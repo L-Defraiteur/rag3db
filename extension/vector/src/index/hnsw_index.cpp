@@ -19,6 +19,9 @@ namespace vector_extension {
 // Mesure de la fin d'instruction (page 04, §4) : false = ne recontrôler que les nœuds qui ont
 // perdu une arête entrante ; true = aussi les lignes mises à jour. Tranché par la mesure.
 static constexpr bool RECHECK_UPDATED_ROWS = false;
+// Mesure d'I2 (11 octobre) : l'heuristique par ligne de 110a65f15, remise comme filtre sur
+// l'union de l'instruction ; seuls les nœuds qu'elle ne règle pas reçoivent la recherche.
+static constexpr bool FILTER_BY_EDGES = true;
 
 InMemHNSWLayer::InMemHNSWLayer(MemoryManager* mm, InMemHNSWLayerInfo info)
     : entryPoint{common::INVALID_OFFSET}, info{info} {
@@ -1135,14 +1138,78 @@ void OnDiskHNSWIndex::finalizeUpdate(Transaction* transaction, UpdateState& upda
     if (RECHECK_UPDATED_ROWS) {
         state.lostLowerInEdges.insert(state.updatedRows.begin(), state.updatedRows.end());
     }
+    // The nodes to check, with their edges. A row deleted since is skipped (at replay, the whole
+    // transaction is finalized at its COMMIT).
+    std::unordered_map<common::offset_t, std::vector<common::offset_t>> edgesOf;
     for (const auto offset : state.lostLowerInEdges) {
-        // A row deleted since (at replay, the whole transaction is finalized at its COMMIT).
-        if (!nodeTable.isVisible(transaction, offset)) {
-            continue;
+        if (nodeTable.isVisible(transaction, offset)) {
+            edgesOf.emplace(offset,
+                scanNeighbors(transaction, offset, false /*isUpperLayer*/, insertState));
         }
-        keepNodeReachable(transaction, offset,
-            scanNeighbors(transaction, offset, false /*isUpperLayer*/, insertState),
-            false /*isUpperLayer*/, insertState);
+    }
+    std::unordered_set<common::offset_t> reachable;
+    if (FILTER_BY_EDGES) {
+        // The heuristic of the per-row check, on the union: a node an updated row points to is
+        // reachable (the row was just inserted anew), and so is a node pointed to by a node that
+        // lost nothing, or by a node already known reachable. Edges are nearly always mutual: the
+        // nodes a node points to are where to look for who points to it.
+        const auto pointsTo = [](const std::vector<common::offset_t>& edges,
+                                  common::offset_t to) {
+            return std::ranges::find(edges, to) != edges.end();
+        };
+        std::unordered_set<common::offset_t> pointedByUpdated;
+        for (const auto row : state.updatedRows) {
+            if (nodeTable.isVisible(transaction, row)) {
+                for (const auto to :
+                    scanNeighbors(transaction, row, false /*isUpperLayer*/, insertState)) {
+                    pointedByUpdated.insert(to);
+                }
+            }
+        }
+        static constexpr size_t MAX_OUTSIDE_NODES_TRIED = 4;
+        for (const auto& [node, edges] : edgesOf) {
+            if (pointedByUpdated.contains(node)) {
+                reachable.insert(node);
+                continue;
+            }
+            size_t numTried = 0;
+            for (const auto other : edges) {
+                if (other == node || edgesOf.contains(other) ||
+                    state.updatedRows.contains(other)) {
+                    continue;
+                }
+                if (pointsTo(scanNeighbors(transaction, other, false /*isUpperLayer*/,
+                                 insertState),
+                        node)) {
+                    reachable.insert(node);
+                    break;
+                }
+                if (++numTried == MAX_OUTSIDE_NODES_TRIED) {
+                    break;
+                }
+            }
+        }
+        for (bool changed = true; changed;) {
+            changed = false;
+            for (const auto& [node, edges] : edgesOf) {
+                if (reachable.contains(node)) {
+                    continue;
+                }
+                for (const auto other : reachable) {
+                    const auto it = edgesOf.find(other);
+                    if (it != edgesOf.end() && pointsTo(it->second, node)) {
+                        reachable.insert(node);
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    for (const auto& [node, edges] : edgesOf) {
+        if (!reachable.contains(node)) {
+            keepNodeReachable(transaction, node, edges, false /*isUpperLayer*/, insertState);
+        }
     }
     state.lostLowerInEdges.clear();
     state.updatedRows.clear();
