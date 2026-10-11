@@ -430,6 +430,18 @@ vrai, et c'est ce qui décide des outils suivants.
 
 ## 8. Ce qui n'est pas décidé
 
+- **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
+  avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
+  pourrait en faire à part distribuer l'inférence »). La brique est posée le
+  même jour : un hôte par poste, un client qui sait lequel, un jeton par
+  hôte, le manifeste qui dit son hôte. Ce qu'elle porte sans chantier à
+  part : l'index qui tourne là où est l'arbre ; l'embarquement et l'inférence
+  là où est la carte ; le démon routeur et les spécialisés sur plusieurs
+  postes ; « une équipe qui parle à un site déployé » (la condition 3 vue du
+  réseau) ; les agents qui se parlent entre postes par la boîte durable en
+  base ; une base gardée à deux endroits, sauvegarde avant réplication. Pas
+  de cap « distribué » pour lui-même : chaque ligne arrive par un besoin.
+
 - « sans IDE » dès le départ, ou « à côté de ton IDE » d'abord ;
 - le prix exact, et ce que l'abonnement compte (une personne, un poste, un
   déploiement) — à écrire dans la LRSL ou à côté ;
