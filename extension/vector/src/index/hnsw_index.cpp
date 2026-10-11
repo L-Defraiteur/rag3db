@@ -18,7 +18,7 @@ namespace vector_extension {
 
 // Mesure de la fin d'instruction (page 04, §4) : false = ne recontrôler que les nœuds qui ont
 // perdu une arête entrante ; true = aussi les lignes mises à jour. Tranché par la mesure.
-static constexpr bool RECHECK_UPDATED_ROWS = false;
+static constexpr bool RECHECK_UPDATED_ROWS = true;
 // Mesure d'I2 (11 octobre) : l'heuristique par ligne de 110a65f15, remise comme filtre sur
 // l'union de l'instruction ; seuls les nœuds qu'elle ne règle pas reçoivent la recherche.
 static constexpr bool FILTER_BY_EDGES = true;
@@ -1135,9 +1135,6 @@ void OnDiskHNSWIndex::finalizeUpdate(Transaction* transaction, UpdateState& upda
     // The shrinks an insertion leaves for later (a node over its degree, under the threshold)
     // stay so, as after commitInsert: shrinking them here, at every statement, cost a shrink per
     // neighbour and per row when rows are updated one by one.
-    if (RECHECK_UPDATED_ROWS) {
-        state.lostLowerInEdges.insert(state.updatedRows.begin(), state.updatedRows.end());
-    }
     // The nodes to check, with their edges. A row deleted since is skipped (at replay, the whole
     // transaction is finalized at its COMMIT).
     std::unordered_map<common::offset_t, std::vector<common::offset_t>> edgesOf;
@@ -1209,6 +1206,20 @@ void OnDiskHNSWIndex::finalizeUpdate(Transaction* transaction, UpdateState& upda
     for (const auto& [node, edges] : edgesOf) {
         if (!reachable.contains(node)) {
             keepNodeReachable(transaction, node, edges, false /*isUpperLayer*/, insertState);
+        }
+    }
+    if (RECHECK_UPDATED_ROWS) {
+        // The updated rows themselves, always by the search: the rows of one statement point to
+        // each other, and a row the later ones do not point to is lost to a query that enters
+        // among them, though nothing it pointed to was lost (TenThousandRowsInBatchesOf512,
+        // rows 1940, 1950, 1960 behind 1989 and after). No filter can see that.
+        for (const auto row : state.updatedRows) {
+            const auto searched = edgesOf.contains(row) && !reachable.contains(row);
+            if (!searched && nodeTable.isVisible(transaction, row)) {
+                keepNodeReachable(transaction, row,
+                    scanNeighbors(transaction, row, false /*isUpperLayer*/, insertState),
+                    false /*isUpperLayer*/, insertState);
+            }
         }
     }
     state.lostLowerInEdges.clear();
