@@ -766,13 +766,20 @@ void WALReplayer::replayRelDetachDeletionRecord(const WALRecord& walRecord) cons
     auto& table = StorageManager::Get(clientContext)->getTable(tableID)->cast<RelTable>();
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
-    const auto anchorState = deletionRecord.ownedSrcNodeIDVector->state;
-    KU_ASSERT(anchorState->getSelVector().getSelSize() == 1);
+    KU_ASSERT(deletionRecord.ownedSrcNodeIDVector->state->getSelVector().getSelSize() == 1);
+    // Les vecteurs voisin et relation reçoivent les lots du balayage des relations du nœud :
+    // ils ont LEUR état, comme dans l'exécuteur (NodeTableDeleteInfo), distinct de celui du
+    // vecteur source, plat, lu à sa position 0. Branchés sur l'état du source (jusqu'au 11
+    // octobre 2026), la sélection du lot écrasait la position de lecture du source : dès que
+    // le nœud avait deux relations visibles dans un même lot, la seconde se lisait à une
+    // position nulle et n'était pas supprimée — elle survivait d'un seul côté après le rejeu
+    // (C7 après arrêt brutal, ticket du 10 octobre ; un seul écrivain suffit).
+    const auto scanState = std::make_shared<DataChunkState>();
     const auto dstNodeIDVector =
         std::make_unique<ValueVector>(LogicalType{LogicalTypeID::INTERNAL_ID});
     const auto relIDVector = std::make_unique<ValueVector>(LogicalType{LogicalTypeID::INTERNAL_ID});
-    dstNodeIDVector->setState(anchorState);
-    relIDVector->setState(anchorState);
+    dstNodeIDVector->setState(scanState);
+    relIDVector->setState(scanState);
     const auto deleteState = std::make_unique<RelTableDeleteState>(
         *deletionRecord.ownedSrcNodeIDVector, *dstNodeIDVector, *relIDVector);
     deleteState->detachDeleteDirection = deletionRecord.direction;
