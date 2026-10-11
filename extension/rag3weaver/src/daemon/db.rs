@@ -272,6 +272,7 @@ impl Service for DbDaemon {
 /// Implémente [`DbConnection`] : un `Catalog` la prend telle quelle, et rien
 /// dans le moteur ne sait que la base est ailleurs.
 pub struct DaemonConnection {
+    adresse: String,
     base_url: String,
     agent: ureq::Agent,
     identite: Identite,
@@ -318,7 +319,13 @@ impl DaemonConnection {
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
         let agent = agent();
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
-        Ok(Self { base_url: base_url(adresse), agent, identite, _attache: attache, reopen: Default::default() })
+        Ok(Self { adresse: adresse.to_string(), base_url: base_url(adresse), agent, identite, _attache: attache, reopen: Default::default() })
+    }
+
+    /// L'adresse où ce client joint le démon — celle que le démon a prise,
+    /// quand on l'a lancé sur un port nul.
+    pub fn adresse(&self) -> &str {
+        &self.adresse
     }
 
     /// Ce que le démon déclare servir.

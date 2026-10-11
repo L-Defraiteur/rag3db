@@ -127,6 +127,15 @@ impl std::fmt::Display for ServeurError {
 
 impl std::error::Error for ServeurError {}
 
+/// **La ligne qu'un serveur lancé sur un port nul écrit sur sa sortie**,
+/// suivie de l'adresse qu'il a réellement prise (`127.0.0.1:45123`), avant de
+/// servir. Le lanceur la lit sur la sortie de **son** enfant — pas dans le
+/// journal, que plusieurs lancements partagent — et joint cette adresse-là.
+/// C'est ce qui permet aux tests de demander `127.0.0.1:0` au lieu d'un port
+/// « libre » choisi d'avance, que quelqu'un d'autre pouvait prendre avant le
+/// serveur (ticket du 11 octobre 2026).
+pub const LIGNE_ADRESSE: &str = "adresse liée : ";
+
 /// **La description d'un serveur** : comment le joindre, comment le
 /// reconnaître, comment le lancer s'il n'est pas là.
 #[derive(Debug, Clone)]
@@ -247,6 +256,13 @@ impl Serveur {
     pub fn assurer(&self) -> Result<Attache, ServeurError> {
         let addr = resoudre(&self.adresse)
             .ok_or_else(|| ServeurError::Adresse(self.adresse.clone()))?;
+        // Un port nul : personne n'y répond jamais, donc **on lance toujours
+        // un nouveau serveur**, et il dit l'adresse qu'il a prise. Pour s'y
+        // rattacher ensuite (un second `assurer`, un autre client), décrire le
+        // serveur par cette adresse-là, que rend [`Attache::adresse`].
+        if addr.port() == 0 {
+            return self.lancer_sur_port_nul();
+        }
 
         match sonder(addr, &self.sonde) {
             Etat::Repond => {
@@ -304,7 +320,65 @@ impl Serveur {
         }
     }
 
+    /// Lancer sur un port nul : la sortie de l'enfant passe par un tube ; un
+    /// fil y prend la ligne [`LIGNE_ADRESSE`] et recopie tout dans le journal.
+    fn lancer_sur_port_nul(&self) -> Result<Attache, ServeurError> {
+        use std::io::{BufRead, Write};
+        let journal = self.journal();
+        let mut enfant = self.lancer_avec(&journal, true)?;
+        let sortie = enfant.stdout.take().expect("sortie en tube");
+        let (envoi, reception) = std::sync::mpsc::channel::<String>();
+        let chemin = journal.clone();
+        std::thread::spawn(move || {
+            let mut copie = std::fs::OpenOptions::new().create(true).append(true).open(&chemin).ok();
+            for ligne in std::io::BufReader::new(sortie).lines().map_while(Result::ok) {
+                if let Some(a) = ligne.strip_prefix(LIGNE_ADRESSE) {
+                    let _ = envoi.send(a.trim().to_string());
+                }
+                if let Some(f) = copie.as_mut() {
+                    let _ = writeln!(f, "{ligne}");
+                }
+            }
+        });
+
+        let debut = Instant::now();
+        let mut reelle: Option<(String, SocketAddr)> = None;
+        loop {
+            if let Ok(Some(statut)) = enfant.try_wait() {
+                return Err(ServeurError::Mort { nom: self.nom.clone(), code: statut.code(), journal });
+            }
+            if reelle.is_none() {
+                if let Ok(a) = reception.try_recv() {
+                    let addr = resoudre(&a).ok_or_else(|| ServeurError::Adresse(a.clone()))?;
+                    reelle = Some((a, addr));
+                }
+            }
+            if let Some((adresse, addr)) = &reelle {
+                if sonder(*addr, &self.sonde) == Etat::Repond {
+                    return Ok(Attache {
+                        adresse: adresse.clone(),
+                        nom: self.nom.clone(),
+                        enfant: Some(enfant),
+                        journal,
+                        demarre_par_nous: true,
+                        fin: self.fin,
+                    });
+                }
+            }
+            if debut.elapsed() >= self.attente {
+                let _ = enfant.kill();
+                let _ = enfant.wait();
+                return Err(ServeurError::Muet { nom: self.nom.clone(), delai: self.attente, journal });
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     fn lancer(&self, journal: &Path) -> Result<Child, ServeurError> {
+        self.lancer_avec(journal, false)
+    }
+
+    fn lancer_avec(&self, journal: &Path, sortie_en_tube: bool) -> Result<Child, ServeurError> {
         if let Some(parent) = journal.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -323,7 +397,7 @@ impl Serveur {
         let mut cmd = Command::new(&self.programme);
         cmd.args(&self.args)
             .stdin(Stdio::null())
-            .stdout(Stdio::from(sortie))
+            .stdout(if sortie_en_tube { Stdio::piped() } else { Stdio::from(sortie) })
             .stderr(Stdio::from(erreurs));
         for (k, v) in &self.env {
             cmd.env(k, v);

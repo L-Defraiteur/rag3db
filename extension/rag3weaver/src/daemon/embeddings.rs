@@ -463,6 +463,7 @@ pub const SERVICE_VARIABLE: &str = "RAG3WEAVER_EMBED_SERVICE";
 /// Se comporte comme n'importe quel [`Embedder`] — c'est tout l'intérêt : ni le
 /// catalogue ni un nœud n'ont à savoir que le modèle est ailleurs.
 pub struct DaemonEmbedder {
+    adresse: String,
     base: String,
     agent: ureq::Agent,
     identite: Identite,
@@ -573,7 +574,13 @@ impl DaemonEmbedder {
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
         let agent = agent();
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
-        Ok(Self { base: base_url(adresse), agent, identite, _attache: attache })
+        Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, identite, _attache: attache })
+    }
+
+    /// L'adresse où ce client joint le démon — celle que le démon a prise,
+    /// quand on l'a lancé sur un port nul.
+    pub fn adresse(&self) -> &str {
+        &self.adresse
     }
 
     /// Ce que le démon déclare être.

@@ -67,7 +67,11 @@ fn servir() -> Result<(), String> {
         return Err(rag3weaver::daemon::DaemonError::Exposition { adresse }.to_string());
     }
     eprintln!("▸ rag3daemon sur {adresse} — base {base}");
-    demon.servir(&adresse).map_err(|e| e.to_string())
+    // Un port nul : se lier ici et dire l'adresse prise (pour le lanceur).
+    match rag3weaver::daemon::ecouter_si_port_nul(&adresse).map_err(|e| e.to_string())? {
+        Some(ecoute) => demon.servir_lie(ecoute).map_err(|e| e.to_string()),
+        None => demon.servir(&adresse).map_err(|e| e.to_string()),
+    }
 }
 
 /// `--adresse <hôte:port>` et `--base <chemin|:memoire:>`.

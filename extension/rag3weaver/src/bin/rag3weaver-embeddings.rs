@@ -175,7 +175,11 @@ fn servir() -> Result<(), String> {
         eprintln!("  chauffe : {formes} classes de forme en {:?}", t.elapsed());
     }
     eprintln!("▸ à l'écoute sur {adresse} — {:?}", demon.identite());
-    demon.servir(&adresse).map_err(|e| e.to_string())
+    // Un port nul : se lier ici et dire l'adresse prise (pour le lanceur).
+    match rag3weaver::daemon::ecouter_si_port_nul(&adresse).map_err(|e| e.to_string())? {
+        Some(ecoute) => demon.servir_lie(ecoute).map_err(|e| e.to_string()),
+        None => demon.servir(&adresse).map_err(|e| e.to_string()),
+    }
 }
 
 /// `--adresse <hôte:port>`, ou `127.0.0.1:7878`.

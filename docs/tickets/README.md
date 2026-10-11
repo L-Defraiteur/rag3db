@@ -90,10 +90,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (83), dans `closed/`
+### Fermés (84), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Les e2e du démon lancent le binaire sur un port « libre » qu'un autre peut prendre](closed/2026-10-11-les-e2e-du-demon-prennent-un-port-libre-qu-un-autre-peut-prendre.md) | corrigé : le binaire sur un port nul se lie et dit l'adresse prise, le lanceur la lit (11 oct.) | test instable | non | oui (lanceur, binaires de service, e2e du démon) |
 | [Le témoin des transactions PostgreSQL crée sa table sans `_uuid`](closed/2026-10-11-le-temoin-des-transactions-postgresql-cree-sa-table-sans-uuid.md) | corrigé, ouvert et fermé dans le même commit (11 oct.) | test faux | non (tests) | oui (tests) |
 | [Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool](closed/2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions.md) | corrigé, témoins vivants verts sur le conteneur (11 oct.) | perte | non aujourd'hui ; oui si la transaction par paquet devient le défaut | oui |
 | [Sur PostgreSQL, défaire un lien ne trouve rien](closed/2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | corrigé, témoin vivant vert sur le conteneur (11 oct.) | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
