@@ -1,0 +1,292 @@
+#!/bin/sh
+# Verrou du poste, partagé entre les sessions.
+#   poste mesure <commande…>   une mesure de durée ou de mémoire : seule sur le poste
+#   poste lourd  <commande…>   compilation, batterie, e2e, banc, boucle : à plusieurs,
+#                              mais jamais pendant une mesure, et en priorité basse
+# La porte donne la priorité à la mesure : dès qu'une mesure attend, plus aucun
+# travail lourd n'entre ; elle n'attend que la fin de ceux déjà lancés.
+# Le travail lourd tourne en priorité basse (nice, ionice) : l'écran et la
+# personne devant le poste passent avant lui.
+#
+# Plafond de mémoire (5 octobre 2026, après la panne du 4 à 22 h 51 : le
+# gardien de mémoire du système a tué VSCodium entier, sessions comprises,
+# parce que tout ce que les sessions lançaient vivait dans sa portée).
+# Chaque commande tourne désormais dans SA portée systemd, avec un plafond :
+# un travail qui déborde est tué seul (code 137), les sessions restent.
+#   POSTE_MEM_MAX   plafond de mémoire de la commande   (défaut 40G)
+#   POSTE_SWAP_MAX  plafond d'échange de la commande    (défaut 4G)
+# Un travail qui a vraiment besoin de plus le demande : POSTE_MEM_MAX=64G poste …
+#
+# Le descripteur du verrou n'est PAS transmis à la commande (11 octobre 2026) :
+# sans cela, tout processus lancé par la commande héritait du verrou, et un
+# `tail -f` orphelin a tenu le poste en partagé pendant 2 h 35, bloquant toute
+# mesure. Le script tient la place lui-même et la rend à sa fin, orphelins ou
+# pas (voir « La priorité au travail exclusif », plus bas).
+#   poste --qui    qui tient la place, qui attend (mesure ou lourd), depuis quand
+D="$HOME/.cache/rag3weaver-build"
+# POSTE_LOCK_DIR : un autre dossier pour les verrous du poste (porte, poste) — pour
+# les témoins, qui ne doivent jamais prendre les verrous réels.
+V="${POSTE_LOCK_DIR:-$D}"
+
+# ── Le verrou de push sur master (11 octobre 2026) ─────────────────────────
+#   poste push <session> -- <commande…>   attend son tour, puis exécute la
+#                                         commande de la session (fetch, rebase,
+#                                         rejeu court, push) verrou tenu
+#   poste push --qui                      qui tient le verrou, depuis quand
+# Trois sessions ont perdu trois courses chacune le 11 octobre : du code arrivait
+# sur master pendant leur rejeu. Un seul tenant à la fois ; les autres attendent,
+# en le disant toutes les 30 s. Le verrou tombe à la fin de la commande, succès
+# ou échec. Au-delà de POSTE_PUSH_MAX secondes (défaut 1200), le tenant est dit
+# sur la sortie d'erreur et dans la fiche, jamais tué. La commande est celle de
+# la session : ce script ne fetch, ne rebase et ne pousse rien lui-même. Pas de
+# plafond de mémoire ici : le rejeu dans la commande passe par `poste lourd`.
+# POSTE_PUSH_DIR : un autre dossier pour le verrou de push — pour les essais,
+# qui ne doivent JAMAIS attendre sur le verrou réel (le 11 octobre, un essai
+# s'est mis dans la file réelle derrière une session qui poussait).
+PUSH_DIR="${POSTE_PUSH_DIR:-$D}"
+PUSH_LOCK="$PUSH_DIR/master-push.lock"
+PUSH_FICHE="$PUSH_DIR/master-push.tenant"
+# Le relais (11 octobre 2026) : un seul verrou de push pour tous les postes.
+# Un poste qui a le fichier `poste-push-hote` (une ligne, `utilisateur@hôte`)
+# prend le verrou de CET hôte par ssh, et ne tient jamais le sien : la session
+# ssh demande le verrou là-bas et le garde tant que son entrée reste ouverte ;
+# la commande tourne ici ; l'entrée se ferme à sa fin, et le verrou tombe.
+# ssh muet : refus nommé, rien n'est exécuté. ssh perdu pendant la commande :
+# dit haut et fort (la commande n'est pas tuée, elle peut être à mi-push).
+PUSH_HOTE="${POSTE_PUSH_HOTE:-$(cat "$D/poste-push-hote" 2>/dev/null)}"
+SSH_PUSH="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
+# ── L'ordre des verrous : le poste d'abord, le push ensuite (11 octobre 2026, soir) ──
+# Une commande de push qui rejouait sous `poste lourd` tenait le verrou de push en
+# attendant le poste : 28 min derrière une mesure (arbre principal), et tout le
+# monde attendait derrière elle pour rien.
+#   poste push <session> --lourd -- <commande…>   (ou POSTE_PUSH_LOURD=1)
+# prend d'abord la place `lourd` du poste, au plus POSTE_PUSH_LOURD_MAX secondes
+# (60) ; sinon « poste occupé par … », code 75, RIEN de pris : la session se remet
+# en file plus tard. Puis le verrou de push, puis la commande, dans le plafond de
+# mémoire et la priorité basse du lourd. La commande n'appelle plus `poste lourd` :
+# dedans (POSTE_DANS_LOURD), `poste lourd` passe la main tel quel. Jamais
+# l'inverse. Une mesure ne connaît pas le push : `poste mesure` attend les
+# partagés en cours, comme avant.
+if [ "${1:-}" = "push" ] && [ "${2:-}" != "--qui" ] && [ -z "${POSTE_DANS_LOURD:-}" ] \
+   && { [ "${3:-}" = "--lourd" ] || [ -n "${POSTE_PUSH_LOURD:-}" ]; }; then
+  nom="${2:-}"; shift; [ $# -gt 0 ] && shift
+  [ "${1:-}" = "--lourd" ] && shift
+  [ "${1:-}" = "--" ] && shift
+  if [ -z "$nom" ] || [ $# -eq 0 ]; then
+    echo "usage: poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2; exit 2
+  fi
+  attente="${POSTE_PUSH_LOURD_MAX:-60}"
+  occupe() {
+    # Le tenant d'un verrou est un `flock` : on nomme la commande au bout de sa chaîne.
+    tenants=""
+    for pid in $(lslocks -n -o PID,PATH 2>/dev/null | awk -v a="$V/porte.lock" -v b="$V/poste.lock" '$2==a || $2==b {print $1}' | sort -u); do
+      bout=$pid
+      for _ in 1 2 3 4 5; do
+        fils=$(ps -o pid= --ppid "$bout" 2>/dev/null | head -1 | tr -d ' ')
+        # On descend à travers flock et à travers ce script (qui tient lui-même
+        # ses verrous depuis le 11 octobre au soir) jusqu'à la commande.
+        case "$(ps -o comm= -p "$bout") $(ps -o args= -p "$bout")" in
+          "flock "*|*"/poste "*) [ -n "$fils" ] && bout=$fils || break ;;
+          *) break ;;
+        esac
+      done
+      case "$tenants" in *"(pid $bout)"*) continue ;; esac
+      tenants="$tenants$(ps -o args= -p "$bout" 2>/dev/null | cut -c1-80) (pid $bout) ; "
+    done
+    echo "poste push : $nom — poste occupé${tenants:+ par $tenants}depuis $attente s : rien de pris (ni le poste ni le push), code 75 ; se remettre en file plus tard" >&2
+    exit 75
+  }
+  flock -w "$attente" -x "$V/porte.lock" true || occupe
+  set -- push "$nom" -- "$@"
+  if command -v systemd-run >/dev/null 2>&1 && systemd-run --user --scope -q -- true 2>/dev/null; then
+    set -- systemd-run --user --scope -q -p MemoryMax="${POSTE_MEM_MAX:-40G}" -p MemorySwapMax="${POSTE_SWAP_MAX:-4G}" -- env POSTE_DANS_LOURD=1 nice -n 15 ionice -c 3 "$0" "$@"
+  else
+    echo "poste: systemd-run indisponible, le push lourd tourne SANS plafond de mémoire" >&2
+    set -- env POSTE_DANS_LOURD=1 nice -n 15 ionice -c 3 "$0" "$@"
+  fi
+  flock -o -s -E 75 -w "$attente" "$V/poste.lock" "$@"
+  rc=$?
+  [ "$rc" -eq 75 ] && occupe
+  exit "$rc"
+fi
+# Dedans un push lourd : la place est déjà prise, `poste lourd` passe la main ;
+# une mesure n'a rien à faire là (elle attendrait le partagé qui la contient).
+if [ -n "${POSTE_DANS_LOURD:-}" ]; then
+  case "${1:-}" in
+    lourd) shift; exec "$@" ;;
+    mesure) echo "poste: une mesure ne se lance pas depuis un push lourd (elle attendrait sa propre place)" >&2; exit 2 ;;
+  esac
+fi
+
+if [ "${1:-}" = "push" ] && [ -n "$PUSH_HOTE" ]; then
+  shift
+  if [ "${1:-}" = "--qui" ]; then
+    env_distant=""; [ -n "${POSTE_PUSH_DIR:-}" ] && env_distant="POSTE_PUSH_DIR='$POSTE_PUSH_DIR' "
+    # -n : ne pas avaler l'entrée du script qui appelle (vu le 11 octobre).
+    $SSH_PUSH -n "$PUSH_HOTE" "${env_distant}~/.cache/rag3weaver-build/poste push --qui" && exit 0
+    echo "poste push : le verrou de $PUSH_HOTE ne répond pas (ssh)" >&2; exit 3
+  fi
+  nom="${1:-}"; [ $# -gt 0 ] && shift
+  [ "${1:-}" = "--" ] && shift
+  if [ -z "$nom" ] || [ $# -eq 0 ]; then
+    echo "usage: poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2; exit 2
+  fi
+  canal=$(mktemp -d "$D/push-relais-XXXXXX") || exit 3
+  mkfifo "$canal/entree" "$canal/sortie" || { rm -rf "$canal"; exit 3; }
+  ici=$(hostname)
+  env_distant=""; [ -n "${POSTE_PUSH_DIR:-}" ] && env_distant="POSTE_PUSH_DIR='$POSTE_PUSH_DIR' "
+  $SSH_PUSH "$PUSH_HOTE" "${env_distant}~/.cache/rag3weaver-build/poste push '$nom@$ici' -- sh -c 'echo PRIS; cat >/dev/null'" \
+    < "$canal/entree" > "$canal/sortie" &
+  relais=$!
+  exec 8>"$canal/entree"
+  ligne=""
+  read -r ligne < "$canal/sortie"
+  if [ "$ligne" != "PRIS" ]; then
+    exec 8>&-; wait "$relais" 2>/dev/null; rm -rf "$canal"
+    echo "poste push : le verrou de $PUSH_HOTE n'a pas pu être pris (ssh muet ou refusé) — rien n'est exécuté, jamais de push sans verrou" >&2
+    exit 3
+  fi
+  echo "poste push : $nom@$ici tient le verrou de $PUSH_HOTE" >&2
+  "$@" 0<&0 &
+  enfant=$!
+  perdu=0
+  while kill -0 "$enfant" 2>/dev/null; do
+    if [ "$perdu" = 0 ] && ! kill -0 "$relais" 2>/dev/null; then
+      echo "poste push : VERROU PERDU — la session ssh vers $PUSH_HOTE est tombée pendant la commande de $nom ; vérifiez master avant de croire ce push" >&2
+      perdu=1
+    fi
+    sleep 2
+  done
+  wait "$enfant"; rc=$?
+  exec 8>&-
+  wait "$relais" 2>/dev/null
+  rm -rf "$canal"
+  [ "$perdu" = 1 ] && [ "$rc" -eq 0 ] && rc=70
+  exit "$rc"
+fi
+
+case "$1" in
+  push)
+    shift
+    if [ "${1:-}" = "--qui" ]; then
+      if flock -n -x "$PUSH_LOCK" true 2>/dev/null; then
+        echo "poste push : libre"
+      else
+        echo "poste push : tenu — $(cat "$PUSH_FICHE" 2>/dev/null || echo 'tenant inconnu')"
+      fi
+      exit 0
+    fi
+    nom="${1:-}"; [ $# -gt 0 ] && shift
+    [ "${1:-}" = "--" ] && shift
+    if [ -z "$nom" ] || [ $# -eq 0 ]; then
+      echo "usage: poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2; exit 2
+    fi
+    debut=$(date +%s)
+    while :; do
+      # 75 : le verrou n'a pas été pris en 30 s ; tout autre code est celui de la commande.
+      flock -o -x -E 75 -w 30 "$PUSH_LOCK" "$0" _push-tenant "$nom" "$@"
+      rc=$?
+      [ "$rc" -ne 75 ] && exit "$rc"
+      echo "poste push : $nom attend depuis $(( $(date +%s) - debut )) s — tenu par $(cat "$PUSH_FICHE" 2>/dev/null || echo 'tenant inconnu')" >&2
+    done ;;
+  _push-tenant)
+    # Interne : verrou tenu par le flock appelant (qui le rend à notre fin).
+    shift; nom="$1"; shift
+    plafond="${POSTE_PUSH_MAX:-1200}"
+    echo "$nom depuis $(date '+%H:%M:%S') (pid $$)" > "$PUSH_FICHE"
+    # L'entrée est gardée explicitement : sans job control, un `&` la remplace
+    # par /dev/null, et le relais d'un autre poste (qui tient le verrou tant
+    # que son entrée reste ouverte) le rendrait aussitôt.
+    "$@" 0<&0 &
+    enfant=$!
+    dit=0; t0=$(date +%s)
+    while kill -0 "$enfant" 2>/dev/null; do
+      if [ "$dit" = 0 ] && [ $(( $(date +%s) - t0 )) -ge "$plafond" ]; then
+        echo "poste push : $nom tient le verrou depuis plus de $plafond s — dit, pas tué" >&2
+        echo "$nom depuis $(date -d "@$t0" '+%H:%M:%S') (pid $$) — AU-DELÀ DE $plafond s" > "$PUSH_FICHE"
+        dit=1
+      fi
+      sleep 2
+    done
+    wait "$enfant"; rc=$?
+    rm -f "$PUSH_FICHE"
+    # 75 est réservé à « verrou pas pris » : une commande qui rend 75 ne doit
+    # pas être relancée par la boucle d'attente.
+    [ "$rc" -eq 75 ] && { echo "poste push : la commande de $nom a rendu 75, rendu comme 74" >&2; exit 74; }
+    exit "$rc" ;;
+esac
+MEM="${POSTE_MEM_MAX:-40G}"
+SWAP="${POSTE_SWAP_MAX:-4G}"
+usage() {
+  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
+  exit 2
+}
+mode="${1:-}"; [ $# -gt 0 ] && shift
+F="$V/fiches"
+
+# ── poste --qui : qui tient la place, qui attend, depuis quand ─────────────
+# Chaque `poste mesure|lourd` tient une fiche (« attend » puis « tient ») tant
+# qu'il vit ; une fiche dont le processus est mort est retirée ici.
+if [ "$mode" = "--qui" ]; then
+  vu=0
+  for f in "$F"/*; do
+    [ -e "$f" ] || continue
+    if kill -0 "${f##*/}" 2>/dev/null; then cat "$f"; vu=1; else rm -f "$f"; fi
+  done
+  [ "$vu" = 0 ] && echo "poste : libre (aucune mesure, aucun lourd)"
+  [ -s "$PUSH_FICHE" ] && echo "push : tenu — $(cat "$PUSH_FICHE")"
+  exit 0
+fi
+case "$mode" in mesure|lourd) ;; *) usage ;; esac
+[ $# -eq 0 ] && usage
+
+if command -v systemd-run >/dev/null 2>&1 && systemd-run --user --scope -q -- true 2>/dev/null; then
+  borne=1
+else
+  echo "poste: systemd-run indisponible, la commande tourne SANS plafond de mémoire" >&2
+  borne=0
+fi
+
+# ── La priorité au travail exclusif (11 octobre 2026, au soir) ─────────────
+# La mesure des fils du cœur a expiré à 21 h 45 sans avoir couru : elle tenait
+# la porte et attendait la place, que des lourds « entrés quand même » après
+# 600 s à la porte ne laissaient jamais vide (ticket
+# 2026-10-11-une-mesure-attend-sans-fin-derriere-des-lourds-qui-entrent-quand-meme).
+# La forme, celle d'un ordonnanceur qui donne la priorité à l'exclusif :
+# - une mesure prend la porte, puis la place exclusive ; elle tient la porte
+#   tout du long : dès qu'une mesure attend, aucun lourd n'entre plus ;
+# - un lourd franchit la porte (la prend et la rend aussitôt), puis prend la
+#   place partagée : il n'attend qu'une mesure, jamais un autre lourd ; le
+#   « entre quand même » n'existe plus (POSTE_PORTE_MAX est ignoré) ;
+# - le délai d'une mesure (POSTE_MESURE_MAX, en secondes) ne court qu'une fois
+#   la place prise : jamais `timeout N poste mesure …`, dont le délai se
+#   consumait à attendre ; une mesure qui le dépasse est arrêtée (124).
+# Les verrous sont tenus par ce script (descripteurs 8 et 9), jamais transmis
+# à la commande (`8>&- 9>&-`) : un orphelin de la commande ne tient pas la
+# place (le `tail -f` du 11 octobre, 2 h 35), et la place tombe à notre fin.
+mkdir -p "$F"
+fiche="$F/$$"
+resume=$(printf '%s ' "$@" | cut -c1-90)
+dire() { echo "$1 $mode depuis $(date +%H:%M:%S) (pid $$) — $resume" > "$fiche"; }
+trap 'rm -f "$fiche"' EXIT
+trap 'exit 143' TERM INT HUP
+if [ "$borne" = 1 ]; then
+  set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -- "$@"
+fi
+dire attend
+case "$mode" in
+  mesure)
+    exec 8>>"$V/porte.lock"; flock -x 8
+    exec 9>>"$V/poste.lock"; flock -x 9
+    dire tient
+    [ -n "${POSTE_MESURE_MAX:-}" ] && set -- timeout "$POSTE_MESURE_MAX" "$@"
+    "$@" 8>&- 9>&-
+    rc=$? ;;
+  lourd)
+    exec 8>>"$V/porte.lock"; flock -x 8; flock -u 8; exec 8>&-
+    exec 9>>"$V/poste.lock"; flock -s 9
+    dire tient
+    nice -n 15 ionice -c 3 "$@" 9>&-
+    rc=$? ;;
+esac
+exit "$rc"

@@ -66,6 +66,36 @@ pour le push, `POSTE_PUSH_LOURD_MAX=5`) :
 Déployé sur les deux postes, md5 `70fe3f1f…`. La version précédente est gardée en
 `poste.avant-lourd`.
 
+## La priorité de la mesure
+
+**Le trou** (11 octobre, 21 h 45) : la mesure des fils du cœur a expiré sans avoir couru.
+`poste mesure` tenait la porte et attendait la place exclusive. Les lourds, eux, attendaient la
+porte 600 s puis « entraient quand même » : sous une charge continue, la place n'était jamais
+vide. Le délai de la mesure, posé par `timeout … poste mesure`, s'est consumé à attendre. Ticket :
+`2026-10-11-une-mesure-attend-sans-fin-derriere-des-lourds-qui-entrent-quand-meme`.
+
+**La forme**, celle d'un ordonnanceur qui donne la priorité au travail exclusif :
+
+- **Dès qu'une mesure attend, aucun lourd n'entre plus.** Elle tient la porte tout du long. Un
+  lourd franchit la porte, en la prenant et la rendant aussitôt, avant de prendre la place
+  partagée. Il n'attend donc qu'une mesure, jamais un autre lourd. Le « entre quand même »
+  n'existe plus, et `POSTE_PORTE_MAX` est ignoré.
+- **Le délai d'une mesure ne court qu'une fois la place prise** : `POSTE_MESURE_MAX=<secondes>
+  poste mesure …`, jamais `timeout N poste mesure …`. Une mesure qui dépasse son délai dans la
+  place est arrêtée, en code 124.
+- **`poste --qui`** dit qui tient la place et qui attend, mesure ou lourd, depuis quand, avec le
+  pid et la commande. Il dit aussi le tenant du push.
+- Le script tient lui-même ses verrous (descripteurs 8 et 9) et ne les transmet jamais à la
+  commande : un orphelin de la commande ne tient pas la place.
+
+Le prix : sept mesures en file affament les compilations le temps de leur passage. C'est voulu.
+La mesure est le travail exclusif, et elle est courte ; une mesure longue se dit.
+
+Témoin : `extension/rag3weaver/scripts/test_poste.sh [chemin/vers/poste]`, sur des verrous
+d'essai, six cas. La version déployée jusque-là en rate trois. Le script fait foi dans le dépôt
+(`extension/rag3weaver/scripts/poste`) et se déploie sur les deux postes par copie, `chmod +x`
+puis `mv`.
+
 ## Un seul verrou pour les deux postes
 
 Le verrou vit **sur lucie-tablette**. luciepc a un fichier

@@ -68,14 +68,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Une mesure attend sans fin derrière des lourds qui « entrent quand même »](2026-10-11-une-mesure-attend-sans-fin-derriere-des-lourds-qui-entrent-quand-meme.md) | ouvert — optimiseur | blocage (mesure expirée sans courir) | oui, sur le poste | oui (`poste`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
 | [Un backend de code dont la racine a disparu rend une erreur brute et se dit ouvert](2026-10-11-un-backend-de-code-dont-la-racine-a-disparu-rend-une-erreur-brute-et-se-dit-ouvert.md) | ouvert (relevé par le cœur C++, demande de Lucie) | réponse fausse / confort — erreur brute, « catalogue occupé » | oui (worktree effacé, manifeste chargé) | oui (démon, MCP du code) |
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | ouvert — pris par l'arbre principal, après sa file | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
@@ -109,10 +108,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (102), dans `closed/`
+### Fermés (103), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une mesure attend sans fin derrière des lourds qui « entrent quand même »](closed/2026-10-11-une-mesure-attend-sans-fin-derriere-des-lourds-qui-entrent-quand-meme.md) | corrigé : priorité à la mesure, délai dans la place, `poste --qui` (11 oct.) | blocage | oui, sur le poste | oui (`poste`) |
 | [« Catalogue occupé » pour un changement localisé](closed/2026-10-11-catalogue-occupe-pour-un-changement-localise.md) | corrigé (la lecture attend un verrou court) | blocage | oui | oui (et seulement) |
 | [L'arrêt de l'hôte attendait la fin d'une longue réaction](closed/2026-10-11-l-arret-attendait-une-longue-reaction.md) | corrigé (un drapeau d'arrêt entre deux fichiers) | blocage | oui | oui (et seulement) |
 | [L'arrêt de l'hôte attend la fin d'une réaction de la montre](closed/2026-10-11-l-arret-de-l-hote-attend-la-fin-d-une-reaction.md) | corrigé (doublon, fermé avec l'arrêt entre deux fichiers) | blocage | oui | oui (et seulement) |

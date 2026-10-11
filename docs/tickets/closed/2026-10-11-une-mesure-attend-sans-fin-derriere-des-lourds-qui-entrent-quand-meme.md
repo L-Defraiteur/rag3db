@@ -1,6 +1,6 @@
 # Une mesure attend sans fin derrière des lourds qui « entrent quand même »
 
-- **État** : ouvert (11 octobre 2026, optimiseur, à la demande de l'orchestration)
+- **État** : corrigé (11 octobre 2026, optimiseur, branche `poste-priorite-mesure`) : la mesure tient la porte, le lourd la franchit, le délai court dans la place (`POSTE_MESURE_MAX`), `poste --qui` ; `scripts/test_poste.sh` vert, six cas
 - **Gravité** : blocage. La mesure des fils du cœur a expiré à 21 h 45 sans avoir couru : une
   heure perdue, et codeparsers et hotfixs attendaient derrière.
 - **Atteignable en service** : oui, sur le poste, dès que des travaux lourds se suivent pendant
