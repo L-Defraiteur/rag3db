@@ -1,6 +1,6 @@
 # Sur PostgreSQL, défaire un lien ne trouve rien
 
-- **État** : ouvert — corrigé dans le texte (`PostgresDialect::batch_delete_relation` lit `from` et `to`, épinglé par `postgres_batch_delete_relation`, commit « Write — Delete et Unlink ») ; reste le témoin vivant sur PostgreSQL
+- **État** : corrigé (11 octobre 2026) — `PostgresDialect::batch_delete_relation` lit `from` et `to` ; témoin vivant sur le conteneur : `e2e_contrat_transactions::defaire_un_lien_le_retire`
 - **Gravité** : réponse fausse (une arête qui devait partir reste)
 - **Atteignable en service** : avec un montage PostgreSQL, quand une
   ingestion est défaite (reprise après incident, annulation d'un nœud de
@@ -41,3 +41,7 @@ intermédiaire doit fixer (une forme, des clés nommées une fois).
 `PostgresDialect::batch_delete_relation` lit `from` et `to` (le plus court),
 ou la suppression d'arêtes passe par `Write` ; puis le témoin, vert sur
 PostgreSQL vivant.
+
+## Fermé (11 octobre 2026)
+
+Le témoin a tourné sur le conteneur de Lucie (`pgvector/pgvector:pg17`, port 5433), vert.

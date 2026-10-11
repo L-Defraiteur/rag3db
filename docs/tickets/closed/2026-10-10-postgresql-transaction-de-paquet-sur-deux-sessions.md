@@ -1,11 +1,6 @@
 # Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool
 
-- **État** : ouvert — corrigé dans le texte : la connexion tient une session
-  (`bb7dddde5`, session recherche), la synchronisation ouvre et ferme par elle
-  (`1d1e1d7de`, arbre principal), `PostgresDialect` déclare `transactions`
-  (commit « Tx »). Reste le témoin vivant (`tests/e2e_contrat_transactions.rs`,
-  et `la_transaction_epinglee_tient_sur_une_session`), faute de base PostgreSQL
-  sur les postes.
+- **État** : corrigé (11 octobre 2026) — la connexion tient une session (`bb7dddde5`), la synchronisation ouvre et ferme par elle (`1d1e1d7de`), `PostgresDialect` déclare `transactions` ; témoins vivants sur le conteneur : `e2e_contrat_transactions::un_paquet_tient_entier_par_le_dialecte_et_la_connexion` et `e2e_postgres::la_transaction_epinglee_tient_sur_une_session`
 - **Gravité** : perte (un paquet « validé » qui ne l'est pas, ou défait à moitié)
 - **Atteignable en service** : non aujourd'hui (`RAG3WEAVER_TX_PAR_PAQUET=1`
   et aucun binaire ne monte PostgreSQL) ; **oui** dès que la transaction par
@@ -50,3 +45,7 @@ dit pas sur quelle session il part. Le runtime dédié de la session recherche
 2. **Ensuite** : `begin`, `commit` et `rollback` dans `DbConnection`, sur une
    session tenue du début à la fin du paquet ; `PostgresDialect` déclare alors
    `transactions`, et le test 5 de la batterie passe sur PostgreSQL.
+
+## Fermé (11 octobre 2026)
+
+Le témoin a tourné sur le conteneur de Lucie (`pgvector/pgvector:pg17`, port 5433), vert.

@@ -63,7 +63,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (24)
+### Ouverts — produit (22)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -89,16 +89,17 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Les « nom seul » et les segments de module](2026-10-04-nom-seul-et-segments-de-module.md) | ouvert — pas pour maintenant | réponse fausse | oui | oui (rendez-vous, usages, Liens) |
 | [Un chemin vers une réexportation reste « par le nom »](2026-10-04-un-chemin-vers-une-reexportation-reste-par-le-nom.md) | ouvert — décidé, en attente de code.rs | réponse fausse | oui | oui (rendez-vous, Liens, impact) |
 | [Des receveurs restent sans type](2026-10-04-des-receveurs-restent-sans-type.md) | en cours (B2d, 11 oct.) | réponse fausse | oui | oui (usages, Liens, impact) |
-| [Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool](2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | perte | non aujourd'hui ; oui si la transaction par paquet devient le défaut | oui |
 | [Sur PostgreSQL, le rebâti du plein texte en fond envoie du Cypher](2026-10-10-postgresql-rebati-du-plein-texte-en-cypher.md) | ouvert | blocage | avec un montage PostgreSQL et lucivy | oui |
-| [Sur PostgreSQL, défaire un lien ne trouve rien](2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | ouvert — corrigé dans le texte, témoin vivant à jouer | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 | [Le mode `--demon` du serveur MCP n'est ni validé ni réfuté — trois questions ouvertes](2026-10-11-mode-demon-ni-valide-ni-refute.md) | ouvert, à trancher au matin ; témoin sur `memoire-temoin-demon-2` | inconnue, et c'est le sujet (une des trois questions peut être un défaut de `rag3daemon`) | seulement par `mcp --demon`, que personne n'utilise | oui — la forme prévue pour une mémoire partagée entre sessions |
 | [L'indexation est un enfant du serveur MCP et meurt avec lui](2026-10-11-indexation-enfant-du-serveur-mcp.md) | partiel : fermeture propre et SIGTERM réglés ; reste le serveur tué (forme C) | travail long perdu sans rien dire, base à moitié indexée | oui, **dès le premier usage** : c'est le premier geste d'une installation | oui — l'outil `index`, et tout travail long lancé en fond |
 
-### Fermés (77), dans `closed/`
+### Fermés (80), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le témoin des transactions PostgreSQL crée sa table sans `_uuid`](closed/2026-10-11-le-temoin-des-transactions-postgresql-cree-sa-table-sans-uuid.md) | corrigé, ouvert et fermé dans le même commit (11 oct.) | test faux | non (tests) | oui (tests) |
+| [Sur PostgreSQL, la transaction d'un paquet part sur deux sessions du pool](closed/2026-10-10-postgresql-transaction-de-paquet-sur-deux-sessions.md) | corrigé, témoins vivants verts sur le conteneur (11 oct.) | perte | non aujourd'hui ; oui si la transaction par paquet devient le défaut | oui |
+| [Sur PostgreSQL, défaire un lien ne trouve rien](closed/2026-10-11-postgresql-defaire-un-lien-ne-trouve-rien.md) | corrigé, témoin vivant vert sur le conteneur (11 oct.) | réponse fausse | avec un montage PostgreSQL | oui (annulation des liens) |
 | [La lib ne compile pas sans la feature `code`](closed/2026-10-11-la-lib-ne-compile-pas-sans-la-feature-code.md) | corrigé, l'arbre principal (11 oct.) | blocage | non | oui (`backend.rs`, garde de feature) |
 | [Le binaire e2e ne compile pas sans burn-embedder](closed/2026-10-11-le-binaire-e2e-ne-compile-pas-sans-burn-embedder.md) | corrigé : le `cfg` de la suite demande sa feature, `scripts/check_features.sh` vérifie les quatre jeux (11 oct.) | blocage (`cargo check --tests` rouge) | non (tests) | oui (tests) |
 | [Le démon d'un test unitaire « n'a pas répondu » sous la charge du poste](closed/2026-10-10-le-demon-de-test-n-a-pas-repondu-sous-charge.md) | corrigé : le démon de test sert un écouteur lié au port 0, plus de course au port (11 oct.) | test instable | non | oui (tests du démon) |
