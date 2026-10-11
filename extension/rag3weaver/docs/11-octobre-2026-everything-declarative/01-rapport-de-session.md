@@ -159,6 +159,45 @@ sans `{text}` ou avec un trou inconnu. Sur master `a6bfb9b9a`.
   `rag3db-native` seul avec `-D warnings`. Ce jeu est désormais dans mes
   contrôles avant tout hash (et devient le cinquième de `check_features.sh`).
 
+## Le soir — la montre en service, et Route et Decide en flux
+
+Sur master `94354595c` (quatre commits, relus par l'arbre principal et la
+recherche ; sept tickets fermés dedans) :
+
+- **La réconciliation au démarrage** : le disque contre l'empreinte que l'index
+  garde par fichier (`File.content_hash`) ; ce qui a bougé pendant que la
+  montre ne tournait pas est repris (trouvé sur la base de Lucie : `callees`
+  rendait « aucune définition »).
+- **Le coût au repos** : un tour ne lit plus que les dates ; la liste de la
+  source n'est relue que quand un dossier bouge. Compteurs par phase dans
+  `index_state` (`watches`). Le « 0,7 cœur » mesuré sur l'hôte était
+  probablement 7 % (des tops au centième de seconde) ; remesure demandée.
+- **Un fichier créé est indexé**, de bout en bout.
+- **Trois défauts vus sur luciepc** : la racine disparue met la montre en pause
+  (rien n'est retiré) ; une lecture attend un catalogue tenu brièvement au lieu
+  de le dire occupé ; l'arrêt coupe une réaction longue entre deux fichiers.
+- **Un quatrième, trouvé par les témoins** : le registre « indexation en
+  cours » de `code_sync` était clé par `source_id` (« local » pour toutes les
+  copies de travail) ; il l'est par la racine.
+- **Route et Decide en flux** : l'entrée `element` se lit élément par élément,
+  les sorties la suivent (`follows`) ; un lecteur qui lâche ne fait pas
+  échouer Route ; l'appel au modèle de Decide s'arrête au jeton suivant si le
+  run est annulé. Le témoin réel passe par l'exécuteur concurrent de la
+  recherche. **La correction NoReader est partie avant la relecture** de la
+  recherche (la file de la montre pressait) ; relue après coup, d'accord.
+- **Une page de plus** : `04-surveiller-les-fichiers.md` §5-6 (ce que la mise en
+  service a appris ; la base copiée d'un autre arbre et sa condition, B4).
+- **Un ticket ouvert** : un index entier qui se fige pendant un checkout
+  (recette de diagnostic ; suspect principal, la lib partagée réécrite en
+  place sous l'hôte).
+
+**La suite, dans l'ordre fixé par l'orchestration** : le lot suivant (la base
+copiée en relatif, les remarques de relecture, `max_tokens` de Decide, la
+reprise dite) ; la mesure phase par phase des 6 s de réindexation d'un fichier
+et son correctif ; la file à deux priorités côté embarquement et le délai
+borné ; le retrait par ensemble ; puis le lot 4 des agents (`AgentNode`), que
+le pont vivant de la recherche rend possible.
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).

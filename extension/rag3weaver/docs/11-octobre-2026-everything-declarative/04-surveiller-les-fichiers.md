@@ -129,3 +129,62 @@ la montre elle-même, et cache froid.
 | W4 | (recette) le crochet Claude Code | — |
 
 Le lot 4 des agents (`AgentNode`) reprend après W3.
+
+## 5. Ce que la mise en service a appris (11 octobre 2026, le soir)
+
+La montre a tourné sur l'hôte de Lucie et sur celui de luciepc. Ce qui en est
+sorti, corrigé chacun avec son témoin et son ticket fermé :
+
+- **La réconciliation au démarrage.** La montre prenait le disque comme
+  photographie de départ : un fichier changé entre le dernier index et son
+  démarrage n'était jamais repris. Désormais elle compare le disque à
+  **l'empreinte que l'index garde par fichier** (`File.content_hash`, le blake3
+  du texte lu par l'ingestion) : écart → `modified`, absent de l'index →
+  `created`, indexé mais plus sur le disque → `removed`. Un index vide ne
+  réconcilie pas : la montre ne remplace pas `index`. Les montres se montent
+  **après** les réactions, pour que la réconciliation trouve la réaction à
+  l'écoute.
+- **Le coût au repos.** La première forme relisait la liste de la source (le
+  parcours du workspace avec ses règles d'exclusion) à chaque tour. Un tour au
+  repos ne lit plus que **la date des fichiers connus et de leurs dossiers** ;
+  la liste n'est relue que quand un dossier bouge (une création, une
+  suppression, un renommage) ou toutes les `relist_ms` (60 s). Mesure, bâti de
+  test : sur le dépôt entier (6 818 fichiers), une liste 20 à 33 ms, un tour au
+  repos 9 à 22 ms. Les compteurs par phase sont dans `index_state`
+  (`watches.<nom>` : relectures, dates, hachages, octets, temps, chemins les
+  plus hachés).
+- **La racine disparue** (un worktree effacé) : la montre se met en pause et ne
+  retire rien ; `index_state` le dit, `WorkingTree::list` nomme la racine.
+- **Une lecture n'est plus refusée pour un changement localisé** : elle attend
+  jusqu'à 1 s un catalogue tenu le temps d'une réindexation.
+- **L'arrêt coupe une longue réaction** entre deux fichiers ; la
+  réconciliation reprend le reste au démarrage suivant.
+- **Le registre « indexation en cours »** de `code_sync` est clé par la racine
+  de la source, et non plus par `source_id` (« local » pour toutes les copies
+  de travail) : une indexation d'un backend ne met plus en reprise les
+  éditions d'un autre.
+
+## 6. Une base copiée d'un autre arbre
+
+La forme retenue pour « chaque arbre indexé, à jour quand on l'édite » : une
+base par arbre, née d'un instantané (reflink) de la base de master, puis la
+réconciliation au démarrage, qui ne réindexe que les fichiers où l'arbre
+diffère.
+
+- **Ce qui est fait** : la réconciliation lit l'index **par chemin relatif à
+  la racine que chaque ligne a enregistrée** (`File.cursor`), pas à la racine
+  courante. Une base copiée, ouverte sur un autre arbre, ne rend que les
+  fichiers qui diffèrent (témoin
+  `backend::tests::a_copied_base_reconciles_by_relative_path`).
+- **La condition** : tant que l'identité de `File` contient le chemin
+  **absolu**, réindexer sous la nouvelle racine crée des lignes neuves à côté
+  des anciennes, et un fichier supprimé dans la copie ne retire pas sa ligne
+  d'origine. La copie se salit. C'est le lot B4 (chemins relatifs dans
+  l'identité, chez G) ; d'ici là, la forme « une base par arbre » n'est pas
+  mise en service, et la réconciliation sert les bases existantes.
+- **Le témoin qui prouvera la propreté après B4** : une base indexée sur une
+  racine A, copiée ; la copie ouverte sur un arbre B qui diffère de quelques
+  fichiers (modifiés, ajoutés, supprimés) ; la réconciliation réindexe ces
+  fichiers-là seulement ; puis un **recompte** : autant de lignes `File` que
+  de fichiers dans B, aucun doublon de chemin relatif, et les usages d'un
+  fichier supprimé dans B partis.
