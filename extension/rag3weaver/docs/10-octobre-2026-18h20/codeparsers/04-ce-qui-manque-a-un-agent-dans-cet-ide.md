@@ -475,3 +475,16 @@ L'hôte (qui tient aussi la mémoire longue) : **9,8 Go de mémoire résidente a
 - **Ce qui manquait** : **l'heure de la réponse dans la réponse** (« servi à 20:28:4x ») : sans
   elle, la borne dépend de ma montre et de l'ordre des appels ; et le n° 3 de 20 h 16 (où passent
   les secondes) reste à mesurer côté hôte.
+
+### 11 oct., 21 h — codeparsers — « pourquoi tant d'absents après une indexation complète ? » (question de Lucie)
+
+**En deux lignes** : sur rag3db/src, entre fichiers, 67 557 références non résolues, dont
+**60 382 externes** (aucun scope de ce nom : paramètres et locaux, macros, champs, `std::` ; ou un
+appel standard sur un type standard) et **7 200 internes manquées** — la vraie couverture.
+Parmi les internes d'avant, la plupart étaient des méthodes standard sur un type standard
+(`size`, `push_back`, `get`) ; les vraies manquées sont rares et nommées (`getSelSize`,
+`getPhysicalType`). rag3weaver : 71 252 et 13 773.
+
+Le banc de couverture suit désormais les deux comptes (codeparsers f17202b, `absents.externes`
+neutre, `absents.internes_manquees` qui ne doit pas monter). La liste des méthodes standard est
+une donnée déclarée de codeparsers (`scope_extraction::standard`), pas en dur chez un consommateur.
