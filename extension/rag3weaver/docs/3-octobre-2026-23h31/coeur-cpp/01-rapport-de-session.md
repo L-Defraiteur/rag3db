@@ -1041,3 +1041,21 @@ sous un nom neuf à chaque tour) ; second tour : rebase sur 3f13b1657 (rien du m
 l'ancienne sémantique. Lib commune de luciepc rebâtie dessus, `rag3db-a9b` effacé. Reste à moi :
 B2, et le ticket de mes verrous relevé par le banc (ligne supprimée par un autre écrivain entre
 le MATCH et le SET → l'erreur nommée de sérialisation, pas un refus inattendu).
+
+## L'erreur de sérialisation nommée sous index (11 octobre 2026, 18 h 30 à PK_FIN) — le ticket relevé par le banc, avant B2
+
+Ordre de l'orchestration : ce petit lot avant B2 (P3 du moteur sous le défaut). Branche
+`verrous-pk-lock`, worktree `rag3db-pk`. Le banc avait vu, dans sa passe de preuve sur master,
+`H4_IndexedRandomMix` Hot/Crash rouge 10 fois sur 10 avec « Row 314 of table Doc has no primary key
+to lock: it is not visible to this transaction » (refus inattendu). **Cause** : sur une table à index
+secondaire, `NodeTable::update` prend l'index (`lockIndexForWrite`, I1), qui rafraîchit l'instantané
+d'une transaction qui n'a rien écrit, puis lit la clé de la ligne (`lockKeyOfRow`) avec ce nouvel
+instantané : une ligne supprimée et validée par un autre écrivain entre le MATCH et le SET n'est
+plus visible, et c'était une `RuntimeException`. Sans index, le chemin était juste (l'instantané
+n'est pas rafraîchi, `lockRowForWrite` lève l'erreur nommée). **Forme** : quand la clé ne se lit pas
+et que la ligne n'est pas visible au dernier état validé, l'erreur de sérialisation nommée
+(fragment d'A4′, « row N of table T was deleted by another transaction after this one started »).
+Témoin `IndexLockBench.AnUpdateOfARowDeletedByAnotherCommitIsASerializationError` (deux connexions,
+déterministe ; `ed93237d7`), correctif `a3a68c103`, ticket ouvert et fermé dans le commit. H4 reste
+rouge par l'autre défaut (« HNSW index: node offset … is beyond the visited set », ticket du banc) :
+le banc le passe en known_red avec les deux causes. Passe : PK_PASSE.
