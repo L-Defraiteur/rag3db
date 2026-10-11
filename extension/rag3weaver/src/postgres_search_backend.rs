@@ -43,31 +43,23 @@ fn quote(name: &str) -> String {
 /// PostgreSQL search backend using pgvector for vector similarity.
 pub struct PostgresSearchBackend {
     conn: Arc<dyn DbConnection>,
-    /// Le plancher n'est posé qu'une fois : c'est un réglage de session, et la
-    /// connexion vit aussi longtemps que le backend.
-    plancher_pose: std::sync::Once,
+    /// Le plancher de rappel, **envoyé avec chaque requête** (`SET LOCAL`
+    /// dans sa transaction, [`DbConnection::execute_with_local_settings`]) :
+    /// un `SET` de session n'était tenu que par une session du pool, et une
+    /// requête à deux fautes rendait « rien » selon la session tirée.
+    plancher: f64,
 }
 
 impl PostgresSearchBackend {
     pub fn new(conn: Arc<dyn DbConnection>) -> Self {
-        Self { conn, plancher_pose: std::sync::Once::new() }
+        Self { conn, plancher: PLANCHER_RAPPEL }
     }
 
-    /// Poser le plancher de rappel, une fois, sur cette session.
-    ///
-    /// Un échec se dit dans le journal et ne fait pas échouer la recherche : on
-    /// se retrouve alors avec le plancher de PostgreSQL, c'est-à-dire un rappel
-    /// plus serré — dégradé, pas faux.
-    fn poser_le_plancher(&self) {
-        self.plancher_pose.call_once(|| {
-            let sql = format!("SET pg_trgm.word_similarity_threshold = {PLANCHER_RAPPEL}");
-            if let Err(e) = self.conn.execute(&sql) {
-                eprintln!(
-                    "[rag3weaver] plancher de rappel non posé ({e}) — le rappel trigramme \
-                     reste au défaut de PostgreSQL, donc plus serré"
-                );
-            }
-        });
+    /// Un autre plancher de rappel que [`PLANCHER_RAPPEL`] : pour mesurer
+    /// (le banc des seuils), ou pour serrer le rappel.
+    pub fn with_recall_floor(mut self, plancher: f64) -> Self {
+        self.plancher = plancher;
+        self
     }
 }
 
@@ -105,7 +97,6 @@ impl SearchBackend for PostgresSearchBackend {
         if fields.is_empty() {
             return Some(Ok(Vec::new()));
         }
-        self.poser_le_plancher();
 
         // **La même expression des deux côtés.** `rag3weaver.sans_accents` est
         // appliquée au champ *et* à la requête : au champ pour que le
@@ -184,7 +175,8 @@ impl SearchBackend for PostgresSearchBackend {
              FROM {table} AS n{jointure} WHERE ({ou}){cloison}{filtre} \
              ORDER BY score DESC LIMIT {limit}"
         );
-        let resultat = match self.conn.execute_with_params(&sql, &params) {
+        let reglages = [("pg_trgm.word_similarity_threshold", self.plancher.to_string())];
+        let resultat = match self.conn.execute_with_local_settings(&sql, &params, &reglages) {
             Ok(r) => r,
             // Une erreur est une erreur, pas une absence : `Some(Err)` pour que
             // l'appelant ne se replie pas en silence sur lucivy.

@@ -131,6 +131,28 @@ pub trait DbConnection: Send + Sync {
         self.execute("ROLLBACK").map(|_| ())
     }
 
+    /// **Une instruction avec des réglages qui ne valent que pour elle** :
+    /// ils partent sur la même session et dans la même transaction que
+    /// l'instruction (`SET LOCAL`), jamais en réglage de session — sur un
+    /// pool, un réglage de session n'est tenu que par une session. Le
+    /// défaut refuse en le disant : un réglage ignoré en silence rendrait
+    /// une réponse fausse sans erreur.
+    fn execute_with_local_settings(
+        &self,
+        sql: &str,
+        params: &[QueryParam],
+        settings: &[(&str, String)],
+    ) -> Result<QueryResult, DbError> {
+        if settings.is_empty() {
+            return self.execute_with_params(sql, params);
+        }
+        let noms: Vec<&str> = settings.iter().map(|(n, _)| *n).collect();
+        Err(DbError::QueryError(format!(
+            "cette connexion ne porte pas de réglage local ({}) : l'instruction n'est pas partie",
+            noms.join(", ")
+        )))
+    }
+
     /// Le chemin de la base sur disque, s'il y en a un : `None` en mémoire,
     /// ou pour un moteur qui n'en a pas (PostgreSQL).
     fn database_path(&self) -> Option<std::path::PathBuf> {

@@ -1,6 +1,6 @@
 # PostgreSQL : une requête à deux fautes ne rend rien, même au plancher de rappel abaissé — le banc des seuils est rouge à sa première exécution
 
-- **état** : ouvert — cause trouvée (le plancher posé sur une seule session du pool), correction à prendre (11 octobre 2026)
+- **état** : corrigé (11 octobre 2026) — le plancher voyage avec la requête (`SET LOCAL` dans sa transaction, sur une seule session) ; témoins `e2e_postgres::le_plancher_de_rappel_tient_sur_chaque_session_du_pool` et `ou_vit_la_frontiere_entre_le_vrai_et_le_bruit`
 - **gravité** : réponse fausse (un rappel attendu ne vient pas, selon la session du pool reçue)
 - **atteignable en service** : sur un backend PostgreSQL, oui ; rag3db n'est pas concerné
 - **touche rag3weaver** : oui (le moteur de texte de PostgreSQL et ses seuils)
@@ -86,3 +86,30 @@ fausse (« rien ») qui dépend du hasard du pool.
   de session.
 
 Le témoin existe déjà : `ou_vit_la_frontiere_entre_le_vrai_et_le_bruit` doit passer au vert.
+
+## Corrigé (11 octobre 2026, session embarquements)
+
+La forme demandée par l'orchestration : **le plancher voyage avec la requête, pas
+avec la session.**
+
+- `DbConnection::execute_with_local_settings(sql, params, réglages)` : les réglages
+  partent sur la même session et dans la même transaction que l'instruction. Pour
+  PostgreSQL, `set_config(nom, valeur, true)` (la forme fonction de `SET LOCAL`),
+  dans la transaction épinglée de l'appelant s'il y en a une, sinon dans une
+  transaction à elle sur une session du pool (`BEGIN`, réglages, instruction,
+  `COMMIT`), qui rentre au pool sans rien garder. Le défaut du trait refuse en le
+  disant : un réglage ignoré en silence rendrait une réponse fausse sans erreur.
+- Pourquoi pas l'épinglage de `begin` tel quel : il est partagé par toute la
+  connexion. Deux recherches concurrentes se seraient disputé la même session
+  épinglée, et l'une aurait commité sous l'autre.
+- `PostgresSearchBackend` : le `Once` et le `SET` de session sont retirés. Le
+  plancher est un champ du backend (`PLANCHER_RAPPEL` = 0,3 par défaut,
+  `with_recall_floor` pour un autre), envoyé avec chaque recherche. `<%` reste
+  dans la requête et l'index GIN sert toujours.
+- Le banc pose ses deux planchers par le même chemin (un backend par plancher).
+
+Témoin rouge d'abord, sur le code d'avant : 4 fils × 3 recherches, puis 12
+successives ; **7 sur 24 ne rendaient pas Clavecin**. Après : 24 sur 24, et
+`e2e_postgres` passe en entier (21 sur 21). Le banc dit maintenant à 0,6 « rien »
+pour la vraie raison (le plancher de PostgreSQL), plus par accident ; à 0,3,
+Clavecin à 0,8955, et le vrai se sépare du bruit dans ]0,8012 ; 0,8876[.

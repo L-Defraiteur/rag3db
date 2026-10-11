@@ -767,6 +767,55 @@ fn le_filtre_utilisateur_tient() {
 
 // ═══ 10. Le banc : où vit la frontière entre le vrai et le bruit ═════════════
 
+/// **Le plancher de rappel tient sur chaque session du pool** (ticket
+/// 2026-10-11-postgres-une-requete-a-deux-fautes-ne-rend-rien-meme-au-plancher-abaisse).
+///
+/// « sauterau baroqe » (deux fautes) a une `word_similarity` de 0,5789 avec
+/// le texte de Clavecin : au plancher du backend (0,3) elle doit le rendre,
+/// **quelle que soit la session du pool** qui porte la requête. Des fils
+/// cherchent ensemble pour que le pool ouvre plusieurs sessions, puis des
+/// requêtes successives les font tourner (la file de deadpool est FIFO).
+/// Un `SET` de session posé une fois n'est tenu que par l'une d'elles.
+#[test]
+#[ignore]
+fn le_plancher_de_rappel_tient_sur_chaque_session_du_pool() {
+    let (_garde, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                produit("Clavecin", "clavecin baroque sautereau registre", 10.0),
+                produit("Sextant", "sextant navigation astronomique horizon", 10.0),
+            ],
+        )
+        .unwrap();
+    let catalog = Arc::new(Mutex::new(catalog));
+    let premier = |c: &Arc<Mutex<Catalog>>| -> Option<String> {
+        let r = Catalog::rechercher(
+            c,
+            "Product",
+            "sauterau baroqe",
+            SearchOptions {
+                consistency: Consistency::Immediate,
+                signals: Some(SearchSignals::BM25),
+                limit: 5,
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("recherche : {e}"));
+        r.results.first().and_then(|x| x.data.as_ref()?.get("name")?.as_str().map(|s| s.to_string()))
+    };
+
+    let mut rendus: Vec<Option<String>> = std::thread::scope(|portee| {
+        let fils: Vec<_> = (0..4).map(|_| portee.spawn(|| (0..3).map(|_| premier(&catalog)).collect::<Vec<_>>())).collect();
+        fils.into_iter().flat_map(|f| f.join().unwrap()).collect()
+    });
+    rendus.extend((0..12).map(|_| premier(&catalog)));
+    let manques = rendus.iter().filter(|n| n.as_deref() != Some("Clavecin")).count();
+    assert_eq!(manques, 0, "{manques} requêtes sur {} n'ont pas rendu Clavecin : {rendus:?}", rendus.len());
+}
+
 /// **Avant de poser un seuil, le mesurer.**
 ///
 /// Ragkit en a un (0,7) mais calibré sur des **noms de médicaments** — des noms
@@ -875,18 +924,17 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
     // base rapporte, donc lui qui décide ce que Jaro peut ordonner. Un rappel
     // trop serré ne se voit pas comme une erreur — il se voit comme « aucun
     // résultat », ce qui ressemble à « ça n'existe pas ».
-    let plancher = |c: &Catalog, v: f64| {
-        c.conn()
-            .execute(&format!("SET pg_trgm.word_similarity_threshold = {v}"))
-            .unwrap_or_else(|e| panic!("plancher {v} : {e}"));
+    //
+    // Le plancher passe par le même chemin que le service : le backend le
+    // porte et l'envoie avec chaque requête (`SET LOCAL`). Un `SET` de
+    // session ne visait qu'une session du pool.
+    let plancher = |c: &mut Catalog, v: f64| {
+        let conn = c.conn_arc();
+        c.set_search_backend(Arc::new(PostgresSearchBackend::new(conn).with_recall_floor(v)));
     };
 
-    // Le backend pose lui-même 0,3 au premier appel : pour montrer la falaise,
-    // il faut donc **remettre** le défaut de PostgreSQL explicitement, après
-    // qu'il ait parlé une fois. C'est ce que fait la recherche à blanc.
-    let _ = cherche(&catalog, "amorce");
     eprintln!("\n═══ plancher au défaut de PostgreSQL (0,6) ══════════════════");
-    plancher(&catalog.lock().unwrap(), 0.6);
+    plancher(&mut catalog.lock().unwrap(), 0.6);
 
     let (exact_min, _) = mesure(&catalog, "exactes", &[
         ("sautereau baroque", Some("Clavecin")),
@@ -943,7 +991,7 @@ fn ou_vit_la_frontiere_entre_le_vrai_et_le_bruit() {
     // rapporte **large** et que Jaro tranche. Avec le plancher par défaut, la
     // base ne rapporte pas large — elle ferme la porte avant.
     eprintln!("\n═══ plancher de rappel abaissé à 0,3 ═══════════════════════");
-    plancher(&catalog.lock().unwrap(), 0.3);
+    plancher(&mut catalog.lock().unwrap(), 0.3);
 
     let (exact_min_b, _) = mesure(&catalog, "exactes", &[
         ("sautereau baroque", Some("Clavecin")),
