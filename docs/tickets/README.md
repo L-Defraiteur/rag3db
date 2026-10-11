@@ -68,7 +68,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -79,7 +79,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | ouvert — pris par l'arbre principal, après sa file | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
 | [Les chemins rangés sont absolus et dans la forme du système, et les comparaisons supposent « / »](2026-10-11-les-chemins-ranges-sont-absolus-et-dans-la-forme-du-systeme.md) | ouvert — lot B4 de G, décision (a) : relatif en « / » | blocage sous Windows, sécurité (`probable_secret`) | oui, sous Windows | oui (et codeparsers) |
 | [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | ouvert — vu par le bâti Windows de l'alpha.3 ; macOS par lecture | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |
-| [La montre de fichiers coûte sept dixièmes d'un cœur en continu](2026-10-11-la-montre-coute-sept-dixiemes-d-un-coeur-en-continu.md) | ouvert — chez le proto | coût (un cœur en permanence) | oui, dès qu'un manifeste déclare watches | oui (et seulement) |
 | [Le journal de l'hôte du démon n'a ni heure ni auteur](2026-10-11-le-journal-de-l-hote-n-a-ni-heure-ni-auteur.md) | ouvert | diagnostic impossible | oui, toujours | oui (et seulement) |
 | [L'hôte du démon hérite de l'environnement du premier client qui le lance](2026-10-11-l-hote-herite-de-l-environnement-du-premier-client.md) | ouvert — côté hôte, arbre principal | réponse fausse ou blocage (un service d'embarquement manque) | oui, dès qu'un hôte sert des backends aux services différents | oui (et seulement) |
 | [La pause n'adresse pas son interlocuteur par l'annuaire](2026-10-11-la-pause-n-adresse-pas-par-l-annuaire.md) | ouvert | réponse fausse (le pair n'est pas prévenu) | oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair | oui |
@@ -109,10 +108,12 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (95), dans `closed/`
+### Fermés (97), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La montre de fichiers coûte sept dixièmes d'un cœur en continu](closed/2026-10-11-la-montre-coute-sept-dixiemes-d-un-coeur-en-continu.md) | corrigé (balayage par dates, liste relue quand un dossier bouge) — à remesurer sur l'hôte | coût | oui | oui (et seulement) |
+| [La montre ne réconciliait pas le disque avec l'index à son démarrage](closed/2026-10-11-la-montre-ne-reconciliait-pas-au-demarrage.md) | corrigé (la réconciliation contre File.content_hash) | réponse fausse (état périmé sans retard dit) | oui, au redémarrage de l'hôte | oui (et seulement) |
 | [Un gabarit livré cherche l'extension vector relativement à lui-même](closed/2026-10-11-un-gabarit-livre-cherche-l-extension-vector-relativement-a-lui-meme.md) | corrigé : `vector_extension` nomme l'extension du bâti (`"vector"`), trouvée par RAG3DB_ROOT, la lib ou le binaire (11 oct.) | blocage (le backend ne s'ouvre pas) | oui, depuis un arbre où le moteur n'est pas bâti | oui (et seulement) |
 | [L'hôte ne relit pas un manifeste modifié, et aucune route ne ferme un backend](closed/2026-10-11-l-hote-ne-relit-pas-un-manifeste-modifie.md) | corrigé : `POST /backend/open` relit un manifeste modifié, `POST /backend/close` ferme et lâche la base (11 oct.) | réponse trompeuse | oui, à chaque correction d'un manifeste servi | oui (`daemon_host.rs`) |
 | [Sur PostgreSQL, le voisinage d'une recherche de code est refusé](closed/2026-10-11-le-voisinage-de-grep-refuse-par-postgresql.md) | corrigé, témoin vert sur les deux moteurs (11 oct.) | blocage | avec un montage PostgreSQL du backend de code | oui (`code_tools.rs`) |

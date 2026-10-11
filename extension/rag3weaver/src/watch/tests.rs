@@ -96,6 +96,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
         bus.clone(),
         Arc::new(crate::catalog::retard::Lag::new()),
         crate::scope::Scope::default(),
+        None,
     )
     .unwrap();
     std::fs::write(dir.path().join("src/a.rs"), "fn a() { 2 }\n").unwrap();
@@ -117,7 +118,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
 
     // Une période d'une minute : l'arrêt n'en attend rien.
     let (dir, source) = tree();
-    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default()).unwrap();
+    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default(), None).unwrap();
     let t = Instant::now();
     handle.stop();
     assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
@@ -149,6 +150,7 @@ fn the_watch_notes_the_lag_before_publishing() {
         bus,
         lag.clone(),
         cell.clone(),
+        None,
     )
     .unwrap();
     std::fs::write(dir.path().join("src/b.rs"), "fn b() { 2 }\n").unwrap();
@@ -160,4 +162,88 @@ fn the_watch_notes_the_lag_before_publishing() {
     assert_eq!(lag.summary_in(&cell).map(|s| s.files), Some(1));
     assert_eq!(lag.summary_in(&crate::scope::Scope::default()), None);
     handle.stop();
+}
+
+
+/// **La réconciliation de départ** : contre l'empreinte de l'index, un fichier
+/// changé est `modified`, un fichier neuf `created`, un fichier indexé absent
+/// du disque `removed` ; un fichier à jour ne dit rien.
+#[test]
+fn reconciling_with_the_index_says_what_moved_since() {
+    let (dir, source) = tree();
+    let s = Scanner::new(dir.path().to_path_buf(), source, &config(0)).unwrap();
+    let hash = |t: &str| blake3::hash(t.as_bytes()).to_hex().to_string();
+    let indexed: Indexed = [
+        ("src/a.rs".to_string(), hash("fn a() {}\n")),        // à jour
+        ("src/b.rs".to_string(), hash("fn b() { ancien }\n")), // changé depuis
+        ("src/parti.rs".to_string(), hash("x")),               // supprimé depuis
+    ]
+    .into_iter()
+    .collect();
+    let got = s.reconcile(&indexed);
+    assert_eq!(
+        changes(&got),
+        [("README.md", Change::Created), ("src/b.rs", Change::Modified), ("src/parti.rs", Change::Removed)]
+    );
+}
+
+/// **Au repos, la liste n'est pas relue** : un tour ne coûte que la date des
+/// fichiers connus et de leurs dossiers. Une création fait bouger son dossier
+/// et relire la liste ; une modification en place, non ; le filet de période
+/// la relit de toute façon.
+#[test]
+fn a_quiet_scan_does_not_relist_the_source() {
+    let (dir, source) = tree();
+    let mut s = Scanner::new(dir.path().to_path_buf(), source, &config(0)).unwrap();
+    let t0 = Instant::now();
+    for i in 0..5 {
+        assert!(s.scan(t0 + Duration::from_millis(100 * i)).unwrap().is_empty());
+    }
+    assert_eq!(s.lists(), 0, "au repos, la liste n'est pas relue");
+
+    std::fs::write(dir.path().join("src/d.rs"), "fn d() {}\\n").unwrap();
+    assert_eq!(changes(&s.scan(t0 + Duration::from_millis(600)).unwrap()), [("src/d.rs", Change::Created)]);
+    assert_eq!(s.lists(), 1, "une création fait relire");
+
+    std::fs::write(dir.path().join("src/a.rs"), "fn a() { 9 }\\n").unwrap();
+    assert_eq!(changes(&s.scan(t0 + Duration::from_millis(700)).unwrap()), [("src/a.rs", Change::Modified)]);
+    assert_eq!(s.lists(), 1, "une modification en place ne fait pas relire");
+
+    s.scan(t0 + Duration::from_secs(61)).unwrap();
+    assert_eq!(s.lists(), 2, "le filet de période relit");
+
+    // Les compteurs le disent : deux hachages (la création, la modification),
+    // deux relectures, et les chemins hachés.
+    let st = s.stats();
+    assert_eq!((st.scans, st.lists, st.hashes), (8, 2, 2), "{st:?}");
+    assert_eq!(st.most_hashed.len(), 2, "{st:?}");
+}
+
+/// **La mesure, sur un vrai arbre** : le `src/` du moteur. Un tour au repos
+/// coûte moins qu'un parcours de la liste — c'était le coût de la première
+/// forme, qui relisait la liste à chaque tour (0,7 cœur sur 7 310 fichiers,
+/// mesuré sur l'hôte de Lucie le 11 octobre).
+#[test]
+fn a_quiet_scan_of_the_engine_tree_costs_less_than_a_listing() {
+    for sous in ["../../src", "../.."] {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(sous);
+    if !root.is_dir() {
+        continue;
+    }
+    let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(&root));
+    let t = Instant::now();
+    let mut s = Scanner::new(root.clone(), source.clone(), &WatchConfig::default()).unwrap();
+    let depart = t.elapsed();
+    let t = Instant::now();
+    let n = source.list().unwrap().len();
+    let liste = t.elapsed();
+    let t = Instant::now();
+    for _ in 0..5 {
+        assert!(s.scan(Instant::now()).unwrap().is_empty());
+    }
+    let tour = t.elapsed() / 5;
+    eprintln!("montre sur {sous} : {n} fichiers ; départ {depart:?} ; une liste {liste:?} ; un tour au repos {tour:?}");
+    assert_eq!(s.lists(), 0);
+    assert!(tour < liste, "un tour au repos ({tour:?}) doit coûter moins qu'une liste ({liste:?})");
+    }
 }

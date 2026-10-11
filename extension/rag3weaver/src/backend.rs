@@ -2035,8 +2035,14 @@ impl Backend {
     /// Rend les noms montés. Sans réaction déclarée, aucun réacteur ne
     /// démarre et le résultat est vide.
     pub fn mount_reactions(&self) -> Result<Vec<String>, String> {
-        // Les montres d'abord : ce sont les sources des réactions.
+        let mounted = self.mount_reactors()?;
+        // Les montres **après** les réactions : ce que leur réconciliation de
+        // départ publie doit trouver la réaction à l'écoute.
         self.mount_watches()?;
+        Ok(mounted)
+    }
+
+    fn mount_reactors(&self) -> Result<Vec<String>, String> {
         let prepared = self.prepared();
         if prepared.reactions.is_empty() {
             return Ok(Vec::new());
@@ -2092,9 +2098,14 @@ impl Backend {
             };
             // Le bus, le registre du retard et la cellule : la montre et sa
             // réaction travaillent dans la cellule du catalogue.
-            let (bus, lag, cell) = {
+            // Et la référence de la réconciliation : l'empreinte que l'index
+            // garde par fichier. Un index vide (jamais indexé) ne réconcilie
+            // pas : la montre ne fait pas d'indexation entière à la place
+            // d'`index`.
+            let (bus, lag, cell, indexed) = {
                 let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
-                (cat.event_bus(), cat.file_lag(), cat.scope().clone())
+                let indexed = crate::watch::indexed_files(&cat, source.as_ref()).ok().filter(|i| !i.is_empty());
+                (cat.event_bus(), cat.file_lag(), cat.scope().clone(), indexed)
             };
             let mut mounted = Vec::new();
             for (name, config) in &prepared.manifest.watches {
@@ -2104,7 +2115,7 @@ impl Backend {
                         config.source
                     ));
                 }
-                slot.push(crate::watch::spawn(name, config, root.clone(), source.clone(), bus.clone(), lag.clone(), cell.clone())?);
+                slot.push(crate::watch::spawn(name, config, root.clone(), source.clone(), bus.clone(), lag.clone(), cell.clone(), indexed.clone())?);
                 mounted.push(name.clone());
             }
             Ok(mounted)
@@ -3003,6 +3014,17 @@ impl Backend {
         if let Some(lag) = cat.file_lag().summary_in(cat.scope()) {
             etats.insert("lag".to_string(), json!({"files": lag.files, "since_ms": lag.since_ms}));
         }
+        // Ce que coûtent les montres, par phase : où passe le temps au repos.
+        let montres: serde_json::Map<String, Value> = self
+            .watches
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|h| (h.name().to_string(), serde_json::to_value(h.stats()).unwrap_or_default()))
+            .collect();
+        if !montres.is_empty() {
+            etats.insert("watches".to_string(), Value::Object(montres));
+        }
         Ok(Value::Object(etats))
         }
     }
@@ -3798,6 +3820,32 @@ mod tests {
         std::fs::write(dir.path().join("sources/nouveau.rs"), "pub fn arrivee() {}\nfn appelant() { arrivee(); }\n").unwrap();
         let u = attendre_les_usages(&backend, "arrivee", |u| u.contains("appelant"));
         assert!(u.contains("nouveau.rs") && u.contains("appelant"), "le fichier créé n'a pas été indexé : {u}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **La montre réconcilie au démarrage** : l'index est fait, des fichiers
+    /// changent pendant que rien ne surveille (la montre n'est pas encore
+    /// montée) ; au démarrage de la montre, le disque est comparé à
+    /// l'empreinte que l'index garde par fichier, et `usages` voit l'édition
+    /// et la suppression sans `index` (la base de Lucie, le 11 octobre).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_watch_reconciles_what_moved_before_it_started() {
+        let (dir, backend) = backend_qui_surveille();
+        std::fs::write(dir.path().join("sources/main.rs"), "fn main() { depart(); }\nfn pendant() { depart(); }\n").unwrap();
+        std::fs::write(dir.path().join("sources/neuf.rs"), "fn neuf() { depart(); }\n").unwrap();
+        backend.mount_reactions().unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("pendant") && u.contains("neuf"));
+        assert!(u.contains("pendant") && u.contains("neuf"), "ce qui a bougé avant la montre n'est pas repris : {u}");
+        // Ce que la montre coûte se lit dans l'état.
+        let montre = &backend.index_states().unwrap()["watches"]["code"];
+        assert!(montre["scans"].as_u64().unwrap_or(0) > 0, "{montre}");
+        assert!(backend.stop_reactions().is_empty());
+        // Et une suppression faite pendant l'arrêt : reprise au redémarrage.
+        std::fs::remove_file(dir.path().join("sources/neuf.rs")).unwrap();
+        backend.mount_reactions().unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| !u.contains("neuf"));
+        assert!(!u.contains("neuf"), "la suppression faite à l'arrêt n'est pas reprise : {u}");
         assert!(backend.stop_reactions().is_empty());
     }
 
