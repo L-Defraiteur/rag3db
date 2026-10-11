@@ -1,6 +1,6 @@
 {
   "name": "rag3weaver",
-  "version": "0.0.1-alpha.2",
+  "version": "0.0.1-alpha.3",
   "description": "rag3weaver backend for Node: the native binary (graph database, hybrid search, code agent tools) launched and driven over JSON lines",
   "main": "index.js",
   "types": "index.d.ts",
@@ -32,9 +32,9 @@
     "test": "node test/essai.js && node test/sonde_copy.js"
   },
   "optionalDependencies": {
-    "rag3weaver-linux-x64-gnu": "0.0.1-alpha.2",
-    "rag3weaver-windows-x64": "0.0.1-alpha.2",
-    "rag3weaver-darwin-arm64": "0.0.1-alpha.2"
+    "rag3weaver-linux-x64-gnu": "0.0.1-alpha.3",
+    "rag3weaver-windows-x64": "0.0.1-alpha.3",
+    "rag3weaver-darwin-arm64": "0.0.1-alpha.3"
   },
   "bin": {
     "rag3weaver-unit": "bin/rag3weaver-unit.js"
