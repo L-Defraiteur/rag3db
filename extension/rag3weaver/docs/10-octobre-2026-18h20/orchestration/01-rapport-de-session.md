@@ -745,3 +745,13 @@ Puis `npm view rag3weaver@next version optionalDependencies`,
 Les archives de `786dfec13` (COPY journalisé sans filet) restent étiquetées
 « ne pas publier ». L'alpha suivante portera le correctif du moteur
 (`60d74a4e2`) et la fin du filet.
+
+**Ajout de 4 h 55 : le filet est retiré** (`f9bf4574d`). La lib d'ici porte
+le correctif (04 h 33, md5 `00a1dde0…` / `5b026608…`) : la sonde d'origine
+trouve 0 ligne fausse en 5 passes ; le témoin de rag3weaver est vert sans le
+filet (6 COPY de 200 000 lignes, deux passes) ; ticket fermé dans `closed/`
+(51 ouverts, 60 fermés) ; la ligne « filet temporaire » a quitté la page des
+défauts. Mesuré : le filet coûtait ~4 s sur la lib complète (25,3 → 21,4 s) ;
+le reste du passage de 10 à 21 s (~11 s) n'est pas imputé — suspects : les
+tests ajoutés cette nuit ; au knowledge dump, pas d'enquête. La condition 2
+est entière de nouveau, et le COPY journalisé est le défaut sans réserve.
