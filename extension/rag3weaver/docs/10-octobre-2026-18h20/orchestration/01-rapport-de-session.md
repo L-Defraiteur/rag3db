@@ -639,3 +639,21 @@ faut plus d'un groupe. Les bases écrites par rag3weaver depuis hier 15 h 54
 n'ont donc pas de valeurs fausses au repos si un point de reprise a suivi
 (ce que l'indexation fait) ; à vérifier quand même sur une base qui compte.
 G refait les quatre archives alpha.2 sur ce master.
+
+## 14. Ajout de 4 h : la mémoire longue est branchée par MCP
+
+Ordre A joué par la session mémoire (`ca9806d06`) : manifeste à
+`~/.config/rag3weaver/memoire-longue/`, base à
+`~/.local/share/rag3weaver/memoire-longue.rag3db`, binaire copié hors du
+target dans `~/.local/bin/rag3weaver-backend`. **La page pour Lucie** :
+`docs/10-octobre-2026-18h00/07-l-ordre-a-la-memoire-branchee.md`, recette en
+trois lignes dont la troisième, `claude mcp add`, **prête et non jouée** (elle
+écrit dans sa configuration). Mesuré : un processus écrit sujet + mémoire +
+genre + référence, un autre les retrouve. Deux défauts du lot précédent
+trouvés en jouant (l'arrêt n'arrêtait pas les réactions ; le serveur ne disait
+pas ses réactions montées) et corrigés. Un troisième réglé dans la foulée :
+aucun outil n'écrivait `ANCHORED_TO`, la réaction tournait à vide — un outil
+d'ancrage déclaré en six lignes sur une pièce existante. **La question de
+l'ordre A — Claude range-t-il spontanément ? — se tranche au matin par une
+session vierge, chez Lucie, après son `claude mcp add`** ; la session qui a
+écrit l'outil ne peut pas y répondre.
