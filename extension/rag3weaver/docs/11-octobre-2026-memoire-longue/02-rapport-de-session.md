@@ -1,4 +1,4 @@
-# Rapport de session — mémoire longue, 11 octobre 2026 (matin, midi, après-midi et soir)
+# Rapport de session — mémoire longue, 11 octobre 2026 (matin, midi, après-midi, soir et nuit)
 
 *Pour Lucie et pour l'orchestration. Ce qui est sur master, ce qui reste, ce qui attend.*
 
@@ -66,16 +66,37 @@ les trois services d'embarquement. Sa copie du gabarit `code` a reçu la montre 
 réaction (sauvegardes `*.avant-montre-11-oct-17h02`) : une édition à la main est vue par
 `usages` en 5 à 6 s, un fichier créé en 4,7 s, et retirés en 4 à 6 s.
 
+## Le soir, sur master
+
+| commit | ce que c'est |
+|---|---|
+| `30ce3aadc`, `519ae1d9f` | **le banc des fiches classées** et ses deux tentatives datées (`templates/experiments/…-fiches-classees-1` et `-2`) ; puis la suite gardée par la feature `daemon` — **master était rouge par moi** sous deux jeux, mon contrôle comptait des verts au lieu de chercher un rouge |
+| `25c8a5d5e` | **le bâti dit son moteur** : `build_id()` porte `CALL build_id()` (relu par l'arbre principal) |
+| `e9d690915` | **la cellule des bouts d'un lien** : `from_cell` / `to_cell`, refus nommé avec la cellule, `add_ref` dans la cellule de l'appel (rouge prouvé sur l'ancien code) |
+| `edfe2aa9d` | **les bancs à services écartés en le disant** dans `run_e2e.sh` (le seul rouge de la batterie de la recherche) |
+| `1266adef0` | **le client mince revient seul** : démarrage jamais bloqué plus de 4 s, reprise toutes les 10 s, `notifications/tools/list_changed` ; une coupure en plein appel se dit et ne se rejoue pas (retours du cœur C++) |
+
+**La tentative 2 des fiches** : Qwen3-1.7B local, 25 / 39 fiches justes, 8 / 8 abstentions,
+3 faux ancrages sûrs d'eux (0,96 à 1,0 sur l'étiquette choisie : un seuil n'y peut rien),
+62 ms la décision ; Gemini tronqué par le plafond de 512 jetons de `Decide` (le proto pose
+`max_tokens`, la tentative 3 l'attend).
+
+**Le binaire de Lucie, réparé à 21 h** : la lib de l'arbre principal a changé d'ABI avec B2 ;
+le binaire installé ne démarrait plus (`undefined symbol …SystemConfig…`), donc aucune
+nouvelle session de Lucie n'aurait eu ses serveurs MCP. Rebâti contre B2, prouvé à l'écart
+(`--describe`, un hôte d'essai sur 7990, un client de boutique), installé par renommage
+sans toucher à son hôte, qui tourne sur l'ancienne image. Son redémarrage attend les
+défenses de l'arbre principal contre la boucle de `run_index` (le gel de luciepc), au plus
+tard à 0 h 15.
+
 ## Ce qui reste
 
-- **Le banc des fiches classées**, puis la première tentative datée (le sujet au
-  `put_memory`), maintenant que `Decide` a son `prompt` (branche `banc-fiches-classees`).
-- **La marche 5, seconde part** : l'hôte déclaré au manifeste, le backend nommé plutôt
-  que son chemin.
-- **La forme B de l'enveloppe** : attend les deux vérifications de l'arbre principal et
-  la §6.
-- **La cellule des bouts d'un lien** (`to_cell`) : la migration de l'arbre principal est
-  faite, à prendre après le banc.
+- **Le redémarrage de l'hôte de Lucie**, puis 5 minutes de surveillance et la remesure de la
+  montre (`index_state` → `watches.code`, pour le proto) ; la réconciliation de la montre
+  remplace la réindexation entière.
+- **La tentative 3 des fiches** quand `Decide` aura `max_tokens`.
+- **La marche 5, seconde part** : l'hôte déclaré au manifeste, le backend nommé.
+- **La forme B de l'enveloppe** : attend la §6.
 
 ## Tickets
 
@@ -113,3 +134,12 @@ basculée ; le banc `pg_trgm` (cause trouvée, à F).
 - **Une passe longue ne gagne pas la course contre master** : trois pushes perdus, puis
   une fenêtre, puis `poste push` (le verrou de G) ; une avance faite de docs seules se
   rebase et se pousse sans rejeu.
+- **Vert est aucun rouge.** Compter « 4 verts » a laissé passer un rouge quand la liste est
+  passée à cinq ; et `$?` après un tube est celui de `tail`. Le contrôle juge maintenant
+  l'absence de rouge et le vrai code de sortie — il a ensuite refusé, à raison, un push où
+  l'index des tickets avait perdu une ligne.
+- **Un tick n'est pas un pour cent.** 69 tops de `/proc/<pid>/stat` en 10 s font 7 % d'un
+  cœur, pas 69 % : le proto l'a relevé, mon ticket surestimait d'un facteur dix.
+- **Un binaire installé dépend d'une lib qu'on rebâtit sous lui.** Un changement d'ABI casse
+  les clients au prochain démarrage, pas l'hôte qui tourne : après tout rebâti de la lib,
+  vérifier que le binaire installé démarre encore.
