@@ -222,6 +222,20 @@ seul se vérifie par `cargo check --tests --features <jeu>`. À jouer avant tout
 hash qui touche `tests/` ou les features de `Cargo.toml`. Un jeu nouveau,
 employé par une session ou un script, s'ajoute au tableau **et** au script.
 
+### 8 bis. Les bancs à services, écartés en le disant (11 octobre, au soir)
+
+Un banc dont l'objet est un service que la batterie ne pose pas refuse sans lui, et c'est
+juste : `e2e_banc_fiches_classees` exige `RAG3WEAVER_BANC_DECIDE` (un llama-server) ou
+`RAG3WEAVER_BANC_VERTEX` (Gemini), et rouge sans eux plutôt que de passer pour vert. Tel
+quel, il était le seul rouge de la batterie de clôture de la recherche (596 passés,
+1 échoué). `run_e2e.sh` le range désormais dans `BANCS_A_SERVICES` (`suite:VAR1|VAR2`,
+l'une des variables suffit) : sans aucune de ses variables, il est **écarté et nommé** au
+départ (« NON JOUÉE, banc à services : posez … »), au résumé (« ÉCARTÉE — banc à
+services ») et à la dernière ligne (« Passe complète hors bancs à services »). Avec une de
+ses variables, il se joue ; nommé par `--test`, toujours. Pas une feature : il reste
+visible dans chaque compte rendu (décision de l'orchestration). Un banc à services de
+plus s'ajoute à la liste, avec ses variables.
+
 ## 9. Un target ne sert qu'un arbre à la fois
 
 Codeparsers l'a vu le 11 octobre : sous un target partagé par deux worktrees,

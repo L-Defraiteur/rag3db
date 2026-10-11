@@ -425,6 +425,38 @@ esac
 SUITES_CARTE_LOCALE=(e2e_burn_ e2e_demon_embeddings e2e_mesure_ingestion_code e2e_banc_bge_m3)
 SANS_CARTE_LOCALE="${RAG3WEAVER_SANS_CARTE_LOCALE:-1}"
 ECARTEES_CARTE_LOCALE=()
+# ── Les bancs à services ────────────────────────────────────────────────────
+#
+# Un banc dont l'objet est un service que la batterie ne pose pas (un
+# llama-server, Vertex) refuse sans lui, et c'est juste : un banc sauté n'est
+# pas un banc vert. Mais tel quel il rougirait toute batterie ordinaire. Il est
+# donc **écarté en le disant** quand aucune de ses variables n'est posée, comme
+# les suites de la carte locale : nommé au départ et au résumé, et la passe se
+# dit « complète hors bancs à services ». Une suite nommée par `--test` se joue
+# toujours. Forme : `suite:VAR1|VAR2` — l'une des variables suffit à la jouer
+# (décision de l'orchestration, 11 octobre 2026, au soir).
+BANCS_A_SERVICES=("e2e_banc_fiches_classees:RAG3WEAVER_BANC_DECIDE|RAG3WEAVER_BANC_VERTEX")
+ECARTEES_BANCS=()
+banc_sans_service() {
+  local entree vars v
+  for entree in "${BANCS_A_SERVICES[@]}"; do
+    [ "${entree%%:*}" = "$1" ] || continue
+    vars="${entree#*:}"
+    IFS='|' read -r -a vs <<< "$vars"
+    for v in "${vs[@]}"; do
+      [ -n "${!v:-}" ] && return 1
+    done
+    return 0
+  done
+  return 1
+}
+services_du_banc() {
+  local entree
+  for entree in "${BANCS_A_SERVICES[@]}"; do
+    [ "${entree%%:*}" = "$1" ] && { echo "${entree#*:}" | sed 's/|/ ou /g'; return 0; }
+  done
+}
+
 est_de_la_carte_locale() {
   local motif
   for motif in "${SUITES_CARTE_LOCALE[@]}"; do
@@ -454,12 +486,19 @@ else
       ECARTEES_CARTE_LOCALE+=("$nom")
       continue
     fi
+    if banc_sans_service "$nom"; then
+      ECARTEES_BANCS+=("$nom")
+      continue
+    fi
     CARGO_ARGS+=(--test "$nom")
   done
   if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
     echo "▸ ⚠ ${#ECARTEES_CARTE_LOCALE[@]} suites NON JOUÉES (carte locale, RAG3WEAVER_SANS_CARTE_LOCALE=0 pour les jouer) :"
     echo "    ${ECARTEES_CARTE_LOCALE[*]}"
   fi
+  for nom in "${ECARTEES_BANCS[@]}"; do
+    echo "▸ ⚠ $nom NON JOUÉE (banc à services : posez $(services_du_banc "$nom") pour la jouer)"
+  done
 fi
 
 # Une suite en échec n'arrête pas les autres : sans ça, cargo s'arrête au
@@ -982,6 +1021,9 @@ if [ "$SUMMARY" = true ]; then
   for nom in "${ECARTEES_CARTE_LOCALE[@]}"; do
     say "  %-30s ÉCARTÉE — carte locale\n" "$nom"
   done
+  for nom in "${ECARTEES_BANCS[@]}"; do
+    say "  %-30s ÉCARTÉE — banc à services (%s)\n" "$nom" "$(services_du_banc "$nom")"
+  done
 
   say "───────────────────────────────────────────────\n"
   if [ "$TOTAL_FAILED" -eq 0 ]; then
@@ -991,6 +1033,9 @@ if [ "$SUMMARY" = true ]; then
   fi
   if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
     say "  %-30s complète hors carte locale (%d suites écartées)\n" "" "${#ECARTEES_CARTE_LOCALE[@]}"
+  fi
+  if [ ${#ECARTEES_BANCS[@]} -gt 0 ]; then
+    say "  %-30s complète hors bancs à services (%d suite(s) écartée(s))\n" "" "${#ECARTEES_BANCS[@]}"
   fi
   if [ "$NOT_RUN" -gt 0 ]; then
     say "  %-30s INCOMPLETE — %d suite(s) not run\n" "" "$NOT_RUN"
@@ -1032,6 +1077,9 @@ else
   fi
   if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
     echo "Passe complète hors carte locale : ${ECARTEES_CARTE_LOCALE[*]} écartées."
+  fi
+  if [ ${#ECARTEES_BANCS[@]} -gt 0 ]; then
+    echo "Passe complète hors bancs à services : ${ECARTEES_BANCS[*]} écartée(s)."
   fi
   if [ -n "$CHARGE_PID" ]; then
     kill "$CHARGE_PID" 2>/dev/null || true
