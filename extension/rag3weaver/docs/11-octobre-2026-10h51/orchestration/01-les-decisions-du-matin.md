@@ -1192,3 +1192,39 @@ où elle vit.
   lot suivant du cœur, page 12 §10 : lecture par décalages sous un petit
   masque par `lookupMultiple`, décidée sur la cardinalité exacte du masque à
   l'exécution) ; F remesure sur la lib corrigée avant de fusionner.
+- **3 h 55 – 4 h 25, nuit : les « 6 secondes » expliquées, le P1 clos.**
+  Mesure par phase du proto (index de src/, 180 fichiers, 15 631 morceaux) :
+  réindexer un fichier 2,5 à 3,9 s dont **0,47 s d'ingestion** ; le reste
+  est une seule instruction, le DETACH DELETE des morceaux du scope changé :
+  **2,1 à 2,9 s pour une seule ligne qui porte un vecteur sous index HNSW**
+  (11 ms sans vecteur ; retirer 45 morceaux : 112 s contre 259 ms) ; et à
+  l'index initial 309 s sur 329 à écrire 15 631 vecteurs (**~20 ms par
+  vecteur**). Contournement approuvé, côté dialecte et rag3db seulement
+  (SchemaDialect::vector_columns_to_clear / clear_vector_by_parent : NULL
+  sur les colonnes vecteur par lot avant le DETACH DELETE) : réindexer un
+  fichier passe à **0,73-1,03 s** ; le défaut moteur part en ticket à
+  hotfixs (l'extension vector), les témoins avant le code au banc
+  (suppression sous HNSW avec et sans index, insertion par lot à 1/8/32
+  fils). Le rendez-vous par les symboles de l'arbre principal attend la
+  mesure finale ; il prend les manques de la page 04 dans son ordre (tests
+  par requêtes suivis, portée, verrous du chemin). **P1 clos** : la
+  réécriture des vides remise en marche (`2b0642b1e`), le ticket fermé avec
+  les suites produit (`961dd7b05`), et **le recomptage de F sur la copie
+  scellée avec la lib corrigée : 0 vide sur 128 732**, rien réécrit ; reste
+  la base vivante de Lucie après le redémarrage du matin (0 attendu). Le
+  banc : témoin du balayage prouvé des deux côtés, garde des grosses listes
+  (`410092032`), règle « pas de rouge annoncé sans l'avoir joué » (son
+  premier témoin ne touchait pas le défaut). **Le binaire du matin de Lucie
+  est prouvé** (mémoire, `~/.cache/rag3weaver-build/binaire-matin-d2b83e5e5080`,
+  md5 d2b83e5e5080…, master acdb91764 ≥ e6f626df4, RUNPATH vers l'identifiant
+  f6179ade… du magasin, sans LD_LIBRARY_PATH : readelf, ldd, check-lib « même
+  bâti », --describe, hôte d'essai, client de boutique ; rapport `4ac16805d`
+  avec la commande d'arrêt pour Lucie) ; codeparsers a le triplet. **G** : B1
+  sur master (`617839ede`, libc/windows-sys par cible), B2 relu par F avec un
+  test de plus, B3 relu par le cœur ; sur luciepc, bâti complet dans son
+  worktree à acdb91764 : lib et extension publiées au magasin de luciepc
+  (créé), binaire et rag3db-check-lib liés par RUNPATH à cet identifiant,
+  tout en `.pret`, ExecStartPre préparé inactif, derrière le client de
+  codeparsers ; **décidé avec hotfixs : le bâti de G au magasin fait foi
+  pour l'hôte de luciepc**, rag3db-lourd ne se rebâtit en place que si
+  codeparsers nomme un outil qui le lie encore.

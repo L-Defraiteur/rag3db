@@ -116,10 +116,14 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
   code-rag3db effacé et réindexé, redémarrage) attend ton `kill -TERM` sur
   le pid de l'hôte, commande exacte dans le rapport de la mémoire
   (`419b87a36`), ou ton autorisation dans sa session.
-- **Le P1 (20 % de morceaux « sans texte ») est résolu dans sa cause et tes
-  textes sont intacts** : un balayage filtré des chaînes du moteur rendait
-  vide ou faux (string_column.cpp:240) ; correctif du cœur en cours, lib à
-  rebâtir ; c'était aussi la cause de la boucle de luciepc.
+- **Le P1 (20 % de morceaux « sans texte ») est clos et tes textes sont
+  intacts** : un balayage filtré des chaînes du moteur rendait vide ou faux
+  (string_column.cpp:240) ; correctif du cœur sur master (`e6f626df4`), lib
+  d'ici rebâtie et publiée au magasin, recomptage de ta copie : 0 vide sur
+  128 732 ; c'était aussi la cause de la boucle de luciepc. **Les « 6 s »** :
+  2,5 s par ligne supprimée sous index HNSW (défaut moteur, ticket à
+  hotfixs), contourné par le proto : réindexer un fichier passe sous la
+  seconde.
 - **luciepc, dans l'ordre** (section « Pour Lucie » du rapport de codeparsers,
   `docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`, et la
   note de hotfixs `ba63aa135`) : terminer le client d'index 132918 (libère
