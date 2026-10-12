@@ -104,6 +104,9 @@ pub mod burn_ppocr;
 /// Le code comme graphe : `File` / `Scope` / `Library` via `codeparsers`.
 #[cfg(feature = "code")]
 pub mod code;
+/// Les tests par requêtes (`workspace.queries_via`) : le relevé d'un lot.
+#[cfg(feature = "code")]
+pub mod queries_via;
 /// `read` et `grep` sur une `FileSource`, annotés par le graphe.
 #[cfg(feature = "code")]
 pub mod code_tools;

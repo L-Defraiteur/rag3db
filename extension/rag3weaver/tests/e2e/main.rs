@@ -220,6 +220,8 @@ mod e2e_symbol_search;
 mod e2e_synchronisation;
 #[path = "../e2e_tampon_plein.rs"]
 mod e2e_tampon_plein;
+#[path = "../e2e_tests_par_requetes.rs"]
+mod e2e_tests_par_requetes;
 #[path = "../e2e_titre_indexe.rs"]
 mod e2e_titre_indexe;
 #[path = "../e2e_tx_ligne_a_ligne.rs"]

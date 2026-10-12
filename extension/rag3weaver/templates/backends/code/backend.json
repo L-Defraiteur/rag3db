@@ -11,7 +11,107 @@
     "source": "working_tree",
     "root": "workspace",
     "commands": "approval",
-    "index": "code"
+    "index": "code",
+    "queries_via": {
+      "test_files": "^test/test_files/.*\\.test$",
+      "registered_name": "static constexpr const char\\* name = \"([A-Za-z_][A-Za-z0-9_]*)\"",
+      "keywords_dated": "2026-10-12 : 24 mots, relevés sur src/include/processor/operator ; page des manques de codeparsers",
+      "keywords": {
+        "ALTER": [
+          "Alter"
+        ],
+        "ATTACH": [
+          "AttachDatabase"
+        ],
+        "BEGIN": [
+          "Transaction"
+        ],
+        "CALL": [
+          "StandaloneCall"
+        ],
+        "COMMIT": [
+          "Transaction"
+        ],
+        "COPY": [
+          "NodeBatchInsert",
+          "RelBatchInsert",
+          "CopyTo"
+        ],
+        "CREATE": [
+          "Insert",
+          "CreateTable",
+          "CreateSequence",
+          "CreateType",
+          "CreateMacro"
+        ],
+        "DELETE": [
+          "DeleteNode",
+          "DeleteRel",
+          "SingleLabelNodeDeleteExecutor",
+          "MultiLabelNodeDeleteExecutor",
+          "SingleLabelRelDeleteExecutor",
+          "MultiLabelRelDeleteExecutor",
+          "EmptyNodeDeleteExecutor",
+          "EmptyRelDeleteExecutor"
+        ],
+        "DROP": [
+          "Drop"
+        ],
+        "EXPORT": [
+          "ExportDB"
+        ],
+        "IMPORT": [
+          "ImportDB"
+        ],
+        "INSTALL": [
+          "InstallExtension"
+        ],
+        "LIMIT": [
+          "Limit"
+        ],
+        "LOAD": [
+          "LoadExtension"
+        ],
+        "MATCH": [
+          "ScanTable",
+          "IndexLookup"
+        ],
+        "MERGE": [
+          "Merge"
+        ],
+        "ORDER": [
+          "OrderBy",
+          "OrderByMerge",
+          "OrderByScan"
+        ],
+        "PROFILE": [
+          "Profile"
+        ],
+        "ROLLBACK": [
+          "Transaction"
+        ],
+        "SET": [
+          "SetNodeProperty",
+          "SetRelProperty",
+          "SingleLabelNodeSetExecutor",
+          "MultiLabelNodeSetExecutor",
+          "SingleLabelRelSetExecutor",
+          "MultiLabelRelSetExecutor"
+        ],
+        "SKIP": [
+          "Skip"
+        ],
+        "UNWIND": [
+          "Unwind"
+        ],
+        "USE": [
+          "UseDatabase"
+        ],
+        "WHERE": [
+          "Filter"
+        ]
+      }
+    }
   },
   "entities": {},
   "tools": {

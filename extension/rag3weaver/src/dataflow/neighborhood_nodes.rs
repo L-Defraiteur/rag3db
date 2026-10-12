@@ -47,7 +47,8 @@ pub const MAX_BUDGET: usize = 2_000;
 
 /// Un pas d'un chemin déclaré : une relation et son sens. Dans `also_path`,
 /// un pas peut nommer plusieurs relations (`IMPLEMENTS/INHERITS_FROM>`) et
-/// se répéter (`…>+` : de 1 à [`MAX_REPEAT`] niveaux, une hiérarchie).
+/// se répéter (`…>+` : de 1 à [`MAX_REPEAT`] niveaux, une hiérarchie), ou
+/// être facultatif (`…>?` : zéro ou un saut, le nœud lui-même compris).
 #[derive(Debug, Clone)]
 pub struct Step {
     /// La première relation (la seule hors de `also_path`).
@@ -56,12 +57,14 @@ pub struct Step {
     pub alternatives: Vec<String>,
     pub direction: Direction,
     pub repeat: bool,
+    /// Zéro ou un saut : le nœud de départ du pas reste dans la suite.
+    pub optional: bool,
 }
 
 impl Step {
     /// Un pas d'une seule relation, non répété.
     pub fn new(relation: &str, direction: Direction) -> Self {
-        Step { relation: relation.to_string(), alternatives: vec![relation.to_string()], direction, repeat: false }
+        Step { relation: relation.to_string(), alternatives: vec![relation.to_string()], direction, repeat: false, optional: false }
     }
 }
 
@@ -92,6 +95,13 @@ pub struct NeighborhoodConfig {
     /// la relation déclarée suivie d'un pas — pour le code, les verrous que
     /// chaque scope prend (`LOCKS>`).
     pub collect: Option<Collect>,
+    /// **Les tests par requêtes** : un chemin déclaré, suivi depuis chaque
+    /// nœud atteint (départs compris) ; au bout, les nœuds du groupe déclaré
+    /// (pour le code : un test qui demande ce que le nœud ou sa classe
+    /// définit ou enregistre, `HAS_PARENT>?|DEFINES/REGISTERS>|<QUERIES`)
+    /// sont relevés comme traversants, notés `queried_note`. Vide : rien.
+    pub queried_by: Vec<Step>,
+    pub queried_note: String,
 }
 
 /// **Un relevé sur le chemin**, déclaré au gabarit : la relation et son sens,
@@ -153,6 +163,10 @@ pub struct NeighborhoodReport {
     pub depth: usize,
     /// Le relevé sur le chemin (vide sans `collect`).
     pub collected: Vec<Collected>,
+    /// Le gabarit déclare un chemin de tests par requêtes, mais l'index n'en
+    /// a jamais écrit la relation : « 0 tests » n'y veut rien dire.
+    #[serde(default)]
+    pub queries_untracked: bool,
 }
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
@@ -337,7 +351,9 @@ pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(S
             for relation in &pas.alternatives {
                 let rel = rel_info(catalog, relation)?;
                 let mut hop = super::graph_walk::hop_of(&rel, pas.direction, &super::graph_walk::EdgeMark::default());
-                if dernier {
+                // `same` vide : rien à comparer au bout, le chemin seul.
+                let filtre = dernier && !same.is_empty();
+                if filtre {
                     hop.returns.push(Column::Node(same.to_string()));
                 }
                 let q = catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
@@ -346,7 +362,7 @@ pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(S
                     let de = texte(r.first());
                     let Some(nom_depart) = origine.get(de.as_str()) else { continue };
                     let vers = texte(r.get(1));
-                    if dernier && texte(r.get(2)) != *nom_depart {
+                    if filtre && texte(r.get(2)) != *nom_depart {
                         continue;
                     }
                     suivant.push((vers, nom_depart.to_string()));
@@ -371,6 +387,13 @@ pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(S
                 front = neufs;
             }
             courant = tous;
+        } else if pas.optional {
+            // Zéro ou un saut : la suite part du nœud et de ce qu'il atteint.
+            let mut suivant = courant.clone();
+            suivant.extend(sauter(&courant)?);
+            suivant.sort();
+            suivant.dedup();
+            courant = suivant;
         } else {
             courant = sauter(&courant)?;
         }
@@ -410,6 +433,60 @@ fn relever(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], atteints: 
     out.sort_by(|a, b| (&a.target, a.level, &a.by, &a.note).cmp(&(&b.target, b.level, &b.by, &b.note)));
     out.dedup_by(|a, b| a.target == b.target && a.by == b.by && a.note == b.note);
     Ok(out)
+}
+
+/// La clé de méta qu'une ingestion pose quand elle écrit des arêtes d'une
+/// relation : ce qui distingue « aucun test par requête » de « jamais relié ».
+pub fn written_key(relation: &str) -> String {
+    format!("written:{relation}")
+}
+
+/// **Les tests par requêtes** (`queried_by`) : depuis les départs (niveau 0)
+/// et chaque nœud atteint, le chemin déclaré ; au bout, les nœuds du groupe
+/// déclaré qui ne sont pas déjà relevés, au niveau de leur origine plus un,
+/// notés `queried_note`. Rend aussi si la relation du dernier pas n'a jamais
+/// été écrite dans cet index.
+fn interroges(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], mut atteints: Vec<Reached>) -> Result<(Vec<Reached>, bool), String> {
+    let cfg = moteur.cfg;
+    let Some(dernier) = cfg.queried_by.last() else { return Ok((atteints, false)) };
+    let jamais = dernier
+        .alternatives
+        .iter()
+        .all(|rel| moteur.catalog.read_meta_key(&written_key(rel)).ok().flatten().is_none());
+    if jamais {
+        return Ok((atteints, true));
+    }
+    let mut niveau: HashMap<String, usize> = HashMap::new();
+    for d in departs {
+        niveau.insert(d.uuid.clone(), 0);
+    }
+    for a in &atteints {
+        niveau.entry(a.uuid.clone()).or_insert(a.level);
+    }
+    let origines: Vec<(String, String)> = niveau.keys().map(|u| (u.clone(), u.clone())).collect();
+    let bouts = follow_also(moteur.catalog, &cfg.queried_by, "", &origines)?;
+    let deja: HashSet<String> = atteints.iter().map(|a| a.uuid.clone()).chain(departs.iter().map(|d| d.uuid.clone())).collect();
+    let mut meilleur: HashMap<String, usize> = HashMap::new();
+    for (bout, origine) in bouts {
+        if deja.contains(&bout) {
+            continue;
+        }
+        let l = niveau.get(&origine).copied().unwrap_or(0) + 1;
+        let e = meilleur.entry(bout).or_insert(l);
+        *e = (*e).min(l);
+    }
+    if meilleur.is_empty() {
+        return Ok((atteints, false));
+    }
+    let uuids: Vec<String> = meilleur.keys().cloned().collect();
+    for m in fiches(moteur, &uuids)? {
+        if m.group.is_empty() {
+            continue;
+        }
+        let level = meilleur.get(&m.uuid).copied().unwrap_or(1);
+        atteints.push(Reached { level, relation: dernier.relation.clone(), note: cfg.queried_note.clone(), ..m });
+    }
+    Ok((atteints, false))
 }
 
 /// Le voisinage d'un nom, jusqu'à `depth` sauts, au plus `budget` nœuds
@@ -470,8 +547,9 @@ pub fn neighborhood_of(
     }
 
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
+    let (atteints, queries_untracked) = interroges(&moteur, &usages.definitions, atteints)?;
     let collected = relever(&moteur, &usages.definitions, &atteints)?;
-    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth, collected })
+    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth, collected, queries_untracked })
 }
 
 /// **L'impact d'un fichier** : le même voisinage, parti de toutes les
@@ -512,8 +590,9 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
     let uuids: Vec<String> = departs.iter().map(|d| d.uuid.clone()).collect();
     let premiers: Vec<Reached> = moteur.saut(&uuids)?.into_iter().map(|(_, m)| m).collect();
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
+    let (atteints, queries_untracked) = interroges(&moteur, &departs, atteints)?;
     let collected = relever(&moteur, &departs, &atteints)?;
-    Ok(NeighborhoodReport { name: file.to_string(), starts: departs, ambiguous: false, reached: atteints, cut, depth, collected })
+    Ok(NeighborhoodReport { name: file.to_string(), starts: departs, ambiguous: false, reached: atteints, cut, depth, collected, queries_untracked })
 }
 
 /// Le parcours par niveaux, commun aux deux départs : dédoublonner, couper
@@ -734,6 +813,11 @@ impl NeighborhoodReport {
         ));
         if !group_title.is_empty() {
             out.push_str(&format!(" — dont **{} {group_title}**", groupes.iter().filter(|r| !r.by_also).count()));
+            if self.queries_untracked {
+                // Un 0 sec mentirait : les tests qui passent par des requêtes
+                // ne sont pas reliés dans cet index.
+                out.push_str(" (tests par requêtes : non suivis — `workspace.queries_via` non déclaré pour cet index)");
+            }
         }
         if self.cut > 0 {
             out.push_str(&format!(" ; budget atteint, {} de plus non rendus", self.cut));
@@ -909,6 +993,10 @@ fn liste(v: Option<&serde_json::Value>) -> Vec<String> {
 
 /// `HAS_PARENT>` (sortant) ou `<IMPLEMENTS` (entrant).
 pub fn pas(s: &str) -> Result<Step, String> {
+    let (s, optional) = match s.strip_suffix('?') {
+        Some(r) => (r, true),
+        None => (s, false),
+    };
     let (s, repeat) = match s.strip_suffix('+') {
         Some(r) => (r, true),
         None => (s, false),
@@ -918,11 +1006,11 @@ pub fn pas(s: &str) -> Result<Step, String> {
     } else if let Some(r) = s.strip_prefix('<') {
         (r, Direction::Incoming)
     } else {
-        return Err(format!("NeighborhoodNode: pas « {s} » : écrire REL> (sortant) ou <REL (entrant), A/B> pour plusieurs relations, + pour répéter"));
+        return Err(format!("NeighborhoodNode: pas « {s} » : écrire REL> (sortant) ou <REL (entrant), A/B> pour plusieurs relations, + pour répéter, ? pour un pas facultatif"));
     };
     let alternatives: Vec<String> = r.split('/').map(str::trim).filter(|x| !x.is_empty()).map(String::from).collect();
     let relation = alternatives.first().cloned().ok_or_else(|| format!("NeighborhoodNode: pas « {s} » sans relation"))?;
-    Ok(Step { relation, alternatives, direction, repeat })
+    Ok(Step { relation, alternatives, direction, repeat, optional })
 }
 
 impl NodeFactory for NeighborhoodNodeFactory {
@@ -958,6 +1046,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             Some(d) => return Err(format!("NeighborhoodNode: sens inconnu « {d} »")),
         };
         let also_path = liste(config.get("also_path")).iter().map(|p| pas(p)).collect::<Result<Vec<_>, _>>()?;
+        let queried_by = liste(config.get("queried_by")).iter().map(|p| pas(p)).collect::<Result<Vec<_>, _>>()?;
         check_also_path(&also_path).map_err(|e| format!("NeighborhoodNode: also_path : {e}"))?;
         let mut start_cfg = start;
         start_cfg.direct = relations.clone();
@@ -971,6 +1060,8 @@ impl NodeFactory for NeighborhoodNodeFactory {
             also_same: s("also_same").unwrap_or_else(|| "name".into()),
             also_label: s("also_label").unwrap_or_else(|| "Aussi, peut-être".into()),
             also_path,
+            queried_by,
+            queried_note: s("queried_note").unwrap_or_else(|| "par requête".into()),
             collect: match s("collect").filter(|c| !c.is_empty()) {
                 Some(c) => Some(Collect {
                     step: pas(&c)?,
@@ -993,6 +1084,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             .chain(cfg.relations.iter().map(String::as_str))
             .chain(st.path_fields.iter().map(String::as_str))
             .chain(cfg.also_path.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
+            .chain(cfg.queried_by.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
             .chain(cfg.collect.iter().flat_map(|c| [c.step.relation.as_str(), c.field.as_str(), c.note.as_str()]))
             .collect();
         if let Some(x) = tous.iter().find(|x| !ident(x)) {
@@ -1064,6 +1156,8 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("label_field", S, false, Some(serde_json::json!("")), "Titre de remplacement quand non vide"),
                 p("note_field", S, false, Some(serde_json::json!("")), "Champ montré entre parenthèses"),
                 p("also_path", S, false, Some(serde_json::json!("")), "Départ supplémentaire : pas REL> ou <REL, séparés par |"),
+                p("queried_by", S, false, Some(serde_json::json!("")), "Tests par requêtes : chemin depuis chaque nœud atteint, pas REL> ou <REL séparés par |, ? pour un pas facultatif"),
+                p("queried_note", S, false, Some(serde_json::json!("par requête")), "La note d'un test relevé par ce chemin"),
                 p("also_same", S, false, Some(serde_json::json!("name")), "Champ qui doit valoir celui du départ, au bout du chemin"),
                 p("also_label", S, false, Some(serde_json::json!("Aussi, peut-être")), "Libellé du groupe du départ supplémentaire"),
                 p("collect", S, false, Some(serde_json::json!("")), "Relevé sur le chemin : une relation et son sens, suivie d'un pas depuis chaque nœud atteint (`LOCKS>`)"),
@@ -1140,6 +1234,8 @@ mod tests_saut {
             label_field: String::new(),
             note_field: "test_certainty".into(),
             also_path: vec![],
+            queried_by: vec![],
+            queried_note: String::new(),
             also_same: "name".into(),
             also_label: String::new(),
             collect: None,

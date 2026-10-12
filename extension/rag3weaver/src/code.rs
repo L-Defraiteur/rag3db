@@ -46,7 +46,7 @@ pub const LIBRARY: &str = "Library";
 /// question.
 pub const SYMBOL: &str = "Symbol";
 
-pub const RELATIONS: [(&str, &str, &str); 12] = [
+pub const RELATIONS: [(&str, &str, &str); 14] = [
     ("DEFINED_IN", SCOPE, FILE),
     ("CONSUMES", SCOPE, SCOPE),
     ("CONSUMED_BY", SCOPE, SCOPE),
@@ -63,6 +63,11 @@ pub const RELATIONS: [(&str, &str, &str); 12] = [
     // `Classe::champ`, que la classe définit (DEFINES). Posée à l'ingestion :
     // le propriétaire se lit sur place (`this`, `self`, un type lu).
     ("LOCKS", SCOPE, SYMBOL),
+    // **Les tests par requêtes** (`workspace.queries_via`) : ce qu'un test
+    // demande par une requête — le nom appelé, ou les symboles qu'un mot-clé
+    // déclaré désigne — et le nom qu'une classe enregistre.
+    ("QUERIES", SCOPE, SYMBOL),
+    ("REGISTERS", SCOPE, SYMBOL),
 ];
 
 /// Répertoires qu'on ne parse jamais.
@@ -541,6 +546,14 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // Le module source d'une réexportation (`runtime` pour `pub use
             // runtime::X`) ; vide pour une mention ordinaire.
             props.insert("reexport_from".to_string(), field_def(FieldType::String));
+            catalog.register_relation_with(rel, from, to, props)?;
+            continue;
+        }
+        if rel == "QUERIES" {
+            // `via` : « nom » (un appel de la requête, rapproché sans casse
+            // d'un nom enregistré) ou « mot:COPY » (la table des mots-clés).
+            let mut props = std::collections::HashMap::new();
+            props.insert("via".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -2001,7 +2014,24 @@ impl Catalog {
         let files = self.ingest_entities_jusqu_a(FILE, analysis.files.iter().map(FileRecord::data).collect(), exige)?;
         report.files = files.processed;
         report.failed += files.failed;
-        let scopes = self.ingest_entities_jusqu_a(SCOPE, analysis.scopes.iter().map(ScopeRecord::data).collect(), exige)?;
+        // **Les tests par requêtes** déclarés : le relevé du lot, une fois.
+        // Les fichiers de test déclarés reçoivent leur marque ici, à
+        // l'écriture du scope ; leurs arêtes partent avec les autres plus bas.
+        let requetes = self.declared_queries().map(|c| crate::queries_via::link_queries(c, &analysis.scopes)).unwrap_or_default();
+        let scopes_data: Vec<_> = analysis
+            .scopes
+            .iter()
+            .map(|sc| {
+                let mut d = sc.data();
+                if let Some(nom) = requetes.marks.get(&sc.key) {
+                    d.insert("test_role".into(), s(crate::queries_via::ROLE_SUITE));
+                    d.insert("test_certainty".into(), s(crate::queries_via::CERTAINTY_DECLARED));
+                    d.insert("test_name".into(), s(nom));
+                }
+                d
+            })
+            .collect();
+        let scopes = self.ingest_entities_jusqu_a(SCOPE, scopes_data, exige)?;
         report.scopes = scopes.processed;
         report.failed += scopes.failed;
         let libs = self.ingest_entities_jusqu_a(LIBRARY, analysis.libraries.iter().map(LibraryRecord::data).collect(), exige)?;
@@ -2063,7 +2093,7 @@ impl Catalog {
         crate::ingest_profile::add("code · relations de l'analyse (identifiants, mise en file)", phase);
 
         let phase = std::time::Instant::now();
-        self.resolve_across_batches(analysis, &mut report, exige, differes.as_deref_mut())?;
+        self.resolve_across_batches(analysis, &requetes, &mut report, exige, differes.as_deref_mut())?;
         report.symbols_ms = phase.elapsed().as_millis();
         crate::ingest_profile::add("code · symboles (ingestion Symbol + rendez-vous)", phase);
         Ok(report)
@@ -2083,6 +2113,7 @@ impl Catalog {
     fn resolve_across_batches(
         &mut self,
         analysis: &CodeAnalysis,
+        requetes: &crate::queries_via::QueryLinks,
         report: &mut CodeIngestReport,
         exige: crate::disponibilite::Disponibilites,
         differes: Option<&mut std::collections::BTreeSet<String>>,
@@ -2109,7 +2140,11 @@ impl Catalog {
             analysis.scopes.iter().map(|s| s.name.as_str()).chain(champs_definis.iter().map(|(_, n)| n.as_str())).collect();
         let expected: BTreeSet<&str> =
             analysis.pending.iter().map(|(_, n, _)| n.as_str()).chain(analysis.pending_locks.iter().map(|(_, n, _)| n.as_str())).collect();
-        let names: BTreeSet<&str> = offered.union(&expected).copied().collect();
+        let mut names: BTreeSet<&str> = offered.union(&expected).copied().collect();
+        // Les noms des tests par requêtes : ce qui est demandé, ce qui est
+        // enregistré — des symboles comme les autres.
+        names.extend(requetes.queries.iter().map(|(_, n, _)| n.as_str()));
+        names.extend(requetes.registers.iter().map(|(_, n)| n.as_str()));
         if names.is_empty() {
             return Ok(());
         }
@@ -2193,6 +2228,27 @@ impl Catalog {
             }
         }
         self.mettre_en_file_les_liens("LOCKS", verrous)?;
+        // Les tests par requêtes : QUERIES du test vers le symbole demandé,
+        // REGISTERS de la classe vers le nom qu'elle enregistre.
+        if !requetes.queries.is_empty() || !requetes.registers.is_empty() {
+            let mut demandes = Vec::with_capacity(requetes.queries.len());
+            for (scope_key, symbole, via) in &requetes.queries {
+                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                demandes.push((from, symbol_uuid(self, symbole)?, [("via".to_string(), s(via))].into_iter().collect()));
+            }
+            self.mettre_en_file_les_liens("QUERIES", demandes)?;
+            // Les tests par requêtes sont reliés dans cet index : `impact` ne
+            // dira plus « non suivis ».
+            if !requetes.queries.is_empty() {
+                self.persist_meta_key(&crate::dataflow::neighborhood_nodes::written_key("QUERIES"), "1")?;
+            }
+            let mut enregistres = Vec::with_capacity(requetes.registers.len());
+            for (scope_key, nom) in &requetes.registers {
+                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                enregistres.push((from, symbol_uuid(self, nom)?, BTreeMap::new()));
+            }
+            self.mettre_en_file_les_liens("REGISTERS", enregistres)?;
+        }
         // Ce que le lot apporte : ses scopes (définisseurs possibles) et ses
         // mentionneurs — pour ne reposer que les arêtes neuves.
         let scopes_du_lot: std::collections::HashSet<String> = definitions.iter().map(|(f, _, _)| f.clone()).collect();

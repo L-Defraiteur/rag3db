@@ -59,6 +59,7 @@ fn le_rendu_dit_les_niveaux_les_tests_les_carrefours_et_le_budget() {
         cut: 7,
         depth: 2,
         collected: vec![],
+        queries_untracked: false,
     };
     let md = r.markdown("Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", 30);
     assert!(md.contains("**5 touchés** (3 à 1 saut, 2 à 2 sauts) — dont **2 Tests qui la traversent**"), "{md}");
@@ -83,7 +84,7 @@ fn les_appelants_par_le_nom_seul_sont_comptes_pas_montres() {
         reached.push(m);
     }
     reached.push(atteint("s3", "replayWALRecord", "wal_replayer.cpp", 2, ""));
-    let r = NeighborhoodReport { name: "update".into(), starts: vec![depart], ambiguous: true, reached, cut: 0, depth: 2, collected: vec![] };
+    let r = NeighborhoodReport { name: "update".into(), starts: vec![depart], ambiguous: true, reached, cut: 0, depth: 2, collected: vec![], queries_untracked: false };
     let md = r.markdown("Tests qui la traversent", "Code qui en dépend", "Par le trait (peut-être)", 30);
     assert!(md.contains("## Code qui en dépend, à 1 saut (2)"), "les sûrs seuls : {md}");
     assert!(md.contains("set — set_executor.cpp:10") && md.contains("replayNodeUpdateRecord — wal_replayer.cpp:10"), "{md}");

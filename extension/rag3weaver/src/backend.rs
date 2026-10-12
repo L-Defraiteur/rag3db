@@ -782,6 +782,19 @@ impl PreparedBackend {
                      verrou se lisent à l'ingestion du code — une déclaration que rien ne lit"
                     .to_string());
             }
+            if let Some(q) = &w.queries_via {
+                if w.index.as_deref() != Some("code") {
+                    return Err("workspace.queries_via sans workspace.index = \"code\" : les tests par \
+                         requêtes se relient à l'ingestion du code — une déclaration que rien ne lit"
+                        .to_string());
+                }
+                // Une expression fautive se refuse au chargement, en la
+                // nommant, pas à la première ingestion.
+                #[cfg(feature = "code")]
+                crate::queries_via::CompiledQueriesVia::compile(q)?;
+                #[cfg(not(feature = "code"))]
+                let _ = q;
+            }
             if !w.index_signals.is_empty() && w.index.is_none() {
                 return Err(
                     "workspace.index_signals sans workspace.index : les signaux se montent \
@@ -1676,6 +1689,8 @@ impl PreparedBackend {
             // Les fonctions de verrou déclarées pour ce dépôt.
             if let Some(w) = &self.manifest.workspace {
                 cat.declare_lock_calls(w.locks_via.clone());
+                let requetes = w.queries_via.as_ref().map(crate::queries_via::CompiledQueriesVia::compile).transpose()?;
+                cat.declare_queries(requetes);
             }
             // Les signaux déclarés par le manifeste montent sur les entités
             // du schéma — la déclaration du moteur reste neutre, chaque

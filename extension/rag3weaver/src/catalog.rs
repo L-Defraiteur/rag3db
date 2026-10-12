@@ -339,6 +339,11 @@ pub struct Catalog {
     /// (`workspace.locks_via`) : un scope qui appelle l'une d'elles la
     /// verrouille (LOCKS, à l'ingestion du code). Vide : aucune.
     declared_lock_calls: Vec<String>,
+    /// **Les tests par requêtes déclarés** (`workspace.queries_via`),
+    /// compilés au montage : à l'ingestion du code, les fichiers de test
+    /// marqués, REGISTERS et QUERIES posées. `None` : rien n'est relié.
+    #[cfg(feature = "code")]
+    declared_queries: Option<Arc<crate::queries_via::CompiledQueriesVia>>,
     /// **Les modèles que ce processus sait enregistrés**, en plus de ce que la
     /// méta rend. Un modèle qu'on vient d'enregistrer *est* enregistré, quoi
     /// que la base réponde ensuite — et une connexion factice ne répond rien.
@@ -556,6 +561,8 @@ impl Catalog {
             event_bus: EventBus::new(1024),
             entity_configs: HashMap::new(),
             declared_lock_calls: Vec::new(),
+            #[cfg(feature = "code")]
+            declared_queries: None,
             embedding_models_cache: std::sync::Mutex::new(Vec::new()),
             embedding_model_registered_here: std::sync::atomic::AtomicBool::new(false),
             scope: crate::scope::Scope::default(),
@@ -9177,6 +9184,20 @@ impl Catalog {
 
     pub fn declared_lock_calls(&self) -> &[String] {
         &self.declared_lock_calls
+    }
+
+    /// Déclarer les tests par requêtes de ce dépôt (`workspace.queries_via`) :
+    /// les ingestions suivantes marquent les fichiers de test et posent
+    /// REGISTERS et QUERIES.
+    #[cfg(feature = "code")]
+    pub fn declare_queries(&mut self, declaration: Option<crate::queries_via::CompiledQueriesVia>) {
+        self.declared_queries = declaration.map(Arc::new);
+    }
+
+    /// Les tests par requêtes déclarés, s'il y en a.
+    #[cfg(feature = "code")]
+    pub fn declared_queries(&self) -> Option<&crate::queries_via::CompiledQueriesVia> {
+        self.declared_queries.as_deref()
     }
 
     // ── Schema queries ─────────────────────────────────────────────────
