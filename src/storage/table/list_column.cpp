@@ -110,7 +110,8 @@ void ListColumn::scanSegment(const SegmentState& state, offset_t startOffsetInCh
     if (!resultVector->state || resultVector->state->getSelVector().isUnfiltered()) {
         scanUnfiltered(state, resultVector, numValuesToScan, listOffsetSizeInfo, offsetInResult);
     } else {
-        scanFiltered(state, startOffsetInChunk, resultVector, listOffsetSizeInfo, offsetInResult);
+        scanFiltered(state, startOffsetInChunk, numValuesToScan, resultVector, listOffsetSizeInfo,
+            offsetInResult);
     }
 }
 
@@ -225,16 +226,19 @@ void ListColumn::scanUnfiltered(const SegmentState& state, ValueVector* resultVe
     }
 }
 
+// Même borne que StringColumn::scanFiltered : les positions sélectionnées de
+// [offsetInResult, offsetInResult + numValuesToScan), ce que listOffsetSizeInfo décrit.
 void ListColumn::scanFiltered(const SegmentState& state, offset_t startOffsetInSegment,
-    ValueVector* resultVector, const ListOffsetSizeInfo& listOffsetSizeInfo,
-    offset_t offsetInResult) const {
+    row_idx_t numValuesToScan, ValueVector* resultVector,
+    const ListOffsetSizeInfo& listOffsetSizeInfo, offset_t offsetInResult) const {
     auto dataVector = ListVector::getDataVector(resultVector);
     auto startOffsetInDataVector = ListVector::getDataVectorSize(resultVector);
     auto offsetInDataVector = startOffsetInDataVector;
 
     for (sel_t i = 0; i < resultVector->state->getSelVector().getSelSize(); i++) {
         auto pos = resultVector->state->getSelVector()[i];
-        if (startOffsetInSegment + pos - offsetInResult < state.metadata.numValues) {
+        if (pos >= offsetInResult && pos - offsetInResult < numValuesToScan) {
+            KU_ASSERT(startOffsetInSegment + pos - offsetInResult < state.metadata.numValues);
             // The listOffsetSizeInfo starts with the first value being scanned, so the
             // startOffsetInSegment parameter is not needed here except for the bounds check
             auto listSize = listOffsetSizeInfo.getListSize(pos - offsetInResult);
@@ -247,8 +251,7 @@ void ListColumn::scanFiltered(const SegmentState& state, offset_t startOffsetInS
     for (auto i = 0u; i < resultVector->state->getSelVector().getSelSize(); i++) {
         auto pos = resultVector->state->getSelVector()[i];
         // Nulls are scanned to the resultVector first
-        if (pos >= offsetInResult &&
-            startOffsetInSegment + pos - offsetInResult < state.metadata.numValues &&
+        if (pos >= offsetInResult && pos - offsetInResult < numValuesToScan &&
             !resultVector->isNull(pos)) {
             auto startOffsetInStorageToScan =
                 listOffsetSizeInfo.getListStartOffset(pos - offsetInResult);

@@ -84,8 +84,8 @@ private:
         uint64_t numValuesToScan, const ListOffsetSizeInfo& listOffsetInfoInStorage,
         common::offset_t offsetInResult) const;
     void scanFiltered(const SegmentState& state, common::offset_t startOffsetInChunk,
-        common::ValueVector* offsetVector, const ListOffsetSizeInfo& listOffsetInfoInStorage,
-        common::offset_t offsetInResult) const;
+        common::row_idx_t numValuesToScan, common::ValueVector* offsetVector,
+        const ListOffsetSizeInfo& listOffsetInfoInStorage, common::offset_t offsetInResult) const;
 
     common::offset_t readOffset(const SegmentState& state,
         common::offset_t offsetInNodeGroup) const;
