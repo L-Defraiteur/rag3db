@@ -241,7 +241,7 @@ public:
     bool hasIndexHolder(const std::string& name) const;
     // Charge l'exemplaire non détaché de ce nom s'il ne l'est pas, sous le verrou de la liste.
     // Rend faux s'il n'y en a pas (détaché par le rejeu, ou retiré).
-    RAG3DB_API bool loadIndex(const std::string& name, main::ClientContext* context,
+    bool loadIndex(const std::string& name, main::ClientContext* context,
         StorageManager* storageManager);
     std::optional<Index*> getIndex(const std::string& name) const;
     // L'index chargé de ce nom, en propriété partagée : il reste vivant tant que l'appelant le
