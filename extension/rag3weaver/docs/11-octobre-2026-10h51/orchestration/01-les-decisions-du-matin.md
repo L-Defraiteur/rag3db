@@ -1291,3 +1291,27 @@ où elle vit.
   taille) ; (4) Decide.labels_from pour la tentative 4 des fiches. Codeparsers
   garde son script pour un troisième rejeu. Binaire du matin de Lucie à
   rebâtir vers 5 h 30 par la mémoire sur la tête (≥ 5fc38460d).
+- **5 h 30 – 6 h, nuit**. **Le balayage sous petit masque est sur master**
+  (cœur, `41d282843` : mode décalages quand le masque retient moins d'une
+  ligne sur 64, décidé sur sa cardinalité exacte ; tranches de ≤ 2 048
+  décalages relues par lookup ; 117 lignes sorties pour 117 masquées sur
+  72 000 contre 67 584 ; 0,26 ms contre 5 ms ; ticket de F fermé, le témoin
+  du banc sorti du known_red ; deux passes complètes dont LDBC) : le
+  planificateur est au point voulu pour l'IDE. **Programme du cœur vide →
+  prochain lot : le coût d'écriture des vecteurs sous HNSW** (309 s sur 329
+  d'un index entier à écrire 15 631 vecteurs, ~20 ms chacun dans le produit ;
+  1-4 ms au banc nu ; 0,6-0,8 ms au CREATE) : pourquoi l'insertion
+  incrémentale coûte 2 à 5 × le CREATE et 20 × dans le produit ; forme
+  attendue : une insertion par lot au coût du CREATE ou proche (lecture de
+  pgvector) ; avec hotfixs (lui le DELETE, 20-50 ms par ligne indexée), un
+  seul instrument et un seul témoin au banc ; mesure avant/après sur l'index
+  entier de codeparsers (1 384 s) ; ensuite I2 et le plein texte tenu par le
+  point de reprise. **La lib d'ici se rebâtit sur 41d282843** par l'arbre
+  principal dès que son push des tests par requêtes (`665636354`, sous le
+  verrou) a rendu : ses `cargo test --lib` lisent encore `build/lecteurs-csv`
+  directement (reste 3d du magasin pour la recherche : le pont et
+  check_features résolvent `RAG3DB_LIB` comme run_e2e.sh). La mémoire a
+  arrêté son bâti de 5 h 30 (visait f6179ade…) et bâtira le binaire de Lucie
+  avec RUNPATH vers le nouvel identifiant à l'annonce ; G avance son worktree
+  de luciepc à ≥ 41d282843 pour un seul bâti. Tentative 3 des fiches
+  classées (mémoire, `01dd9ddb0`, Gemini 3.5 Flash sur Decide à max_tokens).
