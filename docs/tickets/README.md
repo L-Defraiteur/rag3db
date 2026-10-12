@@ -30,13 +30,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (26)
+### Ouverts — moteur (27)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [SIGSEGV sur un agrégat de 80 000 lignes qui rend des textes longs](2026-10-12-sigsegv-sur-un-agregat-de-80-000-lignes-a-textes-longs.md) | ouvert (12 octobre 2026, vu une fois par F, au cœur C++) | plantage | oui en principe, vu une fois | oui (une lecture d'outil qui agrège toute une table) |
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |
 | [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |

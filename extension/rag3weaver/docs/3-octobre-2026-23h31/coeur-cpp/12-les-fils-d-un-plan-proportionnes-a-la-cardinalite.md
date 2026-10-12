@@ -117,7 +117,7 @@ Mesure avant/après : la copie de l'index entier de F, `usages` et son saut en 2
 lues (PROFILE) et temps par appel ; attendu : de 71 657 à 117 lignes lues, et `usages` de 400 ms à
 quelques dizaines de millisecondes. Ticket : par F, avec son plan collé ; pris après les fils.
 
-## 8. Les mesures de la nuit (11-12 octobre)
+## 8. Les mesures de la nuit (11-12 octobre) **[lu]**
 
 **Le petit masque, par le banc** (`MaskedScan.MeasureAtOneAndThirtyTwoThreads`, poste principal,
 `poste mesure`, master b808a3bee, cinq passes par nombre de fils ; le témoin
@@ -164,3 +164,69 @@ rag3db-build-a3e5e5dd7, mesure d'impact de F : 150 appels, 3 620 tâches, 3 038 
   voie — sans quoi elles gardent le plafond, par construction.
 - Référence `[mesure]` avant la règle, sur ce poste, fils par défaut : joindre p2 55,2 ms, p3
   67,5 ms ; est_local p2 54,7 ms, p3 80,4 ms ; servir_lie p2 57,5 ms, p3 68,7 ms (médianes de 5).
+
+## 9. La règle, et le avant/après (12 octobre 2026, 0 h 20 à 2 h) **[mesuré]**
+
+**La règle** (branche `fils-proportionnes`, 6ffec5a82 (master dda63783a) ; `QueryProcessor::initTask`) : la plus grande
+cardinalité estimée le long du pipeline, un fil par tranche de 2 048 lignes
+(`DEFAULT_VECTOR_CAPACITY`), sous le plafond `threads` de la connexion (`Task::limitNumThreads`
+ne fait que réduire : un `CALL threads=1` reste 1) ; un opérateur sans estimation garde le plafond.
+Ce que le témoin `ThreadsByCardinality` a exigé pour que la règle voie les pipelines :
+
+1. **les puits nés dans le mapper** sans contrepartie logique — l'agrégat, la construction d'une
+   jointure, le collecteur de la racine — héritent l'estimation de leur enfant
+   (`PlanMapper::inheritEstimates`, `createResultCollector`) ;
+2. **l'optimiseur ne remettait les cardinalités à jour que pour EXPLAIN LOGICAL** (le commentaire
+   de l'amont : « on ne s'en sert pas après la planification ») ; la jointure que pose la descente
+   des filtres (`UNWIND … MATCH (n {id: x})`) naissait sans estimation → le `CardinalityUpdater`
+   tourne après toute optimisation, et un enfant sans estimation en prive son parent ;
+3. `UNWIND [1, 2, 3]` n'est pas un littéral mais un appel de `LIST_CREATION` :
+   `LogicalUnwind::knownListSize()` (littéral, liste écrite, paramètre — `UNWIND $uuids`) sert au
+   planificateur et au remetteur à jour ; le balayage factice vaut 1 ; une fonction de table ne
+   pose `numRows` que s'il est connu.
+
+La trace (`RAG3DB_TRACE_TASKS`) est lue à l'ouverture de la base, et nomme le premier opérateur
+sans estimation (`sans=…`).
+
+**Le avant/après**, même mesure (e2e_mesure_impact de F, ici, `poste mesure`, trace allumée des
+deux côtés, RUST_TEST_THREADS=1, embarquement par les tunnels ; avant = a3e5e5dd7 l'instrument
+seul, après = 6ffec5a82 (master dda63783a) ; les empreintes `[mesure]` sont identiques des deux côtés — mêmes
+résultats) :
+
+| `[mesure]` (médiane de 5) | avant | après |
+|---|---|---|
+| joindre, profondeur 2 / 3 | 55,2 / 67,5 ms | **26,6 / 29,8 ms** |
+| est_local, profondeur 2 / 3 | 54,7 / 80,4 ms | **24,1 / 32,2 ms** |
+| servir_lie, profondeur 2 / 3 | 57,5 / 68,7 ms | **25,3 / 30,3 ms** |
+
+| `[phases]` (3 450 instructions à paramètres) | avant | après |
+|---|---|---|
+| total des appels d'impact | 10 343 ms | 4 748 ms |
+| prepare, par instruction | 0,779 ms | 0,405 ms |
+| execute, par instruction | 2,044 ms | 0,896 ms |
+| le moteur dit : compilation / exécution | 0,642 / 1,648 ms | 0,338 / 0,656 ms |
+
+| tâches tracées (toute la suite) | avant | après |
+|---|---|---|
+| tâches, temps cumulé | 69 132, 54 379 ms | 69 134, 27 119 ms |
+| à 32 fils donnés | 46 581 (80 % du temps, ~11 fils venus) | 182 (7 %, ~18 venus : l'ingestion) |
+| à 1 fil donné | 22 551 (20 %) | 68 064 (85 %) |
+| à 2 fils donnés | — | 885 (8 %) |
+| sans estimation (plafond gardé) | — | BATCH_INSERT 81, RESULT_COLLECTOR 82, CREATE_TABLE 127, PARTITIONER 19… |
+
+- **Les appels d'impact sont 2,1 à 2,5 × plus courts** ; le temps cumulé des tâches est divisé par
+  deux sur toute la suite. Les tâches à 32 fils ne sont plus que celles qui le méritent
+  (l'ingestion, ~18 fils venus), et presque tout passe à un fil.
+- **Que `prepare` et la compilation baissent aussi** (0,78 → 0,41 ms ; 0,64 → 0,34 ms) alors que
+  la règle ne touche pas la planification dit que le coût d'avant n'était pas seulement dans les
+  tâches : trente-deux fils réveillés pour trois lignes se disputaient le poste avec le fil qui
+  prépare l'instruction suivante. Réserve : les deux passes ne sont pas à charge contrôlée (la
+  nuit des autres sessions) ; le banc rejoue sa mesure du petit masque avant/après sous une seule
+  tenue `poste mesure`, à lire à côté.
+- **Le banc** (×10 probabilistes vectoriels, cherry-pick sur b808a3bee) : 73 verts / 7 rouges
+  avant, 76 / 4 après — rien dans le mauvais sens ; les quatre ProductReloadRecovery
+  (`threads=1` explicite) inchangés. **L'arbre principal** (e2e du produit sur 6ffec5a82 (master dda63783a), bâti à
+  part, artefact prouvé par ldd + md5) : 131 tests, 0 rouge ; e2e_code 160 s contre 198.
+- Ce qui reste hors de la règle, par construction : ce qui n'a pas d'estimation (les
+  fonctions de table : `QUERY_VECTOR_INDEX` connaît son k, un CALL simple rend une ligne — le
+  second pas de §8), et le balayage sous masque (§7, autre lot).

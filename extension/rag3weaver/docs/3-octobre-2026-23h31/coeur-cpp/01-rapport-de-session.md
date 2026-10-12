@@ -1135,3 +1135,48 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   seulement si on va attendre) — juste, deux remarques. Le témoin du semi-masque convenu avec le
   banc (`PROFILE`, `NumOutputTuples` sous le `SCAN_NODE_TABLE` masqué, échec nommé « plan »,
   ≤ 10·k, mesure 1/32 fils à part).
+
+## Nuit, suite (11-12 octobre 2026, 22 h 45 à 1 h 25) — la trace lue, la règle des fils, le lot ABI sur master
+
+- **La trace des fils, obtenue ici** (0 h 10, lib a3e5e5dd7, mesure d'impact de F sous le seul lourd
+  de `run_e2e.sh`) et lue en page 12 §8 : 91 % du temps dans les tâches à 32 fils, 63 % d'entre
+  elles à cardinalité estimée ≤ 2 048, 37 % sans estimation (le balayage factice sous
+  `UNWIND $uuids`, identifié par F).
+- **La règle des fils** (`fils-proportionnes`, 6ffec5a82 (master dda63783a) publié en branche, non fusionné) : un fil
+  par tranche de 2 048 lignes estimées le long du pipeline, sous le plafond `threads`, plafond gardé
+  sans estimation. Ce que le témoin `ThreadsByCardinality` a fait sortir, en trois rouges successifs :
+  1. les **puits nés dans le mapper** sans contrepartie logique (agrégat, construction de jointure,
+     collecteur de la racine) n'avaient aucune estimation → ils héritent celle de leur enfant
+     (`PlanMapper::inheritEstimates`, `createResultCollector`) ;
+  2. **l'optimiseur ne remettait les cardinalités à jour que pour EXPLAIN LOGICAL** (« on ne s'en
+     sert pas après la planification », disait le commentaire de l'amont) : la jointure que pose la
+     descente des filtres (`UNWIND … MATCH (n {id: x})`) naissait sans estimation → le
+     `CardinalityUpdater` tourne après toute optimisation, en propageant l'inconnu d'un enfant ;
+  3. `[1, 2, 3]` écrit dans une requête n'est pas un littéral mais un appel de `LIST_CREATION` →
+     `LogicalUnwind::knownListSize()` (littéral, liste écrite, paramètre), partagé par le
+     planificateur et le remetteur à jour.
+  Et la trace lue en statique au premier `finalize` du processus rendait le témoin rouge au milieu
+  d'une suite : lue à l'ouverture de la base (`QueryProcessor`). La trace nomme désormais le premier
+  opérateur sans estimation (`sans=…`). Vert ici : transaction 266, api 104, planner 2, e2e Cypher
+  1 867. Le banc rejoue ×10 ses probabilistes vectoriels sur la tête (cherry-pick sur b808a3bee),
+  l'arbre principal les e2e du produit avec e2e_code et e2e_impact ; le push attend leurs « fini »
+  et le avant/après (page 12 §9).
+- **Le lot ABI est sur master `2bc7b4a3b`** (1 h 19, rejeu local sous `poste push --lourd` :
+  bâti, SystemConfigTest 5, symbole d'avant exporté, SecondWriterProcess/FailedTransaction 10, banc
+  7 rouges attendus / 259 verts). Quatre tours de file avant : deux refusés par le banc sur un rouge
+  connu **devenu vert par hasard** (`JournaledCopyDeath`, fuite de 1,77 → 2,36 Mo sous la borne de
+  1,5 ×, la mort tombe où elle tombe ; le banc l'a passé aux probabilistes, 94a09d84e), puis le
+  verrou de push aux autres. Piège : un guetteur qui attend un hash annoncé avant rebase attend un
+  hash qui n'existe plus. Les worktrees rag3db-abi (luciepc, dit à codeparsers) et
+  rag3db-moteur-abi sont effacés. Hotfixs rebâtit la lib commune de luciepc sur ce master au matin,
+  après la décision de Lucie sur l'hôte figé.
+- **Le lot des fils est sur master `dda63783a`** (2 h 23 : 85f4f7f9c l'instrument, 6ffec5a82 la
+  règle, dda63783a les deux tickets fermés dans le lot ; rejeu local sur 93090770a : transaction
+  266, api 105, planner 2, e2e Cypher 1 867, banc 7 rouges attendus / 259 verts). Le avant/après
+  (page 12 §9) : appels d'impact 2,1 à 2,5 × plus courts, execute 2,04 → 0,90 ms par instruction,
+  temps cumulé des tâches divisé par deux, résultats identiques. Hotfixs pousse derrière le pas
+  « QUERY_VECTOR_INDEX déclare numRows = k » (relu : juste, deux remarques). Un piège de push : la
+  fermeture des tickets dans le lot fait un conflit d'index à chaque avance de master, à résoudre
+  côté master puis recompter. Remonté par F, en ticket à mon nom : un SIGSEGV sur un agrégat de
+  80 000 lignes qui rend des textes longs (`content`, `docstring`), vu une fois ; à rejouer sur un
+  reflink de sa copie, sous gdb.
