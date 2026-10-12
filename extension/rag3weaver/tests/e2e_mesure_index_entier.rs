@@ -62,6 +62,10 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
         qualifier_field: Some("parent_name".into()),
     };
     let decl = DeclarationsConfig { relation: "HAS_PARENT".into(), field: "declarations".into() };
+    // Les deux formes du saut, l'une après l'autre : où va le temps de chacune.
+    for deux in [false, true] {
+    catalog.set_two_step_hops(Some(deux));
+    let forme = if deux { "en deux temps" } else { "en un temps" };
     for (nom, chemin) in [("update", "src/storage/table/node_table"), ("update", ""), ("getTableID", "")] {
         let appel = || {
             let r = usages_of(&catalog, &cfg, nom, chemin).unwrap();
@@ -81,7 +85,7 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
         let p = phases::arreter();
         temps.sort_by(|a, b| a.partial_cmp(b).unwrap());
         eprintln!(
-            "[usages] {nom} (path « {chemin} ») : {usages} usages, médiane {:.1} ms, {} instructions par appel ; prepare {:.1} ms, execute {:.1} ms, lignes {:.1} ms par appel",
+            "[usages] {forme}, {nom} (path « {chemin} ») : {usages} usages, médiane {:.1} ms, {} instructions par appel ; prepare {:.1} ms, execute {:.1} ms, lignes {:.1} ms par appel",
             temps[5],
             p.appels / 10,
             p.prepare_ns as f64 / 1e7,
@@ -93,6 +97,8 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
             eprintln!("[usages]   {:>7.1} ms / appel, ×{}, {} lignes : {court}", ns as f64 / 1e6 / 10.0, appels / 10, lignes / 10);
         }
     }
+    }
+    catalog.set_two_step_hops(None);
 }
 
 /// Le plan du moteur pour le saut le plus coûteux d'`usages` (MENTIONS
@@ -149,7 +155,15 @@ fn le_plan_du_saut_d_usages_sur_l_index_entier() {
         let empreinte = { use std::hash::{Hash, Hasher}; let mut h = std::collections::hash_map::DefaultHasher::new(); lignes.hash(&mut h); h.finish() };
         eprintln!("[variante] {nom} : médiane {:.1} ms, {n} lignes, empreinte {empreinte:016x} ; tuples par opérateur {}", t[3], balayages.join(" "));
     }
-    for (nom, q, p) in [("saut", saut, liste.clone()), ("par clé", par_cle, CypherValue::List(voisins.clone()))] {
+    // Un saut de Scope vers Scope (départ et arrivée dans la même table), depuis
+    // le premier voisin : la forme d'IMPLEMENTS, INHERITS_FROM et HAS_PARENT.
+    let saut_scope = "UNWIND $uuids AS u MATCH (d:`Scope` {_uuid: u})-[r:`HAS_PARENT`]->(m:`Scope`) \
+                      RETURN u, m.`_uuid`, m.`name`, m.`repo_path`, m.`file_path`, m.`declarations`";
+    for (nom, q, p) in [
+        ("saut", saut, liste.clone()),
+        ("par clé", par_cle, CypherValue::List(voisins.clone())),
+        ("saut Scope vers Scope", saut_scope, CypherValue::List(voisins[..1].to_vec())),
+    ] {
         for prefixe in ["EXPLAIN", "PROFILE"] {
             let r = conn
                 .execute_with_params(&format!("{prefixe} {q}"), &[QueryParam::new("uuids", p.clone())])
