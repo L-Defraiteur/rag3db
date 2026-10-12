@@ -1,8 +1,8 @@
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 //! **Les tests par requêtes sur le vrai moteur** : `src/`, les tests C++ de
 //! `test/transaction/` et les fichiers de cas de `test/test_files/`, indexés
-//! sans puis avec la déclaration du manifeste du dépôt
-//! (`templates/backends/code/backend.json`, `workspace.queries_via`) ; puis
+//! sans puis avec la déclaration du dépôt
+//! (`templates/backends/code/depots/rag3db.queries_via.json`) ; puis
 //! `impact lockIndexForWrite` tel qu'un agent le reçoit. La question de la
 //! page des manques (11 octobre 2026, 17 h 20) : « quels tests traversent
 //! `lockIndexForWrite` ? » — InsertLockTest, que le graphe d'appels ne voyait
@@ -28,10 +28,10 @@ fn rag3db_root() -> String {
     })
 }
 
-/// La déclaration du manifeste livré, telle qu'un backend la lit.
+/// La déclaration du dépôt rag3db, telle qu'un manifeste d'hôte la recopie
+/// dans `workspace.queries_via`.
 fn declaration_du_depot() -> QueriesVia {
-    let m: serde_json::Value = serde_json::from_str(include_str!("../templates/backends/code/backend.json")).unwrap();
-    serde_json::from_value(m["workspace"]["queries_via"].clone()).expect("workspace.queries_via du manifeste livré")
+    serde_json::from_str(include_str!("../templates/backends/code/depots/rag3db.queries_via.json")).expect("la déclaration du dépôt rag3db")
 }
 
 /// Les fichiers, en chemins relatifs à la racine du moteur.

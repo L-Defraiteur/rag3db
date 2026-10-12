@@ -119,6 +119,26 @@ fallait `callees`, où le verrou paraissait sous le nom générique
 `acquireLock`. Deux sites de plus (`update`, `delete_`) ; le compte des
 LOCKS sur `rag3db/src` n'est pas remesuré avec lui.
 
+## Les tests par requêtes — `workspace.queries_via` (12 octobre 2026)
+
+Un test qui atteint le code par une requête (une chaîne Cypher dans un gtest, un fichier de cas
+`.test`, un `CALL fonction(…)`) est invisible au graphe d'appels, qui s'arrête à l'analyse de la
+requête. `impact` répondait « 0 tests qui la traversent ». Le dépôt le déclare dans
+`workspace.queries_via` :
+
+- `test_files` : une expression sur le chemin des fichiers de cas. Leurs scopes `texte_brut`
+  deviennent des suites de tests (`test_role=suite`, `test_certainty=declared`), lues en entier.
+- `registered_name` : le nom qu'une classe enregistre, lu dans son contenu. Il donne `REGISTERS`,
+  comparé sans casse aux appels des requêtes (`storage_info(` → `STORAGE_INFO`).
+- `keywords` : la table des mots de requête vers les symboles qu'ils atteignent (`COPY` →
+  `NodeBatchInsert`). C'est la seule chose écrite à la main, datée par `keywords_dated`.
+- `query_text`, `call_pattern` et `registered_kinds` ont des défauts : les chaînes entre guillemets
+  doubles, `nom(`, et `class|struct`.
+
+Le gabarit générique n'en porte aucune : c'est une déclaration **propre à un dépôt**. Celle du
+moteur rag3db est dans `depots/rag3db.queries_via.json`, à recopier dans le manifeste d'un hôte qui
+indexe ce dépôt. Sans déclaration, `impact` dit « tests par requêtes : non suivis » au lieu d'un 0.
+
 ## La montre de fichiers — l'index suit le disque (11 octobre 2026)
 
 `backend.json` déclare une montre (`watches.code`) et sa réaction
