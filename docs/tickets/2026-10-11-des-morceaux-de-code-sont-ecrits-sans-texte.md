@@ -96,3 +96,16 @@ Ce qui reste à faire pour fermer : établir l'origine sur cette copie ; si c'es
 binaire ancien déjà corrigé, le dire ici ; dans tous les cas, **la réécriture des morceaux sans
 texte** d'une base qui en a (l'index la lance quand le compte est non nul), puisque la montre ne les
 reverra pas.
+
+### À départager au matin (orchestration, 12 octobre, nuit)
+
+Les 26 092 vides de la copie de F viennent d'une base indexée par un autre binaire, ou par un autre
+chemin que l'index entier (synchronisation, réédition par la montre, réindexation partielle, reprise
+après un arrêt) :
+
+1. **Quel commit du binaire a indexé `code-rag3db` vers 15 h le 11 octobre** (le binaire de Lucie
+   d'alors), et ce qui a changé depuis dans l'écriture des morceaux.
+2. **Les fichiers touchés** (`sharded_handle.rs` 301 vides…) **ont-ils été réédités par la montre**
+   entre 15 h et 20 h 24 (heure de la copie), ou sont-ils seulement les plus gros ?
+3. **Sur sa copie, F** : les morceaux vides ont-ils des `_embed_*`, des marqueurs ou des dates qui les
+   distinguent des pleins (écrits par un autre passage) ?
