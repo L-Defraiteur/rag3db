@@ -1274,3 +1274,20 @@ où elle vit.
   (N fichiers de test sans lien) » tant qu'un dépôt ne déclare rien ; un
   seul poseur de marques avec codeparsers). La mémoire joue la tentative 3
   des fiches classées (Gemini, max_tokens de Decide).
+- **4 h 55 – 5 h 30, nuit**. Le témoin de bout en bout rejoué sur df1184d32
+  (codeparsers, `d447364ce`, base entière de 102 469 morceaux, 0 vide,
+  binaire RUNPATH) : **7,13 s** pour usages, 7,53 s pour search_code, pas de
+  gain à cette taille ; mais la ligne [montre] découpe désormais le temps :
+  verrou attendu 0 ms (la lecture ne bloque plus), ~2,1 s avant la première
+  réaction (every_ms 1 000 + settle 300), puis **deux fichiers l'un après
+  l'autre**, 2,2 et 2,7 s, dont « ingérer » **1,9 s chacun contre 0,5 s à
+  15 k morceaux** : ça croît avec la base, c'est un balayage. File du proto
+  réordonnée, la fraîcheur étant la priorité de Lucie : (1) le découpage
+  d'« ingérer » par instruction (nommer le balayage ; le lot du masque du
+  cœur se mesurera dessus ; rendu aussi à l'arbre principal pour son
+  rendez-vous par les symboles) ; (2) LlmNode.tokens (la recherche l'attend) ;
+  (3) reingest_files par lot de fichiers vus ensemble (une ingestion et une
+  résolution pour le lot, la lecture entre deux lots : le vrai gain à cette
+  taille) ; (4) Decide.labels_from pour la tentative 4 des fiches. Codeparsers
+  garde son script pour un troisième rejeu. Binaire du matin de Lucie à
+  rebâtir vers 5 h 30 par la mémoire sur la tête (≥ 5fc38460d).
