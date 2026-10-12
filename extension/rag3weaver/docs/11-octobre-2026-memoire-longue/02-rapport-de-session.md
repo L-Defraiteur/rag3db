@@ -91,9 +91,24 @@ tard à 0 h 15.
 
 ## Ce qui reste
 
-- **Le redémarrage de l'hôte de Lucie**, puis 5 minutes de surveillance et la remesure de la
-  montre (`index_state` → `watches.code`, pour le proto) ; la réconciliation de la montre
-  remplace la réindexation entière.
+- **La séquence B4, au matin, par Lucie.** À 2 h 56 (12 oct.), l'arrêt de l'hôte a été
+  refusé par les permissions de ma session ; rien n'a été exécuté, l'hôte tourne et répond
+  (pid 2061518, `3e95f0302023`). D'ici le matin : le cœur corrige le balayage filtré des
+  chaînes (`string_column.cpp`, cause du P1 et de la boucle de luciepc), l'arbre principal
+  rebâtit la lib à son hash, je rebâtis et prouve le binaire de Lucie dessus
+  (`649a84722b3e` est dépassé, il ne s'installe pas). Puis Lucie arrête son hôte — pid lu
+  dans `daemon.json`, jamais par nom :
+
+  ```sh
+  P=$(jq .pid ~/.local/share/rag3weaver/daemon.json); readlink /proc/$P/exe && kill -TERM $P
+  ```
+
+  (`readlink` doit nommer `~/.local/bin/rag3weaver-backend` ; sinon ne rien tuer.) Ou elle
+  autorise l'arrêt dans ma session. J'enchaîne : installation par renommage (l'installé
+  gardé en `.avant-b4`), signal à codeparsers (code-rag3db mis de côté et réindexé), puis
+  redémarrage, 5 minutes de surveillance (`/etat` porte l'état des index) et la remesure de
+  la montre (`watches.code`, pour le proto) ; la réconciliation de la montre remplace la
+  réindexation entière.
 - **La tentative 3 des fiches** quand `Decide` aura `max_tokens`.
 - **La marche 5, seconde part** : l'hôte déclaré au manifeste, le backend nommé.
 - **La forme B de l'enveloppe** : attend la §6.
