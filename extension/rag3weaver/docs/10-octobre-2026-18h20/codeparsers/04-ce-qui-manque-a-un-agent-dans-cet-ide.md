@@ -642,3 +642,34 @@ L'entrée du cœur C++ de 17 h 20, point 2. **Fermée par `94e21b066`.**
   requête ».
 - **À reprendre** quand le moteur ajoute un opérateur. La table vit dans le manifeste, avec son
   champ `keywords_dated`.
+
+### Fermé — borner une question à un dossier ou à un langage (arbre principal, 12 octobre 2026)
+
+Ce manque venait de deux entrées : celle de codeparsers à 15 h 40 (point 3, « 101 usages par le nom
+de tout le dépôt ») et celle du cœur à 17 h 20 (point 3, « 88 non attribués de tout le dépôt »).
+**Fermé par `daa0a1333` (usages, impact, callees) et `1d28495b4` (search_code).**
+
+- **Les paramètres**, de la même forme dans les quatre outils :
+  - `scope` : des préfixes relatifs à la racine, séparés par `|` (`src/|test/`) ;
+  - `language` : des langages, séparés par `|` (`cpp|rust`).
+
+  La description est écrite une fois (`SCOPE_HELP`, `LANGUAGE_HELP`), et une portée vide couvre
+  tout l'index.
+- **Ce qu'elle borne dans usages, impact et callees** :
+  - le départ, et l'ambiguïté : une définition hors de la question ne la rend plus ambiguë ;
+  - le rendu, avec le compte de ce qui est écarté (« Portée : src/ ; cpp — 2 définition(s) et 3
+    usage(s) hors de la portée, écartés », et « … hors de la portée, écartés (traversés) » dans
+    impact).
+
+  Elle ne borne jamais le parcours : un nœud hors portée reste un relais. Le chemin et le langage se
+  lisent par une seule lecture par clé.
+- **Ce qu'elle borne dans search_code** : la portée se compose en `Must` avec le filtre de
+  l'appelant ou le domaine de travail, jamais à leur place. Le balayage des fichiers d'avant le
+  premier index la respecte aussi : il ignorait jusqu'ici tout filtre. Les fichiers hors portée ne
+  sont pas lus, et leur nombre est dit.
+- **Le témoin `e2e_portee`** porte sur un `update` C++ sous `src/`, avec des homonymes Python et
+  Rust ailleurs :
+  - **sans portée** : nom ambigu, et des résultats de partout ;
+  - **avec `src/` en `cpp`** : une définition, l'appel du moteur, les homonymes écartés et
+    comptés ;
+  - **search_code** : il borne de la même façon, par l'index comme par le balayage.
