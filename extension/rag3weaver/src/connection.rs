@@ -182,8 +182,6 @@ pub struct BufferPoolChoice {
     pub source: BufferPoolSource,
 }
 
-/// Ce qu'on dit du tampon : sa taille et sa source, pour un journal ou un
-/// rapport.
 /// La mémoire vive du poste, en octets : `MemTotal` de `/proc/meminfo` sous
 /// Linux, `hw.memsize` sous macOS, `GlobalMemoryStatusEx` sous Windows.
 /// `None` quand on ne sait pas : la règle ne joue pas, le moteur choisit.
@@ -230,7 +228,6 @@ pub fn total_memory() -> Option<u64> {
         None
     }
 }
-
 
 /// **Un chemin de fichier cité dans une instruction Cypher**, apostrophes
 /// comprises : `'D:\\a\\x\'y'`. Le parseur du moteur lit `\` comme le début
@@ -307,6 +304,8 @@ mod memoire_vive {
     }
 }
 
+/// Ce qu'on dit du tampon : sa taille et sa source, pour un journal ou un
+/// rapport.
 pub fn describe_buffer_pool(choice: BufferPoolChoice) -> String {
     let source = match choice.source {
         BufferPoolSource::Environment => "RAG3DB_BUFFER_POOL_SIZE",
