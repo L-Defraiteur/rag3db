@@ -129,3 +129,51 @@ d'ordinaire un lecteur sur le dernier commit, et l'écrivain valide par généra
 - **Au proto** :
   - (d) une transaction par fichier dans la réaction, et l'embarquement après le COMMIT ;
   - (e) le budget de tenue, qui devient celui du mutex entre écrivains seulement.
+
+## Les réponses (12 octobre 2026, matin)
+
+**Le cœur** :
+
+- **(a) HNSW sous un écrivain : sûr, et prouvé.** Les témoins du banc
+  `vector_search_during_insert_test.cpp` et `readers_during_delete_test.cpp` jouent une recherche sur
+  une connexion pendant une insertion ou une suppression sur une autre. Le lecteur lit à son
+  instantané, puisque `isVisible` filtre ce que le graphe lui fait atteindre. Depuis I1, les
+  écrivains d'une table indexée se sérialisent entre eux, pas contre les lecteurs. Il reste deux
+  réserves : aucun ordre garanti entre deux recherches, et quelques ms de « fraîcheur ».
+- **(b) Une validation seule n'attend aucun lecteur.** Seul le point de reprise forcé les attend,
+  jusqu'à `checkpoint_wait_timeout` ; la forme d'A7/A8 borne cette attente et remet le point de
+  reprise. **Règle de la page** : des lectures courtes en auto-commit, et `auto_checkpoint` laissé au
+  moteur, sans CHECKPOINT par paquet.
+- **(c) `setMaxNumThreadForExec`** borne une connexion. Le pool est partagé, donc une connexion de
+  lecture à 2 ou 4 fils n'affame pas l'écrivain.
+
+Le lot L4 (le verrou de forme) se réduit donc : le pas 1 DDL d'hotfixs tient l'index vivant sous
+une recherche même si un DROP passe. L4 ne garde que la mutation de `entity_configs`, par la vue
+(L2), et le ticket de l'exception brute, s'il reste rouge après ce pas.
+
+**Le proto** :
+
+- **(d) Une transaction par lot, pas par fichier.** Le lot est l'unité que `reingest_files` rend
+  cohérente : toutes les fins, puis l'ingestion, puis la résolution. Avec une transaction par
+  fichier, un renommage qui touche deux fichiers se lirait à moitié. Trois conditions :
+  - **un échec n'empoisonne pas le catalogue** : un ROLLBACK qui laisse servir, à la différence du
+    chemin de masse (`terminer`, qui empoisonne et exige de rouvrir) ;
+  - **le plein texte suit le COMMIT** ;
+  - **l'embarquement passe après le COMMIT, en dette**, et la ligne de retard le dit.
+- **(e)** Le budget de 400 ms ne protégera plus que les écrivains entre eux. Son défaut montera
+  (2 s, ou le seul plafond de fichiers) le jour où les lectures seront sur master, avec la remesure
+  du proto.
+
+**Le plein texte et le ROLLBACK** : l'`IndexWriter` de lucivy sait défaire
+(`index_writer.rs:489`), mais `ShardedHandle` ne l'expose pas, et lucivy est publiée (3.0.8). La
+forme retenue ne touche pas lucivy : **les documents du plein texte d'un lot sont gardés en tampon et
+envoyés après le COMMIT**. Un ROLLBACK les jette, sans rien défaire dans lucivy.
+
+## Les lots, revus
+
+| lot | quoi |
+|---|---|
+| L1 | la connexion de lecture (2 à 4 fils), lectures courtes en auto-commit |
+| L2 | la vue de lecture, `build_services` et `read_catalog_in` hors du mutex |
+| L3 | une transaction par lot réindexé, un ROLLBACK sans empoisonnement, le plein texte en tampon jusqu'au COMMIT, l'embarquement en dette après |
+| L4 | réduit : la mutation de la forme par la vue ; l'exception brute du DROP/CREATE si elle survit au pas 1 DDL |
