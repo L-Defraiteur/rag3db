@@ -81,6 +81,12 @@ réaction (sauvegardes `*.avant-montre-11-oct-17h02`) : une édition à la main 
 62 ms la décision ; Gemini tronqué par le plafond de 512 jetons de `Decide` (le proto pose
 `max_tokens`, la tentative 3 l'attend).
 
+**La tentative 3 des fiches** (12 oct., 4 h 47, `templates/experiments/2026-10-12-fiches-classees-3/`) :
+Gemini 3.5 Flash sur `Decide` à `max_tokens` 2 048 : 32 / 39 fiches justes, 8 / 8
+abstentions, **1 faux ancrage**, 4 manqués (des fiches de règle refusées sous leur domaine),
+5,35 s la décision ; aucune réponse tronquée. Gemini se trompe vers l'abstention, le Decider
+vers le rangement. La tentative 4 : une décision par fiche (« lequel, ou aucun »).
+
 **Le binaire de Lucie, réparé à 21 h** : la lib de l'arbre principal a changé d'ABI avec B2 ;
 le binaire installé ne démarrait plus (`undefined symbol …SystemConfig…`), donc aucune
 nouvelle session de Lucie n'aurait eu ses serveurs MCP. Rebâti contre B2, prouvé à l'écart
@@ -120,7 +126,7 @@ tard à 0 h 15.
   redémarrage, 5 minutes de surveillance (`/etat` porte l'état des index) et la remesure de
   la montre (`watches.code`, pour le proto) ; la réconciliation de la montre remplace la
   réindexation entière. Au rouge, `3e95f0302023` revient.
-- **La tentative 3 des fiches** quand `Decide` aura `max_tokens`.
+- **La tentative 4 des fiches** : une décision par fiche, l'instruction sur les fiches de règle.
 - **La marche 5, seconde part** : l'hôte déclaré au manifeste, le backend nommé.
 - **La forme B de l'enveloppe** : attend la §6.
 

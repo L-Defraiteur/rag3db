@@ -1,0 +1,4 @@
+%% tentative: fiches-classees-3 (12 octobre 2026)
+%% description: Le sujet d'une fiche au put_memory, par la voie de la sortie structurée (Gemini par Vertex) : oui ou non sur chaque paire (fiche, sujet candidat). Le banc pose l'élément {text} en amont et lit {verdict}. max_tokens au défaut de Decide (2 048).
+graph LR
+    decide["Decide(labels='yes|no', field='text', as='verdict', instruction='Tu ranges des fiches de mémoire sous des sujets. Une fiche va sous un sujet seulement si elle parle de ce que le sujet décrit ; partager un mot ne suffit pas. Réponds yes ou no.', via='llm')"]
