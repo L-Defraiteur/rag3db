@@ -1234,3 +1234,23 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   écrivains, la capture de VECTOR_SEARCH à garder dans le bind data) ; forme du pas 2 (la rétention
   jusqu'au point de reprise, comme les tables) convenue. Suite : le balayage sous masque (page 12
   §10).
+
+## Aube (12 octobre 2026, 3 h 55 à 5 h 40) — le balayage sous un petit masque
+
+- **Le lot** (`balayage-sous-masque`, page 12 §10) : `SemiMask::collectFrom`, le mode décalages de
+  `ScanNodeTableSharedState` décidé à l'initialisation sur la cardinalité exacte du masque
+  (`× 64 < numTotalRows`), les tranches de ≤ 2 048 décalages comme morsels,
+  `NodeTable::lookupOffsets` qui relit ligne à ligne et ne garde que les lignes visibles. Témoin du
+  banc sorti du known_red : **117 lignes sorties pour 117 masquées sur 72 000** (67 584 avant) ;
+  mesure : **0,26 / 0,24 ms à 1 / 32 fils contre 5,07 / 5,24 ms**. Le ticket du saut par semi-masque
+  (F) fermé dans le lot. Suites et banc en passe ; push ensuite ; F remesure `usages`.
+- F a recompté sa copie sur la lib corrigée du balayage filtré : 0 morceau lu vide sur 128 732,
+  aucun plantage ; mon reflink est effacé.
+- **Le lot du masque est sur master `41d282843`** (5 h 38 ; rejeu local sur d447364ce : transaction
+  267, api 105, planner 2, e2e Cypher 1 867, banc 7 rouges attendus / 266 verts ; deux passes
+  complètes avant, dont un rouge de la première forme sur LDBC IS2 — un balayage multi-tables gardait
+  le groupe de la table d'avant, remis à zéro au changement de table). Relectures rendues à hotfixs
+  (pas 1 DDL, puis le DROP validé après l'instantané ; avis de forme sur le DELETE indexé HNSW :
+  (C) l'arrêt de la chaîne des versions à la première visible, sûr ; (A) sans garantie propre au
+  delete ; (B) après mesure) et à G (B3, l'identifiant de bâti sous Windows). Programme du cœur
+  C++ vide : la suite est à l'orchestration (I2 page 10, le pas 2 de la rétention des index).
