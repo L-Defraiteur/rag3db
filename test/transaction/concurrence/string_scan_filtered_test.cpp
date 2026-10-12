@@ -245,4 +245,79 @@ INSTANTIATE_TEST_SUITE_P(Windows, StringScanFiltered,
         return std::string("?");
     });
 
+
+// Une garde pour ListColumn::scanFiltered, pas un témoin de défaut. Sa borne
+// (`startOffsetInSegment + pos - offsetInResult < numValues`) était déjà juste pour un segment ; le
+// cœur C++ l'a bornée aussi par numValuesToScan, par forme, sans cas atteignable (12 octobre 2026).
+// Ce cas est vert sans ce changement comme avec : des listes assez grosses pour que leur colonne se
+// découpe (64 éléments sur 6 000 lignes, 4 segments), une ligne supprimée dans la fenêtre lue, et le
+// balayage des listes contre l'attendu. Le contrôle `plan` exige au moins deux segments pour `l`.
+std::string bigListOf(int64_t id) {
+    std::string out = "[";
+    for (int64_t i = 0; i < 64; ++i) {
+        out += (i == 0 ? "" : ",") + std::to_string(id * 64 + i);
+    }
+    return out + "]";
+}
+
+class ListScanFiltered : public EmptyDBTest {
+protected:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        if (inMemMode) {
+            GTEST_SKIP() << "on-disk database needed (the segments come from a checkpoint)";
+        }
+        createDBAndConn();
+        ok("CALL auto_checkpoint=false;");
+        ok("CREATE NODE TABLE L(id INT64 PRIMARY KEY, l INT64[]);");
+        const auto path = databasePath + ".lists.csv";
+        {
+            std::ofstream out(path);
+            for (int64_t id = 0; id < NUM_ROWS; ++id) {
+                out << id << ",\"" << bigListOf(id) << "\"\n";
+            }
+        }
+        ok("COPY L FROM '" + path + "' (header=false);");
+        ok("CHECKPOINT;");
+    }
+
+    void ok(const std::string& query) {
+        auto result = conn->query(query);
+        ASSERT_TRUE(result->isSuccess())
+            << "[check: query] " << query.substr(0, 160) << " : " << result->getErrorMessage();
+    }
+};
+
+TEST_F(ListScanFiltered, ScanOfBigListsEqualsExpected) {
+    auto segments = conn->query("CALL storage_info('L') WHERE column_name = 'l' AND node_group_id "
+                                "= 0 RETURN count(*);");
+    const auto numSegments = segments->isSuccess() && segments->hasNext() ?
+                                 segments->getNext()->getValue(0)->getValue<int64_t>() :
+                                 -1;
+    std::cerr << "  [listes] segments de l dans le groupe 0 : " << numSegments << "\n";
+    ASSERT_GE(numSegments, 2) << "[check: plan] the column l is not split into segments: the "
+                                 "witness would prove nothing";
+    ok("MATCH (n:L {id: 10}) DELETE n;");
+    auto result = conn->query("MATCH (n:L) RETURN n.id, n.l;");
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    int64_t wrong = 0;
+    int64_t seen = 0;
+    int64_t firstWrong = -1;
+    while (result->hasNext()) {
+        auto tuple = result->getNext();
+        const auto id = tuple->getValue(0)->getValue<int64_t>();
+        seen++;
+        if (tuple->getValue(1)->toString() != bigListOf(id)) {
+            if (firstWrong < 0) {
+                firstWrong = id;
+            }
+            wrong++;
+        }
+    }
+    std::cerr << "  [listes] " << wrong << " listes fausses sur " << seen << " (première : id "
+              << firstWrong << ")\n";
+    EXPECT_EQ(seen, NUM_ROWS - 1) << "[check: list-scan-equals-expected] rows";
+    EXPECT_EQ(wrong, 0) << "[check: list-scan-equals-expected] first wrong id " << firstWrong;
+}
+
 } // namespace
