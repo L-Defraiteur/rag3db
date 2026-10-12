@@ -314,6 +314,12 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
     ChunkedNodeGroup* chunkedGroup = nullptr;
     node_group_idx_t currentChunkIdx = INVALID_NODE_GROUP_IDX;
     sel_t numSelected = 0;
+    // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit : le verrou
+    // partagé est pris une fois pour la fenêtre, et non par ligne (il pesait 40 % de l'insertion
+    // d'un vecteur sous index HNSW, profil du banc du 12 octobre 2026). Il est rendu le temps de
+    // changer de bloc : l'écrivain tient chunkedGroups puis inMemAppendMtx, dans cet ordre, et un
+    // lecteur qui tiendrait les deux dans l'ordre inverse s'interbloquerait avec lui.
+    std::shared_lock appendGuard{inMemAppendMtx};
     while (nextRow < numRows) {
         const auto rowIdx =
             nodeGroupScanState.inMemCSRList.rowIndices[nextRow + nodeGroupScanState.nextRowToScan];
@@ -321,12 +327,14 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
             StorageUtils::getQuotientRemainder(rowIdx, StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
         if (chunkIdx != currentChunkIdx) {
             currentChunkIdx = chunkIdx;
-            const auto lock = chunkedGroups.lock();
-            chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+            appendGuard.unlock();
+            {
+                const auto lock = chunkedGroups.lock();
+                chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+            }
+            appendGuard.lock();
         }
         KU_ASSERT(chunkedGroup);
-        // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit.
-        const std::shared_lock appendGuard{inMemAppendMtx};
         numSelected += chunkedGroup->lookup(transaction, tableState, nodeGroupScanState, rowInChunk,
             numSelected);
         nextRow++;
@@ -365,7 +373,7 @@ void CSRNodeGroup::append(const Transaction* transaction, const std::vector<colu
     if (!csrIndex) {
         csrIndex = std::make_unique<CSRIndex>();
     }
-    updateCSRIndex(boundOffsetInGroup, startRow, 1 /*length*/);
+    updateCSRIndex(boundOffsetInGroup, startRow, numRows);
 }
 
 void CSRNodeGroup::updateCSRIndex(offset_t boundNodeOffsetInGroup, row_idx_t startRow,

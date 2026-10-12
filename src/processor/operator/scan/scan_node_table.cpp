@@ -67,12 +67,25 @@ void ScanNodeTableSharedState::nextMorsel(NodeTableScanState& scanState,
         scanState.maskedOffsets.clear();
         if (!maskExhausted) {
             semiMask->collectFrom(maskCursor, DEFAULT_VECTOR_CAPACITY, scanState.maskedOffsets);
+            // Une tranche plus courte que demandé est la dernière. Et un masqueur peut poser un
+            // décalage qui n'est pas une ligne (INVALID_OFFSET, qu'une recherche vectorielle
+            // rend pour un résultat absent) : au-delà de la taille du masque, il n'est pas lu, et
+            // il ne fait pas avancer le curseur au-delà de ce que le masque sait représenter
+            // (4294967295 + 1 revenait à 0 sur un masque 32 bits : la même tranche sans fin).
+            if (scanState.maskedOffsets.size() < DEFAULT_VECTOR_CAPACITY) {
+                maskExhausted = true;
+            }
+            const auto maxOffset = semiMask->getMaxOffset();
+            while (!scanState.maskedOffsets.empty() && scanState.maskedOffsets.back() >= maxOffset) {
+                scanState.maskedOffsets.pop_back();
+                maskExhausted = true;
+            }
         }
         if (scanState.maskedOffsets.empty()) {
             if (!maskExhausted) {
                 maskExhausted = true;
-                progressSharedState.numGroupsScanned += numCommittedNodeGroups;
             }
+            progressSharedState.numGroupsScanned += numCommittedNodeGroups;
             scanState.source = TableScanSource::NONE;
             return;
         }

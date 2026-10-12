@@ -1,6 +1,6 @@
 # Le point de reprise qui suit de nombreux SET d'une colonne de vecteurs coûte un temps quadratique
 
-- **État** : ouvert ; le correctif est écrit dans le lot de l'insertion du cœur C++ (branche
+- **État** : corrigé (le commit qui déplace ce fichier dans `closed/`, 12 octobre 2026, cœur C++, page coeur-cpp/13) — `ColumnChunkData::resize` grandit au moins du double quand il doit grandir (la capacité suit le tampon, le disque reçoit numValues) : le point de reprise applique les mises à jour une valeur à la fois sans plus recopier tout le tampon à chacune. Témoin du banc `Columns/CheckpointAfterUpdates.ScalesWithTheUpdatedRows` sorti du known_red. Ouvert le 12 octobre 2026 ;  ; le correctif est écrit dans le lot de l'insertion du cœur C++ (branche
   insertion-vecteurs, pas 1)
 - **Gravité** : lenteur sévère. Un CHECKPOINT après 15 000 SET de FLOAT[768] prend 24 s, contre
   0,5 s pour le même volume écrit par COPY

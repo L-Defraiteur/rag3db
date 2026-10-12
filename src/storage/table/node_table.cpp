@@ -494,6 +494,26 @@ void NodeTable::lookupOffsets(Transaction* transaction, NodeTableScanState& scan
                             nodeOffset - StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx);
         if (scanState.source != source || scanState.nodeGroupIdx != nodeGroupIdx ||
             scanState.nodeGroup == nullptr) {
+            // Un décalage masqué sans groupe (le masqueur a pu retenir un décalage au-delà des
+            // lignes de la table — un index qui garde des nœuds disparus, une ligne locale
+            // d'une autre table locale — que le balayage par fenêtres ne lisait pas non plus) :
+            // la ligne n'existe pas, on passe.
+            NodeGroup* nodeGroup = nullptr;
+            if (isUnCommitted) {
+                const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
+                if (localTable) {
+                    const auto& localNodeTable = localTable->cast<LocalNodeTable>();
+                    if (nodeGroupIdx < localNodeTable.getNumNodeGroups()) {
+                        nodeGroup = localNodeTable.getNodeGroup(nodeGroupIdx);
+                    }
+                }
+            } else {
+                nodeGroup = nodeGroups->getNodeGroup(nodeGroupIdx, true /* mayOutOfBound */);
+            }
+            if (nodeGroup == nullptr) {
+                scanState.nodeGroup = nullptr;
+                continue;
+            }
             scanState.source = source;
             scanState.nodeGroupIdx = nodeGroupIdx;
             initScanState(transaction, scanState);

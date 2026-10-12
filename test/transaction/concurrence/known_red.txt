@@ -133,9 +133,3 @@ VectorIndexRebuild.SearchesAcrossDropAndCreateAreConsistentOrNamed no-unnamed-se
 VectorIndexCost.ProductShapeDeleteCost delete-close-to-set-null-then-delete
 Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64 delete-independent-of-index-size
 Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation delete-independent-of-index-size
-#
-# Le point de reprise après de nombreux SET d'une colonne de vecteurs (ticket
-# 2026-10-12-le-point-de-reprise-apres-de-nombreux-set-de-vecteurs-est-quadratique) : chaque mise à
-# jour appliquée agrandit la donnée au plus juste et recopie tout le tampon. Pour le cœur C++ (lot
-# de l'insertion, pas 1). STRING et INT64 restent verts.
-Columns/CheckpointAfterUpdates.ScalesWithTheUpdatedRows/Vector768 checkpoint-linear-in-updated-rows

@@ -171,6 +171,13 @@ bool RelTableData::delete_(Transaction* transaction, ValueVector& boundNodeIDVec
     if (rowIdx == INVALID_ROW_IDX) {
         return false;
     }
+    return delete_(transaction, boundNodeIDVector, relIDVector, source, rowIdx);
+}
+
+bool RelTableData::delete_(Transaction* transaction, ValueVector& boundNodeIDVector,
+    const ValueVector& relIDVector, CSRNodeGroupScanSource source, row_idx_t rowIdx) {
+    const auto boundNodePos = boundNodeIDVector.state->getSelVector()[0];
+    const auto relIDPos = relIDVector.state->getSelVector()[0];
     const auto boundNodeOffset = boundNodeIDVector.getValue<nodeID_t>(boundNodePos).offset;
     const auto nodeGroupIdx = StorageUtils::getNodeGroupIdx(boundNodeOffset);
     auto& csrNodeGroup = getNodeGroup(nodeGroupIdx)->cast<CSRNodeGroup>();

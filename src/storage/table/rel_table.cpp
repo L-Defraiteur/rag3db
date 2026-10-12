@@ -366,8 +366,10 @@ void RelTable::detachDelete(Transaction* transaction, RelTableDeleteState* delet
         std::make_unique<RelTableScanState>(*memoryManager, &deleteState->srcNodeIDVector,
             std::vector{&deleteState->dstNodeIDVector, &deleteState->relIDVector},
             deleteState->dstNodeIDVector.state, true /*randomLookup*/);
-    relReadState->setToTable(transaction, this, {NBR_ID_COLUMN_ID, REL_ID_COLUMN_ID}, {},
-        direction);
+    // ROW_IDX en dernier : le balayage rend la ligne de chaque arête dans rowIdxVector, et le
+    // sens direct la supprime sans la re-repérer (RelTableData::delete_ par ligne).
+    relReadState->setToTable(transaction, this,
+        {NBR_ID_COLUMN_ID, REL_ID_COLUMN_ID, ROW_IDX_COLUMN_ID}, {}, direction);
     initScanState(transaction, *relReadState);
     detachDeleteForCSRRels(transaction, tableData, reverseTableData, relReadState.get(),
         deleteState);
@@ -438,6 +440,8 @@ void RelTable::detachDeleteForCSRRels(Transaction* transaction, RelTableData* ta
         }
         tempState->getSelVectorUnsafe().setToFiltered(1);
 
+        const auto source =
+            relDataReadState->nodeGroupScanState->cast<CSRNodeGroupScanState>().source;
         for (auto i = 0u; i < numRelsScanned; i++) {
             tempState->getSelVectorUnsafe()[0] = deleteState->relIDVector.state->getSelVector()[i];
 
@@ -448,8 +452,11 @@ void RelTable::detachDeleteForCSRRels(Transaction* transaction, RelTableData* ta
                 localTable->delete_(transaction, *deleteState);
                 continue;
             }
+            // La ligne de cette arête, rendue par le balayage (colonne ROW_IDX) : pas de
+            // re-repérage par identifiant dans le sens direct.
+            const auto rowIdx = relDataReadState->rowIdxVector->getValue<row_idx_t>(relIDPos);
             [[maybe_unused]] const auto deleted = tableData->delete_(transaction,
-                deleteState->srcNodeIDVector, deleteState->relIDVector);
+                deleteState->srcNodeIDVector, deleteState->relIDVector, source, rowIdx);
             if (reverseTableData) {
                 [[maybe_unused]] const auto reverseDeleted = reverseTableData->delete_(transaction,
                     deleteState->dstNodeIDVector, deleteState->relIDVector);
@@ -570,9 +577,19 @@ void RelTable::prepareCommitForNodeGroup(const Transaction* transaction,
     const std::vector<column_id_t>& columnIDs, const NodeGroup& localNodeGroup,
     CSRNodeGroup& csrNodeGroup, offset_t boundOffsetInGroup, const row_idx_vec_t& rowIndices,
     column_id_t skippedColumn) {
-    for (const auto row : rowIndices) {
+    // Les lignes d'un nœud se suivent dans son bloc local : elles entrent dans le CSR validé par
+    // suites contiguës, d'un seul append et d'une seule mise à jour de l'index (un seul tri de la
+    // liste du nœud), au lieu d'une ligne à la fois (un tri complet par arête : 60 arêtes par
+    // vecteur inséré sous index HNSW, profil du banc du 12 octobre 2026).
+    for (auto k = 0u; k < rowIndices.size();) {
+        const auto row = rowIndices[k];
         auto [chunkedGroupIdx, rowInChunkedGroup] =
             StorageUtils::getQuotientRemainder(row, StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+        row_idx_t numRows = 1;
+        while (k + numRows < rowIndices.size() && rowIndices[k + numRows] == row + numRows &&
+               rowInChunkedGroup + numRows < StorageConfig::CHUNKED_NODE_GROUP_CAPACITY) {
+            numRows++;
+        }
         std::vector<const ColumnChunk*> chunks;
         const auto chunkedGroup = localNodeGroup.getChunkedNodeGroup(chunkedGroupIdx);
         for (auto i = 0u; i < chunkedGroup->getNumColumns(); i++) {
@@ -582,7 +599,8 @@ void RelTable::prepareCommitForNodeGroup(const Transaction* transaction,
             chunks.push_back(&chunkedGroup->getColumnChunk(i));
         }
         csrNodeGroup.append(transaction, columnIDs, boundOffsetInGroup, chunks, rowInChunkedGroup,
-            1 /*numRows*/);
+            numRows);
+        k += numRows;
     }
 }
 
