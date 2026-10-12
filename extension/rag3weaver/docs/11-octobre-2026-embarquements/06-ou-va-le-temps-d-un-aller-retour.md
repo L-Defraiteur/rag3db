@@ -133,3 +133,35 @@ est petit). Deux voies :
   avec le témoin des mêmes lignes et du temps.
 
 La décision est à l'orchestration ; rien n'est changé dans le produit.
+
+## Après le lot des fils, et le saut en deux temps (12 octobre)
+
+**Le lot des fils du cœur** (dda63783a) divise impact par deux sur `src/daemon`, mais
+n'atteint pas `usages` sur l'index entier : remesuré sur la lib 116acb252ace
+(7b54c5f84), `usages` reste à 382 à 389 ms en médiane — ses sauts balaient toute la
+table `Scope`, estimée grande, et gardent leurs fils. Au-dessus de 100 ms : la règle de
+l'orchestration pose la forme en deux temps.
+
+**La forme** : `dataflow::graph_walk::run_hop`, un saut dit par le dialecte en une
+instruction ou en deux. En deux temps, le saut ne rend que l'uuid du voisin (ses champs
+vides à leur place), puis ces champs se lisent par clé (`Select::by_uuids`) et se
+remettent à leur place, ligne par ligne. Seulement pour un saut vers une table connue
+qui lit des champs du voisin, sans filtre, ordre ni limite. Capacité déclarée,
+`DialectCapabilities::two_step_hops` : **vraie pour rag3db, fausse pour PostgreSQL**
+(sa jointure passe par l'index) ; `Catalog::set_two_step_hops` la lève ou la baisse
+pour un montage. Les cinq sauts d'`usages_of` et de `declarations_of` passent par elle.
+
+**Le témoin** (`e2e_mesure_index_entier::usages_en_un_temps_et_en_deux`, même copie,
+même catalogue, dix appels chacun, `poste mesure`) : le rendu est **le même** (empreinte
+des lignes triées), et la médiane baisse de 35 à 40 % :
+
+| appel | un temps | deux temps |
+|---|---|---|
+| `update` sous `src/storage/table/node_table` | 359,9 ms | 234,9 ms |
+| `update` sans chemin | 363,3 ms | 240,5 ms |
+| `getTableID` | 362,7 ms | 217,6 ms |
+
+Le reste (plus de 200 ms) est le balayage sous masque lui-même, que la lecture par clé
+fait encore : le lot suivant du cœur (page `coeur-cpp/12` §7). Quand il est sur master,
+remesurer : si le saut en un temps rejoint les deux temps, la capacité repasse à faux
+pour rag3db et la forme se retire.

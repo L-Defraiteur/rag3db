@@ -152,7 +152,9 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
             .dialect_arc()
             .select(&rag3weaver_ir::Select::filtered(&rel.to, rag3weaver_ir::Predicate::Contains { field: d.field.clone(), param: "nom".into() }, champs))
             .map_err(|e| format!("UsagesNode: {e}"))?;
-        catalog.execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
+        catalog
+            .execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
+            .map_err(|e| format!("UsagesNode: {e}"))?
     } else {
         // Le saut des définitions vers leurs conteneurs, dit par le dialecte ;
         // mêmes colonnes, dans le même ordre.
@@ -162,11 +164,9 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
             .chain(std::iter::once(&d.field))
             .map(|f| rag3weaver_ir::Column::Node(f.clone()))
             .collect();
-        let q = catalog.dialect_arc().hop(&saut).map_err(|e| format!("UsagesNode: {e}"))?;
         let uuids = CypherValue::List(definitions.iter().map(|x| CypherValue::String(x.uuid.clone())).collect());
-        catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", uuids)])
-    }
-    .map_err(|e| format!("UsagesNode: {e}"))?;
+        super::graph_walk::run_hop(catalog, &saut, &[QueryParam::new("uuids", uuids)]).map_err(|e| format!("UsagesNode: {e}"))?
+    };
     let n = cfg.path_fields.len();
     let mut out = Vec::new();
     for r in &rows.rows {
@@ -238,8 +238,8 @@ pub fn virtual_usages_of(catalog: &Catalog, cfg: &UsagesConfig, v: &VirtualConfi
     // Leurs appelants directs.
     for name_rel in &cfg.direct {
         let rel = rel_info(catalog, name_rel)?;
-        let q = catalog.dialect_arc().hop(&direct_usages_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
-        let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(err)?;
+        let rows = super::graph_walk::run_hop(catalog, &direct_usages_hop(cfg, &rel), &[QueryParam::new("uuids", liste.clone())])
+            .map_err(|e| format!("UsagesNode: {e}"))?;
         for r in &rows.rows {
             let def = texte(r.first());
             let mut user = item(r, 1, cfg);
@@ -443,11 +443,12 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     let mut definitions: Vec<Item> = Vec::new();
     if let Some(def) = &cfg.defined_by {
         let rel = rel_info(catalog, def)?;
-        let q = catalog.dialect_arc().hop(&definitions_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
+        let saut = definitions_hop(cfg, &rel);
         // Un pivot à la fois, dans leur ordre ; la première colonne est l'uuid
         // du pivot, la définition vient après.
         for u in &pivots {
-            let rows = catalog.execute_raw_with_params(&q, &[super::graph_walk::uuid_param(std::slice::from_ref(u))]).map_err(err)?;
+            let rows = super::graph_walk::run_hop(catalog, &saut, &[super::graph_walk::uuid_param(std::slice::from_ref(u))])
+                .map_err(|e| format!("UsagesNode: {e}"))?;
             definitions.extend(rows.rows.iter().map(|r| item(r, 1, cfg)));
         }
     }
@@ -490,10 +491,8 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     if !def_uuids.is_empty() {
         for name_rel in &cfg.direct {
             let rel = rel_info(catalog, name_rel)?;
-            let q = catalog.dialect_arc().hop(&direct_usages_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
-            let rows = catalog
-                .execute_raw_with_params(&q, &[QueryParam::new("uuids", CypherValue::List(def_uuids.clone()))])
-                .map_err(err)?;
+            let rows = super::graph_walk::run_hop(catalog, &direct_usages_hop(cfg, &rel), &[QueryParam::new("uuids", CypherValue::List(def_uuids.clone()))])
+                .map_err(|e| format!("UsagesNode: {e}"))?;
             for r in &rows.rows {
                 let def = texte(r.first());
                 let mut user = item(r, 1, cfg);
@@ -515,11 +514,12 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     // qu'une, sinon « non attribués ».
     if let Some(used) = &cfg.used_by {
         let rel = rel_info(catalog, used)?;
-        let q = catalog.dialect_arc().hop(&pivot_usages_hop(cfg, &rel)).map_err(|e| format!("UsagesNode: {e}"))?;
+        let saut = pivot_usages_hop(cfg, &rel);
         let unique = if ambiguous { None } else { definitions.first().map(|d| d.uuid.clone()) };
         let def_set: std::collections::HashSet<&str> = definitions.iter().map(|d| d.uuid.as_str()).collect();
         for u in &pivots {
-            let rows = catalog.execute_raw_with_params(&q, &[super::graph_walk::uuid_param(std::slice::from_ref(u))]).map_err(err)?;
+            let rows = super::graph_walk::run_hop(catalog, &saut, &[super::graph_walk::uuid_param(std::slice::from_ref(u))])
+                .map_err(|e| format!("UsagesNode: {e}"))?;
             for r in &rows.rows {
                 let mut user = item(r, 1, cfg);
                 if def_set.contains(user.uuid.as_str()) {

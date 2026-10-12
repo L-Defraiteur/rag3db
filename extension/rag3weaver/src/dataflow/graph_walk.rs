@@ -163,6 +163,113 @@ pub fn degrees(catalog: &Catalog, rels: &[RelInfo], directions: &[Direction], uu
     Ok(out)
 }
 
+/// **Un saut, dit par le dialecte, en une instruction ou en deux.** Quand le
+/// dialecte le déclare (`DialectCapabilities::two_step_hops`) et que le saut
+/// lit des champs du nœud atteint d'une table connue, sans filtre, ordre ni
+/// limite : d'abord le saut, qui ne rend que l'uuid du voisin (les champs à
+/// leur place, vides), puis ces champs par clé (`Select::by_uuids`), remis
+/// à leur place ligne par ligne. Les lignes sont celles du saut en une
+/// instruction, dans le même ordre de colonnes ; leur ordre entre elles
+/// n'est promis ni par l'un ni par l'autre. Sinon, le saut tel quel.
+pub fn run_hop(catalog: &Catalog, hop: &rag3weaver_ir::Hop, params: &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult, String> {
+    use rag3weaver_ir::Column;
+    let dialect = catalog.dialect_arc();
+    let champ = |c: &Column| match c {
+        Column::Node(f) if f != "_uuid" => Some(f.clone()),
+        _ => None,
+    };
+    let deux_temps = catalog.two_step_hops()
+        && hop.end.is_some()
+        && hop.filter.is_none()
+        && hop.order_by.is_empty()
+        && hop.limit.is_none()
+        && hop.returns.iter().any(|c| champ(c).is_some())
+        && !hop.returns.iter().any(|c| matches!(c, Column::Whole));
+    if !deux_temps {
+        let q = dialect.hop(hop).map_err(|e| e.to_string())?;
+        return catalog.execute_raw_with_params(&q, params).map_err(|e| e.to_string());
+    }
+    // 1. Le saut : l'uuid du voisin en plus, ses champs vides à leur place.
+    let mut premier = hop.clone();
+    premier.returns = std::iter::once(Column::Node("_uuid".into()))
+        .chain(hop.returns.iter().map(|c| if champ(c).is_some() { Column::Null } else { c.clone() }))
+        .collect();
+    let q = dialect.hop(&premier).map_err(|e| e.to_string())?;
+    let sauts = catalog.execute_raw_with_params(&q, params).map_err(|e| e.to_string())?;
+    // 2. Les champs, par clé.
+    let mut champs: Vec<String> = Vec::new();
+    for c in &hop.returns {
+        if let Some(f) = champ(c) {
+            if !champs.contains(&f) {
+                champs.push(f);
+            }
+        }
+    }
+    let mut vus = std::collections::BTreeSet::new();
+    let voisins: Vec<CypherValue> = sauts
+        .rows
+        .iter()
+        .filter_map(|r| r.get(1).filter(|v| !v.is_null()).cloned())
+        .filter(|v| vus.insert(format!("{v:?}")))
+        .collect();
+    let mut lus: HashMap<String, Vec<CypherValue>> = HashMap::new();
+    // Les noms des champs, tels que le dialecte les nomme (même alias `m` que
+    // le saut) : les deux formes ont le même en-tête.
+    let mut noms_lus: Vec<String> = champs.clone();
+    if !voisins.is_empty() {
+        let table = hop.end.clone().expect("vérifié plus haut");
+        let lire = rag3weaver_ir::Select::by_uuids(table, champs.iter().map(|f| Column::Node(f.clone())).collect());
+        let q = dialect.select(&lire).map_err(|e| e.to_string())?;
+        let r = catalog
+            .execute_raw_with_params(&q, &[crate::connection::QueryParam::new("uuids", CypherValue::List(voisins))])
+            .map_err(|e| e.to_string())?;
+        if r.columns.len() == champs.len() + 1 {
+            noms_lus = r.columns[1..].to_vec();
+        }
+        for l in r.rows {
+            let u = text(l.first());
+            lus.insert(u, l.into_iter().skip(1).collect());
+        }
+    }
+    // 3. Les lignes du saut en une instruction : le départ, puis chaque
+    // colonne à sa place.
+    let mut colonnes = vec![sauts.columns.first().cloned().unwrap_or_default()];
+    for (i, c) in hop.returns.iter().enumerate() {
+        colonnes.push(match champ(c) {
+            Some(f) => noms_lus[champs.iter().position(|x| *x == f).expect("champ relevé")].clone(),
+            None => sauts.columns.get(i + 2).cloned().unwrap_or_default(),
+        });
+    }
+    // Un voisin rendu par le saut puis supprimé avant la lecture par clé
+    // (une réingestion concurrente, en mode multi-écrivains) : sa ligne est
+    // écartée, comme si le saut avait lu après la suppression ; la forme en un
+    // temps ne l'aurait jamais rendue à moitié. Le compte se dit.
+    let disparus = sauts.rows.iter().filter(|r| !lus.contains_key(&text(r.get(1)))).count();
+    if disparus > 0 {
+        eprintln!("[rag3weaver] saut en deux temps : {disparus} ligne(s) écartée(s), voisin supprimé entre le saut et la lecture par clé");
+    }
+    let rows = sauts
+        .rows
+        .iter()
+        .filter_map(|r| {
+            let voisin = text(r.get(1));
+            let ligne_lue = lus.get(&voisin)?;
+            let mut ligne = vec![r.first().cloned().unwrap_or(CypherValue::Null)];
+            for (i, c) in hop.returns.iter().enumerate() {
+                ligne.push(match champ(c) {
+                    Some(f) => {
+                        let k = champs.iter().position(|x| *x == f).expect("champ relevé");
+                        ligne_lue.get(k).cloned().unwrap_or(CypherValue::Null)
+                    }
+                    None => r.get(i + 2).cloned().unwrap_or(CypherValue::Null),
+                });
+            }
+            Some(ligne)
+        })
+        .collect();
+    Ok(crate::connection::QueryResult { columns: colonnes, rows })
+}
+
 /// Le saut nu de [`neighbors`], en forme du langage intermédiaire : les
 /// arêtes devinées sont écartées quand la relation porte le champ déclaré.
 pub fn hop_of(rel: &RelInfo, direction: Direction, mark: &EdgeMark) -> rag3weaver_ir::Hop {

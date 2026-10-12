@@ -288,6 +288,9 @@ pub struct Catalog {
     /// La fusion des éventails levée ou baissée pour ce montage
     /// ([`Self::set_fanout`]) ; `None` : ce que déclare le dialecte.
     fanout: Option<bool>,
+    /// Le saut en deux temps levé ou baissé pour ce montage
+    /// ([`Self::set_two_step_hops`]) ; `None` : ce que déclare le dialecte.
+    two_step_hops: Option<bool>,
     /// Garder les points de reprise du dataflow dans une transaction
     /// ([`set_checkpoints_in_transaction`](Self::set_checkpoints_in_transaction)) ;
     /// coupés par défaut.
@@ -535,6 +538,7 @@ impl Catalog {
             absent_signale: std::sync::atomic::AtomicBool::new(false),
             in_transaction: false,
             fanout: None,
+            two_step_hops: None,
             checkpoints_in_transaction: false,
             fresh_ingest: None,
             defer_blob_push: false,
@@ -9072,6 +9076,19 @@ impl Catalog {
     /// aller-retour coûte cher, la lève ; `None` rend la main au dialecte.
     pub fn set_fanout(&mut self, fanout: Option<bool>) {
         self.fanout = fanout;
+    }
+
+    /// **Lever ou baisser le saut en deux temps pour ce montage**
+    /// (`dataflow::graph_walk::run_hop`), quoi que déclare le dialecte ; `None`
+    /// rend la main au dialecte. Sert à comparer les deux formes sur une même
+    /// base.
+    pub fn set_two_step_hops(&mut self, deux_temps: Option<bool>) {
+        self.two_step_hops = deux_temps;
+    }
+
+    /// Le saut en deux temps vaut-il pour ce montage.
+    pub fn two_step_hops(&self) -> bool {
+        self.two_step_hops.unwrap_or_else(|| self.dialect.capabilities().two_step_hops)
     }
 
     /// Execute raw Cypher (useful for debugging/tests).

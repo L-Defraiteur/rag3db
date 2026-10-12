@@ -195,12 +195,21 @@ pub struct DialectCapabilities {
     /// lève (`Catalog::set_fanout`), jamais sur la foi d'un calcul
     /// (`docs/11-octobre-2026-embarquements/04-eventails.md`).
     pub fanout: bool,
+    /// **Un saut qui lit des champs du nœud atteint, en deux temps** : le
+    /// saut ne rend que l'uuid du voisin, puis ses champs se lisent par clé
+    /// (`graph_walk::run_hop`). Vrai pour rag3db : mesuré le 11 octobre sur
+    /// l'index entier, le saut qui lit les champs balaie toute la table du
+    /// voisin sous semi-masque (ticket du semi-masque), et les deux temps
+    /// rendent les mêmes lignes deux fois plus vite. Faux pour PostgreSQL,
+    /// dont la jointure passe par l'index. À remesurer, et à retirer s'il ne
+    /// gagne plus, quand le moteur corrige le semi-masque.
+    pub two_step_hops: bool,
 }
 
 impl DialectCapabilities {
     /// Ce que suppose un dialecte qui ne se prononce pas : il parle Cypher
     /// (l'hypothèse de tout le code d'avant), et rien de plus.
-    pub const CYPHER_ONLY: Self = Self { cypher: true, transactions: false, bulk_load: false, structured_fields: false, fanout: false };
+    pub const CYPHER_ONLY: Self = Self { cypher: true, transactions: false, bulk_load: false, structured_fields: false, fanout: false, two_step_hops: false };
 }
 
 pub trait SchemaDialect: Send + Sync {
@@ -1727,7 +1736,7 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false }
+        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false, two_step_hops: true }
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
@@ -2556,7 +2565,7 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false, fanout: false }
+        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false, fanout: false, two_step_hops: false }
     }
 
     // ── Les lots passent par JSON ────────────────────────────────────────

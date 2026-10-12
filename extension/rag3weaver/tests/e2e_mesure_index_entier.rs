@@ -529,3 +529,71 @@ fn les_morceaux_vides_et_les_groupes_de_noeuds() {
     eprintln!("[groupes] {} groupes de 2 048 : tout vides {tout_vides}, mêlés {mêlés} ({vides_dans_mêlés} vides dedans), sans vide {sans}", r.rows.len());
     eprintln!("[groupes] par groupe (offset/2048 : vides/lignes) : {}", lignes.join(" "));
 }
+
+/// **Le saut en deux temps, sur usages** (page 06, la règle des 100 ms) : sur
+/// la même copie et le même catalogue, `usages` en un temps puis en deux
+/// (`Catalog::set_two_step_hops`), dix appels chacun ; le rendu (Markdown,
+/// lignes triées) doit être le même, et la médiane dit le gain.
+#[test]
+#[ignore]
+fn usages_en_un_temps_et_en_deux() {
+    use rag3weaver::dataflow::usage_nodes::{declarations_of, usages_of, DeclarationsConfig, UsagesConfig};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let Some(base) = base() else { return };
+    let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    let config = CatalogConfig { name: Some("code-rag3db".into()), embedding_dim: 768, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(768)), config);
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let cfg = UsagesConfig {
+        pivot: "Symbol".into(),
+        key: "name".into(),
+        defined_by: Some("DEFINES".into()),
+        used_by: Some("MENTIONS".into()),
+        direct: vec!["CONSUMES".into(), "INHERITS_FROM".into(), "IMPLEMENTS".into()],
+        group_by: "usage".into(),
+        usages_field: "usages".into(),
+        line: "line".into(),
+        title: "name".into(),
+        kind_field: "scope_type".into(),
+        path_fields: vec!["repo_path".into(), "file_path".into()],
+        line_field: "start_line".into(),
+        edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] },
+        qualifier_field: Some("parent_name".into()),
+    };
+    let decl = DeclarationsConfig { relation: "HAS_PARENT".into(), field: "declarations".into() };
+    for (nom, chemin) in [("update", "src/storage/table/node_table"), ("update", ""), ("getTableID", "")] {
+        let mut resultats = Vec::new();
+        for deux in [false, true] {
+            catalog.set_two_step_hops(Some(deux));
+            let appel = || {
+                let r = usages_of(&catalog, &cfg, nom, chemin).unwrap();
+                let d = declarations_of(&catalog, &cfg, &decl, nom, &r.definitions).unwrap();
+                r.markdown_with("all", 200, &d)
+            };
+            let _ = appel();
+            let mut temps = Vec::new();
+            let mut rendu = String::new();
+            for _ in 0..10 {
+                let t = Instant::now();
+                rendu = appel();
+                temps.push(t.elapsed().as_secs_f64() * 1e3);
+            }
+            temps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let mut lignes: Vec<&str> = rendu.lines().collect();
+            lignes.sort();
+            let mut h = DefaultHasher::new();
+            lignes.hash(&mut h);
+            let empreinte = h.finish();
+            eprintln!(
+                "[deux temps] {nom} (path « {chemin} ») en {} : médiane {:.1} ms, empreinte {empreinte:016x}",
+                if deux { "deux temps" } else { "un temps  " },
+                temps[5]
+            );
+            resultats.push(empreinte);
+        }
+        assert_eq!(resultats[0], resultats[1], "{nom} : le rendu est le même en un temps et en deux");
+    }
+    catalog.set_two_step_hops(None);
+}
