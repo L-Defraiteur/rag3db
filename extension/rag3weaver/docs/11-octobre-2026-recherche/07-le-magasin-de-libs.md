@@ -298,3 +298,59 @@ ont pas. Le refus nommé (`rag3db-check-lib`, et le filet dans le processus)
 reste en place. **Reste à prouver** : une passe réelle
    sous `RAG3DB_LIB=courant`, après le rebâti du matin (la première lib qui
    porte sa section). Les modèles MCP et la recette de G suivront, avec G.
+
+## 9. Le pont aussi (lot 3d, demandé par l'orchestration, 12 octobre)
+
+**Le reste vu par l'arbre principal** : `cargo test --lib` et
+`check_features.sh` lisaient la lib par `RAG3DB_LIBRARY_DIR`, que chaque
+script posait sur `build/lecteurs-csv/src`, et non par le `courant` du
+magasin. Un rebâti en place au milieu d'un rejeu faussait donc encore ce
+rejeu : le binaire des tests charge, par `LD_LIBRARY_PATH`, la lib à moitié
+écrite. Et l'arbre principal devait attendre que les pushes aient rendu leur
+résultat avant de rebâtir.
+
+**La forme** : une seule fonction, `exporter_la_lib`
+(scripts/lib_du_magasin.sh), fait le même choix que `run_e2e.sh`
+(`choisir_la_lib`, §8). Elle pose ensuite les quatre variables sur **le même
+dossier** :
+- `RAG3DB_LIBRARY_DIR` et `RAG3DB_INCLUDE_DIR` : le pont se compile contre
+  les en-têtes de ce bâti et y lit son identifiant ;
+- `RAG3DB_SHARED=1` ;
+- `LD_LIBRARY_PATH` en tête : le binaire charge cette lib, et pas une autre
+  du même nom.
+
+Un `RAG3DB_LIBRARY_DIR` hérité qui diffère est remplacé, et c'est dit.
+`RAG3DB_LIB=bati` garde le dossier de bâti. Ce dossier vient de
+`RAG3DB_BUILD`, sinon c'est le `build/lecteurs-csv` de l'arbre principal.
+
+Elle sert à deux endroits :
+- **`check_features.sh`** l'appelle avant ses cinq jeux ;
+- **`scripts/cargo_magasin.sh <arguments de cargo>`** l'appelle puis lance
+  cargo. C'est l'entrée de tout `cargo test --lib` ou `cargo check` joué à
+  la main ou par un script de push, à la place des variables posées sur
+  `build/lecteurs-csv`.
+
+`poste push` lance la commande qu'on lui donne et ne touche pas à
+l'environnement : c'est cette commande qui passe par `cargo_magasin.sh`.
+
+Un dossier du magasin est immuable, donc l'arbre principal peut rebâtir
+quand il veut. Un rejeu en cours garde la lib qu'il a résolue au départ, et
+le rejeu suivant prend le nouveau `courant` une fois la lib publiée.
+
+**Témoins** :
+- `test_lib_du_magasin.sh`, cinq cas de plus pour `exporter_la_lib`. Ils
+  sont rouges sur le script d'avant et verts ici. Ce sont :
+  - les quatre variables posées sur le courant, et l'hérité remplacé et dit ;
+  - `RAG3DB_LIB=bati` ;
+  - `RAG3DB_BUILD` sans argument ;
+  - `RAG3DB_LIB=bati` avec `RAG3DB_BUILD` ;
+  - le refus d'un identifiant absent.
+- `test_cargo_magasin.sh`, de bout en bout, sur le vrai magasin et un vrai
+  binaire de tests :
+  - un dossier de bâti factice, copie du courant, avec l'ancien
+    environnement posé dessus ;
+  - le binaire bâti par `cargo_magasin.sh` ;
+  - la lib du dossier de bâti remplacée par un fichier à moitié écrit ;
+  - lancé sur l'ancien environnement, le binaire ne démarre plus ;
+  - par `cargo_magasin.sh`, les mêmes tests passent, et rien n'est
+    recompilé.

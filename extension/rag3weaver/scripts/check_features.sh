@@ -7,8 +7,10 @@
 # vérifié ici (11 octobre 2026, master rouge sous le jeu de G). À jouer avant
 # tout hash qui touche tests/ ou les features.
 #
-# Usage : scripts/check_features.sh   (depuis extension/rag3weaver, avec le
-# moteur partagé dans RAG3DB_LIBRARY_DIR/RAG3DB_INCLUDE_DIR)
+# Usage : scripts/check_features.sh   (depuis extension/rag3weaver). La lib
+# est celle du magasin, choisie comme pour run_e2e.sh (`exporter_la_lib`,
+# `RAG3DB_LIB=bati|courant|<id>`) : un rebâti en place de build/lecteurs-csv
+# ne la change pas pendant le contrôle (lot 3d).
 set -u
 JEUX=(
   # Celui de run_e2e.sh, la batterie.
@@ -26,6 +28,8 @@ JEUX=(
 ICI="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ICI/scripts/garde_target.sh"
 garder_le_target "${CARGO_TARGET_DIR:-$ICI/target}" "$ICI" || exit 2
+. "$ICI/scripts/lib_du_magasin.sh"
+exporter_la_lib || exit 2
 echec=0
 rouges=()
 # L'index des tickets, recompté sur les fichiers : ses en-têtes ne se
