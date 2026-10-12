@@ -9,7 +9,14 @@ parler ». La forme d'ensemble est déjà posée par le proto, dans
 §2.2 les deux modes, §2.3 le verbe `spawn`, §3.3 la vie indépendante, §4.5 les
 verbes posés comme nœuds, et le lot 5. Cette page ne la redéfinit pas. Elle dit
 ce que l'**exécuteur** doit tenir pour qu'elle soit vraie, et partage le
-travail avec le proto, qui tient `AgentNode`, `Decide`, `send` et l'annuaire.*
+travail avec le proto, qui tient `AgentNode`, `Decide`, `send` et l'annuaire.
+La phrase de Lucie est aussi dans la vision générale :
+`../../visions/00-vision-generale.md`, « L'agent est un graphe à ports, et les
+ports portent des flux » (11 octobre 2026), où « envoyer » et « lancer en
+fond » sont à la fois des verbes que le modèle choisit et des nœuds.*
+
+**Accord de l'orchestration** le 12 octobre, sous celui du proto. Ses quatre
+réponses sont au §7.
 
 ## 1. Ce qui existe, et pourquoi ça ne suffit pas
 
@@ -71,10 +78,10 @@ pub struct Launched { pub run: String, pub handle: String }
   graphes de valeurs entre les deux exécuteurs est prouvée depuis le lot 0,
   donc rien ne change pour ce que le graphe calcule.
 
-  *Variante, à choisir* : armer l'annulation **aussi** sous les niveaux,
-  vérifiée entre deux nœuds. C'est plus général, puisque tout run deviendrait
-  arrêtable, mais ça touche le chemin de tous les graphes. Je la propose comme
-  lot à part, et je ne la fais pas dans celui-ci.
+  Armer l'annulation **aussi** sous les niveaux, vérifiée entre deux nœuds,
+  est plus général : tout run deviendrait arrêtable. C'est un lot à part
+  (décidé, §7), avec son ticket :
+  `docs/tickets/2026-10-12-un-graphe-sous-les-niveaux-ne-s-annule-pas.md`.
 
 ### 2.2 La sortie revient par le bus, en message adressé
 
@@ -145,17 +152,17 @@ Il offre :
 
 *Fondre `suivies()` dedans ?* Une commande en fond et un graphe en fond sont
 la même chose vue de l'appelant : une poignée, une fin dans la boîte, une
-mise à mort par référence. Le risque est d'avoir deux registres et deux
-`--qui`. Je propose de les fondre, en gardant un `kind` (commande ou
-graphe). Mais `run_nodes.rs` est au chantier A : il faut d'abord l'accord de
-son porteur, sinon le lot pose le registre seul et la fonte vient après.
+mise à mort par référence. Ils sont donc **fondus** (décidé, §7), avec un
+`kind` (commande ou graphe), pour un seul `--qui`. `run_nodes.rs` est au
+chantier A, que porte l'arbre principal : son accord est demandé. S'il
+tarde, le lot pose le registre seul, et la fonte vient en commit à part.
 
 ### 2.5 Les bornes que l'exécuteur tient (§2.6 de la page 03)
 
 - **La durée** : un minuteur annule à l'échéance, avec la cause `"durée"`.
 - **Combien à la fois, par outil** : un lancement de trop est **refusé et
-  dit** à l'appelant, sans être mis en file. La file serait un choix de
-  plus ; elle est ouverte en §6.
+  dit** à l'appelant, sans être mis en file (décidé, §7). La file sera un
+  lot à part si un gabarit la demande.
 - **Qui peut lancer** et **le nombre de réveils** relèvent du manifeste et
   de la boucle d'agent : c'est chez le proto.
 
@@ -234,14 +241,17 @@ relecture, comme `src/dataflow/` passe par la sienne.
 - **Le temps d'aller-retour** : de la fin du dernier nœud de l'enfant
   jusqu'au message lu dans la boîte de l'appelant.
 
-## 7. Les questions ouvertes
+## 7. Les décisions (orchestration, 12 octobre)
 
-- L'exécuteur concurrent pour tout run en fond, ou l'annulation armée sous
-  les niveaux (§2.1) ? Je recommande le concurrent dans ce lot ; la
-  variante peut faire un lot à part.
-- Fondre `suivies()` dans le registre (§2.4) ? Je le recommande, avec
-  l'accord du chantier A.
-- Au-delà du nombre permis : refuser (ce lot) ou mettre en file ?
-- La boîte d'un appelant disparu : jusqu'où garder la fin ? Le curseur du
-  bus est en mémoire ; la boîte durable entre processus reste hors chantier
-  (page 03).
+1. **L'exécuteur concurrent pour tout run en fond.** L'annulation armée sous
+   les niveaux fera un lot à part, avec son ticket ouvert.
+2. **`suivies()` fondu dans le registre**, avec un `kind`, pour un seul
+   `--qui`. L'accord de l'arbre principal (chantier A) est demandé.
+3. **Au-delà du nombre permis : refusé et dit.** La file sera un lot à part
+   si un gabarit la demande.
+4. **La fin d'un appelant disparu reste dans le curseur du bus, en
+   mémoire.** C'est la **limite de ce lot** : si le processus s'arrête avant
+   que quelqu'un la lise, elle est perdue, et seule la trace (`RunFinished`
+   et sa cause) dit qu'elle a eu lieu. La forme durable est un lot suivant
+   possible : la fin notée dans la base, relue au retour de l'appelant. La
+   boîte durable entre processus reste hors du chantier de la page 03.
