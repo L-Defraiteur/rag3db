@@ -137,6 +137,10 @@ pub struct ToolInvocation {
     pub bus: Option<crate::events::EventBus>,
     pub inbox: String,
     pub scope: Arc<RunScope>,
+    /// L'annuaire de l'agent qui appelle, s'il a la messagerie : posé sous
+    /// `"directory"` pour l'outil, qui y adresse une fin par nom
+    /// ([`crate::directory::Directory::deliver`]).
+    pub directory: Option<Arc<crate::directory::Directory>>,
 }
 
 /// **Le contrat, et il n'est pas négociable :** [`Self::call`] ne peut pas
@@ -384,6 +388,9 @@ impl ToolBox for GraphToolBox<'_> {
             layer.register("agent_inbox", inv.inbox.clone());
         }
         layer.register("run_scope", inv.scope.clone());
+        if let Some(directory) = &inv.directory {
+            layer.register(crate::directory::DIRECTORY_SERVICE, directory.clone());
+        }
         self.tools
             .call_with_policy(call, self.nodes, Arc::new(layer), &self.policy)
     }
@@ -1196,6 +1203,7 @@ impl<'a> Agent<'a> {
         let handle = handle.to_string();
         let tools = self.tools;
         let agent = self.name.clone();
+        let annuaire = self.directory.clone();
         scope.spawn(move || {
             let started = std::time::Instant::now();
             let invocation = ToolInvocation {
@@ -1203,6 +1211,7 @@ impl<'a> Agent<'a> {
                 bus: Some(bus.clone()),
                 inbox: inbox.clone(),
                 scope: portee,
+                directory: annuaire,
             };
             let result = tools.call_with(&call, &child, &invocation);
             // `send_message` publie **sur la boîte du destinataire** en plus
@@ -1358,6 +1367,11 @@ impl<'a> Agent<'a> {
             scope: self.events.as_ref().map(|b| b.scope().clone()),
         });
         let outcome = self.run_inner(turns, sink, &run_id);
+        // Le tour fini rend son nom : une fin adressée à ce nom attend le
+        // prochain tour au lieu de tomber dans la boîte d'un run fini.
+        if let Some(directory) = &self.directory {
+            directory.release(&self.name, &run_id);
+        }
         self.emit(crate::events::CatalogEvent::RunFinished {
             run: run_id,
             kind: "agent".to_string(),
@@ -1896,6 +1910,7 @@ impl<'a> Agent<'a> {
                             bus: self.events.clone(),
                             inbox: run_id.to_string(),
                             scope: portee_du_run.clone(),
+                            directory: self.directory.clone(),
                         },
                     )
                 };
