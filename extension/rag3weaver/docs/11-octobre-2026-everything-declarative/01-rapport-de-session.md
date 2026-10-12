@@ -198,6 +198,49 @@ et son correctif ; la file à deux priorités côté embarquement et le délai
 borné ; le retrait par ensemble ; puis le lot 4 des agents (`AgentNode`), que
 le pont vivant de la recherche rend possible.
 
+## La nuit du 12 octobre — les « 6 s », et le lot de la montre sur master
+
+Luciepc pris jusqu'au matin : l'orchestration a fait bâtir ici, sous `poste lourd`, et pousser
+sous le verrou de push (la fenêtre de push se prend par le verrou, le rejeu se fait dessous).
+
+- **`30f1f7949`, la suite des relectures de la montre.**
+  - Une lecture passe pendant une réaction qui enchaîne les fichiers : la réaction cède aux
+    lecteurs, et les lectures attendent un verrou court (`lock_for_read`).
+  - Le reçu « occupé » d'`index_states` porte montres et reprise. Le correctif des montres est
+    celui de l'arbre principal ; mon témoin déterministe a été rouge avant le rebase, vert après.
+    Ticket fermé.
+  - La ligne `[montre]` par fichier dans le journal de l'hôte, demandée par codeparsers.
+  - L'instrumentation de la mesure par phase ; `max_tokens` de Decide (2 048).
+- **`df1184d32`, la cause des « 6 s ».** La mesure par phase (page 04, §7) sur un index de
+  `src/` (15 631 morceaux) l'a montré : la suppression des morceaux du scope changé coûtait
+  2,1 à 2,9 s **par ligne qui porte un vecteur sous HNSW**, contre 2 à 8 ms pour les lire.
+  - Le contournement : les vecteurs sont remis à NULL juste avant le `DETACH DELETE`, dans le
+    dialecte rag3db seulement.
+  - Réindexer un fichier : de 2,5–3,9 s à 0,56–0,68 s. Retirer un fichier de 32 scopes : de
+    96–114 s à 0,40 s.
+  - Ticket moteur ouvert pour hotfixs. Le banc mesure 20 à 50 ms par ligne indexée (0,7 ms par
+    NULL d'abord), et prépare une variante fidèle à ma forme.
+- **`5fc38460d`, la relecture de la recherche.**
+  - « Embarquer » sort dans la ligne `[montre]` sans la variable du profil (témoin rouge, puis
+    vert).
+  - Le vidage vide aussi le marqueur dense : une suppression qui échoue laisse une dette
+    honnête.
+  - Le vidage sauté se dit ; `record()` est sûr face à une panique.
+- **Le P1 (morceaux sans texte) n'était pas chez moi** : c'était le balayage filtré des chaînes
+  du moteur, corrigé par le cœur (`f6179ade0`). Mes trois suspects sont tombés, et le témoin de
+  réingestion a été retiré du lot.
+- **Contrôles** :
+  - chaque push : la lib entière rejouée sous le verrou (1 543 à 1 545 passés, 0 échec),
+    `check_features` 5/5, le natif seul sans avertissement ;
+  - `e2e_invariant_des_vecteurs` 8 sur 8 sur la lib courante du magasin ;
+  - trois contrôles lus à chaque hash.
+- **Fait en passant** : le worktree `rag3db-agents` de luciepc est effacé (codeparsers n'y
+  indexait rien), et le worktree local aussi, après chaque fusion. Le target `target-I-ici`
+  (6,7 Go) est gardé.
+- **Ensuite** : `LlmNode.tokens` (le premier flux de jetons, partage convenu avec la recherche :
+  flux non branchés jetés chez elle, `Spot` et `TokenEvents` sur le sujet `tokens` chez moi).
+  Codeparsers rejoue son renommage sur la base entière, à df1184d32.
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).

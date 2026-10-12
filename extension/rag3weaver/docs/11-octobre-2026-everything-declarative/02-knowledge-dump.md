@@ -143,3 +143,29 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
 - Sous le verrou de push, un rebase réécrit les fichiers du lot, donc
   rag3weaver recompile une fois par jeu de `check_features` : ~10 min même
   worktree chaud. La passe complète se fait avant le verrou.
+
+## Ce que la nuit du 12 octobre a appris
+
+- **Une seule instruction peut faire tout le temps.** La mesure par phase n'a servi qu'à la
+  trouver ; ce qui l'a départagée, c'est une sonde jetable par instruction (lecture,
+  suppression, relecture), puis une variante (le vecteur remis à NULL d'abord). La sonde est
+  gardée en patch : `~/.cache/rag3weaver-build/I/sonde-suppression.patch`.
+- **Le moteur (vector)** : supprimer une ligne indexée HNSW coûte des secondes dans la forme
+  « index rempli par `SET` depuis NULL, suppressions répétées sur la même connexion » ; une
+  ligne dont le vecteur est NULL se supprime en quelques millisecondes. Écrire 15 631 vecteurs
+  sous index : 309 s (environ 20 ms chacun). Le banc ne reproduit pas encore (20 à 50 ms) ; sa
+  piste est un coût qui croît d'un lot à l'autre depuis le dernier point de reprise de la base.
+- **Deux instructions qui doivent aller ensemble** (vider puis supprimer) : la première laisse
+  la ligne dans un état honnête si la seconde échoue. Vider le vecteur sans son marqueur
+  rendait un morceau réputé embarqué, sans vecteur.
+- **Un chronomètre global sous variable ne suffit pas à une ligne de production** : les
+  durées des nœuds venaient d'un abonnement armé seulement sous la variable.
+  `ingest_profile::record` (par fil) et `recording()` l'arment pour un seul travail.
+- **Prouver la lib** : `build/lecteurs-csv` a été réécrite en place à 03:48:57, en pleine
+  série de mesures. Les journaux datés ont montré que les quatre mesures « avant/après » sont
+  toutes antérieures, et que la passe finale tournait sur `f6179ade0` (md5 de la lib et de
+  l'extension contre le magasin).
+- **Le push optimiste perd ses courses la nuit** : du code arrive sur master pendant chaque
+  rejeu de 10 minutes. La fenêtre se prend par le verrou (`poste push … --lourd`) : rebase,
+  rejeu et push dessous (`~/.cache/rag3weaver-build/I/scripts/sous-verrou.sh`), les docs
+  passent quand même.
