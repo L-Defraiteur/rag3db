@@ -1503,3 +1503,50 @@ où elle vit.
   dans code.rs, codeparsers relit), (b) « planifier » 219 ms malgré
   DEFINED_IN, avec la jointure par clé du cœur. Lot pour le banc : la pente
   de l'insertion d'un lot à l'autre.
+- **8 h 35 – 9 h 45, matin : Lucie est réveillée, luciepc est de retour.**
+  Lucie a arrêté l'hôte figé de luciepc par sa main à 9 h 05 (TERM ; zombie
+  puis parti, daemon.json retiré, 68 Go de RAM disponibles ; ma propre
+  tentative, avec son mot, avait été refusée par ma permission : « écriture
+  distante »). Puis, **sur son autorisation directe à codeparsers**, les
+  étapes 2 à 8 de la section « Pour Lucie » : copies reflink des deux bases
+  dans avant-b4/ (md5 identiques), rag3db-hote avancé à 796325aac,
+  `hote-bati7.sh` de G avec la lib publiée au magasin de luciepc par hotfixs
+  à 9 h 13 (identifiant `rag3db-build-3cca0ae1e…`, md5 librag3db 1f2b03ab…),
+  binaire et rag3db-check-lib installés (efaa6e68, e5e6b1b6, l'ancien en
+  `.avant-b4-12-oct`, check-lib.conf actif), montre remise et queries_via
+  posé dans les deux manifestes, bases d'avant B4 effacées, hôte relancé
+  (pid 705642, build 3cca0ae1e) ; code-lourd en réindexation, code-principal
+  à l'heure accordée avec le cœur. **Comptage sur la vraie base** (code-lourd,
+  fermée) : 16 368 Scope_Chunk sur 130 715 lus vides avec l'ancienne lib,
+  **0 avec la lib corrigée**, mêmes lignes : le correctif du cœur prouvé sur
+  le réel. **Ménage de luciepc** (demandé par Lucie ; la RAM était l'hôte,
+  le disque n'a jamais manqué : 830 Go libres) : effacés par leurs sessions
+  target-A (9,5 Go) et rag3db-arbre, target-embarquements (11 Go), target-I
+  (4,4 Go), base-mesure-A* et sonde-tampon (3,5 Go) ; par Lucie
+  rag3db-paquet-npm (1,7 Go) et docker-cache (8,9 Go) ; gardés rag3db-hote
+  et target-G-hote (le bâti), rag3db-lourd (racine de code-lourd, son build/
+  à effacer quand plus personne ne le lie), rag3db-tickets (hotfixs) ;
+  **rag3db-service ne s'efface pas** : les trois services d'embarquement
+  exécutent son binaire (proposition à Lucie : l'installer dans ~/.local/bin
+  avec ses unités, puis effacer le worktree). À Lucie encore : deux anciens
+  index (code-bascule.retire-18h40 1,9 Go et rag3db-cpp 1,9 Go avec leurs
+  manifestes), les restes d'e2e arret-brutal et tx-par-paquet-arret (150 Mo,
+  d'avant la règle 4b545923d qui efface sur vert et garde sur rouge ; la page
+  des e2e le dira et une suite lancée hors run_e2e.sh préviendra), et un
+  journal à elle de 367 Go (`llama.cpp/logs/nemotron-test.log`). **Sur
+  master** : la page des lectures qui n'attendent pas l'écrivain
+  (`798903512`, `af31d3f2e` : L1 connexion de lecture, L2 vue immuable, L3
+  transaction par lot, L4 réduit ; L1 en push) ; le lancement en fond, lot A
+  (recherche, `371ded8f9` + `4a2f734dc` : spawn, registre des runs vivants,
+  bornes, dix témoins dont un modèle local en fond, 0,29 ms l'aller-retour) ;
+  le DROP/CREATE de l'index vectoriel sous des recherches (hotfixs,
+  `2b0f2820b`, `c42fc98bf`) ; la pente de l'insertion témoignée (banc,
+  `cb6c1a2cb`, known_red pour le cœur ; le point de reprise vérifié à part :
+  24 s → 0,58 s) ; le pointeur de codeparsers (`796325aac`) ; lib d'ici
+  rebâtie à 9 h 30 sur c42fc98bf. **La jointure par clé du cœur, mesurée par
+  F** (lib copiée) : usages sur l'index entier **352 → 117 ms en un temps,
+  230 → 43 ms en deux temps**, empreintes identiques, recomptage 0 : le but
+  2 atteint dès son push ; reste nommé : le voisin du saut lit encore toute
+  la table Scope (~20 ms), lot suivant. Pour l'hôte de Lucie ici : une seule
+  lib et un seul binaire après ce push, puis sa séquence quand elle arrête
+  son hôte. La boucle des relevés de nuit s'arrête ici.
