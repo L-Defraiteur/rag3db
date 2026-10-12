@@ -1,6 +1,6 @@
 # Un plan de quelques lignes prend un fil par cœur
 
-- **État** : ouvert (11 octobre 2026) — au cœur C++, pas pour maintenant ; ouvert par la session embarquements à la demande de l'orchestration
+- **État** : corrigé (le commit qui déplace ce fichier dans `closed/`, 12 octobre 2026) — les fils d'une tâche sont proportionnés à la cardinalité estimée le long du pipeline (un fil par 2 048 lignes, sous le plafond `threads`, plafond gardé sans estimation) ; les puits nés dans le mapper héritent l'estimation, l'optimiseur remet les cardinalités à jour après toute réécriture ; témoin `ThreadsByCardinality` ; avant/après sur la mesure d'impact de F : appels 2,1 à 2,5 × plus courts (page coeur-cpp/12 §9)
 - **Gravité** : coût (une lecture d'outil passe moitié de son temps à mettre des fils en route)
 - **Atteignable en service** : oui, à chaque lecture d'outil sur rag3db (impact, usages, liens, recherche)
 - **Touche rag3weaver** : oui (les lectures d'outil ; contournable par une connexion de lecture à peu de fils)

@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (28)
+### Ouverts — moteur (26)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -39,8 +39,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 |---|---|---|---|---|
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |
 | [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
-| [Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur](2026-10-11-les-fils-d-un-plan-sont-proportionnes-a-la-cardinalite-estimee-par-le-planificateur.md) | ouvert (cœur C++, né de la mesure de F) | performance — 32 fils pour trois lignes, impact 47 % plus lent qu'à 1 fil | oui (chaque instruction) | oui |
-| [Un plan de quelques lignes prend un fil par cœur](2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur.md) | ouvert — au cœur C++, pas pour maintenant | coût (moitié du temps d'une lecture d'outil) | oui, à chaque lecture d'outil sur rag3db | oui (contournable par une connexion de lecture) |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
@@ -106,10 +104,12 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (111), dans `closed/`
+### Fermés (113), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un plan de quelques lignes prend un fil par cœur](closed/2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur.md) | corrigé (12 octobre 2026, le lot des fils proportionnés, page coeur-cpp/12 §9) | coût (moitié du temps d'une lecture d'outil) | oui, à chaque lecture d'outil sur rag3db | oui (contournable par une connexion de lecture) |
+| [Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur](closed/2026-10-11-les-fils-d-un-plan-sont-proportionnes-a-la-cardinalite-estimee-par-le-planificateur.md) | fait (12 octobre 2026 : la règle, le témoin ThreadsByCardinality, le avant/après — page coeur-cpp/12 §9) | performance — 32 fils pour trois lignes, impact 47 % plus lent qu'à 1 fil | oui (chaque instruction) | oui |
 | [Les chemins rangés sont absolus et dans la forme du système, et les comparaisons supposent « / »](closed/2026-10-11-les-chemins-ranges-sont-absolus-et-dans-la-forme-du-systeme.md) | corrigé : identité relative en « / », une racine locale par base, base d'avant la règle dite (12 oct.) | blocage sous Windows, sécurité | oui, sous Windows | oui (et codeparsers) |
 | [Sans service d'embarquement, l'hôte, `mcp` autonome et `serve` refusent un gabarit à vecteurs](closed/2026-10-11-sans-service-d-embarquement-trois-portes-refusent-un-gabarit-a-vecteurs.md) | corrigé : l'embarqueur absent dans les quatre portes par `embedder_or_absent`, la raison dans les reçus (11 oct.) | blocage | oui, gabarit de code sans service | oui (et seulement) |
 | [Un binaire lié à une autre lib échoue sur un symbole manquant au lieu d'un refus nommé](closed/2026-10-11-un-binaire-lie-a-une-autre-lib-echoue-sur-un-symbole-manquant-au-lieu-d-un-refus-nomme.md) | corrigé : section `.rag3db_build_id` dans la lib, `.rag3db_compiled_against` dans le binaire, `rag3db-check-lib` avant le chargeur (BIND_NOW) et le filet dans le processus (12 oct.) | exploitation — l'hôte de luciepc a bouclé après B2 | oui (tout lot qui change une signature exportée) | oui |

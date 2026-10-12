@@ -1,6 +1,6 @@
 # Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur
 
-- **État** : ouvert (11 octobre 2026, 20 h 45 ; né de la mesure de F, page
+- **État** : fait (12 octobre 2026, le commit qui déplace ce fichier dans `closed/` : la règle dans `QueryProcessor::initTask`, le témoin `ThreadsByCardinality`, le avant/après en page coeur-cpp/12 §9 — appels d'impact 2,1 à 2,5 × plus courts). Ouvert le 11 octobre 2026, 20 h 45 ; né de la mesure de F, page
   `extension/rag3weaver/docs/11-octobre-2026-embarquements/06-ou-va-le-temps-d-un-aller-retour.md`,
   `821d70a63`). Propriétaire : le cœur C++. Page du lot :
   `extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/12-les-fils-d-un-plan-proportionnes-a-la-cardinalite.md`.
