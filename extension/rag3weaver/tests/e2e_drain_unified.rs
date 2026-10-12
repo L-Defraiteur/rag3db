@@ -18,22 +18,9 @@ use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest)
-            .join("../..")
-            .canonicalize()
-            .unwrap()
-            .to_string_lossy()
-            .to_string()
-    })
-}
-
 fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
-    let root = rag3db_root();
     for (name, path) in [
-        ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
+        ("vector", crate::common::vector_extension()),
     ] {
         conn.execute(&format!("LOAD EXTENSION '{path}'"))
             .unwrap_or_else(|e| panic!("Failed to load {name}: {e}"));

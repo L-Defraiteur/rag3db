@@ -94,16 +94,10 @@ fn ecrire(base: &str, copy_refuse: bool) {
     println!("ECRIT");
 }
 
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
-    })
-}
-
 fn ecrire_vecteurs(base: &str) {
     let conn = Rag3dbConnection::new(base).expect("ouvrir la base");
     let x = |q: &str| conn.execute(q).unwrap_or_else(|e| panic!("{q} : {e}"));
-    x(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()));
+    x(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()));
     x("CREATE NODE TABLE Vec(id INT64, v FLOAT[8], PRIMARY KEY(id))");
     x("CALL CREATE_VECTOR_INDEX('Vec', 'vec_idx', 'v', metric := 'cosine')");
     x("CHECKPOINT");

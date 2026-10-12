@@ -92,11 +92,7 @@ impl Embedder for Aligne {
 }
 
 fn extension() -> String {
-    let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
-    });
-    format!("{root}/extension/vector/build/libvector.rag3db_extension")
+    crate::common::vector_extension()
 }
 
 /// Une entité dont la clé fait l'identité : éditer son texte garde la ligne,

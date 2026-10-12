@@ -38,17 +38,10 @@ impl rag3weaver::embedder::Embedder for EmbarqueurNomme {
     }
 }
 
-fn racine() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
-    })
-}
-
 fn catalogue_sur(dossier: &std::path::Path, embarqueur: EmbarqueurNomme) -> rag3weaver::Catalog {
     let conn = Rag3dbConnection::new(dossier).expect("ouvrir la base");
     let boxed: Box<dyn DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", racine());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let mut config = rag3weaver::CatalogConfig::default();
     config.embedding_dim = embarqueur.1;

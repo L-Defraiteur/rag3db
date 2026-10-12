@@ -65,18 +65,9 @@ static MINILM: std::sync::LazyLock<Arc<BurnMiniLmEmbedder>> = std::sync::LazyLoc
     Arc::new(e)
 });
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap()
-            .to_string_lossy().to_string()
-    })
-}
-
 fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
-    let root = rag3db_root();
     for (name, path) in [
-        ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
+        ("vector", crate::common::vector_extension()),
     ] {
         if !std::path::Path::new(&path).exists() {
             panic!("Extension '{name}' not found at: {path}\nRun ./run_e2e.sh --build-only first.");

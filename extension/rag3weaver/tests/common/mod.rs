@@ -460,3 +460,23 @@ pub fn dossier_de_suite(famille: &str, cas: &str) -> std::path::PathBuf {
     std::fs::create_dir_all(&d).expect("créer le dossier du cas");
     d
 }
+
+/// **L'extension vector des e2e.** D'abord à côté de la lib
+/// (`RAG3DB_LIBRARY_DIR`) : sous le magasin de libs, le dossier d'un
+/// identifiant porte la lib et l'extension du même bâti (page
+/// 07-le-magasin-de-libs, §2.1). Sinon sous `RAG3DB_ROOT`, l'arbre où le
+/// moteur est bâti, puis à côté du crate : un dossier de bâti sans extension
+/// (`build/lecteurs-csv/src`) donne le chemin d'avant.
+#[allow(dead_code)] // employée sous certaines features seulement
+pub fn vector_extension() -> String {
+    const FICHIER: &str = "libvector.rag3db_extension";
+    if let Some(lib) = std::env::var_os("RAG3DB_LIBRARY_DIR") {
+        let p = std::path::Path::new(&lib).join(FICHIER);
+        if p.is_file() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    let racine = std::env::var("RAG3DB_ROOT")
+        .unwrap_or_else(|_| format!("{}/../..", env!("CARGO_MANIFEST_DIR")));
+    format!("{racine}/extension/vector/build/{FICHIER}")
+}

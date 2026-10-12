@@ -20,15 +20,8 @@ use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 fn load_extensions(conn: &dyn DbConnection) {
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     assert!(std::path::Path::new(&ext).exists(), "extension vector absente : {ext}");
     conn.execute(&format!("LOAD EXTENSION '{ext}'")).expect("LOAD EXTENSION vector");
 }

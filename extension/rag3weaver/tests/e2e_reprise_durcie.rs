@@ -16,7 +16,7 @@
 //! ```
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
@@ -30,12 +30,6 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 const ROLE: &str = "REPRISE_DURCIE_ROLE";
 const BASE: &str = "REPRISE_DURCIE_BASE";
-
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
-    })
-}
 
 fn dossier(cas: &str) -> PathBuf {
     crate::common::dossier_de_suite("reprise-durcie", cas)
@@ -51,7 +45,7 @@ fn corpus(n: usize) -> Vec<(String, String)> {
 }
 
 fn catalogue(conn: Rag3dbConnection) -> Catalog {
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("reprise-durcie".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);

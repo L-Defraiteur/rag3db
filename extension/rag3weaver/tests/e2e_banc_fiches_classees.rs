@@ -69,8 +69,7 @@ fn ouvrir(dir: &Path) -> Backend {
     copier(&crate_dir().join("templates"), &dir.join("templates"));
     let manifeste = dir.join("templates/backends/memory/backend.json");
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
-    let racine = std::env::var("RAG3DB_ROOT").map(PathBuf::from).unwrap_or_else(|_| crate_dir().join("../.."));
-    m["vector_extension"] = json!(racine.join("extension/vector/build/libvector.rag3db_extension").to_string_lossy());
+    m["vector_extension"] = json!(std::path::PathBuf::from(crate::common::vector_extension()).to_string_lossy());
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     let prepared = PreparedBackend::load(&manifeste).expect("le gabarit memory charge");
     let (embedder, _) = prepared.connect_embedder().unwrap_or_else(|e| {

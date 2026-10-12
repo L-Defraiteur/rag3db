@@ -968,13 +968,7 @@ impl rag3weaver::embedder::Embedder for Compteur {
 /// textes embarqués.
 fn catalogue_vectoriel(snapshot: SnapshotConfig) -> (Catalog, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
-    let ext = format!(
-        "{}/extension/vector/build/libvector.rag3db_extension",
-        std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-            let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-            std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
-        })
-    );
+    let ext = crate::common::vector_extension();
     rag3weaver::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{ext}'")).unwrap();
     let compte = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let config = CatalogConfig {
@@ -1230,13 +1224,7 @@ fn le_creux_d_une_ligne_retiree_quitte_l_index() {
     let sparse: Arc<dyn SparseEmbedder> = common::burn::BGE_M3.clone();
     let dim = embedder.dim();
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
-    let ext = format!(
-        "{}/extension/vector/build/libvector.rag3db_extension",
-        std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-            let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-            std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
-        })
-    );
+    let ext = crate::common::vector_extension();
     rag3weaver::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("creux".into()), embedding_dim: dim, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(dim)), config);

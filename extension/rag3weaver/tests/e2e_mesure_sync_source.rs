@@ -28,7 +28,7 @@ fn mesure_la_duree_par_paquet() {
         .canonicalize()
         .unwrap();
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine.display())).unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
     let config = CatalogConfig { name: Some("mesure-sync".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
     catalog.initialize().unwrap();

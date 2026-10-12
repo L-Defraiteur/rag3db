@@ -56,12 +56,6 @@ thread_local! {
 /// texte, après tous les paquets et les relations.
 const AVANT_LA_POUSSEE: usize = usize::MAX;
 
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
-    })
-}
-
 fn dossier_sur_disque(cas: &str) -> PathBuf {
     crate::common::dossier_de_suite("tx-par-paquet-arret", cas)
 }
@@ -104,7 +98,7 @@ fn catalogue(base: &Path) -> Catalog {
 
 fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
     let conn = Rag3dbConnection::new(base).expect("ouvrir la base");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = if lecture {
@@ -988,7 +982,7 @@ fn la_garde_retire_un_document_sans_ligne(fichiers: bool) {
     if fichiers {
         drop(catalog);
         let conn = Rag3dbConnection::new(&base).expect("base");
-        conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur())).unwrap();
+        conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
         let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
         catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
         catalog.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: format!("{}.fts", base.display()) });
@@ -1068,7 +1062,7 @@ fn a_la_relance_la_ligne_refaite_remplace_le_document_de_son_decalage() {
 
 fn catalogue_fichiers(base: &Path) -> Catalog {
     let conn = Rag3dbConnection::new(base).expect("base");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur())).unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
     let config = CatalogConfig { name: Some("tx-arret".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
     catalog.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: format!("{}.fts", base.display()) });

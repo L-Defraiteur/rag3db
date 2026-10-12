@@ -18,7 +18,6 @@
 //! ```
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE};
@@ -32,12 +31,6 @@ use rag3weaver::{AbsentEmbedder, Catalog, CatalogConfig, Rag3dbConnection, AVERT
 
 const MODELE: &str = "granite-278m";
 const DIM: usize = 32;
-
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
-    })
-}
 
 fn corpus() -> Vec<(String, String)> {
     (0..40)
@@ -59,7 +52,7 @@ fn avertissements(rx: &mut async_broadcast::Receiver<CatalogEvent>) -> Vec<Strin
 #[ignore]
 fn sans_service_l_index_est_en_plein_texte_et_la_dette_se_lit() {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("embarqueur-absent".into()), embedding_dim: DIM, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(AbsentEmbedder::new(MODELE, DIM)), config);

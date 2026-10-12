@@ -66,9 +66,7 @@ fn entite(fichier: &str, cycle: Option<Value>) -> Value {
 }
 
 fn extension_vecteur() -> String {
-    let racine = std::env::var("RAG3DB_ROOT")
-        .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string());
-    format!("{racine}/extension/vector/build/libvector.rag3db_extension")
+    crate::common::vector_extension()
 }
 
 /// Un manifeste dans `dir` : fiches et sujets, `put`, `get`, l'ancre, et la

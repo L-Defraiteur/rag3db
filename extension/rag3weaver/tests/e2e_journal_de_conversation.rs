@@ -14,17 +14,10 @@ use rag3weaver::dataflow::trace_nodes::{record_runs_and_messages, register_trace
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 fn setup() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     assert!(std::path::Path::new(&ext).exists(), "vector extension not found at {ext} — ./run_e2e.sh --build-only");
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("journal-e2e".into()), embedding_dim: 64, ..Default::default() };

@@ -97,13 +97,7 @@ fn entite(fichier: &str, cycle: Option<Value>) -> Value {
 /// moteur la charge à l'ouverture : `RAG3DB_ROOT` ne se dérive jamais du chemin
 /// du code (piège 6 du journal — depuis un worktree, l'extension est ailleurs).
 fn extension_vecteur() -> String {
-    let racine = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .display()
-            .to_string()
-    });
-    let chemin = format!("{racine}/extension/vector/build/libvector.rag3db_extension");
+    let chemin = crate::common::vector_extension();
     assert!(
         Path::new(&chemin).is_file(),
         "l'extension vectorielle manque : {chemin} — posez RAG3DB_ROOT sur l'arbre où le \

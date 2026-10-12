@@ -71,13 +71,6 @@ impl DbConnection for Compteur {
     }
 }
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 /// La configuration du gabarit `templates/tools/impact.mmd`, comme
 /// `e2e_impact::code_config`.
 pub(crate) fn impact_config() -> NeighborhoodConfig {
@@ -161,7 +154,7 @@ pub(crate) fn mesurer(moteur: &str, cat: &Catalog, n: &AtomicUsize) -> Vec<Strin
 pub(crate) fn rag3db_indexe(n: Arc<AtomicUsize>) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn DbConnection> = Box::new(Compteur { inner: Box::new(conn), n });
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("mesure-impact".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
@@ -294,7 +287,7 @@ pub(crate) fn mesurer_eventails(moteur: &str, cat: &Catalog, uuids: &[String]) -
 fn mesure_eventails_sur_rag3db() {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("mesure-eventails".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
@@ -387,7 +380,7 @@ fn l_ingestion_selon_les_fils_d_execution() {
     let fils = std::env::var("RAG3WEAVER_EXEC_THREADS").unwrap_or_else(|_| "défaut".into());
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("mesure-ingestion".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);

@@ -115,19 +115,10 @@ fn make_config() -> CatalogConfig {
     }
 }
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap()
-            .to_string_lossy().to_string()
-    })
-}
-
 /// The same nine documents, through `Catalog`. Every phase timed separately.
 #[test]
 #[ignore]
 fn profile_full_catalog_path() {
-    let root = rag3db_root();
 
     let t = Instant::now();
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
@@ -136,7 +127,7 @@ fn profile_full_catalog_path() {
 
     let t = Instant::now();
     for (name, path) in [
-        ("vector", format!("{root}/extension/vector/build/libvector.rag3db_extension")),
+        ("vector", crate::common::vector_extension()),
     ] {
         boxed.execute(&format!("LOAD EXTENSION '{path}'"))
             .unwrap_or_else(|e| panic!("load {name}: {e}"));
@@ -244,7 +235,6 @@ fn profile_commit_floor() {
 #[test]
 #[ignore]
 fn profile_drain_scaling() {
-    let root = rag3db_root();
 
     eprintln!("\n── D. drain en fonction de N (BM25 KB, MockEmbedder) ──");
     eprintln!("  {:>5}  {:>9}  {:>9}  {:>9}  {:>9}  {:>8}", "N", "create", "drain", "search", "total", "ms/doc");
@@ -253,7 +243,7 @@ fn profile_drain_scaling() {
         let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         for path in [
-            format!("{root}/extension/vector/build/libvector.rag3db_extension"),
+            crate::common::vector_extension(),
         ] {
             boxed.execute(&format!("LOAD EXTENSION '{path}'")).expect("load extension");
         }

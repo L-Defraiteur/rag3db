@@ -32,21 +32,8 @@ use rag3weaver::disponibilite::RegimeEcriture;
 
 // ─── Catalogue de test ───────────────────────────────────────────────────────
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest)
-            .join("../..")
-            .canonicalize()
-            .unwrap()
-            .to_string_lossy()
-            .to_string()
-    })
-}
-
 fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
-    let root = rag3db_root();
-    let ext_path = format!("{root}/extension/vector/build/libvector.rag3db_extension");
+    let ext_path = crate::common::vector_extension();
     assert!(
         std::path::Path::new(&ext_path).exists(),
         "Extension 'vector' absente : {ext_path}\nLancer ./run_e2e.sh --build-only d'abord."

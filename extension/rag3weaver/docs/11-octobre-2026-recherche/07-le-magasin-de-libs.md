@@ -244,7 +244,13 @@ bouge : un lien `courant`.**
    et n'a donc pas été vu rouge. **Limite dite** : une vingtaine de suites
    bâtissent le chemin de l'extension par `RAG3DB_ROOT`. Sous le magasin, la
    passe refuse donc en nommant les deux identifiants si l'extension de
-   l'arbre n'est pas du bâti du magasin. **3c** : les migrer vers un appel
-   commun qui cherche à côté de la lib. **Reste à prouver** : une passe réelle
+   l'arbre n'est pas du bâti du magasin. **3c, fait** : les 97 sites de 82
+   suites passent par `common::vector_extension()`, qui cherche d'abord à côté
+   de la lib, puis sous `RAG3DB_ROOT` comme avant. Hors magasin, le chemin
+   rendu est celui d'avant. Les fonctions de racine devenues inutiles ont été
+   retirées. CHECK_FEATURES VERT 5/5 ; échantillon de sept suites qui couvrent
+   les formes migrées (`LOAD EXTENSION` en ligne, manifeste JSON, formes sur
+   plusieurs lignes) : 82 passés, seul le banc à services rouge, sans service.
+   Le refus de `run_e2e.sh` reste en filet pour une suite écrite à l'ancienne. **Reste à prouver** : une passe réelle
    sous `RAG3DB_LIB=courant`, après le rebâti du matin (la première lib qui
    porte sa section). Les modèles MCP et la recette de G suivront, avec G.

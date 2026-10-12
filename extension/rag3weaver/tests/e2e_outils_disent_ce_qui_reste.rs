@@ -42,10 +42,7 @@ fn sous_faute<T>(table: &str, f: impl FnOnce() -> T) -> T {
 }
 
 fn extension_vecteur() -> String {
-    let racine = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").display().to_string()
-    });
-    format!("{racine}/extension/vector/build/libvector.rag3db_extension")
+    crate::common::vector_extension()
 }
 
 /// Une `Fiche` révisée, et `Ref` / `RefType` **recopiées du gabarit `memory`**,

@@ -35,11 +35,8 @@ fn boutique(dir: &Path) -> PathBuf {
     copier(&Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/proto/boutique"), &ou);
     let chemin = ou.join("backend.json");
     let mut m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
-    let racine = std::env::var("RAG3DB_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
     m["vector_extension"] =
-        json!(racine.join("extension/vector/build/libvector.rag3db_extension").to_string_lossy());
+        json!(std::path::PathBuf::from(crate::common::vector_extension()).to_string_lossy());
     std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     chemin
 }

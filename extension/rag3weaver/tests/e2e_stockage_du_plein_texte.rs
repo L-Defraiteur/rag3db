@@ -33,17 +33,11 @@ fn corpus() -> Vec<(String, String)> {
     (0..40).map(|i| (format!("src/f{i:03}.rs"), format!("pub fn fonction_{i}() -> u32 {{ {i} }}\n"))).collect()
 }
 
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
-    })
-}
-
 fn catalogue(conn: Rag3dbConnection, lecture: bool, blobs: bool) -> Catalog {
     use rag3weaver::connection::DbConnection;
     // L'extension d'abord : sans elle, enregistrer le schéma créerait l'index
     // vectoriel, une écriture, refusée à un lecteur.
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("stockage-fts".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = if lecture {

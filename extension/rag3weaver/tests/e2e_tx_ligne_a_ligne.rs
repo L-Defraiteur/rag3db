@@ -42,12 +42,6 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 const ROLE: &str = "TX_LIGNES_ROLE";
 const BASE: &str = "TX_LIGNES_BASE";
 
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
-    })
-}
-
 fn dossier(cas: &str) -> PathBuf {
     crate::common::dossier_de_suite("tx-ligne-a-ligne", cas)
 }
@@ -75,7 +69,7 @@ fn corpus(version: u8) -> Vec<(String, String)> {
 
 fn catalogue(base: &Path) -> Catalog {
     let conn = Rag3dbConnection::new(base).expect("ouvrir la base");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("tx-lignes".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);

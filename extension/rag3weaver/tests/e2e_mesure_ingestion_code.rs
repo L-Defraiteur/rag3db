@@ -26,20 +26,13 @@ use rag3weaver::code_tools::{FileSource, Snapshot};
 use rag3weaver::embedder::{DualEmbedder, Embedder};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
-    })
-}
-
 #[test]
 #[ignore]
 fn combien_coute_l_indexation_de_src_dataflow() {
     std::env::set_var("RAG3WEAVER_INGEST_PROFILE", "1");
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     // **Le modèle se choisit par `RAG3WEAVER_MESURE_MODELE`** : `bge-m3`
     // (défaut, par le démon, dual), `granite-107m` (384) ou `granite-278m`

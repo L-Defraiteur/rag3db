@@ -130,17 +130,10 @@ fn reranker_chunks_keep_order() {
 // Catalog integration — modelled on tests/e2e_rerank.rs::rerank_reorders_the_fused_pool
 // ---------------------------------------------------------------------------
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 fn catalog() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn DbConnection> = Box::new(conn);
-    let path = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let path = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{path}'")).expect("load vector");
     let config = CatalogConfig { name: Some("burn-rerank-test".into()), embedding_dim: 4, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);

@@ -49,12 +49,6 @@ use rag3weaver::disponibilite::Disponibilites;
 use rag3weaver::embedder::Embedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn racine_moteur() -> PathBuf {
-    std::env::var("RAG3DB_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap())
-}
-
 /// Les tables de morceaux qui portent un vecteur.
 fn tables_vectorielles(catalog: &Catalog) -> Vec<String> {
     let mut t: Vec<String> = catalog
@@ -140,7 +134,7 @@ fn chaque_morceau_se_retrouve_par_son_propre_vecteur() {
 
     let embedder: Arc<dyn Embedder> = common::burn::GRANITE_278M.clone();
     let conn = Rag3dbConnection::new(dossier.join("base.rag3db")).expect("base");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur().display()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("joignabilite".into()), embedding_dim: embedder.dim(), ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(embedder), config);

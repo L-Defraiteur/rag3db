@@ -107,7 +107,7 @@ fn base_dans(dossier: &Path) -> PathBuf {
 fn age_du_moteur() {
     for chemin in [
         format!("{}/build/lecteurs-csv/src/librag3db.so", racine_moteur()),
-        format!("{}/extension/vector/build/libvector.rag3db_extension", racine_moteur()),
+        crate::common::vector_extension(),
     ] {
         match std::fs::metadata(&chemin).and_then(|m| m.modified()) {
             Ok(t) => {
@@ -123,7 +123,7 @@ fn age_du_moteur() {
 }
 
 fn charger_le_vecteur(conn: &dyn rag3weaver::connection::DbConnection) {
-    let chemin = format!("{}/extension/vector/build/libvector.rag3db_extension", racine_moteur());
+    let chemin = crate::common::vector_extension();
     assert!(Path::new(&chemin).exists(), "extension vector absente : {chemin}");
     conn.execute(&format!("LOAD EXTENSION '{chemin}'")).expect("charger vector");
 }

@@ -47,13 +47,7 @@ use rag3weaver::connection::CypherValue;
 use rag3weaver::Rag3dbConnection;
 
 fn extension_vecteur() -> String {
-    let racine = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .display()
-            .to_string()
-    });
-    let chemin = format!("{racine}/extension/vector/build/libvector.rag3db_extension");
+    let chemin = crate::common::vector_extension();
     assert!(
         Path::new(&chemin).is_file(),
         "l'extension vectorielle manque : {chemin} — posez RAG3DB_ROOT sur l'arbre où le \

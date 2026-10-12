@@ -24,18 +24,11 @@ use rag3weaver::llm::{dangling_tool_results, orphan_tool_calls, GenOptions, Stri
 use rag3weaver::openai_llm::OpenAiLlm;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 /// Le catalogue et les services sur une source donnée.
 fn setup_on(source: Arc<dyn FileSource>) -> Arc<ServiceRegistry> {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 1024, ..Default::default() };
     // Le vrai embedder : un `search` sans dense n'est qu'un grep avec des
@@ -82,7 +75,7 @@ fn scratch_copy() -> (std::path::PathBuf, Arc<dyn FileSource>) {
 fn setup() -> Arc<ServiceRegistry> {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("code-agent-cloud".into()), embedding_dim: 1024, ..Default::default() };
     // Le vrai embedder : un `search` sans dense n'est qu'un grep avec des

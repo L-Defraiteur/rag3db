@@ -31,15 +31,7 @@ fn shop(dir: &Path) -> PathBuf {
     copy(&template, dir);
     let path = dir.join("backend.json");
     let mut manifest: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .display()
-            .to_string()
-    });
-    manifest["vector_extension"] = json!(format!(
-        "{root}/extension/vector/build/libvector.rag3db_extension"
-    ));
+    manifest["vector_extension"] = json!(crate::common::vector_extension());
     std::fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
     path
 }

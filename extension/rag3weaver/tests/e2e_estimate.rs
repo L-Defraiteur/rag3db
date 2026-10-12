@@ -192,7 +192,7 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
     );
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     boxed
-        .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display()))
+        .execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vector");
     // `RAG3WEAVER_ESTIMATE_AUTO_CHECKPOINT=0` : le point de reprise
     // automatique du moteur est coupé, et un seul est demandé à la fin.
@@ -471,7 +471,7 @@ fn ce_depot_est_cherchable_par_mots_avant_ses_vecteurs() {
         let conn = Rag3dbConnection::new(dir.join("estimate.rag3db")).expect("base rouverte");
         let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
         boxed
-            .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", root.display()))
+            .execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
             .expect("extension vector");
         let config = CatalogConfig { name: Some("estimate".into()), embedding_dim: reopen_embedder.dim(), ..Default::default() };
         let mut reopened = Catalog::new(boxed, Box::new(reopen_embedder), config);
@@ -559,7 +559,7 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     boxed
-        .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", repository_root().display()))
+        .execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vector");
     let config = CatalogConfig { name: Some("index".into()), embedding_dim: embedder.dim(), ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
@@ -637,7 +637,7 @@ fn le_journal_d_une_conversation_ne_fait_pas_croire_le_code_indexe() {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     boxed
-        .execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", repository_root().display()))
+        .execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vector");
     let config = CatalogConfig { name: Some("chat".into()), embedding_dim: 8, allow_mock_embedder: true, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(rag3weaver::embedder::HashEmbedder::new(8)), config);

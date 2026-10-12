@@ -18,16 +18,8 @@ use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::search_strategy::{ExpansionDirection, ExpansionRule, SearchStrategy};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
-    let root = rag3db_root();
-    let ext_path = format!("{root}/extension/vector/build/libvector.rag3db_extension");
+    let ext_path = crate::common::vector_extension();
     assert!(std::path::Path::new(&ext_path).exists(), "vector extension not found at {ext_path} — ./run_e2e.sh --build-only");
     conn.execute(&format!("LOAD EXTENSION '{ext_path}'")).unwrap();
 }

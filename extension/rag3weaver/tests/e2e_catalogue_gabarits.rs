@@ -34,20 +34,13 @@ use rag3weaver::template::{
 };
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 /// Un catalogue avec le vrai embedder : trouver un gabarit **par le sens** est
 /// précisément ce qu'on veut prouver, et un embedder factice le rendrait faux
 /// — c'est l'erreur qu'on a payée le 27 août.
 fn setup() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
 
     // **Le même embedder des deux côtés.** `Catalog::rechercher` embarque la

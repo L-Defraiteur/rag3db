@@ -53,13 +53,7 @@ fn ligne(texte: &str) -> BTreeMap<String, CypherValue> {
 
 fn catalogue() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
-    let ext = format!(
-        "{}/extension/vector/build/libvector.rag3db_extension",
-        std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-            let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-            std::path::Path::new(&manifest).parent().unwrap().parent().unwrap().to_string_lossy().to_string()
-        })
-    );
+    let ext = crate::common::vector_extension();
     conn.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { embedding_dim: 8, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(Hachage(HashEmbedder::new(8))), config);

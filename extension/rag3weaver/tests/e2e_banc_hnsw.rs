@@ -46,7 +46,7 @@ fn variable(nom: &str, defaut: usize) -> usize {
 fn catalogue(dim: usize) -> Catalog {
     let conn = Rag3dbConnection::in_memory().unwrap();
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("banc-hnsw".into()), embedding_dim: dim, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(dim)), config);

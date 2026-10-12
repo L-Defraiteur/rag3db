@@ -10,7 +10,6 @@
 //! ```
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use std::path::Path;
 
 use rag3weaver::catalog::Level;
 use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE, SYMBOL};
@@ -21,17 +20,11 @@ use rag3weaver::disponibilite::Disponibilites;
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().display().to_string()
-    })
-}
-
 #[test]
 #[ignore]
 fn apres_un_index_symbol_dit_ses_vecteurs_non_declares() {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", racine_moteur()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
     let config = CatalogConfig { name: Some("etat-non-declare".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);

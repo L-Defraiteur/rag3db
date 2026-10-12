@@ -20,11 +20,7 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 fn catalogue() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
-    let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    });
-    conn.execute(&format!("LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'")).unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
     let config = CatalogConfig { name: Some("code-sync".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
     catalog.initialize().unwrap();
@@ -571,10 +567,7 @@ fn une_edition_apres_un_point_de_reprise_vaut_un_index_neuf() {
         let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
         // RAG3DB_ROOT d'abord : depuis un worktree, l'arbre du code n'est pas
         // celui où le moteur est bâti (même motif que e2e_mesure_sync_source).
-        let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-        });
-        conn.execute(&format!("LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'")).unwrap();
+        conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
         let config = CatalogConfig { name: Some("code-sync".into()), embedding_dim: 64, ..Default::default() };
         let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
         catalog.initialize().unwrap();
@@ -617,12 +610,9 @@ fn apres_un_point_de_reprise_les_deux_sens_d_une_relation_restent_egaux() {
     let _ = std::fs::remove_dir_all(&dir);
     // RAG3DB_ROOT d'abord : depuis un worktree, l'arbre du code n'est pas
     // celui où le moteur est bâti (même motif que la ligne 572).
-    let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    });
     let ouvrir = |enregistrer: bool| {
         let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
-        conn.execute(&format!("LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'")).unwrap();
+        conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
         let config = CatalogConfig { name: Some("code-sync".into()), embedding_dim: 64, ..Default::default() };
         let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
         catalog.initialize().unwrap();

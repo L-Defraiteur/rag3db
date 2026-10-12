@@ -35,15 +35,7 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 /// qui a lancé cmake : un chemin dérivé de `CARGO_MANIFEST_DIR` cherche donc la
 /// bibliothèque là où elle n'est pas.
 fn extension_vectorielle() -> String {
-    let racine = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .expect("racine du dépôt")
-            .display()
-            .to_string()
-    });
-    let chemin = format!("{racine}/extension/vector/build/libvector.rag3db_extension");
+    let chemin = crate::common::vector_extension();
     assert!(
         std::path::Path::new(&chemin).exists(),
         "l'extension vectorielle est absente : {chemin}\n\

@@ -23,12 +23,6 @@ use rag3weaver::dataflow::index_nodes::{
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn repository_root() -> PathBuf {
-    std::env::var("RAG3DB_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
-}
-
 fn dossier(cas: &str) -> PathBuf {
     let d = PathBuf::from(std::env::var("HOME").unwrap())
         .join(".cache/rag3weaver-build/arret-propre")
@@ -41,7 +35,7 @@ fn dossier(cas: &str) -> PathBuf {
 fn catalogue(dossier: &Path) -> Arc<Mutex<Catalog>> {
     let conn = Rag3dbConnection::new(dossier.join("base.rag3db")).expect("ouvrir la base");
     use rag3weaver::connection::DbConnection;
-    conn.execute(&format!("LOAD EXTENSION '{}/extension/vector/build/libvector.rag3db_extension'", repository_root().display()))
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vector");
     let config = CatalogConfig { name: Some("arret-propre".into()), embedding_dim: 16, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);

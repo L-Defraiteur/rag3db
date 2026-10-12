@@ -37,17 +37,6 @@ use rag3weaver::{CatalogConfig, Rag3dbConnection};
 #[allow(unused_imports)] // employé sous certaines features seulement
 use crate::common;
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-            .join("../..")
-            .canonicalize()
-            .unwrap()
-            .to_string_lossy()
-            .to_string()
-    })
-}
-
 /// **Cette suite était locale seulement**, et ce n'était pas un oubli : trois
 /// agents qui se répondent font beaucoup d'appels, et les envoyer au nuage se
 /// paie. La fabrique change cela, délibérément — sous `RAG3WEAVER_REGIME=confort`
@@ -70,7 +59,7 @@ fn setup() -> (Arc<ServiceRegistry>, Arc<dyn FileSource>) {
 
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     // **Le vrai embedder, pas un factice.**
     //

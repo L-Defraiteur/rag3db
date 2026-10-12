@@ -309,13 +309,6 @@ fn extraire(source: &str, aiguille: &str, sans_commentaires: bool) -> String {
 /// La limite de l'indexation du banc de qualité (façon ragforge).
 const CHUNK_CHARS: usize = 1500;
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 fn manifest() -> String {
     std::env::var("CARGO_MANIFEST_DIR").unwrap()
 }
@@ -339,7 +332,7 @@ fn embarqueur() -> (Arc<dyn Embedder>, String) {
 fn base(embedder: Arc<dyn Embedder>, nom: &str) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).expect("charger l'extension vecteur");
     let config = CatalogConfig { name: Some(nom.into()), embedding_dim: embedder.dim(), ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(embedder), config);

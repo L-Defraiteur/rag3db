@@ -19,7 +19,7 @@
 //! Run with: ./run_e2e.sh --test e2e_base_par_arbre
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rag3weaver::code::{default_scope_chunking, register_code_schema, FILE};
 use rag3weaver::code_sync::{reingest_file, sync_source, SourceSyncOptions};
@@ -28,11 +28,7 @@ use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 fn extension_vector() -> String {
-    let root = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    });
-    format!("{root}/extension/vector/build/libvector.rag3db_extension")
+    crate::common::vector_extension()
 }
 
 /// Une base de code **sur disque** (une copie reflink n'a de sens que là).

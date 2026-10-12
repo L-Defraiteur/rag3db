@@ -98,13 +98,6 @@ const QUESTIONS_TEXTE: &[(&str, &str)] = &[
 /// étaient introuvables par construction).
 const PROSE_DIRS: &[&str] = &["docs/30-aout-2026-06h00", "codeparsers/docs/30-aout-2026-06h00"];
 
-fn rag3db_root() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        std::path::PathBuf::from(&manifest).join("../..").canonicalize().unwrap().to_string_lossy().to_string()
-    })
-}
-
 fn manifest() -> String {
     std::env::var("CARGO_MANIFEST_DIR").unwrap()
 }
@@ -150,7 +143,7 @@ fn corpus() -> (String, Vec<(String, String)>, usize, usize) {
 fn setup(embedder: Arc<dyn Embedder>) -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = crate::common::vector_extension();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).expect("charger l'extension vecteur");
     let config = CatalogConfig { name: Some("banc-texte-brut".into()), embedding_dim: embedder.dim(), ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(embedder), config);
