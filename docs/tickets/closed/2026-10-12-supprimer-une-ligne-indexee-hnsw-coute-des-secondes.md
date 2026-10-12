@@ -147,3 +147,18 @@ n'y est pas : il se saute).
 Un `DETACH DELETE` d'une ligne indexée en quelques millisecondes sur un index de cette taille,
 mesuré par le même test. Alors le contournement s'enlève : les deux méthodes du dialecte et
 `vider_les_vecteurs_avant_suppression`.
+
+**12 octobre, le contournement retiré (everything declarative).** Avec la lib rebâtie sur
+690029ab7, `measure_one_file_reindexing` a été joué deux fois sous `poste mesure`, avec puis sans
+le vidage avant suppression :
+
+| | avec le vidage | sans |
+|---|---|---|
+| supprimer les morceaux d'un scope (1 morceau) | 10 à 27 ms | 11 à 13 ms |
+| supprimer ceux de 32 scopes (45 morceaux) | 135 ms | 242 ms, soit 5,4 ms par morceau |
+| retirer un fichier | 307 ms | 413 ms |
+| réindexer un fichier | 0,42 à 0,59 s | 0,43 à 0,59 s |
+
+La suppression reste sous 10 ms par ligne sans le contournement : `vider_les_vecteurs_avant_suppression`,
+`SchemaDialect::vector_columns_to_clear` et `clear_vector_by_parent`, et
+`embedding_storage::marker_of_column` sont retirés. `e2e_invariant_des_vecteurs` est vert, 8 sur 8.

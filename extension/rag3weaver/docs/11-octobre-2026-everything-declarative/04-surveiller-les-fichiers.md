@@ -247,6 +247,10 @@ attend le catalogue tenu par la réindexation d'**un** fichier. La mesure par ph
 - **La ligne `[montre]`.** Chaque fichier que la réaction réindexe écrit, dans le journal de
   l'hôte, le verrou attendu, le verrou tenu et ces phases, sans variable d'environnement. Le
   journal suffit donc à répéter ce partage sur n'importe quelle base.
+- **Le contournement est retiré** (12 octobre, après midi). hotfixs a corrigé le moteur
+  (690029ab7 : finalizeDelete sans recherche par voisin). Sur la lib rebâtie, sans le vidage :
+  11 à 13 ms pour un scope, 5,4 ms par morceau pour 45 morceaux, un fichier retiré en 413 ms
+  (307 avec le vidage) et réindexé en 0,43 à 0,59 s, comme avec.
 - **À part** : à l'index initial, 309 s sur 329 passaient à écrire 15 631 vecteurs (`write_ms`
   du nœud `embed`), environ 20 ms par vecteur. C'est dans le même ticket ; le contournement ne
   le change pas.
