@@ -260,3 +260,39 @@ passe de vecteurs sur une base de plusieurs groupes.
 frontières de 2 048. Si les vides forment des plages alignées, c'est le moteur (un SET ou un rejeu
 qui perd une colonne chaîne par groupe) : ticket moteur, banc. Si rien n'est aligné, on revient à la
 lib d'un autre bâti.
+
+### Les vides sont les 32 768 premières lignes de la table : un défaut du moteur (12 octobre, 2 h 55)
+
+Test de F (`e2e_mesure_index_entier::les_morceaux_vides_et_les_groupes_de_noeuds`), sur sa copie de
+code-rag3db-depot, lib 116acb252ace : **les 26 092 morceaux vides sont tous à des offsets de
+`Scope_Chunk` entre 0 et 32 767**, exactement 2^15 lignes. Les groupes de 2 048 qui suivent, du 16
+au 63, n'en ont aucun.
+
+| offset / 2048 | vides / lignes |
+|---|---|
+| 0 à 9 | 1 664 à 1 783 sur ~2 040 (82 à 87 %) |
+| 10 à 15 | 1 496 à 1 547 sur ~2 040 (73 à 76 %) |
+| 16 à 63 | 0 |
+
+Aucun groupe n'est entièrement vide, mais la frontière est nette, et c'est une puissance de deux.
+Les premières lignes écrites dans la table ont perdu leur texte aux trois quarts, les suivantes
+non. Cela explique tout le reste : la perte par fichier entier (le COPY écrit fichier par fichier),
+l'excès de ld-lucivy (indexé dans les premiers lots), et le texte présent au moment du calcul du
+vecteur.
+
+**Le défaut est dans le moteur, plus dans le produit.** Une colonne chaîne des 2^15 premières
+lignes d'une table de nœuds se vide, sans doute à une écriture qui suit le COPY de masse : les SET
+de la passe de vecteurs (`_embed_claim`, `embed_set` qui pose le vecteur et le marqueur), le point
+de reprise, ou le rejeu du WAL après les arrêts brutaux du gel de cet après-midi. Constantes du
+bâti : `v11` (2 048 lignes par vecteur), `g17` (groupe de nœuds de 2^17). 2^15 n'est ni l'une ni
+l'autre ; c'est à chercher dans le stockage des colonnes chaînes (segments, dictionnaire).
+
+**Reproduction proposée (banc)** :
+1. une table de nœuds avec une colonne chaîne de quelques centaines d'octets et une colonne
+   vecteur ;
+2. un COPY de plus de 32 768 lignes ;
+3. des SET par lots `UNWIND … MATCH … SET n.claim, puis n.vec, n.marker` sur toutes les lignes ;
+4. un point de reprise, puis la même chose avec un arrêt brutal et un rejeu ;
+5. compter `_text = ''` par tranche de 2 048 offsets.
+
+Côté produit, la réécriture des morceaux vides (`7b54c5f84`) répare les bases touchées.
