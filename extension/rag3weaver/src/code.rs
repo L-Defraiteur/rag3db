@@ -242,23 +242,6 @@ pub fn file_config() -> EntityConfig {
     }
 }
 
-fn test_role_name(r: &codeparsers::scope_extraction::types::TestRole) -> &'static str {
-    use codeparsers::scope_extraction::types::TestRole;
-    match r {
-        TestRole::Case => "case",
-        TestRole::Suite => "suite",
-        TestRole::Support => "support",
-    }
-}
-
-fn test_certainty_name(c: &codeparsers::scope_extraction::types::TestCertainty) -> &'static str {
-    use codeparsers::scope_extraction::types::TestCertainty;
-    match c {
-        TestCertainty::Certain => "certain",
-        TestCertainty::Convention => "convention",
-    }
-}
-
 pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     let mut fields = HashMap::new();
     fields.insert("name".into(), title(FieldType::String));
@@ -1164,8 +1147,8 @@ pub fn analyze_in_project(
                 file_path: indexed_name.clone(),
                 parent_name: s.parent.clone().unwrap_or_default(),
                 language: language.clone(),
-                test_role: s.test.as_ref().map_or_else(String::new, |t| test_role_name(&t.role).to_string()),
-                test_certainty: s.test.as_ref().map_or_else(String::new, |t| test_certainty_name(&t.certainty).to_string()),
+                test_role: s.test.as_ref().map_or_else(String::new, |t| t.role.as_str().to_string()),
+                test_certainty: s.test.as_ref().map_or_else(String::new, |t| t.certainty.as_str().to_string()),
                 test_name: s.test.as_ref().and_then(|t| t.name.clone()).unwrap_or_default(),
                 declarations: declarations_of(s),
                 field_types: field_types_of(s),

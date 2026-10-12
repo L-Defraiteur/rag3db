@@ -202,6 +202,15 @@ mod tests {
     }
 
     /// Une expression sans groupe de capture est refusée en la nommant.
+    /// Les deux valeurs posées par la déclaration sont celles de
+    /// l'énumération de codeparsers : un seul vocabulaire.
+    #[test]
+    fn les_valeurs_sont_celles_de_codeparsers() {
+        use codeparsers::scope_extraction::types::{TestCertainty, TestRole};
+        assert_eq!(ROLE_SUITE, TestRole::Suite.as_str());
+        assert_eq!(CERTAINTY_DECLARED, TestCertainty::Declared.as_str());
+    }
+
     #[test]
     fn une_expression_sans_groupe_est_refusee() {
         let d = QueriesVia { registered_name: Some("name = \"[A-Z]+\"".into()), ..declaration() };
