@@ -226,6 +226,7 @@ jobs:
       # le bâti seul ne prouvait rien du mode démon hors Linux. Un hôte à la
       # main, un client attaché, /arret, puis un hôte lancé par le client.
       - name: Le cycle du démon (hôte, client attaché, /arret, hôte lancé par le client)
+        timeout-minutes: 15
         run: |
           B=dist/windows-x64/rag3weaver-backend.exe
           [ -e "$B" ] || { echo "pas de binaire"; exit 1; }
@@ -384,6 +385,7 @@ jobs:
       # le bâti seul ne prouvait rien du mode démon hors Linux. Un hôte à la
       # main, un client attaché, /arret, puis un hôte lancé par le client.
       - name: Le cycle du démon (hôte, client attaché, /arret, hôte lancé par le client)
+        timeout-minutes: 15
         run: |
           B=dist/darwin-arm64/rag3weaver-backend
           [ -e "$B" ] || { echo "pas de binaire"; exit 1; }

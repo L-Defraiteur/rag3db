@@ -20,6 +20,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 
@@ -111,12 +112,20 @@ def client(arguments, env):
     except ValueError:
         etat = {"brut": texte}
     p.stdin.close()
+    # Le client fini, ses tuyaux doivent se fermer : un hôte détaché qui en
+    # hériterait les garderait ouverts, et l'agent attendrait sans fin (vu sous
+    # Windows le 12 octobre : deux heures, jusqu'à l'annulation du job).
     try:
         p.wait(timeout=30)
     except subprocess.TimeoutExpired:
         p.kill()
-    erreurs = p.stderr.read()
-    return outils, etat, erreurs
+    lu = []
+    fil = threading.Thread(target=lambda: lu.append(p.stderr.read()), daemon=True)
+    fil.start()
+    fil.join(30)
+    cas(not fil.is_alive(), f"les tuyaux du client se ferment avec lui (client fini : {p.poll() is not None})"
+        + ("" if not fil.is_alive() else " — un hôte détaché en a hérité"))
+    return outils, etat, (lu[0] if lu else "")
 
 
 # ── 1. Un hôte à la main ────────────────────────────────────────────────────
