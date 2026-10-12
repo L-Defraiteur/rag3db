@@ -99,6 +99,42 @@ fn what_arrives_between_two_turns_is_read_at_the_next_one() {
     assert!(second.iter().any(|u| u.contains("le résumé")), "le tour suivant n'a pas lu la fin : {second:?}");
 }
 
+/// **Une boîte qui déborde le dit** : dix messages arrivent pendant le tour
+/// d'un agent, sur un bus de capacité 4. Les plus anciens sont écrasés ;
+/// l'agent l'apprend par un tour, au lieu de les perdre sans un mot
+/// (relevé par l'arbre principal, 12 octobre).
+#[test]
+fn an_overflowing_inbox_tells_the_agent_what_it_lost() {
+    let bus = EventBus::new(4);
+    let mut avertissements = bus.subscribe(crate::events::topic::CATALOG);
+    let tools = no_tools();
+    let lu = Arc::new(Mutex::new(Vec::new()));
+    let (b, l) = (bus.clone(), Arc::clone(&lu));
+    let appels = Mutex::new(0usize);
+    let llm = CallbackLlm::new("déborde", 4096, move |turns, opts, sink| {
+        l.lock().unwrap().push(turns.to_vec());
+        let mut n = appels.lock().unwrap();
+        *n += 1;
+        if *n == 1 {
+            for i in 0..10 {
+                b.send_message("pair", "pair", "run-plein", &format!("message {i}"));
+            }
+        }
+        MockLlm::new("vu").generate(turns, opts, sink)
+    });
+    let agent = Agent::new(&llm, &tools).with_name("plein").with_run_id("run-plein").with_events(bus.clone()).with_inbox();
+    let mut turns = vec![Turn::user("attends des messages")];
+    agent.run(&mut turns, &mut StringSink::default()).unwrap();
+    // Arrivés pendant la dernière réponse : lus dans l'historique à la fin du
+    // tour, pour le suivant.
+    let vus = users(&turns);
+    assert!(vus.iter().any(|u| u.contains("perdu")), "la perte n'est pas dite à l'agent : {vus:?}");
+    let _ = &lu;
+    let dit = std::iter::from_fn(|| avertissements.try_recv().ok())
+        .any(|e| matches!(e, Event::Warning { message, .. } if message.contains("perdu")));
+    assert!(dit, "la perte n'est pas dite sur le bus");
+}
+
 // ── Le verbe `send`, joué par des agents ────────────────────────────────
 
 /// Un modèle qui joue une suite de [`MockLlm`], un par appel, rejoue le

@@ -1284,7 +1284,17 @@ impl<'a> Agent<'a> {
                     n += 1;
                 }
                 Ok(_) => {}
-                Err(async_broadcast::TryRecvError::Overflowed(_)) => continue,
+                // **La boîte a débordé** : le bus a écrasé les plus anciens.
+                // Ce sont des messages entiers ; leur perte se dit à l'agent
+                // et sur le bus, jamais en silence.
+                Err(async_broadcast::TryRecvError::Overflowed(perdus)) => {
+                    let ligne = format!(
+                        "[{perdus} message(s) perdu(s) dans la boîte : débordement — redemandez-les si vous les attendiez]"
+                    );
+                    self.emit(crate::events::CatalogEvent::Warning { context: format!("agent:{}", self.name), message: ligne.clone() });
+                    turns.push(Turn::user(ligne));
+                    n += 1;
+                }
                 Err(_) => break,
             }
         }
