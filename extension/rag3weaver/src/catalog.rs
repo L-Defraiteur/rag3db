@@ -433,6 +433,11 @@ pub struct Catalog {
     cache_base: PathBuf,
     /// Sync connection for BlobStore (avoids async→sync bridge).
     sync_conn: Option<Arc<dyn SyncDbConnection>>,
+    /// **La connexion de lecture** (`DbConnection::read_connection`) : les
+    /// lectures d'outil y passent en auto-commit et voient l'état validé, sans
+    /// jamais tourner dans une transaction ouverte par l'écrivain sur `conn`.
+    /// `None` : elles passent par `conn`.
+    read_conn: Option<Arc<dyn DbConnection>>,
     /// **Les sessions de synchronisation ouvertes**, par (cellule, entité) :
     /// valeurs du périmètre en JSON → identifiant. Lu une fois depuis
     /// `_catalog_meta`, oublié à chaque ouverture, abandon ou fin. Hypothèse
@@ -522,14 +527,22 @@ pub struct EmbeddingChoiceRecord {
 }
 
 impl Catalog {
-    // ── Lifecycle ───────────────────────────────────────────────────────
+    /// Les fils d'exécution de la connexion de lecture (`RAG3WEAVER_READ_THREADS`,
+/// 2 par défaut) : assez pour une lecture d'outil, sans affamer l'écrivain.
+fn read_threads() -> u64 {
+    std::env::var("RAG3WEAVER_READ_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(2)
+}
+
+// ── Lifecycle ───────────────────────────────────────────────────────
 
     pub fn new(
         conn: Box<dyn DbConnection>,
         embedder: Box<dyn Embedder>,
         config: CatalogConfig,
     ) -> Self {
+        let read_conn = conn.read_connection(Self::read_threads());
         Self {
+            read_conn,
             conn: Arc::from(conn),
             embedder: Arc::from(embedder),
             sparse_embedder: None,
@@ -9093,6 +9106,18 @@ impl Catalog {
         crate::plan::run_plan(self.dialect.as_ref(), self.conn.as_ref(), plan, options)
     }
 
+    /// [`Self::run_plan`] pour une lecture d'outil : sur la connexion de
+    /// lecture, sans transaction (elle voit l'état validé, jamais celui d'une
+    /// transaction ouverte par l'écrivain).
+    pub fn run_read_plan(&self, plan: &rag3weaver_ir::Plan, mut options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
+        if options.fanout.is_none() {
+            options.fanout = self.fanout;
+        }
+        options.no_transaction = true;
+        let conn = self.read_conn_arc();
+        crate::plan::run_plan(self.dialect.as_ref(), conn.as_ref(), plan, options)
+    }
+
     /// **Lever (ou baisser) la fusion des éventails pour ce montage**, quoi
     /// que déclare le dialecte : un PostgreSQL distant, où chaque
     /// aller-retour coûte cher, la lève ; `None` rend la main au dialecte.
@@ -9114,6 +9139,29 @@ impl Catalog {
     }
 
     /// Execute raw Cypher (useful for debugging/tests).
+    /// **Une lecture courte, sur la connexion de lecture** : elle voit l'état
+    /// validé, sans attendre ni rejoindre une transaction ouverte par
+    /// l'écrivain. Pour les lectures d'outil ; une lecture de l'écrivain qui
+    /// doit voir ses propres écritures non validées passe par
+    /// [`Self::execute_raw`].
+    pub fn execute_read_with_params(
+        &self,
+        cypher: &str,
+        params: &[crate::connection::QueryParam],
+    ) -> Result<crate::connection::QueryResult, CatalogError> {
+        self.read_conn
+            .as_deref()
+            .unwrap_or(self.conn.as_ref())
+            .execute_with_params(cypher, params)
+            .map_err(|e| CatalogError::DbError(e.to_string()))
+    }
+
+    /// La connexion des lectures d'outil : celle de lecture si le moteur en
+    /// donne une, sinon la principale.
+    pub fn read_conn_arc(&self) -> Arc<dyn DbConnection> {
+        self.read_conn.clone().unwrap_or_else(|| self.conn.clone())
+    }
+
     pub fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
         self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))
     }

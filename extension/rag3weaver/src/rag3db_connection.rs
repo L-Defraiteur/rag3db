@@ -569,6 +569,17 @@ fn noms_de_colonnes(colonnes: Vec<String>) -> Vec<String> {
 }
 
 impl DbConnection for Rag3dbConnection {
+    fn read_connection(&self, threads: u64) -> Option<Arc<dyn DbConnection>> {
+        // La même base, une connexion à elle : son contexte de transaction
+        // lui est propre, ses fils sont bornés (le pool est partagé, une
+        // lecture n'affame pas l'écrivain — le cœur, 12 octobre 2026).
+        let mut c = Self::connect(self.db.clone(), self.reopen.clone()).ok()?;
+        c.conn.set_max_num_threads_for_exec(threads.max(1));
+        c.buffer_pool = self.buffer_pool;
+        c.path = self.path.clone();
+        Some(Arc::new(c))
+    }
+
     fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
         self.query_sync(cypher)
     }

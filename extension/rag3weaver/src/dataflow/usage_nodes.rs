@@ -138,7 +138,7 @@ pub fn in_scope(catalog: &Catalog, table: &str, path_fields: &[String], uuids: &
     let lire = rag3weaver_ir::Select::by_uuids(table, colonnes);
     let q = catalog.dialect_arc().select(&lire).map_err(|e| format!("portée : {e}"))?;
     let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
-    let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(|e| format!("portée : {e}"))?;
+    let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(|e| format!("portée : {e}"))?;
     let n = path_fields.len();
     Ok(rows
         .rows
@@ -193,7 +193,7 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
             .select(&rag3weaver_ir::Select::filtered(&rel.to, rag3weaver_ir::Predicate::Contains { field: d.field.clone(), param: "nom".into() }, champs))
             .map_err(|e| format!("UsagesNode: {e}"))?;
         catalog
-            .execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
+            .execute_read_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
             .map_err(|e| format!("UsagesNode: {e}"))?
     } else {
         // Le saut des définitions vers leurs conteneurs, dit par le dialecte ;
@@ -273,7 +273,7 @@ pub fn virtual_usages_of(catalog: &Catalog, cfg: &UsagesConfig, v: &VirtualConfi
     };
     // Le dialecte rend l'uuid demandé en tête, puis les colonnes.
     let q = catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(&table, colonnes_item(cfg))).map_err(|e| format!("UsagesNode: {e}"))?;
-    let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(err)?;
+    let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(err)?;
     let mut out: Vec<VirtualBase> = rows.rows.iter().map(|r| VirtualBase { base: item(r, 1, cfg), callers: Vec::new() }).collect();
     // Leurs appelants directs.
     for name_rel in &cfg.direct {
@@ -481,7 +481,7 @@ pub fn usages_of_in(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_pref
                 vec![rag3weaver_ir::Column::Node("_uuid".into())],
             ))
             .map_err(|e| format!("UsagesNode: {e}"))?;
-        let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("name", CypherValue::String(name.to_string()))]).map_err(err)?;
+        let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("name", CypherValue::String(name.to_string()))]).map_err(err)?;
         rows.rows.iter().map(|r| texte(r.first())).filter(|u| !u.is_empty()).collect()
     };
 
@@ -530,7 +530,7 @@ pub fn usages_of_in(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_pref
             let lire = rag3weaver_ir::Select::by_uuids(&table, vec![rag3weaver_ir::Column::Node(champ.clone())]);
             let qs = catalog.dialect_arc().select(&lire).map_err(|e| format!("UsagesNode: {e}"))?;
             let liste = CypherValue::List(definitions.iter().map(|d| CypherValue::String(d.uuid.clone())).collect());
-            let rows = catalog.execute_raw_with_params(&qs, &[QueryParam::new("uuids", liste)]).map_err(err)?;
+            let rows = catalog.execute_read_with_params(&qs, &[QueryParam::new("uuids", liste)]).map_err(err)?;
             let conteneur: HashMap<String, String> = rows.rows.iter().map(|r| (texte(r.first()), texte(r.get(1)))).collect();
             let fichier = |chemin: &str| {
                 let base = chemin.rsplit('/').next().unwrap_or(chemin);

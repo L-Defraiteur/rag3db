@@ -317,7 +317,7 @@ fn fiches(catalog: &Catalog, cfg: &LinksConfig, rels: &[RelInfo], uuids: &[Strin
         let Ok(q) = catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(t, champs)) else { continue };
         // Une table qui n'a pas ces champs n'a pas de fiche : le nœud garde
         // son uuid, le lien reste vrai.
-        let Ok(rows) = catalog.execute_raw_with_params(&q, &[uuid_param(uuids)]) else { continue };
+        let Ok(rows) = catalog.execute_read_with_params(&q, &[uuid_param(uuids)]) else { continue };
         let n = cfg.path_fields.len();
         for r in &rows.rows {
             let uuid = text(r.first());

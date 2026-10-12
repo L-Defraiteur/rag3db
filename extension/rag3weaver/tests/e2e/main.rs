@@ -140,6 +140,8 @@ mod e2e_lecture_du_catalogue;
 mod e2e_lecture_mermaid;
 #[path = "../e2e_lecture_seule_apres_fermeture_sans_point_de_reprise.rs"]
 mod e2e_lecture_seule_apres_fermeture_sans_point_de_reprise;
+#[path = "../e2e_lectures.rs"]
+mod e2e_lectures;
 #[path = "../e2e_liens.rs"]
 mod e2e_liens;
 #[path = "../e2e_mcp_cycle_de_vie.rs"]

@@ -125,7 +125,7 @@ impl Lecteur<'_> {
         colonnes.extend(self.lo.path_fields.iter().map(|f| Column::Node(f.clone())));
         let q = self.catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(&self.table, colonnes)).map_err(|e| format!("verrous : {e}"))?;
         let liste = CypherValue::List(manquants.iter().map(|u| CypherValue::String(u.clone())).collect());
-        let rows = self.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(|e| format!("verrous : {e}"))?;
+        let rows = self.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(|e| format!("verrous : {e}"))?;
         for r in rows.rows {
             let path = (0..self.lo.path_fields.len()).map(|i| texte(r.get(4 + i))).rev().find(|p| !p.is_empty()).unwrap_or_default();
             self.fiches.insert(
@@ -149,7 +149,7 @@ impl Lecteur<'_> {
         hop.returns.push(if info.props.iter().any(|p| p == &self.lo.usage) { Column::Edge(self.lo.usage.clone()) } else { Column::Null });
         let q = self.catalog.dialect_arc().hop(&hop).map_err(|e| format!("verrous : {e}"))?;
         let liste = CypherValue::List(depuis.iter().map(|u| CypherValue::String(u.clone())).collect());
-        let rows = self.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(|e| format!("verrous : {e}"))?;
+        let rows = self.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(|e| format!("verrous : {e}"))?;
         Ok(rows.rows.iter().map(|r| (texte(r.first()), texte(r.get(1)), texte(r.get(2)), r.get(3).and_then(|v| v.as_i64()), texte(r.get(4)))).collect())
     }
 

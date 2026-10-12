@@ -154,7 +154,7 @@ pub fn degrees(catalog: &Catalog, rels: &[RelInfo], directions: &[Direction], uu
         }
     }
     let options = crate::plan::PlanOptions { no_transaction: true, ..Default::default() };
-    let rapport = catalog.run_plan(&plan, options).map_err(|e| e.to_string())?;
+    let rapport = catalog.run_read_plan(&plan, options).map_err(|e| e.to_string())?;
     for rows in rapport.outputs.values() {
         for r in &rows.rows {
             *out.entry(text(r.first())).or_default() += r.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
@@ -187,7 +187,7 @@ pub fn run_hop(catalog: &Catalog, hop: &rag3weaver_ir::Hop, params: &[crate::con
         && !hop.returns.iter().any(|c| matches!(c, Column::Whole));
     if !deux_temps {
         let q = dialect.hop(hop).map_err(|e| e.to_string())?;
-        return catalog.execute_raw_with_params(&q, params).map_err(|e| e.to_string());
+        return catalog.execute_read_with_params(&q, params).map_err(|e| e.to_string());
     }
     // 1. Le saut : l'uuid du voisin en plus, ses champs vides à leur place.
     let mut premier = hop.clone();
@@ -195,7 +195,7 @@ pub fn run_hop(catalog: &Catalog, hop: &rag3weaver_ir::Hop, params: &[crate::con
         .chain(hop.returns.iter().map(|c| if champ(c).is_some() { Column::Null } else { c.clone() }))
         .collect();
     let q = dialect.hop(&premier).map_err(|e| e.to_string())?;
-    let sauts = catalog.execute_raw_with_params(&q, params).map_err(|e| e.to_string())?;
+    let sauts = catalog.execute_read_with_params(&q, params).map_err(|e| e.to_string())?;
     // 2. Les champs, par clé.
     let mut champs: Vec<String> = Vec::new();
     for c in &hop.returns {
@@ -221,7 +221,7 @@ pub fn run_hop(catalog: &Catalog, hop: &rag3weaver_ir::Hop, params: &[crate::con
         let lire = rag3weaver_ir::Select::by_uuids(table, champs.iter().map(|f| Column::Node(f.clone())).collect());
         let q = dialect.select(&lire).map_err(|e| e.to_string())?;
         let r = catalog
-            .execute_raw_with_params(&q, &[crate::connection::QueryParam::new("uuids", CypherValue::List(voisins))])
+            .execute_read_with_params(&q, &[crate::connection::QueryParam::new("uuids", CypherValue::List(voisins))])
             .map_err(|e| e.to_string())?;
         if r.columns.len() == champs.len() + 1 {
             noms_lus = r.columns[1..].to_vec();
@@ -291,7 +291,7 @@ pub fn neighbors(catalog: &Catalog, rel: &RelInfo, direction: Direction, mark: &
         return Ok(Vec::new());
     }
     let q = catalog.dialect_arc().hop(&hop_of(rel, direction, mark)).map_err(|e| e.to_string())?;
-    let rows = catalog.execute_raw_with_params(&q, &[uuid_param(uuids)]).map_err(|e| e.to_string())?;
+    let rows = catalog.execute_read_with_params(&q, &[uuid_param(uuids)]).map_err(|e| e.to_string())?;
     Ok(rows.rows.iter().map(|r| (text(r.first()), text(r.get(1)))).collect())
 }
 

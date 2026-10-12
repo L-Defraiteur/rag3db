@@ -284,7 +284,7 @@ impl Moteur<'_> {
                 .output(&id);
         }
         let options = crate::plan::PlanOptions { no_transaction: true, ..Default::default() };
-        let mut rapport = self.catalog.run_plan(&plan, options).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+        let mut rapport = self.catalog.run_read_plan(&plan, options).map_err(|e| format!("NeighborhoodNode: {e}"))?;
         let mut out = Vec::new();
         for (k, rel) in self.rels.iter().enumerate() {
             let rows = rapport.outputs.remove(&format!("r{k}")).unwrap_or_default();
@@ -369,7 +369,7 @@ pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(S
                     hop.returns.push(Column::Node(same.to_string()));
                 }
                 let q = catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
-                let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+                let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(|e| format!("NeighborhoodNode: {e}"))?;
                 for r in &rows.rows {
                     let de = texte(r.first());
                     let Some(nom_depart) = origine.get(de.as_str()) else { continue };
@@ -433,7 +433,7 @@ fn relever(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], atteints: 
     hop.returns.push(Column::Edge(c.note.clone()));
     let q = moteur.catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
     let liste = CypherValue::List(qui.keys().map(|u| CypherValue::String(u.clone())).collect());
-    let rows = moteur.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
+    let rows = moteur.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
     let mut out: Vec<Collected> = rows
         .rows
         .iter()
@@ -646,7 +646,7 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
     colonnes_depart.extend(colonnes(cfg));
     let q = catalog.dialect_arc().select(&rag3weaver_ir::Select::filtered(&table, condition, colonnes_depart)).map_err(Moteur::err_ir)?;
     let rows = catalog
-        .execute_raw_with_params(&q, &[QueryParam::new("file", CypherValue::String(file.to_string()))])
+        .execute_read_with_params(&q, &[QueryParam::new("file", CypherValue::String(file.to_string()))])
         .map_err(Moteur::err)?;
     let departs: Vec<super::usage_nodes::Item> = rows
         .rows
@@ -787,7 +787,7 @@ fn fiches(moteur: &Moteur<'_>, uuids: &[String]) -> Result<Vec<Reached>, String>
     };
     let q = moteur.catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(table, colonnes(moteur.cfg))).map_err(|e| format!("NeighborhoodNode: {e}"))?;
     let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
-    let rows = moteur.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
+    let rows = moteur.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
     Ok(rows.rows.iter().map(|r| reached_from(r, 1, moteur.cfg)).collect())
 }
 
