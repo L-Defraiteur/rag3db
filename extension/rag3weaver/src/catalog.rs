@@ -9129,7 +9129,7 @@ impl Catalog {
 
     /// Publie dans la cellule **courante** — `set_scope` déplace donc aussi
     /// les événements, ce qui est la seule lecture cohérente.
-    fn emit_event(&self, event: CatalogEvent) {
+    pub(crate) fn emit_event(&self, event: CatalogEvent) {
         self.event_bus.in_scope(&self.scope).emit(event);
     }
 

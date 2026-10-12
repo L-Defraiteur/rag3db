@@ -246,7 +246,10 @@ pub fn run_hop(catalog: &Catalog, hop: &rag3weaver_ir::Hop, params: &[crate::con
     // temps ne l'aurait jamais rendue à moitié. Le compte se dit.
     let disparus = sauts.rows.iter().filter(|r| !lus.contains_key(&text(r.get(1)))).count();
     if disparus > 0 {
-        eprintln!("[rag3weaver] saut en deux temps : {disparus} ligne(s) écartée(s), voisin supprimé entre le saut et la lecture par clé");
+        catalog.emit_event(crate::events::CatalogEvent::Warning {
+            context: "saut en deux temps".to_string(),
+            message: format!("{disparus} ligne(s) écartée(s), voisin supprimé entre le saut et la lecture par clé"),
+        });
     }
     let rows = sauts
         .rows
