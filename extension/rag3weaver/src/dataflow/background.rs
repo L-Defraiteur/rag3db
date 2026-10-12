@@ -504,10 +504,13 @@ impl DataflowRuntime {
                 if let Some(c) = &cause {
                     content["cause"] = json!(c);
                 }
+                // **La trace d'abord, la fin ensuite** : qui lit la fin dans sa
+                // boîte trouve `RunFinished` déjà sur le bus (un témoin lisait
+                // l'une puis l'autre et passait entre les deux, sous charge).
+                self.emit_run_finished_because(&run, started.elapsed().as_millis() as u64, ok, cause);
                 if let Some(caller) = &caller {
                     deliver(&self.services, &run, &format!("outil #{handle}"), caller, &content);
                 }
-                self.emit_run_finished_because(&run, started.elapsed().as_millis() as u64, ok, cause);
                 done.store(true, std::sync::atomic::Ordering::SeqCst);
                 let _ = fini_tx.send(());
                 registry.remove(&handle);

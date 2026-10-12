@@ -121,7 +121,9 @@ fn spawn_returns_its_reference_while_the_child_is_held() {
 }
 
 /// **2. La fin dans la boîte** de l'appelant, signée `outil #h`, avec le
-/// résultat ; `RunStarted{parent}` précède `RunFinished`.
+/// résultat ; `RunStarted{parent}` précède `RunFinished`, et **la fin lue,
+/// la trace est complète** : `RunFinished` est sur le bus avant que la fin
+/// n'arrive dans la boîte (sans attente : c'est l'ordre qui le garantit).
 #[test]
 fn the_end_arrives_in_the_caller_inbox_signed_by_the_handle() {
     let w = world("2");
