@@ -570,3 +570,53 @@ gabarit par `qualifier_field`) ou par le nom de son fichier. La réponse dit com
 un conteneur qui n'a pas ce nom le dit (« aucune définition dans ce conteneur : donnez le nom seul,
 avec un chemin, pour les voir toutes ») au lieu de rendre zéro. Témoin :
 `e2e_usages::un_nom_qualifie_rend_le_nom_seul_dans_son_conteneur`.
+
+### Fermé — « 0 tests qui la traversent » quand les tests passent par des requêtes (arbre principal, 12 octobre 2026)
+
+L'entrée du cœur C++ de 17 h 20, point 2. **Fermée par `94e21b066`.**
+
+- **Ce qui manquait** : un test n'était reconnu que par la marque que codeparsers pose sur un
+  `TEST_F`. Les 469 fichiers `.test` étaient des `texte_brut` sans marque ni arête. Les
+  `conn->query("…")` ne donnaient qu'un appel à `Connection::query`, un carrefour. Aucun lien ne
+  menait d'une requête au C++.
+- **Ce qui est fait** : `workspace.queries_via`, déclaré au manifeste du dépôt
+  (`templates/backends/code/backend.json`), rien en dur pour le C++.
+  - Les **fichiers de cas** sont repérés par un motif de chemin. Leurs `texte_brut` reçoivent
+    `test_role=suite` et `test_certainty=declared`, par accord avec codeparsers : un seul poseur par
+    marque.
+  - Les **noms enregistrés** sont lus dans le contenu des classes
+    (`static constexpr const char* name = "…"`), ce qui donne `REGISTERS`.
+  - Les **appels** des requêtes (`storage_info(` → `STORAGE_INFO`) et la **table des mots-clés**
+    donnent `QUERIES`, du test vers le symbole.
+  - Le gabarit `impact` suit `HAS_PARENT>?|DEFINES/REGISTERS>|<QUERIES` depuis chaque nœud atteint.
+    Un test relié ainsi est noté « par requête ».
+  - Sans déclaration, la ligne dit « tests par requêtes : non suivis » au lieu d'un 0 sec.
+- **Témoins** :
+  - `e2e_tests_par_requetes`, un moteur en miniature : sans déclaration « non suivis », avec
+    déclaration 3 tests sur 3 (COPY, `CALL storage_info`, un `.test` qui fait SET), et aucun de trop.
+  - `sonde_tests_par_requetes` sur le vrai moteur (`src/`, `test/transaction`, `test/test_files`,
+    2 075 fichiers) : `impact lockIndexForWrite` passe de **1** test (« non suivis ») à **204**, dont
+    InsertLockTest, LockBench, la copie journalisée et les `.test` de transaction. On compte 11 688
+    QUERIES (4 304 par nom, 7 384 par mot-clé) et 273 REGISTERS. L'ingestion ne coûte pas plus
+    (225 s contre 252 s).
+
+**La table des mots-clés, datée et comptée** (12 octobre 2026, relevée sur
+`src/include/processor/operator`) : **24 mots**.
+
+- **Clauses du moteur** (`ClauseType`, 10 genres) :
+  - 6 ont une entrée : SET, DELETE, CREATE (INSERT), MERGE, MATCH, UNWIND ;
+  - 3 passent par les noms enregistrés : IN_QUERY_CALL, TABLE_FUNCTION_CALL, GDS_CALL ;
+  - **1 sans entrée : LOAD_FROM** (LOAD désigne déjà `LoadExtension`).
+- **Instructions** (`StatementType`, 20 genres) :
+  - 15 ont une entrée : CREATE_TABLE, DROP, ALTER, COPY_TO, COPY_FROM, STANDALONE_CALL,
+    CREATE_MACRO, TRANSACTION, EXTENSION, EXPORT_DATABASE, IMPORT_DATABASE, ATTACH_DATABASE,
+    USE_DATABASE, CREATE_SEQUENCE, CREATE_TYPE ;
+  - 1 passe par les noms enregistrés : STANDALONE_CALL_FUNCTION ;
+  - **4 sans entrée : QUERY** (sans objet), **EXPLAIN**, **DETACH_DATABASE** (DETACH dit aussi
+    `DETACH DELETE`), **EXTENSION_CLAUSE**.
+- **Ce qu'impact ne voit donc pas** : ces cinq genres. Ce qu'il voit en trop : un mot-clé matche le
+  texte entier d'un fichier de cas, commentaires compris. Un `.test` qui écrit « set » dans une
+  remarque compte comme traversant SET : c'est une sur-approximation, assumée et notée « par
+  requête ».
+- **À reprendre** quand le moteur ajoute un opérateur. La table vit dans le manifeste, avec son
+  champ `keywords_dated`.
