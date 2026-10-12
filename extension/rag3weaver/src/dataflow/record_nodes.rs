@@ -3106,6 +3106,7 @@ fn retirer_le_creux_des_chunks(
 /// les concerne seules. Une table qu'on ne peut pas décrire (pas encore créée)
 /// se supprime sans ce détour.
 fn vider_les_vecteurs_avant_suppression(
+    ctx: &mut NodeContext,
     conn: &Arc<dyn DbConnection>,
     dialect: &Arc<dyn crate::dialect::SchemaDialect>,
     chunk_table: &str,
@@ -3114,9 +3115,17 @@ fn vider_les_vecteurs_avant_suppression(
     let Some(requete) = dialect.vector_columns_to_clear(chunk_table) else {
         return Ok(());
     };
-    let Ok(colonnes) = conn.execute(&requete) else {
-        return Ok(());
+    // Décrire la table échoue : le contournement s'éteint, et la suppression
+    // retombe aux secondes par ligne. Ça se dit.
+    let colonnes = match conn.execute(&requete) {
+        Ok(c) => c,
+        Err(e) => {
+            ctx.metric("vidage_saute", 1.0);
+            ctx.warn(&format!("{chunk_table} : vecteurs non vidés avant suppression (table_info : {e}) — la suppression sera lente"));
+            return Ok(());
+        }
     };
+    let noms: HashSet<String> = colonnes.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
     for ligne in &colonnes.rows {
         let (Some(nom), Some(ty)) = (ligne.first().and_then(|v| v.as_str()), ligne.get(1).and_then(|v| v.as_str())) else {
             continue;
@@ -3125,8 +3134,9 @@ fn vider_les_vecteurs_avant_suppression(
         if !ty.contains('[') || ty.ends_with("[]") {
             continue;
         }
+        let marqueur = crate::embedding_storage::marker_of_column(nom).filter(|m| noms.contains(m));
         conn.execute_with_params(
-            &dialect.clear_vector_by_parent(chunk_table, nom),
+            &dialect.clear_vector_by_parent(chunk_table, nom, marqueur.as_deref()),
             &[QueryParam { name: "uuids".into(), value: parents.clone() }],
         )
         .map_err(|e| format!("vider « {nom} » de {chunk_table} avant suppression : {e}"))?;
@@ -3203,7 +3213,7 @@ impl Node for RechunkDeleteNode {
             ctx.metric("sparse_removed", creux as f64);
             let cypher = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
             oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
-            vider_les_vecteurs_avant_suppression(&conn, &dialect, &chunk_table, &uuid_list)?;
+            vider_les_vecteurs_avant_suppression(ctx, &conn, &dialect, &chunk_table, &uuid_list)?;
             let result = conn
                 .execute_with_params(
                     &cypher,
@@ -3366,7 +3376,7 @@ impl Node for DeleteRecordNode {
                 ctx.metric("sparse_removed", creux as f64);
                 let del_chunks = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
                 oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
-                vider_les_vecteurs_avant_suppression(&conn, &dialect, &chunk_table, &uuid_list)?;
+                vider_les_vecteurs_avant_suppression(ctx, &conn, &dialect, &chunk_table, &uuid_list)?;
                 let result = conn
                     .execute_with_params(
                         &del_chunks,

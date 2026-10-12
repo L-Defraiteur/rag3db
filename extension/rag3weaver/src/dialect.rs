@@ -1034,12 +1034,16 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
-    /// Remet à NULL `column` sur les morceaux des parents cités (`$uuids`).
-    /// Même contournement ; appelé seulement quand
+    /// Remet à NULL `column` sur les morceaux des parents cités (`$uuids`),
+    /// et vide `marker` dans la même instruction : si la suppression qui suit
+    /// échoue, la ligne reste une dette honnête (comme
+    /// [`Self::embed_clear`]), jamais un morceau réputé embarqué sans
+    /// vecteur. Même contournement ; appelé seulement quand
     /// [`Self::vector_columns_to_clear`] rend une requête.
-    fn clear_vector_by_parent(&self, table: &str, column: &str) -> String {
+    fn clear_vector_by_parent(&self, table: &str, column: &str, marker: Option<&str>) -> String {
+        let marque = marker.map(|m| format!(", c.{} = ''", self.quote(m))).unwrap_or_default();
         format!(
-            "UNWIND $uuids AS uuid MATCH (c:{} {{{}: uuid}}) SET c.{} = NULL",
+            "UNWIND $uuids AS uuid MATCH (c:{} {{{}: uuid}}) SET c.{} = NULL{marque}",
             self.quote(table),
             self.quote("_parent_uuid"),
             self.quote(column)
@@ -3579,9 +3583,14 @@ mod tests {
             Some("CALL table_info('Scope_Chunk') RETURN name, type")
         );
         assert_eq!(
-            super::SchemaDialect::clear_vector_by_parent(&d, "Scope_Chunk", "embedding__hashembedder"),
-            "UNWIND $uuids AS uuid MATCH (c:`Scope_Chunk` {`_parent_uuid`: uuid}) SET c.`embedding__hashembedder` = NULL"
+            super::SchemaDialect::clear_vector_by_parent(&d, "Scope_Chunk", "embedding__hashembedder", Some("_embed_hash__hashembedder")),
+            "UNWIND $uuids AS uuid MATCH (c:`Scope_Chunk` {`_parent_uuid`: uuid}) SET c.`embedding__hashembedder` = NULL, c.`_embed_hash__hashembedder` = ''"
         );
+        assert_eq!(
+            crate::embedding_storage::marker_of_column("embedding__hashembedder").as_deref(),
+            Some("_embed_hash__hashembedder")
+        );
+        assert_eq!(crate::embedding_storage::marker_of_column("embedding").as_deref(), Some("_embed_hash"));
     }
 
     use super::*;

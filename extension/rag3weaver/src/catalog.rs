@@ -6159,7 +6159,9 @@ impl Catalog {
         // d'ingestion, sur la sortie d'erreur. « L'ingestion est lente » sans
         // ventilation n'a pas de suite possible — et la ventilation existe
         // déjà, le runtime la publie.
-        let profile = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
+        // Sous la variable, ou pendant un `ingest_profile::record` sur ce fil
+        // (la ligne [montre] d'un fichier réindexé, qui veut « nœud embed »).
+        let profile = crate::ingest_profile::enabled() || crate::ingest_profile::recording();
         let mut rx = profile.then(|| runtime.subscribe());
         // Un second abonné, avec son propre curseur : le bloc de profilage
         // ci-dessous n'existe que sous variable d'environnement, et les
@@ -6198,8 +6200,10 @@ impl Catalog {
                 let name = node.split(' ').next().unwrap_or(node);
                 crate::ingest_profile::add_duration(crate::ingest_profile::node_stage(name), std::time::Duration::from_millis(*ms));
             }
-            for (node, ms) in by_node {
-                eprintln!("[ingest-profile] {ms:>6} ms  {node}");
+            if crate::ingest_profile::enabled() {
+                for (node, ms) in by_node {
+                    eprintln!("[ingest-profile] {ms:>6} ms  {node}");
+                }
             }
         }
 

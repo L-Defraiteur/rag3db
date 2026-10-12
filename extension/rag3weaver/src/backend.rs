@@ -4116,6 +4116,26 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **La ligne [montre] dit l'embarquement sans la variable du profil** :
+    /// les durées des nœuds ne s'écoutaient que sous `RAG3WEAVER_INGEST_PROFILE`,
+    /// et « embarquer » manquait à toute ligne de production (relecture de la
+    /// recherche, 12 octobre).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_recorded_reingestion_tells_the_embedding_without_the_profile() {
+        assert!(!crate::ingest_profile::enabled(), "le témoin se joue sans RAG3WEAVER_INGEST_PROFILE");
+        let (dir, backend) = backend_qui_surveille();
+        let source = backend.file_source.clone().unwrap();
+        let contenu = "pub fn neuve() { depart(); }\n";
+        std::fs::write(dir.path().join("sources/neuve.rs"), contenu).unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        let (r, etapes) = crate::ingest_profile::record(|| {
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "neuve.rs", contenu)
+        });
+        r.unwrap();
+        assert!(etapes.iter().any(|(e, _)| *e == "nœud embed"), "pas d'embarquement dans les étapes : {etapes:?}");
+    }
+
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
     /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
     /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation

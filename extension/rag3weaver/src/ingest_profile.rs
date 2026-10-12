@@ -30,12 +30,30 @@ thread_local! {
 
 /// **Les étapes d'un seul travail** : ce que `f` ajoute sur ce fil, rendu à
 /// part, que le profil global soit demandé ou non (la ligne de journal d'un
-/// fichier réindexé). Ce qui court sur d'autres fils n'y est pas.
+/// fichier réindexé). Ce qui court sur d'autres fils n'y est pas. Un `record`
+/// imbriqué garde ses étapes pour lui : l'enregistreur extérieur ne les voit
+/// pas. Une panique dans `f` remet l'enregistreur d'avant en place.
 pub fn record<T>(f: impl FnOnce() -> T) -> (T, Vec<(&'static str, Duration)>) {
-    let previous = RECORDER.with(|r| r.replace(Some(Vec::new())));
+    struct Restaurer(Option<Option<Vec<(&'static str, Duration)>>>);
+    impl Drop for Restaurer {
+        fn drop(&mut self) {
+            if let Some(avant) = self.0.take() {
+                RECORDER.with(|r| *r.borrow_mut() = avant);
+            }
+        }
+    }
+    let mut garde = Restaurer(Some(RECORDER.with(|r| r.replace(Some(Vec::new())))));
     let out = f();
-    let got = RECORDER.with(|r| r.replace(previous)).unwrap_or_default();
+    let avant = garde.0.take().expect("posé plus haut");
+    let got = RECORDER.with(|r| r.replace(avant)).unwrap_or_default();
     (out, got)
+}
+
+/// Un [`record`] est-il en cours sur ce fil ? Ce qui ne s'écoute qu'à la
+/// demande (les durées des nœuds, rendues par le runtime) s'écoute aussi
+/// alors : la ligne d'un fichier réindexé les veut, sans la variable.
+pub fn recording() -> bool {
+    RECORDER.with(|r| r.borrow().is_some())
 }
 
 /// Le profil est-il demandé ? Lu une fois.

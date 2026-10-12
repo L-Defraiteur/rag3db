@@ -130,6 +130,13 @@ pub struct VectorStorage {
     pub dim: usize,
 }
 
+/// **Le marqueur d'une colonne vecteur**, d'après les noms de
+/// [`VectorStorage::resolve`] : `embedding` → `_embed_hash`,
+/// `embedding__<slug>` → `_embed_hash__<slug>`. `None` pour un autre nom.
+pub fn marker_of_column(column: &str) -> Option<String> {
+    column.strip_prefix("embedding").map(|reste| format!("_embed_hash{reste}"))
+}
+
 impl VectorStorage {
     /// Résout les noms pour `table` (`{Entity}_Chunk`). Les tables `_Index*`
     /// des anciennes bases de connaissances, qui forçaient le stockage
