@@ -222,6 +222,26 @@ jobs:
           ./dist/windows-x64/rag3weaver-backend.exe $g/sans-bac.json --describe 2>&1 | head -c 600; echo
       # L'épreuve du paquet, sur le runner : le sous-paquet windows-x64 garni
       # depuis dist/, puis « un dossier vide, trois fichiers, une recherche ».
+      # Le cycle du démon (lot C, relecture de la mémoire, 12 octobre 2026) :
+      # le bâti seul ne prouvait rien du mode démon hors Linux. Un hôte à la
+      # main, un client attaché, /arret, puis un hôte lancé par le client.
+      - name: Le cycle du démon (hôte, client attaché, /arret, hôte lancé par le client)
+        run: |
+          B=dist/windows-x64/rag3weaver-backend.exe
+          [ -e "$B" ] || { echo "pas de binaire"; exit 1; }
+          python3 - <<'PY'
+          import glob, json, os
+          ici = os.getcwd().replace("\\", "/")
+          g = "extension/rag3weaver/templates/proto/boutique/"
+          m = json.load(open(g + "backend.json"))
+          ext = glob.glob("dist/windows-x64/*.rag3db_extension")
+          if ext:
+              m["vector_extension"] = ici + "/" + ext[0].replace("\\", "/")
+          os.makedirs("essai", exist_ok=True)
+          m["database"] = ici + "/essai/boutique.rag3db"
+          json.dump(m, open(g + "epreuve.json", "w"))
+          PY
+          python3 tools/build-images/epreuve_demon.py "./$B" extension/rag3weaver/templates/proto/boutique/epreuve.json
       - name: L'épreuve JS du paquet (npm test)
         working-directory: extension/rag3weaver/bindings/nodejs
         env:
@@ -360,6 +380,26 @@ jobs:
           ./dist/darwin-arm64/rag3weaver-backend $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
           echo "--- sandbox off"
           ./dist/darwin-arm64/rag3weaver-backend $g/sans-bac.json --describe 2>&1 | head -c 600; echo
+      # Le cycle du démon (lot C, relecture de la mémoire, 12 octobre 2026) :
+      # le bâti seul ne prouvait rien du mode démon hors Linux. Un hôte à la
+      # main, un client attaché, /arret, puis un hôte lancé par le client.
+      - name: Le cycle du démon (hôte, client attaché, /arret, hôte lancé par le client)
+        run: |
+          B=dist/darwin-arm64/rag3weaver-backend
+          [ -e "$B" ] || { echo "pas de binaire"; exit 1; }
+          python3 - <<'PY'
+          import glob, json, os
+          ici = os.getcwd().replace("\\", "/")
+          g = "extension/rag3weaver/templates/proto/boutique/"
+          m = json.load(open(g + "backend.json"))
+          ext = glob.glob("dist/darwin-arm64/*.rag3db_extension")
+          if ext:
+              m["vector_extension"] = ici + "/" + ext[0].replace("\\", "/")
+          os.makedirs("essai", exist_ok=True)
+          m["database"] = ici + "/essai/boutique.rag3db"
+          json.dump(m, open(g + "epreuve.json", "w"))
+          PY
+          python3 tools/build-images/epreuve_demon.py "./$B" extension/rag3weaver/templates/proto/boutique/epreuve.json
       - name: L'épreuve JS du paquet (npm test)
         working-directory: extension/rag3weaver/bindings/nodejs
         run: |
