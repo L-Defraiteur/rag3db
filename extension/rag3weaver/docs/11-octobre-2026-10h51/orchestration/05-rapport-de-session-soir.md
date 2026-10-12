@@ -106,8 +106,19 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
 - Un pari sur l'ordre (réindexer après le binaire neuf) qui a coûté deux
   arrêts forcés à Lucie : la règle de l'annonce et de l'heure convenue.
 
-## 6. Ce qui attend Lucie au réveil (mis à jour le 12 à 1 h 15)
+## 6. Ce qui attend Lucie au réveil (mis à jour le 12 à 8 h 25)
 
+- **EN PREMIER, luciepc : arrête l'hôte figé proprement.** Il est à 43 Go
+  résidents (pic 52 Go) et monte depuis la nuit (l'index de code-principal a
+  été lancé dedans par erreur à 6 h 39 et boucle à 99 %) ; la machine n'a plus
+  que 19 Go disponibles sur 93 : risque d'arrêt brutal par le noyau pendant
+  qu'il écrit code-principal. Aucune session n'a eu la permission de
+  l'arrêter (codeparsers, la mémoire, hotfixs, et moi à 8 h 20) ; les bâtis
+  sur luciepc sont suspendus. Geste : `kill -TERM 132823` (exe vérifié :
+  `~/.local/bin/rag3weaver-backend`), **pas `systemctl stop`** qui escalade au
+  SIGKILL après son délai ; si le TERM ne rend pas la main en une minute, c'est
+  toi qui décides du SIGKILL (comme hier). Puis la suite dans la section
+  « Pour Lucie » de codeparsers.
 - **Tes sessions d'ici marchent** : ton hôte a été redémarré à 0 h 26 sur un
   binaire avec la montre, les défenses contre la boucle et le client qui se
   rétablit (md5 3e95f0302023) ; sain à 1 h 01. **Un geste de toi au réveil** :
