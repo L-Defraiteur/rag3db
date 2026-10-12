@@ -1419,3 +1419,46 @@ où elle vit.
   n'attend plus que les pushes rendent (l'arbre principal a déjà passé ses
   scripts). LlmNode.tokens sur master (proto, `7627fa92d`) ; la recherche
   passe au témoin qwen3-1.7b et à la mesure des jetons.
+- **7 h 35 – 8 h 05, matin**. Le tiers non détaillé d'« ingérer » est nommé
+  (proto, `cc74fafb2` : les symboles et les phases du drain ; et dans la fin
+  d'instantané « planifier » = `MATCH (n:Scope) WHERE source = … AND
+  file_path = …` sans index, un balayage de Scope qui grandit avec la base,
+  le suspect des 546 ms) : forme demandée, le nœud File par sa clé puis ses
+  scopes par l'arête (un Hop de l'IR), pas un IN. **La réindexation par lot
+  est sur master** (proto, `c391e8387` : reingest_files un lot un passage ;
+  ReindexFileNode par lots sous un budget de tenue de 400 ms d'après le coût
+  du lot précédent, premier lot de 4, plafond 32, un lot en échec refait
+  fichier par fichier ; la fin d'un fichier passe par l'arête
+  SnapshotConfig.fineScopeVia déclarée au gabarit, File → DEFINED_IN) ;
+  codeparsers lance le quatrième rejeu, un seul pour les deux. Tension
+  relevée : à 102 k morceaux un fichier coûte ~2 s, les lots retombent à un
+  → **conception ouverte chez l'arbre principal : des lectures qui
+  n'attendent pas le verrou de l'écrivain** (une connexion de lecture par
+  appel d'outil ou un pool hors du verrou du catalogue, l'instantané du
+  moteur avec le cœur, la montre avec le proto ; témoin : usages pendant une
+  réindexation de 2 s répond en < 100 ms avec l'état d'avant), après les
+  verrous du chemin. **La portée est fermée** (`1d28495b4` search_code par
+  l'index et par le balayage, `8e57f95bb` la page 04) ; **les verrous du
+  chemin approuvés** (le départ dans l'ordre des lignes, dépliés par les
+  CONSUMES bornés par depth, site, fichier:ligne, condition enveloppante ;
+  les appelants avec l'approximation RAII dite ; troncature dite avec son
+  compte) : deux témoins verts sur le petit moteur, la sonde sur le vrai
+  avant le push. **Le premier flux est complet** (recherche, `6945cd260` :
+  qwen3-1.7b sur le processeur, premier jeton chez le consommateur à 210 ms,
+  822 ns par jeton de canal contre 35,6 ms par jeton du modèle, texte =
+  concaténation exacte) ; **le lancement en fond** (la décision de Lucie du
+  11 au matin) : page de la recherche sur master (`1e1e026c4`,
+  `12-octobre-2026-recherche/03-lancer-en-fond.md` : DataflowRuntime::spawn,
+  run enfant à son fil, Detached par défaut, la fin dans la boîte de
+  l'appelant signée « outil #h », registre des runs vivants = --qui du
+  graphe, bornes dites) ; mon accord avec les quatre réponses (concurrent
+  pour tout run en fond, suivies() fondu dans le registre avec un kind sous
+  l'accord de l'arbre principal, refuser au-delà du nombre, la fin en
+  mémoire pour ce lot) ; le code attend l'accord du proto, qui fait le verbe
+  spawn, AgentNode avec parent et la boîte par nom de l'annuaire. G : le lot
+  C a rougi sous Windows sur le jeton par /dev/urandom (corrigé par
+  getrandom, `ceaaf8795`, run relancé), macOS vert sur tout le cycle. **Pour
+  Lucie** : le compte gh actif du poste est le compte pro
+  (luciedefraiteur-sairen) ; G ne l'a pas changé et passe GH_TOKEN de
+  L-Defraiteur à toutes ses commandes, l'acteur des runs à vérifier ; si
+  c'est elle pour son travail, rien à faire, sinon à remettre.

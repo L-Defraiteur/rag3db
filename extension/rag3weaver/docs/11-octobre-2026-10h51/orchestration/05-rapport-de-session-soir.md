@@ -140,6 +140,9 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
   cause chez l'arbre principal) ; (2) la forme en deux temps d'usages
   (page 06 de F) si le lot des fils ne suffit pas : décidée « oui si > 100 ms »,
   renversable.
+- **Le compte gh actif du poste est le compte pro** (luciedefraiteur-sairen) :
+  aucune session ne l'a changé, G passe le jeton de L-Defraiteur à ses
+  commandes ; si c'est toi pour ton travail, rien à faire, sinon à remettre.
 - La séance npm (quatre OTP) quand tu le voudras ; le ménage des branches
   distantes (liste à produire).
 - Tout le reste est dans le fil de nuit de `01-les-decisions-du-matin.md`
