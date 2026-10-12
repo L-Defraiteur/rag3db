@@ -442,7 +442,11 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
             // Sous Windows (lot C, 12 octobre 2026) : Ctrl-C, Ctrl-Break et la
             // fermeture de la console valent l'arrêt propre. Un hôte lancé par
             // un client est détaché (sans console) : il s'arrête par
-            // `POST /arret` et le jeton, comme d'ici.
+            // `POST /arret` et le jeton, comme d'ici. À la fermeture de la
+            // console, Windows ne laisse que quelques secondes après ce
+            // gestionnaire : un arrêt propre plus long est coupé, et le rejeu
+            // du journal du moteur fait le reste à l'ouverture suivante (seul
+            // l'hôte lancé à la main, dans une console, est concerné).
             #[cfg(windows)]
             {
                 use tokio::signal::windows::{ctrl_break, ctrl_c, ctrl_close};
