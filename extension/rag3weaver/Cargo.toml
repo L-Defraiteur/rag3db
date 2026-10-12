@@ -147,6 +147,11 @@ tiny_http = { version = "0.12", optional = true }
 # puisse signer un JWT RS256 sans ajouter le moindre crate.
 ring = { version = "0.17", optional = true }
 base64 = { version = "0.22", optional = true }
+# Le jeton local de l'hôte du démon : l'aléa du système, partout (getrandom
+# sous Linux, getentropy sous macOS, ProcessPrng sous Windows) ; déjà dans
+# l'arbre par ring et rand. Vu au cycle du démon sous Windows, 12 octobre 2026 :
+# /dev/urandom n'y existe pas, l'hôte refusait de démarrer.
+getrandom = { version = "0.3", optional = true }
 
 # PostgreSQL/Supabase backend (feature flag)
 tokio-postgres = { version = "0.7", optional = true }
@@ -223,7 +228,7 @@ vulkan = ["burn/vulkan"]
 # Au-delà des tests, c'est la première brique de ce qu'un terminal interrogera,
 # et de « savoir démarrer un serveur » — ce dont la boucle étrange aura besoin
 # pour qu'un agent monte un backend (doc 08).
-daemon = ["dep:tiny_http", "dep:ureq", "dep:base64"]
+daemon = ["dep:tiny_http", "dep:ureq", "dep:base64", "dep:getrandom"]
 # LLM distant derrière un endpoint compatible OpenAI : OpenAI, Vertex AI
 # (.../endpoints/openapi), Gemini AI Studio (/v1beta/openai), Mistral,
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
