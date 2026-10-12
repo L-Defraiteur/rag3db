@@ -136,10 +136,12 @@ struct Suivie {
     regard_err: std::sync::Mutex<u64>,
 }
 
-fn suivies() -> &'static std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<Suivie>>> {
-    static S: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<Suivie>>>> =
-        std::sync::OnceLock::new();
-    S.get_or_init(Default::default)
+/// Une commande en fond suivie, par sa poignée, dans le registre des runs
+/// vivants du processus (`dataflow::background`, page
+/// 12-octobre-2026-recherche/03 §2.4 : un seul `--qui` pour les commandes et
+/// les graphes).
+fn suivie(poignee: &str) -> Option<Arc<Suivie>> {
+    crate::dataflow::background::registry().payload::<Suivie>(poignee)
 }
 
 /// La poignée d'une commande en fond : celle de l'appel d'outil quand la
@@ -152,8 +154,7 @@ fn poignee(ctx: &NodeContext) -> String {
     let Some(appel) = ctx.tool_handle().map(|h| h.trim_start_matches('#').to_string()).filter(|h| !h.is_empty()) else {
         return format!("cmd-{}", suivant());
     };
-    let prises = suivies().lock().unwrap_or_else(|p| p.into_inner());
-    if prises.contains_key(&appel) {
+    if crate::dataflow::background::registry().contains(&appel) {
         format!("{appel}-{}", suivant())
     } else {
         appel
@@ -403,7 +404,25 @@ impl RunCommandNode {
             chemin(&en_fond.journal_stderr),
         );
         let suivie = Arc::new(Suivie { en_fond, ligne: c.lisible(), regard_out: Default::default(), regard_err: Default::default() });
-        suivies().lock().unwrap_or_else(|p| p.into_inner()).insert(poignee, suivie.clone());
+        {
+            use crate::dataflow::background::{registry, Entry, Kind};
+            let (vit, tue) = (suivie.clone(), suivie.clone());
+            let parent = Some(ctx.run_id().to_string()).filter(|r| !r.is_empty());
+            registry().insert(
+                &poignee,
+                Entry::new(
+                    Kind::Command,
+                    format!("#{poignee}"),
+                    parent,
+                    ctx.service::<String>("agent_inbox").cloned(),
+                    "run".to_string(),
+                    suivie.ligne.chars().take(120).collect(),
+                    Box::new(move || vit.en_fond.fin().is_none()),
+                    Box::new(move || tue.en_fond.tuer(GRACE_EN_FIN_DE_RUN)),
+                    Some(suivie.clone()),
+                ),
+            );
+        }
         // La mort, confiée à la portée du run. **Après** le registre, et en
         // tenant la commande elle-même : une portée déjà vidée (le run a fini
         // pendant que la commande démarrait) joue la fermeture ici, tout de
@@ -423,8 +442,7 @@ const GRACE_EN_FIN_DE_RUN: std::time::Duration = std::time::Duration::from_secs(
 
 /// **Tuer une commande en fond** et tout son groupe (la fin du run).
 pub fn tuer_en_fond(poignee: &str, grace: std::time::Duration) -> bool {
-    let suivie = suivies().lock().unwrap_or_else(|p| p.into_inner()).get(poignee.trim_start_matches('#')).cloned();
-    match suivie {
+    match suivie(poignee) {
         Some(s) => {
             s.en_fond.tuer(grace);
             true
@@ -435,7 +453,7 @@ pub fn tuer_en_fond(poignee: &str, grace: std::time::Duration) -> bool {
 
 /// La fin d'une commande en fond, si elle est finie.
 pub fn fin_en_fond(poignee: &str) -> Option<Fin> {
-    suivies().lock().unwrap_or_else(|p| p.into_inner()).get(poignee.trim_start_matches('#')).and_then(|s| s.en_fond.fin())
+    suivie(poignee).and_then(|s| s.en_fond.fin())
 }
 
 fn rendre(ctx: &mut NodeContext, texte: String) -> Result<(), String> {
@@ -583,7 +601,7 @@ impl Node for TailNode {
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let poignee = self.cible.trim().trim_start_matches('#').to_string();
-        let suivie = suivies().lock().unwrap_or_else(|p| p.into_inner()).get(&poignee).cloned();
+        let suivie = suivie(&poignee);
         let (chemin, etat) = match &suivie {
             Some(s) => {
                 let p = if self.erreurs { &s.en_fond.journal_stderr } else { &s.en_fond.journal_stdout };

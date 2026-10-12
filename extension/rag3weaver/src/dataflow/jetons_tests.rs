@@ -148,14 +148,14 @@ fn measure_token_overhead() {
 }
 
 #[cfg(feature = "openai-llm")]
-mod local {
+pub(crate) mod local {
     use super::*;
     use std::io::{Read, Write};
     use std::process::{Child, Command, Stdio};
 
     /// Le serveur lancé par le témoin, arrêté par lui (son propre pid, jamais
     /// par nom), même sur un échec.
-    struct Server(Child);
+    pub(crate) struct Server(Child);
 
     impl Drop for Server {
         fn drop(&mut self) {
@@ -173,6 +173,33 @@ mod local {
         let mut r = String::new();
         let _ = s.read_to_string(&mut r);
         r.starts_with("HTTP/1.1 200") || r.starts_with("HTTP/1.0 200")
+    }
+
+    /// **Lance `llama-server`** avec qwen3-1.7b (ou `RAG3WEAVER_TEMOIN_MODELE`),
+    /// sur le processeur, et l'attend : le serveur, arrêté à sa chute, et son
+    /// port. Partagé par les témoins à vrai modèle.
+    pub(crate) fn start_llama() -> (Server, u16) {
+        let model = std::env::var("RAG3WEAVER_TEMOIN_MODELE").unwrap_or_else(|_| {
+            format!("{}/models/qwen3-1.7b/Qwen3-1.7B-Q8_0.gguf", std::env::var("HOME").unwrap())
+        });
+        assert!(std::path::Path::new(&model).exists(), "pas de modèle à {model}");
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let log = std::env::temp_dir().join(format!("temoin-llama-{port}.log"));
+        let child = Command::new("llama-server")
+            .args(["-m", &model, "--host", "127.0.0.1", "--port", &port.to_string()])
+            .args(["-c", "4096", "-ngl", "0", "-t", "6", "--reasoning-budget", "0"])
+            .stdout(Stdio::null())
+            .stderr(std::fs::File::create(&log).unwrap())
+            .spawn()
+            .expect("llama-server introuvable");
+        let server = Server(child);
+        let depart = Instant::now();
+        while !health(port) {
+            assert!(depart.elapsed() < Duration::from_secs(180), "llama-server pas prêt en 180 s ({})", log.display());
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        eprintln!("[témoin] llama-server prêt en {:?}", depart.elapsed());
+        (server, port)
     }
 
     /// Note l'instant du premier fragment reçu du serveur, avant le graphe.
@@ -224,26 +251,7 @@ mod local {
     #[test]
     #[ignore = "lance llama-server et qwen3-1.7b"]
     fn local_model_tokens_reach_the_consumer_before_the_end() {
-        let model = std::env::var("RAG3WEAVER_TEMOIN_MODELE").unwrap_or_else(|_| {
-            format!("{}/models/qwen3-1.7b/Qwen3-1.7B-Q8_0.gguf", std::env::var("HOME").unwrap())
-        });
-        assert!(std::path::Path::new(&model).exists(), "pas de modèle à {model}");
-        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-        let log = std::env::temp_dir().join(format!("temoin-llama-{port}.log"));
-        let child = Command::new("llama-server")
-            .args(["-m", &model, "--host", "127.0.0.1", "--port", &port.to_string()])
-            .args(["-c", "4096", "-ngl", "0", "-t", "6", "--reasoning-budget", "0"])
-            .stdout(Stdio::null())
-            .stderr(std::fs::File::create(&log).unwrap())
-            .spawn()
-            .expect("llama-server introuvable");
-        let _server = Server(child);
-        let depart = Instant::now();
-        while !health(port) {
-            assert!(depart.elapsed() < Duration::from_secs(180), "llama-server pas prêt en 180 s ({})", log.display());
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        eprintln!("[témoin] llama-server prêt en {:?}", depart.elapsed());
+        let (_server, port) = start_llama();
 
         let first = Arc::new(Mutex::new(None));
         let llm: Arc<dyn Llm> = Arc::new(Timed {

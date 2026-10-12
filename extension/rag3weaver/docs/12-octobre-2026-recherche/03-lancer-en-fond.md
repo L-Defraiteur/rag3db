@@ -255,3 +255,72 @@ relecture, comme `src/dataflow/` passe par la sienne.
    et sa cause) dit qu'elle a eu lieu. La forme durable est un lot suivant
    possible : la fin notée dans la base, relue au retour de l'appelant. La
    boîte durable entre processus reste hors du chantier de la page 03.
+
+## 8. Le lot A : fait (12 octobre, matin)
+
+**Le contrat avec le proto** est fixé après sa relecture (ses deux
+objections sont retenues) :
+- **La fin va à un nom.** `Spawn.caller` est le nom de l'appelant dans
+  l'annuaire, ou un run. À la fin, l'exécuteur résout le nom en son run
+  courant (`Directory::resolve`, service `directory`). Quand la boîte par
+  nom du proto sera là, il appellera
+  `Directory::deliver(bus, from, to, content) -> ToRun(run) | Held{name}`.
+  D'ici là, sans annuaire ni nom connu, la fin va à la boîte du run nommé.
+- **L'enfant n'a jamais plus que son appelant.** Il n'y a pas de champ
+  `permissions` : les services de politique passent tels quels. `spawn`
+  n'ajoute que `parent_run`, `tool_handle` et `caller`, et n'en remplace
+  aucun.
+- **On n'annule que ses propres enfants** :
+  `Registry::cancel(run, cause, by)` refuse, et le dit, si `by` n'est ni le
+  parent ni l'appelant. Le verbe `cancel(#h)` côté modèle est chez le proto.
+
+**Ce qui est posé** (`src/dataflow/background.rs`) :
+- `DataflowRuntime::spawn`, `Spawn`, `Tie` (`Detached` ou
+  `WithParent{cancel, scope}`, construit par `Tie::with_parent_of(ctx)`),
+  `Limits` et `Launched` ;
+- le registre (`Registry` : `alive`, `qui`, `cancel`, `cancel_all`,
+  `alive_of`), propre au processus ou passé en service (`background`) ;
+- `RunFinished.cause` ;
+- **`suivies()` fondu dedans**, avec l'accord de l'arbre principal : une
+  commande en fond est une entrée `Kind::Command`, et sa poignée, sa fin et
+  `tuer_en_fond` sont inchangées ;
+- le message est posé sur l'entrée libre `message`, sinon sur la seule
+  entrée libre, sinon sur la seule entrée libre requise ; au-delà, c'est un
+  refus nommé.
+
+**Les témoins** (`background/tests.rs`) :
+- les sept de l'exécuteur (§5, 1 à 7) et le refus d'un message sans entrée
+  claire ;
+- ils étaient rouges avant ce lot, au sens où l'API n'existait pas. Le
+  témoin 3 (l'enfant survit) et le témoin 4 (l'enfant meurt avec son
+  parent) attendent l'inverse l'un de l'autre : une confusion des deux
+  modes en fait tomber un.
+
+**Le vrai modèle** (témoin 8, `#[ignore]`, le harnais `llama-server` de
+`jetons_tests.rs`, désormais partagé par `start_llama()`). Un `LlmNode` est
+lancé en fond avec « résume en une phrase… ». La référence est rendue en
+157 µs ; la fin, lue dans la boîte de l'appelant à 1,48 s, porte : « La
+Loire est le fleuve le plus long de France, qui commence au mont
+Gerbier-de-Jonc et se jette dans l'Atlantique. »
+
+**La mesure d'un lancement** (`measure_a_launch`, 1 000 lancements d'un
+graphe d'un nœud, en debug) :
+
+| | médiane | 99e centile |
+|---|---|---|
+| référence rendue | 34 µs | 79 µs |
+| fin lue dans la boîte de l'appelant | 0,29 ms | 0,50 ms |
+
+Une première passe donnait 5,1 ms pour la fin : c'était la boucle d'attente
+du témoin, qui dormait 5 ms. Elle dort désormais 100 µs. Un lancement coûte
+moins d'un dixième de milliseconde, et un aller-retour complet (un fil, un
+runtime, l'exécuteur concurrent, la fin dans la boîte) moins d'une
+milliseconde : lancer en fond ne pèse rien devant le travail lancé.
+
+**Le reste** :
+- `SpawnNode`, le verbe posé comme nœud (lot C) ;
+- la boîte qui devient un flux ouvert, le second temps (§2.7) ;
+- `alive()` dans `daemon_status` et l'outil MCP, ainsi que `cancel_all` à
+  l'arrêt du démon : chez l'arbre principal, interface proposée ;
+- le verbe `spawn` et le verbe `cancel` dans la boucle : chez le proto, sur
+  cette primitive.

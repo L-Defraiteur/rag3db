@@ -197,10 +197,15 @@ impl DataflowOutput {
     }
 
     /// Les ports posés, (nœud, port), dans l'ordre : la sortie entière d'un
-    /// run se compare par eux (témoin de parité des flux non branchés).
+    /// run se compare par eux (témoin de parité des flux non branchés), et le
+    /// rendu par défaut d'un run lancé en fond les parcourt.
+    pub(crate) fn port_keys(&self) -> std::collections::BTreeSet<(String, String)> {
+        self.data.iter().flat_map(|(n, ps)| ps.keys().map(move |p| (n.clone(), p.clone()))).collect()
+    }
+
     #[cfg(test)]
     pub(super) fn ports(&self) -> std::collections::BTreeSet<(String, String)> {
-        self.data.iter().flat_map(|(n, ps)| ps.keys().map(move |p| (n.clone(), p.clone()))).collect()
+        self.port_keys()
     }
 
     /// La raison du saut de ce nœud, s'il a été sauté (branche non prise).
@@ -1176,15 +1181,21 @@ impl DataflowRuntime {
     }
 
     pub(super) fn emit_run_finished(&self, run_id: &str, ms: u64, ok: bool) {
+        self.emit_run_finished_because(run_id, ms, ok, None);
+    }
+
+    /// Le même, avec la cause d'un arrêt avant la fin (un run lancé en fond).
+    pub(super) fn emit_run_finished_because(&self, run_id: &str, ms: u64, ok: bool, cause: Option<String>) {
         self.publish(crate::events::CatalogEvent::RunFinished {
             run: run_id.to_string(),
             kind: "graph".to_string(),
             ms,
             ok,
+            cause,
         });
     }
 
-    async fn execute_inner(
+    pub(super) async fn execute_inner(
         &self,
         graph: &mut DataflowGraph,
         run_id: &str,

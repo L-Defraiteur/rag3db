@@ -1363,6 +1363,7 @@ impl<'a> Agent<'a> {
             kind: "agent".to_string(),
             ms: run_started.elapsed().as_millis() as u64,
             ok: outcome.is_ok(),
+            cause: None,
         });
         outcome
     }
