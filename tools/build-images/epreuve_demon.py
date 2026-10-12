@@ -106,9 +106,13 @@ def client(arguments, env):
     demander("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "épreuve", "version": "0"}})
     outils = [t["name"] for t in demander("tools/list", {}).get("result", {}).get("tools", [])]
     # Le client démarre avec `daemon_status` seul (« connexion à l'hôte en
-    # cours ») et s'attache par un fil : on redemande l'état tant qu'il dit
-    # « absent », 90 s au plus (sous Windows, lancer l'hôte et ouvrir le
-    # backend passe la seconde ; vu le 12 octobre, run 38226368160).
+    # cours ») et s'attache par un fil, qui réessaie toutes les 10 s : on
+    # redemande l'état tant qu'il ne dit pas « running », 90 s au plus. Sous
+    # Windows, lancer l'hôte et ouvrir le backend passe la seconde (run
+    # 38226368160), et le verrou de la base que l'hôte précédent vient de
+    # fermer peut tarder à être rendu par le système (run 38232395492 : « held
+    # by another writer process », l'hôte arrêté une seconde avant). Un
+    # défaut qui dure passe les 90 s et reste un échec.
     fin = time.time() + 90
     while True:
         r = demander("tools/call", {"name": "daemon_status", "arguments": {}})
@@ -117,11 +121,11 @@ def client(arguments, env):
             etat = json.loads(texte)
         except ValueError:
             etat = {"brut": texte}
-        if etat.get("state") != "absent" or time.time() > fin:
+        if etat.get("state") == "running" or time.time() > fin:
             break
         time.sleep(1)
-    if etat.get("state") != "running":
-        print(f"       daemon_status : {etat.get('state')} — {etat.get('reason')}")
+    print(f"       daemon_status : {etat.get('state')} après {90 - max(0, round(fin - time.time()))} s"
+          + ("" if etat.get("state") == "running" else f" — {etat.get('reason')}"))
     p.stdin.close()
     # Le client fini, ses tuyaux doivent se fermer : un hôte détaché qui en
     # hériterait les garderait ouverts, et l'agent attendrait sans fin (vu sous
