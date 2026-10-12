@@ -1162,3 +1162,33 @@ où elle vit.
   G passe à B1-B3, C, les archives alpha.3 sans publier ; sa recette luciepc
   passe au RUNPATH vers l'identifiant et l'ExecStartPre au premier rebâti
   de hotfixs.
+- **3 h 25 – 3 h 55, nuit : le correctif du P1 est sur master et la lib le
+  porte.** Cœur : `e6f626df4` (`f6179ade0` le correctif de
+  StringColumn::scanFiltered et la borne par forme de ListColumn ; le témoin
+  du banc `Windows/StringScanFiltered.*`, réécrit sur la recette minimale du
+  cœur : 6 000 lignes à chaînes de 200 octets, cinq segments de ~1 250 lignes
+  au point de reprise, une seule ligne supprimée dans la fenêtre → 801/886/800
+  lignes fausses sans correctif, 0 avec) ; tickets du SIGSEGV et des morceaux
+  sans texte fermés dans le lot ; banc 8 rouges attendus / 264 verts. **Lib
+  d'ici rebâtie à 3 h 49** sur e6f626df4 (arbre principal : ABI inchangée,
+  4 757 symboles ; publiée au magasin et posée en courant, identifiant
+  `rag3db-build-f6179ade0…-Release-p12-v11-g17-s18…` ; md5 librag3db
+  c2ddbb67…, libvector 545d634c…) ; les passes en cours gardent leur
+  identifiant. Suite dans l'ordre : la mémoire bâtit le binaire de Lucie avec
+  RUNPATH vers cet identifiant et met à jour la commande qui l'attend ; F
+  recompte sa copie scellée (0 vide attendu) ; l'arbre principal remet la
+  réécriture des vides en marche (une ligne) ; hotfixs rebâtit la lib de
+  luciepc ≥ e6f626df4 après l'arrêt de l'hôte par Lucie, G son binaire prêt
+  dessus ; codeparsers l'écrit dans « Pour Lucie » (aucune réindexation de
+  luciepc avant). Banc : le témoin rouge du DROP/CREATE de l'index vectoriel
+  sous des recherches (`6ae69c6b1`, known_red, « vector::reserve » en plus,
+  ticket à hotfixs) et la version courte de la réécriture des chaînes
+  (`79431d9c4`, vert, 1,5-1,9 s). Recherche : sa part du premier flux
+  (`38a95fa9b` : flux branchés seuls, flux non branché jeté sans fusion,
+  parité par construction dans le témoin) ; le proto porte `LlmNode.tokens`.
+  F : la forme en deux temps écrite (branche saut-en-deux-temps, capacité
+  `two_step_hops` vraie pour rag3db, fausse pour PostgreSQL) : usages 360 →
+  218-241 ms, même rendu, encore > 100 ms (le balayage sous masque reste,
+  lot suivant du cœur, page 12 §10 : lecture par décalages sous un petit
+  masque par `lookupMultiple`, décidée sur la cardinalité exacte du masque à
+  l'exécution) ; F remesure sur la lib corrigée avant de fusionner.
