@@ -4296,10 +4296,15 @@ mod tests {
             let mut cat = backend.catalog.lock().unwrap();
             crate::code_sync::remove_file(&mut cat, source.as_ref(), retire, crate::disponibilite::Disponibilites::TOUT).unwrap();
         }
-        eprintln!("[mesure] retirer {retire} : {:?}", t.elapsed());
+        let retrait = t.elapsed();
+        eprintln!("[mesure] retirer {retire} : {retrait:?}");
         for (etape, duree, fois) in crate::ingest_profile::take() {
             eprintln!("[mesure]   {etape} : {duree:?} ({fois} fois)");
         }
+        // Le seul seuil de la mesure, large : retirer ce fichier (45 morceaux)
+        // prenait 112 s quand chaque morceau supprimé portait encore son
+        // vecteur indexé, 0,3 s quand on le vide d'abord (12 octobre 2026).
+        assert!(retrait < std::time::Duration::from_secs(20), "retirer {retire} : {retrait:?}");
     }
 
     /// Une montre ne surveille qu'une copie de travail : sur un `snapshot`

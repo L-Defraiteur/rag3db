@@ -188,3 +188,65 @@ diffère.
   fichiers-là seulement ; puis un **recompte** : autant de lignes `File` que
   de fichiers dans B, aucun doublon de chemin relatif, et les usages d'un
   fichier supprimé dans B partis.
+
+**12 octobre, nuit** : B4 est sur master (`6e3561268`), et l'identité de `File` est relative à la
+racine. `indexed_files` suit cette règle et ne retranche plus de racine. Le témoin
+`a_copied_base_reconciles_by_relative_path` est gardé ; le recompte est le témoin
+`e2e_base_par_arbre` de G.
+
+## 7. Où passaient les « 6 s » (12 octobre 2026, la nuit)
+
+Codeparsers a mesuré de bout en bout, sur une base entière (102 469 morceaux, hôte release) : un
+renommage sur disque devient visible à `usages` en 7,26 s, dont 5,7 s pendant lesquelles un appel
+attend le catalogue tenu par la réindexation d'**un** fichier. La mesure par phase, ici :
+
+- **Le banc.** `backend::tests::measure_one_file_reindexing` (`#[ignore]`) indexe `src/` (180
+  fichiers, 15 631 morceaux, embarqueur `hashembedder`). Il réindexe ensuite cinq fois
+  `arbre/scope.rs`, dont un scope change à chaque fois, puis retire `arbre/meter.rs` (32 scopes,
+  45 morceaux). Il se joue avec `RAG3WEAVER_INGEST_PROFILE=1 … -- --ignored --nocapture`. Les
+  quatre premières passes ont tourné sur la lib de 2 h 34 ; la passe finale sur la lib courante du
+  magasin (`f6179ade0`, md5 de la lib et de l'extension vector vérifiés contre le magasin).
+- **Ce qui dominait** : une seule instruction, la suppression des morceaux du scope changé,
+  `UNWIND $uuids AS uuid MATCH (c:Scope_Chunk {_parent_uuid: uuid}) DETACH DELETE c`. Une sonde
+  jetable a chronométré chaque étape de `DeleteRecordNode` :
+
+  | étape | avant | après |
+  |---|---|---|
+  | lire les morceaux d'un scope (par `_parent_uuid` ou par l'arête) | 2 à 8 ms | — |
+  | supprimer les morceaux d'un scope (1 morceau) | 2,1 à 2,9 s | ~20 ms (vidage compris) |
+  | supprimer les morceaux de 32 scopes (45 morceaux) | 96 à 114 s | 180 ms |
+  | relire et supprimer le parent, désindexer le plein texte | < 10 ms | < 10 ms |
+  | **réindexer un fichier**, de bout en bout | **2,5 à 3,9 s** | **0,56 à 0,68 s** |
+  | **retirer un fichier** de 32 scopes | **96 à 114 s** | **0,40 s** |
+
+- **La cause** est dans le moteur : supprimer une ligne qui porte encore un vecteur sous index
+  HNSW coûte environ 2,5 s par ligne, et plus d'un essai à l'autre. Si le vecteur est remis à
+  NULL d'abord, la suppression prend quelques millisecondes. Ticket
+  `docs/tickets/2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md`, pour hotfixs.
+- **Le contournement**, rag3db seulement, sur le modèle de celui de `write_vectors` :
+  - `SchemaDialect::vector_columns_to_clear` décrit la table de morceaux ;
+  - `clear_vector_by_parent` remet chaque colonne vecteur à NULL sur les morceaux des parents
+    cités, juste avant le `DETACH DELETE` ;
+  - c'est fait dans `DeleteRecordNode` et dans `RechunkDeleteNode` ;
+  - les lignes partent aussitôt, donc ce qu'un `SET` à NULL par lot ferait perdre à l'index ne
+    concerne qu'elles ; `e2e_invariant_des_vecteurs` le vérifie.
+- **Ce qui reste**, par réindexation (moyenne de cinq) :
+
+  | phase | durée |
+  |---|---|
+  | ingérer | 471 ms, dont 249 ms pour File, Scope et Library, et 193 ms pour les symboles et rendez-vous |
+  | fin d'instantané, vidage et suppression compris | 113 ms |
+  | résoudre les symboles | 29 ms |
+  | oublier les arêtes du fichier | 21 ms |
+  | analyser le fichier | 9 ms |
+  | lister le projet | < 1 ms |
+
+  La cible « sous la seconde » est tenue sur cet index. Sur la base de Lucie, sept fois plus
+  grande, c'est codeparsers qui le dira, en rejouant son renommage sur un binaire bâti avec ce
+  lot.
+- **La ligne `[montre]`.** Chaque fichier que la réaction réindexe écrit, dans le journal de
+  l'hôte, le verrou attendu, le verrou tenu et ces phases, sans variable d'environnement. Le
+  journal suffit donc à répéter ce partage sur n'importe quelle base.
+- **À part** : à l'index initial, 309 s sur 329 passaient à écrire 15 631 vecteurs (`write_ms`
+  du nœud `embed`), environ 20 ms par vecteur. C'est dans le même ticket ; le contournement ne
+  le change pas.

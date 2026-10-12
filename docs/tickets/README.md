@@ -30,13 +30,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (27)
+### Ouverts — moteur (28)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | ouvert — contourné dans rag3weaver | lenteur sévère | oui, avant le contournement | oui (`record_nodes.rs`, `dialect.rs`) |
 | [Une recherche vectorielle pendant un DROP/CREATE de l'index rend une exception brute de la bibliothèque standard](2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute.md) | ouvert — pour hotfixs | erreur non nommée | oui (rattrapage d'embarquement de rag3weaver) | oui |
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |
 | [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |

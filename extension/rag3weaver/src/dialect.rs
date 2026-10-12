@@ -1017,6 +1017,35 @@ pub trait SchemaDialect: Send + Sync {
     /// ligne redevient une dette honnête. Même contournement.
     fn embed_clear(&self, table: &str, embedding_col: &str, marker: &str) -> String;
 
+    /// **Les colonnes à vider avant de supprimer des morceaux** — ou `None`
+    /// si ce moteur supprime une ligne indexée sans surcoût. La requête rend,
+    /// par ligne, le nom d'une colonne de la table puis son type ; les
+    /// vecteurs sont les tableaux de taille fixe (`FLOAT[768]`).
+    ///
+    /// CONTOURNEMENT D'UN DÉFAUT DU MOTEUR, à enlever quand il sera corrigé
+    /// (ticket `docs/tickets/2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md`),
+    /// mesuré le 12 octobre 2026 : dans rag3db, `DETACH DELETE` de
+    /// morceaux qui portent encore un vecteur sous index HNSW coûte environ
+    /// 2,5 s **par ligne** sur un index de 15 631 morceaux. Retirer un fichier
+    /// de 45 morceaux prenait 112 s. Remis à NULL d'abord, la même
+    /// suppression prend 259 ms, et réindexer un fichier passe de 3 s à
+    /// moins d'une. PostgreSQL n'a pas ce défaut.
+    fn vector_columns_to_clear(&self, _table: &str) -> Option<String> {
+        None
+    }
+
+    /// Remet à NULL `column` sur les morceaux des parents cités (`$uuids`).
+    /// Même contournement ; appelé seulement quand
+    /// [`Self::vector_columns_to_clear`] rend une requête.
+    fn clear_vector_by_parent(&self, table: &str, column: &str) -> String {
+        format!(
+            "UNWIND $uuids AS uuid MATCH (c:{} {{{}: uuid}}) SET c.{} = NULL",
+            self.quote(table),
+            self.quote("_parent_uuid"),
+            self.quote(column)
+        )
+    }
+
     /// SET le marqueur dense et rend item.uuid + décalage de ligne (pour le
     /// handle sparse).
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String;
@@ -2131,6 +2160,10 @@ impl SchemaDialect for Rag3dbDialect {
             self.quote(embedding_col),
             self.quote(marker)
         )
+    }
+
+    fn vector_columns_to_clear(&self, table: &str) -> Option<String> {
+        Some(format!("CALL table_info('{}') RETURN name, type", table.replace('\'', "")))
     }
 
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
@@ -3536,6 +3569,21 @@ impl SchemaDialect for PostgresDialect {
 
 #[cfg(test)]
 mod tests {
+    /// Le contournement de la suppression : rag3db décrit la table et vide
+    /// une colonne par parent ; PostgreSQL n'en a pas besoin.
+    #[test]
+    fn rag3db_clears_the_vectors_of_chunks_before_deleting_them() {
+        let d = super::Rag3dbDialect;
+        assert_eq!(
+            super::SchemaDialect::vector_columns_to_clear(&d, "Scope_Chunk").as_deref(),
+            Some("CALL table_info('Scope_Chunk') RETURN name, type")
+        );
+        assert_eq!(
+            super::SchemaDialect::clear_vector_by_parent(&d, "Scope_Chunk", "embedding__hashembedder"),
+            "UNWIND $uuids AS uuid MATCH (c:`Scope_Chunk` {`_parent_uuid`: uuid}) SET c.`embedding__hashembedder` = NULL"
+        );
+    }
+
     use super::*;
 
     /// **Les deux COPY citent leur chemin** par `cypher_path_literal` (lot B2,
