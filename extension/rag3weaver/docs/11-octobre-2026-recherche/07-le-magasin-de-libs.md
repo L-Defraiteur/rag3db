@@ -251,6 +251,19 @@ bouge : un lien `courant`.**
    retirées. CHECK_FEATURES VERT 5/5 ; échantillon de sept suites qui couvrent
    les formes migrées (`LOAD EXTENSION` en ligne, manifeste JSON, formes sur
    plusieurs lignes) : 82 passés, seul le banc à services rouge, sans service.
-   Le refus de `run_e2e.sh` reste en filet pour une suite écrite à l'ancienne. **Reste à prouver** : une passe réelle
+   Le refus de `run_e2e.sh` reste en filet pour une suite écrite à l'ancienne.
+
+**Prouvé de bout en bout** (12 octobre, 02 h 34 - 03 h, sur la lib rebâtie par
+l'arbre principal sur 7b54c5f84) :
+- la lib publiée au magasin : `rag3db-build-6ffec5a82…-Release`, la section
+  lisible, `courant` posé ;
+- un backend bâti contre le dossier du magasin porte la même section
+  `.rag3db_compiled_against` ;
+- `rag3db-check-lib` dit « même bâti » (code 0), et refuse en nommant les deux
+  identifiants devant une lib d'un autre bâti (code 2) ;
+- une passe réelle sous `RAG3DB_LIB=courant`, avec le lot 3c, sur six suites :
+  82 passés.
+Reste chez G, à son rythme : sa recette de luciepc sur le magasin, et
+l'`ExecStartPre`. **Reste à prouver** : une passe réelle
    sous `RAG3DB_LIB=courant`, après le rebâti du matin (la première lib qui
    porte sa section). Les modèles MCP et la recette de G suivront, avec G.
