@@ -30,7 +30,21 @@ pub struct ReindexFileNode {
     name: String,
     /// Seulement les événements de cette montre ; vide : toutes.
     watch: String,
+    /// Au plus tant de fichiers réindexés ensemble, sous une prise du verrou.
+    files_per_batch: usize,
+    /// **Le budget de tenue d'un lot** : le lot suivant se dimensionne pour
+    /// tenir le verrou à peu près ce temps, d'après le coût par fichier du lot
+    /// précédent. Sous l'attente d'une lecture (`catalog_read`, 1 s) : les
+    /// lecteurs passent entre deux lots sans être refusés.
+    hold_ms: u64,
 }
+
+/// Le plafond par défaut de `files_per_batch`.
+pub const FILES_PER_BATCH: usize = 32;
+/// Le budget de tenue par défaut d'un lot, en millisecondes.
+pub const HOLD_MS: u64 = 400;
+/// La taille du premier lot, avant toute mesure.
+const FIRST_BATCH: usize = 4;
 
 /// Ce qui est arrivé à un chemin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,30 +209,36 @@ impl Node for ReindexFileNode {
         let mut errors = Vec::new();
         let stop = ctx.service::<Arc<std::sync::atomic::AtomicBool>>(super::REACTION_STOP_SERVICE).cloned();
         let mut interrupted = 0usize;
+        let source_id = crate::code_sync::registry_key(source.as_ref());
+        // Une indexation entière tient la source : les fichiers sont lus à
+        // leur paquet, ou repris à sa fin — on ne la double pas. Si elle démarre
+        // juste après ce regard, un fichier peut passer deux fois (ici puis à
+        // son paquet) : sans dommage, la réingestion d'un même contenu est
+        // idempotente (l'upsert inchangé est court-circuité).
+        let todo: Vec<String> = if crate::code_sync::indexing_in_progress(&source_id) {
+            // En reprise, **sans effacer le retard** : rien n'est relu ici.
+            for path in &todo {
+                crate::code_sync::note_change(&source_id, path);
+            }
+            deferred.extend(todo);
+            Vec::new()
+        } else {
+            todo.into_iter().collect()
+        };
         let total = todo.len();
-        for (rang, path) in todo.into_iter().enumerate() {
-            // **L'arrêt passe entre deux fichiers** : ce qui est fait reste, le
+        let mut faits = 0usize;
+        let plafond = self.files_per_batch.max(1);
+        let mut taille = FIRST_BATCH.min(plafond);
+        while faits < total {
+            let lot = &todo[faits..(faits + taille).min(total)];
+            // **L'arrêt passe entre deux lots** : ce qui est fait reste, le
             // reste garde son retard, et la réconciliation le reprendra.
             if stop.as_ref().is_some_and(|s| s.load(std::sync::atomic::Ordering::SeqCst)) {
-                interrupted = total - rang;
+                interrupted = total - faits;
                 break;
             }
-            let source_id = crate::code_sync::registry_key(source.as_ref());
-            // Une indexation entière tient la source : le fichier est lu à son
-            // paquet, ou repris à la fin — on ne la double pas. Si elle démarre
-            // juste après ce regard, le fichier peut passer deux fois (ici puis à
-            // son paquet) : sans dommage, la réingestion d'un même contenu est
-            // idempotente (l'upsert inchangé est court-circuité).
-            if crate::code_sync::indexing_in_progress(&source_id) {
-                // En reprise, **sans effacer le retard** : rien n'est relu ici.
-                // C'est la synchronisation qui l'effacera en relisant le fichier
-                // (à son paquet ou à la reprise).
-                crate::code_sync::note_change(&source_id, &path);
-                deferred.push(path);
-                continue;
-            }
-            // **Céder aux lecteurs** entre deux fichiers : un lecteur qui attend le
-            // catalogue passe avant le fichier suivant (au plus 100 ms d'attente,
+            // **Céder aux lecteurs** entre deux lots : un lecteur qui attend le
+            // catalogue passe avant le lot suivant (au plus 100 ms d'attente,
             // pour ne pas affamer la réaction sous des lectures continues).
             let cede = std::time::Instant::now();
             while super::catalog_read::readers_waiting(&catalog)
@@ -232,33 +252,86 @@ impl Node for ReindexFileNode {
             let tenue = std::time::Instant::now();
             // L'instant de la lecture : un changement venu après garde son retard.
             let read_at = crate::catalog::retard::now_ms();
-            let (outcome, steps) = crate::ingest_profile::record(|| match source.read(&path) {
-                Ok(Some(content)) => crate::code_tools::reingest_file(&mut cat, source.as_ref(), &path, &content)
-                    .map(|r| if r.deferred_to.is_some() { Outcome::Deferred } else { Outcome::Reindexed }),
-                Ok(None) => crate::code_sync::remove_file(
-                    &mut cat,
-                    source.as_ref(),
-                    &path,
-                    crate::disponibilite::Disponibilites::TOUT,
-                )
-                .map(|_| Outcome::Removed),
-                Err(e) => Err(e),
-            });
-            drop(cat);
-            eprintln!("{}", journal_line(&path, &outcome, waited, tenue.elapsed(), &steps));
-            if matches!(outcome, Ok(Outcome::Reindexed | Outcome::Removed)) {
-                lag.done(&cell, &path, read_at);
+            // Le disque décide, fichier par fichier : réindexer ou retirer.
+            let mut fichiers: Vec<(String, Option<String>)> = Vec::new();
+            for path in lot {
+                match source.read(path) {
+                    Ok(contenu) => fichiers.push((path.clone(), contenu)),
+                    Err(e) => {
+                        ctx.warn(&format!("ReindexFileNode : {path} : {e}"));
+                        errors.push(json!({"path": path, "error": e}));
+                    }
+                }
             }
-            match outcome {
-                Ok(Outcome::Reindexed) => reindexed.push(path),
-                Ok(Outcome::Removed) => removed.push(path),
-                Ok(Outcome::Deferred) => {
-                    crate::code_sync::note_change(&source_id, &path);
-                    deferred.push(path);
+            let (outcome, steps) = crate::ingest_profile::record(|| {
+                crate::code_sync::reingest_files(&mut cat, source.as_ref(), &fichiers, crate::disponibilite::Disponibilites::TOUT)
+            });
+            // Un lot en échec ne dit pas quel fichier : on les refait un à un
+            // (idempotent), et chacun rend son verdict.
+            let verdicts: Vec<(String, bool, Result<Outcome, String>)> = match outcome {
+                Ok(r) => {
+                    let o = if r.deferred_to.is_some() { Outcome::Deferred } else { Outcome::Reindexed };
+                    fichiers.iter().map(|(p, c)| (p.clone(), c.is_some(), Ok(o))).collect()
                 }
                 Err(e) => {
-                    ctx.warn(&format!("ReindexFileNode : {path} : {e}"));
-                    errors.push(json!({"path": path, "error": e}));
+                    ctx.warn(&format!("ReindexFileNode : le lot de {} fichier(s) a échoué ({e}) ; repris un à un", fichiers.len()));
+                    fichiers
+                        .iter()
+                        .map(|(p, c)| {
+                            let r = match c {
+                                Some(contenu) => crate::code_tools::reingest_file(&mut cat, source.as_ref(), p, contenu)
+                                    .map(|r| if r.deferred_to.is_some() { Outcome::Deferred } else { Outcome::Reindexed }),
+                                None => crate::code_sync::remove_file(&mut cat, source.as_ref(), p, crate::disponibilite::Disponibilites::TOUT)
+                                    .map(|_| Outcome::Removed),
+                            };
+                            (p.clone(), c.is_some(), r)
+                        })
+                        .collect()
+                }
+            };
+            drop(cat);
+            let tenu = tenue.elapsed();
+            faits += lot.len();
+            // Le lot suivant, à la mesure de celui-ci : tant de fichiers qu'il
+            // en tient dans le budget, entre un et le plafond.
+            let par_fichier = tenu.as_millis() as u64 / lot.len().max(1) as u64;
+            taille = (self.hold_ms / par_fichier.max(1)).clamp(1, plafond as u64) as usize;
+            let etiquette = match fichiers.as_slice() {
+                [(p, _)] => p.clone(),
+                l => format!("{} fichiers ({})", l.len(), l.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>().join(", ")),
+            };
+            let resume = if verdicts.iter().all(|(_, _, r)| r.is_ok()) {
+                Ok(if verdicts.iter().any(|(_, _, r)| matches!(r, Ok(Outcome::Deferred))) {
+                    Outcome::Deferred
+                } else if verdicts.iter().all(|(_, present, _)| !present) {
+                    Outcome::Removed
+                } else {
+                    Outcome::Reindexed
+                })
+            } else {
+                Err("au moins un fichier en échec".to_string())
+            };
+            eprintln!("{}", journal_line(&etiquette, &resume, waited, tenu, &steps));
+            for (path, present, verdict) in verdicts {
+                let verdict = match verdict {
+                    // Un supprimé retiré se dit retiré, même passé par le lot.
+                    Ok(Outcome::Reindexed) if !present => Ok(Outcome::Removed),
+                    v => v,
+                };
+                if matches!(verdict, Ok(Outcome::Reindexed | Outcome::Removed)) {
+                    lag.done(&cell, &path, read_at);
+                }
+                match verdict {
+                    Ok(Outcome::Reindexed) => reindexed.push(path),
+                    Ok(Outcome::Removed) => removed.push(path),
+                    Ok(Outcome::Deferred) => {
+                        crate::code_sync::note_change(&source_id, &path);
+                        deferred.push(path);
+                    }
+                    Err(e) => {
+                        ctx.warn(&format!("ReindexFileNode : {path} : {e}"));
+                        errors.push(json!({"path": path, "error": e}));
+                    }
                 }
             }
         }
@@ -299,7 +372,18 @@ impl NodeFactory for ReindexFileNodeFactory {
             Some(Value::String(s)) => s.clone(),
             Some(other) => return Err(format!("'watch' : une chaîne, pas {other}")),
         };
-        Ok(Box::new(ReindexFileNode { name: name.to_string(), watch }))
+        let files_per_batch = match config.get("files_per_batch") {
+            None | Some(Value::Null) => FILES_PER_BATCH,
+            Some(v) => v
+                .as_u64()
+                .filter(|n| *n > 0)
+                .ok_or_else(|| format!("'files_per_batch' : un entier positif, pas {v}"))? as usize,
+        };
+        let hold_ms = match config.get("hold_ms") {
+            None | Some(Value::Null) => HOLD_MS,
+            Some(v) => v.as_u64().filter(|n| *n > 0).ok_or_else(|| format!("'hold_ms' : un entier positif, pas {v}"))?,
+        };
+        Ok(Box::new(ReindexFileNode { name: name.to_string(), watch, files_per_batch, hold_ms }))
     }
     fn node_type(&self) -> &str {
         "ReindexFileNode"
@@ -313,15 +397,39 @@ impl NodeFactory for ReindexFileNodeFactory {
                 .into(),
             inputs: vec![PortDef::value("events", PortType::Map, false)],
             outputs: vec![PortDef::value("report", PortType::Map, true)],
-            config_params: vec![ConfigParam {
-                name: "watch".into(),
-                param_type: ConfigParamType::String,
-                required: false,
-                default: Some(json!("")),
-                description: "seulement les événements de cette montre ; vide : toutes".into(),
-                choices: None,
-                json_schema: None,
-            }],
+            config_params: vec![
+                ConfigParam {
+                    name: "watch".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(json!("")),
+                    description: "seulement les événements de cette montre ; vide : toutes".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "files_per_batch".into(),
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(json!(FILES_PER_BATCH)),
+                    description: "au plus tant de fichiers réindexés ensemble, en un passage et sous une prise \
+                                  du verrou ; les lecteurs passent entre deux lots"
+                        .into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "hold_ms".into(),
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(json!(HOLD_MS)),
+                    description: "le temps de tenue visé pour un lot : le suivant se dimensionne d'après le coût \
+                                  par fichier du précédent (au moins un fichier)"
+                        .into(),
+                    choices: None,
+                    json_schema: None,
+                },
+            ],
         }
     }
 }

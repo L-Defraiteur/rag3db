@@ -4164,6 +4164,93 @@ mod tests {
         }
     }
 
+    /// **La fin d'un fichier atteint ses scopes par l'arête** : depuis la clé
+    /// du `File`, par `DEFINED_IN`, et non en balayant `Scope` sur
+    /// `file_path` — un balayage qui grandit avec la base (546 ms pour un
+    /// fichier sur 102 469 morceaux, 12 octobre). Le plan trouve exactement les
+    /// lignes que le filtre sur les champs trouverait.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_fine_plan_reaches_the_scopes_of_a_file_by_its_edge() {
+        use crate::catalog::SnapshotFinishOptions;
+        use crate::connection::{CypherValue, QueryParam};
+        let (_dir, backend) = backend_qui_surveille();
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        let (source_id, chemin) = crate::code_tools::indexed_name(source.as_ref(), "main.rs");
+        let grain = crate::code_sync::grain_du_fichier(&source_id, &chemin);
+        let open = cat.begin_snapshot(crate::code::SCOPE, &grain, true).unwrap();
+        let plan = cat
+            .plan_snapshot_finish(crate::code::SCOPE, &grain, &open.session, SnapshotFinishOptions { allow_empty: true, force: true })
+            .unwrap();
+        cat.abort_snapshot(crate::code::SCOPE, &grain, &open.session).unwrap();
+        assert_eq!(plan.by_relation.as_deref(), Some("DEFINED_IN"), "le plan n'est pas passé par l'arête");
+        let par_champs = cat
+            .execute_raw_with_params(
+                "MATCH (n:Scope) WHERE n.source = $s AND n.file_path = $p RETURN count(n)",
+                &[QueryParam::new("s", CypherValue::String(source_id.clone())), QueryParam::new("p", CypherValue::String(chemin.clone()))],
+            )
+            .unwrap()
+            .rows[0][0]
+            .as_i64()
+            .unwrap() as usize;
+        assert!(par_champs > 0, "le fichier n'a pas de scope : le témoin ne prouverait rien");
+        assert_eq!(plan.in_scope, par_champs, "le plan par l'arête ne trouve pas les lignes du filtre");
+    }
+
+    /// **Un lot de fichiers se réindexe en un passage**, et l'index en sort
+    /// tel que des réindexations une à une l'auraient laissé : deux fichiers
+    /// modifiés (une fonction retirée, une ajoutée), un supprimé, vus ensemble.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_batch_of_files_is_reindexed_in_one_pass() {
+        use crate::connection::{CypherValue, QueryParam};
+        let (dir, backend) = backend_qui_surveille();
+        let s = dir.path().join("sources");
+        std::fs::write(s.join("a.rs"), "pub fn a1() { depart(); }\npub fn a2() { depart(); }\n").unwrap();
+        std::fs::write(s.join("b.rs"), "pub fn b1() { depart(); }\n").unwrap();
+        std::fs::write(s.join("c.rs"), "pub fn c1() { depart(); }\n").unwrap();
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        let a = "pub fn a1() { depart(); }\n";
+        let b = "pub fn b1() { depart(); }\npub fn b2() { depart(); }\n";
+        std::fs::write(s.join("a.rs"), a).unwrap();
+        std::fs::write(s.join("b.rs"), b).unwrap();
+        std::fs::remove_file(s.join("c.rs")).unwrap();
+        let lot = [("a.rs".to_string(), Some(a.to_string())), ("b.rs".to_string(), Some(b.to_string())), ("c.rs".to_string(), None)];
+        let rapport = crate::code_sync::reingest_files(&mut cat, source.as_ref(), &lot, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        assert!(rapport.deferred_to.is_none(), "{rapport:?}");
+        let (source_id, _) = crate::code_tools::indexed_name(source.as_ref(), "a.rs");
+        let noms = |chemin: &str| -> Vec<String> {
+            let mut v: Vec<String> = cat
+                .execute_raw_with_params(
+                    "MATCH (n:Scope) WHERE n.source = $s AND n.file_path = $p RETURN n.name",
+                    &[QueryParam::new("s", CypherValue::String(source_id.clone())), QueryParam::new("p", CypherValue::String(chemin.into()))],
+                )
+                .unwrap()
+                .rows
+                .iter()
+                .filter_map(|r| r[0].as_str().map(str::to_string))
+                .collect();
+            v.sort();
+            v
+        };
+        assert_eq!(noms("a.rs"), ["a1"], "a2 retirée");
+        assert_eq!(noms("b.rs"), ["b1", "b2"], "b2 ajoutée");
+        assert!(noms("c.rs").is_empty(), "c.rs supprimé : plus de scope");
+        let fichiers = cat
+            .execute_raw_with_params(
+                "MATCH (f:File) WHERE f.source = $s AND f.path = 'c.rs' RETURN count(f)",
+                &[QueryParam::new("s", CypherValue::String(source_id.clone()))],
+            )
+            .unwrap()
+            .rows[0][0]
+            .as_i64();
+        assert_eq!(fichiers, Some(0), "c.rs supprimé : plus de ligne File");
+        assert_eq!(rapport.scopes_deleted, 2, "a2 et c1 retirées : {rapport:?}");
+    }
+
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
     /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
     /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation

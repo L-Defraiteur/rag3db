@@ -231,6 +231,7 @@ pub fn file_config() -> EntityConfig {
         // de celle-ci (`code_sync::sync_source`) ; une édition n'en supprime
         // pas, le grain fin n'a donc pas lieu d'être ici.
         snapshot: Some(crate::config::SnapshotConfig {
+            fine_scope_via: None,
             scope: vec!["source".into()],
             fine_scope: vec![],
             max_missing_ratio: 0.5,
@@ -416,6 +417,16 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         // (`code_sync::reingest_file`) ; une synchronisation de la source
         // retire ce qui a disparu, fichiers supprimés compris.
         snapshot: Some(crate::config::SnapshotConfig {
+            // Les scopes d'un fichier, depuis la clé du fichier, par
+            // l'arête qui les y range : pas un balayage de Scope.
+            fine_scope_via: Some(crate::config::SnapshotVia {
+                entity: FILE.into(),
+                relation: "DEFINED_IN".into(),
+                fields: [("source", "source"), ("file_path", "path")]
+                    .into_iter()
+                    .map(|(a, b)| (a.to_string(), b.to_string()))
+                    .collect(),
+            }),
             scope: vec!["source".into()],
             fine_scope: vec!["file_path".into()],
             max_missing_ratio: 0.5,

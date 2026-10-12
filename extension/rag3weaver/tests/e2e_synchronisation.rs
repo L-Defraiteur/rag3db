@@ -43,6 +43,7 @@ fn fiche(snapshot: SnapshotConfig, lifecycle: Option<Lifecycle>) -> EntityConfig
 
 fn perimetre_classeur() -> SnapshotConfig {
     SnapshotConfig {
+        fine_scope_via: None,
         scope: vec!["classeur".into()],
         fine_scope: vec![],
         max_missing_ratio: 0.5,
