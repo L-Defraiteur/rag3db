@@ -146,7 +146,8 @@ protected:
 
     double createIndex(const std::string& name) {
         return timed([&] {
-            ok(stringFormat("CALL CREATE_VECTOR_INDEX('{}', '{}_index', 'vec', metric := 'cosine');",
+            ok(stringFormat(
+                "CALL CREATE_VECTOR_INDEX('{}', '{}_index', 'vec', metric := 'cosine');",
                 name, name));
         });
     }
@@ -249,7 +250,8 @@ protected:
         if (GetParam() == Build::SET_IN_BATCHES_OF_64_WITH_RELATION) {
             ok(stringFormat("CREATE NODE TABLE {}Parent(id INT64 PRIMARY KEY);", name));
             ok(stringFormat("CREATE REL TABLE {}Has(FROM {}Parent TO {});", name, name, name));
-            ok(stringFormat("UNWIND range(0, {}) AS i CREATE (:{}Parent {id: i});", rows - 1, name));
+            ok(stringFormat("UNWIND range(0, {}) AS i CREATE (:{}Parent {id: i});", rows - 1,
+                name));
             const auto path = databasePath + "." + name + ".has.csv";
             {
                 std::ofstream out(path);
@@ -431,6 +433,131 @@ TEST_F(VectorIndexCost, ProductShapeDeleteCost) {
     line(stringFormat("forme du produit : DETACH DELETE direct après un point de reprise ({} ms), "
                       "ms par essai :{}",
         checkpointMs, afterText));
+}
+
+// La pente de l'insertion à taille d'index presque constante (12 octobre 2026, après le lot de
+// l'insertion du cœur C++, 3cca0ae1e). Depuis un index vide, l'insertion coûte naturellement plus à
+// mesure que l'index grandit (la recherche s'allonge en log N) ; ici l'index est fait par CREATE
+// sur 11 000 vecteurs, et 4 096 autres lignes reçoivent leur vecteur par SET depuis NULL en 64 lots
+// de 64 : l'index grandit de 37 %, un coût en log N n'en bouge que de quelques pour cent.
+// Lu par le cœur C++ : après un CREATE, les degrés sont compacts, et les premières insertions
+// ajoutent des arêtes sans rien rétrécir ; vers 1 300 SET, les nœuds pivots atteignent leur seuil
+// et chaque insertion déclenche ses rétrécissements, un régime permanent. Trois lectures :
+// - VectorIndexInsertSlope.CostPerBatchSettles, contrôle
+//   insert-cost-without-checkpoint-stays-close : les mêmes SET avec et sans un CHECKPOINT tous
+//   les 8 lots ; à la fin, sans point de reprise, les 5 derniers lots au plus 1,2 fois ceux de la
+//   courbe avec, plus 2 ms. Rouge le 12 octobre (1,5 à 1,7 fois sur quatre passes) : sans point
+//   de reprise, après la montée des rétrécissements, le coût croît d'environ 1,1 ms par lot ;
+//   ce qui s'accumule vit en mémoire jusqu'au point de reprise (lignes mortes du CSR validé que
+//   chaque balayage de voisins relit, chaîne des versions). Une première borne, les 5 derniers
+//   lots contre les lots 25 à 30 de la même courbe, rougissait trois passes sur quatre : trop
+//   près de la croissance sous une charge qui varie.
+// - le même cas, contrôle checkpoint-keeps-insert-flat (la garde) : les mêmes SET avec un
+//   CHECKPOINT tous les 8 lots, la même borne ; la courbe y reste plate.
+// - le plateau avec points de reprise contre les premiers lots, imprimé sans contrôle : le coût des
+//   rétrécissements, côté extension.
+// Les lignes « premiers lots », « lots du plateau » (au quart) et « derniers lots » marquent les
+// phases pour le profil.
+class VectorIndexInsertSlope : public VectorIndexCost {
+protected:
+    static constexpr int64_t INDEXED = 11000;
+    // Un multiple du lot : un dernier lot partiel fausserait la moyenne des derniers.
+    static constexpr int64_t ADDED = 4096;
+    static constexpr int64_t BATCH = 64;
+    static constexpr int64_t EDGE_BATCHES = 5;
+    static constexpr int64_t PLATEAU_FROM = 25;
+    static constexpr int64_t PLATEAU_BATCHES = 6;
+    static constexpr int64_t CHECKPOINT_EVERY = 8;
+    static constexpr double SETTLE_FACTOR = 1.2;
+
+    // Les temps de chaque lot de SET depuis NULL, un CHECKPOINT tous les `checkpointEvery` lots
+    // (0 : jamais).
+    std::vector<double> fill(const std::string& name, int64_t checkpointEvery) {
+        createTable(name, INDEXED + ADDED, INDEXED);
+        const auto createMs = createIndex(name);
+        line(stringFormat("pente {} : CREATE de l'index sur {} vecteurs {} ms ({} ms par vecteur)",
+            name, INDEXED, createMs, createMs / INDEXED));
+        std::vector<double> perBatch;
+        const auto numBatches = (ADDED + BATCH - 1) / BATCH;
+        for (int64_t batch = 0; batch < numBatches; ++batch) {
+            if (batch == 0) {
+                line(stringFormat("pente {} : premiers lots", name));
+            }
+            if (batch == numBatches / 4) {
+                line(stringFormat("pente {} : lots du plateau", name));
+            }
+            if (batch == numBatches - EDGE_BATCHES) {
+                line(stringFormat("pente {} : derniers lots", name));
+            }
+            std::vector<int64_t> ids;
+            const auto first = INDEXED + batch * BATCH;
+            for (auto id = first; id < std::min(INDEXED + ADDED, first + BATCH); ++id) {
+                ids.push_back(id);
+            }
+            perBatch.push_back(setFromNull(name, ids));
+            if (checkpointEvery > 0 && (batch + 1) % checkpointEvery == 0 &&
+                batch + 1 < numBatches) {
+                line(stringFormat("pente {} : CHECKPOINT après le lot {} : {} ms", name, batch,
+                    timed([&] { ok("CHECKPOINT;"); })));
+            }
+        }
+        std::string text;
+        for (const auto ms : perBatch) {
+            text += stringFormat(" {}", static_cast<int64_t>(ms));
+        }
+        line(stringFormat("pente {} : ms par lot de {} :{}", name, BATCH, text));
+        return perBatch;
+    }
+
+    static double mean(const std::vector<double>& values, size_t from, size_t count) {
+        double sum = 0;
+        for (auto i = from; i < from + count; ++i) {
+            sum += values[i];
+        }
+        return sum / static_cast<double>(count);
+    }
+};
+
+TEST_F(VectorIndexInsertSlope, CostPerBatchSettles) {
+    const auto plain = fill("Slope", 0);
+    const auto first = mean(plain, 0, EDGE_BATCHES);
+    const auto plateau = mean(plain, PLATEAU_FROM, PLATEAU_BATCHES);
+    const auto last = mean(plain, plain.size() - EDGE_BATCHES, EDGE_BATCHES);
+    // Sans point de reprise, imprimé.
+    line(stringFormat("pente : {} premiers lots {} ms, lots {} à {} {} ms, {} derniers {} ms ; "
+                      "derniers / premiers ×{}",
+        EDGE_BATCHES, first, PLATEAU_FROM, PLATEAU_FROM + PLATEAU_BATCHES - 1, plateau,
+        EDGE_BATCHES, last, last / first));
+    const auto withCheckpoints = fill("SlopeCheckpointed", CHECKPOINT_EVERY);
+    // Le lot juste avant et juste après chaque point de reprise, imprimés.
+    for (auto batch = static_cast<size_t>(CHECKPOINT_EVERY); batch < withCheckpoints.size();
+        batch += CHECKPOINT_EVERY) {
+        line(stringFormat("pente avec CHECKPOINT tous les {} lots : lot {} avant {} ms, lot {} "
+                          "après {} ms",
+            CHECKPOINT_EVERY, batch - 1, withCheckpoints[batch - 1], batch,
+            withCheckpoints[batch]));
+    }
+    const auto checkpointedFirst = mean(withCheckpoints, 0, EDGE_BATCHES);
+    const auto checkpointedPlateau = mean(withCheckpoints, PLATEAU_FROM, PLATEAU_BATCHES);
+    const auto checkpointedLast =
+        mean(withCheckpoints, withCheckpoints.size() - EDGE_BATCHES, EDGE_BATCHES);
+    // (3) Le coût des rétrécissements, côté extension : le plateau avec points de reprise contre
+    // les premiers lots, imprimé sans contrôle.
+    line(stringFormat("pente avec CHECKPOINT : {} premiers lots {} ms, lots {} à {} {} ms, {} "
+                      "derniers {} ms ; plateau / premiers ×{}",
+        EDGE_BATCHES, checkpointedFirst, PLATEAU_FROM, PLATEAU_FROM + PLATEAU_BATCHES - 1,
+        checkpointedPlateau, EDGE_BATCHES, checkpointedLast,
+        checkpointedPlateau / checkpointedFirst));
+    // (2) La garde : avec un point de reprise tous les 8 lots, rien ne croît.
+    EXPECT_LE(checkpointedLast, SETTLE_FACTOR * checkpointedPlateau + NOISE_MS)
+        << "[check: checkpoint-keeps-insert-flat] " << checkpointedLast
+        << " ms par lot à la fin, " << checkpointedPlateau << " ms sur le plateau";
+    // (1) Ce qui s'accumule en mémoire jusqu'au point de reprise : à la fin, sans point de reprise,
+    // le coût par lot au plus 1,2 fois celui de la courbe avec points de reprise (les deux
+    // courbes de la même passe, sous la même charge du poste).
+    EXPECT_LE(last, SETTLE_FACTOR * checkpointedLast + NOISE_MS)
+        << "[check: insert-cost-without-checkpoint-stays-close] " << last
+        << " ms par lot à la fin sans point de reprise, " << checkpointedLast << " ms avec";
 }
 
 TEST_F(VectorIndexCost, MeasureDelete) {

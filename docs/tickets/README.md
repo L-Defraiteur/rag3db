@@ -30,13 +30,15 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (27)
+### Ouverts — moteur (29)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) | ouvert — pour le cœur C++ | lenteur qui s'accumule | oui (`embed_set`) | oui |
+| [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
 | [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | ouvert — contourné dans rag3weaver | lenteur sévère | oui, avant le contournement | oui (`record_nodes.rs`, `dialect.rs`) |
 | [Un index retiré ou recréé change dans le stockage pour toutes les transactions, avant sa validation](2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage.md) | ouvert (forme arrêtée avec le cœur : la rétention) | refus d'une lecture valide, travail perdu | oui | oui (refus transitoires) |
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |

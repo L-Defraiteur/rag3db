@@ -127,3 +127,9 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-ve
 VectorIndexCost.ProductShapeDeleteCost delete-close-to-set-null-then-delete
 Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64 delete-independent-of-index-size
 Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation delete-independent-of-index-size
+#
+# Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot (ticket
+# 2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot) : les lignes mortes
+# du CSR des arêtes, relues par chaque balayage de voisins jusqu'au point de reprise. Rouge trois
+# passes sur trois (1,68 à 1,74 fois la courbe avec points de reprise). Pour le cœur C++.
+VectorIndexInsertSlope.CostPerBatchSettles insert-cost-without-checkpoint-stays-close
