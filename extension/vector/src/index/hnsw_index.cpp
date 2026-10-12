@@ -611,7 +611,13 @@ std::vector<NodeWithDistance> OnDiskHNSWIndex::search(Transaction* transaction,
     fitVisitedToTable(transaction, searchState);
     auto result = searchFromCheckpointed(transaction, queryVector, searchState);
     searchFromUnCheckpointed(transaction, queryVector, searchState, result);
-    result.resize(searchState.k);
+    // Au plus k résultats, jamais plus que trouvés : resize(k) complétait une recherche qui en
+    // trouve moins (des lignes supprimées) par des NodeWithDistance par défaut, des pseudo-lignes
+    // à INVALID_OFFSET que la recherche rendait et que son masqueur inscrivait (le balayage sous
+    // masque les déréférençait : SIGSEGV dans lookupOffsets, 12 octobre 2026).
+    if (result.size() > searchState.k) {
+        result.resize(searchState.k);
+    }
     return result;
 }
 

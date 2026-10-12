@@ -1560,6 +1560,22 @@ TEST_F(VectorIndexUpdate, AnUpdateWaitingBehindAnInsertSeesItsNewRows) {
     EXPECT_EQ(outcome, "ok") << "[check: no-visited-set-refusal] " << outcome;
 }
 
+// Une recherche qui trouve moins de lignes vivantes que k (ici 11 pour 20) ne rend que celles-là.
+// OnDiskHNSWIndex::search complétait le résultat jusqu'à k par des NodeWithDistance par défaut,
+// des pseudo-lignes à INVALID_OFFSET : le CALL les rendait (le compte disait 20), et son masqueur
+// les inscrivait ; le balayage sous masque les déréférençait (SIGSEGV dans lookupOffsets, relevé
+// par le rejeu de hotfixs et réparé côté masque par le cœur C++, 12 octobre 2026).
+TEST_F(VectorIndexUpdate, ASearchForMoreRowsThanLiveOnesReturnsOnlyTheLiveOnes) {
+    createDocs(0, 30);
+    mustRun(stringFormat("MATCH (n:{}) WHERE n.id >= 11 DELETE n;", table));
+    auto result = conn->query(stringFormat(
+        "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', [1, 1, 1, 1], 20) RETURN count(*);", table));
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_TRUE(result->hasNext());
+    EXPECT_EQ(result->getNext()->getValue(0)->getValue<int64_t>(), 11)
+        << "[check: no-padded-result] ";
+}
+
 } // namespace
 
 #endif
