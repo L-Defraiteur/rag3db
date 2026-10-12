@@ -456,8 +456,8 @@ TEST_F(VectorIndexCost, ProductShapeDeleteCost) {
 //   Une garde l'a jugée jusqu'au 12 octobre ; elle rougissait selon la charge du poste.
 // - le plateau avec points de reprise contre les premiers lots, imprimé sans contrôle : le coût des
 //   rétrécissements, côté extension.
-// Les lignes « premiers lots », « lots du plateau » (au quart) et « derniers lots » marquent les
-// phases pour le profil.
+// Les lignes « premiers lots », « lots du plateau » (au quart), « lots tardifs » (au lot 50 sur
+// 64) et « derniers lots » marquent les phases pour le profil.
 class VectorIndexInsertSlope : public VectorIndexCost {
 protected:
     static constexpr int64_t INDEXED = 11000;
@@ -485,6 +485,9 @@ protected:
             }
             if (batch == numBatches / 4) {
                 line(stringFormat("pente {} : lots du plateau", name));
+            }
+            if (batch == numBatches * 50 / 64) {
+                line(stringFormat("pente {} : lots tardifs", name));
             }
             if (batch == numBatches - EDGE_BATCHES) {
                 line(stringFormat("pente {} : derniers lots", name));
