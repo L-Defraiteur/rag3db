@@ -154,6 +154,43 @@ pub fn verdict(path: &str, size: usize) -> Verdict {
     Verdict::Texte
 }
 
+/// La raison d'un fichier binaire écarté.
+pub const REASON_BINARY: &str = "binaire";
+
+/// **La porte unique de l'index** : ce qu'un fichier doit passer pour être
+/// indexé, que ce soit par l'index entier (`code_sync::sync_source`), par la
+/// montre (son scanner et sa réconciliation) ou par une réindexation. Avant
+/// le 12 octobre 2026, la montre ne passait que la liste de la source :
+/// 722 fichiers écartés par l'index (données, générés, binaires) étaient
+/// réintégrés à chaque redémarrage de l'hôte de Lucie.
+///
+/// Sans contenu, le chemin seul : le verdict sans la taille, et le dossier des
+/// générés. Avec le contenu : le verdict avec la taille, un binaire (un octet
+/// nul dans la tête, la règle de git ; la lecture d'une source rend du texte
+/// par `from_utf8_lossy`, qui garde les nuls), et les marqueurs des générés.
+/// Rend la raison d'un refus, toujours nommée.
+pub fn admission(path: &str, content: Option<&str>, generated: &crate::generated::GeneratedPolicy) -> Result<(), &'static str> {
+    if let Verdict::Ecarte(raison) = verdict(path, content.map_or(0, str::len)) {
+        return Err(raison);
+    }
+    if let Some(raison) = generated.reason_by_path(path) {
+        return Err(raison);
+    }
+    if let Some(contenu) = content {
+        let mut tete = contenu.len().min(8000);
+        while !contenu.is_char_boundary(tete) {
+            tete -= 1;
+        }
+        if contenu[..tete].contains('\0') {
+            return Err(REASON_BINARY);
+        }
+        if let Some(raison) = generated.reason(path, contenu) {
+            return Err(raison);
+        }
+    }
+    Ok(())
+}
+
 // ─── Schéma ──────────────────────────────────────────────────────────────────
 
 fn field(t: FieldType) -> SimpleFieldDef {

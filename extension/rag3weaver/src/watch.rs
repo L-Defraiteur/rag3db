@@ -118,6 +118,9 @@ impl Change {
 pub struct WatchStats {
     pub scans: u64,
     pub lists: u64,
+    /// Hors périmètre de l'index : écartés par leur chemin à la dernière liste,
+    /// plus les connus refusés sur leur contenu (générés, binaires).
+    pub excluded: u64,
     /// Dates lues (fichiers et dossiers).
     pub stats: u64,
     pub hashes: u64,
@@ -149,6 +152,10 @@ type Stamp = (SystemTime, u64);
 struct Known {
     stamp: Stamp,
     hash: String,
+    /// Passé la porte de l'index ([`crate::code::admission`]) sur son
+    /// contenu. Un fichier refusé reste connu (sa date se suit), mais aucun
+    /// changement n'en est dit.
+    admitted: bool,
 }
 
 #[cfg(feature = "code")]
@@ -177,12 +184,27 @@ pub struct Scanner {
     stats: WatchStats,
     hashed_paths: BTreeMap<String, u64>,
     paused: Option<String>,
+    /// La politique des générés du manifeste, pour la porte de l'index.
+    generated: crate::generated::GeneratedPolicy,
+    /// Écartés par leur chemin à la dernière liste.
+    excluded_by_path: u64,
 }
 
 #[cfg(feature = "code")]
 impl Scanner {
     /// La photographie de départ : ce qui existe est **connu**, rien n'est dit.
     pub fn new(root: PathBuf, source: Arc<dyn FileSource>, config: &WatchConfig) -> Result<Self, String> {
+        Self::with_generated(root, source, config, crate::generated::GeneratedPolicy::default())
+    }
+
+    /// [`Self::new`], avec la politique des générés du manifeste : la montre
+    /// passe la même porte que l'index ([`crate::code::admission`]).
+    pub fn with_generated(
+        root: PathBuf,
+        source: Arc<dyn FileSource>,
+        config: &WatchConfig,
+        generated: crate::generated::GeneratedPolicy,
+    ) -> Result<Self, String> {
         let mut s = Self {
             root,
             source,
@@ -197,15 +219,23 @@ impl Scanner {
             stats: WatchStats::default(),
             hashed_paths: BTreeMap::new(),
             paused: None,
+            generated,
+            excluded_by_path: 0,
         };
         let listed = s.listed()?;
         s.remember_dirs(&listed);
         for path in listed {
-            if let (Some(stamp), Some(hash)) = (s.stamp(&path), s.hash(&path)) {
-                s.known.insert(path, Known { stamp, hash });
+            if let (Some(stamp), Some((hash, admitted))) = (s.stamp(&path), s.hash(&path)) {
+                s.known.insert(path, Known { stamp, hash, admitted });
             }
         }
+        s.count_excluded();
         Ok(s)
+    }
+
+    /// Le compte des exclus, dans les statistiques.
+    fn count_excluded(&mut self) {
+        self.stats.excluded = self.excluded_by_path + self.known.values().filter(|k| !k.admitted).count() as u64;
     }
 
     /// Combien de fois la liste a été relue depuis le départ.
@@ -279,6 +309,14 @@ impl Scanner {
     pub fn reconcile(&self, indexed: &Indexed) -> Vec<FileChange> {
         let mut out = Vec::new();
         for (path, known) in &self.known {
+            // Refusé par la porte : l'index ne le garde pas. S'il y est
+            // encore (une base d'avant la porte), il en sort.
+            if !known.admitted {
+                if indexed.contains_key(path) {
+                    out.push(FileChange { path: path.clone(), change: Change::Removed, hash: String::new() });
+                }
+                continue;
+            }
             match indexed.get(path) {
                 Some(hash) if *hash == known.hash => {}
                 Some(_) => out.push(FileChange { path: path.clone(), change: Change::Modified, hash: known.hash.clone() }),
@@ -295,9 +333,9 @@ impl Scanner {
         out
     }
 
-    fn listed(&self) -> Result<Vec<String>, String> {
+    fn listed(&mut self) -> Result<Vec<String>, String> {
         let all = self.source.list()?;
-        Ok(if self.paths.is_empty() {
+        let surveilles: Vec<String> = if self.paths.is_empty() {
             all
         } else {
             // Les `paths` du manifeste, normalisés comme ce que la source
@@ -305,7 +343,15 @@ impl Scanner {
             all.into_iter()
                 .filter(|p| self.paths.iter().any(|pre| p.starts_with(crate::workspace_path::slash_prefix(pre).as_str())))
                 .collect()
-        })
+        };
+        // La porte de l'index, sur le chemin seul : ce que l'index écarte
+        // sans le lire (données, sans extension, dossier des générés), la
+        // montre ne le regarde pas.
+        let total = surveilles.len();
+        let admis: Vec<String> =
+            surveilles.into_iter().filter(|p| crate::code::admission(p, None, &self.generated).is_ok()).collect();
+        self.excluded_by_path = (total - admis.len()) as u64;
+        Ok(admis)
     }
 
     fn stamp(&self, path: &str) -> Option<Stamp> {
@@ -313,19 +359,27 @@ impl Scanner {
         Some((meta.modified().ok()?, meta.len()))
     }
 
-    fn hash(&self, path: &str) -> Option<String> {
+    /// L'empreinte du contenu, et s'il passe la porte de l'index : le
+    /// contenu est lu une fois pour les deux.
+    fn hash(&self, path: &str) -> Option<(String, bool)> {
         let bytes = std::fs::read(self.root.join(path)).ok()?;
-        Some(blake3::hash(&bytes).to_hex().to_string())
+        Some(self.hash_and_admit(path, &bytes))
+    }
+
+    fn hash_and_admit(&self, path: &str, bytes: &[u8]) -> (String, bool) {
+        let h = blake3::hash(bytes).to_hex().to_string();
+        let texte = String::from_utf8_lossy(bytes);
+        (h, crate::code::admission(path, Some(&texte), &self.generated).is_ok())
     }
 
     /// `hash`, compté : les octets, le temps, et le chemin.
-    fn hash_counted(&mut self, path: &str) -> Option<String> {
+    fn hash_counted(&mut self, path: &str) -> Option<(String, bool)> {
         let t = Instant::now();
         let bytes = std::fs::read(self.root.join(path)).ok()?;
         self.stats.hashes += 1;
         self.stats.hashed_bytes += bytes.len() as u64;
         *self.hashed_paths.entry(path.to_string()).or_default() += 1;
-        let h = blake3::hash(&bytes).to_hex().to_string();
+        let h = self.hash_and_admit(path, &bytes);
         self.stats.hash_us += t.elapsed().as_micros() as u64;
         Some(h)
     }
@@ -422,15 +476,21 @@ impl Scanner {
                     }
                 }
             }
-            // Posé : le contenu décide.
+            // Posé : le contenu décide — et la porte de l'index.
             self.moving.remove(&path);
-            let Some(hash) = self.hash_counted(&path) else { continue };
-            match self.known.insert(path.clone(), Known { stamp, hash: hash.clone() }) {
-                None => out.push(FileChange { path, change: Change::Created, hash }),
-                Some(old) if old.hash != hash => out.push(FileChange { path, change: Change::Modified, hash }),
-                Some(_) => {} // un `touch` : la date a bougé, pas le contenu
+            let Some((hash, admitted)) = self.hash_counted(&path) else { continue };
+            let avant = self.known.insert(path.clone(), Known { stamp, hash: hash.clone(), admitted });
+            match (avant, admitted) {
+                // Refusé : rien n'est dit, sauf s'il était admis (il sort).
+                (Some(old), false) if old.admitted => out.push(FileChange { path, change: Change::Removed, hash: String::new() }),
+                (_, false) => {}
+                (None, true) => out.push(FileChange { path, change: Change::Created, hash }),
+                (Some(old), true) if !old.admitted => out.push(FileChange { path, change: Change::Created, hash }),
+                (Some(old), true) if old.hash != hash => out.push(FileChange { path, change: Change::Modified, hash }),
+                (Some(_), true) => {} // un `touch` : la date a bougé, pas le contenu
             }
         }
+        self.count_excluded();
         out.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(out)
     }
@@ -530,8 +590,9 @@ pub fn spawn(
     lag: Arc<crate::catalog::retard::Lag>,
     cell: crate::scope::Scope,
     indexed: Option<Indexed>,
+    generated: crate::generated::GeneratedPolicy,
 ) -> Result<WatchHandle, String> {
-    let mut scanner = Scanner::new(root, source, config)?;
+    let mut scanner = Scanner::with_generated(root, source, config, generated)?;
     let published = Arc::new(Mutex::new(WatchStats::default()));
     let to_publish = published.clone();
     let mut last_paused: Option<String> = None;

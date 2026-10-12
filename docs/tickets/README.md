@@ -74,7 +74,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [La montre réintègre ce que l'index entier écarte](2026-10-12-la-montre-reintegre-ce-que-l-index-ecarte.md) | ouvert — pour l'arbre principal | réponse fausse (générés indexés), travail perdu à chaque montage | oui, à chaque montage d'une base indexée | oui (`watch.rs`, `code_sync.rs`, `reindex_nodes.rs`) |
+| [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
 | [Le reçu d'un index annonce un modèle que l'index n'emploie pas](2026-10-12-le-recu-d-index-annonce-un-modele-que-l-index-n-emploie-pas.md) | ouvert — pour l'arbre principal | réponse fausse (le reçu, la durée prévue) | oui, dès qu'un manifeste déclare son modèle | oui (`estimate.rs`) |
 | [Le témoin du réacteur `each_runs_per_ring_and_debounce_waits_for_quiet` rougit sous charge](2026-10-12-le-temoin-du-reacteur-rougit-sous-charge.md) | ouvert — pour la recherche | test instable | non (le test) | oui (`reactor.rs`) |
 | [Un client relance l'hôte sur une base en cours d'écriture autonome](2026-10-12-un-client-relance-l-hote-sur-une-base-en-cours-d-ecriture-autonome.md) | ouvert — après L2 (arbre principal) | deux écrivains sur une base | oui, pendant toute réindexation autonome | oui (`daemon_lifecycle.rs`, `daemon_host.rs`) |
@@ -110,10 +110,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (121), dans `closed/`
+### Fermés (122), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La montre réintègre ce que l'index entier écarte](closed/2026-10-12-la-montre-reintegre-ce-que-l-index-ecarte.md) | corrigé (une porte unique, `code::admission`) | coût et justesse | oui | oui (`code.rs`, `watch.rs`, `code_sync.rs`) |
 | [Une recherche vectorielle pendant un DROP/CREATE de l'index rend une exception brute de la bibliothèque standard](closed/2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute.md) | corrigé (voir le ticket ; la rétention suit) | erreur non nommée | oui | oui |
 | [Le point de reprise qui suit de nombreux SET d'une colonne de vecteurs coûte un temps quadratique](closed/2026-10-12-le-point-de-reprise-apres-de-nombreux-set-de-vecteurs-est-quadratique.md) | corrigé (12 octobre 2026, le lot de l'insertion de vecteurs sous index, pas 1 : resize au double) | lenteur sévère | oui (`embed_set`, premier index) | oui |
 | [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](closed/2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | corrigé (12 octobre 2026, le balayage par décalages sous un petit masque, page coeur-cpp/12 §10) | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |

@@ -97,6 +97,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
         Arc::new(crate::catalog::retard::Lag::new()),
         crate::scope::Scope::default(),
         None,
+        Default::default(),
     )
     .unwrap();
     std::fs::write(dir.path().join("src/a.rs"), "fn a() { 2 }\n").unwrap();
@@ -118,7 +119,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
 
     // Une période d'une minute : l'arrêt n'en attend rien.
     let (dir, source) = tree();
-    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default(), None).unwrap();
+    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default(), None, Default::default()).unwrap();
     let t = Instant::now();
     handle.stop();
     assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
@@ -152,6 +153,7 @@ fn the_watch_notes_the_lag_before_publishing() {
         lag.clone(),
         cell.clone(),
         None,
+        Default::default(),
     )
     .unwrap();
     std::fs::write(dir.path().join("src/b.rs"), "fn b() { 2 }\n").unwrap();

@@ -909,7 +909,7 @@ fn synchroniser(
     // fichier binaire pour l'écarter ensuite.
     let retenus: Vec<String> = listed
         .iter()
-        .filter(|p| !matches!(crate::code::verdict(p, 0), crate::code::Verdict::Ecarte(_)))
+        .filter(|p| crate::code::admission(p, None, &options.generated).is_ok())
         .cloned()
         .collect();
     let mut report =
@@ -965,9 +965,10 @@ fn synchroniser(
         let mut sources = Vec::with_capacity(paquet.len());
         for path in paquet {
             if let Some(content) = source.read(path)? {
-                // Un fichier généré n'entre pas dans l'analyse, et ça se
-                // compte : la fin de session retire ce qu'il avait laissé.
-                if let Some(reason) = options.generated.reason(path, &content) {
+                // Un fichier généré ou binaire n'entre pas dans l'analyse, et ça
+                // se compte : la fin de session retire ce qu'il avait laissé.
+                // La même porte que la montre (`code::admission`).
+                if let Err(reason) = crate::code::admission(path, Some(&content), &options.generated) {
                     *report.files_set_aside.entry(reason.to_string()).or_default() += 1;
                     continue;
                 }

@@ -230,6 +230,12 @@ impl Node for ReindexFileNode {
         };
         let total = todo.len();
         let mut faits = 0usize;
+        // La porte de l'index, avec la politique des générés du manifeste.
+        let politique = ctx
+            .service::<crate::generated::GeneratedPolicy>(crate::generated::GENERATED_POLICY_SERVICE)
+            .cloned()
+            .unwrap_or_default();
+        let mut hors_perimetre = 0usize;
         let plafond = self.files_per_batch.max(1);
         let mut taille = FIRST_BATCH.min(plafond);
         while faits < total {
@@ -256,9 +262,16 @@ impl Node for ReindexFileNode {
             // L'instant de la lecture : un changement venu après garde son retard.
             let read_at = crate::catalog::retard::now_ms();
             // Le disque décide, fichier par fichier : réindexer ou retirer.
+            // Un contenu que la porte de l'index refuse (généré, binaire) est
+            // traité comme absent, comme le ferait la fin d'une indexation
+            // entière : s'il était indexé, il en sort.
             let mut fichiers: Vec<(String, Option<String>)> = Vec::new();
             for path in lot {
                 match source.read(path) {
+                    Ok(Some(contenu)) if crate::code::admission(path, Some(&contenu), &politique).is_err() => {
+                        hors_perimetre += 1;
+                        fichiers.push((path.clone(), None));
+                    }
                     Ok(contenu) => fichiers.push((path.clone(), contenu)),
                     Err(e) => {
                         ctx.warn(&format!("ReindexFileNode : {path} : {e}"));
@@ -351,6 +364,9 @@ impl Node for ReindexFileNode {
                 }
             }
         }
+        if hors_perimetre > 0 {
+            eprintln!("[montre] {total} fichier(s) vu(s), {hors_perimetre} hors du périmètre de l'index (retirés s'ils y étaient)");
+        }
         ctx.info(&format!(
             "ReindexFileNode : {} réindexé(s), {} retiré(s), {} repris plus tard, {} en échec",
             reindexed.len(),
@@ -360,7 +376,7 @@ impl Node for ReindexFileNode {
         ));
         ctx.set_output(
             "report",
-            PortValue::new(json!({"reindexed": reindexed, "removed": removed, "deferred": deferred, "errors": errors, "interrupted": interrupted})),
+            PortValue::new(json!({"reindexed": reindexed, "removed": removed, "deferred": deferred, "errors": errors, "interrupted": interrupted, "excluded": hors_perimetre})),
         );
         Ok(())
     }

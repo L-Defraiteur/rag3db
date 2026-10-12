@@ -62,3 +62,18 @@ avant de hacher, ne jamais publier un refusé). La montre et `ReindexFileNode` r
 même haché des deux côtés (les octets bruts), sans objet une fois le non-UTF-8 refusé. Pour
 l'arbre principal (`watch.rs`, `code_sync.rs`, `reindex_nodes.rs` sont à lui) ; repérage de
 codeparsers, lu sur master `5251eef75` environ.
+
+**12 octobre, fermé (everything declarative).** Une porte unique, `code::admission(chemin, contenu
+facultatif, politique des générés)`, à côté de `verdict`. Elle réunit le verdict (motifs de nom,
+extensions, taille sur le contenu), le dossier des générés, un refus du binaire (un octet nul dans
+la tête, la règle de git) et les marqueurs des générés. Elle a trois lecteurs :
+- l'index entier (`sync_source`, avant et après la lecture) ;
+- le scanner de la montre : sur le chemin seul à la liste, et sur le contenu déjà lu pour le
+  hachage. Un fichier refusé reste connu sans être dit, et un fichier admis qui devient refusé se
+  dit retiré ;
+- `ReindexFileNode`, en filet : un contenu refusé y est traité comme absent.
+La réconciliation de départ ignore les refusés et retire de l'index ceux qu'il porterait encore.
+`WatchStats.excluded` compte les hors-périmètre, et le journal dit « N vus, M hors du périmètre ».
+Témoins, rouges d'abord : `the_watch_does_not_index_what_the_index_excludes` et
+`the_startup_reconciliation_does_not_index_what_the_index_excludes`. Un dossier `generated`, un
+« DO NOT EDIT » en tête et un `.wal` binaire n'entrent pas, un fichier admis passe.

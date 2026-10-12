@@ -2240,7 +2240,17 @@ impl Backend {
                         config.source
                     ));
                 }
-                slot.push(crate::watch::spawn(name, config, root.clone(), source.clone(), bus.clone(), lag.clone(), cell.clone(), indexed.clone())?);
+                slot.push(crate::watch::spawn(
+                    name,
+                    config,
+                    root.clone(),
+                    source.clone(),
+                    bus.clone(),
+                    lag.clone(),
+                    cell.clone(),
+                    indexed.clone(),
+                    workspace.generated.clone(),
+                )?);
                 mounted.push(name.clone());
             }
             Ok(mounted)
@@ -4352,6 +4362,74 @@ mod tests {
         drop(cat);
         let u = usages_de(&backend, "commun");
         assert!(u.contains("Usages (30)") && u.contains("f0.rs"), "{u}");
+    }
+
+    /// Les fichiers que l'index entier écarte, et un fichier admis qui sert de
+    /// témoin de passage : un dossier `generated`, un marqueur « DO NOT EDIT »
+    /// en tête, un binaire (des octets nuls, sous une extension qu'aucune règle
+    /// ne connaît : les `.wal` de l'hôte de Lucie).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn poser_des_exclus_et_un_admis(sources: &Path) {
+        std::fs::create_dir_all(sources.join("generated")).unwrap();
+        std::fs::write(sources.join("generated/genere.rs"), "pub fn genere() { depart(); }\n").unwrap();
+        std::fs::write(sources.join("marque.rs"), "// DO NOT EDIT\npub fn marque() { depart(); }\n").unwrap();
+        std::fs::write(sources.join("journal.wal"), b"\x00\x01wal\x00binaire\x00").unwrap();
+        std::fs::write(sources.join("admis.rs"), "pub fn admis() { depart(); }\n").unwrap();
+    }
+
+    /// Les lignes `File` de ces chemins, en base.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn fichiers_en_base(backend: &Backend, chemins: &[&str]) -> Vec<String> {
+        use crate::connection::{CypherValue, QueryParam};
+        let cat = backend.catalog.lock().unwrap();
+        chemins
+            .iter()
+            .filter(|c| {
+                cat.execute_raw_with_params(
+                    "MATCH (f:File) WHERE f.path = $p RETURN count(f)",
+                    &[QueryParam::new("p", CypherValue::String(c.to_string()))],
+                )
+                .unwrap()
+                .rows[0][0]
+                .as_i64()
+                    > Some(0)
+            })
+            .map(|c| c.to_string())
+            .collect()
+    }
+
+    /// **La montre n'indexe pas ce que l'index écarte** : un dossier généré,
+    /// un marqueur en tête, un binaire, créés sous une montre qui tourne. Un
+    /// fichier admis, créé en même temps, passe (720 fichiers réintégrés au
+    /// redémarrage de l'hôte de Lucie, le 12 octobre : seize minutes, le
+    /// verrou tenu jusqu'à 55 s).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_watch_does_not_index_what_the_index_excludes() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        poser_des_exclus_et_un_admis(&dir.path().join("sources"));
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("admis"));
+        assert!(u.contains("admis"), "le fichier admis n'est pas passé : {u}");
+        assert!(backend.stop_reactions().is_empty());
+        assert!(!u.contains("genere") && !u.contains("marque"), "un exclu est passé : {u}");
+        let passes = fichiers_en_base(&backend, &["generated/genere.rs", "marque.rs", "journal.wal"]);
+        assert!(passes.is_empty(), "des exclus sont en base : {passes:?}");
+    }
+
+    /// **La réconciliation de départ ne reprend pas ce que l'index écarte** :
+    /// les mêmes fichiers, créés entre l'index et le démarrage de la montre.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_startup_reconciliation_does_not_index_what_the_index_excludes() {
+        let (dir, backend) = backend_qui_surveille();
+        poser_des_exclus_et_un_admis(&dir.path().join("sources"));
+        backend.mount_reactions().unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("admis"));
+        assert!(u.contains("admis"), "le fichier admis n'est pas repris : {u}");
+        assert!(backend.stop_reactions().is_empty());
+        let passes = fichiers_en_base(&backend, &["generated/genere.rs", "marque.rs", "journal.wal"]);
+        assert!(passes.is_empty(), "la réconciliation a repris des exclus : {passes:?}");
     }
 
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
