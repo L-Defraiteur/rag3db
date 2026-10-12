@@ -30,8 +30,16 @@ Toutes les sessions lient la lib par `RAG3DB_LIBRARY_DIR` et chargent l'extensio
    l'arbre est partagé).
 3. `cmake --build build/lecteurs-csv -j 8` sous `poste lourd`
    (`~/.cache/rag3weaver-notes-A/lib/batir.sh`).
-4. Annoncer : l'heure, les deux md5, la tête bâtie, le dernier commit moteur (les fichiers
-   doivent être plus récents), et ce qui reste sur l'ancienne image.
+4. **Publier au magasin**, seulement si le bâti est vert (décision de l'orchestration, 12 octobre
+   2026) : `python3 extension/rag3weaver/scripts/rag3db_libs.py publier build/lecteurs-csv --racine
+   <arbre principal>`. Le script copie la lib, les en-têtes, `build_id.h` et l'extension dans
+   `~/.cache/rag3db-libs/<identifiant>/`, vérifie que la lib et l'extension viennent du même bâti,
+   et pose `courant`. Un refus (code 2) s'annonce tel quel : on ne pose rien à la main.
+   `run_e2e.sh` lit le magasin par défaut : une passe e2e n'a plus à dire « fini » avant un
+   rebâti. Les hôtes et les binaires installés, eux, chargent toujours `build/lecteurs-csv`.
+5. Annoncer : l'heure, les deux md5, l'identifiant publié (`rag3db_libs.py courant`), la tête
+   bâtie, le dernier commit moteur (les fichiers doivent être plus récents), et ce qui reste sur
+   l'ancienne image.
 
 ## Ce qui tourne pendant le bâti
 
