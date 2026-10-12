@@ -100,19 +100,22 @@ tard à 0 h 15.
 - **Pour Lucie : la séquence B4, au matin.** À 2 h 56 (12 oct.), l'arrêt de l'hôte a été
   refusé par les permissions de ma session ; rien n'a été exécuté, l'hôte tourne et répond
   (pid 2061518, `3e95f0302023`). Depuis, le cœur a corrigé le balayage filtré des chaînes
-  (`e6f626df4`, cause du P1 et de la boucle de luciepc) et l'arbre principal a publié la lib
-  au magasin à 3 h 49 (`librag3db.so` c2ddbb67…). Le binaire à installer est bâti sur
-  `acdb91764` et prouvé, **pas installé** :
+  (`e6f626df4`, cause du P1 et de la boucle de luciepc) puis le balayage sous petit masque
+  (`41d282843`, `usages` sous 100 ms attendu) ; l'arbre principal a publié la lib au
+  magasin à 5 h 59 (`librag3db.so` 8d6256cc…, libvector bc753707…). Le binaire à installer
+  est bâti sur `ea0a1ef06` (avec les lots de la nuit : le saut en deux temps de F, la
+  montre qui laisse passer une lecture) et prouvé, **pas installé** :
 
-  - `~/.cache/rag3weaver-build/binaire-matin-d2b83e5e5080`, md5
-    `d2b83e5e5080ac3db337e9b639cc564d` ;
-  - RUNPATH vers `~/.cache/rag3db-libs/rag3db-build-f6179ade0d0dec63e4b4cefb605f81e8e648046b-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
+  - `~/.cache/rag3weaver-build/binaire-matin-a327c0da16e3`, md5
+    `a327c0da16e36eb74af53f2ae849136a` ;
+  - RUNPATH vers `~/.cache/rag3db-libs/rag3db-build-41d2828438f68f649ffffb147113188b667087ad-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
     (plus de `LD_LIBRARY_PATH` : un rebâti de la lib ne le touche plus) ;
   - preuves sans `LD_LIBRARY_PATH` : `readelf -d` montre le RUNPATH, `ldd` résout la lib
     du magasin, `rag3db-check-lib` dit « même bâti », `--describe` des deux manifestes
-    (memory 9 outils, code-rag3db 11), un hôte d'essai sur 7990 et un client de boutique
-    (`initialize`, 8 outils, `list_categories`, `daemon_status` au même bâti), arrêt propre.
-    `649a84722b3e` est dépassé.
+    (memory 9 outils, code-rag3db 11, et 11 encore sur une copie qui porte
+    `queries_via`), un hôte d'essai sur 7990 et un client de boutique (`initialize`,
+    8 outils, `list_categories`, `daemon_status` au même bâti), arrêt propre.
+    `649a84722b3e` et `d2b83e5e5080` sont dépassés.
 
   Lucie arrête son hôte — pid lu dans `daemon.json`, jamais par nom :
 
@@ -122,10 +125,19 @@ tard à 0 h 15.
 
   (`readlink` doit nommer `~/.local/bin/rag3weaver-backend` ; sinon ne rien tuer.) Ou elle
   autorise l'arrêt dans ma session. J'enchaîne : installation par renommage (l'installé
-  gardé en `.avant-b4`), signal à codeparsers (code-rag3db mis de côté et réindexé), puis
-  redémarrage, 5 minutes de surveillance (`/etat` porte l'état des index) et la remesure de
-  la montre (`watches.code`, pour le proto) ; la réconciliation de la montre remplace la
-  réindexation entière. Au rouge, `3e95f0302023` revient.
+  gardé en `.avant-b4`) ; le bloc `workspace.queries_via` (les tests par requêtes) posé
+  dans `~/.config/rag3weaver/code-rag3db/templates/backends/code/rag3db.json` par le
+  script de codeparsers (`~/.cache/codeparsers-notes/b2d/scripts/poser-queries-via.py`,
+  gabarit figé à `38b1c9f51`, md5 f4994a5f… ; sauvegarde `rag3db.json.avant-queries-via`,
+  le bloc seul — 24 mots-clés —, diff écrit ici après coup) ; signal à codeparsers
+  (code-rag3db mis de côté et réindexé) ; puis redémarrage, 5 minutes de surveillance
+  (`/etat` porte l'état des index) et la remesure de la montre (`watches.code`, pour le
+  proto). Au rouge, `3e95f0302023` revient.
+
+  **À trancher par Lucie, sans que j'y touche** : `backend.json`, à côté de `rag3db.json`,
+  n'a pas de `db_path` et vise donc une petite base ancienne,
+  `~/.local/share/rag3weaver/code-rag3db.rag3db` (3,4 Mo, dernière écriture le 11 oct.
+  à 16 h 55) ; la base réelle est `code-rag3db-depot.rag3db`, que vise `rag3db.json`.
 - **La tentative 4 des fiches** : une décision par fiche, l'instruction sur les fiches de règle.
 - **La marche 5, seconde part** : l'hôte déclaré au manifeste, le backend nommé.
 - **La forme B de l'enveloppe** : attend la §6.
