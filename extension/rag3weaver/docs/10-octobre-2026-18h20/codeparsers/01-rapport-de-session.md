@@ -60,7 +60,9 @@ L'arbre principal a écrit deux défenses, qui vont sur master ce soir : la réc
 5 ter. **Les tests par requêtes** (arbre principal, 94e21b066 : `impact lockIndexForWrite` passe de
    1 test à 204) : le bloc `workspace.queries_via` du dépôt rag3db dans les deux manifestes, avant la
    réindexation. Le script garde une sauvegarde `.avant-queries-via` et redit le diff (déjà relu :
-   le bloc seul, `queries-via-diff-lourd.txt` et `-principal.txt` à côté) :
+   le bloc seul, `queries-via-diff-lourd.txt` et `-principal.txt` à côté). La déclaration vit
+   désormais dans `extension/rag3weaver/templates/backends/code/depots/rag3db.queries_via.json`
+   (de071e9de) ; le gabarit figé `gabarit-code-38b1c9f51.json` en porte le même contenu (vérifié) :
    `cd ~/.cache/codeparsers-notes && for n in lourd principal; do python3 poser-queries-via.py gabarit-code-38b1c9f51.json ~/.config/rag3weaver/code-$n/templates/backends/code/backend.json --appliquer; done`.
 6. La réindexation des deux bases, par codeparsers, avec ce binaire : dis-moi que l'hôte est
    reparti. `code-principal` sert au cœur : l'heure s'accorde avec lui.
