@@ -12,7 +12,7 @@ use super::checkpoint::GraphDefinition;
 use super::graph::DataflowGraph;
 use super::node::{Node, NodeContext};
 use super::node_registry::{NodeFactory, NodeRegistry, NodeSchema};
-use super::port::{PortDef, PortValue};
+use super::port::PortDef;
 
 // ─── GraphNode ──────────────────────────────────────────────────────────────
 
@@ -274,17 +274,13 @@ impl GraphNode {
         let output = inner.execute_delegated(&mut sub_graph, outer, free_kinds)?;
 
         // Ce que les nœuds intérieurs ont posé sur les arêtes du parent compte
-        // pour les sorties de ce nœud ; une sortie libre non branchée revient
-        // comme avant (valeur, ou éléments dans l'ordre).
+        // pour les sorties de ce nœud ; une sortie libre en flux non branchée a
+        // jeté ses éléments, leur compte dit qu'elle a été posée.
         for (ext_name, (inner_node, inner_port)) in &self.output_map {
             if outputs.contains_key(ext_name) {
                 ctx.note_sent(ext_name, output.sent(inner_node, inner_port));
             } else if ctx.is_stream_output(ext_name) {
-                if let Some(list) = output.stream(inner_node, inner_port) {
-                    for v in list.to_vec() {
-                        ctx.emit(ext_name, v)?;
-                    }
-                }
+                ctx.note_dropped(ext_name, output.dropped(inner_node, inner_port));
             } else if let Some(value) = output.get(inner_node, inner_port) {
                 ctx.set_output(ext_name, value.clone());
             }
@@ -358,17 +354,14 @@ impl Node for GraphNode {
         let output = inner.execute(&mut sub_graph)?;
 
         // 5. Collect free outputs and set them on the parent context. Une
-        // sortie en flux rend ses éléments, dans l'ordre.
+        // sortie en flux rend sa valeur intérieure élément par élément ; ses
+        // éléments jetés (sans arête dedans) comptent pour elle.
         for (ext_name, (inner_node, inner_port)) in &self.output_map {
             if ctx.is_stream_output(ext_name) {
-                let elements: Vec<PortValue> = match output.stream(inner_node, inner_port) {
-                    Some(list) => list.to_vec(),
-                    None => output.get(inner_node, inner_port).cloned().into_iter().collect(),
-                };
-                for v in elements {
-                    match ctx.emit(ext_name, v) {
-                        Ok(()) => {}
-                        Err(super::node::Stopped::NoReader) => break,
+                ctx.note_dropped(ext_name, output.dropped(inner_node, inner_port));
+                if let Some(v) = output.get(inner_node, inner_port) {
+                    match ctx.emit(ext_name, v.clone()) {
+                        Ok(()) | Err(super::node::Stopped::NoReader) => {}
                         Err(e) => return Err(e.into()),
                     }
                 }

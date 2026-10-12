@@ -335,10 +335,17 @@ impl DataflowGraph {
         super::kinds::refuse_complete_on_open(&nodes, &edges, |n, p| kinds.get(&(n.to_string(), p.to_string())).copied())
     }
 
-    /// Le graphe a-t-il une sortie en flux, une fois les genres résolus ?
-    /// C'est le choix de l'exécuteur.
+    /// Le graphe a-t-il une sortie en flux **branchée**, une fois les genres
+    /// résolus ? C'est le choix de l'exécuteur. Une sortie en flux sans arête
+    /// jette ses éléments (`NodeContext::emit`) : elle ne change ni
+    /// l'exécuteur ni la sortie du run — la parité par construction d'un nœud
+    /// qui gagne un port de jetons que personne ne lit (page
+    /// 12-octobre-2026-recherche/01).
     pub fn has_streams(&self) -> Result<bool, String> {
-        Ok(self.resolved_kinds()?.values().any(|k| k.is_stream()))
+        let kinds = self.resolved_kinds()?;
+        Ok(self.edges.iter().any(|e| {
+            kinds.get(&(e.from_node.clone(), e.from_port.clone())).is_some_and(|k| k.is_stream())
+        }))
     }
 
     /// List all node names.

@@ -185,3 +185,74 @@ fn next_any_reads_each_per_element_input_once() {
     assert_eq!(seen, [("a".to_string(), 1), ("b".to_string(), 2)]);
     assert!(ctx.input("whole").is_some(), "une entrée Complete n'est pas lue par next_any");
 }
+
+/// Un nœud de réponse : une valeur `text` lue en aval, et un flux `tokens`
+/// (Finite) qu'il émet fragment par fragment, comme `LlmNode` le fera.
+struct Answer {
+    name: String,
+    with_tokens: bool,
+}
+
+impl Node for Answer {
+    fn node_type(&self) -> &str {
+        "Answer"
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![]
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        let mut out = vec![PortDef::value("text", PortType::Results, true)];
+        if self.with_tokens {
+            out.push(PortDef::value("tokens", PortType::Results, false).stream(PortKind::Finite));
+        }
+        out
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let mut all = Pairs::new();
+        for (i, t) in ["bon", "jour"].iter().enumerate() {
+            let piece = vec![(format!("t{i}"), t.to_string())];
+            if self.with_tokens {
+                ctx.emit("tokens", PortValue::new(piece.clone())).map_err(String::from)?;
+            }
+            all.extend(piece);
+        }
+        ctx.set_output("text", PortValue::new(all));
+        Ok(())
+    }
+}
+
+/// **La parité par construction** (page 12-octobre-2026-recherche/01, §2.2) :
+/// un flux non branché ne change ni l'exécuteur ni la sortie du run. Le même
+/// graphe, avec et sans la sortie `tokens` non branchée, rend exactement la
+/// même sortie entière ; branché, il passe au concurrent.
+#[test]
+fn an_unconnected_stream_changes_neither_the_executor_nor_the_output() {
+    let build = |with_tokens: bool| {
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(Answer { name: "llm".into(), with_tokens })).unwrap();
+        g.add_node(Box::new(Whole { name: "decide".into() })).unwrap();
+        g.connect("llm", "text", "decide", "in").unwrap();
+        g
+    };
+    let with = build(true);
+    assert!(!with.has_streams().unwrap(), "un flux non branché ne fait pas passer au concurrent");
+    let mut with = with;
+    let mut without = build(false);
+    let a = DataflowRuntime::new(100).execute(&mut with).unwrap();
+    let b = DataflowRuntime::new(100).execute(&mut without).unwrap();
+    assert_eq!(a.ports(), b.ports(), "la sortie entière du run porte les mêmes ports");
+    for (node, port) in a.ports() {
+        assert_eq!(pairs_at(&a, &node, &port), pairs_at(&b, &node, &port), "{node}.{port}");
+    }
+    assert_eq!(a.skip_reason("decide"), b.skip_reason("decide"));
+    assert!(a.stopped().is_none() && b.stopped().is_none());
+    assert!(a.get("llm", "tokens").is_none(), "un flux non branché ne finit pas dans la sortie");
+
+    let mut connected = build(true);
+    connected.add_node(Box::new(Whole { name: "tok".into() })).unwrap();
+    connected.connect("llm", "tokens", "tok", "in").unwrap();
+    assert!(connected.has_streams().unwrap(), "branché, le flux fait passer au concurrent");
+}

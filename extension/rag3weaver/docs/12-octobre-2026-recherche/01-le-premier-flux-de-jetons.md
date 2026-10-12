@@ -53,19 +53,33 @@ Avec une sortie `tokens` déclarée `Finite`, **tout graphe qui contient un
 `LlmNode` passerait par l'exécuteur concurrent**, même sans lire `tokens`.
 C'est un changement d'exécuteur pour tous les graphes LLM d'aujourd'hui,
 sans raison. D'où : `has_streams` ne compte que les sorties de flux **dont une
-arête part**. Un flux non branché se fusionne dans la sortie du run (des
-chaînes bout à bout), sous les deux exécuteurs. La parité des graphes de
-valeurs reste donc vraie par construction, et un témoin l'éprouve : un graphe
-`LlmNode → Decide` qui ne lit que `text` reste sous les niveaux.
+arête part**. Un flux non branché **est jeté** (objection du proto, retenue) :
+`ctx.emit` ne range rien, il compte seulement l'élément, pour qu'une sortie de
+flux requise qui a émis reste « posée ». Rien ne finit dans la sortie du run,
+sous aucun des deux exécuteurs : la fusion de fin de nœud disparaît (sous les
+niveaux, un port de flux n'est jamais branché, puisqu'un flux branché fait
+passer au concurrent), et un sous-graphe dont la sortie libre en flux n'est pas
+branchée chez le parent ne rend plus ses éléments, seulement leur compte.
+L'accumulation du puits double pour `text` n'est pas touchée. La parité des
+graphes de valeurs est donc vraie par construction, et un témoin l'éprouve
+(`flux_tests.rs`, `an_unconnected_stream_changes_neither_the_executor_nor_the_output`) :
+le même graphe, avec et sans une sortie `tokens` non branchée, reste sous les
+niveaux et rend la même sortie entière, port à port ; branché, il passe au
+concurrent.
+
+C'est « les ports portent des flux », la phrase de Lucie, qui prend forme : un
+port déclare un flux, l'arête décide s'il coule, et rien ne change pour qui ne
+le lit pas.
 
 ### 2.3 Deux consommateurs (côté proto, nœuds)
 
 - **Afficher au fil de l'eau** : `TokenEvents` (une entrée `tokens` lue
-  élément par élément) publie chaque fragment sur le bus de la session, au
-  format que `ChatSink` emploie déjà (`{"event":"token","text":…}`, avec le run
-  et le nœud). Une interface ou un agent appelant voit les jetons d'un graphe
+  élément par élément) publie chaque fragment sur le bus de la session, sur
+  un sujet à part, **`tokens`** (le bus des événements de nœuds n'en est pas
+  noyé), au format que `ChatSink` emploie déjà (`{"event":"token","text":…}`,
+  avec le run et le nœud). Une interface ou un agent appelant voit les jetons d'un graphe
   comme ceux d'une conversation.
-- **Classer au fil de l'eau** : `Watch`, avec des motifs à étiquettes (texte
+- **Classer au fil de l'eau** : `Spot`, avec des motifs à étiquettes (texte
   ou expression régulière), garde une fenêtre glissante du texte reçu, émet une
   étiquette sur sa sortie (un flux) dès qu'un motif apparaît, et peut **lâcher
   son entrée** (`stop_on`). Avec `stop_when_unread` sur le `LlmNode`, le
@@ -85,7 +99,7 @@ puits intérieur du `TeeSink`, sans doublon.
 | chez le proto | chez moi |
 |---|---|
 | `LlmNode.tokens`, le puits double, `stop_when_unread` | `has_streams` sur les flux branchés, et son témoin de parité |
-| `TokenEvents`, `Watch` | le témoin avec le modèle local (lancer `llama-server`, l'attendre, l'arrêter) |
+| `TokenEvents`, `Spot` | le témoin avec le modèle local (lancer `llama-server`, l'attendre, l'arrêter) |
 | leurs schémas et le mermaid | la mesure (§5) et la page |
 
 ## 4. Les témoins, rouges d'abord
@@ -96,8 +110,9 @@ puits intérieur du `TeeSink`, sans doublon.
    publie à la fin.
 2. **Le texte est la concaténation des jetons** émis, au caractère près.
 3. **La parité** : `LlmNode → Decide` sur `text` seul reste sous les niveaux
-   (`has_streams` faux) et rend la même sortie qu'avant.
-4. **L'arrêt anticipé** : `Watch` lâche son entrée au motif ; avec
+   (`has_streams` faux) et rend la même sortie entière qu'avant. Fait
+   (`flux_tests.rs`, §2.2), rouge d'abord sur `has_streams`.
+4. **L'arrêt anticipé** : `Spot` lâche son entrée au motif ; avec
    `stop_when_unread`, le `CallbackLlm` compte moins de fragments produits
    que sa réponse n'en a. Sans le réglage, il les produit tous, et `text` est
    complet.

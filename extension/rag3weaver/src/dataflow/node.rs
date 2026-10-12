@@ -191,9 +191,10 @@ pub struct NodeContext {
     /// Les sorties en flux du nœud (posé par le runtime) : `emit` y range
     /// chaque élément, `set_output` y est une faute.
     stream_outputs: HashSet<String>,
-    /// Sous l'exécuteur par niveaux, les éléments émis sur un port de flux,
-    /// fusionnés à la fin du nœud comme un lecteur `Complete` les verrait.
-    emitted: HashMap<String, Vec<PortValue>>,
+    /// Combien d'éléments chaque sortie en flux sans arête a jetés : rien ne
+    /// les lit, ils ne vont nulle part ; le compte dit seulement que la sortie
+    /// a été posée (une sortie requise qui a émis).
+    dropped: HashMap<String, usize>,
     /// Les fautes d'emploi du contexte, dites à la fin du nœud.
     misuse: Vec<String>,
     /// Sous l'exécuteur concurrent : les canaux du nœud.
@@ -216,7 +217,7 @@ impl NodeContext {
             outputs: HashMap::new(),
             per_element: HashSet::new(),
             stream_outputs: HashSet::new(),
-            emitted: HashMap::new(),
+            dropped: HashMap::new(),
             misuse: Vec::new(),
             stream: None,
             open_inputs: HashSet::new(),
@@ -234,7 +235,7 @@ impl NodeContext {
             outputs: HashMap::new(),
             per_element: HashSet::new(),
             stream_outputs: HashSet::new(),
-            emitted: HashMap::new(),
+            dropped: HashMap::new(),
             misuse: Vec::new(),
             stream: None,
             open_inputs: HashSet::new(),
@@ -353,7 +354,10 @@ impl NodeContext {
             if let Some(b) = self.stream.as_mut().filter(|b| b.outputs.contains_key(port)) {
                 return b.send(port, value);
             }
-            self.emitted.entry(port.to_string()).or_default().push(value);
+            // Sans arête, l'élément est jeté : une sortie en flux non branchée
+            // ne finit pas dans la sortie du run.
+            drop(value);
+            *self.dropped.entry(port.to_string()).or_default() += 1;
         } else {
             self.outputs.insert(port.to_string(), value);
         }
@@ -429,7 +433,7 @@ impl NodeContext {
     /// a posé ses sorties requises avant de les ranger.)
     pub(crate) fn has_output(&self, port: &str) -> bool {
         self.outputs.contains_key(port)
-            || self.emitted.get(port).is_some_and(|v| !v.is_empty())
+            || self.dropped.get(port).is_some_and(|n| *n > 0)
             || self.stream.as_ref().is_some_and(|b| b.sent.get(port).is_some_and(|n| *n > 0))
     }
 
@@ -476,10 +480,17 @@ impl NodeContext {
         }
     }
 
-    /// Les éléments émis sur chaque sortie en flux que rien ne lit, avant leur
-    /// fusion (l'exécuteur concurrent les rend dans la sortie du run).
-    pub(crate) fn emitted_elements(&self) -> HashMap<String, Vec<PortValue>> {
-        self.emitted.clone()
+    /// Combien d'éléments chaque sortie en flux sans arête a jetés.
+    pub(crate) fn dropped_elements(&self) -> HashMap<String, usize> {
+        self.dropped.clone()
+    }
+
+    /// Ce qu'un runtime imbriqué a jeté pour ce nœud sur la sortie `port` (un
+    /// sous-graphe dont la sortie en flux n'est pas branchée chez le parent).
+    pub(crate) fn note_dropped(&mut self, port: &str, n: usize) {
+        if n > 0 {
+            *self.dropped.entry(port.to_string()).or_default() += n;
+        }
     }
 
     /// Les ports lus élément par élément, et les sorties en flux, du nœud.
@@ -488,20 +499,11 @@ impl NodeContext {
         self.stream_outputs = stream_outputs;
     }
 
-    /// **La fin du nœud, sous les niveaux** : une faute d'emploi est dite, et
-    /// les éléments émis sur chaque port de flux sont fusionnés en une valeur
-    /// (`merge_port_values`), comme un lecteur `Complete` les recevrait.
+    /// **La fin du nœud** : une faute d'emploi est dite. (Les éléments d'une
+    /// sortie en flux sans arête ont été jetés à l'émission.)
     pub(crate) fn settle_streams(&mut self) -> Result<(), String> {
         if !self.misuse.is_empty() {
             return Err(std::mem::take(&mut self.misuse).join(" ; "));
-        }
-        for (port, elements) in std::mem::take(&mut self.emitted) {
-            let mut it = elements.into_iter();
-            let Some(first) = it.next() else { continue };
-            let merged = it.try_fold(first, merge_stream_elements).map_err(|e| {
-                format!("les éléments émis sur « {port} » ne se fusionnent pas en une valeur : {e}")
-            })?;
-            self.outputs.insert(port, merged);
         }
         Ok(())
     }

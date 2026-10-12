@@ -141,10 +141,9 @@ pub struct DataflowOutput {
     /// Le run a été arrêté avant sa fin (par l'hôte) : la sortie est ce qui
     /// était fait.
     stopped: Option<super::node::CancelCause>,
-    /// Les éléments des sorties en flux que rien ne lit dans le graphe, dans
-    /// l'ordre (un sous-graphe les rend à son parent élément par élément) ;
-    /// `data` les porte fusionnés.
-    streams: HashMap<(String, String), Vec<PortValue>>,
+    /// Combien d'éléments chaque sortie en flux sans arête a jetés (un
+    /// sous-graphe : ce qui compte pour sa sortie libre non branchée).
+    dropped: HashMap<(String, String), usize>,
     /// Combien d'éléments chaque sortie a envoyés sur ses canaux (un
     /// sous-graphe délégué : ce que ses nœuds ont posé sur les arêtes du parent).
     sent: HashMap<(String, String), usize>,
@@ -155,9 +154,9 @@ impl DataflowOutput {
         data: HashMap<String, HashMap<String, PortValue>>,
         skipped: HashMap<String, String>,
         stopped: Option<super::node::CancelCause>,
-        streams: HashMap<(String, String), Vec<PortValue>>,
+        dropped: HashMap<(String, String), usize>,
     ) -> Self {
-        Self { data, skipped, stopped, streams, sent: HashMap::new() }
+        Self { data, skipped, stopped, dropped, sent: HashMap::new() }
     }
 
     pub(super) fn with_sent(mut self, sent: HashMap<(String, String), usize>) -> Self {
@@ -170,9 +169,9 @@ impl DataflowOutput {
         self.sent.get(&(node.to_string(), port.to_string())).copied().unwrap_or(0)
     }
 
-    /// Les éléments, dans l'ordre, d'une sortie en flux que rien ne lisait.
-    pub fn stream(&self, node: &str, port: &str) -> Option<&[PortValue]> {
-        self.streams.get(&(node.to_string(), port.to_string())).map(Vec::as_slice)
+    /// Combien d'éléments la sortie en flux `node.port`, sans arête, a jetés.
+    pub(crate) fn dropped(&self, node: &str, port: &str) -> usize {
+        self.dropped.get(&(node.to_string(), port.to_string())).copied().unwrap_or(0)
     }
 
     /// Pourquoi le run s'est arrêté avant sa fin, s'il l'a été (l'hôte a
@@ -192,9 +191,16 @@ impl DataflowOutput {
             data: HashMap::new(),
             skipped: HashMap::new(),
             stopped: None,
-            streams: HashMap::new(),
+            dropped: HashMap::new(),
             sent: HashMap::new(),
         }
+    }
+
+    /// Les ports posés, (nœud, port), dans l'ordre : la sortie entière d'un
+    /// run se compare par eux (témoin de parité des flux non branchés).
+    #[cfg(test)]
+    pub(super) fn ports(&self) -> std::collections::BTreeSet<(String, String)> {
+        self.data.iter().flat_map(|(n, ps)| ps.keys().map(move |p| (n.clone(), p.clone()))).collect()
     }
 
     /// La raison du saut de ce nœud, s'il a été sauté (branche non prise).
@@ -1075,7 +1081,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new(), sent: HashMap::new() })
+        Ok(DataflowOutput { data, skipped, stopped: None, dropped: HashMap::new(), sent: HashMap::new() })
     }
 
     /// Execute the graph. Returns all output values.
@@ -1478,7 +1484,7 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None, streams: HashMap::new(), sent: HashMap::new() })
+        Ok(DataflowOutput { data, skipped, stopped: None, dropped: HashMap::new(), sent: HashMap::new() })
     }
 }
 

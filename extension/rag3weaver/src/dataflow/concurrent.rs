@@ -167,7 +167,7 @@ struct Plan {
 enum Ended {
     Completed {
         unconnected: HashMap<String, PortValue>,
-        streams: HashMap<String, Vec<PortValue>>,
+        dropped: HashMap<String, usize>,
         sent: HashMap<String, usize>,
     },
     Skipped(String),
@@ -383,14 +383,14 @@ impl DataflowRuntime {
         let cause = hub.cancelled();
         let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
         let mut skipped = HashMap::new();
-        let mut streams = HashMap::new();
+        let mut dropped_by = HashMap::new();
         let mut sent_by = HashMap::new();
         let mut failures = Vec::new();
         for ((name, worker_name), ended) in ends {
             match ended {
-                Ended::Completed { unconnected, streams: elements, sent } => {
-                    for (port, list) in elements {
-                        streams.insert((name.clone(), port), list);
+                Ended::Completed { unconnected, dropped, sent } => {
+                    for (port, n) in dropped {
+                        dropped_by.insert((name.clone(), port), n);
                     }
                     for (port, n) in sent {
                         sent_by.insert((name.clone(), port), n);
@@ -425,7 +425,7 @@ impl DataflowRuntime {
             total_nodes: graph.nodes.len(),
             duration_ms: start.elapsed().as_millis() as u64,
         });
-        Ok(DataflowOutput::new(data, skipped, cause, streams).with_sent(sent_by))
+        Ok(DataflowOutput::new(data, skipped, cause, dropped_by).with_sent(sent_by))
     }
 
     /// **Le pont vivant** : exécute un sous-graphe sur les canaux délégués de
@@ -492,7 +492,7 @@ impl DataflowRuntime {
             }
             binding.finish();
             self.emit(DataflowEvent::CheckpointResumed { node: plan.name.clone(), output_ports: outputs.keys().cloned().collect() });
-            return Ended::Completed { unconnected: HashMap::new(), streams: HashMap::new(), sent: binding.sent.clone() };
+            return Ended::Completed { unconnected: HashMap::new(), dropped: HashMap::new(), sent: binding.sent.clone() };
         }
 
         // ── Les entrées de départ ──────────────────────────────────────────
@@ -630,7 +630,7 @@ impl DataflowRuntime {
         if hub.cancelled().is_some() && !own_failure {
             return cancelled(&mut binding, "pendant son exécution");
         }
-        let stream_elements = ctx.emitted_elements();
+        let dropped = ctx.dropped_elements();
         let result = result.and_then(|()| ctx.settle_streams()).and_then(|()| {
             let missing: Vec<&String> = plan.required_outputs.iter().filter(|p| !ctx_has_output(&ctx, &binding, p)).collect();
             if missing.is_empty() {
@@ -707,7 +707,7 @@ impl DataflowRuntime {
         }
         binding.finish();
         self.emit(DataflowEvent::NodeCompleted { node: plan.name.clone(), duration_ms, outputs: output_snapshots, metrics });
-        Ended::Completed { unconnected, streams: stream_elements, sent: binding.sent.clone() }
+        Ended::Completed { unconnected, dropped, sent: binding.sent.clone() }
     }
 }
 
