@@ -91,6 +91,9 @@ struct Hosted {
     /// modifié depuis se voit, se dit dans les réponses, et se relit à
     /// `POST /backend/open`.
     print: Mutex<Option<String>>,
+    /// Le dernier refus d'ouverture, quand un écrivain autonome tenait la
+    /// base (sa marque `<base>.ecrivain`) ; effacé à l'ouverture suivante.
+    refused: Mutex<Option<String>>,
 }
 
 /// L'empreinte d'un manifeste : son contenu, pas sa date (un `touch` ne
@@ -208,6 +211,7 @@ impl DaemonHost {
                     opened: Default::default(),
                     closed: Default::default(),
                     print: Mutex::new(None),
+                    refused: Mutex::new(None),
                 })
             })
             .clone())
@@ -245,6 +249,16 @@ impl DaemonHost {
         if slot.is_none() {
             let print = manifest_print(&hosted.manifest)?;
             let prepared = PreparedBackend::load(&hosted.manifest)?;
+            // **Un écrivain autonome tient la base** : l'ouvrir attendrait le
+            // verrou du moteur pour échouer ; le refus le nomme tout de suite,
+            // et `/etat` le garde jusqu'à l'ouverture suivante.
+            let base = prepared.path(&prepared.manifest.database);
+            if let Some(m) = crate::marque_d_ecrivain::ecrivain_autonome_vivant(&base) {
+                let refus = crate::marque_d_ecrivain::refus(&base, &m);
+                *hosted.refused.lock().unwrap_or_else(|p| p.into_inner()) = Some(refus.clone());
+                return Err(refus);
+            }
+            *hosted.refused.lock().unwrap_or_else(|p| p.into_inner()) = None;
             *slot = Some((self.opener)(prepared)?);
             *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
             hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -409,6 +423,7 @@ impl DaemonHost {
                     "opened": h.opened.load(std::sync::atomic::Ordering::SeqCst),
                     "closed": h.closed.load(std::sync::atomic::Ordering::SeqCst),
                     "manifest_changed": self.manifest_changed(h),
+                    "refused": *h.refused.lock().unwrap_or_else(|p| p.into_inner()),
                 })
             })
             .collect();

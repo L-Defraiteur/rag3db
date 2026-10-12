@@ -189,6 +189,24 @@ impl Client {
         Self { enfant, entree, sortie, id: 0, notifications: Vec::new() }
     }
 
+    /// **Un écrivain autonome** : la forme `--standalone`, qui possède sa
+    /// base sans hôte.
+    fn autonome(manifeste: &Path, demon: &Demon) -> Self {
+        let mut enfant = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
+            .args(["mcp", "--manifest", &manifeste.to_string_lossy(), "--standalone"])
+            .env("RAG3WEAVER_DAEMON_DIR", &demon.dir)
+            .env_remove("RAG3WEAVER_EMBED_SERVICE")
+            .env_remove("RAG3WEAVER_SERVICE_EMBED")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("lancer l'écrivain autonome");
+        let entree = enfant.stdin.take().unwrap();
+        let sortie = BufReader::new(enfant.stdout.take().unwrap());
+        Self { enfant, entree, sortie, id: 0, notifications: Vec::new() }
+    }
+
     fn demander(&mut self, methode: &str, params: Value) -> Value {
         self.id += 1;
         let requete = json!({"jsonrpc": "2.0", "id": self.id, "method": methode, "params": params});
@@ -526,4 +544,63 @@ fn un_backend_de_code_sans_service_s_ouvre_dans_l_hote() {
         journal.contains("pas de service d'embarquement") && journal.contains("aucun service déclaré"),
         "l'hôte dit qu'il ouvre sans service, et pourquoi, dans son journal : {journal}"
     );
+}
+
+/// **(10) Un client ne lance pas d'hôte sur une base tenue par un écrivain
+/// autonome** (ticket du 12 octobre 2026) : pendant qu'un serveur
+/// `--standalone` écrit la base, le client mince ne fait naître aucun hôte ;
+/// son outil d'état dit « refusé » en nommant la base et le pid de
+/// l'écrivain. L'écrivain parti, sa marque tombe, et l'appel suivant lance
+/// l'hôte et s'y attache.
+#[test]
+#[ignore = "e2e : un écrivain autonome, puis le client MCP"]
+fn un_client_ne_lance_pas_d_hote_sur_une_base_tenue_par_un_ecrivain_autonome() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifeste = boutique(tmp.path());
+    let demon = Demon::new(tmp.path());
+    let prepare = rag3weaver::backend::PreparedBackend::load(&manifeste).expect("le manifeste");
+    let base = prepare.path(&prepare.manifest.database);
+    let marque = rag3weaver::marque_d_ecrivain::chemin(&base);
+
+    let mut ecrivain = Client::autonome(&manifeste, &demon);
+    let r = ecrivain.initialiser();
+    assert!(r.get("result").is_some(), "l'écrivain autonome démarre : {r}");
+    let (erreur, texte) = ecrivain.appeler("put_category", json!({"record": {"key": "outils", "name": "Les outils"}}));
+    assert!(!erreur, "il écrit sa base : {texte}");
+    let lue = rag3weaver::marque_d_ecrivain::lire(&base).unwrap_or_else(|| panic!("la marque {} est posée", marque.display()));
+    assert_eq!(lue.role, rag3weaver::marque_d_ecrivain::ROLE_AUTONOME);
+    assert_eq!(lue.pid, ecrivain.enfant.id(), "la marque nomme l'écrivain");
+
+    let mut c = Client::lancer(&manifeste, &demon, LIBRE);
+    c.initialiser();
+    let (erreur, texte) = c.appeler("daemon_status", json!({}));
+    assert!(!erreur, "l'état se dit : {texte}");
+    let etat: Value = serde_json::from_str(&texte).unwrap_or_else(|e| panic!("{e} : {texte}"));
+    assert_eq!(etat["state"], "refusé", "{etat}");
+    let raison = etat["reason"].as_str().unwrap_or_default();
+    assert!(raison.contains(&format!("pid {}", lue.pid)), "le refus nomme l'écrivain : {raison}");
+    assert!(raison.contains(&base.display().to_string()), "le refus nomme la base : {raison}");
+    let (erreur, texte) = c.appeler("list_categories", json!({}));
+    assert!(erreur, "un outil du backend se refuse : {texte}");
+    assert_eq!(demon.demarrages(), 0, "aucun hôte n'est né");
+    assert!(demon.fiche().is_none(), "aucun daemon.json");
+
+    // L'écrivain parti, la marque tombe, et l'appel suivant s'attache.
+    ecrivain.fermer();
+    assert!(!marque.exists(), "la marque tombe avec l'écrivain");
+    let debut = Instant::now();
+    loop {
+        let (_, texte) = c.appeler("daemon_status", json!({}));
+        if serde_json::from_str::<Value>(&texte).is_ok_and(|v| v["state"] == "running") {
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(40), "pas d'hôte 40 s après l'écrivain : {texte}");
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    assert_eq!(demon.demarrages(), 1, "un hôte, une fois l'écrivain parti");
+    let (erreur, texte) = c.appeler("list_categories", json!({}));
+    assert!(!erreur, "l'hôte ouvre la base et répond : {texte}");
+    let lue = rag3weaver::marque_d_ecrivain::lire(&base).expect("l'hôte marque la base qu'il ouvre");
+    assert_eq!(lue.role, rag3weaver::marque_d_ecrivain::ROLE_HOTE, "{lue:?}");
+    c.fermer();
 }

@@ -97,6 +97,9 @@ struct ReopenState {
     /// enfle sans fin (cœur C++, 5 octobre 2026) ; la réouverture repart du
     /// disque et du journal, et elle est juste.
     close_without_checkpoint: std::sync::atomic::AtomicBool,
+    /// **La marque de l'écrivain** (`crate::marque_d_ecrivain`), tenue tant
+    /// qu'une connexion de la base vit ; elle tombe avec la dernière.
+    marque: std::sync::Mutex<Option<crate::marque_d_ecrivain::Garde>>,
 }
 
 /// **La dernière connexion d'une base au tampon plein la ferme sans point de
@@ -334,7 +337,13 @@ impl Rag3dbConnection {
                             .lock()
                             .unwrap_or_else(|p| p.into_inner())
                             .insert(cle, Arc::downgrade(&db));
-                        return Self::connect(db, Self::fresh_reopen_state());
+                        // La marque de l'écrivain, à côté de la base : un client
+                        // ou un hôte qui la lit sait qui la tient.
+                        let reopen = Self::fresh_reopen_state();
+                        if let Ok(mut m) = reopen.marque.lock() {
+                            *m = crate::marque_d_ecrivain::poser(path);
+                        }
+                        return Self::connect(db, reopen);
                     }
                     Err(e) if e.to_string().contains(ALREADY_OPEN_FOR_WRITING) && !reste.is_zero() => {}
                     Err(e) => return Err(DbError::ConnectionError(e.to_string())),

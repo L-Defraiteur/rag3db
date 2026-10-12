@@ -124,6 +124,9 @@ pub mod cypher_blob_store;
 pub mod buffered_blob_store;
 #[cfg(feature = "rag3db-native")]
 pub mod rag3db_connection;
+/// La marque de l'écrivain d'une base (`<base>.ecrivain`).
+#[cfg(feature = "rag3db-native")]
+pub mod marque_d_ecrivain;
 pub mod build_check;
 pub mod rag3db_search_backend;
 

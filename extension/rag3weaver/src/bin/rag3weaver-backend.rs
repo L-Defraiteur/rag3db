@@ -351,6 +351,9 @@ fn modele_du_chat(
 /// `POST /arret` ferme l'écoute, puis chaque backend proprement.
 fn servir_le_demon(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]";
+    // L'hôte se dit hôte dans la marque des bases qu'il ouvre : un client
+    // s'attache à lui, il ne le prend pas pour un écrivain autonome.
+    rag3weaver::marque_d_ecrivain::declare_role(rag3weaver::marque_d_ecrivain::ROLE_HOTE);
     // L'adresse par défaut : `RAG3WEAVER_DAEMON_ADDRESS`, sinon 127.0.0.1:7970
     // (c'est ainsi qu'un client lance l'hôte) ; `--address` la donne à la main.
     let mut adresse = rag3weaver::daemon_lifecycle::launch_address();
