@@ -4590,6 +4590,65 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **Une lecture pendant un lot réindexé voit le lot d'avant, entier**
+    /// (L3, page 12-octobre-2026-arbre-principal/02). Deux fichiers arrivent
+    /// d'un seul coup (un dossier renommé) : l'un définit `arrivee`, l'autre
+    /// l'appelle et tient le lot ouvert 2 s (le crochet `__pause_du_lot__`).
+    /// Pendant ce temps, `usages arrivee` (par la vue de lecture, sans le
+    /// mutex) voit soit rien, soit tout : jamais la définition sans son appel.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_during_a_reindexed_batch_sees_the_batch_before_whole() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let prep = dir.path().join("prep");
+        std::fs::create_dir(&prep).unwrap();
+        std::fs::write(prep.join("def.rs"), "pub fn arrivee() {}\n").unwrap();
+        std::fs::write(prep.join("__pause_du_lot__.rs"), "fn h() { arrivee(); }\n").unwrap();
+        std::fs::rename(&prep, dir.path().join("sources/neuf")).unwrap();
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let (mut avant, mut apres) = (0, false);
+        while std::time::Instant::now() < fin {
+            let u = usages_de(&backend, "arrivee");
+            let (def, appel) = (u.contains("neuf/def.rs"), u.contains("__pause_du_lot__"));
+            assert_eq!(def, appel, "un lot vu à moitié : {}", &u[..u.len().min(400)]);
+            if def {
+                apres = true;
+                break;
+            }
+            avant += 1;
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(apres, "le lot finit par être visible, entier");
+        assert!(avant >= 10, "des lectures ont eu lieu pendant le lot ouvert : {avant}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Un lot en échec est défait sans empoisonner le catalogue** (L3) : le
+    /// crochet `__echec_du_lot__` fait échouer le lot avant le COMMIT, puis
+    /// chaque fichier repris seul. Ni le lot ni le fichier fautif ne restent
+    /// dans l'index, le catalogue sert encore, et l'édition suivante est
+    /// réindexée.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_failed_batch_is_undone_without_poisoning_the_catalog() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        std::fs::write(dir.path().join("sources/__echec_du_lot__.rs"), "fn e() { depart(); }\n").unwrap();
+        // Le lot échoue, puis le fichier seul échoue encore : le temps de deux
+        // passes de la réaction.
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        let u = usages_de(&backend, "depart");
+        assert!(!u.contains("__echec_du_lot__"), "le lot défait ne laisse rien : {u}");
+        assert!(!u.contains("rouvert") && !u.contains("Catalogue occupé"), "le catalogue sert encore : {u}");
+        std::fs::write(dir.path().join("sources/apres.rs"), "fn k() { depart(); }\n").unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("apres.rs"));
+        assert!(u.contains("apres.rs"), "l'édition suivante est réindexée : {u}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     /// **Une base copiée se réconcilie par chemin relatif** : l'index fait sur
     /// une racine, la source ouverte sur une copie de cet arbre qui en diffère
     /// d'un fichier — la carte de l'index se lit à la racine que chaque ligne a

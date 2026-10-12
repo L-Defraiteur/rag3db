@@ -310,6 +310,10 @@ pub struct Catalog {
     /// hors COPY (NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS) — leurs décalages
     /// provisoires se recouvraient, et une recherche par clé plantait.
     merge_in_transaction: HashSet<String>,
+    /// **Le plein texte d'un lot en transaction** (`crate::fts_tampon`, L3) :
+    /// posé par [`Self::begin_lot`], appliqué par [`Self::commit_lot`] aux
+    /// décalages relus, jeté par [`Self::rollback_lot`]. `None` hors d'un lot.
+    fts_tampon: Option<Arc<crate::fts_tampon::TamponPleinTexte>>,
     /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
@@ -588,6 +592,7 @@ fn read_threads() -> u64 {
             fresh_ingest: None,
             defer_blob_push: false,
             merge_in_transaction: HashSet::new(),
+            fts_tampon: None,
             peut_devoir_un_redecoupage: false,
             peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
@@ -3458,6 +3463,9 @@ fn read_threads() -> u64 {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        if let Some(t) = &self.fts_tampon {
+            services.register(crate::fts_tampon::FTS_TAMPON_SERVICE, t.clone());
+        }
         // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
         // sur le chemin natif l'index vit avec les données et il n'y a rien à
         // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
@@ -7667,6 +7675,116 @@ fn read_threads() -> u64 {
 
     /// **Une transaction de l'appelant s'ouvre ou se ferme.** Tant qu'elle
     /// est ouverte, le catalogue n'émet aucun DDL (voir `in_transaction`).
+    /// **Ouvrir un lot en transaction** (L3, page
+    /// 12-octobre-2026-arbre-principal/02) : le DDL d'abord, hors de la
+    /// transaction, puis BEGIN, et le plein texte en tampon. Rend `false`
+    /// sans rien ouvrir pour un dialecte sans Cypher ou une transaction déjà
+    /// ouverte : le lot se fait alors comme avant, instruction par
+    /// instruction.
+    pub fn begin_lot(&mut self) -> Result<bool, CatalogError> {
+        if !self.dialect.capabilities().cypher || self.in_transaction {
+            return Ok(false);
+        }
+        self.prepare_schema_for_ingest()?;
+        self.conn.begin().map_err(|e| CatalogError::DbError(format!("BEGIN du lot : {e}")))?;
+        self.set_in_transaction(true);
+        self.fts_tampon = Some(Arc::new(crate::fts_tampon::TamponPleinTexte::default()));
+        Ok(true)
+    }
+
+    /// **Valider un lot** : COMMIT, puis le plein texte du tampon appliqué
+    /// aux décalages relus par `_uuid` (une ligne neuve peut changer de
+    /// décalage au COMMIT sous plusieurs écrivains), puis la synchronisation
+    /// du plein texte. Un COMMIT refusé défait le lot comme un ROLLBACK, sans
+    /// empoisonner.
+    pub fn commit_lot(&mut self) -> Result<(), CatalogError> {
+        let tampon = self.fts_tampon.take();
+        if let Err(e) = self.conn.commit() {
+            let _ = self.conn.rollback();
+            self.set_in_transaction(false);
+            self.vider_les_caches_du_lot();
+            return Err(CatalogError::DbError(format!("COMMIT du lot refusé, lot défait : {e}")));
+        }
+        self.set_in_transaction(false);
+        if let Some(t) = tampon {
+            self.appliquer_le_tampon(t.prendre())?;
+        }
+        self.flush_blob_store("lot")
+    }
+
+    /// **Défaire un lot, sans empoisonner** : ROLLBACK, le tampon jeté (rien
+    /// n'a touché lucivy), et les caches qui divergeraient de la base
+    /// vidés. Le catalogue sert ensuite comme avant le lot.
+    pub fn rollback_lot(&mut self) {
+        let _ = self.conn.rollback();
+        self.fts_tampon = None;
+        self.set_in_transaction(false);
+        self.vider_les_caches_du_lot();
+    }
+
+    /// Ce qui, en mémoire, a suivi les écritures d'un lot défait : un cache
+    /// qui pointerait sur des décalages provisoires (ils resservent après le
+    /// ROLLBACK), une session ou une file que la base n'a plus, une marque
+    /// que le ROLLBACK a retirée.
+    fn vider_les_caches_du_lot(&mut self) {
+        if let Ok(mut c) = self.node_id_cache.write() {
+            c.clear();
+        }
+        self.sessions_ouvertes.clear();
+        self.pending = Default::default();
+        self.proven_present = None;
+        self.merge_in_transaction.clear();
+        self.fresh_ingest = None;
+        self.marque_posee = false;
+        self.dette_publiee.clear();
+    }
+
+    /// Le plein texte d'un lot validé : les retraits d'abord, puis chaque
+    /// ligne présente à son décalage final, relu par `_uuid`.
+    fn appliquer_le_tampon(&self, a: crate::fts_tampon::Application) -> Result<(), CatalogError> {
+        let err = |e: String| CatalogError::DbError(format!("plein texte du lot : {e}"));
+        let mut touchees: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for (entity, offsets) in &a.retraits {
+            let Some(h) = self.fts_handles.get(entity) else { continue };
+            for o in offsets {
+                h.delete_by_node_id(*o).map_err(|e| err(e.to_string()))?;
+            }
+            touchees.insert(entity.clone());
+        }
+        for (entity, lignes) in &a.presentes {
+            let Some(h) = self.fts_handles.get(entity) else { continue };
+            let uuids = CypherValue::List(lignes.iter().map(|(u, _)| CypherValue::String(u.clone())).collect());
+            let q = format!(
+                "UNWIND $uuids AS u MATCH (n:{} {{_uuid: u}}) RETURN u, {}",
+                self.dialect.quote(entity),
+                self.dialect.node_offset_expr("n")
+            );
+            let rows = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids)]).map_err(|e| err(e.to_string()))?;
+            let decalages: HashMap<String, u64> = rows
+                .rows
+                .iter()
+                .filter_map(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_i64()? as u64)))
+                .collect();
+            for (uuid, fields) in lignes {
+                let Some(&offset) = decalages.get(uuid) else { continue };
+                crate::fts_handle::reindex_document(h, fields, offset).map_err(|e| err(e.to_string()))?;
+                if let Ok(mut c) = self.node_id_cache.write() {
+                    if let Some(mut id) = c.get(uuid) {
+                        id.offset = offset;
+                        c.insert(uuid, id);
+                    }
+                }
+            }
+            touchees.insert(entity.clone());
+        }
+        for entity in &touchees {
+            if let Some(h) = self.fts_handles.get(entity) {
+                h.commit().map_err(|e| err(e.to_string()))?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn set_in_transaction(&mut self, open: bool) {
         self.in_transaction = open;
         self.merge_in_transaction.clear();
@@ -8374,6 +8492,11 @@ fn read_threads() -> u64 {
     /// Return failures to the caller as well as emitting an event. Retaining
     /// pending blobs permits retry but does not mean the index is durable.
     fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
+        // Dans un lot en transaction : rien à synchroniser, le plein texte
+        // attend le COMMIT (`commit_lot`).
+        if self.fts_tampon.is_some() {
+            return Ok(());
+        }
         // Le mode fichiers : la génération du plein texte rendue durable ici,
         // là où les blobs seraient poussés — une fois, pas un `fsync` par
         // fichier.
@@ -8555,6 +8678,9 @@ fn read_threads() -> u64 {
         }
         // Ce que lit `InsertRecordNode` et qui manquait ici.
         services.register("fts_handles", self.fts_handles.clone());
+        if let Some(t) = &self.fts_tampon {
+            services.register(crate::fts_tampon::FTS_TAMPON_SERVICE, t.clone());
+        }
         services.register("entity_configs", self.entity_configs.clone());
         services.register("plein_texte_natif", self.plein_texte_natif());
         let canal = Self::ouvrir_le_canal_d_echecs(&mut services);
@@ -8854,6 +8980,9 @@ fn read_threads() -> u64 {
         // Les nœuds BM25 et sparse cherchent dans les index Rust ouverts par le
         // catalogue — pas dans la base.
         services.register("fts_handles", self.fts_handles.clone());
+        if let Some(t) = &self.fts_tampon {
+            services.register(crate::fts_tampon::FTS_TAMPON_SERVICE, t.clone());
+        }
         // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
         // sur le chemin natif l'index vit avec les données et il n'y a rien à
         // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme

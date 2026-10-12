@@ -118,6 +118,8 @@ pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;
 /// La vue de lecture : ce qu'une lecture d'outil demande au catalogue, sans son mutex.
 pub mod read_view;
+/// Le plein texte d'un lot, en tampon jusqu'au COMMIT (L3).
+pub mod fts_tampon;
 pub mod cypher_blob_store;
 pub mod buffered_blob_store;
 #[cfg(feature = "rag3db-native")]

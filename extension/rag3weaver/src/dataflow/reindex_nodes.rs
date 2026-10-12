@@ -26,6 +26,55 @@ use super::port::{PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::code_tools::{FileSource, FILE_SOURCE_SERVICE};
 
+/// **Un lot réindexé dans une transaction** (L3, page
+/// 12-octobre-2026-arbre-principal/02) : le DDL avant le BEGIN, le lot en
+/// plein texte seul (aucun appel au service d'embarquement dans la
+/// transaction), le plein texte en tampon jusqu'au COMMIT ; puis la dette
+/// d'embarquement du lot, hors transaction. Un lecteur sur la connexion de
+/// lecture voit le lot d'avant, entier, jusqu'au COMMIT. Un échec défait le
+/// lot sans empoisonner le catalogue. Sans transaction possible (un dialecte
+/// sans Cypher), le chemin d'avant, en ligne.
+///
+/// Deux crochets de témoin, par le nom d'un fichier du lot : `__pause_du_lot__`
+/// tient la transaction ouverte 2 s avant le COMMIT ; `__echec_du_lot__` fait
+/// échouer le lot avant le COMMIT.
+fn reindexer_en_lot(
+    cat: &mut Catalog,
+    source: &dyn FileSource,
+    fichiers: &[(String, Option<String>)],
+) -> Result<crate::code_tools::ReingestReport, String> {
+    use crate::disponibilite::Disponibilites;
+    let en_lot = cat.begin_lot().map_err(|e| e.to_string())?;
+    if !en_lot {
+        return crate::code_sync::reingest_files(cat, source, fichiers, Disponibilites::TOUT);
+    }
+    let r = crate::code_sync::reingest_files(cat, source, fichiers, Disponibilites::RECHERCHE_TEXTE).and_then(|r| {
+        if fichiers.iter().any(|(p, _)| p.contains("__pause_du_lot__")) {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        if fichiers.iter().any(|(p, _)| p.contains("__echec_du_lot__")) {
+            return Err("échec du lot provoqué (crochet de témoin)".to_string());
+        }
+        Ok(r)
+    });
+    match r {
+        Ok(rapport) => {
+            cat.commit_lot().map_err(|e| e.to_string())?;
+            // La dette du lot, hors transaction : les morceaux neufs manquent
+            // à la recherche vectorielle le temps de cet appel, et la ligne
+            // de retard le dit.
+            if let Err(e) = cat.embarquer_le_retard(Disponibilites::TOUT, crate::catalog::RATTRAPAGE_PAR_PASSE, None) {
+                eprintln!("[réaction] l'embarquement du lot reste dû : {e}");
+            }
+            Ok(rapport)
+        }
+        Err(e) => {
+            cat.rollback_lot();
+            Err(e)
+        }
+    }
+}
+
 pub struct ReindexFileNode {
     name: String,
     /// Seulement les événements de cette montre ; vide : toutes.
@@ -279,9 +328,7 @@ impl Node for ReindexFileNode {
                     }
                 }
             }
-            let (outcome, steps) = crate::ingest_profile::record(|| {
-                crate::code_sync::reingest_files(&mut cat, source.as_ref(), &fichiers, crate::disponibilite::Disponibilites::TOUT)
-            });
+            let (outcome, steps) = crate::ingest_profile::record(|| reindexer_en_lot(&mut cat, source.as_ref(), &fichiers));
             // Un lot en échec ne dit pas quel fichier : on les refait un à un
             // (idempotent), et chacun rend son verdict.
             let verdicts: Vec<(String, bool, Result<Outcome, String>)> = match outcome {
@@ -294,12 +341,13 @@ impl Node for ReindexFileNode {
                     fichiers
                         .iter()
                         .map(|(p, c)| {
-                            let r = match c {
-                                Some(contenu) => crate::code_tools::reingest_file(&mut cat, source.as_ref(), p, contenu)
-                                    .map(|r| if r.deferred_to.is_some() { Outcome::Deferred } else { Outcome::Reindexed }),
-                                None => crate::code_sync::remove_file(&mut cat, source.as_ref(), p, crate::disponibilite::Disponibilites::TOUT)
-                                    .map(|_| Outcome::Removed),
-                            };
+                            // Chacun dans son lot : la même transaction, le
+                            // même tampon, à l'échelle d'un fichier.
+                            let r = reindexer_en_lot(&mut cat, source.as_ref(), &[(p.clone(), c.clone())]).map(|r| match c {
+                                None => Outcome::Removed,
+                                Some(_) if r.deferred_to.is_some() => Outcome::Deferred,
+                                Some(_) => Outcome::Reindexed,
+                            });
                             (p.clone(), c.is_some(), r)
                         })
                         .collect()

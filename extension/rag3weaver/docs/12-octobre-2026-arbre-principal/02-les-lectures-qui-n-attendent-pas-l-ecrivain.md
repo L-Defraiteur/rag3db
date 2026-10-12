@@ -177,3 +177,57 @@ envoyés après le COMMIT**. Un ROLLBACK les jette, sans rien défaire dans luci
 | L2 | la vue de lecture, `build_services` et `read_catalog_in` hors du mutex |
 | L3 | une transaction par lot réindexé, un ROLLBACK sans empoisonnement, le plein texte en tampon jusqu'au COMMIT, l'embarquement en dette après |
 | L4 | réduit : la mutation de la forme par la vue ; l'exception brute du DROP/CREATE si elle survit au pas 1 DDL |
+
+## Livré
+
+### L1 — la connexion de lecture (`2406684f5`)
+
+Le catalogue ouvre, sur la même base, une connexion de lecture à 2 fils (`RAG3WEAVER_READ_THREADS`).
+Les lectures d'outil y passent en auto-commit, par `execute_read_with_params` et `run_read_plan`.
+Pendant une transaction d'écriture ouverte, une lecture rend l'état d'avant en 0 ms, et une lecture
+fautive ne défait plus la transaction de l'écrivain (`tests/e2e_lectures.rs`).
+
+### L2 — la vue de lecture (`9d1e2dff6`)
+
+Une `ReadView` immuable : le dialecte, la connexion de lecture, les configurations, les relations, la
+cellule et les services de recherche. Elle est publiée par le catalogue quand la forme change,
+jamais pendant l'emprunt d'une cellule, et prise sans le mutex. Le trait `ReadCatalog` est
+implémenté par `Catalog`, son garde et la vue.
+
+`read_for_tool` calcule la ligne d'état si le catalogue est libre à l'instant ; sinon, la réponse
+dit « une écriture de l'index est en cours : la réponse porte sur l'état validé ».
+`build_services` prend les services de la vue au lieu du mutex.
+
+Témoin de bout en bout : un écrivain tient le mutex 2 s, avec une transaction qui retire la
+définition ; `usages` répond en **12 ms**, avec l'état d'avant.
+
+### L3 — une transaction par lot réindexé
+
+- **`fts_tampon`** : le plein texte d'un lot, par `_uuid`, dans son état net (présente ou retirée,
+  et les décalages relevés au retrait). Les nœuds d'insertion, de suppression et de mise à jour y
+  rangent leurs opérations. `FlushNode` et `flush_blob_store` ne valident rien pendant un lot.
+- **`begin_lot`** : le DDL avant le BEGIN (`prepare_schema_for_ingest`), puis BEGIN et le tampon.
+  Sans Cypher, aucun lot, et le chemin d'avant.
+- **`commit_lot`** : le COMMIT ; puis les décalages relus par `_uuid`, puisqu'une ligne neuve change
+  de décalage au COMMIT sous plusieurs écrivains (le cœur) ; puis les retraits, puis chaque ligne
+  présente réécrite (`reindex_document`) ; enfin la synchronisation du plein texte.
+- **`rollback_lot`** : le ROLLBACK, le tampon jeté (rien n'a touché lucivy), et les caches qui
+  divergeraient vidés : `node_id_cache` (les décalages provisoires resservent),
+  `sessions_ouvertes`, la file en attente, les présences prouvées, `merge_in_transaction`,
+  `fresh_ingest`, la marque et la dette publiée. **Le catalogue n'est plus empoisonné.**
+- **`ReindexFileNode`** : chaque lot passe par `reindexer_en_lot`. Le lot se fait en
+  `RECHERCHE_TEXTE`, sans appel au service d'embarquement dans la transaction ; le repli fichier
+  par fichier se fait dans un lot chacun ; la dette d'embarquement est rattrapée après le COMMIT,
+  hors transaction.
+- **Deux crochets de témoin**, par le nom d'un fichier du lot : `__pause_du_lot__` (le lot tenu
+  ouvert 2 s) et `__echec_du_lot__` (le lot qui échoue avant le COMMIT).
+- **Témoins** (`backend::tests`) :
+  - `a_read_during_a_reindexed_batch_sees_the_batch_before_whole` : deux fichiers arrivent d'un
+    coup (un dossier renommé). Pendant le lot ouvert, `usages` ne voit jamais la définition sans son
+    appel, avec au moins dix lectures pendant ce temps.
+  - `a_failed_batch_is_undone_without_poisoning_the_catalog` : rien du lot ne reste, le catalogue
+    sert encore, et l'édition suivante est réindexée.
+
+  Le rouge n'est pas prouvé : sans transaction, le crochet de pause ne joue pas.
+- **Ce qui reste hors de la transaction** : `note_indexed_tree`, écrit après le lot sous une
+  seconde prise, et la dette d'embarquement, qui est voulue ainsi.
