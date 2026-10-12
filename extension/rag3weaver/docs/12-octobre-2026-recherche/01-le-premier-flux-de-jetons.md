@@ -191,3 +191,46 @@ en coûte 0,8 µs, soit 0,002 % : il ne pèse pas. La borne du test est
 Ces deux tests ne sont pas rouges d'abord. Ce sont une mesure et un témoin
 du protocole sur un vrai serveur. Ce qui serait rouge si `LlmNode` publiait
 seulement à la fin, la poignée de main, est le témoin 1 du proto.
+
+## 8. Le refoulement d'un consommateur lent (12 octobre, midi)
+
+Sur `TokenEvents` et `Spot`, poussés par le proto en `3db578589`, la mesure
+`measure_backpressure` (`jetons_tests.rs`, `#[ignore]`, sous `poste mesure`)
+a trois volets. Les chiffres sont en debug.
+
+**1. Un lecteur lent dans le graphe** : 400 fragments d'un modèle rapide
+vers un lecteur qui dort 1 ms par fragment. L'avance maximale du modèle sur
+le lecteur est de **65 fragments**, pour un canal de 64. Le modèle finit à
+357 ms, au rythme du lecteur. **Le canal refoule jusqu'au puits**, donc
+jusqu'à la socket du modèle, comme voulu (§5).
+
+**2. `TokenEvents` vers un abonné du bus lent** : 2 000 jetons d'un modèle
+rapide, un abonné qui dort 1 ms par événement, un bus de 64 comme celui du
+chat. Le modèle finit en **4 ms** : le bus **ne refoule pas**. Il écrase
+les plus anciens (`set_overflow`), et l'abonné en a lu 68 et **perdu
+1 932**, qu'il apprend par `Overflowed(n)`. Chaque jeton est lu ou compté
+perdu.
+
+C'est un choix du bus, pas un défaut de `TokenEvents` : un écran lent ne
+doit pas freiner le modèle. Mais il perd du texte.
+- Au rythme d'un vrai modèle (qwen3 sur le processeur : un jeton toutes les
+  35,6 ms, §7), un abonné à 1 ms ne perd rien.
+- La perte commence quand l'abonné est plus lent que le modèle plus de
+  64 fois de suite.
+- La question ouverte du §6 (un événement par jeton, ou des paquets ?) a
+  donc maintenant son chiffre. Pour un écran qui ne doit rien perdre, il y a
+  deux voies, à décider avec le proto et l'arbre principal :
+  - un sujet `tokens` à plus grande capacité ;
+  - des paquets de quelques millisecondes, émis par `TokenEvents`.
+- Le texte entier reste toujours sur `text` : seule la vue au fil de l'eau
+  perd.
+
+**3. Le coût de `Spot`** : 100 000 fragments, trois tours alternés, le
+minimum de chacun. Lecteur nu : de 1 084 à 1 306 ns par fragment selon les
+passes. `Spot` (un motif texte, fenêtre de 256) : de 929 à 1 387 ns.
+- L'écart a varié de −452 à +81 ns sur quatre passes : le coût propre de
+  `Spot` se perd sous le bruit du passage par le canal. Un lecteur nu, plus rapide que
+  le modèle, vide le canal et se fait réveiller à chaque fragment ; `Spot`,
+  un peu plus lent, trouve des fragments en attente.
+- **`Spot` ne pèse pas** devant le rythme d'un modèle. Le test borne
+  seulement sa valeur absolue, sous 20 µs par fragment.

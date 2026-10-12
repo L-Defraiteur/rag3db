@@ -286,3 +286,187 @@ pub(crate) mod local {
         assert!(ecart < Duration::from_millis(50), "le graphe retient le premier jeton {ecart:?}");
     }
 }
+
+/// Lit `tokens` en dormant `delay` par fragment, et note l'instant de chacun.
+struct SlowReader {
+    seen: Arc<Mutex<Vec<Instant>>>,
+    delay: Duration,
+}
+
+impl Node for SlowReader {
+    fn name(&self) -> &str {
+        "reader"
+    }
+    fn node_type(&self) -> &str {
+        "SlowReader"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("tokens", PortType::Text, true).posture(Posture::PerElement)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        while ctx.next("tokens").map_err(|e| format!("{e:?}"))?.is_some() {
+            std::thread::sleep(self.delay);
+            self.seen.lock().unwrap().push(Instant::now());
+        }
+        Ok(())
+    }
+}
+
+/// Lit `tokens` et ne fait rien d'autre : la référence du coût d'un lecteur.
+struct NullReader;
+
+impl Node for NullReader {
+    fn name(&self) -> &str {
+        "reader"
+    }
+    fn node_type(&self) -> &str {
+        "NullReader"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("tokens", PortType::Text, true).posture(Posture::PerElement)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        while ctx.next("tokens").map_err(|e| format!("{e:?}"))?.is_some() {}
+        Ok(())
+    }
+}
+
+/// Un modèle rapide de `n` fragments qui note l'instant où chaque `on_token`
+/// lui rend la main : un puits qui refoule le retient là.
+fn fast_model(n: usize, produced: Arc<Mutex<Vec<Instant>>>) -> Arc<dyn Llm> {
+    Arc::new(crate::llm::CallbackLlm::new("rapide", 1 << 20, move |_, _, sink| {
+        for _ in 0..n {
+            let flow = sink.on_token("x ");
+            produced.lock().unwrap().push(Instant::now());
+            if flow == Flow::Stop {
+                return Ok((Finish::cancelled(), Usage::default()));
+            }
+        }
+        Ok((Finish::eos(), Usage { completion_tokens: n, ..Default::default() }))
+    }))
+}
+
+/// `Prompt → LlmNode → <node>.tokens`, avec les services donnés.
+fn run_into(llm: Arc<dyn Llm>, node: Box<dyn Node>, n: usize, mut services: ServiceRegistry) {
+    let mut g = DataflowGraph::new();
+    g.add_node(Box::new(Prompt("x".into()))).unwrap();
+    g.add_node(Box::new(LlmNode::new("llm").with_options(GenOptions { max_tokens: n, ..Default::default() }))).unwrap();
+    let name = node.name().to_string();
+    g.add_node(node).unwrap();
+    g.connect("source", "out", "llm", "prompt").unwrap();
+    g.connect("llm", "tokens", &name, "tokens").unwrap();
+    services.register(LLM_SERVICE, llm);
+    DataflowRuntime::with_services(10, services).execute(&mut g).expect("le run");
+}
+
+/// **Le refoulement d'un consommateur lent** (page 01, §5, troisième point),
+/// sur les consommateurs du proto :
+///
+/// 1. un lecteur du graphe lent (1 ms par fragment) : le canal de 64 retient
+///    le modèle, son avance sur le lecteur reste bornée, et le run dure ce
+///    que dure le lecteur — c'est le refoulement jusqu'au puits, donc jusqu'à
+///    la socket ;
+/// 2. `TokenEvents` vers un abonné du bus lent (1 ms par événement, un bus de
+///    64 comme celui du chat) : le bus **ne refoule pas** (il écrase les plus
+///    anciens, `set_overflow`), le modèle va à son rythme et l'abonné perd des
+///    jetons, qu'il apprend par `Overflowed(n)` ;
+/// 3. le coût de `Spot` par fragment, sur 100 000 fragments, contre un
+///    lecteur nu.
+#[test]
+#[ignore = "mesure, jouée à la main"]
+fn measure_backpressure() {
+    use super::token_nodes::{SpotFactory, TokenEventsFactory};
+    use crate::dataflow::node_registry::NodeFactory;
+    let profil = if cfg!(debug_assertions) { "debug" } else { "release" };
+
+    // 1. Un lecteur lent dans le graphe.
+    const N: usize = 400;
+    let (produced, consumed) = (Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())));
+    let t = Instant::now();
+    run_into(
+        fast_model(N, produced.clone()),
+        Box::new(SlowReader { seen: consumed.clone(), delay: Duration::from_millis(1) }),
+        N,
+        ServiceRegistry::new(),
+    );
+    let duree = t.elapsed();
+    let (p, c) = (produced.lock().unwrap().clone(), consumed.lock().unwrap().clone());
+    assert_eq!((p.len(), c.len()), (N, N));
+    let avance = p.iter().enumerate().map(|(i, at)| i + 1 - c.iter().filter(|x| *x <= at).count()).max().unwrap();
+    eprintln!(
+        "[mesure] {N} fragments vers un lecteur à 1 ms, profil {profil} : avance maximale du modèle sur le lecteur \
+         {avance} fragments (canal de 64) ; run {duree:?} ; le modèle a fini à {:?}",
+        p[N - 1] - t
+    );
+    assert!(avance <= 64 + 2, "le canal borne l'avance du modèle : {avance}");
+    assert!(p[N - 1] - t >= Duration::from_millis((N - 70) as u64), "le modèle est retenu par le lecteur");
+
+    // 2. TokenEvents vers un abonné du bus lent.
+    const M: usize = 2000;
+    let bus = Arc::new(crate::events::EventBus::new(64));
+    let mut rx = bus.subscribe(crate::events::topic::TOKENS);
+    let fini = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let abonne = {
+        let fini = fini.clone();
+        std::thread::spawn(move || {
+            let (mut lus, mut perdus) = (0u64, 0u64);
+            let mut calme = Instant::now();
+            loop {
+                match rx.try_recv() {
+                    Ok(_) => {
+                        lus += 1;
+                        calme = Instant::now();
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    Err(async_broadcast::TryRecvError::Overflowed(n)) => perdus += n,
+                    Err(_) => {
+                        if fini.load(std::sync::atomic::Ordering::SeqCst) && calme.elapsed() > Duration::from_millis(50) {
+                            return (lus, perdus);
+                        }
+                        std::thread::sleep(Duration::from_micros(200));
+                    }
+                }
+            }
+        })
+    };
+    let produced = Arc::new(Mutex::new(Vec::new()));
+    let mut services = ServiceRegistry::new();
+    services.register("event_bus", bus.clone());
+    let t = Instant::now();
+    run_into(fast_model(M, produced.clone()), TokenEventsFactory.create("montrer", &serde_json::json!({})).unwrap(), M, services);
+    let modele = t.elapsed();
+    fini.store(true, std::sync::atomic::Ordering::SeqCst);
+    let (lus, perdus) = abonne.join().unwrap();
+    eprintln!(
+        "[mesure] {M} jetons par TokenEvents vers un abonné du bus à 1 ms (bus de 64), profil {profil} : le modèle a fini \
+         en {modele:?} (pas de refoulement) ; l'abonné en a lu {lus}, perdu {perdus} (Overflowed)"
+    );
+    assert_eq!(lus + perdus, M as u64, "chaque jeton est lu ou compté perdu");
+    assert!(modele < Duration::from_millis(M as u64 / 2), "le bus ne retient pas le modèle : {modele:?}");
+
+    // 3. Le coût de Spot par fragment.
+    const K: usize = 100_000;
+    let nu = |node: Box<dyn Node>| {
+        let t = Instant::now();
+        run_into(fast_model(K, Arc::new(Mutex::new(Vec::with_capacity(K)))), node, K, ServiceRegistry::new());
+        t.elapsed().as_nanos() as f64 / K as f64
+    };
+    // Trois tours alternés, le minimum de chacun : le premier run paie le
+    // démarrage à froid (une première passe donnait Spot moins cher que le
+    // lecteur nu, ce qui ne se peut pas).
+    let (mut lecteur, mut spot) = (f64::MAX, f64::MAX);
+    for _ in 0..3 {
+        lecteur = lecteur.min(nu(Box::new(NullReader)));
+        spot = spot.min(nu(SpotFactory.create("repérer", &serde_json::json!({"patterns": {"fin": "ZZZ-JAMAIS"}})).unwrap()));
+    }
+    // De bout en bout, le coût propre de Spot se perd sous celui du passage
+    // par le canal : un lecteur nu, plus rapide que le modèle, vide le canal et
+    // se fait réveiller à chaque fragment ; Spot, un peu plus lent, trouve des
+    // fragments en attente. On dit les deux, et l'écart, sans en faire un coût.
+    eprintln!(
+        "[mesure] {K} fragments, profil {profil} : lecteur nu {lecteur:.0} ns/fragment, Spot (un motif texte, fenêtre 256) \
+         {spot:.0} ns/fragment (écart {:+.0} ns : sous le bruit du passage par le canal)",
+        spot - lecteur
+    );
+    assert!(spot < 20_000.0, "Spot reste loin du rythme d'un modèle : {spot:.0} ns par fragment");
+}
