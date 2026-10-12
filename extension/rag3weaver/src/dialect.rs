@@ -3529,6 +3529,21 @@ impl SchemaDialect for PostgresDialect {
 mod tests {
     use super::*;
 
+    /// **Les deux COPY citent leur chemin** par `cypher_path_literal` (lot B2,
+    /// suggestion de F) : un CSV temporaire Windows (`C:\Users\…`) ou un
+    /// chemin à apostrophe cassait le COPY, qui tombait en silence au repli
+    /// par lots. Qui touche ces deux méthodes garde le chemin cité.
+    #[test]
+    fn les_deux_copy_citent_leur_chemin() {
+        let d = Rag3dbDialect;
+        let q = d.copy_nodes_from_csv("Doc", &["_uuid", "title"], r"C:\tmp\a'b.csv").unwrap();
+        assert!(q.contains(r"FROM 'C:\\tmp\\a\'b.csv'"), "{q}");
+        let q = d.copy_links_from_csv("Lien", ("A", "B"), &[], r"C:\tmp\liens.csv").unwrap();
+        assert!(q.contains(r"FROM 'C:\\tmp\\liens.csv'"), "{q}");
+        let q = d.copy_nodes_from_csv("Doc", &["_uuid"], "/tmp/x.csv").unwrap();
+        assert!(q.contains("FROM '/tmp/x.csv'"), "sous Linux, le même littéral qu'avant : {q}");
+    }
+
     fn sample_columns() -> Vec<ColumnDef> {
         vec![
             ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
