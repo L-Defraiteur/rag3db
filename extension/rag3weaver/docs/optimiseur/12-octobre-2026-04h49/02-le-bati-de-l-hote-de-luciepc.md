@@ -39,10 +39,12 @@
    release.
 4. Lire `hote-bati7.log` : il doit finir par « prêt » et « note ». Puis suivre
    la note qu'il écrit, `~/.local/share/rag3weaver/POUR-LUCIE-hote.md` :
-   installation des deux `.pret` neufs (md5 dans la note), activation de
-   `check-lib.conf`, démarrage, `/sante`.
-5. La réindexation des bases de code par codeparsers, avec ce nouvel hôte : les
-   bases d'avant B4 refusent de s'ouvrir.
+   installation des deux `.pret` neufs (md5 dans la note) et activation de
+   `check-lib.conf`, **sans démarrer l'hôte**.
+5. La section « Pour Lucie » de codeparsers (eef060968) : la montre et
+   `queries_via` dans les deux manifestes, les bases d'avant B4 effacées. **Puis
+   seulement** le démarrage, `/sante`, et la réindexation par `index2.sh`. Un
+   hôte démarré avant ouvrirait une base d'avant B4.
 
 ## Ce que le script exige et produit
 

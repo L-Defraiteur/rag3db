@@ -72,8 +72,10 @@ echo "2. Installer : \`mv ~/.local/bin/rag3weaver-backend.pret ~/.local/bin/rag3
 echo "   \`mv ~/.local/bin/rag3db-check-lib.pret ~/.local/bin/rag3db-check-lib\`."
 echo "3. Activer la vérification : \`mv ~/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf.pret ~/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf\`"
 echo "   puis \`systemctl --user daemon-reload\`."
-echo "4. \`systemctl --user start rag3weaver-daemon\`, puis \`/sante\` (même pid que daemon.json, build $(basename $L))."
-echo "5. Les bases de code sont d'avant la règle des chemins relatifs (B4) : codeparsers les efface et les"
-echo "   réindexe avec cet hôte. Jamais avant que la lib ne porte e6f626df4 : sinon la boucle revient."
+echo "4. **Ne pas démarrer encore** : d'abord la section « Pour Lucie » de codeparsers (eef060968) —"
+echo "   la montre et queries_via dans les deux manifestes, les bases d'avant B4 effacées. Un hôte"
+echo "   démarré avant ouvrirait une base d'avant la règle des chemins relatifs."
+echo "5. Puis \`systemctl --user start rag3weaver-daemon\`, \`/sante\` (même pid que daemon.json, build $(basename $L)),"
+echo "   et la réindexation de codeparsers par index2.sh."
 } > $N
 echo "== note : $N"
