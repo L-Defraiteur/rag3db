@@ -1389,3 +1389,33 @@ où elle vit.
   sinon erreur, plus de repli sur « . » ; un accès refusé vaut inconnu, jamais
   mort ; la preuve dite telle qu'elle est : le cycle du démon hors Linux
   tient au run 38204244740, epreuve_demon.py sur les runners).
+- **7 h – 7 h 35, matin**. Le cœur accepte la jointure par clé (le
+  planificateur ne pose PRIMARY_KEY_SCAN que pour un littéral ou un
+  paramètre scalaire et interdit le semi-masque aux jointures sur
+  propriété : c'est là qu'on agit, le masque par clés rejoint le balayage
+  par décalages) et la commence pendant que ses passes HNSW tournent (quatre
+  pas bâtis : resize du point de reprise au moins du double, verrou par
+  fenêtre, delete par ligne connue, commit des arêtes par suites ; push dans
+  l'heure) ; rappelé à s'accorder maintenant avec hotfixs (le DELETE) et le
+  banc (le point de reprise), un seul instrument, un seul push. **Le point de
+  reprise de 24 s est témoigné** (banc, `6724f82e0`, ticket moteur 28) : au
+  point de reprise, chaque mise à jour d'une liste FLOAT[768] agrandit le
+  tampon au plus juste et ColumnChunkData::resize recopie tout, quadratique
+  (130 ms → 24 s de 1 500 à 15 000 lignes, contre 0,5 s par COPY ; STRING et
+  INT64 verts) ; correctif dans le pas 1 du cœur. **La portée des trois
+  outils de code est sur master** (arbre principal, `daa0a1333` : `scope` et
+  `language` même forme dans les trois gabarits, le compte des écartés dit ;
+  `de071e9de` la déclaration de rag3db hors du gabarit générique, dans
+  `depots/rag3db.queries_via.json`) ; search_code suit. Le témoin du saut par
+  UNWIND et la page 06 de F sur master (`e412c3df5`, `79e404f8f` : le rouge
+  du lot du cœur). **Le magasin est complet** (recherche, `e38cc586b`, lot
+  3d : `scripts/lib_du_magasin.sh` pose RAG3DB_LIBRARY_DIR, INCLUDE_DIR,
+  SHARED et LD_LIBRARY_PATH sur le dossier du courant, `RAG3DB_LIB=bati|
+  courant|<id>` ; check_features l'appelle ; `scripts/cargo_magasin.sh
+  <args>` pour tout cargo qui lie la lib ; témoin de bout en bout : une lib à
+  moitié écrite dans le dossier de bâti ne casse plus un test par le
+  magasin) : **diffusé aux neuf sessions**, les rejeux à la main et les
+  scripts de push passent par l'enveloppeur, et le rebâti de la lib d'ici
+  n'attend plus que les pushes rendent (l'arbre principal a déjà passé ses
+  scripts). LlmNode.tokens sur master (proto, `7627fa92d`) ; la recherche
+  passe au témoin qwen3-1.7b et à la mesure des jetons.
