@@ -139,7 +139,22 @@ impl Node for ScanFilesNode {
         // La liste de la source applique déjà les règles d'exclusion du
         // dossier ; la règle des secrets se réapplique ici parce qu'un
         // instantané chargé d'ailleurs peut ne pas l'avoir vue.
-        let paths = source.list()?;
+        let mut paths = source.list()?;
+        // La portée de la question : les chemins hors portée ne se lisent pas.
+        // Le langage d'un chemin se lit par l'analyse du code ; sans elle,
+        // seuls les préfixes bornent.
+        let portee = &qp.options.portee;
+        if !portee.is_empty() {
+            let avant = paths.len();
+            #[cfg(feature = "code")]
+            paths.retain(|p| portee.admits(&[p.as_str()], &crate::code::language_of_path(p)));
+            #[cfg(not(feature = "code"))]
+            {
+                let par_chemin = crate::work_domain::QueryScope { languages: Vec::new(), ..portee.clone() };
+                paths.retain(|p| par_chemin.admits(&[p.as_str()], ""));
+            }
+            ctx.warn(&format!("portée {} : {} fichier(s) hors de la portée, non balayés", portee.describe(), avant - paths.len()));
+        }
         let mut hits: Vec<FileHit> = Vec::new();
         let (mut scanned, mut skipped_size, mut skipped_secret) = (0usize, 0usize, 0usize);
         for path in &paths {

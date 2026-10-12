@@ -467,6 +467,12 @@ pub struct SearchOptions {
     /// Chercher dans une autre cellule (org, project) que la courante du
     /// `Catalog` (doc 37). `None` = la cellule courante.
     pub scope: Option<crate::scope::Scope>,
+    /// **La portée de la question** (`scope`, `language` de l'outil) : des
+    /// préfixes de chemin et des langages, composés en `Must` avec le filtre
+    /// de l'appelant, et respectés par le balayage des fichiers. Posée par le
+    /// gabarit, jamais par le JSON des options.
+    #[serde(skip)]
+    pub portee: crate::work_domain::QueryScope,
     /// Fan-out : chercher dans plusieurs cellules et fusionner par rang (RRF).
     /// Les scores ne sont pas comparables entre cellules (IDF distincts) ;
     /// `meta.warnings` le rappelle. Prime sur `scope`.
@@ -505,6 +511,7 @@ impl Default for CohesionOptions {
 impl Default for SearchOptions {
     fn default() -> Self {
         Self {
+            portee: Default::default(),
             limit: 10,
             offset: 0,
             strict_signals: false,

@@ -104,3 +104,40 @@ fn impact_borne_le_rendu_pas_le_parcours() {
     assert!(borne.contains("portée src/ ; cpp"), "la portée se dit : {borne}");
     assert!(!borne.contains("client.py") && !borne.contains("deck.rs"), "{borne}");
 }
+
+/// La recherche de l'outil (`search_workspace.mmd`), avec ou sans portée, par
+/// l'index ou par le balayage des fichiers.
+fn chercher(catalog: &Arc<Mutex<Catalog>>, mode: &str, portee: serde_json::Value) -> String {
+    use rag3weaver::code_tools::{FileSource, Snapshot, FILE_SOURCE_SERVICE};
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let recherche = GraphTool::from_mermaid(include_str!("../templates/tools/search_workspace.mmd")).unwrap().bind(&registry).unwrap();
+    let options = serde_json::to_value(rag3weaver::search::SearchOptions { limit: 20, consistency: rag3weaver::search::Consistency::Immediate, ..Default::default() }).unwrap();
+    let mut services = ServiceRegistry::new();
+    catalog.lock().unwrap().register_search_services(&mut services);
+    services.register("catalog", catalog.clone());
+    let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", DEPOT.iter().map(|(p, c)| (p.to_string(), c.to_string()))));
+    services.register::<Arc<dyn FileSource>>(FILE_SOURCE_SERVICE, source);
+    let mut params = serde_json::json!({ "target": "Scope", "query": "update", "options": options, "mode": mode });
+    for (k, v) in portee.as_object().unwrap() {
+        params[k] = v.clone();
+    }
+    let rendu = recherche.execute(&registry, Arc::new(services), &params).unwrap().to_string();
+    eprintln!("── recherche {params} ──\n{rendu}");
+    rendu
+}
+
+/// **search_code** : la même portée, par l'index comme par le balayage des
+/// fichiers d'avant le premier index, qui ignorait jusqu'ici tout filtre.
+#[test]
+#[ignore]
+fn la_recherche_borne_a_la_portee_par_l_index_et_par_le_balayage() {
+    let catalog = depot();
+    for mode in ["indexed", "scan"] {
+        let tout = chercher(&catalog, mode, serde_json::json!({}));
+        assert!(tout.contains("client.py") && tout.contains("deck.rs") && tout.contains("node_table.cpp"), "{mode}, sans portée : {tout}");
+        let borne = chercher(&catalog, mode, serde_json::json!({ "scope": "src/", "language": "cpp" }));
+        assert!(borne.contains("node_table.cpp"), "{mode}, le moteur reste : {borne}");
+        assert!(!borne.contains("client.py") && !borne.contains("deck.rs"), "{mode}, rien hors de la portée : {borne}");
+    }
+}

@@ -709,6 +709,10 @@ impl NodeFactory for SearchSourceNodeFactory {
                 Some(crate::search::RerankOptions { candidates: n as usize })
             };
         }
+        // La portée de la question, la même forme que dans usages, impact et
+        // callees.
+        let texte = |k: &str| config.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        options.portee = crate::work_domain::QueryScope::parse(&texte("scope"), &texte("language"));
         let mut node = SearchSourceNode::new(name, target_name, query, options);
         if let Some(m) = config.get("mode").and_then(|v| v.as_str()).filter(|m| !m.is_empty()) {
             node = node.with_mode(
@@ -757,6 +761,24 @@ impl NodeFactory for SearchSourceNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(5000)),
                     description: "Délai maximum d'attente des écritures des autres processus, en strict".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "scope".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: crate::dataflow::usage_nodes::SCOPE_HELP.into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "language".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: crate::dataflow::usage_nodes::LANGUAGE_HELP.into(),
                     choices: None,
                     json_schema: None,
                 },

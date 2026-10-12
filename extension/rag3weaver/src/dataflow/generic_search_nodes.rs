@@ -444,6 +444,23 @@ impl Node for SearchSourceNode {
             }
         }
 
+        // **La portée de la question** : composée en `Must` avec ce qui
+        // précède (le filtre de l'appelant ou le domaine), jamais à sa place.
+        if !options.portee.is_empty() {
+            let fields = {
+                let catalog = catalog.lock().unwrap();
+                catalog.entity_configs().get(&self.target_name).map(|c| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>())
+            };
+            let has = |f: &str| fields.as_ref().is_some_and(|s| s.contains(f));
+            let path_field = if has("file_path") { "file_path" } else { "path" };
+            if let Some(portee) = options.portee.to_filter(path_field) {
+                options.filter_condition = Some(match options.filter_condition.take() {
+                    Some(appelant) => crate::filter::FilterCondition::Must(vec![appelant, portee]),
+                    None => portee,
+                });
+            }
+        }
+
         // **La consigne de cohérence, enfin appliquée sur ce chemin.** Elle
         // vivait dans le corps de `Catalog::search`, que ce graphe
         // n'empruntait pas : l'outil `search` des agents traversait zéro des trois

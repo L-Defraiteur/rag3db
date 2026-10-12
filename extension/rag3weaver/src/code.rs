@@ -826,6 +826,16 @@ fn texte_language_name(path: &str) -> String {
     }
 }
 
+/// **Le langage d'un chemin**, comme l'indexation l'écrit dans `language` :
+/// celui de la grammaire pour un fichier de code, celui du texte sinon. Le
+/// balayage d'avant le premier index s'en sert pour la portée.
+pub fn language_of_path(path: &str) -> String {
+    match language_name(path) {
+        l if l == "unknown" => texte_language_name(path),
+        l => l,
+    }
+}
+
 fn language_name(path: &str) -> String {
     detect_language_from_path(path)
         .map(|l| format!("{l:?}").to_lowercase())
