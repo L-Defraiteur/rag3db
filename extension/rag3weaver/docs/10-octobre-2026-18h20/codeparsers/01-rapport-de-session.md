@@ -54,6 +54,9 @@ L'arbre principal a écrit deux défenses, qui vont sur master ce soir : la réc
    `cp ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json`,
    `cp ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json`,
    puis `mv ~/.local/bin/rag3weaver-backend.pret ~/.local/bin/rag3weaver-backend && systemctl --user start rag3weaver-daemon`.
+5 bis. **La lib commune de luciepc porte le correctif du balayage filtré** (master ≥ `e6f626df4`),
+   rebâtie par hotfixs après l'arrêt de l'hôte, **avant** toute réindexation : sans lui, la passe
+   de vecteurs relit des textes vides et reboucle. Le binaire prêt de G est bâti contre elle.
 6. La réindexation des deux bases, par codeparsers, avec ce binaire : dis-moi que l'hôte est
    reparti. `code-principal` sert au cœur : l'heure s'accorde avec lui.
 
