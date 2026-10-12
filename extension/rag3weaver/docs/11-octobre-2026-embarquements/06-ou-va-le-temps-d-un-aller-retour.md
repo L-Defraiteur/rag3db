@@ -165,3 +165,25 @@ Le reste (plus de 200 ms) est le balayage sous masque lui-même, que la lecture 
 fait encore : le lot suivant du cœur (page `coeur-cpp/12` §7). Quand il est sur master,
 remesurer : si le saut en un temps rejoint les deux temps, la capacité repasse à faux
 pour rag3db et la forme se retire.
+
+**Fusionné** en `198aeeaec` (le saut), puis `6f5554868` : relu par l'arbre principal,
+qui a demandé deux choses. Une ligne dont le voisin a disparu entre le saut et la
+lecture par clé est écartée et comptée (aucun saut n'est optionnel, donc ce compte ne
+mêle pas un « pas de voisin » à un « voisin disparu ») ; le compte part en
+`CatalogEvent::Warning`. Les noms de colonnes sont ceux du saut d'origine.
+
+**Remesuré sur la lib du correctif de lecture** (`StringColumn::scanFiltered`, master
+`e6f626df4`, sha256 `1b600a4b0b29`, chargée par `LD_LIBRARY_PATH`, `ldd` vérifié), sur
+un reflink neuf de la copie scellée :
+
+| appel | un temps | deux temps |
+|---|---|---|
+| `update` sous `src/storage/table/node_table` | 355,9 ms | 234,7 ms |
+| `update` sans chemin | 354,3 ms | 238,9 ms |
+| `getTableID` | 353,8 ms | 211,9 ms |
+
+Mêmes empreintes qu'avant. Le correctif de lecture ne change pas le temps : c'est le
+balayage sous masque qui coûte. Le lot du cœur qui le fait passer par décalages (117
+lignes lues au lieu de 67 584 sur le témoin du banc) est en passe : la remesure suivante
+se fait sur lui.
+

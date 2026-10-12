@@ -106,3 +106,15 @@
   réelles (jamais en ajoutant ou retirant 1 à un compte qui a pu bouger).
 - Un relevé ou une passe en cours lit les sources : une passe lancée avant une
   édition ne témoigne pas pour le code d'après. La jeter et rejouer.
+
+## Le saut en deux temps et le recomptage (nuit du 12)
+
+- Une lib de mesure se copie hors de l'arbre qui l'a bâtie (un rebâti l'écraserait),
+  et se charge par `LD_LIBRARY_PATH` seul : changer `RAG3DB_INCLUDE_DIR` ou
+  `RAG3DB_LIBRARY_DIR` rebâtit la crate `rag3db`, qui veut `rag3db.hpp` à côté. Le
+  binaire de test n'a pas de RPATH : `ldd` après la passe dit quelle lib il a prise.
+- `cp -a --reflink` d'un sceau garde sa lecture seule : `chmod -R u+w` sur la copie,
+  sinon la base refuse de s'ouvrir (« Permission denied »).
+- Un commit déjà poussé sur une branche de lot ne s'amende plus : un commit de plus,
+  en avance rapide.
+
