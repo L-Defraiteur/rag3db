@@ -99,7 +99,9 @@ impl Hop {
         }));
         if let Some(x) = &self.exclude {
             noms.push(&x.field);
-            noms.extend(x.values.iter().map(String::as_str));
+            // Une valeur vide s'exclut aussi (`''`, un champ posé sans
+            // valeur) : rien à injecter, elle n'a pas à être un identifiant.
+            noms.extend(x.values.iter().map(String::as_str).filter(|v| !v.is_empty()));
         }
         noms.extend(self.order_by.iter().map(String::as_str));
         let mut du_filtre = Vec::new();

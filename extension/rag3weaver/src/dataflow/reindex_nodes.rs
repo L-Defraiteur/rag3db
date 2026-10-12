@@ -66,6 +66,9 @@ const AGREGATS: &[&str] = &[
     "symboles · ingestion",
     "symboles · drain des rendez-vous",
     "symboles · drain des arêtes résolues",
+    // Elle contient la lecture des DEFINES et des MENTIONS, les types
+    // différés, les parents et fichiers, le choix et le lien.
+    "symboles · relecture et mise en file des arêtes",
     "drain · exécution",
     "instantané · drain",
 ];

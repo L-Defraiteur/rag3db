@@ -1833,6 +1833,9 @@ pub struct CodeIngestReport {
     /// Noms écartés parce que plusieurs scopes les définissent : une
     /// relation manquante vaut mieux qu'une relation fausse.
     pub ambiguous: usize,
+    /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
+    /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
+    pub mentions_read: usize,
     /// Millisecondes par phase — sans ça, « l'ingestion est lente » n'a pas
     /// de suite possible.
     pub entities_ms: u128,
@@ -2341,8 +2344,45 @@ impl Catalog {
         lot: Option<(&std::collections::HashSet<String>, &std::collections::HashSet<String>)>,
         report: &mut CodeIngestReport,
     ) -> Result<(), CatalogError> {
+        let t = std::time::Instant::now();
         let definers_by_symbol = self.linked_from_many("DEFINES", uuids)?;
-        let mut mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
+        crate::ingest_profile::add("symboles · lire les DEFINES", t);
+        let t = std::time::Instant::now();
+        // **Ne relire que ce qui concerne le lot.** Une mention ne devient une
+        // arête que si sa cible est un scope du lot ou son mentionneur en est
+        // un. Pour un nom dont aucun définisseur n'est dans le lot, la cible
+        // n'y est jamais : seules comptent les mentions venues du lot, plus
+        // celles qui réexportent le nom (le choix de la cible les lit). Les
+        // noms courants (`len`, `new`…) ne font plus relire toute la base.
+        let mut mentioners_by_symbol = match lot {
+            None => self.linked_from_many_with_kind("MENTIONS", uuids, true)?,
+            Some((scopes, mentionneurs)) => {
+                let (pleins, etroits): (Vec<String>, Vec<String>) = uuids.iter().cloned().partition(|sym| {
+                    definers_by_symbol.get(sym).is_some_and(|ds| ds.iter().any(|d| scopes.contains(d)))
+                });
+                let mut m = self.linked_from_many_with_kind("MENTIONS", &pleins, true)?;
+                let du_lot = self.linked_from_many_where("MENTIONS", &etroits, true, Some(mentionneurs), None)?;
+                let reexports = self.linked_from_many_where(
+                    "MENTIONS",
+                    &etroits,
+                    true,
+                    None,
+                    Some(rag3weaver_ir::EdgeExclusion { field: "reexport_from".into(), values: vec![String::new()] }),
+                )?;
+                for (sym, ms) in du_lot.into_iter().chain(reexports) {
+                    let deja = m.entry(sym).or_default();
+                    for mention in ms {
+                        let cle = |x: &Mention| (x.from.clone(), x.kind.clone(), x.reexport_from.clone(), format!("{:?}", x.usage.get("line")));
+                        if !deja.iter().any(|d| cle(d) == cle(&mention)) {
+                            deja.push(mention);
+                        }
+                    }
+                }
+                m
+            }
+        };
+        crate::ingest_profile::add("symboles · lire les MENTIONS", t);
+        report.mentions_read += mentioners_by_symbol.values().map(Vec::len).sum::<usize>();
         self.resoudre_les_types_differes(&mut mentioners_by_symbol)?;
         // Le parent des définisseurs, pour les noms qu'une mention typée
         // atteint (`n.run()` avec `n: Node` vise le `run` de `Node`).
@@ -2363,7 +2403,10 @@ impl Catalog {
             // part le chemin à suivre.
             .chain(mentioners_by_symbol.values().flatten().filter(|m| !m.reexport_from.is_empty()).map(|m| m.from.clone()))
             .collect();
+        let t = std::time::Instant::now();
         let (parents, fichiers, genres) = self.parents_et_fichiers(&a_departager)?;
+        crate::ingest_profile::add("symboles · parents et fichiers", t);
+        let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
             let empty: Vec<Mention> = Vec::new();
@@ -2734,8 +2777,21 @@ impl Catalog {
         to_uuids: &[String],
         with_kind: bool,
     ) -> Result<std::collections::HashMap<String, Vec<Mention>>, CatalogError> {
+        self.linked_from_many_where(rel, to_uuids, with_kind, None, None)
+    }
+
+    /// La même lecture, restreinte : aux mentionneurs `de` (des uuids de
+    /// scopes), ou aux arêtes qu'une exclusion ne retire pas.
+    fn linked_from_many_where(
+        &self,
+        rel: &str,
+        to_uuids: &[String],
+        with_kind: bool,
+        de: Option<&std::collections::HashSet<String>>,
+        exclure: Option<rag3weaver_ir::EdgeExclusion>,
+    ) -> Result<std::collections::HashMap<String, Vec<Mention>>, CatalogError> {
         let mut out: std::collections::HashMap<String, Vec<Mention>> = std::collections::HashMap::new();
-        if to_uuids.is_empty() {
+        if to_uuids.is_empty() || de.is_some_and(|d| d.is_empty()) {
             return Ok(out);
         }
         // Étiqueté au départ : sans `:Symbol`, le moteur cherchait le nœud
@@ -2748,11 +2804,19 @@ impl Catalog {
                 ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver", "reexport_from"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
             );
         }
+        let mut params = vec![crate::connection::QueryParam::new(
+            "uuids",
+            CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect()),
+        )];
+        if let Some(de) = de {
+            saut.filter = Some(rag3weaver_ir::Predicate::In { field: "_uuid".into(), param: "de".into() });
+            params.push(crate::connection::QueryParam::new("de", CypherValue::List(de.iter().map(|u| CypherValue::String(u.clone())).collect())));
+        }
+        saut.exclude = exclure;
         let cypher = self.dialect_arc().hop(&saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        let param = CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let result = self
             .conn()
-            .execute_with_params(&cypher, &[crate::connection::QueryParam::new("uuids", param)])
+            .execute_with_params(&cypher, &params)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         for row in &result.rows {
             if let (Some(CypherValue::String(to)), Some(CypherValue::String(from))) = (row.first(), row.get(1)) {

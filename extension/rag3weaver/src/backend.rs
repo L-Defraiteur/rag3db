@@ -4159,7 +4159,17 @@ mod tests {
         r.unwrap();
         assert!(etapes.iter().any(|(e, _)| *e == "drain · suppressions"), "pas de suppression du drain dans les étapes : {etapes:?}");
         // Ce qui courait sans nom : la fin d'instantané et les symboles.
-        for attendue in ["instantané · mettre de côté", "instantané · noter la fin", "symboles · mise en file DEFINES/MENTIONS", "drain · construction du graphe"] {
+        for attendue in [
+            "instantané · mettre de côté",
+            "instantané · noter la fin",
+            "symboles · mise en file DEFINES/MENTIONS",
+            "drain · construction du graphe",
+            // Ce que la relecture des arêtes fait, instruction par instruction.
+            "symboles · lire les DEFINES",
+            "symboles · lire les MENTIONS",
+            "symboles · parents et fichiers",
+            "symboles · choisir et lier",
+        ] {
             assert!(etapes.iter().any(|(e, _)| *e == attendue), "« {attendue} » manque aux étapes : {etapes:?}");
         }
     }
@@ -4249,6 +4259,40 @@ mod tests {
             .as_i64();
         assert_eq!(fichiers, Some(0), "c.rs supprimé : plus de ligne File");
         assert_eq!(rapport.scopes_deleted, 2, "a2 et c1 retirées : {rapport:?}");
+    }
+
+    /// **La résolution d'un lot ne relit que ce qui le concerne** : trente
+    /// fichiers appellent `commun()`, un seul est réingéré. Une mention ne
+    /// devient une arête que si sa cible est un scope du lot ou son
+    /// mentionneur en est un ; `commun` est défini hors du lot, donc seules
+    /// les mentions du fichier réingéré comptent, pas les trente (sur la base
+    /// entière, relire toutes les mentions des noms courants coûtait ~0,7 s).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_batch_resolution_reads_only_the_mentions_that_concern_it() {
+        let (dir, backend) = backend_qui_surveille();
+        let s = dir.path().join("sources");
+        std::fs::write(s.join("commun.rs"), "pub fn commun() {}\n").unwrap();
+        for i in 0..30 {
+            std::fs::write(s.join(format!("f{i}.rs")), format!("pub fn f{i}() {{ commun(); }}\n")).unwrap();
+        }
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        let contenu = "pub fn f0() { commun(); commun(); }\n";
+        let cursor = source.cursor();
+        let root = crate::workspace_path::worktree_root(&cursor).unwrap().to_string();
+        let projet = source.list().ok();
+        let mut analyse = crate::code::analyze_in_project(&root, vec![("f0.rs".to_string(), contenu.to_string())], &cursor, projet.as_deref());
+        for f in &mut analyse.files {
+            f.cursor = cursor.clone();
+        }
+        let rapport = cat.ingest_code_jusqu_a(&analyse, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        assert!(rapport.mentions_read <= 3, "la résolution a relu {} mentions pour un fichier : {rapport:?}", rapport.mentions_read);
+        // Et l'arête de f0 vers commun est là, comme celles des autres.
+        drop(cat);
+        let u = usages_de(&backend, "commun");
+        assert!(u.contains("Usages (30)") && u.contains("f0.rs"), "{u}");
     }
 
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
