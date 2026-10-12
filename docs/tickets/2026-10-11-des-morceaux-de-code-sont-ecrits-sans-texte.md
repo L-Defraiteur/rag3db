@@ -203,3 +203,25 @@ L'index neuf de cette nuit, par le binaire d'aujourd'hui, donne 0.
 d'aujourd'hui. L'ancien rouge et le neuf vert : la cause est datée, fermée par la conversion de F ; le
 ticket se ferme par la réécriture des morceaux vides (`dd7bb2c1e`) et par « complet » qui compte
 `_text`.
+
+### La perte est par fichier entier, le plus souvent (arbre principal, 12 octobre)
+
+Sur les tables de F (`~/.cache/rag3weaver-build/embarquements/fichiers-vides.tsv` et `.files`),
+chaque fichier classé selon ses scopes tout vides :
+
+| dépôt | aucun vide | tout vide | partiel |
+|---|---|---|---|
+| principal (1bda16ce) | 4 537 | 1 049 | 266 |
+| ld-lucivy (e8b54145) | 349 | 447 | 326 |
+| codeparsers (4c7897c8) | 91 | 20 | 43 |
+
+Les fichiers les plus touchés sont vides de bout en bout (`lucivy-fst/src/raw/node.rs` : 106 scopes
+sur 106). Un échappement fautif d'un caractère toucherait le scope qui le porte, pas tous les scopes
+d'un fichier. Une perte d'un fichier entier désigne l'écriture **par fichier** (une instruction ou un
+lot par fichier). L'accent grave plus fréquent dans les scopes vides (22 % contre 8,8 %, F) peut
+n'en être que le déclencheur au niveau du fichier. Les 266 + 326 fichiers partiels restent à
+expliquer.
+
+Corpus de la sonde décisive, dans `~/.cache/rag3weaver-notes-A/sonde-binaire/corpus.txt` : les
+dix fichiers ld-lucivy entièrement vides les plus gros, et dix fichiers rust du principal sans
+aucun vide.
