@@ -335,3 +335,19 @@ suivante la chaîne d'une autre ligne. Avec le correctif : 0 faux. Chaînes trop
 segment) ou aucune version dans la fenêtre : vert des deux côtés — c'est pourquoi un index neuf
 n'a rien.
 
+
+## Les suites côté produit (arbre principal, 12 octobre 2026, 4 h 20)
+
+- **Les défenses** (`ab12bd4c2`) restent : un morceau lu sans texte n'est jamais dû, la passe sans
+  progrès s'arrête, le compte est dit au journal, à l'état de l'index et dans l'en-tête des lectures.
+- **La complétude de l'inchangé exige un texte** (`772d4e9d6`) : une réingestion identique
+  redécoupe un parent dont un morceau est vide, au lieu de le garder.
+- **La réécriture des morceaux vides** (`7b54c5f84`) : suspendue de 3 h à 4 h (`1a31fea71`), le
+  temps que la lib porte le correctif, puis remise en marche (`2b0642b1e`).
+  `RAG3WEAVER_REECRIRE_LES_VIDES=0` la suspend sur une lib d'avant.
+- **La lib partagée** est rebâtie sur `e6f626df4` à 3 h 49. `courant` du magasin :
+  `rag3db-build-f6179ade0…-Release`.
+- **Le recomptage de la copie scellée de F**, avec la lib corrigée : **0 morceau lu vide sur
+  128 732**, sans rien réécrire, et les 11 lectures passent.
+- **Reste** : la base de Lucie elle-même. Il faut son hôte redémarré sur un binaire lié à la lib
+  corrigée, puis un compte de ses vides (0 attendu).
