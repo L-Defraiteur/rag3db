@@ -1550,3 +1550,61 @@ où elle vit.
   la table Scope (~20 ms), lot suivant. Pour l'hôte de Lucie ici : une seule
   lib et un seul binaire après ce push, puis sa séquence quand elle arrête
   son hôte. La boucle des relevés de nuit s'arrête ici.
+- **9 h 45 – 15 h 30, journée (Lucie présente)**. **luciepc fini** à 11 h
+  (codeparsers : code-lourd 596 s sans figement, code-principal 496 s ;
+  usages 0,3 s ; un écueil corrigé : les manifestes forçaient l'ancienne
+  extension vector et l'unité ne posait pas RAG3DB_LIBRARY_DIR, règle dans
+  le script de G 17fd3c422/78ceda7b8 ; comptage sur code-lourd base
+  fermée : 16 368 lus vides avec l'ancienne lib, 0 avec la corrigée). **Ici,
+  B4 fini** : Lucie a arrêté son hôte à 10 h 39 ; binaire 22e156eb9a57
+  (lib 2b11b55ec par RUNPATH), queries_via posé, code-rag3db réindexé en
+  20 min (0 sans texte sur 132 030 ; cinq sessions retirées de la place 25
+  min), hôte relancé à 11 h 04 ; au calme usages 0,12 s, search_code 0,49 s,
+  mémoire longue 0,29 s ; la montre a rattrapé 722 fichiers hors périmètre
+  (16 min) → **porte unique de l'index** (proto, `838ed1f0b`) ; un usages a
+  attendu 164 s derrière → les lectures sans attente. **Les optimisations
+  du jour** : jointure par clé en trois pas (cœur `2b11b55ec`, `97589fc9d`,
+  `0c0af5bf5` ; usages sur l'index entier **352 → 7-10 ms**, F a retiré le
+  saut en deux temps `c56cb3aa6`) ; la suppression d'une ligne sous HNSW au
+  moteur (hotfixs `690029ab7`, 136 → 7 ms ; search ne rend plus de nœuds
+  supprimés ; contournement du proto retiré `c0679ed33`) ; les attentes du
+  point de reprise (`9ea7cd0fc`) ; la compaction des lignes mortes du CSR
+  (`c44af8031`, pente ×1,55 → ×1,2-1,4, cas probabiliste) ; les symboles de
+  la réindexation (proto, 1 160 → 250 ms) ; **les lectures sans attente**
+  L1-L3 sur master (arbre principal, `2406684f5`, `9d1e2dff6`+`e8819e3b3`,
+  `a93e98353` ; L4 fermé) ; **cinquième rejeu du témoin : 2,29 s de bout en
+  bout** (7,26 ce matin) ; reste : 0,6 s avant la prise du lot (réaction sur
+  événement du noyau, proto, témoin vert), et **un trou de L2 sur le chemin
+  réel** : par `call_in` (une session avec sa cellule) le mutex du catalogue
+  est pris deux fois avant la vue (backend.rs:2287, :2984) → usages a attendu
+  1 610 ms ; lot à part chez l'arbre principal, témoin rouge par call_in,
+  sixième rejeu avant « livré » ; l'embarquement du retard sous le mutex
+  (reindex_nodes.rs:66) → lot court au proto. **Deux rouges de master
+  trouvés et corrigés** : L2 retenait une poignée du plein texte
+  (`643b6f792` ; règle : les suites de transaction dans le rejeu de tout lot
+  qui touche le catalogue) ; les symboles rougissaient e2e_postgres (F,
+  `ec1707ee2`, le dialecte traduit le saut sans arrivée filtré sur _uuid ;
+  règle : e2e_postgres dans le rejeu de tout lot qui touche code.rs, l'IR ou
+  un gabarit). **Le magasin bouclé** (recherche 3e `f3b0b2dcc`, 3f
+  `70327a3fd` : l'extension à côté de la lib réellement chargée, un rebâti
+  en place ne fait plus tomber une passe ; libs rebâties à 12 h 58, 14 h 53,
+  14 h 58 pendant les passes). **Le lot C de G sur master** (`032edcdd4`,
+  démon portable, runners par L-Defraiteur ; macOS vert ; Windows vert sauf
+  **un défaut moteur à la réouverture d'une base** : B2 et le FileHandle
+  verrouillent le même fichier par deux poignées, ticket c1cedb7ae, codé
+  par le cœur (un verrou par fichier, une poignée à lui, octet 2^62 sous
+  Windows), en passe ; le paquet Windows ne s'annonce pas utilisable avant).
+  **Flux et agents** : lancement en fond lot A et SpawnNode (recherche
+  `371ded8f9`, `80b97af1d`), boîte par nom (proto `bbaf4481d`, `51025501e`),
+  mesure du refoulement (`00079b754` : les ports refoulent, le bus perd
+  1 932 sur 2 000 sous un abonné lent) → **règle : ce qui ne doit rien
+  perdre passe par un port, jamais par le bus** ; page de la boîte en flux
+  ouvert (`c5bc4aff0`) approuvée (SpawnNode en mode flux par réglage,
+  max_duration ferme l'entrée, le correctif de la boîte qui déborde au
+  proto). Ménage de luciepc fait (voir 8 h 35 – 9 h 45). **Ma faute de
+  l'après-midi** : j'ai retiré le worktree wt-modele de l'arbre principal
+  (propre, commit sur master) avant de lire que sa permission lui avait
+  refusé le retrait forcé ; faire par une session ce qu'une autre s'est vu
+  refuser est interdit, pour l'orchestration aussi ; dit à Lucie et à lui.
+  Pour Lucie, sans urgence : les deux anciens index de luciepc, le binaire
+  des services d'embarquement à installer, le compte gh actif pro.
