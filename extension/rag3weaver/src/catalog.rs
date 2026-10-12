@@ -8090,7 +8090,9 @@ impl Catalog {
         let mut ecoute = runtime.subscribe();
         // Le même profil par nœud que l'ingestion, sous la même variable :
         // un drain de liens qui prend 1,6 s sans ventilation n'a pas de suite.
-        let mut profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok().then(|| runtime.subscribe());
+        // Sous la variable, ou pendant un `ingest_profile::record` sur ce fil :
+        // la ligne [montre] veut la suppression et la résolution des liens.
+        let mut profil = (crate::ingest_profile::enabled() || crate::ingest_profile::recording()).then(|| runtime.subscribe());
 
         // Generate deterministic execution_id from graph hash + timestamp
         let graph_def = graph.to_definition();
@@ -8114,8 +8116,14 @@ impl Catalog {
                 }
             }
             par_noeud.sort_by(|a, b| b.1.cmp(&a.1));
-            for (noeud, ms) in par_noeud {
-                eprintln!("[drain-profile] {ms:>6} ms  {noeud}");
+            for (noeud, ms) in &par_noeud {
+                let nom = noeud.split(' ').next().unwrap_or(noeud);
+                crate::ingest_profile::add_duration(crate::ingest_profile::drain_stage(nom), std::time::Duration::from_millis(*ms));
+            }
+            if crate::ingest_profile::enabled() {
+                for (noeud, ms) in par_noeud {
+                    eprintln!("[drain-profile] {ms:>6} ms  {noeud}");
+                }
             }
         }
 

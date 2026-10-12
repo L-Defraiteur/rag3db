@@ -4141,7 +4141,7 @@ mod tests {
         assert!(!crate::ingest_profile::enabled(), "le témoin se joue sans RAG3WEAVER_INGEST_PROFILE");
         let (dir, backend) = backend_qui_surveille();
         let source = backend.file_source.clone().unwrap();
-        let contenu = "pub fn neuve() { depart(); }\n";
+        let contenu = "pub fn neuve() { depart(); }\npub fn partante() { depart(); }\n";
         std::fs::write(dir.path().join("sources/neuve.rs"), contenu).unwrap();
         let mut cat = backend.catalog.lock().unwrap();
         let (r, etapes) = crate::ingest_profile::record(|| {
@@ -4149,6 +4149,15 @@ mod tests {
         });
         r.unwrap();
         assert!(etapes.iter().any(|(e, _)| *e == "nœud embed"), "pas d'embarquement dans les étapes : {etapes:?}");
+        // Une fonction retirée supprime son scope : la suppression du drain se
+        // chronomètre aussi, sans la variable.
+        let modifie = "pub fn neuve() { depart(); }\n";
+        std::fs::write(dir.path().join("sources/neuve.rs"), modifie).unwrap();
+        let (r, etapes) = crate::ingest_profile::record(|| {
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "neuve.rs", modifie)
+        });
+        r.unwrap();
+        assert!(etapes.iter().any(|(e, _)| *e == "drain · suppressions"), "pas de suppression du drain dans les étapes : {etapes:?}");
     }
 
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
@@ -4321,8 +4330,15 @@ mod tests {
             std::fs::write(dir.path().join("sources").join(petit), &contenu).unwrap();
             let t = std::time::Instant::now();
             let mut cat = backend.catalog.lock().unwrap();
-            crate::code_tools::reingest_file(&mut cat, source.as_ref(), petit, &contenu).unwrap();
-            eprintln!("[mesure] réindexer {petit} ({} octets), essai {i} : {:?}", contenu.len(), t.elapsed());
+            // La même ligne que la montre écrit, pour la lire ici aussi.
+            let (r, etapes) = crate::ingest_profile::record(|| crate::code_tools::reingest_file(&mut cat, source.as_ref(), petit, &contenu));
+            r.unwrap();
+            let tenu = t.elapsed();
+            eprintln!("[mesure] réindexer {petit} ({} octets), essai {i} : {tenu:?}", contenu.len());
+            eprintln!(
+                "{}",
+                crate::dataflow::reindex_nodes::journal_line(petit, &Ok(crate::dataflow::reindex_nodes::Outcome::Reindexed), std::time::Duration::ZERO, tenu, &etapes)
+            );
         }
         let retire = "arbre/meter.rs";
         std::fs::remove_file(dir.path().join("sources").join(retire)).unwrap();

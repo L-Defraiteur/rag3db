@@ -34,42 +34,62 @@ pub struct ReindexFileNode {
 
 /// Ce qui est arrivé à un chemin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Outcome {
+pub(crate) enum Outcome {
     Reindexed,
     Removed,
     /// Une indexation entière tient la source : repris à sa fin.
     Deferred,
 }
 
+/// Les étapes qui en contiennent d'autres : elles compteraient deux fois dans
+/// le détail.
+const AGREGATS: &[&str] = &[
+    "entités · TOTAL des appels",
+    "entités · exécuter le graphe (nœuds + points de reprise)",
+    "code · ingérer File, Scope, Library",
+    "code · symboles (ingestion Symbol + rendez-vous)",
+    "sync · paquet entier, de bout en bout",
+    "analyse · parse_project (codeparsers, par fichier en parallèle)",
+];
+
 /// **La ligne de journal d'un fichier** : le verrou du catalogue attendu, puis
-/// tenu, et dans la tenue les phases de la réindexation (ou du retrait) et de
-/// l'embarquement, de la plus longue à la plus courte. Seules les phases vues
-/// sur le fil de la réaction y sont ; le reste de la tenue est ce qui n'est
-/// pas chronométré.
-fn journal_line(
+/// tenu ; les phases de la réindexation (ou du retrait), de la plus longue à
+/// la plus courte ; puis **en détail**, ce qui se passe dedans, instruction
+/// par instruction : les étapes des entités (relire ce qui est en base, les
+/// comptes, les marques), les nœuds (écrire, découper, embarquer, lier, le
+/// plein texte) et le drain (suppressions, liens). Seules les étapes vues sur
+/// le fil de la réaction y sont ; le reste de la tenue n'est pas chronométré.
+pub(crate) fn journal_line(
     path: &str,
     outcome: &Result<Outcome, String>,
     waited: std::time::Duration,
     held: std::time::Duration,
     steps: &[(&'static str, std::time::Duration)],
 ) -> String {
-    let mut phases: std::collections::BTreeMap<&str, std::time::Duration> = Default::default();
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+    let mut phases: BTreeMap<&str, Duration> = Default::default();
+    let mut detail: BTreeMap<&str, Duration> = Default::default();
     for (stage, took) in steps {
-        let short = stage
-            .strip_prefix("réindexer · ")
-            .or_else(|| stage.strip_prefix("retirer · "))
-            .or((*stage == "nœud embed").then_some("embarquer"));
-        if let Some(short) = short {
+        if let Some(short) = stage.strip_prefix("réindexer · ").or_else(|| stage.strip_prefix("retirer · ")) {
             *phases.entry(short).or_default() += *took;
+        } else if !AGREGATS.contains(stage) {
+            let short = match *stage {
+                "nœud embed" => "embarquer",
+                s => s.strip_prefix("entités · ").unwrap_or(s),
+            };
+            *detail.entry(short).or_default() += *took;
         }
     }
-    let mut phases: Vec<_> = phases.into_iter().collect();
-    phases.sort_by(|a, b| b.1.cmp(&a.1));
-    let detail = phases
-        .iter()
-        .map(|(name, took)| format!("{name} {} ms", took.as_millis()))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let rang = |m: BTreeMap<&str, Duration>| {
+        let mut v: Vec<_> = m.into_iter().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        v.iter().map(|(name, took)| format!("{name} {} ms", took.as_millis())).collect::<Vec<_>>().join(", ")
+    };
+    let detail = match rang(detail) {
+        d if d.is_empty() => String::new(),
+        d => format!(" ; en détail : {d}"),
+    };
     let verbe = match outcome {
         Ok(Outcome::Reindexed) => "réindexé",
         Ok(Outcome::Removed) => "retiré",
@@ -77,9 +97,10 @@ fn journal_line(
         Err(_) => "en erreur",
     };
     format!(
-        "[montre] {path} {verbe} : verrou attendu {} ms, tenu {} ms — {detail}",
+        "[montre] {path} {verbe} : verrou attendu {} ms, tenu {} ms — {}{detail}",
         waited.as_millis(),
-        held.as_millis()
+        held.as_millis(),
+        rang(phases)
     )
 }
 
@@ -282,12 +303,18 @@ mod tests {
             ("réindexer · ingérer (scopes, morceaux, vecteurs, liens)", ms(1500)),
             ("nœud embed", ms(100)),
             ("entités · gardes", ms(3)),
+            ("entités · relire ce qui est en base (inchangés)", ms(9)),
+            ("drain · suppressions", ms(40)),
+            // Les agrégats ne s'ajoutent pas au détail : ils comptent deux fois.
+            ("entités · TOTAL des appels", ms(1400)),
+            ("code · ingérer File, Scope, Library", ms(1450)),
         ];
         let line = super::journal_line("arbre/scope.rs", &Ok(super::Outcome::Reindexed), ms(4), ms(1700), &steps);
         assert_eq!(
             line,
             "[montre] arbre/scope.rs réindexé : verrou attendu 4 ms, tenu 1700 ms — \
-             ingérer (scopes, morceaux, vecteurs, liens) 1500 ms, embarquer 1000 ms, analyser le fichier 12 ms"
+             ingérer (scopes, morceaux, vecteurs, liens) 1500 ms, analyser le fichier 12 ms ; \
+             en détail : embarquer 1000 ms, drain · suppressions 40 ms, relire ce qui est en base (inchangés) 9 ms, gardes 3 ms"
         );
     }
 }

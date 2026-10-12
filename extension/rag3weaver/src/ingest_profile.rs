@@ -115,3 +115,14 @@ pub fn node_stage(node: &str) -> &'static str {
         _ => "nœud (autre)",
     }
 }
+
+/// Le nom d'étape d'un nœud de drain (suppressions, liens, mises à jour). Un
+/// nom inconnu est rangé à part plutôt que perdu.
+pub fn drain_stage(node: &str) -> &'static str {
+    match node {
+        "deletes" => "drain · suppressions",
+        "links" => "drain · liens",
+        "updates" => "drain · mises à jour",
+        _ => "drain · (autre)",
+    }
+}
