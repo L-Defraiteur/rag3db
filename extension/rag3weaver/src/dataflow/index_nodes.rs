@@ -452,17 +452,18 @@ fn run_index(
     {
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         let vides: usize = guard.chunks_sans_texte().iter().map(|(_, n)| n).sum();
-        // **Suspendue tant que la lib ne porte pas le correctif du balayage
-        // des chaînes** (12 octobre 2026) : `StringColumn::scanFiltered` rend
-        // vide, ou la chaîne d'une autre ligne, une fin de fenêtre qui
-        // chevauche deux segments ; le disque est intact. Réécrire relit
-        // l'entité par balayage et pourrait poser une fausse chaîne dans
-        // `_text`. Le compte reste dit ; `RAG3WEAVER_REECRIRE_LES_VIDES=1`
-        // force la réécriture.
-        let permise = std::env::var("RAG3WEAVER_REECRIRE_LES_VIDES").is_ok_and(|v| v == "1");
+        // **Remise en marche le 12 octobre 2026**, la lib portant le correctif
+        // du balayage des chaînes (f6179ade0) : un vide lu est désormais un
+        // vrai vide, et réécrire depuis l'entité ne relit plus de fausse
+        // chaîne. Suspendue de 3 h à 4 h ce jour-là, tant que
+        // `StringColumn::scanFiltered` rendait vide, ou la chaîne d'une autre
+        // ligne, une fin de fenêtre à cheval sur deux segments.
+        // `RAG3WEAVER_REECRIRE_LES_VIDES=0` la suspend encore, sur une lib
+        // d'avant.
+        let permise = std::env::var("RAG3WEAVER_REECRIRE_LES_VIDES").map_or(true, |v| v != "0");
         if vides > 0 && !permise {
             log(journal, &format!(
-                "{vides} morceau(x) lu(s) sans texte : réécriture suspendue — le balayage des chaînes du moteur peut rendre un vide ou une fausse chaîne (ticket « des morceaux de code sont écrits sans texte ») ; RAG3WEAVER_REECRIRE_LES_VIDES=1 la force"
+                "{vides} morceau(x) lu(s) sans texte : réécriture suspendue par RAG3WEAVER_REECRIRE_LES_VIDES=0 (ticket « des morceaux de code sont écrits sans texte »)"
             ));
         }
         if vides > 0 && permise {
