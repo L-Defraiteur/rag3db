@@ -317,8 +317,21 @@ moins d'un dixième de milliseconde, et un aller-retour complet (un fil, un
 runtime, l'exécuteur concurrent, la fin dans la boîte) moins d'une
 milliseconde : lancer en fond ne pèse rien devant le travail lancé.
 
+**Lot C, `SpawnNode`** (`src/dataflow/spawn_nodes.rs`, parmi les nœuds intégrés) :
+- en configuration, `node_type`, le type du registre à lancer (un graphe-outil
+  y est un type comme un autre), avec `arguments`, `tie`
+  (`detached`|`parent`), `max_duration_s`, `max_alive` et `caller` ;
+- chaque message reçu sur `message` lance un run, dont la référence part sur
+  `run`. `run` suit `message` : une valeur pour un message, un flux pour un
+  flux ;
+- un lancement refusé par une borne est dit sur `run`
+  (`{"statut": "refusé", "erreur"}`), et le graphe ne tombe pas ;
+- l'appelant est celui que la configuration nomme, sinon la boîte de l'agent
+  qui exécute le graphe (`agent_inbox`), sinon le run ;
+- trois témoins : un message, un flux de trois, un lancement de trop (et
+  `cancel_all("hôte")` qui arrête le run retenu, avec sa cause).
+
 **Le reste** :
-- `SpawnNode`, le verbe posé comme nœud (lot C) ;
 - la boîte qui devient un flux ouvert, le second temps (§2.7) ;
 - `alive()` dans `daemon_status` et l'outil MCP, ainsi que `cancel_all` à
   l'arrêt du démon : chez l'arbre principal, interface proposée ;

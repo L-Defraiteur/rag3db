@@ -1409,6 +1409,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
     super::composable_results::register(registry);
     registry.register(Box::new(ComposeNodeFactory));
+    // Le lancement en fond posé comme nœud (page 12-octobre-2026-recherche/03).
+    registry.register(Box::new(super::spawn_nodes::SpawnNodeFactory));
     registry.register(Box::new(super::rhai_node::RhaiNodeFactory));
     super::validation_nodes::register(registry);
     registry.register(Box::new(KBQuerySourceNodeFactory));
@@ -1485,7 +1487,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 51 + if cfg!(feature = "code") { 15 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 52 + if cfg!(feature = "code") { 15 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

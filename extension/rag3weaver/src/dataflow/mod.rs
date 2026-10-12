@@ -13,6 +13,7 @@ pub mod checkpoint;
 pub mod field_weight;
 pub mod checkpoint_store;
 pub mod background;
+pub mod spawn_nodes;
 pub mod graph;
 pub mod node;
 pub mod observe;
