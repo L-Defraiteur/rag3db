@@ -95,8 +95,12 @@ public:
         common::offset_t startOffsetInOutput, common::row_idx_t startRowScanned,
         common::row_idx_t numRows) const;
 
+    // Parcourt, de la plus récente à la plus ancienne, les versions du vecteur `idx` que voit
+    // `transaction`. Le visiteur rend vrai pour arrêter le parcours : une lecture qui a trouvé la
+    // version la plus récente de ce qu'elle cherche n'a pas à marcher le reste de la chaîne, qui
+    // s'allonge d'une version par transaction de mise à jour jusqu'au point de reprise.
     void iterateVectorInfo(const transaction::Transaction* transaction, common::idx_t idx,
-        const std::function<void(const VectorUpdateInfo&)>& func) const;
+        const std::function<bool(const VectorUpdateInfo&)>& func) const;
 
     void commit(common::idx_t vectorIdx, VectorUpdateInfo* info, common::transaction_t commitTS);
     void rollback(common::idx_t vectorIdx, common::transaction_t version);
