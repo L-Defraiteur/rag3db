@@ -452,7 +452,20 @@ fn run_index(
     {
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         let vides: usize = guard.chunks_sans_texte().iter().map(|(_, n)| n).sum();
-        if vides > 0 {
+        // **Suspendue tant que la lib ne porte pas le correctif du balayage
+        // des chaînes** (12 octobre 2026) : `StringColumn::scanFiltered` rend
+        // vide, ou la chaîne d'une autre ligne, une fin de fenêtre qui
+        // chevauche deux segments ; le disque est intact. Réécrire relit
+        // l'entité par balayage et pourrait poser une fausse chaîne dans
+        // `_text`. Le compte reste dit ; `RAG3WEAVER_REECRIRE_LES_VIDES=1`
+        // force la réécriture.
+        let permise = std::env::var("RAG3WEAVER_REECRIRE_LES_VIDES").is_ok_and(|v| v == "1");
+        if vides > 0 && !permise {
+            log(journal, &format!(
+                "{vides} morceau(x) lu(s) sans texte : réécriture suspendue — le balayage des chaînes du moteur peut rendre un vide ou une fausse chaîne (ticket « des morceaux de code sont écrits sans texte ») ; RAG3WEAVER_REECRIRE_LES_VIDES=1 la force"
+            ));
+        }
+        if vides > 0 && permise {
             let (marquees, redecoupees) = guard.reecrire_les_morceaux_sans_texte().map_err(|e| e.to_string())?;
             let reste: usize = guard.chunks_sans_texte().iter().map(|(_, n)| n).sum();
             log(journal, &format!(
