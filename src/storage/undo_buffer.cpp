@@ -252,6 +252,11 @@ void UndoBuffer::rollbackRecord(ClientContext* context, const UndoRecordType rec
 
 void UndoBuffer::rollbackCatalogEntryRecord(const uint8_t* record) {
     const auto& [catalogSet, catalogEntry] = *reinterpret_cast<CatalogEntryRecord const*>(record);
+    // Sous le verrou du CatalogSet, comme ses autres écritures : un lecteur parcourt la map et les
+    // chaînes de versions sous le verrou partagé, et une annulation qui y effaçait puis remettait
+    // l'entrée sans lui faisait lever « unordered_map::at » à un lecteur entre son contains et son
+    // at (ticket 2026-10-12-une-recherche-vectorielle-pendant-drop-create…).
+    std::unique_lock lck{catalogSet->mtx};
     const auto entryToRollback = catalogEntry->getNext();
     KU_ASSERT(entryToRollback);
     if (entryToRollback->getNext()) {
