@@ -84,3 +84,69 @@ identiques, 11 tests sur 11) :
 PROFILE de V1 : SEMI_MASKER présent, SCAN Symbol 1 ligne (86 248 avant), SCAN_REL MENTIONS 117
 (491 102 avant) ; Scope encore 81 407 lignes (15 ms) : le second niveau, codé ensuite, à
 remesurer par F (deux SEMI_MASKER attendus, Scope à ~117).
+
+## 4. Le second niveau, mesuré (12 octobre, 10 h à 12 h) **[mesuré]**
+
+Lot `jointure-par-cle-niveau-2`, **sur master `97589fc9d`** (12 octobre, 11 h 50) : un balayage masqué
+(`LogicalScanNodeTable::isSemiMasked`) compte comme côté sélectif du passage d'information, et le
+build d'une jointure par clé est revisité après la pose du masque (`visitOperator(buildRoot)`), avec
+la garde ON_BUILD/ON_PROBE de `visitHashJoin` pour ne pas poser deux masques sur le même balayage.
+
+| | avant (lot 1) | après |
+|---|---|---|
+| `usages` en un temps (F) | 117 ms | **65 ms** |
+| `usages` en deux temps (F) | 43 ms | **29 ms** |
+| le saut UNWIND (V1 de F) | 21 ms | **2,3 ms** |
+| le témoin du voisin (banc, `MaskedNeighbour`) | ×1 | **×20** |
+
+PROFILE de la V1 : deux SEMI_MASKER, SCAN Symbol 1, SCAN_REL MENTIONS 117, SCAN Scope 117 lignes
+(81 407 avant). Ce qui reste dans `usages` en un temps : les sauts Scope → Scope, 18 à 20 ms chacun,
+qui ne sont pas des voisins d'un nœud masqué mais des nœuds liés par leur clé à la partie
+précédente — le troisième pas.
+
+## 5. Le troisième pas : le nœud lié par sa clé s'estime à la cardinalité de la partie précédente **[mesuré]**
+
+**Le défaut.** `UNWIND $liste AS u MATCH (d:Scope {_uuid: u})-[:HAS_PARENT]->(m:Scope)` : le prédicat
+`d._uuid = u` dépend de la partie précédente, il est remonté au-dessus de la jointure et le balayage
+de d ne le voit pas. d et m s'estiment donc tous deux à la taille de Scope ; à égalité,
+l'énumérateur d'ordre de jointure étend depuis m (jamais masqué) et joint d par hachage. Le masque
+par clés, posé après la planification, ne peut plus changer l'ordre : Scope entier est balayé pour
+m à chaque saut. Avec un paramètre scalaire (`{_uuid: $u}`), le prédicat est local, d s'estime à 1
+et l'extension part de d : c'est la forme rapide, que la liste perdait.
+
+**Le code** (branche `cle-estimation-du-noeud`, **sur master `0c0af5bf5`**, 12 octobre, 13 h 33). `planRegularMatch` repère, parmi les prédicats
+remontés, `n.clé = expr(gauche)` sur la clé primaire d'un nœud du motif (`getDependentExprs`), et
+le note dans `QueryGraphPlanningInfo::keyBoundNodeIDs` avec `keyBoundCard` = la cardinalité de la
+partie précédente. `planQueryGraph` rectifie alors l'estimation de ces nœuds à cette cardinalité
+(`cardinalityEstimator.rectifyCardinality`), comme pour le nœud corrélé d'une sous-requête — pour
+les nœuds du graphe planifié seulement (`hasNodeIDDom` : un graphe par composante, le premier essai
+tombait sur `unordered_map::at` pour un nœud clé d'une autre composante). L'extension part de d
+masqué, m n'est lu que par ses voisins. C'est l'estimation d'une recherche par index chez Neo4j.
+
+**Témoins.** `KeyMaskJoin.AHopWithinTheSameTableStartsFromTheKeyedNode` (60 000 S, P de S vers S,
+trois clés) : aucun balayage de S ne sort plus de 30 lignes, 3 lignes rendues. Au banc,
+`MaskedSelfHop.StartsFromTheKeyedNode` sur une vraie base (81 407 Scope, 37 572 HAS_PARENT) :
+rouge sur master (m 81 407, HAS_PARENT 37 572, un masqueur), vert avec le lot (d 1, m 1,
+HAS_PARENT 1, deux masqueurs).
+
+| médiane de 5 (banc) | master | lot |
+|---|---|---|
+| le saut Scope → Scope, 1 fil | 8,62 ms | **0,40 ms** |
+| le saut Scope → Scope, 32 fils | 8,87 ms | **0,39 ms** |
+| le voisin masqué | 9,57 ms | **0,56 ms** |
+
+**Mesure de F sur la lib du troisième pas** (13f4647dc, index entier, empreintes identiques, 0 vide,
+11 tests sur 11) : `usages` en un temps **7,4 / 9,5 / 7,1 ms** (352 au départ, 117 après le lot 1,
+65 après le second niveau), contre 10,0 / 12,6 / 9,6 en deux temps — le saut Scope → Scope lit
+1 ligne de Scope de chaque côté et 1 de HAS_PARENT, deux SEMI_MASKER, chaque saut d'usages
+(IMPLEMENTS, INHERITS_FROM, HAS_PARENT, CONSUMES) à 1,0-2,4 ms au lieu de 18-20. Le saut en deux
+temps est retiré de rag3weaver (c56cb3aa6, page 06 de F). En tout : **usages 352 → 7-10 ms**, le
+but 2 de Lucie (< 50 ms) dépassé d'un ordre de grandeur.
+
+**Trouvé en passant.** Deux nœuds liés par leur clé dans un même MATCH
+(`UNWIND … MATCH (a {k: ka}), (b {k: kb}) CREATE …`) se croisent — produit des deux ensembles
+masqués — avant la jointure avec la liste, parce que les deux masques sont indépendants et que
+rien ne lie a à b avant le probe. Ticket ouvert (`docs/tickets/2026-10-12-deux-noeuds-lies-par-leur-cle-…`) ;
+les mises en place des témoins passent par un nœud par MATCH (`WITH a, kb MATCH (b {k: kb})`).
+Les clés calculées (`'d-' + CAST(…)`) dans le même MATCH donnent un produit cartésien pour la
+même raison.

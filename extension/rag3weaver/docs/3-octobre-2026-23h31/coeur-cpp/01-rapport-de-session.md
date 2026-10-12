@@ -1297,3 +1297,68 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   clés) est prouvé sur la V1 exacte de F avec un reflink de son sceau : deux SEMI_MASKER, SCAN
   Scope 117 lignes au lieu de 81 407, 2,4 ms à chaud ; lot suivant, à part (branche
   `jointure-par-cle-niveau-2`), avec le témoin du banc et la remesure de F.
+
+## Fin de matinée (12 octobre 2026, 10 h 20 à 12 h) — le second niveau et le troisième pas de la jointure par clé
+
+- **Le second niveau** (page 14 §4, branche `jointure-par-cle-niveau-2`, **sur master `97589fc9d`** à
+  11 h 50, trois contrôles lus ; rejeu local : transaction 269, api 105, planner 2, e2e Cypher
+  1 867, banc 10 rouges attendus / 272 verts) : F
+  mesure **usages 117 → 65 ms en un temps, 43 → 29 en deux temps**, la V1 21 → 2,3 ms ; le banc
+  ×20 sur son témoin du voisin (690c0b382, qu'il rebase sur le hash poussé).
+- **Le troisième pas** (page 14 §5, branche `cle-estimation-du-noeud`, commit 25252fc91, suites en
+  cours) : F voyait les sauts Scope → Scope rester à 18-20 ms — le nœud lié par sa clé à la partie
+  précédente s'estimait à la table entière, et l'extension partait du voisin non masqué. Le
+  planificateur repère le prédicat remonté `n.clé = expr(gauche)` et rectifie la cardinalité du
+  nœud à celle de la partie précédente (`keyBoundNodeIDs`, un graphe par composante). Banc, médiane
+  de 5 : **saut 8,62 → 0,40 ms**, voisin 9,57 → 0,56, `MaskedSelfHop` rouge sur master et vert
+  sur le lot (d 1, m 1, HAS_PARENT 1).
+- **Trouvé en passant, ticket ouvert** : deux nœuds liés par leur clé dans un même MATCH se croisent
+  (produit des ensembles masqués) avant la jointure avec la liste ; les témoins passent par un nœud
+  par MATCH. Trois leçons de témoins : un `ASSERT` gtest dans un helper ne sort que du helper (un
+  `ok()` raté laissait le test continuer avec zéro arête) ; une clé calculée dans le MATCH donne un
+  produit cartésien ; un petit voisin lu par sa clé est planifié en Extend, sans jointure — le
+  témoin du second niveau se joue sur la forme de F (grand voisin, trois propriétés).
+- **Relectures rendues** : hotfixs (DROP validé après l'instantané ; témoin de suppressions
+  contiguës `RegionDelete.SurvivorsStayReachableAndTheNearestAreRight` lu, feu vert au push ;
+  `RealVectorsReachability` se saute sur ce poste, compté vert à tort puis corrigé par hotfixs),
+  banc (bornes des témoins de la pente : `insert-cost-without-checkpoint-stays-close` rouge = la
+  compaction des lignes mortes du CSR, mon lot suivant, page 13 §5).
+
+## Midi (12 octobre 2026, 12 h à 13 h) — la compaction des lignes mortes du CSR
+
+- **Le lot** (page 13 §5, branche `compaction-csr`) : le plus ancien instantané ouvert posé par
+  le TransactionManager sur la transaction qui valide ; `CSRNodeGroup::delete_` note le nœud ; la
+  liste est reconstruite sans les lignes que plus personne ne voit, à la validation qui ajoute au
+  nœud et à la fin de la validation qui a supprimé. Témoins `CSRDeadRows` 2/2 (listes 1 600 → 1 000
+  → 800, le rétrécissement HNSW à 64, lecteur ancien respecté, CHECKPOINT et réouverture). Témoin
+  du banc sous `poste mesure`, trois passes : **×1,17, ×1,55, ×1,20** (154 / 131, 169 / 109,
+  152 / 126 ms ; ×1,5 à ×1,74 au banc, ×1,42 sur master à 12 h 20). Un rouge sur trois à la borne
+  ×1,2 : le cas passe en probabilistic.txt avec ses comptes (règle du banc : trois verts avant de
+  sortir un cas), le ticket reste ouvert sur ce qui reste — la chaîne des versions des lignes mises
+  à jour, pensait-on : la passe 4 sur le lot rebasé sur ce master (13f4647dc, avec 2bd65cbb8 de
+  hotfixs) rend ×1,37 (154 / 113 ms). Ce qui reste est le coût propre du chemin de lecture en
+  mémoire, ligne à ligne, des relations et vecteurs écrits depuis le dernier point de reprise :
+  à profiler, ticket ouvert sur cette part, cas en probabilistic.txt (2 rouges sur 4). **Sur
+  master `c44af8031`** (14 h 55, trois contrôles lus ; rejeu sur ccecaee5d : transaction 272, api
+  105, planner 2, e2e Cypher 1 867, banc 8 rouges attendus / 280 verts).
+- **Lot Windows** (ticket c1cedb7ae de G, branche `verrou-une-poignee`) : le verrou d'un fichier
+  est pris une fois par processus sur une poignée à lui (`LocalFileSystem::acquireProcessLock`,
+  registre avec compte des ouvertures, remis à vide dans un fils de fork) ; flock sous Unix (fcntl
+  tombait à la fermeture de n'importe quel descripteur : après le rejeu des pages fantômes la
+  garde B2 ne gardait plus rien), LockFileEx sur l'octet 2^62 sous Windows (l'octet 0 verrouillé
+  interdisait aussi la lecture de l'en-tête par une autre poignée). Témoin `FileLockRegistry`
+  (trois tests par fork) 3/3, double ouverture et second écrivain 8/8 ; passe complète en cours.
+- **Le troisième pas en push** : un premier rejeu rouge sur la garde `checkpoint-keeps-insert-flat`
+  du banc (la courbe avec points de reprise montée de 101 à 139 ms sous une mesure et un cargo
+  check d'autres sessions) — la garde dépendait de la charge, le banc l'a passée en impression
+  seule (426a16412) ; un second arrêt sur « arbre sale » (le pointeur du sous-module codeparsers
+  déplacé par le rebase : `git submodule update` après tout rebase, ajouté au script de push) ;
+  troisième tour vert : **le troisième pas est sur master `0c0af5bf5`** (13 h 33, trois contrôles
+  lus ; rejeu sur 03c2b065e : transaction 270, api 105, planner 2, e2e Cypher 1 867, banc 9 rouges
+  attendus / 279 verts). **F sur cette lib : usages 7,4 / 9,5 / 7,1 ms en un temps** (352 au
+  départ : 117 après le lot 1, 65 après le second niveau), chaque saut à 1,0-2,4 ms ; le saut en
+  deux temps est retiré de rag3weaver (c56cb3aa6).
+- **Réponse à l'arbre principal (L3)** : le décalage d'un nœud neuf est gardé au COMMIT avec un
+  seul écrivain sur la table ; avec plusieurs écrivains sur la même table il est remappé (A2) —
+  relire par `_uuid` après le COMMIT ; rien n'est posé avant le COMMIT, un ROLLBACK rend les
+  décalages provisoires à la transaction suivante.

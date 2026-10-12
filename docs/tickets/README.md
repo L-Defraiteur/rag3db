@@ -30,13 +30,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (28)
+### Ouverts — moteur (29)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
 | [Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre](2026-10-12-sous-windows-une-base-existante-ne-se-rouvre-pas-en-ecriture.md) | ouvert — pour le cœur ; vu par l'épreuve du cycle du démon (run 38242681341), cause lue (LockFileEx par poignée) | blocage | oui, sur tout poste Windows | oui (le démon, tout backend) |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
 | [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |

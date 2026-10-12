@@ -112,7 +112,7 @@ référence par COPY fait 550 ms : à égalité), STRING 38 ms, INT64 2,1 ms ; d
 (`VectorIndexCost.ProductShapeDeleteCost`), le CHECKPOINT passe de 19-25 s à **1,1 s**. Le DELETE
 direct reste rouge (218 contre 5,4 ms) : la part d'hotfixs.
 
-## 5. La pente sans point de reprise : compacter les lignes mortes du CSR en mémoire **[lu, à coder]**
+## 5. La pente sans point de reprise : compacter les lignes mortes du CSR en mémoire **[mesuré]**
 
 Le banc (témoin `VectorIndexInsertSlope.CostPerBatchSettles`, master cb6c1a2cb, ticket moteur
 « sans point de reprise, l'insertion sous HNSW ralentit lot après lot ») : sans point de reprise le
@@ -147,3 +147,46 @@ copie, les recherches de `scanCommittedInMemRandom`, le tri d'`updateCSRIndex` s
 Limite : un nœud jamais réalimenté garde ses mortes jusqu'au point de reprise. Témoin : celui du banc
 (rapport sans/avec sous 1,2), plus un lecteur à instantané ancien ouvert pendant les commits qui
 doit encore voir ses arêtes.
+
+**Codé et mesuré (12 octobre, 12 h à 15 h, branche `compaction-csr`, sur master `c44af8031`).** La forme ci-dessus, à deux
+différences près : le filigrane se lit sur `snapshotFloorTS` (startTS tel que le gestionnaire le
+connaît : la `LatestCommittedView` ne change `startTS` que sur son fil, le temps d'un balayage, et
+le lire depuis le commit d'un autre serait une course), et la compaction a deux occasions, pas
+une : la validation qui ajoute au nœud (`compactDeadRows` dans `append`) **et la fin de la
+validation qui a supprimé** (`UndoBuffer::compactDeadRowsAfterCommit`, une fois les suppressions
+datées) — sans la seconde, un rétrécissement HNSW (supprimer puis recréer dans la même
+transaction) laissait ses mortes au commit suivant qui touche le nœud, et un nœud touché une fois
+les gardait jusqu'au point de reprise. Les notes (`deadHints`, un octet par nœud du groupe, et la
+liste des nœuds notés) vivent hors de `NodeCSRIndex`.
+
+Témoins `CSRDeadRows` (`test/transaction/csr_dead_rows_test.cpp`, longueur de la liste lue par
+`CSRNodeGroup::getNumInMemRows`) : sous un lecteur ancien, les listes gardent leurs mortes (1 000 →
+1 600 en trois tours) et il garde ses 1 000 relations et leur somme ; lui parti, la validation
+suivante ramène 1 000, une suppression seule 800 ; la forme du rétrécissement (30 tours) reste à
+64, grandit de 64 par tour sous un lecteur, revient à 64 dès la validation qui suit son départ ;
+mêmes comptes après CHECKPOINT et réouverture.
+
+Le témoin du banc, sous `poste mesure` sur la lib du lot :
+
+| 5 derniers lots | sans point de reprise | avec (tous les 8 lots) | rapport |
+|---|---|---|---|
+| master (banc, cinq passes) | 163 à 230 ms | 108 à 137 ms | ×1,5 à ×1,74 |
+| master (ma passe de 12 h 20, sous charge) | 197 ms | 139 ms | ×1,42 |
+| **le lot**, passe 1 | **154 ms** | **131 ms** | **×1,17** (vert, borne ×1,2) |
+| le lot, passe 2 | 169 ms | 109 ms | ×1,55 (rouge) |
+| le lot, passe 3 | 152 ms | 126 ms | ×1,20 (vert, à la borne) |
+| le lot rebasé sur master 0c0af5bf5 (avec 2bd65cbb8 de hotfixs), passe 4 | 154 ms | 113 ms | ×1,37 (rouge) |
+
+Un rouge sur trois : le cas ne sort pas de known_red pour un vert, il passe en probabilistic.txt
+avec ses comptes (la règle du banc : trois passes vertes avant de sortir un cas), et le ticket
+reste ouvert sur ce qui reste.
+
+Ce qui reste de pente sans point de reprise (135 → 160 ms du lot 22 au lot 63, contre
+110 → 130 avec) n'est plus le CSR, et la passe 4 montre que ce n'est pas non plus la chaîne des
+versions seule (2bd65cbb8 de hotfixs est dans ce bâti). Lecture : c'est le coût propre du chemin
+de lecture en mémoire — les relations et les vecteurs écrits depuis le dernier point de reprise se
+lisent ligne à ligne (`ChunkedNodeGroup::lookup`, `isSelected`, l'info de mise à jour) là où le
+chemin persistant balaie des colonnes ; sans point de reprise, la part des voisins lus par ce
+chemin croît avec chaque lot. À profiler (eu-stack échantillonné sur les derniers lots, comme le
+banc l'a fait) avant d'y toucher ; le cas est en probabilistic.txt, le ticket ouvert sur cette
+part.
