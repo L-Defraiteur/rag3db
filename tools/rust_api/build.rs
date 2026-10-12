@@ -91,6 +91,16 @@ fn build_bundled_cmake() -> Vec<PathBuf> {
         .define("BUILD_SHELL", "OFF")
         .define("BUILD_SINGLE_FILE_HEADER", "OFF")
         .define("AUTO_UPDATE_GRAMMAR", "OFF");
+    // L'identifiant de bâti du moteur (cmake/build_id.cmake) lit git dans la
+    // source cmake. Quand `rag3db-src` est une copie sans `.git` (Windows sans
+    // lien symbolique), on lui dit où est le vrai dépôt : il n'en lit git que
+    // si la source n'a aucun commit ; sans cela l'identifiant dirait « nogit »,
+    // une marque que deux commits différents partageraient (11 octobre 2026).
+    if cfg!(windows) && !rag3db_root.is_symlink() {
+        if let Ok(repo) = std::path::absolute(Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../..")) {
+            build.define("RAG3DB_BUILD_ID_GIT_DIR", repo.to_string_lossy().replace('\\', "/"));
+        }
+    }
     // GCC 13+ a resserré les includes transitifs : <memory>, <string> etc. ne
     // tirent plus <cstdint>. Le cœur kuzu s'appuie dessus dans 613 fichiers, qui
     // utilisent uint32_t & co sans l'inclure — d'où « 'uint32_t' does not name a
