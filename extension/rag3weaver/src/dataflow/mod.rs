@@ -21,6 +21,8 @@ pub(crate) mod concurrent;
 pub use concurrent::CancelHandle;
 #[cfg(test)]
 mod flux_tests;
+#[cfg(test)]
+mod jetons_tests;
 pub mod port;
 pub mod resultat;
 pub mod record;

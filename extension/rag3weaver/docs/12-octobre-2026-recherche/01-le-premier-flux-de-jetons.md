@@ -139,3 +139,55 @@ puits intérieur du `TeeSink`, sans doublon.
 - Le volume sur le bus : un événement par jeton, ou des paquets de quelques
   millisecondes ? C'est à mesurer avec une interface réelle.
 - `reasoning` en flux à part : seulement si un consommateur le demande.
+
+## 7. Les résultats (12 octobre, matin)
+
+`LlmNode.tokens` est sur master depuis `7627fa92d`, côté proto. Ses témoins 1,
+2 et 4 (la poignée de main, la concaténation, l'arrêt anticipé avec et sans
+le réglage) sont rouges d'abord. Le témoin 3, la parité, est chez moi
+(`38a95fa9b`, §2.2). Le témoin 5 et la mesure sont dans
+`src/dataflow/jetons_tests.rs`, en deux tests `#[ignore]` joués à la main :
+
+```
+scripts/cargo_magasin.sh test --lib --features rag3db-native,code,daemon,openai-llm \
+  jetons_tests -- --ignored --nocapture --test-threads=1
+```
+
+**Le vrai modèle** (témoin 5,
+`local_model_tokens_reach_the_consumer_before_the_end`). Le témoin lance
+`llama-server` avec qwen3-1.7b Q8, sur le processeur (`-ngl 0`, six fils,
+`--reasoning-budget 0`), et l'arrête par son propre pid, même sur un échec.
+Le serveur est prêt en 1,8 s. Sur une réponse de 397 jetons :
+
+| | depuis le départ du run |
+|---|---|
+| premier jeton reçu du serveur | 209,5 ms |
+| premier jeton lu par le consommateur | 210,0 ms (écart **0,53 ms**) |
+| dernier jeton lu | 14,14 s |
+| fin du run | 14,14 s |
+
+Le consommateur voit donc le premier jeton **67 fois plus tôt** que la fin de
+la génération, et le graphe n'y ajoute qu'une demi-milliseconde. `text` est
+exactement la concaténation des 397 jetons lus. Les bornes du témoin sont
+larges : un premier jeton avant le quart de la génération, un écart sous
+50 ms.
+
+**Le surcoût par jeton** (`measure_token_overhead`) : 100 000 fragments d'un
+`CallbackLlm`, en profil debug (un majorant) :
+
+| chemin | ns par jeton |
+|---|---|
+| puits nu, sans graphe | 18 |
+| `LlmNode`, `tokens` non branché (jeté, exécuteur par niveaux) | 312 |
+| `LlmNode` → lecteur `PerElement` (exécuteur concurrent, canal de 64) | 1 135 |
+| **le canal seul** | **822** |
+
+Un jeton de qwen3-1.7b sur le processeur arrive toutes les 35,6 ms. Le canal
+en coûte 0,8 µs, soit 0,002 % : il ne pèse pas. La borne du test est
+20 µs par jeton. Le refoulement d'un consommateur lent vers la socket
+(§5, troisième point) n'est pas encore mesuré : il attend `Spot` et
+`TokenEvents`, qui sont les premiers vrais consommateurs.
+
+Ces deux tests ne sont pas rouges d'abord. Ce sont une mesure et un témoin
+du protocole sur un vrai serveur. Ce qui serait rouge si `LlmNode` publiait
+seulement à la fin, la poignée de main, est le témoin 1 du proto.
