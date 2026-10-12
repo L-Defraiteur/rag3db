@@ -132,7 +132,9 @@ impl Registry {
         }
     }
 
-    pub(crate) fn contains(&self, handle: &str) -> bool {
+    /// Une poignée est-elle rangée (vivante ou finie) ? Le `#` de tête est
+    /// facultatif, comme partout ici.
+    pub fn contains(&self, handle: &str) -> bool {
         self.lock().contains_key(bare(handle))
     }
 
@@ -144,8 +146,9 @@ impl Registry {
         self.lock().remove(bare(handle));
     }
 
-    /// Ce qu'une entrée porte pour celui qui l'a inscrite (une commande).
-    pub(crate) fn payload<T: Send + Sync + 'static>(&self, handle: &str) -> Option<Arc<T>> {
+    /// Ce qu'une entrée porte pour celui qui l'a inscrite (une commande en
+    /// fond y range sa `Suivie`).
+    pub fn payload<T: Send + Sync + 'static>(&self, handle: &str) -> Option<Arc<T>> {
         self.lock().get(bare(handle)).and_then(|e| e.payload.clone()).and_then(|p| p.downcast::<T>().ok())
     }
 

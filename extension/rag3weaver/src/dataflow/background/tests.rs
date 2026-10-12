@@ -392,3 +392,17 @@ fn a_graph_with_a_real_model_is_launched_and_its_answer_reaches_the_inbox() {
     assert!(texte.to_lowercase().contains("loire"), "{texte}");
     eprintln!("[témoin] référence rendue en {rendu:?}, fin lue dans la boîte à {fin:?} : « {} »", texte.trim());
 }
+
+/// La poignée se donne avec ou sans `#`, à toutes les méthodes du registre
+/// (relecture de l'arbre principal : `tuer_en_fond("#h")` doit trouver `h`).
+#[test]
+fn a_handle_is_found_with_or_without_its_hash() {
+    let r = Registry::new();
+    let payload: Arc<dyn std::any::Any + Send + Sync> = Arc::new(7u32);
+    r.insert("#h", Entry::new(Kind::Command, "#h".into(), None, None, "run".into(), String::new(), Box::new(|| true), Box::new(|| {}), Some(payload)));
+    assert!(r.contains("h") && r.contains("#h"));
+    assert_eq!(r.payload::<u32>("#h").as_deref(), Some(&7));
+    assert_eq!(r.payload::<u32>("h").as_deref(), Some(&7));
+    r.remove("#h");
+    assert!(!r.contains("h"));
+}
