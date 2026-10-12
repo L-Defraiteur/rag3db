@@ -1347,7 +1347,25 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   tombait à la fermeture de n'importe quel descripteur : après le rejeu des pages fantômes la
   garde B2 ne gardait plus rien), LockFileEx sur l'octet 2^62 sous Windows (l'octet 0 verrouillé
   interdisait aussi la lecture de l'en-tête par une autre poignée). Témoin `FileLockRegistry`
-  (trois tests par fork) 3/3, double ouverture et second écrivain 8/8 ; passe complète en cours.
+  (trois tests par fork) 3/3, double ouverture et second écrivain 8/8. **Sur master `65cb9a1f3`**
+  (15 h 36, trois contrôles lus ; rejeu sur 3bb1828d5 : transaction 275, api 105, planner 2, e2e
+  Cypher 1 867, banc 8 / 280). La branche `_WIN32` n'a pas été compilée ici (pas de poste
+  Windows) : G la compile et joue la phase 1 de l'épreuve du démon sur le runner ; le ticket reste
+  ouvert jusque-là.
+- **La pente, verdict du banc sur master c44af8031** (trois passes sous mesure : ×1,39, ×1,40,
+  ×1,37, courbe avec points de reprise plate) : rouge constant, le cas revient en known_red ; le
+  profil eu-stack dit scanCommittedInMemRandom 4 → 27 % et isSelected 0 → 18 % entre les lots
+  0-15 et 50-63, chaîne des versions et chemin persistant stables. Deux pistes pour un lot à
+  venir : le raccourci par bloc (toutes insertions validées avant l'instantané et aucune
+  suppression → pas d'isSelected ligne à ligne), et les suites contiguës d'une liste compactée
+  lues par balayage de bloc.
+- **Relecture de la rétention (hotfixs)** : la forme tient ; un trou dans `lockIndexForWrite`
+  (mode choisi sur l'instantané avant l'attente) mène à un blocage plus profond — le point de
+  reprise forcé du CREATE attend un écrivain bloqué sur l'EXCLUSIF que le CREATE tient jusqu'au
+  clear. Retenu : (α) la rétention seule maintenant ; un ticket à part « les lignes validées
+  pendant le bâti d'un CREATE manquent à l'index », forme candidate (β) à la CREATE INDEX
+  CONCURRENTLY (rattrapage avant validation, sans chevaucher l'attente du point de reprise) ;
+  les états d'index des écrivains par holderID, pas par position.
 - **Le troisième pas en push** : un premier rejeu rouge sur la garde `checkpoint-keeps-insert-flat`
   du banc (la courbe avec points de reprise montée de 101 à 139 ms sous une mesure et un cargo
   check d'autres sessions) — la garde dépendait de la charge, le banc l'a passée en impression
