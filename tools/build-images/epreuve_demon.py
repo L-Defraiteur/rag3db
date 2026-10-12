@@ -146,6 +146,25 @@ def client(arguments, env):
     return outils, etat, erreurs
 
 
+# ── 0. Une base qui existe déjà ─────────────────────────────────────────────
+# Un premier hôte crée la base du manifeste, l'ouvre par un client, puis
+# s'arrête : la phase 1 rouvre ainsi une base existante, comme tout hôte
+# relancé. Sous Windows, la phase 4 ne pouvait pas rouvrir la base que la
+# phase 1 avait créée (run 38236456277 : verrou refusé pendant 90 s) ; si la
+# phase 1 rougit aussi, c'est la réouverture d'une base, pas le lancement
+# par le client.
+zero = subprocess.Popen([BINAIRE, "daemon", "--address", "127.0.0.1:7990"], env=ENV,
+                        stdout=open(os.path.join(DOSSIER, "hote0.log"), "w"), stderr=subprocess.STDOUT)
+if attendre(lambda: fiche() is not None or zero.poll() is not None):
+    f0 = fiche() or {}
+    _, etat0, _ = client(["--daemon", f0.get("address", "127.0.0.1:7990")], ENV)
+    cas(etat0.get("state") == "running", f"phase 0 : un premier hôte crée et ouvre la base ({etat0.get('state')})")
+    arret(f0)
+    attendre(lambda: zero.poll() is not None, 60)
+    cas(zero.poll() is not None and not os.path.exists(FICHE), f"phase 0 : le premier hôte s'arrête (code {zero.poll()})")
+if zero.poll() is None:
+    zero.kill()
+
 # ── 1. Un hôte à la main ────────────────────────────────────────────────────
 hote = subprocess.Popen([BINAIRE, "daemon", "--address", "127.0.0.1:7990"], env=ENV,
                         stdout=open(os.path.join(DOSSIER, "hote.log"), "w"), stderr=subprocess.STDOUT)
