@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (29)
+### Ouverts — moteur (28)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -38,7 +38,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
-| [Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre](2026-10-12-sous-windows-une-base-existante-ne-se-rouvre-pas-en-ecriture.md) | ouvert — pour le cœur ; vu par l'épreuve du cycle du démon (run 38242681341), cause lue (LockFileEx par poignée) | blocage | oui, sur tout poste Windows | oui (le démon, tout backend) |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
 | [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
 | [Un index retiré ou recréé change dans le stockage pour toutes les transactions, avant sa validation](2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage.md) | ouvert (forme arrêtée avec le cœur : la rétention) | refus d'une lecture valide, travail perdu | oui | oui (refus transitoires) |
@@ -106,13 +105,14 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (128), dans `closed/`
+### Fermés (129), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre](closed/2026-10-12-sous-windows-une-base-existante-ne-se-rouvre-pas-en-ecriture.md) | corrigé (65cb9a1f3, un verrou par processus) ; vu vert sous Windows, run 38262590228 | blocage | oui, sur tout poste Windows | oui (le démon, tout backend) |
 | [Un client relance l'hôte sur une base en cours d'écriture autonome](closed/2026-10-12-un-client-relance-l-hote-sur-une-base-en-cours-d-ecriture-autonome.md) | corrigé (voir le ticket) | deux écrivains sur une base | oui, pendant toute réindexation autonome | oui (`daemon_lifecycle.rs`, `daemon_host.rs`) |
 | [Le reçu d'un index annonce un modèle que l'index n'emploie pas](closed/2026-10-12-le-recu-d-index-annonce-un-modele-que-l-index-n-emploie-pas.md) | corrigé (voir le ticket) | réponse fausse (le reçu, la durée prévue) | oui, dès qu'un manifeste déclare son modèle | oui (`estimate.rs`) |
-| [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](closed/2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | corrigé : l'état d'un processus par système, l'inconnu laissé à /sante, le jeton par getrandom, l'hôte détaché sans les tuyaux du client ; cycle du démon vert sous macOS ; **Windows bloqué à la réouverture d'une base** (ticket moteur du 12 oct., c1cedb7ae) — runs 38236456277 et 38242681341, L-Defraiteur | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |
+| [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](closed/2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | corrigé : l'état d'un processus par système, l'inconnu laissé à /sante, le jeton par getrandom, l'hôte détaché sans les tuyaux du client ; cycle du démon vert sous macOS ; Windows vert, réouverture comprise (run 38262590228) — runs 38236456277 et 38242681341, L-Defraiteur | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |
 | [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](closed/2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | corrigé (136 → 6,9 ms ; voir le ticket) | lenteur sévère | oui | oui (contournement à enlever) |
 | [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](closed/2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | corrigé (le résultat complété jusqu'à k ; voir le ticket) | réponse fausse | oui | non vu |
 | [Le témoin du réacteur `each_runs_per_ring_and_debounce_waits_for_quiet` rougit sous charge](closed/2026-10-12-le-temoin-du-reacteur-rougit-sous-charge.md) | corrigé (12 octobre 2026, attentes par condition) | test instable | non (le test) | oui (`reactor.rs`) |
