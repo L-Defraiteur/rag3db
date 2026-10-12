@@ -112,10 +112,12 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
   binaire avec la montre, les défenses contre la boucle et le client qui se
   rétablit (md5 3e95f0302023) ; sain à 1 h 01. **Un geste de toi au réveil** :
   la mémoire n'a pas eu la permission d'arrêter ton hôte à 2 h 56 ; la
-  séquence (arrêt propre, binaire ≥ B4 avec le correctif du balayage,
-  code-rag3db effacé et réindexé, redémarrage) attend ton `kill -TERM` sur
-  le pid de l'hôte, commande exacte dans le rapport de la mémoire
-  (`419b87a36`), ou ton autorisation dans sa session.
+  séquence (arrêt propre, le bloc `queries_via` posé dans ton manifeste,
+  le binaire du matin installé (md5 a327c0da16e3, tête de master de 6 h :
+  B4, fils, masque, défenses, 6 s, saut en deux temps, RUNPATH vers la lib
+  du magasin), code-rag3db effacé et réindexé, redémarrage) attend ton
+  `kill -TERM` sur le pid de l'hôte, commande exacte dans le rapport de la
+  mémoire (`1eaa5d973`), ou ton autorisation dans sa session.
 - **Le P1 (20 % de morceaux « sans texte ») est clos et tes textes sont
   intacts** : un balayage filtré des chaînes du moteur rendait vide ou faux
   (string_column.cpp:240) ; correctif du cœur sur master (`e6f626df4`), lib

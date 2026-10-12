@@ -1315,3 +1315,51 @@ où elle vit.
   avec RUNPATH vers le nouvel identifiant à l'annonce ; G avance son worktree
   de luciepc à ≥ 41d282843 pour un seul bâti. Tentative 3 des fiches
   classées (mémoire, `01dd9ddb0`, Gemini 3.5 Flash sur Decide à max_tokens).
+- **6 h – 6 h 30, matin**. **La lib d'ici est rebâtie à 5 h 59 sur le masque**
+  (41d282843, tête 94e21b066 ; ABI inchangée, 4 758 symboles, un ajout
+  `NodeTable::lookupOffsets` ; courant `rag3db-build-41d28284…` ; md5
+  librag3db 8d6256cc…, libvector bc753707…). **Le binaire du matin de Lucie
+  est prouvé, pas installé** (mémoire, `~/.cache/rag3weaver-build/binaire-matin-a327c0da16e3`,
+  md5 a327c0da16e3…, master ea0a1ef06, RUNPATH vers la lib du masque, sans
+  LD_LIBRARY_PATH : readelf, ldd, check-lib « même bâti », --describe sur
+  memory et code-rag3db et sur une copie avec queries_via, hôte d'essai,
+  client ; rapport `1eaa5d973` avec la commande d'arrêt, le pas queries_via
+  et la note sur `backend.json` qui vise une petite base ancienne de 3,4 Mo,
+  à trancher par Lucie). **Le premier manque de la page 04 est fermé** :
+  les tests par requêtes (arbre principal, `94e21b066`, page `af2dfd300`) :
+  impact lockIndexForWrite passe de 1 test à 204 ; table de 24 mots-clés, 5
+  genres du moteur sans entrée ; `queries_via` déplacé hors du gabarit
+  générique (4626dec71 en file) ; le manifeste installé de Lucie n'a pas le
+  bloc → **la mémoire le pose à son arrêt de l'hôte** (script et diff de
+  codeparsers, sauvegarde `.avant-queries-via` ; la règle « ne pas toucher à
+  la config de Lucie » tenue par codeparsers) ; même bloc à copier sur
+  luciepc, dans « Pour Lucie ». Le rendez-vous par les symboles est tranché
+  par la mesure : ~32 ms sur ~640 (5 %), pas refait ; le découpage
+  d'« ingérer » sur master (proto, `2a3f57f0d`, « en détail » : relire,
+  comptes, blobs, écrire, embarquer, lier, plein texte, drain ; à 15 631
+  morceaux aucune étape ne domine) ; codeparsers rejoue une troisième fois
+  le témoin à la base entière pour nommer l'étape qui fait les 1,9 s. La
+  portée des outils approuvée (arbre principal, deux lots : `scope` et
+  `language` comme filtre de rendu et d'ambiguïté, jamais de parcours, le
+  compte des écartés dit ; search_code en Must avec le filtre de l'appelant,
+  le mode balayage qui respecte le filtre ; même forme dans les quatre
+  outils). **Les témoins du ticket vector sur master** (banc, `baf76c474`,
+  chaque couleur jouée) : la suppression d'une ligne indexée dans la forme
+  du produit coûte 35-41 × NULL puis DELETE (213-282 ms contre 6-7 ms), et
+  retombe à 30-45 ms après un CHECKPOINT qui prend lui-même 19-25 s ; le
+  coût suit la taille de l'index quand il est bâti par SET sans point de
+  reprise ; profil (eu-stack, PR_SET_PTRACER_ANY, rien installé) :
+  keepNodeReachable 88 %, la lecture des arêtes en mémoire non
+  checkpointées 75 % ; l'insertion 1-4 ms par vecteur sans gain par les
+  fils ; le point de reprise dominé par ColumnChunkData::resize (80 %) ;
+  hotfixs le DELETE, le cœur l'insertion ; lot suivant du banc : le point de
+  reprise de 20 s (témoin et ticket). **Le lot C de G est vert sur les trois
+  systèmes** (branche portage-c `76bf8fc3b`, run 38200365497 pour le bâti,
+  branche d'essai effacée, ticket fermé) ; relecture de la mémoire rendue :
+  deux corrections avant fusion (sous Windows `dir()` lit HOME et se replie
+  sur « . » → deux clients, deux hôtes sur la même base ; `pid_state` rend
+  « mort » sur ACCESS_DENIED) et la preuve à redire (le run est « failure »
+  sur l'épreuve JS, et aucun bout du cycle du démon n'a tourné hors Linux :
+  une étape de runner hôte / sante / client / arret / ensure proposée) ;
+  relecture de l'arbre principal en cours ; paquet-npm-2 (le paquet seul)
+  prêt localement derrière.
