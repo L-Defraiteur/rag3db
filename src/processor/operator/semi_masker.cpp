@@ -1,4 +1,7 @@
 #include "processor/operator/semi_masker.h"
+#include "main/client_context.h"
+#include "transaction/transaction.h"
+#include "storage/table/node_table.h"
 
 #include "common/constants.h"
 #include "common/roaring_mask.h"
@@ -92,6 +95,26 @@ bool SingleTableSemiMasker::getNextTuplesInternal(ExecutionContext* context) {
         auto pos = selVector[i];
         auto nodeID = keyVector->getValue<nodeID_t>(pos);
         localState->maskSingleTable(nodeID.offset);
+    }
+    metrics->numOutputTuple.increase(selVector.getSelSize());
+    return true;
+}
+
+bool PrimaryKeySemiMasker::getNextTuplesInternal(ExecutionContext* context) {
+    if (!children[0]->getNextTuple(context)) {
+        return false;
+    }
+    const auto transaction = transaction::Transaction::Get(*context->clientContext);
+    auto& selVector = keyVector->state->getSelVector();
+    for (auto i = 0u; i < selVector.getSelSize(); i++) {
+        const auto pos = selVector[i];
+        if (keyVector->isNull(pos)) {
+            continue;
+        }
+        offset_t offset = INVALID_OFFSET;
+        if (table->lookupPK(transaction, keyVector, pos, offset)) {
+            localState->maskSingleTable(offset);
+        }
     }
     metrics->numOutputTuple.increase(selVector.getSelSize());
     return true;
