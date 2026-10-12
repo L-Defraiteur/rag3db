@@ -36,7 +36,7 @@ use serde::Serialize;
 use super::node::{Node, NodeContext};
 use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{PortDef, PortType, PortValue};
-use super::usage_nodes::{rel_info, usages_of, RelInfo, UsagesConfig};
+use super::usage_nodes::{in_scope, rel_info, usages_of_in, QueryScope, RelInfo, UsagesConfig};
 pub use super::graph_walk::{degree_count, Direction};
 use crate::catalog::{Catalog, CatalogError};
 use crate::connection::{CypherValue, QueryParam};
@@ -167,6 +167,12 @@ pub struct NeighborhoodReport {
     /// a jamais écrit la relation : « 0 tests » n'y veut rien dire.
     #[serde(default)]
     pub queries_untracked: bool,
+    /// La portée demandée (vide : tout l'index), et combien de nœuds
+    /// atteints elle écarte du rendu — ils restent des relais du parcours.
+    #[serde(default)]
+    pub scope: QueryScope,
+    #[serde(default)]
+    pub scope_hidden: usize,
 }
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
@@ -435,6 +441,20 @@ fn relever(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], atteints: 
     Ok(out)
 }
 
+/// **Borner le rendu à la portée** : les nœuds atteints hors de `scope` sont
+/// retirés du rapport et comptés. Le parcours a déjà eu lieu : ils ont servi
+/// de relais.
+fn borner(moteur: &Moteur<'_>, atteints: Vec<Reached>, scope: &QueryScope) -> Result<(Vec<Reached>, usize), String> {
+    let Some(def) = moteur.cfg.start.defined_by.as_ref().filter(|_| !scope.is_empty()) else { return Ok((atteints, 0)) };
+    let table = rel_info(moteur.catalog, def)?.from;
+    let uuids: Vec<String> = atteints.iter().map(|a| a.uuid.clone()).collect();
+    let dedans = in_scope(moteur.catalog, &table, &moteur.cfg.start.path_fields, &uuids, scope)?;
+    let avant = atteints.len();
+    let gardes: Vec<Reached> = atteints.into_iter().filter(|a| dedans.contains(&a.uuid)).collect();
+    let n = avant - gardes.len();
+    Ok((gardes, n))
+}
+
 /// La clé de méta qu'une ingestion pose quand elle écrit des arêtes d'une
 /// relation : ce qui distingue « aucun test par requête » de « jamais relié ».
 pub fn written_key(relation: &str) -> String {
@@ -500,6 +520,23 @@ pub fn neighborhood_of(
     budget: usize,
     max_degree: usize,
 ) -> Result<NeighborhoodReport, String> {
+    neighborhood_of_in(catalog, cfg, name, path_prefix, depth, budget, max_degree, &QueryScope::default())
+}
+
+/// [`neighborhood_of`] borné à une portée : le parcours est le même (un nœud
+/// hors portée reste un relais), seuls le départ et le rendu sont bornés, et
+/// le compte des écartés est rendu.
+#[allow(clippy::too_many_arguments)]
+pub fn neighborhood_of_in(
+    catalog: &Catalog,
+    cfg: &NeighborhoodConfig,
+    name: &str,
+    path_prefix: &str,
+    depth: usize,
+    budget: usize,
+    max_degree: usize,
+    scope: &QueryScope,
+) -> Result<NeighborhoodReport, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let rels: Vec<RelInfo> = cfg.relations.iter().map(|r| rel_info(catalog, r)).collect::<Result<_, _>>()?;
     let moteur = Moteur { catalog, cfg, rels };
@@ -515,7 +552,7 @@ pub fn neighborhood_of(
     } else {
         std::borrow::Cow::Owned(UsagesConfig { direct: Vec::new(), used_by: None, ..cfg.start.clone() })
     };
-    let usages = usages_of(catalog, &depart, name, path_prefix)?;
+    let usages = usages_of_in(catalog, &depart, name, path_prefix, scope)?;
     let vus: HashSet<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
 
     let mut premiers: Vec<Reached> = Vec::new();
@@ -549,7 +586,19 @@ pub fn neighborhood_of(
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
     let (atteints, queries_untracked) = interroges(&moteur, &usages.definitions, atteints)?;
     let collected = relever(&moteur, &usages.definitions, &atteints)?;
-    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth, collected, queries_untracked })
+    let (atteints, scope_hidden) = borner(&moteur, atteints, scope)?;
+    Ok(NeighborhoodReport {
+        name: name.to_string(),
+        starts: usages.definitions,
+        ambiguous: usages.ambiguous,
+        reached: atteints,
+        cut,
+        depth,
+        collected,
+        queries_untracked,
+        scope: scope.clone(),
+        scope_hidden,
+    })
 }
 
 /// **L'impact d'un fichier** : le même voisinage, parti de toutes les
@@ -592,7 +641,18 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
     let (atteints, queries_untracked) = interroges(&moteur, &departs, atteints)?;
     let collected = relever(&moteur, &departs, &atteints)?;
-    Ok(NeighborhoodReport { name: file.to_string(), starts: departs, ambiguous: false, reached: atteints, cut, depth, collected, queries_untracked })
+    Ok(NeighborhoodReport {
+        name: file.to_string(),
+        starts: departs,
+        ambiguous: false,
+        reached: atteints,
+        cut,
+        depth,
+        collected,
+        queries_untracked,
+        scope: QueryScope::default(),
+        scope_hidden: 0,
+    })
 }
 
 /// Le parcours par niveaux, commun aux deux départs : dédoublonner, couper
@@ -756,6 +816,9 @@ impl NeighborhoodReport {
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
         }
+        if !self.scope.is_empty() {
+            out.push_str(&format!(" ; portée {} : {} hors de la portée, écartés (traversés)", self.scope.describe(), self.scope_hidden));
+        }
         out.push_str(".\n");
         if groupes.is_empty() {
             return out;
@@ -824,6 +887,9 @@ impl NeighborhoodReport {
         }
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
+        }
+        if !self.scope.is_empty() {
+            out.push_str(&format!(" ; portée {} : {} hors de la portée, écartés (traversés)", self.scope.describe(), self.scope_hidden));
         }
         out.push_str(".\n");
 
@@ -913,6 +979,8 @@ pub struct NeighborhoodNode {
     cfg: NeighborhoodConfig,
     name: String,
     path: String,
+    /// La portée de la question (`scope`, `language`).
+    scope: QueryScope,
     /// Mode par fichier : départ de toutes les lignes de ce fichier.
     file: String,
     /// `summary` : les comptes et les premiers du groupe.
@@ -957,7 +1025,7 @@ impl Node for NeighborhoodNode {
                 let r = if self.name.is_empty() {
                     neighborhood_of_file(&cat, &self.cfg, &self.file, self.depth, self.budget, self.max_degree)?
                 } else {
-                    neighborhood_of(&cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree)?
+                    neighborhood_of_in(&cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree, &self.scope)?
                 };
                 (r, status)
             }
@@ -1111,6 +1179,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             summary,
             summary_group: s("summary_group").unwrap_or_default(),
             path: s("path").unwrap_or_default(),
+            scope: QueryScope::parse(&s("scope").unwrap_or_default(), &s("language").unwrap_or_default()),
             depth: entier("depth", 2).clamp(1, MAX_DEPTH as u64) as usize,
             budget: entier("budget", 200).clamp(1, MAX_BUDGET as u64) as usize,
             max_degree: entier("max_degree", 50).max(1) as usize,
@@ -1179,6 +1248,8 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("summary_group", S, false, Some(serde_json::json!("")), "Résumé : la seule valeur du groupe à compter et nommer (ex. case)"),
                 p("file", S, false, Some(serde_json::json!("")), "Mode par fichier : départ de toutes les lignes dont un champ de chemin vaut ce chemin ; ce qui est dans le fichier ne compte pas"),
                 p("path", S, false, Some(serde_json::json!("")), "Ne partir que des définitions sous ce chemin"),
+                p("scope", S, false, Some(serde_json::json!("")), super::usage_nodes::SCOPE_HELP),
+                p("language", S, false, Some(serde_json::json!("")), super::usage_nodes::LANGUAGE_HELP),
                 p("depth", Int, false, Some(serde_json::json!(2)), "Profondeur, 1 à 3"),
                 p("budget", Int, false, Some(serde_json::json!(200)), "Nœuds rendus au plus (plafond 2000)"),
                 p("max_degree", Int, false, Some(serde_json::json!(50)), "Un nœud plus connecté est montré, pas traversé"),

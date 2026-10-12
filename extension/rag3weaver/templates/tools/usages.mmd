@@ -2,13 +2,15 @@
 %% description: Tous les usages d'un nom, et sa ou ses définitions : qui l'appelle, qui s'en sert comme type, qui l'importe, qui en hérite — groupés par genre, chacun avec fichier et ligne. Un nom défini plusieurs fois montre toutes ses définitions, sans choisir ; `path` restreint celles qu'on regarde.
 %% param: name string! -- Le nom cherché (fonction, type, méthode…), tel qu'écrit dans le code.
 %% param: path string = "" -- Ne montrer que les définitions sous ce chemin (préfixe de fichier), pour lever une ambiguïté.
+%% param: scope string = "" -- Borner la réponse à ces chemins relatifs à la racine, séparés par | (src/|test/) ; vide : tout l'index. Ce qui est hors portée est compté, pas montré.
+%% param: language string = "" -- Borner la réponse à ces langages, séparés par | (cpp|rust) ; vide : tous.
 %% param: usage string = "all" -- Ne garder qu'un genre d'usage.
 %% choices: usage = all | call | type | import | inheritance | other
 %% param: limit int = 20 -- Usages rendus par genre (plafond 200) ; tous sont comptés.
 %% result: usages.result
 
 graph LR
-    usages["UsagesNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, qualifier_field=parent_name, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, declared_in=HAS_PARENT, declarations_field=declarations, virtual_path='HAS_PARENT>|IMPLEMENTS/INHERITS_FROM>+|PARENT_OF>', name=$name, path=$path, usage=$usage, limit=$limit, edge_field=resolution, edge_guessed=nom)"]
+    usages["UsagesNode(pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, qualifier_field=parent_name, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, declared_in=HAS_PARENT, declarations_field=declarations, virtual_path='HAS_PARENT>|IMPLEMENTS/INHERITS_FROM>+|PARENT_OF>', name=$name, path=$path, scope=$scope, language=$language, usage=$usage, limit=$limit, edge_field=resolution, edge_guessed=nom)"]
 
 %% Le schéma de code (src/code.rs) : `Symbol` est le rendez-vous des noms,
 %% `DEFINES` le relie à ses définitions, `MENTIONS` à ce qui le nomme d'un

@@ -172,6 +172,8 @@ mod e2e_phase0b;
 mod e2e_plans_par_lot;
 #[path = "../e2e_points_de_reprise_nettoyes.rs"]
 mod e2e_points_de_reprise_nettoyes;
+#[path = "../e2e_portee.rs"]
+mod e2e_portee;
 #[path = "../e2e_postgres.rs"]
 mod e2e_postgres;
 #[path = "../e2e_preuve_d_existence.rs"]
