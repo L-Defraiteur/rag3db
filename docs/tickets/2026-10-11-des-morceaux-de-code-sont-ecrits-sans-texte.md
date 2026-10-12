@@ -76,3 +76,23 @@ avec un faux service lent et une session qui interroge pendant l'index, est la s
 
 La réclamation seule reproduit en revanche **la boucle** : sans le service, elle rend sans fin ses
 propres lignes (512 000 en 8,7 s) — ce que les défenses de l'arbre principal arrêtent.
+
+## Le chemin réel, par l'hôte, est sain (12 octobre, nuit)
+
+Codeparsers, avec le témoin de bout en bout de l'orchestration : binaire release de master
+`8610eaec6` contre la lib du poste (`6df47a54…`), un hôte à part, `code-tree add` d'un worktree de
+rag3db sur une base neuve, l'outil `index` par une session MCP avec le vrai service `granite-278m`
+(régime doux, 1 369,5 s). Pendant l'index, la session a lu (`search_code`, `usages`) et renommé un
+symbole sur disque, et la montre a réindexé. Compté ensuite, base fermée : **`Scope_Chunk` 102 469,
+`_text` nul 0, vide 0 ; `File_Chunk` 6 303, vides 0.**
+
+Le chemin d'aujourd'hui ne crée donc pas de morceau vide en une histoire propre. Les vides de la
+copie de F et de code-lourd viennent de **leur histoire** : des binaires plus anciens (code-lourd a
+été indexé par `a3c1ca98f`, puis par le binaire suivant), des `kill -9`, et une copie prise au vol.
+La copie de code-lourd que Lucie prend au réveil, base fermée, dira si ses vides ont un parent et un
+hash ; l'outil de comptage est la sonde de codeparsers (`compter_une_base`), versée au ticket.
+
+Ce qui reste à faire pour fermer : établir l'origine sur cette copie ; si c'est un défaut d'un
+binaire ancien déjà corrigé, le dire ici ; dans tous les cas, **la réécriture des morceaux sans
+texte** d'une base qui en a (l'index la lance quand le compte est non nul), puisque la montre ne les
+reverra pas.
