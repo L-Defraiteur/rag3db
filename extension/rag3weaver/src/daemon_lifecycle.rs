@@ -166,6 +166,67 @@ pub fn new_token() -> Result<String, String> {
     Ok(octets.iter().map(|o| format!("{o:02x}")).collect())
 }
 
+/// **Sous Windows, l'hôte détaché n'hérite pas des tuyaux du client.**
+/// `Command` appelle `CreateProcess` avec `bInheritHandles` dès qu'il pose les
+/// entrées-sorties de l'enfant, et *toute* poignée héritable du parent part
+/// avec : les entrées-sorties standard du client, que l'agent qui l'a lancé
+/// lui donne héritables, passaient à l'hôte, qui survit au client et gardait
+/// ouverts les tuyaux de l'agent ; celui-ci n'en voyait jamais la fin
+/// (l'épreuve du cycle sous Windows a attendu deux heures, 12 octobre 2026).
+/// Sous Unix rien de tel : le reste se ferme à l'exec, et 0, 1, 2 sont
+/// remplacés.
+///
+/// Le temps du `spawn`, ces trois poignées cessent d'être héritables ; un
+/// garde remet l'état d'origine (le drapeau, sur celles qui l'avaient
+/// seulement), même si le `spawn` échoue. Celles de l'hôte (nul, son journal)
+/// sont dupliquées par `Command`, à part. Une poignée absente (un client sans
+/// console, un stderr fermé) est passée sans erreur.
+///
+/// Limite : pendant cet instant, un autre `spawn` du client, ou une commande
+/// lancée au même moment par un autre de ses fils, ne recevrait pas ces
+/// poignées non plus. Le client mince n'en lance pas. La forme propre serait
+/// la liste exacte des poignées de l'enfant
+/// (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), quand `raw_attribute` sera stable.
+#[cfg(windows)]
+fn sans_heriter_les_entrees_sorties<T>(lancer: impl FnOnce() -> T) -> T {
+    use windows_sys::Win32::Foundation::{GetHandleInformation, SetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+
+    /// Remet le drapeau d'héritage sur les poignées qui l'avaient.
+    struct Remise(Vec<HANDLE>);
+    impl Drop for Remise {
+        fn drop(&mut self) {
+            for &h in &self.0 {
+                // SAFETY : une poignée du processus, remise comme elle était.
+                unsafe {
+                    SetHandleInformation(h, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+                }
+            }
+        }
+    }
+
+    let mut remise = Remise(Vec::new());
+    for quelle in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+        // SAFETY : des poignées du processus lui-même, lues puis remises.
+        unsafe {
+            let h = GetStdHandle(quelle);
+            if h.is_null() || h == INVALID_HANDLE_VALUE {
+                continue;
+            }
+            let mut drapeaux = 0u32;
+            if GetHandleInformation(h, &mut drapeaux) != 0
+                && drapeaux & HANDLE_FLAG_INHERIT != 0
+                && SetHandleInformation(h, HANDLE_FLAG_INHERIT, 0) != 0
+            {
+                remise.0.push(h);
+            }
+        }
+    }
+    let rendu = lancer();
+    drop(remise);
+    rendu
+}
+
 /// `daemon.json`, s'il existe et se lit.
 pub fn read() -> Option<DaemonFile> {
     let octets = std::fs::read(racine(Dossier::Donnees).ok()?.join("daemon.json")).ok()?;
@@ -481,9 +542,11 @@ fn ensure_locked(exe: &Path) -> Result<DaemonFile, Missing> {
         const DETACHED_PROCESS: u32 = 0x0000_0008;
         std::os::windows::process::CommandExt::creation_flags(&mut commande, CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
     }
-    let mut enfant = commande
-        .spawn()
-        .map_err(|e| Missing::Absent(format!("lancer {} : {e}", exe.display())))?;
+    #[cfg(not(windows))]
+    let lance = commande.spawn();
+    #[cfg(windows)]
+    let lance = sans_heriter_les_entrees_sorties(|| commande.spawn());
+    let mut enfant = lance.map_err(|e| Missing::Absent(format!("lancer {} : {e}", exe.display())))?;
     let pid = enfant.id();
     let debut = Instant::now();
     let echec = |raison: String| if perime { Missing::Unreachable(raison) } else { Missing::Absent(raison) };
