@@ -109,3 +109,39 @@ après un arrêt) :
    entre 15 h et 20 h 24 (heure de la copie), ou sont-ils seulement les plus gros ?
 3. **Sur sa copie, F** : les morceaux vides ont-ils des `_embed_*`, des marqueurs ou des dates qui les
    distinguent des pleins (écrits par un autre passage) ?
+
+### Ce que lit la copie de F, et la relecture du chemin de réingestion (12 octobre, nuit)
+
+**La copie (F, `ce_qui_distingue_les_morceaux_vides`)** : la perte se fait **par scope entier**
+(14 724 scopes tout vides, 65 442 tout pleins, 1 232 mêlés). Chez les vides, tout le reste est
+présent à 100 % : `_text_hash`, `_embed_hash`, `_sparse_hash`, `_embed_claim`, le vecteur
+`granite_278m` et son marqueur, les bornes. Le vecteur a donc été calculé depuis un vrai texte, et le
+texte a disparu ensuite. Les scopes vides sont plutôt petits et en tête de fichier (rang moyen 4,7,
+`_start_line` moyen 133).
+
+**Le binaire de la fenêtre** (la mémoire) : de 17 h 50 à 20 h 35, l'hôte de Lucie servait le
+binaire de `e60f2342e` contre la lib rebâtie à 17 h 39 sur **le même commit** (`9f9d9409…`) ; la
+montre de `code-rag3db` tournait depuis 17 h 10.
+
+**La relecture du proto** (aucune écriture applicative ne vide `_text`) : trois chemins qui n'existent
+qu'en réingestion, jamais à un index neuf (qui passe par COPY) —
+1. l'upsert `UNWIND … MERGE … SET n.c = item.c` sur des lignes de morceaux existantes (uuids
+   déterministes : un scope modifié repart en entier) ; le texte est envoyé, une perte y serait un
+   défaut du moteur au SET d'une chaîne sur une ligne existante ;
+2. le remplacement du vecteur par le contournement HNSW (`embed_clear` puis `embed_set`), deux SET
+   de plus sur la ligne ;
+3. **pas de dédoublonnage par uuid sur le chemin d'upsert** (le COPY en a un) : deux scopes de même
+   clé dans un fichier donnent les mêmes uuids de morceaux dans un même lot.
+
+Et ce qui fait **durer** le vide : le critère « complet » de `split_unchanged` compte les morceaux,
+les marqueurs et les arêtes, pas `_text` ; un scope vidé est jugé complet et toute réingestion du
+même contenu le saute.
+
+**Départager (1)/(2)** : sur un vide, le marqueur dense égale-t-il `_text_hash` ? (demandé à F).
+**Témoins au matin** : la réédition avec vecteurs, répétée (codeparsers) ; le témoin du proto
+`a_reingested_file_keeps_the_text_of_its_chunks` (réingestion par le chemin de la montre, décalages,
+deux scopes de même clé) ; le couple `e60f2342e` si les deux restent verts.
+
+**Réparation** : `dd7bb2c1e` (en file) réécrit les morceaux sans texte à l'index, en passant outre
+`split_unchanged` ; ajouter « `_text` non vide » à son critère, pour qu'une réingestion de la montre
+répare aussi, suit en lot court.
