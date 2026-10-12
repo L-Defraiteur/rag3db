@@ -122,6 +122,8 @@ codeparsers = { path = "codeparsers", optional = true }
 # globales), comme ripgrep : `WorkingTree` les respecte par défaut.
 ignore = { version = "0.4", optional = true }
 regex = { version = "1", optional = true }
+# La montre réagit aux événements du noyau (inotify, FSEvents, ReadDirectoryChangesW).
+notify = { version = "8", optional = true }
 
 # ─── Fournisseurs LLM distants (feature `openai-llm`) ────────────────────────
 # Client HTTP **bloquant**. Pourquoi ureq et pas reqwest/genai/rig : le trait
@@ -198,7 +200,7 @@ burn-fusion = ["burn/fusion"]
 # `OcrNode`. Le trait `Ocr` et le nœud existent sans la feature ; le modèle
 # PP-OCRv6 sur burn est sous `burn-ocr`.
 ocr = ["dep:image"]
-code = ["dep:codeparsers", "dep:regex", "dep:ignore", "dep:landlock"]
+code = ["dep:codeparsers", "dep:regex", "dep:ignore", "dep:landlock", "dep:notify"]
 # PP-OCRv6 tiny (détection DB + reconnaissance CTC) sur burn — sans tokenizers.
 # Les graphes générés vivent dans generated/ppocrv6_tiny_{det,rec}_onnx.rs ; les
 # poids (.bpk) et le dictionnaire se chargent depuis un dossier (cf generated/README.md).

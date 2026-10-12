@@ -277,3 +277,14 @@ sur l'hôte de Lucie, le 11 octobre. Un poste qui veut moins remonte la période
 La forme générique est de réagir sur l'événement du noyau (inotify, par la crate `notify`) en
 gardant le balayage comme filet. C'est un lot à part, après les symboles et les jetons.
 
+**Le même jour, l'après-midi : le noyau réveille la montre.** Le cinquième rejeu de codeparsers
+donnait 2,29 s de bout en bout, dont ~0,6 s entre l'édition et la prise du lot. La montre écoute
+maintenant les événements du noyau (la crate `notify` : inotify sous Linux, FSEvents,
+ReadDirectoryChangesW). Un événement sous la racine réveille le balayage, qui reste le juge (dates,
+empreinte, pose, porte de l'index) et le filet d'un événement perdu. Au plus un tour par pose,
+pour qu'un build qui écrit en rafale ne fasse pas balayer en boucle. Avec les événements, la
+période n'est plus qu'un filet (`filet_ms`, 2 000) : le coût au repos baisse d'autant. Sans eux
+(limite d'inotify), la montre le dit et balaie toutes les `every_ms`. `WatchStats` compte les
+réveils (`wakes`) et dit si les événements sont écoutés (`events`). Témoin : avec une période
+d'une minute, une modification est vue en moins de 3 s (rouge avant, aucun balayage).
+

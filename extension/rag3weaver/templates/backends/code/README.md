@@ -154,6 +154,13 @@ porte `lag`, et `usages` ou le voisinage commencent leur réponse par « N
 fichier(s) changé(s) depuis N s, pas encore réindexé(s) : ce résultat peut
 dater ». Une réponse sans cette ligne est à jour du disque.
 
+**Le noyau réveille la montre** (12 octobre 2026, `events`, vrai par défaut) :
+un événement du système de fichiers (inotify sous Linux) déclenche le
+balayage aussitôt, et le changement est vu après la seule pose. Le balayage
+reste le juge et devient un filet toutes les `filet_ms` (2 000). Si les
+événements ne sont pas disponibles (limite d'inotify), la montre le dit et
+balaie toutes les `every_ms`.
+
 **Ce que la montre coûte au repos** (12 octobre 2026) : un tour lit les dates
 des fichiers connus, pas la liste. Il coûte 2 ms pour les 1 654 fichiers du
 `src/` du moteur et 9 ms pour les 6 929 du dépôt entier, cache chaud. À la
