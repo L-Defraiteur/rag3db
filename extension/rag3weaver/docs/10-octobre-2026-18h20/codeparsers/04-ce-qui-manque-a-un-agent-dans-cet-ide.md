@@ -70,6 +70,26 @@ appel bloqué compris.
 `code-rag3db` le 11 à 15 h 34. L'écart vient du régime doux (budget 4 096, GPU à 70 %) et de la
 carte partagée ; il n'est pas mesuré à part.
 
+**Rejeu à `df1184d32`** (12 octobre, 4 h 44 ; le lot du proto : une lecture passe pendant une
+réaction, la ligne `[montre]` par fichier, le contournement de la suppression sous HNSW). Binaire
+release bâti contre la lib du magasin `f6179ade0…` (correctif des chaînes), lié par RUNPATH
+(`RUSTFLAGS=-C link-arg=-Wl,-rpath,<dossier du magasin>` : le `-rpath` du script de bâti de
+`rag3db` ne gagne pas le binaire qui en dépend). Index entier 1 384 s. Après le même renommage :
+`usages` **7,13 s**, `search_code` **7,53 s** — pas de gain à cette taille. Les lignes de l'hôte,
+le temps compté depuis l'édition :
+
+| t | ligne `[montre]` |
+|---|---|
+| ≈ 4,3 s | `bin/rag3weaver-backend.rs` réindexé : verrou attendu 0 ms, tenu 2 175 ms — ingérer 1 914, analyser 124, oublier les arêtes 84, fin d'instantané 28, lister 20, résoudre 0 |
+| ≈ 6,9 s | `code_tree.rs` réindexé : verrou attendu 0 ms, tenu 2 655 ms — ingérer 1 902, fin d'instantané 462, résoudre 142, oublier 77, analyser 46, lister 20 |
+
+La lecture ne bloque plus (verrou attendu 0 ms). Le temps se découpe en ~2,1 s avant la première
+réindexation (le pas de la montre), puis **deux fichiers l'un après l'autre**, chacun ~2 s dont
+1,9 s pour « ingérer » (0,56-0,68 s par réindexation chez le proto à 15 631 morceaux).
+**Manques** : « ingérer » découpé en scopes, morceaux, vecteurs, liens (on ne sait pas si
+l'écriture grandit avec la base ou si les vecteurs, en régime doux, dominent) ; une réaction par
+lot de fichiers vus ensemble plutôt qu'un fichier par réaction.
+
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
 de la session codeparsers.
