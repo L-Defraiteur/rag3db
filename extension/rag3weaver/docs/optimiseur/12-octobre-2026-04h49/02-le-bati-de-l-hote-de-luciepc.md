@@ -66,5 +66,10 @@ Il fait et produit :
   `courant`. Le RUNPATH vise le dossier de cet identifiant ;
 - il vérifie le résultat : chaque symbole `rag3db` du binaire doit être défini
   dans la lib, et `rag3db-check-lib` doit rendre 0 ;
-- il pose `rag3weaver-backend.pret`, `rag3db-check-lib.pret` (avec leurs md5) et
-  `check-lib.conf.pret` (inactif). Il n'installe rien et ne relance rien.
+- il pose `rag3weaver-backend.pret`, `rag3db-check-lib.pret` (avec leurs md5),
+  `check-lib.conf.pret` (inactif) et `rag3weaver-daemon.env.pret`. Ce dernier
+  est l'env de l'unité recopié avec `RAG3DB_LIBRARY_DIR` sur la lib liée. Sans
+  lui, l'hôte retombait sur `RAG3DB_ROOT` et chargeait la libvector de
+  rag3db-lourd, bâtie contre 6df47a543 : les bases refusaient de s'ouvrir (vu
+  par codeparsers le 12 octobre). Dans les manifestes, `vector_extension` vaut
+  `"vector"`, pas un chemin absolu. Il n'installe rien et ne relance rien.

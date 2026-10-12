@@ -18,6 +18,9 @@
 #     vérifiés (symboles rag3db tous définis dans la lib, rag3db-check-lib à 0) ;
 #     ils remplacent le .pret du 11 oct. à 22 h 13, l'ancien (d'avant B4) ;
 #   - check-lib.conf.pret pour l'unité (inactif) ;
+#   - rag3weaver-daemon.env.pret : l'env de l'unité recopié, RAG3DB_LIBRARY_DIR posé sur le
+#     dossier lié (sans lui, l'hôte retombe sur RAG3DB_ROOT et charge une autre libvector :
+#     vu par codeparsers le 12 oct., les bases refusaient de s'ouvrir) ;
 #   - la note ~/.local/share/rag3weaver/POUR-LUCIE-hote.md.
 # Journaux : build/lib.configure.log, build/lib.bati.log, ~/.cache/rag3weaver-build/hote-cargo7.log.
 set -u
@@ -56,6 +59,11 @@ md5sum $HOME/.local/bin/rag3weaver-backend.pret $HOME/.local/bin/rag3db-check-li
 mkdir -p $HOME/.config/systemd/user/rag3weaver-daemon.service.d
 printf '[Service]\n# Le binaire et la lib de son RUNPATH sont du même bâti, sinon l unité ne démarre pas.\nExecStartPre=%%h/.local/bin/rag3db-check-lib %%h/.local/bin/rag3weaver-backend %s/librag3db.so\n' "$L" > $HOME/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf.pret
 cat $HOME/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf.pret
+# L'env de l'unité, recopié avec RAG3DB_LIBRARY_DIR sur le dossier lié : l'extension vector
+# se cherche là, pas sous RAG3DB_ROOT (qui peut porter une libvector d'un autre bâti).
+E=$HOME/.config/rag3weaver/rag3weaver-daemon.env
+{ [ -f $E ] && grep -v '^RAG3DB_LIBRARY_DIR=' $E; echo "RAG3DB_LIBRARY_DIR=$L"; } > $E.pret
+diff $E $E.pret
 echo "== $(date +%H:%M:%S) prêt"
 N=$HOME/.local/share/rag3weaver/POUR-LUCIE-hote.md
 {
@@ -80,7 +88,9 @@ echo "1. La pile de l'hôte figé, puis son arrêt (\`systemctl --user stop rag3
 echo "2. Installer : \`mv ~/.local/bin/rag3weaver-backend.pret ~/.local/bin/rag3weaver-backend\` et"
 echo "   \`mv ~/.local/bin/rag3db-check-lib.pret ~/.local/bin/rag3db-check-lib\`."
 echo "3. Activer la vérification : \`mv ~/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf.pret ~/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf\`"
-echo "   puis \`systemctl --user daemon-reload\`."
+echo "   et l'env : \`mv ~/.config/rag3weaver/rag3weaver-daemon.env.pret ~/.config/rag3weaver/rag3weaver-daemon.env\`"
+echo "   (RAG3DB_LIBRARY_DIR sur la lib liée : l'extension vector vient du même bâti),"
+echo "   puis \`systemctl --user daemon-reload\`. Dans les manifestes, vector_extension vaut \"vector\", pas un chemin."
 echo "4. **Ne pas démarrer encore** : d'abord la section « Pour Lucie » de codeparsers (eef060968) —"
 echo "   la montre et queries_via dans les deux manifestes, les bases d'avant B4 effacées. Un hôte"
 echo "   démarré avant ouvrirait une base d'avant la règle des chemins relatifs."
