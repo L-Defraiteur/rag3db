@@ -36,7 +36,7 @@ est l'ancien binaire d'avant B4, **à ne pas installer**.
    codeparsers y compte les morceaux sans texte (pour le ticket).
 3. **L'arbre de l'hôte à jour** : avancer `~/git_workspaces/rag3db-hote` à la tête de master, qui
    doit contenir `3cca0ae1e` : `git fetch`, `git checkout --detach FETCH_HEAD`, `git submodule update`.
-4. **Le bâti** (G, `afeef6244`) : copier `extension/rag3weaver/docs/optimiseur/12-octobre-2026-04h49/02-hote-bati7.sh`
+4. **Le bâti** (G, `5fc33cec3` — pas `afeef6244`, dont la note démarrait trop tôt) : copier `extension/rag3weaver/docs/optimiseur/12-octobre-2026-04h49/02-hote-bati7.sh`
    sous `~/.cache/rag3weaver-build/` sur luciepc, puis `poste lourd bash hote-bati7.sh > hote-bati7.log 2>&1`
    (une petite heure ; page `02-le-bati-de-l-hote-de-luciepc.md` du même dossier). Il bâtit la lib,
    la publie au magasin, bâtit le binaire lié à elle et le vérifie, en `.pret`.
