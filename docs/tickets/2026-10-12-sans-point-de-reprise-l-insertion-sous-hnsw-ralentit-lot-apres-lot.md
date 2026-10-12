@@ -54,8 +54,10 @@ balayage des voisins de ce nœud (la recherche d'insertion) les relit et les éc
 `VectorIndexInsertSlope.CostPerBatchSettles` (`test/transaction/concurrence/vector_index_cost_test.cpp`),
 contrôle `insert-cost-without-checkpoint-stays-close` : à la fin, les 5 derniers lots sans point de
 reprise au plus 1,2 fois ceux de la courbe avec, plus 2 ms. En known_red, rouge trois passes sur
-trois. La garde `checkpoint-keeps-insert-flat` (avec points de reprise, les 5 derniers lots au plus
-1,2 fois les lots 25 à 30) est verte.
+trois. La courbe avec points de reprise est imprimée (fin sur plateau) sans contrôle : une garde
+qui la jugeait (`checkpoint-keeps-insert-flat`) rougissait selon la charge du poste, au rejeu du
+push du troisième pas de la jointure par clé (138,9 contre 100,8 ms sous une mesure et deux bâtis
+d'autres sessions), et a été retirée le 12 octobre.
 
 ## Pour le fermer
 
