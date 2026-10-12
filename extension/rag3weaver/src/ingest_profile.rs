@@ -126,3 +126,22 @@ pub fn drain_stage(node: &str) -> &'static str {
         _ => "drain · (autre)",
     }
 }
+
+/// **Un chronomètre de portée** : ajoute à `stage` le temps passé jusqu'à sa
+/// sortie de portée, quel que soit le chemin de retour (un `?` compris).
+pub struct Chrono {
+    stage: &'static str,
+    since: Instant,
+}
+
+impl Chrono {
+    pub fn new(stage: &'static str) -> Self {
+        Self { stage, since: Instant::now() }
+    }
+}
+
+impl Drop for Chrono {
+    fn drop(&mut self) {
+        add(self.stage, self.since);
+    }
+}

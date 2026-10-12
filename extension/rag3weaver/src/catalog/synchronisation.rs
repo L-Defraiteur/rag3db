@@ -284,6 +284,7 @@ impl Catalog {
         scope: &BTreeMap<String, CypherValue>,
         takeover: bool,
     ) -> Result<SnapshotSession, CatalogError> {
+        let _chrono = crate::ingest_profile::Chrono::new("instantané · ouvrir la session");
         self.check_initialized()?;
         self.check_ecriture("begin_snapshot")?;
         self.check_entity(entity_name)?;
@@ -364,6 +365,7 @@ impl Catalog {
         session: &str,
         uuids: &[String],
     ) -> Result<(), CatalogError> {
+        let _chrono = crate::ingest_profile::Chrono::new("instantané · marquer");
         self.check_initialized()?;
         self.check_ecriture("mark_snapshot")?;
         self.check_entity(entity_name)?;
@@ -462,6 +464,7 @@ impl Catalog {
         session: &str,
         options: SnapshotFinishOptions,
     ) -> Result<SnapshotFinish, CatalogError> {
+        let _chrono = crate::ingest_profile::Chrono::new("instantané · planifier");
         self.check_initialized()?;
         self.check_ecriture("finish_snapshot")?;
         self.check_entity(entity_name)?;
@@ -647,11 +650,13 @@ impl Catalog {
             // La ligne entière (pour la copie), sa marque, et l'appartenance
             // au périmètre relue : une ligne que la session d'un autre
             // périmètre a portée depuis le plan vit ailleurs.
+            let t = std::time::Instant::now();
             let mut rows: HashMap<String, BTreeMap<String, CypherValue>> = self
                 .get_many(&entity_name, &report.removed)?
                 .into_iter()
                 .filter_map(|row| Some((row.get("_uuid")?.as_str()?.to_string(), row)))
                 .collect();
+            crate::ingest_profile::add("instantané · relire les lignes retirées", t);
             let planned = std::mem::take(&mut report.removed);
             let mut to_remove = Vec::new();
             for uuid in planned {
@@ -673,7 +678,9 @@ impl Catalog {
             }
             // **La copie avant le retrait**, et avant toute mise en file : si
             // elle échoue, rien n'est retiré.
+            let t = std::time::Instant::now();
             report.set_aside = self.set_aside(&entity_name, &report.session, &to_remove)?;
+            crate::ingest_profile::add("instantané · mettre de côté", t);
             for uuid in &report.removed {
                 self.mettre_en_file_la_suppression(&entity_name, uuid)?;
             }
@@ -735,7 +742,9 @@ impl Catalog {
             // pas des vues : elles ne marquent pas. Sinon la fin suivante
             // croirait présentes les lignes qu'elle vient d'archiver.
             self.dans_une_fin = true;
+            let t = std::time::Instant::now();
             let res = self.drain();
+            crate::ingest_profile::add("instantané · drain", t);
             self.dans_une_fin = false;
             // Le rapport ne dit que ce qui a eu lieu : une transition refusée
             // au drain (l'état relu à un autre instant) quitte `transitioned`
@@ -782,14 +791,18 @@ impl Catalog {
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
         // La fin ferme la session, et se garde pour son annulation.
+        let t = std::time::Instant::now();
         self.persist_meta_key(&self.session_key(&entity_name, &report.scope), "")?;
         self.oublier_les_sessions(&entity_name);
         self.record_snapshot_finish(&report)?;
+        crate::ingest_profile::add("instantané · noter la fin", t);
         // La dette de la mise de côté, payée à chaque fin par une passe
         // bornée. Un échec ne défait pas une fin appliquée : il se dit.
+        let t = std::time::Instant::now();
         if let Err(e) = self.purge_snapshot_aside(&entity_name) {
             report.warnings.push(format!("purge de la mise de côté : {e}"));
         }
+        crate::ingest_profile::add("instantané · purger la mise de côté", t);
         Ok(report)
     }
 

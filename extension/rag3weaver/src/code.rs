@@ -2159,16 +2159,19 @@ impl Catalog {
             })
             .collect();
         report.symbols = records.len();
-        let profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
+        let profil = crate::ingest_profile::enabled();
         let mut t = std::time::Instant::now();
-        let etape = |nom: &str, t: &mut std::time::Instant| {
+        // Chaque étape s'enregistre (la ligne [montre] la nomme) ; elle ne
+        // s'imprime que sous la variable.
+        let etape = |nom: &'static str, t: &mut std::time::Instant| {
+            crate::ingest_profile::add(nom, *t);
             if profil {
-                eprintln!("[ingest-profile] {:>6} ms  symboles/{nom}", t.elapsed().as_millis());
+                eprintln!("[ingest-profile] {:>6} ms  {nom}", t.elapsed().as_millis());
             }
             *t = std::time::Instant::now();
         };
         let ingested = self.ingest_entities_jusqu_a(SYMBOL, records, exige)?;
-        etape("ingestion", &mut t);
+        etape("symboles · ingestion", &mut t);
         report.failed += ingested.failed;
 
         let symbol_uuid = |cat: &Self, name: &str| -> Result<String, CatalogError> {
@@ -2293,7 +2296,7 @@ impl Catalog {
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
         self.mettre_en_file_les_liens("MENTIONS", mentions)?;
-        etape("mise en file DEFINES/MENTIONS", &mut t);
+        etape("symboles · mise en file DEFINES/MENTIONS", &mut t);
         if let Some(noms) = differes {
             // Le chemin de masse : les rendez-vous restent en file, la
             // résolution attend que toute la source soit là.
@@ -2302,16 +2305,16 @@ impl Catalog {
         }
         let drained = self.drain_jusqu_a(exige);
         report.failed += drained.failed;
-        etape("drain des rendez-vous", &mut t);
+        etape("symboles · drain des rendez-vous", &mut t);
 
         // Matérialisation, dans les deux sens. **Deux requêtes en tout** :
         // une par relation, en `UNWIND` sur tous les symboles du lot. Une
         // requête par symbole coûtait 2,5 fois le temps d'ingestion.
         let uuids: Vec<String> = names.iter().map(|n| symbol_uuid(self, n)).collect::<Result<_, _>>()?;
         self.materialiser_les_symboles(&uuids, Some((&scopes_du_lot, &mentionneurs_du_lot)), report)?;
-        etape("relecture et mise en file des arêtes", &mut t);
+        etape("symboles · relecture et mise en file des arêtes", &mut t);
         let linked = self.drain_jusqu_a(exige);
-        etape("drain des arêtes résolues", &mut t);
+        etape("symboles · drain des arêtes résolues", &mut t);
         report.failed += linked.failed;
         Ok(())
     }
@@ -2627,7 +2630,8 @@ impl Catalog {
                 m.qualifier_types = v;
             }
         }
-        if std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok() {
+        crate::ingest_profile::add("symboles · types différés", debut);
+        if crate::ingest_profile::enabled() {
             eprintln!("[ingest-profile] {:>6} ms  types différés ({} noms, {tours} tours)", debut.elapsed().as_millis(), charges.len());
         }
         Ok(())

@@ -4158,6 +4158,10 @@ mod tests {
         });
         r.unwrap();
         assert!(etapes.iter().any(|(e, _)| *e == "drain · suppressions"), "pas de suppression du drain dans les étapes : {etapes:?}");
+        // Ce qui courait sans nom : la fin d'instantané et les symboles.
+        for attendue in ["instantané · mettre de côté", "instantané · noter la fin", "symboles · mise en file DEFINES/MENTIONS", "drain · construction du graphe"] {
+            assert!(etapes.iter().any(|(e, _)| *e == attendue), "« {attendue} » manque aux étapes : {etapes:?}");
+        }
     }
 
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des

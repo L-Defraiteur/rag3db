@@ -8044,11 +8044,14 @@ impl Catalog {
         // Le même profil que les nœuds, par phase du drain lui-même : sur le
         // cœur C++ (6 septembre 2026), trois secondes d'un drain de liens
         // n'étaient dans aucun nœud.
-        let profil_phases = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
+        let profil_phases = crate::ingest_profile::enabled();
         let mut horloge = std::time::Instant::now();
-        let phase = |nom: &str, horloge: &mut std::time::Instant| {
+        // Chaque phase s'enregistre (la ligne [montre] la nomme) ; elle ne
+        // s'imprime que sous la variable.
+        let phase = |nom: &'static str, horloge: &mut std::time::Instant| {
+            crate::ingest_profile::add(nom, *horloge);
             if profil_phases {
-                eprintln!("[drain-profile] {:>6} ms  drain/{nom}", horloge.elapsed().as_millis());
+                eprintln!("[drain-profile] {:>6} ms  {nom}", horloge.elapsed().as_millis());
             }
             *horloge = std::time::Instant::now();
         };
@@ -8062,7 +8065,7 @@ impl Catalog {
                 self.pending.extraire_les_tables(&tables, &bouts)
             }
         };
-        phase("extraction du lot", &mut horloge);
+        phase("drain · extraction du lot", &mut horloge);
         // Ce que ce lot écrit (créations et mises à jour), pour la marque à
         // l'écriture une fois le drain réussi.
         let mut ecrites: HashMap<String, Vec<String>> = HashMap::new();
@@ -8076,7 +8079,7 @@ impl Catalog {
         }
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts, canal) =
             self.build_ingestion_graph(lot, avec_embarquement, avec_decoupage);
-        phase("construction du graphe", &mut horloge);
+        phase("drain · construction du graphe", &mut horloge);
         if graph.nodes.is_empty() {
             // La marque dit ce qui reste — rien, ou ce que d'autres cibles
             // doivent encore.
@@ -8097,7 +8100,7 @@ impl Catalog {
         // Generate deterministic execution_id from graph hash + timestamp
         let graph_def = graph.to_definition();
         let execution_id = crate::dataflow::checkpoint::execution_id("drain", &graph_def.hash());
-        phase("runtime et abonnements", &mut horloge);
+        phase("drain · runtime et abonnements", &mut horloge);
 
         let mode = self.config.checkpoint_mode;
         let result = match (self.checkpoint_store_for_execution(), mode) {
@@ -8105,7 +8108,7 @@ impl Catalog {
                 .execute_with_checkpoint_mode(&mut graph, store.as_ref(), &execution_id, mode),
             _ => runtime.execute(&mut graph),
         };
-        phase("exécution", &mut horloge);
+        phase("drain · exécution", &mut horloge);
 
         if let Some(rx) = profil.as_mut() {
             let mut par_noeud: Vec<(String, u64)> = Vec::new();
@@ -8154,7 +8157,7 @@ impl Catalog {
                 // Un drain borné laisse le reste : la marque le dit table
                 // par table, et son horodatage se rafraîchit au passage.
                 self.annoncer_travail_en_attente();
-                phase("marque et avertissements", &mut horloge);
+                phase("drain · marque et avertissements", &mut horloge);
                 let comptes = std::mem::take(
                     &mut *chunk_counts.lock().unwrap_or_else(|e| e.into_inner()),
                 );

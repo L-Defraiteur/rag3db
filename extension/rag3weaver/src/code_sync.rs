@@ -1010,6 +1010,7 @@ impl SyncProfile {
 
 /// Les noms des scopes `uuids`, relus avant leur retrait.
 fn noms_des_scopes(catalog: &Catalog, uuids: &[String]) -> Result<Vec<String>, String> {
+    let _chrono = crate::ingest_profile::Chrono::new("instantané · nommer les retraits");
     if uuids.is_empty() {
         return Ok(Vec::new());
     }

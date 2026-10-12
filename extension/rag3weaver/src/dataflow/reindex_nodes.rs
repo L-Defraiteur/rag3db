@@ -41,8 +41,7 @@ pub(crate) enum Outcome {
     Deferred,
 }
 
-/// Les étapes qui en contiennent d'autres : elles compteraient deux fois dans
-/// le détail.
+/// Les étapes qui en contiennent d'autres : elles compteraient deux fois.
 const AGREGATS: &[&str] = &[
     "entités · TOTAL des appels",
     "entités · exécuter le graphe (nœuds + points de reprise)",
@@ -50,15 +49,23 @@ const AGREGATS: &[&str] = &[
     "code · symboles (ingestion Symbol + rendez-vous)",
     "sync · paquet entier, de bout en bout",
     "analyse · parse_project (codeparsers, par fichier en parallèle)",
+    "symboles · ingestion",
+    "symboles · drain des rendez-vous",
+    "symboles · drain des arêtes résolues",
+    "drain · exécution",
+    "instantané · drain",
 ];
 
 /// **La ligne de journal d'un fichier** : le verrou du catalogue attendu, puis
-/// tenu ; les phases de la réindexation (ou du retrait), de la plus longue à
-/// la plus courte ; puis **en détail**, ce qui se passe dedans, instruction
-/// par instruction : les étapes des entités (relire ce qui est en base, les
-/// comptes, les marques), les nœuds (écrire, découper, embarquer, lier, le
-/// plein texte) et le drain (suppressions, liens). Seules les étapes vues sur
-/// le fil de la réaction y sont ; le reste de la tenue n'est pas chronométré.
+/// tenu ; puis chaque phase de la réindexation (ou du retrait), de la plus
+/// longue à la plus courte, avec entre crochets ce qui s'y passe, instruction
+/// par instruction, et ce qui n'est pas détaillé (la phase moins ses étapes).
+///
+/// Une phase s'enregistre **à sa fin** : les étapes enregistrées avant elle,
+/// depuis la phase précédente, sont les siennes. Seules les feuilles comptent
+/// (les [`AGREGATS`] en contiennent d'autres). Ce qui suit la dernière phase
+/// se dit « hors phase ». Seules les étapes vues sur le fil de la réaction y
+/// sont.
 pub(crate) fn journal_line(
     path: &str,
     outcome: &Result<Outcome, String>,
@@ -68,27 +75,55 @@ pub(crate) fn journal_line(
 ) -> String {
     use std::collections::BTreeMap;
     use std::time::Duration;
-    let mut phases: BTreeMap<&str, Duration> = Default::default();
-    let mut detail: BTreeMap<&str, Duration> = Default::default();
+    let nom_court = |stage: &'static str| -> &'static str {
+        match stage {
+            "nœud embed" => "embarquer",
+            s => s.strip_prefix("entités · ").unwrap_or(s),
+        }
+    };
+    fn rang<'a>(m: &BTreeMap<&'a str, Duration>) -> Vec<(&'a str, Duration)> {
+        let mut v: Vec<_> = m.iter().map(|(n, d)| (*n, *d)).collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        v
+    }
+    // Les phases, chacune avec ses étapes intérieures.
+    let mut phases: BTreeMap<&str, (Duration, BTreeMap<&str, Duration>)> = Default::default();
+    let mut en_cours: BTreeMap<&str, Duration> = Default::default();
     for (stage, took) in steps {
-        if let Some(short) = stage.strip_prefix("réindexer · ").or_else(|| stage.strip_prefix("retirer · ")) {
-            *phases.entry(short).or_default() += *took;
+        if let Some(phase) = stage.strip_prefix("réindexer · ").or_else(|| stage.strip_prefix("retirer · ")) {
+            let entree = phases.entry(phase).or_default();
+            entree.0 += *took;
+            for (n, d) in std::mem::take(&mut en_cours) {
+                *entree.1.entry(n).or_default() += d;
+            }
         } else if !AGREGATS.contains(stage) {
-            let short = match *stage {
-                "nœud embed" => "embarquer",
-                s => s.strip_prefix("entités · ").unwrap_or(s),
-            };
-            *detail.entry(short).or_default() += *took;
+            *en_cours.entry(nom_court(stage)).or_default() += *took;
         }
     }
-    let rang = |m: BTreeMap<&str, Duration>| {
-        let mut v: Vec<_> = m.into_iter().collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
-        v.iter().map(|(name, took)| format!("{name} {} ms", took.as_millis())).collect::<Vec<_>>().join(", ")
-    };
-    let detail = match rang(detail) {
-        d if d.is_empty() => String::new(),
-        d => format!(" ; en détail : {d}"),
+    let mut ordre: Vec<_> = phases.iter().map(|(n, (d, _))| (*n, *d)).collect();
+    ordre.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    let corps = ordre
+        .iter()
+        .map(|(nom, duree)| {
+            let interieur = &phases[nom].1;
+            if interieur.is_empty() {
+                return format!("{nom} {} ms", duree.as_millis());
+            }
+            let detaille: Duration = interieur.values().sum();
+            // Les étapes sous la milliseconde comptent dans le détaillé, sans s'écrire.
+            let mut morceaux: Vec<String> = rang(interieur)
+                .iter()
+                .filter(|(_, d)| d.as_millis() > 0)
+                .map(|(n, d)| format!("{n} {} ms", d.as_millis()))
+                .collect();
+            morceaux.push(format!("non détaillé {} ms", duree.saturating_sub(detaille).as_millis()));
+            format!("{nom} {} ms [{}]", duree.as_millis(), morceaux.join(", "))
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let hors = match rang(&en_cours) {
+        v if v.is_empty() => String::new(),
+        v => format!(" ; hors phase : {}", v.iter().map(|(n, d)| format!("{n} {} ms", d.as_millis())).collect::<Vec<_>>().join(", ")),
     };
     let verbe = match outcome {
         Ok(Outcome::Reindexed) => "réindexé",
@@ -97,10 +132,9 @@ pub(crate) fn journal_line(
         Err(_) => "en erreur",
     };
     format!(
-        "[montre] {path} {verbe} : verrou attendu {} ms, tenu {} ms — {}{detail}",
+        "[montre] {path} {verbe} : verrou attendu {} ms, tenu {} ms — {corps}{hors}",
         waited.as_millis(),
-        held.as_millis(),
-        rang(phases)
+        held.as_millis()
     )
 }
 
@@ -297,24 +331,32 @@ mod tests {
     #[test]
     fn the_journal_line_tells_the_lock_and_the_phases() {
         let ms = std::time::Duration::from_millis;
+        // Dans l'ordre où elles s'enregistrent : une phase se clôt à sa fin, et
+        // les étapes enregistrées avant elle sont les siennes.
         let steps = [
             ("réindexer · analyser le fichier", ms(12)),
-            ("nœud embed", ms(900)),
-            ("réindexer · ingérer (scopes, morceaux, vecteurs, liens)", ms(1500)),
-            ("nœud embed", ms(100)),
-            ("entités · gardes", ms(3)),
-            ("entités · relire ce qui est en base (inchangés)", ms(9)),
             ("drain · suppressions", ms(40)),
-            // Les agrégats ne s'ajoutent pas au détail : ils comptent deux fois.
+            ("instantané · mettre de côté", ms(20)),
+            ("instantané · drain", ms(70)),
+            ("réindexer · fin d'instantané sur le grain du fichier", ms(100)),
+            ("nœud embed", ms(900)),
+            ("entités · gardes", ms(3)),
+            // Les agrégats ne s'ajoutent pas : ils contiennent d'autres étapes.
             ("entités · TOTAL des appels", ms(1400)),
             ("code · ingérer File, Scope, Library", ms(1450)),
+            ("nœud embed", ms(100)),
+            ("symboles · drain des rendez-vous", ms(50)),
+            ("drain · liens", ms(30)),
+            ("réindexer · ingérer (scopes, morceaux, vecteurs, liens)", ms(1500)),
+            ("drain · liens", ms(5)),
         ];
         let line = super::journal_line("arbre/scope.rs", &Ok(super::Outcome::Reindexed), ms(4), ms(1700), &steps);
         assert_eq!(
             line,
             "[montre] arbre/scope.rs réindexé : verrou attendu 4 ms, tenu 1700 ms — \
-             ingérer (scopes, morceaux, vecteurs, liens) 1500 ms, analyser le fichier 12 ms ; \
-             en détail : embarquer 1000 ms, drain · suppressions 40 ms, relire ce qui est en base (inchangés) 9 ms, gardes 3 ms"
+             ingérer (scopes, morceaux, vecteurs, liens) 1500 ms [embarquer 1000 ms, drain · liens 30 ms, gardes 3 ms, non détaillé 467 ms], \
+             fin d'instantané sur le grain du fichier 100 ms [drain · suppressions 40 ms, instantané · mettre de côté 20 ms, non détaillé 40 ms], \
+             analyser le fichier 12 ms ; hors phase : drain · liens 5 ms"
         );
     }
 }
