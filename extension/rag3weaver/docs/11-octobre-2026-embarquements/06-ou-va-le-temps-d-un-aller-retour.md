@@ -248,3 +248,22 @@ sont la même table, le masque du départ n'atteint pas l'expansion. Dit au cœu
 `two_step_hops` reste vraie pour rag3db jusqu'à ce que le saut en un temps rejoigne les
 deux temps.
 
+## Le troisième pas, et le retrait du saut en deux temps (12 octobre, début d'après-midi)
+
+**Le troisième pas du cœur** (`0c0af5bf5`) : un nœud dont la clé primaire est égalée à
+une variable déroulée s'estime à la longueur de la liste, et l'expansion part de lui.
+Mesuré sur la lib `13f4647dc` (la compaction du CSR rebasée sur `0c0af5bf5`, sans dirty),
+binaire rebâti contre elle, reflink neuf du sceau : le saut de Scope vers Scope lit 1
+ligne de Scope de chaque côté et 1 de `HAS_PARENT` (deux `SEMI_MASKER`) ; chaque saut
+d'`usages` tient autour de 1 ms.
+
+| `usages`, médiane | avant | clé | second niveau | troisième pas |
+|---|---|---|---|---|
+| en un temps | 349-352 ms | 117-120 ms | 60-66 ms | **7,1-9,7 ms** |
+| en deux temps | 209-234 ms | 43-47 ms | 27-31 ms | 9,6-12,8 ms |
+
+Mêmes empreintes à chaque colonne ; la copie compte toujours 0 morceau vide. En un temps,
+`usages` passe devant les deux temps : la lecture par clé n'est plus qu'un aller-retour
+de plus. **`two_step_hops` repasse à faux pour rag3db** ; la forme reste
+(`Catalog::set_two_step_hops`) pour un moteur qui ne masquerait pas, ou pour mesurer.
+
