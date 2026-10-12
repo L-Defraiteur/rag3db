@@ -1,7 +1,7 @@
 # Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes
 
-- **État** : ouvert. Le moteur n'est pas corrigé ; rag3weaver le contourne (le vecteur est
-  remis à NULL avant la suppression, ci-dessous)
+- **État** : corrigé (session cœur C++ hotfixs, 12 octobre 2026 ; voir « Correctif »). Le
+  contournement de rag3weaver peut s'enlever (au proto).
 - **Gravité** : lenteur sévère (la réindexation d'un fichier par la montre tenait le catalogue
   plusieurs secondes ; retirer un fichier, des minutes)
 - **Atteignable en service** : oui, à toute réindexation ou tout retrait de fichier d'un index
@@ -104,6 +104,43 @@ les notes du banc, `profil.sh`) :
   agrandissement par mise à jour appliquée, à confirmer dans le code).
 
 Les trois rouges sont en known_red et dans long.txt (215 à 390 s chacun).
+
+## Correctif
+
+Le profil par piles du banc (88 % dans `keepNodeReachable`) l'a tranché : `finalizeDelete` faisait
+une recherche `searchKNNInLayer` (ef = 200) par voisin survivant de la couche basse, environ
+soixante par ligne supprimée. Ces recherches lisaient les données non checkpointées ligne à
+ligne, d'où un coût qui croissait avec l'index tant qu'aucun point de reprise ne passait.
+`update` (le chemin « SET NULL puis DELETE ») les évitait déjà par des heuristiques.
+
+- **(A)** L'étape 3 d'`update` devient `OnDiskHNSWIndex::keepFormerNeighboursReachable`, partagée
+  par `finalizeDelete` : un voisin pointé par un ancrage, par un nœud qui n'a rien perdu ou par un
+  voisin déjà réputé atteignable n'est pas cherché ; une ligne supprimée ne prouve rien.
+- **(C)** La lecture d'une ligne mise à jour s'arrête à sa version la plus récente
+  (`UpdateInfo::iterateVectorInfo`), un gain borné (environ 32 versions par vecteur ici).
+- Le cœur C++ a pris le stockage (`3cca0ae1e`) : le verrou par fenêtre du balayage aléatoire,
+  `detachDelete` sans `findMatchingRow`, le tri par suite, le resize du point de reprise.
+
+Mesuré ici, même poste et même dossier de bâti, avant (master `9da274476`, qui porte le lot du
+cœur) et après :
+
+| | avant | après |
+|---|---|---|
+| forme du produit, DETACH DELETE direct (médiane) | 136 ms | 6,9 ms |
+| forme du produit, SET NULL puis DELETE | 5,7 ms | 4,8 ms |
+| index rempli par SET, non checkpointé, 1 500 → 15 000 lignes | 35 → 161 ms | 1,7 → 5,0 ms |
+| index fait par CREATE | 22 à 29 ms | 1,4 à 1,9 ms |
+
+Les trois témoins du banc sont verts et sortent de `known_red.txt` (ils restent dans `long.txt`).
+L'atteignabilité est gardée, prouvée par un témoin écrit pour ce lot sur la demande du cœur :
+`Cases/RegionDelete.SurvivorsStayReachableAndTheNearestAreRight`. On supprime les 10 % de lignes
+les plus proches d'un centre (une région de l'espace, où les ancrages se raréfient), ou toutes sauf
+cinq (le point d'entrée part aussi), directement ou par SET NULL puis DELETE, sur un graphe non
+checkpointé. Toutes les survivantes restent atteintes (2 700/2 700, 5/5), et les dix plus proches
+d'une requête au bord de la région sont justes (10/10). Les tests `VectorIndexUpdate` sont verts ;
+les seuls rouges restants sont les six `SameVectorForEveryRow` déjà connus ; e2e vector 74 et 63.
+`Paths/RealVectorsReachability` ne tourne pas sur ce poste (l'export de vecteurs réels qu'il lit
+n'y est pas : il se saute).
 
 ## Ce qu'il faut pour le fermer
 

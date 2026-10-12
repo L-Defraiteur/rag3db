@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (28)
+### Ouverts — moteur (27)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -39,7 +39,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 |---|---|---|---|---|
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) | ouvert — pour le cœur C++ | lenteur qui s'accumule | oui (`embed_set`) | oui |
 | [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
-| [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | ouvert — contourné dans rag3weaver | lenteur sévère | oui, avant le contournement | oui (`record_nodes.rs`, `dialect.rs`) |
 | [Un index retiré ou recréé change dans le stockage pour toutes les transactions, avant sa validation](2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage.md) | ouvert (forme arrêtée avec le cœur : la rétention) | refus d'une lecture valide, travail perdu | oui | oui (refus transitoires) |
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
@@ -108,10 +107,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (124), dans `closed/`
+### Fermés (125), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](closed/2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | corrigé (136 → 6,9 ms ; voir le ticket) | lenteur sévère | oui | oui (contournement à enlever) |
 | [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](closed/2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | corrigé (le résultat complété jusqu'à k ; voir le ticket) | réponse fausse | oui | non vu |
 | [Le témoin du réacteur `each_runs_per_ring_and_debounce_waits_for_quiet` rougit sous charge](closed/2026-10-12-le-temoin-du-reacteur-rougit-sous-charge.md) | corrigé (12 octobre 2026, attentes par condition) | test instable | non (le test) | oui (`reactor.rs`) |
 | [La montre réintègre ce que l'index entier écarte](closed/2026-10-12-la-montre-reintegre-ce-que-l-index-ecarte.md) | corrigé (une porte unique, `code::admission`) | coût et justesse | oui | oui (`code.rs`, `watch.rs`, `code_sync.rs`) |

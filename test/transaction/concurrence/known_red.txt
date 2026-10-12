@@ -113,16 +113,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine 
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
-# Supprimer une ligne indexée HNSW coûte des centaines de millisecondes (ticket
-# 2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes) : finalizeDelete fait une recherche
-# par voisin survivant, et la lecture des arêtes écrites depuis le dernier point de reprise croît
-# avec l'index. La forme du produit rouge deux passes sur deux (facteur 38 et 41 contre SET NULL
-# puis DELETE) ; l'index rempli par SET rouge trois passes sur trois sans point de reprise, celui
-# qui a une relation par ligne une passe sur une. Cas longs (long.txt). Pour hotfixs.
-VectorIndexCost.ProductShapeDeleteCost delete-close-to-set-null-then-delete
-Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64 delete-independent-of-index-size
-Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation delete-independent-of-index-size
-#
 # Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot (ticket
 # 2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot) : les lignes mortes
 # du CSR des arêtes, relues par chaque balayage de voisins jusqu'au point de reprise. Rouge trois
