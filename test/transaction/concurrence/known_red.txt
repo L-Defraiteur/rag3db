@@ -122,3 +122,9 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-ve
 # un saut vers 72 000 Scope dont le masque retient 117 lignes éparpillées lit toute la table. Le
 # témoin (masked_scan_test.cpp) borne les lignes sorties du SCAN_NODE_TABLE sous le masque à 10·k.
 MaskedScan.ReadsAboutTheMaskNotTheTable scan-reads-the-mask
+#
+# L'index vectoriel retiré puis recréé pendant que des recherches tournent en face (ticket
+# 2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute) :
+# quelques recherches reçoivent « bad optional access » ou « unordered_map::at » au lieu d'un refus
+# nommé. Rouge trois passes sur trois ; aucun figement, aucun résultat faux.
+VectorIndexRebuild.SearchesAcrossDropAndCreateAreConsistentOrNamed no-unnamed-search-error
