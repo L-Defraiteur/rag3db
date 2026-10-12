@@ -472,27 +472,33 @@ mod tests {
         let bus = EventBus::new(64);
         let count = Arc::new(AtomicUsize::new(0));
         let c = count.clone();
-        let quiet = Arc::new(AtomicUsize::new(0));
+        // Chaque réveil de `quiet` : son instant, et combien d'événements il porte.
+        let quiet: Arc<Mutex<Vec<(Instant, usize)>>> = Arc::new(Mutex::new(Vec::new()));
         let q = quiet.clone();
         let handle = Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
             .on("each", ["messages"], ReactPolicy::Each, move |events| {
                 c.fetch_add(events.len(), Ordering::Relaxed);
             })
             .on("quiet", ["messages"], ReactPolicy::Debounce(30), move |events| {
-                q.fetch_add(events.len(), Ordering::Relaxed);
+                q.lock().unwrap().push((Instant::now(), events.len()));
             })
             .spawn();
         bus.send_message("r", "a", "b", "one");
         bus.send_message("r", "a", "b", "two");
-        // `each` a tout vu tout de suite ; `debounce` attend le calme.
+        let last_send = Instant::now();
+        // **Des attentes par condition, pas des durées** (ticket du 12 octobre :
+        // sous la charge de la lib entière, 50 ms ne suffisaient pas au réveil).
+        // `each` voit tout ; `debounce` se réveille UNE fois pour les deux, et
+        // jamais avant 30 ms de calme après le dernier envoi — un instant que le
+        // réveil porte, quelle que soit la charge.
         let start = Instant::now();
-        while count.load(Ordering::Relaxed) < 2 {
-            assert!(start.elapsed() < Duration::from_secs(2));
+        while count.load(Ordering::Relaxed) < 2 || quiet.lock().unwrap().is_empty() {
+            assert!(start.elapsed() < Duration::from_secs(5), "each {} ; quiet {:?}", count.load(Ordering::Relaxed), quiet.lock().unwrap());
             std::thread::sleep(Duration::from_millis(2));
         }
-        assert_eq!(quiet.load(Ordering::Relaxed), 0);
-        std::thread::sleep(Duration::from_millis(50));
-        assert_eq!(quiet.load(Ordering::Relaxed), 2, "un seul réveil pour les deux, après 30 ms de calme");
+        let (at, n) = quiet.lock().unwrap()[0];
+        assert_eq!(n, 2, "un seul réveil pour les deux");
+        assert!(at.duration_since(last_send) >= Duration::from_millis(30), "réveillé {:?} après le dernier envoi", at.duration_since(last_send));
         let reactor = handle.stop();
         assert_eq!(reactor.topics_of("each"), Some(&["messages".to_string()][..]));
     }
