@@ -18,6 +18,12 @@ bruts dans `~/.cache/codeparsers-notes/b2d/releves-132823*.txt` sur ce poste-ci)
   recherche n'a eu lieu depuis le démarrage ;
 - le service d'embarquement 7878 est au repos, et aucune panique n'apparaît.
 
+**La cause des morceaux vides** (le cœur, 12 octobre, nuit) : les textes sont **intacts sur
+disque** ; c'est le balayage filtré du moteur qui rendait des chaînes vides (ou d'une autre ligne)
+quand une fenêtre de 2 048 lignes chevauche deux segments d'un groupe qui porte des versions
+(`string_column.cpp:240`, correctif en cours). La boucle du gel était cette lecture : `run_index`
+relisait `_text` vide, sans fin.
+
 L'arbre principal a écrit deux défenses, qui vont sur master ce soir : la réclamation filtre
 `_text` vide ou nul, et `run_index` s'arrête sur une passe sans progrès.
 
