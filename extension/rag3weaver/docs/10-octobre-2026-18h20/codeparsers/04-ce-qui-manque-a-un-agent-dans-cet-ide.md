@@ -31,6 +31,49 @@ des faux négatifs jusqu'au correctif** ; cela explique peut-être des manques n
 (`search_code` confiant sur un jeton absent, un nom qualifié à zéro). L'index le dit désormais
 dans l'en-tête de chaque réponse. Ticket : `docs/tickets/2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md`.
 
+## Le témoin : une session voit sa propre modification (12 octobre, 1 h 35)
+
+*Ajouté par codeparsers, à la demande de l'orchestration : les quatre briques de la priorité de
+Lucie bout à bout (montre 94354595c, routes a0f3e3653, code-tree a601b8308, B4 6e3561268).*
+
+**Vert.** Binaire release bâti sur master `8610eaec6` contre la lib d'ici (`6df47a54…`,
+`RAG3WEAVER_MOTEUR_ANCIEN=1` déclaré). Un hôte à part sur `127.0.0.1:7975`, ses dossiers isolés
+(`RAG3WEAVER_CONFIG_DIR`, `RAG3WEAVER_DATA_DIR`, `RAG3WEAVER_DAEMON_DIR`). Une session MCP par le
+client mince. Déroulé et temps :
+
+| phase | temps |
+|---|---|
+| `code-tree add` du worktree `rag3db-temoin` (base neuve), enregistré à l'hôte | 1,2 s |
+| `index` rend son reçu (le plein texte d'abord) | 45 s |
+| index entier, vecteurs compris (granite-278m sur 7979, régime doux) | 1 369,5 s (22 min 50 s) |
+| `name_of_tree` renommé en `name_of_worktree` **sur disque** (deux fichiers), puis `usages name_of_worktree` trouve la définition | **7,26 s** |
+| `search_code name_of_worktree` (mode `indexed`) la trouve | **7,67 s** |
+| `usages name_of_tree` : la définition est partie | aussitôt après |
+| `code-tree remove` (fermé par l'hôte, base mise de côté), arrêt de l'hôte par SIGTERM | 4 s |
+
+**Morceaux sans texte** : l'en-tête n'en dit rien ; le compte brut sur la base fermée donne
+0 sur 102 469 `Scope_Chunk` et 0 sur 6 303 `File_Chunk`. Le chemin réel, hôte, service et montre
+compris, n'en crée pas en une histoire propre.
+
+**Les 7 s, et ce qui manque pour les découper** : la session interrogeait toutes les 0,7 s. Les
+trois premiers appels après l'édition ont rendu l'ancien état en 0,7 s ; le quatrième a **attendu
+5,7 s**, puis rendu le nouvel état. La réindexation du fichier tenait le catalogue, et la
+lecture a attendu derrière elle. Le reste, c'est le pas de la montre (`every_ms` 1 000,
+`settle_ms` 300). Les phases demandées (vu par la montre, réanalysé, embarqué, visible) **ne se
+lisent nulle part** : le journal de l'hôte ne dit que les crochets de `search_code`, ni la montre
+ni la ré-ingestion. **Manque** : une ligne par phase dans le journal de l'hôte (montre :
+fichiers vus ; ré-ingestion : scopes, morceaux, durée ; embarquement : morceaux, durée), ou la
+même chose dans `index_state`. Le proto annonçait 6 s ; on mesure 7,3 à 7,7 s de bout en bout,
+appel bloqué compris.
+
+**Autre manque relevé** : l'index entier prend 22 min 50 s ici contre 12 min 27 s pour
+`code-rag3db` le 11 à 15 h 34. L'écart vient du régime doux (budget 4 096, GPU à 70 %) et de la
+carte partagée ; il n'est pas mesuré à part.
+
+Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
+`hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
+de la session codeparsers.
+
 ## En tête : l'index ne suit pas l'arbre que l'agent édite
 
 *Ajouté le 11 octobre 2026 au soir, à la demande de l'orchestration, après les premiers retours
