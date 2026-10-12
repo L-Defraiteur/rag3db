@@ -1,0 +1,42 @@
+{
+  "name": "rag3weaver",
+  "version": "0.0.1-alpha.3",
+  "description": "rag3weaver backend for Node: the native binary (graph database, hybrid search, code agent tools) launched and driven over JSON lines",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT",
+  "author": "Luciform Research",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/L-Defraiteur/rag3db"
+  },
+  "keywords": [
+    "rag",
+    "graph",
+    "search",
+    "code",
+    "agent",
+    "embeddings"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md",
+    "templates/",
+    "bin/"
+  ],
+  "scripts": {
+    "test": "node test/essai.js && node test/sonde_copy.js"
+  },
+  "optionalDependencies": {
+    "rag3weaver-linux-x64-gnu": "0.0.1-alpha.3",
+    "rag3weaver-windows-x64": "0.0.1-alpha.3",
+    "rag3weaver-darwin-arm64": "0.0.1-alpha.3"
+  },
+  "bin": {
+    "rag3weaver-unit": "bin/rag3weaver-unit.js"
+  }
+}

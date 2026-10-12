@@ -8,19 +8,28 @@ name: paquet npm
 # Linux : l'image Docker commitée sous tools/build-images/linux-x64-gnu, la
 # même recette qu'un poste. Windows : un essai sur le runner, pour la liste
 # réelle des accrocs du moteur hors Linux — le job peut être rouge, son journal
-# est gardé en artefact.
+# est gardé en artefact. macOS arm64 (10 octobre 2026, « go » de Lucie) : la
+# même recette que Windows, clang d'Apple, x64 ensuite si arm64 passe.
 #
-# Un seul sous-module est nécessaire : codeparsers (public), pour la feature
-# `code`. (fuzzy-fst, retiré le 10 octobre 2026, ne servait qu'à l'extension fts
-# de l'amont, qui n'est pas bâtie.)
+# Le sous-module third_party/fuzzy-fst est privé et ne sert qu'à l'extension
+# fts : on ne l'initialise pas. codeparsers (public) est nécessaire à la
+# feature `code`.
 
 on:
   workflow_dispatch:
     inputs:
+      linux:
+        description: "bâtir Linux x86_64 par l'image"
+        type: boolean
+        default: true
       windows:
         description: "essayer aussi le bâti Windows (liste des accrocs)"
         type: boolean
         default: true
+      macos:
+        description: "essayer aussi le bâti macOS arm64 (liste des accrocs)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,6 +41,7 @@ env:
 jobs:
   linux-x64-gnu:
     name: linux-x64-gnu (image Docker)
+    if: ${{ inputs.linux }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -48,9 +58,30 @@ jobs:
           docker run --rm -v "$PWD:/src" -v "$HOME/cache:/cache" -e JOBS=4 \
             rag3weaver-build-linux-x64-gnu /src/tools/build-images/linux-x64-gnu/build.sh
           cat dist/linux-x64-gnu/bati.txt
-      - name: Le binaire démarre-t-il hors de l'image ?
+      # Deux épreuves légères : le binaire démarre-t-il hors de l'image (glibc
+      # du runner), et le bac à sable Landlock se monte-t-il DANS l'image
+      # (Docker filtre des appels système par seccomp) ? `--describe` charge le
+      # manifeste et refuse si Landlock ne se monte pas sur ce noyau.
+      - name: Un manifeste de code pour l'épreuve
         run: |
-          ./dist/linux-x64-gnu/rag3weaver-backend --help | head -20 || true
+          mkdir -p essai/ws && echo 'fn main() {}' > essai/ws/main.rs
+          python3 - <<'PY'
+          import json
+          m = json.load(open("extension/rag3weaver/templates/backends/code/backend.json"))
+          m["vector_extension"] = "/src/dist/linux-x64-gnu/libvector.rag3db_extension"
+          m["workspace"]["root"] = "/src/essai/ws"; m["database"] = "/src/essai/code.rag3db"
+          json.dump(m, open("extension/rag3weaver/templates/backends/code/essai.json", "w"))
+          PY
+      - name: Hors de l'image, sur le runner
+        run: |
+          ./dist/linux-x64-gnu/rag3weaver-backend 2>&1 | head -3 || true
+          sed -i 's#/src/#'"$PWD"'/#g' extension/rag3weaver/templates/backends/code/essai.json
+          ./dist/linux-x64-gnu/rag3weaver-backend extension/rag3weaver/templates/backends/code/essai.json --describe 2>&1 | head -c 400; echo
+          sed -i 's#'"$PWD"'/#/src/#g' extension/rag3weaver/templates/backends/code/essai.json
+      - name: Dans l'image (Landlock sous Docker)
+        run: |
+          docker run --rm -v "$PWD:/src" rag3weaver-build-linux-x64-gnu -c \
+            '/src/dist/linux-x64-gnu/rag3weaver-backend /src/extension/rag3weaver/templates/backends/code/essai.json --describe 2>&1 | head -c 400; echo; uname -r'
       - uses: actions/upload-artifact@v4
         with:
           name: rag3weaver-backend-linux-x64-gnu
@@ -58,7 +89,7 @@ jobs:
           if-no-files-found: error
 
   windows-x64:
-    name: windows-x64 (essai, liste des accrocs)
+    name: "windows-x64 (sous-paquet : binaire, extension vecteur, épreuve JS)"
     if: ${{ inputs.windows }}
     runs-on: windows-latest
     timeout-minutes: 180
@@ -71,6 +102,12 @@ jobs:
       CARGO_TARGET_DIR: C:/rs
       CARGO_BUILD_JOBS: 4
       NUM_JOBS: 4
+      # MSVC (cl) pour tout, comme l'amont. La voie clang-cl a été essayée le
+      # 10 octobre 2026 (cinq essais) : le moteur compile, mais ni sa DLL ni
+      # l'exécutable final ne se lient — des destructeurs de std::variant
+      # que clang-cl n'émet pas avec la STL de MSVC. L'accroc qui avait
+      # poussé vers clang-cl (tree-sitter-scss et son drapeau GCC) est réglé à
+      # la source chez codeparsers (vendor/tree-sitter-scss, master 4c7897c).
     steps:
       - uses: actions/checkout@v4
       - name: Sous-module codeparsers (par https, sans clé)
@@ -82,23 +119,267 @@ jobs:
           toolchain: 1.98.1
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Le cache du bâti : tout C:/rs — le moteur bâti par cmake pour la crate
+      # rag3db y vit (release/build/rag3db-*/out), c'est lui qui coûte 45 min.
+      # Pas Swatinem/rust-cache : il purge les artefacts des crates par chemin,
+      # dont rag3db. Clé : les sources du moteur, le lock, l'extension vecteur.
+      # restore + save (always) : le cache se sauve même quand l'épreuve est
+      # rouge — actions/cache seul ne sauve qu'un job vert (deuxième essai
+      # macOS : 18 min de moteur perdues sur une épreuve rouge).
+      - uses: actions/cache/restore@v4
+        id: cache-rs
+        with:
+          path: |
+            C:/rs
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: windows-x64-rs-paquet-${{ hashFiles('extension/rag3weaver/Cargo.lock', 'tools/rust_api/**', 'src/**', 'extension/vector/**', 'CMakeLists.txt', 'cmake/**') }}
+          restore-keys: |
+            windows-x64-rs-paquet-
       - name: Outils
         run: |
-          cmake --version | head -1; ninja --version; rustc --version; cl 2>&1 | head -1 || true
+          cmake --version | head -1; ninja --version; rustc --version; node --version; cl 2>&1 | head -1 || true
+      # En PowerShell, pas en bash : le bash de Git met son propre `link.exe`
+      # (coreutils) devant celui de MSVC, et l'éditeur de liens de Rust échoue
+      # dès le premier script de bâti (vu le 10 octobre 2026).
       - name: Bâti (le journal est l'artefact, rouge ou vert)
+        shell: pwsh
         working-directory: extension/rag3weaver
         run: |
-          set -o pipefail
-          cargo build --release --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee ../../bati-windows.log
-      - name: Le binaire, s'il existe
+          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/bati-windows.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # L'extension vecteur, que le backend charge à l'exécution : le même
+      # bâti cmake que cargo a fait pour le moteur, avec l'extension en plus
+      # (la recette Linux de tools/build-images/linux-x64-gnu/build.sh).
+      - name: L'extension vecteur
+        shell: pwsh
+        run: |
+          $bdir = (Get-ChildItem -Directory C:/rs/paquet/build -Filter 'rag3db-*' | ForEach-Object { Join-Path $_.FullName 'out/build' } | Where-Object { Test-Path $_ } | Select-Object -First 1)
+          if (-not $bdir) { throw "pas de bâti cmake du moteur sous C:/rs/paquet/build" }
+          Write-Host "bâti cmake du moteur : $bdir"
+          # Le cache cmake avant et après la reconfiguration, en artefact : au
+          # seizième essai, elle a recompilé les 996 objets du moteur (37 min)
+          # sans qu'on sache quel drapeau avait changé.
+          # Hors de l'arbre (RUNNER_TEMP) : rien d'ajouté au checkout entre la
+          # passe de cargo et celle-ci — l'identifiant de bâti du moteur et de
+          # l'extension (cœur C++, lot à venir) compte l'arbre modifié.
+          Copy-Item "$bdir/CMakeCache.txt" "$env:RUNNER_TEMP/CMakeCache-avant.txt"
+          # La MÊME source que cargo : sous Windows, build.rs copie l'arbre
+          # dans tools/rust_api/rag3db-src (pas de lien symbolique) et cmake
+          # l'a configuré de là ; reconfigurer depuis la racine du dépôt
+          # changeait le dossier source et recompilait les 964 objets du
+          # moteur (dix-huitième essai, 37 min). On lit la source dans le cache.
+          $src = (Select-String -Path "$bdir/CMakeCache.txt" -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$').Matches[0].Groups[1].Value
+          Write-Host "source cmake : $src"
+          cmake -S $src -B $bdir -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/cmake-vector-windows.log" | Select-Object -Last 3
+          Copy-Item "$bdir/CMakeCache.txt" "$env:RUNNER_TEMP/CMakeCache-apres.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build $bdir --target rag3db_vector_extension -j 4 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/cmake-vector-windows.log" -Append | Select-Object -Last 3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ext = Get-ChildItem -Recurse -Path $bdir, extension/vector, "$src/extension/vector" -Filter '*.rag3db_extension' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $ext) { throw "extension vecteur introuvable après le bâti" }
+          New-Item -ItemType Directory -Force dist/windows-x64 | Out-Null
+          Copy-Item $ext.FullName dist/windows-x64/
+          Get-ChildItem dist/windows-x64
+          # L'identifiant de bâti : le même pour le moteur et l'extension. Sous
+          # Windows il dit « nogit » (la copie rag3db-src n'a pas de .git) tant
+          # que build.rs ne passe pas le commit au cmake : dit, pas refusé.
+          $idBin = (Select-String -Path C:/rs/paquet/rag3weaver-backend.exe -Pattern 'rag3db-build-[A-Za-z0-9._-]+' -AllMatches | ForEach-Object { $_.Matches } | Select-Object -First 1).Value
+          $idExt = (Select-String -Path $ext.FullName -Pattern 'rag3db-build-[A-Za-z0-9._-]+' -AllMatches | ForEach-Object { $_.Matches } | Select-Object -First 1).Value
+          Write-Host "identifiant de bâti : moteur $idBin · extension $idExt"
+          if ($idBin -ne $idExt) { throw "identifiants différents : l'extension serait refusée" }
+          if ($idBin -like '*-nogit-*') { Write-Host "identifiant sans commit (nogit) : attendu sous Windows pour l'instant" }
+      # Le binaire s'est lié au dixième essai (10 octobre 2026, 31 min 50 s,
+      # 60 Mo). L'artefact doit être sous l'espace de travail : on l'y copie.
+      - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
         if: always()
         run: |
-          ls -la C:/rs/release/rag3weaver-backend.exe 2>/dev/null && C:/rs/release/rag3weaver-backend.exe --help | head -20 || echo "pas de binaire"
+          mkdir -p dist/windows-x64 essai/ws && echo 'fn main() {}' > essai/ws/main.rs
+          cp C:/rs/paquet/rag3weaver-backend.exe dist/windows-x64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
+          ls -la dist/windows-x64/
+          python3 - <<'PY'
+          import json, os
+          m = json.load(open("extension/rag3weaver/templates/backends/code/backend.json"))
+          ici = os.getcwd().replace("\\", "/")
+          m["vector_extension"] = ici + "/dist/windows-x64/vector.rag3db_extension"
+          m["workspace"]["root"] = ici + "/essai/ws"; m["database"] = ici + "/essai/code.rag3db"
+          # À côté du gabarit : ses graphes lui sont relatifs (douzième et
+          # quatorzième essais : écrit sous essai/, ../../tools/edit.mmd manque).
+          g = "extension/rag3weaver/templates/backends/code/"
+          json.dump(m, open(g + "tel-quel.json", "w"))
+          m["workspace"]["sandbox"] = {"mode": "off"}
+          json.dump(m, open(g + "sans-bac.json", "w"))
+          PY
+          g=extension/rag3weaver/templates/backends/code
+          echo "--- tel quel (Landlock demandé : le refus attendu)"
+          # Le refus attendu sort en code 1 : ne pas arrêter l'étape dessus
+          # (onzième essai : l'épreuve « sandbox off » n'a jamais joué).
+          ./dist/windows-x64/rag3weaver-backend.exe $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
+          echo "--- sandbox off"
+          ./dist/windows-x64/rag3weaver-backend.exe $g/sans-bac.json --describe 2>&1 | head -c 600; echo
+      # L'épreuve du paquet, sur le runner : le sous-paquet windows-x64 garni
+      # depuis dist/, puis « un dossier vide, trois fichiers, une recherche ».
+      - name: L'épreuve JS du paquet (npm test)
+        working-directory: extension/rag3weaver/bindings/nodejs
+        env:
+          # La sonde du COPY (score = num + 0.5 sur une entité DOUBLE + liste) :
+          # 200 000 lignes ailleurs, 50 000 ici — le runner Windows est lent
+          # sur le disque (ici 200 000 lignes : 82 s d'ingestion, 10 s de relecture).
+          SONDE_LIGNES: 50000
+        run: |
+          bash scripts/preparer.sh
+          ls -la npm/windows-x64/
+          npm test
+      - uses: actions/cache/save@v4
+        if: always() && steps.cache-rs.outputs.cache-hit != 'true'
+        with:
+          path: |
+            C:/rs
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ steps.cache-rs.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: bati-windows-x64-journal
           path: |
-            bati-windows.log
-            C:/rs/release/rag3weaver-backend.exe
+            ${{ runner.temp }}/bati-windows.log
+            ${{ runner.temp }}/cmake-vector-windows.log
+            ${{ runner.temp }}/CMakeCache-avant.txt
+            ${{ runner.temp }}/CMakeCache-apres.txt
+            dist/windows-x64/
+          if-no-files-found: warn
+
+  macos-arm64:
+    name: "macos-arm64 (sous-paquet : binaire, extension vecteur, épreuve JS)"
+    if: ${{ inputs.macos }}
+    runs-on: macos-latest
+    timeout-minutes: 180
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TARGET_DIR: /tmp/rs
+      CARGO_BUILD_JOBS: 3
+      NUM_JOBS: 3
+      CMAKE_GENERATOR: Ninja
+      # Le profil `paquet` (release + LTO complète) : 61 Mo au lieu de 89 sous
+      # Linux ; le cache change de clé avec lui (dossier target/paquet).
+      # Les extensions (dlopen, -undefined dynamic_lookup) résolvent les
+      # symboles du moteur dans le binaire. Sous macOS, rustc passe
+      # -dead_strip à ld64, qui retire tout ce que le binaire lui-même
+      # n'appelle pas — dont TableFunction::emptyTableFunc, que l'extension
+      # vecteur demande (deuxième essai, 10 octobre 2026 : « symbol not
+      # found in flat namespace »). Sous Linux, lld garde tout ce que
+      # --export-dynamic exporte. link-dead-code : plus de -dead_strip.
+      RUSTFLAGS: -C link-dead-code
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sous-module codeparsers (par https, sans clé)
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 extension/rag3weaver/codeparsers
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Le cache du bâti, comme sous Windows : tout le target (le moteur cmake
+      # de la crate rag3db y vit), clé sur les sources du moteur et le lock.
+      # restore + save (always) : le cache se sauve même quand l'épreuve est
+      # rouge — actions/cache seul ne sauve qu'un job vert (deuxième essai
+      # macOS : 18 min de moteur perdues sur une épreuve rouge).
+      - uses: actions/cache/restore@v4
+        id: cache-rs
+        with:
+          path: |
+            /tmp/rs
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: macos-arm64-rs-paquet-${{ hashFiles('extension/rag3weaver/Cargo.lock', 'tools/rust_api/**', 'src/**', 'extension/vector/**', 'CMakeLists.txt', 'cmake/**') }}
+          restore-keys: |
+            macos-arm64-rs-paquet-
+      - name: Outils
+        run: |
+          brew install ninja > /dev/null
+          sw_vers; uname -m; cmake --version | head -1; ninja --version; rustc --version; node --version; clang --version | head -1
+      - name: Bâti (le journal est l'artefact, rouge ou vert)
+        working-directory: extension/rag3weaver
+        run: |
+          set -o pipefail
+          cargo build --profile paquet --bin rag3weaver-backend --features rag3db-native,code,daemon,openai-llm 2>&1 | tee "$RUNNER_TEMP/bati-macos.log"
+      # L'extension vecteur, par le bâti cmake que cargo a fait pour le moteur
+      # (la recette Linux de tools/build-images/linux-x64-gnu/build.sh).
+      - name: L'extension vecteur
+        run: |
+          set -o pipefail
+          bdir=$(ls -d /tmp/rs/paquet/build/rag3db-*/out/build | head -1)
+          src=$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$bdir/CMakeCache.txt")
+          echo "bâti cmake du moteur : $bdir · source : $src"
+          cmake -S "$src" -B "$bdir" -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF > "$RUNNER_TEMP/cmake-vector-macos.log" 2>&1
+          cmake --build "$bdir" --target rag3db_vector_extension -j 3 >> "$RUNNER_TEMP/cmake-vector-macos.log" 2>&1
+          ext=$(find "$bdir" extension/vector "$src/extension/vector" -name '*.rag3db_extension' 2>/dev/null | head -1)
+          [ -n "$ext" ] || { echo "extension vecteur introuvable après le bâti"; tail -20 "$RUNNER_TEMP/cmake-vector-macos.log"; exit 1; }
+          mkdir -p dist/darwin-arm64 && cp "$ext" dist/darwin-arm64/ && ls -la dist/darwin-arm64/
+          # L'identifiant de bâti : le même pour le moteur et l'extension, et il
+          # nomme le commit (« nogit » est une marque fixe, refusée).
+          id_bin=$(strings /tmp/rs/paquet/rag3weaver-backend | grep -m1 '^rag3db-build-' || true)
+          id_ext=$(strings "$ext" | grep -m1 '^rag3db-build-' || true)
+          echo "identifiant de bâti : moteur $id_bin · extension $id_ext"
+          [ "$id_bin" = "$id_ext" ] || { echo "identifiants différents : l'extension serait refusée"; exit 1; }
+          case "$id_bin" in *-nogit-*) echo "identifiant sans commit (nogit) : refusé"; exit 1 ;; esac
+      - name: Le binaire, s'il existe, et son épreuve (bac à sable fermé)
+        if: always()
+        run: |
+          mkdir -p dist/darwin-arm64 essai/ws && echo 'fn main() {}' > essai/ws/main.rs
+          cp /tmp/rs/paquet/rag3weaver-backend dist/darwin-arm64/ 2>/dev/null || { echo "pas de binaire"; exit 0; }
+          # strip -x : les symboles locaux et de débogage partent, les globaux
+          # (que les extensions résolvent par dlopen) restent.
+          echo "avant strip : $(stat -f %z dist/darwin-arm64/rag3weaver-backend) octets"
+          strip -x dist/darwin-arm64/rag3weaver-backend
+          echo "après strip -x : $(stat -f %z dist/darwin-arm64/rag3weaver-backend) octets"
+          ls -la dist/darwin-arm64/; file dist/darwin-arm64/rag3weaver-backend; otool -L dist/darwin-arm64/rag3weaver-backend
+          python3 - <<'PY'
+          import json, os
+          m = json.load(open("extension/rag3weaver/templates/backends/code/backend.json"))
+          ici = os.getcwd()
+          m["vector_extension"] = ici + "/dist/darwin-arm64/libvector.rag3db_extension"
+          m["workspace"]["root"] = ici + "/essai/ws"; m["database"] = ici + "/essai/code.rag3db"
+          g = "extension/rag3weaver/templates/backends/code/"
+          json.dump(m, open(g + "tel-quel.json", "w"))
+          m["workspace"]["sandbox"] = {"mode": "off"}
+          json.dump(m, open(g + "sans-bac.json", "w"))
+          PY
+          g=extension/rag3weaver/templates/backends/code
+          echo "--- tel quel (Landlock demandé : le refus attendu)"
+          ./dist/darwin-arm64/rag3weaver-backend $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
+          echo "--- sandbox off"
+          ./dist/darwin-arm64/rag3weaver-backend $g/sans-bac.json --describe 2>&1 | head -c 600; echo
+      - name: L'épreuve JS du paquet (npm test)
+        working-directory: extension/rag3weaver/bindings/nodejs
+        run: |
+          bash scripts/preparer.sh
+          ls -la npm/darwin-arm64/
+          npm test
+      - uses: actions/cache/save@v4
+        if: always() && steps.cache-rs.outputs.cache-hit != 'true'
+        with:
+          path: |
+            /tmp/rs
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ steps.cache-rs.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bati-macos-arm64-journal
+          path: |
+            ${{ runner.temp }}/bati-macos.log
+            ${{ runner.temp }}/cmake-vector-macos.log
+            dist/darwin-arm64/
           if-no-files-found: warn

@@ -1,0 +1,5 @@
+# Les binaires viennent de dist/<cible>/ (tools/build-images) au moment de publier ; jamais dans git.
+*/rag3weaver-backend
+*/rag3weaver-backend.exe
+*/libvector.rag3db_extension
+*/vector.rag3db_extension
