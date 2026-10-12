@@ -90,6 +90,28 @@ réindexation (le pas de la montre), puis **deux fichiers l'un après l'autre**,
 l'écriture grandit avec la base ou si les vecteurs, en régime doux, dominent) ; une réaction par
 lot de fichiers vus ensemble plutôt qu'un fichier par réaction.
 
+**Troisième rejeu, à `2a3f57f0d`** (12 octobre, 6 h 30 ; le détail d'« ingérer » et « embarquer »
+sortis dans la ligne). Lib du magasin `41d282843…`, binaire RUNPATH, base entière, index
+1 273 s. `search_code` **6,36 s**, `usages` **6,80 s**. Le détail par fichier :
+
+| étape | `bin/rag3weaver-backend.rs` | `code_tree.rs` |
+|---|---|---|
+| tenu / ingérer | 1 928 / 1 643 ms | 2 640 / 1 796 ms |
+| drain · liens | 254 | 266 |
+| embarquer | 207 | 275 |
+| plein texte rendu durable | 126 | 208 |
+| pousser les blobs d'index | 118 | 196 |
+| relations de l'analyse | 126 | 142 |
+| relire ce qui est en base | 112 | 115 |
+| flush_fts, chunk_link, insert, chunk_insert, marquer | 158 | 153 |
+| fin d'instantané (hors ingérer) | 38 | 546 |
+
+Aucune étape ne domine : six entre 110 et 280 ms, chacune ~3 fois les chiffres du proto à
+15 631 morceaux. **Un tiers d'« ingérer » n'est pas détaillé** (~1 110 ms détaillés sur 1 643,
+~1 360 sur 1 796). Le gain le plus net reste la réaction **par lot** : drain, plein texte durable
+et blobs se paieraient une fois pour les fichiers vus ensemble, au lieu d'une fois par fichier.
+Lignes brutes : `~/.cache/codeparsers-notes/b2d/temoin-montre-2a3f57f0d.txt`.
+
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
 de la session codeparsers.
