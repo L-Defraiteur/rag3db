@@ -187,3 +187,35 @@ balayage sous masque qui coûte. Le lot du cœur qui le fait passer par décalag
 lignes lues au lieu de 67 584 sur le témoin du banc) est en passe : la remesure suivante
 se fait sur lui.
 
+## Après le lot du petit masque : la forme `UNWIND` n'en produit pas (12 octobre, matin)
+
+**Remesuré sur la lib du lot** (`41d282843`, identifiant de bâti `7f794579d` dont `src/`
+est identique, `NodeTable::lookupOffsets` exporté), binaire de test rebâti contre elle :
+`usages` reste à 349 à 352 ms en un temps et à 209 à 234 ms en deux, mêmes empreintes.
+
+**La cause**, lue au PROFILE du saut tel que l'IR le compile
+(`UNWIND $uuids AS u MATCH (d:Symbol {_uuid: u})<-[r:MENTIONS]-(m:Scope)`) : le
+planificateur bâtit la jointure entière — Symbol 86 248, MENTIONS 491 102, Scope 81 407 —
+puis la sonde par `u`. `u` reste du côté sonde : aucun semi-masque, et le lot du petit
+masque n'a rien à lire.
+
+Le même saut et la même lecture par clé, écrits autrement, sur la même lib (médiane de
+sept ; mêmes lignes dans chaque groupe, empreinte des lignes triées) :
+
+| écriture | médiane | Scope balayée |
+|---|---|---|
+| saut, `UNWIND $uuids` (l'IR aujourd'hui) | 111,7 ms | 81 407 |
+| saut, `WHERE d._uuid IN $uuids` | 4,3 ms | 117 |
+| saut, paramètre scalaire | 1,1 ms | 117 |
+| lecture par clé, `UNWIND` | 28,1 ms | 81 407 |
+| lecture par clé, `IN` | 39,0 ms | 81 407 (filtre) |
+
+Deux voies, à trancher par l'orchestration : (a) dans le moteur, `UNWIND` d'une liste
+puis `MATCH` par clé primaire sur la variable déroulée devient une recherche par index
+ou un masque, comme Neo4j (`UNWIND` + `NodeIndexSeek`), ce qui corrige d'un coup chaque
+`Hop` et chaque `Select::by_uuids` ; (b) dans le dialecte rag3db, le saut compile `IN`
+(une liste à doublons ne rend plus ses lignes en double, et la lecture par clé n'y gagne
+rien). Avec l'une ou l'autre, la forme en deux temps n'a plus d'objet.
+
+Le témoin : `e2e_mesure_index_entier::le_plan_du_saut_d_usages_sur_l_index_entier`.
+
