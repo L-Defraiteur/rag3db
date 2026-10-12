@@ -16,6 +16,7 @@ private:
     void visitOperator(planner::LogicalOperator* op);
 
     void visitHashJoin(planner::LogicalOperator* op) override;
+    bool tryKeyMaskHJSIP(planner::LogicalOperator* op);
 
     void visitIntersect(planner::LogicalOperator* op) override;
 

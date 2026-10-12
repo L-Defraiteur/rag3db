@@ -117,6 +117,10 @@ static std::shared_ptr<LogicalSemiMasker> appendSemiMasker(SemiMaskKeyType keyTy
         std::make_shared<LogicalSemiMasker>(keyType, targetType, key, tableIDs, child);
     for (auto candidate : candidates) {
         semiMasker->addTarget(candidate);
+        if (targetType == SemiMaskTargetType::SCAN_NODE &&
+            candidate->getOperatorType() == LogicalOperatorType::SCAN_NODE_TABLE) {
+            candidate->cast<LogicalScanNodeTable>().setSemiMasked();
+        }
     }
     semiMasker->computeFlatSchema();
     return semiMasker;
@@ -134,12 +138,27 @@ void HashJoinSIPOptimizer::visitOperator(LogicalOperator* op) {
     visitOperatorSwitch(op);
 }
 
+// Un balayage déjà masqué est sélectif comme un filtre : la jointure au-dessus peut, à son
+// tour, masquer l'autre côté par ce que le balayage masqué laisse passer (le second niveau d'un
+// saut : `(d {clé: u})<-[r]-(m)`, où m ne doit lire que les voisins des d masqués).
+static bool subPlanContainsMaskedScan(LogicalOperator* root) {
+    auto collector = LogicalScanNodeTableCollector();
+    collector.collect(root);
+    for (auto& op : collector.getOperators()) {
+        if (op->constCast<LogicalScanNodeTable>().isSemiMasked()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool subPlanContainsFilter(LogicalOperator* root) {
     auto filterCollector = LogicalFilterCollector();
     filterCollector.collect(root);
     auto indexScanNodeCollector = LogicalIndexScanNodeCollector();
     indexScanNodeCollector.collect(root);
-    if (!filterCollector.hasOperators() && !indexScanNodeCollector.hasOperators()) {
+    if (!filterCollector.hasOperators() && !indexScanNodeCollector.hasOperators() &&
+        !subPlanContainsMaskedScan(root)) {
         return false;
     }
     return true;
@@ -334,7 +353,7 @@ static std::vector<LogicalOperator*> getScanNodeCandidatesByVariable(
 // primaire ; le balayage de d ne lit plus que ces lignes (par décalages, page 12 §10). La jointure
 // reste : doublons de la liste et clés absentes gardent leur sémantique. Neo4j fait de même par
 // UNWIND + NodeIndexSeek.
-static bool tryKeyMaskHJSIP(LogicalOperator* op) {
+bool HashJoinSIPOptimizer::tryKeyMaskHJSIP(LogicalOperator* op) {
     auto& hashJoin = op->cast<LogicalHashJoin>();
     if (hashJoin.getJoinType() != JoinType::INNER ||
         op->getChild(0)->getOperatorType() == LogicalOperatorType::ACCUMULATE) {
@@ -368,6 +387,10 @@ static bool tryKeyMaskHJSIP(LogicalOperator* op) {
     sipInfo.dependency = SIPDependency::PROBE_DEPENDS_ON_BUILD;
     sipInfo.direction = SIPDirection::PROBE_TO_BUILD;
     hashJoin.setChild(0, appendAccumulate(probeRoot));
+    // Le build a été visité avant que ses balayages soient masqués (parcours de bas en haut) :
+    // ses jointures sur identifiant peuvent maintenant masquer leur autre côté par ce que le
+    // balayage masqué laisse passer — le second niveau du saut.
+    visitOperator(buildRoot.get());
     return true;
 }
 
@@ -376,8 +399,10 @@ void HashJoinSIPOptimizer::visitHashJoin(LogicalOperator* op) {
     if (LogicalOperatorUtils::isAccHashJoin(hashJoin)) {
         return;
     }
-    if (hashJoin.getSIPInfo().position == SemiMaskPosition::PROHIBIT) {
-        return;
+    if (hashJoin.getSIPInfo().position == SemiMaskPosition::PROHIBIT ||
+        hashJoin.getSIPInfo().position == SemiMaskPosition::ON_BUILD ||
+        hashJoin.getSIPInfo().position == SemiMaskPosition::ON_PROBE) {
+        return; // interdite, ou déjà masquée (une seconde visite ne masque pas deux fois)
     }
     if (tryBuildToProbeHJSIP(op)) { // Try build to probe SIP first.
         return;

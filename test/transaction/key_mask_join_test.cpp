@@ -2,6 +2,7 @@
 // pas d par sa clé mais balayait d entier sous une jointure de hachage sur propriété, sans masque.
 // Le masque par clés fait lire à ce balayage les lignes masquées, et elles seules.
 
+#include <set>
 #include <sstream>
 
 #include "graph_test/private_graph_test.h"
@@ -16,6 +17,8 @@ class KeyMaskJoin : public EmptyDBTest {
 protected:
     void SetUp() override {
         EmptyDBTest::SetUp();
+        // 60 000 relations créées en une instruction demandent plus que le tampon du gabarit.
+        systemConfig->bufferPoolSize = 512 * 1024 * 1024;
         createDBAndConn();
     }
 
@@ -109,16 +112,22 @@ TEST_F(KeyMaskJoin, AnUnwindOfKeysReadsTheKeysNotTheTable) {
 }
 
 // La forme du produit : une liste de chaînes en paramètre, la clé STRING, et un saut derrière la
-// clé (`(d)<-[:R]-(m)`), le balayage de d sous le masque.
+// clé (`(d)<-[:R]-(m)`) dont le voisin m est grand et lu par ses propriétés — le planificateur
+// le joint alors par hachage sur m._ID, avec le balayage de M côté build (la forme du saut
+// d'usages de F : Symbol ← MENTIONS ← Scope) ; les deux balayages sont sous un masque.
 TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
     ok("CREATE NODE TABLE D(uuid STRING PRIMARY KEY, name STRING);");
-    ok("CREATE NODE TABLE M(id INT64 PRIMARY KEY);");
+    ok("CREATE NODE TABLE M(id INT64 PRIMARY KEY, name STRING, path STRING, line INT64);");
     ok("CREATE REL TABLE R(FROM M TO D);");
     ok("UNWIND range(0, 19999) AS i CREATE (:D {uuid: 'd-' + CAST(i, 'STRING'), name: 'n' + CAST(i, 'STRING')});");
-    ok("UNWIND range(0, 999) AS i CREATE (:M {id: i});");
-    ok("UNWIND range(0, 999) AS i MATCH (m:M {id: i}), (d:D {uuid: 'd-' + CAST(i * 20, 'STRING')}) CREATE (m)-[:R]->(d);");
+    ok("UNWIND range(0, 59999) AS i CREATE (:M {id: i, name: 'm' + CAST(i, 'STRING'), path: 'p/' + CAST(i % 97, 'STRING'), line: i % 1000});");
+    for (auto low = 0; low < 60000; low += 10000) {
+        ok("UNWIND range(" + std::to_string(low) + ", " + std::to_string(low + 9999) +
+           ") AS i MATCH (m:M {id: i}), (d:D {uuid: 'd-' + CAST(i % 20000, 'STRING')}) CREATE (m)-[:R]->(d);");
+    }
     ok("CHECKPOINT;");
-    auto prepared = conn->prepare("UNWIND $uuids AS u MATCH (d:D {uuid: u})<-[:R]-(m:M) RETURN u, d.name, m.id;");
+    ASSERT_EQ(rows("MATCH ()-[r:R]->() RETURN count(r);")[0], "60000\n") << "[check: edges-created] ";
+    auto prepared = conn->prepare("UNWIND $uuids AS u MATCH (d:D {uuid: u})<-[:R]-(m:M) RETURN u, d.name, m.id, m.name, m.path, m.line;");
     ASSERT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
     std::vector<std::unique_ptr<rag3db::common::Value>> keys;
     for (auto k = 0; k < 50; ++k) {
@@ -129,18 +138,29 @@ TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
         rag3db::common::LogicalType::LIST(rag3db::common::LogicalType::STRING()), std::move(keys));
     auto result = conn->execute(prepared.get(), std::make_pair(std::string("uuids"), list));
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    // Chaque d de la liste a trois voisins m (i, i + 20 000, i + 40 000).
     uint64_t n = 0;
+    std::set<std::string> seen;
     while (result->hasNext()) {
         const auto t = result->getNext();
-        EXPECT_EQ(t->getValue(0)->toString(), "d-" + std::to_string(n * 400));
-        EXPECT_EQ(t->getValue(1)->toString(), "n" + std::to_string(n * 400));
-        EXPECT_EQ(t->getValue(2)->toString(), std::to_string(n * 20));
+        seen.insert(t->getValue(0)->toString() + "/" + t->getValue(2)->toString());
+        EXPECT_EQ(t->getValue(1)->toString(), "n" + t->getValue(0)->toString().substr(2));
+        EXPECT_EQ(t->getValue(3)->toString(), "m" + t->getValue(2)->toString());
         ++n;
     }
-    EXPECT_EQ(n, 50u) << "[check: hop-rows] ";
-    const auto plan = profile("UNWIND ['d-0', 'd-400', 'd-800'] AS u MATCH (d:D {uuid: u})<-[:R]-(m:M) RETURN u, d.name, m.id;");
+    EXPECT_EQ(n, 150u) << "[check: hop-rows] ";
+    EXPECT_EQ(seen.size(), 150u) << "[check: hop-rows-distinct] ";
+    const auto plan = profile("UNWIND ['d-0', 'd-400', 'd-800'] AS u MATCH (d:D {uuid: u})<-[:R]-(m:M) RETURN u, d.name, m.id, m.name, m.path, m.line;");
     ASSERT_NE(plan.find("SEMI_MASKER"), std::string::npos) << "[check: plan] " << plan;
     const auto read = outputTuplesOf(plan, "SCAN_NODE_TABLE");
     ASSERT_TRUE(read.has_value()) << plan;
-    EXPECT_LE(*read, 30) << "[check: scan-reads-the-keys] " << *read << " rows of 20 000\n" << plan;
+    EXPECT_LE(*read, 90) << "[check: scan-reads-the-keys] " << *read << " rows\n" << plan;
+    // Le second niveau : le voisin m est masqué à son tour par les d trouvés (deux masqueurs
+    // dans le plan), au lieu d'être balayé entier.
+    size_t maskers = 0;
+    for (auto at = plan.find("SEMI_MASKER"); at != std::string::npos;
+         at = plan.find("SEMI_MASKER", at + 11)) {
+        ++maskers;
+    }
+    EXPECT_GE(maskers, 2u) << "[check: second-level-masked] " << maskers << " semi-masker(s)\n" << plan;
 }
