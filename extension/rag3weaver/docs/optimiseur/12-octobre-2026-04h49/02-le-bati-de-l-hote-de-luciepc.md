@@ -73,3 +73,9 @@ Il fait et produit :
   rag3db-lourd, bâtie contre 6df47a543 : les bases refusaient de s'ouvrir (vu
   par codeparsers le 12 octobre). Dans les manifestes, `vector_extension` vaut
   `"vector"`, pas un chemin absolu. Il n'installe rien et ne relance rien.
+- **la règle** (orchestration, 12 octobre) : à chaque binaire installé, la
+  ligne `RAG3DB_LIBRARY_DIR` de l'env de l'unité suit le dossier de son RUNPATH.
+  Le script le vérifie : le RUNPATH lu par readelf doit valoir le dossier lié,
+  qui doit valoir l'env. L'extension vector de ce dossier doit porter le même
+  identifiant de bâti. `check-lib.conf` refuse aussi le démarrage si
+  l'extension n'est pas du même bâti que la lib.

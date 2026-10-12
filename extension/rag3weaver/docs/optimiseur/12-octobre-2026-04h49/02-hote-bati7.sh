@@ -17,7 +17,8 @@
 #   - ~/.local/bin/rag3weaver-backend.pret et rag3db-check-lib.pret, avec leurs md5,
 #     vérifiés (symboles rag3db tous définis dans la lib, rag3db-check-lib à 0) ;
 #     ils remplacent le .pret du 11 oct. à 22 h 13, l'ancien (d'avant B4) ;
-#   - check-lib.conf.pret pour l'unité (inactif) ;
+#   - check-lib.conf.pret pour l'unité (inactif) : binaire et lib du même bâti, et
+#     l'extension vector à côté de la lib aussi (son identifiant inscrit, grep -aF) ;
 #   - rag3weaver-daemon.env.pret : l'env de l'unité recopié, RAG3DB_LIBRARY_DIR posé sur le
 #     dossier lié (sans lui, l'hôte retombe sur RAG3DB_ROOT et charge une autre libvector :
 #     vu par codeparsers le 12 oct., les bases refusaient de s'ouvrir) ;
@@ -54,16 +55,25 @@ readelf -d $X | grep -i runpath
 manque=0; for s in $(nm -D --undefined-only $X | awk '{print $2}' | grep '^_ZN6rag3db'); do nm -D --defined-only $L/librag3db.so | grep -q " $s$" || { echo "MANQUE $s"; manque=1; }; done
 echo "symboles rag3db manquants : $manque"; [ $manque = 0 ] || exit 6
 $C $X $L/librag3db.so; rc=$?; echo "rag3db-check-lib : $rc"; [ $rc = 0 ] || exit 6
+# Le RUNPATH du binaire est bien ce dossier, et l'extension vector à côté de la lib vient
+# du même bâti (son identifiant y est inscrit en clair ; elle n'a pas de section ELF).
+ID=$(readelf -p .rag3db_build_id $L/librag3db.so | grep -o 'rag3db-build-[A-Za-z0-9-]*' | head -1)
+R=$(readelf -d $X | sed -n 's/.*RUNPATH.*\[\(.*\)\]/\1/p')
+[ "$R" = "$L" ] || { echo "RUNPATH « $R » n'est pas le dossier lié « $L »"; exit 6; }
+grep -qaF "$ID" $L/libvector.rag3db_extension || { echo "libvector de $L n'est pas du bâti $ID"; exit 6; }
+echo "RUNPATH = $L ; libvector du bâti $ID"
 install -m 755 $X $HOME/.local/bin/rag3weaver-backend.pret && install -m 755 $C $HOME/.local/bin/rag3db-check-lib.pret
 md5sum $HOME/.local/bin/rag3weaver-backend.pret $HOME/.local/bin/rag3db-check-lib.pret
 mkdir -p $HOME/.config/systemd/user/rag3weaver-daemon.service.d
-printf '[Service]\n# Le binaire et la lib de son RUNPATH sont du même bâti, sinon l unité ne démarre pas.\nExecStartPre=%%h/.local/bin/rag3db-check-lib %%h/.local/bin/rag3weaver-backend %s/librag3db.so\n' "$L" > $HOME/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf.pret
+printf '[Service]\n# Le binaire et la lib de son RUNPATH sont du même bâti, sinon l unité ne démarre pas.\nExecStartPre=%%h/.local/bin/rag3db-check-lib %%h/.local/bin/rag3weaver-backend %s/librag3db.so\n# Et l extension vector à côté de la lib, du même bâti.\nExecStartPre=/usr/bin/grep -qaF %s %s/libvector.rag3db_extension\n' "$L" "$ID" "$L" > $HOME/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf.pret
 cat $HOME/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf.pret
 # L'env de l'unité, recopié avec RAG3DB_LIBRARY_DIR sur le dossier lié : l'extension vector
 # se cherche là, pas sous RAG3DB_ROOT (qui peut porter une libvector d'un autre bâti).
 E=$HOME/.config/rag3weaver/rag3weaver-daemon.env
 { [ -f $E ] && grep -v '^RAG3DB_LIBRARY_DIR=' $E; echo "RAG3DB_LIBRARY_DIR=$L"; } > $E.pret
 diff $E $E.pret
+# La ligne de l'env suit l'identifiant du RUNPATH.
+[ "$(sed -n 's/^RAG3DB_LIBRARY_DIR=//p' $E.pret)" = "$R" ] || { echo "l'env ne pointe pas sur le RUNPATH"; exit 6; }
 echo "== $(date +%H:%M:%S) prêt"
 N=$HOME/.local/share/rag3weaver/POUR-LUCIE-hote.md
 {
