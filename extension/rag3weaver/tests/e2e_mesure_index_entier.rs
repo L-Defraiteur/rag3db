@@ -248,3 +248,284 @@ fn les_morceaux_vides_ont_le_hash_d_un_texte() {
         total - sans - vide
     );
 }
+
+/// **Ce qui distingue les morceaux vides des pleins** : pour chaque colonne de
+/// `Scope_Chunk`, la part de valeurs présentes dans chaque groupe et, pour les
+/// nombres, le minimum, la moyenne et le maximum ; et la place des vides dans
+/// leur scope (le premier morceau, le dernier, au-delà de quel offset).
+#[test]
+#[ignore]
+fn ce_qui_distingue_les_morceaux_vides() {
+    use rag3weaver::connection::CypherValue;
+    let Some(base) = base() else { return };
+    let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    let info = conn.execute("CALL TABLE_INFO('Scope_Chunk') RETURN *").unwrap_or_else(|e| panic!("{e}"));
+    let colonnes: Vec<(String, String)> = info
+        .rows
+        .iter()
+        .filter_map(|r| Some((r.get(1)?.as_str()?.to_string(), r.get(2)?.as_str()?.to_string())))
+        .collect();
+    eprintln!("[distingue] colonnes : {:?}", colonnes);
+    let vide = "(n.`_text` IS NULL OR n.`_text` = '')";
+    for (nom, genre) in &colonnes {
+        if nom == "_text" {
+            continue;
+        }
+        let c = format!("n.`{}`", nom.replace('`', ""));
+        let nombre = ["INT64", "INT32", "DOUBLE", "UINT64", "INT16"].iter().any(|t| genre.starts_with(t))
+            || (genre.starts_with("FLOAT") && !genre.contains('['));
+        let q = if nombre {
+            format!("MATCH (n:`Scope_Chunk`) RETURN {vide} AS v, count(n), count({c}), min({c}), avg({c}), max({c}) ORDER BY v")
+        } else {
+            format!("MATCH (n:`Scope_Chunk`) RETURN {vide} AS v, count(n), count({c}) ORDER BY v")
+        };
+        match conn.execute(&q) {
+            Ok(r) => {
+                for l in &r.rows {
+                    let groupe = if matches!(l.first(), Some(CypherValue::Bool(true))) { "vides " } else { "pleins" };
+                    let (n, presents) = (l[1].as_i64().unwrap_or(0), l[2].as_i64().unwrap_or(0));
+                    let stats = if nombre { format!(" ; min {:?} moy {:?} max {:?}", l.get(3), l.get(4), l.get(5)) } else { String::new() };
+                    eprintln!("[distingue] {nom:<22} {groupe} : présents {presents}/{n} ({:.1} %){stats}", 100.0 * presents as f64 / n.max(1) as f64);
+                }
+            }
+            Err(e) => eprintln!("[distingue] {nom} : {e}"),
+        }
+    }
+    // La place dans le scope : le rang du morceau parmi ceux de son scope.
+    let place = conn.execute(&format!(
+        "MATCH (n:`Scope_Chunk`)-[:`Scope_CHUNKED_FROM`]->(s:`Scope`) \
+         WITH s, collect({{d: n.`_start_char`, v: {vide}}}) AS ms \
+         UNWIND ms AS m \
+         WITH s, m, size(ms) AS total, size([x IN ms WHERE x.d < m.d]) AS rang \
+         RETURN m.v AS v, count(*), avg(total), \
+                count(CASE WHEN rang = 0 THEN 1 END), count(CASE WHEN rang = total - 1 THEN 1 END), \
+                count(CASE WHEN total = 1 THEN 1 END) ORDER BY v"
+    ));
+    match place {
+        Ok(r) => {
+            for l in &r.rows {
+                let groupe = if matches!(l.first(), Some(CypherValue::Bool(true))) { "vides " } else { "pleins" };
+                eprintln!(
+                    "[distingue] place {groupe} : {:?} morceaux, scopes de {:?} morceaux en moyenne ; premiers {:?}, derniers {:?}, seuls de leur scope {:?}",
+                    l.get(1), l.get(2), l.get(3), l.get(4), l.get(5)
+                );
+            }
+        }
+        Err(e) => eprintln!("[distingue] place : {e}"),
+    }
+    // Les scopes : tout vide, tout plein, ou mêlés ?
+    let melange = conn.execute(&format!(
+        "MATCH (n:`Scope_Chunk`)-[:`Scope_CHUNKED_FROM`]->(s:`Scope`) \
+         WITH s, count(CASE WHEN {vide} THEN 1 END) AS v, count(n) AS t \
+         RETURN count(CASE WHEN v = 0 THEN 1 END), count(CASE WHEN v = t THEN 1 END), count(CASE WHEN v > 0 AND v < t THEN 1 END)"
+    ));
+    if let Ok(r) = melange {
+        eprintln!("[distingue] scopes sans vide {:?}, tout vides {:?}, mêlés {:?}", r.rows[0].first(), r.rows[0].get(1), r.rows[0].get(2));
+    }
+}
+
+/// **Les fichiers des scopes vides** : pour chaque fichier, ses scopes tout
+/// vides et ses scopes en tout, écrits dans `RAG3WEAVER_MESURE_SORTIE` (une
+/// ligne par fichier, tabulée), pour être croisés avec l'historique git ; et
+/// les colonnes de `File`.
+#[test]
+#[ignore]
+fn les_fichiers_des_scopes_vides() {
+    let Some(base) = base() else { return };
+    let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    if let Ok(r) = conn.execute("CALL TABLE_INFO('File') RETURN *") {
+        let c: Vec<String> = r.rows.iter().filter_map(|l| l.get(1).and_then(|v| v.as_str()).map(|s| s.to_string())).collect();
+        eprintln!("[fichiers] colonnes de File : {c:?}");
+    }
+    let r = conn
+        .execute(
+            "MATCH (n:`Scope_Chunk`)-[:`Scope_CHUNKED_FROM`]->(s:`Scope`) \
+             WITH s, count(CASE WHEN n.`_text` IS NULL OR n.`_text` = '' THEN 1 END) AS v, count(n) AS t \
+             RETURN s.`file_path`, count(CASE WHEN v = t THEN 1 END), count(s)",
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+    let sortie = std::env::var("RAG3WEAVER_MESURE_SORTIE").unwrap_or_else(|_| "/dev/stderr".into());
+    let texte: String = r
+        .rows
+        .iter()
+        .map(|l| format!("{}\t{}\t{}\n", l[0].as_str().unwrap_or(""), l[1].as_i64().unwrap_or(0), l[2].as_i64().unwrap_or(0)))
+        .collect();
+    std::fs::write(&sortie, texte).unwrap();
+    eprintln!("[fichiers] {} fichiers écrits dans {sortie}", r.rows.len());
+    // Les champs de File, un fichier par ligne, à côté.
+    let f = conn
+        .execute("MATCH (f:`File`) RETURN f.`absolute_path`, f.`path`, f.`revision`, f.`_snapshot`, f.`cursor`, f.`language`, f.`size_bytes`, f.`_absent_since`")
+        .unwrap_or_else(|e| panic!("{e}"));
+    let texte: String = f
+        .rows
+        .iter()
+        .map(|l| l.iter().map(|v| match v { rag3weaver::connection::CypherValue::String(s) => s.clone(), autre => format!("{autre:?}") }).collect::<Vec<_>>().join("\t") + "\n")
+        .collect();
+    if sortie.starts_with("/dev/") {
+        eprintln!("[fichiers] RAG3WEAVER_MESURE_SORTIE absent : les champs de File ne sont pas écrits");
+        return;
+    }
+    std::fs::write(format!("{sortie}.files"), texte).unwrap();
+    eprintln!("[fichiers] {} lignes de File écrites dans {sortie}.files", f.rows.len());
+}
+
+/// **Ce que porte le texte des scopes tout vides** : la part de scopes dont
+/// `content` contient un accent grave, un guillemet, une barre oblique inverse,
+/// ou est lui-même vide ; leur longueur — chez les scopes tout vides et chez
+/// ceux qui n'ont aucun morceau vide.
+#[test]
+#[ignore]
+fn ce_que_porte_le_texte_des_scopes_vides() {
+    use rag3weaver::connection::CypherValue;
+    let Some(base) = base() else { return };
+    let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    // En deux temps : le classement des scopes sans leur texte, puis leur
+    // texte par paquets, par clé (la même requête en un temps fait tomber le
+    // moteur : SIGSEGV, le 12 octobre).
+    let classes = conn
+        .execute(
+            "MATCH (n:`Scope_Chunk`)-[:`Scope_CHUNKED_FROM`]->(s:`Scope`) \
+             WITH s, count(CASE WHEN n.`_text` IS NULL OR n.`_text` = '' THEN 1 END) AS v, count(n) AS t \
+             WHERE v = 0 OR v = t \
+             RETURN v > 0 AS vide, s.`_uuid`",
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+    let vide_de: std::collections::HashMap<String, bool> = classes
+        .rows
+        .iter()
+        .filter_map(|l| Some((l.get(1)?.as_str()?.to_string(), matches!(l.first(), Some(CypherValue::Bool(true))))))
+        .collect();
+    let uuids: Vec<String> = vide_de.keys().cloned().collect();
+    let mut lignes = Vec::new();
+    for paquet in uuids.chunks(500) {
+        let liste = CypherValue::List(paquet.iter().map(|u| CypherValue::String(u.clone())).collect());
+        let r = conn
+            .execute_with_params("UNWIND $uuids AS u MATCH (s:`Scope` {_uuid: u}) RETURN u, s.`content`, s.`docstring`", &[QueryParam::new("uuids", liste)])
+            .unwrap_or_else(|e| panic!("{e}"));
+        lignes.extend(r.rows);
+    }
+    // [scopes, grave, guillemet, barre, content vide, longueur totale, docstring non vide]
+    let mut g = [[0u64; 7]; 2];
+    for l in &lignes {
+        let k = l.first().and_then(|v| v.as_str()).and_then(|u| vide_de.get(u)).copied().unwrap_or(false) as usize;
+        let c = l.get(1).and_then(|v| v.as_str()).unwrap_or("");
+        let d = l.get(2).and_then(|v| v.as_str()).unwrap_or("");
+        g[k][0] += 1;
+        g[k][1] += c.contains('`') as u64;
+        g[k][2] += c.contains('"') as u64;
+        g[k][3] += c.contains('\\') as u64;
+        g[k][4] += c.is_empty() as u64;
+        g[k][5] += c.chars().count() as u64;
+        g[k][6] += (!d.is_empty()) as u64;
+    }
+    for (k, nom) in [(0, "pleins    "), (1, "tout vides")] {
+        let n = g[k][0].max(1) as f64;
+        eprintln!(
+            "[texte] {nom} : {} scopes ; accent grave {:.1} % ; guillemet {:.1} % ; barre inverse {:.1} % ; content vide {:.1} % ; longueur moyenne {:.0} ; docstring {:.1} %",
+            g[k][0],
+            100.0 * g[k][1] as f64 / n,
+            100.0 * g[k][2] as f64 / n,
+            100.0 * g[k][3] as f64 / n,
+            100.0 * g[k][4] as f64 / n,
+            g[k][5] as f64 / n,
+            100.0 * g[k][6] as f64 / n
+        );
+    }
+}
+
+/// **Deux lectures pour départager les chemins** (relecture du proto) : chez
+/// les morceaux vides et chez les pleins, le marqueur dense est-il égal à
+/// `_text_hash` ; et parmi les scopes tout vides, combien ont un autre scope de
+/// même clé (`name`, `parent_name`, fichier).
+#[test]
+#[ignore]
+fn deux_lectures_pour_departager_les_chemins() {
+    use rag3weaver::connection::CypherValue;
+    use std::collections::HashMap;
+    let Some(base) = base() else { return };
+    let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    let vide = "(n.`_text` IS NULL OR n.`_text` = '')";
+    let r = conn
+        .execute(&format!(
+            "MATCH (n:`Scope_Chunk`) RETURN {vide} AS v, count(n), \
+             count(CASE WHEN n.`_embed_hash__granite_278m` = n.`_text_hash` THEN 1 END), \
+             count(CASE WHEN n.`_embed_hash` = n.`_text_hash` THEN 1 END), \
+             count(CASE WHEN n.`_sparse_hash` = n.`_text_hash` THEN 1 END) ORDER BY v"
+        ))
+        .unwrap_or_else(|e| panic!("{e}"));
+    for l in &r.rows {
+        let g = if matches!(l.first(), Some(CypherValue::Bool(true))) { "vides " } else { "pleins" };
+        let n = l[1].as_i64().unwrap_or(0).max(1) as f64;
+        let p = |i: usize| 100.0 * l[i].as_i64().unwrap_or(0) as f64 / n;
+        eprintln!(
+            "[chemins] {g} : {:?} morceaux ; _embed_hash__granite_278m = _text_hash {:.1} % ; _embed_hash = _text_hash {:.1} % ; _sparse_hash = _text_hash {:.1} %",
+            l.get(1), p(2), p(3), p(4)
+        );
+    }
+    let classes = conn
+        .execute(&format!(
+            "MATCH (n:`Scope_Chunk`)-[:`Scope_CHUNKED_FROM`]->(s:`Scope`) \
+             WITH s, count(CASE WHEN {vide} THEN 1 END) AS v, count(n) AS t \
+             RETURN s.`_uuid`, v = t AS tout_vide, s.`name`, s.`parent_name`, s.`file_path`"
+        ))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let texte = |v: Option<&CypherValue>| v.and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let mut par_cle: HashMap<(String, String, String), usize> = HashMap::new();
+    for l in &classes.rows {
+        *par_cle.entry((texte(l.get(2)), texte(l.get(3)), texte(l.get(4)))).or_default() += 1;
+    }
+    // Aussi parmi tous les scopes, même ceux sans morceau.
+    let (mut vides, mut vides_doubles, mut pleins, mut pleins_doubles) = (0u64, 0u64, 0u64, 0u64);
+    for l in &classes.rows {
+        let double = par_cle[&(texte(l.get(2)), texte(l.get(3)), texte(l.get(4)))] > 1;
+        if matches!(l.get(1), Some(CypherValue::Bool(true))) {
+            vides += 1;
+            vides_doubles += double as u64;
+        } else {
+            pleins += 1;
+            pleins_doubles += double as u64;
+        }
+    }
+    eprintln!(
+        "[chemins] scopes tout vides : {vides}, dont avec un autre scope de même clé (name, parent_name, fichier) : {vides_doubles} ({:.1} %)",
+        100.0 * vides_doubles as f64 / vides.max(1) as f64
+    );
+    eprintln!(
+        "[chemins] autres scopes : {pleins}, dont avec un autre scope de même clé : {pleins_doubles} ({:.1} %)",
+        100.0 * pleins_doubles as f64 / pleins.max(1) as f64
+    );
+}
+
+/// **Les morceaux vides sont-ils alignés sur les groupes de nœuds du moteur**
+/// (2 048 lignes) ? Pour chaque groupe `offset(id(n)) / 2048` de Scope_Chunk :
+/// ses vides et ses lignes. Des groupes entiers vides désigneraient le moteur
+/// (une colonne chaîne perdue par groupe) ; rien d'aligné, un autre bâti.
+#[test]
+#[ignore]
+fn les_morceaux_vides_et_les_groupes_de_noeuds() {
+    let Some(base) = base() else { return };
+    let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    let r = conn
+        .execute(
+            "MATCH (n:`Scope_Chunk`) \
+             RETURN offset(id(n)) / 2048 AS g, \
+                    count(CASE WHEN n.`_text` IS NULL OR n.`_text` = '' THEN 1 END), count(n) ORDER BY g",
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+    let (mut tout_vides, mut mêlés, mut sans, mut vides_dans_mêlés) = (0, 0, 0, 0i64);
+    let mut lignes = Vec::new();
+    for l in &r.rows {
+        let (g, v, t) = (l[0].as_i64().unwrap_or(-1), l[1].as_i64().unwrap_or(0), l[2].as_i64().unwrap_or(0));
+        if v == 0 {
+            sans += 1;
+        } else if v == t {
+            tout_vides += 1;
+        } else {
+            mêlés += 1;
+            vides_dans_mêlés += v;
+        }
+        lignes.push(format!("{g}:{v}/{t}"));
+    }
+    eprintln!("[groupes] {} groupes de 2 048 : tout vides {tout_vides}, mêlés {mêlés} ({vides_dans_mêlés} vides dedans), sans vide {sans}", r.rows.len());
+    eprintln!("[groupes] par groupe (offset/2048 : vides/lignes) : {}", lignes.join(" "));
+}
