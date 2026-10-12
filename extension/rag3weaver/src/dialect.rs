@@ -3744,6 +3744,23 @@ mod tests {
         assert!(matches!(Rag3dbDialect.hop(&h), Err(rag3weaver_ir::TranslateError::Invalid(_))));
     }
 
+    /// **L'exclusion d'une valeur vide** (`reexport_from` posé sans valeur) :
+    /// acceptée, rendue `''` dans les deux dialectes, et un champ NULL passe
+    /// (un surplus, exact pour la lecture des réexportations, lot des
+    /// symboles du 12 octobre).
+    #[test]
+    fn une_exclusion_vide_se_traduit() {
+        use rag3weaver_ir::{Direction, EdgeExclusion, Hop};
+        let mut h = Hop::new("Symbol", "MENTIONS", "Scope", Direction::Incoming);
+        h.exclude = Some(EdgeExclusion { field: "reexport_from".into(), values: vec![String::new()] });
+        assert!(h.validate().is_ok());
+        assert_eq!(
+            Rag3dbDialect.hop(&h).unwrap(),
+            "UNWIND $uuids AS u MATCH (d:`Symbol` {_uuid: u})<-[r:`MENTIONS`]-(m:`Scope`) WHERE r.`reexport_from` IS NULL OR NOT r.`reexport_from` IN [''] RETURN u, m.`_uuid`"
+        );
+        assert!(PostgresDialect.hop(&h).unwrap().contains("r.\"reexport_from\" <> ALL (ARRAY[''])"));
+    }
+
     /// Le compte : rag3db le traduit, PostgreSQL le refuse en le nommant.
     #[test]
     fn le_compte_se_traduit_ou_se_refuse() {
