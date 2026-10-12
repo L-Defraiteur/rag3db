@@ -103,21 +103,22 @@ tard à 0 h 15.
   (`e6f626df4`, cause du P1 et de la boucle de luciepc) puis le balayage sous petit masque
   (`41d282843`, `usages` sous 100 ms attendu), puis l'insertion de vecteurs (`3cca0ae1e` :
   le point de reprise après les SET de vecteurs n'est plus quadratique, ce qui touche la
-  réindexation du matin) ; l'arbre principal a publié la lib au magasin à 8 h 25
-  (`librag3db.so` 72e2628a…, libvector f03c2a0a…). Le binaire à installer est bâti sur
-  `945700435` (avec les lots de la nuit : le saut en deux temps de F, la
+  réindexation du matin), enfin la jointure par clé (`2b11b55ec` : `usages` 352 → 43 ms sur
+  l'index entier, mesuré par F) ; l'arbre principal a publié la lib au magasin à 10 h 15
+  (`librag3db.so` 105a2f09…, libvector 7b8a30da…). Le binaire à installer est bâti sur
+  `1309ab5a4` (avec les lots de la nuit : le saut en deux temps de F, la
   montre qui laisse passer une lecture) et prouvé, **pas installé** :
 
-  - `~/.cache/rag3weaver-build/binaire-matin-46f910c3fd19`, md5
-    `46f910c3fd193d6b7d25c1740fdd4079` ;
-  - RUNPATH vers `~/.cache/rag3db-libs/rag3db-build-3cca0ae1eb07e1cb8bca79a8ae914b3b05653c18-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
+  - `~/.cache/rag3weaver-build/binaire-matin-22e156eb9a57`, md5
+    `22e156eb9a57d59c3115de48905f0932` ;
+  - RUNPATH vers `~/.cache/rag3db-libs/rag3db-build-2b11b55ec1746973592d5c6e7eb493b281212348-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
     (plus de `LD_LIBRARY_PATH` : un rebâti de la lib ne le touche plus) ;
   - preuves sans `LD_LIBRARY_PATH` : `readelf -d` montre le RUNPATH, `ldd` résout la lib
     du magasin, `rag3db-check-lib` dit « même bâti », `--describe` des deux manifestes
     (memory 9 outils, code-rag3db 11, et 11 encore sur une copie qui porte
     `queries_via`), un hôte d'essai sur 7990 et un client de boutique (`initialize`,
     8 outils, `list_categories`, `daemon_status` au même bâti), arrêt propre.
-    `649a84722b3e`, `d2b83e5e5080` et `a327c0da16e3` sont dépassés.
+    `649a84722b3e`, `d2b83e5e5080`, `a327c0da16e3` et `46f910c3fd19` sont dépassés.
 
   Lucie arrête son hôte — pid lu dans `daemon.json`, jamais par nom :
 
