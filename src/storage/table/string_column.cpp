@@ -133,7 +133,7 @@ void StringColumn::scanSegment(const SegmentState& state, offset_t startOffsetIn
     if (!resultVector->state || resultVector->state->getSelVector().isUnfiltered()) {
         scanUnfiltered(state, startOffsetInChunk, numValuesToScan, resultVector, offsetInResult);
     } else {
-        scanFiltered(state, startOffsetInChunk, resultVector, offsetInResult);
+        scanFiltered(state, startOffsetInChunk, numValuesToScan, resultVector, offsetInResult);
     }
 }
 
@@ -237,15 +237,22 @@ void StringColumn::scanUnfiltered(const SegmentState& state, offset_t startOffse
         getChildState(state, ChildStateIndex::INDEX).metadata);
 }
 
+// Les positions sélectionnées de la fenêtre qui tombent dans ce segment : celles de
+// [offsetInResult, offsetInResult + numValuesToScan). La borne d'avant (l'amont, « Segmentation »)
+// était `startOffsetInChunk + pos < numValues` : juste pour le premier segment d'une fenêtre, fausse
+// pour un second segment plus court que la position — la fin de la fenêtre n'était alors pas écrite
+// et le vecteur gardait la chaîne de la fenêtre d'avant, ou rien (ticket des morceaux sans texte, et
+// le SIGSEGV d'un agrégat de textes longs, 12 octobre 2026).
 void StringColumn::scanFiltered(const SegmentState& state, offset_t startOffsetInChunk,
-    ValueVector* resultVector, offset_t offsetInResult) const {
+    row_idx_t numValuesToScan, ValueVector* resultVector, offset_t offsetInResult) const {
     std::vector<std::pair<string_index_t, uint64_t>> offsetsToScan;
     for (sel_t i = 0; i < resultVector->state->getSelVector().getSelSize(); i++) {
         const auto pos = resultVector->state->getSelVector()[i];
-        if (pos >= offsetInResult && startOffsetInChunk + pos < state.metadata.numValues &&
+        if (pos >= offsetInResult && pos - offsetInResult < numValuesToScan &&
             !resultVector->isNull(pos)) {
             // TODO(bmwinger): optimize index scans by grouping them when adjacent
             const auto offsetInGroup = startOffsetInChunk + pos - offsetInResult;
+            KU_ASSERT(offsetInGroup < state.metadata.numValues);
             string_index_t index = 0;
             indexColumn->scanSegment(getChildState(state, ChildStateIndex::INDEX), offsetInGroup, 1,
                 reinterpret_cast<uint8_t*>(&index));

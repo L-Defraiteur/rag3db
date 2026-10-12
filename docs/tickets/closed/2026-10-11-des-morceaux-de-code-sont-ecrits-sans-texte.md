@@ -1,6 +1,6 @@
 # Des morceaux de code sont écrits sans texte : 20 % de code-rag3db
 
-- **État** : ouvert (11 octobre 2026) — l'arbre principal le prend (cause, témoin, correctif, réécriture des morceaux touchés)
+- **État** : corrigé côté moteur (le commit qui déplace ce fichier dans `closed/`, 12 octobre 2026, cœur C++) — la lecture, pas le stockage : `StringColumn::scanFiltered` (chemin pris quand un groupe porte des versions — lignes supprimées ou écrites sous transaction) bornait la fin d'une fenêtre de 2 048 lignes par `startOffsetInChunk + pos < numValues` au lieu de `pos - offsetInResult < numValuesToScan` : quand la fenêtre chevauche deux segments de la colonne et que le second est plus court que la position, ces lignes n'étaient pas écrites dans le vecteur, qui gardait la chaîne de la fenêtre d'avant (ou rien). Venu de l'amont (« Segmentation », 18 septembre 2025). Même borne dans `ListColumn::scanFiltered`. Les données sur disque sont intactes : la relecture par clé (lookup) était juste ; les morceaux « sans texte » ont leur texte sur disque, c'est le balayage qui ne le rendait pas (vide, ou le texte d'un autre morceau 2 048 lignes plus tôt, sans aucun signe). L'arbre principal note les suites côté produit (la réécriture des vides de 7b54c5f84 reste sans danger). Témoin du banc dans le lot
 - **Gravité** : réponse fausse (une recherche ou un usage ne voit pas le passage, sans le dire jusqu'aux défenses de `40f24a50b`) ; et blocage (la passe de vecteurs bouclait dessus, le gel de code-lourd)
 - **Atteignable en service** : oui, tout index de code
 - **Touche rag3weaver** : oui (l'écriture des morceaux, à trouver)
@@ -322,3 +322,16 @@ luciepc** (`run_index` relit `_text` par balayage, le lit vide, le saute et repr
 3. **Fermeture du ticket** : sur le correctif moteur du cœur (branche `scan-filtre-chaines`, témoin
    gtest), la lib rebâtie, et un recomptage de la copie scellée de F avec la lib corrigée. On attend
    0, sans rien réécrire.
+
+## La forme minimale, sans produit (12 octobre 2026, 3 h 26)
+
+Une table `T(id INT64 PRIMARY KEY, s STRING)`, 6 000 lignes de chaînes de 200 octets (`repeat('x',
+200) + id`), `CHECKPOINT` : la colonne se découpe en 5 segments de ~1 250 lignes (`CALL
+storage_info('T')` ; les segments viennent de la taille, ≤ min(taille/2, 256 Ko), pas du nombre de
+COPY). Une seule ligne supprimée dans la fenêtre lue (`id = 10`), puis `MATCH (n:T) RETURN n.id,
+n.s` : sans correctif, **les lignes 1250 à 2047 de la fenêtre sont lues vides** (0 octet) — le
+« vide » de ce ticket ; une suppression à `id = 2100` fait rendre aux lignes 3292… de la fenêtre
+suivante la chaîne d'une autre ligne. Avec le correctif : 0 faux. Chaînes trop courtes (un seul
+segment) ou aucune version dans la fenêtre : vert des deux côtés — c'est pourquoi un index neuf
+n'a rien.
+
