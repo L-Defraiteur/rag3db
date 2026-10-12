@@ -99,6 +99,7 @@ pub(crate) fn impact_config() -> NeighborhoodConfig {
         note_field: "test_certainty".into(),
         queried_by: vec![],
         queried_note: String::new(),
+        lock_order: None,
         also_path: vec![
             Step::new("HAS_PARENT", Direction::Outgoing),
             Step::new("IMPLEMENTS", Direction::Outgoing),

@@ -162,6 +162,7 @@ fn voisinage(direction: Direction, marque: &EdgeMark) -> NeighborhoodConfig {
         also_path: Vec::new(),
         queried_by: vec![],
         queried_note: String::new(),
+        lock_order: None,
         also_same: "name".into(),
         also_label: String::new(),
         collect: None,

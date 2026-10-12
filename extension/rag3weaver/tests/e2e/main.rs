@@ -242,6 +242,8 @@ mod e2e_undo;
 mod e2e_usages;
 #[path = "../e2e_verrous.rs"]
 mod e2e_verrous;
+#[path = "../e2e_verrous_du_chemin.rs"]
+mod e2e_verrous_du_chemin;
 #[path = "../e2e_working_tree.rs"]
 mod e2e_working_tree;
 

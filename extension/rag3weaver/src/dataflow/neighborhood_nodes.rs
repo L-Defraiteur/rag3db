@@ -102,6 +102,10 @@ pub struct NeighborhoodConfig {
     /// sont relevés comme traversants, notés `queried_note`. Vide : rien.
     pub queried_by: Vec<Step>,
     pub queried_note: String,
+    /// **Les verrous du chemin, dans l'ordre** (`super::lock_order`) : ceux
+    /// que le départ prend, dépliés par ses appels, et ceux que les appelants
+    /// tiennent avant d'appeler. `None` : rien.
+    pub lock_order: Option<super::lock_order::LockOrder>,
 }
 
 /// **Un relevé sur le chemin**, déclaré au gabarit : la relation et son sens,
@@ -173,6 +177,8 @@ pub struct NeighborhoodReport {
     pub scope: QueryScope,
     #[serde(default)]
     pub scope_hidden: usize,
+    /// Les verrous du chemin, dans l'ordre (vide sans `lock_order`).
+    pub locks: super::lock_order::LockReport,
 }
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
@@ -587,6 +593,20 @@ pub fn neighborhood_of_in(
     let (atteints, queries_untracked) = interroges(&moteur, &usages.definitions, atteints)?;
     let collected = relever(&moteur, &usages.definitions, &atteints)?;
     let (atteints, scope_hidden) = borner(&moteur, atteints, scope)?;
+    // Les verrous du chemin : ceux du départ, dans l'ordre ; et, en entrant,
+    // ceux que chaque appelant tient avant la ligne de son appel.
+    let locks = match &cfg.lock_order {
+        Some(lo) => {
+            let departs: Vec<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
+            let appelants: Vec<(String, Option<i64>)> = if cfg.direction == Direction::Incoming {
+                atteints.iter().filter(|a| a.group.is_empty() && !a.by_name).map(|a| (a.uuid.clone(), a.line)).collect()
+            } else {
+                Vec::new()
+            };
+            super::lock_order::lock_report(catalog, lo, &departs, depth, &appelants)?
+        }
+        None => Default::default(),
+    };
     Ok(NeighborhoodReport {
         name: name.to_string(),
         starts: usages.definitions,
@@ -598,6 +618,7 @@ pub fn neighborhood_of_in(
         queries_untracked,
         scope: scope.clone(),
         scope_hidden,
+        locks,
     })
 }
 
@@ -652,6 +673,7 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
         queries_untracked,
         scope: QueryScope::default(),
         scope_hidden: 0,
+        locks: Default::default(),
     })
 }
 
@@ -844,6 +866,44 @@ impl NeighborhoodReport {
     /// relevé sur le chemin, sous le sien ; `include_by_name` : les usages
     /// par le nom seul listés, marqués. Un `group_title` vide : pas de
     /// groupe, rien n'en est dit.
+    /// Les deux sections des verrous du chemin, quand le gabarit les déclare.
+    fn verrous_du_chemin(&self, out: &mut String, limit: usize) {
+        let l = &self.locks;
+        if !l.order.is_empty() || l.cut_by_depth > 0 {
+            out.push_str(&format!("\n## {} ({})\n", l.titles.0, l.order.len()));
+            for v in l.order.iter().take(limit) {
+                let retrait = "  ".repeat(v.nesting);
+                let lieu = match v.line {
+                    Some(n) => format!("{}:{n}", v.path),
+                    None => v.path.clone(),
+                };
+                let par = if v.nesting == 0 { String::new() } else { format!(" (dans {})", v.scope) };
+                let si = if v.condition.is_empty() { String::new() } else { format!(" — si `{}`", v.condition) };
+                let quoi = if v.text.is_empty() { format!("{} {}", v.usage, v.target) } else { v.text.clone() };
+                out.push_str(&format!("{retrait}- `{quoi}` — {lieu}{par}{si}\n"));
+            }
+            if l.order.len() > limit {
+                out.push_str(&format!("… {} de plus\n", l.order.len() - limit));
+            }
+            if l.cut_by_depth > 0 {
+                out.push_str(&format!(
+                    "({} appel(s) au-delà de la profondeur {} prennent eux-mêmes un verrou, non dépliés : augmenter depth)\n",
+                    l.cut_by_depth, self.depth
+                ));
+            }
+        }
+        if !l.held.is_empty() {
+            out.push_str(&format!("\n## {} ({})\n", l.titles.1, l.held.len()));
+            out.push_str("(supposés tenus jusqu'à la fin de leur scope : un `unlock` manuel n'est pas suivi)\n");
+            for h in l.held.iter().take(limit) {
+                let quoi = if h.text.is_empty() { format!("{} {}", h.usage, h.target) } else { h.text.clone() };
+                let ligne = h.line.map(|n| n.to_string()).unwrap_or_default();
+                let appel = h.call_line.map(|n| n.to_string()).unwrap_or_default();
+                out.push_str(&format!("- {} — `{quoi}` ligne {ligne}, avant son appel ligne {appel} — {}\n", h.caller, h.path));
+            }
+        }
+    }
+
     pub fn markdown_avec(&self, heading: &str, group_title: &str, rest_title: &str, also_label: &str, collect_title: Option<&str>, limit: usize, include_by_name: bool) -> String {
         let mut out = format!("# {heading}: {}\n\n", self.name);
         out.push_str(&format!("## Départ ({})\n", self.starts.len()));
@@ -955,6 +1015,7 @@ impl NeighborhoodReport {
                 }
             }
         }
+        self.verrous_du_chemin(&mut out, limit);
         let aussi: Vec<&Reached> = self.reached.iter().filter(|r| r.by_also).collect();
         if !aussi.is_empty() {
             out.push_str(&format!("\n## {also_label} ({})\n", aussi.len()));
@@ -1115,6 +1176,22 @@ impl NodeFactory for NeighborhoodNodeFactory {
         };
         let also_path = liste(config.get("also_path")).iter().map(|p| pas(p)).collect::<Result<Vec<_>, _>>()?;
         let queried_by = liste(config.get("queried_by")).iter().map(|p| pas(p)).collect::<Result<Vec<_>, _>>()?;
+        let lock_order = match s("lock_order").filter(|r| !r.is_empty()) {
+            Some(locks) => Some(super::lock_order::LockOrder {
+                locks,
+                calls: s("lock_calls").filter(|r| !r.is_empty()).unwrap_or_else(|| "CONSUMES".into()),
+                line: s("line").unwrap_or_else(|| "line".into()),
+                usage: s("usage_field").unwrap_or_else(|| "usage".into()),
+                content: s("lock_content").unwrap_or_else(|| "content".into()),
+                start_line: start.line_field.clone(),
+                title: start.title.clone(),
+                path_fields: start.path_fields.clone(),
+                target_field: s("lock_target_field").unwrap_or_else(|| "name".into()),
+                order_title: s("lock_title").unwrap_or_else(|| "Verrous pris par le départ, dans l'ordre".into()),
+                held_title: s("held_title").unwrap_or_else(|| "Verrous tenus par les appelants avant l'appel".into()),
+            }),
+            None => None,
+        };
         check_also_path(&also_path).map_err(|e| format!("NeighborhoodNode: also_path : {e}"))?;
         let mut start_cfg = start;
         start_cfg.direct = relations.clone();
@@ -1130,6 +1207,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             also_path,
             queried_by,
             queried_note: s("queried_note").unwrap_or_else(|| "par requête".into()),
+            lock_order,
             collect: match s("collect").filter(|c| !c.is_empty()) {
                 Some(c) => Some(Collect {
                     step: pas(&c)?,
@@ -1153,6 +1231,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             .chain(st.path_fields.iter().map(String::as_str))
             .chain(cfg.also_path.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
             .chain(cfg.queried_by.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
+            .chain(cfg.lock_order.iter().flat_map(|l| [l.locks.as_str(), l.calls.as_str(), l.line.as_str(), l.usage.as_str(), l.content.as_str(), l.target_field.as_str()]))
             .chain(cfg.collect.iter().flat_map(|c| [c.step.relation.as_str(), c.field.as_str(), c.note.as_str()]))
             .collect();
         if let Some(x) = tous.iter().find(|x| !ident(x)) {
@@ -1227,6 +1306,12 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("also_path", S, false, Some(serde_json::json!("")), "Départ supplémentaire : pas REL> ou <REL, séparés par |"),
                 p("queried_by", S, false, Some(serde_json::json!("")), "Tests par requêtes : chemin depuis chaque nœud atteint, pas REL> ou <REL séparés par |, ? pour un pas facultatif"),
                 p("queried_note", S, false, Some(serde_json::json!("par requête")), "La note d'un test relevé par ce chemin"),
+                p("lock_order", S, false, Some(serde_json::json!("")), "Les verrous du chemin, dans l'ordre : la relation d'un verrou pris (LOCKS) ; vide : rien"),
+                p("lock_calls", S, false, Some(serde_json::json!("CONSUMES")), "La relation d'un appel, dépliée à sa place"),
+                p("lock_content", S, false, Some(serde_json::json!("content")), "Le champ du texte d'un scope"),
+                p("lock_target_field", S, false, Some(serde_json::json!("name")), "Le champ du nom de ce qui est verrouillé"),
+                p("lock_title", S, false, Some(serde_json::json!("Verrous pris par le départ, dans l'ordre")), "Titre de la section des verrous du départ"),
+                p("held_title", S, false, Some(serde_json::json!("Verrous tenus par les appelants avant l'appel")), "Titre de la section des verrous des appelants"),
                 p("also_same", S, false, Some(serde_json::json!("name")), "Champ qui doit valoir celui du départ, au bout du chemin"),
                 p("also_label", S, false, Some(serde_json::json!("Aussi, peut-être")), "Libellé du groupe du départ supplémentaire"),
                 p("collect", S, false, Some(serde_json::json!("")), "Relevé sur le chemin : une relation et son sens, suivie d'un pas depuis chaque nœud atteint (`LOCKS>`)"),
@@ -1307,6 +1392,7 @@ mod tests_saut {
             also_path: vec![],
             queried_by: vec![],
             queried_note: String::new(),
+            lock_order: None,
             also_same: "name".into(),
             also_label: String::new(),
             collect: None,

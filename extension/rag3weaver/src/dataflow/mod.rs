@@ -67,6 +67,7 @@ pub mod react_nodes;
 pub mod ref_nodes;
 pub mod scripted_node;
 pub mod usage_nodes;
+pub mod lock_order;
 pub mod neighborhood_nodes;
 pub mod graph_walk;
 pub mod links_nodes;
