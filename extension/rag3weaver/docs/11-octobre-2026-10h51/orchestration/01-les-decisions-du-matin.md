@@ -1228,3 +1228,49 @@ où elle vit.
   codeparsers ; **décidé avec hotfixs : le bâti de G au magasin fait foi
   pour l'hôte de luciepc**, rag3db-lourd ne se rebâtit en place que si
   codeparsers nomme un outil qui le lie encore.
+- **4 h 25 – 4 h 55, nuit**. **Le lot des « 6 secondes » est sur master**
+  (proto, `30f1f7949` + `df1184d32`, fenêtre accordée par le verrou tenu
+  pendant son rejeu après deux courses perdues ; puis `5fc38460d` les
+  corrections de relecture de la recherche) : la montre laisse passer une
+  lecture pendant une réaction (lock_for_read), le reçu occupé avec montres
+  et reprise (ticket fermé), la ligne [montre] par fichier avec ses phases,
+  la mesure par phase, Decide et max_tokens ; **le contournement de la
+  suppression HNSW** (vecteur remis à NULL avant le DETACH DELETE, rag3db
+  seulement) : réindexer un fichier **2,5-3,9 s → 0,56-0,68 s**, retirer un
+  fichier de 32 scopes **96-114 s → 0,40 s**, invariant des vecteurs 8/8 ;
+  ticket moteur à hotfixs. Codeparsers rejoue le témoin de bout en bout sur
+  cette tête (hôte isolé, binaire RUNPATH, LD_LIBRARY_PATH vide) : on attend
+  les 7,3 s sous 2 s. Le banc ne reproduit pas les 2,5 s par ligne au moteur
+  nu (DELETE d'une ligne indexée 20-50 ms, indépendant de la taille de
+  l'index, 40 × la voie NULL puis DELETE ; SET depuis NULL 1-4 ms par
+  vecteur, aucun gain par les fils, coût qui croît avec les SET depuis le
+  dernier point de reprise ; CREATE 15 000 vecteurs 9-12 s) : variante fidèle
+  au produit en bâti (COPY sans vecteur, relation par morceau, SET par 64,
+  aucun point de reprise, DELETE filtré sur une colonne non clé), aucune
+  couleur annoncée avant de l'avoir jouée. **Le saut en deux temps de F est
+  sur master** (`6f5554868`, capacité `two_step_hops`, Warning du catalogue
+  pour les lignes écartées) : usages 355 → 212-239 ms, empreintes
+  identiques ; recomptage sur la lib corrigée : 0 lu vide, 11 lectures, aucun
+  SIGSEGV ; F remesure sur le balayage sous masque du cœur (en passe : 117
+  lignes lues au lieu de 67 584 sur son témoin) et retire la forme si elle ne
+  gagne plus. **G** : B3 (`71cdf4185`, relu par le cœur) : **le lot B entier
+  est sur master**, paquet-npm ne portera plus que le paquet ; **le lot C
+  (démon portable) écrit** sur portage-c : un module par système pour l'état
+  d'un processus (Linux /proc, macOS proc_pidinfo, Windows OpenProcess…),
+  « inconnu » laissé à /sante, daemon.json 0600 et ACL, détachement par
+  groupe de processus, arrêt propre par console sous Windows ; vert sous
+  Linux ; runners Windows et macOS sur une branche d'essai ci-portage-c, **à
+  effacer du distant dès qu'ils ont parlé** ; relectures mémoire et arbre
+  principal avant push. Le worktree de luciepc de G avancé à la tête pour un
+  seul bâti (lib, magasin, binaire, check-lib), derrière le client de
+  codeparsers. **Binaire du matin de Lucie à rebâtir une fois de plus** sur
+  la tête vers 5 h 30 (mémoire, même lib f6179ade…, même RUNPATH, pas
+  installé : il porte alors le saut en deux temps et les 6 s) ; G de même
+  pour le binaire seul de luciepc. L'arbre principal : conception du manque
+  « tests par requêtes » approuvée (`workspace.queries_via` au manifeste :
+  tests par fichier par motif, noms enregistrés par expression, table
+  mots-clés → symboles dans le gabarit du dépôt, datée et comptée ; relation
+  QUERIES suivie par impact avec la certitude « par requête » ; « non suivis
+  (N fichiers de test sans lien) » tant qu'un dépôt ne déclare rien ; un
+  seul poseur de marques avec codeparsers). La mémoire joue la tentative 3
+  des fiches classées (Gemini, max_tokens de Decide).
