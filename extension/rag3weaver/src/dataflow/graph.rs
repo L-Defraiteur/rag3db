@@ -174,6 +174,13 @@ impl DataflowGraph {
 
     /// Validate the graph: check DAG (no cycles) + all required inputs connected.
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_with(&[])
+    }
+
+    /// [`Self::validate`], avec des entrées nourries de l'extérieur : le flux
+    /// d'entrée d'un run lancé, que l'appelant nourrit (page
+    /// 12-octobre-2026-recherche/04). Elles comptent comme branchées.
+    pub(crate) fn validate_with(&self, fed: &[(String, String)]) -> Result<(), String> {
         // Check DAG
         self.topological_sort()?;
 
@@ -191,7 +198,8 @@ impl DataflowGraph {
                         || self.initial_streams
                             .get(node.name())
                             .map_or(false, |ports| ports.contains_key(&*input.name));
-                    if !connected_by_edge && !connected_by_initial {
+                    let fed_from_outside = fed.iter().any(|(n, p)| n == node.name() && *p == *input.name);
+                    if !connected_by_edge && !connected_by_initial && !fed_from_outside {
                         warnings.push(format!(
                             "required input '{}' on node '{}' is not connected",
                             input.name,

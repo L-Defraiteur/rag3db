@@ -11,15 +11,18 @@
 //! Il survit à son parent, sauf [`Tie::WithParent`].
 
 use std::any::Any;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
 use super::graph::DataflowGraph;
-use super::node::CancelToken;
-use super::port::PortValue;
+use super::concurrent::Outer;
+use super::node::{CancelCause, CancelToken, Stopped};
+use super::port::{PortKind, PortValue};
+pub use super::stream::{TryRecv, TrySend};
+use super::stream::{ChannelId, StreamHub, WorkerId};
 use super::runtime::{DataflowOutput, DataflowRuntime};
 use super::services::ServiceRegistry;
 
@@ -66,6 +69,8 @@ pub(crate) struct Entry {
     pub(crate) is_alive: Box<dyn Fn() -> bool + Send + Sync>,
     pub(crate) stop: Box<dyn Fn() + Send + Sync>,
     pub(crate) payload: Option<Arc<dyn Any + Send + Sync>>,
+    /// Les poignées des flux d'un run lancé avec eux.
+    live: Option<Live>,
     /// La cause de l'arrêt demandé, la première gagne.
     cause: Mutex<Option<String>>,
 }
@@ -83,7 +88,12 @@ impl Entry {
         stop: Box<dyn Fn() + Send + Sync>,
         payload: Option<Arc<dyn Any + Send + Sync>>,
     ) -> Self {
-        Self { kind, run, parent, caller, tool, message, started: Instant::now(), is_alive, stop, payload, cause: Mutex::new(None) }
+        Self { kind, run, parent, caller, tool, message, started: Instant::now(), is_alive, stop, payload, live: None, cause: Mutex::new(None) }
+    }
+
+    fn with_live(mut self, live: Option<Live>) -> Self {
+        self.live = live;
+        self
     }
 
     fn cause(&self) -> Option<String> {
@@ -239,6 +249,26 @@ impl Registry {
         Ok(())
     }
 
+    /// **Les poignées des flux d'un run lancé**, pour son parent ou son
+    /// appelant seulement : une boucle d'agent les reprend à chaque tour (un
+    /// tour qui finit ne ferme rien).
+    pub fn live(&self, who: &str, by: &str) -> Result<Live, String> {
+        let Some((handle, e)) = self.find(who) else {
+            return Err(format!("aucun run en fond « {who} »"));
+        };
+        if e.parent.as_deref() != Some(by) && e.caller.as_deref() != Some(by) {
+            return Err(format!("#{handle} n'est pas un enfant de « {by} » : ses flux ne lui sont pas donnés"));
+        }
+        e.live.clone().ok_or_else(|| format!("#{handle} a été lancé sans flux"))
+    }
+
+    /// Note la cause d'une fin sans l'arrêter (l'entrée fermée à l'échéance).
+    fn note_cause(&self, handle: &str, cause: &str) {
+        if let Some(e) = self.lock().get(bare(handle)) {
+            e.cause.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(|| cause.to_string());
+        }
+    }
+
     /// Arrête tout ce qui vit, avec la cause dite (l'hôte qui s'arrête).
     pub fn cancel_all(&self, cause: &str) -> usize {
         let vivants = self.alive();
@@ -276,10 +306,133 @@ impl Tie {
 /// Les bornes que l'exécuteur tient (page 03, §2.5).
 #[derive(Clone, Default)]
 pub struct Limits {
-    /// Au-delà, le run est annulé (cause `durée`).
+    /// Au-delà, le run est annulé (cause `durée`). Un run à flux d'entrée voit
+    /// d'abord son entrée fermée (il finit proprement), puis il est annulé
+    /// après `grace` s'il n'a pas fini (page 12-octobre-2026-recherche/04).
     pub max_duration: Option<Duration>,
     /// Combien de runs de cet outil à la fois ; un de trop est refusé.
     pub max_alive: Option<usize>,
+    /// Le délai entre l'entrée fermée à l'échéance et l'annulation (10 s par
+    /// défaut) : un enfant pris dans un long appel au modèle ne lit pas son
+    /// entrée.
+    pub grace: Option<Duration>,
+}
+
+/// Le délai de grâce par défaut, entre l'entrée fermée et l'annulation.
+pub const DEFAULT_GRACE: Duration = Duration::from_secs(10);
+
+/// **Les flux d'un run lancé** (page 12-octobre-2026-recherche/04) : ce qui ne
+/// doit rien perdre passe par un port, jamais par le bus.
+#[derive(Clone, Default)]
+pub struct Streams {
+    /// L'entrée que l'appelant nourrit, `(nœud, port)` libre, de genre `Open` :
+    /// le run vit tant qu'elle est ouverte.
+    pub input: Option<(String, String)>,
+    /// La sortie que l'appelant lit, `(nœud, port)` de flux.
+    pub output: Option<(String, String)>,
+}
+
+/// **Le flux d'entrée d'un run lancé**, côté appelant. Ses clones partagent
+/// tout : la chute d'une poignée ne ferme rien ; le flux se ferme par
+/// [`LiveIn::close`], par l'annulation, par la durée, ou à la fin du run.
+#[derive(Clone)]
+pub struct LiveIn {
+    hub: StreamHub<PortValue>,
+    worker: WorkerId,
+    chan: ChannelId,
+    closed: Arc<std::sync::atomic::AtomicBool>,
+    /// Un acteur à lui (une poignée passée à un autre fil) : il quitte le hub
+    /// à sa fermeture.
+    own: bool,
+}
+
+impl LiveIn {
+    /// Bloque tant que le canal est plein : le refoulement traverse la
+    /// frontière. `Err` : le run a fini (`NoReader`) ou est annulé.
+    pub fn send(&self, v: PortValue) -> Result<(), Stopped> {
+        self.hub.send(self.worker, &[self.chan], v)
+    }
+
+    /// Sans attendre : `Full(v)` rend la valeur si le canal est plein. C'est
+    /// la forme d'une boucle d'agent, qui ne bloque pas son tour.
+    pub fn try_send(&self, v: PortValue) -> Result<(), TrySend<PortValue>> {
+        self.hub.try_send(&[self.chan], v)
+    }
+
+    /// Au plus `d`, puis `Full(v)`.
+    pub fn send_timeout(&self, v: PortValue, d: Duration) -> Result<(), TrySend<PortValue>> {
+        self.hub.send_timeout(self.worker, &[self.chan], v, d)
+    }
+
+    /// **Ferme le flux** : l'entrée du run voit sa fin, il finit. Une fois
+    /// pour toutes les poignées ; les suivantes ne font rien. L'appelant reste
+    /// inscrit au hub : il peut encore lire la sortie (un enfant qui attend
+    /// d'écrire pour lui n'est pas interbloqué) ; il le quitte à la fin du run.
+    pub fn close(&self) {
+        if !self.closed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            self.hub.release_sender(self.chan);
+        }
+        if self.own {
+            self.hub.worker_done(self.worker);
+        }
+    }
+
+    /// **Pour un autre fil** : la même entrée, sous un acteur à lui dans le
+    /// hub. Les poignées rendues par `spawn` et par le registre sont **un**
+    /// acteur, celui d'un appelant à un seul fil (une boucle d'agent) : s'il
+    /// attend une lecture pendant que l'enfant attend son entrée, c'est un
+    /// interblocage, et il est dit. Un appelant qui envoie depuis un fil et lit
+    /// depuis un autre passe l'entrée à son fil d'envoi par cette méthode :
+    /// le lecteur qui attend n'est alors plus pris pour tout l'appelant.
+    /// Cet acteur quitte le hub à [`Self::close`].
+    pub fn for_another_thread(&self) -> LiveIn {
+        let worker = self.hub.worker("appelant (un autre fil)");
+        LiveIn { worker, own: true, ..self.clone() }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// **Le flux de sortie d'un run lancé**, côté appelant.
+#[derive(Clone)]
+pub struct LiveOut {
+    hub: StreamHub<PortValue>,
+    worker: WorkerId,
+    chan: ChannelId,
+}
+
+impl LiveOut {
+    /// `Ok(Some(v))` un élément, `Ok(None)` le run a fini son flux, `Err` il a
+    /// été annulé (et voici pourquoi).
+    pub fn recv(&self) -> Result<Option<PortValue>, CancelCause> {
+        self.hub.recv_any(self.worker, &[self.chan]).map(|o| o.map(|(_, v)| v)).map_err(|c| c.0)
+    }
+
+    /// Sans attendre : `Err(Empty)` rien pour l'instant. La boucle d'agent le
+    /// lit à la frontière du tour, et **le vide avant chaque envoi**.
+    pub fn try_recv(&self) -> Result<Option<PortValue>, TryRecv> {
+        self.hub.try_recv(&[self.chan]).map(|o| o.map(|(_, v)| v))
+    }
+
+    /// Au plus `d`, puis `Err(Empty)`.
+    pub fn recv_timeout(&self, d: Duration) -> Result<Option<PortValue>, TryRecv> {
+        self.hub.recv_timeout(self.worker, &[self.chan], d).map(|o| o.map(|(_, v)| v))
+    }
+}
+
+/// Les deux poignées d'un run lancé avec ses flux.
+#[derive(Clone, Default)]
+pub struct Live {
+    pub input: Option<LiveIn>,
+    pub output: Option<LiveOut>,
+}
+
+impl std::fmt::Debug for Live {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Live {{ entrée: {}, sortie: {} }}", self.input.is_some(), self.output.is_some())
+    }
 }
 
 /// Le rendu de la sortie d'un run fini, pour le message de fin.
@@ -303,6 +456,8 @@ pub struct Spawn {
     /// Le rendu du résultat ; sans lui, les sorties de texte ou de JSON du
     /// graphe, en objet `nœud.port`.
     pub render: Option<Render>,
+    /// Les flux que l'appelant nourrit et lit (le second temps).
+    pub streams: Streams,
 }
 
 /// Ce que l'appelant reçoit tout de suite.
@@ -310,6 +465,10 @@ pub struct Spawn {
 pub struct Launched {
     pub run: String,
     pub handle: String,
+    /// Les poignées des flux, si le lancement en a demandé ; aussi tenues par
+    /// le registre ([`Registry::live`]), pour un appelant qui vit plus d'un
+    /// tour.
+    pub live: Option<Live>,
 }
 
 fn head(text: &str, n: usize) -> String {
@@ -417,11 +576,43 @@ impl DataflowRuntime {
             }
         }
         let message_head = spec.message.as_ref().map(|m| head(&message_text(m), 120)).unwrap_or_default();
-        if let Some(m) = spec.message {
+        let handle = registry.free_handle(spec.handle.as_deref().unwrap_or(&spec.tool));
+        // **Les flux** : un hub à ce run, ses canaux d'entrée et de sortie, et un
+        // ouvrier extérieur pour l'appelant. Il est vivant tant que l'entrée est
+        // ouverte et n'attend que pendant un `send`/`recv` : un appelant qui
+        // pense n'est pas un interblocage. Un message donné avec un flux
+        // d'entrée en est le premier élément.
+        let mut message = spec.message;
+        let mut wired: Option<(Outer, HashMap<(String, String), PortKind>, Live)> = None;
+        if spec.streams.input.is_some() || spec.streams.output.is_some() {
+            let capacity = self.services.get::<usize>("stream_capacity").copied().unwrap_or(64);
+            let hub = StreamHub::<PortValue>::new();
+            let external = hub.worker(format!("appelant de #{handle}"));
+            let leave = hub.worker(format!("lancement de #{handle}"));
+            let mut inputs = HashMap::new();
+            let mut free = HashMap::new();
+            let mut live = Live::default();
+            if let Some((node, port)) = &spec.streams.input {
+                let ch = hub.channel(format!("appelant → {node}.{port}"), capacity, 1, 1);
+                let first: std::collections::VecDeque<PortValue> = message.take().into_iter().collect();
+                inputs.insert((node.clone(), port.clone()), (vec![ch], first));
+                free.insert((node.clone(), port.clone()), PortKind::Open);
+                live.input = Some(LiveIn { hub: hub.clone(), worker: external, chan: ch, closed: Default::default(), own: false });
+            }
+            let mut outputs = HashMap::new();
+            if let Some((node, port)) = &spec.streams.output {
+                let ch = hub.channel(format!("{node}.{port} → appelant"), capacity, 1, 1);
+                outputs.insert((node.clone(), port.clone()), vec![ch]);
+                live.output = Some(LiveOut { hub: hub.clone(), worker: external, chan: ch });
+            }
+            let outer = Outer { hub, leave, prefix: format!("#{handle}"), inputs, outputs };
+            wired = Some((outer, free, live));
+        }
+        if let Some(m) = message {
             let (node, port) = message_target(&graph)?;
             graph.set_initial_input(&node, &port, m);
         }
-        let handle = registry.free_handle(spec.handle.as_deref().unwrap_or(&spec.tool));
+        let live = wired.as_ref().map(|(_, _, l)| l.clone());
         let run = crate::events::new_run_id(&spec.tool);
 
         let mut layer = ServiceRegistry::layered(self.services.clone());
@@ -447,7 +638,8 @@ impl DataflowRuntime {
         };
         registry.insert(
             &handle,
-            Entry::new(Kind::Graph, run.clone(), spec.parent_run.clone(), spec.caller.clone(), spec.tool.clone(), message_head, is_alive, stop, None),
+            Entry::new(Kind::Graph, run.clone(), spec.parent_run.clone(), spec.caller.clone(), spec.tool.clone(), message_head, is_alive, stop, None)
+                .with_live(live.clone()),
         );
         // Le début, avant de rendre : un lecteur du bus ne voit jamais une fin sans début.
         self.emit_run_started(&run, &graph);
@@ -466,23 +658,60 @@ impl DataflowRuntime {
         let (fini_tx, fini_rx) = std::sync::mpsc::channel::<()>();
         if let Some(d) = spec.limits.max_duration {
             let (registry, minuteur) = (registry.clone(), handle.clone());
+            let entree = live.as_ref().and_then(|l| l.input.clone());
+            let grace = spec.limits.grace.unwrap_or(DEFAULT_GRACE);
+            // **Le minuteur est un acteur du hub** : tant qu'il n'a pas agi, un
+            // appelant qui attend ce que seule l'échéance débloquera n'est pas
+            // un interblocage. Il s'inscrit vivant, et part quand il a agi.
+            let inscrit = entree.as_ref().map(|e| (e.hub.clone(), e.hub.worker(format!("minuteur de #{handle}"))));
             std::thread::Builder::new()
                 .name(format!("fond-duree-{handle}"))
                 .spawn(move || {
-                    if fini_rx.recv_timeout(d).is_err() {
-                        let _ = registry.cancel(&minuteur, "durée", None);
+                    let part = |inscrit: &Option<(StreamHub<PortValue>, WorkerId)>| {
+                        if let Some((hub, w)) = inscrit {
+                            hub.worker_done(*w);
+                        }
+                    };
+                    if fini_rx.recv_timeout(d).is_ok() {
+                        return part(&inscrit);
                     }
+                    // Un run à flux d'entrée : l'entrée fermée d'abord (il finit
+                    // proprement), l'annulation après la grâce s'il n'a pas fini.
+                    if let Some(entree) = entree {
+                        registry.note_cause(&minuteur, "durée");
+                        entree.close();
+                        if fini_rx.recv_timeout(grace).is_ok() {
+                            return part(&inscrit);
+                        }
+                    }
+                    let _ = registry.cancel(&minuteur, "durée", None);
+                    part(&inscrit);
                 })
                 .map_err(|e| format!("le minuteur de #{handle} n'a pas pu partir : {e}"))?;
         }
 
-        let launched = Launched { run: run.clone(), handle: format!("#{handle}") };
+        let launched = Launched { run: run.clone(), handle: format!("#{handle}"), live: live.clone() };
         let (tool, caller, render) = (spec.tool, spec.caller, spec.render);
         std::thread::Builder::new()
             .name(format!("fond-{handle}"))
             .spawn(move || {
                 let started = Instant::now();
-                let result = crate::dataflow::rt::bloquer("spawn", self.execute_inner(&mut graph, &run)).and_then(|r| r);
+                let result = match wired {
+                    Some((outer, free, _)) => self.execute_spawned(&mut graph, &run, outer, free),
+                    None => crate::dataflow::rt::bloquer("spawn", self.execute_inner(&mut graph, &run)).and_then(|r| r),
+                };
+                // Le run a fini : son entrée aussi (une poignée reprise plus
+                // tard voit `NoReader`, et l'ouvrier extérieur quitte le hub).
+                if let Some(l) = &live {
+                    if let Some(entree) = &l.input {
+                        entree.close();
+                    }
+                    // L'appelant quitte le hub avec la fin du run.
+                    let ouvrier = l.input.as_ref().map(|e| (e.hub.clone(), e.worker)).or_else(|| l.output.as_ref().map(|s| (s.hub.clone(), s.worker)));
+                    if let Some((hub, w)) = ouvrier {
+                        hub.worker_done(w);
+                    }
+                }
                 let cause = registry.cause_of(&handle);
                 let (statut, ok) = match &result {
                     Ok(out) if out.stopped().is_some() => ("annulé", false),
@@ -500,7 +729,9 @@ impl DataflowRuntime {
                     Err(e) => content["erreur"] = json!(e),
                     _ => {}
                 }
-                let cause = if statut == "annulé" { cause.or_else(|| Some("demande".into())) } else { None };
+                // Une fin ordinaire peut avoir une cause : l'entrée fermée à
+                // l'échéance (`durée`).
+                let cause = if statut == "annulé" { cause.or_else(|| Some("demande".into())) } else { cause };
                 if let Some(c) = &cause {
                     content["cause"] = json!(c);
                 }

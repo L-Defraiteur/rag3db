@@ -199,3 +199,101 @@ l'annuaire serait un lot à part, si un gabarit le demande.
 3. **Le correctif de la boîte qui déborde** (`6858a9ebb`, en cours sur
    `boite-pleine`) : il touche `agent.rs`. Cette page en dépend pour que
    les pertes du bus soient dites ; elle ne le refait pas.
+
+## 7. Les décisions (orchestration et proto, 12 octobre)
+
+**De l'orchestration** :
+1. **`SpawnNode` en mode flux par un réglage**, pas un nœud à part : un seul
+   nœud, deux postures, comme pour les ports.
+2. **La durée ferme l'entrée** : le run finit proprement et rend sa fin.
+   L'annulation reste le geste explicite.
+3. **Le correctif de la boîte qui déborde est au proto** : `dab191e43`, sur
+   master avant mes témoins. Sur `Overflowed(n)`, l'agent reçoit un tour qui
+   dit les messages perdus, et un avertissement part sur le bus.
+
+**Du proto**, ses trois objections, retenues :
+1. **Le registre tient les poignées, pas la boucle.** L'agent d'un chat ne
+   vit qu'un tour. Si la boucle tenait `LiveIn`, sa chute fermerait le flux
+   à chaque fin de tour. L'entrée du run lancé garde donc `LiveIn` et
+   `LiveOut`, partagés. `Registry::live(poignée, par)` les rend à chaque
+   tour, au parent ou à l'appelant seulement. **La chute d'une poignée ne
+   ferme rien** : le flux se ferme par `close`, par l'annulation, par la
+   durée, ou à la fin du run. C'est la même idée que la boîte par nom : ce
+   qui dure plus qu'un tour vit hors de la boucle.
+2. **La durée ferme, puis annule après la grâce** (`Limits::grace`, 10 s
+   par défaut), avec la cause `durée` dans les deux cas. Un enfant pris dans
+   un long appel au modèle ne lit pas son entrée, et ne finirait jamais.
+3. **Les deux canaux ne doivent pas interbloquer une boucle d'agent.** Les
+   poignées offrent `try_send`, `send_timeout`, `try_recv` et
+   `recv_timeout` ; les formes bloquantes restent pour un graphe.
+   **La règle de la boucle : vider `LiveOut` avant chaque envoi.** Le
+   détecteur d'interblocage reste le filet de ce qui bloque quand même : un
+   appelant en `recv` sur un enfant qui attend son entrée est dit.
+
+**Ce qui change dans la forme du §2** :
+- `LiveIn` n'a plus de `Drop` qui ferme.
+- Le témoin 5 devient « un tour qui finit ne ferme rien, et le tour suivant
+  reprend les poignées par le registre ».
+- Le §2.3 s'entend avec ces poignées reprises, et non gardées.
+
+## 8. Fait (12 octobre, après-midi)
+
+**La primitive** (`src/dataflow/background.rs`) :
+- `Spawn::streams` : l'entrée et la sortie, par `(nœud, port)`.
+- `Launched::live` et `Registry::live(poignée, par)`, qui rendent les
+  poignées au parent ou à l'appelant seulement.
+- `LiveIn` : `send` (qui refoule), `try_send`, `send_timeout`, `close`,
+  `for_another_thread`.
+- `LiveOut` : `recv`, `try_recv`, `recv_timeout`. Elles rendent un élément,
+  la fin, ou l'annulation avec sa cause.
+- `Limits::grace`.
+
+Le mécanisme est le pont des sous-graphes, sur un hub propre au run lancé
+(`execute_spawned`, qui arme ce hub pour l'annulation du registre). Le hub a
+reçu `try_send`, `send_timeout`, `try_recv` et `recv_timeout` ; une attente
+bornée compte pour le détecteur comme une autre. Un message donné avec un
+flux d'entrée en est le premier élément.
+
+**Ce que les témoins ont appris** (quatre défauts trouvés en les écrivant,
+tous corrigés avant le commit) :
+- **La validation** refusait l'entrée nourrie par l'appelant (« required
+  input … not connected »). `validate_with` la compte comme branchée.
+- **`close` ne fait pas quitter le hub à l'appelant** : il peut encore lire
+  la sortie, et un enfant qui attend d'écrire pour lui n'est pas interbloqué.
+  L'appelant quitte le hub à la fin du run.
+- **Le minuteur de la durée est un acteur du hub**, inscrit vivant jusqu'à
+  ce qu'il ait agi. Un appelant qui attend ce que seule l'échéance
+  débloquera n'est pas un interblocage.
+- **Un appelant à deux fils est deux acteurs.** Les poignées rendues par
+  `spawn` et par le registre sont **un** acteur, celui d'un appelant à un
+  seul fil (une boucle d'agent) : s'il attend une lecture pendant que
+  l'enfant attend son entrée, l'interblocage est dit (témoin 3). Un appelant
+  qui envoie depuis un fil et lit depuis un autre passe l'entrée à son fil
+  par `for_another_thread`. Sans cela, son lecteur qui attend était pris
+  pour tout l'appelant : c'est le rouge de la mesure, devenu un témoin.
+- **L'exécuteur lit lui-même le premier élément** d'une entrée requise lue
+  élément par élément, avant de lancer le nœud. Un run lancé en flux dont
+  l'entrée se ferme avant tout message est donc sauté, et finit tout de
+  suite : c'est le comportement des flux ordinaires, dit ici.
+
+**`SpawnNode` en mode flux** (`stream`, `reply_port`, `grace_s`) : un seul
+lancement au premier message, les suivants par l'entrée du run, les réponses
+sur `replies`, et la fin de `message` qui ferme la conversation. En appelant
+qui ne bloque pas son enfant, il vide les réponses avant chaque envoi et
+envoie par tentatives bornées.
+
+**Les témoins** (`background/tests.rs`, `spawn_nodes/tests.rs`) : les huit
+du §4, plus « deux fils, deux acteurs ». Ils sont verts vingt fois de suite.
+Le témoin 8, sur le vrai modèle, pose trois questions l'une après l'autre
+à qwen3-1.7b sous `llama-server` : « Paris » en 0,74 s, « 4 » en 1,05 s,
+« Rhône » en 1,41 s. La fermeture fait finir le run.
+
+**La mesure** (`measure_the_boundary`, debug) :
+
+| | |
+|---|---|
+| aller-retour d'un message (`send` puis `recv`) | 7,8 µs en médiane, 25 µs au 99e centile |
+| 10 000 messages en continu (un fil envoie, l'autre lit) | 5,5 µs par message, **aucun perdu** |
+
+Pour comparer, le bus, au-delà de 64 en attente, en a perdu 1 932 sur 2 000
+(page 01, §8). La règle du §0 a ses deux chiffres.

@@ -401,7 +401,10 @@ interrompre, c'est fermer un flux avant sa fin ; la politique de livraison,
 c'est quand le nœud modèle lit le flux des pairs ; un agent lancé vit tant
 qu'un de ses flux d'entrée est ouvert ; la voix et le son (STT, TTS) sont
 des ports de flux ordinaires ; le playground à acteurs en est l'exécuteur
-naturel. Consigne de méthode, dite avec : « la complexité n'est jamais un
+naturel. **Ce qui ne doit rien perdre passe par un port, jamais par le bus** :
+un port refoule jusqu'au producteur, le bus écrase les plus anciens et le dit
+— il sert à observer (mesuré le 12 octobre, page
+`docs/12-octobre-2026-recherche/04-la-boite-en-flux-ouvert.md`). Consigne de méthode, dite avec : « la complexité n'est jamais un
 argument, l'important c'est que ce soit au top » — la parité prouvée avec la
 boucle d'aujourd'hui en est la condition, pas la charge de l'exécuteur.
 Chantier ouvert chez la session du proto tout déclaratif le 11 octobre
