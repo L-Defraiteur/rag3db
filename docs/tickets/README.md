@@ -65,13 +65,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (32)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un tenant de push tué rend le verrou pendant que sa commande pousse, et une attente de poste ne s'annule pas](2026-10-12-un-tenant-de-push-tue-rend-le-verrou-et-une-attente-est-sourde.md) | ouvert — optimiseur | réponse fausse, blocage | oui, sur les deux postes | oui (`poste`) |
 | [Des morceaux de code sont écrits sans texte : 20 % de code-rag3db](2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md) | ouvert — l'arbre principal | réponse fausse, et blocage (le gel de code-lourd) | oui | oui |
 | [Le test de réconciliation de la montre lit l'état d'un index occupé, et échoue une fois sur cinq](2026-10-11-le-test-de-reconciliation-de-la-montre-lit-un-index-occupe.md) | ouvert — pour l'auteur de la montre | test instable ; le reçu occupé ne dit pas les montres | non (le test) | oui (`backend.rs`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
