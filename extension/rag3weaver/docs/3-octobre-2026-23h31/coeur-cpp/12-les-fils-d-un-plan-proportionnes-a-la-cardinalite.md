@@ -230,3 +230,45 @@ résultats) :
 - Ce qui reste hors de la règle, par construction : ce qui n'a pas d'estimation (les
   fonctions de table : `QUERY_VECTOR_INDEX` connaît son k, un CALL simple rend une ligne — le
   second pas de §8), et le balayage sous masque (§7, autre lot).
+
+## 10. Le balayage sous un petit masque : ce que fait le code, et la forme **[lu, à coder]**
+
+**Ce que fait le code aujourd'hui** (lecture du 12 octobre, master dda63783a) :
+
+- Le masque (`SemiMask`, `common/mask.h`, bitmap Roaring) est créé par `mapScanNodeTable` à la
+  taille de la table (`createMask(numTotalRows)`), un par table dans `ScanNodeTableSharedState`,
+  rempli par le `SemiMasker` (un masque local par fil, `fastunion` à la fin), branché par
+  `mapSemiMasker`. Son API : `isMasked`, `range(start, end)` (les décalages posés, triés),
+  `getNumMaskedNodes()`, `collectMaskedNodes(n)` ; pas de min/max exposés (le `roaring` l'a).
+- **Le morsel d'un balayage est un groupe entier** (2^17 lignes) ; le masque n'intervient pas dans
+  le choix des groupes. Dans `NodeGroup::scan`, par fenêtre de 2 048, `applySemiMaskFilter` fusionne
+  les décalages masqués dans la sélection ; **si la fenêtre n'en a aucun, elle est sautée ; sinon
+  `ChunkedNodeGroup::scan` écrase la sélection** (`setToUnfiltered(numRowsToScan)`, ou celle des
+  versions) et lit les 2 048 lignes de toutes les colonnes. Le masque ne sert donc qu'à sauter les
+  fenêtres vides : 117 décalages tous les 615 touchent presque toutes les fenêtres → ≈ N lignes
+  lues et sorties (le fait du §7). Le filtrage réel se fait au `HASH_JOIN_PROBE`. Forme de
+  l'amont (2024).
+- **Un chemin par décalages existe** : `NodeTable::lookupMultiple(tx, state)` (node_table.cpp:422)
+  parcourt la sélection de `nodeIDVector`, ne réinitialise l'état qu'au changement de groupe ou de
+  source, écrit chaque ligne à sa position ; COMMITTED et UNCOMMITTED. Personne ne l'appelle pour
+  les nœuds (seules les relations). `PRIMARY_KEY_SCAN` et `INDEX_SCAN` font un `lookup` par ligne.
+- **La cardinalité du masque est exacte à l'exécution** : le pipeline du masqueur est finalisé avant
+  celui du balayage ; dans `ScanNodeTable::initGlobalStateInternal` (ou
+  `ScanNodeTableSharedState::initialize`), `semiMask->isEnabled()` et `getNumMaskedNodes()` sont
+  connus, contre `table->getNumTotalRows(tx)`. Pas besoin d'estimation : le vrai nombre.
+
+**La forme** : dans `ScanNodeTableSharedState`, au moment de `initialize`, si le masque est actif et
+petit — `getNumMaskedNodes() × SEUIL < numTotalRows` (seuil 64 : un décalage par 64 lignes, soit
+moins d'une ligne utile par fenêtre de 2 048 sur 32) — le balayage passe en **mode décalages** :
+les morsels sont des tranches de ≤ 2 048 décalages du masque (`range` par pas, ou l'itérateur
+roaring), chaque fil remplit `nodeIDVector` (sélection = la tranche) et appelle `lookupMultiple` ;
+`numOutputTuple` compte les lignes rendues. Sinon, le chemin d'aujourd'hui. Les lignes non visibles
+(versions) sont rendues nulles par `lookupMultiple` — à retirer de la sélection avant de sortir (la
+valeur de retour compte les nuls comme des échecs : à lire, pas à croire). Le témoin du banc
+`MaskedScan.ReadsAboutTheMaskNotTheTable` (known_red `scan-reads-the-mask`) demande
+`NumOutputTuples ≤ 10·k` sous le `SCAN_NODE_TABLE` : la lecture par décalages le rend ; réparer
+seulement le saut par fenêtre ne suffirait pas (117 décalages touchent toutes les fenêtres).
+Mesure avant/après : `MaskedScan.MeasureAtOneAndThirtyTwoThreads` (5,07 / 5,24 ms à 1 / 32 fils
+sur le lot des fils, 67 584 lignes lues) et la mesure d'usages de F (367 à 399 ms en médiane sur la
+copie de l'index entier). Garde : le témoin lit le premier `NumOutputTuples` sous
+« SCAN_NODE_TABLE », que `PRIMARY_KEY_SCAN_NODE_TABLE` contient aussi — à resserrer au banc.

@@ -28,3 +28,16 @@ chargée est <id> : rebâtissez-le ») au lieu d'un symbole manquant. Le magasin
 identifiant de bâti, en discussion à l'orchestration, ferait disparaître le cas.
 
 Témoin : un binaire de test bâti avec un identifiant attendu faux refuse en nommant les deux.
+
+## Réserve lue le 12 octobre 2026 (arbre principal, 2 h 34)
+
+La surcharge de l'ancienne signature de `SystemConfig` (lot ABI, master 2bc7b4a3b) fait **se
+charger** un binaire d'avant B2, pas **tourner** : l'ancien binaire de Lucie du 11 octobre 13 h 21
+(`~/.local/bin/rag3weaver-backend.avant-marche-4`), lancé sur une lib qui porte la surcharge, plante
+en `malloc(): invalid size (unsorted)` à l'ouverture — la **disposition** de `SystemConfig` a changé
+avec `fileLockWaitMs`, et le binaire d'avant la lit avec son ancienne taille. Règle : **un changement
+de disposition d'un type exporté est un changement d'ABI ; la surcharge n'y suffit pas ; le refus
+nommé fait foi** (la section ELF `.rag3db_build_id` de la recherche et `rag3db-check-lib`, qui
+refusent en nommant les deux identifiants avant le chargeur, plus le filet dans le processus). La
+surcharge reste utile aux binaires qui ne touchent pas à la disposition (ceux qui ne construisent
+pas `SystemConfig` eux-mêmes). Rien à changer dans le code.

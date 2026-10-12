@@ -1180,3 +1180,57 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   côté master puis recompter. Remonté par F, en ticket à mon nom : un SIGSEGV sur un agrégat de
   80 000 lignes qui rend des textes longs (`content`, `docstring`), vu une fois ; à rejouer sur un
   reflink de sa copie, sous gdb.
+- **Réserve sur le lot ABI** (arbre principal, 2 h 34) : la surcharge fait charger un binaire
+  d'avant B2, pas tourner (l'ancien binaire de Lucie plante en `malloc(): invalid size` à
+  l'ouverture : la disposition de `SystemConfig` a changé avec `fileLockWaitMs`). Un changement de
+  disposition d'un type exporté est un changement d'ABI ; la surcharge n'y suffit pas ; le refus
+  nommé (`.rag3db_build_id`, `rag3db-check-lib`) fait foi. Écrit au ticket de la lib d'une autre ABI.
+
+## Nuit, fin (12 octobre 2026, 2 h 25 à 3 h 50) — le SIGSEGV de F et le P1 : une seule cause, la lecture
+
+- **Le fait** : la requête de F (agrégat sur 80 000 Scope qui rend `content`) plante en une seconde
+  sur le reflink de sa copie ; `MATCH (s:Scope) RETURN s.content` suffit ; `count(s.content)` passe
+  (rien ne lit les octets). Pile : le memcpy de l'append du collecteur lit une chaîne de
+  1 944 551 octets à une adresse qui n'est plus mappée. `catch syscall munmap` sous gdb (boucle
+  python) nomme le libérateur : `TableScanState::resetOutVectors` → `InMemOverflowBuffer::resetBuffer`
+  au début de la fenêtre suivante (le bloc d'une chaîne > 256 Ko est à part, malloc, rendu au
+  système). Avec `MALLOC_MMAP_THRESHOLD_` énorme (mémoire gardée lisible) la lecture passe et dit la
+  vérité : **5 lignes sur 81 407 rendent une autre chaîne que leur relecture par clé** — 64339 montre
+  les 1 944 551 octets de 62291 (2 048 plus tôt : même position de fenêtre) pour 271 par clé ;
+  80401 les 471 593 de 78353 pour 78. Une lecture fausse sans aucun signe, pire qu'un vide.
+- **La cause** : `StringColumn::scanFiltered` (le chemin pris quand un groupe porte des versions —
+  lignes supprimées ou écrites sous transaction ; la réingestion de F et de Lucie supprime et
+  recrée) ignore `numValuesToScan` et borne par `startOffsetInChunk + pos < numValues` : juste pour
+  le premier segment d'une fenêtre, fausse pour un second segment plus court que la position — ces
+  positions ne sont pas écrites, le vecteur garde la fenêtre d'avant, ou rien. Trois conditions :
+  colonne STRING (ou LIST, même borne dans `ListColumn::scanFiltered`), sélection filtrée, fenêtre à
+  cheval sur deux segments dont le second est court (un groupe écrit en plusieurs fois, puis des
+  points de reprise). Venu de l'amont (« Segmentation », B. Winger, 18 septembre 2025). C'est le P1
+  tel que l'arbre principal l'a cerné (vides par plages aux frontières, dans la zone des premiers
+  groupes complétés, 0 sur un index neuf, le texte intact par clé).
+- **Le correctif** (`scan-filtre-chaines`, 6bcf4dbae local) : les positions sélectionnées de
+  `[offsetInResult, offsetInResult + numValuesToScan)`, chaînes et listes. Preuve sur la copie de
+  F : la requête d'origine passe (81 398 lignes), **parité octet à octet balayage contre relecture
+  par clé : 0 écart sur content, docstring, name (81 407 lignes)**. Deux tickets fermés dans le lot
+  (le SIGSEGV, les morceaux sans texte). Témoin unique écrit par le banc (second segment court,
+  suppression, balayage contre clé, LIST, arrêt et rejeu), repris par cherry-pick ; suites du moteur
+  en cours. Le balayage sous masque (page 12 §7) ne passe par ce chemin que si le groupe porte des
+  versions : le coût ne change pas.
+- **La forme minimale** (3 h 26, un programme lié à la lib, bâti sans puis avec le correctif) :
+  6 000 lignes de chaînes de 200 octets, `CHECKPOINT` (5 segments de ~1 250 lignes : **les segments
+  viennent de la taille**, `ColumnChunkData::split` à ≤ min(taille/2, 256 Ko), pas du nombre de
+  COPY), une ligne supprimée dans la fenêtre lue → sans correctif les lignes 1250 à 2047 de la
+  fenêtre sont lues **vides** (le « vide » du P1), et une suppression dans la fenêtre suivante y
+  fait rendre la chaîne d'une autre ligne ; avec le correctif, 0 faux. Le premier témoin du banc
+  (chaînes courtes, un seul segment) restait vert sans correctif : réécrit sur cette recette, avec
+  `storage_info` comme contrôle de forme. Piège de la nuit : `--target <test>` ne relie pas la lib
+  (un « rouge » joué sur la lib corrigée) ; et sous zsh une variable non citée ne se découpe pas
+  (mon programme lisait un argument nul : le « plantage » était le mien).
+- **Le lot du balayage filtré est sur master `e6f626df4`** (3 h 47 : f6179ade0 le correctif, e6f626df4
+  le témoin du banc ; rejeu local sur 38a95fa9b : transaction 267, api 105, planner 2, e2e Cypher
+  1 867, banc 8 rouges attendus / 264 verts). Relecture rendue à hotfixs sur son pas 1 « DDL contre
+  la recherche » (shared_mutex sur les index, shared_ptr capturé, identité par entrée de catalogue,
+  refus nommé) : juste, trois remarques (référence rendue hors verrou, `getIndexes()` nu pour les
+  écrivains, la capture de VECTOR_SEARCH à garder dans le bind data) ; forme du pas 2 (la rétention
+  jusqu'au point de reprise, comme les tables) convenue. Suite : le balayage sous masque (page 12
+  §10).
