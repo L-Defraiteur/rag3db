@@ -296,3 +296,29 @@ l'autre ; c'est à chercher dans le stockage des colonnes chaînes (segments, di
 5. compter `_text = ''` par tranche de 2 048 offsets.
 
 Côté produit, la réécriture des morceaux vides (`7b54c5f84`) répare les bases touchées.
+
+### La cause : le balayage des chaînes, pas le stockage (cœur, 12 octobre, 3 h)
+
+**Les données sur disque sont intactes.** C'est le balayage qui rend de fausses chaînes.
+`StringColumn::scanFiltered` (`string_column.cpp:240`) est pris quand un groupe porte des versions
+(lignes supprimées ou écrites sous transaction). Il borne la fenêtre par
+`startOffsetInChunk + pos < numValues` au lieu de `pos - offsetInResult < numValuesToScan`. Quand
+une fenêtre de 2 048 chevauche deux segments d'un groupe (un COPY, puis des points de reprise qui le
+complètent), les positions de fin de fenêtre ne sont pas écrites dans le vecteur. Celui-ci garde la
+valeur d'avant ou rien, d'où le « vide ». La relecture par clé passe par un autre chemin et est
+juste. Sur la copie de F, 5 lignes sur 81 407 rendent la chaîne d'une ligne située exactement 2 048
+plus tôt.
+
+Ce qui s'explique : les vides par plages dans les premiers groupes complétés ; 0 vide sur un index
+neuf (un seul segment, aucune version) ; le texte présent au calcul du vecteur ; **la boucle de
+luciepc** (`run_index` relit `_text` par balayage, le lit vide, le saute et reprend).
+
+**Conséquences côté produit :**
+1. **La réécriture des morceaux vides (`7b54c5f84`) est suspendue** tant que la lib n'a pas le
+   correctif. Elle relit l'entité par balayage et pourrait écrire une fausse chaîne dans `_text`.
+2. Les défenses de `ab12bd4c2` restent justes : un vide lu ne boucle plus et se compte. Le lot
+   « complet compte `_text` » aussi : un vide lu fait redécouper depuis les enregistrements
+   entrants, jamais depuis une relecture.
+3. **Fermeture du ticket** : sur le correctif moteur du cœur (branche `scan-filtre-chaines`, témoin
+   gtest), la lib rebâtie, et un recomptage de la copie scellée de F avec la lib corrigée. On attend
+   0, sans rien réécrire.
