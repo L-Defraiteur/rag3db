@@ -57,8 +57,18 @@ L'arbre principal a écrit deux défenses, qui vont sur master ce soir : la réc
 5 bis. **La lib commune de luciepc porte le correctif du balayage filtré** (master ≥ `e6f626df4`),
    rebâtie par hotfixs après l'arrêt de l'hôte, **avant** toute réindexation : sans lui, la passe
    de vecteurs relit des textes vides et reboucle. Le binaire prêt de G est bâti contre elle.
+5 ter. **Les tests par requêtes** (arbre principal, 94e21b066 : `impact lockIndexForWrite` passe de
+   1 test à 204) : le bloc `workspace.queries_via` du dépôt rag3db dans les deux manifestes, avant la
+   réindexation. Le script garde une sauvegarde `.avant-queries-via` et redit le diff (déjà relu :
+   le bloc seul, `queries-via-diff-lourd.txt` et `-principal.txt` à côté) :
+   `cd ~/.cache/codeparsers-notes && for n in lourd principal; do python3 poser-queries-via.py gabarit-code-38b1c9f51.json ~/.config/rag3weaver/code-$n/templates/backends/code/backend.json --appliquer; done`.
 6. La réindexation des deux bases, par codeparsers, avec ce binaire : dis-moi que l'hôte est
    reparti. `code-principal` sert au cœur : l'heure s'accorde avec lui.
+
+**Sur ce poste-ci, une base à trancher** : `~/.config/rag3weaver/code-rag3db/templates/backends/code/backend.json`
+vise une petite base ancienne, `~/.local/share/rag3weaver/code-rag3db.rag3db` (3,5 Mo, du 11 à
+16 h 55), à côté du vrai manifeste `rag3db.json` (base `code-rag3db-depot`). À toi de dire si on la
+jette, elle et son manifeste.
 
 Après l'arrêt, le cœur et hotfixs rebâtissent la lib de `rag3db-lourd` (ils attendent ce
 signal). Le ticket :
