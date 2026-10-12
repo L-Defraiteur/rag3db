@@ -413,20 +413,23 @@ pub fn service_attached() -> bool {
 ///
 /// `rate` : le débit **brut** de l'embarqueur (noté en base, ou tout juste
 /// sondé) ; `remote` : il vit ailleurs (`Embedder::distant`), le régulateur
-/// d'ici ne le ralentit pas.
+/// d'ici ne le ralentit pas ; `declared` : le modèle déclaré au manifeste,
+/// qui gagne sur la variable et l'heuristique.
 pub fn estimate_here(
     files: &[(String, u64)],
     excluded: &[(String, &'static str)],
     policy: impl Fn(&str, u64) -> Kept,
     rate: Option<Rate>,
     remote: bool,
+    declared: Option<&str>,
 ) -> Estimate {
     let survey = survey(files.iter().map(|(p, b)| (p.as_str(), *b)), policy).with_exclusions(excluded);
     let service = service_attached();
     let card = computing_card(service, crate::regime::card_class_of_this_machine());
     let sole = !service && crate::regime::sole_card_of_this_machine_drives_display();
     let explicit = std::env::var(crate::embedding_choice::MODEL_VARIABLE).ok();
-    let choice = crate::embedding_choice::choose(survey.files, survey.bytes, card, sole, explicit.as_deref());
+    // Le modèle déclaré au manifeste passe avant tout : c'est celui de l'index.
+    let choice = crate::embedding_choice::choose_declared(survey.files, survey.bytes, card, sole, declared, explicit.as_deref());
     let pacing = if remote { None } else { crate::burst::active() };
     let (pool, source) = buffer_pool_here();
     Estimate::new(survey, choice, rate.map(|r| r.paced(pacing)), CONFIRM_ABOVE).with_buffer(pool, source)

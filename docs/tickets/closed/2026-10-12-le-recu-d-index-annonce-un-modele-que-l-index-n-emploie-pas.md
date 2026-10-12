@@ -53,3 +53,14 @@ Passer le modèle déclaré au manifeste à l'estimation, au rang de la précéd
 le reçu et l'estimation nomment alors le modèle qu'emploie l'index, avec la raison « déclaré au
 manifeste », et la durée prévue suit son débit. Signalé à l'arbre principal (`estimate.rs` est à
 lui).
+
+## Fermé (arbre principal, 12 octobre 2026)
+
+Le backend pose le modèle d'embarquement déclaré au manifeste en service
+(`embedding_choice::DECLARED_MODEL_SERVICE`, dans `build_services`). Les nœuds `estimate` et
+`index` le passent à `estimate_here`, qui choisit par `embedding_choice::choose_declared` : le
+modèle déclaré passe avant la variable et l'heuristique, avec la raison « déclaré au manifeste :
+c'est le modèle de l'index ». Hors backend, sans déclaration, l'heuristique reprend la main.
+Témoin : `embedding_choice::tests::le_modele_declare_au_manifeste_gagne_sur_l_heuristique`, où la
+seule carte porte l'affichage. L'heuristique choisirait un autre modèle ; le choix rendu est le
+modèle déclaré, même face à la variable.

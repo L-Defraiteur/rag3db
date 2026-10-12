@@ -53,7 +53,7 @@ fn ce_depot_s_estime_avant_de_s_indexer() {
         [("granite-278m", common::burn::GRANITE_278M.clone()), ("granite-107m", common::burn::GRANITE_107M.clone())];
     for (name, embedder) in embedders {
         let rate = probe_rate(embedder.as_ref(), &samples).expect("sonde");
-        let estimate = estimate_here(&files, &excluded, code_policy, rate, embedder.distant());
+        let estimate = estimate_here(&files, &excluded, code_policy, rate, embedder.distant(), None);
         eprintln!(
             "[estimate] sonde {name} ({}) : {:.0} caractères/s",
             if embedder.distant() { "service" } else { "carte d'ici" },
@@ -553,7 +553,7 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     let corpus = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/daemon");
     let tree = WorkingTree::new(&corpus);
     let (files, excluded) = working_tree_files(&tree).expect("liste");
-    let estimate = estimate_here(&files, &excluded, code_policy, None, true);
+    let estimate = estimate_here(&files, &excluded, code_policy, None, true, None);
 
     let embedder: Arc<dyn Embedder> = common::burn::GRANITE_278M.clone();
     let conn = Rag3dbConnection::in_memory().expect("base en mémoire");

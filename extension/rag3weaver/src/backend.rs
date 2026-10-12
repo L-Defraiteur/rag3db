@@ -2999,6 +2999,9 @@ impl Backend {
         }
         services.register("catalog", self.catalog.clone());
         services.register(crate::read_view::READ_VIEW_SERVICE, self.read_view.clone());
+        // Le modèle d'embarquement déclaré : l'estimation et le reçu de
+        // l'index le nomment, c'est celui qu'emploie l'index.
+        services.register(crate::embedding_choice::DECLARED_MODEL_SERVICE, prepared.embed_source().model.clone());
         if let Some(decider) = &self.decider {
             services.register(crate::decider::DECIDER_SERVICE, decider.clone());
         }

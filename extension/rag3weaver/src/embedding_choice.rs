@@ -180,9 +180,47 @@ pub fn choose(files: usize, source_bytes: u64, card: CardClass, sole_card_drives
     }
 }
 
+/// Le nom du service qui porte le modèle d'embarquement déclaré au manifeste
+/// (`embeddings.model` ou `models.embed.model`), posé par le backend.
+pub const DECLARED_MODEL_SERVICE: &str = "declared_embedding_model";
+
+/// **Le choix, avec le modèle déclaré au manifeste** : il passe avant la
+/// variable et l'heuristique (la précédence du module : le code, puis la
+/// variable, puis l'heuristique, puis le défaut). C'est ce qu'emploie
+/// l'index : le reçu et l'estimation doivent le nommer (ticket du 12 octobre
+/// 2026, « le reçu d'un index annonce un modèle que l'index n'emploie pas »).
+pub fn choose_declared(
+    files: usize,
+    source_bytes: u64,
+    card: CardClass,
+    sole_card_drives_display: bool,
+    declared: Option<&str>,
+    explicit: Option<&str>,
+) -> Choice {
+    match declared.map(str::trim).filter(|v| !v.is_empty()) {
+        Some(model) => Choice { model: model.to_string(), reason: format!("{model} déclaré au manifeste : c'est le modèle de l'index") },
+        None => choose(files, source_bytes, card, sole_card_drives_display, explicit),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Le modèle déclaré gagne**, même quand l'heuristique choisirait un
+    /// autre modèle (la seule carte porte l'affichage) et même devant la
+    /// variable ; sans déclaration, l'heuristique reprend la main.
+    #[test]
+    fn le_modele_declare_au_manifeste_gagne_sur_l_heuristique() {
+        let c = choose_declared(1_642, 0, CardClass::Integrated, true, Some("granite-278m"), None);
+        assert_eq!(c.model, "granite-278m");
+        assert!(c.reason.contains("déclaré au manifeste"), "{}", c.reason);
+        let c = choose_declared(1_642, 0, CardClass::Integrated, true, Some("granite-278m"), Some("granite-107m"));
+        assert_eq!(c.model, "granite-278m", "le code avant la variable");
+        let heuristique = choose(1_642, 0, CardClass::Integrated, true, None);
+        assert_eq!(choose_declared(1_642, 0, CardClass::Integrated, true, None, None).model, heuristique.model);
+        assert_ne!(heuristique.model, "granite-278m", "le cas du ticket : l'heuristique aurait choisi un autre modèle");
+    }
 
     const GIB: u64 = 1024 * 1024 * 1024;
     const MIB: u64 = 1024 * 1024;
