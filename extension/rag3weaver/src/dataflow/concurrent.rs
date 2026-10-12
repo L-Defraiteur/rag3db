@@ -444,6 +444,32 @@ impl DataflowRuntime {
         result
     }
 
+    /// **Un run lancé en fond avec ses flux** (page 12-octobre-2026-recherche/04) :
+    /// le pont vivant sur un hub à lui, créé par `spawn` avec un ouvrier
+    /// extérieur pour l'appelant. À la différence d'un sous-graphe délégué,
+    /// la poignée d'arrêt de ce runtime arme ce hub : l'annulation du
+    /// registre atteint les nœuds et les poignées de l'appelant.
+    pub(crate) fn execute_spawned(
+        &self,
+        graph: &mut DataflowGraph,
+        run_id: &str,
+        outer: Outer,
+        free_inputs: HashMap<(String, String), super::port::PortKind>,
+    ) -> Result<DataflowOutput, String> {
+        let hub = outer.hub.clone();
+        self.cancel.attach(&hub);
+        let start = Instant::now();
+        let fed: Vec<(String, String)> = outer.inputs.keys().cloned().collect();
+        let result = (|| {
+            graph.validate_with(&fed)?;
+            let stream_ports = super::runtime::stream_ports_of_with(graph, &free_inputs)?;
+            let initial = std::mem::take(&mut graph.initial_inputs);
+            self.execute_concurrent(graph, run_id, initial, &stream_ports, start, None, Some(outer))
+        })();
+        self.cancel.detach(&hub);
+        result
+    }
+
     /// Le fil d'un nœud : ses entrées de départ, le saut ou l'exécution, ses
     /// sorties, et la fin de ses canaux.
     fn run_one(&self, node: &mut Box<dyn Node>, plan: Plan, hub: &StreamHub<PortValue>, run_id: &str) -> Ended {

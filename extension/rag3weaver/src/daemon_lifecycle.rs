@@ -447,18 +447,22 @@ pub enum Missing {
     Absent(String),
     /// Un `daemon.json` dont l'hôte ne répond pas, et le relancer a échoué.
     Unreachable(String),
+    /// **La base est tenue par un écrivain autonome** (sa marque
+    /// `<base>.ecrivain`) : aucun hôte n'est lancé, le refus le nomme.
+    Refused(String),
 }
 
 impl Missing {
     pub fn reason(&self) -> &str {
         match self {
-            Missing::Absent(r) | Missing::Unreachable(r) => r,
+            Missing::Absent(r) | Missing::Unreachable(r) | Missing::Refused(r) => r,
         }
     }
     pub fn state(&self) -> &'static str {
         match self {
             Missing::Absent(_) => "absent",
             Missing::Unreachable(_) => "injoignable",
+            Missing::Refused(_) => "refusé",
         }
     }
 }

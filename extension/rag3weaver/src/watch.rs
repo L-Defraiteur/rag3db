@@ -65,6 +65,15 @@ pub struct WatchConfig {
     /// fichiers connus et de leurs dossiers.
     #[serde(default = "default_relist")]
     pub relist_ms: u64,
+    /// **Réagir aux événements du noyau** (inotify sous Linux) : un changement
+    /// réveille le balayage aussitôt. Le balayage reste le juge (dates,
+    /// empreinte, pose, porte de l'index) et le filet d'un événement perdu.
+    #[serde(default = "default_events")]
+    pub events: bool,
+    /// La période du balayage-filet quand les événements sont actifs : plus
+    /// lente que `every_ms`, ce qui baisse aussi le coût au repos.
+    #[serde(default = "default_filet")]
+    pub filet_ms: u64,
 }
 
 fn default_source() -> String {
@@ -79,6 +88,12 @@ fn default_settle() -> u64 {
 fn default_relist() -> u64 {
     60_000
 }
+fn default_events() -> bool {
+    true
+}
+fn default_filet() -> u64 {
+    2_000
+}
 
 impl Default for WatchConfig {
     fn default() -> Self {
@@ -88,6 +103,8 @@ impl Default for WatchConfig {
             settle_ms: default_settle(),
             paths: Vec::new(),
             relist_ms: default_relist(),
+            events: default_events(),
+            filet_ms: default_filet(),
         }
     }
 }
@@ -125,6 +142,10 @@ pub struct WatchStats {
     pub stats: u64,
     pub hashes: u64,
     pub hashed_bytes: u64,
+    /// Les réveils par un événement du noyau.
+    pub wakes: u64,
+    /// Les événements du noyau sont-ils écoutés ? Sinon, la période seule.
+    pub events: bool,
     pub list_us: u64,
     pub hash_us: u64,
     /// Tout le reste d'un tour : les dates, surtout.
@@ -301,6 +322,22 @@ impl Scanner {
 
     pub fn is_empty(&self) -> bool {
         self.known.is_empty()
+    }
+
+    /// Des fichiers attendent de se poser : le prochain tour vient après la
+    /// pose, pas après la période.
+    pub fn has_moving(&self) -> bool {
+        !self.moving.is_empty()
+    }
+
+    /// La racine surveillée.
+    pub fn root(&self) -> &std::path::Path {
+        &self.root
+    }
+
+    /// Un réveil par un événement du noyau, compté.
+    pub fn note_wake(&mut self) {
+        self.stats.wakes += 1;
     }
 
     /// **La réconciliation de départ** : ce que le disque porte (la
@@ -535,10 +572,19 @@ pub fn indexed_files(catalog: &crate::catalog::Catalog, source: &dyn FileSource)
 }
 
 /// Une montre en service : un fil qui balaie et publie.
+/// Ce que le fil de la montre attend : l'arrêt, ou un réveil du noyau.
+#[derive(Default)]
+pub struct Signal {
+    stopped: bool,
+    /// Sonné par l'observateur du noyau, qui n'existe que sous `code`.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
+    poked: bool,
+}
+
 pub struct WatchHandle {
     name: String,
     stats: Arc<Mutex<WatchStats>>,
-    stop: Arc<(Mutex<bool>, Condvar)>,
+    stop: Arc<(Mutex<Signal>, Condvar)>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -561,8 +607,8 @@ impl WatchHandle {
 
     fn halt(&mut self) {
         {
-            let (flag, cv) = &*self.stop;
-            *flag.lock().unwrap_or_else(|e| e.into_inner()) = true;
+            let (etat, cv) = &*self.stop;
+            etat.lock().unwrap_or_else(|e| e.into_inner()).stopped = true;
             cv.notify_all();
         }
         if let Some(t) = self.thread.take() {
@@ -600,23 +646,78 @@ pub fn spawn(
     // tour du fil, la réaction déjà à l'écoute.
     let mut pending = indexed.map(|i| scanner.reconcile(&i)).unwrap_or_default();
     let every = Duration::from_millis(config.every_ms.max(10));
-    let stop = Arc::new((Mutex::new(false), Condvar::new()));
+    let settle = Duration::from_millis(config.settle_ms);
+    let stop = Arc::new((Mutex::new(Signal::default()), Condvar::new()));
+    // **Le noyau réveille le balayage.** Un événement sous la racine sonne le
+    // fil ; le balayage décide. Un observateur qui ne se crée pas (limite
+    // d'inotify atteinte) se dit, et la période seule reste.
+    let observateur = if config.events {
+        let sonnette = stop.clone();
+        let cree = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if res.is_ok() {
+                let (etat, cv) = &*sonnette;
+                etat.lock().unwrap_or_else(|e| e.into_inner()).poked = true;
+                cv.notify_one();
+            }
+        })
+        .and_then(|mut w| {
+            use notify::Watcher;
+            w.watch(scanner.root(), notify::RecursiveMode::Recursive).map(|_| w)
+        });
+        match cree {
+            Ok(w) => Some(w),
+            Err(e) => {
+                bus.emit(crate::events::Event::Warning {
+                    context: format!("montre:{name}"),
+                    message: format!("événements du noyau indisponibles ({e}) : la montre balaie toutes les {} ms", config.every_ms),
+                });
+                None
+            }
+        }
+    } else {
+        None
+    };
+    // Avec les événements, la période n'est plus qu'un filet.
+    let period = if observateur.is_some() { Duration::from_millis(config.filet_ms.max(10)) } else { every };
+    let mut dernier_tour = Instant::now();
     let name = name.to_string();
     let label = name.clone();
     let s = stop.clone();
     let thread = std::thread::Builder::new()
         .name(format!("montre-{name}"))
         .spawn(move || loop {
+            // L'observateur vit avec le fil.
+            let _ = &observateur;
             {
-                let (flag, cv) = &*s;
-                let guard = flag.lock().unwrap_or_else(|e| e.into_inner());
-                // Le premier tour n'attend pas s'il y a une réconciliation à publier.
-                let wait = if pending.is_empty() { every } else { Duration::ZERO };
-                let (guard, _) = cv.wait_timeout_while(guard, wait, |stopped| !*stopped).unwrap_or_else(|e| e.into_inner());
-                if *guard {
+                let (etat, cv) = &*s;
+                let guard = etat.lock().unwrap_or_else(|e| e.into_inner());
+                // Le premier tour n'attend pas s'il y a une réconciliation à
+                // publier ; un fichier qui se pose fait revenir après la pose.
+                let wait = if !pending.is_empty() {
+                    Duration::ZERO
+                } else if scanner.has_moving() {
+                    settle.max(Duration::from_millis(10)).min(period)
+                } else {
+                    period
+                };
+                let (mut guard, _) =
+                    cv.wait_timeout_while(guard, wait, |e| !e.stopped && !e.poked).unwrap_or_else(|e| e.into_inner());
+                if guard.stopped {
                     return;
                 }
+                if guard.poked {
+                    guard.poked = false;
+                    scanner.note_wake();
+                }
             }
+            // Au plus un tour par pose : un build qui écrit en rafale ne fait
+            // pas balayer en boucle.
+            let minimum = settle.max(Duration::from_millis(20));
+            let ecoule = dernier_tour.elapsed();
+            if ecoule < minimum {
+                std::thread::sleep(minimum - ecoule);
+            }
+            dernier_tour = Instant::now();
             let scanned = scanner.scan(Instant::now()).map(|mut changes| {
                 // La réconciliation de départ d'abord ; un chemin que le balayage
                 // redit ne part qu'une fois.
@@ -628,6 +729,7 @@ pub fn spawn(
             // Les compteurs, lisibles par `index_state` pendant que le fil tourne.
             if let Ok(mut p) = to_publish.lock() {
                 *p = scanner.stats();
+                p.events = observateur.is_some();
             }
             // L'entrée en pause se dit, une fois.
             let paused = scanner.paused().map(str::to_string);

@@ -73,6 +73,24 @@ fn call_all(callbacks: Vec<OnCancel>) {
     }
 }
 
+/// Un envoi sans attente qui n'a pas pu se faire.
+#[derive(Debug)]
+pub enum TrySend<T> {
+    /// Un canal est plein : la valeur est rendue.
+    Full(T),
+    /// Plus personne ne lit, ou le run est annulé.
+    Stopped(Stopped),
+}
+
+/// Une lecture sans attente qui n'a rien rendu.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TryRecv {
+    /// Rien pour l'instant ; le flux continue.
+    Empty,
+    /// Le run est annulé, et voici pourquoi.
+    Cancelled(CancelCause),
+}
+
 /// Les canaux d'un run, partagés par ses ouvriers.
 pub(crate) struct StreamHub<T> {
     inner: Arc<(Mutex<State<T>>, Condvar)>,
@@ -262,6 +280,111 @@ impl<T: Clone + Send> StreamHub<T> {
             }
             s = self.wait(s, worker, Wait::Recv(chans.to_vec()));
         }
+    }
+
+    /// [`Self::send`] sans attendre : `Full(value)` rend la valeur si un canal
+    /// est plein (lot de la boîte en flux ouvert : une boucle d'agent ne
+    /// bloque pas son tour).
+    pub(crate) fn try_send(&self, chans: &[ChannelId], value: T) -> Result<(), TrySend<T>> {
+        let mut s = self.lock();
+        if let Some(c) = &s.cancel {
+            return Err(TrySend::Stopped(Stopped::Cancelled(c.clone())));
+        }
+        let live: Vec<ChannelId> = chans.iter().copied().filter(|&c| s.channels[c].receivers > 0).collect();
+        if live.is_empty() {
+            return Err(TrySend::Stopped(Stopped::NoReader));
+        }
+        if live.iter().any(|&c| s.channels[c].buf.len() >= s.channels[c].capacity) {
+            return Err(TrySend::Full(value));
+        }
+        let (last, rest) = live.split_last().expect("au moins un canal lu");
+        for &c in rest {
+            s.channels[c].buf.push_back(value.clone());
+        }
+        s.channels[*last].buf.push_back(value);
+        self.inner.1.notify_all();
+        Ok(())
+    }
+
+    /// [`Self::send`], au plus `timeout` ; à l'échéance, `Full(value)`.
+    pub(crate) fn send_timeout(&self, worker: WorkerId, chans: &[ChannelId], value: T, timeout: std::time::Duration) -> Result<(), TrySend<T>> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut value = value;
+        loop {
+            match self.try_send(chans, value) {
+                Err(TrySend::Full(v)) => {
+                    let now = std::time::Instant::now();
+                    if now >= deadline {
+                        return Err(TrySend::Full(v));
+                    }
+                    value = v;
+                    let s = self.lock();
+                    let full = chans.iter().copied().find(|&c| s.channels[c].buf.len() >= s.channels[c].capacity);
+                    match full {
+                        Some(c) => drop(self.wait_until(s, worker, Wait::Send(c), deadline)),
+                        None => drop(s),
+                    }
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// [`Self::recv_any`] sans attendre : `Ok(Some)` un élément, `Ok(None)`
+    /// tous finis, `Err(Empty)` rien pour l'instant.
+    pub(crate) fn try_recv(&self, chans: &[ChannelId]) -> Result<Option<(usize, T)>, TryRecv> {
+        let mut s = self.lock();
+        if let Some(c) = &s.cancel {
+            return Err(TryRecv::Cancelled(c.clone()));
+        }
+        if let Some(i) = chans.iter().position(|&c| !s.channels[c].buf.is_empty()) {
+            let v = s.channels[chans[i]].buf.pop_front().expect("non vide");
+            self.inner.1.notify_all();
+            return Ok(Some((i, v)));
+        }
+        if chans.iter().all(|&c| s.channels[c].senders == 0) {
+            return Ok(None);
+        }
+        Err(TryRecv::Empty)
+    }
+
+    /// [`Self::recv_any`], au plus `timeout` ; à l'échéance, `Err(Empty)`.
+    pub(crate) fn recv_timeout(&self, worker: WorkerId, chans: &[ChannelId], timeout: std::time::Duration) -> Result<Option<(usize, T)>, TryRecv> {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            match self.try_recv(chans) {
+                Err(TryRecv::Empty) => {
+                    if std::time::Instant::now() >= deadline {
+                        return Err(TryRecv::Empty);
+                    }
+                    let s = self.lock();
+                    drop(self.wait_until(s, worker, Wait::Recv(chans.to_vec()), deadline));
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// [`Self::wait`], borné par `deadline` : l'attente compte pour le
+    /// détecteur, comme une attente sans borne.
+    fn wait_until<'a>(&'a self, mut s: MutexGuard<'a, State<T>>, worker: WorkerId, what: Wait, deadline: std::time::Instant) -> MutexGuard<'a, State<T>> {
+        s.waiting.insert(worker, what);
+        let callbacks = Self::detect_deadlock(&mut s);
+        if s.cancel.is_some() {
+            self.inner.1.notify_all();
+            s.waiting.remove(&worker);
+            drop(s);
+            call_all(callbacks);
+            return self.lock();
+        }
+        let now = std::time::Instant::now();
+        let mut s = if now < deadline {
+            self.inner.1.wait_timeout(s, deadline - now).unwrap_or_else(|p| p.into_inner()).0
+        } else {
+            s
+        };
+        s.waiting.remove(&worker);
+        s
     }
 
     /// S'inscrit, vérifie l'interblocage, dort, se désinscrit.

@@ -74,13 +74,3 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstCopy
 # première, vaut 2 648 064). Revenu de known_red.txt le même jour. Le défaut demeure ; un témoin
 # qui mesure la fuite sans dépendre du moment des morts reste à écrire.
 JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt
-#
-# La pente de l'insertion sous HNSW sans point de reprise (ticket
-# 2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot) : après la
-# compaction des lignes mortes du CSR (12 octobre, cœur C++), le rapport des 5 derniers lots sans
-# point de reprise sur ceux avec est passé de ×1,5-1,74 (cinq passes sur master) à ×1,17, ×1,55 et
-# ×1,20 (trois passes sous `poste mesure`, borne ×1,2), puis ×1,37 sur le lot rebasé sur master
-# avec 2bd65cbb8 de hotfixs : 2 rouges sur 4. Ce qui reste est le coût propre du chemin de lecture
-# en mémoire (ligne à ligne, hors colonnes) des relations et vecteurs écrits depuis le dernier
-# point de reprise. À profiler ; vert trois fois de suite, il sort d'ici et le ticket se ferme.
-VectorIndexInsertSlope.CostPerBatchSettles

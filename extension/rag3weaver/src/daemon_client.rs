@@ -617,7 +617,22 @@ impl McpClient {
     }
 
     fn try_attach(attach: &Attach, manifest: &Path, client: &str, keys: &[String]) -> Side {
+        // La base du manifeste, si un écrivain autonome vivant la tient.
+        fn base_tenue(manifest: &Path) -> Option<String> {
+            let prepared = crate::backend::PreparedBackend::load(manifest).ok()?;
+            let base = prepared.path(&prepared.manifest.database);
+            crate::marque_d_ecrivain::ecrivain_autonome_vivant(&base).map(|m| crate::marque_d_ecrivain::refus(&base, &m))
+        }
         use crate::daemon_lifecycle::Missing;
+        // **Une base tenue par un écrivain autonome** ne fait pas naître
+        // d'hôte : il attendrait le verrou du moteur, échouerait, et le client
+        // recommencerait toutes les 10 s. Le refus nomme la base et l'écrivain ;
+        // la reprise réessaie, et s'attache quand il a fini.
+        if let Attach::Discover(_) = attach {
+            if let Some(refus) = base_tenue(manifest) {
+                return Side::Missing(Missing::Refused(refus));
+            }
+        }
         let essai = match attach {
             Attach::Forced(adresse) => DaemonClient::connect(adresse, manifest, client, keys.to_vec()).map_err(Missing::Unreachable),
             Attach::Designated(d) => DaemonClient::attach_designated(d.clone(), manifest, client, keys.to_vec())
@@ -687,9 +702,17 @@ impl McpClient {
                 "reason": m.reason(),
                 "log": crate::daemon_lifecycle::log_path(),
                 "daemon_file": crate::daemon_lifecycle::file_path(),
-                "what_to_do": "lire le journal ; l'hôte se lance seul au prochain appel d'outil, ou à la main par \
-                               `rag3weaver-backend daemon` (avec LD_LIBRARY_PATH, RAG3DB_ROOT et le service \
-                               d'embarquement)",
+                "what_to_do": match m {
+                    crate::daemon_lifecycle::Missing::Refused(_) => {
+                        "attendre la fin de l'écrivain autonome nommé (ou l'arrêter proprement, `kill -TERM`) : \
+                         le prochain appel d'outil s'attache alors à l'hôte, sans rien relancer à la main"
+                    }
+                    _ => {
+                        "lire le journal ; l'hôte se lance seul au prochain appel d'outil, ou à la main par \
+                         `rag3weaver-backend daemon` (avec LD_LIBRARY_PATH, RAG3DB_ROOT et le service \
+                         d'embarquement)"
+                    }
+                },
             }),
         }
     }

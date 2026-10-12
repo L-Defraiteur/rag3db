@@ -197,3 +197,101 @@ fn one_launch_too_many_is_said_on_run() {
     let ends = w.ends(1, Duration::from_secs(5));
     assert_eq!((ends[0]["statut"].as_str(), ends[0]["cause"].as_str()), (Some("annulé"), Some("hôte")));
 }
+
+/// Lit `message` élément par élément (une entrée nourrie par l'appelant) et
+/// répond `écho: <m>` sur son flux `replies`.
+struct ConvEcho;
+
+impl Node for ConvEcho {
+    fn name(&self) -> &str {
+        "ConvEcho"
+    }
+    fn node_type(&self) -> &str {
+        "ConvEcho"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("message", PortType::Text, true).posture(Posture::PerElement)]
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("replies", PortType::Text, false).stream(PortKind::Finite)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        while let Some(v) = ctx.next("message").map_err(|e| format!("{e:?}"))? {
+            let m = take_or_clone::<String>(v).ok_or("message : du texte")?;
+            ctx.emit("replies", PortValue::new(format!("écho: {m}"))).map_err(|e| format!("{e:?}"))?;
+        }
+        Ok(())
+    }
+}
+
+struct ConvEchoFactory;
+
+impl NodeFactory for ConvEchoFactory {
+    fn create(&self, _: &str, _: &Value) -> Result<Box<dyn Node>, String> {
+        Ok(Box::new(ConvEcho))
+    }
+    fn node_type(&self) -> &'static str {
+        "ConvEcho"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "ConvEcho".into(),
+            description: "écho en flux".into(),
+            inputs: ConvEcho.inputs(),
+            outputs: ConvEcho.outputs(),
+            config_params: vec![],
+        }
+    }
+}
+
+/// Lit `replies` élément par élément.
+struct Replies(Arc<Mutex<Vec<String>>>);
+
+impl Node for Replies {
+    fn name(&self) -> &str {
+        "replies"
+    }
+    fn node_type(&self) -> &str {
+        "Replies"
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("replies", PortType::Any, true).posture(Posture::PerElement)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        while let Some(v) = ctx.next("replies").map_err(|e| format!("{e:?}"))? {
+            self.0.lock().unwrap().push(take_or_clone::<String>(v).ok_or("du texte")?);
+        }
+        Ok(())
+    }
+}
+
+/// **7. `SpawnNode` en mode flux** : un flux de trois messages, **un seul**
+/// lancement, trois réponses sur `replies`, dans l'ordre ; la fin de
+/// `message` ferme la conversation et le run finit.
+#[test]
+fn in_stream_mode_one_launch_carries_the_whole_conversation() {
+    let w = world("appelant-flux");
+    let mut nodes = NodeRegistry::new();
+    nodes.register(Box::new(ConvEchoFactory));
+    nodes.register(Box::new(SpawnNodeFactory));
+    let nodes = Arc::new(nodes);
+    let mut s = ServiceRegistry::new();
+    s.register("event_bus", w.bus.clone());
+    s.register(BACKGROUND_SERVICE, w.registry.clone());
+    s.register(NODE_REGISTRY_SERVICE, nodes.clone());
+    let (runs, replies) = (Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())));
+    let mut g = DataflowGraph::new();
+    g.add_node(Box::new(Source(vec!["un".into(), "deux".into(), "trois".into()], true))).unwrap();
+    g.add_node(nodes.create("SpawnNode", "lance", &json!({"node_type": "ConvEcho", "stream": true, "caller": "appelant-flux"})).unwrap()).unwrap();
+    g.add_node(Box::new(Runs(runs.clone()))).unwrap();
+    g.add_node(Box::new(Replies(replies.clone()))).unwrap();
+    g.connect("source", "out", "lance", "message").unwrap();
+    g.connect("lance", "run", "runs", "run").unwrap();
+    g.connect("lance", "replies", "replies", "replies").unwrap();
+    DataflowRuntime::with_services(10, s).execute(&mut g).unwrap();
+    let runs = runs.lock().unwrap().clone();
+    assert_eq!(runs.len(), 1, "un seul lancement : {runs:?}");
+    assert_eq!(*replies.lock().unwrap(), ["écho: un", "écho: deux", "écho: trois"]);
+    let ends = w.ends(1, Duration::from_secs(5));
+    assert_eq!((ends[0]["run"].clone(), ends[0]["statut"].as_str()), (runs[0]["run"].clone(), Some("terminé")));
+}

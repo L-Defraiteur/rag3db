@@ -81,6 +81,44 @@ fn paths_restrict_the_watch() {
     assert!(s.scan(Instant::now()).unwrap().is_empty());
 }
 
+/// **Le noyau réveille la montre** : avec une période d'une minute, une
+/// modification est dite en moins de trois secondes. L'événement du système de
+/// fichiers déclenche le balayage ; le balayage reste le juge et le filet.
+#[test]
+fn a_change_is_seen_on_the_kernel_event_not_the_period() {
+    let (dir, source) = tree();
+    let bus = crate::events::EventBus::new(64);
+    let mut rx = bus.subscribe(crate::events::topic::FILES);
+    let handle = spawn(
+        "code",
+        &WatchConfig { every_ms: 60_000, settle_ms: 0, ..Default::default() },
+        dir.path().to_path_buf(),
+        source,
+        bus.clone(),
+        Arc::new(crate::catalog::retard::Lag::new()),
+        crate::scope::Scope::default(),
+        None,
+        Default::default(),
+    )
+    .unwrap();
+    // Le premier tour (la réconciliation vide) passe tout de suite ; on écrit après.
+    std::thread::sleep(Duration::from_millis(200));
+    std::fs::write(dir.path().join("src/a.rs"), "fn a() { 3 }\n").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let vu = loop {
+        if let Ok(crate::events::Event::FileChanged { path, .. }) = rx.try_recv() {
+            break Some(path);
+        }
+        if Instant::now() > deadline {
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let stats = handle.stats();
+    handle.stop();
+    assert_eq!(vu.as_deref(), Some("src/a.rs"), "rien vu en 3 s avec une période d'une minute : {stats:?}");
+}
+
 /// **La montre en service** publie sur le sujet `files`, et son arrêt
 /// n'attend pas la fin de la période.
 #[test]
