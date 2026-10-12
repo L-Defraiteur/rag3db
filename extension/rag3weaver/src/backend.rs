@@ -4454,6 +4454,27 @@ mod tests {
         assert!(passes.is_empty(), "la réconciliation a repris des exclus : {passes:?}");
     }
 
+    /// **Une réingestion par nos outils passe la porte aussi** : un agent qui
+    /// édite un fichier généré (`edit_file`) ne le fait pas entrer dans
+    /// l'index. La réaction n'est pas le seul appelant de la réingestion
+    /// (relecture de l'arbre principal, 12 octobre).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_reingested_generated_file_does_not_enter_the_index() {
+        let (dir, backend) = backend_qui_surveille();
+        let source = backend.file_source.clone().unwrap();
+        let contenu = "// DO NOT EDIT\npub fn marque() { depart(); }\n";
+        std::fs::write(dir.path().join("sources/marque.rs"), contenu).unwrap();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "marque.rs", contenu).unwrap();
+            let lot = [("marque.rs".to_string(), Some(contenu.to_string()))];
+            crate::code_sync::reingest_files(&mut cat, source.as_ref(), &lot, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        }
+        let passes = fichiers_en_base(&backend, &["marque.rs"]);
+        assert!(passes.is_empty(), "un fichier généré est entré par la réingestion : {passes:?}");
+    }
+
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
     /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
     /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation

@@ -365,7 +365,10 @@ impl Node for ReindexFileNode {
             }
         }
         if hors_perimetre > 0 {
-            eprintln!("[montre] {total} fichier(s) vu(s), {hors_perimetre} hors du périmètre de l'index (retirés s'ils y étaient)");
+            let ligne = format!("{total} fichier(s) vu(s), {hors_perimetre} hors du périmètre de l'index (retirés s'ils y étaient)");
+            eprintln!("[montre] {ligne}");
+            // Aussi dans le journal de la réaction, que l'hôte lit.
+            ctx.info(&format!("ReindexFileNode : {ligne}"));
         }
         ctx.info(&format!(
             "ReindexFileNode : {} réindexé(s), {} retiré(s), {} repris plus tard, {} en échec",

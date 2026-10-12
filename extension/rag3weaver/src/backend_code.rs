@@ -532,11 +532,15 @@ mod monte {
                 Arc::new(Snapshot::new(format!("backend:{backend_name}"), fichiers))
             }
         };
-        Ok(if config.read_only {
+        let source = if config.read_only {
             Arc::new(ReadOnly(source))
         } else {
             source
-        })
+        };
+        // La porte de l'index lit la politique des générés de cette source,
+        // quel que soit l'appelant de la réingestion.
+        crate::code_sync::declare_generated_policy(source.as_ref(), config.generated.clone());
+        Ok(source)
     }
 
     /// La porte des commandes déclarée — `Off` ne monte rien, et `run`

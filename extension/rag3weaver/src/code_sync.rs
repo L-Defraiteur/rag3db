@@ -71,6 +71,14 @@ struct EnCours {
 /// identité de source ; les chemins sont ceux de la source.
 static EN_COURS: LazyLock<Mutex<HashMap<String, EnCours>>> = LazyLock::new(Default::default);
 
+/// **La politique des générés de chaque source**, déclarée par le manifeste
+/// à la construction de la source (`backend_code::build_source`) : la porte de
+/// l'index ([`crate::code::admission`]) la lit dans toute réingestion, quel
+/// qu'en soit l'appelant (la réaction de la montre, `edit_file`…).
+static POLITIQUES: LazyLock<Mutex<HashMap<String, crate::generated::GeneratedPolicy>>> = LazyLock::new(Default::default);
+
+/// Déclare la politique des générés de `source`.
+
 /// Ce qu'une indexation en cours fait d'un fichier qui vient de changer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +100,15 @@ pub enum ChangeDuringIndexing {
 /// La racine est **canonisée** dans la clé : un même dossier atteint par un
 /// lien symbolique ou avec un `/` final ne fait qu'une clé. (Pas dans le
 /// curseur lui-même : il porte les chemins enregistrés dans l'index.)
+pub fn declare_generated_policy(source: &dyn FileSource, policy: crate::generated::GeneratedPolicy) {
+    POLITIQUES.lock().unwrap_or_else(|e| e.into_inner()).insert(registry_key(source), policy);
+}
+
+/// La politique des générés déclarée pour `source`, sinon les défauts.
+pub fn generated_policy_of(source: &dyn FileSource) -> crate::generated::GeneratedPolicy {
+    POLITIQUES.lock().unwrap_or_else(|e| e.into_inner()).get(&registry_key(source)).cloned().unwrap_or_default()
+}
+
 pub fn registry_key(source: &dyn FileSource) -> String {
     let cursor = source.cursor();
     match cursor.strip_prefix("worktree:") {
@@ -215,6 +232,11 @@ pub fn reingest_file(
     content: &str,
     exige: Disponibilites,
 ) -> Result<ReingestReport, String> {
+    // La porte de l'index : un contenu qu'elle refuse (généré, binaire) est
+    // un fichier absent — s'il était indexé, il en sort.
+    if crate::code::admission(path, Some(content), &generated_policy_of(source)).is_err() {
+        return remove_file(catalog, source, path, exige);
+    }
     // Une réédition range une identité relative : dans une base d'avant la
     // règle, ce serait un doublon de la ligne absolue.
     garder_la_regle(catalog)?;
@@ -374,6 +396,16 @@ pub fn reingest_files(
     if files.is_empty() {
         return Ok(ReingestReport::default());
     }
+    // La porte de l'index : un contenu qu'elle refuse est un fichier absent.
+    let politique = generated_policy_of(source);
+    let admis: Vec<(String, Option<String>)> = files
+        .iter()
+        .map(|(p, c)| match c {
+            Some(contenu) if crate::code::admission(p, Some(contenu), &politique).is_err() => (p.clone(), None),
+            autre => (p.clone(), autre.clone()),
+        })
+        .collect();
+    let files = admis.as_slice();
     garder_la_regle(catalog)?;
     let cursor = source.cursor();
     let (root, virtual_source) = match crate::workspace_path::worktree_root(&cursor) {
