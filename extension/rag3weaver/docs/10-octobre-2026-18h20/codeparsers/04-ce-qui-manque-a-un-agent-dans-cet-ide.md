@@ -134,6 +134,22 @@ Les symboles pèsent désormais le plus (~1,16 s avec la résolution). La fin d'
 (`every_ms` 1 000, `settle_ms` 300) : sous 2 s de bout en bout, il faudra aussi raccourcir ce
 pas. Lignes brutes : `~/.cache/codeparsers-notes/b2d/temoin-montre-c391e8387.txt`.
 
+**Cinquième rejeu, à `dab191e43`** (12 octobre, 15 h ; les lectures sans attente L1-L3, les
+symboles du proto lus au lot, la porte unique de l'index, la montre à 250 / 150 ms). Lib du
+magasin `0c0af5bf5`, base entière, index 1 012 s. `usages` **2,29 s**, `search_code` **2,47 s**
+de bout en bout. Ligne de l'hôte : « 2 fichiers réindexé : verrou attendu 0 ms, tenu 1 636 ms —
+ingérer 533 ms [lire les MENTIONS 161, drain · liens 130, relire 68…], analyser 139, fin
+d'instantané 131, oublier les arêtes 123 ; hors phase : plein texte rendu durable 324 ms ». Les
+symboles sont passés de ~1 160 à ~250 ms, la fin d'instantané de 525 à 131 ms.
+
+**Une lecture pendant la réindexation a attendu.** Chaque appel chronométré (`appels.tsv`, t
+depuis l'édition) : trois appels avant la réaction rendent l'état d'avant en 58 à 251 ms ; un
+`usages name_of_tree` lancé à 0,631 s, dans la tenue, **dure 1 610 ms et rend l'état nouveau** ;
+les suivants, 53 et 177 ms. Il a attendu la fin de la réaction au lieu de répondre avec l'état
+d'avant : l'objectif « < 100 ms pendant la réindexation » n'est pas tenu pour `usages`. Rendu à
+l'arbre principal (L1-L3). Un seul appel a chevauché la fenêtre, mais sa durée colle à la tenue à
+26 ms près. Traces : `~/.cache/codeparsers-notes/b2d/temoin-dab191e43/`.
+
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
 de la session codeparsers.
