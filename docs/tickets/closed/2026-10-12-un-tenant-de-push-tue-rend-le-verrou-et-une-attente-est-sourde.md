@@ -1,6 +1,6 @@
 # Un tenant de push tué rend le verrou pendant que sa commande pousse, et une attente de poste ne s'annule pas
 
-- **État** : ouvert (12 octobre 2026, optimiseur, à la demande de l'orchestration)
+- **État** : corrigé (12 octobre 2026, optimiseur, branche `poste-tenants`) : le verrou de push tenu par le script, l'attente annulable, un flock mort qui arrête, `--qui` qui nomme le tenant ; témoin 21 cas, vert sur les deux postes (md5 0229e1ad)
 - **Gravité** : réponse fausse (deux pushes en même temps, `--qui` qui ne nomme que le second) ;
   blocage (une attente qui ne s'annule pas, et un `flock` mort qui laissait la commande partir)
 - **Atteignable en service** : oui, sur les deux postes
@@ -25,6 +25,12 @@ par motif sur tout le poste (`flock … master-push.lock`, puis `flock -x 8`). I
 pushes de codeparsers, un de F et un de la recherche : tous morts avant `git push`, rien de
 perdu, et les sessions ont vérifié. Le témoin ne vise désormais que ses propres pids, sur ses
 propres verrous.
+
+Le même lot : `POSTE_PUSH_HOTE` posé à vide désactive désormais le relais (le témoin, joué sur
+luciepc, relayait ses pushes d'essai vers lucie-tablette : la forme `${…:-…}` prenait le vide
+pour une absence). Et le cas de codeparsers (son script de push, orphelin après la mort du
+`flock`, est allé jusqu'au `git push` sans verrou) est celui du défaut 1 : la commande n'est
+toujours pas tuée, mais le verrou reste tenu jusqu'à sa fin.
 
 ## La recette
 

@@ -65,14 +65,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Un tenant de push tué rend le verrou pendant que sa commande pousse, et une attente de poste ne s'annule pas](2026-10-12-un-tenant-de-push-tue-rend-le-verrou-et-une-attente-est-sourde.md) | ouvert — optimiseur | réponse fausse, blocage | oui, sur les deux postes | oui (`poste`) |
 | [Des morceaux de code sont écrits sans texte : 20 % de code-rag3db](2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md) | ouvert — l'arbre principal | réponse fausse, et blocage (le gel de code-lourd) | oui | oui |
 | [Le test de réconciliation de la montre lit l'état d'un index occupé, et échoue une fois sur cinq](2026-10-11-le-test-de-reconciliation-de-la-montre-lit-un-index-occupe.md) | ouvert — pour l'auteur de la montre | test instable ; le reçu occupé ne dit pas les montres | non (le test) | oui (`backend.rs`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
@@ -106,10 +105,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (114), dans `closed/`
+### Fermés (115), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un tenant de push tué rend le verrou pendant que sa commande pousse, et une attente de poste ne s'annule pas](closed/2026-10-12-un-tenant-de-push-tue-rend-le-verrou-et-une-attente-est-sourde.md) | corrigé : verrou tenu par le script, attente annulable, `--qui` juste (12 oct.) | réponse fausse, blocage | oui, sur les deux postes | oui (`poste`) |
 | [QUERY_VECTOR_INDEX déclare une ligne au lieu de k, et son masque se dimensionne sur ce chiffre](closed/2026-10-12-query-vector-index-declare-une-ligne-au-lieu-de-k.md) | corrigé (voir le ticket) | estimation fausse | l'estimation oui, ses effets non vus | oui (`rag3db_search_backend.rs`) |
 | [Un plan de quelques lignes prend un fil par cœur](closed/2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur.md) | corrigé (12 octobre 2026, le lot des fils proportionnés, page coeur-cpp/12 §9) | coût (moitié du temps d'une lecture d'outil) | oui, à chaque lecture d'outil sur rag3db | oui (contournable par une connexion de lecture) |
 | [Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur](closed/2026-10-11-les-fils-d-un-plan-sont-proportionnes-a-la-cardinalite-estimee-par-le-planificateur.md) | fait (12 octobre 2026 : la règle, le témoin ThreadsByCardinality, le avant/après — page coeur-cpp/12 §9) | performance — 32 fils pour trois lignes, impact 47 % plus lent qu'à 1 fil | oui (chaque instruction) | oui |

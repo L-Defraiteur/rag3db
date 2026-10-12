@@ -53,7 +53,9 @@ PUSH_FICHE="$PUSH_DIR/master-push.tenant"
 # la commande tourne ici ; l'entrée se ferme à sa fin, et le verrou tombe.
 # ssh muet : refus nommé, rien n'est exécuté. ssh perdu pendant la commande :
 # dit haut et fort (la commande n'est pas tuée, elle peut être à mi-push).
-PUSH_HOTE="${POSTE_PUSH_HOTE:-$(cat "$D/poste-push-hote" 2>/dev/null)}"
+# POSTE_PUSH_HOTE posé, même vide, l'emporte sur le fichier : vide = pas de
+# relais (les témoins, qui ne doivent jamais relayer vers un autre poste).
+PUSH_HOTE="${POSTE_PUSH_HOTE-$(cat "$D/poste-push-hote" 2>/dev/null)}"
 SSH_PUSH="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
 # ── L'ordre des verrous : le poste d'abord, le push ensuite (11 octobre 2026, soir) ──
 # Une commande de push qui rejouait sous `poste lourd` tenait le verrou de push en
@@ -76,6 +78,7 @@ if [ "${1:-}" = "push" ] && [ "${2:-}" != "--qui" ] && [ -z "${POSTE_DANS_LOURD:
     echo "usage: poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2; exit 2
   fi
   attente="${POSTE_PUSH_LOURD_MAX:-60}"
+  commande_tapee="$*"
   occupe() {
     # Le tenant d'un verrou est un `flock` : on nomme la commande au bout de sa chaîne.
     tenants=""
@@ -94,6 +97,13 @@ if [ "${1:-}" = "push" ] && [ "${2:-}" != "--qui" ] && [ -z "${POSTE_DANS_LOURD:
       tenants="$tenants$(ps -o args= -p "$bout" 2>/dev/null | cut -c1-80) (pid $bout) ; "
     done
     echo "poste push : $nom — poste occupé${tenants:+ par $tenants}depuis $attente s : rien de pris (ni le poste ni le push), code 75 ; se remettre en file plus tard" >&2
+    # Un rejeu qui tourne sur l'autre poste prend sa place sous le poste lourd
+    # de CE poste-là : `--lourd` local ne sert que si la commande bâtit ou
+    # mesure ici (12 octobre 2026 : le cœur refusé vingt fois en cinquante
+    # minutes derrière un index local, pour un rejeu sur luciepc).
+    case "$commande_tapee" in
+      *ssh*) echo "poste push : $nom — la commande parle à un autre poste par ssh : si rien ne bâtit ni ne mesure ici, lance-la sans --lourd (et prends le poste lourd de l'autre poste dans la commande)" >&2 ;;
+    esac
     exit 75
   }
   flock -w "$attente" -x "$V/porte.lock" true || occupe
@@ -171,8 +181,21 @@ case "$1" in
     if [ "${1:-}" = "--qui" ]; then
       if flock -n -x "$PUSH_LOCK" true 2>/dev/null; then
         echo "poste push : libre"
+        # Une fiche sans verrou : un tenant tué sans finir (SIGKILL).
+        [ -s "$PUSH_FICHE" ] && { echo "poste push : fiche périmée retirée — $(cat "$PUSH_FICHE")"; rm -f "$PUSH_FICHE"; }
       else
-        echo "poste push : tenu — $(cat "$PUSH_FICHE" 2>/dev/null || echo 'tenant inconnu')"
+        # Le tenant vrai : le processus qui tient le verrou (le noyau le dit),
+        # et la commande au bout de sa chaîne ; la fiche donne le nom.
+        verrou=$(lslocks -n -o PID,PATH 2>/dev/null | awk -v p="$PUSH_LOCK" '$2==p {print $1; exit}')
+        commande=""
+        if [ -n "$verrou" ]; then
+          commande=$(ps -o args= --ppid "$verrou" 2>/dev/null | grep -v '^sleep' | head -1 | cut -c1-90)
+        fi
+        if [ -s "$PUSH_FICHE" ]; then
+          echo "poste push : tenu — $(cat "$PUSH_FICHE")"
+        else
+          echo "poste push : tenu — sans fiche${verrou:+ ; verrou au pid $verrou}${commande:+ — $commande}"
+        fi
       fi
       exit 0
     fi
@@ -182,23 +205,25 @@ case "$1" in
       echo "usage: poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2; exit 2
     fi
     debut=$(date +%s)
-    while :; do
-      # 75 : le verrou n'a pas été pris en 30 s ; tout autre code est celui de la commande.
-      flock -o -x -E 75 -w 30 "$PUSH_LOCK" "$0" _push-tenant "$nom" "$@"
-      rc=$?
-      [ "$rc" -ne 75 ] && exit "$rc"
+    # **Le verrou est tenu par ce script** (descripteur 7), pas par un `flock`
+    # qui l'envelopperait (12 octobre 2026, relevé du cœur) : un `flock` tué
+    # rendait le verrou pendant que la commande, orpheline, poussait encore —
+    # deux pushes en même temps, et `--qui` ne nommait que le second. Ce
+    # script attend, prend, puis protège le verrou de ses signaux tant que la
+    # commande vit ; la commande n'en hérite pas (`7>&-`). Seul SIGKILL passe
+    # outre, et `--qui` dit alors une fiche périmée.
+    exec 7>>"$PUSH_LOCK"
+    while ! flock -x -w 30 7; do
       echo "poste push : $nom attend depuis $(( $(date +%s) - debut )) s — tenu par $(cat "$PUSH_FICHE" 2>/dev/null || echo 'tenant inconnu')" >&2
-    done ;;
-  _push-tenant)
-    # Interne : verrou tenu par le flock appelant (qui le rend à notre fin).
-    shift; nom="$1"; shift
+    done
     plafond="${POSTE_PUSH_MAX:-1200}"
     echo "$nom depuis $(date '+%H:%M:%S') (pid $$)" > "$PUSH_FICHE"
     # L'entrée est gardée explicitement : sans job control, un `&` la remplace
     # par /dev/null, et le relais d'un autre poste (qui tient le verrou tant
     # que son entrée reste ouverte) le rendrait aussitôt.
-    "$@" 0<&0 &
+    "$@" 0<&0 7>&- &
     enfant=$!
+    trap 'echo "poste push : $nom — signal reçu ; le verrou reste tenu jusqu à la fin de la commande (pid $enfant), qu on arrête elle-même" >&2' TERM INT HUP
     dit=0; t0=$(date +%s)
     while kill -0 "$enfant" 2>/dev/null; do
       if [ "$dit" = 0 ] && [ $(( $(date +%s) - t0 )) -ge "$plafond" ]; then
@@ -206,13 +231,10 @@ case "$1" in
         echo "$nom depuis $(date -d "@$t0" '+%H:%M:%S') (pid $$) — AU-DELÀ DE $plafond s" > "$PUSH_FICHE"
         dit=1
       fi
-      sleep 2
+      sleep 1 7>&-
     done
     wait "$enfant"; rc=$?
     rm -f "$PUSH_FICHE"
-    # 75 est réservé à « verrou pas pris » : une commande qui rend 75 ne doit
-    # pas être relancée par la boucle d'attente.
-    [ "$rc" -eq 75 ] && { echo "poste push : la commande de $nom a rendu 75, rendu comme 74" >&2; exit 74; }
     exit "$rc" ;;
 esac
 MEM="${POSTE_MEM_MAX:-40G}"
@@ -291,22 +313,30 @@ fiche="$F/$$"
 resume=$(printf '%s ' "$@" | cut -c1-90)
 dire() { echo "$1 $mode depuis $(date +%H:%M:%S) (pid $$) — $resume" > "$fiche"; }
 trap 'rm -f "$fiche"' EXIT
-trap 'exit 143' TERM INT HUP
+# **Attendre un verrou sans se rendre sourd** (12 octobre 2026, luciepc : deux
+# bâtis annulés restaient bloqués dans flock, le signal n'étant traité qu'au
+# retour de flock). flock attend en fond, le script attend flock par `wait`,
+# qu'un signal interrompt ; un flock qui échoue ou meurt arrête le script, qui
+# ne lance alors jamais sa commande. Le verrou pris par l'enfant appartient au
+# descripteur partagé : il reste tenu par ce script.
+attente=""
+prendre() { flock "$@" & attente=$!; wait "$attente"; r=$?; attente=""; [ "$r" = 0 ] || exit 75; }
+trap '[ -n "$attente" ] && kill "$attente" 2>/dev/null; exit 143' TERM INT HUP
 if [ "$borne" = 1 ]; then
   set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -- "$@"
 fi
 dire attend
 case "$mode" in
   mesure)
-    exec 8>>"$V/porte.lock"; flock -x 8
-    exec 9>>"$V/poste.lock"; flock -x 9
+    exec 8>>"$V/porte.lock"; prendre -x 8
+    exec 9>>"$V/poste.lock"; prendre -x 9
     dire tient
     [ -n "${POSTE_MESURE_MAX:-}" ] && set -- timeout "$POSTE_MESURE_MAX" "$@"
     "$@" 8>&- 9>&-
     rc=$? ;;
   lourd)
-    exec 8>>"$V/porte.lock"; flock -x 8; flock -u 8; exec 8>&-
-    exec 9>>"$V/poste.lock"; flock -s 9
+    exec 8>>"$V/porte.lock"; prendre -x 8; flock -u 8; exec 8>&-
+    exec 9>>"$V/poste.lock"; prendre -s 9
     dire tient
     nice -n 15 ionice -c 3 "$@" 9>&-
     rc=$? ;;

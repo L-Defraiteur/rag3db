@@ -104,6 +104,34 @@ d'essai, six cas. La version déployée jusque-là en rate trois. Le script fait
 (`extension/rag3weaver/scripts/poste`) et se déploie sur les deux postes par copie, `chmod +x`
 puis `mv`.
 
+## Le verrou tenu par le script, l'attente annulable, le rejeu distant
+
+**Le verrou de push est tenu par le script lui-même** (12 octobre, ticket
+`2026-10-12-un-tenant-de-push-tue-rend-le-verrou-et-une-attente-est-sourde`). Avant, un `flock`
+enveloppait le tenant. Tué, il rendait le verrou pendant que la commande, orpheline, poussait
+encore : codeparsers a vu son script finir jusqu'au `git push` sans verrou. Désormais :
+
+- `poste push` prend le verrou sur son propre descripteur. Un signal ne le rend pas avant la fin
+  de la commande, et il le dit sur stderr.
+- La commande n'est jamais tuée, car elle peut être au milieu d'un push. Qui veut l'arrêter
+  l'arrête elle, et le verrou tombe à sa fin. Seul SIGKILL passe outre.
+- `poste push --qui` donne la fiche du tenant. S'il n'y a pas de fiche, il donne le pid qui
+  tient le verrou et sa commande. Une fiche sans verrou est périmée, et retirée.
+- Une attente de verrou (`poste mesure`, `poste lourd`) se laisse annuler par un signal : flock
+  attend en fond, le script attend par `wait`. Un `flock` en échec ou mort arrête le script, qui
+  ne lance alors jamais sa commande.
+
+**Un rejeu qui tourne sur l'autre poste prend sa place sous le poste lourd de cet autre poste**
+(12 octobre : le cœur refusé vingt fois en cinquante minutes derrière un index local, pour un
+rejeu qui tournait sur luciepc). `--lourd` local ne sert que si la commande bâtit ou mesure ici.
+Le refus de `--lourd` le rappelle quand la commande contient `ssh`.
+
+**Les deux règles du témoin** (`scripts/test_poste.sh`, 21 cas) : il ne termine que ses propres
+pids, jamais un motif ni un nom ; et il joue sur ses propres fichiers de verrou, jamais sur ceux
+de `~/.cache/rag3weaver-build`, et refuse d'y jouer. Le 12 octobre à 3 h, un motif de ce témoin a
+tué cinq pushes réels : trois de codeparsers, un de F, un de la recherche, tous avant `git push`,
+rien de perdu.
+
 ## Un seul verrou pour les deux postes
 
 Le verrou vit **sur lucie-tablette**. luciepc a un fichier
