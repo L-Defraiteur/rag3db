@@ -236,12 +236,14 @@ openai-llm = ["dep:ureq", "dep:ring", "dep:base64"]
 landlock = { version = "0.4", optional = true }
 
 # La mémoire vive du poste (`connection::total_memory`) : sysctl sous macOS,
-# GlobalMemoryStatusEx sous Windows (le paquet npm, 10 octobre 2026).
+# GlobalMemoryStatusEx sous Windows (le paquet npm, 10 octobre 2026). L'état
+# d'un processus pour l'hôte du démon (`daemon_lifecycle`, lot C) : kill et
+# proc_pidinfo sous macOS, OpenProcess et GetProcessTimes sous Windows.
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_SystemInformation"] }
+windows-sys = { version = "0.59", features = ["Win32_System_SystemInformation", "Win32_System_Threading", "Win32_Foundation"] }
 
 [dependencies.rayon]
 version = "1.10"

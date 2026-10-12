@@ -123,18 +123,19 @@ pub fn read() -> Option<DaemonFile> {
     serde_json::from_slice(&octets).ok()
 }
 
-/// **Écrire `daemon.json`** en mode 0600 (il porte le jeton), par un fichier
-/// temporaire renommé : un client ne lit jamais un fichier à moitié écrit.
+/// **Écrire `daemon.json`** en mode 0600 sous Unix (il porte le jeton), par un
+/// fichier temporaire renommé : un client ne lit jamais un fichier à moitié
+/// écrit. Sous Windows, le fichier hérite de l'ACL du dossier du profil, qui
+/// n'est lisible que de son utilisateur.
 pub fn write(file: &DaemonFile) -> Result<(), String> {
-    use std::os::unix::fs::OpenOptionsExt;
     let dossier = dir();
     std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
     let provisoire = dossier.join(format!("daemon.json.{}", std::process::id()));
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut f = options
         .open(&provisoire)
         .map_err(|e| format!("{} : {e}", provisoire.display()))?;
     f.write_all(&serde_json::to_vec_pretty(file).expect("un DaemonFile se sérialise"))
@@ -151,13 +152,24 @@ pub fn remove_if_mine(pid: u32) {
     }
 }
 
-/// Un pid vit-il ? Un zombie ne vit pas : un hôte tué reste zombie tant que
-/// le client qui l'a lancé ne l'a pas attendu.
+/// **Un pid vit-il ?** `Some(true)` ou `Some(false)` quand le système sait le
+/// dire, `None` quand il ne sait pas : ne pas savoir se dit, et ne vaut jamais
+/// « mort » (lot C, 12 octobre 2026 : sous macOS, `/proc` manquait et un hôte
+/// vivant passait pour mort, si bien qu'un client en lançait un second).
+/// - Linux : `/proc/<pid>/stat` ; un zombie ne vit pas (un hôte tué reste
+///   zombie tant que le client qui l'a lancé ne l'a pas attendu).
+/// - macOS : `kill(pid, 0)` ; `EPERM` veut dire vivant, sous un autre
+///   utilisateur.
+/// - Windows : `OpenProcess`, puis `GetExitCodeProcess` égal à `STILL_ACTIVE`.
+pub fn pid_state(pid: u32) -> Option<bool> {
+    etat::pid_state(pid)
+}
+
+/// Un pid vit-il, quand il faut trancher (un message, un relevé) : l'inconnu
+/// vaut « mort ». Là où l'inconnu ne doit pas valoir « mort » — décider qu'un
+/// hôte ne répond pas —, [`pid_state`].
 pub fn pid_alive(pid: u32) -> bool {
-    match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-        Ok(s) => !s.rsplit_once(") ").is_some_and(|(_, reste)| reste.starts_with('Z')),
-        Err(_) => false,
-    }
+    pid_state(pid).unwrap_or(false)
 }
 
 /// **L'instant de démarrage d'un processus** (champ 22 de `/proc/<pid>/stat`,
@@ -165,11 +177,108 @@ pub fn pid_alive(pid: u32) -> bool {
 /// désigne **un** processus : un pid repris par un autre n'a pas le même. Le
 /// nom du processus (champ 2) peut contenir des espaces et des parenthèses :
 /// on découpe après la **dernière** `)`.
+///
+/// Sous macOS, `proc_pidinfo` (secondes et microsecondes du démarrage) ;
+/// sous Windows, `GetProcessTimes` (l'instant de création, en FILETIME). Les
+/// unités diffèrent d'un système à l'autre : la valeur ne se compare qu'à
+/// elle-même, sur le même poste.
 pub fn process_start(pid: u32) -> Option<u64> {
-    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    let (_, reste) = stat.rsplit_once(") ")?;
-    // `reste` commence au champ 3 (l'état) : le champ 22 est le 20e.
-    reste.split_whitespace().nth(19)?.parse().ok()
+    etat::process_start(pid)
+}
+
+/// **L'état d'un processus, un module par système** (lot C, 12 octobre
+/// 2026) : le reste du cycle de vie n'en voit que `pid_state` et
+/// `process_start`.
+#[cfg(target_os = "linux")]
+mod etat {
+    pub fn pid_state(pid: u32) -> Option<bool> {
+        Some(match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+            Ok(s) => !s.rsplit_once(") ").is_some_and(|(_, reste)| reste.starts_with('Z')),
+            Err(_) => false,
+        })
+    }
+    pub fn process_start(pid: u32) -> Option<u64> {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        let (_, reste) = stat.rsplit_once(") ")?;
+        // `reste` commence au champ 3 (l'état) : le champ 22 est le 20e.
+        reste.split_whitespace().nth(19)?.parse().ok()
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod etat {
+    pub fn pid_state(pid: u32) -> Option<bool> {
+        // SAFETY : kill avec le signal 0 n'envoie rien, il vérifie.
+        if unsafe { libc::kill(pid as libc::pid_t, 0) } == 0 {
+            return Some(true);
+        }
+        Some(std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM))
+    }
+    pub fn process_start(pid: u32) -> Option<u64> {
+        // SAFETY : proc_pidinfo écrit au plus `taille` octets dans `info`.
+        let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+        let taille = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+        let n = unsafe {
+            libc::proc_pidinfo(pid as libc::c_int, libc::PROC_PIDTBSDINFO, 0, &mut info as *mut _ as *mut libc::c_void, taille)
+        };
+        if n != taille {
+            return None;
+        }
+        Some(info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec)
+    }
+}
+
+#[cfg(windows)]
+mod etat {
+    use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, STILL_ACTIVE};
+    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+
+    pub fn pid_state(pid: u32) -> Option<bool> {
+        // SAFETY : un handle ouvert ici est fermé ici ; un pid inconnu rend un
+        // handle nul.
+        unsafe {
+            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if h.is_null() {
+                return Some(false);
+            }
+            let mut code: u32 = 0;
+            let ok = GetExitCodeProcess(h, &mut code);
+            CloseHandle(h);
+            if ok == 0 {
+                return None;
+            }
+            Some(code == STILL_ACTIVE as u32)
+        }
+    }
+    pub fn process_start(pid: u32) -> Option<u64> {
+        // SAFETY : un handle ouvert ici est fermé ici ; les quatre FILETIME
+        // sont écrits par GetProcessTimes.
+        unsafe {
+            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if h.is_null() {
+                return None;
+            }
+            let zero = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+            let (mut creation, mut fin, mut noyau, mut usager) = (zero, zero, zero, zero);
+            let ok = GetProcessTimes(h, &mut creation, &mut fin, &mut noyau, &mut usager);
+            CloseHandle(h);
+            if ok == 0 {
+                return None;
+            }
+            Some(((creation.dwHighDateTime as u64) << 32) | creation.dwLowDateTime as u64)
+        }
+    }
+}
+
+/// Ailleurs : ne pas savoir se dit (`None`), jamais « mort ».
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+mod etat {
+    pub fn pid_state(_pid: u32) -> Option<bool> {
+        None
+    }
+    pub fn process_start(_pid: u32) -> Option<u64> {
+        None
+    }
 }
 
 /// Le processus `(pid, démarrage)` vit-il encore ? Le pid existe, n'est pas
@@ -181,7 +290,9 @@ pub fn process_alive(pid: u32, started: u64) -> bool {
 /// **L'hôte de ce fichier répond-il ?** Son pid vit, et `GET /sante` (sans
 /// jeton) rend le service et **le même pid**.
 pub fn answers(file: &DaemonFile) -> bool {
-    if !pid_alive(file.pid) {
+    // Mort pour le système : il ne répond pas. Inconnu : `/sante`, qui rend le
+    // pid de l'hôte, tranche seul — jamais un « mort » qu'on ne sait pas.
+    if pid_state(file.pid) == Some(false) {
         return false;
     }
     let agent = crate::daemon::agent();
@@ -283,8 +394,16 @@ fn ensure_locked(exe: &Path) -> Result<DaemonFile, Missing> {
         .stdout(journal.try_clone().map_err(|e| Missing::Absent(e.to_string()))?)
         .stderr(journal);
     // Son propre groupe : un Ctrl-C ou un signal au groupe du client ne
-    // l'atteint pas ; il survit au client.
+    // l'atteint pas ; il survit au client. Sous Windows, un nouveau groupe et
+    // détaché de la console du client.
+    #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut commande, 0);
+    #[cfg(windows)]
+    {
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        std::os::windows::process::CommandExt::creation_flags(&mut commande, CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+    }
     let mut enfant = commande
         .spawn()
         .map_err(|e| Missing::Absent(format!("lancer {} : {e}", exe.display())))?;

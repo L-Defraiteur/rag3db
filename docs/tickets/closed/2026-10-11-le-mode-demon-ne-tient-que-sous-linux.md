@@ -1,6 +1,6 @@
 # Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant
 
-- **État** : ouvert (11 octobre 2026, optimiseur, vu par le bâti de l'archive npm `0.0.1-alpha.3`)
+- **État** : corrigé (12 octobre 2026, optimiseur, lot C, branche `portage-c`) : l'état d'un processus par système, l'inconnu qui ne vaut pas « mort », la fiche et le détachement par plateforme, l'arrêt propre par console sous Windows ; éprouvé par les runners du paquet, run 38200365497, étape « Bâti » verte sous Windows et macOS (et l'extension, et l'épreuve du binaire)
 - **Gravité** : blocage. Sous Windows, le binaire ne se bâtit plus. Sous macOS, le mode démon
   ne s'attache jamais à un hôte vivant (lecture du code, non joué).
 - **Atteignable en service** : oui, sur tout poste Windows ou macOS, dès le bâti pour l'un et
