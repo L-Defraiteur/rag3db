@@ -406,3 +406,46 @@ fn a_handle_is_found_with_or_without_its_hash() {
     r.remove("#h");
     assert!(!r.contains("h"));
 }
+
+/// **La fin va à un nom** (la boîte par nom du proto) : l'appelant d'un chat
+/// ne vit qu'un tour. Son tour fini, la fin lancée attend dans l'annuaire, et
+/// c'est son tour suivant, qui reprend le nom, qui la reçoit — pas le run
+/// d'avant.
+#[test]
+fn the_end_of_a_caller_whose_turn_is_over_reaches_its_next_turn() {
+    use crate::agent::AGENT_INBOX_CURSOR;
+    use crate::directory::{new_owner, Directory};
+    let bus = Arc::new(EventBus::new(256));
+    let directory = Arc::new(Directory::new());
+    let owner = new_owner();
+    directory.claim_and_open(&bus, "lucie", "tour-1", owner.clone()).unwrap();
+    directory.release("lucie", "tour-1");
+    let registry = Arc::new(Registry::new());
+    let mut s = ServiceRegistry::new();
+    s.register("event_bus", bus.clone());
+    s.register(BACKGROUND_SERVICE, registry.clone());
+    s.register(DIRECTORY_SERVICE, directory.clone());
+    let spec = Spawn {
+        tool: "écho".into(),
+        message: Some(PortValue::new("bonjour".to_string())),
+        caller: Some("lucie".into()),
+        parent_run: Some("tour-1".into()),
+        ..Default::default()
+    };
+    let l = DataflowRuntime::with_services_arc(10, Arc::new(s)).spawn(echo(None, false), spec).unwrap();
+    let t = Instant::now();
+    while !registry.alive().is_empty() {
+        assert!(t.elapsed() < Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let ancien = bus.cursor(&inbox_topic("tour-1"), AGENT_INBOX_CURSOR);
+    assert!(ancien.lock().unwrap().try_recv().is_err(), "le tour fini ne la reçoit pas");
+    directory.claim_and_open(&bus, "lucie", "tour-2", owner).unwrap();
+    let suivant = bus.cursor(&inbox_topic("tour-2"), AGENT_INBOX_CURSOR);
+    let Ok(Event::Message { from, content, .. }) = suivant.lock().unwrap().try_recv() else {
+        panic!("le tour suivant reçoit la fin")
+    };
+    assert_eq!(from, format!("outil {}", l.handle));
+    let v: Value = serde_json::from_str(&content).unwrap();
+    assert_eq!((v["run"].as_str(), v["statut"].as_str()), (Some(l.run.as_str()), Some("terminé")));
+}

@@ -331,6 +331,15 @@ milliseconde : lancer en fond ne pèse rien devant le travail lancé.
 - trois témoins : un message, un flux de trois, un lancement de trop (et
   `cancel_all("hôte")` qui arrête le run retenu, avec sa cause).
 
+**La fin par la boîte par nom** (le lot du proto, `bbaf4481d`) : la
+primitive livre désormais par `Directory::deliver`.
+- Un nom dont le tour est en cours reçoit la fin dans sa boîte.
+- Un nom dont le tour est fini la garde pour son tour suivant : c'est
+  l'appelant d'un chat, dont chaque tour est un run.
+- Sans annuaire, l'appelant est un run, et sa boîte la reçoit.
+- Témoin : `the_end_of_a_caller_whose_turn_is_over_reaches_its_next_turn`.
+  Il est rouge sur le repli d'avant (`resolve`, qui envoyait au tour fini).
+
 **Le reste** :
 - la boîte qui devient un flux ouvert, le second temps (§2.7) ;
 - `alive()` dans `daemon_status` et l'outil MCP, ainsi que `cancel_all` à

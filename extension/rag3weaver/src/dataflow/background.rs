@@ -28,7 +28,7 @@ use super::services::ServiceRegistry;
 pub const BACKGROUND_SERVICE: &str = "background";
 
 /// La clé de service de l'annuaire (posée par la boucle d'agent).
-pub const DIRECTORY_SERVICE: &str = "directory";
+pub use crate::directory::DIRECTORY_SERVICE;
 
 /// Ce qui tourne en fond.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -374,8 +374,11 @@ fn message_target(graph: &DataflowGraph) -> Result<(String, String), String> {
     }
 }
 
-/// Écrit la fin chez l'appelant : par l'annuaire s'il est là (le nom résolu
-/// en son run courant), sinon dans la boîte du run nommé.
+/// Écrit la fin chez l'appelant. Par l'annuaire s'il est là
+/// (`Directory::deliver`) : un nom dont le tour est en cours la reçoit dans
+/// sa boîte, un nom dont le tour est fini la garde pour son tour suivant (la
+/// fin d'un appelant de chat, dont chaque tour est un run). Sans annuaire,
+/// l'appelant est un run, et sa boîte la reçoit.
 fn deliver(services: &ServiceRegistry, run: &str, from: &str, caller: &str, content: &Value) {
     let bus = services
         .get::<Arc<crate::events::EventBus>>("event_bus")
@@ -385,12 +388,16 @@ fn deliver(services: &ServiceRegistry, run: &str, from: &str, caller: &str, cont
         eprintln!("[fond] {from} : pas de bus, la fin n'est écrite nulle part (le registre et la trace la disent)");
         return;
     };
-    let to = services
-        .get::<Arc<crate::directory::Directory>>(DIRECTORY_SERVICE)
-        .and_then(|d| d.resolve(caller))
-        .map(|r| r.run)
-        .unwrap_or_else(|| caller.to_string());
-    bus.send_message(run, from, &to, &content.to_string());
+    match services.get::<Arc<crate::directory::Directory>>(DIRECTORY_SERVICE) {
+        Some(d) => match d.deliver(&bus, run, from, caller, &content.to_string()) {
+            Ok(crate::directory::Delivery::ToRun(_)) => {}
+            Ok(crate::directory::Delivery::Held { name }) => {
+                eprintln!("[fond] {from} : « {name} » n'a pas de tour en cours, sa fin attend son tour suivant")
+            }
+            Err(e) => eprintln!("[fond] {from} : la fin n'a pas pu être livrée : {e}"),
+        },
+        None => bus.send_message(run, from, caller, &content.to_string()),
+    }
 }
 
 impl DataflowRuntime {
