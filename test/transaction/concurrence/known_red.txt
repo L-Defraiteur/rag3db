@@ -133,3 +133,12 @@ Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelati
 # du CSR des arêtes, relues par chaque balayage de voisins jusqu'au point de reprise. Rouge trois
 # passes sur trois (1,68 à 1,74 fois la courbe avec points de reprise). Pour le cœur C++.
 VectorIndexInsertSlope.CostPerBatchSettles insert-cost-without-checkpoint-stays-close
+#
+# Un index retiré ou recréé change dans le stockage pour toutes les transactions avant sa
+# validation (ticket 2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage) :
+# le lecteur d'avant reçoit un refus nommé au lieu de l'ancien index, un CREATE annulé laisse son
+# index dans la liste (« already exists » au suivant), un DROP annulé perd l'index. Rouges deux
+# passes sur deux. Pour hotfixs (pas 2, la rétention).
+VectorIndexRetention.ReaderBeforeDropSeesTheOldIndex reader-before-drop-sees-old-index
+VectorIndexRetention.RolledBackCreateCanBeRedone rolled-back-create-can-be-redone
+VectorIndexRetention.RolledBackDropKeepsTheIndex rolled-back-drop-keeps-index

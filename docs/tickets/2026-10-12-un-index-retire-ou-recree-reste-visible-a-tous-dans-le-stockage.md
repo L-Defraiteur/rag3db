@@ -52,14 +52,31 @@ de la liste dans les parcours des écrivains n'est pas sûr : `insert` et `lockI
 reprennent par `hasLoadedSecondaryIndex` (un `shared_mutex` repris s'interbloque derrière un DDL
 qui attend), et `acquireLocks` attendrait jusqu'à `lock_timeout` en le tenant.
 
-## Témoins à écrire
+## Témoins (banc, 12 octobre 2026, écrits avant le correctif)
 
-- Le lecteur d'avant voit l'ancien index entier : une transaction en lecture ouverte avant un
-  DROP validé cherche, et trouve les résultats d'avant.
-- Annuler un CREATE, puis le refaire : pas de « already exists ».
+`test/transaction/concurrence/vector_index_retention_test.cpp`, en known_red, rouges deux passes
+sur deux sur master cb6c1a2cb :
+- `VectorIndexRetention.ReaderBeforeDropSeesTheOldIndex`, contrôle
+  `reader-before-drop-sees-old-index` : une transaction `READ ONLY` cherche (145 … 154), un DROP
+  valide en face, elle cherche de nouveau et reçoit « Index doc_index of table Doc does not exist
+  any more ». Une variante DROP puis CREATE validés en face n'existe pas : `CREATE_VECTOR_INDEX`
+  force un point de reprise qui attend le départ des lecteurs (voulu ; le faire passer sans les
+  attendre serait un CREATE INDEX CONCURRENTLY, hors de ce ticket).
+- `VectorIndexRetention.RolledBackCreateCanBeRedone`, contrôle `rolled-back-create-can-be-redone` :
+  un lecteur ouvert ; en face, un CREATE dont le point de reprise forcé attend 5 s puis échoue et
+  s'annule (`CREATE_VECTOR_INDEX` n'est permis qu'en transaction automatique : c'est la seule
+  façon d'en annuler un) ; le lecteur fermé, le même CREATE répond « Index with name doc_index
+  already exists ».
+- `VectorIndexRetention.RolledBackDropKeepsTheIndex`, contrôle `rolled-back-drop-keeps-index` :
+  `BEGIN TRANSACTION`, `CALL DROP_VECTOR_INDEX` (permis en transaction), `ROLLBACK` ; la recherche
+  suivante reçoit « Index doc_index is behind its table Doc: rows were recovered from the journal
+  while its extension was not loaded. Drop it and build it again. » Plus grave que le constat
+  ci-dessus : le DROP détruit l'index dans le stockage tout de suite, l'annulation ne rend que
+  l'entrée du catalogue, et la liaison le prend pour un index détaché par le rejeu. L'index est
+  perdu et le message est faux.
 - Le témoin du banc (`VectorIndexRebuild.SearchesAcrossDropAndCreateAreConsistentOrNamed`)
   reste vert, rejoué 10 fois.
 
 ## Pour le fermer
 
-La forme ci-dessus, avec les trois témoins verts.
+La forme ci-dessus, avec les quatre témoins verts.
