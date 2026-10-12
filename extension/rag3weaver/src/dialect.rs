@@ -197,12 +197,13 @@ pub struct DialectCapabilities {
     pub fanout: bool,
     /// **Un saut qui lit des champs du nœud atteint, en deux temps** : le
     /// saut ne rend que l'uuid du voisin, puis ses champs se lisent par clé
-    /// (`graph_walk::run_hop`). Vrai pour rag3db : mesuré le 11 octobre sur
-    /// l'index entier, le saut qui lit les champs balaie toute la table du
-    /// voisin sous semi-masque (ticket du semi-masque), et les deux temps
-    /// rendent les mêmes lignes deux fois plus vite. Faux pour PostgreSQL,
-    /// dont la jointure passe par l'index. À remesurer, et à retirer s'il ne
-    /// gagne plus, quand le moteur corrige le semi-masque.
+    /// (`graph_walk::run_hop`). Faux partout depuis le 12 octobre : sur
+    /// rag3db, la jointure par clé du moteur (`2b11b55ec`, `97589fc9d`,
+    /// `0c0af5bf5`) masque le départ et l'arrivée du saut, et `usages` sur
+    /// l'index entier rend les mêmes lignes en 7 à 10 ms en un temps contre
+    /// 10 à 13 ms en deux ; PostgreSQL joint par l'index. La forme reste pour
+    /// un moteur qui ne masquerait pas, ou une mesure
+    /// (`Catalog::set_two_step_hops`, page 06 de la session embarquements).
     pub two_step_hops: bool,
 }
 
@@ -1736,7 +1737,7 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false, two_step_hops: true }
+        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false, two_step_hops: false }
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
