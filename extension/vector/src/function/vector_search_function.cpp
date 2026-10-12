@@ -160,7 +160,7 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
         catalog->getTableCatalogEntry(transaction, lowerRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
     // L'index capturé, celui de cet instantané (voir OnDiskHNSWIndex::captureForQuery).
-    const auto capturedIndex = OnDiskHNSWIndex::captureForQuery(*nodeTable, indexName,
+    const auto capturedIndex = OnDiskHNSWIndex::captureForQuery(*nodeTable, transaction, indexName,
         tableEntry->getName(), upperRelTableEntry->getSingleRelEntryInfo().oid,
         lowerRelTableEntry->getSingleRelEntryInfo().oid);
     auto& hnswIndex = *capturedIndex;

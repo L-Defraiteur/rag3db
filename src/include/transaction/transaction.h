@@ -30,6 +30,7 @@ struct VectorUpdateInfo;
 class ChunkedNodeGroup;
 class Table;
 class VersionRecordHandler;
+class NodeTable;
 } // namespace storage
 namespace transaction {
 class TransactionManager;
@@ -170,6 +171,8 @@ public:
         common::row_idx_t numRows, const storage::VersionRecordHandler* versionRecordHandler) const;
     void pushVectorUpdateInfo(storage::UpdateInfo& updateInfo, common::idx_t vectorIdx,
         storage::VectorUpdateInfo& vectorUpdateInfo, common::transaction_t version) const;
+    // Un CREATE ou un DROP d'index du stockage, versionné (ticket de la rétention).
+    void pushIndexChange(storage::NodeTable& table, uint64_t holderID, bool isCreate) const;
 
     static Transaction* Get(const main::ClientContext& context);
 

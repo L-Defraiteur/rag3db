@@ -62,6 +62,7 @@ private:
 };
 
 class Table;
+class NodeTable;
 class UpdateInfo;
 class VersionInfo;
 struct VectorUpdateInfo;
@@ -78,6 +79,8 @@ public:
         INSERT_INFO = 7,
         DELETE_INFO = 8,
         ADD_COLUMN = 9,
+        // Un CREATE ou un DROP d'index du stockage (NodeTable::addIndex, dropIndex).
+        INDEX_CHANGE = 10,
     };
 
     explicit UndoBuffer(MemoryManager* mm) : mm{mm} {}
@@ -100,6 +103,7 @@ public:
     // copie de l'entrée du catalogue rend son indice à l'annulation ; sans ce retrait, l'ADD
     // suivant reprenait l'indice et relisait la colonne morte (ticket du 18 octobre 2026).
     void createAddColumn(Table& table);
+    void createIndexChange(NodeTable& table, uint64_t holderID, bool isCreate);
 
     void commit(common::transaction_t commitTS) const;
     // Après commit : pour chaque groupe où cette transaction a supprimé des lignes, la

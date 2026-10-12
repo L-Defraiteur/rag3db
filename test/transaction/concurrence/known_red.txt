@@ -113,15 +113,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine 
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
-# Un index retiré ou recréé change dans le stockage pour toutes les transactions avant sa
-# validation (ticket 2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage) :
-# le lecteur d'avant reçoit un refus nommé au lieu de l'ancien index, un CREATE annulé laisse son
-# index dans la liste (« already exists » au suivant), un DROP annulé perd l'index. Rouges deux
-# passes sur deux. Pour hotfixs (pas 2, la rétention).
-VectorIndexRetention.ReaderBeforeDropSeesTheOldIndex reader-before-drop-sees-old-index
-VectorIndexRetention.RolledBackCreateCanBeRedone rolled-back-create-can-be-redone
-VectorIndexRetention.RolledBackDropKeepsTheIndex rolled-back-drop-keeps-index
-#
 # La pente de l'insertion sous HNSW sans point de reprise (ticket
 # 2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot), revenue de
 # probabilistic.txt le 12 octobre. Le rapport des 5 derniers lots sans point de reprise sur ceux avec
@@ -132,3 +123,8 @@ VectorIndexRetention.RolledBackDropKeepsTheIndex rolled-back-drop-keeps-index
 # mémoire, ligne à ligne, de ce qui a été écrit depuis le dernier point de reprise
 # (scanCommittedInMemRandom 4 → 27 %, VersionInfo::isSelected 0 → 18 %). Pour le cœur C++.
 VectorIndexInsertSlope.CostPerBatchSettles insert-cost-without-checkpoint-stays-close
+#
+# Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index (ticket
+# 2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index) : environ 1 500
+# lignes insérées par une autre connexion pendant le bâti, 20 006 atteintes sur 21 508. Pour hotfixs.
+VectorIndexUpdate.RowsCommittedDuringACreateAreIndexed rows-committed-during-create-indexed

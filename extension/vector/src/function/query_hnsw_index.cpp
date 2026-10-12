@@ -341,7 +341,7 @@ std::unique_ptr<TableFuncLocalState> initQueryHNSWLocalState(
             ->getTableCatalogEntry(transaction::Transaction::Get(*context), lowerRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
     auto index = OnDiskHNSWIndex::captureForQuery(*hnswSharedState->nodeTable,
-        hnswBindData->indexEntry->getIndexName(), hnswBindData->nodeTableEntry->getName(),
+        transaction::Transaction::Get(*context), hnswBindData->indexEntry->getIndexName(), hnswBindData->nodeTableEntry->getName(),
         upperRelTableEntry->getSingleRelEntryInfo().oid,
         lowerRelTableEntry->getSingleRelEntryInfo().oid);
     HNSWSearchState searchState{context, hnswBindData->nodeTableEntry, upperRelTableEntry,

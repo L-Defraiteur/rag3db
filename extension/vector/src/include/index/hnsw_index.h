@@ -308,7 +308,8 @@ public:
     // lowerRelTableID : l'oid de la relation unique de chaque groupe, getSingleRelEntryInfo, vu à
     // cet instantané) : un index recréé entre la liaison et la lecture a d'autres tables. Absent, ou d'une autre génération : refus nommé (« does not exist »).
     static std::shared_ptr<OnDiskHNSWIndex> captureForQuery(const storage::NodeTable& nodeTable,
-        const std::string& indexName, const std::string& tableName,
+        const transaction::Transaction* transaction, const std::string& indexName,
+        const std::string& tableName,
         common::table_id_t upperRelTableID, common::table_id_t lowerRelTableID);
     struct HNSWInsertState final : InsertState {
         // State for searching neighbors and reading vectors in the HNSW graph.

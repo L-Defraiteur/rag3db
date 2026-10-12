@@ -7,6 +7,7 @@
 #include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
+#include "transaction/transaction.h"
 #include "transaction/transaction_context.h"
 
 using namespace rag3db::function;
@@ -47,9 +48,14 @@ static common::offset_t internalTableFunc(const TableFuncInput& input, TableFunc
     const auto bindData = input.bindData->constPtrCast<DropHNSWIndexBindData>();
     auto tableID = bindData->tableEntry->getTableID();
     auto transaction = transaction::Transaction::Get(context);
+    auto& nodeTable =
+        storage::StorageManager::Get(context)->getTable(tableID)->cast<storage::NodeTable>();
+    // L'index de la table en EXCLUSIF : le DROP se sérialise avec les écritures (qui le tiennent
+    // en partagé ou en exclusif), pas avec les lecteurs (ticket de la rétention).
+    nodeTable.lockIndexForDDL(transaction);
     catalog::Catalog::Get(context)->dropIndex(transaction, tableID, bindData->indexName);
-    storage::StorageManager::Get(context)->getTable(tableID)->cast<storage::NodeTable>().dropIndex(
-        bindData->indexName);
+    // Marqué, pas effacé : les transactions d'avant le voient encore, l'annulation le rend.
+    nodeTable.dropIndex(bindData->indexName, transaction);
     return 0;
 }
 

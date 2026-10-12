@@ -1711,6 +1711,58 @@ INSTANTIATE_TEST_SUITE_P(Cases, RegionDelete,
                (info.param.keepOnlyAHandful ? "AllButFive" : "TenPercent");
     });
 
+// Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index (ticket
+// 2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index, relevé par le cœur
+// C++ en relisant la rétention). Le CREATE bâtit l'index à son instantané, sans verrou d'index ;
+// une autre connexion insère et valide des lignes pendant ce bâti ; à la fin, une recherche
+// exhaustive (efs = nombre de lignes) doit atteindre toutes les lignes vivantes.
+TEST_F(VectorIndexUpdate, RowsCommittedDuringACreateAreIndexed) {
+    constexpr int NUM_ROWS = 20000;
+    const std::string vec = "[i % 17, i % 23, i % 29, i % 31, i % 37, i % 41, i % 43, i % 47, "
+                            "i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, i / 1000.0]";
+    table = "C";
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+    mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: {}});", NUM_ROWS - 1,
+        vec));
+    rag3db::main::Connection creator(database.get());
+    rag3db::main::Connection writer(database.get());
+    std::atomic<bool> created{false};
+    auto creating = std::async(std::launch::async, [&] {
+        auto result = creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+        created = true;
+        return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+    });
+    int64_t insertedDuring = 0;
+    for (auto j = 0; !created.load() && j < 100000; j++) {
+        const auto i = 100000 + j;
+        auto inserted = writer.query(stringFormat("CREATE (:C {id: {}, vec: {}});", i,
+            stringFormat("[{} % 17, {} % 23, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, {}]", i, i,
+                i / 1000.0)));
+        if (inserted->isSuccess() && !created.load()) {
+            insertedDuring++;
+        }
+    }
+    const auto outcome = creating.get();
+    ASSERT_EQ(outcome, "ok") << "[check: setup] " << outcome;
+    ASSERT_GT(insertedDuring, 0) << "[check: setup] no insert committed during the CREATE";
+    auto count = conn->query("MATCH (n:C) RETURN count(n);");
+    ASSERT_TRUE(count->isSuccess());
+    const auto numLive = count->getNext()->getValue(0)->getValue<int64_t>();
+    auto all = conn->query(stringFormat(
+        "CALL QUERY_VECTOR_INDEX('C', 'c_index', [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "
+        "{}, efs := {}) RETURN node.id;",
+        numLive, numLive));
+    ASSERT_TRUE(all->isSuccess()) << all->getErrorMessage();
+    std::set<int64_t> reached;
+    while (all->hasNext()) {
+        reached.insert(all->getNext()->getValue(0)->getValue<int64_t>());
+    }
+    std::cerr << "  create under writes: " << insertedDuring << " rows committed during the build, "
+              << reached.size() << "/" << numLive << " reached\n";
+    EXPECT_EQ(static_cast<int64_t>(reached.size()), numLive)
+        << "[check: rows-committed-during-create-indexed] " << reached.size() << " of " << numLive;
+}
+
 } // namespace
 
 #endif

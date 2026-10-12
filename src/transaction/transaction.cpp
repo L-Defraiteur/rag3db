@@ -349,6 +349,11 @@ void Transaction::pushVectorUpdateInfo(storage::UpdateInfo& updateInfo,
     undoBuffer->createVectorUpdateInfo(&updateInfo, vectorIdx, &vectorUpdateInfo, version);
 }
 
+void Transaction::pushIndexChange(storage::NodeTable& table, uint64_t holderID,
+    bool isCreate) const {
+    undoBuffer->createIndexChange(table, holderID, isCreate);
+}
+
 Transaction::~Transaction() = default;
 
 common::offset_t Transaction::getMinUncommittedNodeOffset(common::table_id_t tableID) const {

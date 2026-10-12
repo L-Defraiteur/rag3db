@@ -591,18 +591,24 @@ std::unique_ptr<Index> OnDiskHNSWIndex::load(main::ClientContext* context, Stora
 }
 
 std::shared_ptr<OnDiskHNSWIndex> OnDiskHNSWIndex::captureForQuery(
-    const storage::NodeTable& nodeTable, const std::string& indexName, const std::string& tableName,
+    const storage::NodeTable& nodeTable, const transaction::Transaction* transaction,
+    const std::string& indexName, const std::string& tableName,
     common::table_id_t upperRelTableID, common::table_id_t lowerRelTableID) {
-    auto index = std::dynamic_pointer_cast<OnDiskHNSWIndex>(nodeTable.getSharedIndex(indexName));
-    if (index == nullptr) {
-        HNSWIndexUtils::throwIndexGoneUnderTheQuery(indexName, tableName);
+    // Deux exemplaires de ce nom peuvent être visibles jusqu'au point de reprise (l'ancien,
+    // retiré après le début de la transaction, et un neuf) : jamais « le premier de ce nom », mais
+    // celui dont les tables de relations sont celles de l'instantané.
+    for (const auto& candidate : nodeTable.getVisibleSharedIndexes(indexName, transaction)) {
+        auto index = std::dynamic_pointer_cast<OnDiskHNSWIndex>(candidate);
+        if (index == nullptr) {
+            continue;
+        }
+        const auto& storageInfo = index->getStorageInfo().constCast<HNSWStorageInfo>();
+        if (storageInfo.upperRelTableID == upperRelTableID &&
+            storageInfo.lowerRelTableID == lowerRelTableID) {
+            return index;
+        }
     }
-    const auto& storageInfo = index->getStorageInfo().constCast<HNSWStorageInfo>();
-    if (storageInfo.upperRelTableID != upperRelTableID ||
-        storageInfo.lowerRelTableID != lowerRelTableID) {
-        HNSWIndexUtils::throwIndexGoneUnderTheQuery(indexName, tableName);
-    }
-    return index;
+    HNSWIndexUtils::throwIndexGoneUnderTheQuery(indexName, tableName);
 }
 
 std::vector<NodeWithDistance> OnDiskHNSWIndex::search(Transaction* transaction,

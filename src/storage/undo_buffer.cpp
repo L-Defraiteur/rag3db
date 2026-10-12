@@ -8,6 +8,7 @@
 #include "catalog/catalog_set.h"
 #include "storage/table/chunked_node_group.h"
 #include "storage/table/table.h"
+#include "storage/table/node_table.h"
 #include "storage/table/update_info.h"
 #include "storage/table/version_record_handler.h"
 #include "transaction/transaction.h"
@@ -46,6 +47,12 @@ struct VersionRecord {
     row_idx_t numRows;
     node_group_idx_t nodeGroupIdx;
     const VersionRecordHandler* versionRecordHandler;
+};
+
+struct IndexChangeRecord {
+    NodeTable* table;
+    uint64_t holderID;
+    bool isCreate;
 };
 
 struct VectorUpdateRecord {
@@ -152,6 +159,14 @@ void UndoBuffer::createVectorUpdateInfo(UpdateInfo* updateInfo, const idx_t vect
     *reinterpret_cast<VectorUpdateRecord*>(buffer) = vectorUpdateRecord;
 }
 
+void UndoBuffer::createIndexChange(NodeTable& table, uint64_t holderID, bool isCreate) {
+    auto buffer = createUndoRecord(sizeof(UndoRecordHeader) + sizeof(IndexChangeRecord));
+    const UndoRecordHeader recordHeader{UndoRecordType::INDEX_CHANGE, sizeof(IndexChangeRecord)};
+    *reinterpret_cast<UndoRecordHeader*>(buffer) = recordHeader;
+    buffer += sizeof(UndoRecordHeader);
+    *reinterpret_cast<IndexChangeRecord*>(buffer) = IndexChangeRecord{&table, holderID, isCreate};
+}
+
 uint8_t* UndoBuffer::createUndoRecord(const uint64_t size) {
     std::unique_lock xLck{mtx};
     if (memoryBuffers.empty() || !memoryBuffers.back().canFit(size)) {
@@ -227,6 +242,10 @@ void UndoBuffer::commitRecord(UndoRecordType recordType, const uint8_t* record,
     case UndoRecordType::ADD_COLUMN: {
         // La colonne est déjà en place ; la validation de l'entrée du catalogue la nomme.
     } break;
+    case UndoRecordType::INDEX_CHANGE: {
+        const auto& change = *reinterpret_cast<IndexChangeRecord const*>(record);
+        change.table->commitIndexChange(change.holderID, change.isCreate, commitTS);
+    } break;
     default:
         KU_UNREACHABLE;
     }
@@ -282,6 +301,10 @@ void UndoBuffer::rollbackRecord(ClientContext* context, const UndoRecordType rec
     } break;
     case UndoRecordType::ADD_COLUMN: {
         rollbackAddColumn(context, record);
+    } break;
+    case UndoRecordType::INDEX_CHANGE: {
+        const auto& change = *reinterpret_cast<IndexChangeRecord const*>(record);
+        change.table->rollbackIndexChange(change.holderID, change.isCreate);
     } break;
     default: {
         KU_UNREACHABLE;

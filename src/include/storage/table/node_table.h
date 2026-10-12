@@ -204,7 +204,8 @@ public:
     void lockRowForWrite(transaction::Transaction* transaction, common::offset_t nodeOffset,
         const std::string& key) const;
     // Marche I1 (le genre « index ») : la table porte un index secondaire chargé (vectoriel).
-    bool hasLoadedSecondaryIndex() const;
+    // Comptés : les index visibles à la transaction (un index qu'elle a retiré ne compte plus).
+    bool hasLoadedSecondaryIndex(const transaction::Transaction* transaction) const;
     // Sous le mode multi-écrivains, tout écrivain d'une table indexée tient l'index de la table
     // en EXCLUSIF de sa première écriture à sa validation : l'index réécrit, pendant la
     // transaction comme au commit, des arêtes validées de ses voisins et des points d'entrée en
@@ -212,6 +213,10 @@ public:
     // transaction n'a encore rien écrit, son instantané est repris (comme l'annonce de V2) : le
     // second recoud sur le graphe que le premier a validé, et non sur un graphe périmé.
     void lockIndexForWrite(transaction::Transaction* transaction) const;
+    // Le CREATE et le DROP d'un index de la table : l'index en EXCLUSIF (les écritures le tiennent
+    // en partagé ou en exclusif), puis, si la transaction n'a encore rien écrit, son instantané
+    // repris après l'attente. Hors du mode multi-écrivains, rien.
+    void lockIndexForDDL(transaction::Transaction* transaction) const;
     // L'extrémité d'une relation que l'on crée : la clé en partagé ; si le nœud a été supprimé
     // par une validation postérieure à l'instantané, l'erreur de sérialisation.
     void throwIfWrittenByAnotherCommitAfterSnapshot(const transaction::Transaction* transaction,
@@ -222,8 +227,18 @@ public:
     bool lookupPK(const transaction::Transaction* transaction, common::ValueVector* keyVector,
         uint64_t vectorPos, common::offset_t& result) const;
 
-    void addIndex(std::unique_ptr<Index> index);
-    void dropIndex(const std::string& name);
+    // Sous une transaction (hors reprise), le CREATE et le DROP sont versionnés comme une ligne :
+    // l'index créé n'est visible que de sa transaction jusqu'à la validation ; l'index retiré
+    // reste visible des transactions d'avant jusqu'au point de reprise qui l'efface
+    // (reclaimDroppedIndexes) ; une annulation défait l'un et l'autre (enregistrement
+    // INDEX_CHANGE du tampon d'annulation). Sans transaction (le rejeu du journal), l'effet est
+    // immédiat, comme avant.
+    void addIndex(std::unique_ptr<Index> index, transaction::Transaction* transaction = nullptr);
+    void dropIndex(const std::string& name, transaction::Transaction* transaction = nullptr);
+    void commitIndexChange(uint64_t holderID, bool isCreate, common::transaction_t commitTS);
+    void rollbackIndexChange(uint64_t holderID, bool isCreate);
+    // Au point de reprise (aucune transaction ouverte) : efface les index retirés et validés.
+    void reclaimDroppedIndexes();
     // Le nom du refus d'écrire dans une table dont un index n'est pas chargé.
     static constexpr const char* INDEX_NOT_LOADED_FOR_WRITE =
         "is not loaded: load its extension before writing to table";
@@ -238,8 +253,8 @@ public:
     // ne la change : à réserver aux appelants sans DDL concurrent. Les autres prennent
     // hasIndexHolder ou loadIndex, qui lisent et agissent sous le verrou.
     std::optional<std::reference_wrapper<IndexHolder>> getIndexHolder(const std::string& name);
-    // Un exemplaire non détaché de ce nom est là, chargé ou non.
-    bool hasIndexHolder(const std::string& name) const;
+    // Un exemplaire non détaché de ce nom, visible à la transaction, est là, chargé ou non.
+    bool hasIndexHolder(const std::string& name, const transaction::Transaction* transaction) const;
     // Charge l'exemplaire non détaché de ce nom s'il ne l'est pas, sous le verrou de la liste.
     // Rend faux s'il n'y en a pas (détaché par le rejeu, ou retiré).
     bool loadIndex(const std::string& name, main::ClientContext* context,
@@ -248,6 +263,11 @@ public:
     // L'index chargé de ce nom, en propriété partagée : il reste vivant tant que l'appelant le
     // tient, même si un DROP concurrent le retire de la table. Nul s'il n'y est pas (ou plus).
     std::shared_ptr<Index> getSharedIndex(const std::string& name) const;
+    // Les index chargés de ce nom visibles à la transaction, en propriété partagée. Deux peuvent
+    // coexister jusqu'au point de reprise (l'ancien retiré, le neuf) : l'appelant choisit celui
+    // que son instantané du catalogue désigne (OnDiskHNSWIndex::captureForQuery).
+    std::vector<std::shared_ptr<Index>> getVisibleSharedIndexes(const std::string& name,
+        const transaction::Transaction* transaction) const;
     std::vector<IndexHolder>& getIndexes() { return indexes; }
 
     common::column_id_t getNumColumns() const { return columns.size(); }
@@ -348,6 +368,10 @@ private:
     // parcourent par getIndexes(), se sérialisent avec le DDL par le verrou INDEX (à venir).
     mutable std::shared_mutex indexesMtx;
     std::optional<Index*> getIndexNoLock(const std::string& name) const;
+    // Visible à la transaction ; sans transaction, tout index non retiré.
+    static bool isIndexVisible(const IndexHolder& holder,
+        const transaction::Transaction* transaction);
+    uint64_t nextHolderID = 1;
     NodeTableVersionRecordHandler versionRecordHandler;
 };
 

@@ -31,7 +31,7 @@ static void throwIfBehindItsTable(const main::ClientContext& context,
     auto& nodeTable = storage::StorageManager::Get(context)
                           ->getTable(tableEntry->getTableID())
                           ->cast<storage::NodeTable>();
-    if (!nodeTable.hasIndexHolder(indexName)) {
+    if (!nodeTable.hasIndexHolder(indexName, transaction::Transaction::Get(context))) {
         // Une autre transaction l'a retiré ou recréé sans que cet instantané le voie (pas encore
         // validé, ou validé après son début) : la table n'a déjà plus l'exemplaire. L'absence
         // seule ne suffit pas à le dire : un index détaché par le rejeu, puis passé un point de

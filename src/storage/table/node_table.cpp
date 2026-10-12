@@ -326,6 +326,9 @@ NodeTable::NodeTable(const StorageManager* storageManager,
         hashIndexType.definitionType == IndexDefinitionType::BUILTIN};
     indexes.push_back(IndexHolder{PrimaryKeyIndex::createNewIndex(indexInfo,
         storageManager->isInMemory(), *mm, pageAllocator, shadowFile)});
+    // Chaque holder a son identifiant, unique dans la table : la validation et l'annulation d'un
+    // CREATE ou d'un DROP le retrouvent par lui (un identifiant partagé retirait la clé primaire).
+    indexes.back().setHolderID(nextHolderID++);
     nodeGroups = std::make_unique<NodeGroupCollection>(*mm,
         LocalNodeTable::getNodeTableColumnTypes(*nodeTableEntry), enableCompression,
         storageManager->getDataFH() ? ResidencyState::ON_DISK : ResidencyState::IN_MEMORY,
@@ -559,7 +562,7 @@ void NodeTable::validatePkNotExists(const Transaction* transaction, ValueVector*
 }
 
 bool NodeTable::isWritableIndex(IndexHolder& indexHolder, const Transaction* transaction) {
-    if (indexHolder.isDetached()) {
+    if (indexHolder.isDetached() || !isIndexVisible(indexHolder, transaction)) {
         return false;
     }
     if (indexHolder.isLoaded()) {
@@ -625,7 +628,7 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
     if (transaction->usesLocks()) {
         // Marche I1 : sur une table indexée, l'index en exclusif (lockIndexForWrite), sinon en
         // partagé ; la clé en exclusif dans les deux cas.
-        const auto indexed = hasLoadedSecondaryIndex();
+        const auto indexed = hasLoadedSecondaryIndex(transaction);
         const auto pkPos = nodeInsertState.pkVector.state->getSelVector()[0];
         const std::array requests{
             LockRequest{LockResource::index(tableID),
@@ -647,6 +650,9 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
         validatePkNotExists(transaction, const_cast<ValueVector*>(&nodeInsertState.pkVector));
     }
     localTable->insert(transaction, insertState);
+    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
+    // initialisation (voir rollbackIndexChange).
+    KU_ASSERT(nodeInsertState.indexInsertStates.size() == indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         if (!nodeInsertState.indexInsertStates[i]) {
             continue; // index sauté par initInsertState
@@ -673,6 +679,12 @@ void NodeTable::initUpdateState(main::ClientContext* context, TableUpdateState& 
     nodeUpdateState.indexUpdateState.resize(indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         auto& indexHolder = indexes[i];
+        // Un index que la transaction ne voit pas (retiré avant son instantané, ou créé par une
+        // autre sans validation) n'est pas mis à jour (ticket de la rétention).
+        if (!isIndexVisible(indexHolder, transaction::Transaction::Get(*context))) {
+            nodeUpdateState.indexUpdateState[i] = nullptr;
+            continue;
+        }
         if (!indexHolder.isLoaded()) {
             // Un index non chargé ne répond pas ; sa description suffit à dire s'il porte
             // sur la colonne. S'il n'y porte pas, la mise à jour ne le regarde pas.
@@ -723,6 +735,9 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
         lockIndexForWrite(transaction);
         lockRowForWrite(transaction, nodeOffset, lockKeyOfRow(transaction, nodeOffset));
     }
+    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
+    // initialisation (voir rollbackIndexChange).
+    KU_ASSERT(nodeUpdateState.indexUpdateState.size() == indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         if (!nodeUpdateState.needToUpdateIndex(i)) {
             continue;
@@ -781,6 +796,9 @@ void NodeTable::finalizeDelete(Transaction* transaction, TableDeleteState& delet
     if (!nodeDeleteState.indexDeleteStatesInitialized) {
         return;
     }
+    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
+    // initialisation (voir rollbackIndexChange).
+    KU_ASSERT(nodeDeleteState.indexDeleteStates.size() == indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         if (!nodeDeleteState.indexDeleteStates[i]) {
             continue; // index sauté par initDeleteStates
@@ -808,6 +826,9 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     }
     // Use pre-created index delete states (initialized once, reused across calls).
     initDeleteStates(transaction, deleteState);
+    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
+    // initialisation (voir rollbackIndexChange).
+    KU_ASSERT(nodeDeleteState.indexDeleteStates.size() == indexes.size());
     for (auto i = 0u; i < indexes.size(); i++) {
         if (!nodeDeleteState.indexDeleteStates[i]) {
             continue; // index sauté par initDeleteStates
@@ -946,6 +967,11 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
 
     // 3. Scan index columns for newly inserted tuples.
     for (auto& index : indexes) {
+        // Un index que la transaction a retirée, ou qu'une autre crée sans avoir validé, ne
+        // reçoit pas ses lignes (ticket de la rétention).
+        if (!index.isDetached() && !isIndexVisible(index, transaction)) {
+            continue;
+        }
         // Chargé d'abord : needCommitInsert interroge l'index lui-même.
         if (!index.isLoaded()) {
             if (index.isDetached() || transaction->isRecovery()) {
@@ -1003,6 +1029,9 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
     PageAllocator& pageAllocator) {
     const bool ret = hasChanges;
     if (hasChanges) {
+        // Aucune transaction n'est ouverte : un index retiré et validé n'est plus visible de
+        // personne, on l'efface (comme reclaimDroppedTables pour les tables).
+        reclaimDroppedIndexes();
         // Deleted columns are vacuumed and not checkpointed.
         std::vector<std::unique_ptr<Column>> checkpointColumns;
         std::vector<column_id_t> columnIDs;
@@ -1159,15 +1188,29 @@ void NodeTable::lockRowForWrite(Transaction* transaction, offset_t nodeOffset,
     throwIfWrittenByAnotherCommitAfterSnapshot(transaction, nodeOffset, key);
 }
 
-bool NodeTable::hasLoadedSecondaryIndex() const {
+bool NodeTable::hasLoadedSecondaryIndex(const Transaction* transaction) const {
     std::shared_lock lck{indexesMtx};
-    return std::any_of(indexes.begin(), indexes.end(), [](const IndexHolder& holder) {
-        return holder.isLoaded() && !holder.getIndexInfo().isPrimary;
+    return std::any_of(indexes.begin(), indexes.end(), [&](const IndexHolder& holder) {
+        return holder.isLoaded() && !holder.getIndexInfo().isPrimary &&
+               isIndexVisible(holder, transaction);
     });
 }
 
 void NodeTable::lockIndexForWrite(Transaction* transaction) const {
-    if (!transaction->usesLocks() || !hasLoadedSecondaryIndex()) {
+    // Sans index secondaire, aucun verrou d'index : le prendre en partagé ferait attendre un
+    // écrivain derrière un CREATE d'index, que son point de reprise forcé attendrait à son tour
+    // (ticket 2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index).
+    if (!transaction->usesLocks() || !hasLoadedSecondaryIndex(transaction)) {
+        return;
+    }
+    transaction->acquireLock(LockResource::index(tableID), LockMode::EXCLUSIVE);
+    if (!transaction->hasWritten()) {
+        TransactionManager::Get(*transaction->getClientContext())->refreshSnapshot(transaction);
+    }
+}
+
+void NodeTable::lockIndexForDDL(Transaction* transaction) const {
+    if (!transaction->usesLocks()) {
         return;
     }
     transaction->acquireLock(LockResource::index(tableID), LockMode::EXCLUSIVE);
@@ -1333,8 +1376,19 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
     }
 }
 
-void NodeTable::addIndex(std::unique_ptr<Index> index) {
+bool NodeTable::isIndexVisible(const IndexHolder& holder, const Transaction* transaction) {
+    if (transaction == nullptr) {
+        return !holder.isDropped();
+    }
+    return holder.isVisibleTo(transaction->getID(), transaction->getStartTS());
+}
+
+void NodeTable::addIndex(std::unique_ptr<Index> index, Transaction* transaction) {
     std::unique_lock lck{indexesMtx};
+    // Un exemplaire vivant du même nom refuse ; un exemplaire retiré ne compte plus. Un exemplaire
+    // retiré par une autre transaction non validée ne peut pas se trouver ici : un DROP tient
+    // l'index de la table en exclusif jusqu'à sa validation, et un CREATE n'a lieu qu'en
+    // transaction automatique, jamais après un DROP du même nom dans la même transaction.
     if (getIndexNoLock(index->getName()).has_value()) {
         throw RuntimeException("Index with name " + index->getName() + " already exists.");
     }
@@ -1343,27 +1397,91 @@ void NodeTable::addIndex(std::unique_ptr<Index> index) {
         return holder.isDetached() &&
                StringUtils::caseInsensitiveEquals(holder.getName(), index->getName());
     });
-    indexes.push_back(IndexHolder{std::move(index)});
+    IndexHolder holder{std::move(index)};
+    holder.setHolderID(nextHolderID++);
+    const auto versioned = transaction != nullptr && !transaction->isRecovery();
+    if (versioned) {
+        holder.markCreatedBy(transaction->getID());
+    }
+    const auto holderID = holder.getHolderID();
+    indexes.push_back(std::move(holder));
     hasChanges = true;
+    if (versioned) {
+        transaction->pushIndexChange(*this, holderID, true /* isCreate */);
+    }
 }
 
-void NodeTable::dropIndex(const std::string& name) {
-    // L'index peut ne pas être chargé (au rejeu du journal, son extension ne l'est pas
-    // encore), ou ne pas être là du tout (créé puis retiré dans le même journal).
+void NodeTable::dropIndex(const std::string& name, Transaction* transaction) {
     std::unique_lock lck{indexesMtx};
-    for (auto it = indexes.begin(); it != indexes.end(); ++it) {
-        if (StringUtils::caseInsensitiveEquals(it->getName(), name)) {
-            indexes.erase(it);
+    if (transaction == nullptr || transaction->isRecovery()) {
+        // Au rejeu du journal : immédiat. L'index peut ne pas être chargé (son extension ne l'est
+        // pas encore), ou ne pas être là du tout (créé puis retiré dans le même journal).
+        for (auto it = indexes.begin(); it != indexes.end(); ++it) {
+            if (!it->isDropped() && StringUtils::caseInsensitiveEquals(it->getName(), name)) {
+                indexes.erase(it);
+                return;
+            }
+        }
+        return;
+    }
+    // Sous une transaction : marqué, pas effacé. Les transactions d'avant le voient encore ; le
+    // point de reprise l'efface, l'annulation le rend.
+    for (auto& holder : indexes) {
+        if (isIndexVisible(holder, transaction) &&
+            StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
+            holder.markDroppedBy(transaction->getID());
+            hasChanges = true;
+            transaction->pushIndexChange(*this, holder.getHolderID(), false /* isCreate */);
             return;
         }
     }
+}
+
+void NodeTable::commitIndexChange(uint64_t holderID, bool isCreate, transaction_t commitTS) {
+    std::unique_lock lck{indexesMtx};
+    for (auto& holder : indexes) {
+        if (holder.getHolderID() == holderID) {
+            if (isCreate) {
+                holder.commitCreate(commitTS);
+            } else {
+                holder.commitDrop(commitTS);
+            }
+            return;
+        }
+    }
+}
+
+void NodeTable::rollbackIndexChange(uint64_t holderID, bool isCreate) {
+    std::unique_lock lck{indexesMtx};
+    for (auto it = indexes.begin(); it != indexes.end(); ++it) {
+        if (it->getHolderID() != holderID) {
+            continue;
+        }
+        if (isCreate) {
+            // L'index d'une recherche en cours reste vivant par son shared_ptr. Les états d'index
+            // des écrivains sont rangés par position dans `indexes` : un écrivain d'une table sans
+            // index secondaire ne prend pas de verrou d'index, et pourrait voir la liste changer
+            // sous lui (voir le ticket des lignes validées pendant le bâti d'un CREATE, où le
+            // rangement par holderID est noté). Les parcours le vérifient (KU_ASSERT).
+            indexes.erase(it);
+        } else {
+            it->unmarkDropped();
+        }
+        return;
+    }
+}
+
+void NodeTable::reclaimDroppedIndexes() {
+    std::unique_lock lck{indexesMtx};
+    std::erase_if(indexes, [](const IndexHolder& holder) { return holder.isDropCommitted(); });
 }
 
 std::optional<std::reference_wrapper<IndexHolder>> NodeTable::getIndexHolder(
     const std::string& name) {
     std::shared_lock lck{indexesMtx};
     for (auto& index : indexes) {
-        if (!index.isDetached() && StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+        if (!index.isDetached() && !index.isDropped() &&
+            StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             return index;
         }
     }
@@ -1378,7 +1496,7 @@ std::optional<Index*> NodeTable::getIndex(const std::string& name) const {
 std::shared_ptr<Index> NodeTable::getSharedIndex(const std::string& name) const {
     std::shared_lock lck{indexesMtx};
     for (auto& index : indexes) {
-        if (!index.isDetached() && index.isLoaded() &&
+        if (!index.isDetached() && !index.isDropped() && index.isLoaded() &&
             StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             return index.getSharedIndex();
         }
@@ -1386,10 +1504,24 @@ std::shared_ptr<Index> NodeTable::getSharedIndex(const std::string& name) const 
     return nullptr;
 }
 
-bool NodeTable::hasIndexHolder(const std::string& name) const {
+std::vector<std::shared_ptr<Index>> NodeTable::getVisibleSharedIndexes(const std::string& name,
+    const Transaction* transaction) const {
+    std::shared_lock lck{indexesMtx};
+    std::vector<std::shared_ptr<Index>> visible;
+    for (auto& index : indexes) {
+        if (!index.isDetached() && index.isLoaded() && isIndexVisible(index, transaction) &&
+            StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+            visible.push_back(index.getSharedIndex());
+        }
+    }
+    return visible;
+}
+
+bool NodeTable::hasIndexHolder(const std::string& name, const Transaction* transaction) const {
     std::shared_lock lck{indexesMtx};
     return std::any_of(indexes.begin(), indexes.end(), [&](const IndexHolder& holder) {
-        return !holder.isDetached() && StringUtils::caseInsensitiveEquals(holder.getName(), name);
+        return !holder.isDetached() && isIndexVisible(holder, transaction) &&
+               StringUtils::caseInsensitiveEquals(holder.getName(), name);
     });
 }
 
@@ -1397,7 +1529,8 @@ bool NodeTable::loadIndex(const std::string& name, main::ClientContext* context,
     StorageManager* storageManager) {
     std::unique_lock lck{indexesMtx};
     for (auto& holder : indexes) {
-        if (!holder.isDetached() && StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
+        if (!holder.isDetached() && !holder.isDropped() &&
+            StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
             if (!holder.isLoaded()) {
                 holder.load(context, storageManager);
             }
@@ -1409,7 +1542,8 @@ bool NodeTable::loadIndex(const std::string& name, main::ClientContext* context,
 
 std::optional<Index*> NodeTable::getIndexNoLock(const std::string& name) const {
     for (auto& index : indexes) {
-        if (!index.isDetached() && StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+        if (!index.isDetached() && !index.isDropped() &&
+            StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             if (index.isLoaded()) {
                 return index.getIndex();
             }
@@ -1422,12 +1556,14 @@ std::optional<Index*> NodeTable::getIndexNoLock(const std::string& name) const {
 
 void NodeTable::serialize(Serializer& serializer) const {
     nodeGroups->serialize(serializer);
-    // Un index détaché n'est plus un index de la table : il n'est pas écrit.
-    const auto numAttached = std::count_if(indexes.begin(), indexes.end(),
-        [](const IndexHolder& holder) { return !holder.isDetached(); });
+    // Un index détaché, ou retiré, n'est plus un index de la table : il n'est pas écrit.
+    const auto written = [](const IndexHolder& holder) {
+        return !holder.isDetached() && !holder.isDropped();
+    };
+    const auto numAttached = std::count_if(indexes.begin(), indexes.end(), written);
     serializer.write<uint64_t>(numAttached);
     for (auto i = 0u; i < indexes.size(); ++i) {
-        if (!indexes[i].isDetached()) {
+        if (written(indexes[i])) {
             indexes[i].serialize(serializer);
         }
     }
@@ -1459,6 +1595,7 @@ void NodeTable::deserialize(main::ClientContext* context, StorageManager* storag
     for (auto i = 0u; i < indexInfos.size(); ++i) {
         indexes.push_back(IndexHolder(indexInfos[i], std::move(storageInfoBuffers[i]),
             storageInfoBufferSizes[i]));
+        indexes.back().setHolderID(nextHolderID++);
         if (indexInfos[i].isBuiltin) {
             indexes[i].load(context, storageManager);
         }

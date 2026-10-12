@@ -230,6 +230,36 @@ public:
     bool isDetached() const { return detached; }
     void detach() { detached = true; }
 
+    // La version du holder, comme celle d'une ligne (ticket
+    // 2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage). Un CREATE ou un
+    // DROP d'une transaction pose son identifiant (createdBy, droppedBy) ; sa validation pose
+    // l'horodatage (createdTS, droppedTS), son annulation défait. Sans version (chargé du disque,
+    // posé par le rejeu), le holder est visible de tous, comme avant.
+    static constexpr common::transaction_t NO_VERSION = common::INVALID_TRANSACTION;
+    uint64_t getHolderID() const { return holderID; }
+    void setHolderID(uint64_t id) { holderID = id; }
+    void markCreatedBy(common::transaction_t transactionID) { createdBy = transactionID; }
+    void markDroppedBy(common::transaction_t transactionID) { droppedBy = transactionID; }
+    void unmarkDropped() {
+        droppedBy = NO_VERSION;
+        droppedTS = NO_VERSION;
+    }
+    void commitCreate(common::transaction_t commitTS) { createdTS = commitTS; }
+    void commitDrop(common::transaction_t commitTS) { droppedTS = commitTS; }
+    // Retiré par une transaction, validé ou non : plus un index de la table pour qui commence
+    // après, ni pour celle qui l'a retiré.
+    bool isDropped() const { return droppedBy != NO_VERSION; }
+    bool isDropCommitted() const { return droppedTS != NO_VERSION; }
+    // Visible à la transaction (identifiant, début de son instantané).
+    bool isVisibleTo(common::transaction_t transactionID, common::transaction_t startTS) const {
+        const auto created = createdBy == NO_VERSION || createdBy == transactionID ||
+                             (createdTS != NO_VERSION && createdTS <= startTS);
+        const auto dropped = droppedBy != NO_VERSION &&
+                             (droppedBy == transactionID ||
+                                 (droppedTS != NO_VERSION && droppedTS <= startTS));
+        return created && !dropped;
+    }
+
     void serialize(common::Serializer& ser) const;
     RAG3DB_API void load(main::ClientContext* context, StorageManager* storageManager);
     bool needCommitInsert() const { return index && index->needCommitInsert(); }
@@ -267,6 +297,11 @@ private:
     uint64_t storageInfoBufferSize;
     bool loaded;
     bool detached = false;
+    uint64_t holderID = 0;
+    common::transaction_t createdBy = NO_VERSION;
+    common::transaction_t createdTS = NO_VERSION;
+    common::transaction_t droppedBy = NO_VERSION;
+    common::transaction_t droppedTS = NO_VERSION;
 
     // Loaded index structure. Partagée : une recherche la capture (getSharedIndex) et la garde
     // vivante jusqu'à sa fin, même si un DROP concurrent retire le holder de la table.

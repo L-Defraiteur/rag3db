@@ -1,6 +1,6 @@
 # Un index retiré ou recréé change dans le stockage pour toutes les transactions, avant sa validation
 
-- **État** : ouvert (forme arrêtée avec le cœur C++ : la rétention, comme les tables)
+- **État** : corrigé (session cœur C++ hotfixs, 12 octobre 2026 ; voir « Correctif »)
 - **Gravité** : refus d'une lecture valide, et travail perdu. Une recherche liée avant un DROP
   reçoit un refus nommé au lieu de voir l'ancien index. Un CREATE annulé bloque le suivant
   (« Index with name … already exists »). Aucune perte ni réponse fausse depuis le pas 1 du ticket
@@ -76,6 +76,41 @@ sur deux sur master cb6c1a2cb :
   perdu et le message est faux.
 - Le témoin du banc (`VectorIndexRebuild.SearchesAcrossDropAndCreateAreConsistentOrNamed`)
   reste vert, rejoué 10 fois.
+
+## Correctif
+
+La forme arrêtée, telle quelle :
+- **La version du holder.** `IndexHolder` porte `createdBy`/`createdTS` et `droppedBy`/`droppedTS`,
+  et un identifiant stable (`holderID`). Il est visible à une transaction comme une ligne
+  (`isVisibleTo`). Un holder sans version (chargé du disque, posé par le rejeu) est visible de tous.
+- **L'annulation.** `UndoRecordType::INDEX_CHANGE` est posé par `NodeTable::addIndex` et
+  `dropIndex` sous une transaction. La validation pose l'horodatage ; l'annulation retire le CREATE
+  ou démarque le DROP.
+- **La suppression physique.** Le point de reprise (`NodeTable::checkpoint`, sans transaction
+  ouverte) efface les holders retirés et validés (`reclaimDroppedIndexes`). `serialize` n'écrit
+  pas les retirés. Le rejeu du journal garde l'effet immédiat.
+- **La résolution.** `captureForQuery` choisit, parmi les holders visibles de ce nom
+  (`getVisibleSharedIndexes`), celui dont les tables de relations sont celles de l'instantané.
+  `isWritableIndex`, `initUpdateState`, la boucle de validation des insertions et
+  `hasLoadedSecondaryIndex` ne voient que les holders visibles. `addIndex` ne refuse « already
+  exists » que pour un holder de ce nom non retiré.
+- **Le verrou du DROP.** `_DROP_HNSW_INDEX` prend l'index de la table en EXCLUSIF
+  (`NodeTable::lockIndexForDDL`) : il se sérialise avec les écritures d'une table indexée, qui le
+  tiennent, et non avec les lecteurs.
+
+**Écarté de ce lot, après relecture du cœur C++** : le CREATE en EXCLUSIF avant son bâti, et les
+écritures d'une table sans index secondaire en PARTAGÉ. Le point de reprise forcé du CREATE attend
+que les autres transactions partent ; un écrivain qui attend le verrou derrière le CREATE ne le peut
+pas, et le CREATE échoue au délai. Le défaut qu'ils fermaient (les lignes validées pendant le bâti
+manquent à l'index) est préexistant, et il a son ticket :
+`2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index`.
+
+Hors du lot : l'index spatial de l'extension geo garde l'effet immédiat (son DROP et son CREATE
+n'ont pas de transaction à passer). Le CREATE attend toujours les lecteurs (point de reprise forcé).
+
+Les trois témoins sont verts et sortent de `known_red.txt`. `VectorIndexRebuild` reste vert, 3 sur
+3 (un premier jet le rougissait : `initUpdateState` ne regardait pas la visibilité d'un holder
+chargé, et un SET appelait l'index retiré ; corrigé). `transaction_test` 272, e2e vector 74 et 63.
 
 ## Pour le fermer
 

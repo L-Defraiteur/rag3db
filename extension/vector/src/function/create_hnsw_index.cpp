@@ -17,6 +17,7 @@
 #include "processor/result/factorized_table_util.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
+#include "transaction/transaction.h"
 
 using namespace rag3db::common;
 using namespace rag3db::function;
@@ -294,7 +295,8 @@ static void finalizeHNSWTableFinalizeFunc(const ExecutionContext* context,
         std::move(storageInfo), bindData->config.copy());
     auto storageManager = storage::StorageManager::Get(*clientContext);
     auto nodeTable = storageManager->getTable(nodeTableID)->ptrCast<storage::NodeTable>();
-    nodeTable->addIndex(std::move(onDiskIndex));
+    // Visible de sa seule transaction jusqu'à la validation ; l'annulation le retire.
+    nodeTable->addIndex(std::move(onDiskIndex), transaction);
     index->moveToPartitionState(*hnswSharedState->partitionerSharedState);
     transaction->setForceCheckpoint();
 }
