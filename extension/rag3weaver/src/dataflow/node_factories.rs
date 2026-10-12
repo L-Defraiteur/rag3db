@@ -1739,6 +1739,7 @@ mod tests {
                 "RunCommandNode" => serde_json::json!({ "command": "true" }),
                 "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
                 "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
+                "SpawnNode" => serde_json::json!({ "node_type": "Echo" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 "Decide" => serde_json::json!({ "labels": "a|b" }),
