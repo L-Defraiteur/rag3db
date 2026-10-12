@@ -204,6 +204,42 @@ protected:
         return std::nullopt;
     }
 
+    // Les lignes sorties de la boîte qui porte `marker` (par exemple « Alias: d » ou « Tables:
+    // HAS_PARENT ») ; si `title` n'est pas vide, la boîte doit avoir ce titre (dans les six lignes
+    // au-dessus du marqueur, à la même colonne). Rien si aucune boîte ne porte le marqueur.
+    static std::optional<int64_t> boxOutputOf(const std::string& plan, const std::string& marker,
+        const std::string& title) {
+        std::vector<std::string> lines;
+        std::istringstream in(plan);
+        for (std::string line; std::getline(in, line);) {
+            lines.push_back(line);
+        }
+        const auto near = [](const std::string& line, const std::string& what, size_t column) {
+            const auto from = column > 25 ? column - 25 : 0;
+            const auto found = line.find(what, from);
+            return found != std::string::npos && found < column + 25 ? found : std::string::npos;
+        };
+        for (auto i = 0u; i < lines.size(); ++i) {
+            for (auto at = lines[i].find(marker); at != std::string::npos;
+                at = lines[i].find(marker, at + 1)) {
+                bool titled = title.empty();
+                for (auto j = i; j > 0 && j + 6 > i && !titled; --j) {
+                    titled = near(lines[j - 1], title, at) != std::string::npos;
+                }
+                if (!titled) {
+                    continue;
+                }
+                for (auto j = i + 1; j < lines.size() && j < i + 14; ++j) {
+                    const auto key = near(lines[j], "NumOutputTuples:", at);
+                    if (key != std::string::npos) {
+                        return std::stoll(lines[j].substr(key + 16));
+                    }
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
     static int64_t wholeWordCount(const std::string& text, const std::string& word) {
         int64_t count = 0;
         for (auto at = text.find(word); at != std::string::npos; at = text.find(word, at + 1)) {
@@ -324,6 +360,97 @@ TEST_F(MaskedNeighbour, MeasureAtOneAndThirtyTwoThreads) {
         std::sort(durations.begin(), durations.end());
         std::cerr << "  [voisin mesure] threads=" << threads << " lignes sorties du balayage de "
                   << "Scope=" << (read ? std::to_string(*read) : std::string("?"))
+                  << " durée médiane=" << durations[2] << " ms (min " << durations.front()
+                  << ", max " << durations.back() << ")\n";
+    }
+}
+
+// Le saut d'une table vers elle-même depuis un nœud lié par sa clé (troisième pas de la jointure
+// par clé du cœur C++, proposé par F, 12 octobre 2026) : UNWIND d'une clé de Scope, puis HAS_PARENT
+// vers un autre Scope. Le départ d est masqué (une ligne), mais les cardinalités estimées de d et
+// de m sont égales et l'extension part de m : Scope entière (81 407), HAS_PARENT entière, et une
+// table de hachage sur d._ID que l'unique d sonde à la fin (18 à 20 ms par saut dans usages).
+// - MaskedSelfHop.StartsFromTheKeyedNode : le contrôle plan (un SEMI_MASKER au moins) ; les lignes
+//   sorties d'un balayage de Scope porté par l'alias d, puis par l'alias m, chacune au plus
+//   10 × (parents de d) quand ce balayage existe (m lu par ses propriétés au bout de l'extension
+//   n'en a pas) ; les lignes sorties de la boîte de HAS_PARENT au plus 10.
+// - MaskedSelfHop.MeasureAtOneAndThirtyTwoThreads : 1 puis 32 fils, médiane de cinq passes.
+//   Sautée sans CONCURRENCE_MEASURE=1 ; à jouer sous `poste mesure`.
+constexpr auto SELF_HOP = "UNWIND ['scope-40001'] AS u MATCH (d:Scope {_uuid: u})-[r:HAS_PARENT]->"
+                          "(m:Scope) RETURN u, m._uuid, m.name, m.repo_path, m.file_path;";
+
+class MaskedSelfHop : public MaskedNeighbour {
+protected:
+    void SetUp() override {
+        MaskedNeighbour::SetUp();
+        // Un parent pour 6 Scope sur 13, environ 37 600 relations (37 802 dans l'index de F).
+        ok("CREATE REL TABLE HAS_PARENT(FROM Scope TO Scope);");
+        const auto parents = databasePath + ".parents.csv";
+        {
+            std::ofstream out(parents);
+            for (int64_t i = 1; i < NEIGHBOUR_SCOPES; ++i) {
+                if (i % 13 < 6) {
+                    out << "scope-" << i << ",scope-" << i / 3 << "\n";
+                }
+            }
+        }
+        ok("COPY HAS_PARENT FROM '" + parents + "' (header=false);");
+        ok("CHECKPOINT;");
+        std::filesystem::remove(parents);
+    }
+};
+
+TEST_F(MaskedSelfHop, StartsFromTheKeyedNode) {
+    const auto numParents =
+        count("MATCH (d:Scope {_uuid: 'scope-40001'})-[:HAS_PARENT]->(m:Scope) RETURN count(m);");
+    ASSERT_GE(numParents, 1);
+    ASSERT_GE(count("MATCH ()-[r:HAS_PARENT]->() RETURN count(r);"), 30000);
+    const auto plan = profile(SELF_HOP);
+    std::cerr << plan;
+    const auto maskers = wholeWordCount(plan, "SEMI_MASKER");
+    ASSERT_GE(maskers, 1) << "[check: plan] the key of the UNWIND is no longer a mask";
+    const auto fromD = boxOutputOf(plan, "Alias: d ", "SCAN_NODE_TABLE[");
+    const auto fromM = boxOutputOf(plan, "Alias: m ", "SCAN_NODE_TABLE[");
+    const auto hop = boxOutputOf(plan, "Tables: HAS_PARENT ", "");
+    const auto text = [](const std::optional<int64_t>& value) {
+        return value ? std::to_string(*value) : std::string("aucun balayage");
+    };
+    std::cerr << "  [saut] parents de d = " << numParents << ", SEMI_MASKER = " << maskers
+              << ", Scope sous d = " << text(fromD) << ", Scope sous m = " << text(fromM)
+              << ", HAS_PARENT = " << text(hop) << "\n";
+    ASSERT_TRUE(hop.has_value()) << "[check: plan] no HAS_PARENT box in the plan";
+    EXPECT_LE(fromD.value_or(0), READ_FACTOR * numParents)
+        << "[check: self-hop-reads-the-keyed-node] the scan of Scope for d put out " << *fromD;
+    EXPECT_LE(fromM.value_or(0), READ_FACTOR * numParents)
+        << "[check: self-hop-reads-the-neighbours] the scan of Scope for m put out "
+        << fromM.value_or(0);
+    EXPECT_LE(*hop, READ_FACTOR)
+        << "[check: self-hop-reads-few-relations] the HAS_PARENT box put out " << *hop;
+}
+
+TEST_F(MaskedSelfHop, MeasureAtOneAndThirtyTwoThreads) {
+    if (std::getenv("CONCURRENCE_MEASURE") == nullptr) {
+        GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1, under `poste mesure`";
+    }
+    for (const auto threads : {1, 32}) {
+        ok(stringFormat("CALL threads={};", threads));
+        const auto plan = profile(SELF_HOP);
+        const auto fromM = boxOutputOf(plan, "Alias: m ", "SCAN_NODE_TABLE[");
+        std::vector<double> durations;
+        for (auto pass = 0; pass < 5; ++pass) {
+            const auto start = std::chrono::steady_clock::now();
+            auto result = conn->query(SELF_HOP);
+            ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+            while (result->hasNext()) {
+                result->getNext();
+            }
+            durations.push_back(std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start)
+                                    .count());
+        }
+        std::sort(durations.begin(), durations.end());
+        std::cerr << "  [saut mesure] threads=" << threads << " Scope sous m="
+                  << (fromM ? std::to_string(*fromM) : std::string("aucun balayage"))
                   << " durée médiane=" << durations[2] << " ms (min " << durations.front()
                   << ", max " << durations.back() << ")\n";
     }
