@@ -3314,8 +3314,19 @@ impl Backend {
 
     /// La base doit-elle être rouverte ? Voir [`Catalog::must_reopen`] ; un
     /// hôte le demande après chaque requête.
+    ///
+    /// **Sans attendre l'écrivain** : un appel servi par la vue pendant que
+    /// la montre tient le catalogue attendait ici, sa réponse prête, la fin
+    /// de la tenue (sixième rejeu de codeparsers, 1 869 ms). Catalogue tenu,
+    /// la raison se lit sur la connexion de la vue, qui partage l'état de
+    /// réouverture de la base ; seul le compte des opérations en file manque
+    /// alors à la phrase, et l'appel suivant la dit entière.
     pub fn must_reopen(&self) -> Option<String> {
-        self.catalog.lock().unwrap_or_else(|p| p.into_inner()).must_reopen()
+        match self.catalog.try_lock() {
+            Ok(cat) => cat.must_reopen(),
+            Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner().must_reopen(),
+            Err(std::sync::TryLockError::WouldBlock) => self.read_view.current().and_then(|v| v.conn.must_reopen()),
+        }
     }
 
     /// **Arrête ce backend : les réactions d'abord, le catalogue ensuite.**

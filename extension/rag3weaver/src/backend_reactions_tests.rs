@@ -349,3 +349,33 @@ fn un_appel_par_la_cellule_du_catalogue_n_attend_pas_l_ecrivain() {
     assert!(appel < Duration::from_millis(100), "call_in n'attend pas l'écrivain : {appel:?}");
     assert!(construits < Duration::from_millis(100), "build_services n'attend pas l'écrivain : {construits:?}");
 }
+
+/// **La question « faut-il rouvrir la base ? » n'attend pas l'écrivain**
+/// (sixième rejeu de codeparsers, 12 octobre 2026) : l'hôte la pose après
+/// chaque appel, et elle prenait le mutex du catalogue. Un usages tombé
+/// pendant la réaction de la montre avait sa réponse, l'état d'avant lu par
+/// la vue, et l'attendait derrière ce verrou jusqu'à la fin de la tenue
+/// (1 869 ms). Ici un fil tient le mutex 2 s.
+#[test]
+fn la_question_de_la_reouverture_n_attend_pas_l_ecrivain() {
+    let (_dir, backend) = reactif();
+    backend.catalog.lock().unwrap().publish_read_view();
+
+    let (pret, attendre) = std::sync::mpsc::channel();
+    let ecrivain = {
+        let catalog = backend.catalog.clone();
+        std::thread::spawn(move || {
+            let _tenu = catalog.lock().unwrap();
+            pret.send(()).unwrap();
+            std::thread::sleep(Duration::from_secs(2));
+        })
+    };
+    attendre.recv().unwrap();
+
+    let t = std::time::Instant::now();
+    let reponse = backend.must_reopen();
+    let duree = t.elapsed();
+    ecrivain.join().unwrap();
+    assert_eq!(reponse, None, "une base saine n'est pas à rouvrir");
+    assert!(duree < Duration::from_millis(100), "must_reopen n'attend pas l'écrivain : {duree:?}");
+}
