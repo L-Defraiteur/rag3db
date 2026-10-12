@@ -21,6 +21,7 @@ public:
     uint64_t getNumMaskedNodes() const override { return roaring->cardinality(); }
 
     offset_vec_t collectMaskedNodes(uint64_t size) const override;
+    void collectFrom(offset_t start, uint64_t maxCount, offset_vec_t& out) const override;
 
     // include&exclude
     offset_vec_t range(uint32_t start, uint32_t end) override;
@@ -43,6 +44,7 @@ public:
     uint64_t getNumMaskedNodes() const override { return roaring->cardinality(); }
 
     offset_vec_t collectMaskedNodes(uint64_t size) const override;
+    void collectFrom(offset_t start, uint64_t maxCount, offset_vec_t& out) const override;
 
     // include&exclude
     offset_vec_t range(uint32_t start, uint32_t end) override;

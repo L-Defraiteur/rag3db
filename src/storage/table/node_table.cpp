@@ -463,6 +463,51 @@ template bool NodeTable::lookupMultiple<true>(Transaction* transaction,
 template bool NodeTable::lookupMultiple<false>(Transaction* transaction,
     TableScanState& scanState) const;
 
+// Le balayage sous un petit masque (page coeur-cpp/12 §10) : les décalages de la tranche sont
+// relus un à un, comme lookupMultiple, mais la sélection de sortie ne garde que les lignes
+// trouvées (une ligne supprimée pour cette transaction n'y est pas) : le probe reçoit les lignes
+// masquées, et elles seules, au lieu de chaque fenêtre de 2 048 lignes qui en contient une.
+void NodeTable::lookupOffsets(Transaction* transaction, NodeTableScanState& scanState) const {
+    scanState.resetOutVectors();
+    const auto numOffsets = scanState.maskedOffsets.size();
+    auto& selVector = scanState.outState->getSelVectorUnsafe();
+    selVector.setToUnfiltered(numOffsets);
+    for (auto i = 0u; i < numOffsets; i++) {
+        scanState.nodeIDVector->setNull(i, false);
+        scanState.nodeIDVector->setValue<internalID_t>(i,
+            internalID_t{scanState.maskedOffsets[i], tableID});
+    }
+    auto found = selVector.getMutableBuffer();
+    sel_t numFound = 0;
+    for (auto i = 0u; i < numOffsets; i++) {
+        const auto nodeOffset = scanState.maskedOffsets[i];
+        const auto isUnCommitted = transaction->isUnCommitted(tableID, nodeOffset);
+        const auto source =
+            isUnCommitted ? TableScanSource::UNCOMMITTED : TableScanSource::COMMITTED;
+        const auto nodeGroupIdx =
+            isUnCommitted ?
+                StorageUtils::getNodeGroupIdx(transaction->getLocalRowIdx(tableID, nodeOffset)) :
+                StorageUtils::getNodeGroupIdx(nodeOffset);
+        const offset_t rowIdxInGroup =
+            isUnCommitted ? transaction->getLocalRowIdx(tableID, nodeOffset) -
+                                StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx) :
+                            nodeOffset - StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx);
+        if (scanState.source != source || scanState.nodeGroupIdx != nodeGroupIdx ||
+            scanState.nodeGroup == nullptr) {
+            scanState.source = source;
+            scanState.nodeGroupIdx = nodeGroupIdx;
+            initScanState(transaction, scanState);
+        }
+        scanState.rowIdxVector->setValue<row_idx_t>(i, rowIdxInGroup);
+        if (scanState.nodeGroup->lookupSharedLock(transaction, scanState, i)) {
+            found[numFound++] = i;
+        }
+    }
+    if (numFound != numOffsets) {
+        selVector.setToFiltered(numFound);
+    }
+}
+
 offset_t NodeTable::validateUniquenessConstraint(const Transaction* transaction,
     const ValueVector& pkVector) const {
     KU_ASSERT(pkVector.state->getSelVector().getSelSize() == 1);

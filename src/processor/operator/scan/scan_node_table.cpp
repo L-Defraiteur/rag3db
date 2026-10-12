@@ -44,11 +44,42 @@ void ScanNodeTableSharedState::initialize(const transaction::Transaction* transa
         }
     }
     progressSharedState.numGroups += numCommittedNodeGroups;
+    // Le petit masque : la cardinalité est exacte ici, le pipeline du masqueur est fini. Un masque
+    // vide passe aussi par décalages : aucune ligne à rendre.
+    byOffsets = false;
+    maskCursor = 0;
+    maskExhausted = false;
+    if (semiMask && semiMask->isEnabled()) {
+        const auto numMasked = semiMask->getNumMaskedNodes();
+        const auto numRows = table->getNumTotalRows(transaction);
+        byOffsets = numMasked * OFFSET_MODE_RATIO < numRows;
+    }
 }
 
 void ScanNodeTableSharedState::nextMorsel(NodeTableScanState& scanState,
     ScanNodeTableProgressSharedState& progressSharedState) {
     std::unique_lock lck{mtx};
+    if (byOffsets) {
+        // Une tranche de décalages masqués (validés ou locaux : lookupOffsets fait la part), au
+        // plus une fenêtre ; épuisé, le balayage est fini — les lignes non masquées ne peuvent
+        // rien apparier.
+        scanState.byOffsets = true;
+        scanState.maskedOffsets.clear();
+        if (!maskExhausted) {
+            semiMask->collectFrom(maskCursor, DEFAULT_VECTOR_CAPACITY, scanState.maskedOffsets);
+        }
+        if (scanState.maskedOffsets.empty()) {
+            if (!maskExhausted) {
+                maskExhausted = true;
+                progressSharedState.numGroupsScanned += numCommittedNodeGroups;
+            }
+            scanState.source = TableScanSource::NONE;
+            return;
+        }
+        maskCursor = scanState.maskedOffsets.back() + 1;
+        scanState.source = TableScanSource::COMMITTED;
+        return;
+    }
     if (currentCommittedGroupIdx < numCommittedNodeGroups) {
         scanState.nodeGroupIdx = currentCommittedGroupIdx++;
         progressSharedState.numGroupsScanned++;
@@ -91,6 +122,12 @@ void ScanNodeTable::initCurrentTable(ExecutionContext* context) {
     auto& currentInfo = tableInfos[currentTableIdx];
     currentInfo.initScanState(*scanState, outVectors, context->clientContext);
     scanState->semiMask = sharedStates[currentTableIdx]->getSemiMask();
+    scanState->byOffsets = false;
+    scanState->maskedOffsets.clear();
+    // Une autre table : le groupe en cours ne vaut plus rien (lookupOffsets ne réinitialise que
+    // quand la source ou le groupe change, et une autre table peut avoir le même numéro de groupe).
+    scanState->source = TableScanSource::NONE;
+    scanState->nodeGroup = nullptr;
 }
 
 void ScanNodeTable::initGlobalStateInternal(ExecutionContext* context) {
@@ -105,13 +142,28 @@ bool ScanNodeTable::getNextTuplesInternal(ExecutionContext* context) {
     const auto transaction = transaction::Transaction::Get(*context->clientContext);
     while (currentTableIdx < tableInfos.size()) {
         auto& info = tableInfos[currentTableIdx];
-        while (info.table->scan(transaction, *scanState)) {
-            const auto outputSize = scanState->outState->getSelVector().getSelSize();
-            if (outputSize > 0) {
-                info.castColumns();
-                scanState->outState->setToUnflat();
-                metrics->numOutputTuple.increase(outputSize);
-                return true;
+        if (scanState->byOffsets) {
+            // Sous un petit masque : une tranche de décalages relue ligne à ligne.
+            if (!scanState->maskedOffsets.empty()) {
+                info.table->ptrCast<NodeTable>()->lookupOffsets(transaction, *scanState);
+                scanState->maskedOffsets.clear();
+                const auto outputSize = scanState->outState->getSelVector().getSelSize();
+                if (outputSize > 0) {
+                    info.castColumns();
+                    scanState->outState->setToUnflat();
+                    metrics->numOutputTuple.increase(outputSize);
+                    return true;
+                }
+            }
+        } else {
+            while (info.table->scan(transaction, *scanState)) {
+                const auto outputSize = scanState->outState->getSelVector().getSelSize();
+                if (outputSize > 0) {
+                    info.castColumns();
+                    scanState->outState->setToUnflat();
+                    metrics->numOutputTuple.increase(outputSize);
+                    return true;
+                }
             }
         }
         sharedStates[currentTableIdx]->nextMorsel(*scanState, *progressSharedState);
@@ -120,7 +172,7 @@ bool ScanNodeTable::getNextTuplesInternal(ExecutionContext* context) {
             if (currentTableIdx < tableInfos.size()) {
                 initCurrentTable(context);
             }
-        } else {
+        } else if (!scanState->byOffsets) {
             info.table->initScanState(transaction, *scanState);
         }
     }

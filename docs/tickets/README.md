@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (28)
+### Ouverts — moteur (27)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -40,7 +40,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | ouvert — contourné dans rag3weaver | lenteur sévère | oui, avant le contournement | oui (`record_nodes.rs`, `dialect.rs`) |
 | [Une recherche vectorielle pendant un DROP/CREATE de l'index rend une exception brute de la bibliothèque standard](2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute.md) | ouvert — pour hotfixs | erreur non nommée | oui (rattrapage d'embarquement de rag3weaver) | oui |
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |
-| [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
 | [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
@@ -104,10 +103,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (118), dans `closed/`
+### Fermés (119), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](closed/2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | corrigé (12 octobre 2026, le balayage par décalages sous un petit masque, page coeur-cpp/12 §10) | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [Le test de réconciliation de la montre lit l'état d'un index occupé, et échoue une fois sur cinq](closed/2026-10-11-le-test-de-reconciliation-de-la-montre-lit-un-index-occupe.md) | corrigé (e5c53d2e2 ; témoin déterministe) | test instable | non (le test) | oui (`backend.rs`) |
 | [SIGSEGV sur un agrégat de 80 000 lignes qui rend des textes longs](closed/2026-10-12-sigsegv-sur-un-agregat-de-80-000-lignes-a-textes-longs.md) | corrigé (12 octobre 2026, le lot du balayage filtré des chaînes) | plantage | oui en principe, vu une fois | oui (une lecture d'outil qui agrège toute une table) |
 | [Des morceaux de code sont écrits sans texte : 20 % de code-rag3db](closed/2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md) | corrigé côté moteur (12 octobre 2026, le lot du balayage filtré : la lecture, pas le stockage) | réponse fausse, et blocage (le gel de code-lourd) | oui | oui |

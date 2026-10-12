@@ -24,6 +24,10 @@ public:
 
     virtual offset_vec_t collectMaskedNodes(uint64_t size) const = 0;
 
+    // Les décalages posés à partir de `start` (inclus), au plus `maxCount`, ajoutés à `out` dans
+    // l'ordre : la tranche d'un balayage par décalages (ScanNodeTableSharedState::nextMorsel).
+    virtual void collectFrom(offset_t start, uint64_t maxCount, offset_vec_t& out) const = 0;
+
     offset_t getMaxOffset() const { return maxOffset; }
 
     bool isEnabled() const { return enabled; }

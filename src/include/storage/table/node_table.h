@@ -44,6 +44,12 @@ struct RAG3DB_API NodeTableScanState : TableScanState {
     // leurs positions dans les groupes locaux quand la source est UNCOMMITTED
     // (NodeTable::initScanState, LocalNodeTable::getLocalColumnIDs).
     std::vector<common::column_id_t> committedColumnIDs;
+
+    // Le balayage par décalages sous un petit masque (page coeur-cpp/12 §10) : la tranche de
+    // décalages masqués à relire (ScanNodeTableSharedState::nextMorsel), lue par
+    // NodeTable::lookupOffsets. `byOffsets` dit que ce balayage est en ce mode.
+    bool byOffsets = false;
+    std::vector<common::offset_t> maskedOffsets;
 };
 
 // There is a vtable bug related to the Apple clang v15.0.0+. Adding the `FINAL` specifier to
@@ -149,6 +155,10 @@ public:
     // TODO(Guodong): This should be merged together with `lookup`.
     template<bool lock = true>
     bool lookupMultiple(transaction::Transaction* transaction, TableScanState& scanState) const;
+    // Relit les lignes de `scanState.maskedOffsets` (un balayage sous un petit masque) dans les
+    // vecteurs de sortie, positions 0..n-1 ; la sélection de sortie ne garde que les lignes
+    // visibles de la transaction.
+    void lookupOffsets(transaction::Transaction* transaction, NodeTableScanState& scanState) const;
 
     // Return the max node offset during insertions.
     common::offset_t validateUniquenessConstraint(const transaction::Transaction* transaction,
