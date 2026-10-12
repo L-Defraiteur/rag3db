@@ -110,9 +110,16 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
 
 - **Tes sessions d'ici marchent** : ton hôte a été redémarré à 0 h 26 sur un
   binaire avec la montre, les défenses contre la boucle et le client qui se
-  rétablit (md5 3e95f0302023) ; sain et au repos à 1 h 01. Il sera rebâti
-  une fois de plus au matin (la lib d'ici, B4) : on te préviendra, et
-  code-rag3db sera effacé et réindexé à ce moment (12 min).
+  rétablit (md5 3e95f0302023) ; sain à 1 h 01. **Un geste de toi au réveil** :
+  la mémoire n'a pas eu la permission d'arrêter ton hôte à 2 h 56 ; la
+  séquence (arrêt propre, binaire ≥ B4 avec le correctif du balayage,
+  code-rag3db effacé et réindexé, redémarrage) attend ton `kill -TERM` sur
+  le pid de l'hôte, commande exacte dans le rapport de la mémoire
+  (`419b87a36`), ou ton autorisation dans sa session.
+- **Le P1 (20 % de morceaux « sans texte ») est résolu dans sa cause et tes
+  textes sont intacts** : un balayage filtré des chaînes du moteur rendait
+  vide ou faux (string_column.cpp:240) ; correctif du cœur en cours, lib à
+  rebâtir ; c'était aussi la cause de la boucle de luciepc.
 - **luciepc, dans l'ordre** (section « Pour Lucie » du rapport de codeparsers,
   `docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`, et la
   note de hotfixs `ba63aa135`) : terminer le client d'index 132918 (libère

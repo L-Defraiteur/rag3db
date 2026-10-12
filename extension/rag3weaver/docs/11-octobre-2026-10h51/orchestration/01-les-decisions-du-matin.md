@@ -1064,3 +1064,66 @@ où elle vit.
   de plus). Hotfixs rappelé à la règle : `mesure` pour la mesure seule, le
   bâti sous `lourd` (sa mesure qvi tenait l'exclusif pendant un cmake, quatre
   travaux derrière).
+- **2 h 50 – 3 h 30, nuit : la cause du P1 est trouvée, et les textes
+  n'ont jamais été perdus.** Le cœur, sur la copie de F : `MATCH (s:Scope)
+  RETURN s._uuid, s.content` relu ligne à ligne rend pour 5 lignes sur
+  81 407 **la chaîne d'une autre ligne** (celle 2 048 plus tôt, même position
+  de fenêtre) ; la relecture par clé est juste ; le SIGSEGV n'est que le cas
+  où le bloc de la chaîne périmée a été rendu au système. Dans le code :
+  `StringColumn::scanFiltered` (string_column.cpp:240), chemin pris quand le
+  groupe porte des versions (lignes supprimées ou écrites sous transaction),
+  ignore `numValuesToScan` et borne par la fin du segment ; quand la fenêtre
+  de 2 048 chevauche deux segments d'un groupe (COPY puis points de reprise
+  qui complètent), les positions de fin de fenêtre ne sont pas écrites dans
+  le vecteur, qui garde la valeur d'avant ou rien (« vide »). Trois
+  conditions : colonne STRING, sélection filtrée, fenêtre à cheval. Ça
+  explique tout : les « vides » par plages dans les seize premiers groupes
+  (écrits puis complétés), 0 sur un index neuf (un segment, pas de
+  versions), le texte présent au vecteur, **et la boucle de luciepc**
+  (run_index relisait `_text` vide par ce balayage, sautait, reprenait).
+  Correctif en cours (cœur, branche scan-filtre-chaines, témoin gtest,
+  amont ou nous au blame) ; le banc oriente son témoin exactement là (un
+  groupe en deux segments + une sélection filtrée, balayage contre relecture
+  par clé) ; l'arbre principal rebâtira la lib à ce hash ; F recomptera sa
+  copie sans rien réécrire (0 attendu) et dit « lu vide », pas « perdu ».
+  Conséquences : **la réécriture des morceaux vides est suspendue par
+  défaut** (elle relit `content` par le même balayage ; journal avec le
+  compte et la raison, `RAG3WEAVER_REECRIRE_LES_VIDES=1` pour forcer, un
+  commit d'une ligne après la lib corrigée ; pas de garde par hash, un hash
+  ne s'ordonne pas : si garde un jour, une fonction interrogeable du moteur) ;
+  les défenses et « complet compte `_text` » restent (ticket `11c585c48`) ;
+  le témoin de réingestion du proto n'est plus nécessaire ; la remesure
+  d'usages de F après les fils reste à 382-389 ms (le semi-masque est le
+  coût, les fils ne l'atteignent pas) → **la forme en deux temps est posée**
+  par F (54 ms contre 109, mêmes lignes, chaînage générique de l'IR). **La
+  séquence B4 attend Lucie** : le classifieur de la mémoire a refusé l'arrêt
+  TERM de son hôte à 2 h 56 (il l'avait permis deux fois) ; rien exécuté,
+  l'hôte tourne et répond (binaire 3e95f0302023, lib de 2 h 34, ABI
+  inchangée) ; une seule séquence au matin, par sa main, avec le correctif
+  du balayage dedans : rapport de la mémoire `419b87a36` (commande exacte,
+  pid lu dans daemon.json). Codeparsers refuse de réindexer tant que l'hôte
+  répond. **Sur master** : le lot QUERY_VECTOR_INDEX de hotfixs
+  (`db1044912` : estimation = k, semi-masque sur la table, cardinalité des
+  appels de fonction de table) ; le magasin de libs fini (recherche,
+  `5e08ca07b`, 3c : 97 sites de 82 suites, prouvé de bout en bout, publié ;
+  puis `80f4f47ae` le magasin par défaut dans run_e2e.sh) ; la section
+  « Pour Lucie » (`5811a4a2a`, `776602468`). Décisions pour la recherche
+  (renversables) : magasin par défaut si le rebâti publie lui-même ; RUNPATH
+  vers le dossier d'un identifiant **pour les binaires installés seulement**
+  (la mémoire l'adopte pour le binaire du matin) ; puis le premier vrai flux
+  (la sortie du modèle en jetons), forme à me dire avant le code.
+  **Deux incidents de forme, sans dégât** : (1) vers 3 h, les `poste push` en
+  attente de codeparsers (trois), de F (2 h 57) et de la recherche (3 h 01)
+  sont morts en 143 : **le témoin test_poste.sh de G**, joué ici, terminait
+  par motif les `flock … master-push.lock` (cas 5) et `flock -x 8` (cas 6),
+  six passages entre 2 h 57 et 3 h 08 ; G l'a dit, corrigé (pids propres),
+  règle ajoutée : un témoin joue sur ses propres fichiers de verrou, jamais
+  les réels ; tous les autres ont répondu « pas moi » avec leurs pids ; rien
+  de perdu, morts avant tout git push ; (2) ~/.cache/rag3weaver-build/wt-docs
+  était partagé : l'arbre principal l'a remis sur FETCH_HEAD à 2 h 57 et a
+  abandonné un commit non poussé de la mémoire (repris par cherry-pick,
+  `419b87a36`) ; règle : un worktree de docs par session, `git status` et
+  `git log -1` avant tout checkout ; wt-docs reste à l'arbre principal.
+  Lot poste-tenants de G en cours (le verrou de push tenu par le script, une
+  attente annulable, un flock mort qui arrête, `--qui` qui nomme le tenant,
+  19 cas, + le témoin « deux attendants survivent au tenant qui finit »).
