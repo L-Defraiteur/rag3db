@@ -695,3 +695,36 @@ de tout le dépôt ») et celle du cœur à 17 h 20 (point 3, « 88 non attribu�
   - **avec `src/` en `cpp`** : une définition, l'appel du moteur, les homonymes écartés et
     comptés ;
   - **search_code** : il borne de la même façon, par l'index comme par le balayage.
+
+### Fermé — les verrous du chemin, dans l'ordre (arbre principal, 12 octobre 2026)
+
+Entrée de codeparsers de 15 h 40, points 4 (« les verrous pris par le départ lui-même, dans l'ordre,
+avec la ressource, le mode et la condition ») et 5 (« qui tient le verrou avant ? »). **Fermé par
+`545e06935`.**
+
+- **Verrous pris par le départ, dans l'ordre** (dans impact et callees) : le contenu du départ se
+  lit ligne à ligne.
+  - Une ligne qui porte un LOCKS est un verrou pris là.
+  - Une ligne qui porte un appel se déplie à sa place en ce que l'appelé prend, borné par `depth`,
+    avec une garde de cycle.
+  - Chaque verrou vient avec la ligne de code du site (la ressource et le mode tels qu'écrits), son
+    lieu, et les conditions qui l'enveloppent, héritées des appels.
+  - Quand la profondeur coupe, la réponse le dit avec le compte des appels non dépliés qui prennent
+    un verrou.
+- **Verrous tenus par les appelants avant l'appel** (impact) : pour chaque appelant, les verrous
+  dont la ligne précède celle de son appel. C'est une approximation, dite au rendu : un verrou est
+  supposé tenu jusqu'à la fin de son scope, un `unlock` manuel n'est pas suivi.
+- **Générique** : LOCKS (`locks_via` et gardes de mutex), la ligne portée par les arêtes et le
+  texte des scopes, déclarés au gabarit (`lock_order=LOCKS`). Une arête ne garde que son premier
+  site : deux appels au même appelé dans un scope se lisent à la place du premier.
+- **Sur le vrai moteur** (`sonde_cpp_rag3db`, `SONDE_LOCKS_VIA=acquireLock,acquireLocks,lockRowForWrite`),
+  `impact update path=src/storage/table/node_table.cpp` rend, dans l'ordre :
+  - `transaction->acquireLock(LockResource::index(tableID), LockMode::EXCLUSIVE);`, dans
+    `lockIndexForWrite`, si `if (!isLocalRow && transaction->usesLocks())` ;
+  - puis `transaction->acquireLock(LockResource::row(tableID, key), LockMode::EXCLUSIVE);`, dans
+    `lockRowForWrite`, sous la même condition.
+
+  Aucune section « tenus par les appelants » n'apparaît : comme l'entrée le notait, personne ne le
+  tient avant.
+- **Témoin** `e2e_verrous_du_chemin` : un petit moteur où l'on vérifie l'ordre, l'héritage de la
+  condition, le mutex d'un appelant et la troncature par la profondeur.
