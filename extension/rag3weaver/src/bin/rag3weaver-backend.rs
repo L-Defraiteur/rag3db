@@ -430,10 +430,29 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     std::thread::spawn(move || {
         let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return };
         rt.block_on(async {
-            use tokio::signal::unix::{signal, SignalKind};
-            let Ok(mut terme) = signal(SignalKind::terminate()) else { return };
-            if terme.recv().await.is_some() {
-                eprintln!("[démon] SIGTERM : arrêt propre, comme POST /arret");
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{signal, SignalKind};
+                let Ok(mut terme) = signal(SignalKind::terminate()) else { return };
+                if terme.recv().await.is_some() {
+                    eprintln!("[démon] SIGTERM : arrêt propre, comme POST /arret");
+                    arret.stop();
+                }
+            }
+            // Sous Windows (lot C, 12 octobre 2026) : Ctrl-C, Ctrl-Break et la
+            // fermeture de la console valent l'arrêt propre. Un hôte lancé par
+            // un client est détaché (sans console) : il s'arrête par
+            // `POST /arret` et le jeton, comme d'ici.
+            #[cfg(windows)]
+            {
+                use tokio::signal::windows::{ctrl_break, ctrl_c, ctrl_close};
+                let (Ok(mut c), Ok(mut b), Ok(mut f)) = (ctrl_c(), ctrl_break(), ctrl_close()) else { return };
+                tokio::select! {
+                    _ = c.recv() => {}
+                    _ = b.recv() => {}
+                    _ = f.recv() => {}
+                }
+                eprintln!("[démon] Ctrl-C, Ctrl-Break ou fermeture : arrêt propre, comme POST /arret");
                 arret.stop();
             }
         });
