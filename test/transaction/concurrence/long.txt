@@ -28,3 +28,9 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine
 VectorIndexUpdate.NearCopiesAndExactCopiesAreAllFound
 Paths/RealVectorsReachability.RowsNotFoundByTheirOwnVector/Masse
 Paths/RealVectorsReachability.RowsNotFoundByTheirOwnVector/Fond
+#
+# Le coût d'une suppression sous index vectoriel (12 octobre) : remplir 15 000 vecteurs par SET en
+# lots de 64 prend 2 à 3 min par table (215 à 390 s par cas).
+VectorIndexCost.ProductShapeDeleteCost
+Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64
+Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation

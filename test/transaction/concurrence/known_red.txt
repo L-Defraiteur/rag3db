@@ -123,3 +123,13 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-ve
 # quelques recherches reçoivent « bad optional access » ou « unordered_map::at » au lieu d'un refus
 # nommé. Rouge trois passes sur trois ; aucun figement, aucun résultat faux.
 VectorIndexRebuild.SearchesAcrossDropAndCreateAreConsistentOrNamed no-unnamed-search-error
+#
+# Supprimer une ligne indexée HNSW coûte des centaines de millisecondes (ticket
+# 2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes) : finalizeDelete fait une recherche
+# par voisin survivant, et la lecture des arêtes écrites depuis le dernier point de reprise croît
+# avec l'index. La forme du produit rouge deux passes sur deux (facteur 38 et 41 contre SET NULL
+# puis DELETE) ; l'index rempli par SET rouge trois passes sur trois sans point de reprise, celui
+# qui a une relation par ligne une passe sur une. Cas longs (long.txt). Pour hotfixs.
+VectorIndexCost.ProductShapeDeleteCost delete-close-to-set-null-then-delete
+Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64 delete-independent-of-index-size
+Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation delete-independent-of-index-size

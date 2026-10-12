@@ -53,6 +53,58 @@ Le `SET` à NULL par lot est l'opération que `record_nodes::write_vectors` évi
 qui garde sa place (l'index en perd des lignes). Ici, les lignes partent juste après :
 ce qu'il ferait perdre ne concerne qu'elles. `e2e_invariant_des_vecteurs` doit rester vert.
 
+## Témoins au banc (12 octobre 2026, session du banc)
+
+`test/transaction/concurrence/vector_index_cost_test.cpp`, FLOAT[768], cosine, paramètres par
+défaut, vecteurs groupés autour de 64 centres. Moteur de master acdb91764 ; chaque rouge ci-dessous
+a été joué, pas déduit.
+
+- `VectorIndexCost.ProductShapeDeleteCost` : la forme du produit au plus près (index créé sur la
+  table vide, COPY de 15 000 morceaux sans vecteur avec une relation sortante chacun, SET depuis
+  NULL en lots de 64, aucun point de reprise, `DETACH DELETE` filtré sur `_parent_uuid`). **Rouge**
+  sur `delete-close-to-set-null-then-delete` (le DELETE direct au plus cinq fois SET NULL puis
+  DELETE, plus 2 ms) : médianes 219 contre 5,7 ms, puis 282 contre 6,8 ms, soit un facteur 38 à
+  41 (300 chez le proto). `delete-cost-does-not-grow` reste vert (la montée de 2,1 à 2,9 s n'est
+  pas reproduite). Après un `CHECKPOINT` (24,9 s), le même DELETE prend 36 à 48 ms.
+- `Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize` : lots de 10 lignes en une requête, temps
+  médian par ligne de 1 500 à 15 000 lignes, la grande au plus deux fois la petite plus 2 ms.
+
+  | l'index est fait | sans point de reprise | après un point de reprise |
+  |---|---|---|
+  | par CREATE sur la table pleine | 35 → 32 ms, vert | 35 → 33 ms, vert |
+  | par SET depuis NULL en lots de 64 | 127 → 895, puis 39 → 236, 52 → 361 ms : **rouge** | 143 → 116, 39 → 35, 50 → 50 ms, vert |
+  | le même, une relation entrante par ligne | 95 → 644 ms : **rouge** | 68 → 77 ms, vert |
+
+  Le coût dépend de la taille de l'index tant que ses arêtes n'ont pas été checkpointées. Après le
+  point de reprise, il reste un écart : un index rempli par SET coûte 50 à 140 ms par ligne contre
+  33 pour un index fait par CREATE. Et un lot de 10 coûte jusqu'à 900 ms par ligne quand un
+  morceau seul en coûte 220 (forme du produit) : `finalizeDelete` paierait plus que linéairement
+  en voisins à réparer.
+
+Les mesures (`MeasureDelete`, `MeasureInsert`, `MeasureInsertWithCheckpoints`, sous
+`CONCURRENCE_MEASURE=1` et `poste mesure`) :
+- une suppression sous index fait par CREATE coûte 20 à 50 ms par ligne, sans dépendre de la
+  taille ni du point de reprise ; 0,03 à 1 ms sans index ; 0,7 ms par la voie SET NULL puis DELETE ;
+- un SET depuis NULL sous index coûte 1 à 4 ms par vecteur (0,25 sans index) ; 1, 8 et 32 fils
+  donnent les mêmes chiffres ; le coût monte d'un lot de 500 à l'autre, et un point de reprise
+  entre chaque lot ne change pas la courbe ;
+- `CREATE_VECTOR_INDEX` sur 15 000 vecteurs : 9 à 12 s, soit 0,6 à 0,8 ms par vecteur.
+
+Profil par échantillonnage de piles (eu-stack toutes les 0,2 s, fils actifs seulement ; outil dans
+les notes du banc, `profil.sh`) :
+- la suppression sans point de reprise : `finalizeDelete` 98 %, dont `keepNodeReachable` 88 %
+  (une recherche par voisin survivant) ; la lecture des voisins passe par
+  `CSRNodeGroup::scanCommittedInMemRandom` 75 % puis `ChunkedNodeGroup::lookup` 73 %, chaque ligne
+  payant un verrou partagé (34 % de temps propre) et `VersionInfo::isSelected` (21 %) ;
+  `findMatchingRow` 7 %, `UpdateInfo::lookup` 12 %, `updateCSRIndex` et son tri environ 2 % ;
+- l'insertion : `insertToLayer` 90 %, `scanCommittedInMemRandom` 66 %, et `shrinkForNode` puis
+  `detachDelete` puis `findMatchingRow` 29 % ;
+- le point de reprise après environ 15 000 SET : `ColumnChunkData::resize` 80 % de temps propre,
+  sous `UpdateInfo::iterateVectorInfo`, `applyCommittedUpdates` et `ListChunkData::write` (un
+  agrandissement par mise à jour appliquée, à confirmer dans le code).
+
+Les trois rouges sont en known_red et dans long.txt (215 à 390 s chacun).
+
 ## Ce qu'il faut pour le fermer
 
 Un `DETACH DELETE` d'une ligne indexée en quelques millisecondes sur un index de cette taille,
