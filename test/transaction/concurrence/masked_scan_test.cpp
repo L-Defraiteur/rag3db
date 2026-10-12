@@ -13,6 +13,7 @@
 //   passes. Sautée sans CONCURRENCE_MEASURE=1 ; à jouer sous `poste mesure`.
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -122,8 +123,23 @@ protected:
         for (std::string line; std::getline(in, line);) {
             lines.push_back(line);
         }
+        // Le nom entier seulement : « SCAN_NODE_TABLE » ne doit pas prendre la boîte de
+        // PRIMARY_KEY_SCAN_NODE_TABLE.
+        const auto partOfName = [](char c) {
+            return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+        };
+        const auto wholeName = [&](const std::string& text) {
+            for (auto at = text.find(name); at != std::string::npos; at = text.find(name, at + 1)) {
+                const auto end = at + name.size();
+                if ((at == 0 || !partOfName(text[at - 1])) &&
+                    (end == text.size() || !partOfName(text[end]))) {
+                    return at;
+                }
+            }
+            return std::string::npos;
+        };
         for (auto i = 0u; i < lines.size(); ++i) {
-            const auto column = lines[i].find(name);
+            const auto column = wholeName(lines[i]);
             if (column == std::string::npos) {
                 continue;
             }
