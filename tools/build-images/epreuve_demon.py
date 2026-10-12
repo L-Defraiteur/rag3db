@@ -197,6 +197,19 @@ env4 = dict(ENV, RAG3WEAVER_DAEMON_ADDRESS="127.0.0.1:0")
 outils, etat, erreurs = client([], env4)
 f = fiche() or {}
 cas(etat.get("state") == "running" and f.get("pid"), f"le client a lancé l'hôte, qui répond ({etat.get('state')}, pid {f.get('pid')})")
+if etat.get("state") != "running":
+    # Un hôte, ou deux ? (relecture de la mémoire : un second lancement par
+    # la reprise du client se verrait refuser la base par le premier.)
+    nom = os.path.basename(BINAIRE)
+    liste = (["tasklist", "/FI", f"IMAGENAME eq {nom}"] if os.name == "nt" else ["ps", "-C", nom, "-o", "pid,etime,args"])
+    try:
+        print("       --- processus de l'hôte\n" + subprocess.run(liste, capture_output=True, text=True, timeout=30).stdout)
+    except Exception as e:
+        print(f"       processus illisibles : {e}")
+    journal = os.path.join(DOSSIER, "daemon.log")
+    texte = open(journal, errors="replace").read() if os.path.exists(journal) else ""
+    print(f"       daemon.json : pid {f.get('pid')} ; démarrages dans daemon.log : {texte.count('rag3weaver-daemon — http://')}")
+    print("       --- daemon.log\n" + texte[-2500:])
 s = sante(f.get("address", "")) if f else None
 cas(bool(s) and s.get("pid") == f.get("pid"), "l'hôte détaché survit au client qui l'a lancé")
 if f:
