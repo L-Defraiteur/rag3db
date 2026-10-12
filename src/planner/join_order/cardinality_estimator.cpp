@@ -58,6 +58,10 @@ void CardinalityEstimator::rectifyCardinality(const Expression& nodeID, cardinal
     nodeIDName2dom[nodeID.getUniqueName()] = newCard;
 }
 
+bool CardinalityEstimator::hasNodeIDDom(const binder::Expression& nodeID) const {
+    return nodeIDName2dom.contains(nodeID.getUniqueName());
+}
+
 cardinality_t CardinalityEstimator::getNodeIDDom(const std::string& nodeIDName) const {
     KU_ASSERT(nodeIDName2dom.contains(nodeIDName));
     return nodeIDName2dom.at(nodeIDName);

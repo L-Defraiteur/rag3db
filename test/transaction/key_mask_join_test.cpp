@@ -121,9 +121,12 @@ TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
     ok("CREATE REL TABLE R(FROM M TO D);");
     ok("UNWIND range(0, 19999) AS i CREATE (:D {uuid: 'd-' + CAST(i, 'STRING'), name: 'n' + CAST(i, 'STRING')});");
     ok("UNWIND range(0, 59999) AS i CREATE (:M {id: i, name: 'm' + CAST(i, 'STRING'), path: 'p/' + CAST(i % 97, 'STRING'), line: i % 1000});");
+    // Un nœud par MATCH : deux nœuds liés par leur clé dans un même motif se croisent (le produit
+    // des deux ensembles masqués) avant la jointure avec la liste — un travers du planificateur,
+    // hors de ce lot ; et une clé calculée dans le motif ne devient pas une condition de jointure.
     for (auto low = 0; low < 60000; low += 10000) {
         ok("UNWIND range(" + std::to_string(low) + ", " + std::to_string(low + 9999) +
-           ") AS i MATCH (m:M {id: i}), (d:D {uuid: 'd-' + CAST(i % 20000, 'STRING')}) CREATE (m)-[:R]->(d);");
+           ") AS i MATCH (m:M {id: i}) WITH m, 'd-' + CAST(m.id % 20000, 'STRING') AS kd MATCH (d:D {uuid: kd}) CREATE (m)-[:R]->(d);");
     }
     ok("CHECKPOINT;");
     ASSERT_EQ(rows("MATCH ()-[r:R]->() RETURN count(r);")[0], "60000\n") << "[check: edges-created] ";
@@ -164,3 +167,47 @@ TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
     }
     EXPECT_GE(maskers, 2u) << "[check: second-level-masked] " << maskers << " semi-masker(s)\n" << plan;
 }
+
+// Le saut d'une table vers elle-même : `(d:S {clé: u})-[:P]->(m:S)`. À cardinalités égales,
+// l'énumérateur partait de m (non masqué) et joignait d par hachage : S entier était balayé pour
+// m, même pour une clé. Le nœud lié par sa clé à la partie précédente s'estime à la cardinalité de
+// cette partie : l'extension part de d masqué, et m n'est lu que par ses voisins.
+TEST_F(KeyMaskJoin, AHopWithinTheSameTableStartsFromTheKeyedNode) {
+    ok("CREATE NODE TABLE S(uuid STRING PRIMARY KEY, name STRING, path STRING, line INT64);");
+    ok("CREATE REL TABLE P(FROM S TO S);");
+    ok("UNWIND range(0, 59999) AS i CREATE (:S {uuid: 's-' + CAST(i, 'STRING'), name: 'n' + CAST(i, 'STRING'), path: 'p/' + CAST(i % 97, 'STRING'), line: i % 1000});");
+    for (auto low = 0; low < 60000; low += 10000) {
+        ok("UNWIND range(" + std::to_string(low) + ", " + std::to_string(low + 9999) +
+           ") AS i WITH 's-' + CAST(i, 'STRING') AS ka, 's-' + CAST((i * 7 + 1) % 60000, 'STRING') AS kb MATCH (a:S {uuid: ka}) WITH a, kb MATCH (b:S {uuid: kb}) CREATE (a)-[:P]->(b);");
+    }
+    ASSERT_EQ(rows("MATCH ()-[p:P]->() RETURN count(p);")[0], "60000\n") << "[check: edges-created] ";
+    ok("CHECKPOINT;");
+    const std::string query = "UNWIND ['s-0', 's-400', 's-800'] AS u MATCH (d:S {uuid: u})-[:P]->(m:S) RETURN u, m.uuid, m.name, m.path, m.line;";
+    const auto got = rows(query);
+    ASSERT_EQ(got.size(), 3u) << "[check: hop-rows] ";
+    EXPECT_EQ(got[0], "s-0|s-1|n1|p/1|1\n") << "[check: first-row] ";
+    const auto plan = profile(query);
+    ASSERT_NE(plan.find("SEMI_MASKER"), std::string::npos) << "[check: plan] " << plan;
+    // Aucun balayage de S ne sort plus de 10 × 3 lignes : ni d (masqué), ni m (lu par l'extension).
+    std::istringstream in(plan);
+    std::vector<std::string> lines;
+    for (std::string line; std::getline(in, line);) {
+        lines.push_back(line);
+    }
+    int64_t worst = 0;
+    for (auto i = 0u; i < lines.size(); ++i) {
+        for (auto at = lines[i].find("SCAN_NODE_TABLE["); at != std::string::npos;
+             at = lines[i].find("SCAN_NODE_TABLE[", at + 1)) {
+            for (auto j = i + 1; j < lines.size() && j < i + 14; ++j) {
+                const auto key = lines[j].find("NumOutputTuples:", at > 20 ? at - 20 : 0);
+                if (key != std::string::npos && key < at + 40) {
+                    worst = std::max<int64_t>(worst, std::stoll(lines[j].substr(key + 16)));
+                    break;
+                }
+            }
+        }
+    }
+    EXPECT_LE(worst, 30) << "[check: extend-starts-from-the-keyed-node] a scan of S put out " << worst
+                         << " rows for 3 keys\n" << plan;
+}
+

@@ -2,6 +2,7 @@
 #include "binder/expression/subquery_expression.h"
 #include "binder/expression_visitor.h"
 #include "planner/operator/factorization/flatten_resolver.h"
+#include "binder/expression/property_expression.h"
 #include "planner/planner.h"
 
 using namespace rag3db::binder;
@@ -190,6 +191,35 @@ void Planner::planRegularMatch(const QueryGraphCollection& queryGraphCollection,
     auto info = QueryGraphPlanningInfo();
     info.predicates = predicatesToPushDown;
     info.hint = hint;
+    // Un prédicat remonté `n.clé = expr(gauche)` sur la clé primaire d'un nœud du motif : ce nœud
+    // s'estime à la cardinalité de gauche (page coeur-cpp/14, le troisième pas).
+    for (auto& predicate : predicatesToPullUp) {
+        if (predicate->expressionType != ExpressionType::EQUALS) {
+            continue;
+        }
+        for (auto side = 0u; side < 2; ++side) {
+            auto& candidate = *predicate->getChild(side);
+            auto& other = *predicate->getChild(1 - side);
+            if (candidate.expressionType != ExpressionType::PROPERTY ||
+                !candidate.constCast<PropertyExpression>().isPrimaryKey() ||
+                getDependentExprs(predicate->getChild(1 - side), *leftPlan.getSchema()).empty()) {
+                continue; // pas une clé primaire, ou l'autre membre ne vient pas de la gauche
+            }
+            KU_UNUSED(other);
+            const auto& property = candidate.constCast<PropertyExpression>();
+            for (auto g = 0u; g < queryGraphCollection.getNumQueryGraphs(); ++g) {
+                auto graph = queryGraphCollection.getQueryGraph(g);
+                for (auto i = 0u; i < graph->getNumQueryNodes(); ++i) {
+                    auto node = graph->getQueryNode(i);
+                    if (node->getInternalID()->constCast<PropertyExpression>().getVariableName() ==
+                        property.getVariableName()) {
+                        info.keyBoundNodeIDs.push_back(node->getInternalID());
+                    }
+                }
+            }
+        }
+    }
+    info.keyBoundCard = leftPlan.getCardinality();
     if (joinNodeIDs.empty()) {
         info.subqueryType = SubqueryPlanningType::NONE;
         auto rightPlan = planQueryGraphCollectionInNewContext(queryGraphCollection, info);

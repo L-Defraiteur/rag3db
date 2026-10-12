@@ -44,6 +44,13 @@ struct QueryGraphPlanningInfo {
     SubqueryPlanningType subqueryType = SubqueryPlanningType::NONE;
     binder::expression_vector corrExprs;
     cardinality_t corrExprsCard = 0;
+    // Les identifiants des nœuds dont la clé primaire est égalée à une expression d'une partie
+    // précédente (`UNWIND $liste AS u MATCH (d {clé: u})`, page coeur-cpp/14) : le prédicat est
+    // remonté au-dessus de la jointure, mais le balayage de d ne rendra que les lignes des clés
+    // (le masque par clés) — sa cardinalité s'estime à celle de la partie précédente, pour que
+    // l'extension d'un saut parte de d et non du voisin.
+    binder::expression_vector keyBoundNodeIDs;
+    cardinality_t keyBoundCard = 0;
     // Join hint info.
     std::shared_ptr<binder::BoundJoinHintNode> hint = nullptr;
 

@@ -175,6 +175,13 @@ LogicalPlan Planner::planQueryGraph(const QueryGraph& queryGraph,
     const QueryGraphPlanningInfo& info) {
     context.init(&queryGraph, info.predicates);
     cardinalityEstimator.init(queryGraph);
+    for (auto& nodeID : info.keyBoundNodeIDs) {
+        // Un graphe par composante connexe : le nœud lié par sa clé peut être dans une autre.
+        if (cardinalityEstimator.hasNodeIDDom(*nodeID)) {
+            cardinalityEstimator.rectifyCardinality(*nodeID,
+                std::max<cardinality_t>(1, info.keyBoundCard));
+        }
+    }
     if (info.hint != nullptr) {
         auto constructor =
             JoinTreeConstructor(queryGraph, propertyExprCollection, info.predicates, info);
