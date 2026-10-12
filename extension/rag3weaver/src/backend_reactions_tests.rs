@@ -304,3 +304,48 @@ fn un_sous_graphe_herite_de_la_marque_d_ecriture() {
     assert!(!toute);
     assert!(ecrites.contains("ANCRE"), "la relation liée est écrite, à travers le sous-graphe : {ecrites:?}");
 }
+
+/// **Un appel par la cellule du catalogue n'attend pas l'écrivain** (cinquième
+/// rejeu de codeparsers, 12 octobre 2026) : une session de l'hôte appelle
+/// toujours par `call_in`, et ce chemin prenait le mutex du catalogue deux
+/// fois avant la vue — `reactions_de_la_cellule` et `build_services`. Un
+/// usages tombé pendant la réaction de la montre attendait toute sa tenue.
+/// Ici un fil tient le mutex 2 s ; l'appel (refusé : l'outil n'existe pas,
+/// mais après le montage des réactions de la cellule) et les services de
+/// l'appel se rendent sans lui.
+#[test]
+fn un_appel_par_la_cellule_du_catalogue_n_attend_pas_l_ecrivain() {
+    let (_dir, backend) = reactif();
+    backend.mount_reactions().expect("le montage");
+    // La vue, comme l'ouverture d'un backend la publie.
+    backend.catalog.lock().unwrap().publish_read_view();
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    assert!(backend.read_view.current().is_some_and(|v| v.scope == cellule), "la vue est publiée, sur la cellule du catalogue");
+
+    let (pret, attendre) = std::sync::mpsc::channel();
+    let ecrivain = {
+        let catalog = backend.catalog.clone();
+        std::thread::spawn(move || {
+            let _tenu = catalog.lock().unwrap();
+            pret.send(()).unwrap();
+            std::thread::sleep(Duration::from_secs(2));
+        })
+    };
+    attendre.recv().unwrap();
+
+    let t = std::time::Instant::now();
+    let refus = backend.call_in(&cellule, "absent", json!({})).expect_err("l'outil n'existe pas");
+    let appel = t.elapsed();
+    assert!(refus.contains("unexposed tool"), "le refus vient de l'outil, après les réactions de la cellule : {refus}");
+
+    let t = std::time::Instant::now();
+    CELL_OF_CALL.with(|c| *c.borrow_mut() = Some(cellule.clone()));
+    let services = backend.build_services(&backend.prepared());
+    CELL_OF_CALL.with(|c| *c.borrow_mut() = None);
+    let construits = t.elapsed();
+    assert_eq!(services.get::<crate::scope::Scope>("scope"), Some(&cellule), "la cellule de l'appel est posée");
+
+    ecrivain.join().unwrap();
+    assert!(appel < Duration::from_millis(100), "call_in n'attend pas l'écrivain : {appel:?}");
+    assert!(construits < Duration::from_millis(100), "build_services n'attend pas l'écrivain : {construits:?}");
+}

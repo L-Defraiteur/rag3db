@@ -2283,6 +2283,16 @@ impl Backend {
             // Pas de réactions déclarées, ou pas en service (tests, arrêt) : rien à monter.
             return Ok(());
         }
+        // **La cellule du catalogue se lit dans la vue, sans le mutex** : une
+        // écriture qui le tient (la réaction de la montre) ne fait plus
+        // attendre chaque appel d'une session de l'hôte, qui porte toujours
+        // une cellule. Le cinquième rejeu de codeparsers a vu un usages
+        // attendre 1 610 ms ici, toute la tenue de la montre.
+        if self.read_view.current().is_some_and(|v| v.scope == *cell)
+            || self.cell_reactions.lock().unwrap_or_else(|e| e.into_inner()).contains_key(cell)
+        {
+            return Ok(());
+        }
         let bus = {
             let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
             if *cat.scope() == *cell {
@@ -2979,7 +2989,15 @@ impl Backend {
         let mut services = ServiceRegistry::new();
         // La cellule de l'appel, si `call_in` l'a posée : ses index et sa
         // cellule remplacent ceux du catalogue pour les nœuds de cet appel.
-        match CELL_OF_CALL.with(|c| c.borrow().clone()) {
+        let cell = CELL_OF_CALL.with(|c| c.borrow().clone());
+        let vue = self.read_view.current();
+        match cell {
+            // **La cellule de la vue** : ses services, sans le mutex, comme
+            // un appel sans cellule — une session de l'hôte en porte une.
+            Some(cell) if vue.as_ref().is_some_and(|v| v.scope == cell) => {
+                services = ServiceRegistry::layered(vue.expect("la vue vient d'être lue").search_services.clone());
+                services.register("scope", cell);
+            }
             Some(cell) => {
                 let mut cat = self.catalog.lock().unwrap();
                 // Pas de repli sur la cellule du catalogue : ce serait chercher
@@ -2992,7 +3010,7 @@ impl Backend {
             }
             // **Sans le mutex** (lot L2) : les services de recherche de la
             // vue, posés en parent. Le mutex seulement sans vue publiée.
-            None => match self.read_view.current() {
+            None => match vue {
                 Some(vue) => services = ServiceRegistry::layered(vue.search_services.clone()),
                 None => self.catalog.lock().unwrap().register_search_services(&mut services),
             },
