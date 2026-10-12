@@ -67,6 +67,7 @@ std::unique_ptr<TableFuncBindData> QueryHNSWIndexBindData::copy() const {
     bindData->config = config;
     bindData->queryExpression = queryExpression;
     bindData->kExpression = kExpression;
+    bindData->numRows = numRows;
     bindData->outputNode = outputNode;
     bindData->filterStatement = filterStatement;
     return bindData;
@@ -83,6 +84,32 @@ std::unique_ptr<TableFuncBindData> QueryHNSWIndexBindData::copy() const {
 static bool vectorTraceEnabled() {
     static const bool enabled = std::getenv("RAG3DB_VECTOR_TRACE") != nullptr;
     return enabled;
+}
+
+static Value evaluateParamExpr(std::shared_ptr<Expression> paramExpression,
+    main::ClientContext* context, const LogicalType& expectedType);
+
+// La recherche rend au plus k lignes : c'est son estimation pour la règle des fils (page
+// coeur-cpp/12 §8, « les fonctions de table déclarent leur estimation »). k n'est connu à la
+// liaison que s'il est écrit ou passé en paramètre ; sinon, ou s'il est invalide (l'erreur nommée
+// vient alors à l'exécution, comme avant), rien n'est estimé et la tâche garde le plafond. Sous une
+// instruction préparée, k est un paramètre encore sans valeur à la liaison : inconnu, de même.
+static common::row_idx_t estimateNumRows(main::ClientContext* context,
+    const std::shared_ptr<Expression>& kExpression) {
+    if (kExpression->expressionType != ExpressionType::LITERAL &&
+        kExpression->expressionType != ExpressionType::PARAMETER) {
+        return 0;
+    }
+    try {
+        const auto value = evaluateParamExpr(kExpression, context, LogicalType::INT64());
+        if (value.isNull()) {
+            return 0;
+        }
+        const auto k = value.getValue<int64_t>();
+        return k > 0 ? static_cast<common::row_idx_t>(k) : 0;
+    } catch (const Exception&) {
+        return 0;
+    }
 }
 
 static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
@@ -173,6 +200,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     bindData->indexColumnID = nodeTableEntry->getColumnID(propertyID);
     bindData->queryExpression = input->params[2];
     bindData->kExpression = input->params[3];
+    bindData->numRows = estimateNumRows(context, bindData->kExpression);
     bindData->outputNode = outputNode;
     bindData->config = QueryHNSWConfig{input->optionalParams};
     bindData->filterStatement = std::move(boundStatement);
@@ -394,8 +422,14 @@ static std::unique_ptr<PhysicalOperator> getPhysicalPlan(PlanMapper* planMapper,
             static_cast<unsigned long long>(bindData->numRows));
     }
     if (bindData->filterStatement != nullptr) {
+        // Le masque est indexé par décalage de ligne : il se dimensionne sur la table, comme celui
+        // d'un balayage de nœuds (map_scan_node_table), et non sur numRows (une estimation).
+        auto* clientContext = planMapper->clientContext;
+        const auto numNodes = storage::StorageManager::Get(*clientContext)
+                                  ->getTable(bindData->nodeTableEntry->getTableID())
+                                  ->getNumTotalRows(transaction::Transaction::Get(*clientContext));
         sharedState->semiMasks.addMask(bindData->nodeTableEntry->getTableID(),
-            SemiMaskUtil::createMask(bindData->numRows));
+            SemiMaskUtil::createMask(numNodes));
         planMapper->addOperatorMapping(logicalOp, op.get());
         KU_ASSERT(logicalOp->getNumChildren() == 1);
         auto logicalRoot = logicalOp->getChild(0);

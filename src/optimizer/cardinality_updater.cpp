@@ -12,6 +12,7 @@
 #include "planner/operator/logical_intersect.h"
 #include "planner/operator/logical_limit.h"
 #include "planner/operator/logical_plan.h"
+#include "planner/operator/logical_table_function_call.h"
 #include "planner/operator/logical_unwind.h"
 
 namespace rag3db::optimizer {
@@ -24,6 +25,9 @@ void CardinalityUpdater::visitOperator(planner::LogicalOperator* op) {
         visitOperator(op->getChild(i).get());
     }
     visitOperatorSwitchWithDefault(op);
+    if (declaresItsOwnEstimate(*op)) {
+        return;
+    }
     // Un enfant sans estimation (un CALL, une liste calculée) ne donne rien à estimer au-dessus :
     // le processeur garde alors tous les fils de la tâche (QueryProcessor::initTask).
     for (auto i = 0u; i < op->getNumChildren(); ++i) {
@@ -76,6 +80,10 @@ void CardinalityUpdater::visitOperatorSwitchWithDefault(planner::LogicalOperator
         visitUnwind(op);
         break;
     }
+    case planner::LogicalOperatorType::TABLE_FUNCTION_CALL: {
+        visitTableFunctionCall(op);
+        break;
+    }
     default: {
         visitOperatorDefault(op);
         break;
@@ -87,6 +95,31 @@ void CardinalityUpdater::visitOperatorDefault(planner::LogicalOperator* op) {
     if (op->getNumChildren() == 1) {
         op->setCardinality(op->getChild(0)->getCardinality());
     }
+}
+
+// Une fonction de table qui déclare son estimation (numRows : k pour QUERY_VECTOR_INDEX, une ligne
+// pour un CALL simple) la garde. Son enfant, quand elle en a un (seul QUERY_VECTOR_INDEX filtré :
+// le filtre, qui remplit un semi-masque), ne donne pas ses lignes de sortie ; il les borne
+// seulement (au plus les lignes retenues par le filtre).
+bool CardinalityUpdater::declaresItsOwnEstimate(const planner::LogicalOperator& op) {
+    return op.getOperatorType() == planner::LogicalOperatorType::TABLE_FUNCTION_CALL &&
+           op.constCast<planner::LogicalTableFunctionCall>().getBindData()->numRows > 0;
+}
+
+void CardinalityUpdater::visitTableFunctionCall(planner::LogicalOperator* op) {
+    if (declaresItsOwnEstimate(*op)) {
+        common::cardinality_t estimate =
+            op->cast<planner::LogicalTableFunctionCall&>().getBindData()->numRows;
+        for (auto i = 0u; i < op->getNumChildren(); ++i) {
+            const auto& child = *op->getChild(i);
+            if (child.hasCardinalityEstimate()) {
+                estimate = std::min(estimate, child.getCardinality());
+            }
+        }
+        op->setCardinality(estimate);
+        return;
+    }
+    visitOperatorDefault(op);
 }
 
 // Le même calcul que Planner::appendUnwind : l'enfant fois la longueur connue de la liste.

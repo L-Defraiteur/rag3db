@@ -105,10 +105,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (113), dans `closed/`
+### Fermés (114), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [QUERY_VECTOR_INDEX déclare une ligne au lieu de k, et son masque se dimensionne sur ce chiffre](closed/2026-10-12-query-vector-index-declare-une-ligne-au-lieu-de-k.md) | corrigé (voir le ticket) | estimation fausse | l'estimation oui, ses effets non vus | oui (`rag3db_search_backend.rs`) |
 | [Un plan de quelques lignes prend un fil par cœur](closed/2026-10-11-un-plan-de-quelques-lignes-prend-un-fil-par-coeur.md) | corrigé (12 octobre 2026, le lot des fils proportionnés, page coeur-cpp/12 §9) | coût (moitié du temps d'une lecture d'outil) | oui, à chaque lecture d'outil sur rag3db | oui (contournable par une connexion de lecture) |
 | [Les fils d'un plan sont proportionnés à la cardinalité estimée par le planificateur](closed/2026-10-11-les-fils-d-un-plan-sont-proportionnes-a-la-cardinalite-estimee-par-le-planificateur.md) | fait (12 octobre 2026 : la règle, le témoin ThreadsByCardinality, le avant/après — page coeur-cpp/12 §9) | performance — 32 fils pour trois lignes, impact 47 % plus lent qu'à 1 fil | oui (chaque instruction) | oui |
 | [Les chemins rangés sont absolus et dans la forme du système, et les comparaisons supposent « / »](closed/2026-10-11-les-chemins-ranges-sont-absolus-et-dans-la-forme-du-systeme.md) | corrigé : identité relative en « / », une racine locale par base, base d'avant la règle dite (12 oct.) | blocage sous Windows, sécurité | oui, sous Windows | oui (et codeparsers) |

@@ -25,6 +25,7 @@ private:
     void visitOperatorSwitchWithDefault(planner::LogicalOperator* op);
 
     void visitOperatorDefault(planner::LogicalOperator* op);
+    static bool declaresItsOwnEstimate(const planner::LogicalOperator& op);
     void visitScanNodeTable(planner::LogicalOperator* op) override;
     void visitExtend(planner::LogicalOperator* op) override;
     void visitHashJoin(planner::LogicalOperator* op) override;
@@ -34,6 +35,7 @@ private:
     void visitFilter(planner::LogicalOperator* op) override;
     void visitAggregate(planner::LogicalOperator* op) override;
     void visitUnwind(planner::LogicalOperator* op) override;
+    void visitTableFunctionCall(planner::LogicalOperator* op) override;
     void visitLimit(planner::LogicalOperator* op) override;
 
     const planner::CardinalityEstimator& cardinalityEstimator;

@@ -79,8 +79,10 @@ struct QueryHNSWIndexBindData final : function::TableFuncBindData {
 
     std::shared_ptr<binder::BoundStatement> filterStatement;
 
+    // numRows est l'estimation de la règle des fils (page coeur-cpp/12) : k quand il est connu à
+    // la liaison, 0 (inconnu) sinon. Il ne sert plus à dimensionner le masque.
     explicit QueryHNSWIndexBindData(binder::expression_vector columns)
-        : TableFuncBindData({std::move(columns), 1 /* maxOffset */}) {}
+        : TableFuncBindData{std::move(columns)} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override;
 };
