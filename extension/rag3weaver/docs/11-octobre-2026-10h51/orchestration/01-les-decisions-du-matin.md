@@ -1064,7 +1064,7 @@ où elle vit.
   de plus). Hotfixs rappelé à la règle : `mesure` pour la mesure seule, le
   bâti sous `lourd` (sa mesure qvi tenait l'exclusif pendant un cmake, quatre
   travaux derrière).
-- **2 h 50 – 3 h 30, nuit : la cause du P1 est trouvée, et les textes
+- **2 h 50 – 3 h 05, nuit : la cause du P1 est trouvée, et les textes
   n'ont jamais été perdus.** Le cœur, sur la copie de F : `MATCH (s:Scope)
   RETURN s._uuid, s.content` relu ligne à ligne rend pour 5 lignes sur
   81 407 **la chaîne d'une autre ligne** (celle 2 048 plus tôt, même position
@@ -1127,3 +1127,38 @@ où elle vit.
   Lot poste-tenants de G en cours (le verrou de push tenu par le script, une
   attente annulable, un flock mort qui arrête, `--qui` qui nomme le tenant,
   19 cas, + le témoin « deux attendants survivent au tenant qui finit »).
+- **3 h 05 – 3 h 25, nuit**. **Le correctif du balayage filtré est écrit**
+  (cœur, branche scan-filtre-chaines `6bcf4dbae`, chaînes **et listes** :
+  même borne fausse dans ListColumn::scanFiltered ; suites vertes, parité
+  0 écart sur la copie de F, les tickets du SIGSEGV et des morceaux sans
+  texte fermés dans le lot) ; le témoin exact du banc (`52b042632`, un groupe
+  en deux segments, second segment court ou long, sélection filtrée, cinq
+  cas dont mort et rejeu) est repris par le cœur par cherry-pick, joué rouge
+  puis vert, puis push ; les témoins P1 du banc (MERGE…SET, passe de
+  vecteurs, premier COPY avec mort et rejeu) sont tous verts en lecture non
+  filtrée : la cause est confirmée par l'absence ; une version courte reste
+  au banc pour garder la réécriture des chaînes, les longues dans ses notes.
+  Sur master : « complet compte `_text` » et la suspension de la réécriture
+  (arbre principal, `772d4e9d6`, `1a31fea71`, rejeu pris sur la lib du
+  magasin par défaut) ; **le magasin par défaut** (recherche, `02d67d191` :
+  run_e2e.sh lit le courant et le dit, `RAG3DB_LIB=bati|<id>`,
+  `RAG3WEAVER_MOTEUR_DU_WORKTREE=1` pour un worktree du moteur, le rebâti
+  publie et pose courant : plus de « fini » pour un rebâti, seuls les hôtes
+  et binaires installés restent concernés ; diffusé aux neuf sessions) ;
+  **les tenants du push** (G, `a94409139`, déployé md5 0229e1ad : le verrou
+  tenu par le script et jamais rendu par un signal, la commande jamais
+  tuée, attente annulable, `--qui` nomme le tenant, `--lourd` refusé
+  rappelle le rejeu distant, test_poste 21 cas sur ses propres pids et
+  verrous avec garde contre les réels, l'incident de 3 h écrit) ; la sonde
+  des morceaux sans texte (codeparsers, `d2137b70e`, poussée par un script
+  orphelin dont l'enveloppe avait été tuée : un trou du poste, l'enveloppe
+  doit propager le signal, dit à G). **La forme du premier vrai flux**
+  (recherche, `4aa8b683a`, `docs/12-octobre-2026-recherche/01` : LlmNode
+  émet `tokens` Finite optionnel à côté de `text` et `llm`, un seul puits
+  émet et accumule, `stop_when_unread`, `has_streams` sur les flux branchés
+  seulement = parité par construction, Decide sur le texte entier ;
+  consommateurs TokenEvents et Watch chez le proto ; témoins et mesure)
+  approuvée, le mot du proto sur ses deux consommateurs avant le code.
+  G passe à B1-B3, C, les archives alpha.3 sans publier ; sa recette luciepc
+  passe au RUNPATH vers l'identifiant et l'ExecStartPre au premier rebâti
+  de hotfixs.
