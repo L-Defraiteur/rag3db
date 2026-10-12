@@ -105,12 +105,23 @@ def client(arguments, env):
 
     demander("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "épreuve", "version": "0"}})
     outils = [t["name"] for t in demander("tools/list", {}).get("result", {}).get("tools", [])]
-    r = demander("tools/call", {"name": "daemon_status", "arguments": {}})
-    texte = (r.get("result", {}).get("content") or [{}])[0].get("text", "{}")
-    try:
-        etat = json.loads(texte)
-    except ValueError:
-        etat = {"brut": texte}
+    # Le client démarre avec `daemon_status` seul (« connexion à l'hôte en
+    # cours ») et s'attache par un fil : on redemande l'état tant qu'il dit
+    # « absent », 90 s au plus (sous Windows, lancer l'hôte et ouvrir le
+    # backend passe la seconde ; vu le 12 octobre, run 38226368160).
+    fin = time.time() + 90
+    while True:
+        r = demander("tools/call", {"name": "daemon_status", "arguments": {}})
+        texte = (r.get("result", {}).get("content") or [{}])[0].get("text", "{}")
+        try:
+            etat = json.loads(texte)
+        except ValueError:
+            etat = {"brut": texte}
+        if etat.get("state") != "absent" or time.time() > fin:
+            break
+        time.sleep(1)
+    if etat.get("state") != "running":
+        print(f"       daemon_status : {etat.get('state')} — {etat.get('reason')}")
     p.stdin.close()
     # Le client fini, ses tuyaux doivent se fermer : un hôte détaché qui en
     # hériterait les garderait ouverts, et l'agent attendrait sans fin (vu sous
@@ -125,7 +136,10 @@ def client(arguments, env):
     fil.join(30)
     cas(not fil.is_alive(), f"les tuyaux du client se ferment avec lui (client fini : {p.poll() is not None})"
         + ("" if not fil.is_alive() else " — un hôte détaché en a hérité"))
-    return outils, etat, (lu[0] if lu else "")
+    erreurs = lu[0] if lu else ""
+    if etat.get("state") != "running" and erreurs:
+        print("       --- stderr du client\n" + erreurs[-2000:])
+    return outils, etat, erreurs
 
 
 # ── 1. Un hôte à la main ────────────────────────────────────────────────────
