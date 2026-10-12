@@ -169,3 +169,22 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
   rejeu de 10 minutes. La fenêtre se prend par le verrou (`poste push … --lourd`) : rebase,
   rejeu et push dessous (`~/.cache/rag3weaver-build/I/scripts/sous-verrou.sh`), les docs
   passent quand même.
+
+## Ce que le matin du 12 octobre a appris
+
+- **Profiler avant de corriger, sur la même ligne que la production.** La ligne `[montre]`,
+  attribuée par phase avec son « non détaillé », a désigné chaque fois le prochain poste : la
+  suppression HNSW, puis « planifier », puis la lecture des mentions. Un agrégat qui contient
+  d'autres étapes fausse le non détaillé : il se déclare (`AGREGATS`).
+- **Un budget de tenue plutôt qu'une taille de lot fixe.** 32 fichiers tenaient le verrou plus
+  d'une seconde, et une lecture attend au plus une seconde. Le budget (400 ms, d'après le coût du
+  lot précédent) garde les lecteurs vivants. Sur la base entière, un fichier coûte déjà ~2 s : le
+  lot et la lecture tirent en sens contraires, d'où les lectures sans attente de l'arbre principal.
+- **Une lecture restreinte qui garde le même résultat.** Une mention ne devient une arête que si sa
+  cible ou son mentionneur est dans le lot. On peut donc ne pas lire celles qui ne peuvent rien
+  donner, à condition de garder ce que le choix de la cible lit (les réexportations).
+- **`run_e2e.sh` ne garde que le dernier filtre** : une suite par appel, et lire « running N
+  tests ».
+- **La lib du magasin plutôt que le dossier de bâti** : un rebâti en place sous une passe donne
+  des rouges d'environnement (un en-tête neuf, une lib ancienne).
+

@@ -241,6 +241,43 @@ sous le verrou de push (la fenêtre de push se prend par le verrou, le rejeu se 
   flux non branchés jetés chez elle, `Spot` et `TokenEvents` sur le sujet `tokens` chez moi).
   Codeparsers rejoue son renommage sur la base entière, à df1184d32.
 
+## Le matin du 12 octobre — la fraîcheur sur la base entière, et les jetons
+
+La priorité de Lucie est la fraîcheur. Codeparsers a rejoué cinq fois le même témoin sur la base
+entière (102 469 morceaux) : un renommage sur deux fichiers, vu par `usages`. On est passé de
+7,26 s à 5,21 s, puis à ce que dira le cinquième rejeu. Chaque lot a été poussé sous le verrou,
+après la lib entière et `check_features` rejoués.
+
+- **Le découpage** (`2a3f57f0d`, `5c97f4c5a`) : la ligne `[montre]` attribue chaque étape à sa
+  phase, entre crochets, avec ce qui n'y est pas détaillé. Le tiers non nommé d'« ingérer »
+  était la résolution des symboles et le drain.
+- **`LlmNode.tokens`** (`7627fa92d`) : une sortie `tokens` en flux, un puits double, et
+  `stop_when_unread`. La recherche l'a éprouvée sur qwen3-1.7b : premier jeton lu à 210 ms pour
+  une génération de 14,1 s, 822 ns de canal par jeton.
+- **La réindexation par lot** (`c391e8387`) :
+  - `reingest_files`, un passage pour les fichiers vus ensemble ;
+  - `ReindexFileNode` par lots, dont la taille suit un budget de tenue (400 ms) pour laisser
+    passer les lecteurs ;
+  - la fin d'un fichier qui va du `File` à ses scopes par l'arête `DEFINED_IN`
+    (`SnapshotConfig.fineScopeVia`), au lieu de balayer `Scope`.
+  Quatrième rejeu : 5,21 s, une réaction pour deux fichiers.
+- **La période par défaut** (`2b14edd88`) : 250 ms de période et 150 ms de pose. Coût au repos :
+  0,8 % d'un cœur sur 1 654 fichiers, 3,5 % sur 6 929 (page 04, §8).
+- **Les symboles** (`8bfdd74d3`, `25bbca30b`) : la résolution d'un lot ne relit plus toutes les
+  mentions des noms courants, mais seulement celles du lot et les réexportations. Sur le témoin,
+  30 mentions avant, au plus 3 après, et les arêtes sont identiques (e2e des arêtes verts).
+- **`TokenEvents` et `Spot`** (`3db578589`) : les jetons sur le bus (sujet `tokens`), et le
+  classement au fil de l'eau avec arrêt du modèle.
+- **Corrigé en chemin** : j'avais annoncé trois suites e2e vertes pour `c391e8387`, alors que
+  `run_e2e.sh` n'en avait joué qu'une (il ne garde que le dernier filtre). Les deux autres ont été
+  jouées depuis, vertes ; le piège est en mémoire.
+- **Tickets** : la suppression d'une ligne indexée HNSW (pour hotfixs, que le banc a reproduite,
+  88 % dans `keepNodeReachable`) ; le témoin du réacteur instable sous charge (pour la recherche).
+- **Ménage** : le worktree et le target de luciepc sont effacés.
+- **Ensuite** : la boîte par nom de l'annuaire (`Directory::deliver`), qui branche le lancement en
+  fond de la recherche ; la réaction sur événement du noyau (notify, avec le balayage en filet) ;
+  « planifier » avec la jointure par clé du cœur ; l'AgentNode.
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).
