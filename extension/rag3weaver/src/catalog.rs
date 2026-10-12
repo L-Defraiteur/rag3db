@@ -3690,6 +3690,46 @@ impl Catalog {
         out
     }
 
+    /// **Réécrire les morceaux enregistrés sans texte** : marquer leurs
+    /// entités à redécouper, puis la passe de rattrapage du découpage
+    /// supprime les anciens morceaux et les réécrit depuis le contenu de
+    /// l'entité ; les morceaux neufs partent en dette d'embarquement. La
+    /// montre ne les reverrait jamais (le fichier n'a pas changé). Rend
+    /// (entités marquées, entités redécoupées).
+    pub fn reecrire_les_morceaux_sans_texte(&mut self) -> Result<(usize, usize), CatalogError> {
+        let mut marquees = 0usize;
+        let entites: Vec<String> =
+            self.entity_configs.iter().filter(|(_, c)| c.chunked != Some(false)).map(|(n, _)| n.clone()).collect();
+        let mut touchees: HashSet<String> = HashSet::new();
+        for entite in &entites {
+            let requete = self.dialect.marquer_les_parents_des_morceaux_vides(&format!("{entite}_Chunk"), entite);
+            let n = self
+                .conn
+                .execute(&requete)
+                .map_err(|e| CatalogError::DbError(format!("marquer les entités de « {entite} » à redécouper : {e}")))?
+                .rows
+                .first()
+                .and_then(|l| l.first())
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as usize;
+            if n > 0 {
+                marquees += n;
+                touchees.insert(entite.clone());
+            }
+        }
+        let mut redecoupees = 0usize;
+        if !touchees.is_empty() {
+            loop {
+                let n = self.rattraper_le_decoupage(Some(&touchees), RATTRAPAGE_PAR_PASSE, false)?;
+                redecoupees += n;
+                if n == 0 || redecoupees >= marquees {
+                    break;
+                }
+            }
+        }
+        Ok((marquees, redecoupees))
+    }
+
     /// Noter le compte des morceaux sans texte (fin d'indexation) : l'en-tête
     /// des lectures et l'état de l'index le disent sans recompter.
     pub fn note_chunks_sans_texte(&self, n: usize) -> Result<(), CatalogError> {

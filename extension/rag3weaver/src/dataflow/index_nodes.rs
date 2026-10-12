@@ -446,6 +446,21 @@ fn run_index(
         log(journal, &format!("{n} fichiers écartés : {reason}"));
     }
 
+    // **Les morceaux enregistrés sans texte, réécrits** avant les vecteurs :
+    // leurs entités sont redécoupées depuis leur contenu, et les morceaux
+    // neufs entrent dans la dette d'embarquement de la passe qui suit.
+    {
+        let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+        let vides: usize = guard.chunks_sans_texte().iter().map(|(_, n)| n).sum();
+        if vides > 0 {
+            let (marquees, redecoupees) = guard.reecrire_les_morceaux_sans_texte().map_err(|e| e.to_string())?;
+            let reste: usize = guard.chunks_sans_texte().iter().map(|(_, n)| n).sum();
+            log(journal, &format!(
+                "{vides} morceau(x) sans texte : {marquees} entité(s) redécoupée(s) ({redecoupees} passées) — il en reste {reste}"
+            ));
+        }
+    }
+
     // Second temps : la dette de vecteurs, par passes ; le catalogue est
     // rendu entre deux, une recherche par mots passe.
     let (rate, start) = {

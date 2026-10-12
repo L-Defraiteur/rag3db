@@ -945,6 +945,12 @@ pub trait SchemaDialect: Send + Sync {
     /// vide) : ni cherchables par leur texte, ni embarqués. Rend `cnt`.
     fn count_chunks_sans_texte(&self, table: &str) -> String;
 
+    /// Marquer à redécouper (`_chunked_hash` vidé) les entités de
+    /// `parent_table` dont un morceau de `chunk_table` n'a pas de texte :
+    /// la passe de rattrapage du découpage les redécoupera et réécrira leurs
+    /// morceaux. Rend `cnt`, le nombre d'entités marquées.
+    fn marquer_les_parents_des_morceaux_vides(&self, chunk_table: &str, parent_table: &str) -> String;
+
     // ── Search resolution ────────────────────────────────────────────
 
     /// Resolve chunk UUIDs to chunk metadata + parent entity data in one query.
@@ -1975,6 +1981,16 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn count_chunks_sans_texte(&self, table: &str) -> String {
         format!("MATCH (n:{}) WHERE n._text IS NULL OR n._text = '' RETURN count(n) AS cnt", self.quote(table))
+    }
+
+    fn marquer_les_parents_des_morceaux_vides(&self, chunk_table: &str, parent_table: &str) -> String {
+        format!(
+            "MATCH (c:{}) WHERE c._text IS NULL OR c._text = '' \
+             WITH DISTINCT c._parent_uuid AS p \
+             MATCH (n:{} {{_uuid: p}}) SET n._chunked_hash = '' RETURN count(n) AS cnt",
+            self.quote(chunk_table),
+            self.quote(parent_table)
+        )
     }
 
     fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
@@ -3138,6 +3154,16 @@ impl SchemaDialect for PostgresDialect {
 
     fn count_chunks_sans_texte(&self, table: &str) -> String {
         format!("SELECT count(*) AS cnt FROM {} WHERE _text IS NULL OR _text = ''", self.quote(table))
+    }
+
+    fn marquer_les_parents_des_morceaux_vides(&self, chunk_table: &str, parent_table: &str) -> String {
+        let (c, p) = (self.quote(chunk_table), self.quote(parent_table));
+        format!(
+            "WITH marques AS (UPDATE {p} SET _chunked_hash = '' \
+                WHERE _uuid IN (SELECT DISTINCT _parent_uuid FROM {c} WHERE _text IS NULL OR _text = '') \
+                RETURNING 1) \
+             SELECT count(*) AS cnt FROM marques"
+        )
     }
 
     fn select_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {

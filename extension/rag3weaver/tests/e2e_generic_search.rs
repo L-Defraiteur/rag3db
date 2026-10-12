@@ -1540,3 +1540,34 @@ fn un_morceau_sans_texte_n_est_jamais_du() {
         assert_eq!(n, 0, "passe {passe} : rien à réclamer — avant, les mêmes trois morceaux revenaient à chaque passe");
     }
 }
+
+/// **Les morceaux sans texte se réécrivent depuis leur entité** (ticket des
+/// morceaux de code écrits sans texte) : la montre ne les reverrait jamais,
+/// le fichier n'ayant pas changé. Leurs entités sont marquées à redécouper,
+/// la passe de rattrapage du découpage les réécrit : le texte revient, aucun
+/// vide ne reste, et les morceaux neufs doivent leurs vecteurs.
+#[test]
+#[ignore]
+fn les_morceaux_sans_texte_se_reecrivent_depuis_leur_entite() {
+    let (mut catalog, _) = catalogue_avec_un_muet("rien ne sera muet ici");
+    let pleins = |c: &Catalog| -> i64 {
+        c.execute_raw("MATCH (n:Product_Chunk) WHERE n._text IS NOT NULL AND n._text <> '' RETURN count(n)")
+            .unwrap()
+            .rows[0][0]
+            .as_i64()
+            .unwrap()
+    };
+    let avant = pleins(&catalog);
+    assert!(avant >= 3, "des morceaux pleins au départ : {avant}");
+    catalog.execute_raw("MATCH (n:Product_Chunk) SET n._text = ''").expect("vider les textes");
+    assert_eq!(pleins(&catalog), 0);
+    assert_eq!(catalog.chunks_sans_texte().iter().map(|(_, n)| *n as i64).sum::<i64>(), avant);
+
+    let (marquees, redecoupees) = catalog.reecrire_les_morceaux_sans_texte().expect("réécrire");
+    eprintln!("[réécriture] {marquees} entités marquées, {redecoupees} redécoupées");
+    assert_eq!(marquees, 3, "les trois produits");
+    assert_eq!(redecoupees, 3);
+    assert!(catalog.chunks_sans_texte().is_empty(), "aucun vide ne reste : {:?}", catalog.chunks_sans_texte());
+    assert_eq!(pleins(&catalog), avant, "le texte est revenu");
+    assert_eq!(catalog.index_progress().unwrap().dense_missing() as i64, avant, "les morceaux neufs doivent leurs vecteurs");
+}
