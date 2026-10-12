@@ -43,4 +43,17 @@ cas $? "un identifiant nommé rend son dossier"
 lib_du_magasin rag3db-build-Z > /dev/null 2>&1
 [ $? = 2 ]
 cas $? "un identifiant absent : refus nommé"
+# Le choix par défaut (choisir_la_lib).
+unset RAG3DB_LIB RAG3WEAVER_MOTEUR_DU_WORKTREE
+[ "$(choisir_la_lib /bati 2>/dev/null)" = "$(cd "$RAG3DB_LIBS_DIR/rag3db-build-B" && pwd -P)" ]
+cas $? "sans rien poser : le courant du magasin"
+[ "$(RAG3DB_LIB=bati choisir_la_lib /bati 2>/dev/null)" = "/bati/src" ]
+cas $? "RAG3DB_LIB=bati : le dossier de bâti"
+[ "$(RAG3WEAVER_MOTEUR_DU_WORKTREE=1 choisir_la_lib /bati 2>/dev/null)" = "/bati/src" ]
+cas $? "le moteur du worktree : le dossier de bâti"
+[ "$(RAG3DB_LIB=rag3db-build-A choisir_la_lib /bati 2>/dev/null)" = "$(cd "$RAG3DB_LIBS_DIR/rag3db-build-A" && pwd -P)" ]
+cas $? "un identifiant nommé l'emporte"
+vide="$(RAG3DB_LIBS_DIR="$T/vide" choisir_la_lib /bati 2>&1 >/dev/null)"
+[ "$(RAG3DB_LIBS_DIR="$T/vide" choisir_la_lib /bati 2>/dev/null)" = "/bati/src" ] && [[ "$vide" == *repli* ]]
+cas $? "un magasin vide : repli sur le dossier de bâti, dit"
 exit $echec

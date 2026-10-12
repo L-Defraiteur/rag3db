@@ -22,3 +22,37 @@ lib_du_magasin() {
   fi
   (cd "$dossier" && pwd -P)
 }
+
+# `choisir_la_lib <dossier de bâti>` : le dossier de la lib de la passe, sur
+# sa sortie, et une ligne qui dit pourquoi sur l'erreur. Le magasin par défaut
+# (décision de l'orchestration, 12 octobre 2026), dans cet ordre :
+#   1. `RAG3DB_LIB` posé : `bati` (le dossier de bâti), `courant` ou un identifiant ;
+#   2. `RAG3WEAVER_MOTEUR_DU_WORKTREE=1` (le cœur éprouve son moteur) : le dossier de bâti ;
+#   3. le `courant` du magasin s'il existe, sinon le dossier de bâti, dit comme un repli.
+choisir_la_lib() {
+  local bati="$1" m
+  m="${RAG3DB_LIBS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/rag3db-libs}"
+  case "${RAG3DB_LIB:-}" in
+    bati)
+      echo "▸ lib du dossier de bâti (RAG3DB_LIB=bati) : $bati/src" >&2
+      echo "$bati/src" ;;
+    "")
+      if [ "${RAG3WEAVER_MOTEUR_DU_WORKTREE:-0}" = 1 ]; then
+        echo "▸ lib du dossier de bâti (le moteur de ce worktree) : $bati/src" >&2
+        echo "$bati/src"
+      elif [ -e "$m/courant" ]; then
+        local d
+        d="$(lib_du_magasin courant)" || return 2
+        echo "▸ lib du magasin, par défaut (courant) : $d" >&2
+        echo "$d"
+      else
+        echo "▸ le magasin $m est vide : repli sur le dossier de bâti $bati/src (RAG3DB_LIB=bati pour le dire)" >&2
+        echo "$bati/src"
+      fi ;;
+    *)
+      local d
+      d="$(lib_du_magasin "$RAG3DB_LIB")" || return 2
+      echo "▸ lib du magasin ($RAG3DB_LIB) : $d" >&2
+      echo "$d" ;;
+  esac
+}

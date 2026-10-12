@@ -110,17 +110,17 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD="${RAG3DB_BUILD:-$ROOT/build/lecteurs-csv}"
 WEAVER="$ROOT/extension/rag3weaver"
 
-# **Le magasin de libs** (page docs/11-octobre-2026-recherche/07-le-magasin-de-libs.md) :
-# `RAG3DB_LIB=courant`, ou un identifiant de bâti, prend la lib, les en-têtes
-# et l'extension d'un dossier du magasin, résolu **une fois**, ici : une
+# **Le magasin de libs, par défaut** (page docs/11-octobre-2026-recherche/07-le-magasin-de-libs.md,
+# décision de l'orchestration du 12 octobre 2026) : la lib, les en-têtes et
+# l'extension d'un dossier du magasin, résolu **une fois**, ici. Une
 # publication pendant la passe ne la change pas, et plus personne n'a à
-# s'arrêter pour un rebâti. Sans `RAG3DB_LIB`, le dossier de bâti, comme avant.
-LIBDIR="$BUILD/src"
-if [ -n "${RAG3DB_LIB:-}" ]; then
-  . "$WEAVER/scripts/lib_du_magasin.sh"
-  LIBDIR="$(lib_du_magasin "$RAG3DB_LIB")" || exit 2
-  echo "▸ lib du magasin ($RAG3DB_LIB) : $LIBDIR"
-fi
+# s'arrêter pour un rebâti. `RAG3DB_LIB=bati` reprend le dossier de bâti,
+# `RAG3DB_LIB=<identifiant>` un bâti nommé ; `RAG3DB_BUILD` ne dit plus que
+# où `--build` bâtit. L'ordre : scripts/lib_du_magasin.sh, `choisir_la_lib`.
+. "$WEAVER/scripts/lib_du_magasin.sh"
+LIBDIR="$(choisir_la_lib "$BUILD")" || exit 2
+MAGASIN=false
+[ "$LIBDIR" != "$BUILD/src" ] && MAGASIN=true
 
 # **Un worktree ne lie pas son propre moteur en silence** (10 octobre 2026).
 # Sans `RAG3DB_BUILD`, `BUILD` est le `build/lecteurs-csv` **du worktree** :
@@ -129,7 +129,7 @@ fi
 # session recherche pendant sa tenue de mesure). Un worktree nomme donc sa
 # lib, ou déclare qu'il éprouve la sienne (`RAG3WEAVER_MOTEUR_DU_WORKTREE=1`,
 # le cas du cœur C++).
-if [ -z "${RAG3DB_BUILD:-}" ] && [ -z "${RAG3DB_LIB:-}" ] && [ "${RAG3WEAVER_MOTEUR_DU_WORKTREE:-0}" != 1 ]; then
+if [ "$MAGASIN" = false ] && [ -z "${RAG3DB_BUILD:-}" ] && [ "${RAG3WEAVER_MOTEUR_DU_WORKTREE:-0}" != 1 ]; then
   commun="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   propre="$(git -C "$ROOT" rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
   if [ -n "$commun" ] && [ "$commun" != "$propre" ]; then
@@ -327,7 +327,7 @@ if [ "$NEED_BUILD" = true ]; then
   # La lib neuve au magasin, si elle porte son identifiant (refus dit sinon) ;
   # `courant` la désigne désormais.
   if python3 "$WEAVER/scripts/rag3db_libs.py" publier "$BUILD" --racine "$ROOT"; then
-    if [ "${RAG3DB_LIB:-}" = courant ]; then
+    if [ "$MAGASIN" = true ] && [ "${RAG3DB_LIB:-courant}" = courant ]; then
       LIBDIR="$(lib_du_magasin courant)" || exit 2
     fi
   else
@@ -555,17 +555,15 @@ CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 # `RAG3DB_ROOT` désigne l'arbre où elle est, comme pour les tests ; sinon
 # l'arbre du script.
 EXTENSION_VECTOR="${RAG3DB_ROOT:-$ROOT}/extension/vector/build/libvector.rag3db_extension"
-# **Sous le magasin, la paire vient du même bâti.** Le backend cherche
-# l'extension à côté de la lib ; mais une vingtaine de suites bâtissent son
-# chemin par `RAG3DB_ROOT` (leur migration est le lot 3c de la page 07). Tant
-# qu'elles le font, l'extension de l'arbre doit être du bâti du magasin : un
-# refus qui nomme les deux plutôt qu'un `LOAD EXTENSION` refusé au fond d'un test.
-if [ -n "${RAG3DB_LIB:-}" ]; then
+# **Sous le magasin, la paire vient du même bâti** : le backend et les suites
+# (common::vector_extension, lot 3c) cherchent l'extension à côté de la lib.
+# Une extension de l'arbre d'un autre bâti n'est plus chargée par elles ; elle
+# est seulement dite, pour une suite qui serait écrite à l'ancienne.
+if [ "$MAGASIN" = true ]; then
   ID_MAGASIN="$(cat "$LIBDIR/BUILD_ID" 2>/dev/null)"
   if [ -f "$EXTENSION_VECTOR" ] && ! grep -qaF "$ID_MAGASIN" "$EXTENSION_VECTOR"; then
-    echo "✗ l'extension de l'arbre ($EXTENSION_VECTOR) n'est pas du bâti du magasin ($ID_MAGASIN) :"
-    echo "  des suites la chargent par RAG3DB_ROOT. Rebâtissez l'arbre, ou prenez l'identifiant de son bâti (RAG3DB_LIB=<id>)."
-    exit 2
+    echo "▸ note : l'extension de l'arbre ($EXTENSION_VECTOR) n'est pas du bâti du magasin ($ID_MAGASIN) ;"
+    echo "  les suites prennent celle du magasin. Une suite qui la chargerait par RAG3DB_ROOT serait refusée par le moteur."
   fi
   EXTENSION_VECTOR="$LIBDIR/libvector.rag3db_extension"
 fi

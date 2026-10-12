@@ -264,6 +264,29 @@ l'arbre principal sur 7b54c5f84) :
 - une passe réelle sous `RAG3DB_LIB=courant`, avec le lot 3c, sur six suites :
   82 passés.
 Reste chez G, à son rythme : sa recette de luciepc sur le magasin, et
-l'`ExecStartPre`. **Reste à prouver** : une passe réelle
+l'`ExecStartPre`.
+
+## 8. Le magasin par défaut (décision de l'orchestration, 12 octobre)
+
+**`run_e2e.sh` prend sa lib au magasin par défaut**, puisque le rebâti de
+l'arbre principal publie lui-même au magasin et pose `courant` (sa recette,
+`~/.cache/rag3weaver-notes-A/lib/batir.sh`, juste après un `cmake --build`
+vert). L'ordre (`choisir_la_lib`, scripts/lib_du_magasin.sh) :
+1. `RAG3DB_LIB` posé : `bati` (le dossier de bâti), `courant` ou un identifiant ;
+2. `RAG3WEAVER_MOTEUR_DU_WORKTREE=1` (le cœur éprouve son moteur) : le dossier de bâti ;
+3. le `courant` du magasin s'il existe, sinon le dossier de bâti, dit comme un repli.
+
+`RAG3DB_BUILD` ne dit plus que où `--build` bâtit. Une extension de l'arbre
+d'un autre bâti n'est plus un refus, mais une note : les suites prennent
+celle du magasin depuis le lot 3c. Vérifié par une passe réelle lancée comme
+les sessions la lancent (`RAG3DB_BUILD` posé, rien d'autre) : la lib du
+magasin est prise par défaut, 35 passés. Témoins : `test_lib_du_magasin.sh`,
+onze cas.
+
+**Les binaires installés** portent un RUNPATH vers le dossier d'un
+identifiant (fixé au bâti, jamais `courant`) : `~/.local/bin` ici, chez la
+mémoire au matin, et la recette de G sur luciepc. Les tests et le target n'en
+ont pas. Le refus nommé (`rag3db-check-lib`, et le filet dans le processus)
+reste en place. **Reste à prouver** : une passe réelle
    sous `RAG3DB_LIB=courant`, après le rebâti du matin (la première lib qui
    porte sa section). Les modèles MCP et la recette de G suivront, avec G.
