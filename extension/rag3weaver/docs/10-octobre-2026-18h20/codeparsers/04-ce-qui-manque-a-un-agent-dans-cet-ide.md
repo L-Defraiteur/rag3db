@@ -112,6 +112,28 @@ Aucune étape ne domine : six entre 110 et 280 ms, chacune ~3 fois les chiffres 
 et blobs se paieraient une fois pour les fichiers vus ensemble, au lieu d'une fois par fichier.
 Lignes brutes : `~/.cache/codeparsers-notes/b2d/temoin-montre-2a3f57f0d.txt`.
 
+**Quatrième rejeu, à `c391e8387`** (12 octobre, 8 h 00 ; la réindexation par lot, la fin d'un
+fichier par `DEFINED_IN`, chaque étape rangée sous sa phase). Lib `41d282843…`, base entière,
+index 1 394 s. `usages` **5,21 s**, `search_code` **5,59 s**. Les deux fichiers passent en **un
+lot** : « 2 fichiers (…) réindexé : verrou attendu 0 ms, tenu 3 448 ms » (2 × ~2,2 s avant).
+
+| phase / étape | ms |
+|---|---|
+| ingérer (non détaillé 0) | 2 438 |
+| · symboles, relecture et mise en file des arêtes | 696 |
+| · embarquer | 452 |
+| · plein texte rendu durable | 376 |
+| · blobs d'index en base | 368 |
+| · symboles, types différés | 320 |
+| · drain, liens | 316 |
+| fin d'instantané (dont planifier 219) | 525 |
+| oublier les arêtes / résoudre les symboles / analyser | 169 / 143 / 133 |
+
+Les symboles pèsent désormais le plus (~1,16 s avec la résolution). La fin d'instantané reste à
+525 ms malgré `DEFINED_IN`. Environ 1,5 s passent avant que la montre ne prenne le lot
+(`every_ms` 1 000, `settle_ms` 300) : sous 2 s de bout en bout, il faudra aussi raccourcir ce
+pas. Lignes brutes : `~/.cache/codeparsers-notes/b2d/temoin-montre-c391e8387.txt`.
+
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
 de la session codeparsers.
