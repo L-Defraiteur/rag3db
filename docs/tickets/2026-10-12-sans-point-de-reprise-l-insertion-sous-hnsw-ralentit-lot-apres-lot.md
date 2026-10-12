@@ -1,6 +1,20 @@
 # Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot
 
-- **État** : ouvert
+- **État** : ouvert — la part du CSR corrigée (12 octobre 2026, cœur C++, page coeur-cpp/13 §5 :
+  la compaction des lignes mortes du CSR en mémoire, à la validation qui ajoute au nœud et à la
+  fin de la validation qui a supprimé, pour les lignes que plus aucun instantané ouvert ne voit).
+  Sur la lib du lot (d6b446956, trois passes sous `poste mesure`) : 5 derniers lots sans point de
+  reprise contre avec, 154 / 131 ms (×1,17), 169 / 109 (×1,55), 152 / 126 (×1,20) — contre ×1,5
+  à ×1,74 avant. Une quatrième passe sur le lot rebasé sur master 0c0af5bf5, qui porte 2bd65cbb8
+  de hotfixs (la chaîne des versions raccourcie) : 154 / 113 ms, ×1,37. Ce qui reste de pente
+  sans point de reprise (135 → 160 ms du lot 22 au lot 63) n'est donc ni les lignes mortes ni la
+  chaîne des versions seule : c'est le coût propre du chemin de lecture en mémoire — les
+  relations et les vecteurs écrits depuis le dernier point de reprise se lisent ligne à ligne
+  (`ChunkedNodeGroup::lookup`, `isSelected`, l'info de mise à jour) là où le chemin persistant
+  balaie des colonnes ; sans point de reprise, la part des voisins lus par ce chemin croît avec
+  chaque lot. Le cas est en probabilistic.txt avec ses comptes ; à profiler sur un master qui
+  porte les deux lots (le banc rejoue trois fois), et à fermer quand le témoin est vert trois
+  passes sur trois
 - **Gravité** : lenteur qui s'accumule. Sans point de reprise, le coût d'un lot de 64 SET
   croît d'environ 1,1 ms par lot, sans plafond vu sur 64 lots
 - **Atteignable en service** : oui. rag3weaver pose les vecteurs par SET depuis NULL

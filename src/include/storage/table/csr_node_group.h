@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <shared_mutex>
 #include <array>
 #include <bitset>
@@ -203,8 +204,21 @@ public:
     void update(const transaction::Transaction* transaction, CSRNodeGroupScanSource source,
         common::row_idx_t rowIdxInGroup, common::column_id_t columnID,
         const common::ValueVector& propertyVector);
-    bool delete_(const transaction::Transaction* transaction, CSRNodeGroupScanSource source,
+    bool delete_(const transaction::Transaction* transaction,
+        common::offset_t boundOffsetInGroup, CSRNodeGroupScanSource source,
         common::row_idx_t rowIdxInGroup);
+    // Après une validation qui a supprimé dans ce groupe : les listes des nœuds notés par
+    // delete_ oublient leurs lignes mortes que plus aucun instantané ouvert ne voit vivantes
+    // (transaction->getOldestActiveStartTS()). Les blocs gardent les lignes : un balayage en
+    // cours tient sa copie de la liste, et ses lignes restent adressables jusqu'au point de
+    // reprise.
+    void compactHintedLists(const transaction::Transaction* transaction);
+    // Le nombre de lignes de la liste en mémoire d'un nœud, lignes mortes comprises (0 sans
+    // index) : la preuve des témoins de la compaction.
+    common::row_idx_t getNumInMemRows(common::offset_t boundOffsetInGroup) const {
+        std::shared_lock lck{csrIndexMtx};
+        return csrIndex ? csrIndex->getNumRows(boundOffsetInGroup) : 0;
+    }
     // La relation (trouvée par findMatchingRow : sa source et sa ligne) a été supprimée, ou
     // l'une de ses colonnes mise à jour, par une validation postérieure à l'instantané startTS
     // (marche A4′, sur le modèle de ChunkedNodeGroup) ; ce que la transaction a fait elle-même
@@ -306,6 +320,23 @@ private:
         std::shared_lock lck{csrIndexMtx};
         return csrIndex != nullptr;
     }
+
+    // Les nœuds dont une suppression en mémoire a laissé des lignes mortes dans la liste
+    // (notés par delete_, hors de NodeCSRIndex que les lecteurs copient). Un verrou feuille :
+    // jamais tenu en prenant un autre.
+    void noteDeadRow(common::offset_t boundOffsetInGroup);
+    bool takeDeadHint(common::offset_t boundOffsetInGroup);
+    void clearDeadHints();
+    // Sous csrIndexMtx exclusif : la liste du nœud sans les lignes dont la suppression est
+    // validée au plus tard à `oldestActiveStartTS`. Rend vrai s'il reste des lignes mortes plus
+    // récentes (ou d'une transaction non validée), à reprendre à la prochaine occasion.
+    bool compactDeadRowsNoLock(common::transaction_t oldestActiveStartTS,
+        common::offset_t boundOffsetInGroup);
+    void compactDeadRows(const transaction::Transaction* transaction,
+        common::offset_t boundOffsetInGroup);
+    std::mutex deadHintsMtx;
+    std::vector<uint8_t> deadHints; // un octet par nœud du groupe, alloué à la première note
+    std::vector<common::offset_t> deadHintList;
 };
 
 } // namespace storage

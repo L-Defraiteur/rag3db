@@ -113,12 +113,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine 
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
-# Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot (ticket
-# 2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot) : les lignes mortes
-# du CSR des arêtes, relues par chaque balayage de voisins jusqu'au point de reprise. Rouge trois
-# passes sur trois (1,68 à 1,74 fois la courbe avec points de reprise). Pour le cœur C++.
-VectorIndexInsertSlope.CostPerBatchSettles insert-cost-without-checkpoint-stays-close
-#
 # Un index retiré ou recréé change dans le stockage pour toutes les transactions avant sa
 # validation (ticket 2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage) :
 # le lecteur d'avant reçoit un refus nommé au lieu de l'ancien index, un CREATE annulé laisse son

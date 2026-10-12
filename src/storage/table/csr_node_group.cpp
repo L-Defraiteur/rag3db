@@ -373,7 +373,116 @@ void CSRNodeGroup::append(const Transaction* transaction, const std::vector<colu
     if (!csrIndex) {
         csrIndex = std::make_unique<CSRIndex>();
     }
+    compactDeadRows(transaction, boundOffsetInGroup);
     updateCSRIndex(boundOffsetInGroup, startRow, numRows);
+}
+
+void CSRNodeGroup::noteDeadRow(offset_t boundOffsetInGroup) {
+    std::lock_guard lck{deadHintsMtx};
+    if (deadHints.empty()) {
+        deadHints.resize(StorageConfig::NODE_GROUP_SIZE, 0);
+    }
+    if (!deadHints[boundOffsetInGroup]) {
+        deadHints[boundOffsetInGroup] = 1;
+        deadHintList.push_back(boundOffsetInGroup);
+    }
+}
+
+bool CSRNodeGroup::takeDeadHint(offset_t boundOffsetInGroup) {
+    std::lock_guard lck{deadHintsMtx};
+    if (deadHints.empty() || !deadHints[boundOffsetInGroup]) {
+        return false;
+    }
+    deadHints[boundOffsetInGroup] = 0;
+    std::erase(deadHintList, boundOffsetInGroup);
+    return true;
+}
+
+void CSRNodeGroup::clearDeadHints() {
+    std::lock_guard lck{deadHintsMtx};
+    deadHints.clear();
+    deadHintList.clear();
+}
+
+bool CSRNodeGroup::compactDeadRowsNoLock(transaction_t oldestActiveStartTS,
+    offset_t boundOffsetInGroup) {
+    auto& list = csrIndex->indices[boundOffsetInGroup];
+    if (list.isEmpty()) {
+        return false;
+    }
+    const auto rows = list.getRows();
+    row_idx_vec_t alive;
+    alive.reserve(rows.size());
+    bool remaining = false;
+    {
+        const auto lock = chunkedGroups.lock();
+        for (const auto row : rows) {
+            if (row == INVALID_ROW_IDX) {
+                continue;
+            }
+            auto [chunkIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
+                StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+            const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+            // Supprimée par une validation au plus tard au plus ancien instantané ouvert :
+            // personne ne la voit plus vivante.
+            if (chunkedGroup->isDeleted(oldestActiveStartTS, Transaction::DUMMY_TRANSACTION_ID,
+                    rowInChunk)) {
+                continue;
+            }
+            // Supprimée par une validation plus récente, ou par une transaction ouverte : elle
+            // reste dans la liste, le nœud garde sa note.
+            remaining = remaining || chunkedGroup->isDeleted(INVALID_TRANSACTION - 1,
+                                         Transaction::DUMMY_TRANSACTION_ID, rowInChunk);
+            alive.push_back(row);
+        }
+    }
+    if (alive.size() == rows.size()) {
+        return remaining;
+    }
+    if (alive.empty()) {
+        list.clear();
+    } else {
+        list.isSequential = false;
+        list.rowIndices = std::move(alive);
+    }
+    return remaining;
+}
+
+void CSRNodeGroup::compactDeadRows(const Transaction* transaction, offset_t boundOffsetInGroup) {
+    const auto oldestActiveStartTS = transaction->getOldestActiveStartTS();
+    if (oldestActiveStartTS == 0 || !takeDeadHint(boundOffsetInGroup)) {
+        return;
+    }
+    if (compactDeadRowsNoLock(oldestActiveStartTS, boundOffsetInGroup)) {
+        noteDeadRow(boundOffsetInGroup);
+    }
+}
+
+void CSRNodeGroup::compactHintedLists(const Transaction* transaction) {
+    const auto oldestActiveStartTS = transaction->getOldestActiveStartTS();
+    if (oldestActiveStartTS == 0) {
+        return;
+    }
+    std::vector<offset_t> hinted;
+    {
+        std::lock_guard lck{deadHintsMtx};
+        hinted.swap(deadHintList);
+        for (const auto offset : hinted) {
+            deadHints[offset] = 0;
+        }
+    }
+    if (hinted.empty()) {
+        return;
+    }
+    std::unique_lock lck{csrIndexMtx};
+    if (!csrIndex) {
+        return;
+    }
+    for (const auto offset : hinted) {
+        if (compactDeadRowsNoLock(oldestActiveStartTS, offset)) {
+            noteDeadRow(offset);
+        }
+    }
 }
 
 void CSRNodeGroup::updateCSRIndex(offset_t boundNodeOffsetInGroup, row_idx_t startRow,
@@ -436,8 +545,8 @@ void CSRNodeGroup::update(const Transaction* transaction, CSRNodeGroupScanSource
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
-bool CSRNodeGroup::delete_(const Transaction* transaction, CSRNodeGroupScanSource source,
-    row_idx_t rowIdxInGroup) {
+bool CSRNodeGroup::delete_(const Transaction* transaction, offset_t boundOffsetInGroup,
+    CSRNodeGroupScanSource source, row_idx_t rowIdxInGroup) {
     switch (source) {
     case CSRNodeGroupScanSource::COMMITTED_PERSISTENT: {
         KU_ASSERT(persistentChunkGroup);
@@ -447,9 +556,16 @@ bool CSRNodeGroup::delete_(const Transaction* transaction, CSRNodeGroupScanSourc
         KU_ASSERT(csrIndex);
         auto [chunkIdx, rowInChunk] = StorageUtils::getQuotientRemainder(rowIdxInGroup,
             StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-        const auto lock = chunkedGroups.lock();
-        const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
-        return chunkedGroup->delete_(transaction, rowInChunk);
+        bool deleted = false;
+        {
+            const auto lock = chunkedGroups.lock();
+            const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+            deleted = chunkedGroup->delete_(transaction, rowInChunk);
+        }
+        if (deleted) {
+            noteDeadRow(boundOffsetInGroup);
+        }
+        return deleted;
     }
     default: {
         return false;
@@ -1150,6 +1266,7 @@ void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpoint
     // Set `numRows` back to 0 is to reflect that the in mem part of the node group is empty.
     numRows = 0;
     csrIndex.reset();
+    clearDeadHints();
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
@@ -1256,6 +1373,7 @@ void CSRNodeGroup::finalizeCheckpoint(const UniqLock& lock) {
     // Set `numRows` back to 0 is to reflect that the in mem part of the node group is empty.
     numRows = 0;
     csrIndex.reset();
+    clearDeadHints();
 }
 
 } // namespace storage

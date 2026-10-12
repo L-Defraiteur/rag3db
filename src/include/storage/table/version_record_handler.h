@@ -23,6 +23,12 @@ public:
 
     virtual void rollbackInsert(main::ClientContext* context, common::node_group_idx_t nodeGroupIdx,
         common::row_idx_t startRow, common::row_idx_t numRows) const;
+
+    // Après la validation de suppressions dans ce groupe : les listes CSR en mémoire des nœuds
+    // qui ont des lignes mortes les oublient quand plus aucun instantané ouvert ne les voit
+    // (CSRNodeGroup::compactHintedLists). Rien à faire pour un groupe persistant.
+    virtual void compactDeadRows(common::node_group_idx_t, const transaction::Transaction*) const {
+    }
 };
 
 } // namespace storage

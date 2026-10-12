@@ -32,7 +32,8 @@ bool LocalCacheManager::put(std::unique_ptr<LocalCacheObject> object) {
 Transaction::Transaction(main::ClientContext& clientContext, TransactionType transactionType,
     common::transaction_t transactionID, common::transaction_t startTS)
     : type{transactionType}, ID{transactionID}, startTS{startTS},
-      commitTS{common::INVALID_TRANSACTION}, forceCheckpoint{false}, hasCatalogChanges{false} {
+      commitTS{common::INVALID_TRANSACTION}, snapshotFloorTS{startTS}, oldestActiveStartTS{0},
+      forceCheckpoint{false}, hasCatalogChanges{false} {
     this->clientContext = &clientContext;
     localStorage = std::make_unique<storage::LocalStorage>(clientContext);
     undoBuffer = std::make_unique<storage::UndoBuffer>(storage::MemoryManager::Get(clientContext));
@@ -43,7 +44,8 @@ Transaction::Transaction(main::ClientContext& clientContext, TransactionType tra
 
 Transaction::Transaction(TransactionType transactionType) noexcept
     : type{transactionType}, ID{DUMMY_TRANSACTION_ID}, startTS{DUMMY_START_TIMESTAMP},
-      commitTS{common::INVALID_TRANSACTION}, clientContext{nullptr}, undoBuffer{nullptr},
+      commitTS{common::INVALID_TRANSACTION}, snapshotFloorTS{DUMMY_START_TIMESTAMP},
+      oldestActiveStartTS{0}, clientContext{nullptr}, undoBuffer{nullptr},
       forceCheckpoint{false}, hasCatalogChanges{false} {
     currentTS = common::Timestamp::getCurrentTimestamp().value;
 }
@@ -51,8 +53,8 @@ Transaction::Transaction(TransactionType transactionType) noexcept
 Transaction::Transaction(TransactionType transactionType, common::transaction_t ID,
     common::transaction_t startTS) noexcept
     : type{transactionType}, ID{ID}, startTS{startTS}, commitTS{common::INVALID_TRANSACTION},
-      clientContext{nullptr}, undoBuffer{nullptr}, forceCheckpoint{false},
-      hasCatalogChanges{false} {
+      snapshotFloorTS{startTS}, oldestActiveStartTS{0}, clientContext{nullptr},
+      undoBuffer{nullptr}, forceCheckpoint{false}, hasCatalogChanges{false} {
     currentTS = common::Timestamp::getCurrentTimestamp().value;
 }
 
@@ -173,6 +175,10 @@ static void printJournalWeights(storage::LocalWAL& localWAL, main::ClientContext
 void Transaction::commit(storage::WAL* wal) {
     localStorage->commit();
     undoBuffer->commit(commitTS);
+    // Les suppressions que cette validation vient de dater, et celles d'avant qu'un lecteur
+    // retenait : les listes CSR des nœuds touchés les oublient si plus aucun instantané ouvert
+    // ne les voit vivantes.
+    undoBuffer->compactDeadRowsAfterCommit(*this);
     if (shouldLogToWAL()) {
         KU_ASSERT(localWAL && wal);
         if (storage::LocalWAL::profiled()) {

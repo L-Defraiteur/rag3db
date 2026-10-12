@@ -1,5 +1,7 @@
 #include "storage/undo_buffer.h"
 
+#include <algorithm>
+
 #include "catalog/catalog_entry/catalog_entry.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
@@ -166,6 +168,24 @@ void UndoBuffer::commit(transaction_t commitTS) const {
     iterator.iterate([&](UndoRecordType entryType, uint8_t const* entry) {
         commitRecord(entryType, entry, commitTS);
     });
+}
+
+void UndoBuffer::compactDeadRowsAfterCommit(const transaction::Transaction& transaction) const {
+    std::vector<std::pair<const VersionRecordHandler*, node_group_idx_t>> groups;
+    UndoBufferIterator iterator{*this};
+    iterator.iterate([&](UndoRecordType entryType, uint8_t const* entry) {
+        if (entryType != UndoRecordType::DELETE_INFO) {
+            return;
+        }
+        const auto& undoRecord = *reinterpret_cast<VersionRecord const*>(entry);
+        const auto group = std::make_pair(undoRecord.versionRecordHandler, undoRecord.nodeGroupIdx);
+        if (std::find(groups.begin(), groups.end(), group) == groups.end()) {
+            groups.push_back(group);
+        }
+    });
+    for (const auto& [handler, nodeGroupIdx] : groups) {
+        handler->compactDeadRows(nodeGroupIdx, &transaction);
+    }
 }
 
 void UndoBuffer::rollback(ClientContext* context) const {

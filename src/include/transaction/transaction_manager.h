@@ -110,6 +110,9 @@ private:
     void postponeCheckpointNoLock();
 
     bool hasActiveWriteTransactionNoLock() const;
+    // Le plus ancien instantané des transactions ouvertes autres que celle qui valide, ou son
+    // horodatage de validation si elle est seule (Transaction::getOldestActiveStartTS).
+    common::transaction_t oldestActiveSnapshotNoLock(const Transaction* committing) const;
 
     // Note: Used by DBTest::createDB only.
     void setCheckPointWaitTimeoutForTransactionsToLeaveInMicros(uint64_t waitTimeInMicros) {

@@ -48,6 +48,8 @@ public:
         common::row_idx_t numRows, common::transaction_t commitTS) const override;
     void rollbackInsert(main::ClientContext* context, common::node_group_idx_t nodeGroupIdx,
         common::row_idx_t startRow, common::row_idx_t numRows) const override;
+    void compactDeadRows(common::node_group_idx_t nodeGroupIdx,
+        const transaction::Transaction* transaction) const override;
 
 private:
     RelTableData* relTableData;

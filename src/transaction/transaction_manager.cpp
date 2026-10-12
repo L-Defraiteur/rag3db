@@ -90,6 +90,18 @@ void TransactionManager::refreshSnapshot(Transaction* transaction) {
     std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
     KU_ASSERT(!transaction->hasWritten());
     transaction->startTS = lastTimestamp;
+    transaction->snapshotFloorTS = lastTimestamp;
+}
+
+transaction_t TransactionManager::oldestActiveSnapshotNoLock(
+    const Transaction* committing) const {
+    auto oldest = committing->commitTS;
+    for (const auto& active : activeTransactions) {
+        if (active.get() != committing && active->snapshotFloorTS < oldest) {
+            oldest = active->snapshotFloorTS;
+        }
+    }
+    return oldest;
 }
 
 void TransactionManager::commit(main::ClientContext& clientContext, Transaction* transaction) {
@@ -125,6 +137,7 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
         }
         lastTimestamp++;
         transaction->commitTS = lastTimestamp;
+        transaction->oldestActiveStartTS = oldestActiveSnapshotNoLock(transaction);
         storage::CheckpointProfile profile;
         try {
             transaction->commit(&wal);
@@ -332,6 +345,7 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
     }
     lastTimestamp++;
     transaction->commitTS = lastTimestamp;
+    transaction->oldestActiveStartTS = oldestActiveSnapshotNoLock(transaction);
     try {
         transaction->commit(&wal);
     } catch (...) {
