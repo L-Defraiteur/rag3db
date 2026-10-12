@@ -17,6 +17,7 @@ l'index sont refusées par un nom (l'index n'existe pas), ce qui est attendu. Ma
 
 > bad optional access
 > unordered_map::at
+> vector::reserve (vue sur master 6ae69c6b1, deux passes sur trois, après le lot des fils)
 
 Sur trois passes de 6 s chacune, il y a eu 3 à 9 « bad optional access » et 3 « unordered_map::at »
 par passe, pour 30 000 à 53 000 refus nommés. Les autres contrôles restent verts :
