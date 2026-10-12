@@ -101,21 +101,23 @@ tard à 0 h 15.
   refusé par les permissions de ma session ; rien n'a été exécuté, l'hôte tourne et répond
   (pid 2061518, `3e95f0302023`). Depuis, le cœur a corrigé le balayage filtré des chaînes
   (`e6f626df4`, cause du P1 et de la boucle de luciepc) puis le balayage sous petit masque
-  (`41d282843`, `usages` sous 100 ms attendu) ; l'arbre principal a publié la lib au
-  magasin à 5 h 59 (`librag3db.so` 8d6256cc…, libvector bc753707…). Le binaire à installer
-  est bâti sur `ea0a1ef06` (avec les lots de la nuit : le saut en deux temps de F, la
+  (`41d282843`, `usages` sous 100 ms attendu), puis l'insertion de vecteurs (`3cca0ae1e` :
+  le point de reprise après les SET de vecteurs n'est plus quadratique, ce qui touche la
+  réindexation du matin) ; l'arbre principal a publié la lib au magasin à 8 h 25
+  (`librag3db.so` 72e2628a…, libvector f03c2a0a…). Le binaire à installer est bâti sur
+  `945700435` (avec les lots de la nuit : le saut en deux temps de F, la
   montre qui laisse passer une lecture) et prouvé, **pas installé** :
 
-  - `~/.cache/rag3weaver-build/binaire-matin-a327c0da16e3`, md5
-    `a327c0da16e36eb74af53f2ae849136a` ;
-  - RUNPATH vers `~/.cache/rag3db-libs/rag3db-build-41d2828438f68f649ffffb147113188b667087ad-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
+  - `~/.cache/rag3weaver-build/binaire-matin-46f910c3fd19`, md5
+    `46f910c3fd193d6b7d25c1740fdd4079` ;
+  - RUNPATH vers `~/.cache/rag3db-libs/rag3db-build-3cca0ae1eb07e1cb8bca79a8ae914b3b05653c18-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
     (plus de `LD_LIBRARY_PATH` : un rebâti de la lib ne le touche plus) ;
   - preuves sans `LD_LIBRARY_PATH` : `readelf -d` montre le RUNPATH, `ldd` résout la lib
     du magasin, `rag3db-check-lib` dit « même bâti », `--describe` des deux manifestes
     (memory 9 outils, code-rag3db 11, et 11 encore sur une copie qui porte
     `queries_via`), un hôte d'essai sur 7990 et un client de boutique (`initialize`,
     8 outils, `list_categories`, `daemon_status` au même bâti), arrêt propre.
-    `649a84722b3e` et `d2b83e5e5080` sont dépassés.
+    `649a84722b3e`, `d2b83e5e5080` et `a327c0da16e3` sont dépassés.
 
   Lucie arrête son hôte — pid lu dans `daemon.json`, jamais par nom :
 
