@@ -1462,3 +1462,44 @@ où elle vit.
   (luciedefraiteur-sairen) ; G ne l'a pas changé et passe GH_TOKEN de
   L-Defraiteur à toutes ses commandes, l'acteur des runs à vérifier ; si
   c'est elle pour son travail, rien à faire, sinon à remettre.
+- **8 h 05 – 8 h 35, matin**. **L'insertion de vecteurs sous HNSW est sur
+  master** (cœur, `3cca0ae1e` : resize au double, verrou par fenêtre, delete
+  par ligne connue, commit des arêtes par suites, les deux gardes du masque
+  de hotfixs, le témoin du point de reprise du banc sorti du known_red, les
+  trois noms au commit ; le CHECKPOINT quadratique réglé, ×156 avant ;
+  l'insertion 4,01 → 2,85 ms par vecteur ; reste la pente d'un lot à l'autre,
+  lignes mortes du CSR : témoin au banc) ; la jointure par clé codée dans un
+  worktree neuf (page 14, forme B : masque par clés par lookupPK posé
+  probe→build puis le balayage par décalages), en bâti. **Lib d'ici rebâtie
+  à 8 h 25 sur 3cca0ae1e** (courant `rag3db-build-3cca0ae1e…`, md5 librag3db
+  72e2628a…, libvector f03c2a0a… ; ABI inchangée) : la lib de la
+  réindexation du matin de Lucie ; la mémoire rebâtit son binaire dessus
+  (troisième fois : le prix d'un moteur qui a bougé toute la nuit, le
+  magasin le rend sûr). **Urgence luciepc, à Lucie** : l'hôte figé (pid
+  132823) est à 43 Go résidents (pic 52), 19 Go disponibles sur 93 ; le
+  script de codeparsers y a lancé par erreur l'index de code-principal à
+  6 h 39 (son garde-fou ne coupait que l'arbre en cours, corrigé : exit 3 sur
+  alerte), en boucle à 99 % et en écriture sur la base du cœur ; **ma
+  demande d'arrêt propre (TERM seul, exe vérifié) a été refusée par ma
+  permission à 8 h 20**, comme celles de codeparsers, de la mémoire et de
+  hotfixs : personne ne contourne, le geste est à Lucie (`kill -TERM 132823`,
+  pas `systemctl stop` qui escalade au SIGKILL) ; rapport §6 en tête
+  (`80a3268e0`) ; hotfixs a arrêté son bâti de luciepc (21 processus à lui,
+  TERM seul, 29 Go disponibles ensuite), rien de lourd là-bas avant l'arrêt
+  de l'hôte ; **rien n'a été bâti sur luciepc cette nuit** (le script de G
+  mort au configure, sa permission a refusé l'avance du worktree partagé
+  rag3db-hote ; le `.pret` de 22 h 13 est l'ancien, à ne pas installer) ;
+  section « Pour Lucie » réécrite et accordée avec G (`eef060968`, huit
+  étapes : arrêt, comptage, avance du worktree par elle, `hote-bati7.sh` de G
+  mis dans le dépôt, installation, queries_via, effacer et réindexer,
+  relance). **Quatrième rejeu du témoin** (codeparsers, `945700435`, sur
+  c391e8387) : **usages 5,21 s, search_code 5,59 s** (7,3 → 7,1 → 6,4 → 5,2) ;
+  les deux fichiers en un lot (3,45 s), « ingérer » entièrement détaillé ;
+  trois postes restent, ordre pris avec le proto : (c) la montre plus vive
+  (every_ms 250, settle 150 tout de suite avec le coût au repos remesuré ;
+  la réaction sur événement du noyau en lot à part après TokenEvents et
+  Spot), (a) les symboles ~1,16 s (relecture et file des arêtes 696, types
+  différés 320, résoudre 143 ; le proto profile, l'arbre principal corrige
+  dans code.rs, codeparsers relit), (b) « planifier » 219 ms malgré
+  DEFINED_IN, avec la jointure par clé du cœur. Lot pour le banc : la pente
+  de l'insertion d'un lot à l'autre.

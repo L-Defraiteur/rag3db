@@ -1,4 +1,4 @@
-# Knowledge dump de l'orchestration — 11 octobre 2026, 21 h (soir), mis à jour le 12 à 4 h 30
+# Knowledge dump de l'orchestration — 11 octobre 2026, 21 h (soir), mis à jour le 12 à 8 h 35
 
 Remplace `03-knowledge-dump.md` (midi) là où il diffère ; ce qui n'est pas
 répété ici y reste vrai (les projets, l'architecture par couche, la méthode).
@@ -48,7 +48,10 @@ erreurs d'adressage aujourd'hui venaient de là.
   toucher aux identifiants que d'autres lisent : plus de « fini » à attendre.
 - **luciepc** : **l'hôte est figé depuis 22 h 02** (pid 132823, la boucle de
   réclamation : la passe de vecteurs relisait `_text` vide par le balayage
-  fautif) et **gardé pour Lucie**. Devant la place du poste : le client
+  fautif) et **gardé pour Lucie** ; **à 8 h 25 il est à 43 Go résidents (pic
+  52), 19 Go disponibles : l'arrêter en premier** (`kill -TERM 132823`, pas
+  `systemctl stop`) ; rien n'a été bâti là-bas cette nuit, le `.pret` est
+  l'ancien, la suite en huit étapes dans « Pour Lucie » (`eef060968`). Devant la place du poste : le client
   d'index de codeparsers (pid 132918), puis la mesure de hotfixs, puis le
   bâti de G. **Au réveil, dans l'ordre** (section « Pour Lucie » du rapport de
   codeparsers, `docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`) :
