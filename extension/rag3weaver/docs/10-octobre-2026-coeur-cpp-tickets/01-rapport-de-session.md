@@ -388,6 +388,46 @@ fenêtre étroite par la session cœur C++.
   - le CHECKPOINT explicite et la validation forcée sur un fil du planificateur (page 06) ;
   - le COPY de blobs (page 04).
 
+## La nuit du 11 au 12 octobre — QUERY_VECTOR_INDEX, DROP/CREATE, la suppression HNSW
+
+- **QUERY_VECTOR_INDEX déclare k** (`db1044912`). La prémisse « sans estimation, 32 fils » était
+  fausse (mesurée : un fil, card=1 posé en dur). Le lot corrige l'estimation (k), le masque
+  dimensionné sur la table, et la cardinalité d'une fonction de table filtrée dans le
+  CardinalityUpdater.
+- **DROP/CREATE contre une recherche** (ticket du banc). Pas 1 écrit, relu deux fois par le cœur :
+  - la liste des index sous verrou ;
+  - l'index capturé en `shared_ptr` et reconnu par les oid de ses tables de relations ;
+  - le refus nommé ;
+  - un retrait concurrent reconnu au catalogue (`isIndexChangedAfterSnapshotOf`) ;
+  - l'annulation du catalogue sous son verrou (commit à part).
+
+  La liste complète a trouvé une régression (un index détaché, passé un point de reprise, pris pour
+  un DROP), corrigée. Verte sur 4ac16805d. Le push a été refusé, à raison, par l'arrivée du
+  balayage sous masque du cœur. Le rejeu sur ea914bbae plante dans `lookupOffsets` (code de
+  41d282843), corrigé par le cœur dans son lot de l'insertion : **retenu jusqu'à son hash**. Le
+  pas 2 (la rétention) est au ticket ouvert.
+- **La suppression sous index HNSW** (ticket du proto). Les témoins du banc sont sur master
+  (`baf76c474`), et son profil par piles tranche : keepNodeReachable, une recherche ef = 200 par
+  voisin survivant, pèse 88 %. Elle est amplifiée par la lecture aléatoire non checkpointée (un
+  verrou et un isSelected par ligne). Partage avec le cœur : à lui le stockage (resize quadratique
+  du point de reprise, verrou par fenêtre, detachDelete sans findMatchingRow, tri par suite), à moi
+  extension/vector :
+  - **(A)** écrit : `keepFormerNeighboursReachable`, partagé par update et finalizeDelete ;
+  - **(C)** l'arrêt de la chaîne UpdateInfo, écrit, borné à ×2 par le calcul ;
+  - à faire : initUpdateState par ligne, les prepareRelScan de createRels.
+
+  Rien n'est bâti avant le lot du cœur.
+- **La lib de luciepc** : le bâti de G au magasin fait foi, rag3db-lourd ne se rebâtit plus
+  (mémoire `magasin-de-libs`).
+- **Fautes** :
+  - un témoin de recherche vert sur master, retiré ;
+  - mon verdict de liste qui prenait `FIN` pour un rouge ;
+  - deux arrêts de mes propres tâches refusés ce soir-là (je n'insiste pas, je le signale).
+- **Pour reprendre** :
+  - le push DROP/CREATE après le hash du cœur (rebase, rejeu court) ;
+  - puis (A) et (C), mesurés sur le master qui porte le lot du cœur ;
+  - le lot des attentes du point de reprise (`c103b9208`), qui attend luciepc.
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre
