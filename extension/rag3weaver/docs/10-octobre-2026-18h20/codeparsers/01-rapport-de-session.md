@@ -1,63 +1,41 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 12 octobre 2026, 9 h 20.
+Tenu à jour sur place. Dernière mise à jour : 12 octobre 2026, 10 h 05.
 
-## Pour Lucie (12 octobre, 8 h 20) — luciepc : l'hôte figé à 44 Go, à arrêter d'abord
+## Pour Lucie (12 octobre, 10 h 05) — luciepc : fait
 
-**Urgent** : l'hôte de luciepc (pid `132823`) tourne en boucle depuis hier 22 h 02 et sa mémoire
-monte : **44 Go de RSS à 8 h 16 (pic 52 Go), 18 Go disponibles sur 93**. Sans arrêt, luciepc
-risque de manquer de mémoire. Personne ne l'a arrêté cette nuit : ma permission le refuse, et
-l'orchestration a gardé le figement comme preuve.
+Sur ton autorisation de 9 h 40, les étapes 2 à 8 sont faites ; l'hôte de luciepc répond, et
+**`code-lourd` et `code-principal` sont réindexés**.
 
-**Un défaut de mon script s'y ajoute.** Mon `index.sh` attendait la fin de `code-lourd`. À 6 h 39,
-la mémoire de l'hôte a passé son garde-fou de 30 Go : le script a cessé d'attendre `code-lourd`,
-**puis a lancé l'index de `code-principal` dans ce même hôte figé** avant de finir. Cet index est
-arrêté à 99 % (119 505 sur 120 317) depuis 6 h 41 : `code-principal`, la base que le cœur
-interroge, est en cours d'écriture. Mon script est terminé (la place du poste est libre). Le
-garde-fou aurait dû arrêter tout le script : corrigé dans `index2.sh`.
+| base | arbre | temps | base + plein texte | pic de l'hôte |
+|---|---|---|---|---|
+| `code-lourd` | `rag3db-lourd` @ `a72acfeef` | 596 s, **sans figement** | 1,2 Go + 738 Mo | 9,2 Go |
+| `code-principal` | `rag3db` @ `ab95c3a2d` | 496 s, 120 054 vecteurs | 1 020 Mo + 620 Mo | 12,5 Go |
 
-**La cause du figement est connue** : une boucle de réclamation. Le balayage filtré du moteur
-rendait des chaînes vides quand une fenêtre de 2 048 lignes chevauchait deux segments versionnés
-(`string_column.cpp:240`, corrigé à `e6f626df4`) ; les textes sont intacts sur disque. `run_index`
-relisait ces `_text` vides et les reprenait sans fin. Les défenses de l'arbre principal (la
-réclamation filtre le vide, `run_index` s'arrête sans progrès) sont sur master. Relevés bruts :
-`~/.cache/codeparsers-notes/b2d/releves-132823*.txt` sur le poste principal.
+Témoin : `usages acquireLocksBeforeExecution` sur `code-lourd` rend ses 3 définitions et ses
+2 appels en 0,3 s, chemins relatifs (B4), la montre montée.
 
-**Rien n'a été bâti sur luciepc cette nuit** (G) : `~/.local/bin/rag3weaver-backend.pret` (22 h 13)
-est l'ancien binaire d'avant B4, **à ne pas installer**.
+Ce qui a été fait, et ce qui reste de côté :
 
-À faire, dans l'ordre :
-
-1. ✅ **Fait à 9 h 05** (par toi ; `daemon.json` retiré, base fermée sans `.wal`). **L'arrêt propre de l'hôte** : `systemctl --user stop rag3weaver-daemon` (SIGTERM ; la boucle
-   lit son drapeau d'arrêt entre deux passes). S'il ne rend pas la main en une minute, le dire avant
-   d'aller plus loin. *(Facultatif avant : la pile, `sudo gdb -p 132823 -batch -ex 'thread apply all bt' > ~/pile-hote.txt 2>&1`.)*
-2. **Le comptage**, base fermée : une copie reflink des deux bases avant d'y toucher,
-   `cd ~/.local/share/rag3weaver && mkdir -p avant-b4 && cp -a --reflink=always code-lourd.rag3db* code-lourd.checkpoints code-principal.rag3db* code-principal.checkpoints avant-b4/` ;
-   codeparsers y compte les morceaux sans texte (pour le ticket).
-3. **L'arbre de l'hôte à jour** : avancer `~/git_workspaces/rag3db-hote` à la tête de master, qui
-   doit contenir `3cca0ae1e` : `git fetch`, `git checkout --detach FETCH_HEAD`, `git submodule update`.
-4. *(La lib est déjà publiée au magasin de luciepc par hotfixs, 9 h 13 : `rag3db-build-3cca0ae1e…-Release`, librag3db `1f2b03ab7538`, libvector `04245ae8b765` ; le script de G bâtit le binaire dessus.)* **Le bâti** (G, `5fc33cec3` — pas `afeef6244`, dont la note démarrait trop tôt) : copier `extension/rag3weaver/docs/optimiseur/12-octobre-2026-04h49/02-hote-bati7.sh`
-   sous `~/.cache/rag3weaver-build/` sur luciepc, puis `poste lourd bash hote-bati7.sh > hote-bati7.log 2>&1`
-   (une petite heure ; page `02-le-bati-de-l-hote-de-luciepc.md` du même dossier). Il bâtit la lib,
-   la publie au magasin, bâtit le binaire lié à elle et le vérifie, en `.pret`.
-5. **L'installation**, d'après la note qu'il écrit, `POUR-LUCIE-hote.md` : installer les deux
-   `.pret` neufs (md5 dans la note), activer `check-lib.conf` — **sans démarrer encore** : les
-   manifestes et les bases d'abord.
-6. **Les manifestes** : la montre remise, puis le bloc des tests par requêtes (arbre principal,
-   `94e21b066` ; la déclaration vit dans `extension/rag3weaver/templates/backends/code/depots/rag3db.queries_via.json`,
-   `de071e9de`, même contenu que le gabarit figé, diffs relus dans `~/.cache/codeparsers-notes/`) :
-   `for n in lourd principal; do cp ~/.config/rag3weaver/code-$n/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-$n/templates/backends/code/backend.json; done`,
-   puis `cd ~/.cache/codeparsers-notes && for n in lourd principal; do python3 poser-queries-via.py gabarit-code-38b1c9f51.json ~/.config/rag3weaver/code-$n/templates/backends/code/backend.json --appliquer; done`.
-7. **Effacer les deux bases** (B4 : une base d'avant est refusée), copies gardées à l'étape 2 :
-   `cd ~/.local/share/rag3weaver && rm -rf code-lourd.rag3db* code-lourd.checkpoints code-principal.rag3db* code-principal.checkpoints`.
-8. **La relance** : `systemctl --user start rag3weaver-daemon`, puis `/sante`, puis dis-le à codeparsers, qui
-   réindexe les deux par `index2.sh` (la lib suit le RUNPATH ; `code-principal` à l'heure du cœur).
+- **Hôte** : binaire `efaa6e68` (B4, lié par RUNPATH à la lib de hotfixs `rag3db-build-3cca0ae1e…`),
+  `rag3db-check-lib` `e5e6b1b6` et `check-lib.conf` actifs. L'ancien binaire :
+  `~/.local/bin/rag3weaver-backend.avant-b4-12-oct`.
+- **Bases d'avant** : `~/.local/share/rag3weaver/avant-b4/` (les deux, identiques aux originaux).
+  Comptées ici : 16 368 morceaux lus vides avec l'ancienne lib, 0 avec la nouvelle — les textes
+  étaient intacts.
+- **Manifestes** : la montre remise, le bloc des tests par requêtes posé, `vector_extension`
+  remis au nom « vector ». Sauvegardes `.sans-montre-12-oct`, `.avant-queries-via`,
+  `.avant-vector-nom-12-oct`.
+- **Unité** : `RAG3DB_LIBRARY_DIR` posé dans `~/.config/rag3weaver/rag3weaver-daemon.env` sur le
+  dossier du magasin (sauvegarde `.avant-magasin-12-oct`). Sans lui, l'hôte retombait sur
+  l'extension vector de `rag3db-lourd`, bâtie contre l'ancienne lib, et refusait d'ouvrir les
+  bases. **À chaque nouvelle lib installée, cette ligne suit l'identifiant du binaire.**
 
 **Sur le poste principal, une base à trancher** : `~/.config/rag3weaver/code-rag3db/templates/backends/code/backend.json`
 vise une petite base ancienne, `~/.local/share/rag3weaver/code-rag3db.rag3db` (3,5 Mo, du 11 à
-16 h 55), à côté du vrai manifeste `rag3db.json` (base `code-rag3db-depot`). À toi de dire si on la
-jette. La réindexation de `code-rag3db` ici attend ton arrêt de ton hôte : la mémoire pose le bloc
-des tests par requêtes, puis me donne le signal.
+16 h 55), à côté du vrai manifeste `rag3db.json`. À toi de dire si on la jette. La réindexation de
+`code-rag3db` ici attend l'arrêt de ton hôte local ; la mémoire pose le bloc des tests par
+requêtes, puis me donne le signal.
 
 Chantier décidé par Lucie : **indexer nos propres dépôts**, la couverture la
 plus grande possible de codeparsers, C++ et Rust d'abord, mesurée sur nos
