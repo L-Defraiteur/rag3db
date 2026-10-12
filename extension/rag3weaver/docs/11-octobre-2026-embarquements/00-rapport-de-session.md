@@ -1,4 +1,4 @@
-# Session embarquements (chantier F) — rapport du 11 octobre 2026, après-midi (mis à jour le 12 octobre vers 4 h 50)
+# Session embarquements (chantier F) — rapport du 11 octobre 2026, après-midi (mis à jour le 12 octobre vers 7 h 30)
 
 *Suite du rapport de nuit (`11-octobre-2026-01h14/embarquements/01-rapport-de-session.md`).*
 
@@ -22,6 +22,7 @@
 | `17cf90306` | le voisinage de `grep` saute vers la table d'arrivée que le catalogue déclare ; la porte de `grep` admet une relation par le catalogue (identifiant et déclarée), plus par une liste en dur ; ticket fermé |
 | `821d70a63`, `dc4919150` | où va le temps d'un aller-retour (page 06) : les phases, les fils, `usages` sur l'index entier est un balayage sous semi-masque ; la suite `e2e_mesure_index_entier` |
 | `0edeb8bb5` | les lectures des morceaux lus vides sur une copie de l'index |
+| `79e404f8f`, `e412c3df5` | le témoin du saut par `UNWIND` : plans complets et trois écritures (111,7 / 4,3 / 1,1 ms, mêmes lignes) ; page 06 |
 | `198aeeaec`, `6f5554868` | le saut en deux temps (`graph_walk::run_hop`, capacité `two_step_hops`, vraie pour rag3db) : `usages` de 355 à 212-239 ms avec le même rendu ; relu par l'arbre principal |
 
 Décisions de Lucie (11 octobre) : pas d'arête d'ordre seul pour commencer, mais
@@ -34,9 +35,12 @@ dit, refusé seulement si l'appelant exige l'atomicité.
   contre un reflink neuf du sceau — 0 sur 128 732, les 11 lectures passent, plus de
   SIGSEGV. Le ticket est fermé par le cœur. Le sceau (`copie-depot-scellee`) reste
   jusqu'à ce que le banc ait reproduit.
-- Le saut en deux temps : remesurer `usages` quand le lot du balayage par décalages du
-  cœur est sur master avec une lib bâtie dessus ; retirer `two_step_hops` pour rag3db
-  s'il ne gagne plus.
+- Le saut en deux temps : le lot du petit masque (`41d282843`) ne change rien à
+  `usages`, parce que `UNWIND $uuids AS u MATCH (n {_uuid: u})` ne produit aucun
+  masque (page 06, témoin en `79e404f8f`). Décision de l'orchestration : la voie (a),
+  au moteur — le cœur fait de cette forme une recherche par clé primaire par ligne
+  déroulée. `two_step_hops` reste vraie pour rag3db jusqu'à ce lot ; remesurer, puis la
+  retirer si elle ne gagne plus.
 - La latence de `/embed` pour l'arbre principal (les trois services de luciepc,
   `lot_conseille`, doux et plein, p99 et max) : quand luciepc est libre.
 - La fusion des éventails ne se lève que sur un montage distant mesuré.
