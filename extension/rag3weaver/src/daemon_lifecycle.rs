@@ -43,32 +43,82 @@ pub struct DaemonFile {
     pub started_at: u64,
 }
 
-fn home() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
-}
-
 fn forced_dir() -> Option<PathBuf> {
     std::env::var_os("RAG3WEAVER_DAEMON_DIR").filter(|v| !v.is_empty()).map(PathBuf::from)
 }
 
-/// Le dossier de `daemon.json` et de son verrou.
+/// Les deux dossiers de l'hôte pour cet utilisateur.
+#[derive(Clone, Copy)]
+enum Dossier {
+    /// `daemon.json` et son verrou.
+    Donnees,
+    /// Le journal.
+    Etat,
+}
+
+/// **Le dossier de l'hôte, ou pourquoi on ne le sait pas** (lot C, relecture
+/// de la mémoire, 12 octobre 2026). Un « . » ne sert jamais de repli : deux
+/// clients lancés de deux dossiers ne se verraient pas et lanceraient chacun
+/// leur hôte sur la même base, qui n'a qu'un écrivain — exactement ce que le
+/// démon doit empêcher.
+/// - `RAG3WEAVER_DAEMON_DIR` l'emporte partout (les témoins).
+/// - Unix : `$HOME/.local/share/rag3weaver` et `$HOME/.local/state/rag3weaver`,
+///   `$HOME` absolu.
+/// - Windows : `%LOCALAPPDATA%\rag3weaver`, sinon
+///   `%USERPROFILE%\AppData\Local\rag3weaver` (le journal au même endroit).
+fn racine(quel: Dossier) -> Result<PathBuf, String> {
+    if let Some(d) = forced_dir() {
+        return Ok(d);
+    }
+    let absolu = |v: &str| std::env::var_os(v).map(PathBuf::from).filter(|p| p.is_absolute());
+    #[cfg(windows)]
+    {
+        let _ = quel;
+        if let Some(d) = absolu("LOCALAPPDATA") {
+            return Ok(d.join("rag3weaver"));
+        }
+        if let Some(d) = absolu("USERPROFILE") {
+            return Ok(d.join("AppData").join("Local").join("rag3weaver"));
+        }
+        return Err("ni %LOCALAPPDATA% ni %USERPROFILE% (absolus) : le dossier de l'hôte est inconnu — posez RAG3WEAVER_DAEMON_DIR".into());
+    }
+    #[cfg(not(windows))]
+    {
+        let Some(maison) = absolu("HOME") else {
+            return Err("$HOME absent ou relatif : le dossier de l'hôte est inconnu — posez RAG3WEAVER_DAEMON_DIR".into());
+        };
+        Ok(match quel {
+            Dossier::Donnees => maison.join(".local/share/rag3weaver"),
+            Dossier::Etat => maison.join(".local/state/rag3weaver"),
+        })
+    }
+}
+
+/// Un chemin à afficher : le vrai, ou ce qui manque pour le connaître. Les
+/// usages qui lisent ou écrivent passent par [`racine`], qui refuse.
+fn affiche(quel: Dossier, nom: &str) -> PathBuf {
+    match racine(quel) {
+        Ok(d) => d.join(nom),
+        Err(e) => PathBuf::from(format!("(inconnu : {e})")),
+    }
+}
+
+/// Le dossier de `daemon.json` et de son verrou (pour le dire ; voir
+/// [`racine`]).
 pub fn dir() -> PathBuf {
-    forced_dir().unwrap_or_else(|| home().join(".local/share/rag3weaver"))
+    match racine(Dossier::Donnees) {
+        Ok(d) => d,
+        Err(e) => PathBuf::from(format!("(inconnu : {e})")),
+    }
 }
 
 pub fn file_path() -> PathBuf {
-    dir().join("daemon.json")
-}
-
-fn lock_path() -> PathBuf {
-    dir().join("daemon.lock")
+    affiche(Dossier::Donnees, "daemon.json")
 }
 
 /// Le journal de l'hôte lancé par un client.
 pub fn log_path() -> PathBuf {
-    forced_dir()
-        .unwrap_or_else(|| home().join(".local/state/rag3weaver"))
-        .join("daemon.log")
+    affiche(Dossier::Etat, "daemon.log")
 }
 
 /// L'adresse où un client lance l'hôte.
@@ -119,7 +169,7 @@ pub fn new_token() -> Result<String, String> {
 
 /// `daemon.json`, s'il existe et se lit.
 pub fn read() -> Option<DaemonFile> {
-    let octets = std::fs::read(file_path()).ok()?;
+    let octets = std::fs::read(racine(Dossier::Donnees).ok()?.join("daemon.json")).ok()?;
     serde_json::from_slice(&octets).ok()
 }
 
@@ -128,7 +178,7 @@ pub fn read() -> Option<DaemonFile> {
 /// écrit. Sous Windows, le fichier hérite de l'ACL du dossier du profil, qui
 /// n'est lisible que de son utilisateur.
 pub fn write(file: &DaemonFile) -> Result<(), String> {
-    let dossier = dir();
+    let dossier = racine(Dossier::Donnees)?;
     std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
     let provisoire = dossier.join(format!("daemon.json.{}", std::process::id()));
     let mut options = std::fs::OpenOptions::new();
@@ -141,14 +191,17 @@ pub fn write(file: &DaemonFile) -> Result<(), String> {
     f.write_all(&serde_json::to_vec_pretty(file).expect("un DaemonFile se sérialise"))
         .map_err(|e| format!("{} : {e}", provisoire.display()))?;
     drop(f);
-    std::fs::rename(&provisoire, file_path()).map_err(|e| format!("{} : {e}", file_path().display()))
+    let cible = dossier.join("daemon.json");
+    std::fs::rename(&provisoire, &cible).map_err(|e| format!("{} : {e}", cible.display()))
 }
 
 /// **Retirer `daemon.json` s'il est le sien** : un hôte qui s'arrête ne retire
 /// pas celui d'un autre qui l'aurait remplacé.
 pub fn remove_if_mine(pid: u32) {
     if read().is_some_and(|f| f.pid == pid) {
-        let _ = std::fs::remove_file(file_path());
+        if let Ok(d) = racine(Dossier::Donnees) {
+            let _ = std::fs::remove_file(d.join("daemon.json"));
+        }
     }
 }
 
@@ -160,7 +213,8 @@ pub fn remove_if_mine(pid: u32) {
 ///   zombie tant que le client qui l'a lancé ne l'a pas attendu).
 /// - macOS : `kill(pid, 0)` ; `EPERM` veut dire vivant, sous un autre
 ///   utilisateur.
-/// - Windows : `OpenProcess`, puis `GetExitCodeProcess` égal à `STILL_ACTIVE`.
+/// - Windows : `OpenProcess`, puis `WaitForSingleObject(h, 0)` ; un accès
+///   refusé est inconnu, seul `ERROR_INVALID_PARAMETER` vaut absent.
 pub fn pid_state(pid: u32) -> Option<bool> {
     etat::pid_state(pid)
 }
@@ -207,47 +261,68 @@ mod etat {
 
 #[cfg(target_os = "macos")]
 mod etat {
-    pub fn pid_state(pid: u32) -> Option<bool> {
-        // SAFETY : kill avec le signal 0 n'envoie rien, il vérifie.
-        if unsafe { libc::kill(pid as libc::pid_t, 0) } == 0 {
-            return Some(true);
-        }
-        Some(std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM))
-    }
-    pub fn process_start(pid: u32) -> Option<u64> {
+    /// L'état « zombie » de `pbi_status` (`SZOMB`).
+    const SZOMB: u32 = 5;
+
+    fn bsdinfo(pid: u32) -> Option<libc::proc_bsdinfo> {
         // SAFETY : proc_pidinfo écrit au plus `taille` octets dans `info`.
         let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
         let taille = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
         let n = unsafe {
             libc::proc_pidinfo(pid as libc::c_int, libc::PROC_PIDTBSDINFO, 0, &mut info as *mut _ as *mut libc::c_void, taille)
         };
-        if n != taille {
-            return None;
+        (n == taille).then_some(info)
+    }
+
+    /// `kill(pid, 0)` réussit sur un zombie : comme sous Linux, un zombie ne
+    /// vit pas (relecture de l'arbre principal) — sinon la session d'un
+    /// client mort, pas encore attendu, ne se fermerait pas.
+    pub fn pid_state(pid: u32) -> Option<bool> {
+        // SAFETY : kill avec le signal 0 n'envoie rien, il vérifie.
+        if unsafe { libc::kill(pid as libc::pid_t, 0) } == 0 {
+            return Some(bsdinfo(pid).map_or(true, |i| i.pbi_status != SZOMB));
         }
-        Some(info.pbi_start_tvsec * 1_000_000 + info.pbi_start_tvusec)
+        // EPERM : vivant, sous un autre utilisateur.
+        Some(std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM))
+    }
+    pub fn process_start(pid: u32) -> Option<u64> {
+        bsdinfo(pid).map(|i| i.pbi_start_tvsec * 1_000_000 + i.pbi_start_tvusec)
     }
 }
 
 #[cfg(windows)]
 mod etat {
-    use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, STILL_ACTIVE};
-    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, FILETIME};
+    use windows_sys::Win32::System::Threading::{GetProcessTimes, OpenProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION};
 
+    /// `OpenProcess` refusé pour un pid qui n'existe pas.
+    const ERROR_INVALID_PARAMETER: u32 = 87;
+    /// Le droit d'attendre un processus (`WaitForSingleObject`).
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    const WAIT_OBJECT_0: u32 = 0;
+    const WAIT_TIMEOUT: u32 = 258;
+
+    /// Vivant, mort ou inconnu (relecture de la mémoire, 12 octobre 2026) :
+    /// un `OpenProcess` refusé n'est « absent » que sur
+    /// `ERROR_INVALID_PARAMETER` — un accès refusé (un hôte élevé, un autre
+    /// compte) est inconnu, comme `EPERM` sous macOS, et `/sante` tranche.
+    /// `WaitForSingleObject(h, 0)` dit la vie exactement, là où
+    /// `GetExitCodeProcess == STILL_ACTIVE` confondrait un processus sorti avec
+    /// le code 259.
     pub fn pid_state(pid: u32) -> Option<bool> {
-        // SAFETY : un handle ouvert ici est fermé ici ; un pid inconnu rend un
-        // handle nul.
+        // SAFETY : un handle ouvert ici est fermé ici.
         unsafe {
-            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, 0, pid);
             if h.is_null() {
-                return Some(false);
+                return if GetLastError() == ERROR_INVALID_PARAMETER { Some(false) } else { None };
             }
-            let mut code: u32 = 0;
-            let ok = GetExitCodeProcess(h, &mut code);
+            let attente = WaitForSingleObject(h, 0);
             CloseHandle(h);
-            if ok == 0 {
-                return None;
+            match attente {
+                WAIT_TIMEOUT => Some(true),
+                WAIT_OBJECT_0 => Some(false),
+                _ => None,
             }
-            Some(code == STILL_ACTIVE as u32)
         }
     }
     pub fn process_start(pid: u32) -> Option<u64> {
@@ -339,16 +414,17 @@ pub fn ensure(exe: &Path) -> Result<DaemonFile, Missing> {
     if let Some(f) = read().filter(answers) {
         return Ok(f);
     }
-    let dossier = dir();
+    let dossier = racine(Dossier::Donnees).map_err(Missing::Absent)?;
     std::fs::create_dir_all(&dossier)
         .map_err(|e| Missing::Absent(format!("{} : {e}", dossier.display())))?;
+    let verrou_chemin = dossier.join("daemon.lock");
     let verrou = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
-        .open(lock_path())
-        .map_err(|e| Missing::Absent(format!("{} : {e}", lock_path().display())))?;
-    verrou.lock().map_err(|e| Missing::Absent(format!("verrou {} : {e}", lock_path().display())))?;
+        .open(&verrou_chemin)
+        .map_err(|e| Missing::Absent(format!("{} : {e}", verrou_chemin.display())))?;
+    verrou.lock().map_err(|e| Missing::Absent(format!("verrou {} : {e}", verrou_chemin.display())))?;
     let resultat = ensure_locked(exe);
     let _ = verrou.unlock();
     resultat
@@ -365,12 +441,14 @@ fn ensure_locked(exe: &Path) -> Result<DaemonFile, Missing> {
                 f.pid,
                 if pid_alive(f.pid) { "muet" } else { "mort" }
             );
-            let _ = std::fs::remove_file(file_path());
+            if let Ok(d) = racine(Dossier::Donnees) {
+                let _ = std::fs::remove_file(d.join("daemon.json"));
+            }
             true
         }
         None => false,
     };
-    let log = log_path();
+    let log = racine(Dossier::Etat).map_err(Missing::Absent)?.join("daemon.log");
     if let Some(parent) = log.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

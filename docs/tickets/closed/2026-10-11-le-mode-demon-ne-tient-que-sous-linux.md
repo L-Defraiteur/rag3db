@@ -1,6 +1,6 @@
 # Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant
 
-- **État** : corrigé (12 octobre 2026, optimiseur, lot C, branche `portage-c`) : l'état d'un processus par système, l'inconnu qui ne vaut pas « mort », la fiche et le détachement par plateforme, l'arrêt propre par console sous Windows ; éprouvé par les runners du paquet, run 38200365497, étape « Bâti » verte sous Windows et macOS (et l'extension, et l'épreuve du binaire)
+- **État** : corrigé (12 octobre 2026, optimiseur, lot C, branche `portage-c`) : l'état d'un processus par système, l'inconnu qui ne vaut pas « mort », la fiche et le détachement par plateforme, l'arrêt propre par console sous Windows. Preuve, dite telle qu'elle est (relecture de la mémoire) : sous Linux, les e2e du cycle du démon ; sous Windows et macOS, **le bâti seulement** — run 38200365497 des runners du paquet, étape « Bâti » verte (le run lui-même est rouge par son épreuve JS, sans rapport) ; le cycle du démon (`daemon`, client qui lance l'hôte, `answers`, `/arret`) n'a pas tourné hors Linux. Une étape des runners du paquet le jouera (paquet-npm-2).
 - **Gravité** : blocage. Sous Windows, le binaire ne se bâtit plus. Sous macOS, le mode démon
   ne s'attache jamais à un hôte vivant (lecture du code, non joué).
 - **Atteignable en service** : oui, sur tout poste Windows ou macOS, dès le bâti pour l'un et
