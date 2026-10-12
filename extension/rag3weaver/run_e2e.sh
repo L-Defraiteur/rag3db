@@ -37,6 +37,31 @@ set -euo pipefail
 # Tout ce qui n'est pas une mesure tourne en **priorité basse** (`nice -n 15
 # ionice -c 3`) : l'écran et la personne devant le poste passent avant. Une
 # mesure garde la priorité normale, sinon son chiffre ne vaut rien.
+
+# **Un seul filtre positionnel** (relevé par le proto, 12 octobre 2026) :
+# trois noms de suites donnés à la suite n'en filtraient qu'un, le dernier,
+# et les deux autres étaient ignorés en silence — trois suites crues jouées,
+# une seule l'était. Le positionnel est UN filtre sur les noms de tests ; des
+# suites se nomment par `--test`, qui s'accumule. Jugé ici, avant le verrou
+# du poste : un refus d'arguments n'attend pas une passe en cours.
+POSITIONNELS=()
+suivant_est_valeur=false
+for a in "$@"; do
+  if [ "$suivant_est_valeur" = true ]; then suivant_est_valeur=false; continue; fi
+  case "$a" in
+    --test|--features) suivant_est_valeur=true ;;
+    -*) ;;
+    *) POSITIONNELS+=("$a") ;;
+  esac
+done
+if [ ${#POSITIONNELS[@]} -gt 1 ]; then
+  echo "✗ ${#POSITIONNELS[@]} filtres positionnels (${POSITIONNELS[*]}) : un seul est permis, il filtre les noms de tests." >&2
+  printf '  Pour jouer plusieurs suites :'  >&2
+  printf ' --test %s' "${POSITIONNELS[@]}" >&2
+  printf '\n' >&2
+  exit 2
+fi
+
 # On se relance sous `flock`, avant tout effet de bord (journal de charge,
 # compilation), pour que le verrou couvre la passe entière.
 if [ -z "${RAG3WEAVER_VERROU_TENU:-}" ] && command -v flock >/dev/null; then

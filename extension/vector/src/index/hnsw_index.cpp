@@ -590,13 +590,34 @@ std::unique_ptr<Index> OnDiskHNSWIndex::load(main::ClientContext* context, Stora
         auxInfo.config.copy());
 }
 
+std::shared_ptr<OnDiskHNSWIndex> OnDiskHNSWIndex::captureForQuery(
+    const storage::NodeTable& nodeTable, const std::string& indexName, const std::string& tableName,
+    common::table_id_t upperRelTableID, common::table_id_t lowerRelTableID) {
+    auto index = std::dynamic_pointer_cast<OnDiskHNSWIndex>(nodeTable.getSharedIndex(indexName));
+    if (index == nullptr) {
+        HNSWIndexUtils::throwIndexGoneUnderTheQuery(indexName, tableName);
+    }
+    const auto& storageInfo = index->getStorageInfo().constCast<HNSWStorageInfo>();
+    if (storageInfo.upperRelTableID != upperRelTableID ||
+        storageInfo.lowerRelTableID != lowerRelTableID) {
+        HNSWIndexUtils::throwIndexGoneUnderTheQuery(indexName, tableName);
+    }
+    return index;
+}
+
 std::vector<NodeWithDistance> OnDiskHNSWIndex::search(Transaction* transaction,
     const EmbeddingHandle& queryVector, HNSWSearchState& searchState) const {
     throwIfCountsMoreRowsThanItsTable(transaction);
     fitVisitedToTable(transaction, searchState);
     auto result = searchFromCheckpointed(transaction, queryVector, searchState);
     searchFromUnCheckpointed(transaction, queryVector, searchState, result);
-    result.resize(searchState.k);
+    // Au plus k résultats, jamais plus que trouvés : resize(k) complétait une recherche qui en
+    // trouve moins (des lignes supprimées) par des NodeWithDistance par défaut, des pseudo-lignes
+    // à INVALID_OFFSET que la recherche rendait et que son masqueur inscrivait (le balayage sous
+    // masque les déréférençait : SIGSEGV dans lookupOffsets, 12 octobre 2026).
+    if (result.size() > searchState.k) {
+        result.resize(searchState.k);
+    }
     return result;
 }
 
@@ -863,34 +884,29 @@ void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& dele
     // First every surviving neighbour gets its edges rewritten, then the entry points are
     // repaired, and only then is each of them made reachable again: that last step may insert a
     // node anew, which searches the graph from the entry point.
-    std::vector<std::pair<common::offset_t, std::vector<common::offset_t>>> lowerSurvivors;
-    std::vector<std::pair<common::offset_t, std::vector<common::offset_t>>> upperSurvivors;
+    std::unordered_map<common::offset_t, std::vector<common::offset_t>> lowerEdgesOf;
     for (const auto nbrOffset : state.lowerNeighborsToShrink) {
         if (!state.deletedNodes.contains(nbrOffset)) {
-            lowerSurvivors.emplace_back(nbrOffset,
+            lowerEdgesOf.emplace(nbrOffset,
                 cleanEdgesForNode(transaction, nbrOffset, false /*isUpperLayer*/,
                     state.insertState, state.deletedNodes, state.lowerNeighborsOfDeleted));
         }
     }
+    // In the upper layer the edges are rewritten too, but nothing more: a node nothing leads to
+    // there only costs a shortcut (keepNodeReachable).
     for (const auto nbrOffset : state.upperNeighborsToShrink) {
         if (!state.deletedNodes.contains(nbrOffset)) {
-            upperSurvivors.emplace_back(nbrOffset,
-                cleanEdgesForNode(transaction, nbrOffset, true /*isUpperLayer*/,
-                    state.insertState, state.deletedNodes, state.upperNeighborsOfDeleted));
+            cleanEdgesForNode(transaction, nbrOffset, true /*isUpperLayer*/, state.insertState,
+                state.deletedNodes, state.upperNeighborsOfDeleted);
         }
     }
     repairEntryPoint(transaction, false /*isUpperLayer*/, state.insertState,
         state.lowerNeighborsToShrink, &state.deletedNodes);
     repairEntryPoint(transaction, true /*isUpperLayer*/, state.insertState,
         state.upperNeighborsToShrink, &state.deletedNodes);
-    for (const auto& [offset, neighbors] : lowerSurvivors) {
-        keepNodeReachable(transaction, offset, neighbors, false /*isUpperLayer*/,
-            state.insertState);
-    }
-    for (const auto& [offset, neighbors] : upperSurvivors) {
-        keepNodeReachable(transaction, offset, neighbors, true /*isUpperLayer*/,
-            state.insertState);
-    }
+    // No anchor here, and a deleted node proves nothing.
+    keepFormerNeighboursReachable(transaction, lowerEdgesOf, {} /*anchorEdges*/,
+        state.deletedNodes, state.insertState);
     state.lowerNeighborsToShrink.clear();
     state.upperNeighborsToShrink.clear();
     state.lowerNeighborsOfDeleted.clear();
@@ -1130,14 +1146,9 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     // have been reachable through this node only: check them all, as finalizeDelete does for
     // the neighbours of a deleted node.
     //
-    // The full check is a search of the graph per neighbour: sixty searches per updated row,
-    // which made a bulk update sixty times slower. Most neighbours do not need it. A node that
-    // lost nothing in this update is as reachable as it was before; so is the updated row,
-    // which was just inserted anew. A former neighbour one of those points to is therefore
-    // reachable, and so is a former neighbour another reachable former neighbour points to.
-    // Who points to a node is not stored, but edges are nearly always mutual: the nodes a
-    // neighbour points to are where to look. The search is kept for the neighbours this does
-    // not settle.
+    // The full check is a search of the graph per neighbour (keepFormerNeighboursReachable says
+    // how most of them are settled without it). The updated row, just inserted anew, is an
+    // anchor; it proves nothing about itself.
     std::unordered_map<common::offset_t, std::vector<common::offset_t>> edgesOf;
     for (const auto nbr : lowerNbrs) {
         if (nbr != offset && !edgesOf.contains(nbr)) {
@@ -1145,26 +1156,41 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
                 scanNeighbors(transaction, nbr, false /*isUpperLayer*/, state.insertState));
         }
     }
+    const auto edgesOfUpdated =
+        scanNeighbors(transaction, offset, false /*isUpperLayer*/, state.insertState);
+    keepFormerNeighboursReachable(transaction, edgesOf, edgesOfUpdated, {offset},
+        state.insertState);
+}
+
+// The full check is a search of the graph per former neighbour: sixty searches per row, which
+// made a bulk update sixty times slower, and a delete forty times slower than setting the
+// vector to NULL first (banc, 12 October 2026). Most neighbours do not need it. A node that lost
+// nothing is as reachable as it was before; so is an anchor (the updated row, just inserted
+// anew). A former neighbour one of those points to is therefore reachable, and so is a former
+// neighbour another reachable former neighbour points to. Who points to a node is not stored,
+// but edges are nearly always mutual: the nodes a neighbour points to are where to look. The
+// search is kept for the neighbours this does not settle.
+void OnDiskHNSWIndex::keepFormerNeighboursReachable(Transaction* transaction,
+    const std::unordered_map<common::offset_t, std::vector<common::offset_t>>& edgesOf,
+    const std::vector<common::offset_t>& anchorEdges,
+    const std::unordered_set<common::offset_t>& notAnchors, HNSWInsertState& insertState) {
     const auto pointsTo = [](const std::vector<common::offset_t>& edges, common::offset_t to) {
         return std::ranges::find(edges, to) != edges.end();
     };
     std::unordered_set<common::offset_t> reachable;
-    // 3a. Pointed to by the updated row, or by a node outside the former neighbours.
-    const auto edgesOfUpdated =
-        scanNeighbors(transaction, offset, false /*isUpperLayer*/, state.insertState);
+    // 3a. Pointed to by the anchor, or by a node outside the former neighbours that lost nothing.
     static constexpr size_t MAX_OUTSIDE_NODES_TRIED = 4;
     for (const auto& [nbr, edges] : edgesOf) {
-        if (pointsTo(edgesOfUpdated, nbr)) {
+        if (pointsTo(anchorEdges, nbr)) {
             reachable.insert(nbr);
             continue;
         }
         size_t numTried = 0;
         for (const auto other : edges) {
-            if (other == offset || other == nbr || edgesOf.contains(other)) {
+            if (other == nbr || notAnchors.contains(other) || edgesOf.contains(other)) {
                 continue;
             }
-            if (pointsTo(scanNeighbors(transaction, other, false /*isUpperLayer*/,
-                             state.insertState),
+            if (pointsTo(scanNeighbors(transaction, other, false /*isUpperLayer*/, insertState),
                     nbr)) {
                 reachable.insert(nbr);
                 break;
@@ -1193,7 +1219,7 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     // 3c. The rest: the search, and ties if it does not find them.
     for (const auto& [nbr, edges] : edgesOf) {
         if (!reachable.contains(nbr)) {
-            keepNodeReachable(transaction, nbr, edges, false /*isUpperLayer*/, state.insertState);
+            keepNodeReachable(transaction, nbr, edges, false /*isUpperLayer*/, insertState);
         }
     }
 }

@@ -70,6 +70,86 @@ appel bloqué compris.
 `code-rag3db` le 11 à 15 h 34. L'écart vient du régime doux (budget 4 096, GPU à 70 %) et de la
 carte partagée ; il n'est pas mesuré à part.
 
+**Rejeu à `df1184d32`** (12 octobre, 4 h 44 ; le lot du proto : une lecture passe pendant une
+réaction, la ligne `[montre]` par fichier, le contournement de la suppression sous HNSW). Binaire
+release bâti contre la lib du magasin `f6179ade0…` (correctif des chaînes), lié par RUNPATH
+(`RUSTFLAGS=-C link-arg=-Wl,-rpath,<dossier du magasin>` : le `-rpath` du script de bâti de
+`rag3db` ne gagne pas le binaire qui en dépend). Index entier 1 384 s. Après le même renommage :
+`usages` **7,13 s**, `search_code` **7,53 s** — pas de gain à cette taille. Les lignes de l'hôte,
+le temps compté depuis l'édition :
+
+| t | ligne `[montre]` |
+|---|---|
+| ≈ 4,3 s | `bin/rag3weaver-backend.rs` réindexé : verrou attendu 0 ms, tenu 2 175 ms — ingérer 1 914, analyser 124, oublier les arêtes 84, fin d'instantané 28, lister 20, résoudre 0 |
+| ≈ 6,9 s | `code_tree.rs` réindexé : verrou attendu 0 ms, tenu 2 655 ms — ingérer 1 902, fin d'instantané 462, résoudre 142, oublier 77, analyser 46, lister 20 |
+
+La lecture ne bloque plus (verrou attendu 0 ms). Le temps se découpe en ~2,1 s avant la première
+réindexation (le pas de la montre), puis **deux fichiers l'un après l'autre**, chacun ~2 s dont
+1,9 s pour « ingérer » (0,56-0,68 s par réindexation chez le proto à 15 631 morceaux).
+**Manques** : « ingérer » découpé en scopes, morceaux, vecteurs, liens (on ne sait pas si
+l'écriture grandit avec la base ou si les vecteurs, en régime doux, dominent) ; une réaction par
+lot de fichiers vus ensemble plutôt qu'un fichier par réaction.
+
+**Troisième rejeu, à `2a3f57f0d`** (12 octobre, 6 h 30 ; le détail d'« ingérer » et « embarquer »
+sortis dans la ligne). Lib du magasin `41d282843…`, binaire RUNPATH, base entière, index
+1 273 s. `search_code` **6,36 s**, `usages` **6,80 s**. Le détail par fichier :
+
+| étape | `bin/rag3weaver-backend.rs` | `code_tree.rs` |
+|---|---|---|
+| tenu / ingérer | 1 928 / 1 643 ms | 2 640 / 1 796 ms |
+| drain · liens | 254 | 266 |
+| embarquer | 207 | 275 |
+| plein texte rendu durable | 126 | 208 |
+| pousser les blobs d'index | 118 | 196 |
+| relations de l'analyse | 126 | 142 |
+| relire ce qui est en base | 112 | 115 |
+| flush_fts, chunk_link, insert, chunk_insert, marquer | 158 | 153 |
+| fin d'instantané (hors ingérer) | 38 | 546 |
+
+Aucune étape ne domine : six entre 110 et 280 ms, chacune ~3 fois les chiffres du proto à
+15 631 morceaux. **Un tiers d'« ingérer » n'est pas détaillé** (~1 110 ms détaillés sur 1 643,
+~1 360 sur 1 796). Le gain le plus net reste la réaction **par lot** : drain, plein texte durable
+et blobs se paieraient une fois pour les fichiers vus ensemble, au lieu d'une fois par fichier.
+Lignes brutes : `~/.cache/codeparsers-notes/b2d/temoin-montre-2a3f57f0d.txt`.
+
+**Quatrième rejeu, à `c391e8387`** (12 octobre, 8 h 00 ; la réindexation par lot, la fin d'un
+fichier par `DEFINED_IN`, chaque étape rangée sous sa phase). Lib `41d282843…`, base entière,
+index 1 394 s. `usages` **5,21 s**, `search_code` **5,59 s**. Les deux fichiers passent en **un
+lot** : « 2 fichiers (…) réindexé : verrou attendu 0 ms, tenu 3 448 ms » (2 × ~2,2 s avant).
+
+| phase / étape | ms |
+|---|---|
+| ingérer (non détaillé 0) | 2 438 |
+| · symboles, relecture et mise en file des arêtes | 696 |
+| · embarquer | 452 |
+| · plein texte rendu durable | 376 |
+| · blobs d'index en base | 368 |
+| · symboles, types différés | 320 |
+| · drain, liens | 316 |
+| fin d'instantané (dont planifier 219) | 525 |
+| oublier les arêtes / résoudre les symboles / analyser | 169 / 143 / 133 |
+
+Les symboles pèsent désormais le plus (~1,16 s avec la résolution). La fin d'instantané reste à
+525 ms malgré `DEFINED_IN`. Environ 1,5 s passent avant que la montre ne prenne le lot
+(`every_ms` 1 000, `settle_ms` 300) : sous 2 s de bout en bout, il faudra aussi raccourcir ce
+pas. Lignes brutes : `~/.cache/codeparsers-notes/b2d/temoin-montre-c391e8387.txt`.
+
+**Cinquième rejeu, à `dab191e43`** (12 octobre, 15 h ; les lectures sans attente L1-L3, les
+symboles du proto lus au lot, la porte unique de l'index, la montre à 250 / 150 ms). Lib du
+magasin `0c0af5bf5`, base entière, index 1 012 s. `usages` **2,29 s**, `search_code` **2,47 s**
+de bout en bout. Ligne de l'hôte : « 2 fichiers réindexé : verrou attendu 0 ms, tenu 1 636 ms —
+ingérer 533 ms [lire les MENTIONS 161, drain · liens 130, relire 68…], analyser 139, fin
+d'instantané 131, oublier les arêtes 123 ; hors phase : plein texte rendu durable 324 ms ». Les
+symboles sont passés de ~1 160 à ~250 ms, la fin d'instantané de 525 à 131 ms.
+
+**Une lecture pendant la réindexation a attendu.** Chaque appel chronométré (`appels.tsv`, t
+depuis l'édition) : trois appels avant la réaction rendent l'état d'avant en 58 à 251 ms ; un
+`usages name_of_tree` lancé à 0,631 s, dans la tenue, **dure 1 610 ms et rend l'état nouveau** ;
+les suivants, 53 et 177 ms. Il a attendu la fin de la réaction au lieu de répondre avec l'état
+d'avant : l'objectif « < 100 ms pendant la réindexation » n'est pas tenu pour `usages`. Rendu à
+l'arbre principal (L1-L3). Un seul appel a chevauché la fenêtre, mais sa durée colle à la tenue à
+26 ms près. Traces : `~/.cache/codeparsers-notes/b2d/temoin-dab191e43/`.
+
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
 de la session codeparsers.
@@ -550,3 +630,117 @@ gabarit par `qualifier_field`) ou par le nom de son fichier. La réponse dit com
 un conteneur qui n'a pas ce nom le dit (« aucune définition dans ce conteneur : donnez le nom seul,
 avec un chemin, pour les voir toutes ») au lieu de rendre zéro. Témoin :
 `e2e_usages::un_nom_qualifie_rend_le_nom_seul_dans_son_conteneur`.
+
+### Fermé — « 0 tests qui la traversent » quand les tests passent par des requêtes (arbre principal, 12 octobre 2026)
+
+L'entrée du cœur C++ de 17 h 20, point 2. **Fermée par `94e21b066`.**
+
+- **Ce qui manquait** : un test n'était reconnu que par la marque que codeparsers pose sur un
+  `TEST_F`. Les 469 fichiers `.test` étaient des `texte_brut` sans marque ni arête. Les
+  `conn->query("…")` ne donnaient qu'un appel à `Connection::query`, un carrefour. Aucun lien ne
+  menait d'une requête au C++.
+- **Ce qui est fait** : `workspace.queries_via`, déclaré au manifeste du dépôt
+  (`templates/backends/code/backend.json`), rien en dur pour le C++.
+  - Les **fichiers de cas** sont repérés par un motif de chemin. Leurs `texte_brut` reçoivent
+    `test_role=suite` et `test_certainty=declared`, par accord avec codeparsers : un seul poseur par
+    marque.
+  - Les **noms enregistrés** sont lus dans le contenu des classes
+    (`static constexpr const char* name = "…"`), ce qui donne `REGISTERS`.
+  - Les **appels** des requêtes (`storage_info(` → `STORAGE_INFO`) et la **table des mots-clés**
+    donnent `QUERIES`, du test vers le symbole.
+  - Le gabarit `impact` suit `HAS_PARENT>?|DEFINES/REGISTERS>|<QUERIES` depuis chaque nœud atteint.
+    Un test relié ainsi est noté « par requête ».
+  - Sans déclaration, la ligne dit « tests par requêtes : non suivis » au lieu d'un 0 sec.
+- **Témoins** :
+  - `e2e_tests_par_requetes`, un moteur en miniature : sans déclaration « non suivis », avec
+    déclaration 3 tests sur 3 (COPY, `CALL storage_info`, un `.test` qui fait SET), et aucun de trop.
+  - `sonde_tests_par_requetes` sur le vrai moteur (`src/`, `test/transaction`, `test/test_files`,
+    2 075 fichiers) : `impact lockIndexForWrite` passe de **1** test (« non suivis ») à **204**, dont
+    InsertLockTest, LockBench, la copie journalisée et les `.test` de transaction. On compte 11 688
+    QUERIES (4 304 par nom, 7 384 par mot-clé) et 273 REGISTERS. L'ingestion ne coûte pas plus
+    (225 s contre 252 s).
+
+**La table des mots-clés, datée et comptée** (12 octobre 2026, relevée sur
+`src/include/processor/operator`) : **24 mots**.
+
+- **Clauses du moteur** (`ClauseType`, 10 genres) :
+  - 6 ont une entrée : SET, DELETE, CREATE (INSERT), MERGE, MATCH, UNWIND ;
+  - 3 passent par les noms enregistrés : IN_QUERY_CALL, TABLE_FUNCTION_CALL, GDS_CALL ;
+  - **1 sans entrée : LOAD_FROM** (LOAD désigne déjà `LoadExtension`).
+- **Instructions** (`StatementType`, 20 genres) :
+  - 15 ont une entrée : CREATE_TABLE, DROP, ALTER, COPY_TO, COPY_FROM, STANDALONE_CALL,
+    CREATE_MACRO, TRANSACTION, EXTENSION, EXPORT_DATABASE, IMPORT_DATABASE, ATTACH_DATABASE,
+    USE_DATABASE, CREATE_SEQUENCE, CREATE_TYPE ;
+  - 1 passe par les noms enregistrés : STANDALONE_CALL_FUNCTION ;
+  - **4 sans entrée : QUERY** (sans objet), **EXPLAIN**, **DETACH_DATABASE** (DETACH dit aussi
+    `DETACH DELETE`), **EXTENSION_CLAUSE**.
+- **Ce qu'impact ne voit donc pas** : ces cinq genres. Ce qu'il voit en trop : un mot-clé matche le
+  texte entier d'un fichier de cas, commentaires compris. Un `.test` qui écrit « set » dans une
+  remarque compte comme traversant SET : c'est une sur-approximation, assumée et notée « par
+  requête ».
+- **À reprendre** quand le moteur ajoute un opérateur. La table vit dans le manifeste, avec son
+  champ `keywords_dated`.
+
+### Fermé — borner une question à un dossier ou à un langage (arbre principal, 12 octobre 2026)
+
+Ce manque venait de deux entrées : celle de codeparsers à 15 h 40 (point 3, « 101 usages par le nom
+de tout le dépôt ») et celle du cœur à 17 h 20 (point 3, « 88 non attribués de tout le dépôt »).
+**Fermé par `daa0a1333` (usages, impact, callees) et `1d28495b4` (search_code).**
+
+- **Les paramètres**, de la même forme dans les quatre outils :
+  - `scope` : des préfixes relatifs à la racine, séparés par `|` (`src/|test/`) ;
+  - `language` : des langages, séparés par `|` (`cpp|rust`).
+
+  La description est écrite une fois (`SCOPE_HELP`, `LANGUAGE_HELP`), et une portée vide couvre
+  tout l'index.
+- **Ce qu'elle borne dans usages, impact et callees** :
+  - le départ, et l'ambiguïté : une définition hors de la question ne la rend plus ambiguë ;
+  - le rendu, avec le compte de ce qui est écarté (« Portée : src/ ; cpp — 2 définition(s) et 3
+    usage(s) hors de la portée, écartés », et « … hors de la portée, écartés (traversés) » dans
+    impact).
+
+  Elle ne borne jamais le parcours : un nœud hors portée reste un relais. Le chemin et le langage se
+  lisent par une seule lecture par clé.
+- **Ce qu'elle borne dans search_code** : la portée se compose en `Must` avec le filtre de
+  l'appelant ou le domaine de travail, jamais à leur place. Le balayage des fichiers d'avant le
+  premier index la respecte aussi : il ignorait jusqu'ici tout filtre. Les fichiers hors portée ne
+  sont pas lus, et leur nombre est dit.
+- **Le témoin `e2e_portee`** porte sur un `update` C++ sous `src/`, avec des homonymes Python et
+  Rust ailleurs :
+  - **sans portée** : nom ambigu, et des résultats de partout ;
+  - **avec `src/` en `cpp`** : une définition, l'appel du moteur, les homonymes écartés et
+    comptés ;
+  - **search_code** : il borne de la même façon, par l'index comme par le balayage.
+
+### Fermé — les verrous du chemin, dans l'ordre (arbre principal, 12 octobre 2026)
+
+Entrée de codeparsers de 15 h 40, points 4 (« les verrous pris par le départ lui-même, dans l'ordre,
+avec la ressource, le mode et la condition ») et 5 (« qui tient le verrou avant ? »). **Fermé par
+`545e06935`.**
+
+- **Verrous pris par le départ, dans l'ordre** (dans impact et callees) : le contenu du départ se
+  lit ligne à ligne.
+  - Une ligne qui porte un LOCKS est un verrou pris là.
+  - Une ligne qui porte un appel se déplie à sa place en ce que l'appelé prend, borné par `depth`,
+    avec une garde de cycle.
+  - Chaque verrou vient avec la ligne de code du site (la ressource et le mode tels qu'écrits), son
+    lieu, et les conditions qui l'enveloppent, héritées des appels.
+  - Quand la profondeur coupe, la réponse le dit avec le compte des appels non dépliés qui prennent
+    un verrou.
+- **Verrous tenus par les appelants avant l'appel** (impact) : pour chaque appelant, les verrous
+  dont la ligne précède celle de son appel. C'est une approximation, dite au rendu : un verrou est
+  supposé tenu jusqu'à la fin de son scope, un `unlock` manuel n'est pas suivi.
+- **Générique** : LOCKS (`locks_via` et gardes de mutex), la ligne portée par les arêtes et le
+  texte des scopes, déclarés au gabarit (`lock_order=LOCKS`). Une arête ne garde que son premier
+  site : deux appels au même appelé dans un scope se lisent à la place du premier.
+- **Sur le vrai moteur** (`sonde_cpp_rag3db`, `SONDE_LOCKS_VIA=acquireLock,acquireLocks,lockRowForWrite`),
+  `impact update path=src/storage/table/node_table.cpp` rend, dans l'ordre :
+  - `transaction->acquireLock(LockResource::index(tableID), LockMode::EXCLUSIVE);`, dans
+    `lockIndexForWrite`, si `if (!isLocalRow && transaction->usesLocks())` ;
+  - puis `transaction->acquireLock(LockResource::row(tableID, key), LockMode::EXCLUSIVE);`, dans
+    `lockRowForWrite`, sous la même condition.
+
+  Aucune section « tenus par les appelants » n'apparaît : comme l'entrée le notait, personne ne le
+  tient avant.
+- **Témoin** `e2e_verrous_du_chemin` : un petit moteur où l'on vérifie l'ordre, l'héritage de la
+  condition, le mutex d'un appelant et la troncature par la profondeur.

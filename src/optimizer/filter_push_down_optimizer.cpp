@@ -128,8 +128,20 @@ std::shared_ptr<LogicalOperator> FilterPushDownOptimizer::visitCrossProductRepla
     }
     auto hashJoin = std::make_shared<LogicalHashJoin>(joinConditions, JoinType::INNER,
         nullptr /* mark */, op->getChild(0), op->getChild(1), 0 /* cardinality */);
-    // For non-id based joins, we disable side way information passing.
-    hashJoin->getSIPInfoUnsafe().position = SemiMaskPosition::PROHIBIT;
+    // For non-id based joins, we disable side way information passing — sauf quand une clé du
+    // build est la clé primaire d'un nœud et que la clé du probe a son type : le passage
+    // d'information par clés reste possible (HashJoinSIPOptimizer, page coeur-cpp/14 : la
+    // jointure par clé d'un `UNWIND $liste AS u MATCH (d {clé: u})`).
+    bool keyMaskable = false;
+    for (auto& [probeKey, buildKey] : joinConditions) {
+        if (buildKey->expressionType == ExpressionType::PROPERTY &&
+            buildKey->constCast<PropertyExpression>().isPrimaryKey() &&
+            probeKey->getDataType() == buildKey->getDataType()) {
+            keyMaskable = true;
+        }
+    }
+    hashJoin->getSIPInfoUnsafe().position =
+        keyMaskable ? SemiMaskPosition::NONE : SemiMaskPosition::PROHIBIT;
     hashJoin->computeFlatSchema();
     // Apply remaining predicates.
     predicates.insert(predicates.end(), remainingPSet.nonEqualityPredicates.begin(),

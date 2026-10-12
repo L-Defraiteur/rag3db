@@ -97,6 +97,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
         Arc::new(crate::catalog::retard::Lag::new()),
         crate::scope::Scope::default(),
         None,
+        Default::default(),
     )
     .unwrap();
     std::fs::write(dir.path().join("src/a.rs"), "fn a() { 2 }\n").unwrap();
@@ -118,7 +119,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
 
     // Une période d'une minute : l'arrêt n'en attend rien.
     let (dir, source) = tree();
-    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default(), None).unwrap();
+    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default(), None, Default::default()).unwrap();
     let t = Instant::now();
     handle.stop();
     assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
@@ -129,7 +130,8 @@ fn the_running_watch_publishes_and_stops_at_once() {
 fn a_watch_is_read_from_the_manifest() {
     let w: WatchConfig = serde_json::from_value(serde_json::json!({})).unwrap();
     assert_eq!(w, WatchConfig::default());
-    assert_eq!((w.every_ms, w.settle_ms, w.source.as_str()), (1000, 300, "workspace"));
+    // La fraîcheur d'abord (12 octobre 2026) : 250 ms de période, 150 de pose.
+    assert_eq!((w.every_ms, w.settle_ms, w.source.as_str()), (250, 150, "workspace"));
     assert!(serde_json::from_value::<WatchConfig>(serde_json::json!({"période": 3})).is_err());
 }
 
@@ -151,6 +153,7 @@ fn the_watch_notes_the_lag_before_publishing() {
         lag.clone(),
         cell.clone(),
         None,
+        Default::default(),
     )
     .unwrap();
     std::fs::write(dir.path().join("src/b.rs"), "fn b() { 2 }\n").unwrap();

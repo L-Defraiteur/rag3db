@@ -104,6 +104,9 @@ pub mod burn_ppocr;
 /// Le code comme graphe : `File` / `Scope` / `Library` via `codeparsers`.
 #[cfg(feature = "code")]
 pub mod code;
+/// Les tests par requêtes (`workspace.queries_via`) : le relevé d'un lot.
+#[cfg(feature = "code")]
+pub mod queries_via;
 /// `read` et `grep` sur une `FileSource`, annotés par le graphe.
 #[cfg(feature = "code")]
 pub mod code_tools;
@@ -113,6 +116,10 @@ pub mod code_sync;
 #[cfg(feature = "burn-ocr")]
 pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;
+/// La vue de lecture : ce qu'une lecture d'outil demande au catalogue, sans son mutex.
+pub mod read_view;
+/// Le plein texte d'un lot, en tampon jusqu'au COMMIT (L3).
+pub mod fts_tampon;
 pub mod cypher_blob_store;
 pub mod buffered_blob_store;
 #[cfg(feature = "rag3db-native")]

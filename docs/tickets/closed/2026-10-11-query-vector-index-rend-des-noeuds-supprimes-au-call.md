@@ -1,6 +1,6 @@
 # QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL
 
-- **État** : ouvert
+- **État** : corrigé (session cœur C++ hotfixs, 12 octobre 2026 ; voir « Correctif »)
 - **Gravité** : réponse fausse (le compte des lignes du CALL ; les nœuds projetés sont justes)
 - **Atteignable en service** : oui, après toute suppression d'une ligne indexée
 - **Touche rag3weaver** : non vu. Ses recherches projettent le nœud, et cette projection filtre les lignes supprimées. Une requête qui compterait ou limiterait les lignes du CALL avant la projection en serait touchée.
@@ -45,6 +45,17 @@ graphe reste un résultat, et seul le balayage qui projette le nœud l'écarte.
 ## Correctif de l'amont (à lire, ne pas copier)
 
 Non cherché.
+
+## Correctif
+
+La cause n'était pas la visibilité. `OnDiskHNSWIndex::search` finissait par `result.resize(k)` :
+une recherche qui trouvait moins de k lignes vivantes (après des suppressions) était complétée
+par des `NodeWithDistance` par défaut, des pseudo-lignes à `INVALID_OFFSET`. Le CALL les comptait
+(d'où un `count(*)` plus grand que les lignes vivantes), la projection du nœud les écartait. Les
+mêmes pseudo-lignes faisaient planter le balayage sous masque du cœur (SIGSEGV dans
+`lookupOffsets`). On ne tronque plus qu'au-delà de k. Le témoin
+`VectorIndexUpdate.DeletedRowsAreNotReturnedByTheCall` est vert et sort de `known_red.txt` ; un
+second témoin, `ASearchForMoreRowsThanLiveOnesReturnsOnlyTheLiveOnes`, le dit sans projection.
 
 ## Pour le fermer
 

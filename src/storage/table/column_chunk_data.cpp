@@ -481,7 +481,15 @@ void ColumnChunkData::setToInMemory() {
     }
 }
 
+// Le tampon grandit au moins du double quand il doit grandir : une colonne de listes (les vecteurs
+// FLOAT[768]) reçoit au point de reprise une mise à jour à la fois (ListChunkData::write par
+// valeur), et un tampon agrandi juste de ce qu'il faut était recopié à chaque valeur — 15 000
+// vecteurs mis à jour faisaient 25 s de memcpy (profil du banc, 12 octobre 2026). La capacité
+// suit le tampon ; ce qui est écrit sur disque reste numValues.
 void ColumnChunkData::resize(uint64_t newCapacity) {
+    if (getBufferSize(newCapacity) > getBufferSize()) {
+        newCapacity = std::max(newCapacity, capacity * 2);
+    }
     const auto numBytesAfterResize = getBufferSize(newCapacity);
     if (numBytesAfterResize > getBufferSize()) {
         auto resizedBuffer = buffer->getMemoryManager()->allocateBuffer(false, numBytesAfterResize);

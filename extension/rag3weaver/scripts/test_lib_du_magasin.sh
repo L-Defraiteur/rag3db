@@ -56,4 +56,24 @@ cas $? "un identifiant nommé l'emporte"
 vide="$(RAG3DB_LIBS_DIR="$T/vide" choisir_la_lib /bati 2>&1 >/dev/null)"
 [ "$(RAG3DB_LIBS_DIR="$T/vide" choisir_la_lib /bati 2>/dev/null)" = "/bati/src" ] && [[ "$vide" == *repli* ]]
 cas $? "un magasin vide : repli sur le dossier de bâti, dit"
+
+# Le pont (exporter_la_lib, lot 3d) : les quatre variables sur un seul
+# dossier, l'hérité remplacé et dit. Dans un sous-shell : l'export ne fuit pas.
+B="$(cd "$RAG3DB_LIBS_DIR/rag3db-build-B" && pwd -P)"
+dit="$( (RAG3DB_LIBRARY_DIR=/bati/src RAG3DB_INCLUDE_DIR=/bati/src LD_LIBRARY_PATH=/bati/src
+  exporter_la_lib /bati 2>&1 >/dev/null
+  [ "$RAG3DB_LIBRARY_DIR" = "$B" ] && [ "$RAG3DB_INCLUDE_DIR" = "$B" ] && [ "$RAG3DB_SHARED" = 1 ] \
+    && [ "${LD_LIBRARY_PATH%%:*}" = "$B" ] && echo TIENT) )"
+[[ "$dit" == *TIENT* ]] && [[ "$dit" == *hérité*remplacé* ]]
+cas $? "exporter_la_lib : le courant pour les quatre variables, l'hérité remplacé et dit"
+( RAG3DB_LIB=bati exporter_la_lib /bati 2>/dev/null
+  [ "$RAG3DB_LIBRARY_DIR" = /bati/src ] && [ "${LD_LIBRARY_PATH%%:*}" = /bati/src ] )
+cas $? "exporter_la_lib sous RAG3DB_LIB=bati : le dossier de bâti"
+( RAG3DB_BUILD=/autre exporter_la_lib 2>/dev/null; [ "$RAG3DB_LIBRARY_DIR" = "$B" ] )
+cas $? "exporter_la_lib sans argument : RAG3DB_BUILD pour le bâti, le courant choisi"
+( RAG3DB_LIB=bati RAG3DB_BUILD=/autre exporter_la_lib 2>/dev/null; [ "$RAG3DB_LIBRARY_DIR" = /autre/src ] )
+cas $? "exporter_la_lib sans argument, RAG3DB_LIB=bati : le bâti de RAG3DB_BUILD"
+( RAG3DB_LIB=rag3db-build-Z exporter_la_lib /bati 2>/dev/null )
+[ $? = 2 ]
+cas $? "exporter_la_lib sur un identifiant absent : refus (code 2), rien d'exporté"
 exit $echec

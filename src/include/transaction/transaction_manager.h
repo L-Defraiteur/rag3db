@@ -89,8 +89,8 @@ private:
     // (A7) ne bloquent pas : quand il ne reste qu'elles, elles valident à leur tour, et le point
     // de reprise qui suit les contient. Lève une TransactionManagerException si le délai
     // expire, et rouvre alors le démarrage.
-    void stopNewTransactionsAndWaitForOthersNoLock(std::unique_lock<std::mutex>& publicLock,
-        const Transaction* staying);
+    void stopNewTransactionsAndWaitForOthersNoLock(const main::ClientContext* clientContext,
+        std::unique_lock<std::mutex>& publicLock, const Transaction* staying);
     // A7 : une validation qui veut un point de reprise alors qu'un autre attend se range dans la
     // file au lieu d'attendre la fin du premier. Rend vrai si elle a validé et qu'un point de
     // reprise commencé après sa validation s'est écrit ; faux si le point de reprise en attente
@@ -103,12 +103,16 @@ private:
     void writeRequestedCheckpointIfLastNoLock(main::ClientContext& clientContext,
         std::unique_lock<std::mutex>& publicLock);
     void cancelAutoCheckpointRequestNoLock();
-    void waitWhileCheckpointPendingNoLock(std::unique_lock<std::mutex>& publicLock);
+    void waitWhileCheckpointPendingNoLock(const main::ClientContext* clientContext,
+        std::unique_lock<std::mutex>& publicLock);
     void allowNewTransactionsNoLock();
     // Un point de reprise automatique reporté, parce qu'une autre transaction est ouverte.
     void postponeCheckpointNoLock();
 
     bool hasActiveWriteTransactionNoLock() const;
+    // Le plus ancien instantané des transactions ouvertes autres que celle qui valide, ou son
+    // horodatage de validation si elle est seule (Transaction::getOldestActiveStartTS).
+    common::transaction_t oldestActiveSnapshotNoLock(const Transaction* committing) const;
 
     // Note: Used by DBTest::createDB only.
     void setCheckPointWaitTimeoutForTransactionsToLeaveInMicros(uint64_t waitTimeInMicros) {

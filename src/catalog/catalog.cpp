@@ -337,6 +337,12 @@ std::vector<IndexCatalogEntry*> Catalog::getIndexEntries(const Transaction* tran
     return result;
 }
 
+bool Catalog::isIndexChangedAfterSnapshotOf(const Transaction* transaction, table_id_t tableID,
+    const std::string& indexName) const {
+    return indexes->hasChangeAfterSnapshotOf(transaction,
+        IndexCatalogEntry::getInternalIndexName(tableID, indexName));
+}
+
 bool Catalog::containsIndex(const Transaction* transaction, table_id_t tableID,
     const std::string& indexName) const {
     return indexes->containsEntry(transaction,

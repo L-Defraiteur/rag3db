@@ -119,14 +119,34 @@ fallait `callees`, où le verrou paraissait sous le nom générique
 `acquireLock`. Deux sites de plus (`update`, `delete_`) ; le compte des
 LOCKS sur `rag3db/src` n'est pas remesuré avec lui.
 
+## Les tests par requêtes — `workspace.queries_via` (12 octobre 2026)
+
+Un test qui atteint le code par une requête (une chaîne Cypher dans un gtest, un fichier de cas
+`.test`, un `CALL fonction(…)`) est invisible au graphe d'appels, qui s'arrête à l'analyse de la
+requête. `impact` répondait « 0 tests qui la traversent ». Le dépôt le déclare dans
+`workspace.queries_via` :
+
+- `test_files` : une expression sur le chemin des fichiers de cas. Leurs scopes `texte_brut`
+  deviennent des suites de tests (`test_role=suite`, `test_certainty=declared`), lues en entier.
+- `registered_name` : le nom qu'une classe enregistre, lu dans son contenu. Il donne `REGISTERS`,
+  comparé sans casse aux appels des requêtes (`storage_info(` → `STORAGE_INFO`).
+- `keywords` : la table des mots de requête vers les symboles qu'ils atteignent (`COPY` →
+  `NodeBatchInsert`). C'est la seule chose écrite à la main, datée par `keywords_dated`.
+- `query_text`, `call_pattern` et `registered_kinds` ont des défauts : les chaînes entre guillemets
+  doubles, `nom(`, et `class|struct`.
+
+Le gabarit générique n'en porte aucune : c'est une déclaration **propre à un dépôt**. Celle du
+moteur rag3db est dans `depots/rag3db.queries_via.json`, à recopier dans le manifeste d'un hôte qui
+indexe ce dépôt. Sans déclaration, `impact` dit « tests par requêtes : non suivis » au lieu d'un 0.
+
 ## La montre de fichiers — l'index suit le disque (11 octobre 2026)
 
 `backend.json` déclare une montre (`watches.code`) et sa réaction
 (`reindex_on_change`, `graphs/reindex_on_change.mmd`). Un fichier du workspace
 modifié, créé ou supprimé **hors de nos outils** (un éditeur, git, Claude Code
 et ses propres `Edit`/`Write`, un autre agent) est réindexé, ou retiré, sans
-`index` manuel. La montre balaie toutes les `every_ms` (1 000), attend
-`settle_ms` (300) qu'un fichier se pose, et ne dit rien d'un `touch` sans
+`index` manuel. La montre balaie toutes les `every_ms` (250), attend
+`settle_ms` (150) qu'un fichier se pose, et ne dit rien d'un `touch` sans
 changement de contenu.
 
 **Le retard se dit** : entre l'édition et sa réindexation, l'état de l'index
@@ -134,11 +154,14 @@ porte `lag`, et `usages` ou le voisinage commencent leur réponse par « N
 fichier(s) changé(s) depuis N s, pas encore réindexé(s) : ce résultat peut
 dater ». Une réponse sans cette ligne est à jour du disque.
 
-**Si vous voulez l'immédiat** : baissez la période dans le manifeste, par
-exemple `"watches": {"code": {"every_ms": 200, "settle_ms": 100}}`. Le
-balayage coûte peu (2,6 ms pour les 1 653 fichiers du `src/` du moteur, cache
-chaud) ; la réindexation d'un fichier coûte ce qu'elle coûte, une fois par
-sauvegarde. Un crochet Claude Code (`PostToolUse` sur `Edit`/`Write`) qui
+**Ce que la montre coûte au repos** (12 octobre 2026) : un tour lit les dates
+des fichiers connus, pas la liste. Il coûte 2 ms pour les 1 654 fichiers du
+`src/` du moteur et 9 ms pour les 6 929 du dépôt entier, cache chaud. À la
+période par défaut (250 ms), c'est 0,8 % et 3,5 % d'un cœur. Pour un arbre plus
+grand ou un poste plus sobre, montez la période dans le manifeste, par exemple
+`"watches": {"code": {"every_ms": 1000, "settle_ms": 300}}` : le changement
+arrive alors ~1 s plus tard. La réindexation d'un fichier coûte ce qu'elle
+coûte, une fois par sauvegarde. Un crochet Claude Code (`PostToolUse` sur `Edit`/`Write`) qui
 ouvrirait le backend dans un second processus serait **un second écrivain sur
 la base**, ce qu'on ne sait pas faire : pas de crochet, la montre suffit.
 

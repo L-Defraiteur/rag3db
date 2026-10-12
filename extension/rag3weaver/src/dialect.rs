@@ -197,12 +197,13 @@ pub struct DialectCapabilities {
     pub fanout: bool,
     /// **Un saut qui lit des champs du nœud atteint, en deux temps** : le
     /// saut ne rend que l'uuid du voisin, puis ses champs se lisent par clé
-    /// (`graph_walk::run_hop`). Vrai pour rag3db : mesuré le 11 octobre sur
-    /// l'index entier, le saut qui lit les champs balaie toute la table du
-    /// voisin sous semi-masque (ticket du semi-masque), et les deux temps
-    /// rendent les mêmes lignes deux fois plus vite. Faux pour PostgreSQL,
-    /// dont la jointure passe par l'index. À remesurer, et à retirer s'il ne
-    /// gagne plus, quand le moteur corrige le semi-masque.
+    /// (`graph_walk::run_hop`). Faux partout depuis le 12 octobre : sur
+    /// rag3db, la jointure par clé du moteur (`2b11b55ec`, `97589fc9d`,
+    /// `0c0af5bf5`) masque le départ et l'arrivée du saut, et `usages` sur
+    /// l'index entier rend les mêmes lignes en 7 à 10 ms en un temps contre
+    /// 10 à 13 ms en deux ; PostgreSQL joint par l'index. La forme reste pour
+    /// un moteur qui ne masquerait pas, ou une mesure
+    /// (`Catalog::set_two_step_hops`, page 06 de la session embarquements).
     pub two_step_hops: bool,
 }
 
@@ -1017,35 +1018,6 @@ pub trait SchemaDialect: Send + Sync {
     /// ligne redevient une dette honnête. Même contournement.
     fn embed_clear(&self, table: &str, embedding_col: &str, marker: &str) -> String;
 
-    /// **Les colonnes à vider avant de supprimer des morceaux** — ou `None`
-    /// si ce moteur supprime une ligne indexée sans surcoût. La requête rend,
-    /// par ligne, le nom d'une colonne de la table puis son type ; les
-    /// vecteurs sont les tableaux de taille fixe (`FLOAT[768]`).
-    ///
-    /// CONTOURNEMENT D'UN DÉFAUT DU MOTEUR, à enlever quand il sera corrigé
-    /// (ticket `docs/tickets/2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md`),
-    /// mesuré le 12 octobre 2026 : dans rag3db, `DETACH DELETE` de
-    /// morceaux qui portent encore un vecteur sous index HNSW coûte environ
-    /// 2,5 s **par ligne** sur un index de 15 631 morceaux. Retirer un fichier
-    /// de 45 morceaux prenait 112 s. Remis à NULL d'abord, la même
-    /// suppression prend 259 ms, et réindexer un fichier passe de 3 s à
-    /// moins d'une. PostgreSQL n'a pas ce défaut.
-    fn vector_columns_to_clear(&self, _table: &str) -> Option<String> {
-        None
-    }
-
-    /// Remet à NULL `column` sur les morceaux des parents cités (`$uuids`).
-    /// Même contournement ; appelé seulement quand
-    /// [`Self::vector_columns_to_clear`] rend une requête.
-    fn clear_vector_by_parent(&self, table: &str, column: &str) -> String {
-        format!(
-            "UNWIND $uuids AS uuid MATCH (c:{} {{{}: uuid}}) SET c.{} = NULL",
-            self.quote(table),
-            self.quote("_parent_uuid"),
-            self.quote(column)
-        )
-    }
-
     /// SET le marqueur dense et rend item.uuid + décalage de ligne (pour le
     /// handle sparse).
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String;
@@ -1315,6 +1287,25 @@ fn postgres_condition(d: &PostgresDialect, p: &rag3weaver_ir::Predicate) -> Stri
         Predicate::AllOf(v) => format!("({})", v.iter().map(|q| postgres_condition(d, q)).collect::<Vec<_>>().join(" AND ")),
         Predicate::In { field, param } => format!("m.{} = ANY(${param})", d.quote(field)),
         Predicate::Compiled(c) => c.clone(),
+    }
+}
+
+/// Une condition sur le seul `_uuid` du nœud atteint, dite sur `colonne` (la
+/// colonne de la relation qui porte cet uuid) : la forme d'un saut sans table
+/// d'arrivée, où `m` n'est pas joint. `None` dès qu'un membre porte sur un
+/// autre champ, ou arrive déjà compilé : le saut se refuse alors.
+fn postgres_condition_sur_uuid(p: &rag3weaver_ir::Predicate, colonne: &str) -> Option<String> {
+    use rag3weaver_ir::Predicate;
+    let membres = |v: &[Predicate], lien: &str| -> Option<String> {
+        let dits = v.iter().map(|q| postgres_condition_sur_uuid(q, colonne)).collect::<Option<Vec<_>>>()?;
+        Some(format!("({})", dits.join(lien)))
+    };
+    match p {
+        Predicate::Equals { field, param } if field == "_uuid" => Some(format!("{colonne} = ${param}")),
+        Predicate::In { field, param } if field == "_uuid" => Some(format!("{colonne} = ANY(${param})")),
+        Predicate::AnyOf(v) => membres(v, " OR "),
+        Predicate::AllOf(v) => membres(v, " AND "),
+        _ => None,
     }
 }
 
@@ -1765,7 +1756,7 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false, two_step_hops: true }
+        DialectCapabilities { cypher: true, transactions: true, bulk_load: true, structured_fields: true, fanout: false, two_step_hops: false }
     }
 
     fn batch_link_labeled(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str]) -> String {
@@ -2162,10 +2153,6 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
-    fn vector_columns_to_clear(&self, table: &str) -> Option<String> {
-        Some(format!("CALL table_info('{}') RETURN name, type", table.replace('\'', "")))
-    }
-
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
         let offset = self.node_offset_expr("n");
         let t = self.quote(table);
@@ -2489,9 +2476,21 @@ impl SchemaDialect for PostgresDialect {
                 (Column::Node(_) | Column::Label, None) => return refus("Hop (champ sans table d'arrivée)"),
             });
         }
-        if hop.end.is_none() && (hop.filter.is_some() || !hop.order_by.is_empty()) {
-            return refus("Hop (condition sans table d'arrivée)");
+        // Sans table d'arrivée, `m` n'est pas joint : un ordre s'y refuse, et
+        // un filtre ne passe que s'il ne porte que sur l'uuid du nœud atteint,
+        // dit alors sur la colonne de la relation (la résolution d'un lot de
+        // symboles, 8bfdd74d3).
+        if hop.end.is_none() && !hop.order_by.is_empty() {
+            return refus("Hop (ordre sans table d'arrivée)");
         }
+        let filtre = match (&hop.filter, &hop.end) {
+            (None, _) => None,
+            (Some(p), Some(_)) => Some(postgres_condition(self, p)),
+            (Some(p), None) => match postgres_condition_sur_uuid(p, &format!("r.\"{arrivee}\"")) {
+                Some(c) => Some(c),
+                None => return refus("Hop (condition sur un autre champ que _uuid, sans table d'arrivée)"),
+            },
+        };
         let mut sql = format!("SELECT {} FROM unnest($uuids::text[]) AS v(u)", colonnes.join(", "));
         if let Some(t) = &hop.start {
             sql.push_str(&format!(" JOIN {} AS d ON d.\"_uuid\" = v.u", self.quote(t)));
@@ -2505,9 +2504,7 @@ impl SchemaDialect for PostgresDialect {
             let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
             conditions.push(format!("r.{f} IS NULL OR r.{f} <> ALL (ARRAY[{valeurs}])", f = self.quote(&x.field)));
         }
-        if let Some(p) = &hop.filter {
-            conditions.push(postgres_condition(self, p));
-        }
+        conditions.extend(filtre);
         if !conditions.is_empty() {
             sql.push_str(&format!(" WHERE {}", conditions.iter().map(|c| format!("({c})")).collect::<Vec<_>>().join(" AND ")));
         }
@@ -3569,21 +3566,6 @@ impl SchemaDialect for PostgresDialect {
 
 #[cfg(test)]
 mod tests {
-    /// Le contournement de la suppression : rag3db décrit la table et vide
-    /// une colonne par parent ; PostgreSQL n'en a pas besoin.
-    #[test]
-    fn rag3db_clears_the_vectors_of_chunks_before_deleting_them() {
-        let d = super::Rag3dbDialect;
-        assert_eq!(
-            super::SchemaDialect::vector_columns_to_clear(&d, "Scope_Chunk").as_deref(),
-            Some("CALL table_info('Scope_Chunk') RETURN name, type")
-        );
-        assert_eq!(
-            super::SchemaDialect::clear_vector_by_parent(&d, "Scope_Chunk", "embedding__hashembedder"),
-            "UNWIND $uuids AS uuid MATCH (c:`Scope_Chunk` {`_parent_uuid`: uuid}) SET c.`embedding__hashembedder` = NULL"
-        );
-    }
-
     use super::*;
 
     /// **Les deux COPY citent leur chemin** par `cypher_path_literal` (lot B2,
@@ -3721,6 +3703,30 @@ mod tests {
         libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
         assert_eq!(PostgresDialect.hop(&libre).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop (champ sans table d'arrivée)");
         assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:`CHUNKED_FROM`]-(m) RETURN u, m.`_uuid`, label(m), m");
+        // Sans table d'arrivée, un filtre sur le seul uuid du nœud atteint se
+        // dit sur la colonne de la relation (la résolution d'un lot de
+        // symboles, 8bfdd74d3) ; un autre champ, ou un ordre, se refuse.
+        let mut lot = Hop::untyped("MENTIONS", Direction::Incoming);
+        lot.start = Some("Symbol".into());
+        lot.returns.push(rag3weaver_ir::Column::Edge("usage".into()));
+        lot.filter = Some(rag3weaver_ir::Predicate::In { field: "_uuid".into(), param: "de".into() });
+        assert_eq!(
+            PostgresDialect.hop(&lot).unwrap(),
+            "SELECT v.u, r.\"from_uuid\", r.\"usage\" FROM unnest($uuids::text[]) AS v(u) \
+             JOIN \"symbol\" AS d ON d.\"_uuid\" = v.u JOIN \"mentions\" AS r ON r.\"to_uuid\" = v.u \
+             WHERE (r.\"from_uuid\" = ANY($de))"
+        );
+        lot.filter = Some(rag3weaver_ir::Predicate::AllOf(vec![
+            rag3weaver_ir::Predicate::In { field: "_uuid".into(), param: "de".into() },
+            rag3weaver_ir::Predicate::Equals { field: "name".into(), param: "n".into() },
+        ]));
+        assert_eq!(
+            PostgresDialect.hop(&lot).unwrap_err().to_string(),
+            "le dialecte postgresql ne traduit pas la forme Hop (condition sur un autre champ que _uuid, sans table d'arrivée)"
+        );
+        lot.filter = None;
+        lot.order_by = vec!["name".into()];
+        assert_eq!(PostgresDialect.hop(&lot).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop (ordre sans table d'arrivée)");
         let mut journal = Hop::new("Conversation", "IN_CONVERSATION", "Message", Direction::Incoming);
         journal.returns = vec![rag3weaver_ir::Column::Node("at_ms".into())];
         journal.filter = Some(rag3weaver_ir::Predicate::AtLeast { field: "at_ms".into(), param: "since".into() });
@@ -3733,6 +3739,23 @@ mod tests {
         assert!(Rag3dbDialect.hop(&libre).unwrap().ends_with("RETURN u, m.`_uuid`, label(m), m LIMIT 5"));
         h.exclude.as_mut().unwrap().values.push("nom') OR true //".into());
         assert!(matches!(Rag3dbDialect.hop(&h), Err(rag3weaver_ir::TranslateError::Invalid(_))));
+    }
+
+    /// **L'exclusion d'une valeur vide** (`reexport_from` posé sans valeur) :
+    /// acceptée, rendue `''` dans les deux dialectes, et un champ NULL passe
+    /// (un surplus, exact pour la lecture des réexportations, lot des
+    /// symboles du 12 octobre).
+    #[test]
+    fn une_exclusion_vide_se_traduit() {
+        use rag3weaver_ir::{Direction, EdgeExclusion, Hop};
+        let mut h = Hop::new("Symbol", "MENTIONS", "Scope", Direction::Incoming);
+        h.exclude = Some(EdgeExclusion { field: "reexport_from".into(), values: vec![String::new()] });
+        assert!(h.validate().is_ok());
+        assert_eq!(
+            Rag3dbDialect.hop(&h).unwrap(),
+            "UNWIND $uuids AS u MATCH (d:`Symbol` {_uuid: u})<-[r:`MENTIONS`]-(m:`Scope`) WHERE r.`reexport_from` IS NULL OR NOT r.`reexport_from` IN [''] RETURN u, m.`_uuid`"
+        );
+        assert!(PostgresDialect.hop(&h).unwrap().contains("r.\"reexport_from\" <> ALL (ARRAY[''])"));
     }
 
     /// Le compte : rag3db le traduit, PostgreSQL le refuse en le nommant.

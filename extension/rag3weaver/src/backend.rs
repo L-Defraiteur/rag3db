@@ -782,6 +782,19 @@ impl PreparedBackend {
                      verrou se lisent à l'ingestion du code — une déclaration que rien ne lit"
                     .to_string());
             }
+            if let Some(q) = &w.queries_via {
+                if w.index.as_deref() != Some("code") {
+                    return Err("workspace.queries_via sans workspace.index = \"code\" : les tests par \
+                         requêtes se relient à l'ingestion du code — une déclaration que rien ne lit"
+                        .to_string());
+                }
+                // Une expression fautive se refuse au chargement, en la
+                // nommant, pas à la première ingestion.
+                #[cfg(feature = "code")]
+                crate::queries_via::CompiledQueriesVia::compile(q)?;
+                #[cfg(not(feature = "code"))]
+                let _ = q;
+            }
             if !w.index_signals.is_empty() && w.index.is_none() {
                 return Err(
                     "workspace.index_signals sans workspace.index : les signaux se montent \
@@ -1406,45 +1419,19 @@ impl PreparedBackend {
 
     /// **Le fichier de l'extension vectorielle à charger.** Un chemin déclaré
     /// est un forçage, relatif au manifeste. Un nom (`vector`) est celle du
-    /// bâti, cherchée là où le moteur se trouve, dans cet ordre :
-    /// `RAG3DB_ROOT/extension/<nom>/build/` (l'arbre bâti), `RAG3DB_LIBRARY_DIR`
-    /// (une lib installée), le dossier de l'exécutable (le paquet npm la pose
-    /// à côté du binaire), puis l'arbre dont ce crate vient (un bâti de
-    /// développement). Introuvable : le refus nomme chaque endroit cherché et
-    /// la variable à poser. Un gabarit livré ne la cherche jamais relativement
-    /// à lui-même (ticket du 11 octobre 2026 : copié ailleurs, il ne s'ouvrait
-    /// plus).
+    /// bâti, cherchée là où le moteur se trouve (voir
+    /// [`resolve_vector_extension`]). Un gabarit livré ne la cherche jamais
+    /// relativement à lui-même (ticket du 11 octobre 2026 : copié ailleurs, il
+    /// ne s'ouvrait plus).
     pub fn vector_extension_path(&self) -> Result<PathBuf, String> {
-        let declare = &self.manifest.vector_extension;
-        let texte = declare.to_string_lossy();
-        let est_un_chemin = texte.contains('/') || texte.contains('\\') || texte.ends_with(".rag3db_extension");
-        if est_un_chemin {
-            let chemin = self.path(declare);
-            return if chemin.is_file() {
-                Ok(chemin)
-            } else {
-                Err(format!(
-                    "extension vectorielle introuvable : {} (`vector_extension` du manifeste, un chemin relatif à lui) — \
-                     donnez un chemin qui existe, ou le nom « {DEFAULT_VECTOR_EXTENSION} » pour celle du bâti",
-                    chemin.display()
-                ))
-            };
-        }
-        let cherches = vector_extension_candidates(
-            &texte,
+        resolve_vector_extension(
+            &self.manifest.vector_extension,
+            &self.directory,
+            crate::build_check::loaded_lib().as_deref(),
             std::env::var_os("RAG3DB_ROOT"),
             std::env::var_os("RAG3DB_LIBRARY_DIR"),
             std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)),
-        );
-        if let Some(trouve) = cherches.iter().find(|p| p.is_file()) {
-            return Ok(trouve.clone());
-        }
-        let liste: Vec<String> = cherches.iter().map(|p| p.display().to_string()).collect();
-        Err(format!(
-            "extension vectorielle « {texte} » introuvable ; cherchée dans : {} — posez RAG3DB_ROOT sur l'arbre où le moteur est bâti, \
-             ou `vector_extension` sur le chemin du fichier",
-            liste.join(" ; ")
-        ))
+        )
     }
     pub fn describe(&self) -> Value {
         let mut tools:Vec<Value>=self.tools.iter().map(|(name,t)|{
@@ -1676,6 +1663,8 @@ impl PreparedBackend {
             // Les fonctions de verrou déclarées pour ce dépôt.
             if let Some(w) = &self.manifest.workspace {
                 cat.declare_lock_calls(w.locks_via.clone());
+                let requetes = w.queries_via.as_ref().map(crate::queries_via::CompiledQueriesVia::compile).transpose()?;
+                cat.declare_queries(requetes);
             }
             // Les signaux déclarés par le manifeste montent sur les entités
             // du schéma — la déclaration du moteur reste neutre, chaque
@@ -1735,6 +1724,11 @@ impl PreparedBackend {
             avertissement_sans_service,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
+            // La vue de lecture, publiée une dernière fois le catalogue monté.
+            read_view: {
+                cat.publish_read_view();
+                cat.read_view_cell()
+            },
             catalog: Arc::new(Mutex::new(cat)),
             #[cfg(feature = "code")]
             file_source,
@@ -2106,6 +2100,9 @@ pub struct Backend {
     /// rechargement accepté.
     version: std::sync::atomic::AtomicU64,
     pub catalog: Arc<Mutex<Catalog>>,
+    /// **La vue de lecture** du catalogue (`crate::read_view`) : les
+    /// lectures d'outil et `build_services` la prennent sans le mutex.
+    read_view: Arc<crate::read_view::ReadViewCell>,
     /// La source de fichiers du `workspace` déclaré — construite à
     /// l'ouverture (un instantané lit l'arbre une fois).
     #[cfg(feature = "code")]
@@ -2251,7 +2248,17 @@ impl Backend {
                         config.source
                     ));
                 }
-                slot.push(crate::watch::spawn(name, config, root.clone(), source.clone(), bus.clone(), lag.clone(), cell.clone(), indexed.clone())?);
+                slot.push(crate::watch::spawn(
+                    name,
+                    config,
+                    root.clone(),
+                    source.clone(),
+                    bus.clone(),
+                    lag.clone(),
+                    cell.clone(),
+                    indexed.clone(),
+                    workspace.generated.clone(),
+                )?);
                 mounted.push(name.clone());
             }
             Ok(mounted)
@@ -2983,9 +2990,18 @@ impl Backend {
                 }
                 services.register("scope", cell);
             }
-            None => self.catalog.lock().unwrap().register_search_services(&mut services),
+            // **Sans le mutex** (lot L2) : les services de recherche de la
+            // vue, posés en parent. Le mutex seulement sans vue publiée.
+            None => match self.read_view.current() {
+                Some(vue) => services = ServiceRegistry::layered(vue.search_services.clone()),
+                None => self.catalog.lock().unwrap().register_search_services(&mut services),
+            },
         }
         services.register("catalog", self.catalog.clone());
+        services.register(crate::read_view::READ_VIEW_SERVICE, self.read_view.clone());
+        // Le modèle d'embarquement déclaré : l'estimation et le reçu de
+        // l'index le nomment, c'est celui qu'emploie l'index.
+        services.register(crate::embedding_choice::DECLARED_MODEL_SERVICE, prepared.embed_source().model.clone());
         if let Some(decider) = &self.decider {
             services.register(crate::decider::DECIDER_SERVICE, decider.clone());
         }
@@ -3396,42 +3412,138 @@ fn payload_schema(
 
 #[cfg(test)]
 mod tests {
-    /// **L'extension se cherche d'abord à côté de la lib** (le dossier d'un
-    /// identifiant du magasin), puis dans l'arbre : un dossier de bâti sans
-    /// extension retombe sur l'ordre d'avant.
+    /// **L'extension se cherche d'abord à côté de la lib réellement chargée**
+    /// (lot 3e du magasin), puis à côté de `RAG3DB_LIBRARY_DIR`, puis dans
+    /// l'arbre ; un même dossier n'est cherché qu'une fois.
     #[test]
-    fn the_vector_extension_is_looked_up_next_to_the_lib_first() {
+    fn the_vector_extension_is_looked_up_next_to_the_loaded_lib_first() {
         let c = super::vector_extension_candidates(
             "vector",
+            Some(Path::new("/magasin/rag3db-build-L")),
             Some("/arbre".into()),
             Some("/magasin/rag3db-build-A".into()),
             Some(PathBuf::from("/bin-dir")),
         );
-        assert_eq!(c[0], PathBuf::from("/magasin/rag3db-build-A/libvector.rag3db_extension"));
-        assert_eq!(c[1], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
-        assert_eq!(c[2], PathBuf::from("/bin-dir/libvector.rag3db_extension"));
-        let sans_lib = super::vector_extension_candidates("vector", Some("/arbre".into()), None, None);
+        assert_eq!(c[0], PathBuf::from("/magasin/rag3db-build-L/libvector.rag3db_extension"));
+        assert_eq!(c[1], PathBuf::from("/magasin/rag3db-build-A/libvector.rag3db_extension"));
+        assert_eq!(c[2], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
+        assert_eq!(c[3], PathBuf::from("/bin-dir/libvector.rag3db_extension"));
+        let sans_lib = super::vector_extension_candidates("vector", None, Some("/arbre".into()), None, None);
         assert_eq!(sans_lib[0], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
+        let meme = super::vector_extension_candidates("vector", Some(Path::new("/m/L")), None, Some("/m/L".into()), None);
+        assert_eq!(meme.iter().filter(|p| p.starts_with("/m/L")).count(), 1, "{meme:?}");
     }
 
-    /// **L'extension vector des tests** : sous `RAG3DB_ROOT` (l'arbre où le
-    /// moteur est bâti), sinon à côté de ce crate. Un worktree n'a pas
-    /// d'extension à lui (il n'en bâtit pas, et n'a plus de lien vers
-    /// l'arbre principal depuis le 10 octobre 2026) : sans la variable,
-    /// le moteur refusait par une « Binder exception » qui ne disait pas
-    /// quoi faire. On refuse ici, en le disant.
+    /// Une extension factice qui porte (ou non) un identifiant de bâti, comme
+    /// la chaîne que rend sa fonction `build_id`.
+    fn extension_factice(dir: &Path, id: Option<&str>) -> PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
+        let p = dir.join("libvector.rag3db_extension");
+        let mut octets = b"\x7fELF factice\0".to_vec();
+        if let Some(id) = id {
+            octets.extend_from_slice(id.as_bytes());
+            octets.push(0);
+        }
+        std::fs::write(&p, octets).unwrap();
+        p
+    }
+
+    /// **L'identifiant décide** (lot 3e) : sans aucune variable, l'extension à
+    /// côté de la lib chargée ; `RAG3DB_LIBRARY_DIR` sur un autre bâti ne la
+    /// supplante pas ; une extension d'un autre bâti est passée quand elle est
+    /// cherchée, refusée quand elle est forcée, et le refus nomme les deux.
+    #[test]
+    fn an_extension_of_another_build_is_passed_when_searched_and_refused_when_forced() {
+        use crate::build_check::{tests::elf, LIB_SECTION};
+        let d = tempfile::tempdir().unwrap();
+        let (l, x) = ("rag3db-build-L", "rag3db-build-X");
+        let dossier_l = d.path().join("lib-L");
+        std::fs::create_dir_all(&dossier_l).unwrap();
+        let lib = elf(&dossier_l, "librag3db.so", LIB_SECTION, Some(l));
+        let bonne = extension_factice(&dossier_l, Some(l));
+        let autre = extension_factice(&d.path().join("autre"), Some(x));
+        let nom = Path::new("vector");
+        let resoudre = |declare: &Path, lib: &Path, lib_dir: Option<&Path>| {
+            super::resolve_vector_extension(declare, d.path(), Some(lib), None, lib_dir.map(|p| p.as_os_str().to_owned()), None)
+        };
+
+        assert_eq!(resoudre(nom, &lib, None).unwrap(), bonne, "sans aucune variable : à côté de la lib chargée");
+        assert_eq!(resoudre(nom, &lib, Some(&d.path().join("autre"))).unwrap(), bonne, "la lib chargée passe avant la variable");
+
+        let seule = d.path().join("lib-seule");
+        std::fs::create_dir_all(&seule).unwrap();
+        let lib_seule = elf(&seule, "librag3db.so", LIB_SECTION, Some(l));
+        let err = resoudre(nom, &lib_seule, Some(&d.path().join("autre"))).unwrap_err();
+        assert!(err.contains(l) && err.contains(x) && err.contains("écartées"), "{err}");
+
+        let err = resoudre(Path::new("autre/libvector.rag3db_extension"), &lib, None).unwrap_err();
+        assert!(err.contains("refusée") && err.contains(l) && err.contains(x), "{err}");
+        assert_eq!(resoudre(Path::new("lib-L/libvector.rag3db_extension"), &lib, None).unwrap(), bonne);
+
+        let sans_id = extension_factice(&d.path().join("ancienne"), None);
+        assert_eq!(resoudre(Path::new("ancienne/libvector.rag3db_extension"), &lib, None).unwrap(), sans_id, "sans identifiant : le moteur dira");
+        assert_eq!(crate::build_check::extension_build_id(&autre).unwrap().as_deref(), Some(x));
+    }
+
+    /// **De bout en bout, sans aucune variable** (lot 3e) : la lib que ce
+    /// processus a réellement chargée désigne son extension, du même
+    /// identifiant, et le moteur la charge. Sous le magasin (le défaut de
+    /// `cargo_magasin.sh`), c'est le dossier de l'identifiant.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable() {
+        let lib = crate::build_check::loaded_lib().expect("le moteur est lié en partagé : sa lib est dans /proc/self/maps");
+        let d = tempfile::tempdir().unwrap();
+        let resolue = super::resolve_vector_extension(Path::new("vector"), d.path(), Some(&lib), None, None, None);
+        let id_lib = crate::build_check::read_section(&lib, crate::build_check::LIB_SECTION).unwrap();
+        let Some(dossier) = lib.parent().filter(|p| p.join("libvector.rag3db_extension").is_file()) else {
+            // Un dossier de bâti (`build/lecteurs-csv/src`) n'a pas l'extension à
+            // côté : sans variable, ce qui est trouvé (l'arbre de ce crate) n'est
+            // jamais d'un autre bâti.
+            if let Ok(ext) = &resolue {
+                let id_ext = crate::build_check::extension_build_id(ext).unwrap();
+                assert!(id_ext.is_none() || id_ext == id_lib, "{} : {id_ext:?} contre {id_lib:?}", ext.display());
+            }
+            eprintln!("[témoin] la lib chargée ({}) n'a pas d'extension à côté (hors magasin) : {resolue:?}", lib.display());
+            return;
+        };
+        let ext = resolue.unwrap();
+        assert_eq!(ext, dossier.join("libvector.rag3db_extension"));
+        assert_eq!(crate::build_check::extension_build_id(&ext).unwrap(), id_lib, "le même identifiant");
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        conn.execute(&format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&ext))).expect("le moteur charge l'extension");
+        eprintln!("[témoin] {} chargée, bâti {:?}", ext.display(), id_lib);
+    }
+
+    /// **Les tests chargent l'extension de leur lib, pas celle de l'arbre**
+    /// (lot 3f) : même avec `RAG3DB_ROOT` posé sur l'arbre que l'arbre
+    /// principal rebâtit, l'aide des tests rend l'extension à côté de la lib
+    /// réellement chargée quand elle y est (le magasin), du même identifiant.
+    /// Le rouge du 12 octobre, 12 h 58 : un rebâti en place de l'arbre avait
+    /// fait refuser au moteur l'extension d'un autre bâti.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn the_test_helper_loads_the_extension_of_the_loaded_lib_not_of_the_tree() {
+        let lib = crate::build_check::loaded_lib().expect("le moteur est lié en partagé");
+        let ext = PathBuf::from(extension_vector_de_test());
+        let id_lib = crate::build_check::read_section(&lib, crate::build_check::LIB_SECTION).unwrap();
+        match lib.parent().map(|d| d.join("libvector.rag3db_extension")).filter(|p| p.is_file()) {
+            Some(a_cote) => assert_eq!(ext, a_cote, "RAG3DB_ROOT = {:?}", std::env::var_os("RAG3DB_ROOT")),
+            None => eprintln!("[témoin] hors magasin : {} (la lib chargée {})", ext.display(), lib.display()),
+        }
+        let id_ext = crate::build_check::extension_build_id(&ext).unwrap();
+        assert!(id_ext.is_none() || id_ext == id_lib, "{} : {id_ext:?} contre {id_lib:?}", ext.display());
+    }
+
+    /// **L'extension vector des tests** : celle de ce processus
+    /// ([`super::vector_extension_of_this_process`]), à côté de la lib
+    /// réellement chargée d'abord. Elle lisait `RAG3DB_ROOT` seule : un rebâti
+    /// en place de l'arbre faisait tomber un rejeu qui tournait sur la lib du
+    /// magasin (« Extension VECTOR was built from… », 12 octobre, 12 h 58).
+    /// Introuvable, le refus nomme chaque endroit cherché.
     #[allow(dead_code)]
     fn extension_vector_de_test() -> String {
-        let racine = std::env::var("RAG3DB_ROOT").map(std::path::PathBuf::from).unwrap_or_else(|_| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-        });
-        let chemin = racine.join("extension/vector/build/libvector.rag3db_extension");
-        assert!(
-            chemin.exists(),
-            "pas d'extension vector sous {} : posez RAG3DB_ROOT sur l'arbre où le moteur est bâti",
-            racine.display()
-        );
-        chemin.display().to_string()
+        super::vector_extension_of_this_process().unwrap_or_else(|e| panic!("{e}")).display().to_string()
     }
     /// Une fiche réactive en mémoire, pour éprouver les refus sans manifeste.
     ///
@@ -3659,6 +3771,10 @@ mod tests {
             avertissement_sans_service: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
+            read_view: {
+                catalog.publish_read_view();
+                catalog.read_view_cell()
+            },
             catalog: Arc::new(Mutex::new(catalog)),
             #[cfg(feature = "code")]
             file_source: None,
@@ -3868,6 +3984,10 @@ mod tests {
             avertissement_sans_service: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
+            read_view: {
+                catalog.publish_read_view();
+                catalog.read_view_cell()
+            },
             catalog: Arc::new(Mutex::new(catalog)),
             file_source: Some(file_source),
             garde: crate::backend_code::build_garde(&workspace),
@@ -4116,6 +4236,259 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **La ligne [montre] dit l'embarquement sans la variable du profil** :
+    /// les durées des nœuds ne s'écoutaient que sous `RAG3WEAVER_INGEST_PROFILE`,
+    /// et « embarquer » manquait à toute ligne de production (relecture de la
+    /// recherche, 12 octobre).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_recorded_reingestion_tells_the_embedding_without_the_profile() {
+        assert!(!crate::ingest_profile::enabled(), "le témoin se joue sans RAG3WEAVER_INGEST_PROFILE");
+        let (dir, backend) = backend_qui_surveille();
+        let source = backend.file_source.clone().unwrap();
+        let contenu = "pub fn neuve() { depart(); }\npub fn partante() { depart(); }\n";
+        std::fs::write(dir.path().join("sources/neuve.rs"), contenu).unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        let (r, etapes) = crate::ingest_profile::record(|| {
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "neuve.rs", contenu)
+        });
+        r.unwrap();
+        assert!(etapes.iter().any(|(e, _)| *e == "nœud embed"), "pas d'embarquement dans les étapes : {etapes:?}");
+        // Une fonction retirée supprime son scope : la suppression du drain se
+        // chronomètre aussi, sans la variable.
+        let modifie = "pub fn neuve() { depart(); }\n";
+        std::fs::write(dir.path().join("sources/neuve.rs"), modifie).unwrap();
+        let (r, etapes) = crate::ingest_profile::record(|| {
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "neuve.rs", modifie)
+        });
+        r.unwrap();
+        assert!(etapes.iter().any(|(e, _)| *e == "drain · suppressions"), "pas de suppression du drain dans les étapes : {etapes:?}");
+        // Ce qui courait sans nom : la fin d'instantané et les symboles.
+        for attendue in [
+            "instantané · mettre de côté",
+            "instantané · noter la fin",
+            "symboles · mise en file DEFINES/MENTIONS",
+            "drain · construction du graphe",
+            // Ce que la relecture des arêtes fait, instruction par instruction.
+            "symboles · lire les DEFINES",
+            "symboles · lire les MENTIONS",
+            "symboles · parents et fichiers",
+            "symboles · choisir et lier",
+        ] {
+            assert!(etapes.iter().any(|(e, _)| *e == attendue), "« {attendue} » manque aux étapes : {etapes:?}");
+        }
+    }
+
+    /// **La fin d'un fichier atteint ses scopes par l'arête** : depuis la clé
+    /// du `File`, par `DEFINED_IN`, et non en balayant `Scope` sur
+    /// `file_path` — un balayage qui grandit avec la base (546 ms pour un
+    /// fichier sur 102 469 morceaux, 12 octobre). Le plan trouve exactement les
+    /// lignes que le filtre sur les champs trouverait.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_fine_plan_reaches_the_scopes_of_a_file_by_its_edge() {
+        use crate::catalog::SnapshotFinishOptions;
+        use crate::connection::{CypherValue, QueryParam};
+        let (_dir, backend) = backend_qui_surveille();
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        let (source_id, chemin) = crate::code_tools::indexed_name(source.as_ref(), "main.rs");
+        let grain = crate::code_sync::grain_du_fichier(&source_id, &chemin);
+        let open = cat.begin_snapshot(crate::code::SCOPE, &grain, true).unwrap();
+        let plan = cat
+            .plan_snapshot_finish(crate::code::SCOPE, &grain, &open.session, SnapshotFinishOptions { allow_empty: true, force: true })
+            .unwrap();
+        cat.abort_snapshot(crate::code::SCOPE, &grain, &open.session).unwrap();
+        assert_eq!(plan.by_relation.as_deref(), Some("DEFINED_IN"), "le plan n'est pas passé par l'arête");
+        let par_champs = cat
+            .execute_raw_with_params(
+                "MATCH (n:Scope) WHERE n.source = $s AND n.file_path = $p RETURN count(n)",
+                &[QueryParam::new("s", CypherValue::String(source_id.clone())), QueryParam::new("p", CypherValue::String(chemin.clone()))],
+            )
+            .unwrap()
+            .rows[0][0]
+            .as_i64()
+            .unwrap() as usize;
+        assert!(par_champs > 0, "le fichier n'a pas de scope : le témoin ne prouverait rien");
+        assert_eq!(plan.in_scope, par_champs, "le plan par l'arête ne trouve pas les lignes du filtre");
+    }
+
+    /// **Un lot de fichiers se réindexe en un passage**, et l'index en sort
+    /// tel que des réindexations une à une l'auraient laissé : deux fichiers
+    /// modifiés (une fonction retirée, une ajoutée), un supprimé, vus ensemble.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_batch_of_files_is_reindexed_in_one_pass() {
+        use crate::connection::{CypherValue, QueryParam};
+        let (dir, backend) = backend_qui_surveille();
+        let s = dir.path().join("sources");
+        std::fs::write(s.join("a.rs"), "pub fn a1() { depart(); }\npub fn a2() { depart(); }\n").unwrap();
+        std::fs::write(s.join("b.rs"), "pub fn b1() { depart(); }\n").unwrap();
+        std::fs::write(s.join("c.rs"), "pub fn c1() { depart(); }\n").unwrap();
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        let a = "pub fn a1() { depart(); }\n";
+        let b = "pub fn b1() { depart(); }\npub fn b2() { depart(); }\n";
+        std::fs::write(s.join("a.rs"), a).unwrap();
+        std::fs::write(s.join("b.rs"), b).unwrap();
+        std::fs::remove_file(s.join("c.rs")).unwrap();
+        let lot = [("a.rs".to_string(), Some(a.to_string())), ("b.rs".to_string(), Some(b.to_string())), ("c.rs".to_string(), None)];
+        let rapport = crate::code_sync::reingest_files(&mut cat, source.as_ref(), &lot, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        assert!(rapport.deferred_to.is_none(), "{rapport:?}");
+        let (source_id, _) = crate::code_tools::indexed_name(source.as_ref(), "a.rs");
+        let noms = |chemin: &str| -> Vec<String> {
+            let mut v: Vec<String> = cat
+                .execute_raw_with_params(
+                    "MATCH (n:Scope) WHERE n.source = $s AND n.file_path = $p RETURN n.name",
+                    &[QueryParam::new("s", CypherValue::String(source_id.clone())), QueryParam::new("p", CypherValue::String(chemin.into()))],
+                )
+                .unwrap()
+                .rows
+                .iter()
+                .filter_map(|r| r[0].as_str().map(str::to_string))
+                .collect();
+            v.sort();
+            v
+        };
+        assert_eq!(noms("a.rs"), ["a1"], "a2 retirée");
+        assert_eq!(noms("b.rs"), ["b1", "b2"], "b2 ajoutée");
+        assert!(noms("c.rs").is_empty(), "c.rs supprimé : plus de scope");
+        let fichiers = cat
+            .execute_raw_with_params(
+                "MATCH (f:File) WHERE f.source = $s AND f.path = 'c.rs' RETURN count(f)",
+                &[QueryParam::new("s", CypherValue::String(source_id.clone()))],
+            )
+            .unwrap()
+            .rows[0][0]
+            .as_i64();
+        assert_eq!(fichiers, Some(0), "c.rs supprimé : plus de ligne File");
+        assert_eq!(rapport.scopes_deleted, 2, "a2 et c1 retirées : {rapport:?}");
+    }
+
+    /// **La résolution d'un lot ne relit que ce qui le concerne** : trente
+    /// fichiers appellent `commun()`, un seul est réingéré. Une mention ne
+    /// devient une arête que si sa cible est un scope du lot ou son
+    /// mentionneur en est un ; `commun` est défini hors du lot, donc seules
+    /// les mentions du fichier réingéré comptent, pas les trente (sur la base
+    /// entière, relire toutes les mentions des noms courants coûtait ~0,7 s).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_batch_resolution_reads_only_the_mentions_that_concern_it() {
+        let (dir, backend) = backend_qui_surveille();
+        let s = dir.path().join("sources");
+        std::fs::write(s.join("commun.rs"), "pub fn commun() {}\n").unwrap();
+        for i in 0..30 {
+            std::fs::write(s.join(format!("f{i}.rs")), format!("pub fn f{i}() {{ commun(); }}\n")).unwrap();
+        }
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
+        let contenu = "pub fn f0() { commun(); commun(); }\n";
+        let cursor = source.cursor();
+        let root = crate::workspace_path::worktree_root(&cursor).unwrap().to_string();
+        let projet = source.list().ok();
+        let mut analyse = crate::code::analyze_in_project(&root, vec![("f0.rs".to_string(), contenu.to_string())], &cursor, projet.as_deref());
+        for f in &mut analyse.files {
+            f.cursor = cursor.clone();
+        }
+        let rapport = cat.ingest_code_jusqu_a(&analyse, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        assert!(rapport.mentions_read <= 3, "la résolution a relu {} mentions pour un fichier : {rapport:?}", rapport.mentions_read);
+        // Et l'arête de f0 vers commun est là, comme celles des autres.
+        drop(cat);
+        let u = usages_de(&backend, "commun");
+        assert!(u.contains("Usages (30)") && u.contains("f0.rs"), "{u}");
+    }
+
+    /// Les fichiers que l'index entier écarte, et un fichier admis qui sert de
+    /// témoin de passage : un dossier `generated`, un marqueur « DO NOT EDIT »
+    /// en tête, un binaire (des octets nuls, sous une extension qu'aucune règle
+    /// ne connaît : les `.wal` de l'hôte de Lucie).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn poser_des_exclus_et_un_admis(sources: &Path) {
+        std::fs::create_dir_all(sources.join("generated")).unwrap();
+        std::fs::write(sources.join("generated/genere.rs"), "pub fn genere() { depart(); }\n").unwrap();
+        std::fs::write(sources.join("marque.rs"), "// DO NOT EDIT\npub fn marque() { depart(); }\n").unwrap();
+        std::fs::write(sources.join("journal.wal"), b"\x00\x01wal\x00binaire\x00").unwrap();
+        std::fs::write(sources.join("admis.rs"), "pub fn admis() { depart(); }\n").unwrap();
+    }
+
+    /// Les lignes `File` de ces chemins, en base.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn fichiers_en_base(backend: &Backend, chemins: &[&str]) -> Vec<String> {
+        use crate::connection::{CypherValue, QueryParam};
+        let cat = backend.catalog.lock().unwrap();
+        chemins
+            .iter()
+            .filter(|c| {
+                cat.execute_raw_with_params(
+                    "MATCH (f:File) WHERE f.path = $p RETURN count(f)",
+                    &[QueryParam::new("p", CypherValue::String(c.to_string()))],
+                )
+                .unwrap()
+                .rows[0][0]
+                .as_i64()
+                    > Some(0)
+            })
+            .map(|c| c.to_string())
+            .collect()
+    }
+
+    /// **La montre n'indexe pas ce que l'index écarte** : un dossier généré,
+    /// un marqueur en tête, un binaire, créés sous une montre qui tourne. Un
+    /// fichier admis, créé en même temps, passe (720 fichiers réintégrés au
+    /// redémarrage de l'hôte de Lucie, le 12 octobre : seize minutes, le
+    /// verrou tenu jusqu'à 55 s).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_watch_does_not_index_what_the_index_excludes() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        poser_des_exclus_et_un_admis(&dir.path().join("sources"));
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("admis"));
+        assert!(u.contains("admis"), "le fichier admis n'est pas passé : {u}");
+        assert!(backend.stop_reactions().is_empty());
+        assert!(!u.contains("genere") && !u.contains("marque"), "un exclu est passé : {u}");
+        let passes = fichiers_en_base(&backend, &["generated/genere.rs", "marque.rs", "journal.wal"]);
+        assert!(passes.is_empty(), "des exclus sont en base : {passes:?}");
+    }
+
+    /// **La réconciliation de départ ne reprend pas ce que l'index écarte** :
+    /// les mêmes fichiers, créés entre l'index et le démarrage de la montre.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_startup_reconciliation_does_not_index_what_the_index_excludes() {
+        let (dir, backend) = backend_qui_surveille();
+        poser_des_exclus_et_un_admis(&dir.path().join("sources"));
+        backend.mount_reactions().unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("admis"));
+        assert!(u.contains("admis"), "le fichier admis n'est pas repris : {u}");
+        assert!(backend.stop_reactions().is_empty());
+        let passes = fichiers_en_base(&backend, &["generated/genere.rs", "marque.rs", "journal.wal"]);
+        assert!(passes.is_empty(), "la réconciliation a repris des exclus : {passes:?}");
+    }
+
+    /// **Une réingestion par nos outils passe la porte aussi** : un agent qui
+    /// édite un fichier généré (`edit_file`) ne le fait pas entrer dans
+    /// l'index. La réaction n'est pas le seul appelant de la réingestion
+    /// (relecture de l'arbre principal, 12 octobre).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_reingested_generated_file_does_not_enter_the_index() {
+        let (dir, backend) = backend_qui_surveille();
+        let source = backend.file_source.clone().unwrap();
+        let contenu = "// DO NOT EDIT\npub fn marque() { depart(); }\n";
+        std::fs::write(dir.path().join("sources/marque.rs"), contenu).unwrap();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "marque.rs", contenu).unwrap();
+            let lot = [("marque.rs".to_string(), Some(contenu.to_string()))];
+            crate::code_sync::reingest_files(&mut cat, source.as_ref(), &lot, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        }
+        let passes = fichiers_en_base(&backend, &["marque.rs"]);
+        assert!(passes.is_empty(), "un fichier généré est entré par la réingestion : {passes:?}");
+    }
+
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
     /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
     /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation
@@ -4220,6 +4593,65 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **Une lecture pendant un lot réindexé voit le lot d'avant, entier**
+    /// (L3, page 12-octobre-2026-arbre-principal/02). Deux fichiers arrivent
+    /// d'un seul coup (un dossier renommé) : l'un définit `arrivee`, l'autre
+    /// l'appelle et tient le lot ouvert 2 s (le crochet `__pause_du_lot__`).
+    /// Pendant ce temps, `usages arrivee` (par la vue de lecture, sans le
+    /// mutex) voit soit rien, soit tout : jamais la définition sans son appel.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_during_a_reindexed_batch_sees_the_batch_before_whole() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let prep = dir.path().join("prep");
+        std::fs::create_dir(&prep).unwrap();
+        std::fs::write(prep.join("def.rs"), "pub fn arrivee() {}\n").unwrap();
+        std::fs::write(prep.join("__pause_du_lot__.rs"), "fn h() { arrivee(); }\n").unwrap();
+        std::fs::rename(&prep, dir.path().join("sources/neuf")).unwrap();
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let (mut avant, mut apres) = (0, false);
+        while std::time::Instant::now() < fin {
+            let u = usages_de(&backend, "arrivee");
+            let (def, appel) = (u.contains("neuf/def.rs"), u.contains("__pause_du_lot__"));
+            assert_eq!(def, appel, "un lot vu à moitié : {}", &u[..u.len().min(400)]);
+            if def {
+                apres = true;
+                break;
+            }
+            avant += 1;
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(apres, "le lot finit par être visible, entier");
+        assert!(avant >= 10, "des lectures ont eu lieu pendant le lot ouvert : {avant}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Un lot en échec est défait sans empoisonner le catalogue** (L3) : le
+    /// crochet `__echec_du_lot__` fait échouer le lot avant le COMMIT, puis
+    /// chaque fichier repris seul. Ni le lot ni le fichier fautif ne restent
+    /// dans l'index, le catalogue sert encore, et l'édition suivante est
+    /// réindexée.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_failed_batch_is_undone_without_poisoning_the_catalog() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        std::fs::write(dir.path().join("sources/__echec_du_lot__.rs"), "fn e() { depart(); }\n").unwrap();
+        // Le lot échoue, puis le fichier seul échoue encore : le temps de deux
+        // passes de la réaction.
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        let u = usages_de(&backend, "depart");
+        assert!(!u.contains("__echec_du_lot__"), "le lot défait ne laisse rien : {u}");
+        assert!(!u.contains("rouvert") && !u.contains("Catalogue occupé"), "le catalogue sert encore : {u}");
+        std::fs::write(dir.path().join("sources/apres.rs"), "fn k() { depart(); }\n").unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("apres.rs"));
+        assert!(u.contains("apres.rs"), "l'édition suivante est réindexée : {u}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     /// **Une base copiée se réconcilie par chemin relatif** : l'index fait sur
     /// une racine, la source ouverte sur une copie de cet arbre qui en diffère
     /// d'un fichier — la carte de l'index se lit à la racine que chaque ligne a
@@ -4286,8 +4718,15 @@ mod tests {
             std::fs::write(dir.path().join("sources").join(petit), &contenu).unwrap();
             let t = std::time::Instant::now();
             let mut cat = backend.catalog.lock().unwrap();
-            crate::code_tools::reingest_file(&mut cat, source.as_ref(), petit, &contenu).unwrap();
-            eprintln!("[mesure] réindexer {petit} ({} octets), essai {i} : {:?}", contenu.len(), t.elapsed());
+            // La même ligne que la montre écrit, pour la lire ici aussi.
+            let (r, etapes) = crate::ingest_profile::record(|| crate::code_tools::reingest_file(&mut cat, source.as_ref(), petit, &contenu));
+            r.unwrap();
+            let tenu = t.elapsed();
+            eprintln!("[mesure] réindexer {petit} ({} octets), essai {i} : {tenu:?}", contenu.len());
+            eprintln!(
+                "{}",
+                crate::dataflow::reindex_nodes::journal_line(petit, &Ok(crate::dataflow::reindex_nodes::Outcome::Reindexed), std::time::Duration::ZERO, tenu, &etapes)
+            );
         }
         let retire = "arbre/meter.rs";
         std::fs::remove_file(dir.path().join("sources").join(retire)).unwrap();
@@ -4863,12 +5302,19 @@ mod reactions_tests;
 /// (`build/lecteurs-csv/src`) retombe sur l'arbre (`RAG3DB_ROOT`), comme avant.
 pub(crate) fn vector_extension_candidates(
     name: &str,
+    loaded_dir: Option<&Path>,
     root: Option<std::ffi::OsString>,
     lib_dir: Option<std::ffi::OsString>,
     exe_dir: Option<PathBuf>,
 ) -> Vec<PathBuf> {
     let fichier = format!("lib{name}.rag3db_extension");
     let mut cherches: Vec<PathBuf> = Vec::new();
+    // **À côté de la lib réellement chargée, d'abord** (lot 3e du magasin) :
+    // un binaire lié par RUNPATH au dossier d'un identifiant y trouve
+    // l'extension du même bâti, sans aucune variable.
+    if let Some(dossier) = loaded_dir {
+        cherches.push(dossier.join(&fichier));
+    }
     if let Some(lib) = lib_dir {
         cherches.push(PathBuf::from(lib).join(&fichier));
     }
@@ -4879,5 +5325,96 @@ pub(crate) fn vector_extension_candidates(
         cherches.push(dossier.join(&fichier));
     }
     cherches.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extension").join(name).join("build").join(&fichier));
+    let mut vus = std::collections::HashSet::new();
+    cherches.retain(|p| vus.insert(p.clone()));
     cherches
+}
+
+/// **L'extension vector de ce processus** : la règle de
+/// [`resolve_vector_extension`] (à côté de la lib réellement chargée d'abord,
+/// puis `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT`…) appliquée à l'état du processus.
+/// C'est aussi l'aide des tests et des sondes (lot 3f du magasin) : un rebâti
+/// en place de l'arbre ne change plus l'extension d'une passe qui tourne sur
+/// la lib du magasin, quelle que soit la variable posée.
+pub fn vector_extension_of_this_process() -> Result<PathBuf, String> {
+    resolve_vector_extension(
+        Path::new(DEFAULT_VECTOR_EXTENSION),
+        Path::new("."),
+        crate::build_check::loaded_lib().as_deref(),
+        std::env::var_os("RAG3DB_ROOT"),
+        std::env::var_os("RAG3DB_LIBRARY_DIR"),
+        std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)),
+    )
+}
+
+/// **L'extension vectorielle à charger**, de ce qu'on lui donne : la valeur
+/// du manifeste et son dossier, la lib du moteur chargée dans le processus,
+/// et les variables. Un chemin déclaré est un forçage, relatif au manifeste.
+/// Un nom est cherché, dans cet ordre : à côté de la lib chargée,
+/// `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT/extension/<nom>/build/`, le dossier de
+/// l'exécutable (le paquet npm), l'arbre dont ce crate vient.
+///
+/// **L'identifiant doit être celui de la lib chargée** (lot 3e) : une
+/// extension d'un autre bâti est passée quand elle est cherchée, refusée
+/// quand elle est forcée, et le refus nomme les deux identifiants. Le moteur
+/// la refuserait aussi au `LOAD`, mais après coup et sans dire d'où elle
+/// venait. Une extension sans identifiant lisible est laissée au moteur.
+pub(crate) fn resolve_vector_extension(
+    declared: &Path,
+    manifest_dir: &Path,
+    loaded_lib: Option<&Path>,
+    root: Option<std::ffi::OsString>,
+    lib_dir: Option<std::ffi::OsString>,
+    exe_dir: Option<PathBuf>,
+) -> Result<PathBuf, String> {
+    let loaded_id = loaded_lib.and_then(|l| crate::build_check::read_section(l, crate::build_check::LIB_SECTION).ok().flatten());
+    // L'identifiant d'une extension qui n'est pas celui de la lib chargée.
+    let autre = |ext: &Path| -> Option<String> {
+        let id = loaded_id.as_deref()?;
+        crate::build_check::extension_build_id(ext).ok().flatten().filter(|e| e != id)
+    };
+    let texte = declared.to_string_lossy();
+    let est_un_chemin = texte.contains('/') || texte.contains('\\') || texte.ends_with(".rag3db_extension");
+    if est_un_chemin {
+        let chemin = manifest_dir.join(declared);
+        if !chemin.is_file() {
+            return Err(format!(
+                "extension vectorielle introuvable : {} (`vector_extension` du manifeste, un chemin relatif à lui) — \
+                 donnez un chemin qui existe, ou le nom « {DEFAULT_VECTOR_EXTENSION} » pour celle du bâti",
+                chemin.display()
+            ));
+        }
+        if let Some(sien) = autre(&chemin) {
+            return Err(format!(
+                "extension vectorielle refusée : {} (`vector_extension` du manifeste) est du bâti {sien}, \
+                 la lib chargée ({}) du bâti {} — donnez le nom « {DEFAULT_VECTOR_EXTENSION} » pour celle de la lib, \
+                 ou un chemin vers l'extension de ce bâti",
+                chemin.display(),
+                loaded_lib.map(|l| l.display().to_string()).unwrap_or_default(),
+                loaded_id.as_deref().unwrap_or_default()
+            ));
+        }
+        return Ok(chemin);
+    }
+    let cherches = vector_extension_candidates(&texte, loaded_lib.and_then(Path::parent), root, lib_dir, exe_dir);
+    let mut ecartees = Vec::new();
+    for p in cherches.iter().filter(|p| p.is_file()) {
+        match autre(p) {
+            None => return Ok(p.clone()),
+            Some(sien) => ecartees.push(format!("{} (bâti {sien})", p.display())),
+        }
+    }
+    let liste: Vec<String> = cherches.iter().map(|p| p.display().to_string()).collect();
+    if !ecartees.is_empty() {
+        return Err(format!(
+            "extension vectorielle « {texte} » : aucune n'est du bâti de la lib chargée ({}) ; écartées : {}",
+            loaded_id.as_deref().unwrap_or_default(),
+            ecartees.join(" ; ")
+        ));
+    }
+    Err(format!(
+        "extension vectorielle « {texte} » introuvable ; cherchée dans : {} — posez RAG3DB_ROOT sur l'arbre où le moteur est bâti, \
+         ou `vector_extension` sur le chemin du fichier",
+        liste.join(" ; ")
+    ))
 }

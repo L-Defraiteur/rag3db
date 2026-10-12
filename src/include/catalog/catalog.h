@@ -132,6 +132,10 @@ public:
     // Check if index exists for given table and name
     bool containsIndex(const transaction::Transaction* transaction, common::table_id_t tableID,
         const std::string& indexName) const;
+    // Une autre transaction a retiré ou recréé cet index sans que l'instantané de `transaction` le
+    // voie : elle n'a pas encore validé, ou elle a validé après son début.
+    bool isIndexChangedAfterSnapshotOf(const transaction::Transaction* transaction,
+        common::table_id_t tableID, const std::string& indexName) const;
     // Check if index exists for given table and property
     bool containsIndex(const transaction::Transaction* transaction, common::table_id_t tableID,
         common::property_id_t propertyID) const;

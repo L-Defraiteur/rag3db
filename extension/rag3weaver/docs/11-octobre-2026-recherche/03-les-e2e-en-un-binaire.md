@@ -136,13 +136,33 @@ Les restes de `/tmp` (8,6 Go de RAM ici, 10,9 Go de disque sur luciepc) sont
 
 ## 5. Ce qui reste, et à qui
 
-- **Les écritures sous `~/.cache/rag3weaver-build/`** (sept suites, des
-  témoins d'arrêt brutal et de transaction : elles veulent un vrai disque, pas
-  la RAM) ne passent pas par `TMPDIR`. Étape suivante proposée : un
-  `common::dossier_de_suite()` qui lit un `RAG3WEAVER_E2E_DOSSIER` posé par
-  `run_e2e.sh` (même parent, même effacement, même `GARDER`), et les sept
-  aides privées qui s'y rangent. Ce sont des suites du cœur et du banc :
-  à faire avec eux, pas par-dessus.
+- **Les écritures sous `~/.cache/rag3weaver-build/`** : **fait** en
+  `4b545923d` (11 octobre, 12 h 27). Les sept suites qui veulent un vrai
+  disque (arrêts brutaux, transactions, plein texte en fichiers) passent par
+  `common::dossier_de_suite()`. Elle lit `RAG3WEAVER_E2E_DOSSIER`, que
+  `run_e2e.sh` pose suite par suite (avec `RAG3WEAVER_CHECKPOINT_DIR` pour
+  leurs points de reprise). **La règle** :
+  - une suite **verte** voit son dossier effacé à la fin ;
+  - une suite **rouge** garde le sien, déplacé (sans copie) et nommé sous
+    `<disque>/e2e-gardes/<suite>-<date>-<pid>`, que le balayage des passes
+    mortes ne touche pas. Les **cinq derniers** par suite sont gardés : un
+    rouge d'arrêt brutal tombe une fois sur vingt ou trente, et sa base est ce
+    qu'on vient chercher ;
+  - `RAG3WEAVER_GARDER=1` garde tout.
+
+  **Ces suites se lancent par `run_e2e.sh`** (orchestration, 12 octobre).
+  Lancée à la main, une suite écrit sous
+  `~/.cache/rag3weaver-build/<famille>` et rien ne l'efface. Elle le dit
+  désormais une fois sur stderr, avec la commande qui efface. Une garde qui
+  effacerait au vert depuis le test a été écartée : trente sites de création
+  dans des suites du cœur et du banc, pour un usage que `run_e2e.sh` couvre
+  déjà.
+
+  Les restes trouvés sur luciepc le 12 octobre (`arret-brutal`, 42 Mo, et
+  `tx-par-paquet-arret`, 110 Mo, dans `~/.cache/rag3weaver-build/`) datent de
+  11 h 22 à 12 h 15 le 11 octobre, donc **d'avant `4b545923d`**. Leur
+  effacement sur luciepc revient à Lucie : il m'est refusé, parce que c'est
+  une écriture sur un hôte distant.
 - **Le `remove_dir_all` sur une base** : sans effet en `/tmp` désormais (le
   parent part), mais encore faux dans `e2e_code_sync`, `e2e_mesure_premier_index`
   et `sonde_sens_des_relations` (sous `~/.cache`). Le correctif tombe avec

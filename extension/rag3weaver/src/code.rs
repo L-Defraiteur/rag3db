@@ -46,7 +46,7 @@ pub const LIBRARY: &str = "Library";
 /// question.
 pub const SYMBOL: &str = "Symbol";
 
-pub const RELATIONS: [(&str, &str, &str); 12] = [
+pub const RELATIONS: [(&str, &str, &str); 14] = [
     ("DEFINED_IN", SCOPE, FILE),
     ("CONSUMES", SCOPE, SCOPE),
     ("CONSUMED_BY", SCOPE, SCOPE),
@@ -63,6 +63,11 @@ pub const RELATIONS: [(&str, &str, &str); 12] = [
     // `Classe::champ`, que la classe définit (DEFINES). Posée à l'ingestion :
     // le propriétaire se lit sur place (`this`, `self`, un type lu).
     ("LOCKS", SCOPE, SYMBOL),
+    // **Les tests par requêtes** (`workspace.queries_via`) : ce qu'un test
+    // demande par une requête — le nom appelé, ou les symboles qu'un mot-clé
+    // déclaré désigne — et le nom qu'une classe enregistre.
+    ("QUERIES", SCOPE, SYMBOL),
+    ("REGISTERS", SCOPE, SYMBOL),
 ];
 
 /// Répertoires qu'on ne parse jamais.
@@ -149,6 +154,43 @@ pub fn verdict(path: &str, size: usize) -> Verdict {
     Verdict::Texte
 }
 
+/// La raison d'un fichier binaire écarté.
+pub const REASON_BINARY: &str = "binaire";
+
+/// **La porte unique de l'index** : ce qu'un fichier doit passer pour être
+/// indexé, que ce soit par l'index entier (`code_sync::sync_source`), par la
+/// montre (son scanner et sa réconciliation) ou par une réindexation. Avant
+/// le 12 octobre 2026, la montre ne passait que la liste de la source :
+/// 722 fichiers écartés par l'index (données, générés, binaires) étaient
+/// réintégrés à chaque redémarrage de l'hôte de Lucie.
+///
+/// Sans contenu, le chemin seul : le verdict sans la taille, et le dossier des
+/// générés. Avec le contenu : le verdict avec la taille, un binaire (un octet
+/// nul dans la tête, la règle de git ; la lecture d'une source rend du texte
+/// par `from_utf8_lossy`, qui garde les nuls), et les marqueurs des générés.
+/// Rend la raison d'un refus, toujours nommée.
+pub fn admission(path: &str, content: Option<&str>, generated: &crate::generated::GeneratedPolicy) -> Result<(), &'static str> {
+    if let Verdict::Ecarte(raison) = verdict(path, content.map_or(0, str::len)) {
+        return Err(raison);
+    }
+    if let Some(raison) = generated.reason_by_path(path) {
+        return Err(raison);
+    }
+    if let Some(contenu) = content {
+        let mut tete = contenu.len().min(8000);
+        while !contenu.is_char_boundary(tete) {
+            tete -= 1;
+        }
+        if contenu[..tete].contains('\0') {
+            return Err(REASON_BINARY);
+        }
+        if let Some(raison) = generated.reason(path, contenu) {
+            return Err(raison);
+        }
+    }
+    Ok(())
+}
+
 // ─── Schéma ──────────────────────────────────────────────────────────────────
 
 fn field(t: FieldType) -> SimpleFieldDef {
@@ -226,6 +268,7 @@ pub fn file_config() -> EntityConfig {
         // de celle-ci (`code_sync::sync_source`) ; une édition n'en supprime
         // pas, le grain fin n'a donc pas lieu d'être ici.
         snapshot: Some(crate::config::SnapshotConfig {
+            fine_scope_via: None,
             scope: vec!["source".into()],
             fine_scope: vec![],
             max_missing_ratio: 0.5,
@@ -233,23 +276,6 @@ pub fn file_config() -> EntityConfig {
             keep_for: None,
         }),
         ..Default::default()
-    }
-}
-
-fn test_role_name(r: &codeparsers::scope_extraction::types::TestRole) -> &'static str {
-    use codeparsers::scope_extraction::types::TestRole;
-    match r {
-        TestRole::Case => "case",
-        TestRole::Suite => "suite",
-        TestRole::Support => "support",
-    }
-}
-
-fn test_certainty_name(c: &codeparsers::scope_extraction::types::TestCertainty) -> &'static str {
-    use codeparsers::scope_extraction::types::TestCertainty;
-    match c {
-        TestCertainty::Certain => "certain",
-        TestCertainty::Convention => "convention",
     }
 }
 
@@ -411,6 +437,16 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
         // (`code_sync::reingest_file`) ; une synchronisation de la source
         // retire ce qui a disparu, fichiers supprimés compris.
         snapshot: Some(crate::config::SnapshotConfig {
+            // Les scopes d'un fichier, depuis la clé du fichier, par
+            // l'arête qui les y range : pas un balayage de Scope.
+            fine_scope_via: Some(crate::config::SnapshotVia {
+                entity: FILE.into(),
+                relation: "DEFINED_IN".into(),
+                fields: [("source", "source"), ("file_path", "path")]
+                    .into_iter()
+                    .map(|(a, b)| (a.to_string(), b.to_string()))
+                    .collect(),
+            }),
             scope: vec!["source".into()],
             fine_scope: vec!["file_path".into()],
             max_missing_ratio: 0.5,
@@ -541,6 +577,14 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // Le module source d'une réexportation (`runtime` pour `pub use
             // runtime::X`) ; vide pour une mention ordinaire.
             props.insert("reexport_from".to_string(), field_def(FieldType::String));
+            catalog.register_relation_with(rel, from, to, props)?;
+            continue;
+        }
+        if rel == "QUERIES" {
+            // `via` : « nom » (un appel de la requête, rapproché sans casse
+            // d'un nom enregistré) ou « mot:COPY » (la table des mots-clés).
+            let mut props = std::collections::HashMap::new();
+            props.insert("via".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -810,6 +854,16 @@ fn texte_language_name(path: &str) -> String {
         // (Le cas vide n'arrive pas : `verdict` écarte les fichiers sans
         // extension avant d'en venir ici.)
         autre => autre.to_string(),
+    }
+}
+
+/// **Le langage d'un chemin**, comme l'indexation l'écrit dans `language` :
+/// celui de la grammaire pour un fichier de code, celui du texte sinon. Le
+/// balayage d'avant le premier index s'en sert pour la portée.
+pub fn language_of_path(path: &str) -> String {
+    match language_name(path) {
+        l if l == "unknown" => texte_language_name(path),
+        l => l,
     }
 }
 
@@ -1130,8 +1184,8 @@ pub fn analyze_in_project(
                 file_path: indexed_name.clone(),
                 parent_name: s.parent.clone().unwrap_or_default(),
                 language: language.clone(),
-                test_role: s.test.as_ref().map_or_else(String::new, |t| test_role_name(&t.role).to_string()),
-                test_certainty: s.test.as_ref().map_or_else(String::new, |t| test_certainty_name(&t.certainty).to_string()),
+                test_role: s.test.as_ref().map_or_else(String::new, |t| t.role.as_str().to_string()),
+                test_certainty: s.test.as_ref().map_or_else(String::new, |t| t.certainty.as_str().to_string()),
                 test_name: s.test.as_ref().and_then(|t| t.name.clone()).unwrap_or_default(),
                 declarations: declarations_of(s),
                 field_types: field_types_of(s),
@@ -1816,6 +1870,9 @@ pub struct CodeIngestReport {
     /// Noms écartés parce que plusieurs scopes les définissent : une
     /// relation manquante vaut mieux qu'une relation fausse.
     pub ambiguous: usize,
+    /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
+    /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
+    pub mentions_read: usize,
     /// Millisecondes par phase — sans ça, « l'ingestion est lente » n'a pas
     /// de suite possible.
     pub entities_ms: u128,
@@ -2001,7 +2058,24 @@ impl Catalog {
         let files = self.ingest_entities_jusqu_a(FILE, analysis.files.iter().map(FileRecord::data).collect(), exige)?;
         report.files = files.processed;
         report.failed += files.failed;
-        let scopes = self.ingest_entities_jusqu_a(SCOPE, analysis.scopes.iter().map(ScopeRecord::data).collect(), exige)?;
+        // **Les tests par requêtes** déclarés : le relevé du lot, une fois.
+        // Les fichiers de test déclarés reçoivent leur marque ici, à
+        // l'écriture du scope ; leurs arêtes partent avec les autres plus bas.
+        let requetes = self.declared_queries().map(|c| crate::queries_via::link_queries(c, &analysis.scopes)).unwrap_or_default();
+        let scopes_data: Vec<_> = analysis
+            .scopes
+            .iter()
+            .map(|sc| {
+                let mut d = sc.data();
+                if let Some(nom) = requetes.marks.get(&sc.key) {
+                    d.insert("test_role".into(), s(crate::queries_via::ROLE_SUITE));
+                    d.insert("test_certainty".into(), s(crate::queries_via::CERTAINTY_DECLARED));
+                    d.insert("test_name".into(), s(nom));
+                }
+                d
+            })
+            .collect();
+        let scopes = self.ingest_entities_jusqu_a(SCOPE, scopes_data, exige)?;
         report.scopes = scopes.processed;
         report.failed += scopes.failed;
         let libs = self.ingest_entities_jusqu_a(LIBRARY, analysis.libraries.iter().map(LibraryRecord::data).collect(), exige)?;
@@ -2063,7 +2137,7 @@ impl Catalog {
         crate::ingest_profile::add("code · relations de l'analyse (identifiants, mise en file)", phase);
 
         let phase = std::time::Instant::now();
-        self.resolve_across_batches(analysis, &mut report, exige, differes.as_deref_mut())?;
+        self.resolve_across_batches(analysis, &requetes, &mut report, exige, differes.as_deref_mut())?;
         report.symbols_ms = phase.elapsed().as_millis();
         crate::ingest_profile::add("code · symboles (ingestion Symbol + rendez-vous)", phase);
         Ok(report)
@@ -2083,6 +2157,7 @@ impl Catalog {
     fn resolve_across_batches(
         &mut self,
         analysis: &CodeAnalysis,
+        requetes: &crate::queries_via::QueryLinks,
         report: &mut CodeIngestReport,
         exige: crate::disponibilite::Disponibilites,
         differes: Option<&mut std::collections::BTreeSet<String>>,
@@ -2109,7 +2184,11 @@ impl Catalog {
             analysis.scopes.iter().map(|s| s.name.as_str()).chain(champs_definis.iter().map(|(_, n)| n.as_str())).collect();
         let expected: BTreeSet<&str> =
             analysis.pending.iter().map(|(_, n, _)| n.as_str()).chain(analysis.pending_locks.iter().map(|(_, n, _)| n.as_str())).collect();
-        let names: BTreeSet<&str> = offered.union(&expected).copied().collect();
+        let mut names: BTreeSet<&str> = offered.union(&expected).copied().collect();
+        // Les noms des tests par requêtes : ce qui est demandé, ce qui est
+        // enregistré — des symboles comme les autres.
+        names.extend(requetes.queries.iter().map(|(_, n, _)| n.as_str()));
+        names.extend(requetes.registers.iter().map(|(_, n)| n.as_str()));
         if names.is_empty() {
             return Ok(());
         }
@@ -2124,16 +2203,19 @@ impl Catalog {
             })
             .collect();
         report.symbols = records.len();
-        let profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
+        let profil = crate::ingest_profile::enabled();
         let mut t = std::time::Instant::now();
-        let etape = |nom: &str, t: &mut std::time::Instant| {
+        // Chaque étape s'enregistre (la ligne [montre] la nomme) ; elle ne
+        // s'imprime que sous la variable.
+        let etape = |nom: &'static str, t: &mut std::time::Instant| {
+            crate::ingest_profile::add(nom, *t);
             if profil {
-                eprintln!("[ingest-profile] {:>6} ms  symboles/{nom}", t.elapsed().as_millis());
+                eprintln!("[ingest-profile] {:>6} ms  {nom}", t.elapsed().as_millis());
             }
             *t = std::time::Instant::now();
         };
         let ingested = self.ingest_entities_jusqu_a(SYMBOL, records, exige)?;
-        etape("ingestion", &mut t);
+        etape("symboles · ingestion", &mut t);
         report.failed += ingested.failed;
 
         let symbol_uuid = |cat: &Self, name: &str| -> Result<String, CatalogError> {
@@ -2193,6 +2275,27 @@ impl Catalog {
             }
         }
         self.mettre_en_file_les_liens("LOCKS", verrous)?;
+        // Les tests par requêtes : QUERIES du test vers le symbole demandé,
+        // REGISTERS de la classe vers le nom qu'elle enregistre.
+        if !requetes.queries.is_empty() || !requetes.registers.is_empty() {
+            let mut demandes = Vec::with_capacity(requetes.queries.len());
+            for (scope_key, symbole, via) in &requetes.queries {
+                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                demandes.push((from, symbol_uuid(self, symbole)?, [("via".to_string(), s(via))].into_iter().collect()));
+            }
+            self.mettre_en_file_les_liens("QUERIES", demandes)?;
+            // Les tests par requêtes sont reliés dans cet index : `impact` ne
+            // dira plus « non suivis ».
+            if !requetes.queries.is_empty() {
+                self.persist_meta_key(&crate::dataflow::neighborhood_nodes::written_key("QUERIES"), "1")?;
+            }
+            let mut enregistres = Vec::with_capacity(requetes.registers.len());
+            for (scope_key, nom) in &requetes.registers {
+                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                enregistres.push((from, symbol_uuid(self, nom)?, BTreeMap::new()));
+            }
+            self.mettre_en_file_les_liens("REGISTERS", enregistres)?;
+        }
         // Ce que le lot apporte : ses scopes (définisseurs possibles) et ses
         // mentionneurs — pour ne reposer que les arêtes neuves.
         let scopes_du_lot: std::collections::HashSet<String> = definitions.iter().map(|(f, _, _)| f.clone()).collect();
@@ -2237,7 +2340,7 @@ impl Catalog {
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
         self.mettre_en_file_les_liens("MENTIONS", mentions)?;
-        etape("mise en file DEFINES/MENTIONS", &mut t);
+        etape("symboles · mise en file DEFINES/MENTIONS", &mut t);
         if let Some(noms) = differes {
             // Le chemin de masse : les rendez-vous restent en file, la
             // résolution attend que toute la source soit là.
@@ -2246,16 +2349,16 @@ impl Catalog {
         }
         let drained = self.drain_jusqu_a(exige);
         report.failed += drained.failed;
-        etape("drain des rendez-vous", &mut t);
+        etape("symboles · drain des rendez-vous", &mut t);
 
         // Matérialisation, dans les deux sens. **Deux requêtes en tout** :
         // une par relation, en `UNWIND` sur tous les symboles du lot. Une
         // requête par symbole coûtait 2,5 fois le temps d'ingestion.
         let uuids: Vec<String> = names.iter().map(|n| symbol_uuid(self, n)).collect::<Result<_, _>>()?;
         self.materialiser_les_symboles(&uuids, Some((&scopes_du_lot, &mentionneurs_du_lot)), report)?;
-        etape("relecture et mise en file des arêtes", &mut t);
+        etape("symboles · relecture et mise en file des arêtes", &mut t);
         let linked = self.drain_jusqu_a(exige);
-        etape("drain des arêtes résolues", &mut t);
+        etape("symboles · drain des arêtes résolues", &mut t);
         report.failed += linked.failed;
         Ok(())
     }
@@ -2278,8 +2381,45 @@ impl Catalog {
         lot: Option<(&std::collections::HashSet<String>, &std::collections::HashSet<String>)>,
         report: &mut CodeIngestReport,
     ) -> Result<(), CatalogError> {
+        let t = std::time::Instant::now();
         let definers_by_symbol = self.linked_from_many("DEFINES", uuids)?;
-        let mut mentioners_by_symbol = self.linked_from_many_with_kind("MENTIONS", uuids, true)?;
+        crate::ingest_profile::add("symboles · lire les DEFINES", t);
+        let t = std::time::Instant::now();
+        // **Ne relire que ce qui concerne le lot.** Une mention ne devient une
+        // arête que si sa cible est un scope du lot ou son mentionneur en est
+        // un. Pour un nom dont aucun définisseur n'est dans le lot, la cible
+        // n'y est jamais : seules comptent les mentions venues du lot, plus
+        // celles qui réexportent le nom (le choix de la cible les lit). Les
+        // noms courants (`len`, `new`…) ne font plus relire toute la base.
+        let mut mentioners_by_symbol = match lot {
+            None => self.linked_from_many_with_kind("MENTIONS", uuids, true)?,
+            Some((scopes, mentionneurs)) => {
+                let (pleins, etroits): (Vec<String>, Vec<String>) = uuids.iter().cloned().partition(|sym| {
+                    definers_by_symbol.get(sym).is_some_and(|ds| ds.iter().any(|d| scopes.contains(d)))
+                });
+                let mut m = self.linked_from_many_with_kind("MENTIONS", &pleins, true)?;
+                let du_lot = self.linked_from_many_where("MENTIONS", &etroits, true, Some(mentionneurs), None)?;
+                let reexports = self.linked_from_many_where(
+                    "MENTIONS",
+                    &etroits,
+                    true,
+                    None,
+                    Some(rag3weaver_ir::EdgeExclusion { field: "reexport_from".into(), values: vec![String::new()] }),
+                )?;
+                for (sym, ms) in du_lot.into_iter().chain(reexports) {
+                    let deja = m.entry(sym).or_default();
+                    for mention in ms {
+                        let cle = |x: &Mention| (x.from.clone(), x.kind.clone(), x.reexport_from.clone(), format!("{:?}", x.usage.get("line")));
+                        if !deja.iter().any(|d| cle(d) == cle(&mention)) {
+                            deja.push(mention);
+                        }
+                    }
+                }
+                m
+            }
+        };
+        crate::ingest_profile::add("symboles · lire les MENTIONS", t);
+        report.mentions_read += mentioners_by_symbol.values().map(Vec::len).sum::<usize>();
         self.resoudre_les_types_differes(&mut mentioners_by_symbol)?;
         // Le parent des définisseurs, pour les noms qu'une mention typée
         // atteint (`n.run()` avec `n: Node` vise le `run` de `Node`).
@@ -2300,7 +2440,10 @@ impl Catalog {
             // part le chemin à suivre.
             .chain(mentioners_by_symbol.values().flatten().filter(|m| !m.reexport_from.is_empty()).map(|m| m.from.clone()))
             .collect();
+        let t = std::time::Instant::now();
         let (parents, fichiers, genres) = self.parents_et_fichiers(&a_departager)?;
+        crate::ingest_profile::add("symboles · parents et fichiers", t);
+        let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
             let empty: Vec<Mention> = Vec::new();
@@ -2571,7 +2714,8 @@ impl Catalog {
                 m.qualifier_types = v;
             }
         }
-        if std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok() {
+        crate::ingest_profile::add("symboles · types différés", debut);
+        if crate::ingest_profile::enabled() {
             eprintln!("[ingest-profile] {:>6} ms  types différés ({} noms, {tours} tours)", debut.elapsed().as_millis(), charges.len());
         }
         Ok(())
@@ -2670,8 +2814,21 @@ impl Catalog {
         to_uuids: &[String],
         with_kind: bool,
     ) -> Result<std::collections::HashMap<String, Vec<Mention>>, CatalogError> {
+        self.linked_from_many_where(rel, to_uuids, with_kind, None, None)
+    }
+
+    /// La même lecture, restreinte : aux mentionneurs `de` (des uuids de
+    /// scopes), ou aux arêtes qu'une exclusion ne retire pas.
+    fn linked_from_many_where(
+        &self,
+        rel: &str,
+        to_uuids: &[String],
+        with_kind: bool,
+        de: Option<&std::collections::HashSet<String>>,
+        exclure: Option<rag3weaver_ir::EdgeExclusion>,
+    ) -> Result<std::collections::HashMap<String, Vec<Mention>>, CatalogError> {
         let mut out: std::collections::HashMap<String, Vec<Mention>> = std::collections::HashMap::new();
-        if to_uuids.is_empty() {
+        if to_uuids.is_empty() || de.is_some_and(|d| d.is_empty()) {
             return Ok(out);
         }
         // Étiqueté au départ : sans `:Symbol`, le moteur cherchait le nœud
@@ -2684,11 +2841,19 @@ impl Catalog {
                 ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver", "reexport_from"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
             );
         }
+        let mut params = vec![crate::connection::QueryParam::new(
+            "uuids",
+            CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect()),
+        )];
+        if let Some(de) = de {
+            saut.filter = Some(rag3weaver_ir::Predicate::In { field: "_uuid".into(), param: "de".into() });
+            params.push(crate::connection::QueryParam::new("de", CypherValue::List(de.iter().map(|u| CypherValue::String(u.clone())).collect())));
+        }
+        saut.exclude = exclure;
         let cypher = self.dialect_arc().hop(&saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        let param = CypherValue::List(to_uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let result = self
             .conn()
-            .execute_with_params(&cypher, &[crate::connection::QueryParam::new("uuids", param)])
+            .execute_with_params(&cypher, &params)
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         for row in &result.rows {
             if let (Some(CypherValue::String(to)), Some(CypherValue::String(from))) = (row.first(), row.get(1)) {

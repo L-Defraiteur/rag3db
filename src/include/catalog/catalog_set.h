@@ -30,6 +30,11 @@ public:
     explicit CatalogSet(bool isInternal);
     bool containsEntry(const transaction::Transaction* transaction, const std::string& name);
     CatalogEntry* getEntry(const transaction::Transaction* transaction, const std::string& name);
+    // La tête de la chaîne de cette entrée est une version que l'instantané de `transaction` ne
+    // voit pas : posée par une autre transaction et non validée (elle porte son identifiant), ou
+    // validée après le début de `transaction`.
+    bool hasChangeAfterSnapshotOf(const transaction::Transaction* transaction,
+        const std::string& name);
     common::oid_t createEntry(transaction::Transaction* transaction,
         std::unique_ptr<CatalogEntry> entry);
     void dropEntry(transaction::Transaction* transaction, const std::string& name,

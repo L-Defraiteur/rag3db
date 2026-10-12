@@ -97,11 +97,13 @@ struct QueryHNSWIndexSharedState final : function::TableFuncSharedState {
 
 struct QueryHNSWLocalState final : function::TableFuncLocalState {
     std::optional<std::vector<NodeWithDistance>> result;
+    // L'index lu, capturé à l'initialisation (OnDiskHNSWIndex::captureForQuery).
+    std::shared_ptr<OnDiskHNSWIndex> index;
     HNSWSearchState searchState;
     uint64_t numRowsOutput;
 
-    explicit QueryHNSWLocalState(HNSWSearchState searchState)
-        : searchState{std::move(searchState)}, numRowsOutput{0} {}
+    QueryHNSWLocalState(std::shared_ptr<OnDiskHNSWIndex> index, HNSWSearchState searchState)
+        : index{std::move(index)}, searchState{std::move(searchState)}, numRowsOutput{0} {}
 
     bool hasResultToOutput() const { return result.has_value(); }
 };

@@ -96,6 +96,9 @@ public:
         VectorUpdateInfo* vectorUpdateInfo, common::transaction_t version);
 
     void commit(common::transaction_t commitTS) const;
+    // Après commit : pour chaque groupe où cette transaction a supprimé des lignes, la
+    // compaction des listes CSR en mémoire (VersionRecordHandler::compactDeadRows).
+    void compactDeadRowsAfterCommit(const transaction::Transaction& transaction) const;
     void rollback(main::ClientContext* context) const;
     // Oublie les enregistrements : après une annulation déjà appliquée (la transaction en échec
     // reste ouverte, marche T0), un second rollback n'a plus rien à défaire.

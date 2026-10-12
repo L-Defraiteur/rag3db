@@ -7,6 +7,9 @@
 #include "processor/operator/physical_operator.h"
 
 namespace rag3db {
+namespace storage {
+class NodeTable;
+} // namespace storage
 namespace processor {
 
 class BaseSemiMasker;
@@ -90,6 +93,25 @@ public:
         return std::make_unique<SingleTableSemiMasker>(keyPos, sharedState, children[0]->copy(), id,
             printInfo->copy());
     }
+};
+
+// Les clés résolues en décalages par l'index de clé primaire (SemiMaskKeyType::PRIMARY_KEY).
+class PrimaryKeySemiMasker final : public BaseSemiMasker {
+public:
+    PrimaryKeySemiMasker(DataPos keyPos, std::shared_ptr<SemiMaskerSharedState> sharedState,
+        storage::NodeTable* table, std::unique_ptr<PhysicalOperator> child, uint32_t id,
+        std::unique_ptr<OPPrintInfo> printInfo)
+        : BaseSemiMasker{keyPos, std::move(sharedState), std::move(child), id,
+              std::move(printInfo)},
+          table{table} {}
+    bool getNextTuplesInternal(ExecutionContext* context) override;
+    std::unique_ptr<PhysicalOperator> copy() override {
+        return std::make_unique<PrimaryKeySemiMasker>(keyPos, sharedState, table,
+            children[0]->copy(), id, printInfo->copy());
+    }
+
+private:
+    storage::NodeTable* table;
 };
 
 class MultiTableSemiMasker final : public BaseSemiMasker {

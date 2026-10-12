@@ -16,6 +16,7 @@
 #include <windows.h>
 #else
 #include "sys/stat.h"
+#include <sys/file.h>
 #include <unistd.h>
 #endif
 
@@ -23,7 +24,9 @@
 
 #include <cerrno>
 #include <chrono>
+#include <mutex>
 #include <thread>
+#include <unordered_map>
 
 #include <cstring>
 
@@ -42,7 +45,116 @@ LocalFileInfo::~LocalFileInfo() {
         close(fd);
     }
 #endif
+    if (!lockedPath.empty()) {
+        LocalFileSystem::releaseProcessLock(lockedPath);
+    }
 }
+
+// Le verrou d'un fichier, une fois par processus (SQLite fait de même). Avant, chaque ouverture
+// verrouillée posait son propre verrou sur sa propre poignée : sous Unix par fcntl, tenu par le
+// processus — la seconde poignée passait, mais la fermeture de n'importe quel descripteur du
+// fichier faisait tomber le verrou de tout le processus (le rejeu des pages fantômes ouvre et
+// ferme une poignée sur le fichier de données : la garde B2 ne gardait plus rien après lui) ;
+// sous Windows par LockFileEx, tenu par la poignée — la seconde poignée du même processus était
+// refusée (une base existante ne se rouvrait pas en écriture, ticket du 12 octobre), et l'octet 0
+// verrouillé interdisait à toute autre poignée de lire l'en-tête. Désormais la première ouverture
+// verrouillée prend le verrou sur une poignée à elle, gardée dans ce registre avec le compte des
+// ouvertures qui s'y joignent, et rendue par la dernière. Sous Unix, flock : lié à sa poignée, pas
+// au processus, il survit aux autres fermetures. Sous Windows, LockFileEx sur un octet réservé
+// loin des données (2^62), que personne ne lit ni n'écrit. Entre processus, rien ne change : un
+// second écrivain attend la borne puis est refusé par la phrase convenue.
+namespace {
+
+struct ProcessFileLock {
+#ifdef _WIN32
+    HANDLE handle;
+#else
+    int fd;
+#endif
+    FileLockType type;
+    uint32_t holders;
+};
+
+struct ProcessFileLocks {
+    std::mutex mtx;
+    std::unordered_map<std::string, ProcessFileLock> locks;
+#ifndef _WIN32
+    // Le processus qui a rempli le registre : un fils de fork hérite de la mémoire, mais ses
+    // verrous ne sont pas les siens (le parent les rend quand il veut) — il repart à vide. Les
+    // descripteurs hérités tiennent leurs verrous jusqu'à sa fin, comme avant.
+    pid_t owner = 0;
+#endif
+};
+
+// Jamais détruit : des ouvertures peuvent se fermer après la fin de main.
+ProcessFileLocks& processFileLocks() {
+    static auto* locks = new ProcessFileLocks();
+    return *locks;
+}
+
+#ifdef _WIN32
+constexpr uint64_t LOCK_BYTE_OFFSET = uint64_t{1} << 62;
+
+OVERLAPPED lockByte() {
+    OVERLAPPED overlapped = {0};
+    overlapped.Offset = static_cast<DWORD>(LOCK_BYTE_OFFSET & 0xFFFFFFFFull);
+    overlapped.OffsetHigh = static_cast<DWORD>(LOCK_BYTE_OFFSET >> 32);
+    return overlapped;
+}
+
+void unlockFile(HANDLE handle) {
+    auto overlapped = lockByte();
+    UnlockFileEx(handle, 0 /*reserved*/, 1 /*numBytesLow*/, 0 /*numBytesHigh*/, &overlapped);
+}
+
+// B2 : tant que le verrou est tenu par un autre processus, réessayer toutes les 50 ms jusqu'à la
+// borne (lockWaitMs) ; 0 = un seul essai, le refus d'avant.
+bool tryLockFile(HANDLE handle, FileLockType type, uint64_t lockWaitMs) {
+    const DWORD dwFlags = type == FileLockType::READ_LOCK ?
+                              LOCKFILE_FAIL_IMMEDIATELY :
+                              LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK;
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(lockWaitMs);
+    while (true) {
+        auto overlapped = lockByte();
+        if (LockFileEx(handle, dwFlags, 0 /*reserved*/, 1 /*numBytesLow*/, 0 /*numBytesHigh*/,
+                &overlapped)) {
+            return true;
+        }
+        if (lockWaitMs == 0 || std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
+HANDLE openLockHandle(const std::string& fullPath) {
+    return CreateFileA(fullPath.c_str(), GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL, nullptr);
+}
+#else
+// B2 : tant que le verrou est tenu par un autre processus (EWOULDBLOCK), réessayer toutes les
+// 50 ms jusqu'à la borne (lockWaitMs) ; 0 = un seul essai, le refus d'avant. Il n'y a pas encore
+// de connexion à interrompre à ce moment : la borne est la seule sortie.
+bool tryLockFile(int fd, FileLockType type, uint64_t lockWaitMs) {
+    const int operation = (type == FileLockType::READ_LOCK ? LOCK_SH : LOCK_EX) | LOCK_NB;
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(lockWaitMs);
+    while (true) {
+        if (flock(fd, operation) == 0) {
+            return true;
+        }
+        if (errno != EWOULDBLOCK || lockWaitMs == 0 ||
+            std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+#endif
+
+} // namespace
 
 static void validateFileFlags(uint8_t flags) {
     const bool isRead = flags & FileFlags::READ_ONLY;
@@ -69,6 +181,92 @@ static std::string lockRefusedMessage(const std::string& fullPath, uint64_t lock
                    " ms for the database file held by another writer process)";
     }
     return message + "\nSee the docs: https://docs.rag3db.com/concurrency for more information.";
+}
+
+void LocalFileSystem::acquireProcessLock(const std::string& fullPath, FileLockType lockType,
+    uint64_t lockWaitMs) {
+    auto& registry = processFileLocks();
+    std::lock_guard lck{registry.mtx};
+#ifndef _WIN32
+    if (registry.owner != getpid()) {
+        registry.locks.clear();
+        registry.owner = getpid();
+    }
+#endif
+    const auto it = registry.locks.find(fullPath);
+    if (it != registry.locks.end()) {
+        auto& held = it->second;
+        if (lockType == FileLockType::WRITE_LOCK && held.type == FileLockType::READ_LOCK) {
+            // Le verrou du processus se renforce en écriture ; il le reste jusqu'à la dernière
+            // fermeture.
+#ifdef _WIN32
+            // Une poignée ne cumule pas deux verrous sur la même plage : rendre le partagé, puis
+            // prendre l'exclusif ; au refus, reprendre le partagé (toujours possible : personne
+            // n'a pu prendre l'exclusif pendant l'essai, nous le demandions).
+            unlockFile(held.handle);
+            if (!tryLockFile(held.handle, FileLockType::WRITE_LOCK, lockWaitMs)) {
+                tryLockFile(held.handle, FileLockType::READ_LOCK, 0);
+                throw IOException(lockRefusedMessage(fullPath, lockWaitMs));
+            }
+#else
+            if (!tryLockFile(held.fd, FileLockType::WRITE_LOCK, lockWaitMs)) {
+                throw IOException(lockRefusedMessage(fullPath, lockWaitMs));
+            }
+#endif
+            held.type = FileLockType::WRITE_LOCK;
+        }
+        held.holders++;
+        return;
+    }
+#ifdef _WIN32
+    HANDLE handle = openLockHandle(fullPath);
+    if (handle == INVALID_HANDLE_VALUE) {
+        throw IOException(stringFormat("Cannot open file. path: {} - Error {}: {}", fullPath,
+            GetLastError(), std::system_category().message(GetLastError())));
+    }
+    if (!tryLockFile(handle, lockType, lockWaitMs)) {
+        CloseHandle(handle);
+        throw IOException(lockRefusedMessage(fullPath, lockWaitMs));
+    }
+    registry.locks.emplace(fullPath, ProcessFileLock{handle, lockType, 1});
+#else
+    const int fd = open(fullPath.c_str(), O_RDONLY);
+    if (fd == -1) {
+        throw IOException(stringFormat("Cannot open file {}: {}", fullPath, posixErrMessage()));
+    }
+    if (!tryLockFile(fd, lockType, lockWaitMs)) {
+        close(fd);
+        throw IOException(lockRefusedMessage(fullPath, lockWaitMs));
+    }
+    registry.locks.emplace(fullPath, ProcessFileLock{fd, lockType, 1});
+#endif
+}
+
+void LocalFileSystem::releaseProcessLock(const std::string& fullPath) {
+    auto& registry = processFileLocks();
+    std::lock_guard lck{registry.mtx};
+#ifndef _WIN32
+    if (registry.owner != getpid()) {
+        // Une ouverture héritée d'un fork se ferme dans le fils : le verrou est au parent.
+        return;
+    }
+#endif
+    const auto it = registry.locks.find(fullPath);
+    if (it == registry.locks.end()) {
+        return;
+    }
+    auto& held = it->second;
+    if (--held.holders > 0) {
+        return;
+    }
+#ifdef _WIN32
+    unlockFile(held.handle);
+    CloseHandle(held.handle);
+#else
+    flock(held.fd, LOCK_UN);
+    close(held.fd);
+#endif
+    registry.locks.erase(it);
 }
 
 std::unique_ptr<FileInfo> LocalFileSystem::openFile(const std::string& path, FileOpenFlags flags,
@@ -128,62 +326,23 @@ std::unique_ptr<FileInfo> LocalFileSystem::openFile(const std::string& path, Fil
         throw IOException(stringFormat("Cannot open file. path: {} - Error {}: {}", fullPath,
             GetLastError(), std::system_category().message(GetLastError())));
     }
+    auto info = std::make_unique<LocalFileInfo>(fullPath, handle, this);
     if (flags.lockType != FileLockType::NO_LOCK) {
-        DWORD dwFlags = flags.lockType == FileLockType::READ_LOCK ?
-                            LOCKFILE_FAIL_IMMEDIATELY :
-                            LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK;
-        OVERLAPPED overlapped = {0};
-        overlapped.Offset = 0;
-        // B2 : tant que le verrou est tenu par un autre processus, réessayer toutes les 50 ms
-        // jusqu'à la borne (lockWaitMs) ; 0 = un seul essai, le refus d'avant.
-        const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(flags.lockWaitMs);
-        BOOL rc = FALSE;
-        while (true) {
-            rc = LockFileEx(handle, dwFlags, 0 /*reserved*/, 1 /*numBytesLow*/, 0 /*numBytesHigh*/,
-                &overlapped);
-            if (rc || flags.lockWaitMs == 0 || std::chrono::steady_clock::now() >= deadline) {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        if (!rc) {
-            throw IOException(lockRefusedMessage(fullPath, flags.lockWaitMs));
-        }
+        acquireProcessLock(fullPath, flags.lockType, flags.lockWaitMs);
+        info->lockedPath = fullPath;
     }
-    return std::make_unique<LocalFileInfo>(fullPath, handle, this);
+    return info;
 #else
     int fd = open(fullPath.c_str(), openFlags, 0644);
     if (fd == -1) {
         throw IOException(stringFormat("Cannot open file {}: {}", fullPath, posixErrMessage()));
     }
+    auto info = std::make_unique<LocalFileInfo>(fullPath, fd, this);
     if (flags.lockType != FileLockType::NO_LOCK) {
-        struct flock fl {};
-        memset(&fl, 0, sizeof fl);
-        fl.l_type = flags.lockType == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = 0;
-        fl.l_len = 0;
-        // B2 : tant que le verrou est tenu par un autre processus (EACCES ou EAGAIN), réessayer
-        // toutes les 50 ms jusqu'à la borne (lockWaitMs) ; 0 = un seul essai, le refus d'avant. Il
-        // n'y a pas encore de connexion à interrompre à ce moment : la borne est la seule sortie.
-        const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(flags.lockWaitMs);
-        int rc = -1;
-        while (true) {
-            rc = fcntl(fd, F_SETLK, &fl);
-            if (rc != -1 || (errno != EACCES && errno != EAGAIN) || flags.lockWaitMs == 0 ||
-                std::chrono::steady_clock::now() >= deadline) {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        if (rc == -1) {
-            close(fd);
-            throw IOException(lockRefusedMessage(fullPath, flags.lockWaitMs));
-        }
+        acquireProcessLock(fullPath, flags.lockType, flags.lockWaitMs);
+        info->lockedPath = fullPath;
     }
-    return std::make_unique<LocalFileInfo>(fullPath, fd, this);
+    return info;
 #endif
 }
 

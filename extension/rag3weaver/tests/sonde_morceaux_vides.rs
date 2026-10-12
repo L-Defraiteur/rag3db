@@ -27,8 +27,7 @@ fn catalogue() -> Catalog {
 }
 
 fn catalogue_sur(conn: Rag3dbConnection) -> Catalog {
-    let root = std::env::var("RAG3DB_ROOT").expect("RAG3DB_ROOT");
-    conn.execute(&format!("LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'")).unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display())).unwrap();
     let config = CatalogConfig { name: Some("sonde-vides".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
     catalog.initialize().unwrap();
@@ -287,8 +286,7 @@ fn les_morceaux_vides_apres_rattrapage() {
 fn compter_une_base() {
     let chemin = std::env::var("SONDE_BASE").expect("SONDE_BASE");
     let conn = Rag3dbConnection::new(&chemin).unwrap();
-    let root = std::env::var("RAG3DB_ROOT").unwrap();
-    conn.execute(&format!("LOAD EXTENSION '{root}/extension/vector/build/libvector.rag3db_extension'")).unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display())).unwrap();
     for q in [
         "MATCH (c:Scope_Chunk) RETURN count(c)",
         "MATCH (c:Scope_Chunk) WHERE c._text IS NULL RETURN count(c)",

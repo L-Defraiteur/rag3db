@@ -351,3 +351,16 @@ n'a rien.
   128 732**, sans rien réécrire, et les 11 lectures passent.
 - **Reste** : la base de Lucie elle-même. Il faut son hôte redémarré sur un binaire lié à la lib
   corrigée, puis un compte de ses vides (0 attendu).
+
+## La preuve sur une vraie base atteinte (codeparsers, 12 octobre 2026, 9 h 30)
+
+code-lourd de luciepc, base fermée par l'arrêt propre de 9 h 05 (sans `.wal`), copiée deux fois
+(md5 `b0072f74d562`), comptée par chaque lib avec sa libvector :
+
+| lib | `Scope_Chunk` | `_text` nul | `''` | `File_Chunk` vides |
+|---|---|---|---|---|
+| `6ffec5a82` (2 h 34, avant le correctif) | 130 715 | 0 | **16 368 (12,5 %)** | 26 |
+| `3cca0ae1e` (8 h 25, corrigée) | 130 715 | 0 | **0** | 0 |
+
+Le fichier est le même, avec le même nombre de lignes : la différence vient de la lecture seule. Les
+textes étaient intacts sur disque. Traces : `~/.cache/codeparsers-notes/b2d/compte-lourd.txt`.

@@ -3,7 +3,7 @@
 use super::*;
 
 /// Un ELF qui porte `section` = `id` (ou aucune section si `id` est `None`).
-fn elf(dir: &Path, name: &str, section: &str, id: Option<&str>) -> PathBuf {
+pub(crate) fn elf(dir: &Path, name: &str, section: &str, id: Option<&str>) -> PathBuf {
     let path = dir.join(name);
     std::fs::copy("/bin/true", &path).expect("copier /bin/true");
     if let Some(id) = id {

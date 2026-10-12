@@ -100,11 +100,6 @@
 #   a8c619830) ; nom à accent grave doublé (f03139f95) ; toString() (ef1e0e3cc).
 UpstreamFixes.EscapedBacktickInAName escaped-backtick-collapsed
 #
-# Le CALL de la recherche vectorielle rend des nœuds supprimés (ticket
-# 2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call) : la projection du nœud les
-# écarte, le compte du CALL les garde. Relevé par le cœur C++ sur I1.
-VectorIndexUpdate.DeletedRowsAreNotReturnedByTheCall vector-call-dead
-#
 # Un groupe de copies bien plus grand que le degré (vector_index_update_test.cpp,
 # SameVectorForEveryRow, la recette de rag3db-9c du 10 octobre) : 1 402 lignes du même vecteur
 # (FLOAT[384], cosinus), 23 fois le degré. Aucun plantage, mais des lignes injoignables par la
@@ -118,13 +113,11 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine 
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
-# Le balayage sous un petit masque (ticket 2026-10-11-un-saut-par-semi-masque-lit-toute-la-table) :
-# un saut vers 72 000 Scope dont le masque retient 117 lignes éparpillées lit toute la table. Le
-# témoin (masked_scan_test.cpp) borne les lignes sorties du SCAN_NODE_TABLE sous le masque à 10·k.
-MaskedScan.ReadsAboutTheMaskNotTheTable scan-reads-the-mask
-#
-# L'index vectoriel retiré puis recréé pendant que des recherches tournent en face (ticket
-# 2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute) :
-# quelques recherches reçoivent « bad optional access » ou « unordered_map::at » au lieu d'un refus
-# nommé. Rouge trois passes sur trois ; aucun figement, aucun résultat faux.
-VectorIndexRebuild.SearchesAcrossDropAndCreateAreConsistentOrNamed no-unnamed-search-error
+# Un index retiré ou recréé change dans le stockage pour toutes les transactions avant sa
+# validation (ticket 2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage) :
+# le lecteur d'avant reçoit un refus nommé au lieu de l'ancien index, un CREATE annulé laisse son
+# index dans la liste (« already exists » au suivant), un DROP annulé perd l'index. Rouges deux
+# passes sur deux. Pour hotfixs (pas 2, la rétention).
+VectorIndexRetention.ReaderBeforeDropSeesTheOldIndex reader-before-drop-sees-old-index
+VectorIndexRetention.RolledBackCreateCanBeRedone rolled-back-create-can-be-redone
+VectorIndexRetention.RolledBackDropKeepsTheIndex rolled-back-drop-keeps-index

@@ -163,12 +163,7 @@ pub fn check_loaded() -> Result<(), String> {
 /// section).
 pub fn check_against(compiled: Option<&str>, maps: &str, exe: &Path) -> Result<(), String> {
     let Some(compiled) = compiled.filter(|s| !s.is_empty()) else { return Ok(()) };
-    let lib: PathBuf = maps
-        .lines()
-        .filter_map(|l| l.split_whitespace().nth(5))
-        .find(|p| Path::new(p).file_name().is_some_and(|n| n.to_string_lossy().starts_with("librag3db.so")))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| exe.to_path_buf());
+    let lib = loaded_lib_in(maps).unwrap_or_else(|| exe.to_path_buf());
     match read_section(&lib, LIB_SECTION) {
         Ok(Some(loaded)) if loaded != compiled => {
             let binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("ce binaire"));
@@ -179,4 +174,41 @@ pub fn check_against(compiled: Option<&str>, maps: &str, exe: &Path) -> Result<(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
+
+/// **La lib du moteur nommée dans `maps`** (le texte de `/proc/<pid>/maps`),
+/// s'il y en a une : le moteur lié en partagé. Le chemin est celui du
+/// fichier ouvert, liens résolus (le dossier d'un identifiant du magasin, pas
+/// `courant`).
+pub fn loaded_lib_in(maps: &str) -> Option<PathBuf> {
+    maps.lines()
+        .filter_map(|l| l.split_whitespace().nth(5))
+        .find(|p| Path::new(p).file_name().is_some_and(|n| n.to_string_lossy().starts_with("librag3db.so")))
+        .map(PathBuf::from)
+}
+
+/// **La lib du moteur chargée dans ce processus** (Linux), s'il y en a une
+/// (lot 3e du magasin : l'extension se cherche à côté d'elle).
+pub fn loaded_lib() -> Option<PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        loaded_lib_in(&std::fs::read_to_string("/proc/self/maps").ok()?)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// **L'identifiant de bâti d'une extension**, lu sans la charger. Elle ne
+/// porte pas de section : son identifiant est la chaîne que rend sa fonction
+/// `build_id`, cherchée dans ses octets comme le fait la publication au
+/// magasin (`scripts/rag3db_libs.py`). `None` : une extension d'avant les
+/// identifiants (le moteur la refusera lui-même, en le disant).
+pub fn extension_build_id(path: &Path) -> Result<Option<String>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{} : {e}", path.display()))?;
+    const PREFIX: &[u8] = b"rag3db-build-";
+    let Some(start) = bytes.windows(PREFIX.len()).position(|w| w == PREFIX) else { return Ok(None) };
+    let end = bytes[start..].iter().position(|b| *b == 0).map(|n| start + n).unwrap_or(bytes.len());
+    Ok(Some(String::from_utf8_lossy(&bytes[start..end]).into_owned()))
+}

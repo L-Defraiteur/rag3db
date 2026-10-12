@@ -139,3 +139,98 @@ puits intérieur du `TeeSink`, sans doublon.
 - Le volume sur le bus : un événement par jeton, ou des paquets de quelques
   millisecondes ? C'est à mesurer avec une interface réelle.
 - `reasoning` en flux à part : seulement si un consommateur le demande.
+
+## 7. Les résultats (12 octobre, matin)
+
+`LlmNode.tokens` est sur master depuis `7627fa92d`, côté proto. Ses témoins 1,
+2 et 4 (la poignée de main, la concaténation, l'arrêt anticipé avec et sans
+le réglage) sont rouges d'abord. Le témoin 3, la parité, est chez moi
+(`38a95fa9b`, §2.2). Le témoin 5 et la mesure sont dans
+`src/dataflow/jetons_tests.rs`, en deux tests `#[ignore]` joués à la main :
+
+```
+scripts/cargo_magasin.sh test --lib --features rag3db-native,code,daemon,openai-llm \
+  jetons_tests -- --ignored --nocapture --test-threads=1
+```
+
+**Le vrai modèle** (témoin 5,
+`local_model_tokens_reach_the_consumer_before_the_end`). Le témoin lance
+`llama-server` avec qwen3-1.7b Q8, sur le processeur (`-ngl 0`, six fils,
+`--reasoning-budget 0`), et l'arrête par son propre pid, même sur un échec.
+Le serveur est prêt en 1,8 s. Sur une réponse de 397 jetons :
+
+| | depuis le départ du run |
+|---|---|
+| premier jeton reçu du serveur | 209,5 ms |
+| premier jeton lu par le consommateur | 210,0 ms (écart **0,53 ms**) |
+| dernier jeton lu | 14,14 s |
+| fin du run | 14,14 s |
+
+Le consommateur voit donc le premier jeton **67 fois plus tôt** que la fin de
+la génération, et le graphe n'y ajoute qu'une demi-milliseconde. `text` est
+exactement la concaténation des 397 jetons lus. Les bornes du témoin sont
+larges : un premier jeton avant le quart de la génération, un écart sous
+50 ms.
+
+**Le surcoût par jeton** (`measure_token_overhead`) : 100 000 fragments d'un
+`CallbackLlm`, en profil debug (un majorant) :
+
+| chemin | ns par jeton |
+|---|---|
+| puits nu, sans graphe | 18 |
+| `LlmNode`, `tokens` non branché (jeté, exécuteur par niveaux) | 312 |
+| `LlmNode` → lecteur `PerElement` (exécuteur concurrent, canal de 64) | 1 135 |
+| **le canal seul** | **822** |
+
+Un jeton de qwen3-1.7b sur le processeur arrive toutes les 35,6 ms. Le canal
+en coûte 0,8 µs, soit 0,002 % : il ne pèse pas. La borne du test est
+20 µs par jeton. Le refoulement d'un consommateur lent vers la socket
+(§5, troisième point) n'est pas encore mesuré : il attend `Spot` et
+`TokenEvents`, qui sont les premiers vrais consommateurs.
+
+Ces deux tests ne sont pas rouges d'abord. Ce sont une mesure et un témoin
+du protocole sur un vrai serveur. Ce qui serait rouge si `LlmNode` publiait
+seulement à la fin, la poignée de main, est le témoin 1 du proto.
+
+## 8. Le refoulement d'un consommateur lent (12 octobre, midi)
+
+Sur `TokenEvents` et `Spot`, poussés par le proto en `3db578589`, la mesure
+`measure_backpressure` (`jetons_tests.rs`, `#[ignore]`, sous `poste mesure`)
+a trois volets. Les chiffres sont en debug.
+
+**1. Un lecteur lent dans le graphe** : 400 fragments d'un modèle rapide
+vers un lecteur qui dort 1 ms par fragment. L'avance maximale du modèle sur
+le lecteur est de **65 fragments**, pour un canal de 64. Le modèle finit à
+357 ms, au rythme du lecteur. **Le canal refoule jusqu'au puits**, donc
+jusqu'à la socket du modèle, comme voulu (§5).
+
+**2. `TokenEvents` vers un abonné du bus lent** : 2 000 jetons d'un modèle
+rapide, un abonné qui dort 1 ms par événement, un bus de 64 comme celui du
+chat. Le modèle finit en **4 ms** : le bus **ne refoule pas**. Il écrase
+les plus anciens (`set_overflow`), et l'abonné en a lu 68 et **perdu
+1 932**, qu'il apprend par `Overflowed(n)`. Chaque jeton est lu ou compté
+perdu.
+
+C'est un choix du bus, pas un défaut de `TokenEvents` : un écran lent ne
+doit pas freiner le modèle. Mais il perd du texte.
+- Au rythme d'un vrai modèle (qwen3 sur le processeur : un jeton toutes les
+  35,6 ms, §7), un abonné à 1 ms ne perd rien.
+- La perte commence quand l'abonné est plus lent que le modèle plus de
+  64 fois de suite.
+- La question ouverte du §6 (un événement par jeton, ou des paquets ?) a
+  donc maintenant son chiffre. Pour un écran qui ne doit rien perdre, il y a
+  deux voies, à décider avec le proto et l'arbre principal :
+  - un sujet `tokens` à plus grande capacité ;
+  - des paquets de quelques millisecondes, émis par `TokenEvents`.
+- Le texte entier reste toujours sur `text` : seule la vue au fil de l'eau
+  perd.
+
+**3. Le coût de `Spot`** : 100 000 fragments, trois tours alternés, le
+minimum de chacun. Lecteur nu : de 1 084 à 1 306 ns par fragment selon les
+passes. `Spot` (un motif texte, fenêtre de 256) : de 929 à 1 387 ns.
+- L'écart a varié de −452 à +81 ns sur quatre passes : le coût propre de
+  `Spot` se perd sous le bruit du passage par le canal. Un lecteur nu, plus rapide que
+  le modèle, vide le canal et se fait réveiller à chaque fragment ; `Spot`,
+  un peu plus lent, trouve des fragments en attente.
+- **`Spot` ne pèse pas** devant le rythme d'un modèle. Le test borne
+  seulement sa valeur absolue, sous 20 µs par fragment.

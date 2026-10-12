@@ -104,6 +104,16 @@ pub trait DbConnection: Send + Sync {
     /// rend ensuite `reason`. Sans effet pour un moteur qui ne le sait pas.
     fn poison(&self, _reason: &str) {}
 
+    /// **Une connexion de lecture** sur la même base, bornée à `threads`
+    /// fils d'exécution (page 12-octobre-2026-arbre-principal/02, lot L1) :
+    /// des lectures courtes en auto-commit, qui voient l'état validé sans
+    /// attendre une transaction d'écriture ouverte sur la connexion
+    /// principale. `None` : le moteur ne sait pas, et les lectures passent
+    /// par la connexion principale.
+    fn read_connection(&self, _threads: u64) -> Option<std::sync::Arc<dyn DbConnection>> {
+        None
+    }
+
     /// **Fermer la base sans point de reprise** : après une annulation ou un
     /// refus qui a pu laisser le moteur faux en mémoire, un point de reprise
     /// écrirait cet état (ou ne finirait pas) ; la réouverture repart du

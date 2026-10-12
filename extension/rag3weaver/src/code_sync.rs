@@ -49,7 +49,7 @@ use crate::connection::CypherValue;
 use crate::disponibilite::Disponibilites;
 
 /// Le grain fin d'un fichier : sa source et son nom indexé.
-fn grain_du_fichier(source_id: &str, indexed_path: &str) -> BTreeMap<String, CypherValue> {
+pub(crate) fn grain_du_fichier(source_id: &str, indexed_path: &str) -> BTreeMap<String, CypherValue> {
     BTreeMap::from([
         ("source".to_string(), CypherValue::String(source_id.to_string())),
         ("file_path".to_string(), CypherValue::String(indexed_path.to_string())),
@@ -70,6 +70,14 @@ struct EnCours {
 /// consulte sans attendre le verrou que la synchronisation tient. Par
 /// identité de source ; les chemins sont ceux de la source.
 static EN_COURS: LazyLock<Mutex<HashMap<String, EnCours>>> = LazyLock::new(Default::default);
+
+/// **La politique des générés de chaque source**, déclarée par le manifeste
+/// à la construction de la source (`backend_code::build_source`) : la porte de
+/// l'index ([`crate::code::admission`]) la lit dans toute réingestion, quel
+/// qu'en soit l'appelant (la réaction de la montre, `edit_file`…).
+static POLITIQUES: LazyLock<Mutex<HashMap<String, crate::generated::GeneratedPolicy>>> = LazyLock::new(Default::default);
+
+/// Déclare la politique des générés de `source`.
 
 /// Ce qu'une indexation en cours fait d'un fichier qui vient de changer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,6 +100,15 @@ pub enum ChangeDuringIndexing {
 /// La racine est **canonisée** dans la clé : un même dossier atteint par un
 /// lien symbolique ou avec un `/` final ne fait qu'une clé. (Pas dans le
 /// curseur lui-même : il porte les chemins enregistrés dans l'index.)
+pub fn declare_generated_policy(source: &dyn FileSource, policy: crate::generated::GeneratedPolicy) {
+    POLITIQUES.lock().unwrap_or_else(|e| e.into_inner()).insert(registry_key(source), policy);
+}
+
+/// La politique des générés déclarée pour `source`, sinon les défauts.
+pub fn generated_policy_of(source: &dyn FileSource) -> crate::generated::GeneratedPolicy {
+    POLITIQUES.lock().unwrap_or_else(|e| e.into_inner()).get(&registry_key(source)).cloned().unwrap_or_default()
+}
+
 pub fn registry_key(source: &dyn FileSource) -> String {
     let cursor = source.cursor();
     match cursor.strip_prefix("worktree:") {
@@ -215,6 +232,11 @@ pub fn reingest_file(
     content: &str,
     exige: Disponibilites,
 ) -> Result<ReingestReport, String> {
+    // La porte de l'index : un contenu qu'elle refuse (généré, binaire) est
+    // un fichier absent — s'il était indexé, il en sort.
+    if crate::code::admission(path, Some(content), &generated_policy_of(source)).is_err() {
+        return remove_file(catalog, source, path, exige);
+    }
     // Une réédition range une identité relative : dans une base d'avant la
     // règle, ce serait un doublon de la ligne absolue.
     garder_la_regle(catalog)?;
@@ -350,6 +372,191 @@ pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, e
     catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
     crate::ingest_profile::add("retirer · résoudre les symboles", t);
     Ok(ReingestReport { scopes_deleted: fin.removed.len(), ..Default::default() })
+}
+
+/// **Réindexe un lot de fichiers en un seul passage** : `Some(contenu)` pour
+/// un fichier présent, `None` pour un fichier supprimé. Le même résultat que
+/// [`reingest_file`] et [`remove_file`] appelés un à un, mais une seule
+/// analyse, une seule ingestion (un drain, un plein texte rendu durable, une
+/// résolution par rendez-vous) et une seule résolution des noms retirés pour
+/// tout le lot.
+///
+/// L'ordre de [`reingest_file`] est gardé, à l'échelle du lot : toutes les fins
+/// (chaque fichier sur son grain), puis l'oubli des arêtes, puis l'ingestion,
+/// puis les lignes `File` des supprimés, puis la résolution. Une indexation
+/// entière qui tient la source (`deferred_to`) vaut pour tout le lot : les
+/// présents s'écrivent quand même (sa marque à l'écriture les compte), les
+/// supprimés partiront à sa fin.
+pub fn reingest_files(
+    catalog: &mut Catalog,
+    source: &dyn FileSource,
+    files: &[(String, Option<String>)],
+    exige: Disponibilites,
+) -> Result<ReingestReport, String> {
+    if files.is_empty() {
+        return Ok(ReingestReport::default());
+    }
+    // La porte de l'index : un contenu qu'elle refuse est un fichier absent.
+    let politique = generated_policy_of(source);
+    let admis: Vec<(String, Option<String>)> = files
+        .iter()
+        .map(|(p, c)| match c {
+            Some(contenu) if crate::code::admission(p, Some(contenu), &politique).is_err() => (p.clone(), None),
+            autre => (p.clone(), autre.clone()),
+        })
+        .collect();
+    let files = admis.as_slice();
+    garder_la_regle(catalog)?;
+    let cursor = source.cursor();
+    let (root, virtual_source) = match crate::workspace_path::worktree_root(&cursor) {
+        Some(root) => (root.to_string(), false),
+        None => ("/".to_string(), true),
+    };
+    let presents: Vec<(String, String)> =
+        files.iter().filter_map(|(p, c)| c.as_ref().map(|c| (p.clone(), c.clone()))).collect();
+    // Une analyse pour tous les présents, la liste du projet lue une fois.
+    let analysis = if presents.is_empty() {
+        None
+    } else {
+        let t = std::time::Instant::now();
+        let projet = source.list().ok();
+        crate::ingest_profile::add("réindexer · lister le projet (source.list)", t);
+        let t = std::time::Instant::now();
+        let mut a = crate::code::analyze_in_project(&root, presents, &cursor, projet.as_deref());
+        crate::ingest_profile::add("réindexer · analyser le fichier", t);
+        for f in &mut a.files {
+            f.cursor = cursor.clone();
+            if virtual_source {
+                f.absolute_path.clear();
+            }
+        }
+        Some(a)
+    };
+    // Chaque fichier : son grain, et les uuids des scopes qu'il porte.
+    let fichiers: Vec<FichierDuLot> = files
+        .iter()
+        .map(|(p, c)| {
+            let (source_id, indexed_path) = crate::code_tools::indexed_name(source, p);
+            let grain = grain_du_fichier(&source_id, &indexed_path);
+            FichierDuLot { source_id, indexed_path, grain, present: c.is_some() }
+        })
+        .collect();
+    let mut scopes_par_fichier: HashMap<String, Vec<String>> = HashMap::new();
+    if let Some(a) = &analysis {
+        for sc in &a.scopes {
+            let uuid = catalog
+                .entity_uuid(SCOPE, &BTreeMap::from([("key".to_string(), CypherValue::String(sc.key.clone()))]))
+                .map_err(|e| e.to_string())?;
+            scopes_par_fichier.entry(crate::workspace_path::slash(&sc.file_path)).or_default().push(uuid);
+        }
+    }
+
+    // Les fins : toutes les sessions ouvertes d'abord. Une indexation entière
+    // qui tient la source les refuse toutes : on rend celles déjà ouvertes.
+    let mut deleted = 0usize;
+    let mut deferred_to = None;
+    let mut noms_retires = Vec::new();
+    let t = std::time::Instant::now();
+    let mut ouvertes: Vec<(&FichierDuLot, String)> = Vec::new();
+    for f in &fichiers {
+        match catalog.begin_snapshot(SCOPE, &f.grain, true) {
+            Ok(open) => ouvertes.push((f, open.session)),
+            Err(CatalogError::SnapshotRefused(raison)) => {
+                deferred_to = Some(raison);
+                break;
+            }
+            Err(e) => {
+                abandonner(catalog, &ouvertes);
+                return Err(e.to_string());
+            }
+        }
+    }
+    if deferred_to.is_some() {
+        abandonner(catalog, &ouvertes);
+    } else {
+        for (rang, (f, session)) in ouvertes.iter().enumerate() {
+            let fin = (|| -> Result<usize, String> {
+                if f.present {
+                    let uuids = scopes_par_fichier.get(&f.indexed_path).cloned().unwrap_or_default();
+                    catalog.mark_snapshot(SCOPE, &f.grain, session, &uuids).map_err(|e| e.to_string())?;
+                }
+                let plan = catalog
+                    .plan_snapshot_finish(SCOPE, &f.grain, session, SnapshotFinishOptions { allow_empty: true, force: true })
+                    .map_err(|e| e.to_string())?;
+                noms_retires.extend(noms_des_scopes(catalog, &plan.removed)?);
+                Ok(catalog.apply_snapshot_finish(plan).map_err(|e| e.to_string())?.removed.len())
+            })();
+            match fin {
+                Ok(n) => deleted += n,
+                Err(e) => {
+                    // Les sessions qui n'ont pas fini se rendent : la suivante
+                    // les reprendrait, mais une synchronisation entière serait
+                    // refusée tant qu'elles restent ouvertes.
+                    abandonner(catalog, &ouvertes[rang..]);
+                    return Err(e);
+                }
+            }
+        }
+    }
+    crate::ingest_profile::add("réindexer · fin d'instantané sur le grain du fichier", t);
+
+    let t = std::time::Instant::now();
+    for f in fichiers.iter().filter(|f| f.present) {
+        oublier_les_aretes_du_fichier(catalog, &f.source_id, &f.indexed_path)?;
+    }
+    crate::ingest_profile::add("réindexer · oublier les arêtes du fichier", t);
+    let mut rapport = ReingestReport::default();
+    if let Some(a) = &analysis {
+        let t = std::time::Instant::now();
+        let r = catalog.ingest_code_jusqu_a(a, exige).map_err(|e| e.to_string())?;
+        crate::ingest_profile::add("réindexer · ingérer (scopes, morceaux, vecteurs, liens)", t);
+        rapport.scopes_upserted = r.scopes;
+        rapport.relations = r.relations;
+        rapport.failed = r.failed;
+    }
+    // Les lignes `File` des supprimés — sauf si une indexation entière tient
+    // la source : sa fin les retirera.
+    if deferred_to.is_none() {
+        let t = std::time::Instant::now();
+        for f in fichiers.iter().filter(|f| !f.present) {
+            let fichier = BTreeMap::from([
+                ("source".to_string(), CypherValue::String(f.source_id.clone())),
+                ("path".to_string(), CypherValue::String(f.indexed_path.clone())),
+            ]);
+            let uuid = catalog.entity_uuid(FILE, &fichier).map_err(|e| e.to_string())?;
+            if !catalog.get_many(FILE, std::slice::from_ref(&uuid)).map_err(|e| e.to_string())?.is_empty() {
+                catalog.delete_jusqu_a(FILE, &uuid, exige).map_err(|e| e.to_string())?;
+            }
+        }
+        crate::ingest_profile::add("retirer · la ligne File", t);
+    }
+    // Un nom dont un définisseur vient de partir a pu redevenir unique.
+    let t = std::time::Instant::now();
+    noms_retires.sort();
+    noms_retires.dedup();
+    catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
+    crate::ingest_profile::add("réindexer · résoudre les symboles", t);
+    rapport.scopes_deleted = deleted;
+    rapport.deferred_to = deferred_to;
+    Ok(rapport)
+}
+
+/// Un fichier d'un lot : son grain, et s'il est présent sur le disque.
+struct FichierDuLot {
+    source_id: String,
+    indexed_path: String,
+    grain: BTreeMap<String, CypherValue>,
+    present: bool,
+}
+
+/// Rend les sessions fines qu'un lot a ouvertes et ne finira pas. Une
+/// synchronisation entière serait refusée tant qu'elles restent ouvertes. Un
+/// échec à les rendre se tait : la session suivante sur le grain les reprend
+/// (`takeover`).
+fn abandonner(catalog: &mut Catalog, ouvertes: &[(&FichierDuLot, String)]) {
+    for (f, session) in ouvertes {
+        let _ = catalog.abort_snapshot(SCOPE, &f.grain, session);
+    }
 }
 
 /// Ce qu'on demande à une synchronisation de source.
@@ -734,7 +941,7 @@ fn synchroniser(
     // fichier binaire pour l'écarter ensuite.
     let retenus: Vec<String> = listed
         .iter()
-        .filter(|p| !matches!(crate::code::verdict(p, 0), crate::code::Verdict::Ecarte(_)))
+        .filter(|p| crate::code::admission(p, None, &options.generated).is_ok())
         .cloned()
         .collect();
     let mut report =
@@ -790,9 +997,10 @@ fn synchroniser(
         let mut sources = Vec::with_capacity(paquet.len());
         for path in paquet {
             if let Some(content) = source.read(path)? {
-                // Un fichier généré n'entre pas dans l'analyse, et ça se
-                // compte : la fin de session retire ce qu'il avait laissé.
-                if let Some(reason) = options.generated.reason(path, &content) {
+                // Un fichier généré ou binaire n'entre pas dans l'analyse, et ça
+                // se compte : la fin de session retire ce qu'il avait laissé.
+                // La même porte que la montre (`code::admission`).
+                if let Err(reason) = crate::code::admission(path, Some(&content), &options.generated) {
                     *report.files_set_aside.entry(reason.to_string()).or_default() += 1;
                     continue;
                 }
@@ -1010,6 +1218,7 @@ impl SyncProfile {
 
 /// Les noms des scopes `uuids`, relus avant leur retrait.
 fn noms_des_scopes(catalog: &Catalog, uuids: &[String]) -> Result<Vec<String>, String> {
+    let _chrono = crate::ingest_profile::Chrono::new("instantané · nommer les retraits");
     if uuids.is_empty() {
         return Ok(Vec::new());
     }

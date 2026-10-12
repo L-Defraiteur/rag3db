@@ -243,6 +243,9 @@ impl Node for InsertRecordNode {
         let fts_handles = ctx
             .service::<HashMap<String, Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
             .cloned();
+        // Dans un lot en transaction (L3) : le plein texte en tampon, appliqué
+        // après le COMMIT, aux décalages relus.
+        let fts_tampon = ctx.service::<Arc<crate::fts_tampon::TamponPleinTexte>>(crate::fts_tampon::FTS_TAMPON_SERVICE).cloned();
 
         // **Le chemin de masse dédoublonne d'abord.** `COPY` refuse tout le
         // fichier sur une clé en double là où `MERGE` mettait à jour : la
@@ -504,7 +507,9 @@ impl Node for InsertRecordNode {
                                 // Une ligne posée mais non indexée : la donnée
                                 // est là, le plein texte non. Ça se dit comme une
                                 // disponibilité perdue, pas comme une opération.
-                                if let Err(e) = crate::fts_handle::upsert_document(
+                                if let Some(tampon) = &fts_tampon {
+                                    tampon.ecrire(entity_name, &uuid, text_fields);
+                                } else if let Err(e) = crate::fts_handle::upsert_document(
                                     handle,
                                     &text_fields,
                                     node_id.offset,
@@ -2918,7 +2923,10 @@ impl Node for FlushNode {
             .cloned();
 
         let mut flushed: usize = 0;
-        for table in &self.tables {
+        // Dans un lot en transaction : rien à valider, le tampon attend le
+        // COMMIT.
+        let en_lot = ctx.service::<Arc<crate::fts_tampon::TamponPleinTexte>>(crate::fts_tampon::FTS_TAMPON_SERVICE).cloned().is_some();
+        for table in self.tables.iter().filter(|_| !en_lot) {
             let Some(handle) = fts_handles.as_ref().and_then(|h| h.get(table)) else {
                 // Une table sans handle n'a pas d'index FTS : rien à committer.
                 continue;
@@ -3097,43 +3105,6 @@ fn retirer_le_creux_des_chunks(
     Ok(retires)
 }
 
-/// **Vider les vecteurs des morceaux avant de les supprimer** — CONTOURNEMENT
-/// D'UN DÉFAUT DU MOTEUR (ticket du 12 octobre 2026, « supprimer une ligne
-/// indexée HNSW coûte des secondes »), décrit à [`crate::dialect::SchemaDialect::vector_columns_to_clear`] :
-/// dans rag3db, supprimer un morceau qui porte un vecteur indexé coûte environ
-/// 2,5 s ; remis à NULL d'abord, quelques millisecondes. Les lignes partent
-/// juste après : ce qu'un `SET` à NULL par lot ferait perdre à l'index HNSW
-/// les concerne seules. Une table qu'on ne peut pas décrire (pas encore créée)
-/// se supprime sans ce détour.
-fn vider_les_vecteurs_avant_suppression(
-    conn: &Arc<dyn DbConnection>,
-    dialect: &Arc<dyn crate::dialect::SchemaDialect>,
-    chunk_table: &str,
-    parents: &CypherValue,
-) -> Result<(), String> {
-    let Some(requete) = dialect.vector_columns_to_clear(chunk_table) else {
-        return Ok(());
-    };
-    let Ok(colonnes) = conn.execute(&requete) else {
-        return Ok(());
-    };
-    for ligne in &colonnes.rows {
-        let (Some(nom), Some(ty)) = (ligne.first().and_then(|v| v.as_str()), ligne.get(1).and_then(|v| v.as_str())) else {
-            continue;
-        };
-        // Un vecteur est un tableau de taille fixe ; une liste (`STRING[]`) n'est pas indexée.
-        if !ty.contains('[') || ty.ends_with("[]") {
-            continue;
-        }
-        conn.execute_with_params(
-            &dialect.clear_vector_by_parent(chunk_table, nom),
-            &[QueryParam { name: "uuids".into(), value: parents.clone() }],
-        )
-        .map_err(|e| format!("vider « {nom} » de {chunk_table} avant suppression : {e}"))?;
-    }
-    Ok(())
-}
-
 // ─── RechunkDeleteNode ─────────────────────────────────────────────────────
 
 /// Delete old chunks for entities about to be re-chunked.
@@ -3203,7 +3174,6 @@ impl Node for RechunkDeleteNode {
             ctx.metric("sparse_removed", creux as f64);
             let cypher = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
             oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
-            vider_les_vecteurs_avant_suppression(&conn, &dialect, &chunk_table, &uuid_list)?;
             let result = conn
                 .execute_with_params(
                     &cypher,
@@ -3315,6 +3285,7 @@ impl Node for DeleteRecordNode {
             .ok_or("DeleteRecordNode: 'entity_configs' service not registered")?;
         let results_svc = ctx.service::<Arc<Mutex<Vec<DeleteResult>>>>("delete_results").cloned()
             .ok_or("DeleteRecordNode: 'delete_results' service not registered")?;
+        let fts_tampon = ctx.service::<Arc<crate::fts_tampon::TamponPleinTexte>>(crate::fts_tampon::FTS_TAMPON_SERVICE).cloned();
         let event_bus = ctx.service::<Arc<EventBus>>("event_bus").cloned();
 
         // Group by entity_name
@@ -3366,7 +3337,6 @@ impl Node for DeleteRecordNode {
                 ctx.metric("sparse_removed", creux as f64);
                 let del_chunks = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
                 oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
-                vider_les_vecteurs_avant_suppression(&conn, &dialect, &chunk_table, &uuid_list)?;
                 let result = conn
                     .execute_with_params(
                         &del_chunks,
@@ -3442,12 +3412,19 @@ impl Node for DeleteRecordNode {
             let mut removed_offsets: Vec<u64> = Vec::new();
             if let Ok(mut cache) = node_id_cache.write() {
                 for uuid in uuids {
-                    if let Some(id) = cache.remove(uuid.as_str()) {
+                    let id = cache.remove(uuid.as_str());
+                    if let Some(id) = &id {
                         removed_offsets.push(id.offset);
+                    }
+                    // Dans un lot : le retrait attend le COMMIT.
+                    if let Some(tampon) = &fts_tampon {
+                        tampon.retirer(entity_name, uuid, id.map(|i| i.offset));
                     }
                 }
             }
-            if let Some(ref handles) = fts_handles {
+            if fts_tampon.is_some() {
+                // Rien dans lucivy pendant la transaction.
+            } else if let Some(ref handles) = fts_handles {
                 if let Some(handle) = handles.get(entity_name) {
                     for offset in &removed_offsets {
                         handle
@@ -3943,6 +3920,7 @@ impl Node for UpdateRecordNode {
                             // Les champs sont posés ; si l'index ne suit pas,
                             // c'est le plein texte qui est perdu, pas la
                             // mise à jour.
+                            let tampon = ctx.service::<Arc<crate::fts_tampon::TamponPleinTexte>>(crate::fts_tampon::FTS_TAMPON_SERVICE).cloned();
                             if let Err(e) = reindex_fts_rows(
                                 conn.as_ref(),
                                 dialect.as_ref(),
@@ -3951,6 +3929,7 @@ impl Node for UpdateRecordNode {
                                 entity_name,
                                 uuids,
                                 &schema_fields,
+                                tampon.as_deref(),
                             ) {
                                 consigner_l_echec(
                                     ctx, "UpdateRecordNode", entity_name, 0,
@@ -4174,6 +4153,7 @@ impl Node for UpdateRecordNode {
                             entity_name,
                             uuids,
                             &schema_fields,
+                            None,
                         )?;
                     }
                 }
@@ -4211,6 +4191,7 @@ fn reindex_fts_rows(
     entity_name: &str,
     uuids: Vec<CypherValue>,
     schema_fields: &[String],
+    tampon: Option<&crate::fts_tampon::TamponPleinTexte>,
 ) -> Result<(), String> {
     let mut cols: Vec<&str> = vec!["_uuid"];
     cols.extend(schema_fields.iter().map(|s| s.as_str()));
@@ -4226,14 +4207,10 @@ fn reindex_fts_rows(
         let Some(uuid) = row.first().and_then(|v| v.as_str()) else {
             continue;
         };
-        let Some(offset) = node_id_cache
-            .read()
-            .ok()
-            .and_then(|c| c.get(uuid))
-            .map(|id| id.offset)
-        else {
+        let offset = node_id_cache.read().ok().and_then(|c| c.get(uuid)).map(|id| id.offset);
+        if offset.is_none() && tampon.is_none() {
             continue;
-        };
+        }
         let values: Vec<(String, String)> = schema_fields
             .iter()
             .enumerate()
@@ -4243,6 +4220,12 @@ fn reindex_fts_rows(
                     .map(|s| (name.clone(), s.to_string()))
             })
             .collect();
+        // Dans un lot : par `_uuid`, appliqué après le COMMIT.
+        if let Some(t) = tampon {
+            t.ecrire(entity_name, uuid, values);
+            continue;
+        }
+        let Some(offset) = offset else { continue };
         crate::fts_handle::reindex_document(handle, &values, offset)
             .map_err(|e| format!("ré-indexation FTS de {entity_name}: {e}"))?;
     }

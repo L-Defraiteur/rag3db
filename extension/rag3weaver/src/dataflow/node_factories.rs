@@ -709,6 +709,10 @@ impl NodeFactory for SearchSourceNodeFactory {
                 Some(crate::search::RerankOptions { candidates: n as usize })
             };
         }
+        // La portée de la question, la même forme que dans usages, impact et
+        // callees.
+        let texte = |k: &str| config.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        options.portee = crate::work_domain::QueryScope::parse(&texte("scope"), &texte("language"));
         let mut node = SearchSourceNode::new(name, target_name, query, options);
         if let Some(m) = config.get("mode").and_then(|v| v.as_str()).filter(|m| !m.is_empty()) {
             node = node.with_mode(
@@ -757,6 +761,24 @@ impl NodeFactory for SearchSourceNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(5000)),
                     description: "Délai maximum d'attente des écritures des autres processus, en strict".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "scope".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: crate::dataflow::usage_nodes::SCOPE_HELP.into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "language".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: crate::dataflow::usage_nodes::LANGUAGE_HELP.into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -1387,6 +1409,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Search nodes (KB)
     super::composable_results::register(registry);
     registry.register(Box::new(ComposeNodeFactory));
+    // Le lancement en fond posé comme nœud (page 12-octobre-2026-recherche/03).
+    registry.register(Box::new(super::spawn_nodes::SpawnNodeFactory));
     registry.register(Box::new(super::rhai_node::RhaiNodeFactory));
     super::validation_nodes::register(registry);
     registry.register(Box::new(KBQuerySourceNodeFactory));
@@ -1439,6 +1463,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Décider et aiguiller (les agents qui se parlent, lot 2).
     registry.register(Box::new(super::decide_nodes::DecideNodeFactory));
     registry.register(Box::new(super::decide_nodes::RouteNodeFactory));
+    registry.register(Box::new(super::token_nodes::TokenEventsFactory));
+    registry.register(Box::new(super::token_nodes::SpotFactory));
     // Code
     #[cfg(feature = "code")]
     {
@@ -1463,7 +1489,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 51 + if cfg!(feature = "code") { 15 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 54 + if cfg!(feature = "code") { 15 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1715,10 +1741,12 @@ mod tests {
                 "RunCommandNode" => serde_json::json!({ "command": "true" }),
                 "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
                 "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
+                "SpawnNode" => serde_json::json!({ "node_type": "Echo" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 "Decide" => serde_json::json!({ "labels": "a|b" }),
                 "Route" => serde_json::json!({ "routes": "a|b" }),
+                "Spot" => serde_json::json!({ "patterns": { "a": "a" } }),
                 "ReindexFileNode" => serde_json::json!({}),
                 _ => serde_json::json!({}),
             }

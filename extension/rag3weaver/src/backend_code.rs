@@ -76,6 +76,80 @@ pub struct WorkspaceConfig {
     /// `index: "code"`.
     #[serde(default)]
     pub locks_via: Vec<String>,
+    /// **Les tests par requêtes de ce dépôt** (`crate::queries_via`) : les
+    /// fichiers de test par leur chemin, les noms qu'une classe enregistre,
+    /// et la table des mots-clés de requête vers les symboles qu'ils
+    /// atteignent. Absente : rien n'est relié, et `impact` le dit. Exige
+    /// `index: "code"`.
+    #[serde(default)]
+    pub queries_via: Option<QueriesVia>,
+}
+
+/// **Ce qu'un dépôt déclare pour relier ses tests par requêtes au code**
+/// (`workspace.queries_via`). Des expressions régulières et une table : rien
+/// n'y est propre à un langage.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct QueriesVia {
+    /// Les fichiers de test, par une expression sur leur chemin relatif
+    /// (`^test/test_files/.*\.test$`) : leurs scopes `texte_brut` sans marque
+    /// deviennent des suites de tests (`test_role=suite`,
+    /// `test_certainty=declared`), lues en entier.
+    #[serde(default)]
+    pub test_files: Option<String>,
+    /// Dans un test marqué par sa grammaire, le texte des requêtes : le
+    /// groupe 1 de chaque correspondance (par défaut, les chaînes entre
+    /// guillemets doubles).
+    #[serde(default = "default_query_text")]
+    pub query_text: String,
+    /// Le nom qu'une classe enregistre, groupe 1, lu dans son contenu
+    /// (`static constexpr const char\* name = "([A-Za-z_]+)"`). Comparé sans
+    /// casse aux appels des requêtes.
+    #[serde(default)]
+    pub registered_name: Option<String>,
+    /// Les genres de scope où lire `registered_name`.
+    #[serde(default = "default_registered_kinds")]
+    pub registered_kinds: Vec<String>,
+    /// Un appel dans une requête, groupe 1 : le nom appelé
+    /// (`storage_info(` → `STORAGE_INFO`).
+    #[serde(default = "default_call_pattern")]
+    pub call_pattern: String,
+    /// **La table des mots-clés**, écrite à la main : un mot de requête
+    /// (`COPY`) vers les symboles qu'il atteint (`NodeBatchInsert`). La seule
+    /// chose qui ne se lit pas dans le code : le moteur aiguille ses clauses
+    /// par `switch`, pas par un nom.
+    #[serde(default)]
+    pub keywords: std::collections::BTreeMap<String, Vec<String>>,
+    /// Quand la table a été relevée, et sur quoi : elle vieillit avec le
+    /// moteur, et la page des manques compte ce qu'elle ne couvre pas.
+    #[serde(default)]
+    pub keywords_dated: Option<String>,
+}
+
+fn default_query_text() -> String {
+    r#""((?:[^"\\]|\\.)*)""#.to_string()
+}
+
+fn default_registered_kinds() -> Vec<String> {
+    vec!["class".to_string(), "struct".to_string()]
+}
+
+fn default_call_pattern() -> String {
+    r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(".to_string()
+}
+
+impl Default for QueriesVia {
+    fn default() -> Self {
+        Self {
+            test_files: None,
+            query_text: default_query_text(),
+            registered_name: None,
+            registered_kinds: default_registered_kinds(),
+            call_pattern: default_call_pattern(),
+            keywords: Default::default(),
+            keywords_dated: None,
+        }
+    }
 }
 
 /// Les schémas de workspace que le moteur sait enregistrer.
@@ -458,11 +532,15 @@ mod monte {
                 Arc::new(Snapshot::new(format!("backend:{backend_name}"), fichiers))
             }
         };
-        Ok(if config.read_only {
+        let source = if config.read_only {
             Arc::new(ReadOnly(source))
         } else {
             source
-        })
+        };
+        // La porte de l'index lit la politique des générés de cette source,
+        // quel que soit l'appelant de la réingestion.
+        crate::code_sync::declare_generated_policy(source.as_ref(), config.generated.clone());
+        Ok(source)
     }
 
     /// La porte des commandes déclarée — `Off` ne monte rien, et `run`
@@ -498,6 +576,7 @@ mod tests {
             index: Some("code".into()),
             generated: Default::default(),
             locks_via: Vec::new(),
+            queries_via: None,
         }
     }
 

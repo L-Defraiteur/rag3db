@@ -53,6 +53,88 @@ fn enrolling_opens_the_inbox_before_the_run() {
     assert!(matches!(got, Ok(Event::Message { content, .. }) if content == "tôt"));
 }
 
+/// **La boîte par nom** : entre deux tours, une fin adressée au nom attend dans
+/// l'annuaire, et le prochain run qui le prend la reçoit. Un nom en cours
+/// reçoit tout de suite ; un run sans nom aussi.
+#[test]
+fn a_message_to_a_name_between_two_turns_waits_for_the_next_run() {
+    let bus = EventBus::new(64);
+    let d = Directory::new();
+    let ana = new_owner();
+    d.claim_and_open(&bus, "ana", "r1", ana).unwrap();
+    d.release("ana", "r1");
+    assert_eq!(d.deliver(&bus, "fond-1", "outil #resume-1", "ana", "fini").unwrap(), Delivery::Held { name: "ana".into() });
+    let r1 = bus.cursor(&crate::events::inbox_topic("r1"), crate::agent::AGENT_INBOX_CURSOR);
+    assert!(r1.lock().unwrap().try_recv().is_err(), "rien dans la boîte du run fini");
+    // Un autre agent ne prend pas le nom rendu ; son agent le reprend.
+    assert!(d.claim("ana", "r-autre", new_owner()).is_err());
+    d.claim_and_open(&bus, "ana", "r2", ana).unwrap();
+    let r2 = bus.cursor(&crate::events::inbox_topic("r2"), crate::agent::AGENT_INBOX_CURSOR);
+    let recu = r2.lock().unwrap().try_recv();
+    assert!(matches!(&recu, Ok(Event::Message { from, content, .. }) if from == "outil #resume-1" && content == "fini"), "{recu:?}");
+    assert_eq!(d.deliver(&bus, "fond-2", "outil #resume-2", "ana", "encore").unwrap(), Delivery::ToRun("r2".into()));
+    assert_eq!(d.deliver(&bus, "fond-3", "outil #x", "run-sans-nom", "à toi").unwrap(), Delivery::ToRun("run-sans-nom".into()));
+    assert!(d.deliver(&bus, "fond-3", "outil #x", " ", "personne").is_err());
+}
+
+/// **Un tour d'agent rend son nom à sa fin** : ce qui arrive entre deux tours
+/// est lu par le modèle au tour suivant du même agent, comme un message reçu.
+#[test]
+fn what_arrives_between_two_turns_is_read_at_the_next_one() {
+    let bus = EventBus::new(256);
+    let dir = Arc::new(Directory::new());
+    let tools = no_tools();
+    let lu = Arc::new(Mutex::new(Vec::new()));
+    let llm = scripted(vec![MockLlm::new("je lance le résumé"), MockLlm::new("voici le résumé")], Arc::clone(&lu));
+    // Sans run imposé : chaque tour a son run neuf, sous le même agent.
+    let ana = Agent::new(&llm, &tools).with_name("ana").with_events(bus.clone()).with_inbox().with_messaging(dir.clone()).unwrap();
+    ana.run(&mut vec![Turn::user("résume ce texte en fond")], &mut StringSink::default()).unwrap();
+    // La fin du graphe lancé en fond arrive après le tour.
+    assert_eq!(
+        dir.deliver(&bus, "resume-1", "outil #resume-1", "ana", "le résumé").unwrap(),
+        Delivery::Held { name: "ana".into() }
+    );
+    ana.run(&mut vec![Turn::user("et alors ?")], &mut StringSink::default()).unwrap();
+    let second: Vec<String> = lu.lock().unwrap().last().map(|t| users(t)).unwrap_or_default();
+    assert!(second.iter().any(|u| u.contains("le résumé")), "le tour suivant n'a pas lu la fin : {second:?}");
+}
+
+/// **Une boîte qui déborde le dit** : dix messages arrivent pendant le tour
+/// d'un agent, sur un bus de capacité 4. Les plus anciens sont écrasés ;
+/// l'agent l'apprend par un tour, au lieu de les perdre sans un mot
+/// (relevé par l'arbre principal, 12 octobre).
+#[test]
+fn an_overflowing_inbox_tells_the_agent_what_it_lost() {
+    let bus = EventBus::new(4);
+    let mut avertissements = bus.subscribe(crate::events::topic::CATALOG);
+    let tools = no_tools();
+    let lu = Arc::new(Mutex::new(Vec::new()));
+    let (b, l) = (bus.clone(), Arc::clone(&lu));
+    let appels = Mutex::new(0usize);
+    let llm = CallbackLlm::new("déborde", 4096, move |turns, opts, sink| {
+        l.lock().unwrap().push(turns.to_vec());
+        let mut n = appels.lock().unwrap();
+        *n += 1;
+        if *n == 1 {
+            for i in 0..10 {
+                b.send_message("pair", "pair", "run-plein", &format!("message {i}"));
+            }
+        }
+        MockLlm::new("vu").generate(turns, opts, sink)
+    });
+    let agent = Agent::new(&llm, &tools).with_name("plein").with_run_id("run-plein").with_events(bus.clone()).with_inbox();
+    let mut turns = vec![Turn::user("attends des messages")];
+    agent.run(&mut turns, &mut StringSink::default()).unwrap();
+    // Arrivés pendant la dernière réponse : lus dans l'historique à la fin du
+    // tour, pour le suivant.
+    let vus = users(&turns);
+    assert!(vus.iter().any(|u| u.contains("perdu")), "la perte n'est pas dite à l'agent : {vus:?}");
+    let _ = &lu;
+    let dit = std::iter::from_fn(|| avertissements.try_recv().ok())
+        .any(|e| matches!(e, Event::Warning { message, .. } if message.contains("perdu")));
+    assert!(dit, "la perte n'est pas dite sur le bus");
+}
+
 // ── Le verbe `send`, joué par des agents ────────────────────────────────
 
 /// Un modèle qui joue une suite de [`MockLlm`], un par appel, rejoue le

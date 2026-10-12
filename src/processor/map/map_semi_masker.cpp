@@ -2,6 +2,8 @@
 #include "planner/operator/sip/logical_semi_masker.h"
 #include "processor/operator/recursive_extend.h"
 #include "processor/operator/scan/scan_node_table.h"
+#include "storage/storage_manager.h"
+#include "storage/table/node_table.h"
 #include "processor/operator/semi_masker.h"
 #include "processor/operator/table_function_call.h"
 #include "processor/plan_mapper.h"
@@ -109,6 +111,14 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapSemiMasker(
                 std::move(prevOperator), getOperatorID(), std::move(printInfo),
                 extraInfo.direction);
         }
+    }
+    case SemiMaskKeyType::PRIMARY_KEY: {
+        KU_ASSERT(tableIDs.size() == 1);
+        auto table = storage::StorageManager::Get(*clientContext)
+                         ->getTable(tableIDs[0])
+                         ->ptrCast<storage::NodeTable>();
+        return std::make_unique<PrimaryKeySemiMasker>(keyPos, sharedState, table,
+            std::move(prevOperator), getOperatorID(), std::move(printInfo));
     }
     case SemiMaskKeyType::NODE_ID_LIST: {
         auto& extraInfo = semiMasker.getExtraKeyInfo()->constCast<ExtraNodeIDListKeyInfo>();

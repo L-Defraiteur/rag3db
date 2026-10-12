@@ -439,15 +439,29 @@ pub(crate) use test_de_cette_suite;
 /// suite écrit où elle écrivait : `~/.cache/rag3weaver-build/<famille>`. Le
 /// nom du cas porte le pid et l'heure : deux cas, ou un parent et son fils, ne
 /// se marchent pas dessus.
+///
+/// **Ces suites se lancent par `run_e2e.sh`** (orchestration, 12 octobre
+/// 2026) : il efface la base d'une suite verte et garde, nommée, celle d'une
+/// rouge (`e2e-gardes/`, les cinq dernières). Lancée à la main, la suite le
+/// dit une fois sur stderr : sa base reste, et rien ne l'effacera.
 #[allow(dead_code)]
 pub fn dossier_de_suite(famille: &str, cas: &str) -> std::path::PathBuf {
     let base = std::env::var_os("RAG3WEAVER_E2E_DOSSIER")
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_absolute())
         .unwrap_or_else(|| {
-            std::path::PathBuf::from(std::env::var("HOME").expect("HOME"))
+            let base = std::path::PathBuf::from(std::env::var("HOME").expect("HOME"))
                 .join(".cache/rag3weaver-build")
-                .join(famille)
+                .join(famille);
+            static DIT: std::sync::Once = std::sync::Once::new();
+            DIT.call_once(|| {
+                eprintln!(
+                    "▸ hors run_e2e.sh : les bases de « {famille} » restent sous {}, rien ne les effacera ; \
+                     `run_e2e.sh {famille}` efface sur un vert et garde sur un rouge",
+                    base.display()
+                )
+            });
+            base
         });
     let d = base.join(format!(
         "{cas}-{}-{}",
@@ -461,22 +475,20 @@ pub fn dossier_de_suite(famille: &str, cas: &str) -> std::path::PathBuf {
     d
 }
 
-/// **L'extension vector des e2e.** D'abord à côté de la lib
-/// (`RAG3DB_LIBRARY_DIR`) : sous le magasin de libs, le dossier d'un
-/// identifiant porte la lib et l'extension du même bâti (page
-/// 07-le-magasin-de-libs, §2.1). Sinon sous `RAG3DB_ROOT`, l'arbre où le
-/// moteur est bâti, puis à côté du crate : un dossier de bâti sans extension
-/// (`build/lecteurs-csv/src`) donne le chemin d'avant.
+/// **L'extension vector des e2e** : celle de ce processus, par la règle de
+/// la production (`rag3weaver::backend::vector_extension_of_this_process`,
+/// lot 3f du magasin). D'abord à côté de la lib réellement chargée : sous le
+/// magasin, le dossier de son identifiant porte la lib et l'extension du même
+/// bâti, et un rebâti en place de l'arbre n'y touche pas. Introuvable, le
+/// chemin d'avant sous `RAG3DB_ROOT` (le `LOAD` dira l'absence).
 #[allow(dead_code)] // employée sous certaines features seulement
 pub fn vector_extension() -> String {
-    const FICHIER: &str = "libvector.rag3db_extension";
-    if let Some(lib) = std::env::var_os("RAG3DB_LIBRARY_DIR") {
-        let p = std::path::Path::new(&lib).join(FICHIER);
-        if p.is_file() {
-            return p.to_string_lossy().into_owned();
+    match rag3weaver::backend::vector_extension_of_this_process() {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(_) => {
+            let racine = std::env::var("RAG3DB_ROOT")
+                .unwrap_or_else(|_| format!("{}/../..", env!("CARGO_MANIFEST_DIR")));
+            format!("{racine}/extension/vector/build/libvector.rag3db_extension")
         }
     }
-    let racine = std::env::var("RAG3DB_ROOT")
-        .unwrap_or_else(|_| format!("{}/../..", env!("CARGO_MANIFEST_DIR")));
-    format!("{racine}/extension/vector/build/{FICHIER}")
 }

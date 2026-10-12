@@ -62,6 +62,10 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
         qualifier_field: Some("parent_name".into()),
     };
     let decl = DeclarationsConfig { relation: "HAS_PARENT".into(), field: "declarations".into() };
+    // Les deux formes du saut, l'une après l'autre : où va le temps de chacune.
+    for deux in [false, true] {
+    catalog.set_two_step_hops(Some(deux));
+    let forme = if deux { "en deux temps" } else { "en un temps" };
     for (nom, chemin) in [("update", "src/storage/table/node_table"), ("update", ""), ("getTableID", "")] {
         let appel = || {
             let r = usages_of(&catalog, &cfg, nom, chemin).unwrap();
@@ -81,7 +85,7 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
         let p = phases::arreter();
         temps.sort_by(|a, b| a.partial_cmp(b).unwrap());
         eprintln!(
-            "[usages] {nom} (path « {chemin} ») : {usages} usages, médiane {:.1} ms, {} instructions par appel ; prepare {:.1} ms, execute {:.1} ms, lignes {:.1} ms par appel",
+            "[usages] {forme}, {nom} (path « {chemin} ») : {usages} usages, médiane {:.1} ms, {} instructions par appel ; prepare {:.1} ms, execute {:.1} ms, lignes {:.1} ms par appel",
             temps[5],
             p.appels / 10,
             p.prepare_ns as f64 / 1e7,
@@ -93,6 +97,8 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
             eprintln!("[usages]   {:>7.1} ms / appel, ×{}, {} lignes : {court}", ns as f64 / 1e6 / 10.0, appels / 10, lignes / 10);
         }
     }
+    }
+    catalog.set_two_step_hops(None);
 }
 
 /// Le plan du moteur pour le saut le plus coûteux d'`usages` (MENTIONS
@@ -108,13 +114,67 @@ fn le_plan_du_saut_d_usages_sur_l_index_entier() {
         .unwrap()
         .rows[0][0]
         .clone();
-    let saut = "MATCH (d:`Symbol` {_uuid: $u})<-[r:`MENTIONS`]-(m:`Scope`) RETURN m.`_uuid`, m.`name`";
-    for prefixe in ["EXPLAIN", "PROFILE"] {
-        let r = conn.execute_with_params(&format!("{prefixe} {saut}"), &[QueryParam::new("u", symbole.clone())]).unwrap_or_else(|e| panic!("{prefixe} : {e}"));
-        for ligne in &r.rows {
-            for v in ligne {
-                if let CypherValue::String(t) = v {
-                    eprintln!("[plan] {prefixe}\n{t}");
+    let liste = CypherValue::List(vec![symbole.clone()]);
+    let saut = "UNWIND $uuids AS u MATCH (d:`Symbol` {_uuid: u})<-[r:`MENTIONS`]-(m:`Scope`) \
+                RETURN u, m.`_uuid`, m.`name`, m.`scope_type`, m.`repo_path`, m.`file_path`, m.`start_line`";
+    let voisins: Vec<CypherValue> = conn
+        .execute_with_params(saut, &[QueryParam::new("uuids", liste.clone())])
+        .unwrap()
+        .rows
+        .iter()
+        .map(|r| r[1].clone())
+        .collect();
+    // Le saut d'origine, puis la lecture par clé du saut en deux temps.
+    let par_cle = "UNWIND $uuids AS u MATCH (m:`Scope` {_uuid: u}) \
+                   RETURN u, m.`name`, m.`scope_type`, m.`repo_path`, m.`file_path`, m.`start_line`";
+    // Les mêmes requêtes écrites autrement : la liste en filtre (`IN`), et un
+    // seul uuid en paramètre scalaire ; médiane de sept, et les lignes que sort
+    // le balayage de la table d'arrivée.
+    let champs = "m.`name`, m.`scope_type`, m.`repo_path`, m.`file_path`, m.`start_line`";
+    let variantes = [
+        ("saut, UNWIND", saut.to_string(), QueryParam::new("uuids", liste.clone())),
+        ("saut, IN", format!("MATCH (d:`Symbol`)<-[r:`MENTIONS`]-(m:`Scope`) WHERE d.`_uuid` IN $uuids RETURN d.`_uuid`, m.`_uuid`, {champs}"), QueryParam::new("uuids", liste.clone())),
+        ("saut, scalaire", format!("MATCH (d:`Symbol` {{_uuid: $u}})<-[r:`MENTIONS`]-(m:`Scope`) RETURN d.`_uuid`, m.`_uuid`, {champs}"), QueryParam::new("u", symbole.clone())),
+        ("par clé, UNWIND", par_cle.to_string(), QueryParam::new("uuids", CypherValue::List(voisins.clone()))),
+        ("par clé, IN", format!("MATCH (m:`Scope`) WHERE m.`_uuid` IN $uuids RETURN m.`_uuid`, {champs}"), QueryParam::new("uuids", CypherValue::List(voisins.clone()))),
+    ];
+    for (nom, q, p) in &variantes {
+        let mut t = Vec::new();
+        let mut n = 0;
+        for _ in 0..7 {
+            let d = std::time::Instant::now();
+            n = conn.execute_with_params(q, std::slice::from_ref(p)).unwrap_or_else(|e| panic!("{nom} : {e}")).rows.len();
+            t.push(d.elapsed().as_secs_f64() * 1e3);
+        }
+        t.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let profil = conn.execute_with_params(&format!("PROFILE {q}"), std::slice::from_ref(p)).unwrap();
+        let texte = profil.rows.iter().flatten().map(|v| match v { CypherValue::String(t) => t.clone(), _ => String::new() }).collect::<String>();
+        let balayages: Vec<String> = texte.lines().filter(|l| l.contains("NumOutputTuples")).map(|l| l.replace(['│', '┌', '┐', '└', '┘', '─'], "").split_whitespace().filter(|x| x.parse::<u64>().is_ok()).collect::<Vec<_>>().join("/")).collect();
+        let mut lignes: Vec<String> = conn.execute_with_params(q, std::slice::from_ref(p)).unwrap().rows.iter().map(|r| format!("{r:?}")).collect();
+        lignes.sort();
+        let empreinte = { use std::hash::{Hash, Hasher}; let mut h = std::collections::hash_map::DefaultHasher::new(); lignes.hash(&mut h); h.finish() };
+        eprintln!("[variante] {nom} : médiane {:.1} ms, {n} lignes, empreinte {empreinte:016x} ; tuples par opérateur {}", t[3], balayages.join(" "));
+    }
+    // Un saut de Scope vers Scope (départ et arrivée dans la même table), depuis
+    // le premier voisin : la forme d'IMPLEMENTS, INHERITS_FROM et HAS_PARENT.
+    let saut_scope = "UNWIND $uuids AS u MATCH (d:`Scope` {_uuid: u})-[r:`HAS_PARENT`]->(m:`Scope`) \
+                      RETURN u, m.`_uuid`, m.`name`, m.`repo_path`, m.`file_path`, m.`declarations`";
+    for (nom, q, p) in [
+        ("saut", saut, liste.clone()),
+        ("par clé", par_cle, CypherValue::List(voisins.clone())),
+        ("saut Scope vers Scope", saut_scope, CypherValue::List(voisins[..1].to_vec())),
+    ] {
+        for prefixe in ["EXPLAIN", "PROFILE"] {
+            let r = conn
+                .execute_with_params(&format!("{prefixe} {q}"), &[QueryParam::new("uuids", p.clone())])
+                .unwrap_or_else(|e| panic!("{prefixe} : {e}"));
+            eprintln!("[plan] {nom}, {prefixe} : {} ligne(s)", r.rows.len());
+            for ligne in &r.rows {
+                for v in ligne {
+                    match v {
+                        CypherValue::String(t) => eprintln!("[plan] {nom}, {prefixe}\n{t}"),
+                        autre => eprintln!("[plan] {nom}, {prefixe} : {autre:?}"),
+                    }
                 }
             }
         }

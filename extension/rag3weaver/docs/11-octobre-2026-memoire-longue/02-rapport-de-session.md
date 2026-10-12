@@ -81,6 +81,12 @@ réaction (sauvegardes `*.avant-montre-11-oct-17h02`) : une édition à la main 
 62 ms la décision ; Gemini tronqué par le plafond de 512 jetons de `Decide` (le proto pose
 `max_tokens`, la tentative 3 l'attend).
 
+**La tentative 3 des fiches** (12 oct., 4 h 47, `templates/experiments/2026-10-12-fiches-classees-3/`) :
+Gemini 3.5 Flash sur `Decide` à `max_tokens` 2 048 : 32 / 39 fiches justes, 8 / 8
+abstentions, **1 faux ancrage**, 4 manqués (des fiches de règle refusées sous leur domaine),
+5,35 s la décision ; aucune réponse tronquée. Gemini se trompe vers l'abstention, le Decider
+vers le rangement. La tentative 4 : une décision par fiche (« lequel, ou aucun »).
+
 **Le binaire de Lucie, réparé à 21 h** : la lib de l'arbre principal a changé d'ABI avec B2 ;
 le binaire installé ne démarrait plus (`undefined symbol …SystemConfig…`), donc aucune
 nouvelle session de Lucie n'aurait eu ses serveurs MCP. Rebâti contre B2, prouvé à l'écart
@@ -91,36 +97,46 @@ tard à 0 h 15.
 
 ## Ce qui reste
 
-- **Pour Lucie : la séquence B4, au matin.** À 2 h 56 (12 oct.), l'arrêt de l'hôte a été
-  refusé par les permissions de ma session ; rien n'a été exécuté, l'hôte tourne et répond
-  (pid 2061518, `3e95f0302023`). Depuis, le cœur a corrigé le balayage filtré des chaînes
-  (`e6f626df4`, cause du P1 et de la boucle de luciepc) et l'arbre principal a publié la lib
-  au magasin à 3 h 49 (`librag3db.so` c2ddbb67…). Le binaire à installer est bâti sur
-  `acdb91764` et prouvé, **pas installé** :
+- **La séquence B4 est faite (12 oct., 10 h 39 – 11 h 21).** Lucie a arrêté son hôte à
+  10 h 39 (SIGTERM, arrêt propre, `daemon.json` retiré). À 10 h 40, installé
+  `~/.local/bin/rag3weaver-backend` = `22e156eb9a57d59c3115de48905f0932` (bâti sur
+  `1309ab5a4`, RUNPATH vers la lib de 10 h 15, `rag3db-build-2b11b55ec…`, la jointure par
+  clé) ; l'ancien gardé en `.avant-b4` (`3e95f0302023`), qui n'a pas servi. À 10 h 40,
+  `workspace.queries_via` posé dans `rag3db.json` par le script de codeparsers (sauvegarde
+  `rag3db.json.avant-queries-via`) — le diff, le bloc seul :
 
-  - `~/.cache/rag3weaver-build/binaire-matin-d2b83e5e5080`, md5
-    `d2b83e5e5080ac3db337e9b639cc564d` ;
-  - RUNPATH vers `~/.cache/rag3db-libs/rag3db-build-f6179ade0d0dec63e4b4cefb605f81e8e648046b-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
-    (plus de `LD_LIBRARY_PATH` : un rebâti de la lib ne le touche plus) ;
-  - preuves sans `LD_LIBRARY_PATH` : `readelf -d` montre le RUNPATH, `ldd` résout la lib
-    du magasin, `rag3db-check-lib` dit « même bâti », `--describe` des deux manifestes
-    (memory 9 outils, code-rag3db 11), un hôte d'essai sur 7990 et un client de boutique
-    (`initialize`, 8 outils, `list_categories`, `daemon_status` au même bâti), arrêt propre.
-    `649a84722b3e` est dépassé.
-
-  Lucie arrête son hôte — pid lu dans `daemon.json`, jamais par nom :
-
-  ```sh
-  P=$(jq .pid ~/.local/share/rag3weaver/daemon.json); readlink /proc/$P/exe && kill -TERM $P
+  ```diff
+  @@ -21,3 +21,103 @@
+         "lockIndexForWrite"
+  -    ]
+  +    ],
+  +    "queries_via": {
+  +      "test_files": "^test/test_files/.*\\.test$",
+  +      "registered_name": "static constexpr const char\\* name = \"([A-Za-z_][A-Za-z0-9_]*)\"",
+  +      "keywords_dated": "2026-10-12 : 24 mots, relevés sur src/include/processor/operator ; page des manques de codeparsers",
+  +      "keywords": { … 24 mots-clés Cypher → opérateurs (ALTER → Alter, … WHERE → Filter) … }
+  +    }
+     },
   ```
 
-  (`readlink` doit nommer `~/.local/bin/rag3weaver-backend` ; sinon ne rien tuer.) Ou elle
-  autorise l'arrêt dans ma session. J'enchaîne : installation par renommage (l'installé
-  gardé en `.avant-b4`), signal à codeparsers (code-rag3db mis de côté et réindexé), puis
-  redémarrage, 5 minutes de surveillance (`/etat` porte l'état des index) et la remesure de
-  la montre (`watches.code`, pour le proto) ; la réconciliation de la montre remplace la
-  réindexation entière. Au rouge, `3e95f0302023` revient.
-- **La tentative 3 des fiches** quand `Decide` aura `max_tokens`.
+  codeparsers a réindexé code-rag3db en autonome de 10 h 43 à 11 h 03 (1 235 s ; base
+  1,2 Go, plein texte 749 Mo ; **0 morceau sans texte** sur 132 030 `Scope_Chunk` et 7 461
+  `File_Chunk` ; l'ancienne base dans `avant-b4-code-rag3db-20261012-1042/`). L'hôte a
+  redémarré à 11 h 04 (pid 535152, lib du magasin par RUNPATH, les trois services
+  d'embarquement) : cinq minutes vivant et au repos ; les deux backends s'attachent
+  (memory 10 outils, code 12), les index de code prêts, vecteurs à 100 %. À l'ouverture, la
+  montre a rattrapé 722 fichiers que l'index autonome n'avait pas (`dataset/`,
+  `third_party/`, `generated/`, des `.wal` de `test/`), environ un cœur jusqu'à 11 h 21,
+  le verrou tenu jusqu'à 55 s : un client a démarré sans ses outils (arrivés 41 s après) et
+  un `usages` a attendu 164 s puis « catalogue occupé » — le ticket « un appel d'outil
+  attend derrière un index sans le dire », vu en service. Au calme : `usages` 0,08–0,12 s
+  (aller-retour du client compris), `search_code` 0,49 s, `recall` 0,29 s.
+
+  **À trancher par Lucie, sans que j'y touche** : `backend.json`, à côté de `rag3db.json`,
+  n'a pas de `db_path` et vise donc une petite base ancienne,
+  `~/.local/share/rag3weaver/code-rag3db.rag3db` (3,4 Mo, dernière écriture le 11 oct.
+  à 16 h 55) ; la base réelle est `code-rag3db-depot.rag3db`, que vise `rag3db.json`.
+- **La tentative 4 des fiches** : une décision par fiche, l'instruction sur les fiches de règle.
 - **La marche 5, seconde part** : l'hôte déclaré au manifeste, le backend nommé.
 - **La forme B de l'enveloppe** : attend la §6.
 

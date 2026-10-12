@@ -272,12 +272,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
     // As `k` can be larger than the default vector capacity, we run the actual search in the first
     // call, and output the rest of the query result in chunks in the following calls.
     if (!localState->hasResultToOutput()) {
-        const auto nodeTable = storage::StorageManager::Get(*input.context->clientContext)
-                                   ->getTable(bindData->nodeTableEntry->getTableID())
-                                   ->ptrCast<storage::NodeTable>();
-        auto indexOpt = nodeTable->getIndex(bindData->indexEntry->getIndexName());
-        KU_ASSERT(indexOpt.has_value());
-        auto& index = indexOpt.value()->cast<OnDiskHNSWIndex>();
+        auto& index = *localState->index;
         const auto dimension = ArrayType::getNumElements(
             getIndexColumnType(*bindData->nodeTableEntry, *bindData->indexEntry));
         auto indexType = index.getElementType();
@@ -345,6 +340,10 @@ std::unique_ptr<TableFuncLocalState> initQueryHNSWLocalState(
         catalog
             ->getTableCatalogEntry(transaction::Transaction::Get(*context), lowerRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
+    auto index = OnDiskHNSWIndex::captureForQuery(*hnswSharedState->nodeTable,
+        hnswBindData->indexEntry->getIndexName(), hnswBindData->nodeTableEntry->getName(),
+        upperRelTableEntry->getSingleRelEntryInfo().oid,
+        lowerRelTableEntry->getSingleRelEntryInfo().oid);
     HNSWSearchState searchState{context, hnswBindData->nodeTableEntry, upperRelTableEntry,
         lowerRelTableEntry, *hnswSharedState->nodeTable, hnswBindData->indexColumnID,
         hnswSharedState->numNodes, static_cast<uint64_t>(k), hnswBindData->config};
@@ -362,7 +361,7 @@ std::unique_ptr<TableFuncLocalState> initQueryHNSWLocalState(
                 ? static_cast<long long>(searchState.semiMask->getNumMaskedNodes())
                 : -1);
     }
-    return std::make_unique<QueryHNSWLocalState>(std::move(searchState));
+    return std::make_unique<QueryHNSWLocalState>(std::move(index), std::move(searchState));
 }
 
 static void getLogicalPlan(Planner* planner, const BoundReadingClause& readingClause,

@@ -21,6 +21,11 @@ enum class SemiMaskKeyType : uint8_t {
     NODE = 0,
     PATH = 1,
     NODE_ID_LIST = 2,
+    // Les décalages viennent de VALEURS DE CLÉ PRIMAIRE (page coeur-cpp/14) : le masqueur les
+    // résout par l'index de clé primaire de la table (NodeTable::lookupPK), une clé absente ou
+    // NULL ne masque rien. C'est la jointure par clé d'un `UNWIND $liste AS u MATCH (d {clé: u})`,
+    // dont le balayage de d ne lit alors que les lignes masquées.
+    PRIMARY_KEY = 3,
 };
 
 struct ExtraKeyInfo {

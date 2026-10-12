@@ -1234,3 +1234,131 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   écrivains, la capture de VECTOR_SEARCH à garder dans le bind data) ; forme du pas 2 (la rétention
   jusqu'au point de reprise, comme les tables) convenue. Suite : le balayage sous masque (page 12
   §10).
+
+## Aube (12 octobre 2026, 3 h 55 à 5 h 40) — le balayage sous un petit masque
+
+- **Le lot** (`balayage-sous-masque`, page 12 §10) : `SemiMask::collectFrom`, le mode décalages de
+  `ScanNodeTableSharedState` décidé à l'initialisation sur la cardinalité exacte du masque
+  (`× 64 < numTotalRows`), les tranches de ≤ 2 048 décalages comme morsels,
+  `NodeTable::lookupOffsets` qui relit ligne à ligne et ne garde que les lignes visibles. Témoin du
+  banc sorti du known_red : **117 lignes sorties pour 117 masquées sur 72 000** (67 584 avant) ;
+  mesure : **0,26 / 0,24 ms à 1 / 32 fils contre 5,07 / 5,24 ms**. Le ticket du saut par semi-masque
+  (F) fermé dans le lot. Suites et banc en passe ; push ensuite ; F remesure `usages`.
+- F a recompté sa copie sur la lib corrigée du balayage filtré : 0 morceau lu vide sur 128 732,
+  aucun plantage ; mon reflink est effacé.
+- **Le lot du masque est sur master `41d282843`** (5 h 38 ; rejeu local sur d447364ce : transaction
+  267, api 105, planner 2, e2e Cypher 1 867, banc 7 rouges attendus / 266 verts ; deux passes
+  complètes avant, dont un rouge de la première forme sur LDBC IS2 — un balayage multi-tables gardait
+  le groupe de la table d'avant, remis à zéro au changement de table). Relectures rendues à hotfixs
+  (pas 1 DDL, puis le DROP validé après l'instantané ; avis de forme sur le DELETE indexé HNSW :
+  (C) l'arrêt de la chaîne des versions à la première visible, sûr ; (A) sans garantie propre au
+  delete ; (B) après mesure) et à G (B3, l'identifiant de bâti sous Windows). Programme du cœur
+  C++ vide : la suite est à l'orchestration (I2 page 10, le pas 2 de la rétention des index).
+
+## Matin (12 octobre 2026, 5 h 45 à 8 h 15) — l'insertion de vecteurs sous index, et la jointure par clé
+
+- **L'insertion HNSW** (page 13, avec hotfixs : lui extension/vector, moi src/storage ; un seul
+  instrument, celui du banc, et son profil par échantillonnage de piles) : quatre pas — le `resize`
+  au double (le CHECKPOINT quadratique : 24 s après 15 000 SET, ×156 entre 1 500 et 15 000 lignes),
+  le verrou partagé par fenêtre dans `scanCommittedInMemRandom` (40 % du temps propre), le
+  `detachDelete` par la ligne que le balayage rend déjà (29 %), le commit des arêtes d'un nœud par
+  suites contiguës (un tri par suite). Mesure de l'instrument à 1 fil, avant sur master bâti en
+  entier / après : 4,01 → 2,85 ms par vecteur au lot 3 du début, 2,39 → 1,79 à la fin ; la montée
+  d'un lot à l'autre reste (les lignes mortes du CSR validé en mémoire, lot à part). Ma mesure
+  maison a d'abord trompé : une liste de 64 × 768 flottants écrite en texte coûte 8 ms par vecteur
+  à analyser, le produit passe par un paramètre.
+- **Deux gardes du balayage sous masque** (41d282843), trouvées par hotfixs sur
+  `.~delete.DeleteAllThenCreate` : la recherche vectorielle masque INVALID_OFFSET (2^32 − 1) pour
+  un résultat absent (`resize(k)` : hotfixs le corrige côté extension) ; `lookupOffsets` passe un
+  décalage sans groupe (le SIGSEGV), `nextMorsel` retire les décalages au-delà du masque et tient
+  une tranche courte pour la dernière (le curseur à 2^32 revenait à 0 sur l'itérateur 32 bits :
+  la même tranche sans fin), `collectFrom` refuse un départ hors 32 bits. Trouvé par les compteurs
+  de points d'arrêt sous gdb (155 000 passages en 40 s) puis une trace des tranches.
+- **Pièges de mesure** : `LD_LIBRARY_PATH` ne remplace pas la lib d'un binaire de test (RPATH) ; un
+  `cmake --build` pendant une mesure réécrit l'extension vector sous elle ; un « avant » se joue sur
+  master bâti en entier, l'« après » sur la branche, rien entre.
+- **La jointure par clé** (page 14, lot donné par l'orchestration devant l'insertion) : `UNWIND
+  $liste AS u MATCH (d {clé: u})` ne produit aucun masque (jointure de hachage sur propriété,
+  `PROHIBIT`) ; forme choisie : le masque par clés dans l'optimiseur (`PrimaryKeySemiMasker` qui
+  résout les clés par `lookupPK`, posé probe→build avec Accumulate), sur lequel le balayage par
+  décalages fait le reste ; cible `usages` sous 50 ms.
+- **Le lot de l'insertion est sur master `3cca0ae1e`** (8 h 12 ; rejeu local sur c391e8387 :
+  transaction 267, api 105, planner 2, e2e Cypher 1 867, banc 7 rouges attendus / 270 verts ; e2e
+  vector 74 et les témoins avant). Hotfixs rebase son lot vector dessus ; l'arbre principal rebâtit
+  la lib.
+- **Le balayage filtré prouvé sur une vraie base atteinte** (codeparsers, 9 h 05) : code-lourd de
+  luciepc, fermée proprement ; avec la lib 6ffec5a82 (avant le correctif) 16 368 Scope_Chunk sur
+  130 715 sont lus `_text = ''`, avec la lib 3cca0ae1e 0, sur les mêmes lignes de la même copie.
+- **La jointure par clé est sur master `2b11b55ec`** (10 h 13 ; rejeu local : transaction 269,
+  api 105, planner 2, e2e Cypher 1 867, banc 10 rouges attendus / 271 verts). Mesure de F sur
+  cette lib : **usages 352 → 117 ms en un temps, 230 → 43 ms en deux temps**, V4 28 → 1,3 ms,
+  empreintes identiques — le but 2 de Lucie. Le second niveau (le voisin du saut masqué par les
+  voisins trouvés : un balayage masqué compte comme sélectif, le build revisité après le masque par
+  clés) est prouvé sur la V1 exacte de F avec un reflink de son sceau : deux SEMI_MASKER, SCAN
+  Scope 117 lignes au lieu de 81 407, 2,4 ms à chaud ; lot suivant, à part (branche
+  `jointure-par-cle-niveau-2`), avec le témoin du banc et la remesure de F.
+
+## Fin de matinée (12 octobre 2026, 10 h 20 à 12 h) — le second niveau et le troisième pas de la jointure par clé
+
+- **Le second niveau** (page 14 §4, branche `jointure-par-cle-niveau-2`, **sur master `97589fc9d`** à
+  11 h 50, trois contrôles lus ; rejeu local : transaction 269, api 105, planner 2, e2e Cypher
+  1 867, banc 10 rouges attendus / 272 verts) : F
+  mesure **usages 117 → 65 ms en un temps, 43 → 29 en deux temps**, la V1 21 → 2,3 ms ; le banc
+  ×20 sur son témoin du voisin (690c0b382, qu'il rebase sur le hash poussé).
+- **Le troisième pas** (page 14 §5, branche `cle-estimation-du-noeud`, commit 25252fc91, suites en
+  cours) : F voyait les sauts Scope → Scope rester à 18-20 ms — le nœud lié par sa clé à la partie
+  précédente s'estimait à la table entière, et l'extension partait du voisin non masqué. Le
+  planificateur repère le prédicat remonté `n.clé = expr(gauche)` et rectifie la cardinalité du
+  nœud à celle de la partie précédente (`keyBoundNodeIDs`, un graphe par composante). Banc, médiane
+  de 5 : **saut 8,62 → 0,40 ms**, voisin 9,57 → 0,56, `MaskedSelfHop` rouge sur master et vert
+  sur le lot (d 1, m 1, HAS_PARENT 1).
+- **Trouvé en passant, ticket ouvert** : deux nœuds liés par leur clé dans un même MATCH se croisent
+  (produit des ensembles masqués) avant la jointure avec la liste ; les témoins passent par un nœud
+  par MATCH. Trois leçons de témoins : un `ASSERT` gtest dans un helper ne sort que du helper (un
+  `ok()` raté laissait le test continuer avec zéro arête) ; une clé calculée dans le MATCH donne un
+  produit cartésien ; un petit voisin lu par sa clé est planifié en Extend, sans jointure — le
+  témoin du second niveau se joue sur la forme de F (grand voisin, trois propriétés).
+- **Relectures rendues** : hotfixs (DROP validé après l'instantané ; témoin de suppressions
+  contiguës `RegionDelete.SurvivorsStayReachableAndTheNearestAreRight` lu, feu vert au push ;
+  `RealVectorsReachability` se saute sur ce poste, compté vert à tort puis corrigé par hotfixs),
+  banc (bornes des témoins de la pente : `insert-cost-without-checkpoint-stays-close` rouge = la
+  compaction des lignes mortes du CSR, mon lot suivant, page 13 §5).
+
+## Midi (12 octobre 2026, 12 h à 13 h) — la compaction des lignes mortes du CSR
+
+- **Le lot** (page 13 §5, branche `compaction-csr`) : le plus ancien instantané ouvert posé par
+  le TransactionManager sur la transaction qui valide ; `CSRNodeGroup::delete_` note le nœud ; la
+  liste est reconstruite sans les lignes que plus personne ne voit, à la validation qui ajoute au
+  nœud et à la fin de la validation qui a supprimé. Témoins `CSRDeadRows` 2/2 (listes 1 600 → 1 000
+  → 800, le rétrécissement HNSW à 64, lecteur ancien respecté, CHECKPOINT et réouverture). Témoin
+  du banc sous `poste mesure`, trois passes : **×1,17, ×1,55, ×1,20** (154 / 131, 169 / 109,
+  152 / 126 ms ; ×1,5 à ×1,74 au banc, ×1,42 sur master à 12 h 20). Un rouge sur trois à la borne
+  ×1,2 : le cas passe en probabilistic.txt avec ses comptes (règle du banc : trois verts avant de
+  sortir un cas), le ticket reste ouvert sur ce qui reste — la chaîne des versions des lignes mises
+  à jour, pensait-on : la passe 4 sur le lot rebasé sur ce master (13f4647dc, avec 2bd65cbb8 de
+  hotfixs) rend ×1,37 (154 / 113 ms). Ce qui reste est le coût propre du chemin de lecture en
+  mémoire, ligne à ligne, des relations et vecteurs écrits depuis le dernier point de reprise :
+  à profiler, ticket ouvert sur cette part, cas en probabilistic.txt (2 rouges sur 4). **Sur
+  master `c44af8031`** (14 h 55, trois contrôles lus ; rejeu sur ccecaee5d : transaction 272, api
+  105, planner 2, e2e Cypher 1 867, banc 8 rouges attendus / 280 verts).
+- **Lot Windows** (ticket c1cedb7ae de G, branche `verrou-une-poignee`) : le verrou d'un fichier
+  est pris une fois par processus sur une poignée à lui (`LocalFileSystem::acquireProcessLock`,
+  registre avec compte des ouvertures, remis à vide dans un fils de fork) ; flock sous Unix (fcntl
+  tombait à la fermeture de n'importe quel descripteur : après le rejeu des pages fantômes la
+  garde B2 ne gardait plus rien), LockFileEx sur l'octet 2^62 sous Windows (l'octet 0 verrouillé
+  interdisait aussi la lecture de l'en-tête par une autre poignée). Témoin `FileLockRegistry`
+  (trois tests par fork) 3/3, double ouverture et second écrivain 8/8 ; passe complète en cours.
+- **Le troisième pas en push** : un premier rejeu rouge sur la garde `checkpoint-keeps-insert-flat`
+  du banc (la courbe avec points de reprise montée de 101 à 139 ms sous une mesure et un cargo
+  check d'autres sessions) — la garde dépendait de la charge, le banc l'a passée en impression
+  seule (426a16412) ; un second arrêt sur « arbre sale » (le pointeur du sous-module codeparsers
+  déplacé par le rebase : `git submodule update` après tout rebase, ajouté au script de push) ;
+  troisième tour vert : **le troisième pas est sur master `0c0af5bf5`** (13 h 33, trois contrôles
+  lus ; rejeu sur 03c2b065e : transaction 270, api 105, planner 2, e2e Cypher 1 867, banc 9 rouges
+  attendus / 279 verts). **F sur cette lib : usages 7,4 / 9,5 / 7,1 ms en un temps** (352 au
+  départ : 117 après le lot 1, 65 après le second niveau), chaque saut à 1,0-2,4 ms ; le saut en
+  deux temps est retiré de rag3weaver (c56cb3aa6).
+- **Réponse à l'arbre principal (L3)** : le décalage d'un nœud neuf est gardé au COMMIT avec un
+  seul écrivain sur la table ; avec plusieurs écrivains sur la même table il est remappé (A2) —
+  relire par `_uuid` après le COMMIT ; rien n'est posé avant le COMMIT, un ROLLBACK rend les
+  décalages provisoires à la transaction suivante.

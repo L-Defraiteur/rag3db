@@ -91,6 +91,10 @@ public:
 
     LogicalScanNodeTableType getScanType() const { return scanType; }
     void setScanType(LogicalScanNodeTableType scanType_) { scanType = scanType_; }
+    // Un masqueur vise ce balayage (HashJoinSIPOptimizer) : il ne lira que les lignes masquées,
+    // ce qui le rend sélectif comme un filtre pour les jointures au-dessus (page coeur-cpp/14).
+    void setSemiMasked() { semiMasked = true; }
+    bool isSemiMasked() const { return semiMasked; }
 
     std::shared_ptr<binder::Expression> getNodeID() const { return nodeID; }
     std::vector<common::table_id_t> getTableIDs() const { return nodeTableIDs; }
@@ -117,6 +121,7 @@ public:
     std::unique_ptr<LogicalOperator> copy() override;
 
 private:
+    bool semiMasked = false;
     LogicalScanNodeTableType scanType;
     std::shared_ptr<binder::Expression> nodeID;
     std::vector<common::table_id_t> nodeTableIDs;

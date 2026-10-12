@@ -378,3 +378,61 @@ mod tests {
         assert_eq!(back, d, "un domaine se sauvegarde et se relit — c'est un objet, pas un paramètre");
     }
 }
+
+/// **La portée d'une question** (`scope`, `language`) : des préfixes de
+/// chemin relatifs à la racine (`src/|test/`) et des langages (`cpp|rust`),
+/// séparés par `|`. La même forme dans `usages`, `impact`, `callees` et
+/// `search_code`. Elle borne ce qui est **rendu** et ce qui compte pour
+/// l'ambiguïté, jamais le parcours : un nœud hors portée reste un relais.
+/// Vide : tout l'index.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct QueryScope {
+    pub prefixes: Vec<String>,
+    pub languages: Vec<String>,
+}
+
+impl QueryScope {
+    /// Lire `scope` et `language` tels qu'un outil les reçoit.
+    pub fn parse(scope: &str, language: &str) -> Self {
+        let morceaux = |v: &str| -> Vec<String> { v.split(['|', ',']).map(str::trim).filter(|x| !x.is_empty()).map(String::from).collect() };
+        QueryScope {
+            prefixes: morceaux(scope).iter().map(|p| crate::workspace_path::slash_prefix(p)).collect(),
+            languages: morceaux(language).iter().map(|l| l.to_lowercase()).collect(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.prefixes.is_empty() && self.languages.is_empty()
+    }
+
+    /// `src/, test/ ; cpp` — pour la ligne qui dit ce qui est écarté.
+    pub fn describe(&self) -> String {
+        match (self.prefixes.is_empty(), self.languages.is_empty()) {
+            (false, false) => format!("{} ; {}", self.prefixes.join(", "), self.languages.join(", ")),
+            (false, true) => self.prefixes.join(", "),
+            (true, false) => self.languages.join(", "),
+            (true, true) => String::new(),
+        }
+    }
+
+    /// Un chemin et un langage lus dans la portée : un des chemins commence
+    /// par un des préfixes, et le langage est l'un des demandés.
+    pub fn admits(&self, paths: &[&str], language: &str) -> bool {
+        (self.prefixes.is_empty() || paths.iter().any(|c| self.prefixes.iter().any(|p| c.starts_with(p.as_str()))))
+            && (self.languages.is_empty() || self.languages.iter().any(|l| l == &language.to_lowercase()))
+    }
+}
+
+impl QueryScope {
+    /// La condition de recherche de la portée (`None` si elle est vide) :
+    /// les langages, et l'un des préfixes sur `path_field` — la même
+    /// construction qu'un critère du domaine de travail.
+    pub fn to_filter(&self, path_field: &str) -> Option<FilterCondition> {
+        if self.is_empty() {
+            return None;
+        }
+        let critere = Selector { under: self.prefixes.clone(), languages: self.languages.clone(), ..Default::default() };
+        Some(FilterCondition::Must(critere.conditions(path_field)))
+    }
+}
+

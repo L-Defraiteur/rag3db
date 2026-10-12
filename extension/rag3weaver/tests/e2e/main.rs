@@ -140,6 +140,8 @@ mod e2e_lecture_du_catalogue;
 mod e2e_lecture_mermaid;
 #[path = "../e2e_lecture_seule_apres_fermeture_sans_point_de_reprise.rs"]
 mod e2e_lecture_seule_apres_fermeture_sans_point_de_reprise;
+#[path = "../e2e_lectures.rs"]
+mod e2e_lectures;
 #[path = "../e2e_liens.rs"]
 mod e2e_liens;
 #[path = "../e2e_mcp_cycle_de_vie.rs"]
@@ -172,6 +174,8 @@ mod e2e_phase0b;
 mod e2e_plans_par_lot;
 #[path = "../e2e_points_de_reprise_nettoyes.rs"]
 mod e2e_points_de_reprise_nettoyes;
+#[path = "../e2e_portee.rs"]
+mod e2e_portee;
 #[path = "../e2e_postgres.rs"]
 mod e2e_postgres;
 #[path = "../e2e_preuve_d_existence.rs"]
@@ -220,6 +224,8 @@ mod e2e_symbol_search;
 mod e2e_synchronisation;
 #[path = "../e2e_tampon_plein.rs"]
 mod e2e_tampon_plein;
+#[path = "../e2e_tests_par_requetes.rs"]
+mod e2e_tests_par_requetes;
 #[path = "../e2e_titre_indexe.rs"]
 mod e2e_titre_indexe;
 #[path = "../e2e_tx_ligne_a_ligne.rs"]
@@ -238,6 +244,8 @@ mod e2e_undo;
 mod e2e_usages;
 #[path = "../e2e_verrous.rs"]
 mod e2e_verrous;
+#[path = "../e2e_verrous_du_chemin.rs"]
+mod e2e_verrous_du_chemin;
 #[path = "../e2e_working_tree.rs"]
 mod e2e_working_tree;
 

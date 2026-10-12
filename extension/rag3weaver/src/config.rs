@@ -540,6 +540,13 @@ pub struct SnapshotConfig {
     /// et ce qui manque part à sa fin.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fine_scope: Vec<String>,
+    /// **Le grain fin atteint par une arête** plutôt que par un filtre sur
+    /// les champs : la ligne parente se retrouve par sa clé, et les lignes du
+    /// grain par la relation qui va d'elles vers elle. Un filtre sur
+    /// `fineScope` balaie la table entière, un coût qui grandit avec elle ; un
+    /// saut depuis une clé lit les seules lignes du grain. Absent : le filtre.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fine_scope_via: Option<SnapshotVia>,
     /// Au-delà de cette part du périmètre, la fin refuse de retirer sans
     /// `force` — c'est ce qui attrape un instantané tronqué qui paraît complet.
     #[serde(default = "SnapshotConfig::default_max_missing_ratio")]
@@ -554,6 +561,20 @@ pub struct SnapshotConfig {
     /// garder. Absente : 7 jours (Lucie, 3 octobre 2026).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keep_for: Option<String>,
+}
+
+/// D'où un grain fin s'atteint (voir [`SnapshotConfig::fine_scope_via`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SnapshotVia {
+    /// L'entité parente, retrouvée par sa clé (`hashsafe`).
+    pub entity: String,
+    /// La relation qui va **des lignes du grain vers** la parente.
+    pub relation: String,
+    /// Chaque champ du grain (`scope` et `fineScope`), et le champ de la
+    /// parente qui porte sa valeur. Ensemble, ils couvrent la clé de la
+    /// parente.
+    pub fields: std::collections::BTreeMap<String, String>,
 }
 
 impl SnapshotConfig {
@@ -1888,6 +1909,7 @@ mod tests_keep_for {
 
     fn avec(v: Option<&str>) -> SnapshotConfig {
         SnapshotConfig {
+            fine_scope_via: None,
             scope: vec![],
             fine_scope: vec![],
             max_missing_ratio: 0.5,

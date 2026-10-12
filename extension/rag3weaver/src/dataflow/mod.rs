@@ -12,6 +12,8 @@
 pub mod checkpoint;
 pub mod field_weight;
 pub mod checkpoint_store;
+pub mod background;
+pub mod spawn_nodes;
 pub mod graph;
 pub mod node;
 pub mod observe;
@@ -21,6 +23,8 @@ pub(crate) mod concurrent;
 pub use concurrent::CancelHandle;
 #[cfg(test)]
 mod flux_tests;
+#[cfg(test)]
+mod jetons_tests;
 pub mod port;
 pub mod resultat;
 pub mod record;
@@ -49,6 +53,7 @@ pub mod trace_nodes;
 pub mod migration_nodes;
 pub mod llm_nodes;
 pub mod decide_nodes;
+pub mod token_nodes;
 /// Le drapeau d'arrêt servi aux réactions (`Arc<AtomicBool>`), levé par
 /// `Backend::stop_reactions` : une réaction longue s'arrête entre deux unités.
 pub const REACTION_STOP_SERVICE: &str = "reaction_stop";
@@ -65,6 +70,7 @@ pub mod react_nodes;
 pub mod ref_nodes;
 pub mod scripted_node;
 pub mod usage_nodes;
+pub mod lock_order;
 pub mod neighborhood_nodes;
 pub mod graph_walk;
 pub mod links_nodes;

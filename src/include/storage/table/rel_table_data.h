@@ -48,6 +48,8 @@ public:
         common::row_idx_t numRows, common::transaction_t commitTS) const override;
     void rollbackInsert(main::ClientContext* context, common::node_group_idx_t nodeGroupIdx,
         common::row_idx_t startRow, common::row_idx_t numRows) const override;
+    void compactDeadRows(common::node_group_idx_t nodeGroupIdx,
+        const transaction::Transaction* transaction) const override;
 
 private:
     RelTableData* relTableData;
@@ -64,6 +66,12 @@ public:
         const common::ValueVector& dataVector) const;
     bool delete_(transaction::Transaction* transaction, common::ValueVector& boundNodeIDVector,
         const common::ValueVector& relIDVector);
+    // La même suppression quand la ligne est déjà connue (le balayage de detachDelete la rend avec
+    // sa source) : sans le re-repérage de findMatchingRow, qui relisait toute la liste du nœud par
+    // arête (29 % de l'insertion d'un vecteur sous index HNSW, profil du banc du 12 octobre 2026).
+    bool delete_(transaction::Transaction* transaction, common::ValueVector& boundNodeIDVector,
+        const common::ValueVector& relIDVector, CSRNodeGroupScanSource source,
+        common::row_idx_t rowIdx);
     void addColumn(TableAddColumnState& addColumnState, PageAllocator& pageAllocator);
 
     bool checkIfNodeHasRels(transaction::Transaction* transaction,

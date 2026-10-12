@@ -31,15 +31,7 @@ use rag3weaver::Rag3dbConnection;
 /// bibliothèque là où elle n'est pas.
 #[cfg(feature = "code")]
 fn extension_vectorielle() -> String {
-    let racine = std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .canonicalize()
-            .expect("racine du dépôt")
-            .display()
-            .to_string()
-    });
-    let chemin = format!("{racine}/extension/vector/build/libvector.rag3db_extension");
+    let chemin = rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display().to_string();
     assert!(
         std::path::Path::new(&chemin).exists(),
         "l'extension vectorielle est absente : {chemin}\n\

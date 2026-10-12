@@ -110,6 +110,46 @@ pub struct UsagesReport {
     pub qualifier: Option<(String, String)>,
     /// Définitions du nom seul écartées par le qualifiant.
     pub qualifier_hidden: usize,
+    /// La portée demandée (vide : tout l'index), et ce qu'elle écarte.
+    pub scope: QueryScope,
+    pub scope_hidden_definitions: usize,
+    pub scope_hidden_usages: usize,
+}
+
+pub use crate::work_domain::QueryScope;
+
+/// La description de `scope`, la même dans tous les outils.
+pub const SCOPE_HELP: &str = "Borner la réponse à ces chemins relatifs à la racine (src/|test/) ; vide : tout l'index";
+/// La description de `language`, la même dans tous les outils.
+pub const LANGUAGE_HELP: &str = "Borner la réponse à ces langages (cpp|rust) ; vide : tous";
+
+/// Le champ de langage de l'entité de code (`language`).
+pub const LANGUAGE_FIELD: &str = "language";
+
+/// **Les nœuds de `table` dans la portée**, par une lecture par clé de leurs
+/// chemins et de leur langage (les colonnes des autres requêtes se lisent par
+/// position : on n'y touche pas). Une portée vide admet tout.
+pub fn in_scope(catalog: &dyn crate::read_view::ReadCatalog, table: &str, path_fields: &[String], uuids: &[String], scope: &QueryScope) -> Result<std::collections::HashSet<String>, String> {
+    if scope.is_empty() || uuids.is_empty() {
+        return Ok(uuids.iter().cloned().collect());
+    }
+    let mut colonnes: Vec<rag3weaver_ir::Column> = path_fields.iter().map(|f| rag3weaver_ir::Column::Node(f.clone())).collect();
+    colonnes.push(rag3weaver_ir::Column::Node(LANGUAGE_FIELD.into()));
+    let lire = rag3weaver_ir::Select::by_uuids(table, colonnes);
+    let q = catalog.dialect_arc().select(&lire).map_err(|e| format!("portée : {e}"))?;
+    let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
+    let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(|e| format!("portée : {e}"))?;
+    let n = path_fields.len();
+    Ok(rows
+        .rows
+        .iter()
+        .filter(|r| {
+            let chemins: Vec<String> = (0..n).map(|i| texte(r.get(1 + i))).collect();
+            let refs: Vec<&str> = chemins.iter().map(String::as_str).collect();
+            scope.admits(&refs, &texte(r.get(1 + n)))
+        })
+        .map(|r| texte(r.first()))
+        .collect())
 }
 
 /// **Une déclaration** : la ligne d'un conteneur qui annonce un nom défini
@@ -137,7 +177,7 @@ pub struct DeclarationsConfig {
 /// Les déclarations d'un nom. Avec des définitions : celles de leurs
 /// conteneurs. Sans : les conteneurs qui le déclarent sans qu'aucune
 /// définition soit indexée. Rien tant que le schéma ne porte pas le champ.
-pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsConfig, name: &str, definitions: &[Item]) -> Result<Vec<Declaration>, String> {
+pub fn declarations_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, d: &DeclarationsConfig, name: &str, definitions: &[Item]) -> Result<Vec<Declaration>, String> {
     let rel = rel_info(catalog, &d.relation)?;
     if !catalog.entity_config(&rel.to).is_some_and(|c| c.fields.contains_key(&d.field)) {
         return Ok(Vec::new());
@@ -153,7 +193,7 @@ pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsCo
             .select(&rag3weaver_ir::Select::filtered(&rel.to, rag3weaver_ir::Predicate::Contains { field: d.field.clone(), param: "nom".into() }, champs))
             .map_err(|e| format!("UsagesNode: {e}"))?;
         catalog
-            .execute_raw_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
+            .execute_read_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
             .map_err(|e| format!("UsagesNode: {e}"))?
     } else {
         // Le saut des définitions vers leurs conteneurs, dit par le dialecte ;
@@ -210,7 +250,7 @@ pub struct VirtualBase {
 
 /// Les appelants des méthodes de base que `definitions` redéfinissent
 /// (classe de base ou trait, à tout niveau).
-pub fn virtual_usages_of(catalog: &Catalog, cfg: &UsagesConfig, v: &VirtualConfig, definitions: &[Item]) -> Result<Vec<VirtualBase>, String> {
+pub fn virtual_usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, v: &VirtualConfig, definitions: &[Item]) -> Result<Vec<VirtualBase>, String> {
     let err = |e: CatalogError| format!("UsagesNode: {e}");
     let departs: Vec<(String, String)> = definitions.iter().map(|d| (d.uuid.clone(), d.title.clone())).collect();
     let propres: std::collections::HashSet<&str> = definitions.iter().map(|d| d.uuid.as_str()).collect();
@@ -233,7 +273,7 @@ pub fn virtual_usages_of(catalog: &Catalog, cfg: &UsagesConfig, v: &VirtualConfi
     };
     // Le dialecte rend l'uuid demandé en tête, puis les colonnes.
     let q = catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(&table, colonnes_item(cfg))).map_err(|e| format!("UsagesNode: {e}"))?;
-    let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(err)?;
+    let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(err)?;
     let mut out: Vec<VirtualBase> = rows.rows.iter().map(|r| VirtualBase { base: item(r, 1, cfg), callers: Vec::new() }).collect();
     // Leurs appelants directs.
     for name_rel in &cfg.direct {
@@ -365,7 +405,7 @@ pub struct RelInfo {
     pub props: Vec<String>,
 }
 
-pub fn rel_info(catalog: &Catalog, name: &str) -> Result<RelInfo, String> {
+pub fn rel_info(catalog: &dyn crate::read_view::ReadCatalog, name: &str) -> Result<RelInfo, String> {
     let def = catalog.get_relation_def(name).ok_or_else(|| format!("UsagesNode: relation inconnue « {name} »"))?;
     Ok(RelInfo {
         name: name.to_string(),
@@ -417,7 +457,13 @@ pub fn lire_le_nom<'a>(name: &'a str, cfg: &UsagesConfig) -> (&'a str, Option<&'
     (nom, Some(qualifiant))
 }
 
-pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix: &str) -> Result<UsagesReport, String> {
+pub fn usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, name: &str, path_prefix: &str) -> Result<UsagesReport, String> {
+    usages_of_in(catalog, cfg, name, path_prefix, &QueryScope::default())
+}
+
+/// [`usages_of`] borné à une portée : les définitions et les usagers hors de
+/// `scope` sont écartés et comptés ; l'ambiguïté se juge dans la portée.
+pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, name: &str, path_prefix: &str, scope: &QueryScope) -> Result<UsagesReport, String> {
     let err = |e: CatalogError| format!("UsagesNode: {e}");
     let nom_demande = name;
     let (name, qualifiant) = lire_le_nom(name, cfg);
@@ -435,7 +481,7 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
                 vec![rag3weaver_ir::Column::Node("_uuid".into())],
             ))
             .map_err(|e| format!("UsagesNode: {e}"))?;
-        let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("name", CypherValue::String(name.to_string()))]).map_err(err)?;
+        let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("name", CypherValue::String(name.to_string()))]).map_err(err)?;
         rows.rows.iter().map(|r| texte(r.first())).filter(|u| !u.is_empty()).collect()
     };
 
@@ -454,6 +500,20 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
     }
     definitions.sort_by(|a, b| (&a.path, a.line, &a.uuid).cmp(&(&b.path, b.line, &b.uuid)));
     definitions.dedup_by(|a, b| a.uuid == b.uuid);
+    // La portée d'abord : une définition hors de la question ne la rend pas
+    // ambiguë.
+    let table_du_code = match &cfg.defined_by {
+        Some(def) if !scope.is_empty() => Some(rel_info(catalog, def)?.from),
+        _ => None,
+    };
+    let mut scope_hidden_definitions = 0;
+    if let Some(table) = &table_du_code {
+        let uuids: Vec<String> = definitions.iter().map(|d| d.uuid.clone()).collect();
+        let dedans = in_scope(catalog, table, &cfg.path_fields, &uuids, scope)?;
+        let avant = definitions.len();
+        definitions.retain(|d| dedans.contains(&d.uuid));
+        scope_hidden_definitions = avant - definitions.len();
+    }
     let ambiguous = definitions.len() > 1;
     let total = definitions.len();
     if !path_prefix.is_empty() {
@@ -470,7 +530,7 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
             let lire = rag3weaver_ir::Select::by_uuids(&table, vec![rag3weaver_ir::Column::Node(champ.clone())]);
             let qs = catalog.dialect_arc().select(&lire).map_err(|e| format!("UsagesNode: {e}"))?;
             let liste = CypherValue::List(definitions.iter().map(|d| CypherValue::String(d.uuid.clone())).collect());
-            let rows = catalog.execute_raw_with_params(&qs, &[QueryParam::new("uuids", liste)]).map_err(err)?;
+            let rows = catalog.execute_read_with_params(&qs, &[QueryParam::new("uuids", liste)]).map_err(err)?;
             let conteneur: HashMap<String, String> = rows.rows.iter().map(|r| (texte(r.first()), texte(r.get(1)))).collect();
             let fichier = |chemin: &str| {
                 let base = chemin.rsplit('/').next().unwrap_or(chemin);
@@ -547,6 +607,14 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
         .map(|u| (u.user.path.clone(), u.user.line, u.definition.clone()))
         .collect();
     usages.retain(|u| !conteneur(&u.user.kind) || !sites_etroits.contains(&(u.user.path.clone(), u.user.line, u.definition.clone())));
+    let mut scope_hidden_usages = 0;
+    if let Some(table) = &table_du_code {
+        let uuids: Vec<String> = usages.iter().map(|u| u.user.uuid.clone()).collect();
+        let dedans = in_scope(catalog, table, &cfg.path_fields, &uuids, scope)?;
+        let avant = usages.len();
+        usages.retain(|u| dedans.contains(&u.user.uuid));
+        scope_hidden_usages = avant - usages.len();
+    }
     usages.sort_by(|a, b| (&a.user.path, a.user.line, &a.user.title).cmp(&(&b.user.path, b.user.line, &b.user.title)));
     Ok(UsagesReport {
         name: nom_demande.to_string(),
@@ -556,6 +624,9 @@ pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix:
         ambiguous,
         qualifier: qualifiant.map(|q| (q.to_string(), name.to_string())),
         qualifier_hidden,
+        scope: scope.clone(),
+        scope_hidden_definitions,
+        scope_hidden_usages,
     })
 }
 
@@ -621,6 +692,14 @@ impl UsagesReport {
                 out.push_str(&format!(" — {} définition(s) de « {nom} » ailleurs, écartée(s)", self.qualifier_hidden));
             }
             out.push_str(".\n\n");
+        }
+        if !self.scope.is_empty() {
+            out.push_str(&format!(
+                "Portée : {} — {} définition(s) et {} usage(s) hors de la portée, écartés.\n\n",
+                self.scope.describe(),
+                self.scope_hidden_definitions,
+                self.scope_hidden_usages
+            ));
         }
         let defs = &self.definitions;
         out.push_str(&format!("## Définitions ({})", defs.len()));
@@ -713,6 +792,8 @@ pub struct UsagesNode {
     cfg: UsagesConfig,
     name: String,
     path: String,
+    /// La portée de la question (`scope`, `language`).
+    scope: QueryScope,
     usage: String,
     limit: usize,
     /// `true` : le rapport en JSON ; sinon du markdown.
@@ -737,23 +818,27 @@ impl Node for UsagesNode {
         crate::dataflow::node_registry::ports_declares(&UsagesNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog_in, refusal, with_status, CatalogRead};
+        use super::catalog_read::{read_for_tool, refusal, with_status};
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("UsagesNode: service 'catalog' absent")?;
         // Jamais un vide sans dire d'où il vient : occupé, jamais indexé,
         // ou partiel, le rendu le dit.
-        let (report, status) = match read_catalog_in(&catalog, &self.cfg.pivot, ctx.service::<crate::scope::Scope>("scope")) {
-            CatalogRead::Refused(message) => {
+        // Par la vue de lecture quand elle est publiée : sans attendre
+        // l'écrivain (lot L2).
+        let lecture = read_for_tool(&catalog, ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE), &self.cfg.pivot, ctx.service::<crate::scope::Scope>("scope"));
+        let (report, status) = match lecture.into_reader() {
+            Err(message) => {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());
             }
-            CatalogRead::Ready { catalog: cat, status } => {
-                let report = usages_of(&cat, &self.cfg, &self.name, &self.path)?;
+            Ok((source, status)) => {
+                let cat = source.get();
+                let report = usages_of_in(cat, &self.cfg, &self.name, &self.path, &self.scope)?;
                 let declarations = match &self.declarations {
-                    Some(d) => declarations_of(&cat, &self.cfg, d, &self.name, &report.definitions)?,
+                    Some(d) => declarations_of(cat, &self.cfg, d, &self.name, &report.definitions)?,
                     None => Vec::new(),
                 };
                 let virtuels = match &self.virtuel {
-                    Some(v) => virtual_usages_of(&cat, &self.cfg, v, &report.definitions)?,
+                    Some(v) => virtual_usages_of(cat, &self.cfg, v, &report.definitions)?,
                     None => Vec::new(),
                 };
                 ((report, declarations, virtuels), status)
@@ -859,6 +944,7 @@ impl NodeFactory for UsagesNodeFactory {
             virtuel,
             name: requis("name")?,
             path: s("path").unwrap_or_default(),
+            scope: QueryScope::parse(&s("scope").unwrap_or_default(), &s("language").unwrap_or_default()),
             usage,
             limit,
             json,
@@ -907,6 +993,8 @@ impl NodeFactory for UsagesNodeFactory {
                 p("declarations_field", S, false, Some(serde_json::json!("declarations")), "Champ du conteneur : liste JSON de {name, line, signature, kind}"),
                 p("name", S, true, None, "Le nom cherché"),
                 p("path", S, false, Some(serde_json::json!("")), "Ne montrer que les définitions sous ce chemin"),
+                p("scope", S, false, Some(serde_json::json!("")), SCOPE_HELP),
+                p("language", S, false, Some(serde_json::json!("")), LANGUAGE_HELP),
                 usage,
                 p("limit", Int, false, Some(serde_json::json!(20)), "Usages rendus par genre (plafond 200) ; tous sont comptés"),
                 p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),

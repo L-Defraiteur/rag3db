@@ -231,7 +231,7 @@ résultats) :
   fonctions de table : `QUERY_VECTOR_INDEX` connaît son k, un CALL simple rend une ligne — le
   second pas de §8), et le balayage sous masque (§7, autre lot).
 
-## 10. Le balayage sous un petit masque : ce que fait le code, et la forme **[lu, à coder]**
+## 10. Le balayage sous un petit masque : ce que fait le code, la forme, le avant/après **[mesuré]**
 
 **Ce que fait le code aujourd'hui** (lecture du 12 octobre, master dda63783a) :
 
@@ -272,3 +272,22 @@ Mesure avant/après : `MaskedScan.MeasureAtOneAndThirtyTwoThreads` (5,07 / 5,24 
 sur le lot des fils, 67 584 lignes lues) et la mesure d'usages de F (367 à 399 ms en médiane sur la
 copie de l'index entier). Garde : le témoin lit le premier `NumOutputTuples` sous
 « SCAN_NODE_TABLE », que `PRIMARY_KEY_SCAN_NODE_TABLE` contient aussi — à resserrer au banc.
+
+**Codé (12 octobre, 4 h, branche `balayage-sous-masque`)** : `SemiMask::collectFrom(start, n, out)`
+(les décalages posés à partir d'un curseur, par l'itérateur roaring) ; `ScanNodeTableSharedState`
+décide à `initialize` (le masqueur a fini) : `getNumMaskedNodes() × 64 < numTotalRows` → mode
+décalages, les morsels sont des tranches de ≤ 2 048 décalages (curseur sous le mutex), sinon le
+chemin d'avant ; `NodeTable::lookupOffsets` relit la tranche ligne à ligne (source et groupe
+changés à la volée, `lookupSharedLock`), la sélection de sortie ne gardant que les lignes
+visibles ; un masque vide rend zéro ligne sans lire. Les lignes non masquées ne sont plus
+balayées : elles ne pouvaient rien apparier.
+
+| témoin du banc (72 000 Scope, masque de 117) | avant (lot des fils) | après |
+|---|---|---|
+| lignes sorties du `SCAN_NODE_TABLE` | 67 584 | **117** |
+| durée médiane à 1 fil | 5,07 ms | **0,26 ms** |
+| durée médiane à 32 fils | 5,24 ms | **0,24 ms** |
+
+`MaskedScan.ReadsAboutTheMaskNotTheTable` sort du known_red dans le lot ; le ticket du saut par
+semi-masque (F) est fermé. À remesurer par F : `usages` sur la copie de l'index entier (367 à
+399 ms en médiane avant).

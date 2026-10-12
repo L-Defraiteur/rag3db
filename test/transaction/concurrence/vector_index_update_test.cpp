@@ -1560,6 +1560,157 @@ TEST_F(VectorIndexUpdate, AnUpdateWaitingBehindAnInsertSeesItsNewRows) {
     EXPECT_EQ(outcome, "ok") << "[check: no-visited-set-refusal] " << outcome;
 }
 
+// Une recherche qui trouve moins de lignes vivantes que k (ici 11 pour 20) ne rend que celles-là.
+// OnDiskHNSWIndex::search complétait le résultat jusqu'à k par des NodeWithDistance par défaut,
+// des pseudo-lignes à INVALID_OFFSET : le CALL les rendait (le compte disait 20), et son masqueur
+// les inscrivait ; le balayage sous masque les déréférençait (SIGSEGV dans lookupOffsets, relevé
+// par le rejeu de hotfixs et réparé côté masque par le cœur C++, 12 octobre 2026).
+TEST_F(VectorIndexUpdate, ASearchForMoreRowsThanLiveOnesReturnsOnlyTheLiveOnes) {
+    createDocs(0, 30);
+    mustRun(stringFormat("MATCH (n:{}) WHERE n.id >= 11 DELETE n;", table));
+    auto result = conn->query(stringFormat(
+        "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', [1, 1, 1, 1], 20) RETURN count(*);", table));
+    ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+    ASSERT_TRUE(result->hasNext());
+    EXPECT_EQ(result->getNext()->getValue(0)->getValue<int64_t>(), 11)
+        << "[check: no-padded-result] ";
+}
+
+// Des suppressions groupées dans une même région du graphe (relecture du cœur C++, 12 octobre
+// 2026, sur la suppression sans recherche par voisin) : là, beaucoup de voisins tombent ensemble,
+// et les ancrages qui dispensent de la recherche (un nœud qui n'a rien perdu) se raréfient. Des
+// vecteurs groupés autour de trente centres ; l'index est créé avant les lignes (graphe non
+// checkpointé, comme dans le produit). On retire les 10 % de lignes les plus proches d'un centre
+// (une région de l'espace, pas une plage d'id), en trois transactions, ou toutes sauf cinq (le
+// point d'entrée part aussi) ; directement, ou par SET NULL puis DELETE. Puis :
+//  - toutes les lignes vivantes sont atteintes par une recherche exhaustive (efs = leur nombre) ;
+//  - les dix plus proches d'une requête au bord de la région retirée sont ceux d'un calcul brut
+//    (au moins 9 sur 10 : la recherche est approchée).
+struct RegionDeleteCase {
+    bool setNullFirst;
+    bool keepOnlyAHandful;
+};
+
+class RegionDelete : public VectorIndexUpdate, public ::testing::WithParamInterface<RegionDeleteCase> {};
+
+TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
+    constexpr int NUM_ROWS = 3000;
+    constexpr int DIM = 16;
+    constexpr int NUM_CENTERS = 30;
+    std::mt19937 rng{20261012};
+    std::uniform_real_distribution<float> unit{0.0f, 1.0f};
+    std::normal_distribution<float> spread{0.0f, 0.05f};
+    std::vector<std::vector<float>> centers(NUM_CENTERS, std::vector<float>(DIM));
+    for (auto& c : centers) {
+        for (auto& x : c) {
+            x = unit(rng);
+        }
+    }
+    std::vector<std::vector<float>> vecs(NUM_ROWS, std::vector<float>(DIM));
+    for (auto i = 0; i < NUM_ROWS; i++) {
+        const auto& c = centers[i % NUM_CENTERS];
+        for (auto d = 0; d < DIM; d++) {
+            vecs[i][d] = c[d] + spread(rng);
+        }
+    }
+    const auto literal = [](const std::vector<float>& v) {
+        std::string out = "[";
+        for (auto d = 0u; d < v.size(); d++) {
+            out += (d ? ", " : "") + stringFormat("{}", v[d]);
+        }
+        return out + "]";
+    };
+    const auto distance = [](const std::vector<float>& a, const std::vector<float>& b) {
+        double sum = 0;
+        for (auto d = 0u; d < a.size(); d++) {
+            sum += (a[d] - b[d]) * (a[d] - b[d]);
+        }
+        return sum;
+    };
+    table = "R";
+    mustRun(stringFormat("CREATE NODE TABLE R(id INT64 PRIMARY KEY, vec FLOAT[{}]);", DIM));
+    mustRun("CALL CREATE_VECTOR_INDEX('R', 'r_index', 'vec', metric := 'l2');");
+    for (auto first = 0; first < NUM_ROWS; first += 100) {
+        std::string items;
+        for (auto i = first; i < std::min(NUM_ROWS, first + 100); i++) {
+            items += (items.empty() ? "" : ", ") + stringFormat("{i: {}, v: {}}", i, literal(vecs[i]));
+        }
+        mustRun("UNWIND [" + items + "] AS x CREATE (:R {id: x.i, vec: x.v});");
+    }
+    // La région : les plus proches du centre 0, par la distance.
+    std::vector<int> byDistance(NUM_ROWS);
+    for (auto i = 0; i < NUM_ROWS; i++) {
+        byDistance[i] = i;
+    }
+    std::ranges::sort(byDistance, [&](int a, int b) {
+        return distance(vecs[a], centers[0]) < distance(vecs[b], centers[0]);
+    });
+    const auto numDeleted = GetParam().keepOnlyAHandful ? NUM_ROWS - 5 : NUM_ROWS / 10;
+    const std::vector<int> deleted(byDistance.begin(), byDistance.begin() + numDeleted);
+    const std::set<int> deletedSet(deleted.begin(), deleted.end());
+    const auto numParts = 3;
+    for (auto part = 0; part < numParts; part++) {
+        std::string ids;
+        for (auto j = part; j < numDeleted; j += numParts) {
+            ids += (ids.empty() ? "" : ", ") + std::to_string(deleted[j]);
+        }
+        if (GetParam().setNullFirst) {
+            mustRun("MATCH (n:R) WHERE n.id IN [" + ids + "] SET n.vec = NULL;");
+        }
+        mustRun("MATCH (n:R) WHERE n.id IN [" + ids + "] DETACH DELETE n;");
+    }
+    std::vector<int> survivors;
+    for (auto i = 0; i < NUM_ROWS; i++) {
+        if (!deletedSet.contains(i)) {
+            survivors.push_back(i);
+        }
+    }
+    const auto numSurvivors = static_cast<int64_t>(survivors.size());
+    // Toutes les vivantes, atteintes depuis la requête d'un survivant.
+    auto all = conn->query(stringFormat(
+        "CALL QUERY_VECTOR_INDEX('R', 'r_index', {}, {}, efs := {}) RETURN node.id;",
+        literal(vecs[survivors[0]]), numSurvivors, numSurvivors));
+    ASSERT_TRUE(all->isSuccess()) << all->getErrorMessage();
+    std::set<int64_t> reached;
+    while (all->hasNext()) {
+        reached.insert(all->getNext()->getValue(0)->getValue<int64_t>());
+    }
+    EXPECT_EQ(static_cast<int64_t>(reached.size()), numSurvivors)
+        << "[check: survivors-reachable] " << reached.size() << " of " << numSurvivors;
+    // Les dix plus proches d'une requête au bord de la région : le centre 0 lui-même, dont tous les
+    // proches sont retirés.
+    const auto k = std::min<int64_t>(10, numSurvivors);
+    std::vector<int> exact = survivors;
+    std::ranges::sort(exact, [&](int a, int b) {
+        return distance(vecs[a], centers[0]) < distance(vecs[b], centers[0]);
+    });
+    exact.resize(k);
+    auto top = conn->query(stringFormat(
+        "CALL QUERY_VECTOR_INDEX('R', 'r_index', {}, {}) RETURN node.id;", literal(centers[0]), k));
+    ASSERT_TRUE(top->isSuccess()) << top->getErrorMessage();
+    std::set<int64_t> found;
+    while (top->hasNext()) {
+        found.insert(top->getNext()->getValue(0)->getValue<int64_t>());
+    }
+    int64_t hits = 0;
+    for (const auto id : exact) {
+        hits += found.contains(id) ? 1 : 0;
+    }
+    std::cerr << "  region delete (" << (GetParam().setNullFirst ? "set null first" : "direct")
+              << ", " << (GetParam().keepOnlyAHandful ? "all but five" : "10 %")
+              << "): reached " << reached.size() << "/" << numSurvivors << ", nearest " << hits << "/"
+              << k << "\n";
+    EXPECT_GE(hits * 10, k * 9) << "[check: nearest-right] " << hits << " of " << k;
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, RegionDelete,
+    ::testing::Values(RegionDeleteCase{false, false}, RegionDeleteCase{true, false},
+        RegionDeleteCase{false, true}, RegionDeleteCase{true, true}),
+    [](const ::testing::TestParamInfo<RegionDeleteCase>& info) {
+        return std::string(info.param.setNullFirst ? "SetNullFirst" : "Direct") +
+               (info.param.keepOnlyAHandful ? "AllButFive" : "TenPercent");
+    });
+
 } // namespace
 
 #endif

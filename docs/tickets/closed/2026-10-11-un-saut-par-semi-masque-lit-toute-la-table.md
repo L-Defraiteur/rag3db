@@ -1,6 +1,6 @@
 # Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé
 
-- **État** : ouvert (11 octobre 2026) — au cœur C++, avec le ticket des fils (même famille : le planificateur ne regarde pas la cardinalité) ; ouvert par la session embarquements à la demande de l'orchestration
+- **État** : corrigé (le commit qui déplace ce fichier dans `closed/`, 12 octobre 2026, cœur C++, page coeur-cpp/12 §10) — le balayage passe par décalages quand le masque retient moins d'une ligne sur 64 (décidé sur la cardinalité exacte du masque à l'initialisation du balayage, le masqueur ayant fini) : des tranches de ≤ 2 048 décalages relues ligne à ligne (`NodeTable::lookupOffsets`), la sélection ne gardant que les lignes visibles ; au-delà, le chemin d'avant. Témoin du banc `MaskedScan.ReadsAboutTheMaskNotTheTable` sorti du known_red : 117 lignes sorties du balayage pour 117 masquées sur 72 000 (67 584 avant). Ouvert le 11 octobre 2026 ; au cœur C++, avec le ticket des fils (même famille : le planificateur ne regarde pas la cardinalité) ; ouvert par la session embarquements à la demande de l'orchestration
 - **Gravité** : coût (l'outil `usages` prend 0,4 à 1,5 s sur un index entier au lieu de quelques dizaines de millisecondes)
 - **Atteignable en service** : oui, à chaque saut vers une grande table de nœuds (usages, impact, liens, sur un dépôt réel)
 - **Touche rag3weaver** : oui (tous les sauts des outils ; contournement à mesurer côté dialecte)

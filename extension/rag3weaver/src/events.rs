@@ -175,6 +175,10 @@ pub enum Event {
         kind: String,
         ms: u64,
         ok: bool,
+        /// Pourquoi le run s'est arrêté avant sa fin, s'il l'a été : `durée`,
+        /// `parent`, `hôte`, `demande` (un run lancé en fond, page
+        /// 12-octobre-2026-recherche/03). `None` pour une fin ordinaire.
+        cause: Option<String>,
     },
     /// Un appel au modèle, terminé.
     LlmCall {
@@ -237,6 +241,21 @@ pub enum Event {
         change: String,
         hash: String,
         at_ms: u64,
+    },
+    /// **Un fragment de la sortie d'un modèle**, au fil de la génération
+    /// (`TokenEvents`). Sujet `tokens`, que les réactions n'écoutent pas par
+    /// défaut : un événement par jeton ne réveille personne qui ne l'a pas
+    /// demandé. Aussi sur `run.<id>`. `seq` donne l'ordre.
+    Token {
+        run: String,
+        /// Le flux d'où vient le fragment (le nom que `TokenEvents` lui donne).
+        node: String,
+        /// Le rang du (premier) fragment.
+        seq: u64,
+        text: String,
+        /// Combien de fragments ce texte réunit : 1, ou un paquet
+        /// (`TokenEvents.batch_ms`).
+        count: u64,
     },
     /// Un message d'une boucle à une autre. Fire and forget des deux côtés :
     /// un accusé est un second message, pas un verrou.
@@ -320,6 +339,7 @@ impl Event {
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
             Self::FileChanged { .. } => topic::FILES,
+            Self::Token { .. } => topic::TOKENS,
             _ => topic::CATALOG,
         }
     }
@@ -336,6 +356,7 @@ impl Event {
             | Self::TurnCompacted { run, .. }
             | Self::Consumed { run, .. }
             | Self::NodeRun { run, .. }
+            | Self::Token { run, .. }
             | Self::Message { run, .. } => Some(run),
             _ => None,
         }
@@ -362,9 +383,15 @@ impl Event {
                 "org": scope.as_ref().map(|s| s.org.clone()),
                 "project": scope.as_ref().map(|s| s.project.clone()),
             }),
-            Self::RunFinished { run, kind, ms, ok } => json!({
-                "kind": "RunFinished", "run": run, "run_kind": kind, "ms": ms, "ok": ok,
-            }),
+            Self::RunFinished { run, kind, ms, ok, cause } => {
+                let mut v = json!({
+                    "kind": "RunFinished", "run": run, "run_kind": kind, "ms": ms, "ok": ok,
+                });
+                if let Some(cause) = cause {
+                    v["cause"] = json!(cause);
+                }
+                v
+            }
             Self::Consumed { run, agent, iteration, resource, provider, units } => json!({
                 "kind": "Consumed", "run": run, "agent": agent, "iteration": iteration,
                 "resource": resource, "provider": provider,
@@ -405,6 +432,12 @@ impl Event {
                 "kind": "FileChanged", "watch": watch, "path": path, "change": change,
                 "hash": hash, "at_ms": at_ms,
             }),
+            // Le format des jetons d'une conversation (`ChatSink`), plus le
+            // run, le flux et le rang : une interface lit l'un comme l'autre.
+            Self::Token { run, node, seq, text, count } => json!({
+                "kind": "Token", "event": "token", "run": run, "node": node, "seq": seq, "text": text,
+                "count": count,
+            }),
             other => json!({ "kind": other.kind(), "detail": format!("{other:?}") }),
         }
     }
@@ -425,6 +458,8 @@ pub mod topic {
     pub const MESSAGES: &str = "messages";
     /// Les fichiers changés sous une montre (`watches`).
     pub const FILES: &str = "files";
+    /// Les fragments d'un modèle, au fil de la génération (`TokenEvents`).
+    pub const TOKENS: &str = "tokens";
 }
 
 /// Le sujet d'un run : `run.<id>`.
@@ -736,7 +771,7 @@ mod tests {
         assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));
         // Un run de graphe va sur `dataflow`, pas sur `agent`.
-        bus.emit(Event::RunFinished { run: "g1".into(), kind: "graph".into(), ms: 3, ok: true });
+        bus.emit(Event::RunFinished { run: "g1".into(), kind: "graph".into(), ms: 3, ok: true, cause: None });
         assert!(matches!(all.try_recv(), Err(TryRecvError::Empty)));
         assert_ne!(new_run_id("agent"), new_run_id("agent"));
         assert_eq!(inbox_topic("r1"), "run.r1.inbox");

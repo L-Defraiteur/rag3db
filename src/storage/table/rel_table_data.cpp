@@ -51,6 +51,12 @@ void InMemoryVersionRecordHandler::applyFuncToChunkedGroups(version_record_handl
     nodeGroup->applyFuncToChunkedGroups(func, startRow, numRows, commitTS);
 }
 
+void InMemoryVersionRecordHandler::compactDeadRows(node_group_idx_t nodeGroupIdx,
+    const Transaction* transaction) const {
+    relTableData->getNodeGroupNoLock(nodeGroupIdx)->cast<CSRNodeGroup>().compactHintedLists(
+        transaction);
+}
+
 void InMemoryVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     node_group_idx_t nodeGroupIdx, row_idx_t startRow, row_idx_t numRows) const {
     VersionRecordHandler::rollbackInsert(context, nodeGroupIdx, startRow, numRows);
@@ -171,12 +177,20 @@ bool RelTableData::delete_(Transaction* transaction, ValueVector& boundNodeIDVec
     if (rowIdx == INVALID_ROW_IDX) {
         return false;
     }
+    return delete_(transaction, boundNodeIDVector, relIDVector, source, rowIdx);
+}
+
+bool RelTableData::delete_(Transaction* transaction, ValueVector& boundNodeIDVector,
+    const ValueVector& relIDVector, CSRNodeGroupScanSource source, row_idx_t rowIdx) {
+    const auto boundNodePos = boundNodeIDVector.state->getSelVector()[0];
+    const auto relIDPos = relIDVector.state->getSelVector()[0];
     const auto boundNodeOffset = boundNodeIDVector.getValue<nodeID_t>(boundNodePos).offset;
     const auto nodeGroupIdx = StorageUtils::getNodeGroupIdx(boundNodeOffset);
     auto& csrNodeGroup = getNodeGroup(nodeGroupIdx)->cast<CSRNodeGroup>();
     throwIfWrittenByAnotherCommitAfterSnapshot(transaction, csrNodeGroup, source, rowIdx,
         relIDVector.getValue<nodeID_t>(relIDPos).offset, table);
-    bool isDeleted = csrNodeGroup.delete_(transaction, source, rowIdx);
+    bool isDeleted = csrNodeGroup.delete_(transaction,
+        boundNodeOffset % StorageConfig::NODE_GROUP_SIZE, source, rowIdx);
     if (isDeleted && transaction->shouldAppendToUndoBuffer()) {
         transaction->pushDeleteInfo(nodeGroupIdx, rowIdx, 1, getVersionRecordHandler(source));
     }

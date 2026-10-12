@@ -88,18 +88,17 @@ void UpdateInfo::lookup(const Transaction* transaction, offset_t rowInChunk, Val
     }
     auto [vectorIdx, rowInVector] =
         StorageUtils::getQuotientRemainder(rowInChunk, DEFAULT_VECTOR_CAPACITY);
-    bool updated = false;
+    // La première version visible qui porte la ligne est la plus récente pour elle : deux
+    // transactions concurrentes ne mettent pas à jour la même ligne (conflit d'écriture), donc
+    // ses versions se suivent dans la chaîne comme dans le temps. On s'arrête là.
     iterateVectorInfo(transaction, vectorIdx, [&](const VectorUpdateInfo& vectorInfo) {
-        if (updated) {
-            return;
-        }
         for (auto i = 0u; i < vectorInfo.numRowsUpdated; i++) {
             if (vectorInfo.rowsInVector[i] == rowInVector) {
                 vectorInfo.data->lookup(i, output, posInOutputVector);
-                updated = true;
-                return;
+                return true;
             }
         }
+        return false;
     });
 }
 
@@ -112,7 +111,7 @@ void UpdateInfo::scanCommitted(const Transaction* transaction, ColumnChunkData& 
 }
 
 void UpdateInfo::iterateVectorInfo(const Transaction* transaction, idx_t idx,
-    const std::function<void(const VectorUpdateInfo&)>& func) const {
+    const std::function<bool(const VectorUpdateInfo&)>& func) const {
     const UpdateNode* head = nullptr;
     {
         std::shared_lock lock{mtx};
@@ -134,7 +133,9 @@ void UpdateInfo::iterateVectorInfo(const Transaction* transaction, idx_t idx,
                           current->version >= Transaction::START_TRANSACTION_ID) ||
                       (current->version <= transaction->getStartTS() &&
                           current->version < Transaction::START_TRANSACTION_ID));
-            func(*current);
+            if (func(*current)) {
+                return;
+            }
         }
         current = current->getPrev();
     }
@@ -207,6 +208,7 @@ row_idx_t UpdateInfo::getNumUpdatedRows(const Transaction* transaction) const {
             for (auto i = 0u; i < info.numRowsUpdated; i++) {
                 updatedRows.insert(info.rowsInVector[i]);
             }
+            return false;
         });
     }
     return updatedRows.size();
@@ -290,13 +292,9 @@ void UpdateInfo::iterateScan(const Transaction* transaction, uint64_t startOffse
         // visible version. If a row has been updated in the current vectorInfo, we should skip it
         // in older versions.
         std::bitset<DEFAULT_VECTOR_CAPACITY> rowsUpdated;
-        iterateVectorInfo(transaction, idx, [&](const VectorUpdateInfo& vecUpdateInfo) -> void {
+        iterateVectorInfo(transaction, idx, [&](const VectorUpdateInfo& vecUpdateInfo) -> bool {
             if (vecUpdateInfo.numRowsUpdated == 0) {
-                return;
-            }
-            if (rowsUpdated.count() == numRowsInVector) {
-                // All rows in this vector have been updated with a newer visible version already.
-                return;
+                return false;
             }
             // TODO(Guodong): Ideally we should make sure vecUpdateInfo.rowsInVector is sorted to
             // simplify the checks here.
@@ -314,6 +312,9 @@ void UpdateInfo::iterateScan(const Transaction* transaction, uint64_t startOffse
                 readFromRowFunc(vecUpdateInfo, i, posInVector + updatedRowIdx);
                 rowsUpdated[updatedRowIdx] = true;
             }
+            // Toutes les lignes de la plage ont leur version la plus récente : les plus anciennes
+            // n'ont plus rien à donner.
+            return rowsUpdated.count() == numRowsInVector;
         });
         posInVector += numRowsInVector;
         idx++;

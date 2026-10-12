@@ -36,7 +36,7 @@ use serde::Serialize;
 use super::node::{Node, NodeContext};
 use super::node_registry::{Choices, ConfigParam, ConfigParamType, NodeFactory, NodeSchema};
 use super::port::{PortDef, PortType, PortValue};
-use super::usage_nodes::{rel_info, usages_of, RelInfo, UsagesConfig};
+use super::usage_nodes::{in_scope, rel_info, usages_of_in, QueryScope, RelInfo, UsagesConfig};
 pub use super::graph_walk::{degree_count, Direction};
 use crate::catalog::{Catalog, CatalogError};
 use crate::connection::{CypherValue, QueryParam};
@@ -47,7 +47,8 @@ pub const MAX_BUDGET: usize = 2_000;
 
 /// Un pas d'un chemin déclaré : une relation et son sens. Dans `also_path`,
 /// un pas peut nommer plusieurs relations (`IMPLEMENTS/INHERITS_FROM>`) et
-/// se répéter (`…>+` : de 1 à [`MAX_REPEAT`] niveaux, une hiérarchie).
+/// se répéter (`…>+` : de 1 à [`MAX_REPEAT`] niveaux, une hiérarchie), ou
+/// être facultatif (`…>?` : zéro ou un saut, le nœud lui-même compris).
 #[derive(Debug, Clone)]
 pub struct Step {
     /// La première relation (la seule hors de `also_path`).
@@ -56,12 +57,14 @@ pub struct Step {
     pub alternatives: Vec<String>,
     pub direction: Direction,
     pub repeat: bool,
+    /// Zéro ou un saut : le nœud de départ du pas reste dans la suite.
+    pub optional: bool,
 }
 
 impl Step {
     /// Un pas d'une seule relation, non répété.
     pub fn new(relation: &str, direction: Direction) -> Self {
-        Step { relation: relation.to_string(), alternatives: vec![relation.to_string()], direction, repeat: false }
+        Step { relation: relation.to_string(), alternatives: vec![relation.to_string()], direction, repeat: false, optional: false }
     }
 }
 
@@ -92,6 +95,17 @@ pub struct NeighborhoodConfig {
     /// la relation déclarée suivie d'un pas — pour le code, les verrous que
     /// chaque scope prend (`LOCKS>`).
     pub collect: Option<Collect>,
+    /// **Les tests par requêtes** : un chemin déclaré, suivi depuis chaque
+    /// nœud atteint (départs compris) ; au bout, les nœuds du groupe déclaré
+    /// (pour le code : un test qui demande ce que le nœud ou sa classe
+    /// définit ou enregistre, `HAS_PARENT>?|DEFINES/REGISTERS>|<QUERIES`)
+    /// sont relevés comme traversants, notés `queried_note`. Vide : rien.
+    pub queried_by: Vec<Step>,
+    pub queried_note: String,
+    /// **Les verrous du chemin, dans l'ordre** (`super::lock_order`) : ceux
+    /// que le départ prend, dépliés par ses appels, et ceux que les appelants
+    /// tiennent avant d'appeler. `None` : rien.
+    pub lock_order: Option<super::lock_order::LockOrder>,
 }
 
 /// **Un relevé sur le chemin**, déclaré au gabarit : la relation et son sens,
@@ -153,6 +167,18 @@ pub struct NeighborhoodReport {
     pub depth: usize,
     /// Le relevé sur le chemin (vide sans `collect`).
     pub collected: Vec<Collected>,
+    /// Le gabarit déclare un chemin de tests par requêtes, mais l'index n'en
+    /// a jamais écrit la relation : « 0 tests » n'y veut rien dire.
+    #[serde(default)]
+    pub queries_untracked: bool,
+    /// La portée demandée (vide : tout l'index), et combien de nœuds
+    /// atteints elle écarte du rendu — ils restent des relais du parcours.
+    #[serde(default)]
+    pub scope: QueryScope,
+    #[serde(default)]
+    pub scope_hidden: usize,
+    /// Les verrous du chemin, dans l'ordre (vide sans `lock_order`).
+    pub locks: super::lock_order::LockReport,
 }
 
 // ─── Requêtes ────────────────────────────────────────────────────────────────
@@ -228,7 +254,7 @@ fn largeur(cfg: &NeighborhoodConfig) -> usize {
 }
 
 struct Moteur<'a> {
-    catalog: &'a Catalog,
+    catalog: &'a dyn crate::read_view::ReadCatalog,
     cfg: &'a NeighborhoodConfig,
     rels: Vec<RelInfo>,
 }
@@ -258,7 +284,7 @@ impl Moteur<'_> {
                 .output(&id);
         }
         let options = crate::plan::PlanOptions { no_transaction: true, ..Default::default() };
-        let mut rapport = self.catalog.run_plan(&plan, options).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+        let mut rapport = self.catalog.run_read_plan(&plan, options).map_err(|e| format!("NeighborhoodNode: {e}"))?;
         let mut out = Vec::new();
         for (k, rel) in self.rels.iter().enumerate() {
             let rows = rapport.outputs.remove(&format!("r{k}")).unwrap_or_default();
@@ -318,7 +344,7 @@ pub fn check_also_path(chemin: &[Step]) -> Result<(), String> {
 /// bout, ne garder que les nœuds dont le champ `same` vaut le titre du départ.
 /// Rend les paires (atteint, titre du départ). Partagé par `impact` (« par
 /// envoi virtuel ») et `usages`.
-pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(String, String)]) -> Result<Vec<(String, String)>, String> {
+pub fn follow_also(catalog: &dyn crate::read_view::ReadCatalog, chemin: &[Step], same: &str, departs: &[(String, String)]) -> Result<Vec<(String, String)>, String> {
     if chemin.is_empty() || departs.is_empty() {
         return Ok(Vec::new());
     }
@@ -337,16 +363,18 @@ pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(S
             for relation in &pas.alternatives {
                 let rel = rel_info(catalog, relation)?;
                 let mut hop = super::graph_walk::hop_of(&rel, pas.direction, &super::graph_walk::EdgeMark::default());
-                if dernier {
+                // `same` vide : rien à comparer au bout, le chemin seul.
+                let filtre = dernier && !same.is_empty();
+                if filtre {
                     hop.returns.push(Column::Node(same.to_string()));
                 }
                 let q = catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
-                let rows = catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+                let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(|e| format!("NeighborhoodNode: {e}"))?;
                 for r in &rows.rows {
                     let de = texte(r.first());
                     let Some(nom_depart) = origine.get(de.as_str()) else { continue };
                     let vers = texte(r.get(1));
-                    if dernier && texte(r.get(2)) != *nom_depart {
+                    if filtre && texte(r.get(2)) != *nom_depart {
                         continue;
                     }
                     suivant.push((vers, nom_depart.to_string()));
@@ -371,6 +399,13 @@ pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(S
                 front = neufs;
             }
             courant = tous;
+        } else if pas.optional {
+            // Zéro ou un saut : la suite part du nœud et de ce qu'il atteint.
+            let mut suivant = courant.clone();
+            suivant.extend(sauter(&courant)?);
+            suivant.sort();
+            suivant.dedup();
+            courant = suivant;
         } else {
             courant = sauter(&courant)?;
         }
@@ -398,7 +433,7 @@ fn relever(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], atteints: 
     hop.returns.push(Column::Edge(c.note.clone()));
     let q = moteur.catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
     let liste = CypherValue::List(qui.keys().map(|u| CypherValue::String(u.clone())).collect());
-    let rows = moteur.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
+    let rows = moteur.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
     let mut out: Vec<Collected> = rows
         .rows
         .iter()
@@ -412,16 +447,101 @@ fn relever(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], atteints: 
     Ok(out)
 }
 
+/// **Borner le rendu à la portée** : les nœuds atteints hors de `scope` sont
+/// retirés du rapport et comptés. Le parcours a déjà eu lieu : ils ont servi
+/// de relais.
+fn borner(moteur: &Moteur<'_>, atteints: Vec<Reached>, scope: &QueryScope) -> Result<(Vec<Reached>, usize), String> {
+    let Some(def) = moteur.cfg.start.defined_by.as_ref().filter(|_| !scope.is_empty()) else { return Ok((atteints, 0)) };
+    let table = rel_info(moteur.catalog, def)?.from;
+    let uuids: Vec<String> = atteints.iter().map(|a| a.uuid.clone()).collect();
+    let dedans = in_scope(moteur.catalog, &table, &moteur.cfg.start.path_fields, &uuids, scope)?;
+    let avant = atteints.len();
+    let gardes: Vec<Reached> = atteints.into_iter().filter(|a| dedans.contains(&a.uuid)).collect();
+    let n = avant - gardes.len();
+    Ok((gardes, n))
+}
+
+/// La clé de méta qu'une ingestion pose quand elle écrit des arêtes d'une
+/// relation : ce qui distingue « aucun test par requête » de « jamais relié ».
+pub fn written_key(relation: &str) -> String {
+    format!("written:{relation}")
+}
+
+/// **Les tests par requêtes** (`queried_by`) : depuis les départs (niveau 0)
+/// et chaque nœud atteint, le chemin déclaré ; au bout, les nœuds du groupe
+/// déclaré qui ne sont pas déjà relevés, au niveau de leur origine plus un,
+/// notés `queried_note`. Rend aussi si la relation du dernier pas n'a jamais
+/// été écrite dans cet index.
+fn interroges(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], mut atteints: Vec<Reached>) -> Result<(Vec<Reached>, bool), String> {
+    let cfg = moteur.cfg;
+    let Some(dernier) = cfg.queried_by.last() else { return Ok((atteints, false)) };
+    let jamais = dernier
+        .alternatives
+        .iter()
+        .all(|rel| moteur.catalog.read_meta_key(&written_key(rel)).ok().flatten().is_none());
+    if jamais {
+        return Ok((atteints, true));
+    }
+    let mut niveau: HashMap<String, usize> = HashMap::new();
+    for d in departs {
+        niveau.insert(d.uuid.clone(), 0);
+    }
+    for a in &atteints {
+        niveau.entry(a.uuid.clone()).or_insert(a.level);
+    }
+    let origines: Vec<(String, String)> = niveau.keys().map(|u| (u.clone(), u.clone())).collect();
+    let bouts = follow_also(moteur.catalog, &cfg.queried_by, "", &origines)?;
+    let deja: HashSet<String> = atteints.iter().map(|a| a.uuid.clone()).chain(departs.iter().map(|d| d.uuid.clone())).collect();
+    let mut meilleur: HashMap<String, usize> = HashMap::new();
+    for (bout, origine) in bouts {
+        if deja.contains(&bout) {
+            continue;
+        }
+        let l = niveau.get(&origine).copied().unwrap_or(0) + 1;
+        let e = meilleur.entry(bout).or_insert(l);
+        *e = (*e).min(l);
+    }
+    if meilleur.is_empty() {
+        return Ok((atteints, false));
+    }
+    let uuids: Vec<String> = meilleur.keys().cloned().collect();
+    for m in fiches(moteur, &uuids)? {
+        if m.group.is_empty() {
+            continue;
+        }
+        let level = meilleur.get(&m.uuid).copied().unwrap_or(1);
+        atteints.push(Reached { level, relation: dernier.relation.clone(), note: cfg.queried_note.clone(), ..m });
+    }
+    Ok((atteints, false))
+}
+
 /// Le voisinage d'un nom, jusqu'à `depth` sauts, au plus `budget` nœuds
 /// rendus, sans traverser un nœud de degré supérieur à `max_degree`.
 pub fn neighborhood_of(
-    catalog: &Catalog,
+    catalog: &dyn crate::read_view::ReadCatalog,
     cfg: &NeighborhoodConfig,
     name: &str,
     path_prefix: &str,
     depth: usize,
     budget: usize,
     max_degree: usize,
+) -> Result<NeighborhoodReport, String> {
+    neighborhood_of_in(catalog, cfg, name, path_prefix, depth, budget, max_degree, &QueryScope::default())
+}
+
+/// [`neighborhood_of`] borné à une portée : le parcours est le même (un nœud
+/// hors portée reste un relais), seuls le départ et le rendu sont bornés, et
+/// le compte des écartés est rendu.
+#[allow(clippy::too_many_arguments)]
+pub fn neighborhood_of_in(
+    catalog: &dyn crate::read_view::ReadCatalog,
+    cfg: &NeighborhoodConfig,
+    name: &str,
+    path_prefix: &str,
+    depth: usize,
+    budget: usize,
+    max_degree: usize,
+    scope: &QueryScope,
 ) -> Result<NeighborhoodReport, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let rels: Vec<RelInfo> = cfg.relations.iter().map(|r| rel_info(catalog, r)).collect::<Result<_, _>>()?;
@@ -438,7 +558,7 @@ pub fn neighborhood_of(
     } else {
         std::borrow::Cow::Owned(UsagesConfig { direct: Vec::new(), used_by: None, ..cfg.start.clone() })
     };
-    let usages = usages_of(catalog, &depart, name, path_prefix)?;
+    let usages = usages_of_in(catalog, &depart, name, path_prefix, scope)?;
     let vus: HashSet<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
 
     let mut premiers: Vec<Reached> = Vec::new();
@@ -470,8 +590,36 @@ pub fn neighborhood_of(
     }
 
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
+    let (atteints, queries_untracked) = interroges(&moteur, &usages.definitions, atteints)?;
     let collected = relever(&moteur, &usages.definitions, &atteints)?;
-    Ok(NeighborhoodReport { name: name.to_string(), starts: usages.definitions, ambiguous: usages.ambiguous, reached: atteints, cut, depth, collected })
+    let (atteints, scope_hidden) = borner(&moteur, atteints, scope)?;
+    // Les verrous du chemin : ceux du départ, dans l'ordre ; et, en entrant,
+    // ceux que chaque appelant tient avant la ligne de son appel.
+    let locks = match &cfg.lock_order {
+        Some(lo) => {
+            let departs: Vec<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
+            let appelants: Vec<(String, Option<i64>)> = if cfg.direction == Direction::Incoming {
+                atteints.iter().filter(|a| a.group.is_empty() && !a.by_name).map(|a| (a.uuid.clone(), a.line)).collect()
+            } else {
+                Vec::new()
+            };
+            super::lock_order::lock_report(catalog, lo, &departs, depth, &appelants)?
+        }
+        None => Default::default(),
+    };
+    Ok(NeighborhoodReport {
+        name: name.to_string(),
+        starts: usages.definitions,
+        ambiguous: usages.ambiguous,
+        reached: atteints,
+        cut,
+        depth,
+        collected,
+        queries_untracked,
+        scope: scope.clone(),
+        scope_hidden,
+        locks,
+    })
 }
 
 /// **L'impact d'un fichier** : le même voisinage, parti de toutes les
@@ -481,7 +629,7 @@ pub fn neighborhood_of(
 /// seuls les dépendants extérieurs, dédoublonnés, puis leurs propres
 /// dépendants. Pas de rendez-vous par le nom : on part de lignes, pas d'un
 /// nom.
-pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &str, depth: usize, budget: usize, max_degree: usize) -> Result<NeighborhoodReport, String> {
+pub fn neighborhood_of_file(catalog: &dyn crate::read_view::ReadCatalog, cfg: &NeighborhoodConfig, file: &str, depth: usize, budget: usize, max_degree: usize) -> Result<NeighborhoodReport, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let rels: Vec<RelInfo> = cfg.relations.iter().map(|r| rel_info(catalog, r)).collect::<Result<_, _>>()?;
     let table = match &cfg.start.defined_by {
@@ -498,7 +646,7 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
     colonnes_depart.extend(colonnes(cfg));
     let q = catalog.dialect_arc().select(&rag3weaver_ir::Select::filtered(&table, condition, colonnes_depart)).map_err(Moteur::err_ir)?;
     let rows = catalog
-        .execute_raw_with_params(&q, &[QueryParam::new("file", CypherValue::String(file.to_string()))])
+        .execute_read_with_params(&q, &[QueryParam::new("file", CypherValue::String(file.to_string()))])
         .map_err(Moteur::err)?;
     let departs: Vec<super::usage_nodes::Item> = rows
         .rows
@@ -512,8 +660,21 @@ pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &
     let uuids: Vec<String> = departs.iter().map(|d| d.uuid.clone()).collect();
     let premiers: Vec<Reached> = moteur.saut(&uuids)?.into_iter().map(|(_, m)| m).collect();
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
+    let (atteints, queries_untracked) = interroges(&moteur, &departs, atteints)?;
     let collected = relever(&moteur, &departs, &atteints)?;
-    Ok(NeighborhoodReport { name: file.to_string(), starts: departs, ambiguous: false, reached: atteints, cut, depth, collected })
+    Ok(NeighborhoodReport {
+        name: file.to_string(),
+        starts: departs,
+        ambiguous: false,
+        reached: atteints,
+        cut,
+        depth,
+        collected,
+        queries_untracked,
+        scope: QueryScope::default(),
+        scope_hidden: 0,
+        locks: Default::default(),
+    })
 }
 
 /// Le parcours par niveaux, commun aux deux départs : dédoublonner, couper
@@ -626,7 +787,7 @@ fn fiches(moteur: &Moteur<'_>, uuids: &[String]) -> Result<Vec<Reached>, String>
     };
     let q = moteur.catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(table, colonnes(moteur.cfg))).map_err(|e| format!("NeighborhoodNode: {e}"))?;
     let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
-    let rows = moteur.catalog.execute_raw_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
+    let rows = moteur.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
     Ok(rows.rows.iter().map(|r| reached_from(r, 1, moteur.cfg)).collect())
 }
 
@@ -677,6 +838,9 @@ impl NeighborhoodReport {
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
         }
+        if !self.scope.is_empty() {
+            out.push_str(&format!(" ; portée {} : {} hors de la portée, écartés (traversés)", self.scope.describe(), self.scope_hidden));
+        }
         out.push_str(".\n");
         if groupes.is_empty() {
             return out;
@@ -702,6 +866,44 @@ impl NeighborhoodReport {
     /// relevé sur le chemin, sous le sien ; `include_by_name` : les usages
     /// par le nom seul listés, marqués. Un `group_title` vide : pas de
     /// groupe, rien n'en est dit.
+    /// Les deux sections des verrous du chemin, quand le gabarit les déclare.
+    fn verrous_du_chemin(&self, out: &mut String, limit: usize) {
+        let l = &self.locks;
+        if !l.order.is_empty() || l.cut_by_depth > 0 {
+            out.push_str(&format!("\n## {} ({})\n", l.titles.0, l.order.len()));
+            for v in l.order.iter().take(limit) {
+                let retrait = "  ".repeat(v.nesting);
+                let lieu = match v.line {
+                    Some(n) => format!("{}:{n}", v.path),
+                    None => v.path.clone(),
+                };
+                let par = if v.nesting == 0 { String::new() } else { format!(" (dans {})", v.scope) };
+                let si = if v.condition.is_empty() { String::new() } else { format!(" — si `{}`", v.condition) };
+                let quoi = if v.text.is_empty() { format!("{} {}", v.usage, v.target) } else { v.text.clone() };
+                out.push_str(&format!("{retrait}- `{quoi}` — {lieu}{par}{si}\n"));
+            }
+            if l.order.len() > limit {
+                out.push_str(&format!("… {} de plus\n", l.order.len() - limit));
+            }
+            if l.cut_by_depth > 0 {
+                out.push_str(&format!(
+                    "({} appel(s) au-delà de la profondeur {} prennent eux-mêmes un verrou, non dépliés : augmenter depth)\n",
+                    l.cut_by_depth, self.depth
+                ));
+            }
+        }
+        if !l.held.is_empty() {
+            out.push_str(&format!("\n## {} ({})\n", l.titles.1, l.held.len()));
+            out.push_str("(supposés tenus jusqu'à la fin de leur scope : un `unlock` manuel n'est pas suivi)\n");
+            for h in l.held.iter().take(limit) {
+                let quoi = if h.text.is_empty() { format!("{} {}", h.usage, h.target) } else { h.text.clone() };
+                let ligne = h.line.map(|n| n.to_string()).unwrap_or_default();
+                let appel = h.call_line.map(|n| n.to_string()).unwrap_or_default();
+                out.push_str(&format!("- {} — `{quoi}` ligne {ligne}, avant son appel ligne {appel} — {}\n", h.caller, h.path));
+            }
+        }
+    }
+
     pub fn markdown_avec(&self, heading: &str, group_title: &str, rest_title: &str, also_label: &str, collect_title: Option<&str>, limit: usize, include_by_name: bool) -> String {
         let mut out = format!("# {heading}: {}\n\n", self.name);
         out.push_str(&format!("## Départ ({})\n", self.starts.len()));
@@ -734,12 +936,20 @@ impl NeighborhoodReport {
         ));
         if !group_title.is_empty() {
             out.push_str(&format!(" — dont **{} {group_title}**", groupes.iter().filter(|r| !r.by_also).count()));
+            if self.queries_untracked {
+                // Un 0 sec mentirait : les tests qui passent par des requêtes
+                // ne sont pas reliés dans cet index.
+                out.push_str(" (tests par requêtes : non suivis — `workspace.queries_via` non déclaré pour cet index)");
+            }
         }
         if self.cut > 0 {
             out.push_str(&format!(" ; budget atteint, {} de plus non rendus", self.cut));
         }
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
+        }
+        if !self.scope.is_empty() {
+            out.push_str(&format!(" ; portée {} : {} hors de la portée, écartés (traversés)", self.scope.describe(), self.scope_hidden));
         }
         out.push_str(".\n");
 
@@ -805,6 +1015,7 @@ impl NeighborhoodReport {
                 }
             }
         }
+        self.verrous_du_chemin(&mut out, limit);
         let aussi: Vec<&Reached> = self.reached.iter().filter(|r| r.by_also).collect();
         if !aussi.is_empty() {
             out.push_str(&format!("\n## {also_label} ({})\n", aussi.len()));
@@ -829,6 +1040,8 @@ pub struct NeighborhoodNode {
     cfg: NeighborhoodConfig,
     name: String,
     path: String,
+    /// La portée de la question (`scope`, `language`).
+    scope: QueryScope,
     /// Mode par fichier : départ de toutes les lignes de ce fichier.
     file: String,
     /// `summary` : les comptes et les premiers du groupe.
@@ -862,18 +1075,22 @@ impl Node for NeighborhoodNode {
         crate::dataflow::node_registry::ports_declares(&NeighborhoodNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog_in, refusal, with_status, CatalogRead};
+        use super::catalog_read::{read_for_tool, refusal, with_status};
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("NeighborhoodNode: service 'catalog' absent")?;
-        let (report, status) = match read_catalog_in(&catalog, &self.cfg.start.pivot, ctx.service::<crate::scope::Scope>("scope")) {
-            CatalogRead::Refused(message) => {
+        // Par la vue de lecture quand elle est publiée : sans attendre
+        // l'écrivain (lot L2).
+        let lecture = read_for_tool(&catalog, ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE), &self.cfg.start.pivot, ctx.service::<crate::scope::Scope>("scope"));
+        let (report, status) = match lecture.into_reader() {
+            Err(message) => {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());
             }
-            CatalogRead::Ready { catalog: cat, status } => {
+            Ok((source, status)) => {
+                let cat = source.get();
                 let r = if self.name.is_empty() {
-                    neighborhood_of_file(&cat, &self.cfg, &self.file, self.depth, self.budget, self.max_degree)?
+                    neighborhood_of_file(cat, &self.cfg, &self.file, self.depth, self.budget, self.max_degree)?
                 } else {
-                    neighborhood_of(&cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree)?
+                    neighborhood_of_in(cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree, &self.scope)?
                 };
                 (r, status)
             }
@@ -909,6 +1126,10 @@ fn liste(v: Option<&serde_json::Value>) -> Vec<String> {
 
 /// `HAS_PARENT>` (sortant) ou `<IMPLEMENTS` (entrant).
 pub fn pas(s: &str) -> Result<Step, String> {
+    let (s, optional) = match s.strip_suffix('?') {
+        Some(r) => (r, true),
+        None => (s, false),
+    };
     let (s, repeat) = match s.strip_suffix('+') {
         Some(r) => (r, true),
         None => (s, false),
@@ -918,11 +1139,11 @@ pub fn pas(s: &str) -> Result<Step, String> {
     } else if let Some(r) = s.strip_prefix('<') {
         (r, Direction::Incoming)
     } else {
-        return Err(format!("NeighborhoodNode: pas « {s} » : écrire REL> (sortant) ou <REL (entrant), A/B> pour plusieurs relations, + pour répéter"));
+        return Err(format!("NeighborhoodNode: pas « {s} » : écrire REL> (sortant) ou <REL (entrant), A/B> pour plusieurs relations, + pour répéter, ? pour un pas facultatif"));
     };
     let alternatives: Vec<String> = r.split('/').map(str::trim).filter(|x| !x.is_empty()).map(String::from).collect();
     let relation = alternatives.first().cloned().ok_or_else(|| format!("NeighborhoodNode: pas « {s} » sans relation"))?;
-    Ok(Step { relation, alternatives, direction, repeat })
+    Ok(Step { relation, alternatives, direction, repeat, optional })
 }
 
 impl NodeFactory for NeighborhoodNodeFactory {
@@ -958,6 +1179,23 @@ impl NodeFactory for NeighborhoodNodeFactory {
             Some(d) => return Err(format!("NeighborhoodNode: sens inconnu « {d} »")),
         };
         let also_path = liste(config.get("also_path")).iter().map(|p| pas(p)).collect::<Result<Vec<_>, _>>()?;
+        let queried_by = liste(config.get("queried_by")).iter().map(|p| pas(p)).collect::<Result<Vec<_>, _>>()?;
+        let lock_order = match s("lock_order").filter(|r| !r.is_empty()) {
+            Some(locks) => Some(super::lock_order::LockOrder {
+                locks,
+                calls: s("lock_calls").filter(|r| !r.is_empty()).unwrap_or_else(|| "CONSUMES".into()),
+                line: s("line").unwrap_or_else(|| "line".into()),
+                usage: s("usage_field").unwrap_or_else(|| "usage".into()),
+                content: s("lock_content").unwrap_or_else(|| "content".into()),
+                start_line: start.line_field.clone(),
+                title: start.title.clone(),
+                path_fields: start.path_fields.clone(),
+                target_field: s("lock_target_field").unwrap_or_else(|| "name".into()),
+                order_title: s("lock_title").unwrap_or_else(|| "Verrous pris par le départ, dans l'ordre".into()),
+                held_title: s("held_title").unwrap_or_else(|| "Verrous tenus par les appelants avant l'appel".into()),
+            }),
+            None => None,
+        };
         check_also_path(&also_path).map_err(|e| format!("NeighborhoodNode: also_path : {e}"))?;
         let mut start_cfg = start;
         start_cfg.direct = relations.clone();
@@ -971,6 +1209,9 @@ impl NodeFactory for NeighborhoodNodeFactory {
             also_same: s("also_same").unwrap_or_else(|| "name".into()),
             also_label: s("also_label").unwrap_or_else(|| "Aussi, peut-être".into()),
             also_path,
+            queried_by,
+            queried_note: s("queried_note").unwrap_or_else(|| "par requête".into()),
+            lock_order,
             collect: match s("collect").filter(|c| !c.is_empty()) {
                 Some(c) => Some(Collect {
                     step: pas(&c)?,
@@ -993,6 +1234,8 @@ impl NodeFactory for NeighborhoodNodeFactory {
             .chain(cfg.relations.iter().map(String::as_str))
             .chain(st.path_fields.iter().map(String::as_str))
             .chain(cfg.also_path.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
+            .chain(cfg.queried_by.iter().flat_map(|p| p.alternatives.iter().map(String::as_str)))
+            .chain(cfg.lock_order.iter().flat_map(|l| [l.locks.as_str(), l.calls.as_str(), l.line.as_str(), l.usage.as_str(), l.content.as_str(), l.target_field.as_str()]))
             .chain(cfg.collect.iter().flat_map(|c| [c.step.relation.as_str(), c.field.as_str(), c.note.as_str()]))
             .collect();
         if let Some(x) = tous.iter().find(|x| !ident(x)) {
@@ -1019,6 +1262,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             summary,
             summary_group: s("summary_group").unwrap_or_default(),
             path: s("path").unwrap_or_default(),
+            scope: QueryScope::parse(&s("scope").unwrap_or_default(), &s("language").unwrap_or_default()),
             depth: entier("depth", 2).clamp(1, MAX_DEPTH as u64) as usize,
             budget: entier("budget", 200).clamp(1, MAX_BUDGET as u64) as usize,
             max_degree: entier("max_degree", 50).max(1) as usize,
@@ -1064,6 +1308,14 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("label_field", S, false, Some(serde_json::json!("")), "Titre de remplacement quand non vide"),
                 p("note_field", S, false, Some(serde_json::json!("")), "Champ montré entre parenthèses"),
                 p("also_path", S, false, Some(serde_json::json!("")), "Départ supplémentaire : pas REL> ou <REL, séparés par |"),
+                p("queried_by", S, false, Some(serde_json::json!("")), "Tests par requêtes : chemin depuis chaque nœud atteint, pas REL> ou <REL séparés par |, ? pour un pas facultatif"),
+                p("queried_note", S, false, Some(serde_json::json!("par requête")), "La note d'un test relevé par ce chemin"),
+                p("lock_order", S, false, Some(serde_json::json!("")), "Les verrous du chemin, dans l'ordre : la relation d'un verrou pris (LOCKS) ; vide : rien"),
+                p("lock_calls", S, false, Some(serde_json::json!("CONSUMES")), "La relation d'un appel, dépliée à sa place"),
+                p("lock_content", S, false, Some(serde_json::json!("content")), "Le champ du texte d'un scope"),
+                p("lock_target_field", S, false, Some(serde_json::json!("name")), "Le champ du nom de ce qui est verrouillé"),
+                p("lock_title", S, false, Some(serde_json::json!("Verrous pris par le départ, dans l'ordre")), "Titre de la section des verrous du départ"),
+                p("held_title", S, false, Some(serde_json::json!("Verrous tenus par les appelants avant l'appel")), "Titre de la section des verrous des appelants"),
                 p("also_same", S, false, Some(serde_json::json!("name")), "Champ qui doit valoir celui du départ, au bout du chemin"),
                 p("also_label", S, false, Some(serde_json::json!("Aussi, peut-être")), "Libellé du groupe du départ supplémentaire"),
                 p("collect", S, false, Some(serde_json::json!("")), "Relevé sur le chemin : une relation et son sens, suivie d'un pas depuis chaque nœud atteint (`LOCKS>`)"),
@@ -1085,6 +1337,8 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("summary_group", S, false, Some(serde_json::json!("")), "Résumé : la seule valeur du groupe à compter et nommer (ex. case)"),
                 p("file", S, false, Some(serde_json::json!("")), "Mode par fichier : départ de toutes les lignes dont un champ de chemin vaut ce chemin ; ce qui est dans le fichier ne compte pas"),
                 p("path", S, false, Some(serde_json::json!("")), "Ne partir que des définitions sous ce chemin"),
+                p("scope", S, false, Some(serde_json::json!("")), super::usage_nodes::SCOPE_HELP),
+                p("language", S, false, Some(serde_json::json!("")), super::usage_nodes::LANGUAGE_HELP),
                 p("depth", Int, false, Some(serde_json::json!(2)), "Profondeur, 1 à 3"),
                 p("budget", Int, false, Some(serde_json::json!(200)), "Nœuds rendus au plus (plafond 2000)"),
                 p("max_degree", Int, false, Some(serde_json::json!(50)), "Un nœud plus connecté est montré, pas traversé"),
@@ -1140,6 +1394,9 @@ mod tests_saut {
             label_field: String::new(),
             note_field: "test_certainty".into(),
             also_path: vec![],
+            queried_by: vec![],
+            queried_note: String::new(),
+            lock_order: None,
             also_same: "name".into(),
             also_label: String::new(),
             collect: None,

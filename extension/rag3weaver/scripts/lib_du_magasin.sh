@@ -56,3 +56,33 @@ choisir_la_lib() {
       echo "$d" ;;
   esac
 }
+
+# `exporter_la_lib [<dossier de bâti>]` : **le pont lit la lib du magasin**,
+# comme run_e2e.sh (lot 3d, page 07 §9). Le choix est celui de
+# `choisir_la_lib`, fait une fois, et pose pour tout cargo qui suit les quatre
+# variables sur le **même** dossier : `RAG3DB_LIBRARY_DIR` et
+# `RAG3DB_INCLUDE_DIR` (le pont se compile contre ses en-têtes et lit son
+# identifiant), `RAG3DB_SHARED=1`, et `LD_LIBRARY_PATH` en tête (le binaire
+# charge cette lib, pas une autre de même nom). Un dossier du magasin est
+# immuable : un rebâti en place de `build/lecteurs-csv` pendant un
+# `cargo test --lib` ne change plus la lib liée. Un `RAG3DB_LIBRARY_DIR`
+# hérité qui diffère est remplacé, et c'est dit. Le dossier de bâti par
+# défaut est `RAG3DB_BUILD`, sinon le `build/lecteurs-csv` de l'arbre
+# principal (celui que l'arbre principal rebâtit).
+exporter_la_lib() {
+  local bati="${1:-}" d racine
+  if [ -z "$bati" ]; then
+    if [ -n "${RAG3DB_BUILD:-}" ]; then
+      bati="$RAG3DB_BUILD"
+    else
+      racine="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 2
+      bati="$(dirname "$racine")/build/lecteurs-csv"
+    fi
+  fi
+  d="$(choisir_la_lib "$bati")" || return 2
+  if [ -n "${RAG3DB_LIBRARY_DIR:-}" ] && [ "$RAG3DB_LIBRARY_DIR" != "$d" ]; then
+    echo "▸ RAG3DB_LIBRARY_DIR hérité ($RAG3DB_LIBRARY_DIR) remplacé par $d (RAG3DB_LIB=bati pour garder le dossier de bâti)" >&2
+  fi
+  export RAG3DB_SHARED=1 RAG3DB_LIBRARY_DIR="$d" RAG3DB_INCLUDE_DIR="$d"
+  export LD_LIBRARY_PATH="$d${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+}

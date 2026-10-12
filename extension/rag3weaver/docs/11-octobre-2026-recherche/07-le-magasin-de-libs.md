@@ -186,6 +186,14 @@ bouge : un lien `courant`.**
 - **`extension/vector/build`** reste où CMake l'écrit. Le magasin n'en garde
   qu'une copie : ne rien changer au CMake du moteur (rien vers l'amont) évite
   d'y toucher.
+- **Linux seulement chez nous** : `check_features.sh` ne compile que sous
+  Linux. Le seul contrôle de Windows et de macOS, ce sont les runners du
+  paquet npm (chez G). Le 12 octobre, ils ont refusé `build_check.rs` pour du
+  code mort hors Linux : `LEN` et `nul_terminated` ne servaient qu'à la
+  section ELF, gardée par `#[cfg(target_os = "linux")]`, mais eux ne
+  l'étaient pas (run 38197365376). G l'a corrigé dans son lot C
+  (`2f052d5db`, relu). Règle : ce qui ne sert qu'à un code sous `cfg` porte
+  le même `cfg`.
 
 ## 6. Les témoins, rouges d'abord
 
@@ -290,3 +298,132 @@ ont pas. Le refus nommé (`rag3db-check-lib`, et le filet dans le processus)
 reste en place. **Reste à prouver** : une passe réelle
    sous `RAG3DB_LIB=courant`, après le rebâti du matin (la première lib qui
    porte sa section). Les modèles MCP et la recette de G suivront, avec G.
+
+## 9. Le pont aussi (lot 3d, demandé par l'orchestration, 12 octobre)
+
+**Le reste vu par l'arbre principal** : `cargo test --lib` et
+`check_features.sh` lisaient la lib par `RAG3DB_LIBRARY_DIR`, que chaque
+script posait sur `build/lecteurs-csv/src`, et non par le `courant` du
+magasin. Un rebâti en place au milieu d'un rejeu faussait donc encore ce
+rejeu : le binaire des tests charge, par `LD_LIBRARY_PATH`, la lib à moitié
+écrite. Et l'arbre principal devait attendre que les pushes aient rendu leur
+résultat avant de rebâtir.
+
+**La forme** : une seule fonction, `exporter_la_lib`
+(scripts/lib_du_magasin.sh), fait le même choix que `run_e2e.sh`
+(`choisir_la_lib`, §8). Elle pose ensuite les quatre variables sur **le même
+dossier** :
+- `RAG3DB_LIBRARY_DIR` et `RAG3DB_INCLUDE_DIR` : le pont se compile contre
+  les en-têtes de ce bâti et y lit son identifiant ;
+- `RAG3DB_SHARED=1` ;
+- `LD_LIBRARY_PATH` en tête : le binaire charge cette lib, et pas une autre
+  du même nom.
+
+Un `RAG3DB_LIBRARY_DIR` hérité qui diffère est remplacé, et c'est dit.
+`RAG3DB_LIB=bati` garde le dossier de bâti. Ce dossier vient de
+`RAG3DB_BUILD`, sinon c'est le `build/lecteurs-csv` de l'arbre principal.
+
+Elle sert à deux endroits :
+- **`check_features.sh`** l'appelle avant ses cinq jeux ;
+- **`scripts/cargo_magasin.sh <arguments de cargo>`** l'appelle puis lance
+  cargo. C'est l'entrée de tout `cargo test --lib` ou `cargo check` joué à
+  la main ou par un script de push, à la place des variables posées sur
+  `build/lecteurs-csv`.
+
+`poste push` lance la commande qu'on lui donne et ne touche pas à
+l'environnement : c'est cette commande qui passe par `cargo_magasin.sh`.
+
+Un dossier du magasin est immuable, donc l'arbre principal peut rebâtir
+quand il veut. Un rejeu en cours garde la lib qu'il a résolue au départ, et
+le rejeu suivant prend le nouveau `courant` une fois la lib publiée.
+
+**Témoins** :
+- `test_lib_du_magasin.sh`, cinq cas de plus pour `exporter_la_lib`. Ils
+  sont rouges sur le script d'avant et verts ici. Ce sont :
+  - les quatre variables posées sur le courant, et l'hérité remplacé et dit ;
+  - `RAG3DB_LIB=bati` ;
+  - `RAG3DB_BUILD` sans argument ;
+  - `RAG3DB_LIB=bati` avec `RAG3DB_BUILD` ;
+  - le refus d'un identifiant absent.
+- `test_cargo_magasin.sh`, de bout en bout, sur le vrai magasin et un vrai
+  binaire de tests :
+  - un dossier de bâti factice, copie du courant, avec l'ancien
+    environnement posé dessus ;
+  - le binaire bâti par `cargo_magasin.sh` ;
+  - la lib du dossier de bâti remplacée par un fichier à moitié écrit ;
+  - lancé sur l'ancien environnement, le binaire ne démarre plus ;
+  - par `cargo_magasin.sh`, les mêmes tests passent, et rien n'est
+    recompilé.
+
+## 10. L'extension à côté de la lib chargée (lot 3e, demandé par l'orchestration, 12 octobre)
+
+**Le reste vu sur luciepc** : un binaire lié par RUNPATH à la lib du magasin a
+chargé l'extension vector d'un autre bâti. C'était celle de `rag3db-lourd`,
+retenue parce que l'unité n'avait pas `RAG3DB_LIBRARY_DIR` dans son
+environnement. Le moteur l'a refusée par son identifiant (la garde de
+`extension_manager.cpp`), mais l'hôte n'aurait pas dû dépendre d'une
+variable pour trouver son extension.
+
+**La forme** :
+- **D'abord à côté de la lib réellement chargée.**
+  `build_check::loaded_lib()` lit la lib du moteur dans `/proc/self/maps`
+  (`loaded_lib_in`, extraite de `check_against`). C'est le chemin du fichier
+  ouvert, liens résolus : le dossier d'un identifiant, jamais `courant`. Le
+  premier candidat est donc `<dossier de la lib>/lib<nom>.rag3db_extension`,
+  avant `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT`, le dossier de l'exécutable et
+  l'arbre du crate. Un même dossier n'est cherché qu'une fois.
+- **L'identifiant doit être celui de la lib chargée.** L'extension ne porte
+  pas de section `.rag3db_build_id` ; son identifiant est la chaîne que rend
+  sa fonction `build_id`. `build_check::extension_build_id` la lit dans les
+  octets, sans charger le fichier, comme la publication au magasin.
+  - Une extension d'un autre bâti est **passée** quand elle est cherchée par
+    son nom, et **refusée** quand le manifeste la force par un chemin. Le
+    refus nomme les deux identifiants et le chemin : c'est la forme de
+    `1a1ee04b0`, étendue à l'identifiant.
+  - Une extension sans identifiant lisible est laissée au moteur, qui la
+    refuse en le disant.
+- La résolution est une fonction pure (`resolve_vector_extension`), qui
+  reçoit la lib chargée et les variables ; `vector_extension_path` lui
+  passe l'état du processus.
+
+**Témoins** :
+- `the_vector_extension_is_looked_up_next_to_the_loaded_lib_first` : l'ordre
+  des candidats, et un même dossier cherché une fois.
+- `an_extension_of_another_build_is_passed_when_searched_and_refused_when_forced`,
+  sur des ELF factices (le `elf` de `build_check/tests.rs`) :
+  - sans aucune variable, l'extension à côté de la lib chargée ;
+  - `RAG3DB_LIBRARY_DIR` sur un autre bâti ne la supplante pas ;
+  - seule une extension d'un autre bâti, elle est écartée et nommée ;
+  - forcée, elle est refusée, et les deux identifiants sont nommés ;
+  - une extension sans identifiant est laissée au moteur.
+- `the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable` :
+  la vraie lib de ce processus (le magasin, sous `cargo_magasin.sh`) désigne
+  son extension sans aucune variable, du même identifiant, et le moteur la
+  charge (`LOAD EXTENSION` sur une base en mémoire). Hors magasin, il
+  vérifie que ce qui est trouvé n'est jamais d'un autre bâti.
+
+## 11. Les tests et les sondes aussi (lot 3f, relevé par l'arbre principal, 12 octobre)
+
+**Le trou** : le lot 3e faisait chercher l'extension à côté de la lib
+chargée en production, mais pas dans les tests. Le 12 octobre à 12 h 58, un
+rebâti en place de l'arbre principal a fait rougir un rejeu qui tournait sur
+la lib du magasin : « Extension VECTOR was built from rag3db-build-690029ab7…,
+this engine from rag3db-build-2b11b55ec… ». Les tests de la lib chargeaient
+l'extension par `RAG3DB_ROOT`, c'est-à-dire l'arbre que le rebâti venait de
+réécrire.
+
+**La forme** : pas de variable de plus, la règle de la production partout.
+- `backend::vector_extension_of_this_process()` applique
+  `resolve_vector_extension` à l'état du processus : à côté de la lib
+  réellement chargée d'abord, puis `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT`…
+- Les tests de la lib (`extension_vector_de_test`), les e2e
+  (`common::vector_extension`) et les sept sondes y passent.
+- Un rebâti en place de l'arbre ne touche donc plus une passe qui tourne sur
+  la lib du magasin, quelle que soit la variable posée.
+
+**Témoin** : `the_test_helper_loads_the_extension_of_the_loaded_lib_not_of_the_tree`.
+Avec `RAG3DB_ROOT` posé sur l'arbre principal, l'aide des tests rend
+l'extension à côté de la lib chargée, du même identifiant. Il est rouge sur
+l'aide d'avant, avec exactement le chemin de 12 h 58 :
+`/home/lucied/git_workspaces/rag3db/extension/vector/build/…` au lieu du
+dossier `rag3db-build-690029ab7…` du magasin.

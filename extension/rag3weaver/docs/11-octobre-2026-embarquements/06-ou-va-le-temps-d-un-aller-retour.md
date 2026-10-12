@@ -187,3 +187,83 @@ balayage sous masque qui coûte. Le lot du cœur qui le fait passer par décalag
 lignes lues au lieu de 67 584 sur le témoin du banc) est en passe : la remesure suivante
 se fait sur lui.
 
+## Après le lot du petit masque : la forme `UNWIND` n'en produit pas (12 octobre, matin)
+
+**Remesuré sur la lib du lot** (`41d282843`, identifiant de bâti `7f794579d` dont `src/`
+est identique, `NodeTable::lookupOffsets` exporté), binaire de test rebâti contre elle :
+`usages` reste à 349 à 352 ms en un temps et à 209 à 234 ms en deux, mêmes empreintes.
+
+**La cause**, lue au PROFILE du saut tel que l'IR le compile
+(`UNWIND $uuids AS u MATCH (d:Symbol {_uuid: u})<-[r:MENTIONS]-(m:Scope)`) : le
+planificateur bâtit la jointure entière — Symbol 86 248, MENTIONS 491 102, Scope 81 407 —
+puis la sonde par `u`. `u` reste du côté sonde : aucun semi-masque, et le lot du petit
+masque n'a rien à lire.
+
+Le même saut et la même lecture par clé, écrits autrement, sur la même lib (médiane de
+sept ; mêmes lignes dans chaque groupe, empreinte des lignes triées) :
+
+| écriture | médiane | Scope balayée |
+|---|---|---|
+| saut, `UNWIND $uuids` (l'IR aujourd'hui) | 111,7 ms | 81 407 |
+| saut, `WHERE d._uuid IN $uuids` | 4,3 ms | 117 |
+| saut, paramètre scalaire | 1,1 ms | 117 |
+| lecture par clé, `UNWIND` | 28,1 ms | 81 407 |
+| lecture par clé, `IN` | 39,0 ms | 81 407 (filtre) |
+
+Deux voies, à trancher par l'orchestration : (a) dans le moteur, `UNWIND` d'une liste
+puis `MATCH` par clé primaire sur la variable déroulée devient une recherche par index
+ou un masque, comme Neo4j (`UNWIND` + `NodeIndexSeek`), ce qui corrige d'un coup chaque
+`Hop` et chaque `Select::by_uuids` ; (b) dans le dialecte rag3db, le saut compile `IN`
+(une liste à doublons ne rend plus ses lignes en double, et la lecture par clé n'y gagne
+rien). Avec l'une ou l'autre, la forme en deux temps n'a plus d'objet.
+
+Le témoin : `e2e_mesure_index_entier::le_plan_du_saut_d_usages_sur_l_index_entier`.
+
+## La jointure par clé, puis son second niveau (12 octobre, fin de matinée)
+
+**La jointure par clé** (`2b11b55ec`, mesurée sur la lib du cœur bâtie sur ce contenu
+exact, identifiant `41d282843-dirty-2780bda8b04f`, l'empreinte recalculée sur le diff) :
+`UNWIND $uuids AS u MATCH (d {_uuid: u})` pose un masque résolu par l'index de clé
+primaire. Le départ du saut est masqué (Symbol 1 ligne, MENTIONS 117), la lecture par clé
+tombe de 28 à 1,3 ms, mais la table d'arrivée Scope était encore lue en entier pour la
+jointure sur `m._ID`.
+
+**Son second niveau** (branche du cœur, lib `513438183`, pas encore sur master) : un
+balayage masqué compte comme sélectif, la jointure sur `m._ID` masque Scope à son tour.
+Le saut depuis Symbol sort 117 tuples à chaque opérateur, deux `SEMI_MASKER` au plan.
+
+| `usages`, médiane | avant | jointure par clé | second niveau |
+|---|---|---|---|
+| en un temps | 349-352 ms | 117-120 ms | 60-66 ms |
+| en deux temps | 209-234 ms | 43-47 ms | 27-31 ms |
+
+Mêmes empreintes à chaque colonne ; le recomptage de la copie reste à 0 vide.
+
+**Ce qui reste en un temps**, décomposé par instruction : les sauts de Scope vers Scope
+(`IMPLEMENTS`, `INHERITS_FROM`, `HAS_PARENT`) coûtent 18 à 20 ms chacun, même à 0 ligne
+rendue, contre 3 ms pour ceux qui partent de Symbol. Leur PROFILE : `d` est masqué (1
+ligne), mais l'expansion part de `m` — Scope entière (81 407), `HAS_PARENT` 37 802, une
+table de hachage sur `d._ID` — que l'unique `d` sonde à la fin. Quand départ et arrivée
+sont la même table, le masque du départ n'atteint pas l'expansion. Dit au cœur ;
+`two_step_hops` reste vraie pour rag3db jusqu'à ce que le saut en un temps rejoigne les
+deux temps.
+
+## Le troisième pas, et le retrait du saut en deux temps (12 octobre, début d'après-midi)
+
+**Le troisième pas du cœur** (`0c0af5bf5`) : un nœud dont la clé primaire est égalée à
+une variable déroulée s'estime à la longueur de la liste, et l'expansion part de lui.
+Mesuré sur la lib `13f4647dc` (la compaction du CSR rebasée sur `0c0af5bf5`, sans dirty),
+binaire rebâti contre elle, reflink neuf du sceau : le saut de Scope vers Scope lit 1
+ligne de Scope de chaque côté et 1 de `HAS_PARENT` (deux `SEMI_MASKER`) ; chaque saut
+d'`usages` tient autour de 1 ms.
+
+| `usages`, médiane | avant | clé | second niveau | troisième pas |
+|---|---|---|---|---|
+| en un temps | 349-352 ms | 117-120 ms | 60-66 ms | **7,1-9,7 ms** |
+| en deux temps | 209-234 ms | 43-47 ms | 27-31 ms | 9,6-12,8 ms |
+
+Mêmes empreintes à chaque colonne ; la copie compte toujours 0 morceau vide. En un temps,
+`usages` passe devant les deux temps : la lecture par clé n'est plus qu'un aller-retour
+de plus. **`two_step_hops` repasse à faux pour rag3db** ; la forme reste
+(`Catalog::set_two_step_hops`) pour un moteur qui ne masquerait pas, ou pour mesurer.
+

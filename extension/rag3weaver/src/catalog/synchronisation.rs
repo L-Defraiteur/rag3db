@@ -161,6 +161,10 @@ pub struct SnapshotFinish {
     /// l'annulation.
     #[serde(default)]
     pub previous_states: BTreeMap<String, String>,
+    /// **La relation par laquelle le plan a atteint son grain fin**
+    /// (`fineScopeVia`), ou `None` s'il a filtré les lignes sur les champs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by_relation: Option<String>,
 }
 
 impl Catalog {
@@ -284,6 +288,7 @@ impl Catalog {
         scope: &BTreeMap<String, CypherValue>,
         takeover: bool,
     ) -> Result<SnapshotSession, CatalogError> {
+        let _chrono = crate::ingest_profile::Chrono::new("instantané · ouvrir la session");
         self.check_initialized()?;
         self.check_ecriture("begin_snapshot")?;
         self.check_entity(entity_name)?;
@@ -364,6 +369,7 @@ impl Catalog {
         session: &str,
         uuids: &[String],
     ) -> Result<(), CatalogError> {
+        let _chrono = crate::ingest_profile::Chrono::new("instantané · marquer");
         self.check_initialized()?;
         self.check_ecriture("mark_snapshot")?;
         self.check_entity(entity_name)?;
@@ -451,6 +457,57 @@ impl Catalog {
         self.apply_snapshot_finish(plan)
     }
 
+    /// **Les lignes d'un grain fin, atteintes par une arête** : la parente
+    /// retrouvée par sa clé (calculée des champs du grain, dans la cellule
+    /// courante), puis ses lignes par la relation qui va d'elles vers elle.
+    /// Rend les lignes sous la forme du filtre (uuid, marque), ou `None` si
+    /// le dialecte ne traduit pas le saut. Une déclaration qui ne couvre pas
+    /// la clé de la parente est refusée : l'uuid calculé serait faux, et le
+    /// plan ne verrait rien sans le dire.
+    fn lignes_du_grain_par_arete(
+        &self,
+        entity_name: &str,
+        via: &crate::config::SnapshotVia,
+        scope: &BTreeMap<String, CypherValue>,
+    ) -> Result<Option<Vec<Vec<CypherValue>>>, CatalogError> {
+        let parente = self
+            .config
+            .entities
+            .get(&via.entity)
+            .ok_or_else(|| CatalogError::UnknownEntity(via.entity.clone()))?;
+        let cle = parente.hashsafe.as_ref().ok_or_else(|| {
+            CatalogError::SchemaError(format!(
+                "fineScopeVia de « {entity_name} » : la parente « {} » n'a pas de clé (hashsafe) — impossible de la retrouver par son grain",
+                via.entity
+            ))
+        })?;
+        let mut donnees: BTreeMap<String, CypherValue> = BTreeMap::new();
+        for (champ_du_grain, champ_parent) in &via.fields {
+            if let Some(v) = scope.get(champ_du_grain) {
+                donnees.insert(champ_parent.clone(), v.clone());
+            }
+        }
+        if let Some(manque) = cle.iter().find(|c| !donnees.contains_key(*c)) {
+            return Err(CatalogError::SchemaError(format!(
+                "fineScopeVia de « {entity_name} » : le champ « {manque} » de la clé de « {} » n'est porté par aucun champ du grain",
+                via.entity
+            )));
+        }
+        let uuid = self.entity_uuid(&via.entity, &donnees)?;
+        let mut hop = rag3weaver_ir::Hop::new(via.entity.as_str(), via.relation.as_str(), entity_name, rag3weaver_ir::Direction::Incoming);
+        hop.returns = vec![rag3weaver_ir::Column::Node("_uuid".into()), rag3weaver_ir::Column::Node("_snapshot".into())];
+        let Ok(requete) = self.dialect.hop(&hop) else {
+            return Ok(None);
+        };
+        let rows = self
+            .conn
+            .execute_with_params(&requete, &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(uuid)]))])
+            .map_err(|e| CatalogError::DbError(e.to_string()))?
+            .rows;
+        // Le saut rend d'abord l'uuid de départ : la forme du filtre commence après.
+        Ok(Some(rows.into_iter().map(|r| r.into_iter().skip(1).collect()).collect()))
+    }
+
     /// **Ce qu'une fin ferait, sans rien écrire** : les comptes, les
     /// garde-fous (qui refusent ici déjà), et pour chaque absente ce qui lui
     /// arrivera. Le plan est relu et appliqué par `apply_snapshot_finish` ;
@@ -462,6 +519,7 @@ impl Catalog {
         session: &str,
         options: SnapshotFinishOptions,
     ) -> Result<SnapshotFinish, CatalogError> {
+        let _chrono = crate::ingest_profile::Chrono::new("instantané · planifier");
         self.check_initialized()?;
         self.check_ecriture("finish_snapshot")?;
         self.check_entity(entity_name)?;
@@ -476,29 +534,44 @@ impl Catalog {
             .ok_or_else(|| CatalogError::UnknownEntity(entity_name.to_string()))?;
         // Le périmètre, **dans la cellule courante** : une synchronisation ne
         // voit ni ne retire les lignes d'une autre cellule.
-        // Les champs de la session : ceux du grain large, ou du fin.
-        let mut scope_fields: Vec<&str> = scope.keys().map(String::as_str).collect();
-        let mut values: Vec<CypherValue> = scope.values().cloned().collect();
-        scope_fields.extend(["_org", "_project"]);
-        values.push(CypherValue::String(self.scope.org.clone()));
-        values.push(CypherValue::String(self.scope.project.clone()));
-        let cypher = self.dialect.select_snapshot_scope(entity_name, &scope_fields, &[]);
-        let params: Vec<QueryParam> = values
-            .into_iter()
-            .enumerate()
-            .map(|(i, v)| QueryParam::new(&format!("p{i}"), v))
-            .collect();
-        let rows = self
-            .conn
-            .execute_with_params(&cypher, &params)
-            .map_err(|e| CatalogError::DbError(e.to_string()))?
-            .rows;
+        // Le grain fin, s'il se déclare atteint par une arête : depuis la clé
+        // de la parente (dans la cellule courante), par la relation. Sinon,
+        // ou si le dialecte ne traduit pas le saut, le filtre sur les champs.
+        let par_arete = match &config.fine_scope_via {
+            Some(via) if !config.fine_scope.is_empty() && config.fine_scope.iter().all(|f| scope.contains_key(f)) => {
+                self.lignes_du_grain_par_arete(entity_name, via, scope)?
+            }
+            _ => None,
+        };
+        let by_relation = par_arete.as_ref().map(|_| config.fine_scope_via.as_ref().map(|v| v.relation.clone()).unwrap_or_default());
+        let rows = match par_arete {
+            Some(rows) => rows,
+            None => {
+                // Les champs de la session : ceux du grain large, ou du fin.
+                let mut scope_fields: Vec<&str> = scope.keys().map(String::as_str).collect();
+                let mut values: Vec<CypherValue> = scope.values().cloned().collect();
+                scope_fields.extend(["_org", "_project"]);
+                values.push(CypherValue::String(self.scope.org.clone()));
+                values.push(CypherValue::String(self.scope.project.clone()));
+                let cypher = self.dialect.select_snapshot_scope(entity_name, &scope_fields, &[]);
+                let params: Vec<QueryParam> = values
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, v)| QueryParam::new(&format!("p{i}"), v))
+                    .collect();
+                self.conn
+                    .execute_with_params(&cypher, &params)
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?
+                    .rows
+            }
+        };
 
         let mut report = SnapshotFinish {
             entity: entity_name.to_string(),
             scope: scope.clone(),
             session: session.to_string(),
             in_scope: rows.len(),
+            by_relation,
             ..Default::default()
         };
         for row in &rows {
@@ -647,11 +720,13 @@ impl Catalog {
             // La ligne entière (pour la copie), sa marque, et l'appartenance
             // au périmètre relue : une ligne que la session d'un autre
             // périmètre a portée depuis le plan vit ailleurs.
+            let t = std::time::Instant::now();
             let mut rows: HashMap<String, BTreeMap<String, CypherValue>> = self
                 .get_many(&entity_name, &report.removed)?
                 .into_iter()
                 .filter_map(|row| Some((row.get("_uuid")?.as_str()?.to_string(), row)))
                 .collect();
+            crate::ingest_profile::add("instantané · relire les lignes retirées", t);
             let planned = std::mem::take(&mut report.removed);
             let mut to_remove = Vec::new();
             for uuid in planned {
@@ -673,7 +748,9 @@ impl Catalog {
             }
             // **La copie avant le retrait**, et avant toute mise en file : si
             // elle échoue, rien n'est retiré.
+            let t = std::time::Instant::now();
             report.set_aside = self.set_aside(&entity_name, &report.session, &to_remove)?;
+            crate::ingest_profile::add("instantané · mettre de côté", t);
             for uuid in &report.removed {
                 self.mettre_en_file_la_suppression(&entity_name, uuid)?;
             }
@@ -735,7 +812,9 @@ impl Catalog {
             // pas des vues : elles ne marquent pas. Sinon la fin suivante
             // croirait présentes les lignes qu'elle vient d'archiver.
             self.dans_une_fin = true;
+            let t = std::time::Instant::now();
             let res = self.drain();
+            crate::ingest_profile::add("instantané · drain", t);
             self.dans_une_fin = false;
             // Le rapport ne dit que ce qui a eu lieu : une transition refusée
             // au drain (l'état relu à un autre instant) quitte `transitioned`
@@ -782,14 +861,18 @@ impl Catalog {
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
         }
         // La fin ferme la session, et se garde pour son annulation.
+        let t = std::time::Instant::now();
         self.persist_meta_key(&self.session_key(&entity_name, &report.scope), "")?;
         self.oublier_les_sessions(&entity_name);
         self.record_snapshot_finish(&report)?;
+        crate::ingest_profile::add("instantané · noter la fin", t);
         // La dette de la mise de côté, payée à chaque fin par une passe
         // bornée. Un échec ne défait pas une fin appliquée : il se dit.
+        let t = std::time::Instant::now();
         if let Err(e) = self.purge_snapshot_aside(&entity_name) {
             report.warnings.push(format!("purge de la mise de côté : {e}"));
         }
+        crate::ingest_profile::add("instantané · purger la mise de côté", t);
         Ok(report)
     }
 

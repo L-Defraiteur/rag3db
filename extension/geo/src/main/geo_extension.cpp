@@ -46,11 +46,10 @@ static void initSpatialEntries(main::ClientContext* context, catalog::Catalog& c
                 SpatialIndexAuxInfo::deserialize(indexEntry->getAuxBufferReader()));
             auto& nodeTable =
                 storageManager->getTable(indexEntry->getTableID())->cast<storage::NodeTable>();
-            auto optionalIndex = nodeTable.getIndexHolder(indexEntry->getIndexName());
-            KU_ASSERT_UNCONDITIONAL(
-                optionalIndex.has_value() && !optionalIndex.value().get().isLoaded());
-            auto& unloadedIndex = optionalIndex.value().get();
-            unloadedIndex.load(context, storageManager);
+            // Sous le verrou de la liste des index (NodeTable::loadIndex).
+            const auto found =
+                nodeTable.loadIndex(indexEntry->getIndexName(), context, storageManager);
+            KU_ASSERT_UNCONDITIONAL(found);
         }
     }
 }

@@ -1,20 +1,21 @@
-//! `LlmNode` — le nœud de génération minimal (étape 1) : un prompt entre,
-//! le texte sort. Le modèle est un service (`"llm"`, `Arc<dyn Llm>`), comme
-//! `"embedder"` et `"ocr"` — le nœud ne charge rien lui-même.
+//! `LlmNode` — le nœud de génération : un prompt entre, le texte sort. Le
+//! modèle est un service (`"llm"`, `Arc<dyn Llm>`), comme `"embedder"` et
+//! `"ocr"` — le nœud ne charge rien lui-même.
 //!
-//! Le streaming existe déjà **dans le trait** ([`TokenSink`]) mais pas
-//! encore *au travers du graphe* : ce nœud accumule dans un [`StringSink`]
-//! et publie le texte entier sur son port de sortie. L'étape 3 remplacera
-//! ce puits par une boîte aux lettres luciole (un [`crate::llm::ChannelSink`])
-//! sans toucher ni au trait [`Llm`], ni à `Node::execute`, ni aux ports
-//! déclarés ici — c'est précisément ce que le choix du puits achète.
+//! **Les jetons coulent au travers du graphe** (page
+//! `docs/12-octobre-2026-recherche/01-le-premier-flux-de-jetons.md`) : un seul
+//! puits émet chaque fragment sur la sortie `tokens` (un flux fini) et
+//! l'accumule pour `text`. Qui lit le tout continue de lire le tout ; une
+//! sortie `tokens` non branchée ne coûte rien (l'élément est jeté) et ne change
+//! pas d'exécuteur. Le trait [`Llm`] n'a pas bougé : c'est ce que le choix du
+//! puits achète.
 
 use std::sync::Arc;
 
 use super::node::{Node, NodeContext};
 use super::node_registry::{ConfigParam, ConfigParamType, NodeFactory, NodeRegistry, NodeSchema};
 use super::port::{take_or_clone, PortDef, PortType, PortValue};
-use crate::llm::{GenOptions, Llm, LlmOutput, StringSink, Turn};
+use crate::llm::{Flow, GenOptions, Llm, LlmOutput, RetryEvent, TokenSink, Turn};
 use crate::tools::tool_defs;
 
 /// Clé du service LLM dans le [`super::ServiceRegistry`].
@@ -32,11 +33,15 @@ pub const NODE_REGISTRY_SERVICE: &str = "node_registry";
 /// convention du port `image` d'`OcrNode`.
 ///
 /// **Outputs** : `text` — `String`, la réponse entière (PortType::Text) ;
-/// `llm` — [`LlmOutput`] (texte + raison de fin + comptage, PortType::Llm).
+/// `llm` — [`LlmOutput`] (texte + raison de fin + comptage, PortType::Llm) ;
+/// `tokens` — chaque fragment, au fil de la génération (PortType::Text, un
+/// flux fini, optionnel). `text` est exactement la concaténation des fragments.
 ///
 /// **Config** : `max_tokens` (512), `temperature` (0.0, glouton),
 /// `top_p` (1.0), `stop` (liste de chaînes, vide), `with_tools` (`false` —
-/// joint les outils du registre au prompt).
+/// joint les outils du registre au prompt), `stop_when_unread` (`false` —
+/// arrêter la génération quand plus personne ne lit `tokens` ; par défaut,
+/// seule l'annulation du run l'arrête, puisque `text` peut être lu ailleurs).
 ///
 /// **Métriques** : `llm_prompt_tokens`, `llm_completion_tokens`, `llm_ms`,
 /// `llm_tokens_per_s`.
@@ -44,11 +49,37 @@ pub struct LlmNode {
     node_name: String,
     opts: GenOptions,
     with_tools: bool,
+    stop_when_unread: bool,
+}
+
+/// **Le puits double** : chaque fragment part sur `tokens` et s'accumule pour
+/// `text`. Ce que le modèle a produit est dans `text`, même quand le lecteur
+/// de `tokens` lâche et que la génération s'arrête.
+struct AnswerSink<'a> {
+    text: String,
+    tokens: super::node::EmitSink<'a>,
+}
+
+impl TokenSink for AnswerSink<'_> {
+    fn on_token(&mut self, delta: &str) -> Flow {
+        self.text.push_str(delta);
+        self.tokens.on_token(delta)
+    }
+
+    fn on_retry(&mut self, event: &RetryEvent<'_>) -> Flow {
+        self.tokens.on_retry(event)
+    }
 }
 
 impl LlmNode {
     pub fn new(name: &str) -> Self {
-        Self { node_name: name.to_string(), opts: GenOptions::default(), with_tools: false }
+        Self { node_name: name.to_string(), opts: GenOptions::default(), with_tools: false, stop_when_unread: false }
+    }
+
+    /// Arrêter la génération quand plus personne ne lit `tokens`.
+    pub fn with_stop_when_unread(mut self, yes: bool) -> Self {
+        self.stop_when_unread = yes;
+        self
     }
 
     pub fn with_options(mut self, opts: GenOptions) -> Self {
@@ -107,11 +138,19 @@ impl Node for LlmNode {
             opts.tools = tool_defs(registry);
         }
 
-        // Étape 1 : on accumule. Étape 3 : ce puits devient une mailbox.
-        let mut sink = StringSink::default();
-        let (finish, usage) = llm
-            .generate(&turns, &opts, &mut sink)
-            .map_err(|e| format!("LlmNode ({}): {e}", llm.name()))?;
+        // Chaque fragment sur `tokens`, et le tout pour `text`.
+        let (finish, usage, text) = {
+            let tokens = if self.stop_when_unread {
+                ctx.token_sink_stop_when_unread("tokens")
+            } else {
+                ctx.token_sink("tokens")
+            };
+            let mut sink = AnswerSink { text: String::new(), tokens };
+            let (finish, usage) = llm
+                .generate(&turns, &opts, &mut sink)
+                .map_err(|e| format!("LlmNode ({}): {e}", llm.name()))?;
+            (finish, usage, sink.text)
+        };
 
         ctx.metric("llm_prompt_tokens", usage.prompt_tokens as f64);
         ctx.metric("llm_completion_tokens", usage.completion_tokens as f64);
@@ -130,7 +169,7 @@ impl Node for LlmNode {
             ctx.warn(&format!("LlmNode ({}): incomplete answer ({finish:?})", llm.name()));
         }
 
-        let out = LlmOutput { text: sink.text, finish, usage };
+        let out = LlmOutput { text, finish, usage };
         ctx.set_output("text", PortValue::new(out.text.clone()));
         ctx.set_output("llm", PortValue::new(out));
         Ok(())
@@ -180,13 +219,19 @@ impl NodeFactory for LlmNodeFactory {
             None | Some(serde_json::Value::Null) => false,
             Some(v) => v.as_bool().ok_or("LlmNode: 'with_tools' must be a boolean")?,
         };
+        let stop_when_unread = match config.get("stop_when_unread") {
+            None | Some(serde_json::Value::Null) => false,
+            Some(v) => v.as_bool().ok_or("LlmNode: 'stop_when_unread' must be a boolean")?,
+        };
 
         let opts = GenOptions::default()
             .with_max_tokens(max_tokens)
             .with_temperature(temperature)
             .with_top_p(top_p)
             .with_stop(stop);
-        Ok(Box::new(LlmNode::new(name).with_options(opts).with_tools(with_tools)))
+        Ok(Box::new(
+            LlmNode::new(name).with_options(opts).with_tools(with_tools).with_stop_when_unread(stop_when_unread),
+        ))
     }
 
     fn node_type(&self) -> &'static str {
@@ -201,6 +246,7 @@ impl NodeFactory for LlmNodeFactory {
             outputs: vec![
                 PortDef::value("text", PortType::Text, false),
                 PortDef::value("llm", PortType::Llm, false),
+                PortDef::value("tokens", PortType::Text, false).stream(super::port::PortKind::Finite),
             ],
             config_params: vec![
                 ConfigParam {
@@ -245,6 +291,15 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(false)),
                     description: "Expose every registered node type to the model as a tool".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "stop_when_unread".into(),
+                    param_type: ConfigParamType::Bool,
+                    required: false,
+                    default: Some(serde_json::json!(false)),
+                    description: "Stop generating when nobody reads 'tokens' any more (by default only the run's cancellation stops it, since 'text' may be read elsewhere)".into(),
                     choices: None,
                     json_schema: None,
                 },
@@ -428,8 +483,9 @@ mod tests {
         let schema = f.schema();
         assert_eq!(schema.node_type, "LlmNode");
         assert_eq!(schema.inputs[0].port_type, PortType::Text);
-        assert_eq!(schema.outputs.len(), 2);
-        assert_eq!(schema.config_params.len(), 5);
+        // text, llm, et le flux tokens ; stop_when_unread s'ajoute aux cinq réglages.
+        assert_eq!(schema.outputs.len(), 3);
+        assert_eq!(schema.config_params.len(), 6);
     }
 
     #[test]
@@ -480,6 +536,143 @@ mod tests {
         let out = output.get("llm", "llm").cloned().and_then(take_or_clone::<LlmOutput>).unwrap();
         assert_eq!(out.finish, Finish::eos());
         assert_eq!(out.usage.completion_tokens, 4);
+    }
+
+    // ── Les jetons en flux (page 12-octobre-2026-recherche/01) ─────────
+
+    /// Lit `tokens` fragment par fragment, signale le premier, et lâche son
+    /// entrée après `stop_after` fragments s'il est donné.
+    struct TokenReader {
+        seen: Arc<std::sync::Mutex<Vec<String>>>,
+        first: Option<std::sync::mpsc::Sender<()>>,
+        stop_after: Option<usize>,
+    }
+    impl Node for TokenReader {
+        fn name(&self) -> &str {
+            "lecteur"
+        }
+        fn node_type(&self) -> &'static str {
+            "TokenReader"
+        }
+        fn inputs(&self) -> Vec<PortDef> {
+            vec![PortDef::value("tokens", PortType::Text, true).posture(crate::dataflow::port::Posture::PerElement)]
+        }
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            while let Some(v) = ctx.next("tokens").map_err(|e| format!("{e:?}"))? {
+                let t = take_or_clone::<String>(v).ok_or("tokens : une chaîne attendue")?;
+                let mut seen = self.seen.lock().unwrap();
+                seen.push(t);
+                if let Some(tx) = self.first.take() {
+                    let _ = tx.send(());
+                }
+                if self.stop_after.is_some_and(|n| seen.len() >= n) {
+                    return Ok(());
+                }
+            }
+            Ok(())
+        }
+    }
+
+    fn graphe_a_jetons(llm: LlmNode, lecteur: TokenReader) -> DataflowGraph {
+        let mut graph = DataflowGraph::new();
+        graph.add_node(Box::new(PromptSource("parle".into()))).unwrap();
+        graph.add_node(Box::new(llm)).unwrap();
+        graph.add_node(Box::new(lecteur)).unwrap();
+        graph.connect("source", "out", "llm", "prompt").unwrap();
+        graph.connect("llm", "tokens", "lecteur", "tokens").unwrap();
+        graph
+    }
+
+    /// **Les jetons coulent pendant la génération** (témoins 1 et 2) : le
+    /// modèle ne rend son dernier fragment qu'après que l'aval a lu le premier
+    /// — une poignée de main impossible si le nœud publiait à la fin. Et
+    /// `text` est la concaténation exacte des fragments lus.
+    #[test]
+    fn tokens_flow_while_the_model_generates() {
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let rx = std::sync::Mutex::new(rx);
+        let vu_avant_la_fin = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let drapeau = vu_avant_la_fin.clone();
+        let llm = crate::llm::CallbackLlm::new("poignée", 4096, move |_, _, sink| {
+            sink.on_token("bon");
+            let lu = rx.lock().unwrap().recv_timeout(std::time::Duration::from_secs(5)).is_ok();
+            drapeau.store(lu, std::sync::atomic::Ordering::SeqCst);
+            sink.on_token("jour");
+            Ok((Finish::eos(), crate::llm::Usage { completion_tokens: 2, ..Default::default() }))
+        });
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut graph = graphe_a_jetons(
+            LlmNode::new("llm"),
+            TokenReader { seen: seen.clone(), first: Some(tx), stop_after: None },
+        );
+        assert!(graph.has_streams().unwrap(), "tokens branché : l'exécuteur concurrent");
+        let output = DataflowRuntime::with_services(10, services_with(Arc::new(llm))).execute(&mut graph).unwrap();
+        assert!(vu_avant_la_fin.load(std::sync::atomic::Ordering::SeqCst), "le premier jeton n'a pas été lu avant la fin de la génération");
+        let text = output.get("llm", "text").cloned().and_then(take_or_clone::<String>).unwrap();
+        assert_eq!(*seen.lock().unwrap(), ["bon", "jour"]);
+        assert_eq!(text, seen.lock().unwrap().concat(), "text est la concaténation des jetons");
+    }
+
+    /// Un modèle de cent fragments qui compte ce qu'il produit, et s'arrête au
+    /// premier `Flow::Stop`.
+    fn cent_fragments(produits: Arc<std::sync::atomic::AtomicUsize>) -> crate::llm::CallbackLlm {
+        crate::llm::CallbackLlm::new("cent", 4096, move |_, _, sink| {
+            for i in 0..100 {
+                produits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if sink.on_token(&format!("t{i} ")) == crate::llm::Flow::Stop {
+                    return Ok((Finish::cancelled(), crate::llm::Usage { completion_tokens: i + 1, ..Default::default() }));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Ok((Finish::eos(), crate::llm::Usage { completion_tokens: 100, ..Default::default() }))
+        })
+    }
+
+    /// **L'arrêt anticipé** (témoin 4) : le lecteur lâche `tokens` après trois
+    /// fragments. Avec `stop_when_unread`, le modèle s'arrête : moins de cent
+    /// fragments produits, `llm.finish` vaut `Cancelled`. Sans le réglage, il
+    /// les produit tous et `text` est complet, puisque `text` peut être lu ailleurs.
+    #[test]
+    fn stop_when_unread_stops_the_model_when_the_reader_lets_go() {
+        for arreter in [true, false] {
+            let produits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let llm = cent_fragments(produits.clone());
+            let node = LlmNodeFactory
+                .create("llm", &serde_json::json!({"stop_when_unread": arreter}))
+                .unwrap();
+            let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let mut graph = DataflowGraph::new();
+            graph.add_node(Box::new(PromptSource("parle".into()))).unwrap();
+            graph.add_node(node).unwrap();
+            graph.add_node(Box::new(TokenReader { seen: seen.clone(), first: None, stop_after: Some(3) })).unwrap();
+            graph.connect("source", "out", "llm", "prompt").unwrap();
+            graph.connect("llm", "tokens", "lecteur", "tokens").unwrap();
+            let output = DataflowRuntime::with_services(10, services_with(Arc::new(llm))).execute(&mut graph).unwrap();
+            let out = output.get("llm", "llm").cloned().and_then(take_or_clone::<LlmOutput>).unwrap();
+            let n = produits.load(std::sync::atomic::Ordering::SeqCst);
+            if arreter {
+                assert!(n < 100, "stop_when_unread : {n} fragments produits sur 100");
+                assert_eq!(out.finish, Finish::cancelled());
+            } else {
+                assert_eq!(n, 100, "sans le réglage, tous les fragments");
+                assert_eq!(out.finish, Finish::eos());
+                assert_eq!(out.text, (0..100).map(|i| format!("t{i} ")).collect::<String>());
+            }
+            assert_eq!(seen.lock().unwrap().len(), 3);
+        }
+    }
+
+    /// **Le réglage et le port se lisent dans le schéma** : `tokens` est un flux
+    /// fini optionnel, `stop_when_unread` un booléen faux par défaut.
+    #[test]
+    fn the_schema_says_the_tokens_stream_and_its_setting() {
+        let schema = LlmNodeFactory.schema();
+        let tokens = schema.outputs.iter().find(|p| p.name == "tokens").expect("une sortie tokens");
+        assert_eq!(tokens.kind, crate::dataflow::port::PortKind::Finite);
+        assert!(!tokens.required);
+        let reglage = schema.config_params.iter().find(|c| c.name == "stop_when_unread").expect("le réglage");
+        assert_eq!(reglage.default, Some(serde_json::json!(false)));
+        assert!(LlmNodeFactory.create("llm", &serde_json::json!({"stop_when_unread": "oui"})).is_err());
     }
 
     #[test]

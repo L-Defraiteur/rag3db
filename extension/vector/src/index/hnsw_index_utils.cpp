@@ -9,6 +9,7 @@
 #include "extension/extension_manager.h"
 #include "simsimd.h"
 #include "storage/storage_manager.h"
+#include "transaction/transaction.h"
 #include "storage/table/node_table.h"
 #include "transaction/transaction_context.h"
 
@@ -30,7 +31,15 @@ static void throwIfBehindItsTable(const main::ClientContext& context,
     auto& nodeTable = storage::StorageManager::Get(context)
                           ->getTable(tableEntry->getTableID())
                           ->cast<storage::NodeTable>();
-    if (!nodeTable.getIndexHolder(indexName).has_value()) {
+    if (!nodeTable.hasIndexHolder(indexName)) {
+        // Une autre transaction l'a retiré ou recréé sans que cet instantané le voie (pas encore
+        // validé, ou validé après son début) : la table n'a déjà plus l'exemplaire. L'absence
+        // seule ne suffit pas à le dire : un index détaché par le rejeu, puis passé un point de
+        // reprise (qui ne l'écrit plus), n'a plus d'exemplaire du tout, et il est en retard.
+        if (catalog::Catalog::Get(context)->isIndexChangedAfterSnapshotOf(
+                transaction::Transaction::Get(context), tableEntry->getTableID(), indexName)) {
+            HNSWIndexUtils::throwIndexGoneUnderTheQuery(indexName, tableEntry->getName());
+        }
         // Si la reprise a essayé de charger une extension et n'y est pas arrivée, c'est ici
         // que l'appelant l'apprend : un avertissement que personne ne lirait ne servirait à
         // rien.
@@ -46,6 +55,14 @@ static void throwIfBehindItsTable(const main::ClientContext& context,
             "loaded. Drop it and build it again.{}",
             indexName, HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE, tableEntry->getName(), why)};
     }
+}
+
+void HNSWIndexUtils::throwIndexGoneUnderTheQuery(const std::string& indexName,
+    const std::string& tableName) {
+    throw common::RuntimeException{common::stringFormat(
+        "Index {} of table {} does not exist any more: a concurrent transaction dropped or "
+        "rebuilt it after this query was bound. Run the query again.",
+        indexName, tableName)};
 }
 
 void HNSWIndexUtils::throwCountsMoreRowsThanItsTable(const std::string& indexName,

@@ -302,6 +302,14 @@ struct HNSWSearchState {
 
 class OnDiskHNSWIndex final : public HNSWIndex {
 public:
+    // L'index que lit une requête, capturé en propriété partagée : il reste vivant jusqu'à la fin
+    // de la recherche, même si un DROP concurrent le retire de la table. C'est celui que son
+    // instantané du catalogue désigne, reconnu à ses tables de relations (upperRelTableID et
+    // lowerRelTableID : l'oid de la relation unique de chaque groupe, getSingleRelEntryInfo, vu à
+    // cet instantané) : un index recréé entre la liaison et la lecture a d'autres tables. Absent, ou d'une autre génération : refus nommé (« does not exist »).
+    static std::shared_ptr<OnDiskHNSWIndex> captureForQuery(const storage::NodeTable& nodeTable,
+        const std::string& indexName, const std::string& tableName,
+        common::table_id_t upperRelTableID, common::table_id_t lowerRelTableID);
     struct HNSWInsertState final : InsertState {
         // State for searching neighbors and reading vectors in the HNSW graph.
         HNSWSearchState searchState;
@@ -457,6 +465,14 @@ private:
     // ones leading to it, the search no longer reaches it, whatever its own edges are. It is
     // searched for from the entry point; if it is not found, it is tied to the nearest nodes the
     // search did reach.
+    // Garde atteignables les anciens voisins de nœuds qui ont perdu des arêtes (une ligne mise à
+    // jour, des lignes supprimées). `edgesOf` : chaque ancien voisin et ses arêtes actuelles.
+    // `anchorEdges` : les arêtes d'un nœud atteignable connu (la ligne réinsérée), vide sinon.
+    // `notAnchors` : les nœuds qui ne prouvent rien (la ligne elle-même, les lignes supprimées).
+    void keepFormerNeighboursReachable(transaction::Transaction* transaction,
+        const std::unordered_map<common::offset_t, std::vector<common::offset_t>>& edgesOf,
+        const std::vector<common::offset_t>& anchorEdges,
+        const std::unordered_set<common::offset_t>& notAnchors, HNSWInsertState& insertState);
     void keepNodeReachable(transaction::Transaction* transaction, common::offset_t offset,
         const std::vector<common::offset_t>& neighbors, bool isUpperLayer,
         HNSWInsertState& insertState);

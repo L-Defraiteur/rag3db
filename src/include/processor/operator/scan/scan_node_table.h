@@ -28,6 +28,11 @@ public:
         ScanNodeTableProgressSharedState& progressSharedState);
 
     common::SemiMask* getSemiMask() const { return semiMask.get(); }
+    bool scansByOffsets() const { return byOffsets; }
+
+    // Le balayage passe par décalages quand le masque retient moins d'une ligne sur
+    // OFFSET_MODE_RATIO : au-delà, lire les fenêtres entières coûte moins que relire ligne à ligne.
+    static constexpr uint64_t OFFSET_MODE_RATIO = 64;
 
 private:
     std::mutex mtx;
@@ -37,6 +42,12 @@ private:
     common::node_group_idx_t numCommittedNodeGroups;
     common::node_group_idx_t numUnCommittedNodeGroups;
     std::unique_ptr<common::SemiMask> semiMask;
+    // Le balayage par décalages sous un petit masque (page coeur-cpp/12 §10) : décidé à
+    // l'initialisation sur la cardinalité exacte du masque (le masqueur a fini avant), les tranches
+    // de décalages sont les morsels, le curseur avance sous le mutex.
+    bool byOffsets = false;
+    common::offset_t maskCursor = 0;
+    bool maskExhausted = false;
 };
 
 struct ScanNodeTablePrintInfo final : OPPrintInfo {

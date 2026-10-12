@@ -1,68 +1,41 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 11 octobre 2026, 22 h 40.
+Tenu à jour sur place. Dernière mise à jour : 12 octobre 2026, 10 h 05.
 
-## Pour Lucie (11 octobre, 22 h 40) — l'hôte de luciepc tourne en boucle, gardé tel quel pour toi
+## Pour Lucie (12 octobre, 10 h 05) — luciepc : fait
 
-L'index de `code-lourd` sur luciepc s'est figé une quatrième fois, **sans la montre** (retirée
-des deux manifestes pour l'essai). L'orchestration a décidé de ne pas arrêter l'hôte cette nuit,
-et ma permission refuse l'arrêt. Personne n'y touche avant toi.
+Sur ton autorisation de 9 h 40, les étapes 2 à 8 sont faites ; l'hôte de luciepc répond, et
+**`code-lourd` et `code-principal` sont réindexés**.
 
-**La cause du figement est connue** : une boucle de réclamation. L'index réclame des morceaux
-dont `_text` est vide ou nul, l'embarquement les saute sans les marquer, la passe les compte
-faits, et il les reprend au tour suivant, sans fin. Les relevés qui l'ont tranché (lecture seule,
-bruts dans `~/.cache/codeparsers-notes/b2d/releves-132823*.txt` sur ce poste-ci) :
+| base | arbre | temps | base + plein texte | pic de l'hôte |
+|---|---|---|---|---|
+| `code-lourd` | `rag3db-lourd` @ `a72acfeef` | 596 s, **sans figement** | 1,2 Go + 738 Mo | 9,2 Go |
+| `code-principal` | `rag3db` @ `ab95c3a2d` | 496 s, 120 054 vecteurs | 1 020 Mo + 620 Mo | 12,5 Go |
 
-- le `.wal` de `code-lourd` croît de 255 à 376 Ko toutes les 10 s, alors que la base ne bouge plus ;
-- les 25 fils actifs (`demon-3`) sont nés à 22 h 00 min 55 s, de mon appel `index` ; aucune
-  recherche n'a eu lieu depuis le démarrage ;
-- le service d'embarquement 7878 est au repos, et aucune panique n'apparaît.
+Témoin : `usages acquireLocksBeforeExecution` sur `code-lourd` rend ses 3 définitions et ses
+2 appels en 0,3 s, chemins relatifs (B4), la montre montée.
 
-**La cause des morceaux vides** (le cœur, 12 octobre, nuit) : les textes sont **intacts sur
-disque** ; c'est le balayage filtré du moteur qui rendait des chaînes vides (ou d'une autre ligne)
-quand une fenêtre de 2 048 lignes chevauche deux segments d'un groupe qui porte des versions
-(`string_column.cpp:240`, correctif en cours). La boucle du gel était cette lecture : `run_index`
-relisait `_text` vide, sans fin.
+Ce qui a été fait, et ce qui reste de côté :
 
-L'arbre principal a écrit deux défenses, qui vont sur master ce soir : la réclamation filtre
-`_text` vide ou nul, et `run_index` s'arrête sur une passe sans progrès.
+- **Hôte** : binaire `efaa6e68` (B4, lié par RUNPATH à la lib de hotfixs `rag3db-build-3cca0ae1e…`),
+  `rag3db-check-lib` `e5e6b1b6` et `check-lib.conf` actifs. L'ancien binaire :
+  `~/.local/bin/rag3weaver-backend.avant-b4-12-oct`.
+- **Bases d'avant** : `~/.local/share/rag3weaver/avant-b4/` (les deux, identiques aux originaux).
+  Comptées ici : 16 368 morceaux lus vides avec l'ancienne lib, 0 avec la nouvelle — les textes
+  étaient intacts.
+- **Manifestes** : la montre remise, le bloc des tests par requêtes posé, `vector_extension`
+  remis au nom « vector ». Sauvegardes `.sans-montre-12-oct`, `.avant-queries-via`,
+  `.avant-vector-nom-12-oct`.
+- **Unité** : `RAG3DB_LIBRARY_DIR` posé dans `~/.config/rag3weaver/rag3weaver-daemon.env` sur le
+  dossier du magasin (sauvegarde `.avant-magasin-12-oct`). Sans lui, l'hôte retombait sur
+  l'extension vector de `rag3db-lourd`, bâtie contre l'ancienne lib, et refusait d'ouvrir les
+  bases. **À chaque nouvelle lib installée, cette ligne suit l'identifiant du binaire.**
 
-- **Hôte** : pid `132823`, démarré à 21 h 53, binaire `~/.local/bin/rag3weaver-backend@1791744137`.
-- **Index** : lancé à 22 h 02 min 46 s, journal
-  `~/.cache/rag3weaver/commandes/index/1791748859452-132823.out` ; 28 369 vecteurs sur
-  138 579 (20 %), tous hérités des essais précédents ; ce run n'en a écrit aucun.
-
-À faire, dans l'ordre :
-
-1. *(Facultatif.)* La pile, si tu veux la voir de tes yeux :
-   `sudo gdb -p 132823 -batch -ex 'thread apply all bt' > ~/pile-hote-code-lourd.txt 2>&1`
-2. L'arrêt propre : `systemctl --user stop rag3weaver-daemon` (mon `index.sh`, pid `132918`, sort
-   de lui-même ou se tue par `kill -TERM 132918`). Dis-le à codeparsers.
-3. **Ce qui compte ensuite, base fermée** : l'origine des morceaux vides, encore ouverte. Avant de
-   redémarrer, une copie reflink de la base fermée (une seconde, sans place prise) :
-   `cd ~/.local/share/rag3weaver && mkdir -p code-lourd.boucle && cp -a --reflink=always code-lourd.rag3db code-lourd.rag3db.wal code-lourd.rag3db.extensions code-lourd.rag3db.fts code-lourd.boucle/`.
-   Sur cette copie, je compte les `Scope_Chunk` à `_text` nul ou vide, avec
-   les 20 premiers fichiers d'où ils viennent, leur nombre, et `_parent_uuid`, `_parent_field`,
-   `_text_hash`. Sans parent ni hash, c'est une ligne fantôme ; un parent texte brut d'extension
-   exotique, c'est un binaire lu avec un octet nul. Rien à faire de ta part sur ce point.
-4. **Les deux bases s'effacent** (B4 de G, master `6e3561268` : les chemins sont relatifs à la
-   racine, et un binaire ≥ ce hash refuse une base de code d'avant, en le disant). Hôte arrêté et
-   copie de l'étape 3 prise, mettre de côté les fichiers des deux bases :
-   `cd ~/.local/share/rag3weaver && mkdir -p avant-b4 && mv code-lourd.rag3db* code-lourd.checkpoints code-principal.rag3db* code-principal.checkpoints avant-b4/`.
-5. La montre remise et le redémarrage sur le binaire prêt de G, **rebâti sur `6e3561268` et le
-   correctif de l'arbre principal** :
-   `cp ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-lourd/templates/backends/code/backend.json`,
-   `cp ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json.avec-montre ~/.config/rag3weaver/code-principal/templates/backends/code/backend.json`,
-   puis `mv ~/.local/bin/rag3weaver-backend.pret ~/.local/bin/rag3weaver-backend && systemctl --user start rag3weaver-daemon`.
-5 bis. **La lib commune de luciepc porte le correctif du balayage filtré** (master ≥ `e6f626df4`),
-   rebâtie par hotfixs après l'arrêt de l'hôte, **avant** toute réindexation : sans lui, la passe
-   de vecteurs relit des textes vides et reboucle. Le binaire prêt de G est bâti contre elle.
-6. La réindexation des deux bases, par codeparsers, avec ce binaire : dis-moi que l'hôte est
-   reparti. `code-principal` sert au cœur : l'heure s'accorde avec lui.
-
-Après l'arrêt, le cœur et hotfixs rebâtissent la lib de `rag3db-lourd` (ils attendent ce
-signal). Le ticket :
-`docs/tickets/2026-10-11-un-index-se-fige-sur-un-appel-d-embarquement-sans-delai.md`.
+**Sur le poste principal, une base à trancher** : `~/.config/rag3weaver/code-rag3db/templates/backends/code/backend.json`
+vise une petite base ancienne, `~/.local/share/rag3weaver/code-rag3db.rag3db` (3,5 Mo, du 11 à
+16 h 55), à côté du vrai manifeste `rag3db.json`. À toi de dire si on la jette. La réindexation de
+`code-rag3db` ici attend l'arrêt de ton hôte local ; la mémoire pose le bloc des tests par
+requêtes, puis me donne le signal.
 
 Chantier décidé par Lucie : **indexer nos propres dépôts**, la couverture la
 plus grande possible de codeparsers, C++ et Rust d'abord, mesurée sur nos

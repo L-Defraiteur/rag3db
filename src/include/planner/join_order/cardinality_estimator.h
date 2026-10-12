@@ -26,6 +26,9 @@ public:
     RAG3DB_API void init(const binder::NodeExpression& node);
 
     void rectifyCardinality(const binder::Expression& nodeID, cardinality_t card);
+    // Le nœud est-il connu de ce graphe (un graphe de requête est planifié par composante connexe,
+    // et un nœud lié par sa clé peut être dans une autre) ?
+    bool hasNodeIDDom(const binder::Expression& nodeID) const;
 
     cardinality_t estimateScanNode(const LogicalOperator& op) const;
     cardinality_t estimateHashJoin(const std::vector<binder::expression_pair>& joinConditions,

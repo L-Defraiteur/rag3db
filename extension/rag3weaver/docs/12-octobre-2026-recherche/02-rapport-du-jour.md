@@ -17,14 +17,27 @@ l'a acceptée, et le proto aussi, avec ses objections, retenues.
 - `Checking rag3weaver` prouvé après `touch src/lib.rs` ;
 - lib : 1533 passés, 0 échec, rejouée sous le verrou après le rebase.
 
-**Attend** : le hash du proto pour `LlmNode.tokens`, avec son puits double,
-`TokenEvents` et `Spot`. Ensuite, chez moi :
-- le témoin du modèle local : `llama-server` et qwen3-1.7b, lancés puis
-  arrêtés par le témoin ;
-- la mesure :
-  - le surcoût par jeton, sur 100 000 fragments ;
-  - le premier jeton chez le consommateur, comparé à la fin de la
-    génération.
+| ma part, 2 | `6945cd260` | Sur `LlmNode.tokens` du proto (`7627fa92d`). Le témoin du vrai modèle : qwen3-1.7b sous `llama-server`, sur le processeur, lancé et arrêté par le témoin. Sur 397 jetons, le premier est lu par le consommateur à 210 ms, 0,53 ms après le serveur, et la génération finit à 14,1 s. `text` est la concaténation exacte. La mesure, sur 100 000 fragments en debug : le canal coûte 822 ns par jeton, contre 35,6 ms par jeton du modèle. Page 01 §7. |
+
+| le refoulement | `00079b754` | Sur `TokenEvents` et `Spot` du proto. Un lecteur lent du graphe retient le modèle (avance maximale de 65 fragments pour un canal de 64). **`TokenEvents` vers un abonné lent du bus ne refoule pas : il perd** (1 932 jetons sur 2 000 à 1 ms par jeton, sur un bus de 64 ; rien au rythme réel d'un modèle). `Spot` ne pèse rien (sous le bruit du canal). Page 01 §8 ; les deux voies pour un écran qui ne doit rien perdre sont au proto et à l'arbre principal. |
+
+## Lancer un graphe en fond (demande de Lucie du 11 octobre)
+
+La page est `03-lancer-en-fond.md`, acceptée par l'orchestration et par le
+proto, avec ses deux objections retenues (la fin va à un nom ; l'enfant n'a
+jamais plus que son appelant).
+
+| lot | commit | ce qu'il fait |
+|---|---|---|
+| A | `371ded8f9`, `4a2f734dc` | `DataflowRuntime::spawn` : un fil à lui, sous l'exécuteur concurrent, et la référence rendue tout de suite (34 µs). La fin est écrite dans la boîte de l'appelant, signée `outil #h`, et dite sur le bus (`RunFinished.cause`). `Detached` par défaut, `WithParent` déclaré. Le registre des runs vivants (`alive` est le `--qui`, `cancel` est réservé au parent ou à l'appelant), avec la durée et le nombre à la fois. `suivies()` est fondu dedans. Neuf témoins, plus qwen3 sous `llama-server` (un résumé dans la boîte à 1,48 s). |
+| C | `80b97af1d` | `SpawnNode` : le verbe posé comme nœud, un lancement par message, un refus dit sur `run`. |
+| deliver | `51025501e` | La fin passe par `Directory::deliver` (la boîte par nom du proto) : la fin d'un appelant au tour fini va à son tour suivant. |
+| ordre | `fa5fa55bd` | `RunFinished` est émis avant que la fin ne soit écrite dans la boîte (une course vue par le proto). |
+
+**Reste** : le second temps, la boîte qui devient un flux ouvert (« vit tant
+qu'un flux d'entrée est ouvert »). Le verbe `spawn` dans la boucle est chez
+le proto, et `qui()`/`cancel_all` dans `daemon_status` chez l'arbre
+principal.
 
 ## Le magasin de libs
 
@@ -37,6 +50,41 @@ balayage filtré. Relu de mon côté :
   `build/lecteurs-csv` (`c2ddbb67…`) ;
 - celle de l'extension vector est conforme à l'annonce (`545d634c…`).
 
+**Lot 3d** (`e38cc586b`, demandé par l'orchestration) : le pont lit lui
+aussi la lib du magasin.
+- `exporter_la_lib` fait le choix de `run_e2e.sh` et pose les quatre
+  variables sur un même dossier.
+- `check_features.sh` l'appelle.
+- `scripts/cargo_magasin.sh` est l'entrée de tout cargo joué à la main ou
+  par un push.
+- Un rebâti en place de `build/lecteurs-csv` ne change plus la lib d'un
+  rejeu. Le témoin de bout en bout le prouve sur un vrai binaire de tests :
+  sur l'ancien environnement, il ne démarre plus ; par l'enveloppeur, il
+  passe sans rien recompiler.
+- Page 07 §9.
+
+**Relu** : le correctif de G pour Windows et macOS (`2f052d5db`, son lot C),
+du code mort hors Linux dans `build_check.rs`. `check_features` ne joue que
+Linux, et c'est noté dans la page 07 (§5).
+
+**Lots 3e et 3f** (`f3b0b2dcc`, `70327a3fd`) : l'extension vector se
+cherche à côté de la lib réellement chargée (`/proc/self/maps`), en
+production puis dans les tests, les e2e et les sondes. Une extension d'un
+autre bâti est passée quand elle est cherchée, refusée quand elle est forcée,
+et les deux identifiants sont nommés. Le lot 3f ferme le rouge de 12 h 58
+(un rebâti en place avait fait tomber un rejeu sur la lib du magasin).
+
+**Autres** :
+- `run_e2e.sh` refuse plus d'un filtre positionnel (`af7fc62cc`) ;
+- la règle des bases e2e est écrite dans la page des e2e (`680517566`) ;
+- le ticket du réacteur instable est fermé (`7c08bd5f5`) ;
+- relus : l'IR du proto (`9d6504f2c`) et le lot C de G.
+
+**Refusé à moi, laissé à Lucie** : l'effacement de deux restes de bases
+d'arrêt brutal sur luciepc (42 et 110 Mo, sous
+`~/.cache/rag3weaver-build/`). Mon mode de permission refuse une écriture
+sur un hôte distant. La commande est dans le message à l'orchestration.
+
 ## Les leçons
 
 - **check_features jette la sortie de cargo.** La preuve qu'un vert n'est
@@ -46,3 +94,18 @@ balayage filtré. Relu de mon côté :
 - **Un worktree qui contient le sous-module** ne s'efface qu'avec
   `--force`, une fois son état lu propre. Sa branche ne s'efface qu'avec
   `-D`, après avoir prouvé que son bout est un ancêtre de master.
+- **Le FETCH_HEAD de l'arbre principal est partagé** : une autre session l'a
+  écrasé entre deux de mes lectures. Je lis master depuis mon worktree,
+  jamais depuis l'arbre principal.
+- **Deux worktrees sur un même target** se paient d'une recompilation
+  entière à chaque bascule (la garde efface les empreintes). Je n'en lance
+  pas un pendant que la poussée de l'autre attend le verrou.
+- **Un témoin qui lit deux canaux l'un après l'autre** (la boîte, puis le
+  bus) attrape un ordre d'écriture faux sous charge. Le correctif est
+  l'ordre, pas une attente.
+- **Un rejeu complet trouve ce que les tests du lot ne voient pas** : un jeu
+  de features sans `code` (du code mort), ou le témoin des schémas sans
+  configuration d'exemple. Deux poussées l'ont prouvé aujourd'hui.
+- **Une mesure qui donne un coût négatif mesure autre chose.** `Spot` « moins
+  cher » qu'un lecteur nu, c'était le réveil par fragment d'un lecteur qui
+  vide le canal.

@@ -198,6 +198,86 @@ et son correctif ; la file à deux priorités côté embarquement et le délai
 borné ; le retrait par ensemble ; puis le lot 4 des agents (`AgentNode`), que
 le pont vivant de la recherche rend possible.
 
+## La nuit du 12 octobre — les « 6 s », et le lot de la montre sur master
+
+Luciepc pris jusqu'au matin : l'orchestration a fait bâtir ici, sous `poste lourd`, et pousser
+sous le verrou de push (la fenêtre de push se prend par le verrou, le rejeu se fait dessous).
+
+- **`30f1f7949`, la suite des relectures de la montre.**
+  - Une lecture passe pendant une réaction qui enchaîne les fichiers : la réaction cède aux
+    lecteurs, et les lectures attendent un verrou court (`lock_for_read`).
+  - Le reçu « occupé » d'`index_states` porte montres et reprise. Le correctif des montres est
+    celui de l'arbre principal ; mon témoin déterministe a été rouge avant le rebase, vert après.
+    Ticket fermé.
+  - La ligne `[montre]` par fichier dans le journal de l'hôte, demandée par codeparsers.
+  - L'instrumentation de la mesure par phase ; `max_tokens` de Decide (2 048).
+- **`df1184d32`, la cause des « 6 s ».** La mesure par phase (page 04, §7) sur un index de
+  `src/` (15 631 morceaux) l'a montré : la suppression des morceaux du scope changé coûtait
+  2,1 à 2,9 s **par ligne qui porte un vecteur sous HNSW**, contre 2 à 8 ms pour les lire.
+  - Le contournement : les vecteurs sont remis à NULL juste avant le `DETACH DELETE`, dans le
+    dialecte rag3db seulement.
+  - Réindexer un fichier : de 2,5–3,9 s à 0,56–0,68 s. Retirer un fichier de 32 scopes : de
+    96–114 s à 0,40 s.
+  - Ticket moteur ouvert pour hotfixs. Le banc mesure 20 à 50 ms par ligne indexée (0,7 ms par
+    NULL d'abord), et prépare une variante fidèle à ma forme.
+- **`5fc38460d`, la relecture de la recherche.**
+  - « Embarquer » sort dans la ligne `[montre]` sans la variable du profil (témoin rouge, puis
+    vert).
+  - Le vidage vide aussi le marqueur dense : une suppression qui échoue laisse une dette
+    honnête.
+  - Le vidage sauté se dit ; `record()` est sûr face à une panique.
+- **Le P1 (morceaux sans texte) n'était pas chez moi** : c'était le balayage filtré des chaînes
+  du moteur, corrigé par le cœur (`f6179ade0`). Mes trois suspects sont tombés, et le témoin de
+  réingestion a été retiré du lot.
+- **Contrôles** :
+  - chaque push : la lib entière rejouée sous le verrou (1 543 à 1 545 passés, 0 échec),
+    `check_features` 5/5, le natif seul sans avertissement ;
+  - `e2e_invariant_des_vecteurs` 8 sur 8 sur la lib courante du magasin ;
+  - trois contrôles lus à chaque hash.
+- **Fait en passant** : le worktree `rag3db-agents` de luciepc est effacé (codeparsers n'y
+  indexait rien), et le worktree local aussi, après chaque fusion. Le target `target-I-ici`
+  (6,7 Go) est gardé.
+- **Ensuite** : `LlmNode.tokens` (le premier flux de jetons, partage convenu avec la recherche :
+  flux non branchés jetés chez elle, `Spot` et `TokenEvents` sur le sujet `tokens` chez moi).
+  Codeparsers rejoue son renommage sur la base entière, à df1184d32.
+
+## Le matin du 12 octobre — la fraîcheur sur la base entière, et les jetons
+
+La priorité de Lucie est la fraîcheur. Codeparsers a rejoué cinq fois le même témoin sur la base
+entière (102 469 morceaux) : un renommage sur deux fichiers, vu par `usages`. On est passé de
+7,26 s à 5,21 s, puis à ce que dira le cinquième rejeu. Chaque lot a été poussé sous le verrou,
+après la lib entière et `check_features` rejoués.
+
+- **Le découpage** (`2a3f57f0d`, `5c97f4c5a`) : la ligne `[montre]` attribue chaque étape à sa
+  phase, entre crochets, avec ce qui n'y est pas détaillé. Le tiers non nommé d'« ingérer »
+  était la résolution des symboles et le drain.
+- **`LlmNode.tokens`** (`7627fa92d`) : une sortie `tokens` en flux, un puits double, et
+  `stop_when_unread`. La recherche l'a éprouvée sur qwen3-1.7b : premier jeton lu à 210 ms pour
+  une génération de 14,1 s, 822 ns de canal par jeton.
+- **La réindexation par lot** (`c391e8387`) :
+  - `reingest_files`, un passage pour les fichiers vus ensemble ;
+  - `ReindexFileNode` par lots, dont la taille suit un budget de tenue (400 ms) pour laisser
+    passer les lecteurs ;
+  - la fin d'un fichier qui va du `File` à ses scopes par l'arête `DEFINED_IN`
+    (`SnapshotConfig.fineScopeVia`), au lieu de balayer `Scope`.
+  Quatrième rejeu : 5,21 s, une réaction pour deux fichiers.
+- **La période par défaut** (`2b14edd88`) : 250 ms de période et 150 ms de pose. Coût au repos :
+  0,8 % d'un cœur sur 1 654 fichiers, 3,5 % sur 6 929 (page 04, §8).
+- **Les symboles** (`8bfdd74d3`, `25bbca30b`) : la résolution d'un lot ne relit plus toutes les
+  mentions des noms courants, mais seulement celles du lot et les réexportations. Sur le témoin,
+  30 mentions avant, au plus 3 après, et les arêtes sont identiques (e2e des arêtes verts).
+- **`TokenEvents` et `Spot`** (`3db578589`) : les jetons sur le bus (sujet `tokens`), et le
+  classement au fil de l'eau avec arrêt du modèle.
+- **Corrigé en chemin** : j'avais annoncé trois suites e2e vertes pour `c391e8387`, alors que
+  `run_e2e.sh` n'en avait joué qu'une (il ne garde que le dernier filtre). Les deux autres ont été
+  jouées depuis, vertes ; le piège est en mémoire.
+- **Tickets** : la suppression d'une ligne indexée HNSW (pour hotfixs, que le banc a reproduite,
+  88 % dans `keepNodeReachable`) ; le témoin du réacteur instable sous charge (pour la recherche).
+- **Ménage** : le worktree et le target de luciepc sont effacés.
+- **Ensuite** : la boîte par nom de l'annuaire (`Directory::deliver`), qui branche le lancement en
+  fond de la recherche ; la réaction sur événement du noyau (notify, avec le balayage en filet) ;
+  « planifier » avec la jointure par clé du cœur ; l'AgentNode.
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).

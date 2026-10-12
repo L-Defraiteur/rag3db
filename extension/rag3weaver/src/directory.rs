@@ -11,6 +11,12 @@
 //! Un participant inscrit a **sa boîte ouverte** ([`Directory::enroll`]) : un
 //! message qui lui arrive avant son run n'est pas perdu (un curseur ne voit
 //! que ce qui suit sa création).
+//!
+//! **La boîte par nom** ([`Directory::deliver`]) : un tour d'agent rend son nom
+//! à sa fin ([`Directory::release`]). Ce qui est adressé au nom entre deux tours
+//! (la fin d'un graphe lancé en fond, typiquement) attend dans l'annuaire, et le
+//! prochain run qui prend le nom le reçoit dans sa boîte. Sans cela, la fin
+//! tombait dans la boîte d'un run fini, que personne ne lit plus.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
@@ -25,12 +31,38 @@ pub fn new_owner() -> Owner {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+/// La clé de service sous laquelle l'annuaire est posé pour un outil :
+/// `Arc<Directory>`.
+pub const DIRECTORY_SERVICE: &str = "directory";
+
 #[derive(Default)]
 struct Book {
     /// Nom → (run en cours, qui tient le nom).
     runs: BTreeMap<String, (String, Owner)>,
+    /// Les noms dont le run a fini son tour : rien ne lit plus sa boîte.
+    released: BTreeSet<String>,
+    /// Nom → ce qui lui a été adressé pendant qu'il n'avait pas de run en cours.
+    held: BTreeMap<String, Vec<Held>>,
     /// Fil → noms de ses participants.
     threads: BTreeMap<String, BTreeSet<String>>,
+}
+
+/// Un message gardé pour un nom sans run en cours.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Held {
+    run: String,
+    from: String,
+    content: String,
+}
+
+/// Où une livraison est allée.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Delivery {
+    /// Dans la boîte de ce run.
+    ToRun(String),
+    /// Gardée pour ce nom, qui n'a pas de run en cours : son prochain run la
+    /// reçoit.
+    Held { name: String },
 }
 
 /// L'annuaire, partagé par les agents d'une session.
@@ -58,7 +90,9 @@ impl Directory {
     /// **L'hôte** inscrit `name` sous `run` : il fait autorité, l'inscription
     /// remplace ce qui y était. Un agent qui prendra ce nom l'adoptera.
     pub fn register(&self, name: &str, run: &str) {
-        self.book().runs.insert(name.to_string(), (run.to_string(), 0));
+        let mut book = self.book();
+        book.runs.insert(name.to_string(), (run.to_string(), 0));
+        book.released.remove(name);
     }
 
     /// **Un agent** prend `name` pour `run`. Il peut reprendre son propre nom
@@ -67,6 +101,8 @@ impl Directory {
     /// défaut, typiquement) se voleraient leur boîte en silence.
     pub fn claim(&self, name: &str, run: &str, owner: Owner) -> Result<(), String> {
         let mut book = self.book();
+        // Un nom rendu reste à son agent : un autre agent du même nom (le nom
+        // par défaut) ne prend pas sa boîte entre deux de ses tours.
         if let Some((held, by)) = book.runs.get(name) {
             if *by != 0 && *by != owner {
                 return Err(format!(
@@ -75,6 +111,7 @@ impl Directory {
             }
         }
         book.runs.insert(name.to_string(), (run.to_string(), owner));
+        book.released.remove(name);
         Ok(())
     }
 
@@ -83,13 +120,65 @@ impl Directory {
     pub fn enroll(&self, bus: &crate::events::EventBus, name: &str, run: &str) {
         bus.cursor(&crate::events::inbox_topic(run), crate::agent::AGENT_INBOX_CURSOR);
         self.register(name, run);
+        self.hand_over(bus, name, run);
     }
 
-    /// [`Self::claim`], la boîte ouverte.
+    /// [`Self::claim`], la boîte ouverte — et ce qui attendait le nom remis à
+    /// ce run.
     pub fn claim_and_open(&self, bus: &crate::events::EventBus, name: &str, run: &str, owner: Owner) -> Result<(), String> {
         self.claim(name, run, owner)?;
         bus.cursor(&crate::events::inbox_topic(run), crate::agent::AGENT_INBOX_CURSOR);
+        self.hand_over(bus, name, run);
         Ok(())
+    }
+
+    /// Remet à `run` ce qui attendait `name`, dans l'ordre d'arrivée.
+    fn hand_over(&self, bus: &crate::events::EventBus, name: &str, run: &str) {
+        let attente = self.book().held.remove(name).unwrap_or_default();
+        for h in attente {
+            bus.send_message(&h.run, &h.from, run, &h.content);
+        }
+    }
+
+    /// **Le tour de `run` est fini** : `name` n'a plus de run qui lise sa
+    /// boîte. Sans effet si le nom a déjà été repris par un autre run.
+    pub fn release(&self, name: &str, run: &str) {
+        let mut book = self.book();
+        if book.runs.get(name).is_some_and(|(r, _)| r == run) {
+            book.released.insert(name.to_string());
+        }
+    }
+
+    /// **Livre un message à un nom ou à un run** : `run` est le run qui parle,
+    /// `from` sa signature (« outil #h » pour une fin lancée en fond).
+    ///
+    /// - un nom dont le run est en cours : sa boîte ;
+    /// - un nom dont le tour est fini : gardé, remis au prochain run qui le
+    ///   prend ([`Delivery::Held`]) ;
+    /// - sinon, `to` est un run : sa boîte (un appelant qui n'est pas un
+    ///   agent n'a pas de nom).
+    pub fn deliver(&self, bus: &crate::events::EventBus, run: &str, from: &str, to: &str, content: &str) -> Result<Delivery, String> {
+        let to = to.trim();
+        if to.is_empty() {
+            return Err("deliver : pas de destinataire".to_string());
+        }
+        let cible = {
+            let mut book = self.book();
+            match book.runs.get(to).map(|(r, _)| r.clone()) {
+                Some(_) if book.released.contains(to) => {
+                    book.held.entry(to.to_string()).or_default().push(Held {
+                        run: run.to_string(),
+                        from: from.to_string(),
+                        content: content.to_string(),
+                    });
+                    return Ok(Delivery::Held { name: to.to_string() });
+                }
+                Some(r) => r,
+                None => to.to_string(),
+            }
+        };
+        bus.send_message(run, from, &cible, content);
+        Ok(Delivery::ToRun(cible))
     }
 
     /// Les noms inscrits, dans l'ordre.

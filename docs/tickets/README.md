@@ -30,19 +30,20 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (28)
+### Ouverts — moteur (29)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | ouvert — contourné dans rag3weaver | lenteur sévère | oui, avant le contournement | oui (`record_nodes.rs`, `dialect.rs`) |
-| [Une recherche vectorielle pendant un DROP/CREATE de l'index rend une exception brute de la bibliothèque standard](2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute.md) | ouvert — pour hotfixs | erreur non nommée | oui (rattrapage d'embarquement de rag3weaver) | oui |
+| [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
+| [Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre](2026-10-12-sous-windows-une-base-existante-ne-se-rouvre-pas-en-ecriture.md) | ouvert — pour le cœur ; vu par l'épreuve du cycle du démon (run 38242681341), cause lue (LockFileEx par poignée) | blocage | oui, sur tout poste Windows | oui (le démon, tout backend) |
+| [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
+| [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
+| [Un index retiré ou recréé change dans le stockage pour toutes les transactions, avant sa validation](2026-10-12-un-index-retire-ou-recree-reste-visible-a-tous-dans-le-stockage.md) | ouvert (forme arrêtée avec le cœur : la rétention) | refus d'une lecture valide, travail perdu | oui | oui (refus transitoires) |
 | [Une lib d'une autre ABI se charge et tombe sur un symbole manquant](2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md) | ouvert — au nom du cœur | blocage | oui, à chaque rebâti qui change une signature exportée | oui (binaires installés) |
-| [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | ouvert — au cœur C++, avec le ticket des fils | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [L'élagage de l'index vectoriel peut couper le dernier pont vers une région](2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md) | ouvert (vu sur un essai, pas sur master) | réponse fausse (lignes injoignables) | en principe | non vu |
-| [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | ouvert | réponse fausse (compte du CALL) | oui | non vu |
 | [Un groupe de copies bien plus grand que le degré perd des lignes dans l'index vectoriel](2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md) | ouvert, confort | réponse fausse (lignes injoignables, pas de plantage) | seulement avec des centaines de copies d'un vecteur | non (plus de vecteur nul écrit) |
 | [Le journal d'une transaction reste sans borne pour les insertions ordinaires](2026-10-05-journal-d-une-transaction-sans-borne-hors-copy.md) | ouvert, suite de la borne du COPY | refus d'une très grosse transaction | oui | le mode à blobs, qui s'en garde |
 | [Au journal, chaque cellule réécrit son type](2026-10-05-cout-par-cellule-au-journal.md) | ouvert, confort | volume et temps | toujours | en volume |
@@ -66,13 +67,16 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (29)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
+| [Un client relance l'hôte sur une base en cours d'écriture autonome](2026-10-12-un-client-relance-l-hote-sur-une-base-en-cours-d-ecriture-autonome.md) | ouvert — après L2 (arbre principal) | deux écrivains sur une base | oui, pendant toute réindexation autonome | oui (`daemon_lifecycle.rs`, `daemon_host.rs`) |
+| [Un graphe exécuté par niveaux ne s'annule pas](2026-10-12-un-graphe-sous-les-niveaux-ne-s-annule-pas.md) | ouvert — lot à part (recherche) | blocage | oui | oui (`src/dataflow`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
 | [Un backend de code dont la racine a disparu rend une erreur brute et se dit ouvert](2026-10-11-un-backend-de-code-dont-la-racine-a-disparu-rend-une-erreur-brute-et-se-dit-ouvert.md) | ouvert (relevé par le cœur C++, demande de Lucie) | réponse fausse / confort — erreur brute, « catalogue occupé » | oui (worktree effacé, manifeste chargé) | oui (démon, MCP du code) |
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | ouvert — pris par l'arbre principal, après sa file | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
@@ -103,11 +107,19 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (119), dans `closed/`
+### Fermés (127), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](closed/2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | corrigé : l'état d'un processus par système, l'inconnu laissé à /sante ; bâti vert sous Windows et macOS (run 38200365497), cycle du démon joué sous Linux seulement | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |
+| [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](closed/2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | corrigé : l'état d'un processus par système, l'inconnu laissé à /sante, le jeton par getrandom, l'hôte détaché sans les tuyaux du client ; cycle du démon vert sous macOS ; **Windows bloqué à la réouverture d'une base** (ticket moteur du 12 oct., c1cedb7ae) — runs 38236456277 et 38242681341, L-Defraiteur | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |
+| [Supprimer une ligne qui porte un vecteur indexé (HNSW) coûte plusieurs secondes](closed/2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes.md) | corrigé (136 → 6,9 ms ; voir le ticket) | lenteur sévère | oui | oui (contournement à enlever) |
+| [QUERY_VECTOR_INDEX rend des nœuds supprimés au niveau du CALL](closed/2026-10-11-query-vector-index-rend-des-noeuds-supprimes-au-call.md) | corrigé (le résultat complété jusqu'à k ; voir le ticket) | réponse fausse | oui | non vu |
+| [Le témoin du réacteur `each_runs_per_ring_and_debounce_waits_for_quiet` rougit sous charge](closed/2026-10-12-le-temoin-du-reacteur-rougit-sous-charge.md) | corrigé (12 octobre 2026, attentes par condition) | test instable | non (le test) | oui (`reactor.rs`) |
+| [Le reçu d'un index annonce un modèle que l'index n'emploie pas](closed/2026-10-12-le-recu-d-index-annonce-un-modele-que-l-index-n-emploie-pas.md) | corrigé (voir le ticket) | réponse fausse (le reçu, la durée prévue) | oui, dès qu'un manifeste déclare son modèle | oui (`estimate.rs`) |
+| [La montre réintègre ce que l'index entier écarte](closed/2026-10-12-la-montre-reintegre-ce-que-l-index-ecarte.md) | corrigé (une porte unique, `code::admission`) | coût et justesse | oui | oui (`code.rs`, `watch.rs`, `code_sync.rs`) |
+| [Une recherche vectorielle pendant un DROP/CREATE de l'index rend une exception brute de la bibliothèque standard](closed/2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute.md) | corrigé (voir le ticket ; la rétention suit) | erreur non nommée | oui | oui |
+| [Le point de reprise qui suit de nombreux SET d'une colonne de vecteurs coûte un temps quadratique](closed/2026-10-12-le-point-de-reprise-apres-de-nombreux-set-de-vecteurs-est-quadratique.md) | corrigé (12 octobre 2026, le lot de l'insertion de vecteurs sous index, pas 1 : resize au double) | lenteur sévère | oui (`embed_set`, premier index) | oui |
+| [Un saut par semi-masque lit toute la table quand le masque est petit et éparpillé](closed/2026-10-11-un-saut-par-semi-masque-lit-toute-la-table.md) | corrigé (12 octobre 2026, le balayage par décalages sous un petit masque, page coeur-cpp/12 §10) | coût (usages : 0,4 à 1,5 s sur un index entier) | oui, à chaque saut vers une grande table | oui (tous les sauts des outils) |
 | [Le test de réconciliation de la montre lit l'état d'un index occupé, et échoue une fois sur cinq](closed/2026-10-11-le-test-de-reconciliation-de-la-montre-lit-un-index-occupe.md) | corrigé (e5c53d2e2 ; témoin déterministe) | test instable | non (le test) | oui (`backend.rs`) |
 | [SIGSEGV sur un agrégat de 80 000 lignes qui rend des textes longs](closed/2026-10-12-sigsegv-sur-un-agregat-de-80-000-lignes-a-textes-longs.md) | corrigé (12 octobre 2026, le lot du balayage filtré des chaînes) | plantage | oui en principe, vu une fois | oui (une lecture d'outil qui agrège toute une table) |
 | [Des morceaux de code sont écrits sans texte : 20 % de code-rag3db](closed/2026-10-11-des-morceaux-de-code-sont-ecrits-sans-texte.md) | corrigé côté moteur (12 octobre 2026, le lot du balayage filtré : la lecture, pas le stockage) | réponse fausse, et blocage (le gel de code-lourd) | oui | oui |

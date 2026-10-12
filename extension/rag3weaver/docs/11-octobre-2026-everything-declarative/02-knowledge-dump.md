@@ -143,3 +143,48 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
 - Sous le verrou de push, un rebase réécrit les fichiers du lot, donc
   rag3weaver recompile une fois par jeu de `check_features` : ~10 min même
   worktree chaud. La passe complète se fait avant le verrou.
+
+## Ce que la nuit du 12 octobre a appris
+
+- **Une seule instruction peut faire tout le temps.** La mesure par phase n'a servi qu'à la
+  trouver ; ce qui l'a départagée, c'est une sonde jetable par instruction (lecture,
+  suppression, relecture), puis une variante (le vecteur remis à NULL d'abord). La sonde est
+  gardée en patch : `~/.cache/rag3weaver-build/I/sonde-suppression.patch`.
+- **Le moteur (vector)** : supprimer une ligne indexée HNSW coûte des secondes dans la forme
+  « index rempli par `SET` depuis NULL, suppressions répétées sur la même connexion » ; une
+  ligne dont le vecteur est NULL se supprime en quelques millisecondes. Écrire 15 631 vecteurs
+  sous index : 309 s (environ 20 ms chacun). Le banc ne reproduit pas encore (20 à 50 ms) ; sa
+  piste est un coût qui croît d'un lot à l'autre depuis le dernier point de reprise de la base.
+- **Deux instructions qui doivent aller ensemble** (vider puis supprimer) : la première laisse
+  la ligne dans un état honnête si la seconde échoue. Vider le vecteur sans son marqueur
+  rendait un morceau réputé embarqué, sans vecteur.
+- **Un chronomètre global sous variable ne suffit pas à une ligne de production** : les
+  durées des nœuds venaient d'un abonnement armé seulement sous la variable.
+  `ingest_profile::record` (par fil) et `recording()` l'arment pour un seul travail.
+- **Prouver la lib** : `build/lecteurs-csv` a été réécrite en place à 03:48:57, en pleine
+  série de mesures. Les journaux datés ont montré que les quatre mesures « avant/après » sont
+  toutes antérieures, et que la passe finale tournait sur `f6179ade0` (md5 de la lib et de
+  l'extension contre le magasin).
+- **Le push optimiste perd ses courses la nuit** : du code arrive sur master pendant chaque
+  rejeu de 10 minutes. La fenêtre se prend par le verrou (`poste push … --lourd`) : rebase,
+  rejeu et push dessous (`~/.cache/rag3weaver-build/I/scripts/sous-verrou.sh`), les docs
+  passent quand même.
+
+## Ce que le matin du 12 octobre a appris
+
+- **Profiler avant de corriger, sur la même ligne que la production.** La ligne `[montre]`,
+  attribuée par phase avec son « non détaillé », a désigné chaque fois le prochain poste : la
+  suppression HNSW, puis « planifier », puis la lecture des mentions. Un agrégat qui contient
+  d'autres étapes fausse le non détaillé : il se déclare (`AGREGATS`).
+- **Un budget de tenue plutôt qu'une taille de lot fixe.** 32 fichiers tenaient le verrou plus
+  d'une seconde, et une lecture attend au plus une seconde. Le budget (400 ms, d'après le coût du
+  lot précédent) garde les lecteurs vivants. Sur la base entière, un fichier coûte déjà ~2 s : le
+  lot et la lecture tirent en sens contraires, d'où les lectures sans attente de l'arbre principal.
+- **Une lecture restreinte qui garde le même résultat.** Une mention ne devient une arête que si sa
+  cible ou son mentionneur est dans le lot. On peut donc ne pas lire celles qui ne peuvent rien
+  donner, à condition de garder ce que le choix de la cible lit (les réexportations).
+- **`run_e2e.sh` ne garde que le dernier filtre** : une suite par appel, et lire « running N
+  tests ».
+- **La lib du magasin plutôt que le dossier de bâti** : un rebâti en place sous une passe donne
+  des rouges d'environnement (un en-tête neuf, une lib ancienne).
+

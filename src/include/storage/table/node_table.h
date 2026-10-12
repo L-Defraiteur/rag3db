@@ -1,5 +1,7 @@
 #pragma once
 
+#include <shared_mutex>
+
 #include "common/types/types.h"
 #include "storage/index/hash_index.h"
 #include "storage/table/node_group_collection.h"
@@ -44,6 +46,12 @@ struct RAG3DB_API NodeTableScanState : TableScanState {
     // leurs positions dans les groupes locaux quand la source est UNCOMMITTED
     // (NodeTable::initScanState, LocalNodeTable::getLocalColumnIDs).
     std::vector<common::column_id_t> committedColumnIDs;
+
+    // Le balayage par décalages sous un petit masque (page coeur-cpp/12 §10) : la tranche de
+    // décalages masqués à relire (ScanNodeTableSharedState::nextMorsel), lue par
+    // NodeTable::lookupOffsets. `byOffsets` dit que ce balayage est en ce mode.
+    bool byOffsets = false;
+    std::vector<common::offset_t> maskedOffsets;
 };
 
 // There is a vtable bug related to the Apple clang v15.0.0+. Adding the `FINAL` specifier to
@@ -149,6 +157,10 @@ public:
     // TODO(Guodong): This should be merged together with `lookup`.
     template<bool lock = true>
     bool lookupMultiple(transaction::Transaction* transaction, TableScanState& scanState) const;
+    // Relit les lignes de `scanState.maskedOffsets` (un balayage sous un petit masque) dans les
+    // vecteurs de sortie, positions 0..n-1 ; la sélection de sortie ne garde que les lignes
+    // visibles de la transaction.
+    void lookupOffsets(transaction::Transaction* transaction, NodeTableScanState& scanState) const;
 
     // Return the max node offset during insertions.
     common::offset_t validateUniquenessConstraint(const transaction::Transaction* transaction,
@@ -221,8 +233,20 @@ public:
         KU_ASSERT(index.has_value());
         return &index.value()->cast<PrimaryKeyIndex>();
     }
+    // Rend une référence sur un élément de la liste, valable tant qu'aucun DROP ni CREATE d'index
+    // ne la change : à réserver aux appelants sans DDL concurrent. Les autres prennent
+    // hasIndexHolder ou loadIndex, qui lisent et agissent sous le verrou.
     std::optional<std::reference_wrapper<IndexHolder>> getIndexHolder(const std::string& name);
+    // Un exemplaire non détaché de ce nom est là, chargé ou non.
+    bool hasIndexHolder(const std::string& name) const;
+    // Charge l'exemplaire non détaché de ce nom s'il ne l'est pas, sous le verrou de la liste.
+    // Rend faux s'il n'y en a pas (détaché par le rejeu, ou retiré).
+    RAG3DB_API bool loadIndex(const std::string& name, main::ClientContext* context,
+        StorageManager* storageManager);
     std::optional<Index*> getIndex(const std::string& name) const;
+    // L'index chargé de ce nom, en propriété partagée : il reste vivant tant que l'appelant le
+    // tient, même si un DROP concurrent le retire de la table. Nul s'il n'y est pas (ou plus).
+    std::shared_ptr<Index> getSharedIndex(const std::string& name) const;
     std::vector<IndexHolder>& getIndexes() { return indexes; }
 
     common::column_id_t getNumColumns() const { return columns.size(); }
@@ -317,6 +341,12 @@ private:
     std::unique_ptr<NodeGroupCollection> nodeGroups;
     common::column_id_t pkColumnID;
     std::vector<IndexHolder> indexes;
+    // Garde la liste des index contre un DROP ou un CREATE d'index concurrent (ticket
+    // 2026-10-12-une-recherche-vectorielle-pendant-drop-create…) : les recherches la lisent par
+    // nom pendant qu'une autre connexion en retire ou en ajoute un. Les écritures, qui la
+    // parcourent par getIndexes(), se sérialisent avec le DDL par le verrou INDEX (à venir).
+    mutable std::shared_mutex indexesMtx;
+    std::optional<Index*> getIndexNoLock(const std::string& name) const;
     NodeTableVersionRecordHandler versionRecordHandler;
 };
 

@@ -120,7 +120,7 @@ impl Node for EstimateNode {
         let source = source_service(ctx).ok_or("EstimateNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
         let estimate =
-            estimate_of(source.as_ref(), catalog.as_ref(), self.probe, &generated_policy(ctx)).map_err(|e| format!("EstimateNode: {e}"))?;
+            estimate_of(source.as_ref(), catalog.as_ref(), self.probe, &generated_policy(ctx), declared_model(ctx).as_deref()).map_err(|e| format!("EstimateNode: {e}"))?;
         ctx.metric("files", estimate.survey.files as f64);
         ctx.metric("bytes", estimate.survey.bytes as f64);
         ctx.metric("skipped", estimate.survey.skipped_files() as f64);
@@ -136,6 +136,12 @@ impl Node for EstimateNode {
     }
 }
 
+/// Le modèle d'embarquement déclaré au manifeste, que le backend pose en
+/// service.
+fn declared_model(ctx: &NodeContext) -> Option<String> {
+    ctx.service::<String>(crate::embedding_choice::DECLARED_MODEL_SERVICE).cloned()
+}
+
 /// L'estimation d'une source, pour les deux nœuds. Le débit est celui que le
 /// catalogue a noté, sinon une sonde — notée à son tour, pour que
 /// l'estimation suivante ne la refasse pas. Sans catalogue : pas de durée.
@@ -144,6 +150,7 @@ fn estimate_of(
     catalog: Option<&Arc<Mutex<Catalog>>>,
     probe: bool,
     generated: &GeneratedPolicy,
+    declared: Option<&str>,
 ) -> Result<Estimate, String> {
     let (files, excluded) = files_of(source)?;
     // Les générés sortent de la politique avec leur raison et leur poids :
@@ -165,7 +172,7 @@ fn estimate_of(
             (rate, guard.embedder_is_remote())
         }
     };
-    let estimate = estimate_here(&files, &excluded, policy, rate, remote);
+    let estimate = estimate_here(&files, &excluded, policy, rate, remote, declared);
     // Le tampon de la base ouverte, quand elle le dit : celui-là, manifeste
     // compris, est le vrai.
     let pool = catalog.and_then(|c| c.lock().ok().and_then(|g| g.conn().buffer_pool()));
@@ -644,7 +651,7 @@ impl Node for IndexNode {
         let source = source_service(ctx).ok_or("IndexNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("IndexNode: 'catalog' service not found")?;
         let generated = generated_policy(ctx);
-        let estimate = estimate_of(source.as_ref(), Some(&catalog), true, &generated).map_err(|e| format!("IndexNode: {e}"))?;
+        let estimate = estimate_of(source.as_ref(), Some(&catalog), true, &generated, declared_model(ctx).as_deref()).map_err(|e| format!("IndexNode: {e}"))?;
         // Le tampon d'abord : une confirmation n'y change rien, seul un
         // tampon plus grand le lève.
         if let Some(refusal) = estimate.buffer_refusal() {

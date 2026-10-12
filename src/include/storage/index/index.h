@@ -259,6 +259,7 @@ public:
         KU_ASSERT(index);
         return index.get();
     }
+    std::shared_ptr<Index> getSharedIndex() const { return index; }
 
 private:
     IndexInfo indexInfo;
@@ -267,8 +268,9 @@ private:
     bool loaded;
     bool detached = false;
 
-    // Loaded index structure.
-    std::unique_ptr<Index> index;
+    // Loaded index structure. Partagée : une recherche la capture (getSharedIndex) et la garde
+    // vivante jusqu'à sa fin, même si un DROP concurrent retire le holder de la table.
+    std::shared_ptr<Index> index;
 };
 
 } // namespace storage

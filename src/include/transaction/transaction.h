@@ -110,6 +110,12 @@ public:
     common::transaction_t getID() const { return ID; }
     common::transaction_t getStartTS() const { return startTS; }
     common::transaction_t getCommitTS() const { return commitTS; }
+    // Le plus ancien instantané encore ouvert au moment de la validation (hors cette
+    // transaction ; son propre horodatage de validation si elle est seule), posé par le
+    // TransactionManager sous son verrou juste avant la validation : une suppression validée au
+    // plus tard à cet instant n'est vivante pour aucun lecteur, présent ou futur — la liste CSR
+    // d'un nœud peut l'oublier (CSRNodeGroup::compactDeadRows). 0 : inconnu, rien n'est compacté.
+    common::transaction_t getOldestActiveStartTS() const { return oldestActiveStartTS; }
     int64_t getCurrentTS() const { return currentTS; }
 
     // La transaction devient forcée : durable par le seul point de reprise que sa validation
@@ -215,6 +221,12 @@ private:
     common::transaction_t ID;
     common::transaction_t startTS;
     common::transaction_t commitTS;
+    // L'instantané de la transaction tel que le TransactionManager le connaît : startTS, sauf
+    // pendant une LatestCommittedView, qui ne change startTS que sur le fil de la transaction
+    // et pour un balayage. Écrit sous le verrou du gestionnaire (début, refreshSnapshot), lu
+    // par lui pour oldestActiveSnapshotNoLock.
+    common::transaction_t snapshotFloorTS;
+    common::transaction_t oldestActiveStartTS;
     int64_t currentTS;
     main::ClientContext* clientContext;
     std::unique_ptr<storage::LocalStorage> localStorage;

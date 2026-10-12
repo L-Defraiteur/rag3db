@@ -310,6 +310,10 @@ pub struct Catalog {
     /// hors COPY (NodeTable::COPY_AFTER_UNCOMMITTED_INSERTS) — leurs décalages
     /// provisoires se recouvraient, et une recherche par clé plantait.
     merge_in_transaction: HashSet<String>,
+    /// **Le plein texte d'un lot en transaction** (`crate::fts_tampon`, L3) :
+    /// posé par [`Self::begin_lot`], appliqué par [`Self::commit_lot`] aux
+    /// décalages relus, jeté par [`Self::rollback_lot`]. `None` hors d'un lot.
+    fts_tampon: Option<Arc<crate::fts_tampon::TamponPleinTexte>>,
     /// Même indice pour la **dette de découpage** : a-t-on posé une mise à
     /// jour au niveau donnée sans redécouper ? La vérité est en base
     /// (`_chunked_hash <> _content_hash`) ; l'indice évite un balayage.
@@ -339,6 +343,11 @@ pub struct Catalog {
     /// (`workspace.locks_via`) : un scope qui appelle l'une d'elles la
     /// verrouille (LOCKS, à l'ingestion du code). Vide : aucune.
     declared_lock_calls: Vec<String>,
+    /// **Les tests par requêtes déclarés** (`workspace.queries_via`),
+    /// compilés au montage : à l'ingestion du code, les fichiers de test
+    /// marqués, REGISTERS et QUERIES posées. `None` : rien n'est relié.
+    #[cfg(feature = "code")]
+    declared_queries: Option<Arc<crate::queries_via::CompiledQueriesVia>>,
     /// **Les modèles que ce processus sait enregistrés**, en plus de ce que la
     /// méta rend. Un modèle qu'on vient d'enregistrer *est* enregistré, quoi
     /// que la base réponde ensuite — et une connexion factice ne répond rien.
@@ -428,6 +437,18 @@ pub struct Catalog {
     cache_base: PathBuf,
     /// Sync connection for BlobStore (avoids async→sync bridge).
     sync_conn: Option<Arc<dyn SyncDbConnection>>,
+    /// **La connexion de lecture** (`DbConnection::read_connection`) : les
+    /// lectures d'outil y passent en auto-commit et voient l'état validé, sans
+    /// jamais tourner dans une transaction ouverte par l'écrivain sur `conn`.
+    /// `None` : elles passent par `conn`.
+    read_conn: Option<Arc<dyn DbConnection>>,
+    /// **La vue de lecture** (`crate::read_view`), publiée ici quand la forme
+    /// change, lue sans ce mutex par les lectures d'outil.
+    read_view: Arc<crate::read_view::ReadViewCell>,
+    /// Une cellule empruntée le temps de `dans_la_cellule` : la vue ne se
+    /// publie pas pendant ce temps (elle figerait les index d'une autre
+    /// cellule).
+    cellule_empruntee: bool,
     /// **Les sessions de synchronisation ouvertes**, par (cellule, entité) :
     /// valeurs du périmètre en JSON → identifiant. Lu une fois depuis
     /// `_catalog_meta`, oublié à chaque ouverture, abandon ou fin. Hypothèse
@@ -517,14 +538,42 @@ pub struct EmbeddingChoiceRecord {
 }
 
 impl Catalog {
-    // ── Lifecycle ───────────────────────────────────────────────────────
+    /// La lecture d'une clé de méta, sur une connexion donnée : celle du
+/// catalogue, ou celle de la vue de lecture.
+pub(crate) fn read_meta_key_on(dialect: &dyn crate::dialect::SchemaDialect, conn: &dyn DbConnection, key: &str) -> Result<Option<String>, CatalogError> {
+    let stmt = dialect.load_meta_by_prefix("prefix");
+    let result = conn.execute_with_params(
+        &stmt,
+        &[QueryParam::new("prefix", CypherValue::String(key.to_string()))],
+    ).map_err(|e| CatalogError::DbError(e.to_string()))?;
+    for row in &result.rows {
+        if let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) = (row.get(0), row.get(1)) {
+            if k == key {
+                return Ok(Some(v.clone()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Les fils d'exécution de la connexion de lecture (`RAG3WEAVER_READ_THREADS`,
+/// 2 par défaut) : assez pour une lecture d'outil, sans affamer l'écrivain.
+fn read_threads() -> u64 {
+    std::env::var("RAG3WEAVER_READ_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(2)
+}
+
+// ── Lifecycle ───────────────────────────────────────────────────────
 
     pub fn new(
         conn: Box<dyn DbConnection>,
         embedder: Box<dyn Embedder>,
         config: CatalogConfig,
     ) -> Self {
+        let read_conn = conn.read_connection(Self::read_threads());
         Self {
+            read_view: Default::default(),
+            cellule_empruntee: false,
+            read_conn,
             conn: Arc::from(conn),
             embedder: Arc::from(embedder),
             sparse_embedder: None,
@@ -543,6 +592,7 @@ impl Catalog {
             fresh_ingest: None,
             defer_blob_push: false,
             merge_in_transaction: HashSet::new(),
+            fts_tampon: None,
             peut_devoir_un_redecoupage: false,
             peut_devoir_un_rendu: false,
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
@@ -556,6 +606,8 @@ impl Catalog {
             event_bus: EventBus::new(1024),
             entity_configs: HashMap::new(),
             declared_lock_calls: Vec::new(),
+            #[cfg(feature = "code")]
+            declared_queries: None,
             embedding_models_cache: std::sync::Mutex::new(Vec::new()),
             embedding_model_registered_here: std::sync::atomic::AtomicBool::new(false),
             scope: crate::scope::Scope::default(),
@@ -821,6 +873,7 @@ impl Catalog {
             },
         };
         self.sparse_handles.insert(table.to_string(), Arc::new(handle));
+        self.publish_read_view();
     }
 
     /// Creation-time positions policy; existing persisted indexes keep their schema.
@@ -1085,6 +1138,16 @@ impl Catalog {
 
     pub fn drop_fts_index(&mut self, table: &str) {
         let Some(handle) = self.fts_handles.remove(table) else { return };
+        // **La vue de lecture tient une copie de la poignée** (L2) : sans une
+        // vue neuve qui ne l'a plus, l'index ne se détruisait jamais, et la
+        // garde des comptes rebâtissait par-dessus (661 documents pour 330
+        // lignes, `e2e_tx_par_paquet_arret`, 12 octobre 2026). Une lecture en
+        // cours rend sa copie en quelques millisecondes : on l'attend un peu.
+        self.publish_read_view();
+        let attente = std::time::Instant::now();
+        while Arc::strong_count(&handle) > 1 && attente.elapsed() < std::time::Duration::from_secs(1) {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
         match Arc::try_unwrap(handle) {
             Ok(h) => {
                 if let Err(e) = h.drop_index() {
@@ -1100,6 +1163,7 @@ impl Catalog {
                 // On le remet : mieux vaut un index périmé qu'un index à moitié
                 // détruit, et l'appelant peut réessayer.
                 self.fts_handles.insert(table.to_string(), still_shared);
+                self.publish_read_view();
             }
         }
     }
@@ -1378,6 +1442,7 @@ impl Catalog {
         let handle = Arc::new(handle);
         self.fts_files.extend(files.into_inner());
         self.fts_handles.insert(table.to_string(), handle.clone());
+        self.publish_read_view();
         Some(handle)
     }
 
@@ -1385,6 +1450,8 @@ impl Catalog {
     /// Must be called before dropping the Catalog when the DB will be reopened
     /// in the same process (e.g. tests, hot reload).
     pub fn shutdown(&mut self) -> Result<(), CatalogError> {
+        // La vue de lecture lâche ses poignées avant leur fermeture.
+        self.read_view.clear();
         // Collect table names for FTS and sparse.
         let mut fts_tables: Vec<String> = Vec::new();
         for name in self.entity_configs.keys() {
@@ -1779,6 +1846,7 @@ impl Catalog {
         self.persist_entity_config(entity_name, &config)?;
         self.config.entities.insert(entity_name.to_string(), entity_def);
         self.entity_configs.insert(entity_name.to_string(), config.clone());
+        self.publish_read_view();
         if config.derived.is_some() {
             // Une dérivée neuve sur des racines déjà posées : à rendre.
             self.peut_devoir_un_rendu = true;
@@ -1862,7 +1930,7 @@ impl Catalog {
     /// par défaut garde exactement la formule d'avant, et aucune base existante
     /// ne change d'identité ; une autre cellule entre dans le hachage, et la
     /// même fiche écrite dans deux cellules fait deux lignes.
-    fn uuid_for_in(
+    pub(crate) fn uuid_for_in(
         cell: &crate::scope::Scope,
         entity_name: &str,
         entity_def: &crate::config::EntityDef,
@@ -2498,6 +2566,7 @@ impl Catalog {
         self.persist_relation(rel_name, &rel_def)?;
         let (de, vers) = (rel_def.from.clone(), rel_def.to.clone());
         self.config.relations.insert(rel_name.to_string(), rel_def);
+        self.publish_read_view();
 
         // Une relation de plus peut lier une contributrice à la racine d'une
         // base : les bases dont un bout est la racine sont retraduites.
@@ -2614,6 +2683,7 @@ impl Catalog {
             }
             let cfg = crate::derived_kb::entity_config_from_def(def);
             self.entity_configs.insert(nom, cfg);
+            self.publish_read_view();
         }
         let mut kbs: Vec<(String, crate::config::KBConfig)> =
             self.config.knowledge_bases.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -2625,6 +2695,7 @@ impl Catalog {
                 if let Some(derivee) = crate::derived_kb::derived_config_for_kb(&kb, &kb_config, &self.config) {
                     self.config.entities.insert(kb.clone(), Self::entity_config_to_entity_def(&derivee));
                     self.entity_configs.insert(kb, derivee);
+                    self.publish_read_view();
                 }
             }
         }
@@ -3404,6 +3475,9 @@ impl Catalog {
         services.register("has_dual", self.dual_embedder.is_some());
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
+        if let Some(t) = &self.fts_tampon {
+            services.register(crate::fts_tampon::FTS_TAMPON_SERVICE, t.clone());
+        }
         // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
         // sur le chemin natif l'index vit avec les données et il n'y a rien à
         // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
@@ -4467,19 +4541,7 @@ impl Catalog {
 
     /// Read a single `_catalog_meta` value.
     pub(crate) fn read_meta_key(&self, key: &str) -> Result<Option<String>, CatalogError> {
-        let stmt = self.dialect.load_meta_by_prefix("prefix");
-        let result = self.conn.execute_with_params(
-            &stmt,
-            &[QueryParam::new("prefix", CypherValue::String(key.to_string()))],
-        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        for row in &result.rows {
-            if let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) = (row.get(0), row.get(1)) {
-                if k == key {
-                    return Ok(Some(v.clone()));
-                }
-            }
-        }
-        Ok(None)
+        Self::read_meta_key_on(self.dialect.as_ref(), self.conn.as_ref(), key)
     }
 
     // ── Multi-tenant : scope (doc 37) ────────────────────────────────────
@@ -4506,6 +4568,7 @@ impl Catalog {
         // Un index par cellule : on gare ceux de la cellule qu'on quitte, on
         // reprend ceux de la cellule qu'on rejoint (ouverts paresseusement sinon).
         self.basculer(scope);
+        self.publish_read_view();
         if self.initialized {
             self.ensure_scope_nodes()?;
         }
@@ -4545,9 +4608,12 @@ impl Catalog {
         }
         cell.validate().map_err(CatalogError::SchemaError)?;
         let avant = self.scope.clone();
+        let deja = self.cellule_empruntee;
+        self.cellule_empruntee = true;
         self.basculer(cell.clone());
         let r = f(self);
         self.basculer(avant);
+        self.cellule_empruntee = deja;
         r
     }
 
@@ -4917,6 +4983,7 @@ impl Catalog {
             let entity_def = Self::entity_config_to_entity_def(&config);
             self.config.entities.insert(entity_name.to_string(), entity_def);
             self.entity_configs.insert(entity_name.to_string(), config);
+            self.publish_read_view();
         }
 
         Ok(())
@@ -5003,6 +5070,7 @@ impl Catalog {
                     format!("deserialize relation '{rel_name}': {e}")
                 ))?;
             self.config.relations.insert(rel_name.to_string(), rel_def);
+            self.publish_read_view();
         }
 
         Ok(())
@@ -6159,7 +6227,9 @@ impl Catalog {
         // d'ingestion, sur la sortie d'erreur. « L'ingestion est lente » sans
         // ventilation n'a pas de suite possible — et la ventilation existe
         // déjà, le runtime la publie.
-        let profile = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok();
+        // Sous la variable, ou pendant un `ingest_profile::record` sur ce fil
+        // (la ligne [montre] d'un fichier réindexé, qui veut « nœud embed »).
+        let profile = crate::ingest_profile::enabled() || crate::ingest_profile::recording();
         let mut rx = profile.then(|| runtime.subscribe());
         // Un second abonné, avec son propre curseur : le bloc de profilage
         // ci-dessous n'existe que sous variable d'environnement, et les
@@ -6198,8 +6268,10 @@ impl Catalog {
                 let name = node.split(' ').next().unwrap_or(node);
                 crate::ingest_profile::add_duration(crate::ingest_profile::node_stage(name), std::time::Duration::from_millis(*ms));
             }
-            for (node, ms) in by_node {
-                eprintln!("[ingest-profile] {ms:>6} ms  {node}");
+            if crate::ingest_profile::enabled() {
+                for (node, ms) in by_node {
+                    eprintln!("[ingest-profile] {ms:>6} ms  {node}");
+                }
             }
         }
 
@@ -7615,6 +7687,116 @@ impl Catalog {
 
     /// **Une transaction de l'appelant s'ouvre ou se ferme.** Tant qu'elle
     /// est ouverte, le catalogue n'émet aucun DDL (voir `in_transaction`).
+    /// **Ouvrir un lot en transaction** (L3, page
+    /// 12-octobre-2026-arbre-principal/02) : le DDL d'abord, hors de la
+    /// transaction, puis BEGIN, et le plein texte en tampon. Rend `false`
+    /// sans rien ouvrir pour un dialecte sans Cypher ou une transaction déjà
+    /// ouverte : le lot se fait alors comme avant, instruction par
+    /// instruction.
+    pub fn begin_lot(&mut self) -> Result<bool, CatalogError> {
+        if !self.dialect.capabilities().cypher || self.in_transaction {
+            return Ok(false);
+        }
+        self.prepare_schema_for_ingest()?;
+        self.conn.begin().map_err(|e| CatalogError::DbError(format!("BEGIN du lot : {e}")))?;
+        self.set_in_transaction(true);
+        self.fts_tampon = Some(Arc::new(crate::fts_tampon::TamponPleinTexte::default()));
+        Ok(true)
+    }
+
+    /// **Valider un lot** : COMMIT, puis le plein texte du tampon appliqué
+    /// aux décalages relus par `_uuid` (une ligne neuve peut changer de
+    /// décalage au COMMIT sous plusieurs écrivains), puis la synchronisation
+    /// du plein texte. Un COMMIT refusé défait le lot comme un ROLLBACK, sans
+    /// empoisonner.
+    pub fn commit_lot(&mut self) -> Result<(), CatalogError> {
+        let tampon = self.fts_tampon.take();
+        if let Err(e) = self.conn.commit() {
+            let _ = self.conn.rollback();
+            self.set_in_transaction(false);
+            self.vider_les_caches_du_lot();
+            return Err(CatalogError::DbError(format!("COMMIT du lot refusé, lot défait : {e}")));
+        }
+        self.set_in_transaction(false);
+        if let Some(t) = tampon {
+            self.appliquer_le_tampon(t.prendre())?;
+        }
+        self.flush_blob_store("lot")
+    }
+
+    /// **Défaire un lot, sans empoisonner** : ROLLBACK, le tampon jeté (rien
+    /// n'a touché lucivy), et les caches qui divergeraient de la base
+    /// vidés. Le catalogue sert ensuite comme avant le lot.
+    pub fn rollback_lot(&mut self) {
+        let _ = self.conn.rollback();
+        self.fts_tampon = None;
+        self.set_in_transaction(false);
+        self.vider_les_caches_du_lot();
+    }
+
+    /// Ce qui, en mémoire, a suivi les écritures d'un lot défait : un cache
+    /// qui pointerait sur des décalages provisoires (ils resservent après le
+    /// ROLLBACK), une session ou une file que la base n'a plus, une marque
+    /// que le ROLLBACK a retirée.
+    fn vider_les_caches_du_lot(&mut self) {
+        if let Ok(mut c) = self.node_id_cache.write() {
+            c.clear();
+        }
+        self.sessions_ouvertes.clear();
+        self.pending = Default::default();
+        self.proven_present = None;
+        self.merge_in_transaction.clear();
+        self.fresh_ingest = None;
+        self.marque_posee = false;
+        self.dette_publiee.clear();
+    }
+
+    /// Le plein texte d'un lot validé : les retraits d'abord, puis chaque
+    /// ligne présente à son décalage final, relu par `_uuid`.
+    fn appliquer_le_tampon(&self, a: crate::fts_tampon::Application) -> Result<(), CatalogError> {
+        let err = |e: String| CatalogError::DbError(format!("plein texte du lot : {e}"));
+        let mut touchees: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for (entity, offsets) in &a.retraits {
+            let Some(h) = self.fts_handles.get(entity) else { continue };
+            for o in offsets {
+                h.delete_by_node_id(*o).map_err(|e| err(e.to_string()))?;
+            }
+            touchees.insert(entity.clone());
+        }
+        for (entity, lignes) in &a.presentes {
+            let Some(h) = self.fts_handles.get(entity) else { continue };
+            let uuids = CypherValue::List(lignes.iter().map(|(u, _)| CypherValue::String(u.clone())).collect());
+            let q = format!(
+                "UNWIND $uuids AS u MATCH (n:{} {{_uuid: u}}) RETURN u, {}",
+                self.dialect.quote(entity),
+                self.dialect.node_offset_expr("n")
+            );
+            let rows = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids)]).map_err(|e| err(e.to_string()))?;
+            let decalages: HashMap<String, u64> = rows
+                .rows
+                .iter()
+                .filter_map(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_i64()? as u64)))
+                .collect();
+            for (uuid, fields) in lignes {
+                let Some(&offset) = decalages.get(uuid) else { continue };
+                crate::fts_handle::reindex_document(h, fields, offset).map_err(|e| err(e.to_string()))?;
+                if let Ok(mut c) = self.node_id_cache.write() {
+                    if let Some(mut id) = c.get(uuid) {
+                        id.offset = offset;
+                        c.insert(uuid, id);
+                    }
+                }
+            }
+            touchees.insert(entity.clone());
+        }
+        for entity in &touchees {
+            if let Some(h) = self.fts_handles.get(entity) {
+                h.commit().map_err(|e| err(e.to_string()))?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn set_in_transaction(&mut self, open: bool) {
         self.in_transaction = open;
         self.merge_in_transaction.clear();
@@ -8033,11 +8215,14 @@ impl Catalog {
         // Le même profil que les nœuds, par phase du drain lui-même : sur le
         // cœur C++ (6 septembre 2026), trois secondes d'un drain de liens
         // n'étaient dans aucun nœud.
-        let profil_phases = std::env::var_os("RAG3WEAVER_INGEST_PROFILE").is_some();
+        let profil_phases = crate::ingest_profile::enabled();
         let mut horloge = std::time::Instant::now();
-        let phase = |nom: &str, horloge: &mut std::time::Instant| {
+        // Chaque phase s'enregistre (la ligne [montre] la nomme) ; elle ne
+        // s'imprime que sous la variable.
+        let phase = |nom: &'static str, horloge: &mut std::time::Instant| {
+            crate::ingest_profile::add(nom, *horloge);
             if profil_phases {
-                eprintln!("[drain-profile] {:>6} ms  drain/{nom}", horloge.elapsed().as_millis());
+                eprintln!("[drain-profile] {:>6} ms  {nom}", horloge.elapsed().as_millis());
             }
             *horloge = std::time::Instant::now();
         };
@@ -8051,7 +8236,7 @@ impl Catalog {
                 self.pending.extraire_les_tables(&tables, &bouts)
             }
         };
-        phase("extraction du lot", &mut horloge);
+        phase("drain · extraction du lot", &mut horloge);
         // Ce que ce lot écrit (créations et mises à jour), pour la marque à
         // l'écriture une fois le drain réussi.
         let mut ecrites: HashMap<String, Vec<String>> = HashMap::new();
@@ -8065,7 +8250,7 @@ impl Catalog {
         }
         let (mut graph, services, op_count, update_results, delete_results, chunk_counts, canal) =
             self.build_ingestion_graph(lot, avec_embarquement, avec_decoupage);
-        phase("construction du graphe", &mut horloge);
+        phase("drain · construction du graphe", &mut horloge);
         if graph.nodes.is_empty() {
             // La marque dit ce qui reste — rien, ou ce que d'autres cibles
             // doivent encore.
@@ -8079,12 +8264,14 @@ impl Catalog {
         let mut ecoute = runtime.subscribe();
         // Le même profil par nœud que l'ingestion, sous la même variable :
         // un drain de liens qui prend 1,6 s sans ventilation n'a pas de suite.
-        let mut profil = std::env::var("RAG3WEAVER_INGEST_PROFILE").is_ok().then(|| runtime.subscribe());
+        // Sous la variable, ou pendant un `ingest_profile::record` sur ce fil :
+        // la ligne [montre] veut la suppression et la résolution des liens.
+        let mut profil = (crate::ingest_profile::enabled() || crate::ingest_profile::recording()).then(|| runtime.subscribe());
 
         // Generate deterministic execution_id from graph hash + timestamp
         let graph_def = graph.to_definition();
         let execution_id = crate::dataflow::checkpoint::execution_id("drain", &graph_def.hash());
-        phase("runtime et abonnements", &mut horloge);
+        phase("drain · runtime et abonnements", &mut horloge);
 
         let mode = self.config.checkpoint_mode;
         let result = match (self.checkpoint_store_for_execution(), mode) {
@@ -8092,7 +8279,7 @@ impl Catalog {
                 .execute_with_checkpoint_mode(&mut graph, store.as_ref(), &execution_id, mode),
             _ => runtime.execute(&mut graph),
         };
-        phase("exécution", &mut horloge);
+        phase("drain · exécution", &mut horloge);
 
         if let Some(rx) = profil.as_mut() {
             let mut par_noeud: Vec<(String, u64)> = Vec::new();
@@ -8103,8 +8290,14 @@ impl Catalog {
                 }
             }
             par_noeud.sort_by(|a, b| b.1.cmp(&a.1));
-            for (noeud, ms) in par_noeud {
-                eprintln!("[drain-profile] {ms:>6} ms  {noeud}");
+            for (noeud, ms) in &par_noeud {
+                let nom = noeud.split(' ').next().unwrap_or(noeud);
+                crate::ingest_profile::add_duration(crate::ingest_profile::drain_stage(nom), std::time::Duration::from_millis(*ms));
+            }
+            if crate::ingest_profile::enabled() {
+                for (noeud, ms) in par_noeud {
+                    eprintln!("[drain-profile] {ms:>6} ms  {noeud}");
+                }
             }
         }
 
@@ -8135,7 +8328,7 @@ impl Catalog {
                 // Un drain borné laisse le reste : la marque le dit table
                 // par table, et son horodatage se rafraîchit au passage.
                 self.annoncer_travail_en_attente();
-                phase("marque et avertissements", &mut horloge);
+                phase("drain · marque et avertissements", &mut horloge);
                 let comptes = std::mem::take(
                     &mut *chunk_counts.lock().unwrap_or_else(|e| e.into_inner()),
                 );
@@ -8311,6 +8504,11 @@ impl Catalog {
     /// Return failures to the caller as well as emitting an event. Retaining
     /// pending blobs permits retry but does not mean the index is durable.
     fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
+        // Dans un lot en transaction : rien à synchroniser, le plein texte
+        // attend le COMMIT (`commit_lot`).
+        if self.fts_tampon.is_some() {
+            return Ok(());
+        }
         // Le mode fichiers : la génération du plein texte rendue durable ici,
         // là où les blobs seraient poussés — une fois, pas un `fsync` par
         // fichier.
@@ -8492,6 +8690,9 @@ impl Catalog {
         }
         // Ce que lit `InsertRecordNode` et qui manquait ici.
         services.register("fts_handles", self.fts_handles.clone());
+        if let Some(t) = &self.fts_tampon {
+            services.register(crate::fts_tampon::FTS_TAMPON_SERVICE, t.clone());
+        }
         services.register("entity_configs", self.entity_configs.clone());
         services.register("plein_texte_natif", self.plein_texte_natif());
         let canal = Self::ouvrir_le_canal_d_echecs(&mut services);
@@ -8791,6 +8992,9 @@ impl Catalog {
         // Les nœuds BM25 et sparse cherchent dans les index Rust ouverts par le
         // catalogue — pas dans la base.
         services.register("fts_handles", self.fts_handles.clone());
+        if let Some(t) = &self.fts_tampon {
+            services.register(crate::fts_tampon::FTS_TAMPON_SERVICE, t.clone());
+        }
         // Un nœud ne peut pas savoir seul si l'absence de handle est normale :
         // sur le chemin natif l'index vit avec les données et il n'y a rien à
         // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
@@ -9071,11 +9275,24 @@ impl Catalog {
         crate::plan::run_plan(self.dialect.as_ref(), self.conn.as_ref(), plan, options)
     }
 
+    /// [`Self::run_plan`] pour une lecture d'outil : sur la connexion de
+    /// lecture, sans transaction (elle voit l'état validé, jamais celui d'une
+    /// transaction ouverte par l'écrivain).
+    pub fn run_read_plan(&self, plan: &rag3weaver_ir::Plan, mut options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
+        if options.fanout.is_none() {
+            options.fanout = self.fanout;
+        }
+        options.no_transaction = true;
+        let conn = self.read_conn_arc();
+        crate::plan::run_plan(self.dialect.as_ref(), conn.as_ref(), plan, options)
+    }
+
     /// **Lever (ou baisser) la fusion des éventails pour ce montage**, quoi
     /// que déclare le dialecte : un PostgreSQL distant, où chaque
     /// aller-retour coûte cher, la lève ; `None` rend la main au dialecte.
     pub fn set_fanout(&mut self, fanout: Option<bool>) {
         self.fanout = fanout;
+        self.publish_read_view();
     }
 
     /// **Lever ou baisser le saut en deux temps pour ce montage**
@@ -9084,6 +9301,7 @@ impl Catalog {
     /// base.
     pub fn set_two_step_hops(&mut self, deux_temps: Option<bool>) {
         self.two_step_hops = deux_temps;
+        self.publish_read_view();
     }
 
     /// Le saut en deux temps vaut-il pour ce montage.
@@ -9092,6 +9310,57 @@ impl Catalog {
     }
 
     /// Execute raw Cypher (useful for debugging/tests).
+    /// **Une lecture courte, sur la connexion de lecture** : elle voit l'état
+    /// validé, sans attendre ni rejoindre une transaction ouverte par
+    /// l'écrivain. Pour les lectures d'outil ; une lecture de l'écrivain qui
+    /// doit voir ses propres écritures non validées passe par
+    /// [`Self::execute_raw`].
+    pub fn execute_read_with_params(
+        &self,
+        cypher: &str,
+        params: &[crate::connection::QueryParam],
+    ) -> Result<crate::connection::QueryResult, CatalogError> {
+        self.read_conn
+            .as_deref()
+            .unwrap_or(self.conn.as_ref())
+            .execute_with_params(cypher, params)
+            .map_err(|e| CatalogError::DbError(e.to_string()))
+    }
+
+    /// La connexion des lectures d'outil : celle de lecture si le moteur en
+    /// donne une, sinon la principale.
+    /// La cellule de la vue de lecture, à partager avec les lecteurs.
+    pub fn read_view_cell(&self) -> Arc<crate::read_view::ReadViewCell> {
+        self.read_view.clone()
+    }
+
+    /// **Publier la vue de lecture** : une copie de la forme et des services
+    /// de recherche de la cellule du catalogue. Rien pendant un emprunt de
+    /// cellule.
+    pub(crate) fn publish_read_view(&self) {
+        if self.cellule_empruntee {
+            return;
+        }
+        let mut search = crate::dataflow::ServiceRegistry::new();
+        self.register_search_services(&mut search);
+        self.read_view.set(Arc::new(crate::read_view::ReadView {
+            dialect: self.dialect.clone(),
+            conn: self.read_conn_arc(),
+            entity_configs: self.entity_configs.clone(),
+            entity_defs: self.config.entities.clone(),
+            relations: self.config.relations.clone(),
+            scope: self.scope.clone(),
+            fanout: self.fanout,
+            two_step_hops: self.two_step_hops(),
+            event_bus: self.event_bus.clone(),
+            search_services: Arc::new(search),
+        }));
+    }
+
+    pub fn read_conn_arc(&self) -> Arc<dyn DbConnection> {
+        self.read_conn.clone().unwrap_or_else(|| self.conn.clone())
+    }
+
     pub fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
         self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))
     }
@@ -9173,6 +9442,20 @@ impl Catalog {
 
     pub fn declared_lock_calls(&self) -> &[String] {
         &self.declared_lock_calls
+    }
+
+    /// Déclarer les tests par requêtes de ce dépôt (`workspace.queries_via`) :
+    /// les ingestions suivantes marquent les fichiers de test et posent
+    /// REGISTERS et QUERIES.
+    #[cfg(feature = "code")]
+    pub fn declare_queries(&mut self, declaration: Option<crate::queries_via::CompiledQueriesVia>) {
+        self.declared_queries = declaration.map(Arc::new);
+    }
+
+    /// Les tests par requêtes déclarés, s'il y en a.
+    #[cfg(feature = "code")]
+    pub fn declared_queries(&self) -> Option<&crate::queries_via::CompiledQueriesVia> {
+        self.declared_queries.as_deref()
     }
 
     // ── Schema queries ─────────────────────────────────────────────────

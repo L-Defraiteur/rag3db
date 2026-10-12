@@ -113,8 +113,8 @@
   "watches": {
     "code": {
       "source": "workspace",
-      "every_ms": 1000,
-      "settle_ms": 300
+      "every_ms": 250,
+      "settle_ms": 150
     }
   },
   "reactions": {

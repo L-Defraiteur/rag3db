@@ -1,5 +1,7 @@
 #include "storage/undo_buffer.h"
 
+#include <algorithm>
+
 #include "catalog/catalog_entry/catalog_entry.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
@@ -168,6 +170,24 @@ void UndoBuffer::commit(transaction_t commitTS) const {
     });
 }
 
+void UndoBuffer::compactDeadRowsAfterCommit(const transaction::Transaction& transaction) const {
+    std::vector<std::pair<const VersionRecordHandler*, node_group_idx_t>> groups;
+    UndoBufferIterator iterator{*this};
+    iterator.iterate([&](UndoRecordType entryType, uint8_t const* entry) {
+        if (entryType != UndoRecordType::DELETE_INFO) {
+            return;
+        }
+        const auto& undoRecord = *reinterpret_cast<VersionRecord const*>(entry);
+        const auto group = std::make_pair(undoRecord.versionRecordHandler, undoRecord.nodeGroupIdx);
+        if (std::find(groups.begin(), groups.end(), group) == groups.end()) {
+            groups.push_back(group);
+        }
+    });
+    for (const auto& [handler, nodeGroupIdx] : groups) {
+        handler->compactDeadRows(nodeGroupIdx, &transaction);
+    }
+}
+
 void UndoBuffer::rollback(ClientContext* context) const {
     UndoBufferIterator iterator{*this};
     iterator.reverseIterate([&](UndoRecordType entryType, uint8_t const* entry) {
@@ -252,6 +272,11 @@ void UndoBuffer::rollbackRecord(ClientContext* context, const UndoRecordType rec
 
 void UndoBuffer::rollbackCatalogEntryRecord(const uint8_t* record) {
     const auto& [catalogSet, catalogEntry] = *reinterpret_cast<CatalogEntryRecord const*>(record);
+    // Sous le verrou du CatalogSet, comme ses autres écritures : un lecteur parcourt la map et les
+    // chaînes de versions sous le verrou partagé, et une annulation qui y effaçait puis remettait
+    // l'entrée sans lui faisait lever « unordered_map::at » à un lecteur entre son contains et son
+    // at (ticket 2026-10-12-une-recherche-vectorielle-pendant-drop-create…).
+    std::unique_lock lck{catalogSet->mtx};
     const auto entryToRollback = catalogEntry->getNext();
     KU_ASSERT(entryToRollback);
     if (entryToRollback->getNext()) {

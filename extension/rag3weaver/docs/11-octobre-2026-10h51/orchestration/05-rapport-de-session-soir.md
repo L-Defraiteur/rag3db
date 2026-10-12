@@ -106,16 +106,29 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
 - Un pari sur l'ordre (réindexer après le binaire neuf) qui a coûté deux
   arrêts forcés à Lucie : la règle de l'annonce et de l'heure convenue.
 
-## 6. Ce qui attend Lucie au réveil (mis à jour le 12 à 1 h 15)
+## 6. Ce qui attend Lucie au réveil (mis à jour le 12 à 8 h 25)
 
+- **EN PREMIER, luciepc : arrête l'hôte figé proprement.** Il est à 43 Go
+  résidents (pic 52 Go) et monte depuis la nuit (l'index de code-principal a
+  été lancé dedans par erreur à 6 h 39 et boucle à 99 %) ; la machine n'a plus
+  que 19 Go disponibles sur 93 : risque d'arrêt brutal par le noyau pendant
+  qu'il écrit code-principal. Aucune session n'a eu la permission de
+  l'arrêter (codeparsers, la mémoire, hotfixs, et moi à 8 h 20) ; les bâtis
+  sur luciepc sont suspendus. Geste : `kill -TERM 132823` (exe vérifié :
+  `~/.local/bin/rag3weaver-backend`), **pas `systemctl stop`** qui escalade au
+  SIGKILL après son délai ; si le TERM ne rend pas la main en une minute, c'est
+  toi qui décides du SIGKILL (comme hier). Puis la suite dans la section
+  « Pour Lucie » de codeparsers.
 - **Tes sessions d'ici marchent** : ton hôte a été redémarré à 0 h 26 sur un
   binaire avec la montre, les défenses contre la boucle et le client qui se
   rétablit (md5 3e95f0302023) ; sain à 1 h 01. **Un geste de toi au réveil** :
   la mémoire n'a pas eu la permission d'arrêter ton hôte à 2 h 56 ; la
-  séquence (arrêt propre, binaire ≥ B4 avec le correctif du balayage,
-  code-rag3db effacé et réindexé, redémarrage) attend ton `kill -TERM` sur
-  le pid de l'hôte, commande exacte dans le rapport de la mémoire
-  (`419b87a36`), ou ton autorisation dans sa session.
+  séquence (arrêt propre, le bloc `queries_via` posé dans ton manifeste,
+  le binaire du matin installé (md5 a327c0da16e3, tête de master de 6 h :
+  B4, fils, masque, défenses, 6 s, saut en deux temps, RUNPATH vers la lib
+  du magasin), code-rag3db effacé et réindexé, redémarrage) attend ton
+  `kill -TERM` sur le pid de l'hôte, commande exacte dans le rapport de la
+  mémoire (`1eaa5d973`), ou ton autorisation dans sa session.
 - **Le P1 (20 % de morceaux « sans texte ») est clos et tes textes sont
   intacts** : un balayage filtré des chaînes du moteur rendait vide ou faux
   (string_column.cpp:240) ; correctif du cœur sur master (`e6f626df4`), lib
@@ -138,6 +151,9 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
   cause chez l'arbre principal) ; (2) la forme en deux temps d'usages
   (page 06 de F) si le lot des fils ne suffit pas : décidée « oui si > 100 ms »,
   renversable.
+- **Le compte gh actif du poste est le compte pro** (luciedefraiteur-sairen) :
+  aucune session ne l'a changé, G passe le jeton de L-Defraiteur à ses
+  commandes ; si c'est toi pour ton travail, rien à faire, sinon à remettre.
 - La séance npm (quatre OTP) quand tu le voudras ; le ménage des branches
   distantes (liste à produire).
 - Tout le reste est dans le fil de nuit de `01-les-decisions-du-matin.md`
