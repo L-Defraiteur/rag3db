@@ -250,8 +250,12 @@ pub enum Event {
         run: String,
         /// Le flux d'où vient le fragment (le nom que `TokenEvents` lui donne).
         node: String,
+        /// Le rang du (premier) fragment.
         seq: u64,
         text: String,
+        /// Combien de fragments ce texte réunit : 1, ou un paquet
+        /// (`TokenEvents.batch_ms`).
+        count: u64,
     },
     /// Un message d'une boucle à une autre. Fire and forget des deux côtés :
     /// un accusé est un second message, pas un verrou.
@@ -430,8 +434,9 @@ impl Event {
             }),
             // Le format des jetons d'une conversation (`ChatSink`), plus le
             // run, le flux et le rang : une interface lit l'un comme l'autre.
-            Self::Token { run, node, seq, text } => json!({
+            Self::Token { run, node, seq, text, count } => json!({
                 "kind": "Token", "event": "token", "run": run, "node": node, "seq": seq, "text": text,
+                "count": count,
             }),
             other => json!({ "kind": other.kind(), "detail": format!("{other:?}") }),
         }

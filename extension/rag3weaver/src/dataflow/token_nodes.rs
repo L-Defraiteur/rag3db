@@ -20,9 +20,18 @@ use super::port::{take_or_clone, PortDef, PortKind, PortType, PortValue, Posture
 /// nom du flux et son rang. Une interface ou un agent appelant voit les jetons
 /// d'un graphe comme ceux d'une conversation. Sans bus, le nœud lit sans rien
 /// dire : brancher le flux suffit à garder le modèle en vie.
+///
+/// **Des paquets** (`batch_ms`, 0 par défaut : un événement par fragment) : les
+/// fragments s'accumulent, et le paquet part avec le fragment qui dépasse le
+/// délai depuis le premier du paquet, ou à la fin du flux. Le bus écrase les
+/// plus anciens au-delà de sa capacité (64) : un écran plus lent que le modèle
+/// se règle par son graphe, pas par le bus de tout le monde. Un écran qui reçoit
+/// malgré tout `Overflowed(n)` le dit (« n fragments perdus, le texte entier
+/// suit dans `text` ») : il ne le tait pas.
 pub struct TokenEvents {
     name: String,
     stream: String,
+    batch: std::time::Duration,
 }
 
 impl Node for TokenEvents {
@@ -41,13 +50,32 @@ impl Node for TokenEvents {
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let bus = ctx.service::<Arc<crate::events::EventBus>>("event_bus").cloned();
         let run = ctx.run_id().to_string();
+        let stream = self.stream.clone();
+        let emettre = |premier: u64, text: String, count: u64| {
+            if let Some(bus) = &bus {
+                bus.emit(crate::events::Event::Token { run: run.clone(), node: stream.clone(), seq: premier, text, count });
+            }
+        };
         let mut seq = 0u64;
+        // Le paquet en cours : son premier rang, son texte, son compte, son départ.
+        let mut paquet: Option<(u64, String, u64, std::time::Instant)> = None;
         while let Some(v) = ctx.next("tokens").map_err(|e| format!("TokenEvents : {e:?}"))? {
             let text = take_or_clone::<String>(v).ok_or("TokenEvents : 'tokens' porte des textes")?;
-            if let Some(bus) = &bus {
-                bus.emit(crate::events::Event::Token { run: run.clone(), node: self.stream.clone(), seq, text });
+            if self.batch.is_zero() {
+                emettre(seq, text, 1);
+            } else {
+                let p = paquet.get_or_insert_with(|| (seq, String::new(), 0, std::time::Instant::now()));
+                p.1.push_str(&text);
+                p.2 += 1;
+                if p.3.elapsed() >= self.batch {
+                    let (premier, texte, compte, _) = paquet.take().expect("posé plus haut");
+                    emettre(premier, texte, compte);
+                }
             }
             seq += 1;
+        }
+        if let Some((premier, texte, compte, _)) = paquet.take() {
+            emettre(premier, texte, compte);
         }
         ctx.metric("tokens", seq as f64);
         ctx.set_output("report", PortValue::new(json!({"tokens": seq})));
@@ -64,7 +92,11 @@ impl NodeFactory for TokenEventsFactory {
             Some(Value::String(s)) => s.clone(),
             Some(other) => return Err(format!("TokenEvents : 'stream' est un nom, pas {other}")),
         };
-        Ok(Box::new(TokenEvents { name: name.to_string(), stream }))
+        let batch_ms = match config.get("batch_ms") {
+            None | Some(Value::Null) => 0,
+            Some(v) => v.as_u64().ok_or_else(|| format!("TokenEvents : 'batch_ms' est un entier, pas {v}"))?,
+        };
+        Ok(Box::new(TokenEvents { name: name.to_string(), stream, batch: std::time::Duration::from_millis(batch_ms) }))
     }
     fn node_type(&self) -> &str {
         "TokenEvents"
@@ -77,15 +109,28 @@ impl NodeFactory for TokenEventsFactory {
                 .into(),
             inputs: vec![PortDef::value("tokens", PortType::Text, true).posture(Posture::PerElement)],
             outputs: vec![PortDef::value("report", PortType::Map, false)],
-            config_params: vec![ConfigParam {
-                name: "stream".into(),
-                param_type: ConfigParamType::String,
-                required: false,
-                default: None,
-                description: "le nom du flux dans les événements ; absent : le nom du nœud".into(),
-                choices: None,
-                json_schema: None,
-            }],
+            config_params: vec![
+                ConfigParam {
+                    name: "stream".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "le nom du flux dans les événements ; absent : le nom du nœud".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "batch_ms".into(),
+                    param_type: ConfigParamType::Int,
+                    required: false,
+                    default: Some(json!(0)),
+                    description: "réunir les fragments reçus dans ce délai en un seul événement (texte concaténé, \
+                                  rang du premier, compte) ; 0 : un événement par fragment"
+                        .into(),
+                    choices: None,
+                    json_schema: None,
+                },
+            ],
         }
     }
 }
@@ -343,15 +388,39 @@ mod tests {
         DataflowRuntime::with_services(10, services(&bus)).execute(&mut g).unwrap();
         let mut recus = Vec::new();
         while let Ok(e) = rx.try_recv() {
-            if let Event::Token { node, seq, text, .. } = &e {
+            if let Event::Token { node, seq, text, count, .. } = &e {
                 recus.push((node.clone(), *seq, text.clone()));
                 assert_eq!(e.to_json()["event"], "token");
+                assert_eq!(*count, 1, "sans batch_ms, un événement par fragment");
             }
         }
         assert_eq!(
             recus,
             [("réponse".to_string(), 0, "bon".to_string()), ("réponse".to_string(), 1, "jour".to_string()), ("réponse".to_string(), 2, " !".to_string())]
         );
+    }
+
+    /// **Des paquets** (`batch_ms`) : les fragments reçus dans le délai partent
+    /// en un seul événement, le texte concaténé, le rang du premier et le
+    /// compte. Pour un écran plus lent que le modèle, que le bus (64)
+    /// écraserait sinon (mesure de la recherche, page 01 §8).
+    #[test]
+    fn token_events_batches_fragments_within_batch_ms() {
+        let bus = Arc::new(EventBus::new(256));
+        let mut rx = bus.subscribe(topic::TOKENS);
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(Fragments { texts: vec!["bon", "jour", " !"] })).unwrap();
+        g.add_node(TokenEventsFactory.create("montrer", &json!({"stream": "réponse", "batch_ms": 60000})).unwrap()).unwrap();
+        g.connect("llm", "tokens", "montrer", "tokens").unwrap();
+        DataflowRuntime::with_services(10, services(&bus)).execute(&mut g).unwrap();
+        let mut recus = Vec::new();
+        while let Ok(e) = rx.try_recv() {
+            if let Event::Token { seq, text, count, .. } = &e {
+                recus.push((*seq, text.clone(), *count));
+                assert_eq!(e.to_json()["count"], 3);
+            }
+        }
+        assert_eq!(recus, [(0, "bonjour !".to_string(), 3)]);
     }
 
     /// **Un motif à cheval sur deux fragments est vu, une occurrence dite une
