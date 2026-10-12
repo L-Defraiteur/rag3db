@@ -219,3 +219,32 @@ rien). Avec l'une ou l'autre, la forme en deux temps n'a plus d'objet.
 
 Le témoin : `e2e_mesure_index_entier::le_plan_du_saut_d_usages_sur_l_index_entier`.
 
+## La jointure par clé, puis son second niveau (12 octobre, fin de matinée)
+
+**La jointure par clé** (`2b11b55ec`, mesurée sur la lib du cœur bâtie sur ce contenu
+exact, identifiant `41d282843-dirty-2780bda8b04f`, l'empreinte recalculée sur le diff) :
+`UNWIND $uuids AS u MATCH (d {_uuid: u})` pose un masque résolu par l'index de clé
+primaire. Le départ du saut est masqué (Symbol 1 ligne, MENTIONS 117), la lecture par clé
+tombe de 28 à 1,3 ms, mais la table d'arrivée Scope était encore lue en entier pour la
+jointure sur `m._ID`.
+
+**Son second niveau** (branche du cœur, lib `513438183`, pas encore sur master) : un
+balayage masqué compte comme sélectif, la jointure sur `m._ID` masque Scope à son tour.
+Le saut depuis Symbol sort 117 tuples à chaque opérateur, deux `SEMI_MASKER` au plan.
+
+| `usages`, médiane | avant | jointure par clé | second niveau |
+|---|---|---|---|
+| en un temps | 349-352 ms | 117-120 ms | 60-66 ms |
+| en deux temps | 209-234 ms | 43-47 ms | 27-31 ms |
+
+Mêmes empreintes à chaque colonne ; le recomptage de la copie reste à 0 vide.
+
+**Ce qui reste en un temps**, décomposé par instruction : les sauts de Scope vers Scope
+(`IMPLEMENTS`, `INHERITS_FROM`, `HAS_PARENT`) coûtent 18 à 20 ms chacun, même à 0 ligne
+rendue, contre 3 ms pour ceux qui partent de Symbol. Leur PROFILE : `d` est masqué (1
+ligne), mais l'expansion part de `m` — Scope entière (81 407), `HAS_PARENT` 37 802, une
+table de hachage sur `d._ID` — que l'unique `d` sonde à la fin. Quand départ et arrivée
+sont la même table, le masque du départ n'atteint pas l'expansion. Dit au cœur ;
+`two_step_hops` reste vraie pour rag3db jusqu'à ce que le saut en un temps rejoigne les
+deux temps.
+
