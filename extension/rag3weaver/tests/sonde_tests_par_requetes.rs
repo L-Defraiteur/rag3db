@@ -57,7 +57,7 @@ fn sources(racine: &str) -> Vec<(String, String)> {
 fn impact(racine: &str, fichiers: Vec<(String, String)>, declare: bool) -> String {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{racine}/extension/vector/build/libvector.rag3db_extension");
+    let ext = rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display().to_string();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("sonde-tests-par-requetes".into()), embedding_dim: 64, ..Default::default() };
     let mut cat = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);

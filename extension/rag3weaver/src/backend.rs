@@ -3512,24 +3512,35 @@ mod tests {
         eprintln!("[témoin] {} chargée, bâti {:?}", ext.display(), id_lib);
     }
 
-    /// **L'extension vector des tests** : sous `RAG3DB_ROOT` (l'arbre où le
-    /// moteur est bâti), sinon à côté de ce crate. Un worktree n'a pas
-    /// d'extension à lui (il n'en bâtit pas, et n'a plus de lien vers
-    /// l'arbre principal depuis le 10 octobre 2026) : sans la variable,
-    /// le moteur refusait par une « Binder exception » qui ne disait pas
-    /// quoi faire. On refuse ici, en le disant.
+    /// **Les tests chargent l'extension de leur lib, pas celle de l'arbre**
+    /// (lot 3f) : même avec `RAG3DB_ROOT` posé sur l'arbre que l'arbre
+    /// principal rebâtit, l'aide des tests rend l'extension à côté de la lib
+    /// réellement chargée quand elle y est (le magasin), du même identifiant.
+    /// Le rouge du 12 octobre, 12 h 58 : un rebâti en place de l'arbre avait
+    /// fait refuser au moteur l'extension d'un autre bâti.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn the_test_helper_loads_the_extension_of_the_loaded_lib_not_of_the_tree() {
+        let lib = crate::build_check::loaded_lib().expect("le moteur est lié en partagé");
+        let ext = PathBuf::from(extension_vector_de_test());
+        let id_lib = crate::build_check::read_section(&lib, crate::build_check::LIB_SECTION).unwrap();
+        match lib.parent().map(|d| d.join("libvector.rag3db_extension")).filter(|p| p.is_file()) {
+            Some(a_cote) => assert_eq!(ext, a_cote, "RAG3DB_ROOT = {:?}", std::env::var_os("RAG3DB_ROOT")),
+            None => eprintln!("[témoin] hors magasin : {} (la lib chargée {})", ext.display(), lib.display()),
+        }
+        let id_ext = crate::build_check::extension_build_id(&ext).unwrap();
+        assert!(id_ext.is_none() || id_ext == id_lib, "{} : {id_ext:?} contre {id_lib:?}", ext.display());
+    }
+
+    /// **L'extension vector des tests** : celle de ce processus
+    /// ([`super::vector_extension_of_this_process`]), à côté de la lib
+    /// réellement chargée d'abord. Elle lisait `RAG3DB_ROOT` seule : un rebâti
+    /// en place de l'arbre faisait tomber un rejeu qui tournait sur la lib du
+    /// magasin (« Extension VECTOR was built from… », 12 octobre, 12 h 58).
+    /// Introuvable, le refus nomme chaque endroit cherché.
     #[allow(dead_code)]
     fn extension_vector_de_test() -> String {
-        let racine = std::env::var("RAG3DB_ROOT").map(std::path::PathBuf::from).unwrap_or_else(|_| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-        });
-        let chemin = racine.join("extension/vector/build/libvector.rag3db_extension");
-        assert!(
-            chemin.exists(),
-            "pas d'extension vector sous {} : posez RAG3DB_ROOT sur l'arbre où le moteur est bâti",
-            racine.display()
-        );
-        chemin.display().to_string()
+        super::vector_extension_of_this_process().unwrap_or_else(|e| panic!("{e}")).display().to_string()
     }
     /// Une fiche réactive en mémoire, pour éprouver les refus sans manifeste.
     ///
@@ -5255,6 +5266,23 @@ pub(crate) fn vector_extension_candidates(
     let mut vus = std::collections::HashSet::new();
     cherches.retain(|p| vus.insert(p.clone()));
     cherches
+}
+
+/// **L'extension vector de ce processus** : la règle de
+/// [`resolve_vector_extension`] (à côté de la lib réellement chargée d'abord,
+/// puis `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT`…) appliquée à l'état du processus.
+/// C'est aussi l'aide des tests et des sondes (lot 3f du magasin) : un rebâti
+/// en place de l'arbre ne change plus l'extension d'une passe qui tourne sur
+/// la lib du magasin, quelle que soit la variable posée.
+pub fn vector_extension_of_this_process() -> Result<PathBuf, String> {
+    resolve_vector_extension(
+        Path::new(DEFAULT_VECTOR_EXTENSION),
+        Path::new("."),
+        crate::build_check::loaded_lib().as_deref(),
+        std::env::var_os("RAG3DB_ROOT"),
+        std::env::var_os("RAG3DB_LIBRARY_DIR"),
+        std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)),
+    )
 }
 
 /// **L'extension vectorielle à charger**, de ce qu'on lui donne : la valeur

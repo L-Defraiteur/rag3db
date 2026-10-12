@@ -401,3 +401,29 @@ variable pour trouver son extension.
   son extension sans aucune variable, du même identifiant, et le moteur la
   charge (`LOAD EXTENSION` sur une base en mémoire). Hors magasin, il
   vérifie que ce qui est trouvé n'est jamais d'un autre bâti.
+
+## 11. Les tests et les sondes aussi (lot 3f, relevé par l'arbre principal, 12 octobre)
+
+**Le trou** : le lot 3e faisait chercher l'extension à côté de la lib
+chargée en production, mais pas dans les tests. Le 12 octobre à 12 h 58, un
+rebâti en place de l'arbre principal a fait rougir un rejeu qui tournait sur
+la lib du magasin : « Extension VECTOR was built from rag3db-build-690029ab7…,
+this engine from rag3db-build-2b11b55ec… ». Les tests de la lib chargeaient
+l'extension par `RAG3DB_ROOT`, c'est-à-dire l'arbre que le rebâti venait de
+réécrire.
+
+**La forme** : pas de variable de plus, la règle de la production partout.
+- `backend::vector_extension_of_this_process()` applique
+  `resolve_vector_extension` à l'état du processus : à côté de la lib
+  réellement chargée d'abord, puis `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT`…
+- Les tests de la lib (`extension_vector_de_test`), les e2e
+  (`common::vector_extension`) et les sept sondes y passent.
+- Un rebâti en place de l'arbre ne touche donc plus une passe qui tourne sur
+  la lib du magasin, quelle que soit la variable posée.
+
+**Témoin** : `the_test_helper_loads_the_extension_of_the_loaded_lib_not_of_the_tree`.
+Avec `RAG3DB_ROOT` posé sur l'arbre principal, l'aide des tests rend
+l'extension à côté de la lib chargée, du même identifiant. Il est rouge sur
+l'aide d'avant, avec exactement le chemin de 12 h 58 :
+`/home/lucied/git_workspaces/rag3db/extension/vector/build/…` au lieu du
+dossier `rag3db-build-690029ab7…` du magasin.

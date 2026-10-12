@@ -118,10 +118,7 @@ fn sonde_identifiants() {
     let embedder: Arc<dyn rag3weaver::embedder::Embedder> = Arc::new(HashEmbedder::new(64));
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!(
-        "{}/extension/vector/build/libvector.rag3db_extension",
-        rag3db_root()
-    );
+    let ext = rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display().to_string();
     boxed
         .execute(&format!("LOAD EXTENSION '{ext}'"))
         .expect("charger l'extension vecteur");

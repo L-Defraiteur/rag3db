@@ -475,22 +475,20 @@ pub fn dossier_de_suite(famille: &str, cas: &str) -> std::path::PathBuf {
     d
 }
 
-/// **L'extension vector des e2e.** D'abord à côté de la lib
-/// (`RAG3DB_LIBRARY_DIR`) : sous le magasin de libs, le dossier d'un
-/// identifiant porte la lib et l'extension du même bâti (page
-/// 07-le-magasin-de-libs, §2.1). Sinon sous `RAG3DB_ROOT`, l'arbre où le
-/// moteur est bâti, puis à côté du crate : un dossier de bâti sans extension
-/// (`build/lecteurs-csv/src`) donne le chemin d'avant.
+/// **L'extension vector des e2e** : celle de ce processus, par la règle de
+/// la production (`rag3weaver::backend::vector_extension_of_this_process`,
+/// lot 3f du magasin). D'abord à côté de la lib réellement chargée : sous le
+/// magasin, le dossier de son identifiant porte la lib et l'extension du même
+/// bâti, et un rebâti en place de l'arbre n'y touche pas. Introuvable, le
+/// chemin d'avant sous `RAG3DB_ROOT` (le `LOAD` dira l'absence).
 #[allow(dead_code)] // employée sous certaines features seulement
 pub fn vector_extension() -> String {
-    const FICHIER: &str = "libvector.rag3db_extension";
-    if let Some(lib) = std::env::var_os("RAG3DB_LIBRARY_DIR") {
-        let p = std::path::Path::new(&lib).join(FICHIER);
-        if p.is_file() {
-            return p.to_string_lossy().into_owned();
+    match rag3weaver::backend::vector_extension_of_this_process() {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(_) => {
+            let racine = std::env::var("RAG3DB_ROOT")
+                .unwrap_or_else(|_| format!("{}/../..", env!("CARGO_MANIFEST_DIR")));
+            format!("{racine}/extension/vector/build/libvector.rag3db_extension")
         }
     }
-    let racine = std::env::var("RAG3DB_ROOT")
-        .unwrap_or_else(|_| format!("{}/../..", env!("CARGO_MANIFEST_DIR")));
-    format!("{racine}/extension/vector/build/{FICHIER}")
 }

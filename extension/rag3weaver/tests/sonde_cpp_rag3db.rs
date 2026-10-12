@@ -27,7 +27,7 @@ fn rag3db_root() -> String {
 fn appelants_de_node_table_update_et_verrous() {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", rag3db_root());
+    let ext = rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display().to_string();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
     let config = CatalogConfig { name: Some("sonde-cpp-rag3db".into()), embedding_dim: 64, ..Default::default() };
     let mut cat = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);

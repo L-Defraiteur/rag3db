@@ -36,17 +36,6 @@ use std::path::Path;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-fn racine_moteur() -> String {
-    std::env::var("RAG3DB_ROOT").unwrap_or_else(|_| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(|p| p.parent())
-            .expect("racine du dépôt")
-            .display()
-            .to_string()
-    })
-}
-
 #[test]
 #[ignore = "sonde : demande SONDE_BASE, et écrit dans la base désignée"]
 fn que_donne_la_reouverture() {
@@ -64,7 +53,7 @@ fn que_donne_la_reouverture() {
         }
     }
 
-    let ext = format!("{}/extension/vector/build/libvector.rag3db_extension", racine_moteur());
+    let ext = rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display().to_string();
     println!("▸ extension attendue : {ext} ({})", if Path::new(&ext).exists() { "présente" } else { "ABSENTE" });
 
     // ── 1. La connexion seule : le rejeu du journal ──────────────────────
