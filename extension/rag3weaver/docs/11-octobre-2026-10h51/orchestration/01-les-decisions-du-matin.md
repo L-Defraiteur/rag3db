@@ -1025,3 +1025,42 @@ où elle vit.
   reconstruit sous un lecteur en face (correctif de hotfixs) ; hotfixs, les
   deux corrections de QUERY_VECTOR_INDEX après son témoin du point de
   reprise.
+- **2 h 15 – 2 h 50, nuit**. **Le lot des fils est sur master** (cœur,
+  `85f4f7f9c` l'instrument, `6ffec5a82` la règle : un fil par 2 048 lignes
+  estimées, inconnu = plafond, le balayage factice sous UNWIND compté, les
+  cardinalités remises à jour après toute optimisation ; `dda63783a` deux
+  tickets fermés ; page 12 §9 `dbb3c71a8`). **La lib d'ici est rebâtie à
+  2 h 34 sur 7b54c5f84** (arbre principal : md5 librag3db 116acb25…,
+  libvector 0dc728b8… ; 4 755 → 4 757 symboles, ABI inchangée, section
+  `.rag3db_build_id` = rag3db-build-6ffec5a82… ; nouvel inode, l'hôte de
+  Lucie garde l'ancienne image). Réserve écrite au ticket ABI : la surcharge
+  fait se charger un binaire d'avant B2 mais pas tourner (l'ancien binaire
+  de Lucie plante en malloc : la disposition de SystemConfig a changé) ;
+  « un changement de disposition d'un type exporté est un changement d'ABI,
+  le refus nommé fait foi ». Derrière l'annonce : F remesure usages (règle
+  des 100 ms), la recherche publie au magasin (lot 3c écrit : 97 sites de
+  82 suites par `common::vector_extension()`), la mémoire bâtit le binaire
+  de Lucie ≥ B4 sans l'installer. **La réécriture des morceaux sans texte
+  est sur master** (`7b54c5f84`, depuis leur entité) : elle répare n'importe
+  quelle base. **La cause du P1 bascule vers le moteur** : la sonde
+  « binaire » de l'arbre principal rend 0 vide sur 1 989 avec le binaire
+  neuf sur vingt fichiers dont dix tout vides chez Lucie, mais la relecture
+  du code de 13 h 20 (`5422fa937`) montre que `_text` passait déjà par COPY
+  ou paramètres liés, jamais par du Cypher brut : l'hypothèse « binaire »
+  tombe, dite ; le texte était en base à la passe de vecteurs (run_index le
+  relit) et se perd **après** (SET de réclamation, embed_set, point de
+  reprise, rejeu), par plages qui ressemblent à des groupes de nœuds
+  (fichiers entiers + partiels aux frontières). F vérifie l'alignement sur
+  2 048 ; le banc écrit le témoin moteur (COPY de plusieurs groupes, SET
+  colonne par colonne, points de reprise, arrêt propre et rejeu, deux
+  modes) ; le cœur lit le code de l'UPDATE d'un groupe. **Et le SIGSEGV de F
+  se reproduit en une seconde** sur la copie : `MATCH (s:Scope) RETURN
+  s.content` suffit, une chaîne annoncée de 1 944 551 octets dont le pointeur
+  tombe hors de la région des tampons (décalage de dictionnaire abîmé) :
+  une colonne de chaînes abîmée dans la même base, peut-être la même cause ;
+  le cœur cherche (mémoire ou disque), gdb en file. Refus tenu : l'arbre
+  principal ne pouvait pas retirer sa propre file de push, je ne l'ai pas
+  fait à sa place (ordre : codeparsers, lui, puis le rebâti : une demi-heure
+  de plus). Hotfixs rappelé à la règle : `mesure` pour la mesure seule, le
+  bâti sous `lourd` (sa mesure qvi tenait l'exclusif pendant un cmake, quatre
+  travaux derrière).
