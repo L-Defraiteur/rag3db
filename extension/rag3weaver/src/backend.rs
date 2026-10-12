@@ -1724,6 +1724,11 @@ impl PreparedBackend {
             avertissement_sans_service,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
+            // La vue de lecture, publiée une dernière fois le catalogue monté.
+            read_view: {
+                cat.publish_read_view();
+                cat.read_view_cell()
+            },
             catalog: Arc::new(Mutex::new(cat)),
             #[cfg(feature = "code")]
             file_source,
@@ -2095,6 +2100,9 @@ pub struct Backend {
     /// rechargement accepté.
     version: std::sync::atomic::AtomicU64,
     pub catalog: Arc<Mutex<Catalog>>,
+    /// **La vue de lecture** du catalogue (`crate::read_view`) : les
+    /// lectures d'outil et `build_services` la prennent sans le mutex.
+    read_view: Arc<crate::read_view::ReadViewCell>,
     /// La source de fichiers du `workspace` déclaré — construite à
     /// l'ouverture (un instantané lit l'arbre une fois).
     #[cfg(feature = "code")]
@@ -2982,9 +2990,15 @@ impl Backend {
                 }
                 services.register("scope", cell);
             }
-            None => self.catalog.lock().unwrap().register_search_services(&mut services),
+            // **Sans le mutex** (lot L2) : les services de recherche de la
+            // vue, posés en parent. Le mutex seulement sans vue publiée.
+            None => match self.read_view.current() {
+                Some(vue) => services = ServiceRegistry::layered(vue.search_services.clone()),
+                None => self.catalog.lock().unwrap().register_search_services(&mut services),
+            },
         }
         services.register("catalog", self.catalog.clone());
+        services.register(crate::read_view::READ_VIEW_SERVICE, self.read_view.clone());
         if let Some(decider) = &self.decider {
             services.register(crate::decider::DECIDER_SERVICE, decider.clone());
         }
@@ -3743,6 +3757,10 @@ mod tests {
             avertissement_sans_service: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
+            read_view: {
+                catalog.publish_read_view();
+                catalog.read_view_cell()
+            },
             catalog: Arc::new(Mutex::new(catalog)),
             #[cfg(feature = "code")]
             file_source: None,
@@ -3952,6 +3970,10 @@ mod tests {
             avertissement_sans_service: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
+            read_view: {
+                catalog.publish_read_view();
+                catalog.read_view_cell()
+            },
             catalog: Arc::new(Mutex::new(catalog)),
             file_source: Some(file_source),
             garde: crate::backend_code::build_garde(&workspace),

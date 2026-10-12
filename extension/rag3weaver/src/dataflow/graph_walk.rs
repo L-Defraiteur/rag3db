@@ -12,7 +12,6 @@
 use std::collections::HashMap;
 
 use super::usage_nodes::RelInfo;
-use crate::catalog::Catalog;
 use crate::connection::{CypherValue, QueryParam};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,7 +135,7 @@ pub fn degree_count(rel: &RelInfo, direction: Direction) -> rag3weaver_ir::Count
 }
 
 /// La somme des degrés de chaque nœud, par ces relations, dans ces sens.
-pub fn degrees(catalog: &Catalog, rels: &[RelInfo], directions: &[Direction], uuids: &[String]) -> Result<HashMap<String, usize>, String> {
+pub fn degrees(catalog: &dyn crate::read_view::ReadCatalog, rels: &[RelInfo], directions: &[Direction], uuids: &[String]) -> Result<HashMap<String, usize>, String> {
     let mut out: HashMap<String, usize> = HashMap::new();
     if uuids.is_empty() {
         return Ok(out);
@@ -171,7 +170,7 @@ pub fn degrees(catalog: &Catalog, rels: &[RelInfo], directions: &[Direction], uu
 /// à leur place ligne par ligne. Les lignes sont celles du saut en une
 /// instruction, dans le même ordre de colonnes ; leur ordre entre elles
 /// n'est promis ni par l'un ni par l'autre. Sinon, le saut tel quel.
-pub fn run_hop(catalog: &Catalog, hop: &rag3weaver_ir::Hop, params: &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult, String> {
+pub fn run_hop(catalog: &dyn crate::read_view::ReadCatalog, hop: &rag3weaver_ir::Hop, params: &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult, String> {
     use rag3weaver_ir::Column;
     let dialect = catalog.dialect_arc();
     let champ = |c: &Column| match c {
@@ -286,7 +285,7 @@ pub fn hop_of(rel: &RelInfo, direction: Direction, mark: &EdgeMark) -> rag3weave
 
 /// Un saut nu : les paires (départ, atteint) par une relation, dans un sens.
 /// La requête vient du dialecte ([`rag3weaver_ir::Hop`]).
-pub fn neighbors(catalog: &Catalog, rel: &RelInfo, direction: Direction, mark: &EdgeMark, uuids: &[String]) -> Result<Vec<(String, String)>, String> {
+pub fn neighbors(catalog: &dyn crate::read_view::ReadCatalog, rel: &RelInfo, direction: Direction, mark: &EdgeMark, uuids: &[String]) -> Result<Vec<(String, String)>, String> {
     if uuids.is_empty() {
         return Ok(Vec::new());
     }

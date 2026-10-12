@@ -21,7 +21,6 @@ use serde::Serialize;
 
 use super::graph_walk::{Direction, EdgeMark};
 use super::usage_nodes::rel_info;
-use crate::catalog::Catalog;
 use crate::connection::{CypherValue, QueryParam};
 use rag3weaver_ir::Column;
 
@@ -104,7 +103,7 @@ struct Fiche {
 }
 
 struct Lecteur<'a> {
-    catalog: &'a Catalog,
+    catalog: &'a dyn crate::read_view::ReadCatalog,
     lo: &'a LockOrder,
     table: String,
     fiches: HashMap<String, Fiche>,
@@ -235,7 +234,7 @@ impl Lecteur<'_> {
 /// **Les verrous pris par ces départs, dans l'ordre**, dépliés jusqu'à
 /// `depth` appels, et ceux que ces appelants (uuid, ligne de leur appel
 /// vers le chemin) tiennent avant d'appeler.
-pub fn lock_report(catalog: &Catalog, lo: &LockOrder, starts: &[String], depth: usize, callers: &[(String, Option<i64>)]) -> Result<LockReport, String> {
+pub fn lock_report(catalog: &dyn crate::read_view::ReadCatalog, lo: &LockOrder, starts: &[String], depth: usize, callers: &[(String, Option<i64>)]) -> Result<LockReport, String> {
     let table = rel_info(catalog, &lo.calls)?.from;
     let mut lecteur = Lecteur { catalog, lo, table, fiches: HashMap::new() };
     let mut out = LockReport { titles: (lo.order_title.clone(), lo.held_title.clone()), ..Default::default() };

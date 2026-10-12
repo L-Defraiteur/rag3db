@@ -118,7 +118,7 @@ struct Label {
 }
 
 /// Les liens entre `sources`, à `max_hops` sauts au plus.
-pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -> Result<LinksReport, String> {
+pub fn links_between(catalog: &dyn crate::read_view::ReadCatalog, cfg: &LinksConfig, sources: &[String]) -> Result<LinksReport, String> {
     let err = |e: String| format!("LinksNode: {e}");
     let rels: Vec<RelInfo> = cfg.relations.iter().map(|r| rel_info(catalog, r)).collect::<Result<_, _>>().map_err(err)?;
     let mut vus_src: HashSet<&str> = HashSet::new();
@@ -296,7 +296,7 @@ pub fn links_between(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -
 
 /// Titre et lieu de chaque nœud, dans toutes les tables que les relations
 /// suivies touchent.
-fn fiches(catalog: &Catalog, cfg: &LinksConfig, rels: &[RelInfo], uuids: &[String]) -> Result<HashMap<String, Stop>, String> {
+fn fiches(catalog: &dyn crate::read_view::ReadCatalog, cfg: &LinksConfig, rels: &[RelInfo], uuids: &[String]) -> Result<HashMap<String, Stop>, String> {
     let mut tables: Vec<&str> = vec![cfg.entity.as_str()];
     for r in rels {
         tables.push(&r.from);
@@ -440,7 +440,7 @@ impl Node for LinksNode {
         crate::dataflow::node_registry::ports_declares(&LinksNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog, CatalogRead};
+        use super::catalog_read::read_for_tool;
         let mut sources = self.uuids.clone();
         if let Some(results) = ctx.take_input("results").and_then(take_or_clone::<Vec<UnifiedResult>>) {
             // Le balayage des fichiers n'a pas de nœud dans le graphe.
@@ -449,9 +449,9 @@ impl Node for LinksNode {
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("LinksNode: service 'catalog' absent")?;
         // Une section qui accompagne un autre rendu : occupé ou jamais
         // indexé, elle se tait — l'outil qu'elle suit l'a déjà dit.
-        let report = match read_catalog(&catalog, &self.cfg.entity) {
-            CatalogRead::Refused(_) => LinksReport { links: Vec::new(), cut: 0, homonyms: Vec::new(), sources: Vec::new() },
-            CatalogRead::Ready { catalog: cat, .. } => links_between(&cat, &self.cfg, &sources)?,
+        let report = match read_for_tool(&catalog, ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE), &self.cfg.entity, None).into_reader() {
+            Err(_) => LinksReport { links: Vec::new(), cut: 0, homonyms: Vec::new(), sources: Vec::new() },
+            Ok((source, _)) => links_between(source.get(), &self.cfg, &sources)?,
         };
         ctx.metric("links", report.links.len() as f64);
         let value = if self.json {
@@ -566,7 +566,7 @@ impl NodeFactory for LinksNodeFactory {
 /// grappe de résultats reliés vaut plus. C'est un signal de rang, pas de
 /// pertinence : la fusion le prend en `boost`, avec un poids déclaré (0 par
 /// défaut — éteint).
-pub fn cohesion_of(catalog: &Catalog, cfg: &LinksConfig, sources: &[String]) -> Result<HashMap<String, f64>, String> {
+pub fn cohesion_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &LinksConfig, sources: &[String]) -> Result<HashMap<String, f64>, String> {
     let tous = LinksConfig { max_links: usize::MAX, ..cfg.clone() };
     let report = links_between(catalog, &tous, sources)?;
     let mut vus: HashSet<&str> = HashSet::new();
@@ -606,16 +606,16 @@ impl Node for CohesionNode {
         crate::dataflow::node_registry::ports_declares(&CohesionNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog, CatalogRead};
+        use super::catalog_read::read_for_tool;
         let candidats: Vec<UnifiedResult> = ctx.take_input("results").and_then(take_or_clone::<Vec<UnifiedResult>>).unwrap_or_default();
         // L'ordre des candidats : le meilleur rang de chacun, tous signaux confondus.
         let mut tri: Vec<&UnifiedResult> = candidats.iter().filter(|r| !r.uuid.starts_with("scan:")).collect();
         tri.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         let sources: Vec<String> = tri.iter().map(|r| r.uuid.clone()).collect();
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("CohesionNode: service 'catalog' absent")?;
-        let scores = match read_catalog(&catalog, &self.cfg.entity) {
-            CatalogRead::Refused(_) => HashMap::new(),
-            CatalogRead::Ready { catalog: cat, .. } => cohesion_of(&cat, &self.cfg, &sources)?,
+        let scores = match read_for_tool(&catalog, ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE), &self.cfg.entity, None).into_reader() {
+            Err(_) => HashMap::new(),
+            Ok((source, _)) => cohesion_of(source.get(), &self.cfg, &sources)?,
         };
         let mut sortie: Vec<UnifiedResult> = Vec::new();
         let mut deja: HashSet<String> = HashSet::new();
@@ -733,7 +733,7 @@ impl Node for CohesionBoostNode {
         crate::dataflow::node_registry::ports_declares(&CohesionBoostNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog, CatalogRead};
+        use super::catalog_read::read_for_tool;
         let mut results: Vec<UnifiedResult> = ctx.take_input("results").and_then(take_or_clone::<Vec<UnifiedResult>>).unwrap_or_default();
         let qp = ctx.take_input("query").and_then(take_or_clone::<super::port::QueryPayload>);
         let opt = qp.as_ref().and_then(|q| q.options.cohesion.clone()).filter(|c| c.weight != 0.0 && !c.relations.is_empty());
@@ -758,9 +758,9 @@ impl Node for CohesionBoostNode {
                 return Err("CohesionBoostNode: entité ou relation qui n'est pas un identifiant".into());
             }
             let uuids: Vec<String> = results.iter().filter(|r| !r.uuid.starts_with("scan:")).map(|r| r.uuid.clone()).collect();
-            let scores = match read_catalog(&catalog, &entity) {
-                CatalogRead::Refused(_) => HashMap::new(),
-                CatalogRead::Ready { catalog: cat, .. } => cohesion_of(&cat, &cfg, &uuids)?,
+            let scores = match read_for_tool(&catalog, ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE), &entity, None).into_reader() {
+                Err(_) => HashMap::new(),
+                Ok((source, _)) => cohesion_of(source.get(), &cfg, &uuids)?,
             };
             let max = scores.values().cloned().fold(0.0_f64, f64::max);
             if max > 0.0 {

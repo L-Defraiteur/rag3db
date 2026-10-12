@@ -254,7 +254,7 @@ fn largeur(cfg: &NeighborhoodConfig) -> usize {
 }
 
 struct Moteur<'a> {
-    catalog: &'a Catalog,
+    catalog: &'a dyn crate::read_view::ReadCatalog,
     cfg: &'a NeighborhoodConfig,
     rels: Vec<RelInfo>,
 }
@@ -344,7 +344,7 @@ pub fn check_also_path(chemin: &[Step]) -> Result<(), String> {
 /// bout, ne garder que les nœuds dont le champ `same` vaut le titre du départ.
 /// Rend les paires (atteint, titre du départ). Partagé par `impact` (« par
 /// envoi virtuel ») et `usages`.
-pub fn follow_also(catalog: &Catalog, chemin: &[Step], same: &str, departs: &[(String, String)]) -> Result<Vec<(String, String)>, String> {
+pub fn follow_also(catalog: &dyn crate::read_view::ReadCatalog, chemin: &[Step], same: &str, departs: &[(String, String)]) -> Result<Vec<(String, String)>, String> {
     if chemin.is_empty() || departs.is_empty() {
         return Ok(Vec::new());
     }
@@ -518,7 +518,7 @@ fn interroges(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], mut att
 /// Le voisinage d'un nom, jusqu'à `depth` sauts, au plus `budget` nœuds
 /// rendus, sans traverser un nœud de degré supérieur à `max_degree`.
 pub fn neighborhood_of(
-    catalog: &Catalog,
+    catalog: &dyn crate::read_view::ReadCatalog,
     cfg: &NeighborhoodConfig,
     name: &str,
     path_prefix: &str,
@@ -534,7 +534,7 @@ pub fn neighborhood_of(
 /// le compte des écartés est rendu.
 #[allow(clippy::too_many_arguments)]
 pub fn neighborhood_of_in(
-    catalog: &Catalog,
+    catalog: &dyn crate::read_view::ReadCatalog,
     cfg: &NeighborhoodConfig,
     name: &str,
     path_prefix: &str,
@@ -629,7 +629,7 @@ pub fn neighborhood_of_in(
 /// seuls les dépendants extérieurs, dédoublonnés, puis leurs propres
 /// dépendants. Pas de rendez-vous par le nom : on part de lignes, pas d'un
 /// nom.
-pub fn neighborhood_of_file(catalog: &Catalog, cfg: &NeighborhoodConfig, file: &str, depth: usize, budget: usize, max_degree: usize) -> Result<NeighborhoodReport, String> {
+pub fn neighborhood_of_file(catalog: &dyn crate::read_view::ReadCatalog, cfg: &NeighborhoodConfig, file: &str, depth: usize, budget: usize, max_degree: usize) -> Result<NeighborhoodReport, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let rels: Vec<RelInfo> = cfg.relations.iter().map(|r| rel_info(catalog, r)).collect::<Result<_, _>>()?;
     let table = match &cfg.start.defined_by {
@@ -1075,18 +1075,22 @@ impl Node for NeighborhoodNode {
         crate::dataflow::node_registry::ports_declares(&NeighborhoodNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog_in, refusal, with_status, CatalogRead};
+        use super::catalog_read::{read_for_tool, refusal, with_status};
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("NeighborhoodNode: service 'catalog' absent")?;
-        let (report, status) = match read_catalog_in(&catalog, &self.cfg.start.pivot, ctx.service::<crate::scope::Scope>("scope")) {
-            CatalogRead::Refused(message) => {
+        // Par la vue de lecture quand elle est publiée : sans attendre
+        // l'écrivain (lot L2).
+        let lecture = read_for_tool(&catalog, ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE), &self.cfg.start.pivot, ctx.service::<crate::scope::Scope>("scope"));
+        let (report, status) = match lecture.into_reader() {
+            Err(message) => {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());
             }
-            CatalogRead::Ready { catalog: cat, status } => {
+            Ok((source, status)) => {
+                let cat = source.get();
                 let r = if self.name.is_empty() {
-                    neighborhood_of_file(&cat, &self.cfg, &self.file, self.depth, self.budget, self.max_degree)?
+                    neighborhood_of_file(cat, &self.cfg, &self.file, self.depth, self.budget, self.max_degree)?
                 } else {
-                    neighborhood_of_in(&cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree, &self.scope)?
+                    neighborhood_of_in(cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree, &self.scope)?
                 };
                 (r, status)
             }

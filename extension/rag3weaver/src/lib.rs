@@ -116,6 +116,8 @@ pub mod code_sync;
 #[cfg(feature = "burn-ocr")]
 pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;
+/// La vue de lecture : ce qu'une lecture d'outil demande au catalogue, sans son mutex.
+pub mod read_view;
 pub mod cypher_blob_store;
 pub mod buffered_blob_store;
 #[cfg(feature = "rag3db-native")]

@@ -438,6 +438,13 @@ pub struct Catalog {
     /// jamais tourner dans une transaction ouverte par l'écrivain sur `conn`.
     /// `None` : elles passent par `conn`.
     read_conn: Option<Arc<dyn DbConnection>>,
+    /// **La vue de lecture** (`crate::read_view`), publiée ici quand la forme
+    /// change, lue sans ce mutex par les lectures d'outil.
+    read_view: Arc<crate::read_view::ReadViewCell>,
+    /// Une cellule empruntée le temps de `dans_la_cellule` : la vue ne se
+    /// publie pas pendant ce temps (elle figerait les index d'une autre
+    /// cellule).
+    cellule_empruntee: bool,
     /// **Les sessions de synchronisation ouvertes**, par (cellule, entité) :
     /// valeurs du périmètre en JSON → identifiant. Lu une fois depuis
     /// `_catalog_meta`, oublié à chaque ouverture, abandon ou fin. Hypothèse
@@ -527,7 +534,25 @@ pub struct EmbeddingChoiceRecord {
 }
 
 impl Catalog {
-    /// Les fils d'exécution de la connexion de lecture (`RAG3WEAVER_READ_THREADS`,
+    /// La lecture d'une clé de méta, sur une connexion donnée : celle du
+/// catalogue, ou celle de la vue de lecture.
+pub(crate) fn read_meta_key_on(dialect: &dyn crate::dialect::SchemaDialect, conn: &dyn DbConnection, key: &str) -> Result<Option<String>, CatalogError> {
+    let stmt = dialect.load_meta_by_prefix("prefix");
+    let result = conn.execute_with_params(
+        &stmt,
+        &[QueryParam::new("prefix", CypherValue::String(key.to_string()))],
+    ).map_err(|e| CatalogError::DbError(e.to_string()))?;
+    for row in &result.rows {
+        if let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) = (row.get(0), row.get(1)) {
+            if k == key {
+                return Ok(Some(v.clone()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Les fils d'exécution de la connexion de lecture (`RAG3WEAVER_READ_THREADS`,
 /// 2 par défaut) : assez pour une lecture d'outil, sans affamer l'écrivain.
 fn read_threads() -> u64 {
     std::env::var("RAG3WEAVER_READ_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(2)
@@ -542,6 +567,8 @@ fn read_threads() -> u64 {
     ) -> Self {
         let read_conn = conn.read_connection(Self::read_threads());
         Self {
+            read_view: Default::default(),
+            cellule_empruntee: false,
             read_conn,
             conn: Arc::from(conn),
             embedder: Arc::from(embedder),
@@ -841,6 +868,7 @@ fn read_threads() -> u64 {
             },
         };
         self.sparse_handles.insert(table.to_string(), Arc::new(handle));
+        self.publish_read_view();
     }
 
     /// Creation-time positions policy; existing persisted indexes keep their schema.
@@ -1120,6 +1148,7 @@ fn read_threads() -> u64 {
                 // On le remet : mieux vaut un index périmé qu'un index à moitié
                 // détruit, et l'appelant peut réessayer.
                 self.fts_handles.insert(table.to_string(), still_shared);
+                self.publish_read_view();
             }
         }
     }
@@ -1398,6 +1427,7 @@ fn read_threads() -> u64 {
         let handle = Arc::new(handle);
         self.fts_files.extend(files.into_inner());
         self.fts_handles.insert(table.to_string(), handle.clone());
+        self.publish_read_view();
         Some(handle)
     }
 
@@ -1799,6 +1829,7 @@ fn read_threads() -> u64 {
         self.persist_entity_config(entity_name, &config)?;
         self.config.entities.insert(entity_name.to_string(), entity_def);
         self.entity_configs.insert(entity_name.to_string(), config.clone());
+        self.publish_read_view();
         if config.derived.is_some() {
             // Une dérivée neuve sur des racines déjà posées : à rendre.
             self.peut_devoir_un_rendu = true;
@@ -1882,7 +1913,7 @@ fn read_threads() -> u64 {
     /// par défaut garde exactement la formule d'avant, et aucune base existante
     /// ne change d'identité ; une autre cellule entre dans le hachage, et la
     /// même fiche écrite dans deux cellules fait deux lignes.
-    fn uuid_for_in(
+    pub(crate) fn uuid_for_in(
         cell: &crate::scope::Scope,
         entity_name: &str,
         entity_def: &crate::config::EntityDef,
@@ -2518,6 +2549,7 @@ fn read_threads() -> u64 {
         self.persist_relation(rel_name, &rel_def)?;
         let (de, vers) = (rel_def.from.clone(), rel_def.to.clone());
         self.config.relations.insert(rel_name.to_string(), rel_def);
+        self.publish_read_view();
 
         // Une relation de plus peut lier une contributrice à la racine d'une
         // base : les bases dont un bout est la racine sont retraduites.
@@ -2634,6 +2666,7 @@ fn read_threads() -> u64 {
             }
             let cfg = crate::derived_kb::entity_config_from_def(def);
             self.entity_configs.insert(nom, cfg);
+            self.publish_read_view();
         }
         let mut kbs: Vec<(String, crate::config::KBConfig)> =
             self.config.knowledge_bases.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -2645,6 +2678,7 @@ fn read_threads() -> u64 {
                 if let Some(derivee) = crate::derived_kb::derived_config_for_kb(&kb, &kb_config, &self.config) {
                     self.config.entities.insert(kb.clone(), Self::entity_config_to_entity_def(&derivee));
                     self.entity_configs.insert(kb, derivee);
+                    self.publish_read_view();
                 }
             }
         }
@@ -4487,19 +4521,7 @@ fn read_threads() -> u64 {
 
     /// Read a single `_catalog_meta` value.
     pub(crate) fn read_meta_key(&self, key: &str) -> Result<Option<String>, CatalogError> {
-        let stmt = self.dialect.load_meta_by_prefix("prefix");
-        let result = self.conn.execute_with_params(
-            &stmt,
-            &[QueryParam::new("prefix", CypherValue::String(key.to_string()))],
-        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        for row in &result.rows {
-            if let (Some(CypherValue::String(k)), Some(CypherValue::String(v))) = (row.get(0), row.get(1)) {
-                if k == key {
-                    return Ok(Some(v.clone()));
-                }
-            }
-        }
-        Ok(None)
+        Self::read_meta_key_on(self.dialect.as_ref(), self.conn.as_ref(), key)
     }
 
     // ── Multi-tenant : scope (doc 37) ────────────────────────────────────
@@ -4526,6 +4548,7 @@ fn read_threads() -> u64 {
         // Un index par cellule : on gare ceux de la cellule qu'on quitte, on
         // reprend ceux de la cellule qu'on rejoint (ouverts paresseusement sinon).
         self.basculer(scope);
+        self.publish_read_view();
         if self.initialized {
             self.ensure_scope_nodes()?;
         }
@@ -4565,9 +4588,12 @@ fn read_threads() -> u64 {
         }
         cell.validate().map_err(CatalogError::SchemaError)?;
         let avant = self.scope.clone();
+        let deja = self.cellule_empruntee;
+        self.cellule_empruntee = true;
         self.basculer(cell.clone());
         let r = f(self);
         self.basculer(avant);
+        self.cellule_empruntee = deja;
         r
     }
 
@@ -4937,6 +4963,7 @@ fn read_threads() -> u64 {
             let entity_def = Self::entity_config_to_entity_def(&config);
             self.config.entities.insert(entity_name.to_string(), entity_def);
             self.entity_configs.insert(entity_name.to_string(), config);
+            self.publish_read_view();
         }
 
         Ok(())
@@ -5023,6 +5050,7 @@ fn read_threads() -> u64 {
                     format!("deserialize relation '{rel_name}': {e}")
                 ))?;
             self.config.relations.insert(rel_name.to_string(), rel_def);
+            self.publish_read_view();
         }
 
         Ok(())
@@ -9123,6 +9151,7 @@ fn read_threads() -> u64 {
     /// aller-retour coûte cher, la lève ; `None` rend la main au dialecte.
     pub fn set_fanout(&mut self, fanout: Option<bool>) {
         self.fanout = fanout;
+        self.publish_read_view();
     }
 
     /// **Lever ou baisser le saut en deux temps pour ce montage**
@@ -9131,6 +9160,7 @@ fn read_threads() -> u64 {
     /// base.
     pub fn set_two_step_hops(&mut self, deux_temps: Option<bool>) {
         self.two_step_hops = deux_temps;
+        self.publish_read_view();
     }
 
     /// Le saut en deux temps vaut-il pour ce montage.
@@ -9158,6 +9188,34 @@ fn read_threads() -> u64 {
 
     /// La connexion des lectures d'outil : celle de lecture si le moteur en
     /// donne une, sinon la principale.
+    /// La cellule de la vue de lecture, à partager avec les lecteurs.
+    pub fn read_view_cell(&self) -> Arc<crate::read_view::ReadViewCell> {
+        self.read_view.clone()
+    }
+
+    /// **Publier la vue de lecture** : une copie de la forme et des services
+    /// de recherche de la cellule du catalogue. Rien pendant un emprunt de
+    /// cellule.
+    pub(crate) fn publish_read_view(&self) {
+        if self.cellule_empruntee {
+            return;
+        }
+        let mut search = crate::dataflow::ServiceRegistry::new();
+        self.register_search_services(&mut search);
+        self.read_view.set(Arc::new(crate::read_view::ReadView {
+            dialect: self.dialect.clone(),
+            conn: self.read_conn_arc(),
+            entity_configs: self.entity_configs.clone(),
+            entity_defs: self.config.entities.clone(),
+            relations: self.config.relations.clone(),
+            scope: self.scope.clone(),
+            fanout: self.fanout,
+            two_step_hops: self.two_step_hops(),
+            event_bus: self.event_bus.clone(),
+            search_services: Arc::new(search),
+        }));
+    }
+
     pub fn read_conn_arc(&self) -> Arc<dyn DbConnection> {
         self.read_conn.clone().unwrap_or_else(|| self.conn.clone())
     }

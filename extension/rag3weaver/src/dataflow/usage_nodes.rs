@@ -129,7 +129,7 @@ pub const LANGUAGE_FIELD: &str = "language";
 /// **Les nœuds de `table` dans la portée**, par une lecture par clé de leurs
 /// chemins et de leur langage (les colonnes des autres requêtes se lisent par
 /// position : on n'y touche pas). Une portée vide admet tout.
-pub fn in_scope(catalog: &Catalog, table: &str, path_fields: &[String], uuids: &[String], scope: &QueryScope) -> Result<std::collections::HashSet<String>, String> {
+pub fn in_scope(catalog: &dyn crate::read_view::ReadCatalog, table: &str, path_fields: &[String], uuids: &[String], scope: &QueryScope) -> Result<std::collections::HashSet<String>, String> {
     if scope.is_empty() || uuids.is_empty() {
         return Ok(uuids.iter().cloned().collect());
     }
@@ -177,7 +177,7 @@ pub struct DeclarationsConfig {
 /// Les déclarations d'un nom. Avec des définitions : celles de leurs
 /// conteneurs. Sans : les conteneurs qui le déclarent sans qu'aucune
 /// définition soit indexée. Rien tant que le schéma ne porte pas le champ.
-pub fn declarations_of(catalog: &Catalog, cfg: &UsagesConfig, d: &DeclarationsConfig, name: &str, definitions: &[Item]) -> Result<Vec<Declaration>, String> {
+pub fn declarations_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, d: &DeclarationsConfig, name: &str, definitions: &[Item]) -> Result<Vec<Declaration>, String> {
     let rel = rel_info(catalog, &d.relation)?;
     if !catalog.entity_config(&rel.to).is_some_and(|c| c.fields.contains_key(&d.field)) {
         return Ok(Vec::new());
@@ -250,7 +250,7 @@ pub struct VirtualBase {
 
 /// Les appelants des méthodes de base que `definitions` redéfinissent
 /// (classe de base ou trait, à tout niveau).
-pub fn virtual_usages_of(catalog: &Catalog, cfg: &UsagesConfig, v: &VirtualConfig, definitions: &[Item]) -> Result<Vec<VirtualBase>, String> {
+pub fn virtual_usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, v: &VirtualConfig, definitions: &[Item]) -> Result<Vec<VirtualBase>, String> {
     let err = |e: CatalogError| format!("UsagesNode: {e}");
     let departs: Vec<(String, String)> = definitions.iter().map(|d| (d.uuid.clone(), d.title.clone())).collect();
     let propres: std::collections::HashSet<&str> = definitions.iter().map(|d| d.uuid.as_str()).collect();
@@ -405,7 +405,7 @@ pub struct RelInfo {
     pub props: Vec<String>,
 }
 
-pub fn rel_info(catalog: &Catalog, name: &str) -> Result<RelInfo, String> {
+pub fn rel_info(catalog: &dyn crate::read_view::ReadCatalog, name: &str) -> Result<RelInfo, String> {
     let def = catalog.get_relation_def(name).ok_or_else(|| format!("UsagesNode: relation inconnue « {name} »"))?;
     Ok(RelInfo {
         name: name.to_string(),
@@ -457,13 +457,13 @@ pub fn lire_le_nom<'a>(name: &'a str, cfg: &UsagesConfig) -> (&'a str, Option<&'
     (nom, Some(qualifiant))
 }
 
-pub fn usages_of(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix: &str) -> Result<UsagesReport, String> {
+pub fn usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, name: &str, path_prefix: &str) -> Result<UsagesReport, String> {
     usages_of_in(catalog, cfg, name, path_prefix, &QueryScope::default())
 }
 
 /// [`usages_of`] borné à une portée : les définitions et les usagers hors de
 /// `scope` sont écartés et comptés ; l'ambiguïté se juge dans la portée.
-pub fn usages_of_in(catalog: &Catalog, cfg: &UsagesConfig, name: &str, path_prefix: &str, scope: &QueryScope) -> Result<UsagesReport, String> {
+pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, name: &str, path_prefix: &str, scope: &QueryScope) -> Result<UsagesReport, String> {
     let err = |e: CatalogError| format!("UsagesNode: {e}");
     let nom_demande = name;
     let (name, qualifiant) = lire_le_nom(name, cfg);
@@ -818,23 +818,27 @@ impl Node for UsagesNode {
         crate::dataflow::node_registry::ports_declares(&UsagesNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        use super::catalog_read::{read_catalog_in, refusal, with_status, CatalogRead};
+        use super::catalog_read::{read_for_tool, refusal, with_status};
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("UsagesNode: service 'catalog' absent")?;
         // Jamais un vide sans dire d'où il vient : occupé, jamais indexé,
         // ou partiel, le rendu le dit.
-        let (report, status) = match read_catalog_in(&catalog, &self.cfg.pivot, ctx.service::<crate::scope::Scope>("scope")) {
-            CatalogRead::Refused(message) => {
+        // Par la vue de lecture quand elle est publiée : sans attendre
+        // l'écrivain (lot L2).
+        let lecture = read_for_tool(&catalog, ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE), &self.cfg.pivot, ctx.service::<crate::scope::Scope>("scope"));
+        let (report, status) = match lecture.into_reader() {
+            Err(message) => {
                 ctx.set_output("result", PortValue::new(refusal(&message, self.json)));
                 return Ok(());
             }
-            CatalogRead::Ready { catalog: cat, status } => {
-                let report = usages_of_in(&cat, &self.cfg, &self.name, &self.path, &self.scope)?;
+            Ok((source, status)) => {
+                let cat = source.get();
+                let report = usages_of_in(cat, &self.cfg, &self.name, &self.path, &self.scope)?;
                 let declarations = match &self.declarations {
-                    Some(d) => declarations_of(&cat, &self.cfg, d, &self.name, &report.definitions)?,
+                    Some(d) => declarations_of(cat, &self.cfg, d, &self.name, &report.definitions)?,
                     None => Vec::new(),
                 };
                 let virtuels = match &self.virtuel {
-                    Some(v) => virtual_usages_of(&cat, &self.cfg, v, &report.definitions)?,
+                    Some(v) => virtual_usages_of(cat, &self.cfg, v, &report.definitions)?,
                     None => Vec::new(),
                 };
                 ((report, declarations, virtuels), status)

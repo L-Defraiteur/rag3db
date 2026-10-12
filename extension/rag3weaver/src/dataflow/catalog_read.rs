@@ -30,6 +30,9 @@ pub enum CatalogRead<'a> {
     /// On peut lire ; `status` est la ligne à mettre en tête quand le
     /// résultat est partiel.
     Ready { catalog: MutexGuard<'a, Catalog>, status: Option<String> },
+    /// On lit par la vue de lecture, sans le mutex du catalogue
+    /// (`crate::read_view`, lot L2).
+    View { view: Arc<crate::read_view::ReadView>, status: Option<String> },
     /// On ne lit pas : la phrase à rendre à la place du résultat.
     Refused(String),
 }
@@ -141,8 +144,18 @@ pub fn read_catalog_in<'a>(
     let Some(cat) = lock_for_read(catalog) else {
         return CatalogRead::Refused(BUSY.into());
     };
+    match statut(&cat, entity, cell) {
+        Ok(status) => CatalogRead::Ready { catalog: cat, status },
+        Err(refus) => CatalogRead::Refused(refus),
+    }
+}
+
+/// **La ligne d'état d'une lecture**, sur un catalogue déjà tenu : l'index
+/// partiel, le retard sur le disque, l'arbre du dernier index, les morceaux
+/// sans texte. `Err` : la phrase du refus (jamais indexé).
+fn statut(cat: &Catalog, entity: &str, cell: Option<&crate::scope::Scope>) -> Result<Option<String>, String> {
     let status = match cat.index_state_for(entity) {
-        Ok(state) if state.text == Level::Never => return CatalogRead::Refused(NEVER_INDEXED.into()),
+        Ok(state) if state.text == Level::Never => return Err(NEVER_INDEXED.into()),
         Ok(state) => partial_status(state.text, state.relations),
         // L'état ne se lit pas (entité inconnue du catalogue, méta
         // illisible) : on lit quand même, sans rien promettre.
@@ -166,11 +179,10 @@ pub fn read_catalog_in<'a>(
         (Some(a), n) => Some(format!("{a} — {n} morceaux sans texte, ni cherchables ni embarqués (défaut connu)")),
         (None, n) => Some(format!("{n} morceaux sans texte, ni cherchables ni embarqués (défaut connu)")),
     };
-    let status = match (arbre, status) {
+    Ok(match (arbre, status) {
         (Some(a), Some(s)) => Some(format!("{a} — {s}")),
         (a, s) => a.or(s),
-    };
-    CatalogRead::Ready { catalog: cat, status }
+    })
 }
 
 /// Ce qu'un nœud de lecture rend : le refus, ou le résultat précédé de sa
@@ -191,3 +203,61 @@ pub fn refusal(message: &str, json: bool) -> serde_json::Value {
         serde_json::Value::String(message.to_string())
     }
 }
+
+/// Ce qu'une lecture tient pour lire : le catalogue sous son mutex, ou la
+/// vue de lecture.
+pub enum ReadSource<'a> {
+    Locked(MutexGuard<'a, Catalog>),
+    View(Arc<crate::read_view::ReadView>),
+}
+
+impl ReadSource<'_> {
+    pub fn get(&self) -> &dyn crate::read_view::ReadCatalog {
+        match self {
+            ReadSource::Locked(g) => &**g,
+            ReadSource::View(v) => v.as_ref(),
+        }
+    }
+}
+
+impl<'a> CatalogRead<'a> {
+    /// La source et la ligne d'état, ou la phrase du refus.
+    pub fn into_reader(self) -> Result<(ReadSource<'a>, Option<String>), String> {
+        match self {
+            CatalogRead::Ready { catalog, status } => Ok((ReadSource::Locked(catalog), status)),
+            CatalogRead::View { view, status } => Ok((ReadSource::View(view), status)),
+            CatalogRead::Refused(m) => Err(m),
+        }
+    }
+}
+
+/// La ligne d'état d'une lecture par la vue quand un écrivain tient le
+/// catalogue : la réponse est juste, mais d'avant ce qu'il écrit.
+pub const WRITER_HOLDS: &str = "Une écriture de l'index est en cours : la réponse porte sur l'état validé, d'avant elle.";
+
+/// **Lire pour un outil, sans attendre l'écrivain** (lot L2) : par la vue de
+/// lecture quand elle est publiée et que l'appel vise la cellule du
+/// catalogue. La ligne d'état se calcule si le catalogue est libre à
+/// l'instant (un essai, jamais une attente) ; sinon elle dit qu'on lit l'état
+/// validé. Sans vue, ou pour une autre cellule : [`read_catalog_in`], comme
+/// avant.
+pub fn read_for_tool<'a>(
+    catalog: &'a Arc<Mutex<Catalog>>,
+    view: Option<&Arc<crate::read_view::ReadViewCell>>,
+    entity: &str,
+    cell: Option<&crate::scope::Scope>,
+) -> CatalogRead<'a> {
+    let vue = view.and_then(|c| c.current());
+    let Some(vue) = vue.filter(|v| cell.is_none_or(|c| *c == v.scope)) else {
+        return read_catalog_in(catalog, entity, cell);
+    };
+    // Libre à l'instant : la ligne d'état complète, sous ce garde, rendu
+    // aussitôt ; la lecture elle-même se fait par la vue.
+    let essai = catalog.try_lock().ok().map(|cat| statut(&cat, entity, cell));
+    match essai {
+        Some(Ok(status)) => CatalogRead::View { view: vue, status },
+        Some(Err(refus)) => CatalogRead::Refused(refus),
+        None => CatalogRead::View { view: vue, status: Some(WRITER_HOLDS.to_string()) },
+    }
+}
+
