@@ -46,6 +46,18 @@ bool CatalogSet::containsEntryNoLock(const Transaction* transaction,
     return !entry->isDeleted();
 }
 
+bool CatalogSet::hasChangeAfterSnapshotOf(const Transaction* transaction,
+    const std::string& name) {
+    std::shared_lock lck{mtx};
+    if (!entries.contains(name)) {
+        return false;
+    }
+    // Une version non validée porte l'identifiant de sa transaction, au-delà de tout horodatage
+    // de validation : la comparaison à startTS couvre les deux cas.
+    const auto timestamp = entries.at(name)->getTimestamp();
+    return timestamp != transaction->getID() && timestamp > transaction->getStartTS();
+}
+
 CatalogEntry* CatalogSet::getEntry(const Transaction* transaction, const std::string& name) {
     std::shared_lock lck{mtx};
     return getEntryNoLock(transaction, name);

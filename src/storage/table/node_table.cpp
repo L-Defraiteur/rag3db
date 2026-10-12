@@ -1151,6 +1151,7 @@ void NodeTable::lockRowForWrite(Transaction* transaction, offset_t nodeOffset,
 }
 
 bool NodeTable::hasLoadedSecondaryIndex() const {
+    std::shared_lock lck{indexesMtx};
     return std::any_of(indexes.begin(), indexes.end(), [](const IndexHolder& holder) {
         return holder.isLoaded() && !holder.getIndexInfo().isPrimary;
     });
@@ -1324,7 +1325,8 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
 }
 
 void NodeTable::addIndex(std::unique_ptr<Index> index) {
-    if (getIndex(index->getName()).has_value()) {
+    std::unique_lock lck{indexesMtx};
+    if (getIndexNoLock(index->getName()).has_value()) {
         throw RuntimeException("Index with name " + index->getName() + " already exists.");
     }
     // Un exemplaire détaché du même nom n'est plus un index de la table : il cède la place.
@@ -1339,6 +1341,7 @@ void NodeTable::addIndex(std::unique_ptr<Index> index) {
 void NodeTable::dropIndex(const std::string& name) {
     // L'index peut ne pas être chargé (au rejeu du journal, son extension ne l'est pas
     // encore), ou ne pas être là du tout (créé puis retiré dans le même journal).
+    std::unique_lock lck{indexesMtx};
     for (auto it = indexes.begin(); it != indexes.end(); ++it) {
         if (StringUtils::caseInsensitiveEquals(it->getName(), name)) {
             indexes.erase(it);
@@ -1349,6 +1352,7 @@ void NodeTable::dropIndex(const std::string& name) {
 
 std::optional<std::reference_wrapper<IndexHolder>> NodeTable::getIndexHolder(
     const std::string& name) {
+    std::shared_lock lck{indexesMtx};
     for (auto& index : indexes) {
         if (!index.isDetached() && StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             return index;
@@ -1358,6 +1362,43 @@ std::optional<std::reference_wrapper<IndexHolder>> NodeTable::getIndexHolder(
 }
 
 std::optional<Index*> NodeTable::getIndex(const std::string& name) const {
+    std::shared_lock lck{indexesMtx};
+    return getIndexNoLock(name);
+}
+
+std::shared_ptr<Index> NodeTable::getSharedIndex(const std::string& name) const {
+    std::shared_lock lck{indexesMtx};
+    for (auto& index : indexes) {
+        if (!index.isDetached() && index.isLoaded() &&
+            StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+            return index.getSharedIndex();
+        }
+    }
+    return nullptr;
+}
+
+bool NodeTable::hasIndexHolder(const std::string& name) const {
+    std::shared_lock lck{indexesMtx};
+    return std::any_of(indexes.begin(), indexes.end(), [&](const IndexHolder& holder) {
+        return !holder.isDetached() && StringUtils::caseInsensitiveEquals(holder.getName(), name);
+    });
+}
+
+bool NodeTable::loadIndex(const std::string& name, main::ClientContext* context,
+    StorageManager* storageManager) {
+    std::unique_lock lck{indexesMtx};
+    for (auto& holder : indexes) {
+        if (!holder.isDetached() && StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
+            if (!holder.isLoaded()) {
+                holder.load(context, storageManager);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<Index*> NodeTable::getIndexNoLock(const std::string& name) const {
     for (auto& index : indexes) {
         if (!index.isDetached() && StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             if (index.isLoaded()) {

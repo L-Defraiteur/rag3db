@@ -20,17 +20,11 @@ static void initHNSWEntries(main::ClientContext* context) {
             // Should load the index in storage side as well.
             auto& nodeTable =
                 storageManager->getTable(indexEntry->getTableID())->cast<storage::NodeTable>();
-            auto optionalIndex = nodeTable.getIndexHolder(indexEntry->getIndexName());
-            if (!optionalIndex.has_value()) {
-                // Une entrée au catalogue sans exemplaire dans la table : le rejeu du journal
-                // a écrit dans la table pendant que cette extension n'était pas chargée, et
-                // l'index a été détaché. Il n'y a rien à charger ; l'index est à rebâtir, et
-                // HNSWIndexUtils le dit à qui veut s'en servir.
-                continue;
-            }
-            KU_ASSERT_UNCONDITIONAL(!optionalIndex.value().get().isLoaded());
-            auto& unloadedIndex = optionalIndex.value().get();
-            unloadedIndex.load(context, storageManager);
+            // Sans exemplaire dans la table, une entrée au catalogue n'a rien à charger : le rejeu
+            // du journal a écrit dans la table pendant que cette extension n'était pas chargée, et
+            // l'index a été détaché. Il est à rebâtir, et HNSWIndexUtils le dit à qui veut s'en
+            // servir. Le chargement se fait sous le verrou de la liste des index.
+            nodeTable.loadIndex(indexEntry->getIndexName(), context, storageManager);
         }
     }
 }

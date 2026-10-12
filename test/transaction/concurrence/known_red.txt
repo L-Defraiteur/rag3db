@@ -118,12 +118,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine 
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
-# L'index vectoriel retiré puis recréé pendant que des recherches tournent en face (ticket
-# 2026-10-12-une-recherche-vectorielle-pendant-drop-create-de-l-index-rend-une-exception-brute) :
-# quelques recherches reçoivent « bad optional access » ou « unordered_map::at » au lieu d'un refus
-# nommé. Rouge trois passes sur trois ; aucun figement, aucun résultat faux.
-VectorIndexRebuild.SearchesAcrossDropAndCreateAreConsistentOrNamed no-unnamed-search-error
-#
 # Supprimer une ligne indexée HNSW coûte des centaines de millisecondes (ticket
 # 2026-10-12-supprimer-une-ligne-indexee-hnsw-coute-des-secondes) : finalizeDelete fait une recherche
 # par voisin survivant, et la lecture des arêtes écrites depuis le dernier point de reprise croît

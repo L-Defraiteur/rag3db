@@ -149,9 +149,6 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
     auto* storageManager = storage::StorageManager::Get(*context);
     auto* nodeTable =
         storageManager->getTable(tableEntry->getTableID())->ptrCast<storage::NodeTable>();
-    auto indexOpt = nodeTable->getIndex(indexName);
-    KU_ASSERT(indexOpt.has_value());
-    auto& hnswIndex = indexOpt.value()->cast<OnDiskHNSWIndex>();
 
     // Build HNSWSearchState (same logic as initQueryHNSWLocalState).
     auto upperRelTableName = HNSWIndexUtils::getUpperGraphTableName(tableID, indexName);
@@ -162,6 +159,11 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
     auto* lowerRelTableEntry =
         catalog->getTableCatalogEntry(transaction, lowerRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
+    // L'index capturé, celui de cet instantané (voir OnDiskHNSWIndex::captureForQuery).
+    const auto capturedIndex = OnDiskHNSWIndex::captureForQuery(*nodeTable, indexName,
+        tableEntry->getName(), upperRelTableEntry->getSingleRelEntryInfo().oid,
+        lowerRelTableEntry->getSingleRelEntryInfo().oid);
+    auto& hnswIndex = *capturedIndex;
     // Le nombre de lignes, pas la cardinalité estimée (voir query_hnsw_index.cpp).
     auto numNodes = nodeTable->getNumTotalRows(transaction);
 

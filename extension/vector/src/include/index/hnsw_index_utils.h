@@ -35,6 +35,12 @@ struct HNSWIndexUtils {
     [[noreturn]] static void throwCountsMoreRowsThanItsTable(const std::string& indexName,
         const std::string& tableName, common::offset_t numIndexedRows, common::offset_t numRows);
 
+    // L'index que la requête a liée n'est plus celui de la table : une transaction concurrente l'a
+    // retiré, ou retiré et recréé, entre la liaison et la lecture. Le message dit « does not
+    // exist » : c'est une absence, et la requête relancée verra l'état d'après.
+    [[noreturn]] static void throwIndexGoneUnderTheQuery(const std::string& indexName,
+        const std::string& tableName);
+
     // Deux gardes de mémoire, actives en Release. Un décalage de nœud hors du tableau des
     // « déjà visités » d'une recherche, ou hors du graphe en mémoire d'une construction,
     // écrivait hors de son bloc (corruption de tas, ticket du 4 octobre 2026). Chacune a son
