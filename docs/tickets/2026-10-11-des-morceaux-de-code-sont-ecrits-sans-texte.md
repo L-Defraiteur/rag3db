@@ -167,3 +167,18 @@ répare aussi, suit en lot court.
 
 Tables par fichier : `~/.cache/rag3weaver-build/embarquements/fichiers-vides.tsv` ; tests :
 `e2e_mesure_index_entier`.
+
+### Deux lectures de plus (F, `deux_lectures_pour_departager_les_chemins`)
+
+- **Le marqueur dense (`_embed_hash__granite_278m`) égale `_text_hash` chez 97,3 % des vides**
+  (98,7 % des pleins) : la ligne a été embarquée après la dernière écriture de son texte, texte en
+  main. **Le texte a été perdu après l'embarquement.** (`_embed_hash` et `_sparse_hash` n'égalent
+  `_text_hash` chez personne : ils ne portent pas la même chose.)
+- **Les scopes de même clé ne sont pas en excès** chez les vides (13,9 % contre 15,5 %) : la piste du
+  doublon d'uuid dans un même lot d'upsert tombe.
+
+Restent, parmi les chemins de la relecture : **l'upsert d'une réingestion** et **le remplacement du
+vecteur** (contournement HNSW), tous deux sur une ligne déjà embarquée. Mais la répartition (par dépôt,
+par langage, sans excès chez les fichiers réédités et commités) ne les désigne pas d'elle-même. **Rien
+n'est conclu** : la sonde de la réédition avec vecteurs, répétée (codeparsers, au matin), et le témoin
+du proto le diront ; sinon le couple `e60f2342e`.
