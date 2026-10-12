@@ -145,3 +145,25 @@ deux scopes de même clé) ; le couple `e60f2342e` si les deux restent verts.
 **Réparation** : `dd7bb2c1e` (en file) réécrit les morceaux sans texte à l'index, en passant outre
 `split_unchanged` ; ajouter « `_text` non vide » à son critère, pour qu'une réingestion de la montre
 répare aussi, suit en lot court.
+
+### La réédition n'est pas soutenue ; ce qui sépare, c'est le dépôt (F, 12 octobre, nuit)
+
+- **Croisé avec git** (les fichiers touchés par un commit entre le premier index, 15 h 21, et la
+  copie, 20 h 24 : 225 chemins dont 177 indexés) : ils portent des scopes tout vides **moins** souvent
+  que les autres (22,6 % contre 30,0 % des fichiers ; 12,5 % contre 18,6 % des scopes). La piste de la
+  réédition par la montre n'est pas soutenue — réserve : une édition sans commit ou un checkout de
+  sous-module y échappe.
+- **Par dépôt** (`File.revision`) : le sous-module `ld-lucivy` a **46 %** de ses scopes tout vides, un
+  autre dépôt (`4c7897c8…`, à identifier) 21 %, le dépôt principal **9 %**. **Par langage** : cypher
+  89 %, json 44 %, markdown 38 %, python 34 %, rust 32 %, cpp **5 %**. Un seul `_snapshot` pour 7 306
+  fichiers (une seule synchronisation) ; les 43 fichiers sans snapshot n'ont aucun vide.
+- **Le contenu n'est pas en cause** : `Scope.content` n'est jamais vide ; guillemets, barres inverses
+  et longueurs ne distinguent pas les vides ; l'accent grave est en excès chez eux (22 % contre
+  8,8 %) mais absent de 78 % d'entre eux.
+- **Question ouverte (F)** : l'ordre des lots du chemin de masse — les sous-modules et les petits
+  fichiers hors C++ partent-ils dans un même lot, ou un même COPY ?
+- **En route** : un SIGSEGV du moteur sur une lecture de ~80 000 scopes à texte long, signalé au cœur
+  par F.
+
+Tables par fichier : `~/.cache/rag3weaver-build/embarquements/fichiers-vides.tsv` ; tests :
+`e2e_mesure_index_entier`.
