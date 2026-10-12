@@ -162,6 +162,14 @@ impl ReadViewCell {
         self.0.read().ok().and_then(|v| v.clone())
     }
 
+    /// Plus de vue : les lectures retombent sur le catalogue. À la
+    /// fermeture, pour que la vue ne garde pas des poignées fermées.
+    pub(crate) fn clear(&self) {
+        if let Ok(mut v) = self.0.write() {
+            *v = None;
+        }
+    }
+
     pub(crate) fn set(&self, view: Arc<ReadView>) {
         if let Ok(mut v) = self.0.write() {
             *v = Some(view);

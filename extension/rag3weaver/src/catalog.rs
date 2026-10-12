@@ -1138,6 +1138,16 @@ fn read_threads() -> u64 {
 
     pub fn drop_fts_index(&mut self, table: &str) {
         let Some(handle) = self.fts_handles.remove(table) else { return };
+        // **La vue de lecture tient une copie de la poignée** (L2) : sans une
+        // vue neuve qui ne l'a plus, l'index ne se détruisait jamais, et la
+        // garde des comptes rebâtissait par-dessus (661 documents pour 330
+        // lignes, `e2e_tx_par_paquet_arret`, 12 octobre 2026). Une lecture en
+        // cours rend sa copie en quelques millisecondes : on l'attend un peu.
+        self.publish_read_view();
+        let attente = std::time::Instant::now();
+        while Arc::strong_count(&handle) > 1 && attente.elapsed() < std::time::Duration::from_secs(1) {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
         match Arc::try_unwrap(handle) {
             Ok(h) => {
                 if let Err(e) = h.drop_index() {
@@ -1440,6 +1450,8 @@ fn read_threads() -> u64 {
     /// Must be called before dropping the Catalog when the DB will be reopened
     /// in the same process (e.g. tests, hot reload).
     pub fn shutdown(&mut self) -> Result<(), CatalogError> {
+        // La vue de lecture lâche ses poignées avant leur fermeture.
+        self.read_view.clear();
         // Collect table names for FTS and sparse.
         let mut fts_tables: Vec<String> = Vec::new();
         for name in self.entity_configs.keys() {
