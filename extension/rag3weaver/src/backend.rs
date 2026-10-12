@@ -1419,45 +1419,19 @@ impl PreparedBackend {
 
     /// **Le fichier de l'extension vectorielle à charger.** Un chemin déclaré
     /// est un forçage, relatif au manifeste. Un nom (`vector`) est celle du
-    /// bâti, cherchée là où le moteur se trouve, dans cet ordre :
-    /// `RAG3DB_ROOT/extension/<nom>/build/` (l'arbre bâti), `RAG3DB_LIBRARY_DIR`
-    /// (une lib installée), le dossier de l'exécutable (le paquet npm la pose
-    /// à côté du binaire), puis l'arbre dont ce crate vient (un bâti de
-    /// développement). Introuvable : le refus nomme chaque endroit cherché et
-    /// la variable à poser. Un gabarit livré ne la cherche jamais relativement
-    /// à lui-même (ticket du 11 octobre 2026 : copié ailleurs, il ne s'ouvrait
-    /// plus).
+    /// bâti, cherchée là où le moteur se trouve (voir
+    /// [`resolve_vector_extension`]). Un gabarit livré ne la cherche jamais
+    /// relativement à lui-même (ticket du 11 octobre 2026 : copié ailleurs, il
+    /// ne s'ouvrait plus).
     pub fn vector_extension_path(&self) -> Result<PathBuf, String> {
-        let declare = &self.manifest.vector_extension;
-        let texte = declare.to_string_lossy();
-        let est_un_chemin = texte.contains('/') || texte.contains('\\') || texte.ends_with(".rag3db_extension");
-        if est_un_chemin {
-            let chemin = self.path(declare);
-            return if chemin.is_file() {
-                Ok(chemin)
-            } else {
-                Err(format!(
-                    "extension vectorielle introuvable : {} (`vector_extension` du manifeste, un chemin relatif à lui) — \
-                     donnez un chemin qui existe, ou le nom « {DEFAULT_VECTOR_EXTENSION} » pour celle du bâti",
-                    chemin.display()
-                ))
-            };
-        }
-        let cherches = vector_extension_candidates(
-            &texte,
+        resolve_vector_extension(
+            &self.manifest.vector_extension,
+            &self.directory,
+            crate::build_check::loaded_lib().as_deref(),
             std::env::var_os("RAG3DB_ROOT"),
             std::env::var_os("RAG3DB_LIBRARY_DIR"),
             std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)),
-        );
-        if let Some(trouve) = cherches.iter().find(|p| p.is_file()) {
-            return Ok(trouve.clone());
-        }
-        let liste: Vec<String> = cherches.iter().map(|p| p.display().to_string()).collect();
-        Err(format!(
-            "extension vectorielle « {texte} » introuvable ; cherchée dans : {} — posez RAG3DB_ROOT sur l'arbre où le moteur est bâti, \
-             ou `vector_extension` sur le chemin du fichier",
-            liste.join(" ; ")
-        ))
+        )
     }
     pub fn describe(&self) -> Value {
         let mut tools:Vec<Value>=self.tools.iter().map(|(name,t)|{
@@ -3411,22 +3385,107 @@ fn payload_schema(
 
 #[cfg(test)]
 mod tests {
-    /// **L'extension se cherche d'abord à côté de la lib** (le dossier d'un
-    /// identifiant du magasin), puis dans l'arbre : un dossier de bâti sans
-    /// extension retombe sur l'ordre d'avant.
+    /// **L'extension se cherche d'abord à côté de la lib réellement chargée**
+    /// (lot 3e du magasin), puis à côté de `RAG3DB_LIBRARY_DIR`, puis dans
+    /// l'arbre ; un même dossier n'est cherché qu'une fois.
     #[test]
-    fn the_vector_extension_is_looked_up_next_to_the_lib_first() {
+    fn the_vector_extension_is_looked_up_next_to_the_loaded_lib_first() {
         let c = super::vector_extension_candidates(
             "vector",
+            Some(Path::new("/magasin/rag3db-build-L")),
             Some("/arbre".into()),
             Some("/magasin/rag3db-build-A".into()),
             Some(PathBuf::from("/bin-dir")),
         );
-        assert_eq!(c[0], PathBuf::from("/magasin/rag3db-build-A/libvector.rag3db_extension"));
-        assert_eq!(c[1], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
-        assert_eq!(c[2], PathBuf::from("/bin-dir/libvector.rag3db_extension"));
-        let sans_lib = super::vector_extension_candidates("vector", Some("/arbre".into()), None, None);
+        assert_eq!(c[0], PathBuf::from("/magasin/rag3db-build-L/libvector.rag3db_extension"));
+        assert_eq!(c[1], PathBuf::from("/magasin/rag3db-build-A/libvector.rag3db_extension"));
+        assert_eq!(c[2], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
+        assert_eq!(c[3], PathBuf::from("/bin-dir/libvector.rag3db_extension"));
+        let sans_lib = super::vector_extension_candidates("vector", None, Some("/arbre".into()), None, None);
         assert_eq!(sans_lib[0], PathBuf::from("/arbre/extension/vector/build/libvector.rag3db_extension"));
+        let meme = super::vector_extension_candidates("vector", Some(Path::new("/m/L")), None, Some("/m/L".into()), None);
+        assert_eq!(meme.iter().filter(|p| p.starts_with("/m/L")).count(), 1, "{meme:?}");
+    }
+
+    /// Une extension factice qui porte (ou non) un identifiant de bâti, comme
+    /// la chaîne que rend sa fonction `build_id`.
+    fn extension_factice(dir: &Path, id: Option<&str>) -> PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
+        let p = dir.join("libvector.rag3db_extension");
+        let mut octets = b"\x7fELF factice\0".to_vec();
+        if let Some(id) = id {
+            octets.extend_from_slice(id.as_bytes());
+            octets.push(0);
+        }
+        std::fs::write(&p, octets).unwrap();
+        p
+    }
+
+    /// **L'identifiant décide** (lot 3e) : sans aucune variable, l'extension à
+    /// côté de la lib chargée ; `RAG3DB_LIBRARY_DIR` sur un autre bâti ne la
+    /// supplante pas ; une extension d'un autre bâti est passée quand elle est
+    /// cherchée, refusée quand elle est forcée, et le refus nomme les deux.
+    #[test]
+    fn an_extension_of_another_build_is_passed_when_searched_and_refused_when_forced() {
+        use crate::build_check::{tests::elf, LIB_SECTION};
+        let d = tempfile::tempdir().unwrap();
+        let (l, x) = ("rag3db-build-L", "rag3db-build-X");
+        let dossier_l = d.path().join("lib-L");
+        std::fs::create_dir_all(&dossier_l).unwrap();
+        let lib = elf(&dossier_l, "librag3db.so", LIB_SECTION, Some(l));
+        let bonne = extension_factice(&dossier_l, Some(l));
+        let autre = extension_factice(&d.path().join("autre"), Some(x));
+        let nom = Path::new("vector");
+        let resoudre = |declare: &Path, lib: &Path, lib_dir: Option<&Path>| {
+            super::resolve_vector_extension(declare, d.path(), Some(lib), None, lib_dir.map(|p| p.as_os_str().to_owned()), None)
+        };
+
+        assert_eq!(resoudre(nom, &lib, None).unwrap(), bonne, "sans aucune variable : à côté de la lib chargée");
+        assert_eq!(resoudre(nom, &lib, Some(&d.path().join("autre"))).unwrap(), bonne, "la lib chargée passe avant la variable");
+
+        let seule = d.path().join("lib-seule");
+        std::fs::create_dir_all(&seule).unwrap();
+        let lib_seule = elf(&seule, "librag3db.so", LIB_SECTION, Some(l));
+        let err = resoudre(nom, &lib_seule, Some(&d.path().join("autre"))).unwrap_err();
+        assert!(err.contains(l) && err.contains(x) && err.contains("écartées"), "{err}");
+
+        let err = resoudre(Path::new("autre/libvector.rag3db_extension"), &lib, None).unwrap_err();
+        assert!(err.contains("refusée") && err.contains(l) && err.contains(x), "{err}");
+        assert_eq!(resoudre(Path::new("lib-L/libvector.rag3db_extension"), &lib, None).unwrap(), bonne);
+
+        let sans_id = extension_factice(&d.path().join("ancienne"), None);
+        assert_eq!(resoudre(Path::new("ancienne/libvector.rag3db_extension"), &lib, None).unwrap(), sans_id, "sans identifiant : le moteur dira");
+        assert_eq!(crate::build_check::extension_build_id(&autre).unwrap().as_deref(), Some(x));
+    }
+
+    /// **De bout en bout, sans aucune variable** (lot 3e) : la lib que ce
+    /// processus a réellement chargée désigne son extension, du même
+    /// identifiant, et le moteur la charge. Sous le magasin (le défaut de
+    /// `cargo_magasin.sh`), c'est le dossier de l'identifiant.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable() {
+        let lib = crate::build_check::loaded_lib().expect("le moteur est lié en partagé : sa lib est dans /proc/self/maps");
+        let d = tempfile::tempdir().unwrap();
+        let resolue = super::resolve_vector_extension(Path::new("vector"), d.path(), Some(&lib), None, None, None);
+        let id_lib = crate::build_check::read_section(&lib, crate::build_check::LIB_SECTION).unwrap();
+        let Some(dossier) = lib.parent().filter(|p| p.join("libvector.rag3db_extension").is_file()) else {
+            // Un dossier de bâti (`build/lecteurs-csv/src`) n'a pas l'extension à
+            // côté : sans variable, ce qui est trouvé (l'arbre de ce crate) n'est
+            // jamais d'un autre bâti.
+            if let Ok(ext) = &resolue {
+                let id_ext = crate::build_check::extension_build_id(ext).unwrap();
+                assert!(id_ext.is_none() || id_ext == id_lib, "{} : {id_ext:?} contre {id_lib:?}", ext.display());
+            }
+            eprintln!("[témoin] la lib chargée ({}) n'a pas d'extension à côté (hors magasin) : {resolue:?}", lib.display());
+            return;
+        };
+        let ext = resolue.unwrap();
+        assert_eq!(ext, dossier.join("libvector.rag3db_extension"));
+        assert_eq!(crate::build_check::extension_build_id(&ext).unwrap(), id_lib, "le même identifiant");
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        conn.execute(&format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&ext))).expect("le moteur charge l'extension");
+        eprintln!("[témoin] {} chargée, bâti {:?}", ext.display(), id_lib);
     }
 
     /// **L'extension vector des tests** : sous `RAG3DB_ROOT` (l'arbre où le
@@ -5049,12 +5108,19 @@ mod reactions_tests;
 /// (`build/lecteurs-csv/src`) retombe sur l'arbre (`RAG3DB_ROOT`), comme avant.
 pub(crate) fn vector_extension_candidates(
     name: &str,
+    loaded_dir: Option<&Path>,
     root: Option<std::ffi::OsString>,
     lib_dir: Option<std::ffi::OsString>,
     exe_dir: Option<PathBuf>,
 ) -> Vec<PathBuf> {
     let fichier = format!("lib{name}.rag3db_extension");
     let mut cherches: Vec<PathBuf> = Vec::new();
+    // **À côté de la lib réellement chargée, d'abord** (lot 3e du magasin) :
+    // un binaire lié par RUNPATH au dossier d'un identifiant y trouve
+    // l'extension du même bâti, sans aucune variable.
+    if let Some(dossier) = loaded_dir {
+        cherches.push(dossier.join(&fichier));
+    }
     if let Some(lib) = lib_dir {
         cherches.push(PathBuf::from(lib).join(&fichier));
     }
@@ -5065,5 +5131,79 @@ pub(crate) fn vector_extension_candidates(
         cherches.push(dossier.join(&fichier));
     }
     cherches.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extension").join(name).join("build").join(&fichier));
+    let mut vus = std::collections::HashSet::new();
+    cherches.retain(|p| vus.insert(p.clone()));
     cherches
+}
+
+/// **L'extension vectorielle à charger**, de ce qu'on lui donne : la valeur
+/// du manifeste et son dossier, la lib du moteur chargée dans le processus,
+/// et les variables. Un chemin déclaré est un forçage, relatif au manifeste.
+/// Un nom est cherché, dans cet ordre : à côté de la lib chargée,
+/// `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT/extension/<nom>/build/`, le dossier de
+/// l'exécutable (le paquet npm), l'arbre dont ce crate vient.
+///
+/// **L'identifiant doit être celui de la lib chargée** (lot 3e) : une
+/// extension d'un autre bâti est passée quand elle est cherchée, refusée
+/// quand elle est forcée, et le refus nomme les deux identifiants. Le moteur
+/// la refuserait aussi au `LOAD`, mais après coup et sans dire d'où elle
+/// venait. Une extension sans identifiant lisible est laissée au moteur.
+pub(crate) fn resolve_vector_extension(
+    declared: &Path,
+    manifest_dir: &Path,
+    loaded_lib: Option<&Path>,
+    root: Option<std::ffi::OsString>,
+    lib_dir: Option<std::ffi::OsString>,
+    exe_dir: Option<PathBuf>,
+) -> Result<PathBuf, String> {
+    let loaded_id = loaded_lib.and_then(|l| crate::build_check::read_section(l, crate::build_check::LIB_SECTION).ok().flatten());
+    // L'identifiant d'une extension qui n'est pas celui de la lib chargée.
+    let autre = |ext: &Path| -> Option<String> {
+        let id = loaded_id.as_deref()?;
+        crate::build_check::extension_build_id(ext).ok().flatten().filter(|e| e != id)
+    };
+    let texte = declared.to_string_lossy();
+    let est_un_chemin = texte.contains('/') || texte.contains('\\') || texte.ends_with(".rag3db_extension");
+    if est_un_chemin {
+        let chemin = manifest_dir.join(declared);
+        if !chemin.is_file() {
+            return Err(format!(
+                "extension vectorielle introuvable : {} (`vector_extension` du manifeste, un chemin relatif à lui) — \
+                 donnez un chemin qui existe, ou le nom « {DEFAULT_VECTOR_EXTENSION} » pour celle du bâti",
+                chemin.display()
+            ));
+        }
+        if let Some(sien) = autre(&chemin) {
+            return Err(format!(
+                "extension vectorielle refusée : {} (`vector_extension` du manifeste) est du bâti {sien}, \
+                 la lib chargée ({}) du bâti {} — donnez le nom « {DEFAULT_VECTOR_EXTENSION} » pour celle de la lib, \
+                 ou un chemin vers l'extension de ce bâti",
+                chemin.display(),
+                loaded_lib.map(|l| l.display().to_string()).unwrap_or_default(),
+                loaded_id.as_deref().unwrap_or_default()
+            ));
+        }
+        return Ok(chemin);
+    }
+    let cherches = vector_extension_candidates(&texte, loaded_lib.and_then(Path::parent), root, lib_dir, exe_dir);
+    let mut ecartees = Vec::new();
+    for p in cherches.iter().filter(|p| p.is_file()) {
+        match autre(p) {
+            None => return Ok(p.clone()),
+            Some(sien) => ecartees.push(format!("{} (bâti {sien})", p.display())),
+        }
+    }
+    let liste: Vec<String> = cherches.iter().map(|p| p.display().to_string()).collect();
+    if !ecartees.is_empty() {
+        return Err(format!(
+            "extension vectorielle « {texte} » : aucune n'est du bâti de la lib chargée ({}) ; écartées : {}",
+            loaded_id.as_deref().unwrap_or_default(),
+            ecartees.join(" ; ")
+        ));
+    }
+    Err(format!(
+        "extension vectorielle « {texte} » introuvable ; cherchée dans : {} — posez RAG3DB_ROOT sur l'arbre où le moteur est bâti, \
+         ou `vector_extension` sur le chemin du fichier",
+        liste.join(" ; ")
+    ))
 }

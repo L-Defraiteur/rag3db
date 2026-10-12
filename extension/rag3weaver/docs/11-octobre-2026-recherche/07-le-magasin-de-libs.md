@@ -354,3 +354,50 @@ le rejeu suivant prend le nouveau `courant` une fois la lib publiée.
   - lancé sur l'ancien environnement, le binaire ne démarre plus ;
   - par `cargo_magasin.sh`, les mêmes tests passent, et rien n'est
     recompilé.
+
+## 10. L'extension à côté de la lib chargée (lot 3e, demandé par l'orchestration, 12 octobre)
+
+**Le reste vu sur luciepc** : un binaire lié par RUNPATH à la lib du magasin a
+chargé l'extension vector d'un autre bâti. C'était celle de `rag3db-lourd`,
+retenue parce que l'unité n'avait pas `RAG3DB_LIBRARY_DIR` dans son
+environnement. Le moteur l'a refusée par son identifiant (la garde de
+`extension_manager.cpp`), mais l'hôte n'aurait pas dû dépendre d'une
+variable pour trouver son extension.
+
+**La forme** :
+- **D'abord à côté de la lib réellement chargée.**
+  `build_check::loaded_lib()` lit la lib du moteur dans `/proc/self/maps`
+  (`loaded_lib_in`, extraite de `check_against`). C'est le chemin du fichier
+  ouvert, liens résolus : le dossier d'un identifiant, jamais `courant`. Le
+  premier candidat est donc `<dossier de la lib>/lib<nom>.rag3db_extension`,
+  avant `RAG3DB_LIBRARY_DIR`, `RAG3DB_ROOT`, le dossier de l'exécutable et
+  l'arbre du crate. Un même dossier n'est cherché qu'une fois.
+- **L'identifiant doit être celui de la lib chargée.** L'extension ne porte
+  pas de section `.rag3db_build_id` ; son identifiant est la chaîne que rend
+  sa fonction `build_id`. `build_check::extension_build_id` la lit dans les
+  octets, sans charger le fichier, comme la publication au magasin.
+  - Une extension d'un autre bâti est **passée** quand elle est cherchée par
+    son nom, et **refusée** quand le manifeste la force par un chemin. Le
+    refus nomme les deux identifiants et le chemin : c'est la forme de
+    `1a1ee04b0`, étendue à l'identifiant.
+  - Une extension sans identifiant lisible est laissée au moteur, qui la
+    refuse en le disant.
+- La résolution est une fonction pure (`resolve_vector_extension`), qui
+  reçoit la lib chargée et les variables ; `vector_extension_path` lui
+  passe l'état du processus.
+
+**Témoins** :
+- `the_vector_extension_is_looked_up_next_to_the_loaded_lib_first` : l'ordre
+  des candidats, et un même dossier cherché une fois.
+- `an_extension_of_another_build_is_passed_when_searched_and_refused_when_forced`,
+  sur des ELF factices (le `elf` de `build_check/tests.rs`) :
+  - sans aucune variable, l'extension à côté de la lib chargée ;
+  - `RAG3DB_LIBRARY_DIR` sur un autre bâti ne la supplante pas ;
+  - seule une extension d'un autre bâti, elle est écartée et nommée ;
+  - forcée, elle est refusée, et les deux identifiants sont nommés ;
+  - une extension sans identifiant est laissée au moteur.
+- `the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable` :
+  la vraie lib de ce processus (le magasin, sous `cargo_magasin.sh`) désigne
+  son extension sans aucune variable, du même identifiant, et le moteur la
+  charge (`LOAD EXTENSION` sur une base en mémoire). Hors magasin, il
+  vérifie que ce qui est trouvé n'est jamais d'un autre bâti.
