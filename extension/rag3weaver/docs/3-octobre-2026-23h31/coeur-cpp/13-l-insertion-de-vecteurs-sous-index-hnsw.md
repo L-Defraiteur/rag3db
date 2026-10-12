@@ -111,3 +111,39 @@ dans ses trois cas — FLOAT[768] : CHECKPOINT après 15 000 SET **576 ms** (24 
 référence par COPY fait 550 ms : à égalité), STRING 38 ms, INT64 2,1 ms ; dans la forme du produit
 (`VectorIndexCost.ProductShapeDeleteCost`), le CHECKPOINT passe de 19-25 s à **1,1 s**. Le DELETE
 direct reste rouge (218 contre 5,4 ms) : la part d'hotfixs.
+
+## 5. La pente sans point de reprise : compacter les lignes mortes du CSR en mémoire **[lu, à coder]**
+
+Le banc (témoin `VectorIndexInsertSlope.CostPerBatchSettles`, master cb6c1a2cb, ticket moteur
+« sans point de reprise, l'insertion sous HNSW ralentit lot après lot ») : sans point de reprise le
+coût par lot de 64 monte en ligne droite (~1,1 ms par lot, 78 → 165 ms sur 64 lots), avec un
+point de reprise tous les 8 lots il reste plat (~105 ms) ; profil propre : `scanCommittedInMemRandom`
+4 → 29 %, `isSelected` 8 % — les lignes mortes relues ; la chaîne des versions 9 % ;
+`findMatchingRow` < 1 % (le pas 3 a fait son travail). Borne `insert-cost-without-checkpoint-stays-close`
+(sans ≤ 1,2 × avec, + 2 ms) ; le rapport plateau / début (×1,2 à ×1,4, les rétrécissements) est
+un ticket extension pour hotfixs.
+
+**Ce que fait le code** (lecture du 12 octobre, 10 h) : `NodeCSRIndex{isSequential, rowIndices}`
+par nœud dans `CSRIndex` (csr_node_group.h:31-98), sous `csrIndexMtx` (exclusif aux ajouts du commit
+via `updateCSRIndex`, partagé le temps que `scanCommittedInMem` **copie** la liste du nœud —
+ligne 256 — avant de la balayer ligne à ligne) ; une suppression validée en mémoire n'est qu'un
+marqueur (`deletedVersions[row] = commitTS` au commit), la liste garde la ligne ; le point de
+reprise filtre par `isDeleted` puis jette tout (`csrIndex.reset()`), sûr parce que
+`stopNewTransactionsAndWaitForOthers` a vidé les transactions. **Il n'existe aucun « plus ancien
+instantané actif »** : le TransactionManager a `activeTransactions` sous son mutex public, tenu
+pendant tout commit, où `min(startTS)` se calcule en O(#actifs).
+
+**La forme** : (1) un filigrane `oldestActiveStartTS` calculé sous le mutex du TransactionManager
+au commit (hors la transaction qui valide ; `lastTimestamp` si personne), posé sur la transaction ;
+(2) `CSRNodeGroup::delete_` reçoit l'offset du nœud (il manque à `VersionRecord`) et compte les
+mortes par nœud (`deadHints`, hors de `NodeCSRIndex` que les lecteurs copient) ; (3) au commit,
+dans `CSRNodeGroup::append` (déjà sous `csrIndexMtx` exclusif, sur le mutex public), quand un nœud
+a des mortes, sa liste est reconstruite sans les lignes `isDeleted(oldestActiveStartTS, …)` — tout
+lecteur actif ou futur les voit supprimées ; les blocs ne sont pas libérés (un lecteur en cours garde
+sa copie et ses lignes adressables) ; ordre de verrous `csrIndexMtx` → `chunkedGroups` → `versionInfo`
+partagé, jamais inversé ; les suppressions de la transaction qui valide portent encore son identifiant
+(l'annulation est validée après) : elles partent au commit suivant qui touche le nœud. Gains : la
+copie, les recherches de `scanCommittedInMemRandom`, le tri d'`updateCSRIndex` sur les vivantes.
+Limite : un nœud jamais réalimenté garde ses mortes jusqu'au point de reprise. Témoin : celui du banc
+(rapport sans/avec sous 1,2), plus un lecteur à instantané ancien ouvert pendant les commits qui
+doit encore voir ses arêtes.
