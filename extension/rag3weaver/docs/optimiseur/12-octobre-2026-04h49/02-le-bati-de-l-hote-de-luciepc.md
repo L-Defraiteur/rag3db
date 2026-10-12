@@ -36,7 +36,10 @@
 3. Lancer le bâti sous le poste :
    `~/.cache/rag3weaver-build/poste lourd bash ~/.cache/rag3weaver-build/hote-bati7.sh > ~/.cache/rag3weaver-build/hote-bati7.log 2>&1`
    Compter une petite heure : la lib et l'extension en Release, puis l'hôte en
-   release.
+   release. **Si la lib est déjà publiée au magasin** (hotfixs l'a bâtie après
+   l'arrêt de l'hôte, le 12 octobre au matin), lancer plutôt avec son
+   identifiant : `HOTE_LIB_ID=<identifiant> poste lourd bash …/hote-bati7.sh`.
+   Le script ne rebâtit alors que le binaire, lié par RUNPATH à cette lib.
 4. Lire `hote-bati7.log` : il doit finir par « prêt » et « note ». Puis suivre
    la note qu'il écrit, `~/.local/share/rag3weaver/POUR-LUCIE-hote.md` :
    installation des deux `.pret` neufs (md5 dans la note) et activation de

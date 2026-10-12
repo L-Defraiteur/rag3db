@@ -7,6 +7,7 @@
 #   - le worktree ~/git_workspaces/rag3db-hote de luciepc à une tête qui contient
 #     3cca0ae1e (le vérifie, refuse sinon, code 2) ; l'avancer est à Lucie ;
 #   - le poste libre pour un lourd : se lance par `poste lourd bash hote-bati7.sh` ;
+#   - HOTE_LIB_ID=<identifiant> : prend la lib déjà publiée au magasin sans la rebâtir ;
 #   - build/ est créé ici (hote-bati6 était mort sur son absence, le 12 oct. à 6 h 40) ;
 #   - cargo passe par scripts/cargo_magasin.sh avec RAG3DB_LIB=<identifiant publié>
 #     (pas `courant`, qui peut bouger) ; le RUNPATH vers ce dossier reste posé ici.
@@ -25,11 +26,19 @@ B=$W/build/lib
 echo "== $(date +%H:%M:%S) tête : $(git -C $W log --oneline -1 | cut -c1-60)"
 git -C $W merge-base --is-ancestor 3cca0ae1e HEAD || { echo "la tête ne contient pas 3cca0ae1e"; exit 2; }
 mkdir -p $W/build
+if [ -n "${HOTE_LIB_ID:-}" ]; then
+  # La lib est déjà publiée au magasin (par hotfixs, 12 oct.) : on la prend
+  # par son identifiant, sans la rebâtir.
+  L=${RAG3DB_LIBS_DIR:-$HOME/.cache/rag3db-libs}/$HOTE_LIB_ID
+  [ -f $L/librag3db.so ] || { echo "le magasin n'a pas $HOTE_LIB_ID ($L)"; exit 4; }
+  L=$(cd $L && pwd -P)
+else
 cmake -S $W -B $B -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=FALSE > $B.configure.log 2>&1 || { echo "configure rouge"; exit 3; }
 cmake --build $B -j 12 > $B.bati.log 2>&1 || { echo "bâti de la lib rouge"; tail -20 $B.bati.log; exit 3; }
 echo "== $(date +%H:%M:%S) lib bâtie : $(ls -la $B/src/librag3db.so | awk '{print $5}') octets"
 python3 $W/extension/rag3weaver/scripts/rag3db_libs.py publier $B --racine $W || { echo "publication refusée"; exit 4; }
 L=$(python3 $W/extension/rag3weaver/scripts/rag3db_libs.py courant) || exit 4
+fi
 echo "== magasin : $L"
 cd $W/extension/rag3weaver
 # Le pont et la lib par l'enveloppeur du magasin (master e38cc586b), sur l'identifiant
