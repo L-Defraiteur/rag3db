@@ -53,6 +53,7 @@ pub mod trace_nodes;
 pub mod migration_nodes;
 pub mod llm_nodes;
 pub mod decide_nodes;
+pub mod token_nodes;
 /// Le drapeau d'arrêt servi aux réactions (`Arc<AtomicBool>`), levé par
 /// `Backend::stop_reactions` : une réaction longue s'arrête entre deux unités.
 pub const REACTION_STOP_SERVICE: &str = "reaction_stop";

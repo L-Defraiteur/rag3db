@@ -242,6 +242,17 @@ pub enum Event {
         hash: String,
         at_ms: u64,
     },
+    /// **Un fragment de la sortie d'un modèle**, au fil de la génération
+    /// (`TokenEvents`). Sujet `tokens`, que les réactions n'écoutent pas par
+    /// défaut : un événement par jeton ne réveille personne qui ne l'a pas
+    /// demandé. Aussi sur `run.<id>`. `seq` donne l'ordre.
+    Token {
+        run: String,
+        /// Le flux d'où vient le fragment (le nom que `TokenEvents` lui donne).
+        node: String,
+        seq: u64,
+        text: String,
+    },
     /// Un message d'une boucle à une autre. Fire and forget des deux côtés :
     /// un accusé est un second message, pas un verrou.
     Message {
@@ -324,6 +335,7 @@ impl Event {
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
             Self::FileChanged { .. } => topic::FILES,
+            Self::Token { .. } => topic::TOKENS,
             _ => topic::CATALOG,
         }
     }
@@ -340,6 +352,7 @@ impl Event {
             | Self::TurnCompacted { run, .. }
             | Self::Consumed { run, .. }
             | Self::NodeRun { run, .. }
+            | Self::Token { run, .. }
             | Self::Message { run, .. } => Some(run),
             _ => None,
         }
@@ -415,6 +428,11 @@ impl Event {
                 "kind": "FileChanged", "watch": watch, "path": path, "change": change,
                 "hash": hash, "at_ms": at_ms,
             }),
+            // Le format des jetons d'une conversation (`ChatSink`), plus le
+            // run, le flux et le rang : une interface lit l'un comme l'autre.
+            Self::Token { run, node, seq, text } => json!({
+                "kind": "Token", "event": "token", "run": run, "node": node, "seq": seq, "text": text,
+            }),
             other => json!({ "kind": other.kind(), "detail": format!("{other:?}") }),
         }
     }
@@ -435,6 +453,8 @@ pub mod topic {
     pub const MESSAGES: &str = "messages";
     /// Les fichiers changés sous une montre (`watches`).
     pub const FILES: &str = "files";
+    /// Les fragments d'un modèle, au fil de la génération (`TokenEvents`).
+    pub const TOKENS: &str = "tokens";
 }
 
 /// Le sujet d'un run : `run.<id>`.
