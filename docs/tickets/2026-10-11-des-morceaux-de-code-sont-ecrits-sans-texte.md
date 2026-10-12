@@ -182,3 +182,24 @@ vecteur** (contournement HNSW), tous deux sur une ligne déjà embarquée. Mais 
 par langage, sans excès chez les fichiers réédités et commités) ne les désigne pas d'elle-même. **Rien
 n'est conclu** : la sonde de la réédition avec vecteurs, répétée (codeparsers, au matin), et le témoin
 du proto le diront ; sinon le couple `e60f2342e`.
+
+### Correction : « perdu après l'embarquement » ne suit pas du marqueur (arbre principal)
+
+La note précédente concluait que le texte avait été perdu après l'embarquement. **Ce n'est pas
+établi** : dans une ingestion qui embarque en ligne, `EmbedNode` calcule le vecteur depuis le texte
+**en mémoire** (le record), pas depuis la base. Un `_text` mal écrit en base au moment de l'ingestion
+laisse donc une ligne vide portant un vecteur et un marqueur justes. Les faits de F sont tous
+compatibles avec une **écriture fautive du texte à l'ingestion** par le binaire d'alors.
+
+**La lecture de l'orchestration** : « binaire ». La base a été indexée vers 15 h le 11 octobre par le
+binaire de Lucie d'alors, d'avant l'échappement systématique et la conversion du Cypher brut de
+l'indexation en IR (F, 17 h-19 h). Un texte à accents graves, guillemets, `$` ou barres inverses écrit
+par le Cypher brut est le suspect ; cypher et markdown en sont pleins (89 % et 38 % de scopes vides).
+L'index neuf de cette nuit, par le binaire d'aujourd'hui, donne 0.
+
+**La sonde décisive (au matin)** : indexer, avec le plus ancien binaire gardé de Lucie
+(`~/.local/bin/rag3weaver-backend.avant-*`), en autonome et isolé, un petit corpus (dix fichiers
+`.cypher` et `.md` de lucivy parmi les plus touchés), compter les vides ; refaire avec le binaire
+d'aujourd'hui. L'ancien rouge et le neuf vert : la cause est datée, fermée par la conversion de F ; le
+ticket se ferme par la réécriture des morceaux vides (`dd7bb2c1e`) et par « complet » qui compte
+`_text`.
