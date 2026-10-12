@@ -1290,6 +1290,25 @@ fn postgres_condition(d: &PostgresDialect, p: &rag3weaver_ir::Predicate) -> Stri
     }
 }
 
+/// Une condition sur le seul `_uuid` du nœud atteint, dite sur `colonne` (la
+/// colonne de la relation qui porte cet uuid) : la forme d'un saut sans table
+/// d'arrivée, où `m` n'est pas joint. `None` dès qu'un membre porte sur un
+/// autre champ, ou arrive déjà compilé : le saut se refuse alors.
+fn postgres_condition_sur_uuid(p: &rag3weaver_ir::Predicate, colonne: &str) -> Option<String> {
+    use rag3weaver_ir::Predicate;
+    let membres = |v: &[Predicate], lien: &str| -> Option<String> {
+        let dits = v.iter().map(|q| postgres_condition_sur_uuid(q, colonne)).collect::<Option<Vec<_>>>()?;
+        Some(format!("({})", dits.join(lien)))
+    };
+    match p {
+        Predicate::Equals { field, param } if field == "_uuid" => Some(format!("{colonne} = ${param}")),
+        Predicate::In { field, param } if field == "_uuid" => Some(format!("{colonne} = ANY(${param})")),
+        Predicate::AnyOf(v) => membres(v, " OR "),
+        Predicate::AllOf(v) => membres(v, " AND "),
+        _ => None,
+    }
+}
+
 /// Une condition de [`rag3weaver_ir::Predicate`] en Cypher, sur l'alias `m`.
 /// Les champs sont cités ([`cypher_quote`]) ; une condition déjà compilée
 /// passe telle quelle.
@@ -2457,9 +2476,21 @@ impl SchemaDialect for PostgresDialect {
                 (Column::Node(_) | Column::Label, None) => return refus("Hop (champ sans table d'arrivée)"),
             });
         }
-        if hop.end.is_none() && (hop.filter.is_some() || !hop.order_by.is_empty()) {
-            return refus("Hop (condition sans table d'arrivée)");
+        // Sans table d'arrivée, `m` n'est pas joint : un ordre s'y refuse, et
+        // un filtre ne passe que s'il ne porte que sur l'uuid du nœud atteint,
+        // dit alors sur la colonne de la relation (la résolution d'un lot de
+        // symboles, 8bfdd74d3).
+        if hop.end.is_none() && !hop.order_by.is_empty() {
+            return refus("Hop (ordre sans table d'arrivée)");
         }
+        let filtre = match (&hop.filter, &hop.end) {
+            (None, _) => None,
+            (Some(p), Some(_)) => Some(postgres_condition(self, p)),
+            (Some(p), None) => match postgres_condition_sur_uuid(p, &format!("r.\"{arrivee}\"")) {
+                Some(c) => Some(c),
+                None => return refus("Hop (condition sur un autre champ que _uuid, sans table d'arrivée)"),
+            },
+        };
         let mut sql = format!("SELECT {} FROM unnest($uuids::text[]) AS v(u)", colonnes.join(", "));
         if let Some(t) = &hop.start {
             sql.push_str(&format!(" JOIN {} AS d ON d.\"_uuid\" = v.u", self.quote(t)));
@@ -2473,9 +2504,7 @@ impl SchemaDialect for PostgresDialect {
             let valeurs = x.values.iter().map(|v| format!("'{v}'")).collect::<Vec<_>>().join(", ");
             conditions.push(format!("r.{f} IS NULL OR r.{f} <> ALL (ARRAY[{valeurs}])", f = self.quote(&x.field)));
         }
-        if let Some(p) = &hop.filter {
-            conditions.push(postgres_condition(self, p));
-        }
+        conditions.extend(filtre);
         if !conditions.is_empty() {
             sql.push_str(&format!(" WHERE {}", conditions.iter().map(|c| format!("({c})")).collect::<Vec<_>>().join(" AND ")));
         }
@@ -3674,6 +3703,30 @@ mod tests {
         libre.returns.extend([rag3weaver_ir::Column::Label, rag3weaver_ir::Column::Whole]);
         assert_eq!(PostgresDialect.hop(&libre).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop (champ sans table d'arrivée)");
         assert_eq!(Rag3dbDialect.hop(&libre).unwrap(), "UNWIND $uuids AS u MATCH (d {_uuid: u})<-[r:`CHUNKED_FROM`]-(m) RETURN u, m.`_uuid`, label(m), m");
+        // Sans table d'arrivée, un filtre sur le seul uuid du nœud atteint se
+        // dit sur la colonne de la relation (la résolution d'un lot de
+        // symboles, 8bfdd74d3) ; un autre champ, ou un ordre, se refuse.
+        let mut lot = Hop::untyped("MENTIONS", Direction::Incoming);
+        lot.start = Some("Symbol".into());
+        lot.returns.push(rag3weaver_ir::Column::Edge("usage".into()));
+        lot.filter = Some(rag3weaver_ir::Predicate::In { field: "_uuid".into(), param: "de".into() });
+        assert_eq!(
+            PostgresDialect.hop(&lot).unwrap(),
+            "SELECT v.u, r.\"from_uuid\", r.\"usage\" FROM unnest($uuids::text[]) AS v(u) \
+             JOIN \"symbol\" AS d ON d.\"_uuid\" = v.u JOIN \"mentions\" AS r ON r.\"to_uuid\" = v.u \
+             WHERE (r.\"from_uuid\" = ANY($de))"
+        );
+        lot.filter = Some(rag3weaver_ir::Predicate::AllOf(vec![
+            rag3weaver_ir::Predicate::In { field: "_uuid".into(), param: "de".into() },
+            rag3weaver_ir::Predicate::Equals { field: "name".into(), param: "n".into() },
+        ]));
+        assert_eq!(
+            PostgresDialect.hop(&lot).unwrap_err().to_string(),
+            "le dialecte postgresql ne traduit pas la forme Hop (condition sur un autre champ que _uuid, sans table d'arrivée)"
+        );
+        lot.filter = None;
+        lot.order_by = vec!["name".into()];
+        assert_eq!(PostgresDialect.hop(&lot).unwrap_err().to_string(), "le dialecte postgresql ne traduit pas la forme Hop (ordre sans table d'arrivée)");
         let mut journal = Hop::new("Conversation", "IN_CONVERSATION", "Message", Direction::Incoming);
         journal.returns = vec![rag3weaver_ir::Column::Node("at_ms".into())];
         journal.filter = Some(rag3weaver_ir::Predicate::AtLeast { field: "at_ms".into(), param: "since".into() });
