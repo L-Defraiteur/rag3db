@@ -67,13 +67,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (35)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La montre réintègre ce que l'index entier écarte](2026-10-12-la-montre-reintegre-ce-que-l-index-ecarte.md) | ouvert — pour l'arbre principal | réponse fausse (générés indexés), travail perdu à chaque montage | oui, à chaque montage d'une base indexée | oui (`watch.rs`, `code_sync.rs`, `reindex_nodes.rs`) |
 | [Le reçu d'un index annonce un modèle que l'index n'emploie pas](2026-10-12-le-recu-d-index-annonce-un-modele-que-l-index-n-emploie-pas.md) | ouvert — pour l'arbre principal | réponse fausse (le reçu, la durée prévue) | oui, dès qu'un manifeste déclare son modèle | oui (`estimate.rs`) |
 | [Le témoin du réacteur `each_runs_per_ring_and_debounce_waits_for_quiet` rougit sous charge](2026-10-12-le-temoin-du-reacteur-rougit-sous-charge.md) | ouvert — pour la recherche | test instable | non (le test) | oui (`reactor.rs`) |
 | [Un client relance l'hôte sur une base en cours d'écriture autonome](2026-10-12-un-client-relance-l-hote-sur-une-base-en-cours-d-ecriture-autonome.md) | ouvert — après L2 (arbre principal) | deux écrivains sur une base | oui, pendant toute réindexation autonome | oui (`daemon_lifecycle.rs`, `daemon_host.rs`) |
