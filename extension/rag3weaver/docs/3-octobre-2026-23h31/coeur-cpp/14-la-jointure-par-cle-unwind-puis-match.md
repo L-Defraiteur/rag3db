@@ -48,3 +48,39 @@ empreintes et les e2e. Témoins : `les_formes_du_saut_d_usages_sur_l_index_entie
 existe ; A reste la forme générale si B laisse un cas (une clé composée, un `d` qui n'est pas un
 `SCAN`). À vérifier : la taille du masque (`getNumTotalRows(transaction)`) couvre les décalages
 locaux que `LocalNodeTable::lookupPK` rend ; une clé NULL ou absente ne masque rien.
+
+## 3. Codé, mesuré (12 octobre, 8 h à 10 h) **[mesuré]**
+
+- `SemiMaskKeyType::PRIMARY_KEY` et un `PrimaryKeySemiMasker` physique (une valeur → un décalage par
+  `NodeTable::lookupPK`, table locale comprise ; NULL ou absente : rien) ; la descente des filtres ne
+  met plus `PROHIBIT` quand une clé de build est la clé primaire d'un nœud et que la clé du probe a
+  son type ; `HashJoinSIPOptimizer::tryKeyMaskHJSIP` accumule le probe et pose le masqueur sur le
+  `SCAN` de d dans le build. La jointure de hachage reste (doublons, absents).
+- **Le second niveau, lot suivant (branche `jointure-par-cle-niveau-2`, hors du push)** :
+  `(d {clé: u})<-[r]-(m)` masque d mais lit m entier (Scope 81 407 lignes, ~20 ms par saut : tout
+  l'écart entre un temps et deux temps), parce que le passage d'information ne tient un côté pour
+  sélectif que s'il porte un filtre ou une recherche par clé. Premier essai : un balayage masqué
+  compte comme sélectif et le build est revisité après le masque par clés. **Prouvé sur la V1
+  exacte de F** (reflink de son sceau, lib 513438183) : deux SEMI_MASKER, SCAN Symbol 1,
+  SCAN_REL MENTIONS 117, **SCAN Scope 117 lignes** (81 407 avant), V1 à 2,4 ms à chaud. Mon premier
+  témoin ne le voyait pas parce que son saut était planifié en Extend sans jointure (petit voisin
+  lu par sa clé) : refait sur la forme de F (grand voisin lu par trois propriétés : jointure de
+  hachage sur m._ID). Lot poussé à part, après le témoin du banc et la remesure de F.
+- Témoin `KeyMaskJoin` : 72 000 lignes, 117 clés INT64 → le balayage sort moins de 1 170 lignes,
+  les lignes rendues sont celles des clés dans l'ordre, une clé en double rend deux fois, une
+  absente rien ; la forme du produit (liste de chaînes en paramètre, clé STRING, un saut) rend ses
+  lignes, deux masqueurs dans le plan.
+
+**Mesure de F** (lib du lot avant le second niveau, copie de l'index entier, empreintes
+identiques, 11 tests sur 11) :
+
+| | avant | après |
+|---|---|---|
+| `usages` en un temps | 352 / 352 / 349 ms | **117 / 120 / 117 ms** |
+| `usages` en deux temps | 230 / 234 / 209 ms | **43 / 47 / 44 ms** |
+| le saut UNWIND (V1) | 111,7 ms | 24,1 ms (IN : 5,2 ; scalaire : 1,4) |
+| la lecture par clé UNWIND (V4) | 28,1 ms | **1,3 ms** |
+
+PROFILE de V1 : SEMI_MASKER présent, SCAN Symbol 1 ligne (86 248 avant), SCAN_REL MENTIONS 117
+(491 102 avant) ; Scope encore 81 407 lignes (15 ms) : le second niveau, codé ensuite, à
+remesurer par F (deux SEMI_MASKER attendus, Scope à ~117).

@@ -105,3 +105,9 @@ DELETE.
 Leçons de mesure : `LD_LIBRARY_PATH` ne remplace pas la lib d'un binaire de test (RPATH prime) ; un
 `cmake --build` pendant une mesure réécrit l'extension vector sous elle ; un « avant » se joue sur un
 checkout de master bâti en entier, l'« après » sur la branche, rien entre.
+
+**Vérification du banc sur master 9da274476 (8 h 25)** : `Columns/CheckpointAfterUpdates` vert
+dans ses trois cas — FLOAT[768] : CHECKPOINT après 15 000 SET **576 ms** (24 s avant le lot ; la
+référence par COPY fait 550 ms : à égalité), STRING 38 ms, INT64 2,1 ms ; dans la forme du produit
+(`VectorIndexCost.ProductShapeDeleteCost`), le CHECKPOINT passe de 19-25 s à **1,1 s**. Le DELETE
+direct reste rouge (218 contre 5,4 ms) : la part d'hotfixs.

@@ -1286,3 +1286,14 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   transaction 267, api 105, planner 2, e2e Cypher 1 867, banc 7 rouges attendus / 270 verts ; e2e
   vector 74 et les témoins avant). Hotfixs rebase son lot vector dessus ; l'arbre principal rebâtit
   la lib.
+- **Le balayage filtré prouvé sur une vraie base atteinte** (codeparsers, 9 h 05) : code-lourd de
+  luciepc, fermée proprement ; avec la lib 6ffec5a82 (avant le correctif) 16 368 Scope_Chunk sur
+  130 715 sont lus `_text = ''`, avec la lib 3cca0ae1e 0, sur les mêmes lignes de la même copie.
+- **La jointure par clé est sur master `2b11b55ec`** (10 h 13 ; rejeu local : transaction 269,
+  api 105, planner 2, e2e Cypher 1 867, banc 10 rouges attendus / 271 verts). Mesure de F sur
+  cette lib : **usages 352 → 117 ms en un temps, 230 → 43 ms en deux temps**, V4 28 → 1,3 ms,
+  empreintes identiques — le but 2 de Lucie. Le second niveau (le voisin du saut masqué par les
+  voisins trouvés : un balayage masqué compte comme sélectif, le build revisité après le masque par
+  clés) est prouvé sur la V1 exacte de F avec un reflink de son sceau : deux SEMI_MASKER, SCAN
+  Scope 117 lignes au lieu de 81 407, 2,4 ms à chaud ; lot suivant, à part (branche
+  `jointure-par-cle-niveau-2`), avec le témoin du banc et la remesure de F.
