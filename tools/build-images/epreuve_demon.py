@@ -23,6 +23,9 @@ import tempfile
 import time
 import urllib.request
 
+# Les accents passent tels quels dans le journal du runner Windows.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 BINAIRE, MANIFESTE = sys.argv[1], sys.argv[2]
 DOSSIER = tempfile.mkdtemp(prefix="epreuve-demon-")
 ENV = dict(os.environ, RAG3WEAVER_DAEMON_DIR=DOSSIER)
@@ -60,7 +63,18 @@ def sante(adresse):
         return None
 
 
+def journal_de_l_hote():
+    print(f"--- journal de l'hôte (code de sortie : {hote.poll()})")
+    try:
+        print(open(os.path.join(DOSSIER, "hote.log"), errors="replace").read()[-3000:])
+    except OSError as e:
+        print(f"       illisible : {e}")
+
+
 def arret(f):
+    if not f.get("address") or not f.get("token"):
+        print("       pas de fiche : rien à arrêter par /arret")
+        return False
     requete = urllib.request.Request(
         f"http://{f['address']}/arret", method="POST", headers={"Authorization": f"Bearer {f['token']}"}, data=b"{}"
     )
@@ -108,7 +122,16 @@ def client(arguments, env):
 # ── 1. Un hôte à la main ────────────────────────────────────────────────────
 hote = subprocess.Popen([BINAIRE, "daemon", "--address", "127.0.0.1:7990"], env=ENV,
                         stdout=open(os.path.join(DOSSIER, "hote.log"), "w"), stderr=subprocess.STDOUT)
-cas(attendre(lambda: fiche() is not None), "l'hôte écrit sa fiche")
+attendre(lambda: fiche() is not None or hote.poll() is not None)
+cas(fiche() is not None, f"l'hôte écrit sa fiche (code de sortie : {hote.poll()})")
+if fiche() is None:
+    # Un hôte qui ne démarre pas : son journal dit pourquoi, la suite n'a
+    # pas d'objet.
+    journal_de_l_hote()
+    if hote.poll() is None:
+        hote.kill()
+    print("== ROUGE : l'hôte n'a pas démarré")
+    sys.exit(1)
 f = fiche() or {}
 s = sante(f.get("address", "127.0.0.1:7990")) or {}
 cas(s.get("pid") == f.get("pid") == hote.pid, f"/sante rend le pid de la fiche et du processus ({s.get('pid')}, {f.get('pid')}, {hote.pid})")
@@ -135,7 +158,8 @@ if f:
     cas(attendre(lambda: not os.path.exists(FICHE), 60), "sa fiche retirée")
 
 if echecs:
-    print("--- journal de l'hôte")
-    print(open(os.path.join(DOSSIER, "hote.log"), errors="replace").read()[-3000:])
+    journal_de_l_hote()
+if hote.poll() is None:
+    hote.kill()
 print(f"== {'VERT' if not echecs else 'ROUGE'} : {echecs} échec(s)")
 sys.exit(1 if echecs else 0)
