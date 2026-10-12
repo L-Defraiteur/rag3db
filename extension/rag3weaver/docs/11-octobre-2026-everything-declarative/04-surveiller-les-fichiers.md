@@ -43,7 +43,7 @@ Le manifeste déclare une section `watches` :
 
 ```json
 "watches": {
-  "code": { "source": "workspace", "every_ms": 1000, "settle_ms": 300 }
+  "code": { "source": "workspace", "every_ms": 250, "settle_ms": 150 }
 }
 ```
 
@@ -250,3 +250,26 @@ attend le catalogue tenu par la réindexation d'**un** fichier. La mesure par ph
 - **À part** : à l'index initial, 309 s sur 329 passaient à écrire 15 631 vecteurs (`write_ms`
   du nœud `embed`), environ 20 ms par vecteur. C'est dans le même ticket ; le contournement ne
   le change pas.
+
+## 8. La période par défaut, et ce que la montre coûte au repos (12 octobre 2026)
+
+Quatre rejeux de codeparsers sur la base entière (102 469 morceaux) ont fait passer la fraîcheur
+d'un renommage sur deux fichiers de 7,26 s à 5,21 s : la suppression HNSW contournée, la
+réaction par lot, et la fin par l'arête. Sur ces 5,21 s, ~1,5 s passaient avant que la montre ne
+voie le changement : la période d'une seconde, plus 300 ms de pose. Les défauts sont désormais de
+**250 ms de période et 150 ms de pose**, dans `WatchConfig` et dans le gabarit de code.
+
+Ce que coûte un tour au repos (le test `a_quiet_scan_of_the_engine_tree_costs_less_than_a_listing`,
+cache chaud, sous `poste mesure`). Un tour lit les dates des fichiers connus et de leurs dossiers,
+pas la liste :
+
+| arbre | fichiers | un tour | à 1 000 ms | à 250 ms |
+|---|---|---|---|---|
+| `src/` du moteur | 1 654 | 2,0 ms | 0,2 % d'un cœur | 0,8 % d'un cœur |
+| le dépôt entier | 6 929 | 8,8 ms | 0,9 % d'un cœur | 3,5 % d'un cœur |
+
+Pour mémoire, la première forme relisait la liste à chaque tour : 0,7 cœur sur 7 310 fichiers,
+sur l'hôte de Lucie, le 11 octobre. Un poste qui veut moins remonte la période dans le manifeste.
+La forme générique est de réagir sur l'événement du noyau (inotify, par la crate `notify`) en
+gardant le balayage comme filet. C'est un lot à part, après les symboles et les jetons.
+

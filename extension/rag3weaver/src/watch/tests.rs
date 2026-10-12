@@ -129,7 +129,8 @@ fn the_running_watch_publishes_and_stops_at_once() {
 fn a_watch_is_read_from_the_manifest() {
     let w: WatchConfig = serde_json::from_value(serde_json::json!({})).unwrap();
     assert_eq!(w, WatchConfig::default());
-    assert_eq!((w.every_ms, w.settle_ms, w.source.as_str()), (1000, 300, "workspace"));
+    // La fraîcheur d'abord (12 octobre 2026) : 250 ms de période, 150 de pose.
+    assert_eq!((w.every_ms, w.settle_ms, w.source.as_str()), (250, 150, "workspace"));
     assert!(serde_json::from_value::<WatchConfig>(serde_json::json!({"période": 3})).is_err());
 }
 

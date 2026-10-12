@@ -45,10 +45,14 @@ pub struct WatchConfig {
     /// Ce qu'elle surveille : `workspace`, la source de fichiers du backend.
     #[serde(default = "default_source")]
     pub source: String,
-    /// La période du balayage.
+    /// La période du balayage. 250 ms par défaut (12 octobre 2026, la
+    /// fraîcheur d'abord) : un tour au repos coûte 2 ms sur les 1 654 fichiers
+    /// du `src/` du moteur et 9 ms sur les 6 929 du dépôt, soit 0,8 % et 3,5 %
+    /// d'un cœur à cette période (page 04 de everything-declarative, §8).
     #[serde(default = "default_every")]
     pub every_ms: u64,
     /// Combien de temps un fichier doit rester stable avant d'être dit changé.
+    /// 150 ms par défaut : une sauvegarde d'éditeur est faite bien avant.
     #[serde(default = "default_settle")]
     pub settle_ms: u64,
     /// Des sous-chemins (préfixes relatifs) ; vide : toute la source.
@@ -67,10 +71,10 @@ fn default_source() -> String {
     "workspace".into()
 }
 fn default_every() -> u64 {
-    1000
+    250
 }
 fn default_settle() -> u64 {
-    300
+    150
 }
 fn default_relist() -> u64 {
     60_000
