@@ -1254,3 +1254,35 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   (C) l'arrêt de la chaîne des versions à la première visible, sûr ; (A) sans garantie propre au
   delete ; (B) après mesure) et à G (B3, l'identifiant de bâti sous Windows). Programme du cœur
   C++ vide : la suite est à l'orchestration (I2 page 10, le pas 2 de la rétention des index).
+
+## Matin (12 octobre 2026, 5 h 45 à 8 h 15) — l'insertion de vecteurs sous index, et la jointure par clé
+
+- **L'insertion HNSW** (page 13, avec hotfixs : lui extension/vector, moi src/storage ; un seul
+  instrument, celui du banc, et son profil par échantillonnage de piles) : quatre pas — le `resize`
+  au double (le CHECKPOINT quadratique : 24 s après 15 000 SET, ×156 entre 1 500 et 15 000 lignes),
+  le verrou partagé par fenêtre dans `scanCommittedInMemRandom` (40 % du temps propre), le
+  `detachDelete` par la ligne que le balayage rend déjà (29 %), le commit des arêtes d'un nœud par
+  suites contiguës (un tri par suite). Mesure de l'instrument à 1 fil, avant sur master bâti en
+  entier / après : 4,01 → 2,85 ms par vecteur au lot 3 du début, 2,39 → 1,79 à la fin ; la montée
+  d'un lot à l'autre reste (les lignes mortes du CSR validé en mémoire, lot à part). Ma mesure
+  maison a d'abord trompé : une liste de 64 × 768 flottants écrite en texte coûte 8 ms par vecteur
+  à analyser, le produit passe par un paramètre.
+- **Deux gardes du balayage sous masque** (41d282843), trouvées par hotfixs sur
+  `.~delete.DeleteAllThenCreate` : la recherche vectorielle masque INVALID_OFFSET (2^32 − 1) pour
+  un résultat absent (`resize(k)` : hotfixs le corrige côté extension) ; `lookupOffsets` passe un
+  décalage sans groupe (le SIGSEGV), `nextMorsel` retire les décalages au-delà du masque et tient
+  une tranche courte pour la dernière (le curseur à 2^32 revenait à 0 sur l'itérateur 32 bits :
+  la même tranche sans fin), `collectFrom` refuse un départ hors 32 bits. Trouvé par les compteurs
+  de points d'arrêt sous gdb (155 000 passages en 40 s) puis une trace des tranches.
+- **Pièges de mesure** : `LD_LIBRARY_PATH` ne remplace pas la lib d'un binaire de test (RPATH) ; un
+  `cmake --build` pendant une mesure réécrit l'extension vector sous elle ; un « avant » se joue sur
+  master bâti en entier, l'« après » sur la branche, rien entre.
+- **La jointure par clé** (page 14, lot donné par l'orchestration devant l'insertion) : `UNWIND
+  $liste AS u MATCH (d {clé: u})` ne produit aucun masque (jointure de hachage sur propriété,
+  `PROHIBIT`) ; forme choisie : le masque par clés dans l'optimiseur (`PrimaryKeySemiMasker` qui
+  résout les clés par `lookupPK`, posé probe→build avec Accumulate), sur lequel le balayage par
+  décalages fait le reste ; cible `usages` sous 50 ms.
+- **Le lot de l'insertion est sur master `3cca0ae1e`** (8 h 12 ; rejeu local sur c391e8387 :
+  transaction 267, api 105, planner 2, e2e Cypher 1 867, banc 7 rouges attendus / 270 verts ; e2e
+  vector 74 et les témoins avant). Hotfixs rebase son lot vector dessus ; l'arbre principal rebâtit
+  la lib.
