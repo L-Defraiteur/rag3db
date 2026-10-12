@@ -28,11 +28,16 @@ pub const LIB_SECTION: &str = ".rag3db_build_id";
 /// La section du binaire.
 pub const BINARY_SECTION: &str = ".rag3db_compiled_against";
 
+// La section n'est posée que sous Linux (ELF) : sa longueur et son remplissage
+// aussi, sans quoi Windows et macOS refusent du code mort (vu par les runners
+// du paquet, 12 octobre 2026).
+#[cfg(target_os = "linux")]
 const LEN: usize = match COMPILED_AGAINST {
     Some(s) => s.len() + 1,
     None => 1,
 };
 
+#[cfg(target_os = "linux")]
 const fn nul_terminated<const N: usize>(s: &str) -> [u8; N] {
     let bytes = s.as_bytes();
     let mut out = [0u8; N];
