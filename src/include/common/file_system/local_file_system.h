@@ -23,6 +23,9 @@ struct LocalFileInfo final : FileInfo {
 #else
     const int fd;
 #endif
+    // Le chemin dont cette ouverture tient une part du verrou du processus (vide sinon) : rendue
+    // à la fermeture (LocalFileSystem::releaseProcessLock).
+    std::string lockedPath;
 };
 
 class RAG3DB_API LocalFileSystem final : public FileSystem {
@@ -53,6 +56,14 @@ public:
     static bool isLocalPath(const std::string& path);
 
     static bool fileExists(const std::string& filename);
+
+    // Le verrou d'un fichier est tenu une fois par processus, sur une poignée à lui, tant qu'une
+    // ouverture verrouillée du fichier est en vie (acquire : la première prend le verrou, les
+    // suivantes s'y joignent, une demande d'écriture sur un verrou de lecture le renforce ;
+    // release : la dernière fermeture le rend). Le refus vient d'un autre processus seulement.
+    static void acquireProcessLock(const std::string& fullPath, FileLockType lockType,
+        uint64_t lockWaitMs);
+    static void releaseProcessLock(const std::string& fullPath);
 
 protected:
     void readFromFile(FileInfo& fileInfo, void* buffer, uint64_t numBytes,

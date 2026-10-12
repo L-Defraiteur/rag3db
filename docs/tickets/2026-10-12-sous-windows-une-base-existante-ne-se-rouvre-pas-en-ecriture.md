@@ -1,6 +1,15 @@
 # Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre
 
-- **État** : ouvert (12 octobre 2026) — vu par l'épreuve du cycle du démon du paquet (G), pour le cœur
+- **État** : ouvert — corrigé côté moteur (12 octobre 2026, cœur C++, branche `verrou-une-poignee`,
+  hash dans le rapport), à vérifier par G sur le runner Windows : le verrou d'un fichier est pris
+  une fois par processus, sur une poignée à lui (`LocalFileSystem::acquireProcessLock`), les
+  ouvertures suivantes s'y joignent — la garde B2, le FileHandle des données et le rejeu des
+  pages fantômes ne se croisent plus ; sous Windows l'octet verrouillé est 2^62, hors des
+  données (l'octet 0 verrouillé interdisait aussi la lecture de l'en-tête par une autre poignée) ;
+  sous Unix flock remplace fcntl (fcntl tombait à la fermeture de n'importe quel descripteur du
+  fichier : après le rejeu des pages fantômes, la garde ne gardait plus rien). Témoin Linux
+  `FileLockRegistry` (trois tests, un processus fils par fork). Vu par l'épreuve du cycle du démon
+  du paquet (G)
 - **Gravité** : blocage — sous Windows, toute base se crée une fois, puis ne s'ouvre plus en écriture
 - **Atteignable en service** : oui, sur tout poste Windows, dès la deuxième ouverture d'une base
 - **Touche rag3weaver** : oui, par l'hôte du démon et tout backend ; le correctif est dans le moteur

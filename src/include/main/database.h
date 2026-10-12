@@ -218,8 +218,9 @@ private:
     std::shared_ptr<void> openForWritingMark;
     // B2 : la garde du fichier de données, prise avant toute lecture (journal compris) par une
     // ouverture en écriture, avec l'attente bornée au verrou tenu par un autre processus ; gardée
-    // jusqu'à la fin (un verrou fcntl tombe à la fermeture de n'importe quel descripteur du
-    // fichier dans le processus : celui-ci se ferme après le gestionnaire de tampons).
+    // jusqu'à la fin. Le FileHandle des données et le rejeu des pages fantômes se joignent à son
+    // verrou sans en prendre un second (LocalFileSystem::acquireProcessLock : un verrou par
+    // processus, sur une poignée à lui — sous Windows LockFileEx refusait la seconde poignée).
     std::unique_ptr<common::FileInfo> writerGate;
     std::string databasePath;
     DBConfig dbConfig;
