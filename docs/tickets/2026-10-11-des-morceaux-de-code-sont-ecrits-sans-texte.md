@@ -225,3 +225,38 @@ expliquer.
 Corpus de la sonde décisive, dans `~/.cache/rag3weaver-notes-A/sonde-binaire/corpus.txt` : les
 dix fichiers ld-lucivy entièrement vides les plus gros, et dix fichiers rust du principal sans
 aucun vide.
+
+### Le code de 13 h 20 relu : ni Cypher brut, ni perte à l'écriture (arbre principal, 12 octobre, 2 h 40)
+
+**Ma correction de 2 h (« un vecteur calculé en mémoire n'atteste pas le texte en base ») est
+fausse pour ce chemin, et la lecture « binaire » ne tient pas.** Relu à `440ef5826`, master à 13 h 19,
+la révision du binaire installé à 13 h 21 (`8bb2af2d7` au plus, qui ne touche pas l'écriture) :
+
+- `_text` est posé en `record_nodes.rs:1480`, avec `_text_hash` en l. 1482, depuis le même
+  `chunk.text`. Il est écrit par **COPY CSV** (`copier_les_noeuds`, `pousser_cellule` l. 737,
+  `cellule_csv` l. 695, `copy_nodes_from_csv` dans `dialect.rs:1527`). Le repli est `batch_upsert`
+  en **paramètres liés**. Aucun Cypher brut n'écrit `_text`, et l'accent grave n'a besoin d'être
+  échappé ni en CSV ni en paramètre.
+- Ce chemin est **identique aujourd'hui**. Les lots 1 à 4 de la conversion en IR (`68dbcfc4b`,
+  `da02a612e`, `bcea5ea9e`, `c8fae292a`) traduisent des lectures, `Write::Detach` (des arêtes) et
+  des réglages ; aucun n'écrit de texte.
+- `run_index` exige `RECHERCHE_TEXTE` : les vecteurs viennent **après**, par `reclamer_le_retard`,
+  qui **relit `n._text` en base** (`dialect.rs:1828-1837`). Un marqueur égal à `_text_hash`, c'est
+  97 % des vides : **le texte était en base quand la passe de vecteurs l'a réclamé.** La perte
+  vient donc après, au SET de réclamation (`SET n._embed_claim`), à `embed_set`
+  (`SET n.vec = …, n.marker = …`), à `embed_clear`, ou au point de reprise et au rejeu qui suivent.
+
+Cela s'accorde avec ce qu'on sait : le COPY range les morceaux fichier par fichier, et une perte
+**par groupe de nœuds** du moteur (2 048 lignes) toucherait des fichiers entiers, et partiellement
+ceux qui chevauchent une frontière. Elle suivrait aussi l'ordre des lots, donc le dépôt et le
+langage. L'excès d'accent grave n'a pas de mécanisme dans le code lu : sans doute le langage.
+
+Une autre lecture tient aussi : une lib d'un autre bâti chargée par le binaire de 13 h 20, ce que
+`f3d2290ad` interdit depuis 00 h 11. La sonde du binaire neuf (0 vide sur 1 989 `Scope_Chunk`, là où
+dix fichiers étaient tout vides chez Lucie) ne départage pas : elle n'a ni le volume ni la
+passe de vecteurs sur une base de plusieurs groupes.
+
+**Le test qui départage** : dans la copie de F, `offset(n)` des `Scope_Chunk` vides contre les
+frontières de 2 048. Si les vides forment des plages alignées, c'est le moteur (un SET ou un rejeu
+qui perd une colonne chaîne par groupe) : ticket moteur, banc. Si rien n'est aligné, on revient à la
+lib d'un autre bâti.
