@@ -186,6 +186,14 @@ bouge : un lien `courant`.**
 - **`extension/vector/build`** reste où CMake l'écrit. Le magasin n'en garde
   qu'une copie : ne rien changer au CMake du moteur (rien vers l'amont) évite
   d'y toucher.
+- **Linux seulement chez nous** : `check_features.sh` ne compile que sous
+  Linux. Le seul contrôle de Windows et de macOS, ce sont les runners du
+  paquet npm (chez G). Le 12 octobre, ils ont refusé `build_check.rs` pour du
+  code mort hors Linux : `LEN` et `nul_terminated` ne servaient qu'à la
+  section ELF, gardée par `#[cfg(target_os = "linux")]`, mais eux ne
+  l'étaient pas (run 38197365376). G l'a corrigé dans son lot C
+  (`2f052d5db`, relu). Règle : ce qui ne sert qu'à un code sous `cfg` porte
+  le même `cfg`.
 
 ## 6. Les témoins, rouges d'abord
 
