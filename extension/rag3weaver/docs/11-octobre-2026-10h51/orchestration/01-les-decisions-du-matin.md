@@ -990,3 +990,38 @@ où elle vit.
   (`8610eaec6` : les bases de luciepc mises de côté dans avant-b4/ après la
   copie de comptage, le binaire neuf, la réindexation à heure accordée).
   Deux mesures attendent la place d'ici derrière le témoin (F, le banc).
+- **1 h 45 – 2 h 15, nuit : la priorité de Lucie est prouvée de bout en
+  bout.** Témoin **vert** de codeparsers (`93090770a`, en tête de la page des
+  manques), ici, isolé, master 8610eaec6 : code-tree add 1,2 s ; index
+  entier 22 min 50 s en régime doux (102 469 Scope_Chunk, 6 303 File_Chunk) ;
+  `name_of_tree` renommé sur disque → `usages` voit le nouveau nom en
+  **7,26 s**, `search_code` en **7,67 s**, l'ancienne définition partie ;
+  code-tree remove et arrêt 4 s, propres ; **0 morceau sans texte**. Dans
+  les 7,3 s : trois appels rendent l'ancien état, puis un appel attend 5,7 s
+  derrière la réindexation du fichier qui tient le catalogue : c'est là que
+  se gagnera la fraîcheur sous la seconde (proto, mesure par phase au
+  matin ; manque : les phases ne se lisent nulle part, une ligne [montre] par
+  fichier au journal de l'hôte ajoutée à son lot). **Le lot des fils du
+  cœur, mesuré** (page 12 §9) : impact 2,1 à 2,5 × plus court (joindre 55 →
+  27 ms, est_local 80 → 32), execute 2,04 → 0,90 ms par instruction,
+  préparation 0,78 → 0,41 (les 32 fils se disputaient le poste avec elle),
+  temps cumulé des tâches 54,4 → 27,1 s, résultats identiques ; banc ×10 et
+  131 e2e du produit verts ; push en cours (verrou depuis 2 h 02). Après ce
+  push : le rebâti de la lib d'ici en une fois, puis F remesure usages
+  (règle des 100 ms). Hypothèse retirée : « QUERY_VECTOR_INDEX sans
+  estimation » (hotfixs a mesuré : l'estimation existe, fausse à 1 au lieu
+  de k ; les card=? de F sont d'autres CALL) ; les deux corrections courtes
+  (k, dimension du semi-masque sur la table) faites quand même. **Cause du
+  P1 resserrée** (`a7a2374d2`, `ff2f8a5e7`) : un index entier neuf donne 0
+  vide ; sur la base de Lucie (F), **le vide se fait par scope entier**
+  (14 724 scopes tous vides, 65 442 aucun, 1 232 mêlés), tout présent sauf
+  `_text` (hash du texte, hash et vecteur d'embarquement, bornes) : le texte
+  existait à l'embarquement puis la ligne a été réécrite sans lui ; petits
+  scopes (rang moyen 4,7 contre 51,6) ; lecture « chemin » (réingestion par
+  la montre, redécoupage, synchro) plutôt que « binaire » ; au proto de
+  relire la réécriture d'un Scope_Chunk dans les deux dialectes (témoin :
+  réingérer un fichier inchangé, 0 vide attendu), à l'arbre principal la
+  sonde du matin. Lots donnés : banc, le témoin de l'index vectoriel
+  reconstruit sous un lecteur en face (correctif de hotfixs) ; hotfixs, les
+  deux corrections de QUERY_VECTOR_INDEX après son témoin du point de
+  reprise.
