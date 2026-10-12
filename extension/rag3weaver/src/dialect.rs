@@ -563,10 +563,12 @@ pub trait SchemaDialect: Send + Sync {
     ) -> String;
 
     /// [`batch_select`](Self::batch_select) des morceaux d'une liste de
-    /// parents (`_parent_uuid`), plus une dernière colonne : l'uuid du parent
-    /// au bout de l'arête `rel_table` du morceau, NULL si l'arête manque. Une
-    /// ligne par morceau. La complétude de l'inchangé s'en sert : des morceaux
-    /// sans leur arête ne se retrouvent pas par la recherche.
+    /// parents (`_parent_uuid`), plus deux dernières colonnes : l'uuid du
+    /// parent au bout de l'arête `rel_table` du morceau, NULL si l'arête
+    /// manque ; puis un booléen, vrai si le morceau a un texte (`_text` ni nul
+    /// ni vide). Une ligne par morceau. La complétude de l'inchangé s'en sert :
+    /// des morceaux sans leur arête ne se retrouvent pas par la recherche, et
+    /// des morceaux sans texte ni par la recherche ni par l'embarquement.
     fn batch_select_chunks_with_parent_link(
         &self,
         chunk_table: &str,
@@ -1867,7 +1869,8 @@ impl SchemaDialect for Rag3dbDialect {
         let returns = return_fields.iter().map(|f| format!("n.{}", self.quote(f))).collect::<Vec<_>>().join(", ");
         let (t, champ) = (self.quote(chunk_table), self.quote(match_field));
         format!(
-            "{} OPTIONAL MATCH (n)-[:{}]->(__parent:{}) RETURN {returns}, __parent._uuid",
+            "{} OPTIONAL MATCH (n)-[:{}]->(__parent:{}) RETURN {returns}, __parent._uuid, \
+             (n._text IS NOT NULL AND n._text <> '') AS __a_du_texte",
             unwind_par_cle("items", &[ParCle { var: "n", label: Some(&t), prop: "_parent_uuid", champ: &champ }], "MATCH"),
             self.quote(rel_table),
             self.quote(parent_table)
@@ -3065,7 +3068,9 @@ impl SchemaDialect for PostgresDialect {
         let (chunk_table, rel_table, match_field) = (self.quote(chunk_table), self.quote(rel_table), self.quote(match_field));
         let cols = return_fields.iter().map(|f| format!("{chunk_table}.{}", self.quote(f))).collect::<Vec<_>>().join(", ");
         format!(
-            "SELECT {cols}, {rel_table}.to_uuid FROM {chunk_table} \
+            "SELECT {cols}, {rel_table}.to_uuid, \
+             ({chunk_table}._text IS NOT NULL AND {chunk_table}._text <> '') AS __a_du_texte \
+             FROM {chunk_table} \
              INNER JOIN jsonb_to_recordset($items::text::jsonb) AS v({match_field} TEXT) \
              ON {chunk_table}._parent_uuid = v.{match_field} \
              LEFT JOIN {rel_table} ON {rel_table}.from_uuid = {chunk_table}._uuid"

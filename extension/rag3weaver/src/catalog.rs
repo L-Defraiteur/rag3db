@@ -5472,6 +5472,7 @@ impl Catalog {
             // recréait l'arête (un groupe revenu à moitié d'une mort pendant
             // sa validation). La même requête, une jointure de plus.
             let i_lien = colonnes.len();
+            let i_texte = i_lien + 1;
             let cypher = self.dialect.batch_select_chunks_with_parent_link(
                 &chunk_table,
                 "uuid",
@@ -5519,32 +5520,39 @@ impl Catalog {
                 );
             };
             // Par parent : combien de chunks, combien embarqués **en dense**,
-            // combien **en sparse**, combien reliés à lui par leur arête.
+            // combien **en sparse**, combien reliés à lui par leur arête,
+            // combien **ont un texte**. Un morceau sans texte n'est ni
+            // cherchable ni embarqué : son parent n'est pas complet, et une
+            // réingestion le redécoupe au lieu de le sauter en silence (le
+            // 11 octobre 2026, 20 % des morceaux d'un index de code avaient
+            // perdu leur texte et l'inchangé les gardait tels quels).
             //
             // Les deux se comptent séparément depuis le schéma v3. Avant, un
             // seul `_embed_hash` répondait pour les deux signaux : une entité
             // dont les chunks avaient un vecteur dense mais pas de vecteur
             // sparse était déclarée complète, et le court-circuit de l'inchangé
             // la sautait — définitivement.
-            let mut tally: HashMap<String, (usize, usize, usize, usize)> = HashMap::new();
+            let mut tally: HashMap<String, (usize, usize, usize, usize, usize)> = HashMap::new();
             for row in &result.rows {
                 let Some(parent) = row.first().and_then(|v| v.as_str()) else { continue };
                 let pose = |i: usize| {
                     row.get(i).and_then(|v| v.as_str()).is_some_and(|h| !h.is_empty())
                 };
-                let e = tally.entry(parent.to_string()).or_insert((0, 0, 0, 0));
+                let e = tally.entry(parent.to_string()).or_insert((0, 0, 0, 0, 0));
                 e.0 += 1;
                 e.1 += i_dense.map_or(0, |i| usize::from(pose(i)));
                 e.2 += i_sparse.map_or(0, |i| usize::from(pose(i)));
                 e.3 += usize::from(row.get(i_lien).and_then(|v| v.as_str()) == Some(parent));
+                e.4 += usize::from(row.get(i_texte).and_then(|v| v.as_bool()) == Some(true));
             }
             complete = tally
                 .into_iter()
-                .filter(|(_, (chunks, dense, sparse, relies))| {
+                .filter(|(_, (chunks, dense, sparse, relies, textes))| {
                     *chunks > 0
                         && (!veut_dense || dense == chunks)
                         && (!veut_sparse || sparse == chunks)
                         && relies == chunks
+                        && textes == chunks
                 })
                 .map(|(uuid, _)| uuid)
                 .collect();

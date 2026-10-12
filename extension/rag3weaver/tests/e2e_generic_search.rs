@@ -1558,3 +1558,37 @@ fn les_morceaux_sans_texte_se_reecrivent_depuis_leur_entite() {
     assert_eq!(pleins(&catalog), avant, "le texte est revenu");
     assert_eq!(catalog.index_progress().unwrap().dense_missing() as i64, avant, "les morceaux neufs doivent leurs vecteurs");
 }
+
+/// **Un parent dont un morceau a perdu son texte n'est pas complet** (ticket
+/// des morceaux de code écrits sans texte) : le court-circuit de l'inchangé
+/// le jugeait complet sur ses marqueurs et son arête, et une réingestion
+/// identique gardait le vide. Désormais la complétude compte aussi les
+/// morceaux qui ont un texte : la même réingestion le redécoupe, et le texte
+/// revient.
+#[test]
+#[ignore]
+fn une_reingestion_identique_ne_garde_pas_un_morceau_sans_texte() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+    let (mut catalog, _) = catalogue_avec_un_muet("rien ne sera muet ici");
+    catalog.embarquer_le_retard_suivi(D::TOUT, 512, None, None).expect("tout embarquer");
+    assert_eq!(catalog.index_progress().unwrap().dense_missing(), 0, "plus rien de dû");
+    let pleins = |c: &Catalog| -> i64 {
+        c.execute_raw("MATCH (n:Product_Chunk) WHERE n._text IS NOT NULL AND n._text <> '' RETURN count(n)")
+            .unwrap()
+            .rows[0][0]
+            .as_i64()
+            .unwrap()
+    };
+    let avant = pleins(&catalog);
+    assert!(avant >= 3, "des morceaux pleins au départ : {avant}");
+
+    // La réingestion identique d'un index complet ne réécrit rien.
+    catalog.ingest_entities_jusqu_a("Product", test_products(), D::TOUT).expect("réingestion identique");
+    assert_eq!(pleins(&catalog), avant);
+
+    catalog.execute_raw("MATCH (n:Product_Chunk) SET n._text = ''").expect("vider les textes");
+    assert_eq!(pleins(&catalog), 0);
+    catalog.ingest_entities_jusqu_a("Product", test_products(), D::RECHERCHE_TEXTE).expect("réingestion identique");
+    assert!(catalog.chunks_sans_texte().is_empty(), "aucun vide ne survit à la réingestion : {:?}", catalog.chunks_sans_texte());
+    assert_eq!(pleins(&catalog), avant, "le texte est revenu");
+}
