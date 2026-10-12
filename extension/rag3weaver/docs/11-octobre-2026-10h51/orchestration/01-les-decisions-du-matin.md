@@ -1363,3 +1363,29 @@ où elle vit.
   une étape de runner hôte / sante / client / arret / ensure proposée) ;
   relecture de l'arbre principal en cours ; paquet-npm-2 (le paquet seul)
   prêt localement derrière.
+- **6 h 30 – 7 h, matin**. Troisième rejeu du témoin de bout en bout
+  (codeparsers, `dc42d2a18`, sur 2a3f57f0d) : **6,36 s search_code, 6,80 s
+  usages** (contre 7,1-7,5) ; dans « ingérer » aucune étape ne domine (liens
+  260, embarquer 210-275, plein texte 130-210, blobs 120-200, relations 130,
+  relire 115 ms), **un tiers du temps n'est pas détaillé** et la fin
+  d'instantané fait 546 ms sur un fichier : le proto les nomme, puis la
+  réaction par lot (reingest_files), le gain qui reste à cette taille.
+  **Décision (renversable par Lucie) : UNWIND + MATCH par clé primaire au
+  planificateur.** F mesure que le masque du cœur ne change rien à usages
+  (352 ms en un temps, 230 en deux) : la forme compilée par l'IR, `UNWIND
+  $uuids AS u MATCH (d {_uuid: u})`, ne produit aucun masque, le
+  planificateur bâtit la jointure entière Symbol ← MENTIONS ← Scope (491 102
+  tuples) puis sonde par u ; le même saut en `WHERE d._uuid IN $uuids` fait
+  4,3 ms, en paramètre scalaire 1,1 ms, mêmes 117 lignes. Voie (a) retenue :
+  au moteur, un UNWIND de liste suivi d'un MATCH par clé primaire devient une
+  recherche par index ou un masque (comme Neo4j, UNWIND + NodeIndexSeek) :
+  chaque Hop et chaque Select::by_uuids de l'IR en profite, PostgreSQL n'a
+  pas le défaut ; **lot prioritaire du cœur**, devant l'insertion HNSW, cible
+  usages < 50 ms sur l'index entier ; pas de (b) au dialecte (la sémantique
+  des doublons n'est pas la bonne couche) ; F garde two_step_hops jusqu'au
+  lot, puis la retire si elle ne gagne plus ; son témoin imprime les plans
+  et les variantes (page 06). **Lot C de G relu et corrigé** (72a09167b,
+  accord de la mémoire : sous Windows `%LOCALAPPDATA%` sinon `%USERPROFILE%`
+  sinon erreur, plus de repli sur « . » ; un accès refusé vaut inconnu, jamais
+  mort ; la preuve dite telle qu'elle est : le cycle du démon hors Linux
+  tient au run 38204244740, epreuve_demon.py sur les runners).
