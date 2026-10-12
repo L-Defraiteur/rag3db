@@ -16,7 +16,7 @@
 //! l'hôte lancé (`127.0.0.1:7970` par défaut ; `127.0.0.1:0` prend un port
 //! libre, que `daemon.json` dit).
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -158,12 +158,11 @@ pub fn engine_build_from(conn: &dyn crate::connection::DbConnection) -> Option<S
     r.rows.first()?.get(col)?.as_str().map(str::to_string)
 }
 
-/// **Un jeton local** : 32 octets de `/dev/urandom`, en hexadécimal.
+/// **Un jeton local** : 32 octets de l'aléa du système, en hexadécimal
+/// (`getrandom` : il n'y a pas de `/dev/urandom` sous Windows).
 pub fn new_token() -> Result<String, String> {
     let mut octets = [0u8; 32];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(&mut octets))
-        .map_err(|e| format!("pas d'aléa pour le jeton local (/dev/urandom) : {e}"))?;
+    getrandom::fill(&mut octets).map_err(|e| format!("pas d'aléa pour le jeton local : {e}"))?;
     Ok(octets.iter().map(|o| format!("{o:02x}")).collect())
 }
 
