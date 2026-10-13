@@ -68,7 +68,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (32)
+### Ouverts — produit (31)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -77,7 +77,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 |---|---|---|---|---|
 | [Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive](2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md) | ouvert — `remove_dir_all` sur une base, `rag3weaver_cache` jamais effacé ; 755 dossiers effacés le 15, ~4 000 entrées relevées le 18 puis effacées (141 Mio : pas la cause de l’échange) | confort — RAM puis échange | non (tests), sauf `rag3weaver_cache` | oui |
 | [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
-| [Un graphe exécuté par niveaux ne s'annule pas](2026-10-12-un-graphe-sous-les-niveaux-ne-s-annule-pas.md) | ouvert — lot à part (recherche) | blocage | oui | oui (`src/dataflow`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
 | [Un backend de code dont la racine a disparu rend une erreur brute et se dit ouvert](2026-10-11-un-backend-de-code-dont-la-racine-a-disparu-rend-une-erreur-brute-et-se-dit-ouvert.md) | ouvert (relevé par le cœur C++, demande de Lucie) | réponse fausse / confort — erreur brute, « catalogue occupé » | oui (worktree effacé, manifeste chargé) | oui (démon, MCP du code) |
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | ouvert — pris par l'arbre principal, après sa file | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
@@ -108,12 +107,17 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (130), dans `closed/`
+### Fermés (135), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Le chemin dual ne posait pas le marqueur sparse : chaque passe recalculait les mêmes morceaux](closed/2026-10-12-le-chemin-dual-ne-pose-pas-le-marqueur-sparse.md) | corrigé (ouvert et fermé dans le lot ; `poser_le_creux`) | coût, dette jamais soldée | oui (bge-m3 : memory, notebook, validated-result) | oui (`record_nodes.rs`) |
 | [Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre](closed/2026-10-12-sous-windows-une-base-existante-ne-se-rouvre-pas-en-ecriture.md) | corrigé (65cb9a1f3, un verrou par processus) ; vu vert sous Windows, run 38262590228 | blocage | oui, sur tout poste Windows | oui (le démon, tout backend) |
+| [Un graphe exécuté par niveaux ne s'annule pas](closed/2026-10-12-un-graphe-sous-les-niveaux-ne-s-annule-pas.md) | corrigé (12 octobre 2026, hub d'annulation des niveaux) | blocage | oui | oui (`src/dataflow`) |
+| [Un sous-graphe de valeurs ne meurt pas avec son parent par niveaux](closed/2026-10-12-un-sous-graphe-de-valeurs-ne-meurt-pas-avec-son-parent.md) | corrigé (12 octobre 2026, même lot) | blocage | oui | oui (`src/dataflow`) |
+| [LlmNode et Decide ne voient pas l'annulation sous l'exécuteur par niveaux](closed/2026-10-12-llmnode-et-decide-ne-voient-pas-l-annulation.md) | corrigé (12 octobre 2026, même lot) | coût | oui | oui (`src/dataflow`) |
+| [Un enfant lancé WithParent n'est pas annulé avec un parent par niveaux](closed/2026-10-12-withparent-ne-tient-pas-sous-un-parent-par-niveaux.md) | corrigé (12 octobre 2026, même lot) | blocage | oui | oui (`src/dataflow`) |
+| [Un run arrêté par son hôte ne dit pas pourquoi](closed/2026-10-12-un-run-arrete-ne-dit-pas-pourquoi.md) | corrigé (12 octobre 2026, même lot) | diagnostic | oui | oui (`src/dataflow`) |
 | [Un client relance l'hôte sur une base en cours d'écriture autonome](closed/2026-10-12-un-client-relance-l-hote-sur-une-base-en-cours-d-ecriture-autonome.md) | corrigé (voir le ticket) | deux écrivains sur une base | oui, pendant toute réindexation autonome | oui (`daemon_lifecycle.rs`, `daemon_host.rs`) |
 | [Le reçu d'un index annonce un modèle que l'index n'emploie pas](closed/2026-10-12-le-recu-d-index-annonce-un-modele-que-l-index-n-emploie-pas.md) | corrigé (voir le ticket) | réponse fausse (le reçu, la durée prévue) | oui, dès qu'un manifeste déclare son modèle | oui (`estimate.rs`) |
 | [Le mode démon ne tient que sous Linux : Windows ne compile pas, macOS ne reconnaît pas l'hôte vivant](closed/2026-10-11-le-mode-demon-ne-tient-que-sous-linux.md) | corrigé : l'état d'un processus par système, l'inconnu laissé à /sante, le jeton par getrandom, l'hôte détaché sans les tuyaux du client ; cycle du démon vert sous macOS ; Windows vert, réouverture comprise (run 38262590228) — runs 38236456277 et 38242681341, L-Defraiteur | blocage | oui, sur tout poste Windows ou macOS | oui (et seulement) |

@@ -33,6 +33,20 @@ pub const BACKGROUND_SERVICE: &str = "background";
 /// La clé de service de l'annuaire (posée par la boucle d'agent).
 pub use crate::directory::DIRECTORY_SERVICE;
 
+/// **Les causes d'arrêt** (page 12-octobre-2026-recherche/05, §2.4), en
+/// identifiants : la trace (`RunFinished.cause`), le message de fin et `--qui`
+/// les disent telles quelles.
+pub mod cause {
+    /// L'arrêt demandé par son parent ou son appelant (`Registry::cancel`).
+    pub const REQUESTED: &str = "requested";
+    /// Le parent d'un enfant lancé `WithParent` a fini ou a été annulé.
+    pub const PARENT_FINISHED: &str = "parent_finished";
+    /// La durée, puis la grâce, sont passées.
+    pub const TIMEOUT: &str = "timeout";
+    /// L'hôte s'arrête (`Registry::cancel_all`).
+    pub const HOST_STOPPED: &str = "host_stopped";
+}
+
 /// Ce qui tourne en fond.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -71,8 +85,8 @@ pub(crate) struct Entry {
     pub(crate) payload: Option<Arc<dyn Any + Send + Sync>>,
     /// Les poignées des flux d'un run lancé avec eux.
     live: Option<Live>,
-    /// La cause de l'arrêt demandé, la première gagne.
-    cause: Mutex<Option<String>>,
+    /// La cause de l'arrêt demandé, et qui l'a demandé ; la première gagne.
+    cause: Mutex<Option<(String, String)>>,
 }
 
 impl Entry {
@@ -96,7 +110,7 @@ impl Entry {
         self
     }
 
-    fn cause(&self) -> Option<String> {
+    fn cause(&self) -> Option<(String, String)> {
         self.cause.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 }
@@ -244,7 +258,24 @@ impl Registry {
         if !(e.is_alive)() {
             return Err(format!("#{handle} a déjà fini"));
         }
-        e.cause.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(|| cause.to_string());
+        e.cause
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get_or_insert_with(|| (cause.to_string(), by.unwrap_or("host").to_string()));
+        (e.stop)();
+        Ok(())
+    }
+
+    /// Arrêté parce que son parent a fini ou a été annulé (`WithParent`).
+    fn cancel_by_parent(&self, handle: &str) -> Result<(), String> {
+        let Some((_, e)) = self.find(handle) else {
+            return Err(format!("aucun run en fond « {handle} »"));
+        };
+        if !(e.is_alive)() {
+            return Ok(());
+        }
+        let parent = e.parent.clone().unwrap_or_else(|| "parent".into());
+        e.cause.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(|| (cause::PARENT_FINISHED.to_string(), parent));
         (e.stop)();
         Ok(())
     }
@@ -263,19 +294,19 @@ impl Registry {
     }
 
     /// Note la cause d'une fin sans l'arrêter (l'entrée fermée à l'échéance).
-    fn note_cause(&self, handle: &str, cause: &str) {
+    fn note_cause(&self, handle: &str, cause: &str, by: &str) {
         if let Some(e) = self.lock().get(bare(handle)) {
-            e.cause.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(|| cause.to_string());
+            e.cause.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert_with(|| (cause.to_string(), by.to_string()));
         }
     }
 
-    /// Arrête tout ce qui vit, avec la cause dite (l'hôte qui s'arrête).
-    pub fn cancel_all(&self, cause: &str) -> usize {
+    /// **L'hôte s'arrête** : tout ce qui vit est arrêté, cause `host_stopped`.
+    pub fn cancel_all(&self) -> usize {
         let vivants = self.alive();
-        vivants.iter().filter(|a| self.cancel(&a.handle, cause, None).is_ok()).count()
+        vivants.iter().filter(|a| self.cancel(&a.handle, cause::HOST_STOPPED, None).is_ok()).count()
     }
 
-    fn cause_of(&self, handle: &str) -> Option<String> {
+    fn cause_of(&self, handle: &str) -> Option<(String, String)> {
         self.lock().get(bare(handle)).and_then(|e| e.cause())
     }
 }
@@ -624,7 +655,9 @@ impl DataflowRuntime {
             layer.register("caller", c.clone());
         }
         self.services = Arc::new(layer);
-        self.force_concurrent = true;
+        // Un run sans flux prend l'exécuteur que son graphe demande : sous les
+        // niveaux aussi, l'annulation le traverse (page 05). Un run à flux passe
+        // par le pont vivant, concurrent par nature.
 
         let cancel = self.cancel_handle();
         let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -646,7 +679,7 @@ impl DataflowRuntime {
 
         if let Tie::WithParent { cancel: parent_cancel, scope } = &spec.tie {
             let tie = |registry: Arc<Registry>, handle: String| move || {
-                let _ = registry.cancel(&handle, "parent", None);
+                let _ = registry.cancel_by_parent(&handle);
             };
             if let Some(c) = parent_cancel {
                 c.on_cancel(tie(registry.clone(), handle.clone()));
@@ -678,13 +711,13 @@ impl DataflowRuntime {
                     // Un run à flux d'entrée : l'entrée fermée d'abord (il finit
                     // proprement), l'annulation après la grâce s'il n'a pas fini.
                     if let Some(entree) = entree {
-                        registry.note_cause(&minuteur, "durée");
+                        registry.note_cause(&minuteur, cause::TIMEOUT, "host");
                         entree.close();
                         if fini_rx.recv_timeout(grace).is_ok() {
                             return part(&inscrit);
                         }
                     }
-                    let _ = registry.cancel(&minuteur, "durée", None);
+                    let _ = registry.cancel(&minuteur, cause::TIMEOUT, None);
                     part(&inscrit);
                 })
                 .map_err(|e| format!("le minuteur de #{handle} n'a pas pu partir : {e}"))?;
@@ -712,7 +745,7 @@ impl DataflowRuntime {
                         hub.worker_done(w);
                     }
                 }
-                let cause = registry.cause_of(&handle);
+                let arret = registry.cause_of(&handle);
                 let (statut, ok) = match &result {
                     Ok(out) if out.stopped().is_some() => ("annulé", false),
                     Ok(_) => ("terminé", true),
@@ -729,16 +762,26 @@ impl DataflowRuntime {
                     Err(e) => content["erreur"] = json!(e),
                     _ => {}
                 }
-                // Une fin ordinaire peut avoir une cause : l'entrée fermée à
-                // l'échéance (`durée`).
-                let cause = if statut == "annulé" { cause.or_else(|| Some("demande".into())) } else { cause };
+                // La cause notée par le registre d'abord (une fin ordinaire peut
+                // en avoir une : l'entrée fermée à l'échéance, `timeout`) ; sinon
+                // celle du run lui-même (`requested` par sa poignée,
+                // `failed:<nœud>`, `deadlock`).
+                let stop = self.take_stop(&run);
+                let (cause, by) = match (arret, stop) {
+                    (Some((c, by)), _) => (Some(c), Some(by)),
+                    (None, Some(s)) => (Some(super::concurrent::cause_label(&s)), None),
+                    (None, None) => (None, None),
+                };
                 if let Some(c) = &cause {
                     content["cause"] = json!(c);
+                }
+                if let Some(b) = &by {
+                    content["cancelled_by"] = json!(b);
                 }
                 // **La trace d'abord, la fin ensuite** : qui lit la fin dans sa
                 // boîte trouve `RunFinished` déjà sur le bus (un témoin lisait
                 // l'une puis l'autre et passait entre les deux, sous charge).
-                self.emit_run_finished_because(&run, started.elapsed().as_millis() as u64, ok, cause);
+                self.emit_run_finished_because(&run, started.elapsed().as_millis() as u64, ok, cause, by);
                 if let Some(caller) = &caller {
                     deliver(&self.services, &run, &format!("outil #{handle}"), caller, &content);
                 }

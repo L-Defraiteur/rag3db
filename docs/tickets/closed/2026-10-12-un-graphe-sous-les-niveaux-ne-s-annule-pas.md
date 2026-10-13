@@ -1,6 +1,6 @@
 # Un graphe exécuté par niveaux ne s'annule pas
 
-- **État** : ouvert, à faire en lot à part (décision de l'orchestration, 12 octobre 2026)
+- **État** : corrigé (12 octobre 2026, session recherche : un hub d'annulation par run par niveaux, page `extension/rag3weaver/docs/12-octobre-2026-recherche/05-l-annulation-sous-tous-les-executeurs.md`)
 - **Gravité** : blocage. Une annulation demandée n'arrête rien tant que le graphe n'a pas fini
 - **Atteignable en service** : oui. Tout graphe sans flux branché passe par l'exécuteur par niveaux, et une poignée d'annulation prise dessus ne fait rien
 - **Touche rag3weaver** : oui (`src/dataflow`)
@@ -44,3 +44,13 @@ Dans les deux boucles par niveaux de `runtime.rs` :
 
 La parité des graphes de valeurs sans annulation doit être gardée : la lib entière est le
 témoin.
+
+## Le correctif
+
+Un run par niveaux crée un hub d'annulation (sans canal ni ouvrier), attaché à
+la poignée d'arrêt le temps du run. Les nœuds le reçoivent par leur jeton
+(`NodeContext::cancellation`), et la boucle le regarde en tête de chaque
+niveau. Annulé, le run rend `Ok`, avec `stopped()` posé ; les nœuds non
+lancés sont dits arrêtés (`NodeCancelled`), et `RunFinished.cause` vaut
+`requested`. Témoins : `src/dataflow/annulation_tests.rs`, rouges sur le code
+d'avant.

@@ -1388,6 +1388,7 @@ impl<'a> Agent<'a> {
             ms: run_started.elapsed().as_millis() as u64,
             ok: outcome.is_ok(),
             cause: None,
+            cancelled_by: None,
         });
         outcome
     }

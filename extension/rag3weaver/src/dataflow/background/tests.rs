@@ -239,7 +239,7 @@ fn a_child_tied_to_its_parent_is_cancelled_with_it() {
     rt.execute(&mut g).unwrap();
     let (_, content) = w.end(Duration::from_secs(5)).expect("la fin de l'enfant");
     assert_eq!(content["statut"], "annulé");
-    assert_eq!(content["cause"], "parent");
+    assert_eq!(content["cause"], "parent_finished");
 }
 
 /// **5. Annulé par sa référence**, et seulement par son parent ou son
@@ -248,11 +248,11 @@ fn a_child_tied_to_its_parent_is_cancelled_with_it() {
 fn a_child_is_cancelled_by_its_reference_by_its_own_caller_only() {
     let w = world("5");
     let l = w.runtime().spawn(echo(None, true), w.spec("attente")).unwrap();
-    let refus = w.registry.cancel(&l.run, "demande", Some("un-autre")).unwrap_err();
+    let refus = w.registry.cancel(&l.run, "requested", Some("un-autre")).unwrap_err();
     assert!(refus.contains("n'est pas un enfant"), "{refus}");
-    w.registry.cancel(&l.handle, "demande", Some(&w.caller)).unwrap();
+    w.registry.cancel(&l.handle, "requested", Some(&w.caller)).unwrap();
     let (_, content) = w.end(Duration::from_secs(5)).expect("la fin");
-    assert_eq!((content["statut"].as_str(), content["cause"].as_str()), (Some("annulé"), Some("demande")));
+    assert_eq!((content["statut"].as_str(), content["cause"].as_str()), (Some("annulé"), Some("requested")));
     let t = Instant::now();
     while !w.registry.alive().is_empty() {
         assert!(t.elapsed() < Duration::from_secs(2), "le run annulé reste vivant");
@@ -297,7 +297,7 @@ fn the_duration_cancels_and_one_too_many_is_refused() {
     let refus = w.runtime().spawn(echo(None, true), second).unwrap_err();
     assert!(refus.contains("refusé") && refus.contains("borné"), "{refus}");
     let (_, content) = w.end(Duration::from_secs(5)).expect("la fin à la durée");
-    assert_eq!((content["statut"].as_str(), content["cause"].as_str()), (Some("annulé"), Some("durée")));
+    assert_eq!((content["statut"].as_str(), content["cause"].as_str()), (Some("annulé"), Some("timeout")));
 }
 
 /// Un message sans entrée `message` ni entrée libre unique : un refus nommé,
@@ -594,7 +594,7 @@ fn backpressure_crosses_the_boundary_both_ways() {
         }
     }
     assert!(pleins >= 1, "un envoi borné sur une entrée pleine rend Full");
-    w.registry.cancel(&l.handle, "demande", None).unwrap();
+    w.registry.cancel(&l.handle, "requested", None).unwrap();
     w.gone();
 }
 
@@ -629,11 +629,11 @@ fn a_cancel_reaches_both_handles_and_the_end_says_why() {
     let (g, _) = conv(1, Duration::ZERO, false);
     let l = w.spawn_conv(g, Limits::default());
     let live = l.live.unwrap();
-    w.registry.cancel(&l.handle, "demande", Some(&w.caller)).unwrap();
+    w.registry.cancel(&l.handle, "requested", Some(&w.caller)).unwrap();
     assert!(live.output.unwrap().recv().is_err(), "recv rend l'annulation");
     assert!(matches!(live.input.unwrap().try_send(PortValue::new("x".to_string())), Err(TrySend::Stopped(_))));
     let (_, fin) = w.end(Duration::from_secs(5)).expect("la fin");
-    assert_eq!((fin["statut"].as_str(), fin["cause"].as_str()), (Some("annulé"), Some("demande")), "{fin}");
+    assert_eq!((fin["statut"].as_str(), fin["cause"].as_str()), (Some("annulé"), Some("requested")), "{fin}");
     w.gone();
 }
 
@@ -669,7 +669,7 @@ fn the_duration_closes_the_input_then_cancels_after_the_grace() {
     let sortie = l.live.unwrap().output.unwrap();
     assert!(sortie.recv().unwrap().is_none(), "l'entrée fermée à l'échéance, le flux finit");
     let (_, fin) = w.end(Duration::from_secs(5)).expect("la fin");
-    assert_eq!((fin["statut"].as_str(), fin["cause"].as_str()), (Some("terminé"), Some("durée")));
+    assert_eq!((fin["statut"].as_str(), fin["cause"].as_str()), (Some("terminé"), Some("timeout")));
     w.gone();
 
     let w = world("flux-6b");
@@ -687,7 +687,7 @@ fn the_duration_closes_the_input_then_cancels_after_the_grace() {
     let rendu = l.live.unwrap().output.unwrap().recv();
     assert!(rendu.is_err(), "annulé après la grâce, pas {rendu:?}");
     let (_, fin) = w.end(Duration::from_secs(5)).expect("la fin");
-    assert_eq!((fin["statut"].as_str(), fin["cause"].as_str()), (Some("annulé"), Some("durée")));
+    assert_eq!((fin["statut"].as_str(), fin["cause"].as_str()), (Some("annulé"), Some("timeout")));
     w.gone();
 }
 

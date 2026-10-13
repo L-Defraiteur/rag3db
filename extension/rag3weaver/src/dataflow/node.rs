@@ -199,6 +199,10 @@ pub struct NodeContext {
     misuse: Vec<String>,
     /// Sous l'exécuteur concurrent : les canaux du nœud.
     stream: Option<super::stream::StreamBinding>,
+    /// Sous l'exécuteur par niveaux, le hub d'annulation du run (sans canal ni
+    /// ouvrier) : le jeton le lit quand il n'y a pas de liaison de flux (page
+    /// 12-octobre-2026-recherche/05).
+    cancel_hub: Option<super::stream::StreamHub<PortValue>>,
     /// Les entrées dont un producteur est un flux ouvert.
     open_inputs: HashSet<String>,
     /// Le genre de chaque entrée branchée.
@@ -220,6 +224,7 @@ impl NodeContext {
             dropped: HashMap::new(),
             misuse: Vec::new(),
             stream: None,
+            cancel_hub: None,
             open_inputs: HashSet::new(),
             input_kinds: HashMap::new(),
             services: Arc::new(ServiceRegistry::new()),
@@ -238,6 +243,7 @@ impl NodeContext {
             dropped: HashMap::new(),
             misuse: Vec::new(),
             stream: None,
+            cancel_hub: None,
             open_inputs: HashSet::new(),
             input_kinds: HashMap::new(),
             services,
@@ -327,10 +333,17 @@ impl NodeContext {
     }
 
     /// **Le jeton d'annulation du run** : pour un nœud qui calcule longtemps
-    /// sans lire ni émettre, ou qui attend hors des canaux (le bus). Sous
-    /// l'exécuteur par niveaux, il n'est jamais annulé.
+    /// sans lire ni émettre, ou qui attend hors des canaux (le bus). Le même
+    /// sous les deux exécuteurs : le hub de ses canaux sous le concurrent, le
+    /// hub d'annulation du run sous les niveaux (page
+    /// 12-octobre-2026-recherche/05). Hors runtime, jamais annulé.
     pub fn cancellation(&self) -> CancelToken {
-        CancelToken { hub: self.stream.as_ref().map(|b| b.hub.clone()) }
+        CancelToken { hub: self.stream.as_ref().map(|b| b.hub.clone()).or_else(|| self.cancel_hub.clone()) }
+    }
+
+    /// Le hub d'annulation d'un run par niveaux (posé par le runtime).
+    pub(crate) fn set_cancel_hub(&mut self, hub: super::stream::StreamHub<PortValue>) {
+        self.cancel_hub = Some(hub);
     }
 
     /// Un puits de jetons qui **émet chaque jeton** sur `port`, et ne rend
@@ -593,6 +606,11 @@ pub struct EmitSink<'a> {
 
 impl crate::llm::TokenSink for EmitSink<'_> {
     fn on_token(&mut self, delta: &str) -> crate::llm::Flow {
+        // Annulé, on s'arrête au fragment suivant, sous les deux exécuteurs :
+        // sous les niveaux, `emit` sans canal ne le dirait pas.
+        if self.ctx.cancellation().is_cancelled() {
+            return crate::llm::Flow::Stop;
+        }
         match self.ctx.emit(&self.port, PortValue::new(delta.to_string())) {
             Ok(()) => crate::llm::Flow::Continue,
             Err(Stopped::NoReader) if !self.stop_when_unread => crate::llm::Flow::Continue,

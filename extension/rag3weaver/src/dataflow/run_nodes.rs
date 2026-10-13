@@ -549,7 +549,14 @@ impl Node for WaitOutputNode {
                     ),
                 );
             }
-            std::thread::sleep(std::time::Duration::from_millis(200));
+            // Dort par le jeton : l'annulation du run réveille l'attente (page
+            // 12-octobre-2026-recherche/05), sous les deux exécuteurs.
+            if ctx.cancellation().wait_timeout(std::time::Duration::from_millis(200)) {
+                return rendre(
+                    ctx,
+                    format!("**Arrêté.** Le run a été annulé pendant l'attente de `{}` dans `{}`.\n", self.motif, chemin.display()),
+                );
+            }
         }
     }
 }

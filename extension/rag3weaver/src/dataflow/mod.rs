@@ -25,6 +25,8 @@ pub use concurrent::CancelHandle;
 mod flux_tests;
 #[cfg(test)]
 mod jetons_tests;
+#[cfg(test)]
+mod annulation_tests;
 pub mod port;
 pub mod resultat;
 pub mod record;

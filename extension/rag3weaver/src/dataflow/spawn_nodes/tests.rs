@@ -193,9 +193,9 @@ fn one_launch_too_many_is_said_on_run() {
     assert_eq!(runs[0]["statut"], "lancé");
     assert_eq!(runs[1]["statut"], "refusé");
     assert!(runs[1]["erreur"].as_str().unwrap().contains("refusé"), "{runs:?}");
-    assert_eq!(w.registry.cancel_all("hôte"), 1);
+    assert_eq!(w.registry.cancel_all(), 1);
     let ends = w.ends(1, Duration::from_secs(5));
-    assert_eq!((ends[0]["statut"].as_str(), ends[0]["cause"].as_str()), (Some("annulé"), Some("hôte")));
+    assert_eq!((ends[0]["statut"].as_str(), ends[0]["cause"].as_str()), (Some("annulé"), Some("host_stopped")));
 }
 
 /// Lit `message` élément par élément (une entrée nourrie par l'appelant) et

@@ -66,6 +66,37 @@ impl CancelHandle {
     fn detach(&self, hub: &StreamHub<PortValue>) {
         self.inner.lock().unwrap_or_else(|p| p.into_inner()).hubs.retain(|h| !h.same(hub));
     }
+
+    /// Attache `hub` pour la durée de la garde rendue (le hub d'annulation
+    /// d'un run par niveaux, page 12-octobre-2026-recherche/05) : détaché à
+    /// sa chute, quel que soit le retour.
+    pub(super) fn attach_scoped(&self, hub: &StreamHub<PortValue>) -> Attached {
+        self.attach(hub);
+        Attached { handle: self.clone(), hub: hub.clone() }
+    }
+}
+
+/// Un hub attaché à une poignée d'arrêt, détaché à la chute.
+pub(super) struct Attached {
+    handle: CancelHandle,
+    hub: StreamHub<PortValue>,
+}
+
+impl Drop for Attached {
+    fn drop(&mut self) {
+        self.handle.detach(&self.hub);
+    }
+}
+
+/// **Le nom d'une cause d'arrêt** (page 12-octobre-2026-recherche/05, §2.4) :
+/// `requested` (la poignée), `failed:<nœud>`, `deadlock`. Un run lancé en fond
+/// pose les siennes (`timeout`, `parent_finished`, `host_stopped`).
+pub(crate) fn cause_label(cause: &CancelCause) -> String {
+    match cause {
+        CancelCause::External => "requested".to_string(),
+        CancelCause::Failed { node } => format!("failed:{node}"),
+        CancelCause::Deadlock(_) => "deadlock".to_string(),
+    }
 }
 
 /// **Les points de reprise d'un run à flux** (page 05, §3.7). L'unité reste
@@ -381,6 +412,7 @@ impl DataflowRuntime {
         }
 
         let cause = hub.cancelled();
+        self.note_stop(run_id, cause.as_ref());
         let mut data: HashMap<String, HashMap<String, PortValue>> = HashMap::new();
         let mut skipped = HashMap::new();
         let mut dropped_by = HashMap::new();

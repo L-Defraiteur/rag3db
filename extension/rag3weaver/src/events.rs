@@ -175,10 +175,14 @@ pub enum Event {
         kind: String,
         ms: u64,
         ok: bool,
-        /// Pourquoi le run s'est arrêté avant sa fin, s'il l'a été : `durée`,
-        /// `parent`, `hôte`, `demande` (un run lancé en fond, page
-        /// 12-octobre-2026-recherche/03). `None` pour une fin ordinaire.
+        /// Pourquoi le run s'est arrêté avant sa fin, s'il l'a été (page
+        /// 12-octobre-2026-recherche/05, §2.4) : `requested`, `parent_finished`,
+        /// `timeout`, `failed:<nœud>`, `deadlock`, `host_stopped`. `None` pour
+        /// une fin ordinaire.
         cause: Option<String>,
+        /// Qui a demandé l'arrêt, quand on le sait : un run, un appelant,
+        /// `host`.
+        cancelled_by: Option<String>,
     },
     /// Un appel au modèle, terminé.
     LlmCall {
@@ -383,12 +387,15 @@ impl Event {
                 "org": scope.as_ref().map(|s| s.org.clone()),
                 "project": scope.as_ref().map(|s| s.project.clone()),
             }),
-            Self::RunFinished { run, kind, ms, ok, cause } => {
+            Self::RunFinished { run, kind, ms, ok, cause, cancelled_by } => {
                 let mut v = json!({
                     "kind": "RunFinished", "run": run, "run_kind": kind, "ms": ms, "ok": ok,
                 });
                 if let Some(cause) = cause {
                     v["cause"] = json!(cause);
+                }
+                if let Some(by) = cancelled_by {
+                    v["cancelled_by"] = json!(by);
                 }
                 v
             }
@@ -771,7 +778,7 @@ mod tests {
         assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));
         // Un run de graphe va sur `dataflow`, pas sur `agent`.
-        bus.emit(Event::RunFinished { run: "g1".into(), kind: "graph".into(), ms: 3, ok: true, cause: None });
+        bus.emit(Event::RunFinished { run: "g1".into(), kind: "graph".into(), ms: 3, ok: true, cause: None, cancelled_by: None });
         assert!(matches!(all.try_recv(), Err(TryRecvError::Empty)));
         assert_ne!(new_run_id("agent"), new_run_id("agent"));
         assert_eq!(inbox_topic("r1"), "run.r1.inbox");

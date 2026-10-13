@@ -229,6 +229,11 @@ pub struct DataflowRuntime {
     /// Un graphe de valeurs passe aussi par l'exécuteur concurrent (le
     /// témoin de parité).
     pub(super) force_concurrent: bool,
+    /// La cause d'arrêt de chaque run arrêté, par son identifiant, reprise
+    /// pour `RunFinished.cause` (page 12-octobre-2026-recherche/05, §2.4). Par
+    /// run et non par runtime : `execute` prend `&self`, deux runs d'un même
+    /// runtime ne se volent pas leur cause.
+    pub(super) last_stop: Arc<std::sync::Mutex<HashMap<String, super::node::CancelCause>>>,
 }
 
 /// Un nœud prêt, avec son contexte rempli — ce qui sort de la phase 1.
@@ -347,6 +352,7 @@ impl DataflowRuntime {
             services: Arc::new(ServiceRegistry::new()),
             cancel: Default::default(),
             force_concurrent: false,
+            last_stop: Default::default(),
         }
     }
 
@@ -362,6 +368,7 @@ impl DataflowRuntime {
             services: Arc::new(services),
             cancel: Default::default(),
             force_concurrent: false,
+            last_stop: Default::default(),
         }
     }
 
@@ -377,6 +384,7 @@ impl DataflowRuntime {
             services,
             cancel: Default::default(),
             force_concurrent: false,
+            last_stop: Default::default(),
         }
     }
 
@@ -720,6 +728,12 @@ impl DataflowRuntime {
             });
         }
         graph.merge_initial_streams(&mut initial_inputs);
+        // **Le hub d'annulation des niveaux** (page 12-octobre-2026-recherche/05) :
+        // sans canal ni ouvrier, attaché à la poignée d'arrêt le temps du run.
+        // Les nœuds le lisent par leur jeton ; la boucle le regarde à chaque
+        // niveau.
+        let annul = super::stream::StreamHub::<PortValue>::new();
+        let _attache = self.cancel.attach_scoped(&annul);
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         let mut remaining_consumers: HashMap<(String, String), usize> = HashMap::new();
@@ -782,6 +796,11 @@ impl DataflowRuntime {
 
         // Main execution loop (same structure as execute(), with checkpoint saves)
         for _iteration in 0..self.max_iterations {
+            // **Annulé** : rien de plus ne part ; ce qui reste est dit arrêté.
+            if let Some(cause) = annul.cancelled() {
+                self.cancel_remaining(graph, &order, &completed, &skipped, &cause);
+                break;
+            }
             // Les sauts d'abord, jusqu'au point fixe : une branche non prise ne
             // tue plus le run (voir `skip_until_fixpoint`).
             self.skip_until_fixpoint(
@@ -847,6 +866,7 @@ impl DataflowRuntime {
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
+                ctx.set_cancel_hub(annul.clone());
                 if let Some(ports) = stream_ports.get(node_name.as_str()) {
                     ctx.set_stream_ports(ports.per_element.clone(), ports.stream_outputs.clone());
                     ctx.set_open_inputs(ports.open_inputs.clone());
@@ -1062,7 +1082,8 @@ impl DataflowRuntime {
             }
         }
 
-        if completed.len() != graph.nodes.len() {
+        // Un run annulé n'a pas tout fini, et ce n'est pas une faute.
+        if completed.len() != graph.nodes.len() && annul.cancelled().is_none() {
             let error = format!(
                 "max iterations ({}) exceeded, {} of {} nodes completed",
                 self.max_iterations,
@@ -1086,7 +1107,9 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None, dropped: HashMap::new(), sent: HashMap::new() })
+        let stopped = annul.cancelled();
+        self.note_stop(&run_id, stopped.as_ref());
+        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new() })
     }
 
     /// Execute the graph. Returns all output values.
@@ -1180,18 +1203,51 @@ impl DataflowRuntime {
         });
     }
 
+    /// La fin d'un run, avec sa cause s'il a été arrêté (la poignée, un
+    /// échec sous le concurrent, un interblocage).
     pub(super) fn emit_run_finished(&self, run_id: &str, ms: u64, ok: bool) {
-        self.emit_run_finished_because(run_id, ms, ok, None);
+        let cause = self.take_stop(run_id);
+        self.emit_run_finished_because(run_id, ms, ok, cause.as_ref().map(super::concurrent::cause_label), None);
     }
 
-    /// Le même, avec la cause d'un arrêt avant la fin (un run lancé en fond).
-    pub(super) fn emit_run_finished_because(&self, run_id: &str, ms: u64, ok: bool, cause: Option<String>) {
+    /// Note la cause d'arrêt d'un run, s'il a été arrêté.
+    pub(super) fn note_stop(&self, run_id: &str, cause: Option<&super::node::CancelCause>) {
+        if let Some(c) = cause {
+            self.last_stop.lock().unwrap_or_else(|p| p.into_inner()).insert(run_id.to_string(), c.clone());
+        }
+    }
+
+    /// Reprend la cause d'arrêt d'un run, une fois : l'entrée part.
+    pub(super) fn take_stop(&self, run_id: &str) -> Option<super::node::CancelCause> {
+        self.last_stop.lock().unwrap_or_else(|p| p.into_inner()).remove(run_id)
+    }
+
+    /// Les nœuds qui ne partiront pas, dits arrêtés (comme sous le
+    /// concurrent) : ni finis, ni sautés.
+    fn cancel_remaining(
+        &self,
+        graph: &DataflowGraph,
+        order: &[String],
+        completed: &HashSet<String>,
+        skipped: &HashMap<String, String>,
+        cause: &super::node::CancelCause,
+    ) {
+        for name in order.iter().filter(|n| !completed.contains(*n) && !skipped.contains_key(*n)) {
+            let node_type = graph.nodes.iter().find(|n| n.name() == name).map(|n| n.node_type().to_string()).unwrap_or_default();
+            self.emit(DataflowEvent::NodeCancelled { node: name.clone(), node_type, cause: cause.to_string() });
+        }
+    }
+
+    /// Le même, avec la cause d'un arrêt avant la fin et qui l'a demandé (un
+    /// run lancé en fond : son registre les connaît).
+    pub(super) fn emit_run_finished_because(&self, run_id: &str, ms: u64, ok: bool, cause: Option<String>, cancelled_by: Option<String>) {
         self.publish(crate::events::CatalogEvent::RunFinished {
             run: run_id.to_string(),
             kind: "graph".to_string(),
             ms,
             ok,
             cause,
+            cancelled_by,
         });
     }
 
@@ -1226,6 +1282,12 @@ impl DataflowRuntime {
             });
         }
         graph.merge_initial_streams(&mut initial_inputs);
+        // **Le hub d'annulation des niveaux** (page 12-octobre-2026-recherche/05) :
+        // sans canal ni ouvrier, attaché à la poignée d'arrêt le temps du run.
+        // Les nœuds le lisent par leur jeton ; la boucle le regarde à chaque
+        // niveau.
+        let annul = super::stream::StreamHub::<PortValue>::new();
+        let _attache = self.cancel.attach_scoped(&annul);
 
         // Precompute remaining consumer count for each (from_node, from_port) key.
         // Each edge that reads from a port is one consumer. When the last consumer
@@ -1239,6 +1301,11 @@ impl DataflowRuntime {
         }
 
         for _iteration in 0..self.max_iterations {
+            // **Annulé** : rien de plus ne part ; ce qui reste est dit arrêté.
+            if let Some(cause) = annul.cancelled() {
+                self.cancel_remaining(graph, &order, &completed, &skipped, &cause);
+                break;
+            }
             // Find ready nodes: not completed, all required inputs available
             // Les sauts d'abord, jusqu'au point fixe : une branche non prise ne
             // tue plus le run (voir `skip_until_fixpoint`).
@@ -1319,6 +1386,7 @@ impl DataflowRuntime {
             for node_name in &ready {
                 let mut ctx = NodeContext::with_services(self.services.clone());
                 ctx.set_run_id(&run_id);
+                ctx.set_cancel_hub(annul.clone());
                 if let Some(ports) = stream_ports.get(node_name.as_str()) {
                     ctx.set_stream_ports(ports.per_element.clone(), ports.stream_outputs.clone());
                     ctx.set_open_inputs(ports.open_inputs.clone());
@@ -1470,7 +1538,8 @@ impl DataflowRuntime {
             }
         }
 
-        if completed.len() != graph.nodes.len() {
+        // Un run annulé n'a pas tout fini, et ce n'est pas une faute.
+        if completed.len() != graph.nodes.len() && annul.cancelled().is_none() {
             let error = format!(
                 "max iterations ({}) exceeded, {} of {} nodes completed",
                 self.max_iterations,
@@ -1495,7 +1564,9 @@ impl DataflowRuntime {
             data.entry(node).or_default().insert(port, value);
         }
 
-        Ok(DataflowOutput { data, skipped, stopped: None, dropped: HashMap::new(), sent: HashMap::new() })
+        let stopped = annul.cancelled();
+        self.note_stop(&run_id, stopped.as_ref());
+        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new() })
     }
 }
 
