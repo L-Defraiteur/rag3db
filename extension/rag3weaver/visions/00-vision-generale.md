@@ -504,7 +504,15 @@ vrai, et c'est ce qui décide des outils suivants.
   bundle, à la demande ou à chaque changement), et la page vivante recharge
   le module comme une vue ; l'écran est déclaré, stocké, versionné et
   rechargé par le même chemin que le reste, l'empaquetage n'emporte que la
-  base. Graine, pas de chantier sans le mot de Lucie.
+  base. Les libs aussi (Lucie : « dont l'install de libs donc aussi »)  :
+  le module déclare ses dépendances et leurs versions, l'hôte les va
+  chercher sur commande seulement (jamais en silence : c'est du réseau
+  sortant), les range dans un magasin par contenu comme les libs du moteur
+  par identifiant de bâti et les modèles dans le cache, le compilateur
+  embarqué les lie dans le bundle ; l'empaquetage emporte le magasin avec
+  la base et l'application démarre sans réseau ; une mise à jour de lib est
+  un changement déclaré, versionné, rechargé à chaud. Graine, pas de
+  chantier sans le mot de Lucie.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le
