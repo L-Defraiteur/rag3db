@@ -483,7 +483,19 @@ vrai, et c'est ce qui décide des outils suivants.
   application, la garder comme seul frontend enveloppé par système (une
   fenêtre native qui l'affiche, une vue web sur Android), ce qui tient
   « tout en gabarit » jusqu'à l'écran, ou rendre une part native un jour :
-  question ouverte. Graine, pas de chantier sans le mot de Lucie.
+  question ouverte. Et le bout de la vision (Lucie, 12 octobre au soir) :
+  « que même des apps three.js puissent être empaquetées, que j'aie
+  vraiment tout : le mec construit son moteur de jeu en rag3weaver, ou son
+  app de classeur Excel, ou n'importe quelle autre ». C'est « plusieurs
+  produits, un seul atelier » poussé jusqu'au bout : les données de l'app
+  dans le moteur, sa logique en graphes et en nœuds scriptés (TypeScript),
+  ses écrans en vues déclarées ; une scène three.js ou une grille de
+  classeur est une vue de plus, avec ses propres fichiers (un bundle) et son
+  contrat de ports vers les graphes ; l'atelier qui sert la page devient le
+  lanceur de l'application. Ce qui manque est précisément cela : l'atelier
+  qui accepte un frontend arbitraire comme vue déclarée (le bundle, ses
+  assets, ses ports), et l'empaquetage qui l'emporte avec l'hôte, le moteur
+  et la base. Graine, pas de chantier sans le mot de Lucie.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le
