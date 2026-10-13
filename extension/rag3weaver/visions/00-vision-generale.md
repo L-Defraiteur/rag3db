@@ -477,8 +477,13 @@ vrai, et c'est ce qui décide des outils suivants.
   un seul binaire qui embarque l'hôte, le moteur et ses extensions, le
   gabarit du produit et sa base à côté ; les services d'embarquement en
   local ou distants selon le poste ; et Android, le plus loin (le moteur C++
-  et le crate Rust pour l'ARM d'Android, des modèles petits). Graine, pas de
-  chantier sans le mot de Lucie.
+  et le crate Rust pour l'ARM d'Android, des modèles petits). **Le frontend
+  reste à penser** (Lucie, le même soir) : aujourd'hui c'est la page vivante
+  de l'atelier, servie par l'hôte, déclarée et rechargée à chaud ; pour une
+  application, la garder comme seul frontend enveloppé par système (une
+  fenêtre native qui l'affiche, une vue web sur Android), ce qui tient
+  « tout en gabarit » jusqu'à l'écran, ou rendre une part native un jour :
+  question ouverte. Graine, pas de chantier sans le mot de Lucie.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le
