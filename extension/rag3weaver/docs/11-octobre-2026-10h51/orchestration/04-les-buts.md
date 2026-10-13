@@ -85,7 +85,15 @@ qui sont des graphes, le démon qu'on installe, l'IDE pour agents.
   de reprise qui fait la queue, et les migrations comme objet (table des
   migrations, ordre, rejeu, refus). Scénario à poser au banc : vingt clients,
   petites transactions, un DDL par minute, un point de reprise en route ;
-  décision sur les chiffres. Pas avant la reprise.
+  décision sur les chiffres. Pas avant la reprise. **Décidé par Lucie le
+  13** : le cas d'usage est à présenter et valider (page de conception par
+  l'arbre principal, part moteur relue par le cœur, scénario écrit par le
+  banc, joué à la reprise) ; « ça ne doit être bloqué pour l'un ni pour
+  l'autre ». Et une règle : **un index ne se pense pas**, dans notre
+  paradigme c'est une conséquence du gabarit (ce qu'on cherche, joint,
+  embarque), créé et tenu par le produit ; jamais un CREATE INDEX écrit par
+  un développeur (déjà vrai pour le plein texte et les vecteurs, à écrire
+  dans la stèle du produit pour le reste).
 - **Le multi-vecteur et MaxSim** (ColBERT, bge-m3 le rend déjà) : une option
   plus tard, d'abord comme rerank sur les k premiers candidats, jamais une
   colonne de listes de vecteurs par défaut (trop lourd).
