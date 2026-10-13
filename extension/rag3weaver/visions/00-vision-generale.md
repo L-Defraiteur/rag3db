@@ -495,7 +495,16 @@ vrai, et c'est ce qui décide des outils suivants.
   lanceur de l'application. Ce qui manque est précisément cela : l'atelier
   qui accepte un frontend arbitraire comme vue déclarée (le bundle, ses
   assets, ses ports), et l'empaquetage qui l'emporte avec l'hôte, le moteur
-  et la base. Graine, pas de chantier sans le mot de Lucie.
+  et la base. Forme proposée par Lucie (même soir) : « un module React qui
+  se recharge à chaud, embarquer la compilation sur commande ou en hot
+  reload ; pour le frontend, que ça ne sorte jamais des données ». C'est le
+  même chemin que les graphes : les composants et leurs sources sont une
+  donnée du produit, l'hôte les compile lui-même (le moteur de script qui
+  exécute déjà les nœuds TypeScript est la piste pour compiler du TSX en
+  bundle, à la demande ou à chaque changement), et la page vivante recharge
+  le module comme une vue ; l'écran est déclaré, stocké, versionné et
+  rechargé par le même chemin que le reste, l'empaquetage n'emporte que la
+  base. Graine, pas de chantier sans le mot de Lucie.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le
