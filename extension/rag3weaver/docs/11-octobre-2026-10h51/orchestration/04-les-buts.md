@@ -71,6 +71,25 @@ qui sont des graphes, le démon qu'on installe, l'IDE pour agents.
   indexe depuis ce soir ; les réactions et la mémoire doivent y tourner
   aussi ; le fanout quand un vrai déploiement distant le mesure.
 
+### 4 bis. Deux questions ouvertes du 13 octobre (Lucie)
+
+- **rag3weaver comme base d'une application à beaucoup de développeurs**, qui
+  écrivent et migrent en même temps (« ajouter une colonne comme ils le
+  feraient sur PostgreSQL, sur la même base »). L'architecture tient (un seul
+  processus possède les fichiers, l'hôte, et tous s'y connectent, comme le
+  postmaster), mais quatre écarts avec PostgreSQL sont à mesurer avant de
+  raffiner le mode multi-écrivains : le DDL transactionnel (un CREATE INDEX
+  refuse la transaction explicite ; l'ADD COLUMN n'est pas mesuré), le coût
+  d'un ADD COLUMN sous le verrou du catalogue (chez PostgreSQL une écriture
+  de catalogue seule), vingt écrivains simultanés dans l'hôte avec le point
+  de reprise qui fait la queue, et les migrations comme objet (table des
+  migrations, ordre, rejeu, refus). Scénario à poser au banc : vingt clients,
+  petites transactions, un DDL par minute, un point de reprise en route ;
+  décision sur les chiffres. Pas avant la reprise.
+- **Le multi-vecteur et MaxSim** (ColBERT, bge-m3 le rend déjà) : une option
+  plus tard, d'abord comme rerank sur les k premiers candidats, jamais une
+  colonne de listes de vecteurs par défaut (trop lourd).
+
 ## 5. Les buts à long terme (les visions)
 
 - **Plusieurs produits, un seul atelier** : le même atelier Westworld avec un
