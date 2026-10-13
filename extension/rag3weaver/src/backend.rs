@@ -4507,6 +4507,40 @@ mod tests {
         assert!(passes.is_empty(), "un fichier généré est entré par la réingestion : {passes:?}");
     }
 
+    /// **La réaction paie la dette de vecteurs de son lot**, hors du verrou du
+    /// catalogue (`Catalog::embarquer_le_retard_hors_verrou`) : après elle, les
+    /// morceaux ne doivent plus rien. Le garde-fou du branchement ; le témoin
+    /// « le service n'est pas appelé sous le verrou » est au catalogue.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_reaction_pays_the_vector_debt_of_its_batch() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        std::fs::write(dir.path().join("sources/vecteurs.rs"), "pub fn vectorise() { depart(); }\n").unwrap();
+        let u = attendre_les_usages(&backend, "depart", |u| u.contains("vectorise"));
+        assert!(u.contains("vectorise"), "{u}");
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let du = loop {
+            let n = {
+                let cat = backend.catalog.lock().unwrap();
+                let marqueur = cat.vector_storage("Scope_Chunk").unwrap().marker;
+                cat.execute_raw(&format!(
+                    "MATCH (c:Scope_Chunk) WHERE c._text <> '' AND (c.`{marqueur}` IS NULL OR c.`{marqueur}` = '') RETURN count(c)"
+                ))
+                .unwrap()
+                .rows[0][0]
+                .as_i64()
+                .unwrap_or(-1)
+            };
+            if n == 0 || std::time::Instant::now() > fin {
+                break n;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        };
+        assert!(backend.stop_reactions().is_empty());
+        assert_eq!(du, 0, "des morceaux doivent encore leur vecteur après la réaction");
+    }
+
     /// **L'arrêt coupe une réaction longue au prochain fichier** : des
     /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
     /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation

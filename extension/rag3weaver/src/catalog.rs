@@ -3889,6 +3889,30 @@ fn read_threads() -> u64 {
         self.embarquer_le_retard_suivi(exige, limite, tables, None)
     }
 
+    /// **L'embarquement du retard, l'appel au service hors du verrou.** Une
+    /// réaction de la montre tenait le catalogue pendant tout l'embarquement
+    /// de son lot (relevé de l'arbre principal, 12 octobre 2026) : les lectures
+    /// attendaient le modèle. La dette se réclame sous le verrou, le modèle est
+    /// appelé sans lui, et les vecteurs s'écrivent sous lui, en une écriture
+    /// courte qui laisse dû ce dont le texte a changé entre-temps.
+    pub fn embarquer_le_retard_hors_verrou(
+        catalog: &std::sync::Mutex<Catalog>,
+        exige: crate::disponibilite::Disponibilites,
+        limite: usize,
+        tables: Option<&HashSet<String>>,
+    ) -> Result<usize, CatalogError> {
+        let verrou = || catalog.lock().unwrap_or_else(|e| e.into_inner());
+        // (a) sous le verrou ; (b) sans lui ; (c) sous le verrou.
+        let lots = verrou().preparer_l_embarquement(exige, limite, tables, None)?;
+        let calcules: Vec<EmbarquementCalcule> = lots.into_iter().map(Self::calculer_l_embarquement).collect();
+        let mut cat = verrou();
+        let mut total = 0usize;
+        for c in calcules {
+            total += cat.poser_l_embarquement(c, None)?;
+        }
+        cat.finir_l_embarquement(total, limite)
+    }
+
     /// [`Self::embarquer_le_retard`], **suivi** par une indexation : les
     /// morceaux restés sans réponse dans ce run ne sont pas re-réclamés, le
     /// suivi est donné aux nœuds d'embarquement (l'arrêt entre deux appels, le
@@ -3901,15 +3925,38 @@ fn read_threads() -> u64 {
         tables: Option<&HashSet<String>>,
         suivi: Option<&Arc<crate::dataflow::record_nodes::EmbedWatch>>,
     ) -> Result<usize, CatalogError> {
+        // Les trois temps, enchaînés sous `&mut self` : la réclamation, le
+        // calcul, l'écriture. `embarquer_le_retard_hors_verrou` fait les mêmes
+        // en rendant le verrou pendant le calcul.
+        let lots = self.preparer_l_embarquement(exige, limite, tables, suivi)?;
+        let mut total = 0usize;
+        for lot in lots {
+            let calcule = Self::calculer_l_embarquement(lot);
+            total += self.poser_l_embarquement(calcule, suivi)?;
+        }
+        self.finir_l_embarquement(total, limite)
+    }
+
+    /// **(a) Réclamer la dette**, sous le verrou : les morceaux en retard, par
+    /// table, groupés par ce qu'ils doivent (le dense, le sparse, les deux) —
+    /// chaque groupe est calculé avec ces seuls signaux. Rend les lots prêts
+    /// à calculer, avec leurs services (des clones, sans lien au catalogue).
+    fn preparer_l_embarquement(
+        &mut self,
+        exige: crate::disponibilite::Disponibilites,
+        limite: usize,
+        tables: Option<&HashSet<String>>,
+        suivi: Option<&Arc<crate::dataflow::record_nodes::EmbedWatch>>,
+    ) -> Result<Vec<LotDEmbarquement>, CatalogError> {
         self.check_embedding_model()?;
         let exclus: HashSet<String> = suivi.map(|w| w.silent_uuids()).unwrap_or_default();
         if !exige.dense() && !exige.sparse() {
-            return Ok(0);
+            return Ok(Vec::new());
         }
         // Sans service, rien à rattraper : la dette reste notée, et l'index
         // n'est ni tombé ni rebâti pour un retard qu'on ne paiera pas.
         if self.embedder.is_absent() {
-            return Ok(0);
+            return Ok(Vec::new());
         }
 
         // Les tables de chunks et ce que chacune déclare. Clonées d'abord :
@@ -3922,16 +3969,8 @@ fn read_threads() -> u64 {
             }
         }
 
-        let mut total = 0usize;
+        let mut lots = Vec::new();
         for (table, signaux) in cibles {
-            // On ne rattrape que ce qui est **à la fois** exigé et déclaré :
-            // inutile de chercher un retard dense sur une entité qui n'a pas de
-            // signal vectoriel.
-            //
-            // Le marqueur dense est **celui du modèle courant** : c'est par lui
-            // que « migrer de modèle » est un rattrapage ordinaire — un modèle
-            // qui vient d'être enregistré a un retard de 100 %, et cette boucle
-            // le solde chunk par chunk sans redécouper.
             let dense_marker: String = {
                 let storage = self.vector_storage(&table)?;
                 if exige.dense() && signaux.vector() {
@@ -3951,9 +3990,9 @@ fn read_threads() -> u64 {
                 continue;
             }
 
-            // Union par uuid : un chunk peut devoir les deux, il ne passe
-            // qu'une fois — le nœud sait déjà ne recalculer que ce qui manque.
-            let mut par_uuid: BTreeMap<String, BTreeMap<String, CypherValue>> = BTreeMap::new();
+            // Par uuid, ce que chaque morceau doit : il peut devoir les deux, et
+            // il ne passe qu'une fois.
+            let mut par_uuid: BTreeMap<String, (BTreeMap<String, CypherValue>, bool, bool)> = BTreeMap::new();
             for marqueur in marqueurs {
                 // **Réclamés, pas seulement lus** : une autre passe, dans un
                 // autre processus, ne les prendra pas tant que la réclamation
@@ -3973,9 +4012,15 @@ fn read_threads() -> u64 {
                         continue;
                     }
                 };
+                let sparse = marqueur == "_sparse_hash";
                 for data in pris {
-                    let Some(uuid) = data.get("_uuid").and_then(|v| v.as_str()) else { continue };
-                    par_uuid.insert(uuid.to_string(), data.clone());
+                    let Some(uuid) = data.get("_uuid").and_then(|v| v.as_str()).map(str::to_string) else { continue };
+                    let entree = par_uuid.entry(uuid).or_insert_with(|| (data.clone(), false, false));
+                    if sparse {
+                        entree.2 = true;
+                    } else {
+                        entree.1 = true;
+                    }
                 }
             }
             if par_uuid.is_empty() {
@@ -3988,56 +4033,198 @@ fn read_threads() -> u64 {
                 self.ensure_sparse_handle(&table);
             }
 
-            let nombre = par_uuid.len();
-            let records: Vec<EntityRecord> = par_uuid
-                .into_iter()
-                .map(|(uuid, data)| EntityRecord::deja_resolu(table.clone(), data, &uuid))
-                .collect();
-
-            let mut graph = DataflowGraph::new();
-            graph.add_node(Box::new(EmbedNode::new("rattrapage", signaux, 32)))
-                .map_err(|e| CatalogError::DbError(e.to_string()))?;
-            graph.set_initial_input(
-                "rattrapage",
-                "entities",
-                PortValue::new(BatchPayload::new(PortType::Entities, records)),
-            );
-
-            let mut services = ServiceRegistry::new();
-            let canal = self.enregistrer_les_services_d_ingestion(&mut services);
-            if let Some(w) = suivi {
-                services.register(crate::dataflow::record_nodes::SERVICE_EMBED_WATCH, w.clone());
+            // Un groupe par besoin : le nœud lit ses signaux dans la
+            // configuration de l'entité, que chaque groupe reçoit restreinte.
+            let mut groupes: BTreeMap<(bool, bool), Vec<EntityRecord>> = BTreeMap::new();
+            for (uuid, (data, dense, sparse)) in par_uuid {
+                groupes.entry((dense, sparse)).or_default().push(EntityRecord::deja_resolu(table.clone(), data, &uuid));
             }
+            let parent = table.strip_suffix("_Chunk").unwrap_or(&table).to_string();
+            for ((dense, sparse), records) in groupes {
+                let mut restreints = if signaux.bm25() { search::SearchSignals::BM25 } else { search::SearchSignals::NONE };
+                if dense {
+                    restreints |= search::SearchSignals::VECTOR;
+                }
+                if sparse {
+                    restreints |= search::SearchSignals::SPARSE;
+                }
+                let mut graphe = DataflowGraph::new();
+                graphe
+                    .add_node(Box::new(EmbedNode::new("rattrapage", restreints, 32).with_mode(crate::dataflow::record_nodes::EmbedMode::Compute)))
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                let nombre = records.len();
+                graphe.set_initial_input("rattrapage", "entities", PortValue::new(BatchPayload::new(PortType::Entities, records)));
+                let mut services = ServiceRegistry::new();
+                let canal = self.enregistrer_les_services_d_ingestion(&mut services);
+                let mut configs = self.entity_configs.clone();
+                if let Some(cfg) = configs.get_mut(&parent) {
+                    cfg.signals = restreints;
+                }
+                services.register("entity_configs", configs);
+                if let Some(w) = suivi {
+                    services.register(crate::dataflow::record_nodes::SERVICE_EMBED_WATCH, w.clone());
+                }
+                lots.push(LotDEmbarquement { table: table.clone(), nombre, graphe, services, canal });
+            }
+        }
+        Ok(lots)
+    }
 
-            let runtime = DataflowRuntime::with_services(8, services);
-            let mut ecoute = runtime.subscribe();
-            let issue = runtime.execute(&mut graph);
-            for e in Self::relever_les_echecs(&canal) {
-                self.emit_event(CatalogEvent::Warning {
-                    context: "rattrapage".to_string(),
-                    message: format!("{} : « {} » — {}", e.noeud, e.table, e.cause),
-                });
-            }
-            let vus = ramasser_les_avertissements(&mut ecoute);
-            self.relever_les_replis(&vus);
-            for a in vus {
-                self.emit_event(CatalogEvent::Warning {
-                    context: "rattrapage".to_string(),
-                    message: a,
-                });
-            }
-            match issue {
-                Ok(_) => total += nombre,
-                Err(e) => {
-                    let message = format!("embarquement du retard sur « {table} » : {e}");
-                    if let Some(w) = suivi {
-                        w.errors.lock().unwrap_or_else(|p| p.into_inner()).push(message.clone());
-                    }
-                    self.emit_event(CatalogEvent::Error { context: "rattrapage".to_string(), message });
+    /// **(b) Calculer**, sans le catalogue : le nœud en mode `Compute` ne
+    /// touche pas la connexion. C'est ce temps-là qui peut s'exécuter hors du
+    /// verrou (l'appel au service d'embarquement).
+    fn calculer_l_embarquement(lot: LotDEmbarquement) -> EmbarquementCalcule {
+        let LotDEmbarquement { table, nombre, mut graphe, services, canal } = lot;
+        let runtime = DataflowRuntime::with_services(8, services);
+        let mut ecoute = runtime.subscribe();
+        let issue = runtime.execute(&mut graphe).map_err(|e| e.to_string()).and_then(|sortie| {
+            sortie
+                .get("rattrapage", "embedded")
+                .cloned()
+                .and_then(|pv| pv.downcast::<BatchPayload>().and_then(|b| b.take::<EntityRecord>()))
+                .ok_or_else(|| "le calcul n'a rendu aucun lot".to_string())
+        });
+        let echecs = Self::relever_les_echecs(&canal);
+        let avertissements = ramasser_les_avertissements(&mut ecoute);
+        EmbarquementCalcule { table, nombre, issue, echecs, avertissements }
+    }
+
+    /// **(c) Écrire**, sous le verrou, en une écriture courte : les vecteurs et
+    /// leurs marqueurs. Rend le nombre de morceaux posés.
+    fn poser_l_embarquement(
+        &mut self,
+        calcule: EmbarquementCalcule,
+        suivi: Option<&Arc<crate::dataflow::record_nodes::EmbedWatch>>,
+    ) -> Result<usize, CatalogError> {
+        let EmbarquementCalcule { table, nombre, issue, echecs, avertissements } = calcule;
+        // Le calcul n'avait pas la base : ses morceaux muets portent un nom
+        // provisoire, que le verrou repris permet de lire.
+        let avertissements: Vec<String> = avertissements.iter().map(|a| self.nommer_les_muets(&table, a)).collect();
+        if let Some(w) = suivi {
+            for (uuid, nom) in w.silent.lock().unwrap_or_else(|p| p.into_inner()).iter_mut() {
+                if *nom == crate::dataflow::record_nodes::nom_provisoire(&table, uuid) {
+                    *nom = crate::dataflow::record_nodes::nom_du_morceau(
+                        self.conn.as_ref(),
+                        self.dialect.as_ref(),
+                        Some(&self.entity_configs),
+                        &table,
+                        uuid,
+                    );
                 }
             }
         }
+        for e in echecs {
+            self.emit_event(CatalogEvent::Warning {
+                context: "rattrapage".to_string(),
+                message: format!("{} : « {} » — {}", e.noeud, e.table, e.cause),
+            });
+        }
+        self.relever_les_replis(&avertissements);
+        for a in avertissements {
+            self.emit_event(CatalogEvent::Warning { context: "rattrapage".to_string(), message: a });
+        }
+        match issue {
+            Ok(records) => self.poser_les_vecteurs(&table, records),
+            Err(e) => {
+                let message = format!("embarquement du retard sur « {table} » ({nombre} morceaux) : {e}");
+                if let Some(w) = suivi {
+                    w.errors.lock().unwrap_or_else(|p| p.into_inner()).push(message.clone());
+                }
+                self.emit_event(CatalogEvent::Error { context: "rattrapage".to_string(), message });
+                Ok(0)
+            }
+        }
+    }
 
+    /// Remplace dans `texte` chaque nom provisoire d'un morceau de `table`
+    /// (la table, puis un uuid) par son nom pour un humain, lu en base.
+    fn nommer_les_muets(&self, table: &str, texte: &str) -> String {
+        let prefixe = format!("{table} ");
+        let mut rendu = String::with_capacity(texte.len());
+        let mut reste = texte;
+        while let Some(i) = reste.find(&prefixe) {
+            rendu.push_str(&reste[..i]);
+            let apres = &reste[i + prefixe.len()..];
+            let uuid = &apres[..apres.find(char::is_whitespace).unwrap_or(apres.len())];
+            if uuid.len() == 36 && uuid.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+                rendu.push_str(&crate::dataflow::record_nodes::nom_du_morceau(
+                    self.conn.as_ref(),
+                    self.dialect.as_ref(),
+                    Some(&self.entity_configs),
+                    table,
+                    uuid,
+                ));
+                reste = &apres[uuid.len()..];
+            } else {
+                rendu.push_str(&prefixe);
+                reste = apres;
+            }
+        }
+        rendu.push_str(reste);
+        rendu
+    }
+
+    /// **Poser des vecteurs calculés hors du verrou** : seulement sur les
+    /// morceaux dont le texte n'a pas changé depuis leur réclamation (même
+    /// `_text_hash`). Un morceau changé entre-temps garde sa dette, et la
+    /// passe suivante le reprend.
+    fn poser_les_vecteurs(&mut self, table: &str, records: Vec<EntityRecord>) -> Result<usize, CatalogError> {
+        if records.is_empty() {
+            return Ok(0);
+        }
+        let uuids: Vec<String> = records.iter().filter_map(|r| r.data.get("_uuid").and_then(|v| v.as_str()).map(str::to_string)).collect();
+        // L'empreinte actuelle de chaque morceau (une table de morceaux n'est
+        // pas une entité déclarée : une sélection par uuids, par le dialecte).
+        let lecture = rag3weaver_ir::Select::by_uuids(table, vec![rag3weaver_ir::Column::Node("_text_hash".into())]);
+        let requete = self.dialect_arc().select(&lecture).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
+        let actuels: HashMap<String, String> = self
+            .execute_raw_with_params(&requete, &[QueryParam::new("uuids", liste)])?
+            .rows
+            .into_iter()
+            .filter_map(|row| {
+                Some((row.first()?.as_str()?.to_string(), row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string()))
+            })
+            .collect();
+        let marqueur = self.vector_storage(table)?.marker;
+        let mut denses: BTreeMap<String, Vec<CypherValue>> = BTreeMap::new();
+        let mut creux: Vec<(String, String, crate::sparse_index::SparseVector)> = Vec::new();
+        let mut poses = 0usize;
+        for rec in records {
+            let Some(uuid) = rec.data.get("_uuid").and_then(|v| v.as_str()).map(str::to_string) else { continue };
+            let hash = rec.data.get("_text_hash").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            // Le texte a changé depuis la réclamation : la dette reste.
+            if actuels.get(&uuid) != Some(&hash) {
+                continue;
+            }
+            let Some(vecteurs) = rec.vectors else { continue };
+            if let Some(d) = vecteurs.dense {
+                denses.entry(d.column).or_default().push(CypherValue::Map(BTreeMap::from([
+                    ("uuid".to_string(), CypherValue::String(uuid.clone())),
+                    ("hash".to_string(), CypherValue::String(hash.clone())),
+                    ("emb".to_string(), CypherValue::List(d.values.iter().map(|&f| CypherValue::Float(f as f64)).collect())),
+                ])));
+            }
+            if let Some(sv) = vecteurs.sparse {
+                creux.push((uuid, hash, sv));
+            }
+            poses += 1;
+        }
+        for (colonne, items) in denses {
+            crate::dataflow::record_nodes::write_vectors(self.conn.as_ref(), self.dialect.as_ref(), table, &colonne, &marqueur, items)
+                .map_err(CatalogError::DbError)?;
+        }
+        if !creux.is_empty() {
+            let items: Vec<(String, String, &crate::sparse_index::SparseVector)> = creux.iter().map(|(u, h, sv)| (u.clone(), h.clone(), sv)).collect();
+            crate::dataflow::record_nodes::poser_le_creux(self.conn.as_ref(), self.dialect.as_ref(), Some(&self.sparse_handles), table, &items)
+                .map_err(CatalogError::DbError)?;
+        }
+        Ok(poses)
+    }
+
+    /// La fin d'une passe : le plein texte rendu durable, les troncatures
+    /// dites, et l'indice de dette levé si la passe a tout soldé.
+    fn finir_l_embarquement(&mut self, total: usize, limite: usize) -> Result<usize, CatalogError> {
         self.flush_blob_store("rattrapage")?;
         self.signaler_les_troncatures("rattrapage");
         // Le tour est fait. S'il restait plus que la borne quelque part, il en
@@ -12600,3 +12787,23 @@ struct FreshIngest {
     /// Par entité : la marque de session posée dans la ligne.
     marks: HashMap<String, String>,
 }
+
+/// Un lot de morceaux réclamés, prêt à être calculé hors du verrou
+/// (`Catalog::preparer_l_embarquement`).
+struct LotDEmbarquement {
+    table: String,
+    nombre: usize,
+    graphe: DataflowGraph,
+    services: ServiceRegistry,
+    canal: Arc<Mutex<Vec<crate::records::EchecDeGroupe>>>,
+}
+
+/// Ce que le calcul d'un lot a rendu, à écrire sous le verrou.
+struct EmbarquementCalcule {
+    table: String,
+    nombre: usize,
+    issue: Result<Vec<EntityRecord>, String>,
+    echecs: Vec<crate::records::EchecDeGroupe>,
+    avertissements: Vec<String>,
+}
+

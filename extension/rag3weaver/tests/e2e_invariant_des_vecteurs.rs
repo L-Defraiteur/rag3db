@@ -403,3 +403,91 @@ fn le_moteur_seul_sous_des_set_de_vecteur() {
         }
     }
 }
+
+/// Une fiche à trois signaux : le chemin dual (dense et sparse d'un appel).
+fn fiche_a_trois_signaux() -> EntityConfig {
+    serde_json::from_value(serde_json::json!({
+        "fields": {"cle": {"type": "string", "isTitle": true}, "texte": {"type": "string", "isContent": true}},
+        "hashsafe": ["cle"],
+        "signals": ["bm25", "vector", "sparse"]
+    }))
+    .expect("configuration de l'entité")
+}
+
+/// **Le chemin dual pose aussi le marqueur sparse** : le vecteur creux était
+/// inséré dans son index sans que `_sparse_hash` soit posé. Le morceau restait
+/// dû en sparse, et chaque passe le réclamait et le recalculait (relevé le
+/// 12 octobre). Après une passe, la suivante n'a plus rien à faire.
+#[test]
+fn le_chemin_dual_pose_le_marqueur_sparse() {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    conn.execute(&format!("LOAD EXTENSION '{}'", extension())).unwrap();
+    let config = CatalogConfig { embedding_dim: DIM, allow_mock_embedder: true, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(Hachage(HashEmbedder::new(DIM), "hachage")), config);
+    catalog.set_dual_embedder(std::sync::Arc::new(rag3weaver::embedder::MockDualEmbedder::new(DIM)));
+    catalog.initialize().unwrap();
+    catalog.register_entity("Fiche", fiche_a_trois_signaux()).unwrap();
+    catalog.ingest_entities_jusqu_a("Fiche", lignes(0..40, "v1"), D::RECHERCHE_TEXTE).expect("mots");
+    let premiere = catalog.embarquer_le_retard(D::TOUT, 10_000, None).expect("première passe");
+    assert!(premiere > 0, "la première passe n'a rien embarqué");
+    let seconde = catalog.embarquer_le_retard(D::TOUT, 10_000, None).expect("seconde passe");
+    assert_eq!(seconde, 0, "le chemin dual laisse le sparse dû : la seconde passe recalcule {seconde} morceaux");
+}
+
+/// Un embarqueur qui note s'il a été appelé **pendant que le catalogue était
+/// tenu** : il essaie de le prendre, sans attendre.
+struct Surveillant {
+    catalogue: std::sync::Arc<std::sync::OnceLock<std::sync::Arc<std::sync::Mutex<Catalog>>>>,
+    tenu: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    appels: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    interieur: HashEmbedder,
+}
+
+impl Embedder for Surveillant {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        self.appels.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if let Some(c) = self.catalogue.get() {
+            if c.try_lock().is_err() {
+                self.tenu.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        self.interieur.embed(texts)
+    }
+    fn dim(&self) -> usize {
+        self.interieur.dim()
+    }
+    fn is_mock(&self) -> bool {
+        false
+    }
+    fn name(&self) -> &str {
+        "surveillant"
+    }
+}
+
+/// **L'appel au service se fait hors du verrou du catalogue** : une réaction de
+/// la montre tenait le catalogue pendant tout l'embarquement de son lot, et les
+/// lectures attendaient le modèle. La dette se réclame et s'écrit sous le
+/// verrou ; le modèle est appelé sans lui.
+#[test]
+fn l_embarquement_du_retard_appelle_le_service_hors_du_verrou() {
+    let cellule = std::sync::Arc::new(std::sync::OnceLock::new());
+    let tenu = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let appels = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let surveillant = Surveillant {
+        catalogue: cellule.clone(),
+        tenu: tenu.clone(),
+        appels: appels.clone(),
+        interieur: HashEmbedder::new(DIM),
+    };
+    let mut catalog = monter_avec(Rag3dbConnection::in_memory().expect("base en mémoire"), Box::new(surveillant));
+    catalog.ingest_entities_jusqu_a("Fiche", lignes(0..40, "v1"), D::RECHERCHE_TEXTE).expect("mots");
+    let partage = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    cellule.set(partage.clone()).ok();
+    let n = Catalog::embarquer_le_retard_hors_verrou(&partage, D::TOUT, 10_000, None).expect("embarquement");
+    assert!(n > 0 && appels.load(std::sync::atomic::Ordering::SeqCst) > 0, "rien n'a été embarqué");
+    assert!(!tenu.load(std::sync::atomic::Ordering::SeqCst), "le service a été appelé sous le verrou du catalogue");
+    // Et la dette est payée : les vecteurs sont posés, l'invariant tient.
+    let cat = partage.lock().unwrap();
+    verifier(&cat, "embarquement hors du verrou");
+}
+

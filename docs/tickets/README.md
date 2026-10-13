@@ -108,10 +108,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (129), dans `closed/`
+### Fermés (130), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le chemin dual ne posait pas le marqueur sparse : chaque passe recalculait les mêmes morceaux](closed/2026-10-12-le-chemin-dual-ne-pose-pas-le-marqueur-sparse.md) | corrigé (ouvert et fermé dans le lot ; `poser_le_creux`) | coût, dette jamais soldée | oui (bge-m3 : memory, notebook, validated-result) | oui (`record_nodes.rs`) |
 | [Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre](closed/2026-10-12-sous-windows-une-base-existante-ne-se-rouvre-pas-en-ecriture.md) | corrigé (65cb9a1f3, un verrou par processus) ; vu vert sous Windows, run 38262590228 | blocage | oui, sur tout poste Windows | oui (le démon, tout backend) |
 | [Un client relance l'hôte sur une base en cours d'écriture autonome](closed/2026-10-12-un-client-relance-l-hote-sur-une-base-en-cours-d-ecriture-autonome.md) | corrigé (voir le ticket) | deux écrivains sur une base | oui, pendant toute réindexation autonome | oui (`daemon_lifecycle.rs`, `daemon_host.rs`) |
 | [Le reçu d'un index annonce un modèle que l'index n'emploie pas](closed/2026-10-12-le-recu-d-index-annonce-un-modele-que-l-index-n-emploie-pas.md) | corrigé (voir le ticket) | réponse fausse (le reçu, la durée prévue) | oui, dès qu'un manifeste déclare son modèle | oui (`estimate.rs`) |

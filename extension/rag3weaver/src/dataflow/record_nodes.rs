@@ -1747,6 +1747,12 @@ pub enum EmbedMode {
     /// `_sparse_hash`), et l'insertion qui suit les pose avec la ligne. Sans
     /// vérification de marqueurs — rien n'est en base — et sans rien à défaire.
     Enrich,
+    /// **Le calcul seul, sans la base** : comme `Enrich`, les vecteurs
+    /// s'attachent aux enregistrements ; et le nœud ne touche jamais la
+    /// connexion, même pour nommer un morceau muet. C'est ce qui permet de
+    /// l'exécuter **hors du verrou du catalogue** : la réclamation se fait
+    /// avant, sous le verrou, et l'écriture après (`Catalog::poser_les_vecteurs`).
+    Compute,
 }
 
 impl EmbedNode {
@@ -1876,6 +1882,58 @@ struct PipelineWatch<'a> {
     name: Option<&'a (dyn Fn(usize) -> String + Sync)>,
 }
 
+/// **Poser des vecteurs creux sur des lignes qui existent** : relire le
+/// décalage de chaque ligne, insérer le vecteur dans le handle de la table à ce
+/// décalage, puis poser `_sparse_hash` — le marqueur après son vecteur, jamais
+/// l'inverse. `items` : (uuid, empreinte du texte, vecteur). Sans handle ouvert
+/// pour la table, rien n'est posé (le marqueur non plus : la dette reste).
+pub(crate) fn poser_le_creux(
+    conn: &dyn DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    handles: Option<&HashMap<String, Arc<sparse_vector::handle::SparseHandle>>>,
+    table: &str,
+    items: &[(String, String, &SparseVector)],
+) -> Result<(), String> {
+    let Some(handle) = handles.and_then(|h| h.get(table)) else {
+        return Ok(());
+    };
+    if items.is_empty() {
+        return Ok(());
+    }
+    let liste = CypherValue::List(
+        items
+            .iter()
+            .map(|(uuid, _, _)| CypherValue::Map(BTreeMap::from([("uuid".to_string(), CypherValue::String(uuid.clone()))])))
+            .collect(),
+    );
+    let decalages = conn
+        .execute_with_params(&dialect.embed_get_offset(table), &[QueryParam { name: "items".into(), value: liste }])
+        .map_err(|e| e.to_string())?;
+    let par_uuid: HashMap<&str, &SparseVector> = items.iter().map(|(u, _, sv)| (u.as_str(), *sv)).collect();
+    for row in &decalages.rows {
+        if let (Some(uuid), Some(offset)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_i64())) {
+            if let Some(sv) = par_uuid.get(uuid) {
+                let sv_idx = sparse_vector::index::SparseVector::new(sv.indices.clone(), sv.values.clone());
+                handle.insert(offset as u64, &sv_idx).map_err(|e| format!("sparse insert failed: {e}"))?;
+            }
+        }
+    }
+    let marques = CypherValue::List(
+        items
+            .iter()
+            .map(|(uuid, hash, _)| {
+                CypherValue::Map(BTreeMap::from([
+                    ("_uuid".to_string(), CypherValue::String(uuid.clone())),
+                    ("_sparse_hash".to_string(), CypherValue::String(hash.clone())),
+                ]))
+            })
+            .collect(),
+    );
+    let pose = crate::dialect::ecriture(dialect, &rag3weaver_ir::Write::Update { table: table.to_string(), columns: vec!["_sparse_hash".into()] });
+    conn.execute_with_params(&pose, &[QueryParam { name: "items".into(), value: marques }]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// **Poser des vecteurs sur des lignes qui existent** — le seul endroit qui
 /// le fait. `items` : des maps `uuid`, `hash`, `emb`.
 ///
@@ -1902,7 +1960,7 @@ struct PipelineWatch<'a> {
 ///
 /// Le jour où le défaut est corrigé : le corps redevient le seul `embed_set`,
 /// et `e2e_invariant_des_vecteurs` doit rester vert.
-fn write_vectors(
+pub(crate) fn write_vectors(
     conn: &dyn DbConnection,
     dialect: &dyn crate::dialect::SchemaDialect,
     table: &str,
@@ -1959,7 +2017,7 @@ fn write_vectors(
 /// son parent porte un `file_path`, sinon son titre. Lu en base au moment où il
 /// faut le dire (le lot qui part, le morceau muet) ; à défaut, la table et
 /// l'uuid.
-fn nom_du_morceau(
+pub(crate) fn nom_du_morceau(
     conn: &dyn DbConnection,
     dialect: &dyn crate::dialect::SchemaDialect,
     configs: Option<&HashMap<String, crate::config::EntityConfig>>,
@@ -1993,6 +2051,13 @@ fn nom_du_morceau(
         (None, Some(i)) => format!("{ou} (morceau {i})"),
         _ => ou,
     }
+}
+
+/// Le nom d'un morceau quand la base n'est pas là pour le lire (le calcul hors
+/// du verrou) : la table et l'uuid. Le catalogue le remplace par
+/// [`nom_du_morceau`] quand il reprend le verrou pour écrire.
+pub(crate) fn nom_provisoire(table: &str, uuid: &str) -> String {
+    format!("{table} {uuid}")
 }
 
 /// **Relever les morceaux restés muets** : dans le suivi de l'indexation (son
@@ -2325,7 +2390,9 @@ impl Node for EmbedNode {
         // pour le sparse. Un chunk peut être à jour pour l'un et devoir l'autre.
         let mut hash_dense: HashMap<String, String> = HashMap::new();
         let mut hash_sparse: HashMap<String, String> = HashMap::new();
-        let enrich = self.mode == EmbedMode::Enrich;
+        let enrich = matches!(self.mode, EmbedMode::Enrich | EmbedMode::Compute);
+        // Hors du verrou : aucun accès à la connexion, pas même pour nommer.
+        let sans_base = self.mode == EmbedMode::Compute;
         // En mode Enrich, rien n'est en base : tout est à faire.
         if !enrich && !all_uuids.is_empty() {
             let mut by_entity: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -2452,7 +2519,7 @@ impl Node for EmbedNode {
             // du temps elle attendait le JSON et les écritures.
             let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !embedder.distant());
             let embed_dense = |texts: &[String]| embedder.embed(texts).map_err(|e| format!("dense embedding failed: {e}"));
-            let nommer = |i: usize| nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &dense_works[i].entity_name, &dense_works[i].uuid);
+            let nommer = |i: usize| if sans_base { nom_provisoire(&dense_works[i].entity_name, &dense_works[i].uuid) } else { nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &dense_works[i].entity_name, &dense_works[i].uuid) };
             let suivi = PipelineWatch { stop: watch.as_ref().map(|w| &*w.stop), now: watch.as_ref().map(|w| &w.now), name: Some(&nommer) };
             let stats = embed_pipeline_suivi(&dense_works, plages, |w| &w.text, embedder.distant(), &embed_dense, |chunk, vectors| {
                 if vectors.len() != chunk.len() {
@@ -2520,7 +2587,7 @@ impl Node for EmbedNode {
                 let lens: Vec<usize> = sparse_works.iter().map(|w| w.text.len()).collect();
                 let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !sparse_emb.distant());
                 let appel = |texts: &[String]| sparse_emb.embed_sparse(texts).map_err(|e| format!("sparse embedding failed: {e}"));
-                let nommer = |i: usize| nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &sparse_works[i].entity_name, &sparse_works[i].uuid);
+                let nommer = |i: usize| if sans_base { nom_provisoire(&sparse_works[i].entity_name, &sparse_works[i].uuid) } else { nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &sparse_works[i].entity_name, &sparse_works[i].uuid) };
                 let suivi = PipelineWatch { stop: watch.as_ref().map(|w| &*w.stop), now: watch.as_ref().map(|w| &w.now), name: Some(&nommer) };
                 let stats = embed_pipeline_suivi(&sparse_works, plages, |w| &w.text, sparse_emb.distant(), &appel, |chunk, sparse_vecs| {
                     if sparse_vecs.len() != chunk.len() {
@@ -2554,67 +2621,9 @@ impl Node for EmbedNode {
                         // prêt ? » et « sparse prêt ? » — c'est ce que les
                         // quatre disponibilités vont demander, et ça réclame
                         // une seconde colonne. Migration, donc décision.
-                        let items_param = CypherValue::List(
-                            group.iter().map(|(work, _)| {
-                                let mut map = BTreeMap::new();
-                                map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
-                                map.insert("hash".into(), CypherValue::String(work.text_hash.clone()));
-                                CypherValue::Map(map)
-                            }).collect(),
-                        );
-
-                        let cypher = dialect.embed_get_offset(entity_name);
-
-                        let result = conn.execute_with_params(
-                            &cypher,
-                            &[QueryParam { name: "items".into(), value: items_param }],
-                        ).map_err(|e| e.to_string())?;
-
-                        // Insert into SparseHandle using offsets
-                        if let Some(ref handles) = sparse_handles {
-                            if let Some(handle) = handles.get(*entity_name) {
-                                let uuid_to_sv: HashMap<&str, &SparseVector> = group.iter()
-                                    .map(|(w, sv)| (w.uuid.as_str(), *sv))
-                                    .collect();
-                                for row in &result.rows {
-                                    if let (Some(uuid), Some(offset)) = (
-                                        row.first().and_then(|v| v.as_str()),
-                                        row.get(1).and_then(|v| v.as_i64()),
-                                    ) {
-                                        if let Some(sv) = uuid_to_sv.get(uuid) {
-                                            let sv_idx = sparse_vector::index::SparseVector::new(
-                                                sv.indices.clone(), sv.values.clone(),
-                                            );
-                                            handle.insert(offset as u64, &sv_idx)
-                                                .map_err(|e| format!("sparse insert failed: {e}"))?;
-                                        }
-                                    }
-                                }
-
-                                // Le marqueur sparse, après son vecteur. Le
-                                // dense posera le sien plus bas, sur sa propre
-                                // colonne : c'est ce qui rend les deux
-                                // disponibilités indépendantes.
-                                let marques = CypherValue::List(
-                                    group.iter().map(|(work, _)| {
-                                        let mut m = BTreeMap::new();
-                                        m.insert("_uuid".into(),
-                                            CypherValue::String(work.uuid.clone()));
-                                        m.insert("_sparse_hash".into(),
-                                            CypherValue::String(work.text_hash.clone()));
-                                        CypherValue::Map(m)
-                                    }).collect(),
-                                );
-                                let pose = crate::dialect::ecriture(
-                                    &*dialect,
-                                    &rag3weaver_ir::Write::Update { table: entity_name.to_string(), columns: vec!["_sparse_hash".into()] },
-                                );
-                                conn.execute_with_params(
-                                    &pose,
-                                    &[QueryParam { name: "items".into(), value: marques }],
-                                ).map_err(|e| e.to_string())?;
-                            }
-                        }
+                        let items: Vec<(String, String, &SparseVector)> =
+                            group.iter().map(|(work, sv)| (work.uuid.clone(), work.text_hash.clone(), *sv)).collect();
+                        poser_le_creux(conn.as_ref(), dialect.as_ref(), sparse_handles.as_ref(), entity_name, &items)?;
                     }
                     Ok(())
                 }, &suivi)?;
@@ -2645,7 +2654,7 @@ impl Node for EmbedNode {
                 let lens: Vec<usize> = dual_works.iter().map(|w| w.text.len()).collect();
                 let plages = burst::plan(&lens, embedder.budget_conseille(), self.gpu_batch_size, !dual_emb.distant());
                 let appel = |texts: &[String]| dual_emb.embed_dual(texts).map_err(|e| format!("dual embed failed: {e}"));
-                let nommer = |i: usize| nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &dual_works[i].entity_name, &dual_works[i].uuid);
+                let nommer = |i: usize| if sans_base { nom_provisoire(&dual_works[i].entity_name, &dual_works[i].uuid) } else { nom_du_morceau(conn.as_ref(), dialect.as_ref(), entity_configs.as_ref(), &dual_works[i].entity_name, &dual_works[i].uuid) };
                 let suivi = PipelineWatch { stop: watch.as_ref().map(|w| &*w.stop), now: watch.as_ref().map(|w| &w.now), name: Some(&nommer) };
                 let stats = embed_pipeline_suivi(&dual_works, plages, |w| &w.text, dual_emb.distant(), &appel, |chunk, (dense_vecs, sparse_vecs)| {
                     if dense_vecs.len() != chunk.len() || sparse_vecs.len() != chunk.len() {
@@ -2722,42 +2731,12 @@ impl Node for EmbedNode {
 
                     for (entity_name, group) in &groups {
                         // Get offsets for each uuid
-                        let items_param = CypherValue::List(
-                            group.iter().map(|(work, _)| {
-                                let mut map = BTreeMap::new();
-                                map.insert("uuid".into(), CypherValue::String(work.uuid.clone()));
-                                CypherValue::Map(map)
-                            }).collect(),
-                        );
-
-                        let cypher = dialect.embed_get_offset(entity_name);
-
-                        let result = conn.execute_with_params(
-                            &cypher,
-                            &[QueryParam { name: "items".into(), value: items_param }],
-                        ).map_err(|e| e.to_string())?;
-
-                        if let Some(ref handles) = sparse_handles {
-                            if let Some(handle) = handles.get(*entity_name) {
-                                let uuid_to_sv: HashMap<&str, &SparseVector> = group.iter()
-                                    .map(|(w, sv)| (w.uuid.as_str(), *sv))
-                                    .collect();
-                                for row in &result.rows {
-                                    if let (Some(uuid), Some(offset)) = (
-                                        row.first().and_then(|v| v.as_str()),
-                                        row.get(1).and_then(|v| v.as_i64()),
-                                    ) {
-                                        if let Some(sv) = uuid_to_sv.get(uuid) {
-                                            let sv_idx = sparse_vector::index::SparseVector::new(
-                                                sv.indices.clone(), sv.values.clone(),
-                                            );
-                                            handle.insert(offset as u64, &sv_idx)
-                                                .map_err(|e| format!("sparse insert failed: {e}"))?;
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        // Le même helper que le chemin sparse simple : le marqueur
+                        // `_sparse_hash` est posé après le vecteur. Il manquait ici,
+                        // et chaque passe recalculait le morceau (12 octobre).
+                        let items: Vec<(String, String, &SparseVector)> =
+                            group.iter().map(|(work, sv)| (work.uuid.clone(), work.text_hash.clone(), *sv)).collect();
+                        poser_le_creux(conn.as_ref(), dialect.as_ref(), sparse_handles.as_ref(), entity_name, &items)?;
                     }
                 }
             }

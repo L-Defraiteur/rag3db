@@ -44,9 +44,12 @@ fn reindexer_en_lot(
     fichiers: &[(String, Option<String>)],
 ) -> Result<crate::code_tools::ReingestReport, String> {
     use crate::disponibilite::Disponibilites;
+    // Le lot s'écrit sans ses vecteurs : leur dette se paie après, hors du
+    // verrou du catalogue (`Catalog::embarquer_le_retard_hors_verrou`), pour
+    // que les lectures n'attendent pas le modèle.
     let en_lot = cat.begin_lot().map_err(|e| e.to_string())?;
     if !en_lot {
-        return crate::code_sync::reingest_files(cat, source, fichiers, Disponibilites::TOUT);
+        return crate::code_sync::reingest_files(cat, source, fichiers, Disponibilites::RECHERCHE_TEXTE);
     }
     let r = crate::code_sync::reingest_files(cat, source, fichiers, Disponibilites::RECHERCHE_TEXTE).and_then(|r| {
         if fichiers.iter().any(|(p, _)| p.contains("__pause_du_lot__")) {
@@ -60,12 +63,6 @@ fn reindexer_en_lot(
     match r {
         Ok(rapport) => {
             cat.commit_lot().map_err(|e| e.to_string())?;
-            // La dette du lot, hors transaction : les morceaux neufs manquent
-            // à la recherche vectorielle le temps de cet appel, et la ligne
-            // de retard le dit.
-            if let Err(e) = cat.embarquer_le_retard(Disponibilites::TOUT, crate::catalog::RATTRAPAGE_PAR_PASSE, None) {
-                eprintln!("[réaction] l'embarquement du lot reste dû : {e}");
-            }
             Ok(rapport)
         }
         Err(e) => {
@@ -397,6 +394,22 @@ impl Node for ReindexFileNode {
                         errors.push(json!({"path": path, "error": e}));
                     }
                 }
+            }
+            // **La dette du lot, hors du verrou.** Le lot est écrit, le
+            // catalogue rendu, et le retard des fichiers effacé : ils sont à
+            // jour pour le texte. Leur dette de vecteurs se réclame puis
+            // s'écrit sous le verrou, en deux prises courtes, et le modèle est
+            // appelé sans lui. Les morceaux neufs manquent à la recherche
+            // vectorielle le temps de cet appel.
+            let embarque = std::time::Instant::now();
+            match Catalog::embarquer_le_retard_hors_verrou(
+                &catalog,
+                crate::disponibilite::Disponibilites::TOUT,
+                crate::catalog::RATTRAPAGE_PAR_PASSE,
+                None,
+            ) {
+                Ok(n) => eprintln!("[montre] puis {n} morceau(x) embarqué(s) hors du verrou : {} ms", embarque.elapsed().as_millis()),
+                Err(e) => ctx.warn(&format!("ReindexFileNode : l'embarquement du lot reste dû : {e}")),
             }
         }
         // L'arbre indexé a avancé : son commit (et ses modifications) sont

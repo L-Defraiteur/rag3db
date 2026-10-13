@@ -288,3 +288,34 @@ période n'est plus qu'un filet (`filet_ms`, 2 000) : le coût au repos baisse d
 réveils (`wakes`) et dit si les événements sont écoutés (`events`). Témoin : avec une période
 d'une minute, une modification est vue en moins de 3 s (rouge avant, aucun balayage).
 
+## 9. L'embarquement d'une réaction, hors du verrou (12 octobre 2026, l'après-midi)
+
+Une réaction tenait le catalogue pendant l'embarquement de son lot, puisque l'appel au service
+partait de `Catalog::embarquer_le_retard`, en `&mut self`, et que les lectures attendaient le
+modèle. L'embarquement est maintenant coupé en trois temps :
+- **réclamer la dette** sous le verrou, groupée par besoin (le dense, le sparse, les deux) ;
+- **calculer sans le catalogue** : `EmbedNode` en mode `Compute` ne touche jamais la connexion,
+  pas même pour nommer un morceau muet ;
+- **écrire sous le verrou**, en une écriture courte qui relit `_text_hash` et laisse dû ce dont le
+  texte a changé entre-temps.
+
+`embarquer_le_retard_suivi` enchaîne les trois sous `&mut self` : un seul chemin, que toutes les
+suites éprouvent. `Catalog::embarquer_le_retard_hors_verrou` fait la même chose en rendant le
+verrou pendant le calcul. La réaction s'en sert après le COMMIT de son lot, et la ligne `[montre]`
+dit la tenue, puis l'embarquement hors du verrou. Témoin, rouge d'abord : un embarqueur qui essaie
+le mutex à chaque appel le trouvait tenu, il le trouve libre.
+
+**Trouvé en chemin, le chemin dual.** Un modèle dual (BGE-M3) rend le dense et le sparse en un
+appel. Sur ce chemin, le vecteur creux était inséré sans que `_sparse_hash` soit posé. Le morceau
+restait dû en sparse, et chaque passe le réclamait et le recalculait, sans fin. Les chiffres :
+- le témoin : 40 fiches, la seconde passe recalculait les 40, et 0 maintenant ;
+- la mémoire longue de Lucie (gabarit `memory`, bge-m3), comptée par la session mémoire sur une
+  copie en reflink à 16 h 20 : 3 morceaux sur 3 recalculés à chaque passe (Memory, Subject,
+  RefType). L'échelle est trop petite pour chiffrer un coût ; elle montrera le passage à 0 au
+  prochain binaire, recompté de la même façon ;
+- les autres gabarits concernés : `notebook` et `validated-result`.
+
+Le correctif est un helper unique d'écriture sparse (`poser_le_creux` : décalage, handle, puis
+marqueur), utilisé par les deux chemins et par l'écriture hors du verrou. Ticket ouvert et fermé
+dans le même lot.
+
