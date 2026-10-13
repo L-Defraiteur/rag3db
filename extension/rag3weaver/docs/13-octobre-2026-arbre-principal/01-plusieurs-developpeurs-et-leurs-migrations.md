@@ -230,8 +230,9 @@ annulé bloque le suivant
 ## 6. Le scénario du banc
 
 *Écrit par le banc le 13 octobre (`~/.cache/rag3db-banc-notes/scenario-vingt-clients.md`), avec la
-colonne `vec` corrigée avec l'arbre principal. Il n'est pas joué. Les bornes sont des propositions
-à arrêter avec le cœur avant la première couleur. Il vivra dans
+colonne `vec` corrigée avec l'arbre principal. Sa forme finale, bornes arrêtées avec le cœur
+d'après sa lecture du code à `65cb9a1f3`, est du 13 octobre au soir. Il se jouera le samedi 17, au mot
+de Lucie. Il vivra dans
 `test/transaction/concurrence/twenty_writers_scenario_test.cpp` (`long.txt`, 6 minutes ; une
 version courte, un DDL toutes les 15 s, dans la passe ordinaire).*
 
@@ -239,6 +240,8 @@ version courte, un DDL toutes les 15 s, dans la passe ordinaire).*
 - **vingt écrivains**, chacun en boucle sur une petite transaction : `MERGE` d'un `Doc` par sa clé,
   `SET` de deux propriétés et de `vec`, une relation vers un voisin ; une fois sur dix, deux
   instructions dans un `BEGIN … COMMIT` ;
+- **deux écrivains d'une autre table, `Note`**, que le DDL ne touche jamais : un ADD COLUMN retient
+  toutes les validations du processus (§4), on le mesure donc sur une table étrangère aussi ;
 - **quatre lecteurs** : un `Doc` par sa clé, puis ses voisins ;
 - **un DDL par minute.**
 
@@ -252,7 +255,7 @@ Au départ : `Doc(id INT64 PRIMARY KEY, titre STRING, corps STRING, vec FLOAT[64
 | 3 | `CREATE REL TABLE Cite(FROM Doc TO Doc)` | une écriture de catalogue |
 | 4 | `CALL CREATE_VECTOR_INDEX('Doc', 'doc_vec', 'vec', metric := 'cosine')` | `CREATE INDEX CONCURRENTLY` : les écritures passent |
 | 5 | `CHECKPOINT` au milieu des écritures | n'arrête aucun écrivain |
-| 6 | `BEGIN ; ALTER TABLE Doc ADD a STRING ; ALTER TABLE Doc ADD a STRING ; COMMIT` | tout annulé, personne n'a rien vu |
+| 6 | `BEGIN ; ALTER TABLE Doc ADD a STRING ; ALTER TABLE Doc ADD a STRING ; COMMIT`, puis, avant tout point de reprise, `ALTER TABLE Doc ADD b STRING`, un SET de `b` et sa relecture | tout annulé, personne n'a rien vu ; `b` se lit tel qu'écrit |
 
 **Ce qu'on mesure**, par acteur, hors DDL et pendant chaque DDL :
 - la latence des écrivains (médiane, p99, maximum) et des lecteurs ;
@@ -262,26 +265,31 @@ Au départ : `Doc(id INT64 PRIMARY KEY, titre STRING, corps STRING, vec FLOAT[64
   brutal pendant la minute 5 ;
 - le catalogue attendu : `note`, `rang`, `Cite` et `doc_vec`, mais pas `a`.
 
-**Les bornes proposées :**
-1. ADD sans défaut sous 100 ms, et personne n'attend plus que ce temps plus 50 ms.
-2. ADD avec défaut : la borne s'écrit après la première mesure. Si le moteur réécrit chaque ligne,
-   c'est l'écart du §7, à dire, pas une couleur d'abord.
-3. CREATE REL TABLE : comme 1.
-4. CREATE_VECTOR_INDEX : les écrivains attendent au plus la durée du CREATE sur 50 000 vecteurs,
-   mesurée à part, et les lecteurs ne sont pas refusés.
-5. CHECKPOINT : personne n'attend plus que lui plus 50 ms.
-6. La migration échouée ne laisse rien (catalogue, colonnes, journal relu après réouverture) et
-   personne d'autre n'a reçu d'erreur.
-7. Partout : aucune erreur sans nom, aucune perte, et les écrivains hors DDL à p99 sous 20 ms.
+**Les bornes, arrêtées avec le cœur :**
+1. ADD sans défaut et ADD avec défaut : **pas de borne promise**. Le moteur réécrit chaque ligne
+   (§4) : la première mesure donne la durée et l'attente, sur `Doc` et sur `Note`, et l'écart à
+   PostgreSQL est le constat (E1).
+2. CREATE REL TABLE : une écriture de catalogue, personne n'attend plus que sa durée plus 50 ms.
+3. CREATE_VECTOR_INDEX : c'est le seul DDL qui force un point de reprise. Il attend au plus 5 s
+   les transactions ouvertes, puis échoue sous un nom ; les lecteurs ne sont pas refusés. Après lui,
+   les écrivains de `Doc` sont sérialisés par le verrou INDEX exclusif (E11), et on le mesure.
+4. CHECKPOINT : personne n'attend plus que lui plus 50 ms.
+5. La migration échouée ne laisse rien (catalogue, colonnes, journal relu après réouverture), et
+   personne d'autre n'a reçu d'erreur. ALTER est permis en transaction explicite : elle se joue
+   telle quelle.
+6. `b` se relit tel qu'écrit. **Rouge probable** : c'est E10, le trou que le scénario doit montrer.
+7. Partout : aucune erreur sans nom, aucune perte. Le p99 des écrivains hors DDL est **mesuré, pas
+   promis** : un fsync par validation, sous le mutex public.
+
+L'attente d'un verrou n'est lisible nulle part dans le moteur : tout se mesure de bout en bout.
 
 Ce que la lecture du code (§4) annonce avant la passe :
-- la minute 1 réécrira 50 000 lignes : la borne 1 est probablement rouge ;
-- la minute 4 retiendra les vingt écrivains jusqu'à 5 s : la borne 4 dépend de la durée du CREATE ;
-- la minute 6 sera transactionnelle au catalogue : la borne 6 est probablement verte telle
-  qu'écrite. Mais un `ADD b` juste après la ferait lire la colonne annulée (E10) : le cœur propose
-  de l'ajouter à la minute 6 ;
-- après la minute 4, les écrivains de `Doc` seront sérialisés par le verrou INDEX exclusif (E11) :
-  la borne 7 (p99 sous 20 ms) est en jeu pour les minutes 5 et 6.
+- la minute 1 réécrira 50 000 lignes, et les écrivains de `Note` l'attendront à leur validation ;
+- la minute 4 bloquera les nouveaux BEGIN jusqu'à 5 s, le temps que les transactions ouvertes
+  partent ;
+- la migration annulée de la minute 6 sera transactionnelle au catalogue, mais le `ADD b` qui la suit
+  lira probablement la colonne annulée (E10) ;
+- après la minute 4, les écrivains de `Doc` seront sérialisés par le verrou INDEX exclusif (E11).
 
 ## 7. Les écarts mesurables
 
