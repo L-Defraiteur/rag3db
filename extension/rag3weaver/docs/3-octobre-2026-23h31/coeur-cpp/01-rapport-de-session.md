@@ -1350,8 +1350,10 @@ F a aussi trouvé le second cas (page 12 §7) : le balayage entier sous un petit
   (trois tests par fork) 3/3, double ouverture et second écrivain 8/8. **Sur master `65cb9a1f3`**
   (15 h 36, trois contrôles lus ; rejeu sur 3bb1828d5 : transaction 275, api 105, planner 2, e2e
   Cypher 1 867, banc 8 / 280). La branche `_WIN32` n'a pas été compilée ici (pas de poste
-  Windows) : G la compile et joue la phase 1 de l'épreuve du démon sur le runner ; le ticket reste
-  ouvert jusque-là.
+  Windows) : **prouvé par G sur le runner** (run 38262590228, windows-x64, master 0fc7dd10f :
+  bâti MSVC vert, épreuve du cycle du démon à 0 échec — phase 0 création, phase 1 réouverture
+  d'une base existante par un hôte seul, phase 4 hôte lancé par le client ; l'épreuve JS du paquet
+  verte) ; ticket fermé par G en 0b1a68469, le ticket du mode démon ne dit plus « Windows bloqué ».
 - **La pente, verdict du banc sur master c44af8031** (trois passes sous mesure : ×1,39, ×1,40,
   ×1,37, courbe avec points de reprise plate) : rouge constant, le cas revient en known_red ; le
   profil eu-stack dit scanCommittedInMemRandom 4 → 27 % et isSelected 0 → 18 % entre les lots

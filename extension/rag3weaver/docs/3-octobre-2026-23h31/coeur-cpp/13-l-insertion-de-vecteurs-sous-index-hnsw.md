@@ -190,3 +190,44 @@ chemin persistant balaie des colonnes ; sans point de reprise, la part des voisi
 chemin croît avec chaque lot. À profiler (eu-stack échantillonné sur les derniers lots, comme le
 banc l'a fait) avant d'y toucher ; le cas est en probabilistic.txt, le ticket ouvert sur cette
 part.
+
+## 6. La lecture en mémoire ligne à ligne **[en cours, 12 octobre 15 h 35 à …]**
+
+Le lot de l'orchestration après la compaction (profil du banc sur master c44af8031 :
+`scanCommittedInMemRandom` 4 → 27 %, `VersionInfo::isSelected` 0 → 18 % entre les lots 0-15 et
+50-63 ; chaîne des versions et chemin persistant stables). Branche `lecture-en-memoire`, mesure
+par la pente du banc sous `poste mesure` : **avant, master 65cb9a1f3 bâti entier : 147,5 / 109,6 ms,
+×1,35**.
+
+**Ce que fait le code (lu).** Une liste CSR non séquentielle (compactée, ou touchée par un
+rétrécissement) se lit ligne à ligne : `ChunkedNodeGroup::lookup` par ligne, soit un verrou
+partagé `versionInfoMtx`, `getQuotientRemainder`, le vecteur de versions et ses deux switches,
+puis `ColumnChunk::lookup` par colonne (segments, puis l'info de mise à jour). Aucun résumé de
+bloc n'existe : le raccourci `ALWAYS_INSERTED` de `VectorVersionInfo` n'est jamais posé en mémoire
+(`commitInsert` écrit les TS sans changer le statut). Le balayage de plage (`ChunkedNodeGroup::scan`)
+écrit toujours à partir de la position 0 de la sortie.
+
+**Première forme — le résumé par bloc** (`VersionInfo::allRowsVisibleTo` : insertions toutes
+validées au plus tard à l'instantané, aucune suppression, résumé invalide s'il vient du disque)
+et **les suites contiguës lues d'un bloc quand le bloc est tout visible** (`scanRun`, `dstOffset`
+ajouté à `ColumnChunk::scan` et `UpdateInfo::scan`). Témoins `InMemoryReadShortcut` 2/2 (visibilité
+inchangée, suites et DELETE par numéro de ligne), suites complètes vertes. **Pente après : 163 /
+111, ×1,47 : rien.** Les blocs font 1 024 lignes (CHUNKED_NODE_GROUP_CAPACITY = 2^10) : chaque
+rétrécissement supprime partout, `anyDeletion` exclut tout.
+
+**Deuxième forme — les suppressions encore listées** : `listedDeletions` (delete_ +1, rollback −n)
+que la compaction décrémente quand elle retire la ligne morte de sa liste (`forgetDeletion`), avec
+une garde : la compaction d'un groupe ne retire rien tant qu'une copie de liste est en vol
+(`CSRNodeGroupScanState::listCopiedFrom`, `CSRNodeGroup::inFlightListCopies`) — sinon un lecteur
+à copie ancienne relirait la ligne morte que le résumé rendrait vivante. **Pente après : 168 / 111,
+×1,52 : rien.** La trace (`RAG3DB_TRACE_INMEM`) le dit : 6,9 M lignes lues par suite, 28,7 M
+ligne à ligne, 21 M suites refusées, toutes pour « suppressions listées », zéro compaction
+sautée : ce sont les suppressions **de la transaction elle-même** (les rétrécissements du lot en
+cours), que rien ne peut oublier avant sa validation, et le lecteur est l'écrivain.
+
+**Troisième forme — les suites lues en bloc avec leur filtre** : `scanRun(…, runSel)` prend le
+verrou une fois par suite, calcule la sélection de la suite par `getSelVectorToScan`, copie les
+colonnes en bloc à la position de sortie, et `scanCommittedInMemRandom` accumule les positions des
+lignes visibles dans le tampon de la sélection de sortie (filtrée à la fin si une ligne d'une suite
+ne l'était pas ; l'identité pendant la fenêtre). Bâtie ; témoins, trace et pente après 3 à jouer
+après la pause de Lucie (16 h 30).
