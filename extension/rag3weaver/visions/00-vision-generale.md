@@ -464,6 +464,21 @@ vrai, et c'est ce qui décide des outils suivants.
   le channel au moment où ça arrive ; un hook avant chaque message demande à
   l'hôte les fiches pertinentes et les glisse en contexte. Graine, pas de
   chantier sans le mot de Lucie.
+- **Des applications rag3weaver empaquetées, une graine** (Lucie, 12 octobre
+  2026 au soir : « notre projet pourrait être exportable : t'es sur ton
+  Windows, Mac, Linux, Android, tu peux lancer l'app quand même, des apps
+  rag3weaver packageables ; une autre vision long terme »). Un produit
+  (un atelier avec ses gabarits, ses graphes, ses vues, sa base) devient une
+  application qu'on lance sur n'importe quel poste sans rien installer
+  autour. Ce qui y mène déjà : le démon portable (lot C, vert sur Linux,
+  macOS et Windows le 12 octobre), le paquet npm qui livre les binaires par
+  système, la lib du moteur liée par identifiant de bâti, l'atelier qui n'est
+  qu'une page servie et des déclarations rechargées à chaud. Ce qui manque :
+  un seul binaire qui embarque l'hôte, le moteur et ses extensions, le
+  gabarit du produit et sa base à côté ; les services d'embarquement en
+  local ou distants selon le poste ; et Android, le plus loin (le moteur C++
+  et le crate Rust pour l'ARM d'Android, des modèles petits). Graine, pas de
+  chantier sans le mot de Lucie.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le
