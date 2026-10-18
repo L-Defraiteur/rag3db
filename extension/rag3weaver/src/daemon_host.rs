@@ -130,6 +130,27 @@ pub struct DaemonHost {
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
 impl DaemonHost {
+    /// **Ce qui retient l'hôte de s'arrêter pour inactivité**, s'il y a quelque
+    /// chose : un run en fond vivant, un appel en cours sur un backend (son verrou
+    /// tenu), ou le travail d'un backend ([`Backend::travail_en_cours`] : index,
+    /// montre). Ne bloque jamais.
+    pub fn travail_en_cours(&self) -> Option<String> {
+        let vivants = self.background.alive();
+        if !vivants.is_empty() {
+            return Some(format!("{} run(s) en fond vivant(s)", vivants.len()));
+        }
+        let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        for h in hosted {
+            let Ok(slot) = h.backend.try_lock() else {
+                return Some(format!("un appel en cours sur {}", h.manifest.display()));
+            };
+            if let Some(cause) = slot.as_ref().and_then(Backend::travail_en_cours) {
+                return Some(format!("{} : {cause}", h.manifest.display()));
+            }
+        }
+        None
+    }
+
     /// Un hôte qui ouvre ses bases sur disque, comme `serve` : le tampon du
     /// manifeste, l'embarqueur s'il en faut un.
     pub fn new() -> Self {
@@ -673,6 +694,60 @@ pub struct DaemonServer {
     server: Arc<tiny_http::Server>,
     stopping: Arc<std::sync::atomic::AtomicBool>,
     threads: usize,
+    /// **L'arrêt après inactivité** (18 octobre 2026) : sans requête ni travail en
+    /// cours depuis ce délai, l'hôte s'arrête seul et rend sa mémoire. `None` :
+    /// jamais. Sous l'unité systemd à socket, l'appel suivant le relance.
+    idle: Option<std::time::Duration>,
+    activity: Arc<Activite>,
+}
+
+/// L'activité de l'hôte : l'instant de la dernière requête, et les requêtes en vol
+/// (un appel d'outil, un flux de l'IDE ouvert). `GET /sante` n'en est pas : une
+/// sonde ne garde pas un hôte en vie.
+struct Activite {
+    derniere_ms: std::sync::atomic::AtomicU64,
+    en_vol: std::sync::atomic::AtomicUsize,
+}
+
+impl Activite {
+    fn new() -> Self {
+        Self { derniere_ms: std::sync::atomic::AtomicU64::new(maintenant_ms()), en_vol: std::sync::atomic::AtomicUsize::new(0) }
+    }
+    fn entrer(self: &Arc<Self>) -> EnVol {
+        self.en_vol.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.derniere_ms.store(maintenant_ms(), std::sync::atomic::Ordering::SeqCst);
+        EnVol(self.clone())
+    }
+    /// Inactif depuis combien de temps, ou `None` s'il y a une requête en vol.
+    fn inactif_depuis(&self) -> Option<std::time::Duration> {
+        if self.en_vol.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            return None;
+        }
+        let depuis = maintenant_ms().saturating_sub(self.derniere_ms.load(std::sync::atomic::Ordering::SeqCst));
+        Some(std::time::Duration::from_millis(depuis))
+    }
+}
+
+/// Une requête en vol : la fin de la requête (sa sortie de portée, quel que soit le
+/// chemin) la retire et horodate.
+struct EnVol(Arc<Activite>);
+
+impl Drop for EnVol {
+    fn drop(&mut self) {
+        self.0.derniere_ms.store(maintenant_ms(), std::sync::atomic::Ordering::SeqCst);
+        self.0.en_vol.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+fn maintenant_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+/// Le délai d'inactivité de l'hôte : `RAG3WEAVER_DAEMON_IDLE_MIN` minutes, 30 par
+/// défaut ; 0 : jamais.
+pub fn idle_from_env() -> Option<std::time::Duration> {
+    let minutes = std::env::var("RAG3WEAVER_DAEMON_IDLE_MIN").ok().and_then(|v| v.trim().parse::<f64>().ok()).unwrap_or(30.0);
+    (minutes > 0.0).then(|| std::time::Duration::from_secs_f64(minutes * 60.0))
 }
 
 /// **Arrêter l'hôte** : plus aucune requête n'est prise, les fils en attente
@@ -706,7 +781,15 @@ impl DaemonServer {
             server: Arc::new(server),
             stopping: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             threads: threads.max(1),
+            idle: None,
+            activity: Arc::new(Activite::new()),
         }
+    }
+
+    /// S'arrêter seul après `idle` sans requête ni travail en cours (`None` : jamais).
+    pub fn with_idle(mut self, idle: Option<std::time::Duration>) -> Self {
+        self.idle = idle;
+        self
     }
 
     pub fn stopper(&self) -> Stopper {
@@ -722,17 +805,43 @@ impl DaemonServer {
         // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
         // session de client mort ne se fermerait qu'à la lecture de l'état.
         let releve = {
-            let (host, stopping) = (host.clone(), self.stopping.clone());
+            let (host, stopping, stopper, activite, idle) =
+                (host.clone(), self.stopping.clone(), stopper.clone(), self.activity.clone(), self.idle);
             std::thread::Builder::new()
                 .name("demon-releve".into())
                 .spawn(move || {
                     let mut ecoule = std::time::Duration::ZERO;
+                    let pas = idle.map_or(REAP_EVERY, |d| d.min(REAP_EVERY));
+                    let mut retenu: Option<String> = None;
                     while !stopping.load(Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(200));
                         ecoule += std::time::Duration::from_millis(200);
-                        if ecoule >= REAP_EVERY {
+                        if ecoule >= pas {
                             ecoule = std::time::Duration::ZERO;
                             host.reap_dead_sessions();
+                            // **L'arrêt après inactivité** : aucune requête depuis le
+                            // délai, aucune en vol, et rien qui retienne (index, montre,
+                            // runs en fond). Ce qui retient se dit une fois par cause.
+                            if let (Some(delai), Some(depuis)) = (idle, activite.inactif_depuis()) {
+                                if depuis >= delai {
+                                    match host.travail_en_cours() {
+                                        Some(cause) => {
+                                            if retenu.as_deref() != Some(cause.as_str()) {
+                                                eprintln!("[démon] inactif depuis {} s, mais retenu : {cause}", depuis.as_secs());
+                                                retenu = Some(cause);
+                                            }
+                                        }
+                                        None => {
+                                            eprintln!(
+                                                "[démon] inactif depuis {} s sans travail en cours (délai {} s) : arrêt, la mémoire est rendue",
+                                                depuis.as_secs(),
+                                                delai.as_secs()
+                                            );
+                                            stopper.stop();
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 })
@@ -740,8 +849,8 @@ impl DaemonServer {
         };
         let workers: Vec<_> = (0..self.threads)
             .map(|i| {
-                let (server, host, stopping, stopper) =
-                    (self.server.clone(), host.clone(), self.stopping.clone(), stopper.clone());
+                let (server, host, stopping, stopper, activite) =
+                    (self.server.clone(), host.clone(), self.stopping.clone(), stopper.clone(), self.activity.clone());
                 let attendu = token.as_ref().map(|t| format!("Bearer {t}"));
                 std::thread::Builder::new()
                     .name(format!("demon-{i}"))
@@ -755,6 +864,7 @@ impl DaemonServer {
                             let method = request.method().as_str().to_string();
                             let url = request.url().to_string();
                             let path = url.split('?').next().unwrap_or("").to_string();
+                            let _en_vol = (!(method == "GET" && path == "/sante")).then(|| activite.entrer());
                             // L'IDE a sa propre porte : le jeton par le cookie de
                             // l'entrée, ou l'en-tête (`crate::ide`).
                             if crate::ide::est_a_lui(&path) {
@@ -952,6 +1062,48 @@ mod tests {
         let arret = server.stopper();
         let fil = std::thread::spawn(move || server.serve(Arc::new(DaemonHost::new()), Some("j".into())));
         std::thread::sleep(std::time::Duration::from_millis(100));
+        arret.stop();
+        fil.join().unwrap();
+    }
+
+    /// **L'arrêt après inactivité** (18 octobre 2026) : sans requête ni travail,
+    /// l'hôte s'arrête seul dans son délai ; une sonde `/sante` ne le retient pas,
+    /// une requête en vol si (une connexion qui envoie sans finir).
+    #[test]
+    fn l_hote_inactif_s_arrete_seul_et_une_sonde_ne_le_retient_pas() {
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        let server = DaemonServer::new(tiny_http::Server::from_listener(ecoute, None).unwrap(), 3)
+            .with_idle(Some(std::time::Duration::from_millis(600)));
+        let t0 = std::time::Instant::now();
+        let fil = std::thread::spawn(move || server.serve(Arc::new(DaemonHost::new()), Some("j".into())));
+        // Des sondes pendant tout le délai : elles ne comptent pas.
+        while t0.elapsed() < std::time::Duration::from_millis(500) {
+            let _ = demander("GET", &format!("http://{adresse}/sante"), None);
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        while !fil.is_finished() {
+            assert!(t0.elapsed() < std::time::Duration::from_secs(5), "l'hôte inactif ne s'est pas arrêté");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        fil.join().unwrap();
+    }
+
+    #[test]
+    fn une_requete_en_vol_retient_l_hote_inactif() {
+        use std::io::Write;
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        let server = DaemonServer::new(tiny_http::Server::from_listener(ecoute, None).unwrap(), 3)
+            .with_idle(Some(std::time::Duration::from_millis(400)));
+        let arret = server.stopper();
+        let fil = std::thread::spawn(move || server.serve(Arc::new(DaemonHost::new()), Some("j".into())));
+        // Une requête dont le corps n'arrive jamais : elle reste en vol.
+        let mut c = std::net::TcpStream::connect(&adresse).unwrap();
+        write!(c, "POST /etat HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer j\r\nContent-Length: 100\r\n\r\n{{").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        assert!(!fil.is_finished(), "une requête en vol n'a pas retenu l'hôte");
+        drop(c);
         arret.stop();
         fil.join().unwrap();
     }

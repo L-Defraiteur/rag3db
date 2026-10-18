@@ -310,6 +310,27 @@ impl DaemonClient {
                 }
                 encore
             }
+            // **Un hôte relancé derrière la même adresse** (la socket de l'unité
+            // systemd, 18 octobre 2026) : la connexion passe, mais le jeton est
+            // neuf. Le client qui découvre son hôte relit daemon.json (par
+            // `relancer`, qui ne lance rien sous l'unité) et rejoue une fois.
+            None if premier[crate::daemon_host::BAD_TOKEN] == json!(true) => match &self.relaunch {
+                Some(exe) => {
+                    self.relancer(exe, "jeton refusé : l'hôte a redémarré derrière la même adresse")?;
+                    if route != "/open" {
+                        self.envoyer("/open", &json!({ "manifest": self.manifest })).map_err(OpError::from)?;
+                    }
+                    let encore = self.envoyer(route, &body).map_err(OpError::from)?;
+                    if encore[crate::daemon_host::BAD_TOKEN] == json!(true) {
+                        return Err(OpError {
+                            error: format!("jeton local refusé par l'hôte {} même après relecture de daemon.json", self.base()),
+                            transient: false,
+                        });
+                    }
+                    encore
+                }
+                None => premier,
+            },
             _ => premier,
         };
         let reponse = if premier["unknownSession"] == json!(true) {
@@ -542,7 +563,12 @@ impl McpInner {
     /// fois branché, annoncer la liste d'outils changée.
     fn reprendre(self: std::sync::Arc<Self>) {
         loop {
-            if !matches!(&*self.side.lock().unwrap_or_else(|p| p.into_inner()), Side::Missing(_)) {
+            match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
+                Side::Missing(_) => {}
+                _ => return,
+            }
+            // Un client périmé ne le sera pas moins dans 10 s : il le reste, et le dit.
+            if matches!(&*self.side.lock().unwrap_or_else(|p| p.into_inner()), Side::Missing(crate::daemon_lifecycle::Missing::Outdated(_))) {
                 return;
             }
             std::thread::sleep(RETRY_EVERY);
@@ -705,6 +731,10 @@ impl McpClient {
                 "log": crate::daemon_lifecycle::log_path(),
                 "daemon_file": crate::daemon_lifecycle::file_path(),
                 "what_to_do": match m {
+                    crate::daemon_lifecycle::Missing::Outdated(_) => {
+                        "relancer la session (le client MCP) : il prendra le binaire installé, que l'unité \
+                         systemd lance ; un client d'avant la mise à jour ne s'attache pas à l'hôte neuf"
+                    }
                     crate::daemon_lifecycle::Missing::Refused(_) => {
                         "attendre la fin de l'écrivain autonome nommé (ou l'arrêter proprement, `kill -TERM`) : \
                          le prochain appel d'outil s'attache alors à l'hôte, sans rien relancer à la main"

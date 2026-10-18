@@ -404,7 +404,16 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     }
     // **Le port d'abord, `daemon.json` ensuite** (marche 4, page C §5) : le
     // fichier dit l'adresse réellement servie, un port 0 résolu.
-    let ecoute = std::net::TcpListener::bind(&adresse).map_err(|e| format!("{adresse} : {e}"))?;
+    // **La socket de l'unité systemd, si elle nous est passée** (18 octobre 2026) :
+    // `rag3weaver-daemon.socket` écoute, et le service hérite du fd 3. Sinon, le
+    // port se prend ici.
+    let ecoute = match ecoute_de_systemd() {
+        Some(ecoute) => {
+            eprintln!("[démon] la socket de systemd (LISTEN_FDS), pas de bind");
+            ecoute
+        }
+        None => std::net::TcpListener::bind(&adresse).map_err(|e| format!("{adresse} : {e}"))?,
+    };
     let servie = ecoute.local_addr().map_err(|e| e.to_string())?.to_string();
     let server = tiny_http::Server::from_listener(ecoute, None).map_err(|e| format!("{servie} : {e}"))?;
     let jeton = cycle::new_token()?;
@@ -438,7 +447,13 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     );
     // **SIGTERM vaut `POST /arret`** : la même poignée d'arrêt, les bases
     // fermées proprement, puis `daemon.json` retiré.
-    let serveur = rag3weaver::daemon_host::DaemonServer::new(server, fils);
+    // L'arrêt après inactivité (RAG3WEAVER_DAEMON_IDLE_MIN, 30 min par défaut, 0 :
+    // jamais) : sous l'unité à socket, l'appel suivant le relance.
+    let inactivite = rag3weaver::daemon_host::idle_from_env();
+    if let Some(d) = inactivite {
+        eprintln!("[démon] s'arrête seul après {} min sans appel ni travail en cours", d.as_secs() / 60);
+    }
+    let serveur = rag3weaver::daemon_host::DaemonServer::new(server, fils).with_idle(inactivite);
     let arret = serveur.stopper();
     std::thread::spawn(move || {
         let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return };
@@ -478,6 +493,31 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     cycle::remove_if_mine(pid);
     eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
     Ok(())
+}
+
+/// **L'écoute passée par systemd** (activation par socket) : `LISTEN_PID` est ce
+/// processus et `LISTEN_FDS` vaut au moins 1, alors le fd 3 est la socket de
+/// `rag3weaver-daemon.socket`. Elle est dupliquée (std ouvre le double en
+/// close-on-exec) et l'original fermé : une commande lancée par l'hôte n'en hérite
+/// pas. Hors Unix, ou sans ces variables : `None`, l'hôte prend son port.
+fn ecoute_de_systemd() -> Option<std::net::TcpListener> {
+    #[cfg(unix)]
+    {
+        let pid: u32 = std::env::var("LISTEN_PID").ok()?.trim().parse().ok()?;
+        let n: u32 = std::env::var("LISTEN_FDS").ok()?.trim().parse().ok()?;
+        if pid != std::process::id() || n < 1 {
+            return None;
+        }
+        // SAFETY : systemd passe le fd 3, ouvert et à ce seul processus (LISTEN_PID).
+        let herite = unsafe { <std::net::TcpListener as std::os::fd::FromRawFd>::from_raw_fd(3) };
+        let double = herite.try_clone().ok()?;
+        drop(herite);
+        Some(double)
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
 }
 
 fn servir_http(args: &[String]) -> Result<(), String> {
