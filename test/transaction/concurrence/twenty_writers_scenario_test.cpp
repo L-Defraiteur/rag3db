@@ -834,6 +834,10 @@ TEST_F(TwentyWriters, KilledDuringTheCheckpoint) {
     std::cerr << "  [scénario] tué pendant le CHECKPOINT ; .wal "
               << (fs::exists(walPath) ? std::to_string(fs::file_size(walPath)) : "absent")
               << " octets\n";
+    // Le fils est mort base ouverte (SIGKILL dans la portée de sa Database, vérifié ci-dessus) ;
+    // sans journal à rejouer, la réouverture ne prouverait rien.
+    ASSERT_TRUE(fs::exists(walPath) && fs::file_size(walPath) > 0)
+        << "[check: journal-to-replay] no .wal left by the killed child";
 
     // Ce que le fils avait vu validé.
     std::set<int64_t> newKeys;
