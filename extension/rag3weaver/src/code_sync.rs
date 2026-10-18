@@ -199,7 +199,7 @@ pub fn edit_file_shared(
     let source_id = registry_key(source);
     loop {
         match catalog.try_lock() {
-            Ok(mut guard) => return crate::code_tools::edit_file(source, Some(&mut guard), path, op, expected_hash),
+            Ok(mut guard) => return crate::code_tools::edit_file_with_hash(source, Some(&mut guard), path, op, expected_hash),
             Err(std::sync::TryLockError::Poisoned(e)) => return Err(format!("catalogue empoisonné : {e}")),
             Err(std::sync::TryLockError::WouldBlock) if indexing_in_progress(&source_id) => break,
             // Tenu, mais pas par une indexation de cette source — ou pas

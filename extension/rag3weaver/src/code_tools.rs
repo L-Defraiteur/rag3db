@@ -1414,7 +1414,13 @@ pub fn strip_line_prefixes(text: &str) -> String {
 /// catalogue est là : ses scopes sont réécrits (identités `hashsafe` stables),
 /// ceux qui ont disparu sont supprimés. Les relations inter-fichiers vers ce
 /// fichier ne sont pas recalculées — dette nommée.
-pub fn edit_file(
+pub fn edit_file(source: &dyn FileSource, catalog: Option<&mut Catalog>, path: &str, op: &EditOp) -> Result<EditResult, String> {
+    edit_file_with_hash(source, catalog, path, op, None)
+}
+
+/// [`edit_file`], sur une empreinte lue : un fichier changé depuis refuse, et rien
+/// n'est écrit ([`write_edit`]).
+pub fn edit_file_with_hash(
     source: &dyn FileSource,
     catalog: Option<&mut Catalog>,
     path: &str,
@@ -1838,7 +1844,7 @@ mod tests {
         let s = snapshot();
         // Texte recopié depuis `read`, préfixes compris.
         let op = EditOp::Replace { old: "00002|     beta();".into(), new: "00002|     beta(); // twice\n00003|     beta();".into() };
-        let r = edit_file(&s, None, "src/a.rs", &op, None).unwrap();
+        let r = edit_file(&s, None, "src/a.rs", &op).unwrap();
         assert!(!r.created);
         assert_eq!((r.lines_before, r.lines_after), (5, 6));
         assert_eq!(r.first_changed_line, Some(2));
@@ -1846,13 +1852,13 @@ mod tests {
         let after = s.read("src/a.rs").unwrap().unwrap();
         assert!(after.contains("    beta(); // twice\n    beta();\n"), "{after}");
         // Ambigu : `beta();` apparaît maintenant deux fois.
-        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "beta();".into(), new: "x".into() }, None).unwrap_err();
+        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "beta();".into(), new: "x".into() }).unwrap_err();
         assert!(err.contains("appears 2 times"), "{err}");
-        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "gamma();".into(), new: "x".into() }, None).unwrap_err();
+        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "gamma();".into(), new: "x".into() }).unwrap_err();
         assert!(err.contains("not found"), "{err}");
-        let err = edit_file(&s, None, "new.rs", &EditOp::Replace { old: "a".into(), new: "b".into() }, None).unwrap_err();
+        let err = edit_file(&s, None, "new.rs", &EditOp::Replace { old: "a".into(), new: "b".into() }).unwrap_err();
         assert!(err.contains("full write"), "{err}");
-        let w = edit_file(&s, None, "new.rs", &EditOp::Write { content: "fn fresh() {}\n".into() }, None).unwrap();
+        let w = edit_file(&s, None, "new.rs", &EditOp::Write { content: "fn fresh() {}\n".into() }).unwrap();
         assert!(w.created && w.lines_after == 1);
         assert_eq!(s.read("new.rs").unwrap().unwrap(), "fn fresh() {}\n");
     }
@@ -1864,7 +1870,6 @@ mod tests {
         assert_eq!(strip_line_prefixes("plain"), "plain");
     }
 
-    #[test]
     /// **L'édition humaine de l'IDE** (B1, 18 octobre 2026) : sur une empreinte
     /// périmée rien n'est écrit, et le refus porte l'empreinte actuelle ; sur la
     /// bonne, le contenu est écrit tel quel (pas de retrait des préfixes de `read`).
@@ -1876,7 +1881,7 @@ mod tests {
         let lue = read_file_raw(&wt, &RootPolicy::closed(), "a.rs").unwrap();
         // Un autre éditeur passe entre la lecture et l'enregistrement.
         std::fs::write(d.path().join("a.rs"), "fn a() { autre(); }\n").unwrap();
-        let err = edit_file(&wt, None, "a.rs", &EditOp::Write { content: "fn a() { moi(); }\n".into() }, Some(&lue.content_hash))
+        let err = edit_file_with_hash(&wt, None, "a.rs", &EditOp::Write { content: "fn a() { moi(); }\n".into() }, Some(&lue.content_hash))
             .unwrap_err();
         assert!(err.starts_with(STALE_EDIT), "{err}");
         let actuel = crate::hash::content_hash("fn a() { autre(); }\n");
@@ -1885,12 +1890,12 @@ mod tests {
         // Relue, la même édition passe — telle quelle, même ce qui ressemble à un préfixe.
         let relue = read_file_raw(&wt, &RootPolicy::closed(), "a.rs").unwrap();
         let tel_quel = "00001| garde ce texte\n";
-        let r = edit_file(&wt, None, "a.rs", &EditOp::Write { content: tel_quel.into() }, Some(&relue.content_hash)).unwrap();
+        let r = edit_file_with_hash(&wt, None, "a.rs", &EditOp::Write { content: tel_quel.into() }, Some(&relue.content_hash)).unwrap();
         assert_eq!(std::fs::read_to_string(d.path().join("a.rs")).unwrap(), tel_quel);
         assert_eq!(r.content_hash, crate::hash::content_hash(tel_quel));
         // Un fichier disparu depuis la lecture refuse aussi.
         std::fs::remove_file(d.path().join("a.rs")).unwrap();
-        let err = edit_file(&wt, None, "a.rs", &EditOp::Write { content: "x".into() }, Some(&r.content_hash)).unwrap_err();
+        let err = edit_file_with_hash(&wt, None, "a.rs", &EditOp::Write { content: "x".into() }, Some(&r.content_hash)).unwrap_err();
         assert!(err.starts_with(STALE_EDIT) && err.contains("n'existe plus"), "{err}");
         assert!(!d.path().join("a.rs").exists());
     }
@@ -1920,7 +1925,7 @@ mod tests {
         let h = crate::hash::content_hash("secret");
         for chemin in ["../dehors.rs", d.path().join("dehors.rs").to_str().unwrap()] {
             assert!(read_file_raw(&wt, &RootPolicy::closed(), chemin).is_err(), "{chemin}");
-            assert!(edit_file(&wt, None, chemin, &EditOp::Write { content: "écrasé".into() }, Some(&h)).is_err(), "{chemin}");
+            assert!(edit_file_with_hash(&wt, None, chemin, &EditOp::Write { content: "écrasé".into() }, Some(&h)).is_err(), "{chemin}");
         }
         assert_eq!(std::fs::read_to_string(d.path().join("dehors.rs")).unwrap(), "secret");
     }
