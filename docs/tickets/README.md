@@ -30,7 +30,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (29)
+### Ouverts — moteur (30)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -38,6 +38,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini](2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md) | ouvert — cause non cherchée (tampon, mémoire hors tampon, allocateur ou hôte) ; sonde à écrire | mémoire | oui, après tout gros index dans un hôte qui reste ouvert | oui (l'hôte du démon) |
+| [Une colonne ajoutée puis annulée reste au stockage, et l'ajout suivant la relit à sa place](2026-10-18-une-colonne-ajoutee-puis-annulee-reste-au-stockage-et-l-ajout-suivant-la-relit.md) | ouvert — pour le cœur C++ (lu, pas joué ; le banc le joue : E10) | réponse fausse silencieuse, permanente après le point de reprise ; plantage si les types diffèrent | oui (une migration rejouée après un échec) | oui |
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
 | [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
