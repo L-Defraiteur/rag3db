@@ -2,14 +2,15 @@
 
 - **État** : ouvert (reproduit sur master 8f4779bdc et sur le lot du rollback, luciepc, 18 octobre
   2026, par une sonde déterministe)
-- **Gravité** : **perte de données, durable** : après le COPY validé, un `CHECKPOINT` puis une
+- **Gravité** : **perte de données, durable** : après un COPY annulé (puis un COPY validé), un `CHECKPOINT` puis une
   réouverture, les dix relations d'avant du nœud ne sont plus nulle part (`k <= 10` compte 0 dans
   toute la table, le nœud 1 n'a plus d'entrante) : perdues au stockage, pas seulement au
   balayage (sonde du 18 octobre, luciepc, master b47dc6066).
 - **Atteignable en service** : oui, dès qu'un COPY de relations s'ajoute à une table qui a déjà
   des relations validées et reprises (point de reprise) pour les mêmes nœuds source.
-- **Touche rag3weaver** : oui, mesuré par codeparsers sur `code-lourd` (réindexation par COPY :
-  18 `HAS_PARENT` et 11 `INHERITS_FROM` perdus, 17 `CONSUMES` en trop), voir plus bas.
+- **Touche rag3weaver** : seulement si un COPY de relations s'annule (échec en cours de route, ou
+  `BEGIN … ROLLBACK` autour) vers des nœuds déjà reliés et repris ; la perte mesurée par
+  codeparsers sur `code-lourd` n'est pas ce défaut (voir plus bas).
 - **Ouvert le** : 18 octobre 2026, session cœur C++, trouvé en écrivant le témoin du rollback
   sous lecteurs.
 - **Pour** : cœur C++ (à placer par l'orchestration ; c'est une perte, donc avant les lenteurs).
@@ -38,16 +39,44 @@ annulé ou validé. Suite de la sonde, après le COPY validé : toute la table c
 1 500, 0, et le nœud 1 n'a plus aucune relation entrante. **La perte est durable.** Sans le `CHECKPOINT` (les dix relations en mémoire), tout est juste : le
 défaut tient à la rencontre d'un bloc persistant et d'une liste en mémoire pour le même nœud.
 
-## Sur une vraie base (codeparsers, 18 octobre 2026)
+## La forme exacte (sonde de variantes, luciepc, master, 18 octobre 2026, une base neuve par cas)
+
+| cas | après l'annulation (attendu 10) | à la fin, nœud 0 | vers le nœud 1 (attendu 10) |
+|---|---|---|---|
+| COPY validé seul, relations d'avant persistantes | — | 1 510 (juste) | 10 |
+| **COPY annulé seul**, persistantes | **0** | 0 | 0 |
+| COPY annulé puis COPY validé, persistantes | 0 | 1 500 | 0 |
+| COPY annulé **sans propriété**, persistantes | 0 | 1 500 | 0 |
+| COPY **depuis une sous-requête** annulé, persistantes | 0 | 1 500 | 0 |
+| COPY annulé puis **CREATE** validé, persistantes | 0 | 1 500 | 0 |
+| CREATE annulé puis COPY validé, persistantes | 10 | 1 510 (juste) | 10 |
+| COPY annulé puis COPY validé, relations d'avant **en mémoire** | 10 | **3 010** (les 1 500 annulées reviennent) | 10 |
+
+Donc : **c'est l'annulation d'un COPY** (fichier ou sous-requête, avec ou sans propriété) vers un
+nœud qui a des relations **persistantes** qui les efface, tout de suite (0) et pour toujours. Un
+COPY validé seul est juste ; un CREATE annulé ne fait rien (stockage local). Un COPY qui échoue
+en cours de route (clé en double, mémoire) s'annule : il suffit donc d'un COPY refusé pour
+perdre les relations persistantes des nœuds qu'il touchait. La dernière ligne (relations d'avant
+en mémoire : les 1 500 lignes annulées reviennent au COPY suivant) est le défaut des listes CSR
+qui gardent les lignes annulées, corrigé par le lot « rollback sous lecteurs » (58c1110ca).
+
+Ce que le produit en touche : son chemin CSV est en validation automatique, sans ROLLBACK
+explicite ; il n'est atteint que si un COPY échoue (annulation), ou s'il enveloppe un COPY dans
+un `BEGIN … ROLLBACK`.
+
+## Sur une vraie base (codeparsers, 18 octobre 2026) — ce n'est pas ce défaut
 
 Mesure de codeparsers, même lib 87a362e30, base `code-lourd` : réindexée au seuil haut sans COPY,
 contre au seuil par défaut avec COPY. Par rapport à la référence sans COPY : `HAS_PARENT` −18,
 `INHERITS_FROM` −11, `CONSUMES` +17, et 16 relations égales ; la base vive est identique au cas
 avec COPY. Les arêtes perdues sont des relations fines (héritage, parent), et un `CONSUMES` de
-trop apparaît sur le même couple de nœuds : à ajouter à la recette, une table de relations à
-plusieurs paires d'extrémités (groupe de relations) et deux relations d'un même couple. Listes :
-`~/.cache/codeparsers-notes/pertes-18oct/{ref,bas}-lourd-aretes.txt` sur le portable. Donc
-**l'hôte est touché** dès qu'il passe par COPY.
+trop apparaît sur le même couple de nœuds. Listes :
+`~/.cache/codeparsers-notes/pertes-18oct/{ref,bas}-lourd-aretes.txt` sur le portable.
+**L'arbre principal a montré que cette perte-là n'est pas ce défaut** : c'est un ordre de
+résolution du produit (`CONSUMES` posé à la place de `HAS_PARENT` ou d'`INHERITS_FROM` sur le
+même couple) ; ses trois témoins par le chemin CSV du produit (sources ou arrivées déjà liées, en
+automatique et dans un `BEGIN … COMMIT`) restent verts. Le défaut de ce ticket reste réel par
+Cypher, dans la forme exacte du tableau ci-dessus.
 
 ## Ce que dit le code (lu, non prouvé)
 
