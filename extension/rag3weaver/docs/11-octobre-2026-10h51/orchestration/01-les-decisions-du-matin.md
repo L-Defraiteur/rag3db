@@ -1679,3 +1679,52 @@ où elle vit.
   la rétention (205d2923e), la lecture en mémoire du cœur, le binaire de la
   mémoire longue. Sur luciepc : le paquet de G sans publier, puis le
   septième rejeu de codeparsers.
+
+- **18 octobre, de la reprise à la nuit (185 commits sur master).** Ce qui est
+  fait, par chantier :
+  - *Moteur* (cœur, hotfixs, banc) : E10 corrigé (une colonne annulée relue
+    par l'ajout suivant, 87a362e30) ; le BEGIN refusé qui laissait une
+    transaction nulle (8f4779bdc) ; le rollback d'un écrivain qui détruisait
+    un bloc sous un lecteur, cause du figement de l'hôte de luciepc
+    (5e3df4563) ; la rétention des index (9b861579a) ; la régression qu'elle
+    portait, le COPY après un DROP d'index vectoriel (a4505f0b3) ; le COPY
+    annulé qui effaçait des relations persistantes, une perte durable
+    (a45a15adf). Le scénario des vingt clients est sur master (62083d8be),
+    avec les témoins rouges de I2, d'E11 et de la voie 2 du point de reprise
+    prêts pour le cœur. Le vrai bloqueur de « aucun bloqué » est le point de
+    reprise au seuil (1 à 1,9 s toutes les 3 s sous 20 écrivains de
+    vecteurs ; relever le seuil fait déborder le tampon) : page de la voie 2
+    écrite (coeur-cpp/17, 2c75c9433). La mémoire de l'hôte n'est pas une fuite
+    du moteur mais l'allocateur de glibc (malloc_trim rend 1,7 Gio → 205 Mio) :
+    correctif confié à G.
+  - *Produit* (arbre principal, proto, codeparsers) : must_reopen, qui() et
+    cancel_all, la borne du tampon recalculée (8 → 28 Mo par Gio) ; la perte
+    des relations fines (CONSUMES posé au lieu de HAS_PARENT ou d'INHERITS_FROM
+    selon le chemin d'écriture) trouvée et corrigée, bases de luciepc et
+    code-rag3db réindexées et prouvées par sonde ; la montre qui perdait un
+    fichier créé pendant sa liste (« racy git », e89bde792) ; Gemini
+    3.8 Flash par défaut, le compteur par slug (f1d575b50) ; l'erreur Unavailable
+    nommée ; la grammaire TSX et le moteur tsx ; les gabarits indexés comme du
+    code ; la fraîcheur dite par chaque outil de lecture.
+  - *L'IDE* (priorité de Lucie) : A1 à A5 (lecture, papillon d'un symbole),
+    B1 (édition humaine avec empreinte), les composants React (lots 1 à 3 :
+    déclaration, magasin de libs par contenu, aperçu), le niveau 2 (genres
+    d'écran, transpileur du graphe de clic). Un témoin dans un vrai navigateur
+    (G) a trouvé que toutes les vues étaient cassées dans un navigateur sans
+    erreur visible : corrigé.
+  - *Mémoire longue* : seed générique, cited_by par l'IR décidé (pas de nœud
+    ad hoc), modèle « la fiche est le sujet » aligné sur la forme Sairen,
+    fiches en fichiers YAML (M1, M2, M2b, M2c), fautes de test portées par le
+    catalogue.
+  - *Postes* : l'hôte par socket systemd aux deux postes (réveil au premier
+    appel, arrêt après 30 min, jeton stable), le filet check-lib, luciepc
+    dédié à nos projets (gh, remote ssh, identité gmail), le filet de la CI.
+  **Décisions prises par c7 pendant la nuit, à relire par Lucie** : la portée
+  des cases d'état (fenêtre, session, hôte) et les droits d'écran dans la
+  ToolPolicy (codeparsers/08) ; l'agent des gabarits en mode `approbation` par
+  défaut, la base d'une tâche copiée par reflink (codeparsers/09) ; la
+  résolution ambiguë qui pose des arêtes marquées au lieu de s'abstenir (« une
+  relation douteuse se dit ») ; le vrai CREATE INDEX CONCURRENTLY en trois états
+  comme cible, (δ) juste poussé d'abord ; I2 pour E11 plutôt que la voie bon
+  marché ; YAML pour l'en-tête des fiches ; le fichier composé réécrit par
+  réaction (B).
