@@ -113,6 +113,18 @@ Deux différences avec le moteur `typescript` d'aujourd'hui :
 
 ## 3. Le rechargement à chaud par `/ide/flux`
 
+> **Corrigé après relecture du proto (18 octobre, 21 h).** `/ide/flux` existe depuis A2
+> (`6695017d6`, `src/ide.rs`) : il relaie le bus de chaque backend ouvert, sujet par sujet
+> (`SUJETS` : `files`, `dataflow`, `agent`, `tokens`, `catalog`), avec `id:` croissant, rejeu
+> depuis `Last-Event-ID` et lacune dite. Ajouter les composants, c'est un `Event` du bus,
+> `ComponentCompiled { template, hash, importers, exports_only_components }`, et un `refused` de
+> compilation avec sa ligne, sur un sujet `components` ajouté à `SUJETS`. **Le lot le plus
+> structurant est ailleurs** : la montre des déclarations (`check_reload`,
+> `apply_reload_with_reactions`) ne vit que dans l'atelier (`serve --atelier`, un serveur par
+> backend) ; l'hôte démon, où vit l'IDE, ne surveille pas les déclarations et dit seulement
+> `MANIFEST_CHANGED`. Il lui faut cette montre, par backend ouvert, qui émet `reloaded`,
+> `refused` et `ComponentCompiled` sur le bus. Le paragraphe qui suit est la lecture d'avant.
+
 **Ce qui existe** : `/ide/flux` n'existe pas encore (lot A2 du proto : SSE relais du bus, `id:`
 croissant, reprise par `Last-Event-ID`, sujets `files`, fin de réindexation, `dataflow`,
 `run.<id>` ; page 05 lignes 95-101). L'hôte démon n'a pas de route `/ide` ; il dit seulement
@@ -193,15 +205,17 @@ déclaré est un nœud du graphe du backend, ses ports y sont typés, sans rien 
 
 **Niveau 1 (le TSX comme donnée)** :
 
-1. **Le moteur `tsx`** dans `src/script/` : swc parse → types → JSX automatique → Refresh →
-   codegen + source map, sans crate nouvelle ; témoin : un composant compilé contient `jsx(` et
-   `$RefreshReg$(…, "<gabarit> FicheProduit")`, une erreur de syntaxe sort avec sa ligne.
+1. **Le moteur `tsx`** dans `src/script/` : **fait, master `40ebfc9d5`** (`script::tsx::compile_component`,
+   six témoins : module identique d'un appel à l'autre, `$RefreshReg$`/`$RefreshSig$` au nom
+   `"<gabarit> <composant>"`, production sans Refresh ni types, source map vers le TSX, erreur à
+   sa ligne, « n'exporte que des composants »).
 2. **`components/` et `libs.json`** : découverte, déclaration à ports (le schéma des nœuds), le
    magasin par contenu, la commande explicite qui remplit le magasin, la résolution par table ;
    témoin : un import non déclaré est refusé nommément, `react` résout au même hash partout.
 3. **Servir** : une route qui sert un module par hash (cache immuable) et la page d'aperçu
    (registre, runtime de refresh, react, react-dom, puis les composants).
-4. **Le sujet `components` de `/ide/flux`** (sur le lot A2 du proto) et le rechargement dans la
+4. **La montre des déclarations dans l'hôte démon** (par backend ouvert, sur le modèle de
+   l'atelier), puis **le sujet `components` de `/ide/flux`** et le rechargement dans la
    page ; témoin du navigateur : l'état d'un compteur survit à l'édition du libellé, un hook
    ajouté remonte le composant.
 
@@ -211,5 +225,8 @@ un `.tsx` (un `useReducer` pour les cases, des fonctions pour les nœuds purs, d
 `/ide/call` pour les effets), qui entre au niveau 1 par la même porte. Le contrat des ports se
 vérifie alors deux fois, à la transpilation et à la compilation.
 
-**Pour codeparsers, en parallèle et petit** : le correctif de la grammaire TSX, qui fait de tout
-composant du produit un code indexé comme les autres.
+**Pour codeparsers, en parallèle et petit** : le correctif de la grammaire TSX, **fait** :
+codeparsers `9d5de97`, pointeur sur master `938c25e37`, ticket fermé.
+
+La question 8.3 de la page du proto est tranchée avec lui : libs déclarées et rangées par
+contenu ; le CDN toléré en développement seulement. Les lots 2 à 4 vont au proto.
