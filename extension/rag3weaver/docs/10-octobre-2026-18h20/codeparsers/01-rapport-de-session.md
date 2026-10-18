@@ -1,6 +1,61 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 18 octobre 2026, 14 h 45.
+Tenu à jour sur place. Dernière mise à jour : 19 octobre 2026, 1 h 30.
+
+## Nuit du 18 au 19 octobre — le correctif du cœur prouvé, l'ambiguïté dite
+
+Sur les consignes de la nuit, transmises par c7 : personne sans travail, la voie générique,
+fixer plutôt que reporter. Les décisions tranchées par c7 sont à relire par Lucie.
+
+**Le correctif du cœur, sur de vraies bases.**
+- code-lourd a été réindexé par l'hôte de luciepc sur la lib `a45a15adf` : 874 s, 0 erreur,
+  VmHWM 8,6 Go.
+- La sonde (`tests/sonde_aretes_par_relation.rs`) contre ref-lourd montre les deux sens égaux
+  partout. Elle montre aussi +80 scopes de gabarits et −42 CONSUMES : c'est la régression des
+  noms de gabarits, présente dans le binaire de cette passe et corrigée par `0b4cdca0e`.
+- L'hôte de luciepc tourne sur `0b4cdca0e` depuis 0 h 17, MainPID 111551, bascule annoncée à G.
+- code-principal a été réindexé sur cet hôte, sur le même arbre que sa référence (`284cc00c0`) :
+  720 s, 0 erreur.
+- La sonde arête par arête contre `ref-principal-l` donne :
+
+  | relation | perdues | gagnées |
+  |---|---|---|
+  | CONSUMES | 0 | 8 (les nœuds des gabarits vers leur type de nœud Rust) |
+  | HAS_PARENT | 0 | 81 (les scopes des gabarits) |
+  | INHERITS_FROM | 0 | 0 |
+
+**L'ambiguïté : `047655729` sur master.** La règle change (tranché par c7, à relire par Lucie) :
+« une relation manquante vaut mieux qu'une relation fausse » devient « une relation douteuse se
+dit, elle ne se tait pas ». Pour des homonymes, le départage se fait dans cet ordre :
+- même source et même dépôt ;
+- l'import ;
+- le même fichier ;
+- le même dossier (`dossier`, devinée) ;
+- sinon une arête vers chacun (`ambigu`) ;
+- au-delà de 8 candidats (`RAG3WEAVER_AMBIGU_MAX`), l'abstention, comptée.
+
+Les gabarits déclarent `edge_doubtful=ambigu` à côté d'`edge_guessed`, et rien n'est écrit en dur
+dans les nœuds. `usages`, `impact`, `callees` et les liens le disent. L'IR gagne
+`Count::EdgesMatching`, dans les dialectes rag3db et PostgreSQL : il recompte les arêtes ambiguës
+en fin d'index, et la note `ambiguous_edges` paraît dans `index_states`. Les tests d'abstention
+sont réécrits.
+
+Avant le push :
+- check_features 5/5 ;
+- lib entière : 1 752 passés ;
+- e2e code 44, code_sync 17, usages 17, impact 11, liens 6, postgres 32.
+
+Le rebase a absorbé le lot des relations de l'arbre principal (`66bf6a059`). Le rejeu sur
+`047655729` est vert : lib entière 1 759, e2e_code 44, code_sync 17, postgres 32.
+
+**L'hôte de luciepc sur `047655729`** depuis 0 h 45 : MainPID 380337, md5 `75cf904b`, lib
+`a45a15adf`. `RAG3WEAVER_LINK_COPY_THRESHOLD` est retiré de l'env (copie
+`rag3weaver-daemon.env.avant-047-19-oct`), et il est absent de `/proc/380337/environ`.
+
+**En cours, accordé par c7 :**
+1. code-lourd se réindexe au seuil 1. La sonde contre ref-lourd (seuil haut) jugera le lot des
+   relations.
+2. Si c'est vert, effacer `pertes-18oct` (12 Go sur luciepc, plus les vieilles bases d'ici).
 
 ## 18 octobre — la reprise : l'hôte de luciepc sur la montre
 
