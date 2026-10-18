@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (29)
+### Ouverts — moteur (30)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La cible clean efface la grammaire Cypher, suivie par git, et le bâti suivant ne la régénère pas](2026-10-18-la-cible-clean-efface-la-grammaire-cypher-suivie-par-git.md) | ouvert — pour le cœur ; deux formes (ne plus déclarer en OUTPUT, ou régénérer) | blocage du bâti après un `clean` | non | non (sauf un bâti de la lib après `clean`) |
 | [L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini](2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md) | ouvert — cause non cherchée (tampon, mémoire hors tampon, allocateur ou hôte) ; sonde à écrire | mémoire | oui, après tout gros index dans un hôte qui reste ouvert | oui (l'hôte du démon) |
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
