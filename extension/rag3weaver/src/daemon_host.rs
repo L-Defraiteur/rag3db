@@ -114,13 +114,31 @@ pub struct DaemonHost {
     opener: Opener,
     /// Combien de sessions ont été fermées parce que leur client était mort.
     closed_dead: std::sync::atomic::AtomicUsize,
+    /// **Les runs en fond de ce processus** (commandes et graphes lancés) :
+    /// l'état les montre, l'arrêt les annule avant de fermer les backends.
+    /// Le registre du processus, sauf dans les témoins.
+    background: Arc<crate::dataflow::background::Registry>,
 }
+
+/// La cause des runs en fond annulés par l'arrêt de l'hôte.
+pub const BACKGROUND_STOP_CAUSE: &str = "l'hôte du démon s'arrête";
+
+/// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
+/// fermer les backends quand même (et de le dire).
+const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
 impl DaemonHost {
     /// Un hôte qui ouvre ses bases sur disque, comme `serve` : le tampon du
     /// manifeste, l'embarqueur s'il en faut un.
     pub fn new() -> Self {
         Self::with_opener(Box::new(open_on_disk))
+    }
+
+    /// Un registre de runs en fond à lui, à la place de celui du processus
+    /// (les témoins).
+    pub fn with_background(mut self, registry: Arc<crate::dataflow::background::Registry>) -> Self {
+        self.background = registry;
+        self
     }
 
     /// Un hôte qui ouvre ses backends par `opener` (les témoins y posent leur
@@ -131,6 +149,7 @@ impl DaemonHost {
             sessions: Mutex::new(HashMap::new()),
             opener,
             closed_dead: std::sync::atomic::AtomicUsize::new(0),
+            background: crate::dataflow::background::registry(),
         }
     }
 
@@ -434,14 +453,58 @@ impl DaemonHost {
             "backends": backends,
             "sessions": sessions,
             "closed_dead_sessions": self.closed_dead.load(std::sync::atomic::Ordering::SeqCst),
+            "background": self.background_state(),
         })
     }
 
-    /// **Fermer tous les backends** proprement : leurs indexations au
-    /// prochain paquet, leurs réactions, leur catalogue.
+    /// **Les runs vivants en fond**, du plus ancien au plus récent : le `--qui`
+    /// du registre, en lignes pour l'état du démon.
+    fn background_state(&self) -> Value {
+        use crate::dataflow::background::Kind;
+        Value::Array(
+            self.background
+                .alive()
+                .into_iter()
+                .map(|a| {
+                    json!({
+                        "handle": a.handle,
+                        "run": a.run,
+                        "kind": match a.kind { Kind::Command => "commande", Kind::Graph => "graphe" },
+                        "parent": a.parent,
+                        "caller": a.caller,
+                        "tool": a.tool,
+                        "message": a.message,
+                        "age_s": (a.age.as_secs_f64() * 10.0).round() / 10.0,
+                    })
+                })
+                .collect(),
+        )
+    }
+
+    /// **Fermer tous les backends** proprement : d'abord les runs en fond,
+    /// annulés avec leur cause et attendus un temps borné (ils tiennent un
+    /// catalogue, qu'un backend fermé sous eux leur retirerait) ; puis leurs
+    /// indexations au prochain paquet, leurs réactions, leur catalogue.
     pub fn shutdown(&self) -> Vec<String> {
-        let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
         let mut erreurs = Vec::new();
+        let annules = self.background.cancel_all(BACKGROUND_STOP_CAUSE);
+        if annules > 0 {
+            eprintln!("[démon] arrêt : {annules} run(s) en fond annulé(s)");
+            let debut = std::time::Instant::now();
+            while !self.background.alive().is_empty() && debut.elapsed() < BACKGROUND_STOP_WAIT {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            let restants = self.background.alive();
+            if !restants.is_empty() {
+                erreurs.push(format!(
+                    "{} run(s) en fond encore vivant(s) après {} s d'attente, les backends sont fermés quand même : {}",
+                    restants.len(),
+                    BACKGROUND_STOP_WAIT.as_secs(),
+                    restants.iter().map(|a| format!("{} ({})", a.handle, a.tool)).collect::<Vec<_>>().join(", ")
+                ));
+            }
+        }
+        let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
         for h in hosted {
             let mut slot = h.backend.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(mut backend) = slot.take() {
@@ -459,7 +522,7 @@ impl DaemonHost {
     /// | route | corps | réponse |
     /// |---|---|---|
     /// | `GET /sante` | | le service et son pid |
-    /// | `GET /etat` | | backends et sessions |
+    /// | `GET /etat` | | backends, sessions et runs en fond |
     /// | `POST /session` | `{client, cell?, keys?}` | `{session}` |
     /// | `DELETE /session` | | `{closed}` |
     /// | `POST /backend/open` (ou `/open`) | `{manifest}` | `{ok, result: {id, reread, describe, reactions}}` ; un manifeste modifié est relu |
@@ -824,5 +887,46 @@ mod tests {
         assert!(!ids.contains(&reprise.as_str()), "{etat}");
         assert!(ids.contains(&vivante.as_str()) && ids.contains(&sans_pid.as_str()), "{etat}");
         assert_eq!(etat["closed_dead_sessions"], 1, "{etat}");
+    }
+
+    /// **Les runs en fond se voient dans l'état et tombent avec l'hôte**
+    /// (18 octobre 2026) : un run inscrit au registre paraît dans `/etat`
+    /// (poignée, outil, appelant), et l'arrêt de l'hôte l'annule avec sa
+    /// cause avant de fermer les backends ; sans lui, un graphe lancé
+    /// survivait à l'arrêt en tenant son catalogue.
+    #[test]
+    fn les_runs_en_fond_se_voient_dans_l_etat_et_tombent_avec_l_hote() {
+        use crate::dataflow::background::{Entry, Kind, Registry};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let registre = Arc::new(Registry::new());
+        let vivant = Arc::new(AtomicBool::new(true));
+        let (v1, v2) = (vivant.clone(), vivant.clone());
+        registre.insert(
+            "#veille",
+            Entry::new(
+                Kind::Graph,
+                "run-veille".into(),
+                None,
+                Some("agent-a".into()),
+                "veille".into(),
+                "surveiller le dépôt".into(),
+                Box::new(move || v1.load(Ordering::SeqCst)),
+                Box::new(move || v2.store(false, Ordering::SeqCst)),
+                None,
+            ),
+        );
+        let hote = DaemonHost::new().with_background(registre.clone());
+        let etat = hote.state();
+        let runs = etat["background"].as_array().unwrap_or_else(|| panic!("background : {etat}"));
+        assert_eq!(runs.len(), 1, "{etat}");
+        assert_eq!(runs[0]["handle"], "#veille");
+        assert_eq!(runs[0]["tool"], "veille");
+        assert_eq!(runs[0]["caller"], "agent-a");
+        assert_eq!(runs[0]["kind"], "graphe");
+
+        let erreurs = hote.shutdown();
+        assert!(erreurs.is_empty(), "{erreurs:?}");
+        assert!(!vivant.load(Ordering::SeqCst), "l'arrêt de l'hôte annule le run");
+        assert!(hote.state()["background"].as_array().is_some_and(|a| a.is_empty()), "plus rien en fond");
     }
 }
