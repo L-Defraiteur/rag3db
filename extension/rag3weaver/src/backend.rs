@@ -4583,15 +4583,27 @@ mod tests {
         let t = std::time::Instant::now();
         assert!(backend.stop_reactions().is_empty());
         assert!(t.elapsed() < std::time::Duration::from_secs(3), "l'arrêt a attendu la réaction : {:?}", t.elapsed());
-        // Au redémarrage, la réconciliation reprend ce qui restait : on attend
-        // que le retard tombe (l'état de l'index, une lecture brève), puis on
-        // lit les usages une fois.
+        // Au redémarrage, la réconciliation reprend ce qui restait. Le retard
+        // seul ne suffit pas à le dire : la montre ne note la réconciliation
+        // qu'à son premier tour, et si la réaction coupée avait soldé tout ce
+        // qu'elle avait noté, aucun retard n'est visible juste après le
+        // remontage (rouge sous charge, des deux côtés de 113e388fd :
+        // docs/tickets/closed/2026-10-18-la-reprise-apres-arret-rougit-sous-charge.md).
+        // On attend donc ce que le test garde : plus aucun usage dans `lot/`,
+        // lu seulement quand le retard est tombé, dans le même délai.
         backend.mount_reactions().unwrap();
         let fin = std::time::Instant::now() + std::time::Duration::from_secs(120);
-        while backend.index_states().unwrap().get("lag").is_some() && std::time::Instant::now() < fin {
+        let u = loop {
+            if backend.index_states().unwrap().get("lag").is_none() {
+                let u = usages_de(&backend, "depart");
+                if !u.contains("lot/") || std::time::Instant::now() >= fin {
+                    break u;
+                }
+            } else if std::time::Instant::now() >= fin {
+                break usages_de(&backend, "depart");
+            }
             std::thread::sleep(std::time::Duration::from_millis(500));
-        }
-        let u = usages_de(&backend, "depart");
+        };
         assert!(!u.contains("lot/"), "le reste n'est pas repris : {}", &u[..u.len().min(400)]);
         assert!(backend.stop_reactions().is_empty());
     }

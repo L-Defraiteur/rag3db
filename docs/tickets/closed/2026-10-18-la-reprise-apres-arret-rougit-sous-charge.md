@@ -1,6 +1,6 @@
 # La reprise d'une réaction coupée rougit sous charge : la lecture voit encore les fichiers retirés
 
-- **État** : ouvert
+- **État** : fermé (18 octobre 2026) — une course du test, pas un défaut du moteur ni de 113e388fd ; le test attend ce qu'il garde
 - **Gravité** : test instable (un rouge sur une lib entière, sous charge) ; en service, peut-être
   une lecture qui précède la reprise
 - **Atteignable en service** : peut-être — un appel lu juste après le redémarrage d'un hôte dont
@@ -51,3 +51,24 @@ nombre de fichiers notés avant l'arrêt. La seconde, en rejouant sous charge à
 
 Allonger les délais du test sans avoir départagé : la ligne « le reste n'est pas repris » est ce
 que le test garde.
+
+## Le verdict (18 octobre 2026, sur luciepc)
+
+Dix tours alternés, chacun la lib entière plus seize boucles CPU, les deux binaires bâtis une fois
+(lib du magasin 87a362e30) :
+
+| côté | reprise rouge | reprise verte |
+|---|---|---|
+| 113e388fd (le lot de l'embarquement hors du verrou) | 2 | 8 |
+| 2b0c3739d (son parent) | 1 | 9 |
+
+Le parent rougit aussi : ce n'est pas le lot. L'hypothèse 1 tient. Le retard n'est noté qu'au
+premier tour de la montre remontée, et une réaction coupée a pu solder tout ce qu'elle avait
+noté. Juste après le remontage, la boucle ne voyait donc aucun retard et lisait avant la reprise.
+
+**Le correctif est dans le test**, pas dans le moteur. Il attend ce qu'il garde : plus aucun usage
+dans `lot/`, lu seulement quand le retard est tombé, dans le même délai de 120 s. Si la reprise
+ne se fait pas, il rougit toujours sur « le reste n'est pas repris ».
+
+Les mêmes tours ont fait rougir trois autres tests sensibles au temps, des deux côtés : un ticket
+à part, `2026-10-18-trois-temoins-rougissent-sous-charge.md`.
