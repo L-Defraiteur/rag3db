@@ -120,3 +120,114 @@ fn usages_repond_pendant_qu_un_ecrivain_tient_le_catalogue() {
     assert!(out.contains("table.rs"), "l'état d'avant : la définition est là : {out}");
     assert!(out.contains("écriture de l'index est en cours"), "la réponse le dit : {out}");
 }
+
+/// **Les outils de lecture du code n'attendent pas l'écrivain** (lot L4,
+/// 18 octobre 2026). Le septième rejeu de codeparsers : un `search_code`
+/// tombé pendant la réaction de la montre attendait le mutex du catalogue
+/// (`SearchSourceNode`, la cible de la recherche), et l'hôte, qui sérialise
+/// les appels d'un backend, faisait attendre les autres derrière lui. Ici le
+/// gabarit de code livré sur un petit dépôt, indexé ; puis un fil tient le
+/// mutex 2 s, et chaque outil de lecture, par `call_in` comme une session de
+/// l'hôte, répond sous 100 ms avec l'état d'avant.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn les_outils_de_lecture_du_code_n_attendent_pas_l_ecrivain() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::{json, Value};
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    fn copier(src: &Path, dst: &Path) {
+        std::fs::create_dir_all(dst).unwrap();
+        for e in std::fs::read_dir(src).unwrap() {
+            let e = e.unwrap();
+            let cible = dst.join(e.file_name());
+            if e.file_type().unwrap().is_dir() {
+                copier(&e.path(), &cible);
+            } else {
+                std::fs::copy(e.path(), &cible).unwrap();
+            }
+        }
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    let t = dir.join("templates");
+    copier(&gabarits.join("tools"), &t.join("tools"));
+    copier(&gabarits.join("backends/code"), &t.join("backends/code"));
+    let ws = dir.join("ws");
+    std::fs::create_dir_all(ws.join("src")).unwrap();
+    std::fs::write(ws.join("src/a.rs"), "pub fn alpha() -> u32 {\n    beta() + 1\n}\n\npub fn beta() -> u32 {\n    41\n}\n").unwrap();
+    let chemin = t.join("backends/code/backend.json");
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    m["name"] = json!("lectures-l4");
+    m["database"] = json!(dir.join("code.rag3db").to_string_lossy());
+    m["vector_extension"] = json!(crate::common::vector_extension());
+    m["workspace"]["root"] = json!(ws.to_string_lossy());
+    m["workspace"]["commands"] = json!("off");
+    m["tools"].as_object_mut().unwrap().remove("run_command");
+    m["tools"].as_object_mut().unwrap().remove("wait_output");
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
+
+    // L'index, jusqu'à sa ligne de fin dans son journal.
+    let texte = |r: &Value| r.to_string();
+    let lance = texte(&backend.call("index", json!({"confirm": true})).expect("index lancé"));
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        if lu.contains("indexation terminée") {
+            break;
+        }
+        assert!(!lu.contains("indexation échouée"), "{lu}");
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let avant = texte(&backend.call_in(&cellule, "usages", json!({"name": "beta"})).expect("usages avant"));
+    assert!(avant.contains("a.rs"), "l'état d'avant connaît beta : {avant}");
+
+    // L'écrivain : le mutex, 2 s.
+    let (pret, attendre) = std::sync::mpsc::channel();
+    let ecrivain = {
+        let catalog = backend.catalog.clone();
+        std::thread::spawn(move || {
+            let _tenu = catalog.lock().unwrap();
+            pret.send(()).unwrap();
+            std::thread::sleep(Duration::from_secs(2));
+        })
+    };
+    attendre.recv().unwrap();
+
+    let appels = [
+        ("search_code", json!({"query": "alpha", "options": {}, "mode": "indexed"}), "a.rs"),
+        ("read_file", json!({"path": "src/a.rs"}), "alpha"),
+        ("grep_files", json!({"pattern": "beta"}), "a.rs"),
+        ("list_files", json!({}), "a.rs"),
+        ("schema", json!({}), "Scope"),
+        ("usages", json!({"name": "beta"}), "a.rs"),
+    ];
+    let mut mesures = Vec::new();
+    for (outil, args, attendu) in appels {
+        let t = Instant::now();
+        let r = backend.call_in(&cellule, outil, args).unwrap_or_else(|e| panic!("{outil} : {e}"));
+        let ms = t.elapsed().as_millis();
+        let rendu = texte(&r);
+        eprintln!("[lecture L4] {outil} : {ms} ms");
+        mesures.push((outil, ms, rendu.contains(attendu), rendu));
+    }
+    ecrivain.join().unwrap();
+    for (outil, ms, vu, rendu) in &mesures {
+        assert!(*ms < 100, "{outil} n'attend pas l'écrivain : {ms} ms");
+        assert!(*vu, "{outil} rend l'état d'avant : {rendu}");
+    }
+}

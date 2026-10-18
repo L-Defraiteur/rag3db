@@ -31,6 +31,8 @@ mod annulation_tests;
 mod copie_liens_tests;
 #[cfg(all(test, feature = "rag3db-native", feature = "code"))]
 mod chemin_d_ecriture_tests;
+#[cfg(test)]
+mod lecture_sans_mutex_tests;
 pub mod port;
 pub mod resultat;
 pub mod record;
