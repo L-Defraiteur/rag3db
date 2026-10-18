@@ -1,6 +1,7 @@
 # Sous un tampon plein, un ROLLBACK est refusé et bloque la base, et la fermeture d'une connexion tue le processus
 
-- **État** : ouvert
+- **État** : corrigé par le commit qui déplace ce ticket (18 octobre 2026, seconde session cœur
+  C++, forme relue par le cœur C++) ; voir « Ce qui a été fait », à la fin.
 - **Gravité** : plantage du processus (SIGABRT à la fermeture d'une connexion). La base est
   bloquée sans autre issue que la fermeture, ou condamnée à être rouverte, sans qu'aucune donnée
   validée soit perdue.
@@ -81,3 +82,57 @@ joue dans un processus fils.
   (voir le point 3).
 
 Fermé par hotfixs, avec la relecture du cœur, quand les deux contrôles ci-dessus sont verts.
+
+## Ce qui a été fait (18 octobre 2026)
+
+**1. Un ROLLBACK n'alloue rien qui puisse manquer.** `LocalStorage::rollback` relâche ses tables
+locales au lieu de les vider. `LocalNodeTable::clear` rebâtissait un index de hachage, soit une
+page demandée au tampon, et c'était l'allocation refusée. Le chemin du commit, qui vide encore,
+libère l'ancien index et les groupes avant de rebâtir.
+
+**2. La transaction quitte toujours le système.** `TransactionManager::rollback` la retire
+(`clearTransactionNoLock`, verrous rendus) même si son annulation lève, puis lève une erreur
+nommée (« The rollback could not complete (…). The transaction is closed and its locks are
+released »). Le refus ne condamne la base que si l'annulation a commencé de défaire le stockage
+partagé ou le catalogue sans finir (`UndoBuffer::rollback` dit s'il a commencé,
+`Transaction::hasHalfDoneRollback`). Elle est alors à rouvrir (`REOPEN_AFTER_FAILED_ROLLBACK`).
+Un échec du seul stockage local, après un undo complet (le cas de ce ticket), ne condamne rien.
+- `TransactionContext::rollback` oublie sa transaction dans tous les cas.
+- `Transaction::failAfterStatement` marque la transaction échouée avant l'annulation : le
+  ROLLBACK de clôture ne la rejoue pas (le retrait des lignes n'est pas idempotent).
+
+**3. Un destructeur ne lève pas.** `~ClientContext` rattrape l'erreur de l'annulation et l'écrit
+(« [rag3db] closing a connection: the rollback of its open transaction failed: … »).
+
+**4. Un CHECKPOINT refusé avant d'avoir rien changé reste une erreur nommée.**
+`StorageManager::markCheckpointChangedMemory` est posé au premier pas qui ne se défait pas :
+- l'échange de groupes de `NodeGroup::checkpoint`, ou son effacement d'un groupe tout supprimé ;
+- après le point de reprise des groupes d'une table de nœuds ;
+- au début d'une table de relations modifiée ;
+- avant une table retirée ;
+- après tout le stockage.
+
+`NodeTable::checkpoint` ne déplace plus ses colonnes qu'après le succès de ses groupes (relu
+avec le cœur : déplacées d'abord, un échec laissait les numéros du catalogue faux). Avant ce
+drapeau, `checkpointNoLock` rend les pages (`Checkpointer::rollback`), rouvre les BEGIN et lève
+« … the checkpoint was refused before it changed anything. Every committed transaction is in the
+journal, and the database stays open. ».
+
+Il condamne quand même la base si ce point de reprise porte une validation forcée
+(`checkpointCarriesForcedCommit` : la validation forcée elle-même, ou une validation de la file
+A7). Faite en mémoire, elle n'est durable que par lui.
+
+**Témoins.** Ils sont rouges sur `2def4bed0` et verts avec le lot, trois passes chacun, sur
+luciepc :
+- `FullBufferRollback.RollsBackAndClosesCleanly` et `FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen`,
+  sortis de known_red ;
+- `FlakyCheckpointerTest.ARefusedCheckpointThatChangedNothingLeavesTheDatabaseOpen`, témoin
+  unitaire neuf, rouge sur master (« must be closed and reopened »).
+
+Les tests de la condamnation (`RefusedBegin`, `SingleWriterCrash.FailedCheckpointThenDeath…`)
+gardent leur intention : leur faux Checkpointer pose le drapeau avant de lever.
+
+**Ce qui reste.** L'annulation d'un COPY sous un tampon plein passe par
+`rollbackPKIndexInsert`, qui peut épingler des pages et allouer. Ce cas a son ticket, à
+confirmer : `2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer`.
+

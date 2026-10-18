@@ -19,6 +19,7 @@
 #include "common/exception/runtime.h"
 #include "flaky_checkpointer.h"
 #include "storage/checkpointer.h"
+#include "storage/storage_manager.h"
 #include "transaction/transaction_context.h"
 #include "transaction/transaction_manager.h"
 
@@ -100,12 +101,15 @@ TEST_F(RefusedBegin, ARefusedReadBeginLeavesTheConnectionUsableToo) {
     EXPECT_EQ(count(*other), 1);
 }
 
-// Le second refus facile à provoquer : un point de reprise en échec, après lequel le gestionnaire
-// refuse tout BEGIN par un nom (REOPEN_AFTER_FAILED_CHECKPOINT) jusqu'à la réouverture.
+// Le second refus facile à provoquer : un point de reprise en échec après avoir changé la mémoire,
+// après lequel le gestionnaire refuse tout BEGIN par un nom (REOPEN_AFTER_FAILED_CHECKPOINT)
+// jusqu'à la réouverture. Refusé avant tout changement, il laisserait la base ouverte
+// (FlakyCheckpointerTest.ARefusedCheckpointThatChangedNothingLeavesTheDatabaseOpen).
 class CheckpointerFailingOnStorage final : public rag3db::storage::Checkpointer {
 public:
     explicit CheckpointerFailingOnStorage(ClientContext& context) : Checkpointer(context) {}
     bool checkpointStorage() override {
+        rag3db::storage::StorageManager::Get(clientContext)->markCheckpointChangedMemory();
         throw rag3db::common::RuntimeException("checkpoint failed on purpose.");
     }
 };

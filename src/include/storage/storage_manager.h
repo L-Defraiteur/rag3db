@@ -48,6 +48,16 @@ public:
     void finalizeCheckpoint();
     void rollbackCheckpoint(const catalog::Catalog& catalog);
 
+    // Le point de reprise en cours a changé ce que le processus tient en mémoire (le premier
+    // échange de groupes d'une table, le point de reprise de ses index, une table de relations,
+    // une table retirée, puis tout ce qui suit le stockage). Avant, une exception ne laisse rien
+    // à défaire que Checkpointer::rollback ne défasse : le point de reprise est refusé, nommé,
+    // et la base reste ouverte (ticket du ROLLBACK sous un tampon plein, défaut 3). Après, la
+    // base est à rouvrir (TransactionManager::checkpointFailed).
+    void markCheckpointChangedMemory() { checkpointChangedMemory = true; }
+    bool* getCheckpointChangedMemoryFlag() { return &checkpointChangedMemory; }
+    bool hasCheckpointChangedMemory() const { return checkpointChangedMemory; }
+
     WAL& getWAL() const;
     ShadowFile& getShadowFile() const;
     FileHandle* getDataFH() const { return dataFH; }
@@ -89,6 +99,7 @@ private:
 
 private:
     std::mutex mtx;
+    bool checkpointChangedMemory = false;
     std::string databasePath;
     std::unique_ptr<storage::DatabaseHeader> databaseHeader;
     bool readOnly;

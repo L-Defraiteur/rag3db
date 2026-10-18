@@ -166,6 +166,7 @@ void StorageManager::reclaimDroppedTables(const Catalog& catalog) {
         switch (table->getTableType()) {
         case TableType::NODE: {
             if (!catalog.containsTable(&DUMMY_CHECKPOINT_TRANSACTION, tableID, true)) {
+                markCheckpointChangedMemory();
                 table->reclaimStorage(*dataFH->getPageManager());
                 droppedTables.push_back(tableID);
             }
@@ -174,6 +175,7 @@ void StorageManager::reclaimDroppedTables(const Catalog& catalog) {
             auto& relTable = table->cast<RelTable>();
             auto relGroupID = relTable.getRelGroupID();
             if (!catalog.containsTable(&DUMMY_CHECKPOINT_TRANSACTION, relGroupID, true)) {
+                markCheckpointChangedMemory();
                 table->reclaimStorage(*dataFH->getPageManager());
                 droppedTables.push_back(tableID);
             } else {
@@ -181,6 +183,7 @@ void StorageManager::reclaimDroppedTables(const Catalog& catalog) {
                     catalog.getTableCatalogEntry(&DUMMY_CHECKPOINT_TRANSACTION, relGroupID);
                 if (!relGroupEntry->cast<RelGroupCatalogEntry>().getRelEntryInfo(
                         relTable.getFromNodeTableID(), relTable.getToNodeTableID())) {
+                    markCheckpointChangedMemory();
                     table->reclaimStorage(*dataFH->getPageManager());
                     droppedTables.push_back(tableID);
                 }
@@ -197,6 +200,7 @@ void StorageManager::reclaimDroppedTables(const Catalog& catalog) {
 }
 
 bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pageAllocator) {
+    checkpointChangedMemory = false;
     bool hasChanges = false;
     const auto catalog = Catalog::Get(*context);
     const auto nodeTableEntries = catalog->getNodeTableEntries(&DUMMY_CHECKPOINT_TRANSACTION);

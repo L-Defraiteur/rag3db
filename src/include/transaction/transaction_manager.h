@@ -67,6 +67,10 @@ public:
     static constexpr const char* REOPEN_AFTER_FAILED_CHECKPOINT =
         "A checkpoint of this database failed, so it must be closed and reopened before it is "
         "used again";
+    // Le même refus quand une annulation a levé au milieu du stockage partagé (rollbackFailed).
+    static constexpr const char* REOPEN_AFTER_FAILED_ROLLBACK =
+        "A rollback of this database could not complete, so it must be closed and reopened "
+        "before it is used again";
 
     // Les verrous des écritures parallèles. Une transaction les prend pendant ses écritures ;
     // ils sont rendus quand elle quitte le système, validée ou annulée.
@@ -171,6 +175,18 @@ private:
     // database is reopened: the reopening replays the journal over the data file of the last
     // complete checkpoint, which is sound. Guarded by mtxForSerializingPublicFunctionCalls.
     bool checkpointFailed = false;
+    // Une annulation a levé après avoir commencé de défaire le stockage partagé ou le catalogue
+    // (Transaction::hasHalfDoneRollback) : des versions marquées d'une transaction qui n'existe
+    // plus, des clés laissées dans l'index de clé primaire. La base est refusée comme après un
+    // point de reprise raté ; à la réouverture, le journal ne porte rien de cette transaction.
+    // Une annulation qui n'a levé que dans le stockage local de la transaction ne la condamne
+    // pas. Gardé par mtxForSerializingPublicFunctionCalls.
+    bool rollbackFailed = false;
+    // Le prochain point de reprise porte une validation forcée, faite en mémoire et durable par
+    // lui seul (la validation forcée elle-même, ou une validation de la file A7 pendant son
+    // attente). Lu et remis à faux par checkpointNoLock. Gardé par
+    // mtxForSerializingPublicFunctionCalls.
+    bool checkpointCarriesForcedCommit = false;
     void throwIfCheckpointFailedNoLock() const;
 };
 } // namespace transaction

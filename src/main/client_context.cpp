@@ -1,5 +1,7 @@
 #include "main/client_context.h"
 
+#include <cstdio>
+
 #include "binder/binder.h"
 #include "common/exception/checkpoint.h"
 #include "common/exception/connection.h"
@@ -80,7 +82,19 @@ ClientContext::~ClientContext() {
         return;
     }
     if (Transaction::Get(*this)) {
-        getDatabase()->transactionManager->rollback(*this, Transaction::Get(*this));
+        // Un destructeur ne lève pas : une annulation qui échouait ici terminait le processus
+        // (std::terminate, SIGABRT), l'hôte avec (ticket du ROLLBACK sous un tampon plein). Le
+        // gestionnaire a retiré la transaction ; l'erreur est écrite, pas lancée.
+        try {
+            getDatabase()->transactionManager->rollback(*this, Transaction::Get(*this));
+        } catch (const std::exception& e) {
+            fprintf(stderr,
+                "[rag3db] closing a connection: the rollback of its open transaction failed: %s\n",
+                e.what());
+        } catch (...) {
+            fprintf(stderr,
+                "[rag3db] closing a connection: the rollback of its open transaction failed\n");
+        }
     }
 }
 

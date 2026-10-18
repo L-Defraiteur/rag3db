@@ -49,6 +49,15 @@ struct NodeGroupCheckpointState {
     std::vector<Column*> columns;
     PageAllocator& pageAllocator;
     MemoryManager* mm;
+    // Le drapeau du point de reprise (StorageManager::markCheckpointChangedMemory), posé juste
+    // avant le premier échange de groupes.
+    bool* changedMemory = nullptr;
+
+    void markChangedMemory() const {
+        if (changedMemory) {
+            *changedMemory = true;
+        }
+    }
 
     NodeGroupCheckpointState(std::vector<common::column_id_t> columnIDs,
         std::vector<Column*> columns, PageAllocator& pageAllocator, MemoryManager* mm)

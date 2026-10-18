@@ -195,6 +195,10 @@ public:
     // suite (rien de ce qu'elle a écrit ne reste), mais elle reste active et garde ses verrous
     // jusqu'à sa fermeture par ROLLBACK ou COMMIT ; le rollback final n'a plus rien à défaire.
     bool hasFailed() const { return failed; }
+    // Une annulation a levé après avoir commencé de défaire le stockage partagé ou le catalogue :
+    // ce qui en reste ne correspond plus à rien de validé ni d'annulé (TransactionManager
+    // condamne alors la base, à rouvrir).
+    bool hasHalfDoneRollback() const { return halfDoneRollback; }
     void failAfterStatement(storage::WAL* wal);
     bool hasAnnouncedLocks() const { return locksAnnounced; }
     void markLocksAnnounced() { locksAnnounced = true; }
@@ -243,6 +247,7 @@ private:
     std::atomic<bool> hasCatalogChanges;
     bool locksAnnounced = false;
     bool failed = false;
+    bool halfDoneRollback = false;
 };
 
 // TODO(bmwinger): These shouldn't need to be exported

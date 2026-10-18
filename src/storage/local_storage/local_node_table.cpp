@@ -155,8 +155,12 @@ bool LocalNodeTable::addColumn(TableAddColumnState& addColumnState) {
 }
 
 void LocalNodeTable::clear(MemoryManager& mm) {
-    hashIndex = std::make_unique<LocalHashIndex>(mm, pkPhysicalType, overflowFileHandle);
+    // L'ancien index et les groupes rendent leurs pages avant que le nouvel index en demande une :
+    // sous un tampon plein, ce sont elles qui la rendent disponible (ticket du ROLLBACK sous un
+    // tampon plein).
+    hashIndex.reset();
     nodeGroups.clear();
+    hashIndex = std::make_unique<LocalHashIndex>(mm, pkPhysicalType, overflowFileHandle);
 }
 
 bool LocalNodeTable::lookupPK(const Transaction* transaction, const ValueVector* keyVector,

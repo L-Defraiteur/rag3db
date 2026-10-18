@@ -156,12 +156,15 @@ private:
 // Un point de reprise qui échoue dans sa phase de stockage (comme FlakyCheckpointer de
 // checkpoint_test.cpp) : la base doit ensuite tout refuser jusqu'à sa réouverture
 // (7072183db).
+// Un échec après un changement de la mémoire, le seul qui condamne encore la base : refusé avant
+// tout changement, un point de reprise la laisse ouverte (ticket du ROLLBACK sous un tampon plein).
 class FailingCheckpointer final : public rag3db::storage::Checkpointer {
 public:
     explicit FailingCheckpointer(rag3db::main::ClientContext& context) : Checkpointer(context) {}
 
 protected:
     bool checkpointStorage() override {
+        rag3db::storage::StorageManager::Get(clientContext)->markCheckpointChangedMemory();
         throw rag3db::common::RuntimeException("checkpoint failed on purpose");
     }
 };

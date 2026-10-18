@@ -79,6 +79,8 @@ void Checkpointer::writeCheckpoint() {
     // checkpointing storage may overwrite columnIDs in the catalog.
     CheckpointProfile profile;
     bool hasStorageChanges = checkpointStorage();
+    // Le catalogue, l'en-tête et l'application des pages ne se défont pas.
+    StorageManager::Get(clientContext)->markCheckpointChangedMemory();
     const auto storageMs = profile.lap();
     serializeCatalogAndMetadata(databaseHeader, hasStorageChanges);
     const auto serializeMs = profile.lap();

@@ -465,6 +465,7 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
     std::unique_ptr<ChunkedNodeGroup> checkpointedChunkedGroup;
     if (checkpointedVersionInfo->getNumDeletions(&DUMMY_CHECKPOINT_TRANSACTION, 0, numRows) ==
         numRows - firstGroup->getStartRowIdx()) {
+        state.markChangedMemory();
         reclaimStorage(state.pageAllocator, lock);
         checkpointedChunkedGroup =
             ChunkedNodeGroup::flushEmpty(memoryManager, dataTypes, enableCompression,
@@ -477,6 +478,8 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
         }
         checkpointedChunkedGroup->setVersionInfo(std::move(checkpointedVersionInfo));
     }
+    // Déjà posé après la copie fusionnée ; l'échange, lui, ne se défait pas non plus.
+    state.markChangedMemory();
     chunkedGroups.clear(lock);
     chunkedGroups.appendGroup(lock, std::move(checkpointedChunkedGroup));
     checkpointDataTypesNoLock(state);
@@ -526,6 +529,11 @@ std::unique_ptr<ChunkedNodeGroup> NodeGroup::checkpointInMemAndOnDisk(MemoryMana
     }
     const auto insertChunkedGroup = scanAllInsertedAndVersions<ResidencyState::IN_MEMORY>(
         memoryManager, lock, state.columnIDs, columnPtrs);
+    // La copie fusionnée faite, les colonnes du groupe persistant s'écrivent en place (par le
+    // fichier ombre) et changent leurs métadonnées : un échec d'après laisse des pages ombres
+    // et des segments à moitié réécrits, que Checkpointer::rollback ne défait pas. Seule la
+    // copie, juste au-dessus, peut échouer sans rien laisser.
+    state.markChangedMemory();
     const auto numInsertedRows = insertChunkedGroup->getNumRows();
     for (auto i = 0u; i < state.columnIDs.size(); i++) {
         const auto columnID = state.columnIDs[i];
@@ -573,6 +581,9 @@ std::unique_ptr<ChunkedNodeGroup> NodeGroup::checkpointInMemOnly(MemoryManager& 
     }
     auto insertChunkedGroup = scanAllInsertedAndVersions<ResidencyState::IN_MEMORY>(memoryManager,
         lock, state.columnIDs, columnPtrs);
+    // Après la copie, l'écriture des pages : rien de ce qui suit n'est réputé se défaire (voir
+    // checkpointInMemAndOnDisk).
+    state.markChangedMemory();
     return insertChunkedGroup->flush(&DUMMY_CHECKPOINT_TRANSACTION, state.pageAllocator);
 }
 

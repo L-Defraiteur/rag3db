@@ -216,9 +216,12 @@ void UndoBuffer::createAddColumn(Table& table) {
     *reinterpret_cast<AddColumnRecord*>(buffer) = AddColumnRecord{&table};
 }
 
-void UndoBuffer::rollback(ClientContext* context) const {
+void UndoBuffer::rollback(ClientContext* context, bool* started) const {
     UndoBufferIterator iterator{*this};
     iterator.reverseIterate([&](UndoRecordType entryType, uint8_t const* entry) {
+        if (started) {
+            *started = true;
+        }
         rollbackRecord(context, entryType, entry);
     });
 }

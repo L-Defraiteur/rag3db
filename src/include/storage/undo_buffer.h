@@ -109,7 +109,9 @@ public:
     // Après commit : pour chaque groupe où cette transaction a supprimé des lignes, la
     // compaction des listes CSR en mémoire (VersionRecordHandler::compactDeadRows).
     void compactDeadRowsAfterCommit(const transaction::Transaction& transaction) const;
-    void rollback(main::ClientContext* context) const;
+    // started, s'il est donné, passe à vrai avant le premier enregistrement défait : une
+    // exception d'après laisse le stockage partagé ou le catalogue à demi défaits.
+    void rollback(main::ClientContext* context, bool* started = nullptr) const;
     // Oublie les enregistrements : après une annulation déjà appliquée (la transaction en échec
     // reste ouverte, marche T0), un second rollback n'a plus rien à défaire.
     void clear() { memoryBuffers.clear(); }

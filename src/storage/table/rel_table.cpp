@@ -614,10 +614,13 @@ void RelTable::prepareCommitForNodeGroup(const Transaction* transaction,
     }
 }
 
-bool RelTable::checkpoint(main::ClientContext*, TableCatalogEntry* tableEntry,
+bool RelTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tableEntry,
     PageAllocator& pageAllocator) {
     bool ret = hasChanges;
     if (hasChanges) {
+        // Les groupes CSR changent leur part persistante avant leur échange : un échec ici
+        // condamne la base, comme avant (StorageManager::markCheckpointChangedMemory).
+        StorageManager::Get(*context)->markCheckpointChangedMemory();
         // Deleted columns are vacuumed and not checkpointed or serialized.
         std::vector<column_id_t> columnIDs;
         columnIDs.push_back(0);

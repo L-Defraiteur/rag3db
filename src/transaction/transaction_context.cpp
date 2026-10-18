@@ -82,8 +82,15 @@ void TransactionContext::rollback() {
     if (!hasActiveTransaction()) {
         return;
     }
-    clientContext.getDatabase()->getTransactionManager()->rollback(clientContext,
-        activeTransaction);
+    try {
+        clientContext.getDatabase()->getTransactionManager()->rollback(clientContext,
+            activeTransaction);
+    } catch (...) {
+        // Le gestionnaire a retiré la transaction même en échec : la connexion l'oublie aussi,
+        // sinon elle restait en mode manuel sur une transaction détruite.
+        clearTransaction();
+        throw;
+    }
     clearTransaction();
 }
 
@@ -97,9 +104,10 @@ void TransactionContext::rollbackAfterStatementFailure() {
     }
     // Marche T0 : la transaction reste ouverte et garde ses verrous jusqu'au ROLLBACK (ou au
     // COMMIT, qui annule et le dit) ; ses effets sont annulés tout de suite.
+    // Échoué même si l'annulation lève : le bloc ne sert plus rien jusqu'au ROLLBACK.
+    manualTransactionFailed = true;
     clientContext.getDatabase()->getTransactionManager()->failAfterStatement(clientContext,
         activeTransaction);
-    manualTransactionFailed = true;
 }
 
 void TransactionContext::throwIfManualTransactionFailed() const {

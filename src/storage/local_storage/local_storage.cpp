@@ -175,9 +175,12 @@ void LocalStorage::flushNodeTable(table_id_t tableID) {
 
 void LocalStorage::rollback() {
     auto mm = MemoryManager::Get(clientContext);
-    for (auto& [_, localTable] : tables) {
-        localTable->clear(*mm);
-    }
+    // Un ROLLBACK n'alloue rien qui puisse manquer : les tables locales sont relâchées, pas
+    // vidées. Les vider rebâtissait un index de hachage, une page demandée au tampon, refusée
+    // quand il est plein ; l'annulation levait, et la transaction restait ouverte (ticket du
+    // ROLLBACK sous un tampon plein). Une transaction échouée qui sert encore les recrée à la
+    // demande (getOrCreateLocalTable).
+    tables.clear();
     pendingNodeStats.clear();
     for (auto& optimisticAllocator : optimisticAllocators) {
         optimisticAllocator->rollback();

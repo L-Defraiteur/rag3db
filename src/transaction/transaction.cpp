@@ -215,16 +215,25 @@ void Transaction::rollback(storage::WAL*) {
     // Rolling back the local storage will free + evict all optimistically-allocated pages
     // Since the undo buffer may do some scanning (e.g. to delete inserted keys from the hash index)
     // this must be rolled back first
-    undoBuffer->rollback(clientContext);
+    auto undoStarted = false;
+    try {
+        undoBuffer->rollback(clientContext, &undoStarted);
+    } catch (...) {
+        halfDoneRollback = undoStarted;
+        throw;
+    }
     localStorage->rollback();
     hasCatalogChanges = false;
 }
 
 void Transaction::failAfterStatement(storage::WAL* wal) {
+    // Échouée même si l'annulation lève : le ROLLBACK qui ferme le bloc ne la rejoue pas
+    // (TransactionManager::rollback), et rejouer l'annulation ne serait pas sûr (le retrait des
+    // lignes d'un groupe n'est pas idempotent).
+    failed = true;
     rollback(wal);
     undoBuffer->clear();
     localWAL->clear();
-    failed = true;
 }
 
 bool Transaction::isUnCommitted(common::table_id_t tableID, common::offset_t nodeOffset) const {

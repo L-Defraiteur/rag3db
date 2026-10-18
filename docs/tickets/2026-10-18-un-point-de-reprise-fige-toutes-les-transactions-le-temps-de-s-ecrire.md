@@ -155,6 +155,21 @@ pendant les fenêtres des points de reprise au seuil, avant et après. Fermé qu
 reprise au seuil ne fait plus attendre les lecteurs, et que l'attente des écrivains tient dans
 une borne dite.
 
+**Fait par le lot du ROLLBACK sous un tampon plein (19 octobre 2026)** : un point de reprise
+refusé avant d'avoir rien changé de ce qui est servi laisse la base ouverte. Il lève une erreur
+nommée, et tout ce qui est validé est au journal. Le point de non-retour est le drapeau
+`StorageManager::markCheckpointChangedMemory`, posé après la copie fusionnée d'un groupe et avant
+sa première écriture de page. La base est condamnée seulement si ce drapeau est posé, ou si le
+point de reprise porte une validation forcée. Le témoin ci-dessous est vert, et sorti de
+known_red.
+
+Ce qui reste ici :
+- la voie 2 elle-même, un point de reprise qui ne fige pas tout ;
+- le drapeau fin des tables de relations : une table de relations modifiée le pose dès le début
+  de son point de reprise, par prudence. Un refus d'allocation y condamne donc encore la base,
+  comme avant. Il faut le placer après la dernière copie de `CSRNodeGroup` et avant sa première
+  écriture de colonne, avec un témoin à écrire (un tampon plein de relations).
+
 Pour la voie 2 : `FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen`
 (`test/transaction/concurrence/full_buffer_rollback_test.cpp`, dans `known_red.txt`, contrôle
 `refused-checkpoint-leaves-the-database-open`). Un fils remplit le tampon de 64 Mo de pages validées

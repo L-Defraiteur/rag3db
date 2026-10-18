@@ -72,6 +72,38 @@ TEST_F(FlakyCheckpointerTest, RecoverFromCheckpointStorageFailure) {
     FSMLeakChecker::checkForLeakedPages(conn.get());
 }
 
+// Un CHECKPOINT refusé avant d'avoir rien changé de ce qui est servi (ici, avant même le
+// stockage ; sous un tampon plein, à la copie fusionnée d'un groupe) reste une erreur nommée : la
+// base reste ouverte, tout ce qui est validé est au journal (ticket du ROLLBACK sous un tampon
+// plein, défaut 3). Avant, il condamnait la base jusqu'à sa réouverture.
+TEST_F(FlakyCheckpointerTest, ARefusedCheckpointThatChangedNothingLeavesTheDatabaseOpen) {
+    if (inMemMode) {
+        GTEST_SKIP();
+    }
+    FlakyCheckpointer flakyCheckpointer([](main::ClientContext& context) {
+        return std::make_unique<FlakyCheckpointerFailsOnCheckpointStorage>(context);
+    });
+    runFlakyCheckpoint(flakyCheckpointer);
+    FlakyCheckpointer([](main::ClientContext& context) {
+        return std::make_unique<Checkpointer>(context);
+    }).setCheckpointer(*getClientContext(*conn));
+    // Les résultats ne survivent pas à la base : leur mémoire est à elle.
+    {
+        auto begin = conn->query("BEGIN TRANSACTION;");
+        ASSERT_TRUE(begin->isSuccess()) << "[check: refused-checkpoint-leaves-the-database-open] "
+                                        << begin->getErrorMessage();
+        ASSERT_TRUE(conn->query("CREATE (a:test {id: 5000, name: 'after'});")->isSuccess());
+        ASSERT_TRUE(conn->query("COMMIT;")->isSuccess());
+        auto again = conn->query("CHECKPOINT;");
+        EXPECT_TRUE(again->isSuccess()) << again->getErrorMessage();
+    }
+    createDBAndConn();
+    auto res = conn->query("MATCH (a:test) RETURN COUNT(a);");
+    ASSERT_TRUE(res->isSuccess());
+    EXPECT_EQ(res->getNext()->getValue(0)->getValue<int64_t>(), 5001);
+    FSMLeakChecker::checkForLeakedPages(conn.get());
+}
+
 class FlakyCheckpointerFailsOnSerialization final : public Checkpointer {
 public:
     explicit FlakyCheckpointerFailsOnSerialization(main::ClientContext& context)

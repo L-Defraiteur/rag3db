@@ -1034,24 +1034,29 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
         // Aucune transaction n'est ouverte : un index retiré et validé n'est plus visible de
         // personne, on l'efface (comme reclaimDroppedTables pour les tables).
         reclaimDroppedIndexes();
-        // Deleted columns are vacuumed and not checkpointed.
-        std::vector<std::unique_ptr<Column>> checkpointColumns;
+        // Deleted columns are vacuumed and not checkpointed. Les colonnes ne quittent la table
+        // qu'après le point de reprise des groupes : un échec avant leur premier échange laisse la
+        // table comme elle était, et le point de reprise refusé ne condamne pas la base (ticket du
+        // ROLLBACK sous un tampon plein, défaut 3).
         std::vector<column_id_t> columnIDs;
+        std::vector<Column*> checkpointColumnPtrs;
         for (auto& property : tableEntry->getProperties()) {
             auto columnID = tableEntry->getColumnID(property.getName());
-            checkpointColumns.push_back(std::move(columns[columnID]));
             columnIDs.push_back(columnID);
-        }
-        columns = std::move(checkpointColumns);
-
-        std::vector<Column*> checkpointColumnPtrs;
-        for (const auto& column : columns) {
-            checkpointColumnPtrs.push_back(column.get());
+            checkpointColumnPtrs.push_back(columns[columnID].get());
         }
 
+        auto* storageManager = StorageManager::Get(*context);
         NodeGroupCheckpointState state{columnIDs, std::move(checkpointColumnPtrs), pageAllocator,
             memoryManager};
+        state.changedMemory = storageManager->getCheckpointChangedMemoryFlag();
         nodeGroups->checkpoint(*memoryManager, state);
+        storageManager->markCheckpointChangedMemory();
+        std::vector<std::unique_ptr<Column>> checkpointColumns;
+        for (const auto columnID : columnIDs) {
+            checkpointColumns.push_back(std::move(columns[columnID]));
+        }
+        columns = std::move(checkpointColumns);
         for (auto& index : indexes) {
             index.checkpoint(context, pageAllocator);
         }

@@ -18,6 +18,7 @@
 #include "main/database.h"
 #include "main/db_config.h"
 #include "storage/checkpointer.h"
+#include "storage/storage_manager.h"
 #include "storage/wal/local_wal.h"
 
 using namespace rag3db::common;
@@ -152,6 +153,7 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
             forced || Checkpointer::canAutoCheckpoint(clientContext, *transaction);
         clearTransactionNoLock(transaction->getID());
         if (forced) {
+            checkpointCarriesForcedCommit = true;
             checkpointNoLock(clientContext, lck, true /* newTransactionsAlreadyStopped */);
         } else if (shouldCheckpoint) {
             if (checkpointPending) {
@@ -203,7 +205,21 @@ void TransactionManager::failAfterStatement(main::ClientContext& clientContext,
     clientContext.cleanUp();
     KU_ASSERT(transaction->isWriteTransaction() || transaction->isReadOnly());
     if (transaction->isWriteTransaction()) {
-        transaction->failAfterStatement(&wal);
+        try {
+            transaction->failAfterStatement(&wal);
+        } catch (const std::exception& e) {
+            // La transaction est marquée échouée : le ROLLBACK qui ferme le bloc la retire sans
+            // rejouer l'annulation (TransactionManager::rollback).
+            const auto halfDone = transaction->hasHalfDoneRollback();
+            if (halfDone) {
+                rollbackFailed = true;
+            }
+            throw TransactionManagerException(common::stringFormat(
+                "The rollback of the failed statement could not complete ({}). Send ROLLBACK to "
+                "close the transaction{}",
+                e.what(),
+                halfDone ? std::string{". "} + REOPEN_AFTER_FAILED_ROLLBACK + "." : "."));
+        }
     }
     // Pas de clearTransactionNoLock : la transaction reste active et garde ses verrous.
 }
@@ -218,10 +234,32 @@ void TransactionManager::rollback(main::ClientContext& clientContext, Transactio
     } break;
     case TransactionType::RECOVERY:
     case TransactionType::WRITE: {
+        // La transaction quitte le système même si son annulation lève : restée active, elle
+        // gardait ses verrous, et tout le monde l'attendait, BEGIN et CHECKPOINT compris (ticket
+        // du ROLLBACK sous un tampon plein). L'erreur dit ce qu'il en est.
+        std::optional<std::string> failure;
         if (!transaction->hasFailed()) {
-            transaction->rollback(&wal);
+            try {
+                transaction->rollback(&wal);
+            } catch (const std::exception& e) {
+                failure = e.what();
+            }
+        }
+        const auto halfDone = failure && transaction->hasHalfDoneRollback();
+        if (halfDone) {
+            rollbackFailed = true;
         }
         clearTransactionNoLock(transaction->getID());
+        if (failure) {
+            if (autoCheckpointRequested && activeTransactions.empty()) {
+                cancelAutoCheckpointRequestNoLock();
+            }
+            throw TransactionManagerException(common::stringFormat(
+                "The rollback could not complete ({}). The transaction is closed and its locks "
+                "are released{}",
+                *failure,
+                halfDone ? std::string{". "} + REOPEN_AFTER_FAILED_ROLLBACK + "." : "."));
+        }
     } break;
     default: {
         throw TransactionManagerException("Invalid transaction type to rollback.");
@@ -245,6 +283,13 @@ void TransactionManager::checkpoint(main::ClientContext& clientContext) {
 }
 
 void TransactionManager::throwIfCheckpointFailedNoLock() const {
+    if (rollbackFailed) {
+        throw TransactionManagerException(common::stringFormat(
+            "{}: what it holds in memory no longer matches anything committed or rolled back. No "
+            "committed transaction is lost: the journal is replayed when the database is "
+            "reopened.",
+            REOPEN_AFTER_FAILED_ROLLBACK));
+    }
     if (checkpointFailed) {
         throw TransactionManagerException(common::stringFormat(
             "{}: what it holds in memory no longer matches its files. No committed transaction "
@@ -348,6 +393,7 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
     transaction->oldestActiveStartTS = oldestActiveSnapshotNoLock(transaction);
     try {
         transaction->commit(&wal);
+        checkpointCarriesForcedCommit = true;
     } catch (...) {
         leaveQueue();
         throw;
@@ -498,6 +544,10 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext,
     // Le démarrage reste interdit jusqu'à la fin de l'écriture, quelle qu'en soit l'issue.
     auto checkpointer = initCheckpointerFunc(clientContext);
     const auto checkpointNumber = ++checkpointsStarted;
+    // Une validation forcée (un COPY hors journal, la création d'un index) n'est durable que par
+    // ce point de reprise : son échec, quel qu'il soit, condamne la base (voir plus bas).
+    const auto carriesForcedCommit = checkpointCarriesForcedCommit;
+    checkpointCarriesForcedCommit = false;
     try {
         checkpointer->writeCheckpoint();
         walSizeAtLastPostponeWarning = 0;
@@ -505,6 +555,18 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext,
         allowNewTransactionsNoLock();
     } catch (std::exception& e) {
         allowNewTransactionsNoLock();
+        if (!carriesForcedCommit &&
+            !storage::StorageManager::Get(clientContext)->hasCheckpointChangedMemory()) {
+            // Refusé avant d'avoir rien changé de ce qui est servi (le plus souvent : la copie
+            // fusionnée d'un groupe, sous un tampon plein) : Checkpointer::rollback rend les
+            // pages qu'il a prises, et la base reste ouverte. Tout ce qui est validé est au
+            // journal (ticket du ROLLBACK sous un tampon plein, défaut 3).
+            checkpointer->rollback();
+            throw CheckpointException{RuntimeException(common::stringFormat(
+                "{}: the checkpoint was refused before it changed anything. Every committed "
+                "transaction is in the journal, and the database stays open.",
+                e.what()))};
+        }
         // Nothing is served after this, see checkpointFailed. A timeout while waiting for the
         // transactions to leave, above, wrote nothing and does not come here.
         checkpointFailed = true;
