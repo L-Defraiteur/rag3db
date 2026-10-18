@@ -8,8 +8,8 @@
   balayage (sonde du 18 octobre, luciepc, master b47dc6066).
 - **Atteignable en service** : oui, dès qu'un COPY de relations s'ajoute à une table qui a déjà
   des relations validées et reprises (point de reprise) pour les mêmes nœuds source.
-- **Touche rag3weaver** : à vérifier (l'hôte insère ses arêtes par CREATE dans des transactions,
-  pas par COPY ; une réindexation par COPY le toucherait).
+- **Touche rag3weaver** : oui, mesuré par codeparsers sur `code-lourd` (réindexation par COPY :
+  18 `HAS_PARENT` et 11 `INHERITS_FROM` perdus, 17 `CONSUMES` en trop), voir plus bas.
 - **Ouvert le** : 18 octobre 2026, session cœur C++, trouvé en écrivant le témoin du rollback
   sous lecteurs.
 - **Pour** : cœur C++ (à placer par l'orchestration ; c'est une perte, donc avant les lenteurs).
@@ -37,6 +37,17 @@ annulé ou validé. Suite de la sonde, après le COPY validé : toute la table c
 `WHERE r.k <= 10` compte 0 ; après `CHECKPOINT` : 1 500 et 0 ; après fermeture et réouverture :
 1 500, 0, et le nœud 1 n'a plus aucune relation entrante. **La perte est durable.** Sans le `CHECKPOINT` (les dix relations en mémoire), tout est juste : le
 défaut tient à la rencontre d'un bloc persistant et d'une liste en mémoire pour le même nœud.
+
+## Sur une vraie base (codeparsers, 18 octobre 2026)
+
+Mesure de codeparsers, même lib 87a362e30, base `code-lourd` : réindexée au seuil haut sans COPY,
+contre au seuil par défaut avec COPY. Par rapport à la référence sans COPY : `HAS_PARENT` −18,
+`INHERITS_FROM` −11, `CONSUMES` +17, et 16 relations égales ; la base vive est identique au cas
+avec COPY. Les arêtes perdues sont des relations fines (héritage, parent), et un `CONSUMES` de
+trop apparaît sur le même couple de nœuds : à ajouter à la recette, une table de relations à
+plusieurs paires d'extrémités (groupe de relations) et deux relations d'un même couple. Listes :
+`~/.cache/codeparsers-notes/pertes-18oct/{ref,bas}-lourd-aretes.txt` sur le portable. Donc
+**l'hôte est touché** dès qu'il passe par COPY.
 
 ## Ce que dit le code (lu, non prouvé)
 
