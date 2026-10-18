@@ -56,14 +56,17 @@ env:
   RUSTFLAGS: --deny warnings
   PIP_BREAK_SYSTEM_PACKAGES: 1
 
-# Only allow one run in this group to run at a time, and cancel any runs in progress in this group.
+# Only allow one run in this group to run at a time, and cancel any runs in progress in this group (except on master).
 # We use the workflow name and then add the pull request number, or (if it's a push to master), we use the name of the branch.
 # See github's docs[1] and a relevant stack overflow answer[2]
 #   [1]: https://docs.github.com/en/actions/using-jobs/using-concurrency
 #   [2]: https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Sur master, le run qui tourne va toujours au bout, et GitHub ne garde qu'un run en attente par
+  # groupe (le plus récent) : les runs se suivent sans que la file s'allonge. Annulés à chaque push,
+  # aucun run de master ne rendait de verdict (19 octobre 2026, comme rag3weaver-workflow.yml).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   generate-binary-datasets:
