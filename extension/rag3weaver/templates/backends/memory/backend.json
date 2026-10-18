@@ -283,6 +283,268 @@
         "updated_at": "updated_at",
         "revision": "revision"
       }
+    },
+    "Fiche": {
+      "schema": "schemas/fiche.json",
+      "config": {
+        "fields": {
+          "name": {
+            "type": "string",
+            "isTitle": true
+          },
+          "about": {
+            "type": "string",
+            "isContent": true
+          },
+          "state": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "name"
+        ],
+        "returnFields": [
+          "name",
+          "about",
+          "state",
+          "revision",
+          "updated_at"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ],
+        "lifecycle": {
+          "field": "state",
+          "initial": "proposed",
+          "transitions": [
+            {
+              "name": "review",
+              "from": "current",
+              "to": "to_review"
+            },
+            {
+              "name": "confirm",
+              "from": "to_review",
+              "to": "current"
+            },
+            {
+              "name": "accept",
+              "from": "proposed",
+              "to": "current"
+            },
+            {
+              "name": "retire",
+              "from": "current",
+              "to": "retired"
+            },
+            {
+              "name": "retire_reviewed",
+              "from": "to_review",
+              "to": "retired"
+            },
+            {
+              "name": "reject",
+              "from": "proposed",
+              "to": "retired"
+            }
+          ]
+        }
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision"
+      }
+    },
+    "Apport": {
+      "schema": "schemas/apport.json",
+      "config": {
+        "fields": {
+          "fiche": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "section": {
+            "type": "string",
+            "isTitle": true
+          },
+          "texte": {
+            "type": "string",
+            "isContent": true
+          },
+          "niveau": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "fiche",
+          "source",
+          "section"
+        ],
+        "returnFields": [
+          "fiche",
+          "source",
+          "section",
+          "niveau",
+          "state",
+          "created_at"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ],
+        "lifecycle": {
+          "field": "state",
+          "initial": "current",
+          "transitions": [
+            {
+              "name": "consolidate",
+              "from": "current",
+              "to": "consolidated"
+            }
+          ]
+        }
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision"
+      }
+    },
+    "Etat": {
+      "schema": "schemas/etat.json",
+      "config": {
+        "fields": {
+          "fiche": {
+            "type": "string",
+            "isTitle": true
+          },
+          "resume": {
+            "type": "string",
+            "isContent": true
+          }
+        },
+        "hashsafe": [
+          "fiche"
+        ],
+        "returnFields": [
+          "fiche",
+          "resume",
+          "faits",
+          "revision",
+          "updated_at"
+        ],
+        "signals": [
+          "bm25",
+          "vector"
+        ]
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision"
+      }
+    },
+    "Source": {
+      "schema": "schemas/source.json",
+      "config": {
+        "fields": {
+          "chemin": {
+            "type": "string"
+          },
+          "titre": {
+            "type": "string",
+            "isTitle": true
+          },
+          "contenu": {
+            "type": "string",
+            "isContent": true
+          },
+          "origine": {
+            "type": "string"
+          },
+          "session": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "chemin"
+        ],
+        "returnFields": [
+          "chemin",
+          "titre",
+          "origine",
+          "session",
+          "created_at"
+        ],
+        "signals": [
+          "bm25"
+        ]
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision",
+        "immutable": true
+      }
+    },
+    "Rangement": {
+      "schema": "schemas/rangement.json",
+      "config": {
+        "fields": {
+          "session": {
+            "type": "string",
+            "isTitle": true
+          },
+          "transcription": {
+            "type": "string",
+            "isContent": true
+          },
+          "motif": {
+            "type": "string"
+          }
+        },
+        "hashsafe": [
+          "session"
+        ],
+        "returnFields": [
+          "session",
+          "transcription",
+          "jusqu_a",
+          "motif",
+          "updated_at"
+        ],
+        "signals": []
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision"
+      }
     }
   },
   "relations": {
@@ -308,6 +570,35 @@
     "CITE": {
       "from": "Memory",
       "to": "Ref"
+    },
+    "ANCRE": {
+      "from": "Fiche",
+      "to": "Ref",
+      "from_states": [
+        "current",
+        "to_review",
+        "proposed"
+      ]
+    },
+    "APPORT_CITE": {
+      "from": "Apport",
+      "to": "Ref"
+    },
+    "ETAT_DE": {
+      "from": "Etat",
+      "to": "Fiche"
+    },
+    "LIT": {
+      "from": "Etat",
+      "to": "Apport"
+    },
+    "CONSOLIDE": {
+      "from": "Apport",
+      "to": "Apport"
+    },
+    "A_POUR_APPORT": {
+      "from": "Fiche",
+      "to": "Apport"
     }
   },
   "tools": {
@@ -399,6 +690,117 @@
       "bindings": {
         "types_entity": "RefType"
       }
+    },
+    "put_fiche": {
+      "graph": "../notebook/graphs/put.mmd",
+      "bindings": {
+        "entity": "Fiche"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Fiche",
+          "view": "editable"
+        }
+      }
+    },
+    "get_fiche": {
+      "graph": "../notebook/graphs/get.mmd",
+      "bindings": {
+        "entity": "Fiche"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Fiche",
+          "view": "identity"
+        }
+      }
+    },
+    "put_source": {
+      "graph": "../notebook/graphs/put.mmd",
+      "bindings": {
+        "entity": "Source"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Source",
+          "view": "editable"
+        }
+      }
+    },
+    "put_apport": {
+      "graph": "../notebook/graphs/put.mmd",
+      "bindings": {
+        "entity": "Apport"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Apport",
+          "view": "editable"
+        }
+      }
+    },
+    "get_apport": {
+      "graph": "../notebook/graphs/get.mmd",
+      "bindings": {
+        "entity": "Apport"
+      },
+      "input_payloads": {
+        "record": {
+          "entity": "Apport",
+          "view": "identity"
+        }
+      }
+    },
+    "relier_apport": {
+      "graph": "../../tools/link.mmd",
+      "bindings": {
+        "relation": "A_POUR_APPORT"
+      },
+      "description": "Range un apport (L1) sur sa fiche : chaque lien donne la fiche par {name} et l'apport par {fiche, source, section}."
+    },
+    "ancrer_fiche": {
+      "graph": "graphs/add_ref.mmd",
+      "bindings": {
+        "refs_entity": "Ref",
+        "types_entity": "RefType",
+        "from_entity": "Fiche",
+        "relation": "ANCRE"
+      },
+      "description": "Ancre une fiche (un sujet) à une chose citée — un chemin, un symbole, une ligne : la Ref par son genre et sa valeur, la fiche par {name}."
+    },
+    "citer_source": {
+      "graph": "graphs/add_ref.mmd",
+      "bindings": {
+        "refs_entity": "Ref",
+        "types_entity": "RefType",
+        "from_entity": "Apport",
+        "relation": "APPORT_CITE"
+      },
+      "description": "Pose la provenance d'un apport : une Ref de genre doc, valeur <chemin du source>#<titre de la section>, l'apport par {fiche, source, section}."
+    },
+    "recall_fiches": {
+      "graph": "../../tools/search_structured.mmd",
+      "bindings": {
+        "target": "Fiche"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
+    },
+    "recall_apports": {
+      "graph": "../../tools/search_structured.mmd",
+      "bindings": {
+        "target": "Apport"
+      },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ]
     }
   },
   "reactions": {

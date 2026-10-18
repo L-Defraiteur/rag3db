@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "chemin",
+    "titre",
+    "contenu",
+    "origine",
+    "revision",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "chemin": {
+      "type": "string",
+      "minLength": 1,
+      "description": "sources/<date>-<uuid>.md, relatif au dossier de la mémoire : son identité."
+    },
+    "titre": {
+      "type": "string",
+      "description": "Le premier titre du document, ou son nom."
+    },
+    "contenu": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Le Markdown reçu, tel quel : le L0, et la provenance de tout ce qui en sort. Il ne change jamais."
+    },
+    "origine": {
+      "type": "string",
+      "enum": [
+        "envoi",
+        "filet",
+        "migration"
+      ],
+      "description": "envoi : Claude l'a envoyé ; filet : un crochet de Claude Code l'a produit depuis la transcription ; migration : repris d'une fiche d'avant ce modèle."
+    },
+    "session": {
+      "type": "string",
+      "description": "L'identifiant de session de Claude Code (CLAUDE_CODE_SESSION_ID), quand il est connu."
+    },
+    "author": {
+      "type": "string",
+      "description": "De qui vient l'écriture : la personne pour qui l'agent travaillait (l'identité git du dépôt de la mémoire). Posé par l'hôte, jamais par l'outil (lot M7) ; vide avant M7."
+    },
+    "via": {
+      "type": "string",
+      "description": "Par quel client (la session MCP de l'hôte). Posé par l'hôte (lot M7)."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    },
+    "updated_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    }
+  }
+}
