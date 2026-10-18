@@ -68,13 +68,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (32)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La borne du tampon refuse par défaut le premier index de ce dépôt : 65 Mo de texte demandent 9 Gio](2026-10-18-la-borne-du-tampon-refuse-le-premier-index-de-ce-depot.md) | ouvert — borne provisoire du 4 oct. jamais revue après `47a283e6c` ; 10 Gio posés dans l'env de luciepc | blocage (refus avant écriture) | oui, au-delà de 64 Mo de texte au défaut du produit | oui (`index`, `estimate`) |
 | [La reprise d'une réaction coupée rougit sous charge : la lecture voit encore les fichiers retirés](2026-10-18-la-reprise-apres-arret-rougit-sous-charge.md) | ouvert — pour everything declarative ; un rouge sous charge, six verts seul | test instable, peut-être en service | peut-être | oui (`backend.rs`, `reindex_nodes.rs`) |
 | [Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive](2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md) | ouvert — `remove_dir_all` sur une base, `rag3weaver_cache` jamais effacé ; 755 dossiers effacés le 15, ~4 000 entrées relevées le 18 puis effacées (141 Mio : pas la cause de l’échange) | confort — RAM puis échange | non (tests), sauf `rag3weaver_cache` | oui |
 | [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
