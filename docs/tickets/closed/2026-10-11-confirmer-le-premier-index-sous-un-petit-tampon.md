@@ -1,6 +1,6 @@
 # Confirmer qu'une première indexation de ce dépôt passe sous un tampon de 2 Gio
 
-- **État** : ouvert (11 octobre 2026) — une confirmation, pour l'arbre principal
+- **État** : **fermé** le 18 octobre 2026 : la passe va au bout sous 2 Gio, en fichiers et en blobs (§ « Rejoué »). Ouvert le 11 octobre, une confirmation pour l'arbre principal
 - **Gravité** : blocage, s'il revenait (l'indexation s'arrête, la base est à rouvrir)
 - **Atteignable en service** : oui, sur un poste au tampon étroit
 - **Touche rag3weaver** : oui, c'est une passe du produit
@@ -61,3 +61,30 @@ du test.
 **État** : la confirmation est faite pour le défaut d'une base neuve (en fichiers). Le défaut reste
 rouge en blobs, donc pour une base d'avant la bascule. Le ticket reste ouvert pour ce cas. Journaux
 sur luciepc : `~/.cache/rag3weaver-notes-A/confirmation/e2e.log` et `e2e-blobs.log`.
+
+## Rejoué (arbre principal, 18 octobre 2026) : vert sous 2 Gio, en fichiers et en blobs
+
+Luciepc, master `c6bb094fb` (lib du magasin 0fc7dd10f), worktree `rag3db-tampon`, la recette du
+ticket du 11 octobre (`RAG3WEAVER_ESTIMATE_REPO=1`, `e2e_estimate
+ce_depot_est_cherchable_par_mots_avant_ses_vecteurs`, base sur disque), qui passe à côté de la
+borne, sous `poste lourd`, services d'embarquement locaux, régime doux. 6 318 fichiers, 57 Mo de
+texte compté par la passe, 687 467 liens. Journaux : `~/.cache/rag3weaver-notes-A/tampon/` sur
+luciepc. Le pic est relevé par le test toutes les 100 ms ; il tombe chaque fois pendant la pose
+des relations.
+
+| passe | plein texte | tampon | résultat | durée | pic au fil de l'eau | anonyme à 1 024 / 3 072 / 5 120 / 6 318 fichiers |
+|---|---|---|---|---|---|---|
+| paquets de 512 | fichiers | 2 Gio | **vert** | 69 s | 7 907 Mo | 2 359 / 4 576 / 5 569 / 6 288 Mo |
+| paquets de 512 | fichiers | 4 Gio | **vert** | 68 s | 7 677 Mo | 2 365 / 4 493 / 5 265 / 5 967 Mo |
+| paquets de 512 | blobs | 2 Gio | **vert** | 124 s | 9 212 Mo | 2 635 / 5 253 / 6 801 / 7 580 Mo |
+| paquets de 512 | blobs | 4 Gio | **vert** | 122 s | 9 805 Mo | 2 673 / 5 609 / 7 269 / 8 405 Mo |
+| paquets de 2 048, un COMMIT par paquet (le défaut d'`index`) | fichiers | 4 Gio | **vert** | 58 s | 7 982 Mo | 3 769 à 2 048 ; 6 446 à 6 144 |
+| paquets de 2 048, une seule transaction (`RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION=tous`) | fichiers | 4 Gio | **vert** | 56 s | 8 242 Mo | 3 699 à 2 048 ; 6 599 à 6 144 |
+
+**La passe en blobs, rouge le 11, est verte le 18**, sous 2 comme sous 4 Gio. Le chemin du 4
+octobre ne casse donc plus sur ce dépôt. Le
+[ticket du COPY de blobs](../2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md) reste ouvert : son témoin moteur (un gros COPY de blobs)
+n'est pas celui-ci.
+
+La borne du produit, recalculée sur ces passes, est fermée dans le même commit
+([ticket](2026-10-18-la-borne-du-tampon-refuse-le-premier-index-de-ce-depot.md)).

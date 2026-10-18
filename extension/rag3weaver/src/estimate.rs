@@ -37,14 +37,20 @@ use crate::embedding_choice::{CardClass, Choice};
 pub const CONFIRM_ABOVE: Duration = Duration::from_secs(5 * 60);
 
 /// **Ce qu'un Gio de tampon du moteur sait indexer**, en octets de texte
-/// retenus. **Provisoire, deux mesures** (dépôt rag3db, paquets de 512, base
-/// sur disque, 4 octobre 2026) : 62 Mo passent avec 8 Gio ; avec 4 Gio la
-/// passe meurt vers 40 Mo, sur un point de reprise qui ne tient plus dans le
-/// tampon (ticket `2026-10-04-point-de-reprise-echoue-quand-le-tampon-est-petit`).
-/// Soit 7,75 Mo par Gio qui passent, 10 Mo par Gio qui cassent : la borne est
-/// prise au point qui a passé, arrondi à 8 Mo. À remplacer quand la cause sera
-/// connue : ce n'est pas une loi, c'est ce que les deux points autorisent.
-pub const TEXT_BYTES_PER_BUFFER_GIB: u64 = 8_000_000;
+/// retenus. **Mesurée le 18 octobre 2026** (luciepc, master `c6bb094fb`, le
+/// premier index du dépôt rag3db sans la borne, paquets de 512, base sur
+/// disque) : 57 Mo de texte passent sous **2 Gio**, en plein texte en fichiers
+/// comme en blobs, et sous 4 Gio. Le défaut que la borne d'avant mesurait (le
+/// point de reprise mort sous un petit tampon, 8 Mo par Gio le 4 octobre) ne
+/// se montre plus depuis `47a283e6c`. La borne est prise au plus petit point
+/// mesuré qui a passé : 28 Mo par Gio, compté en caractères par la passe, alors
+/// que le relevé compte en octets (65 Mo sur le même arbre), d'où une marge.
+/// Rien n'est mesuré sous 2 Gio.
+///
+/// **Filet** du ticket `docs/tickets/2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md` :
+/// un gros COPY de blobs peut encore échouer sous un petit tampon. À recalculer
+/// ou à retirer quand ce ticket se ferme.
+pub const TEXT_BYTES_PER_BUFFER_GIB: u64 = 28_000_000;
 
 /// Le tampon du moteur que cette indexation aura, et d'où il vient.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -356,7 +362,7 @@ impl Estimate {
         Some(format!(
             "tampon du moteur trop petit pour indexer ce dépôt — rien n'a été écrit. {:.1} Mo de texte demandent environ {} de tampon ; ce processus en a {} ({}). \
              Posez RAG3DB_BUFFER_POOL_SIZE (en octets) à {} au moins, ou indexez un sous-dossier. \
-             Borne provisoire (deux mesures, 4 octobre 2026) : au-delà, la première indexation meurt sur un point de reprise.",
+             Borne mesurée le 18 octobre 2026 (2 Gio portent 57 Mo de texte) ; rien n'est mesuré en dessous.",
             self.survey.bytes as f64 / 1e6,
             gio(b.needed_bytes),
             gio(b.pool_bytes),
@@ -549,11 +555,15 @@ mod tests {
         let choice = Choice { model: DEFAULT_MODEL.into(), reason: "le défaut".into() };
         let s = survey([("a.rs", 62_000_000u64)], |_, _| Kept::Yes("code"));
         let gib = 1u64 << 30;
-        let petit = Estimate::new(s.clone(), choice.clone(), None, CONFIRM_ABOVE).with_buffer(4 * gib, "RAG3DB_BUFFER_POOL_SIZE");
-        let refus = petit.buffer_refusal().expect("4 Gio pour 62 Mo : refusé");
-        assert!(refus.contains("rien n'a été écrit") && refus.contains("RAG3DB_BUFFER_POOL_SIZE") && refus.contains("8.0 Gio"), "{refus}");
+        // 62 Mo à 28 Mo par Gio : 3 Gio demandés.
+        let petit = Estimate::new(s.clone(), choice.clone(), None, CONFIRM_ABOVE).with_buffer(2 * gib, "RAG3DB_BUFFER_POOL_SIZE");
+        let refus = petit.buffer_refusal().expect("2 Gio pour 62 Mo : refusé");
+        assert!(refus.contains("rien n'a été écrit") && refus.contains("RAG3DB_BUFFER_POOL_SIZE") && refus.contains("3.0 Gio"), "{refus}");
         assert!(petit.text().contains("TROP PETIT"), "{}", petit.text());
-        let assez = Estimate::new(s.clone(), choice.clone(), None, CONFIRM_ABOVE).with_buffer(8 * gib, "défaut");
+        // La règle du produit (8 Gio) porte un dépôt de 65 Mo, celui qui était refusé le 18 octobre.
+        let rag3db = survey([("a.rs", 65_200_000u64)], |_, _| Kept::Yes("code"));
+        assert_eq!(Estimate::new(rag3db, choice.clone(), None, CONFIRM_ABOVE).with_buffer(8 * gib, "règle du produit").buffer_refusal(), None);
+        let assez = Estimate::new(s.clone(), choice.clone(), None, CONFIRM_ABOVE).with_buffer(4 * gib, "défaut");
         assert_eq!(assez.buffer_refusal(), None);
         assert_eq!(Estimate::new(s, choice, None, CONFIRM_ABOVE).buffer_refusal(), None, "sans vérification, pas de refus");
     }

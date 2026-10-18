@@ -21,6 +21,20 @@
 > volume. Le filet du produit (ne plus forcer) vaut pour le produit tel qu'il écrit ; il ne prouve
 > pas qu'un gros COPY journalisé de blobs tienne.
 
+## Ses filets
+
+- `extension/rag3weaver/src/estimate.rs`, `TEXT_BYTES_PER_BUFFER_GIB` et `Estimate::buffer_refusal` :
+  le refus d'indexer avant d'écrire quand le tampon ne porterait pas le texte. Recalculé le 18
+  octobre 2026 sur la mesure (28 Mo par Gio, au plus petit point qui a passé, 2 Gio), et gardé à
+  cause de ce ticket. À recalculer ou retirer à sa fermeture.
+- Le filet de la poussée des blobs décrit à l'« État » ci-dessus (les `_index_blobs` écrits par
+  `UNWIND … MERGE` en lots bornés, sans point de reprise forcé).
+
+Le 18 octobre, le premier index de ce dépôt est passé en blobs sous 2 Gio (le
+[ticket de confirmation](closed/2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md)) :
+le produit tel qu'il écrit ne casse plus, mais le témoin moteur de ce ticket, un gros COPY de
+blobs, n'est pas rejoué.
+
 ## Ce que c'est
 
 Sous un tampon de 2 Gio, la première indexation de ce dépôt en blobs meurt encore, au-delà de

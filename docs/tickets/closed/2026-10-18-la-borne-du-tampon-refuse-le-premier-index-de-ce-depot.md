@@ -1,7 +1,7 @@
 # La borne du tampon refuse par défaut le premier index de ce dépôt : 65 Mo de texte demandent 9 Gio
 
-- **État** : ouvert (18 octobre 2026, codeparsers, à la demande de l'orchestration). Contournement
-  posé dans l'env de l'hôte de luciepc ; borne non revue.
+- **État** : **fermé** le 18 octobre 2026 (arbre principal) : la borne est recalculée sur la
+  mesure, 28 Mo par Gio au lieu de 8 (§ « Fermé »). Ouvert le même jour par codeparsers.
 - **Gravité** : blocage. `index` refuse avant d'écrire, rien n'est perdu ni faux, mais le dépôt
   ne s'indexe pas sans réglage.
 - **Atteignable en service** : oui, sur tout poste au défaut du produit, dès que le texte retenu
@@ -80,3 +80,44 @@ réelle, s'il en reste une.
 2. Selon le résultat : retirer la borne, ou la recalculer sur ces mesures, en gardant le refus
    nommé pour le seul cas qui casse encore (le COPY de blobs, tant que son ticket est ouvert).
 3. Retirer alors `RAG3DB_BUFFER_POOL_SIZE` de l'env de luciepc, ou dire pourquoi il reste.
+
+## Fermé (18 octobre 2026, arbre principal)
+
+**Ce que la borne mesurait** : la première indexation morte sur un point de reprise sous un petit
+tampon. C'est le seul objet de la borne, et il ne se montre plus, ni en fichiers ni en blobs, même
+sous 2 Gio. Le 4 octobre, la passe mourait sous 4 Gio vers 40 Mo ; le 11 octobre, elle passait sous
+2 Gio en fichiers et mourait en blobs.
+
+Luciepc, master `c6bb094fb` (lib du magasin 0fc7dd10f), worktree `rag3db-tampon`, la recette du
+ticket du 11 octobre (`RAG3WEAVER_ESTIMATE_REPO=1`, `e2e_estimate
+ce_depot_est_cherchable_par_mots_avant_ses_vecteurs`, base sur disque), qui passe à côté de la
+borne, sous `poste lourd`, services d'embarquement locaux, régime doux. 6 318 fichiers, 57 Mo de
+texte compté par la passe, 687 467 liens. Journaux : `~/.cache/rag3weaver-notes-A/tampon/` sur
+luciepc. Le pic est relevé par le test toutes les 100 ms ; il tombe chaque fois pendant la pose
+des relations.
+
+| passe | plein texte | tampon | résultat | durée | pic au fil de l'eau | anonyme à 1 024 / 3 072 / 5 120 / 6 318 fichiers |
+|---|---|---|---|---|---|---|
+| paquets de 512 | fichiers | 2 Gio | **vert** | 69 s | 7 907 Mo | 2 359 / 4 576 / 5 569 / 6 288 Mo |
+| paquets de 512 | fichiers | 4 Gio | **vert** | 68 s | 7 677 Mo | 2 365 / 4 493 / 5 265 / 5 967 Mo |
+| paquets de 512 | blobs | 2 Gio | **vert** | 124 s | 9 212 Mo | 2 635 / 5 253 / 6 801 / 7 580 Mo |
+| paquets de 512 | blobs | 4 Gio | **vert** | 122 s | 9 805 Mo | 2 673 / 5 609 / 7 269 / 8 405 Mo |
+| paquets de 2 048, un COMMIT par paquet (le défaut d'`index`) | fichiers | 4 Gio | **vert** | 58 s | 7 982 Mo | 3 769 à 2 048 ; 6 446 à 6 144 |
+| paquets de 2 048, une seule transaction (`RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION=tous`) | fichiers | 4 Gio | **vert** | 56 s | 8 242 Mo | 3 699 à 2 048 ; 6 599 à 6 144 |
+
+**Ce qui change** (`extension/rag3weaver/src/estimate.rs`, `TEXT_BYTES_PER_BUFFER_GIB`) : 8 Mo → 28
+Mo de texte par Gio, au plus petit point mesuré qui a passé (57 Mo sous 2 Gio). La règle du produit
+(8 Gio) porte alors 224 Mo, au lieu de 64. La borne reste, faute de mesure sous 2 Gio, et parce
+qu'un gros COPY de blobs peut encore échouer sous un petit tampon : elle devient le **filet** du
+[ticket du COPY de blobs](../2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-un-petit-tampon.md), qu'elle cite et qui la liste.
+
+**Le contournement de luciepc** (`RAG3DB_BUFFER_POOL_SIZE=10737418240` dans
+`~/.config/rag3weaver/rag3weaver-daemon.env`) n'est plus nécessaire pour ce dépôt. Il est à
+codeparsers et touche son hôte : je ne l'ai pas retiré, je le lui ai dit.
+
+**Ce que disent aussi ces passes** (pour le
+[ticket de la mémoire de l'hôte](../2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md)) :
+- le tampon ne fait presque rien au pic : 7,9 Go sous 2 Gio, 7,7 Go sous 4 Gio ;
+- la transaction unique non plus : 8,2 Go contre 8,0 Go par paquets ;
+- c'est l'anonyme qui fait le pic, environ 1 Go par millier de fichiers, et le pic tombe pendant la
+  pose des relations.
