@@ -144,3 +144,8 @@ FullBufferRollback.RollsBackAndClosesCleanly rollback-under-a-full-buffer-succee
 # tant que le point de reprise réécrit en place ; relève de la voie 2 du ticket
 # 2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.
 FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen refused-checkpoint-leaves-the-database-open
+#
+# Un bâti d'index prend tous les fils de travail (ticket
+# 2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions) : à deux fils, un
+# lecteur attend la phase parallèle entière du bâti. Pour le cœur C++ ou hotfixs.
+IndexCreationThreads.LeavesAThreadToReaders index-creation-leaves-a-thread-to-readers

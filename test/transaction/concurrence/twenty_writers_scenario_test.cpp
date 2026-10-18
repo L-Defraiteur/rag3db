@@ -3,10 +3,10 @@
 // d'après sa lecture du code à 65cb9a1f3, page 15 de coeur-cpp ; forme finale au §6 de
 // 13-octobre-2026-arbre-principal/01-plusieurs-developpeurs-et-leurs-migrations.md).
 //
-// Une base ouverte une fois, une connexion par fil : 20 écrivains de Doc (MERGE par la clé, SET de
-// deux propriétés et du vecteur, une relation vers un voisin ; une fois sur dix dans un
-// BEGIN … COMMIT), 2 écrivains de Note (une table que le DDL ne touche jamais), 4 lecteurs (un Doc
-// par sa clé, puis ses voisins), et un DDL par période :
+// Une base ouverte une fois, sur huit fils de travail, une connexion par fil : 20 écrivains de Doc
+// (MERGE par la clé, SET de deux propriétés et du vecteur, une relation vers un voisin ; une fois
+// sur dix dans un BEGIN … COMMIT), 2 écrivains de Note (une table que le DDL ne touche jamais), 4
+// lecteurs (un Doc par sa clé, puis ses voisins), et un DDL par période :
 //   1. ALTER TABLE Doc ADD note STRING
 //   2. ALTER TABLE Doc ADD rang INT64 DEFAULT 0
 //   3. CREATE REL TABLE Cite(FROM Doc TO Doc)
@@ -107,6 +107,17 @@ constexpr int64_t NUM_B_SET = 10;
 // connexion sans transaction et la requête suivante plante (ticket
 // 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction, témoin failed_begin_test.cpp).
 constexpr uint64_t BUFFER_POOL = 2ull * 1024 * 1024 * 1024;
+// Huit fils de travail, plus près de l'hôte que les deux de la configuration des tests : à deux, le
+// bâti de CREATE_VECTOR_INDEX prend tous les fils et affame les 26 connexions environ 9,7 s (ticket
+// 2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions, témoin
+// index_creation_threads_test.cpp). MAX_NUM_THREADS, s'il est posé, l'emporte.
+constexpr uint64_t NUM_THREADS = 8;
+
+void applyThreads(rag3db::main::SystemConfig& config) {
+    if (std::getenv("MAX_NUM_THREADS") == nullptr) {
+        config.maxNumThreads = NUM_THREADS;
+    }
+}
 
 enum class Actor { DocWriter, NoteWriter, Reader };
 
@@ -716,6 +727,7 @@ protected:
 
     void playScenario(std::chrono::milliseconds period) {
         systemConfig->bufferPoolSize = BUFFER_POOL;
+        applyThreads(*systemConfig);
         createDBAndConn();
         load(*conn, databasePath);
         // Le point de reprise automatique en marche, le réglage du produit ; le scénario le coupe
@@ -918,6 +930,7 @@ TEST_F(TwentyWriters, KilledDuringTheCheckpoint) {
     fs::remove(logPath);
     fs::remove(markerPath);
     systemConfig->bufferPoolSize = BUFFER_POOL;
+    applyThreads(*systemConfig);
     const auto pid = fork();
     if (pid == 0) {
         concurrency::disableCoreDumps();
