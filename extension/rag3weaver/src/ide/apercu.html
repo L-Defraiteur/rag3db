@@ -22,36 +22,137 @@
 <div id="racine"></div>
 <script src="/ide/registre.js"></script>
 <script>
-// L'aperçu d'un composant (marche 3, lot 3) : le registre, puis les modules
-// du composant (/ide/apercu/<backend>/<Composant>/modules.js), puis le rendu
-// par react-dom/client. Les props viennent de l'URL : ?props={"titre":"…"}.
+// L'aperçu d'un composant (marche 3, lots 3 et 4) : le registre, puis les
+// modules du composant (/ide/apercu/<backend>/<Composant>/modules.js), puis le
+// rendu par react-dom/client. Les props viennent de l'URL : ?props={"titre":"…"}.
+//
+// Le rechargement à chaud (lot 4) : la page écoute le sujet `components` du
+// flux ; à chaque changement de son backend, elle relit les modules (le
+// registre ne redéfinit que ceux dont le hash a changé), le registre reprend
+// les frontières, et React Refresh remplace les composants en gardant leur
+// état. Sans React Refresh rangé dans libs.json, ou quand un changement
+// remonte sans frontière, la page se recharge entière.
 (function () {
   const [backend, nom] = location.pathname.replace(/^\/ide\/apercu\//, "").split("/").map(decodeURIComponent);
   document.getElementById("titre").textContent = `aperçu · ${nom} · backend ${backend}`;
+  const R = globalThis.__rag3weaver;
+  const src = `/ide/apercu/${encodeURIComponent(backend)}/${encodeURIComponent(nom)}/modules.js`;
+  // Ce que le témoin lit : combien de mises à jour appliquées, la dernière.
+  const etat = window.__apercu = { mises_a_jour: 0, derniere: null, recharge: null };
+  // Un rechargement entier laisse sa raison à la page suivante : elle la dit
+  // à la console, et le témoin la lit.
+  try {
+    const raison = sessionStorage.getItem("apercu-recharge");
+    if (raison) {
+      sessionStorage.removeItem("apercu-recharge");
+      etat.recharge = JSON.parse(raison);
+      console.info("aperçu : rechargé entier", etat.recharge);
+    }
+  } catch (_) {}
   function montrer(e) {
     const pre = document.createElement("pre");
     pre.className = "erreur";
     pre.textContent = String(e && e.stack ? e.stack : e);
     document.body.append(pre);
   }
-  const script = document.createElement("script");
-  script.src = `/ide/apercu/${encodeURIComponent(backend)}/${encodeURIComponent(nom)}/modules.js`;
-  script.onerror = async () => {
-    try { montrer(await (await fetch(script.src)).text()); } catch (e) { montrer(e); }
-  };
-  script.onload = () => {
+  function effacer() {
+    for (const pre of document.querySelectorAll("pre.erreur")) pre.remove();
+  }
+  // Les modules, par une balise <script> (pas d'eval) ; un échec dit le texte
+  // de la route (le refus du graphe).
+  function charger(url) {
+    return new Promise((ok, ko) => {
+      const script = document.createElement("script");
+      script.src = url;
+      script.onload = () => { script.remove(); ok(); };
+      script.onerror = async () => {
+        script.remove();
+        try { ko(await (await fetch(url)).text()); } catch (e) { ko(e); }
+      };
+      document.body.append(script);
+    });
+  }
+  let refresh = null;
+  async function demarrer() {
+    await charger(src);
+    // React Refresh d'abord : react-dom lit le crochet à son chargement.
+    if (R.demarrage["react-refresh/runtime"]) {
+      refresh = R.require(R.demarrage["react-refresh/runtime"]);
+      refresh.injectIntoGlobalHook(window);
+      globalThis.__rag3weaverRefresh = {
+        register: (type, id) => refresh.register(type, id),
+        signature: () => refresh.createSignatureFunctionForTransform(),
+      };
+    }
+    const React = R.require(R.demarrage["react"]);
+    const client = R.require(R.demarrage["react-dom/client"]);
+    const module = R.require(R.entree);
+    const Composant = module[nom] ?? module.default;
+    if (!Composant) throw new Error(`${nom} : le module n'exporte ni « ${nom} » ni default`);
+    const props = JSON.parse(new URLSearchParams(location.search).get("props") ?? "{}");
+    client.createRoot(document.getElementById("racine")).render(React.createElement(Composant, props));
+  }
+  // Une mise à jour à la fois ; un changement arrivé pendant l'une en
+  // relance une après.
+  let enCours = false, encore = false;
+  // **Un rechargement entier attend une seconde.** Un éditeur qui écrit en
+  // place vide le fichier avant de l'écrire : la montre peut voir le module
+  // vide, qui n'est pas une frontière. Si la mise à jour suivante reprend le
+  // module à une frontière, elle s'applique et le rechargement est annulé.
+  const ATTENTE_DU_RECHARGEMENT = 1000;
+  let rechargement = null;
+  function rechargerBientot(r) {
+    if (rechargement) return;
+    const raison = r.recharger ?? "React Refresh n'est pas rangé dans libs.json";
+    rechargement = setTimeout(() => {
+      console.info(`aperçu : rechargement entier — ${raison}`);
+      try { sessionStorage.setItem("apercu-recharge", JSON.stringify(r)); } catch (_) {}
+      location.reload();
+    }, ATTENTE_DU_RECHARGEMENT);
+  }
+  async function mettreAJour() {
+    if (enCours) { encore = true; return; }
+    enCours = true;
     try {
-      const R = globalThis.__rag3weaver;
-      const React = R.require(R.demarrage["react"]);
-      const client = R.require(R.demarrage["react-dom/client"]);
-      const module = R.require(R.entree);
-      const Composant = module[nom] ?? module.default;
-      if (!Composant) throw new Error(`${nom} : le module n'exporte ni « ${nom} » ni default`);
-      const props = JSON.parse(new URLSearchParams(location.search).get("props") ?? "{}");
-      client.createRoot(document.getElementById("racine")).render(React.createElement(Composant, props));
-    } catch (e) { montrer(e); }
-  };
-  document.body.append(script);
+      do {
+        encore = false;
+        await charger(`${src}?v=${Date.now()}`);
+        const r = R.mettre_a_jour(R.frontieres);
+        if (!r.changes.length) continue;
+        if (r.recharger || !refresh) {
+          rechargerBientot(r);
+          continue;
+        }
+        if (rechargement) { clearTimeout(rechargement); rechargement = null; }
+        refresh.performReactRefresh();
+        effacer();
+        etat.mises_a_jour += 1;
+        etat.derniere = r;
+      } while (encore);
+    } catch (e) {
+      montrer(e);
+    } finally {
+      enCours = false;
+    }
+  }
+  // Le flux porte le manifeste du backend ; l'URL, son id : /ide/etat relie
+  // les deux.
+  async function ecouter() {
+    const e = await (await fetch("/ide/etat")).json();
+    const b = (e.backends ?? []).find((b) => b.id === backend);
+    if (!b) { console.info(`aperçu : backend ${backend} absent de /ide/etat, pas de rechargement à chaud`); return; }
+    const flux = new EventSource("/ide/flux?sujets=components");
+    flux.onmessage = (m) => {
+      const d = JSON.parse(m.data);
+      if (d.backend === b.manifest && d.evenement.kind === "ComponentsChanged") mettreAJour();
+    };
+    // Des événements perdus : relire, le registre ne reprend que ce qui a changé.
+    flux.addEventListener("lacune", () => mettreAJour());
+    // Fermé en quittant : le navigateur ne tient que six connexions par hôte,
+    // et une page qui garde la sienne fige la septième.
+    addEventListener("pagehide", () => flux.close());
+  }
+  demarrer().then(ecouter).catch(montrer);
 })();
 </script>
 </body>

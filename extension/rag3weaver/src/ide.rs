@@ -40,7 +40,7 @@ pub const PREFIX: &str = "/ide";
 /// Le cookie qui porte le jeton local.
 pub const COOKIE: &str = "rag3weaver_ide";
 /// Les sujets du bus que le flux relaie.
-pub const SUJETS: [&str; 5] = ["files", "dataflow", "agent", "tokens", "catalog"];
+pub const SUJETS: [&str; 6] = ["files", "dataflow", "agent", "tokens", "catalog", "components"];
 /// Combien d'événements le flux garde pour rejouer.
 const TAMPON: usize = 2048;
 /// Le pas du battement qui fait tomber une fenêtre fermée.
@@ -203,12 +203,27 @@ fn apercu(host: &DaemonHost, path: &str) -> (u16, &'static str, String) {
     let reste = path.trim_start_matches("/ide/apercu/");
     let morceaux: Vec<&str> = reste.split('/').collect();
     match morceaux.as_slice() {
-        [_, nom] if !nom.is_empty() => (200, "text/html; charset=utf-8", APERCU.to_string()),
+        // La page monte la montre des composants : ce qu'on regarde se suit.
+        // Une montre qui ne se monte pas n'empêche pas l'aperçu ; la page le
+        // dit à sa console et se passe du rechargement à chaud.
+        [id, nom] if !nom.is_empty() => {
+            let montre = host.with_backend_id(id, |b| b.watch_components()).and_then(|r| r);
+            let page = match montre {
+                Ok(()) => APERCU.to_string(),
+                Err(e) => APERCU.replace(
+                    "<script src=\"/ide/registre.js\"></script>",
+                    &format!("<script>console.info({});</script>\n<script src=\"/ide/registre.js\"></script>", serde_json::to_string(&format!("sans rechargement à chaud : {e}")).unwrap().replace("</", "<\\/")),
+                ),
+            };
+            (200, "text/html; charset=utf-8", page)
+        }
+        // Les déclarations relues sur le disque : une déclaration éditée
+        // depuis l'ouverture du backend se voit au graphe suivant.
         [id, nom, "modules.js"] => {
             let nom = decoder(nom);
             let rendu = host.with_backend_id(id, |b| {
                 let prepared = b.prepared();
-                let graphe = prepared.components().module_graph(&prepared.directory, &nom, crate::components::Mode::Development)?;
+                let graphe = prepared.components_on_disk()?.module_graph(&prepared.directory, &nom, crate::components::Mode::Development)?;
                 Ok::<_, String>(modules_js(&graphe))
             });
             match rendu.and_then(|r| r) {
@@ -227,9 +242,11 @@ pub fn modules_js(g: &crate::components::modules::Graph) -> String {
     js.push_str(&format!(
         "__rag3weaver.entree = {};
 __rag3weaver.demarrage = {};
+__rag3weaver.frontieres = {};
 ",
         serde_json::to_string(&g.entry).unwrap(),
-        serde_json::to_string(&g.boot).unwrap()
+        serde_json::to_string(&g.boot).unwrap(),
+        serde_json::to_string(&g.modules.values().filter(|m| m.exports_only_components).map(|m| m.id.as_str()).collect::<Vec<_>>()).unwrap()
     ));
     for u in &g.unresolved {
         js.push_str(&format!("console.warn({});

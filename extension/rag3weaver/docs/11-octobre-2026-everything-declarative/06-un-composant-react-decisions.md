@@ -104,4 +104,55 @@ convient pas se reprend : rien n'est publié hors du dépôt.
     dans un vrai navigateur reste à voir par Lucie : `rag3weaver-backend libs add` sur `react`,
     `react-dom` et `scheduler` déballés, puis l'aperçu.
 
-Le lot 4 (le sujet `components` du flux, le rechargement dans la page, React Refresh) suivra ici.
+## Lot 4 — le rechargement à chaud
+
+15. **La montre des composants réutilise le `Scanner` de la montre de fichiers**, sans la porte
+    de l'index (`Scanner::without_gate`) : une déclaration `.component.json` est une donnée que
+    l'index écarte. Elle regarde `components/` et `libs.json`, jamais le magasin ni la base, et
+    hérite des dates douteuses (le « racy git » corrigé le 18 octobre).
+    - *Pourquoi pas un sondeur à part* : il aurait refait la course que la montre vient de
+      perdre.
+16. **Elle est montée à la demande** par la page d'aperçu (`Backend::watch_components`) et vit
+    avec le backend : un backend que personne ne regarde ne balaie rien.
+17. **Ses changements partent sur le bus du backend**, en `ComponentsChanged {paths,
+    declarations, at_ms}`, sujet `components`, que le flux de l'IDE relaie comme les autres
+    (`SUJETS`). `declarations` vaut vrai quand autre chose qu'un script a bougé.
+18. **Le graphe relit les déclarations sur le disque** (`PreparedBackend::components_on_disk`) au
+    lieu de recharger le backend : l'hôte ne recharge un backend nulle part (le rechargement
+    arrête et remonte les réactions), et l'aperçu montre le disque. Les composants que voit le
+    reste du backend restent ceux de son ouverture.
+19. **Le registre ne redéfinit qu'un module dont le hash change**, et note les modules changés.
+    `mettre_a_jour(frontieres)` remonte de chacun par ses importeurs jusqu'à une **frontière** :
+    un module qui n'exporte que des composants (`exports_only_components`, le même critère que
+    Vite et webpack). Chaque frontière est réexécutée, puis la page appelle
+    `performReactRefresh`. Un chemin qui arrive en haut sans frontière rend `recharger`, et la
+    page se recharge entière.
+    - *Pourquoi dans le registre* : la logique se joue dans QuickJS sans navigateur
+      (`an_edit_is_taken_back_at_its_boundary`).
+20. **React Refresh est une lib du backend comme les autres** (`react-refresh/runtime` dans
+    `libs.json`), pris au démarrage en développement s'il est rangé. La page l'injecte avant de
+    charger `react-dom`, qui lit le crochet à son chargement. Sans lui, un changement recharge
+    la page.
+21. **La page relie l'id de son URL au manifeste du flux** par `/ide/etat` : le flux porte le
+    manifeste, comme pour les autres sujets.
+22. **Le témoin est dans un vrai navigateur** (celui de G, `daemon_host/navigateur.rs`). C'est
+    le vrai React 19.2 rangé par `libs add`, un compteur cliqué trois fois et marqué dans le
+    DOM, puis sa source réécrite sur le disque. Il exige : le libellé neuf, le compte 3, le
+    même nœud, une mise à jour qui reprend `comp:Compteur`, un clic de plus qui compte 4, et
+    zéro erreur à la console. Les paquets viennent de `scripts/paquets_react.sh`
+    (`RAG3WEAVER_PAQUETS_REACT`), aussi en CI.
+23. **Un pair se résout vers la copie que le backend range.** Le vrai `react-dom` 19.2.0 déclare
+    `react` en `peerDependencies`, pas en `dependencies` : le premier passage du témoin dans
+    Chromium l'a montré (« react-dom requiert react, que la table ne résout pas »). `libs add`
+    garde l'intervalle tel qu'écrit (`peers`), et l'import d'un pair prend le paquet de
+    `libs.json` quelle que soit sa version : c'est le sens d'un pair dans npm, une seule
+    instance fournie par l'hôte. Un pair absent se dit à l'import, en le nommant.
+24. **Un rechargement entier attend une seconde**, et s'annule si une mise à jour suivante reprend
+    le module à une frontière. Un éditeur qui écrit en place vide le fichier avant de l'écrire :
+    la montre peut tenir le fichier vide pour établi, et un module vide n'est pas une frontière.
+    La passe de push l'a montré une fois sous la lib entière (« Total : 0 », l'état perdu) ; le
+    témoin le rejoue de façon déterministe (le fichier vidé, 600 ms, puis le texte). Sans
+    l'attente il rougit, la page rechargée sur le fichier vide (« le module n'exporte ni
+    Compteur ni default ») ; avec elle, cinq passes sur cinq sont vertes. La raison d'un
+    rechargement entier passe à la page suivante par `sessionStorage` et se lit dans
+    `window.__apercu.recharge`.

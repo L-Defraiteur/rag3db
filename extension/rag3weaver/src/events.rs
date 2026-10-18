@@ -246,6 +246,16 @@ pub enum Event {
         hash: String,
         at_ms: u64,
     },
+    /// **Les composants d'interface ont changé** (`components/`, `libs.json`),
+    /// vus par la montre des composants qu'ouvre l'aperçu de l'IDE :
+    /// `paths` relatifs au dossier du backend ; `declarations` dit qu'une
+    /// déclaration ou la table des libs a bougé (le backend se relit avant le
+    /// prochain graphe). Sujet `components`.
+    ComponentsChanged {
+        paths: Vec<String>,
+        declarations: bool,
+        at_ms: u64,
+    },
     /// **Un fragment de la sortie d'un modèle**, au fil de la génération
     /// (`TokenEvents`). Sujet `tokens`, que les réactions n'écoutent pas par
     /// défaut : un événement par jeton ne réveille personne qui ne l'a pas
@@ -343,6 +353,7 @@ impl Event {
             Self::NodeRun { .. } => topic::DATAFLOW,
             Self::Message { .. } => topic::MESSAGES,
             Self::FileChanged { .. } => topic::FILES,
+            Self::ComponentsChanged { .. } => topic::COMPONENTS,
             Self::Token { .. } => topic::TOKENS,
             _ => topic::CATALOG,
         }
@@ -441,6 +452,9 @@ impl Event {
             }),
             // Le format des jetons d'une conversation (`ChatSink`), plus le
             // run, le flux et le rang : une interface lit l'un comme l'autre.
+            Self::ComponentsChanged { paths, declarations, at_ms } => json!({
+                "kind": "ComponentsChanged", "paths": paths, "declarations": declarations, "at_ms": at_ms,
+            }),
             Self::Token { run, node, seq, text, count } => json!({
                 "kind": "Token", "event": "token", "run": run, "node": node, "seq": seq, "text": text,
                 "count": count,
@@ -467,6 +481,8 @@ pub mod topic {
     pub const FILES: &str = "files";
     /// Les fragments d'un modèle, au fil de la génération (`TokenEvents`).
     pub const TOKENS: &str = "tokens";
+    /// Les composants d'interface d'un backend, changés sur le disque.
+    pub const COMPONENTS: &str = "components";
 }
 
 /// Le sujet d'un run : `run.<id>`.

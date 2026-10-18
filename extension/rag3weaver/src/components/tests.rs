@@ -370,3 +370,140 @@ fn a_tampered_store_is_refused() {
     let e = c.module_graph(&b, "Fiche", Mode::Development).unwrap_err();
     assert!(e.contains("react/cjs/react.development.js") && e.contains("touché"), "{e}");
 }
+
+// ── Le lot 4 : la mise à jour à chaud, et la montre des composants ──
+
+/// Le registre et les modules d'un graphe, évalués dans un contexte QuickJS ;
+/// rend ce que le dernier programme rend.
+fn evaluer(ctx: &rquickjs::Context, programme: &str) -> String {
+    ctx.with(|ctx| match ctx.eval::<String, _>(programme.to_string()) {
+        Ok(s) => s,
+        Err(e) => {
+            let detail = ctx.catch();
+            panic!("{e} — {detail:?}\n{programme}")
+        }
+    })
+}
+
+/// Les modules d'un graphe, puis la mise à jour du registre, en JSON.
+fn mise_a_jour(c: &Components, b: &Path) -> String {
+    let g = c.module_graph(b, "Fiche", Mode::Development).unwrap();
+    let frontieres: Vec<&str> = g.modules.values().filter(|m| m.exports_only_components).map(|m| m.id.as_str()).collect();
+    format!(
+        "{}\nJSON.stringify(__rag3weaver.mettre_a_jour({}));",
+        g.script(),
+        serde_json::to_string(&frontieres).unwrap()
+    )
+}
+
+/// **Une édition se reprend à sa frontière.** Le registre ne redéfinit que le
+/// module dont le hash a changé ; un composant seul se réexécute lui-même ; un
+/// module qui exporte autre chose qu'un composant fait remonter jusqu'au
+/// composant qui l'importe ; un chemin qui n'en trouve aucun demande de
+/// recharger la page.
+#[test]
+fn an_edit_is_taken_back_at_its_boundary() {
+    let (_t, b) = backend_executable();
+    let c = Components::load(&b).unwrap();
+    let g = c.module_graph(&b, "Fiche", Mode::Development).unwrap();
+    let rt = rquickjs::Runtime::new().unwrap();
+    let ctx = rquickjs::Context::full(&rt).unwrap();
+    evaluer(
+        &ctx,
+        &format!(
+            "{}{}\n__rag3weaver.require({});\nJSON.stringify(__rag3weaver.changes);",
+            super::modules::REGISTRE,
+            g.script(),
+            serde_json::to_string(&g.entry).unwrap()
+        ),
+    );
+    let bouton = b.join("components/bouton.tsx");
+
+    // Le bouton seul : il est sa propre frontière.
+    std::fs::write(&bouton, "export function Bouton({ libelle }: { libelle: string }) { return <i>{libelle}</i>; }\n").unwrap();
+    let v: Value = serde_json::from_str(&evaluer(&ctx, &mise_a_jour(&c, &b))).unwrap();
+    assert_eq!(v, json!({ "relances": ["comp:Bouton"], "changes": ["comp:Bouton"] }));
+
+    // Le même graphe relu : rien n'a changé, rien ne se redéfinit.
+    let v: Value = serde_json::from_str(&evaluer(&ctx, &mise_a_jour(&c, &b))).unwrap();
+    assert_eq!(v, json!({ "relances": [], "changes": [] }));
+
+    // Le bouton exporte aussi une constante : la fiche, qui l'importe, est
+    // la frontière.
+    std::fs::write(
+        &bouton,
+        "export const taille = 2;\nexport function Bouton({ libelle }: { libelle: string }) { return <b>{libelle}</b>; }\n",
+    )
+    .unwrap();
+    let v: Value = serde_json::from_str(&evaluer(&ctx, &mise_a_jour(&c, &b))).unwrap();
+    assert_eq!(v, json!({ "relances": ["comp:Fiche"], "changes": ["comp:Bouton"] }));
+
+    // La fiche, l'entrée, exporte une constante : rien au-dessus ne la reprend.
+    let fiche = b.join("components/fiche.tsx");
+    let source = std::fs::read_to_string(&fiche).unwrap();
+    std::fs::write(&fiche, format!("export const nombre = 1;\n{source}")).unwrap();
+    let v: Value = serde_json::from_str(&evaluer(&ctx, &mise_a_jour(&c, &b))).unwrap();
+    assert_eq!(v["changes"], json!(["comp:Fiche"]), "{v}");
+    assert!(v["recharger"].as_str().is_some_and(|r| r.contains("comp:Fiche")), "{v}");
+}
+
+/// **La montre des composants dit ce qui change** sur le sujet `components` :
+/// le code d'un composant, puis une déclaration (que la porte de l'index
+/// aurait écartée : une donnée JSON).
+#[cfg(feature = "code")]
+#[test]
+fn the_components_watch_says_what_changed() {
+    let (_t, b) = backend_executable();
+    let bus = crate::events::EventBus::new(64);
+    let mut rx = bus.subscribe(crate::events::topic::COMPONENTS);
+    let montre = super::a_chaud::spawn(&b, bus.clone()).unwrap();
+    let attendre = |rx: &mut async_broadcast::Receiver<crate::events::Event>| {
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if let Ok(crate::events::Event::ComponentsChanged { paths, declarations, .. }) = rx.try_recv() {
+                return (paths, declarations);
+            }
+            assert!(std::time::Instant::now() < fin, "rien sur le sujet components en 10 s");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    std::fs::write(b.join("components/bouton.tsx"), "export function Bouton() { return null; }\n").unwrap();
+    assert_eq!(attendre(&mut rx), (vec!["components/bouton.tsx".to_string()], false));
+    std::fs::write(
+        b.join("components/bouton.component.json"),
+        json!({ "name": "Bouton", "source": "bouton.tsx", "description": "neuf", "libs": { "react": "19.2.0" } }).to_string(),
+    )
+    .unwrap();
+    assert_eq!(attendre(&mut rx), (vec!["components/bouton.component.json".to_string()], true));
+    drop(montre);
+}
+
+/// **Un pair se résout vers la copie que le backend range** : `react-dom`
+/// déclare `react` en `peerDependencies` (le vrai 19.2.0 le fait), et prend
+/// le `react` de `libs.json`, quelle que soit l'écriture de l'intervalle. Un
+/// pair absent se dit en le nommant.
+#[test]
+fn a_peer_resolves_to_the_copy_the_backend_holds() {
+    let t = tempfile::tempdir().unwrap();
+    let b = t.path().join("backend");
+    std::fs::create_dir_all(&b).unwrap();
+    let r = paquet(t.path(), "react", json!({ "name": "react", "version": "19.2.1", "main": "index.js" }), &[("index.js", "")]);
+    let d = paquet(
+        t.path(),
+        "react-dom",
+        json!({ "name": "react-dom", "version": "19.2.0", "main": "index.js", "peerDependencies": { "react": "^19.2.0" } }),
+        &[("index.js", "require('react');")],
+    );
+    add_lib(&b, &d).unwrap();
+    let c = Components::load(&b).unwrap();
+    assert_eq!(c.libs["react-dom"].peers["react"], "^19.2.0");
+    let importeur = Importer::LibFile { package: "react-dom", file: "index.js" };
+    let e = c.resolve(&importeur, "react", Mode::Development).unwrap_err();
+    assert!(e.contains("le pair « react »"), "{e}");
+    add_lib(&b, &r).unwrap();
+    let c = Components::load(&b).unwrap();
+    match c.resolve(&importeur, "react", Mode::Development).unwrap() {
+        Resolved::LibFile { package, version, file, .. } => assert_eq!((package.as_str(), version.as_str(), file.as_str()), ("react", "19.2.1", "index.js")),
+        autre => panic!("{autre:?}"),
+    }
+}

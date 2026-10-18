@@ -304,6 +304,15 @@ impl std::ops::Deref for BackendRelation {
 /// Une réaction part sans personne devant l'écran ; elle écrit en base par
 /// les verbes du catalogue — donc sous la garde de cycle de vie — et ne
 /// touche ni fichier ni commande.
+/// Ce que le backend offre à l'écran de ses composants : l'écran de chaque
+/// outil et le lieu des cases de portée `hôte`.
+fn ecran_du_backend(manifest: &BackendManifest) -> crate::components::EcranDuBackend {
+    crate::components::EcranDuBackend {
+        outils: manifest.tools.iter().map(|(nom, t)| (nom.clone(), t.policy.ecran)).collect(),
+        etat_hote: manifest.ui_state.as_ref().map(|u| u.entity.clone()),
+    }
+}
+
 /// Le lieu des cases d'écran de portée `hôte` (`BackendManifest::ui_state`).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -952,14 +961,8 @@ impl PreparedBackend {
         }
         // ── Les composants d'interface et leurs bibliothèques ──────────────
         let components = Arc::new(
-            crate::components::Components::load_in(
-                &directory,
-                &crate::components::EcranDuBackend {
-                    outils: manifest.tools.iter().map(|(nom, t)| (nom.clone(), t.policy.ecran)).collect(),
-                    etat_hote: manifest.ui_state.as_ref().map(|u| u.entity.clone()),
-                },
-            )
-            .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
+            crate::components::Components::load_in(&directory, &ecran_du_backend(&manifest))
+                .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
         );
         let mut schemas = HashMap::new();
         let mut mappings = HashMap::new();
@@ -1493,6 +1496,14 @@ impl PreparedBackend {
         self.components.clone()
     }
 
+    /// **Les composants tels qu'ils sont sur le disque**, relus et vérifiés
+    /// contre le même écran qu'à l'ouverture : l'aperçu de l'IDE montre le
+    /// disque, une déclaration éditée depuis l'ouverture comprise.
+    pub fn components_on_disk(&self) -> Result<crate::components::Components, String> {
+        crate::components::Components::load_in(&self.directory, &ecran_du_backend(&self.manifest))
+            .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))
+    }
+
     pub fn path(&self, path: &Path) -> PathBuf {
         self.directory.join(path)
     }
@@ -1818,6 +1829,7 @@ impl PreparedBackend {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            components_watch: Mutex::new(None),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
@@ -2165,6 +2177,9 @@ pub struct Backend {
     /// Les montres de fichiers en service ; arrêtées **avant** les réactions
     /// qu'elles nourrissent.
     watches: Mutex<Vec<crate::watch::WatchHandle>>,
+    /// La montre des composants, montée par l'aperçu de l'IDE
+    /// ([`Backend::watch_components`]).
+    components_watch: Mutex<Option<crate::components::a_chaud::ComponentsWatch>>,
     /// **L'arrêt des réactions** : levé par `stop_reactions`, lu par une
     /// réaction longue entre deux unités de travail (`ReindexFileNode`, entre
     /// deux fichiers). Ce qui est fait reste ; le reste garde son retard et la
@@ -2324,6 +2339,19 @@ impl Backend {
         let (handle, mounted) = self.monter_un_reacteur(&prepared, bus)?;
         *slot = Some(handle);
         Ok(mounted)
+    }
+
+    /// **Monte la montre des composants** (`components/`, `libs.json`) sur le
+    /// bus du catalogue, si elle ne l'est pas : ses changements partent en
+    /// `ComponentsChanged` (sujet `components`). L'aperçu de l'IDE la demande ;
+    /// elle vit avec le backend.
+    pub fn watch_components(&self) -> Result<(), String> {
+        let mut slot = self.components_watch.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_none() {
+            let bus = self.catalog.lock().unwrap_or_else(|e| e.into_inner()).event_bus();
+            *slot = Some(crate::components::a_chaud::spawn(&self.prepared().directory, bus)?);
+        }
+        Ok(())
     }
 
     /// **Monte les montres déclarées** (`watches`), sur le bus du catalogue.
@@ -4111,6 +4139,7 @@ mod tests {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            components_watch: Mutex::new(None),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         let response = backend.run_search_program(&program).unwrap();
@@ -4325,6 +4354,7 @@ mod tests {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            components_watch: Mutex::new(None),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }

@@ -66,6 +66,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         cell_reactions: Mutex::new(std::collections::HashMap::new()),
         miroir_reacteur: Mutex::new(None),
         watches: Mutex::new(Vec::new()),
+        components_watch: Mutex::new(None),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
     (dir, backend)

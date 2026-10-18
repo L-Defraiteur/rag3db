@@ -942,6 +942,10 @@ fn json_response(status: u16, value: &Value) -> tiny_http::Response<std::io::Cur
 #[cfg(all(test, unix))]
 mod navigateur;
 
+/// L'aperçu d'un composant rechargé à chaud, dans le même navigateur.
+#[cfg(all(test, unix, feature = "code"))]
+mod apercu_a_chaud;
+
 #[cfg(test)]
 mod tests {
     use super::*;

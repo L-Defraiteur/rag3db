@@ -99,6 +99,10 @@ fn requires(code: &str) -> Vec<String> {
     out
 }
 
+/// Le runtime de React Refresh, pris au démarrage de la page quand le backend
+/// le range.
+pub const REFRESH: &str = "react-refresh/runtime";
+
 impl Components {
     /// **Le graphe des modules d'un composant**, depuis `backend_dir` (son
     /// dossier `components/` et son magasin). Un fichier de lib dont les
@@ -119,6 +123,16 @@ impl Components {
                     boot.insert(spec.to_string(), id_de(&r));
                 }
                 Err(e) => return Err(format!("l'aperçu demande {spec} dans libs.json : {e}")),
+            }
+        }
+        // **React Refresh**, s'il est rangé : le rechargement à chaud garde
+        // l'état des composants. Sans lui, la page se recharge entière.
+        if mode == Mode::Development {
+            if let Ok(r @ Resolved::LibFile { .. }) = self.resolve(&Importer::Backend, REFRESH, mode) {
+                if let Resolved::LibFile { package, file, .. } = &r {
+                    a_faire.push((String::new(), Some((package.clone(), file.clone(), id_de(&r)))));
+                }
+                boot.insert(REFRESH.to_string(), id_de(&r));
             }
         }
         while let Some((nom, lib)) = a_faire.pop() {
@@ -202,7 +216,12 @@ pub const REGISTRE: &str = r#"(function () {
   const fabriques = {}, hashes = {}, tables = {}, cache = {}, importeurs = {};
   const R = globalThis.__rag3weaver = {
     mode: "development",
+    // Les modules redéfinis avec un hash neuf depuis la dernière mise à
+    // jour : la page les reprend (rechargement à chaud, lot 4).
+    changes: [],
     define(id, hash, deps, fabrique) {
+      if (fabriques[id] && hashes[id] === hash) return;
+      if (fabriques[id]) R.changes.push(id);
       fabriques[id] = fabrique; hashes[id] = hash; tables[id] = deps;
       for (const cible of Object.values(deps)) (importeurs[cible] ??= new Set()).add(id);
       delete cache[id];
@@ -210,6 +229,28 @@ pub const REGISTRE: &str = r#"(function () {
     hash(id) { return hashes[id]; },
     importeurs(id) { return [...(importeurs[id] ?? [])]; },
     oublier(id) { delete cache[id]; },
+    // **La mise à jour à chaud** : de chaque module changé, remonter les
+    // importeurs jusqu'à une frontière (un module qui n'exporte que des
+    // composants, que React Refresh sait remplacer en gardant l'état). Ce qui
+    // est traversé est oublié, chaque frontière atteinte est réexécutée. Un
+    // chemin qui arrive en haut sans frontière (une lib, l'entrée qui exporte
+    // autre chose) demande de recharger la page : rend { recharger }.
+    mettre_a_jour(frontieres) {
+      const changes = R.changes.splice(0);
+      const bornes = new Set(frontieres), relances = new Set(), vus = new Set(), pile = [...changes];
+      while (pile.length) {
+        const id = pile.pop();
+        if (vus.has(id)) continue;
+        vus.add(id);
+        if (bornes.has(id)) { relances.add(id); continue; }
+        const haut = R.importeurs(id);
+        if (!haut.length) return { recharger: id + " a changé et rien au-dessus ne le reprend", changes };
+        delete cache[id];
+        pile.push(...haut);
+      }
+      for (const id of relances) { delete cache[id]; R.require(id); }
+      return { relances: [...relances], changes };
+    },
     require(id) {
       if (cache[id]) return cache[id].exports;
       const fabrique = fabriques[id];

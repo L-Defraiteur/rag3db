@@ -93,6 +93,12 @@ jobs:
           cmake --build "$bdir" --target rag3db_vector_extension -j 4 >> "${{ runner.temp }}/cmake-vector.log" 2>&1 || { tail -30 "${{ runner.temp }}/cmake-vector.log"; exit 1; }
           ls -la extension/vector/build/libvector.rag3db_extension
 
+      # Les paquets npm de React que le témoin de l'aperçu à chaud range dans un backend
+      # (src/daemon_host/apercu_a_chaud.rs) ; sous RAG3WEAVER_EXIGER_NAVIGATEUR, leur
+      # absence est un rouge.
+      - name: Les paquets React du témoin de l'aperçu
+        run: scripts/paquets_react.sh "${{ runner.temp }}/paquets-react"
+
       # Deux tests exigent un moteur lié en partagé (la lib lue dans /proc/self/maps) : en
       # statique, ils ne peuvent pas passer ici ; ils se jouent sur les postes.
       # Le témoin de la page de l'IDE dans un vrai navigateur (src/daemon_host/navigateur.rs) :
@@ -100,6 +106,7 @@ jobs:
       - name: cargo test --lib (rag3db-native,code,daemon,openai-llm)
         env:
           RAG3WEAVER_EXIGER_NAVIGATEUR: '1'
+          RAG3WEAVER_PAQUETS_REACT: ${{ runner.temp }}/paquets-react
         run: >-
           cargo test --lib --features rag3db-native,code,daemon,openai-llm --
           --skip the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable

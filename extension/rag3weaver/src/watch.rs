@@ -209,6 +209,9 @@ pub struct Scanner {
     generated: crate::generated::GeneratedPolicy,
     /// Écartés par leur chemin à la dernière liste.
     excluded_by_path: u64,
+    /// La porte de l'index : un fichier qu'elle écarte n'est pas dit. Une
+    /// montre qui ne sert pas l'index (les composants) la lève.
+    gate: bool,
     /// Un crochet de témoin, appelé entre la lecture de la liste et celle des
     /// dates de dossier : là où un fichier créé se perdait.
     #[cfg(test)]
@@ -240,6 +243,23 @@ impl Scanner {
         config: &WatchConfig,
         generated: crate::generated::GeneratedPolicy,
     ) -> Result<Self, String> {
+        Self::build(root, source, config, generated, true)
+    }
+
+    /// **Sans la porte de l'index** : tout fichier listé est admis. Pour une
+    /// montre qui ne sert pas l'index — celle des composants, dont les
+    /// déclarations sont des données que l'index écarte.
+    pub fn without_gate(root: PathBuf, source: Arc<dyn FileSource>, config: &WatchConfig) -> Result<Self, String> {
+        Self::build(root, source, config, crate::generated::GeneratedPolicy::default(), false)
+    }
+
+    fn build(
+        root: PathBuf,
+        source: Arc<dyn FileSource>,
+        config: &WatchConfig,
+        generated: crate::generated::GeneratedPolicy,
+        gate: bool,
+    ) -> Result<Self, String> {
         let mut s = Self {
             root,
             source,
@@ -256,6 +276,7 @@ impl Scanner {
             paused: None,
             generated,
             excluded_by_path: 0,
+            gate,
             #[cfg(test)]
             apres_la_liste: None,
         };
@@ -410,7 +431,7 @@ impl Scanner {
         // montre ne le regarde pas.
         let total = surveilles.len();
         let admis: Vec<String> =
-            surveilles.into_iter().filter(|p| crate::code::admission(p, None, &self.generated).is_ok()).collect();
+            surveilles.into_iter().filter(|p| !self.gate || crate::code::admission(p, None, &self.generated).is_ok()).collect();
         self.excluded_by_path = (total - admis.len()) as u64;
         Ok(admis)
     }
@@ -430,7 +451,7 @@ impl Scanner {
     fn hash_and_admit(&self, path: &str, bytes: &[u8]) -> (String, bool) {
         let h = blake3::hash(bytes).to_hex().to_string();
         let texte = String::from_utf8_lossy(bytes);
-        (h, crate::code::admission(path, Some(&texte), &self.generated).is_ok())
+        (h, !self.gate || crate::code::admission(path, Some(&texte), &self.generated).is_ok())
     }
 
     /// `hash`, compté : les octets, le temps, et le chemin.

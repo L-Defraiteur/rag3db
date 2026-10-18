@@ -66,6 +66,12 @@ pub struct Lib {
     /// eux aussi dans `libs.json`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<String, String>,
+    /// Les dépendances pairs (`peerDependencies`), avec leur intervalle tel
+    /// qu'écrit : un pair se résout vers **la** copie que le backend range,
+    /// quelle que soit sa version (`react-dom` importe le `react` de l'hôte —
+    /// une seule instance). Un pair absent de `libs.json` se dit à l'import.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub peers: BTreeMap<String, String>,
 }
 
 /// `libs.json` : paquet → sa bibliothèque.
@@ -129,7 +135,18 @@ pub fn add_lib(backend_dir: &Path, package_dir: &Path) -> Result<String, String>
         .as_object()
         .map(|o| o.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").trim_start_matches(['^', '~', '=']).to_string())).collect())
         .unwrap_or_default();
-    let lib = Lib { version: version.clone(), files, exports: pj["exports"].clone(), main: pj["main"].as_str().map(str::to_string), dependencies };
+    let peers = pj["peerDependencies"]
+        .as_object()
+        .map(|o| o.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect())
+        .unwrap_or_default();
+    let lib = Lib {
+        version: version.clone(),
+        files,
+        exports: pj["exports"].clone(),
+        main: pj["main"].as_str().map(str::to_string),
+        dependencies,
+        peers,
+    };
     let mut libs = read_libs(backend_dir)?;
     let avant = libs.insert(nom.clone(), lib).map(|l| l.version);
     let texte = serde_json::to_string_pretty(&libs).map_err(|e| e.to_string())? + "\n";
@@ -338,10 +355,16 @@ impl Components {
                 if paquet == *package {
                     return self.dans_la_lib(paquet, &lib.version, &sous, mode, specifier);
                 }
-                let version = lib.dependencies.get(paquet).ok_or_else(|| {
-                    format!("{package}/{file} importe « {specifier} » : « {paquet} » n'est pas dans ses dependencies")
-                })?;
-                self.dans_la_lib(paquet, version, &sous, mode, specifier)
+                if let Some(version) = lib.dependencies.get(paquet) {
+                    return self.dans_la_lib(paquet, version, &sous, mode, specifier);
+                }
+                if lib.peers.contains_key(paquet) {
+                    let pair = self.libs.get(paquet).ok_or_else(|| {
+                        format!("{package}/{file} importe « {specifier} » : le pair « {paquet} » n'est pas déclaré dans {LIBS_FILE}")
+                    })?;
+                    return self.dans_la_lib(paquet, &pair.version, &sous, mode, specifier);
+                }
+                Err(format!("{package}/{file} importe « {specifier} » : « {paquet} » n'est ni dans ses dependencies ni dans ses peerDependencies"))
             }
         }
     }
@@ -517,6 +540,8 @@ fn normaliser(base: &str, spec: &str) -> Option<String> {
 }
 
 pub mod modules;
+/// La montre des composants : `components/` et `libs.json` changés, sur le bus.
+pub mod a_chaud;
 
 #[cfg(test)]
 mod tests;
