@@ -327,10 +327,12 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     // quoi se montrer.
     let index = appeler("index", json!({ "confirm": true }));
     assert_eq!(index["ok"], true, "{index}");
+    // La sortie d'`usages` porte son propre `result` (et un `status` quand
+    // il n'y a pas d'index) : un cran sous la réponse du graphe.
     let debut = Instant::now();
     loop {
         let u = appeler("usages", json!({ "name": "depart", "format": "json" }));
-        if u["ok"] == true && u["result"]["result"]["definitions"].as_array().is_some_and(|d| !d.is_empty()) {
+        if u["ok"] == true && u["result"]["result"]["result"]["definitions"].as_array().is_some_and(|d| !d.is_empty()) {
             break;
         }
         assert!(debut.elapsed() < Duration::from_secs(60), "depart n'est pas indexé en 60 s : {u}");
