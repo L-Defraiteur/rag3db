@@ -165,14 +165,22 @@ boucle `usages name_of_tree` toutes les 20 ms, `appels-parallele.tsv`) : 26 appe
 54 ms. La tenue va d'environ 0,45 s à 1,7 s après l'édition. Les appels lancés à 0,441, 0,510 et
 0,581 s, dans la tenue, **rendent l'état d'avant en 49 à 51 ms**. Celui de 0,651 s **dure
 1 282 ms et rend l'état nouveau**, comme le `search_code` du client principal lancé à 0,581 s
-(1 299 ms). Les suivants reviennent à 53 ms. Les lectures passent donc pendant les ~150 premières
-millisecondes de la tenue (lister, analyser), puis bloquent jusqu'à sa fin. La bascule coïncide
-avec la première écriture (oublier les arêtes du fichier). L'objectif « < 100 ms avec l'état
-d'avant pendant toute la tenue » n'est tenu que sur ce début. Piste rendue à l'arbre principal
-et au cœur : ce que la transaction d'écriture prend dès sa première écriture et qu'une lecture
-attend. Le figement de l'hôte de luciepc, le même jour, était justement dans « oublier les
-arêtes », sur un rwlock de `ChunkedNodeGroup`. Traces :
-`~/.cache/codeparsers-notes/b2d/temoin-248bf03cc/`.
+(1 299 ms). Les suivants reviennent à 53 ms. L'objectif « < 100 ms avec l'état d'avant pendant
+toute la tenue » n'est donc pas tenu. Traces : `~/.cache/codeparsers-notes/b2d/temoin-248bf03cc/`.
+
+**La cause, trouvée par l'arbre principal** (même jour, témoin rejoué avec `eu-stack` sur l'hôte,
+reproduit à 1 266 ms ; piles dans `~/.cache/rag3weaver-notes-A/piles/sortie/`). Ma première
+lecture, « la bascule tombe sur la première écriture de la réaction », était fausse. C'est le
+`search_code` du client principal, lancé à 0,581 s, qui bloque. Son `SearchSourceNode` prend le
+mutex du catalogue en bloquant (`resolve_search_target`, `generic_search_nodes.rs:404`) et attend
+la fin de la réaction. Pendant ce temps, il tient dans l'hôte le verrou du backend
+(`with_backend`), qui sérialise tous les appels d'un même backend : l'`usages` du second client,
+lancé à 0,651 s, fait la queue derrière lui, puis lit l'état d'après. Ni le moteur ni un point de
+reprise n'y sont pour rien : les `usages` qui ne faisaient pas la queue ont rendu l'état d'avant
+en ~50 ms. Lots proposés par
+l'arbre principal : **L4**, la recherche par la vue (sept prises du mutex dans le graphe de
+recherche), puis **L5**, l'hôte qui ne sérialise plus les appels d'un backend. Le huitième rejeu
+jugera après eux.
 
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
