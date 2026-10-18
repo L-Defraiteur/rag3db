@@ -1088,7 +1088,7 @@ mod tests {
         // Le premier appel ouvre le backend, et monte sa montre.
         let lu = appeler("read_file", json!({ "path": "main.rs", "format": "brut" }));
         assert_eq!(lu["ok"], true, "{lu}");
-        let empreinte = lu["result"]["content_hash"].as_str().unwrap_or_else(|| panic!("la réponse de /ide/call : {lu}")).to_string();
+        let empreinte = lu["result"]["result"]["content_hash"].as_str().unwrap_or_else(|| panic!("la réponse de /ide/call : {lu}")).to_string();
         // Le temps d'un premier balayage de la montre (tous les 250 ms).
         std::thread::sleep(std::time::Duration::from_millis(800));
 
@@ -1134,8 +1134,10 @@ mod tests {
         }
         // Et sa relecture rend le contenu neuf.
         let relu = appeler("read_file", json!({ "path": "main.rs", "format": "brut" }));
-        assert_eq!(relu["result"]["content"], neuf, "{relu}");
-        assert_eq!(relu["result"]["content_hash"], nouvelle);
+        // La sortie de l'outil est un cran plus bas que `result` : c'est ce que
+        // `appeler()` de la page rend.
+        assert_eq!(relu["result"]["result"]["content"], neuf, "{relu}");
+        assert_eq!(relu["result"]["result"]["content_hash"], nouvelle);
 
         fini.store(true, std::sync::atomic::Ordering::SeqCst);
         let _ = lecteur.join();

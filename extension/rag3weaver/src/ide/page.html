@@ -133,7 +133,11 @@ async function appeler(id, nom, args) {
   });
   const v = await r.json();
   if (!v.ok) throw new Error(v.error ?? `${nom} : échec`);
-  return v.result;
+  // `/ide/call` rend la réponse du graphe de l'outil ({ result, metadata,
+  // validation, … }) : ce que la vue lit est sa sortie, `result` (le témoin des
+  // deux fenêtres l'a montré, 18 octobre 2026 : `r.text` et `r.content` étaient
+  // lus un cran trop haut).
+  return v.result && typeof v.result === "object" && "result" in v.result ? v.result.result : v.result;
 }
 
 function erreur(e) {
