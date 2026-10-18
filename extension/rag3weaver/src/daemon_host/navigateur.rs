@@ -321,8 +321,12 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             .unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
-    // Le premier appel ouvre le backend ; on attend l'index (les définitions de
-    // `depart`) pour que le symbole et le graphe aient de quoi se montrer.
+    // Le premier appel ouvre le backend et lance l'index (en plein texte seul
+    // sans service d'embarquement : les vecteurs restent en dette) ; on attend
+    // les définitions de `depart` pour que le symbole et le graphe aient de
+    // quoi se montrer.
+    let index = appeler("index", json!({ "confirm": true }));
+    assert_eq!(index["ok"], true, "{index}");
     let debut = Instant::now();
     loop {
         let u = appeler("usages", json!({ "name": "depart", "format": "json" }));
