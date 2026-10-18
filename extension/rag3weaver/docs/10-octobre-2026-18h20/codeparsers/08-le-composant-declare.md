@@ -14,6 +14,25 @@ d'écran ne traverse que les deux premières sortes. Le moteur WASM étant aband
 `:309-315`), le graphe ne s'exécute pas dans la page : **l'hôte le transpile en TSX**, que le niveau 1
 compile.
 
+> **Tranché par c7, à relire par Lucie** (18 octobre, 21 h 45, sur la consigne « la voie la plus
+> générique ») :
+>
+> 1. **L'état** : chaque case déclare sa **portée**. `fenêtre` (dans la page, perdue au
+>    rechargement : la sélection d'une vue), `session` (dans la page, rendue par l'hôte à la
+>    reconnexion), ou `hôte` (tenue par l'hôte, partagée par toutes les fenêtres via `/ide/flux` :
+>    un filtre commun, l'état d'une application). Par défaut `fenêtre`. La case `persiste` proposée
+>    plus bas devient la portée `session`, et la règle de la vision (« la page n'a pas d'état que
+>    l'hôte n'ait pas ») tient pour tout ce qui n'est pas `fenêtre`. L'état de présentation reste en
+>    `useState`, hors des cases.
+> 2. **Les droits d'écran** : dans le **manifeste**, à côté des autres politiques d'outil
+>    (`ToolPolicy` étendue), pas dans un commentaire `%%` du `.mmd`. Un outil n'est appelable
+>    depuis un écran que s'il le déclare (`ecran: lecture` ou `ecriture`). Un effet en écriture
+>    passe par un nœud `Confirmer`. Le composant déclare ses `effets`, et le contrat se vérifie à la
+>    déclaration : un effet vers un outil non appelable est refusé à `declare`.
+>
+> Les paragraphes ci-dessous gardent la proposition d'avant ; là où ils diffèrent, ce qui vaut est
+> ce cadre.
+
 ## 1. La déclaration
 
 **Où** : à côté du composant du niveau 1, un `components/<nom>.component.json` (props en ports
@@ -24,7 +43,8 @@ même `to_mermaid` pour l'afficher (`:422`).
 
 **Trois genres de nœuds d'écran**, nouveaux, refusés hors d'un graphe de clic :
 
-- **`Etat(nom='filtre', schema='…', initial='…')`** — une case. Son port `valeur` en sortie (ce que
+- **`Etat(nom='filtre', schema='…', initial='…', portee='fenêtre')`** — une case (portée
+  `fenêtre`, `session` ou `hôte`, tranché ci-dessus). Son port `valeur` en sortie (ce que
   les nœuds lisent), `suivante` en entrée (ce qu'un tour y écrit). Le schéma est un JSON Schema,
   comme les ports des nœuds scriptés (`src/dataflow/scripted_node.rs:10-13`). L'ensemble des cases
   est l'état du composant.
@@ -120,10 +140,11 @@ composant (même registre, même React Refresh, même hash).
 
 ## Les lots, dans l'ordre
 
-1. **Les genres d'écran dans le lecteur de graphes** : `Etat`, `Pur`, `Effet`, `Page` (et
-   `Confirmer`), validés seulement dans un `.clic.mmd`, avec les types des cases et des ports ;
-   l'en-tête `%% ecran:` des outils et `effets` du composant. Témoin : un graphe à cycle dans un
-   tour, un effet non déclaré, un outil sans `%% ecran:` sont refusés à leur ligne.
+1. **Les genres d'écran dans le lecteur de graphes** : `Etat` (avec sa portée), `Pur`, `Effet`,
+   `Page` et `Confirmer`, validés seulement dans un `.clic.mmd`, avec les types des cases et des
+   ports ; `ecran: lecture|ecriture` dans la `ToolPolicy` du manifeste et `effets` du composant,
+   vérifiés à `declare`. Témoin : un graphe à cycle dans un tour, un effet non déclaré, un effet vers
+   un outil sans `ecran`, une écriture sans `Confirmer` sont refusés à leur ligne.
 2. **Le transpileur** graphe → TSX (réducteur, effets, rendu de la vue) avec sa carte vers le
    `.mmd`, puis `compile_component`, et la composition des cartes. Témoin : un compteur filtré dont
    le tour rend l'état attendu (exécuté dans QuickJS comme le témoin CommonJS de `748133ef3`), et une
@@ -131,6 +152,5 @@ composant (même registre, même React Refresh, même hash).
 3. **La route du graphe en JSON** et l'afficheur de A5 généralisé, puis le surlignage du tour.
 4. **L'indexation des `.mmd`** comme du code (un scope par nœud, ses usages).
 
-Le niveau 1 reste le chemin unique : le transpileur n'est qu'un producteur de TSX de plus. À
-trancher par Lucie avant le lot 1 : la tension sur l'état (§1, fin), et la forme des droits
-d'écran (`%% ecran:`).
+Le niveau 1 reste le chemin unique : le transpileur n'est qu'un producteur de TSX de plus. Les
+deux points ouverts sont tranchés par c7 (en tête de page), à relire par Lucie.
