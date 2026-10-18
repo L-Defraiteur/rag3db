@@ -1,0 +1,20 @@
+{
+  "_tentative": "fiches-classees-4 (18 octobre 2026) : une décision par fiche — l'un des sujets candidats, ou aucun. Le banc pose l'élément {text, candidats} ; les étiquettes viennent de l'élément (labels_from), « aucun » est fixe. En JSON pour garder les apostrophes de l'instruction.",
+  "nodes": [
+    {
+      "name": "decide",
+      "node_type": "Decide",
+      "config": {
+        "labels_from": "candidats",
+        "labels": [
+          "aucun"
+        ],
+        "field": "text",
+        "as": "verdict",
+        "via": "llm",
+        "instruction": "Tu ranges une fiche de mémoire sous l'un des sujets candidats. Une fiche va sous un sujet si elle parle de ce que le sujet décrit ; une fiche de règle va sous le domaine où la règle s'applique. Partager un mot ne suffit pas. Si aucun candidat ne convient, réponds aucun."
+      }
+    }
+  ],
+  "edges": []
+}
