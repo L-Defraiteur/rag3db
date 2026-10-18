@@ -1,6 +1,7 @@
 #pragma once
 
 #include <shared_mutex>
+#include <unordered_map>
 
 #include "common/types/types.h"
 #include "storage/index/hash_index.h"
@@ -54,15 +55,32 @@ struct RAG3DB_API NodeTableScanState : TableScanState {
     std::vector<common::offset_t> maskedOffsets;
 };
 
+// L'état d'écriture d'un index pour une instruction, avec l'identifiant de son exemplaire
+// (IndexHolder::getHolderID) et l'index en propriété partagée. La liste des index d'une table peut
+// gagner ou perdre une entrée pendant une instruction (le CREATE d'une autre connexion, son
+// annulation) : une position n'y désigne plus le même index. L'écrivain lit donc la liste une
+// fois, sous son verrou, et ne parcourt ensuite que ses propres états (ticket du CREATE
+// concurrent, défaut lié).
+template<typename STATE>
+struct IndexWriteState {
+    uint64_t holderID;
+    std::shared_ptr<Index> index;
+    std::unique_ptr<STATE> state;
+};
+
+// Pour chaque exemplaire d'index (holderID), les positions de ses colonnes parmi les propriétés.
+using IndexPropertyPositions = std::unordered_map<uint64_t, std::vector<common::idx_t>>;
+
 // There is a vtable bug related to the Apple clang v15.0.0+. Adding the `FINAL` specifier to
 // derived class causes casting failures in Apple platform.
 struct RAG3DB_API NodeTableInsertState : TableInsertState {
     common::ValueVector& nodeIDVector;
     const common::ValueVector& pkVector;
-    std::vector<std::unique_ptr<Index::InsertState>> indexInsertStates;
+    // Les index qui reçoivent la ligne, seulement eux (initInsertState).
+    std::vector<IndexWriteState<Index::InsertState>> indexInsertStates;
     // Pour chaque index, les positions de ses colonnes parmi les propriétés : propertyVectors
     // est rangé par position, les index par numéro de colonne (initInsertState).
-    std::vector<std::vector<common::idx_t>> indexPropertyPositions;
+    IndexPropertyPositions indexPropertyPositions;
 
     NodeTableInsertState(common::ValueVector& nodeIDVector, const common::ValueVector& pkVector,
         std::vector<common::ValueVector*> propertyVectors)
@@ -74,24 +92,22 @@ struct RAG3DB_API NodeTableInsertState : TableInsertState {
 
 struct RAG3DB_API NodeTableUpdateState : TableUpdateState {
     common::ValueVector& nodeIDVector;
-    std::vector<std::unique_ptr<Index::UpdateState>> indexUpdateState;
+    // Les index à mettre à jour pour cette colonne, seulement eux (initUpdateState).
+    std::vector<IndexWriteState<Index::UpdateState>> indexUpdateState;
 
     NodeTableUpdateState(common::column_id_t columnID, common::ValueVector& nodeIDVector,
         common::ValueVector& propertyVector)
         : TableUpdateState{columnID, propertyVector}, nodeIDVector{nodeIDVector} {}
 
     NodeTableUpdateState(const NodeTableUpdateState&) = delete;
-
-    bool needToUpdateIndex(common::idx_t idx) const {
-        return idx < indexUpdateState.size() && indexUpdateState[idx] != nullptr;
-    }
 };
 
 struct RAG3DB_API NodeTableDeleteState : TableDeleteState {
     common::ValueVector& nodeIDVector;
     common::ValueVector& pkVector;
-    // Pre-created index delete states, reused across multiple delete_() calls.
-    std::vector<std::unique_ptr<Index::DeleteState>> indexDeleteStates;
+    // Pre-created index delete states, reused across multiple delete_() calls : seulement les
+    // index qui reçoivent la suppression (initDeleteStates).
+    std::vector<IndexWriteState<Index::DeleteState>> indexDeleteStates;
     bool indexDeleteStatesInitialized = false;
 
     explicit NodeTableDeleteState(common::ValueVector& nodeIDVector, common::ValueVector& pkVector)
@@ -167,7 +183,7 @@ public:
         const common::ValueVector& pkVector) const;
     // Pour chaque index, les positions de ses colonnes parmi les propriétés de tableEntry
     // (NodeTableInsertState::indexPropertyPositions). À poser une fois par instruction.
-    std::vector<std::vector<common::idx_t>> getIndexPropertyPositions(
+    IndexPropertyPositions getIndexPropertyPositions(
         const catalog::TableCatalogEntry& tableEntry) const;
 
     void initInsertState(main::ClientContext* context, TableInsertState& insertState) override;

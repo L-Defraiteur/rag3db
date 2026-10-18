@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (38)
+### Ouverts — moteur (37)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -54,7 +54,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Un point de reprise fige toutes les transactions le temps de s'écrire, lecteurs compris, et il s'écrit toutes les trois secondes sous charge](2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md) | ouvert — mesuré par le banc (129 au seuil sur une passe, 1,2 à 1,4 s chacun) ; à placer dans la file du cœur C++ | attente pour tout le monde, lecteurs compris | oui (régime ordinaire d'un hôte qui indexe) | oui |
 | [Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà détruite](2026-10-18-un-commit-dont-le-point-de-reprise-echoue-annule-une-transaction-deja-partie.md) | ouvert, confirmé — pour le cœur C++ ; témoin `CommitAfterFailedCheckpoint.DoesNotRollBackADestroyedTransaction` (Release et ASAN, 3 sur 3) | lecture après libération : « Invalid transaction type to rollback » puis SIGABRT en Release, heap-use-after-free sous ASAN ; rien de perdu | oui, si un point de reprise échoue juste après une validation | oui |
 | [La cible clean efface la grammaire Cypher, suivie par git, et le bâti suivant ne la régénère pas](2026-10-18-la-cible-clean-efface-la-grammaire-cypher-suivie-par-git.md) | ouvert — pour le cœur ; deux formes (ne plus déclarer en OUTPUT, ou régénérer) | blocage du bâti après un `clean` | non | non (sauf un bâti de la lib après `clean`) |
-| [Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index](2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index.md) | ouvert (deux formes à peser) | réponse fausse | oui | oui, en principe |
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
 | [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
@@ -125,10 +124,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (151), dans `closed/`
+### Fermés (152), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index](closed/2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index.md) | corrigé (forme δ : rattrapage à la validation, une fois les autres partis, sans verrou ; voir le ticket) | réponse fausse | oui | oui, en principe |
 | [L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini](closed/2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md) | corrigé (malloc_trim en fin d'index, à la fermeture et au repos ; MALLOC_ARENA_MAX dans l'unité) ; jugé par le banc, phase plein texte et relations : A 5 814 / 4 648 Mio, B 2 329 / 567 (T3 / T4) | mémoire | oui | oui (l'hôte du démon) |
 | [Sous un tampon plein, un ROLLBACK est refusé et bloque la base, et la fermeture d'une connexion tue le processus](closed/2026-10-18-un-rollback-sous-un-tampon-plein-bloque-la-base-et-la-fermeture-tue-le-processus.md) | corrigé (le ROLLBACK n'alloue rien, la transaction quitte toujours le système, ~ClientContext ne lève pas, un CHECKPOINT refusé avant tout changement laisse la base ouverte ; voir le ticket) | plantage du processus, base bloquée | oui | oui (l'hôte) |
 | [Les relations d'un index dépendaient du chemin d'écriture : un héritage posé en CONSUMES par le COPY](closed/2026-10-18-les-relations-d-un-index-dependent-du-chemin-d-ecriture.md) | corrigé (18 octobre 2026) : le COPY a la sémantique du MERGE … SET (la dernière occurrence gagne, une paire déjà là passe par lots) | réponse fausse | oui | oui (`copier_les_liens`) |

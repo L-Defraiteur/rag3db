@@ -579,12 +579,14 @@ bool NodeTable::isWritableIndex(IndexHolder& indexHolder, const Transaction* tra
         INDEX_NOT_LOADED_FOR_WRITE, tableName));
 }
 
-std::vector<std::vector<idx_t>> NodeTable::getIndexPropertyPositions(
+IndexPropertyPositions NodeTable::getIndexPropertyPositions(
     const TableCatalogEntry& tableEntry) const {
-    std::vector<std::vector<idx_t>> positions(indexes.size());
-    for (auto i = 0u; i < indexes.size(); i++) {
-        for (const auto columnID : indexes[i].getIndexInfo().columnIDs) {
-            positions[i].push_back(tableEntry.getPropertyPosition(columnID));
+    std::shared_lock lck{indexesMtx};
+    IndexPropertyPositions positions;
+    for (const auto& holder : indexes) {
+        auto& ofHolder = positions[holder.getHolderID()];
+        for (const auto columnID : holder.getIndexInfo().columnIDs) {
+            ofHolder.push_back(tableEntry.getPropertyPosition(columnID));
         }
     }
     return positions;
@@ -592,24 +594,33 @@ std::vector<std::vector<idx_t>> NodeTable::getIndexPropertyPositions(
 
 void NodeTable::initInsertState(main::ClientContext* context, TableInsertState& insertState) {
     auto& nodeInsertState = insertState.cast<NodeTableInsertState>();
-    nodeInsertState.indexInsertStates.resize(indexes.size());
-    if (nodeInsertState.indexPropertyPositions.size() != indexes.size()) {
-        // Pas posées par l'appelant (le rejeu) : une recherche au catalogue.
-        nodeInsertState.indexPropertyPositions =
-            getIndexPropertyPositions(*catalog::Catalog::Get(*context)->getTableCatalogEntry(
-                transaction::Transaction::Get(*context), tableID));
-    }
-    for (auto i = 0u; i < indexes.size(); i++) {
-        auto& indexHolder = indexes[i];
-        if (!isWritableIndex(indexHolder, transaction::Transaction::Get(*context))) {
-            nodeInsertState.indexInsertStates[i] = nullptr;
-            continue;
+    const auto transaction = transaction::Transaction::Get(*context);
+    // La liste se lit sous son verrou ; les états se créent hors de lui (un index peut relire sa
+    // table).
+    std::vector<std::pair<uint64_t, std::shared_ptr<Index>>> writable;
+    {
+        std::shared_lock lck{indexesMtx};
+        for (auto& holder : indexes) {
+            if (isWritableIndex(holder, transaction)) {
+                writable.emplace_back(holder.getHolderID(), holder.getSharedIndex());
+            }
         }
-        const auto index = indexHolder.getIndex();
-        nodeInsertState.indexInsertStates[i] =
-            index->initInsertState(context, [&](offset_t offset) {
-                return isVisible(transaction::Transaction::Get(*context), offset);
-            });
+    }
+    const auto positionsKnown = std::ranges::all_of(writable, [&](const auto& entry) {
+        return nodeInsertState.indexPropertyPositions.contains(entry.first);
+    });
+    if (!positionsKnown) {
+        // Pas posées par l'appelant (le rejeu), ou posées avant qu'un index n'apparaisse : une
+        // recherche au catalogue.
+        nodeInsertState.indexPropertyPositions = getIndexPropertyPositions(
+            *catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, tableID));
+    }
+    nodeInsertState.indexInsertStates.clear();
+    for (auto& [holderID, index] : writable) {
+        auto state = index->initInsertState(context, [this, context](offset_t offset) {
+            return isVisible(transaction::Transaction::Get(*context), offset);
+        });
+        nodeInsertState.indexInsertStates.push_back({holderID, std::move(index), std::move(state)});
     }
 }
 
@@ -652,20 +663,12 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
         validatePkNotExists(transaction, const_cast<ValueVector*>(&nodeInsertState.pkVector));
     }
     localTable->insert(transaction, insertState);
-    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
-    // initialisation (voir rollbackIndexChange).
-    KU_ASSERT(nodeInsertState.indexInsertStates.size() == indexes.size());
-    for (auto i = 0u; i < indexes.size(); i++) {
-        if (!nodeInsertState.indexInsertStates[i]) {
-            continue; // index sauté par initInsertState
-        }
-        auto index = indexes[i].getIndex();
+    for (const auto& [holderID, index, state] : nodeInsertState.indexInsertStates) {
         std::vector<ValueVector*> indexedPropertyVectors;
-        for (const auto position : nodeInsertState.indexPropertyPositions[i]) {
+        for (const auto position : nodeInsertState.indexPropertyPositions.at(holderID)) {
             indexedPropertyVectors.push_back(insertState.propertyVectors[position]);
         }
-        index->insert(transaction, nodeInsertState.nodeIDVector, indexedPropertyVectors,
-            *nodeInsertState.indexInsertStates[i]);
+        index->insert(transaction, nodeInsertState.nodeIDVector, indexedPropertyVectors, *state);
     }
     if (!insertState.logToWAL) {
         localTable->doNotLogInsertions();
@@ -678,37 +681,42 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
 
 void NodeTable::initUpdateState(main::ClientContext* context, TableUpdateState& updateState) const {
     auto& nodeUpdateState = updateState.cast<NodeTableUpdateState>();
-    nodeUpdateState.indexUpdateState.resize(indexes.size());
-    for (auto i = 0u; i < indexes.size(); i++) {
-        auto& indexHolder = indexes[i];
-        // Un index que la transaction ne voit pas (retiré avant son instantané, ou créé par une
-        // autre sans validation) n'est pas mis à jour (ticket de la rétention).
-        if (!isIndexVisible(indexHolder, transaction::Transaction::Get(*context))) {
-            nodeUpdateState.indexUpdateState[i] = nullptr;
-            continue;
-        }
-        if (!indexHolder.isLoaded()) {
-            // Un index non chargé ne répond pas ; sa description suffit à dire s'il porte
-            // sur la colonne. S'il n'y porte pas, la mise à jour ne le regarde pas.
-            const auto& columnIDs = indexHolder.getIndexInfo().columnIDs;
-            if (std::find(columnIDs.begin(), columnIDs.end(), nodeUpdateState.columnID) !=
-                columnIDs.end()) {
-                const_cast<NodeTable*>(this)->isWritableIndex(
-                    const_cast<IndexHolder&>(indexHolder),
-                    transaction::Transaction::Get(*context));
+    const auto transaction = transaction::Transaction::Get(*context);
+    // La liste se lit sous son verrou ; les états se créent hors de lui.
+    std::vector<std::pair<uint64_t, std::shared_ptr<Index>>> toUpdate;
+    {
+        std::shared_lock lck{indexesMtx};
+        for (auto& indexHolder : indexes) {
+            // Un index que la transaction ne voit pas (retiré avant son instantané, ou créé par
+            // une autre sans validation) n'est pas mis à jour (ticket de la rétention).
+            if (!isIndexVisible(indexHolder, transaction)) {
+                continue;
             }
-            nodeUpdateState.indexUpdateState[i] = nullptr;
-            continue;
+            if (!indexHolder.isLoaded()) {
+                // Un index non chargé ne répond pas ; sa description suffit à dire s'il porte
+                // sur la colonne. S'il n'y porte pas, la mise à jour ne le regarde pas.
+                const auto& columnIDs = indexHolder.getIndexInfo().columnIDs;
+                if (std::find(columnIDs.begin(), columnIDs.end(), nodeUpdateState.columnID) !=
+                    columnIDs.end()) {
+                    const_cast<NodeTable*>(this)->isWritableIndex(
+                        const_cast<IndexHolder&>(indexHolder), transaction);
+                }
+                continue;
+            }
+            auto index = indexHolder.getSharedIndex();
+            if (index->isPrimary() || !index->isBuiltOnColumn(nodeUpdateState.columnID)) {
+                continue;
+            }
+            toUpdate.emplace_back(indexHolder.getHolderID(), std::move(index));
         }
-        auto index = indexHolder.getIndex();
-        if (index->isPrimary() || !index->isBuiltOnColumn(nodeUpdateState.columnID)) {
-            nodeUpdateState.indexUpdateState[i] = nullptr;
-            continue;
-        }
-        nodeUpdateState.indexUpdateState[i] =
-            index->initUpdateState(context, nodeUpdateState.columnID, [&](offset_t offset) {
+    }
+    nodeUpdateState.indexUpdateState.clear();
+    for (auto& [holderID, index] : toUpdate) {
+        auto state = index->initUpdateState(context, nodeUpdateState.columnID,
+            [this, context](offset_t offset) {
                 return isVisible(transaction::Transaction::Get(*context), offset);
             });
+        nodeUpdateState.indexUpdateState.push_back({holderID, std::move(index), std::move(state)});
     }
 }
 
@@ -737,19 +745,12 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
         lockIndexForWrite(transaction);
         lockRowForWrite(transaction, nodeOffset, lockKeyOfRow(transaction, nodeOffset));
     }
-    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
-    // initialisation (voir rollbackIndexChange).
-    KU_ASSERT(nodeUpdateState.indexUpdateState.size() == indexes.size());
-    for (auto i = 0u; i < indexes.size(); i++) {
-        if (!nodeUpdateState.needToUpdateIndex(i)) {
+    for (const auto& [holderID, index, state] : nodeUpdateState.indexUpdateState) {
+        if (isLocalRow && index->needCommitInsert()) {
             continue;
         }
-        if (isLocalRow && indexes[i].needCommitInsert()) {
-            continue;
-        }
-        auto index = indexes[i].getIndex();
         index->update(transaction, nodeUpdateState.nodeIDVector, nodeUpdateState.propertyVector,
-            *nodeUpdateState.indexUpdateState[i]);
+            *state);
     }
     if (isLocalRow) {
         const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
@@ -780,15 +781,20 @@ void NodeTable::initDeleteStates(const Transaction* transaction, TableDeleteStat
     if (nodeDeleteState.indexDeleteStatesInitialized) {
         return;
     }
-    nodeDeleteState.indexDeleteStates.resize(indexes.size());
-    for (auto i = 0u; i < indexes.size(); i++) {
-        if (!isWritableIndex(indexes[i], transaction)) {
-            nodeDeleteState.indexDeleteStates[i] = nullptr;
-            continue;
+    // La liste se lit sous son verrou ; les états se créent hors de lui.
+    std::vector<std::pair<uint64_t, std::shared_ptr<Index>>> writable;
+    {
+        std::shared_lock lck{indexesMtx};
+        for (auto& holder : indexes) {
+            if (isWritableIndex(holder, transaction)) {
+                writable.emplace_back(holder.getHolderID(), holder.getSharedIndex());
+            }
         }
-        nodeDeleteState.indexDeleteStates[i] =
-            indexes[i].getIndex()->initDeleteState(transaction, memoryManager,
-                getVisibleFunc(transaction));
+    }
+    nodeDeleteState.indexDeleteStates.clear();
+    for (auto& [holderID, index] : writable) {
+        auto state = index->initDeleteState(transaction, memoryManager, getVisibleFunc(transaction));
+        nodeDeleteState.indexDeleteStates.push_back({holderID, std::move(index), std::move(state)});
     }
     nodeDeleteState.indexDeleteStatesInitialized = true;
 }
@@ -798,14 +804,8 @@ void NodeTable::finalizeDelete(Transaction* transaction, TableDeleteState& delet
     if (!nodeDeleteState.indexDeleteStatesInitialized) {
         return;
     }
-    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
-    // initialisation (voir rollbackIndexChange).
-    KU_ASSERT(nodeDeleteState.indexDeleteStates.size() == indexes.size());
-    for (auto i = 0u; i < indexes.size(); i++) {
-        if (!nodeDeleteState.indexDeleteStates[i]) {
-            continue; // index sauté par initDeleteStates
-        }
-        indexes[i].getIndex()->finalizeDelete(transaction, *nodeDeleteState.indexDeleteStates[i]);
+    for (const auto& [holderID, index, state] : nodeDeleteState.indexDeleteStates) {
+        index->finalizeDelete(transaction, *state);
     }
 }
 
@@ -828,15 +828,8 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     }
     // Use pre-created index delete states (initialized once, reused across calls).
     initDeleteStates(transaction, deleteState);
-    // Les états sont rangés par position : la liste ne doit pas avoir changé depuis leur
-    // initialisation (voir rollbackIndexChange).
-    KU_ASSERT(nodeDeleteState.indexDeleteStates.size() == indexes.size());
-    for (auto i = 0u; i < indexes.size(); i++) {
-        if (!nodeDeleteState.indexDeleteStates[i]) {
-            continue; // index sauté par initDeleteStates
-        }
-        indexes[i].getIndex()->delete_(transaction, nodeDeleteState.nodeIDVector,
-            *nodeDeleteState.indexDeleteStates[i]);
+    for (const auto& [holderID, index, state] : nodeDeleteState.indexDeleteStates) {
+        index->delete_(transaction, nodeDeleteState.nodeIDVector, *state);
     }
 
     // The deletion of a node of this transaction is logged at commit, with its final offset.
@@ -967,37 +960,45 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
         numLocalRows += localNodeGroup->getNumRows();
     }
 
-    // 3. Scan index columns for newly inserted tuples.
-    for (auto& index : indexes) {
-        // Un index que la transaction a retirée, ou qu'une autre crée sans avoir validé, ne
-        // reçoit pas ses lignes (ticket de la rétention).
-        if (!index.isDetached() && !isIndexVisible(index, transaction)) {
-            continue;
-        }
-        // Chargé d'abord : needCommitInsert interroge l'index lui-même.
-        if (!index.isLoaded()) {
-            if (index.isDetached() || transaction->isRecovery()) {
-                // Au rejeu du journal, la table reçoit ses lignes sans cet index : il est
-                // détaché, à rebâtir.
-                if (!index.isDetached()) {
-                    index.detach();
-                    hasChanges = true;
-                }
+    // 3. Scan index columns for newly inserted tuples. La liste se lit sous son verrou (le
+    // CREATE d'une autre connexion peut l'allonger pendant cette validation) ; les index
+    // reçoivent leurs lignes hors de lui.
+    std::vector<std::shared_ptr<Index>> toInsertInto;
+    {
+        std::shared_lock lck{indexesMtx};
+        for (auto& index : indexes) {
+            // Un index que la transaction a retirée, ou qu'une autre crée sans avoir validé, ne
+            // reçoit pas ses lignes (ticket de la rétention).
+            if (!index.isDetached() && !isIndexVisible(index, transaction)) {
                 continue;
             }
-            throw RuntimeException(
-                "Cannot commit index insertions for index " + index.getName() +
-                ", because it is not loaded. Please load the extension for the index first.");
+            // Chargé d'abord : needCommitInsert interroge l'index lui-même.
+            if (!index.isLoaded()) {
+                if (index.isDetached() || transaction->isRecovery()) {
+                    // Au rejeu du journal, la table reçoit ses lignes sans cet index : il est
+                    // détaché, à rebâtir.
+                    if (!index.isDetached()) {
+                        index.detach();
+                        hasChanges = true;
+                    }
+                    continue;
+                }
+                throw RuntimeException(
+                    "Cannot commit index insertions for index " + index.getName() +
+                    ", because it is not loaded. Please load the extension for the index first.");
+            }
+            if (index.needCommitInsert()) {
+                toInsertInto.push_back(index.getSharedIndex());
+            }
         }
-        if (!index.needCommitInsert()) {
-            continue;
-        }
+    }
+    for (const auto& index : toInsertInto) {
         // L'index de clé primaire contrôle l'unicité avec la visibilité de l'insertion : un
         // contrôle qui différerait ici ferait échouer la validation après l'ajout des lignes
         // aux groupes (étape 1), une transaction à moitié validée (C7 du banc, 10 octobre).
-        UncommittedIndexInserter indexInserter{startNodeOffset, this, index.getIndex(),
-            index.getIndex()->isPrimary() ? getUniquenessVisibleFunc(transaction) :
-                                            getVisibleFunc(transaction)};
+        UncommittedIndexInserter indexInserter{startNodeOffset, this, index.get(),
+            index->isPrimary() ? getUniquenessVisibleFunc(transaction) :
+                                 getVisibleFunc(transaction)};
         // We need to scan from local storage here because some tuples in local node groups might
         // have been deleted.
         scanIndexColumns(context, indexInserter, localNodeTable.getNodeGroups(), &localNodeTable);
@@ -1080,6 +1081,9 @@ void NodeTable::rollbackPKIndexInsert(main::ClientContext* context, row_idx_t st
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
 void NodeTable::rollbackIndexInsert(offset_t firstRolledBackOffset,
     const Transaction* transaction) {
+    // Sous le verrou de la liste : le CREATE d'une autre connexion peut l'allonger pendant cette
+    // annulation.
+    std::shared_lock lck{indexesMtx};
     for (auto& index : indexes) {
         // Les seuls index que la transaction qui annule voyait et écrivait : pas un index retiré
         // avant elle, ni celui qu'une autre transaction crée sans avoir validé (le même filtre
@@ -1481,11 +1485,9 @@ void NodeTable::rollbackIndexChange(uint64_t holderID, bool isCreate) {
             continue;
         }
         if (isCreate) {
-            // L'index d'une recherche en cours reste vivant par son shared_ptr. Les états d'index
-            // des écrivains sont rangés par position dans `indexes` : un écrivain d'une table sans
-            // index secondaire ne prend pas de verrou d'index, et pourrait voir la liste changer
-            // sous lui (voir le ticket des lignes validées pendant le bâti d'un CREATE, où le
-            // rangement par holderID est noté). Les parcours le vérifient (KU_ASSERT).
+            // L'index d'une recherche en cours reste vivant par son shared_ptr, celui d'un
+            // écrivain aussi : ses états portent l'index et son holderID (IndexWriteState), lus
+            // une fois sous ce verrou, et ne dépendent pas de la position dans la liste.
             indexes.erase(it);
         } else {
             it->unmarkDropped();

@@ -1,6 +1,7 @@
 # Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index
 
-- **État** : ouvert (deux formes à peser, ci-dessous ; aucune tranchée)
+- **État** : corrigé par les trois commits du lot qui déplace ce ticket (18 octobre 2026), forme
+  (δ) arrêtée avec le cœur C++ et l'orchestration ; voir « Ce qui a été fait », à la fin.
 - **Gravité** : réponse fausse. Des lignes vivantes ne sont jamais rendues par la recherche,
   jusqu'à la reconstruction suivante de l'index.
 - **Atteignable en service** : oui. rag3weaver reconstruit l'index (`ajuster_l_index_pour_le_retard`,
@@ -64,3 +65,53 @@ pas seule, puisque le parcours de la liste reste une course avec le `push_back` 
 Le témoin vert, rejoué 10 fois, sans que `VectorIndexRebuild` ni les témoins de la rétention ne
 rougissent, et un CREATE croisé par des écrivains qui réussit sans attendre le délai du point de
 reprise.
+
+## Ce qui a été fait (18 octobre 2026)
+
+Aucune des deux formes ci-dessus : (β) gardait un verrou exclusif, (γ′) supposait que le verrou
+d'index précède toute lecture de l'instruction, ce qui est faux (le cœur C++ : la partie MATCH
+d'un MATCH … SET lit avant ; une table sans index visible ne prend aucun verrou d'index).
+
+**(δ) Le rattrapage à la validation, une fois les autres partis, sans verrou.** C'est l'esprit de
+`CREATE INDEX CONCURRENTLY` de PostgreSQL, qui attend les transactions plus vieilles que son
+instantané puis rattrape.
+
+- `Transaction::addPreCommitAction` : une action jouée en tête de `Transaction::commit`.
+  `TransactionManager::commit` attend le départ des autres avant de l'appeler. Une validation
+  forcée (base sur disque) les attendait déjà. La base en mémoire les attend désormais aussi,
+  sous le même délai, sans point de reprise : les deux modes ont la même garantie. À ce moment,
+  rien ne peut plus changer sous le CREATE, et les versions sont encore en mémoire (aucun point de
+  reprise ne passe tant qu'il est ouvert).
+- `OnDiskHNSWIndex::catchUpCommittedAfter`, dans une `Transaction::LatestCommittedView`, compare
+  pour chaque ligne l'instantané du bâti et le dernier état validé :
+  - une ligne apparue entre dans le graphe ;
+  - une ligne disparue (supprimée) en sort, avec la réparation de ses voisins ;
+  - une ligne au vecteur changé (`NodeTable::wasColumnUpdatedByCommitAfter`) reprend sa place.
+  Les chemins sont ceux des écrivains (`updateInternal`, `deleteInternal`, `finalizeDelete`).
+- Le rattrapage s'arrête à la première ligne dont l'insertion n'est pas vue : les lignes d'un
+  COPY forcé validé après le CREATE dans la file du point de reprise (A7). Elle et les suivantes
+  restent lues par le balayage des lignes d'après le graphe (`searchFromUnCheckpointed`), qui saute
+  désormais les lignes que le graphe a déjà rendues.
+- Le défaut lié : les états d'index des écrivains sont rangés avec le holderID de leur index et
+  l'index lui-même (`IndexWriteState`), lus une fois sous `indexesMtx` partagé. Les positions des
+  propriétés sont rangées par holderID. L'étape 3 de la validation et `rollbackIndexInsert`
+  parcourent la liste sous ce verrou.
+
+**Témoins**, tous rouges sur `ecd0324f3` et verts sur luciepc (trois passes chacun) :
+- `RowsCommittedDuringACreateAreIndexed`, sorti de known_red ;
+- `ChangesCommittedDuringACreateAreSeen`, sur disque et en mémoire (`VectorIndexCreateInMemory`) :
+  insertions, suppressions, SET du vecteur, et une ligne déplacée puis supprimée dans la même
+  fenêtre ;
+- `AWriterOpenAcrossTheCreateIsCaughtUp` : une transaction ouverte avant le CREATE, validée
+  pendant son attente, sans que le CREATE atteigne le délai ;
+- `AForcedCopyCommittedRightAfterACreateIsReached` : rouge sur le seul premier commit (1 000
+  lignes manquent), vert avec la borne.
+
+**Ce qui reste :**
+- Les lignes du COPY de la file restent hors du graphe, au balayage, jusqu'à la reconstruction de
+  l'index. La recherche est juste, mais elle balaie davantage. C'était déjà le cas sur master pour
+  toute ligne d'après le graphe.
+- Le rattrapage tourne pendant que les nouveaux BEGIN attendent : un balayage de visibilité de la
+  table, plus une opération HNSW par ligne changée. Le point de reprise qui suit les retient de
+  toute façon.
+
