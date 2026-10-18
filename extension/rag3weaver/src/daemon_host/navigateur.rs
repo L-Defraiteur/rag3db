@@ -124,10 +124,14 @@ impl Navigateur {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        // dup2 rend les fd 3 et 4 au fils sans CLOEXEC.
+        // dup2 rend les fd 3 et 4 au fils sans CLOEXEC. Les tubes passent d'abord
+        // au-dessus de 10 : un tube qui serait déjà le fd 3 (ou 4) resterait sinon
+        // en CLOEXEC (dup2 sur lui-même ne fait rien), ou serait écrasé par l'autre
+        // — le binaire de test lancé seul l'a montré, le 19 octobre 2026.
         unsafe {
             commande.pre_exec(move || {
-                if libc::dup2(a, 3) < 0 || libc::dup2(b, 4) < 0 {
+                let (a, b) = (libc::fcntl(a, libc::F_DUPFD, 10), libc::fcntl(b, libc::F_DUPFD, 10));
+                if a < 0 || b < 0 || libc::dup2(a, 3) < 0 || libc::dup2(b, 4) < 0 {
                     return Err(std::io::Error::last_os_error());
                 }
                 Ok(())
