@@ -41,6 +41,20 @@ On ne sait pas encore qui les a lancés (une boucle de rejeu, sans doute). Ces r
 Le volume vient des bases d'index des suites `e2e_code`, et de 34 fichiers de tests ou de `src/`
 qui écrivent sous `std::env::temp_dir()`.
 
+**Effacés le 18 octobre** (seconde session cœur C++, à la demande de l'orchestration) :
+
+- **Ce qui est parti** : les trois familles des 11 et 12 octobre, soit 4 033 entrées (2 332
+  `rag3weaver-acces-*`, 1 610 `rag3weaver-rag3daemon-*`, 91 `rag3weaver-bulk-*`). Toutes
+  appartenaient à l'uid 1000.
+- **Comment** : d'abord la preuve que rien ne les tenait (rien dans `/proc/*/fd`, `cwd` et `maps`,
+  ni par `fuser`, ni par `lsof`). Puis l'effacement depuis une liste écrite dans un fichier,
+  jamais par un motif.
+- **Leur poids** : 141 Mio au `du` de la liste, 144 Mio rendus au `df` de `/tmp`. C'est faible,
+  ce qui **écarte cette piste pour l'échange** : les 10 Go relevés le 15 ne venaient pas de ces
+  restes (voir le ticket de la mémoire de l'hôte).
+- **Ce qui reste** : `rag3weaver-lignes-*` et `rag3weaver_cache`, hors du périmètre fixé, ainsi
+  que les dossiers des sessions. `/tmp` compte maintenant 92 entrées.
+
 ## La cause
 
 Elle est la même qu'au 11 octobre :
@@ -70,4 +84,4 @@ Aucun pour l'instant. Il faudrait :
    quand il est temporaire.
 4. Une fois rien de vivant dessus (vérifié par `/proc/*/cwd`, `fd` et `maps`, jamais par nom),
    effacer les restes listés plus haut. L'effacement revient à qui Lucie ou l'orchestration
-   désigne.
+   désigne. Ceux de `e2e_rag3daemon` et `e2e_code` ont été effacés le 18 octobre.

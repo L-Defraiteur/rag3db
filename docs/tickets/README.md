@@ -75,7 +75,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive](2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md) | ouvert — `remove_dir_all` sur une base, `rag3weaver_cache` jamais effacé ; 755 dossiers effacés le 15, ~4 000 entrées restent | confort — RAM puis échange | non (tests), sauf `rag3weaver_cache` | oui |
+| [Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive](2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md) | ouvert — `remove_dir_all` sur une base, `rag3weaver_cache` jamais effacé ; 755 dossiers effacés le 15, ~4 000 entrées relevées le 18 puis effacées (141 Mio : pas la cause de l’échange) | confort — RAM puis échange | non (tests), sauf `rag3weaver_cache` | oui |
 | [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
 | [Un graphe exécuté par niveaux ne s'annule pas](2026-10-12-un-graphe-sous-les-niveaux-ne-s-annule-pas.md) | ouvert — lot à part (recherche) | blocage | oui | oui (`src/dataflow`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
