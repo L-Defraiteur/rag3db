@@ -91,15 +91,17 @@ TEST_F(CommitAfterFailedCheckpoint, DoesNotRollBackADestroyedTransaction) {
             say(a, "A", "CALL checkpoint_threshold=4096;");
             say(a, "A", "BEGIN TRANSACTION;");
             say(a, "A", "CREATE (:Doc {id: 0, titre: 'a'});");
-            for (auto i = 1; i <= 20; ++i) {
-                b.query(
-                    stringFormat("CREATE (:Doc {id: {}, titre: '{}'});", i, std::string(400, 'x')));
-            }
-            steps << "B 20 writes committed" << std::endl;
             const FlakyCheckpointer failing([](rag3db::main::ClientContext& context) {
                 return std::make_unique<CheckpointerFailingOnStorage>(context);
             });
             failing.setCheckpointer(*a.getClientContext());
+            // B franchit le seuil en une seule validation : A est ouverte, B pose la demande (A8)
+            // et rend la main. A valide aussitôt, avant que la demande soit abandonnée (250 ms) :
+            // elle ne fait que reporter, puis écrit la demande en partant la dernière.
+            say(b, "B",
+                stringFormat("UNWIND range(1, 20) AS i CREATE (:Doc {id: i, titre: '{}'});",
+                    std::string(400, 'x')));
+            steps << "B 20 writes committed" << std::endl;
             const auto committed = say(a, "A", "COMMIT;");
             steps << "COMMIT " << (committed ? "accepted" : "refused") << std::endl;
             say(a, "A", "RETURN 1;");
