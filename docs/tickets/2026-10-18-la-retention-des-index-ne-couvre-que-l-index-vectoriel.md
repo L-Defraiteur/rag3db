@@ -33,9 +33,20 @@ geo passe par eux :
 - Un nom recréé par une transaction non validée peut aussi être pris par une autre (le holder
   neuf n'est pas retiré).
 
-Le défaut voisin de la finalisation d'un COPY (`NodeBatchInsert::finalize`, sur tous les holders
-sans filtre, d'où « …_UPPER does not exist in catalog » après un CREATE, un DROP puis un COPY)
-est corrigé par le cœur C++ dans son correctif de `5e3df4563`, avec le filtre de visibilité.
+**Le défaut voisin de la finalisation d'un COPY venait de la rétention elle-même** (`9b861579a`,
+seconde session cœur C++). La rétention garde, pour les lecteurs d'avant, le holder d'un index
+retiré. `NodeBatchInsert::finalize` appelait finalize sur tous les holders de la table, sans
+filtre : un CREATE, un DROP puis un COPY finalisaient dans l'index retiré, dont les tables de
+relations n'existent plus (« _0_vec_idx_UPPER does not exist in catalog », puis « must reopen »).
+
+Ce chemin n'a pas été relu quand la rétention a été écrite : seuls l'ont été les chemins de
+l'écriture ordinaire (`isWritableIndex`, `initUpdateState`, l'étape 3 du commit). La régression
+a d'abord été attribuée à `5e3df4563` (le rollback sous lecteurs du cœur), puis reproduite par le
+cœur sur `8f4779bdc` rebâti, qui contient déjà la rétention.
+
+Le cœur la corrige avec le filtre de visibilité, à la transaction du COPY, dans
+`NodeBatchInsert::finalize`, et du même coup dans `NodeTable::rollbackIndexInsert`. Les magasins
+de libs sont revenus à `87a362e30`, la dernière lib saine d'avant la rétention.
 
 ## La forme
 
