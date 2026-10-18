@@ -361,6 +361,7 @@ private:
         std::fprintf(stderr, "  [scénario] début de « %s » à %.0f ms\n", name.c_str(), ddl.start);
         auto result = connection.query(query);
         ddl.end = now();
+        std::fprintf(stderr, "  [scénario] fin de « %s » à %.0f ms\n", name.c_str(), ddl.end);
         ddl.ok = result->isSuccess();
         ddl.error = ddl.ok ? "" : result->getErrorMessage();
         if (commitLog) {
