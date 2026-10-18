@@ -80,13 +80,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (35)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Des scopes sans `DEFINED_IN` dans une réindexation à neuf : 3 825 sur 82 808 dans code-lourd](2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md) | ouvert — structurel, à regarder (scopes de même nom dans un fichier ?) | réponse incomplète (le scope ne se rattache pas à son fichier par l'arête) | oui, à chaque index | oui (ingestion du code) |
 | [La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie](2026-10-18-la-ci-de-rag3weaver-etait-rouge-sans-que-personne-le-voie.md) | ouvert — CI verte sur master (run 39144463679) ; le filet à décider par l'orchestration | filet absent | non (l'outillage) | oui (workflow, check_features) |
 | [Une Ref ne vieillit jamais : son cycle de vie est déclaré, mais rien ne le déclenche](2026-10-18-une-ref-ne-vieillit-jamais.md) | ouvert — le vieillissement par l'index de code attend le mot de Lucie (pont entre bases, §12.4) | réponse fausse en silence (une Ref reste `vue` quand sa cible change) | oui, dès qu'une fiche cite une cible qui bouge | oui (et seulement) |
 | [Trois témoins rougissent sous charge, avant comme après l'embarquement hors du verrou](2026-10-18-trois-temoins-rougissent-sous-charge.md) | ouvert — à attribuer ; une lecture qui verrait un lot à moitié, à établir | tests instables sous charge | peut-être | oui (`backend.rs`, `commande.rs`) |
