@@ -194,11 +194,12 @@ pub fn edit_file_shared(
     catalog: &Mutex<Catalog>,
     path: &str,
     op: &crate::code_tools::EditOp,
+    expected_hash: Option<&str>,
 ) -> Result<crate::code_tools::EditResult, String> {
     let source_id = registry_key(source);
     loop {
         match catalog.try_lock() {
-            Ok(mut guard) => return crate::code_tools::edit_file(source, Some(&mut guard), path, op),
+            Ok(mut guard) => return crate::code_tools::edit_file(source, Some(&mut guard), path, op, expected_hash),
             Err(std::sync::TryLockError::Poisoned(e)) => return Err(format!("catalogue empoisonné : {e}")),
             Err(std::sync::TryLockError::WouldBlock) if indexing_in_progress(&source_id) => break,
             // Tenu, mais pas par une indexation de cette source — ou pas
@@ -206,7 +207,7 @@ pub fn edit_file_shared(
             Err(std::sync::TryLockError::WouldBlock) => std::thread::sleep(std::time::Duration::from_millis(5)),
         }
     }
-    let (mut result, after_text) = crate::code_tools::write_edit(source, path, op)?;
+    let (mut result, after_text) = crate::code_tools::write_edit(source, path, op, expected_hash)?;
     match note_change(&source_id, path) {
         // L'indexation a fini entre-temps : le catalogue se libère, on ré-ingère.
         ChangeDuringIndexing::NotIndexing => {

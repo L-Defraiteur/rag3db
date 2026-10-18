@@ -1353,6 +1353,48 @@ impl EditResult {
     }
 }
 
+/// Le début du refus d'une édition dont l'empreinte attendue n'est plus celle
+/// du fichier ([`write_edit`]).
+pub const STALE_EDIT: &str = "fichier changé depuis la lecture";
+
+/// La taille au-delà de laquelle une lecture brute refuse (un éditeur de page
+/// n'a pas à charger un fichier de plusieurs mégaoctets).
+pub const RAW_READ_MAX_BYTES: usize = 2 * 1024 * 1024;
+
+/// **Une lecture brute** (`read` en `format: "brut"`, 18 octobre 2026) : le texte
+/// exact du fichier entier, son empreinte et sa place — ce qu'un éditeur charge,
+/// et l'empreinte qu'il rend à l'enregistrement (`expected_hash`).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RawRead {
+    pub path: String,
+    /// Lu hors de la source, par la frontière d'accès : pas modifiable par `edit`.
+    pub outside: bool,
+    pub content_hash: String,
+    pub bytes: usize,
+    pub content: String,
+}
+
+/// Lit `path` en entier, sans numéros ni coupes, résolu comme [`read_file_with`] ;
+/// refus nommé au-delà de [`RAW_READ_MAX_BYTES`].
+pub fn read_file_raw(source: &dyn FileSource, access: &RootPolicy, path: &str) -> Result<RawRead, String> {
+    let (content, outside) = match source.read(path)? {
+        Some(c) => (c, false),
+        None if Path::new(path).is_absolute() => {
+            let resolved = access.resolve(path)?;
+            (std::fs::read_to_string(&resolved).map_err(|e| format!("'{path}' : {e}"))?, true)
+        }
+        None => return Err(format!("no such file in {}: {path}", source.cursor())),
+    };
+    if content.len() > RAW_READ_MAX_BYTES {
+        return Err(format!(
+            "{path} : {} octets, au-delà de la lecture brute ({} octets) — lisez-le par tranches (format json)",
+            content.len(),
+            RAW_READ_MAX_BYTES
+        ));
+    }
+    Ok(RawRead { path: path.to_string(), outside, content_hash: crate::hash::content_hash(&content), bytes: content.len(), content })
+}
+
 /// Retire les préfixes `00042| ` d'un texte recopié depuis `read` — le
 /// détail d'ergonomie le plus payant de l'ancienne version : le modèle peut
 /// coller ce qu'il a lu.
@@ -1377,8 +1419,9 @@ pub fn edit_file(
     catalog: Option<&mut Catalog>,
     path: &str,
     op: &EditOp,
+    expected_hash: Option<&str>,
 ) -> Result<EditResult, String> {
-    let (mut result, after_text) = write_edit(source, path, op)?;
+    let (mut result, after_text) = write_edit(source, path, op, expected_hash)?;
     // **Une édition n'échoue pas parce que l'index ne suit pas** : le
     // fichier est écrit, c'est ce qui a été demandé ; la ré-ingestion qui
     // échoue se dit dans le rendu, et l'index suivra.
@@ -1393,17 +1436,39 @@ pub fn edit_file(
 
 /// Applique `op` et écrit, sans toucher l'index : le résultat, et le contenu
 /// écrit.
-pub(crate) fn write_edit(source: &dyn FileSource, path: &str, op: &EditOp) -> Result<(EditResult, String), String> {
+///
+/// **`expected_hash`** (l'édition humaine de l'IDE, 18 octobre 2026) : le
+/// `content_hash` lu avant d'éditer. Si le fichier a changé depuis (ou n'existe
+/// plus), rien n'est écrit : le refus commence par [`STALE_EDIT`] et porte
+/// l'empreinte actuelle, pour que l'appelant relise et montre la différence au
+/// lieu d'écraser. Le contenu est alors écrit **tel quel** (les préfixes de
+/// `read` ne sont retirés que pour un modèle qui recopie une lecture).
+pub(crate) fn write_edit(
+    source: &dyn FileSource,
+    path: &str,
+    op: &EditOp,
+    expected_hash: Option<&str>,
+) -> Result<(EditResult, String), String> {
     let before = source.read(path)?;
     let created = before.is_none();
+    if let Some(attendu) = expected_hash {
+        let actuel = before.as_deref().map(crate::hash::content_hash);
+        if actuel.as_deref() != Some(attendu) {
+            return Err(format!(
+                "{STALE_EDIT} : {path} a changé depuis la lecture (empreinte attendue {attendu}, actuelle {}) — \
+                 relisez-le et réappliquez la modification ; rien n'est écrit",
+                actuel.as_deref().unwrap_or("absente : le fichier n'existe plus")
+            ));
+        }
+    }
+    let brut = expected_hash.is_some();
     let before_text = before.unwrap_or_default();
     let after_text = match op {
         EditOp::Replace { old, new } => {
             if created {
                 return Err(format!("no such file in {}: {path} (use a full write to create it)", source.cursor()));
             }
-            let old = strip_line_prefixes(old);
-            let new = strip_line_prefixes(new);
+            let (old, new) = if brut { (old.clone(), new.clone()) } else { (strip_line_prefixes(old), strip_line_prefixes(new)) };
             let n = before_text.matches(old.as_str()).count();
             if n == 0 {
                 return Err(format!("old text not found in {path} (copy it exactly from read; line-number prefixes are stripped)"));
@@ -1413,6 +1478,7 @@ pub(crate) fn write_edit(source: &dyn FileSource, path: &str, op: &EditOp) -> Re
             }
             before_text.replacen(old.as_str(), &new, 1)
         }
+        EditOp::Write { content } if brut => content.clone(),
         EditOp::Write { content } => strip_line_prefixes(content),
     };
     let first_changed_line = before_text
@@ -1772,7 +1838,7 @@ mod tests {
         let s = snapshot();
         // Texte recopié depuis `read`, préfixes compris.
         let op = EditOp::Replace { old: "00002|     beta();".into(), new: "00002|     beta(); // twice\n00003|     beta();".into() };
-        let r = edit_file(&s, None, "src/a.rs", &op).unwrap();
+        let r = edit_file(&s, None, "src/a.rs", &op, None).unwrap();
         assert!(!r.created);
         assert_eq!((r.lines_before, r.lines_after), (5, 6));
         assert_eq!(r.first_changed_line, Some(2));
@@ -1780,13 +1846,13 @@ mod tests {
         let after = s.read("src/a.rs").unwrap().unwrap();
         assert!(after.contains("    beta(); // twice\n    beta();\n"), "{after}");
         // Ambigu : `beta();` apparaît maintenant deux fois.
-        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "beta();".into(), new: "x".into() }).unwrap_err();
+        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "beta();".into(), new: "x".into() }, None).unwrap_err();
         assert!(err.contains("appears 2 times"), "{err}");
-        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "gamma();".into(), new: "x".into() }).unwrap_err();
+        let err = edit_file(&s, None, "src/a.rs", &EditOp::Replace { old: "gamma();".into(), new: "x".into() }, None).unwrap_err();
         assert!(err.contains("not found"), "{err}");
-        let err = edit_file(&s, None, "new.rs", &EditOp::Replace { old: "a".into(), new: "b".into() }).unwrap_err();
+        let err = edit_file(&s, None, "new.rs", &EditOp::Replace { old: "a".into(), new: "b".into() }, None).unwrap_err();
         assert!(err.contains("full write"), "{err}");
-        let w = edit_file(&s, None, "new.rs", &EditOp::Write { content: "fn fresh() {}\n".into() }).unwrap();
+        let w = edit_file(&s, None, "new.rs", &EditOp::Write { content: "fn fresh() {}\n".into() }, None).unwrap();
         assert!(w.created && w.lines_after == 1);
         assert_eq!(s.read("new.rs").unwrap().unwrap(), "fn fresh() {}\n");
     }
@@ -1796,6 +1862,67 @@ mod tests {
         assert_eq!(strip_line_prefixes("00001| a\n00002| b\n"), "a\nb\n");
         assert_eq!(strip_line_prefixes("00001| a\nb\n"), "00001| a\nb\n");
         assert_eq!(strip_line_prefixes("plain"), "plain");
+    }
+
+    #[test]
+    /// **L'édition humaine de l'IDE** (B1, 18 octobre 2026) : sur une empreinte
+    /// périmée rien n'est écrit, et le refus porte l'empreinte actuelle ; sur la
+    /// bonne, le contenu est écrit tel quel (pas de retrait des préfixes de `read`).
+    #[test]
+    fn une_edition_sur_une_empreinte_perimee_n_ecrit_rien() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a.rs"), "fn a() {}\n").unwrap();
+        let wt = WorkingTree::new(d.path());
+        let lue = read_file_raw(&wt, &RootPolicy::closed(), "a.rs").unwrap();
+        // Un autre éditeur passe entre la lecture et l'enregistrement.
+        std::fs::write(d.path().join("a.rs"), "fn a() { autre(); }\n").unwrap();
+        let err = edit_file(&wt, None, "a.rs", &EditOp::Write { content: "fn a() { moi(); }\n".into() }, Some(&lue.content_hash))
+            .unwrap_err();
+        assert!(err.starts_with(STALE_EDIT), "{err}");
+        let actuel = crate::hash::content_hash("fn a() { autre(); }\n");
+        assert!(err.contains(&actuel), "le refus porte l'empreinte actuelle : {err}");
+        assert_eq!(std::fs::read_to_string(d.path().join("a.rs")).unwrap(), "fn a() { autre(); }\n", "rien n'est écrit");
+        // Relue, la même édition passe — telle quelle, même ce qui ressemble à un préfixe.
+        let relue = read_file_raw(&wt, &RootPolicy::closed(), "a.rs").unwrap();
+        let tel_quel = "00001| garde ce texte\n";
+        let r = edit_file(&wt, None, "a.rs", &EditOp::Write { content: tel_quel.into() }, Some(&relue.content_hash)).unwrap();
+        assert_eq!(std::fs::read_to_string(d.path().join("a.rs")).unwrap(), tel_quel);
+        assert_eq!(r.content_hash, crate::hash::content_hash(tel_quel));
+        // Un fichier disparu depuis la lecture refuse aussi.
+        std::fs::remove_file(d.path().join("a.rs")).unwrap();
+        let err = edit_file(&wt, None, "a.rs", &EditOp::Write { content: "x".into() }, Some(&r.content_hash)).unwrap_err();
+        assert!(err.starts_with(STALE_EDIT) && err.contains("n'existe plus"), "{err}");
+        assert!(!d.path().join("a.rs").exists());
+    }
+
+    /// **La lecture brute rend le fichier exact** : fins de ligne `\r\n`, pas de
+    /// saut final, une ligne de plus de 2000 caractères — et l'empreinte du tout.
+    #[test]
+    fn la_lecture_brute_rend_le_fichier_exact() {
+        let d = tempfile::tempdir().unwrap();
+        let texte = format!("une\r\ndeux {}\r\ntrois sans saut final", "x".repeat(3000));
+        std::fs::write(d.path().join("b.txt"), &texte).unwrap();
+        let wt = WorkingTree::new(d.path());
+        let r = read_file_raw(&wt, &RootPolicy::closed(), "b.txt").unwrap();
+        assert_eq!(r.content, texte);
+        assert_eq!(r.content_hash, crate::hash::content_hash(&texte));
+        assert!(!r.outside);
+        assert_eq!(r.bytes, texte.len());
+    }
+
+    /// **Hors du worktree, ni lecture brute ni écriture**, même avec une empreinte.
+    #[test]
+    fn hors_du_worktree_l_edition_humaine_refuse() {
+        let d = tempfile::tempdir().unwrap();
+        let wt = WorkingTree::new(d.path().join("arbre"));
+        std::fs::create_dir_all(d.path().join("arbre")).unwrap();
+        std::fs::write(d.path().join("dehors.rs"), "secret").unwrap();
+        let h = crate::hash::content_hash("secret");
+        for chemin in ["../dehors.rs", d.path().join("dehors.rs").to_str().unwrap()] {
+            assert!(read_file_raw(&wt, &RootPolicy::closed(), chemin).is_err(), "{chemin}");
+            assert!(edit_file(&wt, None, chemin, &EditOp::Write { content: "écrasé".into() }, Some(&h)).is_err(), "{chemin}");
+        }
+        assert_eq!(std::fs::read_to_string(d.path().join("dehors.rs")).unwrap(), "secret");
     }
 
     #[test]

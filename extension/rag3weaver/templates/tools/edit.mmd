@@ -4,7 +4,8 @@
 %% param: old string = "" -- Texte à remplacer, exact et présent une seule fois dans le fichier.
 %% param: new string = "" -- Texte de remplacement.
 %% param: content string = "" -- Contenu entier du fichier ; crée le fichier s'il n'existe pas. Exclusif avec old/new.
+%% param: expected_hash string = "" -- L'empreinte (content_hash) rendue par read avant d'éditer : si le fichier a changé depuis, rien n'est écrit et le refus le dit. Le contenu est alors écrit tel quel.
 %% result: edit.result
 
 graph LR
-    edit["EditFileNode(path=$path, old=$old, new=$new, content=$content)"]
+    edit["EditFileNode(path=$path, old=$old, new=$new, content=$content, expected_hash=$expected_hash)"]

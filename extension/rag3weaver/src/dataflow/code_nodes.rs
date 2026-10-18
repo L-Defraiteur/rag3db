@@ -186,11 +186,18 @@ pub struct ReadFileNode {
     offset: usize,
     limit: usize,
     format: ToolFormat,
+    /// `format: "brut"` : le texte exact du fichier entier (un éditeur).
+    brut: bool,
 }
 
 impl ReadFileNode {
     pub fn new(name: &str, path: impl Into<String>) -> Self {
-        Self { node_name: name.to_string(), path: path.into(), offset: 1, limit: DEFAULT_READ_LIMIT, format: ToolFormat::Markdown }
+        Self { node_name: name.to_string(), path: path.into(), offset: 1, limit: DEFAULT_READ_LIMIT, format: ToolFormat::Markdown, brut: false }
+    }
+    /// La lecture brute : le fichier entier, exact, avec son `content_hash`.
+    pub fn brut(mut self) -> Self {
+        self.brut = true;
+        self
     }
     pub fn with_window(mut self, offset: usize, limit: usize) -> Self {
         self.offset = offset;
@@ -225,6 +232,12 @@ impl Node for ReadFileNode {
             .service::<Arc<crate::code_tools::RootPolicy>>(crate::code_tools::FILE_ACCESS_SERVICE)
             .cloned()
             .unwrap_or_else(|| Arc::new(crate::code_tools::RootPolicy::closed()));
+        if self.brut {
+            let r = crate::code_tools::read_file_raw(source.as_ref(), &access, &self.path).map_err(|e| format!("ReadFileNode: {e}"))?;
+            ctx.metric("bytes", r.bytes as f64);
+            ctx.set_output("result", PortValue::new(serde_json::to_value(&r).map_err(|e| e.to_string())?));
+            return Ok(());
+        }
         let result = {
             let guard = catalog.as_ref().map(|c| c.lock().unwrap());
             crate::code_tools::read_file_with(source.as_ref(), guard.as_deref(), &access, &self.path, self.offset, self.limit)
@@ -392,11 +405,18 @@ pub struct EditFileNode {
     path: String,
     op: EditOp,
     format: ToolFormat,
+    /// L'empreinte lue avant d'éditer ([`crate::code_tools::write_edit`]) : un
+    /// fichier changé depuis refuse, et rien n'est écrit.
+    expected_hash: Option<String>,
 }
 
 impl EditFileNode {
     pub fn new(name: &str, path: impl Into<String>, op: EditOp) -> Self {
-        Self { node_name: name.to_string(), path: path.into(), op, format: ToolFormat::Markdown }
+        Self { node_name: name.to_string(), path: path.into(), op, format: ToolFormat::Markdown, expected_hash: None }
+    }
+    pub fn with_expected_hash(mut self, hash: Option<String>) -> Self {
+        self.expected_hash = hash;
+        self
     }
     pub fn with_format(mut self, format: ToolFormat) -> Self {
         self.format = format;
@@ -427,8 +447,8 @@ impl Node for EditFileNode {
         // Le catalogue partagé : une indexation en cours ne fait pas attendre
         // l'édition.
         let result = match catalog.as_ref() {
-            Some(c) => crate::code_sync::edit_file_shared(source.as_ref(), c, &self.path, &self.op),
-            None => edit_file(source.as_ref(), None, &self.path, &self.op),
+            Some(c) => crate::code_sync::edit_file_shared(source.as_ref(), c, &self.path, &self.op, self.expected_hash.as_deref()),
+            None => edit_file(source.as_ref(), None, &self.path, &self.op, self.expected_hash.as_deref()),
         }
         .map_err(|e| format!("EditFileNode: {e}"))?;
         ctx.metric("lines_after", result.lines_after as f64);
@@ -473,11 +493,13 @@ impl NodeFactory for ReadFileNodeFactory {
         let path = config.get("path").and_then(|v| v.as_str()).ok_or("ReadFileNode: missing 'path' config")?;
         let offset = usize_param(config, "offset", "ReadFileNode")?.unwrap_or(1);
         let limit = usize_param(config, "limit", "ReadFileNode")?.unwrap_or(DEFAULT_READ_LIMIT);
-        let format = match config.get("format").and_then(|v| v.as_str()) {
-            Some(f) => ToolFormat::parse(f).map_err(|e| format!("ReadFileNode: {e}"))?,
-            None => ToolFormat::Markdown,
+        let node = ReadFileNode::new(name, path).with_window(offset, limit);
+        let node = match config.get("format").and_then(|v| v.as_str()) {
+            Some("brut") => node.brut(),
+            Some(f) => node.with_format(ToolFormat::parse(f).map_err(|e| format!("ReadFileNode: {e} | brut"))?),
+            None => node,
         };
-        Ok(Box::new(ReadFileNode::new(name, path).with_window(offset, limit).with_format(format)))
+        Ok(Box::new(node))
     }
     fn node_type(&self) -> &'static str {
         "ReadFileNode"
@@ -492,7 +514,11 @@ impl NodeFactory for ReadFileNodeFactory {
                 ConfigParam { name: "path".into(), param_type: ConfigParamType::String, required: true, default: None, description: "Chemin relatif à la source (tel que File.path)".into(), choices: None, json_schema: None },
                 ConfigParam { name: "offset".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(1)), description: "Première ligne (1-based)".into(), choices: None, json_schema: None },
                 ConfigParam { name: "limit".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_READ_LIMIT)), description: "Nombre maximum de lignes (plafond 2000)".into(), choices: None, json_schema: None },
-                format_param(),
+                ConfigParam {
+                    choices: Some(Choices::fixed(["markdown", "json", "brut"])),
+                    description: "markdown (compact, pour le modèle) | json (structuré) | brut (le fichier entier, exact, avec son content_hash : un éditeur)".into(),
+                    ..format_param()
+                },
             ],
         }
     }
@@ -643,12 +669,25 @@ impl NodeFactory for EditFileNodeFactory {
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let path = config.get("path").and_then(|v| v.as_str()).ok_or("EditFileNode: missing 'path' config")?;
         let get = |k: &str| config.get(k).and_then(|v| v.as_str()).map(String::from);
-        let op = match (get("content"), get("old"), get("new")) {
-            (Some(content), None, None) if !content.is_empty() => EditOp::Write { content },
-            (None | Some(_), Some(old), Some(new)) if !old.is_empty() => EditOp::Replace { old, new },
-            _ => return Err("EditFileNode: give either 'old' + 'new' (replace one occurrence) or 'content' (write the whole file)".into()),
+        // **Un paramètre vide est un paramètre absent** (18 octobre 2026) : le
+        // graphe `edit` donne `""` par défaut à old, new et content, et l'écriture
+        // entière par l'outil ne passait jamais (old et new arrivaient en
+        // `Some("")`). Un `new` vide reste un remplacement par rien.
+        let plein = |k: &str| get(k).filter(|v| !v.is_empty());
+        let expected_hash = plein("expected_hash");
+        let op = match (plein("content"), plein("old")) {
+            (Some(_), Some(_)) => {
+                return Err("EditFileNode: 'content' (write the whole file) and 'old' (replace one occurrence) are exclusive".into())
+            }
+            (Some(content), None) => EditOp::Write { content },
+            (None, Some(old)) => EditOp::Replace { old, new: get("new").unwrap_or_default() },
+            // Vider un fichier : seulement sur une empreinte lue (l'édition humaine).
+            (None, None) if expected_hash.is_some() && get("content").is_some() => EditOp::Write { content: String::new() },
+            (None, None) => {
+                return Err("EditFileNode: give either 'old' + 'new' (replace one occurrence) or 'content' (write the whole file)".into())
+            }
         };
-        let mut node = EditFileNode::new(name, path, op);
+        let mut node = EditFileNode::new(name, path, op).with_expected_hash(expected_hash);
         if let Some(f) = config.get("format").and_then(|v| v.as_str()) {
             node = node.with_format(ToolFormat::parse(f).map_err(|e| format!("EditFileNode: {e}"))?);
         }
@@ -668,6 +707,7 @@ impl NodeFactory for EditFileNodeFactory {
                 ConfigParam { name: "old".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Texte à remplacer, exact et unique dans le fichier (préfixes de numéros de ligne tolérés)".into(), choices: None, json_schema: None },
                 ConfigParam { name: "new".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Texte de remplacement".into(), choices: None, json_schema: None },
                 ConfigParam { name: "content".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Contenu entier du fichier (crée le fichier s'il n'existe pas)".into(), choices: None, json_schema: None },
+                ConfigParam { name: "expected_hash".into(), param_type: ConfigParamType::String, required: false, default: None, description: "L'empreinte (content_hash) lue avant d'éditer : si le fichier a changé depuis, rien n'est écrit".into(), choices: None, json_schema: None },
                 format_param(),
             ],
         }

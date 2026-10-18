@@ -5416,6 +5416,41 @@ mod tests {
         );
     }
 
+    /// **L'édition humaine par l'outil** (B1, 18 octobre 2026) : `read_file` en
+    /// `format: "brut"` rend le fichier exact et son empreinte ; `edit_file` avec
+    /// `content` seul écrit (les défauts vides du graphe ne le refusent plus), avec
+    /// `expected_hash` ; une empreinte périmée refuse sans rien écrire.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn l_edition_humaine_lit_en_brut_et_ecrit_sur_l_empreinte_lue() {
+        let (dir, p) = fixture_code("working_tree", false, json!({
+            "read_file": {"graph": "read.mmd", "policy": {"read_files": true}},
+            "edit_file": {"graph": "edit.mmd", "policy": {"write_files": true}}
+        }));
+        let backend = backend_de_code(dir.path(), p.unwrap());
+        let fichier = dir.path().join("sources/main.rs");
+        let lu = backend.call_tool("read_file", json!({"path": "main.rs", "format": "brut"})).unwrap();
+        let lu = &lu["result"];
+        assert_eq!(lu["content"].as_str().unwrap(), std::fs::read_to_string(&fichier).unwrap(), "{lu}");
+        let empreinte = lu["content_hash"].as_str().unwrap().to_string();
+        let neuf = format!("{}// ajouté par l'IDE\n", lu["content"].as_str().unwrap());
+        backend
+            .call_tool("edit_file", json!({"path": "main.rs", "content": neuf, "expected_hash": empreinte}))
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(&fichier).unwrap(), neuf, "content seul, par l'outil, écrit tel quel");
+        // L'ancienne empreinte est périmée : refus, rien d'écrit.
+        let err = backend
+            .call_tool("edit_file", json!({"path": "main.rs", "content": "écrasé\n", "expected_hash": empreinte}))
+            .unwrap_err();
+        assert!(err.contains(crate::code_tools::STALE_EDIT), "{err}");
+        assert_eq!(std::fs::read_to_string(&fichier).unwrap(), neuf, "rien n'est écrit sur une empreinte périmée");
+        // Hors du worktree : refus.
+        assert!(backend
+            .call_tool("edit_file", json!({"path": "../hors.rs", "content": "x", "expected_hash": empreinte}))
+            .is_err());
+        assert!(!dir.path().join("hors.rs").exists());
+    }
+
     /// **Un backend en mots seuls démarre sans service d'embarquement** —
     /// signalé par la session mémoire : connect était appelé à l'ouverture
     /// sans regarder les signaux, et une adresse injoignable empêchait un
