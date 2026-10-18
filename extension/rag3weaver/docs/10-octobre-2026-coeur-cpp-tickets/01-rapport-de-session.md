@@ -478,6 +478,69 @@ Le lot ouvre le ticket des lignes validées pendant le bâti d'un CREATE, témoi
 - la rétention : rebase, liste complète sur luciepc (`ret-liste.sh`), push, worktree effacé ;
 - puis le ticket du CREATE concurrent, formes (β) et (γ′) à peser avec le cœur.
 
+## Le 18 octobre — la reprise : la rétention sur master (`9b861579a`), trois tickets, /tmp
+
+**La rétention est sur master** en `9b861579a`. Elle versionne les holders d'index du
+stockage (DROP et CREATE d'un index visibles au seul auteur jusqu'à la validation, annulés par
+`INDEX_CHANGE`, effacés au point de reprise). Elle ferme le ticket de la rétention et ouvre celui
+du CREATE concurrent, dont le témoin `VectorIndexUpdate.RowsCommittedDuringACreateAreIndexed`
+est en known_red.
+
+Deux listes complètes l'ont jouée sur luciepc, le lot appliqué sur chaque base.
+
+| base | bâti | transaction | api | c_api | copy | stockage | banc | vector disque / mémoire | e2e | verdict |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `2cb6b2524` | 0 | 275 | 105 | 136 | 23 | 83 | 7 rouges, 283 verts, conforme | 74 / 63 | 1 867 | VERT |
+| `87a362e30` (E10), bâti neuf | 0 | 282 | 105 | 136 | 23 | 83 | 7 rouges, 283 verts, conforme | 74 / 63 | 1 867 | VERT |
+
+Dans la première, les trois `VectorIndexRetention` passent. Les deux SKIPPED de
+`transaction_test` sont des sondes (`VectorIndexCrashReopenProbe.OpenInAFreshProcess`,
+`WalReader.PrintAFile`).
+
+La première liste prouvait le lot sur `2cb6b2524`. L'orchestration a fait passer E10 avant moi,
+une corruption de données que le cœur poussait déjà : si j'avais poussé d'abord, sa passe
+repartait pour une heure. Mon rejeu, lui, ne coûtait que du temps à luciepc.
+
+**Le conflit avec E10.** E10 prenait la valeur 9 de `UndoRecordType` (`ADD_COLUMN`), que la
+rétention prenait aussi (`INDEX_CHANGE`). J'ai gardé les deux et passé `INDEX_CHANGE` à 10. Le
+tampon d'annulation ne vit qu'en mémoire, ni au WAL ni sur disque : aucun format ne change. Les
+deux déclarations avancées, les deux `create*` et les deux cas du commit et du rollback sont
+gardés.
+
+**Le push depuis luciepc**, permis par Lucie ce jour-là (clé ssh L-Defraiteur). Le script
+(`ret-rejeu-luciepc.sh`) tourne détaché par `setsid nohup`, pour survivre à une coupure du ssh.
+Il vérifie le gmail, commite le lot par `git am` et joue la liste. Puis, seulement dans un
+`if grep -qx "verdict VERT"`, il refuse si du code du moteur est arrivé depuis la base
+(code 9), rebase, refuse sur un conflit (code 8), passe `check_tickets`, pousse une fois sans
+force et écrit les trois contrôles au journal. Je les ai relus d'ici.
+
+**Le premier rejeu sur E10 est tombé rouge au bâti, par ma faute.** Le `clean` demandé pour un
+bâti neuf (E10 ajoute des méthodes virtuelles) efface la grammaire Cypher générée. Elle est
+suivie par git, et le bâti suivant ne la régénère pas. Le `if` a retenu le push. Le script
+restaure maintenant `third_party` et exige un arbre suivi propre avant de bâtir. J'ai ouvert le
+ticket moteur à la demande de l'orchestration (`c3ddc94e4`).
+
+**Deux tickets ouverts à la reprise** (`5781ce02a`, docs seules) :
+- **l'hôte ne rend pas la mémoire d'un gros index** : 10 Go dans l'échange, trois jours après le
+  rattrapage du 12 ;
+- **les tests lancés hors de `run_e2e.sh` laissent leurs bases dans `/tmp`** : un
+  `remove_dir_all` appelé sur une base, qui est un fichier, et `rag3weaver_cache` que rien
+  n'efface.
+
+**Le ménage de `/tmp`**, confié par l'orchestration : 4 033 entrées de `e2e_rag3daemon` et
+`e2e_code` des 11 et 12 octobre, effacées par une liste écrite (`23faa8c57`). Aucun processus
+ne les tenait (`/proc`, `fuser`, `lsof`). Elles pesaient 141 Mio, ce qui écarte cette piste pour
+l'échange.
+
+**Mes fautes du jour :**
+- le `clean` qui a cassé le premier rejeu ;
+- un commit de ticket sans `git add` du fichier neuf, suivi d'un push « réussi » qui n'envoyait
+  rien (HEAD égal à master). Le script de docs refuse maintenant ce cas.
+
+**La suite :** le ticket du CREATE concurrent, que je tiens, en consultant le cœur en léger sur
+le point de reprise forcé et les verrous. Mon worktree `rag3db-tickets` de luciepc reste, propre,
+sur `9b861579a`, avec son `build/moteur`, jusqu'à la fin de la session.
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre

@@ -167,3 +167,20 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
 - **perf n'est installé ni ici ni sur luciepc** ; le banc profile par eu-stack, avec
   `~/.cache/rag3db-banc-notes/ptracer-any.so` en LD_PRELOAD (`ptrace_scope=1`).
 
+## Le 18 octobre
+
+- **`cmake --build <dir> --target clean` efface la grammaire Cypher suivie par git**
+  (`third_party/antlr4_cypher`, déclarée en `OUTPUT` dans l'arbre des sources), et le bâti
+  suivant ne la régénère pas, faute de changement de `hash.md5`. Après un clean, faire
+  `git checkout -- third_party`, puis exiger un status suivi vide.
+- **Deux lots qui ajoutent un type d'annulation se disputent la même valeur.** Le rebase le
+  montre comme un conflit simple ; il faut renuméroter l'un. Le tampon d'annulation n'est pas
+  persisté, donc la valeur est libre, mais chaque `switch` sur `UndoRecordType` doit garder les
+  deux cas.
+- **Un push depuis luciepc** se fait par un script détaché (`setsid nohup`) qui pousse lui-même
+  dans un `if grep -qx "verdict VERT"`, avec le refus du code moteur nouveau et les trois
+  contrôles écrits au journal. Le `gh` de luciepc connaît aussi le compte sairen, inactif ; le
+  push passe par ssh (L-Defraiteur).
+- **Un « push code 0 » ne prouve pas qu'un commit est parti** : si le commit a échoué, HEAD égale
+  master et le push n'envoie rien. Vérifier qu'il y a des commits au-delà de master avant de
+  pousser.
