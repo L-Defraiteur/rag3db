@@ -34,3 +34,11 @@ Paths/RealVectorsReachability.RowsNotFoundByTheirOwnVector/Fond
 VectorIndexCost.ProductShapeDeleteCost
 Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64
 Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation
+#
+# Le scénario des migrations concurrentes (twenty_writers_scenario_test.cpp, 18 octobre) : vingt
+# écrivains, six DDL, un point de reprise en route. Environ 2 min (DDL toutes les 15 s), 7 min (toutes
+# les minutes) et 1 min (l'arrêt brutal pendant la minute 5) ; la version courte sortira d'ici si sa
+# première passe tient sous une minute.
+TwentyWriters.DdlEveryFifteenSeconds
+TwentyWriters.DdlEveryMinute
+TwentyWriters.KilledDuringTheCheckpoint
