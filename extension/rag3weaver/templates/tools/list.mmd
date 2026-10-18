@@ -2,7 +2,9 @@
 %% description: Liste les fichiers du projet sous un préfixe de chemin, avec leur nombre de lignes et leur état d'indexation (indexé, périmé, non indexé). Pour s'orienter avant grep ou read.
 %% param: path_prefix string = "" -- Ne lister que sous ce préfixe (ex. 'src/').
 %% param: limit int = 200 -- Fichiers rendus (plafond 2000) ; tous sont comptés.
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% choices: format = markdown | json
 %% result: list.result
 
 graph LR
-    list["ListFilesNode(path_prefix=$path_prefix, limit=$limit)"]
+    list["ListFilesNode(path_prefix=$path_prefix, limit=$limit, format=$format)"]

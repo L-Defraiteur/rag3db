@@ -46,8 +46,8 @@ le code comme la mémoire.
   riche : `format = json` (`code_nodes.rs:236`, `usage_nodes.rs:914`, `neighborhood_nodes.rs:1245`,
   `render_nodes.rs:1055`). Ce JSON porte le chemin, la ligne, l'uuid et les scopes d'un fichier avec
   leurs lignes. Mais aucun `.mmd` n'expose ce choix, et un argument inconnu est refusé : un appelant
-  reçoit du markdown. Seul `search_code` a une sortie structurée (`render.results`), et le
-  manifeste ne la déclare pas en métadonnée.
+  reçoit du markdown. Seul `search_code` rend déjà une structure : son `result` est la liste des
+  résultats (uuid, `file_path`, lignes), et son markdown va à `presentation` (vu au témoin de A1).
 - **Pas d'outil « symbole à cette position »** : `narrowest(scopes, line)` reste interne
   (`code_tools.rs:471`). `usages` et `impact` prennent un nom, pas un uuid.
 - **L'arborescence** : `list_files` rend une liste plate par préfixe, avec `lines`, `indexed` et
@@ -137,9 +137,10 @@ se recharge, ou se marque « changé sur le disque » s'il est en cours d'éditi
 ### 3.1 Ce qu'il manque pour 1a
 
 1. **Le JSON par l'outil.** Un paramètre `format` (défaut `markdown`) dans les `.mmd` de lecture
-   (`read`, `list`, `grep`, `usages`, `impact`, `callees`), et la sortie structurée de
-   `search_code` déclarée en métadonnée. C'est un changement de gabarit, pas de code. Le défaut
-   reste le markdown, et les agents ne voient pas de différence.
+   (`read`, `list`, `grep`, `usages`, `impact`, `callees`) ; `search_code` n'en a pas besoin. C'est
+   un changement de gabarit, pas de code. Le défaut reste le markdown, et la réponse d'un agent
+   ne change pas. Sa fiche d'outil porte pourtant un paramètre de plus : un manifeste ne sait pas
+   encore cacher un paramètre à un modèle.
 2. **Le socle de l'hôte** : `/ide/…`, l'entrée par jeton, `/ide/call` et `/ide/flux` (§2).
 3. **Les fiches d'un chemin** (§3.2).
 
@@ -210,7 +211,7 @@ des applications empaquetées). Cette marche se conçoit après 1 et 2.
 
 | lot | contenu | témoin |
 |---|---|---|
-| A1 | le JSON des outils de lecture : `format` dans les `.mmd`, métadonnée de `search_code` | chaque outil en `format=json` rend chemin, ligne et uuid ; en markdown, la sortie est identique octet pour octet à celle d'avant |
+| A1 | le JSON des outils de lecture : `format` dans six `.mmd` | chaque outil en `format=json` rend chemin, ligne et uuid ; sans le paramètre, la réponse entière est celle de `format=markdown` ; `search_code` rend déjà sa liste structurée |
 | A2 | le socle de l'hôte : `/ide/` statique, entrée par jeton (cookie), `/ide/call`, `/ide/flux` (relais du bus, `id:`, rejeu) | deux abonnés reçoivent le même `FileChanged` avec le même id ; un abonné reconnecté avec `Last-Event-ID` reçoit ce qu'il a manqué ; sans cookie, 401 |
 | A3 | la page 1a : arbre, fichier, symboles cliquables, recherche, une URL par vue | un test de contrat : chaque appel que la page fait existe dans `/describe`, avec ses paramètres ; puis la relecture de Lucie |
 | A4 | les fiches d'un chemin, d'un dossier, d'un symbole : le filtre éprouvé, l'ordre par date, `fiches_du_chemin` | une fiche qui cite `path:src/a/b.rs` sort pour `src/a/b.rs` et pour `src/a/`, pas pour `src/ab/` ; la plus récente vient d'abord ; le filtre de sujet et de genre retire les autres |

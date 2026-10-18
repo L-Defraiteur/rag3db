@@ -4098,6 +4098,89 @@ mod tests {
     }
 
 
+    /// **Les outils de lecture rendent du JSON sur demande, et le même
+    /// markdown sans elle** (l'IDE, page 05 §3.1, lot A1). Six graphes de
+    /// lecture déclarent `format` (défaut `markdown`) ; la recherche rendait
+    /// déjà sa liste structurée. Sans le paramètre et
+    /// avec `format=markdown`, la réponse est la même octet pour octet — ce
+    /// que lisent les agents ne bouge pas ; avec `format=json`, elle est
+    /// structurée et porte ce dont une interface fait des liens (chemins,
+    /// lignes, uuid).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_read_tools_render_json_on_request_and_the_same_markdown_without() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let graphes = ["read.mmd", "list.mmd", "grep.mmd", "usages.mmd", "impact.mmd", "callees.mmd", "search_workspace.mmd"];
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            for (outil, graphe) in [
+                ("list_files", "list.mmd"),
+                ("grep_files", "grep.mmd"),
+                ("usages", "usages.mmd"),
+                ("impact", "impact.mmd"),
+                ("callees", "callees.mmd"),
+            ] {
+                m["tools"][outil] = json!({"graph": graphe, "policy": {"read_files": true}});
+            }
+            m["tools"]["read_file"] = json!({"graph": "read.mmd", "policy": {"read_files": true}});
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        for g in graphes {
+            std::fs::copy(tools.join(g), dir.path().join(g)).unwrap();
+        }
+        std::fs::write(dir.path().join("sources/outils.rs"), "pub fn depart() {}\n").unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        }
+        let appels: [(&str, Value, &[&str]); 6] = [
+            ("read_file", json!({"path": "outils.rs"}), &["\"scopes\"", "\"uuid\"", "\"start_line\""]),
+            ("list_files", json!({}), &["\"path\"", "outils.rs", "\"indexed\""]),
+            ("grep_files", json!({"pattern": "depart"}), &["\"path\"", "\"line\"", "\"uuid\""]),
+            ("usages", json!({"name": "depart"}), &["\"uuid\"", "\"path\"", "outils.rs"]),
+            // `main.rs` n'appelle `depart` que par le nom : impact et callees
+            // le comptent sans le lister ; leur départ, lui, est structuré.
+            ("impact", json!({"name": "depart"}), &["\"starts\"", "\"uuid\"", "outils.rs"]),
+            ("callees", json!({"name": "main"}), &["\"starts\"", "\"uuid\"", "main.rs"]),
+        ];
+        for (outil, args, attendus) in appels {
+            let avec = |format: Option<&str>| {
+                let mut a = args.clone();
+                if let Some(f) = format {
+                    a["format"] = json!(f);
+                }
+                backend.call(outil, a).unwrap_or_else(|e| panic!("{outil} {format:?} : {e}"))
+            };
+            let nu = avec(None);
+            let markdown = avec(Some("markdown"));
+            assert!(nu["result"].is_string(), "{outil} sans format rend du markdown : {nu}");
+            assert_eq!(nu, markdown, "{outil} : sans format = format=markdown, la réponse entière");
+            let structure = avec(Some("json"));
+            assert!(
+                structure["result"].is_object() || structure["result"].is_array(),
+                "{outil} en json rend une structure : {}",
+                structure["result"]
+            );
+            let texte = structure["result"].to_string();
+            for a in attendus {
+                assert!(texte.contains(a), "{outil} en json porte {a} : {}", &texte[..texte.len().min(600)]);
+            }
+        }
+        // La recherche n'a pas besoin du paramètre : son `result` est déjà la
+        // liste structurée (uuid, chemin, lignes), son markdown va à
+        // `presentation`.
+        let r = backend.call("search_code", json!({"query": "depart", "options": {}})).unwrap();
+        assert!(r["result"].is_array() && r["presentation"].is_string(), "{r}");
+        let texte = r["result"].to_string();
+        assert!(texte.contains("\"uuid\"") && texte.contains("\"file_path\"") && texte.contains("\"start_line\""), "{texte}");
+        // Un format inconnu est refusé, pas rendu en markdown sans le dire.
+        assert!(backend.call("read_file", json!({"path": "outils.rs", "format": "html"})).is_err());
+    }
+
     /// Un backend de code qui **surveille son workspace** : la montre `code`
     /// (période courte), la réaction `reindex_on_change` du gabarit code et
     /// l'outil `usages`. `sources/outils.rs` définit `depart`, `main.rs`
