@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (37)
+### Ouverts — moteur (38)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La rétention des index ne couvre que l'index vectoriel : une recherche spatiale perd son index sous un DROP, et rend zéro ligne sans le dire](2026-10-18-la-retention-des-index-ne-couvre-que-l-index-vectoriel.md) | ouvert — pour hotfixs, après le ROLLBACK, avant (A) ; forme : la rétention au niveau du holder pour tous les genres d'index | réponse fausse (zéro ligne) | oui | oui, s'il emploie l'index spatial |
 | [Une base ne dit pas quel moteur l'a écrite en dernier, et un moteur plus ancien de même format l'ouvre en écriture](2026-10-18-une-base-ne-dit-pas-quel-moteur-l-a-ecrite-et-un-moteur-plus-ancien-l-ouvre-en-ecriture.md) | ouvert — demande de Lucie ; pour le cœur C++, fin de file | corruption possible (un vieil hôte écrit une base plus récente de même numéro) | oui (client et hôte de versions différentes) | oui |
 | [Un COPY de relations vers un nœud qui a déjà des relations persistantes les fait disparaître](2026-10-18-un-copy-de-relations-vers-un-noeud-deja-relie-perd-ses-relations-persistantes.md) | ouvert — reproduit sur master par une sonde déterministe ; pour le cœur C++, à placer par l'orchestration (perte) | perte de données en lecture (0 après ROLLBACK, 1 500 au lieu de 1 510 après COMMIT) | oui : un COPY de relations ANNULÉ (échec ou ROLLBACK) vers des nœuds déjà reliés et repris | si un COPY s'annule (la perte de code-lourd n'est pas ce défaut) |
 | [Sous un tampon plein, un ROLLBACK est refusé et bloque la base, et la fermeture d'une connexion tue le processus](2026-10-18-un-rollback-sous-un-tampon-plein-bloque-la-base-et-la-fermeture-tue-le-processus.md) | ouvert — pour hotfixs (après le CREATE concurrent), relecture du cœur ; recette déterministe, témoin `FullBufferRollback.RollsBackAndClosesCleanly` (le CHECKPOINT refusé relève de la voie 2 du point de reprise) | plantage (SIGABRT), base bloquée ou condamnée à être rouverte | oui (tampon plein de pages validées non reportées) | oui (l'hôte garde ses connexions) |
