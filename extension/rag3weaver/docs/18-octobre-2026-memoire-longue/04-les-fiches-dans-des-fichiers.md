@@ -82,12 +82,16 @@ le recalcul des L2 (§2).
   le, motif}` dans la base (et son fichier), où `jusqu_a` est la position du dernier
   événement rangé dans la transcription. **Un crochet sans rien de neuf depuis ce repère
   ne fait rien** (et le dit dans le journal de l'hôte, pas à l'agent).
-- **L'envoi volontaire avance aussi le repère** quand l'hôte sait de quelle session il
-  vient, pour que le crochet suivant ne range pas une seconde fois ce que Claude a déjà
-  écrit. *À confirmer par un essai* : si une session MCP de Claude Code porte son
-  identifiant de session Claude (une variable d'environnement donnée au serveur MCP, par
-  exemple) ; sinon, le repère volontaire se pose par l'heure, et le crochet ne range que
-  les événements postérieurs.
+- **L'envoi volontaire avance aussi le repère**, pour que le crochet suivant ne range pas
+  une seconde fois ce que Claude a déjà écrit. **Vérifié le 18 octobre 2026** : Claude Code
+  donne à chaque serveur MCP qu'il lance la variable `CLAUDE_CODE_SESSION_ID`, un uuid qui
+  **nomme exactement sa transcription** (`~/.claude/projects/<projet>/<id>.jsonl`, trouvée
+  pour les deux sessions regardées ; relevé sur `/proc/<pid>/environ` des clients MCP de
+  rag3weaver, valeurs non affichées). Il donne aussi `CLAUDE_PROJECT_DIR`. Le client mince
+  doit donc **passer `CLAUDE_CODE_SESSION_ID` dans `POST /session`** (il ne le fait pas
+  aujourd'hui) ; l'hôte rattache l'envoi volontaire à la session, et son repère à la
+  position de la transcription au moment de l'envoi. Sans la variable (un autre client
+  que Claude Code), le repère volontaire se pose par l'heure.
 - **Le crochet est court** : celui de fin de session n'a qu'environ une seconde et demie.
   Il ne fait qu'**appeler la porte** (une commande mince, `rag3weaver-backend ranger
   --crochet`, qui lit le JSON du crochet sur son entrée et le poste à l'hôte) ; le
