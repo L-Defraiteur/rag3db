@@ -7,6 +7,31 @@
 # Usage : cmake -DBENCH=… -DKNOWN_RED_FILE=… -DPROBABILISTIC_FILE=… -DLONG_FILE=…
 #   -DRESULT_FILE=… -P …
 
+# La forme des trois listes, contrôlée avant de lancer quoi que ce soit : une ligne mal formée était
+# lue en partie, sans un mot. Le 18 octobre, deux étiquettes séparées par une espace ont été lues
+# comme une seule. known_red.txt : « nom » ou « nom étiquette,étiquette » (des minuscules, des
+# chiffres et des tirets, séparées par des virgules sans espace) ; probabilistic.txt et long.txt :
+# un nom seul.
+set(malformed)
+foreach (list_file IN ITEMS ${KNOWN_RED_FILE} ${PROBABILISTIC_FILE} ${LONG_FILE})
+    if (list_file STREQUAL "${KNOWN_RED_FILE}")
+        set(form "^[^ \t#]+([ \t]+[a-z0-9-]+(,[a-z0-9-]+)*)?$")
+    else()
+        set(form "^[^ \t#]+$")
+    endif()
+    file(STRINGS ${list_file} lines ENCODING UTF-8 REGEX "^[^#]")
+    foreach (line IN LISTS lines)
+        if (NOT line MATCHES "${form}")
+            list(APPEND malformed "${list_file} : « ${line} »")
+        endif()
+    endforeach()
+endforeach()
+if (malformed)
+    list(JOIN malformed "\n  " malformed)
+    message(FATAL_ERROR "malformed list line (known_red.txt: `name` or `name label,label`; "
+        "probabilistic.txt and long.txt: a name alone):\n  ${malformed}")
+endif()
+
 # Les cas probabilistes ne sont pas lancés dans cette passe : la comparaison les
 # ignore, et C5 peut faire planter tout le processus (course du chemin de suppression
 # sans verrou, SIGSEGV dans VersionInfo::isSelected, 3 octobre) — la passe entière
