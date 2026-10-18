@@ -63,6 +63,10 @@ impl Direction {
 pub struct EdgeMark {
     pub field: String,
     pub guessed: Vec<String>,
+    /// Les valeurs qui disent « douteuse » (`edge_doubtful`) : l'arête est
+    /// suivie, mais le rendu le dit — pour le code, `ambigu`, un homonyme
+    /// parmi d'autres que rien ne départageait.
+    pub doubtful: Vec<String>,
 }
 
 impl EdgeMark {
@@ -70,23 +74,33 @@ impl EdgeMark {
     /// le texte des requêtes : des identifiants seulement.
     pub fn from_config(config: &serde_json::Value, noeud: &str) -> Result<Self, String> {
         let field = config.get("edge_field").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        let guessed: Vec<String> = config
-            .get("edge_guessed")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .split(['|', ','])
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from)
-            .collect();
+        let valeurs = |cle: &str| -> Vec<String> {
+            config
+                .get(cle)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .split(['|', ','])
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        };
+        let guessed = valeurs("edge_guessed");
+        let doubtful = valeurs("edge_doubtful");
         let ident = |x: &str| x.chars().all(|c| c.is_alphanumeric() || c == '_');
-        if let Some(x) = std::iter::once(&field).chain(&guessed).find(|x| !ident(x)) {
+        if let Some(x) = std::iter::once(&field).chain(&guessed).chain(&doubtful).find(|x| !ident(x)) {
             return Err(format!("{noeud}: « {x} » n'est pas un identifiant"));
         }
         if field.is_empty() != guessed.is_empty() {
             return Err(format!("{noeud}: « edge_field » et « edge_guessed » vont ensemble"));
         }
-        Ok(EdgeMark { field, guessed })
+        if field.is_empty() && !doubtful.is_empty() {
+            return Err(format!("{noeud}: « edge_doubtful » demande « edge_field »"));
+        }
+        if let Some(x) = doubtful.iter().find(|x| guessed.contains(x)) {
+            return Err(format!("{noeud}: « {x} » ne peut être à la fois devinée (non suivie) et douteuse (suivie)"));
+        }
+        Ok(EdgeMark { field, guessed, doubtful })
     }
 
     /// La relation porte-t-elle le champ déclaré ?
@@ -115,6 +129,11 @@ impl EdgeMark {
 
     pub fn is_guessed(&self, valeur: &str) -> bool {
         self.guessed.iter().any(|g| g == valeur)
+    }
+
+    /// Suivie, mais douteuse : le rendu le dit.
+    pub fn is_doubtful(&self, valeur: &str) -> bool {
+        self.doubtful.iter().any(|g| g == valeur)
     }
 }
 
@@ -283,15 +302,21 @@ pub fn hop_of(rel: &RelInfo, direction: Direction, mark: &EdgeMark) -> rag3weave
     hop
 }
 
-/// Un saut nu : les paires (départ, atteint) par une relation, dans un sens.
+/// Un saut nu : les triplets (départ, atteint, marque) par une relation, dans
+/// un sens. La marque est la valeur du champ déclaré sur l'arête (`resolution`
+/// pour le code : `ambigu` dit un homonyme parmi d'autres), vide sans champ.
 /// La requête vient du dialecte ([`rag3weaver_ir::Hop`]).
-pub fn neighbors(catalog: &dyn crate::read_view::ReadCatalog, rel: &RelInfo, direction: Direction, mark: &EdgeMark, uuids: &[String]) -> Result<Vec<(String, String)>, String> {
+pub fn neighbors(catalog: &dyn crate::read_view::ReadCatalog, rel: &RelInfo, direction: Direction, mark: &EdgeMark, uuids: &[String]) -> Result<Vec<(String, String, String)>, String> {
     if uuids.is_empty() {
         return Ok(Vec::new());
     }
-    let q = catalog.dialect_arc().hop(&hop_of(rel, direction, mark)).map_err(|e| e.to_string())?;
+    let mut hop = hop_of(rel, direction, mark);
+    if mark.applies(rel) {
+        hop.returns.push(mark.column_ir(rel));
+    }
+    let q = catalog.dialect_arc().hop(&hop).map_err(|e| e.to_string())?;
     let rows = catalog.execute_read_with_params(&q, &[uuid_param(uuids)]).map_err(|e| e.to_string())?;
-    Ok(rows.rows.iter().map(|r| (text(r.first()), text(r.get(1)))).collect())
+    Ok(rows.rows.iter().map(|r| (text(r.first()), text(r.get(1)), text(r.get(2)))).collect())
 }
 
 #[cfg(test)]

@@ -22,6 +22,7 @@ fn atteint(uuid: &str, title: &str, path: &str, level: usize, group: &str) -> Re
         from: None,
         relation: "CONSUMES".into(),
         by_name: false,
+        ambigu: false,
         by_also: false,
         hub: None,
         through_hub: None,

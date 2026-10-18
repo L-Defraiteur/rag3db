@@ -578,6 +578,14 @@ fn run_index(
     if let Ok(g) = catalog.lock() {
         let _ = g.note_chunks_sans_texte(total_vides);
     }
+    // **Les arêtes ambiguës**, recomptées sur la base et notées : un doute se dit.
+    let ambigues = catalog.lock().map(|g| g.compter_les_aretes_ambigues()).unwrap_or(0);
+    if let Ok(g) = catalog.lock() {
+        let _ = g.note_aretes_ambigues(ambigues);
+    }
+    if ambigues > 0 {
+        log(journal, &format!("{ambigues} arête(s) ambiguë(s) : posées vers chacun des homonymes que rien ne départageait, marquées « ambigu »"));
+    }
     if total_vides > 0 {
         let detail: Vec<String> = vides.iter().map(|(t, n)| format!("{t} {n}")).collect();
         log(journal, &format!(

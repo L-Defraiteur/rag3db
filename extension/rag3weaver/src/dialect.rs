@@ -1404,6 +1404,8 @@ impl SchemaDialect for Rag3dbDialect {
         Ok(match count {
             rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
             rag3weaver_ir::Count::Matching { table, filter } => format!("MATCH (m:{}) WHERE {} RETURN count(m)", self.quote(table), rag3db_condition(filter)),
+            // L'arête porte le nom `m` : la condition se lit sur ses champs.
+            rag3weaver_ir::Count::EdgesMatching { relation, filter } => format!("MATCH ()-[m:{}]->() WHERE {} RETURN count(m)", self.quote(relation), rag3db_condition(filter)),
             rag3weaver_ir::Count::Edges { start, relation, direction } => {
                 let (start, relation) = (self.quote(start), self.quote(relation));
                 match direction {
@@ -2525,6 +2527,10 @@ impl SchemaDialect for PostgresDialect {
             rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
             rag3weaver_ir::Count::Matching { table, filter } => {
                 format!("SELECT count(*) AS cnt FROM {} AS m WHERE {}", self.quote(table), postgres_condition(self, filter))
+            }
+            // Une relation est une table, ses champs des colonnes.
+            rag3weaver_ir::Count::EdgesMatching { relation, filter } => {
+                format!("SELECT count(*) AS cnt FROM {} AS m WHERE {}", self.quote(relation), postgres_condition(self, filter))
             }
             rag3weaver_ir::Count::Edges { relation, direction, .. } => {
                 let bout = match direction {
@@ -3812,6 +3818,11 @@ mod tests {
         assert!(PostgresDialect.select(&s).is_ok(), "PostgreSQL dit la sélection (test postgresql_traduit_la_selection_et_le_compte)");
         let c = rag3weaver_ir::Count::Matching { table: "Card".into(), filter: Predicate::Compiled("m.cost > $filter_p0".into()) };
         assert_eq!(Rag3dbDialect.count(&c).unwrap(), "MATCH (m:`Card`) WHERE m.cost > $filter_p0 RETURN count(m)");
+        // Les arêtes qu'une condition sur leurs champs retient : l'arête porte le nom `m`.
+        let e = rag3weaver_ir::Count::EdgesMatching { relation: "CONSUMES".into(), filter: Predicate::Equals { field: "resolution".into(), param: "marque".into() } };
+        assert_eq!(Rag3dbDialect.count(&e).unwrap(), "MATCH ()-[m:`CONSUMES`]->() WHERE m.`resolution` = $marque RETURN count(m)");
+        assert_eq!(PostgresDialect.count(&e).unwrap(), format!("SELECT count(*) AS cnt FROM {} AS m WHERE m.\"resolution\" = $marque", PostgresDialect.quote("CONSUMES")));
+        assert!(Rag3dbDialect.count(&rag3weaver_ir::Count::EdgesMatching { relation: "CON SUMES".into(), filter: Predicate::Equals { field: "resolution".into(), param: "m".into() } }).is_err());
         assert_eq!(Rag3dbDialect.select(&Select::all("Card", vec![Column::Whole])).unwrap(), "MATCH (m:`Card`) RETURN m");
         f.returns.push(Column::Edge("x".into()));
         assert!(Rag3dbDialect.select(&f).is_err());

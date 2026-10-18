@@ -193,7 +193,7 @@ fn banc_des_relations() {
     let cat = catalog.lock().unwrap();
     // Deux passes sur le même index : toutes les arêtes, puis sans les arêtes
     // devinées (`resolution = nom`, la déclaration des gabarits).
-    let gabarits = EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] };
+    let gabarits = EdgeMark { field: "resolution".into(), guessed: vec!["nom".into(), "dossier".into()], doubtful: vec!["ambigu".into()] };
     for (titre, marque) in [("toutes les arêtes", EdgeMark::default()), ("sans les arêtes devinées (resolution = nom)", gabarits)] {
         eprintln!("\n## {titre}");
         let mut lignes: Vec<String> = Vec::new();

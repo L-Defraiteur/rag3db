@@ -127,6 +127,10 @@ pub enum Count {
     Edges { start: String, relation: String, direction: Direction },
     /// Les lignes qu'une condition retient, en une colonne.
     Matching { table: String, filter: Predicate },
+    /// Les arêtes d'une relation qu'une condition sur **leurs** champs
+    /// retient, en une colonne (pour le code : les arêtes `resolution =
+    /// ambigu`, que l'état de l'index dit).
+    EdgesMatching { relation: String, filter: Predicate },
 }
 
 impl Count {
@@ -134,8 +138,8 @@ impl Count {
         let noms: Vec<&str> = match self {
             Count::Rows { table } => vec![table],
             Count::Edges { start, relation, .. } => vec![start, relation],
-            Count::Matching { table, filter } => {
-                let mut v = vec![table.clone()];
+            Count::Matching { table: nom, filter } | Count::EdgesMatching { relation: nom, filter } => {
+                let mut v = vec![nom.clone()];
                 filter.names(&mut v);
                 return match v.iter().find(|n| !crate::is_valid_identifier(n)) {
                     Some(n) => Err(TranslateError::Invalid(format!("compte : « {n} » n'est pas un identifiant"))),

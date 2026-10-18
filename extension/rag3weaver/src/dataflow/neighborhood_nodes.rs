@@ -152,6 +152,10 @@ pub struct Reached {
     pub relation: String,
     /// Atteint par le nom seul (nom ambigu) : peut-être.
     pub by_name: bool,
+    /// **Atteint par une arête ambiguë**, ou au-delà d'elle : un des homonymes que rien ne
+    /// départageait (`resolution = ambigu`). Suivi, mais dit — un doute n'est pas une certitude.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ambigu: bool,
     /// Atteint par le départ supplémentaire.
     pub by_also: bool,
     /// Un carrefour : son degré, et il n'a pas été traversé vers le code.
@@ -224,6 +228,8 @@ pub fn hop_of(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> 
     let mut hop = super::graph_walk::hop_of(rel, direction, &cfg.start.edge_mark);
     hop.returns = colonnes(cfg);
     hop.returns.push(if rel.props.iter().any(|p| p == &cfg.start.line) { Column::Edge(cfg.start.line.clone()) } else { Column::Null });
+    // La marque de l'arête (`resolution`) : une arête ambiguë se suit, et le dit.
+    hop.returns.push(cfg.start.edge_mark.column_ir(rel));
     hop
 }
 
@@ -250,6 +256,7 @@ fn reached_from(row: &[CypherValue], debut: usize, cfg: &NeighborhoodConfig) -> 
         from: None,
         relation: String::new(),
         by_name: false,
+        ambigu: false,
         by_also: false,
         hub: None,
         through_hub: None,
@@ -307,6 +314,7 @@ impl Moteur<'_> {
                     }
                 }
                 m.relation = rel.name.clone();
+                m.ambigu = self.cfg.start.edge_mark.is_doubtful(&texte(r.get(2 + largeur(self.cfg))));
                 out.push((de, m));
             }
         }
@@ -742,7 +750,13 @@ fn parcourir(
         if lvl == depth {
             break;
         }
-        a_explorer = moteur.saut(&niveau)?.into_iter().map(|(de, m)| Reached { from: Some(de), ..m }).collect();
+        // Au-delà d'une arête ambiguë, le doute suit.
+        let douteux: HashSet<String> = atteints.iter().filter(|m| m.ambigu).map(|m| m.uuid.clone()).collect();
+        a_explorer = moteur
+            .saut(&niveau)?
+            .into_iter()
+            .map(|(de, m)| Reached { ambigu: m.ambigu || douteux.contains(&de), from: Some(de), ..m })
+            .collect();
         if !cfg.group_by.is_empty() {
             for (de, m) in moteur.saut(&carrefours)? {
                 if !m.group.is_empty() {
@@ -844,6 +858,11 @@ impl NeighborhoodReport {
         }
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
+        }
+        // **Un doute n'est pas une certitude** : ce qui passe par une arête ambiguë se compte.
+        let douteux = self.reached.iter().filter(|x| x.ambigu && !x.by_also && !cache(x)).count();
+        if douteux > 0 {
+            out.push_str(&format!(" ; dont {douteux} par une arête ambiguë (un homonyme parmi d'autres, marqués « ambigu »)"));
         }
         if !self.scope.is_empty() {
             out.push_str(&format!(" ; portée {} : {} hors de la portée, écartés (traversés)", self.scope.describe(), self.scope_hidden));
@@ -955,6 +974,11 @@ impl NeighborhoodReport {
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
         }
+        // **Un doute n'est pas une certitude** : ce qui passe par une arête ambiguë se compte.
+        let douteux = self.reached.iter().filter(|x| x.ambigu && !x.by_also && !cache(x)).count();
+        if douteux > 0 {
+            out.push_str(&format!(" ; dont {douteux} par une arête ambiguë (un homonyme parmi d'autres, marqués « ambigu »)"));
+        }
         if !self.scope.is_empty() {
             out.push_str(&format!(" ; portée {} : {} hors de la portée, écartés (traversés)", self.scope.describe(), self.scope_hidden));
         }
@@ -964,6 +988,9 @@ impl NeighborhoodReport {
             let mut extra = String::new();
             if r.by_name {
                 extra.push_str(" (par le nom)");
+            }
+            if r.ambigu {
+                extra.push_str(" (ambigu)");
             }
             if let Some(d) = r.hub {
                 extra.push_str(&format!(" — carrefour, {d} usages, non suivi"));
@@ -1351,6 +1378,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("max_degree", Int, false, Some(serde_json::json!(50)), "Un nœud plus connecté est montré, pas traversé"),
                 p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),
                 p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée (ex. nom), séparées par |"),
+                p("edge_doubtful", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête douteuse, suivie mais dite (ex. ambigu), séparées par |"),
                 p("limit", Int, false, Some(serde_json::json!(30)), "Lignes par section"),
                 format,
             ],
@@ -1410,17 +1438,19 @@ mod tests_saut {
         }
     }
 
-    /// La requête que `hop_query` écrivait avant de passer par le dialecte.
+    /// La requête que `hop_query` écrivait avant de passer par le dialecte, plus la marque de
+    /// l'arête en dernière colonne (une arête douteuse se suit et se dit, 18 octobre 2026).
     fn requete_d_avant(cfg: &NeighborhoodConfig, rel: &RelInfo, direction: Direction) -> String {
         let ligne = if rel.props.iter().any(|p| p == &cfg.start.line) { format!("r.{}", crate::dialect::cypher_quote(&cfg.start.line)) } else { "NULL".into() };
-        format!("UNWIND $uuids AS u MATCH {}{} RETURN u, {c}, {ligne}", direction.pattern(rel), cfg.start.edge_mark.clause(rel), c = champs("m", cfg))
+        let marque = cfg.start.edge_mark.column(rel);
+        format!("UNWIND $uuids AS u MATCH {}{} RETURN u, {c}, {ligne}, {marque}", direction.pattern(rel), cfg.start.edge_mark.clause(rel), c = champs("m", cfg))
     }
 
     /// Parité : au caractère près, pour les deux sens, avec et sans ligne
     /// sur l'arête, avec et sans arêtes devinées, champs déclarés ou non.
     #[test]
     fn le_saut_du_voisinage_est_la_requete_d_avant() {
-        let mark = EdgeMark::from_config(&serde_json::json!({"edge_field": "resolution", "edge_guessed": "nom"}), "N").unwrap();
+        let mark = EdgeMark::from_config(&serde_json::json!({"edge_field": "resolution", "edge_guessed": "nom", "edge_doubtful": "ambigu"}), "N").unwrap();
         let rels = [
             RelInfo { name: "CONSUMES".into(), from: "Scope".into(), to: "Scope".into(), props: vec!["usage".into(), "line".into(), "resolution".into()] },
             RelInfo { name: "TESTS".into(), from: "Test".into(), to: "Scope".into(), props: vec![] },

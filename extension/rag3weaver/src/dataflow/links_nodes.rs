@@ -67,6 +67,10 @@ pub struct Edge {
     pub from: String,
     pub to: String,
     pub relation: String,
+    /// **Une arête douteuse** (`edge_doubtful`, pour le code `ambigu` : un des
+    /// homonymes que rien ne départageait) : suivie, et le rendu le dit.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ambigu: bool,
 }
 
 /// Un nœud d'un chemin.
@@ -153,10 +157,11 @@ pub fn links_between(catalog: &dyn crate::read_view::ReadCatalog, cfg: &LinksCon
         let mut voisins: HashMap<String, Vec<(String, Edge)>> = HashMap::new();
         for rel in &rels {
             for &direction in &both {
-                for (de, vers) in neighbors(catalog, rel, direction, &cfg.edge_mark, &a_suivre).map_err(err)? {
+                for (de, vers, marque) in neighbors(catalog, rel, direction, &cfg.edge_mark, &a_suivre).map_err(err)? {
+                    let ambigu = cfg.edge_mark.is_doubtful(&marque);
                     let edge = match direction {
-                        Direction::Outgoing => Edge { from: de.clone(), to: vers.clone(), relation: rel.name.clone() },
-                        Direction::Incoming => Edge { from: vers.clone(), to: de.clone(), relation: rel.name.clone() },
+                        Direction::Outgoing => Edge { from: de.clone(), to: vers.clone(), relation: rel.name.clone(), ambigu },
+                        Direction::Incoming => Edge { from: vers.clone(), to: de.clone(), relation: rel.name.clone(), ambigu },
                     };
                     voisins.entry(de).or_default().push((vers, edge));
                 }
@@ -396,7 +401,10 @@ impl LinksReport {
             for e in siennes {
                 let (autre, sortant) = if e.from == pivot { (e.to.as_str(), true) } else { (e.from.as_str(), false) };
                 let rel = sens(e, sortant);
-                let voisin = decrire(autre, !resultats.contains(autre));
+                let mut voisin = decrire(autre, !resultats.contains(autre));
+                if e.ambigu {
+                    voisin.push_str(" · ambigu");
+                }
                 match groupes.iter_mut().find(|(r, _)| *r == rel) {
                     Some((_, v)) => v.push(voisin),
                     None => groupes.push((rel, vec![voisin])),
@@ -405,6 +413,10 @@ impl LinksReport {
             out.push_str(&crate::arbre::arbre(&decrire(pivot, true), &groupes));
         }
         out.push_str("```\n");
+        let douteuses = aretes.iter().filter(|e| e.ambigu).count();
+        if douteuses > 0 {
+            out.push_str(&format!("_{douteuses} arête(s) ambiguë(s) : un homonyme parmi d'autres, que rien ne départageait — à vérifier._\n"));
+        }
         if self.cut > 0 {
             out.push_str(&format!("_… et {} autres paires reliées._\n", self.cut));
         }
@@ -552,6 +564,7 @@ impl NodeFactory for LinksNodeFactory {
                 p("sources", Int, false, Some(serde_json::json!(10)), "Résultats pris comme départs, dans l'ordre (2 à 20)"),
                 p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),
                 p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée, non suivie (ex. nom), séparées par |"),
+                p("edge_doubtful", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête douteuse, suivie mais dite (ex. ambigu), séparées par |"),
                 format,
             ],
         }

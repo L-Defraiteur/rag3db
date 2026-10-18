@@ -95,6 +95,10 @@ pub struct Usage {
     pub definition: Option<String>,
     /// Trouvé par une arête devinée (`edge_guessed`) : peut-être.
     pub guessed: bool,
+    /// Trouvé par une arête **ambiguë** (`resolution = ambigu`) : un des définisseurs que rien
+    /// ne départageait, chacun relié. Dit, jamais tu.
+    #[serde(default)]
+    pub ambigu: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -289,10 +293,12 @@ pub fn virtual_usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &Usag
                 continue;
             }
             user.line = site.or(user.line);
-            let guessed = cfg.edge_mark.is_guessed(&texte(r.get(debut + 3)));
+            let marque = texte(r.get(debut + 3));
+            let guessed = cfg.edge_mark.is_guessed(&marque);
+            let ambigu = cfg.edge_mark.is_doubtful(&marque);
             if let Some(b) = out.iter_mut().find(|b| b.base.uuid == def) {
                 if !b.callers.iter().any(|c| c.user.uuid == user.uuid && c.user.line == user.line) {
-                    b.callers.push(Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed });
+                    b.callers.push(Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu });
                 }
             }
         }
@@ -315,7 +321,7 @@ pub fn virtual_markdown(bases: &[VirtualBase], limit: usize) -> String {
     for b in bases {
         out.push_str(&format!("\n### {} {} — {}\n", b.base.kind, b.base.title, lieu(&b.base)));
         for u in b.callers.iter().take(limit) {
-            let devine = if u.guessed { " (par le nom)" } else { "" };
+            let devine = if u.guessed { " (par le nom)" } else if u.ambigu { " (ambigu : un des homonymes)" } else { "" };
             out.push_str(&format!("- {} {} — {}{devine}\n", u.user.kind, u.user.title, lieu(&u.user)));
         }
         if b.callers.len() > limit {
@@ -564,8 +570,10 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
                     continue;
                 }
                 user.line = site.or(user.line);
-                let guessed = cfg.edge_mark.is_guessed(&texte(r.get(debut + 3)));
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed });
+                let marque = texte(r.get(debut + 3));
+                let guessed = cfg.edge_mark.is_guessed(&marque);
+                let ambigu = cfg.edge_mark.is_doubtful(&marque);
+                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu });
             }
         }
     }
@@ -593,7 +601,7 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
                 }
                 // Le rendez-vous n'a rien relié : attribué au seul définisseur
                 // pour le rangement, mais par le nom seul — dit tel.
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: true });
+                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: true, ambigu: false });
             }
         }
     }
@@ -764,7 +772,7 @@ impl UsagesReport {
                 } else {
                     String::new()
                 };
-                let devine = if u.guessed { " (par le nom)" } else { "" };
+                let devine = if u.guessed { " (par le nom)" } else if u.ambigu { " (ambigu : un des homonymes)" } else { "" };
                 out.push_str(&format!("- {} {} — {}{cible}{devine}\n", u.user.kind, u.user.title, lieu(&u.user)));
             }
             if v.len() > limit {
@@ -999,6 +1007,7 @@ impl NodeFactory for UsagesNodeFactory {
                 p("limit", Int, false, Some(serde_json::json!(20)), "Usages rendus par genre (plafond 200) ; tous sont comptés"),
                 p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),
                 p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée (ex. nom), séparées par |"),
+                p("edge_doubtful", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête douteuse, suivie mais dite (ex. ambigu), séparées par |"),
                 format,
             ],
         }

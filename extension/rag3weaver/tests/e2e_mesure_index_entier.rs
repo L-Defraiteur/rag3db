@@ -57,7 +57,7 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
         kind_field: "scope_type".into(),
         path_fields: vec!["repo_path".into(), "file_path".into()],
         line_field: "start_line".into(),
-        edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] },
+        edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into(), "dossier".into()], doubtful: vec!["ambigu".into()] },
         // Comme le gabarit (`templates/tools/usages.mmd`).
         qualifier_field: Some("parent_name".into()),
     };
@@ -619,7 +619,7 @@ fn usages_en_un_temps_et_en_deux() {
         kind_field: "scope_type".into(),
         path_fields: vec!["repo_path".into(), "file_path".into()],
         line_field: "start_line".into(),
-        edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] },
+        edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into(), "dossier".into()], doubtful: vec!["ambigu".into()] },
         qualifier_field: Some("parent_name".into()),
     };
     let decl = DeclarationsConfig { relation: "HAS_PARENT".into(), field: "declarations".into() };

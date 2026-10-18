@@ -49,7 +49,7 @@ fn code_config() -> NeighborhoodConfig {
             kind_field: "scope_type".into(),
             path_fields: vec!["repo_path".into(), "file_path".into()],
             line_field: "start_line".into(),
-            edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into()] },
+            edge_mark: rag3weaver::dataflow::graph_walk::EdgeMark { field: "resolution".into(), guessed: vec!["nom".into(), "dossier".into()], doubtful: vec!["ambigu".into()] },
             qualifier_field: Some("parent_name".into()),
         },
         relations,

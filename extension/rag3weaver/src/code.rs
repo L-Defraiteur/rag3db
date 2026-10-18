@@ -1968,6 +1968,10 @@ pub struct CodeIngestReport {
     /// Noms écartés parce que plusieurs scopes les définissent : une
     /// relation manquante vaut mieux qu'une relation fausse.
     pub ambiguous: usize,
+    /// Arêtes posées vers plusieurs définisseurs que rien ne départageait, marquées `ambigu`.
+    pub ambiguous_edges: usize,
+    /// Mentions laissées sans arête : plus de candidats que la borne (`RAG3WEAVER_AMBIGU_MAX`).
+    pub abstained_too_many: usize,
     /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
     /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
     pub mentions_read: usize,
@@ -2534,12 +2538,23 @@ impl Catalog {
                     })
             })
             .flat_map(|sym| definers_by_symbol.get(sym).cloned().unwrap_or_default())
+            // Un nom ambigu : ses définisseurs et ses mentionneurs, pour le départager par le
+            // fichier, le dossier et le dépôt (`departager`).
+            .chain(uuids.iter().filter(|sym| definers_by_symbol.get(*sym).is_some_and(|d| d.len() > 1)).flat_map(|sym| {
+                definers_by_symbol
+                    .get(sym)
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .chain(mentioners_by_symbol.get(sym).into_iter().flatten().map(|m| m.from.clone()))
+            }))
             // Et les scopes qui réexportent un nom : leur fichier dit d'où
             // part le chemin à suivre.
             .chain(mentioners_by_symbol.values().flatten().filter(|m| !m.reexport_from.is_empty()).map(|m| m.from.clone()))
             .collect();
         let t = std::time::Instant::now();
-        let (parents, fichiers, genres) = self.parents_et_fichiers(&a_departager)?;
+        let (parents, fichiers, genres, origines) = self.parents_et_fichiers(&a_departager)?;
+        let borne = borne_ambigu();
         crate::ingest_profile::add("symboles · parents et fichiers", t);
         let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
         for sym in uuids {
@@ -2551,10 +2566,9 @@ impl Catalog {
                 continue;
             }
             if definers.len() > 1 {
-                // Plusieurs définisseurs : on s'abstient, sauf pour une
-                // mention dont le type désigne l'un d'eux. Une relation
-                // manquante vaut mieux qu'une relation fausse — c'est
-                // exactement la sur-connexion que RAGForge a payée.
+                // Plusieurs définisseurs : le type, `self` ou l'import départagent d'abord
+                // (`choose_target`), puis le fichier, le dossier et le dépôt (`departager`) ;
+                // sinon une arête vers chacun, marquée `ambigu` — la relation douteuse se dit.
                 report.ambiguous += 1;
             }
             // Les fichiers qui réexportent ce nom, et le module d'où ils le
@@ -2567,9 +2581,19 @@ impl Catalog {
                 .filter_map(|m| fichiers.get(&m.from).map(|f| (f.clone(), m.reexport_from.clone())))
                 .collect();
             for m in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
-                let Some((target, resolution)) = choose_target(&m, definers, &parents, &fichiers, &genres, &reexports) else {
-                    continue;
+                let cibles: Vec<(String, Resolution)> = match choose_target(&m, definers, &parents, &fichiers, &genres, &reexports) {
+                    Some(c) => vec![c],
+                    None => match departager(&m, definers, &fichiers, &origines, borne) {
+                        Choix::Un(d, r) => vec![(d, r)],
+                        Choix::Plusieurs(ds) => ds.into_iter().map(|d| (d, Resolution::Ambigu)).collect(),
+                        Choix::Trop(_) => {
+                            report.abstained_too_many += 1;
+                            continue;
+                        }
+                        Choix::Rien => continue,
+                    },
                 };
+                for (target, resolution) in cibles {
                 let tous = lot.is_none_or(|(scopes, _)| scopes.contains(&target));
                 // Une arête d'un scope vers lui-même ne vient plus que d'un
                 // appel récursif (le nom propre n'entre au rendez-vous que
@@ -2590,11 +2614,15 @@ impl Catalog {
                 }
                 self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 if rel == "CONSUMES" {
-                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), usage, crate::disponibilite::Disponibilites::AUCUNE)?;
+                    self.link_jusqu_a("CONSUMED_BY", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from.clone()), usage, crate::disponibilite::Disponibilites::AUCUNE)?;
                 } else if rel == "HAS_PARENT" {
-                    self.link_jusqu_a("PARENT_OF", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
+                    self.link_jusqu_a("PARENT_OF", RefOrUuid::Uuid(target.clone()), RefOrUuid::Uuid(m.from.clone()), BTreeMap::new(), crate::disponibilite::Disponibilites::AUCUNE)?;
+                }
+                if resolution == Resolution::Ambigu {
+                    report.ambiguous_edges += 1;
                 }
                 report.linked_across_batches += 1;
+                }
             }
         }
         Ok(())
@@ -2649,20 +2677,22 @@ impl Catalog {
             std::collections::HashMap<String, String>,
             std::collections::HashMap<String, String>,
             std::collections::HashMap<String, String>,
+            std::collections::HashMap<String, (String, String)>,
         ),
         CatalogError,
     > {
         let mut parents = std::collections::HashMap::new();
         let mut fichiers = std::collections::HashMap::new();
         let mut genres = std::collections::HashMap::new();
+        let mut origines = std::collections::HashMap::new();
         if uuids.is_empty() {
-            return Ok((parents, fichiers, genres));
+            return Ok((parents, fichiers, genres, origines));
         }
         let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         // Par le dialecte : l'uuid donné en tête, puis les trois champs.
         let lire = rag3weaver_ir::Select::by_uuids(
             SCOPE,
-            ["parent_name", "file_path", "scope_type"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec(),
+            ["parent_name", "file_path", "scope_type", "source", "repo"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec(),
         );
         let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
@@ -2680,8 +2710,13 @@ impl Catalog {
             if let Some(CypherValue::String(g)) = row.get(3) {
                 genres.insert(u.clone(), g.clone());
             }
+            let texte = |i: usize| match row.get(i) {
+                Some(CypherValue::String(x)) => x.clone(),
+                _ => String::new(),
+            };
+            origines.insert(u.clone(), (texte(4), texte(5)));
         }
-        Ok((parents, fichiers, genres))
+        Ok((parents, fichiers, genres, origines))
     }
 
     /// **Les types différés, résolus** : pour une mention sans type lu qui en
@@ -3080,6 +3115,50 @@ pub(crate) enum Resolution {
     Import,
     /// Seul définisseur du nom, rien d'autre ne le confirme.
     Name,
+    /// Plusieurs définisseurs, un seul dans le dossier du mentionneur : le plus proche.
+    Dossier,
+    /// **Plusieurs définisseurs que rien ne départage** : l'arête est posée vers chacun, et le
+    /// dit. « Une relation douteuse se dit, elle ne se tait pas » (tranché par l'orchestration
+    /// le 18 octobre 2026, à relire par Lucie) : elle remplace « une relation manquante vaut
+    /// mieux qu'une relation fausse », qui laissait tomber l'arête en silence.
+    Ambigu,
+}
+
+/// Clé méta : le compte des arêtes ambiguës de la base, recompté en fin
+/// d'indexation ; l'état de l'index le dit sans recompter.
+pub const AMBIGUOUS_EDGES_KEY: &str = "ambiguous_edges";
+
+impl Catalog {
+    /// **Les arêtes ambiguës de la base**, recomptées par relation d'usage
+    /// (`resolution = ambigu`) : une synchronisation n'en voit que le delta,
+    /// la base les a toutes. `CONSUMED_BY` double `CONSUMES`, elle ne compte
+    /// pas. Une base sans le schéma du code rend 0.
+    pub fn compter_les_aretes_ambigues(&self) -> usize {
+        use rag3weaver_ir::{Count, Predicate};
+        let marque = [crate::connection::QueryParam::new("marque", CypherValue::String(Resolution::Ambigu.as_str().to_string()))];
+        USAGE_RELATIONS
+            .iter()
+            .filter(|r| **r != "CONSUMED_BY")
+            .filter(|r| self.get_relation_def(r).and_then(|d| d.properties.as_ref()).is_some_and(|p| p.contains_key("resolution")))
+            .filter_map(|r| {
+                let compte = Count::EdgesMatching { relation: r.to_string(), filter: Predicate::Equals { field: "resolution".into(), param: "marque".into() } };
+                let q = self.dialect_arc().count(&compte).ok()?;
+                let rows = self.execute_read_with_params(&q, &marque).ok()?;
+                rows.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64())
+            })
+            .map(|n| n.max(0) as usize)
+            .sum()
+    }
+
+    /// Noter le compte des arêtes ambiguës (fin d'indexation).
+    pub fn note_aretes_ambigues(&self, n: usize) -> Result<(), CatalogError> {
+        self.persist_meta_key(AMBIGUOUS_EDGES_KEY, &n.to_string())
+    }
+
+    /// Le dernier compte noté des arêtes ambiguës (0 sans note).
+    pub fn aretes_ambigues_notees(&self) -> usize {
+        self.read_meta_key(AMBIGUOUS_EDGES_KEY).ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0)
+    }
 }
 
 impl Resolution {
@@ -3089,6 +3168,8 @@ impl Resolution {
             Resolution::Type => "type",
             Resolution::Import => "import",
             Resolution::Name => "nom",
+            Resolution::Dossier => "dossier",
+            Resolution::Ambigu => "ambigu",
         }
     }
 }
@@ -3183,6 +3264,81 @@ fn choose_target(
         };
     }
     None
+}
+
+/// Ce que le départage d'un nom ambigu rend.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Choix {
+    /// Un définisseur, et comment.
+    Un(String, Resolution),
+    /// Plusieurs, que rien ne départage : une arête vers chacun, marquée `Ambigu`.
+    Plusieurs(Vec<String>),
+    /// Plus de candidats que la borne : on s'abstient, et on le compte.
+    Trop(usize),
+    /// Rien : la mention vise ailleurs (un import qui ne désigne aucun d'eux).
+    Rien,
+}
+
+/// **La borne des candidats d'un nom ambigu** (`RAG3WEAVER_AMBIGU_MAX`, 8 par défaut) : au-delà,
+/// on s'abstient et on compte, plutôt que de poser une arête vers chacun.
+fn borne_ambigu() -> usize {
+    std::env::var("RAG3WEAVER_AMBIGU_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(8)
+}
+
+/// Le dossier d'un chemin de fichier (`src/a/b.rs` → `src/a`).
+fn dossier_de(f: &str) -> &str {
+    f.rsplit_once('/').map(|(d, _)| d).unwrap_or("")
+}
+
+/// **Départager un nom que [`choose_target`] laisse à plusieurs définisseurs**, pour une mention
+/// sans type lu ni receveur non typé (ces deux-là restent seuls juges, comme le parent) :
+///
+/// 1. seulement les définisseurs de la même source et du même dépôt que le mentionneur (la copie
+///    d'un instantané n'est pas « à côté ») ;
+/// 2. un import du mentionneur qui n'en désigne aucun : la mention vise ailleurs, rien ;
+///    s'il en désigne plusieurs, ce sont eux les candidats ;
+/// 3. le même fichier, puis le même dossier : un seul y est, c'est lui ; plusieurs, ce sont eux ;
+/// 4. sinon, chacun — au plus [`borne_ambigu`], au-delà on s'abstient.
+fn departager(
+    m: &Mention,
+    definers: &[String],
+    fichiers: &HashMap<String, String>,
+    origines: &HashMap<String, (String, String)>,
+    borne: usize,
+) -> Choix {
+    if m.kind == "HAS_PARENT" || m.untyped || !m.qualifier_types.is_empty() || definers.len() < 2 {
+        return Choix::Rien;
+    }
+    let mienne = origines.get(&m.from);
+    let mut candidats: Vec<&String> = definers.iter().filter(|d| mienne.is_none() || origines.get(*d) == mienne).collect();
+    if !m.import_modules.is_empty() {
+        candidats.retain(|d| fichiers.get(*d).is_some_and(|f| m.import_modules.iter().any(|mo| module_designe_fichier(mo, f))));
+        if candidats.is_empty() {
+            return Choix::Rien;
+        }
+    }
+    if let Some(mon_fichier) = fichiers.get(&m.from) {
+        for (proche, marque) in [
+            (Box::new(|f: &str| f == mon_fichier) as Box<dyn Fn(&str) -> bool>, Resolution::File),
+            (Box::new(|f: &str| dossier_de(f) == dossier_de(mon_fichier)), Resolution::Dossier),
+        ] {
+            let ici: Vec<&String> = candidats.iter().copied().filter(|d| fichiers.get(*d).is_some_and(|f| proche(f))).collect();
+            match ici.as_slice() {
+                [] => continue,
+                [un] => return Choix::Un((*un).clone(), marque),
+                _ => {
+                    candidats = ici;
+                    break;
+                }
+            }
+        }
+    }
+    match candidats.as_slice() {
+        [] => Choix::Rien,
+        [un] => Choix::Un((*un).clone(), Resolution::Name),
+        plusieurs if plusieurs.len() > borne => Choix::Trop(plusieurs.len()),
+        plusieurs => Choix::Plusieurs(plusieurs.iter().map(|d| (*d).clone()).collect()),
+    }
 }
 
 /// **Le définisseur qu'un import atteint par les réexportations** (décision
@@ -3861,6 +4017,51 @@ mod tests_resolution {
         assert!(!module_designe_fichier("p/src/dataflow/x", "/p/src/x.rs"));
         // Au-delà de la racine : rien.
         assert_eq!(module_d_un_chemin("super::super::super::x", "/p/b.rs"), None);
+    }
+
+    /// **Départager des homonymes** (« une relation douteuse se dit », 18 octobre 2026) : le même
+    /// fichier, puis le même dossier, choisissent ; sinon une arête vers chacun, au-delà de la
+    /// borne l'abstention ; un import qui n'en désigne aucun, rien ; une autre source n'est pas
+    /// candidate ; une mention typée reste seule juge.
+    #[test]
+    fn departager_par_fichier_puis_dossier_sinon_chacun() {
+        let origine = |ids: &[&str]| -> HashMap<String, (String, String)> { ids.iter().map(|i| (i.to_string(), ("src".to_string(), "depot".to_string()))).collect() };
+        let m = mention("CONSUMES", &[], &[]);
+        // Même fichier : celui-là.
+        let fichiers = table(&[("run", "/p/a/x.rs"), ("h1", "/p/a/x.rs"), ("h2", "/p/a/y.rs"), ("h3", "/p/b/z.rs")]);
+        let tous = origine(&["run", "h1", "h2", "h3"]);
+        assert!(matches!(departager(&m, &ids(&["h1", "h2", "h3"]), &fichiers, &tous, 8), Choix::Un(ref d, Resolution::File) if d == "h1"));
+        // Même dossier : celui-là, marqué « dossier ».
+        assert!(matches!(departager(&m, &ids(&["h2", "h3"]), &fichiers, &tous, 8), Choix::Un(ref d, Resolution::Dossier) if d == "h2"));
+        // Deux dans le dossier, un ailleurs : les deux du dossier, ambigus.
+        let fichiers2 = table(&[("run", "/p/a/x.rs"), ("h1", "/p/a/y.rs"), ("h2", "/p/a/w.rs"), ("h3", "/p/b/z.rs")]);
+        match departager(&m, &ids(&["h1", "h2", "h3"]), &fichiers2, &tous, 8) {
+            Choix::Plusieurs(v) => assert_eq!(v, ids(&["h1", "h2"])),
+            _ => panic!("les deux du dossier, ambigus"),
+        }
+        // Rien de proche : chacun.
+        let fichiers3 = table(&[("run", "/p/c/x.rs"), ("h1", "/p/a/y.rs"), ("h2", "/p/b/z.rs")]);
+        assert!(matches!(departager(&m, &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Plusieurs(ref v) if v.len() == 2));
+        // Au-delà de la borne : l'abstention, comptée.
+        let neuf: Vec<String> = (0..9).map(|i| format!("d{i}")).collect();
+        let mut f9 = table(&[("run", "/p/c/x.rs")]);
+        let mut o9 = origine(&["run"]);
+        for (i, d) in neuf.iter().enumerate() {
+            f9.insert(d.clone(), format!("/p/m{i}/f.rs"));
+            o9.insert(d.clone(), ("src".into(), "depot".into()));
+        }
+        assert!(matches!(departager(&m, &neuf, &f9, &o9, 8), Choix::Trop(9)));
+        assert!(matches!(departager(&m, &neuf, &f9, &o9, 9), Choix::Plusieurs(ref v) if v.len() == 9));
+        // Une autre source n'est pas candidate.
+        let mut ailleurs = tous.clone();
+        ailleurs.insert("h2".into(), ("autre".into(), "depot".into()));
+        assert!(matches!(departager(&m, &ids(&["h1", "h2"]), &fichiers3, &ailleurs, 8), Choix::Un(ref d, Resolution::Name) if d == "h1"));
+        // Un import qui ne désigne aucun d'eux : rien.
+        let importe = mention("CONSUMES", &[], &["ailleurs"]);
+        assert!(matches!(departager(&importe, &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Rien));
+        // Une mention typée, un parent : seuls juges, jamais départagés ici.
+        assert!(matches!(departager(&mention("CONSUMES", &["T"], &[]), &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Rien));
+        assert!(matches!(departager(&mention("HAS_PARENT", &[], &[]), &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Rien));
     }
 
     #[test]

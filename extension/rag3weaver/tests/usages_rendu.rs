@@ -14,7 +14,7 @@ fn item(uuid: &str, title: &str, path: &str, line: i64) -> Item {
 }
 
 fn usage(user: Item, genre: &str, definition: Option<&str>) -> Usage {
-    Usage { user, usage: genre.into(), usages: vec![genre.into()], relation: "CONSUMES".into(), definition: definition.map(String::from), guessed: false }
+    Usage { user, usage: genre.into(), usages: vec![genre.into()], relation: "CONSUMES".into(), definition: definition.map(String::from), guessed: false, ambigu: false }
 }
 
 #[test]

@@ -3496,6 +3496,10 @@ impl Backend {
         if vides > 0 {
             etats.insert("chunks_without_text".to_string(), json!(vides));
         }
+        let ambigues = cat.aretes_ambigues_notees();
+        if ambigues > 0 {
+            etats.insert("ambiguous_edges".to_string(), json!(ambigues));
+        }
         for entite in entites {
             if let Ok(state) = cat.index_state_for(entite) {
                 etats.insert(
