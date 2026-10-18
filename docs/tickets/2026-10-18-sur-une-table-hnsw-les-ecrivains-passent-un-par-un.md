@@ -44,15 +44,34 @@ Le verrou n'est rendu qu'à la fin de la transaction, par `LockManager::releaseA
 (`transaction_manager.cpp:472`). Les transactions d'écriture d'une table indexée sont donc
 sérialisées de leur première écriture à leur validation, fsync compris.
 
-## Piste à étudier
+## Forme retenue : la marche I2 (orchestration, 18 octobre)
 
-- **Tenir le verrou le temps de l'insertion dans le graphe**, et non jusqu'à la validation. Le
-  cœur estime cette insertion à 15 à 20 ms par écrivain dans ce scénario.
-- **Ou une insertion qui n'exclut pas les autres écrivains** : lecture partagée du graphe, écriture
-  par nœud.
+La forme générale, sans demi-mesure, selon la consigne de Lucie : **l'index n'est pris en
+exclusif qu'à la validation**. La maintenance du graphe pour un SET de vecteur et une suppression
+(`OnDiskHNSWIndex::update`, `delete_`, `finalizeDelete`) est reportée au commit, avec un état par
+transaction ; `lockIndexForWrite` est retiré de update et de delete (`node_table.cpp:736, 823`), et
+INDEX est pris au commit, avant l'étape 3 de `NodeTable::commit`. C'est la marche I2 de la page
+`coeur-cpp/10-i2-la-maintenance-de-l-index-au-commit.md`.
 
-Ce qui compte, c'est que la cohérence de l'index sous rétention (forme α du lot de la rétention)
-reste prouvée par les témoins existants.
+Ce que le verrou protège aujourd'hui, et que I2 doit garder :
+- **une insertion** ne touche le graphe qu'à la validation (`NodeTable::commit`, étape 3,
+  `node_table.cpp:969-1003`, puis `OnDiskHNSWIndex::commitInsert`, `hnsw_index.cpp:765`), sous le
+  mutex public ; tenir l'index d'avance ne la protège de rien ;
+- **un SET et une suppression** réécrivent le graphe pendant la transaction (`update`,
+  `hnsw_index.cpp:1125` ; `delete_`, `:858` ; `finalizeDelete`, `:883`). Deux suppressions aux
+  voisinages recouvrants donnaient « Write-write conflict » (H3) : l'exclusif fait attendre la
+  seconde, puis `refreshSnapshot` la recale sur le graphe validé (coeur-cpp 09, §H3) ;
+- les points d'entrée de `HNSWStorageInfo` sont des champs nus, sans verrou ni annulation.
+
+La voie bon marché, l'index en partagé pour la seule insertion (la forme A3′ d'avant I1), n'est
+pas retenue : les écrivains du produit font MERGE puis SET de vecteur, et le SET reprendrait
+l'exclusif.
+
+**Deux tests exigent l'attente actuelle et devront changer avec I2** :
+`IndexedTableLockTest.EveryWriterOfAnIndexedTableHoldsTheIndexExclusiveUntilTheEnd`
+(`test/transaction/insert_lock_test.cpp:623`), et `IndexLockBench` (deux inséreurs doivent s'y
+attendre). `IndexedTableLockTest.TwoDeletesWithOverlappingNeighbourhoodsBothCommitInTurn` (`:693`)
+garde H3, et doit rester vert sous I2, sans plus d'attente.
 
 ## Liens
 
