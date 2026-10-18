@@ -68,7 +68,12 @@ fn which_tool_schemas_does_vertex_accept() {
         let mut sink = StringSink::default();
         match llm.generate(&turns, &opts, &mut sink) {
             Ok((finish, _)) => eprintln!("[probe] OK   {label} → {:?} {:?}", finish.reason, sink.text.trim()),
-            Err(e) => eprintln!("[probe] FAIL {label} → {}", e.to_string().chars().take(160).collect::<String>().replace('\n', " ")),
+            Err(e) => {
+                if crate::common::sauter_si_indisponible("e2e_cloud_schema_probe", &e) {
+                    return;
+                }
+                eprintln!("[probe] FAIL {label} → {}", e.to_string().chars().take(160).collect::<String>().replace('\n', " "))
+            }
         }
     }
 }

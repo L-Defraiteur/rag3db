@@ -492,3 +492,22 @@ pub fn vector_extension() -> String {
         }
     }
 }
+
+/// **Un fournisseur indisponible saute le test, en le nommant** (18 octobre
+/// 2026) : un quota Vertex épuisé ou une panne (`LlmError::Unavailable`) n'est
+/// pas un rouge du code. Imprime `SAUTÉ <suite> — <raison> : <erreur>`, que
+/// `run_e2e.sh` retire des verts et compte comme un saut ; rend vrai, et
+/// l'appelant rend la main. Toute autre erreur : faux, l'appelant échoue.
+#[cfg(feature = "openai-llm")]
+#[allow(dead_code)]
+pub fn sauter_si_indisponible(suite: &str, e: &rag3weaver::llm::LlmError) -> bool {
+    if !e.is_unavailable() {
+        return false;
+    }
+    let raison = if e.quota().is_some() { "quota Vertex" } else { "Vertex en panne" };
+    let ligne = format!("SAUTÉ {suite} — {raison} : {e}");
+    // Une seule ligne au journal (sous --nocapture, stdout et stderr y vont
+    // tous deux) : run_e2e.sh compte une ligne par saut.
+    println!("{ligne}");
+    true
+}

@@ -124,7 +124,11 @@ fn le_modele_donne_son_avis_sur_nos_outils() {
     // raisonnement, ni le début ni la réponse. Un budget qui compte la
     // réflexion doit être dimensionné pour elle.
     let opts = GenOptions::default().with_max_tokens(16_000);
-    let sortie = generate_to_string(&llm, &turns, &opts).expect("génération");
+    let sortie = match generate_to_string(&llm, &turns, &opts) {
+        Ok(s) => s,
+        Err(e) if crate::common::sauter_si_indisponible("e2e_avis_du_modele", &e) => return,
+        Err(e) => panic!("génération : {e}"),
+    };
     let duree = t0.elapsed();
     eprintln!(
         "[avis] {} caractères en {duree:.1?} · fin={:?} · jetons prompt={} sortie={}",

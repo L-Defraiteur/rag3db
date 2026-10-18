@@ -846,6 +846,51 @@ pub enum LlmError {
     Prompt(String),
     /// Le prompt dépasse la fenêtre de contexte.
     ContextOverflow { max: usize, got: usize },
+    /// **Le fournisseur n'a pas répondu**, reprises épuisées, ou un quota qui
+    /// ne revient pas en attendant. Distinct d'un rouge du code : un quota
+    /// épuisé se dit quota, une panne se dit panne, et l'appelant sait s'il
+    /// doit attendre, réessayer plus tard ou s'arrêter (18 octobre 2026).
+    Unavailable {
+        /// Le statut HTTP de la dernière tentative ; `None` : la connexion
+        /// elle-même a échoué.
+        status: Option<u16>,
+        quota: Quota,
+        /// Les reprises faites avant de rendre.
+        retries: u32,
+        /// Le temps passé dans l'appel, attentes comprises.
+        waited_ms: u64,
+        /// Ce que le fournisseur a dit, tronqué.
+        message: String,
+    },
+}
+
+/// Ce qu'un refus du fournisseur dit de son quota.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Quota {
+    /// Un quota qui ne revient pas en attendant (par jour, limite de
+    /// dépense) : s'arrêter.
+    Exhausted,
+    /// Un quota par minute, dépassé jusqu'au bout des reprises : il revient
+    /// en attendant.
+    Throttled,
+    /// Pas un quota : une panne (5xx, 408, 409, la connexion).
+    None,
+}
+
+impl LlmError {
+    /// Le fournisseur n'a pas répondu (quota ou panne) : pas un défaut du
+    /// code qui l'appelle.
+    pub fn is_unavailable(&self) -> bool {
+        matches!(self, LlmError::Unavailable { .. })
+    }
+
+    /// Le quota du refus, s'il y en a un.
+    pub fn quota(&self) -> Option<Quota> {
+        match self {
+            LlmError::Unavailable { quota: q @ (Quota::Exhausted | Quota::Throttled), .. } => Some(*q),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for LlmError {
@@ -855,6 +900,24 @@ impl fmt::Display for LlmError {
             LlmError::Prompt(m) => write!(f, "llm prompt error: {m}"),
             LlmError::ContextOverflow { max, got } => {
                 write!(f, "llm context overflow: {got} tokens, max {max}")
+            }
+            LlmError::Unavailable { status, quota, retries, waited_ms, message } => {
+                let statut = status.map(|s| format!("HTTP {s}")).unwrap_or_else(|| "connexion".to_string());
+                let duree = format!("{:.1} s", *waited_ms as f64 / 1000.0);
+                match quota {
+                    Quota::Exhausted => write!(
+                        f,
+                        "llm indisponible : quota épuisé ({statut}), il ne revient pas en attendant — {message}"
+                    ),
+                    Quota::Throttled => write!(
+                        f,
+                        "llm indisponible : quota dépassé ({statut}) après {retries} reprise(s) en {duree} — {message}"
+                    ),
+                    Quota::None => write!(
+                        f,
+                        "llm indisponible : service en panne ({statut}) après {retries} reprise(s) en {duree} — {message}"
+                    ),
+                }
             }
         }
     }

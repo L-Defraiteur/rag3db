@@ -349,6 +349,9 @@ fn trois_agents_un_fil_une_question() {
                 }
             }
             Err(e) => {
+                if crate::common::sauter_si_indisponible("e2e_conversation_a_plusieurs", &e) {
+                    return;
+                }
                 // Un échec est un résultat : on l'écrit et on continue.
                 eprintln!("[fil] {nom} : ERREUR {e}");
                 Passage {

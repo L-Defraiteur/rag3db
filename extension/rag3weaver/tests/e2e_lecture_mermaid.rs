@@ -120,6 +120,9 @@ fn un_modele_lit_le_mermaid_qu_on_lui_sert() {
         let sortie = match generate_to_string(&llm, &turns, &opts) {
             Ok(s) => s,
             Err(e) => {
+                if crate::common::sauter_si_indisponible("e2e_lecture_mermaid", &e) {
+                    return;
+                }
                 eprintln!("  ✗ {} → erreur : {e}", q.texte);
                 continue;
             }
@@ -164,7 +167,11 @@ fn un_modele_ecrit_du_mermaid_que_notre_parseur_relit() {
         ),
     ];
     let opts = GenOptions::default().with_max_tokens(4_000);
-    let sortie = generate_to_string(&llm, &turns, &opts).expect("génération");
+    let sortie = match generate_to_string(&llm, &turns, &opts) {
+        Ok(s) => s,
+        Err(e) if crate::common::sauter_si_indisponible("e2e_lecture_mermaid", &e) => return,
+        Err(e) => panic!("génération : {e}"),
+    };
     let texte = sortie.text.trim().trim_start_matches("```mermaid").trim_start_matches("```")
         .trim_end_matches("```").trim().to_string();
     eprintln!("[mermaid] {nom} a écrit :\n{texte}");

@@ -755,3 +755,54 @@ fn labels_from_by_the_decider_and_through_a_definition() {
     let g = DataflowGraph::from_definition(&def, &registry()).unwrap();
     assert_eq!(g.to_definition().nodes[0].config, config);
 }
+
+// ── Le fournisseur indisponible (18 octobre 2026) ─────────────────────────
+
+/// **Les reprises se disent à l'appelant, en direct** : chaque reprise
+/// annoncée par le client part sur le bus (`Warning`, contexte du nœud et du
+/// run) et reste dans les avertissements du nœud — un banc qui attend le
+/// quota le dit au lieu de paraître figé.
+#[test]
+fn decide_tells_its_caller_about_each_retry() {
+    use crate::llm::{RetryEvent, RetryPhase};
+    let llm = CallbackLlm::new("l", 4096, |t, o, sink| {
+        let annonce = RetryEvent {
+            phase: RetryPhase::Scheduled,
+            attempt: 1,
+            max_attempts: 4,
+            wait: std::time::Duration::from_secs(60),
+            elapsed: std::time::Duration::ZERO,
+            reason: "HTTP 429: resource exhausted",
+            from_server: false,
+        };
+        sink.on_retry(&annonce);
+        MockLlm::new(r#"{"label": "a"}"#).generate(t, o, sink)
+    });
+    let bus = Arc::new(crate::events::EventBus::new(16));
+    let ecoute = bus.subscribe("catalog");
+    let mut s = with_llm(llm);
+    s.register("event_bus", bus.clone());
+    let def = graph(json!("x"), "Decide", json!({"labels": "a|b"}), &[]);
+    let (out, report) = run(&def, s).unwrap();
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "a");
+    let logs: Vec<String> = report.nodes.iter().find(|n| n.name == "node").unwrap().logs.iter().map(|l| l.text.clone()).collect();
+    assert!(logs.iter().any(|l| l.contains("reprise 1/3 dans 60 s") && l.contains("HTTP 429")), "{logs:?}");
+    let mut ecoute = ecoute;
+    let vu = ecoute.try_recv().expect("la reprise est partie sur le bus");
+    let dit = format!("{vu:?}");
+    assert!(dit.contains("Warning") && dit.contains("reprise 1/3") && dit.contains("Decide node"), "{dit}");
+}
+
+/// **Un quota épuisé se dit quota**, pas « llm model error » : l'erreur du
+/// nœud porte ce que le client a nommé.
+#[test]
+fn decide_names_an_unavailable_provider() {
+    use crate::llm::{LlmError, Quota};
+    let llm = CallbackLlm::new("l", 4096, |_, _, _| {
+        Err(LlmError::Unavailable { status: Some(429), quota: Quota::Throttled, retries: 3, waited_ms: 300_000, message: "HTTP 429: resource exhausted".into() })
+    });
+    let def = graph(json!("x"), "Decide", json!({"labels": "a|b"}), &[]);
+    let err = run(&def, with_llm(llm)).unwrap_err();
+    assert!(err.contains("quota dépassé (HTTP 429) après 3 reprise(s)"), "{err}");
+    assert!(!err.contains("llm model error"), "{err}");
+}

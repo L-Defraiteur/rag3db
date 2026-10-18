@@ -189,6 +189,9 @@ fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
         let run = match agent.run(&mut turns, &mut sink) {
             Ok(run) => run,
             Err(e) => {
+                if crate::common::sauter_si_indisponible("e2e_cloud_code_agent", &e) {
+                    return;
+                }
                 eprintln!("[cloud-agent] Q{} NON MESURÉE en {:?} : {e}", qi + 1, t.elapsed());
                 summary.push((qi + 1, format!("non mesurée : {e}"), 0, 0, vec![], String::new(), 0));
                 continue;
@@ -267,6 +270,9 @@ fn a_cloud_model_edits_a_copy_of_our_code() {
         let run = match agent.run(&mut turns, &mut sink) {
             Ok(run) => run,
             Err(e) => {
+                if crate::common::sauter_si_indisponible("e2e_cloud_code_agent", &e) {
+                    return;
+                }
                 eprintln!("[cloud-agent] M{} ERREUR après {:?} : {e}", mi + 1, t.elapsed());
                 dump(&turns);
                 for (i, turn) in turns.iter().enumerate() {

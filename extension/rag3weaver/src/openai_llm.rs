@@ -1081,7 +1081,7 @@ impl Llm for OpenAiLlm {
 
             // Ce que cette tentative a produit : soit on rend, soit on décide
             // de réessayer.
-            let (err, verdict, server_delay) = match req.send(body.clone()) {
+            let (err, verdict, server_delay, statut) = match req.send(body.clone()) {
                 Ok(mut resp) if resp.status().as_u16() == 200 => {
                     // ─────────────────── LA FRONTIÈRE ───────────────────
                     // À partir d'ici, **plus aucun réessai**. Le flux est
@@ -1147,6 +1147,7 @@ impl Llm for OpenAiLlm {
                         LlmError::Model(format!("HTTP {status}: {}", msg.trim())),
                         classify(status, &msg),
                         delay,
+                        Some(status),
                     )
                 }
                 Err(e) => (
@@ -1155,14 +1156,44 @@ impl Llm for OpenAiLlm {
                     // poussé, rejouer est sûr.
                     Verdict::Retry(RetryBase::Transient),
                     None,
+                    None,
                 ),
             };
 
+            // **L'erreur qui ne ment pas** : un quota se dit quota, une panne
+            // se dit panne, avec les reprises faites et le temps passé — un
+            // appelant sait s'il doit attendre ou s'arrêter, et un test ne
+            // prend pas un quota épuisé pour un rouge du code.
+            // Les reprises **faites** : au plafond de temps, la suivante n'a
+            // pas eu lieu.
+            let reprises_faites = retries;
+            let indisponible = |err: LlmError, quota: crate::llm::Quota| -> LlmError {
+                let message = match &err {
+                    LlmError::Model(m) => m.clone(),
+                    autre => autre.to_string(),
+                };
+                LlmError::Unavailable {
+                    status: statut,
+                    quota,
+                    retries: reprises_faites,
+                    waited_ms: self.clock.now().saturating_duration_since(started).as_millis() as u64,
+                    message,
+                }
+            };
+            let epuise = |err: LlmError| {
+                let quota = if statut == Some(429) { crate::llm::Quota::Throttled } else { crate::llm::Quota::None };
+                indisponible(err, quota)
+            };
+
             let Verdict::Retry(base_kind) = verdict else {
+                // Un 429 qui ne guérit pas en attendant (par jour, dépense).
+                if statut == Some(429) {
+                    return Err(indisponible(err, crate::llm::Quota::Exhausted));
+                }
                 return Err(err);
             };
             if retries + 1 >= self.retry.max_attempts {
-                return Err(err);
+                return Err(epuise(err));
             }
 
             retries += 1;
@@ -1189,7 +1220,7 @@ impl Llm for OpenAiLlm {
             // Plafond total : mieux vaut rendre l'erreur que dépasser.
             let elapsed = self.clock.now().saturating_duration_since(started);
             if elapsed + wait > self.retry.max_total {
-                return Err(err);
+                return Err(epuise(err));
             }
 
             let reason = err.to_string();

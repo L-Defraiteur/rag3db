@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use common::fake_sse::*;
 use rag3weaver::llm::{
-    Finish, Flow, GenOptions, Llm, LlmError, RetryEvent, RetryPhase, StringSink, TokenSink, Turn,
+    Finish, Flow, GenOptions, Llm, LlmError, Quota, RetryEvent, RetryPhase, StringSink, TokenSink, Turn,
 };
 use rag3weaver::openai_llm::{Clock, OpenAiLlm, RetryPolicy};
 
@@ -298,6 +298,71 @@ fn the_total_time_cap_bites_before_the_attempt_cap() {
     assert!(sink.announces.len() < 9, "le plafond de temps a mordu avant celui de tentatives");
 }
 
+// ─── L'erreur qui ne ment pas (18 octobre 2026) ─────────────────────────────
+//
+// Vertex a rendu des 503 puis un 429 « resource exhausted » un soir de banc :
+// la reprise a fait son travail, puis l'erreur finale disait « llm model
+// error » comme un défaut du code. Elle dit maintenant quota ou panne, ses
+// reprises et son attente.
+
+#[test]
+fn a_quota_still_exceeded_after_the_retries_says_quota_retries_and_wait() {
+    let srv = FakeServer::start_sequence(vec![Reply::status(429), Reply::status(429), Reply::status(429)]);
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy { max_attempts: 3, ..Default::default() });
+    let err = llm.generate(&hello(), &GenOptions::default(), &mut RetrySink::default()).unwrap_err();
+    match &err {
+        LlmError::Unavailable { status, quota, retries, waited_ms, .. } => {
+            assert_eq!((*status, *quota, *retries), (Some(429), Quota::Throttled, 2), "{err:?}");
+            assert_eq!(*waited_ms, clock.total().as_millis() as u64, "le temps passé, attentes comprises");
+        }
+        autre => panic!("une indisponibilité nommée attendue : {autre:?}"),
+    }
+    assert!(err.is_unavailable() && err.quota() == Some(Quota::Throttled));
+    let dit = err.to_string();
+    assert!(dit.contains("quota dépassé (HTTP 429) après 2 reprise(s)"), "{dit}");
+}
+
+#[test]
+fn a_quota_that_will_not_heal_says_exhausted_at_once() {
+    let par_jour = r#"{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel"}]}]}}"#;
+    let srv = FakeServer::start_sequence(vec![Reply::body(429, par_jour), Reply::sse()]);
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default());
+    let err = llm.generate(&hello(), &GenOptions::default(), &mut RetrySink::default()).unwrap_err();
+    assert!(matches!(err, LlmError::Unavailable { status: Some(429), quota: Quota::Exhausted, retries: 0, .. }), "{err:?}");
+    assert_eq!(err.quota(), Some(Quota::Exhausted));
+    assert!(err.to_string().contains("quota épuisé (HTTP 429), il ne revient pas en attendant"), "{err}");
+    assert!(err.to_string().contains("PerDay"), "le message du fournisseur reste : {err}");
+}
+
+#[test]
+fn an_outage_until_the_end_says_outage_not_quota() {
+    let srv = FakeServer::start_sequence(vec![Reply::status(503), Reply::status(503), Reply::status(503)]);
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy { max_attempts: 3, ..Default::default() });
+    let err = llm.generate(&hello(), &GenOptions::default(), &mut RetrySink::default()).unwrap_err();
+    assert!(matches!(err, LlmError::Unavailable { status: Some(503), quota: Quota::None, retries: 2, .. }), "{err:?}");
+    assert!(err.is_unavailable() && err.quota().is_none());
+    assert!(err.to_string().contains("service en panne (HTTP 503) après 2 reprise(s)"), "{err}");
+}
+
+#[test]
+fn the_total_time_cap_says_the_retries_actually_made() {
+    // Le plafond de temps rend avant la reprise suivante : elle n'a pas eu
+    // lieu, elle ne se compte pas.
+    let srv = FakeServer::start_sequence(vec![Reply::status(429), Reply::status(429), Reply::status(429), Reply::status(429)]);
+    let clock = FakeClock::new();
+    let policy = RetryPolicy { max_attempts: 10, max_total: Duration::from_secs(90), ..Default::default() };
+    let llm = client(&srv, Arc::clone(&clock), policy);
+    let mut sink = RetrySink::default();
+    let err = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap_err();
+    let LlmError::Unavailable { retries, quota, .. } = err else { panic!("{err:?}") };
+    assert_eq!(quota, Quota::Throttled);
+    assert_eq!(retries as usize, sink.announces.len(), "les reprises faites, pas celle refusée");
+    assert_eq!(retries as usize + 1, srv.connections.load(Ordering::SeqCst));
+}
+
 // ─── La frontière : une fois le flux commencé, on ne rejoue pas ─────────────
 
 #[test]
@@ -345,7 +410,12 @@ fn a_transport_error_before_the_first_frame_is_retried() {
     let mut sink = RetrySink::default();
     let err = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap_err();
 
-    assert!(matches!(err, LlmError::Model(_)));
+    // La connexion elle-même a échoué jusqu'au bout : une panne, nommée.
+    assert!(
+        matches!(err, LlmError::Unavailable { status: None, quota: Quota::None, retries: 2, .. }),
+        "{err:?}"
+    );
+    assert!(err.to_string().contains("service en panne (connexion)"), "{err}");
     assert_eq!(sink.announces.len(), 2, "deux réessais avant d'abandonner");
     // Base courte, comme un 5xx : une panne de socket se dissipe en secondes.
     assert!(sink.announces[0].1 <= Duration::from_secs(2));

@@ -1044,6 +1044,19 @@ if [ "$SUMMARY" = true ]; then
     say "    une suite compilée hors du lot ne prouve rien, et le total non plus.\n"
   fi
 
+  # **Un saut nommé n'est pas un vert** (18 octobre 2026) : un test dont le
+  # fournisseur n'a pas répondu (quota épuisé, panne : `LlmError::Unavailable`)
+  # imprime `SAUTÉ <suite> — <raison>` et rend la main ; libtest le compte
+  # réussi. Il est retiré des verts, nommé, et la passe se dit incomplète.
+  mapfile -t SAUTES < <(grep -oP '^SAUTÉ \K.*' "$TMPLOG")
+  if [ ${#SAUTES[@]} -gt 0 ]; then
+    TOTAL_PASSED=$((TOTAL_PASSED - ${#SAUTES[@]}))
+    say "\n  sautés (le fournisseur n'a pas répondu ; un saut n'est pas un vert) :\n"
+    for t in "${SAUTES[@]}"; do
+      say "    · %s\n" "$t"
+    done
+  fi
+
   # **Nommer ce qui a cassé.** Un compteur dit qu'il y a un problème ; il ne
   # dit pas lequel, et c'est justement ce qu'on vient chercher.
   mapfile -t FAILED_NAMES < <(grep -oP '^test \K[\w:]+(?= \.\.\. FAILED)' "$TMPLOG" | sort -u)
@@ -1088,6 +1101,10 @@ if [ "$SUMMARY" = true ]; then
     say "  %-30s %3d passed\n" "TOTAL" "$TOTAL_PASSED"
   else
     say "  %-30s %3d passed, %d FAILED\n" "TOTAL" "$TOTAL_PASSED" "$TOTAL_FAILED"
+  fi
+  if [ ${#SAUTES[@]} -gt 0 ]; then
+    say "  %-30s INCOMPLÈTE — %d test(s) SAUTÉ(S), le fournisseur n'a pas répondu\n" "" "${#SAUTES[@]}"
+    [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
   if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
     say "  %-30s complète hors carte locale (%d suites écartées)\n" "" "${#ECARTEES_CARTE_LOCALE[@]}"

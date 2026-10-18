@@ -111,6 +111,12 @@ fn json_of(value: PortValue, kind: &str) -> Result<Value, String> {
 struct CancellableSink {
     text: String,
     cancel: CancelToken,
+    /// **Les reprises du fournisseur, dites à l'appelant** (la mémoire, 18
+    /// octobre 2026) : chaque reprise annoncée part aussitôt sur le bus — un
+    /// banc qui attend le quota le dit au lieu de paraître figé — et se garde
+    /// pour les avertissements du nœud.
+    alerte: Option<(Arc<crate::events::EventBus>, String)>,
+    reprises: Vec<String>,
 }
 
 impl TokenSink for CancellableSink {
@@ -121,7 +127,21 @@ impl TokenSink for CancellableSink {
         self.text.push_str(delta);
         Flow::Continue
     }
-    fn on_retry(&mut self, _event: &RetryEvent<'_>) -> Flow {
+    fn on_retry(&mut self, event: &RetryEvent<'_>) -> Flow {
+        if event.phase == crate::llm::RetryPhase::Scheduled {
+            let dit = format!(
+                "Decide : le modèle n'a pas répondu ({}) — reprise {}/{} dans {:.0} s{}",
+                event.reason.split(':').next().unwrap_or(event.reason).trim(),
+                event.attempt,
+                event.max_attempts.saturating_sub(1),
+                event.wait.as_secs_f64(),
+                if event.from_server { ", délai demandé par le fournisseur" } else { "" }
+            );
+            if let Some((bus, contexte)) = &self.alerte {
+                bus.emit(crate::events::Event::Warning { context: contexte.clone(), message: dit.clone() });
+            }
+            self.reprises.push(dit);
+        }
         if self.cancel.is_cancelled() { Flow::Stop } else { Flow::Continue }
     }
 }
@@ -435,7 +455,8 @@ impl DecideNode {
         Ok((labels[i].clone(), Some(*p)))
     }
 
-    fn by_llm(&self, llm: &dyn Llm, text: &str, labels: &[String], cancel: CancelToken) -> Result<(String, Option<f64>), String> {
+    fn by_llm(&self, llm: &dyn Llm, text: &str, labels: &[String], ctx: &mut NodeContext) -> Result<(String, Option<f64>), String> {
+        let cancel = ctx.cancellation();
         let schema = json!({
             "type": "object",
             "properties": {"label": {"type": "string", "enum": labels}},
@@ -456,10 +477,18 @@ impl DecideNode {
         ];
         // Un puits qui s'arrête au jeton suivant si le run est annulé : l'hôte
         // qui arrête le graphe n'attend pas la fin de l'appel.
-        let mut sink = CancellableSink { text: String::new(), cancel };
-        let (finish, _) = llm
-            .generate(&turns, &opts, &mut sink)
-            .map_err(|e| format!("Decide ({}) : {e}", llm.name()))?;
+        let alerte = ctx
+            .service::<Arc<crate::events::EventBus>>("event_bus")
+            .cloned()
+            .map(|bus| (bus, format!("Decide {} (run {})", self.name, ctx.run_id())));
+        let mut sink = CancellableSink { text: String::new(), cancel, alerte, reprises: Vec::new() };
+        let rendu = llm.generate(&turns, &opts, &mut sink);
+        for r in std::mem::take(&mut sink.reprises) {
+            ctx.warn(&r);
+        }
+        // Une indisponibilité (quota, panne) se dit telle quelle : ce n'est
+        // pas une mauvaise étiquette, ni un défaut du graphe.
+        let (finish, _) = rendu.map_err(|e| format!("Decide ({}) : {e}", llm.name()))?;
         // **Coupée par le plafond**, la réponse se dit tronquée — pas « hors
         // liste » : `{"label": "no` n'est pas une mauvaise étiquette, c'est une
         // étiquette pas finie.
@@ -551,7 +580,7 @@ impl DecideNode {
         let (label, probability) = match (self.via, decider, llm) {
             (Via::Auto | Via::Decider, Some(d), _) => self.by_decider(d, &text, &labels)?,
             (Via::Decider, None, _) => return Err("Decide : via='decider' mais aucun 'decider' n'est servi".into()),
-            (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l, &text, &labels, ctx.cancellation())?,
+            (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l, &text, &labels, ctx)?,
             (_, _, None) => return Err("Decide : ni 'decider' ni 'llm' servi".into()),
         };
         ctx.info(&format!("Decide : « {label} »{}", probability.map(|p| format!(" ({p:.3})")).unwrap_or_default()));
