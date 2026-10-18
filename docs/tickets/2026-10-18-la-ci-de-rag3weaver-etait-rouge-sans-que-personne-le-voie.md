@@ -1,6 +1,6 @@
 # La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie
 
-- **État** : ouvert (18 octobre 2026, G) — remise en état sur la branche `ci-rag3weaver` ; à fermer sur un run vert de bout en bout sur master, lu
+- **État** : ouvert — **la CI est verte sur master** (18 octobre 2026, run 39144463679 sur 56edb5371, lu : check_features 5/5, tests unitaires 1 668 réussis, 0 échec, 2 sautés nommément) ; reste le filet, à décider par l'orchestration, puis la fermeture
 - **Gravité** : filet absent. Rien ne cassait dans le produit, mais aucun contrôle automatique ne gardait le crate pendant six semaines
 - **Atteignable en service** : non, c'est l'outillage
 - **Touche rag3weaver** : oui (`.github/workflows/rag3weaver-workflow.yml`, `scripts/check_features.sh`)
@@ -32,6 +32,8 @@ Personne ne lisait ce workflow. Chaque session contrôle sur son poste (`check_f
 - La matrice est remplacée par `scripts/check_features.sh`, dont les jeux font foi, avec le moteur bâti en statique par la crate rag3db (`RAG3DB_LIB=statique`, option ajoutée au script). En CI, la sortie de chaque jeu est gardée (`CHECK_FEATURES_LOGS`) et un rouge s'affiche.
 - Les tests unitaires se jouent sous le jeu du paquet (`rag3db-native,code,daemon,openai-llm`), dans le même job. Sans feature, cinq tests qui supposent `code` rougissent, car ils ne sont pas gardés par cfg : `backend::tests::{index_signals_se_valide_dans_les_deux_sens, la_politique_refuse_en_disant_quoi_faire, locks_via_exige_le_schema_de_code}`, `dataflow::graph_tool::tests::chaque_gabarit_d_outil_livre_se_construit`, `gabarits::tests::chaque_gabarit_livre_se_charge` (run 39133418842). Les garder, ou leur donner un sens sans `code`, reste à faire.
 - fmt + clippy est retiré, avec un commentaire : il revient sans `continue-on-error`, une fois le crate formaté et clippy propre.
+
+- Sur master, un run n'est plus annulé par le push suivant (56edb5371). Annulés, les deux premiers runs de la CI réparée ne rendaient aucun verdict.
 
 ## Le filet qui manquait
 
