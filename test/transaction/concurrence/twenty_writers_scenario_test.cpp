@@ -756,6 +756,45 @@ protected:
         std::cerr << "  [scénario] tampon après le dernier DDL : pic " << peak(from, scenario.end)
                   << " Mio\n";
 
+        // La datation des longues attentes : par DDL et par acteur, les transactions qui
+        // chevauchent le DDL et durent plus d'une seconde, leur nombre, et l'instant (relatif au
+        // début du DDL) où la première a commencé et où la dernière a fini.
+        for (const auto& ddl : scenario.ddls) {
+            for (const auto actor : {Actor::DocWriter, Actor::NoteWriter, Actor::Reader}) {
+                int64_t count = 0;
+                double firstStart = 0, lastStart = 0, firstEnd = 0, lastEnd = 0;
+                for (const auto& journal : scenario.journals) {
+                    if (journal.actor != actor) {
+                        continue;
+                    }
+                    for (const auto& sample : journal.samples) {
+                        if (!overlaps(sample, ddl) || sample.end - sample.start < 1000) {
+                            continue;
+                        }
+                        const auto start = sample.start - ddl.start;
+                        const auto end = sample.end - ddl.start;
+                        if (count == 0) {
+                            firstStart = lastStart = start;
+                            firstEnd = lastEnd = end;
+                        }
+                        firstStart = std::min(firstStart, start);
+                        lastStart = std::max(lastStart, start);
+                        firstEnd = std::min(firstEnd, end);
+                        lastEnd = std::max(lastEnd, end);
+                        count++;
+                    }
+                }
+                if (count > 0) {
+                    std::cerr << "  [scénario] attentes de plus d'1 s pendant « " << ddl.name
+                              << " » (durée " << ddl.end - ddl.start
+                              << " ms) acteur=" << actorName(actor) << " n=" << count
+                              << " : commencées de " << firstStart << " à " << lastStart
+                              << " ms, finies de " << firstEnd << " à " << lastEnd
+                              << " ms après le début du DDL\n";
+                }
+            }
+        }
+
         // Les fenêtres.
         for (const auto actor : {Actor::DocWriter, Actor::NoteWriter, Actor::Reader}) {
             printWindow(scenario, "hors DDL", actor, nullptr);
