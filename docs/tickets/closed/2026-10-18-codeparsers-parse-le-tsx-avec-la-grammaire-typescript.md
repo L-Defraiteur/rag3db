@@ -1,8 +1,10 @@
 # codeparsers parse le TSX avec la grammaire TypeScript : le JSX tombe en erreur, ses usages se perdent
 
-- **État** : ouvert (18 octobre 2026, codeparsers, lu pendant l'étude des composants React,
+- **État** : corrigé — codeparsers `9d5de97` (pointeur monté le même jour). Ouvert le 18 octobre 2026
+  par codeparsers, lu pendant l'étude des composants React,
   `extension/rag3weaver/docs/10-octobre-2026-18h20/codeparsers/07-un-composant-react-est-un-gabarit.md`).
-  Lu, pas joué.
+  Joué : la grammaire TSX seule ne suffisait pas, la collecte des symboles locaux prenait le nom
+  de la balise pour une définition et écartait la référence ; les deux sont corrigés.
 - **Gravité** : réponse incomplète. Les scopes d'un `.tsx` qui suivent du JSX sont mal découpés,
   et un composant employé en balise (`<Button/>`) n'a aucun usage.
 - **Atteignable en service** : oui, pour tout dépôt qui contient des `.tsx` ou des `.jsx`.
@@ -30,8 +32,10 @@ l'indexer seul, puis `usages Button` : attendu un appel depuis `App`, rendu aucu
 
 ## Témoin
 
-Aucun pour l'instant : il n'y a aucune fixture `.tsx` ou `.jsx` dans `codeparsers/tests`, et
-`tests/grammaires.rs:19` ne vérifie que l'ABI de `LANGUAGE_TYPESCRIPT`.
+`codeparsers/tests/jsx.rs` (six cas : la balise de composant, la balise en minuscule, le `.jsx`, le
+nom membre, le choix par extension, le `.ts` qui garde sa grammaire) ; `tests/grammaires.rs` charge
+aussi `LANGUAGE_TSX`. Rouge avant le correctif de la collecte locale (3 cas sur 6), vert après ;
+toute la suite de codeparsers verte.
 
 ## Ce que serait le correctif
 
