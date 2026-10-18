@@ -1088,7 +1088,7 @@ mod tests {
         // Le premier appel ouvre le backend, et monte sa montre.
         let lu = appeler("read_file", json!({ "path": "main.rs", "format": "brut" }));
         assert_eq!(lu["ok"], true, "{lu}");
-        let empreinte = lu["result"]["content_hash"].as_str().unwrap().to_string();
+        let empreinte = lu["result"]["content_hash"].as_str().unwrap_or_else(|| panic!("la réponse de /ide/call : {lu}")).to_string();
         // Le temps d'un premier balayage de la montre (tous les 250 ms).
         std::thread::sleep(std::time::Duration::from_millis(800));
 
