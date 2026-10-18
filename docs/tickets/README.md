@@ -124,10 +124,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (147), dans `closed/`
+### Fermés (148), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La montre perdait un fichier créé pendant sa liste (le « racy git »)](closed/2026-10-18-la-montre-perdait-un-fichier-cree-pendant-sa-liste.md) | corrigé (une date de dossier trop récente est douteuse et fait relire) ; témoin déterministe ; 3 rouges sur 20 sous charge avant, 0 sur 20 après | index faux en silence | oui | oui (`watch.rs`) |
 | [Un COPY de relations vers un nœud qui a déjà des relations persistantes les fait disparaître](closed/2026-10-18-un-copy-de-relations-vers-un-noeud-deja-relie-perd-ses-relations-persistantes.md) | corrigé — 18 octobre 2026 (l'annulation retirait un groupe CSR jugé vide sur ses lignes en mémoire, bloc persistant compris) ; témoin `copy_rollback_persistent_rels_test.cpp` | perte de données, durable | oui : un COPY de relations annulé vers des nœuds déjà reliés et repris | si un COPY s'annule |
 | [Un COPY après le retrait de l'index vectoriel est refusé : la finalisation du COPY touche l'index retiré](closed/2026-10-18-un-copy-apres-le-retrait-de-l-index-vectoriel-est-refuse.md) | corrigé — 18 octobre 2026, ouvert et fermé dans le même commit (régression de la rétention des index sur le chemin DROP, COPY, CREATE du produit) ; témoin `copy_after_drop_vector_index_test.cpp` | refus d'un COPY valide, ingestion en masse du produit bloquée | oui (depuis 9b861579a) | oui |
 | [L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir](closed/2026-10-18-l-arret-de-l-hote-attend-sans-borne-une-reaction-figee.md) | corrigé : arrêt des réacteurs borné à 30 s, le réacteur figé nommé et son catalogue laissé au rejeu (lot de l'hôte par socket) | blocage | oui | oui |

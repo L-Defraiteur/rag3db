@@ -209,7 +209,21 @@ pub struct Scanner {
     generated: crate::generated::GeneratedPolicy,
     /// Écartés par leur chemin à la dernière liste.
     excluded_by_path: u64,
+    /// Un crochet de témoin, appelé entre la lecture de la liste et celle des
+    /// dates de dossier : là où un fichier créé se perdait.
+    #[cfg(test)]
+    pub(crate) apres_la_liste: Option<Box<dyn FnMut() + Send>>,
 }
+
+/// **Une date de dossier trop récente est douteuse** (le « racy git ») : la
+/// liste se lit avant les dates, et un fichier créé entre les deux change la
+/// date sans être dans la liste ; la date d'un inode a aussi sa granularité
+/// (un tic du noyau, deux secondes sur FAT), et un fichier créé dans le même
+/// tic qu'une lecture ne la change pas. Une date qui n'est pas plus vieille que
+/// le début de la liste moins cette marge ne prouve donc rien : le dossier se
+/// relit au tour suivant, jusqu'à ce que sa date ait vieilli.
+#[cfg(feature = "code")]
+const DATE_DOUTEUSE: std::time::Duration = std::time::Duration::from_secs(2);
 
 #[cfg(feature = "code")]
 impl Scanner {
@@ -242,9 +256,16 @@ impl Scanner {
             paused: None,
             generated,
             excluded_by_path: 0,
+            #[cfg(test)]
+            apres_la_liste: None,
         };
+        let debut = SystemTime::now();
         let listed = s.listed()?;
-        s.remember_dirs(&listed);
+        #[cfg(test)]
+        if let Some(f) = s.apres_la_liste.as_mut() {
+            f();
+        }
+        s.remember_dirs(&listed, debut);
         for path in listed {
             if let (Some(stamp), Some((hash, admitted))) = (s.stamp(&path), s.hash(&path)) {
                 s.known.insert(path, Known { stamp, hash, admitted });
@@ -284,8 +305,10 @@ impl Scanner {
         std::fs::metadata(self.root.join(dir)).ok()?.modified().ok()
     }
 
-    /// Les dossiers de `listed` (et la racine), avec leur date.
-    fn remember_dirs(&mut self, listed: &[String]) {
+    /// Les dossiers de `listed` (et la racine), avec leur date — `None`
+    /// quand elle est douteuse ([`DATE_DOUTEUSE`] avant `debut`, l'instant où
+    /// la liste a commencé) : le tour suivant relira la liste.
+    fn remember_dirs(&mut self, listed: &[String], debut: SystemTime) {
         let mut dirs: std::collections::BTreeSet<PathBuf> = [PathBuf::new()].into_iter().collect();
         for path in listed {
             let mut p = std::path::Path::new(path).parent();
@@ -296,8 +319,9 @@ impl Scanner {
                 p = d.parent();
             }
         }
+        let seuil = debut.checked_sub(DATE_DOUTEUSE).unwrap_or(std::time::UNIX_EPOCH);
         self.dirs = dirs.into_iter().map(|d| {
-            let date = self.dir_date(&d);
+            let date = self.dir_date(&d).filter(|t| *t < seuil);
             (d, date)
         }).collect();
     }
@@ -455,15 +479,20 @@ impl Scanner {
             self.stats.lists += 1;
             self.last_list = now;
             let t = Instant::now();
+            let debut = SystemTime::now();
             let listed = self.listed()?;
             self.stats.list_us += t.elapsed().as_micros() as u64;
+            #[cfg(test)]
+            if let Some(f) = self.apres_la_liste.as_mut() {
+                f();
+            }
             // Une source qui ne liste plus rien alors qu'on connaissait des
             // fichiers : la même pause, pas une suppression en masse.
             if listed.is_empty() && !self.known.is_empty() {
                 self.paused = Some(format!("la source ne liste plus aucun fichier sous {}", self.root.display()));
                 return Ok(Vec::new());
             }
-            self.remember_dirs(&listed);
+            self.remember_dirs(&listed, debut);
             let present: std::collections::BTreeSet<&str> = listed.iter().map(String::as_str).collect();
             // Supprimés, ou sortis des règles : connus, plus listés.
             let gone: Vec<String> = self.known.keys().filter(|p| !present.contains(p.as_str())).cloned().collect();

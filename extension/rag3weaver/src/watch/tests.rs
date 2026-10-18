@@ -12,6 +12,19 @@ fn tree() -> (tempfile::TempDir, Arc<dyn FileSource>) {
     (dir, source)
 }
 
+/// Vieillit les dossiers d'un arbre : leur date ne compte plus
+/// pour douteuse ([`DATE_DOUTEUSE`] : une date trop récente fait relire la
+/// liste, c'est voulu, mais un témoin du repos part d'un arbre posé).
+fn vieillir(racine: &std::path::Path) {
+    // Une date fixe (1er janvier 2026) : deux appels ne font pas bouger le dossier.
+    let posee = std::time::UNIX_EPOCH + Duration::from_secs(1_767_225_600);
+    for d in [racine.to_path_buf(), racine.join("src")] {
+        if let Ok(f) = std::fs::File::open(&d) {
+            f.set_modified(posee).unwrap();
+        }
+    }
+}
+
 fn config(settle_ms: u64) -> WatchConfig {
     WatchConfig { settle_ms, ..Default::default() }
 }
@@ -235,6 +248,7 @@ fn reconciling_with_the_index_says_what_moved_since() {
 #[test]
 fn a_quiet_scan_does_not_relist_the_source() {
     let (dir, source) = tree();
+    vieillir(dir.path());
     let mut s = Scanner::new(dir.path().to_path_buf(), source, &config(0)).unwrap();
     let t0 = Instant::now();
     for i in 0..5 {
@@ -246,18 +260,58 @@ fn a_quiet_scan_does_not_relist_the_source() {
     assert_eq!(changes(&s.scan(t0 + Duration::from_millis(600)).unwrap()), [("src/d.rs", Change::Created)]);
     assert_eq!(s.lists(), 1, "une création fait relire");
 
+    // Le dossier vient de bouger : sa date est douteuse, le tour suivant le
+    // relirait (voir le témoin d'après). Vieilli, il reste au repos.
+    vieillir(dir.path());
+    s.scan(t0 + Duration::from_millis(650)).unwrap();
+    assert_eq!(s.lists(), 2, "la date douteuse a fait relire une fois");
+    vieillir(dir.path());
     std::fs::write(dir.path().join("src/a.rs"), "fn a() { 9 }\\n").unwrap();
     assert_eq!(changes(&s.scan(t0 + Duration::from_millis(700)).unwrap()), [("src/a.rs", Change::Modified)]);
-    assert_eq!(s.lists(), 1, "une modification en place ne fait pas relire");
+    assert_eq!(s.lists(), 2, "une modification en place ne fait pas relire");
 
     s.scan(t0 + Duration::from_secs(61)).unwrap();
-    assert_eq!(s.lists(), 2, "le filet de période relit");
+    assert_eq!(s.lists(), 3, "le filet de période relit");
 
     // Les compteurs le disent : deux hachages (la création, la modification),
-    // deux relectures, et les chemins hachés.
+    // trois relectures (la création, sa date douteuse, le filet), et les
+    // chemins hachés.
     let st = s.stats();
-    assert_eq!((st.scans, st.lists, st.hashes), (8, 2, 2), "{st:?}");
+    assert_eq!((st.scans, st.lists, st.hashes), (9, 3, 2), "{st:?}");
     assert_eq!(st.most_hashed.len(), 2, "{st:?}");
+}
+
+/// **Un fichier créé entre la liste et les dates n'est pas perdu** (le
+/// témoin de la montre qui manquait `admis.rs`, 3 fois sur 20 sous charge, 18
+/// octobre 2026) : la liste était lue, puis la date du dossier — qui
+/// comprenait déjà la création. Les tours suivants trouvaient une date
+/// inchangée et ne relisaient plus la liste avant le filet de 60 s. Le crochet
+/// crée le fichier exactement là.
+#[test]
+fn a_file_created_between_the_list_and_the_dates_is_not_lost() {
+    let (dir, source) = tree();
+    vieillir(dir.path());
+    let mut s = Scanner::new(dir.path().to_path_buf(), source, &config(0)).unwrap();
+    let t0 = Instant::now();
+    let racine = dir.path().to_path_buf();
+    let mut une_fois = true;
+    s.apres_la_liste = Some(Box::new(move || {
+        if std::mem::take(&mut une_fois) {
+            std::fs::write(racine.join("src/tardif.rs"), "fn tardif() {}\n").unwrap();
+        }
+    }));
+    std::fs::write(dir.path().join("src/d.rs"), "fn d() {}\n").unwrap();
+    let premier = s.scan(t0 + Duration::from_millis(100)).unwrap();
+    assert_eq!(changes(&premier), [("src/d.rs", Change::Created)], "tardif.rs est arrivé après la liste");
+    // Bien avant le filet de 60 s, tardif.rs doit être vu.
+    let mut vu = false;
+    for i in 2..20 {
+        if s.scan(t0 + Duration::from_millis(100 * i)).unwrap().iter().any(|c| c.path == "src/tardif.rs") {
+            vu = true;
+            break;
+        }
+    }
+    assert!(vu, "un fichier créé entre la liste et les dates est perdu jusqu'au filet");
 }
 
 /// **La mesure, sur un vrai arbre** : le `src/` du moteur. Un tour au repos

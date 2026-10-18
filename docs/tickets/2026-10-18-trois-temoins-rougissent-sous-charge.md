@@ -51,3 +51,24 @@ Il porte `#[ignore]` avec ce renvoi, pour que la CI redise la vérité. Le lot *
 principal, après L5 : un instantané par appel d'outil, sur un réservoir de connexions de lecture)
 le corrige, retire la marque et ferme cette ligne. Les deux autres témoins du ticket restent au
 proto.
+
+## `the_watch_does_not_index_what_the_index_excludes` : un défaut de la montre, corrigé (18 octobre 2026, la nuit)
+
+Départagé sous charge (le test seul, la lib entière en fond et seize boucles CPU, vingt passes,
+lib 87a362e30) avec un diagnostic en cas de rouge : **3 rouges sur 20**, et chaque fois
+`admis.rs` sur le disque mais **absent de la base**, la montre à `lists: 1` pour 17 balayages, et
+1 à 3 exclus vus sur 3. Ce n'était pas une famine : **la montre avait perdu le fichier.**
+
+La cause, lue dans `watch.rs` : la liste de la source était lue, *puis* la date des dossiers
+(`remember_dirs`). Un fichier créé entre les deux changeait la date sans être dans la liste ; les
+tours suivants trouvaient la date inchangée, ne relisaient plus la liste, et le fichier restait
+invisible jusqu'au filet de 60 s. C'est le « racy git » ; la granularité de la date d'un inode
+(un tic du noyau) en donne une seconde forme.
+
+Le correctif : une date de dossier qui n'est pas plus vieille que le début de la liste moins
+`DATE_DOUTEUSE` (2 s) est tenue pour douteuse, et le dossier se relit au tour suivant. Témoin
+déterministe, rouge d'abord sans le filtre : `watch::tests::a_file_created_between_the_list_and_the_dates_is_not_lost`
+(un crochet de test crée le fichier entre la liste et les dates).
+
+Cette ligne du ticket est fermée ; les deux autres restent (le lot vu à moitié, au L6 de l'arbre
+principal ; le journal de commande, au proto).
