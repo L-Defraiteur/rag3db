@@ -498,3 +498,105 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **L'IDE d'un vrai hôte, en lecture seule** (19 octobre 2026) : le même
+/// parcours que [`les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur`],
+/// contre un hôte en service et l'un de ses backends de code, sans rien
+/// éditer. Le fichier et le symbole se choisissent seuls : un fichier indexé,
+/// pas modifié depuis l'index, et l'un de ses scopes.
+///
+/// Ignoré par défaut ; se joue par
+/// `RAG3WEAVER_TEMOIN_HOTE=127.0.0.1:7970 RAG3WEAVER_TEMOIN_MANIFESTE=<backend.json> cargo test --lib -- --ignored l_ide_d_un_vrai_hote`.
+/// Le jeton est lu dans `RAG3WEAVER_TEMOIN_JETON_FICHIER` (par défaut
+/// `~/.local/share/rag3weaver/daemon.token`), jamais écrit nulle part.
+#[test]
+#[ignore = "contre un hôte en service : RAG3WEAVER_TEMOIN_HOTE et RAG3WEAVER_TEMOIN_MANIFESTE"]
+fn l_ide_d_un_vrai_hote_se_rend_en_lecture_seule() {
+    let nom = "l_ide_d_un_vrai_hote_se_rend_en_lecture_seule";
+    let (Ok(adresse), Ok(manifeste)) = (std::env::var("RAG3WEAVER_TEMOIN_HOTE"), std::env::var("RAG3WEAVER_TEMOIN_MANIFESTE")) else {
+        eprintln!("SAUTÉ {nom} : RAG3WEAVER_TEMOIN_HOTE et RAG3WEAVER_TEMOIN_MANIFESTE manquent");
+        return;
+    };
+    let Some(binaire) = navigateur_ou_saut(nom) else { return };
+    let fichier_jeton = std::env::var_os("RAG3WEAVER_TEMOIN_JETON_FICHIER")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap()).join(".local/share/rag3weaver/daemon.token"));
+    let jeton = std::fs::read_to_string(&fichier_jeton).unwrap_or_else(|e| panic!("{} : {e}", fichier_jeton.display())).trim().to_string();
+    let cookie = format!("rag3weaver_ide={jeton}");
+    let appeler = |outil: &str, args: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("http://{adresse}/ide/call"))
+            .header("Cookie", &cookie)
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste, "name": outil, "arguments": args }).to_string())
+            .unwrap();
+        let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(v["ok"], true, "{outil} : {v}");
+        // La sortie de l'outil, sous l'enveloppe d'une lecture du catalogue s'il y en a une.
+        let s = v["result"]["result"].clone();
+        if s.get("status").is_some() && s.get("result").is_some() && s.as_object().is_some_and(|o| o.len() == 2) {
+            s["result"].clone()
+        } else {
+            s
+        }
+    };
+    // Le fichier : indexé, pas modifié depuis l'index, de quelques dizaines de lignes, sous src/ de préférence.
+    let liste = appeler("list_files", json!({ "path_prefix": "", "limit": 5000, "format": "json" }));
+    let entrees = liste["entries"].as_array().unwrap_or_else(|| panic!("list_files : {liste}"));
+    let bon = |e: &&Value| e["indexed"] != false && e["stale"] != true && e["lines"].as_u64().is_some_and(|n| (30..2000).contains(&n));
+    let fichier = entrees
+        .iter()
+        .filter(bon)
+        .find(|e| e["path"].as_str().is_some_and(|p| p.starts_with("src/")))
+        .or_else(|| entrees.iter().find(bon))
+        .unwrap_or_else(|| panic!("aucun fichier indexé et à jour parmi {}", entrees.len()))["path"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let lu = appeler("read_file", json!({ "path": fichier, "limit": 2000, "format": "json" }));
+    let symbole = lu["scopes"]
+        .as_array()
+        .and_then(|s| s.iter().filter_map(|x| x["name"].as_str()).find(|n| n.len() >= 4 && n.chars().all(|c| c.is_alphanumeric() || c == '_')))
+        .unwrap_or_else(|| panic!("{fichier} n'a pas de scope nommé : {lu}"))
+        .to_string();
+    eprintln!("{nom} : {fichier}, symbole {symbole}");
+    let etat: Value = {
+        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", &cookie).call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let id = etat["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifeste.as_str()))
+        .unwrap_or_else(|| panic!("le backend n'est pas dans l'état de l'hôte"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let mut n = Navigateur::lancer(&binaire);
+    let racine = format!("http://{adresse}");
+    n.aller(&format!("{racine}/ide/entrer?jeton={jeton}"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
+    let fichier_url: String = fichier.split('/').map(|p| p.replace('%', "%25").replace('#', "%23").replace('?', "%3F").replace(' ', "%20")).collect::<Vec<_>>().join("/");
+    let vues: Vec<(&str, String, String)> = vec![
+        ("l'accueil", format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Backends'".into()),
+        ("l'arbre", format!("{racine}/ide/code/{id}/arbre/"), "document.querySelectorAll('#vue li a').length > 0".into()),
+        (
+            "un fichier",
+            format!("{racine}/ide/code/{id}/fichier/{fichier_url}"),
+            format!("document.querySelector('#L1') && [...document.querySelectorAll('#vue aside a')].some(a => a.textContent === {})", json!(symbole)),
+        ),
+        (
+            "un symbole",
+            format!("{racine}/ide/code/{id}/symbole/{symbole}"),
+            "[...document.querySelectorAll('#vue h2')].some(h => /^Définitions \\([1-9]/.test(h.textContent))".into(),
+        ),
+        ("la recherche", format!("{racine}/ide/code/{id}/recherche?q={symbole}"), "document.querySelectorAll('#vue .resultat').length > 0".into()),
+        ("le graphe", format!("{racine}/ide/code/{id}/graphe/{symbole}"), "document.querySelector('#vue svg g.noeud.centre')".into()),
+    ];
+    for (quoi, url, attendu) in &vues {
+        n.aller(url, attendu);
+        let alertes = n.evaluer("[...document.querySelectorAll('.alerte')].map(e => e.textContent)");
+        assert_eq!(alertes, json!([]), "{quoi} montre une alerte");
+        assert!(n.erreurs.is_empty(), "{quoi} : erreurs à la console : {:#?}", n.erreurs);
+        eprintln!("{nom} : {quoi} rendu");
+    }
+}
