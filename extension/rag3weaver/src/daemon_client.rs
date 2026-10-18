@@ -674,7 +674,8 @@ impl McpClient {
             "name": DAEMON_STATUS,
             "description": "L'état de l'hôte du démon qui tient les bases : en marche (adresse, bâti, sessions, \
                             backends ouverts et, pour chacun, l'état de ses index : retard sur le disque, \
-                            reconstruction, montres, lot d'embarquement en cours, morceaux sans texte), ou absent / \
+                            reconstruction, montres, lot d'embarquement en cours, morceaux sans texte), les runs en fond \
+                            (commandes et graphes lancés : poignée, outil, appelant, âge), ou absent / \
                             injoignable — avec la raison, le journal à lire et quoi faire. À appeler quand un autre \
                             outil échoue ou manque, ou pour savoir où en est un index.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
@@ -694,6 +695,7 @@ impl McpClient {
                     "sessions": etat["sessions"],
                     "backends": etat["backends"],
                     "closed_dead_sessions": etat["closed_dead_sessions"],
+                    "background": etat["background"],
                 }),
                 Err(e) => json!({ "state": "injoignable", "reason": e, "log": crate::daemon_lifecycle::log_path() }),
             },
