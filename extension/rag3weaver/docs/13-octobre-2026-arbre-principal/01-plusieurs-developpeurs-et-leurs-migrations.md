@@ -415,11 +415,8 @@ ligne porte `_org` et `_project`, et seuls le plein texte et le sparse ont des i
 - **Une méta par cellule.** `entity_config:{E}` devient `entity_config:{cellule}:{E}`. Le
   `migrate_entity` d'aujourd'hui compare dans la cellule, et `dans_la_cellule` bascule aussi les
   configurations, ce qu'il fait déjà pour les poignées plein texte.
-- **Les relations restent dans leur cellule.** Une relation entre deux cellules n'aurait plus de
-  table d'extrémités unique. Je propose de la refuser au chargement, en le nommant. Un renvoi
-  d'un projet à l'autre passe par une propriété (l'uuid de l'autre, comme une clé étrangère), que
-  les outils lisent sans saut. Si un cas réel le contredit (la mémoire longue relie-t-elle ses
-  cellules ?), il revient à Lucie.
+- **Une relation entre deux cellules est explicite** : déclarée comme telle au gabarit, avec qui a
+  le droit de la poser (décision de Lucie, 18 octobre ; le §12).
 - **Une cellule neuve** reçoit les migrations de son gabarit dans l'ordre, sur des tables vides :
   c'est le rejeu du §1, cellule par cellule.
 - **L'existant se migre lui-même en étendre puis contracter** :
@@ -507,5 +504,128 @@ trois migrations, chacune du journal :
 Le scénario du banc mesure E1, E10 et E11 sur une seule table : il reste la référence de chaque
 lot moteur.
 
-**Une question nouvelle, pour Lucie** : les relations entre deux cellules, refusées comme je le
-propose au §11.1, ou permises (alors leur table d'extrémités doit savoir viser plusieurs tables) ?
+**Les relations entre deux cellules**, et les ponts entre bases : le §12.
+
+## 12. Les relations qui traversent : entre cellules, et entre bases
+
+*Arbre principal, 18 octobre 2026. La réponse de Lucie à la question du §11 : pas de refus par
+défaut. Une relation entre deux projets est **explicite**, c'est-à-dire déclarée comme telle dans le
+gabarit, et **autorisée ou non** : le gabarit dit qui a le droit de la poser. Et on devrait pouvoir
+poser des **ponts de relations entre deux bases**, pas seulement entre deux cellules d'une base.*
+
+### 12.1 Ce que le moteur permet déjà
+
+- **Une table de relations à plusieurs paires d'extrémités.**
+  `CREATE REL TABLE R(FROM A TO B, FROM C TO D, …)` est supporté (`src/binder/bind/bind_ddl.cpp:189-210`,
+  `test/test_files/ddl/ddl.test:73`).
+- **On y ajoute ou on en retire une paire** : `ALTER TABLE R ADD [IF NOT EXISTS] FROM X TO Y`, et
+  `DROP … FROM X TO Y` (`bind_ddl.cpp:475-490`, `test/test_files/ddl/alter_rel_group.test`).
+- **Une table de nœuds qu'une relation vise ne peut pas tomber** : « Cannot delete node table … because
+  it is referenced by relationship table … » (`alter_rel_group.test:73`).
+- **`ATTACH` d'une autre base rag3db**, mais en lecture seule, et en **remplaçant** le contexte :
+  - après l'attache, la connexion ne voit que les tables de la base attachée, et toute écriture est
+    refusée (« Cannot execute write operations in a read-only database! »,
+    `src/main/attached_database.cpp:55`, `src/main/client_context.cpp:640-650`) ;
+  - aucune requête ne joint donc deux bases rag3db, aucune arête ne les traverse, et aucune
+    transaction n'écrit dans les deux ;
+  - les extensions duckdb, postgres et sqlite sont dans le dépôt, mais pas bâties par défaut. Elles
+    ne donnent qu'une lecture tabulaire (`LOAD FROM db.table`), pas un `MATCH`.
+
+**Ce que fait le produit aujourd'hui :**
+- une relation du manifeste a une seule paire (`RelationDef { from, to }`, `src/config.rs:118`) ;
+- `create_rel_table` n'en écrit qu'une (`src/dialect.rs:1588`) ;
+- un manifeste n'a qu'une base ;
+- entre cellules, la seule notion est la vue des événements de supervision
+  (`EventBus::across_scopes`), pas une donnée.
+
+### 12.2 Une relation entre cellules, déclarée et autorisée
+
+**La déclaration.** Une relation du gabarit dit qu'elle traverse, entre quelles cellules, et qui la
+pose :
+
+```json
+"relations": {
+  "DEPEND_DE": {
+    "from": "Ticket", "to": "Ticket",
+    "entre_cellules": {
+      "de": "acme/*", "vers": ["acme/socle"],
+      "posee_par": ["mainteneur"]
+    }
+  }
+}
+```
+
+- **`de` et `vers`** disent les cellules permises, en motifs. Une relation sans `entre_cellules`
+  reste dans sa cellule, comme aujourd'hui, et une écriture qui la ferait traverser est refusée en
+  le nommant.
+- **`posee_par`** nomme les clés qui peuvent la poser. Le produit a déjà les clés des outils : un
+  client MCP se lance avec `--keys dev,admin`, et une attache d'outil dit ce qu'elle exige. Un outil
+  qui pose cette relation sans la clé est refusé par son nom, comme un outil non exposé. La lecture
+  d'une relation qui traverse n'est pas restreinte : qui voit la cellule d'arrivée voit la relation.
+- **Le moteur** : c'est **une** table de relations par relation qui traverse, à plusieurs paires.
+  Elle compte une paire `FROM Ticket_<a> TO Ticket_<b>` par couple de cellules effectivement relié.
+  La paire est ajoutée par `ALTER TABLE … ADD FROM … TO …` à la première arête posée entre deux
+  cellules, ou d'avance pour une cellule `vers` qui existe. C'est du DDL, et il passe donc par une
+  migration (§12.3), jamais au fil d'une écriture.
+
+**Ce que devient M3.** Le schéma par cellule garde ses tables à lui. S'y ajoutent les tables de
+relations qui traversent, qui appartiennent au **lien** et non à une cellule :
+- leurs paires listent les cellules reliées ;
+- leur méta (`relation_config:{relation}`) est commune aux cellules qu'elles relient ;
+- **le témoin de M3 grandit** : deux cellules et une relation qui les traverse. Un `ALTER` sur
+  `Ticket` d'une cellule ne touche ni l'autre cellule ni la table du lien. Une arête du lien posée
+  sans la clé est refusée, et une arête vers une cellule non déclarée aussi.
+
+### 12.3 La migration d'une cellule qu'une relation traverse
+
+| ce qui change | ce qui se passe |
+|---|---|
+| une colonne de `Ticket` dans la cellule `a` | rien pour le lien : il vise la table de nœuds, pas ses colonnes |
+| une cellule nouvelle qui entre dans `de` ou `vers` | une migration de la cellule ajoute la paire (`ALTER … ADD FROM … TO …`), journalisée dans la cellule |
+| une propriété ajoutée à la relation du lien | c'est un `ALTER` de la table du lien, partagé : **une migration du lien**, journalisée dans chaque cellule reliée, et refusée si l'une d'elles n'est pas à l'état d'avant que la migration suppose (le refus de M2, étendu aux cellules du lien) |
+| `Ticket` de la cellule `a` contracté ou retiré (étendre puis contracter, M6) | le moteur refuse de faire tomber une table de nœuds qu'un lien vise. La contraction retire donc d'abord la paire du lien (`DROP FROM … TO …`), dans la même transaction, après que le remplissage a reporté les arêtes vers la table neuve |
+| la cellule `b` retirée entière | ses paires tombent avec elle ; les arêtes du lien qui la visaient sont **comptées et dites** dans la migration, jamais perdues en silence (P3) |
+| la base migrée vers les cellules (M7) | une relation qui reliait déjà deux projets dans les tables communes devient une relation du lien, déclarée au gabarit ; sans déclaration, la migration s'arrête et la nomme |
+
+**La règle d'ordre** : une migration qui touche un lien porte la liste des cellules qu'elle traverse.
+Dans l'hôte, elle les retient toutes le temps de sa transaction, et elles seules. C'est le seul cas
+où une migration retient plus d'une cellule.
+
+### 12.4 Le pont entre deux bases (graine)
+
+Lucie veut aller plus loin que les cellules d'une base. Le moteur ne joint pas deux bases (§12.1),
+donc **le pont est l'affaire du produit**. La forme que je propose, sans code :
+
+- **Une arête dont l'autre bout est dans une autre base** s'écrit dans la base qui la pose, vers un
+  **nœud d'ancrage** local : une table `_Pont`, qui porte la base, la cellule, l'entité et l'uuid de
+  l'autre bout. C'est une relation ordinaire pour le moteur, et le pont n'existe que pour le produit.
+- **Le gabarit déclare le pont** comme une relation qui traverse : `entre_bases`, avec la base visée
+  (par le nom de son manifeste), les cellules, l'entité et `posee_par`.
+- **Lire à travers le pont.** L'hôte du démon tient déjà plusieurs bases, une par manifeste. Un saut
+  qui arrive sur `_Pont` se poursuit par la **vue de lecture** de l'autre base (L2), sans son mutex.
+  La réponse dit que le saut a traversé et où ; c'est la condition P1 de la stèle (dire comment un
+  lien a été trouvé).
+- **Écrire à travers le pont** : deux bases, ce sont deux transactions, sans atomicité entre elles.
+  - L'arête et son ancrage s'écrivent d'un seul côté, dans une seule transaction. L'autre côté n'est
+    pas écrit.
+  - Un bout absent (l'autre base n'a plus cet uuid) n'est pas une erreur muette : la lecture le
+    compte et le nomme (« pont vers code-rag3db : 3 bouts absents »), comme P4 le veut.
+  - Une réconciliation en fond, sur le modèle de la dette d'embarquement, peut marquer les ancrages
+    morts.
+- **Ce qui manque :**
+  - dans le moteur, rien n'est exigé pour cette forme. Une jointure entre bases (`ATTACH` en
+    écriture et sans remplacer le contexte) serait une piste à part, et elle demanderait au cœur
+    une transaction sur deux bases, ce qui est loin ;
+  - dans le produit : la table `_Pont`, la déclaration `entre_bases`, la poursuite d'un saut par
+    l'hôte vers la vue d'une autre base, le compte des bouts absents, et les clés de pose ;
+  - une question pour plus tard : un pont vers une base d'un **autre poste** (luciepc), qui demande
+    que l'hôte d'en face serve la lecture.
+
+### 12.5 Ce que ça ajoute aux lots
+
+| # | ajout | où |
+|---|---|---|
+| M3 | les relations qui traversent : la déclaration `entre_cellules`, la table du lien à plusieurs paires, les clés de pose, et le témoin à deux cellules et un lien | dans M3 |
+| M3 bis | la migration d'un lien : journalisée dans chaque cellule reliée, refusée sur un état d'avant différent, et retenant ses cellules seules | après M4, qui fournit la retenue par cellule |
+| M6 | la contraction retire d'abord la paire du lien, après le remplissage des arêtes | dans M6 |
+| P1 | **le pont entre bases** : `_Pont`, `entre_bases`, la lecture à travers par la vue de l'autre base, les bouts absents comptés, les clés de pose | après M7, comme graine à mûrir ; à présenter à Lucie avant de commencer |
