@@ -34,6 +34,12 @@
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); margin: 20px 0 8px; }
   .note { color: var(--doux); font-size: 13px; }
   .alerte { color: var(--alerte); }
+  /* L'édition humaine (B1) : le tampon, la barre, la différence. */
+  .edition textarea { width: 100%; min-height: 70vh; font: 13px/1.5 var(--mono); background: var(--surface);
+    color: var(--texte); border: 1px solid var(--trait); padding: 8px; tab-size: 4; }
+  .barre { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+  .diff { font: 12px/1.45 var(--mono); white-space: pre-wrap; border: 1px solid var(--trait); padding: 6px; max-height: 50vh; overflow: auto; }
+  .diff .plus { background: var(--accent-doux); } .diff .moins { background: var(--marque); }
   ul.liste { list-style: none; padding: 0; margin: 0; }
   ul.liste li { padding: 4px 0; border-bottom: 1px solid var(--trait); display: flex; gap: 12px; flex-wrap: wrap; }
   ul.liste .meta { color: var(--doux); font-size: 13px; }
@@ -79,6 +85,7 @@
 {
   "list_files": ["path_prefix", "limit", "format"],
   "read_file": ["path", "offset", "limit", "format"],
+  "edit_file": ["path", "content", "expected_hash"],
   "usages": ["name", "limit", "format"],
   "impact": ["name", "depth", "format"],
   "callees": ["name", "depth", "format"],
@@ -98,7 +105,9 @@ function el(tag, attrs = {}, ...enfants) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v === undefined || v === null) continue;
-    if (k === "class") e.className = v; else e.setAttribute(k, v);
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
   }
   for (const c of enfants.flat()) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
   return e;
@@ -231,6 +240,7 @@ function ligneCliquable(id, texte) {
 }
 
 async function fichier(id, chemin) {
+  edition = null; // la vue de lecture : aucune édition en cours
   filDAriane(id, chemin, true);
   const offset = Number(new URLSearchParams(location.search).get("depuis") ?? 1) || 1;
   const r = await appeler(id, "read_file", { path: chemin, offset, limit: 2000, format: "json" });
@@ -250,6 +260,7 @@ async function fichier(id, chemin) {
       " ", el("a", { href: lienSymbole(id, s.name), title: "usages, impact, appelés" }, "→")));
   vue.replaceChildren(
     el("h1", {}, chemin),
+    el("p", { class: "barre" }, el("button", { onclick: () => editer(id, chemin) }, "Modifier")),
     el("p", { class: "note" },
       `${r.total_lines} lignes`,
       r.stale === true ? el("span", { class: "alerte" }, " · modifié depuis l'index") : r.stale === null ? " · non indexé" : "",
@@ -260,6 +271,91 @@ async function fichier(id, chemin) {
     ),
   );
   vise();
+}
+
+// ─── L'édition humaine (B1, page 05 §4) ──────────────────────────────────────
+// La page n'est qu'une vue : le tampon vit le temps de l'édition, l'hôte fait foi.
+// On lit le fichier exact (`format: "brut"`) et son empreinte ; l'enregistrement
+// la rend (`expected_hash`) : si le fichier a changé depuis, rien n'est écrit,
+// et la page montre la différence au lieu d'écraser.
+let edition = null; // { id, chemin, hash, modifie, zone, avis }
+
+async function editer(id, chemin) {
+  const r = await appeler(id, "read_file", { path: chemin, format: "brut" });
+  if (r.outside) {
+    vue.prepend(el("p", { class: "alerte" }, "Ce fichier est hors du worktree déclaré : il se lit, il ne se modifie pas."));
+    return;
+  }
+  const zone = el("textarea", { spellcheck: "false", "aria-label": `contenu de ${chemin}` });
+  zone.value = r.content;
+  const avis = el("span", { class: "note" }, "");
+  edition = { id, chemin, hash: r.content_hash, modifie: false, zone, avis };
+  zone.addEventListener("input", () => { edition.modifie = true; avis.textContent = "modifié, non enregistré"; });
+  zone.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); enregistrer(); }
+  });
+  vue.replaceChildren(
+    el("h1", {}, chemin),
+    el("p", { class: "barre" },
+      el("button", { onclick: enregistrer }, "Enregistrer"),
+      el("button", { onclick: quitter }, "Fermer l'édition"),
+      avis),
+    el("div", { class: "edition" }, zone),
+  );
+  zone.focus();
+}
+
+async function enregistrer() {
+  const e = edition;
+  if (!e) return;
+  try {
+    await appeler(e.id, "edit_file", { path: e.chemin, content: e.zone.value, expected_hash: e.hash });
+  } catch (err) {
+    if (String(err).includes("fichier changé depuis la lecture")) return conflit(e, String(err));
+    e.avis.textContent = `refusé : ${err}`;
+    return;
+  }
+  // Écrit : le tampon est l'état du disque, son empreinte se relit.
+  const r = await appeler(e.id, "read_file", { path: e.chemin, format: "brut" });
+  e.hash = r.content_hash;
+  e.modifie = false;
+  e.avis.textContent = "enregistré";
+}
+
+// Le fichier a changé depuis la lecture : la différence entre le disque et le
+// tampon, puis le choix — reprendre le disque, ou écraser en le sachant.
+async function conflit(e, raison) {
+  const r = await appeler(e.id, "read_file", { path: e.chemin, format: "brut" });
+  const choix = el("p", { class: "barre" },
+    el("button", { onclick: () => { e.zone.value = r.content; e.hash = r.content_hash; e.modifie = false; e.avis.textContent = "repris du disque"; choix.remove(); diff.remove(); } }, "Reprendre la version du disque"),
+    el("button", { onclick: () => { e.hash = r.content_hash; choix.remove(); diff.remove(); enregistrer(); } }, "Garder ma version (écrase la leur)"));
+  const diff = el("div", { class: "diff", "aria-label": "différence disque → tampon" }, ...difference(r.content, e.zone.value));
+  e.avis.textContent = raison;
+  e.zone.parentElement.before(choix, diff);
+}
+
+// Une différence par lignes (plus longue sous-suite commune), bornée : au-delà,
+// les deux versions entières se comparent à l'œil.
+function difference(avant, apres) {
+  const a = avant.split("\n"), b = apres.split("\n");
+  if (a.length * b.length > 4e6) return [el("div", {}, "fichiers trop grands pour la différence ligne à ligne : reprenez le disque ou écrasez en connaissance de cause")];
+  const l = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--)
+    l[i][j] = a[i] === b[j] ? l[i + 1][j + 1] + 1 : Math.max(l[i + 1][j], l[i][j + 1]);
+  const lignes = [];
+  let i = 0, j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) { i++; j++; continue; }
+    if (i < a.length && (j >= b.length || l[i + 1][j] >= l[i][j + 1])) lignes.push(el("div", { class: "moins" }, "- " + a[i++]));
+    else lignes.push(el("div", { class: "plus" }, "+ " + b[j++]));
+  }
+  return lignes.length ? lignes : [el("div", {}, "aucune différence de lignes (fins de ligne ou espaces)")];
+}
+
+function quitter() {
+  if (edition?.modifie && !confirm("Des modifications ne sont pas enregistrées : les abandonner ?")) return;
+  edition = null;
+  montrer();
 }
 
 function vise() {
@@ -446,6 +542,12 @@ source.onmessage = (e) => {
   if (!b || d.backend !== b.manifest || ev.kind !== "FileChanged") return;
   const touche = r.vue === "fichier" ? ev.path === r.reste : r.vue === "arbre" ? ev.path?.startsWith(r.reste) : false;
   if (!touche) return;
+  // En édition : un tampon modifié n'est jamais remplacé ; on le dit (page 05 §4).
+  if (edition && r.vue === "fichier" && edition.chemin === ev.path) {
+    if (edition.modifie) edition.avis.textContent = "changé sur le disque depuis la lecture : l'enregistrement montrera la différence";
+    else editer(edition.id, edition.chemin);
+    return;
+  }
   clearTimeout(relire);
   relire = setTimeout(() => { const y = scrollY; montrer().then(() => scrollTo(0, y)); }, 300);
 };
