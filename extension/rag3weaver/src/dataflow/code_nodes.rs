@@ -12,7 +12,7 @@ use super::port::{take_or_clone, PortDef, PortType, PortValue};
 use crate::catalog::Catalog;
 use crate::code::{analyze, analyze_source, read_sources, CodeAnalysis};
 use crate::code_tools::{
-    edit_file, grep_files, list_files, source_service, EditOp, GrepOptions, ToolFormat,
+    grep_files, list_files, source_service, EditOp, GrepOptions, ToolFormat,
     DEFAULT_GREP_LIMIT, DEFAULT_LIST_LIMIT, DEFAULT_READ_LIMIT,
 };
 
