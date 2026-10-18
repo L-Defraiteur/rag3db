@@ -11,6 +11,16 @@ pour le code d'à côté (`:464-466`) : *édité par l'agent dans un worktree à
 avant toute fusion.* La règle qui tient tout (`:468-470`) : *la page n'a pas d'état que l'hôte n'ait
 pas.*
 
+> **Tranché par c7, à relire par Lucie** (18 octobre, 23 h 50) :
+>
+> 1. **Le mode par défaut est `approbation`** : l'agent propose, l'humain applique. Le mode direct
+>    reste déclarable par backend.
+> 2. **La base d'une tâche est copiée**, par reflink quand le système de fichiers le permet, sinon
+>    par une copie pleine annoncée avec sa taille. Elle n'est jamais partagée en écriture, et la
+>    tâche n'écrit jamais dans la base de l'arbre principal. La mémoire longue reste partagée en
+>    lecture : elle n'est pas l'objet de la tâche. (Constat du 18 octobre : le reflink a pris sur
+>    luciepc, btrfs ; sur le poste principal, `cp --reflink=auto` a fait des copies pleines.)
+
 ## 1. Les outils de l'agent : ce qui existe, ce qui manque
 
 **Ce qui existe.**
