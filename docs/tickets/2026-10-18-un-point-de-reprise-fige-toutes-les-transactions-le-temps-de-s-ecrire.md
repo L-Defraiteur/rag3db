@@ -89,6 +89,25 @@ reprise automatique coupé (`SCENARIO_NO_AUTO_CHECKPOINT=1`), le même tampon de
 la minute 5 : 58 598 refus, et `CREATE_VECTOR_INDEX` comme `CHECKPOINT` refusés tant que les
 écrivains tournent.
 
+## Effet de bord mesuré : le convoi après le point de reprise (banc, 18 octobre, 8 fils, 9936a4e6d)
+
+Un `CHECKPOINT` de 786 ms retient vingt écrivains de `Doc` (table sous HNSW) qui repartent
+ensemble à sa fin et se sérialisent un par un sur le verrou INDEX exclusif de l'insertion dans
+le graphe : ils finissent de 1 080 à 1 218 ms, soit 300 à 430 ms de convoi après le point de
+reprise ; les écrivains de `Note` (sans index) finissent à 787 ms. Ce surplus n'est pas le point
+de reprise mais le prix du verrou INDEX exclusif par écrivain (lot de la rétention, forme (α)) ;
+il tombera avec un verrou plus fin sur l'insertion HNSW. La borne du scénario du banc en tient
+compte (durée + 50 ms + écrivains retenus × médiane hors DDL pour les tables indexées).
+
+## Le point 3 du ticket du ROLLBACK sous tampon plein (007b2c3e7), rangé ici
+
+Un `CHECKPOINT` refusé faute de mémoire condamne la base (`checkpointFailed`) même s'il n'a
+encore rien écrit : `writeCheckpoint` réécrit en place dès la première table (les colonnes sont
+déplacées avant les groupes), et le code ne distingue pas « refusé avant la première mutation »
+de « cassé au milieu ». Hotfixs pose un drapeau « l'état en mémoire a changé » au premier pas
+irréversible (après avoir déplacé les colonnes seulement une fois les groupes écrits) ; un point
+de reprise qui n'écrit pas en place (voie 2) n'a plus ce problème.
+
 ## Ce que fait le code
 
 `TransactionManager::checkpointNoLock` : `stopNewTransactionsAndWaitForOthersNoLock` (aucun
