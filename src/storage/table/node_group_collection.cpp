@@ -189,6 +189,17 @@ void NodeGroupCollection::addColumn(TableAddColumnState& addColumnState,
     types.push_back(addColumnState.propertyDefinition.getType().copy());
 }
 
+void NodeGroupCollection::removeLastColumn(PageAllocator* pageAllocator) {
+    KU_ASSERT((pageAllocator == nullptr) == (residency == ResidencyState::IN_MEMORY));
+    const auto lock = nodeGroups.lock();
+    for (const auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
+        nodeGroup->removeLastColumn(pageAllocator);
+    }
+    KU_ASSERT(!types.empty());
+    types.pop_back();
+    stats.removeLastColumn();
+}
+
 uint64_t NodeGroupCollection::getEstimatedMemoryUsage() const {
     auto estimatedMemUsage = 0u;
     const auto lock = nodeGroups.lock();

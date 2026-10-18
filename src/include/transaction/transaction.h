@@ -28,6 +28,7 @@ class VersionInfo;
 class UpdateInfo;
 struct VectorUpdateInfo;
 class ChunkedNodeGroup;
+class Table;
 class VersionRecordHandler;
 } // namespace storage
 namespace transaction {
@@ -157,6 +158,8 @@ public:
 
     void pushCreateDropCatalogEntry(catalog::CatalogSet& catalogSet,
         catalog::CatalogEntry& catalogEntry, bool isInternal, bool skipLoggingToWAL = false);
+    // Une colonne ajoutée au stockage par ALTER TABLE ADD, à retirer si la transaction s'annule.
+    void pushAddColumn(storage::Table& table);
     void pushAlterCatalogEntry(catalog::CatalogSet& catalogSet, catalog::CatalogEntry& catalogEntry,
         const binder::BoundAlterInfo& alterInfo);
     void pushSequenceChange(catalog::SequenceCatalogEntry* sequenceEntry, int64_t kCount,

@@ -429,6 +429,17 @@ void ChunkedNodeGroup::addColumn(MemoryManager& mm, const TableAddColumnState& a
     }
 }
 
+void ChunkedNodeGroup::removeLastColumn(PageAllocator* pageAllocator) {
+    KU_ASSERT(!chunks.empty());
+    if (residencyState == ResidencyState::ON_DISK) {
+        // Les pages écrites par addColumn ne resservent qu'après le prochain point de reprise
+        // (PageManager::freePageRange) : rien de validé ne les désigne, rien de rejoué non plus.
+        KU_ASSERT(pageAllocator);
+        chunks.back()->reclaimStorage(*pageAllocator);
+    }
+    chunks.pop_back();
+}
+
 bool ChunkedNodeGroup::isDeleted(const Transaction* transaction, row_idx_t rowInChunk) const {
     return isDeleted(transaction->getStartTS(), transaction->getID(), rowInChunk);
 }

@@ -176,6 +176,7 @@ public:
     bool hasDeletions(const transaction::Transaction* transaction) const;
     virtual void addColumn(TableAddColumnState& addColumnState, PageAllocator* pageAllocator,
         ColumnStats* newColumnStats);
+    virtual void removeLastColumn(PageAllocator* pageAllocator);
 
     void applyFuncToChunkedGroups(version_record_handler_op_t func, common::row_idx_t startRow,
         common::row_idx_t numRows, common::transaction_t commitTS) const;

@@ -604,6 +604,13 @@ void CSRNodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator*
     NodeGroup::addColumn(addColumnState, pageAllocator, newColumnStats);
 }
 
+void CSRNodeGroup::removeLastColumn(PageAllocator* pageAllocator) {
+    if (persistentChunkGroup) {
+        persistentChunkGroup->removeLastColumn(pageAllocator);
+    }
+    NodeGroup::removeLastColumn(pageAllocator);
+}
+
 void CSRNodeGroup::serialize(Serializer& serializer) {
     serializer.writeDebuggingInfo("node_group_idx");
     serializer.write<node_group_idx_t>(nodeGroupIdx);

@@ -73,6 +73,7 @@ public:
         const common::ValueVector& relIDVector, CSRNodeGroupScanSource source,
         common::row_idx_t rowIdx);
     void addColumn(TableAddColumnState& addColumnState, PageAllocator& pageAllocator);
+    void rollbackAddColumn(PageAllocator& pageAllocator);
 
     bool checkIfNodeHasRels(transaction::Transaction* transaction,
         common::ValueVector* srcNodeIDVector) const;

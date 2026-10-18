@@ -19,6 +19,7 @@
 #include "storage/local_storage/local_node_table.h"
 #include "storage/local_storage/local_storage.h"
 #include "storage/local_storage/local_table.h"
+#include "storage/page_manager.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/local_wal.h"
 #include "transaction/lock_manager.h"
@@ -854,6 +855,14 @@ void NodeTable::addColumn(Transaction* transaction, TableAddColumnState& addColu
     }
     nodeGroups->addColumn(addColumnState, &pageAllocator);
     hasChanges = true;
+    transaction->pushAddColumn(*this);
+}
+
+void NodeTable::rollbackAddColumn(main::ClientContext* context) {
+    KU_ASSERT(!columns.empty());
+    // Le stockage local de la transaction a reçu la colonne aussi ; il est jeté juste après.
+    columns.pop_back();
+    nodeGroups->removeLastColumn(PageManager::Get(*context));
 }
 
 std::pair<offset_t, offset_t> NodeTable::appendToLastNodeGroup(Transaction* transaction,

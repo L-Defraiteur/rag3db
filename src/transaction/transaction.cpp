@@ -316,6 +316,13 @@ void Transaction::pushAlterCatalogEntry(CatalogSet& catalogSet, CatalogEntry& ca
     }
 }
 
+void Transaction::pushAddColumn(storage::Table& table) {
+    if (!shouldAppendToUndoBuffer()) {
+        return;
+    }
+    undoBuffer->createAddColumn(table);
+}
+
 void Transaction::pushSequenceChange(SequenceCatalogEntry* sequenceEntry, int64_t kCount,
     const SequenceRollbackData& data) {
     undoBuffer->createSequenceChange(*sequenceEntry, data);

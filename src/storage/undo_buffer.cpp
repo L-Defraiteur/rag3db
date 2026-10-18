@@ -7,6 +7,7 @@
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog_set.h"
 #include "storage/table/chunked_node_group.h"
+#include "storage/table/table.h"
 #include "storage/table/update_info.h"
 #include "storage/table/version_record_handler.h"
 #include "transaction/transaction.h"
@@ -52,6 +53,10 @@ struct VectorUpdateRecord {
     idx_t vectorIdx;
     VectorUpdateInfo* vectorUpdateInfo;
     transaction_t version; // This is used during roll back.
+};
+
+struct AddColumnRecord {
+    Table* table;
 };
 
 template<typename F>
@@ -188,6 +193,14 @@ void UndoBuffer::compactDeadRowsAfterCommit(const transaction::Transaction& tran
     }
 }
 
+void UndoBuffer::createAddColumn(Table& table) {
+    auto buffer = createUndoRecord(sizeof(UndoRecordHeader) + sizeof(AddColumnRecord));
+    const UndoRecordHeader recordHeader{UndoRecordType::ADD_COLUMN, sizeof(AddColumnRecord)};
+    *reinterpret_cast<UndoRecordHeader*>(buffer) = recordHeader;
+    buffer += sizeof(UndoRecordHeader);
+    *reinterpret_cast<AddColumnRecord*>(buffer) = AddColumnRecord{&table};
+}
+
 void UndoBuffer::rollback(ClientContext* context) const {
     UndoBufferIterator iterator{*this};
     iterator.reverseIterate([&](UndoRecordType entryType, uint8_t const* entry) {
@@ -210,6 +223,9 @@ void UndoBuffer::commitRecord(UndoRecordType recordType, const uint8_t* record,
     } break;
     case UndoRecordType::UPDATE_INFO: {
         commitVectorUpdateInfo(record, commitTS);
+    } break;
+    case UndoRecordType::ADD_COLUMN: {
+        // La colonne est déjà en place ; la validation de l'entrée du catalogue la nomme.
     } break;
     default:
         KU_UNREACHABLE;
@@ -264,6 +280,9 @@ void UndoBuffer::rollbackRecord(ClientContext* context, const UndoRecordType rec
     case UndoRecordType::UPDATE_INFO: {
         rollbackVectorUpdateInfo(record);
     } break;
+    case UndoRecordType::ADD_COLUMN: {
+        rollbackAddColumn(context, record);
+    } break;
     default: {
         KU_UNREACHABLE;
     }
@@ -292,6 +311,13 @@ void UndoBuffer::rollbackCatalogEntryRecord(const uint8_t* record) {
             catalogSet->emplaceNoLock(std::move(olderEntry));
         }
     }
+}
+
+void UndoBuffer::rollbackAddColumn(ClientContext* context, const uint8_t* record) {
+    const auto& [table] = *reinterpret_cast<AddColumnRecord const*>(record);
+    // Les enregistrements se défont à rebours : la colonne part avant que l'entrée du catalogue
+    // qui la nommait ne soit retirée de sa chaîne.
+    table->rollbackAddColumn(context);
 }
 
 void UndoBuffer::commitSequenceEntry(const uint8_t*, transaction_t) {

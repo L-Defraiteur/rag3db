@@ -204,6 +204,12 @@ void RelTableData::addColumn(TableAddColumnState& addColumnState, PageAllocator&
     nodeGroups->addColumn(addColumnState, &pageAllocator);
 }
 
+void RelTableData::rollbackAddColumn(PageAllocator& pageAllocator) {
+    KU_ASSERT(!columns.empty());
+    columns.pop_back();
+    nodeGroups->removeLastColumn(&pageAllocator);
+}
+
 std::pair<CSRNodeGroupScanSource, row_idx_t> RelTableData::findMatchingRow(Transaction* transaction,
     ValueVector& boundNodeIDVector, const ValueVector& relIDVector) const {
     KU_ASSERT(boundNodeIDVector.state->getSelVector().getSelSize() == 1);

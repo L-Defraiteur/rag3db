@@ -1,7 +1,10 @@
 # Une colonne ajoutée puis annulée reste au stockage, et l'ajout suivant la relit à sa place
 
-- **État** : ouvert (lu dans le code, pas encore joué : le banc le joue dans le scénario des
-  migrations concurrentes, minute 6 suivie d'un `ADD b`)
+- **État** : corrigé le 18 octobre 2026 par le commit qui ferme ce ticket (lot « annulation d'un
+  ADD COLUMN », cœur C++) : l'ADD laisse un enregistrement dans le tampon d'annulation et le
+  ROLLBACK retire la colonne du stockage ; deux ALTER d'une même table ne se chevauchent plus
+  (conflit écrivain-écrivain, comme un CREATE). Témoin
+  `test/transaction/add_column_rollback_test.cpp`, sept cas rouges avant, verts après.
 - **Gravité** : réponse fausse silencieuse (la seconde colonne rend la valeur par défaut de la
   première), plantage probable si les deux types diffèrent ; **rendue permanente par le point de
   reprise**, qui garde la colonne annulée et jette la vraie.
@@ -44,7 +47,10 @@ répare plus.
 
 ## Témoin
 
-Aucun encore. Le banc le joue dans le scénario des migrations concurrentes
+`test/transaction/add_column_rollback_test.cpp` (`AddColumnRollback.*`) : la recette, la variante
+à deux types, un autre nom, le nombre de colonnes du stockage, une table de relations, des lignes
+insérées avant l'ADD annulé, deux ALTER concurrents ; chaque lecture avant le point de reprise,
+après `CHECKPOINT` et après réouverture. Le banc le joue aussi dans le scénario des migrations concurrentes
 (`extension/rag3weaver/docs/13-octobre-2026-arbre-principal/01-plusieurs-developpeurs-et-leurs-migrations.md`,
 E10). À écrire aussi en témoin court dans `test/transaction/` : la recette ci-dessus, puis la même
 avec deux types différents, puis la relecture après `CHECKPOINT` et après réouverture.

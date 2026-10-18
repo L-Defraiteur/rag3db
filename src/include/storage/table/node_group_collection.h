@@ -82,6 +82,8 @@ public:
     common::column_id_t getNumColumns() const { return types.size(); }
 
     void addColumn(TableAddColumnState& addColumnState, PageAllocator* pageAllocator = nullptr);
+    // L'inverse d'addColumn, au rollback de l'ADD : les pages des blocs sur disque sont rendues.
+    void removeLastColumn(PageAllocator* pageAllocator);
 
     uint64_t getEstimatedMemoryUsage() const;
 

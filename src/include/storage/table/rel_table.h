@@ -187,6 +187,7 @@ public:
 
     void addColumn(transaction::Transaction* transaction, TableAddColumnState& addColumnState,
         PageAllocator& pageAllocator) override;
+    void rollbackAddColumn(main::ClientContext* context) override;
     Column* getCSROffsetColumn(common::RelDataDirection direction) const {
         return getDirectedTableData(direction)->getCSROffsetColumn();
     }

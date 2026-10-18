@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (30)
+### Ouverts — moteur (29)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -45,7 +45,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini](2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md) | ouvert — cause non cherchée (tampon, mémoire hors tampon, allocateur ou hôte) ; sonde à écrire | mémoire | oui, après tout gros index dans un hôte qui reste ouvert | oui (l'hôte du démon) |
-| [Une colonne ajoutée puis annulée reste au stockage, et l'ajout suivant la relit à sa place](2026-10-18-une-colonne-ajoutee-puis-annulee-reste-au-stockage-et-l-ajout-suivant-la-relit.md) | ouvert — pour le cœur C++ (lu, pas joué ; le banc le joue : E10) | réponse fausse silencieuse, permanente après le point de reprise ; plantage si les types diffèrent | oui (une migration rejouée après un échec) | oui |
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
 | [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
@@ -114,10 +113,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (137), dans `closed/`
+### Fermés (138), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une colonne ajoutée puis annulée reste au stockage, et l'ajout suivant la relit à sa place](closed/2026-10-18-une-colonne-ajoutee-puis-annulee-reste-au-stockage-et-l-ajout-suivant-la-relit.md) | corrigé — 18 octobre 2026, lot « annulation d'un ADD COLUMN » (le ROLLBACK retire la colonne du stockage, deux ALTER d'une même table ne se chevauchent plus) ; témoin `test/transaction/add_column_rollback_test.cpp` | réponse fausse silencieuse, permanente après le point de reprise | oui | oui |
 | [La borne du tampon refuse par défaut le premier index de ce dépôt : 65 Mo de texte demandent 9 Gio](closed/2026-10-18-la-borne-du-tampon-refuse-le-premier-index-de-ce-depot.md) | corrigé (18 octobre 2026) : borne recalculée sur la mesure, 28 Mo par Gio au lieu de 8 ; filet du ticket du COPY de blobs | blocage (refus avant écriture) | oui | oui (`estimate`) |
 | [Confirmer qu'une première indexation de ce dépôt passe sous un tampon de 2 Gio](closed/2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md) | confirmé (18 octobre 2026) : vert sous 2 et 4 Gio, en fichiers et en blobs | blocage (s'il revenait) | oui | oui (premier index) |
 | [Le chemin dual ne posait pas le marqueur sparse : chaque passe recalculait les mêmes morceaux](closed/2026-10-12-le-chemin-dual-ne-pose-pas-le-marqueur-sparse.md) | corrigé (ouvert et fermé dans le lot ; `poser_le_creux`) | coût, dette jamais soldée | oui (bge-m3 : memory, notebook, validated-result) | oui (`record_nodes.rs`) |

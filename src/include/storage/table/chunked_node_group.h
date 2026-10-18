@@ -210,6 +210,7 @@ public:
 
     void addColumn(MemoryManager& mm, const TableAddColumnState& addColumnState,
         bool enableCompression, PageAllocator* pageAllocator, ColumnStats* newColumnStats);
+    void removeLastColumn(PageAllocator* pageAllocator);
 
     bool isDeleted(const transaction::Transaction* transaction, common::row_idx_t rowInChunk) const;
     bool isInserted(const transaction::Transaction* transaction,

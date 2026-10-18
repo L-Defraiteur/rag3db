@@ -423,6 +423,15 @@ void NodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator* pa
     }
 }
 
+void NodeGroup::removeLastColumn(PageAllocator* pageAllocator) {
+    KU_ASSERT(!dataTypes.empty());
+    dataTypes.pop_back();
+    const auto lock = chunkedGroups.lock();
+    for (auto& chunkedGroup : chunkedGroups.getAllGroups(lock)) {
+        chunkedGroup->removeLastColumn(pageAllocator);
+    }
+}
+
 void NodeGroup::rollbackInsert(row_idx_t startRow) {
     const auto lock = chunkedGroups.lock();
     const std::unique_lock appendGuard{inMemAppendMtx};

@@ -11,6 +11,7 @@
 #include "storage/local_storage/local_rel_table.h"
 #include "storage/local_storage/local_storage.h"
 #include "storage/local_storage/local_table.h"
+#include "storage/page_manager.h"
 #include "storage/storage_manager.h"
 #include "storage/storage_utils.h"
 #include "storage/table/column_chunk.h"
@@ -480,6 +481,13 @@ void RelTable::addColumn(Transaction* transaction, TableAddColumnState& addColum
         directedRelData->addColumn(addColumnState, pageAllocator);
     }
     hasChanges = true;
+    transaction->pushAddColumn(*this);
+}
+
+void RelTable::rollbackAddColumn(main::ClientContext* context) {
+    for (auto& relData : directedRelData) {
+        relData->rollbackAddColumn(*PageManager::Get(*context));
+    }
 }
 
 RelTableData* RelTable::getDirectedTableData(RelDataDirection direction) const {

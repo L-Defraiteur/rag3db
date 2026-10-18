@@ -180,6 +180,7 @@ public:
 
     void addColumn(transaction::Transaction* transaction, TableAddColumnState& addColumnState,
         PageAllocator& pageAllocator) override;
+    void rollbackAddColumn(main::ClientContext* context) override;
     bool isVisible(const transaction::Transaction* transaction, common::offset_t offset) const;
     bool isVisible(common::transaction_t startTS, common::transaction_t transactionID,
         common::offset_t offset) const;

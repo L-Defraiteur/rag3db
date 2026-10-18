@@ -56,6 +56,10 @@ public:
         columnStats.emplace_back(dataType);
         return columnStats.back();
     }
+    void removeLastColumn() {
+        KU_ASSERT(!columnStats.empty());
+        columnStats.pop_back();
+    }
 
     void serialize(common::Serializer& serializer) const;
     TableStats deserialize(common::Deserializer& deserializer);

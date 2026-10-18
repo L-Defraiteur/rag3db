@@ -187,6 +187,16 @@ void CatalogSet::alterTableEntry(Transaction* transaction,
     validateExistNoLock(transaction, alterInfo.tableName);
     // LCOV_EXCL_STOP
     auto entry = getEntryNoLock(transaction, alterInfo.tableName);
+    // Deux ALTER d'une même table ne se voyaient pas avant leur validation : deux ADD prenaient
+    // le même indice de colonne (ticket du 18 octobre 2026, une colonne ajoutée puis annulée).
+    // Comme pour un CREATE : la version de tête écrite par une autre transaction vivante, ou
+    // validée après notre départ, est un conflit écrivain-écrivain.
+    if (!transaction->isRecovery() &&
+        checkWWConflict(transaction, entries.at(alterInfo.tableName).get())) {
+        throw CatalogException(
+            stringFormat("Write-write conflict on altering catalog entry with name {}.",
+                alterInfo.tableName));
+    }
     KU_ASSERT(entry->getType() == CatalogEntryType::NODE_TABLE_ENTRY ||
               entry->getType() == CatalogEntryType::REL_GROUP_ENTRY);
     const auto tableEntry = entry->ptrCast<TableCatalogEntry>();

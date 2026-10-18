@@ -61,6 +61,7 @@ private:
     const UndoBuffer& undoBuffer;
 };
 
+class Table;
 class UpdateInfo;
 class VersionInfo;
 struct VectorUpdateInfo;
@@ -76,6 +77,7 @@ public:
         UPDATE_INFO = 6,
         INSERT_INFO = 7,
         DELETE_INFO = 8,
+        ADD_COLUMN = 9,
     };
 
     explicit UndoBuffer(MemoryManager* mm) : mm{mm} {}
@@ -94,6 +96,10 @@ public:
         common::row_idx_t numRows, const VersionRecordHandler* versionRecordHandler);
     void createVectorUpdateInfo(UpdateInfo* updateInfo, common::idx_t vectorIdx,
         VectorUpdateInfo* vectorUpdateInfo, common::transaction_t version);
+    // Une colonne ajoutée par ALTER TABLE ADD : au rollback, la table la retire du stockage. La
+    // copie de l'entrée du catalogue rend son indice à l'annulation ; sans ce retrait, l'ADD
+    // suivant reprenait l'indice et relisait la colonne morte (ticket du 18 octobre 2026).
+    void createAddColumn(Table& table);
 
     void commit(common::transaction_t commitTS) const;
     // Après commit : pour chaque groupe où cette transaction a supprimé des lignes, la
@@ -121,6 +127,8 @@ private:
 
     static void commitSequenceEntry(uint8_t const* entry, common::transaction_t commitTS);
     static void rollbackSequenceEntry(uint8_t const* entry);
+
+    static void rollbackAddColumn(main::ClientContext* context, const uint8_t* record);
 
     static void commitVersionInfo(UndoRecordType recordType, const uint8_t* record,
         common::transaction_t commitTS);

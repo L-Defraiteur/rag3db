@@ -179,6 +179,9 @@ public:
     virtual void addColumn(transaction::Transaction* transaction,
         TableAddColumnState& addColumnState, PageAllocator& pageAllocator) = 0;
     void dropColumn() { setHasChanges(); }
+    // Retire la dernière colonne ajoutée, au rollback de son ADD (UndoBuffer::rollbackAddColumn) :
+    // le catalogue annulé rend l'indice, le stockage doit rendre la colonne.
+    virtual void rollbackAddColumn(main::ClientContext* context) = 0;
 
     virtual void commit(main::ClientContext* context, catalog::TableCatalogEntry* tableEntry,
         LocalTable* localTable) = 0;
