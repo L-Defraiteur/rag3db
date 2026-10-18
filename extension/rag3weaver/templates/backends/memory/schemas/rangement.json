@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session",
+    "transcription",
+    "jusqu_a",
+    "motif",
+    "revision",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "session": {
+      "type": "string",
+      "minLength": 1,
+      "description": "L'identifiant de session de Claude Code : son identité."
+    },
+    "transcription": {
+      "type": "string",
+      "description": "Le chemin de la transcription de la session."
+    },
+    "jusqu_a": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "La position (le rang de la ligne) du dernier événement rangé ; un crochet sans rien après ne fait rien."
+    },
+    "motif": {
+      "type": "string",
+      "description": "Le dernier motif : envoi, pre_compact, session_end."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    },
+    "updated_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fiche",
+    "source",
+    "section",
+    "texte",
+    "niveau",
+    "state",
+    "revision",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "fiche": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Le nom de la fiche que cet apport touche."
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Le chemin du Markdown source (le L0), relatif au dossier de la mémoire : sources/<date>-<uuid>.md."
+    },
+    "section": {
+      "type": "string",
+      "description": "Le titre de la section du source d'où vient l'apport (l'ancre de la Ref doc:) ; vide pour le source entier."
+    },
+    "texte": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Ce que la source a dit de ce sujet, à cette date. Un L1 ne change plus une fois posé : c'est une archive."
+    },
+    "niveau": {
+      "type": "string",
+      "enum": [
+        "L1",
+        "L1bis"
+      ],
+      "description": "L1bis : la consolidation de vieux L1 de la même fiche, qui les cite (relation CONSOLIDE)."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "current",
+        "consolidated"
+      ],
+      "description": "consolidated : un L1 résumé par un L1bis ; il reste (la provenance), le recalcul du L2 ne le relit plus."
+    },
+    "author": {
+      "type": "string",
+      "description": "De qui vient l'écriture : la personne pour qui l'agent travaillait (l'identité git du dépôt de la mémoire). Posé par l'hôte, jamais par l'outil (lot M7) ; vide avant M7."
+    },
+    "via": {
+      "type": "string",
+      "description": "Par quel client (la session MCP de l'hôte). Posé par l'hôte (lot M7)."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    },
+    "updated_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    }
+  }
+}

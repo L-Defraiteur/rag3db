@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "about",
+    "state",
+    "revision",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Le sujet : une fiche EST un sujet (« le moteur de reprise du WAL », « les préférences de communication »). Son identité."
+    },
+    "about": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Une description courte du sujet ; c'est elle qui s'embarque. L'état de ce qu'on en sait est dans son Etat (le L2)."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "current",
+        "to_review",
+        "proposed",
+        "retired"
+      ],
+      "description": "proposed (l'état initial) : une fiche que l'archiviste propose de créer, pas encore confirmée (accept → current, reject → retired). Une fiche créée directement naît current : une naissance n'est pas une transition."
+    },
+    "author": {
+      "type": "string",
+      "description": "De qui vient l'écriture : la personne pour qui l'agent travaillait (l'identité git du dépôt de la mémoire). Posé par l'hôte, jamais par l'outil (lot M7) ; vide avant M7."
+    },
+    "via": {
+      "type": "string",
+      "description": "Par quel client (la session MCP de l'hôte). Posé par l'hôte (lot M7)."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    },
+    "updated_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    }
+  }
+}

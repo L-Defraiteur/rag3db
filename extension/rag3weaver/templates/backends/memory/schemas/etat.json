@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fiche",
+    "resume",
+    "faits",
+    "revision",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "fiche": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Le nom de la fiche dont c'est l'état (un Etat par fiche)."
+    },
+    "resume": {
+      "type": "string",
+      "description": "L'état global du sujet, en prose : toujours recalculé depuis les L1, jamais depuis l'Etat d'avant."
+    },
+    "faits": {
+      "type": "array",
+      "description": "Une ligne par fait. Une déduction n'écrase jamais une parole.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "texte",
+          "nature",
+          "apports"
+        ],
+        "properties": {
+          "texte": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nature": {
+            "type": "string",
+            "enum": [
+              "dit",
+              "deduit"
+            ],
+            "description": "dit : des mots cités tels quels d'un apport (vérifié mot pour mot) ; deduit : une conclusion, avec les apports d'où elle vient."
+          },
+          "apports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Les uuid des apports d'où vient le fait."
+          }
+        }
+      }
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    },
+    "updated_at": {
+      "type": "integer",
+      "description": "Server UTC epoch milliseconds"
+    }
+  }
+}
