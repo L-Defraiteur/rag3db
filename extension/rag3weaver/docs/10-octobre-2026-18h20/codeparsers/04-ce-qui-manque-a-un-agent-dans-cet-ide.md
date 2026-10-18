@@ -150,6 +150,30 @@ d'avant : l'objectif « < 100 ms pendant la réindexation » n'est pas tenu pour
 l'arbre principal (L1-L3). Un seul appel a chevauché la fenêtre, mais sa durée colle à la tenue à
 26 ms près. Traces : `~/.cache/codeparsers-notes/b2d/temoin-dab191e43/`.
 
+**Septième rejeu, à `248bf03cc`** (18 octobre, 16 h 23 ; `must_reopen` sans attente `6a6c71d03`,
+l'embarquement hors du verrou `113e388fd`, E10 `87a362e30`). Poste principal en mode perf, sous
+`poste mesure`, lib du magasin `87a362e30` (prouvée par `/proc/<pid>/maps` de l'hôte), base
+entière, index 1 079 s. `usages` **2,11 s**, `search_code` **2,28 s** de bout en bout (5e : 2,29
+et 2,47 ; 6e : 2,5). Ligne de l'hôte : « 2 fichiers réindexé : verrou attendu 0 ms, **tenu
+1 238 ms** — ingérer 501 ms [lire les MENTIONS 153, drain · liens 124…], analyser 138, oublier les
+arêtes 123, fin d'instantané 105, lister 23 ; hors phase : plein texte rendu durable 232 ms »,
+puis « **7 morceaux embarqués hors du verrou : 406 ms** ». La tenue perd 400 ms (1 636 → 1 238) :
+c'est l'embarquement sorti.
+
+**Les lectures pendant la tenue : rapides au début, puis elles attendent.** Second client (une
+boucle `usages name_of_tree` toutes les 20 ms, `appels-parallele.tsv`) : 26 appels, médiane
+54 ms. La tenue va d'environ 0,45 s à 1,7 s après l'édition. Les appels lancés à 0,441, 0,510 et
+0,581 s, dans la tenue, **rendent l'état d'avant en 49 à 51 ms**. Celui de 0,651 s **dure
+1 282 ms et rend l'état nouveau**, comme le `search_code` du client principal lancé à 0,581 s
+(1 299 ms). Les suivants reviennent à 53 ms. Les lectures passent donc pendant les ~150 premières
+millisecondes de la tenue (lister, analyser), puis bloquent jusqu'à sa fin. La bascule coïncide
+avec la première écriture (oublier les arêtes du fichier). L'objectif « < 100 ms avec l'état
+d'avant pendant toute la tenue » n'est tenu que sur ce début. Piste rendue à l'arbre principal
+et au cœur : ce que la transaction d'écriture prend dès sa première écriture et qu'une lecture
+attend. Le figement de l'hôte de luciepc, le même jour, était justement dans « oublier les
+arêtes », sur un rwlock de `ChunkedNodeGroup`. Traces :
+`~/.cache/codeparsers-notes/b2d/temoin-248bf03cc/`.
+
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
 de la session codeparsers.
