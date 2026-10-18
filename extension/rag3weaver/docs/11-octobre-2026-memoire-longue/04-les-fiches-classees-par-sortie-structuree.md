@@ -168,3 +168,35 @@ Questions :
 L'ordre, si tu dis oui : le nœud `decide` arrive par le proto (rien à faire ici) ;
 puis le banc du §5, avant le moindre graphe ; puis le premier usage de la
 question 4.
+
+## 7. Une piste pour plus tard : un Decider qui rend des probabilités
+
+*Note du 18 octobre 2026, de Lucie par l'orchestration : « petit luxe, pas bloquant ».
+La méthode ne change pas : chercher les sujets voisins (`recall_subjects`), puis les
+proposer à Gemini en sortie structurée — une décision par fiche depuis la tentative 4.*
+
+**pplx-decider-v1.1-27b** (Perplexity,
+<https://huggingface.co/perplexity-ai/pplx-decider-v1.1-27b>) rend **une probabilité
+par réponse d'une liste fermée**. Ce qu'il apporterait ici :
+
+- un **seuil réglable pour « aucun »**, au lieu de la seule abstention que le modèle
+  choisit ;
+- une **mesure de confiance par fiche**, à garder avec le rangement (une fiche rangée
+  de justesse se relit en premier).
+
+Ce qu'on en sait, d'après la note (non vérifié ici, à relire avant tout usage hors
+banc) : licence Apache 2.0, ce qui répond à la question 5 du §6 si elle se confirme ;
+0,04 $ par million de jetons en entrée par l'API, la sortie gratuite ; il tient en
+local sur luciepc en 4 bits. Il s'emboîte dans la voie `decider` de `Decide`, que le
+banc joue déjà (`RAG3WEAVER_BANC_DECIDE`, tentatives 1 et 2), et `labels_from` lui
+donne la liste des candidats par fiche (4c3e8179a).
+
+**La réserve à mesurer d'abord** : la tentative 2 a montré un Decider sûr de lui là où
+il se trompe (Qwen3-1.7B, 0,92 à 1,0 sur l'étiquette choisie dans les manqués et les
+faux ancrages) — « un score ordonne bien et juge mal ». Un seuil ne vaut que si la
+probabilité est calibrée : la première mesure serait la courbe des fiches justes
+selon la probabilité, sur le jeu v1, avant de régler quoi que ce soit.
+
+**Quand y revenir** : si le classement des fiches devient le goulot — en coût (les
+appels à Gemini) ou en qualité (des faux rangements qu'aucune instruction ne
+reprend).
