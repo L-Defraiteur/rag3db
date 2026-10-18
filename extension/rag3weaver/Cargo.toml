@@ -68,6 +68,10 @@ swc_ecma_parser = { version = "46", default-features = false, features = ["types
 swc_ecma_transforms_base = "50"
 swc_ecma_transforms_react = "56"
 swc_ecma_transforms_typescript = "56"
+# La sortie CommonJS du composant (`require`/`exports`, interop par défaut), pour le registre de
+# modules de la page : quatre petites crates de plus (swc_ecma_loader, dashmap, path-clean,
+# Inflector), aucune pile d'AST en double.
+swc_ecma_transforms_module = "57"
 
 # Candle embedder (feature flag, active par defaut)
 candle-core = { version = "0.8", optional = true }

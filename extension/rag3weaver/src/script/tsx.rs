@@ -18,6 +18,11 @@
 //!
 //! Un même source, un même id et un même mode rendent toujours les mêmes octets, donc le même
 //! `hash` (blake3) : c'est la version du module, et sa clé de cache.
+//!
+//! **Deux formats** : le module ES tel quel, ou CommonJS (`require`, `exports`, interop par
+//! défaut comprise : `swc_ecma_transforms_module`), pour le registre de modules de la page, qui
+//! exécute aussi les paquets npm de React, déjà en CommonJS. Les spécifiers importés sont rendus
+//! à part (`imports`) : la page les résout par sa table, et l'hôte en tire les importeurs.
 use super::{ScriptError, ScriptErrorKind};
 use std::sync::{Arc, Mutex};
 use swc_common::comments::SingleThreadedComments;
@@ -34,6 +39,10 @@ use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{inject_helpers, Helpers, HELPERS};
 use swc_ecma_transforms_base::hygiene::hygiene;
 use swc_ecma_transforms_base::resolver;
+use swc_ecma_transforms_module::common_js::{common_js, FeatureFlag};
+use swc_ecma_transforms_module::import_analysis::import_analyzer;
+use swc_ecma_transforms_module::path::Resolver;
+use swc_ecma_transforms_module::util::ImportInterop;
 use swc_ecma_transforms_react::{react, Options as ReactOptions, RefreshOptions, Runtime};
 use swc_ecma_transforms_typescript::typescript;
 
@@ -42,6 +51,15 @@ use swc_ecma_transforms_typescript::typescript;
 pub enum ComponentMode {
     Development,
     Production,
+}
+
+/// Le format du module rendu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleFormat {
+    /// `import` / `export`.
+    Esm,
+    /// `require` / `exports`, pour une fabrique `function (require, module, exports)`.
+    CommonJs,
 }
 
 /// Ce que la compilation rend.
@@ -58,6 +76,9 @@ pub struct CompiledComponent {
     /// Refresh) : le module peut s'accepter lui-même ; sinon la mise à jour remonte à ses
     /// importeurs.
     pub exports_only_components: bool,
+    /// Les spécifiers importés, dans l'ordre du module et sans doublon : `react`,
+    /// `react/jsx-dev-runtime` (posé par le JSX), `./bouton`… Les imports de types sont effacés.
+    pub imports: Vec<String>,
 }
 
 /// Les diagnostics de swc, gardés au lieu d'être écrits.
@@ -78,6 +99,7 @@ pub fn compile_component(
     source: &str,
     template_id: &str,
     mode: ComponentMode,
+    format: ModuleFormat,
 ) -> Result<CompiledComponent, ScriptError> {
     let dev = mode == ComponentMode::Development;
     let cm: Lrc<SourceMap> = Default::default();
@@ -90,7 +112,7 @@ pub fn compile_component(
     let comments = SingleThreadedComments::default();
 
     let sortie = GLOBALS.set(&Globals::new(), || {
-        HANDLER.set(&handler, || -> Result<(String, String, bool), ()> {
+        HANDLER.set(&handler, || -> Result<(String, String, bool, Vec<String>), ()> {
             let syntax = Syntax::Typescript(TsSyntax {
                 tsx: true,
                 decorators: true,
@@ -116,6 +138,7 @@ pub fn compile_component(
             let unresolved_mark = Mark::new();
             let top_level_mark = Mark::new();
             let mut seulement_des_composants = true;
+            let mut importes = Vec::new();
             HELPERS.set(&Helpers::new(false), || {
                 program.mutate(&mut resolver(unresolved_mark, top_level_mark, true));
                 program.mutate(&mut typescript::typescript(
@@ -137,7 +160,19 @@ pub fn compile_component(
                     top_level_mark,
                     unresolved_mark,
                 ));
-                program.mutate(&mut inject_helpers(unresolved_mark));
+                importes = imported_specifiers(&program);
+                if format == ModuleFormat::CommonJs {
+                    program.mutate(&mut import_analyzer(ImportInterop::Swc, true));
+                    program.mutate(&mut inject_helpers(unresolved_mark));
+                    program.mutate(&mut common_js(
+                        Resolver::Default,
+                        unresolved_mark,
+                        Default::default(),
+                        FeatureFlag { support_block_scoping: true, support_arrow: true },
+                    ));
+                } else {
+                    program.mutate(&mut inject_helpers(unresolved_mark));
+                }
                 program.mutate(&mut hygiene());
                 program.mutate(&mut fixer(Some(&comments)));
             });
@@ -169,11 +204,11 @@ pub fn compile_component(
             }
             let code = String::from_utf8(code).map_err(|_| ())?;
             let source_map = String::from_utf8(source_map).map_err(|_| ())?;
-            Ok((code, source_map, seulement_des_composants))
+            Ok((code, source_map, seulement_des_composants, importes))
         })
     });
 
-    let (mut code, source_map, exports_only_components) = match sortie {
+    let (mut code, source_map, exports_only_components, imports) = match sortie {
         Ok(fait) => fait,
         Err(()) => return Err(premiere_erreur(&cm, &collected)),
     };
@@ -181,7 +216,7 @@ pub fn compile_component(
         code.push_str(&refresh_bindings(template_id));
     }
     let hash = crate::hash::content_hash(&code);
-    Ok(CompiledComponent { code, source_map, hash, exports_only_components })
+    Ok(CompiledComponent { code, source_map, hash, exports_only_components, imports })
 }
 
 /// Les deux fonctions qui donnent à React Refresh le nom de famille `"<gabarit> <composant>"`.
@@ -209,6 +244,28 @@ fn premiere_erreur(cm: &Lrc<SourceMap>, collected: &Collected) -> ScriptError {
         }
         None => ScriptError::new(ScriptErrorKind::Syntax, "le TSX ne se compile pas"),
     }
+}
+
+/// Les spécifiers d'`import` et de réexportation (`export … from`), dans l'ordre, sans doublon.
+fn imported_specifiers(program: &Program) -> Vec<String> {
+    let Program::Module(module) = program else { return Vec::new() };
+    let mut vus = Vec::new();
+    for item in &module.body {
+        let ModuleItem::ModuleDecl(decl) = item else { continue };
+        let src = match decl {
+            ModuleDecl::Import(i) => Some(&i.src),
+            ModuleDecl::ExportAll(e) => Some(&e.src),
+            ModuleDecl::ExportNamed(n) => n.src.as_ref(),
+            _ => None,
+        };
+        if let Some(src) = src {
+            let s = src.value.to_string_lossy().to_string();
+            if !vus.contains(&s) {
+                vus.push(s);
+            }
+        }
+    }
+    vus
 }
 
 /// Un nom de composant pour React Refresh : il commence par une majuscule.
@@ -305,17 +362,17 @@ export function Compteur({ libelle, depart = 0 }: Props) {
 
     #[test]
     fn un_meme_source_rend_le_meme_module() {
-        let a = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development).unwrap();
-        let b = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development).unwrap();
+        let a = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development, ModuleFormat::Esm).unwrap();
+        let b = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development, ModuleFormat::Esm).unwrap();
         assert_eq!(a, b, "deux compilations du même source diffèrent");
         assert_eq!(a.hash.len(), 64);
-        let autre = compile_component(&COMPTEUR.replace("+1", "+2"), "boutique/compteur", ComponentMode::Development).unwrap();
+        let autre = compile_component(&COMPTEUR.replace("+1", "+2"), "boutique/compteur", ComponentMode::Development, ModuleFormat::Esm).unwrap();
         assert_ne!(a.hash, autre.hash, "un source changé doit changer le hash");
     }
 
     #[test]
     fn le_developpement_porte_react_refresh_au_nom_du_gabarit() {
-        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development).unwrap();
+        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development, ModuleFormat::Esm).unwrap();
         assert!(c.code.contains("$RefreshReg$("), "pas d'enregistrement Refresh :\n{}", c.code);
         assert!(c.code.contains("$RefreshSig$("), "pas de signature de hooks :\n{}", c.code);
         assert!(c.code.contains("\"Compteur\""), "le composant n'est pas enregistré sous son nom :\n{}", c.code);
@@ -326,7 +383,7 @@ export function Compteur({ libelle, depart = 0 }: Props) {
 
     #[test]
     fn la_production_n_a_ni_refresh_ni_types() {
-        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Production).unwrap();
+        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Production, ModuleFormat::Esm).unwrap();
         assert!(!c.code.contains("$Refresh"), "Refresh en production :\n{}", c.code);
         assert!(c.code.contains("react/jsx-runtime"), "{}", c.code);
         assert!(!c.code.contains("Props") && !c.code.contains("useState<number>"), "des types restent :\n{}", c.code);
@@ -335,7 +392,7 @@ export function Compteur({ libelle, depart = 0 }: Props) {
 
     #[test]
     fn la_source_map_vise_le_tsx() {
-        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development).unwrap();
+        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development, ModuleFormat::Esm).unwrap();
         let carte: serde_json::Value = serde_json::from_str(&c.source_map).unwrap();
         assert_eq!(carte["version"], 3);
         assert!(carte["sources"][0].as_str().unwrap_or("").contains("boutique/compteur.tsx"), "{carte}");
@@ -345,9 +402,9 @@ export function Compteur({ libelle, depart = 0 }: Props) {
     #[test]
     fn une_erreur_de_syntaxe_dit_sa_ligne() {
         // Une balise non fermée se lit jusqu'au `}` qui la trahit (ligne 3) : swc dit où il bute.
-        let e = compile_component("export function A() {\n  return <div>;\n}\n", "a", ComponentMode::Development).unwrap_err();
+        let e = compile_component("export function A() {\n  return <div>;\n}\n", "a", ComponentMode::Development, ModuleFormat::Esm).unwrap_err();
         assert_eq!((e.kind.clone(), e.line, e.column), (ScriptErrorKind::Syntax, Some(3), Some(1)), "{e:?}");
-        let e = compile_component("export function B() {\n  const x = ;\n  return <b/>;\n}\n", "b", ComponentMode::Development).unwrap_err();
+        let e = compile_component("export function B() {\n  const x = ;\n  return <b/>;\n}\n", "b", ComponentMode::Development, ModuleFormat::Esm).unwrap_err();
         assert_eq!((e.kind.clone(), e.line), (ScriptErrorKind::Syntax, Some(2)), "{e:?}");
     }
 
@@ -357,10 +414,76 @@ export function Compteur({ libelle, depart = 0 }: Props) {
             "export const formater = (n: number) => `${n}`;\nexport function Etiquette() { return <b/>; }\n",
             "x",
             ComponentMode::Development,
+            ModuleFormat::Esm,
         )
         .unwrap();
         assert!(!c.exports_only_components);
-        let d = compile_component("export default function () { return <b/>; }\n", "y", ComponentMode::Development).unwrap();
+        let d = compile_component("export default function () { return <b/>; }\n", "y", ComponentMode::Development, ModuleFormat::Esm).unwrap();
         assert!(!d.exports_only_components, "une exportation par défaut anonyme n'a pas de nom de famille");
+    }
+
+    #[test]
+    fn les_imports_sont_rendus_a_part_avec_celui_du_jsx() {
+        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development, ModuleFormat::Esm).unwrap();
+        assert_eq!(c.imports, vec!["react/jsx-dev-runtime", "react", "./bouton"], "{:?}", c.imports);
+        let typee = compile_component(
+            "import type { Props } from \"./types\";\nexport function A(p: Props) { return <b/>; }\n",
+            "a",
+            ComponentMode::Production,
+            ModuleFormat::Esm,
+        )
+        .unwrap();
+        assert_eq!(typee.imports, vec!["react/jsx-runtime"], "un import de type est effacé : {:?}", typee.imports);
+    }
+
+    #[test]
+    fn le_commonjs_requiert_et_exporte_sans_import_ni_export() {
+        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development, ModuleFormat::CommonJs).unwrap();
+        for s in ["require(\"react\")", "require(\"react/jsx-dev-runtime\")", "require(\"./bouton\")"] {
+            assert!(c.code.contains(s), "{s} manque :\n{}", c.code);
+        }
+        assert!(c.code.contains("exports"), "{}", c.code);
+        assert!(!c.code.contains("import ") && !c.code.contains("export "), "il reste de l'ESM :\n{}", c.code);
+        assert!(c.code.contains("$RefreshReg$("), "Refresh perdu en CommonJS :\n{}", c.code);
+        // Un helper d'interop employé est défini dans le module (aucun import de helpers).
+        for helper in ["_interop_require_default", "_interop_require_wildcard"] {
+            if c.code.contains(&format!("{helper}(")) {
+                assert!(c.code.contains(&format!("function {helper}")), "{helper} employé sans être défini :\n{}", c.code);
+            }
+        }
+        let esm = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Development, ModuleFormat::Esm).unwrap();
+        assert_ne!(c.hash, esm.hash);
+        assert_eq!(c.imports, esm.imports);
+    }
+
+    #[test]
+    fn le_commonjs_s_execute_avec_un_require_donne() {
+        // Le module CommonJS, exécuté dans QuickJS avec un `require` qui rend un faux React :
+        // le composant exporté se rend en un élément.
+        let c = compile_component(COMPTEUR, "boutique/compteur", ComponentMode::Production, ModuleFormat::CommonJs).unwrap();
+        let rt = rquickjs::Runtime::new().unwrap();
+        let ctx = rquickjs::Context::full(&rt).unwrap();
+        let rendu: String = ctx.with(|ctx| {
+            let faux = r#"
+                const libs = {
+                  "react": { useState: (v) => [v, () => {}] },
+                  "react/jsx-runtime": {
+                    jsx: (t, p) => ({ t: typeof t === "string" ? t : t.name, p }),
+                    jsxs: (t, p) => ({ t: typeof t === "string" ? t : t.name, p }),
+                    Fragment: "F",
+                  },
+                  "./bouton": { Bouton: function Bouton(p) { return null; } },
+                };
+                const module = { exports: {} };
+                (function (require, module, exports) {
+            "#;
+            let fin = r#"
+                })((s) => libs[s], module, module.exports);
+                JSON.stringify(module.exports.Compteur({ libelle: "n" }));
+            "#;
+            ctx.eval::<String, _>(format!("{faux}{}{fin}", c.code)).unwrap()
+        });
+        assert!(rendu.contains("\"t\":\"div\""), "{rendu}");
+        assert!(rendu.contains("Bouton"), "{rendu}");
     }
 }
