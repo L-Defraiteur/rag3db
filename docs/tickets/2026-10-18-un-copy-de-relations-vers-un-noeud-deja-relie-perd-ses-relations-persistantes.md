@@ -2,9 +2,10 @@
 
 - **État** : ouvert (reproduit sur master 8f4779bdc et sur le lot du rollback, luciepc, 18 octobre
   2026, par une sonde déterministe)
-- **Gravité** : **perte de données en lecture** : après le COPY, validé ou annulé, les relations
-  d'avant du nœud ne sont plus rendues (à vérifier après réouverture : perdues au stockage, ou
-  seulement au balayage).
+- **Gravité** : **perte de données, durable** : après le COPY validé, un `CHECKPOINT` puis une
+  réouverture, les dix relations d'avant du nœud ne sont plus nulle part (`k <= 10` compte 0 dans
+  toute la table, le nœud 1 n'a plus d'entrante) : perdues au stockage, pas seulement au
+  balayage (sonde du 18 octobre, luciepc, master b47dc6066).
 - **Atteignable en service** : oui, dès qu'un COPY de relations s'ajoute à une table qui a déjà
   des relations validées et reprises (point de reprise) pour les mêmes nœuds source.
 - **Touche rag3weaver** : à vérifier (l'hôte insère ses arêtes par CREATE dans des transactions,
@@ -32,7 +33,9 @@ MATCH (a:A {id: 0})-[r:R]->() RETURN count(r);  -- attendu 1 510, rendu 1 500
 ```
 
 Les dix relations persistantes du nœud 0 ne sont plus rendues dès qu'un COPY a touché le nœud,
-annulé ou validé. Sans le `CHECKPOINT` (les dix relations en mémoire), tout est juste : le
+annulé ou validé. Suite de la sonde, après le COPY validé : toute la table compte 1 500,
+`WHERE r.k <= 10` compte 0 ; après `CHECKPOINT` : 1 500 et 0 ; après fermeture et réouverture :
+1 500, 0, et le nœud 1 n'a plus aucune relation entrante. **La perte est durable.** Sans le `CHECKPOINT` (les dix relations en mémoire), tout est juste : le
 défaut tient à la rencontre d'un bloc persistant et d'une liste en mémoire pour le même nœud.
 
 ## Ce que dit le code (lu, non prouvé)
