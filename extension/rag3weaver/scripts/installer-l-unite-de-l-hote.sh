@@ -8,7 +8,7 @@
 #
 #   scripts/installer-l-unite-de-l-hote.sh [--binaire <chemin>] [--adresse 127.0.0.1:7970]
 #       [--inactivite <minutes>] [--env <fichier>] [--nom rag3weaver-daemon]
-#       [--maintenant] [--montrer] [--retirer]
+#       [--maintenant] [--montrer] [--retirer] [--filet-seul]
 #
 # - `--env` : le fichier d'environnement de l'hôte (service d'embarquement, RAG3DB_ROOT,
 #   RAG3DB_LIBRARY_DIR…), repris tel quel s'il existe (~/.config/rag3weaver/<nom>.env).
@@ -17,6 +17,11 @@
 # - `--montrer` écrit les deux unités sur la sortie, sans rien poser.
 # - `--nom` : une autre unité (les témoins : rag3weaver-daemon-essai).
 # - Les unités remplacées sont gardées à côté (`.avant-socket`).
+# - **Le filet de la lib** (`<nom>.service.d/check-lib.conf`) : si le binaire est lié par
+#   RUNPATH à une lib du magasin, l'unité refuse de démarrer un binaire et une lib de bâtis
+#   différents (`rag3db-check-lib`, à côté du binaire), ou une extension vector d'un autre
+#   bâti. Reposé à chaque installation ; `--filet-seul` ne pose que lui (sans redémarrer
+#   l'hôte : il vaut au prochain démarrage). Un binaire au moteur statique n'en a pas besoin.
 set -euo pipefail
 
 binaire="$HOME/.local/bin/rag3weaver-backend"
@@ -27,6 +32,7 @@ env_fichier=""
 maintenant=0
 montrer=0
 retirer=0
+filet_seul=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --binaire) binaire="$2"; shift 2 ;;
@@ -37,6 +43,7 @@ while [ $# -gt 0 ]; do
     --maintenant) maintenant=1; shift ;;
     --montrer) montrer=1; shift ;;
     --retirer) retirer=1; shift ;;
+    --filet-seul) filet_seul=1; shift ;;
     *) echo "option inconnue : $1 (voir l'en-tête du script)" >&2; exit 2 ;;
   esac
 done
@@ -86,9 +93,47 @@ StandardError=append:$journal
 EOF
 }
 
+# Le filet de la lib, d'après le RUNPATH du binaire.
+texte_filet() {
+  local lib id
+  lib=$(readelf -d "$binaire" 2>/dev/null | sed -n 's/.*RUNPATH.*\[\(.*\)\]/\1/p' | cut -d: -f1)
+  [ -n "$lib" ] && [ -f "$lib/librag3db.so" ] || return 1
+  id=$(readelf -p .rag3db_build_id "$lib/librag3db.so" 2>/dev/null | grep -o 'rag3db-build-[A-Za-z0-9-]*' | head -1)
+  [ -n "$id" ] || return 1
+  cat <<EOF
+# Posé par extension/rag3weaver/scripts/installer-l-unite-de-l-hote.sh
+[Service]
+# Le binaire et la lib de son RUNPATH sont du même bâti, sinon l'unité ne démarre pas.
+ExecStartPre=$(dirname "$binaire")/rag3db-check-lib $binaire $lib/librag3db.so
+# Et l'extension vector à côté de la lib, du même bâti.
+ExecStartPre=/usr/bin/grep -qaF $id $lib/libvector.rag3db_extension
+EOF
+}
+
+poser_le_filet() {
+  local d="$unites/$nom.service.d"
+  if ! texte_filet > /dev/null; then
+    echo "filet de la lib : $binaire n'a pas de RUNPATH vers une lib du magasin (moteur statique ?) — pas de check-lib.conf"
+    return 0
+  fi
+  [ -x "$(dirname "$binaire")/rag3db-check-lib" ] || { echo "pas de rag3db-check-lib à côté de $binaire : le filet ne peut pas être posé" >&2; return 3; }
+  mkdir -p "$d"
+  [ -f "$d/check-lib.conf" ] && cp -p "$d/check-lib.conf" "$d/check-lib.conf.avant-$(date +%Y%m%d-%H%M%S)"
+  texte_filet > "$d/check-lib.conf"
+  echo "filet de la lib : $d/check-lib.conf"
+}
+
 if [ "$montrer" = 1 ]; then
   echo "=== $unites/$nom.socket"; texte_socket
   echo "=== $unites/$nom.service"; texte_service
+  echo "=== $unites/$nom.service.d/check-lib.conf"; texte_filet || echo "(pas de RUNPATH vers une lib du magasin : pas de filet)"
+  exit 0
+fi
+
+if [ "$filet_seul" = 1 ]; then
+  poser_le_filet || exit $?
+  systemctl --user daemon-reload
+  echo "$nom : le filet vaut au prochain démarrage de l'hôte (pas de redémarrage ici)"
   exit 0
 fi
 
@@ -115,6 +160,7 @@ done
 [ -f "$env_fichier" ] && echo "environnement repris : $env_fichier" || echo "pas d'environnement à $env_fichier (l'hôte part sans service d'embarquement déclaré)"
 texte_socket > "$unites/$nom.socket"
 texte_service > "$unites/$nom.service"
+poser_le_filet || exit $?
 systemctl --user daemon-reload
 # L'ancienne unité sans socket démarrait avec la session (WantedBy=default.target) :
 # c'est la socket qui démarre désormais.
