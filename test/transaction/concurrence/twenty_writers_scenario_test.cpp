@@ -712,6 +712,12 @@ protected:
         if (autoCheckpoint) {
             mustRun(*conn, "CALL auto_checkpoint=true;");
         }
+        // SCENARIO_CHECKPOINT_THRESHOLD=<octets> : le seuil du journal qui déclenche le point de
+        // reprise automatique (16 Mio par défaut ; ticket du cœur 82695b1d4, première voie).
+        const auto* threshold = std::getenv("SCENARIO_CHECKPOINT_THRESHOLD");
+        if (threshold != nullptr) {
+            mustRun(*conn, stringFormat("CALL checkpoint_threshold={};", threshold));
+        }
         Scenario scenario(*database, period);
         scenario.run(6);
 
@@ -727,7 +733,8 @@ protected:
         };
         std::cerr << "  [scénario] tampon : " << BUFFER_POOL / (1024 * 1024)
                   << " Mio, point de reprise automatique "
-                  << (autoCheckpoint ? "en marche" : "coupé") << ", pic " << peak(0, scenario.end)
+                  << (autoCheckpoint ? "en marche" : "coupé") << ", seuil "
+                  << (threshold ? threshold : "par défaut") << ", pic " << peak(0, scenario.end)
                   << " Mio\n";
         double from = 0;
         for (const auto& ddl : scenario.ddls) {
