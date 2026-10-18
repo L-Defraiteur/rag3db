@@ -234,6 +234,12 @@ pub struct ToolPolicy {
     /// déclarée par `workspace.commands`.
     #[serde(default)]
     pub run_commands: bool,
+    /// **Appelable d'un écran** (un `Effet` d'un graphe de clic, par `/ide/call`) : `"lecture"`
+    /// ou `"ecriture"` (alors derrière un `Confirmer`). Sans lui, aucun écran ne l'appelle —
+    /// tranché par l'orchestration le 18 octobre 2026, à relire par Lucie : les droits d'écran
+    /// vivent ici, à côté des autres capacités, pas dans le graphe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ecran: Option<crate::dataflow::clic::Ecran>,
 }
 
 /// La base déclarative, permise à tout outil de backend : les nœuds
@@ -652,7 +658,7 @@ mod tests {
     /// soit la politique déclarée.
     #[test]
     fn un_crochet_n_ecrit_pas_ne_bloque_pas_ne_lance_pas() {
-        let tout = ToolPolicy { read_files: true, write_files: true, run_commands: true };
+        let tout = ToolPolicy { read_files: true, write_files: true, run_commands: true, ecran: None };
         let nodes = hook_nodes(&tout);
         for interdit in ["EntityRecordNode", "SnapshotFinishNode", "IndexNode", "WaitOutputNode", "RunCommandNode", "EditFileNode"] {
             assert!(!nodes.contains(&interdit), "{interdit} permis dans un crochet");
@@ -691,6 +697,7 @@ mod tests {
                 read_files: true,
                 write_files: true,
                 run_commands: run,
+                ecran: None,
             };
             assert!(
                 !allowed_nodes(&policy).contains(&"RunCommandNode"),

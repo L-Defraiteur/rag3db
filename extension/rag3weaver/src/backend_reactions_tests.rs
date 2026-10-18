@@ -379,3 +379,32 @@ fn la_question_de_la_reouverture_n_attend_pas_l_ecrivain() {
     assert_eq!(reponse, None, "une base saine n'est pas à rouvrir");
     assert!(duree < Duration::from_millis(100), "must_reopen n'attend pas l'écrivain : {duree:?}");
 }
+
+/// **Le lieu des cases d'écran de portée `hôte`** (`ui_state`, marche 3 niveau 2) : une entité
+/// que le manifeste ne déclare pas est refusée au chargement, en disant laquelle et à quoi elle
+/// sert ; et un outil peut se dire appelable d'un écran (`policy.ecran`).
+#[test]
+fn ui_state_vise_une_entite_declaree_et_ecran_se_lit_dans_la_policy() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifeste = |ui: &str| {
+        format!(
+            r#"{{
+  "version": 1,
+  "name": "ecran",
+  "database": "data/ecran.rag3db",
+  "embeddings": {{ "address": "127.0.0.1:1", "model": "toy", "dimensions": 8 }},
+  "vector_extension": "vector.rag3db_extension",
+  "entities": {{}},
+  "tools": {{ "lier": {{ "graph": "link.mmd", "policy": {{ "ecran": "lecture" }} }} }},
+  "ui_state": {{ "entity": "{ui}" }}
+}}"#
+        )
+    };
+    ecrire(dir.path(), "link.mmd", LIEN);
+    ecrire(dir.path(), "backend.json", &manifeste("EtatEcran"));
+    let refus = PreparedBackend::load(&dir.path().join("backend.json")).err().expect("EtatEcran n'est pas déclarée");
+    assert!(refus.contains("ui_state") && refus.contains("« EtatEcran »") && refus.contains("portée hôte"), "{refus}");
+    let lu: BackendManifest = serde_json::from_str(&manifeste("EtatEcran")).unwrap();
+    assert_eq!(lu.tools["lier"].policy.ecran, Some(crate::dataflow::clic::Ecran::Lecture));
+    assert_eq!(lu.ui_state.as_ref().map(|u| u.entity.as_str()), Some("EtatEcran"));
+}

@@ -36,6 +36,8 @@ pub mod report;
 pub mod runtime;
 pub mod graph_node;
 pub mod graph_tool;
+/// Le graphe de clic d'un composant déclaré (marche 3, niveau 2).
+pub mod clic;
 pub mod mermaid;
 pub mod node_factories;
 pub mod node_registry;

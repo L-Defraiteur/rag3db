@@ -68,6 +68,11 @@ pub struct BackendManifest {
     /// (`docs/5-octobre-2026-00h00/01`), tranchée par l'orchestration.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub reactions: BTreeMap<String, ReactionAttachment>,
+    /// **Où l'hôte tient les cases d'écran de portée `hôte`** (les graphes de clic des
+    /// composants) : `{"entity": "<Entité>"}`, une entité de ce manifeste. Sans lui, une case de
+    /// portée `hôte` est refusée à la déclaration (`dataflow::clic`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_state: Option<UiState>,
     /// **Les lignes que le gabarit sème** : `{"RefType": [{…}, …]}`. Posées à
     /// l'ouverture **si elles manquent** — l'identité de la ligne (sa clé
     /// `hashsafe`, dans la cellule du catalogue) décide —, par le même chemin
@@ -285,6 +290,14 @@ impl std::ops::Deref for BackendRelation {
 /// Une réaction part sans personne devant l'écran ; elle écrit en base par
 /// les verbes du catalogue — donc sous la garde de cycle de vie — et ne
 /// touche ni fichier ni commande.
+/// Le lieu des cases d'écran de portée `hôte` (`BackendManifest::ui_state`).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct UiState {
+    /// L'entité du manifeste qui garde ces cases.
+    pub entity: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReactionAttachment {
@@ -1009,6 +1022,14 @@ impl PreparedBackend {
             schemas.insert(name.clone(), schema);
             mappings.insert(name.clone(), mapping);
             entities.insert(name.clone(), config);
+        }
+        if let Some(ui) = &manifest.ui_state {
+            if !entities.contains_key(&ui.entity) {
+                return Err(format!(
+                    "ui_state : l'entité « {} » n'est pas déclarée dans \"entities\" ; c'est elle qui garde les cases d'écran de portée hôte",
+                    ui.entity
+                ));
+            }
         }
         for (name, relation) in &manifest.relations {
             crate::schema::validate_identifier(name, "relation").map_err(|e| e.to_string())?;
