@@ -15,8 +15,17 @@
 //!   déclaré, que la vue exporte), **ses effets** et **son graphe de clic** ;
 //! - un `*.node.json` : un scope `noeud_script` au nom déclaré — celui qu'emploient les graphes.
 //!
-//! `usages search_code` dit alors quels écrans et quels outils l'appellent. Le TSX qu'un graphe de
-//! clic génère n'est jamais écrit dans un arbre (`dataflow::clic_tsx`) : il ne crée aucun usage.
+//! **Les noms des gabarits vivent dans un espace à eux** : `outil/<x>`, `graphe/<x>`,
+//! `noeud/<graphe>.<x>`, `composant/<x>`, `noeud_script/<x>`, `backend/<x>`. Nus, un outil
+//! `edit_file` ou un nœud `decide` devenaient des définisseurs de plus pour la fonction
+//! `edit_file` ou la méthode `Decider.decide` du code, et la résolution par le nom, ambiguë,
+//! laissait tomber 59 arêtes du code de rag3db (18 octobre 2026). Aucun symbole du code n'a la
+//! forme `genre/nom`. La mention du type d'un nœud garde aussi le nom nu : c'est le lien vers le
+//! type qui l'implémente (`RhaiNode`), une mention, jamais un définisseur.
+//!
+//! `usages outil/search_code` dit alors quels écrans et quels outils l'appellent. Le TSX qu'un
+//! graphe de clic génère n'est jamais écrit dans un arbre (`dataflow::clic_tsx`) : il ne crée
+//! aucun usage.
 use crate::dataflow::parse_mermaid;
 use serde_json::Value;
 
@@ -69,8 +78,9 @@ pub fn analyser_gabarit(rel: &str, content: &str) -> Option<Vec<ScopeGabarit>> {
     match genre(rel)? {
         "mmd" => {
             let def = parse_mermaid(content).ok()?;
+            let graphe = tige(rel, ".mmd");
             let mut scopes = vec![ScopeGabarit {
-                name: tige(rel, ".mmd"),
+                name: format!("graphe/{graphe}"),
                 scope_type: "graphe".into(),
                 start_line: 1,
                 end_line: total,
@@ -79,14 +89,14 @@ pub fn analyser_gabarit(rel: &str, content: &str) -> Option<Vec<ScopeGabarit>> {
             }];
             for n in &def.nodes {
                 let ligne = ligne_de(content, &format!("{}[\"", n.name));
-                let mut mentions = vec![(n.node_type.clone(), ligne)];
+                let mut mentions = vec![(n.node_type.clone(), ligne), (format!("noeud_script/{}", n.node_type), ligne)];
                 if n.node_type == "Effet" {
                     if let Some(Value::String(outil)) = n.config.get("outil") {
-                        mentions.push((outil.clone(), ligne));
+                        mentions.push((format!("outil/{outil}"), ligne));
                     }
                 }
                 scopes.push(ScopeGabarit {
-                    name: n.name.clone(),
+                    name: format!("noeud/{graphe}.{}", n.name),
                     scope_type: "noeud".into(),
                     start_line: ligne,
                     end_line: ligne,
@@ -100,7 +110,7 @@ pub fn analyser_gabarit(rel: &str, content: &str) -> Option<Vec<ScopeGabarit>> {
             let v: Value = serde_json::from_str(content).ok()?;
             let nom = v.get("name").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| tige(rel, ".json"));
             let mut scopes = vec![ScopeGabarit {
-                name: nom,
+                name: format!("backend/{nom}"),
                 scope_type: "backend".into(),
                 start_line: 1,
                 end_line: total,
@@ -112,10 +122,10 @@ pub fn analyser_gabarit(rel: &str, content: &str) -> Option<Vec<ScopeGabarit>> {
                     let ligne = ligne_de(content, &format!("\"{outil}\""));
                     let mut mentions = Vec::new();
                     if let Some(Value::String(graphe)) = decl.get("graph") {
-                        mentions.push((tige(graphe, ".mmd"), ligne));
+                        mentions.push((format!("graphe/{}", tige(graphe, ".mmd")), ligne));
                     }
                     scopes.push(ScopeGabarit {
-                        name: outil.clone(),
+                        name: format!("outil/{outil}"),
                         scope_type: "outil".into(),
                         start_line: ligne,
                         end_line: ligne,
@@ -132,15 +142,15 @@ pub fn analyser_gabarit(rel: &str, content: &str) -> Option<Vec<ScopeGabarit>> {
             let mut mentions = vec![(nom.clone(), ligne_de(content, "\"source\""))];
             if let Some(Value::Array(effets)) = v.get("effets") {
                 let ligne = ligne_de(content, "\"effets\"");
-                mentions.extend(effets.iter().filter_map(Value::as_str).map(|e| (e.to_string(), ligne)));
+                mentions.extend(effets.iter().filter_map(Value::as_str).map(|e| (format!("outil/{e}"), ligne)));
             }
             if let Some(Value::String(clic)) = v.get("clic") {
-                mentions.push((tige(clic, ".mmd"), ligne_de(content, "\"clic\"")));
+                mentions.push((format!("graphe/{}", tige(clic, ".mmd")), ligne_de(content, "\"clic\"")));
             }
-            // Le scope se nomme comme son fichier : le nom déclaré est celui du composant TSX,
-            // qu'il mentionne — deux définisseurs du même nom ne se départageraient pas.
+            // Le nom déclaré est celui du composant TSX (sa vue), qu'il mentionne nu ; le scope,
+            // lui, vit dans l'espace des gabarits.
             Some(vec![ScopeGabarit {
-                name: tige(rel, ".json"),
+                name: format!("composant/{}", tige(rel, ".component.json")),
                 scope_type: "composant".into(),
                 start_line: 1,
                 end_line: total,
@@ -152,7 +162,7 @@ pub fn analyser_gabarit(rel: &str, content: &str) -> Option<Vec<ScopeGabarit>> {
             let v: Value = serde_json::from_str(content).ok()?;
             let nom = v.get("name").and_then(Value::as_str)?.to_string();
             Some(vec![ScopeGabarit {
-                name: nom,
+                name: format!("noeud_script/{nom}"),
                 scope_type: "noeud_script".into(),
                 start_line: 1,
                 end_line: total,
@@ -172,11 +182,11 @@ mod tests {
     fn un_graphe_de_clic_donne_un_scope_par_noeud_et_mentionne_l_outil() {
         let g = "graph LR\n    clic[\"Evenement(nom='onClick')\"]\n    chercher[\"Effet(outil='search_code')\"]\n    clic -->|charge:query| chercher\n";
         let s = analyser_gabarit("templates/x/components/fiche.clic.mmd", g).unwrap();
-        assert_eq!(s[0].name, "fiche.clic");
+        assert_eq!(s[0].name, "graphe/fiche.clic");
         assert_eq!(s[0].scope_type, "graphe");
-        let chercher = s.iter().find(|x| x.name == "chercher").unwrap();
+        let chercher = s.iter().find(|x| x.name == "noeud/fiche.clic.chercher").unwrap();
         assert_eq!((chercher.scope_type.as_str(), chercher.start_line, chercher.parent), ("noeud", 3, Some(0)));
-        assert!(chercher.mentions.contains(&("search_code".to_string(), 3)), "{:?}", chercher.mentions);
+        assert!(chercher.mentions.contains(&("outil/search_code".to_string(), 3)), "{:?}", chercher.mentions);
         assert!(chercher.mentions.contains(&("Effet".to_string(), 3)));
     }
 
@@ -190,9 +200,9 @@ mod tests {
   }
 }"#;
         let s = analyser_gabarit("templates/backends/code/backend.json", b).unwrap();
-        let outil = s.iter().find(|x| x.name == "search_code").unwrap();
+        let outil = s.iter().find(|x| x.name == "outil/search_code").unwrap();
         assert_eq!(outil.scope_type, "outil");
-        assert_eq!(outil.mentions, vec![("search_workspace".to_string(), 4)]);
+        assert_eq!(outil.mentions, vec![("graphe/search_workspace".to_string(), 4)]);
     }
 
     #[test]
@@ -205,16 +215,16 @@ mod tests {
 }"#;
         let s = analyser_gabarit("components/fiche_produit.component.json", c).unwrap();
         assert_eq!(s.len(), 1);
-        assert_eq!((s[0].name.as_str(), s[0].scope_type.as_str()), ("fiche_produit.component", "composant"));
+        assert_eq!((s[0].name.as_str(), s[0].scope_type.as_str()), ("composant/fiche_produit", "composant"));
         let noms: Vec<&str> = s[0].mentions.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(noms, vec!["FicheProduit", "search_code", "save_product", "fiche_produit.clic"]);
+        assert_eq!(noms, vec!["FicheProduit", "outil/search_code", "outil/save_product", "graphe/fiche_produit.clic"]);
     }
 
     #[test]
     fn un_noeud_scripte_se_nomme_comme_son_type() {
         let n = r#"{ "name": "product_form", "script": "product_form.ts", "inputs": {}, "outputs": {} }"#;
         let s = analyser_gabarit("templates/proto/boutique/nodes/product_form.node.json", n).unwrap();
-        assert_eq!((s[0].name.as_str(), s[0].scope_type.as_str()), ("product_form", "noeud_script"));
+        assert_eq!((s[0].name.as_str(), s[0].scope_type.as_str()), ("noeud_script/product_form", "noeud_script"));
     }
 
     #[test]
@@ -253,17 +263,38 @@ mod tests {
             })
         };
         let mentionne = |de: &str, nom: &str| a.pending.iter().any(|(k, n, r)| k == de && n == nom && r == "CONSUMES");
-        let chercher = cle("chercher", "noeud");
-        assert!(mentionne(&chercher, "search_code"), "{:?}", a.pending);
-        assert!(mentionne(&cle("search_code", "outil"), "search_workspace"), "{:?}", a.pending);
-        let composant = cle("fiche.component", "composant");
-        for nom in ["Fiche", "search_code", "fiche.clic"] {
+        let chercher = cle("noeud/fiche.clic.chercher", "noeud");
+        assert!(mentionne(&chercher, "outil/search_code"), "{:?}", a.pending);
+        assert!(mentionne(&cle("outil/search_code", "outil"), "graphe/search_workspace"), "{:?}", a.pending);
+        let composant = cle("composant/fiche", "composant");
+        for nom in ["Fiche", "outil/search_code", "graphe/fiche.clic"] {
             assert!(mentionne(&composant, nom), "{nom} : {:?}", a.pending);
         }
-        let graphe = cle("fiche.clic", "graphe");
+        let graphe = cle("graphe/fiche.clic", "graphe");
         assert!(a.relations.iter().any(|r| r.rel == "HAS_PARENT" && r.from_key == chercher && r.to_key == graphe));
         assert!(a.relations.iter().any(|r| r.rel == "DEFINED_IN" && r.from_key == chercher && r.to_key == "components/fiche.clic.mmd"));
         // La vue est du code (TSX), lue par codeparsers : son composant y est défini.
         assert!(a.scopes.iter().any(|s| s.name == "Fiche" && s.file_path == "components/fiche.tsx"));
+    }
+
+    /// **Un nom de gabarit ne devient pas un homonyme du code** : un outil `edit_file`, un nœud
+    /// `decide` ne définissent pas `edit_file` ni `decide` ; seuls `outil/edit_file` et
+    /// `noeud/<graphe>.decide`. Sans cet espace, la fonction `edit_file` d'à côté perdait ses
+    /// arêtes par ambiguïté (59 sur rag3db, le 18 octobre).
+    #[test]
+    fn un_nom_de_gabarit_ne_fait_pas_d_homonyme_dans_le_code() {
+        let fichiers = vec![
+            ("backend.json".to_string(), r#"{ "name": "b", "tools": { "edit_file": { "graph": "g.mmd" } } }"#.to_string()),
+            ("g.mmd".to_string(), "graph LR\n    decide[\"Decide(x=1)\"]\n".to_string()),
+            ("outils.rs".to_string(), "pub fn edit_file() {}\npub fn decide() {}\n".to_string()),
+            ("appel.rs".to_string(), "fn f() { edit_file(); decide(); }\n".to_string()),
+        ];
+        let a = crate::code::analyze_in_project("/virtuel", fichiers, "", None);
+        let noms: Vec<&str> = a.scopes.iter().map(|s| s.name.as_str()).collect();
+        for nu in ["edit_file", "decide"] {
+            let definisseurs = a.scopes.iter().filter(|s| s.name == nu).count();
+            assert_eq!(definisseurs, 1, "« {nu} » n'a que sa définition du code : {noms:?}");
+        }
+        assert!(noms.contains(&"outil/edit_file") && noms.contains(&"noeud/g.decide"), "{noms:?}");
     }
 }
