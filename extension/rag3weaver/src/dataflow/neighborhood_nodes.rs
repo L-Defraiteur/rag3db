@@ -142,6 +142,12 @@ pub struct Reached {
     pub note: String,
     /// 1 : touché directement.
     pub level: usize,
+    /// **D'où on l'a atteint** : l'uuid du nœud dont le saut l'a rendu (un
+    /// départ, ou un nœud du niveau d'avant). Absent quand le parcours ne le
+    /// sait pas (par le nom seul, par requête). C'est ce qui fait un graphe
+    /// du voisinage plutôt que des anneaux (l'IDE, page 05, lot A5).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
     /// La relation par laquelle on l'a atteint.
     pub relation: String,
     /// Atteint par le nom seul (nom ambigu) : peut-être.
@@ -241,6 +247,7 @@ fn reached_from(row: &[CypherValue], debut: usize, cfg: &NeighborhoodConfig) -> 
         group: texte(row.get(debut + 4 + n)),
         note: texte(row.get(debut + 6 + n)),
         level: 0,
+        from: None,
         relation: String::new(),
         by_name: false,
         by_also: false,
@@ -563,13 +570,13 @@ pub fn neighborhood_of_in(
 
     let mut premiers: Vec<Reached> = Vec::new();
     let departs: Vec<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
-    premiers.extend(moteur.saut(&departs)?.into_iter().map(|(_, m)| m));
+    premiers.extend(moteur.saut(&departs)?.into_iter().map(|(de, m)| Reached { from: Some(de), ..m }));
     // Le départ supplémentaire, avant le nom seul : un chemin déclaré dit
     // plus qu'un nom partagé.
     let aussi = moteur.aussi(&usages.definitions)?;
     if !aussi.is_empty() {
-        for (_, m) in moteur.saut(&aussi)? {
-            premiers.push(Reached { by_also: true, ..m });
+        for (de, m) in moteur.saut(&aussi)? {
+            premiers.push(Reached { by_also: true, from: Some(de), ..m });
         }
     }
     // Les usages par le nom seul (nom ambigu), qu'aucune arête directe ne
@@ -658,7 +665,7 @@ pub fn neighborhood_of_file(catalog: &dyn crate::read_view::ReadCatalog, cfg: &N
         .collect();
     let vus: HashSet<String> = departs.iter().map(|d| d.uuid.clone()).collect();
     let uuids: Vec<String> = departs.iter().map(|d| d.uuid.clone()).collect();
-    let premiers: Vec<Reached> = moteur.saut(&uuids)?.into_iter().map(|(_, m)| m).collect();
+    let premiers: Vec<Reached> = moteur.saut(&uuids)?.into_iter().map(|(de, m)| Reached { from: Some(de), ..m }).collect();
     let (atteints, cut) = parcourir(&moteur, vus, premiers, depth, budget, max_degree)?;
     let (atteints, queries_untracked) = interroges(&moteur, &departs, atteints)?;
     let collected = relever(&moteur, &departs, &atteints)?;
@@ -735,12 +742,12 @@ fn parcourir(
         if lvl == depth {
             break;
         }
-        a_explorer = moteur.saut(&niveau)?.into_iter().map(|(_, m)| m).collect();
+        a_explorer = moteur.saut(&niveau)?.into_iter().map(|(de, m)| Reached { from: Some(de), ..m }).collect();
         if !cfg.group_by.is_empty() {
             for (de, m) in moteur.saut(&carrefours)? {
                 if !m.group.is_empty() {
                     let hub = titre_de.get(&de).cloned();
-                    a_explorer.push(Reached { through_hub: hub, ..m });
+                    a_explorer.push(Reached { through_hub: hub, from: Some(de), ..m });
                 }
             }
         }

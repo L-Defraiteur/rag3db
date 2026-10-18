@@ -53,6 +53,15 @@
   .pastille { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: var(--accent-doux); color: var(--accent); }
   .resultat { padding: 8px 0; border-bottom: 1px solid var(--trait); }
   .resultat pre { margin: 4px 0 0; font: 12px/1.45 var(--mono); white-space: pre-wrap; color: var(--doux); }
+  .graphe { background: var(--surface); border: 1px solid var(--trait); border-radius: 8px; overflow: auto; }
+  .graphe svg { display: block; }
+  .graphe .noeud rect { fill: var(--fond); stroke: var(--trait); }
+  .graphe .noeud.centre rect { fill: var(--accent-doux); stroke: var(--accent); }
+  .graphe .noeud text { fill: var(--texte); font: 12px system-ui, sans-serif; }
+  .graphe .noeud text.lieu { fill: var(--doux); font: 10px var(--mono); }
+  .graphe .noeud a:hover text.titre { fill: var(--accent); text-decoration: underline; }
+  .graphe path { fill: none; stroke: var(--doux); stroke-opacity: .55; }
+  .graphe path.devine { stroke-dasharray: 4 3; }
 </style>
 </head>
 <body>
@@ -71,8 +80,8 @@
   "list_files": ["path_prefix", "limit", "format"],
   "read_file": ["path", "offset", "limit", "format"],
   "usages": ["name", "limit", "format"],
-  "impact": ["name", "format"],
-  "callees": ["name", "format"],
+  "impact": ["name", "depth", "format"],
+  "callees": ["name", "depth", "format"],
   "search_code": ["query", "options"]
 }
 </script>
@@ -127,6 +136,9 @@ function lienFichier(id, chemin, ligne) {
 }
 function lienSymbole(id, nom) {
   return `/ide/code/${id}/symbole/${encodeURIComponent(nom)}`;
+}
+function lienGraphe(id, nom) {
+  return `/ide/code/${id}/graphe/${encodeURIComponent(nom)}`;
 }
 
 function filDAriane(id, chemin, dernierEstFichier) {
@@ -282,7 +294,7 @@ async function symbole(id, nom) {
     : [el("h2", {}, `${titre} (${(r.reached ?? []).length})`),
        el("ul", { class: "liste" }, (r.reached ?? []).map((it) => itemLien(id, it)))];
   vue.replaceChildren(
-    el("h1", {}, nom),
+    el("h1", {}, nom, " ", el("a", { href: lienGraphe(id, nom), class: "pastille" }, "en graphe")),
     u.ambiguous ? el("p", { class: "note" }, "Nom défini plusieurs fois : les usages trouvés par le nom seul ne sont pas attribués.") : "",
     el("h2", {}, `Définitions (${(u.definitions ?? []).length})`),
     el("ul", { class: "liste" }, (u.definitions ?? []).map((d) => itemLien(id, d))),
@@ -318,11 +330,87 @@ async function recherche(id) {
   );
 }
 
+// Le voisinage en papillon : ce qui en dépend à gauche (impact), ce qu'il
+// appelle à droite (callees), une colonne par niveau ; une arête suit `from`,
+// le nœud d'où le parcours l'a atteint. Un nœud sans `from` (atteint par le
+// nom seul) se rattache au centre, en pointillé : « peut-être ».
+const SVG = "http://www.w3.org/2000/svg";
+function svg(tag, attrs = {}, ...enfants) {
+  const e = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== undefined && v !== null) e.setAttribute(k, v);
+  for (const c of enfants.flat()) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return e;
+}
+const court = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+
+async function graphe(id, nom) {
+  filDAriane(id, "", false);
+  fil.append(" · ", el("a", { href: lienSymbole(id, nom) }, nom), " · graphe");
+  const [imp, app] = await Promise.all([
+    appeler(id, "impact", { name: nom, depth: 3, format: "json" }).catch(() => ({ starts: [], reached: [] })),
+    appeler(id, "callees", { name: nom, depth: 3, format: "json" }).catch(() => ({ starts: [], reached: [] })),
+  ]);
+  const L = 210, H = 34, LARGE = 180, MARGE = 24;
+  const centres = [...(imp.starts ?? []), ...(app.starts ?? [])].filter((d, i, t) => t.findIndex((x) => x.uuid === d.uuid) === i);
+  const cotes = [{ r: imp, sens: -1 }, { r: app, sens: 1 }];
+  const colonnes = new Map(); // "sens:niveau" → nœuds
+  for (const { r, sens } of cotes) for (const x of r.reached ?? []) {
+    const k = `${sens}:${x.level}`;
+    if (!colonnes.has(k)) colonnes.set(k, []);
+    colonnes.get(k).push(x);
+  }
+  const prof = Math.max(1, ...[...colonnes.keys()].map((k) => Number(k.split(":")[1])));
+  const hauteur = Math.max(centres.length, ...[...colonnes.values()].map((c) => c.length), 1) * H + 2 * MARGE;
+  const largeur = (2 * prof + 1) * L + 2 * MARGE;
+  const pos = new Map(); // uuid du côté → {x, y}
+  const place = (cle, items, colonne) => items.forEach((x, i) => {
+    const y = MARGE + (hauteur - 2 * MARGE - items.length * H) / 2 + i * H;
+    pos.set(cle(x), { x: MARGE + colonne * L, y, x0: x });
+  });
+  place((x) => `c:${x.uuid}`, centres, prof);
+  for (const [k, items] of colonnes) {
+    const [sens, niveau] = k.split(":").map(Number);
+    place((x) => `${sens}:${x.uuid}`, items, prof + sens * niveau);
+  }
+  const traits = svg("g");
+  const noeuds = svg("g");
+  const ou = (sens, uuid) => pos.get(`${sens}:${uuid}`) ?? pos.get(`c:${uuid}`) ?? pos.get(`c:${centres[0]?.uuid}`);
+  for (const { r, sens } of cotes) for (const x of r.reached ?? []) {
+    const a = pos.get(`${sens}:${x.uuid}`);
+    const b = x.from ? ou(sens, x.from) : ou(sens, centres[0]?.uuid);
+    if (!a || !b) continue;
+    // De gauche à droite : l'appelant vers l'appelé.
+    const [g, d] = sens < 0 ? [a, b] : [b, a];
+    const x1 = g.x + LARGE, y1 = g.y + H / 2 - 4, x2 = d.x, y2 = d.y + H / 2 - 4;
+    traits.append(svg("path", { d: `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`, class: x.from && !x.by_name ? "" : "devine" }));
+  }
+  for (const [cle, p] of pos) {
+    const x = p.x0;
+    const centre = cle.startsWith("c:");
+    const lieu = `${x.path ?? ""}${x.line ? ":" + x.line : ""}`;
+    noeuds.append(svg("g", { class: `noeud${centre ? " centre" : ""}`, transform: `translate(${p.x},${p.y})` },
+      svg("title", {}, `${x.title} — ${lieu}${x.relation ? " — " + x.relation : ""}`),
+      svg("rect", { width: LARGE, height: H - 8, rx: 5 }),
+      svg("a", { href: centre ? lienSymbole(id, x.title) : lienGraphe(id, x.title) },
+        svg("text", { x: 8, y: 12, class: "titre" }, court(x.title, 26))),
+      svg("a", { href: lienFichier(id, x.path ?? "", x.line) },
+        svg("text", { x: 8, y: 23, class: "lieu" }, court(lieu, 32)))));
+  }
+  const total = (imp.reached ?? []).length + (app.reached ?? []).length;
+  vue.replaceChildren(
+    el("h1", {}, nom),
+    el("p", { class: "note" }, `${(imp.reached ?? []).length} en dépendent (à gauche), ${(app.reached ?? []).length} appelés (à droite), sur trois niveaux. Un nom mène à son propre graphe, un lieu à son fichier.`),
+    total || centres.length
+      ? el("div", { class: "graphe" }, svg("svg", { width: largeur, height: hauteur, viewBox: `0 0 ${largeur} ${hauteur}` }, traits, noeuds))
+      : el("p", { class: "note" }, "Rien d'atteint depuis ce nom."),
+  );
+}
+
 // ─── Le routage, et le flux ───────────────────────────────────────────────
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|recherche)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -336,6 +424,7 @@ async function montrer() {
       case "arbre": return await arbre(r.id, r.reste);
       case "fichier": return await fichier(r.id, r.reste);
       case "symbole": return await symbole(r.id, r.reste);
+      case "graphe": return await graphe(r.id, r.reste);
       case "recherche": return await recherche(r.id);
       default: return await accueil();
     }

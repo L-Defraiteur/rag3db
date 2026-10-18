@@ -4183,6 +4183,52 @@ mod tests {
         assert!(backend.call("read_file", json!({"path": "outils.rs", "format": "html"})).is_err());
     }
 
+    /// **Chaque nœud atteint dit d'où il vient** (`from`, l'IDE, lot A5) :
+    /// une chaîne `a → b → c` dans un fichier (des appels résolus), et le JSON
+    /// d'impact et de callees relie chaque niveau au précédent — ce qui fait un
+    /// graphe du voisinage plutôt que des anneaux. Le markdown ne bouge pas.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn each_reached_node_says_where_it_comes_from() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["impact"] = json!({"graph": "impact.mmd", "policy": {"read_files": true}});
+            m["tools"]["callees"] = json!({"graph": "callees.mmd", "policy": {"read_files": true}});
+        });
+        drop(p);
+        for g in ["impact.mmd", "callees.mmd"] {
+            std::fs::copy(tools.join(g), dir.path().join(g)).unwrap();
+        }
+        std::fs::write(dir.path().join("sources/chaine.rs"), "fn c() {}\nfn b() { c(); }\nfn a() { b(); }\n").unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        }
+        // Un nom vers son uuid, d'après un rapport (départs et atteints).
+        let uuid_de = |r: &Value, nom: &str| -> String {
+            r["starts"].as_array().unwrap().iter().chain(r["reached"].as_array().unwrap())
+                .find(|x| x["title"] == nom).map(|x| x["uuid"].as_str().unwrap().to_string())
+                .unwrap_or_else(|| panic!("{nom} absent : {r}"))
+        };
+        let niveau = |r: &Value, nom: &str| -> (u64, String) {
+            let x = r["reached"].as_array().unwrap().iter().find(|x| x["title"] == nom).unwrap_or_else(|| panic!("{nom} non atteint : {r}"));
+            (x["level"].as_u64().unwrap(), x["from"].as_str().unwrap_or_else(|| panic!("{nom} sans from : {x}")).to_string())
+        };
+        for (outil, depart, premier, second) in [("callees", "a", "b", "c"), ("impact", "c", "b", "a")] {
+            let r = backend.call(outil, json!({"name": depart, "format": "json"})).unwrap()["result"].clone();
+            let (n1, de1) = niveau(&r, premier);
+            let (n2, de2) = niveau(&r, second);
+            assert_eq!((n1, n2), (1, 2), "{outil} : {r}");
+            assert_eq!(de1, uuid_de(&r, depart), "{outil} : {premier} vient du départ");
+            assert_eq!(de2, uuid_de(&r, premier), "{outil} : {second} vient de {premier}");
+            let md = backend.call(outil, json!({"name": depart})).unwrap();
+            assert!(md["result"].is_string() && !md["result"].as_str().unwrap().contains("\"from\""), "le markdown ne change pas");
+        }
+    }
+
     /// Un backend de code qui **surveille son workspace** : la montre `code`
     /// (période courte), la réaction `reindex_on_change` du gabarit code et
     /// l'outil `usages`. `sources/outils.rs` définit `depart`, `main.rs`

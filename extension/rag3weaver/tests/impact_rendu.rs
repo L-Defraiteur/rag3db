@@ -19,6 +19,7 @@ fn atteint(uuid: &str, title: &str, path: &str, level: usize, group: &str) -> Re
         group: group.into(),
         note: if group.is_empty() { String::new() } else { "certain".into() },
         level,
+        from: None,
         relation: "CONSUMES".into(),
         by_name: false,
         by_also: false,
