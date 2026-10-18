@@ -483,6 +483,18 @@ INSTANTIATE_TEST_SUITE_P(Cases, ColumnIdTakenForAPosition,
 // checkpoint → splitSlots, d'après la pile de la session cœur C++). Sur master tel quel.
 // Le fils a une échéance : un point de reprise sans fin ne doit pas bloquer la passe ; sa
 // mémoire est bornée par la portée de `poste`, qui tue le plus gros processus.
+// Le VmData du processus, en octets (0 s'il est illisible) : ce qu'un fils hérite de son père et qui
+// compte déjà dans RLIMIT_DATA.
+uint64_t inheritedDataBytes() {
+    std::ifstream in("/proc/self/status");
+    for (std::string line; std::getline(in, line);) {
+        if (line.rfind("VmData:", 0) == 0) {
+            return std::stoull(line.substr(7)) * 1024;
+        }
+    }
+    return 0;
+}
+
 class RolledBackCopyThenCheckpoint : public UpstreamFixes,
                                      public ::testing::WithParamInterface<std::string> {
 public:
@@ -502,8 +514,13 @@ public:
                 boundedConfig.bufferPoolSize = 512ull * 1024 * 1024;
                 // La réservation virtuelle du tampon compte dans RLIMIT_DATA : la ramener.
                 boundedConfig.maxDBSize = 1ull << 30;
-                // Et le tas : ce qui enfle n'est pas dans le tampon (essai du 5 octobre).
-                rlimit dataLimit{3ull << 30, 3ull << 30};
+                // Et le tas : ce qui enfle n'est pas dans le tampon (essai du 5 octobre). Trois Gio
+                // au-delà de ce que le fils hérite du père, jamais en absolu : après les cas longs,
+                // le père garde environ 2 Gio de VmData (les arènes de malloc de leurs fils, que
+                // malloc_trim ne rend pas), et un plafond absolu de 3 Gio refusait la réservation
+                // du tampon (« Mmap for size … failed », 18 octobre).
+                const auto inherited = inheritedDataBytes();
+                rlimit dataLimit{inherited + (3ull << 30), inherited + (3ull << 30)};
                 setrlimit(RLIMIT_DATA, &dataLimit);
                 rag3db::main::Database childDatabase(databasePath, boundedConfig);
                 rag3db::main::Connection childConnection(&childDatabase);
