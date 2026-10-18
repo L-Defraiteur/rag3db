@@ -5,59 +5,362 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IDE rag3weaver</title>
 <style>
-  :root { --fond: #fbfaf7; --texte: #1d1c1a; --doux: #6b6862; --trait: #e3e0d9; --accent: #2f5d8a; }
-  @media (prefers-color-scheme: dark) {
-    :root { --fond: #17181a; --texte: #e8e6e1; --doux: #9a978f; --trait: #2c2d30; --accent: #8fb6de; }
+  :root {
+    --fond: #fbfaf7; --surface: #ffffff; --texte: #1d1c1a; --doux: #6b6862; --trait: #e3e0d9;
+    --accent: #2f5d8a; --accent-doux: #e6eef6; --marque: #fff3c4; --alerte: #9a3b1f;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #17181a; --surface: #1e1f22; --texte: #e8e6e1; --doux: #9a978f; --trait: #2c2d30;
+      --accent: #8fb6de; --accent-doux: #22303d; --marque: #3d3620; --alerte: #e3967a;
+    }
+  }
+  * { box-sizing: border-box; }
   body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, sans-serif; }
-  header { padding: 12px 16px; border-bottom: 1px solid var(--trait); display: flex; gap: 12px; align-items: baseline; }
-  header h1 { font-size: 16px; margin: 0; }
-  header span { color: var(--doux); font-size: 13px; }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; }
-  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
-  h2 { font-size: 14px; margin: 0 0 8px; color: var(--doux); font-weight: 600; }
-  pre, ol { margin: 0; font: 12px/1.45 ui-monospace, monospace; overflow-x: auto; }
-  ol { padding-left: 0; list-style: none; max-height: 70vh; overflow-y: auto; }
-  li { border-bottom: 1px solid var(--trait); padding: 3px 0; white-space: pre-wrap; word-break: break-word; }
-  li b { color: var(--accent); font-weight: 600; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--fond); border-bottom: 1px solid var(--trait);
+    padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  header .marque-ide { font-weight: 650; }
+  #fil { color: var(--doux); font-size: 14px; overflow-wrap: anywhere; }
+  #fil a { color: var(--doux); }
+  header form { margin-left: auto; display: flex; gap: 6px; }
+  header input { font: inherit; padding: 4px 8px; border: 1px solid var(--trait); border-radius: 6px;
+    background: var(--surface); color: var(--texte); width: min(320px, 60vw); }
+  #lien { font-size: 12px; color: var(--doux); }
+  main { padding: 16px; max-width: 1400px; }
+  h1 { font-size: 18px; margin: 0 0 12px; overflow-wrap: anywhere; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); margin: 20px 0 8px; }
+  .note { color: var(--doux); font-size: 13px; }
+  .alerte { color: var(--alerte); }
+  ul.liste { list-style: none; padding: 0; margin: 0; }
+  ul.liste li { padding: 4px 0; border-bottom: 1px solid var(--trait); display: flex; gap: 12px; flex-wrap: wrap; }
+  ul.liste .meta { color: var(--doux); font-size: 13px; }
+  .grille { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; }
+  @media (max-width: 900px) { .grille { grid-template-columns: 1fr; } }
+  .code { background: var(--surface); border: 1px solid var(--trait); border-radius: 8px; overflow-x: auto;
+    font: 13px/1.55 var(--mono); }
+  .code table { border-collapse: collapse; width: 100%; }
+  .code td { padding: 0 10px; vertical-align: top; white-space: pre; }
+  .code td.n { color: var(--doux); text-align: right; user-select: none; width: 1%; }
+  .code td.n a { color: var(--doux); }
+  .code tr:target, .code tr.vise { background: var(--marque); }
+  .code a.id { color: inherit; }
+  .code a.id:hover { color: var(--accent); text-decoration: underline; }
+  aside { font-size: 14px; }
+  aside .scope { padding: 3px 0; border-bottom: 1px solid var(--trait); }
+  .pastille { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: var(--accent-doux); color: var(--accent); }
+  .resultat { padding: 8px 0; border-bottom: 1px solid var(--trait); }
+  .resultat pre { margin: 4px 0 0; font: 12px/1.45 var(--mono); white-space: pre-wrap; color: var(--doux); }
 </style>
 </head>
 <body>
-<header><h1>IDE rag3weaver</h1><span id="vue"></span><span id="lien">flux : en attente</span></header>
-<main>
-  <section><h2>L'hôte</h2><pre id="etat">…</pre></section>
-  <section><h2>Le flux</h2><ol id="flux"></ol></section>
-</main>
-<script type="module">
-// Le socle (lot A2) : la page lit son URL, l'état de l'hôte, et le flux.
-// Les vues (arbre, fichier, symbole…) arrivent au lot A3.
-document.getElementById("vue").textContent = location.pathname + location.search + location.hash;
+<header>
+  <a class="marque-ide" href="/ide/">IDE</a>
+  <span id="fil"></span>
+  <form id="chercher" hidden><input name="q" type="search" placeholder="chercher dans le code" aria-label="chercher dans le code"></form>
+  <span id="lien">flux : en attente</span>
+</header>
+<main id="vue"><p class="note">Chargement…</p></main>
 
-async function etat() {
-  const r = await fetch("/ide/etat");
-  document.getElementById("etat").textContent = JSON.stringify(await r.json(), null, 2);
+<!-- Les outils que la page appelle, avec leurs paramètres : un test les
+     confronte au gabarit `code` (ide::tests). À tenir à jour avec les appels. -->
+<script type="application/json" id="outils">
+{
+  "list_files": ["path_prefix", "limit", "format"],
+  "read_file": ["path", "offset", "limit", "format"],
+  "usages": ["name", "limit", "format"],
+  "impact": ["name", "format"],
+  "callees": ["name", "format"],
+  "search_code": ["query", "options"]
 }
-etat();
+</script>
 
-const liste = document.getElementById("flux");
+<script type="module">
+// ─── Le socle ──────────────────────────────────────────────────────────────
+// La page n'est qu'une vue : chaque URL nomme ce qu'elle montre, tout vient
+// des outils de l'hôte (/ide/call), et le flux (/ide/flux) la tient à jour.
+
+const vue = document.getElementById("vue");
+const fil = document.getElementById("fil");
+
+function el(tag, attrs = {}, ...enfants) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null) continue;
+    if (k === "class") e.className = v; else e.setAttribute(k, v);
+  }
+  for (const c of enfants.flat()) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return e;
+}
+const enc = (s) => s.split("/").map(encodeURIComponent).join("/");
+
+let etat = null;
+async function chargerEtat() {
+  etat = await (await fetch("/ide/etat")).json();
+  return etat;
+}
+function backend(id) {
+  return (etat?.backends ?? []).find((b) => b.id === id);
+}
+
+async function appeler(id, nom, args) {
+  const b = backend(id);
+  if (!b) throw new Error(`backend inconnu : ${id}`);
+  const r = await fetch("/ide/call", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ manifest: b.manifest, name: nom, arguments: args }),
+  });
+  const v = await r.json();
+  if (!v.ok) throw new Error(v.error ?? `${nom} : échec`);
+  return v.result;
+}
+
+function erreur(e) {
+  vue.replaceChildren(el("p", { class: "alerte" }, String(e.message ?? e)));
+}
+
+function lienFichier(id, chemin, ligne) {
+  return `/ide/code/${id}/fichier/${enc(chemin)}${ligne ? `#L${ligne}` : ""}`;
+}
+function lienSymbole(id, nom) {
+  return `/ide/code/${id}/symbole/${encodeURIComponent(nom)}`;
+}
+
+function filDAriane(id, chemin, dernierEstFichier) {
+  const b = backend(id);
+  const morceaux = [el("a", { href: `/ide/code/${id}/arbre/` }, b ? nomCourt(b.manifest) : id)];
+  const parts = (chemin ?? "").split("/").filter(Boolean);
+  parts.forEach((p, i) => {
+    const sous = parts.slice(0, i + 1).join("/");
+    const fichier = dernierEstFichier && i === parts.length - 1;
+    morceaux.push(" / ", el("a", { href: fichier ? lienFichier(id, sous) : `/ide/code/${id}/arbre/${enc(sous)}/` }, p));
+  });
+  fil.replaceChildren(...morceaux);
+  const form = document.getElementById("chercher");
+  form.hidden = false;
+  form.onsubmit = (ev) => {
+    ev.preventDefault();
+    const q = new FormData(form).get("q");
+    if (q) location.href = `/ide/code/${id}/recherche?q=${encodeURIComponent(q)}`;
+  };
+}
+const nomCourt = (manifeste) => manifeste.split("/").slice(-3, -1).join("/") || manifeste;
+
+// ─── Les vues ─────────────────────────────────────────────────────────────
+
+async function accueil() {
+  fil.replaceChildren("les backends de l'hôte");
+  const backends = etat.backends ?? [];
+  if (!backends.length) {
+    vue.replaceChildren(el("p", { class: "note" }, "L'hôte ne sert encore aucun backend : un client (MCP) l'ouvre à son premier appel."));
+    return;
+  }
+  vue.replaceChildren(
+    el("h1", {}, "Backends"),
+    el("ul", { class: "liste" }, backends.map((b) =>
+      el("li", {},
+        el("a", { href: `/ide/code/${b.id}/arbre/` }, nomCourt(b.manifest)),
+        el("span", { class: "meta" }, b.manifest),
+        el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
+      ))),
+  );
+}
+
+async function arbre(id, dossier) {
+  filDAriane(id, dossier, false);
+  const prefixe = dossier ? (dossier.endsWith("/") ? dossier : dossier + "/") : "";
+  const r = await appeler(id, "list_files", { path_prefix: prefixe, limit: 2000, format: "json" });
+  const dossiers = new Map();
+  const fichiers = [];
+  for (const e of r.entries ?? []) {
+    const reste = e.path.slice(prefixe.length);
+    const [premier, ...suite] = reste.split("/");
+    if (suite.length) dossiers.set(premier, (dossiers.get(premier) ?? 0) + 1);
+    else fichiers.push(e);
+  }
+  const lignes = [
+    ...[...dossiers.entries()].sort().map(([d, n]) =>
+      el("li", {}, el("a", { href: `/ide/code/${id}/arbre/${enc(prefixe + d)}/` }, d + "/"), el("span", { class: "meta" }, `${n} fichier${n > 1 ? "s" : ""}`))),
+    ...fichiers.sort((a, b) => a.path.localeCompare(b.path)).map((e) =>
+      el("li", {},
+        el("a", { href: lienFichier(id, e.path) }, e.path.slice(prefixe.length)),
+        el("span", { class: "meta" }, e.lines != null ? `${e.lines} lignes` : ""),
+        e.stale ? el("span", { class: "pastille" }, "modifié depuis l'index") : e.indexed === false ? el("span", { class: "pastille" }, "non indexé") : "",
+      )),
+  ];
+  vue.replaceChildren(
+    el("h1", {}, prefixe || "/"),
+    r.total > r.returned ? el("p", { class: "note" }, `${r.returned} fichiers montrés sur ${r.total} sous ce préfixe.`) : "",
+    el("ul", { class: "liste" }, lignes),
+  );
+}
+
+// Les mots qui ne sont pas des symboles du dépôt (quelques langages courants).
+const MOTS = new Set(("as async await break case catch class const continue crate default do dyn else enum export extends " +
+  "false fn for from function if impl import in interface let loop match mod move mut new null pub ref return self Self " +
+  "static struct super switch this throw trait true try type typeof unsafe use var void where while yield int bool char " +
+  "float double long short unsigned signed auto template typename namespace using public private protected virtual override " +
+  "str String Vec Option Some None Ok Err Result Box Arc usize u8 u16 u32 u64 i32 i64 f32 f64").split(" "));
+
+function ligneCliquable(id, texte) {
+  const frag = document.createDocumentFragment();
+  let dernier = 0;
+  for (const m of texte.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
+    if (m.index > dernier) frag.append(texte.slice(dernier, m.index));
+    const mot = m[0];
+    frag.append(MOTS.has(mot) || mot.length < 2 ? mot : el("a", { class: "id", href: lienSymbole(id, mot) }, mot));
+    dernier = m.index + mot.length;
+  }
+  frag.append(texte.slice(dernier));
+  return frag;
+}
+
+async function fichier(id, chemin) {
+  filDAriane(id, chemin, true);
+  const offset = Number(new URLSearchParams(location.search).get("depuis") ?? 1) || 1;
+  const r = await appeler(id, "read_file", { path: chemin, offset, limit: 2000, format: "json" });
+  const corps = el("tbody");
+  for (const brute of r.text.split("\n")) {
+    const m = brute.match(/^(\d+)\| ?(.*)$/);
+    if (!m) continue;
+    const n = Number(m[1]);
+    corps.append(el("tr", { id: `L${n}` },
+      el("td", { class: "n" }, el("a", { href: `#L${n}` }, n)),
+      el("td", {}, ligneCliquable(id, m[2]))));
+  }
+  const scopes = (r.scopes ?? []).map((s) =>
+    el("div", { class: "scope" },
+      el("a", { href: `#L${s.start_line}` }, s.name),
+      " ", el("span", { class: "meta note" }, `${s.scope_type} ${s.start_line}–${s.end_line}`),
+      " ", el("a", { href: lienSymbole(id, s.name), title: "usages, impact, appelés" }, "→")));
+  vue.replaceChildren(
+    el("h1", {}, chemin),
+    el("p", { class: "note" },
+      `${r.total_lines} lignes`,
+      r.stale === true ? el("span", { class: "alerte" }, " · modifié depuis l'index") : r.stale === null ? " · non indexé" : "",
+      r.has_more ? el("span", {}, " · ", el("a", { href: `${location.pathname}?depuis=${r.offset + r.lines_read}` }, "la suite")) : ""),
+    el("div", { class: "grille" },
+      el("div", { class: "code" }, el("table", {}, corps)),
+      el("aside", {}, el("h2", {}, "Dans ce fichier"), scopes.length ? scopes : el("p", { class: "note" }, "aucun scope")),
+    ),
+  );
+  vise();
+}
+
+function vise() {
+  document.querySelectorAll("tr.vise").forEach((t) => t.classList.remove("vise"));
+  const cible = location.hash && document.getElementById(location.hash.slice(1));
+  if (cible) { cible.classList.add("vise"); cible.scrollIntoView({ block: "center" }); }
+}
+addEventListener("hashchange", vise);
+
+function itemLien(id, it) {
+  return el("li", {},
+    el("a", { href: lienFichier(id, it.path, it.line) }, `${it.path}${it.line ? ":" + it.line : ""}`),
+    el("a", { href: lienSymbole(id, it.title) }, it.title),
+    el("span", { class: "meta" }, it.kind ?? ""));
+}
+
+async function symbole(id, nom) {
+  filDAriane(id, "", false);
+  fil.append(" · ", nom);
+  const [u, imp, app] = await Promise.all([
+    appeler(id, "usages", { name: nom, limit: 200, format: "json" }),
+    appeler(id, "impact", { name: nom, format: "json" }).catch((e) => ({ erreur: e.message })),
+    appeler(id, "callees", { name: nom, format: "json" }).catch((e) => ({ erreur: e.message })),
+  ]);
+  const parGenre = new Map();
+  for (const x of u.usages ?? []) {
+    if (!parGenre.has(x.usage)) parGenre.set(x.usage, []);
+    parGenre.get(x.usage).push(x);
+  }
+  const voisins = (r, titre) => r.erreur
+    ? [el("h2", {}, titre), el("p", { class: "note" }, r.erreur)]
+    : [el("h2", {}, `${titre} (${(r.reached ?? []).length})`),
+       el("ul", { class: "liste" }, (r.reached ?? []).map((it) => itemLien(id, it)))];
+  vue.replaceChildren(
+    el("h1", {}, nom),
+    u.ambiguous ? el("p", { class: "note" }, "Nom défini plusieurs fois : les usages trouvés par le nom seul ne sont pas attribués.") : "",
+    el("h2", {}, `Définitions (${(u.definitions ?? []).length})`),
+    el("ul", { class: "liste" }, (u.definitions ?? []).map((d) => itemLien(id, d))),
+    ...[...parGenre.entries()].flatMap(([genre, xs]) => [
+      el("h2", {}, `${genre} (${xs.length})`),
+      el("ul", { class: "liste" }, xs.map((x) => {
+        const li = itemLien(id, x.user);
+        if (x.guessed) li.append(el("span", { class: "pastille" }, "par le nom"));
+        return li;
+      })),
+    ]),
+    ...voisins(imp, "Ce qui en dépend (impact)"),
+    ...voisins(app, "Ce qu'il appelle"),
+  );
+}
+
+async function recherche(id) {
+  filDAriane(id, "", false);
+  const q = new URLSearchParams(location.search).get("q") ?? "";
+  document.querySelector("#chercher input").value = q;
+  fil.append(" · recherche");
+  const r = await appeler(id, "search_code", { query: q, options: { limit: 30 } });
+  vue.replaceChildren(
+    el("h1", {}, `« ${q} »`),
+    ...(Array.isArray(r) ? r : []).map((x) => {
+      const d = x.data ?? {};
+      return el("div", { class: "resultat" },
+        el("a", { href: lienFichier(id, d.file_path ?? "", d.start_line) }, `${d.file_path ?? "?"}:${d.start_line ?? ""}`),
+        " ", d.name ? el("a", { href: lienSymbole(id, d.name) }, d.name) : "",
+        " ", el("span", { class: "meta note" }, `${d.scope_type ?? x.entity ?? ""} · ${x.signal ?? ""}`),
+        d.signature ? el("pre", {}, d.signature) : "");
+    }),
+  );
+}
+
+// ─── Le routage, et le flux ───────────────────────────────────────────────
+
+function route() {
+  const p = location.pathname.replace(/\/+$/, "") || "/ide";
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|recherche)(?:\/(.*))?$/);
+  if (!m) return { vue: "accueil" };
+  return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
+}
+
+async function montrer() {
+  const r = route();
+  try {
+    if (!etat) await chargerEtat();
+    if (r.id && !backend(r.id)) throw new Error(`L'hôte ne connaît pas le backend ${r.id} (ouvert depuis ?). Revenir à l'accueil.`);
+    switch (r.vue) {
+      case "arbre": return await arbre(r.id, r.reste);
+      case "fichier": return await fichier(r.id, r.reste);
+      case "symbole": return await symbole(r.id, r.reste);
+      case "recherche": return await recherche(r.id);
+      default: return await accueil();
+    }
+  } catch (e) { erreur(e); }
+}
+montrer();
+
+// Le flux : un fichier qui change se relit dans la vue qui le montre.
 const lien = document.getElementById("lien");
-const source = new EventSource("/ide/flux");
+const source = new EventSource("/ide/flux?sujets=files");
 source.onopen = () => { lien.textContent = "flux : ouvert"; };
 source.onerror = () => { lien.textContent = "flux : coupé, reprise…"; };
-function montrer(e) {
-  const li = document.createElement("li");
+let relire = null;
+source.onmessage = (e) => {
   const d = JSON.parse(e.data);
-  const genre = e.type === "message" ? (d.evenement?.kind ?? "?") : e.type;
-  li.innerHTML = `<b>${genre}</b> #${d.id ?? ""} ${d.sujet ?? ""} `;
-  li.append(JSON.stringify(d.evenement ?? d));
-  liste.prepend(li);
-  while (liste.children.length > 300) liste.lastChild.remove();
-  if (e.type === "lacune") etat();
-}
-// Chaque événement du bus est un message ordinaire, son genre dans les
-// données ; seule la lacune (le tampon ne garde plus ce qu'on a manqué) a le sien.
-source.onmessage = montrer;
-source.addEventListener("lacune", montrer);
+  const ev = d.evenement ?? {};
+  const r = route();
+  const b = r.id && backend(r.id);
+  if (!b || d.backend !== b.manifest || ev.kind !== "FileChanged") return;
+  const touche = r.vue === "fichier" ? ev.path === r.reste : r.vue === "arbre" ? ev.path?.startsWith(r.reste) : false;
+  if (!touche) return;
+  clearTimeout(relire);
+  relire = setTimeout(() => { const y = scrollY; montrer().then(() => scrollTo(0, y)); }, 300);
+};
+source.addEventListener("lacune", () => montrer());
 </script>
 </body>
 </html>

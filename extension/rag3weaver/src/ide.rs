@@ -420,6 +420,45 @@ mod tests {
         assert!(t.contains("FileChanged") && t.contains("src/lib.rs") && t.contains("\"sujet\":\"files\"") && t.contains("/x/backend.json"), "{t}");
     }
 
+    /// **La page n'appelle que ce que le gabarit `code` sert** (lot A3) : le
+    /// bloc `outils` de la page nomme chaque outil appelé et ses paramètres ;
+    /// chacun existe dans le manifeste du gabarit, et chaque paramètre est
+    /// déclaré par son graphe (`%% param:`) sans être lié par le manifeste. Et
+    /// chaque `appeler(…, "outil", …)` de la page est dans le bloc.
+    #[test]
+    fn the_page_only_calls_what_the_code_template_serves() {
+        let debut = PAGE.find(r#"<script type="application/json" id="outils">"#).expect("le bloc outils");
+        let bloc = &PAGE[debut..];
+        let bloc = &bloc[bloc.find('>').unwrap() + 1..bloc.find("</script>").unwrap()];
+        let outils: serde_json::Map<String, Value> = serde_json::from_str(bloc).expect("le bloc outils est du JSON");
+        let racine = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        let manifeste: Value = serde_json::from_slice(&std::fs::read(racine.join("backend.json")).unwrap()).unwrap();
+        for (outil, params) in &outils {
+            let attache = &manifeste["tools"][outil];
+            assert!(attache.is_object(), "le gabarit code ne sert pas « {outil} »");
+            let graphe = std::fs::read_to_string(racine.join(attache["graph"].as_str().unwrap())).unwrap();
+            let declares: HashSet<&str> = graphe
+                .lines()
+                .filter_map(|l| l.strip_prefix("%% param: "))
+                .filter_map(|l| l.split_whitespace().next())
+                .collect();
+            for p in params.as_array().unwrap() {
+                let p = p.as_str().unwrap();
+                assert!(declares.contains(p), "{outil} : « {p} » n'est pas un paramètre de son graphe ({declares:?})");
+                assert!(attache["bindings"].get(p).is_none(), "{outil} : « {p} » est lié par le manifeste, la page ne peut pas le passer");
+            }
+        }
+        let appeles: HashSet<String> = PAGE
+            .split("appeler(id, \"")
+            .skip(1)
+            .filter_map(|r| r.split('"').next().map(str::to_string))
+            .collect();
+        assert!(!appeles.is_empty());
+        for a in &appeles {
+            assert!(outils.contains_key(a), "la page appelle « {a} », absent du bloc outils");
+        }
+    }
+
     #[test]
     fn url_parameters_are_decoded() {
         assert_eq!(parametres("/ide/flux?sujets=files%2Cdataflow&depuis=12"), vec![("sujets".to_string(), "files,dataflow".to_string()), ("depuis".to_string(), "12".to_string())]);
