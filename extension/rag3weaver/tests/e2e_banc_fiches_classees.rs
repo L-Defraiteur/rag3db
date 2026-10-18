@@ -11,7 +11,12 @@
 //!   `decide_subject_llm.mmd`, Gemini, qui juge.
 //!
 //! `RAG3WEAVER_BANC_TENTATIVE=<dossier>` choisit la tentative (par défaut la
-//! première). Le jeu est `tests/data/banc-fiches-classees/v1.json` : des sujets,
+//! première). Son `tentative.json` dit sa **forme** : `par_candidat` (oui / non
+//! sur chaque paire, le défaut, celle des tentatives 1 à 3) ou `par_fiche` (une
+//! décision par fiche, « lequel des candidats, ou aucun » : l'élément porte
+//! `{text, candidats}` et le `decide` prend ses étiquettes par `labels_from`,
+//! plus `aucun` en fixe — tentative 4). Les deux formes se comptent de même.
+//! Le jeu est `tests/data/banc-fiches-classees/v1.json` : des sujets,
 //! des fiches, et pour chacune le sujet juste ou `null`. Le banc mesure le rappel
 //! des candidats, les ancrages justes, les **faux ancrages**, les manqués, le
 //! temps et (voie du Decider) les probabilités. Il n'affirme aucun seuil de
@@ -93,9 +98,51 @@ fn question(sujet: &Value, fiche: &Value) -> String {
     )
 }
 
-/// Ce qu'une décision rend.
+/// **La question d'une fiche entière** (tentative 4) : la fiche et tous ses
+/// candidats, pour une seule décision « lequel, ou aucun ».
+fn question_fiche(fiche: &Value, candidats: &[Value]) -> String {
+    let liste: Vec<String> = candidats
+        .iter()
+        .map(|s| format!("- {} — {}", s["name"].as_str().unwrap_or(""), s["about"].as_str().unwrap_or("")))
+        .collect();
+    format!(
+        "Fiche : {}\nPourquoi : {}\nSujets candidats :\n{}\nSous lequel de ces sujets va cette fiche ?",
+        fiche["claim"].as_str().unwrap_or(""),
+        fiche["why"].as_str().unwrap_or(""),
+        liste.join("\n")
+    )
+}
+
+/// L'étiquette d'abstention de la forme par fiche, déclarée en `labels` fixes
+/// à côté de `labels_from`.
+const AUCUN: &str = "aucun";
+
+/// **La forme d'une tentative**, lue dans son `tentative.json` (absent : la
+/// forme des tentatives 1 à 3).
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Forme {
+    /// Oui ou non sur chaque paire (fiche, candidat).
+    ParCandidat,
+    /// Une décision par fiche : l'un des candidats, ou « aucun » (étiquettes
+    /// prises dans l'élément par `labels_from`).
+    ParFiche,
+}
+
+fn forme() -> Forme {
+    let chemin = tentative().join("tentative.json");
+    let Ok(texte) = std::fs::read_to_string(&chemin) else { return Forme::ParCandidat };
+    let v: Value = serde_json::from_str(&texte).unwrap_or_else(|e| panic!("{} : {e}", chemin.display()));
+    match v["forme"].as_str() {
+        None | Some("par_candidat") => Forme::ParCandidat,
+        Some("par_fiche") => Forme::ParFiche,
+        Some(autre) => panic!("{} : forme inconnue {autre:?} (par_candidat, par_fiche)", chemin.display()),
+    }
+}
+
+/// Ce qu'une décision rend : l'étiquette, et sa probabilité quand la voie la
+/// donne.
 struct Reponse {
-    oui: bool,
+    etiquette: String,
     proba_verdict: Option<f64>,
 }
 
@@ -129,14 +176,15 @@ impl Voie {
         Self { nom, graphe, services: std::sync::Arc::new(services) }
     }
 
-    /// Le graphe de la tentative, l'élément `{text}` posé devant son `decide`.
-    fn decider(&self, question: &str) -> Result<Reponse, String> {
+    /// Le graphe de la tentative, l'élément posé devant son `decide` ; l'étiquette
+    /// rendue doit être l'une de `permises`, sinon le banc tombe en le disant.
+    fn decider(&self, element: Value, permises: &[String]) -> Result<Reponse, String> {
         use rag3weaver::dataflow::checkpoint::{EdgeDef, NodeDef};
         let mut def = self.graphe.clone();
         def.nodes.push(NodeDef {
             name: "source".into(),
             node_type: "RhaiNode".into(),
-            config: json!({"script": "input", "value": {"text": question}}),
+            config: json!({"script": "input", "value": element}),
         });
         def.edges.push(EdgeDef {
             from_node: "source".into(),
@@ -154,12 +202,12 @@ impl Voie {
             .and_then(|v| v.downcast::<Value>())
             .cloned()
             .ok_or("le decide n'a rien rendu")?;
-        let oui = match element["verdict"].as_str() {
-            Some("yes") => true,
-            Some("no") => false,
-            autre => return Err(format!("étiquette hors liste : {autre:?} — {element}")),
-        };
-        Ok(Reponse { oui, proba_verdict: element["verdict_probability"].as_f64() })
+        match element["verdict"].as_str() {
+            Some(e) if permises.iter().any(|p| p == e) => {
+                Ok(Reponse { etiquette: e.to_string(), proba_verdict: element["verdict_probability"].as_f64() })
+            }
+            autre => Err(format!("étiquette hors liste : {autre:?} (attendues {permises:?}) — {element}")),
+        }
     }
 }
 
@@ -256,31 +304,64 @@ fn le_sujet_d_une_fiche_au_put_memory() {
     );
 
     let mut sortie = json!({"jeu": "v1", "candidats": CANDIDATS, "rappel": [rappel, avec_sujet], "voies": []});
+    let forme = forme();
+    eprintln!("  forme de la tentative : {forme:?}");
     for voie in &voies {
         let mut c = Compte::default();
         let mut lignes = Vec::new();
         for (f, noms) in fiches.iter().zip(&candidats_par_fiche) {
             let gold = f["gold"].as_str();
-            let mut oui = Vec::new();
-            for nom in noms {
-                let sujet = par_nom(nom).expect("un candidat est un sujet du jeu");
-                let t = Instant::now();
-                let r = voie
-                    .decider(&question(&sujet, f))
-                    .unwrap_or_else(|e| panic!("{} : la décision n'a pas rendu d'étiquette — {e}", voie.nom));
-                c.ms += t.elapsed().as_millis();
-                c.decisions += 1;
-                let juste = Some(nom.as_str()) == gold;
-                match (r.oui, juste) {
-                    (true, true) => c.ancrages_justes += 1,
-                    (true, false) => c.faux_ancrages += 1,
-                    (false, true) => c.manques += 1,
-                    (false, false) => {}
+            // Les sujets que la voie range la fiche dessous.
+            let mut oui: Vec<String> = Vec::new();
+            match forme {
+                Forme::ParCandidat => {
+                    let permises = ["yes".to_string(), "no".to_string()];
+                    for nom in noms {
+                        let sujet = par_nom(nom).expect("un candidat est un sujet du jeu");
+                        let t = Instant::now();
+                        let r = voie
+                            .decider(json!({"text": question(&sujet, f)}), &permises)
+                            .unwrap_or_else(|e| panic!("{} : la décision n'a pas rendu d'étiquette — {e}", voie.nom));
+                        c.ms += t.elapsed().as_millis();
+                        c.decisions += 1;
+                        let dit_oui = r.etiquette == "yes";
+                        if dit_oui {
+                            oui.push(nom.clone());
+                        }
+                        lignes.push(json!({"claim": f["claim"], "candidat": nom, "gold": gold, "oui": dit_oui, "proba_verdict": r.proba_verdict}));
+                    }
                 }
-                if r.oui {
-                    oui.push(nom.clone());
+                Forme::ParFiche => {
+                    let sujets_candidats: Vec<Value> =
+                        noms.iter().map(|n| par_nom(n).expect("un candidat est un sujet du jeu")).collect();
+                    let mut permises = noms.clone();
+                    permises.push(AUCUN.to_string());
+                    let t = Instant::now();
+                    let r = voie
+                        .decider(json!({"text": question_fiche(f, &sujets_candidats), "candidats": noms}), &permises)
+                        .unwrap_or_else(|e| panic!("{} : la décision n'a pas rendu d'étiquette — {e}", voie.nom));
+                    c.ms += t.elapsed().as_millis();
+                    c.decisions += 1;
+                    if r.etiquette != AUCUN {
+                        oui.push(r.etiquette.clone());
+                    }
+                    lignes.push(json!({"claim": f["claim"], "candidats": noms, "gold": gold, "choix": r.etiquette, "proba_verdict": r.proba_verdict}));
                 }
-                lignes.push(json!({"claim": f["claim"], "candidat": nom, "gold": gold, "oui": r.oui, "proba_verdict": r.proba_verdict}));
+            }
+            // Le même compte pour les deux formes : un sujet retenu est un
+            // ancrage juste ou faux ; le bon sujet présent et pas retenu, un
+            // manqué.
+            for nom in &oui {
+                if Some(nom.as_str()) == gold {
+                    c.ancrages_justes += 1;
+                } else {
+                    c.faux_ancrages += 1;
+                }
+            }
+            if let Some(g) = gold {
+                if noms.iter().any(|n| n == g) && !oui.iter().any(|n| n == g) {
+                    c.manques += 1;
+                }
             }
             let fiche_juste = match gold {
                 Some(g) => oui == [g.to_string()],
@@ -312,7 +393,7 @@ fn le_sujet_d_une_fiche_au_put_memory() {
             c.ms / c.decisions.max(1) as u128
         );
         sortie["voies"].as_array_mut().unwrap().push(json!({
-            "voie": voie.nom, "tentative": tentative().file_name().map(|n| n.to_string_lossy().to_string()), "fiches": fiches.len(), "fiches_justes": c.fiches_justes,
+            "voie": voie.nom, "tentative": tentative().file_name().map(|n| n.to_string_lossy().to_string()), "forme": format!("{forme:?}"), "fiches": fiches.len(), "fiches_justes": c.fiches_justes,
             "abstentions_justes": c.abstentions_justes, "sans_sujet": sans_sujet,
             "ancrages_justes": c.ancrages_justes, "faux_ancrages": c.faux_ancrages, "manques": c.manques,
             "decisions": c.decisions, "ms": c.ms as u64,
@@ -321,6 +402,11 @@ fn le_sujet_d_une_fiche_au_put_memory() {
     }
     if let Ok(chemin) = std::env::var("RAG3WEAVER_BANC_SORTIE") {
         let chemin = PathBuf::from(chemin);
+        // Le dossier `resultats/` d'une tentative neuve est vide, donc absent
+        // d'un clone : git ne suit pas les dossiers vides (tentative 4, luciepc).
+        if let Some(dossier) = chemin.parent() {
+            std::fs::create_dir_all(dossier).expect("le dossier de la sortie du banc");
+        }
         std::fs::write(&chemin, serde_json::to_vec_pretty(&sortie).unwrap()).expect("la sortie du banc");
         eprintln!("\n  écrit : {}", chemin.display());
     }
