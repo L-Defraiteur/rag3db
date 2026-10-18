@@ -98,6 +98,10 @@ constexpr int NUM_READERS = 4;
 constexpr double SLACK_MS = 50;
 constexpr auto B_DEFAULT = "b-defaut";
 constexpr int64_t NUM_B_SET = 10;
+// Le tampon du produit, pas celui des tests (64 Mo) : sous 64 Mo plein, un BEGIN refusé laisse la
+// connexion sans transaction et la requête suivante plante (ticket
+// 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction, témoin failed_begin_test.cpp).
+constexpr uint64_t BUFFER_POOL = 2ull * 1024 * 1024 * 1024;
 
 enum class Actor { DocWriter, NoteWriter, Reader };
 
@@ -341,6 +345,7 @@ private:
         Ddl ddl;
         ddl.name = name;
         ddl.start = now();
+        std::fprintf(stderr, "  [scénario] début de « %s » à %.0f ms\n", name.c_str(), ddl.start);
         auto result = connection.query(query);
         ddl.end = now();
         ddl.ok = result->isSuccess();
@@ -385,6 +390,11 @@ private:
         if (block) {
             auto begin = connection.query("BEGIN TRANSACTION;");
             if (!begin->isSuccess()) {
+                // Imprimé tout de suite : la requête qui suit un BEGIN refusé peut tuer le
+                // processus (ticket
+                // 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction).
+                std::fprintf(stderr, "  [scénario] BEGIN refusé : %s\n",
+                    begin->getErrorMessage().substr(0, 200).c_str());
                 return begin->getErrorMessage();
             }
         }
@@ -677,6 +687,7 @@ protected:
     }
 
     void playScenario(std::chrono::milliseconds period) {
+        systemConfig->bufferPoolSize = BUFFER_POOL;
         createDBAndConn();
         load(*conn, databasePath);
         Scenario scenario(*database, period);
@@ -798,6 +809,7 @@ TEST_F(TwentyWriters, KilledDuringTheCheckpoint) {
     fs::create_directories(fs::path(databasePath).parent_path());
     fs::remove(logPath);
     fs::remove(markerPath);
+    systemConfig->bufferPoolSize = BUFFER_POOL;
     const auto pid = fork();
     if (pid == 0) {
         concurrency::disableCoreDumps();
