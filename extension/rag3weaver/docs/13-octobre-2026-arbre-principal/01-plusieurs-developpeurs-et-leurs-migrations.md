@@ -368,6 +368,8 @@ Ce que cette forme demande au moteur :
 
 ## 9. Les questions à Lucie
 
+*Tranchées par Lucie le 18 octobre : voir le §11.*
+
 1. **Migration tirée de la différence de gabarits, ou fichier écrit à la main ?** Je propose tirée,
    avec un fichier rangé et nommé : c'est la règle « un index ne se pense pas » étendue au schéma.
 2. **Un schéma par projet (cellule), ou un schéma par base ?** Aujourd'hui, une base. Plusieurs
@@ -379,3 +381,131 @@ Ce que cette forme demande au moteur :
 
 Écrite dans la stèle du produit (`11-octobre-2026-arbre-principal/02-la-stele-du-produit.md`, §4),
 avec ce qui la tient déjà et ce qui ne la tient pas encore.
+
+## 11. Les décisions du 18 octobre, et les lots
+
+*Arbre principal, 18 octobre 2026. Lucie a tranché les trois questions du §9 (notées par
+l'orchestration dans `11-octobre-2026-10h51/orchestration/04-les-buts.md` §4 bis, `d888b6365`) :*
+
+1. **un schéma par projet**, c'est-à-dire par cellule, et non par base ;
+2. **la migration tirée de la différence de gabarits** quand c'est possible, rangée dans un fichier
+   nommé et relisible ;
+3. **les retraits et les conversions en étendre puis contracter** : ajouter, écrire aux deux,
+   retirer plus tard, chaque temps étant une migration. Le refus d'aujourd'hui disparaît.
+
+Ce qui suit dit ce que chaque décision demande au produit, puis les lots dans l'ordre. Rien n'est
+écrit en code.
+
+### 11.1 Un schéma par cellule
+
+**Aujourd'hui** (§3), les tables, les colonnes et les index vecteurs sont communs à la base. Une
+ligne porte `_org` et `_project`, et seuls le plein texte et le sparse ont des index par cellule
+(suffixe `__org__project`, `ir/src/scope.rs:60-81`).
+
+**Ce que demande la décision :**
+- **Des tables par cellule.** `Ticket` d'`acme/alpha` et `Ticket` d'`acme/beta` deviennent deux
+  tables du moteur, nommées comme le sont déjà les index plein texte d'une cellule. C'est la seule
+  forme où un `ALTER` d'un projet ne touche pas l'autre. Une couche logique sur des tables
+  partagées laisserait l'`ALTER` global, et avec lui le coût et les collisions du §5.
+- **Ce que ça règle au passage :**
+  - un `ADD COLUMN` ne réécrit plus que les lignes d'un projet (E1 réduit à sa part) ;
+  - deux projets qui migrent en même temps ne visent plus la même table (E2 et E3 ne restent
+    qu'au sein d'un projet) ;
+  - le verrou exclusif d'un index HNSW ne sérialise plus que les écrivains d'un projet (E11).
+- **Une méta par cellule.** `entity_config:{E}` devient `entity_config:{cellule}:{E}`. Le
+  `migrate_entity` d'aujourd'hui compare dans la cellule, et `dans_la_cellule` bascule aussi les
+  configurations, ce qu'il fait déjà pour les poignées plein texte.
+- **Les relations restent dans leur cellule.** Une relation entre deux cellules n'aurait plus de
+  table d'extrémités unique. Je propose de la refuser au chargement, en le nommant. Un renvoi
+  d'un projet à l'autre passe par une propriété (l'uuid de l'autre, comme une clé étrangère), que
+  les outils lisent sans saut. Si un cas réel le contredit (la mémoire longue relie-t-elle ses
+  cellules ?), il revient à Lucie.
+- **Une cellule neuve** reçoit les migrations de son gabarit dans l'ordre, sur des tables vides :
+  c'est le rejeu du §1, cellule par cellule.
+- **L'existant se migre lui-même en étendre puis contracter** :
+  1. créer les tables de la cellule ;
+  2. y copier les lignes marquées `_org`/`_project`, par lots, reprenable ;
+  3. lire dans les tables neuves ;
+  4. retirer les anciennes.
+  Ce sont les bases de Lucie (`code-rag3db`, la mémoire longue), et chaque temps est une migration
+  du journal.
+
+### 11.2 La migration tirée de la différence de gabarits
+
+**Ce que demande la décision :**
+- **Un état appliqué**, par cellule : le gabarit tel que la dernière migration l'a laissé, rangé
+  en méta avec le numéro de cette migration.
+- **Un calcul de différence**, du gabarit appliqué au gabarit courant, en étapes déclaratives :
+  - `ajouter_entite`, `ajouter_champ` (avec son défaut), `ajouter_relation` ;
+  - `ajouter_signal` (bm25, vector, sparse) et `ajouter_modele` ;
+  - `etendre` et `contracter` (§11.3).
+- **Un fichier par migration**, `migrations/NNN_nom.json`, dans le dépôt de l'application, à côté
+  du gabarit. Le développeur le relit et le commite comme du code. Il porte :
+  - le numéro, le nom, l'auteur ;
+  - les étapes ;
+  - la somme du gabarit d'avant et celle du gabarit d'après.
+- **Ce que la différence ne sait pas dire**, le développeur l'écrit dans le même fichier. Le
+  calcul s'arrête dessus et le nomme : un renommage ressemble à un retrait plus un ajout, et c'est
+  au développeur de dire que c'en est un.
+- **Où il se calcule** : un outil ou une sous-commande (`migrations diff`), hors de l'hôte. Il ne
+  touche pas la base, et se rejoue à l'identique.
+- **Les refus, à l'application** :
+  - une migration dont la somme « d'avant » n'est pas l'état appliqué : un autre est passé entre
+    les deux, et le refus nomme sa migration ;
+  - un numéro déjà pris ;
+  - une migration déjà passée, ou passée avec une autre somme.
+  Deux développeurs partis du même état se voient donc refuser le second, qui recalcule sa
+  différence sur l'état neuf. C'est le « rebase » des migrations, et il est explicite.
+
+### 11.3 Étendre puis contracter
+
+**Ce que demande la décision.** Un retrait, une conversion de type ou un renommage deviennent
+trois migrations, chacune du journal :
+
+| temps | ce qu'elle fait | ce qui se passe entre-temps |
+|---|---|---|
+| **étendre** | ajoute le champ neuf (ou la relation neuve) et déclare au gabarit que l'ancien et le neuf sont **liés** : l'ancien se lit, les écritures vont aux deux | les outils écrivent les deux |
+| **remplir** | une passe en fond, par lots, reprenable, qui écrit le neuf à partir de l'ancien (la conversion, ou la copie) | l'état d'index dit « remplissage n sur N », les lectures restent sur l'ancien |
+| **contracter** | bascule les lectures sur le neuf, puis retire l'ancien (`ALTER … DROP`, déjà transactionnel au moteur) | refusée tant que le remplissage n'a pas fini, ou qu'un outil du gabarit nomme encore l'ancien |
+
+- **Le lien entre l'ancien et le neuf** est une déclaration du gabarit, que les écritures du
+  produit honorent (le put écrit les deux). Ce n'est pas une règle du moteur.
+- **Le remplissage** est une passe du produit, sur le modèle de la dette d'embarquement : elle
+  réclame des lots, écrit et marque. Elle hérite donc de la reprise après un arrêt brutal, et de
+  l'état d'index qui la dit.
+- **La contraction** relit les outils du gabarit, et le refus nomme celui qui lit encore
+  l'ancien.
+- **Pour le moteur**, `DROP` de propriété a eu deux défauts, fermés depuis (le point de reprise
+  après un DROP, et le DROP d'une colonne déclarée avant la clé primaire). C'est le temps sans
+  risque des trois.
+
+### 11.4 Les lots, dans l'ordre
+
+| # | lot | ce qu'il ferme | dépend de | témoin |
+|---|---|---|---|---|
+| M1 | **Une migration = une transaction, et son journal** : la table `_Migration` (par cellule dès le départ), le DDL, la méta et la ligne du journal dans un seul `BEGIN … COMMIT` ; plus d'`ALTER` avant la méta | E7, E8 (le journal) | le cœur pour E10 : sans l'annulation du stockage, une migration annulée laisse une colonne qu'un ADD suivant lit de travers. En attendant, une migration échouée force un point de reprise avant la suivante, et le dit | un arrêt brutal entre deux étapes, puis la réouverture : rien de la migration, et le journal sans elle (rouge d'abord) |
+| M2 | **La différence de gabarits et ses refus** : l'état appliqué, le calcul, le fichier, les sommes, et les trois refus du §11.2 | les trois dernières lignes du §5 | M1 | deux développeurs partis du même état : le second refusé, en nommant le premier |
+| M3 | **Le schéma par cellule** : les tables, la méta et les poignées par cellule ; le refus des relations entre cellules ; une cellule neuve par rejeu | la décision 1, et E1, E2, E3 et E11 entre projets | M1 (le journal porte la cellule) | deux cellules : un `ALTER` de l'une ne change ni les colonnes ni le temps d'écriture de l'autre |
+| M4 | **L'application à chaud par l'hôte** : `migrate` sous le mutex du catalogue, la vue publiée, aucune fermeture de backend ; dans l'hôte, seules les sessions de la cellule migrée attendent | E6 | M1, M3 | deux sessions qui écrivent pendant une migration : leur attente au plus le temps de la transaction (le §1), et une session d'une autre cellule qui n'attend pas |
+| M5 | **Les index après le COMMIT** : `ajouter_signal` et `ajouter_modele` posent la dette, l'index se bâtit en fond, l'état d'index dit « en construction » | E4 côté produit, R1 pour les migrations | M4 | une migration qui rend un champ cherchable : elle se valide sans `CREATE_VECTOR_INDEX` dans sa transaction, et une recherche pendant le bâti répond en le disant |
+| M6 | **Étendre puis contracter** : le lien au gabarit, la passe de remplissage, la contraction et ses refus | la décision 3 | M2, M5 (la passe en fond) | un renommage en trois migrations, avec un arrêt brutal pendant le remplissage : rien de perdu, la contraction refusée avant la fin |
+| M7 | **L'existant vers les cellules** : les bases de Lucie (`code-rag3db`, la mémoire longue), migrées par M6 | la décision 1 sur les vraies bases | M3, M6 | la base copiée (reflink) migrée, puis les comptes et les réponses des outils comparés avant et après |
+
+**Pourquoi cet ordre :**
+- M1 d'abord : sans transaction ni journal, rien ne tient.
+- M3 avant M4 : une application à chaud qui ne retient que la cellule migrée est presque gratuite
+  une fois les tables séparées. Sur des tables communes, elle retiendrait toute la base, et il
+  faudrait la refaire.
+- M5 après M4 : c'est l'hôte qui lance la passe en fond.
+- M6 et M7 en dernier : ils s'appuient sur tout le reste.
+
+**Ce qui reste au moteur**, dans l'ordre du cœur (§8) :
+1. E10 avant M1 si possible ;
+2. E2 et E3 pour deux processus ;
+3. E1 (l'ADD paresseux) pour les grandes cellules.
+
+Le scénario du banc mesure E1, E10 et E11 sur une seule table : il reste la référence de chaque
+lot moteur.
+
+**Une question nouvelle, pour Lucie** : les relations entre deux cellules, refusées comme je le
+propose au §11.1, ou permises (alors leur table d'extrémités doit savoir viser plusieurs tables) ?
