@@ -149,3 +149,9 @@ FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen refused-checkpoint-lea
 # 2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions) : à deux fils, un
 # lecteur attend la phase parallèle entière du bâti. Pour le cœur C++ ou hotfixs.
 IndexCreationThreads.LeavesAThreadToReaders index-creation-leaves-a-thread-to-readers
+#
+# Sur une table indexée par HNSW, les écrivains passent un par un (ticket
+# 2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un, f85e94a4e, E11) : un écrivain qui
+# garde sa transaction ouverte après son insertion fait attendre l'insertion d'un autre jusqu'à sa
+# validation. Pour le cœur C++.
+HnswWriters.DoNotWaitForEachOther writers-of-an-hnsw-table-do-not-wait-for-each-other

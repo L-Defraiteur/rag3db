@@ -63,8 +63,12 @@ reste prouvée par les témoins existants.
 
 ## Témoin
 
-Le scénario, par le terme « convoi de l'index » de sa borne
-`checkpoint-holds-writers-at-most-its-duration`. Ce terme tombera quand ce ticket sera corrigé. Le
-p99 hors DDL de `Doc` contre `Note` se lit à chaque passe. Un témoin dédié reste à écrire : deux
-écrivains d'une table HNSW, dont l'un tient une transaction ouverte après son écriture ; l'autre
-doit pouvoir valider avant lui.
+`HnswWriters.DoNotWaitForEachOther` (`test/transaction/concurrence/hnsw_writers_test.cpp`), dans
+`known_red.txt`, en suite ordinaire. La table compte 1 000 lignes indexées par HNSW. A ouvre un
+bloc, insère une ligne et garde sa transaction ouverte 1,5 s. B insère une autre ligne en
+automatique. Contrôle `writers-of-an-hnsw-table-do-not-wait-for-each-other` : l'insertion de B
+finit avant la validation de A.
+
+Le scénario des vingt écrivains le montre aussi, par le terme « convoi de l'index » de sa borne
+`checkpoint-holds-writers-at-most-its-duration`, qui tombera avec ce ticket. Le p99 hors DDL de
+`Doc` contre `Note` s'y lit à chaque passe.
