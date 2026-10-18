@@ -56,10 +56,13 @@ passent avant.*
   (`[{genre, valeur, dit_comme}]`, en forme normale), `subjects` (les noms), `replaces`
   (l'uuid remplacé, s'il y en a). **Le corps** est le `why`, en Markdown libre. Les
   empreintes, états de Ref et vecteurs ne sont **pas** dans le fichier : ils se recalculent.
-- **Le format de l'en-tête** est un choix de dépendance, donc à Lucie : YAML (le plus
-  courant dans les éditeurs, mais une crate à prendre) ou TOML (`+++`, une crate petite et
-  sûre). Je propose TOML : un format sans ambiguïté de types, ce qui compte pour une
-  parité champ à champ.
+- **L'en-tête est en YAML, encadré par `---`, comme dans Obsidian** (choix de Lucie,
+  18 octobre 2026). Les listes s'écrivent en tirets. **Le harnais écrit toujours la même
+  forme** (l'ordre des clés, les guillemets, les tirets) : un fichier écrit par lui se
+  relit et se réécrit à l'identique, octet pour octet. Un fichier écrit à la main qui ne
+  se réécrirait pas à l'identique est **validé d'abord**, puis réécrit dans la forme
+  canonique **seulement s'il est valide** ; invalide, il n'est jamais touché (§4). La
+  parité champ à champ ne dépend donc pas du style de qui a écrit le fichier.
 - **Les L1/L2/L3 en fichiers**, comme le demande Lucie : ils coûtent un appel de modèle
   et ne se refont pas à l'identique ; un index reconstruit les **relit**, ne les
   **régénère** jamais.
@@ -138,7 +141,8 @@ un `pull` change des fichiers, la montre réindexe.
     écrite dans le `.mcp.json` du poste, donc falsifiable par qui édite ce fichier, pas par
     l'agent ; elle dit **quel client** (Claude Code, l'explorateur) ;
   - **l'identité git du dossier de la mémoire** (`git config user.email`, lue **dans ce
-    dépôt**, pas en global : sur luciepc le global est une adresse pro, interdite ici) :
+    dépôt**, pas en global : la règle tient même maintenant que le global de luciepc est
+    corrigé — il portait une adresse pro, interdite ici, jusqu'au 18 octobre) :
     elle dit **quelle personne**, et c'est aussi l'auteur du commit ;
   - **les deux** : `author` = l'identité git du dépôt de la mémoire ; `via` = le client de
     la session. Le commit git les recoupe : un `author` qui ne serait pas l'auteur du
@@ -155,7 +159,7 @@ un `pull` change des fichiers, la montre réindexe.
 
 | lot | contenu | taille relative |
 |---|---|---|
-| F1 | la déclaration `files` sur une entité, le rendu et l'écriture du fichier avant la ligne, l'en-tête (la crate à choisir) | moyen |
+| F1 | la déclaration `files` sur une entité, le rendu et l'écriture du fichier avant la ligne, l'en-tête YAML canonique | moyen |
 | F2 | `rebuild` en mode restauration, et **le témoin de parité champ à champ** | moyen |
 | F3 | la montre sur un dossier d'entités déclarées, la réconciliation au montage, les fichiers invalides dits | moyen à gros (la montre est liée au code aujourd'hui) |
 | F4 | `expected_hash` sur l'écriture d'une ligne miroir de fichier | petit |
@@ -164,5 +168,5 @@ un `pull` change des fichiers, la montre réindexe.
 | F7 | les L1/L2/L3 en fichiers | dépend du classeur, qui n'existe pas encore |
 
 L'ordre : F1 puis F2 d'abord (sans la preuve de parité, le reste repose sur une promesse) ;
-F4 et F5 ensuite ; F3 ; F6 ; F7 avec le classeur. Le format de l'en-tête (YAML ou TOML)
-attend le mot de Lucie avant F1.
+F4 et F5 ensuite ; F3 ; F6 ; F7 avec le classeur. **Go de Lucie pour F1 puis F2**, après
+les lots en cours (`seed`, `cited_by` par le Plan).
