@@ -450,12 +450,16 @@ pub enum Missing {
     /// **La base est tenue par un écrivain autonome** (sa marque
     /// `<base>.ecrivain`) : aucun hôte n'est lancé, le refus le nomme.
     Refused(String),
+    /// **Ce client n'est plus le binaire installé** (18 octobre 2026) : l'unité
+    /// systemd lance un binaire neuf, et un vieux client ne s'y attache pas — il
+    /// le dit, la session est à relancer.
+    Outdated(String),
 }
 
 impl Missing {
     pub fn reason(&self) -> &str {
         match self {
-            Missing::Absent(r) | Missing::Unreachable(r) | Missing::Refused(r) => r,
+            Missing::Absent(r) | Missing::Unreachable(r) | Missing::Refused(r) | Missing::Outdated(r) => r,
         }
     }
     pub fn state(&self) -> &'static str {
@@ -463,7 +467,123 @@ impl Missing {
             Missing::Absent(_) => "absent",
             Missing::Unreachable(_) => "injoignable",
             Missing::Refused(_) => "refusé",
+            Missing::Outdated(_) => "périmé",
         }
+    }
+}
+
+/// **L'unité systemd de l'hôte** (18 octobre 2026) : `rag3weaver-daemon.socket`
+/// écoute l'adresse de l'hôte et réveille `rag3weaver-daemon.service`, qui lance le
+/// binaire installé. Le client ne lance alors jamais d'hôte lui-même.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Unite {
+    /// Le fichier `.socket` (pour le dire).
+    pub socket: PathBuf,
+    /// Le binaire de l'`ExecStart` du service.
+    pub binaire: PathBuf,
+    /// L'adresse de la socket (`ListenStream`).
+    pub adresse: String,
+}
+
+/// Le dossier des unités de l'utilisateur : `RAG3WEAVER_SYSTEMD_USER_DIR` (les
+/// témoins), sinon `$XDG_CONFIG_HOME/systemd/user`, sinon `~/.config/systemd/user`.
+fn dossier_des_unites() -> Option<PathBuf> {
+    if let Some(d) = std::env::var_os("RAG3WEAVER_SYSTEMD_USER_DIR").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(d));
+    }
+    if let Some(d) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(d).join("systemd/user"));
+    }
+    std::env::var_os("HOME").filter(|v| !v.is_empty()).map(|h| PathBuf::from(h).join(".config/systemd/user"))
+}
+
+/// **L'unité installée, si elle sert ce client.** Linux seulement (launchd pour
+/// macOS : plus tard). Elle ne sert ce client que si son dossier de démon est le
+/// sien : un témoin qui pose son propre `RAG3WEAVER_DAEMON_DIR` ne la voit pas,
+/// sauf à poser aussi `RAG3WEAVER_SYSTEMD_USER_DIR`.
+pub fn unite_installee() -> Option<Unite> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    let du_client = std::env::var("RAG3WEAVER_DAEMON_DIR").ok().filter(|v| !v.is_empty());
+    let temoin = std::env::var_os("RAG3WEAVER_SYSTEMD_USER_DIR").is_some_and(|v| !v.is_empty());
+    unite_dans(&dossier_des_unites()?, &std::env::var("HOME").unwrap_or_default(), du_client, temoin)
+}
+
+/// La lecture de l'unité dans `dossier`, sans l'environnement : `maison` remplace
+/// `%h`, `du_client` est le `RAG3WEAVER_DAEMON_DIR` du client, `temoin` force
+/// l'unité (le dossier d'unités d'un témoin).
+fn unite_dans(dossier: &Path, maison: &str, du_client: Option<String>, temoin: bool) -> Option<Unite> {
+    let socket = dossier.join("rag3weaver-daemon.socket");
+    let service = dossier.join("rag3weaver-daemon.service");
+    let texte_socket = std::fs::read_to_string(&socket).ok()?;
+    let texte_service = std::fs::read_to_string(&service).ok()?;
+    let valeur = |texte: &str, cle: &str| -> Option<String> {
+        texte
+            .lines()
+            .map(str::trim)
+            .find_map(|l| l.strip_prefix(cle).and_then(|r| r.trim_start().strip_prefix('=')).map(|v| v.trim().replace("%h", maison)))
+    };
+    let ecoute = valeur(&texte_socket, "ListenStream")?;
+    let adresse = if ecoute.contains(':') { ecoute } else { format!("127.0.0.1:{ecoute}") };
+    let exec = valeur(&texte_service, "ExecStart")?;
+    let binaire = PathBuf::from(exec.trim_start_matches(['-', '@', '!', '+', ':']).split_whitespace().next()?);
+    // Le dossier de démon de l'unité : son `EnvironmentFile`, sinon le défaut.
+    let env_unite = valeur(&texte_service, "EnvironmentFile")
+        .and_then(|f| std::fs::read_to_string(f.trim_start_matches('-')).ok())
+        .and_then(|t| valeur(&t, "RAG3WEAVER_DAEMON_DIR"));
+    if !temoin && du_client != env_unite {
+        return None;
+    }
+    Some(Unite { socket, binaire, adresse })
+}
+
+/// **Ce client est-il encore le binaire installé ?** Comparés par inode : un
+/// binaire remplacé (`mv`, une installation) a un inode neuf, et le client qui
+/// tourne garde l'ancien. `Some(raison)` s'il est périmé. Hors Linux : jamais.
+pub fn binaire_perime(installe: &Path) -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let moi = std::fs::metadata("/proc/self/exe").ok()?;
+        let lui = std::fs::metadata(installe).ok()?;
+        if (moi.dev(), moi.ino()) != (lui.dev(), lui.ino()) {
+            let exe = std::fs::read_link("/proc/self/exe").map(|p| p.display().to_string()).unwrap_or_default();
+            return Some(format!(
+                "binaire mis à jour : ce client tourne sur {exe}, l'hôte de l'unité lance {} — relancez la session (le client MCP)",
+                installe.display()
+            ));
+        }
+        None
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = installe;
+        None
+    }
+}
+
+/// **Réveiller l'unité et attendre son hôte** : une sonde `/sante` sur la socket
+/// (systemd lance le service à la connexion), puis `daemon.json` qui répond, au plus
+/// [`LAUNCH_WAIT`]. Rien n'est lancé d'ici.
+fn attendre_l_unite(u: &Unite) -> Result<DaemonFile, Missing> {
+    let agent = crate::daemon::agent();
+    let _ = agent.get(format!("{}/sante", crate::daemon::base_url(&u.adresse))).call();
+    let debut = Instant::now();
+    loop {
+        if let Some(f) = read().filter(answers) {
+            return Ok(f);
+        }
+        if debut.elapsed() > LAUNCH_WAIT {
+            return Err(Missing::Unreachable(format!(
+                "l'unité {} n'a pas rendu d'hôte en {} s à {} : `systemctl --user status rag3weaver-daemon`, \
+                 `journalctl --user -u rag3weaver-daemon` (aucun hôte n'est lancé par le client sous l'unité)",
+                u.socket.display(),
+                LAUNCH_WAIT.as_secs(),
+                u.adresse
+            )));
+        }
+        std::thread::sleep(Duration::from_millis(100));
     }
 }
 
@@ -475,8 +595,20 @@ impl Missing {
 /// ensemble font **un** lancement ; le second attend le verrou, puis trouve
 /// l'hôte du premier.
 pub fn ensure(exe: &Path) -> Result<DaemonFile, Missing> {
+    // **Sous l'unité systemd, un client périmé ne s'attache pas** : il le dit.
+    let unite = unite_installee();
+    if let Some(u) = &unite {
+        if let Some(raison) = binaire_perime(&u.binaire) {
+            return Err(Missing::Outdated(raison));
+        }
+    }
     if let Some(f) = read().filter(answers) {
         return Ok(f);
+    }
+    // **Sous l'unité, jamais de lancement** : la socket de systemd réveille le
+    // binaire installé ; le client ne fait que s'y connecter.
+    if let Some(u) = &unite {
+        return attendre_l_unite(u);
     }
     let dossier = racine(Dossier::Donnees).map_err(Missing::Absent)?;
     std::fs::create_dir_all(&dossier)
@@ -600,6 +732,54 @@ fn tail(log: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn dossier_d_unite(env: Option<&str>) -> (tempfile::TempDir, PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let unites = d.path().join("user");
+        std::fs::create_dir_all(&unites).unwrap();
+        std::fs::write(unites.join("rag3weaver-daemon.socket"), "[Socket]\nListenStream=127.0.0.1:7970\n").unwrap();
+        let mut service = String::from("[Service]\nExecStart=%h/.local/bin/rag3weaver-backend daemon\n");
+        if let Some(e) = env {
+            let f = d.path().join("rag3weaver-daemon.env");
+            std::fs::write(&f, e).unwrap();
+            service.push_str(&format!("EnvironmentFile=-{}\n", f.display()));
+        }
+        std::fs::write(unites.join("rag3weaver-daemon.service"), service).unwrap();
+        (d, unites)
+    }
+
+    /// **L'unité se lit** (18 octobre 2026) : l'adresse de la socket, le binaire de
+    /// l'`ExecStart` (`%h` remplacé) ; elle ne sert que le client du même dossier de
+    /// démon, sauf pour un témoin.
+    #[test]
+    fn l_unite_se_lit_et_ne_sert_que_son_dossier_de_demon() {
+        let (_d, unites) = dossier_d_unite(None);
+        let u = unite_dans(&unites, "/home/x", None, false).expect("l'unité du dossier par défaut");
+        assert_eq!(u.adresse, "127.0.0.1:7970");
+        assert_eq!(u.binaire, PathBuf::from("/home/x/.local/bin/rag3weaver-backend"));
+        assert!(unite_dans(&unites, "/home/x", Some("/tmp/temoin".into()), false).is_none(), "un autre dossier de démon");
+        assert!(unite_dans(&unites, "/home/x", Some("/tmp/temoin".into()), true).is_some(), "forcée pour un témoin");
+        let (_d2, unites2) = dossier_d_unite(Some("RAG3WEAVER_DAEMON_DIR=/srv/demon\n"));
+        assert!(unite_dans(&unites2, "/h", Some("/srv/demon".into()), false).is_some(), "le dossier de l'unité");
+        assert!(unite_dans(&unites2, "/h", None, false).is_none(), "le client du défaut n'est pas celui de l'unité");
+        assert!(unite_dans(&tempfile::tempdir().unwrap().path().to_path_buf(), "/h", None, false).is_none(), "sans unité");
+    }
+
+    /// **Un client périmé se voit** : un autre fichier (un autre inode) que celui qui
+    /// tourne l'est ; le binaire qui tourne lui-même ne l'est pas.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn un_client_dont_le_binaire_n_est_plus_l_installe_est_perime() {
+        let moi = std::fs::read_link("/proc/self/exe").unwrap();
+        assert!(binaire_perime(&moi).is_none(), "le binaire qui tourne n'est pas périmé");
+        let d = tempfile::tempdir().unwrap();
+        // Seul l'inode compte : un petit fichier suffit (pas de copie du binaire de
+        // test dans /tmp, qui est de la mémoire vive).
+        let autre = d.path().join("rag3weaver-backend");
+        std::fs::write(&autre, b"un autre binaire").unwrap();
+        let raison = binaire_perime(&autre).expect("un autre fichier est un autre binaire");
+        assert!(raison.contains("binaire mis à jour") && raison.contains("relancez la session"), "{raison}");
+    }
 
     #[test]
     fn un_jeton_est_aleatoire_et_hexadecimal() {

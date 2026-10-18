@@ -80,6 +80,12 @@ impl Lag {
         }
     }
 
+    /// **Combien de fichiers attendent leur réindexation, toutes cellules** : un
+    /// hôte inactif ne s'arrête pas tant que la montre a du travail (18 octobre 2026).
+    pub fn pending_files(&self) -> usize {
+        self.pending().values().map(BTreeMap::len).sum()
+    }
+
     /// Le retard de `cell`, s'il y en a un.
     pub fn summary_in(&self, cell: &Scope) -> Option<LagSummary> {
         let pending = self.pending();

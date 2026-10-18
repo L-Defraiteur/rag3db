@@ -407,6 +407,38 @@ impl ReactorHandle {
     }
 }
 
+impl ReactorHandle {
+    /// **L'arrêt borné** (ticket « l'arrêt de l'hôte attend sans borne une réaction
+    /// figée », 18 octobre 2026) : comme [`ReactorHandle::stop`], mais au plus `delai`.
+    /// Une réaction figée au milieu d'un fichier ne lit jamais son drapeau d'arrêt ;
+    /// au-delà du délai, sa tâche est lâchée sans être attendue (elle n'est pas
+    /// tuée : un fil figé ne se tue pas), et l'appelant reçoit `Err` avec le nombre
+    /// d'exécutions faites, pour le dire.
+    pub fn stop_within(mut self, delai: Duration) -> Result<Reactor, String> {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        let mut task = self.task.take().expect("already stopped");
+        let runs = self.runs();
+        let fin = crate::dataflow::rt::bloquer("ReactorHandle::stop_within", async {
+            tokio::time::timeout(delai, &mut task).await
+        })
+        .expect("ReactorHandle::stop_within hors d'un fil bloquable");
+        match fin {
+            Ok(rendu) => Ok(rendu.expect("reactor task panicked")),
+            Err(_) => {
+                // Lâchée : `abort` marque la tâche, qui ne reprendra pas après son
+                // fil figé ; ni attendue ni rendue.
+                task.abort();
+                Err(format!(
+                    "réacteur figé : pas arrêté en {} s ({runs} exécution(s) faites) — sa tâche est lâchée sans être attendue",
+                    delai.as_secs()
+                ))
+            }
+        }
+    }
+}
+
 impl Drop for ReactorHandle {
     fn drop(&mut self) {
         if let Some(stop) = self.stop.take() {
@@ -446,6 +478,38 @@ mod tests {
         assert!(ReactPolicy::parse("batch").is_err());
         assert!(ReactPolicy::parse("later 3").is_err());
         assert_eq!(ReactPolicy::Batch(200).spec(), "batch 200");
+    }
+
+    /// **Le témoin du ticket « l'arrêt de l'hôte attend sans borne une réaction
+    /// figée »** (18 octobre 2026) : une réaction bloquée sur un canal jamais servi
+    /// ne lit jamais l'arrêt ; `stop_within` rend la main dans son délai, en disant
+    /// le réacteur figé, au lieu d'attendre pour toujours comme `stop`.
+    #[test]
+    fn a_frozen_reaction_does_not_hold_a_bounded_stop() {
+        let bus = EventBus::new(64);
+        let (_garde, attente) = std::sync::mpsc::channel::<()>();
+        let attente = Mutex::new(attente);
+        let entree = Arc::new(AtomicUsize::new(0));
+        let e = entree.clone();
+        let handle = Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
+            .on("figee", ["messages"], ReactPolicy::Each, move |_| {
+                e.fetch_add(1, Ordering::SeqCst);
+                // Jamais servi : `_garde` vit jusqu'à la fin du test.
+                let _ = attente.lock().unwrap().recv();
+            })
+            .spawn();
+        bus.send_message("r", "a", "b", "fige-toi");
+        let debut = Instant::now();
+        while entree.load(Ordering::SeqCst) == 0 {
+            assert!(debut.elapsed() < Duration::from_secs(5), "la réaction n'est jamais entrée");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let t0 = Instant::now();
+        let rendu = handle.stop_within(Duration::from_millis(300));
+        let duree = t0.elapsed();
+        let erreur = rendu.err().expect("un réacteur figé n'est pas rendu");
+        assert!(erreur.contains("réacteur figé"), "{erreur}");
+        assert!(duree < Duration::from_secs(3), "l'arrêt borné a attendu {duree:?}");
     }
 
     #[test]

@@ -2372,19 +2372,46 @@ impl Backend {
 
     fn stop_reactors(&self) -> Vec<String> {
         let mut errors = Vec::new();
+        // **Borné** (18 octobre 2026) : une réaction figée au milieu d'un fichier ne
+        // lit jamais le drapeau ; au-delà du délai, le réacteur est dit figé et lâché,
+        // et `shutdown` ne ferme pas le catalogue qu'il tient peut-être.
+        let delai = reaction_stop_wait();
         // Les réacteurs des autres cellules d'abord, puis celui du catalogue.
-        let cellules: Vec<ReactorHandle> =
-            self.cell_reactions.lock().unwrap_or_else(|e| e.into_inner()).drain().map(|(_, h)| h).collect();
-        for handle in cellules {
+        let cellules: Vec<(crate::scope::Scope, ReactorHandle)> =
+            self.cell_reactions.lock().unwrap_or_else(|e| e.into_inner()).drain().collect();
+        for (cellule, handle) in cellules {
             errors.extend(handle.errors());
-            handle.stop();
+            if let Err(e) = handle.stop_within(delai) {
+                errors.push(format!("{REACTION_FIGEE} (cellule {}/{}) : {e}", cellule.org, cellule.project));
+            }
         }
         let mut slot = self.reactions.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(handle) = slot.take() {
             errors.extend(handle.errors());
-            handle.stop();
+            if let Err(e) = handle.stop_within(delai) {
+                errors.push(format!("{REACTION_FIGEE} (catalogue) : {e}"));
+            }
         }
         errors
+    }
+
+    /// **Ce qui retient ce backend de s'arrêter pour inactivité**, s'il y a
+    /// quelque chose (18 octobre 2026) : une indexation en cours, des fichiers que
+    /// la montre n'a pas encore réindexés, ou le catalogue tenu (un appel, une
+    /// réaction, une ingestion). Ne bloque jamais : un catalogue tenu se dit tel.
+    pub fn travail_en_cours(&self) -> Option<String> {
+        #[cfg(feature = "code")]
+        {
+            let n = crate::dataflow::index_nodes::indexings_running(&self.catalog);
+            if n > 0 {
+                return Some(format!("{n} indexation(s) en cours"));
+            }
+        }
+        let Ok(cat) = self.catalog.try_lock() else {
+            return Some("le catalogue est tenu (un appel, une réaction ou une ingestion)".into());
+        };
+        let fichiers = cat.file_lag().pending_files();
+        (fichiers > 0).then(|| format!("{fichiers} fichier(s) que la montre doit encore réindexer"))
     }
 
     /// Les erreurs des réactions en service, dans l'ordre — ce qu'un hôte
@@ -3410,8 +3437,24 @@ impl Backend {
     /// Les erreurs des réactions arrêtées sont **dites** ici : leur réacteur
     /// est parti avec elles, et personne d'autre ne les relira.
     pub fn shutdown(&mut self) -> Result<(), String> {
+        let mut figees = Vec::new();
         for erreur in self.stop_reactions() {
             eprintln!("[réaction] {erreur}");
+            if erreur.starts_with(REACTION_FIGEE) {
+                figees.push(erreur);
+            }
+        }
+        // **Un réacteur figé tient peut-être le catalogue** (un verrou du moteur, une
+        // ingestion à mi-chemin) : le fermer sous lui bloquerait l'arrêt à son tour, ou
+        // pire. On ne le ferme pas ; ce qui est validé est dans le journal du moteur,
+        // rejoué à la prochaine ouverture (ticket « l'arrêt de l'hôte attend sans
+        // borne une réaction figée »).
+        if !figees.is_empty() {
+            return Err(format!(
+                "{} réacteur(s) figé(s) — catalogue laissé ouvert, rejoué à la prochaine ouverture : {}",
+                figees.len(),
+                figees.join(" ; ")
+            ));
         }
         // **Les indexations en cours s'arrêtent au prochain paquet validé**, et
         // on les attend avant de fermer la base : la relance reprendra là
@@ -3431,6 +3474,15 @@ impl Backend {
             .shutdown()
             .map_err(|e| e.to_string())
     }
+}
+
+/// Le début du message d'un réacteur qui ne s'arrête pas dans le délai.
+pub const REACTION_FIGEE: &str = "réaction figée";
+
+/// Le délai d'arrêt d'un réacteur : `RAG3WEAVER_STOP_WAIT_S` secondes, 30 par défaut.
+fn reaction_stop_wait() -> std::time::Duration {
+    let s = std::env::var("RAG3WEAVER_STOP_WAIT_S").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(30);
+    std::time::Duration::from_secs(s)
 }
 
 fn payload_schema(
