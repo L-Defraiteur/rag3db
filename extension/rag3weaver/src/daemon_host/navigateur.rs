@@ -318,7 +318,7 @@ fn ranger_un_composant(dossier: &std::path::Path, paquets: &std::path::Path) {
         "react",
         json!({ "name": "react", "version": "19.2.0", "exports": { ".": "./index.js", "./jsx-dev-runtime": "./jsx.js", "./jsx-runtime": "./jsx.js" } }),
         &[
-            ("index.js", "exports.useState = function (v) { return [v, function () {}]; };"),
+            ("index.js", "exports.useState = function (v) { return [v, function () {}]; }; exports.createElement = function (type, props) { return { type: type, props: props || {} }; };"),
             ("jsx.js", "require('react'); exports.jsxDEV = function (type, props) { return { type: type, props: props || {} }; }; exports.jsx = exports.jsxDEV; exports.jsxs = exports.jsxDEV; exports.Fragment = 'F';"),
         ],
     );
