@@ -91,3 +91,15 @@ finit avant la validation de A.
 Le scénario des vingt écrivains le montre aussi, par le terme « convoi de l'index » de sa borne
 `checkpoint-holds-writers-at-most-its-duration`, qui tombera avec ce ticket. Le p99 hors DDL de
 `Doc` contre `Note` s'y lit à chaque passe.
+
+Les témoins de I2 (`test/transaction/concurrence/vector_index_i2_test.cpp`), en suite ordinaire,
+joués trois fois sur luciepc le 18 octobre :
+- `VectorIndexI2.SetsOnDifferentRowsDoNotWait`, rouge (known_red), contrôle
+  `vector-sets-on-different-rows-do-not-wait`. Deux SET de vecteur sur des lignes différentes : celui
+  de B finit 5 à 7 ms après le départ de la validation de A, qu'il attendait ;
+- `VectorIndexI2.OverlappingDeletesNeitherBlockNorConflict`, rouge (known_red) du seul
+  `overlapping-deletes-do-not-block`. Deux suppressions aux voisinages recouvrants s'attendent,
+  sans conflit, et le graphe validé est juste après les deux (998 lignes sur 998) ;
+- `VectorIndexI2.ReaderDuringAnOpenSetSeesTheGraphBefore`, vert, et qui doit le rester. Une
+  lecture pendant un SET ouvert voit l'ancien vecteur, en 5 ms.
+
