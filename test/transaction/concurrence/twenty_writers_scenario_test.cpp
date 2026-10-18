@@ -300,6 +300,12 @@ public:
             }
         });
         rag3db::main::Connection ddl(&database);
+        // SCENARIO_DDL_THREADS=<n> : le nombre de fils des seuls DDL. Les tests tournent sur deux
+        // fils de travail (MAX_NUM_THREADS, 2 par défaut) ; un bâti d'index qui les prend tous fait
+        // attendre toutes les autres connexions (hotfixs, 18 octobre).
+        if (const auto* threads = std::getenv("SCENARIO_DDL_THREADS")) {
+            ddl.query(stringFormat("CALL threads={};", threads));
+        }
         for (auto minute = 1; minute <= lastMinute; ++minute) {
             std::this_thread::sleep_until(start + minute * period);
             switch (minute) {
