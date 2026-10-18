@@ -139,7 +139,7 @@ VectorIndexUpdate.RowsCommittedDuringACreateAreIndexed rows-committed-during-cre
 # ROLLBACK est refusé, la fermeture d'une connexion lève depuis un destructeur (SIGABRT), et un
 # CHECKPOINT refusé condamne la base à être rouverte. Joués rouges le 18 octobre sur luciepc. Pour
 # hotfixs, relecture du cœur C++.
-FullBufferRollback.RollsBackAndClosesCleanly rollback-under-a-full-buffer-succeeds closing-a-connection-does-not-abort
+FullBufferRollback.RollsBackAndClosesCleanly rollback-under-a-full-buffer-succeeds,closing-a-connection-does-not-abort
 # Le CHECKPOINT refusé par le tampon plein avant toute écriture condamne la base : la règle prudente
 # tant que le point de reprise réécrit en place ; relève de la voie 2 du ticket
 # 2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.
