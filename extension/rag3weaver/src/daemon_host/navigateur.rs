@@ -298,6 +298,70 @@ impl Drop for Navigateur {
     }
 }
 
+/// **Un composant à prévisualiser**, rangé dans le dossier du manifeste : un
+/// faux React en CommonJS (le magasin n'a pas de vrai React hors réseau) dont
+/// `react-dom/client` rend vraiment dans le DOM, et deux composants TSX, `Fiche`
+/// qui importe `Bouton` et tient un `useState`.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn ranger_un_composant(dossier: &std::path::Path, paquets: &std::path::Path) {
+    let paquet = |nom: &str, pj: Value, fichiers: &[(&str, &str)]| -> PathBuf {
+        let d = paquets.join(nom);
+        for (chemin, texte) in fichiers {
+            let f = d.join(chemin);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, texte).unwrap();
+        }
+        std::fs::write(d.join("package.json"), pj.to_string()).unwrap();
+        d
+    };
+    let react = paquet(
+        "react",
+        json!({ "name": "react", "version": "19.2.0", "exports": { ".": "./index.js", "./jsx-dev-runtime": "./jsx.js", "./jsx-runtime": "./jsx.js" } }),
+        &[
+            ("index.js", "exports.useState = function (v) { return [v, function () {}]; };"),
+            ("jsx.js", "require('react'); exports.jsxDEV = function (type, props) { return { type: type, props: props || {} }; }; exports.jsx = exports.jsxDEV; exports.jsxs = exports.jsxDEV; exports.Fragment = 'F';"),
+        ],
+    );
+    let dom = paquet(
+        "react-dom",
+        json!({ "name": "react-dom", "version": "19.2.0", "exports": { ".": "./index.js", "./client": "./client.js" }, "dependencies": { "react": "19.2.0" } }),
+        &[
+            ("index.js", "module.exports = {};"),
+            ("client.js", "require('react');
+function noeud(e) {
+  if (e === null || e === undefined || e === false) return document.createTextNode('');
+  if (typeof e !== 'object') return document.createTextNode(String(e));
+  if (Array.isArray(e)) { var f = document.createDocumentFragment(); e.forEach(function (x) { f.append(noeud(x)); }); return f; }
+  if (typeof e.type === 'function') return noeud(e.type(e.props));
+  var el = e.type === 'F' ? document.createDocumentFragment() : document.createElement(e.type);
+  var enfants = e.props.children;
+  (Array.isArray(enfants) ? enfants : [enfants]).forEach(function (x) { el.append(noeud(x)); });
+  return el;
+}
+exports.createRoot = function (racine) { return { render: function (e) { racine.replaceChildren(noeud(e)); } }; };"),
+        ],
+    );
+    crate::components::add_lib(dossier, &react).unwrap();
+    crate::components::add_lib(dossier, &dom).unwrap();
+    let composants = dossier.join("components");
+    std::fs::create_dir_all(&composants).unwrap();
+    for (nom, fichier, source) in [
+        ("Bouton", "bouton.tsx", "export function Bouton({ libelle }: { libelle: string }) { return <button>{libelle}</button>; }\n"),
+        (
+            "Fiche",
+            "fiche.tsx",
+            "import { useState } from \"react\";\nimport { Bouton } from \"./bouton\";\nexport function Fiche({ titre }: { titre: string }) {\n  const [n] = useState(3);\n  return <div className=\"fiche\"><h2>{titre}</h2><span>{n}</span><Bouton libelle=\"ok\" /></div>;\n}\n",
+        ),
+    ] {
+        std::fs::write(composants.join(fichier), source).unwrap();
+        std::fs::write(
+            composants.join(format!("{}{}", fichier.split('.').next().unwrap(), crate::components::SUFFIX)),
+            json!({ "name": nom, "source": fichier, "libs": { "react": "19.2.0" } }).to_string(),
+        )
+        .unwrap();
+    }
+}
+
 /// **Les vues de l'IDE, rendues** : l'accueil, l'arbre, un fichier, un symbole,
 /// la recherche et le graphe, chacune avec zéro erreur à la console et son
 /// contenu attendu ; puis la vue d'un fichier se modifie et s'enregistre, et le
@@ -319,6 +383,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
     m["workspace"]["root"] = json!(arbre.to_string_lossy());
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    ranger_un_composant(manifeste.parent().unwrap(), &d.path().join("paquets"));
     let manifeste = manifeste.to_string_lossy().to_string();
 
     let (adresse, fil) = super::tests::hote_garde("j");
@@ -396,7 +461,18 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             "document.querySelectorAll('#vue svg g.noeud').length >= 2 && document.querySelector('#vue svg g.noeud.centre')?.textContent.includes('depart')",
         ),
     ];
-    for (quoi, url, attendu) in vues {
+    // L'aperçu d'un composant (marche 3, lot 3) : le registre, les modules, le
+    // rendu dans le DOM, avec ses props prises à l'URL.
+    let vues = [
+        vues,
+        &[(
+            "l'aperçu d'un composant",
+            format!("{racine}/ide/apercu/{id}/Fiche?props=%7B%22titre%22%3A%22Bonjour%22%7D"),
+            "document.querySelector('#racine .fiche h2')?.textContent === 'Bonjour' && document.querySelector('#racine .fiche span')?.textContent === '3' && document.querySelector('#racine .fiche button')?.textContent === 'ok' && !document.querySelector('pre.erreur')",
+        )],
+    ]
+    .concat();
+    for (quoi, url, attendu) in &vues {
         n.aller(url, attendu);
         let alertes = n.evaluer("[...document.querySelectorAll('.alerte')].map(e => e.textContent)");
         assert_eq!(alertes, json!([]), "{quoi} montre une alerte");
