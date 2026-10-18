@@ -27,6 +27,13 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
   témoin de `test/transaction/concurrence/known_red.txt`, **déplace le fichier dans `closed/`**
   (`git mv`) et met à jour la ligne de l'index (table des fermés), dans le même commit. Les
   anciens liens vers un ticket fermé se retrouvent par `git log --follow`.
+- **Les filets** (Lucie, 18 octobre 2026) : un garde-fou posé ailleurs à cause d'un défaut
+  ouvert (une borne du produit, un refus, un repli, un `known_red`) **cite le ticket** dans son
+  commentaire, et le ticket le liste dans une section « ses filets » (fichier et symbole). Le
+  commit qui ferme le ticket retire ou recalcule chacun de ses filets, ou dit pourquoi il
+  reste. Raison : la borne `TEXT_BYTES_PER_BUFFER_GIB` d'`estimate.rs`, posée le 4 octobre pour
+  le point de reprise sous un petit tampon, a survécu au correctif moteur du 11 (47a283e6c) et
+  refusait encore le 18 tout dépôt de plus de 64 Mo de texte.
 
 ## Index
 
