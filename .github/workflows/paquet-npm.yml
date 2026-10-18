@@ -76,12 +76,12 @@ jobs:
         run: |
           ./dist/linux-x64-gnu/rag3weaver-backend 2>&1 | head -3 || true
           sed -i 's#/src/#'"$PWD"'/#g' extension/rag3weaver/templates/backends/code/essai.json
-          ./dist/linux-x64-gnu/rag3weaver-backend extension/rag3weaver/templates/backends/code/essai.json --describe 2>&1 | head -c 400; echo
+          rc=0; ./dist/linux-x64-gnu/rag3weaver-backend extension/rag3weaver/templates/backends/code/essai.json --describe > describe.txt 2>&1 || rc=$?; head -c 400 describe.txt; echo; [ "$rc" = 0 ]
           sed -i 's#'"$PWD"'/#/src/#g' extension/rag3weaver/templates/backends/code/essai.json
       - name: Dans l'image (Landlock sous Docker)
         run: |
           docker run --rm -v "$PWD:/src" rag3weaver-build-linux-x64-gnu -c \
-            '/src/dist/linux-x64-gnu/rag3weaver-backend /src/extension/rag3weaver/templates/backends/code/essai.json --describe 2>&1 | head -c 400; echo; uname -r'
+            '/src/dist/linux-x64-gnu/rag3weaver-backend /src/extension/rag3weaver/templates/backends/code/essai.json --describe > /tmp/describe.txt 2>&1; head -c 400 /tmp/describe.txt; echo; uname -r'
       - uses: actions/upload-artifact@v4
         with:
           name: rag3weaver-backend-linux-x64-gnu
@@ -217,9 +217,9 @@ jobs:
           echo "--- tel quel (Landlock demandé : le refus attendu)"
           # Le refus attendu sort en code 1 : ne pas arrêter l'étape dessus
           # (onzième essai : l'épreuve « sandbox off » n'a jamais joué).
-          ./dist/windows-x64/rag3weaver-backend.exe $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
+          ./dist/windows-x64/rag3weaver-backend.exe $g/tel-quel.json --describe > describe.txt 2>&1 || true; head -c 400 describe.txt; echo
           echo "--- sandbox off"
-          ./dist/windows-x64/rag3weaver-backend.exe $g/sans-bac.json --describe 2>&1 | head -c 600; echo
+          rc=0; ./dist/windows-x64/rag3weaver-backend.exe $g/sans-bac.json --describe > describe.txt 2>&1 || rc=$?; head -c 600 describe.txt; echo; [ "$rc" = 0 ]
       # L'épreuve du paquet, sur le runner : le sous-paquet windows-x64 garni
       # depuis dist/, puis « un dossier vide, trois fichiers, une recherche ».
       # Le cycle du démon (lot C, relecture de la mémoire, 12 octobre 2026) :
@@ -378,9 +378,9 @@ jobs:
           PY
           g=extension/rag3weaver/templates/backends/code
           echo "--- tel quel (Landlock demandé : le refus attendu)"
-          ./dist/darwin-arm64/rag3weaver-backend $g/tel-quel.json --describe 2>&1 | head -c 400 || true; echo
+          ./dist/darwin-arm64/rag3weaver-backend $g/tel-quel.json --describe > describe.txt 2>&1 || true; head -c 400 describe.txt; echo
           echo "--- sandbox off"
-          ./dist/darwin-arm64/rag3weaver-backend $g/sans-bac.json --describe 2>&1 | head -c 600; echo
+          rc=0; ./dist/darwin-arm64/rag3weaver-backend $g/sans-bac.json --describe > describe.txt 2>&1 || rc=$?; head -c 600 describe.txt; echo; [ "$rc" = 0 ]
       # Le cycle du démon (lot C, relecture de la mémoire, 12 octobre 2026) :
       # le bâti seul ne prouvait rien du mode démon hors Linux. Un hôte à la
       # main, un client attaché, /arret, puis un hôte lancé par le client.
