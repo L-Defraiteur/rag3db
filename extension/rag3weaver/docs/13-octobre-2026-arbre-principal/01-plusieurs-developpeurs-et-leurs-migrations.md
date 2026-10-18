@@ -558,10 +558,17 @@ pose :
 - **`de` et `vers`** disent les cellules permises, en motifs. Une relation sans `entre_cellules`
   reste dans sa cellule, comme aujourd'hui, et une écriture qui la ferait traverser est refusée en
   le nommant.
-- **`posee_par`** nomme les clés qui peuvent la poser. Le produit a déjà les clés des outils : un
-  client MCP se lance avec `--keys dev,admin`, et une attache d'outil dit ce qu'elle exige. Un outil
-  qui pose cette relation sans la clé est refusé par son nom, comme un outil non exposé. La lecture
-  d'une relation qui traverse n'est pas restreinte : qui voit la cellule d'arrivée voit la relation.
+- **`posee_par`** nomme les clés qui peuvent la poser.
+  - **Ce qui existe** : un client MCP se lance avec `--keys dev,admin`, et ses clés suivent la session
+    jusqu'à l'hôte (`open_session`, `src/daemon_host.rs:138`). Le serveur les annonce
+    (`serverInfo.keys`, `src/mcp.rs:229`).
+  - **Ce qui n'existe pas encore** (corrigé après relecture du code) : aucun outil ne vérifie ces
+    clés. Une attache d'outil n'exige aucune clé, et rien n'est refusé faute d'une clé.
+  - **Ce que `posee_par` demande donc** : vérifier, à l'écriture d'une arête du lien, que la session
+    porte l'une des clés déclarées, et sinon un refus nommé. C'est la première vérification de clé du
+    produit. Elle sert ensuite aux outils eux-mêmes.
+  - La lecture d'une relation qui traverse n'est pas restreinte : qui voit la cellule d'arrivée voit
+    la relation.
 - **Le moteur** : c'est **une** table de relations par relation qui traverse, à plusieurs paires.
   Elle compte une paire `FROM Ticket_<a> TO Ticket_<b>` par couple de cellules effectivement relié.
   La paire est ajoutée par `ALTER TABLE … ADD FROM … TO …` à la première arête posée entre deux
@@ -625,7 +632,7 @@ donc **le pont est l'affaire du produit**. La forme que je propose, sans code :
 
 | # | ajout | où |
 |---|---|---|
-| M3 | les relations qui traversent : la déclaration `entre_cellules`, la table du lien à plusieurs paires, les clés de pose, et le témoin à deux cellules et un lien | dans M3 |
+| M3 | les relations qui traversent : la déclaration `entre_cellules`, la table du lien à plusieurs paires, la vérification des clés de pose (la première du produit), et le témoin à deux cellules et un lien | dans M3 |
 | M3 bis | la migration d'un lien : journalisée dans chaque cellule reliée, refusée sur un état d'avant différent, et retenant ses cellules seules | après M4, qui fournit la retenue par cellule |
 | M6 | la contraction retire d'abord la paire du lien, après le remplissage des arêtes | dans M6 |
 | P1 | **le pont entre bases** : `_Pont`, `entre_bases`, la lecture à travers par la vue de l'autre base, les bouts absents comptés, les clés de pose | après M7, comme graine à mûrir ; à présenter à Lucie avant de commencer |
