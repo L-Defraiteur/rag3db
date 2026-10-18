@@ -172,3 +172,10 @@ CheckpointNoStall.BeginDuringACheckpointDoesNotWait begin-during-a-checkpoint-do
 CheckpointNoStall.ReadDuringACheckpointDoesNotWait read-during-a-checkpoint-does-not-wait
 CheckpointNoStall.CommittedPagesAreWrittenOutWhenTheBufferIsFull committed-pages-are-written-out-when-the-buffer-is-full
 CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly crash-after-written-out-pages-replays-exactly
+#
+# Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà
+# détruite (ticket 2026-10-18-un-commit-dont-le-point-de-reprise-echoue-annule-une-transaction-deja-
+# partie) : en Release, « Invalid transaction type to rollback » puis SIGABRT à la fermeture ; sous
+# ASAN, heap-use-after-free dans TransactionManager::rollback. Joué trois fois sur trois de chaque
+# côté le 18 octobre sur luciepc. Pour le cœur C++.
+CommitAfterFailedCheckpoint.DoesNotRollBackADestroyedTransaction commit-whose-checkpoint-fails-does-not-touch-a-destroyed-transaction
