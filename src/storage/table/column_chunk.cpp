@@ -69,23 +69,23 @@ void ColumnChunk::initializeScanState(ChunkState& state, const Column* column) c
 }
 
 void ColumnChunk::scan(const Transaction* transaction, const ChunkState& state, ValueVector& output,
-    offset_t offsetInChunk, length_t length) const {
+    offset_t offsetInChunk, length_t length, sel_t dstOffset) const {
     // Check if there is deletions or insertions. If so, update selVector based on transaction.
     switch (getResidencyState()) {
     case ResidencyState::IN_MEMORY: {
         rangeSegments(offsetInChunk, length,
-            [&](auto& segment, auto offsetInSegment, auto lengthInSegment, auto dstOffset) {
-                segment->scan(output, offsetInSegment, lengthInSegment, dstOffset);
+            [&](auto& segment, auto offsetInSegment, auto lengthInSegment, auto dstInRange) {
+                segment->scan(output, offsetInSegment, lengthInSegment, dstOffset + dstInRange);
             });
     } break;
     case ResidencyState::ON_DISK: {
-        state.column->scan(state, offsetInChunk, length, &output, 0);
+        state.column->scan(state, offsetInChunk, length, &output, dstOffset);
     } break;
     default: {
         KU_UNREACHABLE;
     }
     }
-    updateInfo.scan(transaction, output, offsetInChunk, length);
+    updateInfo.scan(transaction, output, offsetInChunk, length, dstOffset);
 }
 
 static void scanPersistentSegments(ChunkState& chunkState, ColumnChunkScanner& output,

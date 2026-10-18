@@ -434,6 +434,7 @@ void VersionInfo::append(transaction_t transactionID, const row_idx_t startRow,
     if (numRows == 0) {
         return;
     }
+    uncommittedInsertRows += numRows;
     auto [startVectorIdx, startRowIdxInVector] =
         StorageUtils::getQuotientRemainder(startRow, DEFAULT_VECTOR_CAPACITY);
     auto [endVectorIdx, endRowIdxInVector] =
@@ -458,11 +459,18 @@ bool VersionInfo::delete_(transaction_t transactionID, const row_idx_t rowIdx) {
         // ALWAYS_INSERTED to avoid checking the version in the future.
         vectorVersionInfo.insertionStatus = VectorVersionInfo::InsertionStatus::ALWAYS_INSERTED;
     }
-    return vectorVersionInfo.delete_(transactionID, rowIdxInVector);
+    const auto deleted = vectorVersionInfo.delete_(transactionID, rowIdxInVector);
+    if (deleted) {
+        listedDeletions++;
+    }
+    return deleted;
 }
 
 bool VersionInfo::isSelected(transaction_t startTS, transaction_t transactionID,
     row_idx_t rowIdx) const {
+    if (allRowsVisibleTo(startTS)) {
+        return true;
+    }
     auto [vectorIdx, rowIdxInVector] =
         StorageUtils::getQuotientRemainder(rowIdx, DEFAULT_VECTOR_CAPACITY);
     if (const auto vectorVersion = getVectorVersionInfo(vectorIdx)) {
@@ -474,6 +482,10 @@ bool VersionInfo::isSelected(transaction_t startTS, transaction_t transactionID,
 void VersionInfo::getSelVectorToScan(const transaction_t startTS, const transaction_t transactionID,
     SelectionVector& selVector, const row_idx_t startRow, const row_idx_t numRows) const {
     if (numRows == 0) {
+        return;
+    }
+    if (allRowsVisibleTo(startTS)) {
+        selVector.setToUnfiltered(numRows);
         return;
     }
     auto [startVectorIdx, startRowIdxInVector] =
@@ -572,6 +584,9 @@ bool VersionInfo::isInserted(const transaction::Transaction* transaction,
 
 bool VersionInfo::isDeleted(transaction_t startTS, transaction_t transactionID,
     row_idx_t rowInChunk) const {
+    if (listedDeletions == 0 && insertSummaryValid) {
+        return false;
+    }
     auto [vectorIdx, rowInVector] =
         StorageUtils::getQuotientRemainder(rowInChunk, DEFAULT_VECTOR_CAPACITY);
     const auto vectorVersion = getVectorVersionInfo(vectorIdx);
@@ -583,6 +598,9 @@ bool VersionInfo::isDeleted(transaction_t startTS, transaction_t transactionID,
 
 bool VersionInfo::isInserted(transaction_t startTS, transaction_t transactionID,
     row_idx_t rowInChunk) const {
+    if (allRowsVisibleTo(startTS)) {
+        return true;
+    }
     auto [vectorIdx, rowInVector] =
         StorageUtils::getQuotientRemainder(rowInChunk, DEFAULT_VECTOR_CAPACITY);
     const auto vectorVersion = getVectorVersionInfo(vectorIdx);
@@ -605,6 +623,8 @@ void VersionInfo::commitInsert(row_idx_t startRow, row_idx_t numRows, transactio
     if (numRows == 0) {
         return;
     }
+    uncommittedInsertRows -= std::min<uint64_t>(uncommittedInsertRows, numRows);
+    maxInsertCommitTS = std::max(maxInsertCommitTS, commitTS);
     auto [startVectorIdx, startRowIdxInVector] =
         StorageUtils::getQuotientRemainder(startRow, DEFAULT_VECTOR_CAPACITY);
     auto [endVectorIdx, endRowIdxInVector] =
@@ -622,6 +642,7 @@ void VersionInfo::rollbackInsert(row_idx_t startRow, row_idx_t numRows) {
     if (numRows == 0) {
         return;
     }
+    uncommittedInsertRows -= std::min<uint64_t>(uncommittedInsertRows, numRows);
     auto [startVectorIdx, startRowIdxInVector] =
         StorageUtils::getQuotientRemainder(startRow, DEFAULT_VECTOR_CAPACITY);
     auto [endVectorIdx, endRowIdxInVector] =
@@ -656,6 +677,7 @@ void VersionInfo::rollbackDelete(row_idx_t startRow, row_idx_t numRows) {
     if (numRows == 0) {
         return;
     }
+    listedDeletions -= std::min<uint64_t>(listedDeletions, numRows);
     auto [startVectorIdx, startRowIdxInVector] =
         StorageUtils::getQuotientRemainder(startRow, DEFAULT_VECTOR_CAPACITY);
     auto [endVectorIdx, endRowIdxInVector] =
@@ -701,6 +723,7 @@ std::unique_ptr<VersionInfo> VersionInfo::deserialize(Deserializer& deSer) {
             versionInfo->vectorsInfo.push_back(nullptr);
         }
     }
+    versionInfo->insertSummaryValid = false;
     return versionInfo;
 }
 

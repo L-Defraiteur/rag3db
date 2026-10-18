@@ -371,6 +371,62 @@ row_idx_t ChunkedNodeGroup::getNumUpdatedRows(const Transaction* transaction,
     return getColumnChunk(columnID).getNumUpdatedRows(transaction);
 }
 
+void ChunkedNodeGroup::forgetDeletion(row_idx_t) {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::unique_lock lck{versionInfoMtx};
+    if (versionInfo) {
+        versionInfo->forgetDeletion();
+    }
+}
+
+bool ChunkedNodeGroup::allRowsVisibleTo(const Transaction* transaction) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return true;
+    }
+    std::shared_lock lck{versionInfoMtx};
+    return !versionInfo || versionInfo->allRowsVisibleTo(transaction->getStartTS());
+}
+
+void ChunkedNodeGroup::scanRun(const Transaction* transaction, const TableScanState& state,
+    const NodeGroupScanState& nodeGroupScanState, offset_t rowIdxInChunk, length_t numRowsToScan,
+    sel_t posInOutput, SelectionVector& runSel) const {
+    KU_ASSERT(rowIdxInChunk + numRowsToScan <= numRows);
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        runSel.setToUnfiltered(numRowsToScan);
+    } else {
+        std::shared_lock lck{versionInfoMtx};
+        if (versionInfo) {
+            versionInfo->getSelVectorToScan(transaction->getStartTS(), transaction->getID(),
+                runSel, rowIdxInChunk, numRowsToScan);
+        } else {
+            runSel.setToUnfiltered(numRowsToScan);
+        }
+    }
+    if (runSel.getSelSize() == 0) {
+        return;
+    }
+    for (auto i = 0u; i < state.columnIDs.size(); i++) {
+        const auto columnID = state.columnIDs[i];
+        if (columnID == INVALID_COLUMN_ID) {
+            state.outputVectors[i]->setAllNull();
+            continue;
+        }
+        if (columnID == ROW_IDX_COLUMN_ID) {
+            for (auto k = 0u; k < numRowsToScan; k++) {
+                state.rowIdxVector->setValue<row_idx_t>(posInOutput + k,
+                    rowIdxInChunk + k + startRowIdx);
+            }
+            continue;
+        }
+        KU_ASSERT(columnID < chunks.size());
+        KU_ASSERT(i < nodeGroupScanState.chunkStates.size());
+        chunks[columnID]->scan(transaction, nodeGroupScanState.chunkStates[i],
+            *state.outputVectors[i], rowIdxInChunk, numRowsToScan, posInOutput);
+    }
+}
+
 bool ChunkedNodeGroup::lookup(const Transaction* transaction, const TableScanState& state,
     const NodeGroupScanState& nodeGroupScanState, offset_t rowIdxInChunk, sel_t posInOutput) const {
     KU_ASSERT(rowIdxInChunk + 1 <= numRows);

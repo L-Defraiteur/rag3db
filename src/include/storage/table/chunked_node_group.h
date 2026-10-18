@@ -202,6 +202,21 @@ public:
     bool lookup(const transaction::Transaction* transaction, const TableScanState& state,
         const NodeGroupScanState& nodeGroupScanState, common::offset_t rowIdxInChunk,
         common::sel_t posInOutput) const;
+    // Toutes les lignes du bloc sont visibles de l'instantané : insérées et validées au plus tard à
+    // lui, aucune supprimée (VersionInfo::allRowsVisibleTo ; vrai sans info de version).
+    bool allRowsVisibleTo(const transaction::Transaction* transaction) const;
+    // La ligne supprimée et validée vient d'être retirée de sa liste CSR : sa suppression n'a plus
+    // à être lue (VersionInfo::forgetDeletion).
+    void forgetDeletion(common::row_idx_t rowInChunk);
+    // Une suite de lignes contiguës d'un bloc, lue d'un bloc et posée aux positions de sortie
+    // posInOutput… (la sélection de sortie est l'identité pendant la fenêtre), avec son filtre de
+    // versions en une prise de verrou : runSel reçoit, sur [0, numRows), les lignes visibles de la
+    // transaction (non filtrée de taille numRows si toutes le sont). La forme de lookup pour une
+    // suite (CSRNodeGroup::scanCommittedInMemRandom) : les colonnes se copient en bloc.
+    void scanRun(const transaction::Transaction* transaction, const TableScanState& state,
+        const NodeGroupScanState& nodeGroupScanState, common::offset_t rowIdxInChunk,
+        common::length_t numRows, common::sel_t posInOutput,
+        common::SelectionVector& runSel) const;
 
     void update(const transaction::Transaction* transaction, common::row_idx_t rowIdxInChunk,
         common::column_id_t columnID, const common::ValueVector& propertyVector);

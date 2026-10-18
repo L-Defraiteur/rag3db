@@ -148,8 +148,11 @@ public:
     ColumnChunk(bool enableCompression, std::vector<std::unique_ptr<ColumnChunkData>> segments);
 
     void initializeScanState(ChunkState& state, const Column* column) const;
+    // `dstOffset` : la position de sortie de la première valeur (0 d'ordinaire ; une suite lue au
+    // milieu d'une fenêtre, CSRNodeGroup::scanCommittedInMemRandom, la pose après les précédentes).
     void scan(const transaction::Transaction* transaction, const ChunkState& state,
-        common::ValueVector& output, common::offset_t offsetInChunk, common::length_t length) const;
+        common::ValueVector& output, common::offset_t offsetInChunk, common::length_t length,
+        common::sel_t dstOffset = 0) const;
     template<ResidencyState SCAN_RESIDENCY_STATE>
     void scanCommitted(const transaction::Transaction* transaction, ChunkState& chunkState,
         ColumnChunkScanner& output, common::row_idx_t startRow = 0,

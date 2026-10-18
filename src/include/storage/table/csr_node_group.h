@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <shared_mutex>
 #include <array>
@@ -127,6 +128,12 @@ struct CSRNodeGroupScanState final : NodeGroupScanState {
 
     // States at the csr list level. Cached during scan over a single csr list.
     NodeCSRIndex inMemCSRList;
+    // Le groupe dont inMemCSRList est la copie, tant qu'elle vit : il compte les copies en vol et
+    // ne compacte pas une liste pendant qu'une copie peut encore en lire les lignes (page 13 §6).
+    const CSRNodeGroup* listCopiedFrom = nullptr;
+    RAG3DB_API void releaseListCopy();
+    // La sélection d'une suite contiguë lue d'un bloc (ChunkedNodeGroup::scanRun), sur [0, suite).
+    common::SelectionVector runSelection{common::DEFAULT_VECTOR_CAPACITY};
 
     CSRNodeGroupScanSource source;
 
@@ -145,6 +152,7 @@ struct CSRNodeGroupScanState final : NodeGroupScanState {
     }
 
     bool tryScanCachedTuples(RelTableScanState& tableScanState);
+    ~CSRNodeGroupScanState() override { releaseListCopy(); }
 };
 
 struct CSRNodeGroupCheckpointState final : NodeGroupCheckpointState {
@@ -337,6 +345,13 @@ private:
     std::mutex deadHintsMtx;
     std::vector<uint8_t> deadHints; // un octet par nœud du groupe, alloué à la première note
     std::vector<common::offset_t> deadHintList;
+
+public:
+    // Les copies de listes en vol (CSRNodeGroupScanState::inMemCSRList) : prises sous csrIndexMtx
+    // partagé, rendues quand la copie est effacée. La compaction (sous csrIndexMtx exclusif) ne
+    // retire rien tant qu'il y en a : une copie prise avant elle lirait encore la ligne retirée,
+    // que le résumé du bloc rendrait vivante une fois sa suppression oubliée.
+    mutable std::atomic<uint32_t> inFlightListCopies{0};
 };
 
 } // namespace storage

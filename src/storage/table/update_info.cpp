@@ -74,8 +74,8 @@ VectorUpdateInfo& UpdateInfo::update(MemoryManager& memoryManager, const Transac
 }
 
 void UpdateInfo::scan(const Transaction* transaction, ValueVector& output, offset_t offsetInChunk,
-    length_t length) const {
-    iterateScan(transaction, offsetInChunk, length, 0 /* startPosInOutput */,
+    length_t length, sel_t startPosInOutput) const {
+    iterateScan(transaction, offsetInChunk, length, startPosInOutput,
         [&](const VectorUpdateInfo& vecUpdateInfo, uint64_t i, uint64_t posInOutput) -> void {
             vecUpdateInfo.data->lookup(i, output, posInOutput);
         });

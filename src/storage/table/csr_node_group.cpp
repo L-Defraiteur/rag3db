@@ -1,5 +1,8 @@
 #include "storage/table/csr_node_group.h"
 
+#include <atomic>
+#include <cstdlib>
+
 #include "common/constants.h"
 #include "storage/buffer_manager/memory_manager.h"
 #include "storage/storage_utils.h"
@@ -133,6 +136,7 @@ void CSRNodeGroup::initScanForCommittedInMem(RelTableScanState& relScanState,
     nodeGroupScanState.nextRowToScan = 0;
     nodeGroupScanState.numCachedRows = 0;
     nodeGroupScanState.inMemCSRList.clear();
+    nodeGroupScanState.releaseListCopy();
 }
 
 NodeGroupScanResult CSRNodeGroup::scan(const Transaction* transaction,
@@ -241,6 +245,13 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedPersistentWithoutCache(
     return NodeGroupScanResult{startRow, numToScan};
 }
 
+void CSRNodeGroupScanState::releaseListCopy() {
+    if (listCopiedFrom != nullptr) {
+        listCopiedFrom->inFlightListCopies.fetch_sub(1, std::memory_order_acq_rel);
+        listCopiedFrom = nullptr;
+    }
+}
+
 NodeGroupScanResult CSRNodeGroup::scanCommittedInMem(const Transaction* transaction,
     RelTableScanState& tableState, CSRNodeGroupScanState& nodeGroupScanState) const {
     while (true) {
@@ -254,6 +265,9 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMem(const Transaction* transact
             const auto offsetInGroup = boundNodeOffset % StorageConfig::NODE_GROUP_SIZE;
             std::shared_lock lck{csrIndexMtx};
             nodeGroupScanState.inMemCSRList = csrIndex->indices[offsetInGroup];
+            nodeGroupScanState.releaseListCopy();
+            nodeGroupScanState.listCopiedFrom = this;
+            inFlightListCopies.fetch_add(1, std::memory_order_acq_rel);
         }
         if (!nodeGroupScanState.inMemCSRList.isSequential) {
             KU_ASSERT(std::is_sorted(nodeGroupScanState.inMemCSRList.rowIndices.begin(),
@@ -267,6 +281,7 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMem(const Transaction* transact
             tableState.currBoundNodeIdx++;
             nodeGroupScanState.nextRowToScan = 0;
             nodeGroupScanState.inMemCSRList.clear();
+            nodeGroupScanState.releaseListCopy();
         } else {
             tableState.setNodeIDVectorToFlat(
                 tableState.cachedBoundNodeSelVector[tableState.currBoundNodeIdx]);
@@ -302,6 +317,34 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemSequential(const Transaction
     return NodeGroupScanResult{startRow, numRows};
 }
 
+// Trace de la lecture en mémoire (RAG3DB_TRACE_INMEM) : les lignes lues par suite et par ligne,
+// les suites refusées faute de résumé de bloc — imprimée à la fin du processus.
+struct InMemTrace {
+    std::atomic<uint64_t> rowsByRun{0}, runs{0}, rowsByLookup{0}, runsFiltered{0},
+        compactionsSkipped{0}, compactions{0};
+    ~InMemTrace() {
+        if (std::getenv("RAG3DB_TRACE_INMEM")) {
+            fprintf(stderr,
+                "[inmem] lignes par suite %llu (%llu suites, %llu filtrées), par ligne %llu ; "
+                "compactions %llu, sautées (copies en vol) %llu\n",
+                (unsigned long long)rowsByRun.load(), (unsigned long long)runs.load(),
+                (unsigned long long)runsFiltered.load(), (unsigned long long)rowsByLookup.load(),
+                (unsigned long long)compactions.load(),
+                (unsigned long long)compactionsSkipped.load());
+        }
+    }
+};
+static InMemTrace& inMemTrace() {
+    static InMemTrace trace;
+    return trace;
+}
+// Lu une fois : sans la variable, aucun compteur n'est touché (une incrémentation atomique par
+// ligne pèserait sur la lecture qu'elle mesure).
+static bool tracesInMem() {
+    static const bool enabled = std::getenv("RAG3DB_TRACE_INMEM") != nullptr;
+    return enabled;
+}
+
 NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* transaction,
     const RelTableScanState& tableState, CSRNodeGroupScanState& nodeGroupScanState) const {
     const auto numRows = std::min(nodeGroupScanState.inMemCSRList.rowIndices.size() -
@@ -313,7 +356,14 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
     row_idx_t nextRow = 0;
     ChunkedNodeGroup* chunkedGroup = nullptr;
     node_group_idx_t currentChunkIdx = INVALID_NODE_GROUP_IDX;
+    // Pendant la fenêtre, la sélection de sortie est l'identité (lookup et scanRun écrivent aux
+    // positions numWritten…) ; les positions des lignes visibles s'accumulent dans son tampon, et
+    // la sélection devient filtrée à la fin si une ligne d'une suite ne l'était pas.
+    auto& outSel = tableState.outState->getSelVectorUnsafe();
+    outSel.setToUnfiltered();
+    const auto positions = outSel.getMutableBuffer();
     sel_t numSelected = 0;
+    sel_t numWritten = 0;
     // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit : le verrou
     // partagé est pris une fois pour la fenêtre, et non par ligne (il pesait 40 % de l'insertion
     // d'un vecteur sous index HNSW, profil du banc du 12 octobre 2026). Il est rendu le temps de
@@ -335,12 +385,49 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
             appendGuard.lock();
         }
         KU_ASSERT(chunkedGroup);
-        numSelected += chunkedGroup->lookup(transaction, tableState, nodeGroupScanState, rowInChunk,
-            numSelected);
+        // Une suite de lignes contiguës dans le même bloc (une liste compactée les garde : les
+        // relations d'un nœud ajoutées par une validation se suivent), lue d'un bloc quand le
+        // bloc n'a rien à vérifier ligne à ligne ; sinon ligne à ligne, comme avant.
+        length_t run = 1;
+        while (nextRow + run < numRows &&
+               nodeGroupScanState.inMemCSRList.rowIndices[nextRow + run +
+                   nodeGroupScanState.nextRowToScan] == rowIdx + run &&
+               rowInChunk + run < StorageConfig::CHUNKED_NODE_GROUP_CAPACITY) {
+            run++;
+        }
+        if (run > 1) {
+            auto& runSel = nodeGroupScanState.runSelection;
+            chunkedGroup->scanRun(transaction, tableState, nodeGroupScanState, rowInChunk, run,
+                numWritten, runSel);
+            for (auto k = 0u; k < runSel.getSelSize(); k++) {
+                positions[numSelected++] = numWritten + runSel[k];
+            }
+            if (tracesInMem()) {
+                inMemTrace().rowsByRun += run;
+                inMemTrace().runs++;
+                if (runSel.getSelSize() < run) {
+                    inMemTrace().runsFiltered++;
+                }
+            }
+            numWritten += run;
+            nextRow += run;
+            continue;
+        }
+        if (tracesInMem()) {
+            inMemTrace().rowsByLookup++;
+        }
+        if (chunkedGroup->lookup(transaction, tableState, nodeGroupScanState, rowInChunk,
+                numWritten)) {
+            positions[numSelected++] = numWritten++;
+        }
         nextRow++;
     }
     nodeGroupScanState.nextRowToScan += numRows;
-    tableState.outState->getSelVectorUnsafe().setSelSize(numSelected);
+    if (numSelected == numWritten) {
+        outSel.setSelSize(numSelected);
+    } else {
+        outSel.setToFiltered(numSelected);
+    }
     return NodeGroupScanResult{0, numRows};
 }
 
@@ -410,6 +497,16 @@ bool CSRNodeGroup::compactDeadRowsNoLock(transaction_t oldestActiveStartTS,
     if (list.isEmpty()) {
         return false;
     }
+    if (inFlightListCopies.load(std::memory_order_acquire) > 0) {
+        // Une copie de liste peut encore lire les lignes mortes : à la prochaine occasion.
+        if (tracesInMem()) {
+            inMemTrace().compactionsSkipped++;
+        }
+        return true;
+    }
+    if (tracesInMem()) {
+        inMemTrace().compactions++;
+    }
     const auto rows = list.getRows();
     row_idx_vec_t alive;
     alive.reserve(rows.size());
@@ -424,9 +521,10 @@ bool CSRNodeGroup::compactDeadRowsNoLock(transaction_t oldestActiveStartTS,
                 StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
             const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
             // Supprimée par une validation au plus tard au plus ancien instantané ouvert :
-            // personne ne la voit plus vivante.
+            // personne ne la voit plus vivante, et plus personne ne la lira (page 13 §6).
             if (chunkedGroup->isDeleted(oldestActiveStartTS, Transaction::DUMMY_TRANSACTION_ID,
                     rowInChunk)) {
+                chunkedGroup->forgetDeletion(rowInChunk);
                 continue;
             }
             // Supprimée par une validation plus récente, ou par une transaction ouverte : elle

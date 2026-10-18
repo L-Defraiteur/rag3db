@@ -87,7 +87,8 @@ public:
     }
 
     void scan(const transaction::Transaction* transaction, common::ValueVector& output,
-        common::offset_t offsetInChunk, common::length_t length) const;
+        common::offset_t offsetInChunk, common::length_t length,
+        common::sel_t startPosInOutput = 0) const;
     void lookup(const transaction::Transaction* transaction, common::offset_t rowInChunk,
         common::ValueVector& output, common::sel_t posInOutputVector) const;
 
