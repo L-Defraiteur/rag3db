@@ -21,21 +21,20 @@
 //! répond à une seule question — « est-ce que ça monte ? » — et c'est déjà celle
 //! qui a manqué.
 
+/// Un gabarit livré, rendu chargeable dans un dossier : ses chemins en absolu, sa
+/// base et la racine de son espace de travail dans `ou`. Pour les témoins du crate
+/// (ici, et l'IDE de `daemon_host`).
 #[cfg(test)]
-mod tests {
+pub(crate) mod jouable {
     use serde_json::Value;
     use std::path::{Path, PathBuf};
-
-    fn dossier_des_gabarits() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends")
-    }
 
     /// Les chemins d'un gabarit livré sont **relatifs à lui** (`graphs/x.mmd`,
     /// `../notebook/graphs/put.mmd`, `schemas/y.json`) et son `database` est un
     /// emplacement que le produit remplit. On réécrit donc le manifeste en
     /// absolu dans un dossier temporaire — la même chose que fait le banc, et
     /// que ferait n'importe quel appelant réel.
-    fn manifeste_jouable(gabarit: &Path, ou: &Path) -> Result<PathBuf, String> {
+    pub(crate) fn manifeste_jouable(gabarit: &Path, ou: &Path) -> Result<PathBuf, String> {
         let brut = std::fs::read(gabarit.join("backend.json")).map_err(|e| e.to_string())?;
         let mut m: Value = serde_json::from_slice(&brut).map_err(|e| e.to_string())?;
 
@@ -100,6 +99,19 @@ mod tests {
         std::fs::write(&ecrit, serde_json::to_vec_pretty(&m).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
         Ok(ecrit)
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+    use std::path::{Path, PathBuf};
+
+    use super::jouable::manifeste_jouable;
+
+    fn dossier_des_gabarits() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends")
     }
 
     #[test]

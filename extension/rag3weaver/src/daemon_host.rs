@@ -1054,6 +1054,96 @@ mod tests {
         fil.join().unwrap();
     }
 
+    /// **Deux fenêtres de l'IDE** (B1, page 05 §7) : la fenêtre B suit le flux, la
+    /// fenêtre A lit `main.rs` en brut et l'enregistre par `edit_file` sur son
+    /// empreinte ; B reçoit le `FileChanged` de la montre avec la nouvelle
+    /// empreinte dans une borne courte, et sa relecture rend le contenu neuf.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn deux_fenetres_l_une_enregistre_l_autre_voit_le_changement() {
+        use std::io::{Read, Write};
+        let d = tempfile::tempdir().unwrap();
+        let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&arbre).unwrap();
+        std::fs::write(arbre.join("main.rs"), "fn depart() {}\n").unwrap();
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+        // La racine du code, à part de la base : la montre ne voit que l'arbre.
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(arbre.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let manifeste = manifeste.to_string_lossy().to_string();
+
+        let (adresse, fil) = hote_garde("j");
+        let appeler = |nom: &str, args: Value| -> Value {
+            let mut r = crate::daemon::agent()
+                .post(format!("http://{adresse}/ide/call"))
+                .header("Cookie", "rag3weaver_ide=j")
+                .header("content-type", "application/json")
+                .send(json!({ "manifest": manifeste, "name": nom, "arguments": args }).to_string())
+                .unwrap();
+            serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+        };
+        // Le premier appel ouvre le backend, et monte sa montre.
+        let lu = appeler("read_file", json!({ "path": "main.rs", "format": "brut" }));
+        assert_eq!(lu["ok"], true, "{lu}");
+        let empreinte = lu["result"]["content_hash"].as_str().unwrap().to_string();
+        // Le temps d'un premier balayage de la montre (tous les 250 ms).
+        std::thread::sleep(std::time::Duration::from_millis(800));
+
+        // La fenêtre B : le flux des fichiers, lu dans un fil.
+        let recu = Arc::new(Mutex::new(String::new()));
+        let mut b = std::net::TcpStream::connect(&adresse).unwrap();
+        b.write_all(b"GET /ide/flux?sujets=files HTTP/1.1\r\nHost: x\r\nCookie: rag3weaver_ide=j\r\n\r\n").unwrap();
+        b.set_read_timeout(Some(std::time::Duration::from_millis(200))).unwrap();
+        let (recu_b, fini) = (recu.clone(), Arc::new(std::sync::atomic::AtomicBool::new(false)));
+        let fini_b = fini.clone();
+        let lecteur = std::thread::spawn(move || {
+            let mut tampon = [0u8; 4096];
+            while !fini_b.load(std::sync::atomic::Ordering::SeqCst) {
+                if let Ok(n) = b.read(&mut tampon) {
+                    if n == 0 {
+                        break;
+                    }
+                    recu_b.lock().unwrap().push_str(&String::from_utf8_lossy(&tampon[..n]));
+                }
+            }
+        });
+        let debut = std::time::Instant::now();
+        while !recu.lock().unwrap().contains(": ide") {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(5), "le flux ne s'ouvre pas");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+
+        // La fenêtre A enregistre.
+        let neuf = "fn depart() {}\nfn arrivee() {}\n";
+        let ecrit = appeler("edit_file", json!({ "path": "main.rs", "content": neuf, "expected_hash": empreinte }));
+        assert_eq!(ecrit["ok"], true, "{ecrit}");
+        let nouvelle = crate::hash::content_hash(neuf);
+
+        // B reçoit le FileChanged de main.rs, avec la nouvelle empreinte, vite.
+        let debut = std::time::Instant::now();
+        loop {
+            let t = recu.lock().unwrap().clone();
+            if t.lines().any(|l| l.starts_with("data:") && l.contains("FileChanged") && l.contains("main.rs") && l.contains(&nouvelle)) {
+                break;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(5), "pas de FileChanged avec {nouvelle} en 5 s : {t}");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // Et sa relecture rend le contenu neuf.
+        let relu = appeler("read_file", json!({ "path": "main.rs", "format": "brut" }));
+        assert_eq!(relu["result"]["content"], neuf, "{relu}");
+        assert_eq!(relu["result"]["content_hash"], nouvelle);
+
+        fini.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = lecteur.join();
+        let (statut, _) = demander("POST", &format!("http://{adresse}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
+
     #[test]
     fn le_jeton_se_compare_entier() {
         assert!(same_token("Bearer abc", "Bearer abc"));
