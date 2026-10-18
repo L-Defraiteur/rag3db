@@ -30,7 +30,7 @@ Personne ne lisait ce workflow. Chaque session contrôle sur son poste (`check_f
 - Le sous-module lucivy est retiré (284cc00c0) et lucivy vient de crates.io : plus de clone.
 - codeparsers est initialisé par https, comme dans `paquet-npm.yml`.
 - La matrice est remplacée par `scripts/check_features.sh`, dont les jeux font foi, avec le moteur bâti en statique par la crate rag3db (`RAG3DB_LIB=statique`, option ajoutée au script). En CI, la sortie de chaque jeu est gardée (`CHECK_FEATURES_LOGS`) et un rouge s'affiche.
-- Les tests unitaires restent, sans feature.
+- Les tests unitaires se jouent sous le jeu du paquet (`rag3db-native,code,daemon,openai-llm`), dans le même job. Sans feature, cinq tests qui supposent `code` rougissent, car ils ne sont pas gardés par cfg : `backend::tests::{index_signals_se_valide_dans_les_deux_sens, la_politique_refuse_en_disant_quoi_faire, locks_via_exige_le_schema_de_code}`, `dataflow::graph_tool::tests::chaque_gabarit_d_outil_livre_se_construit`, `gabarits::tests::chaque_gabarit_livre_se_charge` (run 39133418842). Les garder, ou leur donner un sens sans `code`, reste à faire.
 - fmt + clippy est retiré, avec un commentaire : il revient sans `continue-on-error`, une fois le crate formaté et clippy propre.
 
 ## Le filet qui manquait
@@ -43,4 +43,4 @@ Qu'un rouge de ce workflow sur master se voie :
 
 ## Pour le fermer
 
-Un run vert de bout en bout sur master, lu (jobs `check_features (cinq jeux)` et `tests unitaires`). Puis le filet décidé.
+Un run vert de bout en bout sur master, lu (job `check_features (cinq jeux) et tests unitaires`). Puis le filet décidé.

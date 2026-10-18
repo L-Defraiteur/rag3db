@@ -43,7 +43,7 @@ jobs:
   # chacun séparément (l'unification des features de cargo masquerait un `dep:`
   # manquant). L'ancienne matrice (candle, wasm) nommait des features retirées.
   check:
-    name: check_features (cinq jeux)
+    name: check_features (cinq jeux) et tests unitaires
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -70,6 +70,12 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: bash scripts/check_features.sh
 
+      # Les tests unitaires, sous le jeu du paquet, sur le moteur que check_features vient
+      # de bâtir. Sans feature, cinq tests qui supposent `code` rougissent : ils ne sont pas
+      # gardés par cfg (voir le ticket) ; on les joue comme les postes, avec leurs features.
+      - name: cargo test --lib (rag3db-native,code,daemon,openai-llm)
+        run: cargo test --lib --features rag3db-native,code,daemon,openai-llm
+
       - name: La sortie des jeux rouges
         if: failure()
         working-directory: .
@@ -79,26 +85,7 @@ jobs:
             echo "=== $(basename "$f")"; grep -E -A6 "^error" "$f" | head -60
           done
 
-  test:
-    name: tests unitaires
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Sous-module codeparsers (par https, sans clé)
-        working-directory: .
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --depth 1 extension/rag3weaver/codeparsers
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: extension/rag3weaver
-
-      # Sans feature : ni le moteur ni le code. Les tests E2E sont `#[ignore]`.
-      - name: cargo test --lib
-        run: cargo test --lib
+  # Le job « tests unitaires » sans feature est fondu dans `check` (18 octobre 2026).
 
   # fmt + clippy est retiré (18 octobre 2026) : il passait pour vert par
   # `continue-on-error`, alors que fmt et clippy rougissaient sur le passif. Il revient
