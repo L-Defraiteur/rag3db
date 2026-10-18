@@ -32,12 +32,28 @@ Le but : plus jamais un client qui démarre son propre hôte avec un vieux binai
   - L'unité porte `TimeoutStopSec=90` en filet.
   - Ticket fermé : « l'arrêt de l'hôte attend sans borne une réaction figée ».
 
+## Le jeton, stable d'un démarrage à l'autre
+
+Sous l'unité, l'hôte s'endort et se réveille plusieurs fois par jour. Un jeton neuf à chaque
+démarrage ferait perdre à l'IDE son entrée (son cookie) à chaque réveil : un 403, puis une
+nouvelle URL à demander.
+
+- Le jeton est rangé dans `daemon.token` (0600), à côté de `daemon.json`.
+- Il n'est tiré que s'il manque ou s'il est illisible.
+- `rag3weaver-backend daemon-nouveau-jeton` en tire un neuf sur demande. Un hôte en service
+  garde l'ancien jusqu'à son redémarrage, et l'IDE se rouvre ensuite par
+  `rag3weaver-backend ide`.
+
+Un client qui reçoit quand même un 403 (un jeton renouvelé) relit `daemon.json` et rejoue
+une fois.
+
 ## Ce qu'il faut attendre de la montre
 
-Sans client et sans travail, l'hôte s'endort après 30 min, montre comprise : **pendant qu'il
-dort, rien ne suit l'arbre**.
+**« La montre dort avec l'hôte »** : sans client et sans travail, l'hôte s'endort après 30 min,
+montre comprise. **Pendant qu'il dort, rien ne suit l'arbre** : les fichiers modifiés ne sont pas
+réindexés.
 
-Au réveil, le backend ne se rouvre qu'à son premier appel. Sa montre rattrape alors ce qui a
+À son réveil, l'hôte rattrape tout ce qui a changé pendant son sommeil. Le backend ne se rouvre qu'à son premier appel. Sa montre rattrape alors ce qui a
 bougé pendant le sommeil (la réconciliation du démarrage). Le premier appel paie ce
 rattrapage, et sa réponse peut dire « une écriture de l'index est en cours » le temps qu'il
 passe.

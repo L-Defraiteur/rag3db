@@ -97,10 +97,18 @@ impl Hote {
         }
     }
 
-    /// Redémarrer : un nouveau jeton, comme l'unité de luciepc le fait.
+    /// Redémarrer avec un jeton neuf : le jeton est stable d'un démarrage à l'autre
+    /// (18 octobre 2026), on le renouvelle donc entre les deux, comme la commande
+    /// `daemon-nouveau-jeton` — ce test éprouve la relecture d'un jeton changé.
     fn redemarrer(&mut self) {
         let avant = self.fiche().unwrap()["token"].clone();
         self.arreter();
+        let renouvele = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
+            .arg("daemon-nouveau-jeton")
+            .env("RAG3WEAVER_DAEMON_DIR", &self.dossier)
+            .status()
+            .expect("daemon-nouveau-jeton");
+        assert!(renouvele.success(), "daemon-nouveau-jeton a échoué");
         self.demarrer();
         assert_ne!(self.fiche().unwrap()["token"], avant, "un nouveau jeton à chaque démarrage");
     }

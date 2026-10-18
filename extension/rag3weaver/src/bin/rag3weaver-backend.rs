@@ -416,7 +416,9 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     };
     let servie = ecoute.local_addr().map_err(|e| e.to_string())?.to_string();
     let server = tiny_http::Server::from_listener(ecoute, None).map_err(|e| format!("{servie} : {e}"))?;
-    let jeton = cycle::new_token()?;
+    // Le jeton, stable d'un démarrage à l'autre (daemon.token) : l'IDE garde son
+    // entrée quand l'hôte se rendort et se réveille.
+    let jeton = cycle::stable_token()?;
     let pid = std::process::id();
     let fiche = cycle::DaemonFile {
         address: servie.clone(),
@@ -659,6 +661,15 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("daemon") {
         return servir_le_demon(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("daemon-nouveau-jeton") {
+        let _ = rag3weaver::daemon_lifecycle::renew_token()?;
+        eprintln!(
+            "un jeton neuf est rangé dans {} : un hôte en service garde l'ancien jusqu'à son \
+             redémarrage ; l'IDE se rouvre ensuite par `rag3weaver-backend ide`",
+            rag3weaver::daemon_lifecycle::file_path().with_file_name("daemon.token").display()
+        );
+        return Ok(());
     }
     if tous.first().map(String::as_str) == Some("ide") {
         return entrer_dans_l_ide();

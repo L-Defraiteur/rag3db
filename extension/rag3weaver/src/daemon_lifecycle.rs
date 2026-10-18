@@ -233,26 +233,61 @@ pub fn read() -> Option<DaemonFile> {
     serde_json::from_slice(&octets).ok()
 }
 
+/// **Le jeton local, stable d'un démarrage à l'autre** (18 octobre 2026) : sous
+/// l'unité à socket, l'hôte s'arrête après l'inactivité et se relance à l'appel
+/// suivant ; un jeton neuf à chaque fois ferait perdre son entrée à l'IDE (son
+/// cookie) plusieurs fois par jour. Il est rangé dans `daemon.token` (0600) à côté
+/// de `daemon.json`, et tiré seulement s'il manque ou s'il est illisible.
+pub fn stable_token() -> Result<String, String> {
+    stable_token_dans(&racine(Dossier::Donnees)?)
+}
+
+fn stable_token_dans(dossier: &Path) -> Result<String, String> {
+    let fichier = dossier.join("daemon.token");
+    if let Ok(texte) = std::fs::read_to_string(&fichier) {
+        let jeton = texte.trim();
+        if jeton.len() == 64 && jeton.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Ok(jeton.to_string());
+        }
+        eprintln!("[démon] {} illisible : un jeton neuf est tiré", fichier.display());
+    }
+    renew_token_dans(dossier)
+}
+
+/// **Un jeton neuf, rangé** (`rag3weaver-backend daemon-nouveau-jeton`) : 0600, par
+/// un fichier temporaire renommé. Un hôte en service garde l'ancien jusqu'à son
+/// prochain démarrage ; l'IDE est alors à rouvrir par `rag3weaver-backend ide`.
+pub fn renew_token() -> Result<String, String> {
+    renew_token_dans(&racine(Dossier::Donnees)?)
+}
+
+fn renew_token_dans(dossier: &Path) -> Result<String, String> {
+    let jeton = new_token()?;
+    ecrire_secret(dossier, "daemon.token", jeton.as_bytes())?;
+    Ok(jeton)
+}
+
+/// Un fichier secret du dossier de l'hôte : 0600 sous Unix, un temporaire renommé.
+fn ecrire_secret(dossier: &Path, nom: &str, contenu: &[u8]) -> Result<(), String> {
+    std::fs::create_dir_all(dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+    let provisoire = dossier.join(format!("{nom}.{}", std::process::id()));
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut f = options.open(&provisoire).map_err(|e| format!("{} : {e}", provisoire.display()))?;
+    f.write_all(contenu).map_err(|e| format!("{} : {e}", provisoire.display()))?;
+    drop(f);
+    let cible = dossier.join(nom);
+    std::fs::rename(&provisoire, &cible).map_err(|e| format!("{} : {e}", cible.display()))
+}
+
 /// **Écrire `daemon.json`** en mode 0600 sous Unix (il porte le jeton), par un
 /// fichier temporaire renommé : un client ne lit jamais un fichier à moitié
 /// écrit. Sous Windows, le fichier hérite de l'ACL du dossier du profil, qui
 /// n'est lisible que de son utilisateur.
 pub fn write(file: &DaemonFile) -> Result<(), String> {
-    let dossier = racine(Dossier::Donnees)?;
-    std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
-    let provisoire = dossier.join(format!("daemon.json.{}", std::process::id()));
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut f = options
-        .open(&provisoire)
-        .map_err(|e| format!("{} : {e}", provisoire.display()))?;
-    f.write_all(&serde_json::to_vec_pretty(file).expect("un DaemonFile se sérialise"))
-        .map_err(|e| format!("{} : {e}", provisoire.display()))?;
-    drop(f);
-    let cible = dossier.join("daemon.json");
-    std::fs::rename(&provisoire, &cible).map_err(|e| format!("{} : {e}", cible.display()))
+    ecrire_secret(&racine(Dossier::Donnees)?, "daemon.json", &serde_json::to_vec_pretty(file).expect("un DaemonFile se sérialise"))
 }
 
 /// **Retirer `daemon.json` s'il est le sien** : un hôte qui s'arrête ne retire
@@ -779,6 +814,27 @@ mod tests {
         std::fs::write(&autre, b"un autre binaire").unwrap();
         let raison = binaire_perime(&autre).expect("un autre fichier est un autre binaire");
         assert!(raison.contains("binaire mis à jour") && raison.contains("relancez la session"), "{raison}");
+    }
+
+    /// **Le jeton est stable d'un démarrage à l'autre**, et neuf sur demande
+    /// (18 octobre 2026) : `stable_token` rend le même deux fois, `renew_token` un
+    /// autre, que `stable_token` rend ensuite ; le fichier est 0600.
+    #[test]
+    fn le_jeton_est_stable_et_neuf_sur_demande() {
+        let d = tempfile::tempdir().unwrap();
+        let a = stable_token_dans(d.path()).unwrap();
+        assert_eq!(stable_token_dans(d.path()).unwrap(), a, "le même jeton au démarrage suivant");
+        let b = renew_token_dans(d.path()).unwrap();
+        assert_ne!(a, b, "un jeton neuf sur demande");
+        assert_eq!(stable_token_dans(d.path()).unwrap(), b);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(d.path().join("daemon.token")).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        std::fs::write(d.path().join("daemon.token"), "abîmé").unwrap();
+        assert_ne!(stable_token_dans(d.path()).unwrap(), b, "illisible : un jeton neuf");
     }
 
     #[test]
