@@ -938,6 +938,10 @@ fn json_response(status: u16, value: &Value) -> tiny_http::Response<std::io::Cur
         .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).expect("en-tête littéral"))
 }
 
+/// Le témoin de la page rendue dans un vrai navigateur.
+#[cfg(all(test, unix))]
+mod navigateur;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -952,7 +956,7 @@ mod tests {
     }
 
     /// Un hôte gardé par un jeton, sur un port libre ; rend l'adresse.
-    fn hote_garde(jeton: &str) -> (String, std::thread::JoinHandle<()>) {
+    pub(super) fn hote_garde(jeton: &str) -> (String, std::thread::JoinHandle<()>) {
         let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let adresse = ecoute.local_addr().unwrap().to_string();
         let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
@@ -961,7 +965,7 @@ mod tests {
         (adresse, fil)
     }
 
-    fn demander(methode: &str, url: &str, jeton: Option<&str>) -> (u16, Value) {
+    pub(super) fn demander(methode: &str, url: &str, jeton: Option<&str>) -> (u16, Value) {
         let agent = crate::daemon::agent();
         let mut r = if methode == "GET" {
             let mut q = agent.get(url);

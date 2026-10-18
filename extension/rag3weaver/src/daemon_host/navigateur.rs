@@ -1,0 +1,407 @@
+//! **Le témoin de la page de l'IDE dans un vrai navigateur** (18 octobre 2026).
+//!
+//! Les autres témoins voient la page par ses appels, jamais rendue : c'est ce
+//! qui a laissé toutes les vues cassées sans que personne le voie (`appeler()`
+//! lisait la réponse un cran trop haut). Celui-ci ouvre les vues dans un
+//! Chromium sans écran, sur un vrai hôte qui sert le gabarit `code`. Il exige
+//! zéro erreur JavaScript à la console et un contenu attendu dans le DOM, puis
+//! il édite et enregistre un fichier par la page.
+//!
+//! Le navigateur se pilote par le protocole DevTools sur un tube
+//! (`--remote-debugging-pipe` : fd 3 en entrée, fd 4 en sortie, un message JSON
+//! par fin `\0`) : ni websocket, ni dépendance.
+//!
+//! **Sans navigateur, le témoin se saute nommément** (une ligne `SAUTÉ` sur la
+//! sortie d'erreur). Là où il doit jouer (la CI, luciepc),
+//! `RAG3WEAVER_EXIGER_NAVIGATEUR=1` fait de cette absence un rouge : jamais
+//! vert pour rien. `RAG3WEAVER_NAVIGATEUR` désigne un binaire précis.
+
+use serde_json::{json, Value};
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::process::CommandExt;
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::time::{Duration, Instant};
+
+const CANDIDATS: &[&str] = &[
+    "chromium",
+    "chromium-browser",
+    "google-chrome-stable",
+    "google-chrome",
+    "chrome",
+    "headless_shell",
+];
+
+/// Le binaire du navigateur : `RAG3WEAVER_NAVIGATEUR`, sinon le premier des
+/// candidats dans le PATH, sinon un Chromium de Playwright
+/// (`~/.cache/ms-playwright/<version>/<dossier>/chrome`, le plus récent).
+pub(crate) fn trouver_navigateur() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("RAG3WEAVER_NAVIGATEUR").filter(|p| !p.is_empty()) {
+        return Some(PathBuf::from(p));
+    }
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    if let Some(p) = CANDIDATS
+        .iter()
+        .flat_map(|nom| std::env::split_paths(&path).map(move |d| d.join(nom)))
+        .find(|p| p.is_file())
+    {
+        return Some(p);
+    }
+    let playwright = PathBuf::from(std::env::var_os("HOME")?).join(".cache/ms-playwright");
+    let mut trouves: Vec<PathBuf> = std::fs::read_dir(playwright)
+        .ok()?
+        .flatten()
+        .flat_map(|v| std::fs::read_dir(v.path()).into_iter().flatten().flatten())
+        .flat_map(|d| ["chrome", "chrome-headless-shell", "headless_shell"].map(|n| d.path().join(n)))
+        .filter(|p| p.is_file())
+        .collect();
+    trouves.sort();
+    trouves.pop()
+}
+
+/// Le navigateur, ou `None` après la ligne `SAUTÉ` ; un rouge si
+/// `RAG3WEAVER_EXIGER_NAVIGATEUR=1`.
+pub(crate) fn navigateur_ou_saut(temoin: &str) -> Option<PathBuf> {
+    if let Some(p) = trouver_navigateur() {
+        return Some(p);
+    }
+    let raison = format!(
+        "aucun navigateur (RAG3WEAVER_NAVIGATEUR vide, aucun de {} dans le PATH, aucun Chromium de Playwright)",
+        CANDIDATS.join(", ")
+    );
+    if std::env::var("RAG3WEAVER_EXIGER_NAVIGATEUR").as_deref() == Ok("1") {
+        panic!("{temoin} : {raison}, et RAG3WEAVER_EXIGER_NAVIGATEUR=1 l'exige");
+    }
+    eprintln!("SAUTÉ {temoin} : {raison}");
+    None
+}
+
+/// Un Chromium sans écran, attaché à un onglet, qui garde ce que la page dit à
+/// la console.
+pub(crate) struct Navigateur {
+    enfant: Child,
+    ecrire: std::fs::File,
+    recus: Receiver<Value>,
+    suivant: u64,
+    session: String,
+    /// Les erreurs vues : exceptions, `console.error`/`warn`, journal en erreur.
+    pub(crate) erreurs: Vec<String>,
+    _profil: tempfile::TempDir,
+}
+
+fn tube() -> (std::fs::File, std::fs::File) {
+    use std::os::fd::FromRawFd;
+    let mut fds = [0; 2];
+    assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0, "pipe2");
+    unsafe { (std::fs::File::from_raw_fd(fds[0]), std::fs::File::from_raw_fd(fds[1])) }
+}
+
+impl Navigateur {
+    pub(crate) fn lancer(binaire: &std::path::Path) -> Navigateur {
+        use std::os::fd::AsRawFd;
+        let profil = tempfile::tempdir().unwrap();
+        // Vers le navigateur (son fd 3), et depuis lui (son fd 4).
+        let (entree_lue, entree) = tube();
+        let (sortie, sortie_ecrite) = tube();
+        let (a, b) = (entree_lue.as_raw_fd(), sortie_ecrite.as_raw_fd());
+        let mut commande = Command::new(binaire);
+        commande
+            .args([
+                "--headless",
+                "--remote-debugging-pipe",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-gpu",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-sync",
+                // Les runners de la CI refusent le bac à sable sans espace de noms.
+                "--no-sandbox",
+            ])
+            .arg(format!("--user-data-dir={}", profil.path().display()))
+            .arg("about:blank")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        // dup2 rend les fd 3 et 4 au fils sans CLOEXEC.
+        unsafe {
+            commande.pre_exec(move || {
+                if libc::dup2(a, 3) < 0 || libc::dup2(b, 4) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let enfant = commande.spawn().unwrap_or_else(|e| panic!("lancer {} : {e}", binaire.display()));
+        drop((entree_lue, sortie_ecrite));
+        // Un fil lit les messages : une attente se borne par recv_timeout.
+        let (envoi, recus) = channel();
+        std::thread::spawn(move || {
+            let mut lecteur = BufReader::new(sortie);
+            loop {
+                let mut tampon = Vec::new();
+                match lecteur.read_until(0, &mut tampon) {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {
+                        tampon.pop();
+                        if let Ok(v) = serde_json::from_slice::<Value>(&tampon) {
+                            if envoi.send(v).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        let mut n = Navigateur {
+            enfant,
+            ecrire: entree,
+            recus,
+            suivant: 0,
+            session: String::new(),
+            erreurs: Vec::new(),
+            _profil: profil,
+        };
+        let cibles = n.commande("Target.getTargets", json!({}));
+        let onglet = cibles["targetInfos"]
+            .as_array()
+            .and_then(|t| t.iter().find(|c| c["type"] == "page"))
+            .unwrap_or_else(|| panic!("aucun onglet : {cibles}"))["targetId"]
+            .clone();
+        let attache = n.commande("Target.attachToTarget", json!({ "targetId": onglet, "flatten": true }));
+        n.session = attache["sessionId"].as_str().unwrap().to_string();
+        for domaine in ["Runtime.enable", "Log.enable", "Page.enable"] {
+            n.commande(domaine, json!({}));
+        }
+        n
+    }
+
+    /// Une commande à l'onglet (au navigateur tant qu'aucune session), et sa
+    /// réponse ; les événements reçus en route sont relevés.
+    pub(crate) fn commande(&mut self, methode: &str, params: Value) -> Value {
+        self.suivant += 1;
+        let id = self.suivant;
+        let mut m = json!({ "id": id, "method": methode, "params": params });
+        if !self.session.is_empty() {
+            m["sessionId"] = json!(self.session);
+        }
+        let mut octets = serde_json::to_vec(&m).unwrap();
+        octets.push(0);
+        self.ecrire.write_all(&octets).unwrap();
+        let fin = Instant::now() + Duration::from_secs(30);
+        loop {
+            let v = self.recevoir(fin.saturating_duration_since(Instant::now()))
+                .unwrap_or_else(|| panic!("{methode} : pas de réponse du navigateur en 30 s"));
+            if v["id"] == id {
+                if let Some(e) = v.get("error") {
+                    panic!("{methode} : {e}");
+                }
+                return v["result"].clone();
+            }
+        }
+    }
+
+    fn recevoir(&mut self, delai: Duration) -> Option<Value> {
+        match self.recus.recv_timeout(delai) {
+            Ok(v) => {
+                self.relever(&v);
+                Some(v)
+            }
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => panic!("le navigateur s'est fermé"),
+        }
+    }
+
+    fn relever(&mut self, v: &Value) {
+        let p = &v["params"];
+        match v["method"].as_str() {
+            Some("Runtime.exceptionThrown") => {
+                let d = &p["exceptionDetails"];
+                let texte = d["exception"]["description"].as_str().or(d["text"].as_str()).unwrap_or("?");
+                self.erreurs.push(format!("exception : {texte} ({}:{})", d["url"].as_str().unwrap_or(""), d["lineNumber"]));
+            }
+            Some("Runtime.consoleAPICalled") if matches!(p["type"].as_str(), Some("error" | "warning" | "assert")) => {
+                let args: Vec<String> = p["args"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|a| a["value"].as_str().map(str::to_string).or(a["description"].as_str().map(str::to_string)).unwrap_or_else(|| a.to_string()))
+                    .collect();
+                self.erreurs.push(format!("console.{} : {}", p["type"].as_str().unwrap(), args.join(" ")));
+            }
+            Some("Log.entryAdded") if p["entry"]["level"] == "error" => {
+                let e = &p["entry"];
+                self.erreurs.push(format!("journal : {} {}", e["text"].as_str().unwrap_or("?"), e["url"].as_str().unwrap_or("")));
+            }
+            _ => {}
+        }
+    }
+
+    /// Le résultat d'une expression JavaScript (les promesses attendues).
+    pub(crate) fn evaluer(&mut self, expression: &str) -> Value {
+        let r = self.commande(
+            "Runtime.evaluate",
+            json!({ "expression": expression, "returnByValue": true, "awaitPromise": true }),
+        );
+        if let Some(e) = r.get("exceptionDetails") {
+            panic!("évaluer {expression} : {e}");
+        }
+        r["result"]["value"].clone()
+    }
+
+    /// Va à une URL, et attend un nouveau document où `condition` est vraie.
+    pub(crate) fn aller(&mut self, url: &str, condition: &str) {
+        // La marque de l'ancien document : la condition ne se juge que sur le neuf.
+        if !self.session.is_empty() {
+            let _ = self.commande("Runtime.evaluate", json!({ "expression": "window.__temoin_ancien = true" }));
+        }
+        self.commande("Page.navigate", json!({ "url": url }));
+        self.attendre(&format!("!window.__temoin_ancien && document.readyState !== 'loading' && ({condition})"), url);
+    }
+
+    /// Attend que `condition` soit vraie, 20 s au plus.
+    pub(crate) fn attendre(&mut self, condition: &str, quoi: &str) {
+        let fin = Instant::now() + Duration::from_secs(20);
+        loop {
+            let r = self.commande(
+                "Runtime.evaluate",
+                json!({ "expression": format!("(() => {{ try {{ return !!({condition}); }} catch (e) {{ return false; }} }})()"), "returnByValue": true }),
+            );
+            if r["result"]["value"] == true {
+                return;
+            }
+            if Instant::now() > fin {
+                let vue = self.evaluer("document.getElementById('vue')?.innerText ?? document.body?.innerText ?? ''");
+                panic!("{quoi} : « {condition} » jamais vraie en 20 s ; la vue : {vue} ; erreurs : {:?}", self.erreurs);
+            }
+            while self.recevoir(Duration::from_millis(100)).is_some() {}
+        }
+    }
+}
+
+impl Drop for Navigateur {
+    fn drop(&mut self) {
+        // Notre propre fils, par son pid.
+        let _ = self.enfant.kill();
+        let _ = self.enfant.wait();
+    }
+}
+
+/// **Les vues de l'IDE, rendues** : l'accueil, l'arbre, un fichier, un symbole,
+/// la recherche et le graphe, chacune avec zéro erreur à la console et son
+/// contenu attendu ; puis la vue d'un fichier se modifie et s'enregistre, et le
+/// disque porte le texte tapé.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
+    let Some(binaire) = navigateur_ou_saut("les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(arbre.join("src")).unwrap();
+    std::fs::write(arbre.join("main.rs"), "fn main() {\n    depart();\n}\n\nfn depart() {\n    arrivee();\n}\n").unwrap();
+    std::fs::write(arbre.join("src/arrivee.rs"), "pub fn arrivee() {\n    let _ = 1;\n}\n").unwrap();
+    let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let manifeste = manifeste.to_string_lossy().to_string();
+
+    let (adresse, fil) = super::tests::hote_garde("j");
+    let appeler = |nom: &str, args: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("http://{adresse}/ide/call"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste, "name": nom, "arguments": args }).to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    // Le premier appel ouvre le backend ; on attend l'index (les définitions de
+    // `depart`) pour que le symbole et le graphe aient de quoi se montrer.
+    let debut = Instant::now();
+    loop {
+        let u = appeler("usages", json!({ "name": "depart", "format": "json" }));
+        if u["ok"] == true && u["result"]["result"]["definitions"].as_array().is_some_and(|d| !d.is_empty()) {
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(60), "depart n'est pas indexé en 60 s : {u}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let etat: Value = {
+        let mut r = crate::daemon::agent()
+            .get(format!("http://{adresse}/ide/etat"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .call()
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let id = etat["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifeste.as_str()))
+        .unwrap_or_else(|| panic!("le backend n'est pas dans l'état : {etat}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let mut n = Navigateur::lancer(&binaire);
+    let racine = format!("http://{adresse}");
+    // L'entrée par le jeton pose le cookie, et mène à l'accueil.
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
+    let vues: &[(&str, String, &str)] = &[
+        ("l'accueil", format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Backends'"),
+        (
+            "l'arbre",
+            format!("{racine}/ide/code/{id}/arbre/"),
+            "[...document.querySelectorAll('#vue li a')].map(a => a.textContent).join(',') === 'src/,main.rs'",
+        ),
+        (
+            "un fichier",
+            format!("{racine}/ide/code/{id}/fichier/main.rs"),
+            "document.querySelector('#L5')?.innerText.includes('fn depart()') && document.querySelector('#vue a.id[href$=\"/symbole/arrivee\"]') && [...document.querySelectorAll('#vue aside a')].some(a => a.textContent === 'depart')",
+        ),
+        (
+            "un symbole",
+            format!("{racine}/ide/code/{id}/symbole/depart"),
+            "[...document.querySelectorAll('#vue h2')].some(h => h.textContent === 'Définitions (1)') && document.querySelector('#vue a[href$=\"/fichier/main.rs#L5\"]')",
+        ),
+        (
+            "la recherche",
+            format!("{racine}/ide/code/{id}/recherche?q=arrivee"),
+            "[...document.querySelectorAll('#vue .resultat a')].some(a => a.textContent.startsWith('src/arrivee.rs'))",
+        ),
+        (
+            "le graphe",
+            format!("{racine}/ide/code/{id}/graphe/depart"),
+            "document.querySelectorAll('#vue svg g.noeud').length >= 2 && document.querySelector('#vue svg g.noeud.centre')?.textContent.includes('depart')",
+        ),
+    ];
+    for (quoi, url, attendu) in vues {
+        n.aller(url, attendu);
+        let alertes = n.evaluer("[...document.querySelectorAll('.alerte')].map(e => e.textContent)");
+        assert_eq!(alertes, json!([]), "{quoi} montre une alerte");
+        assert!(n.erreurs.is_empty(), "{quoi} : erreurs à la console : {:#?}", n.erreurs);
+    }
+
+    // L'édition : Modifier, taper, Enregistrer ; le disque porte le texte tapé.
+    n.aller(&format!("{racine}/ide/code/{id}/fichier/main.rs"), "document.querySelector('#L1')");
+    n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent === 'Modifier').click()");
+    n.attendre("document.querySelector('textarea')?.value.includes('fn depart()')", "le tampon d'édition");
+    let neuf = "fn main() {\n    depart();\n}\n\nfn depart() {}\n";
+    n.evaluer("document.querySelector('textarea').select()");
+    n.commande("Input.insertText", json!({ "text": neuf }));
+    n.attendre("document.querySelector('.barre .note')?.textContent === 'modifié, non enregistré'", "l'avis de modification");
+    n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent === 'Enregistrer').click()");
+    n.attendre("document.querySelector('.barre .note')?.textContent === 'enregistré'", "l'enregistrement");
+    assert_eq!(std::fs::read_to_string(arbre.join("main.rs")).unwrap(), neuf);
+    assert!(n.erreurs.is_empty(), "l'édition : erreurs à la console : {:#?}", n.erreurs);
+
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}

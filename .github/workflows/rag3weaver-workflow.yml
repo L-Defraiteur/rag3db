@@ -93,7 +93,11 @@ jobs:
 
       # Deux tests exigent un moteur lié en partagé (la lib lue dans /proc/self/maps) : en
       # statique, ils ne peuvent pas passer ici ; ils se jouent sur les postes.
+      # Le témoin de la page de l'IDE dans un vrai navigateur (src/daemon_host/navigateur.rs) :
+      # le runner porte google-chrome, son absence est un rouge, jamais un saut.
       - name: cargo test --lib (rag3db-native,code,daemon,openai-llm)
+        env:
+          RAG3WEAVER_EXIGER_NAVIGATEUR: '1'
         run: >-
           cargo test --lib --features rag3db-native,code,daemon,openai-llm --
           --skip the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable
