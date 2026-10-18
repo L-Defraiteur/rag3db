@@ -30,13 +30,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (28)
+### Ouverts — moteur (29)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini](2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md) | ouvert — cause non cherchée (tampon, mémoire hors tampon, allocateur ou hôte) ; sonde à écrire | mémoire | oui, après tout gros index dans un hôte qui reste ouvert | oui (l'hôte du démon) |
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
 | [Les rétrécissements de l'insertion dans l'index HNSW sur disque multiplient son coût par 1,3 à 1,6](2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md) | ouvert — pour hotfixs | lenteur | oui (`embed_set`) | oui |
@@ -66,13 +67,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (31)
+### Ouverts — produit (32)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive](2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md) | ouvert — `remove_dir_all` sur une base, `rag3weaver_cache` jamais effacé ; 755 dossiers effacés le 15, ~4 000 entrées restent | confort — RAM puis échange | non (tests), sauf `rag3weaver_cache` | oui |
 | [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
 | [Un graphe exécuté par niveaux ne s'annule pas](2026-10-12-un-graphe-sous-les-niveaux-ne-s-annule-pas.md) | ouvert — lot à part (recherche) | blocage | oui | oui (`src/dataflow`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
