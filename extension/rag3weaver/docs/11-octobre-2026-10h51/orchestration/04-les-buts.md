@@ -71,6 +71,17 @@ qui sont des graphes, le démon qu'on installe, l'IDE pour agents.
   indexe depuis ce soir ; les réactions et la mémoire doivent y tourner
   aussi ; le fanout quand un vrai déploiement distant le mesure.
 
+### 4 ter. La priorité du 18 octobre (Lucie) : l'atelier comme IDE des gabarits
+
+Ce que Lucie veut voir le plus vite : un pseudo-IDE web, sur la page vivante
+(`atelier.rs`), où l'on voit le graphe du code et les DAG des outils vivants,
+où tout se recharge à chaud parce que tout est déclaré, et où l'agent édite des
+gabarits rag3weaver (composants React compris), pas du code. En second, le même
+IDE sur un dépôt étranger, édité dans un worktree. Multi-fenêtre : une vue par
+URL, tenue à jour par le flux de l'hôte. Détail dans la vision générale,
+« L'atelier comme IDE des gabarits ». Confié au proto (page de conception
+d'abord), le moteur et les lectures continuant en parallèle.
+
 ### 4 bis. Deux questions ouvertes du 13 octobre (Lucie)
 
 - **rag3weaver comme base d'une application à beaucoup de développeurs**, qui

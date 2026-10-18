@@ -431,6 +431,43 @@ tiennent une page « ce qui manque à un agent dans cet IDE », avec chaque
 retour forcé à grep et sa raison ; c'est « demander son avis au modèle », en
 vrai, et c'est ce qui décide des outils suivants.
 
+### L'atelier comme IDE des gabarits — la priorité (Lucie, 18 octobre 2026)
+
+« Je me dis qu'on devrait vite arriver à notre petit pseudo-IDE de graphe de
+code, et chargement à chaud tout déclaratif, des agents non pas de code mais
+d'édition de programmes gabarits rag3weaver (dont aussi des composants React),
+c'est vraiment le truc que je veux voir le plus vite ; et si je peux visualiser
+les DAG, ça m'inspirera peut-être. » Et, en second : « la version avec vrai
+code, qui explore du code indépendant de rag3weaver embarqué dedans et l'édite
+sur un worktree, mais du coup interface web quand même pour ça. Les deux
+profiteraient du multi-fenêtre des navigateurs modernes. »
+
+Ce qu'on a déjà : la page vivante (`src/atelier.rs`, `ui/chat`, `serve
+--atelier`) : le chat avec l'agent et ses outils de déclaration, la page
+produite, le graphe de l'outil touché en mermaid, un flux d'événements
+(`declared`, `refused`, `reloaded`) et une montre qui recharge à chaud. C'est le
+germe : l'IDE se bâtit dessus, il ne repart pas de zéro.
+
+Ce qu'il y faut, dans l'ordre :
+
+1. **Voir** : chaque vue est une URL (un gabarit, le DAG d'un outil, le graphe
+   du code, le journal d'un run), ouvrable dans sa fenêtre ; les fenêtres se
+   tiennent à jour par le flux de l'hôte, jamais par un état propre à l'onglet.
+   Le DAG se dessine vivant (les nœuds qui tournent, les ports et leurs flux,
+   l'annulation), pas seulement en mermaid figé.
+2. **Éditer par l'agent** : un agent dont l'objet est le gabarit, pas le code —
+   il lit, propose, valide (la déclaration refuse ou recharge), et la page
+   montre la différence ; un composant React est un gabarit comme un autre,
+   compilé par l'hôte, rechargé à chaud (la graine des applications
+   empaquetées).
+3. **Le code d'à côté** : le même IDE sur un dépôt étranger, indexé par le
+   gabarit `code`, édité par l'agent dans un worktree à lui, la différence
+   relue avant toute fusion.
+
+La règle de la stèle tient : tout est déclaré, et la page n'a pas d'état que
+l'hôte n'ait pas. Le navigateur abandonné le 8 octobre était le moteur en WASM ;
+ici le moteur reste dans l'hôte et le navigateur n'est qu'une vue.
+
 ### Un produit d'audit de sécurité (Lucie, 18 octobre 2026)
 
 Graine, notée à la lecture des prix de Vertex. CodeMender, l'agent de sécurité
