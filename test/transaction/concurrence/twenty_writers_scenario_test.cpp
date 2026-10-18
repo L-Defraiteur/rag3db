@@ -58,6 +58,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -79,6 +80,8 @@
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
+#include "storage/buffer_manager/buffer_manager.h"
+#include "storage/buffer_manager/memory_manager.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -287,6 +290,13 @@ public:
             journals[i].actor = actor;
             threads.emplace_back([this, i, actor] { actorLoop(i, actor); });
         }
+        std::thread sampler([this] {
+            auto* bufferManager = database.getMemoryManager()->getBufferManager();
+            while (!stop) {
+                bufferSamples.emplace_back(now(), bufferManager->getUsedMemory());
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        });
         rag3db::main::Connection ddl(&database);
         for (auto minute = 1; minute <= lastMinute; ++minute) {
             std::this_thread::sleep_until(start + minute * period);
@@ -324,6 +334,7 @@ public:
         for (auto& thread : threads) {
             thread.join();
         }
+        sampler.join();
         end = now();
     }
 
@@ -338,6 +349,8 @@ public:
     std::string secondAddError;
     std::string commitAfterFailureError;
     double end = 0;
+    // Le tampon utilisé (octets), relevé toutes les 100 ms : (instant, octets).
+    std::vector<std::pair<double, uint64_t>> bufferSamples;
 
 private:
     void runDdl(rag3db::main::Connection& connection, const std::string& name,
@@ -690,8 +703,40 @@ protected:
         systemConfig->bufferPoolSize = BUFFER_POOL;
         createDBAndConn();
         load(*conn, databasePath);
+        // SCENARIO_AUTO_CHECKPOINT=1 : le point de reprise automatique en marche (le réglage du
+        // produit). Coupé par défaut, pour que rien ne s'intercale entre l'annulation de la minute
+        // 6 et le ADD b ; coupé, les pages validées s'accumulent jusqu'au CHECKPOINT de la
+        // minute 5.
+        const bool autoCheckpoint = std::getenv("SCENARIO_AUTO_CHECKPOINT") != nullptr;
+        if (autoCheckpoint) {
+            mustRun(*conn, "CALL auto_checkpoint=true;");
+        }
         Scenario scenario(*database, period);
         scenario.run(6);
+
+        // Le pic du tampon : sur toute la passe, puis entre chaque début de DDL et le suivant.
+        const auto peak = [&](double from, double to) {
+            uint64_t out = 0;
+            for (const auto& [at, used] : scenario.bufferSamples) {
+                if (at >= from && at < to) {
+                    out = std::max(out, used);
+                }
+            }
+            return out / (1024 * 1024);
+        };
+        std::cerr << "  [scénario] tampon : " << BUFFER_POOL / (1024 * 1024)
+                  << " Mio, point de reprise automatique "
+                  << (autoCheckpoint ? "en marche" : "coupé") << ", pic " << peak(0, scenario.end)
+                  << " Mio\n";
+        double from = 0;
+        for (const auto& ddl : scenario.ddls) {
+            std::cerr << "  [scénario] tampon avant « " << ddl.name << " » : pic "
+                      << peak(from, ddl.start) << " Mio ; pendant : pic "
+                      << peak(ddl.start, ddl.end) << " Mio\n";
+            from = ddl.end;
+        }
+        std::cerr << "  [scénario] tampon après le dernier DDL : pic " << peak(from, scenario.end)
+                  << " Mio\n";
 
         // Les fenêtres.
         for (const auto actor : {Actor::DocWriter, Actor::NoteWriter, Actor::Reader}) {
