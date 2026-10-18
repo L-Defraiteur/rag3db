@@ -583,6 +583,12 @@ source.onmessage = (e) => {
   relire = setTimeout(() => { const y = scrollY; montrer().then(() => scrollTo(0, y)); }, 300);
 };
 source.addEventListener("lacune", () => montrer());
+// Une page quittée ferme son flux : gardée en cache d'historique, elle le tenait
+// ouvert, et le navigateur ne donne que six connexions à un hôte — la septième vue
+// attendait sans fin (vu par le témoin navigateur, 19 octobre 2026). Revenue de
+// ce cache, elle se recharge plutôt que de montrer un état sans flux.
+addEventListener("pagehide", () => source.close());
+addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 </script>
 </body>
 </html>
