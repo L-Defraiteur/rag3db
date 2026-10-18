@@ -58,6 +58,37 @@
    suivantes iront au prochain), et tronque le journal après. Chez nous, cela demande les trois
    pièces de la section suivante ; c'est la seule voie qui rende « aucun bloqué ».
 
+## La première voie, mesurée (banc, 18 octobre 2026)
+
+`TwentyWriters.DdlEveryMinute` sur luciepc, à 35795bbd7 (master 8f4779bdc, avec le correctif du
+BEGIN refusé), sous la charge des compilations voisines. Tampon de 2 Gio, point de reprise
+automatique en marche, `RAG3DB_PROFILE_CHECKPOINT=1`, seuil réglé par
+`SCENARIO_CHECKPOINT_THRESHOLD`. Journaux : `~/.cache/rag3weaver-build/jeu-vingt/seuil-*.log`
+sur luciepc.
+
+| seuil | points de reprise au seuil | pic du tampon | refus « Unable to allocate memory » | p99 hors DDL (Doc / Note / lecteurs) | verdict |
+|---|---|---|---|---|---|
+| 16 Mio (défaut) | 67, et 1 forcé | 1 125 Mio | aucun | 445 / 38 / 41 ms (max Doc 4,7 s) | vert |
+| 64 Mio | 0 | 2 049 Mio | 30 137 Doc, 4 355 Note, 8 587 lecteurs | 492 / 328 / 309 ms | rouge |
+| 256 Mio | 0 | 2 050 Mio | plus de 300 000 par acteur | sans objet | rouge |
+
+À 16 Mio, sur les 12 points de reprise profilés en détail : médiane 1,22 s, p90 2,02 s,
+max 2,10 s. À 64 et à 256 Mio, le seul contrôle rouge est `index-creation-refuses-no-reader` :
+les lecteurs sont refusés par le tampon plein pendant `CREATE_VECTOR_INDEX`.
+
+**Le tampon est plein avant que le journal atteigne le seuil.** Avec vingt écrivains de
+vecteurs sous HNSW, la mémoire tenue par les pages validées mais pas encore reportées croît plus
+de trente fois plus vite que le journal. Relever le seuil ne réduit pas le nombre de points de
+reprise : il remplace leur attente par des refus.
+
+**Le fond.** Le tampon ne peut pas rendre une page validée tant qu'elle n'est pas reportée, et le
+seuil compte les octets du journal au lieu de la mémoire tenue. Chez PostgreSQL, quand le tampon
+manque de place, il écrit ces pages sur disque, ce que le journal permet : une page écrite avant
+le checkpoint reste rejouable. Le checkpoint n'y sert qu'à borner la reprise. Avec le point de
+reprise automatique coupé (`SCENARIO_NO_AUTO_CHECKPOINT=1`), le même tampon de 2 Gio déborde avant
+la minute 5 : 58 598 refus, et `CREATE_VECTOR_INDEX` comme `CHECKPOINT` refusés tant que les
+écrivains tournent.
+
 ## Ce que fait le code
 
 `TransactionManager::checkpointNoLock` : `stopNewTransactionsAndWaitForOthersNoLock` (aucun
