@@ -85,6 +85,11 @@ pub struct BackendManifest {
     /// (18 octobre 2026, les genres `path` et `symbol` de la mémoire).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub seed: BTreeMap<String, Vec<Value>>,
+    /// **La racine des fichiers** des entités qui déclarent `files`, relative
+    /// au manifeste ([`crate::fichiers_entite`]). Requise dès qu'une entité en
+    /// déclare.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files_root: Option<PathBuf>,
     /// **Les routes** : `"GET /products/{key}": {"tool": …, "view": …}`. Une
     /// adresse mène à un outil déclaré (le contrôleur), son résultat à une vue
     /// du dossier `views/` ([`crate::routes`]).
@@ -190,6 +195,10 @@ pub struct BackendEntity {
     /// nom. Dire **quand** prendre l'outil, pas ce qu'il fait techniquement.
     #[serde(default)]
     pub description: Option<String>,
+    /// **Le miroir en fichiers** de ses lignes ([`crate::fichiers_entite`]) :
+    /// un fichier Markdown par ligne sous `files_root`, écrit avant la ligne.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files: Option<crate::fichiers_entite::FilesDecl>,
 }
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -686,6 +695,8 @@ pub struct PreparedBackend {
     relation_defs: HashMap<String, RelationDef>,
     mappings: HashMap<String, JsonSchemaMapping>,
     validators: HashMap<String, Arc<jsonschema::Validator>>,
+    /// Les miroirs en fichiers, par entité qui déclare `files`.
+    miroirs: HashMap<String, Arc<crate::fichiers_entite::Miroir>>,
     tools: BTreeMap<String, GraphTool>,
     /// Le registre des nœuds, en `Arc` : le chemin des outils le prête le
     /// temps d'un appel, le réacteur des réactions le garde le temps de son
@@ -935,6 +946,7 @@ impl PreparedBackend {
         let mut mappings = HashMap::new();
         let mut entities = HashMap::new();
         let mut validators = HashMap::new();
+        let mut miroirs = HashMap::new();
         for (name, entity) in &manifest.entities {
             crate::schema::validate_identifier(name, "entity").map_err(|e| e.to_string())?;
             let schema: Value = serde_json::from_slice(
@@ -945,6 +957,15 @@ impl PreparedBackend {
                 name.clone(),
                 Arc::new(jsonschema::validator_for(&schema).map_err(|e| e.to_string())?),
             );
+            if let Some(decl) = &entity.files {
+                let racine = manifest.files_root.as_ref().ok_or_else(|| {
+                    format!("{name}.files : déclarez `files_root` (la racine des fichiers, relative au manifeste)")
+                })?;
+                miroirs.insert(
+                    name.clone(),
+                    Arc::new(crate::fichiers_entite::Miroir::nouveau(name, directory.join(racine), decl.clone(), &schema)?),
+                );
+            }
             let mapping = JsonSchemaMapping::from_schema(&schema)?;
             let mut config = entity.config.clone();
             for (field, declared) in &config.fields {
@@ -1415,6 +1436,7 @@ impl PreparedBackend {
             entities,
             mappings,
             validators,
+            miroirs,
             tools,
             after_hooks,
             reactions,
@@ -3131,6 +3153,7 @@ impl Backend {
         );
         services.register("backend_mappings", prepared.mappings.clone());
         services.register("backend_validators", prepared.validators.clone());
+        services.register(crate::fichiers_entite::SERVICE, prepared.miroirs.clone());
         services.register(
             "backend_write_policies",
             prepared

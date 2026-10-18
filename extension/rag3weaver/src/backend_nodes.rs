@@ -221,6 +221,17 @@ impl Node for EntityRecordNode {
                 };
         }
         validator.validate(&input).map_err(|e| e.to_string())?;
+        // **Le fichier d'abord, la ligne ensuite** (lot M2 de la mémoire) : une
+        // entité qui déclare `files` a son fichier écrit avant que la ligne ne
+        // soit ingérée ; une ingestion qui échoue laisse le fichier en avance
+        // sur l'index (rattrapable), jamais une ligne sans son fichier.
+        let fichier = match ctx
+            .service::<HashMap<String, Arc<crate::fichiers_entite::Miroir>>>(crate::fichiers_entite::SERVICE)
+            .and_then(|m| m.get(entity))
+        {
+            Some(miroir) => Some(miroir.ecrire(&uuid, &input)?),
+            None => None,
+        };
         let mut data = mapping.record(&input)?;
         cell.stamp(&mut data);
         let report = cat
@@ -248,7 +259,7 @@ impl Node for EntityRecordNode {
         // `atomic: false`, dit : la ligne, ses morceaux, son plein texte et ses
         // vecteurs partent en plusieurs instructions, sans transaction autour
         // (la forme B de la page de l'enveloppe les envelopperait).
-        let result = json!({"uuid":uuid,"data":cat.get(entity,&uuid).map_err(|e|e.to_string())?,"warnings":report.warnings,"ready":report.rendu_pret,
+        let result = json!({"uuid":uuid,"data":cat.get(entity,&uuid).map_err(|e|e.to_string())?,"warnings":report.warnings,"ready":report.rendu_pret,"file":fichier,
             "atomic":false,
             "atomic_reason":"the row, its chunks, its full text and its vectors are written by several statements without a transaction around them"});
         ctx.set_output("record", PortValue::new(result));
