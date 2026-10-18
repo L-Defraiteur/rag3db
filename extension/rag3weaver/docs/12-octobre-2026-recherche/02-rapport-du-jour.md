@@ -33,11 +33,34 @@ jamais plus que son appelant).
 | C | `80b97af1d` | `SpawnNode` : le verbe posé comme nœud, un lancement par message, un refus dit sur `run`. |
 | deliver | `51025501e` | La fin passe par `Directory::deliver` (la boîte par nom du proto) : la fin d'un appelant au tour fini va à son tour suivant. |
 | ordre | `fa5fa55bd` | `RunFinished` est émis avant que la fin ne soit écrite dans la boîte (une course vue par le proto). |
+| flux ouvert | `ccf4c49b9` | Le second temps (page 04) : un run lancé vit tant que son flux d'entrée est ouvert. L'appelant le nourrit par `LiveIn` et le lit par `LiveOut`, deux canaux bornés qui refoulent à travers la frontière (le pont des sous-graphes, `execute_spawned`). Le registre tient les poignées : un tour qui finit ne ferme rien. La durée ferme l'entrée, puis annule après la grâce. Le minuteur et l'appelant sont des acteurs du hub : un appelant qui pense n'est pas un interblocage, un vrai l'est et il est dit. `SpawnNode` a son mode flux. Neuf témoins verts vingt fois de suite, dont qwen3 sous `llama-server`. Mesure : 7,8 µs l'aller-retour, 5,5 µs par message en continu, aucun perdu. |
 
-**Reste** : le second temps, la boîte qui devient un flux ouvert (« vit tant
-qu'un flux d'entrée est ouvert »). Le verbe `spawn` dans la boucle est chez
-le proto, et `qui()`/`cancel_all` dans `daemon_status` chez l'arbre
-principal.
+**Reste** : le verbe `spawn` dans la boucle est chez le proto, et
+`qui()`/`cancel_all` dans `daemon_status` chez l'arbre principal.
+
+## L'annulation sous tous les exécuteurs (page 05)
+
+Écrite pendant la pause de Lucie (12 au 18 octobre), **sans bâti ni test**.
+Rebasée et relue le 18 sur `d888b6365` ; elle attend le jeton de
+compilation de l'orchestration.
+- Un run par niveaux a son hub d'annulation, attaché à la poignée d'arrêt ;
+  ses nœuds le lisent par leur jeton, la boucle le regarde en tête de chaque
+  niveau. Un run annulé rend `Ok` avec `stopped()`, et ses nœuds non lancés
+  sont dits arrêtés.
+- `EmitSink` s'arrête à l'annulation (donc `LlmNode` et `Decide`) ;
+  `WaitOutputNode` dort par le jeton.
+- `RunFinished` dit la cause de tout run arrêté, en identifiants
+  (`requested`, `parent_finished`, `timeout`, `failed:<nœud>`, `deadlock`,
+  `host_stopped`), et `cancelled_by`.
+- `spawn` n'impose plus l'exécuteur concurrent à un run sans flux.
+- La relecture du 18 a trouvé deux défauts, corrigés avant tout bâti : la
+  cause était rangée par runtime (deux runs d'un même runtime pouvaient se
+  la voler ; elle l'est par `run_id`), et un run en fond sans cause notée
+  par le registre se disait `requested` même arrêté par un interblocage.
+
+**À faire au jeton** : les 5 jeux, les rouges prouvés sur le code d'avant,
+le lancement en fond rejoué vingt fois, la lib, la poussée. Puis la mesure
+de dix runs en fond, pour chiffrer les bornes par défaut.
 
 ## Le magasin de libs
 
