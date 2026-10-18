@@ -1,6 +1,11 @@
 # Un BEGIN refusé laisse la connexion en transaction explicite, sans transaction : la requête suivante plante
 
-- **État** : ouvert
+- **État** : corrigé le 18 octobre 2026 par le commit qui ferme ce ticket (cœur C++) : le mode ne
+  passe à MANUAL qu'une fois la transaction obtenue (beginRead/Write/RecoveryTransaction), et
+  validateManualTransaction refuse par un nom si un chemin laissait encore MANUAL sans
+  transaction. Témoins : `test/transaction/refused_begin_test.cpp` (second écrivain, BEGIN READ
+  ONLY après le refus, point de reprise en échec) et `FailedBegin.LeavesTheConnectionUsable` du
+  banc, retiré de known_red.
 - **Gravité** : plantage du processus (SIGSEGV), sur la requête qui suit un BEGIN refusé
 - **Atteignable en service** : oui. Un hôte dont le tampon est plein refuse un BEGIN par
   « Unable to allocate memory », et la requête suivante de la même connexion tue l'hôte. Le même
@@ -93,3 +98,22 @@ appartient au cœur.
 Pour juger E10 malgré ce ticket, le scénario des vingt écrivains joue avec un tampon de 2 Gio.
 Ce tampon est aussi celui du produit, et il est dit dans le rapport du banc. Le tampon plein reste
 un déclencheur ; seul le témoin ci-dessus garde ce défaut en vue.
+
+## Les autres chemins, relus à la fermeture (cœur C++, 18 octobre 2026)
+
+Demandé par l'orchestration : tout chemin qui poserait un état avant d'avoir sa ressource.
+- **Transaction automatique** : `beginAutoTransaction` ne touche pas au mode ; si
+  `beginTransaction` lève, le `catch` de `runFuncInTransaction` appelle
+  `rollbackAfterStatementFailure`, qui rend la main faute de transaction. Sain.
+- **COMMIT refusé** : `TransactionContext::commit` ne vide pas le contexte si le gestionnaire
+  lève ; le `catch`, instruction de transaction, appelle `rollback()` qui annule au gestionnaire
+  puis vide le contexte. Sain tant que la transaction est encore dans `activeTransactions`, ce qui
+  est le cas des levées avant la validation. Les levées d'après (point de reprise échoué après le
+  retrait de la transaction) sont un autre défaut, ticket « un COMMIT dont le point de reprise
+  échoue après la validation fait annuler une transaction déjà détruite ».
+- **ROLLBACK après une erreur** : `rollback()` → gestionnaire → `clearTransaction`. Sain.
+- **CHECKPOINT refusé** : instruction de transaction sans transaction ouverte. Sain.
+- **beginRecoveryTransaction** : même défaut que BEGIN (mode posé avant), corrigé de même.
+- **Le tampon plein** : même chemin (`beginTransaction` lève à la construction ou à
+  `logBeginTransaction`), couvert par le même correctif ; pas de témoin déterministe, il dépend
+  de la taille du tampon et de ce que les autres y tiennent.

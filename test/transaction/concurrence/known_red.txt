@@ -133,4 +133,3 @@ VectorIndexUpdate.RowsCommittedDuringACreateAreIndexed rows-committed-during-cre
 # 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction) : le MERGE qui suit le refus
 # plante (signal 11, transaction nulle). Joué rouge le 18 octobre sur luciepc (54f060342, branche du scénario). Pour le cœur
 # C++.
-FailedBegin.LeavesTheConnectionUsable failed-begin-leaves-the-connection-usable

@@ -16,16 +16,20 @@ TransactionContext::TransactionContext(main::ClientContext& clientContext)
 
 TransactionContext::~TransactionContext() = default;
 
+// Le mode ne passe à MANUAL qu'une fois la transaction obtenue : un BEGIN refusé (second
+// écrivain, point de reprise en échec, tampon plein) laissait la connexion en MANUAL sans
+// transaction, ROLLBACK répondait « No active transaction » sans la remettre en AUTO, et la
+// requête suivante se liait sur une transaction nulle (ticket du 18 octobre 2026 du banc).
 void TransactionContext::beginReadTransaction() {
     std::unique_lock lck{mtx};
-    mode = TransactionMode::MANUAL;
     beginTransactionInternal(TransactionType::READ_ONLY);
+    mode = TransactionMode::MANUAL;
 }
 
 void TransactionContext::beginWriteTransaction() {
     std::unique_lock lck{mtx};
-    mode = TransactionMode::MANUAL;
     beginTransactionInternal(TransactionType::WRITE);
+    mode = TransactionMode::MANUAL;
 }
 
 void TransactionContext::beginAutoTransaction(bool readOnlyStatement) {
@@ -41,12 +45,18 @@ void TransactionContext::beginAutoTransaction(bool readOnlyStatement) {
 
 void TransactionContext::beginRecoveryTransaction() {
     std::unique_lock lck{mtx};
-    mode = TransactionMode::MANUAL;
     beginTransactionInternal(TransactionType::RECOVERY);
+    mode = TransactionMode::MANUAL;
 }
 
 void TransactionContext::validateManualTransaction(bool readOnlyStatement) const {
     KU_ASSERT(hasActiveTransaction());
+    if (!hasActiveTransaction()) {
+        // Jamais atteint depuis que le mode ne passe à MANUAL qu'avec sa transaction ; un refus
+        // nommé vaut mieux qu'une liaison sur une transaction nulle si un chemin l'oubliait.
+        throw TransactionManagerException(
+            "The connection is in manual transaction mode without a transaction. Send ROLLBACK.");
+    }
     if (activeTransaction->isReadOnly() && !readOnlyStatement) {
         throw TransactionManagerException(
             "Can not execute a write query inside a read-only transaction.");

@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (34)
+### Ouverts — moteur (33)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -48,7 +48,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Le rollback d'un écrivain détruit un bloc en mémoire sous un lecteur : le lecteur se fige sur un verrou mort](2026-10-18-le-rollback-d-un-ecrivain-detruit-un-bloc-en-memoire-sous-un-lecteur.md) | à confirmer — pour le cœur C++ (lu sur la pile de l'hôte figé de luciepc, 18 octobre ; témoin ASAN à écrire) | blocage définitif du processus, ou lecture après libération | oui, en multi-écrivains | oui (l'hôte de luciepc s'est figé) |
 | [Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà détruite](2026-10-18-un-commit-dont-le-point-de-reprise-echoue-annule-une-transaction-deja-partie.md) | à confirmer — pour le cœur C++ (lu, pas joué ; témoin à écrire en debug ou ASAN) | lecture après libération : assertion en debug, indéfini en release ; rien de perdu | oui, si un point de reprise échoue juste après une validation | oui |
 | [La cible clean efface la grammaire Cypher, suivie par git, et le bâti suivant ne la régénère pas](2026-10-18-la-cible-clean-efface-la-grammaire-cypher-suivie-par-git.md) | ouvert — pour le cœur ; deux formes (ne plus déclarer en OUTPUT, ou régénérer) | blocage du bâti après un `clean` | non | non (sauf un bâti de la lib après `clean`) |
-| [Un BEGIN refusé laisse la connexion en transaction explicite sans transaction : la requête suivante plante](2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction.md) | ouvert — pour le cœur ; cause lue (mode MANUAL posé avant le début), recette déterministe, témoin `FailedBegin.LeavesTheConnectionUsable` | plantage (SIGSEGV) | oui (tampon plein, point de reprise échoué, un seul écrivain) | oui (l'hôte garde ses connexions) |
 | [L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini](2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md) | ouvert — cause non cherchée (tampon, mémoire hors tampon, allocateur ou hôte) ; sonde à écrire | mémoire | oui, après tout gros index dans un hôte qui reste ouvert | oui (l'hôte du démon) |
 | [Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index](2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index.md) | ouvert (deux formes à peser) | réponse fausse | oui | oui, en principe |
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
@@ -119,10 +118,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (139), dans `closed/`
+### Fermés (140), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un BEGIN refusé laisse la connexion en transaction explicite, sans transaction : la requête suivante plante](closed/2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction.md) | corrigé — 18 octobre 2026, lot « BEGIN refusé » (le mode ne passe à MANUAL qu'avec sa transaction) ; témoins `refused_begin_test.cpp` et `FailedBegin.LeavesTheConnectionUsable` | plantage (SIGSEGV) sur la requête qui suit un BEGIN refusé | oui | oui |
 | [Une colonne ajoutée puis annulée reste au stockage, et l'ajout suivant la relit à sa place](closed/2026-10-18-une-colonne-ajoutee-puis-annulee-reste-au-stockage-et-l-ajout-suivant-la-relit.md) | corrigé — 18 octobre 2026, lot « annulation d'un ADD COLUMN » (le ROLLBACK retire la colonne du stockage, deux ALTER d'une même table ne se chevauchent plus) ; témoin `test/transaction/add_column_rollback_test.cpp` | réponse fausse silencieuse, permanente après le point de reprise | oui | oui |
 | [La borne du tampon refuse par défaut le premier index de ce dépôt : 65 Mo de texte demandent 9 Gio](closed/2026-10-18-la-borne-du-tampon-refuse-le-premier-index-de-ce-depot.md) | corrigé (18 octobre 2026) : borne recalculée sur la mesure, 28 Mo par Gio au lieu de 8 ; filet du ticket du COPY de blobs | blocage (refus avant écriture) | oui | oui (`estimate`) |
 | [Confirmer qu'une première indexation de ce dépôt passe sous un tampon de 2 Gio](closed/2026-10-11-confirmer-le-premier-index-sous-un-petit-tampon.md) | confirmé (18 octobre 2026) : vert sous 2 et 4 Gio, en fichiers et en blobs | blocage (s'il revenait) | oui | oui (premier index) |
