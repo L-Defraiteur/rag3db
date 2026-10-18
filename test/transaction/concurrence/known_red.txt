@@ -163,3 +163,12 @@ HnswWriters.DoNotWaitForEachOther writers-of-an-hnsw-table-do-not-wait-for-each-
 # vert, garde la lecture : il doit le rester sous I2. Pour le cœur C++.
 VectorIndexI2.SetsOnDifferentRowsDoNotWait vector-sets-on-different-rows-do-not-wait
 VectorIndexI2.OverlappingDeletesNeitherBlockNorConflict overlapping-deletes-do-not-block
+#
+# Le point de reprise qui ne fige personne (ticket
+# 2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire, voie 2) : un
+# CHECKPOINT retient les BEGIN et les lectures le temps de s'écrire, et le tampon ne rend pas une page
+# validée non reportée. Joués rouges trois fois sur trois le 18 octobre sur luciepc. Pour le cœur C++.
+CheckpointNoStall.BeginDuringACheckpointDoesNotWait begin-during-a-checkpoint-does-not-wait
+CheckpointNoStall.ReadDuringACheckpointDoesNotWait read-during-a-checkpoint-does-not-wait
+CheckpointNoStall.CommittedPagesAreWrittenOutWhenTheBufferIsFull committed-pages-are-written-out-when-the-buffer-is-full
+CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly crash-after-written-out-pages-replays-exactly

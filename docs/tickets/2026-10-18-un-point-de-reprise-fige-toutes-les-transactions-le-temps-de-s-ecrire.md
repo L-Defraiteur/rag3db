@@ -160,3 +160,21 @@ Pour la voie 2 : `FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen`
 `refused-checkpoint-leaves-the-database-open`). Un fils remplit le tampon de 64 Mo de pages validées
 non reportées, point de reprise automatique coupé ; le CHECKPOINT est refusé par le tampon ; un
 BEGIN doit ensuite passer.
+
+### Les témoins de la voie 2 (banc, 18 octobre 2026)
+
+`test/transaction/concurrence/checkpoint_no_stall_test.cpp`, en suite ordinaire et en
+`known_red.txt`. Chacun a été joué rouge trois fois sur trois sur luciepc, en moins de 5 s. Pour
+chacun, ce qu'il exige du moteur :
+
+| témoin et contrôle | ce qu'on voit aujourd'hui | ce qu'il exige |
+|---|---|---|
+| `CheckpointNoStall.BeginDuringACheckpointDoesNotWait`, `begin-during-a-checkpoint-does-not-wait` | un BEGIN lancé 30 ms après un CHECKPOINT de 1,08 à 1,31 s attend 1,05 à 1,28 s, c'est-à-dire tout le point de reprise | un BEGIN rend la main en moins de 100 ms, quelle que soit la durée du point de reprise : le point de reprise ne retient plus les nouvelles transactions (`stopNewTransactionsAndWaitForOthersNoLock`) |
+| `CheckpointNoStall.ReadDuringACheckpointDoesNotWait`, `read-during-a-checkpoint-does-not-wait` | une lecture par clé attend 1,14 à 1,25 s | une lecture en automatique passe pendant l'écriture du point de reprise, sur les versions en place ; les blocs remplacés restent vivants tant qu'un balayage les tient (pièce 1 de la voie 2) |
+| `CheckpointNoStall.CommittedPagesAreWrittenOutWhenTheBufferIsFull`, `committed-pages-are-written-out-when-the-buffer-is-full` | tampon de 64 Mo, point de reprise automatique coupé : 180 000 lignes validées sur 400 000, puis « Unable to allocate memory » | le tampon écrit sur disque des pages validées et pas encore reportées quand il en manque (l'écriture à la demande, steal), sans exiger un point de reprise ; le journal reste ce qui permet de les rejouer |
+| `CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly`, `crash-after-written-out-pages-replays-exactly` | le fils, tué base ouverte, n'a pu valider que 180 000 lignes sur 400 000 (la base rouverte en porte exactement 180 000 : la reprise d'aujourd'hui est juste, mais aucune page n'a été rendue) | après un arrêt brutal survenu alors que des pages validées ont été écrites à la demande, la reprise rend exactement les validations, ni plus ni moins (les pages écrites d'avance ne valent pas validation) |
+
+Les deux derniers sont le tableau des seuils retourné en témoins, sur un seul écrivain pour rester
+déterministes. Le scénario des vingt écrivains joue la même chose à plusieurs par
+`SCENARIO_NO_AUTO_CHECKPOINT=1`.
+
