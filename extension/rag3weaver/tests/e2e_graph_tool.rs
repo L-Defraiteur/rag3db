@@ -30,6 +30,15 @@ use rag3weaver::search::SearchSignals;
 use rag3weaver::{Catalog, CatalogConfig, EntityConfig, Rag3dbConnection, SimpleFieldDef};
 use rag3weaver::disponibilite::RegimeEcriture;
 
+/// Le texte rendu sans la ligne de fraîcheur qu'un outil de lecture met en tête
+/// (`> index : … @ <commit> de <branche>, …`) : ces tests lisent ce qui suit.
+fn sans_fraicheur(s: &str) -> &str {
+    match s.strip_prefix("> ") {
+        Some(reste) => reste.split_once("\n\n").map(|(_, x)| x).unwrap_or(s),
+        None => s,
+    }
+}
+
 // ─── Catalogue de test ───────────────────────────────────────────────────────
 
 fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
@@ -175,7 +184,7 @@ fn a_tool_call_runs_a_graph_against_a_real_catalog() {
     // Markdown compact, pas de JSON : ni uuid, ni hash, ni champ nul —
     // c'est ce que le modèle lit (doc 11).
     eprintln!("[search]\n{}", turn.content);
-    assert!(turn.content.starts_with("# Search:"), "{}", turn.content);
+    assert!(sans_fraicheur(&turn.content).starts_with("# Search:"), "{}", turn.content);
     // Le score n'est plus borné à `0.x` : depuis le 6 septembre 2026, le mode
     // BM25 par défaut est celui de la requête (`Auto`, donc `Parse` sur deux
     // mots — comme le monolithe), et `Parse` additionne un score par mot.
@@ -206,7 +215,7 @@ fn a_tool_graph_that_contains_another_one_runs_too() {
     assert_eq!(turn.tool_call_id.as_deref(), Some("call_expand_1"));
 
     eprintln!("[search + relation]\n{}", turn.content);
-    assert!(turn.content.starts_with("# Search:") || turn.content.starts_with("**"), "réponse vide ou en erreur : {}", turn.content);
+    assert!(sans_fraicheur(&turn.content).starts_with("# Search:") || sans_fraicheur(&turn.content).starts_with("**"), "réponse vide ou en erreur : {}", turn.content);
 
     // Le sous-graphe `search` a tourné, et l'étage d'expansion a attaché les
     // variantes du livre. Depuis le gabarit par défaut (27 août 2026), les

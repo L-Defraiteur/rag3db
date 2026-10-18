@@ -32,7 +32,8 @@
           "node": "render",
           "port": "results"
         }
-      }
+      },
+      "freshness": true
     },
     "read_file": {
       "graph": "../../tools/read.mmd",
@@ -44,21 +45,24 @@
         "graph": "../../tools/impact_fichier.mmd",
         "title": "Avant d'éditer — ce qui dépend de ce fichier",
         "max_lines": 6
-      }
+      },
+      "freshness": true
     },
     "grep_files": {
       "graph": "../../tools/grep.mmd",
       "description": "Motif littéral ou regex sur les fichiers du workspace. À prendre pour une chaîne exacte (un message d'erreur, un nom précis) ; pour une question de sens, search_code fait mieux.",
       "policy": {
         "read_files": true
-      }
+      },
+      "freshness": true
     },
     "list_files": {
       "graph": "../../tools/list.mmd",
       "description": "Lister les chemins du workspace sous un préfixe. À prendre pour s'orienter ; les fichiers écartés (règles d'exclusion, secrets probables) n'y figurent pas.",
       "policy": {
         "read_files": true
-      }
+      },
+      "freshness": true
     },
     "schema": {
       "graph": "../../tools/schema.mmd",
@@ -99,15 +103,18 @@
     },
     "usages": {
       "graph": "../../tools/usages.mmd",
-      "description": "Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence. Exige l'index : avant le premier index, un nom introuvable ici ne veut rien dire — prenez search_code, qui balaye les fichiers tant que rien n'est indexé."
+      "description": "Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence. Exige l'index : avant le premier index, un nom introuvable ici ne veut rien dire — prenez search_code, qui balaye les fichiers tant que rien n'est indexé.",
+      "freshness": true
     },
     "impact": {
       "graph": "../../tools/impact.mmd",
-      "description": "Ce que toucher ce nom impacterait : le code qui en dépend par niveau, et les tests qui le traversent — nommés, avec fichier et certitude, prêts à rejouer. À prendre AVANT d'éditer un symbole partagé ; usages dit qui s'en sert, impact dit quoi rejouer."
+      "description": "Ce que toucher ce nom impacterait : le code qui en dépend par niveau, et les tests qui le traversent — nommés, avec fichier et certitude, prêts à rejouer. À prendre AVANT d'éditer un symbole partagé ; usages dit qui s'en sert, impact dit quoi rejouer.",
+      "freshness": true
     },
     "callees": {
       "graph": "../../tools/callees.mmd",
-      "description": "Ce que ce nom appelle, par niveau, et les verrous pris en route (Classe::champ) — l'autre sens d'impact. À prendre pour savoir où se fait réellement un travail, ou où se prend un verrou que l'appelant ne tient pas."
+      "description": "Ce que ce nom appelle, par niveau, et les verrous pris en route (Classe::champ) — l'autre sens d'impact. À prendre pour savoir où se fait réellement un travail, ou où se prend un verrou que l'appelant ne tient pas.",
+      "freshness": true
     }
   },
   "watches": {

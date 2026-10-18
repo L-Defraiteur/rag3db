@@ -185,6 +185,34 @@ fn statut(cat: &Catalog, entity: &str, cell: Option<&crate::scope::Scope>) -> Re
     })
 }
 
+/// **La fraîcheur d'une réponse** (la graine de l'hôte d'équipe) : sur quel commit et quelle
+/// branche l'index a été bâti, s'il y avait des modifications non commitées, et combien de
+/// fichiers la montre a vus changer sans qu'ils soient encore réindexés. `None` sans index noté.
+/// Le champ `freshness` des outils de lecture (JSON), et leur ligne d'en-tête (markdown).
+pub fn freshness_of(cat: &Catalog, cell: &crate::scope::Scope) -> Option<serde_json::Value> {
+    let arbre = cat.indexed_tree(cell)?;
+    let retard = cat.file_lag().summary_in(cell);
+    Some(serde_json::json!({
+        "root": arbre.get("root"),
+        "commit": arbre.get("commit"),
+        "branch": arbre.get("branch"),
+        "dirty": arbre.get("dirty").and_then(|d| d.as_bool()).unwrap_or(false),
+        "indexed_at_ms": arbre.get("at_ms"),
+        "lag_files": retard.as_ref().map(|r| r.files).unwrap_or(0),
+        "lag_since_ms": retard.as_ref().map(|r| r.since_ms),
+    }))
+}
+
+/// La ligne de fraîcheur : l'arbre indexé, puis le retard s'il y en a un.
+pub fn freshness_line(cat: &Catalog, cell: &crate::scope::Scope) -> Option<String> {
+    let now = crate::catalog::retard::now_ms();
+    let arbre = cat.indexed_tree_line(cell, now)?;
+    Some(match cat.file_lag().summary_in(cell) {
+        Some(r) => format!("{arbre} — {}", r.status_line(now)),
+        None => format!("{arbre}, à jour"),
+    })
+}
+
 /// Ce qu'un nœud de lecture rend : le refus, ou le résultat précédé de sa
 /// ligne d'état. En JSON, `{"status": …, "result": …}`.
 pub fn with_status(status: Option<&str>, result: serde_json::Value, json: bool) -> serde_json::Value {

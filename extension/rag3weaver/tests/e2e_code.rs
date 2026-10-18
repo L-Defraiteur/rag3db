@@ -18,6 +18,15 @@ use rag3weaver::search::{BM25Mode, Consistency, SearchOptions, SearchSignals};
 use rag3weaver::search_strategy::{ExpansionDirection, ExpansionRule, SearchStrategy};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
+/// Le texte rendu sans la ligne de fraîcheur qu'un outil de lecture met en tête
+/// (`> index : … @ <commit> de <branche>, …`) : ces tests lisent ce qui suit.
+fn sans_fraicheur(s: &str) -> &str {
+    match s.strip_prefix("> ") {
+        Some(reste) => reste.split_once("\n\n").map(|(_, x)| x).unwrap_or(s),
+        None => s,
+    }
+}
+
 fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
     let ext_path = crate::common::vector_extension();
     assert!(std::path::Path::new(&ext_path).exists(), "vector extension not found at {ext_path} — ./run_e2e.sh --build-only");
@@ -279,7 +288,7 @@ fn read_and_grep_as_graph_tools() {
     };
     let grep = call("grep", serde_json::json!({"pattern": "pub fn merge_port_values", "extension": "rs"}));
     eprintln!("[grep tool]\n{grep}");
-    assert!(grep.starts_with("**Pattern:**"), "raw markdown, not a JSON string: {grep}");
+    assert!(sans_fraicheur(&grep).starts_with("**Pattern:**"), "raw markdown, not a JSON string: {grep}");
     assert!(grep.contains("| port.rs |") && grep.contains("`merge_port_values`"), "{grep}");
 
     // Le rendu compact, mesuré contre le JSON brut du même appel : c'est le
@@ -313,7 +322,7 @@ fn read_and_grep_as_graph_tools() {
         uuids.dedup();
         assert_eq!(uuids.len(), before, "un scope ne doit sortir qu'une fois : {json}");
     }
-    assert!(markdown.starts_with("# Search:") || markdown.starts_with("**"), "{markdown}");
+    assert!(sans_fraicheur(&markdown).starts_with("# Search:") || sans_fraicheur(&markdown).starts_with("**"), "{markdown}");
     // **Une correspondance exacte reste en tête.** Depuis que `search` est
     // hybride, le vecteur peut noyer un identifiant sous ce qui lui ressemble ;
     // les poids de la fusion penchent vers le plein texte pour cette raison.
@@ -354,7 +363,7 @@ fn read_and_grep_as_graph_tools() {
         "pattern": "fn merge_port_values", "extension": "rs", "relation": "CONSUMES",
     }));
     eprintln!("[grep + CONSUMES]\n{avec}");
-    assert!(avec.starts_with("**Pattern:**"), "{avec}");
+    assert!(sans_fraicheur(&avec).starts_with("**Pattern:**"), "{avec}");
     assert!(avec.contains("## Graphe"), "{avec}");
     assert!(avec.contains("└── ~ Consumes ~"), "{avec}");
     assert!(avec.contains("merge_port_values"), "{avec}");
@@ -443,7 +452,7 @@ fn read_and_grep_as_graph_tools() {
     // passer la requête comme il laisse passer les résultats, donc l'étage
     // extérieur sait ce qu'on a cherché. Sans ce passe-plat, `source.query`
     // reste consommé dans le sous-graphe et invisible du dehors.
-    assert!(amont.starts_with("# Search:") || amont.starts_with("**No results."), "{amont}");
+    assert!(sans_fraicheur(&amont).starts_with("# Search:") || sans_fraicheur(&amont).starts_with("**No results."), "{amont}");
     // Ce qui compte est là : les voisins, sans les champs internes.
     assert!(!amont.contains("content_hash"), "une empreinte de 64 caractères ne dit rien : {amont}");
 }

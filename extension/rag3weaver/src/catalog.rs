@@ -520,8 +520,10 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
         out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
     };
     let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_default();
+    // La branche : `HEAD` détaché n'en a pas (null).
+    let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD");
     let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
-    serde_json::json!({ "root": root, "commit": commit, "dirty": dirty, "at_ms": retard::now_ms() })
+    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty, "at_ms": retard::now_ms() })
 }
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
@@ -3178,10 +3180,16 @@ fn read_threads() -> u64 {
         self.persist_meta_key(&indexed_tree_key(cell), &v.to_string())
     }
 
-    /// La ligne « index : racine @ commit, indexé il y a … » de la cellule,
+    /// L'arbre indexé noté pour la cellule (`root`, `commit`, `branch`, `dirty`, `at_ms`), ou
+    /// `None` sans index noté.
+    pub fn indexed_tree(&self, cell: &crate::scope::Scope) -> Option<serde_json::Value> {
+        serde_json::from_str(&self.read_meta_key(&indexed_tree_key(cell)).ok()??).ok()
+    }
+
+    /// La ligne « index : racine @ commit de branche, indexé il y a … » de la cellule,
     /// ou `None` sans index noté.
     pub fn indexed_tree_line(&self, cell: &crate::scope::Scope, now_ms: u64) -> Option<String> {
-        let v: serde_json::Value = serde_json::from_str(&self.read_meta_key(&indexed_tree_key(cell)).ok()??).ok()?;
+        let v = self.indexed_tree(cell)?;
         let root = v.get("root")?.as_str()?;
         let commit = v.get("commit").and_then(|c| c.as_str()).filter(|c| !c.is_empty());
         let dirty = v.get("dirty").and_then(|d| d.as_bool()).unwrap_or(false);
@@ -3193,9 +3201,10 @@ fn read_threads() -> u64 {
             m if m < 48 * 60 => format!("il y a {} h", m / 60),
             m => format!("il y a {} j", m / (24 * 60)),
         };
+        let branche = v.get("branch").and_then(|b| b.as_str()).map(|b| format!(" de {b}")).unwrap_or_default();
         let version = match (commit, dirty) {
-            (Some(c), false) => format!(" @ {c}"),
-            (Some(c), true) => format!(" @ {c} + modifications non commitées"),
+            (Some(c), false) => format!(" @ {c}{branche}"),
+            (Some(c), true) => format!(" @ {c}{branche} + modifications non commitées"),
             (None, _) => " (hors git)".to_string(),
         };
         Some(format!("index : {root}{version}, indexé {quand}"))

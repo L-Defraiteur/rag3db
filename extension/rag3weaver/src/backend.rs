@@ -234,6 +234,11 @@ pub struct ToolAttachment {
     /// politique qui fait deux produits d'un même moteur.
     #[serde(default)]
     pub policy: crate::backend_code::ToolPolicy,
+    /// **La réponse dit sa fraîcheur** : sur quel commit et quelle branche l'index a été bâti,
+    /// et combien de fichiers changés attendent leur réindexation — une ligne en tête
+    /// (markdown) et un champ `freshness` (toujours). Pour les outils de lecture d'un index.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub freshness: bool,
     #[serde(default)]
     pub harness: ToolHarness,
     #[serde(default)]
@@ -2912,7 +2917,39 @@ impl Backend {
         if attachment.after.is_some() {
             self.enrich_with_after_hook(prepared, name, &args_for_hook, &mut response);
         }
+        if attachment.freshness {
+            self.dire_la_fraicheur(&mut response);
+        }
         Ok(response)
+    }
+
+    /// **La fraîcheur d'une réponse de lecture** (`ToolAttachment::freshness`) : le champ
+    /// `freshness`, et la ligne en tête du texte rendu (le résultat en markdown, ou la
+    /// présentation d'une recherche) quand le nœud ne l'y a pas déjà mise. Le catalogue se
+    /// prend par un essai, jamais une attente : un écrivain qui le tient, et la réponse le dit
+    /// (`writing`) sans retarder l'appel.
+    fn dire_la_fraicheur(&self, response: &mut Value) {
+        let cell = CELL_OF_CALL.with(|c| c.borrow().clone());
+        let Ok(cat) = self.catalog.try_lock() else {
+            response["freshness"] = json!({ "writing": true });
+            return;
+        };
+        let cell = cell.unwrap_or_else(|| cat.scope().clone());
+        let (Some(fraicheur), Some(ligne)) = (
+            crate::dataflow::catalog_read::freshness_of(&cat, &cell),
+            crate::dataflow::catalog_read::freshness_line(&cat, &cell),
+        ) else {
+            return;
+        };
+        drop(cat);
+        response["freshness"] = fraicheur;
+        for cle in ["result", "presentation"] {
+            if let Some(texte) = response.get(cle).and_then(Value::as_str) {
+                if !texte.starts_with("> ") {
+                    response[cle] = Value::String(format!("> {ligne}\n\n{texte}"));
+                }
+            }
+        }
     }
 
     /// **Le crochet après outil** : monte son graphe avec les mêmes arguments
@@ -4541,6 +4578,101 @@ mod tests {
         let apres = attendre_les_usages(&backend, "depart", |u| u.contains("encore") && !u.contains("pas encore réindexé"));
         assert!(apres.contains("encore") && !apres.contains("pas encore réindexé"), "{apres}");
         assert!(backend.index_states().unwrap().get("lag").is_none());
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Chaque outil de lecture dit sa fraîcheur** (graine de l'hôte d'équipe) : un dépôt propre
+    /// donne « index : … @ <commit> de <branche>, indexé à l'instant, à jour » en tête et le champ
+    /// `freshness` ; un fichier changé à la main (la montre le voit, sans réaction) apparaît en
+    /// retard ; la réaction montée, il est rattrapé et le retard tombe.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn les_outils_de_lecture_disent_leur_fraicheur() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["watches"] = json!({"code": {"source": "workspace", "every_ms": 20, "settle_ms": 0}});
+            m["reactions"] = json!({"reindex_on_change": {"graph": "reindex_on_change.mmd"}});
+            m["tools"]["usages"] = json!({"graph": "usages.mmd", "freshness": true});
+            m["tools"]["read_file"] = json!({"graph": "read.mmd", "policy": {"read_files": true}, "freshness": true});
+        });
+        drop(p);
+        std::fs::copy(tools.join("backends/code/graphs/reindex_on_change.mmd"), dir.path().join("reindex_on_change.mmd")).unwrap();
+        std::fs::copy(tools.join("tools/usages.mmd"), dir.path().join("usages.mmd")).unwrap();
+        std::fs::copy(tools.join("tools/read.mmd"), dir.path().join("read.mmd")).unwrap();
+        let racine = dir.path().join("sources");
+        std::fs::write(racine.join("outils.rs"), "pub fn depart() {}\n").unwrap();
+        let git = |args: &[&str]| {
+            let ok = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&racine)
+                .args(["-c", "user.email=t@t", "-c", "user.name=t", "-c", "init.defaultBranch=principale"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(ok.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&ok.stderr));
+            String::from_utf8_lossy(&ok.stdout).trim().to_string()
+        };
+        git(&["init", "-q"]);
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "départ"]);
+        let commit = git(&["rev-parse", "--short", "HEAD"]);
+        let branche = git(&["rev-parse", "--abbrev-ref", "HEAD"]);
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index de départ");
+            let cell = cat.scope().clone();
+            cat.note_indexed_tree(&cell, &crate::catalog::indexed_tree_of(&racine.to_string_lossy())).unwrap();
+        }
+        let lire = |format: &str| backend.call("read_file", json!({"path": "outils.rs", "format": format})).unwrap();
+
+        // Un dépôt propre.
+        let md = lire("markdown");
+        let texte = md["result"].as_str().unwrap();
+        let attendu = format!("> index : {} @ {commit} de {branche}, indexé à l'instant, à jour\n\n", racine.to_string_lossy());
+        assert!(texte.starts_with(&attendu), "en tête attendu {attendu:?} : {texte}");
+        assert_eq!(md["freshness"]["commit"], commit);
+        assert_eq!(md["freshness"]["branch"], branche);
+        assert_eq!(md["freshness"]["lag_files"], 0);
+        let js = lire("json");
+        assert!(js["result"].is_object() || js["result"].is_array(), "le résultat JSON reste structuré : {js}");
+        assert_eq!(js["freshness"]["dirty"], false);
+        // `usages` a déjà sa ligne : pas de doublon.
+        let u = backend.call("usages", json!({"name": "depart"})).unwrap();
+        let u = u["result"].as_str().unwrap_or_default().to_string();
+        assert_eq!(u.matches("> index :").count(), 1, "{u}");
+        assert!(u.contains(&format!("@ {commit} de {branche}")), "{u}");
+
+        // Un fichier modifié : la montre le voit, il est en retard.
+        assert_eq!(backend.mount_watches().unwrap(), ["code"]);
+        std::fs::write(racine.join("outils.rs"), "pub fn depart() {}\npub fn arrivee() {}\n").unwrap();
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let en_retard = loop {
+            let r = lire("markdown");
+            if r["freshness"]["lag_files"] == 1 || std::time::Instant::now() > fin {
+                break r;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        assert_eq!(en_retard["freshness"]["lag_files"], 1, "{en_retard}");
+        assert!(en_retard["result"].as_str().unwrap().contains("1 fichier changé"), "{en_retard}");
+
+        // Rattrapé : la réaction réindexe, le retard tombe.
+        backend.mount_reactions().unwrap();
+        std::fs::write(racine.join("outils.rs"), "pub fn depart() {}\npub fn arrivee() {}\npub fn encore() {}\n").unwrap();
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let rattrape = loop {
+            let r = lire("markdown");
+            let fait = r["freshness"]["lag_files"] == 0 && r["result"].as_str().unwrap_or_default().contains("encore");
+            if fait || std::time::Instant::now() > fin {
+                break r;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        };
+        assert_eq!(rattrape["freshness"]["lag_files"], 0, "{rattrape}");
+        assert!(rattrape["result"].as_str().unwrap().contains(", à jour"), "{rattrape}");
         assert!(backend.stop_reactions().is_empty());
     }
 

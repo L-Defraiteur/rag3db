@@ -652,6 +652,7 @@ fn chaque_reponse_dit_l_arbre_et_le_commit_indexes() {
     git(&["add", "a.rs"]);
     git(&["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "a"]);
     let commit = git(&["rev-parse", "--short", "HEAD"]);
+    let branche = git(&["rev-parse", "--abbrev-ref", "HEAD"]);
     let catalog = setup();
     catalog.lock().unwrap().ingest_code(&analyze("/projet", vec![("a.rs".into(), "pub fn f() {}\npub fn g() { f(); }\n".into())])).unwrap();
     let racine_s = racine.to_string_lossy().to_string();
@@ -670,7 +671,7 @@ fn chaque_reponse_dit_l_arbre_et_le_commit_indexes() {
     let usages = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
     let out = usages.execute(&registry, services.clone(), &serde_json::json!({"name": "f"})).unwrap();
     eprintln!("{out}");
-    assert!(out.starts_with(&format!("> index : {racine_s} @ {commit}, indexé à l'instant")), "{out}");
+    assert!(out.starts_with(&format!("> index : {racine_s} @ {commit} de {branche}, indexé à l'instant")), "{out}");
     // Par cellule : une autre cellule n'a pas d'arbre noté.
     let autre = rag3weaver::scope::Scope::new("autre", "projet");
     assert!(catalog.lock().unwrap().indexed_tree_line(&autre, 0).is_none(), "l'arbre noté est celui de la cellule par défaut");
@@ -678,7 +679,7 @@ fn chaque_reponse_dit_l_arbre_et_le_commit_indexes() {
     std::fs::write(racine.join("a.rs"), "pub fn f() {}\npub fn h() {}\n").unwrap();
     noter(&catalog);
     let out = usages.execute(&registry, services, &serde_json::json!({"name": "f"})).unwrap();
-    assert!(out.contains(&format!("@ {commit} + modifications non commitées")), "{out}");
+    assert!(out.contains(&format!("@ {commit} de {branche} + modifications non commitées")), "{out}");
     let _ = std::fs::remove_dir_all(&racine);
 }
 

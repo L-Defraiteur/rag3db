@@ -15,6 +15,15 @@ use rag3weaver::code::{analyze, default_scope_chunking, register_code_schema};
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
+/// Le texte rendu sans la ligne de fraîcheur qu'un outil de lecture met en tête
+/// (`> index : … @ <commit> de <branche>, …`) : ces tests lisent ce qui suit.
+fn sans_fraicheur(s: &str) -> &str {
+    match s.strip_prefix("> ") {
+        Some(reste) => reste.split_once("\n\n").map(|(_, x)| x).unwrap_or(s),
+        None => s,
+    }
+}
+
 fn setup() -> Arc<Mutex<Catalog>> {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
@@ -125,7 +134,7 @@ fn callees_dit_ce_qui_est_appele_et_les_verrous_pris() {
     let services = Arc::new(services);
     let md = tool.execute(&registry, services.clone(), &serde_json::json!({"name": "top"})).unwrap();
     eprintln!("{md}");
-    assert!(md.starts_with("# callees: top"), "{md}");
+    assert!(sans_fraicheur(&md).starts_with("# callees: top"), "{md}");
     // Le même schéma qu'impact : include_by_name est accepté (rien de plus
     // en sortant, où aucun usage par le nom seul n'est rendu).
     let tout = tool.execute(&registry, services, &serde_json::json!({"name": "top", "include_by_name": true})).unwrap();
