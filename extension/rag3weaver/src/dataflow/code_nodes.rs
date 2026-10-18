@@ -447,7 +447,7 @@ impl Node for EditFileNode {
         // Le catalogue partagé : une indexation en cours ne fait pas attendre
         // l'édition.
         let result = match catalog.as_ref() {
-            Some(c) => crate::code_sync::edit_file_shared(source.as_ref(), c, &self.path, &self.op, self.expected_hash.as_deref()),
+            Some(c) => crate::code_sync::edit_file_shared_with_hash(source.as_ref(), c, &self.path, &self.op, self.expected_hash.as_deref()),
             None => crate::code_tools::edit_file_with_hash(source.as_ref(), None, &self.path, &self.op, self.expected_hash.as_deref()),
         }
         .map_err(|e| format!("EditFileNode: {e}"))?;

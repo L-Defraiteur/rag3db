@@ -194,6 +194,16 @@ pub fn edit_file_shared(
     catalog: &Mutex<Catalog>,
     path: &str,
     op: &crate::code_tools::EditOp,
+) -> Result<crate::code_tools::EditResult, String> {
+    edit_file_shared_with_hash(source, catalog, path, op, None)
+}
+
+/// [`edit_file_shared`], sur une empreinte lue (`crate::code_tools::write_edit`).
+pub fn edit_file_shared_with_hash(
+    source: &dyn FileSource,
+    catalog: &Mutex<Catalog>,
+    path: &str,
+    op: &crate::code_tools::EditOp,
     expected_hash: Option<&str>,
 ) -> Result<crate::code_tools::EditResult, String> {
     let source_id = registry_key(source);
