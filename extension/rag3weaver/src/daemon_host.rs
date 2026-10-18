@@ -697,6 +697,9 @@ pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: u
 
 /// Le pas du relevé des sessions dont le client est mort.
 const REAP_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
+/// Le repos (sans requête ni travail) après lequel l'hôte rend au système la
+/// mémoire que l'allocateur garde ([`crate::allocateur::rendre_au_systeme`]).
+const REPOS_AVANT_RENDU: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// La réponse à une requête sans le jeton local, ou avec un faux. **403, et
 /// pas 401** : 401 dit une session inconnue, que le client rouvre et rejoue.
@@ -828,12 +831,27 @@ impl DaemonServer {
                     let mut ecoule = std::time::Duration::ZERO;
                     let pas = idle.map_or(REAP_EVERY, |d| d.min(REAP_EVERY));
                     let mut retenu: Option<String> = None;
+                    // Rendue une fois par entrée au repos ; une requête la réarme.
+                    let mut rendue_au_repos = false;
                     while !stopping.load(Ordering::SeqCst) {
                         std::thread::sleep(std::time::Duration::from_millis(200));
                         ecoule += std::time::Duration::from_millis(200);
                         if ecoule >= pas {
                             ecoule = std::time::Duration::ZERO;
                             host.reap_dead_sessions();
+                            // **La mémoire rendue au repos** : ce que glibc garde d'un
+                            // travail fini revient au système dès que l'hôte se repose,
+                            // sans attendre son arrêt (ticket « l'hôte ne rend pas la
+                            // mémoire d'un gros index », 19 octobre 2026).
+                            match activite.inactif_depuis() {
+                                Some(depuis) if depuis >= REPOS_AVANT_RENDU => {
+                                    if !rendue_au_repos && host.travail_en_cours().is_none() {
+                                        crate::allocateur::rendre_au_systeme("hôte au repos");
+                                        rendue_au_repos = true;
+                                    }
+                                }
+                                _ => rendue_au_repos = false,
+                            }
                             // **L'arrêt après inactivité** : aucune requête depuis le
                             // délai, aucune en vol, et rien qui retienne (index, montre,
                             // runs en fond). Ce qui retient se dit une fois par cause.

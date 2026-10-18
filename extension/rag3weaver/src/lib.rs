@@ -15,6 +15,7 @@ pub mod bge_m3_embedder;
 #[cfg(feature = "candle-embedder")]
 pub mod candle_embedder;
 /// Un arbre de relations en texte, la forme du graphe de dépendances.
+pub mod allocateur;
 pub mod arbre;
 pub mod en_tete;
 pub mod fichiers_entite;

@@ -359,7 +359,27 @@ fn spawn_index_with_stop(
     generated: GeneratedPolicy,
     watch: Arc<EmbedWatch>,
 ) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, &watch) {
+    std::thread::spawn(move || {
+        indexer_et_dire(&catalog, source, &journal, kept_bytes, generated, &watch);
+        // Un index retient des Go que glibc garde une fois libérés : rendus ici,
+        // et dits au journal (ticket « l'hôte ne rend pas la mémoire d'un gros
+        // index », 19 octobre 2026).
+        if let Some((avant, apres)) = crate::allocateur::rendre_au_systeme("fin d'index") {
+            log(&journal, &format!("mémoire rendue au système : {avant} → {apres} Mio résidents"));
+        }
+    })
+}
+
+fn indexer_et_dire(
+    catalog: &Arc<Mutex<Catalog>>,
+    source: Arc<dyn FileSource>,
+    journal: &std::path::Path,
+    kept_bytes: u64,
+    generated: GeneratedPolicy,
+    watch: &Arc<EmbedWatch>,
+) {
+    let (catalog, journal) = (catalog.clone(), journal.to_path_buf());
+    match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, watch) {
         Ok(reste) => {
             // L'arbre et le commit indexés, que chaque lecture dira.
             if let Some(root) = crate::workspace_path::worktree_root(&source.cursor()) {
@@ -379,7 +399,7 @@ fn spawn_index_with_stop(
         Err(e) if e.starts_with(crate::code_sync::SYNC_SUSPENDED) => log(&journal, &format!("{STOPPED_PREFIX} : {e}")),
         Err(e) if e.starts_with(STOPPED_PREFIX) => log(&journal, &e),
         Err(e) => log(&journal, &format!("{FAILED_PREFIX} : {e}")),
-    })
+    }
 }
 
 /// **Indexer en fond, arrêtable** : comme [`spawn_index`], et l'indexation

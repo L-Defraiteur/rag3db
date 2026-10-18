@@ -7,13 +7,16 @@
 # l'appel suivant le relance. Les clients voient l'unité et ne lancent plus d'hôte.
 #
 #   scripts/installer-l-unite-de-l-hote.sh [--binaire <chemin>] [--adresse 127.0.0.1:7970]
-#       [--inactivite <minutes>] [--env <fichier>] [--nom rag3weaver-daemon]
+#       [--inactivite <minutes>] [--arenes <n>] [--env <fichier>] [--nom rag3weaver-daemon]
 #       [--maintenant] [--montrer] [--retirer] [--filet-seul]
 #
 # - `--env` : le fichier d'environnement de l'hôte (service d'embarquement, RAG3DB_ROOT,
 #   RAG3DB_LIBRARY_DIR…), repris tel quel s'il existe (~/.config/rag3weaver/<nom>.env).
 # - Un hôte de cette unité déjà en service n'est arrêté qu'avec `--maintenant` : c'est un
 #   redémarrage, à annoncer avant aux sessions que `daemon_status` liste.
+# - `--arenes` : MALLOC_ARENA_MAX de l'hôte (glibc), 0 pour le défaut de glibc (8 par cœur).
+#   Les arènes des fils ne sont jamais rendues au système : un plafond borne ce que l'hôte
+#   garde après un gros index (ticket « l'hôte ne rend pas la mémoire d'un gros index »).
 # - `--montrer` écrit les deux unités sur la sortie, sans rien poser.
 # - `--nom` : une autre unité (les témoins : rag3weaver-daemon-essai).
 # - Les unités remplacées sont gardées à côté (`.avant-socket`).
@@ -27,6 +30,7 @@ set -euo pipefail
 binaire="$HOME/.local/bin/rag3weaver-backend"
 adresse="127.0.0.1:7970"
 inactivite=30
+arenes=4
 nom="rag3weaver-daemon"
 env_fichier=""
 maintenant=0
@@ -38,6 +42,7 @@ while [ $# -gt 0 ]; do
     --binaire) binaire="$2"; shift 2 ;;
     --adresse) adresse="$2"; shift 2 ;;
     --inactivite) inactivite="$2"; shift 2 ;;
+    --arenes) arenes="$2"; shift 2 ;;
     --env) env_fichier="$2"; shift 2 ;;
     --nom) nom="$2"; shift 2 ;;
     --maintenant) maintenant=1; shift ;;
@@ -79,6 +84,7 @@ After=$nom.socket
 Type=simple
 EnvironmentFile=-$env_fichier
 Environment=RAG3WEAVER_DAEMON_IDLE_MIN=$inactivite
+$( [ "$arenes" = 0 ] || echo "Environment=MALLOC_ARENA_MAX=$arenes" )
 ExecStart=$binaire daemon
 KillSignal=SIGTERM
 KillMode=mixed
