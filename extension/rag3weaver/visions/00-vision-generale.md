@@ -468,6 +468,37 @@ La règle de la stèle tient : tout est déclaré, et la page n'a pas d'état qu
 l'hôte n'ait pas. Le navigateur abandonné le 8 octobre était le moteur en WASM ;
 ici le moteur reste dans l'hôte et le navigateur n'est qu'une vue.
 
+### Un hôte d'équipe : un index par dépôt, un routeur, les fiches au routeur (Lucie, 18 octobre 2026)
+
+Graine, née d'une question de Lucie sur une mémoire partagée par une équipe.
+Une équipe a plusieurs dépôts ; on lui sert, par MCP, depuis un service à elle
+(un pod), le code et la mémoire de tous :
+
+- **un index par dépôt, sur la tête de sa branche de travail** (`develop`),
+  tenu à jour à chaque push (montre sur un pull, ou un webhook) ; pas un index
+  par commit : l'histoire passe par des fiches qui visent un commit
+  (immuable) ;
+- **un index maître, routeur**, qui passe une question aux index concernés et
+  fusionne les réponses (le pont entre bases de la page des migrations, §12,
+  en lecture seule) ; **les fiches vivent sur lui** et visent tout dépôt par
+  le préfixe `<dépôt>:` de leurs références ;
+- **chaque fiche porte son auteur**, posé par l'hôte d'après l'identité de la
+  session (jamais déclaré par l'agent) : « le Claude de Jean sait qu'il est
+  celui de Jean » ;
+- **les droits ne s'inventent pas** : ils viennent de l'application où les
+  membres sont déjà inscrits, selon leurs scopes (Lucie : « les admins déjà
+  enregistrés sur l'app, selon leurs scopes ») ; l'hôte accepte un jeton de ce
+  fournisseur d'identité et traduit ses scopes en lecture et écriture par
+  dépôt et par mémoire ;
+- **les fiches en fichiers** (la base n'est qu'un index reconstructible) se
+  partagent par git, avec relecture et fusion.
+
+Première marche plus simple : un seul hôte, plusieurs arbres dans une base
+(`code-tree add`) et la mémoire, sans routeur ; le routeur quand le nombre de
+dépôts, les droits par dépôt ou la taille l'exigent. Préalable : les correctifs
+de la perte du COPY de relations (42a32bd52), que `code-tree add` déclenche.
+L'outil dit toujours sa fraîcheur (« indexé à tel commit de develop »).
+
 ### Un produit d'audit de sécurité (Lucie, 18 octobre 2026)
 
 Graine, notée à la lecture des prix de Vertex. CodeMender, l'agent de sécurité
