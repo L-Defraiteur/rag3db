@@ -107,6 +107,9 @@ pub mod burn_ppocr;
 /// Le code comme graphe : `File` / `Scope` / `Library` via `codeparsers`.
 #[cfg(feature = "code")]
 pub mod code;
+/// Les gabarits (graphes, backends, composants, nœuds scriptés) indexés comme du code.
+#[cfg(feature = "code")]
+pub mod code_gabarits;
 /// Les tests par requêtes (`workspace.queries_via`) : le relevé d'un lot.
 #[cfg(feature = "code")]
 pub mod queries_via;

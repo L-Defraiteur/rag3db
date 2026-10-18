@@ -1071,6 +1071,88 @@ pub fn analyze_in_project(
             content_hash: fa.content_hash.clone().unwrap_or_default(),
             cursor: String::new(),
         });
+        // Un gabarit (graphe, backend, composant, nœud scripté) se découpe en scopes nommés dont
+        // les renvois sont des mentions par le nom (`code_gabarits`) ; sinon, un seul texte brut.
+        if let Some(gabarits) = crate::code_gabarits::analyser_gabarit(rel, content) {
+            let lignes: Vec<&str> = content.split_inclusive('\n').collect();
+            let debut_de = |l: usize| -> usize { lignes.iter().take(l.saturating_sub(1)).map(|x| x.len()).sum() };
+            let mut cles: Vec<String> = Vec::with_capacity(gabarits.len());
+            for g in &gabarits {
+                let chemin = match g.parent {
+                    Some(p) => format!("{}.{}", gabarits[p].name, g.name),
+                    None => g.name.clone(),
+                };
+                let key = format!("{source}#{name}#{chemin}:{}", g.scope_type);
+                let texte: String = lignes
+                    .iter()
+                    .skip(g.start_line.saturating_sub(1))
+                    .take(g.end_line + 1 - g.start_line.min(g.end_line))
+                    .copied()
+                    .collect();
+                analysis.scopes.push(ScopeRecord {
+                    key: key.clone(),
+                    source: source.clone(),
+                    repo: repo.clone(),
+                    repo_path: repo_path.clone(),
+                    name: g.name.clone(),
+                    scope_type: g.scope_type.clone(),
+                    extends_type: false,
+                    signature: String::new(),
+                    content: texte,
+                    folds: String::new(),
+                    docstring: String::new(),
+                    file_path: name.clone(),
+                    parent_name: g.parent.map(|p| gabarits[p].name.clone()).unwrap_or_default(),
+                    language: language.clone(),
+                    test_role: String::new(),
+                    test_certainty: String::new(),
+                    test_name: String::new(),
+                    declarations: String::new(),
+                    field_types: String::new(),
+                    return_type: String::new(),
+                    template_params: String::new(),
+                    start_line: g.start_line,
+                    end_line: g.end_line,
+                    start_byte: debut_de(g.start_line),
+                    end_byte: debut_de(g.end_line + 1),
+                });
+                analysis.relations.push(CodeRelation {
+                    rel: "DEFINED_IN".to_string(),
+                    from_entity: SCOPE.to_string(),
+                    from_key: key.clone(),
+                    to_entity: FILE.to_string(),
+                    to_key: name.clone(),
+                    sites: Vec::new(),
+                    by_name: false,
+                });
+                if let Some(p) = g.parent {
+                    for (rel_nom, de, vers) in [("HAS_PARENT", &key, &cles[p]), ("PARENT_OF", &cles[p], &key)] {
+                        analysis.relations.push(CodeRelation {
+                            rel: rel_nom.to_string(),
+                            from_entity: SCOPE.to_string(),
+                            from_key: de.clone(),
+                            to_entity: SCOPE.to_string(),
+                            to_key: vers.clone(),
+                            sites: Vec::new(),
+                            by_name: false,
+                        });
+                    }
+                }
+                let mut vus: BTreeMap<&str, Vec<UsageSite>> = BTreeMap::new();
+                for (mention, ligne) in &g.mentions {
+                    if mention == &g.name {
+                        continue; // un nom ne se mentionne pas lui-même
+                    }
+                    vus.entry(mention.as_str()).or_default().push(UsageSite { usage: UsageKind::Call, line: Some(*ligne) });
+                }
+                for (mention, sites) in vus {
+                    analysis.pending.push((key.clone(), mention.to_string(), "CONSUMES".to_string()));
+                    analysis.pending_sites.push((key.clone(), mention.to_string(), sites));
+                }
+                cles.push(key);
+            }
+            continue;
+        }
         let sc = &fa.scopes[0];
         let key = format!("{source}#{name}#{}:texte_brut", sc.name);
         analysis.scopes.push(ScopeRecord {
@@ -2894,7 +2976,8 @@ impl Catalog {
 
 /// Les genres de scope qui peuvent être le parent d'une définition faite
 /// ailleurs.
-const GENRES_CONTENEURS: [&str; 5] = ["class", "interface", "namespace", "module", "enum"];
+/// Un graphe et un backend (`code_gabarits`) contiennent leurs nœuds et leurs outils.
+const GENRES_CONTENEURS: [&str; 7] = ["class", "interface", "namespace", "module", "enum", "graphe", "backend"];
 
 /// Les champs typés d'un scope, en JSON `[{name, type}]` (le type tel
 /// qu'écrit, génériques compris) ; vide s'il n'en a pas.
