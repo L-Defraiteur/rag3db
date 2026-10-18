@@ -431,6 +431,27 @@ tiennent une page « ce qui manque à un agent dans cet IDE », avec chaque
 retour forcé à grep et sa raison ; c'est « demander son avis au modèle », en
 vrai, et c'est ce qui décide des outils suivants.
 
+### Un produit d'audit de sécurité (Lucie, 18 octobre 2026)
+
+Graine, notée à la lecture des prix de Vertex. CodeMender, l'agent de sécurité
+du code de Google DeepMind (en préversion sur Vertex, dans la plateforme
+d'agents Gemini Enterprise, sur Gemini 3.6 à 3.8 Flash), lit le source,
+cherche les failles, prouve qu'elles sont exploitables par une attaque simulée
+et propose un correctif validé, relu par un humain avant tout envoi ; il couvre
+C, C++, Go, Java, Python, Rust et TypeScript. Lucie : « graine CodeMender oui,
+pour un produit d'audit de sécu ».
+
+Ce qu'on en tirerait : un produit rag3weaver d'audit de sécurité, déclaré comme
+le reste. L'index de code donne déjà ce qu'un auditeur cherche sans lire :
+`usages`, `impact`, `callees`, le voisinage, les entrées non sûres et les
+chemins jusqu'à elles. Un agent d'audit (CodeMender appelé comme un outil, ou
+notre propre agent sur les mêmes modèles) en tire des fiches de faille : la
+preuve, le correctif proposé et la relecture, chaque faille devenant un ticket
+et chaque correctif un lot. Premier essai à prévoir chez nous : un audit du
+moteur C++ et de rag3weaver avant la sortie du paquet npm. À vérifier avant
+tout envoi de code chez Google : les conditions de lecture et de conservation
+du source. Et rien ne part vers les amonts : les correctifs restent nos lots.
+
 ## 8. Ce qui n'est pas décidé
 
 - **S'intégrer à l'usage, une graine** (Lucie, 11 octobre 2026, à propos
