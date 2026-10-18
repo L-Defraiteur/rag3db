@@ -15,14 +15,16 @@
 //   6. BEGIN ; ADD a ; ADD a (refusé) ; ROLLBACK, puis, avant tout point de reprise,
 //      ALTER TABLE Doc ADD b STRING DEFAULT 'b-defaut', un SET de b et sa relecture.
 //
-// La minute 6 et E10. Le ADD a annulé garde sa colonne au stockage (alter.cpp : addColumn à
-// l'exécution, « rollback … handled by checkpoint »), le catalogue rendu redonne son identifiant de
-// colonne N à b, et le stockage range b à l'indice N + 1. Le SET et le balayage passent tous deux
-// par l'identifiant du catalogue : un SET de b puis sa relecture tombent dans la même colonne
-// (celle de a) et se relisent tels qu'écrits. Ce qui montre le trou, c'est le DÉFAUT de b, rempli à
-// l'indice N + 1 et lu à N : les lignes d'avant le ADD doivent lire 'b-defaut'. Le défaut de rang
-// (minute 2, aucune annulation avant) est le témoin de contrôle. Puis la base est fermée proprement
-// et rouverte : la valeur écrite et le défaut de b doivent survivre au point de reprise.
+// Le point de reprise automatique est en marche (le réglage du produit) jusqu'à la minute 6, coupé
+// juste avant sa migration. La minute 6 et E10. Le ADD a annulé garde sa colonne au stockage
+// (alter.cpp : addColumn à l'exécution, « rollback … handled by checkpoint »), le catalogue rendu
+// redonne son identifiant de colonne N à b, et le stockage range b à l'indice N + 1. Le SET et le
+// balayage passent tous deux par l'identifiant du catalogue : un SET de b puis sa relecture tombent
+// dans la même colonne (celle de a) et se relisent tels qu'écrits. Ce qui montre le trou, c'est le
+// DÉFAUT de b, rempli à l'indice N + 1 et lu à N : les lignes d'avant le ADD doivent lire
+// 'b-defaut'. Le défaut de rang (minute 2, aucune annulation avant) est le témoin de contrôle. Puis
+// la base est fermée proprement et rouverte : la valeur écrite et le défaut de b doivent survivre
+// au point de reprise.
 //
 // Contrôles (rouge = un défaut ; une borne « pas promise » est imprimée seulement) :
 // - no-unnamed-error : aucune erreur sans nom (message vide, exception de la bibliothèque standard)
@@ -321,6 +323,7 @@ public:
                 runDdl(ddl, "5 CHECKPOINT", "CHECKPOINT;");
                 break;
             case 6:
+                ddl.query("CALL auto_checkpoint=false;");
                 failedMigration(ddl);
                 runDdl(ddl, "6 ADD b DEFAULT",
                     stringFormat("ALTER TABLE Doc ADD b STRING DEFAULT '{}';", B_DEFAULT));
@@ -528,8 +531,11 @@ protected:
         return sample.start < ddl.end && sample.end > ddl.start;
     }
 
-    // Les latences d'un acteur, chevauchant ou non un DDL ; ddl nul = hors de tout DDL.
-    static std::vector<double> latencies(const Scenario& scenario, Actor actor, const Ddl* ddl) {
+    // Les latences d'un acteur, chevauchant ou non un DDL ; ddl nul = hors de tout DDL. onlyThis :
+    // celles qui ne chevauchent que ce DDL (deux DDL qui se suivent sans attendre, quand l'un dure
+    // plus que la période, se partageraient sinon les mêmes attentes).
+    static std::vector<double> latencies(const Scenario& scenario, Actor actor, const Ddl* ddl,
+        bool onlyThis = false) {
         std::vector<double> out;
         for (const auto& journal : scenario.journals) {
             if (journal.actor != actor) {
@@ -537,10 +543,12 @@ protected:
             }
             for (const auto& sample : journal.samples) {
                 bool inAny = false;
+                bool inOther = false;
                 for (const auto& other : scenario.ddls) {
                     inAny = inAny || overlaps(sample, other);
+                    inOther = inOther || (ddl && &other != ddl && overlaps(sample, other));
                 }
-                if (ddl ? overlaps(sample, *ddl) : !inAny) {
+                if (ddl ? overlaps(sample, *ddl) && !(onlyThis && inOther) : !inAny) {
                     out.push_back(sample.end - sample.start);
                 }
             }
@@ -627,7 +635,7 @@ protected:
             return;
         }
         for (const auto actor : {Actor::DocWriter, Actor::NoteWriter}) {
-            const auto during = latencies(scenario, actor, ddl);
+            const auto during = latencies(scenario, actor, ddl, true /* onlyThis */);
             if (during.empty()) {
                 continue;
             }
@@ -704,11 +712,13 @@ protected:
         systemConfig->bufferPoolSize = BUFFER_POOL;
         createDBAndConn();
         load(*conn, databasePath);
-        // SCENARIO_AUTO_CHECKPOINT=1 : le point de reprise automatique en marche (le réglage du
-        // produit). Coupé par défaut, pour que rien ne s'intercale entre l'annulation de la minute
-        // 6 et le ADD b ; coupé, les pages validées s'accumulent jusqu'au CHECKPOINT de la
-        // minute 5.
-        const bool autoCheckpoint = std::getenv("SCENARIO_AUTO_CHECKPOINT") != nullptr;
+        // Le point de reprise automatique en marche, le réglage du produit ; le scénario le coupe
+        // juste avant la migration de la minute 6, pour que rien ne s'intercale entre son
+        // annulation et le ADD b. SCENARIO_NO_AUTO_CHECKPOINT=1 le coupe dès le départ : les pages
+        // validées s'accumulent alors jusqu'au CHECKPOINT de la minute 5, et 20 écrivains de
+        // vecteurs remplissent 2 Gio avant (joué le 18 octobre : 58 598 refus du tampon, le
+        // CREATE_VECTOR_INDEX et le CHECKPOINT refusés).
+        const bool autoCheckpoint = std::getenv("SCENARIO_NO_AUTO_CHECKPOINT") == nullptr;
         if (autoCheckpoint) {
             mustRun(*conn, "CALL auto_checkpoint=true;");
         }
