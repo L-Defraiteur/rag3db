@@ -1,0 +1,455 @@
+{
+  "candidats": 3,
+  "jeu": "v1",
+  "rappel": [
+    29,
+    31
+  ],
+  "voies": [
+    {
+      "abstentions_justes": 8,
+      "ancrages_justes": 28,
+      "decisions": 39,
+      "faux_ancrages": 0,
+      "fiches": 39,
+      "fiches_justes": 36,
+      "forme": "ParFiche",
+      "lignes": [
+        {
+          "candidats": [
+            "régime GPU",
+            "sauvegarde de la base",
+            "recherche plein texte"
+          ],
+          "choix": "régime GPU",
+          "claim": "Un rapport cyclique de 70 % garde l'écran utilisable pendant une passe.",
+          "gold": "régime GPU",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "régime GPU",
+            "recherche plein texte",
+            "mémoire du poste"
+          ],
+          "choix": "régime GPU",
+          "claim": "Le budget de 4096 caractères par lot évite les pics de mémoire graphique.",
+          "gold": "régime GPU",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "régime GPU",
+            "modèles d'embarquement",
+            "mémoire du poste"
+          ],
+          "choix": "régime GPU",
+          "claim": "Les quatre suites qui chargent la carte locale ne tournent pas de jour.",
+          "gold": "régime GPU",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "tests de bout en bout",
+            "régime GPU",
+            "historique git"
+          ],
+          "choix": "tests de bout en bout",
+          "claim": "Un e2e sans l'attribut ignore ne tourne jamais dans la passe.",
+          "gold": "tests de bout en bout",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "modèles d'embarquement",
+            "tests de bout en bout",
+            "sauvegarde de la base"
+          ],
+          "choix": "tests de bout en bout",
+          "claim": "Le test du démon d'embarquement rougit parfois sous la charge : le rejouer seul.",
+          "gold": "tests de bout en bout",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "historique git",
+            "préférences de communication",
+            "déploiement du paquet npm"
+          ],
+          "choix": "aucun",
+          "claim": "Une suite nouvelle se monte par le script de génération après son ajout à git.",
+          "gold": "tests de bout en bout",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "tests de bout en bout",
+            "recherche plein texte",
+            "déploiement du paquet npm"
+          ],
+          "choix": "tests de bout en bout",
+          "claim": "Éditer un fichier que la suite indexe change ses résultats attendus.",
+          "gold": "tests de bout en bout",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "historique git",
+            "préférences de communication",
+            "mémoire du poste"
+          ],
+          "choix": "historique git",
+          "claim": "Jamais de push en force, même sur sa propre branche.",
+          "gold": "historique git",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "historique git",
+            "recherche plein texte",
+            "déploiement du paquet npm"
+          ],
+          "choix": "historique git",
+          "claim": "Commiter par chemins listés, pas par l'index partagé.",
+          "gold": "historique git",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "historique git",
+            "sauvegarde de la base",
+            "préférences de communication"
+          ],
+          "choix": "historique git",
+          "claim": "Pas de mention d'assistant dans les messages de commit.",
+          "gold": "historique git",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "sauvegarde de la base",
+            "historique git",
+            "recherche plein texte"
+          ],
+          "choix": "historique git",
+          "claim": "Rejouer les tests après un rebase qui apporte du code.",
+          "gold": "historique git",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "sauvegarde de la base",
+            "historique git",
+            "recherche plein texte"
+          ],
+          "choix": "sauvegarde de la base",
+          "claim": "Arrêter un backend par SIGTERM, jamais par kill -9.",
+          "gold": "sauvegarde de la base",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "sauvegarde de la base",
+            "préférences de communication",
+            "recherche plein texte"
+          ],
+          "choix": "sauvegarde de la base",
+          "claim": "Prendre un instantané par reflink avant toute écriture risquée.",
+          "gold": "sauvegarde de la base",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "sauvegarde de la base",
+            "recherche plein texte",
+            "mémoire du poste"
+          ],
+          "choix": "sauvegarde de la base",
+          "claim": "Un test d'arrêt brutal doit tuer le processus base ouverte, journal non vide.",
+          "gold": "sauvegarde de la base",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "modèles d'embarquement",
+            "tests de bout en bout",
+            "déploiement du paquet npm"
+          ],
+          "choix": "modèles d'embarquement",
+          "claim": "Le modèle de 278 millions de paramètres est le défaut.",
+          "gold": "modèles d'embarquement",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "recherche plein texte",
+            "mémoire du poste",
+            "documentation"
+          ],
+          "choix": "aucun",
+          "claim": "bge-m3 rend des vecteurs de 1024 dimensions, denses et creux.",
+          "gold": "modèles d'embarquement",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "modèles d'embarquement",
+            "documentation",
+            "recherche plein texte"
+          ],
+          "choix": "modèles d'embarquement",
+          "claim": "Les adresses du service d'embarquement s'écrivent complètes, hôte et port.",
+          "gold": "modèles d'embarquement",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "documentation",
+            "déploiement du paquet npm",
+            "recherche plein texte"
+          ],
+          "choix": "documentation",
+          "claim": "Les commentaires, commits et pages sont en français, les identifiants en anglais.",
+          "gold": "documentation",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "mémoire du poste",
+            "documentation",
+            "sauvegarde de la base"
+          ],
+          "choix": "documentation",
+          "claim": "Les pages d'une session vont dans un dossier daté du jour.",
+          "gold": "documentation",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "documentation",
+            "recherche plein texte",
+            "régime GPU"
+          ],
+          "choix": "documentation",
+          "claim": "Les visions se datent dans leur nom de fichier.",
+          "gold": "documentation",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "historique git",
+            "régime GPU",
+            "recherche plein texte"
+          ],
+          "choix": "recherche plein texte",
+          "claim": "Le plancher de pg_trgm doit voyager avec chaque requête, pas avec la session.",
+          "gold": "recherche plein texte",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "sauvegarde de la base",
+            "recherche plein texte",
+            "régime GPU"
+          ],
+          "choix": "recherche plein texte",
+          "claim": "Une requête à deux fautes de frappe a besoin d'un plancher de rappel de 0,3.",
+          "gold": "recherche plein texte",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "recherche plein texte",
+            "déploiement du paquet npm",
+            "mémoire du poste"
+          ],
+          "choix": "recherche plein texte",
+          "claim": "lucivy sert le plein texte de l'agent de code, Tantivy et Elasticsearch en plus.",
+          "gold": "recherche plein texte",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "préférences de communication",
+            "historique git",
+            "documentation"
+          ],
+          "choix": "préférences de communication",
+          "claim": "Un symptôme signalé appelle une enquête et des options, pas un changement de conception.",
+          "gold": "préférences de communication",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "préférences de communication",
+            "déploiement du paquet npm",
+            "mémoire du poste"
+          ],
+          "choix": "préférences de communication",
+          "claim": "Dire en une ligne ce qu'on fait avant une longue attente.",
+          "gold": "préférences de communication",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "préférences de communication",
+            "modèles d'embarquement",
+            "mémoire du poste"
+          ],
+          "choix": "aucun",
+          "claim": "Une estimation en jours d'agent se rend comme un ordre de grandeur.",
+          "gold": "préférences de communication",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "déploiement du paquet npm",
+            "préférences de communication",
+            "recherche plein texte"
+          ],
+          "choix": "déploiement du paquet npm",
+          "claim": "Chaque écriture sur npm demande un code de double authentification.",
+          "gold": "déploiement du paquet npm",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "déploiement du paquet npm",
+            "préférences de communication",
+            "documentation"
+          ],
+          "choix": "déploiement du paquet npm",
+          "claim": "Publier d'abord une version préliminaire, puis la vraie.",
+          "gold": "déploiement du paquet npm",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "mémoire du poste",
+            "recherche plein texte",
+            "documentation"
+          ],
+          "choix": "mémoire du poste",
+          "claim": "Le répertoire /tmp est de la mémoire vive sur ce poste.",
+          "gold": "mémoire du poste",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "sauvegarde de la base",
+            "mémoire du poste",
+            "régime GPU"
+          ],
+          "choix": "mémoire du poste",
+          "claim": "Effacer le dossier de compilation de la session au-delà de 20 Go.",
+          "gold": "mémoire du poste",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "mémoire du poste",
+            "historique git",
+            "déploiement du paquet npm"
+          ],
+          "choix": "mémoire du poste",
+          "claim": "Jamais plus de huit tâches de compilation en parallèle.",
+          "gold": "mémoire du poste",
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "préférences de communication",
+            "mémoire du poste",
+            "documentation"
+          ],
+          "choix": "aucun",
+          "claim": "La personne préfère le thé au café l'après-midi.",
+          "gold": null,
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "mémoire du poste",
+            "préférences de communication",
+            "historique git"
+          ],
+          "choix": "aucun",
+          "claim": "Le connecteur Slack demande une autorisation par espace de travail.",
+          "gold": null,
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "régime GPU",
+            "documentation",
+            "recherche plein texte"
+          ],
+          "choix": "aucun",
+          "claim": "Les cartes Magic s'exportent en JSON, pas en index.",
+          "gold": null,
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "préférences de communication",
+            "tests de bout en bout",
+            "mémoire du poste"
+          ],
+          "choix": "aucun",
+          "claim": "La session de jeu de la télévision se lance par un script dédié.",
+          "gold": null,
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "modèles d'embarquement",
+            "sauvegarde de la base",
+            "tests de bout en bout"
+          ],
+          "choix": "aucun",
+          "claim": "Le modèle de décision à 27 milliards de paramètres n'est évalué qu'au banc.",
+          "gold": null,
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "mémoire du poste",
+            "sauvegarde de la base",
+            "régime GPU"
+          ],
+          "choix": "aucun",
+          "claim": "Les clés d'exposition d'un outil ne filtrent encore rien.",
+          "gold": null,
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "recherche plein texte",
+            "mémoire du poste",
+            "régime GPU"
+          ],
+          "choix": "aucun",
+          "claim": "Un crochet après outil peut injecter des fiches dans le contexte.",
+          "gold": null,
+          "proba_verdict": null
+        },
+        {
+          "candidats": [
+            "régime GPU",
+            "recherche plein texte",
+            "historique git"
+          ],
+          "choix": "aucun",
+          "claim": "Le gestionnaire de fenêtres se recharge par qdbus, pas en éditant son fichier.",
+          "gold": null,
+          "proba_verdict": null
+        }
+      ],
+      "manques": 1,
+      "ms": 374260,
+      "sans_sujet": 8,
+      "tentative": "2026-10-18-fiches-classees-4",
+      "voie": "llm (google/gemini-3.8-flash)"
+    }
+  ]
+}
