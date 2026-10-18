@@ -1,4 +1,4 @@
-# Knowledge dump de l'orchestration — 11 octobre 2026, 21 h (soir), mis à jour le 12 à 8 h 35
+# Knowledge dump de l'orchestration — 11 octobre 2026, 21 h (soir), mis à jour le 18 octobre
 
 Remplace `03-knowledge-dump.md` (midi) là où il diffère ; ce qui n'est pas
 répété ici y reste vrai (les projets, l'architecture par couche, la méthode).
@@ -23,63 +23,32 @@ Pour une session vierge qui reprend l'orchestration.
 Codeparsers = `rag3db-ab`, le banc = `rag3db-10`, G = `rag3db-90` : trois
 erreurs d'adressage aujourd'hui venaient de là.
 
-## 2. L'état des hôtes et des binaires (au matin du 12 octobre, 4 h 30)
+## 2. L'état des hôtes et des binaires (18 octobre, pendant la pause)
 
-- **Ici** : l'hôte de Lucie tourne depuis 0 h 26 sur le binaire md5
-  3e95f0302023 (montre, défenses contre la boucle, client qui se rétablit),
-  lié à la lib d'ici de 20 h 39 (ancienne image mappée) ; sain. **Un geste
-  de Lucie au réveil** : la mémoire n'a pas eu la permission d'arrêter cet
-  hôte (2 h 56). La séquence, dans son rapport (`4ac16805d`, commande exacte,
-  pid lu dans daemon.json, exe vérifié) : son `kill -TERM` ; la mémoire
-  installe le **binaire du matin** (`~/.cache/rag3weaver-build/binaire-matin-d2b83e5e5080`,
-  md5 d2b83e5e5080…, master acdb91764 : B4, fils, défenses, réécriture des
-  vides, correctif du balayage ; RUNPATH vers l'identifiant du magasin
-  `rag3db-build-f6179ade0…-Release-…`, prouvé sans LD_LIBRARY_PATH ; l'ancien
-  gardé en `.avant-b4`) ; codeparsers efface et réindexe code-rag3db avec ce
-  binaire en autonome (B4 l'impose ; ancienne base mise de côté dans
-  `avant-b4-code-rag3db-<date>/`), compte les morceaux sans texte (0 attendu,
-  la clôture du P1 sur la vraie base) ; la mémoire redémarre l'hôte, surveille
-  cinq minutes (/etat porte l'état des index), annonce. La mémoire longue n'est
-  pas touchée.
-- **La lib d'ici** : rebâtie à 3 h 49 sur e6f626df4 (le correctif du balayage
-  filtré des chaînes), publiée au **magasin** `~/.cache/rag3db-libs/<id>/`,
-  courant posé ; les passes la prennent par défaut (run_e2e.sh,
-  `RAG3DB_LIB=bati|<id>` sinon) ; le rebâti publie et pose courant sans
-  toucher aux identifiants que d'autres lisent : plus de « fini » à attendre.
-- **luciepc** : **l'hôte est figé depuis 22 h 02** (pid 132823, la boucle de
-  réclamation : la passe de vecteurs relisait `_text` vide par le balayage
-  fautif) et **gardé pour Lucie** ; **à 8 h 25 il est à 43 Go résidents (pic
-  52), 19 Go disponibles : l'arrêter en premier** (`kill -TERM 132823`, pas
-  `systemctl stop`) ; rien n'a été bâti là-bas cette nuit, le `.pret` est
-  l'ancien, la suite en huit étapes dans « Pour Lucie » (`eef060968`). Devant la place du poste : le client
-  d'index de codeparsers (pid 132918), puis la mesure de hotfixs, puis le
-  bâti de G. **Au réveil, dans l'ordre** (section « Pour Lucie » du rapport de
-  codeparsers, `docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`) :
-  terminer 132918 (libère la place) ; arrêt propre de l'hôte
-  (`systemctl --user stop rag3weaver-daemon`, pile gdb facultative) ;
-  compter base fermée les Scope_Chunk « sans texte » de code-lourd (lecture
-  fausse mesurée, pas une perte) ; les deux bases mises de côté dans
-  `avant-b4/` ; remettre la montre (les deux `cp backend.json.avec-montre
-  backend.json`) ; installer le binaire prêt de G (≥ e6f626df4, RUNPATH vers
-  le magasin de luciepc créé par G, `check-lib.conf.pret` l'ExecStartPre) ;
-  **effacer puis réindexer** code-lourd et code-principal (jamais avant que la
-  lib porte le correctif) ; `systemctl --user start`, `/sante`. Le bâti de G
-  au magasin fait foi ; rag3db-lourd/build ne se rebâtit en place que si un
-  outil le lie encore.
-- **Les serveurs MCP de Lucie** : `memoire-longue`, `code-rag3db` (ici),
-  `code-rag3db-luciepc` (mort tant que l'hôte de luciepc est figé).
-- **Le conteneur PostgreSQL** : `rag3weaver-pg`, pgvector pg17, port 5433.
-- **Le P1 de la nuit, clos** (`961dd7b05`) : 20 % des Scope_Chunk lus « sans
-  texte » n'étaient pas perdus : `StringColumn::scanFiltered`
-  (string_column.cpp:240) bornait mal une fenêtre de 2 048 à cheval sur deux
-  segments d'un groupe portant des versions (correctif du cœur `e6f626df4`,
-  chaînes et listes ; témoin du banc 800 lignes fausses → 0) ; recomptage de
-  la copie scellée avec la lib corrigée : 0 sur 128 732 ; aussi la cause du
-  SIGSEGV de F et de la boucle de luciepc. **Les « 6 s »** : 2,5 s par ligne
-  supprimée sous index HNSW (défaut moteur, ticket à hotfixs, témoins au
-  banc), contourné dans le dialecte par le proto : réindexer un fichier passe
-  de 3 s à 0,7-1 s. **Question pour Lucie** (tombée avec la cause) : plus de
-  morceau sans texte à trancher.
+- **Ici** : l'hôte de Lucie (`~/.local/bin/rag3weaver-backend`, md5
+  22e156eb9a57, RUNPATH vers la lib du magasin `rag3db-build-2b11b55ec…`) a été
+  arrêté proprement le 15 à sa demande ; il se relance seul au premier appel
+  d'outil. Ses trois bases (mémoire longue, code-rag3db réindexée le 12 sur
+  B4) sont saines. Le courant du magasin est `rag3db-build-65cb9a1f3…`
+  (pas 3 de la jointure par clé, compaction, lot Windows) : le prochain
+  binaire de Lucie se bâtit dessus ou sur plus récent (usages 7-10 ms au lieu
+  de 43).
+- **luciepc** : hôte relancé le 12 à 11 h par codeparsers sur un binaire de la
+  tête de master lié au magasin de luciepc (lib 3cca0ae1e, publiée par
+  hotfixs) ; code-lourd et code-principal réindexés sur B4 (sans figement) ;
+  RAG3DB_LIBRARY_DIR posé dans l'env de l'unité, `vector_extension = "vector"`
+  dans les manifestes ; règle dans `hote-bati7.sh` de G. Ménage fait (≈ 40 Go
+  de targets, worktrees, caches) ; restent `rag3db-hote`, `target-G-hote`,
+  `rag3db-lourd` (racine de code-lourd), `rag3db-tickets`, `rag3db-service`
+  (les services d'embarquement exécutent son binaire).
+- **L'arbre `~/git_workspaces/rag3db`** : à Lucie, sur master en avance rapide.
+- **Le conteneur PostgreSQL** : `rag3weaver-pg`, port 5433.
+- **Les chiffres de la semaine** : usages sur l'index entier 352 → 7-10 ms ;
+  suppression d'une ligne sous HNSW 136 → 7 ms ; point de reprise après
+  15 000 vecteurs 24 s → 0,6 s ; réindexer un fichier 3 s → 0,5 s ; un symbole
+  renommé vu par l'IDE 7,3 → 2,3 s ; une lecture pendant une réindexation
+  2 s → < 100 ms (L2 et la cellule, le dernier mutex dans 4aa8c95d5 en
+  attente).
 
 ## 3. Le flux de travail des sessions (règles vivantes)
 

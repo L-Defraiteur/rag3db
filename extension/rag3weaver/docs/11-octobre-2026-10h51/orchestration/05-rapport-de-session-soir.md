@@ -106,55 +106,21 @@ main, sur preuve) ; les fiches mémoire en régime d'expérimentation.
 - Un pari sur l'ordre (réindexer après le binaire neuf) qui a coûté deux
   arrêts forcés à Lucie : la règle de l'annonce et de l'heure convenue.
 
-## 6. Ce qui attend Lucie au réveil (mis à jour le 12 à 8 h 25)
+## 6. Ce qui attend Lucie (mis à jour le 18 octobre)
 
-- **EN PREMIER, luciepc : arrête l'hôte figé proprement.** Il est à 43 Go
-  résidents (pic 52 Go) et monte depuis la nuit (l'index de code-principal a
-  été lancé dedans par erreur à 6 h 39 et boucle à 99 %) ; la machine n'a plus
-  que 19 Go disponibles sur 93 : risque d'arrêt brutal par le noyau pendant
-  qu'il écrit code-principal. Aucune session n'a eu la permission de
-  l'arrêter (codeparsers, la mémoire, hotfixs, et moi à 8 h 20) ; les bâtis
-  sur luciepc sont suspendus. Geste : `kill -TERM 132823` (exe vérifié :
-  `~/.local/bin/rag3weaver-backend`), **pas `systemctl stop`** qui escalade au
-  SIGKILL après son délai ; si le TERM ne rend pas la main en une minute, c'est
-  toi qui décides du SIGKILL (comme hier). Puis la suite dans la section
-  « Pour Lucie » de codeparsers.
-- **Tes sessions d'ici marchent** : ton hôte a été redémarré à 0 h 26 sur un
-  binaire avec la montre, les défenses contre la boucle et le client qui se
-  rétablit (md5 3e95f0302023) ; sain à 1 h 01. **Un geste de toi au réveil** :
-  la mémoire n'a pas eu la permission d'arrêter ton hôte à 2 h 56 ; la
-  séquence (arrêt propre, le bloc `queries_via` posé dans ton manifeste,
-  le binaire du matin installé (md5 a327c0da16e3, tête de master de 6 h :
-  B4, fils, masque, défenses, 6 s, saut en deux temps, RUNPATH vers la lib
-  du magasin), code-rag3db effacé et réindexé, redémarrage) attend ton
-  `kill -TERM` sur le pid de l'hôte, commande exacte dans le rapport de la
-  mémoire (`1eaa5d973`), ou ton autorisation dans sa session.
-- **Le P1 (20 % de morceaux « sans texte ») est clos et tes textes sont
-  intacts** : un balayage filtré des chaînes du moteur rendait vide ou faux
-  (string_column.cpp:240) ; correctif du cœur sur master (`e6f626df4`), lib
-  d'ici rebâtie et publiée au magasin, recomptage de ta copie : 0 vide sur
-  128 732 ; c'était aussi la cause de la boucle de luciepc. **Les « 6 s »** :
-  2,5 s par ligne supprimée sous index HNSW (défaut moteur, ticket à
-  hotfixs), contourné par le proto : réindexer un fichier passe sous la
-  seconde.
-- **luciepc, dans l'ordre** (section « Pour Lucie » du rapport de codeparsers,
-  `docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`, et la
-  note de hotfixs `ba63aa135`) : terminer le client d'index 132918 (libère
-  la place du poste, la mesure de hotfixs passe seule) ; arrêt propre de
-  l'hôte figé (`systemctl --user stop rag3weaver-daemon`, pile gdb
-  facultative) ; compter base fermée les Scope_Chunk sans texte de
-  code-lourd ; remettre la montre ; installer le binaire prêt de G (≥ B4) ;
-  **effacer puis réindexer** code-lourd et code-principal ; relancer, /sante ;
-  hotfixs rebâtit la lib commune après l'arrêt.
-- **Deux questions** : (1) un morceau sans texte doit-il exister ou ne jamais
-  naître (ticket P1 `6cdef9585`, 20 % du code, texte perdu à l'écriture,
-  cause chez l'arbre principal) ; (2) la forme en deux temps d'usages
-  (page 06 de F) si le lot des fils ne suffit pas : décidée « oui si > 100 ms »,
-  renversable.
-- **Le compte gh actif du poste est le compte pro** (luciedefraiteur-sairen) :
-  aucune session ne l'a changé, G passe le jeton de L-Defraiteur à ses
-  commandes ; si c'est toi pour ton travail, rien à faire, sinon à remettre.
-- La séance npm (quatre OTP) quand tu le voudras ; le ménage des branches
-  distantes (liste à produire).
-- Tout le reste est dans le fil de nuit de `01-les-decisions-du-matin.md`
-  (depuis « 21 h – 21 h 40 ») et dans `06-knowledge-dump-soir.md` §2.
+- **La reprise** : la pause tient depuis le 12 ; elle devait finir samedi 17 ;
+  un mot de Lucie (« reprise », ou « reprise douce » : une session lourde à la
+  fois) la lève. Les lots prêts sont listés dans le fil (`01`, entrée
+  « 12 octobre 15 h 30 – 18 octobre »).
+- **Les trois questions du rapport des migrations concurrentes** (§9 de
+  `13-octobre-2026-arbre-principal/01-…`).
+- Sur luciepc : les deux anciens index (`code-bascule.retire-18h40`,
+  `rag3db-cpp`, 3,8 Go avec leurs manifestes) ; le binaire des services
+  d'embarquement à installer dans `~/.local/bin` pour libérer `rag3db-service`.
+- Ici : l'ancien `backend.json` à côté de son manifeste code (une petite base
+  de 3,4 Mo) ; le compte gh actif du poste est le compte pro ; les
+  worktrees wt-cellule et wt-hote de l'arbre principal (retrait `--force`
+  refusé à sa session) : `git worktree remove --force` par elle, ou une règle
+  de permission pour les `wt-*`.
+- La séance npm (OTP) quand elle le voudra ; jouer la page vivante de
+  l'atelier.

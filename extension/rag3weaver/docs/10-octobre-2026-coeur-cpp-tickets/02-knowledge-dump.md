@@ -145,3 +145,25 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
 - **Un verdict se calcule sur toutes les lignes du fichier des codes**, y compris celles qui ne
   sont pas des suites (`FIN`) : les admettre explicitement.
 
+## Le 12 octobre
+
+- **Le catalogue est versionné, la liste des index du stockage ne l'était pas.** Un DROP retirait
+  l'index pour tous avant de valider, une annulation ne le rendait pas, un CREATE l'ajoutait avant
+  de valider. La rétention (en attente) donne au holder sa version, comme une ligne. La
+  validation et l'annulation passent par `INDEX_CHANGE` (le crochet du catalogue n'a pas de
+  contexte).
+- **Un identifiant « stable » n'est stable que si chaque entrée le reçoit** : la clé primaire et
+  les holders chargés du disque à 0 ont fait effacer la clé primaire par le DROP d'un autre.
+- **Le point de reprise forcé du CREATE attend toutes les transactions** : un verrou que le CREATE
+  tiendrait jusqu'à sa validation, et qu'un écrivain attendrait, le fait échouer au délai.
+- **QUERY_VECTOR_INDEX complétait son résultat jusqu'à k** par des pseudo-lignes à
+  `INVALID_OFFSET` : c'était la cause du compte faux du CALL et du plantage du masque.
+- **finalizeDelete cherchait le graphe pour chaque voisin** (88 % du profil) ; `update` l'évitait
+  par des heuristiques, désormais partagées.
+- **`RAG3DB_API` jamais sur un membre d'une classe déjà exportée** : MSVC refuse, GCC laisse
+  passer.
+- **Un test SKIPPED n'est pas un vert** ; un filtre qui rend « 0 tests » non plus (les tests vector
+  du banc sont dans `concurrence_test`).
+- **perf n'est installé ni ici ni sur luciepc** ; le banc profile par eu-stack, avec
+  `~/.cache/rag3db-banc-notes/ptracer-any.so` en LD_PRELOAD (`ptrace_scope=1`).
+

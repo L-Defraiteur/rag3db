@@ -1608,3 +1608,74 @@ où elle vit.
   refuser est interdit, pour l'orchestration aussi ; dit à Lucie et à lui.
   Pour Lucie, sans urgence : les deux anciens index de luciepc, le binaire
   des services d'embarquement à installer, le compte gh actif pro.
+- **12 octobre 15 h 30 – 18 octobre : la pause.** Le 12 vers 16 h 30, Lucie au
+  travail : « on met tout en pause, je ne peux pas me permettre » ; les dix
+  sessions ont arrêté leurs lourds (un cmake du cœur, une passe e2e du proto,
+  un check_features de l'arbre principal), poste vérifié libre, rien sur la
+  carte ni sur luciepc. Le 13 : « fais-leur juste étudier ça et rendre un
+  rapport, on reprendra samedi » (le 17 ; **pas de mot de reprise reçu au
+  18**). Seule l'étude a tourné, en docs : **le rapport des migrations
+  concurrentes** (arbre principal,
+  `13-octobre-2026-arbre-principal/01-plusieurs-developpeurs-et-leurs-migrations.md`,
+  `7bedd0982` ; part moteur lue par le cœur, scénario écrit par le banc, non
+  joué) : le DDL ordinaire est transactionnel au catalogue (seuls
+  CREATE_VECTOR_INDEX et CHECKPOINT refusent BEGIN) ; ADD COLUMN réécrit la
+  table et toutes les validations du processus l'attendent ; ni verrou de
+  table ni contrôle de conflit sur ALTER ; une colonne annulée reste au
+  stockage et l'ADD suivant la lit (rouge probable) ; une table HNSW
+  sérialise ses écrivains ; côté produit, le schéma ne migre qu'en fermant le
+  backend, aucun journal de migrations en service ; forme proposée : des
+  migrations tirées de la différence de gabarits, appliquées par l'hôte en
+  une transaction sans fermer le backend, index bâtis après le COMMIT, une
+  table `_Migration` ; **trois questions à Lucie (§9)** : différence de
+  gabarits ou fichier à la main ; un schéma par base ou par projet ; retraits
+  et conversions refusés ou « étendre puis contracter ». La règle « **un index
+  ne se pense pas** » est au §4 de la stèle du produit. Décisions de Lucie
+  pendant la pause : le cas des migrations concurrentes est à présenter et
+  valider, « bloqué pour personne » (`04-les-buts.md` §4 bis) ; le
+  multi-vecteur (MaxSim) en option plus tard, en rerank sur les k premiers ;
+  **l'arbre `~/git_workspaces/rag3db` est à elle** : toujours sur master en
+  avance rapide, c'est là qu'elle lit ; tout travail d'une session dans un
+  worktree à elle (remis sur master le 13, la branche filtre-impact-fusion
+  supprimée ; les neuf fichiers non suivis attribués : l'arbre principal
+  archive et retire les siens à la reprise, les csv/parquet de Kuzu à jeter).
+  Graines dans la vision générale (`d1ec12766`…`41e068d25`) : **des
+  applications rag3weaver empaquetées** pour tout système, jusqu'à un moteur
+  de jeu three.js ou un classeur ; le frontend en données (un module React
+  compilé par l'hôte, rechargé à chaud, ses libs déclarées et rangées par
+  contenu, rien ne sort des données). Runner Windows vert sur le lot du cœur
+  (ticket c1cedb7ae fermé, `0b1a68469`) : la réserve sur le paquet Windows
+  est levée. Le 15 : à la demande de Lucie, son hôte d'ici arrêté
+  proprement (il gardait 10 Go dans l'échange depuis le rattrapage du 12 :
+  ticket à ouvrir à la reprise, l'hôte ne rend pas la mémoire d'un gros
+  index) et 755 dossiers temporaires morts effacés de /tmp (l'échange de
+  22 à 10 Go ; les tests ne nettoient pas leurs dossiers temporaires malgré
+  la règle). Le 17 : résumé du concept de mémoire longue (fiches, classeur
+  L1/L2/L3 par sujets, classification fermée avec « aucun », archiviste à
+  deux rythmes) envoyé, à la demande de Lucie, à sa session « general » qui
+  travaille sur la mémoire de Sairen, sans rien de rag3db. **Ma faute du
+  12** : un worktree retiré à la place d'une session qui s'était vu refuser
+  le retrait ; mémoire `un-refus-vaut-pour-l-orchestration-aussi`.
+  **Lots prêts, en attente de reprise** (commités en local, non rejoués) :
+  l'embarquement hors du verrou et le défaut du dual (proto, 89e228537) ;
+  l'annulation sous tous les exécuteurs (recherche, 0acd8aa30) ; la fin de
+  l'attente des lectures, must_reopen en try_lock (arbre principal,
+  4aa8c95d5) ; la rétention des index (hotfixs, 205d2923e) ; la lecture en
+  mémoire ligne à ligne, troisième forme bâtie (cœur) ; paquet-npm-2 et les
+  archives alpha.3 sans publier (G) ; le scénario des vingt clients (banc) ;
+  le septième rejeu du témoin (codeparsers) ; le binaire de Lucie sur la lib
+  ≥ c44af8031 et la tentative 4 des fiches (mémoire).
+
+- **18 octobre : la reprise.** Lucie lève la pause (« on peut reprendre »),
+  tranche les trois questions des migrations (un schéma par projet, la
+  migration tirée de la différence de gabarits, étendre puis contracter ;
+  noté dans `04-les-buts.md` §4 bis) et pose la règle de la reprise : **une
+  seule grosse indexation à la fois par poste, et autant que possible une
+  seule compilation à la fois par poste**. Je tiens donc un jeton du lourd
+  par poste : une session lourde à la fois ici, une à la fois sur luciepc ;
+  le léger (rebase, relecture, docs, tickets) pour tous sans jeton. Ordre
+  ici : le dual du proto (89e228537), le scénario des vingt clients du
+  banc, puis l'attente des lectures (4aa8c95d5), l'annulation (0acd8aa30),
+  la rétention (205d2923e), la lecture en mémoire du cœur, le binaire de la
+  mémoire longue. Sur luciepc : le paquet de G sans publier, puis le
+  septième rejeu de codeparsers.

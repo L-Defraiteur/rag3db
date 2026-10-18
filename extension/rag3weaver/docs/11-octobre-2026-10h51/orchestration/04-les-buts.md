@@ -71,6 +71,40 @@ qui sont des graphes, le démon qu'on installe, l'IDE pour agents.
   indexe depuis ce soir ; les réactions et la mémoire doivent y tourner
   aussi ; le fanout quand un vrai déploiement distant le mesure.
 
+### 4 bis. Deux questions ouvertes du 13 octobre (Lucie)
+
+- **rag3weaver comme base d'une application à beaucoup de développeurs**, qui
+  écrivent et migrent en même temps (« ajouter une colonne comme ils le
+  feraient sur PostgreSQL, sur la même base »). L'architecture tient (un seul
+  processus possède les fichiers, l'hôte, et tous s'y connectent, comme le
+  postmaster), mais quatre écarts avec PostgreSQL sont à mesurer avant de
+  raffiner le mode multi-écrivains : le DDL transactionnel (un CREATE INDEX
+  refuse la transaction explicite ; l'ADD COLUMN n'est pas mesuré), le coût
+  d'un ADD COLUMN sous le verrou du catalogue (chez PostgreSQL une écriture
+  de catalogue seule), vingt écrivains simultanés dans l'hôte avec le point
+  de reprise qui fait la queue, et les migrations comme objet (table des
+  migrations, ordre, rejeu, refus). Scénario à poser au banc : vingt clients,
+  petites transactions, un DDL par minute, un point de reprise en route ;
+  décision sur les chiffres. Pas avant la reprise. **Décidé par Lucie le
+  13** : le cas d'usage est à présenter et valider (page de conception par
+  l'arbre principal, part moteur relue par le cœur, scénario écrit par le
+  banc, joué à la reprise) ; « ça ne doit être bloqué pour l'un ni pour
+  l'autre ». Et une règle : **un index ne se pense pas**, dans notre
+  paradigme c'est une conséquence du gabarit (ce qu'on cherche, joint,
+  embarque), créé et tenu par le produit ; jamais un CREATE INDEX écrit par
+  un développeur (déjà vrai pour le plein texte et les vecteurs, à écrire
+  dans la stèle du produit pour le reste).
+  **Les trois questions du rapport tranchées par Lucie le 18** (page de
+  l'arbre principal, `13-octobre-2026-arbre-principal/01-…`, §9) : un
+  **schéma par projet** (cellule), pas par base ; la migration **tirée de la
+  différence de gabarits** quand c'est possible, rangée dans un fichier
+  nommé et relisible ; les retraits et conversions de colonne en **étendre
+  puis contracter** (ajouter, écrire aux deux, retirer plus tard, chaque
+  temps une migration), plus de refus.
+- **Le multi-vecteur et MaxSim** (ColBERT, bge-m3 le rend déjà) : une option
+  plus tard, d'abord comme rerank sur les k premiers candidats, jamais une
+  colonne de listes de vecteurs par défaut (trop lourd).
+
 ## 5. Les buts à long terme (les visions)
 
 - **Plusieurs produits, un seul atelier** : le même atelier Westworld avec un

@@ -464,6 +464,55 @@ vrai, et c'est ce qui décide des outils suivants.
   le channel au moment où ça arrive ; un hook avant chaque message demande à
   l'hôte les fiches pertinentes et les glisse en contexte. Graine, pas de
   chantier sans le mot de Lucie.
+- **Des applications rag3weaver empaquetées, une graine** (Lucie, 12 octobre
+  2026 au soir : « notre projet pourrait être exportable : t'es sur ton
+  Windows, Mac, Linux, Android, tu peux lancer l'app quand même, des apps
+  rag3weaver packageables ; une autre vision long terme »). Un produit
+  (un atelier avec ses gabarits, ses graphes, ses vues, sa base) devient une
+  application qu'on lance sur n'importe quel poste sans rien installer
+  autour. Ce qui y mène déjà : le démon portable (lot C, vert sur Linux,
+  macOS et Windows le 12 octobre), le paquet npm qui livre les binaires par
+  système, la lib du moteur liée par identifiant de bâti, l'atelier qui n'est
+  qu'une page servie et des déclarations rechargées à chaud. Ce qui manque :
+  un seul binaire qui embarque l'hôte, le moteur et ses extensions, le
+  gabarit du produit et sa base à côté ; les services d'embarquement en
+  local ou distants selon le poste ; et Android, le plus loin (le moteur C++
+  et le crate Rust pour l'ARM d'Android, des modèles petits). **Le frontend
+  reste à penser** (Lucie, le même soir) : aujourd'hui c'est la page vivante
+  de l'atelier, servie par l'hôte, déclarée et rechargée à chaud ; pour une
+  application, la garder comme seul frontend enveloppé par système (une
+  fenêtre native qui l'affiche, une vue web sur Android), ce qui tient
+  « tout en gabarit » jusqu'à l'écran, ou rendre une part native un jour :
+  question ouverte. Et le bout de la vision (Lucie, 12 octobre au soir) :
+  « que même des apps three.js puissent être empaquetées, que j'aie
+  vraiment tout : le mec construit son moteur de jeu en rag3weaver, ou son
+  app de classeur Excel, ou n'importe quelle autre ». C'est « plusieurs
+  produits, un seul atelier » poussé jusqu'au bout : les données de l'app
+  dans le moteur, sa logique en graphes et en nœuds scriptés (TypeScript),
+  ses écrans en vues déclarées ; une scène three.js ou une grille de
+  classeur est une vue de plus, avec ses propres fichiers (un bundle) et son
+  contrat de ports vers les graphes ; l'atelier qui sert la page devient le
+  lanceur de l'application. Ce qui manque est précisément cela : l'atelier
+  qui accepte un frontend arbitraire comme vue déclarée (le bundle, ses
+  assets, ses ports), et l'empaquetage qui l'emporte avec l'hôte, le moteur
+  et la base. Forme proposée par Lucie (même soir) : « un module React qui
+  se recharge à chaud, embarquer la compilation sur commande ou en hot
+  reload ; pour le frontend, que ça ne sorte jamais des données ». C'est le
+  même chemin que les graphes : les composants et leurs sources sont une
+  donnée du produit, l'hôte les compile lui-même (le moteur de script qui
+  exécute déjà les nœuds TypeScript est la piste pour compiler du TSX en
+  bundle, à la demande ou à chaque changement), et la page vivante recharge
+  le module comme une vue ; l'écran est déclaré, stocké, versionné et
+  rechargé par le même chemin que le reste, l'empaquetage n'emporte que la
+  base. Les libs aussi (Lucie : « dont l'install de libs donc aussi »)  :
+  le module déclare ses dépendances et leurs versions, l'hôte les va
+  chercher sur commande seulement (jamais en silence : c'est du réseau
+  sortant), les range dans un magasin par contenu comme les libs du moteur
+  par identifiant de bâti et les modèles dans le cache, le compilateur
+  embarqué les lie dans le bundle ; l'empaquetage emporte le magasin avec
+  la base et l'application démarre sans réseau ; une mise à jour de lib est
+  un changement déclaré, versionné, rechargé à chaud. Graine, pas de
+  chantier sans le mot de Lucie.
 - **Distribué, une graine** (Lucie, 11 octobre 2026 : « peut-être des visions
   avec des systèmes distribués comme ça, mais je ne sais pas encore ce qu'on
   pourrait en faire à part distribuer l'inférence »). La brique est posée le

@@ -1,7 +1,60 @@
 # Banc de concurrence — rapport de session
 
-Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 4 octobre 2026 après-midi, après les correctifs du planificateur et des
-amonts (`8c83c3360`, puis le second lot).
+Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 18 octobre 2026 (les 11 à 13 octobre).
+
+## Du 11 au 13 octobre : les témoins du stockage, de l'index vectoriel et de la jointure par clé ; en pause depuis le 13
+
+Session « banc » (rag3db-10). Tout ce qui suit est sur master ; chaque couleur a été jouée, pas
+déduite (règle notée le 12 : pas de rouge annoncé sans l'avoir joué, des deux côtés du correctif).
+En pause depuis le 13 octobre à midi, à la demande de Lucie ; rien ne tourne du banc.
+
+### Ce qui a été poussé, dans l'ordre
+
+| commit | quoi | couleur |
+|---|---|---|
+| `e6f626df4` | `Windows/StringScanFiltered` : le balayage filtré d'une colonne de chaînes à cheval sur deux segments (la cause du texte perdu P1, correctif du cœur `f6179ade0`) | 801, 886, 800 lignes fausses sans le correctif ; 0 avec |
+| `410092032` | `ListScanFiltered` : la même garde pour les listes | verte des deux côtés (pas de cas atteignable) |
+| `baf76c474` | `vector_index_cost_test.cpp`, l'instrument du ticket de la suppression HNSW : `ProductShapeDeleteCost`, `Builds/VectorIndexDeleteCost`, trois mesures | DELETE direct 35 à 41 fois SET NULL puis DELETE ; le coût suit la taille de l'index tant qu'il n'est pas checkpointé |
+| `6724f82e0` | `Columns/CheckpointAfterUpdates` : le point de reprise après 15 000 SET de vecteurs | 24 s (quadratique) ; vert après le correctif du cœur `3cca0ae1e` (0,58 s) |
+| `cb6c1a2cb` | `VectorIndexInsertSlope.CostPerBatchSettles` : la pente de l'insertion sans point de reprise ; un ticket moteur et un ticket extension | ×1,7 sans point de reprise contre avec |
+| `5cae23135` | `VectorIndexRetention` : trois témoins du pas 2 de hotfixs (lecteur d'avant un DROP, CREATE annulé, DROP annulé) | rouges ; le DROP annulé perd l'index (défaut neuf) |
+| `0817f6bab`, `a8c17a5ff` | `MaskedNeighbour` (la V1 de F) et `MaskedSelfHop` (le saut Scope → Scope) : les témoins des second et troisième pas de la jointure par clé | verts sur les lots du cœur : 10,9 → 0,54 ms et 8,6 → 0,40 ms |
+| `426a16412` | la garde `checkpoint-keeps-insert-flat` de la pente devient une impression | elle rougissait selon la charge du poste |
+| `799e0fad5` | la pente revient en known_red ; un repère au lot 50 | 4 rouges sur 4 (×1,37 à ×1,40) sur master avec la compaction du cœur et `2bd65cbb8` |
+
+Rejoués à côté, sans commit : les probabilistes vectoriels ×10 avant et après la jointure par clé
+(rien dans le mauvais sens) ; le correctif du point de reprise vérifié (24 s → 0,58 s, forme du
+produit 19-25 s → 1,1 s).
+
+### Ce qu'il faut savoir pour reprendre
+
+- **Le profil sans perf.** perf et valgrind manquent aux deux postes ; `ptrace_scope` vaut 1.
+  Le banc profile par `eu-stack` échantillonné, avec une bibliothèque `LD_PRELOAD` qui appelle
+  `prctl(PR_SET_PTRACER_ANY)` : `~/.cache/rag3db-banc-notes/profil.sh`, `profil-agreger.py`,
+  `ptracer-any.so`. Phases marquées par des lignes du test.
+- **La pente d'insertion** (known_red, ticket ouvert) : ce qui croît encore est la lecture en
+  mémoire, ligne à ligne, de ce qui a été écrit depuis le dernier point de reprise
+  (`scanCommittedInMemRandom` 4 → 27 %, `isSelected` 0 → 18 % entre les lots 0-15 et 50-63). Le
+  cœur a deux pistes (un raccourci par bloc, les suites contiguës d'une liste) ; elles se jugent
+  sur ce témoin.
+- **Les bornes qui dépendent de la charge** n'ont pas leur place dans un cas en known_red ; un
+  contrôle de temps compare deux courbes de la même passe, pas une courbe à elle-même.
+- **Le push** passe par `poste push banc -- push-lot.sh <worktree> code` : la garde « code »
+  arrête si master a reçu du code moteur depuis la base, et le lot se rejoue avant de repartir
+  (arrivé trois fois sur ces jours).
+
+### Ce qui attend
+
+- **Le scénario des migrations concurrentes** (« vingt clients, un DDL par minute, un point de
+  reprise en route, une migration qui échoue ») : écrit avec ses bornes, arrêtées avec le cœur
+  d'après le code ; repris par l'arbre principal dans
+  `13-octobre-2026-arbre-principal/01-plusieurs-developpeurs-et-leurs-migrations.md` ; source
+  `~/.cache/rag3db-banc-notes/scenario-vingt-clients.md`. Le témoin
+  (`twenty_writers_scenario_test.cpp`, dans long.txt) reste à écrire puis à jouer à la levée de la
+  pause. Rouge probable attendu : une migration annulée laisse sa colonne au stockage, et la colonne
+  ajoutée ensuite y reçoit un indice décalé.
+- Le worktree `~/git_workspaces/rag3db-masque` garde le bâti de la session (build/release) ; à
+  effacer en fin de session. Rien du banc sur luciepc.
 
 ## La nuit du 11 octobre : la mise à jour de vecteurs est sur master (`bfc1434e1`)
 

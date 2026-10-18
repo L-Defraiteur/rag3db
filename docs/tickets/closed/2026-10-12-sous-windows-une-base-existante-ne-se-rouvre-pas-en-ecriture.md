@@ -1,15 +1,6 @@
 # Sous Windows, une base qui existe ne se rouvre pas en écriture : la garde B2 et le fichier de données se verrouillent l'un l'autre
 
-- **État** : ouvert — corrigé côté moteur (12 octobre 2026, cœur C++, branche `verrou-une-poignee`,
-  hash dans le rapport), à vérifier par G sur le runner Windows : le verrou d'un fichier est pris
-  une fois par processus, sur une poignée à lui (`LocalFileSystem::acquireProcessLock`), les
-  ouvertures suivantes s'y joignent — la garde B2, le FileHandle des données et le rejeu des
-  pages fantômes ne se croisent plus ; sous Windows l'octet verrouillé est 2^62, hors des
-  données (l'octet 0 verrouillé interdisait aussi la lecture de l'en-tête par une autre poignée) ;
-  sous Unix flock remplace fcntl (fcntl tombait à la fermeture de n'importe quel descripteur du
-  fichier : après le rejeu des pages fantômes, la garde ne gardait plus rien). Témoin Linux
-  `FileLockRegistry` (trois tests, un processus fils par fork). Vu par l'épreuve du cycle du démon
-  du paquet (G)
+- **État** : corrigé (12 octobre 2026, cœur C++, 65cb9a1f3) et vu tourner sous Windows : le verrou d'un fichier est pris une fois par processus, sur une poignée à lui (`LocalFileSystem::acquireProcessLock`), la garde B2, le FileHandle des données et le rejeu des pages fantômes s'y joignent ; sous Windows l'octet verrouillé est 2^62, hors des données ; sous Unix flock remplace fcntl. Témoin Linux `FileLockRegistry`. **Preuve Windows** : run 38262590228 (paquet-npm-2 6d5258699, master 0fc7dd10f, windows-x64, lancé par L-Defraiteur) — bâti vert (la branche `_WIN32` compilée par MSVC), épreuve du cycle du démon verte : phase 0 (création), **phase 1 (réouverture d'une base existante par un hôte seul)** et phase 4 (hôte lancé par le client sur la même base), 0 échec ; macOS vert aussi (run 38257008641).
 - **Gravité** : blocage — sous Windows, toute base se crée une fois, puis ne s'ouvre plus en écriture
 - **Atteignable en service** : oui, sur tout poste Windows, dès la deuxième ouverture d'une base
 - **Touche rag3weaver** : oui, par l'hôte du démon et tout backend ; le correctif est dans le moteur

@@ -128,3 +128,49 @@ qu'aucun outil n'écrit » (une déclaration inatteignable acceptée en silence,
 **La preuve** : chaque ticket fermé avec son témoin, comme pour le moteur. Et une passe de
 contrôle sur ce dépôt, qui compte les liens par marque de résolution (`e2e_banc_relations`) et dit
 ce qui reste « par le nom ».
+
+## 4. Les règles de forme
+
+*Ajoutée le 13 octobre 2026, à la demande de Lucie.* Les conditions P1 à P4 disent ce qui doit être
+vrai d'une réponse. Les règles de forme disent comment le produit se tient, pour que ces conditions
+restent tenables quand d'autres que nous écrivent des gabarits.
+
+### R1 — un index ne se pense pas
+
+Un index est une **conséquence du gabarit** : ce qu'on cherche, ce qu'on joint, ce qu'on embarque.
+Le produit le crée, le tient, le répare et le rebâtit. Un développeur n'écrit jamais de
+`CREATE INDEX` ; il déclare un champ cherchable, une relation, un modèle, et l'index suit. Un index
+que le produit ne connaît pas est une dérive : il n'est ni réparé, ni rebâti, ni dit par l'état
+d'index.
+
+**Déjà ainsi :**
+- **le plein texte** : il naît des champs de contenu et de titre (`isContent`/`isTitle`, le signal
+  bm25 de `EntityConfig`). Lucivy le tient hors du moteur, par cellule, et le rebâtit en fond quand
+  le contenu change ;
+- **les vecteurs** : le signal `vector` et les modèles déclarés créent le stockage et son index HNSW
+  (`ensure_vector_index`, seul point d'appel). L'index est retiré et rebâti autour d'un gros retard,
+  réparé à l'ouverture, et un changement de modèle est un rattrapage ordinaire ;
+- **le sparse** : même chose, par son signal ;
+- **la clé** : `_uuid`, calculé à partir des champs d'identité du gabarit (`hashsafe`), est la clé
+  primaire de chaque table de nœuds. Un développeur ne choisit pas de clé, il déclare ce qui fait
+  l'identité ;
+- **sous PostgreSQL**, les index secondaires (`_row_id`, `_parent_uuid`, la cellule, `to_uuid` des
+  relations, le trigramme) sont posés par le dialecte, jamais par le gabarit.
+
+**Pas encore ainsi :**
+- **les index de clé déclarés** : une clé métier (un numéro de ticket, un chemin de fichier) n'a ni
+  unicité ni index propre. Elle passe par `_uuid` quand elle est d'identité, et sinon par un parcours
+  de table. Le gabarit devrait dire « ce champ est une clé », et le produit en tirer l'unicité et
+  l'index ;
+- **les index secondaires sur rag3db** : aucun. Une recherche par propriété (le `name` d'un `Symbol`
+  dans `usages`) parcourt la table. Le jour où le moteur en aura, ils se déduiront des outils du
+  gabarit (la clé d'un `UsagesNode`, le filtre d'un nœud de recherche), pas d'une déclaration
+  d'index ;
+- **les portes ouvertes au DDL brut** : `Catalog::execute_raw`, le `POST /cypher` du démon
+  `rag3daemon` et un `CypherNode` hors manifeste laissent encore écrire un `CREATE INDEX` que le
+  catalogue ignore. La règle demande de les refuser pour le DDL d'index, ou de les adopter (relire
+  les index de la base, nommer ceux que le gabarit ne dit pas) ;
+- **les migrations** : une migration qui rend un champ cherchable ne crée pas l'index dans sa
+  transaction. Elle pose la dette, et l'index se bâtit après, en fond
+  (`13-octobre-2026-arbre-principal/01-plusieurs-developpeurs-et-leurs-migrations.md`, §8). C'est
+  écrit, pas fait.

@@ -428,6 +428,56 @@ fenêtre étroite par la session cœur C++.
   - puis (A) et (C), mesurés sur le master qui porte le lot du cœur ;
   - le lot des attentes du point de reprise (`c103b9208`), qui attend luciepc.
 
+## Le 12 octobre, la journée — quatre lots sur master, la rétention en attente
+
+**Sur master :**
+- **Le DROP/CREATE contre une recherche** (`2b0f2820b`, `c42fc98bf`) : la liste des index sous
+  verrou, l'index capturé et reconnu par ses tables de relations, le refus nommé, le retrait
+  concurrent reconnu au catalogue (`isIndexChangedAfterSnapshotOf`, qui couvre aussi un DROP
+  validé après le début du lecteur, remarque du cœur), l'annulation du catalogue sous son verrou.
+  La liste a d'abord trouvé une régression : un index détaché, passé un point de reprise, était
+  pris pour un DROP. Le push a été refusé deux fois par des avances du moteur, et un rejeu a
+  attrapé le plantage du masque du cœur (`lookupOffsets`, corrigé par lui).
+- **Les attentes du point de reprise** (`9ea7cd0fc`) : `BlockingWait` dans le gestionnaire de
+  transactions (CHECKPOINT explicite, validation forcée, file d'A7). Témoin rouge 5/5 sur master
+  (le COMMIT attend 4,0 s), vert 5/5.
+- **La suppression sous HNSW** (`690029ab7`, en trois commits) :
+  - (C) l'arrêt de la chaîne UpdateInfo ;
+  - la recherche qui ne complète plus jusqu'à k, cause réelle des « nœuds supprimés rendus par le
+    CALL » et des pseudo-lignes qui faisaient planter le masque ;
+  - (A) `keepFormerNeighboursReachable`, partagée par update et finalizeDelete. Forme du produit :
+    136 → 6,9 ms ; index rempli par SET, 15 000 lignes : 161 → 5 ms. Atteignabilité prouvée par
+    `Cases/RegionDelete`, témoin demandé par le cœur. Le proto a retiré son contournement
+    (`c0679ed33`).
+- **Le bâti Windows** (`0fc7dd10f`) : `RAG3DB_API` retiré de `NodeTable::loadIndex`, que la classe
+  exporte déjà (MSVC C2487, relevé par G).
+- **La lib de luciepc** a été publiée au magasin (identifiant `rag3db-build-3cca0ae1e…`), après
+  l'arrêt de l'hôte par Lucie.
+
+**En attente — la rétention** (commit local `205d2923e`, worktree `rag3db-retention`, sur
+`799e0fad5`) : la version du holder, `INDEX_CHANGE`, l'effacement au point de reprise, la
+résolution par les oid, le DROP en exclusif. Les trois témoins de la rétention sont verts. Le
+cœur a relu et validé. La liste complète a été arrêtée par la pause de Lucie. Deux corrections
+viennent de la relecture et de la liste :
+- **forme (α)** : le CREATE en exclusif et les écritures en partagé sont écartés, parce que le
+  point de reprise forcé du CREATE attendrait l'écrivain qui attend son verrou ;
+- **identifiant de holder partagé** : chaque holder reçoit maintenant un identifiant unique ;
+  partagé, le DROP de l'index détaché effaçait la clé primaire.
+
+Le lot ouvre le ticket des lignes validées pendant le bâti d'un CREATE, témoin rouge sur master
+(309 lignes manquent sur 20 312).
+
+**Fautes** :
+- `RealVectorsReachability` compté vert alors qu'il se sautait (faute d'export) ;
+- une mesure « après » jouée sur les anciens binaires, le bâti ayant échoué : le script s'arrête
+  maintenant ;
+- deux `RAG3DB_API` en double, dont un a cassé Windows ;
+- l'identifiant de holder partagé.
+
+**Pour reprendre** (après la pause, au mot de l'orchestration) :
+- la rétention : rebase, liste complète sur luciepc (`ret-liste.sh`), push, worktree effacé ;
+- puis le ticket du CREATE concurrent, formes (β) et (γ′) à peser avec le cœur.
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre
