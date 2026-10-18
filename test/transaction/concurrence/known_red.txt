@@ -128,3 +128,9 @@ VectorIndexInsertSlope.CostPerBatchSettles insert-cost-without-checkpoint-stays-
 # 2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index) : environ 1 500
 # lignes insérées par une autre connexion pendant le bâti, 20 006 atteintes sur 21 508. Pour hotfixs.
 VectorIndexUpdate.RowsCommittedDuringACreateAreIndexed rows-committed-during-create-indexed
+#
+# Un BEGIN refusé laisse la connexion en transaction explicite sans transaction (ticket
+# 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction) : le MERGE qui suit le refus
+# plante (signal 11, transaction nulle). Joué rouge le 18 octobre sur luciepc (54f060342, branche du scénario). Pour le cœur
+# C++.
+FailedBegin.LeavesTheConnectionUsable failed-begin-leaves-the-connection-usable
