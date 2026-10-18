@@ -540,25 +540,32 @@ fn l_ide_d_un_vrai_hote_se_rend_en_lecture_seule() {
             s
         }
     };
-    // Le fichier : indexé, pas modifié depuis l'index, de quelques dizaines de lignes, sous src/ de préférence.
-    let liste = appeler("list_files", json!({ "path_prefix": "", "limit": 5000, "format": "json" }));
+    // Le fichier : un fichier de code indexé, pas modifié depuis l'index, de quelques dizaines de
+    // lignes, sous src/ de préférence ; le premier dont un scope de code porte un nom d'identifiant.
+    let liste = appeler("list_files", json!({ "path_prefix": "", "limit": 20000, "format": "json" }));
     let entrees = liste["entries"].as_array().unwrap_or_else(|| panic!("list_files : {liste}"));
-    let bon = |e: &&Value| e["indexed"] != false && e["stale"] != true && e["lines"].as_u64().is_some_and(|n| (30..2000).contains(&n));
-    let fichier = entrees
+    const CODE: &[&str] = &[".rs", ".cpp", ".h", ".hpp", ".cc", ".py", ".ts", ".tsx", ".js", ".go", ".java"];
+    let bon = |e: &&Value| {
+        e["indexed"] != false
+            && e["stale"] != true
+            && e["lines"].as_u64().is_none_or(|n| (30..2000).contains(&n))
+            && e["path"].as_str().is_some_and(|p| CODE.iter().any(|x| p.ends_with(x)))
+    };
+    let mut candidats: Vec<&Value> = entrees.iter().filter(bon).collect();
+    candidats.sort_by_key(|e| !e["path"].as_str().is_some_and(|p| p.starts_with("src/")));
+    let (fichier, symbole) = candidats
         .iter()
-        .filter(bon)
-        .find(|e| e["path"].as_str().is_some_and(|p| p.starts_with("src/")))
-        .or_else(|| entrees.iter().find(bon))
-        .unwrap_or_else(|| panic!("aucun fichier indexé et à jour parmi {}", entrees.len()))["path"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let lu = appeler("read_file", json!({ "path": fichier, "limit": 2000, "format": "json" }));
-    let symbole = lu["scopes"]
-        .as_array()
-        .and_then(|s| s.iter().filter_map(|x| x["name"].as_str()).find(|n| n.len() >= 4 && n.chars().all(|c| c.is_alphanumeric() || c == '_')))
-        .unwrap_or_else(|| panic!("{fichier} n'a pas de scope nommé : {lu}"))
-        .to_string();
+        .take(40)
+        .find_map(|e| {
+            let chemin = e["path"].as_str()?.to_string();
+            let lu = appeler("read_file", json!({ "path": chemin, "limit": 2000, "format": "json" }));
+            let nom = lu["scopes"].as_array()?.iter().find_map(|x| {
+                let n = x["name"].as_str()?;
+                (x["scope_type"] != "texte_brut" && n.len() >= 4 && n.chars().all(|c| c.is_alphanumeric() || c == '_')).then(|| n.to_string())
+            })?;
+            Some((chemin, nom))
+        })
+        .unwrap_or_else(|| panic!("aucun fichier de code indexé, à jour et nommé parmi {} ({} candidats)", entrees.len(), candidats.len()));
     eprintln!("{nom} : {fichier}, symbole {symbole}");
     let etat: Value = {
         let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", &cookie).call().unwrap();
