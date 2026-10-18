@@ -90,7 +90,8 @@ mod tests {
             .output()
             .unwrap();
         let texte = String::from_utf8_lossy(&sortie.stdout);
-        let ligne = texte.lines().find(|l| l.starts_with("SONDE ")).unwrap_or_else(|| {
+        // La ligne du fils peut suivre le nom du test, sur la même ligne.
+        let ligne = texte.lines().find_map(|l| l.find("SONDE ").map(|i| &l[i..])).unwrap_or_else(|| {
             panic!("le fils n'a rien mesuré : {texte}{}", String::from_utf8_lossy(&sortie.stderr))
         });
         let val = |k: &str| -> u64 {
