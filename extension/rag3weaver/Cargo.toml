@@ -58,7 +58,16 @@ rquickjs = "0.14"
 swc_ts_fast_strip = "59"
 # Ses diagnostics (ligne et colonne de ce qui ne s'efface pas) : la même
 # version que celle que tire swc_ts_fast_strip.
-swc_common = "26"
+swc_common = { version = "26", features = ["sourcemap"] }
+# **Le composant React d'un gabarit** (`src/script/tsx.rs`) : la chaîne de swc que
+# `swc_ts_fast_strip` tire déjà (mêmes versions, aucune crate nouvelle) — lecture TSX,
+# effacement des types, JSX automatique et React Refresh, génération avec source map.
+swc_ecma_ast = "29"
+swc_ecma_codegen = "32"
+swc_ecma_parser = { version = "46", default-features = false, features = ["typescript"] }
+swc_ecma_transforms_base = "50"
+swc_ecma_transforms_react = "56"
+swc_ecma_transforms_typescript = "56"
 
 # Candle embedder (feature flag, active par defaut)
 candle-core = { version = "0.8", optional = true }

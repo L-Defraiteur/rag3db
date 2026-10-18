@@ -21,6 +21,8 @@ mod rhai;
 #[cfg(test)]
 mod tests;
 mod typescript;
+/// Le composant React d'un gabarit, compilé en module ES pour le navigateur (rien ne s'y exécute).
+pub mod tsx;
 
 /// Les langages connus, sous le nom qu'une déclaration leur donne.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
