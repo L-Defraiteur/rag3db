@@ -70,17 +70,25 @@ fn ouvrir(chemin: &Path) -> Result<Backend, String> {
     prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None)
 }
 
-/// Le Plan refusé quelque part avant les lignes : au chargement, à l'ouverture
-/// ou à l'appel — la forme le permet aux trois (validate() au chargement, le
-/// schéma au liage). Rend le texte du refus.
-fn refus(plan: Value, params: Value) -> String {
+/// **Refusé au chargement du manifeste** (`PreparedBackend::load`) : ce qui
+/// se juge sans données ni base — la forme, `validate()`, les relations du
+/// manifeste (moment fixé avec l'arbre principal). Rend le texte du refus.
+fn refus_au_chargement(plan: Value) -> String {
     let dir = tempfile::tempdir().expect("dossier");
-    match ouvrir(&manifeste(dir.path(), &plan)) {
+    match PreparedBackend::load(&manifeste(dir.path(), &plan)) {
         Err(e) => e,
-        Ok(b) => match b.call("plan_essai", json!({"params": params})) {
-            Err(e) => e,
-            Ok(r) => panic!("le Plan devait être refusé, il a rendu : {r}"),
-        },
+        Ok(_) => panic!("le Plan devait être refusé au chargement du manifeste"),
+    }
+}
+
+/// **Refusé à l'appel, au liage des paramètres** : ce qui dépend de la valeur
+/// passée. Le chargement et l'ouverture doivent passer. Rend le texte du refus.
+fn refus_a_l_appel(plan: Value, params: Value) -> String {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(&manifeste(dir.path(), &plan)).unwrap_or_else(|e| panic!("le chargement et l'ouverture passent : {e}"));
+    match b.call("plan_essai", json!({"params": params})) {
+        Err(e) => e,
+        Ok(r) => panic!("l'appel devait être refusé au liage, il a rendu : {r}"),
     }
 }
 
@@ -168,7 +176,7 @@ fn un_optional_est_retire_par_un_parametre_absent_et_par_une_liste_vide() {
 #[test]
 #[ignore = "rouge jusqu'au lot de l'IR (règle de l'absent et du vide) et au PlanNode"]
 fn une_liste_vide_hors_optional_est_refusee_en_la_nommant() {
-    let e = refus(plan_par_kind(json!({"in": {"field": "kind", "param": "kinds"}})), json!({"kinds": []}));
+    let e = refus_a_l_appel(plan_par_kind(json!({"in": {"field": "kind", "param": "kinds"}})), json!({"kinds": []}));
     assert!(e.contains("kinds"), "le refus nomme le paramètre : {e}");
 }
 
@@ -181,7 +189,7 @@ fn une_pagination_sans_uuid_final_est_refusee() {
                                         "limit": {"param": "limit", "max": 50}}}},
         "outputs": {"rows": "lignes"}
     });
-    let e = refus(plan, json!({"limit": 2}));
+    let e = refus_au_chargement(plan);
     assert!(e.contains("_uuid"), "le refus dit qu'il faut finir l'ordre par _uuid : {e}");
 }
 
@@ -193,7 +201,7 @@ fn un_limit_lie_sans_plafond_est_refuse() {
                                         "order_by": [{"field": "_uuid"}], "limit": {"param": "limit"}}}},
         "outputs": {"rows": "lignes"}
     });
-    let e = refus(plan, json!({"limit": 2}));
+    let e = refus_au_chargement(plan);
     assert!(e.contains("max"), "le refus dit qu'il manque le plafond : {e}");
 }
 
@@ -227,14 +235,14 @@ fn le_total_concorde_avec_les_lignes_quand_on_pagine() {
 fn un_through_vers_un_bout_qui_n_est_pas_celui_de_la_relation_est_refuse() {
     let filtre = json!({"through": {"relation": "CITE", "direction": "outgoing", "end": "Subject",
                                     "filter": {"equals": {"field": "name", "param": "nom"}}}});
-    let e = refus(plan_par_kind(filtre), json!({"nom": "stockage"}));
+    let e = refus_au_chargement(plan_par_kind(filtre));
     assert!(e.contains("CITE") && e.contains("Subject"), "le refus nomme la relation et le bout : {e}");
 }
 
 #[test]
 #[ignore = "rouge jusqu'au lot de l'IR (serde : Compiled jamais désérialisé) et au PlanNode"]
 fn du_cypher_brut_dans_le_plan_est_refuse_a_la_lecture() {
-    let e = refus(plan_par_kind(json!({"compiled": "m.kind = 'fact'"})), json!({}));
+    let e = refus_au_chargement(plan_par_kind(json!({"compiled": "m.kind = 'fact'"})));
     assert!(e.contains("compiled"), "le refus nomme la variante interdite : {e}");
 }
 
