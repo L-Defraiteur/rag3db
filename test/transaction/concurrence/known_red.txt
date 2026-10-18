@@ -132,3 +132,9 @@ VectorIndexRetention.RolledBackDropKeepsTheIndex rolled-back-drop-keeps-index
 # mémoire, ligne à ligne, de ce qui a été écrit depuis le dernier point de reprise
 # (scanCommittedInMemRandom 4 → 27 %, VersionInfo::isSelected 0 → 18 %). Pour le cœur C++.
 VectorIndexInsertSlope.CostPerBatchSettles insert-cost-without-checkpoint-stays-close
+#
+# Un BEGIN refusé laisse la connexion en transaction explicite sans transaction (ticket
+# 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction) : le MERGE qui suit le refus
+# plante (signal 11, transaction nulle). Joué rouge le 18 octobre sur luciepc (54f060342). Pour le cœur
+# C++.
+FailedBegin.LeavesTheConnectionUsable failed-begin-leaves-the-connection-usable

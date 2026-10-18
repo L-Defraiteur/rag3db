@@ -69,12 +69,12 @@ TEST_F(FailedBegin, LeavesTheConnectionUsable) {
         say(a, "A", "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING);");
         say(a, "A", "BEGIN TRANSACTION;");
         say(a, "A", "CREATE (:Doc {id: 1, titre: 'a'});");
-        steps << "PLAN " << (say(b, "B", "BEGIN TRANSACTION;") ? "begin-accepted" : "begin-refused")
-              << std::endl;
+        // Le résultat d'abord : say écrit sa ligne pendant l'évaluation.
+        const auto begun = say(b, "B", "BEGIN TRANSACTION;");
+        steps << "PLAN " << (begun ? "begin-accepted" : "begin-refused") << std::endl;
         say(b, "B", "ROLLBACK;");
-        steps << "MERGE "
-              << (say(b, "B", "MERGE (d:Doc {id: 2}) SET d.titre = 'b';") ? "ok" : "refused")
-              << std::endl;
+        const auto merged = say(b, "B", "MERGE (d:Doc {id: 2}) SET d.titre = 'b';");
+        steps << "MERGE " << (merged ? "ok" : "refused") << std::endl;
         say(a, "A", "COMMIT;");
         _exit(0);
     }
