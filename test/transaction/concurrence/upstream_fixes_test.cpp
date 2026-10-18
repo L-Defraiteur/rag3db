@@ -157,9 +157,8 @@ TEST_F(UpstreamFixes, CheckpointAfterDroppingANodeColumn) {
         return runOrFail(connection, "CHECKPOINT;");
     });
     EXPECT_EQ(first, "") << "[check: checkpoint-survives] the checkpoint after DROP: " << first;
-    const auto second = inChild([](rag3db::main::Connection& connection) {
-        return runOrFail(connection, "CHECKPOINT;");
-    });
+    const auto second = inChild(
+        [](rag3db::main::Connection& connection) { return runOrFail(connection, "CHECKPOINT;"); });
     EXPECT_EQ(second, "") << "[check: checkpoint-after-reopen] " << second;
     const auto values = inChild([](rag3db::main::Connection& connection) {
         auto result = connection.query("MATCH (n:t) RETURN sum(n.a * 1000 + n.c);");
@@ -191,9 +190,8 @@ TEST_F(UpstreamFixes, CheckpointAfterDroppingARelationColumn) {
         return runOrFail(connection, "CHECKPOINT;");
     });
     EXPECT_EQ(first, "") << "[check: checkpoint-survives] the checkpoint after DROP: " << first;
-    const auto second = inChild([](rag3db::main::Connection& connection) {
-        return runOrFail(connection, "CHECKPOINT;");
-    });
+    const auto second = inChild(
+        [](rag3db::main::Connection& connection) { return runOrFail(connection, "CHECKPOINT;"); });
     EXPECT_EQ(second, "") << "[check: checkpoint-after-reopen] " << second;
     const auto values = inChild([](rag3db::main::Connection& connection) {
         auto result = connection.query("MATCH ()-[e:r]->() RETURN sum(e.b);");
@@ -231,8 +229,8 @@ TEST_P(DropBeforeThePrimaryKey, InsertsCopiesAndReplaysFindTheirKeys) {
             return 8;
         }
         for (const auto key : {0, 99, 100, 250, 499, 500, 750, 999}) {
-            auto row = connection.query(
-                "MATCH (n:Item {id: " + std::to_string(key) + "}) RETURN n.name;");
+            auto row =
+                connection.query("MATCH (n:Item {id: " + std::to_string(key) + "}) RETURN n.name;");
             if (!row->isSuccess() || !row->hasNext() ||
                 row->getNext()->getValue(0)->toString() != "item " + std::to_string(key)) {
                 std::cerr << "  key " << key << ": "
@@ -240,10 +238,9 @@ TEST_P(DropBeforeThePrimaryKey, InsertsCopiesAndReplaysFindTheirKeys) {
                 return 9;
             }
         }
-        auto link = connection.query(
-            "MATCH (a:Item {id: 1})-[:Link]->(b:Item {id: 2}) RETURN count(*);");
-        return link->isSuccess() && link->getNext()->getValue(0)->getValue<int64_t>() == 1 ? 0 :
-                                                                                            10;
+        auto link =
+            connection.query("MATCH (a:Item {id: 1})-[:Link]->(b:Item {id: 2}) RETURN count(*);");
+        return link->isSuccess() && link->getNext()->getValue(0)->getValue<int64_t>() == 1 ? 0 : 10;
     };
     const auto written = inChild([&](rag3db::main::Connection& connection) {
         if (journaledCopy && runOrFail(connection, "CALL force_checkpoint_on_copy=false;")) {
@@ -306,9 +303,7 @@ TEST_P(DropBeforeThePrimaryKey, InsertsCopiesAndReplaysFindTheirKeys) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Copy, DropBeforeThePrimaryKey, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) {
-        return info.param ? "Journaled" : "Forced";
-    });
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "Journaled" : "Forced"; });
 
 // La famille du numéro de colonne pris pour une position, par cas (passe de lecture du
 // 5 octobre). Deux fenêtres :
@@ -429,8 +424,7 @@ INSTANTIATE_TEST_SUITE_P(Cases, ColumnIdTakenForAPosition,
         ColumnPositionCase{"ReadOfARelationOfTheTransactionAfterDrop",
             {"CREATE NODE TABLE P(id INT64, PRIMARY KEY (id));",
                 "CREATE REL TABLE R(FROM P TO P, a INT64, b STRING, c STRING);",
-                "CREATE (:P {id: 1}), (:P {id: 2});", "ALTER TABLE R DROP a;",
-                "BEGIN TRANSACTION;",
+                "CREATE (:P {id: 1}), (:P {id: 2});", "ALTER TABLE R DROP a;", "BEGIN TRANSACTION;",
                 "MATCH (x:P {id: 1}), (y:P {id: 2}) CREATE (x)-[:R {b: 'v', c: 'w'}]->(y);"},
             "MATCH ()-[r:R]->() RETURN r.c;", "w"},
         ColumnPositionCase{"UpdateOfARelationOfTheTransactionAfterDrop",
@@ -443,8 +437,8 @@ INSTANTIATE_TEST_SUITE_P(Cases, ColumnIdTakenForAPosition,
         // Relecture de 8b091813d : ce que la fenêtre A touche sans témoin.
         ColumnPositionCase{"AddToARelationTableWithRelationsOfTheTransaction",
             {"CREATE NODE TABLE P(id INT64, PRIMARY KEY (id));",
-                "CREATE REL TABLE R(FROM P TO P, b STRING);",
-                "CREATE (:P {id: 1}), (:P {id: 2});", "BEGIN TRANSACTION;",
+                "CREATE REL TABLE R(FROM P TO P, b STRING);", "CREATE (:P {id: 1}), (:P {id: 2});",
+                "BEGIN TRANSACTION;",
                 "MATCH (x:P {id: 1}), (y:P {id: 2}) CREATE (x)-[:R {b: 'v'}]->(y);",
                 "ALTER TABLE R ADD d INT64 DEFAULT 7;"},
             "MATCH ()-[r:R]->() RETURN r.d;", "7"},
@@ -456,9 +450,8 @@ INSTANTIATE_TEST_SUITE_P(Cases, ColumnIdTakenForAPosition,
         ColumnPositionCase{"DeleteOfARowOfTheTransactionAfterDropThenReplay",
             {ITEM, ROW, "CHECKPOINT;", "ALTER TABLE Item DROP extra;", "BEGIN TRANSACTION;",
                 "CREATE (:Item {id: 2, name: 'b', note: 'm'});",
-                "CREATE (:Item {id: 3, name: 'c', note: 'o'});",
-                "MATCH (n:Item {id: 2}) DELETE n;", "COMMIT;", "REOPEN",
-                "CREATE (:Item {id: 2, name: 'again', note: 'p'});"},
+                "CREATE (:Item {id: 3, name: 'c', note: 'o'});", "MATCH (n:Item {id: 2}) DELETE n;",
+                "COMMIT;", "REOPEN", "CREATE (:Item {id: 2, name: 'again', note: 'p'});"},
             "MATCH (n:Item) RETURN count(*);", "3"},
         ColumnPositionCase{"VectorIndexOnARowOfTheTransactionAfterDrop",
             {"CREATE NODE TABLE V(id INT64, extra STRING, emb FLOAT[3], PRIMARY KEY (id));",
@@ -483,6 +476,18 @@ INSTANTIATE_TEST_SUITE_P(Cases, ColumnIdTakenForAPosition,
 // checkpoint → splitSlots, d'après la pile de la session cœur C++). Sur master tel quel.
 // Le fils a une échéance : un point de reprise sans fin ne doit pas bloquer la passe ; sa
 // mémoire est bornée par la portée de `poste`, qui tue le plus gros processus.
+// Le VmData du processus, en octets (0 s'il est illisible) : ce qu'un fils hérite de son père et
+// qui compte déjà dans RLIMIT_DATA.
+uint64_t inheritedDataBytes() {
+    std::ifstream in("/proc/self/status");
+    for (std::string line; std::getline(in, line);) {
+        if (line.rfind("VmData:", 0) == 0) {
+            return std::stoull(line.substr(7)) * 1024;
+        }
+    }
+    return 0;
+}
+
 class RolledBackCopyThenCheckpoint : public UpstreamFixes,
                                      public ::testing::WithParamInterface<std::string> {
 public:
@@ -502,8 +507,13 @@ public:
                 boundedConfig.bufferPoolSize = 512ull * 1024 * 1024;
                 // La réservation virtuelle du tampon compte dans RLIMIT_DATA : la ramener.
                 boundedConfig.maxDBSize = 1ull << 30;
-                // Et le tas : ce qui enfle n'est pas dans le tampon (essai du 5 octobre).
-                rlimit dataLimit{3ull << 30, 3ull << 30};
+                // Et le tas : ce qui enfle n'est pas dans le tampon (essai du 5 octobre). Trois Gio
+                // au-delà de ce que le fils hérite du père, jamais en absolu : après les cas longs,
+                // le père garde environ 2 Gio de VmData (les arènes de malloc de leurs fils, que
+                // malloc_trim ne rend pas), et un plafond absolu de 3 Gio refusait la réservation
+                // du tampon (« Mmap for size … failed », 18 octobre).
+                const auto inherited = inheritedDataBytes();
+                rlimit dataLimit{inherited + (3ull << 30), inherited + (3ull << 30)};
                 setrlimit(RLIMIT_DATA, &dataLimit);
                 rag3db::main::Database childDatabase(databasePath, boundedConfig);
                 rag3db::main::Connection childConnection(&childDatabase);
@@ -691,12 +701,12 @@ TEST_F(UpstreamFixes, StaleIndexColumnsAreRepairedAtOpening) {
             runOrFail(connection, "CREATE (:V {id: 100, emb: [100.0, 1.0, 2.0]});")) {
             return 4;
         }
-        for (const auto& [query, expected] : std::vector<std::pair<std::string, std::string>>{
-                 {"MATCH (n:Item {id: 1000}) RETURN n.name;", "new"},
-                 {"MATCH (n:Item {id: 1}) RETURN n.name;", "changed"},
-                 {"CALL QUERY_VECTOR_INDEX('V', 'vi', [100.0, 1.0, 2.0], 1) RETURN node.id;",
-                     "100"},
-             }) {
+        for (const auto& [query, expected] :
+            std::vector<std::pair<std::string, std::string>>{
+                {"MATCH (n:Item {id: 1000}) RETURN n.name;", "new"},
+                {"MATCH (n:Item {id: 1}) RETURN n.name;", "changed"},
+                {"CALL QUERY_VECTOR_INDEX('V', 'vi', [100.0, 1.0, 2.0], 1) RETURN node.id;", "100"},
+            }) {
             if (const auto value = text(query); value != expected) {
                 std::cerr << "  " << query << " => " << value << "\n";
                 return 6;
@@ -962,13 +972,13 @@ TEST_F(UpstreamFixes, CheckpointLetsAFinishingReaderGo) {
     const auto ms = [](auto d) {
         return std::chrono::duration_cast<std::chrono::milliseconds>(d).count();
     };
-    std::cerr << "  reader alone " << ms(alone) << " ms, during a checkpoint "
-              << ms(withCheckpoint) << " ms\n";
+    std::cerr << "  reader alone " << ms(alone) << " ms, during a checkpoint " << ms(withCheckpoint)
+              << " ms\n";
     EXPECT_TRUE(checkpoint->isSuccess())
         << "[check: checkpoint-succeeds] " << checkpoint->getErrorMessage();
     EXPECT_LT(withCheckpoint, alone * 3 + std::chrono::seconds(1))
-        << "[check: reader-not-held] the reader took " << ms(withCheckpoint) << " ms, "
-        << ms(alone) << " ms alone";
+        << "[check: reader-not-held] the reader took " << ms(withCheckpoint) << " ms, " << ms(alone)
+        << " ms alone";
 }
 
 // --- Ce qui rend une réponse fausse ----------------------------------------------------------
@@ -1132,8 +1142,7 @@ public:
             if (!key->isSuccess() || !key->hasNext() ||
                 key->getNext()->getValue(0)->getValue<int64_t>() != 5) {
                 std::cerr << "  key 5: "
-                          << (key->isSuccess() ? key->toString() : key->getErrorMessage())
-                          << "\n";
+                          << (key->isSuccess() ? key->toString() : key->getErrorMessage()) << "\n";
                 return 5;
             }
             if (auto code = runOrFail(connection, "MATCH (n:Doc {id: 5}) SET n.name = 'X';")) {
