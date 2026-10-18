@@ -60,12 +60,43 @@ Une proposition de création n'est pas posée seule : elle reste « proposée »
 n'est pas confirmée (par l'agent qui a envoyé le document, ou par Lucie), comme une
 transition du cycle de vie.
 
-## 3. Le filet : les crochets de Claude Code
+## 3. Une seule porte : le rangement, appelé par l'envoi et par les crochets
 
-Si Claude n'a rien envoyé, **les crochets de Claude Code** (`PreCompact`, la fin de
-session) envoient ce qu'il y a : la note de fin si elle existe, sinon un résumé de la
-partie de conversation qui va être compactée, marqué comme tel (`origin: filet`). Le
-filet n'invente rien : il ne fait que garantir qu'aucune session ne se perd sans trace.
+*Confirmé par Lucie le 18 octobre : les crochets de Claude Code font le rangement au
+seuil, en filet de l'envoi volontaire.* Ce que reçoivent les crochets est relevé dans
+`visions/2026-10-04-00h09-l-archiviste-branche-sur-claude-code.md` §2 : l'identifiant de
+la session, le dossier de travail, et **le chemin de la transcription** (une ligne par
+événement : messages, appels d'outils, résultats).
+
+**La porte** : `ranger(source)`, dans l'hôte, la même pour les deux appelants.
+
+| appelant | ce qu'il donne | la source |
+|---|---|---|
+| **l'envoi volontaire** (`archive(document)`, par MCP) | le Markdown que Claude a écrit, la session MCP | le Markdown tel quel (le L0) |
+| **le crochet** (`PreCompact`, la fin de session) | l'identifiant de session, le dossier de travail, le chemin de la transcription, **le motif** (`pre_compact` manuel ou automatique, `session_end` et sa raison) | la tranche de transcription **depuis le dernier rangement de cette session**, résumée en un Markdown marqué `origin: filet` ; ce Markdown est le L0 |
+
+Ensuite, tout est commun : le L0 gardé, le découpage, la classification fermée, les L1,
+le recalcul des L2 (§2).
+
+- **Le repère de chaque session** : une ligne `Rangement {session, transcription, jusqu_a,
+  le, motif}` dans la base (et son fichier), où `jusqu_a` est la position du dernier
+  événement rangé dans la transcription. **Un crochet sans rien de neuf depuis ce repère
+  ne fait rien** (et le dit dans le journal de l'hôte, pas à l'agent).
+- **L'envoi volontaire avance aussi le repère** quand l'hôte sait de quelle session il
+  vient, pour que le crochet suivant ne range pas une seconde fois ce que Claude a déjà
+  écrit. *À confirmer par un essai* : si une session MCP de Claude Code porte son
+  identifiant de session Claude (une variable d'environnement donnée au serveur MCP, par
+  exemple) ; sinon, le repère volontaire se pose par l'heure, et le crochet ne range que
+  les événements postérieurs.
+- **Le crochet est court** : celui de fin de session n'a qu'environ une seconde et demie.
+  Il ne fait qu'**appeler la porte** (une commande mince, `rag3weaver-backend ranger
+  --crochet`, qui lit le JSON du crochet sur son entrée et le poste à l'hôte) ; le
+  rangement tourne **dans l'hôte**, en arrière-plan, et survit à la fin de la session.
+- **L'adaptateur de transcription est petit et tolérant** : le format est interne à
+  Claude Code et peut changer ; un événement qu'il ne comprend pas est compté et sauté,
+  jamais une raison de ne rien ranger.
+- **Le filet n'invente rien** : il garantit qu'aucune session ne se perd sans trace ; son
+  résumé est un L0 comme un autre, cité par les L1 qu'il produit.
 
 ## 4. Les fichiers
 
@@ -158,7 +189,7 @@ une relation de plus (`Fiche -[:A_POUR_APPORT]-> L1`).
 | M6 | le L1 bis : la consolidation au-delà d'un budget | petit à moyen |
 | M7 | l'auteur posé par l'hôte (identité git du dépôt, client de la session) et `authors?` dans `cited_by` | petit à moyen |
 | M8 | la montre sur les dossiers d'entités déclarées, les éditions à la main (un L1 ajouté, `## État` protégé), les fichiers invalides dits, `expected_hash` | moyen à gros |
-| M9 | les crochets de Claude Code (`PreCompact`, fin de session) comme filet | petit |
+| M9 | la porte unique `ranger` : l'envoi volontaire et les crochets (`PreCompact`, fin de session), le repère par session, la commande mince du crochet, l'adaptateur de transcription | petit à moyen |
 | M10 | le partage par git : deux clones, un conflit, une fiche créée des deux côtés (témoins) | moyen |
 
 **L'ordre** : M1 puis M2 et M3 d'abord (sans la preuve de parité, le reste repose sur une
