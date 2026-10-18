@@ -269,6 +269,10 @@ public:
     std::vector<std::shared_ptr<Index>> getVisibleSharedIndexes(const std::string& name,
         const transaction::Transaction* transaction) const;
     std::vector<IndexHolder>& getIndexes() { return indexes; }
+    // Visible à la transaction ; sans transaction, tout index non retiré. Publique : la
+    // finalisation d'un COPY (NodeBatchInsert) parcourt getIndexes() avec ce même filtre.
+    static bool isIndexVisible(const IndexHolder& holder,
+        const transaction::Transaction* transaction);
 
     common::column_id_t getNumColumns() const { return columns.size(); }
     Column& getColumn(common::column_id_t columnID) {
@@ -295,7 +299,8 @@ public:
         common::row_idx_t numRows_, common::node_group_idx_t nodeGroupIdx_);
     void rollbackGroupCollectionInsert(common::row_idx_t numRows_);
     // Prévient chaque index chargé que les lignes à partir de ce décalage sont retirées.
-    void rollbackIndexInsert(common::offset_t firstRolledBackOffset);
+    void rollbackIndexInsert(common::offset_t firstRolledBackOffset,
+        const transaction::Transaction* transaction);
 
     common::node_group_idx_t getNumCommittedNodeGroups() const {
         return nodeGroups->getNumNodeGroups();
@@ -368,9 +373,6 @@ private:
     // parcourent par getIndexes(), se sérialisent avec le DDL par le verrou INDEX (à venir).
     mutable std::shared_mutex indexesMtx;
     std::optional<Index*> getIndexNoLock(const std::string& name) const;
-    // Visible à la transaction ; sans transaction, tout index non retiré.
-    static bool isIndexVisible(const IndexHolder& holder,
-        const transaction::Transaction* transaction);
     uint64_t nextHolderID = 1;
     NodeTableVersionRecordHandler versionRecordHandler;
 };

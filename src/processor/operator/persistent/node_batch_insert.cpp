@@ -322,6 +322,13 @@ void NodeBatchInsert::finalize(ExecutionContext* context) {
 
     auto& nodeTable = nodeSharedState->table->cast<NodeTable>();
     for (auto& index : nodeTable.getIndexes()) {
+        // Seuls les index que cette transaction voit et écrit : un index retiré (DROP validé
+        // avant ce COPY) reste dans la liste pour les lecteurs d'avant (rétention), mais ses
+        // tables internes ont quitté le catalogue, et sa finalisation les cherchait (ticket du
+        // 18 octobre 2026 : un COPY après DROP_VECTOR_INDEX refusé « _UPPER does not exist »).
+        if (index.isDetached() || !NodeTable::isIndexVisible(index, transaction)) {
+            continue;
+        }
         index.finalize(clientContext);
     }
     if (nodeSharedState->stats.has_value()) {

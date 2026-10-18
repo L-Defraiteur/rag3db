@@ -125,10 +125,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (145), dans `closed/`
+### Fermés (146), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un COPY après le retrait de l'index vectoriel est refusé : la finalisation du COPY touche l'index retiré](closed/2026-10-18-un-copy-apres-le-retrait-de-l-index-vectoriel-est-refuse.md) | corrigé — 18 octobre 2026, ouvert et fermé dans le même commit (régression de la rétention des index sur le chemin DROP, COPY, CREATE du produit) ; témoin `copy_after_drop_vector_index_test.cpp` | refus d'un COPY valide, ingestion en masse du produit bloquée | oui (depuis 9b861579a) | oui |
 | [L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir](closed/2026-10-18-l-arret-de-l-hote-attend-sans-borne-une-reaction-figee.md) | corrigé : arrêt des réacteurs borné à 30 s, le réacteur figé nommé et son catalogue laissé au rejeu (lot de l'hôte par socket) | blocage | oui | oui |
 | [codeparsers parse le TSX avec la grammaire TypeScript : le JSX tombe en erreur, ses usages se perdent](closed/2026-10-18-codeparsers-parse-le-tsx-avec-la-grammaire-typescript.md) | corrigé : codeparsers `9d5de97` (la grammaire suit l'extension ; la collecte locale ne prend plus le nom d'une balise pour une définition) ; témoin `codeparsers/tests/jsx.rs` | réponse incomplète (aucun usage d'un composant en balise) | oui, tout dépôt avec des `.tsx`/`.jsx` | oui (index du code, `usages`) |
 | [La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie](closed/2026-10-18-la-ci-de-rag3weaver-etait-rouge-sans-que-personne-le-voie.md) | corrigé : CI verte sur master (run 39144463679), `poste push` dit l'état de la CI, cinq tests gardés | filet absent | non (l'outillage) | oui (workflow, check_features, poste) |

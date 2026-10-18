@@ -95,7 +95,8 @@ void NodeTableVersionRecordHandler::applyFuncToChunkedGroups(version_record_hand
 void NodeTableVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     node_group_idx_t nodeGroupIdx, row_idx_t startRow, row_idx_t numRows) const {
     table->rollbackPKIndexInsert(context, startRow, numRows, nodeGroupIdx);
-    table->rollbackIndexInsert(StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx) + startRow);
+    table->rollbackIndexInsert(StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx) + startRow,
+        transaction::Transaction::Get(*context));
 
     // the only case where a node group would be empty (and potentially removed before) is if an
     // exception occurred while adding its first chunk
@@ -1072,9 +1073,13 @@ void NodeTable::rollbackPKIndexInsert(main::ClientContext* context, row_idx_t st
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
-void NodeTable::rollbackIndexInsert(offset_t firstRolledBackOffset) {
+void NodeTable::rollbackIndexInsert(offset_t firstRolledBackOffset,
+    const Transaction* transaction) {
     for (auto& index : indexes) {
-        if (index.isLoaded()) {
+        // Les seuls index que la transaction qui annule voyait et écrivait : pas un index retiré
+        // avant elle, ni celui qu'une autre transaction crée sans avoir validé (le même filtre
+        // que l'étape 3 de la validation).
+        if (index.isLoaded() && !index.isDetached() && isIndexVisible(index, transaction)) {
             index.getIndex()->rollbackInsert(firstRolledBackOffset);
         }
     }
