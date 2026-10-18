@@ -27,6 +27,15 @@ chevauchent `CREATE_VECTOR_INDEX`, datées depuis le début du DDL. Les trois va
 Une passe antérieure, à deux fils, avait déjà montré la même forme : tous les acteurs retenus de
 43 à 62 ms, puis jusqu'à 9,6 s.
 
+**À huit fils, la famine se voit encore, plus courte** (9936a4e6d, sous `poste mesure`, luciepc) :
+
+| scénario à huit fils | durée du CREATE | attentes de plus d'1 s pendant le CREATE |
+|---|---|---|
+| `DdlEveryFifteenSeconds` | 5,14 s | les 26 acteurs, commencées de 74 à 101 ms, finies de 2 212 à 2 238 ms |
+| `DdlEveryMinute` | 6,95 s | les 26 acteurs, commencées de 74 à 92 ms, finies de 3 192 à 3 230 ms |
+
+Le témoin, à deux fils, a joué rouge : `CREATE` de 14,0 s, et une lecture qui attend 12,7 s.
+
 ## La cause
 
 Elle a été proposée par hotfixs et confirmée par les trois variantes. Le bâti en mémoire du CREATE
