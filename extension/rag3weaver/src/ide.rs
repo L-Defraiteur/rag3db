@@ -193,6 +193,51 @@ impl Flux {
     }
 }
 
+// ─── L'aperçu d'un composant (marche 3, lot 3) ──────────────────────────────
+
+const APERCU: &str = include_str!("ide/apercu.html");
+
+/// `/ide/apercu/<backend>/<Composant>` : la page ; `…/modules.js` : ses
+/// modules, enveloppés, puis l'entrée et le démarrage pour le registre.
+fn apercu(host: &DaemonHost, path: &str) -> (u16, &'static str, String) {
+    let reste = path.trim_start_matches("/ide/apercu/");
+    let morceaux: Vec<&str> = reste.split('/').collect();
+    match morceaux.as_slice() {
+        [_, nom] if !nom.is_empty() => (200, "text/html; charset=utf-8", APERCU.to_string()),
+        [id, nom, "modules.js"] => {
+            let nom = decoder(nom);
+            let rendu = host.with_backend_id(id, |b| {
+                let prepared = b.prepared();
+                let graphe = prepared.components().module_graph(&prepared.directory, &nom, crate::components::Mode::Development)?;
+                Ok::<_, String>(modules_js(&graphe))
+            });
+            match rendu.and_then(|r| r) {
+                Ok(js) => (200, "text/javascript; charset=utf-8", js),
+                Err(e) => (422, "text/plain; charset=utf-8", e),
+            }
+        }
+        _ => (404, "text/plain; charset=utf-8", format!("aperçu : {path} n'est ni /ide/apercu/<backend>/<Composant> ni …/modules.js")),
+    }
+}
+
+/// Le script des modules d'un graphe, puis son entrée, son démarrage et ce qui
+/// ne s'est pas résolu (dit à la console, refusé par le registre s'il s'exécute).
+pub fn modules_js(g: &crate::components::modules::Graph) -> String {
+    let mut js = g.script();
+    js.push_str(&format!(
+        "__rag3weaver.entree = {};
+__rag3weaver.demarrage = {};
+",
+        serde_json::to_string(&g.entry).unwrap(),
+        serde_json::to_string(&g.boot).unwrap()
+    ));
+    for u in &g.unresolved {
+        js.push_str(&format!("console.warn({});
+", serde_json::to_string(u).unwrap()));
+    }
+    js
+}
+
 // ─── Les routes ─────────────────────────────────────────────────────────────
 
 /// Les paramètres d'une URL, décodés.
@@ -296,6 +341,13 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let depuis = entete(&request, "Last-Event-ID").map(str::to_string).or_else(|| param("depuis")).and_then(|v| v.trim().parse::<u64>().ok());
             let ecrivain = request.into_writer();
             host.ide_flux().abonner(ecrivain, sujets, depuis);
+        }
+        ("GET", "/ide/registre.js") => {
+            let _ = request.respond(reponse(200, "text/javascript; charset=utf-8", crate::components::modules::REGISTRE.to_string()));
+        }
+        ("GET", p) if p.starts_with("/ide/apercu/") => {
+            let (statut, type_, corps) = apercu(host, p);
+            let _ = request.respond(reponse(statut, type_, corps));
         }
         ("GET", "/ide/etat") => {
             let (statut, v) = host.handle("GET", "/etat", None, &[]);
@@ -457,6 +509,21 @@ mod tests {
         for a in &appeles {
             assert!(outils.contains_key(a), "la page appelle « {a} », absent du bloc outils");
         }
+    }
+
+    /// **Les routes de l'aperçu** (lot 3) : la page pour un composant ; ses
+    /// modules d'un backend inconnu, refusés en le nommant ; un chemin
+    /// incomplet, 404.
+    #[test]
+    fn the_preview_routes_answer() {
+        let host = DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()));
+        let (s, t, c) = apercu(&host, "/ide/apercu/abc/Fiche");
+        assert_eq!(s, 200);
+        assert!(t.starts_with("text/html") && c.contains("/ide/registre.js") && c.contains("modules.js"), "{c}");
+        let (s, _, c) = apercu(&host, "/ide/apercu/abc/Fiche/modules.js");
+        assert_eq!(s, 422, "{c}");
+        assert!(c.contains("abc"), "{c}");
+        assert_eq!(apercu(&host, "/ide/apercu/abc").0, 404);
     }
 
     #[test]

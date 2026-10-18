@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aperçu d'un composant</title>
+<style>
+  :root { --fond: #fbfaf7; --texte: #1d1c1a; --doux: #6b6862; --trait: #e3e0d9; --alerte: #9a3b1f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #17181a; --texte: #e8e6e1; --doux: #9a978f; --trait: #2c2d30; --alerte: #e3967a; }
+  }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, sans-serif; }
+  header { padding: 8px 16px; border-bottom: 1px solid var(--trait); color: var(--doux); font-size: 13px; overflow-wrap: anywhere; }
+  #racine { padding: 16px; }
+  pre.erreur { margin: 16px; padding: 12px; border: 1px solid var(--alerte); color: var(--alerte);
+    white-space: pre-wrap; font: 13px/1.45 ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<header id="titre">aperçu</header>
+<div id="racine"></div>
+<script src="/ide/registre.js"></script>
+<script>
+// L'aperçu d'un composant (marche 3, lot 3) : le registre, puis les modules
+// du composant (/ide/apercu/<backend>/<Composant>/modules.js), puis le rendu
+// par react-dom/client. Les props viennent de l'URL : ?props={"titre":"…"}.
+(function () {
+  const [backend, nom] = location.pathname.replace(/^\/ide\/apercu\//, "").split("/").map(decodeURIComponent);
+  document.getElementById("titre").textContent = `aperçu · ${nom} · backend ${backend}`;
+  function montrer(e) {
+    const pre = document.createElement("pre");
+    pre.className = "erreur";
+    pre.textContent = String(e && e.stack ? e.stack : e);
+    document.body.append(pre);
+  }
+  const script = document.createElement("script");
+  script.src = `/ide/apercu/${encodeURIComponent(backend)}/${encodeURIComponent(nom)}/modules.js`;
+  script.onerror = async () => {
+    try { montrer(await (await fetch(script.src)).text()); } catch (e) { montrer(e); }
+  };
+  script.onload = () => {
+    try {
+      const R = globalThis.__rag3weaver;
+      const React = R.require(R.demarrage["react"]);
+      const client = R.require(R.demarrage["react-dom/client"]);
+      const module = R.require(R.entree);
+      const Composant = module[nom] ?? module.default;
+      if (!Composant) throw new Error(`${nom} : le module n'exporte ni « ${nom} » ni default`);
+      const props = JSON.parse(new URLSearchParams(location.search).get("props") ?? "{}");
+      client.createRoot(document.getElementById("racine")).render(React.createElement(Composant, props));
+    } catch (e) { montrer(e); }
+  };
+  document.body.append(script);
+})();
+</script>
+</body>
+</html>

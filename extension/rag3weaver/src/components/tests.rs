@@ -250,3 +250,123 @@ fn une_case_de_portee_hote_exige_ui_state() {
     assert!(e.contains("\"ui_state\""), "{e}");
     Components::load_in(t.path(), &ecran(Some("EtatEcran"))).unwrap_or_else(|e| panic!("{e:?}"));
 }
+
+// ── Le lot 3 : le graphe des modules, exécuté par le registre de la page ──
+
+/// Un backend « exécutable » : un faux React en CommonJS (useState, jsxDEV
+/// qui requiert react, react-dom/client qui requiert react), et deux
+/// composants TSX, `Fiche` qui importe `Bouton`.
+fn backend_executable() -> (tempfile::TempDir, PathBuf) {
+    let t = tempfile::tempdir().unwrap();
+    let b = t.path().join("backend");
+    std::fs::create_dir_all(b.join("components")).unwrap();
+    let r = paquet(
+        t.path(),
+        "react",
+        json!({
+            "name": "react", "version": "19.2.0",
+            "exports": {
+                ".": { "development": "./cjs/react.development.js", "default": "./cjs/react.production.js" },
+                "./jsx-dev-runtime": "./cjs/jsx-dev.js",
+                "./jsx-runtime": "./cjs/jsx-dev.js"
+            }
+        }),
+        &[
+            ("cjs/react.development.js", "exports.useState = function (v) { return [v, function () {}]; }; exports.version = 'dev';"),
+            ("cjs/react.production.js", "exports.version = 'prod';"),
+            ("cjs/jsx-dev.js", "var React = require('react'); exports.jsxDEV = function (t, p) { return { t: typeof t === 'string' ? t : t.name, p: p, v: React.version }; }; exports.jsx = exports.jsxDEV; exports.jsxs = exports.jsxDEV; exports.Fragment = 'F';"),
+        ],
+    );
+    let d = paquet(
+        t.path(),
+        "react-dom",
+        json!({ "name": "react-dom", "version": "19.2.0", "exports": { ".": "./index.js", "./client": "./client.js" }, "dependencies": { "react": "19.2.0" } }),
+        &[
+            ("index.js", "module.exports = {};"),
+            ("client.js", "var React = require(\"react\"); exports.createRoot = function () { return { render: function (e) { globalThis.__rendu = e; } }; }; exports.memeReact = React;"),
+        ],
+    );
+    add_lib(&b, &r).unwrap();
+    add_lib(&b, &d).unwrap();
+    let ecrire = |nom: &str, fichier: &str, source: &str| {
+        std::fs::write(b.join("components").join(fichier), source).unwrap();
+        std::fs::write(
+            b.join("components").join(format!("{}{SUFFIX}", fichier.split('.').next().unwrap())),
+            json!({ "name": nom, "source": fichier, "libs": { "react": "19.2.0" } }).to_string(),
+        )
+        .unwrap();
+    };
+    ecrire("Bouton", "bouton.tsx", "export function Bouton({ libelle }: { libelle: string }) { return <button>{libelle}</button>; }\n");
+    ecrire(
+        "Fiche",
+        "fiche.tsx",
+        "import { useState } from \"react\";\nimport { Bouton } from \"./bouton\";\nexport function Fiche({ titre }: { titre: string }) {\n  const [n] = useState(3);\n  return <div>{titre}{n}<Bouton libelle=\"ok\" /></div>;\n}\n",
+    );
+    (t, b)
+}
+
+/// **Le graphe d'un composant tient ensemble** : le composant compilé, le
+/// composant qu'il importe, les fichiers de React, et le démarrage de la page
+/// (react, react-dom/client) — tout résolu, `react` au même id partout.
+#[test]
+fn a_component_graph_holds_together() {
+    let (_t, b) = backend_executable();
+    let c = Components::load(&b).unwrap();
+    let g = c.module_graph(&b, "Fiche", Mode::Development).unwrap();
+    assert!(g.unresolved.is_empty(), "{:?}", g.unresolved);
+    let fiche = &g.modules["comp:Fiche"];
+    assert_eq!(fiche.deps["./bouton"], "comp:Bouton");
+    let react = &fiche.deps["react"];
+    assert_eq!(react, "lib:react@19.2.0/cjs/react.development.js");
+    assert_eq!(&g.boot["react"], react, "le démarrage et le composant partagent react");
+    let client = &g.modules[&g.boot["react-dom/client"]];
+    assert_eq!(&client.deps["react"], react, "react-dom aussi");
+    assert!(g.modules.contains_key("comp:Bouton"));
+    assert!(fiche.exports_only_components);
+    // Chaque module de lib porte le hash du magasin.
+    assert_eq!(g.modules[react].hash, c.libs["react"].files["cjs/react.development.js"]);
+}
+
+/// **Le registre de la page exécute le graphe** (QuickJS, sans navigateur) :
+/// le composant compilé par `tsx` se rend en son élément, son enfant aussi, et
+/// react-dom voit le même React que le composant — une seule instance.
+#[test]
+fn the_page_registry_runs_the_graph() {
+    let (_t, b) = backend_executable();
+    let c = Components::load(&b).unwrap();
+    let g = c.module_graph(&b, "Fiche", Mode::Development).unwrap();
+    let programme = format!(
+        "{}{}\nconst F = __rag3weaver.require({entree}).Fiche;\nconst e = F({{ titre: \"T\" }});\nconst dom = __rag3weaver.require({client});\ndom.createRoot(null).render(e);\nJSON.stringify({{ e: globalThis.__rendu, un: dom.memeReact === __rag3weaver.require({react}) }});",
+        super::modules::REGISTRE,
+        g.script(),
+        entree = serde_json::to_string(&g.entry).unwrap(),
+        client = serde_json::to_string(&g.boot["react-dom/client"]).unwrap(),
+        react = serde_json::to_string(&g.boot["react"]).unwrap(),
+    );
+    let rt = rquickjs::Runtime::new().unwrap();
+    let ctx = rquickjs::Context::full(&rt).unwrap();
+    let rendu: String = ctx.with(|ctx| match ctx.eval::<String, _>(programme.clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            let detail = ctx.catch();
+            panic!("{e} — {detail:?}\n{programme}")
+        }
+    });
+    let v: Value = serde_json::from_str(&rendu).unwrap();
+    assert_eq!(v["e"]["t"], "div", "{rendu}");
+    assert_eq!(v["e"]["v"], "dev", "le React de développement : {rendu}");
+    assert_eq!(v["un"], true, "une seule instance de React : {rendu}");
+    assert!(rendu.contains("\"Bouton\"") && rendu.contains("\"T\"") && rendu.contains('3'), "{rendu}");
+}
+
+/// **Un magasin touché est refusé** : les octets d'une lib qui ne redonnent
+/// plus leur hash.
+#[test]
+fn a_tampered_store_is_refused() {
+    let (_t, b) = backend_executable();
+    let c = Components::load(&b).unwrap();
+    let h = c.libs["react"].files["cjs/react.development.js"].clone();
+    std::fs::write(store_path(&b, &h), "exports.useState = null; // touché").unwrap();
+    let e = c.module_graph(&b, "Fiche", Mode::Development).unwrap_err();
+    assert!(e.contains("react/cjs/react.development.js") && e.contains("touché"), "{e}");
+}

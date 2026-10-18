@@ -204,11 +204,14 @@ pub enum Mode {
     Production,
 }
 
-/// Qui importe : un composant (par son nom) ou un fichier d'une lib.
+/// Qui importe : un composant (par son nom), un fichier d'une lib, ou le
+/// backend lui-même (le démarrage de la page d'aperçu : `react`,
+/// `react-dom/client`, pris dans `libs.json`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Importer<'a> {
     Component(&'a str),
     LibFile { package: &'a str, file: &'a str },
+    Backend,
 }
 
 /// Où mène un import.
@@ -313,6 +316,14 @@ impl Components {
                     format!("{nom} importe « {specifier} » : le paquet « {paquet} » n'est pas dans ses libs (component.json)")
                 })?;
                 self.dans_la_lib(paquet, version, &sous, mode, specifier)
+            }
+            Importer::Backend => {
+                if relatif {
+                    return Err(format!("le backend n'importe pas de relatif (« {specifier} »)"));
+                }
+                let (paquet, sous) = parse_package_name(specifier);
+                let lib = self.libs.get(paquet).ok_or_else(|| format!("« {paquet} » n'est pas déclaré dans {LIBS_FILE}"))?;
+                self.dans_la_lib(paquet, &lib.version, &sous, mode, specifier)
             }
             Importer::LibFile { package, file } => {
                 let lib = self.libs.get(*package).ok_or_else(|| format!("lib inconnue : {package}"))?;
@@ -504,6 +515,8 @@ fn normaliser(base: &str, spec: &str) -> Option<String> {
     }
     Some(pile.join("/"))
 }
+
+pub mod modules;
 
 #[cfg(test)]
 mod tests;

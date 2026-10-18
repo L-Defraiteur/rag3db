@@ -365,6 +365,21 @@ impl DaemonHost {
     /// Le backend hébergé de ce chemin, sans le créer : par le chemin
     /// canonique quand le fichier existe, sinon par le chemin tel quel (un
     /// manifeste effacé se ferme encore).
+    /// **Un backend hébergé, par son id** (l'empreinte de son manifeste, celle
+    /// de `/etat`) : ouvert au besoin, prêté le temps de `f`. L'IDE nomme ses
+    /// backends ainsi dans ses URL.
+    pub fn with_backend_id<T>(&self, id: &str, f: impl FnOnce(&Backend) -> T) -> Result<T, String> {
+        let hosted = self
+            .backends
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .values()
+            .find(|h| h.id == id)
+            .cloned()
+            .ok_or_else(|| format!("l'hôte ne connaît pas le backend {id}"))?;
+        self.with_backend(&hosted, f)
+    }
+
     fn hosted_existing(&self, manifest: &Path) -> Option<Arc<Hosted>> {
         let backends = self.backends.lock().unwrap_or_else(|p| p.into_inner());
         let canonique = std::fs::canonicalize(manifest).ok();

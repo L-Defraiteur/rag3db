@@ -67,5 +67,41 @@ convient pas se reprend : rien n'est publié hors du dépôt.
    vérification des octets eux-mêmes (le hash recalculé) se fera au service (lot 3), là où on
    les lit.
 
-Les lots 3 (servir les modules, la page d'aperçu) et 4 (le sujet `components` du flux, le
-registre de modules, React Refresh) suivront ici, avec leurs décisions.
+## Lot 3 — servir les modules, la page d'aperçu
+
+8. **Un module par fichier, un id stable, un hash pour version.**
+   - `comp:<Nom>` pour un composant : le nom de famille de React Refresh, qui ne change pas d'une
+     édition à l'autre.
+   - `lib:<paquet>@<version>/<fichier>` pour un fichier de lib.
+   - Le hash est celui du module compilé (moteur `tsx`) ou des octets du magasin.
+9. **Tout passe en CommonJS, dans une fabrique.** Le composant est compilé par le moteur `tsx`
+   en CommonJS (codeparsers l'a ajouté à ma demande, 748133ef3) ; les paquets npm de React le
+   sont déjà. Chaque module est servi enveloppé :
+   `__rag3weaver.define(id, hash, deps, function (require, module, exports, process) { … })`.
+   - *Pourquoi* : un module ES ne se remplace pas en place. Le rechargement à chaud (lot 4)
+     redéfinit une fabrique et la sort du cache, comme le fait webpack, sans copier son code.
+   - `process.env.NODE_ENV` est posé par la fabrique (`development` dans l'IDE).
+10. **La table des `require` de chaque module est calculée par l'hôte**, jamais par la page :
+    `deps` va du spécifier tel qu'écrit à l'id visé, résolu par la table du lot 2. Les
+    `require` d'un fichier de lib se lisent par leurs littéraux. Un `require` que rien ne
+    résout est dit à la console, et le registre le refuse en le nommant s'il s'exécute (un
+    `require` dans une branche morte ne bloque rien).
+11. **Le magasin est vérifié au service** : un fichier de lib dont les octets ne redonnent plus
+    leur blake3 est refusé (« le magasin a été touché »).
+12. **Le démarrage de la page se résout par le backend** (`react`, `react-dom/client`, pris dans
+    `libs.json`), pas par le composant : un composant n'a pas à déclarer `react-dom` pour être
+    vu. Un backend sans ces deux libs ne peut pas montrer d'aperçu, et la route le dit.
+13. **Les routes** :
+    - `/ide/registre.js` : le registre, une constante Rust que le témoin exécute aussi ;
+    - `/ide/apercu/<backend>/<Composant>` : la page ;
+    - `…/modules.js` : les modules du composant, puis son entrée et son démarrage.
+
+    Les props viennent de l'URL (`?props={"titre":"…"}`). C'est provisoire : le lot 4 et le
+    niveau 2 les tireront des ports d'entrée.
+14. **Le témoin exécute le vrai chemin sans navigateur** : le composant compilé par `tsx`, le
+    graphe résolu, le registre, dans QuickJS, avec un faux React rangé au magasin. Le composant
+    se rend en son élément, son enfant aussi, et `react-dom` voit le même React. Le vrai React
+    dans un vrai navigateur reste à voir par Lucie : `rag3weaver-backend libs add` sur `react`,
+    `react-dom` et `scheduler` déballés, puis l'aperçu.
+
+Le lot 4 (le sujet `components` du flux, le rechargement dans la page, React Refresh) suivra ici.
