@@ -68,6 +68,18 @@ pub struct BackendManifest {
     /// (`docs/5-octobre-2026-00h00/01`), tranchée par l'orchestration.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub reactions: BTreeMap<String, ReactionAttachment>,
+    /// **Les lignes que le gabarit sème** : `{"RefType": [{…}, …]}`. Posées à
+    /// l'ouverture **si elles manquent** — l'identité de la ligne (sa clé
+    /// `hashsafe`, dans la cellule du catalogue) décide —, par le même chemin
+    /// qu'une écriture d'outil (`EntityRecordNode`) : politique d'écriture,
+    /// dates du serveur, validation par le schéma de l'entité. Une ligne déjà
+    /// là n'est jamais réécrite : ce qu'un utilisateur en a fait (un genre
+    /// retiré, une description reprise) l'emporte sur le gabarit. Une ligne
+    /// qui ne valide pas refuse l'ouverture en se nommant. Un gabarit qui ne
+    /// pouvait pas semer ses propres genres laissait un pas manuel à l'agent
+    /// (18 octobre 2026, les genres `path` et `symbol` de la mémoire).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub seed: BTreeMap<String, Vec<Value>>,
     /// **Les routes** : `"GET /products/{key}": {"tool": …, "view": …}`. Une
     /// adresse mène à un outil déclaré (le contrôleur), son résultat à une vue
     /// du dossier `views/` ([`crate::routes`]).
@@ -1745,6 +1757,7 @@ impl PreparedBackend {
         // exactement la déclaration inerte qu'on écrit en boucle dans ce
         // dépôt. Sans réaction déclarée, aucun réacteur ne démarre.
         backend.mount_reactions()?;
+        backend.seed()?;
         Ok(backend)
     }
 }
@@ -3081,6 +3094,63 @@ impl Backend {
         );
         services
     }
+    /// **Sème les lignes déclarées par `seed`** qui manquent (voir
+    /// [`BackendManifest::seed`]) et rend combien il en a posé. Chaque ligne
+    /// passe par `EntityRecordNode` : d'abord `get` sur son identité, puis
+    /// `put` si rien n'est là ; aucune autre sorte de nœud n'est permise.
+    pub fn seed(&self) -> Result<usize, String> {
+        let prepared = self.prepared();
+        if prepared.manifest.seed.is_empty() {
+            return Ok(0);
+        }
+        let policy = NodeTypePolicy::only(["EntityRecordNode"]);
+        let mut poses = 0;
+        for (entity, rows) in &prepared.manifest.seed {
+            if !prepared.manifest.entities.contains_key(entity) {
+                return Err(format!(
+                    "seed.{entity} : l'entité n'est pas déclarée dans `entities` — semez une entité du gabarit"
+                ));
+            }
+            for (rang, row) in rows.iter().enumerate() {
+                let nom = |row: &Value| -> String {
+                    let identite: Vec<String> = prepared
+                        .entities
+                        .get(entity)
+                        .and_then(|c| c.hashsafe.clone())
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|f| format!("{f}={}", row.get(f).map(Value::to_string).unwrap_or_else(|| "?".into())))
+                        .collect();
+                    format!("seed.{entity}[{rang}] ({})", identite.join(", "))
+                };
+                if !row.is_object() {
+                    return Err(format!("{} : une ligne de seed est un objet, pas {row}", nom(row)));
+                }
+                let pas = |action: &str| -> Result<Value, String> {
+                    let def = GraphDefinition {
+                        nodes: vec![crate::dataflow::checkpoint::NodeDef {
+                            name: "seed".into(),
+                            node_type: "EntityRecordNode".into(),
+                            config: json!({"entity": entity, "action": action, "record": row}),
+                        }],
+                        edges: vec![],
+                    };
+                    self.execute_plan(&prepared, ("seed", "record"), &def, &[], &policy)
+                        .map(|r| r["result"].clone())
+                        .map_err(|e| format!("{} : {e}", nom(row)))
+                };
+                if pas("get")?["data"].is_null() {
+                    pas("put")?;
+                    poses += 1;
+                }
+            }
+        }
+        if poses > 0 {
+            eprintln!("[backend] {} : {poses} ligne(s) semée(s) par `seed`", prepared.manifest.name);
+        }
+        Ok(poses)
+    }
+
     fn execute_graph(
         &self,
         prepared: &PreparedBackend,
