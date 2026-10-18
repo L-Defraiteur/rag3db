@@ -94,6 +94,13 @@ qui sont des graphes, le démon qu'on installe, l'IDE pour agents.
   embarque), créé et tenu par le produit ; jamais un CREATE INDEX écrit par
   un développeur (déjà vrai pour le plein texte et les vecteurs, à écrire
   dans la stèle du produit pour le reste).
+  **Les trois questions du rapport tranchées par Lucie le 18** (page de
+  l'arbre principal, `13-octobre-2026-arbre-principal/01-…`, §9) : un
+  **schéma par projet** (cellule), pas par base ; la migration **tirée de la
+  différence de gabarits** quand c'est possible, rangée dans un fichier
+  nommé et relisible ; les retraits et conversions de colonne en **étendre
+  puis contracter** (ajouter, écrire aux deux, retirer plus tard, chaque
+  temps une migration), plus de refus.
 - **Le multi-vecteur et MaxSim** (ColBERT, bge-m3 le rend déjà) : une option
   plus tard, d'abord comme rerank sur les k premiers candidats, jamais une
   colonne de listes de vecteurs par défaut (trop lourd).

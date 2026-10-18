@@ -1665,3 +1665,17 @@ où elle vit.
   archives alpha.3 sans publier (G) ; le scénario des vingt clients (banc) ;
   le septième rejeu du témoin (codeparsers) ; le binaire de Lucie sur la lib
   ≥ c44af8031 et la tentative 4 des fiches (mémoire).
+
+- **18 octobre : la reprise.** Lucie lève la pause (« on peut reprendre »),
+  tranche les trois questions des migrations (un schéma par projet, la
+  migration tirée de la différence de gabarits, étendre puis contracter ;
+  noté dans `04-les-buts.md` §4 bis) et pose la règle de la reprise : **une
+  seule grosse indexation à la fois par poste, et autant que possible une
+  seule compilation à la fois par poste**. Je tiens donc un jeton du lourd
+  par poste : une session lourde à la fois ici, une à la fois sur luciepc ;
+  le léger (rebase, relecture, docs, tickets) pour tous sans jeton. Ordre
+  ici : le dual du proto (89e228537), le scénario des vingt clients du
+  banc, puis l'attente des lectures (4aa8c95d5), l'annulation (0acd8aa30),
+  la rétention (205d2923e), la lecture en mémoire du cœur, le binaire de la
+  mémoire longue. Sur luciepc : le paquet de G sans publier, puis le
+  septième rejeu de codeparsers.
