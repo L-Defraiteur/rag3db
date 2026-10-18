@@ -7,9 +7,11 @@ name: rag3weaver
 # qu'aucun job de CI ne couvrait ce crate : les 29 autres workflows sont hérités
 # de kuzu et ne touchent pas extension/rag3weaver.
 #
-# Ce job ne compile QUE du Rust. Il ne construit pas librag3db.so — ce serait long
-# et ça masquerait les régressions Rust derrière des soucis de toolchain C++. Les
-# tests E2E (152, tous `#[ignore]`) restent manuels via run_e2e.sh.
+# Rouge du 3 septembre au 18 octobre 2026 sans que personne le voie (991 runs, ticket
+# docs/tickets/2026-10-18-la-ci-de-rag3weaver-etait-rouge-sans-que-personne-le-voie.md) :
+# remise en état le 18 octobre. Le contrôle est celui des postes, scripts/check_features.sh
+# (ses jeux font foi), le moteur bâti en statique par la crate rag3db. Les tests E2E
+# (`#[ignore]`) restent manuels via run_e2e.sh.
 
 on:
   push:
@@ -29,67 +31,64 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
+  # Pas de -D warnings global : la crate rag3db (chemin) en a 28 qui ne sont pas du
+  # ressort de ce crate, et check_features ne les refuse pas non plus sur les postes.
 
 defaults:
   run:
     working-directory: extension/rag3weaver
 
 jobs:
-  # Chaque combinaison de features doit compiler séparément. L'unification des
-  # features de cargo fait qu'un `--all-features` vert ne prouve RIEN sur les
-  # combinaisons individuelles : une dépendance activée par une autre feature
-  # peut masquer un `dep:` manquant.
+  # **Les jeux de check_features.sh**, tels que les postes les jouent avant tout hash :
+  # chacun séparément (l'unification des features de cargo masquerait un `dep:`
+  # manquant). L'ancienne matrice (candle, wasm) nommait des features retirées.
   check:
-    name: check ${{ matrix.label }}
+    name: check_features (cinq jeux)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # `default` est vide depuis le 24 août 2026 (aucun embedder) ; candle
-          # n'est donc plus couvert implicitement et a sa propre entrée.
-          - label: default
-            flags: ''
-          - label: candle-embedder
-            flags: '--features candle-embedder'
-          - label: bge-m3
-            flags: '--features bge-m3'
-          - label: candle-wasm
-            flags: '--no-default-features --features candle-wasm'
-          - label: burn-embedder
-            flags: '--no-default-features --features burn-embedder'
-          - label: postgres
-            flags: '--features postgres'
-          - label: wasm-emscripten
-            flags: '--features wasm-emscripten'
+    timeout-minutes: 180
     steps:
-      # Pas de submodules (codeparsers seul est nécessaire au crate, et seulement avec la feature code).
-      # lucivy, sparse-vector et leurs dépendances viennent de crates.io (4.3.0) : plus de clone
-      # (le sous-module extension/lucivy/ld-lucivy est retiré, 18 octobre 2026).
       - uses: actions/checkout@v4
+      # codeparsers est une dépendance par chemin : cargo l'exige même sans la feature code.
+      - name: Sous-module codeparsers (par https, sans clé)
+        working-directory: .
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 extension/rag3weaver/codeparsers
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: extension/rag3weaver
-          key: ${{ matrix.label }}
+          key: check-features
 
-      - name: cargo check --lib
-        run: cargo check --lib ${{ matrix.flags }}
+      - name: check_features.sh
+        env:
+          RAG3DB_LIB: statique
+          CHECK_FEATURES_LOGS: ${{ runner.temp }}/check-features
+          CHECK_FEATURES_TIMEOUT: '5400'
+          CMAKE_BUILD_PARALLEL_LEVEL: '4'
+        run: bash scripts/check_features.sh
 
-      - name: cargo check --examples
-        run: cargo check --examples ${{ matrix.flags }}
+      - name: La sortie des jeux rouges
+        if: failure()
+        working-directory: .
+        run: |
+          for f in "${{ runner.temp }}"/check-features/*.log; do
+            grep -q -E "^error" "$f" || continue
+            echo "=== $(basename "$f")"; grep -E -A6 "^error" "$f" | head -60
+          done
 
   test:
     name: tests unitaires
     runs-on: ubuntu-latest
     steps:
-      # Pas de submodules (codeparsers seul est nécessaire au crate, et seulement avec la feature code).
-      # lucivy, sparse-vector et leurs dépendances viennent de crates.io (4.3.0) : plus de clone
-      # (le sous-module extension/lucivy/ld-lucivy est retiré, 18 octobre 2026).
       - uses: actions/checkout@v4
+      - name: Sous-module codeparsers (par https, sans clé)
+        working-directory: .
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 extension/rag3weaver/codeparsers
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -97,33 +96,10 @@ jobs:
         with:
           workspaces: extension/rag3weaver
 
-      # Les 152 tests E2E sont `#[ignore]` + cfg(rag3db-native) : ils exigent
-      # librag3db.so et ne tournent pas ici.
+      # Sans feature : ni le moteur ni le code. Les tests E2E sont `#[ignore]`.
       - name: cargo test --lib
         run: cargo test --lib
 
-  lint:
-    name: fmt + clippy
-    runs-on: ubuntu-latest
-    steps:
-      # Pas de submodules (codeparsers seul est nécessaire au crate, et seulement avec la feature code).
-      # lucivy, sparse-vector et leurs dépendances viennent de crates.io (4.3.0) : plus de clone
-      # (le sous-module extension/lucivy/ld-lucivy est retiré, 18 octobre 2026).
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: extension/rag3weaver
-
-      - name: cargo fmt --check
-        run: cargo fmt --check
-        continue-on-error: true # informatif tant que le code n'est pas formaté
-
-      # Le code de generated/ est produit par burn-onnx : on ne le lint pas.
-      - name: cargo clippy
-        run: cargo clippy --lib --all-targets
-        continue-on-error: true # informatif tant que le passif n'est pas résorbé
+  # fmt + clippy est retiré (18 octobre 2026) : il passait pour vert par
+  # `continue-on-error`, alors que fmt et clippy rougissaient sur le passif. Il revient
+  # quand le crate est formaté et que clippy est propre, sans `continue-on-error`.

@@ -11,6 +11,12 @@
 # est celle du magasin, choisie comme pour run_e2e.sh (`exporter_la_lib`,
 # `RAG3DB_LIB=bati|courant|<id>`) : un rebâti en place de build/lecteurs-csv
 # ne la change pas pendant le contrôle (lot 3d).
+#
+# En CI (18 octobre 2026), ni magasin ni dossier de bâti : `RAG3DB_LIB=statique`
+# laisse la crate rag3db bâtir le moteur en statique, comme le paquet npm ;
+# `CHECK_FEATURES_LOGS=<dossier>` y garde la sortie de chaque jeu (un rouge se
+# lit) ; `CHECK_FEATURES_TIMEOUT` (secondes, 1800 par défaut) borne chaque jeu,
+# le premier bâtissant tout le moteur.
 set -u
 JEUX=(
   # Celui de run_e2e.sh, la batterie.
@@ -29,7 +35,13 @@ ICI="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ICI/scripts/garde_target.sh"
 garder_le_target "${CARGO_TARGET_DIR:-$ICI/target}" "$ICI" || exit 2
 . "$ICI/scripts/lib_du_magasin.sh"
-exporter_la_lib || exit 2
+if [ "${RAG3DB_LIB:-}" = statique ]; then
+  unset RAG3DB_SHARED RAG3DB_LIBRARY_DIR RAG3DB_INCLUDE_DIR
+  echo "▸ moteur bâti en statique par la crate rag3db (RAG3DB_LIB=statique)" >&2
+else
+  exporter_la_lib || exit 2
+fi
+[ -n "${CHECK_FEATURES_LOGS:-}" ] && mkdir -p "$CHECK_FEATURES_LOGS"
 echec=0
 rouges=()
 # L'index des tickets, recompté sur les fichiers : ses en-têtes ne se
@@ -39,7 +51,9 @@ if ! python3 "$ICI/scripts/check_tickets.py" "$ICI/../.."; then
   rouges+=("tickets")
 fi
 for jeu in "${JEUX[@]}"; do
-  if timeout 1800 cargo check --tests --features "$jeu" > /dev/null 2>&1; then
+  sortie=/dev/null
+  [ -n "${CHECK_FEATURES_LOGS:-}" ] && sortie="$CHECK_FEATURES_LOGS/${jeu//,/+}.log"
+  if timeout "${CHECK_FEATURES_TIMEOUT:-1800}" cargo check --tests --features "$jeu" > "$sortie" 2>&1; then
     echo "VERT  $jeu"
   else
     echo "ROUGE $jeu   (cargo check --tests --features $jeu)"

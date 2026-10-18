@@ -79,13 +79,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (33)
+### Ouverts — produit (34)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie](2026-10-18-la-ci-de-rag3weaver-etait-rouge-sans-que-personne-le-voie.md) | ouvert — remise en état par G (branche ci-rag3weaver) ; le filet à décider par l'orchestration | filet absent | non (l'outillage) | oui (workflow, check_features) |
 | [Une Ref ne vieillit jamais : son cycle de vie est déclaré, mais rien ne le déclenche](2026-10-18-une-ref-ne-vieillit-jamais.md) | ouvert — le vieillissement par l'index de code attend le mot de Lucie (pont entre bases, §12.4) | réponse fausse en silence (une Ref reste `vue` quand sa cible change) | oui, dès qu'une fiche cite une cible qui bouge | oui (et seulement) |
 | [Trois témoins rougissent sous charge, avant comme après l'embarquement hors du verrou](2026-10-18-trois-temoins-rougissent-sous-charge.md) | ouvert — à attribuer ; une lecture qui verrait un lot à moitié, à établir | tests instables sous charge | peut-être | oui (`backend.rs`, `commande.rs`) |
 | [L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir](2026-10-18-l-arret-de-l-hote-attend-sans-borne-une-reaction-figee.md) | ouvert — l'attente de `ReactorHandle::stop` sans délai ; le figement lui-même est un interblocage du moteur (ticket au cœur) | blocage (seul `kill -9` en sort) | oui, dès qu'une réaction se fige | oui (`shutdown`, `stop_reactions`) |
