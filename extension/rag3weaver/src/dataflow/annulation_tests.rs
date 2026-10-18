@@ -170,6 +170,53 @@ fn a_non_cooperating_node_finishes_and_the_next_one_does_not_start() {
     assert!(!ran.load(Ordering::SeqCst), "le suivant ne part pas");
 }
 
+/// Attend sur le jeton, puis échoue sans poser sa sortie requise : un nœud
+/// que l'annulation fait tomber.
+struct FailOnCancel;
+
+impl Node for FailOnCancel {
+    fn name(&self) -> &str {
+        "tombe"
+    }
+    fn node_type(&self) -> &str {
+        "FailOnCancel"
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("out", PortType::Any, true)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        if ctx.cancellation().wait_timeout(Duration::from_secs(5)) {
+            return Err("annulé pendant l'attente".into());
+        }
+        ctx.set_output("out", PortValue::new(1u32));
+        Ok(())
+    }
+}
+
+/// **3 bis. Un nœud que l'annulation fait échouer est arrêté, pas en faute**
+/// (comme sous le concurrent) : le run rend `Ok` arrêté, le nœud est dit
+/// arrêté. Vu au rejeu du 18 octobre : un run en fond annulé sous les niveaux
+/// se disait « échoué ».
+#[test]
+fn a_node_failing_because_of_the_cancel_is_stopped_not_failed() {
+    let mut g = DataflowGraph::new();
+    g.add_node(Box::new(FailOnCancel)).unwrap();
+    let rt = DataflowRuntime::new(10);
+    let mut evenements = rt.subscribe();
+    cancel_after(&rt, 50);
+    let out = rt.execute(&mut g).expect("arrêté, pas en faute");
+    assert_eq!(out.stopped(), Some(&CancelCause::External));
+    let mut arretes = Vec::new();
+    while let Ok(e) = evenements.try_recv() {
+        match e {
+            DataflowEvent::NodeCancelled { node, .. } => arretes.push(node),
+            DataflowEvent::NodeFailed { node, error } => panic!("{node} dit en faute : {error}"),
+            _ => {}
+        }
+    }
+    assert_eq!(arretes, ["tombe"]);
+}
+
 struct WaitFactory(Arc<AtomicUsize>);
 
 impl NodeFactory for WaitFactory {

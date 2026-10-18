@@ -963,6 +963,13 @@ impl DataflowRuntime {
                         None => Ok(()),
                     }
                 });
+                // **Arrêté pendant son exécution** (comme sous le concurrent) : un
+                // nœud qui échoue, ou ne pose pas sa sortie requise, parce que le
+                // run est annulé n'est pas en faute. Il reste non fini ; la tête
+                // du niveau suivant le dit arrêté avec les autres.
+                if exec_result.is_err() && annul.cancelled().is_some() {
+                    continue;
+                }
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 self.publish(crate::events::CatalogEvent::NodeRun {
                     run: run_id.clone(),
@@ -1475,6 +1482,13 @@ impl DataflowRuntime {
                         None => Ok(()),
                     }
                 });
+                // **Arrêté pendant son exécution** (comme sous le concurrent) : un
+                // nœud qui échoue, ou ne pose pas sa sortie requise, parce que le
+                // run est annulé n'est pas en faute. Il reste non fini ; la tête
+                // du niveau suivant le dit arrêté avec les autres.
+                if exec_result.is_err() && annul.cancelled().is_some() {
+                    continue;
+                }
                 // Vers le bus commun, s'il est là : la trace *sous* un outil.
                 self.publish(crate::events::CatalogEvent::NodeRun {
                     run: run_id.clone(),
