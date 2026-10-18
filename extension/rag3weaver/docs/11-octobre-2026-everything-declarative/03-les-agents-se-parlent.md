@@ -319,7 +319,12 @@ plus après un outil ou un agent) se composent de **deux nœuds neufs** :
   (`GenOptions::with_response_format`, schéma à `enum`, honorée par le client
   compatible OpenAI, donc Vertex et llama-server). Le décodage contraint n'existe
   pas encore : la vérification après coup, comme `BadChoice`, refuse une
-  étiquette hors liste.
+  étiquette hors liste. Les étiquettes sont fixes (`labels`), ou portées par
+  l'élément lui-même (`labels_from`, 18 octobre 2026, pour la tentative 4 des
+  fiches mémoire) : une recherche pose ses candidats sur l'élément, `decide`
+  choisit parmi eux puis parmi les fixes (« A, B ou aucun »). Un champ absent
+  ou mal typé est refusé, jamais replié sur les fixes ; une liste vide laisse
+  les fixes seules.
 - **`route`** : un flux d'entrée et une clé (une étiquette, un champ) ; il
   transmet chaque élément sur le port de sortie de cette clé et **finit les
   autres vides**.

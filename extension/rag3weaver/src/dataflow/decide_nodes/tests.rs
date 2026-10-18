@@ -651,3 +651,107 @@ fn a_reply_cut_by_the_token_cap_is_said_truncated() {
     assert_eq!(*asked.lock().unwrap(), 2048);
     assert!(DecideNodeFactory.create("d", &json!({"labels": "a|b", "max_tokens": 0})).is_err());
 }
+
+// ── Les étiquettes portées par l'élément (`labels_from`, pour la mémoire) ──
+
+/// Un llm qui garde le schéma demandé et le tour `user`, et rend `reply`.
+fn llm_that_keeps(reply: &'static str, seen: Arc<Mutex<Vec<(Value, String)>>>) -> CallbackLlm {
+    CallbackLlm::new("l", 4096, move |turns, opts, sink| {
+        let schema = match &opts.response_format {
+            Some(ResponseFormat::JsonSchema { schema, .. }) => schema["properties"]["label"]["enum"].clone(),
+            _ => Value::Null,
+        };
+        seen.lock().unwrap().push((schema, turns.last().unwrap().content.clone()));
+        MockLlm::new(reply).generate(turns, opts, sink)
+    })
+}
+
+/// **Les candidats de l'élément d'abord, les fixes ensuite, sans doublon** :
+/// « A, B ou aucun », dans le schéma comme dans le gabarit. Une étiquette
+/// hors de l'union est refusée.
+#[test]
+fn labels_from_puts_the_element_labels_first_then_the_fixed_ones() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let def = graph(
+        json!({"text": "le WAL casse", "candidats": ["wal", "aucun", "reprise"]}),
+        "Decide",
+        json!({"labels_from": "candidats", "labels": ["aucun"], "field": "text", "prompt": "{text} — {labels}"}),
+        &[],
+    );
+    let (out, _) = run(&def, with_llm(llm_that_keeps(r#"{"label": "reprise"}"#, seen.clone()))).unwrap();
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "reprise");
+    let (schema, user) = seen.lock().unwrap()[0].clone();
+    assert_eq!(schema, json!(["wal", "aucun", "reprise"]), "l'élément d'abord ; « aucun » n'est pas doublé");
+    assert_eq!(user, "le WAL casse — wal, aucun, reprise");
+
+    // L'étiquette fixe seule reste admise ; une autre, non.
+    let fixe = run(&def, with_llm(llm_that_keeps(r#"{"label": "aucun"}"#, Default::default()))).unwrap();
+    assert_eq!(json_at(&fixe.0, "node", "element").unwrap()["label"], "aucun");
+    let err = run(&def, with_llm(llm_that_keeps(r#"{"label": "autre"}"#, Default::default()))).unwrap_err();
+    assert!(err.contains("autre") && err.contains("wal, aucun, reprise"), "{err}");
+}
+
+/// **Un champ absent ou mal typé est refusé en le nommant**, jamais replié
+/// sur les fixes : c'est presque toujours un câblage faux.
+#[test]
+fn labels_from_refuses_an_absent_or_mistyped_field() {
+    let llm = || with_llm(llm_that_keeps(r#"{"label": "aucun"}"#, Default::default()));
+    let config = json!({"labels_from": "candidats", "labels": ["aucun"], "field": "text"});
+    for (element, attendu) in [
+        (json!({"text": "x", "candidat": ["a"]}), "absent"),
+        (json!({"text": "x", "candidats": "a"}), "liste de chaînes"),
+        (json!({"text": "x", "candidats": ["a", 2]}), "liste de chaînes"),
+        (json!({"text": "x", "candidats": ["a", ""]}), "vide"),
+    ] {
+        let err = run(&graph(element.clone(), "Decide", config.clone(), &[]), llm()).unwrap_err();
+        assert!(err.contains("candidats") && err.contains(attendu), "{element} : {err}");
+    }
+}
+
+/// **Une liste vide laisse les fixes seules** ; vide et sans fixes, rien à
+/// choisir : refusé. Sans `labels_from`, les fixes restent requises.
+#[test]
+fn labels_from_with_an_empty_list() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let def = graph(
+        json!({"text": "x", "candidats": []}),
+        "Decide",
+        json!({"labels_from": "candidats", "labels": "aucun", "field": "text"}),
+        &[],
+    );
+    let (out, _) = run(&def, with_llm(llm_that_keeps(r#"{"label": "aucun"}"#, seen.clone()))).unwrap();
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "aucun");
+    assert_eq!(seen.lock().unwrap()[0].0, json!(["aucun"]));
+
+    let def = graph(json!({"text": "x", "candidats": []}), "Decide", json!({"labels_from": "candidats"}), &[]);
+    let err = run(&def, with_llm(llm_that_keeps(r#"{"label": "aucun"}"#, Default::default()))).unwrap_err();
+    assert!(err.contains("rien à choisir"), "{err}");
+
+    assert!(DecideNodeFactory.create("d", &json!({"labels_from": "candidats"})).is_ok());
+    assert!(DecideNodeFactory.create("d", &json!({"labels_from": "candidats", "labels": []})).is_ok());
+    assert!(DecideNodeFactory.create("d", &json!({})).is_err(), "sans labels_from, les fixes sont requises");
+}
+
+/// **Par le `Decider`**, les probabilités se comptent sur les étiquettes de
+/// l'élément ; et `labels_from` passe par la définition (la reprise).
+#[test]
+fn labels_from_by_the_decider_and_through_a_definition() {
+    let mut s = ServiceRegistry::new();
+    s.register(DECIDER_SERVICE, Arc::new(MockDecider(vec![0.1, 0.6, 0.3])) as Arc<dyn Decider>);
+    let def = graph(
+        json!({"text": "x", "candidats": ["a", "b"]}),
+        "Decide",
+        json!({"labels_from": "candidats", "labels": ["aucun"], "field": "text"}),
+        &[],
+    );
+    let (out, _) = run(&def, s).unwrap();
+    assert_eq!(json_at(&out, "node", "element").unwrap()["label"], "b");
+
+    let config = json!({"labels": ["aucun"], "labels_from": "candidats", "instruction": "", "prompt": "", "field": "text", "as": "label", "via": "auto", "max_tokens": 2048});
+    let def = GraphDefinition {
+        nodes: vec![NodeDef { name: "d".into(), node_type: "Decide".into(), config: config.clone() }],
+        edges: vec![],
+    };
+    let g = DataflowGraph::from_definition(&def, &registry()).unwrap();
+    assert_eq!(g.to_definition().nodes[0].config, config);
+}

@@ -301,7 +301,12 @@ enum Via {
 
 pub struct DecideNode {
     name: String,
+    /// Les étiquettes fixes. Avec `labels_from`, elles complètent celles de
+    /// l'élément et peuvent manquer.
     labels: Vec<String>,
+    /// Le champ de l'élément qui porte **ses** étiquettes (une liste de
+    /// chaînes) : elles viennent d'abord, les fixes ensuite, sans doublon.
+    labels_from: Option<String>,
     instruction: String,
     /// Le gabarit du texte envoyé, à trous `{instruction}`, `{labels}`,
     /// `{text}` : tout le texte du decider, ou le tour `user` du llm. Absent :
@@ -316,6 +321,57 @@ pub struct DecideNode {
 }
 
 impl DecideNode {
+    /// **Les étiquettes de cet élément** : les fixes seules, ou, avec
+    /// `labels_from`, celles que l'élément porte puis les fixes (« A, B ou
+    /// aucun »), sans doublon. Un champ absent ou mal typé est presque
+    /// toujours un câblage faux (un nom mal tapé, un amont qui n'a rien
+    /// posé) : refusé en le disant, jamais replié sur les fixes. Une liste
+    /// vide est légitime (la recherche n'a rien rendu) tant que des fixes
+    /// restent à choisir.
+    fn labels_for(&self, element: &Value) -> Result<Vec<String>, String> {
+        let Some(key) = &self.labels_from else {
+            return Ok(self.labels.clone());
+        };
+        let apercu = || {
+            let s = element.to_string();
+            if s.chars().count() > 120 {
+                format!("{}…", s.chars().take(120).collect::<String>())
+            } else {
+                s
+            }
+        };
+        let candidats: Vec<String> = match element.get(key) {
+            None => return Err(format!("Decide : 'labels_from' nomme « {key} », absent de l'élément {}", apercu())),
+            Some(Value::Array(items)) => items
+                .iter()
+                .map(|v| {
+                    v.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| format!("Decide : « {key} » doit être une liste de chaînes, et {v} n'en est pas une — élément {}", apercu()))
+                })
+                .collect::<Result<_, _>>()?,
+            Some(other) => {
+                return Err(format!("Decide : « {key} » doit être une liste de chaînes, pas {other} — élément {}", apercu()))
+            }
+        };
+        let mut out: Vec<String> = Vec::new();
+        for label in candidats.into_iter().chain(self.labels.iter().cloned()) {
+            if label.is_empty() {
+                return Err(format!("Decide : une étiquette vide dans « {key} » — élément {}", apercu()));
+            }
+            if !out.contains(&label) {
+                out.push(label);
+            }
+        }
+        if out.is_empty() {
+            return Err(format!(
+                "Decide : « {key} » est vide et aucune étiquette fixe ('labels') ne la complète : rien à choisir — élément {}",
+                apercu()
+            ));
+        }
+        Ok(out)
+    }
+
     /// Le texte à classer : un champ de l'élément, l'élément s'il est une
     /// chaîne, son JSON sinon.
     fn text_of(&self, element: &Value) -> String {
@@ -331,8 +387,8 @@ impl DecideNode {
 
     /// Le gabarit rendu, s'il y en a un : les trois trous remplis, rien
     /// d'autre ajouté ni retiré.
-    fn rendered(&self, text: &str) -> Option<String> {
-        let labels = self.labels.join(", ");
+    fn rendered(&self, text: &str, labels: &[String]) -> Option<String> {
+        let labels = labels.join(", ");
         self.template.as_ref().map(|t| {
             fill(t, |hole| match hole {
                 "instruction" => Some(self.instruction.as_str()),
@@ -343,8 +399,8 @@ impl DecideNode {
         })
     }
 
-    fn prompt(&self) -> String {
-        let list = self.labels.join(", ");
+    fn prompt(&self, labels: &[String]) -> String {
+        let list = labels.join(", ");
         if self.instruction.is_empty() {
             format!("Classe le texte suivant. Étiquettes admises : {list}.")
         } else {
@@ -352,23 +408,23 @@ impl DecideNode {
         }
     }
 
-    fn by_decider(&self, decider: &dyn Decider, text: &str) -> Result<(String, Option<f64>), String> {
+    fn by_decider(&self, decider: &dyn Decider, text: &str, labels: &[String]) -> Result<(String, Option<f64>), String> {
         // Un gabarit est envoyé **tel quel** : le decider complète un texte
         // brut, c'est au gabarit de porter celui de la conversation du modèle.
         let prompt = self
-            .rendered(text)
-            .unwrap_or_else(|| format!("{}\n\n{text}\n\nÉtiquette :", self.prompt()));
+            .rendered(text, labels)
+            .unwrap_or_else(|| format!("{}\n\n{text}\n\nÉtiquette :", self.prompt(labels)));
         let probs = decider
-            .decide(&prompt, &self.labels)
+            .decide(&prompt, labels)
             .map_err(|e| format!("Decide ({}) : {e:?}", decider.name()))?;
         // Plus, l'index sortirait des bornes ; moins, des étiquettes seraient
         // ignorées en silence.
-        if probs.len() != self.labels.len() {
+        if probs.len() != labels.len() {
             return Err(format!(
                 "Decide ({}) : {} probabilité(s) pour {} étiquettes",
                 decider.name(),
                 probs.len(),
-                self.labels.len()
+                labels.len()
             ));
         }
         let (i, p) = probs
@@ -376,13 +432,13 @@ impl DecideNode {
             .enumerate()
             .max_by(|a, b| a.1.total_cmp(b.1))
             .ok_or("Decide : le decider n'a rendu aucune probabilité")?;
-        Ok((self.labels[i].clone(), Some(*p)))
+        Ok((labels[i].clone(), Some(*p)))
     }
 
-    fn by_llm(&self, llm: &dyn Llm, text: &str, cancel: CancelToken) -> Result<(String, Option<f64>), String> {
+    fn by_llm(&self, llm: &dyn Llm, text: &str, labels: &[String], cancel: CancelToken) -> Result<(String, Option<f64>), String> {
         let schema = json!({
             "type": "object",
-            "properties": {"label": {"type": "string", "enum": self.labels}},
+            "properties": {"label": {"type": "string", "enum": labels}},
             "required": ["label"],
             "additionalProperties": false,
         });
@@ -394,9 +450,9 @@ impl DecideNode {
             Turn::system(match &self.template {
                 // Le gabarit dit déjà la tâche : le système ne dit que la forme.
                 Some(_) => "Réponds en JSON : {\"label\": \"<étiquette>\"}.".to_string(),
-                None => format!("{}\nRéponds en JSON : {{\"label\": \"<étiquette>\"}}.", self.prompt()),
+                None => format!("{}\nRéponds en JSON : {{\"label\": \"<étiquette>\"}}.", self.prompt(labels)),
             }),
-            Turn::user(self.rendered(text).unwrap_or_else(|| text.to_string())),
+            Turn::user(self.rendered(text, labels).unwrap_or_else(|| text.to_string())),
         ];
         // Un puits qui s'arrête au jeton suivant si le run est annulé : l'hôte
         // qui arrête le graphe n'attend pas la fin de l'appel.
@@ -424,10 +480,10 @@ impl DecideNode {
             .ok()
             .and_then(|v| v.get("label").and_then(Value::as_str).map(str::to_string))
             .unwrap_or_else(|| reply.trim_matches('"').to_string());
-        if !self.labels.contains(&label) {
+        if !labels.contains(&label) {
             return Err(format!(
                 "Decide : « {label} » n'est pas une étiquette admise ({})",
-                self.labels.join(", ")
+                labels.join(", ")
             ));
         }
         Ok((label, None))
@@ -455,7 +511,7 @@ impl Node for DecideNode {
             Via::Decider => "decider",
             Via::Llm => "llm",
         };
-        Some(Box::new(json!({
+        let mut config = json!({
             "labels": self.labels,
             "instruction": self.instruction,
             "prompt": self.template.clone().unwrap_or_default(),
@@ -463,7 +519,11 @@ impl Node for DecideNode {
             "as": self.target,
             "via": via,
             "max_tokens": self.max_tokens,
-        })))
+        });
+        if let Some(from) = &self.labels_from {
+            config["labels_from"] = json!(from);
+        }
+        Some(Box::new(config))
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let decider = ctx.service::<Arc<dyn Decider>>(DECIDER_SERVICE).cloned();
@@ -487,10 +547,11 @@ impl DecideNode {
     /// Un élément étiqueté.
     fn label(&self, ctx: &mut NodeContext, element: Value, decider: Option<&dyn Decider>, llm: Option<&dyn Llm>) -> Result<Value, String> {
         let text = self.text_of(&element);
+        let labels = self.labels_for(&element)?;
         let (label, probability) = match (self.via, decider, llm) {
-            (Via::Auto | Via::Decider, Some(d), _) => self.by_decider(d, &text)?,
+            (Via::Auto | Via::Decider, Some(d), _) => self.by_decider(d, &text, &labels)?,
             (Via::Decider, None, _) => return Err("Decide : via='decider' mais aucun 'decider' n'est servi".into()),
-            (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l, &text, ctx.cancellation())?,
+            (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l, &text, &labels, ctx.cancellation())?,
             (_, _, None) => return Err("Decide : ni 'decider' ni 'llm' servi".into()),
         };
         ctx.info(&format!("Decide : « {label} »{}", probability.map(|p| format!(" ({p:.3})")).unwrap_or_default()));
@@ -519,9 +580,19 @@ impl NodeFactory for DecideNodeFactory {
             other => return Err(format!("'via' : auto, decider ou llm, pas « {other} »")),
         };
         let field = str_param(config, "field", "")?;
+        let labels_from = str_param(config, "labels_from", "")?;
+        // Avec `labels_from`, les fixes peuvent manquer : l'élément porte les
+        // siennes, et une liste vide sans fixes est refusée élément par élément.
+        let fixes = match (labels_from.is_empty(), config.get("labels")) {
+            (false, None | Some(Value::Null)) => Vec::new(),
+            (false, Some(Value::Array(items))) if items.is_empty() => Vec::new(),
+            (false, Some(Value::String(s))) if s.is_empty() => Vec::new(),
+            _ => labels(config, "labels", &[], false)?,
+        };
         Ok(Box::new(DecideNode {
             name: name.to_string(),
-            labels: labels(config, "labels", &[], false)?,
+            labels: fixes,
+            labels_from: (!labels_from.is_empty()).then_some(labels_from),
             instruction: str_param(config, "instruction", "")?,
             max_tokens: match config.get("max_tokens") {
                 None | Some(Value::Null) => 2048,
@@ -547,12 +618,14 @@ impl NodeFactory for DecideNodeFactory {
             node_type: "Decide".into(),
             description: "Pose sur l'élément une étiquette choisie parmi N, par un appel structuré au \
                           modèle (le 'decider' s'il est servi, une probabilité par étiquette ; sinon le \
-                          'llm' sous un schéma à enum). Une étiquette hors liste est refusée."
+                          'llm' sous un schéma à enum). Les étiquettes sont fixes, ou portées par \
+                          l'élément ('labels_from'). Une étiquette hors liste est refusée."
                 .into(),
             inputs: vec![element_input()],
             outputs: vec![element_port("element", true).follows("element")],
             config_params: vec![
-                param("labels", ConfigParamType::Json, true, None, "les étiquettes : un tableau, ou « a|b|c »"),
+                param("labels", ConfigParamType::Json, false, None, "les étiquettes fixes : un tableau, ou « a|b|c » ; requises sans 'labels_from'"),
+                param("labels_from", ConfigParamType::String, false, Some(json!("")), "le champ de l'élément qui porte ses propres étiquettes (une liste de chaînes) : elles passent d'abord, les fixes ensuite, sans doublon ; un champ absent ou mal typé est refusé, une liste vide laisse les fixes seules"),
                 param("instruction", ConfigParamType::String, false, Some(json!("")), "ce que l'étiquette veut dire, pour le modèle"),
                 param("prompt", ConfigParamType::String, false, Some(json!("")), "un gabarit à trous {instruction}, {labels}, {text} : tout le texte envoyé au decider (avec le gabarit de conversation du modèle), ou le tour user du llm ; vide : le texte composé. Le texte de l'élément y est collé tel quel : une fiche qui contient un marqueur du gabarit (<|im_end|>) en casse la structure, l'échappement dépend du modèle"),
                 param("field", ConfigParamType::String, false, Some(json!("")), "le champ de l'élément à classer ; vide : l'élément entier"),
