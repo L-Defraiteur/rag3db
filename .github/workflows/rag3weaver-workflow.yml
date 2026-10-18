@@ -67,6 +67,8 @@ jobs:
       - name: check_features.sh
         env:
           RAG3DB_LIB: statique
+          # Sans couleur : la sortie des jeux rouges se lit par `^error` (18 octobre 2026).
+          CARGO_TERM_COLOR: never
           CHECK_FEATURES_LOGS: ${{ runner.temp }}/check-features
           CHECK_FEATURES_TIMEOUT: '5400'
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
