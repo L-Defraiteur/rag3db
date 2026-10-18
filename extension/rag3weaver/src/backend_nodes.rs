@@ -106,7 +106,37 @@ impl Node for EntityRecordNode {
             .service::<HashMap<String, Arc<jsonschema::Validator>>>("backend_validators")
             .and_then(|m| m.get(entity))
             .ok_or("validator missing")?;
-        let mut cat = catalogue.lock().map_err(|e| e.to_string())?;
+        // **Lire par la vue** (lot L4) : `get` ne prend pas le mutex que tient
+        // un écrivain, quand la vue vaut pour la cellule de l'appel.
+        if self.config["action"] == "get" {
+            if let Some(v) = crate::dataflow::generic_search_nodes::vue_de(ctx) {
+                use crate::read_view::ReadCatalog;
+                let config = v.entity_configs().get(entity).ok_or("unknown entity")?.clone();
+                let input = ctx
+                    .input("record")
+                    .and_then(|v| v.downcast::<Value>())
+                    .unwrap_or(&self.config["record"])
+                    .clone();
+                for field in config.hashsafe.as_ref().ok_or("missing stable identity")? {
+                    if input[field].as_str().is_none_or(str::is_empty) {
+                        return Err(format!("identity field {field} must be a non-empty string"));
+                    }
+                }
+                let identity = serde_json::from_value(input).map_err(|e| e.to_string())?;
+                let uuid = v.entity_uuid(entity, &identity).map_err(|e| e.to_string())?;
+                let cell = v.scope().clone();
+                let old = v.get(entity, &uuid).map_err(|e| e.to_string())?.filter(|row| {
+                    let lire = |c: &str| row.get(c).and_then(|v| v.as_str()).map(str::to_string);
+                    match (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN)) {
+                        (Some(org), Some(project)) => org == cell.org && project == cell.project,
+                        _ => cell.is_default(),
+                    }
+                });
+                ctx.set_output("record", PortValue::new(json!({"uuid":uuid,"data":old})));
+                return Ok(());
+            }
+        }
+        let mut cat = catalogue.lock().map_err(|e| e.to_string())?; // L4 : écriture, ou lecture sans vue
         let config = cat
             .entity_configs()
             .get(entity)
@@ -350,7 +380,7 @@ impl Node for EntityBatchNode {
             .service::<Arc<Mutex<Catalog>>>("catalog")
             .ok_or("catalog missing")?
             .clone();
-        let mut cat = cat.lock().map_err(|e| e.to_string())?;
+        let mut cat = cat.lock().map_err(|e| e.to_string())?; // L4 : écriture
         let config = cat.entity_configs().get(entity).ok_or("unknown entity")?;
         let keys = config
             .hashsafe
@@ -532,7 +562,7 @@ impl Node for SnapshotSessionNode {
         let scope: BTreeMap<String, CypherValue> = serde_json::from_value(self.config["scope"].clone())
             .map_err(|e| format!("scope: {e}"))?;
         let cat = ctx.service::<Arc<Mutex<Catalog>>>("catalog").ok_or("catalog missing")?.clone();
-        let mut cat = cat.lock().map_err(|e| e.to_string())?;
+        let mut cat = cat.lock().map_err(|e| e.to_string())?; // L4 : écriture
         let out = match self.config["action"].as_str() {
             Some("begin") => {
                 let open = cat
@@ -626,7 +656,7 @@ impl Node for SnapshotFinishNode {
             force: self.config["force"].as_bool().unwrap_or(false),
         };
         let cat = ctx.service::<Arc<Mutex<Catalog>>>("catalog").ok_or("catalog missing")?.clone();
-        let mut cat = cat.lock().map_err(|e| e.to_string())?;
+        let mut cat = cat.lock().map_err(|e| e.to_string())?; // L4 : écriture
         let report = cat
             .finish_snapshot(entity, &scope, self.config["snapshot"].as_str().unwrap(), options)
             .map_err(|e| e.to_string())?;
@@ -705,7 +735,7 @@ impl Node for SnapshotUndoNode {
         let scope: BTreeMap<String, CypherValue> = serde_json::from_value(self.config["scope"].clone())
             .map_err(|e| format!("scope: {e}"))?;
         let cat = ctx.service::<Arc<Mutex<Catalog>>>("catalog").ok_or("catalog missing")?.clone();
-        let mut cat = cat.lock().map_err(|e| e.to_string())?;
+        let mut cat = cat.lock().map_err(|e| e.to_string())?; // L4 : écriture
         let report = cat
             .undo_snapshot_finish(entity, &scope, self.config["snapshot"].as_str().unwrap())
             .map_err(|e| e.to_string())?;
@@ -798,7 +828,7 @@ impl Node for RelationBatchNode {
             .service::<Arc<Mutex<Catalog>>>("catalog")
             .ok_or("catalog missing")?
             .clone();
-        let mut cat = cat.lock().map_err(|e| e.to_string())?;
+        let mut cat = cat.lock().map_err(|e| e.to_string())?; // L4 : écriture
         for entity in [&definition.from, &definition.to] {
             if !cat.entity_configs().contains_key(entity) {
                 return Err(format!("undeclared endpoint {entity}"));

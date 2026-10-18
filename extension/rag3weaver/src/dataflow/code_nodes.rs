@@ -142,7 +142,7 @@ impl Node for CodeIngestNode {
             .cloned()
             .ok_or("CodeIngestNode: 'catalog' service not found")?;
         let started = std::time::Instant::now();
-        let mut cat = catalog.lock().unwrap();
+        let mut cat = catalog.lock().unwrap(); // L4 : écriture (index)
         let report = if self.bulk_index {
             // Les trois entités que l'analyse écrit ; `bulk_vector_index`
             // ignore celles qui n'ont pas de signal vectoriel.
@@ -239,8 +239,15 @@ impl Node for ReadFileNode {
             return Ok(());
         }
         let result = {
-            let guard = catalog.as_ref().map(|c| c.lock().unwrap());
-            crate::code_tools::read_file_with(source.as_ref(), guard.as_deref(), &access, &self.path, self.offset, self.limit)
+            // Par la vue de lecture, sans le mutex (lot L4) ; sinon le catalogue.
+            let vue = super::generic_search_nodes::vue_de(ctx);
+            let guard = if vue.is_none() { catalog.as_ref().map(|c| c.lock().unwrap()) } else { None }; // L4 : repli sans vue
+            let lecteur: Option<&dyn crate::read_view::ReadCatalog> = match (&vue, &guard) {
+                (Some(v), _) => Some(&**v),
+                (None, Some(g)) => Some(&**g),
+                (None, None) => None,
+            };
+            crate::code_tools::read_file_with(source.as_ref(), lecteur, &access, &self.path, self.offset, self.limit)
                 .map_err(|e| format!("ReadFileNode: {e}"))?
         };
         ctx.metric("lines_read", result.lines_read as f64);
@@ -312,8 +319,15 @@ impl Node for GrepNode {
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
         let started = std::time::Instant::now();
         let result = {
-            let guard = catalog.as_ref().map(|c| c.lock().unwrap());
-            grep_files(source.as_ref(), guard.as_deref(), &self.pattern, &self.opts).map_err(|e| format!("GrepNode: {e}"))?
+            // Par la vue de lecture, sans le mutex (lot L4) ; sinon le catalogue.
+            let vue = super::generic_search_nodes::vue_de(ctx);
+            let guard = if vue.is_none() { catalog.as_ref().map(|c| c.lock().unwrap()) } else { None }; // L4 : repli sans vue
+            let lecteur: Option<&dyn crate::read_view::ReadCatalog> = match (&vue, &guard) {
+                (Some(v), _) => Some(&**v),
+                (None, Some(g)) => Some(&**g),
+                (None, None) => None,
+            };
+            grep_files(source.as_ref(), lecteur, &self.pattern, &self.opts).map_err(|e| format!("GrepNode: {e}"))?
         };
         ctx.metric("files_searched", result.files_searched as f64);
         ctx.metric("total_found", result.total_found as f64);
@@ -379,8 +393,15 @@ impl Node for ListFilesNode {
         let source = source_service(ctx).ok_or("ListFilesNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
         let result = {
-            let guard = catalog.as_ref().map(|c| c.lock().unwrap());
-            list_files(source.as_ref(), guard.as_deref(), self.path_prefix.as_deref(), self.limit, self.with_state)
+            // Par la vue de lecture, sans le mutex (lot L4) ; sinon le catalogue.
+            let vue = super::generic_search_nodes::vue_de(ctx);
+            let guard = if vue.is_none() { catalog.as_ref().map(|c| c.lock().unwrap()) } else { None }; // L4 : repli sans vue
+            let lecteur: Option<&dyn crate::read_view::ReadCatalog> = match (&vue, &guard) {
+                (Some(v), _) => Some(&**v),
+                (None, Some(g)) => Some(&**g),
+                (None, None) => None,
+            };
+            list_files(source.as_ref(), lecteur, self.path_prefix.as_deref(), self.limit, self.with_state)
                 .map_err(|e| format!("ListFilesNode: {e}"))?
         };
         ctx.metric("total", result.total as f64);

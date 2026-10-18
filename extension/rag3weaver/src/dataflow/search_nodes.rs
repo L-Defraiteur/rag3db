@@ -184,9 +184,12 @@ impl Node for FetchRelatedNode {
 
         // Le dialecte du catalogue s'il est servi ; sinon la connexion est
         // celle de rag3db, comme avant.
-        let dialect: std::sync::Arc<dyn crate::dialect::SchemaDialect> = match ctx.service::<std::sync::Arc<std::sync::Mutex<crate::Catalog>>>("catalog") {
-            Some(c) => c.lock().map_err(|_| "FetchRelatedNode: catalogue empoisonné")?.dialect_arc(),
-            None => std::sync::Arc::new(crate::dialect::Rag3dbDialect),
+        // Par la vue de lecture, sans le mutex (lot L4).
+        let vue = super::generic_search_nodes::vue_de(ctx);
+        let dialect: std::sync::Arc<dyn crate::dialect::SchemaDialect> = match (&vue, ctx.service::<std::sync::Arc<std::sync::Mutex<crate::Catalog>>>("catalog")) {
+            (Some(v), _) => crate::read_view::ReadCatalog::dialect_arc(&**v),
+            (None, Some(c)) => c.lock().map_err(|_| "FetchRelatedNode: catalogue empoisonné")?.dialect_arc(), // L4 : repli sans vue
+            (None, None) => std::sync::Arc::new(crate::dialect::Rag3dbDialect),
         };
         let children_map = fetch_related_in(dialect.as_ref(), conn.as_ref(), &source_uuids, &self.relation, self.direction, self.limit)?;
         ctx.set_output("children", PortValue::new(children_map));
@@ -336,14 +339,21 @@ impl Node for GroupFrameNode {
             }
         }
         for (entite, uuids) in par_entite {
-            let (group_by, title_field, dialect) = {
-                let c = catalog.lock().map_err(|_| "GroupFrameNode: catalogue empoisonné")?;
-                let Some(config) = c.entity_config(&entite) else { continue };
-                let Some(g) = config.group_by.clone() else { continue };
+            // Par la vue de lecture, sans le mutex (lot L4) ; sinon le catalogue.
+            let lu = |config: Option<&crate::config::EntityConfig>, dialect: std::sync::Arc<dyn crate::dialect::SchemaDialect>| {
+                let config = config?;
                 // Le titre du **parent** : même entité que l'enfant quand la
                 // relation reste dans la table ; sinon celui du parent.
-                (g, config.title_field().map(str::to_string), c.dialect_arc())
+                Some((config.group_by.clone()?, config.title_field().map(str::to_string), dialect))
             };
+            let trouve = match super::generic_search_nodes::vue_de(ctx) {
+                Some(v) => lu(v.entity_configs().get(&entite), crate::read_view::ReadCatalog::dialect_arc(&*v)),
+                None => {
+                    let c = catalog.lock().map_err(|_| "GroupFrameNode: catalogue empoisonné")?; // L4 : repli sans vue
+                    lu(c.entity_config(&entite), c.dialect_arc())
+                }
+            };
+            let Some((group_by, title_field, dialect)) = trouve else { continue };
             let conn = ctx.service::<ConnService>("conn").ok_or("GroupFrameNode: 'conn' service not found")?.0.clone();
             let parents = fetch_related_in(dialect.as_ref(), conn.as_ref(), &uuids, &group_by.relation, ExpansionDirection::Outgoing, 1)?;
             for (uuid, mut liste) in parents {

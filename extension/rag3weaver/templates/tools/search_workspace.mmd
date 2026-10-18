@@ -2,7 +2,7 @@
 %% description: Cherche dans un espace de travail, et choisit seul comment : l'index (mots et sens) quand il est prêt, le balayage des fichiers (mots exacts) quand rien n'est encore indexé. La réponse dit toujours d'où elle vient — une ligne d'état quand l'index n'est pas entier.
 %% param: target string! -- Entité où chercher (un binding du manifeste, en général).
 %% param: query string! -- Description naturelle, nom, identifiant.
-%% param: options json! -- SearchOptions : filter_condition, limit, offset, signals, consistency.
+%% param: options json! -- SearchOptions : filter_condition, limit, offset, signals, consistency. Pendant une réindexation, consistency « eventual » (défaut) répond sur l'état validé d'avant sans l'attendre, et peut ne pas voir vos propres écritures en file ; « strict » l'attend.
 %% param: scope string = "" -- Borner la réponse à ces chemins relatifs à la racine, séparés par | (src/|test/) ; vide : tout l'index. Composé avec le filtre des options.
 %% param: language string = "" -- Borner la réponse à ces langages, séparés par | (cpp|rust) ; vide : tous.
 %% param: mode string = "auto" -- auto (l'état de l'index décide), indexed (toujours l'index), scan (toujours le balayage).

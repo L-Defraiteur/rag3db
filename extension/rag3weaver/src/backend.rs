@@ -3550,8 +3550,17 @@ impl Backend {
 
     /// Les messages d'un fil, dans l'ordre où ils sont arrivés (`at_ms`).
     pub fn journal_read(&self, conversation: &str, since_ms: i64) -> Result<Value, String> {
-        let cat = self.catalog.lock().map_err(|_| "catalog lock poisoned")?;
-        if !cat.is_registered_entity(crate::dataflow::trace_nodes::MESSAGE_ENTITY) {
+        // Par la vue de lecture, sans le mutex (lot L4) ; sinon le catalogue.
+        let vue = self.read_view.current();
+        let garde;
+        let cat: &dyn crate::read_view::ReadCatalog = match &vue {
+            Some(v) => &**v,
+            None => {
+                garde = self.catalog.lock().map_err(|_| "catalog lock poisoned")?;
+                &garde
+            }
+        };
+        if cat.entity_config(crate::dataflow::trace_nodes::MESSAGE_ENTITY).is_none() {
             return Ok(json!({"messages": []}));
         }
         use crate::dataflow::trace_nodes::{CONVERSATION_ENTITY, IN_CONVERSATION, MESSAGE_ENTITY};
@@ -3565,7 +3574,7 @@ impl Backend {
         saut.order_by = vec!["at_ms".into(), "seq".into()];
         let q = cat.dialect_arc().hop(&saut).map_err(|e| e.to_string())?;
         let rows = cat
-            .execute_raw_with_params(
+            .execute_read_with_params(
                 &q,
                 &[
                     crate::dataflow::graph_walk::uuid_param(&[uuid]),
