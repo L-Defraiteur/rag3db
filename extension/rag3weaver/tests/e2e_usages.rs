@@ -137,20 +137,15 @@ fn usages_d_un_nom_ambigu_montre_les_deux_definitions_sans_choisir() {
     eprintln!("{}", r.markdown("all", 20));
     assert_eq!(r.definitions.len(), 2, "les deux définitions : {:?}", r.definitions);
     assert!(r.ambiguous);
-    // « Une relation douteuse se dit » (18 octobre 2026) : rien ne départage les
-    // deux `helper` du même dossier, run est relié à chacun, et chaque usage le dit.
     let run: Vec<_> = r.usages.iter().filter(|u| u.user.title == "run").collect();
-    assert_eq!(run.len(), 2, "run, une fois par définition : {:?}", r.usages);
-    assert!(run.iter().all(|u| u.ambigu && !u.guessed), "chacun marqué ambigu : {run:?}");
-    assert!(run.iter().all(|u| u.definition.is_some()), "attribués, mais dits douteux : {run:?}");
-    assert!(r.markdown("all", 20).contains("(ambigu : un des homonymes)"), "{}", r.markdown("all", 20));
+    assert_eq!(run.len(), 1, "run, une fois : {:?}", r.usages);
+    assert_eq!(run[0].definition, None, "par le nom seul, non attribué");
+    assert!(r.markdown("all", 20).contains("non attribués (nom ambigu)"));
 
     let filtre = usages_of(&cat, &code_config(), "helper", "two.rs").unwrap();
     assert_eq!(filtre.definitions.len(), 1, "path restreint les définitions montrées");
     assert_eq!(filtre.definitions_hidden, 1);
     assert!(filtre.ambiguous, "le nom reste ambigu : un usage par le nom seul n'est pas pour autant à celle-ci");
-    let run: Vec<_> = filtre.usages.iter().filter(|u| u.user.title == "run").collect();
-    assert!(run.iter().all(|u| u.ambigu), "l'usage attribué à two.rs reste dit douteux : {run:?}");
 }
 
 #[test]

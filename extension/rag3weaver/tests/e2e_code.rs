@@ -1049,16 +1049,14 @@ fn ingestion_order_does_not_change_the_typed_relations_either() {
     );
 }
 
-/// L'ambiguïté : deux fichiers du même dossier définissent `helper`, un
-/// troisième l'appelle. Rien ne les départage (ni fichier, ni dossier, ni
-/// import) : l'arête est posée **vers chacun**, marquée `resolution =
-/// ambigu`. « Une relation douteuse se dit, elle ne se tait pas » (tranché
-/// par l'orchestration le 18 octobre 2026, à relire par Lucie) remplace « une
-/// arête manquante vaut mieux qu'une fausse », qui faisait s'abstenir ce cas.
-/// Le rendez-vous reste dans le graphe : les candidats restent interrogeables.
+/// L'ambiguïté : deux fichiers définissent `helper`, un troisième l'appelle.
+/// La matérialisation **s'abstient** — une arête manquante vaut mieux qu'une
+/// fausse. Ce test dit ce qu'on perd, et surtout ce qu'on **ne perd pas** :
+/// le rendez-vous reste dans le graphe, donc les candidats restent
+/// interrogeables. L'information n'est pas jetée, elle n'est pas *raccourcie*.
 #[test]
 #[ignore]
-fn an_ambiguous_name_links_every_candidate_and_says_so() {
+fn an_ambiguous_name_abstains_but_keeps_its_candidates_in_the_graph() {
     use rag3weaver::code::analyze;
     use rag3weaver::connection::CypherValue;
 
@@ -1074,20 +1072,12 @@ fn an_ambiguous_name_links_every_candidate_and_says_so() {
         eprintln!("[lot] ambigus={} en attente={} inter-lots={}", report.ambiguous, report.still_pending, report.linked_across_batches);
     }
 
-    let rows = cat
-        .execute_raw("MATCH (a:Scope {name: 'run'})-[r:CONSUMES]->(b:Scope {name: 'helper'}) RETURN b.file_path, r.resolution")
-        .unwrap();
-    let mut vers: Vec<(String, String)> = rows
-        .rows
-        .iter()
-        .map(|r| (r.first().and_then(|v| v.as_str()).unwrap_or("").to_string(), r.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string()))
-        .collect();
-    vers.sort();
-    eprintln!("[relié] {vers:?}");
-    assert_eq!(vers.len(), 2, "deux définisseurs que rien ne départage : une arête vers chacun — {vers:?}");
-    assert!(vers.iter().all(|(_, r)| r == "ambigu"), "et chacune le dit : {vers:?}");
-    assert_ne!(vers[0].0, vers[1].0, "vers les deux fichiers : {vers:?}");
-    assert_eq!(cat.compter_les_aretes_ambigues(), 2, "le recompte de fin d'indexation les voit");
+    let linked = edges(&mut cat, "CONSUMES");
+    eprintln!("[relié] {linked:?}");
+    assert!(
+        !linked.contains(&("run".to_string(), "helper".to_string())),
+        "deux définisseurs : on s'abstient plutôt que de choisir au hasard — {linked:?}"
+    );
 
     // Mais tout est là pour répondre « qui définit ce nom ? ».
     let rows = cat
@@ -1110,8 +1100,7 @@ fn an_ambiguous_name_links_every_candidate_and_says_so() {
 /// (`qualifier_type`) voyage sur `MENTIONS` et désigne le `run` de `Node`,
 /// dans les deux ordres d'ingestion — y compris quand `Other` arrive avant
 /// `Node` et que `run` n'a qu'un définisseur, du mauvais type. `vague()`
-/// appelle `run()` sans type : une arête vers chacun des trois, marquée
-/// `ambigu` (« une relation douteuse se dit », 18 octobre 2026).
+/// appelle `run()` sans type : l'abstention, comme avant.
 #[test]
 #[ignore]
 fn a_typed_variable_picks_its_method_among_homonyms() {
@@ -1148,22 +1137,12 @@ fn a_typed_variable_picks_its_method_among_homonyms() {
             appels.iter().any(|(a, p)| a == "enveloppe" && p.starts_with("Wrap")),
             "le type lu `Wrap` désigne le parent générique `Wrap<'a>` : {appels:?}"
         );
-        // L'appel typé n'est pas douteux.
-        let go = cat
-            .execute_raw("MATCH (a:Scope {name: 'go'})-[r:CONSUMES]->(b:Scope {name: 'run'}) RETURN r.resolution")
-            .unwrap();
-        assert!(go.rows.iter().all(|r| r.first().and_then(|v| v.as_str()) != Some("ambigu")), "go est relié par son type, pas par doute");
         if i == 0 {
             // Dans l'autre ordre, `vague` se relie au seul `run` connu quand
             // il arrive et le garde quand le nom devient ambigu : la
             // fragilité connue (« un nom unique devenu ambigu garde ses
             // anciennes arêtes »), pas l'objet de ce test.
-            let rows = cat
-                .execute_raw("MATCH (a:Scope {name: 'vague'})-[r:CONSUMES]->(b:Scope {name: 'run'}) RETURN b.parent_name, r.resolution")
-                .unwrap();
-            let vague: Vec<String> = rows.rows.iter().map(|r| r.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string()).collect();
-            assert_eq!(vague.len(), 3, "sans type, une arête vers chacun des trois `run` : {appels:?}");
-            assert!(vague.iter().all(|r| r == "ambigu"), "chacune marquée ambiguë : {vague:?}");
+            assert!(!appels.iter().any(|(a, _)| a == "vague"), "sans type, on s'abstient : {appels:?}");
         }
     }
 }

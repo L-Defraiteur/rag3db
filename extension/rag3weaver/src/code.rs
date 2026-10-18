@@ -3281,8 +3281,11 @@ enum Choix {
 
 /// **La borne des candidats d'un nom ambigu** (`RAG3WEAVER_AMBIGU_MAX`, 8 par défaut) : au-delà,
 /// on s'abstient et on compte, plutôt que de poser une arête vers chacun.
+/// Par défaut 1 : au-delà d'un candidat, l'abstention, comptée. Sur code-lourd, la borne 8
+/// posait 209 290 arêtes « ambigu » (CONSUMES ×2,6), vers `result`, `i`, `len`, `clone`, des
+/// variables : du bruit, pas un doute (révisé par c7 sur cette mesure, 19 octobre 2026).
 fn borne_ambigu() -> usize {
-    std::env::var("RAG3WEAVER_AMBIGU_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(8)
+    std::env::var("RAG3WEAVER_AMBIGU_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(1)
 }
 
 /// Le dossier d'un chemin de fichier (`src/a/b.rs` → `src/a`).

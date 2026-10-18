@@ -251,11 +251,10 @@ fn appels_de(catalog: &Catalog, nom: &str) -> Vec<String> {
 }
 
 /// **Un nom ambigu qui redevient unique** : `cible` est défini dans a.rs et
-/// b.rs, c.rs l'appelle — une arête vers chacun, marquée `ambigu` (« une
-/// relation douteuse se dit », 18 octobre 2026). b.rs disparaît de la
+/// b.rs, c.rs l'appelle — la résolution s'abstient. b.rs disparaît de la
 /// source : à la fin de la synchronisation, le nom n'a plus qu'un
-/// définisseur, et l'appel de c.rs garde une seule arête, qui ne se dit plus
-/// douteuse — même si aucun paquet ne repasse sur a.rs après le retrait.
+/// définisseur, et l'appel de c.rs doit gagner son arête — même si aucun
+/// paquet ne repasse sur a.rs après le retrait.
 #[test]
 #[ignore]
 fn un_nom_ambigu_qui_redevient_unique_gagne_ses_aretes() {
@@ -267,30 +266,13 @@ fn un_nom_ambigu_qui_redevient_unique_gagne_ses_aretes() {
     ];
     let options = SourceSyncOptions { batch_files: 1, ..Default::default() };
     sync_source(&mut catalog, &Snapshot::new("depot", fichiers.clone()), &options, &mut |_| {}).unwrap();
-    let avant = appels_de(&catalog, "appelant");
-    assert_eq!(avant.len(), 2, "ambigu : une arête vers chacun des deux : {avant:?}");
-    assert_eq!(resolutions_de(&catalog, "appelant"), vec!["ambigu".to_string(), "ambigu".to_string()]);
+    assert!(appels_de(&catalog, "appelant").is_empty(), "ambigu : on s'abstient");
 
     let sans_b: Vec<(String, String)> = fichiers.into_iter().filter(|(p, _)| p != "b.rs").collect();
     sync_source(&mut catalog, &Snapshot::new("depot", sans_b), &SourceSyncOptions { force: true, ..options }, &mut |_| {}).unwrap();
     let appels = appels_de(&catalog, "appelant");
     assert_eq!(appels.len(), 1, "le nom redevenu unique est résolu : {appels:?}");
     assert!(appels[0].ends_with("a.rs"), "{appels:?}");
-    let marques = resolutions_de(&catalog, "appelant");
-    assert!(!marques.contains(&"ambigu".to_string()), "un doute levé ne se dit plus : {marques:?}");
-}
-
-/// Les `resolution` des arêtes `CONSUMES` qui partent du scope `nom`, triées.
-fn resolutions_de(catalog: &Catalog, nom: &str) -> Vec<String> {
-    let mut v: Vec<String> = catalog
-        .execute_raw(&format!("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = '{nom}' RETURN r.resolution"))
-        .unwrap()
-        .rows
-        .into_iter()
-        .map(|r| r.first().and_then(|v| v.as_str()).unwrap_or("").to_string())
-        .collect();
-    v.sort();
-    v
 }
 
 /// Une source un peu plus riche : des appels entre fichiers, des méthodes.
