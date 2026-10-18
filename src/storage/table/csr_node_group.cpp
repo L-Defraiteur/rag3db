@@ -254,6 +254,13 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMem(const Transaction* transact
             const auto offsetInGroup = boundNodeOffset % StorageConfig::NODE_GROUP_SIZE;
             std::shared_lock lck{csrIndexMtx};
             nodeGroupScanState.inMemCSRList = csrIndex->indices[offsetInGroup];
+            if (nodeGroupScanState.inMemCSRList.rowIndices.empty()) {
+                // Rien en mémoire pour ce nœud (liste jamais remplie, ou vidée par l'annulation
+                // d'un COPY) : au suivant, quel que soit son drapeau isSequential.
+                tableState.currBoundNodeIdx++;
+                nodeGroupScanState.nextRowToScan = 0;
+                continue;
+            }
         }
         if (!nodeGroupScanState.inMemCSRList.isSequential) {
             KU_ASSERT(std::is_sorted(nodeGroupScanState.inMemCSRList.rowIndices.begin(),
@@ -666,7 +673,11 @@ void CSRNodeGroup::rollbackInsert(row_idx_t startRow) {
             const auto first = list.rowIndices[0];
             auto& length = list.rowIndices[1];
             if (first >= startRow) {
+                // Vide : l'état d'une liste neuve (non séquentielle, sans ligne), que le
+                // balayage et updateCSRIndex savent lire ; une liste vide dite séquentielle
+                // faisait lire rowIndices[0] d'un vecteur vide.
                 list.rowIndices.clear();
+                list.isSequential = false;
             } else if (first + length > startRow) {
                 length = startRow - first;
             }

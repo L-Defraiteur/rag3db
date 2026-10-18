@@ -1,7 +1,14 @@
 # Un COPY de relations vers un nœud qui a déjà des relations persistantes les fait disparaître
 
-- **État** : ouvert (reproduit sur master 8f4779bdc et sur le lot du rollback, luciepc, 18 octobre
-  2026, par une sonde déterministe)
+- **État** : corrigé le 18 octobre 2026 par le commit qui ferme ce ticket (cœur C++). La cause :
+  l'annulation retire les groupes de queue « vides » de la collection
+  (`NodeGroupCollection::rollbackInsert` → `GroupCollection::getNumEmptyTrailingGroups`), et le
+  vide se jugeait sur `getNumRows()`, les lignes en mémoire seules ; un groupe CSR dont toutes les
+  relations sont dans son bloc persistant comptait 0 et partait avec elles, le COPY suivant
+  repartait d'un groupe neuf, et le point de reprise rendait la perte durable. Le vide se juge
+  par `isEmpty()`, que `CSRNodeGroup` définit avec son bloc persistant. Témoin
+  `test/transaction/copy_rollback_persistent_rels_test.cpp` (COPY annulé seul, puis COPY validé,
+  depuis une sous-requête, sans propriété, puis CREATE ; relus après `CHECKPOINT` et réouverture).
 - **Gravité** : **perte de données, durable** : après un COPY annulé (puis un COPY validé), un `CHECKPOINT` puis une
   réouverture, les dix relations d'avant du nœud ne sont plus nulle part (`k <= 10` compte 0 dans
   toute la table, le nœud 1 n'a plus d'entrante) : perdues au stockage, pas seulement au
@@ -78,7 +85,7 @@ même couple) ; ses trois témoins par le chemin CSV du produit (sources ou arri
 automatique et dans un `BEGIN … COMMIT`) restent verts. Le défaut de ce ticket reste réel par
 Cypher, dans la forme exacte du tableau ci-dessus.
 
-## Ce que dit le code (lu, non prouvé)
+## Ce que disait la lecture (avant la cause)
 
 Le COPY de relations dans un groupe non vide passe par `CSRNodeGroup::appendChunkedCSRGroup` :
 `NodeGroup::append` des lignes en mémoire, puis `updateCSRIndex(i, startRow, length)` pour chaque

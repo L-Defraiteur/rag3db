@@ -238,7 +238,14 @@ public:
     void rollbackInsert(common::row_idx_t startRow) override;
     void reclaimStorage(PageAllocator& pageAllocator, const common::UniqLock& lock) const override;
 
-    bool isEmpty() const override { return !persistentChunkGroup && NodeGroup::isEmpty(); }
+    // Vide : aucune ligne en mémoire et rien dans le bloc persistant (un bloc persistant vidé
+    // par l'annulation d'un COPY — ses lignes retirées depuis 0 — ne porte plus rien ; l'en-tête
+    // CSR, lui, désigne encore ses lignes : un tel groupe doit partir avec l'annulation, comme
+    // avant, alors qu'un bloc persistant qui a des lignes reste).
+    bool isEmpty() const override {
+        return (!persistentChunkGroup || persistentChunkGroup->getNumRows() == 0) &&
+               NodeGroup::isEmpty();
+    }
 
     ChunkedNodeGroup* getPersistentChunkedGroup() const { return persistentChunkGroup.get(); }
     void setPersistentChunkedGroup(std::unique_ptr<ChunkedNodeGroup> chunkedNodeGroup) {

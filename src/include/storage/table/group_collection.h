@@ -142,11 +142,15 @@ public:
         groups.clear();
     }
 
+    // « Vide » au sens du groupe lui-même (isEmpty), pas de son seul compte de lignes en
+    // mémoire : un groupe CSR dont toutes les relations sont dans son bloc persistant compte 0
+    // ligne en mémoire, et l'annulation d'un COPY le retirait avec ses relations (ticket du 18
+    // octobre 2026 : un COPY de relations annulé efface les relations persistantes du nœud).
     common::idx_t getNumEmptyTrailingGroups(const common::UniqLock& lock) {
         const auto& groupsVector = getAllGroups(lock);
         return common::safeIntegerConversion<common::idx_t>(
             std::find_if(groupsVector.rbegin(), groupsVector.rend(),
-                [](const auto& group) { return (group->getNumRows() != 0); }) -
+                [](const auto& group) { return !group->isEmpty(); }) -
             groupsVector.rbegin());
     }
 

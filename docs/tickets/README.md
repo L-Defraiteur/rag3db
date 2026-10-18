@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (38)
+### Ouverts — moteur (37)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -46,7 +46,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 |---|---|---|---|---|
 | [La rétention des index ne couvre que l'index vectoriel : une recherche spatiale perd son index sous un DROP, et rend zéro ligne sans le dire](2026-10-18-la-retention-des-index-ne-couvre-que-l-index-vectoriel.md) | ouvert — pour hotfixs, après le ROLLBACK, avant (A) ; forme : la rétention au niveau du holder pour tous les genres d'index | réponse fausse (zéro ligne) | oui | oui, s'il emploie l'index spatial |
 | [Une base ne dit pas quel moteur l'a écrite en dernier, et un moteur plus ancien de même format l'ouvre en écriture](2026-10-18-une-base-ne-dit-pas-quel-moteur-l-a-ecrite-et-un-moteur-plus-ancien-l-ouvre-en-ecriture.md) | ouvert — demande de Lucie ; pour le cœur C++, fin de file | corruption possible (un vieil hôte écrit une base plus récente de même numéro) | oui (client et hôte de versions différentes) | oui |
-| [Un COPY de relations vers un nœud qui a déjà des relations persistantes les fait disparaître](2026-10-18-un-copy-de-relations-vers-un-noeud-deja-relie-perd-ses-relations-persistantes.md) | ouvert — reproduit sur master par une sonde déterministe ; pour le cœur C++, à placer par l'orchestration (perte) | perte de données en lecture (0 après ROLLBACK, 1 500 au lieu de 1 510 après COMMIT) | oui : un COPY de relations ANNULÉ (échec ou ROLLBACK) vers des nœuds déjà reliés et repris | si un COPY s'annule (la perte de code-lourd n'est pas ce défaut) |
 | [Sous un tampon plein, un ROLLBACK est refusé et bloque la base, et la fermeture d'une connexion tue le processus](2026-10-18-un-rollback-sous-un-tampon-plein-bloque-la-base-et-la-fermeture-tue-le-processus.md) | ouvert — pour hotfixs (après le CREATE concurrent), relecture du cœur ; recette déterministe, témoin `FullBufferRollback.RollsBackAndClosesCleanly` (le CHECKPOINT refusé relève de la voie 2 du point de reprise) | plantage (SIGABRT), base bloquée ou condamnée à être rouverte | oui (tampon plein de pages validées non reportées) | oui (l'hôte garde ses connexions) |
 | [Un bâti d'index prend tous les fils de travail et affame les autres connexions, lecteurs compris](2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions.md) | ouvert — cause confirmée (le planificateur, pas un verrou) ; forme à étudier : file équitable ; témoin `IndexCreationThreads.LeavesAThreadToReaders` | blocage (tous attendent environ 9,7 s à deux fils) | oui (peu de cœurs, pod sous quota) | oui |
 | [Sur une table indexée par HNSW, chaque écrivain tient l'index en exclusif jusqu'à sa validation : les écrivains passent un par un](2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un.md) | ouvert — pour le cœur, en fin de file (arbitrage de c7 : distinct de la lenteur de l'insertion et du point de reprise) ; E11 | blocage (p99 de Doc 390 ms contre 24 ms pour Note) | oui | oui (tables de morceaux) |
@@ -125,10 +124,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (146), dans `closed/`
+### Fermés (147), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un COPY de relations vers un nœud qui a déjà des relations persistantes les fait disparaître](closed/2026-10-18-un-copy-de-relations-vers-un-noeud-deja-relie-perd-ses-relations-persistantes.md) | corrigé — 18 octobre 2026 (l'annulation retirait un groupe CSR jugé vide sur ses lignes en mémoire, bloc persistant compris) ; témoin `copy_rollback_persistent_rels_test.cpp` | perte de données, durable | oui : un COPY de relations annulé vers des nœuds déjà reliés et repris | si un COPY s'annule |
 | [Un COPY après le retrait de l'index vectoriel est refusé : la finalisation du COPY touche l'index retiré](closed/2026-10-18-un-copy-apres-le-retrait-de-l-index-vectoriel-est-refuse.md) | corrigé — 18 octobre 2026, ouvert et fermé dans le même commit (régression de la rétention des index sur le chemin DROP, COPY, CREATE du produit) ; témoin `copy_after_drop_vector_index_test.cpp` | refus d'un COPY valide, ingestion en masse du produit bloquée | oui (depuis 9b861579a) | oui |
 | [L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir](closed/2026-10-18-l-arret-de-l-hote-attend-sans-borne-une-reaction-figee.md) | corrigé : arrêt des réacteurs borné à 30 s, le réacteur figé nommé et son catalogue laissé au rejeu (lot de l'hôte par socket) | blocage | oui | oui |
 | [codeparsers parse le TSX avec la grammaire TypeScript : le JSX tombe en erreur, ses usages se perdent](closed/2026-10-18-codeparsers-parse-le-tsx-avec-la-grammaire-typescript.md) | corrigé : codeparsers `9d5de97` (la grammaire suit l'extension ; la collecte locale ne prend plus le nom d'une balise pour une définition) ; témoin `codeparsers/tests/jsx.rs` | réponse incomplète (aucun usage d'un composant en balise) | oui, tout dépôt avec des `.tsx`/`.jsx` | oui (index du code, `usages`) |
