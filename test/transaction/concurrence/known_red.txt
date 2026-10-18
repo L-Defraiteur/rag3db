@@ -133,3 +133,11 @@ VectorIndexUpdate.RowsCommittedDuringACreateAreIndexed rows-committed-during-cre
 # 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction) : le MERGE qui suit le refus
 # plante (signal 11, transaction nulle). Joué rouge le 18 octobre sur luciepc (54f060342, branche du scénario). Pour le cœur
 # C++.
+#
+# Sous un tampon plein de pages validées non reportées (ticket
+# 2026-10-18-un-rollback-sous-un-tampon-plein-bloque-la-base-et-la-fermeture-tue-le-processus) : le
+# ROLLBACK est refusé, la fermeture d'une connexion lève depuis un destructeur (SIGABRT), et un
+# CHECKPOINT refusé condamne la base à être rouverte. Joués rouges le 18 octobre sur luciepc. Pour
+# hotfixs, relecture du cœur C++.
+FullBufferRollback.RollsBackAndClosesCleanly rollback-under-a-full-buffer-succeeds closing-a-connection-does-not-abort
+FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen refused-checkpoint-leaves-the-database-open
