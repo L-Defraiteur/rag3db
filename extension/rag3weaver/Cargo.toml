@@ -72,6 +72,9 @@ swc_ecma_transforms_typescript = "56"
 # modules de la page : quatre petites crates de plus (swc_ecma_loader, dashmap, path-clean,
 # Inflector), aucune pile d'AST en double.
 swc_ecma_transforms_module = "57"
+# La source map composée d'un graphe de clic (module → TSX → `.clic.mmd`) : la crate de cartes
+# que swc_common tire déjà (feature `sourcemap`).
+swc_sourcemap = "10"
 
 # Candle embedder (feature flag, active par defaut)
 candle-core = { version = "0.8", optional = true }

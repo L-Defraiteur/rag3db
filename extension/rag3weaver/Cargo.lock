@@ -6838,6 +6838,7 @@ dependencies = [
  "swc_ecma_transforms_module",
  "swc_ecma_transforms_react",
  "swc_ecma_transforms_typescript",
+ "swc_sourcemap",
  "swc_ts_fast_strip",
  "tempfile",
  "text-splitter",

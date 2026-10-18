@@ -38,6 +38,8 @@ pub mod graph_node;
 pub mod graph_tool;
 /// Le graphe de clic d'un composant déclaré (marche 3, niveau 2).
 pub mod clic;
+/// Le graphe de clic transpilé en TSX, puis compilé (marche 3, niveau 2, lot 2).
+pub mod clic_tsx;
 pub mod mermaid;
 pub mod node_factories;
 pub mod node_registry;
