@@ -29,15 +29,18 @@ use std::sync::Mutex;
 /// Une déclaration à la fois, dans tout le processus.
 static DECLARING: Mutex<()> = Mutex::new(());
 
-/// Les extensions d'une déclaration.
-const KINDS: [&str; 11] = [
-    "json", "mmd", "ts", "js", "rhai", "html", "htm", "jinja", "txt", "xml", "md",
+/// Les extensions d'une déclaration. `tsx` et `jsx` : la vue d'un composant (`components/`).
+const KINDS: [&str; 13] = [
+    "json", "mmd", "ts", "js", "tsx", "jsx", "rhai", "html", "htm", "jinja", "txt", "xml", "md",
 ];
 
 /// Ce qu'une déclaration acceptée a mis en service.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Declared {
+    /// Le chemin déclaré ; pour un ensemble, les chemins séparés par des virgules.
     pub path: String,
+    /// Les chemins déclarés, un par fichier.
+    pub paths: Vec<String>,
     /// La version des déclarations en service après elle.
     pub version: u64,
     /// Le commit qui la porte ; `None` si le contenu n'a pas changé.
@@ -72,16 +75,41 @@ impl Backend {
     /// **Pose une déclaration** : vérifiée comme au chargement, mise en
     /// service, commitée avec sa raison ; refusée sans rien laisser derrière.
     pub fn declare(&self, path: &str, content: &str, reason: &str) -> Result<Declared, String> {
+        self.declare_set(&[(path.to_string(), content.to_string())], reason)
+    }
+
+    /// **Pose plusieurs déclarations ensemble** : toutes écrites, vérifiées d'un seul
+    /// rechargement, mises en service et commitées en un commit avec leur raison — ou aucune.
+    /// Un composant neuf en a plusieurs (sa déclaration, sa vue, son graphe de clic) : posés un à
+    /// un, l'ensemble à moitié écrit serait refusé.
+    pub fn declare_set(&self, files: &[(String, String)], reason: &str) -> Result<Declared, String> {
         let _one = DECLARING.lock().unwrap_or_else(|e| e.into_inner());
         if reason.trim().is_empty() {
             return Err("une déclaration dit pourquoi : la raison est vide".into());
         }
+        if files.is_empty() {
+            return Err("une déclaration nomme au moins un fichier".into());
+        }
+        let mut vus = std::collections::BTreeSet::new();
+        if let Some((p, _)) = files.iter().find(|(p, _)| !vus.insert(p.as_str())) {
+            return Err(format!("« {p} » est déclaré deux fois dans le même ensemble"));
+        }
         git_present()?;
-        let target = self.declaration_path(path)?;
-        let before = std::fs::read_to_string(&target).ok();
-        if before.as_deref() == Some(content) {
+        let paths: Vec<String> = files.iter().map(|(p, _)| p.clone()).collect();
+        let nom = paths.join(", ");
+        // (chemin, cible, contenu d'avant) de ce qui change.
+        let mut changes: Vec<(String, PathBuf, Option<String>, &str)> = Vec::new();
+        for (path, content) in files {
+            let target = self.declaration_path(path)?;
+            let before = std::fs::read_to_string(&target).ok();
+            if before.as_deref() != Some(content.as_str()) {
+                changes.push((path.clone(), target, before, content.as_str()));
+            }
+        }
+        if changes.is_empty() {
             return Ok(Declared {
-                path: path.to_string(),
+                path: nom,
+                paths,
                 version: self.declarations_version(),
                 commit: None,
                 removed_reactions: vec![],
@@ -90,41 +118,48 @@ impl Backend {
                 reaction_errors: vec![],
             });
         }
-        write_atomically(&target, content)?;
-        let undo = |target: &Path| match &before {
-            Some(old) => write_atomically(target, old),
-            None => std::fs::remove_file(target).map_err(|e| e.to_string()),
+        // Le retour à l'état d'avant, de tout ce qui a été écrit.
+        let undo = |n: usize| -> Result<(), String> {
+            for (_, target, before, _) in &changes[..n] {
+                match before {
+                    Some(old) => write_atomically(target, old)?,
+                    None => std::fs::remove_file(target).map_err(|e| e.to_string())?,
+                }
+            }
+            Ok(())
         };
+        for (i, (path, target, _, content)) in changes.iter().enumerate() {
+            if let Err(e) = write_atomically(target, content) {
+                undo(i)?;
+                return Err(format!("{path} : ne s'écrit pas ({e}), rien n'est écrit"));
+            }
+        }
+        let tout = changes.len();
         let pending = match self.check_reload() {
             Ok(pending) => pending,
             Err(refused) => {
-                undo(&target)?;
-                return Err(format!(
-                    "{path} : déclaration refusée, rien n'est écrit — {refused}"
-                ));
+                undo(tout)?;
+                return Err(format!("{nom} : déclaration refusée, rien n'est écrit — {refused}"));
             }
         };
         let dir = self.prepared().directory.clone();
-        let back = |target: &Path, why: String| -> Result<Declared, String> {
+        let back = |why: String| -> Result<Declared, String> {
             // Pas de déclaration à moitié : on revient en arrière, réactions
             // comprises.
-            undo(target)?;
+            undo(tout)?;
             self.reload_reactions()
-                .map_err(|e| format!("{path} : {why}, et le retour arrière aussi : {e}"))?;
-            Err(format!("{path} : {why}, rien n'est écrit"))
+                .map_err(|e| format!("{nom} : {why}, et le retour arrière aussi : {e}"))?;
+            Err(format!("{nom} : {why}, rien n'est écrit"))
         };
         let reloaded = match self.apply_reload_with_reactions(pending) {
             Ok(reloaded) => reloaded,
-            Err(error) => {
-                return back(
-                    &target,
-                    format!("les réactions ne se remontent pas ({error})"),
-                )
-            }
+            Err(error) => return back(format!("les réactions ne se remontent pas ({error})")),
         };
-        match commit(&dir, path, reason) {
+        let changes_paths: Vec<&str> = changes.iter().map(|(p, ..)| p.as_str()).collect();
+        match commit(&dir, &changes_paths, reason) {
             Ok(hash) => Ok(Declared {
-                path: path.to_string(),
+                path: nom,
+                paths,
                 version: reloaded.reloaded.version,
                 commit: Some(hash),
                 removed_reactions: reloaded.reloaded.removed_reactions,
@@ -132,16 +167,8 @@ impl Backend {
                 dropped_cursors: reloaded.dropped_cursors,
                 reaction_errors: reloaded.errors_before,
             }),
-            Err(git) => {
-                // Pas de déclaration sans sa raison : on revient en arrière.
-                undo(&target)?;
-                self.reload_reactions().map_err(|e| {
-                    format!("{path} : le commit a échoué ({git}) et le retour arrière aussi : {e}")
-                })?;
-                Err(format!(
-                    "{path} : git a refusé le commit, rien n'est écrit — {git}"
-                ))
-            }
+            // Pas de déclaration sans sa raison : on revient en arrière.
+            Err(git) => back(format!("git a refusé le commit ({git})")),
         }
     }
 
@@ -259,26 +286,19 @@ fn git_present() -> Result<(), String> {
         .ok_or_else(|| "declare demande git sur ce poste (chaque déclaration est un commit)".into())
 }
 
-/// Commite **ce chemin seul** dans le dépôt qui englobe le dossier — créé
+/// Commite **ces chemins seuls**, en un commit, dans le dépôt qui englobe le dossier — créé
 /// s'il n'y en a aucun au-dessus —, sous l'identité git du dépôt.
-fn commit(dir: &Path, path: &str, reason: &str) -> Result<String, String> {
+fn commit(dir: &Path, paths: &[&str], reason: &str) -> Result<String, String> {
     if git(dir, &["rev-parse", "--show-toplevel"]).is_err() {
         git(dir, &["init", "-q"])?;
     }
-    git(dir, &["add", "--", path])?;
-    git(
-        dir,
-        &[
-            "commit",
-            "-q",
-            "-m",
-            reason.trim(),
-            "-m",
-            &format!("declare: {path}"),
-            "--",
-            path,
-        ],
-    )?;
+    let mut add = vec!["add", "--"];
+    add.extend_from_slice(paths);
+    git(dir, &add)?;
+    let pied = format!("declare: {}", paths.join(", "));
+    let mut c = vec!["commit", "-q", "-m", reason.trim(), "-m", pied.as_str(), "--"];
+    c.extend_from_slice(paths);
+    git(dir, &c)?;
     git(dir, &["rev-parse", "HEAD"])
 }
 
@@ -293,6 +313,7 @@ pub struct DeclarationTools<'a> {
 pub const LIST: &str = "list_declarations";
 pub const READ: &str = "read_declaration";
 pub const DECLARE: &str = "declare";
+pub const DECLARE_SET: &str = "declare_set";
 
 /// Les trois définitions d'outil.
 pub fn tool_defs() -> Vec<ToolDef> {
@@ -331,6 +352,35 @@ pub fn tool_defs() -> Vec<ToolDef> {
                 "additionalProperties": false
             }),
         },
+        ToolDef {
+            name: DECLARE_SET.into(),
+            description: "Writes several declaration files together (each whole), checked by one \
+                          reload, put in service and committed in one commit with your reason — or \
+                          none of them. Use it when files depend on each other: a component's \
+                          .component.json, its .tsx view and its .clic.mmd graph."
+                .into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "files": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string", "description": "Relative to the backend folder."},
+                                "content": {"type": "string", "description": "The whole new content of the file."}
+                            },
+                            "required": ["path", "content"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "reason": {"type": "string", "description": "Why — it becomes the commit message."}
+                },
+                "required": ["files", "reason"],
+                "additionalProperties": false
+            }),
+        },
     ]
 }
 
@@ -338,7 +388,7 @@ impl DeclarationTools<'_> {
     fn ours(&self, call: &ToolCall) -> Option<Turn> {
         let answer =
             |content: Value| Some(Turn::tool_result(&call.id, &call.name, content.to_string()));
-        if ![LIST, READ, DECLARE].contains(&call.name.as_str()) {
+        if ![LIST, READ, DECLARE, DECLARE_SET].contains(&call.name.as_str()) {
             return None;
         }
         let args: Value = match serde_json::from_str(&call.arguments) {
@@ -355,13 +405,23 @@ impl DeclarationTools<'_> {
                 Err(error) => json!({"ok": false, "error": error}),
             }),
             _ => answer(
-                match self
-                    .backend
-                    .declare(&text("path"), &text("content"), &text("reason"))
-                {
+                match if call.name == DECLARE_SET {
+                    let files: Vec<(String, String)> = args["files"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|f| {
+                            (f["path"].as_str().unwrap_or_default().to_string(), f["content"].as_str().unwrap_or_default().to_string())
+                        })
+                        .collect();
+                    self.backend.declare_set(&files, &text("reason"))
+                } else {
+                    self.backend.declare(&text("path"), &text("content"), &text("reason"))
+                } {
                     Ok(declared) => json!({
                         "ok": true,
                         "path": declared.path,
+                        "paths": declared.paths,
                         "version": declared.version,
                         "commit": declared.commit,
                         "removed_reactions": declared.removed_reactions,
@@ -384,7 +444,7 @@ impl crate::agent::ToolBox for DeclarationTools<'_> {
     }
 
     fn is_async(&self, name: &str) -> bool {
-        ![LIST, READ, DECLARE].contains(&name) && self.inner.is_async(name)
+        ![LIST, READ, DECLARE, DECLARE_SET].contains(&name) && self.inner.is_async(name)
     }
 
     fn call(&self, call: &ToolCall) -> Turn {

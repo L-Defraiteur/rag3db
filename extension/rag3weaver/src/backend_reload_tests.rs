@@ -1133,3 +1133,64 @@ fn the_watcher_remounts_the_reactions_and_says_the_forgotten_cursors() {
     assert!(events.contains("event: reloaded"), "{events}");
     assert!(events.contains("catalog@watch"), "{events}");
 }
+
+// ─── declare_set : plusieurs déclarations ensemble (marche 3, l'agent des gabarits) ───
+
+/// **Un composant neuf se déclare en un ensemble** : sa déclaration et sa vue `.tsx` ensemble
+/// passent, en un commit qui porte les deux ; la déclaration seule, sans sa vue, est refusée et
+/// rien n'est écrit ; la vue se liste parmi les déclarations.
+#[test]
+fn un_composant_se_declare_en_un_ensemble_ou_pas_du_tout() {
+    let (dir, backend) = toy_in_a_repository();
+    let decl = r#"{ "name": "Fiche", "source": "fiche.tsx" }"#.to_string();
+    let vue = "export function Fiche() { return <b/>; }\n".to_string();
+    let head = git_in(dir.path(), &["rev-parse", "HEAD"]);
+    let seule = backend
+        .declare("components/fiche.component.json", &decl, "Une fiche, sans sa vue")
+        .unwrap_err();
+    assert!(seule.contains("rien n'est écrit") && seule.contains("fiche.tsx"), "{seule}");
+    assert!(!dir.path().join("components/fiche.component.json").exists(), "la déclaration refusée est restée");
+    assert_eq!(git_in(dir.path(), &["rev-parse", "HEAD"]), head, "aucun commit");
+
+    let fait = backend
+        .declare_set(
+            &[("components/fiche.component.json".into(), decl.clone()), ("components/fiche.tsx".into(), vue.clone())],
+            "La fiche et sa vue",
+        )
+        .unwrap();
+    assert_eq!(fait.paths, vec!["components/fiche.component.json", "components/fiche.tsx"]);
+    let commit = fait.commit.expect("un commit");
+    assert_eq!(git_in(dir.path(), &["rev-parse", "HEAD"]), commit);
+    let fichiers = git_in(dir.path(), &["show", "--name-only", "--format=", "HEAD"]);
+    assert_eq!(fichiers, "components/fiche.component.json\ncomponents/fiche.tsx", "un seul commit porte les deux");
+    let message = git_in(dir.path(), &["log", "-1", "--format=%B"]);
+    assert!(message.contains("declare: components/fiche.component.json, components/fiche.tsx"), "{message}");
+    assert!(backend.list_declarations().contains(&"components/fiche.tsx".to_string()));
+    assert!(backend.read_declaration("components/fiche.tsx").unwrap().contains("Fiche"));
+}
+
+/// **Un ensemble dont un fichier est refusé n'écrit rien** : le fichier changé est remis, le
+/// fichier neuf retiré, aucun commit ; et un chemin donné deux fois est refusé d'emblée.
+#[test]
+fn un_ensemble_refuse_remet_tout_en_etat() {
+    let (dir, backend) = toy_in_a_repository();
+    let avant = std::fs::read_to_string(dir.path().join("views/hello.html")).unwrap();
+    let head = git_in(dir.path(), &["rev-parse", "HEAD"]);
+    let refus = backend
+        .declare_set(
+            &[
+                ("views/hello.html".into(), "<p>{{ result.hello }}</p>".into()),
+                ("views/casse.html".into(), "<h1>\n{% if %}\n</h1>".into()),
+            ],
+            "Deux vues, dont une cassée",
+        )
+        .unwrap_err();
+    assert!(refus.contains("rien n'est écrit"), "{refus}");
+    assert_eq!(std::fs::read_to_string(dir.path().join("views/hello.html")).unwrap(), avant);
+    assert!(!dir.path().join("views/casse.html").exists());
+    assert_eq!(git_in(dir.path(), &["rev-parse", "HEAD"]), head);
+    let deux = backend
+        .declare_set(&[("views/hello.html".into(), "a".into()), ("views/hello.html".into(), "b".into())], "deux fois")
+        .unwrap_err();
+    assert!(deux.contains("deux fois"), "{deux}");
+}

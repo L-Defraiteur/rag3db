@@ -394,11 +394,15 @@ struct Observed<'a> {
 
 impl Observed<'_> {
     fn after(&self, call: &ToolCall, turn: Turn) -> Turn {
-        if call.name == crate::declare::DECLARE {
+        if call.name == crate::declare::DECLARE || call.name == crate::declare::DECLARE_SET {
             let result: Value = serde_json::from_str(&turn.content).unwrap_or(Value::Null);
+            // Un ensemble se dit par ses chemins, séparés par des virgules (`Declared::path`).
             let path = serde_json::from_str::<Value>(&call.arguments)
                 .ok()
-                .and_then(|a| a["path"].as_str().map(str::to_string))
+                .and_then(|a| match a["files"].as_array() {
+                    Some(fs) => Some(fs.iter().filter_map(|f| f["path"].as_str()).collect::<Vec<_>>().join(", ")),
+                    None => a["path"].as_str().map(str::to_string),
+                })
                 .unwrap_or_default();
             if result["ok"] == true {
                 // Déjà rechargé par declare : la montre ne le refait pas.
