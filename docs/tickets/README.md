@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (37)
+### Ouverts — moteur (38)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
 | [L'annulation d'un COPY sous un tampon plein peut encore allouer](2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer.md) | ouvert, à confirmer (témoin à écrire) | blocage possible (la base n'est plus bloquée : erreur nommée, ou base à rouvrir) | en principe | oui (ses COPY) |
 | [La rétention des index ne couvre que l'index vectoriel : une recherche spatiale perd son index sous un DROP, et rend zéro ligne sans le dire](2026-10-18-la-retention-des-index-ne-couvre-que-l-index-vectoriel.md) | ouvert — pour hotfixs, après le ROLLBACK, avant (A) ; forme : la rétention au niveau du holder pour tous les genres d'index | réponse fausse (zéro ligne) | oui | oui, s'il emploie l'index spatial |

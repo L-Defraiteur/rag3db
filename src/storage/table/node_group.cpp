@@ -810,10 +810,11 @@ bool NodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transaction_t tra
 
 bool NodeGroup::wasColumnUpdatedByCommitAfter(column_id_t columnID, transaction_t startTS,
     row_idx_t rowIdxInGroup) const {
-    ChunkedNodeGroup* chunkedGroup = nullptr;
+    // En propriété partagée, comme isVisible : le bloc est lu hors du verrou de la collection.
+    std::shared_ptr<ChunkedNodeGroup> chunkedGroup;
     {
         const auto lock = chunkedGroups.lock();
-        chunkedGroup = findChunkedGroupFromRowIdx(lock, rowIdxInGroup);
+        chunkedGroup = findChunkedGroupSharedFromRowIdx(lock, rowIdxInGroup);
     }
     if (!chunkedGroup) {
         return false;
