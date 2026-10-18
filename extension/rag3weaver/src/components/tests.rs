@@ -188,3 +188,65 @@ fn package_names_split_like_node() {
     assert_eq!(parse_package_name("@scope/p"), ("@scope/p", ".".to_string()));
     assert_eq!(parse_package_name("@scope/p/x/y"), ("@scope/p", "./x/y".to_string()));
 }
+
+/// Un backend d'un composant à graphe de clic : `effets` et `clic` déclarés.
+fn composant_a_clic(effets: &str, clic: &str) -> tempfile::TempDir {
+    let t = tempfile::tempdir().unwrap();
+    let c = t.path().join("components");
+    std::fs::create_dir_all(&c).unwrap();
+    std::fs::write(c.join("fiche.tsx"), "export function Fiche() { return null; }\n").unwrap();
+    std::fs::write(
+        c.join("fiche.component.json"),
+        format!(r#"{{ "name": "Fiche", "source": "fiche.tsx", "effets": {effets}, "clic": "fiche.clic.mmd" }}"#),
+    )
+    .unwrap();
+    std::fs::write(c.join("fiche.clic.mmd"), clic).unwrap();
+    t
+}
+
+fn ecran(etat_hote: Option<&str>) -> EcranDuBackend {
+    use crate::dataflow::clic::Ecran;
+    EcranDuBackend {
+        outils: BTreeMap::from([
+            ("search_code".to_string(), Some(Ecran::Lecture)),
+            ("run_command".to_string(), None),
+        ]),
+        etat_hote: etat_hote.map(str::to_string),
+    }
+}
+
+const CHERCHER: &str = "graph LR\n    saisie[\"Evenement(nom='onSaisie')\"]\n    chercher[\"Effet(outil='search_code')\"]\n    saisie -->|charge:query| chercher\n";
+
+/// **Un composant à graphe de clic se déclare** : ses effets et son graphe y sont gardés.
+#[test]
+fn un_composant_a_graphe_de_clic_se_declare() {
+    let t = composant_a_clic(r#"["search_code"]"#, CHERCHER);
+    let c = Components::load_in(t.path(), &ecran(None)).unwrap_or_else(|e| panic!("{e:?}"));
+    let f = &c.components["Fiche"];
+    assert_eq!(f.effets, vec!["search_code"]);
+    assert_eq!(f.clic.as_deref(), Some("fiche.clic.mmd"));
+}
+
+/// **Le contrat se vérifie à la déclaration** : un effet vers un outil sans `ecran` est refusé
+/// en disant quoi déclarer ; un effet du graphe que le composant ne déclare pas l'est à sa
+/// ligne, avec le chemin du `.clic.mmd`.
+#[test]
+fn un_effet_hors_contrat_est_refuse_a_la_declaration() {
+    let t = composant_a_clic(r#"["run_command"]"#, CHERCHER);
+    let e = Components::load_in(t.path(), &ecran(None)).unwrap_err().join("\n");
+    assert!(e.contains("« run_command » n'est pas appelable d'un écran") && e.contains("\"ecran\""), "{e}");
+    let t = composant_a_clic("[]", CHERCHER);
+    let e = Components::load_in(t.path(), &ecran(None)).unwrap_err().join("\n");
+    assert!(e.contains("components/fiche.clic.mmd:3") && e.contains("ne déclare pas"), "{e}");
+}
+
+/// **Une case de portée `hôte` exige son lieu** : sans `ui_state`, refusée en disant quoi
+/// déclarer ; avec, acceptée.
+#[test]
+fn une_case_de_portee_hote_exige_ui_state() {
+    let g = "graph LR\n    commun[\"Etat(nom='filtre', schema='{\"type\":\"string\"}', initial='\"\"', portee='hôte')\"]\n";
+    let t = composant_a_clic("[]", g);
+    let e = Components::load_in(t.path(), &ecran(None)).unwrap_err().join("\n");
+    assert!(e.contains("\"ui_state\""), "{e}");
+    Components::load_in(t.path(), &ecran(Some("EtatEcran"))).unwrap_or_else(|e| panic!("{e:?}"));
+}

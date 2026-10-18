@@ -952,8 +952,14 @@ impl PreparedBackend {
         }
         // ── Les composants d'interface et leurs bibliothèques ──────────────
         let components = Arc::new(
-            crate::components::Components::load(&directory)
-                .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
+            crate::components::Components::load_in(
+                &directory,
+                &crate::components::EcranDuBackend {
+                    outils: manifest.tools.iter().map(|(nom, t)| (nom.clone(), t.policy.ecran)).collect(),
+                    etat_hote: manifest.ui_state.as_ref().map(|u| u.entity.clone()),
+                },
+            )
+            .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
         );
         let mut schemas = HashMap::new();
         let mut mappings = HashMap::new();

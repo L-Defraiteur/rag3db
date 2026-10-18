@@ -155,6 +155,12 @@ struct ComponentFile {
     outputs: Map<String, Value>,
     #[serde(default)]
     libs: BTreeMap<String, String>,
+    /// Les outils que ses effets appellent (marche 3, niveau 2).
+    #[serde(default)]
+    effets: Vec<String>,
+    /// Son graphe de clic, relatif à `components/` (`<nom>.clic.mmd`).
+    #[serde(default)]
+    clic: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -176,6 +182,19 @@ pub struct ComponentDecl {
     pub outputs: Vec<DeclaredPort>,
     /// Paquet → version exacte, déclarée dans `libs.json`.
     pub libs: BTreeMap<String, String>,
+    /// Les outils que ses effets appellent, chacun appelable d'un écran.
+    pub effets: Vec<String>,
+    /// Son graphe de clic validé (`dataflow::clic`), relatif à `components/`.
+    pub clic: Option<String>,
+}
+
+/// **Ce que le backend permet à un écran** : ses outils exposés, avec ce que chacun permet
+/// (`policy.ecran`), et le lieu des cases de portée `hôte` (`ui_state`). Le contexte contre
+/// lequel se vérifient les effets et le graphe de clic d'un composant.
+#[derive(Debug, Clone, Default)]
+pub struct EcranDuBackend {
+    pub outils: BTreeMap<String, Option<crate::dataflow::clic::Ecran>>,
+    pub etat_hote: Option<String>,
 }
 
 /// Ce que compile un mode : les conditions d'`exports` qu'il prend.
@@ -215,6 +234,12 @@ impl Components {
     /// version, chaque fichier présent au magasin). Une erreur par défaut,
     /// toutes rendues ensemble.
     pub fn load(backend_dir: &Path) -> Result<Self, Vec<String>> {
+        Self::load_in(backend_dir, &EcranDuBackend::default())
+    }
+
+    /// La même, contre ce que le backend permet à un écran : les effets et le graphe de clic
+    /// de chaque composant s'y vérifient ([`EcranDuBackend`]).
+    pub fn load_in(backend_dir: &Path, ecran: &EcranDuBackend) -> Result<Self, Vec<String>> {
         let mut errors = Vec::new();
         let libs = match read_libs(backend_dir) {
             Ok(l) => l,
@@ -246,7 +271,7 @@ impl Components {
         };
         chemins.sort();
         for chemin in chemins {
-            match read_component(&chemin, &dir, &libs) {
+            match read_component(&chemin, &dir, &libs, ecran) {
                 Ok(c) => {
                     if components.contains_key(&c.name) {
                         errors.push(format!("components/ : le composant « {} » est déclaré deux fois", c.name));
@@ -323,7 +348,7 @@ impl Components {
     }
 }
 
-fn read_component(chemin: &Path, dir: &Path, libs: &Libs) -> Result<ComponentDecl, String> {
+fn read_component(chemin: &Path, dir: &Path, libs: &Libs, ecran: &EcranDuBackend) -> Result<ComponentDecl, String> {
     let montre = format!("components/{}", chemin.file_name().unwrap().to_string_lossy());
     let texte = std::fs::read_to_string(chemin).map_err(|e| format!("{montre} : {e}"))?;
     let f: ComponentFile = serde_json::from_str(&texte).map_err(|e| format!("{montre} : {e}"))?;
@@ -360,7 +385,51 @@ fn read_component(chemin: &Path, dir: &Path, libs: &Libs) -> Result<ComponentDec
             _ => {}
         }
     }
-    Ok(ComponentDecl { name: f.name, description: f.description, source: f.source, inputs, outputs, libs: f.libs })
+    // Les effets : chacun un outil exposé, appelable d'un écran (`policy.ecran`).
+    for effet in &f.effets {
+        match ecran.outils.get(effet) {
+            None => return Err(format!("{montre} : l'effet « {effet} » n'est pas un outil exposé de ce backend")),
+            Some(None) => {
+                return Err(format!(
+                    "{montre} : l'outil « {effet} » n'est pas appelable d'un écran ; son \"policy\" doit dire \"ecran\": \"lecture\" ou \"ecriture\""
+                ))
+            }
+            Some(Some(_)) => {}
+        }
+    }
+    // Le graphe de clic : dans `components/`, validé contre les effets et le backend.
+    if let Some(clic) = &f.clic {
+        let p = Path::new(clic);
+        if p.is_absolute() || p.components().any(|c| !matches!(c, PathComponent::Normal(_))) || !clic.ends_with(".clic.mmd") {
+            return Err(format!("{montre} : le graphe de clic « {clic} » doit être un <nom>.clic.mmd de components/"));
+        }
+        let texte = std::fs::read_to_string(dir.join(p)).map_err(|e| format!("{montre} : le graphe de clic « {clic} » : {e}"))?;
+        let ctx = crate::dataflow::clic::ContexteClic {
+            effets: f.effets.clone(),
+            outils: ecran.outils.clone(),
+            etat_hote: ecran.etat_hote.clone(),
+        };
+        if let Err(refus) = crate::dataflow::clic::valider_graphe_de_clic(&texte, &ctx) {
+            let dits: Vec<String> = refus
+                .iter()
+                .map(|r| match r.ligne {
+                    Some(l) => format!("components/{clic}:{l} : {}", r.message),
+                    None => format!("components/{clic} : {}", r.message),
+                })
+                .collect();
+            return Err(dits.join(" ; "));
+        }
+    }
+    Ok(ComponentDecl {
+        name: f.name,
+        description: f.description,
+        source: f.source,
+        inputs,
+        outputs,
+        libs: f.libs,
+        effets: f.effets,
+        clic: f.clic,
+    })
 }
 
 /// `react/jsx-runtime` → (`react`, `./jsx-runtime`) ; `@scope/p/x` → (`@scope/p`, `./x`).
