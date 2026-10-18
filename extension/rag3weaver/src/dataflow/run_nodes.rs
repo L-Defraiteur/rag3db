@@ -1075,6 +1075,14 @@ mod tests {
 
     // ── En fond, et `tail` (10 octobre 2026) ────────────────────────────
 
+    /// Les lignes du journal rendues par `tail` : celles du bloc de code,
+    /// sans la tête qui cite la commande et son chemin.
+    fn lignes_du_bloc(t: &str) -> Vec<&str> {
+        let Some(debut) = t.find("```\n") else { return Vec::new() };
+        let corps = &t[debut + 4..];
+        corps[..corps.find("\n```").unwrap_or(corps.len())].lines().collect()
+    }
+
     fn poignee_de(t: &str) -> String {
         let i = t.find("**En fond** : `#").expect("une poignée") + "**En fond** : `".len();
         t[i..].split('`').next().unwrap().to_string()
@@ -1086,7 +1094,11 @@ mod tests {
     /// finit jamais d'elle-même, et la garde la laisse passer.
     #[test]
     fn en_fond_la_main_tout_de_suite_puis_tail_lit_le_neuf() {
-        let dossier = tempfile::tempdir().expect("tempdir");
+        // Le nom du dossier porte les lignes cherchées : le rendu cite la
+        // commande, donc le chemin, et une recherche de sous-chaîne y
+        // trouvait `l4` dans `/tmp/.tmpYl4dqn` (le rouge du 19 octobre).
+        // On juge les lignes du bloc rendu, jamais le texte entier.
+        let dossier = tempfile::Builder::new().prefix("l1l2l4l5-").tempdir().expect("tempdir");
         let suivi = dossier.path().join("suivi.log");
         std::fs::write(&suivi, "l1\nl2\nl3\nl4\n").unwrap();
         let mut ctx = contexte(Mode::Auto, dossier.path());
@@ -1108,8 +1120,8 @@ mod tests {
         let debut = std::time::Instant::now();
         loop {
             let t = lire(&mut ctx, TailNode::new("tail", &p).lignes(3));
-            if t.contains("l4") {
-                assert!(t.contains("l2") && !t.contains("l1"), "les trois dernières : {t}");
+            if lignes_du_bloc(&t).contains(&"l4") {
+                assert_eq!(lignes_du_bloc(&t), ["l2", "l3", "l4"], "les trois dernières : {t}");
                 assert!(t.contains("tourne encore"), "{t}");
                 break;
             }
@@ -1117,15 +1129,15 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         let t = lire(&mut ctx, TailNode::new("tail", &p).depuis_le_dernier_regard(true));
-        assert!(t.contains("l1") && t.contains("l4"), "le premier regard rend tout : {t}");
+        assert_eq!(lignes_du_bloc(&t), ["l1", "l2", "l3", "l4"], "le premier regard rend tout : {t}");
         let t = lire(&mut ctx, TailNode::new("tail", &p).depuis_le_dernier_regard(true));
         assert!(t.contains("Rien de neuf"), "{t}");
         std::fs::OpenOptions::new().append(true).open(&suivi).unwrap().write_all(b"l5\n").unwrap();
         let debut = std::time::Instant::now();
         loop {
             let t = lire(&mut ctx, TailNode::new("tail", &p).depuis_le_dernier_regard(true));
-            if t.contains("l5") {
-                assert!(!t.contains("l4"), "seulement le neuf : {t}");
+            if lignes_du_bloc(&t).contains(&"l5") {
+                assert_eq!(lignes_du_bloc(&t), ["l5"], "seulement le neuf : {t}");
                 break;
             }
             assert!(debut.elapsed() < std::time::Duration::from_secs(5), "l5 n'arrive pas : {t}");

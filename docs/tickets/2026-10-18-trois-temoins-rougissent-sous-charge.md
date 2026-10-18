@@ -73,14 +73,27 @@ déterministe, rouge d'abord sans le filtre : `watch::tests::a_file_created_betw
 Cette ligne du ticket est fermée ; les deux autres restent (le lot vu à moitié, au L6 de l'arbre
 principal ; le journal de commande, au proto).
 
-## Un quatrième, vu le 19 octobre
+## Un quatrième, vu le 19 octobre — c'était le test, corrigé
 
 `dataflow::run_nodes::tests::en_fond_la_main_tout_de_suite_puis_tail_lit_le_neuf` a rougi une
 fois, à la seconde passe de la lib entière du push du lot 4 des composants (luciepc, base
 bbd81dc0a, lib 87a362e30) ; la première passe l'avait vu vert. Le message :
 
-> les trois dernières : `#cmd-1` (`tail -f -n +1 …/suivi.log`) **tourne encore**. _Journal vide._
+> les trois dernières : `#cmd-1` (`tail -f -n +1 /tmp/.tmpYl4dqn/suivi.log`) **tourne encore**.
+> _Journal vide._
 
-`tail` n'avait encore rien lu du journal à la fin de l'attente du test. Le lot ne touche ni
-`run_nodes` ni les commandes de fond. Même travail que pour les trois autres : le reproduire
-seul sous charge, et dire si c'est le délai du test ou le comportement.
+**La cause est dans le message** : le test cherchait les lignes `l1` à `l5` comme des
+sous-chaînes du texte rendu, et le rendu cite la commande, donc le chemin du dossier
+temporaire. `.tmpYl4dqn` contient `l4` : la boucle d'attente s'est arrêtée au premier regard,
+le journal encore vide. Ni le délai ni `tail` n'étaient en cause. Le même défaut pouvait
+frapper chaque recherche (`l1`, `l2`, `l5`, et les absences).
+
+**Le correctif** juge les lignes du bloc rendu (`lignes_du_bloc`), jamais le texte entier, et le
+dossier du test prend le préfixe `l1l2l4l5-`, qui garde ce cas : le chemin porte toujours les
+lignes cherchées.
+
+- Rouge d'abord : l'ancien test avec ce seul préfixe rougit, et dit le message même du
+  19 octobre (`/tmp/l1l2l4l5-nYD6j3/suivi.log`, « tourne encore », journal vide).
+- Le correctif : 0 rouge sur 20 passes sous seize boucles CPU (luciepc, base f32d97383).
+
+Cette ligne est fermée ; les deux autres du tableau restent ouvertes.
