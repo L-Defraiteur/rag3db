@@ -118,6 +118,11 @@ pub struct DaemonHost {
     /// l'état les montre, l'arrêt les annule avant de fermer les backends.
     /// Le registre du processus, sauf dans les témoins.
     background: Arc<crate::dataflow::background::Registry>,
+    /// **Le flux de l'IDE** : le bus de chaque backend ouvert, relayé aux
+    /// fenêtres de `/ide/flux` ([`crate::ide`]).
+    ide: Arc<crate::ide::Flux>,
+    /// La session des appels de l'IDE, ouverte au premier.
+    ide_session: std::sync::OnceLock<String>,
 }
 
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
@@ -147,7 +152,20 @@ impl DaemonHost {
             opener,
             closed_dead: std::sync::atomic::AtomicUsize::new(0),
             background: crate::dataflow::background::registry(),
+            ide: crate::ide::Flux::new(),
+            ide_session: std::sync::OnceLock::new(),
         }
+    }
+
+    /// Le flux de l'IDE.
+    pub fn ide_flux(&self) -> &Arc<crate::ide::Flux> {
+        &self.ide
+    }
+
+    /// La session des appels de l'IDE : une seule, sans pid (le relevé des
+    /// clients morts ne la ferme pas), ouverte au premier appel.
+    pub fn ide_session(&self) -> String {
+        self.ide_session.get_or_init(|| self.open_session("ide", None, Vec::new(), None)).clone()
     }
 
     /// **Enregistrer un client** : rend l'identifiant de sa session.
@@ -276,6 +294,10 @@ impl DaemonHost {
             }
             *hosted.refused.lock().unwrap_or_else(|p| p.into_inner()) = None;
             *slot = Some((self.opener)(prepared)?);
+            // Son bus, relayé au flux de l'IDE ; un backend rouvert a un bus
+            // neuf, relayé à son tour, et l'ancien relais finit avec l'ancien bus.
+            let bus = slot.as_ref().expect("ouvert juste au-dessus").catalog.lock().unwrap_or_else(|p| p.into_inner()).event_bus();
+            self.ide.relayer(&hosted.manifest.display().to_string(), &bus);
             *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
             hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
@@ -673,7 +695,7 @@ impl Stopper {
 
 /// Le jeton comparé **à temps constant** : la durée ne dit pas jusqu'où il
 /// était juste.
-fn same_token(given: &str, expected: &str) -> bool {
+pub(crate) fn same_token(given: &str, expected: &str) -> bool {
     let (a, b) = (given.as_bytes(), expected.as_bytes());
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
@@ -733,6 +755,12 @@ impl DaemonServer {
                             let method = request.method().as_str().to_string();
                             let url = request.url().to_string();
                             let path = url.split('?').next().unwrap_or("").to_string();
+                            // L'IDE a sa propre porte : le jeton par le cookie de
+                            // l'entrée, ou l'en-tête (`crate::ide`).
+                            if crate::ide::est_a_lui(&path) {
+                                crate::ide::servir(&host, request, attendu.as_deref());
+                                continue;
+                            }
                             if let Some(attendu) = &attendu {
                                 let porte = request
                                     .headers()
@@ -844,6 +872,65 @@ mod tests {
         let (statut, _) = demander("POST", &format!("{base}/arret"), None);
         assert_eq!(statut, 403, "l'arrêt aussi demande le jeton");
         let (statut, _) = demander("POST", &format!("{base}/arret"), Some("le-bon"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
+
+    /// Une requête HTTP brute (pour lire un 303 et ses en-têtes sans suivre
+    /// la redirection) ; rend la réponse, en-têtes compris, telle quelle.
+    fn brut(adresse: &str, requete: &str, jusqua: &str) -> String {
+        use std::io::{Read, Write};
+        let mut s = std::net::TcpStream::connect(adresse).unwrap();
+        s.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        s.write_all(requete.as_bytes()).unwrap();
+        let mut lu = Vec::new();
+        let mut tampon = [0u8; 4096];
+        while !String::from_utf8_lossy(&lu).contains(jusqua) {
+            match s.read(&mut tampon) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => lu.extend_from_slice(&tampon[..n]),
+            }
+        }
+        String::from_utf8_lossy(&lu).into_owned()
+    }
+
+    /// **L'entrée de l'IDE** (page 05 §2, lot A2) : sans jeton, rien ; l'URL
+    /// d'entrée avec un faux jeton est refusée ; avec le bon, un 303 vers la
+    /// page et le cookie `HttpOnly; SameSite=Strict`. Avec ce cookie seul, la
+    /// page, l'état, `/ide/call` (dans la session de l'IDE, sans que la page en
+    /// ouvre une) et le flux répondent.
+    #[test]
+    fn the_ide_enters_by_the_token_and_its_cookie_opens_its_routes() {
+        let (adresse, fil) = hote_garde("le-bon");
+        let get = |route: &str, cookie: &str| {
+            brut(&adresse, &format!("GET {route} HTTP/1.1\r\nHost: x\r\n{cookie}Connection: close\r\n\r\n"), "\r\n\r\n")
+        };
+        assert!(get("/ide/", "").starts_with("HTTP/1.1 403"), "sans jeton, rien");
+        assert!(get("/ide/entrer?jeton=le-faux", "").starts_with("HTTP/1.1 403"));
+        let entree = get("/ide/entrer?jeton=le-bon", "");
+        assert!(entree.starts_with("HTTP/1.1 303"), "{entree}");
+        assert!(entree.contains("Location: /ide/"), "{entree}");
+        assert!(entree.contains("Set-Cookie: rag3weaver_ide=le-bon; HttpOnly; SameSite=Strict; Path=/ide"), "{entree}");
+        let cookie = "Cookie: autre=1; rag3weaver_ide=le-bon\r\n";
+        let page = brut(&adresse, &format!("GET /ide/code/b/fichier/src/lib.rs HTTP/1.1\r\nHost: x\r\n{cookie}Connection: close\r\n\r\n"), "</html>");
+        assert!(page.starts_with("HTTP/1.1 200") && page.contains("text/html") && page.contains("IDE rag3weaver"), "toute vue sert la page");
+        let etat = get("/ide/etat", cookie);
+        assert!(etat.starts_with("HTTP/1.1 200"), "{etat}");
+        // Un faux cookie ne vaut rien.
+        assert!(get("/ide/etat", "Cookie: rag3weaver_ide=le-faux\r\n").starts_with("HTTP/1.1 403"));
+        // /ide/call : la réponse de l'hôte (un manifeste absent), pas « aucune session ».
+        let corps = json!({ "manifest": "/nulle/part/backend.json", "name": "x", "arguments": {} }).to_string();
+        let appel = brut(
+            &adresse,
+            &format!("POST /ide/call HTTP/1.1\r\nHost: x\r\n{cookie}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{corps}", corps.len()),
+            "}",
+        );
+        assert!(!appel.starts_with("HTTP/1.1 403") && !appel.contains("aucune session"), "{appel}");
+        assert!(appel.contains("/nulle/part/backend.json"), "l'hôte a répondu sur le manifeste : {appel}");
+        // Le flux : l'en-tête SSE, sur une requête qui reste ouverte.
+        let flux = brut(&adresse, &format!("GET /ide/flux?sujets=files HTTP/1.1\r\nHost: x\r\n{cookie}\r\n"), ": ide");
+        assert!(flux.starts_with("HTTP/1.1 200") && flux.contains("text/event-stream") && flux.contains(": ide"), "{flux}");
+        let (statut, _) = demander("POST", &format!("http://{adresse}/arret"), Some("le-bon"));
         assert_eq!(statut, 200);
         fil.join().unwrap();
     }

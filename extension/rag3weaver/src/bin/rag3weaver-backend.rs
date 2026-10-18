@@ -349,6 +349,16 @@ fn modele_du_chat(
 /// ```
 ///
 /// `POST /arret` ferme l'écoute, puis chaque backend proprement.
+/// **L'URL d'entrée de l'IDE** : celle de l'hôte qui tourne, avec son jeton
+/// local, que l'entrée pose en cookie (page 05 §2). À ouvrir dans le
+/// navigateur ; les fenêtres suivantes n'ont plus besoin du jeton.
+fn entrer_dans_l_ide() -> Result<(), String> {
+    let hote = rag3weaver::daemon_lifecycle::read()
+        .ok_or("aucun hôte ne tourne (daemon.json absent) : lancer `rag3weaver-backend daemon`, ou ouvrir un client MCP qui le lance")?;
+    println!("http://{}/ide/entrer?jeton={}", hote.address, hote.token);
+    Ok(())
+}
+
 fn servir_le_demon(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]";
     // L'hôte se dit hôte dans la marque des bases qu'il ouvre : un client
@@ -609,6 +619,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("daemon") {
         return servir_le_demon(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("ide") {
+        return entrer_dans_l_ide();
     }
     if tous.first().map(String::as_str) == Some("code-tree") {
         return code_tree(&tous[1..]);

@@ -185,6 +185,10 @@ pub mod serve;
 /// clients minces sur la boucle locale.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod daemon_host;
+/// L'IDE servi par l'hôte : la page, l'entrée par jeton, `/ide/call` et le
+/// flux du bus (`/ide/flux`).
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub mod ide;
 /// Le client mince de cet hôte : un serveur MCP qui ne possède rien.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod daemon_client;

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IDE rag3weaver</title>
+<style>
+  :root { --fond: #fbfaf7; --texte: #1d1c1a; --doux: #6b6862; --trait: #e3e0d9; --accent: #2f5d8a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #17181a; --texte: #e8e6e1; --doux: #9a978f; --trait: #2c2d30; --accent: #8fb6de; }
+  }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, sans-serif; }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--trait); display: flex; gap: 12px; align-items: baseline; }
+  header h1 { font-size: 16px; margin: 0; }
+  header span { color: var(--doux); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  h2 { font-size: 14px; margin: 0 0 8px; color: var(--doux); font-weight: 600; }
+  pre, ol { margin: 0; font: 12px/1.45 ui-monospace, monospace; overflow-x: auto; }
+  ol { padding-left: 0; list-style: none; max-height: 70vh; overflow-y: auto; }
+  li { border-bottom: 1px solid var(--trait); padding: 3px 0; white-space: pre-wrap; word-break: break-word; }
+  li b { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<header><h1>IDE rag3weaver</h1><span id="vue"></span><span id="lien">flux : en attente</span></header>
+<main>
+  <section><h2>L'hôte</h2><pre id="etat">…</pre></section>
+  <section><h2>Le flux</h2><ol id="flux"></ol></section>
+</main>
+<script type="module">
+// Le socle (lot A2) : la page lit son URL, l'état de l'hôte, et le flux.
+// Les vues (arbre, fichier, symbole…) arrivent au lot A3.
+document.getElementById("vue").textContent = location.pathname + location.search + location.hash;
+
+async function etat() {
+  const r = await fetch("/ide/etat");
+  document.getElementById("etat").textContent = JSON.stringify(await r.json(), null, 2);
+}
+etat();
+
+const liste = document.getElementById("flux");
+const lien = document.getElementById("lien");
+const source = new EventSource("/ide/flux");
+source.onopen = () => { lien.textContent = "flux : ouvert"; };
+source.onerror = () => { lien.textContent = "flux : coupé, reprise…"; };
+function montrer(e) {
+  const li = document.createElement("li");
+  const d = JSON.parse(e.data);
+  const genre = e.type === "message" ? (d.evenement?.kind ?? "?") : e.type;
+  li.innerHTML = `<b>${genre}</b> #${d.id ?? ""} ${d.sujet ?? ""} `;
+  li.append(JSON.stringify(d.evenement ?? d));
+  liste.prepend(li);
+  while (liste.children.length > 300) liste.lastChild.remove();
+  if (e.type === "lacune") etat();
+}
+// Chaque événement du bus est un message ordinaire, son genre dans les
+// données ; seule la lacune (le tampon ne garde plus ce qu'on a manqué) a le sien.
+source.onmessage = montrer;
+source.addEventListener("lacune", montrer);
+</script>
+</body>
+</html>
