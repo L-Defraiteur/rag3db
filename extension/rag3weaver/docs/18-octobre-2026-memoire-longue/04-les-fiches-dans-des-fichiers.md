@@ -147,6 +147,38 @@ le recalcul des L2 (§2).
     `_content_hash` de sa ligne), et `index_state` dit « dossier ≠ base : N écarts » ;
   - `memoire verifier` reconstruit à blanc dans une base temporaire et rend les écarts.
 
+## 5 bis. La règle de vérité : qui fait foi, et dans quel sens on reconstruit
+
+*Fixée avec l'orchestration le 18 octobre 2026, pour le lot M2c.* Deux sortes de fichiers
+ne suivent pas le même ordre, et la reconstruction ne doit pas se tromper de sens.
+
+- **Une entité qui a son propre fichier** (la `Source`, le L0, déclarée par `files` sur
+  elle-même, lot M2) suit **le fichier d'abord** : `EntityRecordNode` écrit le fichier
+  avant la ligne. **C'est le fichier qui fait foi** : une ligne absente ou en retard se
+  reconstruit depuis lui.
+- **Un fichier composé** (la fiche : son en-tête, `## État` depuis son `Etat`,
+  `## Apports` depuis ses `Apport` liés) est **une vue de la base**, réécrite par une
+  réaction montée d'office dès qu'un manifeste déclare un fichier composé : elle écoute
+  les événements du catalogue (un `put`, un lien posé après coup, une transition, une
+  consolidation, de n'importe quel écrivain) et réécrit les fichiers des fiches touchées,
+  **quelques millisecondes après** la base. Aucun écrivain n'a à le demander, aucun n'est
+  oublié.
+- **Après un arrêt brutal** entre la validation d'une écriture et la réécriture du
+  fichier composé, le démarrage de l'hôte **régénère le fichier depuis la base** (et non
+  l'inverse), et `index_state` dit combien il en a régénéré.
+- **Une édition à la main d'un fichier composé** revient par la montre **comme une
+  proposition d'apport** (un L1 proposé, auteur posé par l'hôte), jamais comme une vérité
+  qui écraserait la base ; la réécriture suivante remet le fichier dans la forme de la
+  base, l'apport proposé y compris.
+- **La reconstruction** (M3) lit donc deux sens : les sources (et toute entité à fichier
+  propre) depuis leurs fichiers ; les fiches, leurs états et leurs apports depuis les
+  fichiers composés **seulement quand la base est perdue** — en marche, c'est la base qui
+  régénère les fichiers composés.
+
+**Le témoin de M2c** : un lien `A_POUR_APPORT` posé après coup, une transition de la
+fiche, puis une consolidation (L1 bis) — et chaque fois, le fichier de la fiche se
+réécrit sans qu'aucun écrivain l'ait demandé.
+
 ## 6. L'édition à la main, l'auteur, le partage
 
 - **La montre sur les dossiers** (la montre d'aujourd'hui est liée au schéma de code ; il
