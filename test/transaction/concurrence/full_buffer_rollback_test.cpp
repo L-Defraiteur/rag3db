@@ -125,10 +125,11 @@ protected:
                 const auto second = first || say(a, "A", "ROLLBACK;");
                 steps << "ROLLBACK " << (second ? "passed" : "refused") << std::endl;
                 if (withCheckpoint) {
-                    steps << "CHECKPOINT " << (say(b, "B", "CHECKPOINT;") ? "passed" : "refused")
-                          << std::endl;
-                    steps << "BEGIN " << (say(a, "A", "BEGIN TRANSACTION;") ? "passed" : "refused")
-                          << std::endl;
+                    // Le résultat d'abord : say écrit sa ligne pendant l'évaluation.
+                    const auto checkpointed = say(b, "B", "CHECKPOINT;");
+                    steps << "CHECKPOINT " << (checkpointed ? "passed" : "refused") << std::endl;
+                    const auto begun = say(a, "A", "BEGIN TRANSACTION;");
+                    steps << "BEGIN " << (begun ? "passed" : "refused") << std::endl;
                     say(a, "A", "ROLLBACK;");
                 }
                 // La fermeture : les connexions, puis la base, à la sortie de ce bloc.
