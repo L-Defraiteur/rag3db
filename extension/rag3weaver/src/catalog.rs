@@ -391,6 +391,8 @@ pub struct Catalog {
     blob_buffer: Option<Arc<BufferedBlobStore<CypherBlobStore>>>,
     /// Sparse vector index handles, keyed by table name (e.g. "Product_Chunk").
     sparse_handles: HashMap<String, Arc<sparse_vector::handle::SparseHandle>>,
+    /// Les fautes armées par un témoin sur **ce** catalogue ([`crate::fautes_de_test`]).
+    fautes_de_test: crate::fautes_de_test::FautesDeTest,
     /// Index FTS lucivy v3, un par table. Ouverture **paresseuse** : ouvrir un
     /// index Blob télécharge tout l'index, donc on ne le fait qu'au premier
     /// usage réel de la table (cf doc 04 de la passation lucivy).
@@ -624,6 +626,7 @@ fn read_threads() -> u64 {
             blob_store: None,
             blob_buffer: None,
             sparse_handles: HashMap::new(),
+            fautes_de_test: Default::default(),
             fts_handles: HashMap::new(),
             fts_files: Vec::new(),
             fts_rebuild: HashSet::new(),
@@ -3436,6 +3439,7 @@ fn read_threads() -> u64 {
     ) -> Arc<Mutex<Vec<crate::records::EchecDeGroupe>>> {
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
+        services.register(crate::fautes_de_test::SERVICE, self.fautes_de_test.clone());
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         if let Some(ref prouves) = self.proven_present {
@@ -8870,6 +8874,7 @@ fn read_threads() -> u64 {
         let mut services = ServiceRegistry::new();
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
+        services.register(crate::fautes_de_test::SERVICE, self.fautes_de_test.clone());
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         if let Some(ref prouves) = self.proven_present {
@@ -9166,6 +9171,25 @@ fn read_threads() -> u64 {
     /// N'enregistre que ce qui se déduit du catalogue. Le service `catalog`
     /// lui-même reste à l'appelant : il demande un `Arc<Mutex<Catalog>>`, donc
     /// de posséder le catalogue, pas de l'emprunter.
+    /// **Arme une faute d'insertion pour un témoin** : le `groupe`-ième groupe
+    /// d'insertion de `table` échoue, sur ce catalogue seulement, jusqu'à
+    /// [`Self::retirer_les_fautes_de_test`]. Réservé aux témoins
+    /// ([`crate::fautes_de_test`]).
+    pub fn injecter_faute_d_insertion(&mut self, table: &str, groupe: usize) {
+        self.fautes_de_test.insertion = Some((table.to_string(), groupe));
+    }
+
+    /// **Arme une faute de lien pour un témoin** : le `groupe`-ième groupe de
+    /// liens de `relation` échoue, sur ce catalogue seulement.
+    pub fn injecter_faute_de_lien(&mut self, relation: &str, groupe: usize) {
+        self.fautes_de_test.lien = Some((relation.to_string(), groupe));
+    }
+
+    /// Désarme les fautes des témoins sur ce catalogue.
+    pub fn retirer_les_fautes_de_test(&mut self) {
+        self.fautes_de_test = Default::default();
+    }
+
     pub fn register_search_services(
         &self,
         services: &mut crate::dataflow::services::ServiceRegistry,
@@ -9175,6 +9199,7 @@ fn read_threads() -> u64 {
             crate::dataflow::services::ConnService(self.conn_arc()),
         );
         services.register("dialect", self.dialect_arc());
+        services.register(crate::fautes_de_test::SERVICE, self.fautes_de_test.clone());
         services.register("scope", self.scope.clone());
         // Les nœuds BM25 et sparse cherchent dans les index Rust ouverts par le
         // catalogue — pas dans la base.

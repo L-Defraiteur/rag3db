@@ -336,10 +336,9 @@ impl Node for InsertRecordNode {
 
         // **La faute injectée des témoins** (11 octobre 2026, forme A de
         // l'enveloppe d'un outil d'écriture) : faire échouer le n-ième groupe
-        // d'une table, comme si le moteur avait refusé l'insertion. Deux
-        // variables, jamais l'une sans l'autre — la table et le rang du groupe —,
-        // comme pour le drain des liens.
-        let faute = faute_injectee_insertion();
+        // d'une table, comme si le moteur avait refusé l'insertion. Armée par le
+        // témoin sur son catalogue (`Catalog::injecter_faute_d_insertion`).
+        let faute = fautes_de_test(ctx).insertion;
         let mut rang_dans_la_table: HashMap<&str, usize> = HashMap::new();
         for ((entity_name, columns), indices) in &groups {
             let rang = {
@@ -659,20 +658,10 @@ const COPY_SEUIL: usize = 200;
 /// ([`crate::catalog::Catalog::take_bulk_load_refusals`]).
 pub(crate) const REPLI_EN_MASSE: &str = "chargement en masse refusé";
 
-/// La faute injectée par un témoin : `(relation, rang du groupe)`, ou rien.
-/// Jamais active sans les **deux** variables (`RAG3WEAVER_TEST_LINK_FAULT_RELATION`
-/// et `RAG3WEAVER_TEST_LINK_FAULT_GROUP`) : une seule posée par mégarde ne fait
-/// rien.
-fn faute_injectee_insertion() -> Option<(String, usize)> {
-    let table = std::env::var("RAG3WEAVER_TEST_INSERT_FAULT_TABLE").ok().filter(|r| !r.is_empty())?;
-    let rang = std::env::var("RAG3WEAVER_TEST_INSERT_FAULT_GROUP").ok()?.parse().ok()?;
-    Some((table, rang))
-}
-
-fn faute_injectee() -> Option<(String, usize)> {
-    let relation = std::env::var("RAG3WEAVER_TEST_LINK_FAULT_RELATION").ok().filter(|r| !r.is_empty())?;
-    let rang = std::env::var("RAG3WEAVER_TEST_LINK_FAULT_GROUP").ok()?.parse().ok()?;
-    Some((relation, rang))
+/// Les fautes armées par un témoin sur le catalogue de ce drain
+/// ([`crate::fautes_de_test`]) : jamais lues dans l'environnement du processus.
+fn fautes_de_test(ctx: &NodeContext) -> crate::fautes_de_test::FautesDeTest {
+    ctx.service::<crate::fautes_de_test::FautesDeTest>(crate::fautes_de_test::SERVICE).cloned().unwrap_or_default()
 }
 
 fn copy_seuil() -> usize {
@@ -1181,11 +1170,10 @@ impl Node for LinkRecordNode {
 
         // **Le point d'injection de faute des témoins** (11 octobre 2026) : faire
         // échouer le n-ième groupe d'une relation donnée, comme si le moteur
-        // avait refusé son instruction. Deux variables, jamais l'une sans
-        // l'autre — la relation (armer) et le rang du groupe (où) —, sur le
-        // modèle du crochet `RAG3WEAVER_TEST_FAILED_CHECKPOINT_AT_CALL`. Sert à
-        // éprouver qu'un lot de liens en plusieurs instructions est atomique.
-        let faute = faute_injectee();
+        // avait refusé son instruction. Armée par le témoin sur son catalogue
+        // (`Catalog::injecter_faute_de_lien`). Sert à éprouver qu'un lot de
+        // liens en plusieurs instructions est atomique.
+        let faute = fautes_de_test(ctx).lien;
         let mut rang_dans_la_relation: HashMap<&str, usize> = HashMap::new();
         for ((rel_name, prop_keys), indices) in &groups {
             let rang = {

@@ -12,32 +12,28 @@
 //! - `add_ref` et `create_ref_type` **ne lisaient pas** le rapport de leur
 //!   ingestion : un échec compté passait pour un succès (ticket fermé par ce lot).
 //!
-//! **Une suite à part, et un verrou** : les variables valent pour tout le
-//! processus, et les tests d'une suite tournent en parallèle. Ici, chaque test
-//! prend le verrou ; aucune autre suite ne voit ces variables (une suite, un
-//! processus).
+//! **La faute est armée sur le catalogue du test** (`Catalog::injecter_faute_d_insertion`,
+//! 18 octobre 2026) : elle ne vaut que pour ce catalogue. Avant, deux variables
+//! d'environnement l'armaient pour tout le processus, et une suite voisine du
+//! même binaire e2e rougissait au hasard de l'ordre des fils.
 //!
 //! Run with: ./run_e2e.sh --test e2e_outils_disent_ce_qui_reste
 
 #![cfg(feature = "rag3db-native")]
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use serde_json::{json, Value};
 
 use rag3weaver::backend::{Backend, PreparedBackend};
 use rag3weaver::Rag3dbConnection;
 
-static FAUTES: Mutex<()> = Mutex::new(());
-
-/// Joue `f` avec la faute armée sur `table`, groupe 1, puis la désarme.
-fn sous_faute<T>(table: &str, f: impl FnOnce() -> T) -> T {
-    std::env::set_var("RAG3WEAVER_TEST_INSERT_FAULT_TABLE", table);
-    std::env::set_var("RAG3WEAVER_TEST_INSERT_FAULT_GROUP", "1");
+/// Joue `f` avec la faute armée sur `table`, groupe 1, **sur le catalogue de
+/// `backend` seulement**, puis la désarme.
+fn sous_faute<T>(backend: &Backend, table: &str, f: impl FnOnce() -> T) -> T {
+    backend.catalog.lock().unwrap().injecter_faute_d_insertion(table, 1);
     let r = f();
-    std::env::remove_var("RAG3WEAVER_TEST_INSERT_FAULT_TABLE");
-    std::env::remove_var("RAG3WEAVER_TEST_INSERT_FAULT_GROUP");
+    backend.catalog.lock().unwrap().retirer_les_fautes_de_test();
     r
 }
 
@@ -119,7 +115,6 @@ fn compter(backend: &Backend, motif: &str) -> i64 {
 #[test]
 #[ignore]
 fn un_put_dit_qu_il_n_est_pas_atomique_et_ce_qui_reste_apres_un_echec() {
-    let _verrou = FAUTES.lock().unwrap_or_else(|p| p.into_inner());
     let dir = tempfile::tempdir().expect("dossier");
     let backend = ouvrir(&manifeste(dir.path()));
 
@@ -129,7 +124,7 @@ fn un_put_dit_qu_il_n_est_pas_atomique_et_ce_qui_reste_apres_un_echec() {
     assert_eq!(r["result"]["atomic"], false, "{r}");
     assert!(r["result"]["atomic_reason"].as_str().is_some_and(|s| !s.is_empty()), "la raison est dite : {r}");
 
-    let refus = sous_faute("Fiche", || backend.call("put_fiche", json!({"record": {"titre": "deux", "corps": "y"}})))
+    let refus = sous_faute(&backend, "Fiche", || backend.call("put_fiche", json!({"record": {"titre": "deux", "corps": "y"}})))
         .expect_err("la ligne n'a pas pu s'écrire");
     assert!(
         refus.contains("ce qui est prêt) = rien;") && refus.contains("does not exist"),
@@ -142,10 +137,9 @@ fn un_put_dit_qu_il_n_est_pas_atomique_et_ce_qui_reste_apres_un_echec() {
 #[test]
 #[ignore]
 fn create_ref_type_ne_dit_plus_cree_un_genre_qui_n_est_pas_ecrit() {
-    let _verrou = FAUTES.lock().unwrap_or_else(|p| p.into_inner());
     let dir = tempfile::tempdir().expect("dossier");
     let backend = ouvrir(&manifeste(dir.path()));
-    let refus = sous_faute("RefType", || {
+    let refus = sous_faute(&backend, "RefType", || {
         backend.call("create_ref_type", json!({"name": "fichier", "description": "un chemin", "forme": "relatif", "confirm": true}))
     })
     .expect_err("le genre n'a pas pu s'écrire");
@@ -160,7 +154,6 @@ fn create_ref_type_ne_dit_plus_cree_un_genre_qui_n_est_pas_ecrit() {
 #[test]
 #[ignore]
 fn add_ref_ne_lie_pas_une_reference_qui_n_est_pas_ecrite() {
-    let _verrou = FAUTES.lock().unwrap_or_else(|p| p.into_inner());
     let dir = tempfile::tempdir().expect("dossier");
     let backend = ouvrir(&manifeste(dir.path()));
     backend.call("put_fiche", json!({"record": {"titre": "une", "corps": "x"}})).expect("la fiche");
@@ -168,7 +161,7 @@ fn add_ref_ne_lie_pas_une_reference_qui_n_est_pas_ecrite() {
         .call("create_ref_type", json!({"name": "fichier", "description": "un chemin", "forme": "relatif", "confirm": true}))
         .expect("le genre");
 
-    let r = sous_faute("Ref", || {
+    let r = sous_faute(&backend, "Ref", || {
         backend.call("add_ref", json!({"genre": "fichier", "valeur": "src/a.rs", "fiche": {"titre": "une"}}))
     })
     .expect("une réponse");
@@ -195,7 +188,6 @@ fn add_ref_ne_lie_pas_une_reference_qui_n_est_pas_ecrite() {
 #[test]
 #[ignore]
 fn add_ref_cherche_la_fiche_et_ecrit_la_reference_dans_la_cellule_de_l_appel() {
-    let _verrou = FAUTES.lock().unwrap_or_else(|p| p.into_inner());
     let dir = tempfile::tempdir().expect("dossier");
     let backend = ouvrir(&manifeste(dir.path()));
     let alpha = rag3weaver::scope::Scope::new("acme", "alpha");
@@ -208,4 +200,25 @@ fn add_ref_cherche_la_fiche_et_ecrit_la_reference_dans_la_cellule_de_l_appel() {
         .expect("une réponse");
     assert_eq!(r["result"]["executed"], true, "la fiche d'alpha est trouvée dans alpha : {r}");
     assert_eq!(compter(&backend, "MATCH (f:Fiche)-[r:CITE]->(x:Ref) WHERE f._project = 'alpha' AND x._project = 'alpha' RETURN count(r)"), 1);
+}
+
+/// **La faute ne fuit pas** : armée sur le catalogue d'un témoin, elle ne
+/// touche pas un autre catalogue du même processus (18 octobre 2026 ; avant,
+/// armée par l'environnement, elle faisait rougir les suites voisines).
+#[test]
+#[ignore]
+fn une_faute_armee_sur_un_catalogue_ne_touche_pas_un_autre() {
+    let (d1, d2) = (tempfile::tempdir().expect("dossier"), tempfile::tempdir().expect("dossier"));
+    let arme = ouvrir(&manifeste(d1.path()));
+    let voisin = ouvrir(&manifeste(d2.path()));
+    arme.catalog.lock().unwrap().injecter_faute_d_insertion("Fiche", 1);
+    voisin
+        .call("put_fiche", json!({"record": {"titre": "voisine", "corps": "x"}}))
+        .expect("le catalogue voisin écrit : la faute n'est pas la sienne");
+    assert!(
+        arme.call("put_fiche", json!({"record": {"titre": "armée", "corps": "x"}})).is_err(),
+        "le catalogue armé, lui, échoue"
+    );
+    arme.catalog.lock().unwrap().retirer_les_fautes_de_test();
+    arme.call("put_fiche", json!({"record": {"titre": "après", "corps": "x"}})).expect("désarmé, il écrit");
 }

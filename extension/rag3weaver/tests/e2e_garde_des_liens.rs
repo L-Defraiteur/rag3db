@@ -673,13 +673,11 @@ fn un_lot_en_deux_instructions_est_tout_ou_rien() {
         {"from": {"titre": "duty cycle"}, "to": {"titre": "cartes"}}
     ]});
 
-    // Armé, et seulement le temps de cet appel : la relation NOTE, son
-    // second groupe. Aucun autre témoin de ce fichier ne pose deux groupes NOTE.
-    std::env::set_var("RAG3WEAVER_TEST_LINK_FAULT_RELATION", "NOTE");
-    std::env::set_var("RAG3WEAVER_TEST_LINK_FAULT_GROUP", "2");
+    // Armé sur le catalogue de ce témoin seulement, et le temps de cet appel :
+    // la relation NOTE, son second groupe.
+    backend.catalog.lock().unwrap().injecter_faute_de_lien("NOTE", 2);
     let rendu = backend.call("noter", mixte.clone());
-    std::env::remove_var("RAG3WEAVER_TEST_LINK_FAULT_RELATION");
-    std::env::remove_var("RAG3WEAVER_TEST_LINK_FAULT_GROUP");
+    backend.catalog.lock().unwrap().retirer_les_fautes_de_test();
     assert!(rendu.is_err(), "une instruction a échoué : l'appel le dit — {rendu:?}");
     assert_eq!(
         compter(&backend, "NOTE"),
