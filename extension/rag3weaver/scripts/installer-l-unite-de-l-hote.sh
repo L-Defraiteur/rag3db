@@ -14,9 +14,10 @@
 #   RAG3DB_LIBRARY_DIR…), repris tel quel s'il existe (~/.config/rag3weaver/<nom>.env).
 # - Un hôte de cette unité déjà en service n'est arrêté qu'avec `--maintenant` : c'est un
 #   redémarrage, à annoncer avant aux sessions que `daemon_status` liste.
-# - `--arenes` : MALLOC_ARENA_MAX de l'hôte (glibc), 0 pour le défaut de glibc (8 par cœur).
-#   Les arènes des fils ne sont jamais rendues au système : un plafond borne ce que l'hôte
-#   garde après un gros index (ticket « l'hôte ne rend pas la mémoire d'un gros index »).
+# - `--arenes` : MALLOC_ARENA_MAX de l'hôte (glibc) ; 0, le défaut, laisse celui de glibc (8 par
+#   cœur). Mesuré le 19 octobre 2026 (ticket fermé « l'hôte ne rend pas la mémoire d'un gros
+#   index ») : 4 arènes coûtent 38 % de débit d'index, 2 en coûtent 100 %, pour 0,5 Go de pic en
+#   moins ; la mémoire se rend par malloc_trim seul (src/allocateur.rs).
 # - `--montrer` écrit les deux unités sur la sortie, sans rien poser.
 # - `--nom` : une autre unité (les témoins : rag3weaver-daemon-essai).
 # - Les unités remplacées sont gardées à côté (`.avant-socket`).
@@ -30,7 +31,7 @@ set -euo pipefail
 binaire="$HOME/.local/bin/rag3weaver-backend"
 adresse="127.0.0.1:7970"
 inactivite=30
-arenes=4
+arenes=0
 nom="rag3weaver-daemon"
 env_fichier=""
 maintenant=0

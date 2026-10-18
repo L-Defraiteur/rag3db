@@ -1,8 +1,11 @@
 # L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini
 
-- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration).
-  Cause non cherchée. Le correctif peut vivre dans le moteur (le gestionnaire de tampon, l'index
-  vectoriel), dans l'hôte, lucivy ou l'allocateur : en cas de doute, la table du moteur.
+- **État** : **fermé** le 19 octobre 2026 (G, jugé par le banc), pour la phase plein texte et
+  relations : l'hôte rend au système ce que glibc garde (`malloc_trim(0)`) en fin d'index, à la
+  fermeture d'un backend et au repos ; aucun `MALLOC_ARENA_MAX` (il coûte trop de débit). La phase des
+  vecteurs reste à mesurer :
+  [la mémoire d'un index avec ses vecteurs](../2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md).
+  Ouvert le 18 octobre 2026 (seconde session cœur C++, à la demande de l'orchestration).
 - **Gravité** : mémoire. Rien n'est perdu ni faux, mais le poste reste chargé tant que l'hôte vit.
 - **Atteignable en service** : oui, après tout gros index ou rattrapage dans un hôte qui reste
   ouvert ensuite.
@@ -133,3 +136,63 @@ rattrapage) et à l'endormissement de l'hôte, et un `MALLOC_ARENA_MAX` dans l'u
    backend).
 3. Passer la sonde en témoin : au repos, backend fermé, la mémoire anonyme revient sous un seuil
    écrit dans le test, avec sa justification.
+
+## Corrigé : la mémoire rendue au système (G, jugé par le banc, 19 octobre 2026)
+
+La piste « arènes de l'allocateur » était la bonne : la mémoire tenue après un gros index est de la
+mémoire libérée que glibc garde.
+
+**Le correctif** (`src/allocateur.rs`) : `rendre_au_systeme(raison)` appelle `malloc_trim(0)`, sous
+Linux avec glibc seulement (ailleurs, rien), et dit `VmRSS` avant et après sur la sortie d'erreur.
+L'hôte l'appelle à trois endroits :
+- à la fin d'un index, dans son fil, avec une ligne au journal de l'index ;
+- à la fermeture d'un backend ;
+- au repos, après 60 s sans requête ni travail en cours, une fois par repos, avant même l'arrêt par
+  la socket.
+
+L'unité systemd peut poser `MALLOC_ARENA_MAX` (`installer-l-unite-de-l-hote.sh --arenes <n>`), mais
+ne le fait pas par défaut (`0`, le défaut de glibc) : voir le débit, plus bas. Le témoin `allocateur::tests::une_memoire_liberee_revient_au_systeme`
+se joue dans un processus fils : 512 Mio écrits puis libérés y restent tenus, et le rendu en rend
+plus de la moitié (528 → 17 Mio mesurés).
+
+**La mesure** (protocole du banc, ci-dessus). Périmètre, tel quel :
+- luciepc, corpus rag3db à `c6bb094fb`, 6 117 fichiers, tampon de 2 Gio ;
+- phase plein texte et relations, vecteurs en dette (sans service d'embarquement) ;
+- passes une à une, hôte isolé (`RAG3WEAVER_DAEMON_DIR` à part, port 7983) ;
+- mémoire comptée en RssAnon + VmSwap, parce que luciepc envoie l'anonyme inactif en échange même
+  seul, dès T0 (`swappiness` 150, échange zram de 93,6 Gio) ;
+- A sur `bacf411e1` (sans correctif), B, C4 et C2 sur `cae40d28f`.
+
+Bornes : T3 (repos, backend ouvert) ≤ T0 + tampon + 500 Mo ≈ 2 650 Mio ; T4 (backend fermé, 60 s)
+≤ T0 + 500 Mio ≈ 605 Mio. En Mio :
+
+| | T3 | T4 | pic VmRSS |
+|---|---|---|---|
+| A, sans correctif | 5 814, échoue | 4 648, échoue | 6 572 |
+| B, `malloc_trim` | 2 329, tient | 567, tient (39 Mio de marge) | 6 124 |
+| C4, et `MALLOC_ARENA_MAX=4` | 2 248, tient | 392, tient | 5 116 |
+| C2, et `MALLOC_ARENA_MAX=2` | 2 398, tient | 340, tient | 5 608 |
+
+A échoue aux deux bornes : la mesure voit le défaut. Les trois variantes du correctif tiennent les
+deux. Le rendu de fin d'index rend environ 3,5 Go en moins de 200 ms (B : `VmRSS` 5 983 → 2 505
+Mio). Le rendu à la fermeture fait tenir T4 (B : 531 → 203 Mio) : sans lui, la première série
+échouait à T4. CSV et journaux : `~/.cache/rag3weaver-build/mesure-malloc/seq-0056/` sur les deux
+postes.
+
+**La réserve du banc** : la marge de B à T4 est mince, 39 Mio sous la borne de 500 Mo. C'est le rendu à
+la fermeture d'un backend (`cae40d28f`) qui la fait : c'est la pièce à ne pas perdre.
+
+**Le débit de `MALLOC_ARENA_MAX`** : deux passes par réglage, sous `poste mesure` (porte fermée, rien
+d'autre de lourd), en alternance sans / 4 / 2 / sans / 4 / 2, binaire `cae40d28f`, même corpus et même
+tampon. L'écart entre deux passes d'un même réglage (2 s au plus) est vingt fois plus petit que
+l'effet. Dossier : `~/.cache/rag3weaver-build/mesure-malloc/debit-0133/` sur luciepc.
+
+| réglage | durées de l'index | médiane | écart | pic VmRSS |
+|---|---|---|---|---|
+| sans | 38 s, 36 s | 37 s | — | 6 703 / 6 586 Mio |
+| `MALLOC_ARENA_MAX=4` | 50 s, 52 s | 51 s | +38 % | 6 145 / 6 058 Mio |
+| `MALLOC_ARENA_MAX=2` | 76 s, 74 s | 75 s | +100 % | 6 341 / 6 448 Mio |
+
+La règle du banc était une perte de moins de 10 % : ni 4 ni 2 ne la tiennent, pour environ 0,5 Go de
+pic en moins. **Verdict du banc : aucun `MALLOC_ARENA_MAX`**. Le rendu après le travail, ce que ce
+ticket demandait, tient par `malloc_trim` seul.
