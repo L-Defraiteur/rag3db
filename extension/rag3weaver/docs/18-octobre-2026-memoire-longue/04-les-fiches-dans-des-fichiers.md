@@ -155,6 +155,26 @@ un `pull` change des fichiers, la montre réindexe.
   `Memory.author`, dans la forme fixée) et un tri possible par auteur puis date ; le
   classeur cite ses fiches avec leur auteur, et une vue du sujet se filtre par auteur.
 
+## 5 bis. Ce qu'un humain lit : la vue d'un sujet
+
+*Précision de Lucie, 18 octobre 2026.* Ce qu'un humain lit, c'est **un sujet** : en haut
+son **L3**, puis ses **L2 par ordre chronologique**, puis **les fiches rangées sous ce
+sujet**, chacune avec son lien.
+
+- **Une vue rendue, jamais une source** : `classeur/<sujet>/index.md`, régénéré à chaque
+  changement du sujet, de ses L2/L3 ou d'une fiche qui l'ancre. Son en-tête dit
+  « généré — ne pas modifier » ; la montre ne le lit pas, la reconstruction l'ignore, et
+  une édition à la main y est écrasée à la régénération suivante (et dite dans
+  `index_state`).
+- **Les liens** sont relatifs (`../../fiches/<uuid>.md`), pour qu'ils marchent dans un
+  éditeur, sur GitHub et dans Obsidian.
+- **Le même rendu des deux côtés** : un seul modèle jinja (`subject.md.jinja`) rend le
+  fichier et la page de l'explorateur du proto (une URL par sujet) ; l'explorateur rend
+  le même Markdown, il n'a pas sa propre mise en page de la donnée. Les liens de fiche y
+  deviennent des URL de l'explorateur par une seule fonction de lien passée au modèle.
+- **L'ordre des fiches** sous le sujet : par `coalesce(updated_at, created_at)`
+  décroissant, comme `cited_by` — c'est le même Plan, restreint par `ANCHORED_TO`.
+
 ## 6. Les lots, en ordre de grandeur relatif
 
 | lot | contenu | taille relative |
@@ -166,7 +186,9 @@ un `pull` change des fichiers, la montre réindexe.
 | F5 | `author` posé par l'hôte (identité git du dépôt + client de la session), filtrable dans `cited_by` | petit à moyen |
 | F6 | le partage : deux clones, un conflit, une fiche créée des deux côtés (témoins) | moyen |
 | F7 | les L1/L2/L3 en fichiers | dépend du classeur, qui n'existe pas encore |
+| F2 bis | la vue d'un sujet (`index.md` généré et la page de l'explorateur, un seul modèle) | petit à moyen |
 
-L'ordre : F1 puis F2 d'abord (sans la preuve de parité, le reste repose sur une promesse) ;
+L'ordre : F1 puis F2 d'abord (sans la preuve de parité, le reste repose sur une promesse),
+puis F2 bis (la vue d'un sujet, demandée par Lucie) ;
 F4 et F5 ensuite ; F3 ; F6 ; F7 avec le classeur. **Go de Lucie pour F1 puis F2**, après
 les lots en cours (`seed`, `cited_by` par le Plan).
