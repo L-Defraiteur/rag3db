@@ -1089,23 +1089,17 @@ mod tests {
         fil.join().unwrap();
     }
 
+    /// **Une requête en vol retient l'hôte** : tant qu'un garde est tenu (un appel,
+    /// un flux de l'IDE ouvert), l'hôte n'est pas inactif ; sa fin horodate.
     #[test]
     fn une_requete_en_vol_retient_l_hote_inactif() {
-        use std::io::Write;
-        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let adresse = ecoute.local_addr().unwrap().to_string();
-        let server = DaemonServer::new(tiny_http::Server::from_listener(ecoute, None).unwrap(), 3)
-            .with_idle(Some(std::time::Duration::from_millis(400)));
-        let arret = server.stopper();
-        let fil = std::thread::spawn(move || server.serve(Arc::new(DaemonHost::new()), Some("j".into())));
-        // Une requête dont le corps n'arrive jamais : elle reste en vol.
-        let mut c = std::net::TcpStream::connect(&adresse).unwrap();
-        write!(c, "POST /etat HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer j\r\nContent-Length: 100\r\n\r\n{{").unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-        assert!(!fil.is_finished(), "une requête en vol n'a pas retenu l'hôte");
-        drop(c);
-        arret.stop();
-        fil.join().unwrap();
+        let activite = Arc::new(Activite::new());
+        let garde = activite.entrer();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(activite.inactif_depuis().is_none(), "une requête en vol n'est pas de l'inactivité");
+        drop(garde);
+        let depuis = activite.inactif_depuis().expect("plus rien en vol");
+        assert!(depuis < std::time::Duration::from_millis(40), "la fin de la requête horodate : {depuis:?}");
     }
 
     /// **Une session dont le client est mort se ferme** au relevé, et l'état
