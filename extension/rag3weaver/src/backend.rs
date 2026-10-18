@@ -682,6 +682,9 @@ pub struct PreparedBackend {
     /// fichiers, ni réseau, ni commande —, ils entrent dans toutes les
     /// politiques où entre un calcul.
     scripted_types: BTreeSet<String>,
+    /// Les composants d'interface (`components/`) et leurs bibliothèques
+    /// (`libs.json`), vérifiés au chargement comme les nœuds scriptés.
+    components: Arc<crate::components::Components>,
     /// Les routes vérifiées et les vues du dossier `views/`.
     routes: crate::routes::Routes,
     pub manifest: BackendManifest,
@@ -942,6 +945,11 @@ impl PreparedBackend {
             scripted_types.insert(name);
             nodes.register(Box::new(factory));
         }
+        // ── Les composants d'interface et leurs bibliothèques ──────────────
+        let components = Arc::new(
+            crate::components::Components::load(&directory)
+                .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
+        );
         let mut schemas = HashMap::new();
         let mut mappings = HashMap::new();
         let mut entities = HashMap::new();
@@ -1424,6 +1432,7 @@ impl PreparedBackend {
         Ok(Self {
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             scripted_types,
+            components,
             routes,
             relation_defs: manifest
                 .relations
@@ -1466,6 +1475,11 @@ impl PreparedBackend {
         self.entities
             .values()
             .any(|config| config.signals.vector() || config.signals.sparse())
+    }
+
+    /// Les composants d'interface et leurs bibliothèques, vérifiés.
+    pub fn components(&self) -> Arc<crate::components::Components> {
+        self.components.clone()
     }
 
     pub fn path(&self, path: &Path) -> PathBuf {

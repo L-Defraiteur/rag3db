@@ -349,6 +349,20 @@ fn modele_du_chat(
 /// ```
 ///
 /// `POST /arret` ferme l'écoute, puis chaque backend proprement.
+/// **Ranger une bibliothèque** : `libs add <backend.json> <paquet déballé>`.
+/// La seule écriture du magasin `.libs/` ; rien ne télécharge en silence (un
+/// paquet npm se déballe d'abord : `npm pack react@19.2.0 && tar xzf …`).
+fn ranger_une_lib(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend libs add <backend.json> <dossier du paquet déballé>";
+    let [verbe, manifeste, paquet] = args else { return Err(USAGE.into()) };
+    if verbe != "add" {
+        return Err(USAGE.into());
+    }
+    let dossier = Path::new(manifeste).parent().ok_or("le manifeste n'a pas de dossier")?;
+    println!("{}", rag3weaver::components::add_lib(dossier, Path::new(paquet))?);
+    Ok(())
+}
+
 /// **L'URL d'entrée de l'IDE** : celle de l'hôte qui tourne, avec son jeton
 /// local, que l'entrée pose en cookie (page 05 §2). À ouvrir dans le
 /// navigateur ; les fenêtres suivantes n'ont plus besoin du jeton.
@@ -670,6 +684,9 @@ fn run() -> Result<(), String> {
             rag3weaver::daemon_lifecycle::file_path().with_file_name("daemon.token").display()
         );
         return Ok(());
+    }
+    if tous.first().map(String::as_str) == Some("libs") {
+        return ranger_une_lib(&tous[1..]);
     }
     if tous.first().map(String::as_str) == Some("ide") {
         return entrer_dans_l_ide();

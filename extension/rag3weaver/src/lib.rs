@@ -184,6 +184,9 @@ pub mod refs;
 pub mod atelier;
 pub mod backend_tools;
 pub mod declare;
+/// Les composants d'interface déclarés comme des nœuds (`components/`), et
+/// leurs bibliothèques rangées par contenu (`libs.json`, `.libs/`).
+pub mod components;
 pub mod routes;
 #[cfg(feature = "daemon")]
 pub mod serve;
