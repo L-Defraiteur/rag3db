@@ -136,6 +136,14 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
             // avant la validation, l'appelant annule, et l'erreur dit vrai : rien n'est validé.
             stopNewTransactionsAndWaitForOthersNoLock(&clientContext, lck, transaction);
         }
+        // Une action d'avant validation (Transaction::addPreCommitAction) lit ce que les autres
+        // ont validé : elle veut qu'ils soient tous partis. Une validation forcée les a déjà
+        // attendus ; sans point de reprise (base en mémoire), on les attend de même, sous le
+        // même délai, et les BEGIN reprennent dès la validation faite.
+        const auto waitsWithoutCheckpoint = !forced && transaction->hasPreCommitActions();
+        if (waitsWithoutCheckpoint) {
+            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, lck, transaction);
+        }
         lastTimestamp++;
         transaction->commitTS = lastTimestamp;
         transaction->oldestActiveStartTS = oldestActiveSnapshotNoLock(transaction);
@@ -143,7 +151,7 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
         try {
             transaction->commit(&wal);
         } catch (...) {
-            if (forced) {
+            if (forced || waitsWithoutCheckpoint) {
                 allowNewTransactionsNoLock();
             }
             throw;
@@ -152,6 +160,9 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
         auto shouldCheckpoint =
             forced || Checkpointer::canAutoCheckpoint(clientContext, *transaction);
         clearTransactionNoLock(transaction->getID());
+        if (waitsWithoutCheckpoint) {
+            allowNewTransactionsNoLock();
+        }
         if (forced) {
             checkpointCarriesForcedCommit = true;
             checkpointNoLock(clientContext, lck, true /* newTransactionsAlreadyStopped */);

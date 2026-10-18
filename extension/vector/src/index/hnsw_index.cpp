@@ -834,6 +834,76 @@ void OnDiskHNSWIndex::finalize(main::ClientContext* context) {
     hnswStorageInfo.numCheckpointedNodes = numTotalRows;
 }
 
+void OnDiskHNSWIndex::catchUpCommittedAfter(main::ClientContext* context,
+    common::transaction_t buildStartTS) {
+    auto* transaction = Transaction::Get(*context);
+    // Les autres sont partis et personne n'entre : le dernier état validé est celui que l'index
+    // doit refléter. La transaction le lit le temps du rattrapage ; ses propres écritures (les
+    // tables de relations de l'index) restent les siennes.
+    Transaction::LatestCommittedView latest{*transaction};
+    auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
+    const auto transactionID = transaction->getID();
+    const auto columnID = indexInfo.columnIDs[0];
+    const auto numTotalRows = nodeTable.getNumTotalRows(&DUMMY_CHECKPOINT_TRANSACTION);
+    std::vector<common::offset_t> inserted;
+    std::vector<common::offset_t> deleted;
+    std::vector<common::offset_t> updated;
+    for (common::offset_t offset = 0; offset < numTotalRows; ++offset) {
+        const auto atBuild = nodeTable.isVisible(buildStartTS, transactionID, offset);
+        const auto now =
+            nodeTable.isVisible(Transaction::LATEST_COMMITTED_TS, transactionID, offset);
+        if (!atBuild && now) {
+            inserted.push_back(offset);
+        } else if (atBuild && !now) {
+            // Visible au bâti, la ligne y était insérée : absente maintenant, elle a été
+            // supprimée par une validation d'après.
+            deleted.push_back(offset);
+        } else if (atBuild &&
+                   nodeTable.wasColumnUpdatedByCommitAfter(columnID, buildStartTS, offset)) {
+            updated.push_back(offset);
+        }
+    }
+    if (inserted.empty() && deleted.empty() && updated.empty()) {
+        hnswStorageInfo.numCheckpointedNodes = numTotalRows;
+        return;
+    }
+    auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
+        getIndexTableCatalogEntries(catalog::Catalog::Get(*context), transaction, indexInfo);
+    HNSWDeleteState state{context, nodeTableEntry, upperRelTableEntry, lowerRelTableEntry,
+        nodeTable, columnID, config.ml};
+    auto& insertState = state.insertState;
+    fitVisitedToTable(transaction, insertState.searchState);
+    // 1. Les lignes supprimées sortent, puis leurs voisins sont réparés, pour toutes à la fois.
+    for (const auto offset : deleted) {
+        deleteInternal(transaction, offset, state);
+    }
+    finalizeDelete(transaction, state);
+    // Le vecteur en cours de reprise se lit par son propre état de lecture : celui de la
+    // recherche sert pendant ce temps aux voisins.
+    const auto embeddingDim = typeInfo.constPtrCast<common::ArrayTypeInfo>()->getNumElements();
+    const auto scanState = std::make_unique<OnDiskEmbeddingScanState>(transaction, mm, nodeTable,
+        columnID, embeddingDim);
+    // 2. Les lignes dont le vecteur a changé reprennent leur place ; passées à NULL, elles sortent.
+    for (const auto offset : updated) {
+        const auto vector = insertState.searchState.embeddings->getEmbedding(offset, *scanState);
+        updateInternal(transaction, offset, vector.isNull() ? nullptr : &vector, insertState);
+    }
+    // 3. Les lignes insérées entrent.
+    for (const auto offset : inserted) {
+        const auto vector = insertState.searchState.embeddings->getEmbedding(offset, *scanState);
+        if (!vector.isNull()) {
+            insertInternal(transaction, offset, vector, insertState);
+        }
+    }
+    for (const auto offset : insertState.upperNodesToShrink) {
+        shrinkForNode(transaction, offset, true, config.mu, insertState);
+    }
+    for (const auto offset : insertState.lowerNodesToShrink) {
+        shrinkForNode(transaction, offset, false, config.ml, insertState);
+    }
+    hnswStorageInfo.numCheckpointedNodes = numTotalRows;
+}
+
 void OnDiskHNSWIndex::checkpoint(main::ClientContext* context,
     storage::PageAllocator& pageAllocator) {
     auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] = getIndexTableCatalogEntries(
@@ -861,21 +931,25 @@ void OnDiskHNSWIndex::delete_(Transaction* transaction, const common::ValueVecto
     fitVisitedToTable(transaction, state.insertState.searchState);
     for (size_t i = 0; i < nodeIDVector.state->getSelSize(); ++i) {
         const auto pos = nodeIDVector.state->getSelVector()[i];
-        const auto offset = nodeIDVector.readNodeOffset(pos);
-        state.deletedNodes.insert(offset);
-        auto [lowerNbrs, upperNbrs] =
-            deleteFromGraph(transaction, offset, state.insertState, &state.deletedNodes);
-        state.lowerNeighborsOfDeleted[offset] = lowerNbrs;
-        state.upperNeighborsOfDeleted[offset] = upperNbrs;
-        for (const auto nbr : lowerNbrs) {
-            if (nbr != offset) {
-                state.lowerNeighborsToShrink.insert(nbr);
-            }
+        deleteInternal(transaction, nodeIDVector.readNodeOffset(pos), state);
+    }
+}
+
+void OnDiskHNSWIndex::deleteInternal(Transaction* transaction, common::offset_t offset,
+    HNSWDeleteState& state) {
+    state.deletedNodes.insert(offset);
+    auto [lowerNbrs, upperNbrs] =
+        deleteFromGraph(transaction, offset, state.insertState, &state.deletedNodes);
+    state.lowerNeighborsOfDeleted[offset] = lowerNbrs;
+    state.upperNeighborsOfDeleted[offset] = upperNbrs;
+    for (const auto nbr : lowerNbrs) {
+        if (nbr != offset) {
+            state.lowerNeighborsToShrink.insert(nbr);
         }
-        for (const auto nbr : upperNbrs) {
-            if (nbr != offset) {
-                state.upperNeighborsToShrink.insert(nbr);
-            }
+    }
+    for (const auto nbr : upperNbrs) {
+        if (nbr != offset) {
+            state.upperNeighborsToShrink.insert(nbr);
         }
     }
 }
@@ -1129,24 +1203,32 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     fitVisitedToTable(transaction, state.insertState.searchState);
     const auto pos = nodeIDVector.state->getSelVector()[0];
     const auto offset = nodeIDVector.readNodeOffset(pos);
+    const auto valuePos = propertyVector.state->getSelVector()[0];
+    if (propertyVector.isNull(valuePos)) {
+        updateInternal(transaction, offset, nullptr, state.insertState);
+        return;
+    }
+    auto scanState = std::make_unique<CommitInsertEmbeddingScanState>(&propertyVector);
+    EmbeddingHandle handle{propertyVector.getValue<common::list_entry_t>(valuePos).offset,
+        scanState.get()};
+    updateInternal(transaction, offset, &handle, state.insertState);
+}
+
+void OnDiskHNSWIndex::updateInternal(Transaction* transaction, common::offset_t offset,
+    const EmbeddingHandle* newVector, HNSWInsertState& insertState) {
     // 1. Remove old node from graph (forward edges + lazy cleanup of neighbors' back-edges).
     const std::unordered_set<common::offset_t> removed{offset};
-    auto [lowerNbrs, upperNbrs] =
-        deleteFromGraph(transaction, offset, state.insertState, &removed);
+    auto [lowerNbrs, upperNbrs] = deleteFromGraph(transaction, offset, insertState, &removed);
     // If this node was an entry point and none of its neighbours could replace it, find another
     // live node before re-inserting: otherwise the re-inserted node would become the entry point
     // of a graph that reaches nothing else.
-    repairEntryPoint(transaction, false /*isUpperLayer*/, state.insertState,
+    repairEntryPoint(transaction, false /*isUpperLayer*/, insertState,
         {lowerNbrs.begin(), lowerNbrs.end()}, &removed);
-    repairEntryPoint(transaction, true /*isUpperLayer*/, state.insertState,
+    repairEntryPoint(transaction, true /*isUpperLayer*/, insertState,
         {upperNbrs.begin(), upperNbrs.end()}, &removed);
     // 2. Re-insert with new embedding if not NULL.
-    const auto valuePos = propertyVector.state->getSelVector()[0];
-    if (!propertyVector.isNull(valuePos)) {
-        auto scanState = std::make_unique<CommitInsertEmbeddingScanState>(&propertyVector);
-        EmbeddingHandle handle{propertyVector.getValue<common::list_entry_t>(valuePos).offset,
-            scanState.get()};
-        insertInternal(transaction, offset, handle, state.insertState);
+    if (newVector != nullptr) {
+        insertInternal(transaction, offset, *newVector, insertState);
     }
     // 3. The nodes the old position led to have lost an incoming edge each. One of them may
     // have been reachable through this node only: check them all, as finalizeDelete does for
@@ -1159,13 +1241,12 @@ void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector
     for (const auto nbr : lowerNbrs) {
         if (nbr != offset && !edgesOf.contains(nbr)) {
             edgesOf.emplace(nbr,
-                scanNeighbors(transaction, nbr, false /*isUpperLayer*/, state.insertState));
+                scanNeighbors(transaction, nbr, false /*isUpperLayer*/, insertState));
         }
     }
     const auto edgesOfUpdated =
-        scanNeighbors(transaction, offset, false /*isUpperLayer*/, state.insertState);
-    keepFormerNeighboursReachable(transaction, edgesOf, edgesOfUpdated, {offset},
-        state.insertState);
+        scanNeighbors(transaction, offset, false /*isUpperLayer*/, insertState);
+    keepFormerNeighboursReachable(transaction, edgesOf, edgesOfUpdated, {offset}, insertState);
 }
 
 // The full check is a search of the graph per former neighbour: sixty searches per row, which

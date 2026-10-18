@@ -173,6 +173,12 @@ static void printJournalWeights(storage::LocalWAL& localWAL, main::ClientContext
 }
 
 void Transaction::commit(storage::WAL* wal) {
+    // Jouées une fois : une validation qui échoue après elles est annulée, pas reprise.
+    auto actions = std::move(preCommitActions);
+    preCommitActions.clear();
+    for (const auto& action : actions) {
+        action();
+    }
     localStorage->commit();
     undoBuffer->commit(commitTS);
     // Les suppressions que cette validation vient de dater, et celles d'avant qu'un lecteur
@@ -224,6 +230,7 @@ void Transaction::rollback(storage::WAL*) {
     }
     localStorage->rollback();
     hasCatalogChanges = false;
+    preCommitActions.clear();
 }
 
 void Transaction::failAfterStatement(storage::WAL* wal) {

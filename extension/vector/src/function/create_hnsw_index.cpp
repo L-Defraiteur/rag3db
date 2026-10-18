@@ -295,10 +295,19 @@ static void finalizeHNSWTableFinalizeFunc(const ExecutionContext* context,
         std::move(storageInfo), bindData->config.copy());
     auto storageManager = storage::StorageManager::Get(*clientContext);
     auto nodeTable = storageManager->getTable(nodeTableID)->ptrCast<storage::NodeTable>();
+    // Le bâti a lu la table à l'instantané de la transaction, sans verrou : ce que les autres
+    // valident pendant ce temps manque à l'index. Il le rattrape en tête de sa validation, une
+    // fois les autres parties (ticket 2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-
+    // manquent-a-l-index, forme δ).
+    auto* catchingUp = onDiskIndex.get();
+    const auto buildStartTS = transaction->getStartTS();
     // Visible de sa seule transaction jusqu'à la validation ; l'annulation le retire.
     nodeTable->addIndex(std::move(onDiskIndex), transaction);
     index->moveToPartitionState(*hnswSharedState->partitionerSharedState);
     transaction->setForceCheckpoint();
+    transaction->addPreCommitAction([clientContext, catchingUp, buildStartTS] {
+        catchingUp->catchUpCommittedAfter(clientContext, buildStartTS);
+    });
 }
 
 static double finalizeHNSWProgressFunc(TableFuncSharedState* sharedState) {

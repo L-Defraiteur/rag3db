@@ -255,6 +255,153 @@ public:
                                     << " runs lose rows in the vector index:" << details;
     }
 
+    // Ce qu'une autre connexion a validé pendant un CREATE_VECTOR_INDEX, avant qu'il rende la main.
+    struct WritesDuringCreate {
+        int64_t inserted = 0;
+        int64_t deleted = 0;
+        // Déplacées puis supprimées dans la même fenêtre : l'absence l'emporte.
+        int64_t movedThenDeleted = 0;
+        // Les lignes dont le vecteur a changé, avec leur nouveau vecteur.
+        std::vector<std::pair<int64_t, std::string>> updated;
+    };
+
+    // Le vecteur de dimension 16 d'une ligne insérée pendant le bâti, et un vecteur lointain,
+    // propre à chaque j, pour les SET.
+    static std::string createRowVector(int64_t i) {
+        return stringFormat("[{} % 17, {} % 23, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, {}]", i,
+            i, i / 1000.0);
+    }
+    static std::string movedRowVector(int64_t j) {
+        return stringFormat("[{}, {} % 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1]", 500 + j, j);
+    }
+
+    // La table C de numRows lignes, puis c_index bâti par une connexion pendant qu'une autre
+    // valide en boucle, une instruction par écriture : une insertion et, si withChanges, la
+    // suppression d'une ligne d'origine paire et le SET du vecteur d'une impaire (une sur cinq
+    // ensuite supprimée elle aussi).
+    WritesDuringCreate createIndexUnderWrites(int64_t numRows, bool withChanges) {
+        WritesDuringCreate writes;
+        const std::string vec = "[i % 17, i % 23, i % 29, i % 31, i % 37, i % 41, i % 43, i % 47, "
+                                "i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, i / 1000.0]";
+        table = "C";
+        mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+        mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: {}});",
+            numRows - 1, vec));
+        rag3db::main::Connection creator(database.get());
+        rag3db::main::Connection writer(database.get());
+        std::atomic<bool> created{false};
+        auto creating = std::async(std::launch::async, [&] {
+            auto result =
+                creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+            created = true;
+            return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+        });
+        for (int64_t j = 0; !created.load() && j < 100000; j++) {
+            const auto i = 100000 + j;
+            auto inserted = writer.query(
+                stringFormat("CREATE (:C {id: {}, vec: {}});", i, createRowVector(i)));
+            if (inserted->isSuccess() && !created.load()) {
+                writes.inserted++;
+            }
+            if (!withChanges || 2 * j + 1 >= numRows) {
+                continue;
+            }
+            auto deleted = writer.query(stringFormat("MATCH (n:C {id: {}}) DELETE n;", 2 * j));
+            if (deleted->isSuccess() && !created.load()) {
+                writes.deleted++;
+            }
+            const auto moved = movedRowVector(j);
+            auto updated = writer.query(
+                stringFormat("MATCH (n:C {id: {}}) SET n.vec = {};", 2 * j + 1, moved));
+            if (!updated->isSuccess() || created.load()) {
+                continue;
+            }
+            if (j % 5 == 4) {
+                auto gone =
+                    writer.query(stringFormat("MATCH (n:C {id: {}}) DELETE n;", 2 * j + 1));
+                if (gone->isSuccess() && !created.load()) {
+                    writes.movedThenDeleted++;
+                    continue;
+                }
+            }
+            writes.updated.emplace_back(2 * j + 1, moved);
+        }
+        const auto outcome = creating.get();
+        EXPECT_EQ(outcome, "ok") << "[check: setup] " << outcome;
+        EXPECT_GT(writes.inserted, 0) << "[check: setup] no insert committed during the CREATE";
+        return writes;
+    }
+
+    // Toutes les lignes vivantes sont joignables par une recherche exhaustive, aucune ligne
+    // supprimée n'est rendue, et chaque ligne déplacée pendant le bâti se retrouve première à son
+    // nouveau vecteur. Rend les étiquettes en défaut.
+    std::set<std::string> checkAfterCreateUnderWrites(const WritesDuringCreate& writes) {
+        std::set<std::string> failed;
+        std::set<int64_t> alive;
+        auto scan = conn->query("MATCH (n:C) WHERE n.vec IS NOT NULL RETURN n.id;");
+        while (scan->hasNext()) {
+            alive.insert(scan->getNext()->getValue(0)->getValue<int64_t>());
+        }
+        const auto numLive = static_cast<int64_t>(alive.size());
+        const std::string origin = "[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]";
+        auto all = conn->query(stringFormat(
+            "CALL QUERY_VECTOR_INDEX('C', 'c_index', {}, {}, efs := {}) RETURN node.id;", origin,
+            numLive, numLive));
+        if (!all->isSuccess()) {
+            ADD_FAILURE() << "[check: query] " << all->getErrorMessage();
+            failed.insert("query");
+            return failed;
+        }
+        std::set<int64_t> reached;
+        int64_t dead = 0;
+        while (all->hasNext()) {
+            const auto id = all->getNext()->getValue(0)->getValue<int64_t>();
+            if (alive.contains(id)) {
+                reached.insert(id);
+            } else {
+                dead++;
+            }
+        }
+        // Une recherche courte : exhaustive, elle relit le vecteur courant de chaque ligne
+        // atteinte et retrouve une ligne déplacée même restée à sa place d'avant dans le graphe.
+        // Les lignes déplacées forment un nuage lointain et régulier : à sa vraie place, chacune
+        // se trouve en 64 candidats.
+        int64_t movedFound = 0;
+        for (const auto& [id, moved] : writes.updated) {
+            auto own = conn->query(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('C', 'c_index', {}, 1, efs := 64) RETURN node.id;",
+                moved));
+            if (own->isSuccess() && own->hasNext() &&
+                own->getNext()->getValue(0)->getValue<int64_t>() == id) {
+                movedFound++;
+            }
+        }
+        std::cerr << "  create under writes: " << writes.inserted << " inserted, "
+                  << writes.deleted << " deleted, " << writes.updated.size() << " moved, "
+                  << writes.movedThenDeleted << " moved then deleted during the build; "
+                  << reached.size() << "/" << numLive << " reached, " << dead
+                  << " dead returned, " << movedFound << "/" << writes.updated.size()
+                  << " moved rows found at their new vector\n";
+        if (static_cast<int64_t>(reached.size()) != numLive) {
+            failed.insert("rows-committed-during-create-indexed");
+        }
+        if (dead != 0) {
+            failed.insert("vector-search-no-dead-row");
+        }
+        if (movedFound != static_cast<int64_t>(writes.updated.size())) {
+            failed.insert("rows-moved-during-create-found");
+        }
+        return failed;
+    }
+
+    static std::string checksOf(const std::set<std::string>& failed) {
+        std::string checks;
+        for (const auto& name : failed) {
+            checks += "[check: " + name + "] ";
+        }
+        return checks;
+    }
+
     int forcedRuns = 0;
     bool checkSecondIndex = false;
     // Le compte du dernier contrôle (check), pour le message d'un essai perdant.
@@ -1761,6 +1908,81 @@ TEST_F(VectorIndexUpdate, RowsCommittedDuringACreateAreIndexed) {
               << reached.size() << "/" << numLive << " reached\n";
     EXPECT_EQ(static_cast<int64_t>(reached.size()), numLive)
         << "[check: rows-committed-during-create-indexed] " << reached.size() << " of " << numLive;
+}
+
+// La même chose avec des suppressions et des SET du vecteur validés pendant le bâti, dont des
+// lignes déplacées puis supprimées dans la même fenêtre. Le CREATE les rattrape à sa validation,
+// une fois les autres transactions parties (forme δ du ticket) : une ligne supprimée ne reste pas
+// dans le graphe, une ligne déplacée se retrouve à son nouveau vecteur.
+TEST_F(VectorIndexUpdate, ChangesCommittedDuringACreateAreSeen) {
+    const auto writes = createIndexUnderWrites(20000, true /*withChanges*/);
+    if (HasFailure()) {
+        return;
+    }
+    ASSERT_GT(writes.deleted, 0) << "[check: setup] no delete committed during the CREATE";
+    ASSERT_FALSE(writes.updated.empty()) << "[check: setup] no SET committed during the CREATE";
+    ASSERT_GT(writes.movedThenDeleted, 0)
+        << "[check: setup] no row moved then deleted during the CREATE";
+    const auto failed = checkAfterCreateUnderWrites(writes);
+    EXPECT_TRUE(failed.empty()) << checksOf(failed);
+}
+
+// En base en mémoire, aucun point de reprise ne force le CREATE à attendre les autres : un
+// écrivain commencé avant sa validation et validé après ne voit pas l'index. Le CREATE y attend
+// aussi le départ des autres, pour la même garantie qu'en base sur disque.
+class VectorIndexCreateInMemory : public VectorIndexUpdate {
+public:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        inMemMode = true;
+        databasePath = "";
+        systemConfig->bufferPoolSize = 1024 * 1024 * 1024;
+        createDBAndConn();
+        concurrency::loadVectorExtension(*conn);
+    }
+};
+
+TEST_F(VectorIndexCreateInMemory, ChangesCommittedDuringACreateAreSeen) {
+    const auto writes = createIndexUnderWrites(20000, true /*withChanges*/);
+    if (HasFailure()) {
+        return;
+    }
+    const auto failed = checkAfterCreateUnderWrites(writes);
+    EXPECT_TRUE(failed.empty()) << checksOf(failed);
+}
+
+// Une transaction d'écriture ouverte avant le CREATE et validée pendant qu'il bâtit ou attend :
+// elle déplace des lignes déjà là au bâti. La validation du CREATE l'attend, puis rattrape le
+// déplacement. Le CREATE ne dépasse pas le délai (la transaction part bien avant), et les lignes
+// se retrouvent à leur nouveau vecteur.
+TEST_F(VectorIndexUpdate, AWriterOpenAcrossTheCreateIsCaughtUp) {
+    table = "C";
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+    mustRun("UNWIND range(0, 1999) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, 1, 2, 3, 4, 5, "
+            "6, 7, 8, 9, 10, 11, 12, 13, i / 1000.0]});");
+    rag3db::main::Connection writer(database.get());
+    ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
+    WritesDuringCreate writes;
+    for (int64_t j = 0; j < 20; j++) {
+        const auto id = 100 * j + 7;
+        auto written = writer.query(
+            stringFormat("MATCH (n:C {id: {}}) SET n.vec = {};", id, movedRowVector(j)));
+        ASSERT_TRUE(written->isSuccess()) << "[check: setup] " << written->getErrorMessage();
+        writes.updated.emplace_back(id, movedRowVector(j));
+    }
+    rag3db::main::Connection creator(database.get());
+    auto creating = std::async(std::launch::async, [&] {
+        auto result =
+            creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+        return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    auto committed = writer.query("COMMIT;");
+    const auto outcome = creating.get();
+    ASSERT_TRUE(committed->isSuccess()) << "[check: setup] " << committed->getErrorMessage();
+    ASSERT_EQ(outcome, "ok") << "[check: create-waits-for-open-writer] " << outcome;
+    const auto failed = checkAfterCreateUnderWrites(writes);
+    EXPECT_TRUE(failed.empty()) << checksOf(failed);
 }
 
 } // namespace

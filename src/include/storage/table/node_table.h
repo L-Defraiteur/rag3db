@@ -184,6 +184,11 @@ public:
     bool isVisible(const transaction::Transaction* transaction, common::offset_t offset) const;
     bool isVisible(common::transaction_t startTS, common::transaction_t transactionID,
         common::offset_t offset) const;
+    // Une mise à jour validée après startTS de cette colonne, à cette ligne : avec deux isVisible,
+    // de quoi dire ce qui a changé dans une table entre deux instantanés (le rattrapage d'un index
+    // bâti à un instantané, OnDiskHNSWIndex::catchUpCommittedAfter).
+    bool wasColumnUpdatedByCommitAfter(common::column_id_t columnID, common::transaction_t startTS,
+        common::offset_t offset) const;
     // La ligne vue depuis le dernier état validé : toute ligne validée, quel que soit
     // l'instantané de la transaction, plus les siennes. C'est ce que regarde le contrôle
     // d'unicité d'une clé primaire sous les verrous (marche A3′).

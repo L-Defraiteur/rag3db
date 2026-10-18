@@ -1133,6 +1133,13 @@ bool NodeTable::isVisible(transaction_t startTS, transaction_t transactionID,
     return nodeGroup->isVisible(startTS, transactionID, offsetInGroup);
 }
 
+bool NodeTable::wasColumnUpdatedByCommitAfter(column_id_t columnID, transaction_t startTS,
+    offset_t offset) const {
+    auto [nodeGroupIdx, offsetInGroup] = StorageUtils::getNodeGroupIdxAndOffsetInChunk(offset);
+    const auto* nodeGroup = getNodeGroup(nodeGroupIdx);
+    return nodeGroup->wasColumnUpdatedByCommitAfter(columnID, startTS, offsetInGroup);
+}
+
 bool NodeTable::isVisibleToLatestCommit(const Transaction* transaction, offset_t offset) const {
     return isVisible(Transaction::LATEST_COMMITTED_TS, transaction->getID(), offset);
 }

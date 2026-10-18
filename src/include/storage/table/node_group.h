@@ -225,6 +225,10 @@ public:
         common::row_idx_t rowIdxInGroup) const;
     bool wasWrittenByCommitAfter(common::transaction_t startTS,
         common::transaction_t transactionID, common::row_idx_t rowIdxInGroup) const;
+    // Une mise à jour validée après startTS de cette colonne, à cette ligne (la chaîne des
+    // versions de mise à jour, en mémoire jusqu'au point de reprise).
+    bool wasColumnUpdatedByCommitAfter(common::column_id_t columnID,
+        common::transaction_t startTS, common::row_idx_t rowIdxInGroup) const;
     bool isVisibleNoLock(const transaction::Transaction* transaction,
         common::row_idx_t rowIdxInGroup) const;
     bool isDeleted(const transaction::Transaction* transaction,

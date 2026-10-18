@@ -414,7 +414,23 @@ public:
     void finalize(main::ClientContext*) override;
     void checkpoint(main::ClientContext* context, storage::PageAllocator& pageAllocator) override;
 
+    // Le rattrapage d'un index bâti à l'instantané buildStartTS de la transaction qui le crée :
+    // ce que les autres ont validé depuis — une ligne insérée, supprimée, ou dont le vecteur a
+    // changé — y entre, en sort ou y change de place. Joué en tête de la validation de cette
+    // transaction, une fois les autres parties (Transaction::addPreCommitAction) : ce qui est
+    // validé est alors figé, et les versions sont encore en mémoire (aucun point de reprise ne
+    // passe tant que la transaction est ouverte).
+    void catchUpCommittedAfter(main::ClientContext* context, common::transaction_t buildStartTS);
+
 private:
+    // Une ligne déjà dans le graphe qui change de vecteur (newVector), ou qui le perd (nullptr) :
+    // retirée, reprise si elle a un vecteur, et ses anciens voisins gardés joignables.
+    void updateInternal(transaction::Transaction* transaction, common::offset_t offset,
+        const EmbeddingHandle* newVector, HNSWInsertState& insertState);
+    // Une ligne qui sort du graphe ; finalizeDelete répare ensuite ses voisins, pour toutes à la
+    // fois.
+    void deleteInternal(transaction::Transaction* transaction, common::offset_t offset,
+        HNSWDeleteState& state);
     common::offset_t searchNNInUpperLayer(const EmbeddingHandle& queryVector,
         HNSWSearchState& searchState) const;
     std::vector<NodeWithDistance> searchKNNInLayer(transaction::Transaction* transaction,

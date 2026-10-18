@@ -808,6 +808,20 @@ bool NodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transaction_t tra
         rowIdxInGroup - chunkedGroup->getStartRowIdx());
 }
 
+bool NodeGroup::wasColumnUpdatedByCommitAfter(column_id_t columnID, transaction_t startTS,
+    row_idx_t rowIdxInGroup) const {
+    ChunkedNodeGroup* chunkedGroup = nullptr;
+    {
+        const auto lock = chunkedGroups.lock();
+        chunkedGroup = findChunkedGroupFromRowIdx(lock, rowIdxInGroup);
+    }
+    if (!chunkedGroup) {
+        return false;
+    }
+    return chunkedGroup->getColumnChunk(columnID).hasCommittedUpdateAfter(startTS,
+        rowIdxInGroup - chunkedGroup->getStartRowIdx());
+}
+
 bool NodeGroup::isVisibleNoLock(const Transaction* transaction, row_idx_t rowIdxInGroup) const {
     // Sans le verrou de chunkedGroups, mais sous la garde partagée : la liste des blocs
     // peut s'allonger sous un lecteur.

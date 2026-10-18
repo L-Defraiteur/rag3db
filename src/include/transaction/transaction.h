@@ -1,8 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <span>
+#include <vector>
 
 #include "common/types/types.h"
 
@@ -142,6 +144,17 @@ public:
 
     bool shouldForceCheckpoint() const;
 
+    // Une action jouée en tête de la validation, une fois les autres transactions parties :
+    // TransactionManager::commit attend leur départ avant d'appeler commit dès qu'il y en a une,
+    // et aucune nouvelle n'entre avant la fin. Ce qu'elles ont validé est donc figé, et l'action
+    // le lit en entier (le rattrapage d'un index bâti à l'instantané de la transaction,
+    // CREATE_VECTOR_INDEX). Elle tourne sous le verrou du gestionnaire : rien de public de
+    // celui-ci, rien qui attende un BEGIN.
+    void addPreCommitAction(std::function<void()> action) {
+        preCommitActions.push_back(std::move(action));
+    }
+    bool hasPreCommitActions() const { return !preCommitActions.empty(); }
+
     void commit(storage::WAL* wal);
     void rollback(storage::WAL* wal);
 
@@ -244,6 +257,7 @@ private:
     std::unique_ptr<storage::LocalWAL> localWAL;
     LocalCacheManager localCacheManager;
     bool forceCheckpoint;
+    std::vector<std::function<void()>> preCommitActions;
     std::atomic<bool> hasCatalogChanges;
     bool locksAnnounced = false;
     bool failed = false;
