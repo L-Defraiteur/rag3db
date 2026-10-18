@@ -403,7 +403,9 @@ impl Node for ListFilesNode {
 pub struct EditFileNode {
     node_name: String,
     path: String,
-    op: EditOp,
+    /// L'opération, ou le refus des arguments de l'appel : l'exclusivité de
+    /// `content` et `old` se juge à l'exécution (voir la fabrique).
+    op: Result<EditOp, String>,
     format: ToolFormat,
     /// L'empreinte lue avant d'éditer ([`crate::code_tools::write_edit`]) : un
     /// fichier changé depuis refuse, et rien n'est écrit.
@@ -412,6 +414,9 @@ pub struct EditFileNode {
 
 impl EditFileNode {
     pub fn new(name: &str, path: impl Into<String>, op: EditOp) -> Self {
+        Self::avec_op(name, path, Ok(op))
+    }
+    fn avec_op(name: &str, path: impl Into<String>, op: Result<EditOp, String>) -> Self {
         Self { node_name: name.to_string(), path: path.into(), op, format: ToolFormat::Markdown, expected_hash: None }
     }
     pub fn with_expected_hash(mut self, hash: Option<String>) -> Self {
@@ -433,8 +438,9 @@ impl Node for EditFileNode {
     }
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
         let op = match &self.op {
-            EditOp::Replace { old, new } => serde_json::json!({ "replace": { "old_len": old.len(), "new_len": new.len() } }),
-            EditOp::Write { content } => serde_json::json!({ "write": { "len": content.len() } }),
+            Ok(EditOp::Replace { old, new }) => serde_json::json!({ "replace": { "old_len": old.len(), "new_len": new.len() } }),
+            Ok(EditOp::Write { content }) => serde_json::json!({ "write": { "len": content.len() } }),
+            Err(refus) => serde_json::json!({ "refused": refus }),
         };
         Some(Box::new(serde_json::json!({ "path": self.path, "op": op })))
     }
@@ -442,13 +448,14 @@ impl Node for EditFileNode {
         crate::dataflow::node_registry::ports_declares(&crate::dataflow::code_nodes::EditFileNodeFactory).1
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let op = self.op.as_ref().map_err(|refus| refus.clone())?;
         let source = source_service(ctx).ok_or("EditFileNode: 'file_source' service not found")?;
         let catalog = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned();
         // Le catalogue partagé : une indexation en cours ne fait pas attendre
         // l'édition.
         let result = match catalog.as_ref() {
-            Some(c) => crate::code_sync::edit_file_shared_with_hash(source.as_ref(), c, &self.path, &self.op, self.expected_hash.as_deref()),
-            None => crate::code_tools::edit_file_with_hash(source.as_ref(), None, &self.path, &self.op, self.expected_hash.as_deref()),
+            Some(c) => crate::code_sync::edit_file_shared_with_hash(source.as_ref(), c, &self.path, op, self.expected_hash.as_deref()),
+            None => crate::code_tools::edit_file_with_hash(source.as_ref(), None, &self.path, op, self.expected_hash.as_deref()),
         }
         .map_err(|e| format!("EditFileNode: {e}"))?;
         ctx.metric("lines_after", result.lines_after as f64);
@@ -675,19 +682,26 @@ impl NodeFactory for EditFileNodeFactory {
         // `Some("")`). Un `new` vide reste un remplacement par rien.
         let plein = |k: &str| get(k).filter(|v| !v.is_empty());
         let expected_hash = plein("expected_hash");
+        // **Les arguments se jugent à l'exécution** (18 octobre 2026) : la
+        // fabrique refusait `content` et `old` donnés ensemble, et le filet des
+        // gabarits livrés, qui bâtit chaque graphe avec une valeur neutre par
+        // paramètre (« x » pour une chaîne), ne construisait plus edit.mmd
+        // (cbe99e380). Le graphe est bien formé ; c'est l'appel qui est refusé,
+        // avec le nom des deux paramètres. Une forme fausse (path, format) reste
+        // refusée à la construction.
         let op = match (plein("content"), plein("old")) {
             (Some(_), Some(_)) => {
-                return Err("EditFileNode: 'content' (write the whole file) and 'old' (replace one occurrence) are exclusive".into())
+                Err("EditFileNode: 'content' (write the whole file) and 'old' (replace one occurrence) are exclusive".to_string())
             }
-            (Some(content), None) => EditOp::Write { content },
-            (None, Some(old)) => EditOp::Replace { old, new: get("new").unwrap_or_default() },
+            (Some(content), None) => Ok(EditOp::Write { content }),
+            (None, Some(old)) => Ok(EditOp::Replace { old, new: get("new").unwrap_or_default() }),
             // Vider un fichier : seulement sur une empreinte lue (l'édition humaine).
-            (None, None) if expected_hash.is_some() && get("content").is_some() => EditOp::Write { content: String::new() },
+            (None, None) if expected_hash.is_some() && get("content").is_some() => Ok(EditOp::Write { content: String::new() }),
             (None, None) => {
-                return Err("EditFileNode: give either 'old' + 'new' (replace one occurrence) or 'content' (write the whole file)".into())
+                Err("EditFileNode: give either 'old' + 'new' (replace one occurrence) or 'content' (write the whole file)".to_string())
             }
         };
-        let mut node = EditFileNode::new(name, path, op).with_expected_hash(expected_hash);
+        let mut node = EditFileNode::avec_op(name, path, op).with_expected_hash(expected_hash);
         if let Some(f) = config.get("format").and_then(|v| v.as_str()) {
             node = node.with_format(ToolFormat::parse(f).map_err(|e| format!("EditFileNode: {e}"))?);
         }

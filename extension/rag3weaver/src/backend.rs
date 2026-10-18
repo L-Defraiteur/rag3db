@@ -5455,6 +5455,13 @@ mod tests {
             .call_tool("edit_file", json!({"path": "../hors.rs", "content": "x", "expected_hash": empreinte}))
             .is_err());
         assert!(!dir.path().join("hors.rs").exists());
+        // content et old ensemble : l'appel est refusé à l'exécution, avec le nom
+        // des deux, et rien n'est écrit (le graphe, lui, se construit : cbe99e380).
+        let err = backend
+            .call_tool("edit_file", json!({"path": "main.rs", "content": "écrasé\n", "old": "arrivee", "new": "x", "expected_hash": empreinte}))
+            .unwrap_err();
+        assert!(err.contains("'content'") && err.contains("'old'") && err.contains("exclusive"), "{err}");
+        assert_eq!(std::fs::read_to_string(&fichier).unwrap(), neuf, "rien n'est écrit sur un appel refusé");
     }
 
     /// **Un backend en mots seuls démarre sans service d'embarquement** —
