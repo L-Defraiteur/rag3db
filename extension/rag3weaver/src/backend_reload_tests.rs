@@ -805,6 +805,75 @@ fn the_graph_of_a_tool_is_readable_for_drawing() {
     assert!(prepared.tool_graph("nope").is_none());
 }
 
+/// **Le graphe d'un outil ou d'un composant, en JSON** (C1) : les nœuds
+/// portent le nom que disent les `NodeRun`, leur type, leur config telle
+/// qu'écrite, leur ligne dans le `.mmd` et, pour un nœud de flux, le schéma de
+/// leur type ; les arêtes relient des nœuds du graphe. L'outil `graph` rend le
+/// même JSON, et il n'existe que si le manifeste le demande.
+#[test]
+fn the_graph_of_a_tool_or_a_component_is_served_as_json() {
+    let (dir, backend) = toy();
+    std::fs::create_dir(dir.path().join("components")).unwrap();
+    write(&dir.path().join("components"), "fiche.tsx", "export function Fiche() { return null; }\n");
+    write(
+        &dir.path().join("components"),
+        "fiche.component.json",
+        r#"{ "name": "Fiche", "source": "fiche.tsx", "clic": "fiche.clic.mmd" }"#,
+    );
+    write(
+        &dir.path().join("components"),
+        "fiche.clic.mmd",
+        "graph LR\n    clic[\"Evenement(nom='onClick')\"]\n    a[\"Pur(expr='x + 1')\"]\n    clic -->|charge:x| a\n",
+    );
+    write(&dir.path().join("components"), "nue.tsx", "export function Nue() { return null; }\n");
+    write(&dir.path().join("components"), "nue.component.json", r#"{ "name": "Nue", "source": "nue.tsx" }"#);
+    let prepared = backend.prepared();
+
+    let outil = prepared.graph_json(&GraphTarget::Tool("echo".into())).unwrap();
+    assert_eq!(outil["kind"], "tool");
+    assert_eq!(outil["nodes"][0]["name"], "answer");
+    assert_eq!(outil["nodes"][0]["node_type"], "RhaiNode");
+    assert_eq!(outil["nodes"][0]["line"], 6, "{outil}");
+    assert_eq!(outil["nodes"][0]["config"]["script_id"], "answer", "{outil}");
+    assert!(outil["nodes"][0]["schema"]["outputs"].as_array().is_some_and(|o| !o.is_empty()), "{outil}");
+    assert_eq!(outil["result"], json!({ "node": "answer", "port": "result" }));
+    assert!(outil["inputSchema"]["properties"]["value"].is_object(), "{outil}");
+
+    let fiche = prepared.graph_json(&GraphTarget::Component("Fiche".into())).unwrap();
+    assert_eq!(fiche["kind"], "component");
+    assert_eq!(fiche["source"], "components/fiche.clic.mmd");
+    let noms: Vec<&str> = fiche["nodes"].as_array().unwrap().iter().map(|n| n["name"].as_str().unwrap()).collect();
+    assert_eq!(noms, ["clic", "a"]);
+    assert_eq!(fiche["nodes"][1]["node_type"], "Pur");
+    assert_eq!(fiche["nodes"][1]["line"], 3);
+    assert_eq!(fiche["edges"], json!([{ "from_node": "clic", "from_port": "charge", "to_node": "a", "to_port": "x" }]));
+    let nue = prepared.graph_json(&GraphTarget::Component("Nue".into())).unwrap();
+    assert_eq!((nue["nodes"].clone(), nue["source"].clone()), (json!([]), Value::Null));
+
+    for (cible, attendu) in [
+        (GraphTarget::Tool("nope".into()), "pas d'outil « nope »"),
+        (GraphTarget::Reaction("nope".into()), "pas de réaction « nope »"),
+        (GraphTarget::Component("Nope".into()), "pas de composant « Nope »"),
+    ] {
+        let e = prepared.graph_json(&cible).unwrap_err();
+        assert!(e.contains(attendu), "{e}");
+    }
+    assert!(GraphTarget::from_args(&json!({})).is_err());
+    assert!(GraphTarget::from_args(&json!({ "tool": "a", "component": "B" })).is_err());
+    assert_eq!(GraphTarget::from_args(&json!({ "component": "B" })).unwrap(), GraphTarget::Component("B".into()));
+
+    // L'outil `graph` : absent sans le drapeau, puis le même JSON.
+    assert!(!prepared.describe()["tools"].as_array().unwrap().iter().any(|t| t["name"] == "graph"));
+    write(dir.path(), "backend.json", &MANIFEST.replace(r#""tools": {"#, r#""graph_tool": true, "tools": {"#));
+    backend.reload().unwrap();
+    let prepared = backend.prepared();
+    assert!(prepared.describe()["tools"].as_array().unwrap().iter().any(|t| t["name"] == "graph"));
+    let par_l_outil = backend.call("graph", json!({ "component": "Fiche" })).unwrap();
+    assert_eq!(par_l_outil, fiche);
+    let refus = backend.call("graph", json!({ "tool": "echo", "component": "Fiche" })).unwrap_err();
+    assert!(refus.contains("exactement un"), "{refus}");
+}
+
 // ─── serve : les routes sur HTTP (lot 4c) ───────────────────────────────────
 
 #[cfg(feature = "daemon")]

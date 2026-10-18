@@ -98,6 +98,11 @@ pub struct BackendManifest {
     /// Opt in to discovery and ad-hoc read-only Mermaid search tools.
     #[serde(default)]
     pub search_graphs: bool,
+    /// **L'outil `graph`** : le graphe d'un outil, d'une réaction ou d'un
+    /// composant, en JSON (le même que la route `/ide/graphe`). Opt-in, comme
+    /// `search_graphs` : il change la liste d'outils que voit l'agent.
+    #[serde(default)]
+    pub graph_tool: bool,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
@@ -1161,6 +1166,9 @@ impl PreparedBackend {
             if manifest.search_graphs && SEARCH_TOOLS.contains(&name.as_str()) {
                 return Err(format!("reserved search tool {name}"));
             }
+            if manifest.graph_tool && name == GRAPH_TOOL {
+                return Err(format!("reserved tool {name} (graph_tool)"));
+            }
             let source = lire_texte(&directory.join(&attachment.graph))?;
             let tool = GraphTool::from_mermaid(&source)
                 .and_then(|t| t.bind(&nodes))
@@ -1545,6 +1553,9 @@ impl PreparedBackend {
         }).collect();
         if self.manifest.search_graphs {
             tools.extend(search_tool_definitions());
+        }
+        if self.manifest.graph_tool {
+            tools.push(graph_tool_definition());
         }
         json!({"name":self.manifest.name,"version":self.manifest.version,"database":self.path(&self.manifest.database),"fts":"lucivy","embeddings":self.embed,"payloads":self.mappings,"tools":tools,"capabilities":["journal","journal_read","index_state"]})
     }
@@ -2002,6 +2013,52 @@ const SEARCH_NODES: &[&str] = &[
 ];
 const SEARCH_TOOLS: &[&str] = &["describe_backend", "validate_search", "run_search"];
 
+/// L'outil fourni par l'hôte quand le manifeste dit `graph_tool`.
+const GRAPH_TOOL: &str = "graph";
+
+fn graph_tool_definition() -> Value {
+    json!({"name":GRAPH_TOOL,
+        "description":"The graph of one of this backend's tools, reactions or UI components, as JSON: nodes (name, node_type, config as written, declaring line, node schema with ports) and edges (from_node, from_port, to_node, to_port). Give exactly one of tool, reaction, component.",
+        "inputSchema":{"type":"object","additionalProperties":false,"properties":{
+            "tool":{"type":"string","description":"A tool of this backend."},
+            "reaction":{"type":"string","description":"A reaction of this backend."},
+            "component":{"type":"string","description":"A UI component of this backend (its click graph)."}
+        }}})
+}
+
+/// **Ce dont on demande le graphe** : un outil, une réaction, un composant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GraphTarget {
+    Tool(String),
+    Reaction(String),
+    Component(String),
+}
+
+impl GraphTarget {
+    /// Depuis des arguments `{tool | reaction | component}` : exactement un.
+    pub fn from_args(args: &Value) -> Result<Self, String> {
+        let donnes: Vec<(&str, &str)> = ["tool", "reaction", "component"]
+            .iter()
+            .filter_map(|k| args.get(*k).and_then(Value::as_str).map(|v| (*k, v)))
+            .collect();
+        match donnes.as_slice() {
+            [("tool", v)] => Ok(Self::Tool(v.to_string())),
+            [("reaction", v)] => Ok(Self::Reaction(v.to_string())),
+            [("component", v)] => Ok(Self::Component(v.to_string())),
+            _ => Err("graph : donnez exactement un de tool, reaction, component".to_string()),
+        }
+    }
+}
+
+/// Le schéma d'un type de nœud, ses ports et ses paramètres, en JSON.
+fn node_schema_json(s: &crate::dataflow::NodeSchema) -> Value {
+    let port = |p: &crate::dataflow::PortDef| json!({"name":p.name,"type":format!("{:?}",p.port_type),"required":p.required});
+    json!({"type":s.node_type,"description":s.description,
+        "inputs":s.inputs.iter().map(port).collect::<Vec<_>>(),
+        "outputs":s.outputs.iter().map(port).collect::<Vec<_>>(),
+        "parameters":s.config_params.iter().map(|p| json!({"name":p.name,"type":format!("{:?}",p.param_type),"required":p.required,"default":p.default,"description":p.description,"schema":p.json_schema,"choices":p.choices.as_ref().map(|c| c.spec())})).collect::<Vec<_>>()})
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SearchGraphRequest {
@@ -2027,14 +2084,66 @@ fn search_tool_definitions() -> Vec<Value> {
     ]
 }
 impl PreparedBackend {
+    /// **Le graphe d'un outil, d'une réaction ou d'un composant**, en JSON :
+    /// la forme de `GraphDefinition` (`nodes` : `name`, `node_type`, `config`
+    /// telle qu'écrite ; `edges` : `from_node`, `from_port`, `to_node`,
+    /// `to_port`), plus la ligne de déclaration de chaque nœud dans son `.mmd`
+    /// et, pour un nœud de flux, le schéma de son type (ses ports). Le nom d'un
+    /// nœud est celui que portent les `NodeRun` du sujet `dataflow` : c'est ce
+    /// qui allume un nœud dans un dessin vivant. Un composant donne son graphe
+    /// de clic, relu sur le disque ; sans graphe de clic, un graphe vide.
+    pub fn graph_json(&self, target: &GraphTarget) -> Result<Value, String> {
+        let dessin = |kind: &str, name: &str, source: &Path, def: &crate::dataflow::checkpoint::GraphDefinition, schemas: bool| {
+            let texte = std::fs::read_to_string(self.path(source)).unwrap_or_default();
+            let lignes = crate::dataflow::clic::lignes_des_noeuds(&texte);
+            let nodes: Vec<Value> = def
+                .nodes
+                .iter()
+                .map(|n| {
+                    let mut v = json!({"name":n.name,"node_type":n.node_type,"config":n.config,"line":lignes.get(&n.name)});
+                    if schemas {
+                        v["schema"] = self.nodes.schema(&n.node_type).map(|s| node_schema_json(&s)).unwrap_or(Value::Null);
+                    }
+                    v
+                })
+                .collect();
+            json!({"kind":kind,"name":name,"source":source,"nodes":nodes,"edges":def.edges})
+        };
+        match target {
+            GraphTarget::Tool(name) => {
+                let t = self.tools.get(name).ok_or_else(|| format!("graph : pas d'outil « {name} » dans ce backend"))?;
+                let mut v = dessin("tool", name, &self.manifest.tools[name].graph, t.template(), true);
+                v["inputSchema"] = self.tool_schemas[name].clone();
+                v["result"] = json!({"node":t.result().0,"port":t.result().1});
+                Ok(v)
+            }
+            GraphTarget::Reaction(name) => {
+                let t = self.reactions.get(name).ok_or_else(|| format!("graph : pas de réaction « {name} » dans ce backend"))?;
+                let mut v = dessin("reaction", name, &self.manifest.reactions[name].graph, t.template(), true);
+                v["result"] = json!({"node":t.result().0,"port":t.result().1});
+                Ok(v)
+            }
+            GraphTarget::Component(name) => {
+                let composants = self.components_on_disk()?;
+                let decl = composants
+                    .components
+                    .get(name)
+                    .ok_or_else(|| format!("graph : pas de composant « {name} » dans ce backend"))?;
+                let Some(clic) = &decl.clic else {
+                    return Ok(json!({"kind":"component","name":name,"source":Value::Null,"nodes":[],"edges":[]}));
+                };
+                let source = Path::new("components").join(clic);
+                let texte = std::fs::read_to_string(self.path(&source)).map_err(|e| format!("{} : {e}", source.display()))?;
+                let def = crate::dataflow::mermaid::parse_mermaid(&texte).map_err(|e| format!("{} : {e}", source.display()))?;
+                // Les genres d'un graphe de clic ne sont pas des nœuds de flux :
+                // pas de schéma de registre.
+                Ok(dessin("component", name, &source, &def, false))
+            }
+        }
+    }
+
     fn search_description(&self) -> Value {
-        let nodes: Vec<Value> = SEARCH_NODES.iter().filter_map(|name| self.nodes.schema(name)).map(|s| {
-            let port = |p: &crate::dataflow::PortDef| json!({"name":p.name,"type":format!("{:?}",p.port_type),"required":p.required});
-            json!({"type":s.node_type,"description":s.description,
-                "inputs":s.inputs.iter().map(port).collect::<Vec<_>>(),
-                "outputs":s.outputs.iter().map(port).collect::<Vec<_>>(),
-                "parameters":s.config_params.iter().map(|p| json!({"name":p.name,"type":format!("{:?}",p.param_type),"required":p.required,"default":p.default,"description":p.description,"schema":p.json_schema,"choices":p.choices.as_ref().map(|c| c.spec())})).collect::<Vec<_>>()})
-        }).collect();
+        let nodes: Vec<Value> = SEARCH_NODES.iter().filter_map(|name| self.nodes.schema(name)).map(|s| node_schema_json(&s)).collect();
         let examples: Vec<Value> = self.tools.iter().filter(|(_, t)| t.template().nodes.iter().all(|n| SEARCH_NODES.contains(&n.node_type.as_str()))).map(|(name,t)| json!({"name":name,"mermaid":t.to_mermaid(),"bindings":self.manifest.tools[name].bindings,"metadata":self.manifest.tools[name].metadata})).collect();
         json!({"backend":self.describe(),"entities":self.entities,"relations":self.manifest.relations,"nodes":nodes,"examples":examples,
             "filter_examples":{"all":{"must":[]},"scalar":{"path":{"path":["field"],"value":[{"op":"eq","value":true}]}},"array":{"path":{"path":["tags"],"value":[{"op":"has_any","value":["value"]}]}},"nested":{"nested":{"path":["abilities"],"condition":{"field":{"key":"text_en","value":[{"op":"contains","value":"graveyard"}]}}}}},
@@ -2837,6 +2946,13 @@ impl Backend {
         name: &str,
         args: Value,
     ) -> Result<Value, String> {
+        if prepared.manifest.graph_tool && name == GRAPH_TOOL {
+            jsonschema::validator_for(&graph_tool_definition()["inputSchema"])
+                .map_err(|e| e.to_string())?
+                .validate(&args)
+                .map_err(|e| schema_refusal(&e))?;
+            return prepared.graph_json(&GraphTarget::from_args(&args)?);
+        }
         if prepared.manifest.search_graphs && SEARCH_TOOLS.contains(&name) {
             let definition = search_tool_definitions()
                 .into_iter()

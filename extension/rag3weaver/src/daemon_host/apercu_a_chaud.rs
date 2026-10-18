@@ -99,6 +99,29 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
         .unwrap()
         .to_string();
 
+    // La route des graphes (C1), sur le même hôte : le graphe d'un outil du
+    // gabarit, celui d'un composant (sans graphe de clic : vide), et le refus
+    // d'une demande sans backend.
+    let graphe = |requete: &str| -> (u16, Value) {
+        let mut r = crate::daemon::agent()
+            .get(format!("{racine}/ide/graphe?{requete}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .config()
+            .http_status_as_error(false)
+            .build()
+            .call()
+            .unwrap();
+        (r.status().as_u16(), serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap())
+    };
+    let (statut, usages) = graphe(&format!("backend={id}&tool=usages"));
+    assert_eq!(statut, 200, "{usages}");
+    assert_eq!(usages["result"]["kind"], "tool", "{usages}");
+    let noeuds = usages["result"]["nodes"].as_array().unwrap();
+    assert!(!noeuds.is_empty() && noeuds.iter().all(|n| n["line"].is_u64() && n["schema"].is_object()), "{usages}");
+    let (statut, compteur) = graphe(&format!("backend={id}&component=Compteur"));
+    assert_eq!((statut, compteur["result"]["nodes"].clone()), (200, json!([])), "{compteur}");
+    assert_eq!(graphe("tool=usages").0, 400);
+
     let mut n = Navigateur::lancer(&binaire);
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
     n.aller(

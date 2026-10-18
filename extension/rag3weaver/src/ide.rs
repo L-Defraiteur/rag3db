@@ -10,6 +10,7 @@
 //! |---|---|
 //! | `GET /ide/entrer?jeton=…` | le jeton local posé en cookie (`HttpOnly`, `SameSite=Strict`), puis la page |
 //! | `GET /ide`, `GET /ide/…` | la page (une seule, qui lit son URL) |
+//! | `GET /ide/graphe?backend=<id>&tool=…` | le graphe d'un outil (ou `reaction=`, `component=`), en JSON |
 //! | `GET /ide/etat` | l'état de l'hôte (`/etat`) |
 //! | `POST /ide/call` | `{manifest, name, arguments}`, comme `/call`, dans la session de l'IDE |
 //! | `POST /ide/describe` | `{manifest}`, comme `/describe` |
@@ -365,6 +366,20 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         ("GET", p) if p.starts_with("/ide/apercu/") => {
             let (statut, type_, corps) = apercu(host, p);
             let _ = request.respond(reponse(statut, type_, corps));
+        }
+        // Le graphe d'un outil, d'une réaction ou d'un composant (C1) : le
+        // JSON de l'outil `graph`, pour tout backend ouvert par son id.
+        ("GET", "/ide/graphe") => {
+            let cible = json!({ "tool": param("tool"), "reaction": param("reaction"), "component": param("component") });
+            let (statut, v) = match (param("backend"), crate::backend::GraphTarget::from_args(&cible)) {
+                (None, _) => (400, json!({ "ok": false, "error": "graphe : il faut backend=<id>" })),
+                (_, Err(e)) => (400, json!({ "ok": false, "error": e })),
+                (Some(id), Ok(cible)) => match host.with_backend_id(&id, |b| b.prepared().graph_json(&cible)).and_then(|r| r) {
+                    Ok(g) => (200, json!({ "ok": true, "result": g })),
+                    Err(e) => (404, json!({ "ok": false, "error": e })),
+                },
+            };
+            let _ = request.respond(json_(statut, &v));
         }
         ("GET", "/ide/etat") => {
             let (statut, v) = host.handle("GET", "/etat", None, &[]);

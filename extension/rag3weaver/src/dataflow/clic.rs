@@ -143,7 +143,9 @@ fn est_un_identifiant(nom: &str) -> bool {
 }
 
 /// La ligne où chaque nœud est déclaré (`nom["…"]`), lue dans le texte.
-fn lignes_des_noeuds(texte: &str) -> HashMap<String, usize> {
+/// La ligne où chaque nœud d'un `.mmd` est déclaré (sa première apparition
+/// `nom["…"]`) : pour les refus, et pour la route des graphes.
+pub(crate) fn lignes_des_noeuds(texte: &str) -> HashMap<String, usize> {
     let mut lignes = HashMap::new();
     for (i, brute) in texte.lines().enumerate() {
         let ligne = brute.split("%%").next().unwrap_or("");
