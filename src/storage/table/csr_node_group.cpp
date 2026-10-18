@@ -288,14 +288,31 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemSequential(const Transaction
     if (numRows == 0) {
         return NODE_GROUP_SCAN_EMPTY_RESULT;
     }
-    const ChunkedNodeGroup* chunkedGroup = nullptr;
+    // Le bloc est gardé en propriété partagée le temps du balayage : entre le verrou de la
+    // collection, rendu ici, et inMemAppendMtx, l'annulation d'une insertion d'une autre
+    // transaction peut retirer les blocs de queue vidés (ticket du 18 octobre 2026).
+    std::shared_ptr<const ChunkedNodeGroup> chunkedGroup;
     {
         const auto lock = chunkedGroups.lock();
-        chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+        if (chunkIdx >= chunkedGroups.getNumGroups(lock)) {
+            // Le bloc a été retiré par l'annulation d'un COPY après la copie de la liste : ses
+            // lignes, et toutes celles qui suivent dans cette liste, sont annulées.
+            nodeGroupScanState.nextRowToScan = nodeGroupScanState.inMemCSRList.rowIndices[1];
+            return NODE_GROUP_SCAN_EMPTY_RESULT;
+        }
+        chunkedGroup = chunkedGroups.getGroupShared(lock, chunkIdx);
     }
     {
         // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit.
         const std::shared_lock appendGuard{inMemAppendMtx};
+        // Une liste copiée avant l'annulation d'un COPY désigne encore des lignes que le bloc n'a
+        // plus (tronqué) : tout ce qui dépasse ses lignes est annulé, donc fini pour cette liste.
+        const auto rowsInChunk = chunkedGroup->getNumRows();
+        if (startRowInChunk >= rowsInChunk) {
+            nodeGroupScanState.nextRowToScan = nodeGroupScanState.inMemCSRList.rowIndices[1];
+            return NODE_GROUP_SCAN_EMPTY_RESULT;
+        }
+        numRows = std::min(numRows, rowsInChunk - startRowInChunk);
         chunkedGroup->scan(transaction, tableState, nodeGroupScanState, startRowInChunk, numRows);
     }
     nodeGroupScanState.nextRowToScan += numRows;
@@ -311,7 +328,8 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
         return NODE_GROUP_SCAN_EMPTY_RESULT;
     }
     row_idx_t nextRow = 0;
-    ChunkedNodeGroup* chunkedGroup = nullptr;
+    // En propriété partagée : voir scanCommittedInMemSequential.
+    std::shared_ptr<ChunkedNodeGroup> chunkedGroup;
     node_group_idx_t currentChunkIdx = INVALID_NODE_GROUP_IDX;
     sel_t numSelected = 0;
     // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit : le verrou
@@ -330,11 +348,19 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
             appendGuard.unlock();
             {
                 const auto lock = chunkedGroups.lock();
-                chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+                // Bloc retiré par l'annulation d'un COPY après la copie de la liste : ses lignes
+                // sont annulées, on les saute.
+                chunkedGroup = chunkIdx < chunkedGroups.getNumGroups(lock) ?
+                                   chunkedGroups.getGroupShared(lock, chunkIdx) :
+                                   nullptr;
             }
             appendGuard.lock();
         }
-        KU_ASSERT(chunkedGroup);
+        if (!chunkedGroup || rowInChunk >= chunkedGroup->getNumRows()) {
+            // Ligne retirée du bloc par l'annulation d'un COPY après la copie de la liste.
+            nextRow++;
+            continue;
+        }
         numSelected += chunkedGroup->lookup(transaction, tableState, nodeGroupScanState, rowInChunk,
             numSelected);
         nextRow++;
@@ -623,6 +649,32 @@ void CSRNodeGroup::serialize(Serializer& serializer) {
     if (persistentChunkGroup) {
         serializer.writeDebuggingInfo("checkpointed_data");
         persistentChunkGroup->serialize(serializer);
+    }
+}
+
+void CSRNodeGroup::rollbackInsert(row_idx_t startRow) {
+    NodeGroup::rollbackInsert(startRow);
+    std::unique_lock lck{csrIndexMtx};
+    if (!csrIndex) {
+        return;
+    }
+    for (auto& list : csrIndex->indices) {
+        if (list.rowIndices.empty()) {
+            continue;
+        }
+        if (list.isSequential) {
+            const auto first = list.rowIndices[0];
+            auto& length = list.rowIndices[1];
+            if (first >= startRow) {
+                list.rowIndices.clear();
+            } else if (first + length > startRow) {
+                length = startRow - first;
+            }
+        } else {
+            const auto kept =
+                std::lower_bound(list.rowIndices.begin(), list.rowIndices.end(), startRow);
+            list.rowIndices.erase(kept, list.rowIndices.end());
+        }
     }
 }
 

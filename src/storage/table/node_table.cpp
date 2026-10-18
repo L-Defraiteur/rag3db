@@ -350,7 +350,8 @@ void NodeTable::initScanState(Transaction* transaction, TableScanState& scanStat
     NodeGroup* nodeGroup = nullptr;
     switch (nodeScanState.source) {
     case TableScanSource::COMMITTED: {
-        nodeGroup = nodeGroups->getNodeGroup(nodeScanState.nodeGroupIdx);
+        nodeScanState.nodeGroupKeepAlive = nodeGroups->getNodeGroupShared(nodeScanState.nodeGroupIdx);
+        nodeGroup = nodeScanState.nodeGroupKeepAlive.get();
         if (!nodeScanState.committedColumnIDs.empty()) {
             nodeScanState.columnIDs = nodeScanState.committedColumnIDs;
         }

@@ -1,6 +1,15 @@
 # Le rollback d'un écrivain détruit un bloc en mémoire sous un lecteur : le lecteur se fige sur un verrou mort
 
-- **État** : à confirmer (lu dans le code sur la pile de l'hôte figé ; pas encore reproduit)
+- **État** : corrigé le 18 octobre 2026 par le commit qui ferme ce ticket (cœur C++) : blocs et
+  groupes passent en propriété partagée (`GroupCollection` en `shared_ptr`, `getGroupShared`) et
+  tout lecteur qui utilise un bloc ou un groupe hors du verrou de sa collection en garde une
+  référence le temps de l'usage (les deux balayages en mémoire du CSR, `isVisible`,
+  `wasWrittenByCommitAfter`, et l'état de balayage de table d'un appel à l'autre). Le rollback ne
+  change pas : il retire les blocs et groupes de queue vidés comme avant, et l'objet survit tant
+  qu'un lecteur le tient. Témoin `test/transaction/rollback_under_readers_test.cpp`, cinq cas ;
+  celui du lecteur en boucle sous soixante COPY annulés d'un autre écrivain est rouge sur master
+  (le fils meurt d'un signal 11 après 64 s en Release ; heap-use-after-free dans
+  `ChunkedNodeGroup::scan` sous `-fsanitize=address`) et vert sur le correctif.
 - **Gravité** : blocage définitif du processus (un worker du moteur attend pour toujours un
   verrou dont l'objet est détruit ; l'hôte ne sort plus sur TERM), ou lecture après libération.
 - **Atteignable en service** : oui, en mode multi-écrivains (le défaut depuis le 11 octobre) :
@@ -68,16 +77,38 @@ blocage de l'hôte ou une lecture silencieuse.
 Aucun encore. À écrire dans `test/transaction/concurrence/` (deux fils, la recette), avec sa
 preuve sous ASAN ; en Release il sert de garde contre le blocage (délai).
 
-## Forme proposée
+## Forme retenue
 
-Ne rien détruire au rollback. Les blocs et groupes de queue vides restent en place : le prochain
-`append` les remplit (un bloc vide n'est pas plein), et le point de reprise, qui s'écrit sans
-aucune transaction ouverte, est le seul à les retirer. C'est la forme la plus simple et elle
-supprime les deux étages du défaut sans toucher à l'ordre des verrous. L'autre forme, différer la
-destruction tant qu'un balayage tient le bloc (un compte de lecteurs en vol par groupe, comme la
-garde `inFlightListCopies` prévue pour la compaction), est plus lourde et ne vaut que si garder
-des blocs vides gêne quelque chose (à vérifier : `getNumEmptyTrailingGroups`, l'assertion
-`numGroups >= 1` du point de reprise, la sérialisation des groupes vides).
+La propriété partagée, et non « ne rien détruire au rollback ». La première forme essayée (garder
+les blocs et groupes vidés en place) rendait les lignes annulées visibles : le balayage d'un
+groupe borne par les lignes de chaque bloc et non par le compte du groupe, un groupe de nœuds
+vide sans aucun bloc était balayé hors tableau, et les listes CSR désignaient encore les lignes
+du bloc survivant. Prolonger la vie des objets tenus par un lecteur ne change aucune règle de
+visibilité : c'est la forme sûre. Le coût : un compteur atomique par prise de référence dans les
+balayages en mémoire du CSR (une par bloc, pas par ligne).
 
-Fermé quand le témoin passe sous ASAN et que l'hôte rejoue la réindexation de luciepc sans se
-figer.
+## Le second défaut, lu puis vu (cœur C++, 18 octobre 2026)
+
+Les listes CSR en mémoire (`CSRIndex::indices[nœud].rowIndices`) reçoivent les lignes à l'append
+(`updateCSRIndex`) et rien ne les en retirait au rollback. Un CREATE annulé ne le montre pas (il
+vit dans le stockage local), ni un COPY annulé dans une table vide (ses lignes vont au bloc
+persistant, retrouvées par l'en-tête CSR). Il se voit dès qu'un COPY annulé s'ajoute à des
+relations déjà en mémoire ou persistantes d'un même nœud : c'est le témoin du lecteur en boucle,
+une fois le bloc gardé vivant par la garde partagée, qui l'a montré (265 lectures fausses sur
+268 : la liste du nœud 0 désignait les 1 500 lignes du COPY annulé, tronquées du bloc, et le
+balayage les lisait au-delà des lignes du bloc). Deux pièces dans le même commit :
+`CSRNodeGroup::rollbackInsert` (`rollbackInsert` devient virtuel) retire des listes, sous
+`csrIndexMtx` exclusif, toute ligne à partir de `startRow` ; et les deux balayages en mémoire
+bornent par les lignes du bloc (`getNumRows`), pour une liste copiée avant l'annulation : tout ce
+qui dépasse est annulé. Les témoins `ARolledBackRelInsertLeavesNoRowInTheNodesList` et
+`ARolledBackFirstRelInsertIsStillInvisibleToACopiedList` (table vide) passent sur master et
+restent comme gardes ; `AReaderSurvivesTheRollbackOfAnotherWriter` juge les deux défauts
+(`reader-survives-rollback`, `reader-sees-only-committed-rows`), et
+`ARolledBackCopyDoesNotComeBackWithTheNextCopy` le second sans concurrence : relations d'avant
+en mémoire, un COPY annulé puis un COPY validé comptaient 3 010 au lieu de 1 510 sur master (les
+1 500 lignes annulées revenaient avec le suivant).
+
+Résidu, noté sans correctif : une transaction qui tient une copie de liste prise avant une
+annulation et qui réemploie elle-même ces emplacements dans la même instruction peut lire ses
+propres lignes sous le nœud d'avant ; la garde des copies en vol prévue pour la lecture en
+mémoire (page `coeur-cpp/13` §6) le fermerait.

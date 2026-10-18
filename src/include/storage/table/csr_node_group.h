@@ -232,6 +232,10 @@ public:
     void removeLastColumn(PageAllocator* pageAllocator) override;
 
     void checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointState& state) override;
+    // Les listes en mémoire oublient les lignes annulées (à partir de startRow) : sinon la liste
+    // d'un nœud désigne encore des lignes retirées du bloc, puis réemployées par l'insertion
+    // suivante sous un autre nœud.
+    void rollbackInsert(common::row_idx_t startRow) override;
     void reclaimStorage(PageAllocator& pageAllocator, const common::UniqLock& lock) const override;
 
     bool isEmpty() const override { return !persistentChunkGroup && NodeGroup::isEmpty(); }

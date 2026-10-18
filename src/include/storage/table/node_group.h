@@ -180,7 +180,7 @@ public:
 
     void applyFuncToChunkedGroups(version_record_handler_op_t func, common::row_idx_t startRow,
         common::row_idx_t numRows, common::transaction_t commitTS) const;
-    void rollbackInsert(common::row_idx_t startRow);
+    virtual void rollbackInsert(common::row_idx_t startRow);
     void reclaimStorage(PageAllocator& pageAllocator) const;
     virtual void reclaimStorage(PageAllocator& pageAllocator, const common::UniqLock& lock) const;
 
@@ -236,6 +236,9 @@ private:
     std::pair<common::idx_t, common::row_idx_t> findChunkedGroupIdxFromRowIdxNoLock(
         common::row_idx_t rowIdx) const;
     ChunkedNodeGroup* findChunkedGroupFromRowIdx(const common::UniqLock& lock,
+        common::row_idx_t rowIdx) const;
+    // Le même bloc en propriété partagée, pour l'utiliser hors du verrou de la collection.
+    std::shared_ptr<ChunkedNodeGroup> findChunkedGroupSharedFromRowIdx(const common::UniqLock& lock,
         common::row_idx_t rowIdx) const;
     ChunkedNodeGroup* findChunkedGroupFromRowIdxNoLock(common::row_idx_t rowIdx) const;
 

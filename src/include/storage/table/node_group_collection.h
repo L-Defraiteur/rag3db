@@ -56,6 +56,16 @@ public:
         KU_ASSERT(nodeGroups.getGroupNoLock(groupIdx)->getNodeGroupIdx() == groupIdx);
         return nodeGroups.getGroup(lock, groupIdx);
     }
+    // Le groupe en propriété partagée, pour l'état d'un balayage qui le garde d'un appel à
+    // l'autre : l'annulation d'une insertion peut le retirer de la collection entre deux.
+    std::shared_ptr<NodeGroup> getNodeGroupShared(const common::node_group_idx_t groupIdx,
+        bool mayOutOfBound = false) const {
+        const auto lock = nodeGroups.lock();
+        if (mayOutOfBound && groupIdx >= nodeGroups.getNumGroups(lock)) {
+            return nullptr;
+        }
+        return nodeGroups.getGroupShared(lock, groupIdx);
+    }
     NodeGroup* getOrCreateNodeGroup(const transaction::Transaction* transaction,
         common::node_group_idx_t groupIdx, NodeGroupDataFormat format);
 

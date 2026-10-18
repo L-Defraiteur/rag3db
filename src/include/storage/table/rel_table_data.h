@@ -95,6 +95,9 @@ public:
     NodeGroup* getNodeGroup(common::node_group_idx_t nodeGroupIdx) const {
         return nodeGroups->getNodeGroup(nodeGroupIdx, true /*mayOutOfBound*/);
     }
+    std::shared_ptr<NodeGroup> getNodeGroupShared(common::node_group_idx_t nodeGroupIdx) const {
+        return nodeGroups->getNodeGroupShared(nodeGroupIdx, true /*mayOutOfBound*/);
+    }
     NodeGroup* getOrCreateNodeGroup(const transaction::Transaction* transaction,
         common::node_group_idx_t nodeGroupIdx) const {
         return nodeGroups->getOrCreateNodeGroup(transaction, nodeGroupIdx,

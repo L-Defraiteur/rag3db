@@ -34,6 +34,9 @@ struct RAG3DB_API TableScanState {
     TableScanSource source;
     common::node_group_idx_t nodeGroupIdx;
     NodeGroup* nodeGroup = nullptr;
+    // Tient le groupe de nodeGroup vivant d'un appel à l'autre quand il vient d'une collection
+    // partagée (groupes validés) : l'annulation d'une insertion peut l'en retirer entre deux.
+    std::shared_ptr<NodeGroup> nodeGroupKeepAlive;
     std::unique_ptr<NodeGroupScanState> nodeGroupScanState;
 
     std::vector<ColumnPredicateSet> columnPredicateSets;

@@ -696,6 +696,16 @@ ChunkedNodeGroup* NodeGroup::findChunkedGroupFromRowIdx(const UniqLock& lock,
     return chunkedGroups.getGroup(lock, chunkedGroupIdx);
 }
 
+std::shared_ptr<ChunkedNodeGroup> NodeGroup::findChunkedGroupSharedFromRowIdx(const UniqLock& lock,
+    row_idx_t rowIdx) const {
+    const auto [chunkedGroupIdx, rowIdxInChunkedGroup] =
+        findChunkedGroupIdxFromRowIdxNoLock(rowIdx);
+    if (chunkedGroupIdx == INVALID_CHUNKED_GROUP_IDX) {
+        return nullptr;
+    }
+    return chunkedGroups.getGroupShared(lock, chunkedGroupIdx);
+}
+
 ChunkedNodeGroup* NodeGroup::findChunkedGroupFromRowIdxNoLock(row_idx_t rowIdx) const {
     const auto [chunkedGroupIdx, rowIdxInChunkedGroup] =
         findChunkedGroupIdxFromRowIdxNoLock(rowIdx);
@@ -758,10 +768,12 @@ bool NodeGroup::isVisible(const Transaction* transaction, row_idx_t rowIdxInGrou
 
 bool NodeGroup::isVisible(transaction_t startTS, transaction_t transactionID,
     row_idx_t rowIdxInGroup) const {
-    ChunkedNodeGroup* chunkedGroup = nullptr;
+    // En propriété partagée : le bloc est lu hors du verrou de la collection, et l'annulation
+    // d'une insertion d'une autre transaction peut l'en retirer entre-temps.
+    std::shared_ptr<ChunkedNodeGroup> chunkedGroup;
     {
         const auto lock = chunkedGroups.lock();
-        chunkedGroup = findChunkedGroupFromRowIdx(lock, rowIdxInGroup);
+        chunkedGroup = findChunkedGroupSharedFromRowIdx(lock, rowIdxInGroup);
     }
     if (!chunkedGroup) {
         return false;
@@ -773,10 +785,10 @@ bool NodeGroup::isVisible(transaction_t startTS, transaction_t transactionID,
 
 bool NodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transaction_t transactionID,
     row_idx_t rowIdxInGroup) const {
-    ChunkedNodeGroup* chunkedGroup = nullptr;
+    std::shared_ptr<ChunkedNodeGroup> chunkedGroup;
     {
         const auto lock = chunkedGroups.lock();
-        chunkedGroup = findChunkedGroupFromRowIdx(lock, rowIdxInGroup);
+        chunkedGroup = findChunkedGroupSharedFromRowIdx(lock, rowIdxInGroup);
     }
     if (!chunkedGroup) {
         return false;

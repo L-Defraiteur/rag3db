@@ -167,7 +167,9 @@ void RelTable::initScanState(Transaction* transaction, TableScanState& scanState
     const auto nodeGroupIdx = StorageUtils::getNodeGroupIdx(boundNodeID.offset);
     if (relScanState.nodeGroupIdx != nodeGroupIdx) {
         // We need to re-initialize the node group scan state.
-        nodeGroup = getDirectedTableData(relScanState.direction)->getNodeGroup(nodeGroupIdx);
+        relScanState.nodeGroupKeepAlive =
+            getDirectedTableData(relScanState.direction)->getNodeGroupShared(nodeGroupIdx);
+        nodeGroup = relScanState.nodeGroupKeepAlive.get();
     } else {
         nodeGroup = relScanState.nodeGroup;
     }

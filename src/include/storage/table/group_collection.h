@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <memory>
 #include <vector>
 
 #include "common/serializer/deserializer.h"
@@ -23,9 +24,15 @@ public:
     void deserializeGroups(MemoryManager& memoryManager, common::Deserializer& deSer,
         const std::vector<common::LogicalType>& columnTypes) {
         auto lockGuard = lock();
-        deSer.deserializeVectorOfPtrs<T>(groups, [&](common::Deserializer& deser) {
+        std::vector<std::unique_ptr<T>> owned;
+        deSer.deserializeVectorOfPtrs<T>(owned, [&](common::Deserializer& deser) {
             return T::deserialize(memoryManager, deser, columnTypes);
         });
+        groups.clear();
+        groups.reserve(owned.size());
+        for (auto& group : owned) {
+            groups.emplace_back(std::move(group));
+        }
     }
 
     void removeTrailingGroups([[maybe_unused]] const common::UniqLock& lock,
@@ -37,7 +44,10 @@ public:
 
     void serializeGroups(common::Serializer& ser) {
         auto lockGuard = lock();
-        ser.serializeVectorOfPtrs<T>(groups);
+        ser.serializeValue<uint64_t>(groups.size());
+        for (auto& group : groups) {
+            group->serialize(ser);
+        }
     }
 
     void appendGroup(const common::UniqLock& lock, std::unique_ptr<T> group) {
@@ -55,6 +65,16 @@ public:
     T* getGroupNoLock(common::idx_t groupIdx) const {
         KU_ASSERT(groupIdx < groups.size());
         return groups[groupIdx].get();
+    }
+    // La même entrée, en propriété partagée : un lecteur qui la garde tient le groupe vivant
+    // après que la collection l'a retiré (l'annulation d'une insertion retire les groupes de
+    // queue vidés ; un balayage d'une autre transaction en tenait peut-être le pointeur, et se
+    // figeait sur le verrou d'un objet libéré : ticket du 18 octobre 2026, l'hôte de luciepc).
+    std::shared_ptr<T> getGroupShared(const common::UniqLock& lock, common::idx_t groupIdx) const {
+        KU_ASSERT(lock.isLocked());
+        KU_UNUSED(lock);
+        KU_ASSERT(groupIdx < groups.size());
+        return groups[groupIdx];
     }
     void replaceGroup(const common::UniqLock& lock, common::idx_t groupIdx,
         std::unique_ptr<T> group) {
@@ -88,7 +108,7 @@ public:
     }
     common::idx_t getNumGroupsNoLock() const { return groups.size(); }
 
-    const std::vector<std::unique_ptr<T>>& getAllGroups(const common::UniqLock& lock) const {
+    const std::vector<std::shared_ptr<T>>& getAllGroups(const common::UniqLock& lock) const {
         KU_ASSERT(lock.isLocked());
         KU_UNUSED(lock);
         return groups;
@@ -132,7 +152,8 @@ public:
 
 private:
     mutable std::mutex mtx;
-    std::vector<std::unique_ptr<T>> groups;
+    // Propriété partagée : voir getGroupShared.
+    std::vector<std::shared_ptr<T>> groups;
 };
 
 } // namespace storage
