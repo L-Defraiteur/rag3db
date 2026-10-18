@@ -349,6 +349,10 @@ impl DaemonHost {
         drop(backend);
         *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = None;
         hosted.closed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        // Un backend fermé libère sa base, son tampon et ses caches : ce que
+        // glibc en garde revient au système tout de suite (la mesure du banc,
+        // 19 octobre 2026 : 1,2 Go restaient tenus jusqu'au repos suivant).
+        crate::allocateur::rendre_au_systeme("backend fermé");
         fermeture.map(|_| true).map_err(|e| format!("fermeture de {} : {e}", hosted.manifest.display()))
     }
 
