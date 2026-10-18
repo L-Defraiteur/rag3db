@@ -27,7 +27,9 @@ on:
 
 concurrency:
   group: rag3weaver-${{ github.ref }}
-  cancel-in-progress: true
+  # Sur master, chaque run va au bout : un run dure plus d'une heure (le moteur se bâtit) et master
+  # reçoit des pushes plus souvent ; annulés, ses runs ne rendaient jamais de verdict (18 octobre 2026).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 env:
   CARGO_TERM_COLOR: always
