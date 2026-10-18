@@ -174,6 +174,15 @@ impl Navigateur {
         for domaine in ["Runtime.enable", "Log.enable", "Page.enable"] {
             n.commande(domaine, json!({}));
         }
+        // Les appels en vol, relevés dès la création de chaque document : une
+        // attente dépassée dit lesquels n'ont jamais répondu.
+        n.commande(
+            "Page.addScriptToEvaluateOnNewDocument",
+            json!({ "source": "(() => { const vol = new Map(); let n = 0; window.__temoin_en_vol = vol; \
+                const f = window.fetch; window.fetch = (...a) => { const k = ++n; \
+                vol.set(k, `${a[0]} ${typeof a[1]?.body === 'string' ? a[1].body.slice(0, 300) : ''}`); \
+                return f(...a).finally(() => vol.delete(k)); }; })()" }),
+        );
         n
     }
 
@@ -273,7 +282,8 @@ impl Navigateur {
             }
             if Instant::now() > fin {
                 let vue = self.evaluer("document.getElementById('vue')?.innerText ?? document.body?.innerText ?? ''");
-                panic!("{quoi} : « {condition} » jamais vraie en 20 s ; la vue : {vue} ; erreurs : {:?}", self.erreurs);
+                let en_vol = self.evaluer("[...(window.__temoin_en_vol ?? new Map()).values()]");
+                panic!("{quoi} : « {condition} » jamais vraie en 20 s ; la vue : {vue} ; en vol : {en_vol} ; erreurs : {:?}", self.erreurs);
             }
             while self.recevoir(Duration::from_millis(100)).is_some() {}
         }
