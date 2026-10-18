@@ -139,11 +139,26 @@ async function appeler(id, nom, args) {
   // validation, … }) : ce que la vue lit est sa sortie, `result` (le témoin des
   // deux fenêtres l'a montré, 18 octobre 2026 : `r.text` et `r.content` étaient
   // lus un cran trop haut).
-  if (v.result && typeof v.result === "object" && "result" in v.result) return v.result.result;
+  if (v.result && typeof v.result === "object" && "result" in v.result) return sortie(v.result.result);
   // Toute réponse d'un outil du backend porte `result` : ce repli ne devrait
   // jamais servir, et s'il sert, une forme inattendue ne passe pas en silence.
   console.warn(`${nom} : réponse de /ide/call sans « result », rendue telle quelle`, v.result);
   return v.result;
+}
+
+// Une lecture du catalogue (usages, impact, callees…) enveloppe sa sortie de
+// sa ligne d'état — `{ status, result }`, `with_status` côté hôte — et un refus
+// est `{ status, result: null }`. La vue lit la sortie ; la ligne d'état se
+// montre en tête de la vue, le refus devient l'erreur affichée (vu par le témoin
+// navigateur, 19 octobre 2026 : le symbole montrait « Définitions (0) »).
+let lignesDEtat = new Set();
+function sortie(s) {
+  if (!s || typeof s !== "object" || Array.isArray(s)) return s;
+  const cles = Object.keys(s);
+  if (cles.length !== 2 || !cles.includes("status") || !cles.includes("result")) return s;
+  if (s.result === null) throw new Error(s.status);
+  lignesDEtat.add(s.status);
+  return s.result;
 }
 
 function erreur(e) {
@@ -523,18 +538,24 @@ function route() {
 
 async function montrer() {
   const r = route();
+  lignesDEtat = new Set();
   try {
-    if (!etat) await chargerEtat();
-    if (r.id && !backend(r.id)) throw new Error(`L'hôte ne connaît pas le backend ${r.id} (ouvert depuis ?). Revenir à l'accueil.`);
-    switch (r.vue) {
-      case "arbre": return await arbre(r.id, r.reste);
-      case "fichier": return await fichier(r.id, r.reste);
-      case "symbole": return await symbole(r.id, r.reste);
-      case "graphe": return await graphe(r.id, r.reste);
-      case "recherche": return await recherche(r.id);
-      default: return await accueil();
-    }
+    await vueDe(r);
   } catch (e) { erreur(e); }
+  if (lignesDEtat.size) vue.prepend(...[...lignesDEtat].map((l) => el("p", { class: "note etat" }, l)));
+}
+
+async function vueDe(r) {
+  if (!etat) await chargerEtat();
+  if (r.id && !backend(r.id)) throw new Error(`L'hôte ne connaît pas le backend ${r.id} (ouvert depuis ?). Revenir à l'accueil.`);
+  switch (r.vue) {
+    case "arbre": return await arbre(r.id, r.reste);
+    case "fichier": return await fichier(r.id, r.reste);
+    case "symbole": return await symbole(r.id, r.reste);
+    case "graphe": return await graphe(r.id, r.reste);
+    case "recherche": return await recherche(r.id);
+    default: return await accueil();
+  }
 }
 montrer();
 
