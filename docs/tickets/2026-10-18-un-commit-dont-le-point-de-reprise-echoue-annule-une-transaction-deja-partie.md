@@ -1,7 +1,6 @@
 # Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà détruite
 
-- **État** : à confirmer (lu dans le code, pas joué ; demandé par l'orchestration à la relecture
-  du lot « BEGIN refusé »)
+- **État** : ouvert, confirmé par le banc le 18 octobre 2026 (Release et ASAN, trois sur trois)
 - **Gravité** : lecture après libération (`Transaction` détruite par le gestionnaire, encore
   tenue par le contexte de la connexion) : assertion en debug, comportement indéfini en release ;
   rien n'est perdu (la validation est au journal), le danger est le plantage ou un verrou rendu
@@ -72,8 +71,33 @@ ASAN ou en debug : le témoin ordinaire en Release ne le verra sans doute pas).
 
 ## Témoin
 
-Aucun. À écrire dans `test/transaction/` avec le `FlakyCheckpointer`, à jouer en debug ou sous
-`-fsanitize=address` pour que le rouge soit nommé.
+`CommitAfterFailedCheckpoint.DoesNotRollBackADestroyedTransaction`
+(`test/transaction/concurrence/commit_after_failed_checkpoint_test.cpp`), en suite ordinaire et en
+`known_red.txt`. La recette est jouée dans un processus fils, avec le `FlakyCheckpointer` qui lève
+dans `checkpointStorage`. Contrôle
+`commit-whose-checkpoint-fails-does-not-touch-a-destroyed-transaction` : le fils sort normalement,
+et le COMMIT de A est refusé par le message qui dit la validation faite et le point de reprise
+échoué.
+
+**Une précision à la recette** : B doit franchir le seuil **en une seule validation**, et A valider
+aussitôt. Avec plusieurs validations de B, les BEGIN suivants de B attendent la demande. Celle-ci
+est abandonnée au bout de `AUTO_CHECKPOINT_WAIT` (250 ms), et A, seule, écrit alors le point de
+reprise elle-même par le chemin sain : l'exception brute arrive, sans annulation.
+
+Joué sur luciepc, trois fois sur trois de chaque côté :
+- **Release** (`build-vingt`) : le COMMIT de A est refusé par « Invalid transaction type to
+  rollback. », c'est-à-dire le type lu dans la mémoire libérée, puis le processus s'abandonne
+  (SIGABRT) à la fermeture.
+- **ASAN** (`RelWithDebInfo`, `ENABLE_ADDRESS_SANITIZER`, `ASAN_OPTIONS=detect_leaks=0`) :
+
+```
+ERROR: AddressSanitizer: heap-use-after-free … READ of size 1
+#0 Transaction::getType() const              transaction.h:107
+#1 TransactionManager::rollback(ClientContext&, Transaction*)
+#2 TransactionContext::rollback()            transaction_context.cpp:85
+#4 ClientContext::TransactionHelper::runFuncInTransaction
+freed by: operator delete ← clearTransactionNoLock
+```
 
 ## Forme proposée
 
