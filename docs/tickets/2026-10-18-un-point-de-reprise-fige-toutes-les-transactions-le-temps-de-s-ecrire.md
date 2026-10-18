@@ -120,9 +120,24 @@ Un point de reprise qui ne fige pas tout le monde. Trois pièces, à étudier av
 
 Le « forcé » du `CREATE_VECTOR_INDEX` est le sujet du ticket du CREATE concurrent (hotfixs).
 
+**Un refus avant la première écriture n'a pas à condamner la base.** Aujourd'hui, un point de
+reprise refusé par le tampon plein, avant d'avoir rien écrit, condamne la base (« A checkpoint of
+this database failed, so it must be closed and reopened »). C'est la règle prudente tant que le
+point de reprise réécrit en place : le code ne sait pas dire s'il a déjà touché la mémoire. Un
+point de reprise qui n'écrit pas en place peut faire cette distinction, et le refus redevient une
+erreur nommée. Le banc l'a vu le 18 octobre (ticket
+`2026-10-18-un-rollback-sous-un-tampon-plein-bloque-la-base-et-la-fermeture-tue-le-processus`,
+point 3).
+
 ## Témoin
 
 Le scénario du banc avec `RAG3DB_PROFILE_CHECKPOINT=1` : le p99 des écrivains et des lecteurs
 pendant les fenêtres des points de reprise au seuil, avant et après. Fermé quand un point de
 reprise au seuil ne fait plus attendre les lecteurs, et que l'attente des écrivains tient dans
 une borne dite.
+
+Pour la voie 2 : `FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen`
+(`test/transaction/concurrence/full_buffer_rollback_test.cpp`, dans `known_red.txt`, contrôle
+`refused-checkpoint-leaves-the-database-open`). Un fils remplit le tampon de 64 Mo de pages validées
+non reportées, point de reprise automatique coupé ; le CHECKPOINT est refusé par le tampon ; un
+BEGIN doit ensuite passer.

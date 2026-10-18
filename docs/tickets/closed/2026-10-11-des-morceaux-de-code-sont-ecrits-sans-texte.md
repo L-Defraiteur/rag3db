@@ -364,3 +364,19 @@ code-lourd de luciepc, base fermée par l'arrêt propre de 9 h 05 (sans `.wal`),
 
 Le fichier est le même, avec le même nombre de lignes : la différence vient de la lecture seule. Les
 textes étaient intacts sur disque. Traces : `~/.cache/codeparsers-notes/b2d/compte-lourd.txt`.
+
+## La copie scellée de F, reproduite par le banc (18 octobre 2026)
+
+La copie scellée de F (`copie-depot-scellee`, sha256 `551a178b121aafa1…`, vérifié sur les deux
+postes) a été comptée sur luciepc par chaque lib du magasin, chacune sur sa propre copie de travail
+et avec sa propre libvector. Le comptage est en lecture seule, par un programme C++ compilé contre
+le `rag3db.hpp` de chaque lib.
+
+| lib | `Scope_Chunk` | `_text` nul | `''` | `File_Chunk` vides |
+|---|---|---|---|---|
+| `6ffec5a82`, avant le correctif `f6179ade0` | 128 732 | 0 | **26 092 (20,3 %)** | 29 sur 7 349 |
+| `87a362e30`, après | 128 732 | 0 | **0** | 0 |
+
+C'est le même fichier : la différence vient de la seule lecture. La copie scellée peut partir ;
+l'orchestration l'efface. Programme et sorties : `~/.cache/rag3db-banc-notes/p1/`.
+

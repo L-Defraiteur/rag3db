@@ -1,4 +1,4 @@
-# Sous un tampon plein, un ROLLBACK est refusé et bloque la base, la fermeture d'une connexion tue le processus, et un CHECKPOINT refusé empoisonne la base
+# Sous un tampon plein, un ROLLBACK est refusé et bloque la base, et la fermeture d'une connexion tue le processus
 
 - **État** : ouvert
 - **Gravité** : plantage du processus (SIGABRT à la fermeture d'une connexion). La base est
@@ -50,7 +50,7 @@ exception: Unable to allocate memory! … »), et dès lors tout est refusé pou
 « A checkpoint of this database failed, so it must be closed and reopened before it is used
 again ». Le point de reprise n'avait pourtant rien écrit.
 
-## Trois défauts
+## Deux défauts, et un troisième rangé ailleurs
 
 1. **Un ROLLBACK a besoin de mémoire.** Le cœur l'a lu : l'annulation rejoue le tampon
    d'annulation, et `rollbackPKIndexInsert` relit les colonnes pour retirer les clés de l'index,
@@ -58,9 +58,14 @@ again ». Le point de reprise n'avait pourtant rien écrit.
    garde sa transaction à demi annulée. Chez PostgreSQL, l'abandon réussit toujours.
 2. **Un destructeur lève.** `ClientContext::~ClientContext` annule la transaction ouverte, et
    l'exception du tampon en sort : `std::terminate`. Un destructeur ne doit jamais lever.
-3. **Un CHECKPOINT refusé faute de mémoire empoisonne la base.** Le refus arrive avant toute
-   écriture. Il doit rester une erreur nommée et laisser la base ouverte. L'état « à rouvrir »
-   n'a de sens qu'après une écriture commencée.
+3. **Un CHECKPOINT refusé faute de mémoire condamne la base**, alors que le refus est arrivé
+   avant toute écriture. Ce point n'est pas pour ce ticket. Le cœur l'a lu comme la règle
+   actuelle, et l'orchestration l'a suivi : `writeCheckpoint` réécrit en place avant l'en-tête, et
+   le code ne distingue pas « refusé avant la première écriture » de « cassé au milieu ».
+   Condamner la base est donc la règle prudente d'aujourd'hui. Le témoin
+   `FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen` est rangé sous le ticket du point
+   de reprise (`2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire`),
+   voie 2 : c'est elle qui doit permettre cette distinction.
 
 Le fond est le même que celui du ticket du point de reprise : le tampon ne peut pas rendre les
 pages validées pas encore reportées.
@@ -72,5 +77,7 @@ joue dans un processus fils.
 - `FullBufferRollback.RollsBackAndClosesCleanly` (premier pas 5 000) :
   - `rollback-under-a-full-buffer-succeeds` : l'un des deux ROLLBACK passe ;
   - `closing-a-connection-does-not-abort` : le fils sort sans signal en fermant ses connexions.
-- `FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen` (premier pas 20 000) :
-  - `refused-checkpoint-leaves-the-database-open` : après le CHECKPOINT refusé, un BEGIN passe.
+- `FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen` relève du ticket du point de reprise
+  (voir le point 3).
+
+Fermé par hotfixs, avec la relecture du cœur, quand les deux contrôles ci-dessus sont verts.
