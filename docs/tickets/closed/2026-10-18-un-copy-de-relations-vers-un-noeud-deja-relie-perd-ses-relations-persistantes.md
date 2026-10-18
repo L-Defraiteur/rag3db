@@ -18,6 +18,13 @@
 - **Touche rag3weaver** : seulement si un COPY de relations s'annule (échec en cours de route, ou
   `BEGIN … ROLLBACK` autour) vers des nœuds déjà reliés et repris ; la perte mesurée par
   codeparsers sur `code-lourd` n'est pas ce défaut (voir plus bas).
+  **Éprouvé par le chemin du produit** (arbre principal, 18 octobre) : le produit écrit bien ses
+  liens par COPY dès 200 arêtes d'un groupe, depuis des nœuds déjà liés (`LinkRecordNode`,
+  `copier_les_liens`, un CSV sans propriété). Sur dix liens, un CHECKPOINT, puis trois cents de
+  plus depuis la même source ou vers la même arrivée, en transaction automatique, sous COMMIT
+  **et sous ROLLBACK**, le compte est juste (`dataflow::copie_liens_tests`, gardés comme garde).
+  La perte de code-lourd était un défaut du produit, fermé :
+  [les relations d'un index dépendaient du chemin d'écriture](closed/2026-10-18-les-relations-d-un-index-dependent-du-chemin-d-ecriture.md).
 - **Ouvert le** : 18 octobre 2026, session cœur C++, trouvé en écrivant le témoin du rollback
   sous lecteurs.
 - **Pour** : cœur C++ (à placer par l'orchestration ; c'est une perte, donc avant les lenteurs).

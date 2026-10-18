@@ -1031,6 +1031,24 @@ fn copier_les_liens(
     let t_csv0 = std::time::Instant::now();
     let mut absents = 0usize;
 
+    // **La sémantique du chemin par lots** (ticket
+    // `2026-10-18-les-relations-d-un-index-dependent-du-chemin-d-ecriture`) :
+    // il pose chaque paire par `MERGE … SET`, si bien qu'une paire déjà en base
+    // reçoit les propriétés du lot, et qu'une paire en double dans le lot garde
+    // celles de sa **dernière** occurrence. Le COPY gardait la première, et
+    // sautait la paire déjà là : une mention `CONSUMES` puis `INHERITS_FROM`
+    // (la clause d'héritage, poussée après la référence) restait `CONSUMES`, et
+    // la résolution posait `CONSUMES` au lieu de l'héritage. Une paire déjà là
+    // avec des propriétés à écrire renvoie donc le groupe au chemin par lots ;
+    // et le dédoublonnage parcourt le groupe à rebours.
+    if !prop_keys.is_empty()
+        && indices.iter().any(|&ri| deja.get(resolved[ri].from_uuid.as_str()).is_some_and(|tos| tos.contains(resolved[ri].to_uuid.as_str())))
+    {
+        if profil {
+            eprintln!("[link-profile] {rel_name} : des paires déjà en base reçoivent leurs propriétés : chemin par lots");
+        }
+        return Ok(false);
+    }
     let mut vues: HashSet<(&str, &str)> = HashSet::with_capacity(indices.len());
     let mut ecrites = 0usize;
     {
@@ -1038,7 +1056,8 @@ fn copier_les_liens(
         let f = std::fs::File::create(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
         let mut w = std::io::BufWriter::with_capacity(1 << 20, f);
         let mut ligne = String::with_capacity(256);
-        for &ri in indices {
+        // À rebours : la dernière occurrence d'une paire gagne, comme sous MERGE … SET.
+        for &ri in indices.iter().rev() {
             let rl = &resolved[ri];
             let paire = (rl.from_uuid.as_str(), rl.to_uuid.as_str());
             if !froms_presents.contains(paire.0) || !tos_presents.contains(paire.1) {

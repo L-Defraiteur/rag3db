@@ -1629,8 +1629,24 @@ pub fn analyze_in_project(
     for (key, nom) in parents_d_ailleurs {
         analysis.pending.push((key, nom, "HAS_PARENT".to_string()));
     }
-    analysis.pending.sort();
-    analysis.pending.dedup();
+    // **Un genre par (scope, nom), le plus fin** (ticket
+    // `closed/2026-10-18-les-relations-d-un-index-dependent-du-chemin-d-ecriture`) :
+    // une seule arête `MENTIONS` porte la paire, donc un seul genre en sort.
+    // Une méthode hors ligne qui nomme aussi sa classe, une classe qui nomme
+    // aussi sa base, poussaient deux entrées (`CONSUMES` et la relation fine),
+    // et le genre gardé dépendait de l'ordre d'écriture des liens. La relation
+    // fine l'emporte, nommément.
+    fn rang(genre: &str) -> u8 {
+        match genre {
+            "HAS_PARENT" => 0,
+            "INHERITS_FROM" => 1,
+            "IMPLEMENTS" => 2,
+            "CONSUMES" => 9,
+            _ => 5,
+        }
+    }
+    analysis.pending.sort_by(|a, b| (&a.0, &a.1, rang(&a.2), &a.2).cmp(&(&b.0, &b.1, rang(&b.2), &b.2)));
+    analysis.pending.dedup_by(|suivant, garde| suivant.0 == garde.0 && suivant.1 == garde.1);
 
     fold_lambdas(&mut analysis);
     dedupe_relations(&mut analysis);
