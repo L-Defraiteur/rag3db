@@ -14,6 +14,7 @@
 //! "entities": {"Source": {…, "files": {"dir": "sources", "name": "{chemin}", "header": ["titre", "origine"], "body": "contenu"}}}
 //! ```
 
+use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,34 @@ pub struct FilesDecl {
     /// Le champ dont le texte est le corps du fichier, tel quel.
     #[serde(default)]
     pub body: Option<String>,
+    /// **Un fichier composé** (lot M2c) : un gabarit jinja, relatif au
+    /// manifeste, qui rend le corps depuis la ligne et ses lignes liées
+    /// (`related`). Le fichier devient une **vue de la base**, réécrite par la
+    /// réaction de miroir après chaque changement, de n'importe quel écrivain ;
+    /// exclusif de `body`.
+    #[serde(default)]
+    pub template: Option<String>,
+    /// Les lignes liées données au gabarit, par nom :
+    /// `{"apports": {"relation": "A_POUR_APPORT", "order_by": "created_at"}}`.
+    #[serde(default)]
+    pub related: BTreeMap<String, RelatedDecl>,
+}
+
+/// Une famille de lignes liées d'un fichier composé.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RelatedDecl {
+    pub relation: String,
+    /// `outgoing` (la ligne est le départ de la relation, le défaut) ou `incoming`.
+    #[serde(default = "sortant")]
+    pub direction: String,
+    /// Le champ qui ordonne les lignes liées, croissant.
+    #[serde(default)]
+    pub order_by: Option<String>,
+}
+
+fn sortant() -> String {
+    "outgoing".into()
 }
 
 /// Le miroir d'une entité, prêt à écrire.
@@ -48,6 +77,8 @@ pub struct Miroir {
     /// La racine, absolue.
     pub racine: PathBuf,
     pub decl: FilesDecl,
+    /// Le texte du gabarit d'un fichier composé, lu au chargement.
+    pub gabarit: Option<String>,
 }
 
 /// Un nom de champ entre accolades dans `name`.
@@ -66,7 +97,7 @@ impl Miroir {
     /// **Contrôlé au chargement** : les champs nommés existent dans le schéma,
     /// le corps est une chaîne, le nom finit par `.md` et n'a ni `..` ni chemin
     /// absolu, la racine existe ou peut être créée.
-    pub fn nouveau(entite: &str, racine: PathBuf, decl: FilesDecl, schema: &Value) -> Result<Self, String> {
+    pub fn nouveau(entite: &str, racine: PathBuf, decl: FilesDecl, schema: &Value, dossier_du_manifeste: &Path) -> Result<Self, String> {
         let props = schema["properties"].as_object().cloned().unwrap_or_default();
         let ici = |quoi: &str, champ: &str| -> Result<(), String> {
             if props.contains_key(champ) {
@@ -96,7 +127,30 @@ impl Miroir {
         }
         relatif_sur(&decl.dir, &format!("{entite}.files.dir"))?;
         relatif_sur(&decl.name.replace(['{', '}'], ""), &format!("{entite}.files.name"))?;
-        Ok(Self { entite: entite.to_string(), racine, decl })
+        if decl.template.is_some() && decl.body.is_some() {
+            return Err(format!("{entite}.files : `template` (un fichier composé) et `body` s'excluent"));
+        }
+        if decl.template.is_none() && !decl.related.is_empty() {
+            return Err(format!("{entite}.files.related : sans `template`, les lignes liées ne vont nulle part"));
+        }
+        for (nom, r) in &decl.related {
+            if !matches!(r.direction.as_str(), "outgoing" | "incoming") {
+                return Err(format!("{entite}.files.related.{nom}.direction : outgoing ou incoming, pas « {} »", r.direction));
+            }
+        }
+        let gabarit = match &decl.template {
+            Some(g) => {
+                let chemin = dossier_du_manifeste.join(g);
+                Some(std::fs::read_to_string(&chemin).map_err(|e| format!("{entite}.files.template : {} : {e}", chemin.display()))?)
+            }
+            None => None,
+        };
+        Ok(Self { entite: entite.to_string(), racine, decl, gabarit })
+    }
+
+    /// Un fichier composé : une vue de la base, réécrite par la réaction de miroir.
+    pub fn est_compose(&self) -> bool {
+        self.gabarit.is_some()
     }
 
     /// Le chemin du fichier d'une ligne, relatif à la racine.
@@ -125,6 +179,12 @@ impl Miroir {
     /// Le texte du fichier d'une ligne : l'en-tête (`uuid`, puis les champs
     /// déclarés présents), puis le corps.
     pub fn rendre(&self, uuid: &str, record: &Value) -> String {
+        let corps = self.decl.body.as_ref().and_then(|b| record[b].as_str()).unwrap_or("");
+        self.rendre_avec(uuid, record, corps)
+    }
+
+    /// L'en-tête d'une ligne, suivi d'un corps donné.
+    fn rendre_avec(&self, uuid: &str, record: &Value, corps: &str) -> String {
         let mut champs = Map::new();
         champs.insert("uuid".into(), Value::String(uuid.to_string()));
         for c in &self.decl.header {
@@ -134,7 +194,6 @@ impl Miroir {
         }
         let mut ordre: Vec<&str> = vec!["uuid"];
         ordre.extend(self.decl.header.iter().map(String::as_str));
-        let corps = self.decl.body.as_ref().and_then(|b| record[b].as_str()).unwrap_or("");
         crate::en_tete::assembler(&crate::en_tete::ecrire_en_tete(&champs, &ordre), corps)
     }
 
@@ -142,14 +201,171 @@ impl Miroir {
     /// réellement sous la racine. Rend son chemin relatif.
     pub fn ecrire(&self, uuid: &str, record: &Value) -> Result<String, String> {
         let rel = self.chemin_relatif(uuid, record)?;
-        let cible = sous_la_racine(&self.racine, &rel)?;
+        self.ecrire_texte(&rel, &self.rendre(uuid, record))?;
+        Ok(rel)
+    }
+
+    /// Écrit `texte` à `rel` atomiquement, réellement sous la racine ; un
+    /// fichier déjà identique n'est pas réécrit (sa date ne bouge pas, la montre
+    /// ne le revoit pas). Rend vrai s'il a écrit.
+    fn ecrire_texte(&self, rel: &str, texte: &str) -> Result<bool, String> {
+        let cible = sous_la_racine(&self.racine, rel)?;
+        if std::fs::read_to_string(&cible).is_ok_and(|actuel| actuel == texte) {
+            return Ok(false);
+        }
         if let Some(parent) = cible.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{} : {e}", parent.display()))?;
         }
         let temporaire = cible.with_extension("md.ecriture");
-        std::fs::write(&temporaire, self.rendre(uuid, record)).map_err(|e| format!("{} : {e}", temporaire.display()))?;
+        std::fs::write(&temporaire, texte).map_err(|e| format!("{} : {e}", temporaire.display()))?;
         std::fs::rename(&temporaire, &cible).map_err(|e| format!("{} : {e}", cible.display()))?;
-        Ok(rel)
+        Ok(true)
+    }
+
+    /// **Régénère le fichier composé d'une ligne depuis la base** : la ligne,
+    /// ses lignes liées (`related`, ordonnées), le gabarit. Rend le chemin
+    /// relatif et s'il a écrit ; `None` si la ligne n'existe plus (son fichier
+    /// est alors retiré).
+    pub fn regenerer(&self, cat: &crate::catalog::Catalog, uuid: &str) -> Result<Option<(String, bool)>, String> {
+        let gabarit = self.gabarit.as_deref().ok_or_else(|| format!("{} : pas un fichier composé", self.entite))?;
+        let ligne = cat.get(&self.entite, uuid).map_err(|e| e.to_string())?;
+        let Some(ligne) = ligne else {
+            return Ok(None);
+        };
+        let record = serde_json::to_value(&ligne).map_err(|e| e.to_string())?;
+        let mut liees = Map::new();
+        for (nom, r) in &self.decl.related {
+            let sens = if r.direction == "incoming" {
+                crate::search_strategy::ExpansionDirection::Incoming
+            } else {
+                crate::search_strategy::ExpansionDirection::Outgoing
+            };
+            let voisins = crate::dataflow::search_nodes::fetch_related_in(
+                cat.dialect_arc().as_ref(),
+                cat.conn(),
+                &[uuid.to_string()],
+                &r.relation,
+                sens,
+                0,
+            )?;
+            let mut lignes: Vec<Value> = voisins
+                .get(uuid)
+                .map(|v| {
+                    v.iter()
+                        .map(|c| {
+                            let mut d = serde_json::to_value(&c.data).unwrap_or(Value::Null);
+                            if let Some(o) = d.as_object_mut() {
+                                o.insert("uuid".into(), Value::String(c.uuid.clone()));
+                            }
+                            d
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(champ) = &r.order_by {
+                lignes.sort_by(|a, b| ordre_json(&a[champ], &b[champ]).then_with(|| ordre_json(&a["uuid"], &b["uuid"])));
+            } else {
+                lignes.sort_by(|a, b| ordre_json(&a["uuid"], &b["uuid"]));
+            }
+            liees.insert(nom.clone(), Value::Array(lignes));
+        }
+        let contexte = serde_json::json!({"uuid": uuid, "record": record, "related": liees});
+        let corps = crate::dataflow::render_nodes::rendre(&contexte, gabarit)?;
+        let rel = self.chemin_relatif(uuid, &record)?;
+        let ecrit = self.ecrire_texte(&rel, &self.rendre_avec(uuid, &record, &corps))?;
+        Ok(Some((rel, ecrit)))
+    }
+
+    /// **Les lignes de cette entité qu'un événement du catalogue touche** : ses
+    /// propres uuids, ou les propriétaires des lignes liées par une relation de
+    /// `related`, ou les bouts d'un lien posé ou retiré par une de ces relations.
+    pub fn touchees(&self, cat: &crate::catalog::Catalog, evenement: &Value) -> Vec<String> {
+        let mut out = Vec::new();
+        let chaines = |v: &Value| -> Vec<String> {
+            v.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default()
+        };
+        match evenement["kind"].as_str() {
+            Some("EntitiesChanged") | Some("EntityDeleted") | Some("EntityUpdated") => {
+                let entite = evenement["entity"].as_str().unwrap_or("");
+                let mut uuids = chaines(&evenement["uuids"]);
+                if let Some(u) = evenement["uuid"].as_str() {
+                    uuids.push(u.to_string());
+                }
+                if entite == self.entite {
+                    out.extend(uuids.iter().cloned());
+                }
+                // Une ligne liée qui change : ses propriétaires, en remontant la relation.
+                for r in self.decl.related.values() {
+                    let Some(def) = cat.get_relation_def(&r.relation) else { continue };
+                    let (bout_lie, sens_retour) = if r.direction == "incoming" {
+                        (&def.from, crate::search_strategy::ExpansionDirection::Outgoing)
+                    } else {
+                        (&def.to, crate::search_strategy::ExpansionDirection::Incoming)
+                    };
+                    if bout_lie != entite || uuids.is_empty() {
+                        continue;
+                    }
+                    if let Ok(proprietaires) = crate::dataflow::search_nodes::fetch_related_in(
+                        cat.dialect_arc().as_ref(),
+                        cat.conn(),
+                        &uuids,
+                        &r.relation,
+                        sens_retour,
+                        0,
+                    ) {
+                        for enfants in proprietaires.values() {
+                            out.extend(enfants.iter().filter(|c| c.entity == self.entite).map(|c| c.uuid.clone()));
+                        }
+                    }
+                }
+            }
+            Some("RelationsChanged") => {
+                let relation = evenement["relation"].as_str().unwrap_or("");
+                for r in self.decl.related.values().filter(|r| r.relation == relation) {
+                    let cote = if r.direction == "incoming" { 1 } else { 0 };
+                    for liste in ["added", "removed"] {
+                        if let Some(paires) = evenement[liste].as_array() {
+                            out.extend(paires.iter().filter_map(|p| p[cote].as_str().map(str::to_string)));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// **Tous les fichiers composés régénérés depuis la base** (au démarrage :
+    /// un arrêt brutal entre une écriture et la réécriture laisse un fichier en
+    /// retard). Rend combien ont été réécrits.
+    pub fn regenerer_tout(&self, cat: &crate::catalog::Catalog) -> Result<usize, String> {
+        let requete = format!("MATCH (n:{}) RETURN n._uuid", self.entite);
+        crate::schema::validate_identifier(&self.entite, "entity").map_err(|e| e.to_string())?;
+        let r = cat.execute_raw_with_params(&requete, &[]).map_err(|e| e.to_string())?;
+        let mut ecrits = 0;
+        for ligne in &r.rows {
+            if let Some(u) = ligne.first().and_then(|v| v.as_str()) {
+                if let Some((_, true)) = self.regenerer(cat, u)? {
+                    ecrits += 1;
+                }
+            }
+        }
+        Ok(ecrits)
+    }
+}
+
+/// Un ordre total sur des valeurs JSON de même sorte (nombres, chaînes), les
+/// nulles d'abord.
+fn ordre_json(a: &Value, b: &Value) -> std::cmp::Ordering {
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => x.as_f64().partial_cmp(&y.as_f64()).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::String(x), Value::String(y)) => x.cmp(y),
+        (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+        (Value::Null, _) => std::cmp::Ordering::Less,
+        (_, Value::Null) => std::cmp::Ordering::Greater,
+        _ => a.to_string().cmp(&b.to_string()),
     }
 }
 
@@ -202,7 +418,7 @@ mod tests {
     }
 
     fn miroir(racine: &Path, decl: Value) -> Result<Miroir, String> {
-        Miroir::nouveau("Source", racine.to_path_buf(), serde_json::from_value(decl).unwrap(), &schema())
+        Miroir::nouveau("Source", racine.to_path_buf(), serde_json::from_value(decl).unwrap(), &schema(), racine)
     }
 
     #[test]

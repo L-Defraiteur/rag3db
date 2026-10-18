@@ -229,8 +229,10 @@ impl Node for EntityRecordNode {
             .service::<HashMap<String, Arc<crate::fichiers_entite::Miroir>>>(crate::fichiers_entite::SERVICE)
             .and_then(|m| m.get(entity))
         {
-            Some(miroir) => Some(miroir.ecrire(&uuid, &input)?),
-            None => None,
+            // Un fichier composé est une vue de la base : la réaction de miroir
+            // le réécrit après l'ingestion (lot M2c), pas le put.
+            Some(miroir) if !miroir.est_compose() => Some(miroir.ecrire(&uuid, &input)?),
+            _ => None,
         };
         let mut data = mapping.record(&input)?;
         cell.stamp(&mut data);

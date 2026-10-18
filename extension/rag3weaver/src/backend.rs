@@ -971,7 +971,7 @@ impl PreparedBackend {
                 })?;
                 miroirs.insert(
                     name.clone(),
-                    Arc::new(crate::fichiers_entite::Miroir::nouveau(name, directory.join(racine), decl.clone(), &schema)?),
+                    Arc::new(crate::fichiers_entite::Miroir::nouveau(name, directory.join(racine), decl.clone(), &schema, &directory)?),
                 );
             }
             let mapping = JsonSchemaMapping::from_schema(&schema)?;
@@ -1805,6 +1805,7 @@ impl PreparedBackend {
             garde,
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
+            miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
@@ -1815,6 +1816,7 @@ impl PreparedBackend {
         // dépôt. Sans réaction déclarée, aucun réacteur ne démarre.
         backend.mount_reactions()?;
         backend.seed()?;
+        backend.regenerer_les_fichiers_composes()?;
         Ok(backend)
     }
 }
@@ -2162,6 +2164,10 @@ pub struct Backend {
     /// et les services de cette cellule. Le bus préfixe ses sujets par la
     /// cellule : le réacteur de la cellule du catalogue n'entend pas les autres.
     cell_reactions: Mutex<HashMap<crate::scope::Scope, ReactorHandle>>,
+    /// **La réaction de miroir** (lot M2c) : montée d'office dès qu'une entité
+    /// déclare un fichier composé ; elle réécrit les fichiers touchés par chaque
+    /// événement du catalogue.
+    miroir_reacteur: Mutex<Option<ReactorHandle>>,
     /// **Les déclarations en service.** Un appel prend la version courante au
     /// départ et la garde jusqu'au bout : un rechargement qui la remplace
     /// pendant ce temps ne change rien à l'appel en cours.
@@ -2238,11 +2244,53 @@ impl Backend {
     /// Rend les noms montés. Sans réaction déclarée, aucun réacteur ne
     /// démarre et le résultat est vide.
     pub fn mount_reactions(&self) -> Result<Vec<String>, String> {
-        let mounted = self.mount_reactors()?;
+        let mut mounted = self.mount_reactors()?;
+        mounted.extend(self.monter_le_miroir()?);
         // Les montres **après** les réactions : ce que leur réconciliation de
         // départ publie doit trouver la réaction à l'écoute.
         self.mount_watches()?;
         Ok(mounted)
+    }
+
+    /// **Monte la réaction de miroir** si une entité déclare un fichier composé
+    /// (lot M2c ; `docs/18-octobre-2026-memoire-longue/04-…` §5 bis) : une
+    /// fermeture sur le sujet `catalog`, sans graphe ni nœud, qui réécrit les
+    /// fichiers des lignes que chaque événement touche, quelques millisecondes
+    /// après la base, quel que soit l'écrivain. Déjà montée : rien.
+    fn monter_le_miroir(&self) -> Result<Vec<String>, String> {
+        const NOM: &str = "miroir_des_fichiers";
+        let prepared = self.prepared();
+        let composes: Vec<Arc<crate::fichiers_entite::Miroir>> =
+            prepared.miroirs.values().filter(|m| m.est_compose()).cloned().collect();
+        if composes.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut slot = self.miroir_reacteur.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return Ok(Vec::new());
+        }
+        let bus = self.catalog.lock().unwrap_or_else(|e| e.into_inner()).event_bus();
+        let catalogue = self.catalog.clone();
+        let reacteur = Reactor::new(bus, prepared.nodes.clone(), Arc::new(ServiceRegistry::new())).on(
+            NOM,
+            ["catalog"],
+            crate::dataflow::reactor::ReactPolicy::Debounce(50),
+            move |evenements: Vec<Value>| {
+                let cat = catalogue.lock().unwrap_or_else(|e| e.into_inner());
+                for m in &composes {
+                    let mut touchees: Vec<String> = evenements.iter().flat_map(|e| m.touchees(&cat, e)).collect();
+                    touchees.sort();
+                    touchees.dedup();
+                    for u in touchees {
+                        if let Err(e) = m.regenerer(&cat, &u) {
+                            eprintln!("[miroir] {} {u} : {e}", m.entite);
+                        }
+                    }
+                }
+            },
+        );
+        *slot = Some(reacteur.spawn());
+        Ok(vec![NOM.to_string()])
     }
 
     fn mount_reactors(&self) -> Result<Vec<String>, String> {
@@ -2447,6 +2495,12 @@ impl Backend {
             errors.extend(handle.errors());
             if let Err(e) = handle.stop_within(delai) {
                 errors.push(format!("{REACTION_FIGEE} (catalogue) : {e}"));
+            }
+        }
+        if let Some(handle) = self.miroir_reacteur.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            errors.extend(handle.errors());
+            if let Err(e) = handle.stop_within(delai) {
+                errors.push(format!("{REACTION_FIGEE} (miroir des fichiers) : {e}"));
             }
         }
         errors
@@ -3183,6 +3237,23 @@ impl Backend {
     /// [`BackendManifest::seed`]) et rend combien il en a posé. Chaque ligne
     /// passe par `EntityRecordNode` : d'abord `get` sur son identité, puis
     /// `put` si rien n'est là ; aucune autre sorte de nœud n'est permise.
+    /// **Régénère tous les fichiers composés depuis la base** (à l'ouverture,
+    /// lot M2c) : un arrêt brutal entre une écriture et sa réécriture laisse un
+    /// fichier en retard ; c'est la base qui fait foi pour une vue. Rend combien
+    /// ont été réécrits, et le dit.
+    pub fn regenerer_les_fichiers_composes(&self) -> Result<usize, String> {
+        let prepared = self.prepared();
+        let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+        let mut ecrits = 0;
+        for m in prepared.miroirs.values().filter(|m| m.est_compose()) {
+            ecrits += m.regenerer_tout(&cat)?;
+        }
+        if ecrits > 0 {
+            eprintln!("[backend] {} : {ecrits} fichier(s) composé(s) régénéré(s) depuis la base", prepared.manifest.name);
+        }
+        Ok(ecrits)
+    }
+
     pub fn seed(&self) -> Result<usize, String> {
         let prepared = self.prepared();
         if prepared.manifest.seed.is_empty() {
@@ -3991,6 +4062,7 @@ mod tests {
             garde: None,
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
+            miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
@@ -4204,6 +4276,7 @@ mod tests {
             garde: crate::backend_code::build_garde(&workspace),
             reactions: Mutex::new(None),
             cell_reactions: Mutex::new(HashMap::new()),
+            miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }

@@ -99,6 +99,7 @@ fn reactif() -> (tempfile::TempDir, Backend) {
         avertissement_sans_service: None,
         reactions: Mutex::new(None),
         cell_reactions: Mutex::new(std::collections::HashMap::new()),
+        miroir_reacteur: Mutex::new(None),
         watches: Mutex::new(Vec::new()),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         decider: None,
