@@ -927,13 +927,22 @@ fn json_response(status: u16, value: &Value) -> tiny_http::Response<std::io::Cur
 mod tests {
     use super::*;
 
+    /// **Un hôte de test a son propre registre de runs en fond**, jamais
+    /// celui du processus : les tests de la lib tournent en parallèle, et un
+    /// hôte sur le registre global voyait les runs vivants des autres (l'hôte
+    /// inactif s'y croyait retenu, faf94cdfc) — et son arrêt les aurait
+    /// annulés (`cancel_all`).
+    fn hote_isole() -> DaemonHost {
+        DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()))
+    }
+
     /// Un hôte gardé par un jeton, sur un port libre ; rend l'adresse.
     fn hote_garde(jeton: &str) -> (String, std::thread::JoinHandle<()>) {
         let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let adresse = ecoute.local_addr().unwrap().to_string();
         let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
         let jeton = jeton.to_string();
-        let fil = std::thread::spawn(move || DaemonServer::new(server, 2).serve(Arc::new(DaemonHost::new()), Some(jeton)));
+        let fil = std::thread::spawn(move || DaemonServer::new(server, 2).serve(Arc::new(hote_isole()), Some(jeton)));
         (adresse, fil)
     }
 
@@ -1060,7 +1069,7 @@ mod tests {
         let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let server = DaemonServer::new(tiny_http::Server::from_listener(ecoute, None).unwrap(), 3);
         let arret = server.stopper();
-        let fil = std::thread::spawn(move || server.serve(Arc::new(DaemonHost::new()), Some("j".into())));
+        let fil = std::thread::spawn(move || server.serve(Arc::new(hote_isole()), Some("j".into())));
         std::thread::sleep(std::time::Duration::from_millis(100));
         arret.stop();
         fil.join().unwrap();
@@ -1076,7 +1085,7 @@ mod tests {
         let server = DaemonServer::new(tiny_http::Server::from_listener(ecoute, None).unwrap(), 3)
             .with_idle(Some(std::time::Duration::from_millis(600)));
         let t0 = std::time::Instant::now();
-        let fil = std::thread::spawn(move || server.serve(Arc::new(DaemonHost::new()), Some("j".into())));
+        let fil = std::thread::spawn(move || server.serve(Arc::new(hote_isole()), Some("j".into())));
         // Des sondes pendant tout le délai : elles ne comptent pas.
         while t0.elapsed() < std::time::Duration::from_millis(500) {
             let _ = demander("GET", &format!("http://{adresse}/sante"), None);
@@ -1097,9 +1106,17 @@ mod tests {
         let garde = activite.entrer();
         std::thread::sleep(std::time::Duration::from_millis(50));
         assert!(activite.inactif_depuis().is_none(), "une requête en vol n'est pas de l'inactivité");
+        // L'ordre se prouve sans horloge serrée (une borne de 40 ms rougissait
+        // sous la charge de la lib entière, 43 ms) : l'horodatage est
+        // postérieur à un instant pris juste avant la fin de la requête, donc
+        // à son entrée, 50 ms plus tôt. L'horloge d'`Activite` est murale et
+        // tronquée à la milliseconde : une milliseconde de jeu (vu 11 ms pour
+        // un peu plus de 10, le fil préempté entre la fin et la lecture).
+        let juste_avant = std::time::Instant::now();
         drop(garde);
         let depuis = activite.inactif_depuis().expect("plus rien en vol");
-        assert!(depuis < std::time::Duration::from_millis(40), "la fin de la requête horodate : {depuis:?}");
+        let borne = juste_avant.elapsed() + std::time::Duration::from_millis(1);
+        assert!(depuis <= borne, "la fin de la requête horodate : {depuis:?} (au plus {borne:?})");
     }
 
     /// **Une session dont le client est mort se ferme** au relevé, et l'état
@@ -1107,7 +1124,7 @@ mod tests {
     /// démarrage) aussi ; une session sans pid n'est jamais fermée ainsi.
     #[test]
     fn le_releve_ferme_la_session_d_un_client_mort() {
-        let hote = DaemonHost::new();
+        let hote = hote_isole();
         let moi = std::process::id();
         let debut = crate::daemon_lifecycle::process_start(moi).unwrap();
         let reprise = hote.open_session("pid repris", None, vec![], Some((moi, debut + 1)));
@@ -1146,7 +1163,7 @@ mod tests {
                 None,
             ),
         );
-        let hote = DaemonHost::new().with_background(registre.clone());
+        let hote = hote_isole().with_background(registre.clone());
         let etat = hote.state();
         let runs = etat["background"].as_array().unwrap_or_else(|| panic!("background : {etat}"));
         assert_eq!(runs.len(), 1, "{etat}");
