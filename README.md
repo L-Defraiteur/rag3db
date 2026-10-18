@@ -87,7 +87,6 @@ rag3db (fork of Kuzu v0.11.2.2)
 |-- extension/rag3weaver/           the Rust orchestrator (own README)
 |   |-- codeparsers/                submodule: scopes, usages, relations for 13 languages
 |   +-- visions/                    where the project is going (French)
-|-- extension/lucivy/ld-lucivy/     submodule, reference only (rag3weaver takes lucivy from crates.io)
 |-- docs/                           stele, tickets, journal, design notes (French)
 |-- tools/wasm/, tools/nodejs_api/  browser and Node.js builds, last built 24 August 2026
 +-- BUILD.md

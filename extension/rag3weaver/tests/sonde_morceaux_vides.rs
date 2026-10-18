@@ -9,7 +9,8 @@
 //! dira l'origine sur une copie de base atteinte (`SONDE_BASE`).
 //!
 //! Run with: cargo test --features rag3db-native,code --test sonde_morceaux_vides -- --ignored --nocapture <test>
-//! Variables : `RAG3DB_ROOT` (l'arbre, l'extension vector), `SONDE_FICHIER`,
+//! Variables : `RAG3DB_ROOT` (l'arbre, l'extension vector), `SONDE_LUCIVY` (le corpus),
+//! `SONDE_FICHIER`,
 //! `SONDE_DOSSIERS` (séparés par `:`), `SONDE_BASES` (dossier effacé puis
 //! recréé), `SONDE_BASE`.
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
@@ -21,6 +22,31 @@ use rag3weaver::connection::DbConnection;
 use rag3weaver::disponibilite::Disponibilites;
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+
+/// **Le corpus : les sources de lucivy.** `SONDE_LUCIVY` (le dossier d'un arbre de lucivy), sinon
+/// la crate publiée du registre cargo, à la version que prend rag3weaver (4.3.0). Le sous-module
+/// `extension/lucivy/ld-lucivy` qui servait ici est retiré (18 octobre 2026).
+fn lucivy(crate_publiee: &str) -> String {
+    if let Ok(d) = std::env::var("SONDE_LUCIVY") {
+        return if crate_publiee == "lucivy-core" {
+            format!("{d}/lucivy_core")
+        } else {
+            d
+        };
+    }
+    let maison = std::env::var("CARGO_HOME")
+        .unwrap_or_else(|_| format!("{}/.cargo", std::env::var("HOME").unwrap()));
+    let index = std::fs::read_dir(format!("{maison}/registry/src")).expect("le registre cargo");
+    index
+        .filter_map(|e| e.ok())
+        .map(|e| e.path().join(format!("{crate_publiee}-4.3.0")))
+        .find(|d| d.is_dir())
+        .unwrap_or_else(|| {
+            panic!("{crate_publiee} 4.3.0 absente du registre cargo : posez SONDE_LUCIVY")
+        })
+        .to_string_lossy()
+        .to_string()
+}
 
 fn catalogue() -> Catalog {
     catalogue_sur(Rag3dbConnection::in_memory().expect("base en mémoire"))
@@ -93,7 +119,7 @@ fn les_morceaux_vides_d_un_dossier() {
 #[ignore]
 fn les_morceaux_vides_d_un_gros_fichier() {
     let fichier = std::env::var("SONDE_FICHIER").unwrap_or_else(|_| {
-        format!("{}/extension/lucivy/ld-lucivy/lucivy_core/src/sharded_handle.rs", std::env::var("RAG3DB_ROOT").unwrap())
+        format!("{}/src/sharded_handle.rs", lucivy("lucivy-core"))
     });
     let texte = std::fs::read_to_string(&fichier).unwrap();
     let nom = std::path::Path::new(&fichier).file_name().unwrap().to_string_lossy().to_string();
@@ -151,13 +177,12 @@ fn les_morceaux_vides_sur_disque() {
 fn les_morceaux_vides_apres_histoires() {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    let r = std::env::var("RAG3DB_ROOT").unwrap();
     let bases = std::path::PathBuf::from(std::env::var("SONDE_BASES").expect("SONDE_BASES"));
     let _ = std::fs::remove_dir_all(&bases);
     std::fs::create_dir_all(&bases).unwrap();
 
     // (1) La masse interrompue puis reprise.
-    let dossier = format!("{r}/extension/lucivy/ld-lucivy");
+    let dossier = lucivy("ld-lucivy");
     let chemin = bases.join("reprise.rag3db");
     {
         let mut cat = catalogue_sur(Rag3dbConnection::new(&chemin).unwrap());
@@ -191,7 +216,7 @@ fn les_morceaux_vides_apres_histoires() {
     drop(cat);
 
     // (2) Le gros fichier modifié puis ré-ingéré.
-    let core = format!("{r}/extension/lucivy/ld-lucivy/lucivy_core");
+    let core = lucivy("lucivy-core");
     let arbre = WorkingTree::new(&core);
     let (liste, _) = arbre.list_with_exclusions().unwrap();
     let fichiers: Vec<(String, String)> = liste
@@ -240,11 +265,10 @@ fn les_morceaux_vides_apres_histoires() {
 #[test]
 #[ignore]
 fn les_morceaux_vides_apres_rattrapage() {
-    let r = std::env::var("RAG3DB_ROOT").unwrap();
     let bases = std::path::PathBuf::from(std::env::var("SONDE_BASES").expect("SONDE_BASES"));
     let _ = std::fs::remove_dir_all(&bases);
     std::fs::create_dir_all(&bases).unwrap();
-    let dossier = format!("{r}/extension/lucivy/ld-lucivy");
+    let dossier = lucivy("ld-lucivy");
     for variante in ["embarquer", "reclamer"] {
         let chemin = bases.join(format!("{variante}.rag3db"));
         {
