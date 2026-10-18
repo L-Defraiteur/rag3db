@@ -188,3 +188,22 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
 - **La lib du magasin plutôt que le dossier de bâti** : un rebâti en place sous une passe donne
   des rouges d'environnement (un en-tête neuf, une lib ancienne).
 
+## Ce que le 18 octobre a appris
+
+- **Rejouer sous la charge qui a fait rougir, des deux côtés, avant d'accuser un lot.** Un rouge
+  vu une fois sous charge se compte sur dix tours alternés, avec le parent du lot suspect. Si le
+  parent rougit aussi, c'est le test ou le moteur.
+- **Un test qui attend un signal (le retard tombé) au lieu de ce qu'il garde** a une course dès
+  que le signal peut manquer (la montre ne note la réconciliation qu'à son premier tour). Attendre
+  ce qu'on garde, dans le même délai, garde le rouge quand le défaut est vrai.
+- **La vue de lecture n'a pas d'instantané par appel** : chaque requête est sa propre
+  transaction, et `usages` en fait trois. Un rapport peut chevaucher un COMMIT. C'est l'objet du
+  L6 de l'arbre principal.
+- **Avant d'ajouter un paramètre à un outil, regarder ce que sa réponse porte déjà** :
+  `search_code` rendait sa liste structurée dans `result` et son markdown dans `presentation`.
+- **Une passe à distance doit survivre à une coupure** (`systemd-run --user --collect`), et son
+  attente doit guetter aussi la mort de l'unité, pas seulement la ligne de fin : une attente qui ne
+  lisait que FINI a perdu 90 minutes sur un script mort à la première ligne.
+- **Un en-tête `equiv` de tiny_http exige un `&'static str`** ; et `git worktree remove` refuse un
+  worktree qui porte des sous-modules (`rm -rf` puis `git worktree prune`).
+- **luciepc n'a pas de PostgreSQL** : `RAG3WEAVER_PG=host=lucie-tablette port=5433 …` par Tailscale.

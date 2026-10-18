@@ -278,6 +278,59 @@ après la lib entière et `check_features` rejoués.
   fond de la recherche ; la réaction sur événement du noyau (notify, avec le balayage en filet) ;
   « planifier » avec la jointure par clé du cœur ; l'AgentNode.
 
+## L'après-midi du 12 octobre — une porte, des boîtes, le noyau
+
+- **Une seule porte de l'index** (`838ed1f0b`, `03c2b065e`) : `code::admission` décide pour
+  l'index entier, la montre, la réconciliation et la réingestion. La montre n'intègre plus les
+  722 fichiers que l'index écarte.
+- **La boîte par nom** (`bbaf4481d`) : `Directory::deliver`, qui branche le lancement en fond de
+  la recherche ; une boîte qui déborde le dit (`dab191e43`).
+- **Le contournement de la suppression HNSW retiré** (`c0679ed33`) : 5,4 ms par morceau sur la
+  lib corrigée par hotfixs.
+- **Les paquets de jetons** (`c5cd38152`, `batch_ms`).
+- **Le noyau réveille la montre** (`fb23b4f6d`, crate notify) : la période n'est plus qu'un filet.
+  Au cinquième rejeu de codeparsers, un renommage se voit en 2,29 s (7,26 s le matin).
+- **L'embarquement hors du verrou**, préparé le soir : interrompu par la pause de Lucie (12 au
+  18 octobre), commité en local.
+
+## Le 18 octobre — la reprise, puis l'IDE
+
+- **L'embarquement hors du verrou** (`113e388fd`) :
+  - la réaction réindexe en plein texte sous le verrou, puis calcule les vecteurs sans lui ;
+  - le chemin dual pose enfin `_sparse_hash` (BGE-M3 recalculait les mêmes morceaux à chaque
+    passe) ;
+  - le rejeu a trouvé un rouge que la pause avait laissé : un morceau muet nommé sans sa base,
+    corrigé.
+
+  Au septième rejeu de codeparsers : la tenue passe de 1 636 à 1 238 ms, et 2,11 s de bout en
+  bout.
+- **`labels_from` dans Decide** (`4c3e8179a`) : les candidats de l'élément d'abord, les fixes
+  ensuite, refus nommé d'un champ absent. La tentative 4 des fiches de la mémoire donne 36/39 et
+  39 appels au lieu de 117.
+- **Vertex 3.8 par défaut** (`f1d575b50`) :
+  - le témoin du slug était rouge d'abord : le compteur rangeait `llm.google/…` ;
+  - qualité comparable à 3.5, environ 50 % de durée en plus.
+- **Le rouge sous charge départagé** (`a81e398c4`) :
+  - la reprise après arrêt rougit 2/10 avec 113e388fd et 1/10 sans : c'est une course du test,
+    corrigée ;
+  - trois autres témoins instables sous charge ont un ticket, dont le lot vu à moitié, donné à
+    l'arbre principal pour son L6 (un instantané par appel d'outil).
+- **L'IDE**, la priorité de Lucie :
+  - la page de conception (`f5d50fe16`, page 05) ;
+  - A1, le JSON des outils de lecture (`b665d94c3`) ;
+  - A2, le socle sur l'hôte : entrée par jeton en cookie, `/ide/call`, `/ide/flux` numéroté et
+    rejouable (`6695017d6`) ;
+  - A3, la page de lecture : arbre, fichier, symboles cliquables, recherche, une URL par vue
+    (`903aa05e1`). Le rendu attend la relecture de Lucie dans un navigateur.
+- **Les passes tournent sur luciepc**, détachées par `systemd-run` ; le push part de là-bas dans
+  un `if VERT` et refuse tout code arrivé sur master depuis sa base. Trois fois, ce code était
+  hors du crate ou une cible de test autonome : rebase sans rejeu, par un script à liste fermée.
+- **Ma faute** : mes passes du matin embarquaient sur la carte de ce poste
+  (`RAG3WEAVER_EMBED_SERVICE` non posé), vues par Lucie. Corrigé dans mes scripts.
+- **Ensuite** : A5, le voisinage en graphe ; puis `LlmError::Unavailable`, une erreur nommée quand
+  Vertex rend un 429 de quota ou un 503, que les suites cloud comptent comme un saut nommé, jamais
+  comme un vert ni un rouge. A4 (`cited_by`) est chez la mémoire.
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).
