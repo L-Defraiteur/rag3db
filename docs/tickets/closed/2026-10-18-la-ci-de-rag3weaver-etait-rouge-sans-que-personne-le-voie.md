@@ -1,6 +1,6 @@
 # La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie
 
-- **État** : ouvert — **la CI est verte sur master** (18 octobre 2026, run 39144463679 sur 56edb5371, lu : check_features 5/5, tests unitaires 1 668 réussis, 0 échec, 2 sautés nommément) ; reste le filet, à décider par l'orchestration, puis la fermeture
+- **État** : corrigé (18 octobre 2026, G) — la CI est verte sur master (run 39144463679, lu) ; le filet est posé : `poste push` dit l'état de la CI de master avant chaque push, sans bloquer, et l'orchestration le lit à chaque relevé ; les cinq tests qui rougissaient sans `code` sont gardés
 - **Gravité** : filet absent. Rien ne cassait dans le produit, mais aucun contrôle automatique ne gardait le crate pendant six semaines
 - **Atteignable en service** : non, c'est l'outillage
 - **Touche rag3weaver** : oui (`.github/workflows/rag3weaver-workflow.yml`, `scripts/check_features.sh`)
@@ -35,13 +35,18 @@ Personne ne lisait ce workflow. Chaque session contrôle sur son poste (`check_f
 
 - Sur master, un run n'est plus annulé par le push suivant (56edb5371). Annulés, les deux premiers runs de la CI réparée ne rendaient aucun verdict.
 
-## Le filet qui manquait
+## Le filet qui manquait, posé
 
-Qu'un rouge de ce workflow sur master se voie :
-- une ligne dans le rapport de l'orchestration ;
-- ou une notification au premier rouge, après un vert.
+Décidé par l'orchestration le 18 octobre :
 
-À décider par l'orchestration.
+1. l'orchestration lit l'état des runs de master à chaque relevé et le met dans le fil ;
+2. `poste push` dit, avant de pousser, la conclusion du dernier run de master de chaque workflow, et « CI rouge depuis <date> » s'il le faut, sans bloquer (20 s au plus ; un état illisible se dit en une ligne ; `POSTE_CI=0` le tait) ;
+3. pas de ligne en tête de l'index des tickets ni dans `index_state`.
+
+Les cinq tests qui supposaient `code` sont gardés :
+- les trois de `backend` montent un espace de travail de code et prennent `#[cfg(feature = "code")]` ;
+- `chaque_gabarit_d_outil_livre_se_construit` le prend aussi, car ses fiches sont les outils du code ;
+- `chaque_gabarit_livre_se_charge` ne saute, sans `code`, que les gabarits qui déclarent un `workspace`, et surveille les autres.
 
 ## Pour le fermer
 

@@ -3078,6 +3078,9 @@ mod tests {
     /// des valeurs NEUTRES par type pour chaque `$param` : la validation des
     /// valeurs réelles appartient aux suites de chaque outil, ici on prouve
     /// que la FORME du graphe tient (noms uniques, types connus, ports).
+    // Les fiches livrées sont les outils du code (lire, chercher, indexer, lancer) : leurs
+    // nœuds n'existent qu'avec la feature `code` (18 octobre 2026, la CI sans feature).
+    #[cfg(feature = "code")]
     #[test]
     fn chaque_gabarit_d_outil_livre_se_construit() {
         let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");

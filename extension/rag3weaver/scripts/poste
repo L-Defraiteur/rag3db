@@ -57,6 +57,44 @@ PUSH_FICHE="$PUSH_DIR/master-push.tenant"
 # relais (les témoins, qui ne doivent jamais relayer vers un autre poste).
 PUSH_HOTE="${POSTE_PUSH_HOTE-$(cat "$D/poste-push-hote" 2>/dev/null)}"
 SSH_PUSH="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
+
+# ── L'état de la CI, dit avant chaque push (18 octobre 2026, le filet du ticket « la CI de
+# rag3weaver était rouge sans que personne le voie ») ──
+# La conclusion du dernier run de master de chaque workflow, et « CI rouge depuis <date> »
+# s'il le faut. Ne bloque jamais : 20 s au plus, et un état illisible se dit en une ligne.
+# POSTE_CI_DEPOT (L-Defraiteur/rag3db) ; POSTE_CI=0 le tait (les témoins).
+etat_de_la_ci() {
+  [ "${POSTE_CI:-1}" = 0 ] && return 0
+  local depot="${POSTE_CI_DEPOT:-L-Defraiteur/rag3db}" jeton
+  jeton=$(gh auth token --user L-Defraiteur 2>/dev/null || true)
+  GH_TOKEN="${jeton:-${GH_TOKEN:-}}" timeout 20 python3 - "$depot" <<'ETAT' >&2 || echo "poste push : état de la CI illisible (gh ou réseau)" >&2
+import json, subprocess, sys
+sys.excepthook = lambda *_: sys.exit(1)  # illisible : la ligne de bash le dit, sans trace
+depot = sys.argv[1]
+def api(chemin):
+    return json.loads(subprocess.run(["gh", "api", chemin], capture_output=True, text=True, check=True).stdout)
+runs = api(f"repos/{depot}/actions/runs?branch=master&per_page=100")["workflow_runs"]
+derniers = {}
+for r in runs:  # du plus récent au plus ancien
+    if r["status"] != "completed" or r["conclusion"] in ("cancelled", "skipped"):
+        continue
+    derniers.setdefault(r["workflow_id"], r)
+lignes = []
+for wid, r in sorted(derniers.items(), key=lambda kv: kv[1]["name"]):
+    if r["conclusion"] == "success":
+        lignes.append(f"  vert   {r['name']} ({r['created_at'][:10]})")
+        continue
+    vert = api(f"repos/{depot}/actions/workflows/{wid}/runs?branch=master&status=success&per_page=1")["workflow_runs"]
+    filtre = f"&created=>{vert[0]['created_at']}" if vert else ""
+    apres = api(f"repos/{depot}/actions/workflows/{wid}/runs?branch=master&per_page=100{filtre}")["workflow_runs"]
+    rouges = [x for x in apres if x["conclusion"] == "failure"]
+    depuis = rouges[-1]["created_at"][:16].replace("T", " ") if rouges else r["created_at"][:16].replace("T", " ")
+    plus = "" if len(apres) < 100 else " au moins"
+    lignes.append(f"  ROUGE  {r['name']} : CI rouge depuis{plus} {depuis} UTC" + ("" if vert else " (aucun vert connu)"))
+print("poste push : la CI de master, dernier run de chaque workflow (sans bloquer)")
+print("\n".join(lignes) if lignes else "  aucun run terminé")
+ETAT
+}
 # ── L'ordre des verrous : le poste d'abord, le push ensuite (11 octobre 2026, soir) ──
 # Une commande de push qui rejouait sous `poste lourd` tenait le verrou de push en
 # attendant le poste : 28 min derrière une mesure (arbre principal), et tout le
@@ -157,6 +195,7 @@ if [ "${1:-}" = "push" ] && [ -n "$PUSH_HOTE" ]; then
     exit 3
   fi
   echo "poste push : $nom@$ici tient le verrou de $PUSH_HOTE" >&2
+  etat_de_la_ci 8>&-
   "$@" 0<&0 &
   enfant=$!
   perdu=0
@@ -218,6 +257,7 @@ case "$1" in
     done
     plafond="${POSTE_PUSH_MAX:-1200}"
     echo "$nom depuis $(date '+%H:%M:%S') (pid $$)" > "$PUSH_FICHE"
+    etat_de_la_ci 7>&-
     # L'entrée est gardée explicitement : sans job control, un `&` la remplace
     # par /dev/null, et le relais d'un autre poste (qui tient le verrou tant
     # que son entrée reste ouverte) le rendrait aussitôt.

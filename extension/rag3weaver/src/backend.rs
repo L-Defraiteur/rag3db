@@ -4989,6 +4989,8 @@ mod tests {
 
     /// **La politique refuse au chargement, en disant quoi faire** — la
     /// leçon du deck builder : nommer le paramètre à changer, pas la règle.
+    // Un espace de travail de code (`fixture_code`) : la clé `workspace` exige la feature.
+    #[cfg(feature = "code")]
     #[test]
     fn la_politique_refuse_en_disant_quoi_faire() {
         // edit attaché sans write_files : le refus nomme la capacité.
@@ -5298,6 +5300,8 @@ mod tests {
     /// **Les signaux du schéma nommé se valident dans les deux sens** : le
     /// signal sans modèle, la clé sans index, le signal inconnu — chacun
     /// refuse au chargement en disant quoi faire.
+    // Un espace de travail de code (`fixture_code`) : la clé `workspace` exige la feature.
+    #[cfg(feature = "code")]
     #[test]
     fn index_signals_se_valide_dans_les_deux_sens() {
         let (_d, p) = fixture_code("working_tree", false, json!({}));
@@ -5384,6 +5388,8 @@ mod tests {
     /// **Les fonctions de verrou déclarées** (`workspace.locks_via`) se
     /// lisent à l'ingestion du code : sans `index: "code"`, refusées au
     /// chargement ; avec, lues telles quelles.
+    // Un espace de travail de code (`fixture_code`) : la clé `workspace` exige la feature.
+    #[cfg(feature = "code")]
     #[test]
     fn locks_via_exige_le_schema_de_code() {
         let patch = |m: &mut Value| {

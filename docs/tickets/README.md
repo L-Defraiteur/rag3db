@@ -83,7 +83,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (35)
+### Ouverts — produit (34)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -91,7 +91,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Des scopes sans `DEFINED_IN` dans une réindexation à neuf : 3 825 sur 82 808 dans code-lourd](2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md) | ouvert — structurel, à regarder (scopes de même nom dans un fichier ?) | réponse incomplète (le scope ne se rattache pas à son fichier par l'arête) | oui, à chaque index | oui (ingestion du code) |
-| [La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie](2026-10-18-la-ci-de-rag3weaver-etait-rouge-sans-que-personne-le-voie.md) | ouvert — CI verte sur master (run 39144463679) ; le filet à décider par l'orchestration | filet absent | non (l'outillage) | oui (workflow, check_features) |
 | [Une Ref ne vieillit jamais : son cycle de vie est déclaré, mais rien ne le déclenche](2026-10-18-une-ref-ne-vieillit-jamais.md) | ouvert — le vieillissement par l'index de code attend le mot de Lucie (pont entre bases, §12.4) | réponse fausse en silence (une Ref reste `vue` quand sa cible change) | oui, dès qu'une fiche cite une cible qui bouge | oui (et seulement) |
 | [Trois témoins rougissent sous charge, avant comme après l'embarquement hors du verrou](2026-10-18-trois-temoins-rougissent-sous-charge.md) | ouvert — à attribuer ; une lecture qui verrait un lot à moitié, à établir | tests instables sous charge | peut-être | oui (`backend.rs`, `commande.rs`) |
 | [L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir](2026-10-18-l-arret-de-l-hote-attend-sans-borne-une-reaction-figee.md) | ouvert — l'attente de `ReactorHandle::stop` sans délai ; le figement lui-même est un interblocage du moteur (ticket au cœur) | blocage (seul `kill -9` en sort) | oui, dès qu'une réaction se fige | oui (`shutdown`, `stop_reactions`) |
@@ -126,10 +125,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (141), dans `closed/`
+### Fermés (142), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie](closed/2026-10-18-la-ci-de-rag3weaver-etait-rouge-sans-que-personne-le-voie.md) | corrigé : CI verte sur master (run 39144463679), `poste push` dit l'état de la CI, cinq tests gardés | filet absent | non (l'outillage) | oui (workflow, check_features, poste) |
 | [La reprise d'une réaction coupée rougissait sous charge](closed/2026-10-18-la-reprise-apres-arret-rougit-sous-charge.md) | fermé — une course du test (2 rouges sur 10 à 113e388fd, 1 sur 10 à son parent) ; le test attend ce qu'il garde | test instable | non | oui (le test, `backend.rs`) |
 | [Un BEGIN refusé laisse la connexion en transaction explicite, sans transaction : la requête suivante plante](closed/2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction.md) | corrigé — 18 octobre 2026, lot « BEGIN refusé » (le mode ne passe à MANUAL qu'avec sa transaction) ; témoins `refused_begin_test.cpp` et `FailedBegin.LeavesTheConnectionUsable` | plantage (SIGSEGV) sur la requête qui suit un BEGIN refusé | oui | oui |
 | [Une colonne ajoutée puis annulée reste au stockage, et l'ajout suivant la relit à sa place](closed/2026-10-18-une-colonne-ajoutee-puis-annulee-reste-au-stockage-et-l-ajout-suivant-la-relit.md) | corrigé — 18 octobre 2026, lot « annulation d'un ADD COLUMN » (le ROLLBACK retire la colonne du stockage, deux ALTER d'une même table ne se chevauchent plus) ; témoin `test/transaction/add_column_rollback_test.cpp` | réponse fausse silencieuse, permanente après le point de reprise | oui | oui |

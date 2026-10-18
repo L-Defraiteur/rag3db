@@ -130,6 +130,16 @@ mod tests {
         let mut echecs: Vec<String> = Vec::new();
         for gabarit in &gabarits {
             let nom = gabarit.file_name().unwrap_or_default().to_string_lossy().to_string();
+            // Sans la feature `code`, un gabarit qui déclare un `workspace` refuse de charger,
+            // et c'est voulu (« rebâtir avec elle ») : il n'est essayé qu'avec elle. Les autres
+            // le sont toujours (la CI les joue sans feature, 18 octobre 2026).
+            if !cfg!(feature = "code") {
+                let brut = std::fs::read(gabarit.join("backend.json")).unwrap_or_default();
+                let manifeste: Value = serde_json::from_slice(&brut).unwrap_or(Value::Null);
+                if manifeste.get("workspace").is_some() {
+                    continue;
+                }
+            }
             let ou = tmp.join(&nom);
             if let Err(e) = std::fs::create_dir_all(&ou) {
                 echecs.push(format!("{nom} : dossier temporaire impossible ({e})"));
