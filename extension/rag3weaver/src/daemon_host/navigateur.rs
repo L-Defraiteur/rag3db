@@ -334,6 +334,7 @@ function noeud(e) {
   if (Array.isArray(e)) { var f = document.createDocumentFragment(); e.forEach(function (x) { f.append(noeud(x)); }); return f; }
   if (typeof e.type === 'function') return noeud(e.type(e.props));
   var el = e.type === 'F' ? document.createDocumentFragment() : document.createElement(e.type);
+  if (e.props.className) el.className = e.props.className;
   var enfants = e.props.children;
   (Array.isArray(enfants) ? enfants : [enfants]).forEach(function (x) { el.append(noeud(x)); });
   return el;
