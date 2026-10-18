@@ -1400,7 +1400,11 @@ impl<'a> Agent<'a> {
     /// se recouvrir compterait deux fois ce qui n'a été payé qu'une, au plein
     /// tarif en plus.
     fn meter_call(&self, run_id: &str, iteration: usize, model: &str, usage: &Usage) {
-        let resource = self.resource.clone().unwrap_or_else(|| format!("llm.{model}"));
+        // Le slug porte le nom du modèle sans son éditeur : Vertex nomme
+        // `google/gemini-3.8-flash`, le compteur range `llm.gemini-3.8-flash`
+        // (le fournisseur est dans `provider`). Chaque modèle garde son slug.
+        let nom = model.rsplit('/').next().unwrap_or(model);
+        let resource = self.resource.clone().unwrap_or_else(|| format!("llm.{nom}"));
         let plein = usage.prompt_tokens.saturating_sub(usage.cached_prompt_tokens);
         let c = crate::meter::Consumption::new(resource, self.provider.clone())
             .by(run_id, self.name.clone())
@@ -2449,6 +2453,25 @@ mod tests {
         assert_eq!(turns[2].role, "assistant");
         assert!(run.usage.completion_tokens > 0);
         assert_well_formed(&turns);
+    }
+
+    /// **Un slug par modèle, sans l'éditeur** : Vertex nomme
+    /// `google/gemini-3.8-flash` ; le compteur range `llm.gemini-3.8-flash`, à
+    /// côté de `llm.gemini-3.5-flash`, chacun avec ses jetons.
+    #[test]
+    fn the_meter_slug_is_the_model_name_without_its_publisher() {
+        let meter = Arc::new(crate::meter::Meter::new());
+        let tools = toolbox(vec![]);
+        for (nom, texte) in [("google/gemini-3.5-flash", "court"), ("google/gemini-3.8-flash", "un peu plus long")] {
+            let llm = CallbackLlm::new(nom, 4096, move |t, o, s| MockLlm::new(texte).generate(t, o, s));
+            let agent = Agent::new(&llm, &tools).with_meter(meter.clone());
+            agent.run(&mut start(), &mut StringSink::default()).unwrap();
+        }
+        let totaux = meter.totals();
+        let sortie = |slug: &str| totaux.get(&(slug.to_string(), crate::meter::Unit::OutputTokens)).copied();
+        assert!(sortie("llm.gemini-3.5-flash").is_some_and(|n| n > 0), "{totaux:?}");
+        assert!(sortie("llm.gemini-3.8-flash").is_some_and(|n| n > 0), "{totaux:?}");
+        assert!(totaux.keys().all(|(slug, _)| !slug.contains('/')), "{totaux:?}");
     }
 
     // ── 2. Un outil, puis la réponse ────────────────────────────────

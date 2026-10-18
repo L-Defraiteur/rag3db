@@ -231,6 +231,13 @@ impl Origine {
     }
 }
 
+/// **Le modèle Vertex par défaut**, quand `VERTEX_MODEL` n'est pas posée.
+///
+/// `gemini-3.8-flash` depuis le 18 octobre 2026, à la demande de Lucie (avant :
+/// `gemini-3.5-flash`). Aucun prix ici : `meter.rs` compte par slug
+/// (`llm.gemini-3.8-flash`), la tarification s'applique à la lecture.
+pub const MODELE_VERTEX_PAR_DEFAUT: &str = "google/gemini-3.8-flash";
+
 /// **Le modèle agentique, en un seul endroit.**
 ///
 /// Rend `None` avec une raison **écrite** plutôt qu'un silence : cinq suites
@@ -274,7 +281,7 @@ pub fn modele_agentique_nomme(etiquette: &str) -> Option<(OpenAiLlm, String)> {
                 .map_err(|e| eprintln!("[{etiquette}] le jeton Vertex n'a pas pu être obtenu : {e}"))
                 .ok()?;
             let lieu = std::env::var("GOOGLE_CLOUD_LOCATION").unwrap_or_else(|_| "global".into());
-            let nom = std::env::var("VERTEX_MODEL").unwrap_or_else(|_| "google/gemini-3.5-flash".into());
+            let nom = std::env::var("VERTEX_MODEL").unwrap_or_else(|_| MODELE_VERTEX_PAR_DEFAUT.into());
             eprintln!("[{etiquette}] {nom} @ {lieu} · projet {projet}");
             Some((OpenAiLlm::vertex(&projet, &lieu, jeton, nom.clone()), nom))
         }

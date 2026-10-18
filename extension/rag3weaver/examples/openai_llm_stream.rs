@@ -112,7 +112,7 @@ fn build(target: &str) -> Result<(OpenAiLlm, bool), String> {
                  puis : export GEMINI_API_KEY=…"
                     .to_string()
             })?;
-            Ok((OpenAiLlm::ai_studio(key, env_or("GEMINI_MODEL", "gemini-3.5-flash")), true))
+            Ok((OpenAiLlm::ai_studio(key, env_or("GEMINI_MODEL", rag3weaver::regime::MODELE_VERTEX_PAR_DEFAUT.trim_start_matches("google/"))), true))
         }
         "vertex" => {
             let project = std::env::var("GOOGLE_CLOUD_PROJECT").map_err(|_| {
@@ -135,7 +135,7 @@ fn build(target: &str) -> Result<(OpenAiLlm, bool), String> {
                     &project,
                     &env_or("GOOGLE_CLOUD_LOCATION", "global"),
                     token,
-                    env_or("VERTEX_MODEL", "google/gemini-3.5-flash"),
+                    env_or("VERTEX_MODEL", rag3weaver::regime::MODELE_VERTEX_PAR_DEFAUT),
                 ),
                 true,
             ))

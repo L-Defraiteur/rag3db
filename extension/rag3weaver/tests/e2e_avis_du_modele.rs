@@ -145,7 +145,7 @@ fn le_modele_donne_son_avis_sur_nos_outils() {
     doc.push_str(&format!(
         "**Produit par `tests/e2e_avis_du_modele.rs`**, modèle `{}`, {} outils publiés, \
          {cibles} cibles énumérées, réponse en {duree:.1?}.\n\n",
-        std::env::var("VERTEX_MODEL").unwrap_or_else(|_| "google/gemini-3.5-flash".into()),
+        std::env::var("VERTEX_MODEL").unwrap_or_else(|_| rag3weaver::regime::MODELE_VERTEX_PAR_DEFAUT.into()),
         outils.len()
     ));
     doc.push_str(

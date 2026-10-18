@@ -161,6 +161,8 @@ fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
     let services = setup();
     let toolbox = GraphToolBox::new(&graph_tools, &nodes, services);
     let mut summary = Vec::new();
+    // Le compteur : chaque appel s'y range sous le slug de son modèle.
+    let meter = Arc::new(rag3weaver::meter::Meter::new());
     // `RAG3WEAVER_CLOUD_QUESTIONS=3` ou `1,3` : ne poser que celles-là —
     // pour remesurer une question sans repayer les autres.
     let only: Option<Vec<usize>> = std::env::var("RAG3WEAVER_CLOUD_QUESTIONS")
@@ -177,7 +179,8 @@ fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
             .with_tool_choice(ToolChoice::Auto);
         let agent = Agent::new(&llm, &toolbox)
             .with_gen_options(opts)
-            .with_limits(AgentLimits { max_iterations: 8, ..Default::default() });
+            .with_limits(AgentLimits { max_iterations: 8, ..Default::default() })
+            .with_meter(meter.clone());
         let mut turns = vec![Turn::system(SYSTEM), Turn::user(*question)];
         let mut sink = StringSink::default();
         let t = Instant::now();
@@ -201,6 +204,11 @@ fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
         let used: Vec<String> = turns.iter().flat_map(|t| t.tool_calls.iter().map(|c| c.name.clone())).collect();
         summary.push((qi + 1, format!("{:?}", run.stop), run.tool_calls, run.tool_errors, used, run.text.clone(), run.total_tokens()));
     }
+    // Un slug par modèle, sans l'éditeur : `google/gemini-3.8-flash` se
+    // compte sous `llm.gemini-3.8-flash`.
+    let attendu = format!("llm.{}", rag3weaver::llm::Llm::name(&llm).rsplit('/').next().unwrap_or_default());
+    eprintln!("[cloud-agent] compteur : {}", meter.describe());
+    assert!(meter.totals().keys().all(|(slug, _)| *slug == attendu), "slug attendu {attendu} : {}", meter.describe());
     eprintln!("\n══════ Bilan");
     for (q, stop, calls, errors, used, text, tokens) in &summary {
         eprintln!("  Q{q}: {stop}, {calls} appels ({errors} erreurs), {tokens} jetons, outils {used:?}\n      → {}", text.chars().take(500).collect::<String>().replace('\n', " "));
