@@ -1,6 +1,31 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 12 octobre 2026, 10 h 05.
+Tenu à jour sur place. Dernière mise à jour : 18 octobre 2026, 14 h 45.
+
+## 18 octobre — la reprise : l'hôte de luciepc sur la montre
+
+Sur l'autorisation de Lucie (donnée dans ma session ; le relais de l'orchestration n'a pas suffi
+au mode de permission, qui a refusé l'effacement puis la lecture par ssh) :
+
+- **Hôte de luciepc relancé à 14 h 32** : arrêt par l'unité (TERM, pid 706325, sorti en 3 s), puis
+  pid 908569. Binaire md5 `3ea1d5a7`, bâti sur master `6041f9194`, qui contient la porte unique de
+  la montre (`838ed1f0b`) et l'embarquement hors du verrou (`113e388fd`). Bâti dans mon worktree
+  `rag3db-hote-ab`, target `target-codeparsers-hote`, par une copie du `02-hote-bati7.sh` de G.
+  `/sante` rend `rag3db-build-0fc7dd10…`. `usages acquireLocksBeforeExecution` sur `code-lourd`
+  répond en 0,1 s (3 définitions), la montre est montée. Au `daemon_status`, aucune session MCP
+  ni aucun index en cours : personne à prévenir. Sauvegardes `*.avant-montre-18-oct` (binaire,
+  `rag3db-check-lib`), `check-lib.conf.avant-18-oct`, `rag3weaver-daemon.env.avant-18-oct`.
+- **Écart** : `HOTE_LIB_ID` oublié, le script a rebâti la lib depuis `6041f9194` (2 min, en cache)
+  et l'a publiée au magasin de luciepc ; `courant` y est passé de `3cca0ae1e…` à `0fc7dd10…`. Sans
+  dommage : c'est l'identifiant du dernier commit moteur, celui du paquet alpha.3 de G (qui ne lit
+  pas le magasin). Contrôles verts : 0 symbole manquant, `rag3db-check-lib` à 0, libvector du même
+  bâti, `RAG3DB_LIBRARY_DIR` de l'env sur la lib du RUNPATH.
+- **La petite base `code-rag3db.rag3db`** (3,5 Mo, du 11 oct.) du poste principal, ses
+  `.extensions` et `.readers` et le `backend.json` qui la visait sont effacés ; aucun processus ne
+  la tenait. `rag3db.json` reste.
+- **Reste** : le comportement de la montre sous `code::admission` n'est pas encore éprouvé (il
+  faudrait éditer `rag3db-lourd`, qui n'est pas à moi) ; le septième rejeu du témoin le fera, après
+  la mesure de F et `4aa8c95d5` sur master.
 
 ## Pour Lucie (12 octobre, 10 h 05) — luciepc : fait
 
