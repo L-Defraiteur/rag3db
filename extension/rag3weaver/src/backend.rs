@@ -3995,6 +3995,7 @@ mod tests {
 
     /// Le notebook copié avec un workspace et les outils de code attachés —
     /// deux manifestes du même moteur, la politique seule les distingue.
+    #[cfg(feature = "code")]
     fn fixture_code(
         source: &str,
         read_only: bool,
@@ -4036,6 +4037,7 @@ mod tests {
     }
 
     /// [`fixture_code`], plus un patch libre du manifeste.
+    #[cfg(feature = "code")]
     fn fixture_code_avec(
         source: &str,
         read_only: bool,
