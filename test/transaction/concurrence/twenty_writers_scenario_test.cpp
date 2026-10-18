@@ -338,7 +338,8 @@ public:
 private:
     void runDdl(rag3db::main::Connection& connection, const std::string& name,
         const std::string& query) {
-        Ddl ddl{name};
+        Ddl ddl;
+        ddl.name = name;
         ddl.start = now();
         auto result = connection.query(query);
         ddl.end = now();
@@ -351,7 +352,8 @@ private:
     }
 
     void failedMigration(rag3db::main::Connection& connection) {
-        Ddl ddl{"6 migration annulée"};
+        Ddl ddl;
+        ddl.name = "6 migration annulée";
         ddl.start = now();
         auto begin = connection.query("BEGIN TRANSACTION;");
         auto first = connection.query("ALTER TABLE Doc ADD a STRING;");
