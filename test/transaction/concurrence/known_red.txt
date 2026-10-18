@@ -155,3 +155,11 @@ IndexCreationThreads.LeavesAThreadToReaders index-creation-leaves-a-thread-to-re
 # garde sa transaction ouverte après son insertion fait attendre l'insertion d'un autre jusqu'à sa
 # validation. Pour le cœur C++.
 HnswWriters.DoNotWaitForEachOther writers-of-an-hnsw-table-do-not-wait-for-each-other
+#
+# Les témoins de la marche I2, la forme retenue du ticket
+# 2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un : sur une table HNSW, un SET de
+# vecteur et une suppression tiennent l'index en exclusif jusqu'à la validation. Joués rouges trois
+# fois sur trois le 18 octobre sur luciepc. VectorIndexI2.ReaderDuringAnOpenSetSeesTheGraphBefore,
+# vert, garde la lecture : il doit le rester sous I2. Pour le cœur C++.
+VectorIndexI2.SetsOnDifferentRowsDoNotWait vector-sets-on-different-rows-do-not-wait
+VectorIndexI2.OverlappingDeletesNeitherBlockNorConflict overlapping-deletes-do-not-block
