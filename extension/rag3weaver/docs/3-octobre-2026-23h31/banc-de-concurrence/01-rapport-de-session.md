@@ -1,6 +1,65 @@
 # Banc de concurrence — rapport de session
 
-Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 18 octobre 2026 (les 11 à 13 octobre).
+Session « banc » (`rag3db-76`, anciennement `rag3db-19`). Mis à jour le 18 octobre 2026 au soir.
+
+## Le 18 octobre : le scénario des vingt clients, et les défauts qu'il a levés
+
+Session « banc » (rag3db-10). La pause a été levée le 18. Le lourd a été déplacé sur luciepc, où
+le banc compile, joue et pousse depuis le même jour. Les chiffres de luciepc ont été pris sous la
+charge des compilations voisines ; les mesures fines, sous `poste mesure`. Chaque couleur ci-dessous
+a été jouée.
+
+### Ce qui a été poussé
+
+| commit | quoi | couleur |
+|---|---|---|
+| `62083d8be` | `twenty_writers_scenario_test.cpp` : 20 écrivains de `Doc`, 2 de `Note`, 4 lecteurs, six DDL (`ADD note`, `ADD rang DEFAULT 0`, `CREATE REL TABLE`, `CREATE_VECTOR_INDEX`, `CHECKPOINT`, une migration annulée suivie de `ADD b DEFAULT`) ; trois cas dans long.txt, dont l'arrêt brutal pendant le point de reprise | 4 sur 4 verts sur le correctif BEGIN du cœur ; E10 vert sur son correctif `87a362e30` |
+| `248bf03cc` | `FailedBegin.LeavesTheConnectionUsable` : un BEGIN refusé laissait la connexion en mode explicite sans transaction, et la requête suivante plantait (SIGSEGV) | rouge ; vert sur le correctif du cœur `8f4779bdc` |
+| `b5afd545c` | la première voie du point de reprise, mesurée : à 64 et 256 Mio de seuil, le tampon de 2 Gio est plein avant tout point de reprise | mesure |
+| `007b2c3e7`, `b886b0c37` | `FullBufferRollback` : sous un tampon plein, le ROLLBACK est refusé et la fermeture d'une connexion abandonne le processus (exception d'un destructeur) ; le CHECKPOINT refusé relève de la voie 2 du point de reprise | rouges, en known_red ; pour hotfixs, avec relecture du cœur |
+| `c4f5265f1` | la datation des attentes de plus d'une seconde par DDL ; `SCENARIO_DDL_THREADS` | mesure |
+| `e0ac77164` | `IndexCreationThreads.LeavesAThreadToReaders` : un bâti d'index prend tous les fils et affame les autres connexions ; le scénario passe de 2 à 8 fils ; la borne de Doc compte le convoi de l'index | rouge, en known_red ; le scénario vert à 8 fils |
+| `f85e94a4e` | le ticket E11 : sur une table HNSW, les écrivains passent un par un | ticket, pour le cœur |
+
+Rejoué sans commit : le P1 du 12 octobre, sur la copie scellée de F. Il donne 26 092 morceaux lus
+vides sur 128 732 avec la lib d'avant le correctif, et 0 après. Le tableau est dans le ticket
+fermé ; la copie peut partir.
+
+### Ce que le scénario a appris
+
+- **Les ADD COLUMN ne coûtent rien** (8 et 9 ms sur 50 000 lignes). Les 1,3 s vues d'abord
+  venaient d'un point de reprise au seuil tombé au même moment (profil `[commit-profile]`).
+- **Le point de reprise automatique tombe toutes les 3 s environ** sous 20 écrivains de vecteurs,
+  et retient tout le monde 1 à 2 s. Relever le seuil fait déborder le tampon : le seuil compte le
+  journal, pas la mémoire tenue (ticket du point de reprise, voie 1 mesurée).
+- **Coupé dès le départ, le point de reprise automatique fait déborder 2 Gio** en moins de deux
+  minutes. Le scénario le garde donc en marche jusqu'à la minute 6. `SCENARIO_NO_AUTO_CHECKPOINT=1`
+  rejoue le débordement.
+- **La retenue de `CREATE_VECTOR_INDEX`** (environ 9,7 s sur 2 fils) n'est pas un verrou : le bâti
+  parallèle prend tous les fils de travail. À 8 fils, elle dure encore 2,2 à 3,2 s ; à 16 fils, elle
+  disparaît.
+- **E11** : après la création de l'index, le p99 des écrivains de Doc est de 390 ms, contre 24 ms
+  pour Note au même moment.
+
+### Les fautes du banc, corrigées
+
+- **Un DDL plus long que la période** faisait imputer ses attentes au DDL suivant. Un DDL se juge
+  désormais sur les seules transactions qui ne chevauchent que lui.
+- **Deux témoins écrivaient leur ligne de plan avant leur résultat**, si bien que le contrôle de plan
+  ne pouvait jamais se déclencher. Corrigé avant leur push.
+- **Une première lecture envoyée à hotfixs**, « la retenue n'est que le point de reprise de la fin »,
+  était fausse. Elle a été corrigée dans le message suivant, puis datée.
+
+### Ce qui attend
+
+- **Rejouer les vingt clients** après les correctifs du ROLLBACK (hotfixs) et du COMMIT détruit
+  (cœur). Le worktree `rag3db-vingt` et `build-vingt` sont gardés sur luciepc.
+- **La mesure des lignes hors du graphe**, après le lot du CREATE concurrent de hotfixs : latence à
+  k = 10 pour N = 0, 1 000, 10 000 et 100 000, en dimension 768, sous `poste mesure`.
+- **Une fenêtre de push au cœur** : rien sous `test/transaction/concurrence/` avant son lot du
+  rollback.
+- **Un témoin dédié à E11** reste à écrire : deux écrivains d'une table HNSW, dont l'un tient une
+  transaction ouverte après son écriture.
 
 ## Du 11 au 13 octobre : les témoins du stockage, de l'index vectoriel et de la jointure par clé ; en pause depuis le 13
 
