@@ -89,6 +89,43 @@ des relations.
   d'abord : ce que retient chaque paquet après son COMMIT (files de l'index, état des relations
   différées, caches de lucivy, arènes de l'allocateur).
 
+## Mesuré : ce que garde l'allocateur après la fermeture (banc, 18 octobre 2026)
+
+Ce n'est pas l'hôte, mais le même moteur : le banc de concurrence sur luciepc, master `cbe99e380`
+à `a4505f0b3`, une sonde gtest non commitée qui lit `/proc/self/maps` et `/proc/self/status` avant
+et après chaque test. `TwentyWriters.DdlEveryFifteenSeconds` fait travailler 20 écrivains de
+vecteurs, 2 de `Note` et 4 lecteurs sur 8 fils de travail, avec un tampon de 2 Gio. La base est
+ensuite fermée et tous les fils partis, il ne reste que le principal.
+
+| moment | projections | VmSize | VmData | VmRSS |
+|---|---|---|---|---|
+| avant | 64 | 32 Mio | 0 | 9 Mio |
+| après, base fermée | 151 | 3 032 Mio | 2 065 Mio | **1 737 Mio** |
+| après `malloc_trim(0)` | 151 | 3 032 Mio | 2 065 Mio | **205 Mio** |
+
+Trois passes du même scénario dans un seul processus laissent VmData stable, à 2,2 Gio, et les
+projections autour de 149. Il n'y a donc pas de fuite d'une base à l'autre. Ce qu'on voit :
+- **La mémoire résidente retenue après la fermeture est de la mémoire libérée que l'allocateur de
+  glibc garde.** `malloc_trim(0)` en rend 1,5 Go sur 1,7.
+- **VmData et VmSize ne redescendent pas, même après `malloc_trim`** : ce sont les arènes de malloc
+  des fils, une par fil jusqu'à 8 × le nombre de cœurs, que glibc ne rend jamais. Elles comptent
+  dans `RLIMIT_DATA`. Un test du banc, `RolledBackCopyThenCheckpoint`, en a rougi. Son plafond
+  absolu est devenu relatif.
+
+C'est la piste « arènes de l'allocateur » de ce ticket, et elle explique au moins la part qui ne
+redescend pas après un gros travail fini.
+
+**Le correctif, confié à G (orchestration)** : `malloc_trim(0)` après un gros travail (un index, un
+rattrapage) et à l'endormissement de l'hôte, et un `MALLOC_ARENA_MAX` dans l'unité systemd.
+
+**Le protocole qui le jugera (banc)** :
+1. Un gros index de l'hôte (la recette du ticket du 11 octobre), puis l'hôte au repos.
+2. Relever `VmRSS`, `VmData` et le nombre de projections de l'hôte (`/proc/<pid>/status` et
+   `/proc/<pid>/maps`) à la fin de l'index, puis 30 s plus tard, au repos.
+3. Le même relevé avant et après le correctif, sur la même recette et le même poste.
+4. Attendu : au repos, `VmRSS` revient près de son niveau d'avant l'index, à quelques centaines
+   de Mo près, au lieu de garder les Go de l'index.
+
 ## Pour le fermer
 
 1. Écrire la sonde, puis savoir quelle part revient à chaque piste.
