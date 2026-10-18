@@ -23,8 +23,9 @@ catalogue (`attmissingval`) et ne réécrit aucune ligne. Cette page lit notre c
 - **Compression constante** (`ConstantCompression::analyze`) : un bloc dont toutes les valeurs
   sont égales s'écrit en **zéro page**, métadonnées seules, pour les booléens, entiers et
   flottants. Les chaînes n'ont pas cette forme : un défaut `STRING` écrit un dictionnaire par bloc.
-  C'est l'écart mesuré par le banc : 345 ms pour `INT64 DEFAULT 0` (évaluation et copie par
-  ligne, rien d'écrit), 1,08 s pour `STRING DEFAULT 'b-defaut'` (dictionnaires écrits).
+  Mesuré par le banc avec le profil (§2) : `ADD note` (chaîne) 7,9 ms, `ADD rang INT64 DEFAULT 0`
+  9,1 ms sur 50 000 lignes ; les 345 ms et 1,08 s de la première passe comprenaient un point de
+  reprise au seuil tombé au même moment.
 - **Journal** : un seul enregistrement `ALTER` ; le rejeu refait tout le remplissage
   (`WALReplayer::replayAlterTableEntryRecord` relie le défaut et rappelle `addColumn`) : même
   coût à la réouverture après un arrêt brutal.
@@ -46,10 +47,11 @@ catalogue (`attmissingval`) et ne réécrit aucune ligne. Cette page lit notre c
      de tous (A8), puis écrit ; c'est exactement « tout le monde attend 1,3 s », à côté du
      « CHECKPOINT fige 1,4 s » mesuré à part ;
   2. la validation sous le mutex public (fsync), de l'ordre de la milliseconde : trop court.
-  À faire au banc : rejouer `DdlEveryMinute` avec `RAG3DB_PROFILE_CHECKPOINT=1` ; la ligne
-  `[commit-profile]` de la validation de l'ADD dit si un point de reprise l'a suivie (« au
-  seuil ») et combien il a pris. Si oui, l'attente globale n'est pas celle de l'ADD mais celle du
-  point de reprise, et la forme paresseuse ne la supprime pas.
+  **Départagé par le banc le jour même** (`RAG3DB_PROFILE_CHECKPOINT=1`, 6ff805fcb) : aucune
+  ligne `[commit-profile]` dans les fenêtres des ADD ; 129 points de reprise « au seuil » sur la
+  passe, un toutes les 3 s ; l'attente de 1,3 s de la première passe était l'un d'eux. L'attente
+  globale n'est pas celle de l'ADD : ticket « un point de reprise fige toutes les transactions le
+  temps de s'écrire ».
 
 ## 3. La forme à la PostgreSQL 11, chez nous
 

@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (33)
+### Ouverts — moteur (34)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un point de reprise fige toutes les transactions le temps de s'écrire, lecteurs compris, et il s'écrit toutes les trois secondes sous charge](2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md) | ouvert — mesuré par le banc (129 au seuil sur une passe, 1,2 à 1,4 s chacun) ; à placer dans la file du cœur C++ | attente pour tout le monde, lecteurs compris | oui (régime ordinaire d'un hôte qui indexe) | oui |
 | [Le rollback d'un écrivain détruit un bloc en mémoire sous un lecteur : le lecteur se fige sur un verrou mort](2026-10-18-le-rollback-d-un-ecrivain-detruit-un-bloc-en-memoire-sous-un-lecteur.md) | à confirmer — pour le cœur C++ (lu sur la pile de l'hôte figé de luciepc, 18 octobre ; témoin ASAN à écrire) | blocage définitif du processus, ou lecture après libération | oui, en multi-écrivains | oui (l'hôte de luciepc s'est figé) |
 | [Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà détruite](2026-10-18-un-commit-dont-le-point-de-reprise-echoue-annule-une-transaction-deja-partie.md) | à confirmer — pour le cœur C++ (lu, pas joué ; témoin à écrire en debug ou ASAN) | lecture après libération : assertion en debug, indéfini en release ; rien de perdu | oui, si un point de reprise échoue juste après une validation | oui |
 | [La cible clean efface la grammaire Cypher, suivie par git, et le bâti suivant ne la régénère pas](2026-10-18-la-cible-clean-efface-la-grammaire-cypher-suivie-par-git.md) | ouvert — pour le cœur ; deux formes (ne plus déclarer en OUTPUT, ou régénérer) | blocage du bâti après un `clean` | non | non (sauf un bâti de la lib après `clean`) |
