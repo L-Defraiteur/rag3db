@@ -55,13 +55,15 @@ echo "bâti de l'extension vecteur : $(( ($(date +%s) - d) / 60 )) min $(( ($(da
 # 3. Ce qu'on rend — et l'identifiant de bâti (cœur C++, 11 octobre 2026) : le
 #    moteur et l'extension doivent porter le même, et il doit nommer le commit ;
 #    « nogit » est une marque fixe que deux commits différents partageraient.
+#    Le motif est la forme exacte d'un identifiant : la table des chaînes d'un binaire
+#    peut contenir d'autres « rag3db-build-… » collés à des fragments (vu le 18 octobre).
 bin=$CARGO_TARGET_DIR/paquet/rag3weaver-backend
 ext=$(find "$bdir" "$SRC/extension/vector/build" -name 'libvector.rag3db_extension' 2>/dev/null | head -1)
 cp "$bin" "$DIST/rag3weaver-backend"
 strip "$DIST/rag3weaver-backend"
 [ -n "$ext" ] && cp "$ext" "$DIST/libvector.rag3db_extension" && strip "$DIST/libvector.rag3db_extension"
-id_bin=$(strings "$DIST/rag3weaver-backend" | grep -m1 '^rag3db-build-' || true)
-id_ext=$([ -n "$ext" ] && strings "$DIST/libvector.rag3db_extension" | grep -m1 '^rag3db-build-' || true)
+id_bin=$(strings "$DIST/rag3weaver-backend" | grep -m1 -E '^rag3db-build-([0-9a-f]{40}(-dirty-[0-9a-f]{12})?|nogit)-[A-Za-z]+-[A-Za-z0-9-]+$' || true)
+id_ext=$([ -n "$ext" ] && strings "$DIST/libvector.rag3db_extension" | grep -m1 -E '^rag3db-build-([0-9a-f]{40}(-dirty-[0-9a-f]{12})?|nogit)-[A-Za-z]+-[A-Za-z0-9-]+$' || true)
 echo "identifiant de bâti : moteur $id_bin · extension $id_ext" | tee -a "$releve"
 if [ -n "$ext" ] && [ "$id_bin" != "$id_ext" ]; then echo "identifiants différents : l'extension serait refusée" | tee -a "$releve"; exit 1; fi
 case "$id_bin" in *-nogit-*) echo "identifiant sans commit (nogit) : le dépôt n'était pas lisible par git — archive refusée" | tee -a "$releve"; exit 1 ;; esac
