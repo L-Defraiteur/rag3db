@@ -70,11 +70,30 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL: '4'
         run: bash scripts/check_features.sh
 
-      # Les tests unitaires, sous le jeu du paquet, sur le moteur que check_features vient
-      # de bâtir. Sans feature, cinq tests qui supposent `code` rougissent : ils ne sont pas
-      # gardés par cfg (voir le ticket) ; on les joue comme les postes, avec leurs features.
+      # Les tests unitaires, sous le jeu du paquet, sur le moteur bâti par cargo. Sans feature,
+      # cinq tests qui supposent `code` rougissent : ils ne sont pas gardés par cfg (voir le
+      # ticket) ; on les joue comme les postes, avec leurs features.
+      - name: Bâti des tests unitaires
+        run: cargo test --lib --features rag3db-native,code,daemon,openai-llm --no-run
+
+      # L'extension vector, que les backends chargent : bâtie sur le bâti cmake du moteur que
+      # cargo vient de faire (comme le paquet), elle se pose dans extension/vector/build/,
+      # où le backend la cherche.
+      - name: L'extension vector, du même bâti
+        working-directory: .
+        run: |
+          bdir=$(ls -td extension/rag3weaver/target/debug/build/rag3db-*/out/build | head -1)
+          cmake -S . -B "$bdir" -DBUILD_EXTENSIONS=vector -DBUILD_SHELL=OFF -DBUILD_SINGLE_FILE_HEADER=OFF -DAUTO_UPDATE_GRAMMAR=OFF > "${{ runner.temp }}/cmake-vector.log" 2>&1 || { tail -30 "${{ runner.temp }}/cmake-vector.log"; exit 1; }
+          cmake --build "$bdir" --target rag3db_vector_extension -j 4 >> "${{ runner.temp }}/cmake-vector.log" 2>&1 || { tail -30 "${{ runner.temp }}/cmake-vector.log"; exit 1; }
+          ls -la extension/vector/build/libvector.rag3db_extension
+
+      # Deux tests exigent un moteur lié en partagé (la lib lue dans /proc/self/maps) : en
+      # statique, ils ne peuvent pas passer ici ; ils se jouent sur les postes.
       - name: cargo test --lib (rag3db-native,code,daemon,openai-llm)
-        run: cargo test --lib --features rag3db-native,code,daemon,openai-llm
+        run: >-
+          cargo test --lib --features rag3db-native,code,daemon,openai-llm --
+          --skip the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable
+          --skip the_test_helper_loads_the_extension_of_the_loaded_lib_not_of_the_tree
 
       - name: La sortie des jeux rouges
         if: failure()
