@@ -683,8 +683,18 @@ void OnDiskHNSWIndex::searchFromUnCheckpointed(Transaction* transaction,
         return;
     }
     result.reserve(numUnCheckpointedTuples + result.size());
+    // Une ligne du balayage déjà rendue par le graphe n'est pas rendue deux fois : le rattrapage
+    // d'un CREATE peut laisser au balayage des lignes du graphe (catchUpCommittedAfter s'arrête à
+    // la première ligne encore à valider, qui peut précéder des lignes déjà reliées).
+    std::unordered_set<common::offset_t> fromGraph;
+    for (const auto& node : result) {
+        fromGraph.insert(node.nodeOffset);
+    }
     // TODO(Guodong): Perhaps should switch to scan instead of lookup here.
     for (auto offset = hnswStorageInfo.numCheckpointedNodes; offset < numTotalRows; offset++) {
+        if (fromGraph.contains(offset)) {
+            continue;
+        }
         if (!searchState.isMasked(offset)) {
             // Le balayage des lignes non checkpointées ignorait le semi-masque :
             // une recherche filtrée rendait donc **toutes** les lignes insérées
@@ -844,11 +854,21 @@ void OnDiskHNSWIndex::catchUpCommittedAfter(main::ClientContext* context,
     auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
     const auto transactionID = transaction->getID();
     const auto columnID = indexInfo.columnIDs[0];
-    const auto numTotalRows = nodeTable.getNumTotalRows(&DUMMY_CHECKPOINT_TRANSACTION);
+    // Les lignes d'une transaction qui valide après celle-ci (un COPY forcé du même point de
+    // reprise, qui attend dans la file : ticket du CREATE concurrent, limite b) sont déjà dans la
+    // table, pas encore validées. Le rattrapage s'arrête à la première : elle et les suivantes
+    // restent hors du graphe, lues par la recherche comme toute ligne d'après le graphe
+    // (searchFromUnCheckpointed). Les y compter les aurait perdues.
+    const auto numPhysicalRows = nodeTable.getNumTotalRows(&DUMMY_CHECKPOINT_TRANSACTION);
+    auto numTotalRows = numPhysicalRows;
     std::vector<common::offset_t> inserted;
     std::vector<common::offset_t> deleted;
     std::vector<common::offset_t> updated;
-    for (common::offset_t offset = 0; offset < numTotalRows; ++offset) {
+    for (common::offset_t offset = 0; offset < numPhysicalRows; ++offset) {
+        if (!nodeTable.isInserted(transaction, offset)) {
+            numTotalRows = offset;
+            break;
+        }
         const auto atBuild = nodeTable.isVisible(buildStartTS, transactionID, offset);
         const auto now =
             nodeTable.isVisible(Transaction::LATEST_COMMITTED_TS, transactionID, offset);

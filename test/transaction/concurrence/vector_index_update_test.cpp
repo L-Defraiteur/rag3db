@@ -354,14 +354,17 @@ public:
         }
         std::set<int64_t> reached;
         int64_t dead = 0;
+        int64_t returned = 0;
         while (all->hasNext()) {
             const auto id = all->getNext()->getValue(0)->getValue<int64_t>();
+            returned++;
             if (alive.contains(id)) {
                 reached.insert(id);
             } else {
                 dead++;
             }
         }
+        const auto duplicates = returned - dead - static_cast<int64_t>(reached.size());
         // Une recherche courte : exhaustive, elle relit le vecteur courant de chaque ligne
         // atteinte et retrouve une ligne déplacée même restée à sa place d'avant dans le graphe.
         // Les lignes déplacées forment un nuage lointain et régulier : à sa vraie place, chacune
@@ -380,13 +383,16 @@ public:
                   << writes.deleted << " deleted, " << writes.updated.size() << " moved, "
                   << writes.movedThenDeleted << " moved then deleted during the build; "
                   << reached.size() << "/" << numLive << " reached, " << dead
-                  << " dead returned, " << movedFound << "/" << writes.updated.size()
+                  << " dead returned, " << duplicates << " returned twice, " << movedFound << "/" << writes.updated.size()
                   << " moved rows found at their new vector\n";
         if (static_cast<int64_t>(reached.size()) != numLive) {
             failed.insert("rows-committed-during-create-indexed");
         }
         if (dead != 0) {
             failed.insert("vector-search-no-dead-row");
+        }
+        if (duplicates != 0) {
+            failed.insert("vector-search-no-duplicate-row");
         }
         if (movedFound != static_cast<int64_t>(writes.updated.size())) {
             failed.insert("rows-moved-during-create-found");
@@ -1982,6 +1988,38 @@ TEST_F(VectorIndexUpdate, AWriterOpenAcrossTheCreateIsCaughtUp) {
     ASSERT_TRUE(committed->isSuccess()) << "[check: setup] " << committed->getErrorMessage();
     ASSERT_EQ(outcome, "ok") << "[check: create-waits-for-open-writer] " << outcome;
     const auto failed = checkAfterCreateUnderWrites(writes);
+    EXPECT_TRUE(failed.empty()) << checksOf(failed);
+}
+
+// Un COPY forcé (copy_journal_threshold=1) part pendant le bâti ; sa validation attend le départ
+// du CREATE, qui valide alors dans la file du point de reprise (A7) avant lui. Les lignes du COPY
+// sont déjà dans la table, pas encore validées : le rattrapage s'arrête à la première, et elles
+// restent hors du graphe, lues par la recherche comme toute ligne d'après lui. Les compter dans le
+// graphe sans les y mettre les perdait.
+TEST_F(VectorIndexUpdate, AForcedCopyCommittedRightAfterACreateIsReached) {
+    table = "C";
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+    mustRun("UNWIND range(0, 19999) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, i % 29, i % 31, "
+            "i % 37, i % 41, i % 43, i % 47, i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, "
+            "i / 1000.0]});");
+    rag3db::main::Connection creator(database.get());
+    rag3db::main::Connection copier(database.get());
+    ASSERT_TRUE(copier.query("CALL copy_journal_threshold=1;")->isSuccess());
+    auto creating = std::async(std::launch::async, [&] {
+        auto result =
+            creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+        return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    auto copied = copier.query("COPY C FROM (UNWIND range(200000, 200999) AS i RETURN i, [i % 17, "
+                               "i % 23, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, i / 1000.0]);");
+    // Le COPY de mille lignes finit bien avant le bâti de vingt mille : sa validation attend
+    // celle du CREATE. Les retours ne le prouvent pas (le CREATE validé dans la file attend à son
+    // tour le point de reprise du COPY) ; un vert ici dirait que le bâti a fini avant le COPY.
+    const auto outcome = creating.get();
+    ASSERT_TRUE(copied->isSuccess()) << "[check: setup] " << copied->getErrorMessage();
+    ASSERT_EQ(outcome, "ok") << "[check: setup] " << outcome;
+    const auto failed = checkAfterCreateUnderWrites(WritesDuringCreate{});
     EXPECT_TRUE(failed.empty()) << checksOf(failed);
 }
 

@@ -1140,6 +1140,11 @@ bool NodeTable::wasColumnUpdatedByCommitAfter(column_id_t columnID, transaction_
     return nodeGroup->wasColumnUpdatedByCommitAfter(columnID, startTS, offsetInGroup);
 }
 
+bool NodeTable::isInserted(const Transaction* transaction, offset_t offset) const {
+    auto [nodeGroupIdx, offsetInGroup] = StorageUtils::getNodeGroupIdxAndOffsetInChunk(offset);
+    return getNodeGroup(nodeGroupIdx)->isInserted(transaction, offsetInGroup);
+}
+
 bool NodeTable::isVisibleToLatestCommit(const Transaction* transaction, offset_t offset) const {
     return isVisible(Transaction::LATEST_COMMITTED_TS, transaction->getID(), offset);
 }

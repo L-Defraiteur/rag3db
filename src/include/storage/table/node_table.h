@@ -189,6 +189,9 @@ public:
     // bâti à un instantané, OnDiskHNSWIndex::catchUpCommittedAfter).
     bool wasColumnUpdatedByCommitAfter(common::column_id_t columnID, common::transaction_t startTS,
         common::offset_t offset) const;
+    // L'insertion de la ligne est vue de la transaction (validée à son instantané, ou à elle),
+    // supprimée ou non.
+    bool isInserted(const transaction::Transaction* transaction, common::offset_t offset) const;
     // La ligne vue depuis le dernier état validé : toute ligne validée, quel que soit
     // l'instantané de la transaction, plus les siennes. C'est ce que regarde le contrôle
     // d'unicité d'une clé primaire sous les verrous (marche A3′).
