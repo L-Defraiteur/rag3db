@@ -82,7 +82,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (33)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -92,7 +92,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Des scopes sans `DEFINED_IN` dans une réindexation à neuf : 3 825 sur 82 808 dans code-lourd](2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md) | ouvert — structurel, à regarder (scopes de même nom dans un fichier ?) | réponse incomplète (le scope ne se rattache pas à son fichier par l'arête) | oui, à chaque index | oui (ingestion du code) |
 | [Une Ref ne vieillit jamais : son cycle de vie est déclaré, mais rien ne le déclenche](2026-10-18-une-ref-ne-vieillit-jamais.md) | ouvert — le vieillissement par l'index de code attend le mot de Lucie (pont entre bases, §12.4) | réponse fausse en silence (une Ref reste `vue` quand sa cible change) | oui, dès qu'une fiche cite une cible qui bouge | oui (et seulement) |
 | [Trois témoins rougissent sous charge, avant comme après l'embarquement hors du verrou](2026-10-18-trois-temoins-rougissent-sous-charge.md) | ouvert — à attribuer ; une lecture qui verrait un lot à moitié, à établir | tests instables sous charge | peut-être | oui (`backend.rs`, `commande.rs`) |
-| [L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir](2026-10-18-l-arret-de-l-hote-attend-sans-borne-une-reaction-figee.md) | ouvert — l'attente de `ReactorHandle::stop` sans délai ; le figement lui-même est un interblocage du moteur (ticket au cœur) | blocage (seul `kill -9` en sort) | oui, dès qu'une réaction se fige | oui (`shutdown`, `stop_reactions`) |
 | [Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive](2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md) | ouvert — `remove_dir_all` sur une base, `rag3weaver_cache` jamais effacé ; 755 dossiers effacés le 15, ~4 000 entrées relevées le 18 puis effacées (141 Mio : pas la cause de l’échange) | confort — RAM puis échange | non (tests), sauf `rag3weaver_cache` | oui |
 | [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
@@ -124,10 +123,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (144), dans `closed/`
+### Fermés (145), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir](closed/2026-10-18-l-arret-de-l-hote-attend-sans-borne-une-reaction-figee.md) | corrigé : arrêt des réacteurs borné à 30 s, le réacteur figé nommé et son catalogue laissé au rejeu (lot de l'hôte par socket) | blocage | oui | oui |
 | [codeparsers parse le TSX avec la grammaire TypeScript : le JSX tombe en erreur, ses usages se perdent](closed/2026-10-18-codeparsers-parse-le-tsx-avec-la-grammaire-typescript.md) | corrigé : codeparsers `9d5de97` (la grammaire suit l'extension ; la collecte locale ne prend plus le nom d'une balise pour une définition) ; témoin `codeparsers/tests/jsx.rs` | réponse incomplète (aucun usage d'un composant en balise) | oui, tout dépôt avec des `.tsx`/`.jsx` | oui (index du code, `usages`) |
 | [La CI de rag3weaver était rouge depuis le 3 septembre sans que personne le voie](closed/2026-10-18-la-ci-de-rag3weaver-etait-rouge-sans-que-personne-le-voie.md) | corrigé : CI verte sur master (run 39144463679), `poste push` dit l'état de la CI, cinq tests gardés | filet absent | non (l'outillage) | oui (workflow, check_features, poste) |
 | [La reprise d'une réaction coupée rougissait sous charge](closed/2026-10-18-la-reprise-apres-arret-rougit-sous-charge.md) | fermé — une course du test (2 rouges sur 10 à 113e388fd, 1 sur 10 à son parent) ; le test attend ce qu'il garde | test instable | non | oui (le test, `backend.rs`) |

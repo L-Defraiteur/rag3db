@@ -1,9 +1,6 @@
 # L'arrêt de l'hôte attend sans borne une réaction figée : TERM ne le fait jamais sortir
 
-- **État** : ouvert (18 octobre 2026, codeparsers, à la demande de l'orchestration). Cause du
-  figement : un interblocage du moteur, ticket au cœur C++ (pile capturée par Lucie, dans
-  `~/.cache/rag3weaver-notes-c7/` sur luciepc). Ce ticket-ci ne porte que l'arrêt sans délai de
-  garde.
+- **État** : corrigé (18 octobre 2026, G, le lot de l'hôte par socket) — l'arrêt des réacteurs est borné (`ReactorHandle::stop_within`, `RAG3WEAVER_STOP_WAIT_S`, 30 s) ; au-delà, le réacteur figé est nommé et lâché, et le backend ne ferme pas le catalogue qu'il tient peut-être (« catalogue laissé ouvert, rejoué à la prochaine ouverture ») ; l'hôte sort. Témoin `reactor::tests::a_frozen_reaction_does_not_hold_a_bounded_stop`. L'unité porte `TimeoutStopSec=90` en filet. L'interblocage du moteur reste dans son propre ticket
 - **Gravité** : blocage. L'hôte ne sert plus et ne se remplace pas ; seul un `kill -9` le fait
   sortir, au prix du journal d'écriture des bases ouvertes.
 - **Atteignable en service** : oui, dès qu'une réaction de la montre se fige.
