@@ -14,5 +14,13 @@ image=rag3weaver-build-$cible
 poste=$HOME/.cache/rag3weaver-build/poste
 lourd=(); [ -x "$poste" ] && lourd=("$poste" lourd)
 "${lourd[@]}" "$moteur" build -t "$image" "$dossier"
-"${lourd[@]}" "$moteur" run --rm -v "$racine:/src" -v "$cache:/cache" "$image" /src/tools/build-images/$cible/build.sh
+# Un worktree n'a qu'un fichier .git qui pointe vers le dossier git commun : monté seul, le
+# conteneur ne lit pas le commit et l'identifiant de bâti tombe à « nogit » (vu le 18 octobre
+# 2026, archive refusée). Le dossier commun est donc monté aussi, en lecture, au même chemin.
+git_commun=()
+if [ -f "$racine/.git" ]; then
+  commun=$(git -C "$racine" rev-parse --path-format=absolute --git-common-dir)
+  git_commun=(-v "$commun:$commun:ro")
+fi
+"${lourd[@]}" "$moteur" run --rm -v "$racine:/src" "${git_commun[@]}" -v "$cache:/cache" "$image" /src/tools/build-images/$cible/build.sh
 cat "$racine/dist/$cible/bati.txt"
