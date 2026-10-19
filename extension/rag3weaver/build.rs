@@ -1,6 +1,7 @@
 fn main() {
     println!("cargo:rerun-if-env-changed=RAG3DB_SHARED");
     compiled_against();
+    builtin_templates();
     // Native extensions resolve core C++ symbols from the executable when rag3db
     // is statically linked. Link arguments of dependency build scripts are not
     // propagated to this crate's executables (see tools/rust_api/build.rs).
@@ -34,4 +35,34 @@ fn compiled_against() {
     if let Some(id) = id {
         println!("cargo:rustc-env=RAG3DB_COMPILED_AGAINST={id}");
     }
+}
+
+/// **Les gabarits livrés, embarqués dans le binaire** (`src/builtin_templates.rs`) :
+/// chaque fichier de `templates/`, par son chemin relatif à `templates/`. Un
+/// manifeste les désigne par `builtin:<chemin>` ; ils suivent donc chaque bâti.
+fn builtin_templates() {
+    let racine = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    println!("cargo:rerun-if-changed={}", racine.display());
+    fn parcourir(dossier: &std::path::Path, racine: &std::path::Path, out: &mut Vec<(String, std::path::PathBuf)>) {
+        let Ok(entrees) = std::fs::read_dir(dossier) else { return };
+        for e in entrees.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                parcourir(&p, racine, out);
+            } else if p.is_file() {
+                let rel = p.strip_prefix(racine).unwrap().components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/");
+                out.push((rel, p));
+            }
+        }
+    }
+    let mut fichiers = Vec::new();
+    parcourir(&racine, &racine, &mut fichiers);
+    fichiers.sort();
+    let mut code = String::from("pub static BUILTIN: &[(&str, &[u8])] = &[\n");
+    for (rel, p) in &fichiers {
+        code.push_str(&format!("    ({rel:?}, include_bytes!({:?})),\n", p.display().to_string()));
+    }
+    code.push_str("];\n");
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("builtin_templates.rs");
+    std::fs::write(out, code).unwrap();
 }

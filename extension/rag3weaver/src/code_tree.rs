@@ -127,6 +127,12 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
         outils.remove("run_command");
     }
     let manifest = roots.manifest(&name);
+    // Les gabarits identiques au livré se désignent par leur nom (`builtin:`) et
+    // suivent donc chaque bâti ; seuls ceux que `from` a modifiés restent des
+    // copies (`crate::builtin_templates::link`).
+    if let Some(dir) = manifest.parent() {
+        crate::builtin_templates::link(dir, &mut m);
+    }
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifest.display()))?;
 
     // La base : un instantané de celle de `from`, fichier par fichier.
@@ -330,6 +336,9 @@ mod tests {
         assert_eq!(m["workspace"]["root"], std::fs::canonicalize(&arbre).unwrap().display().to_string());
         assert_eq!(m["workspace"]["read_only"], true);
         assert!(m["tools"].get("edit_file").is_none() && m["tools"].get("run_command").is_none());
+        // Les gabarits identiques au livré sont désignés par leur nom : ils suivront le binaire.
+        assert_eq!(m["tools"]["read_file"]["graph"], "builtin:tools/read.mmd", "{}", m["tools"]);
+        assert_eq!(m["tools"]["list_files"]["graph"], "builtin:tools/list.mmd");
         assert_eq!(std::fs::read(&a.database).unwrap(), b"base");
         assert_eq!(std::fs::read(format!("{}.wal", a.database.display())).unwrap(), b"journal");
         assert_eq!(std::fs::read(format!("{}.fts/segment", a.database.display())).unwrap(), b"plein texte");

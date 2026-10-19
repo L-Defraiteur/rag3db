@@ -697,6 +697,9 @@ pub struct OutputPort {
 pub struct PreparedBackend {
     /// Le manifeste lu, pour le relire : un rechargement repart de lui.
     manifest_path: PathBuf,
+    /// Les copies locales de gabarits livrés qui en diffèrent
+    /// ([`crate::builtin_templates::drift`]).
+    template_drift: Vec<crate::builtin_templates::Drift>,
     /// Les types des nœuds scriptés du dossier `nodes/` (lot 2) : purs — ni
     /// fichiers, ni réseau, ni commande —, ils entrent dans toutes les
     /// politiques où entre un calcul.
@@ -802,11 +805,26 @@ impl PreparedBackend {
         &self.reactions
     }
 
+    /// Les copies locales de gabarits livrés que ce manifeste désigne et qui en
+    /// diffèrent.
+    pub fn template_drift(&self) -> &[crate::builtin_templates::Drift] {
+        &self.template_drift
+    }
+
     /// Pure preparation: read and validate descriptors before opening a database.
     pub fn load(path: &Path) -> Result<Self, String> {
-        let manifest: BackendManifest =
-            serde_json::from_slice(&lire_octets(path)?)
-                .map_err(|e| e.to_string())?;
+        let brut = lire_octets(path)?;
+        // **Les gabarits livrés désignés par leur nom** (`builtin:tools/list.mmd`,
+        // `crate::builtin_templates`) : résolus vers le gabarit extrait du binaire
+        // avant toute lecture. Sans `builtin:`, la lecture directe garde la ligne
+        // et la colonne de ses erreurs.
+        let manifest: BackendManifest = if brut.windows(crate::builtin_templates::PREFIX.len()).any(|w| w == crate::builtin_templates::PREFIX.as_bytes()) {
+            let mut v: serde_json::Value = serde_json::from_slice(&brut).map_err(|e| e.to_string())?;
+            crate::builtin_templates::resolve(&mut v)?;
+            serde_json::from_value(v).map_err(|e| e.to_string())?
+        } else {
+            serde_json::from_slice(&brut).map_err(|e| e.to_string())?
+        };
         if manifest.version != 1 {
             return Err("unsupported backend manifest version".into());
         }
@@ -1451,7 +1469,14 @@ impl PreparedBackend {
                 tool_entities.insert(name.clone(), vues);
             }
         }
+        // Les copies locales qui diffèrent du gabarit livré du même nom : dites à
+        // l'ouverture (l'état de l'hôte, la page), pas découvertes à une erreur
+        // d'argument plus loin.
+        let template_drift = serde_json::from_slice::<serde_json::Value>(&brut)
+            .map(|v| crate::builtin_templates::drift(&directory, &v))
+            .unwrap_or_default();
         Ok(Self {
+            template_drift,
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             scripted_types,
             components,

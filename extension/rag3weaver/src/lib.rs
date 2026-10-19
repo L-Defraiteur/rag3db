@@ -17,6 +17,7 @@ pub mod candle_embedder;
 /// Un arbre de relations en texte, la forme du graphe de dépendances.
 pub mod allocateur;
 pub mod arbre;
+pub mod builtin_templates;
 pub mod en_tete;
 pub mod fichiers_entite;
 pub mod fautes_de_test;

@@ -486,18 +486,25 @@ impl DaemonHost {
                 // l'état de ses index (le retard, la reconstruction, les
                 // montres, le lot en cours, les morceaux sans texte), lu par
                 // `index_states`, qui sait lui-même dire un catalogue occupé.
-                let (ouvert, index) = match h.backend.try_lock() {
+                // Et les copies locales de gabarits livrés qui en diffèrent
+                // (`crate::builtin_templates::drift`), que la page montre.
+                let (ouvert, index, derive) = match h.backend.try_lock() {
                     Ok(slot) => match slot.as_ref() {
-                        Some(b) => (json!(true), b.index_states().unwrap_or_else(|e| json!({ "error": e }))),
-                        None => (json!(false), Value::Null),
+                        Some(b) => (
+                            json!(true),
+                            b.index_states().unwrap_or_else(|e| json!({ "error": e })),
+                            json!(b.prepared().template_drift()),
+                        ),
+                        None => (json!(false), Value::Null, Value::Null),
                     },
-                    Err(_) => (json!(true), json!({ "busy": true, "why": "un appel tient ce backend" })),
+                    Err(_) => (json!(true), json!({ "busy": true, "why": "un appel tient ce backend" }), Value::Null),
                 };
                 json!({
                     "id": h.id,
                     "manifest": h.manifest,
                     "open": ouvert,
                     "index": index,
+                    "template_drift": derive,
                     "opened": h.opened.load(std::sync::atomic::Ordering::SeqCst),
                     "closed": h.closed.load(std::sync::atomic::Ordering::SeqCst),
                     "manifest_changed": self.manifest_changed(h),

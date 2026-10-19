@@ -363,6 +363,56 @@ fn ranger_une_lib(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// **Les gabarits livrés d'un manifeste** (`rag3weaver::builtin_templates`) :
+/// `templates drift <backend.json>` dit les copies locales qui diffèrent du
+/// gabarit livré du même nom ; `templates link <backend.json>` remplace par
+/// `builtin:<nom>` les chemins dont la copie est identique au livré (le
+/// manifeste d'avant gardé en `<backend.json>.avant-link`), et ne garde en copie
+/// que ce qui a été modifié.
+fn gabarits_livres(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend templates drift|link <backend.json>";
+    let [verbe, manifeste] = args else { return Err(USAGE.into()) };
+    let chemin = Path::new(manifeste);
+    let dossier = chemin.parent().ok_or("le manifeste n'a pas de dossier")?;
+    let brut = std::fs::read(chemin).map_err(|e| format!("{manifeste} : {e}"))?;
+    let mut v: serde_json::Value = serde_json::from_slice(&brut).map_err(|e| format!("{manifeste} : {e}"))?;
+    match verbe.as_str() {
+        "drift" => {
+            let copies = rag3weaver::builtin_templates::local_copies(dossier, &v);
+            for (valeur, _, nom, pareil) in &copies {
+                println!("{} {valeur} ({nom})", if *pareil { "identique" } else { "DIFFÈRE  " });
+            }
+            let n = copies.iter().filter(|c| !c.3).count();
+            println!("{n} copie(s) locale(s) différente(s) du livré sur {} gabarit(s) désigné(s) par un chemin", copies.len());
+        }
+        "link" => {
+            let (reliees, gardees) = rag3weaver::builtin_templates::link(dossier, &mut v);
+            for (de, vers) in &reliees {
+                println!("relié   {de} → {vers}");
+            }
+            for d in &gardees {
+                println!("gardé   {} (diffère de {})", d.path, d.builtin);
+            }
+            if !reliees.is_empty() {
+                let garde = format!("{manifeste}.avant-link");
+                std::fs::write(&garde, &brut).map_err(|e| format!("{garde} : {e}"))?;
+                let texte = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())? + "\n";
+                std::fs::write(chemin, texte).map_err(|e| format!("{manifeste} : {e}"))?;
+                // Le manifeste relié doit se charger : sinon, l'ancien revient.
+                if let Err(e) = rag3weaver::backend::PreparedBackend::load(chemin) {
+                    std::fs::write(chemin, &brut).map_err(|e| format!("{manifeste} : {e}"))?;
+                    return Err(format!("le manifeste relié ne se charge pas ({e}) : l'ancien est remis"));
+                }
+                println!("{} chemin(s) relié(s) ; l'ancien manifeste : {garde}", reliees.len());
+            } else {
+                println!("rien à relier");
+            }
+        }
+        _ => return Err(USAGE.into()),
+    }
+    Ok(())
+}
+
 /// **L'URL d'entrée de l'IDE** : celle de l'hôte qui tourne, avec son jeton
 /// local, que l'entrée pose en cookie (page 05 §2). À ouvrir dans le
 /// navigateur ; les fenêtres suivantes n'ont plus besoin du jeton.
@@ -690,6 +740,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("ide") {
         return entrer_dans_l_ide();
+    }
+    if tous.first().map(String::as_str) == Some("templates") {
+        return gabarits_livres(&tous[1..]);
     }
     if tous.first().map(String::as_str) == Some("code-tree") {
         return code_tree(&tous[1..]);
