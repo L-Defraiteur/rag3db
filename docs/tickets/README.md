@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (38)
+### Ouverts — moteur (39)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -45,6 +45,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Le COPY de relations ne lit pas le mot NULL dans une colonne entière](2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere.md) | ouvert — filet dans `copier_les_liens` (une colonne texte, sinon par lots) ; témoin du moteur à écrire | blocage, base à rouvrir | non, par le filet | oui (son filet) |
+| [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | ouvert — pour le cœur ; recette en Cypher brut, quatre formes du dehors | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
 | [L'annulation d'un COPY sous un tampon plein peut encore allouer](2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer.md) | ouvert, à confirmer (témoin à écrire) | blocage possible (la base n'est plus bloquée : erreur nommée, ou base à rouvrir) | en principe | oui (ses COPY) |
