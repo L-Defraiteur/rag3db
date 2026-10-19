@@ -34,7 +34,8 @@ tampon. Dans tous les moteurs, la seule forme qui tienne fait payer l'entretien 
 
 ## 3. La forme
 
-Il y a trois transactions, et quatre états de l'index :
+Il y a trois transactions, et quatre états de l'index, plus INCOMPLET après un arrêt brutal
+(§3 bis, point 7) :
 
 ```
             T_A (courte)      T_B (le bâti, à T1)          T_C (le rattrapage)
@@ -90,6 +91,39 @@ Les lots rendent le verrou entre eux, et les écrivains passent. L'ensemble est 
 n'y notent plus rien. Les notes d'une instruction commencée à l'état NOTÉ et finie après le
 passage sont reprises comme les autres. L'ensemble vidé, T_C passe l'index à PRÊT.
 
+## 3 bis. Les précisions de la relecture (cœur C++, 19 octobre)
+
+Elles priment sur le §3 là où elles le précisent.
+
+1. **Un écrivain décide à sa validation, pas à son instruction.** Les décalages des lignes
+   insérées ne sont connus qu'au versement du stockage local (étape 3 de `NodeTable::commit`) ou
+   à la finalisation d'un COPY. C'est donc là, sous le verrou d'index, que l'écrivain lit l'état
+   du holder et agit : NOTÉ → il note ; ENTRETENU ou PRÊT → il entretient. Le cas d'une
+   instruction commencée en NOTÉ et finie après le passage à ENTRETENU disparaît.
+2. **L'attente après T_A ne concerne que les transactions d'écriture** ouvertes avec
+   startTS < TS0. Un lecteur long n'écrit rien, et ne retarde pas le bâtisseur.
+3. **Le point de reprise forcé de T_B retient tout le monde le temps de s'écrire.** Comme toute
+   validation forcée, il arrête les BEGIN et attend les autres. C'est la retenue qui reste avec
+   (A), de l'ordre de l'écriture du graphe (quelques secondes ; la mesure est au témoin 2).
+   Deux sorties : écrire le graphe par le chemin journalisé quand il tient sous
+   `copy_journal_threshold`, et alors il n'y a pas de point de reprise forcé ; ou la voie 2 du
+   point de reprise, qui ne retient plus personne.
+4. **T_C avance au rythme des validations des écrivains**, tant qu'E11 tient : sous I1,
+   l'écrivain d'une table indexée garde le verrou d'index en exclusif jusqu'à sa validation, et
+   chaque lot de T_C attend la fin d'une transaction entière. Le rattrapage reste borné, mais
+   il est lent sous vingt écrivains. Il se mesure dans `TwentyWriters`, et ce coût tombe avec
+   I2.
+5. **Le COPY note aussi.** Sa finalisation (`NodeBatchInsert::finalize`, qui filtre la
+   visibilité depuis le correctif du 18 octobre) lit l'état du holder : elle note ses lignes en
+   NOTÉ, et les entretient en ENTRETENU.
+6. **Une suppression d'une ligne absente du graphe se note aussi en ENTRETENU.** T_C relit le
+   dernier état validé : une ligne absente n'est pas réinsérée depuis l'instantané du bâti.
+   C'est la règle du §3, à garder dans un témoin.
+7. **Un état à part entière : INCOMPLET.** À la réouverture après un arrêt brutal, un holder
+   ENTRETENU a perdu ses notes, qui étaient en mémoire. Il passe à INCOMPLET : refusé aux
+   recherches par un nom, dit au journal, et rebâti par le produit. Un holder NOTÉ est retiré,
+   comme le dit le §4.
+
 ## 4. Les pièces
 
 - **Le catalogue.** L'entrée d'index porte son état (NOTÉ, ENTRETENU, PRÊT), versionné comme
@@ -113,8 +147,8 @@ passage sont reprises comme les autres. L'ensemble vidé, T_C passe l'index à P
     reprise après réouverture, termine le rattrapage.
 - **La reprise après un arrêt brutal.** À la réouverture, un holder NOTÉ est retiré, et le journal
   le dit par un nom : son graphe n'existait pas. Un holder ENTRETENU garde son graphe, durable par
-  le point de reprise de T_B. Son ensemble de notes, en mémoire, est perdu : il est à rebâtir,
-  et dit comme tel au produit, qui le rebâtit (« un index ne se pense pas »). La garder
+  le point de reprise de T_B. Son ensemble de notes, en mémoire, est perdu : il passe à
+  INCOMPLET (§3 bis, point 7), et le produit le rebâtit (« un index ne se pense pas »). La garder
   persistante serait une autre étape, à mesurer avant.
 - **DROP pendant la construction.** Il est permis à tout état. Le bâtisseur le voit à son
   prochain lot et s'arrête.
@@ -131,7 +165,9 @@ Ils sont à écrire avant le code, et à jouer rouges sur master :
    `ChangesCommittedDuringACreateAreSeen` (sur disque et en mémoire), `AWriterOpenAcrossTheCreate…`,
    `AForcedCopyCommittedRightAfterACreateIsReached`.
 2. Un neuf : sous vingt écrivains, aucune transaction n'attend plus d'une borne écrite pendant le
-   CREATE. Il se joue à 8 fils (le réglage du scénario) et à 2.
+   CREATE. Il se joue à 8 fils (le réglage du scénario) et à 2. La retenue du point de reprise
+   forcé de T_B se mesure à part, pour qu'on voie ce que (A) laisse et ce que la voie 2 du point
+   de reprise enlèvera.
 3. Un neuf : une recherche pendant la construction est refusée par le nom de l'état.
 4. Des neufs pour l'arrêt brutal à chaque état (NOTÉ, ENTRETENU, pendant T_C), et pour le DROP à
    chaque état.
