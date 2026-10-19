@@ -173,11 +173,17 @@ impl Components {
     /// octets ne redonnent pas leur hash est refusé : le magasin a été
     /// touché.
     pub fn module_graph(&self, backend_dir: &Path, entry: &str, mode: Mode) -> Result<Graph, String> {
+        self.module_graph_avec(backend_dir, entry, mode, &crate::lecteur::Disque)
+    }
+
+    /// [`Self::module_graph`], par un lecteur : l'aperçu d'un composant
+    /// **proposé**, sur le recouvrement de sa proposition, sans l'appliquer.
+    pub fn module_graph_avec(&self, backend_dir: &Path, entry: &str, mode: Mode, lecteur: &dyn crate::lecteur::Lecteur) -> Result<Graph, String> {
         let c = self.components.get(entry).ok_or_else(|| format!("composant inconnu : {entry}"))?;
         // **React Refresh**, s'il est rangé : le rechargement à chaud garde
         // l'état des composants. Sans lui, la page se recharge entière.
         let facultatifs: &[&str] = if mode == Mode::Development { &[REFRESH] } else { &[] };
-        self.graph_from(backend_dir, Some(c.name.clone()), &["react", "react-dom/client"], facultatifs, mode, "l'aperçu demande")
+        self.graph_from(backend_dir, Some(c.name.clone()), &["react", "react-dom/client"], facultatifs, mode, "l'aperçu demande", lecteur)
     }
 
     /// **Le graphe des modules de quelques libs**, par leurs spécifiers
@@ -188,7 +194,7 @@ impl Components {
         if specifiers.is_empty() {
             return Err("un graphe de libs demande au moins un spécifier".into());
         }
-        self.graph_from(backend_dir, None, specifiers, &[], mode, "le graphe demande")
+        self.graph_from(backend_dir, None, specifiers, &[], mode, "le graphe demande", &crate::lecteur::Disque)
     }
 
     /// Le parcours commun : un composant de départ (ou aucun), les libs
@@ -201,6 +207,7 @@ impl Components {
         optional: &[&str],
         mode: Mode,
         pourquoi: &str,
+        lecteur: &dyn crate::lecteur::Lecteur,
     ) -> Result<Graph, String> {
         let mut modules = BTreeMap::new();
         let mut unresolved = Vec::new();
@@ -245,11 +252,11 @@ impl Components {
                         // importe la vue.
                         (Some(clic), false) => {
                             let chemin = format!("components/{clic}");
-                            let texte = std::fs::read_to_string(backend_dir.join(&chemin)).map_err(|e| format!("{chemin} : {e}"))?;
+                            let texte = lecteur.lire_texte(&backend_dir.join(&chemin)).map_err(|e| format!("{chemin} : {e}"))?;
                             compiler_clic(&texte, &chemin, &composant, &decl.effets, &self.ecran, mode)?
                         }
                         _ => {
-                            let source = std::fs::read_to_string(backend_dir.join("components").join(&decl.source))
+                            let source = lecteur.lire_texte(&backend_dir.join("components").join(&decl.source))
                                 .map_err(|e| format!("{} : {e}", decl.source))?;
                             let famille = if est_la_vue { format!("{composant}/vue") } else { composant.clone() };
                             compiler(&source, &famille, mode)?
@@ -263,7 +270,7 @@ impl Components {
                     }
                     let lib = &self.libs[package];
                     let hash = lib.files[file].clone();
-                    let octets = std::fs::read(super::store_path(backend_dir, &hash)).map_err(|e| format!("{package}/{file} : {e}"))?;
+                    let octets = lecteur.lire(&super::store_path(backend_dir, &hash)).map_err(|e| format!("{package}/{file} : {e}"))?;
                     if blake3::hash(&octets).to_hex().as_str() != hash {
                         return Err(format!("{package}/{file} : le magasin ne redonne pas son hash ({hash}) — il a été touché"));
                     }

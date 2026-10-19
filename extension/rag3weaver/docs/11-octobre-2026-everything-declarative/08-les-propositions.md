@@ -82,3 +82,22 @@ modules :
 - **P4** : le témoin de bout en bout dans le navigateur. Un composant est proposé, sa proposition
   paraît, le graphe changé est surligné, l'aperçu joue le module proposé, et Appliquer l'écrit et
   le commite.
+
+## État (19 octobre 2026)
+
+- **P1** sur master (`95b6bccf3`) : le lecteur, le recouvrement, `load_avec`, `valider_sur`, et la
+  garde du recouvrement (chaque déclaration empoisonnée sur le disque, proposée valide).
+- **P2** sur master (`7b544bfb7`) : `proposer`, `appliquer`, `rejeter`, `PropositionChanged` sur
+  `declarations`, le mode `approbation` par défaut et les outils de l'agent selon le mode.
+- **P3 et P4**, dans le même commit :
+  - les routes de l'IDE ;
+  - le détail d'une proposition, avec les graphes touchés avant et après, leur diff nœud à
+    nœud et arête à arête, et les composants touchés ;
+  - l'aperçu et `/ide/graphe` sur le recouvrement d'une proposition (`?proposition=<n>` ;
+    `module_graph_avec`, `graph_json_avec`, `components_on_disk_avec`) ;
+  - les vues de la page, et le dessin de graphe partagé avec le DAG vivant (`dessinerGraphe`) ;
+  - le témoin de bout en bout `une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide`.
+
+Reste le lot 4 de la page 09 de codeparsers : le worktree de tâche (une branche, une seconde
+instance du backend, la relecture et la fusion dans l'IDE). Il attend la décision de Lucie sur la
+base d'une tâche, que c7 a tranchée : copiée, jamais partagée en écriture.

@@ -71,6 +71,15 @@
   .graphe .noeud a:hover text.titre { fill: var(--accent); text-decoration: underline; }
   .graphe path { fill: none; stroke: var(--doux); stroke-opacity: .55; }
   .graphe path.devine { stroke-dasharray: 4 3; }
+  /* Les propositions (page 08) : le diff de graphe sur le dessin. */
+  .graphe .etape.ajoute rect { fill: var(--accent-doux); stroke: var(--accent); stroke-width: 2; }
+  .graphe .etape.change rect { fill: var(--marque); stroke: var(--alerte); }
+  .graphe .etape.retire { opacity: .5; }
+  .graphe .etape.retire rect { stroke-dasharray: 4 3; }
+  .graphe path.ajoutee { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2; }
+  .graphe path.retiree { stroke-dasharray: 4 3; stroke-opacity: .35; }
+  .proposition .refus { white-space: pre-wrap; font: 12px/1.45 var(--mono); color: var(--alerte); border: 1px solid var(--alerte); padding: 8px; }
+  .proposition .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
   /* Les réactions ((b)) : les runs récents, un par ligne. */
   table.runs { border-collapse: collapse; width: 100%; font-size: 13px; }
   table.runs th, table.runs td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--trait); }
@@ -224,6 +233,7 @@ async function accueil() {
         el("a", { href: `/ide/code/${b.id}/arbre/` }, nomCourt(b.manifest)),
         el("a", { href: `/ide/code/${b.id}/dag/` }, "graphes"),
         el("a", { href: `/ide/code/${b.id}/reactions/` }, "réactions"),
+        el("a", { href: `/ide/code/${b.id}/propositions/` }, "propositions"),
         el("span", { class: "meta" }, b.manifest),
         el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
         (b.template_drift ?? []).length ? el("span", { class: "meta" }, `${b.template_drift.length} gabarit(s) local(aux) différent(s) du livré`) : "",
@@ -624,6 +634,87 @@ async function graphe(id, nom) {
   );
 }
 
+// ─── Les propositions (page 08) ─────────────────────────────────────────────
+// Une proposition est un état de l'hôte : la page la montre et dit oui ou non.
+// La liste se relit à chaque changement (sujet `declarations` du flux) ; le
+// détail montre la différence textuelle de chaque fichier, le diff de chaque
+// graphe touché sur son dessin (ajoutés, changés, retirés), l'aperçu d'un
+// composant proposé sans l'appliquer, et Appliquer / Rejeter.
+
+const etatDe = (p) => p.etat === "appliquee" ? `appliquée (${p.commit ? p.commit.slice(0, 9) : "rien à écrire"})`
+  : p.etat === "rejetee" ? `rejetée : ${p.pourquoi}` : p.refus ? "refusée à la validation" : "proposée";
+
+async function propositions(id, reste) {
+  if (reste) return proposition(id, Number(reste));
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · propositions");
+  const r = await (await fetch(`/ide/propositions?${new URLSearchParams({ backend: id })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const liste = [...r.result].reverse();
+  vue.replaceChildren(
+    el("h1", {}, "Propositions"),
+    el("p", { class: "note" }, "Ce que l'agent (ou quelqu'un) propose de déclarer : validé sans être écrit, appliqué ou rejeté ici."),
+    liste.length
+      ? el("table", { class: "runs", id: "propositions" },
+          el("thead", {}, el("tr", {}, ...["", "raison", "auteur", "fichiers", "état"].map((t) => el("th", {}, t)))),
+          el("tbody", {}, liste.map((p) => el("tr", { "data-id": p.id, "data-etat": p.refus && p.etat === "proposee" ? "refusee" : p.etat },
+            el("td", {}, el("a", { href: `/ide/code/${id}/propositions/${p.id}` }, `#${p.id}`)),
+            el("td", {}, p.raison),
+            el("td", {}, p.auteur),
+            el("td", {}, p.fichiers.map((f) => f.path + (f.neuf ? " (neuf)" : "")).join(", ")),
+            el("td", {}, etatDe(p))))))
+      : el("p", { class: "note" }, "Aucune proposition pour ce backend."),
+  );
+}
+
+async function proposition(id, pid) {
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ",
+    el("a", { href: `/ide/code/${id}/propositions/` }, nomCourt(b.manifest)), ` · proposition #${pid}`);
+  const r = await (await fetch(`/ide/propositions?${new URLSearchParams({ backend: id, id: pid })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const { proposition: p, graphes, composants } = r.result;
+  const agir = async (route, corps) => {
+    const rep = await (await fetch(`/ide/propositions/${route}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, id: pid, ...corps }),
+    })).json();
+    if (!rep.ok) note.textContent = rep.error;
+    else montrer();
+  };
+  const note = el("span", { class: "note", id: "proposition-note" }, "");
+  const pourquoi = el("input", { id: "pourquoi", placeholder: "pourquoi rejeter", "aria-label": "pourquoi rejeter" });
+  const ouverte = p.etat === "proposee";
+  vue.replaceChildren(el("div", { class: "proposition", "data-etat": p.etat },
+    el("h1", {}, `Proposition #${p.id}`),
+    el("p", { class: "note" }, `${p.raison} — par ${p.auteur} — `, el("strong", { id: "proposition-etat" }, etatDe(p))),
+    p.refus ? el("pre", { class: "refus" }, p.refus) : "",
+    ouverte ? el("div", { class: "actions" },
+      p.refus ? "" : el("button", { id: "appliquer", onclick: () => agir("appliquer", {}) }, "Appliquer"),
+      pourquoi,
+      el("button", { id: "rejeter", onclick: () => agir("rejeter", { why: pourquoi.value || "rejetée dans l'IDE" }) }, "Rejeter"),
+      note) : "",
+    composants.length ? el("p", {}, "Aperçu, sans appliquer : ", ...composants.map((c) =>
+      el("a", { href: `/ide/apercu/${id}/${encodeURIComponent(c)}?proposition=${pid}`, target: "_blank", class: "apercu-propose" }, c))) : "",
+    ...graphes.map((g) => {
+      const d = g.diff;
+      const union = { nodes: [...(g.apres?.nodes ?? []), ...(g.avant?.nodes ?? []).filter((n) => d.retires.includes(n.name))],
+        edges: [...(g.apres?.edges ?? []), ...(g.avant?.edges ?? []).filter((e) => d.aretes_retirees.includes(`${e.from_node}.${e.from_port}→${e.to_node}.${e.to_port}`))] };
+      const cle = (e) => `${e.from_node}.${e.from_port}→${e.to_node}.${e.to_port}`;
+      const { dessin } = dessinerGraphe(union,
+        (n) => d.ajoutes.includes(n) ? "ajoute" : d.changes.includes(n) ? "change" : d.retires.includes(n) ? "retire" : "",
+        (e) => d.aretes_ajoutees.includes(cle(e)) ? "ajoutee" : d.aretes_retirees.includes(cle(e)) ? "retiree" : "");
+      const [genre, nom] = Object.entries(g.cible)[0];
+      return el("section", { class: "graphe-propose", "data-cible": `${genre}:${nom}` },
+        el("h2", {}, `graphe — ${genre} ${nom}`),
+        el("p", { class: "note" }, `${d.ajoutes.length} ajouté(s), ${d.changes.length} changé(s), ${d.retires.length} retiré(s) ; ${d.aretes_ajoutees.length} arête(s) ajoutée(s), ${d.aretes_retirees.length} retirée(s).`),
+        el("div", { class: "graphe" }, dessin));
+    }),
+    ...p.fichiers.map((f) => el("section", {},
+      el("h2", {}, f.path + (f.avant == null ? " (neuf)" : "")),
+      el("div", { class: "diff" }, difference(f.avant ?? "", f.apres)))),
+  ));
+}
+
 // ─── Les réactions ((b)) ───────────────────────────────────────────────────
 // Les réactions du backend (/ide/reactions), chacune menant à son DAG vivant ;
 // l'état des montres et le dernier fichier qu'elles ont vu ; les runs récents,
@@ -718,18 +809,12 @@ async function graphes(id) {
   );
 }
 
-async function dag(id, reste) {
-  const [genre, ...suite] = reste.split("/");
-  const nom = suite.join("/");
-  if (!genre || !nom) return graphes(id);
-  const b = backend(id);
-  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ",
-    el("a", { href: `/ide/code/${id}/dag/` }, nomCourt(b.manifest)), ` · ${genre} ${nom}`);
-  const r = await (await fetch(`/ide/graphe?${new URLSearchParams({ backend: id, [genre]: nom })}`)).json();
-  if (!r.ok) throw new Error(r.error);
-  const g = r.result;
-  // La couche d'un nœud : la plus longue chaîne d'arêtes qui y mène (bornée
-  // par le nombre de nœuds : un cycle ne fait pas tourner la page).
+// Le dessin d'un graphe (la forme de /ide/graphe), par couches de gauche à
+// droite : la couche d'un nœud est la plus longue chaîne d'arêtes qui y mène
+// (bornée par le nombre de nœuds : un cycle ne fait pas tourner la page).
+// `classeDe(nom)` et `classeArete(e)` ajoutent leurs classes (le diff d'une
+// proposition). Rend le <svg> et les <g> des nœuds par nom.
+function dessinerGraphe(g, classeDe = () => "", classeArete = () => "") {
   const couche = new Map(g.nodes.map((n) => [n.name, 0]));
   for (let i = 0; i < g.nodes.length; i++) for (const e of g.edges) {
     const c = (couche.get(e.from_node) ?? 0) + 1;
@@ -748,7 +833,7 @@ async function dag(id, reste) {
     if (!a || !z) continue;
     const x1 = a.x + LARGE, y1 = a.y + (H - 12) / 2, x2 = z.x, y2 = z.y + (H - 12) / 2;
     traits.append(
-      svg("path", { d: `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}` }),
+      svg("path", { d: `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`, class: classeArete(e) }),
       svg("text", { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 3, "text-anchor": "middle", class: "port" },
         e.from_port === e.to_port ? e.from_port : `${e.from_port}→${e.to_port}`));
   }
@@ -756,7 +841,7 @@ async function dag(id, reste) {
   const parNom = new Map();
   for (const n of g.nodes) {
     const p = pos.get(n.name);
-    const etape = svg("g", { class: "etape", "data-nom": n.name, transform: `translate(${p.x},${p.y})` },
+    const etape = svg("g", { class: `etape ${classeDe(n.name)}`.trim(), "data-nom": n.name, transform: `translate(${p.x},${p.y})` },
       svg("title", {}, `${n.node_type}${n.line ? " — ligne " + n.line : ""}\n${JSON.stringify(n.config)}`),
       svg("rect", { width: LARGE, height: H - 12, rx: 5 }),
       svg("text", { x: 8, y: 14, class: "titre" }, court(n.name, 28)),
@@ -765,13 +850,27 @@ async function dag(id, reste) {
     parNom.set(n.name, etape);
     noeuds.append(etape);
   }
+  return { dessin: svg("svg", { width: largeur, height: hauteur, viewBox: `0 0 ${largeur} ${hauteur}` }, traits, noeuds), parNom };
+}
+
+async function dag(id, reste) {
+  const [genre, ...suite] = reste.split("/");
+  const nom = suite.join("/");
+  if (!genre || !nom) return graphes(id);
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ",
+    el("a", { href: `/ide/code/${id}/dag/` }, nomCourt(b.manifest)), ` · ${genre} ${nom}`);
+  const r = await (await fetch(`/ide/graphe?${new URLSearchParams({ backend: id, [genre]: nom })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const g = r.result;
+  const { dessin, parNom } = dessinerGraphe(g);
   const etatDuRun = el("p", { class: "note", id: "dag-etat" }, "En attente d'un run de ce graphe…");
   vue.replaceChildren(
     el("h1", {}, `${nom}`),
     el("p", { class: "note" }, `${genre === "tool" ? "Outil" : genre === "reaction" ? "Réaction" : "Composant"}, ${g.nodes.length} nœud(s), ${g.edges.length} arête(s)${g.source ? " — " + g.source : ""}.`),
     etatDuRun,
     g.nodes.length
-      ? el("div", { class: "graphe" }, svg("svg", { width: largeur, height: hauteur, viewBox: `0 0 ${largeur} ${hauteur}` }, traits, noeuds))
+      ? el("div", { class: "graphe" }, dessin)
       : el("p", { class: "note" }, "Ce graphe est vide."),
   );
   dagVivant = { manifest: b.manifest, cible: JSON.stringify({ [genre]: nom }), run: null, noeuds: parNom, etat: etatDuRun };
@@ -806,7 +905,7 @@ function vivre(d) {
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -845,6 +944,7 @@ async function vueDe(r) {
     case "recherche": return await recherche(r.id);
     case "dag": return await dag(r.id, r.reste);
     case "reactions": return await reactions(r.id);
+    case "propositions": return await propositions(r.id, r.reste);
     default: return await accueil();
   }
 }
@@ -853,7 +953,7 @@ montrer();
 // Le flux : un fichier qui change se relit dans la vue qui le montre ; un run
 // allume le DAG montré.
 const lien = document.getElementById("lien");
-const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions");
+const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations");
 source.onopen = () => { lien.textContent = "flux : ouvert"; };
 source.onerror = () => { lien.textContent = "flux : coupé, reprise…"; };
 let relire = null;
@@ -861,6 +961,11 @@ source.onmessage = (e) => {
   const d = JSON.parse(e.data);
   // Les runs passent par `dataflow` (un appel d'outil par l'hôte), `reactions`
   // (une réaction) ou `catalog` (une ingestion) : le DAG vivant les lit tous.
+  // Une proposition a changé : la vue des propositions se relit.
+  if (d.sujet === "declarations") {
+    if (route().vue === "propositions" && d.backend === backend(route().id)?.manifest) montrer();
+    return;
+  }
   suivreLesReactions(d);
   if (d.sujet === "dataflow" || d.sujet === "reactions" || d.sujet === "catalog") return vivre(d);
   const ev = d.evenement ?? {};

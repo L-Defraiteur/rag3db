@@ -51,9 +51,13 @@
 // remonte sans frontière, la page se recharge entière.
 (function () {
   const [backend, nom] = location.pathname.replace(/^\/ide\/apercu\//, "").split("/").map(decodeURIComponent);
-  document.getElementById("titre").textContent = `aperçu · ${nom} · backend ${backend}`;
+  document.getElementById("titre").textContent = `aperçu · ${nom} · backend ${backend}${new URLSearchParams(location.search).get("proposition") ? " · proposition " + new URLSearchParams(location.search).get("proposition") + ", non appliquée" : ""}`;
   const R = globalThis.__rag3weaver;
-  const src = `/ide/apercu/${encodeURIComponent(backend)}/${encodeURIComponent(nom)}/modules.js`;
+  // Sur une proposition (`?proposition=<n>`) : le composant tel qu'elle le
+  // propose, joué sans l'appliquer (page 08).
+  const proposition = new URLSearchParams(location.search).get("proposition");
+  const surProposition = proposition ? `proposition=${encodeURIComponent(proposition)}` : "";
+  const src = `/ide/apercu/${encodeURIComponent(backend)}/${encodeURIComponent(nom)}/modules.js${surProposition ? "?" + surProposition : ""}`;
   // Ce que le témoin lit : combien de mises à jour appliquées, la dernière.
   const etat = window.__apercu = { mises_a_jour: 0, derniere: null, recharge: null, clics: [] };
   // Un rechargement entier laisse sa raison à la page suivante : elle la dit
@@ -103,7 +107,7 @@
   let etapes = new Map(); // nom → <g>
   async function dessinerClic() {
     const aside = document.getElementById("clic");
-    const r = await (await fetch(`/ide/graphe?${new URLSearchParams({ backend, component: nom })}`)).json();
+    const r = await (await fetch(`/ide/graphe?${new URLSearchParams({ backend, component: nom, ...(proposition ? { proposition } : {}) })}`)).json();
     const g = r.ok ? r.result : null;
     if (!g || !g.nodes.length) { aside.hidden = true; etapes = new Map(); return; }
     const couche = new Map(g.nodes.map((n) => [n.name, 0]));
@@ -195,7 +199,7 @@
     try {
       do {
         encore = false;
-        await charger(`${src}?v=${Date.now()}`);
+        await charger(`${src}${surProposition ? "&" : "?"}v=${Date.now()}`);
         const r = R.mettre_a_jour(R.frontieres);
         if (!r.changes.length) continue;
         if (r.recharger || !refresh) {

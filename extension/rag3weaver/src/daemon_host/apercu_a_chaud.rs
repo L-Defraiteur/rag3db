@@ -292,3 +292,99 @@ fn le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **Une proposition se voit, se joue, puis s'applique dans l'IDE** (page 08,
+/// de bout en bout). Le graphe de clic du compteur est proposé autrement
+/// (`n + 5`), comme un agent le proposerait par l'hôte : la proposition paraît
+/// dans la liste par le flux ; son détail montre le texte neuf et le nœud
+/// `plus` changé sur le dessin du graphe ; l'aperçu de la proposition compte
+/// par cinq **sans que rien ne soit écrit** ; Appliquer l'écrit et le commite
+/// avec sa raison. Une seconde proposition est rejetée avec son pourquoi.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide() {
+    const TEMOIN: &str = "une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Some(paquets) = paquets_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Banc { _d, composants, racine, id, fil } = monter(
+        &paquets,
+        &[
+            ("compteur.tsx", VUE_DU_COMPTEUR),
+            ("compteur.clic.mmd", GRAPHE_DU_COMPTEUR),
+            (
+                "compteur.component.json",
+                r#"{ "name": "Compteur", "source": "compteur.tsx", "clic": "compteur.clic.mmd", "libs": { "react": "19.2.0" } }"#,
+            ),
+        ],
+    );
+    // Le dossier du backend en dépôt : appliquer commite.
+    let dossier = composants.parent().unwrap().to_path_buf();
+    for args in [&["init", "-q"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"]] {
+        assert!(std::process::Command::new("git").arg("-C").arg(&dossier).args(args).status().unwrap().success());
+    }
+    let poster = |route: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}/ide/propositions{route}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/code/{id}/propositions/"),
+        "document.querySelector('#vue h1')?.textContent === 'Propositions' && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+
+    // L'agent propose ; la proposition paraît par le flux.
+    let neuf = GRAPHE_DU_COMPTEUR.replace("n + 1", "n + 5");
+    let p = poster("", json!({ "backend": id, "files": [{ "path": "components/compteur.clic.mmd", "content": neuf }], "reason": "compter par cinq" }));
+    assert_eq!(p["ok"], true, "{p}");
+    assert_eq!(p["result"]["refus"], Value::Null, "{p}");
+    let pid = p["result"]["id"].as_u64().unwrap();
+    n.attendre(&format!("document.querySelector('#propositions tr[data-id=\"{pid}\"]')"), "la proposition dans la liste, par le flux");
+
+    // Le détail : le texte neuf, et le nœud changé sur le dessin.
+    n.aller(
+        &format!("{racine}/ide/code/{id}/propositions/{pid}"),
+        "[...document.querySelectorAll('.diff .plus')].some(l => l.textContent.includes('n + 5')) \
+         && document.querySelector('section.graphe-propose[data-cible=\"component:Compteur\"] g.etape.change[data-nom=\"plus\"]')",
+    );
+
+    // L'aperçu de la proposition compte par cinq ; le disque n'a pas changé.
+    n.aller(
+        &format!("{racine}/ide/apercu/{id}/Compteur?proposition={pid}"),
+        "document.querySelector('#compteur')?.textContent === 'Compte : 0 (0)'",
+    );
+    n.evaluer("document.querySelector('#compteur').click()");
+    n.attendre("document.querySelector('#compteur')?.textContent === 'Compte : 5 (10)'", "le comportement proposé, joué sans être appliqué");
+    assert!(std::fs::read_to_string(composants.join("compteur.clic.mmd")).unwrap().contains("n + 1"), "l'aperçu a écrit");
+
+    // Appliquer : écrit, en service, commité avec sa raison.
+    n.aller(&format!("{racine}/ide/code/{id}/propositions/{pid}"), "document.querySelector('#appliquer')");
+    n.evaluer("document.querySelector('#appliquer').click()");
+    n.attendre("document.querySelector('#proposition-etat')?.textContent.startsWith('appliquée')", "la proposition appliquée");
+    assert!(std::fs::read_to_string(composants.join("compteur.clic.mmd")).unwrap().contains("n + 5"));
+    let log = std::process::Command::new("git").arg("-C").arg(&dossier).args(["log", "-1", "--format=%s"]).output().unwrap();
+    assert!(String::from_utf8_lossy(&log.stdout).contains("compter par cinq"), "{log:?}");
+
+    // Une seconde, rejetée avec son pourquoi.
+    let q = poster("", json!({ "backend": id, "files": [{ "path": "components/compteur.tsx", "content": VUE_DU_COMPTEUR.replace("Compte", "Total") }], "reason": "un autre libellé" }));
+    let qid = q["result"]["id"].as_u64().unwrap();
+    n.aller(&format!("{racine}/ide/code/{id}/propositions/{qid}"), "document.querySelector('#rejeter')");
+    n.evaluer("document.querySelector('#pourquoi').value = 'pas maintenant'; document.querySelector('#rejeter').click()");
+    n.attendre("document.querySelector('#proposition-etat')?.textContent === 'rejetée : pas maintenant'", "la proposition rejetée");
+    assert!(std::fs::read_to_string(composants.join("compteur.tsx")).unwrap().contains("Compte"), "un rejet n'écrit rien");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}

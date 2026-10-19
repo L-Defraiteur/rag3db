@@ -12,6 +12,8 @@
 //! | `GET /ide`, `GET /ide/…` | la page (une seule, qui lit son URL) |
 //! | `GET /ide/graphe?backend=<id>&tool=…` | le graphe d'un outil (ou `reaction=`, `component=`), en JSON |
 //! | `GET /ide/reactions?backend=<id>` | les réactions du backend, ses runs, l'état de ses montres |
+//! | `GET /ide/propositions?backend=<id>[&id=<n>]` | les propositions, ou le détail d'une (diffs, graphes avant/après) |
+//! | `POST /ide/propositions[/appliquer\|/rejeter]` | proposer `{backend, files, reason}`, appliquer `{backend, id}`, rejeter `{backend, id, why}` |
 //! | `GET /ide/etat` | l'état de l'hôte (`/etat`) |
 //! | `POST /ide/call` | `{manifest, name, arguments}`, comme `/call`, dans la session de l'IDE |
 //! | `POST /ide/describe` | `{manifest}`, comme `/describe` |
@@ -205,7 +207,7 @@ const APERCU: &str = include_str!("ide/apercu.html");
 
 /// `/ide/apercu/<backend>/<Composant>` : la page ; `…/modules.js` : ses
 /// modules, enveloppés, puis l'entrée et le démarrage pour le registre.
-fn apercu(host: &DaemonHost, path: &str) -> (u16, &'static str, String) {
+fn apercu(host: &DaemonHost, path: &str, proposition: Option<u64>) -> (u16, &'static str, String) {
     let reste = path.trim_start_matches("/ide/apercu/");
     let morceaux: Vec<&str> = reste.split('/').collect();
     match morceaux.as_slice() {
@@ -227,9 +229,17 @@ fn apercu(host: &DaemonHost, path: &str) -> (u16, &'static str, String) {
         // depuis l'ouverture du backend se voit au graphe suivant.
         [id, nom, "modules.js"] => {
             let nom = decoder(nom);
+            // Sur une proposition (`?proposition=<n>`) : le composant tel qu'elle
+            // le propose, lu sur son recouvrement, sans l'appliquer.
             let rendu = host.with_backend_id(id, |b| {
                 let prepared = b.prepared();
-                let graphe = prepared.components_on_disk()?.module_graph(&prepared.directory, &nom, crate::components::Mode::Development)?;
+                let graphe = match proposition {
+                    None => prepared.components_on_disk()?.module_graph(&prepared.directory, &nom, crate::components::Mode::Development)?,
+                    Some(pid) => {
+                        let r = b.recouvrement_de_proposition(pid)?;
+                        prepared.components_on_disk_avec(&r)?.module_graph_avec(&prepared.directory, &nom, crate::components::Mode::Development, &r)?
+                    }
+                };
                 Ok::<_, String>(modules_js(&graphe))
             });
             match rendu.and_then(|r| r) {
@@ -426,7 +436,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let _ = request.respond(reponse(statut, if statut == 200 { "text/javascript; charset=utf-8" } else { "text/plain; charset=utf-8" }, corps));
         }
         ("GET", p) if p.starts_with("/ide/apercu/") => {
-            let (statut, type_, corps) = apercu(host, p);
+            let (statut, type_, corps) = apercu(host, p, param("proposition").and_then(|v| v.parse().ok()));
             let _ = request.respond(reponse(statut, type_, corps));
         }
         // Les réactions d'un backend et l'état de ses montres ((b)) : ce que la
@@ -448,10 +458,70 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let (statut, v) = match (param("backend"), crate::backend::GraphTarget::from_args(&cible)) {
                 (None, _) => (400, json!({ "ok": false, "error": "graphe : il faut backend=<id>" })),
                 (_, Err(e)) => (400, json!({ "ok": false, "error": e })),
-                (Some(id), Ok(cible)) => match host.with_backend_id(&id, |b| b.prepared().graph_json(&cible)).and_then(|r| r) {
+                (Some(id), Ok(cible)) => match host
+                    .with_backend_id(&id, |b| match param("proposition").and_then(|v| v.parse::<u64>().ok()) {
+                        None => b.prepared().graph_json(&cible),
+                        // Le graphe tel qu'une proposition le propose : le chargement
+                        // sur son recouvrement.
+                        Some(pid) => {
+                            let r = b.recouvrement_de_proposition(pid)?;
+                            let apres = crate::backend::PreparedBackend::load_avec(b.prepared().manifest_path(), &r)?;
+                            apres.graph_json_avec(&cible, &r)
+                        }
+                    })
+                    .and_then(|r| r)
+                {
                     Ok(g) => (200, json!({ "ok": true, "result": g })),
                     Err(e) => (404, json!({ "ok": false, "error": e })),
                 },
+            };
+            let _ = request.respond(json_(statut, &v));
+        }
+        // Les propositions (page 08, P3) : la liste, le détail (diffs et
+        // graphes avant/après), proposer, appliquer, rejeter. La page de
+        // l'IDE est une personne : elle applique en mode approbation.
+        ("GET", "/ide/propositions") => {
+            let (statut, v) = match param("backend") {
+                None => (400, json!({ "ok": false, "error": "propositions : il faut backend=<id>" })),
+                Some(id) => {
+                    let r = host.with_backend_id(&id, |b| match param("id").and_then(|v| v.parse::<u64>().ok()) {
+                        None => Ok(json!(b.propositions().iter().map(crate::propositions::resume).collect::<Vec<_>>())),
+                        Some(pid) => b.detail_de_proposition(pid),
+                    });
+                    match r.and_then(|r| r) {
+                        Ok(v) => (200, json!({ "ok": true, "result": v })),
+                        Err(e) => (404, json!({ "ok": false, "error": e })),
+                    }
+                }
+            };
+            let _ = request.respond(json_(statut, &v));
+        }
+        ("POST", "/ide/propositions" | "/ide/propositions/appliquer" | "/ide/propositions/rejeter") => {
+            let mut corps = Vec::new();
+            let (statut, v) = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => (400, json!({ "ok": false, "error": format!("corps illisible : {e}") })),
+                Ok(c) => {
+                    let id = c["backend"].as_str().unwrap_or_default().to_string();
+                    let pid = c["id"].as_u64().unwrap_or(0);
+                    let r = host.with_backend_id(&id, |b| match path.as_str() {
+                        "/ide/propositions" => {
+                            let files: Vec<(String, String)> = c["files"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .map(|f| (f["path"].as_str().unwrap_or_default().to_string(), f["content"].as_str().unwrap_or_default().to_string()))
+                                .collect();
+                            b.proposer(&files, c["reason"].as_str().unwrap_or_default(), "ide")
+                        }
+                        "/ide/propositions/appliquer" => b.appliquer(pid),
+                        _ => b.rejeter(pid, c["why"].as_str().unwrap_or_default()),
+                    });
+                    match r.and_then(|r| r) {
+                        Ok(p) => (200, json!({ "ok": true, "result": crate::propositions::resume(&p) })),
+                        // Un refus est une réponse (200 ok:false), pas une ressource en échec.
+                        Err(e) => (200, json!({ "ok": false, "error": e })),
+                    }
+                }
             };
             let _ = request.respond(json_(statut, &v));
         }
@@ -636,13 +706,13 @@ mod tests {
     #[test]
     fn the_preview_routes_answer() {
         let host = DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()));
-        let (s, t, c) = apercu(&host, "/ide/apercu/abc/Fiche");
+        let (s, t, c) = apercu(&host, "/ide/apercu/abc/Fiche", None);
         assert_eq!(s, 200);
         assert!(t.starts_with("text/html") && c.contains("/ide/registre.js") && c.contains("modules.js"), "{c}");
-        let (s, _, c) = apercu(&host, "/ide/apercu/abc/Fiche/modules.js");
+        let (s, _, c) = apercu(&host, "/ide/apercu/abc/Fiche/modules.js", None);
         assert_eq!(s, 422, "{c}");
         assert!(c.contains("abc"), "{c}");
-        assert_eq!(apercu(&host, "/ide/apercu/abc").0, 404);
+        assert_eq!(apercu(&host, "/ide/apercu/abc", None).0, 404);
     }
 
     /// **Les modules de l'éditeur se rendent**, depuis le magasin embarqué : le

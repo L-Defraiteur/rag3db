@@ -1552,7 +1552,12 @@ impl PreparedBackend {
     /// contre le même écran qu'à l'ouverture : l'aperçu de l'IDE montre le
     /// disque, une déclaration éditée depuis l'ouverture comprise.
     pub fn components_on_disk(&self) -> Result<crate::components::Components, String> {
-        crate::components::Components::load_in(&self.directory, &ecran_du_backend(&self.manifest, &self.manifest_path))
+        self.components_on_disk_avec(&crate::lecteur::Disque)
+    }
+
+    /// [`Self::components_on_disk`], par un lecteur (une proposition).
+    pub fn components_on_disk_avec(&self, lecteur: &dyn crate::lecteur::Lecteur) -> Result<crate::components::Components, String> {
+        crate::components::Components::load_in_avec(&self.directory, &ecran_du_backend(&self.manifest, &self.manifest_path), lecteur)
             .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))
     }
 
@@ -2123,8 +2128,14 @@ impl PreparedBackend {
     /// qui allume un nœud dans un dessin vivant. Un composant donne son graphe
     /// de clic, relu sur le disque ; sans graphe de clic, un graphe vide.
     pub fn graph_json(&self, target: &GraphTarget) -> Result<Value, String> {
+        self.graph_json_avec(target, &crate::lecteur::Disque)
+    }
+
+    /// [`Self::graph_json`], par un lecteur : le graphe d'une proposition se
+    /// lit sur son recouvrement (le diff de graphe de l'IDE).
+    pub fn graph_json_avec(&self, target: &GraphTarget, lecteur: &dyn crate::lecteur::Lecteur) -> Result<Value, String> {
         let dessin = |kind: &str, name: &str, source: &Path, def: &crate::dataflow::checkpoint::GraphDefinition, schemas: bool| {
-            let texte = std::fs::read_to_string(self.path(source)).unwrap_or_default();
+            let texte = lecteur.lire_texte(&self.path(source)).unwrap_or_default();
             let lignes = crate::dataflow::clic::lignes_des_noeuds(&texte);
             let nodes: Vec<Value> = def
                 .nodes
@@ -2154,7 +2165,7 @@ impl PreparedBackend {
                 Ok(v)
             }
             GraphTarget::Component(name) => {
-                let composants = self.components_on_disk()?;
+                let composants = self.components_on_disk_avec(lecteur)?;
                 let decl = composants
                     .components
                     .get(name)
@@ -2163,7 +2174,7 @@ impl PreparedBackend {
                     return Ok(json!({"kind":"component","name":name,"source":Value::Null,"nodes":[],"edges":[]}));
                 };
                 let source = Path::new("components").join(clic);
-                let texte = std::fs::read_to_string(self.path(&source)).map_err(|e| format!("{} : {e}", source.display()))?;
+                let texte = lecteur.lire_texte(&self.path(&source)).map_err(|e| format!("{} : {e}", source.display()))?;
                 let def = crate::dataflow::mermaid::parse_mermaid(&texte).map_err(|e| format!("{} : {e}", source.display()))?;
                 // Les genres d'un graphe de clic ne sont pas des nœuds de flux :
                 // pas de schéma de registre.

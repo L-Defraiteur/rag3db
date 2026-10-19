@@ -193,3 +193,116 @@ pub fn resume(p: &Proposition) -> Value {
     }
     v
 }
+
+/// **Le diff de deux graphes**, nœud à nœud et arête à arête (la forme de
+/// `/ide/graphe`) : les nœuds ajoutés, retirés, changés (type ou config), et
+/// les arêtes ajoutées ou retirées. Un graphe absent d'un côté : tout est
+/// ajouté, ou tout retiré.
+pub fn diff_de_graphes(avant: Option<&Value>, apres: Option<&Value>) -> Value {
+    let noeuds = |g: Option<&Value>| -> std::collections::BTreeMap<String, Value> {
+        g.and_then(|g| g["nodes"].as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|n| Some((n["name"].as_str()?.to_string(), json!({"node_type": n["node_type"], "config": n["config"]}))))
+            .collect()
+    };
+    let aretes = |g: Option<&Value>| -> std::collections::BTreeSet<String> {
+        g.and_then(|g| g["edges"].as_array())
+            .into_iter()
+            .flatten()
+            .map(|e| format!("{}.{}→{}.{}", e["from_node"].as_str().unwrap_or(""), e["from_port"].as_str().unwrap_or(""), e["to_node"].as_str().unwrap_or(""), e["to_port"].as_str().unwrap_or("")))
+            .collect()
+    };
+    let (na, nb) = (noeuds(avant), noeuds(apres));
+    let (ea, eb) = (aretes(avant), aretes(apres));
+    json!({
+        "ajoutes": nb.keys().filter(|k| !na.contains_key(*k)).collect::<Vec<_>>(),
+        "retires": na.keys().filter(|k| !nb.contains_key(*k)).collect::<Vec<_>>(),
+        "changes": nb.iter().filter(|(k, v)| na.get(*k).is_some_and(|a| a != *v)).map(|(k, _)| k).collect::<Vec<_>>(),
+        "aretes_ajoutees": eb.difference(&ea).collect::<Vec<_>>(),
+        "aretes_retirees": ea.difference(&eb).collect::<Vec<_>>(),
+    })
+}
+
+impl Backend {
+    /// **Le détail d'une proposition**, pour la vue de l'IDE : la
+    /// proposition entière (contenus d'avant et d'après), les graphes qu'elle
+    /// touche — un outil ou une réaction dont le `.mmd` est proposé, un
+    /// composant dont la déclaration, la vue ou le graphe de clic l'est —,
+    /// chacun avant (le disque), après (le recouvrement) et leur diff ; et
+    /// les composants touchés, que l'aperçu peut jouer sur la proposition.
+    pub fn detail_de_proposition(&self, id: u64) -> Result<Value, String> {
+        use crate::backend::GraphTarget;
+        let p = self.proposition(id).ok_or_else(|| format!("pas de proposition {id}"))?;
+        let avant = self.prepared();
+        let fichiers: Vec<(String, String)> = p.fichiers.iter().map(|f| (f.path.clone(), f.apres.clone())).collect();
+        let recouvrement = crate::lecteur::Recouvrement::sur(&avant.directory, &fichiers);
+        let proposes: std::collections::BTreeSet<std::path::PathBuf> =
+            fichiers.iter().map(|(chemin, _)| crate::lecteur::normaliser(&avant.directory.join(chemin))).collect();
+        let propose = |chemin: &std::path::Path| proposes.contains(&crate::lecteur::normaliser(&avant.directory.join(chemin)));
+        // L'après n'existe que si la validation l'a accepté.
+        let apres = match &p.refus {
+            None => crate::backend::PreparedBackend::load_avec(avant.manifest_path(), &recouvrement).ok(),
+            Some(_) => None,
+        };
+        let mut cibles: Vec<GraphTarget> = Vec::new();
+        for m in [Some(&avant.manifest), apres.as_ref().map(|a| &a.manifest)].into_iter().flatten() {
+            for (nom, t) in &m.tools {
+                if propose(&t.graph) && !cibles.contains(&GraphTarget::Tool(nom.clone())) {
+                    cibles.push(GraphTarget::Tool(nom.clone()));
+                }
+            }
+            for (nom, r) in &m.reactions {
+                if propose(&r.graph) && !cibles.contains(&GraphTarget::Reaction(nom.clone())) {
+                    cibles.push(GraphTarget::Reaction(nom.clone()));
+                }
+            }
+        }
+        // Les composants : par leur déclaration, leur vue ou leur graphe de clic.
+        let mut composants: Vec<String> = Vec::new();
+        let touche = |c: &crate::components::ComponentDecl| {
+            propose(&std::path::Path::new("components").join(&c.source))
+                || c.clic.as_ref().is_some_and(|k| propose(&std::path::Path::new("components").join(k)))
+        };
+        let declares: Vec<String> = fichiers
+            .iter()
+            .filter(|(chemin, _)| chemin.ends_with(crate::components::SUFFIX))
+            .filter_map(|(_, contenu)| serde_json::from_str::<Value>(contenu).ok()?["name"].as_str().map(str::to_string))
+            .collect();
+        let les_composants = match &apres {
+            Some(a) => a.components_on_disk_avec(&recouvrement).ok(),
+            None => avant.components_on_disk().ok(),
+        };
+        for c in les_composants.iter().flat_map(|cs| cs.components.values()) {
+            if (touche(c) || declares.contains(&c.name)) && !composants.contains(&c.name) {
+                composants.push(c.name.clone());
+            }
+        }
+        for c in &composants {
+            cibles.push(GraphTarget::Component(c.clone()));
+        }
+        let graphes: Vec<Value> = cibles
+            .iter()
+            .map(|cible| {
+                let g_avant = avant.graph_json(cible).ok();
+                let g_apres = apres.as_ref().and_then(|a| a.graph_json_avec(cible, &recouvrement).ok());
+                json!({
+                    "cible": cible.to_json(),
+                    "avant": g_avant,
+                    "apres": g_apres,
+                    "diff": diff_de_graphes(g_avant.as_ref(), g_apres.as_ref()),
+                })
+            })
+            .filter(|g| !(g["avant"]["nodes"].as_array().is_none_or(Vec::is_empty) && g["apres"]["nodes"].as_array().is_none_or(Vec::is_empty)))
+            .collect();
+        Ok(json!({ "proposition": p, "graphes": graphes, "composants": composants }))
+    }
+
+    /// **Le recouvrement d'une proposition** : ce sur quoi l'aperçu joue un
+    /// composant proposé sans l'appliquer.
+    pub fn recouvrement_de_proposition(&self, id: u64) -> Result<crate::lecteur::Recouvrement, String> {
+        let p = self.proposition(id).ok_or_else(|| format!("pas de proposition {id}"))?;
+        let fichiers: Vec<(String, String)> = p.fichiers.iter().map(|f| (f.path.clone(), f.apres.clone())).collect();
+        Ok(crate::lecteur::Recouvrement::sur(&self.prepared().directory, &fichiers))
+    }
+}
