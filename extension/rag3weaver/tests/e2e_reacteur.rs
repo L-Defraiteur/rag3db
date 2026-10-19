@@ -193,10 +193,10 @@ fn un_sujet_qui_change_fait_revoir_les_fiches_qui_l_ancrent() {
     // commencerait après le lien ne saurait pas distinguer « la réaction a
     // marché » de « la création avait déjà tout transitionné ».
     let r = jouer();
-    // `seen` est **imprimé et non exigé**, et l'exécution a répondu : il vaut
-    // **0**, donc `create` n'émet pas d'`EntitiesChanged`. Le seul site
-    // d'émission du dépôt est `ingest_entities` (`catalog.rs`) — vérifié au
-    // grep, un seul.
+    // `seen` est **imprimé et non exigé**. Depuis le 19 octobre 2026, `create`
+    // publie aussi un `EntitiesChanged` (`change: created`, « le catalogue dit
+    // tout ») : ce premier appel vide ce curseur-là, et rien n'est ancré, donc
+    // rien n'est concerné.
     //
     // **Et le chemin du produit passe bien par là** : `EntityRecordNode`
     // (`backend_nodes.rs:214`), qui sert les verbes `put_*` des gabarits,

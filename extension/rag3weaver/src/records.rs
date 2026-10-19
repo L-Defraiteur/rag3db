@@ -90,6 +90,12 @@ pub struct UpdateResult {
     pub reembedded: bool,
     pub chunks_created: usize,
     pub chunks_deleted: usize,
+    /// La ligne existait : une mise à jour d'une ligne absente est un no-op,
+    /// comptée `Updated` jusqu'au 19 octobre 2026, et ne s'annonce pas.
+    pub found: bool,
+    /// `(avant, après)` quand le champ d'état a changé — une transition, que
+    /// le statut seul (`Unchanged` quand seul l'état bouge) ne dit pas.
+    pub transition: Option<(String, String)>,
 }
 
 #[derive(Debug)]

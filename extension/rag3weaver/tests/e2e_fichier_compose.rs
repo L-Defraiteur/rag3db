@@ -7,9 +7,10 @@
 //!   ligne liée a changé) ;
 //! - à l'ouverture, un fichier perdu ou retouché est régénéré depuis la base.
 //!
-//! Le lien posé après coup, la transition et la consolidation demandent que le
-//! catalogue publie ces écritures (la pièce 1 du lot) : leurs témoins viennent
-//! avec elle.
+//! - un lien posé après coup, une transition de la fiche, puis la consolidation
+//!   d'une ligne liée (sa transition) la réécrivent, sans qu'aucun écrivain l'ait
+//!   demandé (le catalogue publie ces écritures depuis la pièce 1 du lot,
+//!   19 octobre 2026).
 //!
 //! Run with: ./run_e2e.sh --test e2e_fichier_compose
 
@@ -43,11 +44,11 @@ fn schema(dir: &Path, nom: &str, champs: &[&str]) {
 }
 
 fn manifeste(dir: &Path) -> PathBuf {
-    schema(dir, "sujet.json", &["name", "about"]);
-    schema(dir, "note.json", &["titre", "texte"]);
+    schema(dir, "sujet.json", &["name", "about", "etat"]);
+    schema(dir, "note.json", &["titre", "texte", "etat"]);
     std::fs::write(
         dir.join("sujet.md.jinja"),
-        "# {{ record.name }}\n\n{{ record.about }}\n\n## Notes\n{% for n in related.notes %}\n- {{ n.titre }} : {{ n.texte }}\n{% endfor %}\n",
+        "# {{ record.name }}\n\n{{ record.about }}\n\n## Notes\n{% for n in related.notes %}\n- {{ n.titre }} : {{ n.texte }} [{{ n.etat }}]\n{% endfor %}\n",
     )
     .unwrap();
     let tpl = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
@@ -57,12 +58,14 @@ fn manifeste(dir: &Path) -> PathBuf {
         "vector_extension": crate::common::vector_extension(),
         "entities": {
             "Sujet": {"schema": "sujet.json",
-                "config": {"fields": {"name": {"type": "string", "isTitle": true}, "about": {"type": "string", "isContent": true}}, "hashsafe": ["name"], "signals": []},
+                "config": {"fields": {"name": {"type": "string", "isTitle": true}, "about": {"type": "string", "isContent": true}, "etat": {"type": "string"}}, "hashsafe": ["name"], "signals": [],
+                           "lifecycle": {"field": "etat", "initial": "courant", "transitions": [{"name": "revoir", "from": "courant", "to": "revu"}]}},
                 "writes": {"created_at": "created_at", "updated_at": "updated_at", "revision": "revision"},
-                "files": {"dir": "sujets", "name": "{uuid}.md", "header": ["name", "revision"], "template": "sujet.md.jinja",
+                "files": {"dir": "sujets", "name": "{uuid}.md", "header": ["name", "etat", "revision"], "template": "sujet.md.jinja",
                           "related": {"notes": {"relation": "A_NOTE", "order_by": "titre"}}}},
             "Note": {"schema": "note.json",
-                "config": {"fields": {"titre": {"type": "string", "isTitle": true}, "texte": {"type": "string", "isContent": true}}, "hashsafe": ["titre"], "signals": []},
+                "config": {"fields": {"titre": {"type": "string", "isTitle": true}, "texte": {"type": "string", "isContent": true}, "etat": {"type": "string"}}, "hashsafe": ["titre"], "signals": [],
+                           "lifecycle": {"field": "etat", "initial": "courant", "transitions": [{"name": "consolider", "from": "courant", "to": "consolide"}]}},
                 "writes": {"created_at": "created_at", "updated_at": "updated_at", "revision": "revision"}}
         },
         "relations": {"A_NOTE": {"from": "Sujet", "to": "Note"}},
@@ -103,19 +106,19 @@ fn attendre(fichier: &Path, attendu: &str) -> String {
 fn la_reaction_ecrit_le_fichier_du_sujet_et_le_reecrit_quand_une_note_liee_change() {
     let dir = tempfile::tempdir().expect("dossier");
     let b = ouvrir(&manifeste(dir.path()));
-    let r = b.call("put_sujet", json!({"record": {"name": "le WAL", "about": "la reprise du journal"}})).expect("le put");
+    let r = b.call("put_sujet", json!({"record": {"name": "le WAL", "about": "la reprise du journal", "etat": "courant"}})).expect("le put");
     assert!(r["result"]["file"].is_null(), "un fichier composé n'est pas écrit par le put : {r}");
     let uuid = r["result"]["uuid"].as_str().unwrap().to_string();
     let fichier = dir.path().join("fichiers/sujets").join(format!("{uuid}.md"));
     let texte = attendre(&fichier, "# le WAL");
-    assert!(texte.starts_with(&format!("---\nuuid: \"{uuid}\"\nname: \"le WAL\"\nrevision: 1\n---\n")), "{texte}");
+    assert!(texte.starts_with(&format!("---\nuuid: \"{uuid}\"\nname: \"le WAL\"\netat: \"courant\"\nrevision: 1\n---\n")), "{texte}");
 
-    b.call("put_note", json!({"record": {"titre": "rejeu", "texte": "en entier"}})).expect("la note");
+    b.call("put_note", json!({"record": {"titre": "rejeu", "texte": "en entier", "etat": "courant"}})).expect("la note");
     b.call("noter", json!({"links": [{"from": {"name": "le WAL"}, "to": {"titre": "rejeu"}}]})).expect("le lien");
     // La note réécrite : sa ligne liée change, le fichier du sujet suit.
-    b.call("put_note", json!({"record": {"titre": "rejeu", "texte": "en entier, avant toute écriture"}, "expected_revision": 1}))
+    b.call("put_note", json!({"record": {"titre": "rejeu", "texte": "en entier, avant toute écriture", "etat": "courant"}, "expected_revision": 1}))
         .expect("la note réécrite");
-    attendre(&fichier, "- rejeu : en entier, avant toute écriture");
+    attendre(&fichier, "- rejeu : en entier, avant toute écriture [courant]");
 }
 
 #[test]
@@ -127,7 +130,7 @@ fn a_l_ouverture_un_fichier_perdu_ou_retouche_est_regenere_depuis_la_base() {
     let attendu;
     {
         let b = ouvrir(&chemin);
-        uuid = b.call("put_sujet", json!({"record": {"name": "le WAL", "about": "la reprise"}})).expect("le put")["result"]["uuid"]
+        uuid = b.call("put_sujet", json!({"record": {"name": "le WAL", "about": "la reprise", "etat": "courant"}})).expect("le put")["result"]["uuid"]
             .as_str()
             .unwrap()
             .to_string();
@@ -145,4 +148,47 @@ fn a_l_ouverture_un_fichier_perdu_ou_retouche_est_regenere_depuis_la_base() {
     std::fs::remove_file(&fichier).unwrap();
     let _b = ouvrir(&chemin);
     assert_eq!(std::fs::read_to_string(&fichier).unwrap(), attendu);
+}
+
+#[test]
+#[ignore]
+fn un_lien_pose_apres_coup_une_transition_et_une_consolidation_reecrivent_le_fichier() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(&manifeste(dir.path()));
+    let uuid = b.call("put_sujet", json!({"record": {"name": "le WAL", "about": "la reprise", "etat": "courant"}})).expect("le sujet")["result"]
+        ["uuid"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let fichier = dir.path().join("fichiers/sujets").join(format!("{uuid}.md"));
+    attendre(&fichier, "# le WAL");
+    b.call("put_note", json!({"record": {"titre": "rejeu", "texte": "en entier", "etat": "courant"}})).expect("la note");
+
+    // 1. Le lien posé après coup : RelationsChanged, la note entre dans le fichier.
+    b.call("noter", json!({"links": [{"from": {"name": "le WAL"}, "to": {"titre": "rejeu"}}]})).expect("le lien");
+    attendre(&fichier, "- rejeu : en entier [courant]");
+
+    // 2. La transition de la fiche (un écrivain direct, aucun outil) : l'en-tête suit.
+    {
+        let mut cat = b.catalog.lock().unwrap();
+        let mut etat = std::collections::BTreeMap::new();
+        etat.insert("etat".to_string(), rag3weaver::connection::CypherValue::String("revu".into()));
+        cat.update_many("Sujet", vec![(uuid.clone(), etat)]).expect("la transition du sujet");
+    }
+    attendre(&fichier, "etat: \"revu\"");
+
+    // 3. La consolidation d'une ligne liée (sa transition) : le corps suit.
+    {
+        let mut cat = b.catalog.lock().unwrap();
+        let note = cat.entity_uuid("Note", &{
+            let mut d = std::collections::BTreeMap::new();
+            d.insert("titre".to_string(), rag3weaver::connection::CypherValue::String("rejeu".into()));
+            d
+        })
+        .expect("l'uuid de la note");
+        let mut etat = std::collections::BTreeMap::new();
+        etat.insert("etat".to_string(), rag3weaver::connection::CypherValue::String("consolide".into()));
+        cat.update_many("Note", vec![(note, etat)]).expect("la consolidation");
+    }
+    attendre(&fichier, "- rejeu : en entier [consolide]");
 }
