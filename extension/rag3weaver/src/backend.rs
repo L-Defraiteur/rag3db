@@ -2630,7 +2630,9 @@ impl Backend {
     pub fn stop_reactions(&self) -> Vec<String> {
         // Les montres d'abord : plus rien n'arrive aux réactions qu'on arrête.
         self.stop_watches();
-        // Puis le drapeau : une réaction longue s'arrête au prochain fichier.
+        // Puis le drapeau : une réaction longue s'arrête **au prochain lot** — un lot est une
+        // transaction (`ReindexFileNode`, quatre fichiers d'abord, puis ce qui tient en
+        // `HOLD_MS`) ; l'arrêt attend celui qui est en cours, pas le reste.
         self.reaction_stop.store(true, std::sync::atomic::Ordering::SeqCst);
         let errors = self.stop_reactors();
         // Remontables ensuite.
@@ -5283,10 +5285,18 @@ mod tests {
         assert_eq!(du, 0, "des morceaux doivent encore leur vecteur après la réaction");
     }
 
-    /// **L'arrêt coupe une réaction longue au prochain fichier** : des
-    /// centaines de fichiers supprimés font une longue réaction ; l'arrêt rend
-    /// la main vite, ce qui est fait reste, et au redémarrage la réconciliation
-    /// reprend le reste.
+    /// **L'arrêt coupe une réaction longue au prochain lot** : cent fichiers
+    /// supprimés font une longue réaction ; l'arrêt rend la main avant sa fin,
+    /// ce qui est fait reste, et au redémarrage la réconciliation reprend le
+    /// reste.
+    ///
+    /// Le témoin juge l'**ordre**, pas une durée : l'arrêt est demandé
+    /// pendant la réaction (un lot déjà soldé), et il revient avant qu'elle
+    /// ne finisse — du retard reste. Une borne de 3 s rougissait sous la
+    /// charge de la lib entière (4,5 s : un premier lot de quatre fichiers à
+    /// plus d'une seconde chacun), et dans la plupart des passes l'arrêt
+    /// tombait avant le premier fichier, sans rien couper (le diagnostic du
+    /// 19 octobre : `docs/tickets/closed/2026-10-19-…`).
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn stopping_cuts_a_long_reaction_and_the_restart_resumes_it() {
@@ -5306,14 +5316,22 @@ mod tests {
         }
         backend.mount_reactions().unwrap();
         std::fs::remove_dir_all(&lot).unwrap();
-        // La réaction a commencé : le retard est noté.
-        let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while backend.index_states().unwrap()["lag"]["files"].as_u64().unwrap_or(0) == 0 && std::time::Instant::now() < fin {
-            std::thread::sleep(std::time::Duration::from_millis(20));
+        // La réaction est en cours : son retard est noté (cent fichiers) et
+        // au moins un lot en est soldé.
+        let retard = || backend.index_states().unwrap()["lag"]["files"].as_u64().unwrap_or(0);
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            let r = retard();
+            if r > 0 && r < 100 {
+                break;
+            }
+            assert!(std::time::Instant::now() < fin, "la réaction n'a soldé aucun lot en 60 s (retard {r})");
+            std::thread::sleep(std::time::Duration::from_millis(5));
         }
-        let t = std::time::Instant::now();
         assert!(backend.stop_reactions().is_empty());
-        assert!(t.elapsed() < std::time::Duration::from_secs(3), "l'arrêt a attendu la réaction : {:?}", t.elapsed());
+        // **L'arrêt revient avant la fin de la réaction** : du retard reste.
+        let reste = retard();
+        assert!(reste > 0, "l'arrêt a attendu la fin de la réaction : plus aucun retard");
         // Au redémarrage, la réconciliation reprend ce qui restait. Le retard
         // seul ne suffit pas à le dire : la montre ne note la réconciliation
         // qu'à son premier tour, et si la réaction coupée avait soldé tout ce
