@@ -48,6 +48,12 @@ enum class WALRecordType : uint8_t {
 
     LOAD_EXTENSION_RECORD = 100,
 
+    // Le premier enregistrement d'un journal (version de format 41) : la version de format et
+    // le bâti du moteur qui l'écrit. Un moteur plus ancien le refuse comme un type inconnu ; un
+    // moteur qui lit une version plus récente que la sienne refuse le journal en le disant,
+    // avant d'en rejouer quoi que ce soit.
+    FORMAT_RECORD = 253,
+
     CHECKPOINT_RECORD = 254,
 };
 
@@ -341,6 +347,18 @@ struct RelUpdateRecord final : WALRecord {
     void serialize(common::Serializer& serializer) const override;
     static std::unique_ptr<RelUpdateRecord> deserialize(common::Deserializer& deserializer,
         const main::ClientContext& clientContext, bool rawNumericArrays = false);
+};
+
+struct FormatRecord final : WALRecord {
+    uint64_t storageVersion;
+    std::string writerBuildID;
+
+    FormatRecord(uint64_t storageVersion, std::string writerBuildID)
+        : WALRecord{WALRecordType::FORMAT_RECORD}, storageVersion{storageVersion},
+          writerBuildID{std::move(writerBuildID)} {}
+
+    void serialize(common::Serializer& serializer) const override;
+    static std::unique_ptr<FormatRecord> deserialize(common::Deserializer& deserializer);
 };
 
 struct LoadExtensionRecord final : WALRecord {

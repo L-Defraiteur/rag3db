@@ -4,6 +4,7 @@
 
 #include "common/assert.h"
 #include "common/exception/runtime.h"
+#include "common/exception/storage_version.h"
 #include "common/file_system/file_info.h"
 #include "common/serializer/buffered_file.h"
 #include "common/serializer/deserializer.h"
@@ -14,23 +15,36 @@
 #include "storage/storage_version_info.h"
 
 namespace rag3db::storage {
-// Rend la version lue : celle du moteur, ou celle d'avant l'étendue du fichier, qui s'ouvre
-// encore.
-static storage_version_t validateStorageVersion(common::Deserializer& deSer) {
+// Lit la version de format et, à partir de la 41, le bâti du dernier écrivain ; refuse en le
+// disant une base plus récente que ce moteur (en lecture comme en écriture : le format n'est
+// pas lisible) ou plus ancienne que la plus ancienne lisible. Entre les deux, la base s'ouvre et
+// son premier point de reprise la réécrit à la version courante.
+static std::pair<storage_version_t, std::string> readStorageVersion(common::Deserializer& deSer) {
     std::string key;
     deSer.validateDebuggingInfo(key, "storage_version");
     storage_version_t savedStorageVersion = 0;
     deSer.deserializeValue(savedStorageVersion);
-    const auto storageVersion = StorageVersionInfo::getStorageVersion();
-    if (savedStorageVersion != storageVersion &&
-        savedStorageVersion != StorageVersionInfo::VERSION_BEFORE_DATA_FILE_EXTENT) {
-        // TODO(Guodong): Add a test case for this.
-        throw common::RuntimeException(
-            common::stringFormat("Trying to read a database file with a different version. "
-                                 "Database file version: {}, Current build storage version: {}",
-                savedStorageVersion, storageVersion));
+    std::string writer;
+    if (savedStorageVersion > StorageVersionInfo::VERSION_BEFORE_WRITER_BUILD_ID) {
+        deSer.validateDebuggingInfo(key, "writer");
+        deSer.deserializeValue(writer);
     }
-    return savedStorageVersion;
+    const auto storageVersion = StorageVersionInfo::getStorageVersion();
+    if (savedStorageVersion > storageVersion) {
+        throw common::StorageVersionException(common::stringFormat(
+            "This database was last written by the engine {} in storage format {}; this engine "
+            "({}) reads and writes format {}: open it with an engine at least as recent.",
+            writer.empty() ? std::string{"of an unknown build"} : writer, savedStorageVersion,
+            StorageVersionInfo::getBuildID(), storageVersion));
+    }
+    if (savedStorageVersion < StorageVersionInfo::OLDEST_READABLE_STORAGE_VERSION) {
+        throw common::StorageVersionException(common::stringFormat(
+            "This database is in storage format {}, older than the oldest this engine ({}, "
+            "format {}) can read ({}): export it with an engine of its time, then import it here.",
+            savedStorageVersion, StorageVersionInfo::getBuildID(), storageVersion,
+            StorageVersionInfo::OLDEST_READABLE_STORAGE_VERSION));
+    }
+    return {savedStorageVersion, writer};
 }
 
 static void validateMagicBytes(common::Deserializer& deSer) {
@@ -70,9 +84,18 @@ static void writeMagicBytes(common::Serializer& serializer) {
 }
 
 void DatabaseHeader::serialize(common::Serializer& ser) const {
+    serializeAs(ser, StorageVersionInfo::getStorageVersion(), StorageVersionInfo::getBuildID());
+}
+
+void DatabaseHeader::serializeAs(common::Serializer& ser, uint64_t version,
+    const std::string& writer) const {
     writeMagicBytes(ser);
     ser.writeDebuggingInfo("storage_version");
-    ser.serializeValue(StorageVersionInfo::getStorageVersion());
+    ser.serializeValue<storage_version_t>(version);
+    if (version > StorageVersionInfo::VERSION_BEFORE_WRITER_BUILD_ID) {
+        ser.writeDebuggingInfo("writer");
+        ser.serializeValue(writer);
+    }
     ser.writeDebuggingInfo("catalog");
     ser.serializeValue(catalogPageRange.startPageIdx);
     ser.serializeValue(catalogPageRange.numPages);
@@ -81,13 +104,15 @@ void DatabaseHeader::serialize(common::Serializer& ser) const {
     ser.serializeValue(metadataPageRange.numPages);
     ser.writeDebuggingInfo("databaseID");
     ser.serializeValue(databaseID.value);
-    ser.writeDebuggingInfo("data_pages");
-    ser.serializeValue(numDataPages);
+    if (version > StorageVersionInfo::VERSION_BEFORE_DATA_FILE_EXTENT) {
+        ser.writeDebuggingInfo("data_pages");
+        ser.serializeValue(numDataPages);
+    }
 }
 
 DatabaseHeader DatabaseHeader::deserialize(common::Deserializer& deSer) {
     validateMagicBytes(deSer);
-    const auto savedStorageVersion = validateStorageVersion(deSer);
+    const auto [savedStorageVersion, writer] = readStorageVersion(deSer);
     PageRange catalogPageRange{}, metaPageRange{};
     common::ku_uuid_t databaseID{};
     std::string key;
@@ -100,6 +125,8 @@ DatabaseHeader DatabaseHeader::deserialize(common::Deserializer& deSer) {
     deSer.validateDebuggingInfo(key, "databaseID");
     deSer.deserializeValue(databaseID.value);
     DatabaseHeader header{catalogPageRange, metaPageRange, databaseID};
+    header.storageVersion = savedStorageVersion;
+    header.writerBuildID = writer;
     if (savedStorageVersion > StorageVersionInfo::VERSION_BEFORE_DATA_FILE_EXTENT) {
         deSer.validateDebuggingInfo(key, "data_pages");
         deSer.deserializeValue(header.numDataPages);

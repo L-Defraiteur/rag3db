@@ -98,6 +98,8 @@ inline std::string walRecordTypeName(storage::WALRecordType type) {
         return "LOAD_EXTENSION";
     case WALRecordType::CHECKPOINT_RECORD:
         return "CHECKPOINT";
+    case WALRecordType::FORMAT_RECORD:
+        return "FORMAT";
     default:
         return "TYPE_" + std::to_string(static_cast<unsigned>(type));
     }
