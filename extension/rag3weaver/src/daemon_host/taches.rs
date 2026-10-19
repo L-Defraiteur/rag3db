@@ -7,13 +7,22 @@
 //! `declarations: auto` (la tâche est l'espace de l'agent, sur sa branche).
 //! Le manifeste du worktree n'est pas réécrit. La base de l'arbre principal
 //! n'est jamais ouverte par la tâche.
+//!
+//! **Le registre** (`<racine>/registre.json`) garde les tâches ouvertes et
+//! fermées sur le disque : l'hôte s'arrête seul après 30 minutes
+//! d'inactivité, une tâche doit lui survivre. Il est écrit à chaque
+//! ouverture, fermeture, fusion et rejet, et relu au démarrage
+//! ([`DaemonHost::avec_les_taches_relues`]) : chaque tâche ouverte dont le
+//! worktree, la branche, le manifeste et la copie de base sont là est
+//! réinscrite ; une autre est dite **orpheline**, avec ce qui manque, et
+//! n'est jamais rouverte en silence.
 
 use super::*;
 use crate::backend::{CopieDeBase, Surcharges};
 use std::path::{Path, PathBuf};
 
 /// Une tâche ouverte.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Tache {
     pub nom: String,
     /// L'id du backend dont elle part.
@@ -68,6 +77,35 @@ fn git_show(dir: &Path, reference: &str, chemin: &str) -> Option<String> {
     o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
+/// Ce que le registre garde : les tâches ouvertes, et les fermées
+/// (fusionnées, rejetées, orphelines) avec leur pourquoi.
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct Registre {
+    ouvertes: Vec<Tache>,
+    fermees: Vec<Value>,
+}
+
+/// Ce qui manque à une tâche du registre pour être rouverte, s'il manque
+/// quelque chose.
+fn ce_qui_manque(t: &Tache) -> Option<String> {
+    let mut manque = Vec::new();
+    if !t.arbre.is_dir() {
+        manque.push(format!("le worktree {}", t.arbre.display()));
+    } else if !t.manifest.is_file() {
+        manque.push(format!("le manifeste {}", t.manifest.display()));
+    }
+    if !t.copie.base.exists() {
+        manque.push(format!("la copie de base {}", t.copie.base.display()));
+    }
+    if !t.parent_manifest.is_file() {
+        manque.push(format!("le manifeste du backend principal {}", t.parent_manifest.display()));
+    }
+    if git(&t.depot, &["rev-parse", "--verify", "-q", &format!("refs/heads/{}", t.branche)]).is_err() {
+        manque.push(format!("la branche {}", t.branche));
+    }
+    (!manque.is_empty()).then(|| format!("disparu(s) : {}", manque.join(", ")))
+}
+
 fn nom_valide(nom: &str) -> Result<(), String> {
     let ok = !nom.is_empty()
         && nom.len() <= 64
@@ -81,6 +119,80 @@ fn nom_valide(nom: &str) -> Result<(), String> {
 }
 
 impl DaemonHost {
+    fn chemin_du_registre(&self) -> PathBuf {
+        self.racine_des_taches.join("registre.json")
+    }
+
+    /// Écrit le registre (un fichier neuf, puis renommé : jamais à moitié
+    /// écrit). Une tâche qui ne s'inscrit pas sur le disque ne survivrait pas
+    /// à l'hôte : l'appelant le dit.
+    fn ecrire_le_registre(&self) -> Result<(), String> {
+        let registre = Registre {
+            ouvertes: self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect(),
+            fermees: self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+        };
+        let chemin = self.chemin_du_registre();
+        std::fs::create_dir_all(&self.racine_des_taches).map_err(|e| format!("{} : {e}", self.racine_des_taches.display()))?;
+        let neuf = chemin.with_extension("json.neuf");
+        let texte = serde_json::to_vec_pretty(&registre).map_err(|e| e.to_string())?;
+        std::fs::write(&neuf, texte).map_err(|e| format!("{} : {e}", neuf.display()))?;
+        std::fs::rename(&neuf, &chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+    }
+
+    /// **Relit le registre des tâches** au démarrage de l'hôte : chaque
+    /// tâche ouverte complète est réinscrite (elle et son backend principal,
+    /// ouverts au premier appel comme tout backend) ; une tâche à qui il
+    /// manque quelque chose devient orpheline, fermée avec ce qui manque, sans
+    /// rien effacer. Les tâches fermées restent lisibles. Rend une ligne par
+    /// tâche relue.
+    pub fn relire_les_taches(&self) -> Vec<String> {
+        let chemin = self.chemin_du_registre();
+        let registre: Registre = match std::fs::read(&chemin) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+            Err(e) => return vec![format!("le registre des tâches {} ne se lit pas : {e}", chemin.display())],
+            Ok(octets) => match serde_json::from_slice(&octets) {
+                Ok(r) => r,
+                Err(e) => return vec![format!("le registre des tâches {} est illisible, il n'est pas réécrit : {e}", chemin.display())],
+            },
+        };
+        let mut lignes = Vec::new();
+        self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).extend(registre.fermees);
+        for t in registre.ouvertes {
+            let rouverte = match ce_qui_manque(&t) {
+                Some(manque) => Err(manque),
+                None => self.hosted(&t.parent_manifest).and_then(|_| {
+                    self.taches.lock().unwrap_or_else(|p| p.into_inner()).insert(t.manifest.clone(), t.clone());
+                    self.hosted(&t.manifest).map(|_| ())
+                }),
+            };
+            match rouverte {
+                Ok(()) => lignes.push(format!("tâche « {} » de {} rouverte ({})", t.nom, t.parent, t.arbre.display())),
+                Err(pourquoi) => {
+                    self.taches.lock().unwrap_or_else(|p| p.into_inner()).remove(&t.manifest);
+                    lignes.push(format!("tâche « {} » de {} orpheline : {pourquoi}", t.nom, t.parent));
+                    self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(json!({
+                        "nom": t.nom, "parent": t.parent, "etat": "orpheline", "pourquoi": pourquoi,
+                        "branche": t.branche, "arbre": t.arbre, "base": t.copie.base,
+                    }));
+                }
+            }
+        }
+        if let Err(e) = self.ecrire_le_registre() {
+            lignes.push(format!("le registre des tâches ne se réécrit pas : {e}"));
+        }
+        lignes
+    }
+
+    /// L'hôte, ses tâches relues ([`relire_les_taches`](Self::relire_les_taches)),
+    /// chaque ligne dite sur la sortie d'erreur : ce que fait le service au
+    /// démarrage.
+    pub fn avec_les_taches_relues(self) -> Self {
+        for l in self.relire_les_taches() {
+            eprintln!("[démon] {l}");
+        }
+        self
+    }
+
     /// La racine sous laquelle vivent les worktrees et les bases des tâches.
     pub fn with_racine_des_taches(mut self, racine: PathBuf) -> Self {
         self.racine_des_taches = racine;
@@ -184,6 +296,10 @@ impl DaemonHost {
             self.backends.lock().unwrap_or_else(|p| p.into_inner()).remove(&manifest);
             return Err(defaire("l'ouverture de la seconde instance", e));
         }
+        if let Err(e) = self.ecrire_le_registre() {
+            let _ = self.fermer_une_tache(parent, nom);
+            return Err(format!("tâche « {nom} » : le registre des tâches : {e} ; la tâche est refermée, elle ne survivrait pas à l'hôte"));
+        }
         Ok(tache)
     }
 
@@ -202,6 +318,7 @@ impl DaemonHost {
         git(&tache.depot, &["branch", "-D", &tache.branche])?;
         let dossier = tache.arbre.parent().map(Path::to_path_buf).unwrap_or_default();
         std::fs::remove_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        self.ecrire_le_registre()?;
         Ok(tache)
     }
 }
@@ -294,6 +411,7 @@ impl DaemonHost {
         self.fermer_une_tache(parent, nom)?;
         let fin = json!({ "nom": nom, "parent": parent, "etat": "fusionnee", "commit": fusion, "rechargement": recharge.as_ref().err() });
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
+        self.ecrire_le_registre()?;
         recharge.map_err(|e| format!("fusionné ({fusion}), mais le principal ne recharge pas : {e}"))?;
         Ok(fin)
     }
@@ -306,6 +424,7 @@ impl DaemonHost {
         self.fermer_une_tache(parent, nom)?;
         let fin = json!({ "nom": nom, "parent": parent, "etat": "rejetee", "pourquoi": pourquoi });
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
+        self.ecrire_le_registre()?;
         Ok(fin)
     }
 

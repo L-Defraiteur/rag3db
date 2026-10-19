@@ -6,6 +6,19 @@ use std::time::{Duration, Instant};
 /// commité : sa base, au chemin absolu, est à côté), son arbre de code, et un
 /// hôte dont les tâches vivent dans le dossier du témoin.
 fn banc() -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
+    let (d, manifeste) = depot_du_banc();
+    let host = DaemonHost::new()
+        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+        .with_racine_des_taches(d.path().join("taches"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le backend principal s'ouvre");
+    let id = h.id.clone();
+    (d, host, manifeste.canonicalize().unwrap(), id)
+}
+
+/// Le dépôt du banc : le backend du gabarit `code`, son manifeste seul
+/// commité, et l'arbre de code qu'il indexe.
+fn depot_du_banc() -> (tempfile::TempDir, PathBuf) {
     let d = tempfile::tempdir().unwrap();
     let depot = d.path().join("depot");
     let arbre = d.path().join("code");
@@ -26,13 +39,7 @@ fn banc() -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
     ] {
         git(&depot, args).unwrap();
     }
-    let host = DaemonHost::new()
-        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
-        .with_racine_des_taches(d.path().join("taches"));
-    let h = host.hosted(&manifeste).unwrap();
-    host.with_backend(&h, |_| ()).expect("le backend principal s'ouvre");
-    let id = h.id.clone();
-    (d, host, manifeste.canonicalize().unwrap(), id)
+    (d, manifeste)
 }
 
 /// Les fichiers d'une base, chemin → octets, sans ce qui bouge parce qu'elle
@@ -129,4 +136,99 @@ fn une_declaration_dans_la_tache_commite_sur_sa_branche() {
     assert!(!tache.arbre.exists() && !d.path().join("taches").join(&parent).join("notes").exists());
     assert!(git(&depot, &["rev-parse", "--verify", &tache.branche]).is_err(), "la branche reste");
     assert!(host.state()["backends"].as_array().unwrap().iter().all(|b| b["id"] != tache.id.as_str()), "la tâche reste dans l'état");
+}
+
+/// **Une tâche ouverte survit à l'hôte** (c7 : l'hôte s'arrête seul après
+/// 30 minutes d'inactivité, c'est le cas ordinaire). Deux tâches ouvertes par
+/// l'IDE, une déclaration dans la première ; l'hôte arrêté par `/arret`. Le
+/// worktree de la seconde disparaît pendant l'arrêt. L'hôte relancé sur la
+/// même racine relit son registre : la première est là, sous le même id,
+/// sa relecture montre sa déclaration et elle se fusionne ; la seconde est
+/// dite orpheline avec ce qui manque, jamais rouverte. Un troisième hôte lit
+/// encore les deux fermées, avec leur pourquoi.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne() {
+    let (d, manifeste) = depot_du_banc();
+    let manifeste = manifeste.canonicalize().unwrap();
+    let depot = manifeste.parent().unwrap().to_path_buf();
+    let racine_des_taches = d.path().join("taches");
+    let lancer = || {
+        let r = racine_des_taches.clone();
+        let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(r).avec_les_taches_relues());
+        (format!("http://{adresse}"), fil)
+    };
+    let appeler = |racine: &str, route: &str, corps: Option<Value>| -> Value {
+        let a = crate::daemon::agent();
+        let mut r = match corps {
+            Some(c) => a
+                .post(format!("{racine}{route}"))
+                .header("Cookie", "rag3weaver_ide=j")
+                .header("content-type", "application/json")
+                .send(c.to_string())
+                .unwrap(),
+            None => a.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap(),
+        };
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let arreter = |racine: &str, fil: std::thread::JoinHandle<()>| {
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    };
+
+    // Le premier hôte : deux tâches, une déclaration dans la première.
+    let (racine, fil) = lancer();
+    let decrit = appeler(&racine, "/ide/describe", Some(json!({ "manifest": manifeste })));
+    assert_eq!(decrit["ok"], true, "{decrit}");
+    let parent = blake3::hash(manifeste.to_string_lossy().as_bytes()).to_hex()[..12].to_string();
+    let survit = appeler(&racine, "/ide/taches", Some(json!({ "backend": parent, "nom": "survit" })));
+    assert_eq!(survit["ok"], true, "{survit}");
+    let perdue = appeler(&racine, "/ide/taches", Some(json!({ "backend": parent, "nom": "perdue" })));
+    assert_eq!(perdue["ok"], true, "{perdue}");
+    let id = survit["result"]["id"].as_str().unwrap().to_string();
+    let p = appeler(&racine, "/ide/propositions", Some(json!({ "backend": id, "files": [{ "path": "notes.md", "content": "# Survit à l'hôte\n" }], "reason": "une note qui survit" })));
+    assert_eq!(p["ok"], true, "{p}");
+    let a = appeler(&racine, "/ide/propositions/appliquer", Some(json!({ "backend": id, "id": p["result"]["id"] })));
+    assert_eq!(a["ok"], true, "{a}");
+    arreter(&racine, fil);
+
+    // Pendant l'arrêt, le worktree de la seconde disparaît.
+    let arbre_perdu = PathBuf::from(perdue["result"]["arbre"].as_str().unwrap());
+    std::fs::remove_dir_all(&arbre_perdu).unwrap();
+
+    // Le second hôte relit le registre.
+    let (racine, fil) = lancer();
+    let taches = appeler(&racine, &format!("/ide/taches?backend={parent}"), None);
+    let ouvertes = taches["result"]["ouvertes"].as_array().unwrap();
+    assert_eq!(ouvertes.len(), 1, "{taches}");
+    assert_eq!(ouvertes[0]["nom"], "survit");
+    assert_eq!(ouvertes[0]["id"], id.as_str(), "la tâche a changé d'id");
+    let orpheline = taches["result"]["fermees"].as_array().unwrap().iter().find(|t| t["nom"] == "perdue").cloned().unwrap_or_else(|| panic!("{taches}"));
+    assert_eq!(orpheline["etat"], "orpheline", "{orpheline}");
+    assert!(orpheline["pourquoi"].as_str().unwrap().contains("le worktree"), "{orpheline}");
+    assert!(appeler(&racine, "/ide/etat", None)["backends"].as_array().unwrap().iter().all(|b| b["tache"]["nom"] != "perdue"), "l'orpheline a été rouverte");
+
+    let relue = appeler(&racine, &format!("/ide/taches?backend={parent}&nom=survit"), None);
+    assert_eq!(relue["ok"], true, "{relue}");
+    assert!(relue["result"]["fichiers"].as_array().unwrap().iter().any(|f| f["path"] == "notes.md"), "{relue}");
+    assert_eq!(relue["result"]["temoins"]["chargement"], true, "{relue}");
+    let fusion = appeler(&racine, "/ide/taches/fusionner", Some(json!({ "backend": parent, "nom": "survit" })));
+    assert_eq!(fusion["ok"], true, "{fusion}");
+    assert_eq!(std::fs::read_to_string(depot.join("notes.md")).unwrap(), "# Survit à l'hôte\n");
+    assert_eq!(git(&depot, &["log", "-1", "--format=%s"]).unwrap(), "une note qui survit");
+    arreter(&racine, fil);
+
+    // Un troisième hôte : plus rien d'ouvert, les deux fermées lisibles.
+    let (racine, fil) = lancer();
+    let taches = appeler(&racine, &format!("/ide/taches?backend={parent}"), None);
+    assert!(taches["result"]["ouvertes"].as_array().unwrap().is_empty(), "{taches}");
+    let etats: Vec<(String, String)> = taches["result"]["fermees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| (t["nom"].as_str().unwrap().to_string(), t["etat"].as_str().unwrap().to_string()))
+        .collect();
+    assert!(etats.contains(&("survit".into(), "fusionnee".into())) && etats.contains(&("perdue".into(), "orpheline".into())), "{etats:?}");
+    arreter(&racine, fil);
 }

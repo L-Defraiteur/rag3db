@@ -572,7 +572,8 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
             }
         });
     });
-    serveur.serve(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new()), Some(jeton));
+    // Les tâches de l'agent survivent à l'hôte : leur registre est relu.
+    serveur.serve(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new().avec_les_taches_relues()), Some(jeton));
     cycle::remove_if_mine(pid);
     eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
     Ok(())

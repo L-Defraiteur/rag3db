@@ -758,7 +758,7 @@ async function taches(id, reste) {
       : el("p", { class: "note" }, "Aucune tâche ouverte."),
     fermees.length ? el("h2", {}, "Fermées") : "",
     fermees.length ? el("ul", { class: "liste", id: "taches-fermees" }, fermees.map((t) => el("li", { "data-nom": t.nom, "data-etat": t.etat },
-      t.nom, el("span", { class: "meta" }, t.etat === "fusionnee" ? `fusionnée (${String(t.commit).slice(0, 9)})` : `rejetée : ${t.pourquoi}`)))) : "",
+      t.nom, el("span", { class: "meta" }, t.etat === "fusionnee" ? `fusionnée (${String(t.commit).slice(0, 9)})` : t.etat === "orpheline" ? `orpheline : ${t.pourquoi}` : `rejetée : ${t.pourquoi}`)))) : "",
   );
 }
 

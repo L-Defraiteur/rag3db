@@ -717,7 +717,7 @@ pub struct Surcharges {
 
 /// Une base copiée sous la porte des écrivains
 /// ([`Backend::copier_la_base_sous_la_porte`]).
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CopieDeBase {
     /// Le fichier principal de la copie (ce que la tâche ouvre).
     pub base: PathBuf,

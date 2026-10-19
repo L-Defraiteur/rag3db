@@ -120,3 +120,28 @@ avec les décisions de c7 en tête de cette page :
   principal compte par cinq ; une seconde tâche est rejetée avec son pourquoi, sans rien écrire.
   La console du navigateur est vide. Les tâches du témoin vivent dans son dossier
   (`hote_garde_avec`, racine des tâches réglée), jamais sous `~/.local`.
+
+## Le registre : une tâche survit à l'hôte
+
+c7, le 19 octobre : l'hôte s'arrête seul après 30 minutes d'inactivité, c'est le cas ordinaire,
+et une tâche ouverte doit lui survivre.
+
+- **Le registre** est `<racine des tâches>/registre.json` : les tâches ouvertes (tout ce qu'il
+  faut pour les rouvrir : dépôt, worktree, branche, départ, copie de base, manifestes) et les
+  fermées, avec leur état (`fusionnee` et son commit, `rejetee` et son pourquoi, `orpheline` et
+  ce qui manque). Il est réécrit à chaque ouverture, fermeture, fusion et rejet, par un fichier
+  neuf renommé : jamais à moitié écrit. Une tâche dont le registre ne s'écrit pas est refermée
+  aussitôt, en le disant : elle ne survivrait pas à l'hôte.
+- **Au démarrage**, le service relit le registre (`DaemonHost::avec_les_taches_relues`, appelé
+  par `rag3weaver-backend` avant de servir). Chaque tâche ouverte dont le worktree, le
+  manifeste, la branche, la copie de base et le manifeste du principal sont là est réinscrite,
+  avec son backend principal ; les deux s'ouvrent au premier appel, comme tout backend, sous le
+  même id qu'avant (l'id est le hash du manifeste). Il manque quelque chose : la tâche est
+  **orpheline**, fermée avec ce qui manque, jamais rouverte en silence ; rien n'est effacé, ce
+  qui reste sur le disque est nommé dans son entrée.
+- **Le témoin** : `une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne`. Un hôte de
+  service ouvre deux tâches par l'IDE et déclare dans la première ; il est arrêté par `/arret`,
+  et le worktree de la seconde est effacé pendant l'arrêt. Le deuxième hôte relit le registre :
+  la première est là, sous le même id, sa relecture montre sa déclaration et elle se fusionne ;
+  la seconde est orpheline, avec « le worktree » dans son pourquoi. Un troisième hôte ne rouvre
+  rien et lit les deux fermées.
