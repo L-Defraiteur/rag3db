@@ -188,6 +188,19 @@ impl Instantane {
     pub fn conn(&self) -> Arc<dyn DbConnection> {
         self.conn.as_ref().expect("la connexion vit jusqu'à la chute de l'instantané").clone()
     }
+
+    /// Pour les témoins : l'instantané ouvert passe son plafond, sans attendre
+    /// (une attente réelle rougit sous charge : un `CREATE` de l'écrivain peut à
+    /// lui seul dépasser un plafond court).
+    #[cfg(test)]
+    fn vieillir(&self) {
+        if let Some(c) = &self.conn {
+            let mut etat = c.etat.lock().unwrap_or_else(|e| e.into_inner());
+            if let Phase::Ouvert(_) = *etat {
+                *etat = Phase::Ouvert(Instant::now() - c.duree_max - Duration::from_millis(1));
+            }
+        }
+    }
 }
 
 impl Drop for Instantane {
@@ -354,15 +367,18 @@ mod tests {
     #[test]
     fn passe_son_plafond_l_instantane_se_valide_et_la_suite_lit_le_neuf() {
         let dir = tempfile::tempdir().unwrap();
+        // Un plafond large, que rien dans le témoin n'atteint seul ; le
+        // dépassement se pose par `vieillir`, pas par une attente (rouge une
+        // fois sous charge avec 100 ms, codeparsers, 19 octobre 2026).
         let (ecrivain, mut p) = pool(dir.path(), 2);
-        Arc::get_mut(&mut p).unwrap().duree_max = Duration::from_millis(100);
+        Arc::get_mut(&mut p).unwrap().duree_max = Duration::from_secs(60);
         ecrivain.execute("CREATE (:T {id: 1})").unwrap();
         let i = p.instantane(ATTENTE).expect("un instantané");
         let c = i.conn();
         assert_eq!(compte(&c), 1);
         ecrivain.execute("CREATE (:T {id: 2})").unwrap();
         assert_eq!(compte(&c), 1, "sous le plafond, l'instantané tient");
-        std::thread::sleep(Duration::from_millis(150));
+        i.vieillir();
         assert_eq!(compte(&c), 2, "passé le plafond, la requête suivante lit le validé");
         assert_eq!(p.ecourtes(), 1);
         drop(c);
