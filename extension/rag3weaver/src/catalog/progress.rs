@@ -153,6 +153,10 @@ pub enum Level {
     /// texte seul, n'a pas de vecteurs). Ni « jamais » ni une dette — rien ne
     /// manque. Rendu « sans vecteurs (non déclarés) » (10 octobre 2026).
     NotDeclared,
+    /// **L'index n'a pas pu s'ouvrir ou se créer** : rien ne se cherche à ce
+    /// niveau, et ses raisons se lisent par `Catalog::index_failures_for` (19 octobre 2026). Jamais un
+    /// « prêt » sur un index absent.
+    Failed,
 }
 
 /// **L'état de l'index, lisible à chaque recherche.** Une seule lecture de
@@ -393,8 +397,30 @@ impl Catalog {
         self.state_at(&entity_state_key(entity), || self.index_progress_for(entity))
     }
 
+    /// **Les index d'une entité qui n'ont pas pu s'ouvrir ou se créer** —
+    /// (genre, raison) — ou de toutes (`None`). Une table se rattache à
+    /// l'entité qu'elle porte (le plein texte), ou par son nom (`<Entité>`,
+    /// `<Entité>_…`).
+    pub fn index_failures_for(&self, entite: Option<&str>) -> Vec<(String, String)> {
+        self.index_failures()
+            .into_iter()
+            .filter(|((_, table), _)| match entite {
+                Some(e) => table == e || self.entity_of_fts_table(table).as_deref() == Some(e) || table.starts_with(&format!("{e}_")),
+                None => true,
+            })
+            .map(|((genre, _), raison)| (genre, raison))
+            .collect()
+    }
+
     fn state_at(&self, key: &str, count: impl FnOnce() -> Result<IndexProgress, CatalogError>) -> Result<IndexState, CatalogError> {
         let state = self.state_at_counted(key, count)?;
+        // **Un index plein texte qui n'a pas pu s'ouvrir ou se créer** : « échoué »,
+        // avant tout « prêt » ou « en cours » ; ses raisons se lisent par
+        // [`Catalog::index_failures_for`].
+        let entite = key.strip_prefix("index_state:");
+        if self.index_failures_for(entite).iter().any(|(g, _)| g == super::PLEIN_TEXTE_INDEX) {
+            return Ok(IndexState { text: Level::Failed, ..state });
+        }
         // **Le plein texte laissé sans blobs** (premier index qui retient sa
         // poussée, arrêté ou en cours) : « mots : en cours » tant que la
         // marque est là, jamais un « prêt » sur un index vide.
