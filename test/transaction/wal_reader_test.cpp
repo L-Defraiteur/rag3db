@@ -67,8 +67,8 @@ protected:
         std::vector<std::string> out;
         for (const auto& e : reading.entries) {
             const auto name = walRecordTypeName(e.type);
-            if (name == "BEGIN" || name == "COMMIT" || name == "CREATE_CATALOG_ENTRY" ||
-                name == "UPDATE_SEQUENCE") {
+            if (name == "BEGIN" || name == "COMMIT" || name == "FORMAT" ||
+                name == "CREATE_CATALOG_ENTRY" || name == "UPDATE_SEQUENCE") {
                 continue;
             }
             out.push_back(name + (e.detail.empty() ? "" : " " + e.detail));
@@ -89,7 +89,8 @@ TEST_F(WalReader, KnownScenario) {
     for (const auto& e : reading.entries) {
         const auto name = walRecordTypeName(e.type);
         begins += name == "BEGIN";
-        if (name != "BEGIN" && name != "COMMIT") {
+        // Le FORMAT, en tête du journal, est hors de toute transaction.
+        if (name != "BEGIN" && name != "COMMIT" && name != "FORMAT") {
             EXPECT_GE(e.transaction, 0) << "[check: wal-in-a-transaction] #" << e.index << " "
                                         << name;
         }

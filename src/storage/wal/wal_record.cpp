@@ -90,6 +90,9 @@ std::unique_ptr<WALRecord> WALRecord::deserialize(Deserializer& deserializer,
     case WALRecordType::LOAD_EXTENSION_RECORD: {
         walRecord = LoadExtensionRecord::deserialize(deserializer);
     } break;
+    case WALRecordType::FORMAT_RECORD: {
+        walRecord = FormatRecord::deserialize(deserializer);
+    } break;
     case WALRecordType::INVALID_RECORD: {
         throw RuntimeException("Corrupted wal file. Read out invalid WAL record type.");
     }
@@ -487,6 +490,25 @@ std::unique_ptr<RelUpdateRecord> RelUpdateRecord::deserialize(Deserializer& dese
         resultChunkState, rawNumericArrays);
     return std::make_unique<RelUpdateRecord>(tableID, columnID, std::move(srcNodeIDVector),
         std::move(dstNodeIDVector), std::move(relIDVector), std::move(propertyVector));
+}
+
+void FormatRecord::serialize(Serializer& serializer) const {
+    WALRecord::serialize(serializer);
+    serializer.writeDebuggingInfo("storage_version");
+    serializer.write<uint64_t>(storageVersion);
+    serializer.writeDebuggingInfo("writer");
+    serializer.write<std::string>(writerBuildID);
+}
+
+std::unique_ptr<FormatRecord> FormatRecord::deserialize(Deserializer& deserializer) {
+    std::string key;
+    uint64_t storageVersion = 0;
+    deserializer.validateDebuggingInfo(key, "storage_version");
+    deserializer.deserializeValue<uint64_t>(storageVersion);
+    std::string writer;
+    deserializer.validateDebuggingInfo(key, "writer");
+    deserializer.deserializeValue<std::string>(writer);
+    return std::make_unique<FormatRecord>(storageVersion, std::move(writer));
 }
 
 void LoadExtensionRecord::serialize(Serializer& serializer) const {

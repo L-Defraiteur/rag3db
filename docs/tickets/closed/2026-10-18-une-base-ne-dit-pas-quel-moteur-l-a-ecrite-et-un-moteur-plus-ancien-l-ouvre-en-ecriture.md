@@ -1,7 +1,7 @@
 # Une base ne dit pas quel moteur l'a écrite en dernier, et un moteur plus ancien de même format l'ouvre en écriture
 
-- **État** : ouvert (demande de Lucie par l'orchestration, 18 octobre 2026 ; fin de la file du
-  cœur C++)
+- **État** : corrigé le 19 octobre 2026 par le commit qui déplace ce fichier (`git log --follow`),
+  première pièce de V2-1a (demande de Lucie par l'orchestration, 18 octobre 2026)
 - **Gravité** : corruption possible : un vieux client démarre un vieil hôte sur une base écrite
   par un moteur plus récent de même « version de stockage », l'ouvre en écriture et y écrit avec
   un code qui ne connaît pas ce que le récent y a mis (un champ d'en-tête, une colonne
@@ -70,7 +70,46 @@ les deux bâtis ; une base à la version −1 (quand une migration existe) s'ouv
 point de reprise la passe à la version courante avec le bâti courant. Le même pour un journal
 forgé.
 
-## Pour le fermer
+## Ce qui a été fait (19 octobre 2026)
 
-Les quatre points, le témoin vert, et la note dans la page de G sur le démarrage de l'hôte (le
-filet du moteur s'ajoute à l'activation par socket).
+1. **`StorageVersionInfo::STORAGE_FORMAT_VERSION`** (`src/include/storage/storage_version_info.h`),
+   posée à la main avec la note de chaque numéro (39, 40, 41) ; `getStorageVersion()` la rend ;
+   la table « produit → numéro » reste comme mémoire de ce que les versions du produit ont écrit.
+   `OLDEST_READABLE_STORAGE_VERSION = 39`.
+2. **Le bâti du dernier écrivain dans l'en-tête** (`DatabaseHeader::writerBuildID`, format 41) :
+   écrit juste après la version à chaque point de reprise (`StorageVersionInfo::getBuildID()`,
+   l'identifiant de `cmake/build_id.cmake`) ; toute version suivante garde cet ordre, pour que le
+   refus puisse nommer les deux bâtis. `DatabaseHeader::storageVersion` et `writerBuildID`
+   disent ce que l'en-tête lu portait.
+3. **Le refus nommé** (`readStorageVersion`, `src/storage/database_header.cpp`,
+   `common::StorageVersionException`) : une base plus récente que le moteur est refusée en
+   lecture comme en écriture (« This database was last written by the engine ‹bâti› in storage
+   format N; this engine (‹bâti›) reads and writes format M: open it with an engine at least as
+   recent. ») ; une base plus ancienne que 39 aussi (« older than the oldest this engine … can
+   read : export it … ») ; entre les deux elle s'ouvre, et son premier point de reprise la
+   réécrit à la version et au bâti courants.
+4. **Le journal** : son premier enregistrement est un `FormatRecord` (type 253 : version de
+   format, bâti écrivain), écrit avec l'en-tête du journal. Le rejeu à sec le lit en premier et
+   refuse par le même nom (« This database's journal was written by the engine … ») un journal
+   plus récent que le moteur, avant d'en rejouer ou d'en effacer quoi que ce soit ; l'exception
+   traverse le filet « journal corrompu » (`throwOnWalReplayFailure`). Un moteur d'avant refuse
+   ce journal comme un type inconnu, ce qui était déjà le cas d'un journal plus récent.
+
+Témoin : `test/transaction/storage_format_version_test.cpp` (`StorageFormatVersion.*`) : l'en-tête
+neuf porte version et bâti ; une base forgée à la version +1 par un autre bâti est refusée en
+nommant les deux versions et les deux bâtis, en écriture et en lecture seule par les mêmes mots ;
+une base forgée à 38 est refusée par son nom ; une base forgée à 40 puis à 39 s'ouvre, se lit, et
+son premier point de reprise l'estampille ; un journal forgé à la version +1 est refusé avant tout
+rejeu, intact.
+
+**Conséquence à dire à chaque poste** : dès que ce moteur a passé un point de reprise sur une
+base, un moteur d'avant (format 40) la refuse (« Trying to read a database file with a different
+version », son propre message) : un binaire installé lié à une lib d'avant ne rouvre plus une base
+que l'hôte neuf a écrite. **Une lib d'avant le format 41 n'est plus une cible de
+retour pour une base ouverte par celle-ci** : le seul retour est l'instantané (reflink) pris
+avant la bascule, hôtes arrêtés proprement. La bascule est cadrée par l'orchestration (19 octobre
+2026) : lib rebâtie et tenue hors `courant`, instantané des bases partagées sur les deux postes,
+verdict e2e_code, puis `courant` aux deux postes en même temps et hôtes redémarrés annoncés aux
+sessions MCP ; aucune recette ne force plus une lib d'avant 41 sur une base partagée (les tests sur
+bases temporaires gardent leurs épinglages). La note sur le démarrage de l'hôte (le filet du moteur
+s'ajoute à l'activation par socket) est demandée à G par message, avec le hash du lot.

@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (42)
+### Ouverts — moteur (41)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -53,7 +53,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
 | [L'annulation d'un COPY sous un tampon plein peut encore allouer](2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer.md) | ouvert, à confirmer (témoin à écrire) | blocage possible (la base n'est plus bloquée : erreur nommée, ou base à rouvrir) | en principe | oui (ses COPY) |
 | [La rétention des index ne couvre que l'index vectoriel : une recherche spatiale perd son index sous un DROP, et rend zéro ligne sans le dire](2026-10-18-la-retention-des-index-ne-couvre-que-l-index-vectoriel.md) | ouvert pour geo (R2, quand geo servira) ; la part commune est faite (R1) : accès par nom avec la transaction, capture commune, ordre du chargement | réponse fausse (zéro ligne) | oui | oui, s'il emploie l'index spatial |
-| [Une base ne dit pas quel moteur l'a écrite en dernier, et un moteur plus ancien de même format l'ouvre en écriture](2026-10-18-une-base-ne-dit-pas-quel-moteur-l-a-ecrite-et-un-moteur-plus-ancien-l-ouvre-en-ecriture.md) | ouvert — demande de Lucie ; pour le cœur C++, fin de file | corruption possible (un vieil hôte écrit une base plus récente de même numéro) | oui (client et hôte de versions différentes) | oui |
 | [Un bâti d'index prend tous les fils de travail et affame les autres connexions, lecteurs compris](2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions.md) | ouvert — cause confirmée (le planificateur, pas un verrou) ; forme à étudier : file équitable ; témoin `IndexCreationThreads.LeavesAThreadToReaders` | blocage (tous attendent environ 9,7 s à deux fils) | oui (peu de cœurs, pod sous quota) | oui |
 | [Sur une table indexée par HNSW, chaque écrivain tient l'index en exclusif jusqu'à sa validation : les écrivains passent un par un](2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un.md) | ouvert — pour le cœur, en fin de file (arbitrage de c7 : distinct de la lenteur de l'insertion et du point de reprise) ; E11 | blocage (p99 de Doc 390 ms contre 24 ms pour Note) | oui | oui (tables de morceaux) |
 | [Un point de reprise fige toutes les transactions le temps de s'écrire, lecteurs compris, et il s'écrit toutes les trois secondes sous charge](2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md) | ouvert — mesuré par le banc (129 au seuil sur une passe, 1,2 à 1,4 s chacun) ; à placer dans la file du cœur C++ | attente pour tout le monde, lecteurs compris | oui (régime ordinaire d'un hôte qui indexe) | oui |
@@ -133,10 +132,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (157), dans `closed/`
+### Fermés (158), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une base ne dit pas quel moteur l'a écrite en dernier, et un moteur plus ancien de même format l'ouvre en écriture](closed/2026-10-18-une-base-ne-dit-pas-quel-moteur-l-a-ecrite-et-un-moteur-plus-ancien-l-ouvre-en-ecriture.md) | corrigé (19 octobre 2026, première pièce de V2-1a) — version de format 41 posée à la main, bâti écrivain dans l'en-tête et en tête du journal, refus nommés dans les deux sens, base ancienne estampillée au point de reprise | corruption possible | oui | oui |
 | [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | corrigé (19 octobre 2026) — la préparation voit les paramètres d'une sous-requête ; le produit rend `through` en `EXISTS` quand sa lib est `courant` | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Une méthode propre contre une méthode de trait de même nom](closed/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md) | corrigé (codeparsers `trait_impl`, la méthode propre passe avant à types égaux ; témoin d'impact vert par le vrai chemin) | relation manquante | oui, `impact row_to_map` | oui (`code.rs`, codeparsers) |
 | [Une base réserve 8 Tio d'adressage : un processus n'en ouvre qu'une quinzaine](closed/2026-10-19-une-base-reserve-8-tio-d-adressage-un-processus-n-en-ouvre-qu-une-quinzaine.md) | corrigé (la réservation par tranches de 16 Gio, qui grandit avec la base ; voir le ticket) | ouverture refusée | oui | oui (l'hôte d'équipe, les tâches de l'agent) |

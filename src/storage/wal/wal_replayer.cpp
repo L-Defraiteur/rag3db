@@ -1,5 +1,7 @@
 #include "storage/wal/wal_replayer.h"
 
+#include "storage/storage_version_info.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -19,6 +21,7 @@
 #include "common/exception/end_of_file.h"
 #include "common/exception/io.h"
 #include "common/exception/runtime.h"
+#include "common/exception/storage_version.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
@@ -410,6 +413,18 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo, bool throw
                 // Update the offset to the end of the last commit record.
                 offsetDeserialized = getReadOffset(deserializer, enableChecksums);
             } break;
+            case WALRecordType::FORMAT_RECORD: {
+                // Un journal d'un moteur plus récent : refusé en le disant, avant tout rejeu.
+                const auto& format = walRecord->constCast<FormatRecord>();
+                if (format.storageVersion > StorageVersionInfo::getStorageVersion()) {
+                    throw StorageVersionException(stringFormat(
+                        "This database's journal was written by the engine {} in storage format "
+                        "{}; this engine ({}) reads and writes format {}: open it with an engine "
+                        "at least as recent.",
+                        format.writerBuildID, format.storageVersion,
+                        StorageVersionInfo::getBuildID(), StorageVersionInfo::getStorageVersion()));
+                }
+            } break;
             default: {
                 // DO NOTHING.
             }
@@ -419,6 +434,9 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo, bool throw
         // transaction whose COMMIT was never written. Also a torn end.
         tornEnd = !isLastRecordCheckpoint &&
                   getReadOffset(deserializer, enableChecksums) > offsetDeserialized;
+    } catch (const StorageVersionException&) {
+        // Ni une corruption ni une fin déchirée : le journal est d'un autre format.
+        throw;
     } catch (const EndOfFileException&) {
         // The file ended inside a record: a torn end, left by a stop while a
         // commit was being appended. Every byte before it was read and
@@ -480,6 +498,9 @@ void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
     } break;
     case WALRecordType::LOAD_EXTENSION_RECORD: {
         replayLoadExtensionRecord(walRecord);
+    } break;
+    case WALRecordType::FORMAT_RECORD: {
+        // Lu et jugé au rejeu à sec ; rien à rejouer.
     } break;
     case WALRecordType::CHECKPOINT_RECORD: {
         // This record should not be replayed. It is only used to indicate that the previous records
