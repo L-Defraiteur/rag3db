@@ -1972,6 +1972,10 @@ pub struct CodeIngestReport {
     pub ambiguous_edges: usize,
     /// Mentions laissées sans arête : plus de candidats que la borne (`RAG3WEAVER_AMBIGU_MAX`).
     pub abstained_too_many: usize,
+    /// Mentions dont tous les définisseurs sont d'un autre langage, ou qu'un seul définisseur de
+    /// leur langage ne désignerait que par le nom : aucune arête (une résolution ne traverse pas
+    /// les langages, et ce filtre ne désigne personne).
+    pub abstained_cross_language: usize,
     /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
     /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
     pub mentions_read: usize,
@@ -2551,6 +2555,12 @@ impl Catalog {
             // Et les scopes qui réexportent un nom : leur fichier dit d'où
             // part le chemin à suivre.
             .chain(mentioners_by_symbol.values().flatten().filter(|m| !m.reexport_from.is_empty()).map(|m| m.from.clone()))
+            // Et tous les définisseurs et mentionneurs du lot : leur fichier dit leur langage, et
+            // une résolution ne traverse pas les langages (`meme_langage`).
+            .chain(uuids.iter().flat_map(|sym| definers_by_symbol.get(sym).cloned().unwrap_or_default()))
+            .chain(uuids.iter().flat_map(|sym| mentioners_by_symbol.get(sym).into_iter().flatten().map(|m| m.from.clone())))
+            .collect::<std::collections::BTreeSet<String>>()
+            .into_iter()
             .collect();
         let t = std::time::Instant::now();
         let (parents, fichiers, genres, origines) = self.parents_et_fichiers(&a_departager)?;
@@ -2581,7 +2591,24 @@ impl Catalog {
                 .filter_map(|m| fichiers.get(&m.from).map(|f| (f.clone(), m.reexport_from.clone())))
                 .collect();
             for m in mentioners_by_symbol.get(sym).unwrap_or(&empty).iter().cloned() {
+                // Une résolution ne traverse pas les langages : les définisseurs d'une autre
+                // famille ne sont pas candidats (révisé par c7 sur la mesure du 19 octobre 2026).
+                let homonymes = definers.len();
+                let definers: Vec<String> = definers.iter().filter(|d| meme_langage(fichiers.get(&m.from), fichiers.get(*d))).cloned().collect();
+                if definers.is_empty() {
+                    report.abstained_cross_language += 1;
+                    continue;
+                }
+                let definers = &definers;
                 let cibles: Vec<(String, Resolution)> = match choose_target(&m, definers, &parents, &fichiers, &genres, &reexports) {
+                    // Le filtre des langages ôte des candidats, il n'en désigne pas : un nom que
+                    // plusieurs langages définissent, unique dans le sien, ne se résout pas par le
+                    // seul nom (sur code-lourd, la moitié de ces arêtes étaient fausses). Un parent
+                    // (HAS_PARENT), qui se lit par la portée, garde sa résolution.
+                    Some((_, Resolution::Name)) if homonymes > 1 && m.kind != "HAS_PARENT" => {
+                        report.abstained_cross_language += 1;
+                        continue;
+                    }
                     Some(c) => vec![c],
                     None => match departager(&m, definers, &fichiers, &origines, borne) {
                         Choix::Un(d, r) => vec![(d, r)],
@@ -3115,8 +3142,6 @@ pub(crate) enum Resolution {
     Import,
     /// Seul définisseur du nom, rien d'autre ne le confirme.
     Name,
-    /// Plusieurs définisseurs, un seul dans le dossier du mentionneur : le plus proche.
-    Dossier,
     /// **Plusieurs définisseurs que rien ne départage** : l'arête est posée vers chacun, et le
     /// dit. « Une relation douteuse se dit, elle ne se tait pas » (tranché par l'orchestration
     /// le 18 octobre 2026, à relire par Lucie) : elle remplace « une relation manquante vaut
@@ -3168,7 +3193,6 @@ impl Resolution {
             Resolution::Type => "type",
             Resolution::Import => "import",
             Resolution::Name => "nom",
-            Resolution::Dossier => "dossier",
             Resolution::Ambigu => "ambigu",
         }
     }
@@ -3288,10 +3312,38 @@ fn borne_ambigu() -> usize {
     std::env::var("RAG3WEAVER_AMBIGU_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(1)
 }
 
-/// Le dossier d'un chemin de fichier (`src/a/b.rs` → `src/a`).
-fn dossier_de(f: &str) -> &str {
-    f.rsplit_once('/').map(|(d, _)| d).unwrap_or("")
+/// **La famille de langage d'un fichier**, par son extension : C et C++ ensemble (en-têtes
+/// compris), JavaScript et TypeScript ensemble. `gabarit` pour les déclarations de rag3weaver
+/// (`.mmd`, `.json`), qui nomment par dessein le type Rust de leurs nœuds. `None` : inconnue.
+fn famille_de_langage(chemin: &str) -> Option<&'static str> {
+    let ext = chemin.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase())?;
+    Some(match ext.as_str() {
+        "c" | "h" | "cc" | "cpp" | "cxx" | "c++" | "hh" | "hpp" | "hxx" | "h++" | "inl" | "ipp" | "tpp" => "c++",
+        "rs" => "rust",
+        "py" | "pyi" => "python",
+        "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts" => "js",
+        "go" => "go",
+        "java" => "java",
+        "kt" | "kts" => "kotlin",
+        "cs" => "c#",
+        "rb" => "ruby",
+        "php" => "php",
+        "swift" => "swift",
+        "mmd" | "json" => "gabarit",
+        _ => return None,
+    })
 }
+
+/// **Une résolution ne traverse pas les langages** : une mention ne vise qu'un définisseur de sa
+/// famille. Un fichier de langage inconnu ne restreint rien ; un gabarit peut nommer du code
+/// (le lien déclaré entre langages : un nœud et son type Rust).
+fn meme_langage(mentionneur: Option<&String>, definisseur: Option<&String>) -> bool {
+    match (mentionneur.and_then(|f| famille_de_langage(f)), definisseur.and_then(|f| famille_de_langage(f))) {
+        (Some("gabarit"), _) | (None, _) | (_, None) => true,
+        (Some(a), Some(b)) => a == b,
+    }
+}
+
 
 /// **Départager un nom que [`choose_target`] laisse à plusieurs définisseurs**, pour une mention
 /// sans type lu ni receveur non typé (ces deux-là restent seuls juges, comme le parent) :
@@ -3320,25 +3372,17 @@ fn departager(
             return Choix::Rien;
         }
     }
-    if let Some(mon_fichier) = fichiers.get(&m.from) {
-        for (proche, marque) in [
-            (Box::new(|f: &str| f == mon_fichier) as Box<dyn Fn(&str) -> bool>, Resolution::File),
-            (Box::new(|f: &str| dossier_de(f) == dossier_de(mon_fichier)), Resolution::Dossier),
-        ] {
-            let ici: Vec<&String> = candidats.iter().copied().filter(|d| fichiers.get(*d).is_some_and(|f| proche(f))).collect();
-            match ici.as_slice() {
-                [] => continue,
-                [un] => return Choix::Un((*un).clone(), marque),
-                _ => {
-                    candidats = ici;
-                    break;
-                }
-            }
-        }
-    }
+    // Ni le même fichier ni le même dossier ne choisissent : une proximité est une devinette, et
+    // « une relation douteuse se compte et se dit, elle ne se devine pas » (révisé par c7 sur la
+    // mesure du 19 octobre 2026 : sur code-lourd, ces deux choix posaient 13 308 arêtes, des
+    // appels à receveur vers la méthode homonyme d'à côté, le mentionneur vers lui-même).
     match candidats.as_slice() {
         [] => Choix::Rien,
-        [un] => Choix::Un((*un).clone(), Resolution::Name),
+        // Un seul candidat ne se désigne que par un import. Réduit à un par la source ou le dépôt,
+        // ce serait encore une devinette : sur code-lourd, 935 `.collect()` vers le seul
+        // `collect` du dépôt d'à côté. L'abstention, comptée.
+        [un] if !m.import_modules.is_empty() => Choix::Un((*un).clone(), Resolution::Import),
+        [_] => Choix::Trop(definers.len()),
         plusieurs if plusieurs.len() > borne => Choix::Trop(plusieurs.len()),
         plusieurs => Choix::Plusieurs(plusieurs.iter().map(|d| (*d).clone()).collect()),
     }
@@ -4027,44 +4071,40 @@ mod tests_resolution {
     /// borne l'abstention ; un import qui n'en désigne aucun, rien ; une autre source n'est pas
     /// candidate ; une mention typée reste seule juge.
     #[test]
-    fn departager_par_fichier_puis_dossier_sinon_chacun() {
+    fn une_resolution_ne_traverse_pas_les_langages() {
+        let f = |x: &str| Some(x.to_string());
+        assert!(meme_langage(f("/p/a.cpp").as_ref(), f("/p/include/a.h").as_ref()), "C++ et ses en-têtes");
+        assert!(meme_langage(f("/p/a.ts").as_ref(), f("/p/b.js").as_ref()));
+        assert!(!meme_langage(f("/p/a.cpp").as_ref(), f("/p/b.rs").as_ref()), "C++ vers Rust : non");
+        assert!(!meme_langage(f("/p/run.py").as_ref(), f("/p/third_party/re2/regexp.h").as_ref()), "Python vers C++ : non");
+        assert!(meme_langage(f("/p/templates/trace.mmd").as_ref(), f("/p/src/trace_nodes.rs").as_ref()), "un gabarit nomme son type Rust");
+        assert!(!meme_langage(f("/p/src/a.rs").as_ref(), f("/p/templates/trace.mmd").as_ref()), "le code ne vise pas un gabarit par le nom");
+        assert!(meme_langage(f("/p/Makefile").as_ref(), f("/p/b.rs").as_ref()) && meme_langage(None, f("/p/b.rs").as_ref()), "inconnu : rien ne restreint");
+    }
+
+    #[test]
+    fn departager_ne_devine_pas() {
         let origine = |ids: &[&str]| -> HashMap<String, (String, String)> { ids.iter().map(|i| (i.to_string(), ("src".to_string(), "depot".to_string()))).collect() };
         let m = mention("CONSUMES", &[], &[]);
-        // Même fichier : celui-là.
         let fichiers = table(&[("run", "/p/a/x.rs"), ("h1", "/p/a/x.rs"), ("h2", "/p/a/y.rs"), ("h3", "/p/b/z.rs")]);
         let tous = origine(&["run", "h1", "h2", "h3"]);
-        assert!(matches!(departager(&m, &ids(&["h1", "h2", "h3"]), &fichiers, &tous, 8), Choix::Un(ref d, Resolution::File) if d == "h1"));
-        // Même dossier : celui-là, marqué « dossier ».
-        assert!(matches!(departager(&m, &ids(&["h2", "h3"]), &fichiers, &tous, 8), Choix::Un(ref d, Resolution::Dossier) if d == "h2"));
-        // Deux dans le dossier, un ailleurs : les deux du dossier, ambigus.
-        let fichiers2 = table(&[("run", "/p/a/x.rs"), ("h1", "/p/a/y.rs"), ("h2", "/p/a/w.rs"), ("h3", "/p/b/z.rs")]);
-        match departager(&m, &ids(&["h1", "h2", "h3"]), &fichiers2, &tous, 8) {
-            Choix::Plusieurs(v) => assert_eq!(v, ids(&["h1", "h2"])),
-            _ => panic!("les deux du dossier, ambigus"),
-        }
-        // Rien de proche : chacun.
-        let fichiers3 = table(&[("run", "/p/c/x.rs"), ("h1", "/p/a/y.rs"), ("h2", "/p/b/z.rs")]);
-        assert!(matches!(departager(&m, &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Plusieurs(ref v) if v.len() == 2));
-        // Au-delà de la borne : l'abstention, comptée.
-        let neuf: Vec<String> = (0..9).map(|i| format!("d{i}")).collect();
-        let mut f9 = table(&[("run", "/p/c/x.rs")]);
-        let mut o9 = origine(&["run"]);
-        for (i, d) in neuf.iter().enumerate() {
-            f9.insert(d.clone(), format!("/p/m{i}/f.rs"));
-            o9.insert(d.clone(), ("src".into(), "depot".into()));
-        }
-        assert!(matches!(departager(&m, &neuf, &f9, &o9, 8), Choix::Trop(9)));
-        assert!(matches!(departager(&m, &neuf, &f9, &o9, 9), Choix::Plusieurs(ref v) if v.len() == 9));
-        // Une autre source n'est pas candidate.
+        // Ni le même fichier ni le même dossier ne choisissent (« ne se devine pas ») : à la
+        // borne 1, plusieurs candidats sont une abstention comptée ; au-delà, une arête vers chacun.
+        assert!(matches!(departager(&m, &ids(&["h1", "h2", "h3"]), &fichiers, &tous, 1), Choix::Trop(3)));
+        assert!(matches!(departager(&m, &ids(&["h1", "h2"]), &fichiers, &tous, 8), Choix::Plusieurs(ref v) if v.len() == 2));
+        // Une autre source n'est pas candidate ; le seul qui reste n'est pas désigné pour autant
+        // (une devinette), sauf par un import qui le nomme.
         let mut ailleurs = tous.clone();
         ailleurs.insert("h2".into(), ("autre".into(), "depot".into()));
-        assert!(matches!(departager(&m, &ids(&["h1", "h2"]), &fichiers3, &ailleurs, 8), Choix::Un(ref d, Resolution::Name) if d == "h1"));
+        assert!(matches!(departager(&m, &ids(&["h1", "h2"]), &fichiers, &ailleurs, 1), Choix::Trop(2)));
+        let par_import = mention("CONSUMES", &[], &["p::a::x"]);
+        assert!(matches!(departager(&par_import, &ids(&["h1", "h2"]), &fichiers, &ailleurs, 1), Choix::Un(ref d, Resolution::Import) if d == "h1"));
         // Un import qui ne désigne aucun d'eux : rien.
         let importe = mention("CONSUMES", &[], &["ailleurs"]);
-        assert!(matches!(departager(&importe, &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Rien));
+        assert!(matches!(departager(&importe, &ids(&["h1", "h2"]), &fichiers, &tous, 8), Choix::Rien));
         // Une mention typée, un parent : seuls juges, jamais départagés ici.
-        assert!(matches!(departager(&mention("CONSUMES", &["T"], &[]), &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Rien));
-        assert!(matches!(departager(&mention("HAS_PARENT", &[], &[]), &ids(&["h1", "h2"]), &fichiers3, &tous, 8), Choix::Rien));
+        assert!(matches!(departager(&mention("CONSUMES", &["T"], &[]), &ids(&["h1", "h2"]), &fichiers, &tous, 8), Choix::Rien));
+        assert!(matches!(departager(&mention("HAS_PARENT", &[], &[]), &ids(&["h1", "h2"]), &fichiers, &tous, 8), Choix::Rien));
     }
 
     #[test]

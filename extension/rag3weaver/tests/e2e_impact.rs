@@ -248,10 +248,7 @@ fn la_latence_d_impact_sur_ce_depot() {
 /// (relevés à la main dans l'historique, 3 octobre 2026). `impact` de la
 /// fonction modifiée doit nommer le test parmi ceux qui la traversent.
 ///
-/// - `row_to_map` (ab95c3a2d, réparé d83a557d3) → `Catalog::get` →
-///   `phase0_create_drain_all_field_types` et `phase0_update_and_delete`
-///   (e2e_search.rs) : deux sauts, par un nom (`get`) défini sept fois, que
-///   le type de `catalog` départage ;
+/// - `row_to_map` : voir [`impact_row_to_map_nomme_les_tests_qui_appellent_catalog_get`] ;
 /// - `mark_snapshot` (7bd31517c, réparé 90d094fe8) → `lot` →
 ///   `une_fin_retire_les_absentes_du_seul_perimetre` (e2e_synchronisation.rs) ;
 /// - `split_unchanged` (927967b79, réparé 078d49345) →
@@ -261,6 +258,31 @@ fn la_latence_d_impact_sur_ce_depot() {
 #[test]
 #[ignore]
 fn impact_nomme_les_tests_que_des_changements_reels_ont_casses() {
+    impact_nomme_ces_tests(&[
+        ("mark_snapshot", vec!["une_fin_retire_les_absentes_du_seul_perimetre"]),
+        ("split_unchanged", vec!["une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge"]),
+    ]);
+}
+
+/// - `row_to_map` (ab95c3a2d, réparé d83a557d3) → `Catalog::get` →
+///   `phase0_create_drain_all_field_types` et `phase0_update_and_delete`
+///   (e2e_search.rs) : deux sauts, par un nom (`get`) que le type de `catalog` départage.
+///
+/// **Se saute, en le disant**, tant que la méthode propre ne passe pas avant la méthode de trait :
+/// `Catalog::get` et le `get` de `impl ReadCatalog for Catalog` ont le même type. Le vert d'avant
+/// passait par `exists` → `get`, une arête devinée par le fichier et fausse. Ticket
+/// `docs/tickets/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md`.
+#[test]
+#[ignore]
+fn impact_row_to_map_nomme_les_tests_qui_appellent_catalog_get() {
+    if std::env::var("RAG3WEAVER_TEMOIN_METHODE_DE_TRAIT").is_err() {
+        eprintln!("SKIPPED : la méthode propre contre la méthode de trait, ticket du 19 octobre 2026 (RAG3WEAVER_TEMOIN_METHODE_DE_TRAIT=1 pour le jouer)");
+        return;
+    }
+    impact_nomme_ces_tests(&[("row_to_map", vec!["phase0_create_drain_all_field_types", "phase0_update_and_delete"])]);
+}
+
+fn impact_nomme_ces_tests(cas: &[(&str, Vec<&str>)]) {
     let catalog = setup();
     let racine = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let mut sources = Vec::new();
@@ -275,18 +297,13 @@ fn impact_nomme_les_tests_que_des_changements_reels_ont_casses() {
     catalog.lock().unwrap().ingest_code(&analyze(&racine, sources)).unwrap();
     eprintln!("[ingestion de src/ et tests/] {} s", t.elapsed().as_secs());
     let cat = catalog.lock().unwrap();
-    let cas = [
-        ("row_to_map", vec!["phase0_create_drain_all_field_types", "phase0_update_and_delete"]),
-        ("mark_snapshot", vec!["une_fin_retire_les_absentes_du_seul_perimetre"]),
-        ("split_unchanged", vec!["une_premiere_ingestion_passe_par_la_masse_et_la_seconde_par_le_merge"]),
-    ];
     let mut manques = Vec::new();
     for (fonction, tests) in cas {
         let t = Instant::now();
         let r = neighborhood_of(&cat, &code_config(), fonction, "", 3, 400, 50).unwrap();
         eprintln!("[{fonction}] {} ms\n{}", t.elapsed().as_millis(), md(&r));
         for test in tests {
-            let trouve = r.reached.iter().any(|x| x.title == test && !x.group.is_empty());
+            let trouve = r.reached.iter().any(|x| x.title == *test && !x.group.is_empty());
             if !trouve {
                 manques.push(format!("{fonction} → {test}"));
             }

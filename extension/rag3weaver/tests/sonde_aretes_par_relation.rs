@@ -8,6 +8,7 @@
 //! Une ligne TSV par couple : `table  from  to  aller  retour` ; puis les nœuds par
 //! table et deux invariants (`sans_lien`). `SONDE_LISTER=R1,R2` liste en plus chaque
 //! arête de ces relations par les clés de ses bouts, pour un `comm` entre deux bases.
+//! `SONDE_REQUETE=<cypher>` rend en plus les lignes d'une requête libre.
 //!
 //! Mesuré le 18 octobre 2026 (code-lourd, même arbre, même binaire) : la
 //! réindexation au seuil de COPY de liens par défaut a 18 `HAS_PARENT` et 11
@@ -71,6 +72,13 @@ fn compter_les_aretes() {
             for l in &r.rows {
                 println!("arete\t{rel}\t{:?}\t{:?}", l.first(), l.get(1));
             }
+        }
+    }
+    // `SONDE_REQUETE` : une requête libre, ses lignes telles quelles (la marque d'une arête…).
+    if let Ok(q) = std::env::var("SONDE_REQUETE") {
+        match conn.execute(&q) {
+            Ok(r) => r.rows.iter().for_each(|l| println!("ligne\t{l:?}")),
+            Err(e) => println!("requete\terreur\t{e}"),
         }
     }
     if noeuds.iter().any(|m| m == "Scope") && noeuds.iter().any(|m| m == "File") {
