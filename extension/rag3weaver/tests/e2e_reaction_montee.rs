@@ -298,6 +298,13 @@ fn une_reaction_du_manifeste_transitionne_sans_que_personne_l_appelle() {
     );
 
     // ── 3. L'ancre, puis le sujet change ─────────────────────────────────
+    //
+    // Le bus écouté dès ici, sur `catalog` (l'écriture de la réaction) et sur
+    // `reactions` (ses runs) : le 3 ter relie les deux.
+    let (mut du_catalogue, mut des_reactions) = {
+        let bus = backend.catalog.lock().unwrap().event_bus();
+        (bus.subscribe(rag3weaver::events::topic::CATALOG), bus.subscribe(rag3weaver::events::topic::REACTIONS))
+    };
     backend
         .call(
             "ancrer",
@@ -351,6 +358,38 @@ fn une_reaction_du_manifeste_transitionne_sans_que_personne_l_appelle() {
         "une réaction qui écrit publie son écriture et ne se relance pas sans fin — runs = {}",
         backend.reaction_runs()
     );
+
+    // ── 3 ter. **L'écriture dit quel run l'a faite, et ce run s'annonce** ─
+    //
+    // La transition publiée sur `catalog` porte le run du nœud qui l'a écrite
+    // (la pièce 1 de la mémoire), et ce run est celui que le réacteur annonce
+    // sur `reactions` par son `RunStarted`, cible la réaction (la publication
+    // des runs, 5f9cf0983) : de l'écriture, on remonte à la réaction qui l'a
+    // faite, par le bus seul.
+    let vider = |rx: &mut async_broadcast::Receiver<rag3weaver::events::Event>| -> Vec<Value> {
+        let mut v = Vec::new();
+        loop {
+            match rx.try_recv() {
+                Ok(e) => v.push(e.to_json()),
+                // Un récepteur débordé perd les plus anciens et continue : le
+                // dire plutôt que de s'arrêter là.
+                Err(async_broadcast::TryRecvError::Overflowed(n)) => v.push(json!({ "debordement": n })),
+                Err(_) => return v,
+            }
+        }
+    };
+    let ecrits = vider(&mut du_catalogue);
+    let transition = ecrits
+        .iter()
+        .find(|e| e["change"] == "transitioned" && e["entity"] == "Fiche")
+        .unwrap_or_else(|| panic!("aucune transition de Fiche sur catalog : {ecrits:?}"));
+    let run = transition["run"].as_str().unwrap_or_else(|| panic!("la transition ne dit pas son run : {transition}"));
+    let annonces = vider(&mut des_reactions);
+    let debut = annonces
+        .iter()
+        .find(|e| e["kind"] == "RunStarted" && e["run"] == run)
+        .unwrap_or_else(|| panic!("le run {run} de la transition n'est pas annoncé sur reactions : {annonces:?}"));
+    assert_eq!(debut["target"], json!({ "reaction": "review_anchored" }), "le run qui a écrit est celui de la réaction : {debut}");
 
     // ── 4. Le filtre `source` est DANS le graphe, pas à la sonnette ──────
     //
