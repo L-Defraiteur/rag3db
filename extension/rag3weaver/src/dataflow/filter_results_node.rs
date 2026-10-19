@@ -96,6 +96,10 @@ impl Node for FilterResultsNode {
 pub struct FilterResultsNodeFactory;
 
 impl NodeFactory for FilterResultsNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let mut node = FilterResultsNode::new(name);
         if let Some(s) = config.get("min_score").and_then(|v| v.as_f64()) {

@@ -747,6 +747,10 @@ impl NodeFactory for RunCommandNodeFactory {
 pub struct TailNodeFactory;
 
 impl NodeFactory for TailNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let cible = config
             .get("handle")

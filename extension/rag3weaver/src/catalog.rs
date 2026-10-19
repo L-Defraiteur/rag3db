@@ -444,6 +444,10 @@ pub struct Catalog {
     /// jamais tourner dans une transaction ouverte par l'écrivain sur `conn`.
     /// `None` : elles passent par `conn`.
     read_conn: Option<Arc<dyn DbConnection>>,
+    /// **Le pool des instantanés** (L6) : une connexion de lecture par appel
+    /// d'outil en vol, chacune en transaction READ ONLY ; `None` sans
+    /// connexions de lecture (PostgreSQL).
+    read_pool: Option<Arc<crate::read_pool::ReadPool>>,
     /// **La vue de lecture** (`crate::read_view`), publiée ici quand la forme
     /// change, lue sans ce mutex par les lectures d'outil.
     read_view: Arc<crate::read_view::ReadViewCell>,
@@ -577,12 +581,15 @@ fn read_threads() -> u64 {
         embedder: Box<dyn Embedder>,
         config: CatalogConfig,
     ) -> Self {
+        let conn: Arc<dyn DbConnection> = Arc::from(conn);
         let read_conn = conn.read_connection(Self::read_threads());
+        let read_pool = crate::read_pool::ReadPool::new(conn.clone(), Self::read_threads());
         Self {
             read_view: Default::default(),
             cellule_empruntee: false,
             read_conn,
-            conn: Arc::from(conn),
+            read_pool,
+            conn,
             embedder: Arc::from(embedder),
             sparse_embedder: None,
             reranker: None,
@@ -9375,7 +9382,8 @@ fn read_threads() -> u64 {
         // lignes non validées (relevé à l'inventaire de L4, 18 octobre 2026).
         let lecture = self.read_conn_arc();
         search.register("conn", crate::dataflow::services::ConnService(lecture.clone()));
-        if self.plein_texte_natif() && self.search_backend_par_defaut {
+        let texte_natif = self.plein_texte_natif() && self.search_backend_par_defaut;
+        if texte_natif {
             let natif: Arc<dyn crate::search_backend::SearchBackend> =
                 Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(lecture));
             search.register("texte_natif", natif);
@@ -9393,6 +9401,9 @@ fn read_threads() -> u64 {
             search_backend_externe: if self.search_backend_par_defaut { None } else { self.search_backend.clone() },
             event_bus: self.event_bus.clone(),
             search_services: Arc::new(search),
+            pool: self.read_pool.clone(),
+            sans_instantane: false,
+            texte_natif,
         }));
     }
 

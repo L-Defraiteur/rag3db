@@ -36,6 +36,10 @@ fn param(
     }
 }
 impl NodeFactory for EntityRecordFactory {
+    // L6 : lit sous `action='get'`, écrit sous `action='put'`.
+    fn snapshot_safe(&self, config: &serde_json::Value) -> bool {
+        config.get("action").and_then(|v| v.as_str()) == Some("get")
+    }
     fn node_type(&self) -> &'static str {
         "EntityRecordNode"
     }

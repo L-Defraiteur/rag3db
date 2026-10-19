@@ -46,6 +46,10 @@ pub fn register(nodes: &mut NodeRegistry) {
     }
 }
 impl NodeFactory for SetFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn node_type(&self) -> &'static str {
         self.0
     }

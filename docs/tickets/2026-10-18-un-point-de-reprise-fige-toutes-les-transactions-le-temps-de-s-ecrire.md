@@ -193,3 +193,31 @@ Les deux derniers sont le tableau des seuils retourné en témoins, sur un seul 
 déterministes. Le scénario des vingt écrivains joue la même chose à plusieurs par
 `SCENARIO_NO_AUTO_CHECKPOINT=1`.
 
+
+## Une transaction de lecture ouverte fait échouer un COMMIT forcé au bout de 5 s (arbre principal, 19 octobre 2026)
+
+Lu en écrivant L6 (un instantané READ ONLY par appel d'outil de lecture),
+`src/transaction/transaction_manager.cpp`, autour de 340 à 370. Un point de reprise **forcé**,
+c'est-à-dire le COMMIT d'un `COPY FROM` ou d'une validation qui porte des actions d'avant
+validation, passe par `stopNewTransactionsAndWaitForOthersNoLock`. Cette fonction fait deux
+choses :
+
+- elle **retient tout nouveau BEGIN** pendant qu'elle attend le départ des transactions
+  ouvertes, lecteurs compris ;
+- elle **échoue au bout de `DEFAULT_CHECKPOINT_WAIT_TIMEOUT_IN_MICROS` (5 s)** : « Timeout
+  waiting for active transactions to leave the system before checkpointing ». L'exception sort
+  avant la validation, et l'écrivain annule son lot.
+
+Une transaction de lecture tenue plus de 5 s fait donc échouer l'écriture d'un autre. Avant L6,
+une lecture d'outil ouvrait une transaction par requête, de l'ordre de la milliseconde. Avec L6,
+la transaction couvre l'appel. Le produit borne donc l'instantané :
+
+- `RAG3WEAVER_SNAPSHOT_MAX_MS`, 1 000 par défaut, au-delà duquel la requête suivante le valide
+  et l'appel continue requête par requête ;
+- la transaction ne s'ouvre qu'à la première requête, et la recherche embarque sa requête avant
+  toute lecture (le travail lent qui ne lit pas la base reste dehors).
+
+L'écrivain attend ainsi au plus environ une seconde, plus la requête en cours. C'est une
+pièce de plus pour la voie 2 : un point de reprise qui n'attend plus le départ des autres
+transactions lèverait à la fois le gel des BEGIN et cet échec, et le plafond du produit
+deviendrait inutile.

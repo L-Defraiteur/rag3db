@@ -131,6 +131,13 @@ pub trait DbConnection: Send + Sync {
         self.execute("BEGIN TRANSACTION").map(|_| ())
     }
 
+    /// **Une transaction de lecture** (L6) : un instantané fixe, que rag3db
+    /// ouvre à côté d'un écrivain sans l'attendre. Validée par
+    /// [`commit`](Self::commit).
+    fn begin_read_only(&self) -> Result<(), DbError> {
+        self.execute("BEGIN TRANSACTION READ ONLY").map(|_| ())
+    }
+
     /// Valide la transaction ouverte par [`begin`](Self::begin).
     fn commit(&self) -> Result<(), DbError> {
         self.execute("COMMIT").map(|_| ())

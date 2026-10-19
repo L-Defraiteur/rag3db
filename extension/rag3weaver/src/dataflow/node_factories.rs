@@ -40,6 +40,7 @@ named_factory!(
         PortDef::value("frames", PortType::Children, false),
     ],
     &[PortDef::value("results", PortType::Results, false)],
+    lecture,
 );
 
 named_factory!(
@@ -49,6 +50,7 @@ named_factory!(
     "Le parent de chaque résultat, selon le group_by déclaré par son entité — pour l'encadrer au rendu",
     &[PortDef::value("results", PortType::Results, true)],
     &[PortDef::value("frames", PortType::Children, false)],
+    lecture,
 );
 
 // ─── Macro-generated factories (named_factory!) ─────────────────────────────
@@ -57,6 +59,10 @@ named_factory!(
 pub struct FieldWeightNodeFactory;
 
 impl NodeFactory for FieldWeightNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -393,6 +399,10 @@ impl NodeFactory for SparseCommitNodeFactory {
 pub struct KBQuerySourceNodeFactory;
 
 impl NodeFactory for KBQuerySourceNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -462,6 +472,10 @@ impl NodeFactory for KBQuerySourceNodeFactory {
 pub struct FetchRelatedNodeFactory;
 
 impl NodeFactory for FetchRelatedNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -653,6 +667,10 @@ impl NodeFactory for EmbedNodeFactory {
 pub struct SearchSourceNodeFactory;
 
 impl NodeFactory for SearchSourceNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -925,6 +943,10 @@ fn status_out() -> PortDef {
 pub struct VectorSearchNodeFactory;
 
 impl NodeFactory for VectorSearchNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -962,6 +984,10 @@ impl NodeFactory for VectorSearchNodeFactory {
 pub struct BM25SearchNodeFactory;
 
 impl NodeFactory for BM25SearchNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -1046,6 +1072,10 @@ impl NodeFactory for BM25SearchNodeFactory {
 pub struct SparseSearchNodeFactory;
 
 impl NodeFactory for SparseSearchNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -1088,6 +1118,10 @@ impl NodeFactory for SparseSearchNodeFactory {
 pub struct FuseResultsNodeFactory;
 
 impl NodeFactory for FuseResultsNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -1252,6 +1286,10 @@ impl NodeFactory for FuseResultsNodeFactory {
 pub struct RerankNodeFactory;
 
 impl NodeFactory for RerankNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -1333,6 +1371,10 @@ pub struct ResolveParentNodeFactory;
 pub struct PaginateNodeFactory;
 
 impl NodeFactory for PaginateNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -1360,6 +1402,10 @@ impl NodeFactory for PaginateNodeFactory {
 }
 
 impl NodeFactory for ResolveParentNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,
@@ -1827,6 +1873,10 @@ pub struct ScanFilesNodeFactory;
 
 #[cfg(feature = "code")]
 impl NodeFactory for ScanFilesNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(
         &self,
         name: &str,

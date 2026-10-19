@@ -282,10 +282,21 @@ pub fn read_for_tool<'a>(
     // Libre à l'instant : la ligne d'état complète, sous ce garde, rendu
     // aussitôt ; la lecture elle-même se fait par la vue.
     let essai = catalog.try_lock().ok().map(|cat| statut(&cat, entity, cell));
+    // Un appel de lecture qui n'a pas eu d'instantané (pool plein, L6) le dit.
+    let sans = |status: Option<String>| -> Option<String> {
+        if !vue.sans_instantane {
+            return status;
+        }
+        let ligne = crate::read_pool::SANS_INSTANTANE.to_string();
+        Some(match status {
+            Some(s) => format!("{s}\n{ligne}"),
+            None => ligne,
+        })
+    };
     match essai {
-        Some(Ok(status)) => CatalogRead::View { view: vue, status },
+        Some(Ok(status)) => CatalogRead::View { status: sans(status), view: vue },
         Some(Err(refus)) => CatalogRead::Refused(refus),
-        None => CatalogRead::View { view: vue, status: Some(WRITER_HOLDS.to_string()) },
+        None => CatalogRead::View { status: sans(Some(WRITER_HOLDS.to_string())), view: vue },
     }
 }
 

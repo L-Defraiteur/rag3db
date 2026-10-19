@@ -553,9 +553,57 @@ pub struct ReadView {
     /// Les services de recherche de la cellule du catalogue, tout prêts :
     /// `build_services` les pose en parent du registre d'un appel.
     pub search_services: Arc<ServiceRegistry>,
+    /// Le pool des instantanés (L6) ; `None` sans connexions de lecture.
+    pub(crate) pool: Option<Arc<crate::read_pool::ReadPool>>,
+    /// La vue d'un appel qui voulait un instantané et n'en a pas eu (pool
+    /// plein) : ses lectures le disent ([`crate::read_pool::SANS_INSTANTANE`]).
+    pub(crate) sans_instantane: bool,
+    /// Le moteur de recherche servi par la base, quand la vue en a un : la
+    /// copie d'un appel le rebâtit sur sa connexion.
+    pub(crate) texte_natif: bool,
 }
 
 impl ReadView {
+    /// **La vue d'un appel, sur sa connexion** (L6) : la même forme, ses
+    /// requêtes sur `conn` (un instantané du pool), et ses services de
+    /// recherche posés par-dessus ceux de la vue, `"conn"` et `"texte_natif"`
+    /// rebâtis sur `conn`.
+    pub(crate) fn sur_connexion(&self, conn: Arc<dyn DbConnection>) -> ReadView {
+        let mut search = ServiceRegistry::layered(self.search_services.clone());
+        search.register("conn", crate::dataflow::services::ConnService(conn.clone()));
+        if self.texte_natif {
+            let natif: Arc<dyn crate::search_backend::SearchBackend> =
+                Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(conn.clone()));
+            search.register("texte_natif", natif);
+        }
+        ReadView { conn, search_services: Arc::new(search), sans_instantane: false, ..self.copie() }
+    }
+
+    /// La vue d'un appel qui n'a pas eu d'instantané : la même, qui le dit.
+    pub(crate) fn sans_instantane(&self) -> ReadView {
+        ReadView { sans_instantane: true, ..self.copie() }
+    }
+
+    fn copie(&self) -> ReadView {
+        ReadView {
+            dialect: self.dialect.clone(),
+            conn: self.conn.clone(),
+            entity_configs: self.entity_configs.clone(),
+            entity_defs: self.entity_defs.clone(),
+            relations: self.relations.clone(),
+            scope: self.scope.clone(),
+            fanout: self.fanout,
+            two_step_hops: self.two_step_hops,
+            multi_cell: self.multi_cell,
+            search_backend_externe: self.search_backend_externe.clone(),
+            event_bus: self.event_bus.clone(),
+            search_services: self.search_services.clone(),
+            pool: self.pool.clone(),
+            sans_instantane: self.sans_instantane,
+            texte_natif: self.texte_natif,
+        }
+    }
+
     /// Une entité déclarée, comme `Catalog::check_entity` ; une base à
     /// rouvrir se refuse comme au catalogue.
     fn entite_connue(&self, name: &str) -> Result<&EntityDef, CatalogError> {
@@ -648,6 +696,11 @@ impl ReadCatalog for ReadView {
 pub struct ReadViewCell(RwLock<Option<Arc<ReadView>>>);
 
 impl ReadViewCell {
+    /// Une cellule qui ne porte que `view` : celle d'un appel (L6).
+    pub(crate) fn avec(view: ReadView) -> Self {
+        Self(RwLock::new(Some(Arc::new(view))))
+    }
+
     /// La vue courante, si le catalogue en a publié une.
     pub fn current(&self) -> Option<Arc<ReadView>> {
         self.0.read().ok().and_then(|v| v.clone())

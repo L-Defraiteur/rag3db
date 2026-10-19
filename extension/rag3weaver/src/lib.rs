@@ -126,6 +126,8 @@ pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;
 /// La vue de lecture : ce qu'une lecture d'outil demande au catalogue, sans son mutex.
 pub mod read_view;
+/// Un instantané par appel d'outil, sur un pool de connexions de lecture (L6).
+pub mod read_pool;
 /// Le plein texte d'un lot, en tampon jusqu'au COMMIT (L3).
 pub mod fts_tampon;
 pub mod cypher_blob_store;
