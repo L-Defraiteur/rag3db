@@ -40,6 +40,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <atomic>
+#include <mutex>
 #include <thread>
 #include <future>
 #include <iostream>
@@ -1947,6 +1949,83 @@ public:
         concurrency::loadVectorExtension(*conn);
     }
 };
+
+// Le témoin d'acceptation de (A), le CREATE concurrent (page 07, témoin 2) : quarante écrivains
+// déplacent des vecteurs en boucle pendant un CREATE, sur une base à huit fils ; aucune
+// instruction d'un écrivain ne doit attendre plus de BOUND_MS. Il mêle deux défauts, que (A) règle
+// tous les deux :
+// - la retenue du rattrapage de (δ), joué une fois les autres partis, le temps de reprendre chaque
+//   ligne déplacée (ticket 2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-
+//   temps-de-son-rattrapage) ;
+// - la famine du bâti, qui prend tous les fils de travail pendant sa phase parallèle (ticket
+//   2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions) ; c'est elle
+//   qui donne la plus grande part de l'attente sur master (environ 70 % de la durée du CREATE).
+// Rouge sur master a0757d5fb : 9,1 s et 11,1 s d'attente pour un CREATE de 13 et 15 s, sur
+// luciepc.
+class VectorIndexCreateUnderManyWriters : public VectorIndexUpdate {
+public:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        if (inMemMode) {
+            GTEST_SKIP() << "on-disk database needed";
+        }
+        systemConfig->bufferPoolSize = 1024 * 1024 * 1024;
+        systemConfig->maxNumThreads = 8;
+        createDBAndConn();
+        mustRun("CALL auto_checkpoint=false;");
+        concurrency::loadVectorExtension(*conn);
+    }
+};
+
+TEST_F(VectorIndexCreateUnderManyWriters, NoWriterWaitsLongDuringTheCreate) {
+    static constexpr int64_t NUM_ROWS = 100000;
+    static constexpr int NUM_WRITERS = 40;
+    static constexpr double BOUND_MS = 5000;
+    table = "C";
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+    mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, "
+                         "i % 29, i % 31, i % 37, i % 41, i % 43, i % 47, i % 53, i % 59, i % 61, "
+                         "i % 67, i % 71, i % 73, i % 79, i / 1000.0]});",
+        NUM_ROWS - 1));
+    std::atomic<bool> created{false};
+    std::atomic<int64_t> statements{0};
+    std::mutex worstMtx;
+    double worstMs = 0;
+    std::vector<std::thread> writers;
+    for (auto w = 0; w < NUM_WRITERS; ++w) {
+        writers.emplace_back([&, w] {
+            rag3db::main::Connection connection(database.get());
+            for (int64_t j = 0; !created.load(); ++j) {
+                const auto id = (w * (NUM_ROWS / NUM_WRITERS) + j) % NUM_ROWS;
+                const auto start = std::chrono::steady_clock::now();
+                connection.query(stringFormat("MATCH (n:C {id: {}}) SET n.vec = {};", id,
+                    movedRowVector(j + w * 100000)));
+                const auto ms = std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - start)
+                                    .count();
+                statements++;
+                std::lock_guard lock{worstMtx};
+                worstMs = std::max(worstMs, ms);
+            }
+        });
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    rag3db::main::Connection creator(database.get());
+    const auto createStart = std::chrono::steady_clock::now();
+    auto result = creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+    const auto createMs = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - createStart)
+                              .count();
+    created = true;
+    for (auto& writer : writers) {
+        writer.join();
+    }
+    ASSERT_TRUE(result->isSuccess()) << "[check: setup] " << result->getErrorMessage();
+    std::cerr << "  create under " << NUM_WRITERS << " writers: " << createMs << " ms, "
+              << statements.load() << " writer statements, the longest " << worstMs << " ms\n";
+    EXPECT_LT(worstMs, BOUND_MS) << "[check: no-writer-waits-long-during-create] " << worstMs
+                                 << " ms (CREATE " << createMs << " ms)";
+}
 
 TEST_F(VectorIndexCreateInMemory, ChangesCommittedDuringACreateAreSeen) {
     const auto writes = createIndexUnderWrites(20000, true /*withChanges*/);
