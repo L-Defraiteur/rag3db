@@ -3535,7 +3535,8 @@ impl Backend {
     ) -> Result<Value, String> {
         let mut graph =
             build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
-        // The host serializes tool calls; services are fresh so shutdown owns all handles.
+        // Des services neufs à chaque appel : les appels parallèles de l'hôte
+        // (lot L5) ne partagent rien d'ici, et l'arrêt garde toutes les poignées.
         let mut services = self.build_services(prepared);
         // **Le run se publie** (`RunStarted`, `NodeRun`, `RunFinished`) sur
         // `dataflow`, dans la cellule de l'appel : ce qu'un appel exécute se
