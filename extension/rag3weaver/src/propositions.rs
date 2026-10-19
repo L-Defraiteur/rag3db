@@ -242,7 +242,7 @@ impl Backend {
         let propose = |chemin: &std::path::Path| proposes.contains(&crate::lecteur::normaliser(&avant.directory.join(chemin)));
         // L'après n'existe que si la validation l'a accepté.
         let apres = match &p.refus {
-            None => crate::backend::PreparedBackend::load_avec(avant.manifest_path(), &recouvrement).ok(),
+            None => avant.recharger(&recouvrement).ok(),
             Some(_) => None,
         };
         let mut cibles: Vec<GraphTarget> = Vec::new();

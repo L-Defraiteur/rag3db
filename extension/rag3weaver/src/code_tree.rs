@@ -186,7 +186,7 @@ pub fn remove_files(roots: &Roots, name: &str) -> Result<Removed, String> {
 /// Copier `de` vers `vers` avec `cp -a` ; `reflink` : `--reflink=auto` (le
 /// partage de blocs quand le système de fichiers le sait). Rend `true` si la
 /// copie a pu se faire par reflink, d'après un essai `--reflink=always`.
-fn copy(de: &Path, vers: &Path, reflink: bool) -> Result<bool, String> {
+pub(crate) fn copy(de: &Path, vers: &Path, reflink: bool) -> Result<bool, String> {
     if reflink {
         let toujours = Command::new("cp").args(["-a", "--reflink=always"]).arg(de).arg(vers).output().map_err(|e| format!("cp : {e}"))?;
         if toujours.status.success() {

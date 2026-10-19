@@ -1,0 +1,203 @@
+//! **Les tâches de l'agent** (page 09 de everything declarative, T1) : une
+//! branche `agent/<nom>` et son worktree, partis du `HEAD` du dépôt qui
+//! englobe le backend ; une **copie de sa base**, prise sous la porte des
+//! écrivains ([`Backend::copier_la_base_sous_la_porte`] : personne n'est
+//! fermé, les lectures continuent) ; et une seconde instance du backend sur le
+//! worktree, ouverte par l'hôte avec ses **surcharges** — la base copiée, et
+//! `declarations: auto` (la tâche est l'espace de l'agent, sur sa branche).
+//! Le manifeste du worktree n'est pas réécrit. La base de l'arbre principal
+//! n'est jamais ouverte par la tâche.
+
+use super::*;
+use crate::backend::{CopieDeBase, Surcharges};
+use std::path::{Path, PathBuf};
+
+/// Une tâche ouverte.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Tache {
+    pub nom: String,
+    /// L'id du backend dont elle part.
+    pub parent: String,
+    pub parent_manifest: PathBuf,
+    /// Le dépôt qui englobe le backend.
+    pub depot: PathBuf,
+    /// Le worktree de la tâche.
+    pub arbre: PathBuf,
+    /// Le manifeste de la tâche : le même chemin relatif, dans le worktree.
+    pub manifest: PathBuf,
+    /// L'id de la tâche comme backend de l'hôte.
+    pub id: String,
+    pub branche: String,
+    /// Le commit dont la branche est partie.
+    pub depart: String,
+    pub copie: CopieDeBase,
+    pub ouverte_ms: u64,
+}
+
+/// La racine des tâches : `RAG3WEAVER_TACHES_DIR`, sinon
+/// `~/.local/share/rag3weaver/taches`.
+pub(super) fn racine_par_defaut() -> PathBuf {
+    if let Some(d) = std::env::var_os("RAG3WEAVER_TACHES_DIR") {
+        return PathBuf::from(d);
+    }
+    let donnees = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+        .unwrap_or_else(std::env::temp_dir);
+    donnees.join("rag3weaver/taches")
+}
+
+/// `git -C dir args…` : sa sortie, ou ce qu'il dit en refusant.
+fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let o = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {} : {e}", args.join(" ")))?;
+    if !o.status.success() {
+        return Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()));
+    }
+    Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+fn nom_valide(nom: &str) -> Result<(), String> {
+    let ok = !nom.is_empty()
+        && nom.len() <= 64
+        && nom.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && nom.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("« {nom} » n'est pas un nom de tâche : minuscules, chiffres, - et _, 64 au plus"))
+    }
+}
+
+impl DaemonHost {
+    /// La racine sous laquelle vivent les worktrees et les bases des tâches.
+    pub fn with_racine_des_taches(mut self, racine: PathBuf) -> Self {
+        self.racine_des_taches = racine;
+        self
+    }
+
+    /// Les surcharges d'un backend hébergé, s'il est une tâche.
+    pub(super) fn surcharges_de(&self, manifest: &Path) -> Option<Surcharges> {
+        self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).map(|t| Surcharges {
+            database: Some(t.copie.base.clone()),
+            declarations: Some(crate::propositions::ModeDeclarations::Auto),
+        })
+    }
+
+    /// La tâche d'un manifeste hébergé, en JSON (pour `/etat`).
+    pub(super) fn tache_de(&self, manifest: &Path) -> Value {
+        match self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest) {
+            Some(t) => json!({ "nom": t.nom, "parent": t.parent, "branche": t.branche }),
+            None => Value::Null,
+        }
+    }
+
+    fn hote_par_id(&self, id: &str) -> Result<Arc<Hosted>, String> {
+        self.backends
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .values()
+            .find(|h| h.id == id)
+            .cloned()
+            .ok_or_else(|| format!("l'hôte ne connaît pas le backend {id}"))
+    }
+
+    /// Les tâches d'un backend.
+    pub fn taches_de(&self, parent: &str) -> Vec<Tache> {
+        self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().filter(|t| t.parent == parent).cloned().collect()
+    }
+
+    /// Une tâche, par son backend et son nom.
+    pub fn tache(&self, parent: &str, nom: &str) -> Option<Tache> {
+        self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().find(|t| t.parent == parent && t.nom == nom).cloned()
+    }
+
+    /// **Ouvrir une tâche** sur le backend `parent` : la branche
+    /// `agent/<nom>` et son worktree, la base copiée sous la porte des
+    /// écrivains, puis la seconde instance du backend, ouverte par l'hôte avec
+    /// ses surcharges. Tout ce qui a été fait est défait si une étape échoue.
+    pub fn ouvrir_une_tache(&self, parent: &str, nom: &str) -> Result<Tache, String> {
+        nom_valide(nom)?;
+        if self.tache(parent, nom).is_some() {
+            return Err(format!("la tâche « {nom} » est déjà ouverte"));
+        }
+        let hote = self.hote_par_id(parent)?;
+        let directory = self.with_backend(&hote, |b| b.prepared().directory.clone())?;
+        let depot = PathBuf::from(git(&directory, &["rev-parse", "--show-toplevel"]).map_err(|e| format!("le backend n'est pas dans un dépôt git : {e}"))?);
+        let depot = depot.canonicalize().unwrap_or(depot);
+        let relatif = hote
+            .manifest
+            .strip_prefix(&depot)
+            .map_err(|_| format!("le manifeste {} n'est pas dans le dépôt {}", hote.manifest.display(), depot.display()))?
+            .to_path_buf();
+        let dossier = self.racine_des_taches.join(parent).join(nom);
+        if dossier.exists() {
+            return Err(format!("{} existe déjà : une tâche de ce nom n'a pas été fermée", dossier.display()));
+        }
+        let arbre = dossier.join("arbre");
+        let branche = format!("agent/{nom}");
+        let depart = git(&depot, &["rev-parse", "HEAD"])?;
+        std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        let defaire = |etape: &str, e: String| -> String {
+            let _ = git(&depot, &["worktree", "remove", "--force", &arbre.to_string_lossy()]);
+            let _ = git(&depot, &["branch", "-D", &branche]);
+            let _ = std::fs::remove_dir_all(&dossier);
+            format!("tâche « {nom} » : {etape} : {e}")
+        };
+        git(&depot, &["worktree", "add", "-q", "-b", &branche, &arbre.to_string_lossy(), &depart]).map_err(|e| defaire("le worktree", e))?;
+        let copie = self
+            .with_backend(&hote, |b| b.copier_la_base_sous_la_porte(&dossier.join("base")))
+            .and_then(|r| r)
+            .map_err(|e| defaire("la copie de la base", e))?;
+        let manifest = arbre.join(&relatif);
+        let manifest = manifest.canonicalize().map_err(|e| defaire("le manifeste du worktree", e.to_string()))?;
+        let id = blake3::hash(manifest.to_string_lossy().as_bytes()).to_hex()[..12].to_string();
+        let tache = Tache {
+            nom: nom.to_string(),
+            parent: parent.to_string(),
+            parent_manifest: hote.manifest.clone(),
+            depot: depot.clone(),
+            arbre: arbre.clone(),
+            manifest: manifest.clone(),
+            id,
+            branche: branche.clone(),
+            depart,
+            copie,
+            ouverte_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0),
+        };
+        // Inscrite avant l'ouverture : `open_slot` y lit ses surcharges.
+        self.taches.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.clone(), tache.clone());
+        let ouverte = self.hosted(&manifest).and_then(|h| self.with_backend(&h, |_| ()));
+        if let Err(e) = ouverte {
+            self.taches.lock().unwrap_or_else(|p| p.into_inner()).remove(&manifest);
+            self.backends.lock().unwrap_or_else(|p| p.into_inner()).remove(&manifest);
+            return Err(defaire("l'ouverture de la seconde instance", e));
+        }
+        Ok(tache)
+    }
+
+    /// **Fermer une tâche** : sa seconde instance fermée et oubliée de
+    /// l'hôte, le worktree retiré, la branche effacée, la copie de base
+    /// retirée. Le rejet et la fusion finissent par là.
+    pub fn fermer_une_tache(&self, parent: &str, nom: &str) -> Result<Tache, String> {
+        let tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
+        if let Some(h) = self.hosted_existing(&tache.manifest) {
+            let mut slot = h.backend.write().unwrap_or_else(|p| p.into_inner());
+            self.close_slot(&h, &mut slot)?;
+        }
+        self.backends.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
+        self.taches.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
+        git(&tache.depot, &["worktree", "remove", "--force", &tache.arbre.to_string_lossy()])?;
+        git(&tache.depot, &["branch", "-D", &tache.branche])?;
+        let dossier = tache.arbre.parent().map(Path::to_path_buf).unwrap_or_default();
+        std::fs::remove_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        Ok(tache)
+    }
+}
+
+#[cfg(all(test, feature = "code"))]
+mod tests;

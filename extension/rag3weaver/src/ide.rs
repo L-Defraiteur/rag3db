@@ -465,7 +465,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                         // sur son recouvrement.
                         Some(pid) => {
                             let r = b.recouvrement_de_proposition(pid)?;
-                            let apres = crate::backend::PreparedBackend::load_avec(b.prepared().manifest_path(), &r)?;
+                            let apres = b.prepared().recharger(&r)?;
                             apres.graph_json_avec(&cible, &r)
                         }
                     })

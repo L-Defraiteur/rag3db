@@ -105,7 +105,7 @@ impl Backend {
         }
         let current = self.prepared();
         let recouvrement = crate::lecteur::Recouvrement::sur(&current.directory, &absolus);
-        let next = crate::backend::PreparedBackend::load_avec(current.manifest_path(), &recouvrement)?;
+        let next = current.recharger(&recouvrement)?;
         let changed = crate::backend::opening_changes(&current, &next);
         if !changed.is_empty() {
             return Err(format!(

@@ -136,7 +136,15 @@ pub struct DaemonHost {
     ide: Arc<crate::ide::Flux>,
     /// La session des appels de l'IDE, ouverte au premier.
     ide_session: std::sync::OnceLock<String>,
+    /// **Les tâches de l'agent** ouvertes, par le manifeste canonique de leur
+    /// seconde instance ([`taches`]).
+    taches: Mutex<std::collections::BTreeMap<PathBuf, taches::Tache>>,
+    /// Où vivent leurs worktrees et leurs bases.
+    racine_des_taches: PathBuf,
 }
+
+/// Les tâches de l'agent : une branche, un worktree, une base à soi.
+pub mod taches;
 
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
@@ -190,6 +198,8 @@ impl DaemonHost {
             background: crate::dataflow::background::registry(),
             ide: crate::ide::Flux::new(),
             ide_session: std::sync::OnceLock::new(),
+            taches: Mutex::new(std::collections::BTreeMap::new()),
+            racine_des_taches: taches::racine_par_defaut(),
         }
     }
 
@@ -357,6 +367,11 @@ impl DaemonHost {
         if slot.is_none() {
             let print = manifest_print(&hosted.manifest)?;
             let prepared = PreparedBackend::load(&hosted.manifest)?;
+            // **Une tâche** : sa base copiée et son mode, par-dessus le manifeste.
+            let prepared = match self.surcharges_de(&hosted.manifest) {
+                Some(s) => prepared.avec_surcharges(s),
+                None => prepared,
+            };
             // **Un écrivain autonome tient la base** : l'ouvrir attendrait le
             // verrou du moteur pour échouer ; le refus le nomme tout de suite,
             // et `/etat` le garde jusqu'à l'ouverture suivante.
@@ -564,6 +579,7 @@ impl DaemonHost {
                     "closed": h.closed.load(std::sync::atomic::Ordering::SeqCst),
                     "manifest_changed": self.manifest_changed(h),
                     "refused": *h.refused.lock().unwrap_or_else(|p| p.into_inner()),
+                    "tache": self.tache_de(&h.manifest),
                 })
             })
             .collect();

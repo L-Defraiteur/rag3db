@@ -704,9 +704,37 @@ pub struct OutputPort {
     pub port: String,
 }
 
+/// **Ce que l'hôte impose à un backend par-dessus son manifeste** (une tâche,
+/// page 09) : sa base (la copie de la tâche) et son mode de déclarations
+/// (`auto` : la tâche est l'espace de l'agent). Le manifeste n'est pas réécrit
+/// — c'est une déclaration suivie, et une fusion l'emporterait ; chaque
+/// rechargement réapplique les surcharges ([`PreparedBackend::recharger`]).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Surcharges {
+    pub database: Option<PathBuf>,
+    pub declarations: Option<crate::propositions::ModeDeclarations>,
+}
+
+/// Une base copiée sous la porte des écrivains
+/// ([`Backend::copier_la_base_sous_la_porte`]).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CopieDeBase {
+    /// Le fichier principal de la copie (ce que la tâche ouvre).
+    pub base: PathBuf,
+    /// Les fichiers copiés.
+    pub fichiers: Vec<PathBuf>,
+    /// Le reflink a pris pour tous ; sinon une copie pleine, de `octets`.
+    pub reflink: bool,
+    pub octets: u64,
+    /// Combien de temps les écrivains ont attendu à la porte.
+    pub tenue_ms: u64,
+}
+
 pub struct PreparedBackend {
     /// Le manifeste lu, pour le relire : un rechargement repart de lui.
     manifest_path: PathBuf,
+    /// Ce que l'hôte impose par-dessus le manifeste ([`Surcharges`]).
+    surcharges: Surcharges,
     /// Les copies locales de gabarits livrés qui en diffèrent
     /// ([`crate::builtin_templates::drift`]).
     template_drift: Vec<crate::builtin_templates::Drift>,
@@ -1497,6 +1525,7 @@ impl PreparedBackend {
         Ok(Self {
             template_drift,
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
+            surcharges: Surcharges::default(),
             scripted_types,
             components,
             routes,
@@ -1568,6 +1597,31 @@ impl PreparedBackend {
     /// Le chemin canonique du manifeste chargé.
     pub fn manifest_path(&self) -> &Path {
         &self.manifest_path
+    }
+
+    /// **Impose des surcharges** : la base et le mode de déclarations
+    /// remplacent ceux du manifeste, et les rechargements les gardent.
+    pub fn avec_surcharges(mut self, surcharges: Surcharges) -> Self {
+        if let Some(base) = &surcharges.database {
+            self.manifest.database = base.clone();
+        }
+        if let Some(mode) = surcharges.declarations {
+            self.manifest.declarations = mode;
+        }
+        self.surcharges = surcharges;
+        self
+    }
+
+    /// Les surcharges imposées à ce backend.
+    pub fn surcharges(&self) -> &Surcharges {
+        &self.surcharges
+    }
+
+    /// **Recharger le même manifeste par un lecteur**, avec les mêmes
+    /// surcharges : ce que font le rechargement (le disque) et la validation
+    /// d'une proposition (un recouvrement).
+    pub fn recharger(&self, lecteur: &dyn crate::lecteur::Lecteur) -> Result<PreparedBackend, String> {
+        Ok(Self::load_avec(&self.manifest_path, lecteur)?.avec_surcharges(self.surcharges.clone()))
     }
 
     /// **Le fichier de l'extension vectorielle à charger.** Un chemin déclaré
@@ -2715,6 +2769,55 @@ impl Backend {
         errors
     }
 
+    /// **Copier la base sous la porte des écrivains** (une tâche, page 09) :
+    /// le mutex du catalogue tenu — les écrivains attendent, les lectures
+    /// passent par la vue —, un `CHECKPOINT` (la base est alors celle d'un
+    /// point de reprise propre, son WAL vide, et le plein texte est validé
+    /// sur le disque après chaque lot, sous ce même mutex), puis chaque fichier
+    /// de la base (`code_tree::database_files`, sans le verrou `.readers`)
+    /// copié dans `vers` par reflink, sinon en copie pleine, et la porte
+    /// rendue. Refusée pendant une indexation. Rend la base copiée, si le
+    /// reflink a pris, la taille et la durée de la porte.
+    pub fn copier_la_base_sous_la_porte(&self, vers: &Path) -> Result<CopieDeBase, String> {
+        #[cfg(feature = "code")]
+        {
+            let n = crate::dataflow::index_nodes::indexings_running(&self.catalog);
+            if n > 0 {
+                return Err(format!("{n} indexation(s) en cours : la base ne se copie pas pendant une indexation"));
+            }
+        }
+        let prepared = self.prepared();
+        let base = prepared.path(&prepared.manifest.database);
+        std::fs::create_dir_all(vers).map_err(|e| format!("{} : {e}", vers.display()))?;
+        let porte = std::time::Instant::now();
+        let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+        cat.conn().execute("CHECKPOINT").map_err(|e| format!("CHECKPOINT avant la copie : {e}"))?;
+        let mut reflink = true;
+        let mut fichiers = Vec::new();
+        // Après le CHECKPOINT, le WAL n'existe plus : seuls les fichiers présents se copient.
+        for f in crate::code_tree::database_files(&base).into_iter().filter(|f| f.exists()) {
+            let cible = vers.join(f.file_name().ok_or("un fichier de base sans nom")?);
+            reflink &= crate::code_tree::copy(&f, &cible, true)?;
+            fichiers.push(cible);
+        }
+        drop(cat);
+        let tenue_ms = porte.elapsed().as_millis() as u64;
+        fn taille(p: &Path) -> u64 {
+            match std::fs::metadata(p) {
+                Ok(m) if m.is_dir() => std::fs::read_dir(p).map(|e| e.flatten().map(|e| taille(&e.path())).sum()).unwrap_or(0),
+                Ok(m) => m.len(),
+                Err(_) => 0,
+            }
+        }
+        Ok(CopieDeBase {
+            base: vers.join(base.file_name().ok_or("une base sans nom")?),
+            octets: fichiers.iter().map(|f| taille(f)).sum(),
+            reflink,
+            tenue_ms,
+            fichiers,
+        })
+    }
+
     /// **Ce qui retient ce backend de s'arrêter pour inactivité**, s'il y a
     /// quelque chose (18 octobre 2026) : une indexation en cours, des fichiers que
     /// la montre n'a pas encore réindexés, ou le catalogue tenu (un appel, une
@@ -2861,7 +2964,7 @@ impl Backend {
             format!("rechargement refusé, l'ancienne version reste en service : {why}")
         };
         let current = self.prepared();
-        let next = PreparedBackend::load(&current.manifest_path).map_err(refused)?;
+        let next = current.recharger(&crate::lecteur::Disque).map_err(refused)?;
         let changed = opening_changes(&current, &next);
         if !changed.is_empty() {
             return Err(refused(format!(
