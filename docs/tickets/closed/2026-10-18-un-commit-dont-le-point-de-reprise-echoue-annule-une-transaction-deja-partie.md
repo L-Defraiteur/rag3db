@@ -1,6 +1,6 @@
 # Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà détruite
 
-- **État** : ouvert, confirmé par le banc le 18 octobre 2026 (Release et ASAN, trois sur trois)
+- **État** : corrigé le 19 octobre 2026 par le commit qui déplace ce fichier (`git log --follow`), forme (b) ; confirmé par le banc le 18 octobre 2026 (Release et ASAN, trois sur trois)
 - **Gravité** : lecture après libération (`Transaction` détruite par le gestionnaire, encore
   tenue par le contexte de la connexion) : assertion en debug, comportement indéfini en release ;
   rien n'est perdu (la validation est au journal), le danger est le plantage ou un verrou rendu
@@ -110,3 +110,12 @@ demande au gestionnaire, dans son `catch`, si la transaction est encore active
 (`isActiveNoLock(id)`), et vide le contexte sans annuler si elle ne l'est plus. (b) couvre aussi
 tout chemin futur. Fermé quand le témoin, en debug, passe par le chemin 4 sans assertion ni
 annulation d'une transaction partie.
+
+## Correctif
+
+La forme (b). `TransactionManager::isActive(id)` dit, sous le verrou public, si la transaction
+est encore dans le système ; `TransactionContext::commit` retient l'identifiant avant d'appeler
+le gestionnaire et, dans son `catch`, vide le contexte sans annuler quand la transaction n'est
+plus active (validée, point de reprise échoué : le message du gestionnaire le dit) ; une
+transaction encore active (la validation elle-même a échoué) s'annule comme avant par
+`runFuncInTransaction`. Le témoin du banc sort de `known_red.txt` dans le même commit.

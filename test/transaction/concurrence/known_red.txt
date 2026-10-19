@@ -163,4 +163,3 @@ CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly crash-after-written-ou
 # partie) : en Release, « Invalid transaction type to rollback » puis SIGABRT à la fermeture ; sous
 # ASAN, heap-use-after-free dans TransactionManager::rollback. Joué trois fois sur trois de chaque
 # côté le 18 octobre sur luciepc. Pour le cœur C++.
-CommitAfterFailedCheckpoint.DoesNotRollBackADestroyedTransaction commit-whose-checkpoint-fails-does-not-touch-a-destroyed-transaction

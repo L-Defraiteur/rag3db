@@ -74,7 +74,21 @@ void TransactionContext::commit() {
             stringFormat("{}: nothing was committed. The transaction is now closed.",
                 MANUAL_TRANSACTION_FAILED));
     }
-    clientContext.getDatabase()->getTransactionManager()->commit(clientContext, activeTransaction);
+    auto manager = clientContext.getDatabase()->getTransactionManager();
+    const auto transactionID = activeTransaction->getID();
+    try {
+        manager->commit(clientContext, activeTransaction);
+    } catch (...) {
+        // Le gestionnaire a pu retirer (et détruire) la transaction avant de lever : la
+        // validation est faite, c'est le point de reprise qui la suit qui a échoué. La connexion
+        // l'oublie alors sans l'annuler ; sinon runFuncInTransaction annulerait un objet libéré
+        // (ticket du 18 octobre 2026, « un COMMIT dont le point de reprise échoue »). Une
+        // transaction encore active (la validation elle-même a échoué) s'annule comme avant.
+        if (!manager->isActive(transactionID)) {
+            clearTransaction();
+        }
+        throw;
+    }
     clearTransaction();
 }
 

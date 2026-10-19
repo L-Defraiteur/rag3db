@@ -516,6 +516,13 @@ bool TransactionManager::hasActiveWriteTransactionNoLock() const {
         [](const auto& transaction) { return transaction->isWriteTransaction(); });
 }
 
+bool TransactionManager::isActive(transaction_t transactionID) {
+    std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
+    return std::ranges::any_of(activeTransactions, [transactionID](const auto& transaction) {
+        return transaction->getID() == transactionID;
+    });
+}
+
 void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {
     KU_ASSERT(std::ranges::any_of(activeTransactions.begin(), activeTransactions.end(),
         [transactionID](const auto& activeTransaction) {
