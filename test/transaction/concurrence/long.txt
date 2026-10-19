@@ -42,3 +42,10 @@ Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelati
 TwentyWriters.DdlEveryFifteenSeconds
 TwentyWriters.DdlEveryMinute
 TwentyWriters.KilledDuringTheCheckpoint
+#
+# Le témoin du rattrapage d'un CREATE qui reprenait une à une des lignes déplacées ensemble
+# (vector_index_update_test.cpp, 19 octobre) : six tours sur une table de 12 288 lignes, environ
+# 30 s sur luciepc chargé. Le défaut reste gardé dans la passe par défaut par
+# VectorIndexUpdate.ChangesCommittedDuringACreateAreSeen, rouge environ une fois sur douze avant le
+# correctif.
+VectorIndexUpdate.RowsMovedTogetherDuringACreateStayReachable
