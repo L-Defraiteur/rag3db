@@ -3541,11 +3541,21 @@ impl Backend {
         // `dataflow`, dans la cellule de l'appel : ce qu'un appel exécute se
         // voit (la trace, le DAG vivant de l'IDE). Sans `run_topic`, chaque
         // événement va à son sujet.
-        let bus = {
-            let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
-            match services.get::<crate::scope::Scope>("scope") {
-                Some(cell) => cat.event_bus_in(cell),
-                None => cat.event_bus(),
+        //
+        // Le bus vient de la vue, qui en porte un clone (le même `Arc`) : un
+        // appel ne prend pas le mutex du catalogue pour publier, et une lecture
+        // n'attend pas l'écrivain qui le tient (L4). Le mutex seulement sans vue.
+        let bus = match self.read_view.current() {
+            Some(vue) => match services.get::<crate::scope::Scope>("scope") {
+                Some(cell) => vue.event_bus.in_scope(cell),
+                None => vue.event_bus.in_scope(&vue.scope),
+            },
+            None => {
+                let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+                match services.get::<crate::scope::Scope>("scope") {
+                    Some(cell) => cat.event_bus_in(cell),
+                    None => cat.event_bus(),
+                }
             }
         };
         services.register("event_bus", Arc::new(bus));

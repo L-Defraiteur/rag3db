@@ -121,6 +121,44 @@ fn usages_repond_pendant_qu_un_ecrivain_tient_le_catalogue() {
     assert!(out.contains("écriture de l'index est en cours"), "la réponse le dit : {out}");
 }
 
+/// Le gabarit de code livré, copié sous `dir` sur un petit dépôt (`ws/src/a.rs`),
+/// sans commandes : le manifeste prêt à ouvrir.
+#[cfg(feature = "code")]
+fn manifeste_code(dir: &std::path::Path, nom: &str) -> std::path::PathBuf {
+    use serde_json::{json, Value};
+    use std::path::Path;
+    fn copier(src: &Path, dst: &Path) {
+        std::fs::create_dir_all(dst).unwrap();
+        for e in std::fs::read_dir(src).unwrap() {
+            let e = e.unwrap();
+            let cible = dst.join(e.file_name());
+            if e.file_type().unwrap().is_dir() {
+                copier(&e.path(), &cible);
+            } else {
+                std::fs::copy(e.path(), &cible).unwrap();
+            }
+        }
+    }
+    let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    let t = dir.join("templates");
+    copier(&gabarits.join("tools"), &t.join("tools"));
+    copier(&gabarits.join("backends/code"), &t.join("backends/code"));
+    let ws = dir.join("ws");
+    std::fs::create_dir_all(ws.join("src")).unwrap();
+    std::fs::write(ws.join("src/a.rs"), "pub fn alpha() -> u32 {\n    beta() + 1\n}\n\npub fn beta() -> u32 {\n    41\n}\n").unwrap();
+    let chemin = t.join("backends/code/backend.json");
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    m["name"] = json!(nom);
+    m["database"] = json!(dir.join("code.rag3db").to_string_lossy());
+    m["vector_extension"] = json!(crate::common::vector_extension());
+    m["workspace"]["root"] = json!(ws.to_string_lossy());
+    m["workspace"]["commands"] = json!("off");
+    m["tools"].as_object_mut().unwrap().remove("run_command");
+    m["tools"].as_object_mut().unwrap().remove("wait_output");
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    chemin
+}
+
 /// **Les outils de lecture du code n'attendent pas l'écrivain** (lot L4,
 /// 18 octobre 2026). Le septième rejeu de codeparsers : un `search_code`
 /// tombé pendant la réaction de la montre attendait le mutex du catalogue
@@ -135,40 +173,11 @@ fn usages_repond_pendant_qu_un_ecrivain_tient_le_catalogue() {
 fn les_outils_de_lecture_du_code_n_attendent_pas_l_ecrivain() {
     use rag3weaver::backend::PreparedBackend;
     use serde_json::{json, Value};
-    use std::path::Path;
     use std::time::{Duration, Instant};
 
-    fn copier(src: &Path, dst: &Path) {
-        std::fs::create_dir_all(dst).unwrap();
-        for e in std::fs::read_dir(src).unwrap() {
-            let e = e.unwrap();
-            let cible = dst.join(e.file_name());
-            if e.file_type().unwrap().is_dir() {
-                copier(&e.path(), &cible);
-            } else {
-                std::fs::copy(e.path(), &cible).unwrap();
-            }
-        }
-    }
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
-    let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
-    let t = dir.join("templates");
-    copier(&gabarits.join("tools"), &t.join("tools"));
-    copier(&gabarits.join("backends/code"), &t.join("backends/code"));
-    let ws = dir.join("ws");
-    std::fs::create_dir_all(ws.join("src")).unwrap();
-    std::fs::write(ws.join("src/a.rs"), "pub fn alpha() -> u32 {\n    beta() + 1\n}\n\npub fn beta() -> u32 {\n    41\n}\n").unwrap();
-    let chemin = t.join("backends/code/backend.json");
-    let mut m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
-    m["name"] = json!("lectures-l4");
-    m["database"] = json!(dir.join("code.rag3db").to_string_lossy());
-    m["vector_extension"] = json!(crate::common::vector_extension());
-    m["workspace"]["root"] = json!(ws.to_string_lossy());
-    m["workspace"]["commands"] = json!("off");
-    m["tools"].as_object_mut().unwrap().remove("run_command");
-    m["tools"].as_object_mut().unwrap().remove("wait_output");
-    std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let chemin = manifeste_code(dir, "lectures-l4");
 
     let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
     let base = prepared.path(&prepared.manifest.database);
@@ -230,4 +239,99 @@ fn les_outils_de_lecture_du_code_n_attendent_pas_l_ecrivain() {
         assert!(*ms < 100, "{outil} n'attend pas l'écrivain : {ms} ms");
         assert!(*vu, "{outil} rend l'état d'avant : {rendu}");
     }
+}
+
+/// **Aucune prise bloquante du mutex du catalogue sur le chemin d'une lecture**
+/// (19 octobre 2026). La garde des nœuds de lecture (`lecture_sans_mutex_tests`)
+/// n'avait pas vu `Backend::run`, qui prenait le mutex à chaque appel pour le
+/// bus du run (5f9cf0983) : `search_code` y attendait l'écrivain 2 s. Ici le
+/// chemin entier, depuis `DaemonHost::call` : le témoin tient le mutex **sans
+/// borne**, et chaque outil de lecture doit répondre pendant qu'il le tient.
+/// Une seule prise bloquante, où qu'elle soit (hôte, backend, services,
+/// nœuds), et l'appel ne revient pas : c'est un compteur de prises qui doit
+/// valoir zéro, sans instrumenter chaque prise.
+#[cfg(all(feature = "code", feature = "daemon"))]
+#[test]
+#[ignore]
+fn un_outil_de_lecture_ne_prend_jamais_le_mutex_du_catalogue() {
+    use rag3weaver::backend::PreparedBackend;
+    use rag3weaver::daemon_host::DaemonHost;
+    use serde_json::{json, Value};
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    let m = manifeste_code(dir, "lectures-sans-mutex");
+    let catalogues: Arc<Mutex<Vec<Arc<Mutex<rag3weaver::Catalog>>>>> = Arc::default();
+    let pour_l_ouvreur = catalogues.clone();
+    let host = Arc::new(DaemonHost::with_opener(Box::new(move |prepared: PreparedBackend| {
+        let base = prepared.path(&prepared.manifest.database);
+        let conn = Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
+        let backend = prepared.open(Box::new(conn), None)?;
+        pour_l_ouvreur.lock().unwrap().push(backend.catalog.clone());
+        Ok(backend)
+    })));
+    let s = host.open_session("garde-du-mutex", None, vec![], None);
+    let ok = |r: Value| -> Value {
+        assert_eq!(r["ok"], json!(true), "{r}");
+        r
+    };
+    ok(host.open(Some(&s), &m));
+
+    // L'index, jusqu'à sa ligne de fin dans son journal.
+    let lance = ok(host.call(Some(&s), &m, "index", json!({"confirm": true}))).to_string();
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|x| x.contains("commandes/index/") && x.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        if lu.contains("indexation terminée") {
+            break;
+        }
+        assert!(!lu.contains("indexation échouée"), "{lu}");
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    // Un premier passage, mutex libre : chaque outil répond, et rend ce qu'il faut.
+    let appels = [
+        ("search_code", json!({"query": "alpha", "options": {}, "mode": "indexed"}), "a.rs"),
+        ("read_file", json!({"path": "src/a.rs"}), "alpha"),
+        ("grep_files", json!({"pattern": "beta"}), "a.rs"),
+        ("list_files", json!({}), "a.rs"),
+        ("schema", json!({}), "Scope"),
+        ("usages", json!({"name": "beta"}), "a.rs"),
+    ];
+    for (outil, args, attendu) in &appels {
+        let r = ok(host.call(Some(&s), &m, outil, args.clone())).to_string();
+        assert!(r.contains(attendu), "{outil}, mutex libre : {r}");
+    }
+
+    // Le mutex tenu sans borne, pendant que chaque outil est appelé.
+    let catalogue = catalogues.lock().unwrap().last().unwrap().clone();
+    let tenu = catalogue.lock().unwrap();
+    let mut sans_reponse = Vec::new();
+    for (outil, args, attendu) in appels {
+        let (envoi, reponse) = std::sync::mpsc::channel();
+        let (host, s, m) = (host.clone(), s.clone(), m.clone());
+        std::thread::spawn(move || {
+            let _ = envoi.send(host.call(Some(&s), &m, outil, args));
+        });
+        match reponse.recv_timeout(Duration::from_secs(30)) {
+            Ok(r) => {
+                let r = ok(r).to_string();
+                assert!(r.contains(attendu), "{outil}, mutex tenu : {r}");
+            }
+            Err(_) => sans_reponse.push(outil),
+        }
+        // Un appel resté bloqué reprend à la libération ; les suivants se
+        // jouent quand même. Tant que le slot d'un backend est un Mutex (avant
+        // L5), un appel bloqué le retient, et les suivants sont nommés avec lui.
+    }
+    drop(tenu);
+    assert!(sans_reponse.is_empty(), "ces outils de lecture prennent le mutex du catalogue : {sans_reponse:?}");
+    host.shutdown();
 }
