@@ -152,3 +152,11 @@ CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly crash-after-written-ou
 # partie) : en Release, « Invalid transaction type to rollback » puis SIGABRT à la fermeture ; sous
 # ASAN, heap-use-after-free dans TransactionManager::rollback. Joué trois fois sur trois de chaque
 # côté le 18 octobre sur luciepc. Pour le cœur C++.
+#
+# Le témoin d'acceptation de (A), le CREATE concurrent (page 07 de coeur-cpp-tickets) : sous
+# quarante écrivains, une instruction attend 9 à 11 s pendant un CREATE de 13 à 15 s (borne 5 s).
+# Il mêle la retenue du rattrapage de (δ) (ticket
+# 2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage)
+# et la famine du bâti (ticket 2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-
+# connexions), que (A) règle toutes les deux. Joué rouge 2/2 sur luciepc le 19 octobre. Pour hotfixs.
+VectorIndexCreateUnderManyWriters.NoWriterWaitsLongDuringTheCreate no-writer-waits-long-during-create
