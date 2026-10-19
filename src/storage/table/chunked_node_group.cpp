@@ -1,5 +1,7 @@
 #include "storage/table/chunked_node_group.h"
 
+#include "storage/storage_version_info.h"
+
 #include "transaction/transaction.h"
 
 #include <exception>
@@ -31,7 +33,9 @@ static void handleAppendException(std::vector<std::unique_ptr<Chunk>>& chunks, u
     // We reset the state of the chunk so later changes won't corrupt any data
     // Due to the numValues in column chunks not matching the number of rows
     for (const auto& chunk : chunks) {
-        chunk->truncate(numRows);
+        if (chunk) {
+            chunk->truncate(numRows);
+        }
     }
     std::rethrow_exception(std::current_exception());
 }
@@ -44,20 +48,24 @@ ChunkedNodeGroup::ChunkedNodeGroup(std::vector<std::unique_ptr<ColumnChunk>> chu
     numRows = this->chunks[0]->getNumValues();
     capacity = numRows;
     for (auto columnID = 1u; columnID < this->chunks.size(); columnID++) {
+        if (!this->chunks[columnID]) {
+            continue; // un trou
+        }
         KU_ASSERT(this->chunks[columnID]->getNumValues() == numRows);
         KU_ASSERT(this->chunks[columnID]->getResidencyState() == residencyState);
     }
 }
 
+// Les colonnes gardées restent à leur numéro ; les autres (supprimées) deviennent des trous, et
+// restent dans base pour que reclaimStorage rende leurs pages.
 ChunkedNodeGroup::ChunkedNodeGroup(ChunkedNodeGroup& base,
-    const std::vector<column_id_t>& selectedColumns)
+    const std::vector<column_id_t>& keptColumns)
     : format{base.format}, residencyState{base.residencyState}, startRowIdx{base.startRowIdx},
       capacity{base.capacity}, numRows{base.numRows.load()} {
-    chunks.resize(selectedColumns.size());
-    for (auto i = 0u; i < selectedColumns.size(); i++) {
-        auto columnID = selectedColumns[i];
-        KU_ASSERT(columnID < base.getNumColumns());
-        chunks[i] = base.moveColumnChunk(columnID);
+    chunks.resize(base.getNumColumns());
+    for (const auto columnID : keptColumns) {
+        KU_ASSERT(columnID < base.getNumColumns() && base.hasColumnChunk(columnID));
+        chunks[columnID] = base.moveColumnChunk(columnID);
     }
 }
 
@@ -81,6 +89,10 @@ ChunkedNodeGroup::ChunkedNodeGroup(MemoryManager& mm, const std::vector<LogicalT
       numRows{0} {
     chunks.reserve(columnTypes.size());
     for (auto& type : columnTypes) {
+        if (isColumnHole(type)) {
+            chunks.push_back(nullptr);
+            continue;
+        }
         chunks.push_back(std::make_unique<ColumnChunk>(mm, type.copy(), capacity, enableCompression,
             residencyState));
     }
@@ -108,7 +120,7 @@ ChunkedNodeGroup::ChunkedNodeGroup(MemoryManager& mm, ChunkedNodeGroup& base,
     }
 
     for (column_id_t i = 0; i < columnTypes.size(); ++i) {
-        if (chunks[i] == nullptr) {
+        if (chunks[i] == nullptr && !isColumnHole(columnTypes[i])) {
             chunks[i] = std::make_unique<ColumnChunk>(mm, columnTypes[i].copy(), 0,
                 enableCompression, ResidencyState::IN_MEMORY);
         }
@@ -121,7 +133,7 @@ void ChunkedNodeGroup::resetNumRowsFromChunks() {
     numRows = getColumnChunk(0).getNumValues();
     capacity = numRows;
     for (auto i = 1u; i < getNumColumns(); i++) {
-        KU_ASSERT(numRows == getColumnChunk(i).getNumValues());
+        KU_ASSERT(!hasColumnChunk(i) || numRows == getColumnChunk(i).getNumValues());
     }
 }
 
@@ -132,14 +144,18 @@ void ChunkedNodeGroup::resetVersionAndUpdateInfo() {
         mayHaveVersionInfo.store(false, std::memory_order_release);
     }
     for (const auto& chunk : chunks) {
-        chunk->resetUpdateInfo();
+        if (chunk) {
+            chunk->resetUpdateInfo();
+        }
     }
 }
 
 void ChunkedNodeGroup::truncate(const offset_t numRows_) {
     KU_ASSERT(numRows >= numRows_);
     for (const auto& chunk : chunks) {
-        chunk->truncate(numRows_);
+        if (chunk) {
+            chunk->truncate(numRows_);
+        }
     }
     numRows = numRows_;
 }
@@ -479,7 +495,7 @@ bool ChunkedNodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transactio
         return true;
     }
     for (auto i = 0u; i < getNumColumns(); i++) {
-        if (getColumnChunk(i).hasCommittedUpdateAfter(startTS, rowInChunk)) {
+        if (hasColumnChunk(i) && getColumnChunk(i).hasCommittedUpdateAfter(startTS, rowInChunk)) {
             return true;
         }
     }
@@ -549,7 +565,9 @@ std::unique_ptr<ChunkedNodeGroup> ChunkedNodeGroup::flushEmpty(MemoryManager& mm
     auto emptyGroup = std::make_unique<ChunkedNodeGroup>(mm, columnTypes, enableCompression,
         capacity, startRowIdx, ResidencyState::IN_MEMORY);
     for (auto i = 0u; i < columnTypes.size(); i++) {
-        emptyGroup->getColumnChunk(i).flush(pageAllocator);
+        if (emptyGroup->hasColumnChunk(i)) {
+            emptyGroup->getColumnChunk(i).flush(pageAllocator);
+        }
     }
     // Reset residencyState and numRows after flushing.
     emptyGroup->residencyState = ResidencyState::ON_DISK;
@@ -562,14 +580,16 @@ uint64_t ChunkedNodeGroup::getEstimatedMemoryUsage() const {
     }
     uint64_t memoryUsage = 0;
     for (const auto& chunk : chunks) {
-        memoryUsage += chunk->getEstimatedMemoryUsage();
+        if (chunk) {
+            memoryUsage += chunk->getEstimatedMemoryUsage();
+        }
     }
     return memoryUsage;
 }
 
 bool ChunkedNodeGroup::hasUpdates() const {
     for (const auto& chunk : chunks) {
-        if (chunk->hasUpdates()) {
+        if (chunk && chunk->hasUpdates()) {
             return true;
         }
     }
@@ -628,10 +648,45 @@ void ChunkedNodeGroup::reclaimStorage(PageAllocator& pageAllocator) const {
     }
 }
 
+// Version 42 : une entrée par numéro de colonne, trous compris, chacune précédée d'un octet
+// « présente ». Avant : un vecteur dense de colonnes, sans numéros.
+void ChunkedNodeGroup::serializeChunks(Serializer& serializer,
+    const std::vector<std::unique_ptr<ColumnChunk>>& chunks) {
+    serializer.writeDebuggingInfo("chunks");
+    serializer.write<uint64_t>(chunks.size());
+    for (auto& chunk : chunks) {
+        serializer.write<bool>(chunk != nullptr);
+        if (chunk) {
+            chunk->serialize(serializer);
+        }
+    }
+}
+
+std::vector<std::unique_ptr<ColumnChunk>> ChunkedNodeGroup::deserializeChunks(
+    MemoryManager& memoryManager, Deserializer& deSer) {
+    std::string key;
+    std::vector<std::unique_ptr<ColumnChunk>> chunks;
+    deSer.validateDebuggingInfo(key, "chunks");
+    const auto version = deSer.getStorageVersion();
+    if (version != 0 && version <= StorageVersionInfo::VERSION_BEFORE_COLUMN_HOLES) {
+        deSer.deserializeVectorOfPtrs<ColumnChunk>(chunks,
+            [&](Deserializer& deser) { return ColumnChunk::deserialize(memoryManager, deser); });
+        return chunks;
+    }
+    uint64_t numSlots = 0;
+    deSer.deserializeValue<uint64_t>(numSlots);
+    chunks.reserve(numSlots);
+    for (uint64_t i = 0; i < numSlots; i++) {
+        bool present = false;
+        deSer.deserializeValue<bool>(present);
+        chunks.push_back(present ? ColumnChunk::deserialize(memoryManager, deSer) : nullptr);
+    }
+    return chunks;
+}
+
 void ChunkedNodeGroup::serialize(Serializer& serializer) const {
     KU_ASSERT(residencyState == ResidencyState::ON_DISK);
-    serializer.writeDebuggingInfo("chunks");
-    serializer.serializeVectorOfPtrs(chunks);
+    serializeChunks(serializer, chunks);
     serializer.writeDebuggingInfo("startRowIdx");
     serializer.write(startRowIdx);
     serializer.writeDebuggingInfo("has_version_info");
@@ -646,12 +701,9 @@ void ChunkedNodeGroup::serialize(Serializer& serializer) const {
 std::unique_ptr<ChunkedNodeGroup> ChunkedNodeGroup::deserialize(MemoryManager& memoryManager,
     Deserializer& deSer) {
     std::string key;
-    std::vector<std::unique_ptr<ColumnChunk>> chunks;
     bool hasVersions = false;
     row_idx_t startRowIdx = 0;
-    deSer.validateDebuggingInfo(key, "chunks");
-    deSer.deserializeVectorOfPtrs<ColumnChunk>(chunks,
-        [&](Deserializer& deser) { return ColumnChunk::deserialize(memoryManager, deser); });
+    auto chunks = deserializeChunks(memoryManager, deSer);
     deSer.validateDebuggingInfo(key, "startRowIdx");
     deSer.deserializeValue<row_idx_t>(startRowIdx);
     auto chunkedGroup = std::make_unique<ChunkedNodeGroup>(std::move(chunks), startRowIdx);

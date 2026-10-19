@@ -37,17 +37,13 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (41)
+### Ouverts — moteur (37)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Les statistiques par colonne ne sont pas compactées au point de reprise après un DROP](2026-10-19-les-statistiques-par-colonne-ne-sont-pas-compactees-au-point-de-reprise-apres-un-drop.md) | ouvert — pour le cœur, lot V2-1a ; témoin à écrire | réponse fausse en silence (cardinalités d'une autre colonne) | oui (DROP d'une propriété du milieu puis point de reprise) | oui |
-| [Un groupe vidé par le point de reprise garde la colonne supprimée](2026-10-19-un-groupe-vide-par-le-point-de-reprise-garde-la-colonne-supprimee.md) | ouvert, à vérifier par un témoin — pour le cœur, lot V2-1a | bloc et types décalés si confirmé | oui si confirmé | oui si confirmé |
-| [Un ADD COLUMN sur une relation après le DROP de sa dernière propriété range la colonne locale au mauvais numéro](2026-10-19-un-add-column-sur-une-relation-apres-le-drop-de-sa-derniere-propriete-range-la-colonne-locale-au-mauvais-numero.md) | ouvert, à confirmer par un témoin — pour le cœur, lot V2-1a | valeur dans une autre colonne ou hors du vecteur si confirmé | oui si confirmé | oui si confirmé |
-| [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | ouvert — pour le cœur, une ligne (avec V2-1a ou avant) ; témoin à écrire | blocage nommé « Miss cached column » après un DROP puis un point de reprise | oui | oui |
 | [Le COPY de relations ne lit pas le mot NULL dans une colonne entière](2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere.md) | ouvert — filet dans `copier_les_liens` (une colonne texte, sinon par lots) ; témoin du moteur à écrire | blocage, base à rouvrir | non, par le filet | oui (son filet) |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
@@ -132,10 +128,14 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (158), dans `closed/`
+### Fermés (162), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](closed/2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | corrigé (19 octobre 2026) — une seule clé, le numéro de colonne ; témoin `StableColumnIDs.AVectorIndexIsCreatedOnATableWhereAPropertyWasDropped` | blocage nommé « Miss cached column » | oui | oui |
+| [Un ADD COLUMN sur une relation après le DROP de sa dernière propriété range la colonne locale au mauvais numéro](closed/2026-10-19-un-add-column-sur-une-relation-apres-le-drop-de-sa-derniere-propriete-range-la-colonne-locale-au-mauvais-numero.md) | corrigé (19 octobre 2026, V2-1a) — la table locale range la colonne ajoutée à son numéro ; témoin `StableColumnIDs.AnAddOnARelationAfterDroppingItsLastPropertyWritesTheRightColumn` | valeur dans une autre colonne ou hors du vecteur | oui | oui |
+| [Un groupe vidé par le point de reprise garde la colonne supprimée](closed/2026-10-19-un-groupe-vide-par-le-point-de-reprise-garde-la-colonne-supprimee.md) | corrigé (19 octobre 2026, V2-1a) — un bloc vidé garde une entrée par numéro ; témoin `StableColumnIDs.AGroupEmptiedByTheCheckpointKeepsTheHole` | bloc et types décalés | oui | oui |
+| [Les statistiques par colonne ne sont pas compactées au point de reprise après un DROP](closed/2026-10-19-les-statistiques-par-colonne-ne-sont-pas-compactees-au-point-de-reprise-apres-un-drop.md) | corrigé (19 octobre 2026, V2-1a) — numéros stables, statistiques à leur numéro ; témoin `StableColumnIDs.TheRemainingColumnsKeepTheirOwnStatistics` | réponse fausse en silence (cardinalités d'une autre colonne) | oui | oui |
 | [Une base ne dit pas quel moteur l'a écrite en dernier, et un moteur plus ancien de même format l'ouvre en écriture](closed/2026-10-18-une-base-ne-dit-pas-quel-moteur-l-a-ecrite-et-un-moteur-plus-ancien-l-ouvre-en-ecriture.md) | corrigé (19 octobre 2026, première pièce de V2-1a) — version de format 41 posée à la main, bâti écrivain dans l'en-tête et en tête du journal, refus nommés dans les deux sens, base ancienne estampillée au point de reprise | corruption possible | oui | oui |
 | [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | corrigé (19 octobre 2026) — la préparation voit les paramètres d'une sous-requête ; le produit rend `through` en `EXISTS` quand sa lib est `courant` | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Une méthode propre contre une méthode de trait de même nom](closed/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md) | corrigé (codeparsers `trait_impl`, la méthode propre passe avant à types égaux ; témoin d'impact vert par le vrai chemin) | relation manquante | oui, `impact row_to_map` | oui (`code.rs`, codeparsers) |
