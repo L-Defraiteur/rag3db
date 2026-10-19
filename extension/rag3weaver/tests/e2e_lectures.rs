@@ -417,7 +417,8 @@ fn mesure_des_instantanes_sur_un_vrai_depot() {
     };
     let mut repos_search = Vec::new();
     let mut repos_usages = Vec::new();
-    for i in 0..40 {
+    let appels: usize = std::env::var("RAG3WEAVER_MESURE_APPELS").ok().and_then(|v| v.parse().ok()).unwrap_or(40);
+    for i in 0..appels {
         let (d, bon) = appel(&host, "search_code", json!({"query": requetes[i % requetes.len()], "options": {}, "mode": "indexed"}));
         assert!(bon, "search_code au repos");
         repos_search.push(d);
@@ -427,6 +428,12 @@ fn mesure_des_instantanes_sur_un_vrai_depot() {
     }
     resume("search_code au repos", repos_search);
     resume("usages au repos", repos_usages);
+    // `RAG3WEAVER_MESURE_REPOS_SEUL` : la mesure au repos seulement (l'écart
+    // d'usages, à binaire égal avec `RAG3WEAVER_READ_POOL=0`).
+    if std::env::var_os("RAG3WEAVER_MESURE_REPOS_SEUL").is_some() {
+        host.shutdown();
+        return;
+    }
 
     // Sous l'écrivain : trois tours, chacun touche tous les fichiers ; quatre
     // lecteurs en boucle pendant ce temps.

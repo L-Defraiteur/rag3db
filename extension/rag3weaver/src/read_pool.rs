@@ -49,9 +49,11 @@ pub fn duree_max() -> Duration {
     Duration::from_millis(std::env::var("RAG3WEAVER_SNAPSHOT_MAX_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1_000))
 }
 
-/// Le plafond du pool : `RAG3WEAVER_READ_POOL`, 8 par défaut.
+/// Le plafond du pool : `RAG3WEAVER_READ_POOL`, 8 par défaut. **0 coupe les
+/// instantanés** : pas de pool, les lectures partent requête par requête comme
+/// avant L6 (un interrupteur d'exploitation, et la mesure à binaire égal).
 pub fn plafond() -> usize {
-    std::env::var("RAG3WEAVER_READ_POOL").ok().and_then(|v| v.parse().ok()).filter(|n: &usize| *n > 0).unwrap_or(8)
+    std::env::var("RAG3WEAVER_READ_POOL").ok().and_then(|v| v.parse().ok()).unwrap_or(8)
 }
 
 struct Etat {
@@ -76,11 +78,15 @@ impl ReadPool {
     /// Un pool sur `source`, si son moteur sait ouvrir des connexions de
     /// lecture (rag3db) ; `None` sinon (PostgreSQL : pas d'instantané).
     pub fn new(source: Arc<dyn DbConnection>, threads: u64) -> Option<Arc<Self>> {
+        let plafond = plafond();
+        if plafond == 0 {
+            return None;
+        }
         let premiere = source.read_connection(threads)?;
         Some(Arc::new(Self {
             source,
             threads,
-            plafond: plafond(),
+            plafond,
             etat: Mutex::new(Etat { libres: vec![premiere], ouvertes: 1 }),
             rendue: Condvar::new(),
             sans_instantane: Arc::new(AtomicU64::new(0)),
@@ -364,6 +370,41 @@ mod tests {
         assert_eq!(p.occupation().0, 1, "la connexion revient au pool");
         let j = p.instantane(ATTENTE).expect("de nouveau");
         assert_eq!(compte(&j.conn()), 2);
+    }
+
+    /// **Ce que coûte un instantané**, à part (la mesure de L6, 19 octobre
+    /// 2026) : `BEGIN TRANSACTION READ ONLY` puis `COMMIT` sur une connexion du
+    /// pool, sans requête entre les deux, contre une requête seule. Rien
+    /// n'est exigé ; les chiffres se lisent dans la sortie.
+    #[test]
+    #[ignore]
+    fn mesure_du_cout_d_un_instantane() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ecrivain, p) = pool(dir.path(), 2);
+        for i in 0..1000 {
+            ecrivain.execute(&format!("CREATE (:T {{id: {i}}})")).unwrap();
+        }
+        let c = p.prendre(ATTENTE).unwrap();
+        let mut ouvrir = Vec::new();
+        let mut valider = Vec::new();
+        let mut requete = Vec::new();
+        for _ in 0..2000 {
+            let t = Instant::now();
+            c.begin_read_only().unwrap();
+            ouvrir.push(t.elapsed());
+            let t = Instant::now();
+            c.commit().unwrap();
+            valider.push(t.elapsed());
+            let t = Instant::now();
+            compte(&c);
+            requete.push(t.elapsed());
+        }
+        for (nom, mut d) in [("BEGIN READ ONLY", ouvrir), ("COMMIT", valider), ("une requête de compte", requete)] {
+            d.sort();
+            let q = |x: f64| d[((d.len() as f64 * x) as usize).min(d.len() - 1)].as_micros();
+            eprintln!("[mesure L6] {nom} : p50={} µs p99={} µs max={} µs", q(0.5), q(0.99), d.last().unwrap().as_micros());
+        }
+        p.rendre(c);
     }
 
     /// Plafond atteint : l'attente est bornée, l'appel passe sans instantané,
