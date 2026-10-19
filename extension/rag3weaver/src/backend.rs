@@ -2822,6 +2822,11 @@ impl Backend {
     /// quelque chose (18 octobre 2026) : une indexation en cours, des fichiers que
     /// la montre n'a pas encore réindexés, ou le catalogue tenu (un appel, une
     /// réaction, une ingestion). Ne bloque jamais : un catalogue tenu se dit tel.
+    /// MESURE SEULEMENT : les écrivains plein texte lâchés au repos.
+    pub fn lacher_les_ecrivains_fts(&self) -> usize {
+        self.catalog.try_lock().map(|c| c.lacher_les_ecrivains_fts()).unwrap_or(0)
+    }
+
     pub fn travail_en_cours(&self) -> Option<String> {
         #[cfg(feature = "code")]
         {

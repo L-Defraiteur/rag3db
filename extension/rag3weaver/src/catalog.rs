@@ -8508,6 +8508,25 @@ fn read_threads() -> u64 {
     ///
     /// Return failures to the caller as well as emitting an event. Retaining
     /// pending blobs permits retry but does not mean the index is durable.
+    /// MESURE SEULEMENT (19 octobre 2026) : valide puis lâche l'écrivain de
+    /// chaque shard des index plein texte, pour mesurer ce que le drop rend au
+    /// repos. Rend le nombre d'écrivains lâchés.
+    pub fn lacher_les_ecrivains_fts(&self) -> usize {
+        let mut n = 0;
+        for h in self.fts_handles.values().chain(self.parked_fts.values().flat_map(|m| m.values())) {
+            let _ = h.commit();
+            for i in 0..h.num_shards() {
+                if let Some(s) = h.shard(i) {
+                    if s.close().is_ok() {
+                        n += 1;
+                    }
+                }
+            }
+        }
+        let _ = self.flush_blob_store("lâcher les écrivains");
+        n
+    }
+
     fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
         // Dans un lot en transaction : rien à synchroniser, le plein texte
         // attend le COMMIT (`commit_lot`).

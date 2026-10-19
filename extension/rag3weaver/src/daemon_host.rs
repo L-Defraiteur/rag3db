@@ -157,6 +157,19 @@ impl DaemonHost {
     /// chose : un run en fond vivant, un appel en cours sur un backend (son verrou
     /// tenu), ou le travail d'un backend ([`Backend::travail_en_cours`] : index,
     /// montre). Ne bloque jamais.
+    /// MESURE SEULEMENT : lâche les écrivains plein texte de chaque backend ouvert.
+    pub fn lacher_les_ecrivains_fts(&self) -> usize {
+        self.backends
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .values()
+            .map(|h| match h.backend.try_lock() {
+                Ok(slot) => slot.as_ref().map(|b| b.lacher_les_ecrivains_fts()).unwrap_or(0),
+                Err(_) => 0,
+            })
+            .sum()
+    }
+
     pub fn travail_en_cours(&self) -> Option<String> {
         let vivants = self.background.alive();
         if !vivants.is_empty() {
@@ -937,6 +950,10 @@ impl DaemonServer {
                             match activite.inactif_depuis() {
                                 Some(depuis) if depuis >= REPOS_AVANT_RENDU => {
                                     if !rendue_au_repos && host.travail_en_cours().is_none() {
+                                        if std::env::var_os("RAG3WEAVER_MESURE_LACHER").is_some() {
+                                            let n = host.lacher_les_ecrivains_fts();
+                                            eprintln!("[mesure] {n} écrivain(s) plein texte lâché(s) au repos");
+                                        }
                                         crate::allocateur::rendre_au_systeme("hôte au repos");
                                         rendue_au_repos = true;
                                     }
