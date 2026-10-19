@@ -163,7 +163,7 @@ impl DaemonHost {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .values()
-            .map(|h| match h.backend.try_lock() {
+            .map(|h| match h.backend.try_read() {
                 Ok(slot) => slot.as_ref().map(|b| b.lacher_les_ecrivains_fts()).unwrap_or(0),
                 Err(_) => 0,
             })
