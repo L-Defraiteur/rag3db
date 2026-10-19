@@ -3970,10 +3970,14 @@ impl Backend {
         }
         for entite in entites {
             if let Ok(state) = cat.index_state_for(entite) {
-                etats.insert(
-                    entite.to_string(),
-                    serde_json::to_value(state).map_err(|e| e.to_string())?,
-                );
+                let mut v = serde_json::to_value(state).map_err(|e| e.to_string())?;
+                // Les index de l'entité qui n'ont pas pu s'ouvrir ou se créer, et
+                // pourquoi (19 octobre 2026) : jusque-là sur stderr seulement.
+                let echecs = cat.index_failures_for(Some(entite));
+                if !echecs.is_empty() {
+                    v["failures"] = json!(echecs.iter().map(|(genre, raison)| json!({"index": genre, "reason": raison})).collect::<Vec<_>>());
+                }
+                etats.insert(entite.to_string(), v);
             }
         }
         // Le retard de l'index sur le disque : des fichiers changés pas encore
