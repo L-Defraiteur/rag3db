@@ -238,6 +238,12 @@ struct DrainCounters {
     flush_count: usize,
 }
 
+/// Les genres d'index dont l'ouverture ou la création peut échouer
+/// ([`Catalog::index_failures`]).
+pub const PLEIN_TEXTE_INDEX: &str = "plein texte";
+pub const CREUX_INDEX: &str = "creux";
+pub const VECTEUR_INDEX: &str = "vecteurs";
+
 pub struct Catalog {
     // ⚠️ ORDRE DE DÉCLARATION SIGNIFICATIF — Rust droppe les champs dans cet
     // ordre. `conn` doit rester **en dernier**, après tout ce qui peut
@@ -404,6 +410,11 @@ pub struct Catalog {
     /// (génération qui n'est pas celle de la base) : à rebâtir depuis les
     /// lignes, hors transaction (`open_fts_handles_for`).
     fts_rebuild: HashSet<String>,
+    /// **Les index qui n'ont pas pu s'ouvrir ou se créer**, par (genre, table),
+    /// avec leur raison (19 octobre 2026) : jusque-là dits sur stderr seulement,
+    /// et l'indexation annonçait « plein texte prêt » sur un index absent. Lus
+    /// par l'état de l'index ([`Catalog::index_failures`]) et par `run_index`.
+    index_echecs: std::sync::Mutex<BTreeMap<(String, String), String>>,
     /// Le dernier décalage de ligne indexé par le rebâti, par table.
     fts_rebuild_cursor: HashMap<String, i64>,
     /// **La génération promise** (mode fichiers) : posée en base avant toute
@@ -643,6 +654,7 @@ fn read_threads() -> u64 {
             fts_handles: HashMap::new(),
             fts_files: Vec::new(),
             fts_rebuild: HashSet::new(),
+            index_echecs: Default::default(),
             fts_rebuild_cursor: HashMap::new(),
             fts_promise: std::sync::atomic::AtomicBool::new(false),
             fts_promise_orphan: std::sync::atomic::AtomicBool::new(false),
@@ -884,11 +896,14 @@ fn read_threads() -> u64 {
             ) {
                 Ok(h) => h,
                 Err(e) => {
-                    eprintln!("[rag3weaver] failed to create sparse handle for {table}: {e}");
+                    let raison = format!("création de l'index creux de {table} échouée : {e}");
+                    eprintln!("[rag3weaver] {raison}");
+                    self.note_index_failure(CREUX_INDEX, table, &raison);
                     return;
                 }
             },
         };
+        self.forget_index_failure(CREUX_INDEX, table);
         self.sparse_handles.insert(table.to_string(), Arc::new(handle));
         self.publish_read_view();
     }
@@ -1324,10 +1339,34 @@ fn read_threads() -> u64 {
         text_fields: &[String],
         filter_fields: &[(String, String)],
     ) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
-        if text_fields.is_empty() {
-            return None;
+        match self.open_fts_handle_or_reason(table, text_fields, filter_fields) {
+            Ok(h) => {
+                self.forget_index_failure(PLEIN_TEXTE_INDEX, table);
+                Some(h)
+            }
+            // Rien à ouvrir, sans faute : pas de champ texte, pas de magasin, ou
+            // un lecteur qui attend le rebâti d'un écrivain.
+            Err(None) => None,
+            Err(Some(raison)) => {
+                eprintln!("[rag3weaver] {raison}");
+                self.note_index_failure(PLEIN_TEXTE_INDEX, table, &raison);
+                None
+            }
         }
-        let blob_store = self.blob_store.clone()?;
+    }
+
+    /// L'ouverture (ou la création) de l'index plein texte de `table`, avec la
+    /// raison d'un échec ; `Err(None)` quand il n'y a rien à ouvrir.
+    fn open_fts_handle_or_reason(
+        &mut self,
+        table: &str,
+        text_fields: &[String],
+        filter_fields: &[(String, String)],
+    ) -> Result<Arc<lucivy_core::sharded_handle::ShardedHandle>, Option<String>> {
+        if text_fields.is_empty() {
+            return Err(None);
+        }
+        let blob_store = self.blob_store.clone().ok_or(None)?;
 
         use lucivy_core::sharded_handle::{
             BlobShardStorage, FsShardStorage, ShardStorage, ShardedHandle,
@@ -1344,8 +1383,7 @@ fn read_threads() -> u64 {
             let sur_disque = crate::fts_directory::generation_on_disk(&dir);
             base_generation = marque.unwrap_or(0);
             if let Err(e) = self.reprendre_une_promesse() {
-                eprintln!("[rag3weaver] plein texte {table} : promesse illisible ou marque impossible ({e}) — index non ouvert");
-                return None;
+                return Err(Some(format!("plein texte {table} : promesse illisible ou marque impossible ({e}) — index non ouvert")));
             }
             let entite = self.entity_of_fts_table(table);
             // Un rebâti interrompu (marque durable encore posée) recommence.
@@ -1361,7 +1399,7 @@ fn read_threads() -> u64 {
                     );
                     self.fts_rebuild.insert(table.to_string());
                     if !dir.exists() {
-                        return None;
+                        return Err(None);
                     }
                 } else {
                     eprintln!(
@@ -1373,14 +1411,12 @@ fn read_threads() -> u64 {
                     // un index disparu sans marque.
                     if let Some(e) = &entite {
                         if let Err(err) = self.mark_fts_pending(&[e.as_str()]) {
-                            eprintln!("[rag3weaver] plein texte {table} : marque « à rebâtir » impossible ({err}) — dossier gardé, index non ouvert");
-                            return None;
+                            return Err(Some(format!("plein texte {table} : marque « à rebâtir » impossible ({err}) — dossier gardé, index non ouvert")));
                         }
                     }
                     if let Err(err) = std::fs::remove_dir_all(&dir) {
                         if err.kind() != std::io::ErrorKind::NotFound {
-                            eprintln!("[rag3weaver] plein texte {table} : dossier impossible à retirer ({err}) — index non ouvert");
-                            return None;
+                            return Err(Some(format!("plein texte {table} : dossier impossible à retirer ({err}) — index non ouvert")));
                         }
                     }
                     self.fts_rebuild.insert(table.to_string());
@@ -1389,7 +1425,7 @@ fn read_threads() -> u64 {
             }
         }
         let files: std::cell::RefCell<Vec<Arc<crate::fts_directory::FtsShardStorage>>> = Default::default();
-        let storage = || -> Option<Box<dyn ShardStorage>> {
+        let storage = || -> Result<Box<dyn ShardStorage>, Option<String>> {
             match &self.fts_storage {
                 crate::fts_handle::FtsStorage::BlobBacked { lazy } => {
                     let mut st = BlobShardStorage::new(
@@ -1402,7 +1438,7 @@ fn read_threads() -> u64 {
                             lucivy_core::blob_directory::BlobLoadMode::Lazy,
                         );
                     }
-                    Some(Box::new(st))
+                    Ok(Box::new(st))
                 }
                 crate::fts_handle::FtsStorage::Files { base_path } => {
                     let dir = std::path::Path::new(base_path).join(&index_name);
@@ -1410,22 +1446,16 @@ fn read_threads() -> u64 {
                         Ok(s) => {
                             s.start_after(base_generation);
                             files.borrow_mut().push(s.clone());
-                            Some(Box::new(crate::fts_directory::SharedFtsStorage(s)))
+                            Ok(Box::new(crate::fts_directory::SharedFtsStorage(s)))
                         }
-                        Err(e) => {
-                            eprintln!("[rag3weaver] dossier du plein texte {table}: {e}");
-                            None
-                        }
+                        Err(e) => Err(Some(format!("dossier du plein texte {table} : {e}"))),
                     }
                 }
                 crate::fts_handle::FtsStorage::LocalFs { base_path } => {
                     let dir = std::path::Path::new(base_path).join(&index_name);
                     match FsShardStorage::new(&dir.to_string_lossy()) {
-                        Ok(s) => Some(Box::new(s)),
-                        Err(e) => {
-                            eprintln!("[rag3weaver] FsShardStorage {table}: {e}");
-                            None
-                        }
+                        Ok(s) => Ok(Box::new(s)),
+                        Err(e) => Err(Some(format!("stockage du plein texte {table} : {e}"))),
                     }
                 }
             }
@@ -1433,7 +1463,7 @@ fn read_threads() -> u64 {
 
         let handle = match ShardedHandle::open_with_storage(storage()?) {
             Ok(h) => h,
-            Err(_) => {
+            Err(ouverture) => {
                 let config = match crate::fts_handle::build_schema_config_with_positions(
                     text_fields,
                     filter_fields,
@@ -1441,16 +1471,14 @@ fn read_threads() -> u64 {
                     self.fts_positions,
                 ) {
                     Ok(c) => c,
-                    Err(e) => {
-                        eprintln!("[rag3weaver] schéma FTS invalide pour {table}: {e}");
-                        return None;
-                    }
+                    Err(e) => return Err(Some(format!("schéma du plein texte invalide pour {table} : {e}"))),
                 };
                 match ShardedHandle::create_with_storage(storage()?, &config) {
                     Ok(h) => h,
                     Err(e) => {
-                        eprintln!("[rag3weaver] création de l'index FTS {table} échouée: {e}");
-                        return None;
+                        return Err(Some(format!(
+                            "création de l'index plein texte de {table} échouée : {e} (ouverture : {ouverture})"
+                        )))
                     }
                 }
             }
@@ -1460,7 +1488,23 @@ fn read_threads() -> u64 {
         self.fts_files.extend(files.into_inner());
         self.fts_handles.insert(table.to_string(), handle.clone());
         self.publish_read_view();
-        Some(handle)
+        Ok(handle)
+    }
+
+    /// Note qu'un index n'a pas pu s'ouvrir ou se créer, avec sa raison.
+    fn note_index_failure(&self, genre: &str, table: &str, raison: &str) {
+        self.index_echecs.lock().unwrap_or_else(|p| p.into_inner()).insert((genre.to_string(), table.to_string()), raison.to_string());
+    }
+
+    /// Un index qui s'ouvre n'est plus en échec.
+    fn forget_index_failure(&self, genre: &str, table: &str) {
+        self.index_echecs.lock().unwrap_or_else(|p| p.into_inner()).remove(&(genre.to_string(), table.to_string()));
+    }
+
+    /// **Les index qui n'ont pas pu s'ouvrir ou se créer** : (genre, table) →
+    /// raison. Genres : [`PLEIN_TEXTE_INDEX`], [`CREUX_INDEX`], [`VECTEUR_INDEX`].
+    pub fn index_failures(&self) -> BTreeMap<(String, String), String> {
+        self.index_echecs.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// Gracefully close all lucivy FTS indexes to release file locks.
@@ -2341,10 +2385,17 @@ fn read_threads() -> u64 {
     fn ensure_vector_index(&self, table: &str, column: &str, index: &str) -> Result<(), CatalogError> {
         let ddl = self.dialect.create_vector_index(table, column, index);
         let Err(refus) = self.conn.execute(&ddl) else {
+            self.forget_index_failure(VECTEUR_INDEX, table);
             return Ok(());
         };
         let refus = refus.to_string();
         if !refus.contains(INDEX_BEHIND_ITS_TABLE) {
+            // Un index déjà posé n'est pas un échec ; tout autre refus en est un,
+            // gardé pour l'état de l'index au lieu d'un avertissement que personne
+            // ne lit.
+            if !refus.to_lowercase().contains("already exist") {
+                self.note_index_failure(VECTEUR_INDEX, table, &format!("index vectoriel de {table} non posé : {refus}"));
+            }
             self.emit_event(CatalogEvent::Warning {
                 context: "index".into(),
                 message: format!("index vectoriel non posé — {ddl} : {refus}"),
