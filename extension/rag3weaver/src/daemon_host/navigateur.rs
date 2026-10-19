@@ -461,6 +461,16 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             "[...document.querySelectorAll('#vue .resultat a')].some(a => a.textContent.startsWith('src/arrivee.rs'))",
         ),
         (
+            "la liste des graphes",
+            format!("{racine}/ide/code/{id}/dag/"),
+            "[...document.querySelectorAll('#vue li a')].some(a => a.textContent === 'usages')",
+        ),
+        (
+            "le DAG d'un outil",
+            format!("{racine}/ide/code/{id}/dag/tool/usages"),
+            "document.querySelectorAll('#vue svg g.etape').length >= 1 && document.querySelector('#dag-etat')",
+        ),
+        (
             "le graphe",
             format!("{racine}/ide/code/{id}/graphe/depart"),
             "document.querySelectorAll('#vue svg g.noeud').length >= 2 && document.querySelector('#vue svg g.noeud.centre')?.textContent.includes('depart')",
@@ -496,6 +506,22 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     n.attendre("document.querySelector('.barre .note')?.textContent === 'enregistré'", "l'enregistrement");
     assert_eq!(std::fs::read_to_string(arbre.join("main.rs")).unwrap(), neuf);
     assert!(n.erreurs.is_empty(), "l'édition : erreurs à la console : {:#?}", n.erreurs);
+
+    // Le DAG vivant (C2) : la page montre le graphe de `usages` ; un appel de
+    // l'outil s'annonce par sa cible, et ses nœuds s'allument à leur NodeRun.
+    n.aller(
+        &format!("{racine}/ide/code/{id}/dag/tool/usages"),
+        "document.querySelectorAll('#vue svg g.etape').length >= 1 && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+    let u = appeler("usages", json!({ "name": "depart", "format": "json" }));
+    assert_eq!(u["ok"], true, "{u}");
+    n.attendre(
+        "document.querySelector('#dag-etat')?.textContent.includes(': fini en') \
+         && document.querySelectorAll('#vue g.etape.passe').length >= 1 \
+         && document.querySelectorAll('#vue g.etape.echec').length === 0",
+        "le DAG allumé par le run de l'outil",
+    );
+    assert!(n.erreurs.is_empty(), "le DAG vivant : erreurs à la console : {:#?}", n.erreurs);
 
     drop(n);
     let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));

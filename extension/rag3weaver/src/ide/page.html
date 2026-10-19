@@ -70,6 +70,13 @@
   .graphe .noeud a:hover text.titre { fill: var(--accent); text-decoration: underline; }
   .graphe path { fill: none; stroke: var(--doux); stroke-opacity: .55; }
   .graphe path.devine { stroke-dasharray: 4 3; }
+  /* Le DAG vivant (C2) : un nœud passé s'allume, un nœud en échec se borde. */
+  .graphe .etape rect { fill: var(--fond); stroke: var(--trait); }
+  .graphe .etape.passe rect { fill: var(--accent-doux); stroke: var(--accent); }
+  .graphe .etape.echec rect { fill: var(--marque); stroke: var(--alerte); }
+  .graphe .etape text { fill: var(--texte); font: 12px system-ui, sans-serif; }
+  .graphe .etape text.lieu, .graphe .etape text.duree { fill: var(--doux); font: 10px var(--mono); }
+  .graphe text.port { fill: var(--doux); font: 10px var(--mono); }
 </style>
 </head>
 <body>
@@ -209,6 +216,7 @@ async function accueil() {
     el("ul", { class: "liste" }, backends.map((b) =>
       el("li", {},
         el("a", { href: `/ide/code/${b.id}/arbre/` }, nomCourt(b.manifest)),
+        el("a", { href: `/ide/code/${b.id}/dag/` }, "graphes"),
         el("span", { class: "meta" }, b.manifest),
         el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
         (b.template_drift ?? []).length ? el("span", { class: "meta" }, `${b.template_drift.length} gabarit(s) local(aux) différent(s) du livré`) : "",
@@ -528,11 +536,122 @@ async function graphe(id, nom) {
   );
 }
 
+// ─── Le DAG vivant (C2) ────────────────────────────────────────────────────
+// Le graphe d'un outil, d'une réaction ou d'un composant (/ide/graphe), dessiné
+// par couches de gauche à droite ; le sujet `dataflow` du flux l'allume. Le run
+// se reconnaît à sa cible (`RunStarted.target`, la même forme que la demande du
+// graphe), un nœud au nom que porte son `NodeRun` — sur `dataflow` pour un
+// appel d'outil, `reactions` pour une réaction.
+
+let dagVivant = null; // { manifest, cible, run, noeuds: Map(nom → <g>), etat: <p> }
+
+async function graphes(id) {
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · graphes");
+  const r = await (await fetch("/ide/describe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ manifest: b.manifest }),
+  })).json();
+  const d = r.result ?? r;
+  if (r.ok === false) throw new Error(r.error ?? "describe refusé");
+  const outils = (d.tools ?? []).map((t) => t.name).sort();
+  vue.replaceChildren(
+    el("h1", {}, "Graphes des outils"),
+    el("p", { class: "note" }, "Un outil appelé pendant qu'on regarde son graphe s'y allume, nœud par nœud."),
+    el("ul", { class: "liste" }, outils.map((n) => el("li", {}, el("a", { href: `/ide/code/${id}/dag/tool/${encodeURIComponent(n)}` }, n)))),
+  );
+}
+
+async function dag(id, reste) {
+  const [genre, ...suite] = reste.split("/");
+  const nom = suite.join("/");
+  if (!genre || !nom) return graphes(id);
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ",
+    el("a", { href: `/ide/code/${id}/dag/` }, nomCourt(b.manifest)), ` · ${genre} ${nom}`);
+  const r = await (await fetch(`/ide/graphe?${new URLSearchParams({ backend: id, [genre]: nom })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const g = r.result;
+  // La couche d'un nœud : la plus longue chaîne d'arêtes qui y mène (bornée
+  // par le nombre de nœuds : un cycle ne fait pas tourner la page).
+  const couche = new Map(g.nodes.map((n) => [n.name, 0]));
+  for (let i = 0; i < g.nodes.length; i++) for (const e of g.edges) {
+    const c = (couche.get(e.from_node) ?? 0) + 1;
+    if (couche.has(e.to_node) && c > couche.get(e.to_node) && c < g.nodes.length) couche.set(e.to_node, c);
+  }
+  const colonnes = [];
+  for (const n of g.nodes) (colonnes[couche.get(n.name)] ??= []).push(n);
+  const L = 250, H = 56, LARGE = 200, MARGE = 24;
+  const hauteur = Math.max(1, ...colonnes.map((c) => c?.length ?? 0)) * H + 2 * MARGE;
+  const largeur = Math.max(1, colonnes.length) * L + 2 * MARGE;
+  const pos = new Map();
+  colonnes.forEach((c, x) => (c ?? []).forEach((n, i) => pos.set(n.name, { x: MARGE + x * L, y: MARGE + i * H })));
+  const traits = svg("g");
+  for (const e of g.edges) {
+    const a = pos.get(e.from_node), z = pos.get(e.to_node);
+    if (!a || !z) continue;
+    const x1 = a.x + LARGE, y1 = a.y + (H - 12) / 2, x2 = z.x, y2 = z.y + (H - 12) / 2;
+    traits.append(
+      svg("path", { d: `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}` }),
+      svg("text", { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 3, "text-anchor": "middle", class: "port" },
+        e.from_port === e.to_port ? e.from_port : `${e.from_port}→${e.to_port}`));
+  }
+  const noeuds = svg("g");
+  const parNom = new Map();
+  for (const n of g.nodes) {
+    const p = pos.get(n.name);
+    const etape = svg("g", { class: "etape", "data-nom": n.name, transform: `translate(${p.x},${p.y})` },
+      svg("title", {}, `${n.node_type}${n.line ? " — ligne " + n.line : ""}\n${JSON.stringify(n.config)}`),
+      svg("rect", { width: LARGE, height: H - 12, rx: 5 }),
+      svg("text", { x: 8, y: 14, class: "titre" }, court(n.name, 28)),
+      svg("text", { x: 8, y: 27, class: "lieu" }, court(n.node_type, 30)),
+      svg("text", { x: LARGE - 8, y: 27, "text-anchor": "end", class: "duree" }, ""));
+    parNom.set(n.name, etape);
+    noeuds.append(etape);
+  }
+  const etatDuRun = el("p", { class: "note", id: "dag-etat" }, "En attente d'un run de ce graphe…");
+  vue.replaceChildren(
+    el("h1", {}, `${nom}`),
+    el("p", { class: "note" }, `${genre === "tool" ? "Outil" : genre === "reaction" ? "Réaction" : "Composant"}, ${g.nodes.length} nœud(s), ${g.edges.length} arête(s)${g.source ? " — " + g.source : ""}.`),
+    etatDuRun,
+    g.nodes.length
+      ? el("div", { class: "graphe" }, svg("svg", { width: largeur, height: hauteur, viewBox: `0 0 ${largeur} ${hauteur}` }, traits, noeuds))
+      : el("p", { class: "note" }, "Ce graphe est vide."),
+  );
+  dagVivant = { manifest: b.manifest, cible: JSON.stringify({ [genre]: nom }), run: null, noeuds: parNom, etat: etatDuRun };
+}
+
+// Un événement `dataflow` du flux, pour le DAG montré.
+function vivre(d) {
+  const v = dagVivant;
+  const ev = d.evenement ?? {};
+  if (!v || route().vue !== "dag" || d.backend !== v.manifest) return;
+  if (ev.kind === "RunStarted" && ev.target && JSON.stringify(ev.target) === v.cible) {
+    v.run = ev.run;
+    for (const g of v.noeuds.values()) {
+      g.classList.remove("passe", "echec");
+      g.querySelector("text.duree").textContent = "";
+    }
+    v.etat.textContent = `run ${ev.run} : en cours`;
+    return;
+  }
+  if (!v.run || ev.run !== v.run) return;
+  if (ev.kind === "NodeRun") {
+    const g = v.noeuds.get(ev.node);
+    if (!g) return;
+    g.classList.add(ev.ok === false || ev.error ? "echec" : "passe");
+    g.querySelector("text.duree").textContent = `${ev.ms} ms`;
+  } else if (ev.kind === "RunFinished") {
+    v.etat.textContent = `run ${ev.run} : ${ev.ok ? "fini" : "échoué"} en ${ev.ms} ms`;
+  }
+}
+
 // ─── Le routage, et le flux ───────────────────────────────────────────────
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -569,19 +688,24 @@ async function vueDe(r) {
     case "symbole": return await symbole(r.id, r.reste);
     case "graphe": return await graphe(r.id, r.reste);
     case "recherche": return await recherche(r.id);
+    case "dag": return await dag(r.id, r.reste);
     default: return await accueil();
   }
 }
 montrer();
 
-// Le flux : un fichier qui change se relit dans la vue qui le montre.
+// Le flux : un fichier qui change se relit dans la vue qui le montre ; un run
+// allume le DAG montré.
 const lien = document.getElementById("lien");
-const source = new EventSource("/ide/flux?sujets=files");
+const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions");
 source.onopen = () => { lien.textContent = "flux : ouvert"; };
 source.onerror = () => { lien.textContent = "flux : coupé, reprise…"; };
 let relire = null;
 source.onmessage = (e) => {
   const d = JSON.parse(e.data);
+  // Les runs passent par `dataflow` (un appel d'outil par l'hôte), `reactions`
+  // (une réaction) ou `catalog` (une ingestion) : le DAG vivant les lit tous.
+  if (d.sujet === "dataflow" || d.sujet === "reactions" || d.sujet === "catalog") return vivre(d);
   const ev = d.evenement ?? {};
   const r = route();
   const b = r.id && backend(r.id);

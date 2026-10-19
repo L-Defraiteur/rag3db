@@ -86,7 +86,30 @@ d'agent qui rendent le même JSON, celui du graphe d'un outil, d'une réaction o
   du gabarit `code` (chaque nœud a sa ligne et son schéma) et celui d'un composant sans graphe de
   clic, puis vérifie le refus d'une demande sans backend.
 
+## C2 — le DAG vivant dans la page de l'IDE
+
+10. **Deux vues de plus dans la page** :
+    - `/ide/code/<id>/dag/` liste les outils du backend (par `/ide/describe`) ;
+    - `/ide/code/<id>/dag/tool/<nom>` (ou `reaction/`, `component/`) dessine le graphe de
+      `/ide/graphe`.
+
+    L'accueil mène aux graphes de chaque backend. Le dessin est par couches de gauche à droite :
+    la couche d'un nœud est la plus longue chaîne d'arêtes qui y mène, bornée par le nombre de
+    nœuds, si bien qu'un cycle ne fait pas tourner la page. Les ports se lisent sur les arêtes,
+    et le type, la ligne et la config d'un nœud dans son infobulle.
+11. **Le flux allume le dessin.** La page s'abonne à `files`, `dataflow`, `catalog` et
+    `reactions`. Un `RunStarted` dont `target` est le graphe montré (la même forme que sa
+    demande) ouvre le run suivi et éteint le dessin. Chaque `NodeRun` de ce run allume son nœud
+    (`passe`, ou `echec` s'il porte une erreur) et y écrit sa durée. `RunFinished` dit la fin et
+    sa durée. Un run d'un autre graphe ne touche à rien.
+12. **Le témoin est celui de G** (`daemon_host/navigateur.rs`) :
+    - deux entrées au tableau `vues`, la liste des graphes et le DAG de `usages`, chacune avec
+      zéro erreur à la console ;
+    - une étape vivante : la page montre le DAG de `usages`, le test appelle l'outil par
+      `/ide/call`, et il attend « fini », au moins un nœud allumé et aucun en échec, toujours
+      sans erreur à la console.
+
 ## La suite
 
-Le dessin vivant dans la page de l'IDE. Il dessine ce JSON, s'abonne au sujet `dataflow` et
-allume les nœuds par leur nom, au run reconnu.
+Le DAG d'un composant dans l'aperçu (son graphe de clic, à côté du rendu), et le run d'une
+réaction suivi de même dans une vue des réactions.
