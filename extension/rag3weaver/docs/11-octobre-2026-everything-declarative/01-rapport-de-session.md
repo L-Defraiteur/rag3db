@@ -410,6 +410,10 @@ lib deux fois, `check_features`, le navigateur exigé, `e2e_lectures` quand l'h�
 | `03663bc34` | le ticket moteur des 8 Tio d'adressage par base (une quinzaine de bases par processus), pour hotfixs |
 | `5f55fcd80` | T2 : la relecture d'une tâche (fichiers et graphes en diff, chargement rejoué), la fusion en avance rapide après validation sur le principal, le rejet ; les vues de l'IDE ; témoin navigateur de bout en bout |
 
+| `d8eaf925f` | une tâche ouverte survit à l'hôte : le registre des tâches sur le disque, relu au démarrage ; une tâche à qui il manque son worktree est orpheline, jamais rouverte en silence |
+| `8f91327cd` | le rechargement à chaud ne dépend plus d'aucune durée (départagé sous charge, voir plus bas) |
+| `c15915b73` | la marche 3 : le même IDE sur un dépôt d'à côté ; l'agent y édite du code dans une tâche, relue puis fusionnée, et l'humain édite toujours le principal (page 10) |
+
 **Les défauts trouvés en route** :
 
 - la copie de T1 échouait sur un `.wal` absent : après le `CHECKPOINT`, le journal n'existe plus,
@@ -419,13 +423,26 @@ lib deux fois, `check_features`, le navigateur exigé, `e2e_lectures` quand l'h�
   de plus dans le processus de la lib ont passé la borne de l'adressage. Les témoins de la lib
   réservent 1 Tio par base (`cfg!(test)`), et le remède est au ticket moteur.
 
+**Le départage du rechargement à chaud** (demande de c7, après deux rouges en 37 s). Le banc :
+22 fils qui brûlent le CPU à luciepc, dix passes avec charge et dix sans, de chaque côté. Il y
+avait deux défauts, et ni l'un ni l'autre n'était une lenteur :
+
+- une course : la page n'écoutait le flux qu'après son premier rendu. Le flux s'ouvrait jusqu'à
+  1,7 s après le chargement, et un changement écrit avant était perdu ;
+- une attente sur une durée : un module vide programmait un rechargement entier après une
+  seconde. Sous charge, la version suivante arrivait après, et la page perdait son état.
+
+Les chiffres : avant, 20 sur 20 vert ; après le premier correctif, 2 rouges sur 10 sous charge,
+le second défaut ; après les deux, 20 sur 20 vert. Le témoin est devenu déterministe : il attend
+que la page ait vu le module vide, puis laisse passer plus que l'ancienne seconde.
+
 **Comment reprendre** :
 
 - (c) d'abord, dès que la pièce 1 de la mémoire (96) est sur master : son témoin anti-boucle et
   `e2e_reaction_montee` sur la publication des runs ;
-- les tâches fermées ne survivent pas à un redémarrage de l'hôte (gardées en mémoire), et une
-  tâche ouverte non plus (son worktree et sa copie restent sur le disque) : à reprendre si c7 le
-  demande.
+- le registre des tâches (`d8eaf925f`) a réglé la survie des tâches à l'hôte ;
+- un code tree inscrit avant le 19 octobre n'a pas de dépôt pour ses déclarations : une tâche
+  y est refusée, en disant de faire un `git init` à la racine de ses déclarations.
 
 ## Relectures faites pour la recherche
 

@@ -299,3 +299,22 @@ chargement entier sur un recouvrement.
 **L'adressage** : une base sur disque `mmap`e 8 Tio (`max_db_size`). Un processus en tient une
 quinzaine. Les témoins de la lib réservent 1 Tio sous `cfg!(test)`, les e2e non (ticket moteur
 du 19 octobre).
+
+**Le registre et la marche 3** (19 octobre, l'après-midi) :
+
+- le registre des tâches est `<racine des tâches>/registre.json`. Le service le relit par
+  `DaemonHost::avec_les_taches_relues`, et un témoin le règle par `hote_garde_avec` ;
+- `WorkspaceConfig.task_writes` : l'agent n'écrit pas le principal. Le refus est dans
+  `Backend::call`. L'IDE passe par `call_humain` ou `call_in_humain`, quand l'hôte reconnaît la
+  session de l'IDE ; le drapeau `APPEL_HUMAIN` est posé le temps de l'appel ;
+- `Surcharges.workspace` (la racine, l'écriture) place le workspace d'une tâche dans son worktree.
+  `Tache.workspace.code` est le second worktree, celui du dépôt de code à part ;
+- les changements d'une tâche se lisent dans le worktree, commités ou non, par genre (`Tache::
+  genre_de`) ;
+- `code-tree add` crée le dépôt des déclarations à `<config>/<nom>`. Son identité vient de la
+  configuration locale du dépôt de code, sinon de la globale ;
+- l'aperçu : `__apercu.flux` et `flux_ouvert_ms` disent l'écoute du rechargement, et
+  `__apercu.attente` un module vide qu'elle attend. `__rag3weaver.vides` est la liste du serveur
+  (`Module.empty_source`) ;
+- le banc de charge : `I-charge.sh` à luciepc (`ETIQUETTE`, `PATCH`, `TOURS`), sous `poste lourd`.
+  Les fils de charge sont tués par leurs pids.
