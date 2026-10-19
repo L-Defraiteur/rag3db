@@ -386,7 +386,7 @@ charge : le lot vu à moitié (chez l'arbre principal, L6) et `the_watch_does_no
 
 **Comment reprendre** :
 
-- (c) attend la pièce 1 de la mémoire : rejouer son témoin anti-boucle (une réaction qui écrit
+- (c) attend la pièce 1 de la mémoire (toujours vrai le 19 au soir) : rejouer son témoin anti-boucle (une réaction qui écrit
   publie sur `catalog` et ne se relance qu'une fois) et `e2e_reaction_montee` sur la publication
   des runs ;
 - la marche suivante de l'IDE (c7, page 09 de codeparsers) : les propositions — `proposer(files,
@@ -395,6 +395,37 @@ charge : le lot vu à moitié (chez l'arbre principal, L6) et `the_watch_does_no
   `rejeter(id, pourquoi)`, en mode approbation par défaut. Dépend du lot tsx de codeparsers
   (`KINDS`, `declare_set`) ;
 - les scripts de passe sont dans `~/.cache/rag3weaver-build/I-*.sh` sur luciepc (voir le relevé).
+
+## Le 19 octobre, le jour — les propositions, puis les tâches de l'agent
+
+Deux marches de l'IDE demandées par c7 (page 09 de codeparsers), chacune jouée sur luciepc (la
+lib deux fois, `check_features`, le navigateur exigé, `e2e_lectures` quand l'hôte est touché).
+
+| Commit | Ce qu'il pose |
+|---|---|
+| `95b6bccf3` | P1 : valider sans écrire — un lecteur des déclarations (`Lecteur`, `Recouvrement`) ; `valider_sur(files)` charge le backend entier sur le recouvrement, sans lire un fichier remplacé ni rien écrire |
+| `7b544bfb7` | P2 : une proposition gardée par le backend, publiée sur `declarations`, appliquée (écrite, commitée avec sa raison) ou rejetée avec son pourquoi ; le mode `declarations` du manifeste (`approbation` par défaut, `auto`) décide si l'agent propose ou déclare |
+| `f6936b49d` | P3 et P4 : la vue des propositions (diff textuel, diff de graphe nœud à nœud), l'aperçu d'un composant sur une proposition sans l'appliquer, Appliquer et Rejeter ; témoin navigateur |
+| `bc2cb48e7` | T1 : une tâche — la branche `agent/<nom>`, son worktree, la base copiée sous la porte des écrivains (mutex du catalogue, `CHECKPOINT`, reflink) **sans fermer le principal**, une seconde instance du backend avec ses surcharges ; la base principale jamais écrite (témoin octet pour octet) |
+| `03663bc34` | le ticket moteur des 8 Tio d'adressage par base (une quinzaine de bases par processus), pour hotfixs |
+| `5f55fcd80` | T2 : la relecture d'une tâche (fichiers et graphes en diff, chargement rejoué), la fusion en avance rapide après validation sur le principal, le rejet ; les vues de l'IDE ; témoin navigateur de bout en bout |
+
+**Les défauts trouvés en route** :
+
+- la copie de T1 échouait sur un `.wal` absent : après le `CHECKPOINT`, le journal n'existe plus,
+  ce qui confirme une copie propre ; seuls les fichiers présents se copient ;
+- un témoin de T1 fermait la tâche pendant son indexation : il attend qu'elle finisse ;
+- la passe de T1 a rougi `copie_liens_tests` (« Mmap for size 8796093022208 failed ») : deux bases
+  de plus dans le processus de la lib ont passé la borne de l'adressage. Les témoins de la lib
+  réservent 1 Tio par base (`cfg!(test)`), et le remède est au ticket moteur.
+
+**Comment reprendre** :
+
+- (c) d'abord, dès que la pièce 1 de la mémoire (96) est sur master : son témoin anti-boucle et
+  `e2e_reaction_montee` sur la publication des runs ;
+- les tâches fermées ne survivent pas à un redémarrage de l'hôte (gardées en mémoire), et une
+  tâche ouverte non plus (son worktree et sa copie restent sur le disque) : à reprendre si c7 le
+  demande.
 
 ## Relectures faites pour la recherche
 

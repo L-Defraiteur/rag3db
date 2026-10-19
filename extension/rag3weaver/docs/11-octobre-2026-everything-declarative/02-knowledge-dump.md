@@ -264,3 +264,38 @@ Les vues de `page.html` : arbre, fichier, symbole, graphe, recherche, `dag`, `re
 - `e2e_lectures` si `Backend::run`, l'hôte ou le bus ;
 - `e2e_reaction_montee` si la publication des runs ;
 - `e2e_postgres` si `code.rs`, l'IR ou un gabarit.
+
+## Ce que le 19 octobre a appris (propositions et tâches)
+
+**Valider sans écrire** (`src/lecteur.rs`) : tout le chargement passe par un `&dyn Lecteur`
+(`PreparedBackend::load_avec`, les variantes `_avec`). `Disque` lit le disque ; `Recouvrement`
+sert des fichiers remplacés en mémoire, puis le disque. `Backend::valider_sur(files)` est le
+chargement entier sur un recouvrement.
+
+**Les propositions** (`src/propositions.rs`) :
+
+- `proposer`, `appliquer`, `rejeter` sur le backend ; `Event::PropositionChanged` sur le sujet
+  `declarations` ; le bus vient de la vue (`bus_de_publication`), jamais de `catalog.lock()` ;
+- `ModeDeclarations` (champ `declarations` du manifeste) : `approbation` par défaut, `auto` ;
+- `graphes_touches(avant, apres, touches, declares)` et `diff_de_graphes` servent aux
+  propositions et aux tâches.
+
+**Les tâches** (`src/daemon_host/taches.rs`) :
+
+- la racine : `RAG3WEAVER_TACHES_DIR`, sinon `~/.local/share/rag3weaver/taches`,
+  `<parent>/<nom>/{arbre,base}` ; un témoin la règle dans son dossier (`with_racine_des_taches`,
+  `hote_garde_avec`) ;
+- `Surcharges {database, declarations}` vivent dans le `PreparedBackend` et `recharger` les
+  réapplique ;
+- `copier_la_base_sous_la_porte` : le mutex du catalogue est la porte des écrivains, les lectures
+  passent par la vue ;
+- la relecture lit la branche par git (`diff --name-only départ...branche`, `git show`) ;
+- la fusion valide les fichiers de la branche sur le principal par recouvrement, puis `merge
+  --ff-only`.
+
+**Les vues de l'IDE** : `propositions` et `taches` s'ajoutent aux vues de `page.html` ;
+`sectionDeGraphe` dessine un graphe en diff (classes `ajoute`, `change`, `retire`).
+
+**L'adressage** : une base sur disque `mmap`e 8 Tio (`max_db_size`). Un processus en tient une
+quinzaine. Les témoins de la lib réservent 1 Tio sous `cfg!(test)`, les e2e non (ticket moteur
+du 19 octobre).
