@@ -82,9 +82,24 @@ impl Node for Mark {
 }
 
 /// Annule `rt` après `ms`.
+/// Annule le run `ms` après le **démarrage de son premier nœud** (son
+/// `NodeStarted`), pas après le lancement de ce fil : sous charge, le runtime
+/// peut mettre plus de `ms` à lancer un nœud, et l'annulation tombait avant
+/// lui — le nœud ne tournait pas, et le témoin qui voulait voir un nœud en
+/// cours arrêté voyait un run vide (le rouge du 19 octobre, « le sommeil n'est
+/// pas interrompu »).
 fn cancel_after(rt: &DataflowRuntime, ms: u64) {
     let stop = rt.cancel_handle();
+    let mut evenements = rt.subscribe();
     std::thread::spawn(move || {
+        let fin = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < fin {
+            match evenements.try_recv() {
+                Ok(DataflowEvent::NodeStarted { .. }) => break,
+                Ok(_) => {}
+                Err(_) => std::thread::sleep(Duration::from_millis(2)),
+            }
+        }
         std::thread::sleep(Duration::from_millis(ms));
         stop.cancel();
     });
