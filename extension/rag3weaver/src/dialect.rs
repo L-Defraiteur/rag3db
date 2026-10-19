@@ -1290,16 +1290,82 @@ pub fn ecriture<D: SchemaDialect + ?Sized>(dialect: &D, write: &rag3weaver_ir::W
 
 /// Une condition de [`rag3weaver_ir::Predicate`] en SQL PostgreSQL, sur l'alias `m`.
 fn postgres_condition(d: &PostgresDialect, p: &rag3weaver_ir::Predicate) -> String {
+    postgres_condition_sur(d, p, "m", &mut 0)
+}
+
+/// La même, sur l'alias `a` ; `n` numérote les alias des sous-requêtes
+/// (`through`) pour qu'ils ne se croisent pas.
+fn postgres_condition_sur(d: &PostgresDialect, p: &rag3weaver_ir::Predicate, a: &str, n: &mut usize) -> String {
     use rag3weaver_ir::Predicate;
     match p {
-        Predicate::Equals { field, param } => format!("m.{} = ${param}", d.quote(field)),
-        Predicate::Contains { field, param } => format!("strpos(m.{}, ${param}) > 0", d.quote(field)),
-        Predicate::AtLeast { field, param } => format!("m.{} >= ${param}", d.quote(field)),
-        Predicate::AnyOf(v) => format!("({})", v.iter().map(|q| postgres_condition(d, q)).collect::<Vec<_>>().join(" OR ")),
-        Predicate::AllOf(v) => format!("({})", v.iter().map(|q| postgres_condition(d, q)).collect::<Vec<_>>().join(" AND ")),
-        Predicate::In { field, param } => format!("m.{} = ANY(${param})", d.quote(field)),
+        Predicate::Equals { field, param } => format!("{a}.{} = ${param}", d.quote(field)),
+        Predicate::Contains { field, param } => format!("strpos({a}.{}, ${param}) > 0", d.quote(field)),
+        Predicate::AtLeast { field, param } => format!("{a}.{} >= ${param}", d.quote(field)),
+        Predicate::AnyOf(v) => format!("({})", v.iter().map(|q| postgres_condition_sur(d, q, a, n)).collect::<Vec<_>>().join(" OR ")),
+        Predicate::AllOf(v) => format!("({})", v.iter().map(|q| postgres_condition_sur(d, q, a, n)).collect::<Vec<_>>().join(" AND ")),
+        Predicate::In { field, param } => format!("{a}.{} = ANY(${param})", d.quote(field)),
+        // Jamais `LIKE` : un `%` ou un `_` d'un chemin y serait un joker.
+        Predicate::StartsWith { field, param } => format!("left({a}.{}, length(${param})) = ${param}", d.quote(field)),
+        Predicate::Through { relation, direction, end, filter } => {
+            *n += 1;
+            let (r, t) = (format!("r{n}"), format!("t{n}"));
+            let (vers, depuis) = match direction {
+                rag3weaver_ir::Direction::Outgoing => ("to_uuid", "from_uuid"),
+                rag3weaver_ir::Direction::Incoming => ("from_uuid", "to_uuid"),
+            };
+            let condition = filter.as_ref().map(|f| format!(" AND {}", postgres_condition_sur(d, f, &t, n))).unwrap_or_default();
+            format!(
+                "EXISTS (SELECT 1 FROM {} AS {r} JOIN {} AS {t} ON {t}.\"_uuid\" = {r}.\"{vers}\" WHERE {r}.\"{depuis}\" = {a}.\"_uuid\"{condition})",
+                d.quote(relation),
+                d.quote(end)
+            )
+        }
+        // Un Plan lié n'en porte plus : la validation les a refusées avant.
+        Predicate::Optional(_) | Predicate::Let(_) => "FALSE".to_string(),
         Predicate::Compiled(c) => c.clone(),
     }
+}
+
+/// Une sélection qui se fond dans la suivante : sans ordre, borne, décalage
+/// ni liste de lignes liées (chacun change ce que la fusion lirait).
+fn fondable(s: &rag3weaver_ir::Select) -> bool {
+    s.order_by.is_empty()
+        && s.limit.is_none()
+        && s.offset.is_none()
+        && !s.returns.iter().any(|c| matches!(c, rag3weaver_ir::Column::Collect(_)))
+}
+
+/// Une clé d'ordre, sur l'alias `m` : un champ ou `coalesce(…)`, et `DESC`.
+fn cle_d_ordre(quote: impl Fn(&str) -> String, k: &rag3weaver_ir::OrderKey) -> String {
+    let expr = match &k.by {
+        rag3weaver_ir::OrderBy::Field(f) => format!("m.{}", quote(f)),
+        rag3weaver_ir::OrderBy::Coalesce(v) => format!("coalesce({})", v.iter().map(|f| format!("m.{}", quote(f))).collect::<Vec<_>>().join(", ")),
+    };
+    if k.desc {
+        format!("{expr} DESC")
+    } else {
+        expr
+    }
+}
+
+/// `limit` et `offset` d'une sélection liée, en nombres ; un paramètre non lié
+/// est refusé en le nommant.
+fn borne_et_saut(select: &rag3weaver_ir::Select) -> Result<(Option<usize>, Option<usize>), rag3weaver_ir::TranslateError> {
+    let limit = match &select.limit {
+        None => None,
+        Some(rag3weaver_ir::Limit::Literal(n)) => Some(*n),
+        Some(rag3weaver_ir::Limit::Param { param, .. }) => {
+            return Err(rag3weaver_ir::TranslateError::Invalid(format!("sélection : le limit « {param} » n'est pas lié")))
+        }
+    };
+    let offset = match &select.offset {
+        None => None,
+        Some(rag3weaver_ir::Offset::Literal(n)) => Some(*n),
+        Some(rag3weaver_ir::Offset::Param { param }) => {
+            return Err(rag3weaver_ir::TranslateError::Invalid(format!("sélection : l'offset « {param} » n'est pas lié")))
+        }
+    };
+    Ok((limit, offset))
 }
 
 /// Une condition sur le seul `_uuid` du nœud atteint, dite sur `colonne` (la
@@ -1325,15 +1391,34 @@ fn postgres_condition_sur_uuid(p: &rag3weaver_ir::Predicate, colonne: &str) -> O
 /// Les champs sont cités ([`cypher_quote`]) ; une condition déjà compilée
 /// passe telle quelle.
 fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
+    rag3db_condition_sur(p, "m", &mut 0)
+}
+
+/// La même, sur l'alias `a` ; `n` numérote les alias des sous-requêtes
+/// (`through`).
+fn rag3db_condition_sur(p: &rag3weaver_ir::Predicate, a: &str, n: &mut usize) -> String {
     use rag3weaver_ir::Predicate;
     match p {
-        Predicate::Equals { field, param } => format!("m.{} = ${param}", cypher_quote(field)),
-        Predicate::Contains { field, param } => format!("m.{} CONTAINS ${param}", cypher_quote(field)),
-        Predicate::AtLeast { field, param } => format!("m.{} >= ${param}", cypher_quote(field)),
-        Predicate::AnyOf(v) => v.iter().map(rag3db_condition).collect::<Vec<_>>().join(" OR "),
+        Predicate::Equals { field, param } => format!("{a}.{} = ${param}", cypher_quote(field)),
+        Predicate::Contains { field, param } => format!("{a}.{} CONTAINS ${param}", cypher_quote(field)),
+        Predicate::AtLeast { field, param } => format!("{a}.{} >= ${param}", cypher_quote(field)),
+        Predicate::AnyOf(v) => v.iter().map(|q| rag3db_condition_sur(q, a, n)).collect::<Vec<_>>().join(" OR "),
         // Chaque membre entre parenthèses : un `AnyOf` dedans garde son sens.
-        Predicate::AllOf(v) => v.iter().map(|q| format!("({})", rag3db_condition(q))).collect::<Vec<_>>().join(" AND "),
-        Predicate::In { field, param } => format!("m.{} IN ${param}", cypher_quote(field)),
+        Predicate::AllOf(v) => v.iter().map(|q| format!("({})", rag3db_condition_sur(q, a, n))).collect::<Vec<_>>().join(" AND "),
+        Predicate::In { field, param } => format!("{a}.{} IN ${param}", cypher_quote(field)),
+        Predicate::StartsWith { field, param } => format!("{a}.{} STARTS WITH ${param}", cypher_quote(field)),
+        Predicate::Through { relation, direction, end, filter } => {
+            *n += 1;
+            let t = format!("t{n}");
+            let motif = match direction {
+                rag3weaver_ir::Direction::Outgoing => format!("({a})-[:{}]->({t}:{})", cypher_quote(relation), cypher_quote(end)),
+                rag3weaver_ir::Direction::Incoming => format!("({a})<-[:{}]-({t}:{})", cypher_quote(relation), cypher_quote(end)),
+            };
+            let condition = filter.as_ref().map(|f| format!(" WHERE {}", rag3db_condition_sur(f, &t, n))).unwrap_or_default();
+            format!("EXISTS {{ MATCH {motif}{condition} }}")
+        }
+        // Un Plan lié n'en porte plus : la validation les a refusées avant.
+        Predicate::Optional(_) | Predicate::Let(_) => "false".to_string(),
         Predicate::Compiled(c) => c.clone(),
     }
 }
@@ -1363,6 +1448,8 @@ impl Rag3dbDialect {
                 rag3weaver_ir::Column::Null => "NULL".to_string(),
                 rag3weaver_ir::Column::Label => "label(m)".to_string(),
                 rag3weaver_ir::Column::Whole => "m".to_string(),
+                // Refusée par `Hop::validate` : une liste ne se rend que dans une sélection.
+                rag3weaver_ir::Column::Collect(_) => "NULL".to_string(),
             }))
             .collect()
     }
@@ -1392,21 +1479,59 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
+        use rag3weaver_ir::Column;
         select.validate()?;
-        let condition = rag3db_condition;
-        let colonnes = self.select_columns(select);
-        let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", condition(p))).unwrap_or_default();
+        let (limit, offset) = borne_et_saut(select)?;
+        let mut n = 0;
+        let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", rag3db_condition_sur(p, "m", &mut n))).unwrap_or_default();
         let ordre = if select.order_by.is_empty() {
             String::new()
         } else {
-            format!(" ORDER BY {}", select.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", "))
+            format!(" ORDER BY {}", select.order_by.iter().map(|k| cle_d_ordre(|f| self.quote(f), k)).collect::<Vec<_>>().join(", "))
         };
-        let borne = select.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
-        Ok(if select.by_uuids {
-            format!("UNWIND $uuids AS u MATCH (m:{} {{_uuid: u}}){filtre} RETURN {}{ordre}{borne}", self.quote(&select.table), colonnes.join(", "))
+        let borne = format!(
+            "{}{}",
+            offset.map(|o| format!(" SKIP {o}")).unwrap_or_default(),
+            limit.map(|l| format!(" LIMIT {l}")).unwrap_or_default()
+        );
+        let tete = if select.by_uuids {
+            format!("UNWIND $uuids AS u MATCH (m:{} {{_uuid: u}})", self.quote(&select.table))
         } else {
-            format!("MATCH (m:{}){filtre} RETURN {}{ordre}{borne}", self.quote(&select.table), colonnes.join(", "))
-        })
+            format!("MATCH (m:{})", self.quote(&select.table))
+        };
+        // **Les lignes liées** : un `OPTIONAL MATCH` par liste, réduit par
+        // `collect` avant la suivante (sinon elles se multiplient entre elles).
+        // Une ligne sans lien rend une liste vide : `collect` ne garde pas les
+        // NULL que l'`OPTIONAL MATCH` laisse.
+        let mut corps = String::new();
+        let mut porte: Vec<String> = select.by_uuids.then(|| "u".to_string()).into_iter().chain(["m".to_string()]).collect();
+        for (i, c) in select.returns.iter().filter_map(|c| if let Column::Collect(c) = c { Some(c) } else { None }).enumerate() {
+            let x = format!("c{i}");
+            let motif = match c.direction {
+                rag3weaver_ir::Direction::Outgoing => format!("(m)-[:{}]->({x}:{})", self.quote(&c.relation), self.quote(&c.end)),
+                rag3weaver_ir::Direction::Incoming => format!("(m)<-[:{}]-({x}:{})", self.quote(&c.relation), self.quote(&c.end)),
+            };
+            let condition = c.filter.as_ref().map(|f| format!(" WHERE {}", rag3db_condition_sur(f, &x, &mut n))).unwrap_or_default();
+            let champs = c.fields.iter().map(|f| format!("{f}: {x}.{}", self.quote(f))).collect::<Vec<_>>().join(", ");
+            corps.push_str(&format!(
+                " OPTIONAL MATCH {motif}{condition} WITH {}, coalesce(collect(CASE WHEN {x} IS NULL THEN NULL ELSE {{{champs}}} END), []) AS {}",
+                porte.join(", "),
+                self.quote(&c.alias)
+            ));
+            porte.push(self.quote(&c.alias));
+        }
+        let colonnes: Vec<String> = select
+            .by_uuids
+            .then(|| "u".to_string())
+            .into_iter()
+            .chain(select.returns.iter().map(|c| match c {
+                Column::Node(f) => format!("m.{}", self.quote(f)),
+                Column::Whole => "m".to_string(),
+                Column::Collect(c) => self.quote(&c.alias),
+                _ => "NULL".to_string(),
+            }))
+            .collect();
+        Ok(format!("{tete}{filtre}{corps} RETURN {}{ordre}{borne}", colonnes.join(", ")))
     }
 
     /// Le degré : `UNWIND $uuids AS u MATCH (d:Départ {_uuid: u})<-[r:REL]-()
@@ -1415,7 +1540,11 @@ impl SchemaDialect for Rag3dbDialect {
         count.validate()?;
         Ok(match count {
             rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
-            rag3weaver_ir::Count::Matching { table, filter } => format!("MATCH (m:{}) WHERE {} RETURN count(m)", self.quote(table), rag3db_condition(filter)),
+            rag3weaver_ir::Count::Matching { table, filter } => format!(
+                "MATCH (m:{}){} RETURN count(m)",
+                self.quote(table),
+                filter.as_ref().map(|f| format!(" WHERE {}", rag3db_condition(f))).unwrap_or_default()
+            ),
             // L'arête porte le nom `m` : la condition se lit sur ses champs.
             rag3weaver_ir::Count::EdgesMatching { relation, filter } => format!("MATCH ()-[m:{}]->() WHERE {} RETURN count(m)", self.quote(relation), rag3db_condition(filter)),
             rag3weaver_ir::Count::Edges { start, relation, direction } => {
@@ -1475,7 +1604,7 @@ impl SchemaDialect for Rag3dbDialect {
     /// suppression) se fond en aval.
     fn fuse(&self, upstream_text: &str, upstream: &rag3weaver_ir::Form, column: usize, downstream_text: &str) -> Option<String> {
         let colonnes = match upstream {
-            rag3weaver_ir::Form::Select(s) if s.order_by.is_empty() && s.limit.is_none() => self.select_columns(s),
+            rag3weaver_ir::Form::Select(s) if fondable(s) => self.select_columns(s),
             rag3weaver_ir::Form::Hop(h) if h.order_by.is_empty() && h.limit.is_none() => self.hop_columns(h),
             _ => return None,
         };
@@ -1535,7 +1664,7 @@ impl SchemaDialect for Rag3dbDialect {
         for (rang, (colonne, texte, forme)) in branches.iter().enumerate() {
             let colonnes = match forme {
                 rag3weaver_ir::Form::Hop(h) if h.order_by.is_empty() && h.limit.is_none() => self.hop_columns(h),
-                rag3weaver_ir::Form::Select(s) if s.by_uuids && s.order_by.is_empty() && s.limit.is_none() => self.select_columns(s),
+                rag3weaver_ir::Form::Select(s) if s.by_uuids && fondable(s) => self.select_columns(s),
                 rag3weaver_ir::Form::Count(rag3weaver_ir::Count::Edges { .. }) => vec!["u".to_string(), "count(r)".to_string()],
                 _ => return None,
             };
@@ -2370,22 +2499,45 @@ impl SchemaDialect for PostgresDialect {
     fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
         use rag3weaver_ir::Column;
         select.validate()?;
+        let (limit, offset) = borne_et_saut(select)?;
+        let mut n = 0;
         let mut colonnes: Vec<String> = Vec::new();
-        for c in &select.returns {
+        for (i, c) in select.returns.iter().enumerate() {
             colonnes.push(match c {
                 Column::Node(f) => format!("m.{}", self.quote(f)),
                 Column::Null => "NULL".to_string(),
+                // **Les lignes liées**, par une sous-requête corrélée : une liste
+                // JSON d'objets, vide (`[]`) quand il n'y en a pas.
+                Column::Collect(c) => {
+                    let (r, x) = (format!("rc{i}"), format!("c{i}"));
+                    let (vers, depuis) = match c.direction {
+                        rag3weaver_ir::Direction::Outgoing => ("to_uuid", "from_uuid"),
+                        rag3weaver_ir::Direction::Incoming => ("from_uuid", "to_uuid"),
+                    };
+                    let champs = c.fields.iter().map(|f| format!("'{f}', {x}.{}", self.quote(f))).collect::<Vec<_>>().join(", ");
+                    let condition = c.filter.as_ref().map(|f| format!(" AND {}", postgres_condition_sur(self, f, &x, &mut n))).unwrap_or_default();
+                    format!(
+                        "(SELECT coalesce(json_agg(json_build_object({champs})), '[]'::json) FROM {} AS {r} JOIN {} AS {x} ON {x}.\"_uuid\" = {r}.\"{vers}\" WHERE {r}.\"{depuis}\" = m.\"_uuid\"{condition}) AS {}",
+                        self.quote(&c.relation),
+                        self.quote(&c.end),
+                        self.quote(&c.alias)
+                    )
+                }
                 _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Select (ligne entière)" }),
             });
         }
         let table = self.quote(&select.table);
-        let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", postgres_condition(self, p))).unwrap_or_default();
+        let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", postgres_condition_sur(self, p, "m", &mut n))).unwrap_or_default();
         let ordre = if select.order_by.is_empty() {
             String::new()
         } else {
-            format!(" ORDER BY {}", select.order_by.iter().map(|f| format!("m.{}", self.quote(f))).collect::<Vec<_>>().join(", "))
+            format!(" ORDER BY {}", select.order_by.iter().map(|k| cle_d_ordre(|f| self.quote(f), k)).collect::<Vec<_>>().join(", "))
         };
-        let borne = select.limit.map(|n| format!(" LIMIT {n}")).unwrap_or_default();
+        let borne = format!(
+            "{}{}",
+            limit.map(|l| format!(" LIMIT {l}")).unwrap_or_default(),
+            offset.map(|o| format!(" OFFSET {o}")).unwrap_or_default()
+        );
         Ok(if select.by_uuids {
             let mut toutes = vec!["v.u".to_string()];
             toutes.extend(colonnes);
@@ -2510,6 +2662,7 @@ impl SchemaDialect for PostgresDialect {
                 (Column::Label, Some(t)) => format!("'{t}'"),
                 (Column::Whole, _) => return refus("Hop (ligne entière)"),
                 (Column::Node(_) | Column::Label, None) => return refus("Hop (champ sans table d'arrivée)"),
+                (Column::Collect(_), _) => return refus("Hop (liste de lignes liées)"),
             });
         }
         // Sans table d'arrivée, `m` n'est pas joint : un ordre s'y refuse, et
@@ -2559,9 +2712,11 @@ impl SchemaDialect for PostgresDialect {
         count.validate()?;
         Ok(match count {
             rag3weaver_ir::Count::Rows { table } => self.count_rows(table),
-            rag3weaver_ir::Count::Matching { table, filter } => {
-                format!("SELECT count(*) AS cnt FROM {} AS m WHERE {}", self.quote(table), postgres_condition(self, filter))
-            }
+            rag3weaver_ir::Count::Matching { table, filter } => format!(
+                "SELECT count(*) AS cnt FROM {} AS m{}",
+                self.quote(table),
+                filter.as_ref().map(|f| format!(" WHERE {}", postgres_condition(self, f))).unwrap_or_default()
+            ),
             // Une relation est une table, ses champs des colonnes.
             rag3weaver_ir::Count::EdgesMatching { relation, filter } => {
                 format!("SELECT count(*) AS cnt FROM {} AS m WHERE {}", self.quote(relation), postgres_condition(self, filter))
@@ -3853,11 +4008,11 @@ mod tests {
             ]),
             vec![Column::Node("_uuid".into())],
         );
-        f.order_by.push("_uuid".into());
-        f.limit = Some(3);
+        f.order_by.push(rag3weaver_ir::OrderKey::field("_uuid"));
+        f.limit = Some(rag3weaver_ir::Limit::Literal(3));
         assert_eq!(Rag3dbDialect.select(&f).unwrap(), "MATCH (m:`Scope`) WHERE m.`file_path` = $file OR m.`source` = $file RETURN m.`_uuid` ORDER BY m.`_uuid` LIMIT 3");
         assert!(PostgresDialect.select(&s).is_ok(), "PostgreSQL dit la sélection (test postgresql_traduit_la_selection_et_le_compte)");
-        let c = rag3weaver_ir::Count::Matching { table: "Card".into(), filter: Predicate::Compiled("m.cost > $filter_p0".into()) };
+        let c = rag3weaver_ir::Count::Matching { table: "Card".into(), filter: Some(Predicate::Compiled("m.cost > $filter_p0".into())) };
         assert_eq!(Rag3dbDialect.count(&c).unwrap(), "MATCH (m:`Card`) WHERE m.cost > $filter_p0 RETURN count(m)");
         // Les arêtes qu'une condition sur leurs champs retient : l'arête porte le nom `m`.
         let e = rag3weaver_ir::Count::EdgesMatching { relation: "CONSUMES".into(), filter: Predicate::Equals { field: "resolution".into(), param: "marque".into() } };

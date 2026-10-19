@@ -189,17 +189,30 @@ impl PostgresConnection {
 /// Translate named parameters (`$key`, `$value`) to positional (`$1`, `$2`).
 ///
 /// Returns the translated query and the ordered parameter values.
+///
+/// **Un seul passage, par identifiant entier** (19 octobre 2026) : remplacer
+/// chaque nom l'un après l'autre faisait de `$value_dir` un `$1_dir` dès qu'un
+/// paramètre `value` venait avant (« trailing junk after parameter »). Un `$`
+/// suivi d'un nom qui n'est pas un paramètre reste tel quel.
 fn translate_params(query: &str, params: &[QueryParam]) -> (String, Vec<CypherValue>) {
-    let mut translated = query.to_string();
-    let mut values = Vec::with_capacity(params.len());
-
-    for (i, param) in params.iter().enumerate() {
-        let named = format!("${}", param.name);
-        let positional = format!("${}", i + 1);
-        translated = translated.replace(&named, &positional);
-        values.push(param.value.clone());
+    let rang: std::collections::HashMap<&str, usize> = params.iter().enumerate().map(|(i, p)| (p.name.as_str(), i + 1)).collect();
+    let values = params.iter().map(|p| p.value.clone()).collect();
+    let mut translated = String::with_capacity(query.len());
+    let mut reste = query;
+    while let Some(i) = reste.find('$') {
+        translated.push_str(&reste[..i]);
+        let apres = &reste[i + 1..];
+        let fin = apres.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(apres.len());
+        match rang.get(&apres[..fin]) {
+            Some(n) if fin > 0 => translated.push_str(&format!("${n}")),
+            _ => {
+                translated.push('$');
+                translated.push_str(&apres[..fin]);
+            }
+        }
+        reste = &apres[fin..];
     }
-
+    translated.push_str(reste);
     (translated, values)
 }
 
@@ -344,6 +357,14 @@ fn pg_row_to_cypher(row: &tokio_postgres::Row) -> Vec<CypherValue> {
                     .map(CypherValue::Bool)
                     .unwrap_or(CypherValue::Null)
             }
+            // **Du JSON** (`json_agg` d'un `collect`) : une liste ou une carte,
+            // pas une chaîne. Tombé dans le repli, il rendait NULL en silence.
+            "json" | "jsonb" => row
+                .try_get::<_, Option<serde_json::Value>>(i)
+                .ok()
+                .flatten()
+                .and_then(|j| serde_json::from_value::<CypherValue>(j).ok())
+                .unwrap_or(CypherValue::Null),
             "bytea" => {
                 row.try_get::<_, Option<Vec<u8>>>(i)
                     .ok()
@@ -558,5 +579,23 @@ impl DbConnection for PostgresConnection {
 
     fn rollback(&self) -> Result<(), DbError> {
         self.clore("ROLLBACK")
+    }
+}
+
+#[cfg(test)]
+mod tests_des_parametres {
+    use super::*;
+
+    /// Un nom préfixe d'un autre (`value`, `value_dir`) ne le mange plus ; un
+    /// cast (`$uuids::text[]`) et un `$` inconnu restent ce qu'ils sont.
+    #[test]
+    fn un_parametre_prefixe_d_un_autre_ne_le_mange_pas() {
+        let p = |n: &str| QueryParam::new(n, CypherValue::String(n.into()));
+        let (sql, valeurs) = translate_params(
+            "a = $value OR left(a, length($value_dir)) = $value_dir AND u = ANY($uuids::text[]) AND x = $inconnu",
+            &[p("value"), p("value_dir"), p("uuids")],
+        );
+        assert_eq!(sql, "a = $1 OR left(a, length($2)) = $2 AND u = ANY($3::text[]) AND x = $inconnu");
+        assert_eq!(valeurs.len(), 3);
     }
 }

@@ -977,7 +977,7 @@ fn read_threads() -> u64 {
         }
         // Une ligne suffit : une sélection bornée à 1, par le dialecte.
         let mut une = rag3weaver_ir::Select::all(self.dialect.internal_table("_index_blobs"), vec![rag3weaver_ir::Column::Node("_key".into())]);
-        une.limit = Some(1);
+        une.limit = Some(rag3weaver_ir::Limit::Literal(1));
         let des_blobs = self
             .dialect
             .select(&une)

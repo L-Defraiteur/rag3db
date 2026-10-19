@@ -181,6 +181,8 @@ pub mod derived_kb;
 pub mod ocr;
 pub mod origin;
 pub mod plan;
+#[cfg(all(test, feature = "rag3db-native"))]
+mod plan_declare_tests;
 pub mod records;
 pub mod relation_directions;
 pub mod dataflow;

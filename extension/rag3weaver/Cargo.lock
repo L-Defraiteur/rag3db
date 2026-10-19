@@ -6513,6 +6513,8 @@ dependencies = [
  "fallible-iterator 0.2.0",
  "postgres-derive",
  "postgres-protocol",
+ "serde_core",
+ "serde_json",
 ]
 
 [[package]]

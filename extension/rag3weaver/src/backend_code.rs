@@ -258,6 +258,8 @@ pub struct ToolPolicy {
 /// `ingest_` / `finish_` / `abort_` / `undo_snapshot` traversent.)
 const BASE_NODES: &[&str] = &[
     "RhaiNode",
+    // Un Plan déclaré : il ne fait que lire.
+    "PlanNode",
     "EntityRecordNode",
     "EntityBatchNode",
     "SnapshotFinishNode",

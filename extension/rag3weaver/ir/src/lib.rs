@@ -12,14 +12,16 @@
 //! anciens noms (`connection::CypherValue`, …) le temps que les sites
 //! d'usage se renomment, par touches.
 
+mod declared;
 mod filter;
 mod form;
 mod plan;
 mod scope;
 mod value;
 
+pub use declared::{BoundPlan, DeclaredForm, DeclaredPlan, Outputs, PlanSchema, ResultsSpec};
 pub use filter::{FilterCondition, FilterOp, FilterValue};
-pub use form::{Column, Count, Direction, EdgeExclusion, Hop, LoadTarget, Predicate, Select, TranslateError, Write};
+pub use form::{Collect, Column, Count, Direction, EdgeExclusion, Hop, Limit, LoadTarget, Offset, OrderBy, OrderKey, Predicate, Select, TranslateError, Write};
 pub use plan::{ColumnKind, Edge, Form, Plan, PlanNode, Slot};
 pub use scope::{Scope, DEFAULT_ID, ORG_COLUMN, PROJECT_COLUMN};
 pub use value::{is_valid_identifier, normalize, validate_payload_type, FieldType, QueryParam, Value};
