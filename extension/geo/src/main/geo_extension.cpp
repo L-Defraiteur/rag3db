@@ -56,6 +56,10 @@ static void initSpatialEntries(main::ClientContext* context, catalog::Catalog& c
 
 void GeoExtension::load(main::ClientContext* context) {
     auto& db = *context->getDatabase();
+    // Les index d'abord, les fonctions ensuite, comme l'extension vector : une requête ne se lie
+    // qu'à un index chargé.
+    ExtensionUtils::registerIndexType(db, RTreeIndex::getIndexType());
+    initSpatialEntries(context, *db.getCatalog());
 
     // Scalar functions — distance.
     ExtensionUtils::addScalarFunc<GeoDistanceFunction>(db);
@@ -97,10 +101,6 @@ void GeoExtension::load(main::ClientContext* context) {
     ExtensionUtils::addTableFunc<QuerySpatialIndexFunction>(db);
     ExtensionUtils::addStandaloneTableFunc<DropSpatialIndexFunction>(db);
     ExtensionUtils::addInternalStandaloneTableFunc<InternalDropSpatialIndexFunction>(db);
-
-    // Index type.
-    ExtensionUtils::registerIndexType(db, RTreeIndex::getIndexType());
-    initSpatialEntries(context, *db.getCatalog());
 }
 
 } // namespace geo_extension

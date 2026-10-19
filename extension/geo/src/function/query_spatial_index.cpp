@@ -149,7 +149,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
         auto* storageManager = storage::StorageManager::Get(*input.context->clientContext);
         auto* nodeTable =
             storageManager->getTable(bd.tableID)->ptrCast<storage::NodeTable>();
-        auto indexOpt = nodeTable->getIndex(bd.indexName);
+        auto indexOpt = nodeTable->getIndex(bd.indexName,
+            transaction::Transaction::Get(*input.context->clientContext));
         if (!indexOpt.has_value()) {
             return 0;
         }

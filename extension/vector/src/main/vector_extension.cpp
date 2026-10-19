@@ -1,5 +1,9 @@
 #include "main/vector_extension.h"
 
+#include <chrono>
+#include <cstdlib>
+#include <thread>
+
 #include "catalog/hnsw_index_catalog_entry.h"
 #include "function/hnsw_index_functions.h"
 #include "function/vector_search_function.h"
@@ -29,8 +33,24 @@ static void initHNSWEntries(main::ClientContext* context) {
     }
 }
 
+// Le crochet du témoin du chargement (IndexReopen.AQueryDuringTheLoadIsNotToldTheIndexIsGone) :
+// une pause juste après l'enregistrement des fonctions, en millisecondes, lue dans
+// RAG3DB_TEST_PAUSE_AFTER_VECTOR_FUNCTIONS_MS. Une requête s'y glisse, liée aux fonctions qu'elle
+// voit. Sans la variable, rien.
+static void pauseAfterTheFunctionsForATest() {
+    if (const auto* ms = std::getenv("RAG3DB_TEST_PAUSE_AFTER_VECTOR_FUNCTIONS_MS")) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::atoi(ms)));
+    }
+}
+
 void VectorExtension::load(main::ClientContext* context) {
     auto& db = *context->getDatabase();
+    // Les index d'abord, les fonctions ensuite : une requête ne peut se lier à QUERY_VECTOR_INDEX
+    // qu'une fois les index chargés. Enregistrées avant, elles laissaient une fenêtre où la
+    // requête liée trouvait l'index pas encore chargé et le prenait pour un index retiré (ticket
+    // 2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index).
+    extension::ExtensionUtils::registerIndexType(db, OnDiskHNSWIndex::getIndexType());
+    initHNSWEntries(context);
     extension::ExtensionUtils::addTableFunc<QueryVectorIndexFunction>(db);
     extension::ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateHNSWIndexFunction>(db);
     extension::ExtensionUtils::addInternalStandaloneTableFunc<InternalFinalizeHNSWIndexFunction>(
@@ -40,8 +60,7 @@ void VectorExtension::load(main::ClientContext* context) {
     extension::ExtensionUtils::addStandaloneTableFunc<DropVectorIndexFunction>(db);
     extension::ExtensionUtils::addScalarFunc<VectorSearchFunction>(db);
     extension::ExtensionUtils::addScalarFunc<VectorDistanceFunction>(db);
-    extension::ExtensionUtils::registerIndexType(db, OnDiskHNSWIndex::getIndexType());
-    initHNSWEntries(context);
+    pauseAfterTheFunctionsForATest();
 }
 
 } // namespace vector_extension

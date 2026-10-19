@@ -1416,7 +1416,9 @@ void NodeTable::addIndex(std::unique_ptr<Index> index, Transaction* transaction)
     // retiré par une autre transaction non validée ne peut pas se trouver ici : un DROP tient
     // l'index de la table en exclusif jusqu'à sa validation, et un CREATE n'a lieu qu'en
     // transaction automatique, jamais après un DROP du même nom dans la même transaction.
-    if (getIndexNoLock(index->getName()).has_value()) {
+    // Tout exemplaire non retiré de ce nom, validé ou non, d'où qu'il vienne : un CREATE non
+    // validé d'une autre connexion bloque encore le même nom.
+    if (getIndexNoLock(index->getName(), nullptr /*transaction*/).has_value()) {
         throw RuntimeException("Index with name " + index->getName() + " already exists.");
     }
     // Un exemplaire détaché du même nom n'est plus un index de la table : il cède la place.
@@ -1501,43 +1503,26 @@ void NodeTable::reclaimDroppedIndexes() {
     std::erase_if(indexes, [](const IndexHolder& holder) { return holder.isDropCommitted(); });
 }
 
-std::optional<std::reference_wrapper<IndexHolder>> NodeTable::getIndexHolder(
-    const std::string& name) {
+std::optional<Index*> NodeTable::getIndex(const std::string& name,
+    const Transaction* transaction) const {
     std::shared_lock lck{indexesMtx};
-    for (auto& index : indexes) {
-        if (!index.isDetached() && !index.isDropped() &&
-            StringUtils::caseInsensitiveEquals(index.getName(), name)) {
-            return index;
-        }
-    }
-    return std::nullopt;
+    return getIndexNoLock(name, transaction);
 }
 
-std::optional<Index*> NodeTable::getIndex(const std::string& name) const {
-    std::shared_lock lck{indexesMtx};
-    return getIndexNoLock(name);
-}
-
-std::shared_ptr<Index> NodeTable::getSharedIndex(const std::string& name) const {
-    std::shared_lock lck{indexesMtx};
-    for (auto& index : indexes) {
-        if (!index.isDetached() && !index.isDropped() && index.isLoaded() &&
-            StringUtils::caseInsensitiveEquals(index.getName(), name)) {
-            return index.getSharedIndex();
-        }
-    }
-    return nullptr;
-}
-
-std::vector<std::shared_ptr<Index>> NodeTable::getVisibleSharedIndexes(const std::string& name,
+std::vector<std::shared_ptr<Index>> NodeTable::captureVisibleIndexes(const std::string& name,
     const Transaction* transaction) const {
     std::shared_lock lck{indexesMtx};
     std::vector<std::shared_ptr<Index>> visible;
     for (auto& index : indexes) {
-        if (!index.isDetached() && index.isLoaded() && isIndexVisible(index, transaction) &&
-            StringUtils::caseInsensitiveEquals(index.getName(), name)) {
-            visible.push_back(index.getSharedIndex());
+        if (index.isDetached() || !isIndexVisible(index, transaction) ||
+            !StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+            continue;
         }
+        if (!index.isLoaded()) {
+            throw RuntimeException(stringFormat(
+                "Index {} is not loaded yet. Please load the index before accessing it.", name));
+        }
+        visible.push_back(index.getSharedIndex());
     }
     return visible;
 }
@@ -1565,9 +1550,10 @@ bool NodeTable::loadIndex(const std::string& name, main::ClientContext* context,
     return false;
 }
 
-std::optional<Index*> NodeTable::getIndexNoLock(const std::string& name) const {
+std::optional<Index*> NodeTable::getIndexNoLock(const std::string& name,
+    const Transaction* transaction) const {
     for (auto& index : indexes) {
-        if (!index.isDetached() && !index.isDropped() &&
+        if (!index.isDetached() && isIndexVisible(index, transaction) &&
             StringUtils::caseInsensitiveEquals(index.getName(), name)) {
             if (index.isLoaded()) {
                 return index.getIndex();

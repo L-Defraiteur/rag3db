@@ -22,6 +22,8 @@
 #include <sys/wait.h>
 
 #include <atomic>
+#include <cstdlib>
+#include <mutex>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -562,6 +564,127 @@ TEST_F(IndexReopen, QueryWhileTheExtensionLoads) {
               << (first.empty() ? "" : ", first: " + first) << "\n";
     EXPECT_EQ(notLoaded, 0u) << "[check: index-loaded] ";
     EXPECT_EQ(unexpected, 0u) << "[check: no-unexpected-error] ";
+}
+
+// Le même défaut, rendu déterministe par le crochet du chargement : l'extension vector s'arrête
+// 1,5 s juste après avoir enregistré ses fonctions (RAG3DB_TEST_PAUSE_AFTER_VECTOR_FUNCTIONS_MS).
+// Une requête lancée pendant la pause se lie à QUERY_VECTOR_INDEX ; si les index ne sont pas
+// encore chargés, elle s'entend dire que l'index a été retiré. Les index doivent être chargés
+// avant que les fonctions ne soient visibles.
+TEST_F(IndexReopen, AQueryDuringTheLoadIsNotToldTheIndexIsGone) {
+    createIndexedTable();
+    createDBAndConn();
+    setenv("RAG3DB_TEST_PAUSE_AFTER_VECTOR_FUNCTIONS_MS", "1500", 1 /*overwrite*/);
+    std::atomic<bool> loaded{false};
+    std::string gone;
+    std::string other;
+    int64_t succeeded = 0;
+    std::thread reader([&] {
+        rag3db::main::Connection connection(database.get());
+        while (!loaded.load()) {
+            auto result = connection.query(QUERY);
+            if (result->isSuccess()) {
+                succeeded++;
+            } else {
+                const auto message = result->getErrorMessage();
+                if (message.find("does not exist any more") != std::string::npos) {
+                    if (gone.empty()) {
+                        gone = message;
+                    }
+                } else if (message.find("is not defined") == std::string::npos &&
+                           other.empty()) {
+                    other = message;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    });
+    loadVectorExtension(*conn);
+    loaded.store(true);
+    reader.join();
+    unsetenv("RAG3DB_TEST_PAUSE_AFTER_VECTOR_FUNCTIONS_MS");
+    std::cerr << "  succeeded during the load: " << succeeded << (gone.empty() ? "" : ", gone: " + gone)
+              << (other.empty() ? "" : ", other: " + other) << "\n";
+    EXPECT_TRUE(gone.empty()) << "[check: no-index-gone-during-load] " << gone;
+    EXPECT_TRUE(other.empty()) << "[check: no-unexpected-error] " << other;
+    auto after = conn->query(QUERY);
+    EXPECT_TRUE(after->isSuccess()) << "[check: everything-passes-once-loaded] "
+                                    << after->getErrorMessage();
+}
+
+// Le chargement de l'extension sous des requêtes ET des écrivains en boucle (ticket
+// 2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index) :
+// une requête qui se lie avant la fin du chargement ne voit pas encore la fonction (« is not
+// defined »), un écrivain qui croise un index pas encore chargé est refusé par un nom (« is not
+// loaded ») ; ni l'un ni l'autre ne s'entend dire que l'index a été retiré, et tous passent une
+// fois le chargement fini.
+TEST_F(IndexReopen, QueriesAndWritersWhileTheExtensionLoads) {
+    createIndexedTable();
+    std::atomic<uint32_t> gone{0};
+    std::atomic<uint32_t> unexpected{0};
+    std::atomic<uint32_t> failedAfterLoad{0};
+    std::string first;
+    std::mutex firstMtx;
+    const auto classify = [&](const std::string& message) {
+        if (message.find("is not defined") != std::string::npos ||
+            message.find("is not loaded") != std::string::npos) {
+            return;
+        }
+        if (message.find("does not exist any more") != std::string::npos) {
+            ++gone;
+        } else {
+            ++unexpected;
+        }
+        std::lock_guard lock{firstMtx};
+        if (first.empty()) {
+            first = message;
+        }
+    };
+    int64_t nextID = 100'000;
+    for (auto round = 0; round < 30; ++round) {
+        createDBAndConn();
+        std::atomic<bool> loaded{false};
+        std::thread reader([&] {
+            rag3db::main::Connection connection(database.get());
+            for (auto attempt = 0; attempt < 2'000; ++attempt) {
+                const auto wasLoaded = loaded.load();
+                auto result = connection.query(QUERY);
+                if (!result->isSuccess()) {
+                    classify(result->getErrorMessage());
+                    failedAfterLoad += wasLoaded ? 1 : 0;
+                }
+                if (wasLoaded) {
+                    return;
+                }
+            }
+        });
+        std::thread writer([&, round] {
+            rag3db::main::Connection connection(database.get());
+            for (auto attempt = 0; attempt < 2'000; ++attempt) {
+                const auto wasLoaded = loaded.load();
+                const auto id = nextID + round * 10'000 + attempt;
+                auto result = connection.query(stringFormat(
+                    "CREATE (:Doc {id: {}, vec: [1.0, 2.0, 3.0, {}.0]});", id, id % 1000));
+                if (!result->isSuccess()) {
+                    classify(result->getErrorMessage());
+                    failedAfterLoad += wasLoaded ? 1 : 0;
+                }
+                if (wasLoaded) {
+                    return;
+                }
+            }
+        });
+        loadVectorExtension(*conn);
+        loaded.store(true);
+        reader.join();
+        writer.join();
+    }
+    std::cerr << "  index gone: " << gone.load() << ", unexpected: " << unexpected.load()
+              << ", failed after the load: " << failedAfterLoad.load()
+              << (first.empty() ? "" : ", first: " + first) << "\n";
+    EXPECT_EQ(gone.load(), 0u) << "[check: no-index-gone-during-load] " << first;
+    EXPECT_EQ(unexpected.load(), 0u) << "[check: no-unexpected-error] " << first;
+    EXPECT_EQ(failedAfterLoad.load(), 0u) << "[check: everything-passes-once-loaded] ";
 }
 
 // (c) La cause, isolée par la session de l'arbre principal (3 octobre) : un index écrit

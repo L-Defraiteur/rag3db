@@ -74,10 +74,3 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstCopy
 # première, vaut 2 648 064). Revenu de known_red.txt le même jour. Le défaut demeure ; un témoin
 # qui mesure la fuite sans dépendre du moment des morts reste à écrire.
 JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt
-#
-# Une recherche liée pendant que l'extension charge l'index à la réouverture reçoit le refus de la
-# rétention, comme si l'index avait été retiré (ticket
-# 2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index) :
-# rouge une fois sur quatre (cœur, master a45a15adf). Il retournera dans la passe ordinaire avec le
-# témoin déterministe au crochet du chargement.
-IndexReopen.QueryWhileTheExtensionLoads

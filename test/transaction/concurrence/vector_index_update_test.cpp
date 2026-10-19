@@ -1123,7 +1123,7 @@ offset_t indexedRowCount(rag3db::main::Connection& connection, const std::string
     auto& nodeTable = rag3db::storage::StorageManager::Get(*context)
                           ->getTable(entry->getTableID())
                           ->cast<rag3db::storage::NodeTable>();
-    auto* found = nodeTable.getIndex(index).value();
+    auto* found = nodeTable.getIndex(index, nullptr).value();
     auto& info = static_cast<HNSWStorageInfoMirror&>(
         const_cast<rag3db::storage::IndexStorageInfo&>(found->getStorageInfo()));
     if (newCount) {
@@ -1146,7 +1146,7 @@ int64_t lowerGraphEdgeCount(rag3db::main::Connection& connection, const std::str
     auto* storage = rag3db::storage::StorageManager::Get(*context);
     auto& nodeTable = storage->getTable(entry->getTableID())->cast<rag3db::storage::NodeTable>();
     const auto& info = static_cast<const HNSWStorageInfoMirror&>(
-        nodeTable.getIndex(index).value()->getStorageInfo());
+        nodeTable.getIndex(index, nullptr).value()->getStorageInfo());
     const auto count =
         static_cast<int64_t>(storage->getTable(info.lowerRelTableID)->getNumTotalRows(transaction));
     EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());

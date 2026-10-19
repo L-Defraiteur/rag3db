@@ -1,6 +1,7 @@
 # Un chargement d'extension à la réouverture se fait passer pour un retrait de l'index
 
-- **État** : ouvert
+- **État** : corrigé par le commit qui déplace ce ticket (19 octobre 2026, seconde session cœur
+  C++, forme relue par le cœur C++) ; voir « Ce qui a été fait », à la fin.
 - **Gravité** : refus d'une lecture valide. Une recherche vectorielle liée pendant que
   l'extension charge l'index à la réouverture est refusée comme si l'index avait été retiré, alors
   que personne ne l'a touché. Le refus est nommé, et il suffit de rejouer la requête. Mais il est
@@ -60,3 +61,37 @@ sans rien changer au chemin de service. Le témoin du banc s'écrit alors ainsi 
 autre connexion lie `QUERY_VECTOR_INDEX` (requête préparée) ; on rend la main au chargement ; puis
 on exécute la requête préparée. Elle doit passer, sans refus de la rétention. Le test du banc
 retournera alors dans la passe ordinaire.
+
+## Ce qui a été fait (19 octobre 2026)
+
+**La cause, relue** (elle remplace la lecture d'abord attribuée à hotfixs plus haut) : le holder
+n'est pas remplacé. `VectorExtension::load` enregistrait d'abord ses fonctions (QUERY_VECTOR_INDEX
+et les autres), puis le type d'index, puis chargeait les index (`initHNSWEntries` : `setAuxInfo`,
+`loadIndex` sur le même holder, même holderID). Dans l'intervalle, une requête se liait,
+`hasIndexHolder` ne demandant pas l'index chargé. `captureForQuery` ne retenait ensuite que les
+holders chargés, n'en trouvait aucun, et concluait au retrait.
+
+**Le correctif** :
+- les extensions vector et geo chargent leurs index (type enregistré, puis chargement) **avant**
+  d'enregistrer leurs fonctions : une requête ne se lie plus qu'à un index chargé ;
+- la capture d'une recherche est commune à tous les genres d'index, dans `NodeTable`
+  (`captureVisibleIndexes`, à la place de `getVisibleSharedIndexes`). Un exemplaire visible mais
+  pas encore chargé s'y refuse par « is not loaded yet », un refus passager, et non par l'absence
+  de l'index. Le choix de l'exemplaire par l'instantané du catalogue reste au genre d'index
+  (`OnDiskHNSWIndex::captureForQuery`) ;
+- un écrivain qui croise un index pas encore chargé est refusé par son nom
+  (`INDEX_NOT_LOADED_FOR_WRITE`), sous le verrou de la liste, que le chargement prend en exclusif.
+
+**Témoins** :
+- `IndexReopen.AQueryDuringTheLoadIsNotToldTheIndexIsGone` : l'extension vector s'arrête 1,5 s
+  après l'enregistrement de ses fonctions (le crochet `RAG3DB_TEST_PAUSE_AFTER_VECTOR_FUNCTIONS_MS`),
+  et une requête s'y glisse. Il est rouge 3/3 sur bc2cb48e7, avec le crochet posé à l'ancien
+  ordre (« Index doc_index of table Doc does not exist any more »), et vert 3/3 avec le correctif ;
+- `IndexReopen.QueriesAndWritersWhileTheExtensionLoads`, avec des requêtes et des écrivains en
+  boucle pendant 30 rechargements, est vert des deux côtés : la fenêtre s'ouvre trop rarement sans
+  le crochet ;
+- `IndexReopen.QueryWhileTheExtensionLoads` sort de probabilistic.txt : vert 3/3 avec le
+  correctif ;
+- les suites proches (VectorIndexRetention, Rebuild, ExtensionIndexRecovery, DropCreate et les
+  CREATE de VectorIndexUpdate) sont vertes (25 tests).
+

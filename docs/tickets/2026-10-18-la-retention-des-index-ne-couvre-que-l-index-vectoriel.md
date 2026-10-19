@@ -1,9 +1,12 @@
 # La rétention des index ne couvre que l'index vectoriel : une recherche spatiale perd son index sous un DROP, et rend zéro ligne sans le dire
 
-- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration).
-  La forme est arrêtée par l'orchestration : la rétention vit au niveau du holder d'index, pour
-  tous les genres d'index (HNSW, R-tree, et ceux qui viendront), et non dans chaque extension. À
-  faire après le ROLLBACK sous un tampon plein, avant (A), le CREATE concurrent, qui en dépend.
+- **État** : ouvert pour sa part propre à geo (R2) ; la part commune est faite (R1, 19 octobre
+  2026, voir « Ce qui a été fait (R1) », à la fin). La forme est arrêtée par l'orchestration : la
+  rétention vit au niveau du holder d'index, pour tous les genres d'index (HNSW, R-tree, et ceux
+  qui viendront), et non dans chaque extension. **Injoignable aujourd'hui** : l'index spatial ne
+  se crée pas (ticket `2026-10-05-rtree-recoit-des-decalages-provisoires`, faute
+  d'`inferInputTypes`). geo n'a aucun utilisateur, et l'orchestration le laisse « pour quand geo
+  servira » (10 octobre, confirmé le 19).
 - **Gravité** : réponse fausse (zéro ligne, sans erreur). Peut-être aussi un accès à un index
   détruit : à vérifier.
 - **Atteignable en service** : oui, dès qu'une recherche spatiale croise un DROP ou un re-CREATE
@@ -74,3 +77,34 @@ de libs sont revenus à `87a362e30`, la dernière lib saine d'avant la rétentio
 
 Les témoins verts ; les accès par nom de `NodeTable` sans transaction retirés, ou réservés au
 point de reprise et au rejeu, et dits comme tels.
+
+## Ce qui a été fait (R1, 19 octobre 2026)
+
+La part commune, pour tout genre d'index, sans rien de propre à HNSW :
+- **les accès par nom prennent la transaction** : `NodeTable::getIndex(name, transaction)`
+  filtre `isIndexVisible` ; sans transaction, tout exemplaire non retiré, ce qui sert à la clé
+  primaire et au contrôle « already exists » d'`addIndex`. `getIndexHolder(name)` et
+  `getSharedIndex(name)`, sans appelant et sans filtre, sont retirés. geo passe désormais sa
+  transaction (`query_spatial_index`, `drop_spatial_index`) ;
+- **la capture d'une recherche est commune** : `NodeTable::captureVisibleIndexes(name,
+  transaction)` rend les exemplaires visibles en propriété partagée, ou refuse un exemplaire
+  visible pas encore chargé par « is not loaded yet ». Le genre d'index n'y ajoute que le choix
+  de l'exemplaire par son catalogue ;
+- **l'ordre du chargement** : une extension charge ses index avant d'enregistrer ses fonctions
+  (vector et geo). C'est le ticket fermé
+  `closed/2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index.md`.
+
+## Ce qui reste (R2, le jour où geo servira)
+
+Le jour où geo deviendra créable, il entrera dans la capture commune **sans rien réécrire** :
+`QUERY_SPATIAL_INDEX` prendra `captureVisibleIndexes` au lieu de `getIndex`, et cessera de tenir
+un pointeur nu. Il ne restera que sa part propre :
+- `inferInputTypes` pour ses fonctions à paramètre `LIST` ;
+- le versionnement de son holder et de son fichier : `addIndex(index, transaction)`,
+  `dropIndex(name, transaction)`, l'effacement du fichier `.rtree` à la sortie réelle de la liste
+  (au point de reprise pour un DROP validé, à l'annulation d'un CREATE) et non à l'instruction,
+  les fichiers orphelins après un arrêt brutal, et `loadFromFile` qui refuse au lieu de bâtir un
+  arbre vide ;
+- un index absent refusé par un nom, jamais par zéro ligne ;
+- ses témoins (§ « Témoins, à écrire »).
+

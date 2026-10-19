@@ -597,7 +597,7 @@ std::shared_ptr<OnDiskHNSWIndex> OnDiskHNSWIndex::captureForQuery(
     // Deux exemplaires de ce nom peuvent être visibles jusqu'au point de reprise (l'ancien,
     // retiré après le début de la transaction, et un neuf) : jamais « le premier de ce nom », mais
     // celui dont les tables de relations sont celles de l'instantané.
-    for (const auto& candidate : nodeTable.getVisibleSharedIndexes(indexName, transaction)) {
+    for (const auto& candidate : nodeTable.captureVisibleIndexes(indexName, transaction)) {
         auto index = std::dynamic_pointer_cast<OnDiskHNSWIndex>(candidate);
         if (index == nullptr) {
             continue;

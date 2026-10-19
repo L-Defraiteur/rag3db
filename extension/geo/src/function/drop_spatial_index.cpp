@@ -63,7 +63,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
 
     // Get index file path before dropping.
     auto& nodeTable = storageManager->getTable(bd.tableID)->cast<storage::NodeTable>();
-    auto indexOpt = nodeTable.getIndex(bd.indexName);
+    auto indexOpt = nodeTable.getIndex(bd.indexName, transaction);
     std::string indexFilePath;
     if (indexOpt.has_value()) {
         auto& index = indexOpt.value()->cast<RTreeIndex>();

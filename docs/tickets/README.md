@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (39)
+### Ouverts — moteur (38)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -48,8 +48,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
 | [L'annulation d'un COPY sous un tampon plein peut encore allouer](2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer.md) | ouvert, à confirmer (témoin à écrire) | blocage possible (la base n'est plus bloquée : erreur nommée, ou base à rouvrir) | en principe | oui (ses COPY) |
-| [La rétention des index ne couvre que l'index vectoriel : une recherche spatiale perd son index sous un DROP, et rend zéro ligne sans le dire](2026-10-18-la-retention-des-index-ne-couvre-que-l-index-vectoriel.md) | ouvert — pour hotfixs, après le ROLLBACK, avant (A) ; forme : la rétention au niveau du holder pour tous les genres d'index | réponse fausse (zéro ligne) | oui | oui, s'il emploie l'index spatial |
-| [Un chargement d'extension à la réouverture se fait passer pour un retrait de l'index](2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index.md) | ouvert — pour hotfixs, cas de la rétention pour tous les index ; témoin déterministe à écrire au crochet de test du chargement ; `IndexReopen.QueryWhileTheExtensionLoads` en probabilistic | refus d'une lecture valide (une fois sur quatre au banc) | oui (redémarrage d'un hôte) | oui |
+| [La rétention des index ne couvre que l'index vectoriel : une recherche spatiale perd son index sous un DROP, et rend zéro ligne sans le dire](2026-10-18-la-retention-des-index-ne-couvre-que-l-index-vectoriel.md) | ouvert pour geo (R2, quand geo servira) ; la part commune est faite (R1) : accès par nom avec la transaction, capture commune, ordre du chargement | réponse fausse (zéro ligne) | oui | oui, s'il emploie l'index spatial |
 | [Une base ne dit pas quel moteur l'a écrite en dernier, et un moteur plus ancien de même format l'ouvre en écriture](2026-10-18-une-base-ne-dit-pas-quel-moteur-l-a-ecrite-et-un-moteur-plus-ancien-l-ouvre-en-ecriture.md) | ouvert — demande de Lucie ; pour le cœur C++, fin de file | corruption possible (un vieil hôte écrit une base plus récente de même numéro) | oui (client et hôte de versions différentes) | oui |
 | [Un bâti d'index prend tous les fils de travail et affame les autres connexions, lecteurs compris](2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions.md) | ouvert — cause confirmée (le planificateur, pas un verrou) ; forme à étudier : file équitable ; témoin `IndexCreationThreads.LeavesAThreadToReaders` | blocage (tous attendent environ 9,7 s à deux fils) | oui (peu de cœurs, pod sous quota) | oui |
 | [Sur une table indexée par HNSW, chaque écrivain tient l'index en exclusif jusqu'à sa validation : les écrivains passent un par un](2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un.md) | ouvert — pour le cœur, en fin de file (arbitrage de c7 : distinct de la lenteur de l'insertion et du point de reprise) ; E11 | blocage (p99 de Doc 390 ms contre 24 ms pour Note) | oui | oui (tables de morceaux) |
@@ -127,10 +126,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (153), dans `closed/`
+### Fermés (154), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un chargement d'extension à la réouverture se fait passer pour un retrait de l'index](closed/2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index.md) | corrigé (les index chargés avant les fonctions, la capture commune qui refuse « is not loaded yet » ; voir le ticket) | refus d'une lecture valide | oui | oui (au redémarrage d'un hôte) |
 | [L'arrêt d'une réaction longue dépassait trois secondes sous charge](closed/2026-10-19-l-arret-d-une-reaction-longue-depasse-trois-secondes-sous-charge.md) | fermé — l'arrêt attend le lot en cours, comme conçu ; le témoin juge l'ordre (du retard reste), plus 3 s ; 0 rouge sur 20 sous charge | test rouge | peut-être | oui |
 | [Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index](closed/2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index.md) | corrigé (forme δ : rattrapage à la validation, une fois les autres partis, sans verrou ; voir le ticket) | réponse fausse | oui | oui, en principe |
 | [L'hôte ne rend pas la mémoire d'un gros index : 10 Go restent dans l'échange, l'index fini](closed/2026-10-18-l-hote-ne-rend-pas-la-memoire-d-un-gros-index.md) | corrigé (malloc_trim en fin d'index, à la fermeture et au repos ; MALLOC_ARENA_MAX dans l'unité) ; jugé par le banc, phase plein texte et relations : A 5 814 / 4 648 Mio, B 2 329 / 567 (T3 / T4) | mémoire | oui | oui (l'hôte du démon) |

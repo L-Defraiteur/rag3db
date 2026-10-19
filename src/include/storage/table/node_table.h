@@ -269,28 +269,31 @@ public:
 
     common::column_id_t getPKColumnID() const { return pkColumnID; }
     PrimaryKeyIndex* getPKIndex() const {
-        const auto index = getIndex(PrimaryKeyIndex::DEFAULT_NAME);
+        // La clé primaire n'est jamais retirée ni recréée : visible de toute transaction.
+        const auto index = getIndex(PrimaryKeyIndex::DEFAULT_NAME, nullptr /*transaction*/);
         KU_ASSERT(index.has_value());
         return &index.value()->cast<PrimaryKeyIndex>();
     }
-    // Rend une référence sur un élément de la liste, valable tant qu'aucun DROP ni CREATE d'index
-    // ne la change : à réserver aux appelants sans DDL concurrent. Les autres prennent
-    // hasIndexHolder ou loadIndex, qui lisent et agissent sous le verrou.
-    std::optional<std::reference_wrapper<IndexHolder>> getIndexHolder(const std::string& name);
     // Un exemplaire non détaché de ce nom, visible à la transaction, est là, chargé ou non.
     bool hasIndexHolder(const std::string& name, const transaction::Transaction* transaction) const;
     // Charge l'exemplaire non détaché de ce nom s'il ne l'est pas, sous le verrou de la liste.
     // Rend faux s'il n'y en a pas (détaché par le rejeu, ou retiré).
     bool loadIndex(const std::string& name, main::ClientContext* context,
         StorageManager* storageManager);
-    std::optional<Index*> getIndex(const std::string& name) const;
-    // L'index chargé de ce nom, en propriété partagée : il reste vivant tant que l'appelant le
-    // tient, même si un DROP concurrent le retire de la table. Nul s'il n'y est pas (ou plus).
-    std::shared_ptr<Index> getSharedIndex(const std::string& name) const;
-    // Les index chargés de ce nom visibles à la transaction, en propriété partagée. Deux peuvent
-    // coexister jusqu'au point de reprise (l'ancien retiré, le neuf) : l'appelant choisit celui
-    // que son instantané du catalogue désigne (OnDiskHNSWIndex::captureForQuery).
-    std::vector<std::shared_ptr<Index>> getVisibleSharedIndexes(const std::string& name,
+    // L'exemplaire de ce nom visible à la transaction (isIndexVisible ; sans transaction, tout
+    // exemplaire non retiré), pour un appelant qui ne garde pas l'index au-delà de l'appel. Une
+    // recherche qui le garde le capture (captureVisibleIndexes).
+    std::optional<Index*> getIndex(const std::string& name,
+        const transaction::Transaction* transaction) const;
+    // La capture d'une recherche, pour tout genre d'index : les exemplaires de ce nom visibles à
+    // la transaction, en propriété partagée (ils restent vivants tant que la recherche les tient,
+    // même retirés de la table par un DROP concurrent). Deux peuvent coexister jusqu'au point de
+    // reprise, l'ancien retiré et le neuf : le genre d'index choisit celui que l'instantané de son
+    // catalogue désigne (OnDiskHNSWIndex::captureForQuery). Un exemplaire visible mais pas encore
+    // chargé (son extension se charge) se refuse par « is not loaded yet », un refus passager, et
+    // non par l'absence de l'index (ticket 2026-10-19-un-chargement-d-extension-a-la-reouverture-
+    // se-fait-passer-pour-un-retrait-de-l-index).
+    std::vector<std::shared_ptr<Index>> captureVisibleIndexes(const std::string& name,
         const transaction::Transaction* transaction) const;
     std::vector<IndexHolder>& getIndexes() { return indexes; }
     // Visible à la transaction ; sans transaction, tout index non retiré. Publique : la
@@ -396,7 +399,8 @@ private:
     // nom pendant qu'une autre connexion en retire ou en ajoute un. Les écritures, qui la
     // parcourent par getIndexes(), se sérialisent avec le DDL par le verrou INDEX (à venir).
     mutable std::shared_mutex indexesMtx;
-    std::optional<Index*> getIndexNoLock(const std::string& name) const;
+    std::optional<Index*> getIndexNoLock(const std::string& name,
+        const transaction::Transaction* transaction) const;
     uint64_t nextHolderID = 1;
     NodeTableVersionRecordHandler versionRecordHandler;
 };
