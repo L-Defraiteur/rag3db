@@ -857,6 +857,8 @@ fn run() -> Result<(), String> {
     backend.shutdown()
 }
 fn main() {
+    // Avant tout fil : lucivy lit l'environnement à la création de chaque écrivain.
+    rag3weaver::fts_handle::poser_le_defaut_des_ecrivains();
     if let Err(e) = run() {
         eprintln!("{e}");
         std::process::exit(1);

@@ -647,3 +647,31 @@ mod repro_drop {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }
+
+/// Le nombre de fils d'un écrivain de lucivy dans un processus de rag3weaver,
+/// quand rien ne le fixe : `RAG3WEAVER_FTS_WRITER_THREADS`, sinon 2.
+pub const FTS_WRITER_THREADS_PAR_DEFAUT: usize = 2;
+
+/// **Le défaut sobre des écrivains de lucivy** (19 octobre 2026) : lucivy-core
+/// donne à chaque écrivain `min(cœurs, 16)` fils et 25 Mo de tas par fil, un
+/// écrivain par shard, quatre shards par table — sur luciepc (24 cœurs), 32
+/// blocs de 32 Mio et 24 fils restaient tenus au repos, backend ouvert (mesure
+/// du banc et de G, ticket fermé « l'hôte ne rend pas la mémoire d'un gros
+/// index »). Un processus de rag3weaver pose donc `LUCIVY_WRITER_THREADS`
+/// (`RAG3WEAVER_FTS_WRITER_THREADS`, défaut [`FTS_WRITER_THREADS_PAR_DEFAUT`]) ;
+/// un `LUCIVY_WRITER_THREADS` ou `LUCIVY_WRITER_HEAP` déjà posé garde le dernier
+/// mot. lucivy ne se règle que par l'environnement, lu à la création de chaque
+/// écrivain : l'appel se fait au tout début de `main`, avant tout fil.
+pub fn poser_le_defaut_des_ecrivains() -> Option<usize> {
+    let pose = |k: &str| std::env::var_os(k).is_some_and(|v| !v.is_empty());
+    if pose("LUCIVY_WRITER_THREADS") || pose("LUCIVY_WRITER_HEAP") {
+        return None;
+    }
+    let n = std::env::var("RAG3WEAVER_FTS_WRITER_THREADS")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(FTS_WRITER_THREADS_PAR_DEFAUT);
+    std::env::set_var("LUCIVY_WRITER_THREADS", n.to_string());
+    Some(n)
+}
