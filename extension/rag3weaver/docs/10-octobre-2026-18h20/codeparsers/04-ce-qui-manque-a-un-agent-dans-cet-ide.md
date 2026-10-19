@@ -182,6 +182,35 @@ l'arbre principal : **L4**, la recherche par la vue (sept prises du mutex dans l
 recherche), puis **L5**, l'hôte qui ne sérialise plus les appels d'un backend. Le huitième rejeu
 jugera après eux.
 
+**Huitième rejeu, à `c2ef8a941`** (19 octobre, 8 h 16, poste principal, sur secteur et en mode
+performance). Il porte L4 (la recherche par la vue), L5 (l'hôte ne sérialise plus les appels d'un
+backend) et L6 (un instantané READ ONLY par appel de lecture), plus les lots de résolution de la
+nuit. Lib `4f9274a38`, régime 4096/70 comme au septième.
+
+| | 7e (`248bf03cc`) | 8e (`c2ef8a941`) |
+|---|---|---|
+| `usages` voit le renommage, de bout en bout | 2,11 s | **1,61 s** |
+| `search_code`, de bout en bout | 2,28 s | **1,84 s** |
+| tenue de la montre | 1 238 ms | 1 568 ms |
+| second client pendant la tenue | 26 appels, max 1 282 ms, 3 > 100 ms | **39 appels, max 97 ms, 0 > 100 ms**, médiane 53 ms |
+| `usages` pendant la réindexation, état d'avant | 6/9, max 64 ms | **12/12**, max 54 ms |
+| index entier | 1 079 s | 1 182 s |
+
+**L'objectif « < 100 ms avec l'état d'avant pendant toute la tenue » est atteint.** Plus aucune
+lecture ne fait la queue derrière un appel du même backend, et chacune lit son instantané.
+
+**La tenue, elle, recule de 330 ms.**
+- Environ 70 ms sont dus au lot des langages (`9b22ef8d7`) : « parents et fichiers » passe de 13 à
+  37 ms et « choisir et lier » de 9 à 54 ms, parce que le départage lit le fichier de tous les
+  définisseurs et mentionneurs du lot. Un lot les borne aux symboles à plusieurs définisseurs.
+- Le reste n'est pas dans la résolution : plein texte 232 → 344 ms, oubli des arêtes
+  123 → 172 ms, analyse 138 → 175 ms, et l'index entier est 10 % plus lent. Il sera attribué par
+  une seconde passe, les binaires du 7e et du 8e alternés sur le même poste.
+- La pièce 1 de la mémoire (`60348d75a`, +8 % à la réindexation) n'est pas dans ce binaire : le
+  neuvième rejeu la comptera à part.
+
+Traces : `~/.cache/codeparsers-notes/b2d/temoin-8.log`, sur le poste principal.
+
 Traces brutes : `~/.cache/codeparsers-notes/b2d/temoin/` sur le poste principal (`temoin.txt`,
 `hote.log`, `index.out`, les réponses avant et après). Le script : `temoin.py` dans le scratchpad
 de la session codeparsers.
