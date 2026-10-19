@@ -22,13 +22,30 @@ struct StorageVersionInfo {
             {"0.0.7", 15}, {"0.0.6", 9}, {"0.0.5", 8}, {"0.0.4", 7}, {"0.0.3", 1}};
     }
 
-    static RAG3DB_API storage_version_t getStorageVersion();
-
-    // La version 40 écrit dans l'en-tête l'étendue du fichier de données au point de reprise
-    // (DatabaseHeader::numDataPages). Une base de la version d'avant s'ouvre encore : son
-    // étendue est inconnue jusqu'à son premier point de reprise, qui la passe en 40. Un moteur
-    // d'avant refuse une base en 40.
+    // **La version du format**, posée à la main à chaque changement de ce qui est écrit (le
+    // CATALOG_VERSION_NO de PostgreSQL), indépendante de la chaîne de version du produit : la
+    // table ci-dessus ne sert plus qu'à dire ce que les versions du produit ont écrit.
+    //   39 : avant l'étendue du fichier de données ;
+    //   40 : l'en-tête porte l'étendue du fichier de données au point de reprise
+    //        (DatabaseHeader::numDataPages) ;
+    //   41 : l'en-tête porte le bâti du dernier moteur écrivain (juste après la version, et
+    //        toute version suivante garde cet ordre : un moteur plus ancien lit les deux avant
+    //        de refuser) ; le journal commence par un enregistrement de format (FormatRecord) ;
+    //   42 : les numéros de colonnes ne changent jamais (plus de renumérotation au point de
+    //        reprise) ; un bloc sur disque garde une entrée par numéro, et dit pour chacune si
+    //        la colonne y est (une colonne supprimée laisse un trou).
+    // Une base plus récente que ce moteur est refusée en le disant, en lecture comme en
+    // écriture ; une base plus ancienne, jusqu'à OLDEST_READABLE_STORAGE_VERSION, s'ouvre et son
+    // premier point de reprise la passe à la version courante, au bâti courant.
+    static constexpr storage_version_t STORAGE_FORMAT_VERSION = 42;
+    static constexpr storage_version_t OLDEST_READABLE_STORAGE_VERSION = 39;
     static constexpr storage_version_t VERSION_BEFORE_DATA_FILE_EXTENT = 39;
+    static constexpr storage_version_t VERSION_BEFORE_WRITER_BUILD_ID = 40;
+    static constexpr storage_version_t VERSION_BEFORE_COLUMN_HOLES = 41;
+    static RAG3DB_API storage_version_t getStorageVersion();
+    // L'identifiant de bâti de ce moteur (cmake/build_id.cmake), celui que l'en-tête de base et
+    // le journal portent comme « dernier écrivain ».
+    static RAG3DB_API std::string getBuildID();
 
     static constexpr const char* MAGIC_BYTES = "RAG3DB";
 };
