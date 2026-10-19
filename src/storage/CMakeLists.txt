@@ -30,3 +30,6 @@ add_library(rag3db_storage
 set(ALL_OBJECT_FILES
         ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:rag3db_storage>
         PARENT_SCOPE)
+
+# storage_version_info.cpp porte l'identifiant de bâti (common/build_id.h, généré à chaque bâti).
+add_dependencies(rag3db_storage rag3db_build_id)

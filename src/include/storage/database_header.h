@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 
 #include "common/types/uuid.h"
 #include "storage/page_range.h"
@@ -24,10 +25,19 @@ struct DatabaseHeader {
     // l'ouverture en écriture le rend à l'espace libre. INVALID_PAGE_IDX : inconnue (une base
     // écrite avant la version 40 du stockage).
     common::page_idx_t numDataPages = common::INVALID_PAGE_IDX;
+    // Ce que l'en-tête lu disait : la version de format de la base, et le bâti du dernier moteur
+    // qui l'a écrite (vide avant la version 41). Un en-tête neuf porte la version et le bâti de
+    // ce moteur.
+    uint64_t storageVersion = 0;
+    std::string writerBuildID;
 
     void updateCatalogPageRange(PageManager& pageManager, PageRange newPageRange);
     void freeMetadataPageRange(PageManager& pageManager) const;
     void serialize(common::Serializer& ser) const;
+    // La même écriture, sous une version et un bâti donnés (la forme des versions 39 à 41) :
+    // pour les témoins qui forgent une base d'un autre moteur.
+    void serializeAs(common::Serializer& ser, uint64_t version,
+        const std::string& writerBuildID) const;
 
     static DatabaseHeader deserialize(common::Deserializer& deSer);
     static DatabaseHeader createInitialHeader(common::RandomEngine* randomEngine);

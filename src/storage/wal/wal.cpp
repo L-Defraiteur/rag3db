@@ -1,5 +1,7 @@
 #include "storage/wal/wal.h"
 
+#include "storage/storage_version_info.h"
+
 #include "common/file_system/file_info.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
@@ -95,6 +97,9 @@ void WAL::initWriter(main::ClientContext* context) {
     // This is used to ensure that when replaying the WAL matches the database
     if (fileInfo->getFileSize() == 0) {
         writeHeader(*context);
+        // Le premier enregistrement dit le format et le moteur qui écrit ce journal.
+        addNewWALRecordNoLock(FormatRecord{StorageVersionInfo::getStorageVersion(),
+            StorageVersionInfo::getBuildID()});
     }
 
     // WAL should always be APPEND only. We don't want to overwrite the file as it may still
