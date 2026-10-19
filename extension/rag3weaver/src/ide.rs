@@ -11,6 +11,7 @@
 //! | `GET /ide/entrer?jeton=…` | le jeton local posé en cookie (`HttpOnly`, `SameSite=Strict`), puis la page |
 //! | `GET /ide`, `GET /ide/…` | la page (une seule, qui lit son URL) |
 //! | `GET /ide/graphe?backend=<id>&tool=…` | le graphe d'un outil (ou `reaction=`, `component=`), en JSON |
+//! | `GET /ide/reactions?backend=<id>` | les réactions du backend, ses runs, l'état de ses montres |
 //! | `GET /ide/etat` | l'état de l'hôte (`/etat`) |
 //! | `POST /ide/call` | `{manifest, name, arguments}`, comme `/call`, dans la session de l'IDE |
 //! | `POST /ide/describe` | `{manifest}`, comme `/describe` |
@@ -263,6 +264,33 @@ pub fn editeur_modules() -> &'static Result<String, String> {
     })
 }
 
+/// **Les réactions d'un backend**, et ce que ses montres en disent : chaque
+/// réaction déclarée (son nom de manifeste, sa description, ses sujets, sa
+/// politique), le nombre de runs et les erreurs du réacteur, et l'état de
+/// l'index (`index_states` : les montres, le retard des fichiers).
+pub fn reactions_du_backend(b: &crate::backend::Backend) -> Value {
+    let prepared = b.prepared();
+    let reactions: Vec<Value> = prepared
+        .reaction_graphs()
+        .iter()
+        .map(|(nom, t)| {
+            let description = prepared
+                .manifest
+                .reactions
+                .get(nom)
+                .and_then(|a| a.description.clone())
+                .unwrap_or_else(|| t.description().to_string());
+            json!({ "name": nom, "description": description, "on": t.on(), "policy": format!("{:?}", t.policy()) })
+        })
+        .collect();
+    json!({
+        "reactions": reactions,
+        "runs": b.reaction_runs(),
+        "errors": b.reaction_errors(),
+        "index": b.index_states().unwrap_or_else(|e| json!({ "error": e })),
+    })
+}
+
 /// Le script des modules d'un graphe, puis son entrée, son démarrage et ce qui
 /// ne s'est pas résolu (dit à la console, refusé par le registre s'il s'exécute).
 pub fn modules_js(g: &crate::components::modules::Graph) -> String {
@@ -400,6 +428,18 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         ("GET", p) if p.starts_with("/ide/apercu/") => {
             let (statut, type_, corps) = apercu(host, p);
             let _ = request.respond(reponse(statut, type_, corps));
+        }
+        // Les réactions d'un backend et l'état de ses montres ((b)) : ce que la
+        // vue des réactions montre, et que le flux (`reactions`) tient à jour.
+        ("GET", "/ide/reactions") => {
+            let (statut, v) = match param("backend") {
+                None => (400, json!({ "ok": false, "error": "réactions : il faut backend=<id>" })),
+                Some(id) => match host.with_backend_id(&id, reactions_du_backend) {
+                    Ok(r) => (200, json!({ "ok": true, "result": r })),
+                    Err(e) => (404, json!({ "ok": false, "error": e })),
+                },
+            };
+            let _ = request.respond(json_(statut, &v));
         }
         // Le graphe d'un outil, d'une réaction ou d'un composant (C1) : le
         // JSON de l'outil `graph`, pour tout backend ouvert par son id.

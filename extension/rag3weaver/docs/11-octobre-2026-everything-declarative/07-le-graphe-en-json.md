@@ -109,7 +109,25 @@ d'agent qui rendent le même JSON, celui du graphe d'un outil, d'une réaction o
       `/ide/call`, et il attend « fini », au moins un nœud allumé et aucun en échec, toujours
       sans erreur à la console.
 
+## (b) — la vue des réactions et de leurs runs
+
+13. **Une route** : `GET /ide/reactions?backend=<id>` (`ide::reactions_du_backend`). Elle rend
+    chaque réaction déclarée (nom de manifeste, description, sujets, politique), le nombre de
+    runs et les erreurs du réacteur, et l'état de l'index (`index_states` : les montres, le retard
+    des fichiers).
+14. **Une vue** : `/ide/code/<id>/reactions/`, à laquelle l'accueil mène.
+    - Chaque réaction mène à son DAG vivant (`dag/reaction/<nom>`). C2 l'allume déjà par son
+      `target`.
+    - Les montres et leurs balayages, et le dernier fichier vu (`FileChanged`, sujet `files`) :
+      **la montre est visible**.
+    - Les runs récents : un `RunStarted` dont la cible est une réaction ouvre une ligne (sujet
+      `reactions`), son `RunFinished` la ferme avec sa durée et son issue. Cinquante lignes au
+      plus.
+15. **Le témoin est celui de G**. La vue liste `reindex_on_change`. Un fichier réécrit sur le
+    disque est vu par la montre, et le run de la réaction s'inscrit puis finit, sans erreur à la
+    console.
+
 ## La suite
 
-Le DAG d'un composant dans l'aperçu (son graphe de clic, à côté du rendu), et le run d'une
-réaction suivi de même dans une vue des réactions.
+Le graphe de clic d'un composant est dessiné et allumé dans l'aperçu (page 06, décisions 25 à 30).
+Reste (c), le témoin anti-boucle d'une réaction qui écrit, à la pièce 1 de la mémoire.

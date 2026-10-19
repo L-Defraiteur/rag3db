@@ -71,6 +71,11 @@
   .graphe .noeud a:hover text.titre { fill: var(--accent); text-decoration: underline; }
   .graphe path { fill: none; stroke: var(--doux); stroke-opacity: .55; }
   .graphe path.devine { stroke-dasharray: 4 3; }
+  /* Les réactions ((b)) : les runs récents, un par ligne. */
+  table.runs { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.runs th, table.runs td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--trait); }
+  table.runs th { color: var(--doux); font-weight: 600; }
+  table.runs td.fin.echec { color: var(--alerte); }
   /* Le DAG vivant (C2) : un nœud passé s'allume, un nœud en échec se borde. */
   .graphe .etape rect { fill: var(--fond); stroke: var(--trait); }
   .graphe .etape.passe rect { fill: var(--accent-doux); stroke: var(--accent); }
@@ -218,6 +223,7 @@ async function accueil() {
       el("li", {},
         el("a", { href: `/ide/code/${b.id}/arbre/` }, nomCourt(b.manifest)),
         el("a", { href: `/ide/code/${b.id}/dag/` }, "graphes"),
+        el("a", { href: `/ide/code/${b.id}/reactions/` }, "réactions"),
         el("span", { class: "meta" }, b.manifest),
         el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
         (b.template_drift ?? []).length ? el("span", { class: "meta" }, `${b.template_drift.length} gabarit(s) local(aux) différent(s) du livré`) : "",
@@ -618,6 +624,73 @@ async function graphe(id, nom) {
   );
 }
 
+// ─── Les réactions ((b)) ───────────────────────────────────────────────────
+// Les réactions du backend (/ide/reactions), chacune menant à son DAG vivant ;
+// l'état des montres et le dernier fichier qu'elles ont vu ; les runs récents,
+// tenus par le flux : un `RunStarted` dont la cible est une réaction ouvre une
+// ligne, son `RunFinished` la ferme.
+
+let reactionsVivantes = null; // { manifest, corps: <tbody>, lignes: Map(run → <tr>), vu: <p> }
+
+async function reactions(id) {
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · réactions");
+  const r = await (await fetch(`/ide/reactions?${new URLSearchParams({ backend: id })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const d = r.result;
+  const lag = d.index?.lag?.files ?? 0;
+  const montres = Object.entries(d.index?.watches ?? {});
+  const corps = el("tbody");
+  const vu = el("p", { class: "note", id: "montre-vue" }, "Aucun fichier vu depuis l'ouverture de cette page.");
+  vue.replaceChildren(
+    el("h1", {}, "Réactions"),
+    el("p", { class: "note" }, `${d.runs} run(s) depuis l'ouverture du backend${d.errors.length ? `, ${d.errors.length} erreur(s)` : ""} ; retard des fichiers : ${lag}.`),
+    d.reactions.length
+      ? el("ul", { class: "liste" }, d.reactions.map((x) => el("li", {},
+          el("a", { href: `/ide/code/${id}/dag/reaction/${encodeURIComponent(x.name)}` }, x.name),
+          el("span", { class: "meta" }, `sur ${x.on.join(", ")} · ${x.policy}`),
+          el("span", { class: "meta" }, x.description))))
+      : el("p", { class: "note" }, "Ce backend ne déclare aucune réaction."),
+    el("h2", {}, "Montres"),
+    montres.length
+      ? el("ul", { class: "liste" }, montres.map(([n, w]) => el("li", {},
+          n,
+          el("span", { class: "meta" }, w.paused ? `en pause : ${w.paused}` : `${w.scans ?? 0} balayages, ${w.lists ?? 0} listes`))))
+      : el("p", { class: "note" }, "Aucune montre en service."),
+    vu,
+    el("h2", {}, "Runs récents"),
+    el("table", { class: "runs", id: "runs-recents" },
+      el("thead", {}, el("tr", {}, el("th", {}, "début"), el("th", {}, "réaction"), el("th", {}, "run"), el("th", {}, "fin"))),
+      corps),
+  );
+  reactionsVivantes = { manifest: b.manifest, corps, lignes: new Map(), vu };
+}
+
+// Un événement du flux, pour la vue des réactions.
+function suivreLesReactions(d) {
+  const v = reactionsVivantes;
+  const ev = d.evenement ?? {};
+  if (!v || route().vue !== "reactions" || d.backend !== v.manifest) return;
+  const heure = new Date(d.at_ms ?? Date.now()).toLocaleTimeString();
+  if (ev.kind === "FileChanged") {
+    v.vu.textContent = `Dernier fichier vu par la montre « ${ev.watch} » : ${ev.path} (${ev.change}, ${heure}).`;
+  } else if (ev.kind === "RunStarted" && ev.target?.reaction) {
+    const fin = el("td", { class: "fin" }, "en cours");
+    const ligne = el("tr", { "data-reaction": ev.target.reaction, "data-run": ev.run },
+      el("td", {}, heure),
+      el("td", {}, el("a", { href: `/ide/code/${route().id}/dag/reaction/${encodeURIComponent(ev.target.reaction)}` }, ev.target.reaction)),
+      el("td", {}, ev.run),
+      fin);
+    v.corps.prepend(ligne);
+    v.lignes.set(ev.run, fin);
+    while (v.corps.children.length > 50) v.lignes.delete(v.corps.lastElementChild.dataset.run), v.corps.lastElementChild.remove();
+  } else if (ev.kind === "RunFinished" && v.lignes.has(ev.run)) {
+    const fin = v.lignes.get(ev.run);
+    fin.textContent = `${ev.ok ? "fini" : "échoué"} en ${ev.ms} ms`;
+    if (!ev.ok) fin.classList.add("echec");
+  }
+}
+
 // ─── Le DAG vivant (C2) ────────────────────────────────────────────────────
 // Le graphe d'un outil, d'une réaction ou d'un composant (/ide/graphe), dessiné
 // par couches de gauche à droite ; le sujet `dataflow` du flux l'allume. Le run
@@ -733,7 +806,7 @@ function vivre(d) {
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -771,6 +844,7 @@ async function vueDe(r) {
     case "graphe": return await graphe(r.id, r.reste);
     case "recherche": return await recherche(r.id);
     case "dag": return await dag(r.id, r.reste);
+    case "reactions": return await reactions(r.id);
     default: return await accueil();
   }
 }
@@ -787,6 +861,7 @@ source.onmessage = (e) => {
   const d = JSON.parse(e.data);
   // Les runs passent par `dataflow` (un appel d'outil par l'hôte), `reactions`
   // (une réaction) ou `catalog` (une ingestion) : le DAG vivant les lit tous.
+  suivreLesReactions(d);
   if (d.sujet === "dataflow" || d.sujet === "reactions" || d.sujet === "catalog") return vivre(d);
   const ev = d.evenement ?? {};
   const r = route();

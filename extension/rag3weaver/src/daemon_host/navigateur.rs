@@ -554,6 +554,21 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     );
     assert!(n.erreurs.is_empty(), "le DAG vivant : erreurs à la console : {:#?}", n.erreurs);
 
+    // Les réactions ((b)) : la vue liste `reindex_on_change` ; un fichier
+    // réécrit sur le disque est vu par la montre, et le run de la réaction
+    // s'inscrit dans les runs récents puis finit.
+    n.aller(
+        &format!("{racine}/ide/code/{id}/reactions/"),
+        "[...document.querySelectorAll('#vue li a')].some(a => a.textContent === 'reindex_on_change') && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+    std::fs::write(arbre.join("src/arrivee.rs"), "pub fn arrivee() {\n    let _ = 2;\n}\n").unwrap();
+    n.attendre(
+        "document.querySelector('#montre-vue')?.textContent.includes('src/arrivee.rs') \
+         && [...document.querySelectorAll('#runs-recents tr[data-reaction=\"reindex_on_change\"] td.fin')].some(t => t.textContent.startsWith('fini'))",
+        "la montre et le run de la réaction, vus dans la vue des réactions",
+    );
+    assert!(n.erreurs.is_empty(), "la vue des réactions : erreurs à la console : {:#?}", n.erreurs);
+
     drop(n);
     let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
