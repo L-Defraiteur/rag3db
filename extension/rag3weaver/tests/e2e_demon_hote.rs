@@ -648,3 +648,105 @@ fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
     servi.join().unwrap();
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// **Les appels d'un backend courent en parallèle** (lot L5, 18 octobre
+/// 2026) : l'hôte tenait un mutex par backend pendant tout l'appel, et un seul
+/// appel bloqué derrière un écrivain du catalogue (la réaction de la montre)
+/// faisait attendre tous les autres — le septième rejeu de codeparsers. Ici,
+/// vingt fois : un fil tient le mutex du catalogue 500 ms, un `put_fiche`
+/// reste bloqué derrière lui, et quatre lecteurs lancés ensemble (`describe`,
+/// qui ne touche pas le catalogue) répondent chacun sous 100 ms. Puis une
+/// fermeture pendant un appel retenu attend sa fin, et le backend se rouvre.
+#[test]
+#[ignore]
+fn les_appels_d_un_backend_ne_font_pas_la_queue_derriere_un_appel_retenu() {
+    let d = dossier("parallele");
+    let m = manifeste(&d);
+    let catalogues: Arc<Mutex<Vec<Arc<Mutex<rag3weaver::Catalog>>>>> = Arc::default();
+    let pour_l_ouvreur = catalogues.clone();
+    let host = Arc::new(DaemonHost::with_opener(Box::new(move |prepared: PreparedBackend| {
+        let base = prepared.path(&prepared.manifest.database);
+        let conn = Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
+        let backend = prepared.open(Box::new(conn), None)?;
+        pour_l_ouvreur.lock().unwrap().push(backend.catalog.clone());
+        Ok(backend)
+    })));
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    ok(&put(&host, &s, &m, "put_fiche", "avant"));
+    let catalogue = catalogues.lock().unwrap().last().unwrap().clone();
+
+    let mut pires = Vec::new();
+    for tour in 0..20 {
+        // L'écrivain du catalogue, 500 ms.
+        let (pret, attendre) = std::sync::mpsc::channel();
+        let tenant = {
+            let catalogue = catalogue.clone();
+            std::thread::spawn(move || {
+                let _tenu = catalogue.lock().unwrap();
+                pret.send(()).unwrap();
+                std::thread::sleep(Duration::from_millis(500));
+            })
+        };
+        attendre.recv().unwrap();
+        // Un appel d'écriture, bloqué derrière lui.
+        let retenu = {
+            let (host, s, m) = (host.clone(), s.clone(), m.clone());
+            std::thread::spawn(move || put(&host, &s, &m, "put_fiche", &format!("retenu-{tour}")))
+        };
+        std::thread::sleep(Duration::from_millis(100));
+        // Quatre lecteurs ensemble.
+        let barriere = Arc::new(std::sync::Barrier::new(4));
+        let lecteurs: Vec<_> = (0..4)
+            .map(|_| {
+                let (host, s, m, barriere) = (host.clone(), s.clone(), m.clone(), barriere.clone());
+                std::thread::spawn(move || {
+                    barriere.wait();
+                    let t = std::time::Instant::now();
+                    let r = host.describe(Some(&s), &m);
+                    (t.elapsed(), r)
+                })
+            })
+            .collect();
+        let mut pire = Duration::ZERO;
+        for l in lecteurs {
+            let (duree, r) = l.join().unwrap();
+            ok(&r);
+            pire = pire.max(duree);
+        }
+        pires.push(pire);
+        tenant.join().unwrap();
+        ok(&retenu.join().unwrap());
+    }
+    eprintln!("[L5] pire lecture par tour : {:?}", pires.iter().map(|d| d.as_millis()).collect::<Vec<_>>());
+    assert!(pires.iter().all(|d| *d < Duration::from_millis(100)), "une lecture a attendu l'appel retenu : {pires:?}");
+
+    // Une fermeture pendant un appel retenu : elle attend sa fin, sans rien casser.
+    let (pret, attendre) = std::sync::mpsc::channel();
+    let tenant = {
+        let catalogue = catalogue.clone();
+        std::thread::spawn(move || {
+            let _tenu = catalogue.lock().unwrap();
+            pret.send(()).unwrap();
+            std::thread::sleep(Duration::from_millis(500));
+        })
+    };
+    attendre.recv().unwrap();
+    let retenu = {
+        let (host, s, m) = (host.clone(), s.clone(), m.clone());
+        std::thread::spawn(move || put(&host, &s, &m, "put_fiche", "pendant-la-fermeture"))
+    };
+    std::thread::sleep(Duration::from_millis(100));
+    let ferme = host.close(Some(&s), &m);
+    assert_eq!(ok(&ferme)["closed"], json!(true), "{ferme}");
+    ok(&retenu.join().unwrap());
+    tenant.join().unwrap();
+    // Le témoin relâche ses deux prises sur le catalogue fermé : tenues, elles
+    // retiennent l'instance de la base, et la réouverture la verrait encore ouverte.
+    drop(catalogue);
+    catalogues.lock().unwrap().clear();
+    let relu = host.call(Some(&s), &m, "get_fiche", json!({"record": {"titre": "pendant-la-fermeture"}}));
+    assert!(fiche(&host, &s, &m, "pendant-la-fermeture").is_some(), "l'appel retenu a écrit, et le backend se rouvre pour le lire : {relu}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}

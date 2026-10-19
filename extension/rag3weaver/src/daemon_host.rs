@@ -53,6 +53,13 @@ pub const BUSY_INDEXING: &str = "backend tenu par une indexation";
 
 /// Le refus de fermer un manifeste que cet hôte n'a jamais ouvert.
 pub const NOT_HOSTED: &str = "aucun backend hébergé pour ce manifeste";
+/// Le refus d'ouvrir, fermer ou relire un backend que des appels tiennent
+/// encore au-delà de [`SLOT_WRITE_WAIT`] (lot L5) : rien n'a été fait.
+pub const CALLS_IN_FLIGHT: &str = "des appels tiennent encore ce backend";
+
+/// **Combien de temps une ouverture, une fermeture ou une relecture attend
+/// les appels en vol d'un backend** (lot L5) avant de refuser en le disant.
+pub const SLOT_WRITE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Ouvre un backend depuis son manifeste chargé.
 pub type Opener = Box<dyn Fn(PreparedBackend) -> Result<Backend, String> + Send + Sync>;
@@ -82,7 +89,13 @@ pub struct Session {
 struct Hosted {
     id: String,
     manifest: PathBuf,
-    backend: Mutex<Option<Backend>>,
+    /// **Le backend, partagé par les appels** (lot L5, 18 octobre 2026) : un
+    /// appel le tient en lecture pour toute sa durée, et les appels d'un même
+    /// backend courent en parallèle ; ouvrir, fermer, relire et lâcher le
+    /// tiennent en écriture, qui attend les appels en vol. Le mutex d'avant
+    /// sérialisait tous les appels : un seul bloqué derrière un écrivain (une
+    /// recherche pendant la réaction de la montre) les faisait tous attendre.
+    backend: std::sync::RwLock<Option<Backend>>,
     /// Combien de fois ce backend a été ouvert (1 au premier appel).
     opened: std::sync::atomic::AtomicUsize,
     /// Combien de fois il a été fermé par `POST /backend/close`.
@@ -141,7 +154,9 @@ impl DaemonHost {
         }
         let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
         for h in hosted {
-            let Ok(slot) = h.backend.try_lock() else {
+            // `try_write`, pas `try_read` : un appel tient le slot en lecture
+            // (L5), et seule l'écriture échoue tant qu'un appel est en cours.
+            let Ok(slot) = h.backend.try_write() else {
                 return Some(format!("un appel en cours sur {}", h.manifest.display()));
             };
             if let Some(cause) = slot.as_ref().and_then(Backend::travail_en_cours) {
@@ -262,7 +277,7 @@ impl DaemonHost {
                 Arc::new(Hosted {
                     id,
                     manifest: canonical,
-                    backend: Mutex::new(None),
+                    backend: std::sync::RwLock::new(None),
                     opened: Default::default(),
                     closed: Default::default(),
                     print: Mutex::new(None),
@@ -272,26 +287,64 @@ impl DaemonHost {
             .clone())
     }
 
-    /// Le backend ouvert, sous son verrou : l'ouvre s'il ne l'est pas.
+    /// **Le slot en écriture**, sans attendre les appels en vol plus de
+    /// [`SLOT_WRITE_WAIT`] : au-delà, un refus qui le dit, et rien n'est fait.
+    fn ecrire_le_slot<'a>(&self, hosted: &'a Hosted) -> Result<std::sync::RwLockWriteGuard<'a, Option<Backend>>, String> {
+        let debut = std::time::Instant::now();
+        loop {
+            match hosted.backend.try_write() {
+                Ok(slot) => return Ok(slot),
+                Err(std::sync::TryLockError::Poisoned(p)) => return Ok(p.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) if debut.elapsed() >= SLOT_WRITE_WAIT => {
+                    return Err(format!(
+                        "{CALLS_IN_FLIGHT} après {} s pour {} : rien n'a été fait, recommencez quand ils auront fini",
+                        SLOT_WRITE_WAIT.as_secs(),
+                        hosted.manifest.display()
+                    ))
+                }
+                Err(std::sync::TryLockError::WouldBlock) => std::thread::sleep(std::time::Duration::from_millis(20)),
+            }
+        }
+    }
+
+    /// **Le backend ouvert, partagé** : l'ouvre s'il ne l'est pas (le seul
+    /// temps exclusif d'un appel), puis l'appelle sous le slot en lecture, en
+    /// parallèle des autres appels de ce backend.
     fn with_backend<T>(&self, hosted: &Hosted, f: impl FnOnce(&Backend) -> T) -> Result<T, String> {
-        let mut slot = hosted.backend.lock().unwrap_or_else(|p| p.into_inner());
-        self.open_slot(hosted, &mut slot)?;
-        let backend = slot.as_ref().expect("ouvert juste au-dessus");
+        let ferme = hosted.backend.read().map(|s| s.is_none()).unwrap_or_else(|p| p.into_inner().is_none());
+        if ferme {
+            let mut slot = self.ecrire_le_slot(hosted)?;
+            self.open_slot(hosted, &mut slot)?;
+        }
+        let slot = hosted.backend.read().unwrap_or_else(|p| p.into_inner());
+        let Some(backend) = slot.as_ref() else {
+            return Err(format!("{NOT_HOSTED} : {} a été fermé pendant cet appel ; recommencez", hosted.manifest.display()));
+        };
+        // L'instance de cet appel : seule celle-là se lâche plus bas.
+        let instance = hosted.opened.load(std::sync::atomic::Ordering::SeqCst);
         let out = f(backend);
+        let raison = backend.must_reopen();
+        drop(slot);
         // **Une base à rouvrir lâche ce backend, et lui seul** : sans
         // `shutdown`, qui demanderait un point de reprise que le moteur
-        // refuse. Le prochain appel le rouvre.
-        if let Some(raison) = backend.must_reopen() {
+        // refuse. Le prochain appel le rouvre. L'écriture attend les autres
+        // appels en vol, et ne lâche que l'instance de cet appel (un autre a
+        // pu la lâcher et en rouvrir une, saine).
+        if let Some(raison) = raison {
             eprintln!("[démon] {} : la base doit être rouverte ({raison}) — le backend est lâché, le prochain appel le rouvre", hosted.manifest.display());
-            // Ses réactions et ses indexations s'arrêtent d'abord : leurs fils
-            // tiennent le catalogue, et donc la base, que la réouverture veut.
-            if let Some(lache) = slot.take() {
-                for erreur in lache.stop_reactions() {
-                    eprintln!("[réaction] {erreur}");
+            let mut slot = hosted.backend.write().unwrap_or_else(|p| p.into_inner());
+            if hosted.opened.load(std::sync::atomic::Ordering::SeqCst) == instance {
+                // Ses réactions et ses indexations s'arrêtent d'abord : leurs
+                // fils tiennent le catalogue, et donc la base, que la
+                // réouverture veut.
+                if let Some(lache) = slot.take() {
+                    for erreur in lache.stop_reactions() {
+                        eprintln!("[réaction] {erreur}");
+                    }
+                    #[cfg(feature = "code")]
+                    crate::dataflow::index_nodes::stop_indexings_of(&lache.catalog);
+                    drop(lache);
                 }
-                #[cfg(feature = "code")]
-                crate::dataflow::index_nodes::stop_indexings_of(&lache.catalog);
-                drop(lache);
             }
             return Err(format!("{REOPENED} ({raison}) : cet appel n'a pas abouti et n'est pas rejoué ; recommencez"));
         }
@@ -407,7 +460,7 @@ impl DaemonHost {
             }
             let hosted = self.hosted(manifest)?;
             let relu = {
-                let mut slot = hosted.backend.lock().unwrap_or_else(|p| p.into_inner());
+                let mut slot = self.ecrire_le_slot(&hosted)?;
                 let relu = slot.is_some() && self.manifest_changed(&hosted);
                 if relu {
                     eprintln!("[démon] {} : le manifeste a changé — le backend est fermé et rouvert", hosted.manifest.display());
@@ -438,7 +491,7 @@ impl DaemonHost {
             let hosted = self
                 .hosted_existing(manifest)
                 .ok_or_else(|| format!("{NOT_HOSTED} : {}", manifest.display()))?;
-            let mut slot = hosted.backend.lock().unwrap_or_else(|p| p.into_inner());
+            let mut slot = self.ecrire_le_slot(&hosted)?;
             let ferme = self.close_slot(&hosted, &mut slot)?;
             Ok(json!({ "id": hosted.id, "manifest": hosted.manifest, "closed": ferme }))
         });
@@ -454,8 +507,8 @@ impl DaemonHost {
         op_response(result)
     }
 
-    /// **`call`** : un outil du backend, sérialisé avec les autres appels de
-    /// ce backend.
+    /// **`call`** : un outil du backend, en parallèle des autres appels de ce
+    /// backend (lot L5) ; les écritures, elles, se sérialisent au catalogue.
     pub fn call(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value) -> Value {
         let result = self.check_session(session).and_then(|s| {
             let cell = cell_of(&s)?;
@@ -481,14 +534,16 @@ impl DaemonHost {
             .unwrap_or_else(|p| p.into_inner())
             .values()
             .map(|h| {
-                // **Sans attendre** : un appel long tient le backend, et l'état
-                // de l'hôte ne doit jamais faire la queue derrière lui. Ouvert,
+                // **Sans attendre** : une ouverture ou une fermeture tient le
+                // slot en écriture, et l'état de l'hôte ne fait jamais la queue
+                // derrière elle ; les appels, eux, le tiennent en lecture et ne
+                // l'empêchent pas (lot L5). Ouvert,
                 // l'état de ses index (le retard, la reconstruction, les
                 // montres, le lot en cours, les morceaux sans texte), lu par
                 // `index_states`, qui sait lui-même dire un catalogue occupé.
                 // Et les copies locales de gabarits livrés qui en diffèrent
                 // (`crate::builtin_templates::drift`), que la page montre.
-                let (ouvert, index, derive) = match h.backend.try_lock() {
+                let (ouvert, index, derive) = match h.backend.try_read() {
                     Ok(slot) => match slot.as_ref() {
                         Some(b) => (
                             json!(true),
@@ -497,7 +552,7 @@ impl DaemonHost {
                         ),
                         None => (json!(false), Value::Null, Value::Null),
                     },
-                    Err(_) => (json!(true), json!({ "busy": true, "why": "un appel tient ce backend" }), Value::Null),
+                    Err(_) => (json!(true), json!({ "busy": true, "why": "une ouverture ou une fermeture tient ce backend" }), Value::Null),
                 };
                 json!({
                     "id": h.id,
@@ -573,7 +628,13 @@ impl DaemonHost {
         }
         let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
         for h in hosted {
-            let mut slot = h.backend.lock().unwrap_or_else(|p| p.into_inner());
+            let mut slot = match self.ecrire_le_slot(&h) {
+                Ok(slot) => slot,
+                Err(e) => {
+                    erreurs.push(e);
+                    continue;
+                }
+            };
             if let Some(mut backend) = slot.take() {
                 if let Err(e) = backend.shutdown() {
                     erreurs.push(format!("{} : {e}", h.manifest.display()));
