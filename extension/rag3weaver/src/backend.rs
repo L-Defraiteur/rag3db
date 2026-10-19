@@ -103,6 +103,11 @@ pub struct BackendManifest {
     /// `search_graphs` : il change la liste d'outils que voit l'agent.
     #[serde(default)]
     pub graph_tool: bool,
+    /// **Qui applique une proposition de déclarations** (page 08) :
+    /// `approbation` (le défaut) — l'agent propose, une personne applique dans
+    /// l'IDE ; `auto` — l'agent déclare directement et applique.
+    #[serde(default)]
+    pub declarations: crate::propositions::ModeDeclarations,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
@@ -1885,6 +1890,7 @@ impl PreparedBackend {
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
             components_watch: Mutex::new(None),
+            propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
@@ -2313,6 +2319,9 @@ pub struct Backend {
     /// La montre des composants, montée par l'aperçu de l'IDE
     /// ([`Backend::watch_components`]).
     components_watch: Mutex<Option<crate::components::a_chaud::ComponentsWatch>>,
+    /// Les propositions de déclarations, gardées avec leur verdict
+    /// ([`crate::propositions`]).
+    pub(crate) propositions: crate::propositions::Propositions,
     /// **L'arrêt des réactions** : levé par `stop_reactions`, lu par une
     /// réaction longue entre deux unités de travail (`ReindexFileNode`, entre
     /// deux fichiers). Ce qui est fait reste ; le reste garde son retard et la
@@ -2472,6 +2481,16 @@ impl Backend {
         let (handle, mounted) = self.monter_un_reacteur(&prepared, bus)?;
         *slot = Some(handle);
         Ok(mounted)
+    }
+
+    /// **Le bus où publier**, pris de la vue (le même `Arc` que le catalogue) :
+    /// publier ne prend pas le mutex du catalogue, et n'attend pas l'écrivain
+    /// qui le tient (L4). Le mutex seulement sans vue.
+    pub(crate) fn bus_de_publication(&self) -> crate::events::EventBus {
+        match self.read_view.current() {
+            Some(vue) => vue.event_bus.in_scope(&vue.scope),
+            None => self.catalog.lock().unwrap_or_else(|e| e.into_inner()).event_bus(),
+        }
     }
 
     /// **Monte la montre des composants** (`components/`, `libs.json`) sur le
@@ -4331,6 +4350,7 @@ mod tests {
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
             components_watch: Mutex::new(None),
+            propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
         let response = backend.run_search_program(&program).unwrap();
@@ -4546,6 +4566,7 @@ mod tests {
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
             components_watch: Mutex::new(None),
+            propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }

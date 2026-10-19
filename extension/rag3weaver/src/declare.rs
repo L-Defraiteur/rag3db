@@ -207,7 +207,7 @@ impl Backend {
     }
 
     /// Le chemin absolu d'une déclaration, ou pourquoi ce n'en est pas une.
-    fn declaration_path(&self, path: &str) -> Result<PathBuf, String> {
+    pub(crate) fn declaration_path(&self, path: &str) -> Result<PathBuf, String> {
         let relative = Path::new(path);
         let refuse = |why: &str| {
             Err(format!(
@@ -348,6 +348,71 @@ pub const LIST: &str = "list_declarations";
 pub const READ: &str = "read_declaration";
 pub const DECLARE: &str = "declare";
 pub const DECLARE_SET: &str = "declare_set";
+pub const PROPOSE: &str = "propose";
+pub const PROPOSALS: &str = "proposals";
+pub const APPLY: &str = "apply";
+pub const REJECT: &str = "reject";
+
+/// Les outils de déclaration que voit l'agent, selon le mode du backend
+/// (page 08) : en `approbation` (le défaut), il lit et **propose** — une
+/// personne applique dans l'IDE ; en `auto`, il déclare directement, et
+/// applique ou rejette les propositions.
+pub fn tool_defs_pour(mode: crate::propositions::ModeDeclarations) -> Vec<ToolDef> {
+    let fichiers = json!({
+        "type": "array",
+        "minItems": 1,
+        "items": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Relative to the backend folder."},
+                "content": {"type": "string", "description": "The whole new content of the file."}
+            },
+            "required": ["path", "content"],
+            "additionalProperties": false
+        }
+    });
+    let mut defs: Vec<ToolDef> = tool_defs()
+        .into_iter()
+        .filter(|d| mode == crate::propositions::ModeDeclarations::Auto || ![DECLARE, DECLARE_SET].contains(&d.name.as_str()))
+        .collect();
+    defs.push(ToolDef {
+        name: PROPOSE.into(),
+        description: "Proposes several declaration files together (each whole). They are checked as at \
+                      load time WITHOUT being written; the proposal is kept with its verdict (accepted, \
+                      or the refusal with its file and line) and shown in the IDE, where a person applies \
+                      or rejects it. Propose again to correct a refused or rejected one."
+            .into(),
+        parameters: json!({
+            "type": "object",
+            "properties": {
+                "files": fichiers,
+                "reason": {"type": "string", "description": "Why — the person reading the proposal sees it, and it becomes the commit message."}
+            },
+            "required": ["files", "reason"],
+            "additionalProperties": false
+        }),
+    });
+    defs.push(ToolDef {
+        name: PROPOSALS.into(),
+        description: "Lists the proposals of this backend: id, reason, files, verdict, and state \
+                      (proposed, applied with its commit, rejected with why)."
+            .into(),
+        parameters: json!({"type": "object", "properties": {}, "additionalProperties": false}),
+    });
+    if mode == crate::propositions::ModeDeclarations::Auto {
+        defs.push(ToolDef {
+            name: APPLY.into(),
+            description: "Applies a proposal: checked again on the current tree, written, put in service and committed.".into(),
+            parameters: json!({"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"], "additionalProperties": false}),
+        });
+        defs.push(ToolDef {
+            name: REJECT.into(),
+            description: "Rejects a proposal, saying why.".into(),
+            parameters: json!({"type": "object", "properties": {"id": {"type": "integer"}, "why": {"type": "string"}}, "required": ["id", "why"], "additionalProperties": false}),
+        });
+    }
+    defs
+}
 
 /// Les trois définitions d'outil.
 pub fn tool_defs() -> Vec<ToolDef> {
@@ -422,8 +487,15 @@ impl DeclarationTools<'_> {
     fn ours(&self, call: &ToolCall) -> Option<Turn> {
         let answer =
             |content: Value| Some(Turn::tool_result(&call.id, &call.name, content.to_string()));
-        if ![LIST, READ, DECLARE, DECLARE_SET].contains(&call.name.as_str()) {
+        if ![LIST, READ, DECLARE, DECLARE_SET, PROPOSE, PROPOSALS, APPLY, REJECT].contains(&call.name.as_str()) {
             return None;
+        }
+        let mode = self.backend.mode_declarations();
+        if mode == crate::propositions::ModeDeclarations::Approbation && [DECLARE, DECLARE_SET, APPLY, REJECT].contains(&call.name.as_str()) {
+            return answer(json!({"ok": false, "error": format!(
+                "ce backend est en mode approbation : « {} » n'est pas à l'agent — propose (une personne applique dans l'IDE)",
+                call.name
+            )}));
         }
         let args: Value = match serde_json::from_str(&call.arguments) {
             Ok(args) => args,
@@ -432,6 +504,27 @@ impl DeclarationTools<'_> {
             }
         };
         let text = |key: &str| args[key].as_str().unwrap_or_default().to_string();
+        let fichiers = || -> Vec<(String, String)> {
+            args["files"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|f| (f["path"].as_str().unwrap_or_default().to_string(), f["content"].as_str().unwrap_or_default().to_string()))
+                .collect()
+        };
+        let proposition = |r: Result<crate::propositions::Proposition, String>| match r {
+            Ok(p) => json!({"ok": true, "proposal": crate::propositions::resume(&p)}),
+            Err(error) => json!({"ok": false, "error": error}),
+        };
+        match call.name.as_str() {
+            PROPOSE => return answer(proposition(self.backend.proposer(&fichiers(), &text("reason"), "agent"))),
+            PROPOSALS => {
+                return answer(json!({"ok": true, "proposals": self.backend.propositions().iter().map(crate::propositions::resume).collect::<Vec<_>>()}))
+            }
+            APPLY => return answer(proposition(self.backend.appliquer(args["id"].as_u64().unwrap_or(0)))),
+            REJECT => return answer(proposition(self.backend.rejeter(args["id"].as_u64().unwrap_or(0), &text("why")))),
+            _ => {}
+        }
         match call.name.as_str() {
             LIST => answer(json!({"ok": true, "paths": self.backend.list_declarations()})),
             READ => answer(match self.backend.read_declaration(&text("path")) {
@@ -473,7 +566,7 @@ impl DeclarationTools<'_> {
 impl crate::agent::ToolBox for DeclarationTools<'_> {
     fn tool_defs(&self) -> Vec<ToolDef> {
         let mut defs = self.inner.tool_defs();
-        defs.extend(tool_defs());
+        defs.extend(tool_defs_pour(self.backend.mode_declarations()));
         defs
     }
 

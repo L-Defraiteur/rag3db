@@ -67,6 +67,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         miroir_reacteur: Mutex::new(None),
         watches: Mutex::new(Vec::new()),
         components_watch: Mutex::new(None),
+        propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
     (dir, backend)
@@ -573,6 +574,15 @@ fn toy_in_a_repository() -> (tempfile::TempDir, Backend) {
     (dir, backend)
 }
 
+/// Le jouet du dépôt, **en mode `auto`** (page 08) : l'agent y déclare
+/// directement. Le défaut, `approbation`, ne lui donne que `propose`.
+fn en_mode_auto(dir: &tempfile::TempDir, backend: &Backend) {
+    let m = std::fs::read_to_string(dir.path().join("backend.json")).unwrap();
+    write(dir.path(), "backend.json", &m.replacen("\"version\": 1,", "\"version\": 1,\n  \"declarations\": \"auto\",", 1));
+    backend.reload().expect("le mode auto se charge");
+    git_in(dir.path(), &["commit", "-q", "-am", "le mode auto"]);
+}
+
 #[test]
 fn declare_refuses_what_is_not_a_declaration_of_this_backend() {
     let (_dir, backend) = toy_in_a_repository();
@@ -730,6 +740,7 @@ fn an_agent_corrects_a_refused_declaration_on_the_next_turn() {
         }
     }
     let (dir, backend) = toy_in_a_repository();
+    en_mode_auto(&dir, &backend);
     let broken =
         json!({"path": "views/hello.html", "content": "<h1>{% if %}</h1>", "reason": "Titre"})
             .to_string();
@@ -1091,6 +1102,7 @@ fn a_chat_turn_declares_and_pushes_its_events() {
     use crate::llm::{CallbackLlm, Llm, MockLlm};
     use std::sync::atomic::{AtomicUsize, Ordering};
     let (dir, backend) = toy_in_a_repository();
+    en_mode_auto(&dir, &backend);
     let backend = Arc::new(backend);
     let view = json!({"path": "views/hello.html", "content": "<h1>Hello {{ result.hello }}</h1>", "reason": "En anglais"}).to_string();
     let calls = AtomicUsize::new(0);
@@ -1412,4 +1424,78 @@ fn a_proposal_is_judged_on_the_overlay_and_the_tree_is_untouched() {
     let disque = PreparedBackend::load(&d.join("backend.json")).unwrap();
     let vide = PreparedBackend::load_avec(&d.join("backend.json"), &crate::lecteur::Recouvrement::default()).unwrap();
     assert_eq!(vide.describe(), disque.describe(), "un recouvrement vide charge ce que charge le disque");
+}
+
+// ── Les propositions (P2) ─────────────────────────────────────────────────
+
+/// **Une proposition se garde, se publie, puis s'applique ou se rejette** :
+/// acceptée, elle n'écrit rien jusqu'à `appliquer`, qui l'écrit et la
+/// commite ; refusée à la validation, elle reste lisible avec son refus et
+/// ne s'applique pas ; rejetée, elle garde son pourquoi ; chaque changement
+/// paraît sur le sujet `declarations`.
+#[test]
+fn a_proposal_is_kept_published_then_applied_or_rejected() {
+    let (dir, backend) = toy_in_a_repository();
+    let mut rx = backend.catalog.lock().unwrap().event_bus().subscribe(crate::events::topic::DECLARATIONS);
+    let vue = "<h2>Salut {{ result.hello }}</h2>";
+    let avant = std::fs::read_to_string(dir.path().join("views/hello.html")).unwrap();
+
+    let p = backend.proposer(&[("views/hello.html".into(), vue.into())], "un titre plus discret", "ide").unwrap();
+    assert!(p.refus.is_none(), "{p:?}");
+    assert_eq!(p.fichiers[0].avant.as_deref(), Some(avant.as_str()));
+    assert_eq!(std::fs::read_to_string(dir.path().join("views/hello.html")).unwrap(), avant, "proposer n'écrit rien");
+
+    let mauvaise = backend.proposer(&[("views/hello.html".into(), "<h1>{% if %}</h1>".into())], "cassé", "agent").unwrap();
+    assert!(mauvaise.refus.as_deref().is_some_and(|r| r.contains("hello.html")), "{mauvaise:?}");
+    assert!(backend.appliquer(mauvaise.id).unwrap_err().contains("refusée à la validation"));
+    let rejetee = backend.rejeter(mauvaise.id, "la vue ne se compile pas").unwrap();
+    assert_eq!(rejetee.etat, crate::propositions::EtatProposition::Rejetee { pourquoi: "la vue ne se compile pas".into() });
+
+    let appliquee = backend.appliquer(p.id).unwrap();
+    assert!(matches!(&appliquee.etat, crate::propositions::EtatProposition::Appliquee { commit: Some(_), .. }), "{appliquee:?}");
+    assert_eq!(std::fs::read_to_string(dir.path().join("views/hello.html")).unwrap(), vue);
+    assert_eq!(get(&backend, "/hello/Lucie", &[]).body, "<h2>Salut Lucie</h2>", "en service");
+    assert!(git_in(dir.path(), &["log", "-1", "--format=%s"]).contains("un titre plus discret"));
+    assert!(backend.appliquer(p.id).unwrap_err().contains("n'est plus proposée"));
+
+    let mut vus = Vec::new();
+    while let Ok(crate::events::Event::PropositionChanged { id, change, .. }) = rx.try_recv() {
+        vus.push(format!("{id}:{change}"));
+    }
+    assert_eq!(vus, [format!("{}:proposed", p.id), format!("{}:proposed", mauvaise.id), format!("{}:rejected", mauvaise.id), format!("{}:applied", p.id)]);
+    assert_eq!(backend.propositions().len(), 2);
+}
+
+/// **En mode approbation (le défaut), l'agent propose et ne déclare pas** :
+/// ses outils sont `propose` et `proposals`, pas `declare` ni `apply` ; un
+/// appel à `declare` est refusé en le disant ; sa proposition est gardée. En
+/// mode `auto`, il a aussi `declare`, `apply` et `reject`.
+#[test]
+fn in_approval_mode_the_agent_proposes_and_does_not_declare() {
+    use crate::agent::ToolBox;
+    use crate::llm::{ToolCall, Turn};
+    struct Rien;
+    impl ToolBox for Rien {
+        fn call(&self, call: &ToolCall) -> Turn {
+            Turn::tool_result(&call.id, &call.name, "{}")
+        }
+    }
+    let (dir, backend) = toy_in_a_repository();
+    let outils = crate::declare::DeclarationTools { backend: &backend, inner: &Rien };
+    let noms: Vec<String> = outils.tool_defs().into_iter().map(|d| d.name).collect();
+    assert!(noms.contains(&"propose".to_string()) && noms.contains(&"proposals".to_string()), "{noms:?}");
+    assert!(!noms.contains(&"declare".to_string()) && !noms.contains(&"apply".to_string()), "{noms:?}");
+    let appel = |nom: &str, args: Value| outils.call(&ToolCall::new("1", nom, args.to_string()));
+    let refus = appel("declare", json!({"path": "views/hello.html", "content": "x", "reason": "r"}));
+    assert!(refus.content.contains("mode approbation"), "{}", refus.content);
+    let propose = appel("propose", json!({"files": [{"path": "views/hello.html", "content": "<p>{{ result.hello }}</p>"}], "reason": "plus simple"}));
+    assert!(propose.content.contains("\"ok\":true"), "{}", propose.content);
+    assert_eq!(backend.propositions().len(), 1);
+    assert_eq!(backend.propositions()[0].auteur, "agent");
+
+    en_mode_auto(&dir, &backend);
+    let noms: Vec<String> = outils.tool_defs().into_iter().map(|d| d.name).collect();
+    for n in ["declare", "declare_set", "propose", "apply", "reject"] {
+        assert!(noms.contains(&n.to_string()), "{n} : {noms:?}");
+    }
 }

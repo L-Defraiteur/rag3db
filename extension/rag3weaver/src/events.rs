@@ -263,6 +263,16 @@ pub enum Event {
         declarations: bool,
         at_ms: u64,
     },
+    /// **Une proposition de déclarations a changé** (`crate::propositions`) :
+    /// `change` vaut `proposed`, `applied` ou `rejected` ; `accepted` dit si
+    /// sa validation l'a acceptée. Sujet `declarations`.
+    PropositionChanged {
+        id: u64,
+        change: String,
+        paths: Vec<String>,
+        accepted: bool,
+        at_ms: u64,
+    },
     /// **Un fragment de la sortie d'un modèle**, au fil de la génération
     /// (`TokenEvents`). Sujet `tokens`, que les réactions n'écoutent pas par
     /// défaut : un événement par jeton ne réveille personne qui ne l'a pas
@@ -361,6 +371,7 @@ impl Event {
             Self::Message { .. } => topic::MESSAGES,
             Self::FileChanged { .. } => topic::FILES,
             Self::ComponentsChanged { .. } => topic::COMPONENTS,
+            Self::PropositionChanged { .. } => topic::DECLARATIONS,
             Self::Token { .. } => topic::TOKENS,
             _ => topic::CATALOG,
         }
@@ -459,6 +470,9 @@ impl Event {
             }),
             // Le format des jetons d'une conversation (`ChatSink`), plus le
             // run, le flux et le rang : une interface lit l'un comme l'autre.
+            Self::PropositionChanged { id, change, paths, accepted, at_ms } => json!({
+                "kind": "PropositionChanged", "id": id, "change": change, "paths": paths, "accepted": accepted, "at_ms": at_ms,
+            }),
             Self::ComponentsChanged { paths, declarations, at_ms } => json!({
                 "kind": "ComponentsChanged", "paths": paths, "declarations": declarations, "at_ms": at_ms,
             }),
@@ -495,6 +509,8 @@ pub mod topic {
     /// `%% on: reactions`, ce qui rend impossible par construction qu'une
     /// réaction se relance sur ses propres runs.
     pub const REACTIONS: &str = "reactions";
+    /// Les propositions de déclarations : proposées, appliquées, rejetées.
+    pub const DECLARATIONS: &str = "declarations";
 }
 
 /// **Ce dont un graphe est le graphe** : un outil, une réaction, un composant

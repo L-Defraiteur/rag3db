@@ -107,6 +107,7 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         miroir_reacteur: Mutex::new(None),
         watches: Mutex::new(Vec::new()),
         components_watch: Mutex::new(None),
+        propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         decider: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),

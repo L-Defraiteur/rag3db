@@ -42,7 +42,7 @@ pub const PREFIX: &str = "/ide";
 /// Le cookie qui porte le jeton local.
 pub const COOKIE: &str = "rag3weaver_ide";
 /// Les sujets du bus que le flux relaie.
-pub const SUJETS: [&str; 7] = ["files", "dataflow", "agent", "tokens", "catalog", "components", "reactions"];
+pub const SUJETS: [&str; 8] = ["files", "dataflow", "agent", "tokens", "catalog", "components", "reactions", "declarations"];
 /// Combien d'événements le flux garde pour rejouer.
 const TAMPON: usize = 2048;
 /// Le pas du battement qui fait tomber une fenêtre fermée.
