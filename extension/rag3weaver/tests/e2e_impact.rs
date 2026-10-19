@@ -268,17 +268,13 @@ fn impact_nomme_les_tests_que_des_changements_reels_ont_casses() {
 ///   `phase0_create_drain_all_field_types` et `phase0_update_and_delete`
 ///   (e2e_search.rs) : deux sauts, par un nom (`get`) que le type de `catalog` départage.
 ///
-/// **Se saute, en le disant**, tant que la méthode propre ne passe pas avant la méthode de trait :
-/// `Catalog::get` et le `get` de `impl ReadCatalog for Catalog` ont le même type. Le vert d'avant
-/// passait par `exists` → `get`, une arête devinée par le fichier et fausse. Ticket
-/// `docs/tickets/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md`.
+/// `Catalog::get` et le `get` de `impl ReadCatalog for Catalog` ont le même type : la méthode
+/// propre passe avant (codeparsers `trait_impl`). Le vert d'avant le 19 octobre 2026 passait par
+/// `exists` → `get`, une arête devinée par le fichier et fausse. Ticket fermé
+/// `docs/tickets/closed/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md`.
 #[test]
 #[ignore]
 fn impact_row_to_map_nomme_les_tests_qui_appellent_catalog_get() {
-    if std::env::var("RAG3WEAVER_TEMOIN_METHODE_DE_TRAIT").is_err() {
-        eprintln!("SKIPPED : la méthode propre contre la méthode de trait, ticket du 19 octobre 2026 (RAG3WEAVER_TEMOIN_METHODE_DE_TRAIT=1 pour le jouer)");
-        return;
-    }
     impact_nomme_ces_tests(&[("row_to_map", vec!["phase0_create_drain_all_field_types", "phase0_update_and_delete"])]);
 }
 

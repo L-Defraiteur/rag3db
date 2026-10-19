@@ -1,6 +1,8 @@
 # Une méthode propre contre une méthode de trait de même nom
 
-- **État** : ouvert (19 octobre 2026, codeparsers). Correctif tranché par c7 : la voie (a) ci-dessous.
+- **État** : corrigé le 19 octobre 2026 (codeparsers). La voie (a) : codeparsers marque `trait_impl`
+  la méthode d'un `impl Trait for Type`, rag3weaver la garde sur le scope, et `choose_target` fait
+  passer la méthode propre avant, à types égaux. Le témoin est rejoué vert par le vrai chemin.
 - **Gravité** : relation manquante. L'appel n'est pas relié, et rien de faux n'est posé.
 - **Atteignable en service** : oui. `impact row_to_map` ne nomme pas les tests qui appellent
   `catalog.get(…)`.
@@ -41,6 +43,6 @@ commit.
 
 ## Le témoin
 
-`impact_row_to_map_nomme_les_tests_qui_appellent_catalog_get` (tests/e2e_impact.rs). Il se saute
-en le disant (SKIPPED, avec ce ticket) tant que `RAG3WEAVER_TEMOIN_METHODE_DE_TRAIT` n'est pas
-posée. Le correctif retire ce saut.
+`impact_row_to_map_nomme_les_tests_qui_appellent_catalog_get` (tests/e2e_impact.rs), joué sans
+saut depuis le correctif ; et `la_methode_propre_passe_avant_celle_du_trait` (unitaire, code.rs),
+`une_methode_d_impl_de_trait_porte_trait_impl` (codeparsers, tests/blocs_impl.rs).

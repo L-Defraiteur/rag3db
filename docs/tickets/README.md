@@ -82,14 +82,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (37)
+### Ouverts — produit (36)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Une méthode propre contre une méthode de trait de même nom](2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md) | ouvert — `catalog.get(…)` voit `Catalog::get` et le `get` de `impl ReadCatalog for Catalog`, et s'abstient ; voie (a) tranchée : la méthode propre passe avant | relation manquante | oui, `impact row_to_map` | oui (`code.rs`, peut-être codeparsers) |
 | [Un shard de lucivy sans écrivain perd les écritures en silence](2026-10-19-un-shard-de-lucivy-sans-ecrivain-perd-les-ecritures-en-silence.md) | ouvert — dans lucivy-core 4.3.0 : sans écrivain, un Insert est jeté et un Delete sauté avec Ok ; version à publier par Lucie | perte silencieuse | pas aujourd'hui (rag3weaver garde ses écrivains) ; dès qu'un appelant en lâche un | oui (appelant) |
 | [Le plein texte lucivy se fige dans son commit pendant une réindexation lue](2026-10-19-le-plein-texte-lucivy-se-fige-dans-son-commit-pendant-une-reindexation-lue.md) | ouvert — 3 sur 3, avec et sans L6 ; départager les lecteurs, puis la pile | blocage (la montre ne réindexe plus, sans erreur) | oui | oui (correctif dans lucivy) |
 | [Une relation qui porte le nom d'une entité, à la casse près, se déclare sans refus et casse au premier lien](2026-10-18-une-relation-au-nom-d-une-entite-casse-au-premier-lien.md) | ouvert — le contrôle au chargement pour l'arbre principal | blocage mal nommé (« Cannot bind … as a relationship pattern label ») | oui, dès qu'un gabarit nomme une relation comme une entité | oui |
@@ -127,10 +126,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (155), dans `closed/`
+### Fermés (156), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une méthode propre contre une méthode de trait de même nom](closed/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md) | corrigé (codeparsers `trait_impl`, la méthode propre passe avant à types égaux ; témoin d'impact vert par le vrai chemin) | relation manquante | oui, `impact row_to_map` | oui (`code.rs`, codeparsers) |
 | [Une base réserve 8 Tio d'adressage : un processus n'en ouvre qu'une quinzaine](closed/2026-10-19-une-base-reserve-8-tio-d-adressage-un-processus-n-en-ouvre-qu-une-quinzaine.md) | corrigé (la réservation par tranches de 16 Gio, qui grandit avec la base ; voir le ticket) | ouverture refusée | oui | oui (l'hôte d'équipe, les tâches de l'agent) |
 | [Un chargement d'extension à la réouverture se fait passer pour un retrait de l'index](closed/2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index.md) | corrigé (les index chargés avant les fonctions, la capture commune qui refuse « is not loaded yet » ; voir le ticket) | refus d'une lecture valide | oui | oui (au redémarrage d'un hôte) |
 | [L'arrêt d'une réaction longue dépassait trois secondes sous charge](closed/2026-10-19-l-arret-d-une-reaction-longue-depasse-trois-secondes-sous-charge.md) | fermé — l'arrêt attend le lot en cours, comme conçu ; le témoin juge l'ordre (du retard reste), plus 3 s ; 0 rouge sur 20 sous charge | test rouge | peut-être | oui |

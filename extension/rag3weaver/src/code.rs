@@ -339,6 +339,9 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     // .h). Vides quand il n'y en a pas.
     fields.insert("field_types".into(), field(FieldType::String));
     fields.insert("return_type".into(), field(FieldType::String));
+    // « oui » : une méthode portée par un bloc `impl Trait for Type` (codeparsers `trait_impl`). À
+    // nom et type égaux, la méthode propre du type passe avant. Vide sinon.
+    fields.insert("trait_impl".into(), field(FieldType::String));
     fields.insert("template_params".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
     fields.insert("end_line".into(), field(FieldType::Integer));
@@ -683,6 +686,9 @@ pub struct ScopeRecord {
     /// Le type de retour écrit d'une fonction ; vide sinon.
     #[serde(default)]
     pub return_type: String,
+    /// « oui » pour une méthode d'un `impl Trait for Type` ; vide sinon.
+    #[serde(default)]
+    pub trait_impl: String,
     /// Les paramètres d'une fonction gabarit, dans l'ordre, séparés par des
     /// virgules (`TO,FROM`) ; vide sinon. Le retour d'un appel à arguments
     /// explicites s'en lit (`ku_dynamic_cast<ProcessorTask*>(t)`).
@@ -1110,6 +1116,7 @@ pub fn analyze_in_project(
                     declarations: String::new(),
                     field_types: String::new(),
                     return_type: String::new(),
+                    trait_impl: String::new(),
                     template_params: String::new(),
                     start_line: g.start_line,
                     end_line: g.end_line,
@@ -1176,6 +1183,7 @@ pub fn analyze_in_project(
             declarations: String::new(),
             field_types: String::new(),
             return_type: String::new(),
+            trait_impl: String::new(),
             template_params: String::new(),
             start_line: sc.scope_start_line,
             end_line: sc.scope_end_line,
@@ -1272,6 +1280,7 @@ pub fn analyze_in_project(
                 declarations: declarations_of(s),
                 field_types: field_types_of(s),
                 return_type: s.return_type.clone().unwrap_or_default(),
+                trait_impl: if s.modifiers.iter().any(|m| m == "trait_impl") { "oui".into() } else { String::new() },
                 template_params: s.generic_parameters.iter().flatten().map(|g| g.name.as_str()).collect::<Vec<_>>().join(","),
                 start_line: s.scope_start_line,
                 end_line: s.scope_end_line,
@@ -2033,6 +2042,7 @@ impl ScopeRecord {
             ("declarations".into(), s(&self.declarations)),
             ("field_types".into(), s(&self.field_types)),
             ("return_type".into(), s(&self.return_type)),
+            ("trait_impl".into(), s(&self.trait_impl)),
             ("template_params".into(), s(&self.template_params)),
             ("start_line".into(), i(self.start_line)),
             ("end_line".into(), i(self.end_line)),
@@ -2563,7 +2573,7 @@ impl Catalog {
             .into_iter()
             .collect();
         let t = std::time::Instant::now();
-        let (parents, fichiers, genres, origines) = self.parents_et_fichiers(&a_departager)?;
+        let (parents, fichiers, genres, origines, de_trait) = self.parents_et_fichiers(&a_departager)?;
         let borne = borne_ambigu();
         crate::ingest_profile::add("symboles · parents et fichiers", t);
         let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
@@ -2600,7 +2610,7 @@ impl Catalog {
                     continue;
                 }
                 let definers = &definers;
-                let cibles: Vec<(String, Resolution)> = match choose_target(&m, definers, &parents, &fichiers, &genres, &reexports) {
+                let cibles: Vec<(String, Resolution)> = match choose_target(&m, definers, &parents, &fichiers, &genres, &de_trait, &reexports) {
                     // Le filtre des langages ôte des candidats, il n'en désigne pas : un nom que
                     // plusieurs langages définissent, unique dans le sien, ne se résout pas par le
                     // seul nom (sur code-lourd, la moitié de ces arêtes étaient fausses). Un parent
@@ -2705,6 +2715,7 @@ impl Catalog {
             std::collections::HashMap<String, String>,
             std::collections::HashMap<String, String>,
             std::collections::HashMap<String, (String, String)>,
+            std::collections::HashSet<String>,
         ),
         CatalogError,
     > {
@@ -2712,14 +2723,15 @@ impl Catalog {
         let mut fichiers = std::collections::HashMap::new();
         let mut genres = std::collections::HashMap::new();
         let mut origines = std::collections::HashMap::new();
+        let mut de_trait = std::collections::HashSet::new();
         if uuids.is_empty() {
-            return Ok((parents, fichiers, genres, origines));
+            return Ok((parents, fichiers, genres, origines, de_trait));
         }
         let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         // Par le dialecte : l'uuid donné en tête, puis les trois champs.
         let lire = rag3weaver_ir::Select::by_uuids(
             SCOPE,
-            ["parent_name", "file_path", "scope_type", "source", "repo"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec(),
+            ["parent_name", "file_path", "scope_type", "source", "repo", "trait_impl"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec(),
         );
         let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
@@ -2742,8 +2754,11 @@ impl Catalog {
                 _ => String::new(),
             };
             origines.insert(u.clone(), (texte(4), texte(5)));
+            if texte(6) == "oui" {
+                de_trait.insert(u.clone());
+            }
         }
-        Ok((parents, fichiers, genres, origines))
+        Ok((parents, fichiers, genres, origines, de_trait))
     }
 
     /// **Les types différés, résolus** : pour une mention sans type lu qui en
@@ -3223,8 +3238,10 @@ fn choose_target(
     parents: &HashMap<String, String>,
     fichiers: &HashMap<String, String>,
     genres: &HashMap<String, String>,
+    de_trait: &std::collections::HashSet<String>,
     reexports: &[(String, String)],
 ) -> Option<(String, Resolution)> {
+
     // Le définisseur qu'un import atteint au travers des réexportations du
     // fichier qu'il désigne (`crate::dataflow` → dataflow/mod.rs → `pub use
     // runtime::X` → dataflow/runtime.rs) : il vaut un import direct.
@@ -3260,6 +3277,7 @@ fn choose_target(
             .iter()
             .filter(|d| parents.get(*d).is_some_and(|p| m.qualifier_types.iter().any(|t| nom_de_type(t) == nom_de_type(p))))
             .collect();
+        let du_type = propre_d_abord(du_type, de_trait);
         return match du_type.as_slice() {
             [un] => Some(((*un).clone(), Resolution::Type)),
             _ => None,
@@ -3273,6 +3291,7 @@ fn choose_target(
             .iter()
             .filter(|d| parents.get(*d).is_some_and(|p| m.self_types.iter().any(|t| nom_de_type(t) == nom_de_type(p))))
             .collect();
+        let du_type = propre_d_abord(du_type, de_trait);
         if let [un] = du_type.as_slice() {
             return Some(((*un).clone(), Resolution::Type));
         }
@@ -3288,6 +3307,20 @@ fn choose_target(
         };
     }
     None
+}
+
+/// **La méthode propre passe avant celle d'un trait** : à nom et type égaux (`Catalog::get` et le
+/// `get` de `impl ReadCatalog for Catalog`), un appel par la méthode vise la méthode propre du type,
+/// comme Rust le résout. Le définisseur d'un `impl Trait for Type` (codeparsers `trait_impl`) ne se
+/// retient que s'il est seul.
+fn propre_d_abord<'a>(v: Vec<&'a String>, de_trait: &std::collections::HashSet<String>) -> Vec<&'a String> {
+    if v.len() > 1 {
+        let propres: Vec<&'a String> = v.iter().copied().filter(|d| !de_trait.contains(*d)).collect();
+        if !propres.is_empty() {
+            return propres;
+        }
+    }
+    v
 }
 
 /// Ce que le départage d'un nom ambigu rend.
@@ -4014,7 +4047,7 @@ mod tests_resolution {
     fn un_seul_definisseur_sans_rien_est_par_le_nom() {
         // La recette du ticket : `v.clear()` sans type lu, une seule `clear`.
         let m = mention("CONSUMES", &[], &[]);
-        let t = choose_target(&m, &ids(&["clear@a.rs"]), &HashMap::new(), &HashMap::new(), &HashMap::new(), &[]);
+        let t = choose_target(&m, &ids(&["clear@a.rs"]), &HashMap::new(), &HashMap::new(), &HashMap::new(), &Default::default(), &[]);
         assert_eq!(t, Some(("clear@a.rs".into(), Resolution::Name)));
         assert_eq!(Resolution::Name.as_str(), "nom");
     }
@@ -4023,11 +4056,11 @@ mod tests_resolution {
     fn un_seul_definisseur_designe_par_un_import_est_par_l_import() {
         let m = mention("CONSUMES", &[], &["crate::estimate"]);
         let fichiers = table(&[("rate", "/p/src/estimate.rs")]);
-        let t = choose_target(&m, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new(), &[]);
+        let t = choose_target(&m, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &[]);
         assert_eq!(t, Some(("rate".into(), Resolution::Import)));
         // Un import qui ne désigne pas son fichier ne confirme rien.
         let ailleurs = mention("CONSUMES", &[], &["crate::autre"]);
-        let t = choose_target(&ailleurs, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new(), &[]);
+        let t = choose_target(&ailleurs, &ids(&["rate"]), &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &[]);
         assert_eq!(t, Some(("rate".into(), Resolution::Name)));
     }
 
@@ -4035,10 +4068,10 @@ mod tests_resolution {
     fn le_type_lu_choisit_et_reste_seul_juge() {
         let parents = table(&[("run@node", "Node<'a>"), ("run@reactor", "Reactor")]);
         let m = mention("CONSUMES", &["Node"], &[]);
-        let t = choose_target(&m, &ids(&["run@node", "run@reactor"]), &parents, &HashMap::new(), &HashMap::new(), &[]);
+        let t = choose_target(&m, &ids(&["run@node", "run@reactor"]), &parents, &HashMap::new(), &HashMap::new(), &Default::default(), &[]);
         assert_eq!(t, Some(("run@node".into(), Resolution::Type)));
         // Seul définisseur, mais d'un autre type : l'abstention.
-        let t = choose_target(&m, &ids(&["run@reactor"]), &parents, &HashMap::new(), &HashMap::new(), &[]);
+        let t = choose_target(&m, &ids(&["run@reactor"]), &parents, &HashMap::new(), &HashMap::new(), &Default::default(), &[]);
         assert_eq!(t, None);
     }
 
@@ -4047,9 +4080,9 @@ mod tests_resolution {
         let fichiers = table(&[("get@a", "/p/src/a.rs"), ("get@b", "/p/src/b.rs")]);
         let definers = ids(&["get@a", "get@b"]);
         let m = mention("CONSUMES", &[], &["crate::b"]);
-        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &[]), Some(("get@b".into(), Resolution::Import)));
+        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &[]), Some(("get@b".into(), Resolution::Import)));
         let rien = mention("CONSUMES", &[], &[]);
-        assert_eq!(choose_target(&rien, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &[]), None);
+        assert_eq!(choose_target(&rien, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &[]), None);
     }
 
     #[test]
@@ -4107,19 +4140,38 @@ mod tests_resolution {
         assert!(matches!(departager(&mention("HAS_PARENT", &[], &[]), &ids(&["h1", "h2"]), &fichiers, &tous, 8), Choix::Rien));
     }
 
+    /// **La méthode propre passe avant celle d'un trait** (19 octobre 2026) : `catalog.get(…)`,
+    /// typé `Catalog`, vise `Catalog::get` et non le `get` de `impl ReadCatalog for Catalog`. Seule,
+    /// la méthode de trait reste retenue ; deux méthodes propres de même type restent une abstention.
+    #[test]
+    fn la_methode_propre_passe_avant_celle_du_trait() {
+        let parents = table(&[("get@catalog", "Catalog"), ("get@read_view", "Catalog"), ("get@autre", "Postures")]);
+        let de_trait: std::collections::HashSet<String> = ["get@read_view".to_string()].into();
+        let m = mention("CONSUMES", &["Catalog"], &[]);
+        let tous = ids(&["get@catalog", "get@read_view", "get@autre"]);
+        assert_eq!(choose_target(&m, &tous, &parents, &HashMap::new(), &HashMap::new(), &de_trait, &[]), Some(("get@catalog".into(), Resolution::Type)));
+        assert_eq!(choose_target(&m, &tous, &parents, &HashMap::new(), &HashMap::new(), &Default::default(), &[]), None, "sans la marque, deux du même type : rien");
+        assert_eq!(choose_target(&m, &ids(&["get@read_view", "get@autre"]), &parents, &HashMap::new(), &HashMap::new(), &de_trait, &[]), Some(("get@read_view".into(), Resolution::Type)), "seule, la méthode de trait est retenue");
+        let deux_propres = table(&[("a", "Catalog"), ("b", "Catalog")]);
+        assert_eq!(choose_target(&m, &ids(&["a", "b"]), &deux_propres, &HashMap::new(), &HashMap::new(), &de_trait, &[]), None);
+        // Par `self` aussi.
+        let par_self = Mention { self_types: vec!["Catalog".into()], ..mention("CONSUMES", &[], &[]) };
+        assert_eq!(choose_target(&par_self, &tous, &parents, &HashMap::new(), &HashMap::new(), &de_trait, &[]), Some(("get@catalog".into(), Resolution::Type)));
+    }
+
     #[test]
     fn self_prefere_le_type_englobant_sans_exclure_l_heritage() {
         let parents = table(&[("new@foo", "Foo"), ("new@bar", "Bar")]);
         let par_self = |englobant: &str| Mention { self_types: vec![englobant.to_string()], ..mention("CONSUMES", &[], &[]) };
         // `Self::new()` dans `impl Foo`, `new` défini pour Foo et Bar : Foo.
-        let t = choose_target(&par_self("Foo"), &ids(&["new@foo", "new@bar"]), &parents, &HashMap::new(), &HashMap::new(), &[]);
+        let t = choose_target(&par_self("Foo"), &ids(&["new@foo", "new@bar"]), &parents, &HashMap::new(), &HashMap::new(), &Default::default(), &[]);
         assert_eq!(t, Some(("new@foo".into(), Resolution::Type)));
         // `self.f()` dans une méthode par défaut du trait `Outil`, `f` défini
         // par deux impls : le trait ne choisit pas au hasard.
         let parents2 = table(&[("f@a", "A"), ("f@b", "B")]);
-        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a", "f@b"]), &parents2, &HashMap::new(), &HashMap::new(), &[]), None);
+        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a", "f@b"]), &parents2, &HashMap::new(), &HashMap::new(), &Default::default(), &[]), None);
         // … et s'il n'y en a qu'un : la règle d'avant, par le nom.
-        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a"]), &parents2, &HashMap::new(), &HashMap::new(), &[]), Some(("f@a".into(), Resolution::Name)));
+        assert_eq!(choose_target(&par_self("Outil"), &ids(&["f@a"]), &parents2, &HashMap::new(), &HashMap::new(), &Default::default(), &[]), Some(("f@a".into(), Resolution::Name)));
     }
 
     #[test]
@@ -4127,14 +4179,14 @@ mod tests_resolution {
         let genres = table(&[("Foo@class", "class"), ("Foo@ctor", "method"), ("Foo@ns", "namespace")]);
         let m = mention("HAS_PARENT", &[], &[]);
         // Le constructeur homonyme n'est pas un parent.
-        let t = choose_target(&m, &ids(&["Foo@class", "Foo@ctor"]), &HashMap::new(), &HashMap::new(), &genres, &[]);
+        let t = choose_target(&m, &ids(&["Foo@class", "Foo@ctor"]), &HashMap::new(), &HashMap::new(), &genres, &Default::default(), &[]);
         assert_eq!(t, Some(("Foo@class".into(), Resolution::Name)));
         // Deux conteneurs sans import : l'abstention ; l'import départage.
         let deux = ids(&["Foo@class", "Foo@ns"]);
-        assert_eq!(choose_target(&m, &deux, &HashMap::new(), &HashMap::new(), &genres, &[]), None);
+        assert_eq!(choose_target(&m, &deux, &HashMap::new(), &HashMap::new(), &genres, &Default::default(), &[]), None);
         let fichiers = table(&[("Foo@class", "/p/foo.h"), ("Foo@ns", "/p/ns.h")]);
         let par_import = mention("HAS_PARENT", &[], &["foo"]);
-        assert_eq!(choose_target(&par_import, &deux, &HashMap::new(), &fichiers, &genres, &[]), Some(("Foo@class".into(), Resolution::Import)));
+        assert_eq!(choose_target(&par_import, &deux, &HashMap::new(), &fichiers, &genres, &Default::default(), &[]), Some(("Foo@class".into(), Resolution::Import)));
     }
 
     /// **Les réexportations** : le module source se résout depuis le module
@@ -4155,7 +4207,7 @@ mod tests_resolution {
         let definers = ids(&["E@runtime", "E@autre"]);
         let reexports = vec![("/p/src/dataflow/mod.rs".to_string(), "runtime".to_string())];
         let m = Mention { import_modules: vec!["crate::dataflow".into()], ..mention("CONSUMES", &[], &[]) };
-        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &reexports), Some(("E@runtime".into(), Resolution::Import)));
-        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &[]), None, "sans la réexportation, rien");
+        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &reexports), Some(("E@runtime".into(), Resolution::Import)));
+        assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &[]), None, "sans la réexportation, rien");
     }
 }
