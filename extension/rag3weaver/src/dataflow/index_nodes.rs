@@ -470,6 +470,21 @@ fn run_index(
             SyncPhase::Done => {}
         })?
     };
+    // **Jamais « plein texte prêt » sur un index absent** (19 octobre 2026) :
+    // un index plein texte qui n'a pas pu s'ouvrir ou se créer fait échouer
+    // l'indexation, en le nommant ; un index creux ou vectoriel en échec se dit
+    // au journal, et l'état de l'index le porte.
+    let echecs = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?.index_failures();
+    let texte: Vec<&String> = echecs.iter().filter(|((g, _), _)| g == crate::catalog::PLEIN_TEXTE_INDEX).map(|(_, r)| r).collect();
+    if !texte.is_empty() {
+        return Err(format!("plein texte non posé — {}", texte.iter().map(|r| r.as_str()).collect::<Vec<_>>().join(" ; ")));
+    }
+    for ((genre, _), raison) in echecs.iter().filter(|((g, _), _)| g != crate::catalog::PLEIN_TEXTE_INDEX) {
+        log(journal, &format!("index {genre} en échec : {raison}"));
+    }
+    for w in &report.warnings {
+        log(journal, &format!("avertissement : {w}"));
+    }
     log(
         journal,
         &format!("plein texte prêt : {} fichiers, {} scopes, {} relations posées", report.files_ingested, report.scopes_written, report.relations),
@@ -899,6 +914,38 @@ mod tests {
         assert!(texte.contains("relancer index reprend là"), "ce qui est vrai après un arrêt propre : {texte}");
         assert!(texte.contains("relancer index est alors refusé"), "ce qui est vrai après un serveur tué : {texte}");
         assert!(!texte.contains("--demon"), "le démon ne la porterait pas : {texte}");
+    }
+
+    /// **Jamais « plein texte prêt » sur un index absent** (19 octobre 2026) :
+    /// un index plein texte qui ne peut pas se créer (ici, son dossier tombe
+    /// sous un fichier) fait échouer l'indexation en le nommant, et l'état de
+    /// l'index le dit « échoué », avec sa raison. Avant, seul stderr le disait,
+    /// et le journal annonçait « plein texte prêt » puis « indexation terminée ».
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn un_plein_texte_impossible_fait_echouer_l_index_en_le_nommant() {
+        let d = tempfile::tempdir().unwrap();
+        let fichier = d.path().join("pas-un-dossier");
+        std::fs::write(&fichier, "x").unwrap();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", [("a.rs".to_string(), "pub fn a() {}\n".to_string())]));
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let config = crate::CatalogConfig { name: Some("echec".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.set_fts_storage(crate::fts_handle::FtsStorage::Files { base_path: fichier.join("fts").to_string_lossy().into_owned() });
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("le fil d'indexation");
+        let lignes: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+        let _ = std::fs::remove_file(&journal);
+        let fin = lignes.last().cloned().unwrap_or_default();
+        assert!(fin.starts_with(FAILED_PREFIX) && fin.contains("plein texte"), "la fin nomme l'échec : {lignes:?}");
+        assert!(!lignes.iter().any(|l| l.starts_with("plein texte prêt :")), "jamais « prêt » sur un index absent : {lignes:?}");
+        let etat = catalog.lock().unwrap().index_state_for(crate::code::SCOPE).unwrap();
+        assert_eq!(etat.text, crate::catalog::Level::Failed, "{etat:?}");
+        let raisons = catalog.lock().unwrap().index_failures_for(Some(crate::code::SCOPE));
+        assert!(raisons.iter().any(|(g, r)| g == crate::catalog::PLEIN_TEXTE_INDEX && r.contains("plein texte")), "{raisons:?}");
     }
 
     #[test]
