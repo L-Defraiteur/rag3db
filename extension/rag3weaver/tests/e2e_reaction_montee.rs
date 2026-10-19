@@ -335,6 +335,23 @@ fn une_reaction_du_manifeste_transitionne_sans_que_personne_l_appelle() {
         "et sans erreur : une liaison perdue ferait échouer l'instanciation ici"
     );
 
+    // ── 3 bis. **La réaction a écrit, et ne se relance pas sans fin** ─────
+    //
+    // Depuis le 19 octobre 2026, le catalogue publie aussi les transitions
+    // (`EntitiesChanged`, `change: transitioned`) : l'écriture de la réaction
+    // part sur `catalog`, la sonnette du réacteur l'entend, et la réaction
+    // repasse **une fois** sur son propre événement — la fiche n'est pas sa
+    // source, elle n'écrit rien, donc rien ne la relance. Le compte se stabilise.
+    std::thread::sleep(Duration::from_millis(1500));
+    let apres_l_ecriture = backend.reaction_runs();
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(
+        backend.reaction_runs(),
+        apres_l_ecriture,
+        "une réaction qui écrit publie son écriture et ne se relance pas sans fin — runs = {}",
+        backend.reaction_runs()
+    );
+
     // ── 4. Le filtre `source` est DANS le graphe, pas à la sonnette ──────
     //
     // **Relevé ici le 11 octobre 2026, et mon assertion disait le contraire.**

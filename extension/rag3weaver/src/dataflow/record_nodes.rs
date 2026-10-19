@@ -18,7 +18,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 
 
-use crate::events::{CatalogEvent, EventBus};
 use crate::chunker::{Chunker, ChunkerConfig};
 use crate::config::CatalogConfig;
 use crate::connection::{CypherValue, DbConnection, QueryParam};
@@ -339,6 +338,9 @@ impl Node for InsertRecordNode {
         // d'une table, comme si le moteur avait refusé l'insertion. Armée par le
         // témoin sur son catalogue (`Catalog::injecter_faute_d_insertion`).
         let faute = fautes_de_test(ctx).insertion;
+        // Le journal du drain (« le catalogue dit tout ») : ce qui est
+        // réellement posé, lu par le catalogue au succès.
+        let ecritures = ctx.service::<crate::ecritures::Ecritures>(crate::ecritures::SERVICE).cloned();
         let mut rang_dans_la_table: HashMap<&str, usize> = HashMap::new();
         for ((entity_name, columns), indices) in &groups {
             let rang = {
@@ -540,6 +542,9 @@ impl Node for InsertRecordNode {
                     }
                 }
 
+                if let Some(e) = &ecritures {
+                    e.noter_posee(entity_name, &*uuid);
+                }
                 if let Some(resolver) = rec.take_resolver() {
                     resolver.resolve(uuid);
                 }
@@ -1193,6 +1198,7 @@ impl Node for LinkRecordNode {
         // (`Catalog::injecter_faute_de_lien`). Sert à éprouver qu'un lot de
         // liens en plusieurs instructions est atomique.
         let faute = fautes_de_test(ctx).lien;
+        let ecritures = ctx.service::<crate::ecritures::Ecritures>(crate::ecritures::SERVICE).cloned();
         let mut rang_dans_la_relation: HashMap<&str, usize> = HashMap::new();
         for ((rel_name, prop_keys), indices) in &groups {
             let rang = {
@@ -1241,6 +1247,9 @@ impl Node for LinkRecordNode {
                         Ok(true) => {
                             for &ri in indices {
                                 let rl = &resolved[ri];
+                                if let Some(e) = &ecritures {
+                                    e.noter_liee(rel_name, &rl.from_uuid, &rl.to_uuid);
+                                }
                                 if let Some(resolver) = items[rl.index].take_resolver() {
                                     resolver.resolve(rl.from_uuid.clone(), rl.to_uuid.clone());
                                 }
@@ -1320,6 +1329,9 @@ impl Node for LinkRecordNode {
             // Resolve relation refs
             for &ri in tranche {
                 let rl = &resolved[ri];
+                if let Some(e) = &ecritures {
+                    e.noter_liee(rel_name, &rl.from_uuid, &rl.to_uuid);
+                }
                 let rel = &mut items[rl.index];
                 if let Some(resolver) = rel.take_resolver() {
                     resolver.resolve(rl.from_uuid.clone(), rl.to_uuid.clone());
@@ -3272,7 +3284,7 @@ impl Node for DeleteRecordNode {
         let results_svc = ctx.service::<Arc<Mutex<Vec<DeleteResult>>>>("delete_results").cloned()
             .ok_or("DeleteRecordNode: 'delete_results' service not registered")?;
         let fts_tampon = ctx.service::<Arc<crate::fts_tampon::TamponPleinTexte>>(crate::fts_tampon::FTS_TAMPON_SERVICE).cloned();
-        let event_bus = ctx.service::<Arc<EventBus>>("event_bus").cloned();
+        let ecritures_supp = ctx.service::<crate::ecritures::Ecritures>(crate::ecritures::SERVICE).cloned();
 
         // Group by entity_name
         let mut groups: HashMap<String, Vec<String>> = HashMap::new();
@@ -3430,13 +3442,12 @@ impl Node for DeleteRecordNode {
                     relations_deleted: 0,
                     echec: None,
                 });
+                // Le catalogue publie au succès du drain (au commit d'une
+                // transaction), plus le nœud au milieu du graphe : un graphe qui
+                // tombe ensuite n'a rien supprimé.
                 if existing.contains(uuid.as_str()) {
-                    if let Some(ref bus) = event_bus {
-                        bus.emit(CatalogEvent::EntityDeleted {
-                            entity: entity_name.clone(),
-                            uuid: uuid.clone(),
-                            chunks_deleted,
-                        });
+                    if let Some(e) = &ecritures_supp {
+                        e.noter_supprimee(entity_name, uuid);
                     }
                 }
             }
@@ -3673,6 +3684,8 @@ impl Node for UpdateRecordNode {
                         reembedded: false,
                         chunks_created: 0,
                         chunks_deleted: 0,
+                        found: false,
+                        transition: None,
                     });
                 }
                 continue;
@@ -3976,8 +3989,13 @@ impl Node for UpdateRecordNode {
                 let uuid = &items[i].uuid;
                 let found = old_hashes.contains_key(uuid);
                 let reembedded = found && content_changed && a_des_chunks(&entity_configs, entity_name);
+                let transition = lifecycle.and_then(|lc| {
+                    let vers = items[i].data.get(&lc.field)?.as_str()?;
+                    let depuis = old_states.get(uuid)?;
+                    (depuis != vers).then(|| (depuis.clone(), vers.to_string()))
+                });
                 let status = if !found {
-                    UpdateStatus::Updated // no old hash → considered "changed" (no-op in DB)
+                    UpdateStatus::Updated // no old hash → considered "changed" (no-op in DB) ; `found` le dit
                 } else if content_changed {
                     UpdateStatus::Updated
                 } else {
@@ -3999,6 +4017,8 @@ impl Node for UpdateRecordNode {
                     reembedded,
                     chunks_created: 0,
                     chunks_deleted: 0,
+                    found,
+                    transition,
                 });
             }
             Ok(())
@@ -4012,6 +4032,8 @@ impl Node for UpdateRecordNode {
                     reembedded: false,
                     chunks_created: 0,
                     chunks_deleted: 0,
+                    found: false,
+                    transition: None,
                 });
             };
             for (&i, cause) in rejetes.iter() {

@@ -1388,15 +1388,21 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
             let r = catalog.conn().commit();
             crate::ingest_profile::add("sync · COMMIT du paquet (et son point de reprise)", t);
             match r {
-                Ok(_) => return Ok(()),
+                Ok(_) => {
+                    catalog.publier_les_evenements_retenus();
+                    return Ok(());
+                }
                 Err(e) => {
+                    catalog.jeter_les_evenements_retenus();
                     catalog.end_proving_presence();
                     format!("valider le paquet : {e}")
                 }
             }
         }
         Err(cause) => {
-            // Défait : les lignes posées n'existent plus, la preuve tombe.
+            // Défait : les lignes posées n'existent plus, la preuve tombe, et
+            // rien de ce qu'elles avaient annoncé ne part.
+            catalog.jeter_les_evenements_retenus();
             catalog.end_proving_presence();
             let defait = catalog.conn().rollback().map_err(|e| e.to_string());
             format!(

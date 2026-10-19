@@ -321,9 +321,40 @@ pub enum Event {
     /// ferait relire des mémoires que rien n'a touchées.
     ///
     /// Émis **au succès seulement** : une ingestion qui échoue n'a rien changé.
+    ///
+    /// **Tous les chemins d'écriture** l'émettent depuis le 19 octobre 2026
+    /// (« le catalogue dit tout ») : `change` dit lequel — `ingested`
+    /// (`ingest_entities`), `created` (`create`), `updated` (le contenu a
+    /// changé), `transitioned` (seul l'état a changé ; `from_state` et
+    /// `to_state` le disent), `removed` (`delete`). Seuls les uuids réellement
+    /// écrits y sont ; sous une transaction, il part au commit, jamais au
+    /// rollback.
     EntitiesChanged {
         entity: String,
         uuids: Vec<String>,
+        change: String,
+        from_state: Option<String>,
+        to_state: Option<String>,
+        /// L'instant d'émission, en millisecondes UTC.
+        at_ms: u64,
+        /// Le run qui a écrit, quand il est connu.
+        run: Option<String>,
+    },
+    /// **Des liens posés ou retirés** (19 octobre 2026) : l'état net du lot,
+    /// deux listes séparées — une paire liée puis déliée dans le même lot n'y
+    /// paraît pas. Au plus [`Event::PAIRES_PAR_EVENEMENT`] paires par liste ;
+    /// `count` dit le total et `truncated` qu'il en manque (une indexation de
+    /// code en pose des centaines de milliers : les relire par la base).
+    RelationsChanged {
+        relation: String,
+        from_entity: String,
+        to_entity: String,
+        added: Vec<(String, String)>,
+        removed: Vec<(String, String)>,
+        count: usize,
+        truncated: bool,
+        at_ms: u64,
+        run: Option<String>,
     },
     EntityUpdated {
         entity: String,
@@ -337,6 +368,29 @@ pub enum Event {
         uuid: String,
         chunks_deleted: usize,
     },
+}
+
+impl Event {
+    /// Le plafond de paires par liste d'un [`Event::RelationsChanged`].
+    pub const PAIRES_PAR_EVENEMENT: usize = 500;
+
+    /// Un [`Event::EntitiesChanged`] maintenant, hors run.
+    pub fn entites_changees(entity: &str, uuids: Vec<String>, change: &str) -> Self {
+        Self::EntitiesChanged {
+            entity: entity.to_string(),
+            uuids,
+            change: change.to_string(),
+            from_state: None,
+            to_state: None,
+            at_ms: maintenant_ms(),
+            run: None,
+        }
+    }
+}
+
+/// L'instant présent, en millisecondes UTC.
+pub fn maintenant_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 /// L'ancien nom, conservé : l'enum s'appelait ainsi quand seul le
@@ -380,6 +434,7 @@ impl Event {
             | Self::NodeRun { run, .. }
             | Self::Token { run, .. }
             | Self::Message { run, .. } => Some(run),
+            Self::EntitiesChanged { run: Some(run), .. } | Self::RelationsChanged { run: Some(run), .. } => Some(run),
             _ => None,
         }
     }
@@ -423,9 +478,32 @@ impl Event {
                 "units": units.iter().map(|(u, n)| json!({ "unit": u.as_str(), "amount": n }))
                     .collect::<Vec<_>>(),
             }),
-            Self::EntitiesChanged { entity, uuids } => json!({
-                "kind": "EntitiesChanged", "entity": entity, "uuids": uuids,
-                "count": uuids.len(),
+            Self::EntitiesChanged { entity, uuids, change, from_state, to_state, at_ms, run } => {
+                let mut v = json!({
+                    "kind": "EntitiesChanged", "entity": entity, "uuids": uuids,
+                    "count": uuids.len(), "change": change, "at_ms": at_ms, "run": run,
+                });
+                if let Some(s) = from_state {
+                    v["from_state"] = json!(s);
+                }
+                if let Some(s) = to_state {
+                    v["to_state"] = json!(s);
+                }
+                v
+            }
+            Self::RelationsChanged { relation, from_entity, to_entity, added, removed, count, truncated, at_ms, run } => json!({
+                "kind": "RelationsChanged", "relation": relation, "from_entity": from_entity, "to_entity": to_entity,
+                "added": added.iter().map(|(a, b)| json!([a, b])).collect::<Vec<_>>(),
+                "removed": removed.iter().map(|(a, b)| json!([a, b])).collect::<Vec<_>>(),
+                "count": count, "truncated": truncated, "at_ms": at_ms, "run": run,
+            }),
+            Self::EntityUpdated { entity, uuid, reembedded, chunks_created, chunks_deleted } => json!({
+                "kind": "EntityUpdated", "entity": entity, "uuid": uuid, "uuids": [uuid],
+                "reembedded": reembedded, "chunks_created": chunks_created, "chunks_deleted": chunks_deleted,
+            }),
+            Self::EntityDeleted { entity, uuid, chunks_deleted } => json!({
+                "kind": "EntityDeleted", "entity": entity, "uuid": uuid, "uuids": [uuid],
+                "chunks_deleted": chunks_deleted,
             }),
             Self::TurnCompacted { run, rewritten, kept, dropped } => json!({
                 "kind": "TurnCompacted", "run": run, "rewritten": rewritten,
