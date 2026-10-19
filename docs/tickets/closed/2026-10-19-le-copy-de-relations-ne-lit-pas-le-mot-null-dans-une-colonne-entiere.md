@@ -1,7 +1,8 @@
 # Le COPY de relations ne lit pas le mot NULL dans une colonne entière
 
-- **État** : ouvert (relevé le 19 octobre 2026 par la session mémoire longue, au tour de push de
-  la pièce 1 « le catalogue dit tout »)
+- **État** : corrigé le 19 octobre 2026 par le commit qui déplace ce fichier (`git log --follow`) ;
+  relevé le 19 octobre 2026 par la session mémoire longue, au tour de push de la pièce 1 « le
+  catalogue dit tout »
 - **Gravité** : blocage, et base à rouvrir. Le COPY est refusé après avoir commencé (« Conversion
   exception: Cast failed. Could not convert "__nul_…__" to INT64 »), et la connexion doit être
   rouverte.
@@ -46,7 +47,23 @@ moteur reste à écrire : la recette ci-dessus, en test du moteur.
   Fermé, le filet peut nommer n'importe quelle colonne déclarée, et garder le COPY pour toutes
   les relations.
 
-## Ce qu'il faut pour le fermer
+## Cause et correctif
 
-Que `null_strings` vaille pour toutes les colonnes d'un COPY de relations, quel que soit leur
-type, comme pour le texte. Puis retirer le filet.
+`setVectorNull` (`src/function/cast_from_string_functions.cpp`), appelé pour chaque cellule par
+le lecteur CSV, ne consultait `null_strings` que pour une colonne `STRING` ; pour tout autre
+type il ne reconnaissait que la cellule vide et le mot `NULL` (forme de l'amont). Les nœuds
+étaient touchés comme les relations. Le mot convenu vaut maintenant pour toutes les colonnes,
+hors guillemets ; entre guillemets il reste une valeur (et une colonne entière la refuse par
+son nom) ; la cellule vide et le mot `NULL` se lisent toujours NULL hors texte.
+
+## Témoin
+
+`test/transaction/copy_null_strings_test.cpp` (`CopyNullStrings.*`) : la recette du ticket, le
+mot dans chaque type de colonne d'un nœud, le mot entre guillemets, et le comportement sans
+l'option.
+
+## Ce qu'il fallait pour le fermer
+
+Que `null_strings` vaille pour toutes les colonnes d'un COPY, quel que soit leur type, comme
+pour le texte : fait. Le filet du produit (`copier_les_liens`) reste à retirer par la session
+mémoire longue quand sa lib est `courant`.

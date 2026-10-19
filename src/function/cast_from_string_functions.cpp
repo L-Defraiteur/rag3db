@@ -858,23 +858,19 @@ void CastString::operation(const ku_string_t& input, union_entry_t& result,
         resultVector, rowToAdd, CSVOption);
 }
 
+// Un mot NULL convenu (null_strings) vaut pour toutes les colonnes, quel que soit leur type ;
+// entre guillemets, c'est une valeur. Une colonne qui n'est pas du texte lit aussi la cellule
+// vide et le mot NULL comme NULL, guillemets ou non, comme avant.
 static void setVectorNull(ValueVector* vector, uint64_t vectorPos, std::string_view strVal,
     const CSVOption* option, bool valueWasQuoted) {
-    auto& type = vector->dataType;
-    switch (type.getLogicalTypeID()) {
-    case LogicalTypeID::STRING: {
-        if (!valueWasQuoted && std::any_of(option->nullStrings.begin(), option->nullStrings.end(),
-                [&](const std::string& nullStr) { return nullStr == strVal; })) {
-            vector->setNull(vectorPos, true /* isNull */);
-            return;
-        }
-    } break;
-    default: {
-        if (isNull(strVal)) {
-            vector->setNull(vectorPos, true /* isNull */);
-            return;
-        }
-    } break;
+    if (!valueWasQuoted && std::any_of(option->nullStrings.begin(), option->nullStrings.end(),
+                               [&](const std::string& nullStr) { return nullStr == strVal; })) {
+        vector->setNull(vectorPos, true /* isNull */);
+        return;
+    }
+    if (vector->dataType.getLogicalTypeID() != LogicalTypeID::STRING && isNull(strVal)) {
+        vector->setNull(vectorPos, true /* isNull */);
+        return;
     }
     vector->setNull(vectorPos, false /* isNull */);
 }
