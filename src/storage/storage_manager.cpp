@@ -241,7 +241,8 @@ bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pag
                 }
             }
         }
-        entry->vacuumColumnIDs(1);
+        // Plus de renumérotation des colonnes au point de reprise (format 42) : les numéros ne
+        // bougent jamais.
     }
     reclaimDroppedTables(*catalog);
     if (CheckpointProfile::enabled()) {

@@ -35,7 +35,7 @@ LocalRelTable::LocalRelTable(const catalog::TableCatalogEntry* tableEntry, const
     : LocalTable{table} {
     localNodeGroup = std::make_unique<NodeGroup>(mm, 0, false,
         getTypesForLocalRelTable(*tableEntry), INVALID_ROW_IDX);
-    positionOfColumn.resize(tableEntry->getMaxColumnID() + 1, INVALID_IDX);
+    positionOfColumn.resize(tableEntry->getNumColumnSlots(), INVALID_IDX);
     for (auto columnID = 0u; columnID < positionOfColumn.size(); columnID++) {
         positionOfColumn[columnID] = tableEntry->getPropertyPosition(columnID);
     }
@@ -170,7 +170,14 @@ bool LocalRelTable::addColumn(TableAddColumnState& addColumnState) {
     // La nouvelle propriété prend le numéro de colonne suivant (RelTable::addColumn appelle la
     // table locale avant d'ajouter la colonne au stockage), et la dernière position ici, après
     // les deux colonnes de nœuds.
-    positionOfColumn.push_back(localNodeGroup->getDataTypes().size() - 1 - 2);
+    // Le numéro de la colonne ajoutée est le prochain numéro attribué (RelTable::addColumn appelle
+    // la table locale avant d'ajouter la colonne au stockage : c'est son nombre de numéros), pas
+    // la fin de ce vecteur (plus court quand la dernière propriété a été supprimée).
+    const auto columnID = table.cast<RelTable>().getNumColumns();
+    if (positionOfColumn.size() <= columnID) {
+        positionOfColumn.resize(columnID + 1, INVALID_IDX);
+    }
+    positionOfColumn[columnID] = localNodeGroup->getDataTypes().size() - 1 - 2;
     return true;
 }
 

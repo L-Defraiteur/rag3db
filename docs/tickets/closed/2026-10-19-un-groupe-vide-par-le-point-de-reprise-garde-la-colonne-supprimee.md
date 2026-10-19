@@ -1,7 +1,8 @@
 # Un groupe vidé par le point de reprise garde la colonne supprimée
 
-- **État** : ouvert, **à vérifier par un témoin** (lu dans le code le 19 octobre 2026, carte des
-  numéros de colonnes pour V2-1a)
+- **État** : corrigé le 19 octobre 2026 par le commit qui déplace ce fichier (`git log --follow`),
+  V2-1a : un bloc vidé garde une entrée par numéro, trou compris ; témoin
+  `StableColumnIDs.AGroupEmptiedByTheCheckpointKeepsTheHole` (la recette, avec réouverture)
 - **Gravité** : si confirmé, un bloc sur disque dont les colonnes ne correspondent plus aux
   types du groupe : lecture fausse ou assertion à la réouverture, au prochain ADD ou au prochain
   balayage du groupe.

@@ -18,6 +18,6 @@ add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_te
         add_column_rollback_test.cpp refused_begin_test.cpp rollback_under_readers_test.cpp
         copy_after_drop_vector_index_test.cpp copy_rollback_persistent_rels_test.cpp
         copy_null_strings_test.cpp
-        storage_format_version_test.cpp)
+        storage_format_version_test.cpp stable_column_ids_test.cpp)
 
 add_subdirectory(concurrence)

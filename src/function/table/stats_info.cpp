@@ -39,8 +39,13 @@ static offset_t internalTableFunc(const TableFuncMorsel& /*morsel*/, const Table
         const auto& nodeTable = table->cast<storage::NodeTable>();
         const auto stats = nodeTable.getStats(transaction::Transaction::Get(*bindData->context));
         output.getValueVectorMutable(0).setValue<cardinality_t>(0, stats.getTableCard());
-        for (auto i = 0u; i < nodeTable.getNumColumns(); ++i) {
-            output.getValueVectorMutable(i + 1).setValue(0, stats.getNumDistinctValues(i));
+        // Une sortie par propriété, lue au numéro de colonne de la propriété (les numéros ont des
+        // trous après un DROP).
+        auto position = 1u;
+        for (auto& property : bindData->tableEntry->getProperties()) {
+            const auto columnID = bindData->tableEntry->getColumnID(property.getName());
+            output.getValueVectorMutable(position++).setValue(0,
+                stats.getNumDistinctValues(columnID));
         }
     } break;
     default: {
