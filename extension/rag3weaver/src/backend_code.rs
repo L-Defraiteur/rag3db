@@ -28,6 +28,15 @@ pub struct WorkspaceConfig {
     /// Refuse toute écriture, quelle que soit la source.
     #[serde(default)]
     pub read_only: bool,
+    /// **Les écritures dans les tâches seulement** (avec `read_only`) : le
+    /// backend principal refuse toute écriture, et une tâche de l'agent
+    /// (page 09 de everything declarative) écrit dans son worktree, sur sa
+    /// branche, relue puis fusionnée. Un outil d'écriture est alors permis
+    /// au chargement. C'est la forme d'un arbre de code inscrit par
+    /// `code-tree add` : le dépôt de l'utilisateur n'est jamais écrit par
+    /// l'agent hors d'une fusion.
+    #[serde(default)]
+    pub task_writes: bool,
     /// La porte des commandes (`run`/`run_bg`) : absente ou `off`, le
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
@@ -464,10 +473,11 @@ pub fn validate_tool_policy(
     }
     if policy.write_files {
         if let Some(w) = workspace {
-            if w.read_only {
+            if w.read_only && !w.task_writes {
                 return Err(format!(
                     "l'outil « {tool_name} » déclare write_files mais le workspace est read_only : \
-                     retirez read_only, ou retirez l'outil d'écriture"
+                     retirez read_only, posez task_writes (les écritures dans les tâches seulement), \
+                     ou retirez l'outil d'écriture"
                 ));
             }
         }
@@ -495,11 +505,24 @@ mod monte {
 
     /// Une source que la politique interdit d'écrire : délègue tout, et
     /// laisse au trait son `write` par défaut — `Err("… is read-only")`.
-    struct ReadOnly(Arc<dyn FileSource>);
+    /// Une source en lecture seule ; le booléen : les écritures se font
+    /// dans les tâches (`task_writes`), et le refus le dit.
+    struct ReadOnly(Arc<dyn FileSource>, bool);
 
     impl FileSource for ReadOnly {
         fn cursor(&self) -> String {
             self.0.cursor()
+        }
+        fn write(&self, path: &str, _content: &str) -> Result<(), String> {
+            Err(if self.1 {
+                format!(
+                    "{} : l'arbre principal est en lecture seule ; l'agent écrit dans une tâche \
+                     (POST /ide/taches : sa branche agent/<nom>, relue puis fusionnée)",
+                    path
+                )
+            } else {
+                format!("{} is read-only", self.0.cursor())
+            })
         }
         fn list(&self) -> Result<Vec<String>, String> {
             self.0.list()
@@ -539,7 +562,7 @@ mod monte {
             }
         };
         let source = if config.read_only {
-            Arc::new(ReadOnly(source))
+            Arc::new(ReadOnly(source, config.task_writes))
         } else {
             source
         };
@@ -576,6 +599,7 @@ mod tests {
             source,
             root: "sources".into(),
             read_only,
+            task_writes: false,
             commands: CommandGate::Off,
             index_signals: std::collections::BTreeMap::new(),
             sandbox: SandboxConfig::default(),

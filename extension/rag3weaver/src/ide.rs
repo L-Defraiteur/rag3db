@@ -15,7 +15,7 @@
 //! | `GET /ide/propositions?backend=<id>[&id=<n>]` | les propositions, ou le détail d'une (diffs, graphes avant/après) |
 //! | `POST /ide/propositions[/appliquer\|/rejeter]` | proposer `{backend, files, reason}`, appliquer `{backend, id}`, rejeter `{backend, id, why}` |
 //! | `GET /ide/taches?backend=<id>[&nom=<n>]` | les tâches de l'agent, ou la relecture d'une (fichiers, graphes, témoins) |
-//! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom}`, rejeter `{backend, nom, why}` |
+//! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom, message}`, rejeter `{backend, nom, why}` |
 //! | `GET /ide/etat` | l'état de l'hôte (`/etat`) |
 //! | `POST /ide/call` | `{manifest, name, arguments}`, comme `/call`, dans la session de l'IDE |
 //! | `POST /ide/describe` | `{manifest}`, comme `/describe` |
@@ -551,7 +551,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     let nom = c["nom"].as_str().unwrap_or_default();
                     let r = match path.as_str() {
                         "/ide/taches" => host.ouvrir_une_tache(id, nom).map(|t| json!(t)),
-                        "/ide/taches/fusionner" => host.fusionner_une_tache(id, nom),
+                        "/ide/taches/fusionner" => host.fusionner_une_tache(id, nom, c["message"].as_str().unwrap_or_default()),
                         _ => host.rejeter_une_tache(id, nom, c["why"].as_str().unwrap_or_default()),
                     };
                     match r {

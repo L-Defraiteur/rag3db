@@ -706,13 +706,17 @@ pub struct OutputPort {
 
 /// **Ce que l'hôte impose à un backend par-dessus son manifeste** (une tâche,
 /// page 09) : sa base (la copie de la tâche) et son mode de déclarations
-/// (`auto` : la tâche est l'espace de l'agent). Le manifeste n'est pas réécrit
+/// (`auto` : la tâche est l'espace de l'agent), et son workspace (la racine
+/// dans le worktree de la tâche, écrivable ou non). Le manifeste n'est pas réécrit
 /// — c'est une déclaration suivie, et une fusion l'emporterait ; chaque
 /// rechargement réapplique les surcharges ([`PreparedBackend::recharger`]).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Surcharges {
     pub database: Option<PathBuf>,
     pub declarations: Option<crate::propositions::ModeDeclarations>,
+    /// La racine du workspace (absolue) et si la tâche y écrit : jamais la
+    /// racine de l'arbre principal quand celle-ci est dans un dépôt git.
+    pub workspace: Option<(PathBuf, bool)>,
 }
 
 /// Une base copiée sous la porte des écrivains
@@ -1608,6 +1612,10 @@ impl PreparedBackend {
         if let Some(mode) = surcharges.declarations {
             self.manifest.declarations = mode;
         }
+        if let (Some((racine, ecrit)), Some(w)) = (&surcharges.workspace, self.manifest.workspace.as_mut()) {
+            w.root = racine.clone();
+            w.read_only = !ecrit;
+        }
         self.surcharges = surcharges;
         self
     }
@@ -2366,6 +2374,29 @@ thread_local! {
     static CELL_OF_CALL: std::cell::RefCell<Option<crate::scope::Scope>> = const { std::cell::RefCell::new(None) };
 }
 
+thread_local! {
+    /// L'appel en cours est celui de l'humain (l'IDE), posé par
+    /// [`Backend::call_humain`] le temps de l'appel, dans ce fil : la garde
+    /// de `task_writes` se lit à l'entrée de l'appel, avant que le graphe ne
+    /// parte sur d'autres fils.
+    static APPEL_HUMAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Pose le drapeau de l'appel humain et le remet à sa valeur d'avant.
+struct AppelHumain(bool);
+
+impl AppelHumain {
+    fn poser() -> Self {
+        AppelHumain(APPEL_HUMAIN.with(|h| h.replace(true)))
+    }
+}
+
+impl Drop for AppelHumain {
+    fn drop(&mut self) {
+        APPEL_HUMAIN.with(|h| h.set(self.0));
+    }
+}
+
 pub struct Backend {
     /// **Les réactions en service** — le réacteur qui les exécute, ou rien si
     /// le manifeste n'en déclare aucune. Montées à l'ouverture, arrêtées par
@@ -3094,10 +3125,48 @@ impl Backend {
         self.call(name, args)
     }
 
+    /// [`call_in`](Self::call_in) au nom de l'humain (l'IDE).
+    pub fn call_in_humain(&self, cell: &crate::scope::Scope, name: &str, args: Value) -> Result<Value, String> {
+        let _humain = AppelHumain::poser();
+        self.call_in(cell, name, args)
+    }
+
+    /// **Un appel d'outil**, au nom de l'agent : sur un workspace à
+    /// `task_writes`, un outil qui écrit les fichiers est refusé sur le
+    /// principal — l'agent écrit dans une tâche. L'IDE appelle
+    /// [`call_humain`](Self::call_humain).
     pub fn call(&self, name: &str, args: Value) -> Result<Value, String> {
+        if !APPEL_HUMAIN.with(|h| h.get()) {
+            self.refus_de_l_agent_hors_tache(name)?;
+        }
         let mut response = self.call_tool(name, args)?;
         harness_presentation(&mut response);
         Ok(response)
+    }
+
+    /// **Un appel d'outil au nom de l'humain** (l'IDE : l'édition de Lucie,
+    /// B1) : `task_writes` ne vise que l'agent, l'humain écrit le principal
+    /// tant que `read_only` ne l'interdit pas.
+    pub fn call_humain(&self, name: &str, args: Value) -> Result<Value, String> {
+        let _humain = AppelHumain::poser();
+        self.call(name, args)
+    }
+
+    /// Le refus d'un outil d'écriture appelé par l'agent sur le principal
+    /// d'un workspace à `task_writes` (une tâche, elle, a sa surcharge de
+    /// workspace et écrit dans son worktree).
+    fn refus_de_l_agent_hors_tache(&self, name: &str) -> Result<(), String> {
+        let prepared = self.prepared();
+        let task_writes = prepared.manifest.workspace.as_ref().is_some_and(|w| w.task_writes);
+        let ecrit = prepared.manifest.tools.get(name).is_some_and(|t| t.policy.write_files);
+        if task_writes && ecrit && prepared.surcharges().workspace.is_none() {
+            return Err(format!(
+                "« {name} » écrit les fichiers, et sur ce backend l'agent n'écrit pas l'arbre principal (task_writes) : \
+                 ouvrez une tâche (POST /ide/taches {{backend, nom}}) — sa branche agent/<nom>, relue puis fusionnée — \
+                 et appelez « {name} » sur le backend de la tâche"
+            ));
+        }
+        Ok(())
     }
 
     fn call_tool(&self, name: &str, args: Value) -> Result<Value, String> {

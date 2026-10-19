@@ -771,6 +771,7 @@ async function tache(id, nom) {
   const { tache: t, fichiers, graphes, temoins, base_a_bouge } = r.result;
   const note = el("span", { class: "note", id: "tache-note" }, "");
   const pourquoi = el("input", { id: "pourquoi", placeholder: "pourquoi rejeter", "aria-label": "pourquoi rejeter" });
+  const message = el("input", { id: "message", placeholder: `message (la tâche ${nom})`, "aria-label": "message de la fusion" });
   const agir = async (route, corps) => {
     note.textContent = route === "fusionner" ? "fusion…" : "rejet…";
     const rep = await (await fetch(`/ide/taches/${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, nom, ...corps }) })).json();
@@ -786,14 +787,15 @@ async function tache(id, nom) {
     el("p", { id: "temoins" }, temoins.chargement ? "Témoins : la branche se charge entière." : "Témoins : la branche ne se charge pas."),
     temoins.refus ? el("pre", { class: "refus" }, temoins.refus) : "",
     el("div", { class: "actions" },
-      el("button", { id: "fusionner", onclick: () => agir("fusionner", {}) }, "Fusionner"),
+      message,
+      el("button", { id: "fusionner", onclick: () => agir("fusionner", { message: message.value }) }, "Fusionner"),
       pourquoi,
       el("button", { id: "rejeter", onclick: () => agir("rejeter", { why: pourquoi.value || "rejetée dans l'IDE" }) }, "Rejeter"),
       note),
     fichiers.length ? "" : el("p", { class: "note" }, "La branche ne change encore rien."),
     ...graphes.map(sectionDeGraphe),
-    ...fichiers.map((f) => el("section", {},
-      el("h2", {}, f.path + (f.avant == null ? " (neuf)" : f.apres == null ? " (retiré)" : "")),
+    ...fichiers.map((f) => el("section", { class: "fichier-de-tache", "data-genre": f.genre, "data-path": f.path },
+      el("h2", {}, (f.genre === "code" ? "code · " : f.genre === "depot" ? "dépôt · " : "") + f.path + (f.avant == null ? " (neuf)" : f.apres == null ? " (retiré)" : "")),
       el("div", { class: "diff" }, difference(f.avant ?? "", f.apres ?? "")))),
   ));
 }

@@ -84,6 +84,54 @@ pub fn database_files(db: &Path) -> Vec<PathBuf> {
     v
 }
 
+/// **Les déclarations de l'arbre dans un dépôt git** (`<config>/<nom>`) :
+/// une tâche de l'agent est une branche, et une déclaration un commit. Le
+/// dépôt est à la racine de l'arbre inscrit, pas au dossier du manifeste :
+/// ses gabarits copiés (`templates/`) sont dedans. L'identité est celle du
+/// dépôt de code (sa configuration locale), sinon l'identité git de
+/// l'utilisateur (sa configuration globale) ; aucune : refusé en le disant,
+/// jamais une identité inventée.
+fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let o = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| format!("git : {e}"))?;
+    if o.status.success() {
+        Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
+    } else {
+        Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
+    }
+}
+
+/// L'identité du dépôt des déclarations (voir [`depot_des_declarations`]),
+/// cherchée avant que rien ne soit posé : un refus ne laisse rien derrière.
+fn identite_des_declarations(tree: &Path, name: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let mut identite = Vec::new();
+    for cle in ["user.name", "user.email"] {
+        let valeur = git(tree, &["config", "--local", "--get", cle])
+            .ok()
+            .filter(|v| !v.is_empty())
+            .or_else(|| git(tree, &["config", "--global", "--get", cle]).ok().filter(|v| !v.is_empty()))
+            .ok_or_else(|| {
+                format!(
+                    "{name} : aucune identité git pour le dépôt de ses déclarations ({cle} absent du dépôt {} et de la \
+                     configuration globale) — posez-la (`git -C {} config {cle} …`), puis recommencez",
+                    tree.display(),
+                    tree.display()
+                )
+            })?;
+        identite.push((cle, valeur));
+    }
+    Ok(identite)
+}
+
+fn depot_des_declarations(dossier: &Path, identite: &[(&'static str, String)], tree: &Path, name: &str) -> Result<(), String> {
+    git(dossier, &["init", "-q"])?;
+    for (cle, valeur) in identite {
+        git(dossier, &["config", cle, valeur])?;
+    }
+    git(dossier, &["add", "-A"])?;
+    git(dossier, &["commit", "-q", "-m", &format!("code-tree add {name} : {}", tree.display())])?;
+    Ok(())
+}
+
 /// **Poser l'arbre, sans hôte** : le gabarit de `from` copié sous
 /// `code-<nom>`, le manifeste réécrit (nom, base, racine), la base copiée de
 /// celle de `from` par reflink. `name` : `--as`, sinon le nom de l'arbre.
@@ -102,6 +150,7 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
     let mut m: Value = serde_json::from_str(&texte).map_err(|e| format!("--from {from} : manifeste illisible : {e}"))?;
     let base_de_depart = m["database"].as_str().map(PathBuf::from).ok_or_else(|| format!("--from {from} : le manifeste n'a pas de `database`"))?;
 
+    let identite = identite_des_declarations(&tree, &name)?;
     let dossier = roots.config.join(&name);
     if dossier.exists() {
         return Err(format!("{name} existe déjà ({}) : `code-tree remove {name}` d'abord", dossier.display()));
@@ -120,10 +169,14 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
     m["database"] = Value::String(database.display().to_string());
     let w = m.get_mut("workspace").and_then(Value::as_object_mut).ok_or_else(|| format!("--from {from} : le manifeste n'a pas de `workspace`"))?;
     w.insert("root".into(), Value::String(tree.display().to_string()));
-    w.insert("read_only".into(), Value::Bool(true));
+    // L'arbre de l'utilisateur n'est jamais écrit par l'agent hors d'une
+    // fusion : l'agent édite dans une tâche (sa branche, relue puis
+    // fusionnée — `task_writes`) ; l'humain, lui, édite le principal dans
+    // l'IDE.
+    w.insert("read_only".into(), Value::Bool(false));
+    w.insert("task_writes".into(), Value::Bool(true));
     w.insert("commands".into(), Value::String("off".into()));
     if let Some(outils) = m.get_mut("tools").and_then(Value::as_object_mut) {
-        outils.remove("edit_file");
         outils.remove("run_command");
     }
     let manifest = roots.manifest(&name);
@@ -134,6 +187,7 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
         crate::builtin_templates::link(dir, &mut m);
     }
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifest.display()))?;
+    depot_des_declarations(&dossier, &identite, &tree, &name)?;
 
     // La base : un instantané de celle de `from`, fichier par fichier.
     std::fs::create_dir_all(&roots.data).map_err(|e| format!("{} : {e}", roots.data.display()))?;
@@ -322,6 +376,10 @@ mod tests {
         std::fs::write(PathBuf::from(format!("{}.fts/segment", base.display())), b"plein texte").unwrap();
         let arbre = racine.join("arbres").join("rag3db-pk");
         std::fs::create_dir_all(&arbre).unwrap();
+        // Un dépôt avec son identité : celle que prend le dépôt des déclarations.
+        for args in [&["init", "-q"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"]] {
+            git(&arbre, args).unwrap();
+        }
         (roots, arbre)
     }
 
@@ -334,8 +392,18 @@ mod tests {
         assert_eq!(m["name"], "code-rag3db-pk");
         assert_eq!(m["database"], a.database.display().to_string());
         assert_eq!(m["workspace"]["root"], std::fs::canonicalize(&arbre).unwrap().display().to_string());
-        assert_eq!(m["workspace"]["read_only"], true);
-        assert!(m["tools"].get("edit_file").is_none() && m["tools"].get("run_command").is_none());
+        assert_eq!(m["workspace"]["read_only"], false);
+        // L'agent édite dans une tâche, jamais l'arbre principal ; l'humain
+        // édite le principal dans l'IDE ; aucune commande.
+        assert_eq!(m["workspace"]["task_writes"], true);
+        assert!(m["tools"].get("edit_file").is_some() && m["tools"].get("run_command").is_none());
+        // Les déclarations dans un dépôt, à la racine de l'arbre inscrit.
+        let racine = roots.config.join(&a.name);
+        let log = std::process::Command::new("git").arg("-C").arg(&racine).args(["log", "--format=%s"]).output().unwrap();
+        assert!(String::from_utf8_lossy(&log.stdout).starts_with("code-tree add code-rag3db-pk"), "{log:?}");
+        let top = std::process::Command::new("git").arg("-C").arg(&racine).args(["rev-parse", "--show-toplevel"]).output().unwrap();
+        assert_eq!(PathBuf::from(String::from_utf8_lossy(&top.stdout).trim()), racine.canonicalize().unwrap());
+        assert_eq!(git(&racine, &["config", "--local", "user.email"]).unwrap(), "personne@example.org", "l'identité du dépôt de code");
         // Les gabarits identiques au livré sont désignés par leur nom : ils suivront le binaire.
         assert_eq!(m["tools"]["read_file"]["graph"], "builtin:tools/read.mmd", "{}", m["tools"]);
         assert_eq!(m["tools"]["list_files"]["graph"], "builtin:tools/list.mmd");

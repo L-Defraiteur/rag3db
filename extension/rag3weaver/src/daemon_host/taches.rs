@@ -41,6 +41,87 @@ pub struct Tache {
     pub depart: String,
     pub copie: CopieDeBase,
     pub ouverte_ms: u64,
+    /// Son workspace, si le backend en déclare un.
+    #[serde(default)]
+    pub workspace: Option<WorkspaceDeTache>,
+}
+
+/// **Le workspace d'une tâche** (marche 3) : la racine du principal est
+/// dans un dépôt git, la tâche a la sienne dans un worktree — celui du
+/// backend quand le code est dans le même dépôt, un second (`code`) sinon,
+/// sur une branche du même nom. Elle y écrit si le principal le permet
+/// (`read_only` levé, ou `task_writes`). La racine n'est dans aucun dépôt :
+/// la tâche la lit, et n'y écrit jamais.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WorkspaceDeTache {
+    /// La racine de la tâche (absolue).
+    pub racine: PathBuf,
+    /// La tâche y écrit.
+    pub ecrit: bool,
+    /// La racine du principal (absolue, canonique).
+    pub racine_principale: PathBuf,
+    /// Le dépôt de code, quand ce n'est pas celui du backend.
+    pub code: Option<DepotDeCode>,
+}
+
+/// Un dépôt de code à part, son worktree de tâche, le commit de départ.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DepotDeCode {
+    pub depot: PathBuf,
+    pub arbre: PathBuf,
+    pub depart: String,
+}
+
+/// Un dépôt d'une tâche, vu de la tâche : le dépôt du backend, et le dépôt
+/// de code s'il est à part.
+struct Volet<'a> {
+    depot: &'a Path,
+    arbre: &'a Path,
+    depart: &'a str,
+}
+
+impl Tache {
+    fn volets(&self) -> Vec<Volet<'_>> {
+        let mut v = vec![Volet { depot: &self.depot, arbre: &self.arbre, depart: &self.depart }];
+        if let Some(c) = self.workspace.as_ref().and_then(|w| w.code.as_ref()) {
+            v.push(Volet { depot: &c.depot, arbre: &c.arbre, depart: &c.depart });
+        }
+        v
+    }
+
+    /// Ce qu'est un chemin d'un dépôt de la tâche : une déclaration (relatif
+    /// au dossier du backend), du code (relatif à la racine du workspace), ou
+    /// un autre fichier du dépôt — le préfixe le plus long l'emporte.
+    fn genre_de(&self, depot: &Path, chemin: &str) -> (&'static str, String) {
+        let chemin = Path::new(chemin);
+        let mut prefixes: Vec<(&'static str, PathBuf)> = Vec::new();
+        if depot == self.depot {
+            if let Some(d) = self.parent_manifest.parent().and_then(|d| d.strip_prefix(&self.depot).ok()) {
+                prefixes.push(("declarations", d.to_path_buf()));
+            }
+        }
+        if let Some(w) = &self.workspace {
+            if let Ok(r) = w.racine_principale.strip_prefix(depot) {
+                prefixes.push(("code", r.to_path_buf()));
+            }
+        }
+        prefixes.sort_by_key(|(_, p)| std::cmp::Reverse(p.components().count()));
+        for (genre, prefixe) in prefixes {
+            if let Ok(r) = chemin.strip_prefix(&prefixe) {
+                return (genre, r.to_string_lossy().to_string());
+            }
+        }
+        ("depot", chemin.to_string_lossy().to_string())
+    }
+}
+
+/// Un fichier qu'une tâche change : son genre (`declarations`, `code`,
+/// `depot`), son chemin dans ce genre, avant et après.
+struct Changement {
+    genre: &'static str,
+    chemin: String,
+    avant: Option<String>,
+    apres: Option<String>,
 }
 
 /// La racine des tâches : `RAG3WEAVER_TACHES_DIR`, sinon
@@ -102,6 +183,14 @@ fn ce_qui_manque(t: &Tache) -> Option<String> {
     }
     if git(&t.depot, &["rev-parse", "--verify", "-q", &format!("refs/heads/{}", t.branche)]).is_err() {
         manque.push(format!("la branche {}", t.branche));
+    }
+    if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()) {
+        if !c.arbre.is_dir() {
+            manque.push(format!("le worktree de code {}", c.arbre.display()));
+        }
+        if git(&c.depot, &["rev-parse", "--verify", "-q", &format!("refs/heads/{}", t.branche)]).is_err() {
+            manque.push(format!("la branche {} du dépôt de code {}", t.branche, c.depot.display()));
+        }
     }
     (!manque.is_empty()).then(|| format!("disparu(s) : {}", manque.join(", ")))
 }
@@ -204,6 +293,7 @@ impl DaemonHost {
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).map(|t| Surcharges {
             database: Some(t.copie.base.clone()),
             declarations: Some(crate::propositions::ModeDeclarations::Auto),
+            workspace: t.workspace.as_ref().map(|w| (w.racine.clone(), w.ecrit)),
         })
     }
 
@@ -245,8 +335,20 @@ impl DaemonHost {
             return Err(format!("la tâche « {nom} » est déjà ouverte"));
         }
         let hote = self.hote_par_id(parent)?;
-        let directory = self.with_backend(&hote, |b| b.prepared().directory.clone())?;
-        let depot = PathBuf::from(git(&directory, &["rev-parse", "--show-toplevel"]).map_err(|e| format!("le backend n'est pas dans un dépôt git : {e}"))?);
+        let (directory, espace) = self.with_backend(&hote, |b| {
+            let p = b.prepared();
+            let espace = p.manifest.workspace.as_ref().map(|w| {
+                let racine = if w.root.is_absolute() { w.root.clone() } else { p.directory.join(&w.root) };
+                (racine.canonicalize().unwrap_or(racine), !w.read_only || w.task_writes)
+            });
+            (p.directory.clone(), espace)
+        })?;
+        let depot = PathBuf::from(git(&directory, &["rev-parse", "--show-toplevel"]).map_err(|e| {
+            format!(
+                "le backend n'est pas dans un dépôt git ({e}) : une tâche est une branche. `git init` à la racine de ses \
+                 déclarations, puis un commit (code-tree add le fait pour un arbre inscrit)"
+            )
+        })?);
         let depot = depot.canonicalize().unwrap_or(depot);
         let relatif = hote
             .manifest
@@ -258,16 +360,60 @@ impl DaemonHost {
             return Err(format!("{} existe déjà : une tâche de ce nom n'a pas été fermée", dossier.display()));
         }
         let arbre = dossier.join("arbre");
+        let arbre_code = dossier.join("code");
         let branche = format!("agent/{nom}");
+        // Le dépôt du code, s'il est à part.
+        let depot_code = espace
+            .as_ref()
+            .and_then(|(racine, _)| git(racine, &["rev-parse", "--show-toplevel"]).ok())
+            .map(PathBuf::from)
+            .map(|d| d.canonicalize().unwrap_or(d))
+            .filter(|d| *d != depot);
+        // Une branche du même nom existe : refusé avant de rien créer (et
+        // donc avant que la défaite d'une étape ne l'efface).
+        for d in std::iter::once(&depot).chain(depot_code.as_ref()) {
+            if git(d, &["rev-parse", "--verify", "-q", &format!("refs/heads/{branche}")]).is_ok() {
+                return Err(format!("la branche {branche} existe déjà dans {} : une tâche de ce nom n'a pas été fermée", d.display()));
+            }
+        }
         let depart = git(&depot, &["rev-parse", "HEAD"])?;
         std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
         let defaire = |etape: &str, e: String| -> String {
             let _ = git(&depot, &["worktree", "remove", "--force", &arbre.to_string_lossy()]);
             let _ = git(&depot, &["branch", "-D", &branche]);
+            if let Some(d) = &depot_code {
+                let _ = git(d, &["worktree", "remove", "--force", &arbre_code.to_string_lossy()]);
+                let _ = git(d, &["branch", "-D", &branche]);
+            }
             let _ = std::fs::remove_dir_all(&dossier);
             format!("tâche « {nom} » : {etape} : {e}")
         };
         git(&depot, &["worktree", "add", "-q", "-b", &branche, &arbre.to_string_lossy(), &depart]).map_err(|e| defaire("le worktree", e))?;
+        let workspace = match espace {
+            None => None,
+            Some((racine_principale, permis)) => Some(match &depot_code {
+                Some(d) => {
+                    let depart_code = git(d, &["rev-parse", "HEAD"]).map_err(|e| defaire("le dépôt de code", e))?;
+                    git(d, &["worktree", "add", "-q", "-b", &branche, &arbre_code.to_string_lossy(), &depart_code])
+                        .map_err(|e| defaire("le worktree de code", e))?;
+                    let sous = racine_principale.strip_prefix(d).map(Path::to_path_buf).unwrap_or_default();
+                    WorkspaceDeTache {
+                        racine: arbre_code.join(sous),
+                        ecrit: permis,
+                        racine_principale,
+                        code: Some(DepotDeCode { depot: d.clone(), arbre: arbre_code.clone(), depart: depart_code }),
+                    }
+                }
+                None => match racine_principale.strip_prefix(&depot) {
+                    // Le code dans le dépôt du backend : sa racine dans le même worktree.
+                    Ok(sous) if git(&racine_principale, &["rev-parse", "--show-toplevel"]).is_ok() => {
+                        WorkspaceDeTache { racine: arbre.join(sous), ecrit: permis, racine_principale: racine_principale.clone(), code: None }
+                    }
+                    // Hors de tout dépôt : lue telle quelle, jamais écrite.
+                    _ => WorkspaceDeTache { racine: racine_principale.clone(), ecrit: false, racine_principale, code: None },
+                },
+            }),
+        };
         let copie = self
             .with_backend(&hote, |b| b.copier_la_base_sous_la_porte(&dossier.join("base")))
             .and_then(|r| r)
@@ -287,6 +433,7 @@ impl DaemonHost {
             depart,
             copie,
             ouverte_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0),
+            workspace,
         };
         // Inscrite avant l'ouverture : `open_slot` y lit ses surcharges.
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.clone(), tache.clone());
@@ -314,8 +461,10 @@ impl DaemonHost {
         }
         self.backends.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
-        git(&tache.depot, &["worktree", "remove", "--force", &tache.arbre.to_string_lossy()])?;
-        git(&tache.depot, &["branch", "-D", &tache.branche])?;
+        for v in tache.volets() {
+            git(v.depot, &["worktree", "remove", "--force", &v.arbre.to_string_lossy()])?;
+            git(v.depot, &["branch", "-D", &tache.branche])?;
+        }
         let dossier = tache.arbre.parent().map(Path::to_path_buf).unwrap_or_default();
         std::fs::remove_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
         self.ecrire_le_registre()?;
@@ -324,21 +473,24 @@ impl DaemonHost {
 }
 
 impl DaemonHost {
-    /// Les fichiers que la branche d'une tâche change depuis son départ,
-    /// relatifs au dossier du backend : (chemin, avant, après).
-    fn changements(&self, tache: &Tache) -> Result<Vec<(String, Option<String>, Option<String>)>, String> {
-        let dossier = tache
-            .parent_manifest
-            .parent()
-            .and_then(|d| d.strip_prefix(&tache.depot).ok())
-            .map(Path::to_path_buf)
-            .unwrap_or_default();
-        let liste = git(&tache.depot, &["diff", "--name-only", &format!("{}...{}", tache.depart, tache.branche)])?;
+    /// Ce que la tâche change depuis son départ, dans chacun de ses dépôts :
+    /// ce que son worktree porte (commité sur sa branche ou non, et les
+    /// fichiers neufs que `.gitignore` laisse) contre le commit de départ —
+    /// ce que la fusion amènera.
+    fn changements(&self, tache: &Tache) -> Result<Vec<Changement>, String> {
         let mut out = Vec::new();
-        for chemin in liste.lines().filter(|l| !l.is_empty()) {
-            let Ok(relatif) = Path::new(chemin).strip_prefix(&dossier) else { continue };
-            let lire = |reference: &str| git_show(&tache.depot, reference, chemin);
-            out.push((relatif.to_string_lossy().to_string(), lire(&tache.depart), lire(&tache.branche)));
+        for v in tache.volets() {
+            let mut chemins: std::collections::BTreeSet<String> = git(v.arbre, &["diff", "--name-only", v.depart])?.lines().map(str::to_string).collect();
+            chemins.extend(git(v.arbre, &["ls-files", "--others", "--exclude-standard"])?.lines().map(str::to_string));
+            for chemin in chemins.into_iter().filter(|c| !c.is_empty()) {
+                let (genre, relatif) = tache.genre_de(v.depot, &chemin);
+                out.push(Changement {
+                    genre,
+                    chemin: relatif,
+                    avant: git_show(v.depot, v.depart, &chemin),
+                    apres: std::fs::read_to_string(v.arbre.join(&chemin)).ok(),
+                });
+            }
         }
         Ok(out)
     }
@@ -356,60 +508,91 @@ impl DaemonHost {
         let h = self.hosted(&tache.manifest)?;
         let apres = self.with_backend(&h, |b| b.prepared())?;
         let temoin = apres.recharger(&crate::lecteur::Disque).err();
-        let touches: std::collections::BTreeSet<PathBuf> = changements.iter().map(|(c, ..)| crate::lecteur::normaliser(Path::new(c))).collect();
-        let declares = crate::propositions::noms_declares(changements.iter().filter_map(|(c, _, a)| Some((c.as_str(), a.as_deref()?))));
+        let declarations: Vec<&Changement> = changements.iter().filter(|c| c.genre == "declarations").collect();
+        let touches: std::collections::BTreeSet<PathBuf> = declarations.iter().map(|c| crate::lecteur::normaliser(Path::new(&c.chemin))).collect();
+        let declares = crate::propositions::noms_declares(declarations.iter().filter_map(|c| Some((c.chemin.as_str(), c.apres.as_deref()?))));
         let (graphes, composants) =
             crate::propositions::graphes_touches(&avant, Some((&apres, &crate::lecteur::Disque)), &touches, &declares);
-        let tete = git(&tache.depot, &["rev-parse", "HEAD"])?;
+        let mut base_a_bouge = false;
+        for v in tache.volets() {
+            base_a_bouge |= git(v.depot, &["rev-parse", "HEAD"])? != v.depart;
+        }
         Ok(json!({
             "tache": tache,
-            "fichiers": changements.iter().map(|(c, a, b)| json!({ "path": c, "avant": a, "apres": b })).collect::<Vec<_>>(),
+            "fichiers": changements.iter().map(|c| json!({ "genre": c.genre, "path": c.chemin, "avant": c.avant, "apres": c.apres })).collect::<Vec<_>>(),
             "graphes": graphes,
             "composants": composants,
             "temoins": { "chargement": temoin.is_none(), "refus": temoin },
-            "base_a_bouge": tete != tache.depart,
+            "base_a_bouge": base_a_bouge,
         }))
     }
 
-    /// **Fusionner une tâche, en avance rapide** (T2) :
-    /// 1. le worktree propre, aucune indexation dans la tâche ;
+    /// **Fusionner une tâche, en avance rapide** (T2, puis la marche 3 pour le
+    /// code), dans chacun de ses dépôts (celui du backend, celui du code s'il
+    /// est à part) :
+    /// 1. ce que le worktree porte sans l'avoir commité (les éditions de code
+    ///    de l'agent) est commité sur la branche, avec `message` ;
     /// 2. si le dépôt a bougé depuis le départ, la branche rebasée dans le
     ///    worktree — un conflit abandonne le rebase et refuse en le disant ;
-    /// 3. les fichiers de la branche **validés sur le principal sans écrire**
-    ///    (`valider_sur`, un recouvrement) : une fusion ne laisse jamais le
-    ///    principal invalide ;
-    /// 4. `git merge --ff-only`, puis le principal recharge ses déclarations
-    ///    et ses réactions ;
-    /// 5. la tâche fermée (son instance, son worktree, sa branche, sa base).
-    pub fn fusionner_une_tache(&self, parent: &str, nom: &str) -> Result<Value, String> {
-        let tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
-        let sale = git(&tache.arbre, &["status", "--porcelain", "--untracked-files=no"])?;
-        if !sale.is_empty() {
-            return Err(format!("le worktree de la tâche a des changements non commités :\n{sale}"));
-        }
-        let tete = git(&tache.depot, &["rev-parse", "HEAD"])?;
-        if tete != tache.depart {
-            if let Err(e) = git(&tache.arbre, &["rebase", "-q", &tete]) {
-                let _ = git(&tache.arbre, &["rebase", "--abort"]);
-                return Err(format!("la branche ne se rebase pas sur la base du dépôt ({}) : {e}", &tete[..tete.len().min(9)]));
+    /// 3. les déclarations de la branche **validées sur le principal sans
+    ///    écrire** (`valider_sur`, un recouvrement) : une fusion ne laisse
+    ///    jamais le principal invalide ;
+    /// 4. les arbres principaux sans changement non commité ;
+    /// 5. `git merge --ff-only`, le code d'abord, puis le principal recharge
+    ///    ses déclarations et ses réactions (sa montre réindexe le code) ;
+    /// 6. la tâche fermée (son instance, ses worktrees, sa branche, sa base).
+    pub fn fusionner_une_tache(&self, parent: &str, nom: &str, message: &str) -> Result<Value, String> {
+        let mut tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
+        let message = if message.trim().is_empty() { format!("la tâche {nom}") } else { message.trim().to_string() };
+        for v in tache.volets() {
+            git(v.arbre, &["add", "-A"])?;
+            if !git(v.arbre, &["status", "--porcelain", "--untracked-files=no"])?.is_empty() {
+                git(v.arbre, &["commit", "-q", "-m", &message])?;
             }
         }
-        let changements = self.changements(&Tache { depart: tete.clone(), ..tache.clone() })?;
+        let mut tetes = Vec::new();
+        for v in tache.volets() {
+            let tete = git(v.depot, &["rev-parse", "HEAD"])?;
+            if tete != v.depart {
+                if let Err(e) = git(v.arbre, &["rebase", "-q", &tete]) {
+                    let _ = git(v.arbre, &["rebase", "--abort"]);
+                    return Err(format!("la branche ne se rebase pas sur {} ({}) : {e}", v.depot.display(), &tete[..tete.len().min(9)]));
+                }
+            }
+            tetes.push(tete);
+        }
+        // Les changements vus de la base où la branche est maintenant posée.
+        tache.depart = tetes[0].clone();
+        if let Some(c) = tache.workspace.as_mut().and_then(|w| w.code.as_mut()) {
+            c.depart = tetes[1].clone();
+        }
+        let changements = self.changements(&tache)?;
         let principal = self.hote_par_id(parent)?;
-        let fichiers: Vec<(String, String)> = changements.iter().filter_map(|(c, _, a)| Some((c.clone(), a.clone()?))).collect();
+        let fichiers: Vec<(String, String)> =
+            changements.iter().filter(|c| c.genre == "declarations").filter_map(|c| Some((c.chemin.clone(), c.apres.clone()?))).collect();
         if !fichiers.is_empty() {
             self.with_backend(&principal, |b| b.valider_sur(&fichiers))?
                 .map_err(|e| format!("la branche ne se charge pas sur le principal, rien n'est fusionné : {e}"))?;
         }
-        let sale = git(&tache.depot, &["status", "--porcelain", "--untracked-files=no"])?;
-        if !sale.is_empty() {
-            return Err(format!("l'arbre principal a des changements non commités :\n{sale}"));
+        for v in tache.volets() {
+            let sale = git(v.depot, &["status", "--porcelain", "--untracked-files=no"])?;
+            if !sale.is_empty() {
+                return Err(format!("l'arbre principal {} a des changements non commités, rien n'est fusionné :\n{sale}", v.depot.display()));
+            }
         }
-        git(&tache.depot, &["merge", "-q", "--ff-only", &tache.branche])?;
-        let fusion = git(&tache.depot, &["rev-parse", "HEAD"])?;
+        let mut commits = Vec::new();
+        for v in tache.volets().iter().rev() {
+            git(v.depot, &["merge", "-q", "--ff-only", &tache.branche])?;
+            commits.push(git(v.depot, &["rev-parse", "HEAD"])?);
+        }
+        let fusion = commits.last().cloned().unwrap_or_default();
+        let fusion_code = (commits.len() > 1).then(|| commits[0].clone());
         let recharge = self.with_backend(&principal, |b| b.reload_reactions())?;
         self.fermer_une_tache(parent, nom)?;
-        let fin = json!({ "nom": nom, "parent": parent, "etat": "fusionnee", "commit": fusion, "rechargement": recharge.as_ref().err() });
+        let fin = json!({
+            "nom": nom, "parent": parent, "etat": "fusionnee", "commit": fusion, "commit_code": fusion_code,
+            "message": message, "rechargement": recharge.as_ref().err(),
+        });
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
         self.ecrire_le_registre()?;
         recharge.map_err(|e| format!("fusionné ({fusion}), mais le principal ne recharge pas : {e}"))?;

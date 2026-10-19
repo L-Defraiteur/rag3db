@@ -531,11 +531,15 @@ impl DaemonHost {
         let result = self.check_session(session).and_then(|s| {
             let cell = cell_of(&s)?;
             let hosted = self.hosted(manifest)?;
-            self.with_backend(&hosted, |b| match &cell {
+            // L'IDE appelle au nom de l'humain : `task_writes` ne vise que l'agent.
+            let humain = self.ide_session.get().is_some_and(|ide| *ide == s.id);
+            self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
-                Some(cell) => b.call_in(cell, name, arguments),
-                None => b.call(name, arguments),
+                (Some(cell), false) => b.call_in(cell, name, arguments),
+                (Some(cell), true) => b.call_in_humain(cell, name, arguments),
+                (None, false) => b.call(name, arguments),
+                (None, true) => b.call_humain(name, arguments),
             })
             .and_then(|r| r)
         });
@@ -1054,6 +1058,8 @@ mod navigateur;
 /// L'aperçu d'un composant rechargé à chaud, dans le même navigateur.
 #[cfg(all(test, unix, feature = "code"))]
 mod apercu_a_chaud;
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_sur_un_depot;
 
 #[cfg(test)]
 mod tests {
