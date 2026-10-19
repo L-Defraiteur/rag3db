@@ -1,5 +1,7 @@
 #include "storage/table/node_group_collection.h"
 
+#include <algorithm>
+
 #include "common/vector/value_vector.h"
 #include "storage/table/chunked_node_group.h"
 #include "storage/table/csr_node_group.h"
@@ -217,11 +219,14 @@ void NodeGroupCollection::checkpoint(MemoryManager& memoryManager,
     for (const auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
         nodeGroup->checkpoint(memoryManager, state);
     }
-    std::vector<LogicalType> typesAfterCheckpoint;
-    for (auto i = 0u; i < state.columnIDs.size(); i++) {
-        typesAfterCheckpoint.push_back(types[state.columnIDs[i]].copy());
+    // Les numéros ne bougent pas : une colonne supprimée devient un trou (ANY) à son numéro, et
+    // les statistiques gardent leur entrée (jamais relue) au même numéro.
+    for (auto columnID = 0u; columnID < types.size(); columnID++) {
+        if (std::find(state.columnIDs.begin(), state.columnIDs.end(), columnID) ==
+            state.columnIDs.end()) {
+            types[columnID] = LogicalType::ANY();
+        }
     }
-    types = std::move(typesAfterCheckpoint);
     // L'estimation que lisent STATS_INFO et le planificateur n'est tenue qu'à l'ajout : une ligne
     // supprimée, ou écartée par un COPY sous IGNORE_ERRORS (ajoutée puis supprimée), y reste
     // comptée. Le point de reprise la recale sur les lignes vivantes, d'après les informations

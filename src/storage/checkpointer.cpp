@@ -294,6 +294,7 @@ void Checkpointer::readCheckpoint(main::ClientContext* context, catalog::Catalog
     auto reader = std::make_unique<common::BufferedFileReader>(*fileInfo);
     common::Deserializer deSer(std::move(reader));
     auto currentHeader = std::make_unique<DatabaseHeader>(DatabaseHeader::deserialize(deSer));
+    deSer.setStorageVersion(currentHeader->storageVersion);
     // If the catalog page range is invalid, it means there is no catalog to read; thus, the
     // database is empty.
     if (currentHeader->catalogPageRange.startPageIdx != common::INVALID_PAGE_IDX) {

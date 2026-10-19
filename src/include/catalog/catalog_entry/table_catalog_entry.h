@@ -44,6 +44,7 @@ public:
     virtual function::TableFunction getScanFunction() { KU_UNREACHABLE; }
 
     common::column_id_t getMaxColumnID() const;
+    common::column_id_t getNumColumnSlots() const { return propertyCollection.getNumColumnSlots(); }
     void vacuumColumnIDs(common::column_id_t nextColumnID);
     std::vector<binder::PropertyDefinition> getProperties() const {
         return propertyCollection.getDefinitions();

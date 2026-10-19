@@ -184,6 +184,9 @@ static void appendStorageInfoForChunkedGroup(StorageInfoLocalState* localState,
     auto numColumns = chunkedGroup->getNumColumns();
     outputData.columnIdx = 0;
     for (auto i = 0u; i < numColumns; i++) {
+        if (!chunkedGroup->hasColumnChunk(i) || outputData.columns[i] == nullptr) {
+            continue; // un trou : colonne supprimée
+        }
         for (auto* segment : chunkedGroup->getColumnChunk(i).getSegments()) {
             appendStorageInfoForChunkData(localState, outputChunk, outputData,
                 *outputData.columns[i], *segment);
@@ -257,7 +260,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
             auto& nodeTable = table->cast<NodeTable>();
             std::vector<const Column*> columns;
             for (auto columnID = 0u; columnID < nodeTable.getNumColumns(); columnID++) {
-                columns.push_back(&nodeTable.getColumn(columnID));
+                columns.push_back(
+                    nodeTable.hasColumn(columnID) ? &nodeTable.getColumn(columnID) : nullptr);
             }
             outputData.columns = std::move(columns);
             numNodeGroups = nodeTable.getNumNodeGroups();
