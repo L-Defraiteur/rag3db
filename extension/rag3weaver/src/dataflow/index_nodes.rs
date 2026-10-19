@@ -361,13 +361,12 @@ fn spawn_index_with_stop(
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let fin = indexer_et_dire(&catalog, source, &journal, kept_bytes, generated, &watch);
-        // Un index retient des Go que glibc garde une fois libérés : rendus ici,
-        // et dits au journal (ticket « l'hôte ne rend pas la mémoire d'un gros
-        // index », 19 octobre 2026) — **avant** la ligne de fin, qui reste la
-        // dernière du journal (le contrat de ce module ; e2e_arret_propre le juge).
-        if let Some((avant, apres)) = crate::allocateur::rendre_au_systeme("fin d'index") {
-            log(&journal, &format!("mémoire rendue au système : {avant} → {apres} Mio résidents"));
-        }
+        // Un index retient des Go que glibc garde une fois libérés : rendus ici
+        // (ticket « l'hôte ne rend pas la mémoire d'un gros index », 19 octobre
+        // 2026), avant la ligne de fin. Le rendu se dit sur la sortie d'erreur de
+        // l'hôte, pas dans ce journal : le journal d'index ne dit que l'index, et
+        // sa dernière ligne reste celle de la fin (le contrat de ce module).
+        crate::allocateur::rendre_au_systeme("fin d'index");
         log(&journal, &fin);
     })
 }

@@ -583,7 +583,10 @@ fn l_indexation_en_fond_ecrit_son_journal_jusqu_au_bout() {
     let ready = lines.iter().position(|l| l.starts_with("plein texte prêt :")).expect("le plein texte est annoncé prêt");
     let first_vectors = lines.iter().position(|l| l.contains("· vecteurs")).expect("puis les vecteurs");
     assert!(ready < first_vectors, "le plein texte d'abord : {lines:?}");
-    assert!(lines[lines.len() - 2].contains("vecteurs prêts"), "{lines:?}");
+    // « vecteurs prêts » avant la fin, à sa place quelle qu'elle soit : seule la
+    // dernière ligne est un contrat (index_nodes.rs), une ligne de plus avant
+    // elle ne doit pas rougir ce témoin.
+    assert!(lines[..lines.len() - 1].iter().any(|l| l.contains("vecteurs prêts")), "{lines:?}");
 
     let progress = catalog.lock().unwrap().index_progress().expect("avancement");
     assert!(progress.complete() && progress.chunks() > 100, "{progress:?}");
