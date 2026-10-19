@@ -940,7 +940,8 @@ mod tests {
         assert!(!lignes.iter().any(|l| l.starts_with("plein texte prêt :")), "jamais « prêt » sur un index absent : {lignes:?}");
         let etat = catalog.lock().unwrap().index_state_for(crate::code::SCOPE).unwrap();
         assert_eq!(etat.text, crate::catalog::Level::Failed, "{etat:?}");
-        assert!(etat.failures.iter().any(|f| f.contains("plein texte")), "{etat:?}");
+        let raisons = catalog.lock().unwrap().index_failures_for(Some(crate::code::SCOPE));
+        assert!(raisons.iter().any(|(g, r)| g == crate::catalog::PLEIN_TEXTE_INDEX && r.contains("plein texte")), "{raisons:?}");
     }
 
     #[test]

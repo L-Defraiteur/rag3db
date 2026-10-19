@@ -2728,7 +2728,7 @@ mod tests {
                 vectors_seconds_left: None,
                 sparse: None,
                 text_percent: None,
-                failures: Vec::new(), updated_ms: 0,
+                updated_ms: 0,
             })
         };
         // Sans vecteurs déclarés, le plein texte prêt suffit : rien à dire.
