@@ -64,15 +64,34 @@ cette section disait « une seule allocation de 960 Mio ». smaps montre les pro
 fusionnées par le noyau, et c'est `malloc_info` (G) qui a séparé les 32 blocs. Hors du tampon, environ 2,1 Go sont tenus au
 repos ; sans les vecteurs, environ 1,3 Go (seq-0056, B).
 
-**La cause, trouvée par G** : ce sont les écrivains de lucivy. Les blocs de 32 Mio sont déjà là en
-plein texte seul : malloc_info au repos compte 32 blocs projetés vivants (1 024 Mio), plus 618 Mio
-en usage dans les arènes. Avec `LUCIVY_WRITER_HEAP=15000000` et `LUCIVY_WRITER_THREADS=2`, il n'y a
-plus aucun bloc projeté, 211 Mio en usage, et 69 fils au lieu de 93. L'anonyme + échange à T3 passe
-de 2 639 à 1 251 Mio. Relevés : `~/.cache/rag3weaver-build/mesure-malloc/sonde-*/B2/` sur luciepc
-(`t3-malloc-info.xml`, `t3-piles`, `gros-mallocs.log`).
+**Ce qui tient au repos, d'après G** : l'index lucivy ouvert. Les blocs de 32 Mio sont déjà là en
+plein texte seul : `malloc_info` au repos compte 32 blocs projetés vivants (1 024 Mio), plus environ
+620 Mio en usage dans les arènes. Ils restent tant que le backend est ouvert, et tout tombe à sa
+fermeture (T4 tient). Qui, dans l'index ouvert, les tient — dictionnaires des shards, readers, cache
+du `BlobDirectory` — n'est pas encore prouvé. Relevés : `~/.cache/rag3weaver-build/mesure-malloc/`
+sur luciepc (`sonde-*`, `ecrivains-0635`, `ecrivains-0718` ; `t3-malloc-info.xml`, `t3-piles`).
 
-**Le correctif annoncé (G)** : rendre les écrivains de lucivy au repos, et les recréer à la
-première écriture. Il sera jugé par le même protocole, T3 compris.
+**Correction (G, 19 octobre 2026, 7 h 40).** Une première version de cette section attribuait
+l'excès aux *écrivains* de lucivy, sur un essai avec `LUCIVY_WRITER_HEAP=15000000` et
+`LUCIVY_WRITER_THREADS=2` (T3 de 2 639 à 1 251 Mio, 69 fils). **Cet essai était un artefact** : lucivy
+y refusait de créer chaque écrivain, et la passe n'avait aucun index plein texte. Son journal
+d'hôte le dit :
+
+    [rag3weaver] création de l'index FTS File échouée: cannot create writer: An invalid argument was
+    passed: 'The memory arena in bytes per thread needs to be at least 15000000.'
+
+Les passes propres, toutes avec leur index plein texte, 32 blocs de 32 Mio et 93 fils :
+
+| passe | T3 anonyme + échange | en usage dans les arènes |
+|---|---|---|
+| défaut de lucivy (16 fils par écrivain), deux fois | 2 778 et 2 806 Mio | 625 Mio |
+| 2 fils par écrivain, deux fois | 2 669 et 2 959 Mio | 617 Mio |
+| tas de 15 Mo seul (lucivy prend alors 1 fil) | 2 436 Mio | 618 Mio |
+| les 16 écrivains lâchés au repos | 2 373 Mio | 623 Mio |
+
+Ni le tas, ni le nombre de fils, ni le lâcher des écrivains n'y font rien. Le correctif annoncé (rendre
+les écrivains au repos) est abandonné. L'échec silencieux de création de l'index plein texte, que cet
+artefact a montré, est un défaut à part, que G corrige.
 
 ## Pour le fermer
 
