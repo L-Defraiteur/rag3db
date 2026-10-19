@@ -508,9 +508,16 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
     let i = |k: &str| event.get(k).and_then(|v| v.as_i64()).unwrap_or(0);
     let kind = s("kind");
     let (summary, detail) = match kind.as_str() {
+        // Ce que le run exécute (`target`), quand l'événement le dit : la
+        // trace d'un appel d'outil nomme son outil.
         "RunStarted" => (
             format!("RunStarted {} {}", s("run_kind"), s("name")),
-            format!("run {}{}", s("run"), event.get("parent").and_then(|v| v.as_str()).map(|p| format!(", sous {p}")).unwrap_or_default()),
+            format!(
+                "run {}{}{}",
+                s("run"),
+                event.get("parent").and_then(|v| v.as_str()).map(|p| format!(", sous {p}")).unwrap_or_default(),
+                cible_du_run(event).map(|(genre, nom)| format!(" — {genre} {nom}")).unwrap_or_default()
+            ),
         ),
         "RunFinished" => (
             format!("RunFinished {} {}", s("run_kind"), if event["ok"].as_bool().unwrap_or(false) { "ok" } else { "error" }),
@@ -552,6 +559,10 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
         _ => (kind.clone(), s("detail")),
     };
     let ok = event.get("ok").and_then(|v| v.as_bool()).unwrap_or(true);
+    let outil = match cible_du_run(event) {
+        Some(("outil", nom)) if kind == "RunStarted" => nom.to_string(),
+        _ => s("tool"),
+    };
     let mut d = BTreeMap::new();
     d.insert("summary".into(), CypherValue::String(summary));
     d.insert("detail".into(), CypherValue::String(detail));
@@ -559,7 +570,7 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
     d.insert("run_id".into(), CypherValue::String(s("run")));
     d.insert("parent_run_id".into(), CypherValue::String(s("parent")));
     d.insert("agent".into(), CypherValue::String(s("agent")));
-    d.insert("tool".into(), CypherValue::String(s("tool")));
+    d.insert("tool".into(), CypherValue::String(outil));
     d.insert("call_id".into(), CypherValue::String(s("call_id")));
     d.insert("node".into(), CypherValue::String(s("node")));
     d.insert("ok".into(), CypherValue::Bool(ok));
@@ -568,6 +579,15 @@ pub fn trace_record(event: &serde_json::Value, at_ms: i64) -> BTreeMap<String, C
     d.insert("at_ms".into(), CypherValue::Int(at_ms));
     d.insert("at".into(), CypherValue::String(iso8601_utc(at_ms)));
     d
+}
+
+/// La cible d'un `RunStarted` (`target`), en français : `("outil", nom)`,
+/// `("réaction", nom)` ou `("composant", nom)`.
+fn cible_du_run(event: &serde_json::Value) -> Option<(&'static str, &str)> {
+    let t = event.get("target")?;
+    [("tool", "outil"), ("reaction", "réaction"), ("component", "composant")]
+        .iter()
+        .find_map(|(cle, genre)| t.get(*cle).and_then(|v| v.as_str()).map(|n| (*genre, n)))
 }
 
 fn now_ms() -> i64 {

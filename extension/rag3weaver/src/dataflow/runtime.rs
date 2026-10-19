@@ -1198,6 +1198,12 @@ impl DataflowRuntime {
             // être partagé : sa cellule ne dit pas où le run a tourné.
             // Un graphe n'a pas de domaine de travail : il fait ce qu'on lui demande.
             domain: String::new(),
+            // Le nom déclaré de ce graphe, si qui l'a lancé l'a posé pour ce run.
+            target: self
+                .services
+                .get::<crate::events::RunTarget>(crate::events::RUN_TARGET_SERVICE)
+                .filter(|t| t.run == run_id)
+                .map(|t| t.target.clone()),
             scope: self
                 .services
                 .get::<crate::scope::Scope>("scope")

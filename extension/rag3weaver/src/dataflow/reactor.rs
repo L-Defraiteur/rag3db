@@ -35,7 +35,7 @@ use async_broadcast::Receiver;
 
 use crate::events::{Event, EventBus};
 
-use super::graph_tool::{execute_definition, GraphTool, GraphToolError, NodeTypePolicy};
+use super::graph_tool::{execute_definition_as, GraphTool, GraphToolError, NodeTypePolicy};
 use super::node_registry::NodeRegistry;
 use super::services::ServiceRegistry;
 
@@ -103,6 +103,9 @@ struct Watch {
     /// sienne.
     nodes_policy: NodeTypePolicy,
     target: Target,
+    /// Le nom déclaré de ce graphe (la réaction du manifeste), que chacun de
+    /// ses runs dit dans son `RunStarted`.
+    label: Option<crate::events::GraphTarget>,
     /// Les récepteurs de sonnette, un par sujet — ouverts au `watch`.
     doorbells: Vec<(String, Receiver<Event>)>,
     /// Sonnette en attente : depuis quand, et dernier coup.
@@ -153,6 +156,7 @@ impl Reactor {
     /// (`<nom>`, celui que son `EventSourceNode` doit nommer) maintenant —
     /// avant ce qu'on veut observer.
     pub fn watch(mut self, tool: GraphTool) -> Result<Self, GraphToolError> {
+        refuser_le_sujet_des_reactions(tool.name(), tool.on()).map_err(GraphToolError::Spec)?;
         if tool.on().is_empty() {
             return Err(GraphToolError::Spec(format!(
                 "outil '{}' : rien à surveiller — la fiche n'a pas de '%% on:'",
@@ -172,6 +176,7 @@ impl Reactor {
             target: Target::Graph(Arc::new(tool)),
             doorbells,
             pending: None,
+            label: None,
             buffered: Vec::new(),
         });
         Ok(self)
@@ -196,6 +201,16 @@ impl Reactor {
         Ok(self)
     }
 
+    /// **Nomme la dernière montre** : ses runs s'annoncent sous ce nom
+    /// (`RunStarted.target`) — la réaction du manifeste, pas l'en-tête
+    /// `%% tool:` de sa fiche.
+    pub fn named(mut self, label: crate::events::GraphTarget) -> Self {
+        if let Some(w) = self.watches.last_mut() {
+            w.label = Some(label);
+        }
+        self
+    }
+
     /// (en JSON) arrivés depuis le dernier appel. C'est le réacteur d'agent :
     /// une fermeture qui relance `Agent::run` par message.
     pub fn on<S: Into<String>, I: IntoIterator<Item = S>>(
@@ -216,6 +231,7 @@ impl Reactor {
             target: Target::Callback(Arc::new(f)),
             doorbells,
             pending: None,
+            label: None,
             buffered: Vec::new(),
         });
         self
@@ -243,7 +259,7 @@ impl Reactor {
             let events = std::mem::take(&mut w.buffered);
             let outcome: Result<(), String> = match &w.target {
                 Target::Graph(tool) => {
-                    run_tool(tool, &self.nodes, self.services.clone(), &w.arguments, &w.nodes_policy)
+                    run_tool(tool, &self.nodes, self.services.clone(), &w.arguments, &w.nodes_policy, w.label.as_ref())
                 }
                 Target::Callback(f) => {
                     f(events);
@@ -348,15 +364,44 @@ impl Reactor {
     }
 }
 
+/// **Une réaction n'écoute pas les runs des réactions.** Ils sont publiés
+/// sur `reactions` ; une fiche qui l'écouterait se relancerait sur ses propres
+/// runs. Refusé au chargement (manifeste) comme au montage (`watch`).
+pub fn refuser_le_sujet_des_reactions(nom: &str, on: &[String]) -> Result<(), String> {
+    if on.iter().any(|t| t == crate::events::topic::REACTIONS) {
+        return Err(format!(
+            "« {nom} » écoute le sujet « {} » : il porte les runs des réactions, et une réaction \
+             qui l'écouterait se relancerait sur ses propres runs. Écoutez ce qui les cause \
+             (catalog, files, dataflow…), pas les runs eux-mêmes",
+            crate::events::topic::REACTIONS
+        ));
+    }
+    Ok(())
+}
+
 fn run_tool(
     tool: &GraphTool,
     nodes: &NodeRegistry,
     services: Arc<ServiceRegistry>,
     arguments: &serde_json::Value,
     nodes_policy: &NodeTypePolicy,
+    label: Option<&crate::events::GraphTarget>,
 ) -> Result<(), String> {
     let def = tool.instantiate(arguments).map_err(|e| e.to_string())?;
-    execute_definition(&def, nodes, services, nodes_policy, tool.result())
+    // Un run nommé : son id choisi ici, et le nom posé pour ce run seul.
+    let run = crate::events::new_run_id("graph");
+    let services = match label {
+        Some(target) => {
+            let mut layer = ServiceRegistry::layered(services);
+            layer.register(
+                crate::events::RUN_TARGET_SERVICE,
+                crate::events::RunTarget { run: run.clone(), target: target.clone() },
+            );
+            Arc::new(layer)
+        }
+        None => services,
+    };
+    execute_definition_as(&def, nodes, services, nodes_policy, tool.result(), Some(&run))
         .map(|_| ())
         .map_err(|e| e.to_string())
 }

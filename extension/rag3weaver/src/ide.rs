@@ -41,7 +41,7 @@ pub const PREFIX: &str = "/ide";
 /// Le cookie qui porte le jeton local.
 pub const COOKIE: &str = "rag3weaver_ide";
 /// Les sujets du bus que le flux relaie.
-pub const SUJETS: [&str; 6] = ["files", "dataflow", "agent", "tokens", "catalog", "components"];
+pub const SUJETS: [&str; 7] = ["files", "dataflow", "agent", "tokens", "catalog", "components", "reactions"];
 /// Combien d'événements le flux garde pour rejouer.
 const TAMPON: usize = 2048;
 /// Le pas du battement qui fait tomber une fenêtre fermée.
@@ -110,7 +110,11 @@ impl Flux {
         let id = self.prochain.fetch_add(1, Ordering::SeqCst);
         // Un message ordinaire, le genre dans les données : une page n'a pas à
         // écouter chaque genre par son nom pour ne rien perdre.
-        let data = json!({ "id": id, "sujet": sujet, "backend": backend, "evenement": evenement });
+        // L'enveloppe commune des événements relayés : l'id du flux, le sujet,
+        // le backend, l'instant du relais (epoch ms UTC) ; l'événement garde
+        // sa forme (`kind`, `run` quand il en a un, ses champs à plat).
+        let at_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        let data = json!({ "id": id, "sujet": sujet, "backend": backend, "at_ms": at_ms, "evenement": evenement });
         let entree = Arc::new(Entree { id, sujet: sujet.to_string(), trame: format!("id: {id}\ndata: {data}\n\n") });
         {
             let mut t = self.tampon.lock().unwrap_or_else(|p| p.into_inner());

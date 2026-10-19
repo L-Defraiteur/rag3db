@@ -460,6 +460,9 @@ fn valider_une_reaction(
              le dire — renommez l'une des deux"
         ));
     }
+    // 0. **Une réaction n'écoute pas les runs des réactions** (`reactions`) :
+    //    elle se relancerait sur ses propres runs.
+    crate::dataflow::reactor::refuser_le_sujet_des_reactions(nom, graphe.on())?;
     // 1 bis. **La clé du manifeste EST le curseur, donc elle doit être le nom
     //    de la fiche.** `Reactor::watch` ouvre `bus.cursor(sujet,
     //    tool.name())` — le nom de la FICHE, pas la clé — et la fiche nomme
@@ -2051,29 +2054,9 @@ fn graph_tool_definition() -> Value {
         }}})
 }
 
-/// **Ce dont on demande le graphe** : un outil, une réaction, un composant.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GraphTarget {
-    Tool(String),
-    Reaction(String),
-    Component(String),
-}
-
-impl GraphTarget {
-    /// Depuis des arguments `{tool | reaction | component}` : exactement un.
-    pub fn from_args(args: &Value) -> Result<Self, String> {
-        let donnes: Vec<(&str, &str)> = ["tool", "reaction", "component"]
-            .iter()
-            .filter_map(|k| args.get(*k).and_then(Value::as_str).map(|v| (*k, v)))
-            .collect();
-        match donnes.as_slice() {
-            [("tool", v)] => Ok(Self::Tool(v.to_string())),
-            [("reaction", v)] => Ok(Self::Reaction(v.to_string())),
-            [("component", v)] => Ok(Self::Component(v.to_string())),
-            _ => Err("graph : donnez exactement un de tool, reaction, component".to_string()),
-        }
-    }
-}
+/// Ce dont on demande le graphe (et ce qu'exécute un run) : la forme vit
+/// avec les événements.
+pub use crate::events::GraphTarget;
 
 /// Le schéma d'un type de nœud, ses ports et ses paramètres, en JSON.
 fn node_schema_json(s: &crate::dataflow::NodeSchema) -> Value {
@@ -2613,6 +2596,10 @@ impl Backend {
             Arc::new(bus.clone()),
         );
         services.register(crate::dataflow::REACTION_STOP_SERVICE, self.reaction_stop.clone());
+        // Les runs des réactions se publient sur `reactions`, qu'aucune
+        // réaction ne peut écouter : pas de boucle par construction.
+        services.register("event_bus", Arc::new(bus.clone()));
+        services.register("run_topic", crate::events::topic::REACTIONS.to_string());
         let mut reactor = Reactor::new(bus, prepared.nodes.clone(), Arc::new(services));
         let policy = NodeTypePolicy::only(crate::backend_code::reaction_nodes());
         let mut mounted = Vec::new();
@@ -2625,7 +2612,8 @@ impl Backend {
                 .unwrap_or_default();
             reactor = reactor
                 .watch_bound(graphe.clone(), Value::Object(bindings), policy.clone())
-                .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?;
+                .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?
+                .named(GraphTarget::Reaction(name.clone()));
             mounted.push(name.clone());
         }
         Ok((reactor.spawn(), mounted))
@@ -2927,6 +2915,7 @@ impl Backend {
             &plan.graph,
             &metadata,
             &NodeTypePolicy::only(SEARCH_NODES.iter().copied()),
+            None,
         )?;
         response["graph_hash"] = json!(plan.graph.hash());
         response["candidate_bounded"] = json!(plan.candidate_bounded);
@@ -3006,6 +2995,7 @@ impl Backend {
                 &def,
                 &request.metadata,
                 &NodeTypePolicy::only(SEARCH_NODES.iter().copied()),
+                Some(GraphTarget::Tool(name.to_string())),
             )?;
             response["graph_hash"] = json!(def.hash());
             return Ok(response);
@@ -3067,7 +3057,7 @@ impl Backend {
                 metadata_ports.push(port.clone());
             }
         }
-        let mut response = self.execute_graph(prepared, tool, &def, &metadata_ports, &policy)?;
+        let mut response = self.execute_graph(prepared, tool, &def, &metadata_ports, &policy, Some(GraphTarget::Tool(name.to_string())))?;
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(prepared, &harness.after, &context);
         report.warnings.extend(before.warnings);
@@ -3229,6 +3219,7 @@ impl Backend {
                     &def,
                     &[],
                     &prepared.with_scripted(crate::backend_code::hook_nodes(&hook.policy)),
+                    None,
                 )
             });
         match outcome {
@@ -3297,6 +3288,7 @@ impl Backend {
             &def,
             &[],
             &prepared.with_scripted(["RhaiNode", "ValidationRuleNode", "ValidationMergeNode"]),
+            None,
         )?;
         Ok(response["result"].clone())
     }
@@ -3503,7 +3495,7 @@ impl Backend {
                         }],
                         edges: vec![],
                     };
-                    self.execute_plan(&prepared, ("seed", "record"), &def, &[], &policy)
+                    self.execute_plan(&prepared, ("seed", "record"), &def, &[], &policy, None)
                         .map(|r| r["result"].clone())
                         .map_err(|e| format!("{} : {e}", nom(row)))
                 };
@@ -3526,9 +3518,12 @@ impl Backend {
         def: &GraphDefinition,
         metadata_ports: &[OutputPort],
         policy: &NodeTypePolicy,
+        target: Option<GraphTarget>,
     ) -> Result<Value, String> {
-        self.execute_plan(prepared, tool.result(), def, metadata_ports, policy)
+        self.execute_plan(prepared, tool.result(), def, metadata_ports, policy, target)
     }
+    /// `target` : ce que le run exécute, qu'il dit dans son `RunStarted`
+    /// (l'outil appelé) ; `None` pour un graphe sans nom déclaré.
     fn execute_plan(
         &self,
         prepared: &PreparedBackend,
@@ -3536,12 +3531,29 @@ impl Backend {
         def: &GraphDefinition,
         metadata_ports: &[OutputPort],
         policy: &NodeTypePolicy,
+        target: Option<GraphTarget>,
     ) -> Result<Value, String> {
         let mut graph =
             build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
         // The host serializes tool calls; services are fresh so shutdown owns all handles.
-        let services = self.build_services(prepared);
-        let output = DataflowRuntime::with_services(100, services).execute(&mut graph)?;
+        let mut services = self.build_services(prepared);
+        // **Le run se publie** (`RunStarted`, `NodeRun`, `RunFinished`) sur
+        // `dataflow`, dans la cellule de l'appel : ce qu'un appel exécute se
+        // voit (la trace, le DAG vivant de l'IDE). Sans `run_topic`, chaque
+        // événement va à son sujet.
+        let bus = {
+            let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            match services.get::<crate::scope::Scope>("scope") {
+                Some(cell) => cat.event_bus_in(cell),
+                None => cat.event_bus(),
+            }
+        };
+        services.register("event_bus", Arc::new(bus));
+        let run = crate::events::new_run_id("graph");
+        if let Some(target) = target {
+            services.register(crate::events::RUN_TARGET_SERVICE, crate::events::RunTarget { run: run.clone(), target });
+        }
+        let output = DataflowRuntime::with_services(100, services).execute_as(&mut graph, &run)?;
         let read = |node: &str, port: &str| -> Result<Value, String> {
             let value = output
                 .get(node, port)

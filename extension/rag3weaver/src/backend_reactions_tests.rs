@@ -78,12 +78,17 @@ fn ecrire(dir: &Path, nom: &str, texte: &str) {
 /// Un backend déclaré dans un dossier temporaire, monté sans base (une
 /// connexion qui ne rend rien) : ce témoin mesure le montage, pas l'écriture.
 fn reactif() -> (tempfile::TempDir, Backend) {
+    reactif_sur(CallbackConnection::new(|_, _| Ok(QueryResult::default())))
+}
+
+/// Le même, sur une connexion donnée (une qui garde ses requêtes, pour voir
+/// ce qu'un graphe écrit).
+fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
     let dir = tempfile::tempdir().unwrap();
     ecrire(dir.path(), "backend.json", MANIFESTE);
     ecrire(dir.path(), "sonde.mmd", SONDE);
     ecrire(dir.path(), "vu.rhai", "#{vu: true}");
     let prepared = PreparedBackend::load(&dir.path().join("backend.json")).unwrap();
-    let conn = CallbackConnection::new(|_, _| Ok(QueryResult::default()));
     let mut catalog = Catalog::new(
         Box::new(conn),
         Box::new(HashEmbedder::new(8)),
@@ -409,4 +414,133 @@ fn ui_state_vise_une_entite_declaree_et_ecran_se_lit_dans_la_policy() {
     let lu: BackendManifest = serde_json::from_str(&manifeste("EtatEcran")).unwrap();
     assert_eq!(lu.tools["lier"].policy.ecran, Some(crate::dataflow::clic::Ecran::Lecture));
     assert_eq!(lu.ui_state.as_ref().map(|u| u.entity.as_str()), Some("EtatEcran"));
+}
+
+/// **Un run dit ce qu'il exécute** (`RunStarted.target`) : l'appel d'un outil
+/// s'annonce sous le nom de l'outil — celui du manifeste, pas l'en-tête
+/// `%% tool:` de sa fiche, qui diffère ici exprès —, le déclenchement d'une
+/// réaction sous le nom de la réaction (là, le chargement exige que la clé
+/// soit le nom de la fiche : c'est le curseur du réacteur). C'est par lui
+/// qu'un dessin vivant reconnaît son run.
+#[test]
+fn un_run_d_outil_puis_un_run_de_reaction_s_annoncent_par_leur_nom() {
+    let (dir, backend) = reactif();
+    ecrire(
+        dir.path(),
+        "dis.mmd",
+        "%% tool: autre_nom\n%% description: dit oui\n%% param: value json! -- n'importe quoi\n%% result: vu.result\ngraph LR\n    vu[\"RhaiNode(script_id=vu, value=$value)\"]\n",
+    );
+    ecrire(
+        dir.path(),
+        "backend.json",
+        &MANIFESTE
+            .replace(r#""tools": {},"#, r#""tools": { "dis": { "graph": "dis.mmd" } },"#),
+    );
+    backend.reload().expect("le rechargement");
+    // Un appel par l'hôte publie ses runs sur `dataflow`, une réaction sur
+    // `reactions` — qu'aucune réaction ne peut écouter.
+    let mut flux = bus_de(&backend).subscribe(crate::events::topic::DATAFLOW);
+    let mut des_reactions = bus_de(&backend).subscribe(crate::events::topic::REACTIONS);
+    let annonce = |rx: &mut async_broadcast::Receiver<Event>, cible: Value| -> Value {
+        let fin = std::time::Instant::now() + Duration::from_secs(10);
+        let mut vus = Vec::new();
+        while std::time::Instant::now() < fin {
+            match rx.try_recv() {
+                Ok(e @ Event::RunStarted { .. }) => {
+                    let v = e.to_json();
+                    if v["target"] == cible {
+                        return v;
+                    }
+                    vus.push(v);
+                }
+                Ok(_) => {}
+                Err(_) => std::thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        panic!("aucun RunStarted de cible {cible} en 10 s ; vus : {vus:?}")
+    };
+
+    backend.call("dis", json!({ "value": { "n": 1 } })).expect("l'appel de l'outil");
+    let v = annonce(&mut flux, json!({ "tool": "dis" }));
+    assert_eq!(v["run_kind"], "graph", "{v}");
+    assert!(v["run"].as_str().is_some_and(|r| !r.is_empty()), "{v}");
+
+    assert_eq!(backend.mount_reactions().expect("le montage"), vec!["sonde".to_string()]);
+    bus_de(&backend).emit(Event::EntitiesChanged { entity: "N'importe".into(), uuids: vec!["u-1".into()] });
+    assert!(backend.wait_reaction_runs(1, Duration::from_secs(10)), "la réaction n'est pas partie");
+    annonce(&mut des_reactions, json!({ "reaction": "sonde" }));
+    // **Pas de boucle** : la réaction écoute `catalog`, ses runs vont sur
+    // `reactions` ; rien ne la relance.
+    std::thread::sleep(Duration::from_millis(600));
+    assert_eq!(backend.reaction_runs(), 1, "la réaction s'est relancée sur ses propres runs");
+    assert_eq!(backend.reaction_errors(), Vec::<String>::new());
+    assert_eq!(backend.stop_reactions(), Vec::<String>::new());
+}
+
+/// **Écouter les runs des réactions est refusé au chargement** : une réaction
+/// qui écouterait `reactions` se relancerait sur ses propres runs. Le refus
+/// dit pourquoi, et ce qu'il faut écouter à la place.
+#[test]
+fn une_reaction_qui_ecoute_les_runs_des_reactions_est_refusee() {
+    let (dir, _backend) = reactif();
+    ecrire(dir.path(), "sonde.mmd", &SONDE.replace("%% on: catalog", "%% on: reactions"));
+    let e = PreparedBackend::load(&dir.path().join("backend.json")).err().expect("le chargement doit refuser");
+    assert!(e.contains("« reactions »") && e.contains("se relancerait"), "{e}");
+}
+
+/// **La trace livrée enregistre un appel d'outil, et ne se relance pas** :
+/// la fiche `trace` (`%% on: agent, dataflow, messages`), montée comme dans
+/// l'e2e, voit le run de l'outil sur `dataflow` et l'écrit ; son propre run ne
+/// publie rien qu'elle écoute.
+#[test]
+fn la_trace_livree_enregistre_un_appel_d_outil_sans_se_relancer() {
+    let ecrit: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let journal = ecrit.clone();
+    let (dir, backend) = reactif_sur(CallbackConnection::new(move |q, p| {
+        journal.lock().unwrap().push(format!("{q} {p:?}"));
+        Ok(QueryResult::default())
+    }));
+    ecrire(
+        dir.path(),
+        "dis.mmd",
+        "%% tool: dis\n%% description: dit oui\n%% param: value json! -- n'importe quoi\n%% result: vu.result\ngraph LR\n    vu[\"RhaiNode(script_id=vu, value=$value)\"]\n",
+    );
+    ecrire(dir.path(), "backend.json", &MANIFESTE.replace(r#""tools": {},"#, r#""tools": { "dis": { "graph": "dis.mmd" } },"#));
+    backend.reload().expect("le rechargement");
+    crate::dataflow::register_trace_schema(&mut backend.catalog.lock().unwrap()).unwrap();
+    let bus = bus_de(&backend);
+    let (nodes, _) = crate::dataflow::builtin_graph_tools().unwrap();
+    let nodes = Arc::new(nodes);
+    let trace = crate::dataflow::GraphTool::from_mermaid(crate::dataflow::TRACE_GRAPH_MERMAID).unwrap().bind(&nodes).unwrap();
+    let mut services = crate::dataflow::services::ServiceRegistry::new();
+    services.register("catalog", backend.catalog.clone());
+    services.register(crate::dataflow::EVENTS_SERVICE, Arc::new(bus.shared()));
+    let handle = crate::dataflow::reactor::Reactor::new(bus.shared(), nodes, Arc::new(services)).watch(trace).unwrap().spawn();
+
+    ecrit.lock().unwrap().clear();
+    backend.call("dis", json!({ "value": { "n": 1 } })).expect("l'appel de l'outil");
+    let fin = std::time::Instant::now() + Duration::from_secs(10);
+    while !ecrit.lock().unwrap().iter().any(|q| q.contains("RunStarted") && q.contains("outil dis")) {
+        if std::time::Instant::now() >= fin {
+            let ecrites = ecrit.lock().unwrap();
+            let citant: Vec<String> = ecrites.iter().filter(|q| q.contains("RunStarted")).map(|q| q.chars().rev().take(1500).collect::<String>().chars().rev().collect()).collect();
+            panic!(
+                "la trace n'a pas écrit le run de l'outil ; runs={}, erreurs={:?}, {} requêtes, celles qui citent RunStarted : {citant:#?}",
+                handle.runs(),
+                handle.errors(),
+                ecrites.len()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // Le run qui a écrit se compte à sa fin : l'attendre avant de relever.
+    while handle.runs() < 1 {
+        assert!(std::time::Instant::now() < fin, "le run de la trace ne finit pas");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(handle.errors().is_empty(), "{:?}", handle.errors());
+    let runs = handle.runs();
+    std::thread::sleep(Duration::from_millis(600));
+    assert_eq!(handle.runs(), runs, "la trace s'est relancée sur son propre run");
+    handle.stop();
 }

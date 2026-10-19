@@ -122,6 +122,13 @@ pub enum Event {
         /// La cellule où ce run tourne — les autres événements appartiennent
         /// à un run, donc ne la répètent pas.
         scope: Option<crate::scope::Scope>,
+        /// **Ce que ce run exécute**, quand on le sait : l'outil, la réaction
+        /// ou le composant déclaré dont c'est le graphe. `name` reste la liste
+        /// des nœuds ; c'est par `target` qu'un dessin reconnaît son run, et
+        /// demande le graphe à dessiner (la même forme que l'outil `graph`).
+        /// `None` : un graphe sans nom déclaré (un sous-graphe, une recherche
+        /// composée, un crochet), ou une boucle d'agent.
+        target: Option<GraphTarget>,
     },
     /// **Ce qu'un appel a consommé** — le compteur
     /// ([`crate::meter`], [doc 08](../docs/27-aout-2026-13h01/08-le-compteur.md)).
@@ -392,9 +399,9 @@ impl Event {
     pub fn to_json(&self) -> serde_json::Value {
         use serde_json::json;
         match self {
-            Self::RunStarted { run, parent, kind, name, domain, scope } => json!({
+            Self::RunStarted { run, parent, kind, name, domain, scope, target } => json!({
                 "kind": "RunStarted", "run": run, "parent": parent, "run_kind": kind, "name": name,
-                "domain": domain,
+                "domain": domain, "target": target.as_ref().map(GraphTarget::to_json),
                 "org": scope.as_ref().map(|s| s.org.clone()),
                 "project": scope.as_ref().map(|s| s.project.clone()),
             }),
@@ -483,7 +490,62 @@ pub mod topic {
     pub const TOKENS: &str = "tokens";
     /// Les composants d'interface d'un backend, changés sur le disque.
     pub const COMPONENTS: &str = "components";
+    /// Les runs des réactions (`RunStarted`, `NodeRun`, `RunFinished`) :
+    /// **aucune réaction ne peut l'écouter** — le chargement refuse
+    /// `%% on: reactions`, ce qui rend impossible par construction qu'une
+    /// réaction se relance sur ses propres runs.
+    pub const REACTIONS: &str = "reactions";
 }
+
+/// **Ce dont un graphe est le graphe** : un outil, une réaction, un composant
+/// déclarés. Il dit ce qu'exécute un run (`RunStarted.target`) et ce dont on
+/// demande le dessin (l'outil `graph`, la route `/ide/graphe`) : une seule
+/// forme JSON pour les deux, `{"tool": nom}`, `{"reaction": nom}` ou
+/// `{"component": nom}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GraphTarget {
+    Tool(String),
+    Reaction(String),
+    Component(String),
+}
+
+impl GraphTarget {
+    /// Depuis des arguments `{tool | reaction | component}` : exactement un.
+    pub fn from_args(args: &serde_json::Value) -> Result<Self, String> {
+        let donnes: Vec<(&str, &str)> = ["tool", "reaction", "component"]
+            .iter()
+            .filter_map(|k| args.get(*k).and_then(serde_json::Value::as_str).map(|v| (*k, v)))
+            .collect();
+        match donnes.as_slice() {
+            [("tool", v)] => Ok(Self::Tool(v.to_string())),
+            [("reaction", v)] => Ok(Self::Reaction(v.to_string())),
+            [("component", v)] => Ok(Self::Component(v.to_string())),
+            _ => Err("graph : donnez exactement un de tool, reaction, component".to_string()),
+        }
+    }
+
+    /// `{"tool": nom}`, `{"reaction": nom}` ou `{"component": nom}`.
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            Self::Tool(n) => serde_json::json!({ "tool": n }),
+            Self::Reaction(n) => serde_json::json!({ "reaction": n }),
+            Self::Component(n) => serde_json::json!({ "component": n }),
+        }
+    }
+}
+
+/// Le service qui nomme un run (`"run_target"`) : posé par qui lance le
+/// graphe d'un outil ou d'une réaction, **pour ce run-là**. Un sous-graphe,
+/// un graphe lancé ou un graphe de port héritent des services mais ont leur
+/// propre id : ils ne s'annoncent pas sous le nom de leur parent.
+#[derive(Debug, Clone)]
+pub struct RunTarget {
+    pub run: String,
+    pub target: GraphTarget,
+}
+
+/// La clé du service [`RunTarget`].
+pub const RUN_TARGET_SERVICE: &str = "run_target";
 
 /// Le sujet d'un run : `run.<id>`.
 pub fn run_topic(run: &str) -> String {
@@ -789,7 +851,7 @@ mod tests {
         let mut all = bus.subscribe(topic::AGENT);
         let mut mine = bus.subscribe(&run_topic("r1"));
         let mut other = bus.subscribe(&run_topic("r2"));
-        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), domain: String::new(), scope: None });
+        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), domain: String::new(), scope: None, target: None });
         assert!(matches!(all.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));
