@@ -287,6 +287,10 @@ struct HNSWSearchState {
     SearchType searchType;
     std::unique_ptr<graph::NbrScanState> nbrScanState;
     std::unique_ptr<graph::NbrScanState> secondHopNbrScanState;
+    // Rows taken out of the graph and not yet put back (the catch-up of a CREATE): an edge a
+    // survivor still has to one of them leads to a dead end at a vector the graph does not hold
+    // yet. The search does not follow it.
+    const std::unordered_set<common::offset_t>* outOfGraph = nullptr;
 
     HNSWSearchState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
         catalog::TableCatalogEntry* upperRelTableEntry,
@@ -296,6 +300,9 @@ struct HNSWSearchState {
 
     bool isMasked(common::offset_t offset) const {
         return !hasMask() || semiMask->isMasked(offset);
+    }
+    bool isOutOfGraph(common::offset_t offset) const {
+        return outOfGraph != nullptr && outOfGraph->contains(offset);
     }
     bool hasMask() const { return semiMask != nullptr; }
 };
@@ -499,6 +506,11 @@ private:
     // point therefore does not prove the index is empty; this is how to make sure.
     common::offset_t findLiveNode(const transaction::Transaction* transaction,
         HNSWSearchState& searchState, common::offset_t except = common::INVALID_OFFSET) const;
+    // The first live node of the upper layer, other than `except` and `deletedNodes`, or
+    // INVALID_OFFSET: an invalid upper entry point does not prove the upper layer empty either.
+    common::offset_t findLiveUpperNode(transaction::Transaction* transaction,
+        HNSWInsertState& insertState, const std::unordered_set<common::offset_t>* deletedNodes,
+        common::offset_t except = common::INVALID_OFFSET);
     bool canBeEntryPoint(transaction::Transaction* transaction, common::offset_t offset,
         HNSWInsertState& insertState,
         const std::unordered_set<common::offset_t>* deletedNodes) const;

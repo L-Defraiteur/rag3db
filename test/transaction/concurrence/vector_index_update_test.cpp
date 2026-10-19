@@ -279,7 +279,42 @@ public:
     // valide en boucle, une instruction par écriture : une insertion et, si withChanges, la
     // suppression d'une ligne d'origine paire et le SET du vecteur d'une impaire (une sur cinq
     // ensuite supprimée elle aussi).
+    // La fenêtre du bâti dépend de la charge du poste : un essai dont le CREATE a fini avant
+    // qu'une écriture de chaque genre ait validé recommence sur une table neuve, jusqu'à cinq
+    // fois. Un témoin ne passe jamais sur une mise en place vide, et n'échoue pas sur une mise en
+    // place ratée. Un CREATE en échec n'est pas une mise en place ratée : il ne recommence pas.
     WritesDuringCreate createIndexUnderWrites(int64_t numRows, bool withChanges) {
+        static constexpr int MAX_ATTEMPTS = 5;
+        WritesDuringCreate writes;
+        for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+            if (attempt > 0) {
+                std::cerr << "  setup attempt " << attempt << " again: " << writes.inserted
+                          << " inserted, " << writes.deleted << " deleted, "
+                          << writes.updated.size() << " moved, " << writes.movedThenDeleted
+                          << " moved then deleted during the build\n";
+                mustRun("CALL DROP_VECTOR_INDEX('C', 'c_index');");
+                mustRun("DROP TABLE C;");
+            }
+            std::string outcome;
+            writes = createIndexUnderWritesOnce(numRows, withChanges, outcome);
+            if (outcome != "ok") {
+                ADD_FAILURE() << "[check: setup] " << outcome;
+                return writes;
+            }
+            const auto complete = writes.inserted > 0 &&
+                                  (!withChanges || (writes.deleted > 0 && !writes.updated.empty() &&
+                                                       writes.movedThenDeleted > 0));
+            if (complete) {
+                return writes;
+            }
+        }
+        ADD_FAILURE() << "[check: setup] " << MAX_ATTEMPTS
+                      << " attempts, the CREATE always ended before a write of each kind";
+        return writes;
+    }
+
+    WritesDuringCreate createIndexUnderWritesOnce(int64_t numRows, bool withChanges,
+        std::string& outcome) {
         WritesDuringCreate writes;
         const std::string vec = "[i % 17, i % 23, i % 29, i % 31, i % 37, i % 41, i % 43, i % 47, "
                                 "i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, i / 1000.0]";
@@ -319,16 +354,20 @@ public:
             if (j % 5 == 4) {
                 auto gone =
                     writer.query(stringFormat("MATCH (n:C {id: {}}) DELETE n;", 2 * j + 1));
-                if (gone->isSuccess() && !created.load()) {
-                    writes.movedThenDeleted++;
+                // Supprimée, la ligne n'est plus à chercher, même si sa suppression a validé
+                // après la fin du CREATE : elle restait attendue à son nouveau vecteur, et la
+                // recherche courte « ne la trouvait pas » (139, 149, 169, 179, toutes d'indice
+                // j % 5 = 4, introuvables même à efs 2000).
+                if (gone->isSuccess()) {
+                    if (!created.load()) {
+                        writes.movedThenDeleted++;
+                    }
                     continue;
                 }
             }
             writes.updated.emplace_back(2 * j + 1, moved);
         }
-        const auto outcome = creating.get();
-        EXPECT_EQ(outcome, "ok") << "[check: setup] " << outcome;
-        EXPECT_GT(writes.inserted, 0) << "[check: setup] no insert committed during the CREATE";
+        outcome = creating.get();
         return writes;
     }
 
@@ -374,10 +413,25 @@ public:
             auto own = conn->query(stringFormat(
                 "CALL QUERY_VECTOR_INDEX('C', 'c_index', {}, 1, efs := 64) RETURN node.id;",
                 moved));
-            if (own->isSuccess() && own->hasNext() &&
-                own->getNext()->getValue(0)->getValue<int64_t>() == id) {
-                movedFound++;
+            int64_t got = -1;
+            if (own->isSuccess() && own->hasNext()) {
+                got = own->getNext()->getValue(0)->getValue<int64_t>();
             }
+            if (got == id) {
+                movedFound++;
+                continue;
+            }
+            // Ce qu'un manque rend, et si une recherche large retrouve la ligne : un défaut de
+            // graphe se distingue ainsi d'une ligne qui n'est plus là.
+            auto wide = conn->query(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('C', 'c_index', {}, 1, efs := 2000) RETURN node.id, "
+                "distance;",
+                moved));
+            std::cerr << "  moved row " << id << " not found first at " << moved << ": got " << got
+                      << ", at efs 2000 "
+                      << (wide->isSuccess() && wide->hasNext() ? wide->getNext()->toString() :
+                                                                 std::string("nothing"))
+                      << "\n";
         }
         std::cerr << "  create under writes: " << writes.inserted << " inserted, "
                   << writes.deleted << " deleted, " << writes.updated.size() << " moved, "
@@ -1151,6 +1205,28 @@ int64_t lowerGraphEdgeCount(rag3db::main::Connection& connection, const std::str
         static_cast<int64_t>(storage->getTable(info.lowerRelTableID)->getNumTotalRows(transaction));
     EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());
     return count;
+}
+
+// Le point d'entrée de la couche haute de l'index, lu ou, avec newEntryPoint, écrit par les
+// internes.
+offset_t upperEntryPointOf(rag3db::main::Connection& connection, const std::string& table,
+    const std::string& index, std::optional<offset_t> newEntryPoint = std::nullopt) {
+    EXPECT_TRUE(connection.query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
+    auto* context = connection.getClientContext();
+    auto* transaction = rag3db::transaction::Transaction::Get(*context);
+    const auto* entry =
+        rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, table);
+    auto& nodeTable = rag3db::storage::StorageManager::Get(*context)
+                          ->getTable(entry->getTableID())
+                          ->cast<rag3db::storage::NodeTable>();
+    auto& info = static_cast<HNSWStorageInfoMirror&>(const_cast<rag3db::storage::IndexStorageInfo&>(
+        nodeTable.getIndex(index, nullptr).value()->getStorageInfo()));
+    if (newEntryPoint) {
+        info.upperEntryPoint = *newEntryPoint;
+    }
+    const auto entryPoint = info.upperEntryPoint;
+    EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());
+    return entryPoint;
 }
 
 // Le filet de e1049934e : un index qui compte plus de lignes reliées que sa table n'en contient
@@ -2021,6 +2097,107 @@ TEST_F(VectorIndexUpdate, AForcedCopyCommittedRightAfterACreateIsReached) {
     ASSERT_EQ(outcome, "ok") << "[check: setup] " << outcome;
     const auto failed = checkAfterCreateUnderWrites(WritesDuringCreate{});
     EXPECT_TRUE(failed.empty()) << checksOf(failed);
+}
+
+// Des lignes déplacées ensemble pendant un CREATE, par un écrivain ouvert avant lui. Le
+// rattrapage les reprenait une à une contre une table où toutes portaient déjà leur nouveau
+// vecteur : une ligne réinsérée se liait à des voisines « proches » à leur nouvelle place mais
+// encore à l'ancienne dans le graphe, et le point d'entrée haut, déplacé, passait de voisine en
+// voisine jusqu'à une ligne déjà partie. La recherche entrait alors dans le nuage, dont la couche
+// basse ne ressortait pas : 146 lignes atteintes sur 19 984 (ChangesCommittedDuringACreateAreSeen,
+// trois rouges sur quarante). Le point d'entrée du bâti tombe près du début d'un groupe de nœuds
+// (2 048 lignes), et les premiers nœuds de la couche haute s'y lient entre eux : l'écrivain
+// déplace les 150 premières lignes de chaque groupe vers une grille serrée. Rouge sur la moitié
+// des tours ; six tours, chacun sur une table neuve.
+TEST_F(VectorIndexUpdate, RowsMovedTogetherDuringACreateStayReachable) {
+    constexpr int64_t NUM_ROWS = 6 * 2048;
+    constexpr int64_t GROUP_SIZE = 2048;
+    constexpr int64_t CHANGED_PER_GROUP = 150;
+    constexpr int ROUNDS = 6;
+    std::string failedRounds;
+    for (int round = 0; round < ROUNDS; round++) {
+        if (round > 0) {
+            mustRun("CALL DROP_VECTOR_INDEX('C', 'c_index');");
+            mustRun("DROP TABLE C;");
+        }
+        table = "C";
+        mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+        mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, "
+                             "i % 29, i % 31, i % 37, i % 41, i % 43, i % 47, i % 53, i % 59, "
+                             "i % 61, i % 67, i % 71, i % 73, i % 79, i / 1000.0]});",
+            NUM_ROWS - 1));
+        rag3db::main::Connection writer(database.get());
+        ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
+        auto moved = writer.query(stringFormat(
+            "MATCH (n:C) WHERE n.id % {} < {} SET n.vec = [500 + n.id % {}, n.id / {}, 0, 0, 0, "
+            "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1];",
+            GROUP_SIZE, CHANGED_PER_GROUP, GROUP_SIZE, GROUP_SIZE));
+        ASSERT_TRUE(moved->isSuccess()) << "[check: setup] " << moved->getErrorMessage();
+        WritesDuringCreate writes;
+        for (int64_t id = 0; id < NUM_ROWS; id++) {
+            // Une ligne déplacée sur dix est cherchée à son vecteur : la recherche exhaustive
+            // juge déjà toutes les autres.
+            if (id % GROUP_SIZE < CHANGED_PER_GROUP && id % 10 == 1) {
+                writes.updated.emplace_back(id,
+                    stringFormat("[{}, {}, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1]",
+                        500 + id % GROUP_SIZE, id / GROUP_SIZE));
+            }
+        }
+        rag3db::main::Connection creator(database.get());
+        auto creating = std::async(std::launch::async, [&] {
+            auto result =
+                creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+            return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        auto committed = writer.query("COMMIT;");
+        const auto outcome = creating.get();
+        ASSERT_TRUE(committed->isSuccess()) << "[check: setup] " << committed->getErrorMessage();
+        ASSERT_EQ(outcome, "ok") << "[check: setup] " << outcome;
+        const auto failed = checkAfterCreateUnderWrites(writes);
+        if (!failed.empty()) {
+            failedRounds += stringFormat(" round {}:{}", round, checksOf(failed));
+        }
+    }
+    EXPECT_TRUE(failedRounds.empty())
+        << "[check: rows-moved-together-during-create-reachable]" << failedRounds;
+}
+
+// Un point d'entrée haut invalide (une suppression dont aucun voisin haut ne survit, ou
+// l'annulation de la ligne qui le portait) : la ligne suivante qui monte dans la couche haute en
+// devenait le point d'entrée sans une seule arête, comme si la couche était vide, et toute
+// recherche y entrait sur elle seule. Le point d'entrée invalide est rendu tel par les internes,
+// puis des lignes s'insèrent jusqu'à ce que l'une monte : le point d'entrée doit être un nœud
+// qui était déjà dans la couche haute, jamais la ligne neuve.
+TEST_F(VectorIndexUpdate, AnInvalidUpperEntryPointIsTakenFromTheUpperLayer) {
+    constexpr int64_t NUM_ROWS = 2000;
+    table = "C";
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+    mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, "
+                         "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, i / 1000.0]});",
+        NUM_ROWS - 1));
+    mustRun("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+    mustRun("CHECKPOINT;");
+    ASSERT_LT(upperEntryPointOf(*conn, "C", "c_index"), static_cast<offset_t>(NUM_ROWS))
+        << "[check: setup] the mirror of HNSWStorageInfo does not read the upper entry point";
+    upperEntryPointOf(*conn, "C", "c_index", INVALID_OFFSET);
+    offset_t entryPoint = INVALID_OFFSET;
+    for (int64_t i = NUM_ROWS; i < NUM_ROWS + 1000 && entryPoint == INVALID_OFFSET; i++) {
+        mustRun(stringFormat("CREATE (:C {id: {}, vec: [{} % 17, {} % 23, 1, 2, 3, 4, 5, 6, 7, 8, "
+                             "9, 10, 11, 12, 13, {}]});",
+            i, i, i, i / 1000.0));
+        entryPoint = upperEntryPointOf(*conn, "C", "c_index");
+    }
+    ASSERT_NE(entryPoint, INVALID_OFFSET) << "[check: setup] no inserted row entered the upper layer";
+    EXPECT_LT(entryPoint, static_cast<offset_t>(NUM_ROWS))
+        << "[check: upper-entry-point-from-the-upper-layer] the entry point is the new row "
+        << entryPoint;
+    const auto failed = check("after the upper entry point is replaced", 10, "c_index");
+    std::string checks;
+    for (const auto& name : failed) {
+        checks += " [check: " + name + "]";
+    }
+    EXPECT_TRUE(failed.empty()) << checks;
 }
 
 } // namespace

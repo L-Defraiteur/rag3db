@@ -893,8 +893,22 @@ void OnDiskHNSWIndex::catchUpCommittedAfter(main::ClientContext* context,
         nodeTable, columnID, config.ml};
     auto& insertState = state.insertState;
     fitVisitedToTable(transaction, insertState.searchState);
-    // 1. Les lignes supprimées sortent, puis leurs voisins sont réparés, pour toutes à la fois.
+    // 1. Les lignes supprimées et les lignes déplacées sortent ensemble du graphe, puis leurs
+    // voisins sont réparés, pour toutes à la fois. La table porte déjà le nouveau vecteur de
+    // chaque ligne déplacée : en reprendre une à la fois la liait à des voisines « proches » à
+    // leur nouvelle place mais encore à l'ancienne dans le graphe, et un point d'entrée déplacé
+    // passait de voisine en voisine jusqu'à une ligne déjà partie (un nuage d'où la recherche ne
+    // ressortait plus : RowsMovedTogetherDuringACreateStayReachable). Sorties ensemble, aucune
+    // ne peut remplacer un point d'entrée, et ce qui reste du graphe est à la place de son vecteur.
+    // Une survivante peut garder une arête vers une ligne sortie (une arête sans retour, que
+    // finalizeDelete ne réécrit pas) : la recherche ne la suit pas tant que la ligne n'est pas
+    // rentrée, sans quoi les lignes réinsérées se liaient à ces impasses.
+    std::unordered_set<common::offset_t> outOfGraph{updated.begin(), updated.end()};
+    insertState.searchState.outOfGraph = &outOfGraph;
     for (const auto offset : deleted) {
+        deleteInternal(transaction, offset, state);
+    }
+    for (const auto offset : updated) {
         deleteInternal(transaction, offset, state);
     }
     finalizeDelete(transaction, state);
@@ -903,11 +917,16 @@ void OnDiskHNSWIndex::catchUpCommittedAfter(main::ClientContext* context,
     const auto embeddingDim = typeInfo.constPtrCast<common::ArrayTypeInfo>()->getNumElements();
     const auto scanState = std::make_unique<OnDiskEmbeddingScanState>(transaction, mm, nodeTable,
         columnID, embeddingDim);
-    // 2. Les lignes dont le vecteur a changé reprennent leur place ; passées à NULL, elles sortent.
+    // 2. Les lignes déplacées entrent à leur nouveau vecteur ; passées à NULL, elles restent
+    // dehors.
     for (const auto offset : updated) {
+        outOfGraph.erase(offset);
         const auto vector = insertState.searchState.embeddings->getEmbedding(offset, *scanState);
-        updateInternal(transaction, offset, vector.isNull() ? nullptr : &vector, insertState);
+        if (!vector.isNull()) {
+            insertInternal(transaction, offset, vector, insertState);
+        }
     }
+    insertState.searchState.outOfGraph = nullptr;
     // 3. Les lignes insérées entrent.
     for (const auto offset : inserted) {
         const auto vector = insertState.searchState.embeddings->getEmbedding(offset, *scanState);
@@ -1029,6 +1048,20 @@ common::offset_t OnDiskHNSWIndex::findLiveNode(const Transaction* transaction,
     return common::INVALID_OFFSET;
 }
 
+// A node is in the upper layer when it has edges there: a removed node has none left.
+common::offset_t OnDiskHNSWIndex::findLiveUpperNode(Transaction* transaction,
+    HNSWInsertState& insertState, const std::unordered_set<common::offset_t>* deletedNodes,
+    common::offset_t except) {
+    const auto numNodes = storageInfo->cast<HNSWStorageInfo>().numCheckpointedNodes;
+    for (common::offset_t offset = 0; offset < numNodes; offset++) {
+        if (offset != except && canBeEntryPoint(transaction, offset, insertState, deletedNodes) &&
+            !scanNeighbors(transaction, offset, true /*isUpperLayer*/, insertState).empty()) {
+            return offset;
+        }
+    }
+    return common::INVALID_OFFSET;
+}
+
 bool OnDiskHNSWIndex::canBeEntryPoint(Transaction* transaction, common::offset_t offset,
     HNSWInsertState& insertState, const std::unordered_set<common::offset_t>* deletedNodes) const {
     if (offset == common::INVALID_OFFSET || (deletedNodes && deletedNodes->contains(offset))) {
@@ -1059,8 +1092,12 @@ void OnDiskHNSWIndex::repairEntryPoint(Transaction* transaction, bool isUpperLay
         }
     }
     if (isUpperLayer) {
-        // Nothing near the deleted nodes survives in the upper layer. It restarts from the next
-        // node inserted into it; until then the search starts from the lower entry point.
+        // Nothing near the deleted nodes survives in the upper layer: until the next node
+        // inserted into it (insertToLayer takes a live node of it), the search starts from the
+        // lower entry point, repaired below by a scan. Taking a live upper node here instead
+        // could leave the search on a node whose upper edges all lead to removed rows, and the
+        // lower layer from it did not reach every survivor
+        // (RegionDelete/SetNullFirstAllButFive, 2 red in 26 runs, none in 25 on master).
         return;
     }
     // Every row that has a vector is in the lower layer: any live one will do.
@@ -1588,7 +1625,8 @@ void OnDiskHNSWIndex::oneHopSearch(const EmbeddingHandle& queryVector,
     for (const auto neighborChunk : nbrItr) {
         neighborChunk.forEach([&](auto neighbors, auto, auto i) {
             const auto nbr = neighbors[i];
-            if (!searchState.visited.contains(nbr.offset) && searchState.isMasked(nbr.offset)) {
+            if (!searchState.visited.contains(nbr.offset) && searchState.isMasked(nbr.offset) &&
+                !searchState.isOutOfGraph(nbr.offset)) {
                 const auto nbrVector = searchState.embeddings->getEmbedding(nbr.offset,
                     searchState.embeddingScanState);
                 processNbrNodeInKNNSearch(queryVector, nbrVector, nbr.offset, searchState.ef,
@@ -1686,10 +1724,14 @@ void OnDiskHNSWIndex::insertToLayer(Transaction* transaction, common::offset_t o
     if (entryPoint == common::INVALID_OFFSET) {
         auto& entryPointToSet =
             isUpperLayer ? hnswStorageInfo.upperEntryPoint : hnswStorageInfo.lowerEntryPoint;
-        if (entryPointToSet == common::INVALID_OFFSET && !isUpperLayer) {
-            // Same doubt as in the search: make sure the lower layer is really empty before
-            // starting a new graph that would not reach the nodes already there.
-            entryPointToSet = findLiveNode(transaction, insertState.searchState, offset);
+        if (entryPointToSet == common::INVALID_OFFSET) {
+            // Same doubt as in the search: make sure the layer is really empty before starting a
+            // new graph that would not reach the nodes already there. In the upper layer the
+            // inserted node became the entry point without a single edge, and every search
+            // entered on it alone (AnInvalidUpperEntryPointIsTakenFromTheUpperLayer).
+            entryPointToSet = isUpperLayer ?
+                                  findLiveUpperNode(transaction, insertState, nullptr, offset) :
+                                  findLiveNode(transaction, insertState.searchState, offset);
         }
         if (entryPointToSet == common::INVALID_OFFSET) {
             // The layer is empty. Set the entry point to the current offset.

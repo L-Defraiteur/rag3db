@@ -132,10 +132,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (158), dans `closed/`
+### Fermés (159), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Après un CREATE sous écritures, la recherche entre dans un nuage de lignes déplacées](closed/2026-10-19-apres-un-create-sous-ecritures-la-recherche-entre-dans-un-nuage-de-lignes-deplacees.md) | corrigé (le rattrapage sort ensemble les lignes déplacées et les supprimées, puis les réinsère ; un point d'entrée haut invalide se prend dans la couche haute ; voir le ticket) | réponse fausse | non (aucun CREATE sous écritures dans le produit) | non |
 | [Le COPY ne lit pas le mot NULL convenu hors d'une colonne texte](closed/2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere.md) | corrigé (19 octobre 2026) — `null_strings` vaut pour toutes les colonnes ; le filet de `copier_les_liens` reste au produit | blocage, base à rouvrir | non, par le filet | oui (son filet) |
 | [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | corrigé (19 octobre 2026) — la préparation voit les paramètres d'une sous-requête ; le produit rend `through` en `EXISTS` quand sa lib est `courant` | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Une méthode propre contre une méthode de trait de même nom](closed/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md) | corrigé (codeparsers `trait_impl`, la méthode propre passe avant à types égaux ; témoin d'impact vert par le vrai chemin) | relation manquante | oui, `impact row_to_map` | oui (`code.rs`, codeparsers) |
