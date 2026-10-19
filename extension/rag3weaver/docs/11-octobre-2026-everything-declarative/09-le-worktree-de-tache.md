@@ -86,3 +86,37 @@ avec les décisions de c7 en tête de cette page :
   - Le témoin de bout en bout dans le navigateur : une tâche ouverte, une déclaration dans la
     tâche, la relecture (texte et graphe), puis la fusion en avance rapide, avec le backend
     principal qui sert le neuf ; et un rejet.
+
+## T2, tel qu'il est fait
+
+- **La relecture** (`DaemonHost::relecture`) lit la branche par git, sans ouvrir de fichier du
+  worktree à la main : `git diff --name-only <départ>...agent/<nom>` donne les chemins touchés,
+  `git show` leur texte avant et après. Les graphes touchés et leur diff nœud à nœud viennent de
+  la même fonction que les propositions (`propositions::graphes_touches`, extraite pour servir
+  aux deux). Les témoins rejoués sont le rechargement entier du backend de la tâche
+  (`recharger`, sur sa copie de base, avec ses surcharges) : `chargement` vrai, ou le `refus`.
+  `base_a_bouge` dit si le `HEAD` du dépôt a avancé depuis le départ.
+- **La fusion** (`fusionner_une_tache`), dans cet ordre :
+  1. le worktree de la tâche n'a rien de non commité (les fichiers non suivis n'entrent pas
+     dans une fusion et ne la bloquent pas) ;
+  2. si la base a bougé, rebase dans le worktree ; un conflit abandonne le rebase et refuse ;
+  3. **les fichiers de la branche sont validés sur le backend principal, par recouvrement**
+     (`valider_sur`), avant que rien ne bouge : une branche qui se charge sur sa copie mais pas
+     sur le principal est refusée, rien n'est fusionné ;
+  4. l'arbre principal n'a rien de non commité ;
+  5. `git merge --ff-only`, le principal recharge, la tâche se ferme.
+- **Le rejet** ferme sans fusion et garde son pourquoi. Les tâches fermées (fusionnées avec
+  leur commit, rejetées avec leur pourquoi) sont gardées en mémoire par l'hôte.
+- **L'IDE** : `/ide/code/<id>/taches/` liste les tâches ouvertes (branche, copie et durée de la
+  porte, liens vers les vues de leur backend) et fermées, avec le formulaire pour en ouvrir une ;
+  `/ide/code/<id>/taches/<nom>` est la relecture, avec Fusionner et Rejeter. Le dessin d'un
+  graphe en diff est le même que celui des propositions (`sectionDeGraphe`). L'accueil montre
+  un lien « tâches » par backend, et une pastille sur un backend qui est une tâche.
+- **Le témoin** : `une_tache_se_relit_puis_se_fusionne_dans_l_ide` (`apercu_a_chaud.rs`). Une
+  tâche ouverte par le formulaire ; le graphe de clic du compteur changé dans la tâche (`n + 5`,
+  une proposition appliquée sur son backend, donc un commit sur sa branche), l'arbre principal
+  intact ; la relecture montre le texte neuf, le nœud `plus` changé et la branche qui se charge ;
+  Fusionner amène le commit dans l'arbre principal, la branche est effacée et l'aperçu du
+  principal compte par cinq ; une seconde tâche est rejetée avec son pourquoi, sans rien écrire.
+  La console du navigateur est vide. Les tâches du témoin vivent dans son dossier
+  (`hote_garde_avec`, racine des tâches réglée), jamais sous `~/.local`.

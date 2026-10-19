@@ -74,7 +74,9 @@ fn monter(paquets: &std::path::Path, fichiers: &[(&str, &str)]) -> Banc {
     assert!(reduit.bytes_after < reduit.bytes_before, "{reduit:?}");
     let manifeste = manifeste.to_string_lossy().to_string();
 
-    let (adresse, fil) = super::tests::hote_garde("j");
+    // Les tâches d'un témoin vivent dans son dossier, jamais sous ~/.local.
+    let taches = d.path().join("taches");
+    let (adresse, fil) = super::tests::hote_garde_avec("j", |h| h.with_racine_des_taches(taches));
     let racine = format!("http://{adresse}");
     // `describe` ouvre le backend ; `/ide/etat` donne son id.
     let decrit: Value = {
@@ -380,6 +382,132 @@ fn une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide() {
     n.aller(&format!("{racine}/ide/code/{id}/propositions/{qid}"), "document.querySelector('#rejeter')");
     n.evaluer("document.querySelector('#pourquoi').value = 'pas maintenant'; document.querySelector('#rejeter').click()");
     n.attendre("document.querySelector('#proposition-etat')?.textContent === 'rejetée : pas maintenant'", "la proposition rejetée");
+    assert!(std::fs::read_to_string(composants.join("compteur.tsx")).unwrap().contains("Compte"), "un rejet n'écrit rien");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **Une tâche se relit, puis se fusionne dans l'IDE** (page 09, T2, de bout
+/// en bout). Une tâche s'ouvre par le formulaire de l'IDE ; l'agent y change le
+/// graphe de clic du compteur (`n + 5`, par une proposition appliquée sur le
+/// backend de la tâche : un commit sur sa branche) ; la relecture montre le
+/// texte neuf, le nœud `plus` changé sur le dessin et la branche qui se
+/// charge ; Fusionner l'amène en avance rapide dans l'arbre principal, dont
+/// l'aperçu compte alors par cinq, et la tâche est fermée. Une seconde tâche
+/// est rejetée avec son pourquoi, et l'arbre principal n'en a rien.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn une_tache_se_relit_puis_se_fusionne_dans_l_ide() {
+    const TEMOIN: &str = "une_tache_se_relit_puis_se_fusionne_dans_l_ide";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Some(paquets) = paquets_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Banc { _d, composants, racine, id, fil } = monter(
+        &paquets,
+        &[
+            ("compteur.tsx", VUE_DU_COMPTEUR),
+            ("compteur.clic.mmd", GRAPHE_DU_COMPTEUR),
+            (
+                "compteur.component.json",
+                r#"{ "name": "Compteur", "source": "compteur.tsx", "clic": "compteur.clic.mmd", "libs": { "react": "19.2.0" } }"#,
+            ),
+        ],
+    );
+    // Le dossier du backend en dépôt, tout commité sauf la base : une tâche
+    // part d'un commit.
+    let dossier = composants.parent().unwrap().to_path_buf();
+    std::fs::write(dossier.join(".gitignore"), "base.rag3db*\n").unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["config", "user.name", "Personne Test"],
+        &["config", "user.email", "personne@example.org"],
+        &["add", "-A"],
+        &["commit", "-q", "-m", "le compteur"],
+    ] {
+        assert!(std::process::Command::new("git").arg("-C").arg(&dossier).args(args).status().unwrap().success(), "git {args:?}");
+    }
+    let poster = |route: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}{route}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let lire = |route: &str| -> Value {
+        let mut r = crate::daemon::agent().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let id_de = |nom: &str| -> String {
+        let t = lire(&format!("/ide/taches?backend={id}"));
+        t["result"]["ouvertes"]
+            .as_array()
+            .and_then(|o| o.iter().find(|t| t["nom"] == nom))
+            .unwrap_or_else(|| panic!("la tâche {nom} n'est pas ouverte : {t}"))["id"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/taches/"), "document.querySelector('#vue h1')?.textContent === \"Tâches de l'agent\"");
+
+    // Ouvrir la tâche par le formulaire.
+    n.evaluer("document.querySelector('#tache-nom').value = 'par-cinq'; document.querySelector('#ouvrir-tache').click()");
+    n.attendre("document.querySelector('#taches tr[data-nom=\"par-cinq\"]')", "la tâche ouverte, dans la liste");
+    let tache = id_de("par-cinq");
+
+    // L'agent change le graphe de clic dans la tâche : un commit sur sa branche.
+    let neuf = GRAPHE_DU_COMPTEUR.replace("n + 1", "n + 5");
+    let p = poster("/ide/propositions", json!({ "backend": tache, "files": [{ "path": "components/compteur.clic.mmd", "content": neuf }], "reason": "compter par cinq" }));
+    assert_eq!(p["ok"], true, "{p}");
+    let a = poster("/ide/propositions/appliquer", json!({ "backend": tache, "id": p["result"]["id"] }));
+    assert_eq!(a["ok"], true, "{a}");
+    assert!(std::fs::read_to_string(composants.join("compteur.clic.mmd")).unwrap().contains("n + 1"), "la tâche a écrit dans l'arbre principal");
+
+    // La relecture : le texte neuf, le nœud changé, la branche qui se charge.
+    n.aller(
+        &format!("{racine}/ide/code/{id}/taches/par-cinq"),
+        "[...document.querySelectorAll('.diff .plus')].some(l => l.textContent.includes('n + 5')) \
+         && document.querySelector('section.graphe-propose[data-cible=\"component:Compteur\"] g.etape.change[data-nom=\"plus\"]') \
+         && document.querySelector('#temoins')?.textContent === 'Témoins : la branche se charge entière.'",
+    );
+
+    // Fusionner : en avance rapide, puis la tâche fermée.
+    n.evaluer("document.querySelector('#fusionner').click()");
+    n.attendre("document.querySelector('#taches-fermees li[data-nom=\"par-cinq\"][data-etat=\"fusionnee\"]')", "la tâche fusionnée");
+    assert!(std::fs::read_to_string(composants.join("compteur.clic.mmd")).unwrap().contains("n + 5"));
+    let log = std::process::Command::new("git").arg("-C").arg(&dossier).args(["log", "-1", "--format=%s"]).output().unwrap();
+    assert!(String::from_utf8_lossy(&log.stdout).contains("compter par cinq"), "{log:?}");
+    let branches = std::process::Command::new("git").arg("-C").arg(&dossier).args(["branch", "--list", "agent/*"]).output().unwrap();
+    assert!(branches.stdout.is_empty(), "la branche de la tâche est restée : {branches:?}");
+    assert!(lire(&format!("/ide/taches?backend={id}"))["result"]["ouvertes"].as_array().unwrap().is_empty());
+
+    // Le principal sert le neuf : son aperçu compte par cinq.
+    n.aller(&format!("{racine}/ide/apercu/{id}/Compteur"), "document.querySelector('#compteur')?.textContent === 'Compte : 0 (0)'");
+    n.evaluer("document.querySelector('#compteur').click()");
+    n.attendre("document.querySelector('#compteur')?.textContent === 'Compte : 5 (10)'", "le comportement fusionné, servi par le principal");
+
+    // Une seconde tâche, rejetée avec son pourquoi.
+    let o = poster("/ide/taches", json!({ "backend": id, "nom": "autre-libelle" }));
+    assert_eq!(o["ok"], true, "{o}");
+    let autre = id_de("autre-libelle");
+    let q = poster("/ide/propositions", json!({ "backend": autre, "files": [{ "path": "components/compteur.tsx", "content": VUE_DU_COMPTEUR.replace("Compte", "Total") }], "reason": "un autre libellé" }));
+    assert_eq!(poster("/ide/propositions/appliquer", json!({ "backend": autre, "id": q["result"]["id"] }))["ok"], true);
+    n.aller(&format!("{racine}/ide/code/{id}/taches/autre-libelle"), "document.querySelector('#rejeter')");
+    n.evaluer("document.querySelector('#pourquoi').value = 'pas maintenant'; document.querySelector('#rejeter').click()");
+    n.attendre(
+        "document.querySelector('#taches-fermees li[data-nom=\"autre-libelle\"][data-etat=\"rejetee\"]')?.textContent.includes('pas maintenant')",
+        "la tâche rejetée",
+    );
     assert!(std::fs::read_to_string(composants.join("compteur.tsx")).unwrap().contains("Compte"), "un rejet n'écrit rien");
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
 

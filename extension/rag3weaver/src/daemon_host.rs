@@ -141,6 +141,8 @@ pub struct DaemonHost {
     taches: Mutex<std::collections::BTreeMap<PathBuf, taches::Tache>>,
     /// Où vivent leurs worktrees et leurs bases.
     racine_des_taches: PathBuf,
+    /// Les tâches fermées, fusionnées ou rejetées (leur trace).
+    taches_fermees: Mutex<Vec<Value>>,
 }
 
 /// Les tâches de l'agent : une branche, un worktree, une base à soi.
@@ -200,6 +202,7 @@ impl DaemonHost {
             ide_session: std::sync::OnceLock::new(),
             taches: Mutex::new(std::collections::BTreeMap::new()),
             racine_des_taches: taches::racine_par_defaut(),
+            taches_fermees: Mutex::new(Vec::new()),
         }
     }
 
@@ -1067,11 +1070,18 @@ mod tests {
 
     /// Un hôte gardé par un jeton, sur un port libre ; rend l'adresse.
     pub(super) fn hote_garde(jeton: &str) -> (String, std::thread::JoinHandle<()>) {
+        hote_garde_avec(jeton, |h| h)
+    }
+
+    /// [`hote_garde`], l'hôte réglé par `regler` (la racine des tâches d'un
+    /// témoin, dans son dossier).
+    pub(super) fn hote_garde_avec(jeton: &str, regler: impl FnOnce(DaemonHost) -> DaemonHost) -> (String, std::thread::JoinHandle<()>) {
+        let hote = regler(hote_isole());
         let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let adresse = ecoute.local_addr().unwrap().to_string();
         let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
         let jeton = jeton.to_string();
-        let fil = std::thread::spawn(move || DaemonServer::new(server, 2).serve(Arc::new(hote_isole()), Some(jeton)));
+        let fil = std::thread::spawn(move || DaemonServer::new(server, 2).serve(Arc::new(hote), Some(jeton)));
         (adresse, fil)
     }
 

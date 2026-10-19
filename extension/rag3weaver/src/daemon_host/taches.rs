@@ -61,6 +61,13 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
 
+/// Le contenu d'un fichier à une référence (`git show ref:chemin`), tel
+/// quel : sans rien rogner, une fin de ligne comprise.
+fn git_show(dir: &Path, reference: &str, chemin: &str) -> Option<String> {
+    let o = std::process::Command::new("git").arg("-C").arg(dir).args(["show", &format!("{reference}:{chemin}")]).output().ok()?;
+    o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
 fn nom_valide(nom: &str) -> Result<(), String> {
     let ok = !nom.is_empty()
         && nom.len() <= 64
@@ -196,6 +203,115 @@ impl DaemonHost {
         let dossier = tache.arbre.parent().map(Path::to_path_buf).unwrap_or_default();
         std::fs::remove_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
         Ok(tache)
+    }
+}
+
+impl DaemonHost {
+    /// Les fichiers que la branche d'une tâche change depuis son départ,
+    /// relatifs au dossier du backend : (chemin, avant, après).
+    fn changements(&self, tache: &Tache) -> Result<Vec<(String, Option<String>, Option<String>)>, String> {
+        let dossier = tache
+            .parent_manifest
+            .parent()
+            .and_then(|d| d.strip_prefix(&tache.depot).ok())
+            .map(Path::to_path_buf)
+            .unwrap_or_default();
+        let liste = git(&tache.depot, &["diff", "--name-only", &format!("{}...{}", tache.depart, tache.branche)])?;
+        let mut out = Vec::new();
+        for chemin in liste.lines().filter(|l| !l.is_empty()) {
+            let Ok(relatif) = Path::new(chemin).strip_prefix(&dossier) else { continue };
+            let lire = |reference: &str| git_show(&tache.depot, reference, chemin);
+            out.push((relatif.to_string_lossy().to_string(), lire(&tache.depart), lire(&tache.branche)));
+        }
+        Ok(out)
+    }
+
+    /// **La relecture d'une tâche** (T2) : les fichiers que sa branche
+    /// change, avant et après ; les graphes touchés, avant (le backend
+    /// principal) et après (la tâche), en diff nœud à nœud ; les témoins
+    /// rejoués — le chargement entier de la branche, sur sa base ; et si la
+    /// base du dépôt a bougé depuis le départ (la fusion rebasera).
+    pub fn relecture(&self, parent: &str, nom: &str) -> Result<Value, String> {
+        let tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
+        let changements = self.changements(&tache)?;
+        let principal = self.hote_par_id(parent)?;
+        let avant = self.with_backend(&principal, |b| b.prepared())?;
+        let h = self.hosted(&tache.manifest)?;
+        let apres = self.with_backend(&h, |b| b.prepared())?;
+        let temoin = apres.recharger(&crate::lecteur::Disque).err();
+        let touches: std::collections::BTreeSet<PathBuf> = changements.iter().map(|(c, ..)| crate::lecteur::normaliser(Path::new(c))).collect();
+        let declares = crate::propositions::noms_declares(changements.iter().filter_map(|(c, _, a)| Some((c.as_str(), a.as_deref()?))));
+        let (graphes, composants) =
+            crate::propositions::graphes_touches(&avant, Some((&apres, &crate::lecteur::Disque)), &touches, &declares);
+        let tete = git(&tache.depot, &["rev-parse", "HEAD"])?;
+        Ok(json!({
+            "tache": tache,
+            "fichiers": changements.iter().map(|(c, a, b)| json!({ "path": c, "avant": a, "apres": b })).collect::<Vec<_>>(),
+            "graphes": graphes,
+            "composants": composants,
+            "temoins": { "chargement": temoin.is_none(), "refus": temoin },
+            "base_a_bouge": tete != tache.depart,
+        }))
+    }
+
+    /// **Fusionner une tâche, en avance rapide** (T2) :
+    /// 1. le worktree propre, aucune indexation dans la tâche ;
+    /// 2. si le dépôt a bougé depuis le départ, la branche rebasée dans le
+    ///    worktree — un conflit abandonne le rebase et refuse en le disant ;
+    /// 3. les fichiers de la branche **validés sur le principal sans écrire**
+    ///    (`valider_sur`, un recouvrement) : une fusion ne laisse jamais le
+    ///    principal invalide ;
+    /// 4. `git merge --ff-only`, puis le principal recharge ses déclarations
+    ///    et ses réactions ;
+    /// 5. la tâche fermée (son instance, son worktree, sa branche, sa base).
+    pub fn fusionner_une_tache(&self, parent: &str, nom: &str) -> Result<Value, String> {
+        let tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
+        let sale = git(&tache.arbre, &["status", "--porcelain", "--untracked-files=no"])?;
+        if !sale.is_empty() {
+            return Err(format!("le worktree de la tâche a des changements non commités :\n{sale}"));
+        }
+        let tete = git(&tache.depot, &["rev-parse", "HEAD"])?;
+        if tete != tache.depart {
+            if let Err(e) = git(&tache.arbre, &["rebase", "-q", &tete]) {
+                let _ = git(&tache.arbre, &["rebase", "--abort"]);
+                return Err(format!("la branche ne se rebase pas sur la base du dépôt ({}) : {e}", &tete[..tete.len().min(9)]));
+            }
+        }
+        let changements = self.changements(&Tache { depart: tete.clone(), ..tache.clone() })?;
+        let principal = self.hote_par_id(parent)?;
+        let fichiers: Vec<(String, String)> = changements.iter().filter_map(|(c, _, a)| Some((c.clone(), a.clone()?))).collect();
+        if !fichiers.is_empty() {
+            self.with_backend(&principal, |b| b.valider_sur(&fichiers))?
+                .map_err(|e| format!("la branche ne se charge pas sur le principal, rien n'est fusionné : {e}"))?;
+        }
+        let sale = git(&tache.depot, &["status", "--porcelain", "--untracked-files=no"])?;
+        if !sale.is_empty() {
+            return Err(format!("l'arbre principal a des changements non commités :\n{sale}"));
+        }
+        git(&tache.depot, &["merge", "-q", "--ff-only", &tache.branche])?;
+        let fusion = git(&tache.depot, &["rev-parse", "HEAD"])?;
+        let recharge = self.with_backend(&principal, |b| b.reload_reactions())?;
+        self.fermer_une_tache(parent, nom)?;
+        let fin = json!({ "nom": nom, "parent": parent, "etat": "fusionnee", "commit": fusion, "rechargement": recharge.as_ref().err() });
+        self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
+        recharge.map_err(|e| format!("fusionné ({fusion}), mais le principal ne recharge pas : {e}"))?;
+        Ok(fin)
+    }
+
+    /// **Rejeter une tâche**, avec son pourquoi : fermée sans fusion.
+    pub fn rejeter_une_tache(&self, parent: &str, nom: &str, pourquoi: &str) -> Result<Value, String> {
+        if pourquoi.trim().is_empty() {
+            return Err("un rejet dit pourquoi".into());
+        }
+        self.fermer_une_tache(parent, nom)?;
+        let fin = json!({ "nom": nom, "parent": parent, "etat": "rejetee", "pourquoi": pourquoi });
+        self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
+        Ok(fin)
+    }
+
+    /// Les tâches fermées d'un backend (fusionnées ou rejetées), dans l'ordre.
+    pub fn taches_fermees_de(&self, parent: &str) -> Vec<Value> {
+        self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|t| t["parent"] == parent).cloned().collect()
     }
 }
 

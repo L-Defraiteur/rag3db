@@ -232,69 +232,20 @@ impl Backend {
     /// chacun avant (le disque), après (le recouvrement) et leur diff ; et
     /// les composants touchés, que l'aperçu peut jouer sur la proposition.
     pub fn detail_de_proposition(&self, id: u64) -> Result<Value, String> {
-        use crate::backend::GraphTarget;
         let p = self.proposition(id).ok_or_else(|| format!("pas de proposition {id}"))?;
         let avant = self.prepared();
         let fichiers: Vec<(String, String)> = p.fichiers.iter().map(|f| (f.path.clone(), f.apres.clone())).collect();
         let recouvrement = crate::lecteur::Recouvrement::sur(&avant.directory, &fichiers);
-        let proposes: std::collections::BTreeSet<std::path::PathBuf> =
-            fichiers.iter().map(|(chemin, _)| crate::lecteur::normaliser(&avant.directory.join(chemin))).collect();
-        let propose = |chemin: &std::path::Path| proposes.contains(&crate::lecteur::normaliser(&avant.directory.join(chemin)));
         // L'après n'existe que si la validation l'a accepté.
         let apres = match &p.refus {
             None => avant.recharger(&recouvrement).ok(),
             Some(_) => None,
         };
-        let mut cibles: Vec<GraphTarget> = Vec::new();
-        for m in [Some(&avant.manifest), apres.as_ref().map(|a| &a.manifest)].into_iter().flatten() {
-            for (nom, t) in &m.tools {
-                if propose(&t.graph) && !cibles.contains(&GraphTarget::Tool(nom.clone())) {
-                    cibles.push(GraphTarget::Tool(nom.clone()));
-                }
-            }
-            for (nom, r) in &m.reactions {
-                if propose(&r.graph) && !cibles.contains(&GraphTarget::Reaction(nom.clone())) {
-                    cibles.push(GraphTarget::Reaction(nom.clone()));
-                }
-            }
-        }
-        // Les composants : par leur déclaration, leur vue ou leur graphe de clic.
-        let mut composants: Vec<String> = Vec::new();
-        let touche = |c: &crate::components::ComponentDecl| {
-            propose(&std::path::Path::new("components").join(&c.source))
-                || c.clic.as_ref().is_some_and(|k| propose(&std::path::Path::new("components").join(k)))
-        };
-        let declares: Vec<String> = fichiers
-            .iter()
-            .filter(|(chemin, _)| chemin.ends_with(crate::components::SUFFIX))
-            .filter_map(|(_, contenu)| serde_json::from_str::<Value>(contenu).ok()?["name"].as_str().map(str::to_string))
-            .collect();
-        let les_composants = match &apres {
-            Some(a) => a.components_on_disk_avec(&recouvrement).ok(),
-            None => avant.components_on_disk().ok(),
-        };
-        for c in les_composants.iter().flat_map(|cs| cs.components.values()) {
-            if (touche(c) || declares.contains(&c.name)) && !composants.contains(&c.name) {
-                composants.push(c.name.clone());
-            }
-        }
-        for c in &composants {
-            cibles.push(GraphTarget::Component(c.clone()));
-        }
-        let graphes: Vec<Value> = cibles
-            .iter()
-            .map(|cible| {
-                let g_avant = avant.graph_json(cible).ok();
-                let g_apres = apres.as_ref().and_then(|a| a.graph_json_avec(cible, &recouvrement).ok());
-                json!({
-                    "cible": cible.to_json(),
-                    "avant": g_avant,
-                    "apres": g_apres,
-                    "diff": diff_de_graphes(g_avant.as_ref(), g_apres.as_ref()),
-                })
-            })
-            .filter(|g| !(g["avant"]["nodes"].as_array().is_none_or(Vec::is_empty) && g["apres"]["nodes"].as_array().is_none_or(Vec::is_empty)))
-            .collect();
+        let touches: std::collections::BTreeSet<std::path::PathBuf> =
+            fichiers.iter().map(|(chemin, _)| crate::lecteur::normaliser(std::path::Path::new(chemin))).collect();
+        let declares = noms_declares(fichiers.iter().map(|(c, t)| (c.as_str(), t.as_str())));
+        let (graphes, composants) =
+            graphes_touches(&avant, apres.as_ref().map(|a| (a, &recouvrement as &dyn crate::lecteur::Lecteur)), &touches, &declares);
         Ok(json!({ "proposition": p, "graphes": graphes, "composants": composants }))
     }
 
@@ -305,4 +256,73 @@ impl Backend {
         let fichiers: Vec<(String, String)> = p.fichiers.iter().map(|f| (f.path.clone(), f.apres.clone())).collect();
         Ok(crate::lecteur::Recouvrement::sur(&self.prepared().directory, &fichiers))
     }
+}
+
+/// Les noms des composants que des fichiers déclarent (leurs `.component.json`).
+pub fn noms_declares<'a>(fichiers: impl Iterator<Item = (&'a str, &'a str)>) -> Vec<String> {
+    fichiers
+        .filter(|(chemin, _)| chemin.ends_with(crate::components::SUFFIX))
+        .filter_map(|(_, contenu)| serde_json::from_str::<Value>(contenu).ok()?["name"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// **Les graphes que des changements touchent**, avant et après, avec leur
+/// diff : un outil ou une réaction dont le `.mmd` a changé, un composant dont
+/// la déclaration, la vue ou le graphe de clic a changé. `touches` : les
+/// chemins changés, relatifs au dossier du backend. `apres` : le backend
+/// d'après et son lecteur (le recouvrement d'une proposition, ou le disque
+/// d'une tâche), absent si l'après ne se charge pas. Rend les graphes et les
+/// composants touchés. Sert au détail d'une proposition et à la relecture
+/// d'une tâche.
+pub fn graphes_touches(
+    avant: &crate::backend::PreparedBackend,
+    apres: Option<(&crate::backend::PreparedBackend, &dyn crate::lecteur::Lecteur)>,
+    touches: &std::collections::BTreeSet<std::path::PathBuf>,
+    declares: &[String],
+) -> (Vec<Value>, Vec<String>) {
+    use crate::backend::GraphTarget;
+    let touche = |chemin: &std::path::Path| touches.contains(&crate::lecteur::normaliser(chemin));
+    let mut cibles: Vec<GraphTarget> = Vec::new();
+    for m in [Some(&avant.manifest), apres.map(|(a, _)| &a.manifest)].into_iter().flatten() {
+        for (nom, t) in &m.tools {
+            if touche(&t.graph) && !cibles.contains(&GraphTarget::Tool(nom.clone())) {
+                cibles.push(GraphTarget::Tool(nom.clone()));
+            }
+        }
+        for (nom, r) in &m.reactions {
+            if touche(&r.graph) && !cibles.contains(&GraphTarget::Reaction(nom.clone())) {
+                cibles.push(GraphTarget::Reaction(nom.clone()));
+            }
+        }
+    }
+    let les_composants = match apres {
+        Some((a, lecteur)) => a.components_on_disk_avec(lecteur).ok(),
+        None => avant.components_on_disk().ok(),
+    };
+    let mut composants: Vec<String> = Vec::new();
+    for c in les_composants.iter().flat_map(|cs| cs.components.values()) {
+        let par_fichier = touche(&std::path::Path::new("components").join(&c.source))
+            || c.clic.as_ref().is_some_and(|k| touche(&std::path::Path::new("components").join(k)));
+        if (par_fichier || declares.contains(&c.name)) && !composants.contains(&c.name) {
+            composants.push(c.name.clone());
+        }
+    }
+    for c in &composants {
+        cibles.push(GraphTarget::Component(c.clone()));
+    }
+    let graphes = cibles
+        .iter()
+        .map(|cible| {
+            let g_avant = avant.graph_json(cible).ok();
+            let g_apres = apres.and_then(|(a, lecteur)| a.graph_json_avec(cible, lecteur).ok());
+            json!({
+                "cible": cible.to_json(),
+                "avant": g_avant,
+                "apres": g_apres,
+                "diff": diff_de_graphes(g_avant.as_ref(), g_apres.as_ref()),
+            })
+        })
+        .filter(|g| !(g["avant"]["nodes"].as_array().is_none_or(Vec::is_empty) && g["apres"]["nodes"].as_array().is_none_or(Vec::is_empty)))
+        .collect();
+    (graphes, composants)
 }

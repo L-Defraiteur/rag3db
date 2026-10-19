@@ -234,6 +234,7 @@ async function accueil() {
         el("a", { href: `/ide/code/${b.id}/dag/` }, "graphes"),
         el("a", { href: `/ide/code/${b.id}/reactions/` }, "réactions"),
         el("a", { href: `/ide/code/${b.id}/propositions/` }, "propositions"),
+        b.tache ? el("span", { class: "pastille" }, `tâche ${b.tache.nom}`) : el("a", { href: `/ide/code/${b.id}/taches/` }, "tâches"),
         el("span", { class: "meta" }, b.manifest),
         el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
         (b.template_drift ?? []).length ? el("span", { class: "meta" }, `${b.template_drift.length} gabarit(s) local(aux) différent(s) du livré`) : "",
@@ -644,6 +645,24 @@ async function graphe(id, nom) {
 const etatDe = (p) => p.etat === "appliquee" ? `appliquée (${p.commit ? p.commit.slice(0, 9) : "rien à écrire"})`
   : p.etat === "rejetee" ? `rejetée : ${p.pourquoi}` : p.refus ? "refusée à la validation" : "proposée";
 
+// Un graphe touché, avant et après, dessiné avec son diff : la réunion des
+// deux, les nœuds ajoutés, changés et retirés surlignés (les propositions, la
+// relecture d'une tâche).
+function sectionDeGraphe(g) {
+      const d = g.diff;
+      const union = { nodes: [...(g.apres?.nodes ?? []), ...(g.avant?.nodes ?? []).filter((n) => d.retires.includes(n.name))],
+        edges: [...(g.apres?.edges ?? []), ...(g.avant?.edges ?? []).filter((e) => d.aretes_retirees.includes(`${e.from_node}.${e.from_port}→${e.to_node}.${e.to_port}`))] };
+      const cle = (e) => `${e.from_node}.${e.from_port}→${e.to_node}.${e.to_port}`;
+      const { dessin } = dessinerGraphe(union,
+        (n) => d.ajoutes.includes(n) ? "ajoute" : d.changes.includes(n) ? "change" : d.retires.includes(n) ? "retire" : "",
+        (e) => d.aretes_ajoutees.includes(cle(e)) ? "ajoutee" : d.aretes_retirees.includes(cle(e)) ? "retiree" : "");
+      const [genre, nom] = Object.entries(g.cible)[0];
+      return el("section", { class: "graphe-propose", "data-cible": `${genre}:${nom}` },
+        el("h2", {}, `graphe — ${genre} ${nom}`),
+        el("p", { class: "note" }, `${d.ajoutes.length} ajouté(s), ${d.changes.length} changé(s), ${d.retires.length} retiré(s) ; ${d.aretes_ajoutees.length} arête(s) ajoutée(s), ${d.aretes_retirees.length} retirée(s).`),
+        el("div", { class: "graphe" }, dessin));
+}
+
 async function propositions(id, reste) {
   if (reste) return proposition(id, Number(reste));
   const b = backend(id);
@@ -695,23 +714,87 @@ async function proposition(id, pid) {
       note) : "",
     composants.length ? el("p", {}, "Aperçu, sans appliquer : ", ...composants.map((c) =>
       el("a", { href: `/ide/apercu/${id}/${encodeURIComponent(c)}?proposition=${pid}`, target: "_blank", class: "apercu-propose" }, c))) : "",
-    ...graphes.map((g) => {
-      const d = g.diff;
-      const union = { nodes: [...(g.apres?.nodes ?? []), ...(g.avant?.nodes ?? []).filter((n) => d.retires.includes(n.name))],
-        edges: [...(g.apres?.edges ?? []), ...(g.avant?.edges ?? []).filter((e) => d.aretes_retirees.includes(`${e.from_node}.${e.from_port}→${e.to_node}.${e.to_port}`))] };
-      const cle = (e) => `${e.from_node}.${e.from_port}→${e.to_node}.${e.to_port}`;
-      const { dessin } = dessinerGraphe(union,
-        (n) => d.ajoutes.includes(n) ? "ajoute" : d.changes.includes(n) ? "change" : d.retires.includes(n) ? "retire" : "",
-        (e) => d.aretes_ajoutees.includes(cle(e)) ? "ajoutee" : d.aretes_retirees.includes(cle(e)) ? "retiree" : "");
-      const [genre, nom] = Object.entries(g.cible)[0];
-      return el("section", { class: "graphe-propose", "data-cible": `${genre}:${nom}` },
-        el("h2", {}, `graphe — ${genre} ${nom}`),
-        el("p", { class: "note" }, `${d.ajoutes.length} ajouté(s), ${d.changes.length} changé(s), ${d.retires.length} retiré(s) ; ${d.aretes_ajoutees.length} arête(s) ajoutée(s), ${d.aretes_retirees.length} retirée(s).`),
-        el("div", { class: "graphe" }, dessin));
-    }),
+    ...graphes.map(sectionDeGraphe),
     ...p.fichiers.map((f) => el("section", {},
       el("h2", {}, f.path + (f.avant == null ? " (neuf)" : "")),
       el("div", { class: "diff" }, difference(f.avant ?? "", f.apres)))),
+  ));
+}
+
+// ─── Les tâches de l'agent (page 09) ────────────────────────────────────────
+// Une tâche : une branche agent/<nom>, un worktree, une base à soi, et une
+// seconde instance du backend (ses vues sont celles de tout backend). La
+// relecture montre ce que sa branche change, ses graphes en diff, ses témoins
+// rejoués, puis Fusionner (en avance rapide) ou Rejeter.
+
+async function taches(id, reste) {
+  if (reste) return tache(id, reste);
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · tâches");
+  const r = await (await fetch(`/ide/taches?${new URLSearchParams({ backend: id })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const { ouvertes, fermees } = r.result;
+  const note = el("span", { class: "note", id: "tache-note" }, "");
+  const nom = el("input", { id: "tache-nom", placeholder: "nom de la tâche", "aria-label": "nom de la tâche" });
+  const ouvrir = async () => {
+    note.textContent = "copie de la base, worktree…";
+    const rep = await (await fetch("/ide/taches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, nom: nom.value }) })).json();
+    if (!rep.ok) { note.textContent = rep.error; return; }
+    await chargerEtat();
+    montrer();
+  };
+  vue.replaceChildren(
+    el("h1", {}, "Tâches de l'agent"),
+    el("p", { class: "note" }, "Une tâche : une branche à elle, un worktree, une copie de la base. L'agent y déclare ; on relit, puis on fusionne ou on rejette."),
+    el("div", { class: "barre" }, nom, el("button", { id: "ouvrir-tache", onclick: ouvrir }, "Ouvrir une tâche"), note),
+    ouvertes.length
+      ? el("table", { class: "runs", id: "taches" },
+          el("thead", {}, el("tr", {}, ...["tâche", "branche", "base", "backend"].map((t) => el("th", {}, t)))),
+          el("tbody", {}, ouvertes.map((t) => el("tr", { "data-nom": t.nom },
+            el("td", {}, el("a", { href: `/ide/code/${id}/taches/${encodeURIComponent(t.nom)}` }, t.nom)),
+            el("td", {}, t.branche),
+            el("td", {}, `${t.copie.reflink ? "reflink" : "copie pleine"}, ${Math.round(t.copie.octets / 1024)} Kio, porte ${t.copie.tenue_ms} ms`),
+            el("td", {}, el("a", { href: `/ide/code/${t.id}/arbre/` }, "ses vues"), " · ", el("a", { href: `/ide/code/${t.id}/propositions/` }, "ses propositions"))))))
+      : el("p", { class: "note" }, "Aucune tâche ouverte."),
+    fermees.length ? el("h2", {}, "Fermées") : "",
+    fermees.length ? el("ul", { class: "liste", id: "taches-fermees" }, fermees.map((t) => el("li", { "data-nom": t.nom, "data-etat": t.etat },
+      t.nom, el("span", { class: "meta" }, t.etat === "fusionnee" ? `fusionnée (${String(t.commit).slice(0, 9)})` : `rejetée : ${t.pourquoi}`)))) : "",
+  );
+}
+
+async function tache(id, nom) {
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ",
+    el("a", { href: `/ide/code/${id}/taches/` }, nomCourt(b.manifest)), ` · tâche ${nom}`);
+  const r = await (await fetch(`/ide/taches?${new URLSearchParams({ backend: id, nom })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const { tache: t, fichiers, graphes, temoins, base_a_bouge } = r.result;
+  const note = el("span", { class: "note", id: "tache-note" }, "");
+  const pourquoi = el("input", { id: "pourquoi", placeholder: "pourquoi rejeter", "aria-label": "pourquoi rejeter" });
+  const agir = async (route, corps) => {
+    note.textContent = route === "fusionner" ? "fusion…" : "rejet…";
+    const rep = await (await fetch(`/ide/taches/${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, nom, ...corps }) })).json();
+    if (!rep.ok) { note.textContent = rep.error; return; }
+    await chargerEtat();
+    history.pushState(null, "", `/ide/code/${id}/taches/`);
+    montrer();
+  };
+  vue.replaceChildren(el("div", { class: "proposition" },
+    el("h1", {}, `Tâche ${t.nom}`),
+    el("p", { class: "note" }, `${t.branche}, partie de ${t.depart.slice(0, 9)}${base_a_bouge ? " — la base du dépôt a bougé depuis : la fusion rebasera" : ""}. `,
+      el("a", { href: `/ide/code/${t.id}/arbre/` }, "ses vues")),
+    el("p", { id: "temoins" }, temoins.chargement ? "Témoins : la branche se charge entière." : "Témoins : la branche ne se charge pas."),
+    temoins.refus ? el("pre", { class: "refus" }, temoins.refus) : "",
+    el("div", { class: "actions" },
+      el("button", { id: "fusionner", onclick: () => agir("fusionner", {}) }, "Fusionner"),
+      pourquoi,
+      el("button", { id: "rejeter", onclick: () => agir("rejeter", { why: pourquoi.value || "rejetée dans l'IDE" }) }, "Rejeter"),
+      note),
+    fichiers.length ? "" : el("p", { class: "note" }, "La branche ne change encore rien."),
+    ...graphes.map(sectionDeGraphe),
+    ...fichiers.map((f) => el("section", {},
+      el("h2", {}, f.path + (f.avant == null ? " (neuf)" : f.apres == null ? " (retiré)" : "")),
+      el("div", { class: "diff" }, difference(f.avant ?? "", f.apres ?? "")))),
   ));
 }
 
@@ -905,7 +988,7 @@ function vivre(d) {
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -945,6 +1028,7 @@ async function vueDe(r) {
     case "dag": return await dag(r.id, r.reste);
     case "reactions": return await reactions(r.id);
     case "propositions": return await propositions(r.id, r.reste);
+    case "taches": return await taches(r.id, r.reste);
     default: return await accueil();
   }
 }

@@ -14,6 +14,8 @@
 //! | `GET /ide/reactions?backend=<id>` | les réactions du backend, ses runs, l'état de ses montres |
 //! | `GET /ide/propositions?backend=<id>[&id=<n>]` | les propositions, ou le détail d'une (diffs, graphes avant/après) |
 //! | `POST /ide/propositions[/appliquer\|/rejeter]` | proposer `{backend, files, reason}`, appliquer `{backend, id}`, rejeter `{backend, id, why}` |
+//! | `GET /ide/taches?backend=<id>[&nom=<n>]` | les tâches de l'agent, ou la relecture d'une (fichiers, graphes, témoins) |
+//! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom}`, rejeter `{backend, nom, why}` |
 //! | `GET /ide/etat` | l'état de l'hôte (`/etat`) |
 //! | `POST /ide/call` | `{manifest, name, arguments}`, comme `/call`, dans la session de l'IDE |
 //! | `POST /ide/describe` | `{manifest}`, comme `/describe` |
@@ -524,6 +526,39 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                 }
             };
             let _ = request.respond(json_(statut, &v));
+        }
+        // Les tâches de l'agent (page 09) : la liste, la relecture d'une tâche,
+        // l'ouvrir, la fusionner, la rejeter. La page est une personne.
+        ("GET", "/ide/taches") => {
+            let (statut, v) = match (param("backend"), param("nom")) {
+                (None, _) => (400, json!({ "ok": false, "error": "tâches : il faut backend=<id>" })),
+                (Some(id), None) => (200, json!({ "ok": true, "result": { "ouvertes": host.taches_de(&id), "fermees": host.taches_fermees_de(&id) } })),
+                (Some(id), Some(nom)) => match host.relecture(&id, &nom) {
+                    Ok(v) => (200, json!({ "ok": true, "result": v })),
+                    Err(e) => (404, json!({ "ok": false, "error": e })),
+                },
+            };
+            let _ = request.respond(json_(statut, &v));
+        }
+        ("POST", "/ide/taches" | "/ide/taches/fusionner" | "/ide/taches/rejeter") => {
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => {
+                    let id = c["backend"].as_str().unwrap_or_default();
+                    let nom = c["nom"].as_str().unwrap_or_default();
+                    let r = match path.as_str() {
+                        "/ide/taches" => host.ouvrir_une_tache(id, nom).map(|t| json!(t)),
+                        "/ide/taches/fusionner" => host.fusionner_une_tache(id, nom),
+                        _ => host.rejeter_une_tache(id, nom, c["why"].as_str().unwrap_or_default()),
+                    };
+                    match r {
+                        Ok(v) => json!({ "ok": true, "result": v }),
+                        Err(e) => json!({ "ok": false, "error": e }),
+                    }
+                }
+            };
+            let _ = request.respond(json_(200, &v));
         }
         ("GET", "/ide/etat") => {
             let (statut, v) = host.handle("GET", "/etat", None, &[]);
