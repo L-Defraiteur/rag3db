@@ -37,13 +37,17 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (39)
+### Ouverts — moteur (43)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Les statistiques par colonne ne sont pas compactées au point de reprise après un DROP](2026-10-19-les-statistiques-par-colonne-ne-sont-pas-compactees-au-point-de-reprise-apres-un-drop.md) | ouvert — pour le cœur, lot V2-1a ; témoin à écrire | réponse fausse en silence (cardinalités d'une autre colonne) | oui (DROP d'une propriété du milieu puis point de reprise) | oui |
+| [Un groupe vidé par le point de reprise garde la colonne supprimée](2026-10-19-un-groupe-vide-par-le-point-de-reprise-garde-la-colonne-supprimee.md) | ouvert, à vérifier par un témoin — pour le cœur, lot V2-1a | bloc et types décalés si confirmé | oui si confirmé | oui si confirmé |
+| [Un ADD COLUMN sur une relation après le DROP de sa dernière propriété range la colonne locale au mauvais numéro](2026-10-19-un-add-column-sur-une-relation-apres-le-drop-de-sa-derniere-propriete-range-la-colonne-locale-au-mauvais-numero.md) | ouvert, à confirmer par un témoin — pour le cœur, lot V2-1a | valeur dans une autre colonne ou hors du vecteur si confirmé | oui si confirmé | oui si confirmé |
+| [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | ouvert — pour le cœur, une ligne (avec V2-1a ou avant) ; témoin à écrire | blocage nommé « Miss cached column » après un DROP puis un point de reprise | oui | oui |
 | [Le COPY de relations ne lit pas le mot NULL dans une colonne entière](2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere.md) | ouvert — filet dans `copier_les_liens` (une colonne texte, sinon par lots) ; témoin du moteur à écrire | blocage, base à rouvrir | non, par le filet | oui (son filet) |
 | [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | ouvert — pour le cœur ; recette en Cypher brut, quatre formes du dehors | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
