@@ -68,6 +68,11 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
         r#"{ "name": "Compteur", "source": "compteur.tsx", "libs": { "react": "19.2.0" } }"#,
     )
     .unwrap();
+    // Le magasin réduit à ce que le graphe de Compteur atteint (et les licences) :
+    // l'aperçu à chaud doit se charger sur ce magasin-là (G, 19 octobre 2026).
+    let reduit = crate::components::Components::load(&dossier).unwrap().prune_store(&dossier, &[]).unwrap();
+    eprintln!("magasin de l'aperçu : {} → {} octets ({} objets effacés)", reduit.bytes_before, reduit.bytes_after, reduit.objects_removed);
+    assert!(reduit.bytes_after < reduit.bytes_before, "{reduit:?}");
     let manifeste = manifeste.to_string_lossy().to_string();
 
     let (adresse, fil) = super::tests::hote_garde("j");

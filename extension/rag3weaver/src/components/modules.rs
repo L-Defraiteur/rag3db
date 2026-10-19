@@ -326,3 +326,84 @@ pub const REGISTRE: &str = r#"(function () {
   };
 })();
 "#;
+
+// ─── Le magasin réduit à ce que le graphe atteint ───────────────────────────
+
+/// Ce qu'une réduction du magasin a fait : fichiers et octets rangés avant et
+/// après, et les objets du magasin effacés.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Pruned {
+    pub files_before: usize,
+    pub bytes_before: u64,
+    pub files_after: usize,
+    pub bytes_after: u64,
+    pub objects_removed: usize,
+}
+
+/// Un fichier qu'un paquet garde toujours : sa licence, quel que soit son nom.
+fn licence(nom_complet: &str) -> bool {
+    let nom = nom_complet.rsplit('/').next().unwrap_or(nom_complet).to_ascii_lowercase();
+    nom.starts_with("license") || nom.starts_with("licence") || nom.starts_with("copying")
+}
+
+impl Components {
+    /// **Réduit le magasin à ce que le graphe atteint** (19 octobre 2026) : les
+    /// fichiers de chaque lib que le graphe de modules atteint depuis les
+    /// entrées — les spécifiers donnés, sinon chaque composant du backend —, en
+    /// développement comme en production, plus la licence de chaque paquet.
+    /// `libs.json` est réécrit, et les objets du magasin que plus rien ne désigne
+    /// sont effacés. Un graphe qui ne se résout pas entier refuse : on ne réduit
+    /// pas un magasin d'après un graphe faux.
+    pub fn prune_store(&self, backend_dir: &Path, entries: &[&str]) -> Result<Pruned, String> {
+        let mut atteints: BTreeMap<&str, std::collections::BTreeSet<String>> = BTreeMap::new();
+        let mut graphes = Vec::new();
+        for mode in [Mode::Development, Mode::Production] {
+            if entries.is_empty() {
+                if self.components.is_empty() {
+                    return Err("aucun composant ni spécifier : rien ne dit ce que le magasin doit garder".into());
+                }
+                for nom in self.components.keys() {
+                    graphes.push(self.module_graph(backend_dir, nom, mode)?);
+                }
+            } else {
+                graphes.push(self.module_graph_of(backend_dir, entries, mode)?);
+            }
+        }
+        for g in &graphes {
+            if !g.unresolved.is_empty() {
+                return Err(format!("le graphe ne se résout pas entier, le magasin n'est pas réduit : {}", g.unresolved.join(" ; ")));
+            }
+            for id in g.modules.keys() {
+                for (paquet, lib) in &self.libs {
+                    if let Some(fichier) = id.strip_prefix(&format!("lib:{paquet}@{}/", lib.version)) {
+                        atteints.entry(paquet.as_str()).or_default().insert(fichier.to_string());
+                    }
+                }
+            }
+        }
+        let taille = |hash: &str| std::fs::metadata(super::store_path(backend_dir, hash)).map(|m| m.len()).unwrap_or(0);
+        let (mut files_before, mut bytes_before, mut files_after, mut bytes_after) = (0, 0, 0, 0);
+        let mut libs = self.libs.clone();
+        for (paquet, lib) in libs.iter_mut() {
+            files_before += lib.files.len();
+            bytes_before += lib.files.values().map(|h| taille(h)).sum::<u64>();
+            let garde = atteints.get(paquet.as_str());
+            lib.files.retain(|f, _| licence(f) || garde.is_some_and(|g| g.contains(f)));
+            files_after += lib.files.len();
+            bytes_after += lib.files.values().map(|h| taille(h)).sum::<u64>();
+        }
+        let gardes: std::collections::BTreeSet<&String> = libs.values().flat_map(|l| l.files.values()).collect();
+        let mut objects_removed = 0;
+        if let Ok(entrees) = std::fs::read_dir(backend_dir.join(super::STORE_DIR)) {
+            for e in entrees.flatten() {
+                let nom = e.file_name().to_string_lossy().into_owned();
+                if !gardes.contains(&nom) && std::fs::remove_file(e.path()).is_ok() {
+                    objects_removed += 1;
+                }
+            }
+        }
+        let texte = serde_json::to_string_pretty(&libs).map_err(|e| e.to_string())? + "\n";
+        std::fs::write(backend_dir.join(super::LIBS_FILE), texte).map_err(|e| e.to_string())?;
+        Ok(Pruned { files_before, bytes_before, files_after, bytes_after, objects_removed })
+    }
+}

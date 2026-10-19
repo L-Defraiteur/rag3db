@@ -352,15 +352,32 @@ fn modele_du_chat(
 /// **Ranger une bibliothèque** : `libs add <backend.json> <paquet déballé>`.
 /// La seule écriture du magasin `.libs/` ; rien ne télécharge en silence (un
 /// paquet npm se déballe d'abord : `npm pack react@19.2.0 && tar xzf …`).
+///
+/// `libs prune <backend.json> [spécifier…]` réduit le magasin à ce que le graphe
+/// de modules atteint depuis les spécifiers donnés (sinon chaque composant du
+/// backend), plus les licences, et dit la taille avant et après.
 fn ranger_une_lib(args: &[String]) -> Result<(), String> {
-    const USAGE: &str = "usage: rag3weaver-backend libs add <backend.json> <dossier du paquet déballé>";
-    let [verbe, manifeste, paquet] = args else { return Err(USAGE.into()) };
-    if verbe != "add" {
-        return Err(USAGE.into());
+    const USAGE: &str = "usage: rag3weaver-backend libs add <backend.json> <dossier du paquet déballé>\n       rag3weaver-backend libs prune <backend.json> [spécifier…]";
+    match args {
+        [verbe, manifeste, paquet] if verbe == "add" => {
+            let dossier = Path::new(manifeste).parent().ok_or("le manifeste n'a pas de dossier")?;
+            println!("{}", rag3weaver::components::add_lib(dossier, Path::new(paquet))?);
+            Ok(())
+        }
+        [verbe, manifeste, entrees @ ..] if verbe == "prune" => {
+            let dossier = Path::new(manifeste).parent().ok_or("le manifeste n'a pas de dossier")?;
+            let libs = rag3weaver::components::Components::load(dossier).map_err(|e| e.join(" ; "))?;
+            let entrees: Vec<&str> = entrees.iter().map(String::as_str).collect();
+            let r = libs.prune_store(dossier, &entrees)?;
+            let mo = |o: u64| o as f64 / 1_048_576.0;
+            println!(
+                "magasin réduit : {} fichiers ({:.2} Mio) → {} fichiers ({:.2} Mio), {} objet(s) effacé(s)",
+                r.files_before, mo(r.bytes_before), r.files_after, mo(r.bytes_after), r.objects_removed
+            );
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
     }
-    let dossier = Path::new(manifeste).parent().ok_or("le manifeste n'a pas de dossier")?;
-    println!("{}", rag3weaver::components::add_lib(dossier, Path::new(paquet))?);
-    Ok(())
 }
 
 /// **Les gabarits livrés d'un manifeste** (`rag3weaver::builtin_templates`) :

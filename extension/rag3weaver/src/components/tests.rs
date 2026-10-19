@@ -615,3 +615,52 @@ fn the_store_keeps_code_and_licence_not_types_maps_or_notes() {
     let fichiers: Vec<String> = read_libs(&b).unwrap()["leger"].files.keys().cloned().collect();
     assert_eq!(fichiers, vec!["LICENSE", "LICENSE.md", "dist/index.cjs", "package.json"]);
 }
+
+/// **Le magasin ne garde que ce que le graphe atteint** : un fichier mort, le
+/// doublon ESM d'un paquet dont on prend le CommonJS et ses notes partent ; la
+/// licence et les fichiers des deux modes restent ; le graphe s'exécute encore,
+/// et une seconde réduction n'efface plus rien.
+#[test]
+fn the_store_is_pruned_to_what_the_graph_reaches() {
+    let (_t, b) = backend_executable();
+    let outil = paquet(
+        _t.path(),
+        "outil",
+        json!({ "name": "outil", "version": "1.0.0", "exports": { "import": "./dist/index.js", "require": "./dist/index.cjs" } }),
+        &[
+            ("dist/index.js", "export const un = 1;"),
+            ("dist/index.cjs", "exports.un = 1;"),
+            ("dist/mort.cjs", "exports.mort = true;"),
+            ("LICENSE", "MIT"),
+        ],
+    );
+    add_lib(&b, &outil).unwrap();
+    // Fiche importe outil : il entre dans le graphe.
+    let fiche = b.join("components/fiche.tsx");
+    let source = std::fs::read_to_string(&fiche).unwrap();
+    // La liaison sert : TypeScript retire un import dont rien ne se sert.
+    std::fs::write(&fiche, format!("import {{ un }} from \"outil\";\nexport const UN = un;\n{source}")).unwrap();
+    let json_fiche = b.join("components/fiche.component.json");
+    let mut decl: Value = serde_json::from_str(&std::fs::read_to_string(&json_fiche).unwrap()).unwrap();
+    decl["libs"]["outil"] = json!("1.0.0");
+    std::fs::write(&json_fiche, decl.to_string()).unwrap();
+
+    let c = Components::load(&b).unwrap();
+    let r = c.prune_store(&b, &[]).unwrap();
+    assert!(r.files_after < r.files_before && r.bytes_after < r.bytes_before && r.objects_removed > 0, "{r:?}");
+    let libs = read_libs(&b).unwrap();
+    let fichiers: Vec<&String> = libs["outil"].files.keys().collect();
+    assert_eq!(fichiers, vec!["LICENSE", "dist/index.cjs"], "le CommonJS atteint et la licence");
+    assert!(libs["react"].files.contains_key("cjs/react.development.js") && libs["react"].files.contains_key("cjs/react.production.js"), "les deux modes : {:?}", libs["react"].files.keys());
+    // Le graphe s'exécute toujours, sur le magasin réduit.
+    let c = Components::load(&b).unwrap();
+    let g = c.module_graph(&b, "Fiche", Mode::Development).unwrap();
+    assert!(g.unresolved.is_empty(), "{:?}", g.unresolved);
+    let rendu = executer(&g, &format!(
+        "const F = __rag3weaver.require({}).Fiche; JSON.stringify(F({{ titre: \"T\" }}));",
+        serde_json::to_string(&g.entry).unwrap()
+    ));
+    assert!(rendu.contains("\"T\""), "{rendu}");
+    let encore = c.prune_store(&b, &[]).unwrap();
+    assert_eq!((encore.files_before, encore.objects_removed), (encore.files_after, 0), "{encore:?}");
+}

@@ -628,6 +628,16 @@ mod tests {
         assert_eq!(doc, "ab");
     }
 
+    /// **Le script qui range les libs de l'éditeur réduit le magasin aux mêmes
+    /// entrées que la page** : une seule liste, `EDITEUR`, dite deux fois.
+    #[test]
+    fn the_ide_libs_script_prunes_to_the_editor_entries() {
+        let script = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/ide_libs.sh")).unwrap();
+        let ligne = script.lines().find(|l| l.contains("libs prune")).expect("ide_libs.sh réduit le magasin");
+        let entrees: Vec<&str> = ligne.split_whitespace().filter(|m| m.starts_with('@') || m.starts_with("codemirror")).collect();
+        assert_eq!(entrees, EDITEUR, "{ligne}");
+    }
+
     #[test]
     fn url_parameters_are_decoded() {
         assert_eq!(parametres("/ide/flux?sujets=files%2Cdataflow&depuis=12"), vec![("sujets".to_string(), "files,dataflow".to_string()), ("depuis".to_string(), "12".to_string())]);

@@ -39,4 +39,8 @@ for spec in \
     "$binaire" libs add "$dossier/libs.json" "$travail/paquet/package"
     rm -rf "$archive" "$travail/paquet"
 done
+# Le magasin réduit à ce que le graphe de l'éditeur atteint (src/ide.rs, EDITEUR),
+# plus les licences : ni l'ESM d'un paquet dont on prend le CommonJS, ni ce qu'aucun
+# module n'importe.
+"$binaire" libs prune "$dossier/libs.json" @codemirror/view @codemirror/state @codemirror/commands @codemirror/search @codemirror/language
 echo "$(ls "$dossier/.libs" | wc -l) objets, $(du -sh "$dossier/.libs" | cut -f1) dans $dossier/.libs"

@@ -3,9 +3,7 @@
     "version": "6.11.1",
     "files": {
       "LICENSE": "cb807f45386c13b2de3f3b74d2205f73a46052b4f8a1cf4192b046e59ba7c90c",
-      "dist/index.cjs": "ecf3d7d27877af02315519056583a66b8ae6fc5c6f3c66d320d50159cb2e8887",
-      "dist/index.js": "cdea376eb43d7b0f40d306979026f5a9c716890995ce17ac598e3b17431a1a55",
-      "package.json": "dd862e7bcc140056c40e9c9b81fcecdafa53c02df9f501f606c6411176cff5a3"
+      "dist/index.cjs": "ecf3d7d27877af02315519056583a66b8ae6fc5c6f3c66d320d50159cb2e8887"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -23,9 +21,7 @@
     "version": "6.13.1",
     "files": {
       "LICENSE": "cb807f45386c13b2de3f3b74d2205f73a46052b4f8a1cf4192b046e59ba7c90c",
-      "dist/index.cjs": "58e9677790d3cc0b20117950df3d16fa6be0ce0ab17e82b0f6962d1e96224480",
-      "dist/index.js": "dade7fc05b68af26845af6f54850821a13aa6f766aa43b4a908689181ef9eb37",
-      "package.json": "7cdd77b931269d2d6ba0b65c0770dd5923401d1569f6a2d7939298bdd81ea0f4"
+      "dist/index.cjs": "58e9677790d3cc0b20117950df3d16fa6be0ce0ab17e82b0f6962d1e96224480"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -46,9 +42,7 @@
     "version": "6.7.2",
     "files": {
       "LICENSE": "cb807f45386c13b2de3f3b74d2205f73a46052b4f8a1cf4192b046e59ba7c90c",
-      "dist/index.cjs": "dcf2bc7bb530d2922bac4a652c68ec33c69cc1b3af830ac47fd6c2913fdc3dd3",
-      "dist/index.js": "ee97ddef5eceb3f7d97f0e8a38a44b427c21cc77fcbfeeb039274f8809c57535",
-      "package.json": "f8e9ce4c086174d30bb3821af04551675929ea491e171631f175b3a8474690eb"
+      "dist/index.cjs": "dcf2bc7bb530d2922bac4a652c68ec33c69cc1b3af830ac47fd6c2913fdc3dd3"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -65,9 +59,7 @@
     "version": "6.7.6",
     "files": {
       "LICENSE": "cb807f45386c13b2de3f3b74d2205f73a46052b4f8a1cf4192b046e59ba7c90c",
-      "dist/index.cjs": "5e89d7fc79ab6ae3113075168361056a25ab845e41b0c8098c8599db31a6e64f",
-      "dist/index.js": "e3bb75794a56f23e29f5c3ee75d6d074f262ffe4208b72581d5abf7587e74c9d",
-      "package.json": "8487ee8be75633006309679a28c12bbfc60c7ecb138c8aba3afa31e11b7da5fa"
+      "dist/index.cjs": "5e89d7fc79ab6ae3113075168361056a25ab845e41b0c8098c8599db31a6e64f"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -82,9 +74,7 @@
     "version": "6.0.0",
     "files": {
       "LICENSE": "cb807f45386c13b2de3f3b74d2205f73a46052b4f8a1cf4192b046e59ba7c90c",
-      "dist/index.cjs": "0478d42e7d3a356359d40e1add80c2aca1b390c96b107ec006ceff770a9e8f94",
-      "dist/index.js": "ad162840a3dcf4bc82f8ee4691de4285351531b8273f88f1927d1cebdf7cf5d7",
-      "package.json": "041037a1e3f7b3f35705714cae730f7015eefc1cc74b835b963de3f05507c0a4"
+      "dist/index.cjs": "0478d42e7d3a356359d40e1add80c2aca1b390c96b107ec006ceff770a9e8f94"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -96,9 +86,7 @@
     "version": "6.43.14",
     "files": {
       "LICENSE": "cb807f45386c13b2de3f3b74d2205f73a46052b4f8a1cf4192b046e59ba7c90c",
-      "dist/index.cjs": "76f7d99280d2838e88e7adbe42c2e8c7e3c9ba6364b49a6c3c47a28c0218e776",
-      "dist/index.js": "c65fe9ca9b3a0762aa76ad6fd10411ab137baf1fe887aef90e85b94df7caa6e5",
-      "package.json": "0121d9052b1fc71cbbd27be30372490362b5473a6d7e38aa724d5342005d1c62"
+      "dist/index.cjs": "76f7d99280d2838e88e7adbe42c2e8c7e3c9ba6364b49a6c3c47a28c0218e776"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -116,9 +104,7 @@
     "version": "1.5.3",
     "files": {
       "LICENSE": "82f57b3b09c4049a5244f9bdc3685864140debf80e5c23b1eb41a19ac68dbcf6",
-      "dist/index.cjs": "e55e92e87b33a2a2d6eebb026b9a68bc105177712265393d4bb0252251d2cb64",
-      "dist/index.js": "f925ba424637863d1fa2929c74568362ab14d410c1815ef3e569aa8939fbe516",
-      "package.json": "281a917c4303fa176c578e2585564b715ffa8ed942b5e3cd9369c5fe5957d7b0"
+      "dist/index.cjs": "e55e92e87b33a2a2d6eebb026b9a68bc105177712265393d4bb0252251d2cb64"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -130,9 +116,7 @@
     "version": "1.2.5",
     "files": {
       "LICENSE": "82f57b3b09c4049a5244f9bdc3685864140debf80e5c23b1eb41a19ac68dbcf6",
-      "dist/index.cjs": "8623f92f62f8ee5dba9edd2c1b54ca13538effcf8bc30403a8cba31f36c6206e",
-      "dist/index.js": "c745bc6e3960bb76b7d1a4a48e27a839a3fb548458ea420e27610c8823f704b3",
-      "package.json": "8cc215973ef34644baa05f92f7f5cf4e106279dcb9cc51f1cbafefec9a6da776"
+      "dist/index.cjs": "8623f92f62f8ee5dba9edd2c1b54ca13538effcf8bc30403a8cba31f36c6206e"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -146,11 +130,7 @@
   "@lezer/lr": {
     "version": "1.4.11",
     "files": {
-      "LICENSE": "82f57b3b09c4049a5244f9bdc3685864140debf80e5c23b1eb41a19ac68dbcf6",
-      "dist/constants.js": "c5209f127e31bf7d51c0d1bab6c36f5e9be7d421319efd5f161fec92e67838cc",
-      "dist/index.cjs": "e074a75a4229171427f817aae3919e1dcd9f336fe69a5248d0114b765be18fd4",
-      "dist/index.js": "b63a3790cc80c43b88a1fcfdfe6750023116502271ed482cce813614315f42dd",
-      "package.json": "d630d780a79cdcb84a65ecfcc65bf25c757776faf159f235710ab576cc80cf40"
+      "LICENSE": "82f57b3b09c4049a5244f9bdc3685864140debf80e5c23b1eb41a19ac68dbcf6"
     },
     "exports": {
       "import": "./dist/index.js",
@@ -165,12 +145,7 @@
     "version": "1.0.4",
     "files": {
       "LICENSE": "1457cd422b441283f8d2873c04b12a5d1ff8dd9f1649312c96d80ce18fd6a1c2",
-      "bin/build-extenders.js": "000e717157b352b04cdf39cb353f8a924d1d933c5a377f293196e592e818a2b4",
-      "dist/index.cjs": "c61758da717628547c11971ae5e8af630c20c3ac649610e4179a6988455ab5cb",
-      "package.json": "31a37a786b99cb719b6d40229382fefc9568dcf9e927077cfaa1faac09801a91",
-      "rollup.config.js": "bbd15b09e3b9ef9106b6d612c3a7da19d51dbe47b565c25cca1c1ee7cff0c77f",
-      "src/index.js": "2de1dad6ec5dd56cd08256816e8b364e747fe59f3fd30a893254a41aad09344b",
-      "test/test-cluster.js": "0b7eb7968f3178e6a288472bebb887bf1ea3fbfa6efba6f151235ef5441f164c"
+      "dist/index.cjs": "c61758da717628547c11971ae5e8af630c20c3ac649610e4179a6988455ab5cb"
     },
     "exports": {
       "import": "./src/index.js",
@@ -182,10 +157,7 @@
     "version": "1.0.7",
     "files": {
       "LICENSE": "13db7bb6286320a2c5abeed45a71449121cf346112ca4a55004680f2f805d5b7",
-      "dist/index.cjs": "a8a0f1082a27630271e81b6f19ec9ea9f2fcedfa545f77770f26c7c9d9712ab6",
-      "index.js": "af7a788cc271a0efe4c13f694e96afbb8e9c3b190eb4e01cca79b096cc788d36",
-      "package.json": "b2852f5a356a8c0ce54c82bb1d7e0090d4497e6f1316795e8ea68ccbb3e31e1a",
-      "rollup.config.js": "3525fabd1ddc24a313eda8b1c96c76ececb44d5e961dfefed63ac4570c29ab20"
+      "dist/index.cjs": "a8a0f1082a27630271e81b6f19ec9ea9f2fcedfa545f77770f26c7c9d9712ab6"
     },
     "exports": {
       "import": "./index.js",
@@ -197,9 +169,7 @@
     "version": "4.1.4",
     "files": {
       "LICENSE": "6dc1af35595ea9f62f4b5151b3fbc4c5e833a3dd96eda76ed946818210bde605",
-      "dist/style-mod.cjs": "154682a9f0da5b3315275e2c9015a526dd6f789252d6dea4c086624bb77e4084",
-      "package.json": "ce9f5cce6cd34587ac87a72684feac608ee3ba0b78ec9c11da23070e46c8c55c",
-      "src/style-mod.js": "650a611d22e13c2998dde6cb17c62060b86daacf189f42ce2bf2fe3dcb4da162"
+      "dist/style-mod.cjs": "154682a9f0da5b3315275e2c9015a526dd6f789252d6dea4c086624bb77e4084"
     },
     "exports": {
       "import": "./src/style-mod.js",
@@ -210,11 +180,8 @@
   "w3c-keyname": {
     "version": "2.2.8",
     "files": {
-      ".tern-port": "007a6fc68312d27fd76c4e1b3d871a42bddb2003f48d20d49a167c50743bf876",
       "LICENSE": "d575ffd0ae300349fb00db605ebd2caf9de26e30f67c0d2e42baef6dbb63aca0",
-      "index.cjs": "d6c38749205b232137ee656d6d067e9f083223ab2c17226917ba5ceb8b8dd94a",
-      "index.js": "d637bb2c49e26e9f8f14c3204f426fe80d385e2eb25e0bb6f852de2bc3685c6e",
-      "package.json": "2098a148f3fd9248f65a463ccb36fe5be475cbdb08b47537afd04635ae36e91f"
+      "index.cjs": "d6c38749205b232137ee656d6d067e9f083223ab2c17226917ba5ceb8b8dd94a"
     },
     "exports": {
       "import": "./index.js",
