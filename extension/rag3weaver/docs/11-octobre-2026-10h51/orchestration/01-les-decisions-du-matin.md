@@ -1728,3 +1728,26 @@ où elle vit.
   comme cible, (δ) juste poussé d'abord ; I2 pour E11 plutôt que la voie bon
   marché ; YAML pour l'en-tête des fiches ; le fichier composé réécrit par
   réaction (B).
+
+- **19 octobre, de 1 h au matin.** Pour le réveil de Lucie : son hôte d'ici
+  est rebâti à 6 h 30 (binaire 51134d57, master 9b22ef8d7, lib cf71c929d),
+  ses deux manifestes reliés aux gabarits livrés (`builtin:`), son IDE vérifié
+  par le témoin navigateur contre son vrai hôte (six vues, zéro erreur) ; le
+  compte rendu court de G est en `optimiseur/19-octobre-2026-02h05/
+  03-pour-ton-reveil.md`. La nuit a livré dans l'IDE : le DAG vivant (C1, C2),
+  les composants React rechargés à chaud avec leur graphe de clic qui s'allume
+  (lots 3, 4 et (a)), la vue des réactions, CodeMirror, les propositions de
+  l'agent des gabarits (P1 à P4) et ses tâches en worktree (T1, T2, et le
+  registre qui survit à l'hôte) ; le témoin dans un vrai navigateur, qui a
+  trouvé que toutes les vues étaient cassées et l'a fait corriger. Côté
+  données : la montre qui perdait un fichier (« racy git »), les lectures sans
+  attente (L4, L5, L6, la garde du mutex), la mémoire de l'hôte (les arènes de
+  glibc et les écrivains de lucivy), la rétention pour tous les index (R1), et
+  la résolution des symboles qui ne devine plus (trois révisions par la
+  mesure : « une relation douteuse se compte et se dit, elle ne se devine
+  pas »). **À Lucie** : deux défauts de lucivy-core, sa bibliothèque (un shard
+  sans écrivain perd des écritures en silence ; le plein texte se fige dans
+  son commit sous lectures et réindexation, trois fois sur trois), dont le
+  correctif se prépare sans rien publier ; le budget par défaut des écrivains
+  de lucivy ; et les décisions de la nuit listées dans l'entrée précédente,
+  plus les gabarits reliés à `builtin:` dans ses manifestes.
