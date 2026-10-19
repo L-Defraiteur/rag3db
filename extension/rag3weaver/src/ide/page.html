@@ -836,10 +836,35 @@ async function reactions(id) {
     vu,
     el("h2", {}, "Runs récents"),
     el("table", { class: "runs", id: "runs-recents" },
-      el("thead", {}, el("tr", {}, el("th", {}, "début"), el("th", {}, "réaction"), el("th", {}, "run"), el("th", {}, "fin"))),
+      el("thead", {}, el("tr", {}, el("th", {}, "début"), el("th", {}, "réaction"), el("th", {}, "run"), el("th", {}, "fin"), el("th", {}, "écrit"))),
       corps),
   );
-  reactionsVivantes = { manifest: b.manifest, corps, lignes: new Map(), vu };
+  reactionsVivantes = { manifest: b.manifest, corps, lignes: new Map(), ecrits: new Map(), vu };
+}
+
+// Ce qu'une écriture du catalogue dit, cumulé par run : l'entité et le
+// changement (les états d'une transition), ou les liens posés et retirés d'une
+// relation. Une écriture porte le run du nœud qui l'a faite (la pièce 1 de la
+// mémoire) : c'est ce qui la range sous le run de la réaction.
+function cleDEcriture(ev) {
+  if (ev.kind === "RelationsChanged") return `lien|${ev.relation}`;
+  const etats = ev.change === "transitioned" && ev.from_state != null ? ` (${ev.from_state} → ${ev.to_state})` : "";
+  return `entite|${ev.entity}|${ev.change}${etats}`;
+}
+function cumulerUneEcriture(acc, ev) {
+  if (ev.kind === "RelationsChanged") {
+    acc.plus = (acc.plus ?? 0) + (ev.added?.length ?? 0);
+    acc.moins = (acc.moins ?? 0) + (ev.removed?.length ?? 0);
+    acc.tronque = acc.tronque || ev.truncated;
+    acc.attrs = { "data-relation": ev.relation };
+    acc.texte = `${ev.relation} : +${acc.plus} −${acc.moins}${acc.tronque ? " (tronqué : le compte entier est dans le catalogue)" : ""}`;
+  } else {
+    acc.n = (acc.n ?? 0) + (ev.count ?? ev.uuids?.length ?? 1);
+    const etats = ev.change === "transitioned" && ev.from_state != null ? ` (${ev.from_state} → ${ev.to_state})` : "";
+    acc.attrs = { "data-entity": ev.entity, "data-change": ev.change };
+    acc.texte = `${ev.entity} : ${acc.n} ${ev.change}${etats}`;
+  }
+  return acc;
 }
 
 // Un événement du flux, pour la vue des réactions.
@@ -856,10 +881,27 @@ function suivreLesReactions(d) {
       el("td", {}, heure),
       el("td", {}, el("a", { href: `/ide/code/${route().id}/dag/reaction/${encodeURIComponent(ev.target.reaction)}` }, ev.target.reaction)),
       el("td", {}, ev.run),
-      fin);
+      fin,
+      el("td", { class: "ecrit" }, el("ul", { class: "ecritures" })));
     v.corps.prepend(ligne);
     v.lignes.set(ev.run, fin);
-    while (v.corps.children.length > 50) v.lignes.delete(v.corps.lastElementChild.dataset.run), v.corps.lastElementChild.remove();
+    v.ecrits.set(ev.run, { liste: ligne.querySelector("ul.ecritures"), parCle: new Map() });
+    while (v.corps.children.length > 50) {
+      const run = v.corps.lastElementChild.dataset.run;
+      v.lignes.delete(run), v.ecrits.delete(run), v.corps.lastElementChild.remove();
+    }
+  } else if ((ev.kind === "EntitiesChanged" || ev.kind === "RelationsChanged") && v.ecrits.has(ev.run)) {
+    // Les écritures d'une même entité et d'un même changement se cumulent sur
+    // une ligne, celles d'une même relation aussi.
+    const e = v.ecrits.get(ev.run);
+    const cle = cleDEcriture(ev);
+    const acc = cumulerUneEcriture(e.parCle.get(cle) ?? {}, ev);
+    if (!acc.li) {
+      acc.li = el("li", acc.attrs);
+      e.liste.append(acc.li);
+      e.parCle.set(cle, acc);
+    }
+    acc.li.textContent = acc.texte;
   } else if (ev.kind === "RunFinished" && v.lignes.has(ev.run)) {
     const fin = v.lignes.get(ev.run);
     fin.textContent = `${ev.ok ? "fini" : "échoué"} en ${ev.ms} ms`;

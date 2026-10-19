@@ -556,7 +556,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
 
     // Les réactions ((b)) : la vue liste `reindex_on_change` ; un fichier
     // réécrit sur le disque est vu par la montre, et le run de la réaction
-    // s'inscrit dans les runs récents puis finit.
+    // s'inscrit dans les runs récents, finit, et dit ce qu'il a écrit.
     n.aller(
         &format!("{racine}/ide/code/{id}/reactions/"),
         "[...document.querySelectorAll('#vue li a')].some(a => a.textContent === 'reindex_on_change') && document.getElementById('lien')?.textContent === 'flux : ouvert'",
@@ -567,6 +567,15 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
          && [...document.querySelectorAll('#runs-recents tr[data-reaction=\"reindex_on_change\"] td.fin')].some(t => t.textContent.startsWith('fini'))",
         "la montre et le run de la réaction, vus dans la vue des réactions",
     );
+    // Ce que le run a écrit, sous son run : la ré-indexation du fichier publie
+    // sur `catalog` des écritures qui portent le run de la réaction (la pièce
+    // 1 de la mémoire), et la vue les range sous lui.
+    n.attendre(
+        "[...document.querySelectorAll('#runs-recents tr[data-reaction=\"reindex_on_change\"]')].some(tr => tr.querySelector('td.fin')?.textContent.startsWith('fini') && tr.querySelector('td.ecrit li[data-entity]'))",
+        "ce que le run de la réaction a écrit, rangé sous lui",
+    );
+    let ecrit = n.evaluer("[...document.querySelectorAll('#runs-recents td.ecrit li')].map(li => li.textContent)");
+    eprintln!("le run de reindex_on_change a écrit : {ecrit}");
     assert!(n.erreurs.is_empty(), "la vue des réactions : erreurs à la console : {:#?}", n.erreurs);
 
     drop(n);
