@@ -1,14 +1,20 @@
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 #include "common/constants.h"
+#include "common/exception/buffer_manager.h"
 #include "common/system_config.h"
 #include "common/types/types.h"
 #include "graph_test/private_graph_test.h"
+#include "main/connection.h"
+#include "main/database.h"
 #include "gtest/gtest.h"
 #include "spdlog/spdlog.h"
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/buffer_manager/memory_manager.h"
 #include "storage/buffer_manager/spiller.h"
+#include "storage/buffer_manager/vm_region.h"
 #include "storage/enums/residency_state.h"
 #include "storage/storage_manager.h"
 #include "storage/table/chunked_node_group.h"
@@ -158,6 +164,98 @@ TEST_F(BufferManagerTest, TestBMEvictionSlowRead) {
         }
     });
 #endif
+}
+
+// La réservation par tranches (ticket 2026-10-19-une-base-reserve-8-tio-d-adressage-un-processus-
+// n-en-ouvre-qu-une-quinzaine). Une base sur disque réservait d'un bloc sa taille maximale, 8 Tio
+// par défaut : un processus, qui adresse 128 Tio, n'en ouvrait qu'une quinzaine.
+class VMRegionTest : public EmptyDBTest {};
+
+TEST_F(VMRegionTest, ThirtyTwoDatabasesOpenInOneProcess) {
+    if (inMemMode) {
+        GTEST_SKIP() << "on-disk databases needed";
+    }
+    // La taille maximale par défaut (8 Tio), un petit tampon.
+    main::SystemConfig config(64ull * 1024 * 1024 /*bufferPoolSize*/);
+    std::vector<std::unique_ptr<main::Database>> databases;
+    std::string refused;
+    for (auto i = 0; i < 32 && refused.empty(); ++i) {
+        try {
+            databases.push_back(std::make_unique<main::Database>(
+                databasePath + "-" + std::to_string(i), config));
+            main::Connection connection(databases.back().get());
+            auto created = connection.query("CREATE NODE TABLE T(id INT64 PRIMARY KEY);");
+            if (!created->isSuccess()) {
+                refused = "base " + std::to_string(i) + " : " + created->getErrorMessage();
+            }
+        } catch (const std::exception& e) {
+            refused = "base " + std::to_string(i) + " : " + e.what();
+        }
+    }
+    EXPECT_TRUE(refused.empty()) << "[check: thirty-two-databases-open] " << refused;
+}
+
+// Une région à petites tranches (deux groupes de cadres chacune) : les cadres des groupes ajoutés
+// au-delà de plusieurs tranches s'écrivent et se relisent, contains est juste aux bords, et la
+// région refuse au-delà de sa taille maximale comme avant.
+TEST(VMRegionChunks, FramesBeyondSeveralChunksAreWritable) {
+    const uint64_t groupBytes = RAG3DB_PAGE_SIZE * StorageConstants::PAGE_GROUP_SIZE;
+    VMRegion region(REGULAR_PAGE, 7 * groupBytes /*maxRegionSize*/, 2 * groupBytes /*chunkSize*/);
+    ASSERT_EQ(region.getChunkSize(), 2 * groupBytes);
+    std::vector<uint8_t*> frames;
+    for (auto group = 0u; group < 7; ++group) {
+        ASSERT_EQ(region.addNewFrameGroup(), group);
+        for (const uint64_t page : {uint64_t{0}, StorageConstants::PAGE_GROUP_SIZE - 1}) {
+            const auto frameIdx = group * StorageConstants::PAGE_GROUP_SIZE + page;
+            auto* frame = region.getFrame(frameIdx);
+            frame[0] = static_cast<uint8_t>(group + 1);
+            frame[RAG3DB_PAGE_SIZE - 1] = static_cast<uint8_t>(page % 251);
+            EXPECT_TRUE(region.contains(frame)) << "[check: contains] group " << group;
+            EXPECT_TRUE(region.contains(frame + RAG3DB_PAGE_SIZE - 1))
+                << "[check: contains] group " << group;
+            frames.push_back(frame);
+        }
+    }
+    for (auto i = 0u; i < frames.size(); ++i) {
+        EXPECT_EQ(frames[i][0], static_cast<uint8_t>(i / 2 + 1)) << "[check: frames-keep-their-bytes]";
+    }
+    uint8_t outside = 0;
+    EXPECT_FALSE(region.contains(&outside)) << "[check: contains]";
+    EXPECT_THROW(region.addNewFrameGroup(), BufferManagerException) << "[check: max-frame-groups]";
+}
+
+// Une tranche refusée par le système (ici la troisième, par une région qui fait échouer sa
+// réservation) : addNewFrameGroup lève une erreur nommée, et les cadres déjà réservés restent
+// bons.
+class RegionRefusingItsThirdChunk final : public VMRegion {
+public:
+    using VMRegion::VMRegion;
+
+protected:
+    uint8_t* reserveChunk(uint64_t size) override {
+        return ++numReserved == 3 ? nullptr : VMRegion::reserveChunk(size);
+    }
+
+private:
+    int numReserved = 0;
+};
+
+TEST(VMRegionChunks, ARefusedChunkIsANamedError) {
+    const uint64_t groupBytes = RAG3DB_PAGE_SIZE * StorageConstants::PAGE_GROUP_SIZE;
+    RegionRefusingItsThirdChunk region(REGULAR_PAGE, 8 * groupBytes, 2 * groupBytes);
+    for (auto group = 0u; group < 4; ++group) {
+        ASSERT_EQ(region.addNewFrameGroup(), group);
+        region.getFrame(group * StorageConstants::PAGE_GROUP_SIZE)[0] = 7;
+    }
+    try {
+        region.addNewFrameGroup();
+        ADD_FAILURE() << "[check: refused-chunk-is-named] no error";
+    } catch (const BufferManagerException& e) {
+        EXPECT_NE(std::string(e.what()).find("Cannot reserve"), std::string::npos)
+            << "[check: refused-chunk-is-named] " << e.what();
+    }
+    EXPECT_EQ(region.getFrame(3 * StorageConstants::PAGE_GROUP_SIZE)[0], 7)
+        << "[check: frames-keep-their-bytes]";
 }
 
 } // namespace testing

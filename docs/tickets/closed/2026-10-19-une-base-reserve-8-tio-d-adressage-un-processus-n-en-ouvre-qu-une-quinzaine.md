@@ -1,7 +1,7 @@
 # Une base réserve 8 Tio d'adressage : un processus n'en ouvre qu'une quinzaine
 
-- **État** : ouvert — vu le 19 octobre 2026 (everything declarative), contourné dans les témoins
-  de la lib seulement (`bc2cb48e7`).
+- **État** : corrigé par le commit qui déplace ce ticket (19 octobre 2026, seconde session cœur
+  C++, forme relue par le cœur C++), par le remède 1 ; voir « Ce qui a été fait », à la fin.
 - **Gravité** : une ouverture de base refusée en service, au hasard de l'ordre d'ouverture, dès
   qu'un processus tient une quinzaine de bases sur disque.
 - **Atteignable en service** : oui. C'est l'hôte d'équipe de la vision (un index par dépôt),
@@ -59,3 +59,42 @@ L'une des deux, ou les deux :
 Un processus ouvre trente-deux bases sur disque sans `RAG3DB_MAX_DB_SIZE`, et toutes s'ouvrent.
 Et une base qui grossit au-delà de sa première réservation continue de s'écrire (pour le
 remède 1).
+
+## Ce qui a été fait (19 octobre 2026)
+
+**Le remède 1, la réservation qui grandit.** `VMRegion` ne réserve plus sa taille maximale d'un
+bloc. Elle réserve des tranches de 16 Gio, à mesure que les groupes de cadres s'ajoutent
+(`addNewFrameGroup`, sous son verrou, avant de rendre l'indice) :
+- une tranche est une puissance de deux et un multiple d'un groupe de cadres, donc un groupe ne
+  chevauche jamais deux tranches. L'adresse d'un cadre est `chunks[idx >> shift] + (idx & mask)
+  × frameSize` ;
+- la table des tranches, de taille fixe, est écrite en release après la réservation réussie, et
+  lue en acquire sans verrou, par `getFrame` (le chemin chaud) comme par `contains` et
+  `releaseFrame` ;
+- la taille maximale d'une base ne change pas : le nombre de tranches est borné, et la tranche
+  grandit si la région en demande plus de 1 024 ;
+- la région temporaire prend la même classe, avec une tranche bornée à sa taille. Sous
+  Windows, chaque tranche est un `VirtualAlloc MEM_RESERVE`, et le destructeur libère chacune ;
+- une réservation se refuse désormais en cours de route, et non plus à l'ouverture. Le refus est
+  une erreur nommée (« Cannot reserve N GiB more of address space for this database »), traitée
+  comme un refus du tampon. Au point de reprise, il ne condamne la base qu'après le premier
+  changement de la mémoire.
+
+Une petite base réserve 16 Gio au lieu de 8 Tio, une base de 50 Gio en réserve 64. Un processus
+en ouvre des milliers au lieu d'une quinzaine.
+
+**Témoins** (`test/storage/buffer_manager_test.cpp`, sur luciepc) :
+- `VMRegionTest.ThirtyTwoDatabasesOpenInOneProcess` : rouge 2/2 sur fe700661e (« base 15 : Mmap
+  for size 8796093022208 failed »), vert 2/2 avec le lot ;
+- `VMRegionChunks.FramesBeyondSeveralChunksAreWritable` : une région à petites tranches, des
+  cadres écrits et relus au-delà de plusieurs tranches, `contains` juste aux bords, et le refus
+  au-delà de la taille maximale ;
+- `VMRegionChunks.ARefusedChunkIsANamedError` : une tranche refusée par le système donne l'erreur
+  nommée, et les cadres déjà réservés restent bons.
+
+`buffer_manager_test` est vert en entier (6 tests).
+
+**Le remède 2**, `max_db_size` par base au manifeste, n'est plus nécessaire pour ouvrir. Il garde
+un sens pour borner la taille d'une base : c'est au produit (everything declarative) de le
+vouloir ou non. Le contournement de la lib sous `cfg(test)` (1 Tio, `bc2cb48e7`) peut partir.
+

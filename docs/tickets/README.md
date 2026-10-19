@@ -37,14 +37,13 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (38)
+### Ouverts — moteur (37)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Une base réserve 8 Tio d'adressage : un processus n'en ouvre qu'une quinzaine](2026-10-19-une-base-reserve-8-tio-d-adressage-un-processus-n-en-ouvre-qu-une-quinzaine.md) | ouvert — contourné dans les témoins de la lib (1 Tio sous `cfg(test)`) ; remède moteur attendu (réservation à la demande, ou `max_db_size` par manifeste) ; pour hotfixs | ouverture refusée au hasard | oui (hôte d'équipe, tâches) | oui |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
 | [L'annulation d'un COPY sous un tampon plein peut encore allouer](2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer.md) | ouvert, à confirmer (témoin à écrire) | blocage possible (la base n'est plus bloquée : erreur nommée, ou base à rouvrir) | en principe | oui (ses COPY) |
@@ -127,10 +126,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (154), dans `closed/`
+### Fermés (155), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une base réserve 8 Tio d'adressage : un processus n'en ouvre qu'une quinzaine](closed/2026-10-19-une-base-reserve-8-tio-d-adressage-un-processus-n-en-ouvre-qu-une-quinzaine.md) | corrigé (la réservation par tranches de 16 Gio, qui grandit avec la base ; voir le ticket) | ouverture refusée | oui | oui (l'hôte d'équipe, les tâches de l'agent) |
 | [Un chargement d'extension à la réouverture se fait passer pour un retrait de l'index](closed/2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index.md) | corrigé (les index chargés avant les fonctions, la capture commune qui refuse « is not loaded yet » ; voir le ticket) | refus d'une lecture valide | oui | oui (au redémarrage d'un hôte) |
 | [L'arrêt d'une réaction longue dépassait trois secondes sous charge](closed/2026-10-19-l-arret-d-une-reaction-longue-depasse-trois-secondes-sous-charge.md) | fermé — l'arrêt attend le lot en cours, comme conçu ; le témoin juge l'ordre (du retard reste), plus 3 s ; 0 rouge sur 20 sous charge | test rouge | peut-être | oui |
 | [Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index](closed/2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-manquent-a-l-index.md) | corrigé (forme δ : rattrapage à la validation, une fois les autres partis, sans verrou ; voir le ticket) | réponse fausse | oui | oui, en principe |
