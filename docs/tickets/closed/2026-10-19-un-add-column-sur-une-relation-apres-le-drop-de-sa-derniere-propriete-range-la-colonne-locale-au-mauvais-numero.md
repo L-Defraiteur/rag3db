@@ -1,7 +1,8 @@
 # Un ADD COLUMN sur une relation, après le DROP de sa dernière propriété, range la colonne locale au mauvais numéro
 
-- **État** : ouvert, à confirmer par un témoin (lu dans le code le 19 octobre 2026, carte des
-  numéros de colonnes pour V2-1a)
+- **État** : corrigé le 19 octobre 2026 par le commit qui déplace ce fichier (`git log --follow`),
+  V2-1a : la table locale range la colonne ajoutée à son numéro (`LocalRelTable::addColumn`) ;
+  témoin `StableColumnIDs.AnAddOnARelationAfterDroppingItsLastPropertyWritesTheRightColumn`
 - **Gravité** : si confirmé, une valeur écrite dans la même transaction que l'ADD va dans une
   autre colonne locale, ou hors du vecteur (lecture après la fin).
 - **Atteignable en service** : oui si confirmé : DROP d'une propriété de relation, puis, avant un

@@ -58,8 +58,10 @@ struct CacheArrayColumnSharedState final : public SimpleTableFuncSharedState {
     explicit CacheArrayColumnSharedState(storage::NodeTable& table,
         node_group_idx_t maxNodeGroupIdx, const CacheArrayColumnBindData& bindData)
         : SimpleTableFuncSharedState{maxNodeGroupIdx, 1 /*maxMorselSize*/}, table{table} {
+        // La clé est le numéro de colonne, celui que l'index cherche (InMemEmbeddings) : il
+        // diffère de l'identifiant de propriété dès qu'une propriété a été supprimée.
         cachedColumn = std::make_unique<storage::CachedColumn>(bindData.tableEntry->getTableID(),
-            bindData.propertyID);
+            bindData.tableEntry->getColumnID(common::idx_t{bindData.propertyID}));
         cachedColumn->columnChunks.resize(maxNodeGroupIdx + 1);
     }
 
