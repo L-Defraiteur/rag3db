@@ -35,7 +35,7 @@ LocalNodeTable::LocalNodeTable(const catalog::TableCatalogEntry* tableEntry, Tab
                          .getPrimaryKeyDefinition()
                          .getType()
                          .getPhysicalType()} {
-    positionOfColumn.resize(tableEntry->getMaxColumnID() + 1, INVALID_IDX);
+    positionOfColumn.resize(tableEntry->getNumColumnSlots(), INVALID_IDX);
     for (auto columnID = 0u; columnID < positionOfColumn.size(); columnID++) {
         positionOfColumn[columnID] = tableEntry->getPropertyPosition(columnID);
     }

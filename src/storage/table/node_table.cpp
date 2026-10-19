@@ -302,6 +302,20 @@ bool NodeTableScanState::scanNext(Transaction* transaction) {
     return true;
 }
 
+// Les types par numéro de colonne, trous compris (ANY pour une colonne supprimée) : la forme des
+// vecteurs du stockage, à la différence de LocalNodeTable::getNodeTableColumnTypes (par position).
+std::vector<LogicalType> NodeTable::getColumnTypesBySlot(const TableCatalogEntry& entry) {
+    std::vector<LogicalType> types;
+    types.reserve(entry.getNumColumnSlots());
+    for (auto i = 0u; i < entry.getNumColumnSlots(); i++) {
+        types.push_back(LogicalType::ANY());
+    }
+    for (auto& property : entry.getProperties()) {
+        types[entry.getColumnID(property.getName())] = property.getType().copy();
+    }
+    return types;
+}
+
 NodeTable::NodeTable(const StorageManager* storageManager,
     const NodeTableCatalogEntry* nodeTableEntry, MemoryManager* mm)
     : Table{nodeTableEntry, storageManager, mm},
@@ -309,8 +323,7 @@ NodeTable::NodeTable(const StorageManager* storageManager,
       versionRecordHandler(this) {
     auto* dataFH = storageManager->getDataFH();
     auto& pageAllocator = *dataFH->getPageManager();
-    const auto maxColumnID = nodeTableEntry->getMaxColumnID();
-    columns.resize(maxColumnID + 1);
+    columns.resize(nodeTableEntry->getNumColumnSlots());
     for (auto& property : nodeTableEntry->getProperties()) {
         const auto columnID = nodeTableEntry->getColumnID(property.getName());
         const auto columnName =
@@ -331,7 +344,7 @@ NodeTable::NodeTable(const StorageManager* storageManager,
     // CREATE ou d'un DROP le retrouvent par lui (un identifiant partagé retirait la clé primaire).
     indexes.back().setHolderID(nextHolderID++);
     nodeGroups = std::make_unique<NodeGroupCollection>(*mm,
-        LocalNodeTable::getNodeTableColumnTypes(*nodeTableEntry), enableCompression,
+        getColumnTypesBySlot(*nodeTableEntry), enableCompression,
         storageManager->getDataFH() ? ResidencyState::ON_DISK : ResidencyState::IN_MEMORY,
         &versionRecordHandler);
 }
@@ -1053,17 +1066,16 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
         state.changedMemory = storageManager->getCheckpointChangedMemoryFlag();
         nodeGroups->checkpoint(*memoryManager, state);
         storageManager->markCheckpointChangedMemory();
-        std::vector<std::unique_ptr<Column>> checkpointColumns;
-        for (const auto columnID : columnIDs) {
-            checkpointColumns.push_back(std::move(columns[columnID]));
+        // Les numéros ne bougent pas : une colonne supprimée laisse son numéro vide (un trou),
+        // les autres restent où elles sont. Plus de renumérotation du catalogue.
+        for (auto columnID = 0u; columnID < columns.size(); columnID++) {
+            if (std::find(columnIDs.begin(), columnIDs.end(), columnID) == columnIDs.end()) {
+                columns[columnID].reset();
+            }
         }
-        columns = std::move(checkpointColumns);
         for (auto& index : indexes) {
             index.checkpoint(context, pageAllocator);
         }
-        tableEntry->vacuumColumnIDs(0 /*nextColumnID*/);
-        renumberColumns(*catalog::Catalog::Get(*context),
-            tableEntry->constCast<NodeTableCatalogEntry>());
         hasChanges = false;
     }
     return ret;

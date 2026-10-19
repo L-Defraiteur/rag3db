@@ -63,6 +63,11 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     dataChunk.insert(0, std::make_shared<ValueVector>(LogicalType::INTERNAL_ID(), memoryManager));
     std::vector<ValueVector*> outputVectors;
     for (column_id_t columnID = 0; columnID < table.getNumColumns(); columnID++) {
+        if (!table.hasColumn(columnID)) {
+            // Un trou (colonne supprimée) garde son numéro : une statistique vide à sa place.
+            columnTypes.push_back(LogicalType::ANY());
+            continue;
+        }
         const auto& dataType = table.getColumn(columnID).getDataType();
         columnIDs.push_back(columnID);
         columnTypes.push_back(dataType.copy());

@@ -20,6 +20,12 @@ public:
 
     bool finished() const { return reader->finished(); }
 
+    // La version de format de ce qui est lu (posée à la lecture de l'en-tête de base) : ce qui
+    // a changé de forme entre deux versions se relit d'après elle. 0 : inconnue, lue comme la
+    // version courante.
+    void setStorageVersion(uint64_t version) { storageVersion = version; }
+    uint64_t getStorageVersion() const { return storageVersion; }
+
     template<typename T>
         requires std::is_trivially_destructible_v<T> || std::is_same_v<std::string, T>
     void deserializeValue(T& value) {
@@ -139,6 +145,7 @@ public:
 
 private:
     std::unique_ptr<Reader> reader;
+    uint64_t storageVersion = 0;
 };
 
 template<>

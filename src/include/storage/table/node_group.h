@@ -108,7 +108,9 @@ public:
           numRows{chunkedNodeGroup->getStartRowIdx() + chunkedNodeGroup->getNumRows()},
           nextRowToAppend{numRows}, capacity{capacity} {
         for (auto i = 0u; i < chunkedNodeGroup->getNumColumns(); i++) {
-            dataTypes.push_back(chunkedNodeGroup->getColumnChunk(i).getDataType().copy());
+            dataTypes.push_back(chunkedNodeGroup->hasColumnChunk(i) ?
+                                    chunkedNodeGroup->getColumnChunk(i).getDataType().copy() :
+                                    common::LogicalType::ANY());
         }
         const auto lock = chunkedGroups.lock();
         chunkedGroups.appendGroup(lock, std::move(chunkedNodeGroup));

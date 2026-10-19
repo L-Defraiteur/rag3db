@@ -691,12 +691,14 @@ void CSRNodeGroup::rollbackInsert(row_idx_t startRow) {
 
 void CSRNodeGroup::checkpoint(MemoryManager&, NodeGroupCheckpointState& state) {
     const auto lock = chunkedGroups.lock();
+    // Les trous d'abord (voir NodeGroup::checkpoint) : la copie vidée reprend ses numéros avec
+    // dataTypes.
+    checkpointDataTypesNoLock(state);
     if (!persistentChunkGroup) {
         checkpointInMemOnly(lock, state);
     } else {
         checkpointInMemAndOnDisk(lock, state);
     }
-    checkpointDataTypesNoLock(state);
 }
 
 void CSRNodeGroup::reclaimStorage(PageAllocator& pageAllocator, const UniqLock& lock) const {
@@ -734,7 +736,7 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheck
         // No csr regions need to be checkpointed, meaning nothing is updated or deleted.
         // We should reset the version and update info of the persistent chunked group.
         persistentChunkGroup->resetVersionAndUpdateInfo();
-        if (csrState.columnIDs.size() != persistentChunkGroup->getNumColumns()) {
+        if (csrState.columnIDs.size() != persistentChunkGroup->getNumPresentColumns()) {
             // The column set of the node group has changed. We need to re-create the persistent
             // chunked group.
             persistentChunkGroup = createNewPersistentChunkGroup(
@@ -1328,9 +1330,12 @@ void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpoint
     }
     csrState.newHeader->offset->flush(csrState.pageAllocator);
     csrState.newHeader->length->flush(csrState.pageAllocator);
-    persistentChunkGroup = std::make_unique<ChunkedCSRNodeGroup>(
+    // Les colonnes vidées sont dans l'ordre de csrState.columnIDs : chacune reprend son numéro.
+    auto flushedGroup = std::make_unique<ChunkedCSRNodeGroup>(
         ChunkedCSRHeader(false /*enableCompression*/, std::move(*csrState.newHeader)),
         std::move(dataChunksToFlush), 0);
+    persistentChunkGroup = std::make_unique<ChunkedCSRNodeGroup>(*state.mm, *flushedGroup,
+        std::span{dataTypes}, std::span{csrState.columnIDs});
     // TODO(Guodong): Use `finalizeCheckpoint`.
     chunkedGroups.clear(lock);
     // Set `numRows` back to 0 is to reflect that the in mem part of the node group is empty.

@@ -1,5 +1,7 @@
 #include "storage/table/node_group.h"
 
+#include <algorithm>
+
 #include <mutex>
 #include <shared_mutex>
 
@@ -458,6 +460,10 @@ void NodeGroup::reclaimStorage(PageAllocator& pageAllocator, const UniqLock& loc
 void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointState& state) {
     const auto lock = chunkedGroups.lock();
     KU_ASSERT(chunkedGroups.getNumGroups(lock) >= 1);
+    // Les trous d'abord : le bloc vidé (flushEmpty) et la copie fusionnée qui reprend ses
+    // numéros lisent dataTypes, et une colonne supprimée doit y être ANY, pas son ancien type
+    // (sinon elle renaît vide, et le bloc se relit avec zéro ligne).
+    checkpointDataTypesNoLock(state);
     const auto firstGroup = chunkedGroups.getFirstGroup(lock);
     const auto hasPersistentData = firstGroup->getResidencyState() == ResidencyState::ON_DISK;
     // Re-populate version info here first.
@@ -482,17 +488,17 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
     state.markChangedMemory();
     chunkedGroups.clear(lock);
     chunkedGroups.appendGroup(lock, std::move(checkpointedChunkedGroup));
-    checkpointDataTypesNoLock(state);
 }
 
+// Les numéros ne bougent pas : une colonne qui n'est plus dans le point de reprise (supprimée)
+// devient un trou, à son numéro.
 void NodeGroup::checkpointDataTypesNoLock(const NodeGroupCheckpointState& state) {
-    std::vector<LogicalType> checkpointedTypes;
-    for (auto i = 0u; i < state.columnIDs.size(); i++) {
-        auto columnID = state.columnIDs[i];
-        KU_ASSERT(columnID < dataTypes.size());
-        checkpointedTypes.push_back(dataTypes[columnID].copy());
+    for (auto columnID = 0u; columnID < dataTypes.size(); columnID++) {
+        if (std::find(state.columnIDs.begin(), state.columnIDs.end(), columnID) ==
+            state.columnIDs.end()) {
+            dataTypes[columnID] = LogicalType::ANY();
+        }
     }
-    dataTypes = std::move(checkpointedTypes);
 }
 
 void NodeGroup::scanCommittedUpdatesForColumn(
@@ -584,7 +590,11 @@ std::unique_ptr<ChunkedNodeGroup> NodeGroup::checkpointInMemOnly(MemoryManager& 
     // Après la copie, l'écriture des pages : rien de ce qui suit n'est réputé se défaire (voir
     // checkpointInMemAndOnDisk).
     state.markChangedMemory();
-    return insertChunkedGroup->flush(&DUMMY_CHECKPOINT_TRANSACTION, state.pageAllocator);
+    // Le bloc vidé porte les colonnes vivantes dans l'ordre de state.columnIDs : chacune
+    // reprend son numéro, les trous restent des trous.
+    auto flushed = insertChunkedGroup->flush(&DUMMY_CHECKPOINT_TRANSACTION, state.pageAllocator);
+    return std::make_unique<ChunkedNodeGroup>(memoryManager, *flushed, std::span{dataTypes},
+        std::span{state.columnIDs});
 }
 
 std::unique_ptr<VersionInfo> NodeGroup::checkpointVersionInfo(const UniqLock& lock,

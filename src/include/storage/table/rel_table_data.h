@@ -150,7 +150,8 @@ private:
         std::vector<common::LogicalType> types;
         types.reserve(columns.size());
         for (const auto& column : columns) {
-            types.push_back(column->getDataType().copy());
+            // Un trou (colonne supprimée) est ANY, à son numéro.
+            types.push_back(column ? column->getDataType().copy() : common::LogicalType::ANY());
         }
         return types;
     }

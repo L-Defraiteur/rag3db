@@ -301,7 +301,13 @@ public:
     static bool isIndexVisible(const IndexHolder& holder,
         const transaction::Transaction* transaction);
 
+    // Le nombre de numéros de colonnes, trous compris ; hasColumn dit si le numéro est vivant.
     common::column_id_t getNumColumns() const { return columns.size(); }
+    bool hasColumn(common::column_id_t columnID) const {
+        return columnID < columns.size() && columns[columnID] != nullptr;
+    }
+    static std::vector<common::LogicalType> getColumnTypesBySlot(
+        const catalog::TableCatalogEntry& entry);
     Column& getColumn(common::column_id_t columnID) {
         KU_ASSERT(columnID < columns.size());
         return *columns[columnID];

@@ -185,7 +185,9 @@ public:
               NodeGroupDataFormat::CSR},
           persistentChunkGroup{std::move(chunkedNodeGroup)} {
         for (auto i = 0u; i < persistentChunkGroup->getNumColumns(); i++) {
-            dataTypes.push_back(persistentChunkGroup->getColumnChunk(i).getDataType().copy());
+            dataTypes.push_back(persistentChunkGroup->hasColumnChunk(i) ?
+                                    persistentChunkGroup->getColumnChunk(i).getDataType().copy() :
+                                    common::LogicalType::ANY());
         }
     }
 

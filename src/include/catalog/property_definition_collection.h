@@ -21,6 +21,9 @@ public:
     const binder::PropertyDefinition& getDefinition(const std::string& name) const;
     const binder::PropertyDefinition& getDefinition(common::idx_t idx) const;
     common::column_id_t getMaxColumnID() const;
+    // Le nombre de numéros de colonnes attribués depuis la création, trous compris : la
+    // taille de tout vecteur indexé par numéro de colonne.
+    common::column_id_t getNumColumnSlots() const { return nextColumnID; }
     common::column_id_t getColumnID(const std::string& name) const;
     common::column_id_t getColumnID(common::property_id_t propertyID) const;
     common::property_id_t getPropertyID(const std::string& name) const;

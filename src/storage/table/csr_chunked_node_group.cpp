@@ -266,10 +266,7 @@ std::unique_ptr<ChunkedCSRNodeGroup> ChunkedCSRNodeGroup::deserialize(MemoryMana
     deSer.validateDebuggingInfo(key, "csr_header_length");
     auto length = ColumnChunk::deserialize(memoryManager, deSer);
     // TODO(Guodong): Rework to reuse ChunkedNodeGroup::deserialize().
-    std::vector<std::unique_ptr<ColumnChunk>> chunks;
-    deSer.validateDebuggingInfo(key, "chunks");
-    deSer.deserializeVectorOfPtrs<ColumnChunk>(chunks,
-        [&](Deserializer& deser) { return ColumnChunk::deserialize(memoryManager, deser); });
+    auto chunks = ChunkedNodeGroup::deserializeChunks(memoryManager, deSer);
     deSer.validateDebuggingInfo(key, "startRowIdx");
     row_idx_t startRowIdx = 0;
     deSer.deserializeValue<row_idx_t>(startRowIdx);
