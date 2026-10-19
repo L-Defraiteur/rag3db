@@ -159,7 +159,7 @@ fn loading_checks_everything_and_names_each_fault() {
     std::fs::write(b2.join(LIBS_FILE), serde_json::to_string(&libs).unwrap()).unwrap();
     std::fs::remove_dir_all(b2.join("components")).unwrap();
     let e = Components::load(&b2).unwrap_err();
-    assert!(e.iter().any(|x| x.contains("react-dom dépend de react@19.2.0") && x.contains("pas déclaré")), "{e:?}");
+    assert!(e.iter().any(|x| x.contains("react-dom dépend de react@^19.2.0") && x.contains("pas déclaré")), "{e:?}");
     let (_t3, b3) = backend();
     let h = read_libs(&b3).unwrap()["react"].files["cjs/react.production.js"].clone();
     std::fs::remove_file(store_path(&b3, &h)).unwrap();
@@ -506,4 +506,112 @@ fn a_peer_resolves_to_the_copy_the_backend_holds() {
         Resolved::LibFile { package, version, file, .. } => assert_eq!((package.as_str(), version.as_str(), file.as_str()), ("react", "19.2.1", "index.js")),
         autre => panic!("{autre:?}"),
     }
+}
+
+/// Exécute un graphe de libs dans rquickjs : le registre, les modules, puis
+/// `expression` (du JavaScript qui rend une chaîne).
+fn executer(g: &super::modules::Graph, expression: &str) -> String {
+    let programme = format!("{}{}\n{expression}", super::modules::REGISTRE, g.script());
+    let rt = rquickjs::Runtime::new().unwrap();
+    let ctx = rquickjs::Context::full(&rt).unwrap();
+    ctx.with(|ctx| match ctx.eval::<String, _>(programme.clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            let detail = ctx.catch();
+            panic!("{e} — {detail:?}\n{programme}")
+        }
+    })
+}
+
+/// **Un graphe de libs, sans composant ni React** (l'éditeur de l'IDE) : une
+/// lib qui ne publie que de l'ESM est rendue en CommonJS pour le registre, sa
+/// dépendance en `.cjs` est prise par la condition `require`, et une dépendance
+/// en intervalle (`^1.0.0`) se résout vers la copie rangée qui le tient.
+#[test]
+fn a_graph_of_libs_runs_esm_and_cjs_through_the_registry() {
+    let t = tempfile::tempdir().unwrap();
+    let b = t.path().join("backend");
+    std::fs::create_dir_all(&b).unwrap();
+    let outil = paquet(
+        t.path(),
+        "outil",
+        json!({ "name": "outil", "version": "1.4.2", "type": "module",
+                "exports": { "import": "./dist/index.js", "require": "./dist/index.cjs" } }),
+        &[
+            ("dist/index.js", "export function double(x) { return 2 * x; }"),
+            ("dist/index.cjs", "exports.double = function (x) { return 2 * x; };"),
+        ],
+    );
+    let editeur = paquet(
+        t.path(),
+        "editeur",
+        json!({ "name": "editeur", "version": "6.0.0", "type": "module", "exports": { "import": "./dist/index.js" },
+                "dependencies": { "outil": "^1.0.0" } }),
+        &[("dist/index.js", "import { double } from \"outil\";\nexport const nom = \"éditeur\";\nexport default function quatre() { return double(2); }\n")],
+    );
+    add_lib(&b, &outil).unwrap();
+    add_lib(&b, &editeur).unwrap();
+    let c = Components::load(&b).unwrap();
+    assert_eq!(c.libs["editeur"].dependencies["outil"], "^1.0.0", "l'intervalle reste tel qu'écrit");
+    let g = c.module_graph_of(&b, &["editeur"], Mode::Development).unwrap();
+    assert!(g.unresolved.is_empty(), "{:?}", g.unresolved);
+    assert!(g.modules.keys().any(|k| k == "lib:outil@1.4.2/dist/index.cjs"), "la condition require : {:?}", g.modules.keys());
+    let rendu = executer(&g, &format!(
+        "const m = __rag3weaver.require({}); JSON.stringify({{ nom: m.nom, quatre: m.default() }});",
+        serde_json::to_string(&g.boot["editeur"]).unwrap()
+    ));
+    assert_eq!(rendu, r#"{"nom":"éditeur","quatre":4}"#);
+    // Un intervalle que la copie rangée ne tient pas se refuse en le nommant.
+    let vieil = paquet(t.path(), "outil-0", json!({ "name": "outil", "version": "0.9.0", "main": "index.js" }), &[("index.js", "")]);
+    add_lib(&b, &vieil).unwrap();
+    let e = Components::load(&b).unwrap_err();
+    assert!(e.iter().any(|x| x.contains("editeur dépend de outil@^1.0.0") && x.contains("0.9.0")), "{e:?}");
+}
+
+/// **Un pair hors de son intervalle se refuse**, en le nommant, comme une
+/// dépendance (le pair est la copie du backend — si elle tient l'intervalle).
+#[test]
+fn a_peer_outside_its_range_is_refused() {
+    let t = tempfile::tempdir().unwrap();
+    let b = t.path().join("backend");
+    std::fs::create_dir_all(&b).unwrap();
+    let r = paquet(t.path(), "react", json!({ "name": "react", "version": "18.3.1", "main": "index.js" }), &[("index.js", "")]);
+    let d = paquet(
+        t.path(),
+        "react-dom",
+        json!({ "name": "react-dom", "version": "19.2.0", "main": "index.js", "peerDependencies": { "react": "^19.2.0" } }),
+        &[("index.js", "require('react');")],
+    );
+    add_lib(&b, &r).unwrap();
+    add_lib(&b, &d).unwrap();
+    let c = Components::load(&b).unwrap();
+    let e = c.resolve(&Importer::LibFile { package: "react-dom", file: "index.js" }, "react", Mode::Development).unwrap_err();
+    assert!(e.contains("react@^19.2.0") && e.contains("18.3.1"), "{e}");
+}
+
+/// **Le magasin ne range pas ce qu'un navigateur ne charge pas** : types,
+/// cartes de sources et notes partent ; la licence reste.
+#[test]
+fn the_store_keeps_code_and_licence_not_types_maps_or_notes() {
+    let t = tempfile::tempdir().unwrap();
+    let b = t.path().join("backend");
+    std::fs::create_dir_all(&b).unwrap();
+    let p = paquet(
+        t.path(),
+        "leger",
+        json!({ "name": "leger", "version": "1.0.0", "main": "dist/index.cjs" }),
+        &[
+            ("dist/index.cjs", "module.exports = 1;"),
+            ("dist/index.d.ts", "export {};"),
+            ("dist/index.d.cts", "export {};"),
+            ("dist/index.cjs.map", "{}"),
+            ("CHANGELOG.md", "# 1.0.0"),
+            ("README.md", "# leger"),
+            ("LICENSE", "MIT"),
+            ("LICENSE.md", "MIT"),
+        ],
+    );
+    add_lib(&b, &p).unwrap();
+    let fichiers: Vec<String> = read_libs(&b).unwrap()["leger"].files.keys().cloned().collect();
+    assert_eq!(fichiers, vec!["LICENSE", "LICENSE.md", "dist/index.cjs", "package.json"]);
 }

@@ -37,6 +37,7 @@
   .note { color: var(--doux); font-size: 13px; }
   .alerte { color: var(--alerte); }
   /* L'édition humaine (B1) : le tampon, la barre, la différence. */
+  .edition .cm-editor { border: 1px solid var(--trait); background: var(--surface); }
   .edition textarea { width: 100%; min-height: 70vh; font: 13px/1.5 var(--mono); background: var(--surface);
     color: var(--texte); border: 1px solid var(--trait); padding: 8px; tab-size: 4; }
   .barre { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
@@ -320,23 +321,104 @@ async function editer(id, chemin) {
     vue.prepend(el("p", { class: "alerte" }, "Ce fichier est hors du worktree déclaré : il se lit, il ne se modifie pas."));
     return;
   }
-  const zone = el("textarea", { spellcheck: "false", "aria-label": `contenu de ${chemin}` });
-  zone.value = r.content;
   const avis = el("span", { class: "note" }, "");
-  edition = { id, chemin, hash: r.content_hash, modifie: false, zone, avis };
-  zone.addEventListener("input", () => { edition.modifie = true; avis.textContent = "modifié, non enregistré"; });
-  zone.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); enregistrer(); }
-  });
+  const conteneur = el("div", { class: "edition", "aria-label": `contenu de ${chemin}` });
+  const marquer = () => { if (edition) { edition.modifie = true; avis.textContent = "modifié, non enregistré"; } };
+  edition = { id, chemin, hash: r.content_hash, modifie: false, zone: null, avis };
   vue.replaceChildren(
     el("h1", {}, chemin),
     el("p", { class: "barre" },
       el("button", { onclick: enregistrer }, "Enregistrer"),
       el("button", { onclick: quitter }, "Fermer l'édition"),
       avis),
-    el("div", { class: "edition" }, zone),
+    conteneur,
   );
-  zone.focus();
+  edition.zone = await zoneDEdition(conteneur, r.content, marquer, chemin);
+  edition.zone.focus();
+}
+
+// ─── L'éditeur (B1, partie 2) ─────────────────────────────────────────────────
+// CodeMirror, par le magasin de libs embarqué dans l'hôte (/ide/editeur/modules.js,
+// rangé par scripts/ide_libs.sh) et le registre de l'aperçu : ni CDN, ni
+// téléchargement à l'usage. La zone garde l'interface d'une textarea (value,
+// focus, parentElement) : l'enregistrement, le conflit et la différence n'en
+// savent rien. Ctrl-S (Cmd-S) enregistre ; le tampon n'est jamais remplacé par le
+// disque sans le choix de l'utilisatrice.
+let editeur = null; // la promesse des modules de CodeMirror, chargés une fois
+function chargerScript(src) {
+  return new Promise((ok, ko) => {
+    const s = el("script", { src });
+    s.onload = ok;
+    s.onerror = () => ko(new Error(`${src} ne se charge pas`));
+    document.head.append(s);
+  });
+}
+function modulesDeLEditeur() {
+  if (!editeur) {
+    editeur = (async () => {
+      if (!globalThis.__rag3weaver) await chargerScript("/ide/registre.js");
+      await chargerScript("/ide/editeur/modules.js");
+      const R = globalThis.__rag3weaver;
+      const lib = (spec) => R.require(R.demarrage[spec]);
+      return {
+        view: lib("@codemirror/view"), state: lib("@codemirror/state"), commands: lib("@codemirror/commands"),
+        search: lib("@codemirror/search"), language: lib("@codemirror/language"),
+      };
+    })();
+  }
+  return editeur;
+}
+
+async function zoneDEdition(conteneur, texte, marquer, chemin) {
+  let cm;
+  try {
+    cm = await modulesDeLEditeur();
+  } catch (err) {
+    // Sans ses modules, l'édition reste possible : une textarea, et la raison dite.
+    console.error(`l'éditeur ne se charge pas, une zone de texte le remplace : ${err.message ?? err}`);
+    editeur = null;
+    const zone = el("textarea", { spellcheck: "false", "aria-label": `contenu de ${chemin}` });
+    zone.value = texte;
+    zone.addEventListener("input", marquer);
+    zone.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); enregistrer(); }
+    });
+    conteneur.append(zone);
+    return zone;
+  }
+  const { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } = cm.view;
+  const { EditorState } = cm.state;
+  const { defaultKeymap, history, historyKeymap, indentWithTab } = cm.commands;
+  const { searchKeymap, highlightSelectionMatches } = cm.search;
+  const { bracketMatching, indentOnInput } = cm.language;
+  // Une écriture de la page (reprendre le disque) n'est pas une modification.
+  let deLaPage = false;
+  const vue = new EditorView({
+    parent: conteneur,
+    state: EditorState.create({
+      doc: texte,
+      extensions: [
+        lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(),
+        history(), bracketMatching(), indentOnInput(), highlightSelectionMatches(),
+        keymap.of([
+          { key: "Mod-s", preventDefault: true, run: () => { enregistrer(); return true; } },
+          ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab,
+        ]),
+        EditorView.updateListener.of((u) => { if (u.docChanged && !deLaPage) marquer(); }),
+        EditorView.theme({ "&": { height: "70vh" }, ".cm-scroller": { fontFamily: "var(--mono)", fontSize: "13px" } }),
+      ],
+    }),
+  });
+  return {
+    get value() { return vue.state.doc.toString(); },
+    set value(t) {
+      deLaPage = true;
+      try { vue.dispatch({ changes: { from: 0, to: vue.state.doc.length, insert: t } }); } finally { deLaPage = false; }
+    },
+    focus() { vue.focus(); },
+    get parentElement() { return conteneur; },
+    vue,
+  };
 }
 
 async function enregistrer() {
@@ -714,6 +796,8 @@ source.onmessage = (e) => {
   if (!touche) return;
   // En édition : un tampon modifié n'est jamais remplacé ; on le dit (page 05 §4).
   if (edition && r.vue === "fichier" && edition.chemin === ev.path) {
+    // Notre propre enregistrement : le disque est déjà le tampon.
+    if (ev.hash && ev.hash === edition.hash) return;
     if (edition.modifie) edition.avis.textContent = "changé sur le disque depuis la lecture : l'enregistrement montrera la différence";
     else editer(edition.id, edition.chemin);
     return;

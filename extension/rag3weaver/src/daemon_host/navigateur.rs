@@ -251,6 +251,17 @@ impl Navigateur {
         }
     }
 
+    /// **Une touche au clavier**, par le protocole (keyDown puis keyUp) :
+    /// `modificateurs` 2 = Ctrl. La page reçoit de vrais événements clavier.
+    pub(crate) fn touche(&mut self, cle: &str, code: &str, virtuelle: u32, modificateurs: u32) {
+        for genre in ["keyDown", "keyUp"] {
+            self.commande(
+                "Input.dispatchKeyEvent",
+                json!({ "type": genre, "key": cle, "code": code, "windowsVirtualKeyCode": virtuelle, "modifiers": modificateurs }),
+            );
+        }
+    }
+
     /// Le résultat d'une expression JavaScript (les promesses attendues).
     pub(crate) fn evaluer(&mut self, expression: &str) -> Value {
         let r = self.commande(
@@ -494,17 +505,37 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
         assert!(n.erreurs.is_empty(), "{quoi} : erreurs à la console : {:#?}", n.erreurs);
     }
 
-    // L'édition : Modifier, taper, Enregistrer ; le disque porte le texte tapé.
+    // L'édition (B1, page 05 §4), dans CodeMirror : Modifier, tout sélectionner et
+    // taper au clavier, Ctrl-S ; le disque porte le texte tapé.
     n.aller(&format!("{racine}/ide/code/{id}/fichier/main.rs"), "document.querySelector('#L1')");
     n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent === 'Modifier').click()");
-    n.attendre("document.querySelector('textarea')?.value.includes('fn depart()')", "le tampon d'édition");
+    n.attendre("document.querySelector('.edition .cm-content')?.innerText.includes('fn depart()')", "l'éditeur CodeMirror");
+    let avis = |texte: &str| format!("document.querySelector('.barre .note')?.textContent === {}", json!(texte));
     let neuf = "fn main() {\n    depart();\n}\n\nfn depart() {}\n";
-    n.evaluer("document.querySelector('textarea').select()");
+    n.evaluer("document.querySelector('.edition .cm-content').focus()");
+    n.touche("a", "KeyA", 65, 2);
     n.commande("Input.insertText", json!({ "text": neuf }));
-    n.attendre("document.querySelector('.barre .note')?.textContent === 'modifié, non enregistré'", "l'avis de modification");
-    n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent === 'Enregistrer').click()");
-    n.attendre("document.querySelector('.barre .note')?.textContent === 'enregistré'", "l'enregistrement");
+    n.attendre(&avis("modifié, non enregistré"), "l'avis de modification");
+    n.touche("s", "KeyS", 83, 2);
+    n.attendre(&avis("enregistré"), "l'enregistrement par Ctrl-S");
     assert_eq!(std::fs::read_to_string(arbre.join("main.rs")).unwrap(), neuf);
+
+    // Le tampon n'est jamais remplacé : on tape encore, le fichier change sur le
+    // disque (un autre éditeur) ; la page le dit et garde le tampon. Ctrl-S montre
+    // la différence sans rien écrire ; « garder ma version » écrit le tampon.
+    n.touche("End", "End", 35, 2);
+    n.commande("Input.insertText", json!({ "text": "// tampon\n" }));
+    n.attendre(&avis("modifié, non enregistré"), "la seconde modification");
+    let disque = "fn main() {}\n// disque\n";
+    std::fs::write(arbre.join("main.rs"), disque).unwrap();
+    n.attendre("document.querySelector('.barre .note')?.textContent.startsWith('changé sur le disque')", "l'avis du changement sur le disque");
+    n.attendre("document.querySelector('.edition .cm-content')?.innerText.includes('// tampon')", "le tampon gardé");
+    n.touche("s", "KeyS", 83, 2);
+    n.attendre("document.querySelector('.diff .moins') && document.querySelector('.diff .plus')", "la différence disque → tampon");
+    assert_eq!(std::fs::read_to_string(arbre.join("main.rs")).unwrap(), disque, "rien n'est écrit sur un fichier changé");
+    n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent.startsWith('Garder ma version')).click()");
+    n.attendre(&avis("enregistré"), "l'écriture en connaissance de cause");
+    assert_eq!(std::fs::read_to_string(arbre.join("main.rs")).unwrap(), format!("{neuf}// tampon\n"));
     assert!(n.erreurs.is_empty(), "l'édition : erreurs à la console : {:#?}", n.erreurs);
 
     // Le DAG vivant (C2) : la page montre le graphe de `usages` ; un appel de

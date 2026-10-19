@@ -62,8 +62,10 @@ pub struct Lib {
     /// `main` du `package.json`, quand il n'y a pas d'`exports`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub main: Option<String>,
-    /// Les paquets que celui-ci importe, avec leur version exacte : déclarés
-    /// eux aussi dans `libs.json`.
+    /// Les paquets que celui-ci importe, avec leur intervalle tel qu'écrit dans
+    /// `package.json` (`^6.7.0`), déclarés eux aussi dans `libs.json` : la copie
+    /// rangée doit le satisfaire, par les règles de npm ([`semver::satisfies`] ;
+    /// un nombre nu reste exact, comme dans les `libs.json` d'avant).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<String, String>,
     /// Les dépendances pairs (`peerDependencies`), avec leur intervalle tel
@@ -94,8 +96,10 @@ pub fn store_path(backend_dir: &Path, hash: &str) -> PathBuf {
 
 /// **Range un paquet déballé dans le magasin, et le déclare** : chaque fichier
 /// haché (blake3) et copié sous son hash, l'entrée de `libs.json` écrite d'après
-/// le `package.json` (nom, version, `exports`, `main`, `dependencies` à leur
-/// version exacte). C'est la commande explicite qui remplit le magasin : rien
+/// le `package.json` (nom, version, `exports`, `main`, `dependencies` avec leur
+/// intervalle). Ce qu'un navigateur ne charge jamais n'est pas rangé
+/// ([`range_dans_le_magasin`] : déclarations de types, cartes de sources, notes),
+/// la licence l'est toujours. C'est la commande explicite qui remplit le magasin : rien
 /// d'autre n'y écrit, et rien ne télécharge en silence. Un paquet déjà
 /// déclaré sous une autre version est remplacé, et la réponse le dit : un
 /// backend n'en garde qu'une.
@@ -118,6 +122,9 @@ pub fn add_lib(backend_dir: &Path, package_dir: &Path) -> Result<String, String>
                 }
                 continue;
             }
+            if !range_dans_le_magasin(nom_f) {
+                continue;
+            }
             let octets = std::fs::read(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
             let hash = blake3::hash(&octets).to_hex().to_string();
             let cible = store_path(backend_dir, &hash);
@@ -133,7 +140,7 @@ pub fn add_lib(backend_dir: &Path, package_dir: &Path) -> Result<String, String>
     }
     let dependencies = pj["dependencies"]
         .as_object()
-        .map(|o| o.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").trim_start_matches(['^', '~', '=']).to_string())).collect())
+        .map(|o| o.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect())
         .unwrap_or_default();
     let peers = pj["peerDependencies"]
         .as_object()
@@ -155,6 +162,19 @@ pub fn add_lib(backend_dir: &Path, package_dir: &Path) -> Result<String, String>
         Some(v) if v != version => format!("{nom}@{version} rangé ; remplace {nom}@{v} (un backend n'en garde qu'une version)"),
         _ => format!("{nom}@{version} rangé"),
     })
+}
+
+/// Un fichier de paquet que le magasin range : tout sauf les déclarations de
+/// types (`.d.ts`, `.d.cts`, `.d.mts`), les cartes de sources (`.map`) et les
+/// notes en Markdown (`CHANGELOG.md`, `README.md`) — la licence reste, quel que
+/// soit son nom (`LICENSE`, `LICENSE.md`, `LICENCE`). Un navigateur ne charge
+/// rien de ce qui part ; CodeMirror en perdait la moitié de son poids.
+pub fn range_dans_le_magasin(nom: &str) -> bool {
+    let bas = nom.to_ascii_lowercase();
+    if bas.starts_with("license") || bas.starts_with("licence") || bas.starts_with("copying") {
+        return true;
+    }
+    ![".d.ts", ".d.cts", ".d.mts", ".map", ".md", ".markdown"].iter().any(|x| bas.ends_with(x))
 }
 
 // ─── Les composants ─────────────────────────────────────────────────────────
@@ -269,11 +289,14 @@ impl Components {
             for (dep, version) in &lib.dependencies {
                 match libs.get(dep) {
                     None => errors.push(format!("{LIBS_FILE} : {nom} dépend de {dep}@{version}, qui n'est pas déclaré")),
-                    Some(d) if &d.version != version => errors.push(format!(
-                        "{LIBS_FILE} : {nom} dépend de {dep}@{version}, déclaré en {} (une seule version par paquet)",
-                        d.version
-                    )),
-                    _ => {}
+                    Some(d) => match semver::satisfies(version, &d.version) {
+                        Ok(true) => {}
+                        Ok(false) => errors.push(format!(
+                            "{LIBS_FILE} : {nom} dépend de {dep}@{version}, déclaré en {} (une seule version par paquet)",
+                            d.version
+                        )),
+                        Err(e) => errors.push(format!("{LIBS_FILE} : {nom} dépend de {dep} : {e}")),
+                    },
                 }
             }
             for (fichier, hash) in &lib.files {
@@ -358,11 +381,13 @@ impl Components {
                 if let Some(version) = lib.dependencies.get(paquet) {
                     return self.dans_la_lib(paquet, version, &sous, mode, specifier);
                 }
-                if lib.peers.contains_key(paquet) {
-                    let pair = self.libs.get(paquet).ok_or_else(|| {
-                        format!("{package}/{file} importe « {specifier} » : le pair « {paquet} » n'est pas déclaré dans {LIBS_FILE}")
-                    })?;
-                    return self.dans_la_lib(paquet, &pair.version, &sous, mode, specifier);
+                if let Some(intervalle) = lib.peers.get(paquet) {
+                    if !self.libs.contains_key(paquet) {
+                        return Err(format!("{package}/{file} importe « {specifier} » : le pair « {paquet} » n'est pas déclaré dans {LIBS_FILE}"));
+                    }
+                    // Le pair est la copie que le backend range — à condition
+                    // qu'elle tienne l'intervalle que la lib demande.
+                    return self.dans_la_lib(paquet, intervalle, &sous, mode, specifier);
                 }
                 Err(format!("{package}/{file} importe « {specifier} » : « {paquet} » n'est ni dans ses dependencies ni dans ses peerDependencies"))
             }
@@ -371,13 +396,14 @@ impl Components {
 
     fn dans_la_lib(&self, paquet: &str, version: &str, sous: &str, mode: Mode, specifier: &str) -> Result<Resolved, String> {
         let lib = self.libs.get(paquet).ok_or_else(|| format!("« {paquet} » n'est pas déclaré dans {LIBS_FILE}"))?;
-        if lib.version != version {
+        // `version` est l'intervalle que l'importeur demande (un nombre nu : exact).
+        if !semver::satisfies(version, &lib.version).map_err(|e| format!("« {specifier} » : {e}"))? {
             return Err(format!("« {specifier} » veut {paquet}@{version}, {LIBS_FILE} déclare {}", lib.version));
         }
-        let cible = cible_exports(lib, sous, mode).ok_or_else(|| format!("« {specifier} » : {paquet}@{version} n'exporte pas « {sous} »"))?;
+        let cible = cible_exports(lib, sous, mode).ok_or_else(|| format!("« {specifier} » : {paquet}@{} n'exporte pas « {sous} »", lib.version))?;
         let vise = normaliser("", &cible).ok_or_else(|| format!("« {specifier} » : cible hors du paquet ({cible})"))?;
         fichier_de(lib, &vise)
-            .map(|(f, hash)| Resolved::LibFile { package: paquet.to_string(), version: version.to_string(), file: f, hash })
+            .map(|(f, hash)| Resolved::LibFile { package: paquet.to_string(), version: lib.version.clone(), file: f, hash })
             .ok_or_else(|| format!("« {specifier} » mène à {paquet}/{vise}, absent du paquet"))
     }
 }
@@ -413,7 +439,7 @@ fn read_component(chemin: &Path, dir: &Path, libs: &Libs, ecran: &EcranDuBackend
     for (paquet, version) in &f.libs {
         match libs.get(paquet) {
             None => return Err(format!("{montre} : la lib « {paquet} » n'est pas déclarée dans {LIBS_FILE}")),
-            Some(l) if &l.version != version => {
+            Some(l) if !semver::satisfies(version, &l.version).map_err(|e| format!("{montre} : {paquet} : {e}"))? => {
                 return Err(format!("{montre} : veut {paquet}@{version}, {LIBS_FILE} déclare {}", l.version))
             }
             _ => {}
@@ -478,7 +504,10 @@ pub fn parse_package_name(specifier: &str) -> (&str, String) {
 
 /// La cible d'un sous-chemin par la table `exports` (ou `main`, ou `index.js`).
 fn cible_exports(lib: &Lib, sous: &str, mode: Mode) -> Option<String> {
-    let conditions = ["browser", if mode == Mode::Development { "development" } else { "production" }, "import", "default"];
+    // `require` avant `import` : le registre de la page exécute du CommonJS, et
+    // les paquets qui publient les deux (CodeMirror, Lezer) donnent leur `.cjs`
+    // là ; un paquet qui n'a que de l'ESM passe par `compile_module`.
+    let conditions = ["browser", if mode == Mode::Development { "development" } else { "production" }, "require", "import", "default"];
     fn choisir(v: &Value, conditions: &[&str]) -> Option<String> {
         match v {
             Value::String(s) => Some(s.clone()),
@@ -513,9 +542,10 @@ fn cible_exports(lib: &Lib, sous: &str, mode: Mode) -> Option<String> {
     }
 }
 
-/// Un fichier d'une lib par son chemin, en essayant `.js` et `/index.js`.
+/// Un fichier d'une lib par son chemin, en essayant `.js`, `.cjs`, `/index.js`
+/// et `/index.cjs`.
 fn fichier_de(lib: &Lib, vise: &str) -> Option<(String, String)> {
-    [vise.to_string(), format!("{vise}.js"), format!("{vise}/index.js")]
+    [vise.to_string(), format!("{vise}.js"), format!("{vise}.cjs"), format!("{vise}/index.js"), format!("{vise}/index.cjs")]
         .into_iter()
         .find_map(|c| lib.files.get(&c).map(|h| (c.clone(), h.clone())))
 }
@@ -540,6 +570,7 @@ fn normaliser(base: &str, spec: &str) -> Option<String> {
 }
 
 pub mod modules;
+pub mod semver;
 /// La montre des composants : `components/` et `libs.json` changés, sur le bus.
 pub mod a_chaud;
 

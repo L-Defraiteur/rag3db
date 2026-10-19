@@ -78,6 +78,32 @@ fn compiler(source: &str, name: &str, mode: Mode) -> Result<CompiledComponent, S
     Ok(c)
 }
 
+/// **Un fichier de lib, en CommonJS** : tel quel s'il n'a ni `import` ni
+/// `export`, rendu par `compile_module` sinon ; mis en cache par son hash (le
+/// magasin est rangé par contenu).
+fn module_en_commonjs(code: &str, hash: &str, nom: &str) -> Result<String, String> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, String>>> = OnceLock::new();
+    // Sans `import` ni `export` dans le texte, inutile de parser (le cas de
+    // tout fichier `.cjs`).
+    if !code.contains("import") && !code.contains("export") {
+        return Ok(code.to_string());
+    }
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(c) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(hash) {
+        return Ok(c.clone());
+    }
+    let rendu = match crate::script::tsx::compile_module(code, nom) {
+        Ok(Some(cjs)) => cjs,
+        Ok(None) => code.to_string(),
+        // Un script CommonJS que le parseur d'ESM refuse (un `return` au premier
+        // niveau, un `with`…) n'est pas un module : il reste tel quel.
+        Err(_) if !code.contains("export ") && !code.contains("import ") => code.to_string(),
+        Err(e) => return Err(format!("{nom} : un module ESM que la page ne sait pas rendre en CommonJS : {e}")),
+    };
+    cache.lock().unwrap_or_else(|p| p.into_inner()).insert(hash.to_string(), rendu.clone());
+    Ok(rendu)
+}
+
 /// Les `require("…")` littéraux d'un fichier CommonJS de lib, dans l'ordre.
 fn requires(code: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -110,11 +136,42 @@ impl Components {
     /// touché.
     pub fn module_graph(&self, backend_dir: &Path, entry: &str, mode: Mode) -> Result<Graph, String> {
         let c = self.components.get(entry).ok_or_else(|| format!("composant inconnu : {entry}"))?;
+        // **React Refresh**, s'il est rangé : le rechargement à chaud garde
+        // l'état des composants. Sans lui, la page se recharge entière.
+        let facultatifs: &[&str] = if mode == Mode::Development { &[REFRESH] } else { &[] };
+        self.graph_from(backend_dir, Some(c.name.clone()), &["react", "react-dom/client"], facultatifs, mode, "l'aperçu demande")
+    }
+
+    /// **Le graphe des modules de quelques libs**, par leurs spécifiers
+    /// (`@codemirror/view`…), résolus comme le backend les importe : la page de
+    /// l'IDE s'en sert pour son éditeur, sans composant ni React. L'entrée est
+    /// le premier spécifier ; tous sont au démarrage (`boot`).
+    pub fn module_graph_of(&self, backend_dir: &Path, specifiers: &[&str], mode: Mode) -> Result<Graph, String> {
+        if specifiers.is_empty() {
+            return Err("un graphe de libs demande au moins un spécifier".into());
+        }
+        self.graph_from(backend_dir, None, specifiers, &[], mode, "le graphe demande")
+    }
+
+    /// Le parcours commun : un composant de départ (ou aucun), les libs
+    /// exigées au démarrage, celles qui y viennent si elles sont rangées.
+    fn graph_from(
+        &self,
+        backend_dir: &Path,
+        component: Option<String>,
+        required: &[&str],
+        optional: &[&str],
+        mode: Mode,
+        pourquoi: &str,
+    ) -> Result<Graph, String> {
         let mut modules = BTreeMap::new();
         let mut unresolved = Vec::new();
-        let mut a_faire: Vec<(String, Option<(String, String, String)>)> = vec![(c.name.clone(), None)];
+        let mut a_faire: Vec<(String, Option<(String, String, String)>)> = Vec::new();
+        if let Some(c) = &component {
+            a_faire.push((c.clone(), None));
+        }
         let mut boot = BTreeMap::new();
-        for spec in ["react", "react-dom/client"] {
+        for (spec, exige) in required.iter().map(|s| (*s, true)).chain(optional.iter().map(|s| (*s, false))) {
             match self.resolve(&Importer::Backend, spec, mode) {
                 Ok(r) => {
                     if let Resolved::LibFile { package, file, .. } = &r {
@@ -122,19 +179,14 @@ impl Components {
                     }
                     boot.insert(spec.to_string(), id_de(&r));
                 }
-                Err(e) => return Err(format!("l'aperçu demande {spec} dans libs.json : {e}")),
+                Err(e) if exige => return Err(format!("{pourquoi} {spec} dans libs.json : {e}")),
+                Err(_) => {}
             }
         }
-        // **React Refresh**, s'il est rangé : le rechargement à chaud garde
-        // l'état des composants. Sans lui, la page se recharge entière.
-        if mode == Mode::Development {
-            if let Ok(r @ Resolved::LibFile { .. }) = self.resolve(&Importer::Backend, REFRESH, mode) {
-                if let Resolved::LibFile { package, file, .. } = &r {
-                    a_faire.push((String::new(), Some((package.clone(), file.clone(), id_de(&r)))));
-                }
-                boot.insert(REFRESH.to_string(), id_de(&r));
-            }
-        }
+        let entry = match &component {
+            Some(c) => component_id(c),
+            None => boot[required[0]].clone(),
+        };
         while let Some((nom, lib)) = a_faire.pop() {
             let (id, hash, code, specs, seul, importeur): (String, String, String, Vec<String>, bool, Importer<'_>) = match &lib {
                 None => {
@@ -159,7 +211,10 @@ impl Components {
                     if blake3::hash(&octets).to_hex().as_str() != hash {
                         return Err(format!("{package}/{file} : le magasin ne redonne pas son hash ({hash}) — il a été touché"));
                     }
-                    let code = String::from_utf8_lossy(&octets).into_owned();
+                    let brut = String::from_utf8_lossy(&octets).into_owned();
+                    // Un fichier de lib en ESM (un paquet sans build CommonJS) se
+                    // rend en CommonJS pour le registre ; un script reste tel quel.
+                    let code = module_en_commonjs(&brut, &hash, &format!("{package}/{file}"))?;
                     let specs = requires(&code);
                     let paquet = self.libs.get_key_value(package).map(|(k, _)| k.as_str()).unwrap();
                     (id.clone(), hash, code, specs, false, Importer::LibFile { package: paquet, file: file.as_str() })
@@ -181,7 +236,7 @@ impl Components {
             }
             modules.insert(id.clone(), Module { id, hash, deps, code, exports_only_components: seul });
         }
-        Ok(Graph { entry: component_id(entry), boot, modules, unresolved })
+        Ok(Graph { entry, boot, modules, unresolved })
     }
 }
 

@@ -240,6 +240,29 @@ fn apercu(host: &DaemonHost, path: &str) -> (u16, &'static str, String) {
     }
 }
 
+// ─── L'éditeur de la page (B1, partie 2) ─────────────────────────────────────
+
+/// Les libs que la page de l'IDE prend pour son éditeur, au démarrage du graphe.
+pub const EDITEUR: &[&str] = &["@codemirror/view", "@codemirror/state", "@codemirror/commands", "@codemirror/search", "@codemirror/language"];
+
+/// **Les modules de l'éditeur** (CodeMirror), par le magasin de libs embarqué
+/// dans le binaire (`templates/ide/`, rangé par `scripts/ide_libs.sh`, extrait par
+/// `crate::builtin_templates`) et le graphe de modules de l'aperçu. Rendus une
+/// fois par processus : le magasin embarqué ne change pas. Une lib que le
+/// graphe ne résout pas est une erreur ici, pas un avertissement dans la page.
+pub fn editeur_modules() -> &'static Result<String, String> {
+    static M: std::sync::OnceLock<Result<String, String>> = std::sync::OnceLock::new();
+    M.get_or_init(|| {
+        let dir = crate::builtin_templates::root()?.join("ide");
+        let libs = crate::components::Components::load(&dir).map_err(|e| format!("les libs de l'éditeur : {}", e.join(" ; ")))?;
+        let g = libs.module_graph_of(&dir, EDITEUR, crate::components::Mode::Production)?;
+        if !g.unresolved.is_empty() {
+            return Err(format!("les libs de l'éditeur ne se résolvent pas : {}", g.unresolved.join(" ; ")));
+        }
+        Ok(modules_js(&g))
+    })
+}
+
 /// Le script des modules d'un graphe, puis son entrée, son démarrage et ce qui
 /// ne s'est pas résolu (dit à la console, refusé par le registre s'il s'exécute).
 pub fn modules_js(g: &crate::components::modules::Graph) -> String {
@@ -367,6 +390,13 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         ("GET", "/ide/registre.js") => {
             let _ = request.respond(reponse(200, "text/javascript; charset=utf-8", crate::components::modules::REGISTRE.to_string()));
         }
+        ("GET", "/ide/editeur/modules.js") => {
+            let (statut, corps) = match editeur_modules() {
+                Ok(js) => (200, js.clone()),
+                Err(e) => (500, e.clone()),
+            };
+            let _ = request.respond(reponse(statut, if statut == 200 { "text/javascript; charset=utf-8" } else { "text/plain; charset=utf-8" }, corps));
+        }
         ("GET", p) if p.starts_with("/ide/apercu/") => {
             let (statut, type_, corps) = apercu(host, p);
             let _ = request.respond(reponse(statut, type_, corps));
@@ -398,6 +428,19 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     let session = host.ide_session();
                     host.handle("POST", route, Some(&session), &corps)
                 }
+            };
+            // **Un refus d'outil est une réponse, pas une panne** : la page lit
+            // `ok: false` (le conflit d'un enregistrement sur un fichier changé
+            // en est un, attendu). En 422, le navigateur le journalisait comme une
+            // ressource en échec, à chaque conflit (vu par le témoin navigateur,
+            // 19 octobre 2026). Le statut de l'hôte reste dans le corps.
+            let (statut, v) = match statut {
+                422 => {
+                    let mut v = v;
+                    v["status"] = json!(422);
+                    (200, v)
+                }
+                autre => (autre, v),
             };
             let _ = request.respond(json_(statut, &v));
         }
@@ -560,6 +603,29 @@ mod tests {
         assert_eq!(s, 422, "{c}");
         assert!(c.contains("abc"), "{c}");
         assert_eq!(apercu(&host, "/ide/apercu/abc").0, 404);
+    }
+
+    /// **Les modules de l'éditeur se rendent**, depuis le magasin embarqué : le
+    /// graphe de CodeMirror sans import non résolu, chaque lib du démarrage
+    /// présente, et leur code exécutable par le registre (rquickjs, sans DOM :
+    /// on ne fait que charger `@codemirror/state`, qui n'en a pas besoin).
+    #[test]
+    fn the_editor_modules_render_from_the_embedded_store() {
+        let js = editeur_modules().as_ref().unwrap_or_else(|e| panic!("{e}"));
+        for spec in EDITEUR {
+            assert!(js.contains(&format!("{spec:?}")) || js.contains(spec), "{spec} au démarrage");
+        }
+        let programme = format!(
+            "{}{js}\nconst S = __rag3weaver.require(__rag3weaver.demarrage[\"@codemirror/state\"]);\nS.EditorState.create({{ doc: \"ab\" }}).doc.toString();",
+            crate::components::modules::REGISTRE
+        );
+        let rt = rquickjs::Runtime::new().unwrap();
+        let ctx = rquickjs::Context::full(&rt).unwrap();
+        let doc: String = ctx.with(|ctx| match ctx.eval::<String, _>(programme.clone()) {
+            Ok(s) => s,
+            Err(e) => panic!("{e} — {:?}", ctx.catch()),
+        });
+        assert_eq!(doc, "ab");
     }
 
     #[test]

@@ -34,7 +34,7 @@ use swc_ecma_ast::{
     Decl, DefaultDecl, EsVersion, ExportSpecifier, ModuleDecl, ModuleExportName, ModuleItem, Pat,
     Program,
 };
-use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
+use swc_ecma_parser::{lexer::Lexer, EsSyntax, Parser, StringInput, Syntax, TsSyntax};
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_transforms_base::helpers::{inject_helpers, Helpers, HELPERS};
 use swc_ecma_transforms_base::hygiene::hygiene;
@@ -217,6 +217,76 @@ pub fn compile_component(
     }
     let hash = crate::hash::content_hash(&code);
     Ok(CompiledComponent { code, source_map, hash, exports_only_components, imports })
+}
+
+/// **Un module JavaScript en ESM, rendu en CommonJS** (19 octobre 2026) : pour un
+/// fichier de lib que son paquet ne publie qu'en ESM, le registre de la page
+/// n'exécutant que du CommonJS. Ni types, ni JSX, ni React Refresh : le code
+/// tiers ne passe que par `common_js`. `Ok(None)` quand le fichier n'a ni
+/// `import` ni `export` (il est déjà un script, rien à faire) — la détection est
+/// celle du parse, pas du nom du fichier.
+pub fn compile_module(source: &str, name: &str) -> Result<Option<String>, ScriptError> {
+    let cm: Lrc<SourceMap> = Default::default();
+    let collected = Collected::default();
+    let handler = Handler::with_emitter(false, false, Box::new(collected.clone()));
+    let fm = cm.new_source_file(FileName::Custom(name.to_string()).into(), source.to_string());
+    let comments = SingleThreadedComments::default();
+    let sortie = GLOBALS.set(&Globals::new(), || {
+        HANDLER.set(&handler, || -> Result<Option<String>, ()> {
+            let lexer = Lexer::new(Syntax::Es(EsSyntax::default()), EsVersion::latest(), StringInput::from(&*fm), Some(&comments));
+            let mut parser = Parser::new_from(lexer);
+            let lu = parser.parse_module();
+            for e in parser.take_errors() {
+                e.into_diagnostic(&handler).emit();
+            }
+            let module = match lu {
+                Ok(m) => m,
+                Err(e) => {
+                    e.into_diagnostic(&handler).emit();
+                    return Err(());
+                }
+            };
+            if handler.has_errors() {
+                return Err(());
+            }
+            if !module.body.iter().any(|i| matches!(i, ModuleItem::ModuleDecl(_))) {
+                return Ok(None);
+            }
+            let mut program = Program::Module(module);
+            let unresolved_mark = Mark::new();
+            let top_level_mark = Mark::new();
+            HELPERS.set(&Helpers::new(false), || {
+                program.mutate(&mut resolver(unresolved_mark, top_level_mark, false));
+                program.mutate(&mut import_analyzer(ImportInterop::Swc, true));
+                program.mutate(&mut inject_helpers(unresolved_mark));
+                program.mutate(&mut common_js(
+                    Resolver::Default,
+                    unresolved_mark,
+                    Default::default(),
+                    FeatureFlag { support_block_scoping: true, support_arrow: true },
+                ));
+                program.mutate(&mut hygiene());
+                program.mutate(&mut fixer(Some(&comments)));
+            });
+            if handler.has_errors() {
+                return Err(());
+            }
+            let mut code = Vec::new();
+            {
+                let mut emitter = swc_ecma_codegen::Emitter {
+                    cfg: swc_ecma_codegen::Config::default(),
+                    comments: Some(&comments),
+                    cm: cm.clone(),
+                    wr: swc_ecma_codegen::text_writer::JsWriter::new(cm.clone(), "\n", &mut code, None),
+                };
+                if emitter.emit_program(&program).is_err() {
+                    return Err(());
+                }
+            }
+            String::from_utf8(code).map(Some).map_err(|_| ())
+        })
+    });
+    sortie.map_err(|()| premiere_erreur(&cm, &collected))
 }
 
 /// Les deux fonctions qui donnent à React Refresh le nom de famille `"<gabarit> <composant>"`.
