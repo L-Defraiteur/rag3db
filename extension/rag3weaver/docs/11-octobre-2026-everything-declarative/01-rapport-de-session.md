@@ -331,6 +331,71 @@ après la lib entière et `check_features` rejoués.
   Vertex rend un 429 de quota ou un 503, que les suites cloud comptent comme un saut nommé, jamais
   comme un vert ni un rouge. A4 (`cited_by`) est chez la mémoire.
 
+## La nuit du 18 au 19 octobre — l'IDE vivant
+
+Onze commits sur master, tous joués sur luciepc (la lib deux fois, `check_features`, le
+navigateur exigé quand le lot touche une page), poussés dans un `if VERT` après trois contrôles.
+
+| Commit | Ce qu'il pose |
+|---|---|
+| `e89bde792` | la montre ne perd plus un fichier créé pendant sa liste (« racy git » : une date de dossier trop récente fait relire) ; 3 rouges sur 20 sous charge avant, 0 après |
+| `79be52abe` | lot 3 des composants : le graphe des modules d'un composant, servi à une page d'aperçu par un registre CommonJS |
+| `f32d97383` | lot 4 : un composant modifié se recharge dans l'aperçu **en gardant son état** (React Refresh), constaté dans Chromium avec le vrai React 19.2 |
+| `d18951c61` | le témoin de `tail` en fond juge les lignes du bloc, plus des sous-chaînes (le dossier `.tmpYl4dqn` contenait `l4`) |
+| `cd164cb7d` | C1 : le graphe d'un outil, d'une réaction ou d'un composant en JSON (`/ide/graphe`, outil `graph`) |
+| `5f9cf0983` | un run dit ce qu'il exécute (`RunStarted.target`) ; les appels d'outil publient sur `dataflow`, les réactions sur `reactions`, qu'aucune réaction ne peut écouter |
+| `178ff1cd4` | C2 : le DAG vivant d'un outil dans l'IDE, allumé nœud par nœud par ses runs |
+| `f6ba5aafc` | `cancel_after` annule après le démarrage du premier nœud (six témoins d'annulation avaient la course) |
+| `863ba4a83` | (a) : le graphe de clic d'un composant s'exécute enfin dans l'aperçu, dessiné à côté du rendu et allumé à chaque clic |
+| `fadc999df` | le témoin de l'arrêt juge l'ordre : l'arrêt attend le lot en cours, comme conçu ; la borne de 3 s était fausse |
+| `456f50ae6` | (b) : la vue des réactions et de leurs runs ; la montre visible |
+
+**Les défauts que les témoins ont trouvés en route** (tous corrigés, chacun avec son rouge d'abord) :
+
+- le vrai `react-dom` importe `react` en `peerDependencies` : les pairs se résolvent vers la copie
+  du backend ;
+- un éditeur qui écrit en place laisse voir un fichier vide : un rechargement entier attend une
+  seconde ;
+- aucun appel d'outil ni aucune réaction ne publiait ses runs (`build_services` ne posait pas le
+  bus) : décision de c7, `dataflow` et `reactions` ;
+- la trace enregistrait un run sans dire de quel outil ;
+- le graphe de clic était validé mais jamais exécuté par l'aperçu ;
+- React Refresh rejouait l'effet du dernier tour après un rechargement, ce qui aurait refait l'appel
+  d'outil d'un `Effet` : le dernier tour traité vit dans une ref ;
+- un graphe à cycle laissait des couches vides, et la hauteur du dessin valait `NaN`, dans
+  l'aperçu comme dans le DAG de l'IDE.
+
+**Ma faute** : `5f9cf0983` prenait `catalog.lock()` à chaque appel de graphe pour obtenir le bus.
+Les lectures attendaient de nouveau l'écrivain (`search_code` à 2 015 ms) et `e2e_lectures` a
+rougi master. La lib et `check_features` ne le voient pas. L'arbre principal l'a corrigé (le bus
+vient de la vue). Désormais, un lot qui touche `Backend::run`, l'hôte ou le bus joue
+`e2e_lectures` avant son push.
+
+**Témoins départagés** : `tail` en fond (le test), l'annulation (le test), l'arrêt d'une réaction
+longue (la borne ; ticket fermé, mesures dedans). Restent ouverts au ticket des témoins sous
+charge : le lot vu à moitié (chez l'arbre principal, L6) et `the_watch_does_not_index…`.
+
+**Accords avec les autres sessions** :
+
+- avec la mémoire (96) : l'enveloppe commune des événements est celle du flux
+  (`{id, sujet, backend, at_ms, evenement}`), et elle écrit ses événements du catalogue sur cette
+  forme ;
+- avec G (90) : son témoin navigateur porte mes vues, CodeMirror est passé par mon magasin de libs
+  (semver, `module_graph_of`, `compile_module`), et son magasin réduit (`prune_store`) sert aux
+  deux témoins d'aperçu.
+
+**Comment reprendre** :
+
+- (c) attend la pièce 1 de la mémoire : rejouer son témoin anti-boucle (une réaction qui écrit
+  publie sur `catalog` et ne se relance qu'une fois) et `e2e_reaction_montee` sur la publication
+  des runs ;
+- la marche suivante de l'IDE (c7, page 09 de codeparsers) : les propositions — `proposer(files,
+  reason)` validé sur un recouvrement en mémoire, tenu par l'hôte et publié sur le flux ; la vue
+  (diff textuel, diff de graphe nœud à nœud, aperçu du module régénéré) ; `appliquer(id)` et
+  `rejeter(id, pourquoi)`, en mode approbation par défaut. Dépend du lot tsx de codeparsers
+  (`KINDS`, `declare_set`) ;
+- les scripts de passe sont dans `~/.cache/rag3weaver-build/I-*.sh` sur luciepc (voir le relevé).
+
 ## Relectures faites pour la recherche
 
 - La page de l'exécuteur de flux (`../11-octobre-2026-recherche/04-l-executeur-de-flux.md`).

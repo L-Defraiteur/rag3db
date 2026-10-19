@@ -207,3 +207,60 @@ Les précédents à deux et trois agents : `e2e_agent_loop.rs`
 - **Un en-tête `equiv` de tiny_http exige un `&'static str`** ; et `git worktree remove` refuse un
   worktree qui porte des sous-modules (`rm -rf` puis `git worktree prune`).
 - **luciepc n'a pas de PostgreSQL** : `RAG3WEAVER_PG=host=lucie-tablette port=5433 …` par Tailscale.
+
+## Ce que la nuit du 19 octobre a appris
+
+**Les composants et l'aperçu** (`src/components/`, `src/ide/apercu.html`) :
+
+- Les ids de modules :
+  - `comp:<Nom>` : le composant, ou son graphe de clic compilé s'il en déclare un ;
+  - `vue:<Nom>` : sa vue écrite à la main, sous la famille React Refresh `<Nom>/vue`, importée par
+    le spécifier réservé `rag3weaver:vue` ;
+  - `lib:<paquet>@<version>/<fichier>`.
+- Le registre (`modules::REGISTRE`) : `define` ne redéfinit un module que si son hash change ;
+  `mettre_a_jour(frontieres)` remonte jusqu'aux modules qui n'exportent que des composants, ou
+  rend `recharger`.
+- L'aperçu tient `window.__apercu` (mises à jour, dernière, recharge, clics), que les témoins
+  lisent.
+- Les crochets d'un graphe de clic vers la page : `__rag3weaverClic(nom, allumes, tour)`,
+  `__rag3weaverConfirmer`, `__rag3weaverNaviguer`.
+- `EcranDuBackend.manifeste` est le chemin canonique que `/ide/call` reçoit.
+- Les paquets React des témoins viennent de `scripts/paquets_react.sh`
+  (`RAG3WEAVER_PAQUETS_REACT`) ; G réduit le magasin (`prune_store`).
+
+**Les routes de l'IDE** (`src/ide.rs`) :
+
+- `/ide/flux`, avec les sujets `files`, `dataflow`, `agent`, `tokens`, `catalog`, `components`,
+  `reactions` ;
+- `/ide/graphe?backend&tool|reaction|component` ;
+- `/ide/reactions?backend` ;
+- `/ide/apercu/<id>/<Comp>[/modules.js]` et `/ide/registre.js` ;
+- `/ide/call`, `/ide/describe`, `/ide/etat`.
+
+Les vues de `page.html` : arbre, fichier, symbole, graphe, recherche, `dag`, `reactions`.
+
+**Les runs** :
+
+- `RunStarted.target` (`events::GraphTarget`, la forme des arguments de l'outil `graph`) est posé
+  pour un seul run par le service `run_target` `{run, target}`. Le posent `execute_plan` (l'appel
+  d'outil) et `run_tool` du réacteur (`Reactor::named`).
+- Les appels d'outil publient sur `dataflow` (le bus pris de la vue, jamais sous
+  `catalog.lock()`). Les réactions publient sur `reactions` (`run_topic`), que
+  `refuser_le_sujet_des_reactions` interdit d'écouter. Les ingestions publient sur `catalog`.
+- `ReindexFileNode` s'arrête entre deux lots : quatre fichiers d'abord, puis ce qui tient en
+  `HOLD_MS`.
+
+**Les passes sur luciepc** (`ssh lucied@luciepc`, fish : `bash -c`) :
+
+- worktree `~/git_workspaces/rag3db-I-apres`, target `target-I-apres` ;
+- la lib épinglée par `I-court-reprise.sh` (`RAG3DB_LIB` 87a362e30) ;
+- `l2/deux.sh` joue la lib deux fois et `check_features` ;
+- chaque lot a son `I-pousse-<lot>.sh`, lancé par `systemd-run --user --collect`, et
+  `poste push` refuse le code arrivé sur master depuis la base (« REJOUER ») ;
+- le nettoyage du worktree doit couvrir `extension`, `docs` et `.github`.
+
+**Les e2e à jouer selon ce qu'un lot touche** :
+
+- `e2e_lectures` si `Backend::run`, l'hôte ou le bus ;
+- `e2e_reaction_montee` si la publication des runs ;
+- `e2e_postgres` si `code.rs`, l'IR ou un gabarit.
