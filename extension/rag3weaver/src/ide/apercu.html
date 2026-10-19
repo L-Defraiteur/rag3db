@@ -6,20 +6,37 @@
 <title>Aperçu d'un composant</title>
 <link rel="icon" href="data:,">
 <style>
-  :root { --fond: #fbfaf7; --texte: #1d1c1a; --doux: #6b6862; --trait: #e3e0d9; --alerte: #9a3b1f; }
+  :root { --fond: #fbfaf7; --surface: #ffffff; --texte: #1d1c1a; --doux: #6b6862; --trait: #e3e0d9; --alerte: #9a3b1f;
+    --accent: #2f5d8a; --accent-doux: #e6eef6; }
   @media (prefers-color-scheme: dark) {
-    :root { --fond: #17181a; --texte: #e8e6e1; --doux: #9a978f; --trait: #2c2d30; --alerte: #e3967a; }
+    :root { --fond: #17181a; --surface: #1e1f22; --texte: #e8e6e1; --doux: #9a978f; --trait: #2c2d30; --alerte: #e3967a;
+      --accent: #8fb6de; --accent-doux: #22303d; }
   }
   body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, sans-serif; }
   header { padding: 8px 16px; border-bottom: 1px solid var(--trait); color: var(--doux); font-size: 13px; overflow-wrap: anywhere; }
-  #racine { padding: 16px; }
+  #cadre { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  #racine { padding: 16px; flex: 1 1 320px; min-width: 0; }
+  /* Le graphe de clic du composant, à côté de son rendu : chaque tour l'allume. */
+  #clic { flex: 0 1 auto; margin: 16px; max-width: 100%; overflow: auto; background: var(--surface);
+    border: 1px solid var(--trait); border-radius: 8px; }
+  #clic h2 { margin: 8px 12px 0; font-size: 12px; color: var(--doux); font-weight: 600; }
+  #clic svg { display: block; }
+  #clic .etape rect { fill: var(--fond); stroke: var(--trait); transition: fill .25s, stroke .25s; }
+  #clic .etape.allume rect { fill: var(--accent-doux); stroke: var(--accent); }
+  #clic .etape text { fill: var(--texte); font: 12px system-ui, sans-serif; }
+  #clic .etape text.genre { fill: var(--doux); font: 10px ui-monospace, monospace; }
+  #clic path { fill: none; stroke: var(--doux); stroke-opacity: .55; }
+  #clic text.port { fill: var(--doux); font: 10px ui-monospace, monospace; }
   pre.erreur { margin: 16px; padding: 12px; border: 1px solid var(--alerte); color: var(--alerte);
     white-space: pre-wrap; font: 13px/1.45 ui-monospace, monospace; }
 </style>
 </head>
 <body>
 <header id="titre">aperçu</header>
-<div id="racine"></div>
+<main id="cadre">
+  <div id="racine"></div>
+  <aside id="clic" hidden><h2>graphe de clic</h2></aside>
+</main>
 <script src="/ide/registre.js"></script>
 <script>
 // L'aperçu d'un composant (marche 3, lots 3 et 4) : le registre, puis les
@@ -38,7 +55,7 @@
   const R = globalThis.__rag3weaver;
   const src = `/ide/apercu/${encodeURIComponent(backend)}/${encodeURIComponent(nom)}/modules.js`;
   // Ce que le témoin lit : combien de mises à jour appliquées, la dernière.
-  const etat = window.__apercu = { mises_a_jour: 0, derniere: null, recharge: null };
+  const etat = window.__apercu = { mises_a_jour: 0, derniere: null, recharge: null, clics: [] };
   // Un rechargement entier laisse sa raison à la page suivante : elle la dit
   // à la console, et le témoin la lit.
   try {
@@ -72,6 +89,68 @@
       document.body.append(script);
     });
   }
+  // ─── Le graphe de clic, dessiné et allumé ─────────────────────────────
+  // Le graphe vient de /ide/graphe (le même JSON que l'outil `graph`) ; le
+  // code du composant dit à chaque tour les nœuds traversés
+  // (`__rag3weaverClic`), allumés un à un dans leur ordre.
+  const SVG = "http://www.w3.org/2000/svg";
+  const svg = (tag, attrs = {}, ...enfants) => {
+    const e = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) if (v !== undefined && v !== null) e.setAttribute(k, v);
+    for (const c of enfants.flat()) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    return e;
+  };
+  let etapes = new Map(); // nom → <g>
+  async function dessinerClic() {
+    const aside = document.getElementById("clic");
+    const r = await (await fetch(`/ide/graphe?${new URLSearchParams({ backend, component: nom })}`)).json();
+    const g = r.ok ? r.result : null;
+    if (!g || !g.nodes.length) { aside.hidden = true; etapes = new Map(); return; }
+    const couche = new Map(g.nodes.map((n) => [n.name, 0]));
+    for (let i = 0; i < g.nodes.length; i++) for (const e of g.edges) {
+      const c = (couche.get(e.from_node) ?? 0) + 1;
+      if (couche.has(e.to_node) && c > couche.get(e.to_node) && c < g.nodes.length) couche.set(e.to_node, c);
+    }
+    const colonnes = [];
+    for (const n of g.nodes) (colonnes[couche.get(n.name)] ??= []).push(n);
+    const L = 190, H = 50, LARGE = 150, MARGE = 16;
+    const hauteur = Math.max(1, ...Array.from(colonnes, (c) => c?.length ?? 0)) * H + 2 * MARGE;
+    const largeur = Math.max(1, colonnes.length) * L + 2 * MARGE;
+    const pos = new Map();
+    colonnes.forEach((c, x) => (c ?? []).forEach((n, i) => pos.set(n.name, { x: MARGE + x * L, y: MARGE + i * H })));
+    const traits = svg("g");
+    for (const e of g.edges) {
+      const a = pos.get(e.from_node), z = pos.get(e.to_node);
+      if (!a || !z) continue;
+      const x1 = a.x + LARGE, y1 = a.y + (H - 12) / 2, x2 = z.x, y2 = z.y + (H - 12) / 2;
+      traits.append(svg("path", { d: `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}` }),
+        svg("text", { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 3, "text-anchor": "middle", class: "port" },
+          e.from_port === e.to_port ? e.from_port : `${e.from_port}→${e.to_port}`));
+    }
+    const noeuds = svg("g");
+    etapes = new Map();
+    for (const n of g.nodes) {
+      const p = pos.get(n.name);
+      const etape = svg("g", { class: "etape", "data-nom": n.name, transform: `translate(${p.x},${p.y})` },
+        svg("title", {}, `${n.node_type}${n.line ? " — ligne " + n.line : ""}\n${JSON.stringify(n.config)}`),
+        svg("rect", { width: LARGE, height: H - 12, rx: 5 }),
+        svg("text", { x: 8, y: 14 }, n.name),
+        svg("text", { x: 8, y: 28, class: "genre" }, n.node_type));
+      etapes.set(n.name, etape);
+      noeuds.append(etape);
+    }
+    aside.replaceChildren(aside.querySelector("h2"), svg("svg", { width: largeur, height: hauteur, viewBox: `0 0 ${largeur} ${hauteur}` }, traits, noeuds));
+    aside.hidden = false;
+  }
+  let allumage = [];
+  globalThis.__rag3weaverClic = (composant, noeuds, tour) => {
+    if (composant !== nom) return;
+    etat.clics.push({ tour, noeuds });
+    for (const t of allumage) clearTimeout(t);
+    for (const g of etapes.values()) g.classList.remove("allume");
+    allumage = noeuds.map((n, i) => setTimeout(() => etapes.get(n)?.classList.add("allume"), i * 120));
+  };
+
   let refresh = null;
   async function demarrer() {
     await charger(src);
@@ -125,6 +204,7 @@
         }
         if (rechargement) { clearTimeout(rechargement); rechargement = null; }
         refresh.performReactRefresh();
+        dessinerClic().catch(montrer);
         effacer();
         etat.mises_a_jour += 1;
         etat.derniere = r;
@@ -152,7 +232,7 @@
     // et une page qui garde la sienne fige la septième.
     addEventListener("pagehide", () => flux.close());
   }
-  demarrer().then(ecouter).catch(montrer);
+  demarrer().then(dessinerClic).then(ecouter).catch(montrer);
 })();
 </script>
 </body>

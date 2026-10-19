@@ -78,6 +78,44 @@ fn compiler(source: &str, name: &str, mode: Mode) -> Result<CompiledComponent, S
     Ok(c)
 }
 
+/// Le spécifier par lequel le code d'un graphe de clic importe la vue écrite à la main de son
+/// composant : réservé, résolu vers `vue:<Nom>` (un nom qu'aucun fichier ne porte).
+pub const VUE_SPEC: &str = "rag3weaver:vue";
+
+/// L'id du module de la vue d'un composant à graphe de clic.
+pub fn vue_id(name: &str) -> String {
+    format!("vue:{name}")
+}
+
+/// **Le graphe de clic d'un composant, compilé** (`dataflow::clic_tsx`) : son réducteur, ses
+/// effets vers `/ide/call` du manifeste, sa vue importée par [`VUE_SPEC`] ; mis en cache par
+/// empreinte du texte, du nom, du mode et de l'écran.
+fn compiler_clic(texte: &str, chemin: &str, name: &str, effets: &[String], ecran: &super::EcranDuBackend, mode: Mode) -> Result<CompiledComponent, String> {
+    static CACHE: OnceLock<Mutex<BTreeMap<String, CompiledComponent>>> = OnceLock::new();
+    let cle = blake3::hash(format!("{name}\0{mode:?}\0{effets:?}\0{ecran:?}\0{texte}").as_bytes()).to_hex().to_string();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(c) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(&cle) {
+        return Ok(c.clone());
+    }
+    let ctx = crate::dataflow::clic::ContexteClic { effets: effets.to_vec(), outils: ecran.outils.clone(), etat_hote: ecran.etat_hote.clone() };
+    let options = crate::dataflow::clic_tsx::OptionsClic { manifeste: ecran.manifeste.clone(), vue: Some((VUE_SPEC.to_string(), name.to_string())) };
+    let m = if mode == Mode::Development { ComponentMode::Development } else { ComponentMode::Production };
+    let c = crate::dataflow::clic_tsx::compiler_graphe_de_clic(texte, chemin, name, name, &ctx, &options, m, ModuleFormat::CommonJs)
+        .map_err(|refus| {
+            refus
+                .iter()
+                .map(|r| match r.ligne {
+                    Some(l) => format!("{chemin}:{l} : {}", r.message),
+                    None => format!("{chemin} : {}", r.message),
+                })
+                .collect::<Vec<_>>()
+                .join(" ; ")
+        })?
+        .module;
+    cache.lock().unwrap_or_else(|p| p.into_inner()).insert(cle, c.clone());
+    Ok(c)
+}
+
 /// **Un fichier de lib, en CommonJS** : tel quel s'il n'a ni `import` ni
 /// `export`, rendu par `compile_module` sinon ; mis en cache par son hash (le
 /// magasin est rangé par contenu).
@@ -190,15 +228,33 @@ impl Components {
         while let Some((nom, lib)) = a_faire.pop() {
             let (id, hash, code, specs, seul, importeur): (String, String, String, Vec<String>, bool, Importer<'_>) = match &lib {
                 None => {
-                    let decl = &self.components[&nom];
-                    let id = component_id(&nom);
+                    // La vue écrite à la main d'un composant à graphe de clic (`vue:<Nom>`) : son
+                    // source, sous une autre famille de React Refresh que le composant.
+                    let (composant, est_la_vue) = match nom.strip_prefix("vue:") {
+                        Some(c) => (c.to_string(), true),
+                        None => (nom.clone(), false),
+                    };
+                    let decl = &self.components[&composant];
+                    let id = if est_la_vue { vue_id(&composant) } else { component_id(&composant) };
                     if modules.contains_key(&id) {
                         continue;
                     }
-                    let source = std::fs::read_to_string(backend_dir.join("components").join(&decl.source))
-                        .map_err(|e| format!("{} : {e}", decl.source))?;
-                    let compile = compiler(&source, &nom, mode)?;
-                    let importeur = Importer::Component(self.components.get_key_value(&nom).unwrap().0.as_str());
+                    let importeur = Importer::Component(self.components.get_key_value(&composant).unwrap().0.as_str());
+                    let compile = match (&decl.clic, est_la_vue) {
+                        // Un composant à graphe de clic : son module est le graphe compilé, qui
+                        // importe la vue.
+                        (Some(clic), false) => {
+                            let chemin = format!("components/{clic}");
+                            let texte = std::fs::read_to_string(backend_dir.join(&chemin)).map_err(|e| format!("{chemin} : {e}"))?;
+                            compiler_clic(&texte, &chemin, &composant, &decl.effets, &self.ecran, mode)?
+                        }
+                        _ => {
+                            let source = std::fs::read_to_string(backend_dir.join("components").join(&decl.source))
+                                .map_err(|e| format!("{} : {e}", decl.source))?;
+                            let famille = if est_la_vue { format!("{composant}/vue") } else { composant.clone() };
+                            compiler(&source, &famille, mode)?
+                        }
+                    };
                     (id, compile.hash, compile.code, compile.imports, compile.exports_only_components, importeur)
                 }
                 Some((package, file, id)) => {
@@ -222,6 +278,13 @@ impl Components {
             };
             let mut deps = BTreeMap::new();
             for spec in specs {
+                // La vue d'un composant à graphe de clic : pas un fichier, son propre module.
+                if spec == VUE_SPEC && lib.is_none() && !nom.starts_with("vue:") {
+                    let cible = vue_id(&nom);
+                    a_faire.push((cible.clone(), None));
+                    deps.insert(spec, cible);
+                    continue;
+                }
                 match self.resolve(&importeur, &spec, mode) {
                     Ok(r) => {
                         let cible = id_de(&r);

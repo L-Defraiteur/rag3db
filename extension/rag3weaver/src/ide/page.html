@@ -665,7 +665,7 @@ async function dag(id, reste) {
   const colonnes = [];
   for (const n of g.nodes) (colonnes[couche.get(n.name)] ??= []).push(n);
   const L = 250, H = 56, LARGE = 200, MARGE = 24;
-  const hauteur = Math.max(1, ...colonnes.map((c) => c?.length ?? 0)) * H + 2 * MARGE;
+  const hauteur = Math.max(1, ...Array.from(colonnes, (c) => c?.length ?? 0)) * H + 2 * MARGE;
   const largeur = Math.max(1, colonnes.length) * L + 2 * MARGE;
   const pos = new Map();
   colonnes.forEach((c, x) => (c ?? []).forEach((n, i) => pos.set(n.name, { x: MARGE + x * L, y: MARGE + i * H })));

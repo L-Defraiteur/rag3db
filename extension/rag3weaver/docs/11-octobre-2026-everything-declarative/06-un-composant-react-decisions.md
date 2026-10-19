@@ -156,3 +156,41 @@ convient pas se reprend : rien n'est publié hors du dépôt.
     Compteur ni default ») ; avec elle, cinq passes sur cinq sont vertes. La raison d'un
     rechargement entier passe à la page suivante par `sessionStorage` et se lit dans
     `window.__apercu.recharge`.
+
+## Le graphe de clic dans l'aperçu — (a), 19 octobre
+
+25. **Le graphe de clic d'un composant s'exécute enfin.** Il était validé au chargement et servi
+    par `/ide/graphe`, mais son code généré (`dataflow::clic_tsx`) n'entrait dans aucun graphe
+    de modules. Un composant qui déclare `clic` a maintenant pour module `comp:<Nom>` le graphe
+    compilé : son réducteur, ses effets vers `/ide/call`, sa vue. Ce module est une frontière de
+    React Refresh, si bien qu'un graphe réécrit se recharge à chaud en gardant l'état.
+26. **La vue écrite à la main devient `vue:<Nom>`.** Le code généré l'importe par un spécifier
+    réservé, `rag3weaver:vue`, qu'aucun fichier ne porte. Elle se compile sous la famille
+    `<Nom>/vue`, pour que React Refresh ne confonde pas la vue et le composant, qui exportent
+    le même nom.
+27. **Le code généré parle à son manifeste** : `EcranDuBackend.manifeste`, le chemin canonique
+    que l'hôte connaît. `Components` garde l'écran contre lequel il s'est vérifié, et le graphe
+    de clic se recompile contre lui.
+28. **Un tour dit ce qu'il a traversé** (`allumes`), connu à la génération et écrit en dur dans
+    chaque cas du réducteur, qui reste pur. L'ordre est la source, les purs du tour, les cases
+    écrites, puis les dérivés qu'elles font recalculer. Le composant le dit à la page par
+    `__rag3weaverClic(nom, allumes, tour)`, dans l'effet de chaque tour, à côté de
+    `__rag3weaverConfirmer` et `__rag3weaverNaviguer`.
+29. **L'aperçu dessine le graphe à côté du rendu** (le JSON de `/ide/graphe`, par couches), et
+    allume les nœuds d'un tour un à un. Il le redessine après chaque rechargement à chaud.
+    Le premier passage dans Chromium a montré une hauteur `NaN` : un graphe à cycle laisse des
+    couches vides, et `map` saute les trous. Le même défaut était dans le DAG vivant de l'IDE
+    (C2), corrigé ici.
+30. **Un tour ne se traite qu'une fois.** React Refresh rejoue les effets d'un composant rechargé à
+    chaud : l'effet du dernier tour se relançait, ce qui redisait le tour à l'aperçu et, pour un
+    `Effet`, aurait **refait un appel d'outil** à chaque rechargement. Le témoin l'a montré en
+    comptant trois tours pour deux clics. Le code généré garde le dernier tour traité dans une
+    ref (`useRef`), conservée au rechargement comme l'état, et ne refait rien pour le même tour.
+
+Témoins :
+- `un_tour_dit_ce_qu_il_a_traverse` (QuickJS) ;
+- `a_click_graph_component_enters_the_module_graph_through_its_graph` ;
+- `le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu`, dans Chromium avec le vrai
+  React 19.2. Un clic donne « Compte : 1 (2) » et allume `clic`, `plus`, `n`, `double`. Le
+  graphe réécrit (`n + 10`) se recharge à chaud, et le clic suivant compte 11 sans recharger
+  la page ni rien dire à la console.

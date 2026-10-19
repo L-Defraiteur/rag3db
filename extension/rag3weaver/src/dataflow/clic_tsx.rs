@@ -106,14 +106,17 @@ pub fn transpiler(graphe: &GrapheClic, nom: &str, options: &OptionsClic) -> Clic
 
     let mut w = Ecrit { lignes: Vec::new(), origines: Vec::new() };
     w.ligne("// Généré depuis un graphe de clic (dataflow::clic_tsx) — jamais écrit dans un arbre indexé.");
-    w.ligne("import { useReducer, useEffect, useMemo } from \"react\";");
+    w.ligne("import { useReducer, useEffect, useMemo, useRef } from \"react\";");
     if let Some((module, export)) = &options.vue {
         w.ligne(format!("import {{ {export} as Vue }} from {};", js(module)));
     }
     w.ligne(format!("const MANIFESTE = {};", js(&options.manifeste)));
 
     // L'état initial : les cases.
-    w.ligne("const initial: any = { tour: 0, attente: {}, effets: [], cases: {");
+    // `allumes` : les nœuds que le dernier tour a traversés, dans l'ordre — ce que l'aperçu
+    // allume (`__rag3weaverClic`). Connus à la génération : chaque cas les écrit en dur, le
+    // réducteur reste pur.
+    w.ligne("const initial: any = { tour: 0, attente: {}, effets: [], allumes: [], cases: {");
     for n in &graphe.noeuds {
         if let Genre::Etat { nom, initial, .. } = &n.genre {
             w.du_noeud(format!("  {}: {},", js(nom), initial), n);
@@ -181,6 +184,8 @@ pub fn transpiler(graphe: &GrapheClic, nom: &str, options: &OptionsClic) -> Clic
         }
     }
     for (genre_action, source, port) in &sources {
+        let mut allumes: Vec<&str> = vec![source.nom.as_str()];
+        let mut cases_ecrites: BTreeSet<&str> = BTreeSet::new();
         w.du_noeud(format!("    case {}: {{", js(genre_action)), source);
         if matches!(source.genre, Genre::Effet { .. } | Genre::Confirmer { .. }) {
             w.du_noeud(
@@ -217,6 +222,7 @@ pub fn transpiler(graphe: &GrapheClic, nom: &str, options: &OptionsClic) -> Clic
                 let n = par_nom[p.as_str()];
                 w.du_noeud(format!("      const {} = {};", var(p), expr_pur(n, &args)), n);
                 actifs.insert(p.as_str());
+                allumes.push(p.as_str());
             }
         }
         // Les écritures, les effets demandés, les confirmations et les pages.
@@ -230,9 +236,12 @@ pub fn transpiler(graphe: &GrapheClic, nom: &str, options: &OptionsClic) -> Clic
                 Genre::Etat { nom, .. } => {
                     if let Some((_, v)) = args.iter().find(|(p, _)| p == "suivante") {
                         w.du_noeud(format!("      cases[{}] = {v};", js(nom)), n);
+                        allumes.push(*cible);
+                        cases_ecrites.insert(*cible);
                     }
                 }
                 Genre::Effet { outil, .. } if complet => {
+                    allumes.push(*cible);
                     let a: Vec<String> = args.iter().map(|(p, v)| format!("{}: {v}", js(p))).collect();
                     w.du_noeud(format!("      attente[{}] = tour;", js(&n.nom)), n);
                     w.du_noeud(
@@ -246,6 +255,7 @@ pub fn transpiler(graphe: &GrapheClic, nom: &str, options: &OptionsClic) -> Clic
                     );
                 }
                 Genre::Confirmer { message } if complet => {
+                    allumes.push(*cible);
                     let charge = args.iter().find(|(p, _)| p == "demande").map(|(_, v)| v.clone()).unwrap_or("null".into());
                     w.du_noeud(format!("      attente[{}] = tour;", js(&n.nom)), n);
                     w.du_noeud(
@@ -258,13 +268,23 @@ pub fn transpiler(graphe: &GrapheClic, nom: &str, options: &OptionsClic) -> Clic
                     );
                 }
                 Genre::Page { vers } if complet => {
+                    allumes.push(*cible);
                     let p = args.iter().find(|(p, _)| p == "parametres").map(|(_, v)| v.clone()).unwrap_or("null".into());
                     w.du_noeud(format!("      effets.push({{ genre: \"page\", vers: {}, parametres: {p}, tour }});", js(vers)), n);
                 }
                 _ => {}
             }
         }
-        w.ligne("      return { tour, attente, effets, cases };");
+        // Les dérivés qu'une case écrite fait recalculer, dans leur ordre.
+        let mut touches: BTreeSet<&str> = cases_ecrites.clone();
+        for p in &ordre {
+            if derives.contains(p.as_str()) && entrees[p.as_str()].iter().any(|e| touches.contains(e.from_node.as_str())) {
+                touches.insert(p.as_str());
+                allumes.push(p.as_str());
+            }
+        }
+        let liste: Vec<String> = allumes.iter().map(|x| js(x)).collect();
+        w.ligne(format!("      return {{ tour, attente, effets, cases, allumes: [{}] }};", liste.join(", ")));
         w.ligne("    }");
     }
     w.ligne("    default:");
@@ -294,7 +314,17 @@ pub fn transpiler(graphe: &GrapheClic, nom: &str, options: &OptionsClic) -> Clic
     // Le composant.
     w.ligne(format!("export function {nom}(props: any) {{"));
     w.ligne("  const [etat, dispatch] = useReducer(reduire, initial);");
-    w.ligne("  useEffect(() => { for (const f of etat.effets) lancer(f, dispatch); }, [etat.tour]);");
+    // À chaque tour : ses effets, puis ce qu'il a traversé, dit à l'hôte de la page (l'aperçu
+    // l'allume dans le dessin du graphe).
+    // **Un tour ne se traite qu'une fois** : React Refresh rejoue les effets d'un composant
+    // rechargé à chaud, ce qui relançait les effets du dernier tour (un second appel d'outil) et
+    // le redisait à l'aperçu. Le dernier tour traité vit dans une ref, gardée au rechargement
+    // comme l'état.
+    w.ligne("  const traite = useRef(0);");
+    w.ligne(format!(
+        "  useEffect(() => {{ if (etat.tour === traite.current) return; traite.current = etat.tour; for (const f of etat.effets) lancer(f, dispatch); if (etat.tour > 0) (globalThis as any).__rag3weaverClic?.({}, etat.allumes, etat.tour); }}, [etat.tour]);",
+        js(nom)
+    ));
     w.ligne("  const derives = useMemo(() => deriver(etat.cases), [etat.cases]);");
     w.ligne("  const gestionnaires: any = {");
     for n in &graphe.noeuds {
@@ -488,6 +518,33 @@ mod tests {
                JSON.stringify({ n: e.cases.n, tour: e.tour, double: C.deriver(e.cases).double, effets: e.effets.length })"#,
         );
         assert_eq!(r, r#"{"n":2,"tour":2,"double":4,"effets":0}"#, "TSX :\n{}", c.tsx);
+    }
+
+    /// **Un tour dit ce qu'il a traversé** (`allumes`), pour que l'aperçu l'allume : la source,
+    /// les purs du tour dans leur ordre, les cases écrites, puis les dérivés qu'elles font
+    /// recalculer. Une réponse d'effet allume l'effet et ce qu'elle écrit.
+    #[test]
+    fn un_tour_dit_ce_qu_il_a_traverse() {
+        let c = compiler(COMPTEUR);
+        let r = executer(
+            &c.module.code,
+            r#"let e = C.reduire(C.initial, { type: "evenement:onClick", charge: null });
+               JSON.stringify({ initial: C.initial.allumes, allumes: e.allumes })"#,
+        );
+        assert_eq!(r, r#"{"initial":[],"allumes":["clic","plus","n","double"]}"#, "TSX :\n{}", c.tsx);
+        let c = compiler(FILTRE);
+        let r = executer(
+            &c.module.code,
+            r#"let e = C.reduire(C.initial, { type: "evenement:onSaisie", charge: "a" });
+               const saisie = e.allumes;
+               e = C.reduire(e, { type: "effet:chercher:reponse", tour: e.effets[0].tour, charge: ["x"] });
+               JSON.stringify({ saisie, reponse: e.allumes })"#,
+        );
+        let v: serde_json::Value = serde_json::from_str(&r).unwrap();
+        assert_eq!(v["saisie"][0], "saisie", "{r}\nTSX :\n{}", c.tsx);
+        assert!(v["saisie"].as_array().unwrap().iter().any(|x| x == "chercher"), "{r}");
+        assert_eq!(v["reponse"][0], "chercher", "{r}");
+        assert!(v["reponse"].as_array().unwrap().len() >= 2, "la réponse écrit une case : {r}");
     }
 
     #[test]

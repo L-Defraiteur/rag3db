@@ -212,6 +212,7 @@ fn ecran(etat_hote: Option<&str>) -> EcranDuBackend {
             ("run_command".to_string(), None),
         ]),
         etat_hote: etat_hote.map(str::to_string),
+        manifeste: "/b/backend.json".to_string(),
     }
 }
 
@@ -663,4 +664,41 @@ fn the_store_is_pruned_to_what_the_graph_reaches() {
     assert!(rendu.contains("\"T\""), "{rendu}");
     let encore = c.prune_store(&b, &[]).unwrap();
     assert_eq!((encore.files_before, encore.objects_removed), (encore.files_after, 0), "{encore:?}");
+}
+
+/// **Un composant à graphe de clic entre dans le graphe des modules par son
+/// graphe** : `comp:<Nom>` est le code généré (son réducteur, et le crochet
+/// `__rag3weaverClic` qui dit à l'aperçu ce qu'un tour a traversé), qui importe
+/// la vue écrite à la main par le spécifier réservé ; la vue est `vue:<Nom>`,
+/// sous une autre famille de React Refresh.
+#[test]
+fn a_click_graph_component_enters_the_module_graph_through_its_graph() {
+    let (_t, b) = backend_executable();
+    std::fs::write(
+        b.join("components/fiche.clic.mmd"),
+        r#"graph LR
+    clic["Evenement(nom='onClick')"]
+    n["Etat(nom='n', schema='{"type":"number"}', initial=0)"]
+    plus["Pur(expr='n + 1')"]
+    clic -->|charge:declenche| plus
+    n -->|valeur:n| plus
+    plus -->|resultat:suivante| n
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        b.join("components/fiche.component.json"),
+        json!({ "name": "Fiche", "source": "fiche.tsx", "clic": "fiche.clic.mmd", "libs": { "react": "19.2.0" } }).to_string(),
+    )
+    .unwrap();
+    let c = Components::load(&b).unwrap_or_else(|e| panic!("{e:?}"));
+    let g = c.module_graph(&b, "Fiche", Mode::Development).unwrap();
+    assert!(g.unresolved.is_empty(), "{:?}", g.unresolved);
+    let entree = &g.modules["comp:Fiche"];
+    assert_eq!(entree.deps.get(super::modules::VUE_SPEC).map(String::as_str), Some("vue:Fiche"), "{:?}", entree.deps);
+    assert!(entree.code.contains("__rag3weaverClic") && entree.code.contains("reduire"), "le code du graphe : {}", entree.code);
+    assert!(entree.exports_only_components, "le graphe est une frontière de React Refresh");
+    let vue = &g.modules["vue:Fiche"];
+    assert!(vue.code.contains("Fiche/vue"), "la vue a sa propre famille : {}", vue.code);
+    assert!(vue.deps.values().any(|d| d == "comp:Bouton"), "la vue garde ses imports : {:?}", vue.deps);
 }

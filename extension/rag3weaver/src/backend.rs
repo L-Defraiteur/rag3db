@@ -311,10 +311,12 @@ impl std::ops::Deref for BackendRelation {
 /// touche ni fichier ni commande.
 /// Ce que le backend offre à l'écran de ses composants : l'écran de chaque
 /// outil et le lieu des cases de portée `hôte`.
-fn ecran_du_backend(manifest: &BackendManifest) -> crate::components::EcranDuBackend {
+fn ecran_du_backend(manifest: &BackendManifest, manifest_path: &Path) -> crate::components::EcranDuBackend {
     crate::components::EcranDuBackend {
         outils: manifest.tools.iter().map(|(nom, t)| (nom.clone(), t.policy.ecran)).collect(),
         etat_hote: manifest.ui_state.as_ref().map(|u| u.entity.clone()),
+        // Le chemin canonique, celui que l'hôte connaît (`/ide/etat`) et que `/ide/call` reçoit.
+        manifeste: manifest_path.canonicalize().unwrap_or_else(|_| manifest_path.to_path_buf()).display().to_string(),
     }
 }
 
@@ -987,7 +989,7 @@ impl PreparedBackend {
         }
         // ── Les composants d'interface et leurs bibliothèques ──────────────
         let components = Arc::new(
-            crate::components::Components::load_in(&directory, &ecran_du_backend(&manifest))
+            crate::components::Components::load_in(&directory, &ecran_du_backend(&manifest, path))
                 .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
         );
         let mut schemas = HashMap::new();
@@ -1536,7 +1538,7 @@ impl PreparedBackend {
     /// contre le même écran qu'à l'ouverture : l'aperçu de l'IDE montre le
     /// disque, une déclaration éditée depuis l'ouverture comprise.
     pub fn components_on_disk(&self) -> Result<crate::components::Components, String> {
-        crate::components::Components::load_in(&self.directory, &ecran_du_backend(&self.manifest))
+        crate::components::Components::load_in(&self.directory, &ecran_du_backend(&self.manifest, &self.manifest_path))
             .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))
     }
 

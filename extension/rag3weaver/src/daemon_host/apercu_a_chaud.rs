@@ -37,16 +37,18 @@ export function Compteur() {
 }
 "#;
 
+/// Un backend du gabarit `code` sur un hôte gardé par le jeton `j`, ses
+/// paquets React rangés et ses composants écrits, ouvert (par `describe`).
+struct Banc {
+    _d: tempfile::TempDir,
+    composants: std::path::PathBuf,
+    racine: String,
+    id: String,
+    fil: std::thread::JoinHandle<()>,
+}
+
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
-#[test]
-fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
-    const TEMOIN: &str = "un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat";
-    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
-        return;
-    };
-    let Some(paquets) = paquets_ou_saut(TEMOIN) else {
-        return;
-    };
+fn monter(paquets: &std::path::Path, fichiers: &[(&str, &str)]) -> Banc {
     let d = tempfile::tempdir().unwrap();
     let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
     std::fs::create_dir_all(&base).unwrap();
@@ -62,14 +64,11 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
     }
     let composants = dossier.join("components");
     std::fs::create_dir_all(&composants).unwrap();
-    std::fs::write(composants.join("compteur.tsx"), COMPTEUR).unwrap();
-    std::fs::write(
-        composants.join("compteur.component.json"),
-        r#"{ "name": "Compteur", "source": "compteur.tsx", "libs": { "react": "19.2.0" } }"#,
-    )
-    .unwrap();
-    // Le magasin réduit à ce que le graphe de Compteur atteint (et les licences) :
-    // l'aperçu à chaud doit se charger sur ce magasin-là (G, 19 octobre 2026).
+    for (nom, texte) in fichiers {
+        std::fs::write(composants.join(nom), texte).unwrap();
+    }
+    // Le magasin réduit à ce que le graphe atteint (et les licences) : l'aperçu
+    // à chaud doit se charger sur ce magasin-là (G, 19 octobre 2026).
     let reduit = crate::components::Components::load(&dossier).unwrap().prune_store(&dossier, &[]).unwrap();
     eprintln!("magasin de l'aperçu : {} → {} octets ({} objets effacés)", reduit.bytes_before, reduit.bytes_after, reduit.objects_removed);
     assert!(reduit.bytes_after < reduit.bytes_before, "{reduit:?}");
@@ -103,6 +102,26 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
         .as_str()
         .unwrap()
         .to_string();
+    Banc { _d: d, composants, racine, id, fil }
+}
+
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
+    const TEMOIN: &str = "un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Some(paquets) = paquets_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Banc { _d, composants, racine, id, fil } = monter(
+        &paquets,
+        &[
+            ("compteur.tsx", COMPTEUR),
+            ("compteur.component.json", r#"{ "name": "Compteur", "source": "compteur.tsx", "libs": { "react": "19.2.0" } }"#),
+        ],
+    );
 
     // La route des graphes (C1), sur le même hôte : le graphe d'un outil du
     // gabarit, celui d'un composant (sans graphe de clic : vide), et le refus
@@ -187,6 +206,86 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
     n.evaluer("document.querySelector('#compteur').click()");
     n.attendre("document.querySelector('#compteur')?.textContent === 'Total : 4'", "un clic après le rechargement");
     assert!(n.erreurs.is_empty(), "le rechargement : erreurs à la console : {:#?}", n.erreurs);
+
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// La vue écrite à la main du compteur à graphe de clic : elle reçoit la case
+/// `n`, le dérivé `double` et le gestionnaire `onClick` du graphe.
+const VUE_DU_COMPTEUR: &str = r#"export function Compteur({ n, double, onClick }: any) {
+  return <button id="compteur" onClick={() => onClick(null)}>Compte : {n} ({double})</button>;
+}
+"#;
+
+/// Le comportement du compteur, en graphe de clic : un clic ajoute 1 à `n`,
+/// `double` en dérive.
+const GRAPHE_DU_COMPTEUR: &str = r#"graph LR
+    clic["Evenement(nom='onClick')"]
+    n["Etat(nom='n', schema='{"type":"number"}', initial=0)"]
+    plus["Pur(expr='n + 1')"]
+    double["Pur(expr='n * 2')"]
+    clic -->|charge:declenche| plus
+    n -->|valeur:n| plus
+    plus -->|resultat:suivante| n
+    n -->|valeur:n| double
+"#;
+
+/// **Le graphe de clic d'un composant, dessiné à côté de son rendu, s'allume à
+/// chaque clic** (marche 3, (a)). Le composant n'a que sa vue écrite à la main ;
+/// son comportement est le graphe, compilé dans le graphe des modules. Un clic
+/// compte, et les nœuds traversés (`clic`, `plus`, `n`, `double`) s'allument
+/// dans le panneau. Puis le graphe réécrit sur le disque (`n + 10`) se recharge
+/// à chaud sans perdre l'état : le clic suivant compte de 1 à 11.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu() {
+    const TEMOIN: &str = "le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Some(paquets) = paquets_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Banc { _d, composants, racine, id, fil } = monter(
+        &paquets,
+        &[
+            ("compteur.tsx", VUE_DU_COMPTEUR),
+            ("compteur.clic.mmd", GRAPHE_DU_COMPTEUR),
+            (
+                "compteur.component.json",
+                r#"{ "name": "Compteur", "source": "compteur.tsx", "clic": "compteur.clic.mmd", "libs": { "react": "19.2.0" } }"#,
+            ),
+        ],
+    );
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/apercu/{id}/Compteur"),
+        "document.querySelector('#compteur')?.textContent === 'Compte : 0 (0)' && document.querySelectorAll('#clic g.etape').length === 4",
+    );
+    assert!(n.erreurs.is_empty(), "le premier rendu : erreurs à la console : {:#?}", n.erreurs);
+
+    n.evaluer("document.querySelector('#compteur').click()");
+    n.attendre("document.querySelector('#compteur')?.textContent === 'Compte : 1 (2)'", "le clic compté par le graphe");
+    n.attendre(
+        "window.__apercu.clics.length === 1 && window.__apercu.clics[0].noeuds.join(',') === 'clic,plus,n,double' \
+         && document.querySelectorAll('#clic g.etape.allume').length === 4",
+        "les quatre nœuds traversés, allumés",
+    );
+
+    // Le graphe réécrit : le clic suivant ajoute 10, l'état (1) est gardé.
+    std::fs::write(composants.join("compteur.clic.mmd"), GRAPHE_DU_COMPTEUR.replace("n + 1", "n + 10")).unwrap();
+    n.attendre("window.__apercu.mises_a_jour >= 1", "le graphe rechargé à chaud");
+    n.evaluer("document.querySelector('#compteur').click()");
+    n.attendre("document.querySelector('#compteur')?.textContent === 'Compte : 11 (22)'", "l'état gardé, le graphe neuf");
+    let apres = n.evaluer("({ recharge: window.__apercu.recharge, erreurs: document.querySelectorAll('pre.erreur').length, clics: window.__apercu.clics.length })");
+    assert_eq!(apres["recharge"], Value::Null, "la page s'est rechargée entière : {apres}");
+    assert_eq!(apres["erreurs"], 0, "{apres}");
+    assert_eq!(apres["clics"], 2, "{apres}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
 
     drop(n);
     let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));

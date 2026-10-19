@@ -232,6 +232,9 @@ pub struct ComponentDecl {
 pub struct EcranDuBackend {
     pub outils: BTreeMap<String, Option<crate::dataflow::clic::Ecran>>,
     pub etat_hote: Option<String>,
+    /// Le manifeste à qui l'écran parle : ce que le code d'un graphe de clic envoie à
+    /// `/ide/call` pour ses effets. Vide hors d'un backend chargé.
+    pub manifeste: String,
 }
 
 /// Ce que compile un mode : les conditions d'`exports` qu'il prend.
@@ -265,6 +268,9 @@ pub enum Resolved {
 pub struct Components {
     pub components: BTreeMap<String, ComponentDecl>,
     pub libs: Libs,
+    /// L'écran contre lequel ces composants se sont vérifiés : le graphe de clic d'un
+    /// composant se recompile contre lui dans le graphe des modules.
+    pub ecran: EcranDuBackend,
 }
 
 impl Components {
@@ -326,7 +332,7 @@ impl Components {
             }
         }
         if errors.is_empty() {
-            Ok(Self { components, libs })
+            Ok(Self { components, libs, ecran: ecran.clone() })
         } else {
             Err(errors)
         }
