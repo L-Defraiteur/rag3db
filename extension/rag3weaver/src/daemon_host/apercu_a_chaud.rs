@@ -166,12 +166,17 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
     n.evaluer("document.querySelector('#compteur').dataset.temoin = 'le-meme'");
 
     // La source réécrite sur le disque comme le fait un éditeur qui écrit en
-    // place, au pire : le fichier vide d'abord, assez longtemps pour que la
-    // montre le tienne pour établi (plus que sa fenêtre de 150 ms), puis le
-    // texte. Le module vide n'est pas une frontière : la page attend avant de
-    // se recharger, et la mise à jour suivante reprend le compteur.
+    // place, au pire : le fichier vide d'abord, jusqu'à ce que la page l'ait
+    // vu, puis plus longtemps que l'ancienne attente d'une seconde, puis le
+    // texte. Le module vide n'est pas un état à rendre : la page attend sa
+    // version suivante sans rien recharger, sur aucune durée (sous charge, la
+    // seconde qu'elle laissait ne suffisait pas : la page se rechargeait
+    // entière et perdait l'état — 19 octobre 2026).
     std::fs::write(composants.join("compteur.tsx"), "").unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(600));
+    n.attendre("window.__apercu.attente?.startsWith('comp:Compteur est vide')", "le module vide vu par la page, qui attend");
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let pendant = n.evaluer("({ recharge: window.__apercu.recharge, texte: document.querySelector('#compteur')?.textContent, temoin: document.querySelector('#compteur')?.dataset.temoin })");
+    assert_eq!(pendant, json!({ "recharge": null, "texte": "Compte : 3", "temoin": "le-meme" }), "la page a bougé sur un module vide");
     std::fs::write(composants.join("compteur.tsx"), COMPTEUR.replace("Compte : ", "Total : ")).unwrap();
     // L'attente dit, en cas d'échec, ce que la page a fait : ses mises à jour
     // et la raison d'un rechargement entier.
@@ -182,6 +187,7 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
                erreurs: [...document.querySelectorAll('pre.erreur')].map(p => p.textContent) })",
         );
         if v["texte"] == "Total : 3" {
+            eprintln!("MESURE rechargement à chaud : {} ms ; la page : {}", debut.elapsed().as_millis(), v["apercu"]);
             break;
         }
         assert!(
@@ -279,8 +285,11 @@ fn le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu() {
     );
 
     // Le graphe réécrit : le clic suivant ajoute 10, l'état (1) est gardé.
+    let avant = n.evaluer("window.__apercu");
+    let debut = std::time::Instant::now();
     std::fs::write(composants.join("compteur.clic.mmd"), GRAPHE_DU_COMPTEUR.replace("n + 1", "n + 10")).unwrap();
-    n.attendre("window.__apercu.mises_a_jour >= 1", "le graphe rechargé à chaud");
+    n.attendre("window.__apercu.mises_a_jour >= 1", &format!("le graphe rechargé à chaud (la page avant l'écriture : {avant})"));
+    eprintln!("MESURE graphe rechargé à chaud : {} ms ; la page avant l'écriture : {avant}", debut.elapsed().as_millis());
     n.evaluer("document.querySelector('#compteur').click()");
     n.attendre("document.querySelector('#compteur')?.textContent === 'Compte : 11 (22)'", "l'état gardé, le graphe neuf");
     let apres = n.evaluer("({ recharge: window.__apercu.recharge, erreurs: document.querySelectorAll('pre.erreur').length, clics: window.__apercu.clics.length })");

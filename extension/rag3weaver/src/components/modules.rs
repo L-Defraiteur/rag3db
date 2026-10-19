@@ -33,6 +33,10 @@ pub struct Module {
     pub code: String,
     /// Toutes ses exportations sont des composants (le lot 4 : il s'accepte lui-même).
     pub exports_only_components: bool,
+    /// Sa source est vide (blancs seuls) : l'état passager d'un éditeur qui
+    /// écrit en place, pas un état à rendre. L'aperçu attend la suite au lieu
+    /// de se recharger.
+    pub empty_source: bool,
 }
 
 /// Le graphe d'un composant : son module d'entrée, tous ses modules, et les
@@ -233,6 +237,7 @@ impl Components {
             None => boot[required[0]].clone(),
         };
         while let Some((nom, lib)) = a_faire.pop() {
+            let mut vide = false;
             let (id, hash, code, specs, seul, importeur): (String, String, String, Vec<String>, bool, Importer<'_>) = match &lib {
                 None => {
                     // La vue écrite à la main d'un composant à graphe de clic (`vue:<Nom>`) : son
@@ -253,11 +258,13 @@ impl Components {
                         (Some(clic), false) => {
                             let chemin = format!("components/{clic}");
                             let texte = lecteur.lire_texte(&backend_dir.join(&chemin)).map_err(|e| format!("{chemin} : {e}"))?;
+                            vide = texte.trim().is_empty();
                             compiler_clic(&texte, &chemin, &composant, &decl.effets, &self.ecran, mode)?
                         }
                         _ => {
                             let source = lecteur.lire_texte(&backend_dir.join("components").join(&decl.source))
                                 .map_err(|e| format!("{} : {e}", decl.source))?;
+                            vide = source.trim().is_empty();
                             let famille = if est_la_vue { format!("{composant}/vue") } else { composant.clone() };
                             compiler(&source, &famille, mode)?
                         }
@@ -304,7 +311,7 @@ impl Components {
                     Err(e) => unresolved.push(format!("{id} : {e}")),
                 }
             }
-            modules.insert(id.clone(), Module { id, hash, deps, code, exports_only_components: seul });
+            modules.insert(id.clone(), Module { id, hash, deps, code, exports_only_components: seul, empty_source: vide });
         }
         Ok(Graph { entry, boot, modules, unresolved })
     }
@@ -368,6 +375,10 @@ pub const REGISTRE: &str = r#"(function () {
         if (vus.has(id)) continue;
         vus.add(id);
         if (bornes.has(id)) { relances.add(id); continue; }
+        // Une source vide n'est pas un état à rendre (un éditeur qui écrit en
+        // place la vide d'abord) : rien ne se relance ni ne se recharge, la
+        // page attend la version suivante.
+        if (R.vides && R.vides.includes(id)) return { attendre: id + " est vide : la page attend sa version suivante", changes };
         const haut = R.importeurs(id);
         if (!haut.length) return { recharger: id + " a changé et rien au-dessus ne le reprend", changes };
         delete cache[id];

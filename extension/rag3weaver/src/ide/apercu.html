@@ -59,7 +59,9 @@
   const surProposition = proposition ? `proposition=${encodeURIComponent(proposition)}` : "";
   const src = `/ide/apercu/${encodeURIComponent(backend)}/${encodeURIComponent(nom)}/modules.js${surProposition ? "?" + surProposition : ""}`;
   // Ce que le témoin lit : combien de mises à jour appliquées, la dernière.
-  const etat = window.__apercu = { mises_a_jour: 0, derniere: null, recharge: null, clics: [] };
+  // `flux` : l'écoute du rechargement à chaud (absent, connexion, ouvert,
+  // erreur), et quand elle s'est ouverte depuis le chargement de la page.
+  const etat = window.__apercu = { mises_a_jour: 0, derniere: null, recharge: null, clics: [], flux: "absent", flux_ouvert_ms: null };
   // Un rechargement entier laisse sa raison à la page suivante : elle la dit
   // à la console, et le témoin la lit.
   try {
@@ -178,11 +180,13 @@
   // Une mise à jour à la fois ; un changement arrivé pendant l'une en
   // relance une après.
   let enCours = false, encore = false;
-  // **Un rechargement entier attend une seconde.** Un éditeur qui écrit en
-  // place vide le fichier avant de l'écrire : la montre peut voir le module
-  // vide, qui n'est pas une frontière. Si la mise à jour suivante reprend le
-  // module à une frontière, elle s'applique et le rechargement est annulé.
-  const ATTENTE_DU_RECHARGEMENT = 1000;
+  // **Un module vide n'est pas un état à rendre** : un éditeur qui écrit en
+  // place vide le fichier avant de l'écrire, et la montre peut voir le vide.
+  // Le registre le dit (`attendre`, d'après le serveur qui sait la source
+  // vide) : rien ne se relance ni ne se recharge, et la version suivante
+  // s'applique. Plus d'attente sur une durée — sous charge, la version
+  // suivante arrivait après la seconde qu'on lui laissait, et la page se
+  // rechargeait entière en perdant l'état (19 octobre 2026).
   let rechargement = null;
   function rechargerBientot(r) {
     if (rechargement) return;
@@ -191,7 +195,7 @@
       console.info(`aperçu : rechargement entier — ${raison}`);
       try { sessionStorage.setItem("apercu-recharge", JSON.stringify(r)); } catch (_) {}
       location.reload();
-    }, ATTENTE_DU_RECHARGEMENT);
+    }, 0);
   }
   async function mettreAJour() {
     if (enCours) { encore = true; return; }
@@ -202,6 +206,8 @@
         await charger(`${src}${surProposition ? "&" : "?"}v=${Date.now()}`);
         const r = R.mettre_a_jour(R.frontieres);
         if (!r.changes.length) continue;
+        if (r.attendre) { etat.attente = r.attendre; continue; }
+        etat.attente = null;
         if (r.recharger || !refresh) {
           rechargerBientot(r);
           continue;
@@ -225,7 +231,18 @@
     const e = await (await fetch("/ide/etat")).json();
     const b = (e.backends ?? []).find((b) => b.id === backend);
     if (!b) { console.info(`aperçu : backend ${backend} absent de /ide/etat, pas de rechargement à chaud`); return; }
+    etat.flux = "connexion";
     const flux = new EventSource("/ide/flux?sujets=components");
+    // Ce qui a changé entre le premier rendu et l'ouverture du flux n'a été
+    // dit à personne (le flux ne rejoue pas le passé d'une fenêtre neuve) :
+    // relire à chaque ouverture, la première comme une reconnexion. Sans
+    // changement, rien n'est compté ni rendu.
+    flux.onopen = () => {
+      etat.flux = "ouvert";
+      etat.flux_ouvert_ms = Math.round(performance.now());
+      mettreAJour();
+    };
+    flux.onerror = () => { etat.flux = "erreur"; };
     flux.onmessage = (m) => {
       const d = JSON.parse(m.data);
       if (d.backend === b.manifest && d.evenement.kind === "ComponentsChanged") mettreAJour();

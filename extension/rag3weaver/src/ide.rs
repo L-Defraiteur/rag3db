@@ -311,10 +311,12 @@ pub fn modules_js(g: &crate::components::modules::Graph) -> String {
         "__rag3weaver.entree = {};
 __rag3weaver.demarrage = {};
 __rag3weaver.frontieres = {};
+__rag3weaver.vides = {};
 ",
         serde_json::to_string(&g.entry).unwrap(),
         serde_json::to_string(&g.boot).unwrap(),
-        serde_json::to_string(&g.modules.values().filter(|m| m.exports_only_components).map(|m| m.id.as_str()).collect::<Vec<_>>()).unwrap()
+        serde_json::to_string(&g.modules.values().filter(|m| m.exports_only_components).map(|m| m.id.as_str()).collect::<Vec<_>>()).unwrap(),
+        serde_json::to_string(&g.modules.values().filter(|m| m.empty_source).map(|m| m.id.as_str()).collect::<Vec<_>>()).unwrap()
     ));
     for u in &g.unresolved {
         js.push_str(&format!("console.warn({});
