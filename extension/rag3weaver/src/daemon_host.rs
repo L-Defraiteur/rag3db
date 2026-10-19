@@ -111,9 +111,33 @@ struct Hosted {
 
 /// L'empreinte d'un manifeste : son contenu, pas sa date (un `touch` ne
 /// rouvre rien).
+///
+/// **Les Plans déclarés comptent** (`plans/`, à côté du manifeste) : un Plan
+/// modifié change l'empreinte, et le backend se rouvre pour le relire.
 fn manifest_print(manifest: &Path) -> Result<String, String> {
     let octets = std::fs::read(manifest).map_err(|e| format!("manifeste {} : {e}", manifest.display()))?;
-    Ok(blake3::hash(&octets).to_hex()[..16].to_string())
+    let mut h = blake3::Hasher::new();
+    h.update(&octets);
+    if let Some(plans) = manifest.parent().map(|d| d.join("plans")).filter(|d| d.is_dir()) {
+        fn tous(d: &Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    tous(&p, out);
+                } else {
+                    out.push(p);
+                }
+            }
+        }
+        let mut fichiers = Vec::new();
+        tous(&plans, &mut fichiers);
+        fichiers.sort();
+        for f in fichiers {
+            h.update(f.strip_prefix(&plans).unwrap_or(&f).to_string_lossy().as_bytes());
+            h.update(&std::fs::read(&f).map_err(|e| format!("plan {} : {e}", f.display()))?);
+        }
+    }
+    Ok(h.finalize().to_hex()[..16].to_string())
 }
 
 /// Ce qu'une réponse dit d'un manifeste modifié depuis l'ouverture.

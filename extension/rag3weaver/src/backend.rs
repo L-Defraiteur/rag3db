@@ -1011,6 +1011,7 @@ impl PreparedBackend {
         nodes.register(Box::new(crate::backend_nodes::SnapshotUndoFactory));
         nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
+        nodes.register(Box::new(crate::dataflow::plan_node::PlanNodeFactory));
         // ── Les nœuds scriptés du dossier `nodes/` ──────────────────────────
         //
         // Découverts, pas listés : un dossier de déclarations se copie tel
@@ -1226,6 +1227,17 @@ impl PreparedBackend {
                 .collect()
         };
         let mut harnesses = HashMap::new();
+        // Le schéma contre lequel un Plan déclaré se vérifie : les champs de
+        // chaque entité (`_uuid` compris), les deux bouts de chaque relation.
+        let schema_des_plans = rag3weaver_ir::PlanSchema {
+            tables: entities
+                .iter()
+                .map(|(nom, e): (&String, &EntityConfig)| {
+                    (nom.clone(), e.fields.keys().cloned().chain(["_uuid".to_string()]).collect())
+                })
+                .collect(),
+            relations: manifest.relations.iter().map(|(nom, r)| (nom.clone(), (r.def.from.clone(), r.def.to.clone()))).collect(),
+        };
         let mut after_hooks = BTreeMap::new();
         let mut tools = BTreeMap::new();
         let mut tool_schemas = BTreeMap::new();
@@ -1239,9 +1251,28 @@ impl PreparedBackend {
                 return Err(format!("reserved tool {name} (graph_tool)"));
             }
             let source = lire_texte(lecteur, &directory.join(&attachment.graph))?;
-            let tool = GraphTool::from_mermaid(&source)
+            let mut tool = GraphTool::from_mermaid(&source)
                 .and_then(|t| t.bind(&nodes))
                 .map_err(|e| e.to_string())?;
+            // **Les Plans déclarés** (`PlanNode(plan=@plans/…)`) : lus et vérifiés
+            // ici, contre leur forme et contre le schéma du manifeste ; un Plan
+            // faux refuse le gabarit.
+            let plans: Vec<(String, String)> = tool
+                .template()
+                .nodes
+                .iter()
+                .filter(|n| n.node_type == crate::dataflow::plan_node::NODE_TYPE)
+                .filter_map(|n| n.config.get("plan").and_then(Value::as_str).map(|c| (n.name.clone(), c.to_string())))
+                .collect();
+            for (noeud, cite) in plans {
+                let lu = crate::dataflow::plan_node::lire_le_plan(
+                    &cite,
+                    |chemin| lire_texte(lecteur, &directory.join(chemin)),
+                    &schema_des_plans,
+                )
+                .map_err(|e| format!("{name}: {e}"))?;
+                tool.remplacer_config(&noeud, "plan", lu);
+            }
             for key in attachment.bindings.keys() {
                 if !tool.params().iter().any(|p| p.name == key.as_str()) {
                     return Err(format!("{name}: unknown binding {key}"));
@@ -4462,7 +4493,7 @@ mod tests {
         let reactif = crate::backend_code::reaction_nodes();
         assert_eq!(
             outil.len(),
-            37,
+            38,
             "la liste des nœuds d'outil a changé ({} entrées) : si c'est voulu, corrigez \
              ce compte dans le même commit — et dites pourquoi dans son message",
             outil.len()

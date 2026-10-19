@@ -1,0 +1,39 @@
+{
+  "let": {
+    "ref_qui_repond": {"all_of": [
+      {"optional": {"in": {"field": "genre", "param": "genres"}}},
+      {"any_of": [
+        {"equals":      {"field": "valeur", "param": "value"}},
+        {"optional": {"starts_with": {"field": "valeur", "param": "value_dir"}}},
+        {"optional": {"starts_with": {"field": "valeur", "param": "value_sym"}}}
+      ]}
+    ]},
+    "fiche_gardee": {"all_of": [
+      {"through": {"relation": "CITE", "direction": "outgoing", "end": "Ref",
+                   "filter": {"let": "ref_qui_repond"}}},
+      {"optional": {"in":       {"field": "state",      "param": "states"}}},
+      {"optional": {"in":       {"field": "kind",       "param": "kinds"}}},
+      {"optional": {"at_least": {"field": "updated_at", "param": "since"}}},
+      {"optional": {"through": {"relation": "ANCHORED_TO", "direction": "outgoing", "end": "Subject",
+                                "filter": {"equals": {"field": "name", "param": "subject"}}}}}
+    ]}
+  },
+  "forms": {
+    "fiches": {"select": {
+      "table": "Memory",
+      "filter": {"let": "fiche_gardee"},
+      "returns": [
+        "_uuid", "claim", "kind", "state", "origin", "reach", "created_at", "updated_at", "reviewed_at",
+        {"collect": {"as": "refs", "relation": "CITE", "direction": "outgoing", "end": "Ref",
+                     "fields": ["genre", "valeur", "etat"], "filter": {"let": "ref_qui_repond"}}},
+        {"collect": {"as": "subjects", "relation": "ANCHORED_TO", "direction": "outgoing", "end": "Subject",
+                     "fields": ["name"]}}
+      ],
+      "order_by": [{"coalesce": ["updated_at", "created_at"], "desc": true}, {"field": "_uuid"}],
+      "limit":  {"param": "limit", "max": 200},
+      "offset": {"param": "offset"}
+    }},
+    "total": {"count": {"matching": {"table": "Memory", "filter": {"let": "fiche_gardee"}}}}
+  },
+  "outputs": {"rows": "fiches", "total": "total", "results": {"form": "fiches", "uuid": "_uuid", "entity": "Memory"}}
+}

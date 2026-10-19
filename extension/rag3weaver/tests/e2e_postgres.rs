@@ -1927,3 +1927,100 @@ fn le_voisinage_de_grep_rend_les_memes_lignes_que_rag3db() {
     let rendu = crate::e2e_mesure_impact::voisinage(&catalog);
     assert_eq!(rendu, attendu, "PostgreSQL rend les lignes de rag3db");
 }
+
+/// **Un Plan déclaré, rendu en SQL et joué sur PostgreSQL** (19 octobre 2026,
+/// l'IR du Plan) : `starts_with` (`left(…) = $p`, jamais `LIKE`), `through`
+/// (`EXISTS (SELECT 1 …)`), `collect` (une sous-requête corrélée `json_agg`,
+/// `[]` sans lien), l'ordre `coalesce(…) DESC`, `LIMIT`/`OFFSET` et le total —
+/// le même Plan et les mêmes fiches que `plan_declare_tests` sur rag3db, les
+/// mêmes réponses. Le `kinds` à côté d'un `through` y est juste (le défaut
+/// des EXISTS paramétrés est celui du moteur rag3db). Les tables se créent
+/// sans guillemets : le dialecte met ses identifiants en minuscules.
+#[test]
+#[ignore]
+fn un_plan_declare_se_rend_et_se_joue_en_sql() {
+    use rag3weaver::plan::{run_plan, PlanOptions};
+    use rag3weaver_ir::{DeclaredPlan, Value};
+    use serde_json::json;
+    let _garde = VERROU_BASE.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = ouvrir();
+    table_rase(conn.as_ref());
+    for q in [
+        r#"CREATE TABLE Memory (_uuid text PRIMARY KEY, kind text, created_at bigint, updated_at bigint)"#,
+        r#"CREATE TABLE Ref (_uuid text PRIMARY KEY, genre text, valeur text)"#,
+        r#"CREATE TABLE Subject (_uuid text PRIMARY KEY, name text)"#,
+        r#"CREATE TABLE CITE (from_uuid text, to_uuid text)"#,
+        r#"CREATE TABLE ANCHORED_TO (from_uuid text, to_uuid text)"#,
+        r#"INSERT INTO Memory VALUES ('f1','fact',1,10), ('f2','rule',2,30), ('f3','fact',20,NULL), ('f4','rule',4,50), ('f5','fact',5,40)"#,
+        r#"INSERT INTO Ref VALUES ('r1','fichier','d:src/a.rs'), ('r2','symbole','d:src/a.rs#m::f'), ('r4','fichier','d:srcx/b.rs'), ('r5','dossier','d:src/')"#,
+        r#"INSERT INTO Subject VALUES ('s1','stockage')"#,
+        r#"INSERT INTO CITE VALUES ('f1','r1'), ('f2','r2'), ('f3','r1'), ('f4','r4'), ('f5','r5'), ('f5','r4')"#,
+        r#"INSERT INTO ANCHORED_TO VALUES ('f2','s1')"#,
+    ] {
+        conn.execute(q).unwrap_or_else(|e| panic!("{q} : {e}"));
+    }
+    let plan = DeclaredPlan::from_json(
+        &json!({
+            "let": {
+                "ref_qui_repond": {"any_of": [
+                    {"equals": {"field": "valeur", "param": "value"}},
+                    {"optional": {"starts_with": {"field": "valeur", "param": "value_dir"}}}
+                ]},
+                "fiche_gardee": {"all_of": [
+                    {"through": {"relation": "CITE", "direction": "outgoing", "end": "Ref", "filter": {"let": "ref_qui_repond"}}},
+                    {"optional": {"in": {"field": "kind", "param": "kinds"}}},
+                    {"optional": {"through": {"relation": "ANCHORED_TO", "direction": "outgoing", "end": "Subject",
+                                              "filter": {"equals": {"field": "name", "param": "subject"}}}}}
+                ]}
+            },
+            "forms": {
+                "fiches": {"select": {
+                    "table": "Memory",
+                    "filter": {"let": "fiche_gardee"},
+                    "returns": ["_uuid", "kind",
+                        {"collect": {"as": "refs", "relation": "CITE", "direction": "outgoing", "end": "Ref",
+                                     "fields": ["genre", "valeur"], "filter": {"let": "ref_qui_repond"}}},
+                        {"collect": {"as": "subjects", "relation": "ANCHORED_TO", "direction": "outgoing", "end": "Subject", "fields": ["name"]}}],
+                    "order_by": [{"coalesce": ["updated_at", "created_at"], "desc": true}, {"field": "_uuid"}],
+                    "limit": {"param": "limit", "max": 50},
+                    "offset": {"param": "offset"}
+                }},
+                "total": {"count": {"matching": {"table": "Memory", "filter": {"let": "fiche_gardee"}}}}
+            },
+            "outputs": {"rows": "fiches", "total": "total"}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    plan.check().unwrap();
+    let jouer = |params: serde_json::Value| {
+        let params: BTreeMap<String, Value> = serde_json::from_value(params).unwrap();
+        let lie = plan.bind(&params).unwrap();
+        let r = run_plan(&PostgresDialect, conn.as_ref(), &lie.plan, PlanOptions { no_transaction: true, ..Default::default() })
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        let lignes = r.outputs["fiches"].rows.clone();
+        let total = match &r.outputs["total"].rows[0][0] {
+            CypherValue::Int(n) => *n,
+            autre => panic!("{autre:?}"),
+        };
+        let uuids: Vec<String> = lignes.iter().map(|l| l[0].as_str().unwrap().to_string()).collect();
+        (lignes, uuids, total)
+    };
+    let (lignes, uuids, total) = jouer(json!({"value": "d:src", "value_dir": "d:src/", "limit": 10, "offset": 0}));
+    assert_eq!(uuids, ["f5", "f2", "f3", "f1"]);
+    assert_eq!(total, 4);
+    let CypherValue::List(refs) = &lignes[0][2] else { panic!("{:?}", lignes[0]) };
+    assert_eq!(refs.len(), 1, "seule la Ref qui répond : {refs:?}");
+    assert_eq!(lignes[3][3], CypherValue::List(vec![]), "sans sujet : une liste vide");
+    let (_, uuids, total) = jouer(json!({"value": "d:src", "value_dir": "d:src/", "limit": 2, "offset": 2}));
+    assert_eq!(uuids, ["f3", "f1"]);
+    assert_eq!(total, 4);
+    let (_, uuids, total) = jouer(json!({"value": "d:src", "value_dir": "d:src/", "kinds": ["rule"], "limit": 10, "offset": 0}));
+    assert_eq!(uuids, ["f2"]);
+    assert_eq!(total, 1);
+    let (_, uuids, _) = jouer(json!({"value": "d:src", "value_dir": "d:src/", "subject": "stockage", "limit": 10, "offset": 0}));
+    assert_eq!(uuids, ["f2"]);
+    // `%` et `_` d'un chemin ne sont pas des jokers : `left(…) = $p`, pas LIKE.
+    let (_, uuids, total) = jouer(json!({"value": "x", "value_dir": "d:sr_/", "limit": 10, "offset": 0}));
+    assert!(uuids.is_empty() && total == 0, "{uuids:?}");
+}

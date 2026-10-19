@@ -91,7 +91,7 @@ impl Form {
             match c {
                 Column::Node(f) if f == "_uuid" => ColumnKind::Uuid,
                 Column::Whole => ColumnKind::Whole,
-                Column::Node(_) | Column::Edge(_) | Column::Null | Column::Label => ColumnKind::Value,
+                Column::Node(_) | Column::Edge(_) | Column::Null | Column::Label | Column::Collect(_) => ColumnKind::Value,
             }
         }
         match self {

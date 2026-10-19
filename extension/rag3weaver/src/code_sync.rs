@@ -1302,7 +1302,7 @@ pub fn avant_la_regle(catalog: &Catalog) -> Result<bool, String> {
         return Ok(false);
     }
     let mut select = rag3weaver_ir::Select::all(crate::code::FILE, vec![rag3weaver_ir::Column::Node("_uuid".into())]);
-    select.limit = Some(1);
+    select.limit = Some(rag3weaver_ir::Limit::Literal(1));
     let q = catalog.dialect_arc().select(&select).map_err(|e| e.to_string())?;
     match catalog.execute_raw_with_params(&q, &[]) {
         Ok(res) => Ok(!res.rows.is_empty()),
@@ -1330,7 +1330,7 @@ fn source_deja_indexee(catalog: &Catalog, source_id: &str) -> Result<bool, Strin
         rag3weaver_ir::Predicate::Equals { field: "source".into(), param: "source".into() },
         vec![rag3weaver_ir::Column::Node("_uuid".into())],
     );
-    select.limit = Some(1);
+    select.limit = Some(rag3weaver_ir::Limit::Literal(1));
     let q = catalog.dialect_arc().select(&select).map_err(|e| e.to_string())?;
     let res = catalog
         .execute_raw_with_params(&q, &[crate::connection::QueryParam::new("source", CypherValue::String(source_id.to_string()))])

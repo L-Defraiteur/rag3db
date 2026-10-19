@@ -178,6 +178,8 @@ mod e2e_nom_reserve;
 mod e2e_outils_disent_ce_qui_reste;
 #[path = "../e2e_phase0b.rs"]
 mod e2e_phase0b;
+#[path = "../e2e_plan_declare.rs"]
+mod e2e_plan_declare;
 #[path = "../e2e_plans_par_lot.rs"]
 mod e2e_plans_par_lot;
 #[path = "../e2e_points_de_reprise_nettoyes.rs"]

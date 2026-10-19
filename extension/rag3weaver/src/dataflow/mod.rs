@@ -156,6 +156,8 @@ pub use record_nodes::{
 };
 
 pub mod composable_results;
+/// Le PlanNode : un Plan déclaré, lu par la vue (19 octobre 2026).
+pub mod plan_node;
 /// Transport-independent search verbs compiled into the ordinary dataflow DAG.
 pub mod search_chain;
 

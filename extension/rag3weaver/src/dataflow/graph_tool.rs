@@ -1230,6 +1230,23 @@ impl GraphTool {
     pub fn template(&self) -> &GraphDefinition {
         &self.template
     }
+
+    /// Une valeur de configuration d'un nœud du gabarit, remplacée (un `PlanNode`
+    /// dont le Plan cité, `@plans/…`, a été lu au chargement). `false` : pas
+    /// de nœud de ce nom.
+    pub(crate) fn remplacer_config(&mut self, noeud: &str, cle: &str, valeur: Value) -> bool {
+        match self.template.nodes.iter_mut().find(|n| n.name == noeud) {
+            Some(n) => {
+                if let Some(o) = n.config.as_object_mut() {
+                    o.insert(cle.to_string(), valeur);
+                } else {
+                    n.config = serde_json::json!({ cle: valeur });
+                }
+                true
+            }
+            None => false,
+        }
+    }
     /// `(nœud, port)` qui porte le résultat.
     pub fn result(&self) -> (&str, &str) {
         (&self.result_node, &self.result_port)
