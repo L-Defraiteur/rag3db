@@ -1264,3 +1264,152 @@ fn un_ensemble_refuse_remet_tout_en_etat() {
         .unwrap_err();
     assert!(deux.contains("deux fois"), "{deux}");
 }
+
+// ── Valider sans écrire : le recouvrement (propositions, P1) ──────────────
+
+/// La réaction du témoin de la garde : un graphe réactif de plus à lire.
+const SONDE_DU_RECOUVREMENT: &str = "%% tool: sonde
+%% description: draine le catalogue
+%% param: limite int! -- combien au plus
+%% on: catalog
+%% policy: each
+%% result: vu.result
+graph LR
+    events[\"EventSourceNode(topics='catalog', cursor='sonde', limit=$limite)\"]
+    vu[\"RhaiNode(script_id=answer)\"]
+    events -->|events:value| vu
+";
+
+/// Le graphe de clic d'un composant du témoin.
+const CLIC_DU_RECOUVREMENT: &str = "graph LR
+    clic[\"Evenement(nom='onClick')\"]
+    a[\"Pur(expr='x + 1')\"]
+    clic -->|charge:x| a
+";
+
+/// L'arbre d'un dossier, chemin → octets : ce qu'une validation ne doit pas
+/// changer.
+fn photographie(dir: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut pile = vec![dir.to_path_buf()];
+    while let Some(d) = pile.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                pile.push(p);
+            } else {
+                out.insert(p.clone(), std::fs::read(&p).unwrap());
+            }
+        }
+    }
+    out
+}
+
+/// Le jouet, avec une réaction, un composant à graphe de clic, un nœud
+/// scripté, une vue et ses scripts : un exemplaire de chaque déclaration que
+/// le chargement lit. Rend aussi ces fichiers, dans leur version valide.
+fn jouet_a_toutes_les_declarations() -> (tempfile::TempDir, Backend, Vec<(String, String)>) {
+    let (dir, backend) = toy_with_routes();
+    let d = dir.path();
+    write(d, "sonde.mmd", SONDE_DU_RECOUVREMENT);
+    std::fs::create_dir(d.join("components")).unwrap();
+    write(&d.join("components"), "fiche.tsx", "export function Fiche() { return null; }\n");
+    write(&d.join("components"), "fiche.component.json", r#"{ "name": "Fiche", "source": "fiche.tsx", "clic": "fiche.clic.mmd" }"#);
+    write(&d.join("components"), "fiche.clic.mmd", CLIC_DU_RECOUVREMENT);
+    let manifeste = MANIFEST.replace(
+        "\"tools\": { ",
+        &format!("\"reactions\": {{ \"sonde\": {{ \"graph\": \"sonde.mmd\", \"bindings\": {{ \"limite\": 100 }} }} }},\n  {ROUTES}"),
+    );
+    write(d, "backend.json", &manifeste);
+    backend.reload().expect("le jouet complet se charge");
+    let valides: Vec<(String, String)> = [
+        "backend.json",
+        "greet.mmd",
+        "echo.mmd",
+        "answer.rhai",
+        "sonde.mmd",
+        "nodes/greet.node.json",
+        "nodes/greet.ts",
+        "views/hello.html",
+        "components/fiche.component.json",
+        "components/fiche.clic.mmd",
+    ]
+    .iter()
+    .map(|p| (p.to_string(), std::fs::read_to_string(d.join(p)).unwrap()))
+    .collect();
+    (dir, backend, valides)
+}
+
+/// **La garde du recouvrement** (c7, 19 octobre) : une validation sur
+/// recouvrement **ne lit aucun fichier que le recouvrement remplace**, et
+/// **n'écrit rien**. Chaque déclaration que le chargement lit — le manifeste,
+/// un graphe d'outil, un script, une réaction, la déclaration et le script
+/// d'un nœud scripté, une vue, la déclaration et le graphe de clic d'un
+/// composant — est empoisonnée sur le disque, et proposée valide : une seule
+/// lecture qui contournerait le lecteur (un `std::fs` direct) lirait le
+/// poison, et la validation rougirait en le nommant. L'arbre est le même,
+/// octet pour octet, avant et après.
+#[test]
+fn a_validation_on_an_overlay_reads_no_replaced_file_and_writes_nothing() {
+    let (dir, backend, valides) = jouet_a_toutes_les_declarations();
+    let d = dir.path();
+    for (chemin, _) in &valides {
+        let poison = match chemin.rsplit('.').next().unwrap() {
+            "json" => "{ « poison »".to_string(),
+            "mmd" => "graph LR\n    poison[\"NoeudQuiNExistePas()\"]\n".to_string(),
+            "rhai" => "let = = ; // poison".to_string(),
+            "ts" => "function ((( // poison".to_string(),
+            "html" => "{% if %} poison".to_string(),
+            autre => panic!("pas de poison pour .{autre}"),
+        };
+        write(d, chemin, &poison);
+    }
+    let avant = photographie(d);
+    backend.valider_sur(&valides).unwrap_or_else(|e| panic!("une lecture a contourné le recouvrement et lu le poison du disque : {e}"));
+    assert_eq!(photographie(d), avant, "la validation a écrit dans l'arbre");
+}
+
+/// **Une proposition refusée l'est avec son chemin et sa ligne**, et l'arbre
+/// n'est pas touché ; **un fichier neuf du recouvrement se voit** (un
+/// composant neuf, sa déclaration et sa vue) ; un composant neuf dont la vue
+/// manque est refusé ; une migration (la base) est refusée comme telle ; et
+/// sans fichier proposé, le recouvrement charge ce que charge le disque.
+#[test]
+fn a_proposal_is_judged_on_the_overlay_and_the_tree_is_untouched() {
+    let (dir, backend, _) = jouet_a_toutes_les_declarations();
+    let d = dir.path();
+    let avant = photographie(d);
+
+    let refus = backend
+        .valider_sur(&[(
+            "components/fiche.clic.mmd".to_string(),
+            // Un effet que le composant ne déclare pas : refusé à la ligne de son nœud.
+            "graph LR\n    clic[\"Evenement(nom='onClick')\"]\n    e[\"Effet(outil='echo')\"]\n    clic -->|charge:value| e\n".to_string(),
+        )])
+        .unwrap_err();
+    assert!(refus.contains("components/fiche.clic.mmd:3"), "le refus nomme le fichier et la ligne : {refus}");
+
+    backend
+        .valider_sur(&[
+            ("components/neuve.tsx".to_string(), "export function Neuve() { return null; }\n".to_string()),
+            ("components/neuve.component.json".to_string(), r#"{ "name": "Neuve", "source": "neuve.tsx" }"#.to_string()),
+        ])
+        .expect("un composant neuf, seulement dans le recouvrement");
+    let manque = backend
+        .valider_sur(&[("components/seule.component.json".to_string(), r#"{ "name": "Seule", "source": "seule.tsx" }"#.to_string())])
+        .unwrap_err();
+    assert!(manque.contains("seule.tsx") && manque.contains("absent"), "{manque}");
+
+    let manifeste = std::fs::read_to_string(d.join("backend.json")).unwrap();
+    let migration = backend
+        .valider_sur(&[("backend.json".to_string(), manifeste.replace("data/toy.rag3db", "data/autre.rag3db"))])
+        .unwrap_err();
+    assert!(migration.contains("migration"), "{migration}");
+
+    assert!(backend.valider_sur(&[("../dehors.mmd".to_string(), String::new())]).is_err(), "un chemin hors du backend");
+    assert_eq!(photographie(d), avant, "aucune proposition n'a écrit dans l'arbre");
+
+    let disque = PreparedBackend::load(&d.join("backend.json")).unwrap();
+    let vide = PreparedBackend::load_avec(&d.join("backend.json"), &crate::lecteur::Recouvrement::default()).unwrap();
+    assert_eq!(vide.describe(), disque.describe(), "un recouvrement vide charge ce que charge le disque");
+}

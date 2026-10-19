@@ -778,11 +778,11 @@ fn sans_prefixe_verbatim(chemin: PathBuf) -> PathBuf {
     }
     chemin
 }
-fn lire_octets(chemin: &Path) -> Result<Vec<u8>, String> {
-    std::fs::read(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+fn lire_octets(lecteur: &dyn crate::lecteur::Lecteur, chemin: &Path) -> Result<Vec<u8>, String> {
+    lecteur.lire(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
 }
-fn lire_texte(chemin: &Path) -> Result<String, String> {
-    std::fs::read_to_string(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+fn lire_texte(lecteur: &dyn crate::lecteur::Lecteur, chemin: &Path) -> Result<String, String> {
+    lecteur.lire_texte(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
 }
 
 impl PreparedBackend {
@@ -818,7 +818,15 @@ impl PreparedBackend {
 
     /// Pure preparation: read and validate descriptors before opening a database.
     pub fn load(path: &Path) -> Result<Self, String> {
-        let brut = lire_octets(path)?;
+        Self::load_avec(path, &crate::lecteur::Disque)
+    }
+
+    /// **Le chargement par un lecteur** : le disque ([`crate::lecteur::Disque`]), ou
+    /// le disque sous une proposition en mémoire ([`crate::lecteur::Recouvrement`]).
+    /// Toute déclaration se lit par lui : c'est ce qui rend vrai « valider sans
+    /// écrire » (`Backend::valider_sur`).
+    pub fn load_avec(path: &Path, lecteur: &dyn crate::lecteur::Lecteur) -> Result<Self, String> {
+        let brut = lire_octets(lecteur, path)?;
         // **Les gabarits livrés désignés par leur nom** (`builtin:tools/list.mmd`,
         // `crate::builtin_templates`) : résolus vers le gabarit extrait du binaire
         // avant toute lecture. Sans `builtin:`, la lecture directe garde la ligne
@@ -971,9 +979,10 @@ impl PreparedBackend {
         // Découverts, pas listés : un dossier de déclarations se copie tel
         // quel. Revérifiés à chaque chargement, donc à chaque rechargement.
         let mut scripted_types = BTreeSet::new();
-        let declared = crate::dataflow::scripted_node::discover(
+        let declared = crate::dataflow::scripted_node::discover_avec(
             &directory.join("nodes"),
             &crate::script::ScriptLimits::default(),
+            lecteur,
         )
         .map_err(|errors| format!("nodes/ : {}", errors.join(" ; ")))?;
         for factory in declared {
@@ -989,7 +998,7 @@ impl PreparedBackend {
         }
         // ── Les composants d'interface et leurs bibliothèques ──────────────
         let components = Arc::new(
-            crate::components::Components::load_in(&directory, &ecran_du_backend(&manifest, path))
+            crate::components::Components::load_in_avec(&directory, &ecran_du_backend(&manifest, path), lecteur)
                 .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
         );
         let mut schemas = HashMap::new();
@@ -1000,7 +1009,7 @@ impl PreparedBackend {
         for (name, entity) in &manifest.entities {
             crate::schema::validate_identifier(name, "entity").map_err(|e| e.to_string())?;
             let schema: Value = serde_json::from_slice(
-                &lire_octets(&directory.join(&entity.schema))?,
+                &lire_octets(lecteur, &directory.join(&entity.schema))?,
             )
             .map_err(|e| e.to_string())?;
             validators.insert(
@@ -1013,7 +1022,7 @@ impl PreparedBackend {
                 })?;
                 miroirs.insert(
                     name.clone(),
-                    Arc::new(crate::fichiers_entite::Miroir::nouveau(name, directory.join(racine), decl.clone(), &schema, &directory)?),
+                    Arc::new(crate::fichiers_entite::Miroir::nouveau_avec(name, directory.join(racine), decl.clone(), &schema, &directory, lecteur)?),
                 );
             }
             let mapping = JsonSchemaMapping::from_schema(&schema)?;
@@ -1141,7 +1150,7 @@ impl PreparedBackend {
             .iter()
             .map(|(name, path)| {
                 let text =
-                    lire_texte(&directory.join(path))?;
+                    lire_texte(lecteur, &directory.join(path))?;
                 if text.len() > 65536 {
                     return Err(format!("script {name} too large"));
                 }
@@ -1152,7 +1161,7 @@ impl PreparedBackend {
             hooks
                 .iter()
                 .map(|hook| {
-                    let source = lire_texte(&directory.join(&hook.graph))?;
+                    let source = lire_texte(lecteur, &directory.join(&hook.graph))?;
                     let tool = GraphTool::from_mermaid(&source)
                         .and_then(|t| t.bind(&nodes))
                         .map_err(|e| e.to_string())?;
@@ -1164,7 +1173,7 @@ impl PreparedBackend {
                         .iter()
                         .map(|(key, path)| {
                             let bytes =
-                                lire_octets(&directory.join(path))?;
+                                lire_octets(lecteur, &directory.join(path))?;
                             Ok((
                                 key.clone(),
                                 serde_json::from_slice::<Value>(&bytes)
@@ -1192,7 +1201,7 @@ impl PreparedBackend {
             if manifest.graph_tool && name == GRAPH_TOOL {
                 return Err(format!("reserved tool {name} (graph_tool)"));
             }
-            let source = lire_texte(&directory.join(&attachment.graph))?;
+            let source = lire_texte(lecteur, &directory.join(&attachment.graph))?;
             let tool = GraphTool::from_mermaid(&source)
                 .and_then(|t| t.bind(&nodes))
                 .map_err(|e| e.to_string())?;
@@ -1208,7 +1217,7 @@ impl PreparedBackend {
                 // Le graphe du crochet se charge et se valide ICI : un
                 // crochet mal déclaré est une erreur de manifeste, pas un
                 // silence — le silence couvre l'exécution, jamais le montage.
-                let source = lire_texte(&directory.join(&hook.graph))
+                let source = lire_texte(lecteur, &directory.join(&hook.graph))
                     .map_err(|e| format!("{name}: crochet after : {e}"))?;
                 let hook_tool = GraphTool::from_mermaid(&source)
                     .and_then(|t| t.bind(&nodes))
@@ -1317,7 +1326,7 @@ impl PreparedBackend {
             }
             if let Some(path) = &attachment.harness.input_schema {
                 input = serde_json::from_slice(
-                    &lire_octets(&directory.join(path))?,
+                    &lire_octets(lecteur, &directory.join(path))?,
                 )
                 .map_err(|e| e.to_string())?;
                 let declared = tool.tool_def().parameters;
@@ -1364,9 +1373,9 @@ impl PreparedBackend {
             }
         }
         // ── Les routes et les vues ──────────────────────────────────────
-        let routes = crate::routes::Routes::load(&manifest.routes, &directory, &|name| {
+        let routes = crate::routes::Routes::load_avec(&manifest.routes, &directory, &|name| {
             tools.contains_key(name)
-        })?;
+        }, lecteur)?;
         // ── Les graphes réactifs ─────────────────────────────────────────
         //
         // Lus, construits et liés ici, au même étage que les outils : un
@@ -1390,7 +1399,7 @@ impl PreparedBackend {
         let mut reactions = BTreeMap::new();
         for (name, attachment) in &manifest.reactions {
             crate::schema::validate_identifier(name, "reaction").map_err(|e| e.to_string())?;
-            let source = std::fs::read_to_string(directory.join(&attachment.graph))
+            let source = lecteur.lire_texte(&directory.join(&attachment.graph))
                 .map_err(|e| format!("la réaction « {name} » : {e}"))?;
             let graphe = GraphTool::from_mermaid(&source)
                 .and_then(|t| t.bind(&nodes))
@@ -1478,7 +1487,7 @@ impl PreparedBackend {
         // l'ouverture (l'état de l'hôte, la page), pas découvertes à une erreur
         // d'argument plus loin.
         let template_drift = serde_json::from_slice::<serde_json::Value>(&brut)
-            .map(|v| crate::builtin_templates::drift(&directory, &v))
+            .map(|v| crate::builtin_templates::drift_avec(&directory, &v, lecteur))
             .unwrap_or_default();
         Ok(Self {
             template_drift,
@@ -1544,6 +1553,11 @@ impl PreparedBackend {
 
     pub fn path(&self, path: &Path) -> PathBuf {
         self.directory.join(path)
+    }
+
+    /// Le chemin canonique du manifeste chargé.
+    pub fn manifest_path(&self) -> &Path {
+        &self.manifest_path
     }
 
     /// **Le fichier de l'extension vectorielle à charger.** Un chemin déclaré
@@ -1912,7 +1926,7 @@ impl PreparedBackend {
 /// l'ouverture de la base — nommé par sa clé de manifeste. Les entités sont
 /// comparées après fusion de leur schéma JSON (un champ ajouté au schéma est
 /// un changement d'entité), sans leur description.
-fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> Vec<String> {
+pub(crate) fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> Vec<String> {
     fn value<T: Serialize>(v: &T) -> Value {
         serde_json::to_value(v).unwrap_or(Value::Null)
     }

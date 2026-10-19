@@ -98,6 +98,19 @@ impl Miroir {
     /// le corps est une chaîne, le nom finit par `.md` et n'a ni `..` ni chemin
     /// absolu, la racine existe ou peut être créée.
     pub fn nouveau(entite: &str, racine: PathBuf, decl: FilesDecl, schema: &Value, dossier_du_manifeste: &Path) -> Result<Self, String> {
+        Self::nouveau_avec(entite, racine, decl, schema, dossier_du_manifeste, &crate::lecteur::Disque)
+    }
+
+    /// [`Self::nouveau`], par un lecteur (le disque, ou un recouvrement) : le
+    /// gabarit d'un miroir se lit comme toute déclaration du chargement.
+    pub fn nouveau_avec(
+        entite: &str,
+        racine: PathBuf,
+        decl: FilesDecl,
+        schema: &Value,
+        dossier_du_manifeste: &Path,
+        lecteur: &dyn crate::lecteur::Lecteur,
+    ) -> Result<Self, String> {
         let props = schema["properties"].as_object().cloned().unwrap_or_default();
         let ici = |quoi: &str, champ: &str| -> Result<(), String> {
             if props.contains_key(champ) {
@@ -141,7 +154,7 @@ impl Miroir {
         let gabarit = match &decl.template {
             Some(g) => {
                 let chemin = dossier_du_manifeste.join(g);
-                Some(std::fs::read_to_string(&chemin).map_err(|e| format!("{entite}.files.template : {} : {e}", chemin.display()))?)
+                Some(lecteur.lire_texte(&chemin).map_err(|e| format!("{entite}.files.template : {} : {e}", chemin.display()))?)
             }
             None => None,
         };

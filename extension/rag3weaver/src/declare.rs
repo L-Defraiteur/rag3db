@@ -82,6 +82,40 @@ impl Backend {
     /// rechargement, mises en service et commitées en un commit avec leur raison — ou aucune.
     /// Un composant neuf en a plusieurs (sa déclaration, sa vue, son graphe de clic) : posés un à
     /// un, l'ensemble à moitié écrit serait refusé.
+    /// **Valider un ensemble de déclarations sans rien écrire** (une
+    /// proposition, page 08) : les mêmes chemins que [`Self::declare_set`],
+    /// puis le chargement entier sur un recouvrement — le dossier du backend
+    /// sous les fichiers proposés, en mémoire ([`crate::lecteur::Recouvrement`])
+    /// — et la règle de `check_reload` : un changement de base, de modèles ou
+    /// d'entités est une migration, pas une déclaration. Rend le refus tel que
+    /// le chargement le dit (chemin et ligne quand il les sait). L'arbre n'est
+    /// pas touché.
+    pub fn valider_sur(&self, files: &[(String, String)]) -> Result<(), String> {
+        if files.is_empty() {
+            return Err("une proposition nomme au moins un fichier".into());
+        }
+        let mut vus = std::collections::BTreeSet::new();
+        if let Some((p, _)) = files.iter().find(|(p, _)| !vus.insert(p.as_str())) {
+            return Err(format!("« {p} » est proposé deux fois dans le même ensemble"));
+        }
+        let mut absolus = Vec::new();
+        for (path, content) in files {
+            let target = self.declaration_path(path)?;
+            absolus.push((target.to_string_lossy().to_string(), content.clone()));
+        }
+        let current = self.prepared();
+        let recouvrement = crate::lecteur::Recouvrement::sur(&current.directory, &absolus);
+        let next = crate::backend::PreparedBackend::load_avec(current.manifest_path(), &recouvrement)?;
+        let changed = crate::backend::opening_changes(&current, &next);
+        if !changed.is_empty() {
+            return Err(format!(
+                "{} change — fixé à l'ouverture de la base : c'est une migration, pas une déclaration",
+                changed.join(", ")
+            ));
+        }
+        Ok(())
+    }
+
     pub fn declare_set(&self, files: &[(String, String)], reason: &str) -> Result<Declared, String> {
         let _one = DECLARING.lock().unwrap_or_else(|e| e.into_inner());
         if reason.trim().is_empty() {

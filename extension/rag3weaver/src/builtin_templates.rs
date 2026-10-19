@@ -160,34 +160,44 @@ pub fn builtin_name_of(path: &Path) -> Option<&'static str> {
 /// Pour chaque valeur du manifeste qui désigne un fichier local copiant un
 /// gabarit livré : `(valeur, chemin résolu, nom livré, identique ?)`.
 pub fn local_copies(directory: &Path, manifest: &Value) -> Vec<(String, PathBuf, &'static str, bool)> {
-    fn parcourir(v: &Value, dir: &Path, out: &mut Vec<(String, PathBuf, &'static str, bool)>) {
+    local_copies_avec(directory, manifest, &crate::lecteur::Disque)
+}
+
+/// [`local_copies`], par un lecteur (le disque, ou un recouvrement).
+pub fn local_copies_avec(directory: &Path, manifest: &Value, lecteur: &dyn crate::lecteur::Lecteur) -> Vec<(String, PathBuf, &'static str, bool)> {
+    fn parcourir(v: &Value, dir: &Path, lecteur: &dyn crate::lecteur::Lecteur, out: &mut Vec<(String, PathBuf, &'static str, bool)>) {
         match v {
             Value::String(s) if !s.starts_with(PREFIX) && EXTENSIONS.iter().any(|x| s.ends_with(x)) => {
                 let p = dir.join(s);
-                if !p.is_file() {
+                if !lecteur.est_fichier(&p) {
                     return;
                 }
                 let canon = p.canonicalize().unwrap_or(p.clone());
                 if let Some(nom) = builtin_name_of(&canon) {
-                    let pareil = std::fs::read(&canon).ok().as_deref() == get(nom);
+                    let pareil = lecteur.lire(&p).ok().as_deref() == get(nom);
                     if !out.iter().any(|(v, ..)| v == s) {
                         out.push((s.clone(), canon, nom, pareil));
                     }
                 }
             }
-            Value::Array(a) => a.iter().for_each(|x| parcourir(x, dir, out)),
-            Value::Object(o) => o.values().for_each(|x| parcourir(x, dir, out)),
+            Value::Array(a) => a.iter().for_each(|x| parcourir(x, dir, lecteur, out)),
+            Value::Object(o) => o.values().for_each(|x| parcourir(x, dir, lecteur, out)),
             _ => {}
         }
     }
     let mut out = Vec::new();
-    parcourir(manifest, directory, &mut out);
+    parcourir(manifest, directory, lecteur, &mut out);
     out
 }
 
 /// **Les copies locales qui diffèrent du gabarit livré du même nom.**
 pub fn drift(directory: &Path, manifest: &Value) -> Vec<Drift> {
-    local_copies(directory, manifest)
+    drift_avec(directory, manifest, &crate::lecteur::Disque)
+}
+
+/// [`drift`], par un lecteur (le disque, ou un recouvrement).
+pub fn drift_avec(directory: &Path, manifest: &Value, lecteur: &dyn crate::lecteur::Lecteur) -> Vec<Drift> {
+    local_copies_avec(directory, manifest, lecteur)
         .into_iter()
         .filter(|(.., pareil)| !pareil)
         .map(|(path, _, builtin, _)| Drift { path, builtin: builtin.to_string() })

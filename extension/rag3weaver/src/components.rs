@@ -81,8 +81,13 @@ pub type Libs = BTreeMap<String, Lib>;
 
 /// Lit `libs.json` (absent : aucune bibliothèque).
 pub fn read_libs(backend_dir: &Path) -> Result<Libs, String> {
+    read_libs_avec(backend_dir, &crate::lecteur::Disque)
+}
+
+/// [`read_libs`], par un lecteur (le disque, ou un recouvrement).
+pub fn read_libs_avec(backend_dir: &Path, lecteur: &dyn crate::lecteur::Lecteur) -> Result<Libs, String> {
     let chemin = backend_dir.join(LIBS_FILE);
-    match std::fs::read_to_string(&chemin) {
+    match lecteur.lire_texte(&chemin) {
         Ok(t) => serde_json::from_str(&t).map_err(|e| format!("{LIBS_FILE} : {e}")),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Libs::new()),
         Err(e) => Err(format!("{LIBS_FILE} : {e}")),
@@ -286,8 +291,14 @@ impl Components {
     /// La même, contre ce que le backend permet à un écran : les effets et le graphe de clic
     /// de chaque composant s'y vérifient ([`EcranDuBackend`]).
     pub fn load_in(backend_dir: &Path, ecran: &EcranDuBackend) -> Result<Self, Vec<String>> {
+        Self::load_in_avec(backend_dir, ecran, &crate::lecteur::Disque)
+    }
+
+    /// [`Self::load_in`], par un lecteur (le disque, ou un recouvrement) : une
+    /// proposition de composant se valide sans être écrite.
+    pub fn load_in_avec(backend_dir: &Path, ecran: &EcranDuBackend, lecteur: &dyn crate::lecteur::Lecteur) -> Result<Self, Vec<String>> {
         let mut errors = Vec::new();
-        let libs = match read_libs(backend_dir) {
+        let libs = match read_libs_avec(backend_dir, lecteur) {
             Ok(l) => l,
             Err(e) => return Err(vec![e]),
         };
@@ -306,21 +317,21 @@ impl Components {
                 }
             }
             for (fichier, hash) in &lib.files {
-                if !store_path(backend_dir, hash).exists() {
+                if !lecteur.est_fichier(&store_path(backend_dir, hash)) {
                     errors.push(format!("{LIBS_FILE} : {nom}/{fichier} absent du magasin ({STORE_DIR}/{hash}) — le ranger par la commande des libs"));
                 }
             }
         }
         let dir = backend_dir.join("components");
         let mut components = BTreeMap::new();
-        let mut chemins: Vec<PathBuf> = match std::fs::read_dir(&dir) {
-            Ok(e) => e.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.to_string_lossy().ends_with(SUFFIX)).collect(),
+        let mut chemins: Vec<PathBuf> = match lecteur.lister(&dir) {
+            Ok(e) => e.into_iter().filter(|p| p.to_string_lossy().ends_with(SUFFIX)).collect(),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(vec![format!("components/ : {e}")]),
         };
         chemins.sort();
         for chemin in chemins {
-            match read_component(&chemin, &dir, &libs, ecran) {
+            match read_component(&chemin, &dir, &libs, ecran, lecteur) {
                 Ok(c) => {
                     if components.contains_key(&c.name) {
                         errors.push(format!("components/ : le composant « {} » est déclaré deux fois", c.name));
@@ -414,9 +425,9 @@ impl Components {
     }
 }
 
-fn read_component(chemin: &Path, dir: &Path, libs: &Libs, ecran: &EcranDuBackend) -> Result<ComponentDecl, String> {
+fn read_component(chemin: &Path, dir: &Path, libs: &Libs, ecran: &EcranDuBackend, lecteur: &dyn crate::lecteur::Lecteur) -> Result<ComponentDecl, String> {
     let montre = format!("components/{}", chemin.file_name().unwrap().to_string_lossy());
-    let texte = std::fs::read_to_string(chemin).map_err(|e| format!("{montre} : {e}"))?;
+    let texte = lecteur.lire_texte(chemin).map_err(|e| format!("{montre} : {e}"))?;
     let f: ComponentFile = serde_json::from_str(&texte).map_err(|e| format!("{montre} : {e}"))?;
     let source = Path::new(&f.source);
     if source.is_absolute() || source.components().any(|c| !matches!(c, PathComponent::Normal(_))) {
@@ -425,7 +436,7 @@ fn read_component(chemin: &Path, dir: &Path, libs: &Libs, ecran: &EcranDuBackend
     if !matches!(source.extension().and_then(|e| e.to_str()), Some("tsx" | "jsx" | "ts" | "js")) {
         return Err(format!("{montre} : le source « {} » n'est ni .tsx, ni .jsx, ni .ts, ni .js", f.source));
     }
-    if !dir.join(source).is_file() {
+    if !lecteur.est_fichier(&dir.join(source)) {
         return Err(format!("{montre} : le source « {} » est absent", f.source));
     }
     let ports = |cote: &str, map: Map<String, Value>| -> Result<Vec<DeclaredPort>, String> {
@@ -469,7 +480,7 @@ fn read_component(chemin: &Path, dir: &Path, libs: &Libs, ecran: &EcranDuBackend
         if p.is_absolute() || p.components().any(|c| !matches!(c, PathComponent::Normal(_))) || !clic.ends_with(".clic.mmd") {
             return Err(format!("{montre} : le graphe de clic « {clic} » doit être un <nom>.clic.mmd de components/"));
         }
-        let texte = std::fs::read_to_string(dir.join(p)).map_err(|e| format!("{montre} : le graphe de clic « {clic} » : {e}"))?;
+        let texte = lecteur.lire_texte(&dir.join(p)).map_err(|e| format!("{montre} : le graphe de clic « {clic} » : {e}"))?;
         let ctx = crate::dataflow::clic::ContexteClic {
             effets: f.effets.clone(),
             outils: ecran.outils.clone(),

@@ -186,6 +186,8 @@ pub mod refs;
 pub mod atelier;
 pub mod backend_tools;
 pub mod declare;
+/// Le lecteur des déclarations : le disque, ou un recouvrement en mémoire (valider sans écrire).
+pub mod lecteur;
 /// Les composants d'interface déclarés comme des nœuds (`components/`), et
 /// leurs bibliothèques rangées par contenu (`libs.json`, `.libs/`).
 pub mod components;

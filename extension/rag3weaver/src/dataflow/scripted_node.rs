@@ -417,8 +417,13 @@ pub const DECLARATION_SUFFIX: &str = ".node.json";
 
 /// Lit une déclaration et son script.
 pub fn read_declaration(path: &std::path::Path) -> Result<ScriptedNodeDecl, String> {
+    read_declaration_avec(path, &crate::lecteur::Disque)
+}
+
+/// [`read_declaration`], par un lecteur (le disque, ou un recouvrement).
+pub fn read_declaration_avec(path: &std::path::Path, lecteur: &dyn crate::lecteur::Lecteur) -> Result<ScriptedNodeDecl, String> {
     let shown = path.display();
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{shown}: {e}"))?;
+    let text = lecteur.lire_texte(path).map_err(|e| format!("{shown}: {e}"))?;
     let file: DeclFile = serde_json::from_str(&text).map_err(|e| format!("{shown}: {e}"))?;
     let relative = std::path::Path::new(&file.script);
     if relative.is_absolute()
@@ -449,7 +454,8 @@ pub fn read_declaration(path: &std::path::Path) -> Result<ScriptedNodeDecl, Stri
         .parent()
         .unwrap_or(std::path::Path::new("."))
         .join(relative);
-    let source = std::fs::read_to_string(&script_path)
+    let source = lecteur
+        .lire_texte(&script_path)
         .map_err(|e| format!("{shown}: script '{}': {e}", file.script))?;
     let ports = |side: &str, map: Map<String, Value>| -> Result<Vec<DeclaredPort>, String> {
         map.into_iter()
@@ -498,13 +504,22 @@ pub fn discover(
     dir: &std::path::Path,
     limits: &ScriptLimits,
 ) -> Result<Vec<ScriptedNodeFactory>, Vec<String>> {
-    let entries = match std::fs::read_dir(dir) {
+    discover_avec(dir, limits, &crate::lecteur::Disque)
+}
+
+/// [`discover`], par un lecteur (le disque, ou un recouvrement).
+pub fn discover_avec(
+    dir: &std::path::Path,
+    limits: &ScriptLimits,
+    lecteur: &dyn crate::lecteur::Lecteur,
+) -> Result<Vec<ScriptedNodeFactory>, Vec<String>> {
+    let entries = match lecteur.lister(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
         Err(e) => return Err(vec![format!("{}: {e}", dir.display())]),
     };
     let mut paths: Vec<_> = entries
-        .filter_map(|e| e.ok().map(|e| e.path()))
+        .into_iter()
         .filter(|p| {
             p.file_name()
                 .and_then(|n| n.to_str())
@@ -516,7 +531,7 @@ pub fn discover(
     let mut errors = Vec::new();
     let mut names = std::collections::BTreeSet::new();
     for path in paths {
-        match read_declaration(&path)
+        match read_declaration_avec(&path, lecteur)
             .and_then(|decl| ScriptedNodeFactory::new(decl, limits.clone()))
         {
             Ok(factory) => {

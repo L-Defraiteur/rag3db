@@ -97,7 +97,17 @@ impl Routes {
         directory: &Path,
         tools: &dyn Fn(&str) -> bool,
     ) -> Result<Self, String> {
-        let views = read_views(&directory.join("views"))?;
+        Self::load_avec(decls, directory, tools, &crate::lecteur::Disque)
+    }
+
+    /// [`Self::load`], par un lecteur (le disque, ou un recouvrement).
+    pub fn load_avec(
+        decls: &BTreeMap<String, RouteDecl>,
+        directory: &Path,
+        tools: &dyn Fn(&str) -> bool,
+        lecteur: &dyn crate::lecteur::Lecteur,
+    ) -> Result<Self, String> {
+        let views = read_views(&directory.join("views"), lecteur)?;
         let mut routes: Vec<Route> = Vec::new();
         for (key, decl) in decls {
             let at = |why: String| format!("route « {key} » : {why}");
@@ -314,17 +324,16 @@ fn matches(segments: &[Segment], parts: &[&str]) -> Option<Map<String, Value>> {
     Some(params)
 }
 
-fn read_views(dir: &Path) -> Result<BTreeMap<String, String>, String> {
+fn read_views(dir: &Path, lecteur: &dyn crate::lecteur::Lecteur) -> Result<BTreeMap<String, String>, String> {
     let mut views = BTreeMap::new();
-    if !dir.exists() {
+    if !lecteur.est_dossier(dir) {
         return Ok(views);
     }
     let mut stack = vec![dir.to_path_buf()];
     while let Some(folder) = stack.pop() {
-        let entries = std::fs::read_dir(&folder).map_err(|e| format!("views/ : {e}"))?;
-        for entry in entries {
-            let path = entry.map_err(|e| format!("views/ : {e}"))?.path();
-            if path.is_dir() {
+        let entries = lecteur.lister(&folder).map_err(|e| format!("views/ : {e}"))?;
+        for path in entries {
+            if lecteur.est_dossier(&path) {
                 stack.push(path);
                 continue;
             }
@@ -342,8 +351,7 @@ fn read_views(dir: &Path) -> Result<BTreeMap<String, String>, String> {
                 .map(|c| c.as_os_str().to_string_lossy())
                 .collect::<Vec<_>>()
                 .join("/");
-            let source =
-                std::fs::read_to_string(&path).map_err(|e| format!("views/{name} : {e}"))?;
+            let source = lecteur.lire_texte(&path).map_err(|e| format!("views/{name} : {e}"))?;
             views.insert(name, source);
         }
     }
