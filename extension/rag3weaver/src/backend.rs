@@ -3560,6 +3560,44 @@ impl Backend {
     /// pas ici : le catalogue donne `"event_bus"`, par lequel on **publie**.
     /// C'est le montage qui ajoute le premier, parce que lui seul sait sur
     /// quel bus les curseurs ont été ouverts.
+    /// **L'instantané d'un appel de lecture** (L6) : un graphe dont tous les
+    /// nœuds ne font que lire ([`crate::dataflow::NodeRegistry::snapshot_safe`]),
+    /// sur la cellule de la vue, lit dans une transaction READ ONLY d'une
+    /// connexion du pool : toutes ses requêtes voient le même état, et un lot
+    /// validé entre deux d'entre elles ne se voit pas à moitié. `"conn"`,
+    /// `"texte_natif"` et la vue de l'appel passent sur cette connexion ; la
+    /// garde tombe avec les services de l'appel, qui valide et rend la
+    /// connexion. Pool plein au-delà de l'attente : l'appel lit comme avant, et
+    /// le dit.
+    fn poser_l_instantane(&self, prepared: &PreparedBackend, def: &GraphDefinition, services: &mut ServiceRegistry) {
+        if !prepared.nodes.snapshot_safe(def) {
+            return;
+        }
+        let Some(vue) = self.read_view.current() else { return };
+        let cell = CELL_OF_CALL.with(|c| c.borrow().clone());
+        if cell.as_ref().is_some_and(|c| *c != vue.scope) {
+            return;
+        }
+        let Some(pool) = vue.pool.clone() else { return };
+        let Some(instantane) = pool.instantane(crate::read_pool::ATTENTE) else {
+            services.register(
+                crate::read_view::READ_VIEW_SERVICE,
+                Arc::new(crate::read_view::ReadViewCell::avec(vue.sans_instantane())),
+            );
+            return;
+        };
+        let conn = instantane.conn();
+        let appel = vue.sur_connexion(conn.clone());
+        services.register("conn", crate::dataflow::services::ConnService(conn.clone()));
+        if vue.texte_natif {
+            let natif: Arc<dyn crate::search_backend::SearchBackend> =
+                Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(conn));
+            services.register("texte_natif", natif);
+        }
+        services.register(crate::read_view::READ_VIEW_SERVICE, Arc::new(crate::read_view::ReadViewCell::avec(appel)));
+        services.register(crate::read_pool::SERVICE, Arc::new(instantane));
+    }
+
     fn build_services(&self, prepared: &PreparedBackend) -> ServiceRegistry {
         let mut services = ServiceRegistry::new();
         // La cellule de l'appel, si `call_in` l'a posée : ses index et sa
@@ -3758,6 +3796,7 @@ impl Backend {
         // Des services neufs à chaque appel : les appels parallèles de l'hôte
         // (lot L5) ne partagent rien d'ici, et l'arrêt garde toutes les poignées.
         let mut services = self.build_services(prepared);
+        self.poser_l_instantane(prepared, def, &mut services);
         // **Le run se publie** (`RunStarted`, `NodeRun`, `RunFinished`) sur
         // `dataflow`, dans la cellule de l'appel : ce qu'un appel exécute se
         // voit (la trace, le DAG vivant de l'IDE). Sans `run_topic`, chaque
@@ -3880,10 +3919,19 @@ impl Backend {
             .as_ref()
             .and_then(|s| crate::code_sync::pending_resume(s.as_ref()))
             .map(|n| json!({"indexing": true, "files": n}));
+        // Les instantanés de lecture (L6) : les connexions ouvertes, le
+        // plafond, et les appels passés sans (pool plein). Hors du catalogue.
+        let lectures = self.read_view.current().and_then(|v| v.pool.clone()).map(|p| {
+            let (ouvertes, plafond) = p.occupation();
+            json!({"connections": ouvertes, "max": plafond, "without_snapshot": p.sans_instantane(), "shortened_snapshots": p.ecourtes()})
+        });
         // Un verrou court (la réindexation d'un fichier) s'attend ; seule une
         // tenue longue rend « busy ».
         let Some(cat) = crate::dataflow::catalog_read::lock_for_read(&self.catalog) else {
             let mut occupe = json!({"busy": true});
+            if let Some(l) = &lectures {
+                occupe["reads"] = l.clone();
+            }
             if let Some(r) = reprise {
                 occupe["resume"] = r;
             }
@@ -3930,6 +3978,9 @@ impl Backend {
         }
         if !montres.is_empty() {
             etats.insert("watches".to_string(), Value::Object(montres));
+        }
+        if let Some(l) = lectures {
+            etats.insert("reads".to_string(), l);
         }
         // Les avertissements, à côté des entités (leurs noms commencent par
         // une majuscule, `warnings` ne peut pas en être une) : sans service
@@ -5641,9 +5692,11 @@ mod tests {
     /// l'appelle et tient le lot ouvert 2 s (le crochet `__pause_du_lot__`).
     /// Pendant ce temps, `usages arrivee` (par la vue de lecture, sans le
     /// mutex) voit soit rien, soit tout : jamais la définition sans son appel.
+    /// Ses requêtes (le pivot, les définitions, les rendez-vous) lisent dans
+    /// l'instantané de l'appel (L6) : un COMMIT du lot entre deux d'entre elles
+    /// ne se voit plus (environ 1 rouge sur 10 sous charge avant L6).
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
-    #[ignore = "instable connu, environ 1 rouge sur 10 sous charge : un rapport à cheval sur le COMMIT du lot (ses requêtes lisent chacune dans sa transaction) ; ticket docs/tickets/2026-10-18-trois-temoins-rougissent-sous-charge.md, deuxième ligne ; le lot L6 (un instantané par appel d'outil) le corrige et retire cette marque"]
     fn a_read_during_a_reindexed_batch_sees_the_batch_before_whole() {
         let (dir, backend) = backend_qui_surveille();
         backend.mount_reactions().unwrap();

@@ -3169,4 +3169,81 @@ mod tests {
             echecs.join("\n")
         );
     }
+
+    /// **Chaque outil de lecture livré lit dans un instantané, aucun outil qui
+    /// écrit** (L6, 19 octobre 2026) : tous les nœuds du graphe portent
+    /// `snapshot_safe` sous leur configuration, ou l'appel lit comme avant L6,
+    /// ses requêtes sur des états différents. La liste nomme les outils des
+    /// gabarits livrés ; un outil ajouté s'y range d'un côté ou de l'autre.
+    #[cfg(feature = "code")]
+    #[test]
+    fn les_outils_de_lecture_livres_lisent_dans_un_instantane() {
+        let (mut nodes, _) = builtin_graph_tools().expect("les registres fournis");
+        nodes.register(Box::new(crate::backend_nodes::EntityRecordFactory));
+        nodes.register(Box::new(crate::backend_nodes::EntityBatchFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotFinishFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotUndoFactory));
+        nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
+        nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
+        let racine = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        let lecture = [
+            "tools/search_workspace.mmd",
+            "tools/search_structured.mmd",
+            "tools/read.mmd",
+            "tools/grep.mmd",
+            "tools/list.mmd",
+            "tools/schema.mmd",
+            "tools/estimate.mmd",
+            "tools/usages.mmd",
+            "tools/impact.mmd",
+            "tools/callees.mmd",
+            "tools/search.mmd",
+            "tools/search_base.mmd",
+            "tools/search_dense_related.mmd",
+            "tools/search_related_scoped.mmd",
+            "tools/select_structured.mmd",
+            "tools/impact_fichier.mmd",
+            "tools/links.mmd",
+            "tools/apres-motif-ailleurs.mmd",
+            "tools/tail.mmd",
+            "backends/notebook/graphs/get.mmd",
+            "backends/validated-result/graphs/get.mmd",
+        ];
+        let ecriture = [
+            "tools/edit.mmd",
+            "tools/run.mmd",
+            "tools/run_bg.mmd",
+            "tools/wait.mmd",
+            "tools/index.mmd",
+            "tools/link.mmd",
+            "tools/place.mmd",
+            "tools/adopt.mmd",
+            "tools/begin_snapshot.mmd",
+            "tools/ingest_snapshot.mmd",
+            "tools/link_snapshot.mmd",
+            "tools/finish_snapshot.mmd",
+            "tools/undo_snapshot.mmd",
+            "tools/abort_snapshot.mmd",
+            "backends/notebook/graphs/put.mmd",
+            "backends/memory/graphs/add_ref.mmd",
+            "backends/memory/graphs/create_ref_type.mmd",
+            "backends/validated-result/graphs/submit.mmd",
+        ];
+        let definition = |f: &str| {
+            let source = std::fs::read_to_string(racine.join(f)).unwrap_or_else(|e| panic!("{f} : {e}"));
+            GraphTool::from_mermaid(&source).unwrap_or_else(|e| panic!("{f} : {e}")).template
+        };
+        let sans: Vec<String> = lecture
+            .iter()
+            .filter(|f| !nodes.snapshot_safe(&definition(f)))
+            .map(|f| {
+                let d = definition(f);
+                let types: Vec<&str> = d.nodes.iter().map(|n| n.node_type.as_str()).collect();
+                format!("{f} ({types:?})")
+            })
+            .collect();
+        assert!(sans.is_empty(), "ces outils de lecture n'ont pas d'instantané : {sans:?}");
+        let avec: Vec<&str> = ecriture.iter().copied().filter(|f| nodes.snapshot_safe(&definition(f))).collect();
+        assert!(avec.is_empty(), "ces outils écrivent ou lancent un run, et liraient dans un instantané : {avec:?}");
+    }
 }

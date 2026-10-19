@@ -1050,6 +1050,10 @@ impl Node for RenderResultsNode {
 pub struct RenderResultsNodeFactory;
 
 impl NodeFactory for RenderResultsNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let mut node = RenderResultsNode::new(name);
         match config.get("format").and_then(|v| v.as_str()) {

@@ -168,6 +168,10 @@ use super::node_registry::{ConfigParam, ConfigParamType, NodeFactory, NodeSchema
 pub struct SchemaNodeFactory;
 
 impl NodeFactory for SchemaNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let mut node = SchemaNode::new(name);
         if let Some(t) = config.get("target").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {

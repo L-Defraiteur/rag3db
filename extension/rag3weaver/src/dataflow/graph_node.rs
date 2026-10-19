@@ -450,6 +450,10 @@ impl GraphNodeFactory {
 }
 
 impl NodeFactory for GraphNodeFactory {
+    // L6 : lit seulement si tout son sous-graphe ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        self.registry.snapshot_safe(&self.definition)
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let definition = if self.schema.config_params.is_empty() {
             self.definition.clone()

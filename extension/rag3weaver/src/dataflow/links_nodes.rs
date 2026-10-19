@@ -487,6 +487,10 @@ fn liste(v: Option<&serde_json::Value>) -> Vec<String> {
 }
 
 impl NodeFactory for LinksNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let s = |k: &str| config.get(k).and_then(|v| v.as_str()).map(str::to_string);
         let entier = |k: &str, defaut: u64| config.get(k).and_then(|v| v.as_u64()).unwrap_or(defaut);
@@ -793,6 +797,10 @@ impl Node for CohesionBoostNode {
 pub struct CohesionBoostNodeFactory;
 
 impl NodeFactory for CohesionBoostNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, _config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         Ok(Box::new(CohesionBoostNode { node_name: name.to_string() }))
     }

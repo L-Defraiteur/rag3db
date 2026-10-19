@@ -517,6 +517,10 @@ fn usize_param(config: &serde_json::Value, key: &str, node: &str) -> Result<Opti
 pub struct ReadFileNodeFactory;
 
 impl NodeFactory for ReadFileNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let path = config.get("path").and_then(|v| v.as_str()).ok_or("ReadFileNode: missing 'path' config")?;
         let offset = usize_param(config, "offset", "ReadFileNode")?.unwrap_or(1);
@@ -555,6 +559,10 @@ impl NodeFactory for ReadFileNodeFactory {
 pub struct GrepNodeFactory;
 
 impl NodeFactory for GrepNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let pattern = config.get("pattern").and_then(|v| v.as_str()).ok_or("GrepNode: missing 'pattern' config")?;
         let opts = GrepOptions {
@@ -656,6 +664,10 @@ impl NodeFactory for CodeIngestNodeFactory {
 pub struct ListFilesNodeFactory;
 
 impl NodeFactory for ListFilesNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let mut node = ListFilesNode::new(name);
         if let Some(p) = config.get("path_prefix").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {

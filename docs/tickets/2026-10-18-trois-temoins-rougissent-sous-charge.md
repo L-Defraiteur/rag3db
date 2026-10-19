@@ -52,6 +52,13 @@ principal, après L5 : un instantané par appel d'outil, sur un réservoir de co
 le corrige, retire la marque et ferme cette ligne. Les deux autres témoins du ticket restent au
 proto.
 
+**Fermé par L6 (19 octobre 2026).** Un appel de lecture lit maintenant dans un instantané READ
+ONLY d'une connexion du pool, ouvert à sa première requête : le pivot, les définitions et les
+rendez-vous d'`usages` voient le même état, et un COMMIT du lot entre deux d'entre eux ne se voit
+plus. La marque `#[ignore]` est retirée. Sur luciepc, lib cf71c929d, seize boucles de calcul en
+fond : **0 rouge sur 20 passes**, contre environ 1 sur 10 avant. Témoin direct, sans montre :
+`read_pool::tests::deux_requetes_d_un_instantane_voient_le_meme_etat_autour_d_un_commit`.
+
 ## `the_watch_does_not_index_what_the_index_excludes` : un défaut de la montre, corrigé (18 octobre 2026, la nuit)
 
 Départagé sous charge (le test seul, la lib entière en fond et seize boucles CPU, vingt passes,

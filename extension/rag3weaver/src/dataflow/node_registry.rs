@@ -242,6 +242,16 @@ pub trait NodeFactory: Send + Sync {
     fn schema_for(&self, _config: &serde_json::Value) -> NodeSchema {
         self.schema()
     }
+
+    /// **Le nœud lit, et rien d'autre** (L6) : un graphe dont tous les nœuds
+    /// le disent lit dans un instantané de lecture, toutes ses requêtes sur le
+    /// même état. Faux au défaut : un nœud qui écrit, ou lance un run en fond,
+    /// ne le pose pas — un oubli ne fait que perdre l'instantané, jamais lire
+    /// faux. La configuration compte : `EntityRecordNode` lit sous
+    /// `action='get'` et écrit sous `action='put'`.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        false
+    }
 }
 
 // ─── NodeRegistry ────────────────────────────────────────────────────────────
@@ -312,6 +322,13 @@ impl NodeRegistry {
     }
 
     /// List all registered node types.
+    /// Tous les nœuds de `def` lisent seulement ([`NodeFactory::snapshot_safe`]) :
+    /// le graphe peut lire dans un instantané. Un type inconnu dit non.
+    pub fn snapshot_safe(&self, def: &crate::dataflow::checkpoint::GraphDefinition) -> bool {
+        !def.nodes.is_empty()
+            && def.nodes.iter().all(|n| self.factories.get(&n.node_type).is_some_and(|f| f.snapshot_safe(&n.config)))
+    }
+
     pub fn types(&self) -> Vec<&str> {
         self.factories.keys().map(String::as_str).collect()
     }
@@ -337,7 +354,7 @@ impl NodeRegistry {
 /// ```
 #[macro_export]
 macro_rules! simple_factory {
-    ($factory:ident, $node:ty, $type_name:expr, $desc:expr, $inputs:expr, $outputs:expr $(,)?) => {
+    ($factory:ident, $node:ty, $type_name:expr, $desc:expr, $inputs:expr, $outputs:expr $(, $lecture:ident)? $(,)?) => {
         pub struct $factory;
 
         impl $crate::dataflow::node_registry::NodeFactory for $factory {
@@ -352,6 +369,14 @@ macro_rules! simple_factory {
             fn node_type(&self) -> &'static str {
                 $type_name
             }
+
+            // `lecture` en dernier argument : le nœud ne fait que lire (L6).
+            $(
+                fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+                    let _ = stringify!($lecture);
+                    true
+                }
+            )?
 
             fn schema(&self) -> $crate::dataflow::node_registry::NodeSchema {
                 $crate::dataflow::node_registry::NodeSchema {
@@ -369,7 +394,7 @@ macro_rules! simple_factory {
 /// Like `simple_factory!` but for nodes whose constructor is `Type::new(name: &str)`.
 #[macro_export]
 macro_rules! named_factory {
-    ($factory:ident, $node:ty, $type_name:expr, $desc:expr, $inputs:expr, $outputs:expr $(,)?) => {
+    ($factory:ident, $node:ty, $type_name:expr, $desc:expr, $inputs:expr, $outputs:expr $(, $lecture:ident)? $(,)?) => {
         pub struct $factory;
 
         impl $crate::dataflow::node_registry::NodeFactory for $factory {
@@ -384,6 +409,14 @@ macro_rules! named_factory {
             fn node_type(&self) -> &'static str {
                 $type_name
             }
+
+            // `lecture` en dernier argument : le nœud ne fait que lire (L6).
+            $(
+                fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+                    let _ = stringify!($lecture);
+                    true
+                }
+            )?
 
             fn schema(&self) -> $crate::dataflow::node_registry::NodeSchema {
                 $crate::dataflow::node_registry::NodeSchema {

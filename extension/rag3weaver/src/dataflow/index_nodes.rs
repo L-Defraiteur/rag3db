@@ -188,6 +188,10 @@ fn estimate_of(
 pub struct EstimateNodeFactory;
 
 impl NodeFactory for EstimateNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let mut node = EstimateNode::new(name);
         if let Some(p) = config.get("probe").and_then(|v| v.as_bool()) {

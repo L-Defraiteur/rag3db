@@ -486,6 +486,8 @@ impl Node for SearchSourceNode {
             },
             _ => Some(catalog.lock().unwrap()), // L4 : Strict, ou sans vue
         };
+        // Par la vue sans instantané (pool plein, L6) : la réponse le dit.
+        let sans_instantane = garde.is_none() && vue.as_ref().is_some_and(|v| v.sans_instantane);
         let (reste_en_file, partiel, mut avertissements, embedding, sparse) = if let (None, Some(v)) = (&garde, &vue) {
             let mut w: Vec<String> = Vec::new();
             if let Some(condition) = options.filter_condition.as_ref() {
@@ -510,7 +512,21 @@ impl Node for SearchSourceNode {
                  (consistency « strict » pour l'attendre).",
                 crate::dataflow::catalog_read::WRITER_HOLDS
             ));
-            (0, true, w, None, None)
+            // **La requête s'embarque ici, avant toute lecture** (L6) : c'est le
+            // travail le plus lent d'une recherche, et il ne lit pas la base.
+            // L'instantané de l'appel s'ouvre à la première requête : fait par
+            // le nœud vectoriel, en parallèle du plein texte, l'embarquement
+            // l'aurait tenu ouvert, et un point de reprise forcé avec lui.
+            let signaux = options.signals.unwrap_or(target.default_signals);
+            let embedding = if signaux.vector() {
+                ctx.service::<Arc<dyn Embedder>>("embedder")
+                    .filter(|e| !e.is_absent())
+                    .and_then(|e| crate::search::embed_query(&**e, &self.query, &mut HashMap::new()).ok())
+                    .filter(|e| !e.is_empty())
+            } else {
+                None
+            };
+            (0, true, w, embedding, None)
         } else {
             let mut cat = garde.expect("le catalogue est tenu quand la vue ne sert pas");
             if let Some(condition) = options.filter_condition.as_ref() {
@@ -580,6 +596,9 @@ impl Node for SearchSourceNode {
         // résultat plus pauvre que prévu (vecteurs en cours, index occupé).
         if let Some(l) = ligne_etat {
             avertissements.insert(0, l);
+        }
+        if sans_instantane {
+            avertissements.push(crate::read_pool::SANS_INSTANTANE.to_string());
         }
         for a in &avertissements {
             ctx.warn(a);
