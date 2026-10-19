@@ -54,15 +54,25 @@ d'index et celui du repos)** :
 | famille | Anon + échange |
 |---|---|
 | les arènes de malloc : 74 projections anonymes alignées à 64 Mio, 93 fils vivants | **1 263** |
-| **une seule allocation anonyme de 960 Mio** (à 0x7f872d9de000) | **646** |
+| **une projection anonyme de 960 Mio** (à 0x7f872d9de000) : la fusion, par le noyau, de 32 blocs de malloc de 32 Mio projetés côte à côte (G, malloc_info) | **646** |
 | le tampon : la région des pages (807) et celle des pages temporaires (249, réservée à la taille du tampon, `buffer_manager.cpp:73`) | 1 056, sous son budget |
 | autres anonymes (deux de 96 Mio, et le reste) et `[heap]` | environ 170 |
 
 Le tampon n'est donc pas en cause. Ce qui dépasse, c'est la mémoire encore allouée dans les arènes
-après `malloc_trim`, et un bloc vivant de 960 Mio. Hors du tampon, environ 2,1 Go sont tenus au
-repos ; sans les vecteurs, environ 1,3 Go (seq-0056, B). Les vecteurs ajoutent environ 0,8 Go, dont
-le bloc de 960 Mio est le suspect : un tampon d'embarquement, des lots reçus ou des files de la
-dette gardés après le paiement, côté rag3weaver. C'est à chercher par G.
+après `malloc_trim`, et 32 blocs vivants de 32 Mio. Correction du banc : une première version de
+cette section disait « une seule allocation de 960 Mio ». smaps montre les projections déjà
+fusionnées par le noyau, et c'est `malloc_info` (G) qui a séparé les 32 blocs. Hors du tampon, environ 2,1 Go sont tenus au
+repos ; sans les vecteurs, environ 1,3 Go (seq-0056, B).
+
+**La cause, trouvée par G** : ce sont les écrivains de lucivy. Les blocs de 32 Mio sont déjà là en
+plein texte seul : malloc_info au repos compte 32 blocs projetés vivants (1 024 Mio), plus 618 Mio
+en usage dans les arènes. Avec `LUCIVY_WRITER_HEAP=15000000` et `LUCIVY_WRITER_THREADS=2`, il n'y a
+plus aucun bloc projeté, 211 Mio en usage, et 69 fils au lieu de 93. L'anonyme + échange à T3 passe
+de 2 639 à 1 251 Mio. Relevés : `~/.cache/rag3weaver-build/mesure-malloc/sonde-*/B2/` sur luciepc
+(`t3-malloc-info.xml`, `t3-piles`, `gros-mallocs.log`).
+
+**Le correctif annoncé (G)** : rendre les écrivains de lucivy au repos, et les recréer à la
+première écriture. Il sera jugé par le même protocole, T3 compris.
 
 ## Pour le fermer
 
