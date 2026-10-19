@@ -360,13 +360,15 @@ fn spawn_index_with_stop(
     watch: Arc<EmbedWatch>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
-        indexer_et_dire(&catalog, source, &journal, kept_bytes, generated, &watch);
+        let fin = indexer_et_dire(&catalog, source, &journal, kept_bytes, generated, &watch);
         // Un index retient des Go que glibc garde une fois libérés : rendus ici,
         // et dits au journal (ticket « l'hôte ne rend pas la mémoire d'un gros
-        // index », 19 octobre 2026).
+        // index », 19 octobre 2026) — **avant** la ligne de fin, qui reste la
+        // dernière du journal (le contrat de ce module ; e2e_arret_propre le juge).
         if let Some((avant, apres)) = crate::allocateur::rendre_au_systeme("fin d'index") {
             log(&journal, &format!("mémoire rendue au système : {avant} → {apres} Mio résidents"));
         }
+        log(&journal, &fin);
     })
 }
 
@@ -377,8 +379,9 @@ fn indexer_et_dire(
     kept_bytes: u64,
     generated: GeneratedPolicy,
     watch: &Arc<EmbedWatch>,
-) {
+) -> String {
     let (catalog, journal) = (catalog.clone(), journal.to_path_buf());
+    // La ligne de fin est rendue, pas écrite : l'appelant l'écrit en dernier.
     match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, watch) {
         Ok(reste) => {
             // L'arbre et le commit indexés, que chaque lecture dira.
@@ -394,11 +397,11 @@ fn indexer_et_dire(
             }
             // « terminée » reste en tête de la ligne (ce que `wait` attend), et
             // dit ce qui reste dû quand l'embarquement n'a pas tout pris.
-            log(&journal, &format!("{DONE_LINE}{}", reste.map(|r| format!(" — {r}")).unwrap_or_default()))
+            format!("{DONE_LINE}{}", reste.map(|r| format!(" — {r}")).unwrap_or_default())
         }
-        Err(e) if e.starts_with(crate::code_sync::SYNC_SUSPENDED) => log(&journal, &format!("{STOPPED_PREFIX} : {e}")),
-        Err(e) if e.starts_with(STOPPED_PREFIX) => log(&journal, &e),
-        Err(e) => log(&journal, &format!("{FAILED_PREFIX} : {e}")),
+        Err(e) if e.starts_with(crate::code_sync::SYNC_SUSPENDED) => format!("{STOPPED_PREFIX} : {e}"),
+        Err(e) if e.starts_with(STOPPED_PREFIX) => e,
+        Err(e) => format!("{FAILED_PREFIX} : {e}"),
     }
 }
 
