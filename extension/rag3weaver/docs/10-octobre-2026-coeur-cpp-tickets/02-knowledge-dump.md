@@ -184,3 +184,27 @@ le reste est dit « non vérifié ». Complète les relevés de la session cœur
 - **Un « push code 0 » ne prouve pas qu'un commit est parti** : si le commit a échoué, HEAD égale
   master et le push n'envoie rien. Vérifier qu'il y a des commits au-delà de master avant de
   pousser.
+
+## Le 19 octobre
+
+- **Le point de non-retour d'un point de reprise de groupe** est la première écriture de colonne
+  du groupe persistant (`ColumnChunk::checkpoint` par le fichier ombre, dans
+  `checkpointInMemAndOnDisk`), juste après la copie fusionnée (`scanAllInsertedAndVersions`), et
+  non l'échange des groupes. Une table de relations change sa part persistante avant son
+  échange.
+- **Une extension enregistrait ses fonctions avant de charger ses index** : une requête se liait
+  dans la fenêtre, et la capture, qui ne retient que les holders chargés, concluait au retrait.
+  Une fenêtre rare se rend déterministe par un crochet (une pause lue dans une variable
+  d'environnement), pas par des boucles.
+- **L'adressage d'une base** se réserve par tranches (`VMRegion`, 16 Gio), parce que les pages
+  n'ont besoin d'être contiguës qu'à l'intérieur d'un groupe de cadres, et que les groupes
+  s'attribuent dans l'ordre.
+- **Un lot qui touche l'index, le COPY ou le chargement** passe `e2e_code` sur sa propre lib :
+  `RAG3DB_LIB=bati` et `RAG3DB_BUILD=<son build/lecteurs-csv>`, jamais `run_e2e.sh --build`, qui
+  publie au magasin et déplace `courant`. Il se prouve par la ligne « moteur lié ».
+- **Pousser depuis luciepc** se fait par une chaîne détachée (lib, e2e_code, liste, push dans un
+  `if`). Son rebase final bute souvent sur le README des tickets : on résout ici, on vérifie que
+  le code est identique à celui rejoué (le diff du lot contre sa propre base), et on pousse par
+  `push-lot.sh` avec la base rejouée.
+- **Une retenue de tous les acteurs pendant un bâti, à 20 ms près**, était la famine du
+  planificateur (le bâti prend tous les fils), pas un verrou.

@@ -541,6 +541,61 @@ l'échange.
 le point de reprise forcé et les verrous. Mon worktree `rag3db-tickets` de luciepc reste, propre,
 sur `9b861579a`, avec son `build/moteur`, jusqu'à la fin de la session.
 
+## Le 18 au soir et le 19 octobre — quatre lots sur master, la page de (A)
+
+**Les lots sur master** :
+
+| commit | lot | ticket |
+|---|---|---|
+| `a333c34f2` | un ROLLBACK sous un tampon plein n'alloue rien, la transaction quitte toujours le système, ~ClientContext ne lève pas, un CHECKPOINT refusé avant tout changement laisse la base ouverte | fermé ; « à confirmer » ouvert pour l'annulation d'un COPY |
+| `cf71c929d` | (δ) : le CREATE_VECTOR_INDEX rattrape à sa validation ce que les autres ont validé pendant son bâti ; la borne à la première ligne encore à valider, la déduplication du balayage ; les états d'index par holderID | fermé ; défaut connu ouvert : la retenue du rattrapage |
+| `2822e314d` | R1 : une extension charge ses index avant ses fonctions, une capture commune dans NodeTable, les accès par nom avec la transaction | celui du banc fermé ; la rétention pour tous les index reste ouverte pour geo (R2) |
+| `4f9274a38` | la réservation d'adressage par tranches de 16 Gio au lieu de 8 Tio d'un bloc | fermé |
+
+Chacun a passé `e2e_code` entier sur sa propre lib (27/27, la lib et l'extension prouvées par
+« moteur lié »), puis la liste complète, avant son push.
+
+**(δ) et sa retenue.** Le scénario des vingt écrivains a montré que (δ), juste, retient les
+autres connexions 115 à 273 s pendant son rattrapage, contre 7,8 s sur master, qui perdait des
+lignes en silence. Ces 7,8 s de master viennent de la famine du bâti (le bâti prend tous les
+fils, 2 en test), pas d'un verrou : le banc l'a daté, puis confirmé.
+
+(δ′), des passes de rattrapage avant la validation, a échoué : un seul fil ne rattrape pas vingt
+écrivains, et ses arêtes ont rempli le tampon. L'orchestration a tranché : la justesse d'abord,
+(δ) sur master avec sa retenue en défaut connu, puis (A), le vrai CREATE INDEX CONCURRENTLY.
+
+**La page de (A)** (`07-create-index-concurrently.md`, `4a7d74cf2`, précisée en `67feff3af`) :
+- trois transactions et des états NOTÉ, ENTRETENU, PRÊT, plus INCOMPLET après un arrêt
+  brutal ;
+- les écrivains notent puis entretiennent, et décident à leur validation ;
+- le rattrapage des seules lignes notées ;
+- la retenue qui reste, celle du point de reprise forcé du bâti.
+
+Elle est relue par le cœur C++, avec sept précisions.
+
+**Les défauts trouvés en route** :
+- **Ma rétention** (`9b861579a`) avait laissé sans filtre la finalisation d'un COPY : un CREATE,
+  un DROP puis un COPY finalisaient dans l'index retiré (« _UPPER does not exist in catalog »).
+  La régression a d'abord été imputée au rollback du cœur, et les magasins de libs sont revenus
+  en arrière. Le cœur l'a corrigée avec le filtre de visibilité que j'ai relu.
+- **Le ROLLBACK** : posé à l'échange des groupes, le drapeau « la mémoire a changé » venait
+  trop tard. Les colonnes du groupe persistant s'écrivent par le fichier ombre avant, et le point
+  de reprise de fermeture se bloquait. Le drapeau est maintenant posé après la copie fusionnée.
+- **Le chargement d'extension** : la fenêtre entre l'enregistrement des fonctions et le
+  chargement des index. Seul un crochet de test l'a rendue déterministe : 30 rechargements sous
+  charge ne la montraient pas.
+- **Les « Mmap … failed » du banc** sous les cas longs : une faute du banc (un plafond posé en
+  absolu), et non une fuite du moteur.
+
+**Mes fautes du jour** :
+- la rétention non relue sur tous ses parcours (mémoire `relire-tous-les-parcours-d-une-structure`) ;
+- le drapeau du point de reprise posé trop tard ;
+- deux témoins verts présentés d'abord comme des témoins, avant le crochet ;
+- un test qui gardait des résultats au-delà de la vie de sa base.
+
+**La suite** : (A), d'abord ses témoins rouges. Restent aussi le ticket « à confirmer » de
+l'annulation d'un COPY sous un tampon plein, et R2 de la rétention (geo, quand geo servira).
+
 ## Ce que j'ai lu en arrivant, et ce qui m'a manqué
 
 Lu en entier : `README.md`, `BUILD.md`, le relevé du 2 octobre
