@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (41)
+### Ouverts — moteur (40)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -56,7 +56,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Un bâti d'index prend tous les fils de travail et affame les autres connexions, lecteurs compris](2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions.md) | ouvert — cause confirmée (le planificateur, pas un verrou) ; forme à étudier : file équitable ; témoin `IndexCreationThreads.LeavesAThreadToReaders` | blocage (tous attendent environ 9,7 s à deux fils) | oui (peu de cœurs, pod sous quota) | oui |
 | [Sur une table indexée par HNSW, chaque écrivain tient l'index en exclusif jusqu'à sa validation : les écrivains passent un par un](2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un.md) | ouvert — pour le cœur, en fin de file (arbitrage de c7 : distinct de la lenteur de l'insertion et du point de reprise) ; E11 | blocage (p99 de Doc 390 ms contre 24 ms pour Note) | oui | oui (tables de morceaux) |
 | [Un point de reprise fige toutes les transactions le temps de s'écrire, lecteurs compris, et il s'écrit toutes les trois secondes sous charge](2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md) | ouvert — mesuré par le banc (129 au seuil sur une passe, 1,2 à 1,4 s chacun) ; à placer dans la file du cœur C++ | attente pour tout le monde, lecteurs compris | oui (régime ordinaire d'un hôte qui indexe) | oui |
-| [Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà détruite](2026-10-18-un-commit-dont-le-point-de-reprise-echoue-annule-une-transaction-deja-partie.md) | ouvert, confirmé — pour le cœur C++ ; témoin `CommitAfterFailedCheckpoint.DoesNotRollBackADestroyedTransaction` (Release et ASAN, 3 sur 3) | lecture après libération : « Invalid transaction type to rollback » puis SIGABRT en Release, heap-use-after-free sous ASAN ; rien de perdu | oui, si un point de reprise échoue juste après une validation | oui |
 | [La cible clean efface la grammaire Cypher, suivie par git, et le bâti suivant ne la régénère pas](2026-10-18-la-cible-clean-efface-la-grammaire-cypher-suivie-par-git.md) | ouvert — pour le cœur ; deux formes (ne plus déclarer en OUTPUT, ou régénérer) | blocage du bâti après un `clean` | non | non (sauf un bâti de la lib après `clean`) |
 | [Deux nœuds liés par leur clé dans un même MATCH se croisent avant la jointure](2026-10-12-deux-noeuds-lies-par-leur-cle-dans-un-meme-match-se-croisent-avant-la-jointure.md) | ouvert — pour le cœur C++ (planificateur) | lenteur et mémoire (produit des deux ensembles masqués sous 512 Mo) | non : le dialecte lie un nœud par MATCH | non |
 | [Sans point de reprise, l'insertion de vecteurs sous index HNSW ralentit lot après lot](2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md) |  ouvert — la part du CSR corrigée (compaction, 12 octobre), reste la chaîne des versions ; en probabilistic.txt | lenteur qui s'accumule | oui (`embed_set`) | oui |
@@ -131,10 +130,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (161), dans `closed/`
+### Fermés (162), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà détruite](closed/2026-10-18-un-commit-dont-le-point-de-reprise-echoue-annule-une-transaction-deja-partie.md) | corrigé (25 octobre 2026) — le contexte demande au gestionnaire si sa transaction est encore active avant d'annuler ; témoin `CommitAfterFailedCheckpoint.DoesNotRollBackADestroyedTransaction` sorti du rouge connu | lecture après libération : « Invalid transaction type to rollback » puis SIGABRT en Release, heap-use-after-free sous ASAN ; rien de perdu | oui, si un point de reprise échoue juste après une validation | oui |
 | [Des écritures ne passent pas par le journal du catalogue et ne s'annoncent pas](closed/2026-10-19-des-ecritures-ne-passent-pas-par-le-journal-et-ne-s-annoncent-pas.md) | corrigé (l'annulation d'une fin qui transitionne s'annonce ; un drain tombé, une pose, une ingestion et une reprise annoncent ce qu'ils ont écrit ; le Plan a son ticket) | réponse fausse en silence | oui | oui |
 | [L'annulation d'un lot de liens retire aussi les paires qui existaient avant lui](closed/2026-10-19-l-annulation-d-un-lot-de-liens-retire-aussi-les-paires-qui-existaient.md) | corrigé (l'annulation ne retire que les paires créées par le lot ; une déliaison se repose avec ses propriétés) | perte | peu (le rollback d'une migration) | oui |
 | [Une reprise de drain perd les liens vers les lignes nées dans le même drain](closed/2026-10-19-une-reprise-de-drain-perd-les-liens-vers-les-lignes-nees-dans-le-meme-drain.md) | corrigé (la reprise retrouve les bouts par les clés des lignes du même point de reprise ; une clé inconnue rend un échec dit) | perte (un lien, en silence) | oui (une reprise après une chute) | oui |

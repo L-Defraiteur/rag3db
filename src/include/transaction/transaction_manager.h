@@ -50,6 +50,10 @@ public:
     // tiendrait un fil dont les transactions ouvertes ont besoin pour valider et partir (A8).
     void waitUntilNewTransactionsAreAllowed();
     void rollback(main::ClientContext& clientContext, Transaction* transaction);
+    // Vrai tant que la transaction est dans le système. Une validation dont le point de reprise
+    // qui suit échoue lève après l'avoir retirée (et détruite) : la connexion le demande avant
+    // d'annuler ce qu'elle tient encore.
+    bool isActive(common::transaction_t transactionID);
     // Marche T0 : une instruction a échoué dans une transaction explicite. Ses effets sont
     // annulés, elle reste active, ses verrous tenus ; rollback() la ferme ensuite.
     void failAfterStatement(main::ClientContext& clientContext, Transaction* transaction);
