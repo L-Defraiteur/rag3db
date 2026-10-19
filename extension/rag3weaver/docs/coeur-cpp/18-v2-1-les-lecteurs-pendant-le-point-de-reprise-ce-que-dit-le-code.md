@@ -168,3 +168,34 @@ connu mis à jour dans le commit.
 - Les trous de colonnes (c) sont aussi la forme de l'ADD paresseux (page 16) : V2-1a les pose,
   l'ADD paresseux les reprend tels quels. D'accord pour que V2-1a précède l'ADD paresseux dans ma
   file, puisque c'est la même pièce ?
+
+## 5. V2-1a, tel qu'écrit (19 octobre 2026)
+
+Ce que le code a tranché de plus que le §2 (c), après la carte des numéros de colonnes (tout ce qui
+supposait « numéro = position » : les vecteurs `columns`, `chunks`, `dataTypes`, `types`,
+`columnStats`, les constructions par `getProperties()`, les `push_back`/`pop_back` de l'ADD, le
+format d'un bloc sur disque) :
+
+- **Aucune compaction automatique.** Le point de reprise ne renumérote plus rien
+  (`vacuumColumnIDs` n'est plus appelé ; `renumberColumns` ne sert plus qu'à l'ouverture d'une
+  base écrite avant). Les trous restent, même quand aucune transaction n'est ouverte : un lecteur
+  nouveau pourra lier un plan pendant l'écriture (V2-1c), donc aucun moment n'est sûr pour
+  renuméroter. Une compaction viendra, si elle vient, comme une instruction à part.
+- **Un trou est** : une entrée nulle dans `columns` (table) et dans `chunks` (bloc), un type `ANY`
+  dans `dataTypes` et `types`, une entrée gardée telle quelle dans `columnStats` (jamais relue).
+  La taille de tous ces vecteurs est le nombre de numéros attribués depuis la création,
+  `TableCatalogEntry::getNumColumnSlots()` (le `nextColumnID` du catalogue), trous compris.
+- **Un ADD prend le numéro suivant, jamais un trou** : le `push_back` reste juste parce que la
+  taille vaut toujours `nextColumnID`, et le rollback d'un ADD (E10) reste un `pop_back`.
+- **Entre le DROP et le point de reprise**, rien ne change : la colonne reste entière, le catalogue
+  ne la nomme plus. Au point de reprise, ses pages sont rendues et son numéro devient un trou.
+- **Format 42** : un bloc sur disque écrit une entrée par numéro, précédée d'un octet « présente »
+  ; un bloc écrit avant (41 et moins, dense, sans trou) se relit par l'ancienne forme, d'après la
+  version lue dans l'en-tête (`Deserializer::getStorageVersion`). Les statistiques et le catalogue
+  ne changent pas de forme (le catalogue sérialisait déjà ses numéros).
+- **La pièce « version de format »** (première de V2-1a) précède : version 41 pour l'en-tête et le
+  journal, 42 pour les trous.
+- Les quatre défauts lus en route (statistiques non compactées, groupe vidé aux types non filtrés,
+  ADD local sur relation après le DROP de la dernière propriété, clé du cache HNSW) tombent avec
+  cette forme ou par une ligne (le cache), chacun avec son témoin dans
+  `test/transaction/stable_column_ids_test.cpp`.

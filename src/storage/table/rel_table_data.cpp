@@ -1,5 +1,7 @@
 #include "storage/table/rel_table_data.h"
 
+#include <algorithm>
+
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/enums/rel_direction.h"
 #include "common/exception/runtime.h"
@@ -95,8 +97,7 @@ void RelTableData::initCSRHeaderColumns(FileHandle* dataFH) {
 
 void RelTableData::initPropertyColumns(const RelGroupCatalogEntry& relGroupEntry,
     table_id_t nbrTableID, FileHandle* dataFH) {
-    const auto maxColumnID = relGroupEntry.getMaxColumnID();
-    columns.resize(maxColumnID + 1);
+    columns.resize(relGroupEntry.getNumColumnSlots());
     auto nbrIDColName = StorageUtils::getColumnName("NBR_ID", StorageUtils::ColumnType::DEFAULT,
         RelDirectionUtils::relDirectionToString(direction));
     auto nbrIDColumn =
@@ -303,21 +304,19 @@ void RelTableData::pushInsertInfo(const Transaction* transaction, const CSRNodeG
 
 void RelTableData::checkpoint(const std::vector<column_id_t>& columnIDs,
     PageAllocator& pageAllocator) {
-    std::vector<std::unique_ptr<Column>> checkpointColumns;
-    for (auto i = 0u; i < columnIDs.size(); i++) {
-        const auto columnID = columnIDs[i];
-        checkpointColumns.push_back(std::move(columns[columnID]));
-    }
-    columns = std::move(checkpointColumns);
-
     std::vector<Column*> checkpointColumnPtrs;
-    for (const auto& column : columns) {
-        checkpointColumnPtrs.push_back(column.get());
+    for (const auto columnID : columnIDs) {
+        checkpointColumnPtrs.push_back(columns[columnID].get());
     }
-
     CSRNodeGroupCheckpointState state{columnIDs, std::move(checkpointColumnPtrs), pageAllocator, mm,
         csrHeaderColumns.offset.get(), csrHeaderColumns.length.get()};
     nodeGroups->checkpoint(*mm, state);
+    // Les numéros ne bougent pas : une colonne supprimée laisse un trou à son numéro.
+    for (auto columnID = 0u; columnID < columns.size(); columnID++) {
+        if (std::find(columnIDs.begin(), columnIDs.end(), columnID) == columnIDs.end()) {
+            columns[columnID].reset();
+        }
+    }
 }
 
 void RelTableData::serialize(Serializer& serializer) const {

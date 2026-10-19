@@ -1,7 +1,8 @@
 # Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne
 
-- **État** : ouvert (lu dans le code le 19 octobre 2026, carte des numéros de colonnes pour
-  V2-1a ; témoin à écrire)
+- **État** : corrigé le 19 octobre 2026 par le commit qui déplace ce fichier (`git log --follow`) :
+  `cache_column.cpp` prend le numéro de colonne pour clé, comme l'index ; témoin
+  `StableColumnIDs.AVectorIndexIsCreatedOnATableWhereAPropertyWasDropped`
 - **Gravité** : blocage nommé : « Miss cached column, which should never happen. » au
   CREATE_VECTOR_INDEX d'une table dont une propriété a été supprimée avant la colonne indexée.
 - **Atteignable en service** : oui : rag3weaver supprime des propriétés aux migrations de

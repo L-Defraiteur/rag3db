@@ -1,7 +1,8 @@
 # Les statistiques par colonne ne sont pas compactées au point de reprise après un DROP
 
-- **État** : ouvert (lu dans le code le 19 octobre 2026, carte des numéros de colonnes pour
-  V2-1a ; témoin à écrire)
+- **État** : corrigé le 19 octobre 2026 par le commit qui déplace ce fichier (`git log --follow`),
+  V2-1a : les numéros ne bougent plus, les statistiques gardent leur entrée à leur numéro ; témoin
+  `StableColumnIDs.TheRemainingColumnsKeepTheirOwnStatistics`
 - **Gravité** : réponse fausse, en silence : le planificateur et `STATS_INFO` lisent le nombre
   de valeurs distinctes d'une autre colonne.
 - **Atteignable en service** : oui, dès qu'une propriété qui n'est pas la dernière est

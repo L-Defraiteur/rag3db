@@ -140,10 +140,35 @@ public:
         ResidencyState residencyState, NodeGroupDataFormat format = NodeGroupDataFormat::REGULAR);
     virtual ~ChunkedNodeGroup() = default;
 
+    // Les numéros de colonnes, trous compris : un trou (colonne supprimée puis passée par un
+    // point de reprise) est une entrée nulle, et son type est ANY dans les vecteurs de types.
     common::idx_t getNumColumns() const { return chunks.size(); }
     common::row_idx_t getStartRowIdx() const { return startRowIdx; }
     common::row_idx_t getNumRows() const { return numRows; }
     bool isEmpty() const { return numRows == 0; }
+    bool hasColumnChunk(const common::column_id_t columnID) const {
+        return columnID < chunks.size() && chunks[columnID] != nullptr;
+    }
+    // La première colonne présente : la colonne 0 peut être un trou (la première propriété
+    // déclarée, supprimée, quand la clé n'est pas la première), le nombre de lignes se lit ailleurs.
+    const ColumnChunk& firstPresentChunk() const {
+        for (auto& chunk : chunks) {
+            if (chunk) {
+                return *chunk;
+            }
+        }
+        KU_UNREACHABLE;
+    }
+    common::idx_t getNumPresentColumns() const {
+        common::idx_t n = 0;
+        for (auto& chunk : chunks) {
+            n += chunk != nullptr;
+        }
+        return n;
+    }
+    static bool isColumnHole(const common::LogicalType& type) {
+        return type.getLogicalTypeID() == common::LogicalTypeID::ANY;
+    }
     const ColumnChunk& getColumnChunk(const common::column_id_t columnID) const {
         KU_ASSERT(columnID < chunks.size());
         return *chunks[columnID];
@@ -255,6 +280,10 @@ public:
 
     virtual void serialize(common::Serializer& serializer) const;
     static std::unique_ptr<ChunkedNodeGroup> deserialize(MemoryManager& memoryManager,
+        common::Deserializer& deSer);
+    static void serializeChunks(common::Serializer& serializer,
+        const std::vector<std::unique_ptr<ColumnChunk>>& chunks);
+    static std::vector<std::unique_ptr<ColumnChunk>> deserializeChunks(MemoryManager& mm,
         common::Deserializer& deSer);
 
     template<class TARGET>
