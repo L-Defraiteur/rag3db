@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (37)
+### Ouverts — moteur (38)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le COPY de relations ne lit pas le mot NULL dans une colonne entière](2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere.md) | ouvert — filet dans `copier_les_liens` (une colonne texte, sinon par lots) ; témoin du moteur à écrire | blocage, base à rouvrir | non, par le filet | oui (son filet) |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
 | [L'annulation d'un COPY sous un tampon plein peut encore allouer](2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer.md) | ouvert, à confirmer (témoin à écrire) | blocage possible (la base n'est plus bloquée : erreur nommée, ou base à rouvrir) | en principe | oui (ses COPY) |
@@ -82,13 +83,15 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (36)
+### Ouverts — produit (38)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Des écritures ne passent pas par le journal du catalogue et ne s'annoncent pas](2026-10-19-des-ecritures-ne-passent-pas-par-le-journal-et-ne-s-annoncent-pas.md) | ouvert — le PlanNode, le retour d'une mise de côté, la marque d'absence, la reprise d'un drain | réponse fausse en silence (pour qui écoute `catalog`) | oui (PlanNode) | oui |
+| [L'annulation d'un lot de liens retire aussi les paires qui existaient avant lui](2026-10-19-l-annulation-d-un-lot-de-liens-retire-aussi-les-paires-qui-existaient.md) | ouvert — témoin à écrire | perte (des arêtes d'avant le lot, et les propriétés d'une déliaison reposée) | peu (annulation hors transaction) | oui |
 | [Un shard de lucivy sans écrivain perd les écritures en silence](2026-10-19-un-shard-de-lucivy-sans-ecrivain-perd-les-ecritures-en-silence.md) | ouvert — dans lucivy-core 4.3.0 : sans écrivain, un Insert est jeté et un Delete sauté avec Ok ; version à publier par Lucie | perte silencieuse | pas aujourd'hui (rag3weaver garde ses écrivains) ; dès qu'un appelant en lâche un | oui (appelant) |
 | [Le plein texte lucivy se fige dans son commit pendant une réindexation lue](2026-10-19-le-plein-texte-lucivy-se-fige-dans-son-commit-pendant-une-reindexation-lue.md) | ouvert — 3 sur 3, avec et sans L6 ; départager les lecteurs, puis la pile | blocage (la montre ne réindexe plus, sans erreur) | oui | oui (correctif dans lucivy) |
 | [Une relation qui porte le nom d'une entité, à la casse près, se déclare sans refus et casse au premier lien](2026-10-18-une-relation-au-nom-d-une-entite-casse-au-premier-lien.md) | ouvert — le contrôle au chargement pour l'arbre principal | blocage mal nommé (« Cannot bind … as a relationship pattern label ») | oui, dès qu'un gabarit nomme une relation comme une entité | oui |

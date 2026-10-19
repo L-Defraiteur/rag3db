@@ -2542,6 +2542,14 @@ impl Backend {
             move |evenements: Vec<Value>| {
                 let cat = catalogue.lock().unwrap_or_else(|e| e.into_inner());
                 for m in &composes {
+                    // Une annonce de liens tronquée ne nomme pas tout ce qu'elle
+                    // touche : les fichiers de l'entité se régénèrent tous.
+                    if evenements.iter().any(|e| m.lit_une_annonce_tronquee(e)) {
+                        if let Err(e) = m.regenerer_tout(&cat) {
+                            eprintln!("[miroir] {} : {e}", m.entite);
+                        }
+                        continue;
+                    }
                     let mut touchees: Vec<String> = evenements.iter().flat_map(|e| m.touchees(&cat, e)).collect();
                     touchees.sort();
                     touchees.dedup();

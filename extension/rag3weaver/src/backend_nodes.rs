@@ -1063,6 +1063,7 @@ impl Node for RelationBatchNode {
             cat.set_in_transaction(false);
             if report.failed > 0 {
                 let defait = cat.conn().rollback();
+                cat.jeter_les_evenements_retenus();
                 return Err(format!(
                     "link batch failed and was rolled back ({}): nothing written; {:?}",
                     match defait {
@@ -1072,7 +1073,11 @@ impl Node for RelationBatchNode {
                     report.warnings
                 ));
             }
-            cat.conn().commit().map_err(|e| format!("link batch: commit refused, nothing written: {e}"))?;
+            if let Err(e) = cat.conn().commit() {
+                cat.jeter_les_evenements_retenus();
+                return Err(format!("link batch: commit refused, nothing written: {e}"));
+            }
+            cat.publier_les_evenements_retenus();
         }
         if report.failed > 0 {
             return Err(format!(

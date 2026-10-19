@@ -267,7 +267,9 @@ fn run_level(nodes: &mut [Box<dyn Node>], prepared: Vec<PreparedNode>) -> Vec<Do
     let execute_one = |node: &mut Box<dyn Node>, p: PreparedNode| -> DoneNode {
         let PreparedNode { name, idx, node_type, mut ctx } = p;
         let started = Instant::now();
-        let result = node.execute(&mut ctx);
+        // Le run du nœud sur son fil : le catalogue l'appose à ce qu'il publie.
+        let run = ctx.run_id().to_string();
+        let result = crate::events::pendant_le_run(&run, || node.execute(&mut ctx));
         DoneNode { name, idx, node_type, ctx, result, duration_ms: started.elapsed().as_millis() as u64 }
     };
     if prepared.len() == 1 {

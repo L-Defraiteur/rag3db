@@ -21,6 +21,7 @@ pub mod builtin_templates;
 pub mod en_tete;
 pub mod fichiers_entite;
 pub mod fautes_de_test;
+pub mod ecritures;
 /// Modèle BGE-M3 généré par burn-onnx depuis l'ONNX de BAAI — code machine, non édité.
 /// Voir `generated/README.md` pour la provenance et la régénération.
 /// Périphérique burn partagé (embedders, rerankers, OCR).

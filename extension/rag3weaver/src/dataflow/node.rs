@@ -84,7 +84,12 @@ pub trait Node: Send {
         &'a mut self,
         ctx: &'a mut NodeContext,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
-        Box::pin(async move { tokio::task::block_in_place(|| self.execute(ctx)) })
+        // Le run du nœud, posé sur le fil le temps de son exécution : le
+        // catalogue l'appose aux écritures qu'il publie.
+        Box::pin(async move {
+            let run = ctx.run_id().to_string();
+            tokio::task::block_in_place(|| crate::events::pendant_le_run(&run, || self.execute(ctx)))
+        })
     }
 
     /// `true` ssi le nœud implémente `execute_async` (et laisse `execute`
