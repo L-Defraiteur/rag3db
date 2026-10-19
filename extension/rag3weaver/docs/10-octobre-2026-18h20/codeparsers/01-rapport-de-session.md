@@ -1,6 +1,56 @@
 # Session codeparsers — rapport
 
-Tenu à jour sur place. Dernière mise à jour : 19 octobre 2026, 1 h 30.
+Tenu à jour sur place. Dernière mise à jour : 19 octobre 2026, 7 h.
+
+## 19 octobre, de 1 h 30 à 7 h — l'ambiguïté mesurée, la règle révisée deux fois
+
+**Ce qu'a montré la sonde sur code-lourd.** L'ambiguïté (`047655729`, une arête vers chacun des
+homonymes, borne 8) était verte partout en tests, lib entière et six suites e2e. Réindexé,
+code-lourd a pris **209 290 arêtes « ambigu »** : CONSUMES ×2,6, vers `result`, `i`, `len`,
+`clone` et des variables. Trois tentatives de cadrage n'ont pas suffi, aucune n'est poussée :
+
+| tentative | CONSUMES gagnés | échantillon de 20 |
+|---|---|---|
+| borne 8, sans filtre | 220 127 | du bruit |
+| filtre de genre, borne 3 | 73 428 | appels à receveur inconnu (`x.map()`) |
+| champ « nom nu » sur MENTIONS | 48 545 | 0 juste (langages traversés, paramètres nommés nus) |
+
+**Ce qui est sur master.**
+- **`e5e984a7b`** : la borne d'ambiguïté vaut 1 par défaut, en urgence, avant le rebâti de
+  Lucie.
+- **`9b22ef8d7`** : « une relation douteuse se compte et se dit, elle ne se devine pas », révisé
+  par c7 sur la mesure, à relire par Lucie. Le choix par fichier et par dossier est retiré : il
+  posait 13 308 arêtes, dont des arêtes d'un scope vers lui-même. Un candidat unique ne se
+  désigne plus que par un import. Une résolution ne traverse plus les langages (C/C++ ensemble,
+  JS/TS ensemble, un gabarit peut nommer son type Rust), et le filtre ôte des candidats sans en
+  désigner. Contre ref-lourd :
+  - CONSUMES : 8 767 arêtes perdues, toutes entre langages, et l'échantillon de vingt est
+    entièrement faux. Par rapport à master, le lot n'ajoute que 445 arêtes neuves, et
+    l'échantillon de vingt est entièrement juste ;
+  - HAS_PARENT : 535 gagnées, justes.
+  La sonde gagne `SONDE_REQUETE`, une requête libre.
+- **codeparsers `5949214`** : une méthode d'un `impl Trait for Type` porte `trait_impl`.
+
+**Le témoin d'impact.** Il rougissait avec le lot, à juste titre : master le passait par une
+fausse chaîne, phase0 → `Catalog::exists` → `Catalog::get`, dont le maillon `exists` → `get` était
+deviné par le fichier. Le vrai appel, `catalog.get(…)`, voit deux `get` du type `Catalog` : la
+méthode propre et celle de `impl ReadCatalog for Catalog`. Le cas `row_to_map` est passé dans un
+témoin à part, qui se saute en le disant. Ticket : « une méthode propre contre une méthode de
+trait de même nom ».
+
+**En cours.** Le correctif tranché par c7 :
+- codeparsers `trait_impl` ;
+- une colonne `trait_impl` sur le scope ;
+- `choose_target`, qui fait passer la méthode propre avant à types égaux ;
+- le témoin rendu à sa garde et le ticket fermé, dans le même commit.
+Le code est écrit. La mesure sur code-lourd attend la porte de mesure de G.
+
+**Ce qui ne s'est pas fait.** Le binaire de Lucie a été rebâti vers 6 h 30 sur le master du
+moment, sans le lot des langages, poussé à 7 h. `pertes-18oct` n'est pas effacé.
+
+**Leçons.**
+- Une règle de résolution qui ajoute des arêtes se mesure sur une vraie base avant le push.
+- Un témoin vert n'est pas une preuve tant que son chemin n'est pas lu.
 
 ## Nuit du 18 au 19 octobre — le correctif du cœur prouvé, l'ambiguïté dite
 
