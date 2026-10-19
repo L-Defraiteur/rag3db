@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (43)
+### Ouverts — moteur (42)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -49,7 +49,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Un ADD COLUMN sur une relation après le DROP de sa dernière propriété range la colonne locale au mauvais numéro](2026-10-19-un-add-column-sur-une-relation-apres-le-drop-de-sa-derniere-propriete-range-la-colonne-locale-au-mauvais-numero.md) | ouvert, à confirmer par un témoin — pour le cœur, lot V2-1a | valeur dans une autre colonne ou hors du vecteur si confirmé | oui si confirmé | oui si confirmé |
 | [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | ouvert — pour le cœur, une ligne (avec V2-1a ou avant) ; témoin à écrire | blocage nommé « Miss cached column » après un DROP puis un point de reprise | oui | oui |
 | [Le COPY de relations ne lit pas le mot NULL dans une colonne entière](2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere.md) | ouvert — filet dans `copier_les_liens` (une colonne texte, sinon par lots) ; témoin du moteur à écrire | blocage, base à rouvrir | non, par le filet | oui (son filet) |
-| [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | ouvert — pour le cœur ; recette en Cypher brut, quatre formes du dehors | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
 | [L'annulation d'un COPY sous un tampon plein peut encore allouer](2026-10-18-l-annulation-d-un-copy-sous-un-tampon-plein-peut-encore-allouer.md) | ouvert, à confirmer (témoin à écrire) | blocage possible (la base n'est plus bloquée : erreur nommée, ou base à rouvrir) | en principe | oui (ses COPY) |
@@ -134,10 +133,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (156), dans `closed/`
+### Fermés (157), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | corrigé (19 octobre 2026) — la préparation voit les paramètres d'une sous-requête ; le produit rend `through` en `EXISTS` quand sa lib est `courant` | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Une méthode propre contre une méthode de trait de même nom](closed/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md) | corrigé (codeparsers `trait_impl`, la méthode propre passe avant à types égaux ; témoin d'impact vert par le vrai chemin) | relation manquante | oui, `impact row_to_map` | oui (`code.rs`, codeparsers) |
 | [Une base réserve 8 Tio d'adressage : un processus n'en ouvre qu'une quinzaine](closed/2026-10-19-une-base-reserve-8-tio-d-adressage-un-processus-n-en-ouvre-qu-une-quinzaine.md) | corrigé (la réservation par tranches de 16 Gio, qui grandit avec la base ; voir le ticket) | ouverture refusée | oui | oui (l'hôte d'équipe, les tâches de l'agent) |
 | [Un chargement d'extension à la réouverture se fait passer pour un retrait de l'index](closed/2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index.md) | corrigé (les index chargés avant les fonctions, la capture commune qui refuse « is not loaded yet » ; voir le ticket) | refus d'une lecture valide | oui | oui (au redémarrage d'un hôte) |

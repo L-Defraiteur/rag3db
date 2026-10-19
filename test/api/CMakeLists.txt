@@ -3,6 +3,7 @@ add_rag3db_api_test(api_test
         system_config_test.cpp
         arrow_test.cpp
         prepare_test.cpp
+        prepare_subquery_parameters_test.cpp
         result_value_test.cpp
         storage_driver_test.cpp
         udf_test.cpp

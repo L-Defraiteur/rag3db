@@ -1,6 +1,7 @@
 #pragma once
 
 #include "parsed_expression.h"
+#include "parser/query/graph_pattern/rel_pattern.h"
 
 namespace rag3db {
 namespace parser {
@@ -29,6 +30,9 @@ public:
 
     void visitChildren(const ParsedExpression& expr);
     void visitCaseChildren(const ParsedExpression& expr);
+    void visitSubqueryChildren(const ParsedExpression& expr);
+    void visitNodePattern(const NodePattern& pattern);
+    void visitRelPattern(const RelPattern& pattern);
 
     virtual void visitSwitchUnsafe(ParsedExpression*) {}
     virtual void visitChildrenUnsafe(ParsedExpression& expr);

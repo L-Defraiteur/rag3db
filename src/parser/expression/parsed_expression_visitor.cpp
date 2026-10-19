@@ -6,6 +6,7 @@
 #include "parser/expression/parsed_case_expression.h"
 #include "parser/expression/parsed_function_expression.h"
 #include "parser/expression/parsed_lambda_expression.h"
+#include "parser/expression/parsed_subquery_expression.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;
@@ -93,11 +94,53 @@ void ParsedExpressionVisitor::visitChildren(const ParsedExpression& expr) {
         auto& lambda = expr.constCast<ParsedLambdaExpression>();
         visit(lambda.getFunctionExpr());
     } break;
+    case ExpressionType::SUBQUERY: {
+        visitSubqueryChildren(expr);
+    } break;
     default: {
         for (auto i = 0u; i < expr.getNumChildren(); ++i) {
             visit(expr.getChild(i));
         }
     }
+    }
+}
+
+// Les expressions d'une sous-requête (EXISTS, COUNT) ne sont pas des enfants au sens de
+// getChild : elles vivent dans ses motifs (propriétés, WHERE et projections d'une relation
+// récursive) et dans sa clause WHERE. Un visiteur qui ne les parcourt pas ne voit pas un paramètre
+// écrit dedans, et la préparation ne l'enregistre pas.
+void ParsedExpressionVisitor::visitSubqueryChildren(const ParsedExpression& expr) {
+    auto& subquery = expr.constCast<ParsedSubqueryExpression>();
+    for (auto& element : subquery.getPatternElements()) {
+        visitNodePattern(*element.getFirstNodePattern());
+        for (auto i = 0u; i < element.getNumPatternElementChains(); ++i) {
+            auto chain = element.getPatternElementChain(i);
+            visitRelPattern(*chain->getRelPattern());
+            visitNodePattern(*chain->getNodePattern());
+        }
+    }
+    if (subquery.hasWhereClause()) {
+        visit(subquery.getWhereClause());
+    }
+}
+
+void ParsedExpressionVisitor::visitNodePattern(const NodePattern& pattern) {
+    for (auto& [_, value] : pattern.getPropertyKeyVals()) {
+        visit(value.get());
+    }
+}
+
+void ParsedExpressionVisitor::visitRelPattern(const RelPattern& pattern) {
+    visitNodePattern(pattern);
+    auto info = pattern.getRecursiveInfo();
+    if (info->whereExpression != nullptr) {
+        visit(info->whereExpression.get());
+    }
+    for (auto& projected : info->relProjectionList) {
+        visit(projected.get());
+    }
+    for (auto& projected : info->nodeProjectionList) {
+        visit(projected.get());
     }
 }
 
