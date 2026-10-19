@@ -153,6 +153,10 @@ pub enum Level {
     /// texte seul, n'a pas de vecteurs). Ni « jamais » ni une dette — rien ne
     /// manque. Rendu « sans vecteurs (non déclarés) » (10 octobre 2026).
     NotDeclared,
+    /// **L'index n'a pas pu s'ouvrir ou se créer** : rien ne se cherche à ce
+    /// niveau, et la raison est dans `failures` (19 octobre 2026). Jamais un
+    /// « prêt » sur un index absent.
+    Failed,
 }
 
 /// **L'état de l'index, lisible à chaque recherche.** Une seule lecture de
@@ -190,6 +194,11 @@ pub struct IndexState {
     /// table). `None` hors rebâti.
     #[serde(default)]
     pub text_percent: Option<u8>,
+    /// **Les index de l'entité qui n'ont pas pu s'ouvrir ou se créer**, avec
+    /// leur raison (« création de l'index plein texte de File échouée : … ») ;
+    /// calculé à la lecture, jamais noté.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failures: Vec<String>,
     /// Quand cet état a été écrit (millisecondes Unix).
     pub updated_ms: u64,
 }
@@ -395,6 +404,26 @@ impl Catalog {
 
     fn state_at(&self, key: &str, count: impl FnOnce() -> Result<IndexProgress, CatalogError>) -> Result<IndexState, CatalogError> {
         let state = self.state_at_counted(key, count)?;
+        // **Un index qui n'a pas pu s'ouvrir ou se créer** : dit, avec sa
+        // raison, avant tout « prêt » ou « en cours ».
+        let entite = key.strip_prefix("index_state:");
+        let echecs: Vec<(String, String)> = self
+            .index_failures()
+            .into_iter()
+            .filter(|((_, table), _)| match entite {
+                Some(e) => table == e || self.entity_of_fts_table(table).as_deref() == Some(e) || table.starts_with(&format!("{e}_")),
+                None => true,
+            })
+            .map(|((genre, _), raison)| (genre, raison))
+            .collect();
+        if !echecs.is_empty() {
+            let texte_perdu = echecs.iter().any(|(g, _)| g == super::PLEIN_TEXTE_INDEX);
+            return Ok(IndexState {
+                text: if texte_perdu { Level::Failed } else { state.text },
+                failures: echecs.into_iter().map(|(_, r)| r).collect(),
+                ..state
+            });
+        }
         // **Le plein texte laissé sans blobs** (premier index qui retient sa
         // poussée, arrêté ou en cours) : « mots : en cours » tant que la
         // marque est là, jamais un « prêt » sur un index vide.
@@ -652,11 +681,11 @@ mod tests {
 
     #[test]
     fn un_etat_en_cours_sans_nouvelles_n_est_plus_cru() {
-        let en_cours = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Running, vectors_percent: 40, vectors_seconds_left: None, sparse: None, text_percent: None, updated_ms: 1_000 };
+        let en_cours = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Running, vectors_percent: 40, vectors_seconds_left: None, sparse: None, text_percent: None, failures: Vec::new(), updated_ms: 1_000 };
         assert!(!en_cours.is_stale(1_000 + STATE_STALE_MS));
         assert!(en_cours.is_stale(1_001 + STATE_STALE_MS), "un processus tué ne laisse pas « en cours » pour toujours");
         // Un état abouti ne périme pas : rien ne le rafraîchit, et c'est normal.
-        let pret = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Ready, vectors_percent: 100, vectors_seconds_left: None, sparse: None, text_percent: None, updated_ms: 1_000 };
+        let pret = IndexState { text: Level::Ready, relations: Level::Ready, vectors: Level::Ready, vectors_percent: 100, vectors_seconds_left: None, sparse: None, text_percent: None, failures: Vec::new(), updated_ms: 1_000 };
         assert!(!pret.is_stale(u64::MAX));
         // Et il se lit tel qu'il s'écrit.
         let json = serde_json::to_string(&en_cours).unwrap();
