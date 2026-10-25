@@ -116,7 +116,7 @@ fn absent_pendant_l_indexation(signal: &str) -> String {
 /// l'écriture tient encore, et la branche le dit.
 fn catalogue_vivant(c: &Mutex<Catalog>, par_la_vue: bool) -> Option<std::sync::MutexGuard<'_, Catalog>> {
     if !par_la_vue {
-        return Some(c.lock().unwrap_or_else(|p| p.into_inner()));
+        return Some(c.lock().unwrap_or_else(|p| p.into_inner())); // L4 : repli sans vue
     }
     let fin = std::time::Instant::now() + ATTENTE_DE_LA_POIGNEE;
     loop {
