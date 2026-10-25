@@ -32,6 +32,18 @@ refused: it would have reached one direction only.
 - Il existe deux instantanés pour comparer : `bascule-04063ee06` (avant la réouverture de 17 h 43)
   et `bascule-66994dd43`.
 
+**Une quatrième occurrence, la même arête** (G, 25 octobre au soir). Elle est survenue juste après
+le réveil de 21 h 19 min 23 s (repli sur 04063ee06, Rust 348fa758b), à la ligne 2551 du journal.
+C'est encore la relation 851 de LOCKS, nœud 16249 : **l'arête est donc toujours en base**, et la
+montre bute dessus à chaque rattrapage qui la touche. Depuis ce réveil, 27 fichiers sont restés en
+erreur, chacun une fois, surtout des fichiers du moteur (transaction_manager.cpp, rel_table,
+node_table, node_group, csr_node_group, chunked_node_group, storage_manager.cpp,
+single_writer_crash_test.cpp, et backend, catalog, daemon_host.rs côté crate).
+L'hypothèse de G : ce sont des fichiers dont les symboles prennent des verrous (LOCKS est la
+relation « prend le verrou » du gabarit de code). Chaque drain qui réécrit leurs arêtes LOCKS
+retombe sur l'arête 851 et défait tout le paquet. Ces fichiers restent donc en retard dans l'index
+tant que l'arête est là. Un défaut durable plutôt qu'une course passagère.
+
 ## La garde
 
 `RelTableData::update` (`src/storage/table/rel_table_data.cpp`, autour de la ligne 145). Une
