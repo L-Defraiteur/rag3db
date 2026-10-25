@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Les grammaires d'aujourd'hui.** tree-sitter 0.27 : les enums du pont
+  cxx rattachés à leur module, des fermetures devenues fonctions nommées, les
+  méthodes de snappy à leur classe ; un recul connu dans fmt, en ticket. dfb706b07.
 - **25 oct. — Les requêtes préparées ne s'accumulent plus.** Une préparation porte
   sa requête et la rend en mourant : quatre lecteurs d'un vrai dépôt tiennent dans
   7,1 Go au lieu de 30. fb4d83b65.
