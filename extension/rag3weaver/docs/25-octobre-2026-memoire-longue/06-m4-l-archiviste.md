@@ -70,16 +70,34 @@ Relevé sur master (b9cbfb774).
 **Sans modèle déclaré**, `archive` garde le L0, ne range rien et le dit : le filet n'invente
 rien. C'est aussi le comportement d'un `Decide` qui ne répond pas après ses reprises.
 
-## 3. Le graphe, déclaré
+## 3. Le graphe, déclaré, et le nœud qui manque : « pour chaque »
 
 `graphs/archive.mmd` : `params (Rhai) → EntityRecordNode(Source, put) → SplitSectionsNode →
-GraphNode(recall_fiches, par section) → RhaiNode(candidates → labels, présentation) →
-Decide(via llm) → Route(verdict)` puis trois branches : `EntityRecordNode(Apport, put) →
-LinkRecordNode(A_POUR_APPORT) → AddRefNode(doc)`, la même précédée d'un
-`EntityRecordNode(Fiche, put, state proposed)`, et un compteur ; `RenderResultsNode` du rapport.
-Tous ces nœuds existent, sauf `SplitSectionsNode`. Si le dataflow refuse une écriture par
-élément dans une branche de `Route`, le repli est le patron du juge en Rust, derrière le même
-outil, et la page le dira ; on ne le fait pas d'avance.
+pour chaque section : [GraphNode(recall_fiches) → RhaiNode(candidates → labels, présentation) →
+Decide(via llm) → Route(verdict) → EntityRecordNode(Apport, put) → LinkRecordNode(A_POUR_APPORT)
+→ AddRefNode(doc), ou la même précédée d'un EntityRecordNode(Fiche, put, state proposed), ou un
+compteur] → RenderResultsNode` du rapport.
+
+**Ce que 73 a lu dans le code** (nuit du 25 au 26) : aucun nœud d'écriture ne lit par élément.
+Une entrée de valeur (posture `Complete`) derrière un flux reçoit **le pli** du flux
+(`concurrent.rs`, `merge_stream_elements`) ; deux JSON ne se plient pas, l'échec rend un
+`Trigger`, et un `Trigger` s'efface devant la valeur suivante : pour N enregistrements, le
+dernier si N est impair, rien si N est pair, **sans erreur**. C'est un défaut à part entière,
+73 l'ouvre en ticket (un pli impossible doit refuser en le nommant). Un `GraphNode` ne
+s'exécute pas non plus une fois par élément : le sous-graphe tourne une fois, les éléments
+coulent à travers sa frontière. Seuls `Decide`, les nœuds de jetons et `spawn` lisent par
+élément.
+
+**La forme générale**, proposée par 73 à c7, plutôt qu'un nœud Rust propre à l'archive : un
+nœud **« pour chaque »** (`ForEach`), qui lit son entrée en `PerElement` et appelle un
+sous-graphe (un `GraphNode`, ou un graphe cité) **une fois par élément**, l'élément posé sur
+une entrée nommée et les sorties remises en flux ; les écritures de chaque appel entrent dans
+la transaction du run, et l'annulation d'un élément annule le run. Il règle d'un coup les
+candidates par section et les écritures par section, pour tout graphe à venir. **M4 l'attend**
+plutôt que d'écrire un nœud Rust qu'on remplacerait : les pas 1 et 2 (§7) ne dépendent pas de
+lui, le pas 5 (la mesure sur Gemini, par le banc) non plus, et le pas 4 se joue par les outils.
+Si c7 me le confie, je l'écris dans le dataflow avec son témoin (N éléments → N appels, N
+écritures, l'annulation au k-ième).
 
 ## 4. Ce qui change dans le code, du générique au gabarit
 
