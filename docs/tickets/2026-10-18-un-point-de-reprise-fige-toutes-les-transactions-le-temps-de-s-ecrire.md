@@ -1,7 +1,11 @@
 # Un point de reprise fige toutes les transactions le temps de s'écrire, lecteurs compris, et il s'écrit toutes les trois secondes sous charge
 
-- **État** : ouvert (mesuré par le banc le 18 octobre 2026 ; à placer dans la file du cœur C++
-  par l'orchestration)
+- **État** : ouvert, réduit par V2-1c (25 octobre 2026, cœur C++) : un lecteur nouveau n'attend
+  plus l'écriture du point de reprise (il entre, lit le dernier validé sur les blocs qu'il tient,
+  valide et annule pendant qu'elle dure ; `CheckpointNoStall.ReadDuringACheckpointDoesNotWait` au
+  vert) ; un écrivain nouveau attend encore, et un lecteur ouvert avant le point de reprise est
+  encore attendu (V2-2) ; l'écriture à la demande des pages validées (« steal », §3.1 de la
+  page 17) reste à faire
 - **Gravité** : attente, pour tout le monde : aucun BEGIN n'entre et chaque validation attend
   que le point de reprise soit écrit ; sous vingt écrivains, 1,2 à 1,4 s par point de reprise,
   un toutes les 3 s au seuil. Ni perte ni réponse fausse.
