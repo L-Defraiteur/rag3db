@@ -1,12 +1,6 @@
 # Un shard de lucivy sans écrivain perd les écritures en silence
 
-- **État** : ouvert (19 octobre 2026, G, à la demande de l'orchestration). **Le correctif vit dans
-  lucivy-core**, la bibliothèque de Lucie : une version à publier par elle. Rien n'est proposé
-  vers son dépôt sans son mot. Correctif prêt, non poussé : commit `bb07627` de la branche locale
-  `correctifs-rag3db-19-octobre` (worktree `~/git_workspaces/lucivy-figement-G`), avec le correctif
-  du figement pour une seule version. Témoin `test_writes_to_a_shard_without_writer_are_reported_by_commit`,
-  rouge sur v4.3.0, vert avec. Le choix revient à Lucie :
-  `extension/rag3weaver/docs/optimiseur/19-octobre-2026-02h05/04-lucivy-deux-correctifs-a-ton-choix.md`.
+- **État** : **corrigé** dans lucivy 4.3.1, publiée par Lucie le 25 octobre 2026, et prise par rag3weaver à sa version publiée : une écriture vers un shard sans écrivain devient une erreur au commit, au lieu d'un Ok.
 - **Gravité** : perte silencieuse. Un document indexé ou retiré n'atteint pas l'index, et l'appel a
   rendu `Ok`.
 - **Atteignable en service** : pas aujourd'hui. rag3weaver garde un écrivain ouvert sur chaque shard

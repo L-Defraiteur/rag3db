@@ -1,9 +1,6 @@
 # Retirer le patch lucivy à la publication
 
-- **État** : ouvert, le 25 octobre 2026 (G, sur décision de Lucie relayée par l'orchestration).
-  rag3weaver prend lucivy par un `[patch.crates-io]` **temporaire** : la branche
-  `4.3.1` du dépôt https://github.com/L-Defraiteur/lucivy, épinglée à `a925d94` (depuis le 25 octobre au soir ; avant, `correctifs-rag3db-19-octobre` à `bb07627`).
-  Il en sera ainsi jusqu'à ce que Lucie approuve cette branche sur main et publie une version.
+- **État** : **corrigé** — Lucie a publié lucivy 4.3.1 (crates.io, npm, PyPI, tag v4.3.1, 25 octobre 2026) ; rag3weaver la prend par sa version publiée (^4.3.1) et le `[patch.crates-io]` lucivy est retiré. Les sources résolues depuis crates.io sont celles du tag (ld-lucivy, lucivy-core, luciole, lucistore, sparse-vector, lucivy-fst, et six sous-crates 0.27.0 à l'identique) ; ld-lucivy-common et ld-lucivy-columnar 0.27.0 n'en diffèrent que par trois retouches sans effet (une fermeture réécrite, un `&` dans un Debug, une ligne d'un TODO.md).
 - **Gravité** : aucune en service. C'est une dette de construction : rag3weaver ne prend plus lucivy
   par sa version publiée, ce qui est notre règle.
 - **Atteignable en service** : sans objet.
