@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Le juge de session.** Un agent relit chaque tour du chat par son
+  journal, rejoue ce qui lit, vérifie le résultat, se compare aux sessions
+  précédentes de la même tâche et range sa fiche de bilan dans la mémoire ; sur
+  Gemini, il nomme la description d'outil qui a trompé l'agent. 4b64a98e5.
 - **25 oct. — Le chat code dans une tâche.** Sur un dépôt étranger ouvert dans
   l'IDE, le chat lit, cherche et édite le code sur la branche de la tâche, jamais
   ailleurs, et mène à sa relecture ; Gemini le fait en 13 s. ae127d634.
