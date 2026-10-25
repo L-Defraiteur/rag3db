@@ -40,7 +40,7 @@ impl NodeFactory for RhaiNodeFactory {
                 param(
                     "value",
                     ConfigParamType::Json,
-                    "Input when no edge supplies value; any other key is a field of it",
+                    "Input when no edge supplies value; any other key is a field of it. With fields given by key, a value supplied by an edge is added under `value` instead of replacing them; search results arrive as JSON",
                 ),
                 param(
                     "inputs",
@@ -122,16 +122,40 @@ impl Node for RhaiNode {
                     .and_then(|id| scripts.as_ref()?.get(id).map(String::as_str))
             })
             .ok_or("unknown registered script")?;
-        let input = ctx
+        // L'entrée : la valeur du port `value`, ou celle de la config. Avec des
+        // champs donnés par clé (`inputs`), le port ne les remplace pas : il
+        // s'y ajoute sous `value` — le script lit `input.section` (la clé) et
+        // `input.value` (le port). C'est ce qu'un graphe cité par élément
+        // demande (M4) : la section par clé, les résultats de la recherche par
+        // le port. Des résultats de recherche (`Results`) se rendent en JSON.
+        let port = ctx
             .input("value")
-            .and_then(|v| v.downcast::<Value>())
-            .or_else(|| self.config.get("value"))
-            .ok_or("RhaiNode requires JSON value")?;
+            .map(|v| {
+                if let Some(json) = v.downcast::<Value>() {
+                    Ok(json.clone())
+                } else if let Some(results) = v.downcast::<Vec<super::resultat::UnifiedResult>>() {
+                    serde_json::to_value(results).map_err(|e| format!("RhaiNode : les résultats ne se rendent pas en JSON : {e}"))
+                } else {
+                    Err("RhaiNode requires JSON value".to_string())
+                }
+            })
+            .transpose()?;
+        let keyed = self.config.get("inputs").is_some();
+        let input: Value = match (port, self.config.get("value"), keyed) {
+            (Some(p), Some(Value::Object(fields)), true) => {
+                let mut fields = fields.clone();
+                fields.insert("value".into(), p);
+                Value::Object(fields)
+            }
+            (Some(p), _, _) => p,
+            (None, Some(c), _) => c.clone(),
+            (None, None, _) => return Err("RhaiNode requires JSON value".into()),
+        };
         let limits = ctx
             .service::<crate::harness::RhaiLimits>("rhai_limits")
             .cloned()
             .unwrap_or_default();
-        let value = crate::harness::evaluate(script, input, &limits)?;
+        let value = crate::harness::evaluate(script, &input, &limits)?;
         ctx.set_output("result", PortValue::new(value));
         Ok(())
     }

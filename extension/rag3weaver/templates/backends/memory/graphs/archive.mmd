@@ -1,0 +1,33 @@
+%% tool: archive
+%% description: Envoie un document Markdown à l'archiviste : le document est gardé tel quel (une Source, le L0, immuable), découpé par ses titres, et chaque section est rangée sur une fiche par une décision fermée du modèle déclaré au manifeste (models.llm) parmi les fiches candidates que la recherche rappelle — ou none (rien d'écrit, la section reste dans le L0), ou create (une fiche proposée, nommée par le titre de la section). Chaque section rangée devient un apport L1 de sa fiche, qui cite sa provenance doc:<chemin>#<titre>. Sans modèle déclaré, le L0 est gardé et chaque section est dite en erreur. Rend le rapport du dernier étage ({elements, ok, errors}) ; les métadonnées portent ceux des autres.
+%% param: titre string! -- Le titre du document.
+%% param: contenu string! -- Le Markdown, tel quel.
+%% param: chemin string = "" -- Le chemin de la Source ; vide : sources/<jour>-<slug du titre>.md.
+%% param: origine string = "envoi" -- envoi, filet, migration…
+%% param: jour string! -- Le jour, AAAA-MM-JJ, pour le chemin par défaut.
+%% param: candidates int = 5 -- Fiches candidates rappelées par section.
+%% param: search_options json = {"limit": 8} -- Les options de la recherche de candidates.
+%% param: allow_create bool = true -- Sans create, une section sans candidate est none.
+%% param: instruction string = "Tu ranges une section d'un document sous l'une des fiches candidates. Une section va sous une fiche si elle parle de ce que la fiche décrit ; une règle va sous le domaine où elle s'applique. Partager un mot ne suffit pas. Si aucune candidate ne convient, réponds none ; si le sujet est net et qu'aucune fiche ne le porte, réponds create." -- Ce que l'étiquette veut dire, pour le modèle.
+%% result: refs.report
+
+graph LR
+    genre["CreateRefTypeNode(name='doc', description='La section d&#39;un source Markdown, provenance d&#39;un apport : doc:<chemin du source>#<titre de la section>.', forme='doc:<chemin du source>#<titre>', confirm=true, types_entity='RefType')"]
+    params["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
+    source["EntityRecordNode(entity='Source', action='put', record={})"]
+    split["SplitSections(field='contenu')"]
+    decide["ForEachNode(graph='@graphs/archive_decide.mmd', on_error='report', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
+    route["Route(key='kind', routes='none|create|fiche')"]
+    write["ForEachNode(graph='@graphs/archive_write.mmd', on_error='report')"]
+    create["ForEachNode(graph='@graphs/archive_create.mmd', on_error='report')"]
+    refs["ForEachNode(graph='@graphs/archive_link.mmd', on_error='report')"]
+    refs_new["ForEachNode(graph='@graphs/archive_link.mmd', on_error='report')"]
+    genre -->|report| params
+    params -->|result| source
+    params -->|result| split
+    split -->|element| decide
+    decide -->|results| route
+    route -->|fiche| write
+    route -->|create| create
+    write -->|results| refs
+    create -->|results| refs_new
