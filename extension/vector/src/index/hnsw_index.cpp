@@ -889,8 +889,10 @@ void OnDiskHNSWIndex::catchUpCommittedAfter(main::ClientContext* context,
     }
     auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
         getIndexTableCatalogEntries(catalog::Catalog::Get(*context), transaction, indexInfo);
+    // config.ml est un int64_t (le degré maximal du graphe bas, vérifié positif au CREATE) et
+    // le champ un uint64_t : entre accolades, MSVC et AppleClang refusent le rétrécissement.
     HNSWDeleteState state{context, nodeTableEntry, upperRelTableEntry, lowerRelTableEntry,
-        nodeTable, columnID, config.ml};
+        nodeTable, columnID, static_cast<uint64_t>(config.ml)};
     auto& insertState = state.insertState;
     fitVisitedToTable(transaction, insertState.searchState);
     // 1. Les lignes supprimées et les lignes déplacées sortent ensemble du graphe, puis leurs
