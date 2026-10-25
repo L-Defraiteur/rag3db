@@ -138,6 +138,7 @@ fn les_outils_d_avant_le_modele_marchent_encore() {
 }
 
 /// Un outil d'essai : l'élément donné passe par `Decide via='llm'`.
+#[cfg(feature = "openai-llm")]
 const DECIDE_ESSAI: &str = "%% tool: decide_essai
 %% description: Un Decide par le modèle déclaré, pour le témoin.
 %% param: element json! -- L'élément à étiqueter ({text}).
