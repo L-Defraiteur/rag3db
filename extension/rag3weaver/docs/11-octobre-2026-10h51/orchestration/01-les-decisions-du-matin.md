@@ -1751,3 +1751,43 @@ où elle vit.
   correctif se prépare sans rien publier ; le budget par défaut des écrivains
   de lucivy ; et les décisions de la nuit listées dans l'entrée précédente,
   plus les gabarits reliés à `builtin:` dans ses manifestes.
+
+- **19 octobre, de 7 h à 10 h 30, puis la reprise du 25 octobre.** La matinée
+  du 19 a fait atterrir quatre lots : les lectures sans instantané
+  (`RAG3WEAVER_READ_POOL=0`, b0652a2c5), le correctif EXISTS-paramètre du cœur
+  (8b98f19f7 : un paramètre écrit dans une sous-requête est vu à la
+  préparation ; lib en service aux deux postes à 9 h 14, e2e_code 27 sur 27),
+  l'anti-boucle (c) et la vue des réactions qui dit ce que chaque run a écrit
+  (3ffee24a4, 4e6129993), et les NULL d'un COPY valables pour toutes les
+  colonnes (dcbaef7b1). Décisions prises ce matin-là : la pièce V2-1 du cœur
+  en trois lots (colonnes stables avec le format de stockage 41, bloc neuf
+  réécrit hors place, porte à deux niveaux) ; le format 41 est un aller sans
+  retour, la lib en service ne se ramène plus en arrière, le seul retour est
+  l'instantané, et sa mise en service passe par une bascule coordonnée
+  (instantanés reflink des bases partagées, hôtes arrêtés, verdict e2e_code,
+  `courant` aux deux postes ensemble, hôtes redémarrés annoncés) ; le coût de
+  la réécriture hors place se mesure dans la passe de V2-1b et se remonte à
+  Lucie ; un plancher du magasin de libs ne se pose que quand le crate dépend
+  du correctif et que `courant` le porte (celui de dcbaef7b1 entre avec le
+  retrait du filet copier_les_liens) ; les intermittents d'un test ne passent
+  pas en probabilistic quand une course du test est prouvée (hotfixs sur
+  ChangesCommittedDuringACreateAreSeen) ; un worktree par script lourd ; un
+  rebase qui n'apporte que du C++ ou des docs ne fait pas rejouer un lot
+  Rust. Puis une file d'envoi sous `extension/rag3weaver` s'est formée
+  derrière l'IR du Plan : la fenêtre de G, la mémoire, everything
+  declarative, le plafond. **Rien de cette file n'a atterri : master est
+  resté à dcbaef7b1 pendant six jours**, tout est resté commité ou en patch
+  dans les worktrees des deux postes (l'IR du Plan ec1e26c1b, les échecs
+  d'index 927fb0f55, les lots de la mémoire, les planchers et C4, le lot (3)
+  du cœur f0e1fcc45, le format 41 3c4e6bdb3, le rattrapage HNSW 2d3ace19e, le
+  CREATE concurrent f51e17cde, l'allègement des langages). Le 25 octobre,
+  toutes les sessions sont relancées de zéro et la file reprend dans le même
+  ordre, chaque lot rejoué sur le master du moment. Décisions de Lucie du
+  25 : pas de compilateur dans le produit (trop lourd à chaque coup), mais
+  **clangd comme oracle de mesure** de nos arêtes C++, en script à part sur
+  luciepc ; **tree-sitter passe de 0.24.7 à 0.27.1** avec ses grammaires
+  (lève l'épinglage ABI 15 de C#), prouvé par la sonde sur code-lourd ; et une
+  graine : **les outils d'un serveur de langage reproduits en gabarits** sur
+  notre graphe (définition, références, type, plan du fichier,
+  implémentations, hiérarchie d'appels), par l'IR du Plan, à garder ou non
+  ensuite.
