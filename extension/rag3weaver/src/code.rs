@@ -255,6 +255,10 @@ pub fn file_config() -> EntityConfig {
     // Curseur de source (commit git, instant de balayage…) — vide tant que
     // `FileSource` n'existe pas ; le champ est là pour ne pas migrer.
     fields.insert("cursor".into(), field(FieldType::String));
+    // **Les `#include` du fichier**, tels qu'écrits (sans guillemets ni chevrons), un par ligne :
+    // C et C++ seulement. Ils disent ce que le fichier voit (`Inclusions`) ; nul pour une base
+    // d'avant le champ, et la visibilité ne filtre alors rien.
+    fields.insert("includes".into(), field(FieldType::String));
     EntityConfig {
         fields,
         // La politique par défaut : **copie de travail**. Un fichier, un
@@ -622,6 +626,10 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
             // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
             let mut props = usage_property_defs();
             props.insert("resolution".to_string(), field_def(FieldType::String));
+            // C/C++ : par où le définisseur est visible du mentionneur — « inclusion » (son fichier
+            // est dans la fermeture des #include), « entete » (un en-tête de même nom de base l'est :
+            // la définition d'un .cpp que son .h déclare). Vide hors C/C++ et sur une base d'avant.
+            props.insert("visibility".to_string(), field_def(FieldType::String));
             catalog.register_relation_with(rel, from, to, props)?;
             continue;
         }
@@ -655,6 +663,9 @@ pub struct FileRecord {
     /// rempli par [`analyze_source`].
     #[serde(default)]
     pub cursor: String,
+    /// Les `#include` du fichier, tels qu'écrits, un par ligne (C et C++ ; vide sinon).
+    #[serde(default)]
+    pub includes: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1064,6 +1075,16 @@ pub fn analyze_in_project(
             size_bytes: sizes.get(abs).copied().unwrap_or(0),
             content_hash: fa.content_hash.clone().unwrap_or_default(),
             cursor: String::new(),
+            includes: if famille_de_langage(abs) == Some("c++") {
+                fa.import_references
+                    .iter()
+                    .filter(|imp| imp.kind == codeparsers::scope_extraction::types::ImportReferenceKind::SideEffect)
+                    .map(|imp| imp.source.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            } else {
+                String::new()
+            },
         });
     }
     // ── Les fichiers sans grammaire ─────────────────────────────────────
@@ -1089,6 +1110,7 @@ pub fn analyze_in_project(
             size_bytes: fa.octets,
             content_hash: fa.content_hash.clone().unwrap_or_default(),
             cursor: String::new(),
+            includes: String::new(),
         });
         // Un gabarit (graphe, backend, composant, nœud scripté) se découpe en scopes nommés dont
         // les renvois sont des mentions par le nom (`code_gabarits`) ; sinon, un seul texte brut.
@@ -1998,6 +2020,9 @@ pub struct CodeIngestReport {
     /// leur langage ne désignerait que par le nom : aucune arête (une résolution ne traverse pas
     /// les langages, et ce filtre ne désigne personne).
     pub abstained_cross_language: usize,
+    /// Mentions C/C++ dont aucun définisseur n'est visible par les #include du mentionneur :
+    /// aucune arête (une libc, une std ou une bibliothèque non indexée n'a pas de candidat).
+    pub abstained_invisible: usize,
     /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
     /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
     pub mentions_read: usize,
@@ -2029,6 +2054,7 @@ impl FileRecord {
             ("size_bytes".into(), i(self.size_bytes)),
             ("content_hash".into(), s(&self.content_hash)),
             ("cursor".into(), s(&self.cursor)),
+            ("includes".into(), s(&self.includes)),
         ])
     }
 }
@@ -2589,6 +2615,9 @@ impl Catalog {
         let (parents, fichiers, genres, origines, de_trait) = self.parents_et_fichiers(&a_departager)?;
         let borne = borne_ambigu();
         let familles: HashMap<&str, Option<&'static str>> = fichiers.iter().map(|(u, f)| (u.as_str(), famille_de_langage(f))).collect();
+        // Les #include du C/C++ indexé, lus une fois par lot quand un mentionneur en est.
+        let inclusions = if familles.values().any(|f| *f == Some("c++")) { Inclusions::charger(self)? } else { Inclusions::default() };
+        let mut vues: HashMap<String, Option<std::rc::Rc<Vue>>> = HashMap::new();
         crate::ingest_profile::add("symboles · parents et fichiers", t);
         let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
         for sym in uuids {
@@ -2632,6 +2661,43 @@ impl Catalog {
                     continue;
                 }
                 let definers: &[String] = &filtres;
+                // **La visibilité par les #include** (C/C++, révisé par c7 le 25 octobre 2026) : un
+                // définisseur n'est candidat que si son fichier est dans la fermeture des #include
+                // du mentionneur, ou si un en-tête de même nom de base l'est (la définition d'un
+                // .cpp que son .h déclare : marquée « entete », mesurée à part ; la forme exacte est
+                // le ticket docs/tickets/2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md). Une base sans les
+                // includes (nuls) ne filtre rien. Un candidat unique parmi les visibles se désigne :
+                // c'est la règle du langage, pas une devinette.
+                let mut par_entete: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let vue = if de_ma_famille == Some("c++") && m.kind != "HAS_PARENT" {
+                    fichiers.get(&m.from).and_then(|f| vues.entry(f.clone()).or_insert_with(|| inclusions.vue(f).map(std::rc::Rc::new)).clone())
+                } else {
+                    None
+                };
+                let visibles: std::borrow::Cow<[String]> = match &vue {
+                    Some(vue) => std::borrow::Cow::Owned(
+                        definers
+                            .iter()
+                            .filter(|d| match fichiers.get(*d) {
+                                Some(f) if vue.fichiers.contains(f) => true,
+                                Some(f) if vue.par_entete(f) => {
+                                    par_entete.insert((*d).clone());
+                                    true
+                                }
+                                Some(_) => false,
+                                None => true,
+                            })
+                            .cloned()
+                            .collect(),
+                    ),
+                    None => std::borrow::Cow::Borrowed(definers),
+                };
+                if visibles.is_empty() {
+                    report.abstained_invisible += 1;
+                    continue;
+                }
+                let homonymes = if vue.is_some() { visibles.len() } else { homonymes };
+                let definers: &[String] = &visibles;
                 let cibles: Vec<(String, Resolution)> = match choose_target(&m, definers, &parents, &fichiers, &genres, &de_trait, &reexports) {
                     // Le filtre des langages ôte des candidats, il n'en désigne pas : un nom que
                     // plusieurs langages définissent, unique dans le sien, ne se résout pas par le
@@ -2670,6 +2736,9 @@ impl Catalog {
                 let mut usage = if USAGE_RELATIONS.contains(&rel) { m.usage.clone() } else { BTreeMap::new() };
                 if USAGE_RELATIONS.contains(&rel) {
                     usage.insert("resolution".to_string(), s(resolution.as_str()));
+                    if vue.is_some() {
+                        usage.insert("visibility".to_string(), s(if par_entete.contains(&target) { "entete" } else { "inclusion" }));
+                    }
                 }
                 self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
                 if rel == "CONSUMES" {
@@ -3387,6 +3456,108 @@ fn famille_de_langage(chemin: &str) -> Option<&'static str> {
         "mmd" | "json" => "gabarit",
         _ => return None,
     })
+}
+
+/// **Ce qu'un fichier C/C++ voit** : la fermeture de ses #include (lui compris), et les noms de
+/// base des en-têtes qu'elle contient.
+#[derive(Debug, Default)]
+struct Vue {
+    fichiers: std::collections::HashSet<String>,
+    radicaux: std::collections::HashSet<String>,
+}
+
+impl Vue {
+    /// Un .c/.cc/.cpp que la fermeture ne contient pas, mais dont un en-tête de même nom de base y
+    /// est : la définition que cet en-tête déclare (`node_table.cpp` ↔ `node_table.h`).
+    fn par_entete(&self, fichier: &str) -> bool {
+        let (radical, ext) = match fichier.rsplit_once('/').map_or(fichier, |(_, n)| n).rsplit_once('.') {
+            Some((r, e)) => (r, e),
+            None => return false,
+        };
+        matches!(ext, "c" | "cc" | "cpp" | "cxx" | "c++") && self.radicaux.contains(radical)
+    }
+}
+
+/// **Les #include du C/C++ indexé** : par fichier, ses includes tels qu'écrits (`None` : une base
+/// d'avant le champ) ; et les fichiers par nom de base, pour résoudre un include par suffixe.
+#[derive(Debug, Default)]
+struct Inclusions {
+    includes: HashMap<String, Option<Vec<String>>>,
+    par_nom: HashMap<String, Vec<String>>,
+}
+
+impl Inclusions {
+    fn charger(cat: &Catalog) -> Result<Self, CatalogError> {
+        use rag3weaver_ir::{Column, Select};
+        let lire = Select::all(FILE, vec![Column::Node("path".into()), Column::Node("includes".into())]);
+        let requete = cat.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let rows = cat.conn().execute_with_params(&requete, &[]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let mut out = Inclusions::default();
+        for row in &rows.rows {
+            let Some(CypherValue::String(chemin)) = row.first() else { continue };
+            if famille_de_langage(chemin) != Some("c++") {
+                continue;
+            }
+            let incs = match row.get(1) {
+                Some(CypherValue::String(t)) => Some(t.lines().filter(|l| !l.is_empty()).map(String::from).collect()),
+                _ => None,
+            };
+            out.includes.insert(chemin.clone(), incs);
+            let nom = chemin.rsplit_once('/').map_or(chemin.as_str(), |(_, n)| n).to_string();
+            out.par_nom.entry(nom).or_default().push(chemin.clone());
+        }
+        Ok(out)
+    }
+
+    /// **Les fichiers qu'un include désigne** : ceux dont le chemin finit par ce qu'il écrit
+    /// (`storage/table/x.h` → `src/include/storage/table/x.h`), comme un module désigne un fichier
+    /// ([`module_designe_fichier`]). Plusieurs : tous, un sur-ensemble qui n'ôte jamais une arête
+    /// juste. `../` se lit depuis le dossier de l'includeur.
+    fn cibles(&self, de: &str, include: &str) -> Vec<&String> {
+        let ecrit = include.trim_start_matches("./");
+        let ecrit = if ecrit.starts_with("../") {
+            let mut parties: Vec<&str> = de.rsplit_once('/').map_or("", |(d, _)| d).split('/').filter(|p| !p.is_empty()).collect();
+            let mut reste = ecrit;
+            while let Some(r) = reste.strip_prefix("../") {
+                parties.pop();
+                reste = r;
+            }
+            parties.push(reste);
+            std::borrow::Cow::Owned(parties.join("/"))
+        } else {
+            std::borrow::Cow::Borrowed(ecrit)
+        };
+        let nom = ecrit.rsplit_once('/').map_or(ecrit.as_ref(), |(_, n)| n);
+        self.par_nom
+            .get(nom)
+            .map(|v| v.iter().filter(|p| p.as_str() == ecrit.as_ref() || p.ends_with(&format!("/{ecrit}"))).collect())
+            .unwrap_or_default()
+    }
+
+    /// **Ce que voit `fichier`** : la fermeture de ses #include. `None` si ses includes ne sont pas
+    /// connus (une base d'avant le champ) : la visibilité ne filtre alors rien.
+    fn vue(&self, fichier: &str) -> Option<Vue> {
+        self.includes.get(fichier)?.as_ref()?;
+        let mut vue = Vue::default();
+        let mut a_suivre = vec![fichier.to_string()];
+        while let Some(f) = a_suivre.pop() {
+            if !vue.fichiers.insert(f.clone()) {
+                continue;
+            }
+            if let Some(Some(incs)) = self.includes.get(&f) {
+                for inc in incs {
+                    a_suivre.extend(self.cibles(&f, inc).into_iter().filter(|c| !vue.fichiers.contains(*c)).cloned());
+                }
+            }
+        }
+        for f in &vue.fichiers {
+            let nom = f.rsplit_once('/').map_or(f.as_str(), |(_, n)| n);
+            if let Some((radical, _)) = nom.rsplit_once('.') {
+                vue.radicaux.insert(radical.to_string());
+            }
+        }
+        Some(vue)
+    }
 }
 
 /// **Une résolution ne traverse pas les langages** : une mention ne vise qu'un définisseur de sa
@@ -4141,6 +4312,43 @@ mod tests_resolution {
         assert!(meme_langage(f("/p/templates/trace.mmd").as_ref(), f("/p/src/trace_nodes.rs").as_ref()), "un gabarit nomme son type Rust");
         assert!(!meme_langage(f("/p/src/a.rs").as_ref(), f("/p/templates/trace.mmd").as_ref()), "le code ne vise pas un gabarit par le nom");
         assert!(meme_langage(f("/p/Makefile").as_ref(), f("/p/b.rs").as_ref()) && meme_langage(None, f("/p/b.rs").as_ref()), "inconnu : rien ne restreint");
+    }
+
+    /// **Ce qu'un fichier C/C++ voit** (la visibilité par les #include, 25 octobre 2026) : un
+    /// include se résout par suffixe, `../` depuis le dossier de l'includeur ; la fermeture suit
+    /// les includes des includes ; un .cpp est visible par son en-tête de même nom ; une base sans
+    /// le champ ne filtre rien.
+    #[test]
+    fn la_visibilite_suit_les_includes() {
+        let mut inc = Inclusions::default();
+        let poser = |inc: &mut Inclusions, f: &str, incs: Option<&[&str]>| {
+            inc.includes.insert(f.to_string(), incs.map(|v| v.iter().map(|x| x.to_string()).collect()));
+            inc.par_nom.entry(f.rsplit_once('/').unwrap().1.to_string()).or_default().push(f.to_string());
+        };
+        poser(&mut inc, "/p/src/main/db.cpp", Some(&["main/db.h", "../common/util.h", "vector"]));
+        poser(&mut inc, "/p/src/include/main/db.h", Some(&["storage/table.h"]));
+        poser(&mut inc, "/p/src/include/storage/table.h", Some(&[]));
+        poser(&mut inc, "/p/src/storage/table.cpp", Some(&["storage/table.h"]));
+        poser(&mut inc, "/p/src/common/util.h", Some(&[]));
+        poser(&mut inc, "/p/src/other/util.h", Some(&[]));
+        poser(&mut inc, "/p/src/other/helper.cpp", Some(&[]));
+        poser(&mut inc, "/p/old/legacy.cpp", None);
+
+        assert_eq!(inc.cibles("/p/src/main/db.cpp", "main/db.h"), vec!["/p/src/include/main/db.h"], "par suffixe");
+        assert_eq!(inc.cibles("/p/src/main/db.cpp", "../common/util.h"), vec!["/p/src/common/util.h"], "../ depuis le dossier de l'includeur");
+        assert_eq!(inc.cibles("/p/src/main/db.cpp", "util.h").len(), 2, "un include ambigu les désigne tous");
+        assert!(inc.cibles("/p/src/main/db.cpp", "vector").is_empty(), "une std non indexée ne désigne rien");
+        assert!(inc.cibles("/p/src/main/db.cpp", "able.h").is_empty(), "un suffixe se coupe à un /");
+
+        let vue = inc.vue("/p/src/main/db.cpp").unwrap();
+        assert!(vue.fichiers.contains("/p/src/main/db.cpp"), "un fichier se voit");
+        assert!(vue.fichiers.contains("/p/src/include/storage/table.h"), "la fermeture suit les includes des includes");
+        assert!(!vue.fichiers.contains("/p/src/other/util.h"), "un homonyme non inclus n'est pas vu");
+        assert!(vue.par_entete("/p/src/storage/table.cpp"), "un .cpp est vu par son en-tête de même nom");
+        assert!(!vue.par_entete("/p/src/other/helper.cpp"), "un .cpp sans en-tête inclus ne l'est pas");
+        assert!(!vue.par_entete("/p/src/include/storage/table.h"), "par_entete ne vaut que pour une source");
+        assert!(inc.vue("/p/old/legacy.cpp").is_none(), "une base sans le champ ne filtre rien");
+        assert!(inc.vue("/p/inconnu.cpp").is_none());
     }
 
     #[test]

@@ -91,6 +91,8 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une définition C++ se lie à la déclaration de son en-tête, pas à son nom de fichier](2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md) | ouvert — règle approchée (« entete », même nom de base) posée par le lot INCLUDES, mesurée à part par l'oracle | réponse fausse | oui, dès la visibilité sur master | oui (code.rs, codeparsers) |
+| [Retirer le patch lucivy à la publication](2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | ouvert — `[patch.crates-io]` temporaire vers la branche correctifs-rag3db-19-octobre (bb07627), jusqu'à la publication par Lucie | dette de construction | non | oui (Cargo.toml, Cargo.lock) |
 | [fmt/format.h : depuis tree-sitter 0.27, une macro est lue comme un corps de fonction](2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md) | ouvert — recul accepté par Lucie avec le passage à 0.27 ; aucun correctif | réponse fausse (39 fonctions sous un parent anonyme, un fichier tiers) | oui | oui (codeparsers) |
 | [Le témoin du chat rougit encore sous la lib entière, sur le tour lent](2026-10-25-le-temoin-du-chat-rougit-encore-sur-le-tour-lent.md) | ouvert — pour everything declarative | test instable | non (le test) | oui (`daemon_host/chat.rs`) |
 | [Retirer le patch lucivy à la publication](2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | ouvert — `[patch.crates-io]` temporaire vers la branche 4.3.1 (a925d94), jusqu'à la publication par Lucie | dette de construction | non | oui (Cargo.toml, Cargo.lock) |
