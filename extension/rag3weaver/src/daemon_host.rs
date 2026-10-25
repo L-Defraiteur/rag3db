@@ -618,6 +618,7 @@ impl DaemonHost {
         let result = self.check_session(session).and_then(|s| {
             let cell = cell_of(&s)?;
             let hosted = self.hosted(manifest)?;
+            let (client, appel) = (s.client.clone(), arguments.clone());
             // L'IDE appelle au nom de l'humain : `task_writes` ne vise que l'agent.
             let humain = self.ide_session.get().is_some_and(|ide| *ide == s.id);
             self.with_backend(&hosted, |b| match (&cell, humain) {
@@ -629,8 +630,31 @@ impl DaemonHost {
                 (None, true) => b.call_humain(name, arguments),
             })
             .and_then(|r| r)
+            .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, name, &appel, r))
         });
         op_response(result)
+    }
+
+    /// **Ce qu'un appel d'outil a rendu à son appelant**, dans le journal de son
+    /// run (page 04 du 25 octobre 2026) : le client (un Claude Code, l'IDE),
+    /// l'outil, ses arguments et le résultat tel qu'il l'a reçu, borné. C'est ce
+    /// que le juge regarde quand l'agent n'est pas notre chat.
+    fn journaliser_l_appel(&self, backend: &str, client: &str, outil: &str, arguments: &Value, reponse: &Value) {
+        let Some(run) = reponse["run"].as_str() else { return };
+        const BORNE: usize = 64 * 1024;
+        let rendu = reponse["result"].to_string();
+        let rendu = if rendu.len() > BORNE {
+            let mut coupe = BORNE;
+            while !rendu.is_char_boundary(coupe) {
+                coupe -= 1;
+            }
+            json!({ "tronque": rendu.len(), "debut": &rendu[..coupe] })
+        } else {
+            reponse["result"].clone()
+        };
+        let mut ajouts = serde_json::Map::new();
+        ajouts.insert("appel".into(), json!({ "client": client, "outil": outil, "arguments": arguments, "rendu": rendu }));
+        self.journal.ajouter(backend, run, ajouts);
     }
 
     /// **Arrête un run** d'un backend hébergé, au nom de `by` (C4) : un run

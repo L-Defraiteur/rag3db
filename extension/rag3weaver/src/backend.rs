@@ -4426,7 +4426,9 @@ impl Backend {
                 read(&port.node, &port.port)?,
             );
         }
-        let mut response = json!({"result":result,"metadata":metadata});
+        // `run` : l'id du run de cet appel, pour que l'appelant (l'hôte) range ce
+        // qu'il a rendu dans le journal du run (page 04 du 25 octobre 2026).
+        let mut response = json!({"result":result,"metadata":metadata,"run":run});
         if result_port.1 == "results" && output.get(result_port.0, "text").is_some() {
             response["presentation"] = read(result_port.0, "text")?;
         }
