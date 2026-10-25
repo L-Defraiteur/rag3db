@@ -6,6 +6,7 @@
 
 #include "catalog/catalog.h"
 #include "common/test_hooks.h"
+#include "common/file_system/file_info.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
@@ -78,6 +79,7 @@ void Checkpointer::writeCheckpoint() {
     // Checkpoint storage. Note that we first checkpoint storage before serializing the catalog, as
     // checkpointing storage may overwrite columnIDs in the catalog.
     CheckpointProfile profile;
+    const auto bytesWrittenBefore = common::FileInfo::bytesWritten();
     bool hasStorageChanges = checkpointStorage();
     // Le catalogue, l'en-tête et l'application des pages ne se défont pas.
     StorageManager::Get(clientContext)->markCheckpointChangedMemory();
@@ -113,10 +115,11 @@ void Checkpointer::writeCheckpoint() {
         const auto endMs = profile.lap();
         fprintf(stderr,
             "[checkpoint-profile] total=%.1f ms : tables=%.1f catalogue+metadonnees=%.1f "
-            "en-tete=%.1f journal+pages-ombres=%.1f fin=%.1f | fichier=%lu pages | attente des "
-            "lecteurs=%lu ms\n",
+            "en-tete=%.1f journal+pages-ombres=%.1f fin=%.1f | fichier=%lu pages | ecrits=%lu "
+            "octets | attente des lecteurs=%lu ms\n",
             profile.total(), storageMs, serializeMs, headerMs, applyMs, endMs,
             static_cast<unsigned long>(dataFH->getNumPages()),
+            static_cast<unsigned long>(common::FileInfo::bytesWritten() - bytesWrittenBefore),
             static_cast<unsigned long>(readersWaitMs));
     }
 }

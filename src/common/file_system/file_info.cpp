@@ -23,7 +23,10 @@ int64_t FileInfo::readFile(void* buf, size_t nbyte) {
     return fileSystem->readFile(*this, buf, nbyte);
 }
 
+std::atomic<uint64_t> FileInfo::totalBytesWritten{0};
+
 void FileInfo::writeFile(const uint8_t* buffer, uint64_t numBytes, uint64_t offset) {
+    totalBytesWritten.fetch_add(numBytes, std::memory_order_relaxed);
     fileSystem->writeFile(*this, buffer, numBytes, offset);
 }
 
