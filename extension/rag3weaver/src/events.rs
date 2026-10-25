@@ -331,9 +331,48 @@ pub enum Event {
     /// ferait relire des mémoires que rien n'a touchées.
     ///
     /// Émis **au succès seulement** : une ingestion qui échoue n'a rien changé.
+    ///
+    /// **Tous les chemins d'écriture** l'émettent depuis le 19 octobre 2026
+    /// (« le catalogue dit tout ») : `change` dit lequel — `ingested`
+    /// (`ingest_entities`), `created` (`create`), `updated` (le contenu a
+    /// changé), `transitioned` (l'état a changé ; `from_state` et `to_state`
+    /// le disent), `removed` (`delete`). Une écriture qui change le contenu
+    /// **et** l'état émet `updated` puis `transitioned` : deux faits, deux
+    /// annonces. Seuls les uuids réellement
+    /// écrits y sont ; sous une transaction, il part au commit, jamais au
+    /// rollback.
     EntitiesChanged {
         entity: String,
         uuids: Vec<String>,
+        change: String,
+        from_state: Option<String>,
+        to_state: Option<String>,
+        /// L'instant d'émission, en millisecondes UTC.
+        at_ms: u64,
+        /// Le run qui a écrit, quand il est connu.
+        run: Option<String>,
+    },
+    /// **Des liens posés ou retirés** (19 octobre 2026) : l'état net du lot,
+    /// deux listes séparées. `added` ne porte que des paires **neuves** (une
+    /// paire reposée n'y est pas), `removed` que des paires qui existaient ;
+    /// une paire liée puis déliée, ou déliée puis reposée, dans la même
+    /// fenêtre (un drain, une transaction, la ré-indexation d'un fichier) n'y
+    /// paraît pas — un fichier ré-indexé sans changement ne publie rien. Au
+    /// plus [`Event::PAIRES_PAR_EVENEMENT_PAR_DEFAUT`] paires par liste (réglable) ; `count` dit le
+    /// total des deux et `truncated` qu'il en manque (une indexation de code en
+    /// pose des centaines de milliers : les relire par la base). Tronquées, les
+    /// listes ne se fondent qu'en ce qu'elles montrent : `count` est alors un
+    /// majorant.
+    RelationsChanged {
+        relation: String,
+        from_entity: String,
+        to_entity: String,
+        added: Vec<(String, String)>,
+        removed: Vec<(String, String)>,
+        count: usize,
+        truncated: bool,
+        at_ms: u64,
+        run: Option<String>,
     },
     EntityUpdated {
         entity: String,
@@ -347,6 +386,185 @@ pub enum Event {
         uuid: String,
         chunks_deleted: usize,
     },
+}
+
+impl Event {
+    /// Le plafond de paires par liste d'un [`Event::RelationsChanged`], par
+    /// défaut : la charge d'une annonce reste bornée (le bus la garde, et
+    /// `/ide/flux` la relaie à chaque page ouverte). Une indexation de code en
+    /// annonce un million : au-delà, le compte exact et `truncated`, et l'abonné
+    /// qui a besoin de tout relit le catalogue. Réglable par catalogue
+    /// ([`crate::Catalog::set_paires_par_evenement`]) ou par
+    /// `RAG3WEAVER_PAIRES_PAR_EVENEMENT` (c7, 19 octobre 2026).
+    pub const PAIRES_PAR_EVENEMENT_PAR_DEFAUT: usize = 1_000;
+
+    /// Le plafond par défaut, ou celui de `RAG3WEAVER_PAIRES_PAR_EVENEMENT`.
+    pub fn paires_par_evenement_par_defaut() -> usize {
+        std::env::var("RAG3WEAVER_PAIRES_PAR_EVENEMENT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|n: &usize| *n > 0)
+            .unwrap_or(Self::PAIRES_PAR_EVENEMENT_PAR_DEFAUT)
+    }
+
+    /// Un [`Event::EntitiesChanged`] maintenant, hors run.
+    pub fn entites_changees(entity: &str, uuids: Vec<String>, change: &str) -> Self {
+        Self::EntitiesChanged {
+            entity: entity.to_string(),
+            uuids,
+            change: change.to_string(),
+            from_state: None,
+            to_state: None,
+            at_ms: maintenant_ms(),
+            run: None,
+        }
+    }
+}
+
+impl Event {
+    /// Un [`Event::RelationsChanged`] en état net : une paire présente dans
+    /// les deux listes s'annule, chaque liste est bornée. `None` quand rien ne
+    /// reste à dire. Les totaux comptent aussi les paires au-delà du plafond.
+    #[allow(clippy::too_many_arguments)]
+    pub fn relations_changees(
+        relation: &str,
+        from_entity: &str,
+        to_entity: &str,
+        added: std::collections::BTreeSet<(String, String)>,
+        added_total: usize,
+        removed: std::collections::BTreeSet<(String, String)>,
+        removed_total: usize,
+        tronquees: bool,
+        plafond: usize,
+    ) -> Option<Self> {
+        let annulees: std::collections::BTreeSet<(String, String)> = added.intersection(&removed).cloned().collect();
+        let added: Vec<(String, String)> = added.difference(&annulees).cloned().collect();
+        let removed: Vec<(String, String)> = removed.difference(&annulees).cloned().collect();
+        let count = (added_total.max(added.len() + annulees.len()) + removed_total.max(removed.len() + annulees.len()))
+            .saturating_sub(2 * annulees.len());
+        if count == 0 {
+            return None;
+        }
+        let truncated = tronquees
+            || added.len() > plafond
+            || removed.len() > plafond
+            || count > added.len() + removed.len();
+        Some(Self::RelationsChanged {
+            relation: relation.to_string(),
+            from_entity: from_entity.to_string(),
+            to_entity: to_entity.to_string(),
+            added: added.into_iter().take(plafond).collect(),
+            removed: removed.into_iter().take(plafond).collect(),
+            count,
+            truncated,
+            at_ms: maintenant_ms(),
+            run: None,
+        })
+    }
+
+    /// **Fondre l'annonce suivante d'une même relation dans celle-ci**, en
+    /// état net (retenues sous une transaction ou une fenêtre). Rend
+    /// `Err(suivant)` si les deux ne se fondent pas ; `Ok(false)` si rien ne
+    /// reste (l'appelant retire alors l'annonce).
+    pub fn fondre_relations(&mut self, suivant: Self, plafond: usize) -> Result<bool, Self> {
+        let (
+            Self::RelationsChanged { relation, from_entity, to_entity, added, removed, count, truncated, run, .. },
+            Self::RelationsChanged { relation: r2, added: a2, removed: d2, count: c2, truncated: t2, run: run2, .. },
+        ) = (&*self, &suivant)
+        else {
+            return Err(suivant);
+        };
+        if relation != r2 {
+            return Err(suivant);
+        }
+        let a1: std::collections::BTreeSet<_> = added.iter().cloned().collect();
+        let d1: std::collections::BTreeSet<_> = removed.iter().cloned().collect();
+        let a2s: std::collections::BTreeSet<_> = a2.iter().cloned().collect();
+        let d2s: std::collections::BTreeSet<_> = d2.iter().cloned().collect();
+        // Posée puis retirée, ou retirée puis reposée : rien.
+        let annulees: std::collections::BTreeSet<_> = a1.intersection(&d2s).chain(d1.intersection(&a2s)).cloned().collect();
+        let ajoutees: std::collections::BTreeSet<_> = a1.union(&a2s).filter(|p| !annulees.contains(*p)).cloned().collect();
+        let retirees: std::collections::BTreeSet<_> = d1.union(&d2s).filter(|p| !annulees.contains(*p)).cloned().collect();
+        let total = (count + c2).saturating_sub(2 * annulees.len());
+        let run = run2.clone().or_else(|| run.clone());
+        let tronquees = *truncated || *t2;
+        let fondu = Self::relations_changees(relation, from_entity, to_entity, ajoutees, 0, retirees, 0, tronquees, plafond).map(|mut e| {
+            if let Self::RelationsChanged { added, removed, count, truncated, run: r, .. } = &mut e {
+                *count = total.max(*count);
+                *truncated = *truncated || *count > added.len() + removed.len();
+                *r = run.clone();
+            }
+            e
+        });
+        match fondu {
+            Some(e) => {
+                *self = e;
+                Ok(true)
+            }
+            // Les listes visibles s'annulent, mais des paires tronquées restent.
+            None if total > 0 && tronquees => {
+                if let Self::RelationsChanged { added, removed, count, truncated, at_ms, run: r, .. } = self {
+                    added.clear();
+                    removed.clear();
+                    *count = total;
+                    *truncated = true;
+                    *at_ms = maintenant_ms();
+                    *r = run;
+                }
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+}
+
+thread_local! {
+    static RUN_DU_FIL: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// **Le run du nœud qui s'exécute sur ce fil** (« le catalogue dit tout »,
+/// réserve de c7 du 19 octobre) : posé par le runtime autour de chaque nœud
+/// synchrone, lu par le catalogue quand il publie une écriture. Un drain
+/// imbriqué rend la main au fil du nœud avant que le catalogue publie : c'est
+/// donc le run de l'outil, de la réaction ou du composant qui a écrit, celui
+/// de son `RunStarted`. `None` hors run.
+///
+/// **Borne** : un nœud qui a son propre `execute_async` n'est pas enveloppé
+/// (il peut rendre la main entre deux `await`, et un autre nœud prendre le
+/// fil) ; ses écritures portent `run: None`. Aucun nœud d'écriture ne l'est
+/// aujourd'hui.
+pub fn run_du_fil() -> Option<String> {
+    RUN_DU_FIL.with(|r| r.borrow().clone())
+}
+
+/// `f` sous le run `run` (vide : hors run), l'ancien rendu au retour, même
+/// sur une panique.
+pub fn pendant_le_run<R>(run: &str, f: impl FnOnce() -> R) -> R {
+    struct Rendre(Option<String>);
+    impl Drop for Rendre {
+        fn drop(&mut self) {
+            let ancien = self.0.take();
+            RUN_DU_FIL.with(|r| *r.borrow_mut() = ancien);
+        }
+    }
+    let nouveau = (!run.is_empty()).then(|| run.to_string());
+    let _rendre = Rendre(RUN_DU_FIL.with(|r| std::mem::replace(&mut *r.borrow_mut(), nouveau)));
+    f()
+}
+
+impl Event {
+    /// Le run d'une écriture, posé s'il manque (les autres variantes n'en
+    /// portent pas).
+    pub fn poser_le_run_s_il_manque(&mut self, run: Option<String>) {
+        if let Self::EntitiesChanged { run: r @ None, .. } | Self::RelationsChanged { run: r @ None, .. } = self {
+            *r = run;
+        }
+    }
+}
+
+/// L'instant présent, en millisecondes UTC.
+pub fn maintenant_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 /// L'ancien nom, conservé : l'enum s'appelait ainsi quand seul le
@@ -391,6 +609,7 @@ impl Event {
             | Self::NodeRun { run, .. }
             | Self::Token { run, .. }
             | Self::Message { run, .. } => Some(run),
+            Self::EntitiesChanged { run: Some(run), .. } | Self::RelationsChanged { run: Some(run), .. } => Some(run),
             _ => None,
         }
     }
@@ -434,9 +653,32 @@ impl Event {
                 "units": units.iter().map(|(u, n)| json!({ "unit": u.as_str(), "amount": n }))
                     .collect::<Vec<_>>(),
             }),
-            Self::EntitiesChanged { entity, uuids } => json!({
-                "kind": "EntitiesChanged", "entity": entity, "uuids": uuids,
-                "count": uuids.len(),
+            Self::EntitiesChanged { entity, uuids, change, from_state, to_state, at_ms, run } => {
+                let mut v = json!({
+                    "kind": "EntitiesChanged", "entity": entity, "uuids": uuids,
+                    "count": uuids.len(), "change": change, "at_ms": at_ms, "run": run,
+                });
+                if let Some(s) = from_state {
+                    v["from_state"] = json!(s);
+                }
+                if let Some(s) = to_state {
+                    v["to_state"] = json!(s);
+                }
+                v
+            }
+            Self::RelationsChanged { relation, from_entity, to_entity, added, removed, count, truncated, at_ms, run } => json!({
+                "kind": "RelationsChanged", "relation": relation, "from_entity": from_entity, "to_entity": to_entity,
+                "added": added.iter().map(|(a, b)| json!([a, b])).collect::<Vec<_>>(),
+                "removed": removed.iter().map(|(a, b)| json!([a, b])).collect::<Vec<_>>(),
+                "count": count, "truncated": truncated, "at_ms": at_ms, "run": run,
+            }),
+            Self::EntityUpdated { entity, uuid, reembedded, chunks_created, chunks_deleted } => json!({
+                "kind": "EntityUpdated", "entity": entity, "uuid": uuid, "uuids": [uuid],
+                "reembedded": reembedded, "chunks_created": chunks_created, "chunks_deleted": chunks_deleted,
+            }),
+            Self::EntityDeleted { entity, uuid, chunks_deleted } => json!({
+                "kind": "EntityDeleted", "entity": entity, "uuid": uuid, "uuids": [uuid],
+                "chunks_deleted": chunks_deleted,
             }),
             Self::TurnCompacted { run, rewritten, kept, dropped } => json!({
                 "kind": "TurnCompacted", "run": run, "rewritten": rewritten,

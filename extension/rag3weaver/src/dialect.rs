@@ -319,6 +319,18 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// [`Self::detach_edges`] **qui rend les paires défaites**, colonnes
+    /// `(from_uuid, to_uuid)`, dans la même instruction : la déliaison
+    /// s'annonce (« le catalogue dit tout ») sans relire ce qu'elle défait. Une
+    /// lecture à part refaisait le même balayage filtré, et coûtait +56 % à la
+    /// ré-indexation de 200 fichiers de code-lourd (19 octobre 2026). `None` :
+    /// ce dialecte ne le dit pas, la déliaison passe par `detach_edges` et se
+    /// tait.
+    fn detach_edges_returning(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let _ = (relation, table, side, filter);
+        None
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1503,6 +1515,15 @@ impl SchemaDialect for Rag3dbDialect {
         Some(format!("MATCH {motif} WHERE {} DELETE r", rag3db_condition(filter)))
     }
 
+    fn detach_edges_returning(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let (t, r) = (self.quote(table), self.quote(relation));
+        let (motif, rendre) = match side {
+            rag3weaver_ir::Direction::Outgoing => (format!("(m:{t})-[r:{r}]->(o)"), "m._uuid, o._uuid"),
+            rag3weaver_ir::Direction::Incoming => (format!("(o)-[r:{r}]->(m:{t})"), "o._uuid, m._uuid"),
+        };
+        Some(format!("MATCH {motif} WHERE {} DELETE r RETURN {rendre}", rag3db_condition(filter)))
+    }
+
     /// `UNION ALL` des branches, chacune fondue à l'amont s'il y en a un
     /// (une `UNION` de Cypher ne partage pas de préfixe : l'amont est relu
     /// dans chaque branche, dans la même instruction), et son `RETURN`
@@ -2392,6 +2413,19 @@ impl SchemaDialect for PostgresDialect {
         ))
     }
 
+    fn detach_edges_returning(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let bout = match side {
+            rag3weaver_ir::Direction::Outgoing => "from_uuid",
+            rag3weaver_ir::Direction::Incoming => "to_uuid",
+        };
+        Some(format!(
+            "DELETE FROM {} AS r USING {} AS m WHERE m.\"_uuid\" = r.\"{bout}\" AND ({}) RETURNING r.from_uuid, r.to_uuid",
+            self.quote(relation),
+            self.quote(table),
+            postgres_condition(self, filter)
+        ))
+    }
+
     /// **Fondre en CTE** : l'amont devient `WITH __chain(c0, c1, …) AS (…)`, et
     /// chaque `$uuids` de l'aval devient
     /// `ARRAY(SELECT DISTINCT cK FROM __chain WHERE cK IS NOT NULL)` — la règle
@@ -2877,6 +2911,12 @@ impl SchemaDialect for PostgresDialect {
              WHERE {table}._uuid = v._uuid",
             assigns.join(", ")
         )
+    }
+
+    // Les paires posées, comme en Cypher : un lien par lots sait ainsi dire ce
+    // qu'il a réellement créé (« le catalogue dit tout », 19 octobre 2026).
+    fn existing_links(&self, rel_table: &str, _ends: (&str, &str)) -> String {
+        format!("SELECT from_uuid, to_uuid FROM {} WHERE from_uuid = ANY($froms)", self.quote(rel_table))
     }
 
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
@@ -3672,11 +3712,12 @@ mod tests {
         let d = PostgresDialect;
         for (methode, requete) in [
             ("select_page_after_offset", d.select_page_after_offset("Doc", &["texte"], 10)),
-            ("existing_links", d.existing_links("R", ("A", "B"))),
             ("count_links", d.count_links("R")),
         ] {
             assert_eq!(requete, format!("RAG3WEAVER_REFUS__le_dialecte_postgresql_ne_traduit_pas__{methode}"));
         }
+        // Traduit depuis le 19 octobre 2026 : le lien par lots relit ses paires.
+        assert_eq!(d.existing_links("R", ("A", "B")), "SELECT from_uuid, to_uuid FROM \"r\" WHERE from_uuid = ANY($froms)");
         assert!(Rag3dbDialect.select_page_after_offset("Doc", &["texte"], 10).starts_with("MATCH"));
     }
 

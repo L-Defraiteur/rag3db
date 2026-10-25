@@ -292,6 +292,14 @@ impl Miroir {
     /// **Les lignes de cette entité qu'un événement du catalogue touche** : ses
     /// propres uuids, ou les propriétaires des lignes liées par une relation de
     /// `related`, ou les bouts d'un lien posé ou retiré par une de ces relations.
+    /// Un `RelationsChanged` tronqué d'une relation que ce fichier lit : ses
+    /// listes ne nomment pas toutes les paires, [`Self::touchees`] n'y suffit pas.
+    pub fn lit_une_annonce_tronquee(&self, evenement: &Value) -> bool {
+        evenement["kind"] == "RelationsChanged"
+            && evenement["truncated"] == true
+            && self.decl.related.values().any(|r| evenement["relation"] == r.relation.as_str())
+    }
+
     pub fn touchees(&self, cat: &crate::catalog::Catalog, evenement: &Value) -> Vec<String> {
         let mut out = Vec::new();
         let chaines = |v: &Value| -> Vec<String> {

@@ -68,6 +68,8 @@ mod e2e_burn_ocr;
 mod e2e_burn_reranker;
 #[path = "../e2e_burn_xlmr_reranker.rs"]
 mod e2e_burn_xlmr_reranker;
+#[path = "../e2e_catalogue_dit_tout.rs"]
+mod e2e_catalogue_dit_tout;
 #[path = "../e2e_catalogue_gabarits.rs"]
 mod e2e_catalogue_gabarits;
 #[path = "../e2e_cellule_des_bouts.rs"]

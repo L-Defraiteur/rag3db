@@ -136,10 +136,7 @@ fn une_reaction_declaree_tourne_avec_ses_liaisons() {
 
     // Un événement sur le sujet déclaré. C'est le seul déclencheur : personne
     // n'appelle une réaction.
-    bus_de(&backend).emit(Event::EntitiesChanged {
-        entity: "N'importe".into(),
-        uuids: vec!["u-1".into()],
-    });
+    bus_de(&backend).emit(Event::entites_changees("N'importe", vec!["u-1".into()], "ingested"));
     assert!(
         backend.wait_reaction_runs(1, Duration::from_secs(10)),
         "la réaction doit partir sur l'événement — runs = {}",
@@ -200,10 +197,7 @@ fn un_noeud_hors_liste_est_refuse_a_l_execution() {
         .expect("la montre")
         .spawn();
 
-    bus.emit(Event::EntitiesChanged {
-        entity: "N'importe".into(),
-        uuids: vec!["u-1".into()],
-    });
+    bus.emit(Event::entites_changees("N'importe", vec!["u-1".into()], "ingested"));
     assert!(
         handle.wait_runs(1, Duration::from_secs(10)),
         "la réaction doit partir : c'est à l'exécution qu'on veut le refus, pas avant"
@@ -467,7 +461,7 @@ fn un_run_d_outil_puis_un_run_de_reaction_s_annoncent_par_leur_nom() {
     assert!(v["run"].as_str().is_some_and(|r| !r.is_empty()), "{v}");
 
     assert_eq!(backend.mount_reactions().expect("le montage"), vec!["sonde".to_string()]);
-    bus_de(&backend).emit(Event::EntitiesChanged { entity: "N'importe".into(), uuids: vec!["u-1".into()] });
+    bus_de(&backend).emit(Event::entites_changees("N'importe", vec!["u-1".into()], "ingested"));
     assert!(backend.wait_reaction_runs(1, Duration::from_secs(10)), "la réaction n'est pas partie");
     annonce(&mut des_reactions, json!({ "reaction": "sonde" }));
     // **Pas de boucle** : la réaction écoute `catalog`, ses runs vont sur
