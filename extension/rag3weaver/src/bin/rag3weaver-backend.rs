@@ -731,6 +731,38 @@ fn code_tree(args: &[String]) -> Result<(), String> {
     }
 }
 
+/// **`files`** : le dossier des fiches face à la base, hors de l'hôte (la base
+/// ne doit être ouverte par personne). `verify` reconstruit une base jetable
+/// depuis une copie du dossier et la compare, ligne à ligne et champ à champ,
+/// à la base vivante (sortie 1 si elles diffèrent) ; `rebuild` reconstruit la
+/// base depuis le dossier — refusé si la base n'est ni vide ni perdue.
+fn fichiers_cli(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend files verify <backend.json>\n       \
+                         rag3weaver-backend files rebuild <backend.json>";
+    let [action, chemin] = args else { return Err(USAGE.into()) };
+    let prepared = PreparedBackend::load(Path::new(chemin))?;
+    let database = prepared.path(&prepared.manifest.database);
+    if let Some(parent) = database.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let (embedder, raison) = prepared.embedder_or_absent();
+    let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
+    let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
+    let rendu = match action.as_str() {
+        "verify" => backend.verify_files(),
+        "rebuild" => backend.rebuild_from_files(),
+        _ => Err(USAGE.into()),
+    };
+    let fin = backend.shutdown();
+    let rendu = rendu?;
+    println!("{}", serde_json::to_string_pretty(&rendu).map_err(|e| e.to_string())?);
+    fin?;
+    if action == "verify" && rendu["ok"] != json!(true) {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 fn run() -> Result<(), String> {
     // La sous-commande se reconnaît au premier mot ; la forme positionnelle
     // d'avant (`rag3weaver-backend backend.json [--describe]`) reste intacte.
@@ -764,6 +796,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("code-tree") {
         return code_tree(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("files") {
+        return fichiers_cli(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args
@@ -830,11 +865,12 @@ fn run() -> Result<(), String> {
                 // Réservées à l'hôte : jamais exposées comme outils.
                 Some("journal") => backend.journal(v["events"].as_array().ok_or("events missing")?),
                 Some("index_state") => backend.index_states(),
+                Some("verify_files") => backend.verify_files(),
                 Some("journal_read") => backend.journal_read(
                     v["conversation"].as_str().ok_or("conversation missing")?,
                     v["since_ms"].as_i64().unwrap_or(0),
                 ),
-                _ => Err("op must be describe, call, journal, journal_read or index_state".into()),
+                _ => Err("op must be describe, call, journal, journal_read, index_state or verify_files".into()),
             }
         });
         // **Un point de reprise a échoué** : la réponse le dit, puis l'hôte

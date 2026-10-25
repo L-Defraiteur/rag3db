@@ -50,8 +50,10 @@ impl NodeFactory for EntityRecordFactory {
             true,
             "Read or put one record",
         );
-        action.choices = Some(Choices::fixed(["get", "put"]));
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy".into(),inputs:vec![PortDef::value("record", PortType::Map, false)],outputs:vec![PortDef::value("record", PortType::Map, false)],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation")]}
+        // `restore` : la reconstruction de l'hôte seulement (lot M3), refusée à
+        // tout graphe auquel l'hôte ne prête pas le service de restauration.
+        action.choices = Some(Choices::fixed(["get", "put", "restore"]));
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy; `restore` (the host's rebuild from files only) writes a row read from its file, dates and revision as read".into(),inputs:vec![PortDef::value("record", PortType::Map, false)],outputs:vec![PortDef::value("record", PortType::Map, false)],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put; the row read from its file for restore"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation"),param("uuid",ConfigParamType::String,false,"restore: the uuid read from the file, checked against the one its identity derives")]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         for key in ["entity", "action"] {
@@ -59,8 +61,11 @@ impl NodeFactory for EntityRecordFactory {
                 return Err(format!("missing {key}"));
             }
         }
-        if !matches!(config["action"].as_str(), Some("get" | "put")) {
+        if !matches!(config["action"].as_str(), Some("get" | "put" | "restore")) {
             return Err("invalid action".into());
+        }
+        if config["action"] == "restore" && config["uuid"].as_str().is_none_or(str::is_empty) {
+            return Err("restore: the uuid read from the file is required".into());
         }
         if !config["record"].is_object() {
             return Err("record must be an object".into());
@@ -176,6 +181,36 @@ impl Node for EntityRecordNode {
         let old = cat.get(entity, &uuid).map_err(|e| e.to_string())?.filter(|row| dans_la_cellule(row));
         if self.config["action"] == "get" {
             ctx.set_output("record", PortValue::new(json!({"uuid":uuid,"data":old})));
+            return Ok(());
+        }
+        // **La restauration** (lot M3 de la mémoire) : une ligne relue de son
+        // fichier, telle quelle, dates et révision comprises — la seule
+        // exception au refus des champs du serveur. Réservée à la reconstruction
+        // de l'hôte, qui seule prête le service : un outil déclaré ne peut pas
+        // forger une date ni une révision.
+        if self.config["action"] == "restore" {
+            if ctx.service::<bool>(SERVICE_RESTAURATION).copied() != Some(true) {
+                return Err("restore: reserved to the host's rebuild from files, not to a tool".into());
+            }
+            let lu = self.config["uuid"].as_str().unwrap_or_default();
+            if lu != uuid {
+                return Err(format!(
+                    "restore: the file's uuid {lu} is not the uuid of its identity in this cell ({uuid}) — \
+                     a file moved between cells, or an identity field edited by hand"
+                ));
+            }
+            if old.is_some() {
+                return Err("restore: the row already exists — a rebuild starts from an empty base".into());
+            }
+            validator.validate(&input).map_err(|e| e.to_string())?;
+            let mut data = mapping.record(&input)?;
+            cell.stamp(&mut data);
+            let report = cat.ingest_entities(entity, vec![data]).map_err(|e| e.to_string())?;
+            if report.failed > 0 {
+                return Err(format!("restore: the row was not written — {:?}", report.warnings));
+            }
+            let result = json!({"uuid": uuid, "data": cat.get(entity, &uuid).map_err(|e| e.to_string())?, "restored": true});
+            ctx.set_output("record", PortValue::new(result));
             return Ok(());
         }
         let generated: Vec<&str> = [&policy.created_at, &policy.updated_at, &policy.revision]
@@ -302,6 +337,10 @@ impl Node for EntityRecordNode {
         Ok(())
     }
 }
+
+/// La clé du service qui permet l'action `restore` d'[`EntityRecordNode`] : seule
+/// la reconstruction de l'hôte (`Backend::rebuild_from_files`) le prête.
+pub const SERVICE_RESTAURATION: &str = "restauration_depuis_les_fichiers";
 
 /// Bulk ingestion for external snapshots. Managed business records retain EntityRecordNode.
 pub struct EntityBatchFactory;
