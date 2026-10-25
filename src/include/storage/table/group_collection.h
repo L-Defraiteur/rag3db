@@ -113,6 +113,7 @@ public:
         KU_UNUSED(lock);
         return groups;
     }
+    const std::vector<std::shared_ptr<T>>& getAllGroupsNoLock() const { return groups; }
     T* getFirstGroup(const common::UniqLock& lock) const {
         KU_ASSERT(lock.isLocked());
         KU_UNUSED(lock);

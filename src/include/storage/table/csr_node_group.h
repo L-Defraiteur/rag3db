@@ -130,6 +130,11 @@ struct CSRNodeGroupScanState final : NodeGroupScanState {
 
     CSRNodeGroupScanSource source;
 
+    // Le bloc persistant du groupe au moment où le balayage l'a abordé, tenu en propriété
+    // partagée (voir NodeGroupScanState::groups pour les blocs en mémoire) : header et
+    // chunkStates le décrivent, un point de reprise qui le remplace ne le retire pas au lecteur.
+    std::shared_ptr<ChunkedNodeGroup> persistent;
+
     // This is for local scan state where we don't need `header`.
     explicit CSRNodeGroupScanState()
         : header{nullptr}, numTotalRows{0}, numCachedRows{0}, nextCachedRowToScan{0},
@@ -323,7 +328,9 @@ private:
     void finalizeCheckpoint(const common::UniqLock& lock);
 
 private:
-    std::unique_ptr<ChunkedNodeGroup> persistentChunkGroup;
+    // En propriété partagée : un balayage en cours le tient (CSRNodeGroupScanState::persistent)
+    // quand le point de reprise le remplace.
+    std::shared_ptr<ChunkedNodeGroup> persistentChunkGroup;
     // The index of the relationships committed in memory is created by the first commit that
     // appends to this group and grows with each one, while scans of other connections read it
     // and copy its lists. Appends take this mutex exclusively, scans share it. The checkpoint
