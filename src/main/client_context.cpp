@@ -303,8 +303,7 @@ std::unique_ptr<PreparedStatement> ClientContext::prepareWithParams(std::string_
     }
     auto [preparedStatement, cachedStatement] = prepareNoLock(parsedStatements[0],
         true /*shouldCommitNewTransaction*/, std::move(inputParamsTmp));
-    preparedStatement->cachedPreparedStatementName =
-        cachedPreparedStatementManager.addStatement(std::move(cachedStatement));
+    preparedStatement->cachedPreparedStatement = std::move(cachedStatement);
     useInternalCatalogEntry_ = false;
     return std::move(preparedStatement);
 }
@@ -339,15 +338,9 @@ std::unique_ptr<QueryResult> ClientContext::executeWithParams(PreparedStatement*
         transactionContext->rollbackAfterStatementFailure();
         return QueryResult::getQueryResultWithError(e.what());
     }
-    auto name = preparedStatement->getName();
-    // LCOV_EXCL_START
-    // The following should never happen. But we still throw just in case.
-    if (!cachedPreparedStatementManager.containsStatement(name)) {
-        return QueryResult::getQueryResultWithError(
-            stringFormat("Cannot find prepared statement with name {}.", name));
-    }
-    // LCOV_EXCL_STOP
-    auto cachedStatement = cachedPreparedStatementManager.getCachedStatement(name);
+    // A successful statement always holds its bound query.
+    const auto cachedStatement = preparedStatement->cachedPreparedStatement;
+    KU_ASSERT(cachedStatement != nullptr);
     // rebind
     auto [newPreparedStatement, newCachedStatement] =
         prepareNoLock(cachedStatement->parsedStatement, false /*shouldCommitNewTransaction*/,
