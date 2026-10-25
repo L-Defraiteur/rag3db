@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Le juge juge aussi les outils.** À chaque run, un second rapport
+  par outil appelé : un défaut typé par genre (paramètre manquant ou mal nommé,
+  retour bavard, hors sujet, incohérent…) et par gravité, avec sa preuve exacte et
+  la forme corrigée, rangé dans la fiche de l'outil ; sur Gemini, sept défauts
+  nommés sur un outil volontairement faux. bdf5929c7.
 - **25 oct. — Un point de reprise ne fige plus les lecteurs.** Une lecture entre,
   lit le dernier validé et rend la main pendant qu'il s'écrit ; les blocs neufs se
   bâtissent hors des verrous et s'échangent sous eux. 66994dd43.
