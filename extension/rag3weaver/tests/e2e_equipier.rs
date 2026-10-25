@@ -67,6 +67,12 @@ fn depot_de_test(d: &Path) -> (PathBuf, PathBuf, PathBuf) {
     let mut c: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
     c["bilans"] = json!({ "memoire": memoire.display().to_string() });
     std::fs::write(&manifeste, serde_json::to_string_pretty(&c).unwrap()).unwrap();
+    // Le dossier du backend est un dépôt git (`code-tree add` l'a commité) et une
+    // tâche est un worktree de son HEAD : un manifeste modifié se commite, sinon
+    // la tâche ne voit pas `bilans`.
+    let config = manifeste.ancestors().find(|p| p.join(".git").exists()).expect("le dossier du backend est un dépôt").to_path_buf();
+    git(&config, &["add", "-A"]);
+    git(&config, &["commit", "-q", "-m", "bilans vers la mémoire du banc"]);
     (depot, manifeste, memoire)
 }
 
