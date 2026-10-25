@@ -3,9 +3,13 @@
 %% param: path string! -- Le chemin du fichier, tel que list_files ou search_code le rendent (ex. 'src/main/database.cpp').
 %% param: source string = "" -- La source de l'index, quand le même chemin existe dans deux (vide : toutes).
 %% param: limit int = 500 -- Scopes rendus au plus (plafond 2000) ; le total est compté.
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré, pour une interface : {rows, total, provenance}, une ligne par scope).
+%% choices: format = markdown | json
 %% result: render.text
 
 graph LR
     plan["PlanNode(plan='@builtin:backends/code/plans/outline.json', path=$path, source=$source, limit=$limit)"]
-    render["RenderResultsNode(template='outline', group=false)"]
+    render["RenderResultsNode(template='outline', group=false, format=$format, json=rows, provenance="Lu par l'analyseur (tree-sitter), pas par un compilateur : une macro peut cacher un scope.")"]
     plan -->|results| render
+    plan -->|rows| render
+    plan -->|total| render
