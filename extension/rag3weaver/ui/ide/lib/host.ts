@@ -25,7 +25,11 @@ export async function call(manifest: string, name: string, args: unknown): Promi
     body: JSON.stringify({ manifest, name, arguments: args }),
   })).json();
   if (!r.ok) throw new Error(r.error ?? "appel refusé");
-  return r.result?.result ?? r.result;
+  // La sortie de l'outil, un cran sous la réponse du graphe ({ result, metadata, … }),
+  // et sous l'enveloppe { status, result } d'une lecture du catalogue quand il y en a
+  // une (usages, impact, callees… : `status` dit l'état de l'index) — comme
+  // l'ancienne page le faisait ; un `result` nul est l'erreur que `status` dit.
+  return unwrap(r.result?.result ?? r.result).value;
 }
 
 /// Le nom court d'un backend : les deux derniers dossiers de son manifeste.
