@@ -162,20 +162,29 @@ fn index_vectoriel_illisible(
     index: &str,
 ) -> Option<Chute> {
     let requete = dialect.vector_index_listing()?;
-    let lignes = match conn.execute(&requete) {
-        Ok(r) => r.rows,
+    let resultat = match conn.execute(&requete) {
+        Ok(r) => r,
         Err(e) => return Some(Chute::Echec(format!("VectorSearchNode: vector index check failed: {e}"))),
     };
-    // Les colonnes de `SHOW_INDEXES() RETURN *` : table_name, index_name,
-    // index_type, property_names, extension_loaded, index_definition, et, à
-    // partir du format 43 du moteur, state. Une lib d'avant n'a pas `state` :
-    // l'index est alors prêt dès qu'il est là, comme avant.
-    let ligne = lignes
-        .iter()
-        .find(|l| l.first().and_then(|v| v.as_str()) == Some(table) && l.get(1).and_then(|v| v.as_str()) == Some(index));
+    // Les colonnes se lisent par leur nom : `RETURN *` rend toutes celles de
+    // SHOW_INDEXES, et la lib du format 43 y ajoute `state` (l'état de
+    // construction d'un index). Une lib d'avant ne l'a pas : l'index est alors
+    // prêt dès qu'il est là, comme avant. Sans `table_name` ni `index_name`, on
+    // ne sait rien : un échec nommé, pas un index cru absent.
+    let colonne = |nom: &str| resultat.columns.iter().position(|c| c == nom);
+    let (Some(col_table), Some(col_index)) = (colonne("table_name"), colonne("index_name")) else {
+        return Some(Chute::Echec(format!(
+            "VectorSearchNode: vector index check failed: SHOW_INDEXES has no table_name or index_name column ({:?})",
+            resultat.columns
+        )));
+    };
+    let (col_chargee, col_etat) = (colonne("extension_loaded"), colonne("state"));
+    let ligne = resultat.rows.iter().find(|l| {
+        l.get(col_table).and_then(|v| v.as_str()) == Some(table) && l.get(col_index).and_then(|v| v.as_str()) == Some(index)
+    });
     let lisible = ligne.map(|l| {
-        let chargee = l.get(4).and_then(|v| v.as_bool()).unwrap_or(true);
-        let etat = l.get(6).and_then(|v| v.as_str()).unwrap_or("READY").to_string();
+        let chargee = col_chargee.and_then(|c| l.get(c)).and_then(|v| v.as_bool()).unwrap_or(true);
+        let etat = col_etat.and_then(|c| l.get(c)).and_then(|v| v.as_str()).unwrap_or("READY").to_string();
         (chargee, etat)
     });
     match lisible {
@@ -183,12 +192,15 @@ fn index_vectoriel_illisible(
         Some((false, _)) => Some(Chute::Indisponible(format!(
             "the vector index `{index}` exists but its extension is not loaded — answering from the other signals"
         ))),
-        // Un CREATE le construit : l'entrée est visible, la recherche dense
-        // serait refusée (« is under construction ») et condamnerait la
-        // transaction que partagent les signaux de l'appel.
+        // Sa construction n'a pas fini : le catalogue le rebâtit à l'ouverture
+        // (le CREATE avec skip_if_exists le refuse par « is behind its table »).
         Some((true, etat)) if etat == "INCOMPLETE" => Some(Chute::Indisponible(format!(
             "the vector index `{index}` is incomplete and will be rebuilt — answering from the other signals"
         ))),
+        // NOTED ou MAINTAINED, les deux autres états : un CREATE le construit.
+        // L'entrée est visible, mais la recherche dense serait refusée (« is
+        // under construction ») et condamnerait la transaction que partagent
+        // les signaux de l'appel.
         Some((true, _)) => Some(Chute::Indisponible(format!(
             "the vector index `{index}` is under construction — answering from the other signals"
         ))),
