@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (41)
+### Ouverts — moteur (42)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Chaque requête préparée reste en mémoire pour la vie de sa connexion](2026-10-25-chaque-requete-preparee-reste-en-memoire-pour-la-vie-de-sa-connexion.md) | ouvert — détenteur trouvé (`CachedPreparedStatementManager`, jamais vidé ; Kuzu #5846) ; aucun correctif | mémoire sans borne (≈ 1,7 Go/min avec quatre lecteurs) | oui | oui |
 | [La CI de master est rouge depuis le 18 octobre : un `<cassert>` dans geo et le format clang](2026-10-25-la-ci-de-master-est-rouge-depuis-le-18-octobre-cassert-dans-geo-et-format-clang.md) | ouvert — le cassert corrigé sur `ci-cassert-geo` (baf19b9e5, vers master à la fenêtre) ; le formatage attend une fenêtre : `.clang-format-ignore` pour les annexes des docs + un commit de formatage pur par clang-format-18 (la version de la CI n'a pas changé) | aucun run vert du CI Workflow | non (CI) | non |
 | [Les statistiques par colonne ne sont pas compactées au point de reprise après un DROP](2026-10-19-les-statistiques-par-colonne-ne-sont-pas-compactees-au-point-de-reprise-apres-un-drop.md) | ouvert — pour le cœur, lot V2-1a ; témoin à écrire | réponse fausse en silence (cardinalités d'une autre colonne) | oui (DROP d'une propriété du milieu puis point de reprise) | oui |
 | [Un groupe vidé par le point de reprise garde la colonne supprimée](2026-10-19-un-groupe-vide-par-le-point-de-reprise-garde-la-colonne-supprimee.md) | ouvert, à vérifier par un témoin — pour le cœur, lot V2-1a | bloc et types décalés si confirmé | oui si confirmé | oui si confirmé |
