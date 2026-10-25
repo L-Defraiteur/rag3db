@@ -939,6 +939,42 @@ fn copier_les_noeuds(
 /// faites (à reposer). Aucune relation ne peut porter ce nom.
 const UNDO_RETIRES: &str = "__retires";
 
+/// Les paires `(from, to)` posées pour ces départs, avec leurs propriétés
+/// `props` non nulles — ce que relit une déliaison avant de délier. Une
+/// relation sans bouts déclarés n'est pas lue.
+fn paires_et_proprietes(
+    conn: &dyn crate::connection::DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    rel_name: &str,
+    ends: Option<&(String, String)>,
+    froms: &[&str],
+    props: &[String],
+) -> Result<Vec<((String, String), BTreeMap<String, CypherValue>)>, String> {
+    let mut paires = Vec::new();
+    let Some((de, vers)) = ends else { return Ok(paires) };
+    let noms: Vec<&str> = props.iter().map(String::as_str).collect();
+    let requete = dialect.existing_links_with(rel_name, (de, vers), &noms);
+    for tranche in froms.chunks(5_000) {
+        let param = CypherValue::List(tranche.iter().map(|f| CypherValue::String(f.to_string())).collect());
+        let lu = conn
+            .execute_with_params(&requete, &[QueryParam { name: "froms".into(), value: param }])
+            .map_err(|e| e.to_string())?;
+        for row in &lu.rows {
+            let (Some(a), Some(b)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_str())) else {
+                continue;
+            };
+            let valeurs: BTreeMap<String, CypherValue> = props
+                .iter()
+                .zip(row.iter().skip(2))
+                .filter(|(_, v)| !matches!(v, CypherValue::Null))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            paires.push(((a.to_string(), b.to_string()), valeurs));
+        }
+    }
+    Ok(paires)
+}
+
 /// Les paires `(from, to)` posées pour ces départs — ce qu'un lien relit avant
 /// et après sa tranche pour savoir ce qu'il a créé. Une relation sans bouts
 /// déclarés (un lien de morceau) n'est pas lue.
@@ -1283,6 +1319,18 @@ impl Node for LinkRecordNode {
         let faute = fautes_de_test(ctx).lien;
         let ecritures = ctx.service::<crate::ecritures::Ecritures>(crate::ecritures::SERVICE).cloned();
         let mut rang_dans_la_relation: HashMap<&str, usize> = HashMap::new();
+        // Les paires créées par ce nœud, pour les relations déclarées (les
+        // seules dont il sait ce qu'il a créé), et ces relations.
+        let mut crees: HashMap<String, Vec<(String, String)>> = HashMap::new();
+        let exactes: HashSet<String> = {
+            let config = ctx.service::<crate::config::CatalogConfig>("config");
+            groups
+                .keys()
+                .map(|(r, _)| r.clone())
+                .chain(a_retirer.keys().cloned())
+                .filter(|r| config.is_some_and(|c| c.relations.contains_key(r.as_str())))
+                .collect()
+        };
         for ((rel_name, prop_keys), indices) in &groups {
             let rang = {
                 let r = rang_dans_la_relation.entry(rel_name.as_str()).or_insert(0);
@@ -1322,10 +1370,13 @@ impl Node for LinkRecordNode {
             // tout », réserve de c7 du 19 octobre) : une paire reposée, ou dont
             // un bout manque, n'est pas un lien posé. Seules les relations
             // déclarées s'annoncent ; les liens des morceaux ne coûtent rien.
-            let journalisee = ecritures.is_some()
-                && ctx
-                    .service::<crate::config::CatalogConfig>("config")
-                    .is_some_and(|c| c.relations.contains_key(rel_name.as_str()));
+            // Ce que le nœud sait exactement d'une relation déclarée sert aussi
+            // à son annulation : elle ne défait que ce qu'il a créé (ticket
+            // « l'annulation d'un lot de liens retire aussi les paires qui
+            // existaient », 19 octobre 2026).
+            let journalisee = ctx
+                .service::<crate::config::CatalogConfig>("config")
+                .is_some_and(|c| c.relations.contains_key(rel_name.as_str()));
 
             // **En masse, par COPY**, quand le lot est gros, que la relation
             // a ses deux étiquettes et que le moteur sait le faire : 200 000
@@ -1338,9 +1389,13 @@ impl Node for LinkRecordNode {
                         Ok(Some(ecrites_ici)) => {
                             // Le journal ne note que les paires écrites : une
                             // paire reposée n'est pas un lien neuf.
-                            if let Some(e) = ecritures.as_ref().filter(|_| journalisee) {
+                            if journalisee {
                                 for &ri in &ecrites_ici {
-                                    e.noter_liee(rel_name, &resolved[ri].from_uuid, &resolved[ri].to_uuid);
+                                    let (de, vers) = (&resolved[ri].from_uuid, &resolved[ri].to_uuid);
+                                    if let Some(e) = &ecritures {
+                                        e.noter_liee(rel_name, de, vers);
+                                    }
+                                    crees.entry(rel_name.clone()).or_default().push((de.clone(), vers.clone()));
                                 }
                             }
                             for &ri in indices {
@@ -1439,7 +1494,7 @@ impl Node for LinkRecordNode {
                 continue;
             }
 
-            if let Some(e) = ecritures.as_ref().filter(|_| journalisee) {
+            if journalisee {
                 let apres = paires_posees(conn.as_ref(), dialect.as_ref(), rel_name, ends.as_ref(), &froms_de_la_tranche)?;
                 let de_la_tranche: HashSet<(&str, &str)> = tranche
                     .iter()
@@ -1447,7 +1502,10 @@ impl Node for LinkRecordNode {
                     .collect();
                 for (de, vers) in apres.difference(&avant) {
                     if de_la_tranche.contains(&(de.as_str(), vers.as_str())) {
-                        e.noter_liee(rel_name, de, vers);
+                        if let Some(e) = &ecritures {
+                            e.noter_liee(rel_name, de, vers);
+                        }
+                        crees.entry(rel_name.clone()).or_default().push((de.clone(), vers.clone()));
                     }
                 }
             }
@@ -1478,11 +1536,24 @@ impl Node for LinkRecordNode {
             let mut froms: Vec<&str> = demandees.iter().map(|p| p.0).collect();
             froms.sort_unstable();
             froms.dedup();
-            let lu = paires_posees(conn.as_ref(), dialect.as_ref(), rel_name, ends.as_ref(), &froms)
+            // Les propriétés déclarées, lues avec les paires : l'annulation
+            // repose une paire telle qu'elle était (un `CONSUMES` garde sa
+            // `resolution`).
+            let proprietes: Vec<String> = {
+                let mut p: Vec<String> = ctx
+                    .service::<crate::config::CatalogConfig>("config")
+                    .and_then(|c| c.relations.get(rel_name.as_str()))
+                    .and_then(|d| d.properties.as_ref())
+                    .map(|p| p.keys().cloned().collect())
+                    .unwrap_or_default();
+                p.sort();
+                p
+            };
+            let lu = paires_et_proprietes(conn.as_ref(), dialect.as_ref(), rel_name, ends.as_ref(), &froms, &proprietes)
                 .and_then(|posees| {
-                    let existaient: Vec<(String, String)> = posees
+                    let existaient: Vec<((String, String), BTreeMap<String, CypherValue>)> = posees
                         .into_iter()
-                        .filter(|(de, vers)| demandees.contains(&(de.as_str(), vers.as_str())))
+                        .filter(|((de, vers), _)| demandees.contains(&(de.as_str(), vers.as_str())))
                         .collect();
                     if existaient.is_empty() {
                         return Ok(existaient);
@@ -1490,7 +1561,7 @@ impl Node for LinkRecordNode {
                     let items_param = CypherValue::List(
                         existaient
                             .iter()
-                            .map(|(de, vers)| {
+                            .map(|((de, vers), _)| {
                                 let mut m = BTreeMap::new();
                                 m.insert("from".into(), CypherValue::String(de.clone()));
                                 m.insert("to".into(), CypherValue::String(vers.clone()));
@@ -1505,14 +1576,14 @@ impl Node for LinkRecordNode {
                 });
             match lu {
                 Ok(existaient) => {
-                    for (de, vers) in &existaient {
+                    for ((de, vers), props) in &existaient {
                         if let Some(e) = &ecritures {
                             e.noter_deliee(rel_name, de, vers);
                         }
                         retirees_par_relation
                             .entry(rel_name.clone())
                             .or_default()
-                            .push(serde_json::json!({"from": de, "to": vers}));
+                            .push(serde_json::json!({"from": de, "to": vers, "props": props, "ends": ends}));
                     }
                     for &ri in indices {
                         let rl = &resolved[ri];
@@ -1534,10 +1605,18 @@ impl Node for LinkRecordNode {
 
         // Capture undo data: rel_name → [{from, to}] ; les déliaisons faites
         // sous `__retires`, reposées par l'undo.
+        // Une relation déclarée ne défait que ce que ce nœud a créé : une paire
+        // déjà là, reposée, n'est pas à lui. Les autres (les liens des
+        // morceaux, vers des morceaux nés dans ce drain) défont tout le lot.
         let mut undo_groups: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+        for (rel_name, paires) in &crees {
+            undo_groups.entry(rel_name.clone()).or_default().extend(
+                paires.iter().map(|(de, vers)| serde_json::json!({"from": de, "to": vers})),
+            );
+        }
         for rl in &resolved {
             let rel = &items[rl.index];
-            if rel.retirer {
+            if rel.retirer || exactes.contains(&rel.rel_name) {
                 continue;
             }
             undo_groups.entry(rel.rel_name.clone()).or_default().push(
@@ -1576,21 +1655,34 @@ impl Node for LinkRecordNode {
         let groups = undo_ctx.as_object()
             .ok_or("LinkRecordNode undo: expected object")?;
 
-        // Les déliaisons faites, reposées (sans leurs propriétés : un lien
-        // déclaré par `unlink` n'en garde pas la trace).
+        // Les déliaisons faites, reposées avec leurs propriétés et leurs bouts
+        // déclarés. Par jeu de propriétés : un NULL dans la liste des
+        // paramètres n'a pas de type, et ferait refuser la colonne.
         if let Some(retires) = groups.get(UNDO_RETIRES).and_then(|v| v.as_object()) {
             for (rel_name, links) in retires {
-                let items_param = CypherValue::List(
-                    links.as_array().into_iter().flatten().filter_map(|link| {
-                        let mut m = BTreeMap::new();
-                        m.insert("from_uuid".into(), CypherValue::String(link["from"].as_str()?.to_string()));
-                        m.insert("to_uuid".into(), CypherValue::String(link["to"].as_str()?.to_string()));
-                        Some(CypherValue::Map(m))
-                    }).collect()
-                );
-                let cypher = crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Link { relation: rel_name.to_string(), ends: None, props: Vec::new() });
-                conn.execute_with_params(&cypher, &[QueryParam { name: "items".into(), value: items_param }])
-                    .map_err(|e| format!("LinkRecordNode undo (reposer « {rel_name} ») failed: {e}"))?;
+                let mut par_cles: BTreeMap<Vec<String>, Vec<CypherValue>> = BTreeMap::new();
+                let mut bouts: Option<(String, String)> = None;
+                for link in links.as_array().into_iter().flatten() {
+                    let (Some(de), Some(vers)) = (link["from"].as_str(), link["to"].as_str()) else { continue };
+                    if bouts.is_none() {
+                        bouts = serde_json::from_value(link["ends"].clone()).ok().flatten();
+                    }
+                    let props: BTreeMap<String, CypherValue> = serde_json::from_value(link["props"].clone()).unwrap_or_default();
+                    let mut m = BTreeMap::new();
+                    m.insert("from_uuid".into(), CypherValue::String(de.to_string()));
+                    m.insert("to_uuid".into(), CypherValue::String(vers.to_string()));
+                    let cles: Vec<String> = props.keys().cloned().collect();
+                    m.extend(props);
+                    par_cles.entry(cles).or_default().push(CypherValue::Map(m));
+                }
+                for (cles, items) in par_cles {
+                    let cypher = crate::dialect::ecriture(
+                        &**dialect,
+                        &rag3weaver_ir::Write::Link { relation: rel_name.to_string(), ends: bouts.clone(), props: cles },
+                    );
+                    conn.execute_with_params(&cypher, &[QueryParam { name: "items".into(), value: CypherValue::List(items) }])
+                        .map_err(|e| format!("LinkRecordNode undo (reposer « {rel_name} ») failed: {e}"))?;
+                }
             }
         }
 
@@ -4466,6 +4558,76 @@ fn reindex_fts_rows(
 
 #[cfg(test)]
 mod tests {
+
+    /// **L'annulation d'un lot de liens ne retire que ce qu'il a créé, et
+    /// repose une déliaison avec ses propriétés** (ticket « l'annulation d'un
+    /// lot de liens retire aussi les paires qui existaient avant lui »,
+    /// 19 octobre 2026). `a → b1` existe avant le lot, `a → b2` est neuve, et
+    /// `a → b3`, qui existe avec `raison = avant`, est déliée par le lot.
+    /// L'annulation doit garder `a → b1`, retirer `a → b2`, et reposer `a → b3`
+    /// avec sa raison. Avant : elle retirait `a → b1`, et reposait `a → b3`
+    /// sans propriété.
+    #[test]
+    fn l_annulation_d_un_lot_de_liens_ne_retire_que_ce_qu_il_a_cree() {
+        use crate::config::{FieldDef, RelationDef};
+        use crate::dataflow::node::{Node, NodeContext};
+        use crate::dataflow::services::ServiceRegistry;
+        use crate::records::{RefOrUuid, RelationRecord};
+        use crate::refs::RelationRef;
+        use crate::{Catalog, CatalogConfig, Rag3dbConnection};
+
+        let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+        let mut cat = Catalog::new(
+            Box::new(conn),
+            Box::new(crate::embedder::MockEmbedder::new(4)),
+            CatalogConfig { embedding_dim: 4, ..Default::default() },
+        );
+        cat.initialize().unwrap();
+        let texte = || -> FieldDef { serde_json::from_value(serde_json::json!({"type": "string"})).unwrap() };
+        for t in ["A", "B"] {
+            cat.execute_raw(&format!("CREATE NODE TABLE {t}(_uuid STRING, PRIMARY KEY(_uuid))")).unwrap();
+        }
+        cat.execute_raw("CREATE REL TABLE R(FROM A TO B, raison STRING)").unwrap();
+        cat.execute_raw("CREATE (:A {_uuid: 'a'})").unwrap();
+        for b in ["b1", "b2", "b3"] {
+            cat.execute_raw(&format!("CREATE (:B {{_uuid: '{b}'}})")).unwrap();
+        }
+        cat.execute_raw("MATCH (a:A {_uuid: 'a'}), (b:B {_uuid: 'b1'}) CREATE (a)-[:R]->(b)").unwrap();
+        cat.execute_raw("MATCH (a:A {_uuid: 'a'}), (b:B {_uuid: 'b3'}) CREATE (a)-[:R {raison: 'avant'}]->(b)").unwrap();
+
+        let mut config = CatalogConfig::default();
+        config.relations.insert(
+            "R".into(),
+            RelationDef { from: "A".into(), to: "B".into(), properties: Some(HashMap::from([("raison".to_string(), texte())])) },
+        );
+        let mut services = ServiceRegistry::new();
+        services.register("conn", cat.conn_arc());
+        services.register("dialect", cat.dialect_arc());
+        services.register("config", config);
+        let mut ctx = NodeContext::with_services(Arc::new(services));
+        let paire = |b: &str, retirer: bool| {
+            let (r, res) = RelationRef::new("R");
+            let mut rec = RelationRecord::new("R".into(), RefOrUuid::Uuid("a".into()), RefOrUuid::Uuid(b.into()), BTreeMap::new(), res, r);
+            rec.retirer = retirer;
+            rec
+        };
+        ctx.set_input(
+            "relations",
+            PortValue::new(BatchPayload::new(PortType::Relations, vec![paire("b1", false), paire("b2", false), paire("b3", true)])),
+        );
+        let mut node = LinkRecordNode::new("links");
+        node.execute(&mut ctx).expect("le lot");
+        let compte = |cat: &Catalog| -> Vec<String> {
+            let r = cat
+                .execute_raw("MATCH (:A)-[r:R]->(b:B) RETURN b._uuid, r.raison ORDER BY b._uuid")
+                .unwrap();
+            r.rows.iter().map(|l| format!("{}={}", l[0].as_str().unwrap_or("?"), l[1].as_str().unwrap_or("NULL"))).collect()
+        };
+        assert_eq!(compte(&cat), ["b1=NULL", "b2=NULL"], "le lot pose b2 et délie b3");
+        let annulation = node.undo_context().expect("un contexte d'annulation");
+        node.undo(annulation).expect("l'annulation");
+        assert_eq!(compte(&cat), ["b1=NULL", "b3=avant"], "b1 reste, b2 part, b3 revient avec sa raison");
+    }
 
     /// L'écriture sans allocation rend octet pour octet ce que rend
     /// `cellule_csv` — le format du COPY ne change pas.

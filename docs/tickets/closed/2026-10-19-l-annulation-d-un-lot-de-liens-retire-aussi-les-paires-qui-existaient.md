@@ -1,7 +1,6 @@
 # L'annulation d'un lot de liens retire aussi les paires qui existaient avant lui
 
-- **État** : ouvert (relevé le 19 octobre 2026 par la session mémoire longue, en écrivant le
-  compte exact des liens neufs de la pièce 1)
+- **État** : corrigé par le commit qui déplace ce ticket (19 octobre 2026, session mémoire longue)
 - **Gravité** : perte : des arêtes posées avant le lot disparaissent quand le lot est défait
   par l'annulation du nœud (hors transaction).
 - **Atteignable en service** : peu : seulement quand un drain hors transaction échoue après
@@ -43,3 +42,18 @@ paires avant de délier, et les reposer avec elles.
 N'annuler que les paires créées (les mêmes que le journal note), et reposer une déliaison
 avec ses propriétés ; pour une relation non
 déclarée (liens de morceaux), garder le comportement, ou faire la même lecture.
+
+## Ce qui a été fait (19 octobre 2026)
+
+- `LinkRecordNode` sait, pour une relation déclarée, les paires qu'il crée. Le COPY rend celles
+  qu'il écrit, et le chemin par lots relit chaque tranche avant et après. Son annulation ne
+  retire plus que celles-là. Une relation non déclarée (les liens des morceaux, vers des morceaux
+  nés dans le même drain) défait tout le lot, comme avant.
+- Une déliaison relit les propriétés déclarées de ses paires avec elles
+  (`SchemaDialect::existing_links_with`, Cypher et PostgreSQL). L'annulation les repose avec ces
+  propriétés et leurs bouts déclarés, par jeu de propriétés : un NULL dans la liste des
+  paramètres n'a pas de type.
+- Témoin : `dataflow::record_nodes::tests::l_annulation_d_un_lot_de_liens_ne_retire_que_ce_qu_il_a_cree`
+  (le nœud seul : une paire d'avant gardée, une neuve retirée, une déliée reposée avec sa raison).
+- Où l'annulation sert : seul le rollback d'une migration (`migration_rollback_graph`) rejoue
+  les `undo` des nœuds. Le runtime ne défait rien de lui-même quand un graphe tombe.
