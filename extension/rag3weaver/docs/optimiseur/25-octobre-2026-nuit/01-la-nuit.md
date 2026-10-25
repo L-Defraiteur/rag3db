@@ -54,4 +54,12 @@ chantier ou réindex complet ». Le portable est en mode éco : les durées comp
   part de là.
 - Pour la pose du matin : f5edfdb6c et 45308bce9 (la première recherche après l'ouverture), 7c7a69578 (vue
   3), c10dabb71 (vue 4) ; à suivre, le Markdown du chat, les surlignages et « rien de probant ».
+- 0 h 36 — bâti à luciepc sur 11d350001 (bb0f4d9c0 : les vues React 1 à 4 et le Markdown du chat ; la recherche :
+  la poignée, « rien de probant », les surlignages), lib 04063ee06, binaire 8f4c923e ; essai vert aux deux postes
+  à 0 h 38.
+- 0 h 44 — pose et réveil aux deux postes (annoncés à 0 h 39). Preuves : le témoin l_ide_d_un_vrai_hote est
+  vert en 9,6 s ; le chat est rendu par CDP sur l'hôte vivant, avec le Markdown (strong 2, listes 3, li 7,
+  code 11, plus aucun astérisque), l'en-tête et le modèle, et la console est propre.
+- La suite, d'après c7 : une pose en fin de file vers 2 h 30, sur son hash, puis le matin la bascule 43 par la
+  procédure de l'arbre principal.
 
