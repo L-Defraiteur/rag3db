@@ -69,7 +69,7 @@ Les rouges de l'après-midi, tous vus avant master sauf le premier :
 
 ## Ce qui attend
 
-1. **M4, l'archiviste**, comme prévu, maintenant que la mémoire réelle est sur le gabarit livré ; il relira Memory et Subject.
+1. **M4, l'archiviste** : le design est à la page 06 (l'outil `archive`, le découpage par sections, la décision fermée de la tentative 4 avec `create`, le modèle déclaré au backend, la relecture de l'ancien modèle) ; le code suit dans l'ordre de son §7.
 2. **Les roadmaps et les visions en mémoire** : le design est à la page 03 ; **l'identité des agents et la fusion entre mémoires**, à la page 04. Les deux attendent le mot de Lucie.
 3. **La forme des fiches de bilan du juge** d'everything declarative : relue, réponses dans sa page §5 (branche juge-1).
 4. **En fin de session**, effacer les worktrees et les targets :
