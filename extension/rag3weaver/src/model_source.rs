@@ -598,7 +598,7 @@ pub fn connect_llm(source: &ModelSource) -> Result<(crate::openai_llm::OpenAiLlm
 /// Un artefact de modèle local : `<PRÉFIXE>_<SUFFIXE>` dans l'environnement,
 /// sinon `~/.cache/rag3weaver/<dossier>/<fichier>`.
 #[cfg(feature = "burn-embedder")]
-fn local_artifact(folder: &str, prefix: &str, suffix: &str, file: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn local_artifact(folder: &str, prefix: &str, suffix: &str, file: &str) -> Result<std::path::PathBuf, String> {
     let variable = format!("{prefix}_{suffix}");
     let path = match std::env::var(&variable) {
         Ok(v) => std::path::PathBuf::from(v),

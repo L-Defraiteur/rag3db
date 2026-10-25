@@ -484,6 +484,11 @@ pub struct SearchOptions {
     /// candidats fusionnés. `None` (ou un poids nul) : rien ne change.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cohesion: Option<CohesionOptions>,
+    /// **Le surlignage à l'affichage** (`"sparse"`) : les morceaux de la page
+    /// que lucivy n'a pas surlignés le sont par le creux de bge-m3, ou par les
+    /// mots de la requête (`HighlightNode`). `None` : rien de plus.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlights: Option<String>,
 }
 
 /// La cohésion des candidats fusionnés : pour chacun, la somme de 1/sauts
@@ -532,6 +537,7 @@ impl Default for SearchOptions {
             scopes: Vec::new(),
             rerank: None,
             cohesion: None,
+            highlights: None,
         }
     }
 }
