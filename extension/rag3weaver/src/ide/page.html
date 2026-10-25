@@ -927,6 +927,9 @@ function suivreLesReactions(d) {
 // passe par le même chemin que tout run (C4).
 
 let chatVivant = null; // { id, manifest, fil, run, bulle, outils, arreter, note, conso }
+// Ce que le flux a dit du dernier tour (appels de modèle, appels d'outil,
+// avec leurs durées) : lisible par un témoin, comme `window.__apercu`.
+window.__chat = { run: null, evenements: [] };
 
 function tourDuChat(t) {
   const appels = (t.tool_calls ?? []).map((c) => el("li", { "data-outil": c.name }, c.name));
@@ -998,6 +1001,7 @@ function suivreLeChat(d) {
   if (!v || route().vue !== "chat" || d.backend !== v.manifest) return;
   if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${v.id}`) {
     v.run = ev.run;
+    window.__chat = { run: ev.run, evenements: [] };
     v.arreter.hidden = false;
     return;
   }
@@ -1009,6 +1013,11 @@ function suivreLeChat(d) {
     return;
   }
   if (!v.run || ev.run !== v.run) return;
+  if (d.sujet === "agent") {
+    window.__chat.evenements.push({ kind: ev.kind, at_ms: d.at_ms, ms: ev.ms ?? null, tool: ev.tool ?? null,
+      iteration: ev.iteration ?? null, prompt_tokens: ev.prompt_tokens ?? null, completion_tokens: ev.completion_tokens ?? null,
+      retries: ev.retries ?? null, finish: ev.finish ?? null, ok: ev.ok ?? null });
+  }
   if (ev.kind === "Token" && v.bulle) {
     v.bulle.querySelector("pre").textContent += ev.text;
   } else if (ev.kind === "ToolCallStarted" && v.outils) {
