@@ -1110,6 +1110,14 @@ fn la_requete_entiere_passe_devant_les_mots() {
             premier["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "bm25_exact" && x["rank"] == 1)),
             "« {requete} » : trouvé par la requête entière, au rang 1 : {premier}"
         );
+        // La phrase exacte est trouvée : la réponse ne dit pas que le plein texte n'a « rien de
+        // probant » (G, 25 octobre 2026, sur la base de Lucie : 0,51 mesuré sur le premier de la
+        // recherche par mots, pas sur ce que la requête entière a trouvé).
+        let avertissements = r["metadata"]["render.meta"]["warnings"].to_string();
+        assert!(
+            !avertissements.contains("rien de probant"),
+            "« {requete} » : la phrase est trouvée, rien ne dit le contraire : {avertissements}"
+        );
     }
 }
 
