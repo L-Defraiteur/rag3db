@@ -591,9 +591,29 @@ tâches, fiches de la mémoire) :
   juge ne touche jamais ni l'outil ni le manifeste : il range, il compare, il
   demande.
 
+- **L'outil garde qui l'a fait, et le contexte de ce moment.** Aujourd'hui une
+  proposition porte son auteur et son instant (`auteur`, `at_ms`), mais l'outil
+  appliqué au manifeste ne les garde pas, et le journal des runs est borné (200
+  runs par backend, le milieu d'un long run tombe) : on sait qui et quand au
+  moment de la déclaration, on ne retrouve pas le contexte plus tard sans l'avoir
+  figé. Donc la déclaration estampille l'outil (auteur, run, instant) et fige
+  dans la fiche de l'outil le contexte qu'avait l'agent à ce moment : le journal
+  de ce run entier, hors de la borne, la tâche, les messages qui ont mené à la
+  déclaration. Deux chemins pour la correction, au choix de la réaction :
+  - **la session de l'auteur est encore ouverte et récente** : la suggestion du
+    juge (la fiche, le défaut, la forme proposée) s'injecte directement dans sa
+    session, comme un message du bus, et c'est lui qui corrige dans son fil ;
+    cela suppose que les réactions puissent s'adresser aux agents, ce que Lucie
+    doit encore blanchir (18 octobre) ;
+  - **sinon** : l'agent est relancé dans une tâche neuve avec le contexte figé
+    et la fiche, et sa correction repasse par le bac à sable. Automatique
+    seulement si la correction automatique des outils est activée sur le backend
+    (`autofix_outils`, éteint par défaut) ; sinon la tâche attend qu'un humain
+    la lance.
+
 Rien n'est décidé ni commencé au-delà de juge-outils-1. L'ordre naturel : le
 bilan des outils d'abord (c'est lui qui fournit le jugement), puis la marque
-`a_surveiller` et la réaction qui adresse (ce sont des déclarations), puis le
+`a_surveiller`, l'estampille de l'outil et la réaction qui adresse (ce sont des déclarations), puis le
 bac à sable avec ses essais (c'est le seul morceau qui demande une mise en
 scène de l'hôte). Ce qui reste à trancher avec Lucie : qui a le droit de poser
 une marque, combien de runs lèvent la surveillance, et si un outil déclaré par
