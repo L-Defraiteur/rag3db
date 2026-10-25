@@ -166,6 +166,7 @@ fn le_chat_d_un_principal_n_ecrit_jamais_meme_sans_task_writes() {
 /// et un lien vers la relecture de la tâche, qui montre la différence. Le
 /// principal est intact ; la console reste vide.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page() {
     use super::navigateur::{navigateur_ou_saut, Navigateur};

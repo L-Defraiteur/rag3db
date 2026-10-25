@@ -109,6 +109,7 @@ fn monter(paquets: &std::path::Path, fichiers: &[(&str, &str)]) -> Banc {
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
     const TEMOIN: &str = "un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat";
@@ -249,6 +250,7 @@ const GRAPHE_DU_COMPTEUR: &str = r#"graph LR
 /// dans le panneau. Puis le graphe réécrit sur le disque (`n + 10`) se recharge
 /// à chaud sans perdre l'état : le clic suivant compte de 1 à 11.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu() {
     const TEMOIN: &str = "le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu";
@@ -313,6 +315,7 @@ fn le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu() {
 /// par cinq **sans que rien ne soit écrit** ; Appliquer l'écrit et le commite
 /// avec sa raison. Une seconde proposition est rejetée avec son pourquoi.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide() {
     const TEMOIN: &str = "une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide";
@@ -410,6 +413,7 @@ fn une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide() {
 /// l'aperçu compte alors par cinq, et la tâche est fermée. Une seconde tâche
 /// est rejetée avec son pourquoi, et l'arbre principal n'en a rien.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn une_tache_se_relit_puis_se_fusionne_dans_l_ide() {
     const TEMOIN: &str = "une_tache_se_relit_puis_se_fusionne_dans_l_ide";
@@ -556,7 +560,7 @@ pub(super) fn gemini_ou_saut(temoin: &str, raison_de_plus: Option<&str>) -> bool
 /// tourne : il finit arrêté par l'IDE.
 ///
 /// **Ignoré par défaut**, comme les autres témoins sur un modèle du nuage : il
-/// se joue par `--ignored` (ou `--include-ignored`), avec `openai-llm`, les
+/// se joue par `--ignored` (ou `--include-ignored`), avec `openai-llm` et `navigateur`, les
 /// identifiants et `RAG3WEAVER_EXIGER_GEMINI=1`. Joué sans eux, il se saute
 /// nommément.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
