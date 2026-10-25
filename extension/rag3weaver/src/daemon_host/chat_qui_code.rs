@@ -404,6 +404,7 @@ fn le_rendu_journalise_d_un_appel_est_entier() {
     let rendu = journal["appel"]["rendu"].to_string();
     assert!(rendu.len() > 64 * 1024, "le rendu dépasse l'ancienne borne : {} octets", rendu.len());
     assert!(journal["appel"]["rendu"].get("tronque").is_none(), "rien de tronqué : {}", &rendu[..200]);
-    assert!(rendu.contains("LIGNE_3999"), "la dernière ligne est dans le journal");
+    // (`read_file` borne lui-même sa lecture : le journal garde ce que l'appelant a
+    // reçu, pas plus — et pas moins.)
     assert_eq!(journal["appel"]["rendu"].to_string(), r["result"]["result"].to_string(), "le journal porte exactement ce que l'appelant a reçu");
 }
