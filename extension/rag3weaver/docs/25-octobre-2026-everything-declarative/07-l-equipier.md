@@ -22,7 +22,8 @@ fiabilité. Ce lot est équipier-1.
 
 1. **La demande** arrive par la boîte aux lettres. L'hôte ouvre la tâche si elle n'existe pas,
    puis lance le premier pas.
-2. **Le mini-plan.** Le premier pas écrit le mini-plan par `editer_le_plan`. Il contient la
+2. **Le mini-plan.** Le premier pas écrit le mini-plan par `editer_le_plan` ; l'agent le
+   réédite ensuite librement (plus bas). Il contient la
    demande telle que l'agent la comprend, ce qu'il propose, puis des éléments. Chaque élément
    porte :
    - un statut : `a_faire`, `en_cours`, `fait`, `bloque`, `abandonne` ;
@@ -77,20 +78,45 @@ Il y a deux voies :
 
 Le canal des sessions Claude n'est pas utilisé.
 
-## Le mini-plan, où il vit
+## Le mini-plan : libre, puis gardé en mémoire (Lucie)
 
-- **La vérité de la boucle** est `<dossier de la tâche>/plan.json`. L'hôte le lit à chaque
-  frontière pour savoir s'il reste un pas, et l'injecte.
-- **Dans la mémoire déclarée** (`bilans.memoire`), la tâche a une fiche « tâche : <nom> », via
-  `equipier`. Chaque édition y ajoute un L1 de section `plan`, lisible avec son bloc json. La
-  fiche garde ainsi l'histoire du plan, et le juge peut la lire pour comparer un pas à son
-  intention.
+**Pas de harnais sur le plan.** L'agent édite ses éléments quand il veut, comme il le sent. Il
+peut juger son plan accompli ou obsolète, le clore avec sa raison et en ouvrir un autre. Les
+seules contraintes dures sont le budget du pas (douze appels sans `tour_fini`) et l'arrêt (C4).
+
+**Le plan courant** est l'état vivant de la tâche :
+- dans `<dossier de la tâche>/plan.json`, que l'hôte lit à chaque frontière (reste-t-il un
+  élément faisable ou bloqué ?) et injecte ;
+- et sur la fiche de session, son état vivant.
+
+**Les plans clos vont en mémoire, sur la fiche de session** (la vision du 4 octobre : le
+contexte comme une vue des fiches).
+- La fiche de session est celle que le juge range déjà (page 04, nom stable par
+  `nom_de_tache`), dans la mémoire déclarée (`bilans.memoire`).
+- Pour un équipier, son nom vient de la demande, pas du premier message d'un pas : chaque pas
+  commence par l'injection de la frontière, et le juge doit ranger tous les pas sur la même
+  fiche.
+- Chaque plan clos y devient un L1 de section `plan`, avec :
+  - son JSON entier : la demande, la proposition, les éléments et leurs statuts finaux, la
+    raison de la clôture ;
+  - ses références :
+    - les fiches sujets touchées pendant ce plan : les fichiers, les outils par leurs ancres
+      `outil:<nom>`, les concepts ;
+    - les L1 précis de ces fiches que ses pas ont produits ou lus (par exemple les « defauts »
+      que le juge a rangés pour ses runs).
+- Relancé, l'agent lit le plan courant et peut remonter aux plans clos. Le juge, qui range son
+  bilan sur la même fiche, voit le plan à côté du run.
+- La forme de ce L1 et de ses références est relue avec 96, comme la fiche par outil. Les
+  concepts sont à trancher avec lui.
 
 ## Ses outils
 
 - Ceux du chat qui code dans une tâche, rien de plus. Les tests, la fusion et le push restent à
   une session Claude ou au superviseur.
-- `editer_le_plan` : le plan entier, ou un élément par son id (statut, raison, question).
+- `editer_le_plan` :
+  - poser le plan entier ;
+  - changer, ajouter ou retirer un élément (statut, raison, question) ;
+  - ou clore ce plan (`accompli` ou `obsolete`, avec sa raison) et en ouvrir un autre.
 - `tour_fini { element, reussi, fait, reste }` : il finit le pas. La boucle de l'agent apprend
   un **outil qui termine** : un nom déclaré terminal arrête la boucle après sa réponse
   (`StopReason::Terminal`). C'est générique : `pause_dialogue` en est le cas d'origine.
