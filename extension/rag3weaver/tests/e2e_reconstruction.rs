@@ -331,3 +331,89 @@ fn la_verification_a_blanc_reconstruit_une_copie_et_la_compare_a_la_base_vivante
     assert_eq!(avant, apres, "la vérification travaille dans un répertoire jetable");
     assert_eq!(lignes(&vivante).len(), 2);
 }
+
+// ── La version du format et le manifeste du dossier (25 oct. 2026) ─────────
+
+/// Le manifeste `chemin`, son `files_format` remplacé.
+fn avec_format(chemin: &Path, format: serde_json::Value) {
+    let mut m: serde_json::Value = serde_json::from_slice(&std::fs::read(chemin).unwrap()).unwrap();
+    m["files_format"] = format;
+    std::fs::write(chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+}
+
+fn le_manifeste_du_dossier(dir: &Path) -> PathBuf {
+    dir.join("fichiers").join(rag3weaver::fichiers_entite::MANIFESTE_DU_DOSSIER)
+}
+
+#[test]
+#[ignore]
+fn un_dossier_sans_manifeste_ou_d_un_autre_gabarit_se_dit_et_ne_se_reconstruit_pas() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let vivante = ouvrir(&manifeste(dir.path(), "backend.json", "base.rag3db", TOUT));
+    vivante.call("put_note", json!({"record": {"titre": "Le WAL", "corps": "Le journal se rejoue.\n"}})).expect("une note");
+    drop(vivante);
+    let ecrit = std::fs::read_to_string(le_manifeste_du_dossier(dir.path())).expect("le manifeste du dossier, écrit à l'ouverture");
+    for attendu in ["nom: reconstruction", "format: 1", "Note:", "dossier: notes"] {
+        assert!(ecrit.contains(attendu), "le manifeste dit « {attendu} » : {ecrit}");
+    }
+
+    // Sans manifeste : l'ouverture le dit sans le réécrire, la reconstruction refuse.
+    std::fs::remove_file(le_manifeste_du_dossier(dir.path())).unwrap();
+    let neuve = ouvrir(&manifeste(dir.path(), "neuve.json", "neuve.rag3db", TOUT));
+    let etat = neuve.index_states().expect("l'état");
+    assert!(etat["files"]["manifest"].as_str().is_some_and(|e| e.contains("pas de manifeste.yaml")), "{etat}");
+    assert!(etat["warnings"].to_string().contains("dossier :"), "l'avertissement le dit : {etat}");
+    assert!(!le_manifeste_du_dossier(dir.path()).exists(), "un dossier sans manifeste n'en reçoit pas un deviné");
+    let refus = neuve.rebuild_from_files().expect_err("sans manifeste");
+    assert!(refus.contains("manifeste.yaml") && refus.contains("rien n'est reconstruit"), "{refus}");
+    drop(neuve);
+
+    // D'un autre gabarit : dit, refusé, et pas écrasé.
+    std::fs::write(le_manifeste_du_dossier(dir.path()), "gabarit:\n  nom: autre\n  version: 1\nformat: 1\n").unwrap();
+    let neuve = ouvrir(&manifeste(dir.path(), "neuve2.json", "neuve2.rag3db", TOUT));
+    let refus = neuve.rebuild_from_files().expect_err("un autre gabarit");
+    assert!(refus.contains("« autre »"), "{refus}");
+    assert!(std::fs::read_to_string(le_manifeste_du_dossier(dir.path())).unwrap().contains("nom: autre"), "le manifeste d'un autre n'est pas écrasé");
+}
+
+#[test]
+#[ignore]
+fn un_dossier_d_anciens_fichiers_se_relit_par_sa_migration_et_un_format_inconnu_se_dit() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let vivante = ouvrir(&manifeste(dir.path(), "backend.json", "base.rag3db", TOUT));
+    vivante.call("put_note", json!({"record": {"titre": "Le WAL", "etiquette": "moteur", "corps": "Le journal se rejoue.\n"}})).expect("une note");
+    let futur = vivante.call("put_note", json!({"record": {"titre": "Venue du futur", "corps": "Écrite par un harnais plus neuf.\n"}})).expect("une note")
+        ["result"]["uuid"].as_str().unwrap().to_string();
+    drop(vivante);
+    let fichier = dir.path().join("fichiers/notes").join(format!("{futur}.md"));
+    let texte = std::fs::read_to_string(&fichier).unwrap();
+    assert!(texte.contains("\nformat: 1\n"), "chaque fichier porte son format : {texte}");
+    std::fs::write(&fichier, texte.replace("\nformat: 1\n", "\nformat: 9\n")).unwrap();
+
+    // Le format 2 : l'étiquette prend un « # ». Une migration déclarée, un pas.
+    std::fs::write(
+        dir.path().join("m1-2.rhai"),
+        "let f = input.fields; if f.contains(\"etiquette\") { f.etiquette = \"#\" + f.etiquette; } f",
+    )
+    .unwrap();
+    let chemin = manifeste(dir.path(), "neuve.json", "neuve.rag3db", TOUT);
+    avec_format(&chemin, json!({"version": 2, "migrations": [{"from": 1, "to": 2, "script": "m1-2.rhai"}]}));
+    let neuve = ouvrir(&chemin);
+    let rapport = neuve.rebuild_from_files().expect("un dossier au format 1 se reconstruit sous le format 2");
+    assert_eq!(rapport["Note"]["restored"], 1, "{rapport}");
+    let refus = rapport["Note"]["refused"].to_string();
+    assert!(refus.contains("format 9") && refus.contains("plus récent"), "le fichier d'un format inconnu se dit : {rapport}");
+    let lignes = lignes(&neuve);
+    assert_eq!(lignes.len(), 1);
+    assert_eq!(lignes[0][2], CypherValue::String("#moteur".into()), "le champ passé par la migration : {lignes:?}");
+    drop(neuve);
+
+    // Sans la migration, un fichier au format 1 ne se devine pas : il se dit,
+    // fichier par fichier (le dossier, lui, est passé au format 2 en s'ouvrant
+    // sous le gabarit qui le migre).
+    let chemin = manifeste(dir.path(), "neuve2.json", "neuve2.rag3db", TOUT);
+    avec_format(&chemin, json!({"version": 2}));
+    let rapport = ouvrir(&chemin).rebuild_from_files().expect("le dossier au format 2 se lit");
+    assert_eq!(rapport["Note"]["restored"], 0, "{rapport}");
+    assert!(rapport["Note"]["refused"].to_string().contains("aucune migration"), "{rapport}");
+}

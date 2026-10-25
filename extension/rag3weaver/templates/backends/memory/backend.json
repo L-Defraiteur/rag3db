@@ -3,6 +3,13 @@
   "name": "memory",
   "database": "data/memory.rag3db",
   "files_root": "fichiers",
+  "files_format": {
+    "version": 1,
+    "migrations": [],
+    "lists": {
+      "genres": "RefType.name"
+    }
+  },
   "embeddings": {
     "address": "",
     "model": "bge-m3",
@@ -614,7 +621,8 @@
       "from_states": [
         "current",
         "to_review"
-      ]
+      ],
+      "description": "une mémoire (l'ancien modèle) se range sous un sujet"
     },
     "REPLACES": {
       "from": "Memory",
@@ -625,11 +633,13 @@
       "to_states": [
         "current",
         "to_review"
-      ]
+      ],
+      "description": "une mémoire en remplace une plus ancienne"
     },
     "CITE": {
       "from": "Memory",
-      "to": "Ref"
+      "to": "Ref",
+      "description": "une mémoire (l'ancien modèle) cite une chose : un fichier, un symbole, un lien"
     },
     "ANCRE": {
       "from": "Fiche",
@@ -638,27 +648,33 @@
         "current",
         "to_review",
         "proposed"
-      ]
+      ],
+      "description": "une fiche est ancrée à une chose qu'elle concerne : un chemin, un symbole, un outil"
     },
     "APPORT_CITE": {
       "from": "Apport",
-      "to": "Ref"
+      "to": "Ref",
+      "description": "un apport cite sa provenance : la section d'un source (doc:)"
     },
     "ETAT_DE": {
       "from": "Etat",
-      "to": "Fiche"
+      "to": "Fiche",
+      "description": "un état (L2) résume une fiche"
     },
     "LIT": {
       "from": "Etat",
-      "to": "Apport"
+      "to": "Apport",
+      "description": "un état (L2) se fonde sur un apport"
     },
     "CONSOLIDE": {
       "from": "Apport",
-      "to": "Apport"
+      "to": "Apport",
+      "description": "un apport consolidé (L1 bis) reprend des apports plus anciens"
     },
     "A_POUR_APPORT": {
       "from": "Fiche",
-      "to": "Apport"
+      "to": "Apport",
+      "description": "une fiche a un apport (L1) : ce qu'une source en a dit"
     }
   },
   "scripts": {
