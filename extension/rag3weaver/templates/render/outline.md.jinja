@@ -3,7 +3,8 @@
 
   Rendu par l'outil `outline` (un Plan déclaré, `plans/outline.json`). Les scopes sont ceux que
   l'analyseur (tree-sitter) a lus, pas ceux d'un compilateur : une macro ou un gabarit peut en
-  cacher. Il le dit en pied de page, comme chaque outil de lecture du code dit sa marque.
+  cacher. Il le dit en pied de page, comme chaque outil de lecture du code dit sa marque ; la
+  phrase vient de l'outil (`provenance=` de son rendu), et son json la porte aussi.
 -#}
 {%- if count == 0 -%}
 **Aucun scope pour ce fichier dans l'index.** Le chemin est-il celui que rend `list_files` ? Le fichier est-il indexé ?
@@ -14,5 +15,5 @@
   `{{ r.signature }}`{% endif %}
 {%- endfor %}
 
-_Lu par l'analyseur (tree-sitter), pas par un compilateur : une macro peut cacher un scope._
+_{{ provenance }}_
 {%- endif %}

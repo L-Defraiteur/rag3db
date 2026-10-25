@@ -3161,6 +3161,10 @@ mod tests {
                 echecs.push(format!("{nom} : {e}"));
                 continue;
             }
+            if let Err(e) = crate::dataflow::render_nodes::verifier_le_cablage(&nom, outil.template()) {
+                echecs.push(e);
+                continue;
+            }
             let mut args = serde_json::Map::new();
             for p in &outil.params {
                 // Une chaîne à valeurs admises prend la PREMIÈRE admise :
