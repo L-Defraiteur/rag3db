@@ -23,6 +23,163 @@ use serde_json::{Map, Value};
 /// La clé du service : `HashMap<String, Arc<Miroir>>`, par entité.
 pub const SERVICE: &str = "backend_files";
 
+/// **La version du format des fichiers** (25 oct. 2026, demande de Lucie : « si
+/// on améliore les index du jour au lendemain, faut-il versionner ? »). Les
+/// fichiers sont la vérité et la base se rebâtit depuis eux : chaque fichier
+/// porte `format: N` dans son en-tête (et son bloc machine), et le manifeste
+/// dit le format qu'il écrit et comment rejoindre le présent depuis un format
+/// passé. Un fichier d'un format qu'aucune migration ne rejoint se dit, il ne
+/// se devine pas.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FilesFormat {
+    /// Le format que le harnais écrit.
+    #[serde(default = "format_un")]
+    pub version: u32,
+    /// Une migration par pas (étendre, puis contracter) : un script Rhai, relatif
+    /// au manifeste, qui reçoit `input = #{entity, fields}` (les champs d'un
+    /// fichier ou d'une ligne de bloc au format `from`) et rend les champs au
+    /// format `to`.
+    #[serde(default)]
+    pub migrations: Vec<MigrationDecl>,
+    /// Des listes que le manifeste du dossier nomme (`"genres": "RefType.name"`) :
+    /// les valeurs d'un champ d'une entité, lues dans la base à chaque écriture.
+    #[serde(default)]
+    pub lists: BTreeMap<String, String>,
+}
+
+impl Default for FilesFormat {
+    fn default() -> Self {
+        Self { version: 1, migrations: Vec::new(), lists: BTreeMap::new() }
+    }
+}
+
+fn format_un() -> u32 {
+    1
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct MigrationDecl {
+    pub from: u32,
+    pub to: u32,
+    pub script: String,
+}
+
+/// Le format d'un dossier tel que le chargement l'a lu : la version écrite, le
+/// gabarit qui l'écrit, et les scripts de migration, lus.
+#[derive(Debug, Clone)]
+pub struct FormatDuDossier {
+    pub version: u32,
+    pub gabarit: String,
+    pub gabarit_version: u32,
+    pub migrations: Vec<(u32, u32, String)>,
+}
+
+impl Default for FormatDuDossier {
+    fn default() -> Self {
+        Self { version: 1, gabarit: String::new(), gabarit_version: 0, migrations: Vec::new() }
+    }
+}
+
+impl FormatDuDossier {
+    /// Les champs d'un fichier (ou d'une ligne de bloc) au format `version`,
+    /// rendus au format courant par les migrations déclarées, pas à pas. Un
+    /// format plus récent, ou sans chemin de migration, se dit.
+    pub fn migrer(&self, entite: &str, version: u32, champs: Map<String, Value>) -> Result<Map<String, Value>, String> {
+        if version > self.version {
+            return Err(format!(
+                "format {version} : plus récent que celui que ce gabarit écrit ({}) — un harnais plus neuf l'a écrit",
+                self.version
+            ));
+        }
+        let mut v = version;
+        let mut champs = champs;
+        while v < self.version {
+            let Some((_, vers, script)) = self.migrations.iter().find(|(de, _, _)| *de == v) else {
+                return Err(format!(
+                    "format {v} : aucune migration déclarée vers le format {} (files_format.migrations)",
+                    self.version
+                ));
+            };
+            let rendu = crate::harness::evaluate(
+                script,
+                &serde_json::json!({"entity": entite, "fields": champs}),
+                &crate::harness::RhaiLimits::default(),
+            )
+            .map_err(|e| format!("la migration du format {v} vers {vers} : {e}"))?;
+            champs = match rendu {
+                Value::Object(m) => m,
+                autre => return Err(format!("la migration du format {v} vers {vers} rend {autre}, pas les champs")),
+            };
+            v = *vers;
+        }
+        Ok(champs)
+    }
+
+    /// Le manifeste d'un dossier parle-t-il du même schéma que ce gabarit ? Le
+    /// même gabarit, et un format qui se lit (le présent, ou un passé que les
+    /// migrations rejoignent).
+    pub fn juger_le_manifeste(&self, lu: &Value) -> Result<(), String> {
+        let gabarit = lu["gabarit"]["nom"].as_str().unwrap_or_default();
+        if gabarit != self.gabarit {
+            return Err(format!(
+                "{MANIFESTE_DU_DOSSIER} : le dossier est celui du gabarit « {gabarit} », pas « {} »",
+                self.gabarit
+            ));
+        }
+        let Some(format) = lu["format"].as_u64() else {
+            return Err(format!("{MANIFESTE_DU_DOSSIER} : pas de version de format"));
+        };
+        self.migrer("", format as u32, Map::new()).map(|_| ()).map_err(|e| format!("{MANIFESTE_DU_DOSSIER} : {e}"))
+    }
+}
+
+/// **Le manifeste du dossier** (demande de Lucie) : à la racine des fichiers, il
+/// dit de quoi le dossier parle — le gabarit, le format, les listes, les
+/// relations et leur sens —, écrit par le harnais à chaque ouverture, jamais à
+/// la main.
+pub const MANIFESTE_DU_DOSSIER: &str = "manifeste.yaml";
+
+/// Le manifeste d'un dossier, s'il en a un.
+pub fn lire_le_manifeste_du_dossier(racine: &Path) -> Result<Option<Value>, String> {
+    let chemin = racine.join(MANIFESTE_DU_DOSSIER);
+    match std::fs::read_to_string(&chemin) {
+        Ok(texte) => serde_norway::from_str(&texte).map(Some).map_err(|e| format!("{} illisible : {e}", chemin.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("{} : {e}", chemin.display())),
+    }
+}
+
+/// Écrit le manifeste du dossier, atomiquement.
+pub fn ecrire_le_manifeste_du_dossier(racine: &Path, contenu: &Value) -> Result<(), String> {
+    std::fs::create_dir_all(racine).map_err(|e| format!("{} : {e}", racine.display()))?;
+    let yaml = serde_norway::to_string(contenu).map_err(|e| e.to_string())?;
+    let texte = format!("# Écrit par rag3weaver à chaque ouverture, depuis le gabarit : ne pas éditer.\n{yaml}");
+    let cible = racine.join(MANIFESTE_DU_DOSSIER);
+    let temporaire = racine.join(format!("{MANIFESTE_DU_DOSSIER}.ecriture"));
+    std::fs::write(&temporaire, texte).map_err(|e| format!("{} : {e}", temporaire.display()))?;
+    std::fs::rename(&temporaire, &cible).map_err(|e| format!("{} : {e}", cible.display()))
+}
+
+/// Le dossier porte-t-il déjà des fichiers (`.md`, à n'importe quelle profondeur) ?
+pub fn a_des_fichiers(racine: &Path) -> bool {
+    let mut pile = vec![racine.to_path_buf()];
+    while let Some(d) = pile.pop() {
+        let Ok(entrees) = std::fs::read_dir(&d) else { continue };
+        for e in entrees.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                pile.push(p);
+            } else if p.extension().is_some_and(|x| x == "md") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+
 /// La déclaration d'une entité, telle que le manifeste la porte.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -83,6 +240,9 @@ pub const FIN_DU_BLOC: &str = "-->\n";
 /// pour toute entité à fichier composé, jamais par un gabarit.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct BlocMachine {
+    /// Le format des lignes du bloc (absent : un bloc d'avant les formats).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<u32>,
     pub rows: Vec<LigneDuBloc>,
 }
 
@@ -158,8 +318,8 @@ fn ligne_du_bloc(cat: &crate::catalog::Catalog, entite: &str, uuid: &str, record
 /// Le texte du bloc. Une valeur ne peut pas fermer le commentaire : `-->` et
 /// `&` y sont échappés (`--&gt;`, `&amp;`), et [`Miroir::relire_le_bloc`] les
 /// rend.
-fn ecrire_le_bloc(lignes: &[LigneDuBloc]) -> Result<String, String> {
-    let yaml = serde_norway::to_string(&BlocMachine { rows: lignes.to_vec() }).map_err(|e| e.to_string())?;
+fn ecrire_le_bloc(lignes: &[LigneDuBloc], format: u32) -> Result<String, String> {
+    let yaml = serde_norway::to_string(&BlocMachine { format: Some(format), rows: lignes.to_vec() }).map_err(|e| e.to_string())?;
     let yaml = yaml.replace('&', "&amp;").replace("-->", "--&gt;");
     Ok(format!("\n{DEBUT_DU_BLOC}{yaml}{FIN_DU_BLOC}"))
 }
@@ -186,6 +346,9 @@ pub struct Miroir {
     /// lit pas comme siens les fichiers d'une fiche ou d'un genre. Relatifs à
     /// la racine : un miroir déplacé sur une autre racine les garde justes.
     pub dossiers_voisins: std::sync::OnceLock<Vec<PathBuf>>,
+    /// Le format du dossier, posé au chargement (absent : le format 1, sans
+    /// migration — un miroir construit hors d'un manifeste).
+    pub format: std::sync::OnceLock<std::sync::Arc<FormatDuDossier>>,
 }
 
 /// Un nom de champ entre accolades dans `name`.
@@ -268,8 +431,9 @@ impl Miroir {
         let mut schema = schema.clone();
         if let Some(props) = schema["properties"].as_object_mut() {
             props.insert("uuid".into(), serde_json::json!({"type": "string"}));
+            props.insert("format".into(), serde_json::json!({"type": "integer"}));
         }
-        Ok(Self { entite: entite.to_string(), racine, decl, gabarit, schema, sans_fichier: std::sync::OnceLock::new(), dossiers_voisins: std::sync::OnceLock::new() })
+        Ok(Self { entite: entite.to_string(), racine, decl, gabarit, schema, sans_fichier: std::sync::OnceLock::new(), dossiers_voisins: std::sync::OnceLock::new(), format: std::sync::OnceLock::new() })
     }
 
     /// **Relit le fichier d'une ligne** (lot M3, la reconstruction) : l'en-tête,
@@ -287,12 +451,17 @@ impl Miroir {
             Some(Value::String(u)) if !u.is_empty() => u,
             _ => return Err("l'en-tête ne porte pas d'uuid".into()),
         };
+        let version = match champs.remove("format") {
+            Some(v) => v.as_u64().ok_or_else(|| format!("format : « {v} » n'est pas un entier"))? as u32,
+            None => return Err("l'en-tête ne porte pas de version de format (`format`)".into()),
+        };
         // Le corps vide d'un champ absent ne devient pas une chaîne vide.
         if let Some(b) = &self.decl.body {
             if !corps.is_empty() {
                 champs.insert(b.clone(), Value::String(corps.to_string()));
             }
         }
+        let champs = self.format().migrer(&self.entite, version, champs)?;
         Ok((uuid, champs))
     }
 
@@ -338,7 +507,7 @@ impl Miroir {
     /// perdrait, dit plutôt que perdu en silence.
     pub fn champs_non_portes(&self) -> Vec<String> {
         let portes: std::collections::BTreeSet<&str> =
-            self.decl.header.iter().map(String::as_str).chain(self.decl.body.as_deref()).chain(["uuid"]).collect();
+            self.decl.header.iter().map(String::as_str).chain(self.decl.body.as_deref()).chain(["uuid", "format"]).collect();
         let mut out: Vec<String> = self.schema["properties"]
             .as_object()
             .map(|p| p.keys().filter(|k| !portes.contains(k.as_str())).cloned().collect())
@@ -386,12 +555,13 @@ impl Miroir {
     fn rendre_avec(&self, uuid: &str, record: &Value, corps: &str) -> String {
         let mut champs = Map::new();
         champs.insert("uuid".into(), Value::String(uuid.to_string()));
+        champs.insert("format".into(), Value::from(self.format().version));
         for c in &self.decl.header {
             if let Some(v) = record.get(c) {
                 champs.insert(c.clone(), v.clone());
             }
         }
-        let mut ordre: Vec<&str> = vec!["uuid"];
+        let mut ordre: Vec<&str> = vec!["uuid", "format"];
         ordre.extend(self.decl.header.iter().map(String::as_str));
         crate::en_tete::assembler(&crate::en_tete::ecrire_en_tete(&champs, &ordre), corps)
     }
@@ -514,7 +684,7 @@ impl Miroir {
         if !corps.is_empty() && !corps.ends_with('\n') {
             corps.push('\n');
         }
-        corps.push_str(&ecrire_le_bloc(&lignes)?);
+        corps.push_str(&ecrire_le_bloc(&lignes, self.format().version)?);
         let rel = self.chemin_relatif(uuid, &record)?;
         let ecrit = self.ecrire_texte(&rel, &self.rendre_avec(uuid, &record, &corps))?;
         Ok(Some((rel, ecrit)))
@@ -524,13 +694,24 @@ impl Miroir {
     /// qu'il porte — la sienne, puis ses lignes liées —, chacune avec ses
     /// champs et ses liens sortants. `None` : un fichier sans bloc (écrit avant
     /// M3b, ou à la main).
-    pub fn relire_le_bloc(texte: &str) -> Result<Option<Vec<LigneDuBloc>>, String> {
+    pub fn relire_le_bloc(&self, texte: &str) -> Result<Option<Vec<LigneDuBloc>>, String> {
         let Some(debut) = texte.rfind(DEBUT_DU_BLOC) else { return Ok(None) };
         let reste = &texte[debut + DEBUT_DU_BLOC.len()..];
         let fin = reste.find(FIN_DU_BLOC).ok_or("bloc machine sans fin")?;
         let yaml = reste[..fin].replace("--&gt;", "-->").replace("&amp;", "&");
         let bloc: BlocMachine = serde_norway::from_str(&yaml).map_err(|e| format!("bloc machine illisible : {e}"))?;
-        Ok(Some(bloc.rows))
+        let version = bloc.format.ok_or("le bloc machine ne porte pas de version de format (`format`)")?;
+        let format = self.format();
+        let mut lignes = bloc.rows;
+        for l in &mut lignes {
+            l.fields = format.migrer(&l.entity, version, std::mem::take(&mut l.fields))?;
+        }
+        Ok(Some(lignes))
+    }
+
+    /// Le format du dossier (le format 1 sans migration, hors d'un manifeste).
+    pub fn format(&self) -> std::sync::Arc<FormatDuDossier> {
+        self.format.get().cloned().unwrap_or_default()
     }
 
     /// **Les lignes de cette entité qu'un événement du catalogue touche** : ses
@@ -740,8 +921,10 @@ mod tests {
         assert_eq!(corps, rec["contenu"].as_str().unwrap(), "le corps est le champ tel quel");
         let mut s = schema();
         s["properties"]["uuid"] = json!({"type": "string"});
+        s["properties"]["format"] = json!({"type": "integer"});
         let champs = crate::en_tete::lire_en_tete(yaml, &s).unwrap();
         assert_eq!(champs["uuid"], "u-1");
+        assert_eq!(champs["format"], 1, "chaque fichier porte la version de son format");
         assert_eq!(champs["titre"], "Le journal : la reprise");
         assert_eq!(champs["rang"], 2);
         // Réécrire la même ligne rend le même fichier, octet pour octet.
