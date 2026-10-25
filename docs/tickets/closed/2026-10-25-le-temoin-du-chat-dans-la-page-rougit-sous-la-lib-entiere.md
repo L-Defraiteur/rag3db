@@ -1,6 +1,6 @@
 # Le témoin du chat dans la page rougit sous la lib entière
 
-- **État** : ouvert, le 25 octobre 2026 (vu par la session « recherche », à luciepc).
+- **État** : corrigé `930cccc96` (everything declarative) ; ouvert le 25 octobre 2026 (vu par la session « recherche », à luciepc).
 - **Gravité** : test instable.
 - **Atteignable en service** : non (le test).
 - **Touche rag3weaver** : oui (`src/daemon_host/chat.rs`, `src/daemon_host/navigateur.rs`).
@@ -30,3 +30,9 @@ Le test lui-même. Le journal du rouge :
 Lire laquelle des quatre parties de la condition manquait au délai : la note « fini », le lien de
 la proposition, l'outil `propose` ou le dernier `pre`. L'attente devrait le dire. Puis attendre la
 bonne chose, ou borner le délai sur un signal de la page plutôt que sur 20 s.
+
+## Le correctif
+
+`930cccc96` : le lien de la proposition d'un tour vient aussi de la réponse du tour. Le flux le
+disait sur `declarations`, relayé à part d'agent, parfois après la fin du tour : la deuxième partie
+de la condition (le lien `data-proposition`) manquait donc au délai sous charge.

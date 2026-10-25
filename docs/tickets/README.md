@@ -84,14 +84,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (40)
+### Ouverts — produit (39)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Le témoin du chat dans la page rougit sous la lib entière](2026-10-25-le-temoin-du-chat-dans-la-page-rougit-sous-la-lib-entiere.md) | ouvert | test instable | non (le test) | oui (`daemon_host/chat.rs`) |
 | [Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas](2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md) | ouvert — lot en cours chez G | réponse fausse en silence (état « running 97 % », recherche dense en repli) | oui | oui |
 | [Retirer le patch lucivy à la publication](2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | ouvert — `[patch.crates-io]` temporaire vers la branche correctifs-rag3db-19-octobre (bb07627), jusqu'à la publication par Lucie | dette de construction | non | oui (Cargo.toml, Cargo.lock) |
 | [Un Plan qui écrit ne s'annonce pas](2026-10-19-un-plan-qui-ecrit-ne-s-annonce-pas.md) | ouvert — décision de forme au premier appelant écrivant | réponse fausse en silence (pour qui écoute `catalog`) | non (aucun appelant en service) | oui |
@@ -132,10 +131,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (170), dans `closed/`
+### Fermés (171), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le témoin du chat dans la page rougit sous la lib entière](closed/2026-10-25-le-temoin-du-chat-dans-la-page-rougit-sous-la-lib-entiere.md) | corrigé `930cccc96` (le lien de la proposition vient aussi de la réponse du tour) | test instable | non (le test) | oui (`daemon_host/chat.rs`) |
 | [Un signal en panne fait tomber la recherche hybride entière](closed/2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere.md) | corrigé (25 octobre 2026, la branche dense demande à l'instantané si son index se lit) | blocage (search_code ne répondait plus) | oui | oui |
 | [Le témoin du sous-graphe de valeurs annulé rougit sous charge](closed/2026-10-25-le-temoin-du-sous-graphe-de-valeurs-annule-rougit-sous-charge.md) | fermé — 2e205927a : annuler sur une barrière, le nœud entré | faux rouge d'un témoin | non | oui (annulation_tests) |
 | [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](closed/2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | corrigé (25 octobre 2026) — une seule clé, le numéro de colonne ; témoin `StableColumnIDs.AVectorIndexIsCreatedOnATableWhereAPropertyWasDropped` | blocage nommé « Miss cached column » | oui | oui |
