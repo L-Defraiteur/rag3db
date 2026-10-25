@@ -181,6 +181,10 @@ pub struct NeighborhoodReport {
     /// a jamais écrit la relation : « 0 tests » n'y veut rien dire.
     #[serde(default)]
     pub queries_untracked: bool,
+    /// Mentions C/C++ du nom sans définisseur visible par leurs #include : la résolution s'est
+    /// abstenue. Jamais suivies ni comptées parmi les appelants, dites à côté.
+    #[serde(default)]
+    pub invisible_usages: usize,
     /// La portée demandée (vide : tout l'index), et combien de nœuds
     /// atteints elle écarte du rendu — ils restent des relais du parcours.
     #[serde(default)]
@@ -574,6 +578,7 @@ pub fn neighborhood_of_in(
         std::borrow::Cow::Owned(UsagesConfig { direct: Vec::new(), used_by: None, ..cfg.start.clone() })
     };
     let usages = usages_of_in(catalog, &depart, name, path_prefix, scope)?;
+    let invisible_usages = usages.invisible_usages;
     let vus: HashSet<String> = usages.definitions.iter().map(|d| d.uuid.clone()).collect();
 
     let mut premiers: Vec<Reached> = Vec::new();
@@ -594,7 +599,7 @@ pub fn neighborhood_of_in(
         let rv: Vec<String> = usages
             .usages
             .iter()
-            .filter(|u| u.definition.is_none() && !deja.contains(&u.user.uuid))
+            .filter(|u| u.definition.is_none() && !u.invisible && !deja.contains(&u.user.uuid))
             .map(|u| u.user.uuid.clone())
             .collect();
         if !rv.is_empty() {
@@ -631,11 +636,16 @@ pub fn neighborhood_of_in(
         depth,
         collected,
         queries_untracked,
+        invisible_usages,
         scope: scope.clone(),
         scope_hidden,
         locks,
     })
 }
+
+/// La ligne de compte des mentions qu'aucun définisseur visible ne reçoit (la même dans les deux
+/// rendus) : la cause possible dite, pour que l'agent sache quoi chercher.
+const INVISIBLES: &str = "mention(s) C/C++ sans définisseur visible par leurs #include (un en-tête non indexé, ou une définition dans un autre fichier), non suivies";
 
 /// **L'impact d'un fichier** : le même voisinage, parti de toutes les
 /// lignes dont un champ de chemin vaut `file` (l'entité définie par
@@ -686,6 +696,7 @@ pub fn neighborhood_of_file(catalog: &dyn crate::read_view::ReadCatalog, cfg: &N
         depth,
         collected,
         queries_untracked,
+        invisible_usages: 0,
         scope: QueryScope::default(),
         scope_hidden: 0,
         locks: Default::default(),
@@ -837,7 +848,8 @@ impl NeighborhoodReport {
     /// `include_by_name` : les usages par le nom seul nommés et comptés comme
     /// les autres ; sinon, un compte à part.
     pub fn summary(&self, group_title: &str, rest_title: &str, limit: usize, only: &str, include_by_name: bool) -> String {
-        if self.reached.is_empty() {
+        // Aucun appelant suivi, mais des mentions tues : la ligne de compte se dit quand même.
+        if self.reached.is_empty() && self.invisible_usages == 0 {
             return String::new();
         }
         // Comme le rendu complet : un usage par le nom seul n'est ni nommé ni
@@ -858,6 +870,9 @@ impl NeighborhoodReport {
         }
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
+        }
+        if self.invisible_usages > 0 {
+            out.push_str(&format!(" ; {} {INVISIBLES}", self.invisible_usages));
         }
         // **Un doute n'est pas une certitude** : ce qui passe par une arête ambiguë se compte.
         let douteux = self.reached.iter().filter(|x| x.ambigu && !x.by_also && !cache(x)).count();
@@ -973,6 +988,9 @@ impl NeighborhoodReport {
         }
         if par_nom > 0 {
             out.push_str(&format!(" ; {par_nom} par le nom seul, non montrés"));
+        }
+        if self.invisible_usages > 0 {
+            out.push_str(&format!(" ; {} {INVISIBLES}", self.invisible_usages));
         }
         // **Un doute n'est pas une certitude** : ce qui passe par une arête ambiguë se compte.
         let douteux = self.reached.iter().filter(|x| x.ambigu && !x.by_also && !cache(x)).count();
