@@ -4,7 +4,7 @@ Seconde session cœur C++, ouverte le 10 octobre 2026 : les correctifs et les ti
 pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src/transaction/` ni
 `src/storage/` (journal, tampon, verrous) sans demander à « coeur c++ » ; elle ne corrige dans
 `extension/vector/` qu'avec l'accord du banc.
-**Dernière mise à jour : 25 octobre 2026, 21 h 15 — le rattrapage et les requêtes préparées sur master ; (A) lots 1 et 3 prêts sur create-concurrently-etat-3, la chaîne à lancer après les mesures de la fenêtre.**
+**Dernière mise à jour : 25 octobre 2026, 21 h 30 — le rattrapage et les requêtes préparées sur master ; (A) lots 1 et 3 prêts sur create-concurrently-etat-4 (base 5651ac341), la chaîne à lancer après les mesures de la fenêtre.**
 
 ## Le 25 octobre 2026 — reprise : de quoi reprendre seul
 
@@ -21,9 +21,9 @@ pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src
   26db89a10 (une interruption tombée entre deux instructions d'une requête réécrite est perdue).
 
 ### (A), lots 1 et 3 fondus, et la parade du crate — à pousser
-- **Branche `create-concurrently-etat-3` = cd56a324f, sur master bb3cf75f8**, 8 commits. Les
-  branches `create-concurrently-etat` et `-2` sont des états d'avant les rebases : ne pas les
-  rejouer.
+- **Branche `create-concurrently-etat-4` = ff5a7bf4f, sur master 5651ac341** (le compteur d'octets
+  du cœur), 8 commits ; le diff du rebase est lu, et aucun fichier n'est commun. Les branches
+  `create-concurrently-etat`, `-2` et `-3` sont des états d'avant les rebases : ne pas les rejouer.
 - **Forme retenue avec le cœur.** L'état est porté au holder (READY, NOTED, MAINTAINED,
   INCOMPLETE), versionné comme createdTS. Il est persisté au format 43 et journalisé par
   INDEX_STATE. Le CREATE se fait en trois temps : T_A (_CREATE_HNSW_NOTE), puis l'attente des
@@ -44,7 +44,7 @@ pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src
   (`e2e-etat-rouge.log`, `e2e-etat-vert.log`).
 - **La chaîne à lancer** (permise ce soir par c7, après les mesures, sur luciepc qui porte deux
   lourds ; le cœur peut y jouer V2-2 en même temps). Le mbox est déjà à luciepc :
-  `ssh luciepc "bash -c 'setsid nohup bash ~/.cache/rag3db-tickets-notes/chaine-a.sh bb3cf75f8 a.mbox a > /dev/null 2>&1 < /dev/null &'"`
+  `ssh luciepc "bash -c 'setsid nohup bash ~/.cache/rag3db-tickets-notes/chaine-a.sh 5651ac341 a.mbox a > /dev/null 2>&1 < /dev/null &'"`
   Elle enchaîne quatre étapes et s'arrête au premier rouge :
   1. lib-lot.sh : git am sur la base, puis la lib build/lecteurs-csv, sans publication ;
   2. e2e-code-lot.sh : e2e_code sur cette lib, prouvée par « ▸ moteur lié » ;
