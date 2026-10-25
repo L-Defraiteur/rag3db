@@ -1,7 +1,8 @@
 # Une définition C++ se lie à la déclaration de son en-tête, pas à son nom de fichier
 
-- **État** : ouvert — la règle approchée (`visibility = "entete"`) est posée par le lot INCLUDES
-  (branche `codeparsers/includes`) ; la forme exacte attend la mesure de l'oracle.
+- **État** : en cours — la forme exacte est écrite sur `codeparsers/includes` (5a368e2f5,
+  `visibility = "declaration"`), sa mesure sur code-lourd tourne ; il se ferme avec elle, ou garde
+  ses limites ci-dessous comme défauts connus.
 - **Gravité** : réponse fausse (une arête vers le mauvais homonyme, ou une abstention à tort).
 - **Atteignable en service** : oui, dès que la visibilité par les #include est sur master.
 - **Touche rag3weaver** : oui (`src/code.rs`, la résolution) et codeparsers (les déclarations).
@@ -34,3 +35,33 @@ rouge de la forme exacte : il faudrait un `table_impl.cpp` qui définit ce que `
    sont aussi fausses que « nom », la règle approchée part.
 2. Sinon, la forme exacte : la déclaration en scope, la définition liée, la visibilité par elle ;
    puis la règle par nom de base part.
+
+## Ce qui a été mesuré (25 octobre 2026)
+
+Deux réindexations de code-lourd par lot, clangd sur des arêtes de `src/` (que couvre
+`compile_commands.json`) :
+
+- **Le pas 1** (inclusion, entete, homonymes recomptés après le filtre) promouvait 6 089 arêtes
+  par le nom, fausses à 80 % : les homonymes se comptent désormais avant le filtre.
+- **Ce qu'il ôtait** sous `src/` (1 021, 300 jugées) : 263 bonnes pertes, 36 appels justes perdus,
+  tous de la même forme, une classe éclatée en plusieurs `.cpp` dont l'en-tête porte un autre nom
+  de base (`transformer.cpp` → `transform_ddl.cpp`).
+- **La co-inclusion** (une source qui inclut un en-tête de la fermeture est visible) reprenait 78
+  justes sur 81, mais aussi 143 fausses sur 169 : l'en-tête commun la rend presque toujours vraie.
+  Retirée.
+
+## La forme exacte, telle qu'écrite (pas 2)
+
+Un définisseur est visible si une de ses déclarations est dans la fermeture des #include du
+mentionneur, avec le même nom et le même conteneur. La déclaration est ce que codeparsers relève
+déjà : une ligne du champ `declarations` d'une classe, d'un namespace, ou du scope de fichier pour
+un prototype (depuis le ticket du 4 octobre). Elle n'est jamais un scope, donc jamais un
+définisseur.
+
+Ses limites, à mesurer avec elle :
+
+- **Le conteneur se compare par le dernier segment de son nom** : deux classes `Transformer` de
+  deux namespaces se confondent (comme pour HAS_PARENT aujourd'hui).
+- **Les surcharges ne se distinguent pas** : aucune signature n'est comparée.
+- **Une fonction déclarée derrière une macro** (`RAG3DB_C_API rag3db_state f(…);`) n'est pas
+  relevée comme déclaration par tree-sitter : ni membre, ni visible par elle.
