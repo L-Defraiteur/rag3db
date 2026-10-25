@@ -2513,7 +2513,9 @@ impl Node for ResolveParentNode {
         // Results are already parent-level (resolved by upstream nodes).
         // Enrich with data fields via UUID-based lookup. L'étiquette de signal
         // ne survit pas au passage par `SearchResult` : on la garde à part.
-        let signals: Vec<Option<String>> = results.iter().map(|r| r.signal.clone()).collect();
+        // Et ce que chaque signal en a dit (`signals`, pièce 1 de la recherche de l'IDE).
+        let signals: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> =
+            results.iter().map(|r| (r.signal.clone(), r.signals.clone())).collect();
         let mut search_results: Vec<SearchResult> =
             results.into_iter().map(SearchResult::from).collect();
 
@@ -2538,10 +2540,10 @@ impl Node for ResolveParentNode {
         // déduplication du monolithe : deux lignes d'index du même document
         // ne rendent qu'un document. La provenance suit par la source : c'est
         // le signal du meilleur original qui reste.
-        let signals: Vec<Option<String>> = if qp.options.result_mode == ResultMode::SourceResolved
+        let signals: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> = if qp.options.result_mode == ResultMode::SourceResolved
             && target.has_source_refs
         {
-            let mut par_source: HashMap<String, Option<String>> = HashMap::new();
+            let mut par_source: HashMap<String, (Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> = HashMap::new();
             for (r, sig) in search_results.iter().zip(signals.iter()) {
                 if let Some(src) = r.data.as_ref().and_then(|d| d.get("_source_uuid")).and_then(|v| v.as_str()) {
                     par_source.entry(src.to_string()).or_insert_with(|| sig.clone());
@@ -2560,7 +2562,7 @@ impl Node for ResolveParentNode {
             .map_err(|e| format!("ResolveParentNode: source resolution failed: {e}"))?;
             search_results
                 .iter()
-                .map(|r| par_source.get(&r.uuid).cloned().flatten())
+                .map(|r| par_source.get(&r.uuid).cloned().unwrap_or_default())
                 .collect()
         } else {
             signals
@@ -2569,9 +2571,10 @@ impl Node for ResolveParentNode {
         let enriched: Vec<UnifiedResult> = search_results
             .into_iter()
             .zip(signals)
-            .map(|(r, signal)| {
+            .map(|(r, (signal, dits))| {
                 let mut u = UnifiedResult::from(r);
                 u.signal = signal;
+                u.signals = dits;
                 u
             })
             .collect();
