@@ -72,8 +72,8 @@ void ShadowFile::applyShadowPages(ClientContext& context) const {
         shadowingFH->readPageFromDisk(pageBuffer.get(), shadowPageIdx++);
         dataFileInfo->writeFile(pageBuffer.get(), RAG3DB_PAGE_SIZE,
             record.originalPageIdx * RAG3DB_PAGE_SIZE);
-        // NOTE: We're not taking lock here, as we assume this is only called with a single thread.
-        MemoryManager::Get(context)->getBufferManager()->updateFrameIfPageIsInFrameWithoutLock(
+        // Sous le verrou de la page : des lecteurs lisent pendant la recopie (V2-1c).
+        MemoryManager::Get(context)->getBufferManager()->updateFrameIfPageIsInFrame(
             record.originalFileIdx, pageBuffer.get(), record.originalPageIdx);
     }
     dataFileInfo->syncFile();

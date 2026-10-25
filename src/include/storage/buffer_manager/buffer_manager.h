@@ -199,7 +199,11 @@ public:
 
     // Currently, these functions are specifically used only for WAL files.
     void removeFilePagesFromFrames(FileHandle& fileHandle);
-    void updateFrameIfPageIsInFrameWithoutLock(common::file_idx_t fileIdx, const uint8_t* newPage,
+    // Recopie une page ombre dans le cadre qui porte la page, s'il existe, sous le verrou de la
+    // page : une lecture optimiste en cours recommence (la version change), une page épinglée
+    // attend d'être rendue. Depuis V2-1c, des lecteurs lisent pendant qu'un point de reprise
+    // applique ses pages ombres.
+    void updateFrameIfPageIsInFrame(common::file_idx_t fileIdx, const uint8_t* newPage,
         common::page_idx_t pageIdx);
 
     // For files that are managed by BM, their FileHandles should be created through this function.
