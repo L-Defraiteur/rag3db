@@ -95,9 +95,12 @@ public:
         return common::ku_dynamic_cast<TARGET&>(*this);
     }
 
-    // Return value is the new segments if segment splitting occurs during an out of place
-    // checkpoint
-    virtual std::vector<std::unique_ptr<ColumnChunkData>> checkpointSegment(
+    // Le point de reprise d'un segment : rend le ou les segments NEUFS (un, ou plusieurs s'il
+    // se coupe) rebâtis sur des pages neuves à partir du segment persistant et des écritures à
+    // y fusionner. Le segment persistant n'est pas modifié (un balayage peut le tenir) ; il est
+    // seulement marqué pour rendre ses pages à sa mort. Plus aucune réécriture en place par le
+    // fichier ombre pour les colonnes (V2-1b).
+    std::vector<std::unique_ptr<ColumnChunkData>> checkpointSegment(
         ColumnCheckpointState&& checkpointState, PageAllocator& pageAllocator,
         bool canSplitSegment = true) const;
 
@@ -127,21 +130,8 @@ protected:
         const std::optional<StorageValue>& min, const std::optional<StorageValue>& max) const;
 
 protected:
-    bool isEndOffsetOutOfPagesCapacity(const ColumnChunkMetadata& metadata,
-        common::offset_t endOffset) const;
 
-    virtual bool canCheckpointInPlace(const SegmentState& state,
-        const ColumnCheckpointState& checkpointState) const;
 
-    void checkpointColumnChunkInPlace(SegmentState& state,
-        const ColumnCheckpointState& checkpointState, PageAllocator& pageAllocator) const;
-
-    void checkpointNullData(const ColumnCheckpointState& checkpointState,
-        PageAllocator& pageAllocator) const;
-
-    std::vector<std::unique_ptr<ColumnChunkData>> checkpointColumnChunkOutOfPlace(
-        const SegmentState& state, const ColumnCheckpointState& checkpointState,
-        PageAllocator& pageAllocator, bool canSplitSegment) const;
 
     // check if val is in range [start, end)
     static bool isInRange(uint64_t val, uint64_t start, uint64_t end) {

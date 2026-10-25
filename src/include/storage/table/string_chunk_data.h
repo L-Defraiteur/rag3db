@@ -64,6 +64,7 @@ public:
     uint64_t getMinimumSizeOnDisk() const override;
     uint64_t getSizeOnDiskInMemoryStats() const override;
     void reclaimStorage(PageAllocator& pageAllocator) override;
+    void retireStorage(PageAllocator& pageAllocator) override;
 
     void resetNumValuesFromMetadata() override;
     void syncNumValues() override {

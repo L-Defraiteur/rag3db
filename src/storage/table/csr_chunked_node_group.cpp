@@ -233,6 +233,17 @@ void ChunkedCSRNodeGroup ::reclaimStorage(PageAllocator& pageAllocator) const {
     }
 }
 
+// L'en-tête CSR (décalages, longueurs) rend ses pages à sa mort comme les colonnes.
+void ChunkedCSRNodeGroup::retireStorage(PageAllocator& pageAllocator) const {
+    ChunkedNodeGroup::retireStorage(pageAllocator);
+    if (csrHeader.offset) {
+        csrHeader.offset->retireStorage(pageAllocator);
+    }
+    if (csrHeader.length) {
+        csrHeader.length->retireStorage(pageAllocator);
+    }
+}
+
 void ChunkedCSRNodeGroup::scanCSRHeader(MemoryManager& memoryManager,
     CSRNodeGroupCheckpointState& csrState) const {
     if (!csrState.oldHeader) {
