@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **26 oct. — Un graphe dans un graphe, une fois par élément.** Un manifeste cite un
+  sous-graphe par fichier et l'appelle une fois ou par élément d'un flux, les résultats
+  rendus dans l'ordre ; et un flux qui ne se lit pas en une seule valeur est refusé au
+  lieu de se taire. 1bd1be619.
 - **26 oct. — Créer l'index vectoriel ne fige plus les écritures.** Le CREATE pose
   l'index, attend seulement les écrivains déjà ouverts, puis bâtit pendant que les
   autres écrivent ; un index en construction ou incomplet se dit dans SHOW_INDEXES,
