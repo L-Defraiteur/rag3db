@@ -210,3 +210,17 @@ le DOM ni exécuté, le texte autour reste.
 - Au passage : la vue 4 demande `highlights: "sparse"` à `search_code` (c7 d'après Lucie : le
   surlignage des morceaux trouvés par le seul dense se calcule à l'affichage, sur demande), et le
   témoin de l'aperçu dit comment préparer les paquets React quand ils manquent.
+
+## Ce qui est fait (vue 6 : les bilans)
+
+- `src/views/Bilans.tsx` : les fiches de session (`section.fiche-de-bilan[data-fiche]`, la tendance
+  des notes et le verdict de comparaison en `.tendance`, chaque apport en `details.apport-de-bilan`
+  avec son texte tel que le juge l'a écrit), puis les fiches d'outils (`section.fiche-d-outil` :
+  `.tendance-par-genre li[data-genre]` run après run, `.autres` par libellé, les défauts du dernier
+  run par `.gravite[data-gravite]` avec l'appel, la preuve et la forme proposée) ; un backend qui ne
+  déclare pas `bilans` le dit (`#bilans-absents`).
+- Témoin : la vue sur un backend sans `bilans`, dans les vues de l'IDE ; les fiches pleines sont
+  éprouvées par e2e_juge sur le JSON de `/ide/bilans`, pas en navigateur (il faudrait la mémoire et
+  son service d'embarquement).
+- `VUES_PORTEES` : `chat`, `fichier`, `recherche`, `taches`, `bilans`. Reste la vue 7 (le graphe,
+  le DAG vivant, l'aperçu, les réactions, les propositions, l'arbre, le symbole), puis l'édition.
