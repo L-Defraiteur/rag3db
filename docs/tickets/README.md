@@ -86,13 +86,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (37)
+### Ouverts — produit (38)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [fmt/format.h : depuis tree-sitter 0.27, une macro est lue comme un corps de fonction](2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md) | ouvert — recul accepté par Lucie avec le passage à 0.27 ; aucun correctif | réponse fausse (39 fonctions sous un parent anonyme, un fichier tiers) | oui | oui (codeparsers) |
 | [Un Plan qui écrit ne s'annonce pas](2026-10-19-un-plan-qui-ecrit-ne-s-annonce-pas.md) | ouvert — décision de forme au premier appelant écrivant | réponse fausse en silence (pour qui écoute `catalog`) | non (aucun appelant en service) | oui |
 | [Un shard de lucivy sans écrivain perd les écritures en silence](2026-10-19-un-shard-de-lucivy-sans-ecrivain-perd-les-ecritures-en-silence.md) | ouvert — dans lucivy-core 4.3.0 : sans écrivain, un Insert est jeté et un Delete sauté avec Ok ; correctif prêt dans lucivy (bb07627), non publié ; à Lucie de trancher | perte silencieuse | pas aujourd'hui (rag3weaver garde ses écrivains) ; dès qu'un appelant en lâche un | oui (appelant) |
 | [Le plein texte lucivy se fige dans son commit pendant une réindexation lue](2026-10-19-le-plein-texte-lucivy-se-fige-dans-son-commit-pendant-une-reindexation-lue.md) | ouvert — cause trouvée (réentrance du commit sous des recherches), correctif prêt dans lucivy, non publié ; à Lucie de trancher (4.3.1 ou patch provisoire) | blocage (la montre ne réindexe plus, sans erreur) | oui | oui (correctif dans lucivy) |
