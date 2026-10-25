@@ -26,6 +26,10 @@ dans `02-knowledge-dump.md`.
 | `400813249` | le lot IDE groupé : la marge « Dans ce fichier » se replie sans `outline`, le cookie de l'IDE en `SameSite=Lax` |
 | `c4472d61a` | le rendu journalisé d'un appel `/call` est entier (la borne de 64 Kio retirée) |
 | `81fdc2f40` | l'IDE en React, vues 1 et 2 (page 08) : la chaîne de bâti (bundle commité, embarqué, vérifié), le cadre avec le mode sombre, le chat sur la forme de `ui/chat` |
+| `7c7a69578` | vue 3 : la vue d'un fichier et sa marge (plan d'outline, repli sur les scopes de `read_file`) ; l'édition reste sur l'ancienne page |
+| `c10dabb71` | vue 4 : la recherche sur le JSON convenu avec recherche, les surlignages prêts (`chunk.highlights`, UTF-16) |
+| `067f63a96` | le Markdown des réponses du chat (marked + dompurify), un `<script>` neutralisé |
+| `bb0f4d9c0` | le harnais navigateur attend l'appel en vol (vingt secondes de calme, deux minutes au plus) : le rouge sous charge de la vue du symbole était le témoin, pas la vue |
 
 ## Le témoin du chat dans la page : quatre défauts, un seul symptôme
 
@@ -148,6 +152,18 @@ ligne et à son symbole, et la provenance s'affiche sous le plan.
   déterministe : deux `--check` verts), le cadre avec le mode sombre (vue 1), puis le chat de la
   tâche et de l'atelier sur la forme de `ui/chat` (vue 2), un seul composant. L'ancienne page reste
   servie pour les vues non portées et sous `/ide/ancienne/`.
+
+## Comment reprendre (matin du 26)
+
+- Les vues 1 à 4 sont sur master ; G pose à `bb0f4d9c0` au matin. Restent 5 (la relecture d'une
+  tâche, avec l'équipier), 6 (les bilans et la fiche par outil), 7 (le graphe et l'aperçu), puis
+  l'édition (vue 3b, CodeMirror par le magasin embarqué) et la vue du symbole, à rendre section par
+  section dès la première réponse (c7). Un worktree neuf par vue, `npm ci` dans `ui/ide`,
+  `scripts/ide_bundle.sh` avant chaque commit.
+- Quand le lot des surlignages de recherche est sur master, la vue 4 ne lit plus que
+  `chunk.highlights` et le dit dans le même commit.
+- Les worktrees de luciepc (`rag3db-I-apres`, `rag3db-I-mesure`) et leurs targets sont gardés
+  pour ces vues ; à effacer à la fin.
 
 ## Comment reprendre (nuit du 25)
 
