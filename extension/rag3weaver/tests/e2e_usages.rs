@@ -201,6 +201,46 @@ fn les_requetes_de_usages_passent_par_l_index() {
     }
 }
 
+/// **Un définisseur C/C++ n'est candidat que s'il est visible par les #include** (25 octobre
+/// 2026, la règle du langage lui-même) : deux `helper` homonymes, `run` inclut l'un, il est seul
+/// lié et la marque dit « inclusion » ; `compute`, déclaré par `calc.h` et défini dans `calc.cpp`,
+/// est vu par l'en-tête homonyme (« entete », mesuré à part), pas son homonyme de `w/` ; `lone`
+/// n'inclut rien : il s'abstient, au lieu d'une arête par le nom.
+#[test]
+#[ignore]
+fn un_definisseur_cpp_se_voit_par_ses_includes() {
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    let fichiers: Vec<(String, String)> = [
+        ("x/helper.h", "#pragma once\ninline int helper() {\n    return 1;\n}\n"),
+        ("y/helper.h", "#pragma once\ninline int helper() {\n    return 2;\n}\n"),
+        ("app/run.cpp", "#include \"x/helper.h\"\n#include <vector>\n\nint run() {\n    return helper();\n}\n"),
+        ("z/calc.h", "#pragma once\nint compute();\n"),
+        ("z/calc.cpp", "#include \"calc.h\"\n\nint compute() {\n    return 3;\n}\n"),
+        ("w/other.cpp", "int compute() {\n    return 4;\n}\n"),
+        ("app/use.cpp", "#include \"../z/calc.h\"\n\nint use_compute() {\n    return compute();\n}\n"),
+        ("app/lone.cpp", "int lone() {\n    return helper();\n}\n"),
+    ]
+    .iter()
+    .map(|(p, c)| (p.to_string(), c.to_string()))
+    .collect();
+    let rapport = cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let r = cat
+        .execute_raw(
+            "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name IN ['run', 'use_compute', 'lone'] \
+             RETURN a.name, b.file_path, r.resolution, r.visibility ORDER BY a.name, b.file_path",
+        )
+        .unwrap();
+    let aretes: Vec<String> = r.rows.iter().map(|x| x.iter().map(|v| v.as_str().unwrap_or("∅").to_string()).collect::<Vec<_>>().join(" ")).collect();
+    eprintln!("{aretes:#?}\n{rapport:?}");
+    assert!(aretes.iter().any(|a| a == "run /projet/x/helper.h nom inclusion"), "le helper inclus, seul candidat : {aretes:#?}");
+    assert!(!aretes.iter().any(|a| a.contains("y/helper.h")), "l'homonyme non inclus n'est pas lié : {aretes:#?}");
+    assert!(aretes.iter().any(|a| a.starts_with("use_compute /projet/z/calc.cpp ") && a.ends_with(" entete")), "la définition vue par son en-tête : {aretes:#?}");
+    assert!(!aretes.iter().any(|a| a.contains("w/other.cpp")), "l'homonyme de w/ n'est pas vu : {aretes:#?}");
+    assert!(!aretes.iter().any(|a| a.starts_with("lone ")), "sans include, l'abstention : {aretes:#?}");
+    assert!(rapport.abstained_invisible >= 1, "l'abstention se compte : {rapport:?}");
+}
+
 /// **Une arête devinée se dit, et ne se suit pas** (ticket « une arête ne
 /// dit pas comment elle a été résolue ») : `run` appelle `helper` sans
 /// import — le rendez-vous le relie par le seul nom ; `go` l'importe. Par
