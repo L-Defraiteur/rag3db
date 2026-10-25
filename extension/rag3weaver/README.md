@@ -185,11 +185,11 @@ flowchart TD
     B -->|"opens or wakes the task"| A["Agent on the task branch<br/>read, search, edit; no commands"]
     A -->|"writes, edits, closes"| P["Mini-plan<br/>request as understood, proposal,<br/>items: todo / doing / done / blocked"]
     P -->|"blockers need a validation"| B
-    A -->|"one step = one item"| T{"tour_fini<br/>succeeded?"}
+    A -->|"one step = one item"| T{"step_done<br/>succeeded?"}
     T -->|"yes: item done"| R["Relaunch<br/>inbox and current plan injected"]
     T -->|"no: reason kept, plan edited"| R
     R --> A
-    H["Host budget<br/>12 calls without tour_fini: refused"] -.-> A
+    H["Host budget<br/>12 calls without step_done: refused"] -.-> A
     C["Stop (C4)"] -.->|"immediately"| A
     A -.->|"each step is a run"| J["Run journal<br/>calls, results as received, durations<br/>bounded by weight and age, pinned runs kept"]
     J --> G["Judge<br/>a Gemini agent: reads the run, replays what reads,<br/>opens the result, compares to earlier verdicts"]
