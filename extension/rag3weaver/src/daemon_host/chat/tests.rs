@@ -272,6 +272,7 @@ fn selon_le_message() -> ChatModel {
 /// du flux rend Arrêter à la page. Un quatrième, qui propose flux fermé : le
 /// lien de la proposition vient de la réponse du tour. La console reste vide.
 #[cfg(unix)]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
