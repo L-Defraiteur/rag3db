@@ -53,6 +53,7 @@ public:
     uint64_t getMinimumSizeOnDisk() const override;
     uint64_t getSizeOnDiskInMemoryStats() const override;
     void reclaimStorage(PageAllocator& pageAllocator) override;
+    void retireStorage(PageAllocator& pageAllocator) override;
 
 protected:
     void append(const ColumnChunkData* other, common::offset_t startPosInOtherChunk,

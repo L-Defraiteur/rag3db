@@ -1029,6 +1029,13 @@ void ColumnChunkData::reclaimStorage(PageAllocator& pageAllocator) {
     }
 }
 
+void ColumnChunkData::retireStorage(PageAllocator& pageAllocator) {
+    if (nullData) {
+        nullData->retireStorage(pageAllocator);
+    }
+    retiredBy = &pageAllocator;
+}
+
 uint64_t ColumnChunkData::getSizeOnDisk() const {
     // Probably could just return the actual size from the metadata if it's on-disk, but it's not
     // currently needed for on-disk segments
@@ -1124,7 +1131,14 @@ std::vector<std::unique_ptr<ColumnChunkData>> ColumnChunkData::split(bool target
     return newSegments;
 }
 
-ColumnChunkData::~ColumnChunkData() = default;
+// Un segment remplacé rend ses pages en mourant (retireStorage) : à ce moment plus aucun bloc,
+// ni ancien ni neuf, ne les désigne. Les nuls et les enfants ont chacun leur marque.
+ColumnChunkData::~ColumnChunkData() {
+    if (retiredBy && residencyState == ResidencyState::ON_DISK &&
+        metadata.getStartPageIdx() != INVALID_PAGE_IDX) {
+        retiredBy->freePageRange(metadata.pageRange);
+    }
+}
 
 uint64_t ColumnChunkData::getMinimumSizeOnDisk() const {
     if (hasNullData() && nullData->getSizeOnDisk() > 0) {

@@ -23,9 +23,6 @@ public:
         common::offset_t offsetInSegment, const ColumnChunkData& data, common::offset_t dataOffset,
         common::length_t numValues) const override;
 
-    std::vector<std::unique_ptr<ColumnChunkData>> checkpointSegment(
-        ColumnCheckpointState&& checkpointState, PageAllocator& pageAllocator,
-        bool canSplitSegment = true) const override;
 
 protected:
     void scanSegment(const SegmentState& state, ColumnChunkData* resultChunk,
@@ -37,8 +34,6 @@ protected:
     void lookupInternal(const SegmentState& state, common::offset_t offsetInSegment,
         common::ValueVector* resultVector, uint32_t posInVector) const override;
 
-    bool canCheckpointInPlace(const SegmentState& state,
-        const ColumnCheckpointState& checkpointState) const override;
 
 private:
     std::vector<std::unique_ptr<Column>> childColumns;

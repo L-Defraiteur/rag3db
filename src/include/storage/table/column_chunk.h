@@ -146,6 +146,7 @@ public:
         ColumnChunkMetadata metadata);
     ColumnChunk(bool enableCompression, std::unique_ptr<ColumnChunkData> data);
     ColumnChunk(bool enableCompression, std::vector<std::unique_ptr<ColumnChunkData>> segments);
+    ColumnChunk(bool enableCompression, std::vector<std::shared_ptr<ColumnChunkData>> segments);
 
     void initializeScanState(ChunkState& state, const Column* column) const;
     void scan(const transaction::Transaction* transaction, const ChunkState& state,
@@ -229,6 +230,9 @@ public:
     MergedColumnChunkStats getMergedColumnChunkStats() const;
 
     void reclaimStorage(PageAllocator& pageAllocator) const;
+    void retireStorage(PageAllocator& pageAllocator) const;
+    // Un chunk neuf qui reprend tous les segments de celui-ci (mêmes pages), sans mises à jour.
+    std::unique_ptr<ColumnChunk> sharedView() const;
 
     void append(common::ValueVector* vector, const common::SelectionView& selView);
     void append(const ColumnChunk* other, common::offset_t startPosInOtherChunk,
@@ -299,8 +303,11 @@ public:
         return segments;
     }
 
-    void checkpoint(Column& column, std::vector<ChunkCheckpointState>&& chunkCheckpointStates,
-        PageAllocator& pageAllocator);
+    // Le chunk neuf du point de reprise : un segment sans changement est repris (partagé), un
+    // segment changé est rebâti sur des pages neuves par la colonne. Celui-ci n'est pas modifié.
+    std::unique_ptr<ColumnChunk> checkpoint(Column& column,
+        std::vector<ChunkCheckpointState>&& chunkCheckpointStates,
+        PageAllocator& pageAllocator) const;
 
     void write(Column& column, ChunkState& state, common::offset_t dstOffset,
         const ColumnChunkData& dataToWrite, common::offset_t srcOffset, common::length_t numValues);
@@ -332,7 +339,10 @@ private:
     // storage structures, instead should be fed into functions needed from ClientContext
     // dbConfig.
     bool enableCompression;
-    std::vector<std::unique_ptr<ColumnChunkData>> data;
+    // Les segments, partagés entre l'ancien bloc et le neuf à un point de reprise : un segment
+    // inchangé est repris par le bloc neuf (mêmes pages, même objet) ; un segment changé est
+    // rebâti sur des pages neuves et l'ancien rend ses pages à sa mort (retireStorage).
+    std::vector<std::shared_ptr<ColumnChunkData>> data;
     UpdateInfo updateInfo;
 };
 
