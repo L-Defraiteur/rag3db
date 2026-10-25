@@ -442,6 +442,13 @@ void ListChunkData::reclaimStorage(PageAllocator& pageAllocator) {
     dataColumnChunk->reclaimStorage(pageAllocator);
     offsetColumnChunk->reclaimStorage(pageAllocator);
 }
+void ListChunkData::retireStorage(PageAllocator& pageAllocator) {
+    ColumnChunkData::retireStorage(pageAllocator);
+    sizeColumnChunk->retireStorage(pageAllocator);
+    dataColumnChunk->retireStorage(pageAllocator);
+    offsetColumnChunk->retireStorage(pageAllocator);
+}
+
 uint64_t ListChunkData::getSizeOnDisk() const {
     return ColumnChunkData::getSizeOnDisk() + sizeColumnChunk->getSizeOnDisk() +
            dataColumnChunk->getSizeOnDisk() + offsetColumnChunk->getSizeOnDisk();

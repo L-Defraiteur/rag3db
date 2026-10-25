@@ -91,58 +91,5 @@ void StructColumn::writeSegment(ColumnChunkData& persistentChunk, SegmentState& 
     }
 }
 
-std::vector<std::unique_ptr<ColumnChunkData>> StructColumn::checkpointSegment(
-    ColumnCheckpointState&& checkpointState, PageAllocator& pageAllocator,
-    bool canSplitSegment) const {
-    auto& persistentStructChunk = checkpointState.persistentData.cast<StructChunkData>();
-    // TODO(bmwinger): child columns are now handled as a group so they get split together
-    // Re-introduce the code below when struct columns checkpoing each field individually again
-    /*
-    for (auto i = 0u; i < childColumns.size(); i++) {
-        std::vector<SegmentCheckpointState> childSegmentCheckpointStates;
-        for (const auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
-            childSegmentCheckpointStates.emplace_back(
-                segmentCheckpointState.chunkData.cast<StructChunkData>().getChild(i),
-                segmentCheckpointState.startRowInData, segmentCheckpointState.offsetInSegment,
-                segmentCheckpointState.numRows);
-        }
-        childColumns[i]->checkpointSegment(ColumnCheckpointState(*persistentStructChunk.getChild(i),
-            std::move(childSegmentCheckpointStates)), pageAllocator);
-    }
-    Column::checkpointNullData(checkpointState, pageAllocator);
-    */
-    auto result =
-        Column::checkpointSegment(std::move(checkpointState), pageAllocator, canSplitSegment);
-    persistentStructChunk.syncNumValues();
-    return result;
-}
-
-bool StructColumn::canCheckpointInPlace(const SegmentState& state,
-    const ColumnCheckpointState& checkpointState) const {
-    if (!Column::canCheckpointInPlace(state, checkpointState)) {
-        return false;
-    }
-    for (size_t i = 0; i < childColumns.size(); ++i) {
-        auto& structChunkData = checkpointState.persistentData.cast<StructChunkData>();
-        KU_ASSERT(childColumns.size() == structChunkData.getNumChildren());
-        auto* childChunkData = structChunkData.getChild(i);
-
-        std::vector<SegmentCheckpointState> childSegmentCheckpointStates;
-        for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
-            auto& structSegmentData = segmentCheckpointState.chunkData.cast<StructChunkData>();
-            auto& childSegmentData = structSegmentData.getChild(i);
-            childSegmentCheckpointStates.emplace_back(childSegmentData,
-                segmentCheckpointState.offsetInSegment, segmentCheckpointState.startRowInData,
-                segmentCheckpointState.numRows);
-        }
-
-        if (!childColumns[i]->canCheckpointInPlace(state.getChildState(i),
-                ColumnCheckpointState(*childChunkData, std::move(childSegmentCheckpointStates)))) {
-            return false;
-        }
-    }
-    return true;
-}
-
 } // namespace storage
 } // namespace rag3db

@@ -146,9 +146,6 @@ public:
     }
     ChunkedCSRNodeGroup(InMemChunkedCSRNodeGroup& base,
         const std::vector<common::column_id_t>& selectedColumns);
-    ChunkedCSRNodeGroup(ChunkedCSRNodeGroup& base,
-        const std::vector<common::column_id_t>& selectedColumns)
-        : ChunkedNodeGroup{base, selectedColumns}, csrHeader{std::move(base.csrHeader)} {}
     ChunkedCSRNodeGroup(MemoryManager& mm, ChunkedCSRNodeGroup& base,
         std::span<const common::LogicalType> columnTypes,
         std::span<const common::column_id_t> baseColumnIDs)

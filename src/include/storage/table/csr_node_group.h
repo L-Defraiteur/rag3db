@@ -313,13 +313,13 @@ private:
     // columnID désigne la colonne dans le groupe persistant, les groupes en mémoire et
     // dataTypes ; checkpointColumnIdx, sa position dans csrState.columnIDs, qui indexe
     // csrState.columns et CSRRegion::hasUpdates. Ils diffèrent après un DROP de colonne.
-    void checkpointColumn(const common::UniqLock& lock, common::column_id_t columnID,
-        common::idx_t checkpointColumnIdx, const CSRNodeGroupCheckpointState& csrState,
-        const std::vector<CSRRegion>& regions) const;
+    std::unique_ptr<ColumnChunk> checkpointColumn(const common::UniqLock& lock,
+        common::column_id_t columnID, common::idx_t checkpointColumnIdx,
+        const CSRNodeGroupCheckpointState& csrState, const std::vector<CSRRegion>& regions) const;
     std::vector<ChunkCheckpointState> checkpointColumnInRegion(const common::UniqLock& lock,
         common::column_id_t columnID, common::idx_t checkpointColumnIdx,
         const CSRNodeGroupCheckpointState& csrState, const CSRRegion& region) const;
-    void checkpointCSRHeaderColumns(const CSRNodeGroupCheckpointState& csrState) const;
+    ChunkedCSRHeader checkpointCSRHeaderColumns(const CSRNodeGroupCheckpointState& csrState) const;
     void finalizeCheckpoint(const common::UniqLock& lock);
 
 private:

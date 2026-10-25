@@ -457,6 +457,12 @@ void NodeGroup::reclaimStorage(PageAllocator& pageAllocator, const UniqLock& loc
     }
 }
 
+void NodeGroup::retireStorage(PageAllocator& pageAllocator, const UniqLock& lock) const {
+    for (auto& chunkedGroup : chunkedGroups.getAllGroups(lock)) {
+        chunkedGroup->retireStorage(pageAllocator);
+    }
+}
+
 void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointState& state) {
     const auto lock = chunkedGroups.lock();
     KU_ASSERT(chunkedGroups.getNumGroups(lock) >= 1);
@@ -472,7 +478,7 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
     if (checkpointedVersionInfo->getNumDeletions(&DUMMY_CHECKPOINT_TRANSACTION, 0, numRows) ==
         numRows - firstGroup->getStartRowIdx()) {
         state.markChangedMemory();
-        reclaimStorage(state.pageAllocator, lock);
+        retireStorage(state.pageAllocator, lock);
         checkpointedChunkedGroup =
             ChunkedNodeGroup::flushEmpty(memoryManager, dataTypes, enableCompression,
                 StorageConfig::CHUNKED_NODE_GROUP_CAPACITY, numRows, state.pageAllocator);
@@ -541,19 +547,22 @@ std::unique_ptr<ChunkedNodeGroup> NodeGroup::checkpointInMemAndOnDisk(MemoryMana
     // copie, juste au-dessus, peut échouer sans rien laisser.
     state.markChangedMemory();
     const auto numInsertedRows = insertChunkedGroup->getNumRows();
+    // Le bloc neuf : pour chaque colonne vivante, un chunk neuf (segments inchangés repris,
+    // segments changés rebâtis sur des pages neuves) ; rien n'est déplacé hors de l'ancien bloc,
+    // qu'un balayage peut encore tenir. Un trou reste un trou.
+    std::vector<std::unique_ptr<ColumnChunk>> newChunks(firstGroup->getNumColumns());
     for (auto i = 0u; i < state.columnIDs.size(); i++) {
         const auto columnID = state.columnIDs[i];
-        // if has persistent data, scan updates from persistent chunked group;
         KU_ASSERT(firstGroup && firstGroup->getResidencyState() == ResidencyState::ON_DISK);
         const auto columnHasUpdates = firstGroup->hasAnyUpdates(&DUMMY_CHECKPOINT_TRANSACTION,
             columnID, 0, firstGroup->getNumRows());
         if (numInsertedRows == 0 && !columnHasUpdates) {
+            newChunks[columnID] = firstGroup->getColumnChunk(columnID).sharedView();
             continue;
         }
         std::vector<ChunkCheckpointState> chunkCheckpointStates;
         // Deux index : columnID pour le groupe persistant, qui garde toutes ses colonnes ; i
         // pour state.columns et le groupe des insertions, lus dans l'ordre de state.columnIDs.
-        // Ils diffèrent dès qu'une colonne qui n'est pas la dernière a été supprimée.
         if (columnHasUpdates) {
             scanCommittedUpdatesForColumn(chunkCheckpointStates, memoryManager, lock, columnID,
                 state.columns[i]);
@@ -562,18 +571,18 @@ std::unique_ptr<ChunkedNodeGroup> NodeGroup::checkpointInMemAndOnDisk(MemoryMana
             chunkCheckpointStates.emplace_back(insertChunkedGroup->moveColumnChunk(i),
                 numPersistentRows, numInsertedRows);
         }
-        firstGroup->getColumnChunk(columnID).checkpoint(*state.columns[i],
+        newChunks[columnID] = firstGroup->getColumnChunk(columnID).checkpoint(*state.columns[i],
             std::move(chunkCheckpointStates), state.pageAllocator);
     }
+    // Les colonnes supprimées : leurs pages reviennent à la mort de l'ancien bloc.
+    for (auto columnID = 0u; columnID < firstGroup->getNumColumns(); columnID++) {
+        if (!newChunks[columnID] && firstGroup->hasColumnChunk(columnID)) {
+            firstGroup->getColumnChunk(columnID).retireStorage(state.pageAllocator);
+        }
+    }
     auto checkpointedChunkedGroup =
-        std::make_unique<ChunkedNodeGroup>(*chunkedGroups.getGroup(lock, 0), state.columnIDs);
+        std::make_unique<ChunkedNodeGroup>(std::move(newChunks), firstGroup->getStartRowIdx());
     KU_ASSERT(checkpointedChunkedGroup->getResidencyState() == ResidencyState::ON_DISK);
-    checkpointedChunkedGroup->resetNumRowsFromChunks();
-    checkpointedChunkedGroup->resetVersionAndUpdateInfo();
-    // The first chunked group is the only persistent one
-    // The checkpointed columns have been moved to the checkpointedChunkedGroup, the
-    // remaining must have been dropped
-    firstGroup->reclaimStorage(state.pageAllocator);
     return checkpointedChunkedGroup;
 }
 

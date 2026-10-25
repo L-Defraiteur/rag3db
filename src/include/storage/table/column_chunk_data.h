@@ -272,6 +272,10 @@ public:
     void updateStats(const common::ValueVector* vector, const common::SelectionView& selVector);
 
     virtual void reclaimStorage(PageAllocator& pageAllocator);
+    // Un segment remplacé par un point de reprise : ses pages ne sont plus désignées par aucun
+    // bloc neuf, mais un balayage peut encore le tenir. Elles reviennent à l'espace libre à sa
+    // mort (liste non validée du FSM, libres au point de reprise suivant), pas tout de suite.
+    virtual void retireStorage(PageAllocator& pageAllocator);
 
     std::vector<std::unique_ptr<ColumnChunkData>> split(bool targetMaxSize = false) const;
 
@@ -316,6 +320,8 @@ protected:
 
     // On-disk metadata for column chunk.
     ColumnChunkMetadata metadata;
+    // Posé par retireStorage : l'allocateur à qui rendre les pages à la mort.
+    PageAllocator* retiredBy = nullptr;
 
     // Stats for any in-memory updates applied to the column chunk
     // This will be merged with the on-disk metadata to get the overall stats
