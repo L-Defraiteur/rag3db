@@ -751,7 +751,8 @@ impl ResponseFormat {
 /// Correspondance documentée par Google : `minimal`/`low` → 1 024 jetons de
 /// réflexion sur 2.5, `medium` → 8 192, `high` → 24 576. Sur Gemini 3.5 Flash
 /// le défaut du modèle est `medium`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ReasoningEffort {
     /// Le moins possible. Mesuré : 12 s, 0 jeton de réflexion. Google avait
     /// un bogue qui le refusait sur Gemini 3 Flash (400 énumérant les valeurs
@@ -788,6 +789,12 @@ impl fmt::Display for ReasoningEffort {
 pub struct Usage {
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
+    /// **Les jetons de raisonnement** que le fournisseur rapporte
+    /// (`completion_tokens_details.reasoning_tokens`), **compris** dans
+    /// `completion_tokens` selon le protocole compatible OpenAI. 0 quand il ne
+    /// dit rien. Sans eux, un modèle qui raisonne était compté comme s'il ne
+    /// raisonnait pas (25 octobre 2026).
+    pub reasoning_tokens: usize,
     /// Durée totale de l'appel, **attentes de réessai comprises**.
     pub ms: u64,
     /// Nombre de réessais effectués. `0` en temps normal.
@@ -1246,7 +1253,7 @@ impl Llm for MockLlm {
                 ms: started.elapsed().as_millis() as u64,
                 // Un modèle local ne réessaie rien, et **ne met rien en
                 // cache côté fournisseur** : il n'y a pas de fournisseur.
-                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0 },
+                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0 },
         ))
     }
 
@@ -1486,7 +1493,7 @@ mod tests {
                 }
             }
             sink.on_finish(&Finish::eos());
-            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0 }))
+            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0 }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
@@ -1750,7 +1757,7 @@ mod tests {
     #[test]
     fn usage_tokens_per_s() {
         assert_eq!(Usage::default().tokens_per_s(), 0.0);
-        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0 };
+        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0 };
         assert!((u.tokens_per_s() - 50.0).abs() < 1e-9);
     }
 

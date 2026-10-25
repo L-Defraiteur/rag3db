@@ -175,6 +175,13 @@ pub struct ModelSource {
     /// d'embarquement, `RAG3WEAVER_EMBED_TIMEOUT_SECS`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_secs: Option<u64>,
+    /// **Le budget de raisonnement** d'un modèle de langage : `minimal`,
+    /// `low`, `medium`, `high` (`reasoning_effort` du protocole). Absent :
+    /// rien n'est envoyé, le modèle raisonne à son défaut — Lucie, 25 octobre
+    /// 2026 : « garder par défaut autant qu'il veut, mais savoir régler ».
+    /// Un appel qui fixe le sien (`GenOptions::reasoning`) l'emporte.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<crate::llm::ReasoningEffort>,
 }
 
 impl ModelSource {
@@ -190,6 +197,7 @@ impl ModelSource {
             context_tokens: None,
             params: Default::default(),
             timeout_secs: None,
+            reasoning: None,
         }
     }
     pub fn service(model: impl Into<String>) -> Self {
@@ -543,9 +551,17 @@ pub fn connect_llm(source: &ModelSource) -> Result<(crate::openai_llm::OpenAiLlm
     if source.model.trim().is_empty() {
         return Err("models.llm : un modèle est requis".into());
     }
-    let with_context = |llm: OpenAiLlm| match source.context_tokens {
-        Some(n) => llm.with_context_len(n),
-        None => llm,
+    // Ce que la déclaration dit du modèle, posé sur le client quel que soit
+    // le chemin : sa fenêtre, et son budget de raisonnement s'il en a un.
+    let with_context = |llm: OpenAiLlm| {
+        let llm = match source.context_tokens {
+            Some(n) => llm.with_context_len(n),
+            None => llm,
+        };
+        match source.reasoning {
+            Some(effort) => llm.with_reasoning_default(effort),
+            None => llm,
+        }
     };
     if source.provider == Provider::Compatible && source.protocol.as_deref() == Some("vertex") {
         let project = source
