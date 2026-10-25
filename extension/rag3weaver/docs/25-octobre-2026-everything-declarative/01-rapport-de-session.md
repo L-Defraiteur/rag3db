@@ -89,6 +89,30 @@ ligne et à son symbole, et la provenance s'affiche sous le plan.
   - les anciennes versions sont dans `.avant-openai` et `.avant-04063ee06`.
 - Chaque passe de push dit la lib liée (« lib du magasin », « moteur lié »).
 
+## La nuit : l'équipier posé, les retours de Lucie sur l'IDE
+
+- **Équipier-1 sur master** (`0ab04909a`). Deux rouges du banc Gemini avant le vert : un manifeste
+  modifié non commité est invisible à la tâche (worktree du HEAD du dossier du backend), et
+  `propose` est déjà un outil du backend — Vertex refuse deux déclarations du même nom, l'outil du
+  hors-plan s'appelle `suggest`. Deux passes de push : la première, verte, refusée à raison (master
+  avait reçu du code) ; la seconde, rejouée, poussée. Entre les deux, une passe arrêtée et
+  relancée avaient écrit le même journal : lire deux fois « CHECK_FEATURES » dans une sortie, c'est
+  deux passes.
+- **Le lot IDE groupé** (branche `ide-outline-repli-1`) : la marge « Dans ce fichier » se replie
+  sur les scopes de `read_file` quand `outline` n'est pas exposé (G : le manifeste de Lucie ne
+  l'expose pas, la marge restait vide) ; le cookie de l'IDE passe à `SameSite=Lax` (Lucie : « bad
+  token » au premier clic depuis une autre application, Strict ne suit pas la redirection). Deux
+  témoins navigateur.
+- **Le rendu journalisé entier** (branche `journal-rendu-1`) : la borne de 64 Kio que j'avais mise
+  sur le `rendu` d'un `/call` coupait deux recherches à 4 et 12 résultats sur 30 ; une borne ne
+  coupe que les événements, jamais le rendu final ni les arguments.
+- **L'IDE en React** (page 08, branche `ide-react-1`) : Lucie, après son essai — « il nous faut
+  shadcn et React et lucide ». La chaîne de bâti (`ui/ide`, esbuild + tailwind, bundle commité sous
+  `templates/ide/app`, embarqué, servi, vérifié par sha256 et par `--check` octet pour octet,
+  déterministe : deux `--check` verts), le cadre avec le mode sombre (vue 1), puis le chat de la
+  tâche et de l'atelier sur la forme de `ui/chat` (vue 2), un seul composant. L'ancienne page reste
+  servie pour les vues non portées et sous `/ide/ancienne/`.
+
 ## Comment reprendre
 
 - Rien n'est en attente de push. Les branches dépassées restent telles quelles : `relais-ide-1/2`,
