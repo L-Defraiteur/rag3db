@@ -54,14 +54,15 @@ pub fn nom_de_tache(intitule: &str) -> String {
     format!("bilan : {nu}")
 }
 
-/// Le gabarit livré du juge : son `ChatConfig` et le schéma de son verdict.
-fn gabarit() -> Result<(ChatConfig, Value), String> {
+/// Le gabarit livré du juge : son `ChatConfig`, le schéma du bilan de session et
+/// celui du bilan des outils (page 05).
+fn gabarit() -> Result<(ChatConfig, Value, Value), String> {
     let lire = |nom: &str| -> Result<Value, String> {
         let octets = crate::builtin_templates::get(nom).ok_or_else(|| format!("le gabarit livré {nom} manque"))?;
         serde_json::from_slice(octets).map_err(|e| format!("{nom} : {e}"))
     };
     let config: ChatConfig = serde_json::from_value(lire("agents/juge/juge.json")?).map_err(|e| format!("agents/juge/juge.json : {e}"))?;
-    Ok((config, lire("agents/juge/bilan.schema.json")?))
+    Ok((config, lire("agents/juge/bilan.schema.json")?, lire("agents/juge/bilan_des_outils.schema.json")?))
 }
 
 /// **Les outils du juge** : sur le run cible, son backend et la mémoire.
@@ -83,7 +84,21 @@ impl OutilsDuJuge<'_> {
             .filter(|e| e["kind"] != "Token")
             .filter(|e| outil.is_none_or(|o| e["tool"].as_str() == Some(o) || e["tool"].is_null()))
             .collect();
+        // **Les déclarations des outils appelés, telles que l'agent les a vues**
+        // (page 05) : leur description et leur schéma de paramètres, pris dans
+        // les `tool_defs` du backend — sans elles, le juge devinerait un nom
+        // trompeur ou un paramètre qui devrait être optionnel.
+        let appeles: std::collections::BTreeSet<&str> = evenements.iter().filter_map(|e| e["tool"].as_str()).collect();
+        let declarations: serde_json::Map<String, Value> = self
+            .host
+            .with_backend(&self.cible, |b| crate::backend_tools::BackendTools { backend: b }.tool_defs())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|d| appeles.contains(d.name.as_str()))
+            .map(|d| (d.name, json!({ "description": d.description, "parametres": d.parameters })))
+            .collect();
         Ok(json!({
+            "declarations": declarations,
             "run": self.journal["run"],
             "debut": self.journal["debut"],
             "fin": self.journal["fin"],
@@ -220,7 +235,7 @@ impl DaemonHost {
         let fiche = nom_de_tache(&intitule);
 
         // L'enquête : la boucle de l'agent juge, sur ses outils.
-        let (mut config, schema) = gabarit()?;
+        let (mut config, schema_session, schema_outils) = gabarit()?;
         let state_dir = self.chats_root.join("juge");
         std::fs::create_dir_all(&state_dir).map_err(|e| format!("{} : {e}", state_dir.display()))?;
         config.state_dir = state_dir;
@@ -248,26 +263,60 @@ impl DaemonHost {
         if tours.first().is_none_or(|t| t.role != "system") {
             tours.insert(0, Turn::system(&config.system_prompt));
         }
-        tours.push(Turn::user("Rends maintenant ton verdict, entier, dans la forme demandée."));
-        let opts = GenOptions {
-            max_tokens: config.max_output_tokens,
-            response_format: Some(ResponseFormat::strict_schema("bilan", schema)),
-            ..Default::default()
+        // Deux rapports, l'un après l'autre (page 05) : les outils d'abord, puis la
+        // session, qui renvoie aux défauts bloquants du premier.
+        let rendre = |tours: &[Turn], nom: &str, schema: Value| -> Result<Value, String> {
+            let opts = GenOptions {
+                max_tokens: config.max_output_tokens,
+                response_format: Some(ResponseFormat::strict_schema(nom, schema)),
+                ..Default::default()
+            };
+            let mut sink = StringSink::default();
+            llm.generate(tours, &opts, &mut sink).map_err(|e| format!("le rapport {nom} du juge : {e:?}"))?;
+            serde_json::from_str(sink.text.trim()).map_err(|e| format!("le rapport {nom} n'est pas du JSON : {e} — {}", sink.text))
         };
-        let mut sink = StringSink::default();
-        llm.generate(&tours, &opts, &mut sink).map_err(|e| format!("le verdict du juge : {e:?}"))?;
-        let verdict: Value = serde_json::from_str(sink.text.trim()).map_err(|e| format!("le verdict n'est pas du JSON : {e} — {}", sink.text))?;
+        tours.push(Turn::user(
+            "Rends d'abord le bilan des outils, entier, dans la forme demandée : il juge les outils, pas l'agent ; chaque défaut avec son call_id, sa preuve exacte et la forme que tu proposes, rangé par gravité.",
+        ));
+        let bilan_des_outils = rendre(&tours, "bilan_des_outils", schema_outils)?;
+        tours.push(Turn::new("assistant", bilan_des_outils.to_string()));
+        tours.push(Turn::user(
+            "Rends maintenant le bilan de la session, entier, dans la forme demandée ; renvoie aux défauts bloquants des outils sans les redire.",
+        ));
+        let verdict = rendre(&tours, "bilan", schema_session)?;
         let juge_ms = debut.elapsed().as_millis() as u64;
 
         let cout = cout_du_run(&journal);
         let texte = rendre_le_bilan(&verdict, &cout, run, juge_ms);
-        let ecrit = self.ecrire_le_bilan(&memoire, &fiche, &intitule, run, &journal, &texte, &verdict)?;
-        let tickets = self.proposer_les_tickets(&cible, propre.as_deref(), &verdict, &fiche);
+        // **La fiche d'un outil suit le code qu'il exécute** (96) : un graphe livré
+        // a une fiche commune, « outil : <nom> » ; un graphe propre au manifeste,
+        // « outil : <backend> / <nom> ». Le chemin du graphe sert aussi d'ancre.
+        let (nom_du_backend, identites): (String, std::collections::BTreeMap<String, (String, String)>) = self.with_backend(&cible, |b| {
+            let p = b.prepared();
+            let carte = p
+                .manifest
+                .tools
+                .iter()
+                .map(|(nom, t)| {
+                    let graphe = t.graph.to_string_lossy().to_string();
+                    let resolu = p.directory.join(&t.graph);
+                    let livre = graphe.starts_with('@')
+                        || resolu.canonicalize().unwrap_or(resolu).to_string_lossy().contains("/templates/tools/");
+                    let fiche = if livre { format!("outil : {nom}") } else { format!("outil : {} / {nom}", p.manifest.name) };
+                    (nom.clone(), (fiche, graphe))
+                })
+                .collect();
+            (p.manifest.name.clone(), carte)
+        })?;
+        let ecrit = self.ecrire_le_bilan(&memoire, &fiche, &intitule, run, &journal, &texte, &verdict, &bilan_des_outils, &identites, &nom_du_backend)?;
+        let tickets = self.proposer_les_tickets(&cible, propre.as_deref(), &bilan_des_outils, &fiche);
         Ok(json!({
             "fiche": fiche,
             "intitule": intitule,
             "source": ecrit["source"],
+            "fiches_des_outils": ecrit["fiches_des_outils"],
             "verdict": verdict,
+            "bilan_des_outils": bilan_des_outils,
             "cout": cout,
             "tickets": tickets,
             "enquete": { "iterations": enquete.iterations, "ms": juge_ms },
@@ -295,12 +344,22 @@ impl DaemonHost {
                 _ => Vec::new(),
             }
         };
-        let fiches = appeler("recall_fiches", json!({ "query": "bilan", "options": { "limit": 100, "filter_condition": { "field": { "key": "via", "value": "juge" } } } }))?;
+        // Les fiches du juge : celles des tâches (« bilan : … ») et celles des
+        // outils (« outil : … »), chacune trouvée par son mot.
+        let mut fiches = Vec::new();
+        for mot in ["bilan", "outil"] {
+            let r = appeler("recall_fiches", json!({ "query": mot, "options": { "limit": 100, "filter_condition": { "field": { "key": "via", "value": "juge" } } } }))?;
+            fiches.extend(lignes(&r));
+        }
+        let mut vues = std::collections::BTreeSet::new();
         let mut sortie = Vec::new();
-        for f in lignes(&fiches) {
+        for f in fiches {
             let data = if f["data"].is_object() { f["data"].clone() } else { f.clone() };
             let Some(nom) = data["name"].as_str().map(str::to_string) else { continue };
-            let apports = appeler("recall_apports", json!({ "query": "bilan", "options": { "limit": 100, "filter_condition": { "field": { "key": "fiche", "value": nom } } } }))?;
+            if !vues.insert(nom.clone()) {
+                continue;
+            }
+            let apports = appeler("recall_apports", json!({ "query": nom, "options": { "limit": 100, "filter_condition": { "field": { "key": "fiche", "value": nom } } } }))?;
             let mut liste: Vec<Value> = lignes(&apports)
                 .into_iter()
                 .map(|a| if a["data"].is_object() { a["data"].clone() } else { a })
@@ -311,11 +370,19 @@ impl DaemonHost {
                         .and_then(|(_, j)| j.split_once("\n```"))
                         .and_then(|(j, _)| serde_json::from_str::<Value>(j).ok())
                         .unwrap_or(Value::Null);
-                    json!({ "source": a["source"], "creee": a["created_at"], "texte": texte, "note": verdict["note"], "comparaison": verdict["comparaison"] })
+                    json!({
+                        "source": a["source"],
+                        "creee": a["created_at"],
+                        "texte": texte,
+                        "note": verdict["note"],
+                        "comparaison": verdict["comparaison"],
+                        "defauts": verdict["defauts"],
+                        "part_utilisee": verdict["part_utilisee"],
+                    })
                 })
                 .collect();
             liste.sort_by_key(|a| a["creee"].as_i64().unwrap_or(0));
-            sortie.push(json!({ "fiche": nom, "about": data["about"], "apports": liste }));
+            sortie.push(json!({ "fiche": nom, "outil": nom.starts_with("outil : "), "about": data["about"], "apports": liste }));
         }
         Ok(json!({ "declare": true, "fiches": sortie }))
     }
@@ -366,16 +433,33 @@ impl DaemonHost {
 
     /// La fiche (créée si besoin, `via: juge`), le L0 (le journal, au chemin),
     /// le L1 de section `bilan`, son lien, et une ancre par outil appelé (96).
-    fn ecrire_le_bilan(&self, memoire: &Arc<Hosted>, fiche: &str, intitule: &str, run: &str, journal: &Value, texte: &str, verdict: &Value) -> Result<Value, String> {
+    #[allow(clippy::too_many_arguments)]
+    fn ecrire_le_bilan(
+        &self,
+        memoire: &Arc<Hosted>,
+        fiche: &str,
+        intitule: &str,
+        run: &str,
+        journal: &Value,
+        texte: &str,
+        verdict: &Value,
+        bilan_des_outils: &Value,
+        identites: &std::collections::BTreeMap<String, (String, String)>,
+        nom_du_backend: &str,
+    ) -> Result<Value, String> {
         let appeler = |outil: &str, args: Value| -> Result<Value, String> { self.with_backend(memoire, |b| b.call(outil, args)).and_then(|r| r) };
         // `get_fiche` rend une réponse même quand la fiche n'existe pas : elle
         // existe si la réponse porte son nom.
-        let nom = json!({ "name": fiche }).to_string();
-        let nom = &nom[1..nom.len() - 1];
-        let existe = appeler("get_fiche", json!({ "record": { "name": fiche } })).is_ok_and(|r| r["result"].to_string().contains(nom));
-        if !existe {
-            appeler("put_fiche", json!({ "record": { "name": fiche, "about": intitule, "state": "current", "via": "juge" } }))?;
-        }
+        let assurer_la_fiche = |nom_de_fiche: &str, about: &str| -> Result<(), String> {
+            let nom = json!({ "name": nom_de_fiche }).to_string();
+            let nom = &nom[1..nom.len() - 1];
+            let existe = appeler("get_fiche", json!({ "record": { "name": nom_de_fiche } })).is_ok_and(|r| r["result"].to_string().contains(nom));
+            if !existe {
+                appeler("put_fiche", json!({ "record": { "name": nom_de_fiche, "about": about, "state": "current", "via": "juge" } }))?;
+            }
+            Ok(())
+        };
+        assurer_la_fiche(fiche, intitule)?;
         let jour = chrono_jour();
         let chemin = format!("sources/{jour}-{}.md", run.replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "-"));
         let contenu = format!("# Journal du run {run}\n\n```json\n{}\n```\n", serde_json::to_string_pretty(journal).unwrap_or_default());
@@ -389,6 +473,17 @@ impl DaemonHost {
             json!({ "record": { "fiche": fiche, "source": chemin, "section": "bilan", "texte": texte_l1, "niveau": "L1", "state": "current", "via": "juge" } }),
         )?;
         appeler("relier_apport", json!({ "links": [{ "from": { "name": fiche }, "to": { "fiche": fiche, "source": chemin, "section": "bilan" } }] }))?;
+        // La provenance de chaque apport (96) : une Ref doc:<source>#<section>.
+        let _ = appeler("create_ref_type", json!({ "genre": "doc" }));
+        let citer = |fiche_de_l_apport: &str, section: &str| {
+            if let Err(e) = appeler(
+                "citer_source",
+                json!({ "genre": "doc", "valeur": format!("{chemin}#{section}"), "fiche": { "fiche": fiche_de_l_apport, "source": chemin, "section": section } }),
+            ) {
+                eprintln!("[juge] la provenance de « {fiche_de_l_apport} » ({section}) : {e}");
+            }
+        };
+        citer(fiche, "bilan");
         // Une ancre par outil appelé : `cited_by(value: "outil:<nom>")` rend ses bilans.
         let _ = appeler("create_ref_type", json!({ "genre": "outil" }));
         let mut outils: Vec<String> = journal["evenements"]
@@ -406,17 +501,55 @@ impl DaemonHost {
                 eprintln!("[juge] l'ancre outil:{o} de « {fiche} » : {e}");
             }
         }
-        Ok(json!({ "source": chemin, "ancres": outils }))
+        // **Une fiche par outil** (page 05, c7) : « outil : <nom> », un L1
+        // « defauts » par run jugé, de la même source, ancrée `outil:<nom>`.
+        let mut fiches_des_outils = Vec::new();
+        for o in bilan_des_outils["outils"].as_array().into_iter().flatten() {
+            let Some(nom_outil) = o["outil"].as_str() else { continue };
+            let (fiche_outil, graphe) = identites.get(nom_outil).cloned().unwrap_or_else(|| (format!("outil : {nom_outil}"), String::new()));
+            assurer_la_fiche(&fiche_outil, &format!("Les défauts de l'outil {nom_outil}, jugés run par run."))?;
+            let texte_outil = format!("{}\n\n```json\n{}\n```\n", rendre_les_defauts(o, run, nom_du_backend), serde_json::to_string_pretty(o).unwrap_or_default());
+            appeler(
+                "put_apport",
+                json!({ "record": { "fiche": fiche_outil, "source": chemin, "section": "defauts", "texte": texte_outil, "niveau": "L1", "state": "current", "via": "juge" } }),
+            )?;
+            appeler("relier_apport", json!({ "links": [{ "from": { "name": fiche_outil }, "to": { "fiche": fiche_outil, "source": chemin, "section": "defauts" } }] }))?;
+            citer(&fiche_outil, "defauts");
+            // Deux ancres (96) : le nom, pour trouver tous les homonymes ; le
+            // graphe, pour savoir quel code a été jugé.
+            let _ = appeler("create_ref_type", json!({ "genre": "gabarit" }));
+            let mut ancres = vec![("outil", format!("outil:{nom_outil}"))];
+            if !graphe.is_empty() {
+                ancres.push(("gabarit", format!("gabarit:{graphe}")));
+            }
+            for (genre, valeur) in ancres {
+                if let Err(e) = appeler("ancrer_fiche", json!({ "genre": genre, "valeur": valeur, "fiche": { "name": fiche_outil } })) {
+                    eprintln!("[juge] l'ancre {valeur} de « {fiche_outil} » : {e}");
+                }
+            }
+            fiches_des_outils.push(fiche_outil);
+        }
+        Ok(json!({ "source": chemin, "ancres": outils, "fiches_des_outils": fiches_des_outils }))
     }
 
-    /// Un ticket par description à corriger : une proposition sur la clé
+    /// Un ticket par `description_trompeuse` (page 05 : le seul genre qui en
+    /// devient un) : une proposition sur la clé
     /// `description` de l'outil dans le manifeste cible (les `.mmd` partagés
     /// sont hors de son dossier), appliquée ou rejetée comme les autres.
-    fn proposer_les_tickets(&self, cible: &Arc<Hosted>, manifeste: Option<&str>, verdict: &Value, fiche: &str) -> Vec<Value> {
+    fn proposer_les_tickets(&self, cible: &Arc<Hosted>, manifeste: Option<&str>, bilan_des_outils: &Value, fiche: &str) -> Vec<Value> {
         let Some(manifeste) = manifeste else { return Vec::new() };
         let mut tickets = Vec::new();
-        for a in verdict["a_corriger"].as_array().into_iter().flatten() {
-            let (Some(outil), Some(proposee)) = (a["outil"].as_str(), a["proposee"].as_str()) else { continue };
+        let trompeuses = bilan_des_outils["outils"].as_array().into_iter().flatten().flat_map(|o| {
+            ["bloquant", "genant", "mineur"]
+                .into_iter()
+                .flat_map(move |g| o["defauts"][g].as_array().cloned().unwrap_or_default())
+                .filter(|d| d["genre"] == "description_trompeuse")
+                .map(move |d| (o["outil"].as_str().unwrap_or_default().to_string(), d))
+        });
+        for (outil, d) in trompeuses {
+            let outil = outil.as_str();
+            let Some(proposee) = d["proposee"].as_str() else { continue };
+            let a = json!({ "phrase": d["preuve"] });
             let fait = self.with_backend(cible, |b| {
                 let p = b.prepared();
                 if !p.manifest.tools.contains_key(outil) {
@@ -481,38 +614,17 @@ fn rendre_le_bilan(v: &Value, cout: &Value, run: &str, juge_ms: u64) -> String {
         .flatten()
         .map(|f| format!("- ({}) {}", f["nature"].as_str().unwrap_or("?"), f["texte"].as_str().unwrap_or("")))
         .collect();
-    let outils: Vec<String> = v["outils"]
+    let renvois: Vec<String> = v["renvois_bloquants"]
         .as_array()
         .into_iter()
         .flatten()
-        .map(|o| {
-            let ambigus: Vec<String> = o["ambigus"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .map(|a| format!("\n  - retour ambigu : « {} » — l'agent a cru : {}", a["retour"].as_str().unwrap_or(""), a["cru"].as_str().unwrap_or("")))
-                .collect();
-            format!(
-                "- `{}` : {} appel(s), {} échec(s), {} inutile(s){}",
-                o["outil"].as_str().unwrap_or("?"),
-                o["appels"],
-                o["echecs"],
-                o["inutiles"],
-                ambigus.concat()
-            )
-        })
-        .collect();
-    let corriger: Vec<String> = v["a_corriger"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|a| format!("- `{}` : « {} » → « {} »", a["outil"].as_str().unwrap_or("?"), a["phrase"].as_str().unwrap_or(""), a["proposee"].as_str().unwrap_or("")))
+        .map(|r| format!("- `{}` : {} (voir sa fiche « outil : {} »)", r["outil"].as_str().unwrap_or("?"), r["genre"].as_str().unwrap_or("?"), r["outil"].as_str().unwrap_or("?")))
         .collect();
     format!(
         "**Note {}/10** (confiance {}), objectif {}. {}\n\n\
          Comparaison : {} — {}\n\n\
-         Faits :\n{}\n\nOutils :\n{}\n\nFrictions :\n{}\n\nAttentes :\n{}\n\nCe qui manquait :\n{}\n\nÀ corriger :\n{}\n\n\
-         Coût : {}\n\n_Run {run} ; cible en {juge_ms} ms._",
+         Faits :\n{}\n\nDéfauts bloquants des outils :\n{}\n\nFrictions :\n{}\n\nAttentes :\n{}\n\n\
+         Coût : {}\n\n_Run {run} ; jugé en {juge_ms} ms._",
         v["note"],
         v["confiance"].as_str().unwrap_or("?"),
         v["objectif"].as_str().unwrap_or("?"),
@@ -520,13 +632,47 @@ fn rendre_le_bilan(v: &Value, cout: &Value, run: &str, juge_ms: u64) -> String {
         v["comparaison"]["verdict"].as_str().unwrap_or("?"),
         v["comparaison"]["sur"].as_str().unwrap_or(""),
         if faits.is_empty() { "- rien".into() } else { faits.join("\n") },
-        if outils.is_empty() { "- aucun".into() } else { outils.join("\n") },
+        if renvois.is_empty() { "- aucun".into() } else { renvois.join("\n") },
         liste("frictions"),
         liste("attentes"),
-        liste("manquait"),
-        if corriger.is_empty() { "- rien".into() } else { corriger.join("\n") },
         cout,
     )
+}
+
+/// Les défauts d'un outil dans un run, lisibles dans sa fiche : par gravité,
+/// chacun avec sa preuve et sa forme proposée.
+fn rendre_les_defauts(o: &Value, run: &str, backend: &str) -> String {
+    let mut texte = format!(
+        "**`{}`** — {} appel(s), {} échec(s), {} inutile(s) ; part du retour utilisée : {}.",
+        o["outil"].as_str().unwrap_or("?"),
+        o["appels"],
+        o["echecs"],
+        o["inutiles"],
+        o["part_utilisee"]
+    );
+    for (g, titre) in [("bloquant", "Bloquants"), ("genant", "Gênants"), ("mineur", "Mineurs")] {
+        let defauts = o["defauts"][g].as_array().cloned().unwrap_or_default();
+        texte.push_str(&format!("\n\n{titre} :"));
+        if defauts.is_empty() {
+            texte.push_str("\n- aucun");
+        }
+        for d in defauts {
+            let genre = match d["genre"].as_str().unwrap_or("?") {
+                "autre" => format!("autre — {}", d["libelle"].as_str().unwrap_or("")),
+                g => g.to_string(),
+            };
+            texte.push_str(&format!(
+                "\n- {genre} (appel {}) : « {} »{}\n  proposé : {}",
+                d["call_id"].as_str().unwrap_or("?"),
+                d["preuve"].as_str().unwrap_or(""),
+                d["ce_que_l_agent_en_a_fait"].as_str().filter(|s| !s.is_empty()).map(|s| format!(" — l'agent : {s}")).unwrap_or_default(),
+                d["proposee"].as_str().unwrap_or("")
+            ));
+        }
+    }
+    // Le backend du run (c7) : un défaut qui ne vient que d'une base se départage.
+    texte.push_str(&format!("\n\n_Run {run}, backend {backend}._"));
+    texte
 }
 
 #[cfg(test)]
@@ -543,7 +689,8 @@ mod tests {
     /// Le gabarit livré du juge se lit, et son schéma est strict.
     #[test]
     fn the_judge_template_reads() {
-        let (config, schema) = gabarit().unwrap();
+        let (config, schema, outils) = gabarit().unwrap();
+        assert!(outils["properties"]["outils"]["items"]["properties"]["defauts"]["required"].as_array().unwrap().len() == 3, "les trois gravités, toujours");
         assert_eq!(config.name, "juge");
         assert!(config.system_prompt.contains("rejouer_un_outil"));
         assert_eq!(schema["additionalProperties"], false);

@@ -35,6 +35,8 @@ fn copier(src: &Path, dst: &Path) {
 struct Vu {
     rejoue: Vec<String>,
     precedents: Vec<String>,
+    /// Ce que `lire_le_run` a rendu, vu au moment des rapports.
+    declarations: Vec<String>,
 }
 
 /// Un faux modèle qui sert le chat (lire `main.rs`, puis répondre) et le juge
@@ -52,18 +54,35 @@ fn faux(vu: Arc<Mutex<Vu>>) -> rag3weaver::daemon_host::chat::ChatModel {
                 }
                 return MockLlm::new("").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]).generate(turns, opts, sink);
             }
-            if opts.response_format.is_some() {
-                // Le dernier pas : le verdict. Il se compare au précédent s'il l'a vu.
+            if let Some(rag3weaver::llm::ResponseFormat::JsonSchema { name, .. }) = &opts.response_format {
+                // Les deux rapports de la fin (page 05) : les outils, puis la session.
+                if name == "bilan_des_outils" {
+                    vu.lock().unwrap().declarations.push(outils_vus[0].content.clone());
+                    let defaut = |genre: &str, libelle: &str, preuve: &str, proposee: &str| json!({
+                        "genre": genre, "libelle": libelle, "call_id": "c-read", "preuve": preuve,
+                        "ce_que_l_agent_en_a_fait": "il a résumé le fichier", "proposee": proposee,
+                    });
+                    let outils = json!({ "outils": [{
+                        "outil": "read_file", "appels": 1, "echecs": 0, "inutiles": 0, "part_utilisee": 0.6,
+                        "defauts": {
+                            "bloquant": [],
+                            "genant": [defaut("retour_incomplet_ou_ambigu", "", "(End of file - 1 lines)", "« main.rs : 1 ligne, fin du fichier »")],
+                            "mineur": [
+                                defaut("description_trompeuse", "", "Lit un fichier", "Lit un fichier du projet, avec ses numéros de ligne ; la dernière ligne dit combien le fichier en a."),
+                                defaut("autre", "numérotation des lignes", "00001| fn main() {}", "les numéros à part, dans un champ"),
+                            ],
+                        },
+                    }]});
+                    return MockLlm::new(outils.to_string().as_str()).generate(turns, opts, sink);
+                }
+                // Le bilan de session : il se compare au précédent s'il l'a vu.
                 let deja = turns.iter().any(|t| t.role == "tool" && t.tool_name.as_deref() == Some("bilans_precedents") && t.content.contains("Note "));
                 let verdict = json!({
                     "resume": "Le tour a lu main.rs et l'a résumé.",
                     "note": 8, "confiance": "haute", "objectif": "atteint",
                     "faits": [{ "texte": "read_file a rendu main.rs entier", "nature": "dit" }],
-                    "outils": [{ "outil": "read_file", "appels": 1, "echecs": 0, "inutiles": 0,
-                                 "ambigus": [{ "retour": "(End of file - 1 lines)", "cru": "le fichier est vide" }] }],
-                    "frictions": [], "attentes": [], "manquait": [],
-                    "a_corriger": [{ "outil": "read_file", "phrase": "(End of file - 1 lines)",
-                                     "proposee": "Lit un fichier du projet, avec ses numéros de ligne ; la dernière ligne dit combien le fichier en a." }],
+                    "renvois_bloquants": [],
+                    "frictions": [], "attentes": [],
                     "comparaison": if deja { json!({ "verdict": "pareil", "sur": "la même lecture que la session précédente" }) }
                                    else { json!({ "verdict": "premier", "sur": "aucun bilan précédent" }) },
                 });
@@ -118,7 +137,7 @@ fn journal(host: &DaemonHost, backend: &str, run: &str) -> Value {
 /// un hôte sur le faux modèle ; rend l'hôte, la mémoire, l'id du backend.
 fn banc(d: &Path, vu: Arc<Mutex<Vu>>) -> (DaemonHost, PathBuf, String) {
     let modele = faux(vu);
-    banc_avec(d, modele.clone(), Some(modele), None)
+    banc_avec(d, modele.clone(), Some(modele), None, false)
 }
 
 /// Le banc, modèles donnés (le chat, le juge), et, s'il le faut, une
@@ -128,6 +147,7 @@ fn banc_avec(
     chat: rag3weaver::daemon_host::chat::ChatModel,
     juge: Option<rag3weaver::daemon_host::chat::ChatModel>,
     description_de_read_file: Option<&str>,
+    outil_de_banc: bool,
 ) -> (DaemonHost, PathBuf, String) {
     let gabarits = d.join("templates");
     copier(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits);
@@ -147,6 +167,26 @@ fn banc_avec(
     c["bilans"] = json!({ "memoire": memoire.display().to_string() });
     if let Some(desc) = description_de_read_file {
         c["tools"]["read_file"]["description"] = json!(desc);
+    }
+    if outil_de_banc {
+        // **Un outil de banc au schéma et au retour volontairement faux** (page 05) :
+        // il dit chercher dans tout le projet mais exige `fichier` (qui devrait être
+        // optionnel) ; `ligne` porte le mot cherché (un nom trompeur) ; son retour
+        // change de forme d'un appel à l'autre et mêle une biographie hors sujet.
+        let graphe = gabarits.join("backends/code/graphs/chercher_dans.mmd");
+        std::fs::create_dir_all(graphe.parent().unwrap()).unwrap();
+        std::fs::write(
+            &graphe,
+            "%% tool: chercher_dans\n\
+             %% description: Cherche un mot dans tout le projet.\n\
+             %% param: fichier string! -- Le fichier.\n\
+             %% param: ligne string! -- Le mot cherché.\n\
+             %% result: run.result\n\n\
+             graph LR\n    \
+             run[\"RhaiNode(script='if input.fichier == `main.rs` { #{trouve: true, fichier: input.fichier, auteur: `L auteur du projet a grandi au Bresil, fait de la voile et a trois chats.`} } else { `pas trouve dans ` + input.fichier + ` ; l auteur aime la voile` }', inputs='fichier,ligne', fichier=$fichier, ligne=$ligne)\"]\n",
+        )
+        .unwrap();
+        c["tools"]["chercher_dans"] = json!({ "graph": "graphs/chercher_dans.mmd" });
     }
     std::fs::write(&code, serde_json::to_string_pretty(&c).unwrap()).unwrap();
 
@@ -197,7 +237,13 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
         assert!(v.rejoue.first().is_some_and(|r| r.contains("fn main()")), "le juge a rejoué read_file : {:?}", v.rejoue);
     }
     let ticket = &b1["tickets"][0];
-    assert!(ticket["proposition"].is_u64(), "un ticket sur la description de read_file : {b1}");
+    assert!(ticket["proposition"].is_u64(), "un ticket sur la description trompeuse de read_file : {b1}");
+    assert_eq!(b1["tickets"].as_array().map(Vec::len), Some(1), "seule description_trompeuse devient une proposition : {b1}");
+    assert!(
+        vu.lock().unwrap().declarations.first().is_some_and(|d| d.contains("\"declarations\"") && d.contains("\"parametres\"") && d.contains("\"path\"")),
+        "lire_le_run rend la déclaration de read_file telle que l'agent l'a vue"
+    );
+    assert_eq!(b1["fiches_des_outils"], json!(["outil : read_file"]), "un outil livré : une fiche commune : {b1}");
 
     // La fiche dans la mémoire : la Fiche via juge, l'apport « bilan » avec son JSON.
     let appeler_memoire = |outil: &str, args: Value| -> Value {
@@ -208,7 +254,7 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
     assert!(f.to_string().contains("\"via\":\"juge\""), "la fiche, via juge : {f}");
     let apports = appeler_memoire("recall_apports", json!({ "query": "bilan", "options": { "limit": 5, "filter_condition": { "field": { "key": "fiche", "value": b1["fiche"] } } } }));
     let texte = apports.to_string();
-    assert!(texte.contains("Note 8/10") && texte.contains("```json") && texte.contains("(End of file - 1 lines)"), "le L1 lisible, son JSON, le retour ambigu nommé : {apports}");
+    assert!(texte.contains("Note 8/10") && texte.contains("```json"), "le L1 lisible et son JSON : {apports}");
 
     // Seconde session, même tâche : le juge retrouve la première et s'y compare.
     let r2 = host.chat_turn(&id, "Lis main.rs et dis-moi ce qu'il fait.").expect("le second tour");
@@ -222,8 +268,15 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
     // La vue « bilans » : la fiche, ses deux apports dans l'ordre, leurs notes, la comparaison.
     let vue = host.bilans_de(&id).unwrap_or_else(|e| panic!("les bilans : {e}"));
     assert_eq!(vue["declare"], true, "{vue}");
-    let fiches = vue["fiches"].as_array().unwrap();
+    let (outils, fiches): (Vec<Value>, Vec<Value>) = vue["fiches"].as_array().unwrap().iter().cloned().partition(|f| f["outil"] == true);
     assert_eq!(fiches.len(), 1, "{vue}");
+    // La fiche de l'outil : un L1 « defauts » par run, classés par gravité, l'autre à libellé.
+    assert_eq!(outils.len(), 1, "{vue}");
+    let apports_outil = outils[0]["apports"].as_array().unwrap();
+    assert_eq!(apports_outil.len(), 2, "un apport « defauts » par run jugé : {vue}");
+    let d = &apports_outil[1]["defauts"];
+    assert_eq!((d["bloquant"].as_array().map(Vec::len), d["genant"].as_array().map(Vec::len), d["mineur"].as_array().map(Vec::len)), (Some(0), Some(1), Some(2)), "{vue}");
+    assert!(apports_outil[1]["texte"].as_str().is_some_and(|t| t.contains("Gênants") && t.contains("(End of file - 1 lines)") && t.contains("autre — numérotation des lignes")), "{vue}");
     let notes: Vec<Value> = fiches[0]["apports"].as_array().unwrap().iter().map(|a| a["note"].clone()).collect();
     assert_eq!(notes, vec![json!(8), json!(8)], "{vue}");
     assert_eq!(fiches[0]["apports"][1]["comparaison"]["verdict"], "pareil", "{vue}");
@@ -291,7 +344,7 @@ fn le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session() {
         return;
     }
     let d = tempfile::tempdir().unwrap();
-    let (host, _memoire, id) = banc_avec(d.path(), chat_qui_croit(), None, Some("Rend le nombre de lignes du fichier, jamais son contenu."));
+    let (host, _memoire, id) = banc_avec(d.path(), chat_qui_croit(), None, Some("Rend le nombre de lignes du fichier, jamais son contenu."), false);
     let session = |n: usize| -> Value {
         let r = host.chat_turn(&id, "Lis main.rs et dis-moi ce qu'il fait.").expect("le tour");
         let run = r["run"].as_str().unwrap().to_string();
@@ -303,14 +356,69 @@ fn le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session() {
         b
     };
     let b1 = session(1);
-    let v = &b1["verdict"];
-    let nomme = v["outils"].as_array().into_iter().flatten().any(|o| o["outil"] == "read_file" && o["ambigus"].as_array().is_some_and(|a| !a.is_empty()))
-        || v["a_corriger"].as_array().into_iter().flatten().any(|a| a["outil"] == "read_file")
-        || b1["tickets"].as_array().into_iter().flatten().any(|t| t["outil"] == "read_file");
+    // Le bilan des outils (page 05) : un défaut sur read_file, quelle que soit sa gravité.
+    let nomme = b1["bilan_des_outils"]["outils"].as_array().into_iter().flatten().any(|o| {
+        o["outil"] == "read_file" && ["bloquant", "genant", "mineur"].iter().any(|g| o["defauts"][*g].as_array().is_some_and(|d| !d.is_empty()))
+    }) || b1["tickets"].as_array().into_iter().flatten().any(|t| t["outil"] == "read_file");
     assert!(nomme, "le juge n'a pas nommé le retour ambigu de read_file : {b1}");
     let b2 = session(2);
     assert_eq!(b2["fiche"], b1["fiche"], "la même fiche");
     assert_ne!(b2["verdict"]["comparaison"]["verdict"], "premier", "la seconde session n'est pas comparée à la première : {b2}");
     let vue = host.bilans_de(&id).unwrap();
     assert_eq!(vue["fiches"][0]["apports"].as_array().map(Vec::len), Some(2), "{vue}");
+}
+
+/// Un faux chat qui se sert de l'outil de banc : il doit nommer un fichier pour
+/// chercher dans tout le projet, appelle deux fois, et répond.
+fn chat_qui_cherche() -> rag3weaver::daemon_host::chat::ChatModel {
+    Arc::new(|_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-chat", 8192, |turns, opts, sink| {
+            let resultats = turns.iter().filter(|t| t.role == "tool").count();
+            match resultats {
+                0 => MockLlm::new("").with_tool_calls(vec![("chercher_dans", r#"{"fichier":"main.rs","ligne":"main"}"#)]).generate(turns, opts, sink),
+                1 => MockLlm::new("").with_tool_calls(vec![("chercher_dans", r#"{"fichier":"lib.rs","ligne":"main"}"#)]).generate(turns, opts, sink),
+                _ => MockLlm::new("Le mot main est dans main.rs ; je n'ai pas pu chercher dans tout le projet sans nommer chaque fichier.").generate(turns, opts, sink),
+            }
+        })))
+    })
+}
+
+/// **Le juge des outils sur Gemini, jugé sur le résultat** (page 05) : un outil de
+/// banc au schéma faux (un paramètre obligatoire qui devrait être optionnel, un
+/// nom trompeur) et au retour faux (hors sujet, et de forme changeante entre deux
+/// appels). Le bilan des outils doit nommer les quatre défauts, chacun avec un
+/// call_id et une forme proposée.
+#[test]
+#[ignore]
+fn le_juge_des_outils_sur_gemini_nomme_les_defauts_de_schema_et_de_retour() {
+    const TEMOIN: &str = "le_juge_des_outils_sur_gemini_nomme_les_defauts_de_schema_et_de_retour";
+    let projet = std::env::var("GOOGLE_CLOUD_PROJECT").ok().filter(|p| !p.is_empty());
+    let cles = std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").map(PathBuf::from).filter(|p| p.is_file());
+    if projet.is_none() || cles.is_none() {
+        let raison = "GOOGLE_CLOUD_PROJECT ou GOOGLE_APPLICATION_CREDENTIALS manque";
+        if std::env::var("RAG3WEAVER_EXIGER_GEMINI").as_deref() == Ok("1") {
+            panic!("{TEMOIN} : {raison}, et RAG3WEAVER_EXIGER_GEMINI=1");
+        }
+        eprintln!("SAUTÉ {TEMOIN} : {raison}");
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (host, _memoire, id) = banc_avec(d.path(), chat_qui_cherche(), None, None, true);
+    let r = host.chat_turn(&id, "Cherche le mot main dans tout le projet.").expect("le tour");
+    let run = r["run"].as_str().unwrap().to_string();
+    journal(&host, &id, &run);
+    let debut = Instant::now();
+    let b = host.juger(&id, &run).unwrap_or_else(|e| panic!("le juge : {e}"));
+    eprintln!("MESURE juge des outils sur Gemini : {} ms, {} itération(s)", debut.elapsed().as_millis(), b["enquete"]["iterations"]);
+    eprintln!("bilan des outils : {}", b["bilan_des_outils"]);
+    let outil = b["bilan_des_outils"]["outils"]
+        .as_array()
+        .and_then(|o| o.iter().find(|o| o["outil"] == "chercher_dans"))
+        .unwrap_or_else(|| panic!("aucun bilan pour chercher_dans : {b}"))
+        .clone();
+    let defauts: Vec<Value> = ["bloquant", "genant", "mineur"].iter().flat_map(|g| outil["defauts"][*g].as_array().cloned().unwrap_or_default()).collect();
+    let nomme = |genre: &str| defauts.iter().any(|d| d["genre"] == genre && d["call_id"].as_str().is_some_and(|c| !c.is_empty()) && d["proposee"].as_str().is_some_and(|p| !p.is_empty()));
+    for genre in ["parametre_devrait_etre_optionnel", "parametre_mal_nomme", "retour_hors_sujet", "retour_incoherent"] {
+        assert!(nomme(genre), "le juge n'a pas nommé {genre} avec son call_id et sa forme : {outil}");
+    }
 }
