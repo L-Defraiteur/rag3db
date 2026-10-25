@@ -157,6 +157,9 @@ impl GraphNode {
         super::kinds::refuse_complete_on_open(&inner_ports, &inner_edges, |n, p| {
             resolved.get(&(n.to_string(), p.to_string())).map(|r| r.with_value_inputs())
         })?;
+        super::kinds::refuse_complete_on_finite_unfoldable(&inner_ports, &inner_edges, |n, p| {
+            resolved.get(&(n.to_string(), p.to_string())).map(|r| r.with_value_inputs())
+        })?;
         for out in &mut outputs {
             let inner = &output_map[out.name.as_ref()];
             match resolved.get(inner) {
