@@ -141,3 +141,19 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
   `ui/chat` : `#model`, `#status`, `#message`, `#send`, `#stop`, `article.message.assistant`,
   `details.outil[data-outil]`, `.proposition-du-tour`, `.tache-du-tour` — changés dans le même
   commit que la vue.
+
+## Ce qui est fait (vue 3 : le fichier et sa marge)
+
+- `src/views/File.tsx` : le fil d'Ariane (`#fil`), le texte numéroté (`tr#L<n>`, la ligne visée
+  par l'ancre centrée et marquée `.vise`), chaque identifiant en lien vers son symbole (`a.id`), la
+  suite d'un long fichier (`?depuis=`), l'état (lignes, « modifié depuis l'index » en `.alerte`,
+  « non indexé »).
+- La marge `aside#plan` « Dans ce fichier » : le plan d'outline (`.scope` avec `--profondeur`,
+  `data-ligne`, le nom vers `#L<n>`, la flèche vers le symbole, `#plan-borne`, `#plan-provenance`)
+  ; sans `outline` au manifeste, les scopes de `read_file` et `#plan-repli` qui dit pourquoi — le
+  même repli que le lot IDE (400813249), porté.
+- **L'édition reste sur l'ancienne page** jusqu'à ce qu'elle soit portée (vue 3b, CodeMirror par
+  le magasin embarqué) : le bouton « Modifier » (`a[data-modifier]`) mène à
+  `/ide/ancienne/code/<id>/fichier/<chemin>`, et les deux témoins qui éditent (`les vues de
+  l'IDE`, `le dépôt d'à côté`) y vont tout droit pour cette partie.
+- `VUES_PORTEES` : `chat`, `fichier`.
