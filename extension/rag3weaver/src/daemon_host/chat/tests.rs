@@ -213,15 +213,21 @@ fn une_session_survit_a_l_hote_et_une_orpheline_est_dite() {
     assert!(racine.join("disparu0000.json").is_file(), "le fichier de l'orpheline a été effacé");
 }
 
-/// **Un seul message système, le verbe selon le mode** (c7).
+/// **Un seul message système, le verbe selon le mode** (c7), et une phrase
+/// sur le code selon qu'on est, ou non, dans une tâche.
 #[test]
 fn le_message_systeme_dit_le_verbe_du_mode() {
-    let a = system_prompt(ModeDeclarations::Approbation);
-    let t = system_prompt(ModeDeclarations::Auto);
+    let a = system_prompt(ModeDeclarations::Approbation, false);
+    let t = system_prompt(ModeDeclarations::Auto, true);
     assert!(a.contains("propose") && !a.contains("declare them"), "{a}");
     assert!(t.contains("declare them") && t.contains("task's branch"), "{t}");
     // Le reste est le même texte.
     assert_eq!(a.split("To change them").next(), t.split("To change them").next());
+    // Le code : s'éditer sur la branche dans une tâche, se lire seulement hors d'elle.
+    assert!(t.contains("edit with edit_file") && t.contains("on the task's branch only"), "{t}");
+    assert!(a.contains("can be read here, not written") && a.contains("open a task") && !a.contains("edit with edit_file"), "{a}");
+    // La phrase du code suit la tâche, pas le mode.
+    assert_eq!(system_prompt(ModeDeclarations::Auto, false).contains("not written"), true);
 }
 
 /// Un faux modèle sans état, piloté par la conversation : après le résultat

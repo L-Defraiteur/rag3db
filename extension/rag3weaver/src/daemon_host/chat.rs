@@ -22,7 +22,8 @@
 use super::*;
 use crate::chat::{ChatConfig, ChatRunOptions, ChatSession, EventHandler};
 use crate::propositions::ModeDeclarations;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Ce qui donne le modèle d'un backend : celui de son manifeste, sinon le
@@ -79,8 +80,10 @@ pub(super) fn default_chat_model() -> ChatModel {
 }
 
 /// **Le message système** : un seul, et le verbe vient du mode de la
-/// déclaration (c7) — deux textes divergeraient à la première retouche.
-pub fn system_prompt(mode: ModeDeclarations) -> String {
+/// déclaration (c7) — deux textes divergeraient à la première retouche. Une
+/// phrase sur le code suit le fait d'être, ou non, dans une tâche : le chat
+/// n'écrit jamais hors d'une tâche (page 03 du 25 octobre 2026).
+pub fn system_prompt(mode: ModeDeclarations, dans_une_tache: bool) -> String {
     let changer = match mode {
         ModeDeclarations::Approbation => {
             "To change them, propose them with propose (each file whole, with your reason): they are \
@@ -95,11 +98,19 @@ pub fn system_prompt(mode: ModeDeclarations) -> String {
              the file and the line) and correct it."
         }
     };
+    let code = if dans_une_tache {
+        "The code of this backend's tree is yours to change, on the task's branch only: find your way with \
+         outline, grep and search, read before you change, then edit with edit_file (the content_hash that \
+         read gives keeps you from overwriting a change). The person reviews the branch, then merges it."
+    } else {
+        "The code of this backend's tree can be read here, not written: if the person wants a change, tell \
+         them to open a task in the IDE (its own branch, reviewed then merged) and to ask you there."
+    };
     format!(
         "You work on a declared backend: its manifest, tool graphs (mermaid), JSON schemas, scripted nodes, \
          React components (tsx, with an optional click graph in mermaid) and views are files you can list and \
-         read with list_declarations and read_declaration. {changer} Nothing is compiled by hand. Use the \
-         backend's own tools to look at its data. Answer briefly, in the language of the person."
+         read with list_declarations and read_declaration. {changer} Nothing is compiled by hand. {code} Use \
+         the backend's own tools to look at its data. Answer briefly, in the language of the person."
     )
 }
 
@@ -245,7 +256,7 @@ impl DaemonHost {
             (std::mem::take(&mut e.session), en_vol)
         };
         let resultat = self
-            .with_backend(&hosted, |b| self.run_chat_turn(b, backend_id, &run_id, &mut session, message, annule, arrete_par))
+            .with_backend(&hosted, |b| self.run_chat_turn(b, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par))
             .and_then(|r| r);
         {
             let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
@@ -263,6 +274,7 @@ impl DaemonHost {
         &self,
         b: &Backend,
         backend_id: &str,
+        manifest: &Path,
         run_id: &str,
         session: &mut ChatSession,
         message: &str,
@@ -270,7 +282,9 @@ impl DaemonHost {
         arrete_par: Arc<Mutex<Option<String>>>,
     ) -> Result<Value, String> {
         let llm = (self.chat_model)(b).map_err(|why| format!("le chat est éteint : {why}"))?;
-        let prompt = system_prompt(b.mode_declarations());
+        // Une tâche : le backend porte sa surcharge de workspace (son worktree).
+        let dans_une_tache = b.prepared().surcharges().workspace.is_some();
+        let prompt = system_prompt(b.mode_declarations(), dans_une_tache);
         // Le message système suit le mode de la déclaration : il est réécrit à
         // chaque tour (une tâche fusionnée, un mode changé).
         match session.turns.first_mut() {
@@ -303,7 +317,8 @@ impl DaemonHost {
                 }
             })
         };
-        let outils = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
+        let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
+        let outils = OutilsDuChat::de(b, &declares, dans_une_tache);
         let avant = session.turns.len();
         let fait = session.run_with(
             message,
@@ -326,16 +341,110 @@ impl DaemonHost {
             .map(|((slug, unite), n)| json!({ "slug": slug, "unit": unite.as_str(), "amount": n }))
             .collect();
         let arrete = arrete_par.lock().unwrap_or_else(|p| p.into_inner()).clone();
-        let propositions = propositions_du_tour(session.turns.get(avant..).unwrap_or_default());
+        let du_tour = session.turns.get(avant..).unwrap_or_default();
+        let propositions = propositions_du_tour(du_tour);
+        let fichiers = fichiers_ecrits_du_tour(du_tour, &outils.ecrivent);
+        let tache = if dans_une_tache { self.tache_de(manifest) } else { Value::Null };
+        let reponse = |text: &str| {
+            json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers })
+        };
         match fait {
-            Ok(run) => Ok(json!({ "run": run_id, "text": run.text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions })),
+            Ok(run) => Ok(reponse(&run.text)),
             // Un tour arrêté n'est pas une panne : il dit qui l'a arrêté.
-            Err(_) if arrete.is_some() => {
-                Ok(json!({ "run": run_id, "text": "", "stopped_by": arrete, "consumed": consomme, "propositions": propositions }))
-            }
+            Err(_) if arrete.is_some() => Ok(reponse("")),
             Err(e) => Err(e),
         }
     }
+}
+
+/// **Les outils du chat** : ceux du backend et des déclarations, sauf ce que
+/// le chat ne fait pas (page 03 du 25 octobre 2026, c7). Hors d'une tâche, un
+/// outil qui écrit les fichiers n'est pas proposé au modèle, et un appel par son
+/// nom est refusé en disant d'ouvrir une tâche — quel que soit le manifeste
+/// (`task_writes` ne vise que l'agent d'un workspace qui le dit). Un outil qui
+/// lance des commandes n'est proposé nulle part : coder, ici, c'est lire et
+/// éditer.
+pub(crate) struct OutilsDuChat<'a> {
+    inner: &'a (dyn crate::agent::ToolBox + Sync),
+    /// Les outils qui écrivent les fichiers (proposés dans une tâche).
+    pub(crate) ecrivent: HashSet<String>,
+    /// Ceux qui ne sont pas proposés, et pourquoi.
+    retires: HashMap<String, String>,
+}
+
+impl<'a> OutilsDuChat<'a> {
+    pub(crate) fn de(b: &Backend, inner: &'a (dyn crate::agent::ToolBox + Sync), dans_une_tache: bool) -> Self {
+        let prepared = b.prepared();
+        let mut ecrivent = HashSet::new();
+        let mut retires = HashMap::new();
+        for (nom, outil) in &prepared.manifest.tools {
+            if outil.policy.run_commands {
+                retires.insert(nom.clone(), format!("« {nom} » lance des commandes, et le chat n'en lance pas : il lit et édite le code"));
+            } else if outil.policy.write_files {
+                ecrivent.insert(nom.clone());
+                if !dans_une_tache {
+                    retires.insert(
+                        nom.clone(),
+                        format!(
+                            "« {nom} » écrit les fichiers, et le chat n'écrit jamais hors d'une tâche : demandez à la personne \
+                             d'ouvrir une tâche dans l'IDE (sa branche, relue puis fusionnée), et éditez-y"
+                        ),
+                    );
+                }
+            }
+        }
+        Self { inner, ecrivent, retires }
+    }
+
+    fn refus(&self, call: &crate::llm::ToolCall) -> Option<crate::llm::Turn> {
+        self.retires
+            .get(&call.name)
+            .map(|pourquoi| crate::llm::Turn::tool_result(&call.id, &call.name, json!({ "ok": false, "error": pourquoi }).to_string()))
+    }
+}
+
+impl crate::agent::ToolBox for OutilsDuChat<'_> {
+    fn call(&self, call: &crate::llm::ToolCall) -> crate::llm::Turn {
+        self.refus(call).unwrap_or_else(|| self.inner.call(call))
+    }
+    fn call_in(&self, call: &crate::llm::ToolCall, run: &str) -> crate::llm::Turn {
+        self.refus(call).unwrap_or_else(|| self.inner.call_in(call, run))
+    }
+    fn call_with(&self, call: &crate::llm::ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> crate::llm::Turn {
+        self.refus(call).unwrap_or_else(|| self.inner.call_with(call, run, inv))
+    }
+    fn tool_defs(&self) -> Vec<crate::tools::ToolDef> {
+        self.inner.tool_defs().into_iter().filter(|d| !self.retires.contains_key(&d.name)).collect()
+    }
+    fn is_async(&self, tool: &str) -> bool {
+        self.inner.is_async(tool)
+    }
+}
+
+/// **Les fichiers qu'un tour a écrits** : les `path` des appels à un outil qui
+/// écrit, dont le résultat n'est pas un refus, dans l'ordre et sans doublon.
+fn fichiers_ecrits_du_tour(turns: &[crate::llm::Turn], ecrivent: &HashSet<String>) -> Vec<String> {
+    let reussi = |id: &str| {
+        turns.iter().find(|t| t.role == "tool" && t.tool_call_id.as_deref() == Some(id)).is_some_and(|t| {
+            match serde_json::from_str::<Value>(&t.content) {
+                Ok(Value::Object(o)) => !o.contains_key("error") && o.get("ok") != Some(&json!(false)),
+                _ => true,
+            }
+        })
+    };
+    let mut fichiers: Vec<String> = Vec::new();
+    for appel in turns.iter().flat_map(|t| t.tool_calls.iter()) {
+        if !ecrivent.contains(&appel.name) || !reussi(&appel.id) {
+            continue;
+        }
+        let args: Value = serde_json::from_str(&appel.arguments).unwrap_or(Value::Null);
+        if let Some(p) = args["path"].as_str() {
+            if !fichiers.iter().any(|f| f == p) {
+                fichiers.push(p.to_string());
+            }
+        }
+    }
+    fichiers
 }
 
 /// **Les propositions qu'un tour a faites**, lues dans ses résultats de
