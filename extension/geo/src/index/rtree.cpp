@@ -1,7 +1,6 @@
 #include "index/rtree.h"
 #include "math/geometry.h"
 
-#include <cassert>
 #include <cstring>
 
 namespace rag3db {
