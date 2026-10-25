@@ -46,11 +46,19 @@ impl NodeFactory for PlanNodeFactory {
             None => return Err(format!("{NODE_TYPE}: il manque `plan`")),
         };
         plan.check().map_err(|e| format!("{NODE_TYPE}: {e}"))?;
-        let params = match config.get("params") {
+        let mut params = match config.get("params") {
             None | Some(Value::Null) => serde_json::Map::new(),
             Some(Value::Object(m)) => m.clone(),
             Some(autre) => return Err(format!("{NODE_TYPE}: `params` n'est pas un objet ({autre})")),
         };
+        // **Un paramètre par clé** : `PlanNode(plan=@plans/x.json, path=$path)`. Le Mermaid
+        // n'écrit pas d'objet, mais il écrit une clé par paramètre de l'outil ; toute clé autre
+        // que `plan` et `params` est un paramètre du Plan.
+        if let Value::Object(cles) = config {
+            for (k, v) in cles.iter().filter(|(k, _)| k.as_str() != "plan" && k.as_str() != "params") {
+                params.insert(k.clone(), v.clone());
+            }
+        }
         Ok(Box::new(PlanNode { name: name.to_string(), plan, params }))
     }
 
@@ -83,7 +91,7 @@ impl NodeFactory for PlanNodeFactory {
                     param_type: ConfigParamType::Json,
                     required: false,
                     default: Some(json!({})),
-                    description: "les paramètres du Plan (un objet) ; l'entrée params les remplace".into(),
+                    description: "les paramètres du Plan (un objet) ; toute autre clé de la config en est un aussi (`path=$path`) ; l'entrée params les remplace".into(),
                     choices: None,
                     json_schema: None,
                 },

@@ -1238,6 +1238,18 @@ impl PreparedBackend {
                 .collect(),
             relations: manifest.relations.iter().map(|(nom, r)| (nom.clone(), (r.def.from.clone(), r.def.to.clone()))).collect(),
         };
+        // Et le schéma nommé du workspace (`workspace.index`), que le manifeste ne déclare pas :
+        // ses entités s'enregistrent à l'ouverture, mais un Plan se vérifie dès le chargement.
+        #[cfg(feature = "code")]
+        let schema_des_plans = {
+            let mut s = schema_des_plans;
+            if manifest.workspace.as_ref().and_then(|w| w.index.as_deref()) == Some("code") {
+                let (tables, relations) = crate::code::plan_schema();
+                s.tables.extend(tables);
+                s.relations.extend(relations);
+            }
+            s
+        };
         let mut after_hooks = BTreeMap::new();
         let mut tools = BTreeMap::new();
         let mut tool_schemas = BTreeMap::new();

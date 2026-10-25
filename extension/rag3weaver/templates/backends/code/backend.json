@@ -57,6 +57,11 @@
       },
       "freshness": true
     },
+    "outline": {
+      "graph": "../../tools/outline.mmd",
+      "description": "Le plan d'un fichier : ses scopes dans l'ordre (genre, nom qualifié, lignes, signature), lus dans l'index. À prendre pour s'orienter dans un fichier avant de le lire.",
+      "freshness": true
+    },
     "list_files": {
       "graph": "../../tools/list.mmd",
       "description": "Lister les chemins du workspace sous un préfixe. À prendre pour s'orienter ; les fichiers écartés (règles d'exclusion, secrets probables) n'y figurent pas.",

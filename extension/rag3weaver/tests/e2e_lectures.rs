@@ -236,6 +236,7 @@ fn les_outils_de_lecture_du_code_n_attendent_pas_l_ecrivain() {
         ("list_files", json!({}), "a.rs"),
         ("schema", json!({}), "Scope"),
         ("usages", json!({"name": "beta"}), "a.rs"),
+        ("outline", json!({"path": "src/a.rs"}), "alpha"),
     ];
     let mut mesures = Vec::new();
     for (outil, args, attendu) in appels {
@@ -251,6 +252,50 @@ fn les_outils_de_lecture_du_code_n_attendent_pas_l_ecrivain() {
         assert!(*ms < 100, "{outil} n'attend pas l'écrivain : {ms} ms");
         assert!(*vu, "{outil} rend l'état d'avant : {rendu}");
     }
+}
+
+/// **`outline`, le plan d'un fichier, est un Plan déclaré** (25 octobre 2026) : le premier
+/// (`templates/backends/code/plans/outline.json`), sur la table `Scope` du schéma nommé du
+/// workspace, que le manifeste ne déclare pas. Il rend les scopes du fichier dans l'ordre, avec
+/// leur genre et leurs lignes, et dit sa marque : lus par l'analyseur, pas par un compilateur.
+/// Un chemin sans scope le dit ; un appel sans `path` est refusé en le nommant.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn outline_rend_le_plan_d_un_fichier_par_un_plan_declare() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::json;
+    use std::time::{Duration, Instant};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code(tmp.path(), "outline");
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge, son Plan sur Scope compris");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    while !std::fs::read_to_string(&journal).unwrap_or_default().contains("indexation terminée") {
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    let rendu = backend.call("outline", json!({"path": "src/a.rs"})).expect("outline").to_string();
+    eprintln!("{rendu}");
+    let (a, b) = (rendu.find("`alpha`").expect("alpha"), rendu.find("`beta`").expect("beta"));
+    assert!(a < b, "dans l'ordre du fichier : {rendu}");
+    assert!(rendu.contains("src/a.rs:1-3") && rendu.contains("src/a.rs:5-7"), "les lignes de chaque scope : {rendu}");
+    assert!(rendu.contains("pas par un compilateur"), "la marque est dite : {rendu}");
+    assert!(rendu.contains("scopes**"), "le compte : {rendu}");
+
+    let vide = backend.call("outline", json!({"path": "src/absent.rs"})).expect("outline d'un chemin absent").to_string();
+    assert!(vide.contains("Aucun scope"), "un chemin sans scope le dit : {vide}");
+    let refus = backend.call("outline", json!({})).map(|v| v.to_string()).unwrap_or_else(|e| e.to_string());
+    assert!(refus.contains("path"), "un appel sans path nomme le paramètre : {refus}");
 }
 
 /// **Aucune prise bloquante du mutex du catalogue sur le chemin d'une lecture**
@@ -316,6 +361,7 @@ fn un_outil_de_lecture_ne_prend_jamais_le_mutex_du_catalogue() {
         ("list_files", json!({}), "a.rs"),
         ("schema", json!({}), "Scope"),
         ("usages", json!({"name": "beta"}), "a.rs"),
+        ("outline", json!({"path": "src/a.rs"}), "alpha"),
     ];
     for (outil, args, attendu) in &appels {
         let r = ok(host.call(Some(&s), &m, outil, args.clone())).to_string();

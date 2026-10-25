@@ -1,0 +1,18 @@
+{#-
+  Le gabarit **outline** : le plan d'un fichier, un scope par ligne, dans l'ordre du fichier.
+
+  Rendu par l'outil `outline` (un Plan déclaré, `plans/outline.json`). Les scopes sont ceux que
+  l'analyseur (tree-sitter) a lus, pas ceux d'un compilateur : une macro ou un gabarit peut en
+  cacher. Il le dit en pied de page, comme chaque outil de lecture du code dit sa marque.
+-#}
+{%- if count == 0 -%}
+**Aucun scope pour ce fichier dans l'index.** Le chemin est-il celui que rend `list_files` ? Le fichier est-il indexé ?
+{%- else -%}
+**{{ count }} scope{{ "" if count == 1 else "s" }}**, dans l'ordre du fichier :
+{% for r in results %}
+- {% if r.kind %}{{ r.kind }} {% endif %}`{{ r.title }}`{% if r.location %} — {{ r.location }}{% endif %}{% if r.signature %}
+  `{{ r.signature }}`{% endif %}
+{%- endfor %}
+
+_Lu par l'analyseur (tree-sitter), pas par un compilateur : une macro peut cacher un scope._
+{%- endif %}
