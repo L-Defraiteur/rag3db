@@ -547,6 +547,58 @@ de parole. Rien n'est décidé ni commencé : c'est un chantier propre, qui vien
 quand le chat lui-même (l'atelier dans l'IDE, l'agent qui code dans une tâche)
 est stable.
 
+### Le juge sur les outils que les agents déclarent : bac à sable et surveillance (Lucie, 25 octobre 2026)
+
+Une graine, dite le soir où le juge de session est arrivé sur master
+(4b64a98e5) et où son second rapport, le bilan des outils, se concevait
+(juge-outils-1 : une fiche par outil, des défauts typés avec preuve, gravité
+et forme proposée, le retour jugé en cinq genres). Lucie : « pourrait servir
+aussi pour des bacs à sable / staging d'outils créés déclarativement par des
+agents, hop ils provident un contexte de test et un juge vient regarder, ou
+bien leurs prochains appels y a flag comme outil à surveiller, et le juge vient
+observer la session et demander à quelqu'un d'améliorer ». Structuré ainsi,
+tout en déclaratif, avec les pièces qui existent déjà (propositions, réactions,
+tâches, fiches de la mémoire) :
+
+- **Un outil déclaré naît sous surveillance.** La proposition qui ajoute un
+  outil au manifeste d'un backend (un agent qui déclare un outil, un gabarit
+  nouveau) pose sur lui une marque `a_surveiller`. Tant qu'elle est là, chaque
+  run qui l'appelle déclenche le bilan des outils sur ce run, et pas seulement
+  à la fin d'un tour du chat : le juge observe la session par le journal des
+  runs, comme aujourd'hui, mais pour cet outil à chaque appel.
+- **Le bac à sable : des essais fournis avec la déclaration.** Celui qui
+  déclare l'outil fournit un contexte d'essai : quelques appels avec leurs
+  arguments, et ce qu'il attend du retour (un champ présent, une forme, un
+  compte). L'hôte les joue dans un backend de mise en scène (une base
+  éphémère, un instantané reflink de la vraie, jamais la vraie), et le juge
+  relit les retours avec ses genres : mal formé, incohérent d'un appel à
+  l'autre, bavard, hors sujet, incomplet ou ambigu, paramètre manquant ou mal
+  nommé. Aucun défaut bloquant : l'outil entre en service, sous surveillance.
+  Un défaut bloquant : la proposition revient à son auteur avec la fiche du
+  juge, elle ne s'applique pas.
+- **La surveillance se lève par la fiche.** La fiche de l'outil (« outil :
+  <nom> », ancrée outil:<nom>) accumule les défauts run après run, par
+  gravité. Après un nombre fixé de runs sans défaut bloquant ni gênant, la
+  marque tombe ; un défaut qui revient ensuite la repose. La tendance par
+  genre de défaut, déjà prévue dans la page par outil de l'IDE, est ce qu'on
+  regarde pour décider.
+- **Le juge n'améliore pas, il adresse.** Une réaction déclarée sur « défaut
+  bloquant ou récurrent sur un outil » ouvre une tâche pour l'auteur de
+  l'outil, s'il est un agent, avec la fiche en contexte : la même tâche que
+  celle où le chat code aujourd'hui (ae127d634), sur la branche de la tâche,
+  jamais ailleurs, et sa proposition repasse par le bac à sable. Si l'outil est
+  livré avec le produit, c'est un ticket dans docs/tickets, pour un humain. Le
+  juge ne touche jamais ni l'outil ni le manifeste : il range, il compare, il
+  demande.
+
+Rien n'est décidé ni commencé au-delà de juge-outils-1. L'ordre naturel : le
+bilan des outils d'abord (c'est lui qui fournit le jugement), puis la marque
+`a_surveiller` et la réaction qui adresse (ce sont des déclarations), puis le
+bac à sable avec ses essais (c'est le seul morceau qui demande une mise en
+scène de l'hôte). Ce qui reste à trancher avec Lucie : qui a le droit de poser
+une marque, combien de runs lèvent la surveillance, et si un outil déclaré par
+un agent peut écrire avant d'être sorti de surveillance.
+
 ## 8. Ce qui n'est pas décidé
 
 - **S'intégrer à l'usage, une graine** (Lucie, 11 octobre 2026, à propos
