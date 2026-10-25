@@ -795,7 +795,9 @@ mod tests {
     /// bloc `outils` de la page nomme chaque outil appelé et ses paramètres ;
     /// chacun existe dans le manifeste du gabarit, et chaque paramètre est
     /// déclaré par son graphe (`%% param:`) sans être lié par le manifeste. Et
-    /// chaque `appeler(…, "outil", …)` de la page est dans le bloc.
+    /// chaque `appeler(…, "outil", …)` de la page est dans le bloc, comme chaque
+    /// `appelerEntier(…, "outil", …)` (la réponse entière, pour la recherche) :
+    /// une forme oubliée sortirait ses appels de la garde sans bruit.
     #[test]
     fn the_page_only_calls_what_the_code_template_serves() {
         let debut = PAGE.find(r#"<script type="application/json" id="outils">"#).expect("le bloc outils");
@@ -819,11 +821,12 @@ mod tests {
                 assert!(attache["bindings"].get(p).is_none(), "{outil} : « {p} » est lié par le manifeste, la page ne peut pas le passer");
             }
         }
-        let appeles: HashSet<String> = PAGE_JS
-            .split("appeler(id, \"")
-            .skip(1)
+        let appeles: HashSet<String> = ["appeler(id, \"", "appelerEntier(id, \""]
+            .iter()
+            .flat_map(|forme| PAGE_JS.split(*forme).skip(1))
             .filter_map(|r| r.split('"').next().map(str::to_string))
             .collect();
+        assert!(appeles.contains("search_code"), "la recherche, appelée par appelerEntier, est vue par la garde");
         assert!(!appeles.is_empty());
         for a in &appeles {
             assert!(outils.contains_key(a), "la page appelle « {a} », absent du bloc outils");

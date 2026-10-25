@@ -465,6 +465,8 @@ async function recherche(id) {
   filDAriane(id, "", false);
   const params = new URLSearchParams(location.search);
   const q = params.get("q") ?? "";
+  // Le formulaire de l'en-tête repart sans `reclasser` : la relecture se
+  // décide question par question (elle coûte une demi-seconde).
   const reclasser = params.get("reclasser") === "1";
   document.querySelector("#chercher input").value = q;
   fil.append(" · recherche");
@@ -472,21 +474,25 @@ async function recherche(id) {
   if (reclasser) options.rerank = { candidates: 20 };
   const reponse = await appelerEntier(id, "search_code", { query: q, options });
   const r = sortie(reponse?.result);
+  // La méta porte le nom du nœud qui la rend dans le graphe de search_code
+  // (`render`, port `meta`, déclaré par le gabarit) : un renommage viderait
+  // l'en-tête sans erreur ; le témoin navigateur, qui exige la ligne d'état,
+  // le verrait.
   const meta = reponse?.metadata?.["render.meta"] ?? {};
   const avertis = meta.warnings ?? [];
   const etatIndex = avertis.find((w) => w.startsWith("index : "));
   const autres = avertis.filter((w) => !w.startsWith("index : "));
   const resultats = Array.isArray(r) ? r : [];
-  const case_ = el("input", { type: "checkbox", id: "reclasser", onchange: (e) => {
+  const caseReclasser = el("input", { type: "checkbox", id: "reclasser", onchange: (e) => {
     const p = new URLSearchParams(location.search);
     if (e.target.checked) p.set("reclasser", "1"); else p.delete("reclasser");
     location.search = p.toString();
   } });
-  case_.checked = reclasser;
+  caseReclasser.checked = reclasser;
   vue.replaceChildren(
     el("h1", {}, `« ${q} »`),
     el("p", { id: "recherche-etat", class: "note" }, etatRecherche(etatIndex, reponse?.freshness, meta, resultats.length)),
-    el("p", { class: "note" }, el("label", {}, case_, " reclasser (un relecteur relit les 20 premiers ; pour une vraie question)")),
+    el("p", { class: "note" }, el("label", {}, caseReclasser, " reclasser : un relecteur relit les 20 premiers (plus lent ; pour une question en phrases)")),
     ...resultats.map((x) => {
       const d = x.data ?? {};
       const extrait = x.chunk?.text ?? d.signature ?? "";
