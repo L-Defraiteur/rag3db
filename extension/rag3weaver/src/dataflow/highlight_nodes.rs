@@ -83,7 +83,7 @@ pub fn query_word_highlights(query: &str, text: &str) -> Vec<Highlight> {
 /// tokenizer de bge-m3) ; `requete` et `morceau` : les vecteurs creux rendus
 /// par le service. La part d'un id est le produit de ses deux poids ; les
 /// tokens dont la part atteint [`PART_MINIMALE`] de la plus forte sont
-/// surlignés, rognés de leurs blancs, et les morceaux de mot contigus fondus.
+/// surlignés, rognés de leurs blancs et étendus à leur mot entier.
 pub fn sparse_highlights(
     text: &str,
     tokens: &[(u32, (usize, usize))],
@@ -116,9 +116,19 @@ pub fn sparse_highlights(
         let Some(brut) = text.get(d..f) else { continue };
         let tete = brut.len() - brut.trim_start().len();
         let net = brut.trim();
-        if !net.is_empty() {
-            spans.push((d + tete, d + tete + net.len(), net));
+        if net.is_empty() {
+            continue;
         }
+        // Un sous-mot (« pro » dans « réciproque ») s'étend à son mot : la
+        // page montre des mots, pas des morceaux de vocabulaire.
+        let (mut a, mut b) = (d + tete, d + tete + net.len());
+        while let Some(c) = text[..a].chars().next_back().filter(|c| c.is_alphanumeric()) {
+            a -= c.len_utf8();
+        }
+        while let Some(c) = text[b..].chars().next().filter(|c| c.is_alphanumeric()) {
+            b += c.len_utf8();
+        }
+        spans.push((a, b, &text[a..b]));
     }
     chunk_highlights(text, 0, text.len(), &spans, HIGHLIGHT_SPARSE)
 }
@@ -328,6 +338,13 @@ mod tests {
         let h = sparse_highlights(texte, &tokens, &requete, &morceau);
         let vus: Vec<String> = h.iter().map(|x| en_utf16(texte, x)).collect();
         assert_eq!(vus, vec!["fusion", "rangs"], "les morceaux contigus se fondent, le blanc de tête part, « des » reste : {vus:?}");
+        // Un sous-mot seul s'étend à son mot.
+        let texte = "le rang réciproque";
+        let tokens = vec![(20, (3, 7)), (21, (7, 12)), (22, (12, 15)), (23, (15, 19))];
+        let requete = SparseVector { indices: vec![22], values: vec![0.4] };
+        let morceau = SparseVector { indices: vec![22], values: vec![0.3] };
+        let h = sparse_highlights(texte, &tokens, &requete, &morceau);
+        assert_eq!(h.iter().map(|x| en_utf16(texte, x)).collect::<Vec<_>>(), vec!["réciproque"]);
         assert!(h.iter().all(|x| x.source == HIGHLIGHT_SPARSE));
     }
 
