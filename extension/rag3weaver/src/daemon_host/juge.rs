@@ -200,6 +200,15 @@ impl ToolBox for OutilsDuJuge<'_> {
 }
 
 impl DaemonHost {
+    /// La mémoire que le manifeste d'un backend déclare (`bilans.memoire`),
+    /// résolue depuis son dossier : là où vont ses bilans et ses plans clos.
+    pub(super) fn memoire_declaree(&self, hosted: &Arc<Hosted>) -> Result<Option<PathBuf>, String> {
+        self.with_backend(hosted, |b| {
+            let p = b.prepared();
+            p.manifest.bilans.as_ref().map(|d| if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) })
+        })
+    }
+
     /// **Juge un run** d'un backend hébergé (page 04) : rend la fiche, l'apport
     /// et le verdict, et les tickets proposés. Refusé, en le disant, si le
     /// backend ne déclare pas `bilans` ou si le run n'a pas de journal.
@@ -210,11 +219,8 @@ impl DaemonHost {
             return Err(format!("{run} est un run du juge : il ne se juge pas lui-même"));
         }
         let cible = self.hote_par_id(backend_id)?;
-        let (memoire_manifeste, modele) = self.with_backend(&cible, |b| {
-            let p = b.prepared();
-            let memoire = p.manifest.bilans.as_ref().map(|d| if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) });
-            (memoire, (self.juge_model)(b))
-        })?;
+        let memoire_manifeste = self.memoire_declaree(&cible)?;
+        let modele = self.with_backend(&cible, |b| (self.juge_model)(b))?;
         // Le manifeste jugé, par son nom de fichier dans son dossier : ce que
         // ses tickets proposent de changer.
         let propre = cible.manifest.file_name().map(|f| f.to_string_lossy().to_string());
@@ -224,12 +230,18 @@ impl DaemonHost {
         let journal: Value = journal_des_runs::lire_le_fichier(&chemin)?;
         let memoire = self.hosted(&memoire_manifeste)?;
 
-        // La tâche ciblee : le premier message de l'agent, sinon l'outil appelé.
-        let intitule = journal["tours"]
+        // La tâche ciblée : la demande, quand le run la dit (un pas d'équipier :
+        // tous ses pas vont sur la même fiche, page 07) ; sinon le premier
+        // message de l'agent, sinon l'outil appelé.
+        let intitule = journal["demande"]
+            .as_str()
+            .filter(|d| !d.trim().is_empty())
+            .map(str::to_string)
+            .or_else(|| journal["tours"]
             .as_array()
             .and_then(|t| t.iter().find(|t| t["role"] == "user"))
             .and_then(|t| t["content"].as_str())
-            .map(str::to_string)
+            .map(str::to_string))
             .or_else(|| journal["appel"]["outil"].as_str().map(|o| format!("outil {o}")))
             .unwrap_or_else(|| format!("run {run}"));
         let fiche = nom_de_tache(&intitule);
@@ -253,7 +265,7 @@ impl DaemonHost {
             &config,
             silencieux,
             Arc::new(AtomicBool::new(false)),
-            ChatRunOptions { bus: None, run_id: Some(format!("juge-{run}")), meter: Some(self.chat_meter.clone()), stopped_by: None },
+            ChatRunOptions { bus: None, run_id: Some(format!("juge-{run}")), meter: Some(self.chat_meter.clone()), stopped_by: None, ..Default::default() },
         )?;
 
         // Le dernier pas : le verdict, dans la forme fixe du schéma.
@@ -595,8 +607,12 @@ fn cout_du_run(journal: &Value) -> Value {
     json!(cout)
 }
 
-fn chrono_jour() -> String {
-    let s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+pub(super) fn chrono_jour() -> String {
+    jour_depuis(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0))
+}
+
+/// Le jour civil d'un instant (secondes depuis l'époque), `AAAA-MM-JJ`.
+pub(super) fn jour_depuis(s: u64) -> String {
     let (j, _) = (s / 86_400, s % 86_400);
     // Le jour civil (algorithme de Howard Hinnant), sans dépendance.
     let z = j as i64 + 719_468;
