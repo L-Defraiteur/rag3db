@@ -3128,6 +3128,16 @@ mod tests {
         nodes.register(Box::new(crate::backend_nodes::SnapshotUndoFactory));
         nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
+        nodes.register(Box::new(crate::dataflow::plan_node::PlanNodeFactory));
+        // Les Plans cités se lisent comme au chargement d'un manifeste (`backend.rs`), contre le
+        // schéma du code : un Plan livré faux rougit ici aussi.
+        #[cfg(feature = "code")]
+        let schema_des_plans = {
+            let (tables, relations) = crate::code::plan_schema();
+            rag3weaver_ir::PlanSchema { tables, relations }
+        };
+        #[cfg(not(feature = "code"))]
+        let schema_des_plans = rag3weaver_ir::PlanSchema { tables: Default::default(), relations: Default::default() };
         let mut echecs: Vec<String> = Vec::new();
         for fiche in &fiches {
             let nom = fiche.file_name().unwrap_or_default().to_string_lossy().to_string();
@@ -3140,13 +3150,35 @@ mod tests {
             };
             // Tous essayés avant de rendre : un filet qui s'arrête au premier
             // échec cache les autres.
-            let outil = match GraphTool::from_mermaid(&source).and_then(|t| t.bind(&nodes)) {
+            let mut outil = match GraphTool::from_mermaid(&source).and_then(|t| t.bind(&nodes)) {
                 Ok(t) => t,
                 Err(e) => {
                     echecs.push(format!("{nom} : {e}"));
                     continue;
                 }
             };
+            let plans: Vec<(String, String)> = outil
+                .template()
+                .nodes
+                .iter()
+                .filter(|n| n.node_type == crate::dataflow::plan_node::NODE_TYPE)
+                .filter_map(|n| n.config.get("plan").and_then(serde_json::Value::as_str).map(|c| (n.name.clone(), c.to_string())))
+                .collect();
+            let mut plan_faux = false;
+            for (noeud, cite) in plans {
+                match crate::dataflow::plan_node::lire_le_plan(&cite, |c| Err(format!("{c} : un outil livré cite son Plan par @builtin:")), &schema_des_plans) {
+                    Ok(lu) => {
+                        outil.remplacer_config(&noeud, "plan", lu);
+                    }
+                    Err(e) => {
+                        echecs.push(format!("{nom} : {e}"));
+                        plan_faux = true;
+                    }
+                }
+            }
+            if plan_faux {
+                continue;
+            }
             let mut args = serde_json::Map::new();
             for p in &outil.params {
                 // Une chaîne à valeurs admises prend la PREMIÈRE admise :

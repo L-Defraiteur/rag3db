@@ -6,6 +6,6 @@
 %% result: render.text
 
 graph LR
-    plan["PlanNode(plan=@plans/outline.json, path=$path, source=$source, limit=$limit)"]
+    plan["PlanNode(plan='@builtin:backends/code/plans/outline.json', path=$path, source=$source, limit=$limit)"]
     render["RenderResultsNode(template='outline', group=false)"]
     plan -->|results| render

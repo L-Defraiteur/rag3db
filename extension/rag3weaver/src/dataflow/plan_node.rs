@@ -230,7 +230,14 @@ pub fn lire_le_plan(cite: &str, lire: impl Fn(&str) -> Result<String, String>, s
     let Some(chemin) = cite.strip_prefix('@') else {
         return Err(format!("{NODE_TYPE}: `plan` se cite par @plans/<fichier>.json, pas « {cite} »"));
     };
-    let texte = lire(chemin)?;
+    // **Un Plan livré** se cite `@builtin:<chemin relatif à templates/>`, comme un graphe livré :
+    // il suit le binaire, et un manifeste relié ou installé ailleurs le trouve sans copier plans/.
+    let texte = match chemin.strip_prefix(crate::builtin_templates::PREFIX) {
+        Some(livre) => crate::builtin_templates::get(livre)
+            .map(|o| String::from_utf8_lossy(o).into_owned())
+            .ok_or_else(|| format!("{NODE_TYPE}: aucun Plan livré « {livre} »"))?,
+        None => lire(chemin)?,
+    };
     let plan = DeclaredPlan::from_json(&texte).map_err(|e| format!("{chemin} : {e}"))?;
     plan.check().map_err(|e| format!("{chemin} : {e}"))?;
     plan.check_schema(schema).map_err(|e| format!("{chemin} : {e}"))?;
