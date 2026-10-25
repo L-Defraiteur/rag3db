@@ -86,6 +86,7 @@ private:
     void replayRelUpdateRecord(const WALRecord& walRecord) const;
     void replayCopyTableRecord(const WALRecord& walRecord) const;
     void replayUpdateSequenceRecord(const WALRecord& walRecord) const;
+    void replayIndexStateRecord(const WALRecord& walRecord) const;
 
     void replayNodeTableInsertRecord(const WALRecord& walRecord) const;
     void replayRelTableInsertRecord(const WALRecord& walRecord) const;

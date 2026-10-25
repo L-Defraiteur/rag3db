@@ -2417,7 +2417,9 @@ TEST_F(VectorIndexCreateStates, ASnapshotBeforeTheCreateSaysTheIndexDoesNotExist
     auto old = reader.query(searchFor(movedRowVector(0)));
     const auto message = old->isSuccess() ? std::string("<success>") : old->getErrorMessage();
     old.reset();
-    ASSERT_TRUE(reader.query("COMMIT;")->isSuccess());
+    // La recherche a échoué dans la transaction explicite : elle se ferme par ROLLBACK (marche
+    // T0, un COMMIT serait refusé).
+    reader.query("ROLLBACK;");
     const auto outcome = creating.get();
     std::cerr << "  search on a snapshot before the CREATE (index seen NOTED by others: "
               << (noted ? "yes" : "no") << "): " << message.substr(0, 200) << "\n";
@@ -2519,8 +2521,16 @@ TEST_F(VectorIndexCreateStates, AnInterruptedCreateLeavesAnIndexToRebuild) {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    creator.interrupt();
+    // Une interruption ne vaut que pour l'instruction en cours : chaque instruction de la
+    // réécriture la remet à zéro en commençant. Elle est donc répétée jusqu'au retour du CREATE,
+    // pour tomber pendant le bâti de T_B.
+    while (noted.load() && !created.load()) {
+        creator.interrupt();
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
     const auto outcome = creating.get();
+    // Le bloc de T_B interrompu reste ouvert et marqué en échec (marche T0) : il se ferme.
+    creator.query("ROLLBACK;");
     ASSERT_TRUE(noted.load()) << "[check: setup] the index was never seen NOTED";
     ASSERT_NE(outcome, "ok") << "[check: setup] the CREATE finished before the interruption";
     auto refused = conn->query(searchFor(movedRowVector(0)));
