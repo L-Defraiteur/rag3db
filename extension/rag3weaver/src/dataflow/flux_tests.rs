@@ -321,7 +321,6 @@ impl Node for JsonWhole {
 /// Trigger si N est pair, sans erreur. Le run doit refuser, en nommant le nœud,
 /// le port et ce qui ne se fond pas.
 #[test]
-#[ignore = "rouge connu : docs/tickets/2026-10-25-un-pli-impossible-d-un-flux-rend-un-trigger-en-silence.md"]
 fn un_pli_impossible_d_un_flux_vers_une_entree_complete_se_refuse_en_le_nommant() {
     let mut refus = Vec::new();
     for n in [2usize, 3] {
