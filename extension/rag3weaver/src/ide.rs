@@ -18,6 +18,7 @@
 //! | `GET /ide/taches?backend=<id>[&nom=<n>]` | les tâches de l'agent, ou la relecture d'une (fichiers, graphes, témoins) |
 //! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom, message}`, rejeter `{backend, nom, why}` |
 //! | `GET /ide/bilans?backend=<id>` | les bilans du backend : ses fiches (via juge), leurs apports dans l'ordre et leurs notes |
+//! | `POST /ide/runs/epingler` | épingler un run `{backend, run, raison}` : son journal ne tombe jamais (ni poids ni âge) |
 //! | `POST /ide/bilans` | juger un run `{backend, run}` : le juge relit son journal et range sa fiche dans la mémoire déclarée (`bilans`) |
 //! | `POST /ide/runs/arreter` | arrêter un run en vol `{backend, run}`, au nom de l'IDE (C4) |
 //! | `GET /ide/chat?backend=<id>` | le chat de l'atelier : allumé ou non, le run en cours, le fil, les orphelines (page 11) |
@@ -603,6 +604,19 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
                 Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
                 Ok(c) => match host.juger(c["backend"].as_str().unwrap_or_default(), c["run"].as_str().unwrap_or_default()) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/runs/epingler") => {
+            // **Épingler un run** (page 06) : `{backend, run, raison}` ; son
+            // journal ne tombera jamais. Un refus est une réponse.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match host.epingler_un_run(c["backend"].as_str().unwrap_or_default(), c["run"].as_str().unwrap_or_default(), c["raison"].as_str().unwrap_or_default()) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
                 },

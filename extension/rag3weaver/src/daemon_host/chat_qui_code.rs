@@ -133,8 +133,7 @@ fn le_chat_d_une_tache_edite_sa_branche_et_laisse_le_principal_intact() {
     let journal = loop {
         let lu = host
             .journal_des_runs()
-            .fichier(&t.id, run)
-            .and_then(|p| serde_json::from_slice::<Value>(&std::fs::read(p).ok()?).ok())
+            .lire(&t.id, run)
             .filter(|v| v["tours"].is_array());
         if let Some(v) = lu {
             break v;
@@ -358,8 +357,7 @@ fn un_appel_mcp_laisse_ce_qu_il_a_rendu_dans_le_journal_de_son_run() {
     let journal = loop {
         let lu = host
             .journal_des_runs()
-            .fichier(&h.id, &run)
-            .and_then(|p| serde_json::from_slice::<Value>(&std::fs::read(p).ok()?).ok())
+            .lire(&h.id, &run)
             .filter(|v| v["appel"].is_object());
         if let Some(v) = lu {
             break v;

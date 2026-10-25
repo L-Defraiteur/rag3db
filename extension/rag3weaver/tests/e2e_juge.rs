@@ -122,8 +122,7 @@ fn journal(host: &DaemonHost, backend: &str, run: &str) -> Value {
     loop {
         let lu = host
             .journal_des_runs()
-            .fichier(backend, run)
-            .and_then(|p| serde_json::from_slice::<Value>(&std::fs::read(p).ok()?).ok())
+            .lire(backend, run)
             .filter(|v| v["tours"].is_array());
         if let Some(v) = lu {
             return v;

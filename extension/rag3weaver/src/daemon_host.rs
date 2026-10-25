@@ -665,6 +665,20 @@ impl DaemonHost {
         let mut ajouts = serde_json::Map::new();
         ajouts.insert("appel".into(), json!({ "client": client, "outil": outil, "arguments": arguments, "rendu": rendu }));
         self.journal.ajouter(backend, run, ajouts);
+        if journal_des_runs::declare_un_outil(outil, arguments) && reponse["ok"] != false {
+            self.journal.epingler(backend, run, &format!("déclaration d'un outil ({outil}, par {client})"));
+        }
+    }
+
+    /// **Épingle un run** d'un backend hébergé (page 06) : son journal ne tombera
+    /// jamais, ni par le poids ni par l'âge. Un run sans journal est un refus.
+    pub fn epingler_un_run(&self, backend_id: &str, run: &str, raison: &str) -> Result<Value, String> {
+        if self.journal.fichier(backend_id, run).is_none() {
+            return Err(format!("le run {run} de {backend_id} n'a pas de journal (pas fini, effacé, ou le journal ne suit rien)"));
+        }
+        let raison = if raison.trim().is_empty() { "épinglé à la demande" } else { raison };
+        self.journal.epingler(backend_id, run, raison);
+        Ok(json!({ "run": run, "backend": backend_id, "epingle": raison }))
     }
 
     /// **Arrête un run** d'un backend hébergé, au nom de `by` (C4) : un run
