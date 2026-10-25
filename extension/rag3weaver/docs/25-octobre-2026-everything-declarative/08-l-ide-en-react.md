@@ -178,3 +178,16 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
 - `VUES_PORTEES` : `chat`, `fichier`, `recherche`. Les deux témoins de la recherche (« la
   recherche », « la recherche à reclasser » dans les vues de l'IDE) passent par la page neuve avec
   leurs repères inchangés.
+
+## Le Markdown des réponses (commit à part de la vue 2)
+
+G, en vérifiant la pose de 81fdc2f40 chez Lucie, a vu les réponses de l'agent en Markdown brut ;
+`ui/chat` les affichait aussi en texte. Nommé avant, tranché par c7 : une bibliothèque plutôt qu'un
+rendu maison (« le genre de chose qu'on réécrit mal »). `marked` 18.1.1 (MIT) rend le Markdown des
+réponses de l'agent (gfm, retours à la ligne), `dompurify` 3.4.17 (MPL-2.0 ou Apache-2.0, au choix
+— pas MIT : noté dans `LICENSES.md`) assainit le HTML, obligatoire puisque le texte vient d'un
+modèle. Le message de la personne reste du texte ; la réponse en cours (`.en-cours`) aussi, le
+Markdown se rend à la fin du tour. Le bundle passe de 259 à 338 Kio. Témoin navigateur
+(`chat_qui_code::le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise`) : gras, liste
+et bloc de code rendus dans `.body.markdown` ; un `<script>` glissé dans la réponse n'est ni dans
+le DOM ni exécuté, le texte autour reste.
