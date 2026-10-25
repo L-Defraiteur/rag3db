@@ -3183,6 +3183,12 @@ impl Backend {
         self.runs_in_flight.runs()
     }
 
+    /// Le registre des runs en vol de ce backend : une boucle d'agent (le chat
+    /// de l'IDE) s'y inscrit par ce qui l'arrête.
+    pub fn runs_in_flight_registry(&self) -> &crate::dataflow::RunsInFlight {
+        &self.runs_in_flight
+    }
+
     /// [`call_in`](Self::call_in) au nom de l'humain (l'IDE).
     pub fn call_in_humain(&self, cell: &crate::scope::Scope, name: &str, args: Value) -> Result<Value, String> {
         let _humain = AppelHumain::poser();

@@ -167,10 +167,23 @@ pub struct DaemonHost {
     racine_des_taches: PathBuf,
     /// Les tâches fermées, fusionnées ou rejetées (leur trace).
     taches_fermees: Mutex<Vec<Value>>,
+    /// Les sessions de chat, par id de backend (page 11, `chat`).
+    chats: Mutex<std::collections::BTreeMap<String, chat::ChatEntry>>,
+    /// Les sessions relues dont le manifeste a disparu : dites, jamais rouvertes.
+    orphan_chats: Mutex<Vec<Value>>,
+    /// La racine des sessions de chat (`RAG3WEAVER_CHATS_DIR`).
+    chats_root: PathBuf,
+    /// Ce qui donne le modèle d'un backend.
+    chat_model: chat::ChatModel,
+    /// Ce que les chats ont consommé, par run et par slug.
+    chat_meter: Arc<crate::meter::Meter>,
 }
 
 /// Les tâches de l'agent : une branche, un worktree, une base à soi.
 pub mod taches;
+
+/// Le chat de l'atelier dans l'IDE : l'agent des gabarits, par backend.
+pub mod chat;
 
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
@@ -227,6 +240,11 @@ impl DaemonHost {
             taches: Mutex::new(std::collections::BTreeMap::new()),
             racine_des_taches: taches::racine_par_defaut(),
             taches_fermees: Mutex::new(Vec::new()),
+            chats: Mutex::new(std::collections::BTreeMap::new()),
+            orphan_chats: Mutex::new(Vec::new()),
+            chats_root: chat::default_chats_root(),
+            chat_model: chat::default_chat_model(),
+            chat_meter: Arc::new(crate::meter::Meter::new()),
         }
     }
 

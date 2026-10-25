@@ -18,15 +18,20 @@ use super::concurrent::CancelHandle;
 /// Le nom du service qui porte le registre.
 pub const RUNS_IN_FLIGHT_SERVICE: &str = "runs_in_flight";
 
-/// Les runs en vol : id de run → poignée d'arrêt.
+/// Ce qui arrête un run, au nom de qui le demande : la poignée d'un runtime
+/// ([`RunsInFlight::register`]), ou l'arrêt d'une boucle d'agent (un tour de
+/// chat, [`RunsInFlight::register_stop`]).
+pub type Stop = Arc<dyn Fn(&str) + Send + Sync>;
+
+/// Les runs en vol : id de run → ce qui l'arrête.
 #[derive(Clone, Default)]
 pub struct RunsInFlight {
-    runs: Arc<Mutex<HashMap<String, CancelHandle>>>,
+    runs: Arc<Mutex<HashMap<String, Stop>>>,
 }
 
 /// Un run inscrit ; il sort du registre à la chute de la garde.
 pub struct Registered {
-    runs: Arc<Mutex<HashMap<String, CancelHandle>>>,
+    runs: Arc<Mutex<HashMap<String, Stop>>>,
     run: String,
 }
 
@@ -41,9 +46,15 @@ impl RunsInFlight {
         Self::default()
     }
 
-    /// Inscrit `run` le temps de la garde rendue.
+    /// Inscrit le run d'un runtime, par sa poignée, le temps de la garde rendue.
     pub fn register(&self, run: &str, handle: CancelHandle) -> Registered {
-        self.runs.lock().unwrap_or_else(|p| p.into_inner()).insert(run.to_string(), handle);
+        self.register_stop(run, Arc::new(move |by: &str| handle.cancel_by(by)))
+    }
+
+    /// Inscrit un run par ce qui l'arrête (une boucle d'agent n'a pas de
+    /// poignée de runtime), le temps de la garde rendue.
+    pub fn register_stop(&self, run: &str, stop: Stop) -> Registered {
+        self.runs.lock().unwrap_or_else(|p| p.into_inner()).insert(run.to_string(), stop);
         Registered { runs: self.runs.clone(), run: run.to_string() }
     }
 
@@ -62,10 +73,10 @@ impl RunsInFlight {
     /// **Arrête `run`**, au nom de `by`. Un run qui n'est pas (ou plus) en vol
     /// est un refus nommé, et rien ne bouge.
     pub fn stop(&self, run: &str, by: &str) -> Result<(), String> {
-        let handle = self.runs.lock().unwrap_or_else(|p| p.into_inner()).get(run).cloned();
-        match handle {
-            Some(h) => {
-                h.cancel_by(by);
+        let stop = self.runs.lock().unwrap_or_else(|p| p.into_inner()).get(run).cloned();
+        match stop {
+            Some(stop) => {
+                stop(by);
                 Ok(())
             }
             None => Err(format!("aucun run « {run} » en vol : il a fini, ou il n'est pas de ce backend ; rien n'est arrêté")),

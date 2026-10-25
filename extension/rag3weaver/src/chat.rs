@@ -179,6 +179,16 @@ impl LlmProvider {
 pub struct ChatSession {
     pub turns: Vec<Turn>,
 }
+/// Ce qu'un tour publié prend en plus d'un tour d'atelier
+/// ([`ChatSession::run_with`]) ; tout absent : un bus privé, un id généré.
+#[derive(Default)]
+pub struct ChatRunOptions {
+    pub bus: Option<crate::events::EventBus>,
+    pub run_id: Option<String>,
+    pub meter: Option<Arc<crate::meter::Meter>>,
+    pub stopped_by: Option<Arc<std::sync::Mutex<Option<String>>>>,
+}
+
 impl ChatSession {
     pub fn new(prompt: &str) -> Self {
         Self {
@@ -193,6 +203,24 @@ impl ChatSession {
         config: &ChatConfig,
         events: EventHandler,
         cancelled: Arc<AtomicBool>,
+    ) -> Result<AgentRun, String> {
+        self.run_with(message, llm, tools, config, events, cancelled, ChatRunOptions::default())
+    }
+
+    /// [`run`](Self::run), le tour **publié** : sur `options.bus` (celui du
+    /// backend, que le flux de l'IDE relaie) au lieu d'un bus privé, sous
+    /// `options.run_id`, compté par `options.meter`, et dit arrêté par qui
+    /// remplit `options.stopped_by` (le chat de l'IDE, page 11).
+    #[allow(clippy::too_many_arguments)]
+    pub fn run_with(
+        &mut self,
+        message: &str,
+        llm: &dyn Llm,
+        tools: &(dyn ToolBox + Sync),
+        config: &ChatConfig,
+        events: EventHandler,
+        cancelled: Arc<AtomicBool>,
+        options: ChatRunOptions,
     ) -> Result<AgentRun, String> {
         if message.trim().is_empty() || message.len() > 128 * 1024 {
             return Err("message must contain 1..131072 bytes".into());
@@ -224,8 +252,18 @@ impl ChatSession {
         // `ToolInvocation`), et c'est la boîte (`with_inbox`) qui ramène cette
         // fin dans la conversation au tour suivant. Personne d'autre n'y est
         // abonné : s'il déborde, le plus ancien tombe, le chat ne ralentit pas.
-        let bus = crate::events::EventBus::new(64);
-        Agent::new(&observed_llm, &observed)
+        let bus = options.bus.unwrap_or_else(|| crate::events::EventBus::new(64));
+        let mut agent = Agent::new(&observed_llm, &observed);
+        if let Some(run_id) = options.run_id {
+            agent = agent.with_run_id(run_id);
+        }
+        if let Some(meter) = options.meter {
+            agent = agent.with_meter(meter);
+        }
+        if let Some(stopped_by) = options.stopped_by {
+            agent = agent.with_stopped_by(stopped_by);
+        }
+        agent
             .with_events(bus)
             .with_inbox()
             .with_completion_check(
