@@ -133,10 +133,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (177), dans `closed/`
+### Fermés (178), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un pli impossible d'un flux rend un Trigger en silence](closed/2026-10-25-un-pli-impossible-d-un-flux-rend-un-trigger-en-silence.md) | corrigé (25 octobre 2026, lot pli et ForEachNode) — refusé au bâti (`Complete ← Finite` d'un type qui ne se fond pas) et à l'exécution (`node::plier`), en nommant le nœud et le port | réponse fausse en silence | non (aucun gabarit livré ne le branchait) | oui (`dataflow::concurrent`) |
 | [La vue vivante de l'IDE gelée par un graphe long](closed/2026-10-25-la-vue-vivante-de-l-ide-gelee-par-un-graphe-long.md) | corrigé (chaque relais du flux de l'IDE a son fil, hors du runtime des graphes ; sonde 3/3 rouge avant) | la vue vivante se fige | oui | oui (`Flux::relayer`) |
 | [Une demande de reclassement à search_code est ignorée en silence](closed/2026-10-25-une-demande-de-reclassement-a-search-code-est-ignoree-en-silence.md) | corrigé (25 octobre 2026, pièce 2 de la recherche de l'IDE : `RerankNode` dans `search_workspace.mmd`, à la demande) | réponse fausse en silence | oui | oui |
 | [La recherche fusionnée perd ce que chaque signal a dit, et search_code ne rend pas sa méta](closed/2026-10-25-la-recherche-fusionnee-perd-ce-que-chaque-signal-a-dit.md) | corrigé (25 octobre 2026, pièce 1 de la recherche de l'IDE : `UnifiedResult.signals`, le port `metadata` de `search_code`) | réponse incomplète | oui | oui |
