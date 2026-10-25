@@ -10,6 +10,11 @@
 //! - un champ que les fichiers ne portent pas est dit (`fields_not_carried`) au
 //!   lieu d'être perdu en silence.
 //!
+//! Lot M3c : un dossier qui s'écarte de la base (un champ édité à la main, un
+//! fichier effacé) se dit à l'ouverture, dans `index_state` (`files` et un
+//! avertissement) ; la vérification à blanc reconstruit une copie du dossier
+//! dans une base jetable et la compare, champ à champ, à la base vivante.
+//!
 //! Run with: ./run_e2e.sh --test e2e_reconstruction
 
 #![cfg(feature = "rag3db-native")]
@@ -240,4 +245,82 @@ fn les_fiches_d_une_base_perdue_reviennent_par_leur_bloc_machine_et_un_lien_vers
     assert_eq!(requete(&neuve, notes), n0, "les notes reviennent champ à champ, depuis le bloc du sujet");
     assert_eq!(requete(&neuve, a_note), l0, "les liens du sujet à ses notes sont reposés");
     assert!(requete(&neuve, "MATCH (r:Ref) RETURN r._uuid").is_empty(), "la Ref, sans fichier, n'est pas devinée");
+}
+
+// ── M3c : la comparaison à l'ouverture, la vérification à blanc ────────────
+
+/// Le fichier propre d'une note, par son uuid.
+fn fichier_de(dir: &Path, uuid: &str) -> PathBuf {
+    dir.join("fichiers/notes").join(format!("{uuid}.md"))
+}
+
+#[test]
+#[ignore]
+fn un_dossier_qui_s_ecarte_de_la_base_se_dit_a_l_ouverture() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let chemin = manifeste(dir.path(), "backend.json", "base.rag3db", TOUT);
+    let vivante = ouvrir(&chemin);
+    let editee = vivante.call("put_note", json!({"record": {"titre": "Alpha", "etiquette": "moteur", "corps": "Le corps.\n"}})).expect("une note")["result"]["uuid"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let perdue = vivante.call("put_note", json!({"record": {"titre": "Beta", "corps": "Un autre corps.\n"}})).expect("une note")["result"]["uuid"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let etat = vivante.index_states().expect("l'état");
+    assert_eq!(etat["files"]["gaps"], 0, "un dossier fidèle n'a pas d'écart : {etat}");
+    drop(vivante);
+
+    // Base fermée : une main édite un fichier, une autre en efface un.
+    let texte = std::fs::read_to_string(fichier_de(dir.path(), &editee)).expect("le fichier d'Alpha");
+    assert_eq!(texte.matches("moteur").count(), 1, "{texte}");
+    std::fs::write(fichier_de(dir.path(), &editee), texte.replace("moteur", "stockage")).unwrap();
+    std::fs::remove_file(fichier_de(dir.path(), &perdue)).unwrap();
+
+    let rouverte = ouvrir(&chemin);
+    let etat = rouverte.index_states().expect("l'état");
+    assert_eq!(etat["files"]["gaps"], 2, "{etat}");
+    let ecarts = etat["files"]["by_entity"]["Note"].as_array().expect("les écarts de Note").clone();
+    assert!(
+        ecarts.iter().any(|e| e["kind"] == "field" && e["uuid"] == editee.as_str() && e["field"] == "etiquette"
+            && e["file_value"] == "stockage" && e["base_value"] == "moteur"),
+        "le champ édité se nomme, avec ses deux valeurs : {ecarts:?}"
+    );
+    assert!(ecarts.iter().any(|e| e["kind"] == "row_without_file" && e["uuid"] == perdue.as_str()), "la ligne sans fichier se nomme : {ecarts:?}");
+    let avertissements = etat["warnings"].as_array().expect("des avertissements").clone();
+    assert!(avertissements.iter().any(|a| a.as_str().is_some_and(|a| a.starts_with("dossier ≠ base : 2 écart(s)"))), "{avertissements:?}");
+}
+
+#[test]
+#[ignore]
+fn la_verification_a_blanc_reconstruit_une_copie_et_la_compare_a_la_base_vivante() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let vivante = ouvrir(&manifeste(dir.path(), "backend.json", "base.rag3db", TOUT));
+    let uuid = vivante.call("put_note", json!({"record": {"titre": "Alpha", "etiquette": "moteur", "corps": "Le corps.\n"}})).expect("une note")["result"]["uuid"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    vivante.call("put_note", json!({"record": {"titre": "Beta", "corps": "Un autre corps.\n"}})).expect("une note");
+    let avant: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+
+    let r = vivante.verify_files().expect("la vérification");
+    assert_eq!(r["ok"], true, "un dossier fidèle se reconstruit à l'identique : {r}");
+    assert_eq!(r["entities"]["Note"]["rows"], 2, "{r}");
+    assert_eq!(r["rebuild"]["Note"]["restored"], 2, "{r}");
+
+    // Le fichier s'écarte : la vérification le voit, champ nommé.
+    let texte = std::fs::read_to_string(fichier_de(dir.path(), &uuid)).expect("le fichier d'Alpha");
+    std::fs::write(fichier_de(dir.path(), &uuid), texte.replace("moteur", "stockage")).unwrap();
+    let r = vivante.verify_files().expect("la vérification");
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(
+        r["entities"]["Note"]["differing"],
+        json!([{"uuid": uuid, "field": "etiquette", "live": "moteur", "rebuilt": "stockage"}]),
+        "{r}"
+    );
+    // Rien n'est écrit à côté de la vraie base ; la vraie base n'a pas bougé.
+    let apres: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(avant, apres, "la vérification travaille dans un répertoire jetable");
+    assert_eq!(lignes(&vivante).len(), 2);
 }
