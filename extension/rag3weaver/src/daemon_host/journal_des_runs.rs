@@ -547,6 +547,16 @@ mod tests {
         assert_eq!(v["tours"][0]["content"], "dis salut", "l'ajout d'après l'écriture est fondu : {v}");
     }
 
+    /// Attend qu'une condition tienne : l'élagage suit l'écriture du fichier
+    /// neuf, qui est lisible avant lui.
+    fn attendre(quoi: &str, condition: impl Fn() -> bool) {
+        let fin = std::time::Instant::now() + Duration::from_secs(10);
+        while !condition() {
+            assert!(std::time::Instant::now() < fin, "{quoi}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
     /// Un run, de son début à sa fin, sous la racine `run`.
     fn un_run(bus: &EventBus, run: &str, appels: usize) {
         bus.emit(debut(run, None, "agent"));
@@ -588,13 +598,13 @@ mod tests {
         std::thread::sleep(Duration::from_millis(20));
         un_run(&bus1, "r2", 3);
         attendre_le_fichier(&j, "b1", "r2");
+        attendre("le plus vieux non épinglé tombe, sur un autre backend", || j.fichier("b2", "r1").is_none());
         assert!(j.fichier("b1", "r0").is_some(), "l'épinglé reste");
-        assert!(j.fichier("b2", "r1").is_none(), "le plus vieux non épinglé tombe, sur un autre backend");
         assert!(j.fichier("b1", "r2").is_some());
         std::thread::sleep(Duration::from_millis(20));
         un_run(&bus2, "r3", 3);
         attendre_le_fichier(&j, "b2", "r3");
-        assert!(j.fichier("b1", "r2").is_none(), "puis le suivant, dans l'ordre");
+        attendre("puis le suivant, dans l'ordre", || j.fichier("b1", "r2").is_none());
         assert!(j.fichier("b1", "r0").is_some() && j.fichier("b2", "r3").is_some());
         assert_eq!(j.lire("b1", "r0").unwrap()["epingle"]["raison"], "le témoin");
         let disque: u64 = ["b1/r0", "b2/r3"].iter().map(|r| std::fs::metadata(d.path().join("runs").join(format!("{r}.json.zst"))).unwrap().len()).sum();
@@ -629,7 +639,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(50));
         un_run(&bus, "neuf", 1);
         attendre_le_fichier(&j, "b1", "neuf");
-        assert!(j.fichier("b1", "vieux").is_none(), "au-delà de deux jours, il tombe");
+        attendre("au-delà de deux jours, il tombe", || j.fichier("b1", "vieux").is_none());
         assert!(j.fichier("b1", "vieux-epingle").is_some(), "l'épinglé jamais");
         let mut a = Map::new();
         a.insert("note".into(), json!(1));
