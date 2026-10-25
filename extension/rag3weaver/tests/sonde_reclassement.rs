@@ -96,6 +96,11 @@ fn ce_que_le_relecteur_change_sur_de_vraies_requetes() {
         }
     }
     m["workspace"]["commands"] = json!("off");
+    // La sonde ne fait que chercher : les outils qui écrivent partent (un
+    // espace de travail en lecture seule les refuse au chargement).
+    if let Some(outils) = m["tools"].as_object_mut() {
+        outils.retain(|_, t| t["policy"]["write_files"] != json!(true) && t["policy"]["run_commands"] != json!(true));
+    }
     m["database"] = json!(base.to_string_lossy());
     m["models"]["rerank"] = json!({"provider": "service", "model": "bge-reranker-v2-m3", "address": relecteur});
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
