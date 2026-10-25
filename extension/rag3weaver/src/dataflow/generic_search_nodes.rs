@@ -93,6 +93,44 @@ enum Chute {
     Echec(String),
 }
 
+/// **Combien un signal attend le catalogue vivant** quand sa poignée manque
+/// à la vue. Une écriture brève (la poignée qui s'ouvre, un lot de la montre)
+/// se laisse finir ; une indexation longue ne fait pas attendre la recherche
+/// au-delà.
+pub(crate) const ATTENTE_DE_LA_POIGNEE: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// La raison d'une branche dont la poignée manque parce qu'une écriture tient
+/// le catalogue au-delà de [`ATTENTE_DE_LA_POIGNEE`].
+fn absent_pendant_l_indexation(signal: &str) -> String {
+    format!(
+        "{signal} absent : indexation en cours (une écriture tient le catalogue depuis plus de {} ms ; \
+         l'index s'ouvrira à sa sortie, la recherche suivante l'aura)",
+        ATTENTE_DE_LA_POIGNEE.as_millis()
+    )
+}
+
+/// **Le catalogue vivant, pour la poignée qui manque à la vue** (25 octobre
+/// 2026 : la première recherche après l'ouverture de l'IDE perdait le plein
+/// texte, ouvert sous le verrou que la montre tenait). Sans vue, on attend
+/// comme avant (L4) ; par la vue, un court instant borné : `None` si
+/// l'écriture tient encore, et la branche le dit.
+fn catalogue_vivant(c: &Mutex<Catalog>, par_la_vue: bool) -> Option<std::sync::MutexGuard<'_, Catalog>> {
+    if !par_la_vue {
+        return Some(c.lock().unwrap_or_else(|p| p.into_inner()));
+    }
+    let fin = std::time::Instant::now() + ATTENTE_DE_LA_POIGNEE;
+    loop {
+        match c.try_lock() {
+            Ok(g) => return Some(g),
+            Err(std::sync::TryLockError::Poisoned(p)) => return Some(p.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) if std::time::Instant::now() < fin => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            Err(std::sync::TryLockError::WouldBlock) => return None,
+        }
+    }
+}
+
 /// **Le repli d'un nœud de signal** : en mode par défaut, la branche tombée
 /// rend une liste vide, son statut sur le port `status`, et le DIT
 /// (`ctx.warn` → les warnings du résultat) — jamais un repli muet. En mode
@@ -918,17 +956,34 @@ impl Node for VectorSearchNode {
                         // redemande au catalogue **vivant** — même motif que le
                         // handle FTS du nœud BM25 — et on ne refuse qu'après lui.
                         None => {
+                            // Par la vue, le catalogue vivant s'attend un court instant
+                            // borné : tenu au-delà, le modèle est indisponible pour cette
+                            // requête, et la branche dit pourquoi.
+                            let mut tenu = false;
                             let vivant = ctx
                                 .service::<Arc<Mutex<Catalog>>>("catalog")
                                 .cloned()
                                 .and_then(|c| {
-                                    // Par la vue, le catalogue vivant ne s'attend pas : tenu, le
-                                    // modèle est indisponible pour cette requête.
-                                    let cat = if vue.is_some() { c.try_lock().ok()? } else { c.lock().unwrap() }; // L4 : repli sans vue
+                                    let Some(cat) = catalogue_vivant(&c, vue.is_some()) else {
+                                        tenu = true;
+                                        return None;
+                                    };
                                     Some(cat.vector_storage(&target.chunk_table))
                                 });
                             match vivant {
                                 Some(Ok(st)) => (st.index, st.column),
+                                None if tenu => {
+                                    return replier_la_branche(
+                                        ctx,
+                                        strict,
+                                        &label,
+                                        "dense",
+                                        &query_str,
+                                        &target.name,
+                                        crate::search::SearchSignals::VECTOR,
+                                        Chute::Indisponible(absent_pendant_l_indexation("dense")),
+                                    )
+                                }
                                 Some(Err(e)) => {
                                     return replier_la_branche(
                                         ctx,
@@ -1235,16 +1290,26 @@ impl Node for BM25SearchNode {
         // `fts_handles`, sinon le catalogue **vivant** — une entité
         // enregistrée après la construction des services (une trace, un
         // message) a son index dans le catalogue, pas dans l'instantané.
+        let mut catalogue_tenu = false;
         let fts_handle = ctx
             .service::<std::collections::HashMap<String, std::sync::Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
             .and_then(|h| h.get(&target.parent_table).cloned())
             .or_else(|| {
-                // Le catalogue vivant, sans attendre un écrivain quand la vue
-                // sert (lot L4) : tenu, la poignée manque et la branche le dit.
+                // Le catalogue vivant, attendu un court instant borné quand la
+                // vue sert (lot L4) : tenu au-delà, la poignée manque et la
+                // branche dit pourquoi. Obtenu, la poignée s'ouvre ici si la
+                // source n'a pas pu l'ouvrir (le catalogue lui était tenu), et
+                // la vue republiée la porte pour la recherche suivante.
                 let par_la_vue = vue_de(ctx).is_some();
-                ctx.service::<Arc<Mutex<Catalog>>>("catalog")
-                    .and_then(|c| if par_la_vue { c.try_lock().ok() } else { c.lock().ok() }) // L4 : repli sans vue
-                    .and_then(|c| c.fts_handle(&target.parent_table))
+                let c = ctx.service::<Arc<Mutex<Catalog>>>("catalog")?;
+                let Some(mut cat) = catalogue_vivant(c, par_la_vue) else {
+                    catalogue_tenu = true;
+                    return None;
+                };
+                if cat.plein_texte_natif() {
+                    return cat.fts_handle(&target.parent_table);
+                }
+                cat.ensure_fts_handle(&target.parent_table, &target.bm25_fields, &crate::scope::fts_filter_fields())
             });
 
         let fields: &[String] = match &self.fields {
@@ -1444,7 +1509,9 @@ impl Node for BM25SearchNode {
                 let texte = format!("BM25SearchNode: search failed: {e}");
                 // « aucun index FTS ouvert » : le signal n'existe pas ici —
                 // index jamais bâti ou en rebâti — contre un vrai échec.
-                let chute = if texte.contains("aucun index FTS") {
+                let chute = if catalogue_tenu && fts_handle.is_none() {
+                    Chute::Indisponible(absent_pendant_l_indexation("plein texte"))
+                } else if texte.contains("aucun index FTS") {
                     Chute::Indisponible(texte)
                 } else {
                     Chute::Echec(texte)
