@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — La recherche trouve ce qu'on a sous les yeux.** La requête entière part
+  à lucivy telle quelle, en parallèle d'une recherche par mots, et l'exact passe
+  devant la fusion : « Vue d'ensemble » rend sa page aux rangs 1, 2, 3 au lieu
+  d'être absente des trente ; les questions en langue naturelle gardent leur
+  3 sur 3. 159087582.
 - **25 oct. — L'équipier.** Un agent qui accomplit une tâche seul, par pas, et parle à
   un superviseur par une boîte aux lettres ; un plan quand il le faut, le hors-plan en
   proposition, et le juge à chaque pas ; sur Gemini, la doc d'un dépôt de test en un
