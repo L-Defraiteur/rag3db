@@ -323,6 +323,7 @@ impl Node for JsonWhole {
 #[test]
 #[ignore = "rouge connu : docs/tickets/2026-10-25-un-pli-impossible-d-un-flux-rend-un-trigger-en-silence.md"]
 fn un_pli_impossible_d_un_flux_vers_une_entree_complete_se_refuse_en_le_nommant() {
+    let mut refus = Vec::new();
     for n in [2usize, 3] {
         let mut g = DataflowGraph::new();
         g.add_node(Box::new(JsonBurst { name: "sections".into(), n })).unwrap();
@@ -335,7 +336,11 @@ fn un_pli_impossible_d_un_flux_vers_une_entree_complete_se_refuse_en_le_nommant(
             (Ok(_), Some(v)) => format!("accepté, le lecteur a vu {v}"),
             (Ok(_), None) => "accepté, rien rendu".to_string(),
         });
-        let e = r.err().unwrap_or_else(|| panic!("N={n} : le pli de {n} objets JSON passe en silence (le lecteur a vu {vu:?})"));
+        refus.push((n, r.err(), vu));
+    }
+    // Tout est imprimé avant d'exiger : les deux parités se lisent dans la sortie.
+    for (n, e, vu) in refus {
+        let e = e.unwrap_or_else(|| panic!("N={n} : le pli de {n} objets JSON passe en silence (le lecteur a vu {vu:?})"));
         assert!(e.contains("ecrire") && e.contains("record"), "N={n} : le refus nomme le nœud et le port : {e}");
     }
 }
