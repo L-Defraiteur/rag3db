@@ -132,6 +132,41 @@ pub fn port_value_to_checkpoint(value: &PortValue) -> Result<CheckpointPortValue
 
 /// Convert a [`CheckpointPortValue`] back to a runtime [`PortValue`].
 pub fn port_value_from_checkpoint(cpv: CheckpointPortValue) -> Result<PortValue, String> {
+    port_value_from_checkpoint_avec(cpv, &std::collections::HashMap::new())
+}
+
+/// **Les clés de corrélation des lignes d'un lot d'entités enregistré**, et
+/// leurs uuids : ce que la reprise d'un drain lit avant de relire ses liens,
+/// pour que ceux qui visent une ligne née dans le même drain retrouvent leur
+/// bout (19 octobre 2026). Vide pour tout autre port.
+pub fn correspondances_des_entites(cpv: &CheckpointPortValue) -> Result<std::collections::HashMap<String, String>, String> {
+    let mut cles = std::collections::HashMap::new();
+    if cpv.port_type != PortType::Entities || !cpv.is_batch {
+        return Ok(cles);
+    }
+    let records: Vec<CheckpointEntityRecord> = match (cpv.data_bytes.as_ref(), cpv.data_file.as_deref(), cpv.data_json.as_deref()) {
+        (Some(b), _, _) => rmp_serde::from_slice(b).map_err(|e| e.to_string())?,
+        (None, Some(f), _) => {
+            let b = std::fs::read(f).map_err(|e| format!("fichier de checkpoint « {f} » : {e} — le lot n'est plus là"))?;
+            rmp_serde::from_slice(&b).map_err(|e| e.to_string())?
+        }
+        (None, None, Some(json)) => serde_json::from_str(json).map_err(|e| e.to_string())?,
+        (None, None, None) => return Ok(cles),
+    };
+    for r in &records {
+        if let Some((cle, uuid)) = r.cle_et_uuid() {
+            cles.insert(cle, uuid);
+        }
+    }
+    Ok(cles)
+}
+
+/// [`port_value_from_checkpoint`], les bouts des liens retrouvés par leur clé
+/// dans `cles` ([`correspondances_des_entites`]).
+pub fn port_value_from_checkpoint_avec(
+    cpv: CheckpointPortValue,
+    cles: &std::collections::HashMap<String, String>,
+) -> Result<PortValue, String> {
     if cpv.port_type == PortType::Empty {
         return Ok(PortValue::Trigger);
     }
@@ -144,10 +179,10 @@ pub fn port_value_from_checkpoint(cpv: CheckpointPortValue) -> Result<PortValue,
             (None, Some(f), _) => std::sync::Arc::new(std::fs::read(f).map_err(|e| {
                 format!("fichier de checkpoint « {f} » : {e} — le lot n'est plus là")
             })?),
-            (None, None, Some(json)) => return Ok(PortValue::new(checkpoint_deserialize_batch(cpv.port_type, &json)?)),
+            (None, None, Some(json)) => return Ok(PortValue::new(checkpoint_deserialize_batch(cpv.port_type, &json, cles)?)),
             (None, None, None) => return Err(format!("missing data for {:?}", cpv.port_type)),
         };
-        return Ok(PortValue::new(checkpoint_decode_batch(cpv.port_type, &bytes)?));
+        return Ok(PortValue::new(checkpoint_decode_batch(cpv.port_type, &bytes, cles)?));
     }
     let json = cpv
         .data_json
@@ -193,7 +228,7 @@ fn checkpoint_encode_batch(payload: &BatchPayload) -> Result<Vec<u8>, String> {
     }
 }
 
-fn checkpoint_decode_batch(port_type: PortType, bytes: &[u8]) -> Result<BatchPayload, String> {
+fn checkpoint_decode_batch(port_type: PortType, bytes: &[u8], cles: &std::collections::HashMap<String, String>) -> Result<BatchPayload, String> {
     fn dec<T: serde::de::DeserializeOwned>(b: &[u8]) -> Result<T, String> {
         rmp_serde::from_slice(b).map_err(|e| e.to_string())
     }
@@ -204,7 +239,7 @@ fn checkpoint_decode_batch(port_type: PortType, bytes: &[u8]) -> Result<BatchPay
         }
         PortType::Relations => {
             let checkpoint: Vec<CheckpointRelationRecord> = dec(bytes)?;
-            Ok(BatchPayload::new(PortType::Relations, checkpoint.into_iter().map(|c| c.into_relation_record()).collect::<Vec<RelationRecord>>()))
+            Ok(BatchPayload::new(PortType::Relations, checkpoint.into_iter().map(|c| c.into_relation_record_avec(cles)).collect::<Vec<RelationRecord>>()))
         }
         PortType::Derivations => Ok(BatchPayload::new(PortType::Derivations, dec::<Vec<crate::records::Derivation>>(bytes)?)),
         PortType::Updates => Ok(BatchPayload::new(PortType::Updates, dec::<Vec<UpdateRecord>>(bytes)?)),
@@ -217,7 +252,7 @@ fn checkpoint_decode_batch(port_type: PortType, bytes: &[u8]) -> Result<BatchPay
 
 
 /// Deserialize a [`BatchPayload`] from checkpoint JSON.
-fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<BatchPayload, String> {
+fn checkpoint_deserialize_batch(port_type: PortType, json: &str, cles: &std::collections::HashMap<String, String>) -> Result<BatchPayload, String> {
     match port_type {
         PortType::Entities => {
             let checkpoint: Vec<CheckpointEntityRecord> =
@@ -233,7 +268,7 @@ fn checkpoint_deserialize_batch(port_type: PortType, json: &str) -> Result<Batch
                 serde_json::from_str(json).map_err(|e| e.to_string())?;
             let records: Vec<RelationRecord> = checkpoint
                 .into_iter()
-                .map(|c| c.into_relation_record())
+                .map(|c| c.into_relation_record_avec(cles))
                 .collect();
             Ok(BatchPayload::new(PortType::Relations, records))
         }

@@ -6,7 +6,7 @@
 //!
 //! See doc 23 — "Design: Elimination des Ops — Le graphe EST le plan".
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -501,6 +501,17 @@ impl CheckpointEntityRecord {
     ///
     /// The EntityRef is pre-resolved (channel initialized to Ready).
     /// The resolver is None (already consumed in the original execution).
+    /// La clé de corrélation de cette ligne et son uuid, s'il est connu : par
+    /// le ref résolu, sinon par la donnée (`_uuid`, posé à la mise en file).
+    /// Ce qu'une reprise lit pour retrouver les bouts des liens du même lot.
+    pub fn cle_et_uuid(&self) -> Option<(String, String)> {
+        let uuid = match &self.ref_state.status {
+            CheckpointRefStatus::Ready { uuid } if !uuid.is_empty() => Some(uuid.clone()),
+            _ => self.data.get("_uuid").and_then(|v| v.as_str()).filter(|u| !u.is_empty()).map(str::to_string),
+        }?;
+        Some((self.ref_state.temp_uuid.clone(), uuid))
+    }
+
     pub fn into_entity_record(self) -> EntityRecord {
         let entity_ref = match &self.ref_state.status {
             CheckpointRefStatus::Ready { uuid } => {
@@ -511,9 +522,10 @@ impl CheckpointEntityRecord {
                 )
             }
             _ => {
-                // Pending or Failed: create a new unresolved ref with the same temp_uuid.
-                // This shouldn't happen in practice (checkpoint saves after node completes),
-                // but we handle it for robustness.
+                // Pending ou Failed : c'est le cas ordinaire d'une entrée du
+                // graphe, enregistrée avant qu'aucun nœud ne tourne. Le nœud
+                // d'insertion résout la ligne par sa donnée (`_uuid`) ; les
+                // liens du lot la retrouvent par sa clé (`cle_et_uuid`).
                 EntityRef::pre_resolved(
                     &self.ref_state.type_name,
                     &self.ref_state.temp_uuid,
@@ -570,14 +582,38 @@ impl RelationRecord {
 impl CheckpointRelationRecord {
     /// Reconstruct a RelationRecord from checkpoint data.
     pub fn into_relation_record(self) -> RelationRecord {
-        let from = match self.from_uuid {
-            Some(uuid) => RefOrUuid::Uuid(uuid),
-            None => RefOrUuid::Uuid(String::new()),
+        self.into_relation_record_avec(&HashMap::new())
+    }
+
+    /// **Le même, en retrouvant les bouts nés dans le même drain** (19 octobre
+    /// 2026, ticket « une reprise de drain perd les liens vers les lignes nées
+    /// dans le même drain »). Le point de reprise enregistre les entrées avant
+    /// qu'aucun nœud ne tourne : un bout qui est le ref d'une création du lot
+    /// n'a encore que sa clé de corrélation. `cles` la fait correspondre à
+    /// l'uuid de la ligne, tiré des entités du même point de reprise. Une clé
+    /// que rien ne nomme rend un bout en échec, que le nœud de liens compte et
+    /// dit — avant, un uuid vide, et le lien disparaissait sans un mot.
+    pub fn into_relation_record_avec(self, cles: &HashMap<String, String>) -> RelationRecord {
+        let bout = |uuid: Option<String>, cle: Option<String>, cote: &str| -> RefOrUuid {
+            if let Some(uuid) = uuid.filter(|u| !u.is_empty()) {
+                return RefOrUuid::Uuid(uuid);
+            }
+            match cle {
+                Some(cle) => match cles.get(&cle) {
+                    Some(uuid) => RefOrUuid::Uuid(uuid.clone()),
+                    None => {
+                        let (r, resolver) = EntityRef::new(cote);
+                        resolver.fail(format!(
+                            "bout {cote} perdu à la reprise : la clé {cle} ne nomme aucune ligne du point de reprise"
+                        ));
+                        RefOrUuid::Ref(r)
+                    }
+                },
+                None => RefOrUuid::Uuid(String::new()),
+            }
         };
-        let to = match self.to_uuid {
-            Some(uuid) => RefOrUuid::Uuid(uuid),
-            None => RefOrUuid::Uuid(String::new()),
-        };
+        let from = bout(self.from_uuid.clone(), self.from_temp_uuid.clone(), "source");
+        let to = bout(self.to_uuid.clone(), self.to_temp_uuid.clone(), "cible");
         let relation_ref = match &self.ref_state.status {
             CheckpointRefStatus::ReadyRel { from_uuid, to_uuid } => {
                 RelationRef::pre_resolved(
