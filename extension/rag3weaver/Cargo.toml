@@ -571,6 +571,9 @@ path = "tests/sonde_cpp_rag3db.rs"
 name = "sonde_tests_par_requetes"
 path = "tests/sonde_tests_par_requetes.rs"
 [[test]]
+name = "sonde_requete_entiere"
+path = "tests/sonde_requete_entiere.rs"
+[[test]]
 name = "sonde_reclassement"
 path = "tests/sonde_reclassement.rs"
 [[test]]
