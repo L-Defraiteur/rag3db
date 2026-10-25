@@ -63,6 +63,30 @@ avant elle, un seul sens était modifié, en silence.
    hors du verrou (3724accba), dans la lib actuelle de l'hôte. Mais le défaut précède cette lib :
    il est vu dès 04063ee06.
 
+## La lecture du 25 octobre, 21 h 30 (copies, jamais la base vivante)
+
+**En trois lignes** :
+1. **La contradiction est dans le fichier, et déjà avant la bascule.** Sur la copie de
+   bascule-04063ee06 (format d'avant 41, jamais ouverte par 04063ee06), le sens avant depuis Scope
+   16249 ne porte pas la relation 851, alors que le sens arrière depuis sa destination, Symbol
+   13803, la porte (avec une autre source : Scope 12067).
+2. **Ce n'est pas une lecture de travers par la lib courante** : la lib d'avant la bascule
+   (58b46a9bf) et 04063ee06 lisent exactement la même chose sur cette même copie. Ni la migration
+   41/42 ni V2-1a ne l'ont créée.
+3. **Elle dure dans la base vivante** (copie à chaud de 21 h 26, sous 04063ee06). Le sens avant
+   depuis 16249 n'a toujours que la relation 76 ; le sens arrière depuis 13803 porte 851 (venue de
+   16249) et 852 (de 16250). Le compte de LOCKS est passé de 506 à 514. C'est la relation que la
+   garde ne trouve pas dans le sens avant.
+
+Le détail. Le lecteur est `~/.cache/rag3db-locks/lire.cpp`, lié à chaque lib du magasin, ouvert en
+lecture seule ; les copies sont avant-58b4, avant-0406 et m-0406. LOCKS va de Scope à Symbol et
+porte quatre propriétés (line, usage, usages, via), sans trou. La requête qui cherche 851 par son
+identifiant laisse le planificateur choisir le sens : seules la première (ancrée sur la source) et
+la troisième (ancrée sur la destination) disent un sens à coup sûr. La suite : lire les deux CSR
+par les internes, d'où vient l'écart dans le sens avant (une relation supprimée d'un seul côté, ou
+un identifiant réutilisé), et chercher sous quel lot il a pu s'écrire avant le 25 (les COPY de
+relations annulés, le rollback du CSR).
+
 ## Ce que la bascule 43 attend
 
 **La bascule au format 43 (prévue le 26 octobre) attend la lecture du point 1 ci-dessous**
