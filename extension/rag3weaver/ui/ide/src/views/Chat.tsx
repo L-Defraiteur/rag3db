@@ -41,7 +41,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const [busy, setBusy] = useState(false);
   const [run, setRun] = useState<string | null>(null);
   const [consumed, setConsumed] = useState("");
-  const [text, setText] = useState("");
+  // La saisie n'est pas contrôlée par React : un témoin (ou une saisie
+  // automatique du navigateur) pose la valeur par le DOM, et `send` la lit là.
+  const input = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLElement>(null);
   const runRef = useRef<string | null>(null);
   runRef.current = run;
@@ -105,9 +107,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   }, [items]);
 
   const send = async () => {
-    const message = text.trim();
+    const message = input.current?.value.trim() ?? "";
     if (!message || busy || !chat?.on) return;
-    setText("");
+    if (input.current) input.current.value = "";
     setBusy(true);
     setStatus("l'agent travaille…");
     setConsumed("");
@@ -258,8 +260,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             required
             disabled={!chat?.on}
             placeholder="Que voulez-vous explorer ?"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
+            ref={input}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
