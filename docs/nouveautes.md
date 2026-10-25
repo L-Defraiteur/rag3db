@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — La recherche tient sans ses vecteurs.** Pendant un rattrapage,
+  `search_code` répond par les mots et dit pourquoi le dense manque, au lieu de
+  tomber en entier. d6abc051f.
 - **25 oct. — Ce que la mémoire sait d'un fichier.** `cited_by` rend les fiches qui
   citent un chemin, un dossier, un symbole ou un source, avec leurs ancres et les
   apports qui le citent, lues par un Plan déclaré, sans Cypher. 665a4a97c.
