@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Le chat code dans une tâche.** Sur un dépôt étranger ouvert dans
+  l'IDE, le chat lit, cherche et édite le code sur la branche de la tâche, jamais
+  ailleurs, et mène à sa relecture ; Gemini le fait en 13 s. ae127d634.
 - **25 oct. — Un dossier qui dit de quoi il parle.** Chaque fiche porte la version
   de son format, et le dossier un `manifeste.yaml` : une base reconstruite après un
   changement de format relit les anciens fichiers par leurs migrations, ou dit
