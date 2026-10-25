@@ -254,7 +254,12 @@ impl DaemonHost {
     /// le L1 de section `bilan`, son lien, et une ancre par outil appelé (96).
     fn ecrire_le_bilan(&self, memoire: &Arc<Hosted>, fiche: &str, intitule: &str, run: &str, journal: &Value, texte: &str, verdict: &Value) -> Result<Value, String> {
         let appeler = |outil: &str, args: Value| -> Result<Value, String> { self.with_backend(memoire, |b| b.call(outil, args)).and_then(|r| r) };
-        if appeler("get_fiche", json!({ "record": { "name": fiche } })).is_err() {
+        // `get_fiche` rend une réponse même quand la fiche n'existe pas : elle
+        // existe si la réponse porte son nom.
+        let nom = json!({ "name": fiche }).to_string();
+        let nom = &nom[1..nom.len() - 1];
+        let existe = appeler("get_fiche", json!({ "record": { "name": fiche } })).is_ok_and(|r| r["result"].to_string().contains(nom));
+        if !existe {
             appeler("put_fiche", json!({ "record": { "name": fiche, "about": intitule, "state": "current", "via": "juge" } }))?;
         }
         let jour = chrono_jour();
