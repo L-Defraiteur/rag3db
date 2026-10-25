@@ -4349,6 +4349,14 @@ mod tests_resolution {
         assert!(!vue.par_entete("/p/src/include/storage/table.h"), "par_entete ne vaut que pour une source");
         assert!(inc.vue("/p/old/legacy.cpp").is_none(), "une base sans le champ ne filtre rien");
         assert!(inc.vue("/p/inconnu.cpp").is_none());
+
+        // **Une base mi-réanalysée** (relecture de l'arbre principal, 25 octobre 2026) : a.cpp est
+        // connu, mais b.h, qu'il inclut, a ses includes encore nuls ; c.h, que b.h inclut, définit
+        // helper. La fermeture est incomplète : elle ne filtre rien, au lieu d'abstenir helper.
+        poser(&mut inc, "/q/a.cpp", Some(&["b.h"]));
+        poser(&mut inc, "/q/b.h", None);
+        poser(&mut inc, "/q/c.h", Some(&[]));
+        assert!(inc.vue("/q/a.cpp").is_none(), "une fermeture qui touche des includes inconnus ne filtre rien");
     }
 
     #[test]
