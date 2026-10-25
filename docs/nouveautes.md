@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — La recherche de l'IDE montre ce que l'hôte sait.** Chaque résultat
+  avec son score et ce que chaque signal en a dit, l'état de l'index en tête, les
+  replis en pied, et une case pour faire relire. b0e5451d0.
 - **25 oct. — Une recherche ne peut plus tuer un écrivain.** Le plein texte (lucivy
   4.3.1) ne panique plus sous validations concurrentes, et une recherche en échec
   ne fait plus perdre d'écriture ni geler une validation ; prouvé 80 fois sur 80
