@@ -27,3 +27,17 @@ chantier ou réindex complet ». Le portable est en mode éco : les durées comp
   la nuit, qui redémarrent l'hôte de Lucie, l'auraient tué. 6 616 fichiers retenus. Journal :
   ~/.cache/rag3weaver/commandes/index/1792965744115-3263852.out.
 - Les lots IDE d'everything declarative de la nuit seront posés ensemble, au hash de l'IDE en React.
+- 23 h 06 — la session mémoire a fini la migration de la fiche de Lucie (memoire-longue rouverte sur
+  son nouveau manifeste, instantané migration-fiche-25-oct).
+- 23 h 21 — l'index complet de la base neuve est fini, en 19 min : 6 508 fichiers, 68 585 scopes,
+  214 438 relations, 116 573 vecteurs ; aucune ligne d'échec ; « plein texte vérifié : autant de
+  documents que de lignes (4 entités) ». L'hôte à part est arrêté proprement à 23 h 21 m 42 s.
+  Base neuve : 1 066 627 072 octets, plus 648 Mo de plein texte (la vivante : 1,2 Go et 707 Mo).
+- 23 h 22 — étape 3 : la base neuve est donnée à hotfixs pour le relevé de LOCKS et des tables de liens.
+- 23 h 28 — bâti sur 81fdc2f40 (l'IDE en React vues 1 et 2, le repli de la marge 400813249, le rendu
+  entier c4472d61a), lib 04063ee06, binaire a4df1b50 ; essai vert aux deux postes.
+- 23 h 31 — pose et réveil aux deux postes. Témoin de l'IDE vert ; /ide/ et la page du chat servent la
+  page React ; le sha256 de app.js est celui du bundle aux deux postes.
+- 23 h 40 — la page du chat est rendue en Chrome sans tête piloté par CDP, sur l'hôte vivant : en-tête « Chat de
+  l'atelier · backends/code », « modèle : google/gemini-3.8-flash », conversation et champ de saisie, console
+  sans erreur. Une remarque à everything declarative : le Markdown des réponses s'affiche brut.
