@@ -18,6 +18,7 @@
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 #include "transaction/transaction.h"
+#include "transaction/transaction_manager.h"
 
 using namespace rag3db::common;
 using namespace rag3db::function;
@@ -41,14 +42,16 @@ CreateInMemHNSWSharedState::CreateInMemHNSWSharedState(const CreateHNSWIndexBind
         bindData.tableEntry->getColumnID(bindData.propertyID), bindData.config.copy());
 }
 
+// buildOfNotedIndex : le bind de T_B, où l'entrée existe déjà (posée par T_A, NOTED).
 static std::unique_ptr<TableFuncBindData> createInMemHNSWBindFunc(main::ClientContext* context,
-    const TableFuncBindInput* input) {
+    const TableFuncBindInput* input, bool buildOfNotedIndex) {
     const auto tableName = input->getLiteralVal<std::string>(0);
     const auto indexName = input->getLiteralVal<std::string>(1);
     const auto columnName = input->getLiteralVal<std::string>(2);
     auto config = HNSWIndexConfig{input->optionalParams};
     const auto nodeTableEntry = HNSWIndexUtils::bindNodeTable(*context, tableName);
-    if (HNSWIndexUtils::validateIndexExistence(*context, nodeTableEntry, indexName,
+    if (!buildOfNotedIndex &&
+        HNSWIndexUtils::validateIndexExistence(*context, nodeTableEntry, indexName,
             HNSWIndexUtils::IndexOperation::CREATE, config.conflictAction)) {
         return std::make_unique<CreateHNSWIndexBindData>(context, indexName, nullptr, 0, 0,
             std::move(config),
@@ -221,7 +224,9 @@ function_set InternalCreateHNSWIndexFunction::getFunctionSet() {
     function_set functionSet;
     std::vector inputTypes = {LogicalTypeID::STRING, LogicalTypeID::STRING, LogicalTypeID::STRING};
     auto func = std::make_unique<TableFunction>(name, inputTypes);
-    func->bindFunc = createInMemHNSWBindFunc;
+    func->bindFunc = [](main::ClientContext* context, const TableFuncBindInput* input) {
+        return createInMemHNSWBindFunc(context, input, true /*buildOfNotedIndex*/);
+    };
     func->initSharedStateFunc = initCreateInMemHNSWSharedState;
     func->initLocalStateFunc = initCreateInMemHNSWLocalState;
     func->tableFunc = createInMemHNSWTableFunc;
@@ -229,6 +234,93 @@ function_set InternalCreateHNSWIndexFunction::getFunctionSet() {
     func->progressFunc = createInMemHNSWProgressFunc;
     func->getPhysicalPlanFunc = getPhysicalPlan;
     func->isReadOnly = false;
+    functionSet.push_back(std::move(func));
+    return functionSet;
+}
+
+// T_A ((A), page 07, §3) : l'entrée au catalogue, et un holder NOTED qui porte un index vide (ses
+// tables de relations, sans graphe). Visible des autres dès la validation de T_A : les recherches
+// le refusent par son état, les écrivains n'y touchent pas. La requête du CREATE le tient en vie
+// par son jeton ; sans elle, il est INCOMPLETE.
+static offset_t createHNSWNoteTableFunc(const TableFuncInput& input, TableFuncOutput&) {
+    auto* clientContext = input.context->clientContext;
+    const auto bindData = input.bindData->constPtrCast<CreateHNSWIndexBindData>();
+    const auto transaction = transaction::Transaction::Get(*clientContext);
+    const auto catalog = catalog::Catalog::Get(*clientContext);
+    const auto nodeTableID = bindData->tableEntry->getTableID();
+    const auto upperTableID =
+        catalog
+            ->getTableCatalogEntry(transaction,
+                HNSWIndexUtils::getUpperGraphTableName(nodeTableID, bindData->indexName))
+            ->cast<catalog::RelGroupCatalogEntry>()
+            .getSingleRelEntryInfo()
+            .oid;
+    const auto lowerTableID =
+        catalog
+            ->getTableCatalogEntry(transaction,
+                HNSWIndexUtils::getLowerGraphTableName(nodeTableID, bindData->indexName))
+            ->cast<catalog::RelGroupCatalogEntry>()
+            .getSingleRelEntryInfo()
+            .oid;
+    auto auxInfo = std::make_unique<HNSWIndexAuxInfo>(bindData->config.copy());
+    catalog->createIndex(transaction,
+        std::make_unique<catalog::IndexCatalogEntry>(HNSWIndexCatalogEntry::TYPE_NAME, nodeTableID,
+            bindData->indexName, std::vector{bindData->propertyID}, std::move(auxInfo)));
+    const auto hnswIndexType = OnDiskHNSWIndex::getIndexType();
+    storage::IndexInfo indexInfo{bindData->indexName, hnswIndexType.typeName, nodeTableID,
+        {bindData->tableEntry->getColumnID(bindData->propertyID)}, {PhysicalTypeID::ARRAY},
+        hnswIndexType.constraintType == storage::IndexConstraintType::PRIMARY,
+        hnswIndexType.definitionType == storage::IndexDefinitionType::BUILTIN};
+    auto emptyIndex = std::make_unique<OnDiskHNSWIndex>(clientContext, indexInfo,
+        std::make_unique<HNSWStorageInfo>(upperTableID, lowerTableID, INVALID_OFFSET,
+            INVALID_OFFSET, 0 /*numCheckpointedNodes*/),
+        bindData->config.copy());
+    storage::StorageManager::Get(*clientContext)
+        ->getTable(nodeTableID)
+        ->cast<storage::NodeTable>()
+        .addNotedIndex(std::move(emptyIndex), transaction, clientContext->newQueryScopedToken());
+    return 0;
+}
+
+function_set InternalCreateHNSWNoteFunction::getFunctionSet() {
+    function_set functionSet;
+    std::vector inputTypes = {LogicalTypeID::STRING, LogicalTypeID::STRING, LogicalTypeID::STRING};
+    auto func = std::make_unique<TableFunction>(name, inputTypes);
+    func->bindFunc = [](main::ClientContext* context, const TableFuncBindInput* input) {
+        return createInMemHNSWBindFunc(context, input, false /*buildOfNotedIndex*/);
+    };
+    func->tableFunc = createHNSWNoteTableFunc;
+    func->initSharedStateFunc = SimpleTableFunc::initSharedState;
+    func->initLocalStateFunc = TableFunction::initEmptyLocalState;
+    func->canParallelFunc = [] { return false; };
+    func->isReadOnly = false;
+    functionSet.push_back(std::move(func));
+    return functionSet;
+}
+
+// Entre T_A et T_B (page 07, §3 bis.2) : les transactions d'écriture commencées avant la
+// validation de T_A ne voyaient pas l'index. Le bâti attend leur départ ; celles commencées
+// depuis (l'instantané de cette attente est postérieur à T_A) le voient.
+static offset_t waitHNSWWritersTableFunc(const TableFuncInput& input, TableFuncOutput&) {
+    auto& clientContext = *input.context->clientContext;
+    const auto transaction = transaction::Transaction::Get(clientContext);
+    transaction::TransactionManager::Get(clientContext)
+        ->waitForWriteTransactionsStartedBefore(clientContext, transaction->getStartTS(),
+            transaction);
+    return 0;
+}
+
+function_set InternalWaitHNSWWritersFunction::getFunctionSet() {
+    function_set functionSet;
+    std::vector inputTypes = {LogicalTypeID::STRING, LogicalTypeID::STRING};
+    auto func = std::make_unique<TableFunction>(name, inputTypes);
+    func->bindFunc = [](main::ClientContext*, const TableFuncBindInput*) {
+        return std::make_unique<TableFuncBindData>(common::row_idx_t{0});
+    };
+    func->tableFunc = waitHNSWWritersTableFunc;
+    func->initSharedStateFunc = SimpleTableFunc::initSharedState;
+    func->initLocalStateFunc = TableFunction::initEmptyLocalState;
+    func->canParallelFunc = [] { return false; };
     functionSet.push_back(std::move(func));
     return functionSet;
 }
@@ -276,11 +368,8 @@ static void finalizeHNSWTableFinalizeFunc(const ExecutionContext* context,
             ->getTableCatalogEntry(transaction,
                 HNSWIndexUtils::getLowerGraphTableName(nodeTableID, bindData->indexName))
             ->cast<catalog::RelGroupCatalogEntry>();
-    auto auxInfo = std::make_unique<HNSWIndexAuxInfo>(bindData->config.copy());
-    auto indexEntry = std::make_unique<catalog::IndexCatalogEntry>(HNSWIndexCatalogEntry::TYPE_NAME,
-        bindData->tableEntry->getTableID(), bindData->indexName, std::vector{bindData->propertyID},
-        std::move(auxInfo));
-    catalog->createIndex(transaction, std::move(indexEntry));
+    // L'entrée au catalogue et le holder NOTED sont de T_A (_CREATE_HNSW_NOTE) : T_B y pose l'index
+    // bâti, et le holder passe à READY à sa validation.
     auto columnID = bindData->tableEntry->getColumnID(bindData->propertyID);
     const auto hnswIndexType = OnDiskHNSWIndex::getIndexType();
     storage::IndexInfo indexInfo{bindData->indexName, hnswIndexType.typeName, nodeTableID,
@@ -299,10 +388,13 @@ static void finalizeHNSWTableFinalizeFunc(const ExecutionContext* context,
     // valident pendant ce temps manque à l'index. Il le rattrape en tête de sa validation, une
     // fois les autres parties (ticket 2026-10-12-les-lignes-validees-pendant-le-bati-d-un-create-
     // manquent-a-l-index, forme δ).
-    auto* catchingUp = onDiskIndex.get();
     const auto buildStartTS = transaction->getStartTS();
-    // Visible de sa seule transaction jusqu'à la validation ; l'annulation le retire.
-    nodeTable->addIndex(std::move(onDiskIndex), transaction);
+    // READY vu de T_B seule jusqu'à sa validation ; son annulation rend le holder NOTED (et,
+    // le jeton de la requête mort, INCOMPLETE).
+    auto* catchingUp = &nodeTable
+                            ->completeNotedIndex(bindData->indexName, std::move(onDiskIndex),
+                                transaction)
+                            ->cast<OnDiskHNSWIndex>();
     index->moveToPartitionState(*hnswSharedState->partitionerSharedState);
     transaction->setForceCheckpoint();
     transaction->addPreCommitAction([clientContext, catchingUp, buildStartTS] {
@@ -340,7 +432,7 @@ function_set InternalFinalizeHNSWIndexFunction::getFunctionSet() {
 static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     const TableFuncBindInput* input) {
     HNSWIndexUtils::validateAutoTransaction(*context, CreateVectorIndexFunction::name);
-    return createInMemHNSWBindFunc(context, input);
+    return createInMemHNSWBindFunc(context, input, false /*buildOfNotedIndex*/);
 }
 
 static std::string rewriteCreateHNSWQuery(main::ClientContext& context,
@@ -350,6 +442,10 @@ static std::string rewriteCreateHNSWQuery(main::ClientContext& context,
     if (hnswBindData->skipAfterBind) {
         return "";
     }
+    // Le CREATE concurrent ((A), page 07) : T_A pose l'entrée et le holder NOTED, puis valide ;
+    // l'attente des écrivains d'avant T_A ; T_B bâtit à son instantané, rattrape à sa validation
+    // ce qui a été validé depuis, et passe l'index à READY. Une instruction qui échoue arrête la
+    // suite : le holder reste NOTED, et le jeton de la requête mort, INCOMPLETE.
     std::string query = "BEGIN TRANSACTION;";
     auto indexName = hnswBindData->indexName;
     auto tableName = hnswBindData->tableEntry->getName();
@@ -369,6 +465,11 @@ static std::string rewriteCreateHNSWQuery(main::ClientContext& context,
     params +=
         stringFormat("cache_embeddings := {}", config.cacheEmbeddingsColumn ? "true" : "false");
     auto columnName = hnswBindData->tableEntry->getProperty(hnswBindData->propertyID).getName();
+    query += stringFormat("CALL _CREATE_HNSW_NOTE('{}', '{}', '{}', {});", tableName, indexName,
+        columnName, params);
+    query += "COMMIT;";
+    query += stringFormat("CALL _WAIT_HNSW_WRITERS('{}', '{}');", tableName, indexName);
+    query += "BEGIN TRANSACTION;";
     if (config.cacheEmbeddingsColumn) {
         query +=
             stringFormat("CALL _CACHE_ARRAY_COLUMN_LOCALLY('{}', '{}');", tableName, columnName);

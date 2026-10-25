@@ -366,8 +366,8 @@ void Transaction::pushVectorUpdateInfo(storage::UpdateInfo& updateInfo,
 }
 
 void Transaction::pushIndexChange(storage::NodeTable& table, uint64_t holderID,
-    bool isCreate) const {
-    undoBuffer->createIndexChange(table, holderID, isCreate);
+    storage::IndexChangeKind kind) const {
+    undoBuffer->createIndexChange(table, holderID, kind);
 }
 
 Transaction::~Transaction() = default;
