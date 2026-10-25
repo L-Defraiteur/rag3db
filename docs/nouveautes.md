@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — La recherche dit ce que chaque signal a trouvé.** Chaque résultat porte
+  le score et le rang du plein texte et des vecteurs, et `search_code` rend sa méta
+  en JSON. 0427c2c2d.
 - **25 oct. — Les grammaires d'aujourd'hui.** tree-sitter 0.27 : les enums du pont
   cxx rattachés à leur module, des fermetures devenues fonctions nommées, les
   méthodes de snappy à leur classe ; un recul connu dans fmt, en ticket. dfb706b07.
