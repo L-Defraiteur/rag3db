@@ -243,6 +243,22 @@ pub fn reingest_file(
     content: &str,
     exige: Disponibilites,
 ) -> Result<ReingestReport, String> {
+    // Délier puis reposer, sans transaction quand il n'y en a pas : une
+    // fenêtre de retenue fait de l'ensemble une seule annonce, en état net
+    // (un fichier inchangé ne publie aucun lien).
+    catalog.retenir_les_evenements();
+    let r = reingest_file_retenu(catalog, source, path, content, exige);
+    catalog.relacher_les_evenements();
+    r
+}
+
+fn reingest_file_retenu(
+    catalog: &mut Catalog,
+    source: &dyn FileSource,
+    path: &str,
+    content: &str,
+    exige: Disponibilites,
+) -> Result<ReingestReport, String> {
     // La porte de l'index : un contenu qu'elle refuse (généré, binaire) est
     // un fichier absent — s'il était indexé, il en sort.
     if crate::code::admission(path, Some(content), &generated_policy_of(source)).is_err() {
@@ -340,10 +356,30 @@ fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed
         Predicate::Equals { field: "source".into(), param: "source".into() },
         Predicate::Equals { field: "file_path".into(), param: "path".into() },
     ]);
-    let defaire = |relation: &str, side: Direction| -> Result<(), String> {
+    // Les paires défaites, lues juste avant sous les mêmes paramètres : la
+    // déliaison s'annonce (`RelationsChanged.removed`), en état net avec ce que
+    // l'ingestion repose ensuite (la fenêtre de `reingest_file`).
+    let mut defaire = |relation: &str, side: Direction| -> Result<(), String> {
+        let dialecte = catalog.dialect_arc();
+        let mut defaites = std::collections::BTreeSet::new();
+        let mut total = 0usize;
+        if let Some(lire) = dialecte.edges_to_detach(relation, SCOPE, side, &filtre) {
+            let lu = catalog.execute_raw_with_params(&lire, &params).map_err(|e| e.to_string())?;
+            for row in &lu.rows {
+                if let (Some(a), Some(b)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_str())) {
+                    total += 1;
+                    if defaites.len() < crate::events::Event::PAIRES_PAR_EVENEMENT {
+                        defaites.insert((a.to_string(), b.to_string()));
+                    }
+                }
+            }
+        }
         let ecrire = Write::Detach { relation: relation.into(), table: SCOPE.into(), side, filter: filtre.clone() };
-        let requete = catalog.dialect_arc().write(&ecrire).map_err(|e| e.to_string())?;
+        let requete = dialecte.write(&ecrire).map_err(|e| e.to_string())?;
         catalog.execute_raw_with_params(&requete, &params).map_err(|e| e.to_string())?;
+        if total > 0 {
+            catalog.publier_les_deliaisons(relation, defaites, total);
+        }
         Ok(())
     };
     for (rel, from, _) in crate::code::RELATIONS {
@@ -399,6 +435,21 @@ pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, e
 /// présents s'écrivent quand même (sa marque à l'écriture les compte), les
 /// supprimés partiront à sa fin.
 pub fn reingest_files(
+    catalog: &mut Catalog,
+    source: &dyn FileSource,
+    files: &[(String, Option<String>)],
+    exige: Disponibilites,
+) -> Result<ReingestReport, String> {
+    // Délier puis reposer, sans transaction quand il n'y en a pas : une
+    // fenêtre de retenue fait de l'ensemble une seule annonce, en état net
+    // (un fichier inchangé ne publie aucun lien).
+    catalog.retenir_les_evenements();
+    let r = reingest_files_retenu(catalog, source, files, exige);
+    catalog.relacher_les_evenements();
+    r
+}
+
+fn reingest_files_retenu(
     catalog: &mut Catalog,
     source: &dyn FileSource,
     files: &[(String, Option<String>)],

@@ -28,11 +28,15 @@ pub struct Journal {
     pub liees_total: BTreeMap<String, usize>,
     /// Les lignes supprimées (qui existaient), par entité.
     pub supprimees: BTreeMap<String, BTreeSet<String>>,
+    /// Les paires déliées (qui existaient), par relation — même plafond que
+    /// `liees`, le total dans `deliees_total`.
+    pub deliees: BTreeMap<String, BTreeSet<(String, String)>>,
+    pub deliees_total: BTreeMap<String, usize>,
 }
 
 impl Journal {
     pub fn est_vide(&self) -> bool {
-        self.posees.is_empty() && self.liees.is_empty() && self.supprimees.is_empty()
+        self.posees.is_empty() && self.liees.is_empty() && self.supprimees.is_empty() && self.deliees.is_empty()
     }
 }
 
@@ -46,13 +50,18 @@ impl Ecritures {
         j.posees.entry(entite.to_string()).or_default().insert(uuid.to_string());
     }
 
+    /// Une paire réellement posée par ce drain (pas une paire reposée).
     pub fn noter_liee(&self, relation: &str, de: &str, vers: &str) {
         let mut j = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        *j.liees_total.entry(relation.to_string()).or_insert(0) += 1;
-        let gardees = j.liees.entry(relation.to_string()).or_default();
-        if gardees.len() < crate::events::Event::PAIRES_PAR_EVENEMENT {
-            gardees.insert((de.to_string(), vers.to_string()));
-        }
+        let j = &mut *j;
+        noter_paire(&mut j.liees, &mut j.liees_total, relation, de, vers);
+    }
+
+    /// Une paire réellement retirée par ce drain (qui existait).
+    pub fn noter_deliee(&self, relation: &str, de: &str, vers: &str) {
+        let mut j = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let j = &mut *j;
+        noter_paire(&mut j.deliees, &mut j.deliees_total, relation, de, vers);
     }
 
     pub fn noter_supprimee(&self, entite: &str, uuid: &str) {
@@ -63,5 +72,31 @@ impl Ecritures {
     /// Le journal, vidé.
     pub fn prendre(&self) -> Journal {
         std::mem::take(&mut *self.0.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+}
+
+/// Une paire notée sous sa relation : comptée toujours, gardée sous le plafond.
+/// Une indexation en note des centaines de milliers : le nom de la relation
+/// n'est alloué qu'à sa première paire.
+fn noter_paire(
+    gardees: &mut BTreeMap<String, BTreeSet<(String, String)>>,
+    totaux: &mut BTreeMap<String, usize>,
+    relation: &str,
+    de: &str,
+    vers: &str,
+) {
+    match totaux.get_mut(relation) {
+        Some(n) => *n += 1,
+        None => {
+            totaux.insert(relation.to_string(), 1);
+        }
+    }
+    let paire = || (de.to_string(), vers.to_string());
+    if let Some(g) = gardees.get_mut(relation) {
+        if g.len() < crate::events::Event::PAIRES_PAR_EVENEMENT {
+            g.insert(paire());
+        }
+    } else {
+        gardees.insert(relation.to_string(), BTreeSet::from([paire()]));
     }
 }

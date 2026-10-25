@@ -400,6 +400,10 @@ pub struct Catalog {
     /// ouverte : publiés au commit, jetés au rollback (une réaction ne doit
     /// jamais réagir à une écriture défaite).
     evenements_retenus: Vec<CatalogEvent>,
+    /// Les fenêtres de retenue ouvertes hors transaction
+    /// ([`Self::retenir_les_evenements`]) : une écriture en plusieurs temps
+    /// (la ré-indexation d'un fichier délie puis repose) s'annonce en état net.
+    fenetres_de_retenue: usize,
     /// Index FTS lucivy v3, un par table. Ouverture **paresseuse** : ouvrir un
     /// index Blob télécharge tout l'index, donc on ne le fait qu'au premier
     /// usage réel de la table (cf doc 04 de la passation lucivy).
@@ -642,6 +646,7 @@ fn read_threads() -> u64 {
             fautes_de_test: Default::default(),
             journal_des_ecritures: Default::default(),
             evenements_retenus: Vec::new(),
+            fenetres_de_retenue: 0,
             fts_handles: HashMap::new(),
             fts_files: Vec::new(),
             fts_rebuild: HashSet::new(),
@@ -6976,6 +6981,11 @@ fn read_threads() -> u64 {
         let (from_entity, to_entity) = (rel_def.from.clone(), rel_def.to.clone());
         let mut n = 0usize;
         let mut derivations = Vec::new();
+        let liens: Vec<(String, String, BTreeMap<String, CypherValue>)> = liens.into_iter().collect();
+        if self.pending.relations.iter().any(|r| r.retirer) {
+            let paires: HashSet<(&str, &str)> = liens.iter().map(|(de, vers, _)| (de.as_str(), vers.as_str())).collect();
+            self.annuler_en_file(rel_name, true, |de, vers| paires.contains(&(de, vers)));
+        }
         for (de, vers, props) in liens {
             derivations.extend(self.derivations_pour_lien(rel_name, Some(&de), Some(&vers)));
             let (relation_ref, resolver) = RelationRef::new(rel_name);
@@ -7249,6 +7259,12 @@ fn read_threads() -> u64 {
 
         let (relation_ref, resolver) = RelationRef::new(rel_name);
 
+        // Un lien après une déliaison en file de la même paire : la dernière
+        // demande gagne, la déliaison tombe.
+        if let (Ok(de), Ok(vers)) = (from_ref.try_resolve(), to_ref.try_resolve()) {
+            self.annuler_en_file(rel_name, true, |a, b| a == de && b == vers);
+        }
+
         // Push relation record with resolver into PendingWork
         self.pending.relations.push(RelationRecord::new(
             rel_name.to_string(),
@@ -7270,6 +7286,77 @@ fn read_threads() -> u64 {
         self.mettre_en_file_les_derivations_avec_dette(derivations);
 
         Ok(relation_ref)
+    }
+
+    /// **Retire une relation, et pose le retrait avant de rendre** — même
+    /// contrat que [`Catalog::link`], son symétrique (19 octobre 2026). La paire
+    /// est retirée si elle existe ; sinon rien, et rien ne s'annonce. Un lien
+    /// en file vers la même paire tombe : la dernière demande gagne.
+    pub fn unlink(&mut self, rel_name: &str, from_uuid: &str, to_uuid: &str) -> Result<(), CatalogError> {
+        let exige = self.exigence_d_ecriture_par_defaut();
+        let res = self.unlink_jusqu_a(rel_name, from_uuid, to_uuid, exige)?;
+        self.dire_les_avertissements("unlink", &res);
+        Ok(())
+    }
+
+    /// Le même verbe, en disant ce qui doit être prêt quand il rend.
+    pub fn unlink_jusqu_a(
+        &mut self,
+        rel_name: &str,
+        from_uuid: &str,
+        to_uuid: &str,
+        exige: crate::disponibilite::Disponibilites,
+    ) -> Result<FlushResult, CatalogError> {
+        self.check_initialized()?;
+        self.check_ecriture("unlink")?;
+        let rel_def = self
+            .config
+            .relations
+            .get(rel_name)
+            .ok_or_else(|| CatalogError::UnknownRelation(rel_name.to_string()))?;
+        let (from_entity, to_entity) = (rel_def.from.clone(), rel_def.to.clone());
+        // Un lien encore en file vers cette paire tombe ; une déliaison déjà en
+        // file aussi (la nouvelle la remplace).
+        self.annuler_en_file(rel_name, false, |a, b| a == from_uuid && b == to_uuid);
+        self.annuler_en_file(rel_name, true, |a, b| a == from_uuid && b == to_uuid);
+        let (relation_ref, resolver) = RelationRef::new(rel_name);
+        let mut retrait = RelationRecord::new(
+            rel_name.to_string(),
+            RefOrUuid::Uuid(from_uuid.to_string()),
+            RefOrUuid::Uuid(to_uuid.to_string()),
+            BTreeMap::new(),
+            resolver,
+            relation_ref,
+        );
+        retrait.retirer = true;
+        self.pending.relations.push(retrait);
+        self.devoir(&from_entity, crate::disponibilite::Disponibilites::TOUT);
+        self.devoir(&to_entity, crate::disponibilite::Disponibilites::TOUT);
+        self.drain_counters.total_queued += 1;
+        let derivations = self.derivations_pour_lien(rel_name, Some(from_uuid), Some(to_uuid));
+        self.mettre_en_file_les_derivations_avec_dette(derivations);
+        Ok(self.tenir_l_exigence_d_ecriture(&from_entity, exige))
+    }
+
+    /// Les demandes en file de `rel_name` (déliaisons si `retraits`, liens
+    /// sinon) dont la paire résolue répond à `meme`, retirées de la file. Leur
+    /// référence se résout : la demande a été prise, puis remplacée.
+    fn annuler_en_file(&mut self, rel_name: &str, retraits: bool, meme: impl Fn(&str, &str) -> bool) {
+        let (annulees, gardees): (Vec<RelationRecord>, Vec<RelationRecord>) =
+            std::mem::take(&mut self.pending.relations).into_iter().partition(|r| {
+                r.retirer == retraits
+                    && r.rel_name == rel_name
+                    && matches!(
+                        (r.from.try_resolve(), r.to.try_resolve()),
+                        (Ok(de), Ok(vers)) if meme(&de, &vers)
+                    )
+            });
+        self.pending.relations = gardees;
+        for mut r in annulees {
+            if let (Ok(de), Ok(vers), Some(res)) = (r.from.try_resolve(), r.to.try_resolve(), r.take_resolver()) {
+                res.resolve(de, vers);
+            }
+        }
     }
 
     // ── Direct DB reads ────────────────────────────────────────────────
@@ -8718,6 +8805,10 @@ fn read_threads() -> u64 {
             services.register(crate::fts_tampon::FTS_TAMPON_SERVICE, t.clone());
         }
         services.register("entity_configs", self.entity_configs.clone());
+        // Les bouts déclarés des relations, que `LinkRecordNode` lit : sans eux
+        // son MATCH n'était pas étiqueté, et il ne pouvait ni dire ce qu'il a
+        // créé ni défaire une déliaison (19 octobre 2026).
+        services.register("config", self.config.clone());
         services.register("plein_texte_natif", self.plein_texte_natif());
         services.register(crate::ecritures::SERVICE, self.journal_des_ecritures.clone());
         let canal = Self::ouvrir_le_canal_d_echecs(&mut services);
@@ -9048,7 +9139,9 @@ fn read_threads() -> u64 {
         // ouvrir, sur le chemin lucivy c'est une indexation perdue. Même forme
         // que `has_sparse` et `has_dual` juste au-dessus.
         services.register("plein_texte_natif", self.plein_texte_natif());
-        services.register(crate::ecritures::SERVICE, self.journal_des_ecritures.clone());
+        // Pas de journal des écritures ici : ces services servent aussi la vue
+        // de lecture, dont les graphes ne sont pas des drains — un nœud qui y
+        // noterait partagerait le journal de l'écrivain (73, 19 oct.).
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register::<Arc<dyn Embedder>>("embedder", self.embedder.clone());
         services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
@@ -9475,11 +9568,65 @@ fn read_threads() -> u64 {
     /// retenu sous une transaction ouverte, jusqu'à
     /// [`Self::publier_les_evenements_retenus`] (au commit) ou
     /// [`Self::jeter_les_evenements_retenus`] (au rollback).
-    pub(crate) fn publier(&mut self, event: CatalogEvent) {
-        if self.in_transaction {
-            self.evenements_retenus.push(event);
-        } else {
+    ///
+    /// L'événement porte le run du nœud qui écrit ([`crate::events::run_du_fil`])
+    /// s'il n'en dit pas. Retenus, deux `RelationsChanged` d'une même relation
+    /// se fondent en état net : une paire déliée puis reposée n'y paraît pas.
+    pub(crate) fn publier(&mut self, mut event: CatalogEvent) {
+        event.poser_le_run_s_il_manque(crate::events::run_du_fil());
+        if !self.in_transaction && self.fenetres_de_retenue == 0 {
             self.emit_event(event);
+            return;
+        }
+        if let CatalogEvent::RelationsChanged { relation, .. } = &event {
+            let relation = relation.clone();
+            if let Some(i) = self
+                .evenements_retenus
+                .iter()
+                .position(|e| matches!(e, CatalogEvent::RelationsChanged { relation: r, .. } if *r == relation))
+            {
+                match self.evenements_retenus[i].fondre_relations(event) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        self.evenements_retenus.remove(i);
+                    }
+                    Err(e) => self.evenements_retenus.push(e),
+                }
+                return;
+            }
+        }
+        self.evenements_retenus.push(event);
+    }
+
+    /// **Ouvre une fenêtre de retenue** hors transaction : les écritures
+    /// s'annoncent à [`Self::relacher_les_evenements`], en état net. Pour une
+    /// écriture en plusieurs instructions qui n'a pas de transaction (la
+    /// ré-indexation d'un fichier : délier, puis reposer).
+    pub fn retenir_les_evenements(&mut self) {
+        self.fenetres_de_retenue += 1;
+    }
+
+    /// Ferme la fenêtre : à la dernière, hors transaction, ce qui est retenu
+    /// part. Les écritures faites ont eu lieu, réussies ou non : elles
+    /// s'annoncent (sans transaction, rien ne les défait).
+    pub fn relacher_les_evenements(&mut self) {
+        self.fenetres_de_retenue = self.fenetres_de_retenue.saturating_sub(1);
+        if self.fenetres_de_retenue == 0 && !self.in_transaction {
+            self.publier_les_evenements_retenus();
+        }
+    }
+
+    /// **Des paires déliées hors drain** (le `Detach` de la synchronisation du
+    /// code), annoncées comme celles d'un drain : relation et bouts déclarés
+    /// seulement.
+    pub(crate) fn publier_les_deliaisons(&mut self, relation: &str, paires: std::collections::BTreeSet<(String, String)>, total: usize) {
+        let Some(def) = self.get_relation_def(relation).cloned() else { return };
+        if !self.entity_configs.contains_key(&def.from) || !self.entity_configs.contains_key(&def.to) {
+            return;
+        }
+        let tronquees = total > paires.len();
+        if let Some(e) = CatalogEvent::relations_changees(relation, &def.from, &def.to, Default::default(), 0, paires, total, tronquees) {
+            self.publier(e);
         }
     }
 
@@ -9500,8 +9647,8 @@ fn read_threads() -> u64 {
 
     /// **Le journal d'un drain réussi, publié** (« le catalogue dit tout ») :
     /// les lignes posées (`created`), mises à jour (`updated`, la ligne existait
-    /// et son contenu a changé), transitionnées (`transitioned`, seul l'état a
-    /// changé), supprimées (`removed`, et un `EntityDeleted` par ligne), et les
+    /// et son contenu a changé), transitionnées (`transitioned`, l'état a
+    /// changé ; une écriture qui change les deux émet les deux), supprimées (`removed`, et un `EntityDeleted` par ligne), et les
     /// paires liées (`RelationsChanged`). Seules les entités et relations
     /// déclarées sortent : ni les tables de morceaux ni leurs liens.
     fn publier_le_journal(
@@ -9522,12 +9669,15 @@ fn read_threads() -> u64 {
         let mut maj: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut transitions: BTreeMap<(String, String, String), Vec<String>> = BTreeMap::new();
         for u in updates.iter().filter(|u| u.found && declaree(self, &u.entity)) {
-            match (&u.status, &u.transition) {
-                (crate::records::UpdateStatus::Updated, _) => maj.entry(u.entity.clone()).or_default().push(u.uuid.clone()),
-                (crate::records::UpdateStatus::Unchanged, Some((de, vers))) => {
-                    transitions.entry((u.entity.clone(), de.clone(), vers.clone())).or_default().push(u.uuid.clone())
-                }
-                _ => {}
+            // Deux faits, deux annonces : le contenu changé (`updated`), l'état
+            // changé (`transitioned`). Une réécriture qui passe aussi la fiche
+            // à `a_revoir` émet les deux — une réaction qui suit les
+            // transitions ne la manque pas (73, 19 oct.).
+            if matches!(u.status, crate::records::UpdateStatus::Updated) {
+                maj.entry(u.entity.clone()).or_default().push(u.uuid.clone());
+            }
+            if let Some((de, vers)) = &u.transition {
+                transitions.entry((u.entity.clone(), de.clone(), vers.clone())).or_default().push(u.uuid.clone());
             }
         }
         for (entite, uuids) in maj {
@@ -9551,24 +9701,22 @@ fn read_threads() -> u64 {
                 evenements.push(CatalogEvent::EntityDeleted { entity: entite.clone(), uuid: u.clone(), chunks_deleted });
             }
         }
-        for (relation, paires) in &journal.liees {
-            let Some(def) = self.get_relation_def(relation).cloned() else { continue };
+        // Les relations : posées et retirées, en état net.
+        let crate::ecritures::Journal { mut liees, liees_total, mut deliees, deliees_total, .. } = journal;
+        let relations: std::collections::BTreeSet<String> = liees.keys().chain(deliees.keys()).cloned().collect();
+        for relation in relations {
+            let Some(def) = self.get_relation_def(&relation).cloned() else { continue };
             if !declaree(self, &def.from) || !declaree(self, &def.to) {
                 continue;
             }
-            let count = journal.liees_total.get(relation).copied().unwrap_or(paires.len()).max(paires.len());
-            let added: Vec<(String, String)> = paires.iter().take(CatalogEvent::PAIRES_PAR_EVENEMENT).cloned().collect();
-            evenements.push(CatalogEvent::RelationsChanged {
-                relation: relation.clone(),
-                from_entity: def.from.clone(),
-                to_entity: def.to.clone(),
-                truncated: count > added.len(),
-                added,
-                removed: Vec::new(),
-                count,
-                at_ms: crate::events::maintenant_ms(),
-                run: None,
-            });
+            let posees = liees.remove(&relation).unwrap_or_default();
+            let retirees = deliees.remove(&relation).unwrap_or_default();
+            let total_posees = liees_total.get(&relation).copied().unwrap_or(0).max(posees.len());
+            let total_retirees = deliees_total.get(&relation).copied().unwrap_or(0).max(retirees.len());
+            let tronquees = total_posees > posees.len() || total_retirees > retirees.len();
+            if let Some(e) = CatalogEvent::relations_changees(&relation, &def.from, &def.to, posees, total_posees, retirees, total_retirees, tronquees) {
+                evenements.push(e);
+            }
         }
         for e in evenements {
             self.publier(e);

@@ -5,7 +5,8 @@
 //!
 //! Un témoin par chemin : `create`, `update` (le contenu change), une mise à jour
 //! sans changement (rien), une mise à jour d'une ligne absente (rien), la
-//! transition d'état (`transitioned`, avec ses états), `ingest_entities`,
+//! transition d'état (`transitioned`, avec ses états), contenu et état
+//! changés ensemble (les deux), `ingest_entities`,
 //! `link` (`RelationsChanged`), `delete` (`removed` et `EntityDeleted`) ; puis le
 //! lot en transaction : rien avant le commit, tout au commit, rien au rollback.
 //!
@@ -144,6 +145,31 @@ fn une_transition_publie_transitioned_avec_ses_etats() {
     assert_eq!(t[0]["to_state"], "a_revoir");
 }
 
+/// Le cas courant d'un put : la fiche réécrite **et** passée à `a_revoir` dans
+/// le même appel. Les deux faits s'annoncent — une réaction qui suit les
+/// transitions ne doit pas la manquer parce que le contenu a bougé aussi.
+#[test]
+#[ignore]
+fn contenu_et_etat_changes_ensemble_publient_updated_et_transitioned() {
+    let (mut cat, mut rx) = catalogue();
+    cat.ingest_entities("Fiche", vec![ligne("une", "x")]).expect("ingest");
+    vider(&mut rx);
+    let u = uuid(&cat, "Fiche", "une");
+    let mut champs = BTreeMap::new();
+    champs.insert("corps".to_string(), CypherValue::String("réécrit".into()));
+    champs.insert("etat".to_string(), CypherValue::String("a_revoir".into()));
+    cat.update_many("Fiche", vec![(u.clone(), champs)]).expect("contenu et état");
+    let e = vider(&mut rx);
+    let m = changes(&e, "updated");
+    assert_eq!(m.len(), 1, "le contenu changé s'annonce : {e:?}");
+    assert_eq!(m[0]["uuids"], serde_json::json!([u]));
+    let t = changes(&e, "transitioned");
+    assert_eq!(t.len(), 1, "la transition s'annonce aussi : {e:?}");
+    assert_eq!(t[0]["uuids"], serde_json::json!([u]));
+    assert_eq!(t[0]["from_state"], "courant");
+    assert_eq!(t[0]["to_state"], "a_revoir");
+}
+
 #[test]
 #[ignore]
 fn ingest_publie_ingested() {
@@ -212,4 +238,214 @@ fn sous_un_lot_rien_avant_le_commit_tout_au_commit_rien_au_rollback() {
     cat.rollback_lot();
     let e = vider(&mut rx);
     assert!(e.is_empty(), "une écriture défaite ne s'annonce jamais : {e:?}");
+}
+
+// ── Les réserves de c7 (19 octobre 2026) ───────────────────────────────────
+
+fn relations_changees<'a>(evts: &'a [Value], relation: &str) -> Vec<&'a Value> {
+    evts.iter().filter(|x| x["kind"] == "RelationsChanged" && x["relation"] == relation).collect()
+}
+
+/// `added` ne compte que les paires neuves : une paire reposée par le chemin
+/// par lots (MERGE, une paire seule) ne s'annonce pas.
+#[test]
+#[ignore]
+fn une_paire_reposee_par_lots_ne_s_annonce_pas() {
+    let (mut cat, mut rx) = catalogue();
+    cat.ingest_entities("Fiche", vec![ligne("f", "x")]).expect("fiche");
+    cat.ingest_entities("Sujet", vec![ligne("s", "x")]).expect("sujet");
+    let (f, s) = (uuid(&cat, "Fiche", "f"), uuid(&cat, "Sujet", "s"));
+    cat.link("ANCRE", f.as_str(), s.as_str(), BTreeMap::new()).expect("link");
+    cat.drain();
+    vider(&mut rx);
+    cat.link("ANCRE", f.as_str(), s.as_str(), BTreeMap::new()).expect("relink");
+    cat.drain();
+    let e = vider(&mut rx);
+    assert!(relations_changees(&e, "ANCRE").is_empty(), "une paire reposée n'est pas un lien neuf : {e:?}");
+}
+
+/// Le même par le chemin en masse (COPY, au-delà de 200 paires d'une relation
+/// dans un drain) : la seconde fois, seules les dix paires neuves sortent.
+#[test]
+#[ignore]
+fn des_paires_reposees_par_copy_ne_s_annoncent_pas() {
+    let (mut cat, mut rx) = catalogue();
+    cat.ingest_entities("Fiche", vec![ligne("f", "x")]).expect("fiche");
+    let sujets: Vec<_> = (0..260).map(|i| ligne(&format!("s{i}"), "x")).collect();
+    cat.ingest_entities("Sujet", sujets).expect("sujets");
+    let f = uuid(&cat, "Fiche", "f");
+    let s: Vec<String> = (0..260).map(|i| uuid(&cat, "Sujet", &format!("s{i}"))).collect();
+    // En file, puis un seul drain : un `link` sous l'exigence par défaut pose
+    // tout de suite, une paire par drain, donc par lots et jamais par COPY.
+    use rag3weaver::disponibilite::Disponibilites;
+    for u in &s[..250] {
+        cat.link_jusqu_a("ANCRE", f.as_str(), u.as_str(), BTreeMap::new(), Disponibilites::AUCUNE).expect("link");
+    }
+    cat.drain();
+    let e = vider(&mut rx);
+    let r = relations_changees(&e, "ANCRE");
+    assert_eq!(r.len(), 1, "{e:?}");
+    assert_eq!(r[0]["count"], 250, "les 250 paires neuves");
+    assert_eq!(r[0]["added"].as_array().map(Vec::len), Some(250));
+    // Les 250 reposées, et 10 neuves.
+    for u in &s {
+        cat.link_jusqu_a("ANCRE", f.as_str(), u.as_str(), BTreeMap::new(), Disponibilites::AUCUNE).expect("relink");
+    }
+    cat.drain();
+    let e = vider(&mut rx);
+    let r = relations_changees(&e, "ANCRE");
+    assert_eq!(r.len(), 1, "{e:?}");
+    assert_eq!(r[0]["count"], 10, "seules les paires neuves comptent : {:?}", r[0]);
+    let neuves: Vec<Value> = s[250..].iter().map(|u| serde_json::json!([f, u])).collect();
+    let mut added = r[0]["added"].as_array().cloned().unwrap_or_default();
+    added.sort_by_key(|v| v.to_string());
+    let mut attendues = neuves.clone();
+    attendues.sort_by_key(|v| v.to_string());
+    assert_eq!(added, attendues);
+}
+
+/// Le verbe symétrique de `link` : la paire retirée s'annonce dans `removed` ;
+/// une paire absente ne s'annonce pas.
+#[test]
+#[ignore]
+fn unlink_publie_removed_et_rien_pour_une_paire_absente() {
+    let (mut cat, mut rx) = catalogue();
+    cat.ingest_entities("Fiche", vec![ligne("f", "x")]).expect("fiche");
+    cat.ingest_entities("Sujet", vec![ligne("s", "x")]).expect("sujet");
+    let (f, s) = (uuid(&cat, "Fiche", "f"), uuid(&cat, "Sujet", "s"));
+    cat.link("ANCRE", f.as_str(), s.as_str(), BTreeMap::new()).expect("link");
+    cat.drain();
+    vider(&mut rx);
+    cat.unlink("ANCRE", &f, &s).expect("unlink");
+    cat.drain();
+    let e = vider(&mut rx);
+    let r = relations_changees(&e, "ANCRE");
+    assert_eq!(r.len(), 1, "{e:?}");
+    assert_eq!(r[0]["removed"], serde_json::json!([[f, s]]));
+    assert_eq!(r[0]["added"], serde_json::json!([]));
+    assert_eq!(r[0]["count"], 1);
+    assert!(r[0]["run"].is_null(), "hors run, pas de run : {:?}", r[0]);
+    let reste = cat
+        .execute_raw("MATCH (:Fiche)-[r:ANCRE]->(:Sujet) RETURN count(r)")
+        .expect("compte");
+    assert_eq!(reste.rows[0][0], rag3weaver::connection::CypherValue::Int(0), "la paire est retirée");
+    cat.unlink("ANCRE", &f, &s).expect("unlink d'une paire absente");
+    cat.drain();
+    let e = vider(&mut rx);
+    assert!(relations_changees(&e, "ANCRE").is_empty(), "une paire absente ne s'annonce pas : {e:?}");
+}
+
+/// Dans la file, la dernière demande gagne : un lien puis sa déliaison ne
+/// posent rien ; une déliaison puis un lien d'une paire déjà là la gardent.
+/// Aucun des deux ne s'annonce : rien n'a changé.
+#[test]
+#[ignore]
+fn lien_et_deliaison_en_file_s_annulent() {
+    use rag3weaver::disponibilite::Disponibilites;
+    let (mut cat, mut rx) = catalogue();
+    cat.ingest_entities("Fiche", vec![ligne("f", "x"), ligne("g", "x")]).expect("fiches");
+    cat.ingest_entities("Sujet", vec![ligne("s", "x")]).expect("sujet");
+    let (f, g, s) = (uuid(&cat, "Fiche", "f"), uuid(&cat, "Fiche", "g"), uuid(&cat, "Sujet", "s"));
+    cat.link("ANCRE", g.as_str(), s.as_str(), BTreeMap::new()).expect("g ancrée");
+    cat.drain();
+    vider(&mut rx);
+    // f → s : lien puis déliaison, en file.
+    cat.link_jusqu_a("ANCRE", f.as_str(), s.as_str(), BTreeMap::new(), Disponibilites::AUCUNE).expect("link");
+    cat.unlink_jusqu_a("ANCRE", &f, &s, Disponibilites::AUCUNE).expect("unlink");
+    // g → s, déjà là : déliaison puis lien, en file.
+    cat.unlink_jusqu_a("ANCRE", &g, &s, Disponibilites::AUCUNE).expect("unlink");
+    cat.link_jusqu_a("ANCRE", g.as_str(), s.as_str(), BTreeMap::new(), Disponibilites::AUCUNE).expect("link");
+    cat.drain();
+    let e = vider(&mut rx);
+    assert!(relations_changees(&e, "ANCRE").is_empty(), "rien n'a changé : {e:?}");
+    let paires = cat
+        .execute_raw("MATCH (a:Fiche)-[:ANCRE]->(:Sujet) RETURN a._uuid")
+        .expect("paires");
+    let de: Vec<String> = paires.rows.iter().filter_map(|r| r[0].as_str().map(str::to_string)).collect();
+    assert_eq!(de, vec![g.clone()], "g garde son lien, f n'en a pas");
+}
+
+/// **Le run qui écrit** : une écriture faite par un nœud d'un graphe porte le
+/// run de ce graphe, celui de son `RunStarted`.
+#[test]
+#[ignore]
+fn une_ecriture_dans_un_graphe_porte_son_run() {
+    use rag3weaver::dataflow::graph::DataflowGraph;
+    use rag3weaver::dataflow::node::{Node, NodeContext};
+    use rag3weaver::dataflow::runtime::DataflowRuntime;
+    use rag3weaver::dataflow::services::ServiceRegistry;
+    use std::sync::{Arc, Mutex};
+
+    struct Ecrire;
+    impl Node for Ecrire {
+        fn node_type(&self) -> &str {
+            "EcrireUneFiche"
+        }
+        fn name(&self) -> &str {
+            "ecrire"
+        }
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            let cat = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned().ok_or("catalog")?;
+            let mut cat = cat.lock().map_err(|e| e.to_string())?;
+            cat.create("Fiche", ligne("du graphe", "x")).map_err(|e| e.to_string())?;
+            cat.drain();
+            Ok(())
+        }
+    }
+
+    let (cat, mut rx) = catalogue();
+    let cat = Arc::new(Mutex::new(cat));
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", cat.clone());
+    let mut graphe = DataflowGraph::new();
+    graphe.add_node(Box::new(Ecrire)).expect("le nœud");
+    DataflowRuntime::with_services(5, services).execute_as(&mut graphe, "outil-temoin-1").expect("le run");
+    let e = vider(&mut rx);
+    let c = changes(&e, "created");
+    assert_eq!(c.len(), 1, "{e:?}");
+    assert_eq!(c[0]["run"], "outil-temoin-1", "l'écriture porte le run du graphe : {:?}", c[0]);
+}
+
+/// **La ré-indexation d'un fichier s'annonce en état net** : `code_sync` délie
+/// les arêtes sortantes des scopes du fichier puis les repose. Inchangé, le
+/// fichier ne publie aucun lien ; l'appel retiré sort dans `removed`.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn un_fichier_reindexe_s_annonce_en_etat_net() {
+    use rag3weaver::code_tools::Snapshot;
+    use rag3weaver::disponibilite::Disponibilites;
+    use rag3weaver::embedder::HashEmbedder;
+
+    let avec = "fn g() {}\n\nfn f() {\n    g();\n}\n".to_string();
+    let sans = "fn g() {}\n\nfn f() {\n}\n".to_string();
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    let mut cat = Catalog::new(
+        Box::new(conn),
+        Box::new(HashEmbedder::new(8)),
+        CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
+    );
+    cat.initialize().expect("initialize");
+    rag3weaver::code::register_code_schema(&mut cat, rag3weaver::code::default_scope_chunking()).expect("schéma du code");
+    let source = Snapshot::new("depot", vec![("a.rs".to_string(), avec.clone())]);
+    let options = rag3weaver::code_sync::SourceSyncOptions { batch_files: 64, ..Default::default() };
+    rag3weaver::code_sync::sync_source(&mut cat, &source, &options, &mut |_| {}).expect("le premier index");
+    let mut rx = cat.subscribe();
+
+    rag3weaver::code_sync::reingest_file(&mut cat, &source, "a.rs", &avec, Disponibilites::TOUT).expect("inchangé");
+    let e = vider(&mut rx);
+    let liens: Vec<&Value> = e.iter().filter(|x| x["kind"] == "RelationsChanged").collect();
+    assert!(liens.is_empty(), "un fichier inchangé ne publie aucun lien : {liens:?}");
+
+    rag3weaver::code_sync::reingest_file(&mut cat, &source, "a.rs", &sans, Disponibilites::TOUT).expect("l'appel retiré");
+    let e = vider(&mut rx);
+    let retires: Vec<&Value> = e
+        .iter()
+        .filter(|x| x["kind"] == "RelationsChanged" && x["removed"].as_array().is_some_and(|r| !r.is_empty()))
+        .collect();
+    assert!(!retires.is_empty(), "l'appel retiré s'annonce dans removed : {e:?}");
+    assert!(
+        e.iter().filter(|x| x["kind"] == "RelationsChanged").all(|x| x["added"].as_array().is_some_and(Vec::is_empty)),
+        "rien n'est ajouté : {e:?}"
+    );
 }

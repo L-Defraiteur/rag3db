@@ -676,7 +676,8 @@ impl DataflowRuntime {
         } else if node.is_async() {
             super::rt::bloquer("nœud asynchrone d'un graphe à flux", node.execute_async(&mut ctx)).and_then(|r| r)
         } else {
-            node.execute(&mut ctx)
+            let run = ctx.run_id().to_string();
+            crate::events::pendant_le_run(&run, || node.execute(&mut ctx))
         };
         let duration_ms = started.elapsed().as_millis() as u64;
         let mut binding = ctx.take_stream().expect("le lien posé avant l'exécution");

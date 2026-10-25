@@ -361,6 +361,10 @@ pub struct RelationRecord {
     pub properties: BTreeMap<String, CypherValue>,
     pub relation_ref: RelationRef,
     pub resolver: Option<RelationRefResolver>,
+    /// **Une déliaison**, pas un lien (19 octobre 2026, [`crate::Catalog::unlink`]) :
+    /// la paire est retirée si elle existe. Même file, même nœud que le lien ;
+    /// le lien et la déliaison d'une même paire s'annulent à la mise en file.
+    pub retirer: bool,
 }
 
 impl RelationRecord {
@@ -379,6 +383,7 @@ impl RelationRecord {
             properties,
             relation_ref,
             resolver: Some(resolver),
+            retirer: false,
         }
     }
 
@@ -452,6 +457,8 @@ pub struct CheckpointRelationRecord {
     pub to_temp_uuid: Option<String>,
     pub properties: BTreeMap<String, CypherValue>,
     pub ref_state: CheckpointRefState,
+    #[serde(default)]
+    pub retirer: bool,
 }
 
 impl EntityRecord {
@@ -555,6 +562,7 @@ impl RelationRecord {
                 temp_uuid: self.relation_ref.cle_de_correlation().to_string(),
                 status,
             },
+            retirer: self.retirer,
         }
     }
 }
@@ -593,6 +601,7 @@ impl CheckpointRelationRecord {
             properties: self.properties,
             relation_ref,
             resolver: None,
+            retirer: self.retirer,
         }
     }
 }

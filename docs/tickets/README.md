@@ -83,13 +83,15 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (34)
+### Ouverts — produit (36)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Des écritures ne passent pas par le journal du catalogue et ne s'annoncent pas](2026-10-19-des-ecritures-ne-passent-pas-par-le-journal-et-ne-s-annoncent-pas.md) | ouvert — le PlanNode, le retour d'une mise de côté, la marque d'absence, la reprise d'un drain | réponse fausse en silence (pour qui écoute `catalog`) | oui (PlanNode) | oui |
+| [L'annulation d'un lot de liens retire aussi les paires qui existaient avant lui](2026-10-19-l-annulation-d-un-lot-de-liens-retire-aussi-les-paires-qui-existaient.md) | ouvert — témoin à écrire | perte (des arêtes d'avant le lot) | peu (annulation hors transaction) | oui |
 | [Une relation qui porte le nom d'une entité, à la casse près, se déclare sans refus et casse au premier lien](2026-10-18-une-relation-au-nom-d-une-entite-casse-au-premier-lien.md) | ouvert — le contrôle au chargement pour l'arbre principal | blocage mal nommé (« Cannot bind … as a relationship pattern label ») | oui, dès qu'un gabarit nomme une relation comme une entité | oui |
 | [Des scopes sans `DEFINED_IN` dans une réindexation à neuf : 3 825 sur 82 808 dans code-lourd](2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md) | ouvert — structurel, à regarder (scopes de même nom dans un fichier ?) | réponse incomplète (le scope ne se rattache pas à son fichier par l'arête) | oui, à chaque index | oui (ingestion du code) |
 | [Une Ref ne vieillit jamais : son cycle de vie est déclaré, mais rien ne le déclenche](2026-10-18-une-ref-ne-vieillit-jamais.md) | ouvert — le vieillissement par l'index de code attend le mot de Lucie (pont entre bases, §12.4) | réponse fausse en silence (une Ref reste `vue` quand sa cible change) | oui, dès qu'une fiche cite une cible qui bouge | oui (et seulement) |

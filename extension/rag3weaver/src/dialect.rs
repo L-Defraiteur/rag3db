@@ -319,6 +319,15 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// Les paires `(from_uuid, to_uuid)` que [`Self::detach_edges`] déferait,
+    /// sous les mêmes paramètres : lues juste avant, pour que la déliaison
+    /// s'annonce (« le catalogue dit tout »). `None` : ce dialecte ne le dit
+    /// pas, et la déliaison se tait.
+    fn edges_to_detach(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let _ = (relation, table, side, filter);
+        None
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1503,6 +1512,15 @@ impl SchemaDialect for Rag3dbDialect {
         Some(format!("MATCH {motif} WHERE {} DELETE r", rag3db_condition(filter)))
     }
 
+    fn edges_to_detach(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let (t, r) = (self.quote(table), self.quote(relation));
+        let (motif, rendre) = match side {
+            rag3weaver_ir::Direction::Outgoing => (format!("(m:{t})-[r:{r}]->(o)"), "m._uuid, o._uuid"),
+            rag3weaver_ir::Direction::Incoming => (format!("(o)-[r:{r}]->(m:{t})"), "o._uuid, m._uuid"),
+        };
+        Some(format!("MATCH {motif} WHERE {} RETURN {rendre}", rag3db_condition(filter)))
+    }
+
     /// `UNION ALL` des branches, chacune fondue à l'amont s'il y en a un
     /// (une `UNION` de Cypher ne partage pas de préfixe : l'amont est relu
     /// dans chaque branche, dans la même instruction), et son `RETURN`
@@ -2392,6 +2410,19 @@ impl SchemaDialect for PostgresDialect {
         ))
     }
 
+    fn edges_to_detach(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+        let bout = match side {
+            rag3weaver_ir::Direction::Outgoing => "from_uuid",
+            rag3weaver_ir::Direction::Incoming => "to_uuid",
+        };
+        Some(format!(
+            "SELECT r.from_uuid, r.to_uuid FROM {} AS r JOIN {} AS m ON m.\"_uuid\" = r.\"{bout}\" WHERE ({})",
+            self.quote(relation),
+            self.quote(table),
+            postgres_condition(self, filter)
+        ))
+    }
+
     /// **Fondre en CTE** : l'amont devient `WITH __chain(c0, c1, …) AS (…)`, et
     /// chaque `$uuids` de l'aval devient
     /// `ARRAY(SELECT DISTINCT cK FROM __chain WHERE cK IS NOT NULL)` — la règle
@@ -2877,6 +2908,16 @@ impl SchemaDialect for PostgresDialect {
              WHERE {table}._uuid = v._uuid",
             assigns.join(", ")
         )
+    }
+
+    // Les paires posées et leur compte, comme en Cypher : un lien sait ainsi
+    // dire ce qu'il a réellement créé (« le catalogue dit tout »).
+    fn existing_links(&self, rel_table: &str, _ends: (&str, &str)) -> String {
+        format!("SELECT from_uuid, to_uuid FROM {} WHERE from_uuid = ANY($froms)", self.quote(rel_table))
+    }
+
+    fn count_links(&self, rel_table: &str) -> String {
+        format!("SELECT count(*) FROM {}", self.quote(rel_table))
     }
 
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {

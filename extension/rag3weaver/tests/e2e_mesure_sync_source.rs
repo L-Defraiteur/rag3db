@@ -6,6 +6,7 @@
 //! courants à chaque paquet). Affichée, pas affirmée : hors de la batterie.
 //!
 //! Run with: ./run_e2e.sh --test e2e_mesure_sync_source
+//! (`MESURE_DOSSIER=.` et `RAG3DB_ROOT=<arbre>` : un arbre entier.)
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
 use rag3weaver::code::{default_scope_chunking, register_code_schema};
@@ -42,10 +43,39 @@ fn mesure_la_duree_par_paquet() {
         _ => None,
     };
     let options = SourceSyncOptions { batch_files: 64, exige: Disponibilites::RECHERCHE_TEXTE, relations, ..Default::default() };
+    // **Ce que le catalogue a publié** (19 octobre 2026, « le catalogue dit
+    // tout » : son coût se mesure ici, avec et sans la pièce). Le bus déborde
+    // sans bloquer : vidé à chaque paquet, et ce qui a débordé est compté.
+    let mut ecoute = catalog.subscribe();
+    let mut evenements: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut paires_annoncees = 0usize;
+    let vider = |ecoute: &mut async_broadcast::Receiver<rag3weaver::CatalogEvent>,
+                     evenements: &mut std::collections::BTreeMap<String, usize>,
+                     paires: &mut usize| loop {
+        match ecoute.try_recv() {
+            Ok(e) => {
+                let v = e.to_json();
+                if v["kind"] == "RelationsChanged" {
+                    *paires += v["count"].as_u64().unwrap_or(0) as usize;
+                }
+                let cle = match v["change"].as_str() {
+                    Some(c) => format!("{}:{c}", v["kind"].as_str().unwrap_or("?")),
+                    None => v["kind"].as_str().unwrap_or("?").to_string(),
+                };
+                *evenements.entry(cle).or_insert(0) += 1;
+            }
+            Err(async_broadcast::TryRecvError::Overflowed(n)) => *evenements.entry("débordés".into()).or_insert(0) += n as usize,
+            Err(_) => break,
+        }
+    };
     let debut = std::time::Instant::now();
     let mut dernier = std::time::Instant::now();
     let mut durees = Vec::new();
-    let rapport = sync_source(&mut catalog, &WorkingTree::new(racine.join("src")), &options, &mut |p| {
+    // `MESURE_DOSSIER` : le dossier indexé sous la racine (`src` par défaut ;
+    // `.` pour l'arbre entier, comme l'arbre de code « code-lourd »).
+    let dossier = std::env::var("MESURE_DOSSIER").unwrap_or_else(|_| "src".into());
+    let rapport = sync_source(&mut catalog, &WorkingTree::new(racine.join(dossier)), &options, &mut |p| {
+        vider(&mut ecoute, &mut evenements, &mut paires_annoncees);
         if p.phase != rag3weaver::code_sync::SyncPhase::Nodes {
             return;
         }
@@ -55,15 +85,21 @@ fn mesure_la_duree_par_paquet() {
         eprintln!("PAQUET {:>4}/{} fichiers — {ms} ms — {} scopes", p.files_done, p.files_total, p.scopes_written);
     })
     .unwrap();
+    let duree_totale = debut.elapsed();
+    vider(&mut ecoute, &mut evenements, &mut paires_annoncees);
+    eprintln!(
+        "MESURE événements du catalogue : {} en tout, {paires_annoncees} paires annoncées ; {evenements:?}",
+        evenements.values().sum::<usize>()
+    );
     let n = durees.len();
     let tiers = |a: usize, b: usize| durees[a..b].iter().sum::<u128>() / (b - a).max(1) as u128;
     eprintln!(
-        "MESURE sync_source ({:?}) : {} fichiers, {} scopes, {} relations en {} s (chargement final {} ms) ; ms par paquet, par tiers : {} / {} / {}",
+        "MESURE sync_source ({:?}) : {} fichiers, {} scopes, {} relations en {:.1} s (chargement final {} ms) ; ms par paquet, par tiers : {} / {} / {}",
         rapport.relations_mode,
         rapport.files_ingested,
         rapport.scopes_written,
         rapport.relations,
-        debut.elapsed().as_secs(),
+        duree_totale.as_secs_f64(),
         rapport.relations_bulk_ms,
         tiers(0, n / 3),
         tiers(n / 3, 2 * n / 3),
