@@ -678,7 +678,13 @@
     }
   },
   "scripts": {
-    "cited_by_params": "scripts/cited_by_params.rhai"
+    "cited_by_params": "scripts/cited_by_params.rhai",
+    "archive_params": "scripts/archive_params.rhai",
+    "archive_candidates": "scripts/archive_candidates.rhai",
+    "archive_decided": "scripts/archive_decided.rhai",
+    "archive_pass": "scripts/archive_pass.rhai",
+    "archive_linked": "scripts/archive_linked.rhai",
+    "archive_summary": "scripts/archive_summary.rhai"
   },
   "tools": {
     "put_memory": {
@@ -887,6 +893,27 @@
         {
           "node": "plan",
           "port": "total"
+        }
+      ]
+    },
+    "archive": {
+      "graph": "graphs/archive.mmd",
+      "metadata": [
+        {
+          "node": "decide",
+          "port": "report"
+        },
+        {
+          "node": "write",
+          "port": "report"
+        },
+        {
+          "node": "create",
+          "port": "report"
+        },
+        {
+          "node": "refs_new",
+          "port": "report"
         }
       ]
     }
