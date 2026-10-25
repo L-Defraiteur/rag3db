@@ -152,11 +152,22 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
   `data-ligne`, le nom vers `#L<n>`, la flèche vers le symbole, `#plan-borne`, `#plan-provenance`)
   ; sans `outline` au manifeste, les scopes de `read_file` et `#plan-repli` qui dit pourquoi — le
   même repli que le lot IDE (400813249), porté.
-- **L'édition reste sur l'ancienne page** jusqu'à ce qu'elle soit portée (vue 3b, CodeMirror par
-  le magasin embarqué) : le bouton « Modifier » (`a[data-modifier]`) mène à
-  `/ide/ancienne/code/<id>/fichier/<chemin>`, et les deux témoins qui éditent (`les vues de
-  l'IDE`, `le dépôt d'à côté`) y vont tout droit pour cette partie.
-- `VUES_PORTEES` : `chat`, `fichier`.
+- **L'édition** (vue 3b, après la vue 7) : `src/views/Editor.tsx`, ouvert par le bouton « Modifier »
+  (`button[data-modifier]`) dans la même page. CodeMirror vient du magasin embarqué dans l'hôte
+  (`/ide/registre.js` puis `/ide/editeur/modules.js`, chargés à la première édition, jamais d'un CDN)
+  ; s'il ne se charge pas, une zone de texte le remplace et la console dit pourquoi. La barre
+  (`.barre` : Enregistrer, Fermer l'édition, `span.note`), Ctrl-S et Cmd-S enregistrent par
+  `edit_file` sur l'empreinte lue (`expected_hash`) ; « fichier changé depuis la lecture » montre
+  la différence disque → tampon (`.diff .moins|.plus`, par `lib/diff.ts`) et deux boutons :
+  « Reprendre la version du disque », « Garder ma version (écrase la leur) » — le tampon n'est
+  jamais remplacé sans ce choix. Un `FileChanged` du flux sur le chemin édité : notre propre
+  enregistrement (même empreinte) passe ; un tampon modifié garde son texte et la note le dit
+  (« changé sur le disque… ») ; un tampon intact se relit. En lecture, le fichier qui change se
+  relit aussi (300 ms après l'événement). Un fichier hors du worktree se lit, ne se modifie pas
+  (`.alerte`). Les deux témoins qui éditent (`les vues de l'IDE`, `le dépôt d'à côté`) reviennent
+  sur `/ide/code/<id>/fichier/<chemin>` ; les repères sont ceux de l'ancienne page (`.edition
+  .cm-content`, `.barre .note`, les textes des boutons).
+- `VUES_PORTEES` : `chat`, `fichier` (dès la vue 3 ; l'édition compte dans `fichier`).
 
 ## Ce qui est fait (vue 4 : la recherche)
 
@@ -256,5 +267,6 @@ pose une valeur par le DOM doit la voir partir.
   le détail (`.proposition[data-etat]`, `#proposition-etat`, `#appliquer`, `#pourquoi`, `#rejeter`,
   `#proposition-note`, l'aperçu `.apercu-propose`, le diff de chaque graphe, la différence de chaque
   fichier).
-- `VUES_PORTEES` : toutes les vues de l'ancienne page sauf l'édition d'un fichier (vue 3b). Le bundle
-  pèse 388 Kio.
+- `VUES_PORTEES` : toutes les vues de l'ancienne page ; l'édition d'un fichier (vue 3b) suit dans
+  son propre lot, et avec elle l'ancienne page n'a plus de vue à elle. Le bundle pèse 388 Kio
+  (393 Kio avec l'édition).
