@@ -190,6 +190,9 @@ pub mod chat;
 /// Le journal des runs de l'hôte : un fichier par run racine, borné.
 pub mod journal_des_runs;
 
+/// Le juge de session : un agent déclaré qui relit un run et range son bilan.
+pub mod juge;
+
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);

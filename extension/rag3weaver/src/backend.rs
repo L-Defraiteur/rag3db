@@ -29,6 +29,13 @@ fn default_vector_extension() -> PathBuf {
     PathBuf::from(DEFAULT_VECTOR_EXTENSION)
 }
 
+/// La clé `bilans` d'un manifeste : la mémoire où le juge range ses fiches.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BilansDeclares {
+    pub memoire: PathBuf,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
@@ -108,6 +115,11 @@ pub struct BackendManifest {
     /// l'IDE ; `auto` — l'agent déclare directement et applique.
     #[serde(default)]
     pub declarations: crate::propositions::ModeDeclarations,
+    /// **Les bilans de session** (page 04 du 25 octobre 2026) : où le juge range
+    /// ses fiches (le manifeste d'une mémoire, relatif à celui-ci). Absent : les
+    /// runs de ce backend ne sont pas jugés.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bilans: Option<BilansDeclares>,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
