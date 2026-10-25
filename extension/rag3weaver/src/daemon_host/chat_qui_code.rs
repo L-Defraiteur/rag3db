@@ -242,3 +242,74 @@ fn le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **Le chat d'une tâche code, sur Gemini** — jugé sur le résultat, jamais sur
+/// le texte du modèle, comme K3. À « bonjour doit dire salut », le tour finit ;
+/// `src/lib.rs` change sur la branche de la tâche (la fonction `bonjour` est
+/// toujours là, et rend « salut ») ; la réponse le dit (`fichiers`) ; le dépôt
+/// de l'utilisateur garde chaque octet et son `HEAD` ; la consommation sous le
+/// slug de Gemini n'est pas nulle. La mesure du tour est dite et écrite.
+///
+/// **Ignoré par défaut** : il se joue par `--ignored`, avec `openai-llm`, les
+/// identifiants et `RAG3WEAVER_EXIGER_GEMINI=1` ; sans eux, il se saute
+/// nommément.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+#[ignore]
+fn le_chat_d_une_tache_code_sur_gemini() {
+    const TEMOIN: &str = "le_chat_d_une_tache_code_sur_gemini";
+    if !super::apercu_a_chaud::gemini_ou_saut(TEMOIN, None) {
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
+    // Le modèle par défaut de l'hôte : `models.llm`, sinon Vertex.
+    let host = DaemonHost::new()
+        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+        .with_racine_des_taches(d.path().join("taches"))
+        .with_chats_root(d.path().join("chats"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let avant = empreinte(&depot);
+    let t = host.ouvrir_une_tache(&h.id, "salut").expect("la tâche s'ouvre");
+    let etat = host.chat_state(&t.id).unwrap();
+    if etat["on"] != true {
+        let pourquoi = etat["why"].as_str().unwrap_or("le chat est éteint").to_string();
+        if !super::apercu_a_chaud::gemini_ou_saut(TEMOIN, Some(&pourquoi)) {
+            return;
+        }
+    }
+    let modele = etat["model"].as_str().unwrap_or_default().to_string();
+
+    let debut = std::time::Instant::now();
+    let r = host
+        .chat_turn(&t.id, "Dans src/lib.rs, la fonction bonjour doit rendre \"salut\" au lieu de \"bonjour\". Fais-le.")
+        .expect("le tour");
+    let tour_ms = debut.elapsed().as_millis() as u64;
+    eprintln!("MESURE tour de chat qui code sur {modele} : {tour_ms} ms");
+    eprintln!("réponse : {}", r["text"]);
+    eprintln!("consommé : {}", r["consumed"]);
+    let appels: Vec<String> = host.chat_state(&t.id).unwrap()["turns"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|t| t["tool_calls"].as_array().cloned().unwrap_or_default())
+        .filter_map(|c| c["name"].as_str().map(str::to_string))
+        .collect();
+    eprintln!("MESURE appels d'outil du tour : {} ({appels:?})", appels.len());
+    if let Some(cible) = std::env::var_os("CARGO_TARGET_DIR") {
+        let dossier = PathBuf::from(cible).join("mesures");
+        let _ = std::fs::create_dir_all(&dossier);
+        let _ = std::fs::write(
+            dossier.join(format!("chat-qui-code-gemini-{}.json", std::process::id())),
+            serde_json::to_vec_pretty(&json!({ "modele": modele, "tour_ms": tour_ms, "appels": appels, "consomme": r["consumed"] })).unwrap(),
+        );
+    }
+
+    let racine = &t.workspace.as_ref().expect("une tâche à workspace").racine;
+    let ecrit = std::fs::read_to_string(racine.join("src/lib.rs")).unwrap();
+    assert!(ecrit.contains("fn bonjour") && ecrit.contains("\"salut\"") && !ecrit.contains("\"bonjour\""), "src/lib.rs sur la branche : {ecrit}");
+    assert!(r["fichiers"].as_array().is_some_and(|f| f.iter().any(|p| p == "src/lib.rs")), "la réponse dit le fichier : {r}");
+    assert!(r["consumed"].to_string().contains("gemini"), "aucune consommation sous le slug de Gemini : {}", r["consumed"]);
+    assert!(empreinte(&depot) == avant, "le dépôt de l'utilisateur a changé (fichiers ou HEAD)");
+}

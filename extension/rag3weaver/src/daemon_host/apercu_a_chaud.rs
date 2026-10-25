@@ -531,7 +531,7 @@ fn une_tache_se_relit_puis_se_fusionne_dans_l_ide() {
 /// `GOOGLE_APPLICATION_CREDENTIALS` (un fichier qui existe ; son contenu n'est
 /// jamais lu ici). Sinon, la ligne `SAUTÉ` — un rouge sous
 /// `RAG3WEAVER_EXIGER_GEMINI=1` : on ne juge jamais l'agent sur un modèle local.
-fn gemini_ou_saut(temoin: &str, raison_de_plus: Option<&str>) -> bool {
+pub(super) fn gemini_ou_saut(temoin: &str, raison_de_plus: Option<&str>) -> bool {
     let projet = std::env::var("GOOGLE_CLOUD_PROJECT").ok().filter(|p| !p.is_empty());
     let cles = std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").map(std::path::PathBuf::from).filter(|p| p.is_file());
     let raison = match (projet, cles, raison_de_plus) {
