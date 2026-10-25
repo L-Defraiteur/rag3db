@@ -1335,7 +1335,9 @@ mod tests {
         assert!(entree.contains("Set-Cookie: rag3weaver_ide=le-bon; HttpOnly; SameSite=Lax; Path=/ide"), "{entree}");
         let cookie = "Cookie: autre=1; rag3weaver_ide=le-bon\r\n";
         let page = brut(&adresse, &format!("GET /ide/code/b/fichier/src/lib.rs HTTP/1.1\r\nHost: x\r\n{cookie}Connection: close\r\n\r\n"), "</html>");
-        assert!(page.starts_with("HTTP/1.1 200") && page.contains("text/html") && page.contains("IDE rag3weaver"), "toute vue sert la page");
+        // Toute vue sert une page : la neuve (React, page 08) pour une vue portée — le
+        // fichier l'est —, l'ancienne pour les autres ; chacune charge son script.
+        assert!(page.starts_with("HTTP/1.1 200") && page.contains("text/html") && (page.contains("/ide/app.js") || page.contains("/ide/page.js")), "toute vue sert la page : {}", &page[..page.len().min(400)]);
         let etat = get("/ide/etat", cookie);
         assert!(etat.starts_with("HTTP/1.1 200"), "{etat}");
         // Un faux cookie ne vaut rien.
