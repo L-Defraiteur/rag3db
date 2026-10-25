@@ -181,6 +181,11 @@ pub struct Miroir {
     /// par un lien sortant d'une ligne du bloc, voyage avec le bloc (une Ref
     /// `doc:` citée par un apport). Sans elle, la base perdue la perdrait.
     pub sans_fichier: std::sync::OnceLock<std::collections::BTreeSet<String>>,
+    /// Les dossiers des **autres** miroirs sous le sien, posés au chargement :
+    /// une entité rangée à la racine (`dir` vide, une Source à son chemin) ne
+    /// lit pas comme siens les fichiers d'une fiche ou d'un genre. Relatifs à
+    /// la racine : un miroir déplacé sur une autre racine les garde justes.
+    pub dossiers_voisins: std::sync::OnceLock<Vec<PathBuf>>,
 }
 
 /// Un nom de champ entre accolades dans `name`.
@@ -264,7 +269,7 @@ impl Miroir {
         if let Some(props) = schema["properties"].as_object_mut() {
             props.insert("uuid".into(), serde_json::json!({"type": "string"}));
         }
-        Ok(Self { entite: entite.to_string(), racine, decl, gabarit, schema, sans_fichier: std::sync::OnceLock::new() })
+        Ok(Self { entite: entite.to_string(), racine, decl, gabarit, schema, sans_fichier: std::sync::OnceLock::new(), dossiers_voisins: std::sync::OnceLock::new() })
     }
 
     /// **Relit le fichier d'une ligne** (lot M3, la reconstruction) : l'en-tête,
@@ -307,6 +312,10 @@ impl Miroir {
                 let chemin = e.path();
                 let genre = e.file_type().map_err(|e| e.to_string())?;
                 if genre.is_dir() {
+                    let rel = chemin.strip_prefix(&self.racine).map(Path::to_path_buf).unwrap_or_default();
+                    if self.dossiers_voisins.get().is_some_and(|v| v.contains(&rel)) {
+                        continue;
+                    }
                     pile.push(chemin);
                 } else if chemin.extension().is_some_and(|x| x == "md") {
                     let rel = chemin.strip_prefix(&self.racine).map_err(|e| e.to_string())?;

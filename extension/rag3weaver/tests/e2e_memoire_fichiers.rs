@@ -119,7 +119,7 @@ fn la_memoire_s_ecrit_dans_des_fichiers_lisibles_et_son_bloc_se_ferme() {
     assert!(source.ends_with(CONTENU) || source.contains(CONTENU), "le contenu tel quel : {source}");
     for genre in ["doc", "path"] {
         let t = std::fs::read_to_string(racine.join("genres").join(format!("{genre}.md"))).expect("le fichier du genre");
-        assert!(t.contains(&format!("name: {genre}")), "{t}");
+        assert!(t.contains(&format!("name: \"{genre}\"")), "{t}");
     }
 
     let fiche = fichier_de_la_fiche(dir.path(), &uuid);
