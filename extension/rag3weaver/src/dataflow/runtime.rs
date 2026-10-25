@@ -740,7 +740,7 @@ impl DataflowRuntime {
                 self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, Some(checkpointing), None)
             });
         }
-        graph.merge_initial_streams(&mut initial_inputs);
+        graph.merge_initial_streams(&mut initial_inputs)?;
         // **Le hub d'annulation des niveaux** (page 12-octobre-2026-recherche/05) :
         // sans canal ni ouvrier, attaché à la poignée d'arrêt le temps du run.
         // Les nœuds le lisent par leur jeton ; la boucle le regarde à chaque
@@ -1318,7 +1318,7 @@ impl DataflowRuntime {
                 self.execute_concurrent(graph, &run_id, initial, &stream_ports, start, None, None)
             });
         }
-        graph.merge_initial_streams(&mut initial_inputs);
+        graph.merge_initial_streams(&mut initial_inputs)?;
         // **Le hub d'annulation des niveaux** (page 12-octobre-2026-recherche/05) :
         // sans canal ni ouvrier, attaché à la poignée d'arrêt le temps du run.
         // Les nœuds le lisent par leur jeton ; la boucle le regarde à chaque
