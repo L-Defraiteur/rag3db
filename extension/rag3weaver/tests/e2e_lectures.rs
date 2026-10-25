@@ -629,7 +629,17 @@ fn la_recherche_se_replie_sans_l_index_vectoriel(nom: &str, drapeau: bool, raiso
     let backend = code_indexe_avec_vecteurs(tmp.path(), nom);
     let cellule = backend.catalog.lock().unwrap().scope().clone();
     let cherche = || backend.call_in(&cellule, "search_code", json!({"query": "alpha", "options": {}, "mode": "indexed"}));
-    let avant = cherche().expect("la recherche avant le retrait").to_string();
+    // La fin de l'index ne dit pas que les vecteurs sont posés : sous charge,
+    // l'embarquement suit encore (« modèle non disponible sur cet index »). On
+    // attend que le dense réponde avant de retirer son index.
+    let debut = std::time::Instant::now();
+    let avant = loop {
+        let r = cherche().expect("la recherche avant le retrait").to_string();
+        if !r.contains("dense signal") || debut.elapsed() > std::time::Duration::from_secs(120) {
+            break r;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    };
     assert!(avant.contains("a.rs"), "avant le retrait : {avant}");
     assert!(!avant.contains("dense signal"), "avant le retrait, le dense répond : {avant}");
 
