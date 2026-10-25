@@ -101,3 +101,22 @@ fn la_declaration_se_montre_avec_sa_definition_ou_seule() {
     // Sans déclaration, le rendu d'avant.
     assert_eq!(r.markdown_with("all", 10, &[]), r.markdown("all", 10));
 }
+
+/// **Une mention C/C++ sans définisseur visible par ses #include** : marquée, comptée en tête, et
+/// jamais « par le nom » à la fois, ni dans le markdown ni dans le JSON (l'arbre principal : une
+/// interface qui lit `guessed` la compterait devinée).
+#[test]
+fn une_mention_invisible_se_dit_et_n_est_pas_devinee() {
+    let def = item("d", "solo", "x/solo.h", 2);
+    let mut u = usage(item("l", "lone", "app/lone.cpp", 2), "call", Some("d"));
+    u.relation = "MENTIONS".into();
+    u.invisible = true;
+    let r = UsagesReport { name: "solo".into(), definitions: vec![def], definitions_hidden: 0, usages: vec![u], ambiguous: false, qualifier: None, qualifier_hidden: 0, scope: Default::default(), scope_hidden_definitions: 0, scope_hidden_usages: 0, invisible_usages: 1 };
+    let md = r.markdown("all", 10);
+    assert!(md.contains("1 mention(s) C/C++ sans définisseur visible par leurs #include : un en-tête non indexé, ou une définition dans un autre fichier"), "{md}");
+    assert!(md.contains("lone — app/lone.cpp:2 (invisible par les #include)") && !md.contains("(par le nom)"), "{md}");
+    let json = serde_json::to_value(&r).unwrap();
+    assert_eq!(json["invisible_usages"], 1, "{json}");
+    assert_eq!(json["usages"][0]["invisible"], true, "{json}");
+    assert_eq!(json["usages"][0]["guessed"], false, "jamais invisible et devinée à la fois : {json}");
+}

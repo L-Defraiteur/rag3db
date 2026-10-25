@@ -271,6 +271,12 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     let ligne = usages.lines().find(|l| l.contains(" lone —")).unwrap_or_else(|| panic!("lone absent : {usages}"));
     assert!(ligne.ends_with("(invisible par les #include)"), "lone marqué : {usages}");
     assert!(!usages.lines().any(|l| l.contains(" run —") && l.contains("invisible")), "run, qui inclut solo.h, n'est pas marqué : {usages}");
+    let json = outil(include_str!("../templates/tools/usages.mmd"), serde_json::json!({"name": "solo", "format": "json"}));
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap_or_else(|e| panic!("{e} : {json}"));
+    let v = if v.is_string() { serde_json::from_str(v.as_str().unwrap()).unwrap() } else { v };
+    let lone = v["usages"].as_array().and_then(|us| us.iter().find(|u| u["user"]["title"] == "lone")).unwrap_or_else(|| panic!("lone absent du JSON : {v}"));
+    assert_eq!((lone["invisible"].as_bool(), lone["guessed"].as_bool()), (Some(true), Some(false)), "invisible, jamais devinée à la fois : {lone}");
+    assert_eq!(v["invisible_usages"], 1, "{v}");
     let impact = outil(include_str!("../templates/tools/impact.mmd"), serde_json::json!({"name": "solo"}));
     eprintln!("{impact}");
     assert!(impact.contains("1 mention(s) C/C++ sans définisseur visible par leurs #include"), "impact le compte : {impact}");

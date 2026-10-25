@@ -2026,6 +2026,9 @@ pub struct CodeIngestReport {
     /// Fichiers C/C++ dont les #include ont été lus pour la visibilité (toute la table File, une
     /// fois par résolution d'un lot qui a du C/C++) : le coût du pas 1, que les arêtes INCLUDES ôteront.
     pub include_files_read: usize,
+    /// Requêtes des déclarants C/C++ (la forme exacte) : une pour les conteneurs du lot, une par
+    /// tranche de fonctions libres restées invisibles. Leur nombre par lot, que le profil suit.
+    pub declarant_queries: usize,
     /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
     /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
     pub mentions_read: usize,
@@ -2625,6 +2628,48 @@ impl Catalog {
         report.include_files_read += inclusions.includes.len();
         crate::ingest_profile::add("symboles · includes", t);
         let mut vues: HashMap<String, Option<std::rc::Rc<Vue>>> = HashMap::new();
+        // **Les déclarations des définisseurs C/C++ du lot** (la forme exacte, pas 2) : lues une
+        // fois, avant la boucle. Les conteneurs (classes, namespaces) par le `parent_name` des
+        // définisseurs ; les scopes de fichier, pour les seules fonctions libres qu'aucune vue ne
+        // voit déjà par inclusion ou par l'en-tête homonyme.
+        let t = std::time::Instant::now();
+        let (noms, declarants) = if inclusions.includes.is_empty() {
+            (HashMap::new(), Declarants::default())
+        } else {
+            let cpp = |u: &String| familles.get(u.as_str()).copied().flatten() == Some("c++");
+            let noms = self.noms_des_symboles(uuids)?;
+            let parent_de = |d: &String| parents.get(d).map_or("", |p| p.as_str());
+            let conteneurs: std::collections::BTreeSet<String> = uuids
+                .iter()
+                .flat_map(|sym| definers_by_symbol.get(sym).into_iter().flatten())
+                .filter(|d| cpp(d) && !parent_de(d).is_empty())
+                .map(|d| parent_de(d).to_string())
+                .collect();
+            let mut libres: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+            for sym in uuids {
+                let Some(nom) = noms.get(sym) else { continue };
+                let defs: Vec<&String> = definers_by_symbol.get(sym).into_iter().flatten().filter(|d| cpp(d) && parent_de(d).is_empty()).collect();
+                if defs.is_empty() {
+                    continue;
+                }
+                for m in mentioners_by_symbol.get(sym).into_iter().flatten() {
+                    if familles.get(m.from.as_str()).copied().flatten() != Some("c++") {
+                        continue;
+                    }
+                    let Some(f) = fichiers.get(&m.from) else { continue };
+                    let Some(vue) = vues.entry(f.clone()).or_insert_with(|| inclusions.vue(f).map(std::rc::Rc::new)).clone() else { continue };
+                    if defs.iter().any(|d| fichiers.get(*d).is_some_and(|fd| vue.visibilite(fd).is_none())) {
+                        libres.insert(nom.clone());
+                        break;
+                    }
+                }
+            }
+            let (declarants, requetes) =
+                Declarants::charger_par(self.dialect_arc().as_ref(), |q, p| self.conn().execute_with_params(q, p).map_err(|e| CatalogError::DbError(e.to_string())), &conteneurs, &libres)?;
+            report.declarant_queries += requetes;
+            (noms, declarants)
+        };
+        crate::ingest_profile::add("symboles · déclarants", t);
         let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
@@ -2684,6 +2729,8 @@ impl Catalog {
                 // le nom, fausses à 80 % selon clangd) : `homonymes` reste le compte d'avant, comme
                 // pour la garde de langage.
                 let mut par_entete: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let mut par_declaration: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let nom_du_symbole = noms.get(sym).map_or("", |n| n.as_str());
                 let vue = if de_ma_famille == Some("c++") && m.kind != "HAS_PARENT" {
                     fichiers.get(&m.from).and_then(|f| vues.entry(f.clone()).or_insert_with(|| inclusions.vue(f).map(std::rc::Rc::new)).clone())
                 } else {
@@ -2699,6 +2746,10 @@ impl Catalog {
                                     true
                                 }
                                 Some(Some(_)) => true,
+                                Some(None) if declarants.voit(vue, nom_du_symbole, parents.get(*d).map_or("", |p| p.as_str())) => {
+                                    par_declaration.insert((*d).clone());
+                                    true
+                                }
                                 Some(None) => false,
                                 None => true,
                             })
@@ -2751,7 +2802,14 @@ impl Catalog {
                 if USAGE_RELATIONS.contains(&rel) {
                     usage.insert("resolution".to_string(), s(resolution.as_str()));
                     if vue.is_some() {
-                        usage.insert("visibility".to_string(), s(if par_entete.contains(&target) { "entete" } else { "inclusion" }));
+                        let par = if par_declaration.contains(&target) {
+                            "declaration"
+                        } else if par_entete.contains(&target) {
+                            "entete"
+                        } else {
+                            "inclusion"
+                        };
+                        usage.insert("visibility".to_string(), s(par));
                     }
                 }
                 self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
@@ -2811,6 +2869,28 @@ impl Catalog {
 
     /// Le `parent_name` et le fichier de scopes, par uuid.
     #[allow(clippy::type_complexity)]
+    /// Le nom de chaque symbole (`uuids`), lu par le dialecte : la clé des déclarants.
+    fn noms_des_symboles(&self, uuids: &[String]) -> Result<HashMap<String, String>, CatalogError> {
+        if uuids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let lire = rag3weaver_ir::Select::by_uuids(SYMBOL, vec![rag3weaver_ir::Column::Node("name".into())]);
+        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
+        let rows = self
+            .conn()
+            .execute_with_params(&requete, &[crate::connection::QueryParam::new("uuids", param)])
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        Ok(rows
+            .rows
+            .iter()
+            .filter_map(|r| match (r.first(), r.get(1)) {
+                (Some(CypherValue::String(u)), Some(CypherValue::String(n))) => Some((u.clone(), n.clone())),
+                _ => None,
+            })
+            .collect())
+    }
+
     fn parents_et_fichiers(
         &self,
         uuids: &[String],
@@ -3480,7 +3560,7 @@ fn famille_de_langage(chemin: &str) -> Option<&'static str> {
 /// « un appelant perdu en silence ment par omission »). Les includes se lisent par `catalog`, la
 /// vue de lecture de l'outil, jamais par le catalogue derrière son mutex, et seulement si un
 /// mentionneur est C/C++.
-pub fn mentions_sans_definisseur_visible(catalog: &dyn crate::read_view::ReadCatalog, couples: &[(&str, Vec<&str>)]) -> Result<Vec<bool>, CatalogError> {
+pub fn mentions_sans_definisseur_visible(catalog: &dyn crate::read_view::ReadCatalog, nom: &str, couples: &[(&str, Vec<&str>)]) -> Result<Vec<bool>, CatalogError> {
     let cpp = |f: &str| famille_de_langage(f) == Some("c++");
     // Les fichiers par `Scope.file_path`, la clé que la résolution compare aux includes (`repo_path`,
     // que le rendu affiche, peut en différer).
@@ -3491,25 +3571,41 @@ pub fn mentions_sans_definisseur_visible(catalog: &dyn crate::read_view::ReadCat
         .into_iter()
         .map(|u| CypherValue::String(u.to_string()))
         .collect();
-    let lire = rag3weaver_ir::Select::by_uuids(SCOPE, vec![rag3weaver_ir::Column::Node("file_path".into())]);
+    let lire = rag3weaver_ir::Select::by_uuids(SCOPE, vec![rag3weaver_ir::Column::Node("file_path".into()), rag3weaver_ir::Column::Node("parent_name".into())]);
     let requete = catalog.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
     let lignes = catalog.execute_read_with_params(&requete, &[crate::connection::QueryParam::new("uuids", CypherValue::List(uuids))])?;
-    let fichier: HashMap<String, String> = lignes
-        .rows
+    let mut fichier: HashMap<String, String> = HashMap::new();
+    let mut parent: HashMap<String, String> = HashMap::new();
+    for r in &lignes.rows {
+        let Some(CypherValue::String(u)) = r.first() else { continue };
+        if let Some(CypherValue::String(f)) = r.get(1) {
+            fichier.insert(u.clone(), f.clone());
+        }
+        if let Some(CypherValue::String(p)) = r.get(2) {
+            parent.insert(u.clone(), p.clone());
+        }
+    }
+    // (fichier, parent) de chaque définition ; le fichier du mentionneur.
+    let couples: Vec<(&str, Vec<(&str, &str)>)> = couples
         .iter()
-        .filter_map(|r| match (r.first(), r.get(1)) {
-            (Some(CypherValue::String(u)), Some(CypherValue::String(f))) => Some((u.clone(), f.clone())),
-            _ => None,
+        .map(|(m, defs)| {
+            (
+                fichier.get(*m).map_or("", |f| f.as_str()),
+                defs.iter().map(|d| (fichier.get(*d).map_or("", |f| f.as_str()), parent.get(*d).map_or("", |p| p.as_str()))).collect(),
+            )
         })
-        .collect();
-    let couples: Vec<(&str, Vec<&str>)> = couples
-        .iter()
-        .map(|(m, defs)| (fichier.get(*m).map_or("", |f| f.as_str()), defs.iter().map(|d| fichier.get(*d).map_or("", |f| f.as_str())).collect()))
         .collect();
     if !couples.iter().any(|(m, _)| cpp(m)) {
         return Ok(vec![false; couples.len()]);
     }
-    let inclusions = Inclusions::charger_par(catalog.dialect_arc().as_ref(), |q| catalog.execute_read_with_params(q, &[]))?;
+    let dialecte = catalog.dialect_arc();
+    let inclusions = Inclusions::charger_par(dialecte.as_ref(), |q| catalog.execute_read_with_params(q, &[]))?;
+    // Les mêmes déclarants que la résolution : les conteneurs des définitions, et le nom s'il est libre.
+    let conteneurs: std::collections::BTreeSet<String> =
+        couples.iter().flat_map(|(_, ds)| ds.iter()).filter(|(f, p)| cpp(f) && !p.is_empty()).map(|(_, p)| p.to_string()).collect();
+    let libres: std::collections::BTreeSet<String> =
+        if couples.iter().flat_map(|(_, ds)| ds.iter()).any(|(f, p)| cpp(f) && p.is_empty()) { [nom.to_string()].into() } else { Default::default() };
+    let (declarants, _) = Declarants::charger_par(dialecte.as_ref(), |q, p| catalog.execute_read_with_params(q, p), &conteneurs, &libres)?;
     let mut vues: HashMap<&str, Option<Vue>> = HashMap::new();
     Ok(couples
         .iter()
@@ -3520,10 +3616,110 @@ pub fn mentions_sans_definisseur_visible(catalog: &dyn crate::read_view::ReadCat
             let Some(vue) = vues.entry(m).or_insert_with(|| inclusions.vue(m)) else { return false };
             // Sans définition C/C++, l'abstention est celle de la garde de langage, pas des
             // includes ; une définition sans fichier connu ne s'ôte pas, comme à la résolution.
-            let defs_cpp: Vec<&&str> = defs.iter().filter(|d| d.is_empty() || cpp(d)).collect();
-            !defs_cpp.is_empty() && !defs_cpp.iter().any(|d| d.is_empty() || vue.visibilite(d).is_some())
+            let defs_cpp: Vec<&(&str, &str)> = defs.iter().filter(|(f, _)| f.is_empty() || cpp(f)).collect();
+            !defs_cpp.is_empty() && !defs_cpp.iter().any(|(f, p)| f.is_empty() || vue.visibilite(f).is_some() || declarants.voit(vue, nom, p))
         })
         .collect())
+}
+
+/// **Les déclarations C/C++ connues d'un lot** (la forme exacte, pas 2, 25 octobre 2026) : ce que
+/// codeparsers relève déjà sans en faire un scope — les lignes du champ `declarations` d'une classe,
+/// d'un namespace ou, pour un prototype au niveau du fichier, du scope de fichier. Un définisseur
+/// est visible d'un mentionneur si une de ses déclarations est dans la fermeture des #include de
+/// celui-ci, avec le même nom et le même conteneur. Une déclaration n'est jamais un définisseur
+/// (pas de DEFINES, pas d'homonyme). Ses limites, mesurées dans le ticket de la forme exacte : le
+/// conteneur se compare par le dernier segment de son nom (deux classes homonymes de deux
+/// namespaces se confondent, comme pour HAS_PARENT), et les surcharges ne se distinguent pas.
+#[derive(Debug, Default)]
+struct Declarants {
+    /// Conteneur (classe, namespace) → (fichier, noms qu'il y déclare).
+    par_conteneur: HashMap<String, Vec<(String, std::collections::HashSet<String>)>>,
+    /// Fonction libre → fichiers dont le scope de fichier la déclare.
+    libres: HashMap<String, Vec<String>>,
+}
+
+/// Le genre d'un scope de fichier (`scope_type_name(ScopeInfoType::Module)`).
+const SCOPE_DE_FICHIER: &str = "module";
+/// Les fonctions libres dont on lit les déclarants, par requête (une tranche de `AnyOf`).
+const LIBRES_PAR_REQUETE: usize = 200;
+
+/// Les noms déclarés d'un JSON `declarations` (`[{name, line, signature, kind}]`), de genre
+/// fonction ou méthode. Le JSON se relit ici : la base ne fait qu'un crible par sous-chaîne, et
+/// `"function"` s'y trouve aussi dans chaque `kind` (relecture de l'arbre principal).
+fn noms_declares(json: &str) -> std::collections::HashSet<String> {
+    let Ok(serde_json::Value::Array(entrees)) = serde_json::from_str::<serde_json::Value>(json) else { return Default::default() };
+    entrees
+        .iter()
+        .filter(|e| matches!(e.get("kind").and_then(|k| k.as_str()), Some("function" | "method")))
+        .filter_map(|e| e.get("name").and_then(|n| n.as_str()).map(String::from))
+        .collect()
+}
+
+impl Declarants {
+    /// Lit les déclarants des `conteneurs` (une requête, `In` sur le nom) et ceux des fonctions
+    /// `libres` (par tranches, `AnyOf` de `Contains` sur `declarations`, confirmés en relisant le
+    /// JSON). Rend aussi le nombre de requêtes faites.
+    fn charger_par(
+        dialecte: &dyn crate::dialect::SchemaDialect,
+        executer: impl Fn(&str, &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult, CatalogError>,
+        conteneurs: &std::collections::BTreeSet<String>,
+        libres: &std::collections::BTreeSet<String>,
+    ) -> Result<(Self, usize), CatalogError> {
+        use crate::connection::QueryParam;
+        use rag3weaver_ir::{Column, Predicate, Select};
+        let mut out = Declarants::default();
+        let mut requetes = 0;
+        let colonnes = |extra: &str| vec![Column::Node(extra.into()), Column::Node("file_path".into()), Column::Node("declarations".into())];
+        if !conteneurs.is_empty() {
+            let lire = Select::filtered(SCOPE, Predicate::In { field: "name".into(), param: "conteneurs".into() }, colonnes("name"));
+            let requete = dialecte.select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let liste = CypherValue::List(conteneurs.iter().map(|c| CypherValue::String(c.clone())).collect());
+            let rows = executer(&requete, &[QueryParam::new("conteneurs", liste)])?;
+            requetes += 1;
+            for r in &rows.rows {
+                let (Some(CypherValue::String(c)), Some(CypherValue::String(f)), Some(CypherValue::String(j))) = (r.first(), r.get(1), r.get(2)) else { continue };
+                if famille_de_langage(f) != Some("c++") || j.is_empty() {
+                    continue;
+                }
+                out.par_conteneur.entry(c.clone()).or_default().push((f.clone(), noms_declares(j)));
+            }
+        }
+        let libres: Vec<&String> = libres.iter().collect();
+        for tranche in libres.chunks(LIBRES_PAR_REQUETE) {
+            let crible = Predicate::AnyOf(
+                (0..tranche.len()).map(|i| Predicate::Contains { field: "declarations".into(), param: format!("nom{i}") }).collect(),
+            );
+            let lire = Select::filtered(SCOPE, Predicate::AllOf(vec![Predicate::Equals { field: "scope_type".into(), param: "genre".into() }, crible]), colonnes("scope_type"));
+            let requete = dialecte.select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let mut params = vec![QueryParam::new("genre", CypherValue::String(SCOPE_DE_FICHIER.into()))];
+            params.extend(tranche.iter().enumerate().map(|(i, n)| QueryParam::new(&format!("nom{i}"), CypherValue::String(format!("\"{n}\"")))));
+            let rows = executer(&requete, &params)?;
+            requetes += 1;
+            let voulus: std::collections::HashSet<&str> = tranche.iter().map(|n| n.as_str()).collect();
+            for r in &rows.rows {
+                let (Some(CypherValue::String(f)), Some(CypherValue::String(j))) = (r.get(1), r.get(2)) else { continue };
+                if famille_de_langage(f) != Some("c++") {
+                    continue;
+                }
+                for n in noms_declares(j) {
+                    if voulus.contains(n.as_str()) {
+                        out.libres.entry(n).or_default().push(f.clone());
+                    }
+                }
+            }
+        }
+        Ok((out, requetes))
+    }
+
+    /// `nom`, de conteneur `parent` (vide : une fonction libre), est-il déclaré dans un fichier
+    /// de `vue` ?
+    fn voit(&self, vue: &Vue, nom: &str, parent: &str) -> bool {
+        if parent.is_empty() {
+            self.libres.get(nom).is_some_and(|fs| fs.iter().any(|f| vue.fichiers.contains(f)))
+        } else {
+            self.par_conteneur.get(parent).is_some_and(|ds| ds.iter().any(|(f, noms)| vue.fichiers.contains(f) && noms.contains(nom)))
+        }
+    }
 }
 
 /// **Ce qu'un fichier C/C++ voit** : la fermeture de ses #include (lui compris), et les noms de
@@ -4455,6 +4651,30 @@ mod tests_resolution {
         poser(&mut inc, "/q/b.h", None);
         poser(&mut inc, "/q/c.h", Some(&[]));
         assert!(inc.vue("/q/a.cpp").is_none(), "une fermeture qui touche des includes inconnus ne filtre rien");
+    }
+
+    /// **La visibilité par la déclaration** (la forme exacte, pas 2) : une méthode se voit par sa
+    /// classe déclarante dans la fermeture, une fonction libre par le scope de fichier qui la
+    /// déclare ; le JSON se relit, un nom qui vaut un `kind` (`function`) ne trouve rien par lui.
+    #[test]
+    fn un_definisseur_se_voit_par_sa_declaration() {
+        assert_eq!(
+            noms_declares(r#"[{"name":"drop_it","line":4,"signature":"int drop_it();","kind":"method"},{"name":"n","line":5,"signature":"","kind":"field"}]"#),
+            ["drop_it".to_string()].into(),
+            "un champ n'est pas une déclaration de fonction"
+        );
+        assert!(noms_declares(r#"[{"name":"aire","line":2,"signature":"double aire();","kind":"function"}]"#).get("function").is_none(), "« function » est un kind, pas un nom déclaré");
+        let mut vue = Vue::default();
+        vue.fichiers.insert("t/transformer.h".into());
+        let mut d = Declarants::default();
+        d.par_conteneur.insert("Transformer".into(), vec![("t/transformer.h".into(), ["drop_it".to_string()].into())]);
+        d.par_conteneur.insert("Other".into(), vec![("o/other.h".into(), ["drop_it".to_string()].into())]);
+        d.libres.insert("compute2".into(), vec!["t/transformer.h".into()]);
+        assert!(d.voit(&vue, "drop_it", "Transformer"), "la classe déclarante est dans la fermeture");
+        assert!(!d.voit(&vue, "drop_it", "Other"), "la classe d'un homonyme ne l'est pas");
+        assert!(!d.voit(&vue, "transform", "Transformer"), "un nom que la classe ne déclare pas");
+        assert!(d.voit(&vue, "compute2", ""), "une fonction libre par son prototype");
+        assert!(!d.voit(&vue, "function", ""), "une fonction libre nommée « function », non déclarée dans la fermeture, reste invisible");
     }
 
     #[test]
