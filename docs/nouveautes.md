@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Ce que la mémoire sait d'un fichier.** `cited_by` rend les fiches qui
+  citent un chemin, un dossier, un symbole ou un source, avec leurs ancres et les
+  apports qui le citent, lues par un Plan déclaré, sans Cypher. 665a4a97c.
 - **25 oct. — Trier par ce qui arrive aux liens.** Un Plan déclaré s'ordonne par le
   max ou le min d'un champ des lignes liées (les fiches par la date de leur dernier
   apport), en Cypher comme en SQL. beda3d8f1.
