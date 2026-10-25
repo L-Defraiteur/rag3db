@@ -308,8 +308,14 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     n.evaluer("document.querySelector('.proposition-du-tour a').click()");
     n.attendre("document.querySelector('#vue h1')?.textContent.startsWith('Proposition') || location.pathname.includes('/propositions/')", "la proposition du tour, ouverte");
 
-    // Un tour lent, arrêté depuis la page.
-    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#chat-envoyer') && !document.querySelector('#chat-envoyer').disabled");
+    // Un tour lent, arrêté depuis la page. La page rechargée rouvre son flux :
+    // un tour envoyé avant qu'il soit ouvert perd son RunStarted, et la page ne
+    // connaît jamais son run (ni Arrêter, ni jetons).
+    n.aller(
+        &format!("{racine}/ide/code/{id}/chat"),
+        "document.querySelector('#chat-envoyer') && !document.querySelector('#chat-envoyer').disabled \
+         && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
     n.evaluer("document.querySelector('#chat-message').value = 'parle, lentement'; document.querySelector('#chat-envoyer').click()");
     n.attendre("!document.querySelector('#chat-arreter').hidden && document.querySelector('.tour.en-cours pre')?.textContent.includes('encore')", "le tour lent, en cours, ses jetons dans la bulle");
     n.evaluer("document.querySelector('#chat-arreter').click()");
