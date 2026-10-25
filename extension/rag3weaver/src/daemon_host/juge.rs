@@ -344,12 +344,22 @@ impl DaemonHost {
                 _ => Vec::new(),
             }
         };
-        let fiches = appeler("recall_fiches", json!({ "query": "bilan", "options": { "limit": 100, "filter_condition": { "field": { "key": "via", "value": "juge" } } } }))?;
+        // Les fiches du juge : celles des tâches (« bilan : … ») et celles des
+        // outils (« outil : … »), chacune trouvée par son mot.
+        let mut fiches = Vec::new();
+        for mot in ["bilan", "outil"] {
+            let r = appeler("recall_fiches", json!({ "query": mot, "options": { "limit": 100, "filter_condition": { "field": { "key": "via", "value": "juge" } } } }))?;
+            fiches.extend(lignes(&r));
+        }
+        let mut vues = std::collections::BTreeSet::new();
         let mut sortie = Vec::new();
-        for f in lignes(&fiches) {
+        for f in fiches {
             let data = if f["data"].is_object() { f["data"].clone() } else { f.clone() };
             let Some(nom) = data["name"].as_str().map(str::to_string) else { continue };
-            let apports = appeler("recall_apports", json!({ "query": "bilan", "options": { "limit": 100, "filter_condition": { "field": { "key": "fiche", "value": nom } } } }))?;
+            if !vues.insert(nom.clone()) {
+                continue;
+            }
+            let apports = appeler("recall_apports", json!({ "query": nom, "options": { "limit": 100, "filter_condition": { "field": { "key": "fiche", "value": nom } } } }))?;
             let mut liste: Vec<Value> = lignes(&apports)
                 .into_iter()
                 .map(|a| if a["data"].is_object() { a["data"].clone() } else { a })
