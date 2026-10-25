@@ -21,6 +21,7 @@
 #include "storage/shadow_utils.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/local_wal.h"
+#include "transaction/transaction_manager.h"
 
 namespace rag3db {
 namespace storage {
@@ -146,6 +147,9 @@ void Checkpointer::holdReadersLock() {
 bool Checkpointer::checkpointStorage() {
     const auto storageManager = StorageManager::Get(clientContext);
     auto pageAllocator = storageManager->getDataFH()->getPageManager();
+    const auto* transactionManager = transaction::TransactionManager::Get(clientContext);
+    storageManager->setCheckpointTimestamps(transactionManager->getCheckpointTS(),
+        transactionManager->getOldestReaderTS());
     return storageManager->checkpoint(&clientContext, *pageAllocator);
 }
 

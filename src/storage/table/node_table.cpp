@@ -1064,6 +1064,8 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
         NodeGroupCheckpointState state{columnIDs, std::move(checkpointColumnPtrs), pageAllocator,
             memoryManager};
         state.changedMemory = storageManager->getCheckpointChangedMemoryFlag();
+        state.checkpointTS = storageManager->getCheckpointTS();
+        state.oldestReaderTS = storageManager->getOldestReaderTS();
         nodeGroups->checkpoint(*memoryManager, state);
         storageManager->markCheckpointChangedMemory();
         // Les numéros ne bougent pas : une colonne supprimée laisse son numéro vide (un trou),

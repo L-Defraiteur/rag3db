@@ -65,6 +65,11 @@ struct NodeGroupCheckpointState {
     // Le drapeau du point de reprise (StorageManager::markCheckpointChangedMemory), posé juste
     // avant le premier échange de groupes.
     bool* changedMemory = nullptr;
+    // V2-2 : l'horodatage T de ce point de reprise et le plus vieux instantané ouvert F. Si
+    // F < T, l'ancienne génération des blocs est gardée pour les transactions d'instantané < T.
+    common::transaction_t checkpointTS = 0;
+    common::transaction_t oldestReaderTS = 0;
+    bool keepsPreviousGeneration() const { return oldestReaderTS < checkpointTS; }
 
     void markChangedMemory() const {
         if (changedMemory) {
@@ -262,6 +267,22 @@ protected:
     // s'il n'en a pas encore, sinon les blocs ajoutés depuis, si la liste vivante commence
     // encore par le même bloc. Après un échange au point de reprise, le lecteur garde la sienne.
     void extendScanGroups(const common::UniqLock& lock, NodeGroupScanState& scanState) const;
+    // V2-2 : une génération précédente de la liste des blocs, remplacée par le point de reprise
+    // d'horodatage checkpointTS et gardée pour les transactions d'instantané antérieur : elles y
+    // lisent ce qu'elles voyaient, versions comprises. Retirée au point de reprise suivant quand
+    // plus aucune n'est ouverte.
+    struct PreviousGeneration {
+        common::transaction_t checkpointTS;
+        ChunkedGroups groups;
+    };
+    // La liste des blocs que lit une transaction d'instantané startTS : la plus ancienne
+    // génération gardée dont le point de reprise lui est postérieur, sinon la liste vivante.
+    const ChunkedGroups& groupsFor(const common::UniqLock& lock,
+        common::transaction_t startTS) const;
+    // Garde l'ancienne liste (si l'état le demande) et retire les générations que plus
+    // personne ne lit. Sous le verrou.
+    void retireAndKeepGeneration(const common::UniqLock& lock, ChunkedGroups oldGroups,
+        const NodeGroupCheckpointState& state);
     // Le bloc de ce rang parmi ceux que le balayage tient, en l'étendant s'il le faut ; nul si
     // la liste n'a pas ce rang.
     const ChunkedNodeGroup* scanGroupAt(NodeGroupScanState& scanState,
@@ -327,6 +348,9 @@ protected:
     common::row_idx_t capacity;
     std::vector<common::LogicalType> dataTypes;
     GroupCollection<ChunkedNodeGroup> chunkedGroups;
+    // Les générations précédentes, de la plus ancienne à la plus récente (V2-2). Sous le
+    // verrou de chunkedGroups.
+    std::vector<PreviousGeneration> previousGenerations;
     // La garde des lectures qui ne prennent pas le verrou de chunkedGroups (lookupSharedLock,
     // isVisibleNoLock). L'ajout en mémoire la prend en exclusif : il allonge la liste des
     // blocs et réalloue le tampon d'une colonne à longueur variable, qu'un lecteur ne doit

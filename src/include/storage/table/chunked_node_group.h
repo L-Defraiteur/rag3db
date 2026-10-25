@@ -180,8 +180,12 @@ public:
         return std::move(chunks[columnID]);
     }
     bool isFullOrOnDisk() const {
-        return numRows == capacity || residencyState == ResidencyState::ON_DISK;
+        return numRows == capacity || sealed || residencyState == ResidencyState::ON_DISK;
     }
+    // Scellé par le point de reprise à la prise de la liste des blocs (V2-2) : ce qui s'ajoute
+    // ensuite ouvre un bloc neuf, que l'échange garde ; rien ne s'ajoute à un bloc en cours de
+    // fonte.
+    void seal() { sealed = true; }
     ResidencyState getResidencyState() const { return residencyState; }
     NodeGroupDataFormat getFormat() const { return format; }
 
@@ -316,6 +320,7 @@ protected:
     // the mutex: a reader that sees false sees the rows as they were before any change in
     // progress, which is what its snapshot is entitled to.
     std::atomic<bool> mayHaveVersionInfo{false};
+    bool sealed = false;
     // Creates the version info if needed. The caller holds versionInfoMtx exclusively.
     VersionInfo& getOrCreateVersionInfoNoLock();
 };
