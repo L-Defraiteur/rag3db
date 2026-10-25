@@ -888,6 +888,13 @@ async function envoyerAuChat(id) {
   // fin du tour.
   for (const p of res.propositions ?? []) lienDeProposition(v, v.bulle, p);
   v.bulle.dataset.run = res.run;
+  // Un tour d'une tâche qui a écrit : ses fichiers, sur la branche, et la
+  // relecture de la tâche (diff, témoins, fusion).
+  if (res.tache && res.fichiers?.length) {
+    v.bulle.append(el("p", { class: "tache-du-tour" },
+      `${res.fichiers.join(", ")} — sur la branche ${res.tache.branche} · `,
+      el("a", { href: `/ide/code/${res.tache.parent}/taches/${encodeURIComponent(res.tache.nom)}`, "data-tache": res.tache.nom }, "relire la tâche")));
+  }
   v.note.textContent = res.stopped_by ? `arrêté ${res.stopped_by === "ide" ? "dans l'IDE" : `par ${res.stopped_by}`}` : "fini";
   v.conso.textContent = res.consumed?.length
     ? `consommé : ${res.consumed.map((c) => `${c.slug} ${c.amount} ${c.unit}`).join(", ")}`
