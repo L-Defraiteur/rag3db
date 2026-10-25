@@ -15,5 +15,5 @@
   `{{ r.signature }}`{% endif %}
 {%- endfor %}
 
-_{{ provenance }}_
+{% if provenance %}_{{ provenance }}_{% endif %}
 {%- endif %}

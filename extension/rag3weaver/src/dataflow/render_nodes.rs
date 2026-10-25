@@ -1015,6 +1015,8 @@ impl Node for RenderResultsNode {
         let query: Option<QueryPayload> = ctx.take_input("query").and_then(take_or_clone::<QueryPayload>);
         let meta: Option<crate::search::SearchMeta> =
             ctx.take_input("meta").and_then(take_or_clone::<crate::search::SearchMeta>);
+        // En markdown, rows est lu et laissé : le gabarit lit results (total et
+        // provenance vont dans sa vue).
         let rows: Option<serde_json::Value> = ctx.take_input("rows").and_then(take_or_clone::<serde_json::Value>);
         let total: Option<serde_json::Value> = ctx.take_input("total").and_then(take_or_clone::<serde_json::Value>);
         let text = if self.json && self.json_of_rows {
