@@ -280,7 +280,8 @@ public:
     void commitIndexChange(uint64_t holderID, IndexChangeKind kind,
         common::transaction_t commitTS);
     void rollbackIndexChange(uint64_t holderID, IndexChangeKind kind);
-    // Au point de reprise (aucune transaction ouverte) : efface les index retirés et validés.
+    // Au point de reprise (aucun écrivain ouvert ; un lecteur entré pendant l'écriture voit le
+    // dernier état validé, sans l'index retiré) : efface les index retirés et validés.
     void reclaimDroppedIndexes();
     // Le nom du refus d'écrire dans une table dont un index n'est pas chargé.
     static constexpr const char* INDEX_NOT_LOADED_FOR_WRITE =
