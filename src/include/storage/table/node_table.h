@@ -258,9 +258,28 @@ public:
     // INDEX_CHANGE du tampon d'annulation). Sans transaction (le rejeu du journal), l'effet est
     // immédiat, comme avant.
     void addIndex(std::unique_ptr<Index> index, transaction::Transaction* transaction = nullptr);
+    // Le CREATE concurrent ((A), page 07 de coeur-cpp-tickets). T_A pose un holder NOTED : visible
+    // comme tout index créé, refusé aux recherches, jamais écrit ; il n'est en construction que
+    // tant que vit le jeton de la requête qui le construit (sinon INCOMPLETE).
+    void addNotedIndex(std::unique_ptr<Index> emptyIndex, transaction::Transaction* transaction,
+        std::weak_ptr<void> builderToken);
+    // T_B : l'index bâti prend la place de l'index vide du holder NOTED, et le holder passe à
+    // READY par une transition versionnée (vue de T_B seule jusqu'à sa validation). Lève si le
+    // holder n'est pas NOTED pour T_B.
+    Index* completeNotedIndex(const std::string& name, std::unique_ptr<Index> built,
+        transaction::Transaction* transaction);
+    // Au rejeu du journal (INDEX_STATE_RECORD) : l'état posé sans version, si le holder est là.
+    void setIndexBuildStateForRecovery(const std::string& name, IndexBuildState state);
+    // L'état de construction de l'exemplaire de ce nom visible à la transaction (SHOW_INDEXES).
+    std::optional<IndexBuildState> getIndexBuildState(const std::string& name,
+        const transaction::Transaction* transaction) const;
+    // Les noms des refus d'une recherche sur un index en construction ou à refaire.
+    static constexpr const char* INDEX_UNDER_CONSTRUCTION = "is under construction";
+    static constexpr const char* INDEX_INCOMPLETE = "is incomplete";
     void dropIndex(const std::string& name, transaction::Transaction* transaction = nullptr);
-    void commitIndexChange(uint64_t holderID, bool isCreate, common::transaction_t commitTS);
-    void rollbackIndexChange(uint64_t holderID, bool isCreate);
+    void commitIndexChange(uint64_t holderID, IndexChangeKind kind,
+        common::transaction_t commitTS);
+    void rollbackIndexChange(uint64_t holderID, IndexChangeKind kind);
     // Au point de reprise (aucune transaction ouverte) : efface les index retirés et validés.
     void reclaimDroppedIndexes();
     // Le nom du refus d'écrire dans une table dont un index n'est pas chargé.
@@ -381,6 +400,10 @@ private:
     // pendant le rejeu du journal il est détaché (la table reçoit la ligne, l'index sera à
     // rebâtir) ; hors rejeu, l'écriture est refusée par INDEX_NOT_LOADED_FOR_WRITE.
     bool isWritableIndex(IndexHolder& indexHolder, const transaction::Transaction* transaction);
+    void addIndexInState(std::unique_ptr<Index> index, transaction::Transaction* transaction,
+        IndexBuildState state, std::weak_ptr<void> builderToken);
+    void logIndexBuildState(transaction::Transaction* transaction, const std::string& name,
+        IndexBuildState state) const;
 
 private:
     void validatePkNotExists(const transaction::Transaction* transaction,

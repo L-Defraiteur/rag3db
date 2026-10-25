@@ -1,5 +1,7 @@
 #include "storage/table/node_table.h"
 
+#include "storage/storage_version_info.h"
+
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -581,7 +583,9 @@ bool NodeTable::isWritableIndex(IndexHolder& indexHolder, const Transaction* tra
         return false;
     }
     if (indexHolder.isLoaded()) {
-        return true;
+        // Pas encore bâti (NOTED), ou à refaire (INCOMPLETE) : l'écrivain n'y touche pas. L'état
+        // est lu au moment d'écrire, sous le verrou d'index (page 07, §3 bis.1).
+        return indexHolder.receivesWrites();
     }
     if (transaction->isRecovery()) {
         indexHolder.detach();
@@ -714,6 +718,9 @@ void NodeTable::initUpdateState(main::ClientContext* context, TableUpdateState& 
                     const_cast<NodeTable*>(this)->isWritableIndex(
                         const_cast<IndexHolder&>(indexHolder), transaction);
                 }
+                continue;
+            }
+            if (!indexHolder.receivesWrites()) {
                 continue;
             }
             auto index = indexHolder.getSharedIndex();
@@ -1000,7 +1007,7 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
                     "Cannot commit index insertions for index " + index.getName() +
                     ", because it is not loaded. Please load the extension for the index first.");
             }
-            if (index.needCommitInsert()) {
+            if (index.needCommitInsert() && index.receivesWrites()) {
                 toInsertInto.push_back(index.getSharedIndex());
             }
         }
@@ -1423,6 +1430,80 @@ bool NodeTable::isIndexVisible(const IndexHolder& holder, const Transaction* tra
 }
 
 void NodeTable::addIndex(std::unique_ptr<Index> index, Transaction* transaction) {
+    addIndexInState(std::move(index), transaction, IndexBuildState::READY, {});
+}
+
+void NodeTable::addNotedIndex(std::unique_ptr<Index> emptyIndex, Transaction* transaction,
+    std::weak_ptr<void> builderToken) {
+    const auto name = emptyIndex->getName();
+    addIndexInState(std::move(emptyIndex), transaction, IndexBuildState::NOTED,
+        std::move(builderToken));
+    logIndexBuildState(transaction, name, IndexBuildState::NOTED);
+}
+
+void NodeTable::logIndexBuildState(Transaction* transaction, const std::string& name,
+    IndexBuildState state) const {
+    // Une transaction forcée (T_B) a jeté son journal : son état est durable par le point de
+    // reprise qui la suit.
+    if (transaction != nullptr && transaction->shouldLogToWAL()) {
+        transaction->getLocalWAL().logIndexStateRecord(tableID, name,
+            static_cast<uint8_t>(state));
+    }
+}
+
+Index* NodeTable::completeNotedIndex(const std::string& name, std::unique_ptr<Index> built,
+    Transaction* transaction) {
+    std::unique_lock lck{indexesMtx};
+    for (auto& holder : indexes) {
+        if (holder.isDetached() || !isIndexVisible(holder, transaction) ||
+            !StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
+            continue;
+        }
+        const auto state = holder.buildStateFor(transaction->getID(), transaction->getStartTS());
+        if (state != IndexBuildState::NOTED) {
+            throw RuntimeException(stringFormat("Index {} of table {} cannot be built: it is {}.",
+                name, tableName, indexBuildStateToString(state)));
+        }
+        holder.replaceIndex(std::move(built));
+        holder.markBuildState(transaction->getID(), IndexBuildState::READY);
+        hasChanges = true;
+        transaction->pushIndexChange(*this, holder.getHolderID(), IndexChangeKind::BUILD_STATE);
+        logIndexBuildState(transaction, name, IndexBuildState::READY);
+        return holder.getIndex();
+    }
+    throw RuntimeException(stringFormat(
+        "Index {} of table {} cannot be built: its entry was not created.", name, tableName));
+}
+
+void NodeTable::setIndexBuildStateForRecovery(const std::string& name, IndexBuildState state) {
+    std::unique_lock lck{indexesMtx};
+    for (auto& holder : indexes) {
+        if (!holder.isDetached() && !holder.isDropped() &&
+            StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
+            holder.setBuildState(state);
+            hasChanges = true;
+            return;
+        }
+    }
+}
+
+std::optional<IndexBuildState> NodeTable::getIndexBuildState(const std::string& name,
+    const Transaction* transaction) const {
+    std::shared_lock lck{indexesMtx};
+    for (const auto& holder : indexes) {
+        if (holder.isDetached() || !isIndexVisible(holder, transaction) ||
+            !StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
+            continue;
+        }
+        return transaction == nullptr ?
+                   holder.committedBuildState() :
+                   holder.buildStateFor(transaction->getID(), transaction->getStartTS());
+    }
+    return std::nullopt;
+}
+
+void NodeTable::addIndexInState(std::unique_ptr<Index> index, Transaction* transaction,
+    IndexBuildState state, std::weak_ptr<void> builderToken) {
     std::unique_lock lck{indexesMtx};
     // Un exemplaire vivant du même nom refuse ; un exemplaire retiré ne compte plus. Un exemplaire
     // retiré par une autre transaction non validée ne peut pas se trouver ici : un DROP tient
@@ -1440,6 +1521,7 @@ void NodeTable::addIndex(std::unique_ptr<Index> index, Transaction* transaction)
     });
     IndexHolder holder{std::move(index)};
     holder.setHolderID(nextHolderID++);
+    holder.initBuildState(state, std::move(builderToken));
     const auto versioned = transaction != nullptr && !transaction->isRecovery();
     if (versioned) {
         holder.markCreatedBy(transaction->getID());
@@ -1448,7 +1530,7 @@ void NodeTable::addIndex(std::unique_ptr<Index> index, Transaction* transaction)
     indexes.push_back(std::move(holder));
     hasChanges = true;
     if (versioned) {
-        transaction->pushIndexChange(*this, holderID, true /* isCreate */);
+        transaction->pushIndexChange(*this, holderID, IndexChangeKind::CREATE);
     }
 }
 
@@ -1472,39 +1554,52 @@ void NodeTable::dropIndex(const std::string& name, Transaction* transaction) {
             StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
             holder.markDroppedBy(transaction->getID());
             hasChanges = true;
-            transaction->pushIndexChange(*this, holder.getHolderID(), false /* isCreate */);
+            transaction->pushIndexChange(*this, holder.getHolderID(), IndexChangeKind::DROP);
             return;
         }
     }
 }
 
-void NodeTable::commitIndexChange(uint64_t holderID, bool isCreate, transaction_t commitTS) {
+void NodeTable::commitIndexChange(uint64_t holderID, IndexChangeKind kind,
+    transaction_t commitTS) {
     std::unique_lock lck{indexesMtx};
     for (auto& holder : indexes) {
         if (holder.getHolderID() == holderID) {
-            if (isCreate) {
+            switch (kind) {
+            case IndexChangeKind::CREATE:
                 holder.commitCreate(commitTS);
-            } else {
+                break;
+            case IndexChangeKind::DROP:
                 holder.commitDrop(commitTS);
+                break;
+            case IndexChangeKind::BUILD_STATE:
+                holder.commitBuildState(commitTS);
+                break;
             }
             return;
         }
     }
 }
 
-void NodeTable::rollbackIndexChange(uint64_t holderID, bool isCreate) {
+void NodeTable::rollbackIndexChange(uint64_t holderID, IndexChangeKind kind) {
     std::unique_lock lck{indexesMtx};
     for (auto it = indexes.begin(); it != indexes.end(); ++it) {
         if (it->getHolderID() != holderID) {
             continue;
         }
-        if (isCreate) {
+        switch (kind) {
+        case IndexChangeKind::CREATE:
             // L'index d'une recherche en cours reste vivant par son shared_ptr, celui d'un
             // écrivain aussi : ses états portent l'index et son holderID (IndexWriteState), lus
             // une fois sous ce verrou, et ne dépendent pas de la position dans la liste.
             indexes.erase(it);
-        } else {
+            break;
+        case IndexChangeKind::DROP:
             it->unmarkDropped();
+            break;
+        case IndexChangeKind::BUILD_STATE:
+            it->rollbackBuildState();
+            break;
         }
         return;
     }
@@ -1533,6 +1628,23 @@ std::vector<std::shared_ptr<Index>> NodeTable::captureVisibleIndexes(const std::
         if (!index.isLoaded()) {
             throw RuntimeException(stringFormat(
                 "Index {} is not loaded yet. Please load the index before accessing it.", name));
+        }
+        // L'état vu à l'instantané de la recherche : un index en construction se refuse par son
+        // nom, jamais pris pour un index absent ; un index incomplet dit qu'il est à refaire.
+        const auto state = transaction == nullptr ?
+                               index.committedBuildState() :
+                               index.buildStateFor(transaction->getID(), transaction->getStartTS());
+        if (state == IndexBuildState::INCOMPLETE) {
+            throw RuntimeException(stringFormat(
+                "Index {} of table {} {}: its build did not finish. Rebuild it: drop it, then "
+                "create it again.",
+                name, tableName, INDEX_INCOMPLETE));
+        }
+        if (state != IndexBuildState::READY) {
+            throw RuntimeException(stringFormat(
+                "Index {} of table {} {} (state {}): a CREATE is building it. Run the query again "
+                "once the CREATE is done.",
+                name, tableName, INDEX_UNDER_CONSTRUCTION, indexBuildStateToString(state)));
         }
         visible.push_back(index.getSharedIndex());
     }
@@ -1598,6 +1710,11 @@ void NodeTable::deserialize(main::ClientContext* context, StorageManager* storag
     std::vector<IndexInfo> indexInfos;
     std::vector<length_t> storageInfoBufferSizes;
     std::vector<std::unique_ptr<uint8_t[]>> storageInfoBuffers;
+    std::vector<IndexBuildState> buildStates;
+    // Avant le format 43, un holder ne portait pas d'état : il était prêt.
+    const auto version = deSer.getStorageVersion();
+    const auto readsBuildState =
+        version == 0 || version > StorageVersionInfo::VERSION_BEFORE_INDEX_BUILD_STATE;
     uint64_t numIndexes = 0u;
     deSer.deserializeValue<uint64_t>(numIndexes);
     indexInfos.reserve(numIndexes);
@@ -1612,6 +1729,11 @@ void NodeTable::deserialize(main::ClientContext* context, StorageManager* storag
         auto storageInfoBuffer = std::make_unique<uint8_t[]>(storageInfoSize);
         deSer.read(storageInfoBuffer.get(), storageInfoSize);
         storageInfoBuffers.push_back(std::move(storageInfoBuffer));
+        uint8_t buildState = static_cast<uint8_t>(IndexBuildState::READY);
+        if (readsBuildState) {
+            deSer.deserializeValue<uint8_t>(buildState);
+        }
+        buildStates.push_back(static_cast<IndexBuildState>(buildState));
     }
     indexes.clear();
     indexes.reserve(indexInfos.size());
@@ -1619,6 +1741,8 @@ void NodeTable::deserialize(main::ClientContext* context, StorageManager* storag
         indexes.push_back(IndexHolder(indexInfos[i], std::move(storageInfoBuffers[i]),
             storageInfoBufferSizes[i]));
         indexes.back().setHolderID(nextHolderID++);
+        // Sans jeton : un état autre que READY se lit INCOMPLETE (IndexHolder::withBuilder).
+        indexes.back().setBuildState(buildStates[i]);
         if (indexInfos[i].isBuiltin) {
             indexes[i].load(context, storageManager);
         }

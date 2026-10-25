@@ -114,6 +114,21 @@ struct InternalCreateHNSWIndexFunction final {
     static function::function_set getFunctionSet();
 };
 
+// Le CREATE concurrent ((A), page 07 de coeur-cpp-tickets) : T_A pose l'entrée au catalogue et un
+// holder NOTED, que la requête du CREATE tient en vie par son jeton.
+struct InternalCreateHNSWNoteFunction final {
+    static constexpr const char* name = "_CREATE_HNSW_NOTE";
+
+    static function::function_set getFunctionSet();
+};
+
+// Entre T_A et T_B : attend les transactions d'écriture commencées avant T_A.
+struct InternalWaitHNSWWritersFunction final {
+    static constexpr const char* name = "_WAIT_HNSW_WRITERS";
+
+    static function::function_set getFunctionSet();
+};
+
 struct InternalFinalizeHNSWIndexFunction final {
     static constexpr const char* name = "_FINALIZE_HNSW_INDEX";
 

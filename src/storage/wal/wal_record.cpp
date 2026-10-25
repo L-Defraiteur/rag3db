@@ -87,6 +87,9 @@ std::unique_ptr<WALRecord> WALRecord::deserialize(Deserializer& deserializer,
     case WALRecordType::UPDATE_SEQUENCE_RECORD: {
         walRecord = UpdateSequenceRecord::deserialize(deserializer);
     } break;
+    case WALRecordType::INDEX_STATE_RECORD: {
+        walRecord = IndexStateRecord::deserialize(deserializer);
+    } break;
     case WALRecordType::LOAD_EXTENSION_RECORD: {
         walRecord = LoadExtensionRecord::deserialize(deserializer);
     } break;
@@ -285,6 +288,21 @@ std::unique_ptr<UpdateSequenceRecord> UpdateSequenceRecord::deserialize(
     auto retVal = std::make_unique<UpdateSequenceRecord>();
     deserializer.deserializeValue(retVal->sequenceID);
     deserializer.deserializeValue(retVal->kCount);
+    return retVal;
+}
+
+void IndexStateRecord::serialize(Serializer& serializer) const {
+    WALRecord::serialize(serializer);
+    serializer.write(tableID);
+    serializer.write(indexName);
+    serializer.write(buildState);
+}
+
+std::unique_ptr<IndexStateRecord> IndexStateRecord::deserialize(Deserializer& deserializer) {
+    auto retVal = std::make_unique<IndexStateRecord>();
+    deserializer.deserializeValue(retVal->tableID);
+    deserializer.deserializeValue(retVal->indexName);
+    deserializer.deserializeValue(retVal->buildState);
     return retVal;
 }
 

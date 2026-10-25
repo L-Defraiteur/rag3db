@@ -52,6 +52,8 @@ void VectorExtension::load(main::ClientContext* context) {
     extension::ExtensionUtils::registerIndexType(db, OnDiskHNSWIndex::getIndexType());
     initHNSWEntries(context);
     extension::ExtensionUtils::addTableFunc<QueryVectorIndexFunction>(db);
+    extension::ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateHNSWNoteFunction>(db);
+    extension::ExtensionUtils::addInternalStandaloneTableFunc<InternalWaitHNSWWritersFunction>(db);
     extension::ExtensionUtils::addInternalStandaloneTableFunc<InternalCreateHNSWIndexFunction>(db);
     extension::ExtensionUtils::addInternalStandaloneTableFunc<InternalFinalizeHNSWIndexFunction>(
         db);

@@ -52,7 +52,7 @@ struct VersionRecord {
 struct IndexChangeRecord {
     NodeTable* table;
     uint64_t holderID;
-    bool isCreate;
+    IndexChangeKind kind;
 };
 
 struct VectorUpdateRecord {
@@ -159,12 +159,12 @@ void UndoBuffer::createVectorUpdateInfo(UpdateInfo* updateInfo, const idx_t vect
     *reinterpret_cast<VectorUpdateRecord*>(buffer) = vectorUpdateRecord;
 }
 
-void UndoBuffer::createIndexChange(NodeTable& table, uint64_t holderID, bool isCreate) {
+void UndoBuffer::createIndexChange(NodeTable& table, uint64_t holderID, IndexChangeKind kind) {
     auto buffer = createUndoRecord(sizeof(UndoRecordHeader) + sizeof(IndexChangeRecord));
     const UndoRecordHeader recordHeader{UndoRecordType::INDEX_CHANGE, sizeof(IndexChangeRecord)};
     *reinterpret_cast<UndoRecordHeader*>(buffer) = recordHeader;
     buffer += sizeof(UndoRecordHeader);
-    *reinterpret_cast<IndexChangeRecord*>(buffer) = IndexChangeRecord{&table, holderID, isCreate};
+    *reinterpret_cast<IndexChangeRecord*>(buffer) = IndexChangeRecord{&table, holderID, kind};
 }
 
 uint8_t* UndoBuffer::createUndoRecord(const uint64_t size) {
@@ -247,7 +247,7 @@ void UndoBuffer::commitRecord(UndoRecordType recordType, const uint8_t* record,
     } break;
     case UndoRecordType::INDEX_CHANGE: {
         const auto& change = *reinterpret_cast<IndexChangeRecord const*>(record);
-        change.table->commitIndexChange(change.holderID, change.isCreate, commitTS);
+        change.table->commitIndexChange(change.holderID, change.kind, commitTS);
     } break;
     default:
         KU_UNREACHABLE;
@@ -307,7 +307,7 @@ void UndoBuffer::rollbackRecord(ClientContext* context, const UndoRecordType rec
     } break;
     case UndoRecordType::INDEX_CHANGE: {
         const auto& change = *reinterpret_cast<IndexChangeRecord const*>(record);
-        change.table->rollbackIndexChange(change.holderID, change.isCreate);
+        change.table->rollbackIndexChange(change.holderID, change.kind);
     } break;
     default: {
         KU_UNREACHABLE;
