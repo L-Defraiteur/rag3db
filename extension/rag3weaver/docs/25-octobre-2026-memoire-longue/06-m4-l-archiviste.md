@@ -114,18 +114,30 @@ Les identifiants sont en anglais (`archive`, `SplitSectionsNode`, `models.llm`, 
 `create`, `unranged`, `proposed`) ; les valeurs de données restent celles du gabarit (`via:
 archiviste`, `niveau: L1`).
 
-## 5. La relecture de l'ancien modèle de la mémoire de Lucie
+## 5. La relecture de l'ancien modèle de la mémoire de Lucie — jouée sur l'instantané
 
-Un graphe `relire_l_ancien_modele`, joué une fois après le mot de Lucie, qui fait ce que la
-page 05 a fait à la main pour « régime GPU » :
+`scripts/relire_l_ancien_modele.py <backend.json> [ecrire]`, par les outils du gabarit sur une
+base ouverte en appel unique par le binaire (le graphe attend « pour chaque », §3). Sans
+`ecrire`, il lit et dit ce qu'il ferait. Ce qu'il fait :
 - un L0 par jour de création, `sources/<jour>-ancien-modele.md`, une section par Memory
   (`said_as` pour titre, la `claim`, le `why`, la provenance avec l'uuid et les dates) ;
-- une Fiche par Subject (nom, `about`, `current`), si elle n'existe pas ;
-- un L1 par Memory sur la fiche de son Subject (`ANCHORED_TO`), texte = `claim` puis `why`,
-  Ref `doc:` vers sa section ; une Memory dont le texte est déjà celui d'un apport de la fiche
-  est sautée (c'est le cas de « régime GPU ») ;
-- rien n'est retiré : les lignes Memory et Subject restent, et le rapport dit ce qui a été
-  relu. Les retirer (`set_aside`) est un geste à part, après lecture.
+- une Fiche par Subject (nom, `about`, `current`) si elle manque ; une Memory sans Subject
+  retrouvé donne une fiche `proposed` à son titre ;
+- un L1 par Memory sur la fiche, texte = `claim` puis `why`, relié, cité par `doc:` (le genre
+  créé au besoin) ; une Memory dont le texte est déjà celui d'un apport de la fiche est sautée ;
+- rien n'est retiré, et le rapport dit ce qu'il a fait.
+
+**Joué le 26 octobre à 0 h 15 sur une copie de l'instantané `migration-fiche-25-oct`** (sous
+`~/.cache/rag3weaver-build/relecture-96/`, la vraie base intacte) : l'ancien modèle tient
+exactement un Subject et une Memory, la paire « régime GPU » que la page 05 a portée à la main.
+La relecture a écrit la Source `sources/2026-10-11-ancien-modele.md`, la Fiche « régime GPU »
+(même uuid que sur la vraie base : il dérive du nom), son L1 et sa Ref `doc:` ; `cited_by` la
+rend ; rejouée, elle saute tout. Les deux lignes Memory et Subject sont identiques avant et après.
+Sur la vraie base, elle n'a donc rien à écrire aujourd'hui ; elle servira s'il revient des
+Memory, et le jour où l'on retirera l'ancien modèle (`set_aside`, un geste à part, après le mot
+de Lucie).
+
+Limite : aucun outil ne rend `ANCHORED_TO`, le Subject d'une Memory se retrouve par `said_as`.
 
 ## 6. Les témoins et la mesure
 
