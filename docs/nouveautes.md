@@ -7,6 +7,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Un service revenu est repris sans rien redémarrer.** Un backend
+  ouvert sans son service d'embarquement le retente, et se rouvre de lui-même dès
+  qu'il répond : les vecteurs reprennent, l'avertissement dit toujours le vrai.
+  2a5a38cb0.
+- **25 oct. — Aucune écriture du plein texte ne se perd en silence.** Chaque index
+  finit par compter ses documents contre les lignes de la base et dit l'écart, au
+  journal et dans l'état. 4d1a4a0ee.
 - **25 oct. — La recherche tient sans ses vecteurs.** Pendant un rattrapage,
   `search_code` répond par les mots et dit pourquoi le dense manque, au lieu de
   tomber en entier. d6abc051f.
