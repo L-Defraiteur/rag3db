@@ -98,3 +98,32 @@ son contrat.
   cochée et « aucun reranker configuré ». Rouge sur master, vert avec la page, sous
   `RAG3WEAVER_EXIGER_NAVIGATEUR=1`.
 - Relue par everything declarative, qui tient `page.js` (25 octobre 2026).
+
+## 5. Une recherche bornée sort de l'instantané (25 octobre 2026, le soir)
+
+Sur l'hôte de Lucie, `search_code « cpu_count »` borné à `benchmark/` rendait « dense signal
+failed: … PROJECT_GRAPH_CYPHER failed: … Can not execute a write query inside a read-only
+transaction ». Un `scope`, un `language` ou un `filter_condition` filtre la branche dense par une
+projection de graphe, une écriture pour le moteur, et L6 lit toute la recherche dans une
+transaction en lecture seule. Le refus condamnait cette transaction : selon l'ordre, le plein
+texte tombait aussi, d'où « every signal branch is down ».
+
+- **Pas une régression de ce lot** : le même témoin tombe sur le code de `04063ee06`, avant les
+  pièces 1 à 3. Le défaut date de L6 ; aucune recherche bornée sur un vrai index vectoriel ne
+  l'avait exercé.
+- **Le correctif** : `SearchSourceNodeFactory::snapshot_safe` dit non pour un appel filtré (la
+  définition instanciée porte le filtre) ; cet appel lit comme avant L6, les autres restent sous
+  l'instantané. Dans le nœud, aucune connexion hors de l'instantané n'existe (la vue de l'appel
+  est reconstruite sur lui), sauf par le mutex du catalogue, interdit par L4.
+- **Témoins** : `e2e_lectures::une_recherche_dense_bornee_a_un_chemin_tient_sous_l_instantane`
+  (rouge sur master et sur `04063ee06`) ; `node_factories::tests::une_recherche_filtree_ne_lit_pas_sous_l_instantane`.
+
+**Le retour sous l'instantané** : quand la lib du cœur qui permet la projection sous READ ONLY
+(une projection devient un objet de la connexion, lot « projection-lecture-seule ») sera en
+`courant`, `snapshot_safe` redeviendra vrai pour tout appel de recherche, et le témoin e2e restera
+vert sous l'instantané.
+
+**Le cas qui reste** : une base à plusieurs cellules dont le seul filtre de cellule ferait
+projeter la branche dense, sans `scope` ni `filter_condition` de l'appelant. L'appel resterait
+sous l'instantané et tomberait comme avant. Pas vu sur les bases de Lucie (ses recherches non
+bornées passent) ; le correctif du cœur le couvre.
