@@ -767,7 +767,12 @@ fn l_entree_par_un_lien_venu_d_ailleurs_ouvre_la_page_au_premier_clic() {
     let ailleurs = format!("data:text/html,<a id=\"entree\" href=\"{racine}/ide/entrer?jeton=j\">entrer</a>");
     n.aller(&ailleurs, "document.querySelector('#entree')");
     n.evaluer("document.querySelector('#entree').click()");
-    n.attendre("location.pathname === '/ide/' && document.querySelector('#vue h1')?.textContent === 'Backends'", "l'accueil au premier clic");
+    // L'accueil d'un hôte sans backend dit qu'il n'en sert aucun : la page s'est
+    // rendue avec le cookie (un 403 bad token n'aurait ni #vue ni ce texte).
+    n.attendre(
+        "location.pathname === '/ide/' && (document.querySelector('#vue h1')?.textContent === 'Backends' || document.querySelector('#vue')?.textContent.includes('aucun backend'))",
+        "l'accueil au premier clic",
+    );
     assert!(n.erreurs.is_empty(), "l'entrée par un lien externe : erreurs à la console : {:#?}", n.erreurs);
     drop(n);
     let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
