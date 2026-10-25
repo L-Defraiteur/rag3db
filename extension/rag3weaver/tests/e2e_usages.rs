@@ -202,24 +202,33 @@ fn les_requetes_de_usages_passent_par_l_index() {
 }
 
 /// **Un définisseur C/C++ n'est candidat que s'il est visible par les #include** (25 octobre
-/// 2026, la règle du langage lui-même) : deux `helper` homonymes, `run` inclut l'un, il est seul
-/// lié et la marque dit « inclusion » ; `compute`, déclaré par `calc.h` et défini dans `calc.cpp`,
-/// est vu par l'en-tête homonyme (« entete », mesuré à part), pas son homonyme de `w/` ; `lone`
-/// n'inclut rien : il s'abstient, au lieu d'une arête par le nom.
+/// 2026, la règle du langage lui-même), et **la visibilité ôte des candidats, elle n'en désigne
+/// jamais** (la mesure sur code-lourd : recompter les homonymes après le filtre promouvait des
+/// arêtes par le nom fausses à 80 %).
+/// - `solo`, seul de son nom, défini dans un en-tête que `run` inclut : lié, « inclusion ».
+/// - deux `helper` homonymes, `run` inclut l'un : aucune arête par le nom, ni vers l'un ni vers l'autre.
+/// - `compute`, déclaré par `calc.h`, défini dans `calc.cpp` : vu par l'en-tête homonyme, « entete ».
+/// - `drop_it`, défini dans `t/ddl.cpp` qui inclut `transformer.h`, appelé depuis `t/transformer.cpp`
+///   qui l'inclut aussi : vu par co-inclusion, « co-inclusion ».
+/// - `lone` appelle `solo` sans rien inclure : il s'abstient, et l'abstention se compte.
+/// - une arête Rust du même lot ne porte pas de visibilité.
 #[test]
 #[ignore]
 fn un_definisseur_cpp_se_voit_par_ses_includes() {
     let catalog = setup();
     let mut cat = catalog.lock().unwrap();
     let fichiers: Vec<(String, String)> = [
+        ("x/solo.h", "#pragma once\ninline int solo() {\n    return 0;\n}\n"),
         ("x/helper.h", "#pragma once\ninline int helper() {\n    return 1;\n}\n"),
         ("y/helper.h", "#pragma once\ninline int helper() {\n    return 2;\n}\n"),
-        ("app/run.cpp", "#include \"x/helper.h\"\n#include <vector>\n\nint run() {\n    return helper();\n}\n"),
+        ("app/run.cpp", "#include \"x/solo.h\"\n#include \"x/helper.h\"\n#include <vector>\n\nint run() {\n    return solo() + helper();\n}\n"),
         ("z/calc.h", "#pragma once\nint compute();\n"),
         ("z/calc.cpp", "#include \"calc.h\"\n\nint compute() {\n    return 3;\n}\n"),
-        ("w/other.cpp", "int compute() {\n    return 4;\n}\n"),
         ("app/use.cpp", "#include \"../z/calc.h\"\n\nint use_compute() {\n    return compute();\n}\n"),
-        ("app/lone.cpp", "int lone() {\n    return helper();\n}\n"),
+        ("t/transformer.h", "#pragma once\nint drop_it();\n"),
+        ("t/ddl.cpp", "#include \"transformer.h\"\n\nint drop_it() {\n    return 4;\n}\n"),
+        ("t/transformer.cpp", "#include \"transformer.h\"\n\nint transform() {\n    return drop_it();\n}\n"),
+        ("app/lone.cpp", "int lone() {\n    return solo();\n}\n"),
         ("r/lib.rs", "pub fn rhelper() -> i32 {\n    1\n}\n\npub fn rcall() -> i32 {\n    rhelper()\n}\n"),
     ]
     .iter()
@@ -228,20 +237,20 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     let rapport = cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
     let r = cat
         .execute_raw(
-            "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name IN ['run', 'use_compute', 'lone', 'rcall'] \
+            "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name IN ['run', 'use_compute', 'transform', 'lone', 'rcall'] \
              RETURN a.name, b.file_path, r.resolution, r.visibility ORDER BY a.name, b.file_path",
         )
         .unwrap();
     let aretes: Vec<String> = r.rows.iter().map(|x| x.iter().map(|v| v.as_str().unwrap_or("∅").to_string()).collect::<Vec<_>>().join(" ")).collect();
     eprintln!("{aretes:#?}\n{rapport:?}");
-    assert!(aretes.iter().any(|a| a == "run x/helper.h nom inclusion"), "le helper inclus, seul candidat : {aretes:#?}");
-    assert!(!aretes.iter().any(|a| a.contains("y/helper.h")), "l'homonyme non inclus n'est pas lié : {aretes:#?}");
+    assert!(aretes.iter().any(|a| a == "run x/solo.h nom inclusion"), "le seul de son nom, inclus : {aretes:#?}");
+    assert!(!aretes.iter().any(|a| a.contains("helper.h")), "deux homonymes, un seul inclus : aucune arête par le nom : {aretes:#?}");
     assert!(aretes.iter().any(|a| a.starts_with("use_compute z/calc.cpp ") && a.ends_with(" entete")), "la définition vue par son en-tête : {aretes:#?}");
-    assert!(!aretes.iter().any(|a| a.contains("w/other.cpp")), "l'homonyme de w/ n'est pas vu : {aretes:#?}");
+    assert!(aretes.iter().any(|a| a.starts_with("transform t/ddl.cpp ") && a.ends_with(" co-inclusion")), "la classe éclatée, vue par co-inclusion : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.starts_with("lone ")), "sans include, l'abstention : {aretes:#?}");
     assert!(aretes.iter().any(|a| a.starts_with("rcall r/lib.rs ") && a.ends_with(" ∅")), "une arête Rust du même lot ne porte pas de visibilité : {aretes:#?}");
     assert!(rapport.abstained_invisible >= 1, "l'abstention se compte : {rapport:?}");
-    assert!(rapport.include_files_read >= 7, "le coût se compte : {rapport:?}");
+    assert!(rapport.include_files_read >= 10, "le coût se compte : {rapport:?}");
 }
 
 /// **Une arête devinée se dit, et ne se suit pas** (ticket « une arête ne
