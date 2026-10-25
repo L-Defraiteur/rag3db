@@ -225,3 +225,6 @@ L'écrivain attend ainsi au plus environ une seconde, plus la requête en cours.
 pièce de plus pour la voie 2 : un point de reprise qui n'attend plus le départ des autres
 transactions lèverait à la fois le gel des BEGIN et cet échec, et le plafond du produit
 deviendrait inutile.
+
+**Mesuré côté produit le 25 octobre 2026** (arbre principal) : `read_pool::tests::un_lecteur_ouvert_ne_retient_pas_le_point_de_reprise_d_un_copy` tient un instantané de L6 sous un plafond que rien n'atteint, et l'écrivain fait `CHECKPOINT` à côté. Sous 58b46a9bf (avant V2) et sous 3724accba (V2-1c), le `CHECKPOINT` attend le lecteur ouvert 5,000 s puis échoue (« Timeout waiting for… ») ; sous la lib de V2-2 (f8c0c8df0, magasin `rag3db-build-3ebaadb5a`), il passe en 2 ms, le lecteur relit sa génération et un instantané neuf voit l'écriture. Le témoin est `#[ignore]` tant que `courant` n'a pas V2-2 ; le lot qui retire l'ignore relâchera `RAG3WEAVER_SNAPSHOT_MAX_MS`, avec ses deux chiffres. Un COPY de trois lignes, lui, ne force aucun point de reprise (9 à 12 ms sous les trois libs) : un témoin du gel doit le forcer.
+
