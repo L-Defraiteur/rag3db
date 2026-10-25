@@ -300,7 +300,7 @@ impl DeclaredPlan {
         for (id, f) in &self.forms {
             let ctx = |m: String| format!("Plan, forme « {id} » : {m}");
             let mut noms = BTreeSet::new();
-            let mut lier = |p: &Option<Predicate>, noms: &mut BTreeSet<String>| -> Result<Option<Predicate>, String> {
+            let lier = |p: &Option<Predicate>, noms: &mut BTreeSet<String>| -> Result<Option<Predicate>, String> {
                 match p {
                     Some(p) => {
                         let d = self.deplier(p, &mut Vec::new())?;
