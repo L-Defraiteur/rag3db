@@ -280,6 +280,8 @@ const BASE_NODES: &[&str] = &[
     // Le filtre de résultats : un seuil, une exclusion — rien n'est relu.
     "FilterResultsNode",
     "RerankNode",
+    // Le surlignage à l'affichage : il lit la page, le service creux est hors de la base.
+    "HighlightNode",
     "PaginateNode",
     "ResolveParentNode",
     "RenderResultsNode",
