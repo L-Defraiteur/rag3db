@@ -36,6 +36,8 @@ pub struct CancelHandle {
 #[derive(Default)]
 struct HandleState {
     cancelled: bool,
+    /// Qui a demandé l'arrêt (`cancel_by`) : dit par `RunFinished.cancelled_by`.
+    by: Option<String>,
     hubs: Vec<StreamHub<PortValue>>,
 }
 
@@ -49,6 +51,18 @@ impl CancelHandle {
         for h in hubs {
             h.cancel(CancelCause::External);
         }
+    }
+
+    /// [`cancel`](Self::cancel), au nom de `by` (l'IDE, un parent, un agent) :
+    /// le run finit `requested`, `cancelled_by` le dit.
+    pub fn cancel_by(&self, by: &str) {
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).by.get_or_insert_with(|| by.to_string());
+        self.cancel();
+    }
+
+    /// Qui a demandé l'arrêt, s'il a été demandé par [`cancel_by`](Self::cancel_by).
+    pub fn requested_by(&self) -> Option<String> {
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).by.clone()
     }
 
     pub fn is_cancelled(&self) -> bool {

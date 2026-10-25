@@ -1990,6 +1990,7 @@ impl PreparedBackend {
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            runs_in_flight: crate::dataflow::RunsInFlight::new(),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
@@ -2454,6 +2455,10 @@ pub struct Backend {
     /// deux fichiers). Ce qui est fait reste ; le reste garde son retard et la
     /// réconciliation le reprend au prochain démarrage.
     reaction_stop: Arc<std::sync::atomic::AtomicBool>,
+    /// **Les runs en vol** de ce backend (C4) : chaque run d'outil, de
+    /// réaction ou de sous-graphe s'y inscrit le temps du run, et
+    /// [`Backend::stop_run`] l'arrête.
+    runs_in_flight: crate::dataflow::RunsInFlight,
     /// **Les réacteurs des autres cellules** (marche 1 bis, pas c) : un par
     /// cellule qu'une requête a nommée, monté à sa première requête, sur le bus
     /// et les services de cette cellule. Le bus préfixe ses sujets par la
@@ -2766,6 +2771,7 @@ impl Backend {
             Arc::new(bus.clone()),
         );
         services.register(crate::dataflow::REACTION_STOP_SERVICE, self.reaction_stop.clone());
+        services.register(crate::dataflow::RUNS_IN_FLIGHT_SERVICE, self.runs_in_flight.clone());
         // Les runs des réactions se publient sur `reactions`, qu'aucune
         // réaction ne peut écouter : pas de boucle par construction.
         services.register("event_bus", Arc::new(bus.clone()));
@@ -3162,6 +3168,19 @@ impl Backend {
         // Les réactions de cette cellule écoutent avant que l'appel n'écrive.
         self.reactions_de_la_cellule(cell)?;
         self.call(name, args)
+    }
+
+    /// **Arrête un run en vol** de ce backend (C4), au nom de `by` : un appel
+    /// d'outil, une réaction, un sous-graphe. Le run finit `requested`, et
+    /// `RunFinished.cancelled_by` dit `by`. Un run qui n'est pas en vol est
+    /// un refus nommé, et rien ne bouge.
+    pub fn stop_run(&self, run: &str, by: &str) -> Result<(), String> {
+        self.runs_in_flight.stop(run, by)
+    }
+
+    /// Les runs en vol de ce backend.
+    pub fn runs_in_flight(&self) -> Vec<String> {
+        self.runs_in_flight.runs()
     }
 
     /// [`call_in`](Self::call_in) au nom de l'humain (l'IDE).
@@ -3732,6 +3751,10 @@ impl Backend {
                 .map(|(k, v)| (k.clone(), v.writes.clone()))
                 .collect::<HashMap<_, _>>(),
         );
+        // **En vol** (C4), posé en dernier : une branche plus haut remplace le
+        // registre par celui de la vue (une couche), et l'inscription s'y
+        // perdait — l'arrêt depuis la page ne trouvait pas le run.
+        services.register(crate::dataflow::RUNS_IN_FLIGHT_SERVICE, self.runs_in_flight.clone());
         services
     }
     /// **Sème les lignes déclarées par `seed`** qui manquent (voir
@@ -4629,6 +4652,7 @@ mod tests {
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            runs_in_flight: crate::dataflow::RunsInFlight::new(),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -4845,6 +4869,7 @@ mod tests {
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            runs_in_flight: crate::dataflow::RunsInFlight::new(),
         }
     }
 

@@ -570,6 +570,21 @@ impl DaemonHost {
         op_response(result)
     }
 
+    /// **Arrête un run** d'un backend hébergé, au nom de `by` (C4) : un run
+    /// en vol du backend (appel d'outil, réaction, sous-graphe), sinon un run
+    /// en fond de l'hôte. Un run qui n'est ni l'un ni l'autre — fini, ou
+    /// inconnu — est un refus nommé, et rien ne bouge.
+    pub fn stop_run(&self, backend_id: &str, run: &str, by: &str) -> Result<Value, String> {
+        let en_vol = self.with_backend_id(backend_id, |b| b.stop_run(run, by))?;
+        match en_vol {
+            Ok(()) => Ok(json!({ "run": run, "arrete_par": by, "en": "vol" })),
+            Err(e) => match self.background.cancel_on_behalf(run, by) {
+                Ok(()) => Ok(json!({ "run": run, "arrete_par": by, "en": "fond" })),
+                Err(_) => Err(e),
+            },
+        }
+    }
+
     /// **L'état du démon** : ses backends (ouverts ou non, combien de fois)
     /// et ses sessions. C'est ce que l'outil « état du démon » dira.
     pub fn state(&self) -> Value {
