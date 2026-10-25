@@ -560,3 +560,108 @@ fn mesure_des_instantanes_sur_un_vrai_depot() {
     eprintln!("[mesure L6] describe : {}", host.describe(Some(&s), &m));
     host.shutdown();
 }
+
+/// L'embarqueur du gabarit de code, sans service : le nom et la dimension de
+/// `granite-278m`, des vecteurs de hachage. Il n'est pas un factice (l'ouverture
+/// refuse un factice), donc la branche dense lit vraiment son index.
+#[cfg(feature = "code")]
+struct GraniteDeHachage(HashEmbedder);
+
+#[cfg(feature = "code")]
+impl rag3weaver::embedder::Embedder for GraniteDeHachage {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::embedder::EmbedError> {
+        self.0.embed(texts)
+    }
+    fn dim(&self) -> usize {
+        768
+    }
+    fn name(&self) -> &str {
+        "granite-278m"
+    }
+}
+
+/// Le gabarit de code ouvert sur le petit dépôt, avec la branche dense
+/// (`GraniteDeHachage`), indexé jusqu'à la ligne de fin de son journal.
+#[cfg(feature = "code")]
+fn code_indexe_avec_vecteurs(dir: &std::path::Path, nom: &str) -> rag3weaver::backend::Backend {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::json;
+    use std::time::{Duration, Instant};
+
+    let prepared = PreparedBackend::load(&manifeste_code(dir, nom)).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared
+        .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
+        .expect("l'ouverture");
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        if lu.contains("indexation terminée") {
+            break;
+        }
+        assert!(!lu.contains("indexation échouée"), "{lu}");
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    backend
+}
+
+/// **Un index vectoriel retiré ne fait plus tomber la recherche hybride**
+/// (ticket 2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere).
+/// Le rattrapage d'une grosse dette de vecteurs retire l'index le temps de
+/// payer, en posant son drapeau. Avant : la branche dense lisait l'index
+/// absent, l'échec au binder condamnait la transaction en lecture que tous
+/// les signaux de l'appel partagent (L6), et `search_code` rendait « every
+/// signal branch is down ». Après : les mots répondent, et la réponse dit que
+/// le dense manque, et pourquoi. `drapeau` : retiré comme par le rattrapage
+/// (le drapeau posé), ou absent sans raison connue.
+#[cfg(feature = "code")]
+fn la_recherche_se_replie_sans_l_index_vectoriel(nom: &str, drapeau: bool, raison: &str) {
+    use serde_json::json;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), nom);
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let cherche = || backend.call_in(&cellule, "search_code", json!({"query": "alpha", "options": {}, "mode": "indexed"}));
+    let avant = cherche().expect("la recherche avant le retrait").to_string();
+    assert!(avant.contains("a.rs"), "avant le retrait : {avant}");
+    assert!(!avant.contains("dense signal"), "avant le retrait, le dense répond : {avant}");
+
+    {
+        let cat = backend.catalog.lock().unwrap();
+        let index = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle").index;
+        if drapeau {
+            cat.execute_raw(&format!(
+                "MERGE (m:_catalog_meta {{_key: 'vector_index_dropped:Scope_Chunk:{index}'}}) SET m._value = 'embedding'"
+            ))
+            .expect("le drapeau");
+        }
+        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{index}')")).expect("le retrait");
+    }
+
+    let apres = cherche().unwrap_or_else(|e| panic!("la recherche tombe en entier sans l'index vectoriel : {e}"));
+    let apres = apres.to_string();
+    assert!(apres.contains("a.rs"), "les mots répondent seuls : {apres}");
+    assert!(apres.contains("dense signal is not available"), "la réponse dit que le dense manque : {apres}");
+    assert!(apres.contains(raison), "et pourquoi ({raison}) : {apres}");
+}
+
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn la_recherche_rend_les_mots_pendant_le_rattrapage_des_vecteurs() {
+    la_recherche_se_replie_sans_l_index_vectoriel("repli-rattrapage", true, "catch up");
+}
+
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn la_recherche_rend_les_mots_quand_l_index_vectoriel_manque() {
+    la_recherche_se_replie_sans_l_index_vectoriel("repli-absent", false, "is missing");
+}
