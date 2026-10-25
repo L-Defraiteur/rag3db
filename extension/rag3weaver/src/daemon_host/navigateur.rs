@@ -476,9 +476,19 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             "[...document.querySelectorAll('#vue h2')].some(h => h.textContent === 'Définitions (1)') && document.querySelector('#vue a[href$=\"/fichier/main.rs#L5\"]')",
         ),
         (
+            // La recherche dit ce qu'elle sait (pièce 3, docs/12-octobre-2026-recherche/06) :
+            // le score et les scores par signal de chaque résultat, l'état de l'index en
+            // tête, les avertissements en pied — ici le repli dense, l'index étant bâti
+            // sans service d'embarquement —, et la case « reclasser ».
             "la recherche",
             format!("{racine}/ide/code/{id}/recherche?q=arrivee"),
-            "[...document.querySelectorAll('#vue .resultat a')].some(a => a.textContent.startsWith('src/arrivee.rs'))",
+            "[...document.querySelectorAll('#vue .resultat a')].some(a => a.textContent.startsWith('src/arrivee.rs')) && document.querySelector('#vue .resultat .score') && document.querySelector('#vue .resultat .signaux') && document.querySelector('#recherche-etat') && document.querySelector('#vue .avertissements')?.textContent.includes('dense signal is not available') && document.querySelector('#reclasser') && !document.querySelector('#reclasser').checked",
+        ),
+        (
+            // Reclasser sans relecteur configuré : la page le dit, la case est cochée.
+            "la recherche à reclasser",
+            format!("{racine}/ide/code/{id}/recherche?q=arrivee&reclasser=1"),
+            "document.querySelector('#reclasser')?.checked && document.querySelector('#vue .avertissements')?.textContent.includes('aucun reranker configuré')",
         ),
         (
             "la liste des graphes",
