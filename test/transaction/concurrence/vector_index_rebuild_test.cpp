@@ -53,6 +53,11 @@ protected:
         ASSERT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
     }
 
+    // Un refus attendu pendant le CREATE concurrent : l'index est là, en construction.
+    static bool namedConstruction(const std::string& message) {
+        return message.find("is under construction") != std::string::npos;
+    }
+
     // Un refus attendu pendant le rattrapage : l'index n'est pas là.
     static bool namedAbsence(const std::string& message) {
         for (const auto* fragment :
@@ -86,7 +91,11 @@ TEST_F(VectorIndexRebuild, SearchesAcrossDropAndCreateAreConsistentOrNamed) {
             slowestMs = std::max(slowestMs, ms);
             if (!result->isSuccess()) {
                 const auto message = result->getErrorMessage();
-                outcomes[namedAbsence(message) ? "named absence" : "OTHER: " + message.substr(0, 160)]++;
+                // Depuis le CREATE concurrent ((A)), l'index existe dès T_A et la recherche le refuse par
+                // le nom de son état, en construction, jusqu'à la fin du bâti.
+                outcomes[namedAbsence(message)       ? "named absence" :
+                         namedConstruction(message) ? "named construction" :
+                                                      "OTHER: " + message.substr(0, 160)]++;
                 continue;
             }
             // Le plus proche de [7, 7, 7, 1000] est la ligne 1000 : [1000 % 17, 1000 % 23,
