@@ -531,6 +531,18 @@ pub trait SchemaDialect: Send + Sync {
         )
     }
 
+    /// [`Self::existing_links`] avec les propriétés `props` de chaque arête,
+    /// dans cet ordre après les deux bouts : ce qu'une déliaison relit pour
+    /// pouvoir reposer la paire telle qu'elle était. Paramètre `$froms`.
+    fn existing_links_with(&self, rel_table: &str, ends: (&str, &str), props: &[&str]) -> String {
+        if !self.capabilities().cypher { return self.untranslated("existing_links_with"); }
+        let (from, to, rel) = (self.quote(ends.0), self.quote(ends.1), self.quote(rel_table));
+        let colonnes: String = props.iter().map(|p| format!(", r.{}", self.quote(p))).collect();
+        format!(
+            "UNWIND $froms AS f MATCH (a:{from} {{_uuid: f}})-[r:{rel}]->(b:{to}) RETURN a._uuid, b._uuid{colonnes}"
+        )
+    }
+
     /// Le nombre d'arêtes d'une relation.
     fn count_links(&self, rel_table: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("count_links"); }
@@ -3072,6 +3084,11 @@ impl SchemaDialect for PostgresDialect {
     // qu'il a réellement créé (« le catalogue dit tout », 19 octobre 2026).
     fn existing_links(&self, rel_table: &str, _ends: (&str, &str)) -> String {
         format!("SELECT from_uuid, to_uuid FROM {} WHERE from_uuid = ANY($froms)", self.quote(rel_table))
+    }
+
+    fn existing_links_with(&self, rel_table: &str, _ends: (&str, &str), props: &[&str]) -> String {
+        let colonnes: String = props.iter().map(|p| format!(", {}", self.quote(p))).collect();
+        format!("SELECT from_uuid, to_uuid{colonnes} FROM {} WHERE from_uuid = ANY($froms)", self.quote(rel_table))
     }
 
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
