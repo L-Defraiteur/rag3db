@@ -85,6 +85,23 @@ void IndexHolder::serialize(common::Serializer& ser) const {
             ser.write(storageInfoBuffer.get(), storageInfoBufferSize);
         }
     }
+    // Format 43 : l'état de construction, tel qu'écrit (sans le jeton, qui n'est qu'en mémoire :
+    // relu, un état autre que READY vaut INCOMPLETE).
+    ser.write<uint8_t>(static_cast<uint8_t>(buildState));
+}
+
+std::string indexBuildStateToString(IndexBuildState state) {
+    switch (state) {
+    case IndexBuildState::READY:
+        return "READY";
+    case IndexBuildState::NOTED:
+        return "NOTED";
+    case IndexBuildState::MAINTAINED:
+        return "MAINTAINED";
+    case IndexBuildState::INCOMPLETE:
+        return "INCOMPLETE";
+    }
+    KU_UNREACHABLE;
 }
 
 void IndexHolder::load(main::ClientContext* context, StorageManager* storageManager) {

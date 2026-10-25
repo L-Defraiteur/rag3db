@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 
 #include "common/serializer/buffer_writer.h"
 #include "common/types/types.h"
@@ -21,6 +22,29 @@ namespace storage {
 enum class RAG3DB_API IndexConstraintType : uint8_t {
     PRIMARY = 0,              // Primary key index
     SECONDARY_NON_UNIQUE = 1, // Secondary index that is not unique
+};
+
+// L'état de construction d'un index ((A), le CREATE concurrent : page 07 de coeur-cpp-tickets).
+// READY vaut 0 : un holder écrit avant le format 43, ou sans construction, est prêt.
+// - NOTED : l'entrée existe, le graphe n'est pas encore bâti ; les recherches sont refusées, et
+//   les écrivains ne touchent pas à l'index (la validation du bâti les rattrape).
+// - MAINTAINED : bâti, entretenu par les écrivains, pas encore rattrapé (lot 4).
+// - INCOMPLETE : la construction n'a pas fini (requête interrompue, connexion tombée, processus
+//   mort) ; refusé aux recherches, à retirer puis à refaire.
+enum class IndexBuildState : uint8_t {
+    READY = 0,
+    NOTED = 1,
+    MAINTAINED = 2,
+    INCOMPLETE = 3,
+};
+RAG3DB_API std::string indexBuildStateToString(IndexBuildState state);
+
+// Ce qu'un enregistrement d'annulation INDEX_CHANGE défait ou date : la création d'un holder, son
+// retrait, ou une transition de son état de construction.
+enum class IndexChangeKind : uint8_t {
+    DROP = 0,
+    CREATE = 1,
+    BUILD_STATE = 2,
 };
 
 enum class RAG3DB_API IndexDefinitionType : uint8_t {
@@ -260,6 +284,63 @@ public:
         return created && !dropped;
     }
 
+    // L'état de construction, versionné comme la création : une transition d'une transaction
+    // (markBuildState) n'est vue que d'elle jusqu'à sa validation (commitBuildState), et son
+    // annulation la défait. Une seule transition en cours à la fois (le bâtisseur).
+    // Le jeton du bâtisseur : un holder NOTED ou MAINTAINED n'est en construction que tant que la
+    // requête qui le construit vit (ClientContext::newQueryScopedToken) ; sans elle — requête
+    // interrompue ou en échec, connexion tombée, holder relu du disque ou du journal — il est
+    // INCOMPLETE. Le jeton n'est qu'en mémoire : à la réouverture, tout état autre que READY vaut
+    // donc INCOMPLETE.
+    void initBuildState(IndexBuildState state, std::weak_ptr<void> token) {
+        buildState = state;
+        builderToken = std::move(token);
+    }
+    void setBuilderToken(std::weak_ptr<void> token) { builderToken = std::move(token); }
+    void markBuildState(common::transaction_t transactionID, IndexBuildState state) {
+        previousBuildState = buildState;
+        buildState = state;
+        buildStateBy = transactionID;
+        buildStateTS = NO_VERSION;
+    }
+    void commitBuildState(common::transaction_t commitTS) { buildStateTS = commitTS; }
+    void rollbackBuildState() {
+        buildState = previousBuildState;
+        buildStateBy = NO_VERSION;
+        buildStateTS = NO_VERSION;
+    }
+    // Posé sans version (le rejeu du journal, la lecture du disque).
+    void setBuildState(IndexBuildState state) {
+        buildState = state;
+        buildStateBy = NO_VERSION;
+        buildStateTS = NO_VERSION;
+    }
+    // L'état vu d'une transaction (identifiant, début de son instantané).
+    IndexBuildState buildStateFor(common::transaction_t transactionID,
+        common::transaction_t startTS) const {
+        const auto seesTransition = buildStateBy == NO_VERSION || buildStateBy == transactionID ||
+                                    (buildStateTS != NO_VERSION && buildStateTS <= startTS);
+        return withBuilder(seesTransition ? buildState : previousBuildState);
+    }
+    // Le dernier état validé : ce qu'un écrivain lit au moment d'écrire, sous le verrou d'index
+    // (page 07, §3 bis.1), et non à son instantané.
+    IndexBuildState committedBuildState() const {
+        const auto pending = buildStateBy != NO_VERSION && buildStateTS == NO_VERSION;
+        return withBuilder(pending ? previousBuildState : buildState);
+    }
+    IndexBuildState rawBuildState() const { return buildState; }
+    // Un holder ne reçoit les écritures qu'une fois bâti : READY, ou MAINTAINED (lot 4). NOTED et
+    // INCOMPLETE ne sont pas écrits (la validation du bâti rattrape ce que NOTED a laissé passer).
+    bool receivesWrites() const {
+        const auto state = committedBuildState();
+        return state == IndexBuildState::READY || state == IndexBuildState::MAINTAINED;
+    }
+    // T_B : l'index bâti prend la place de l'index vide posé par T_A.
+    void replaceIndex(std::unique_ptr<Index> built) {
+        index = std::move(built);
+        loaded = true;
+    }
+
     void serialize(common::Serializer& ser) const;
     RAG3DB_API void load(main::ClientContext* context, StorageManager* storageManager);
     bool needCommitInsert() const { return index && index->needCommitInsert(); }
@@ -302,6 +383,19 @@ private:
     common::transaction_t createdTS = NO_VERSION;
     common::transaction_t droppedBy = NO_VERSION;
     common::transaction_t droppedTS = NO_VERSION;
+    IndexBuildState buildState = IndexBuildState::READY;
+    IndexBuildState previousBuildState = IndexBuildState::READY;
+    common::transaction_t buildStateBy = NO_VERSION;
+    common::transaction_t buildStateTS = NO_VERSION;
+    std::weak_ptr<void> builderToken;
+
+    IndexBuildState withBuilder(IndexBuildState state) const {
+        if ((state == IndexBuildState::NOTED || state == IndexBuildState::MAINTAINED) &&
+            builderToken.expired()) {
+            return IndexBuildState::INCOMPLETE;
+        }
+        return state;
+    }
 
     // Loaded index structure. Partagée : une recherche la capture (getSharedIndex) et la garde
     // vivante jusqu'à sa fin, même si un DROP concurrent retire le holder de la table.
