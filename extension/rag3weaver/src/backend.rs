@@ -29,6 +29,13 @@ fn default_vector_extension() -> PathBuf {
     PathBuf::from(DEFAULT_VECTOR_EXTENSION)
 }
 
+/// La clé `bilans` d'un manifeste : la mémoire où le juge range ses fiches.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BilansDeclares {
+    pub memoire: PathBuf,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
@@ -113,6 +120,11 @@ pub struct BackendManifest {
     /// l'IDE ; `auto` — l'agent déclare directement et applique.
     #[serde(default)]
     pub declarations: crate::propositions::ModeDeclarations,
+    /// **Les bilans de session** (page 04 du 25 octobre 2026) : où le juge range
+    /// ses fiches (le manifeste d'une mémoire, relatif à celui-ci). Absent : les
+    /// runs de ce backend ne sont pas jugés.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bilans: Option<BilansDeclares>,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
@@ -4569,7 +4581,9 @@ impl Backend {
                 read(&port.node, &port.port)?,
             );
         }
-        let mut response = json!({"result":result,"metadata":metadata});
+        // `run` : l'id du run de cet appel, pour que l'appelant (l'hôte) range ce
+        // qu'il a rendu dans le journal du run (page 04 du 25 octobre 2026).
+        let mut response = json!({"result":result,"metadata":metadata,"run":run});
         if result_port.1 == "results" && output.get(result_port.0, "text").is_some() {
             response["presentation"] = read(result_port.0, "text")?;
         }
@@ -5654,7 +5668,10 @@ mod tests {
                 if let Some(f) = format {
                     a["format"] = json!(f);
                 }
-                backend.call(outil, a).unwrap_or_else(|e| panic!("{outil} {format:?} : {e}"))
+                let mut r = backend.call(outil, a).unwrap_or_else(|e| panic!("{outil} {format:?} : {e}"));
+                // `run` est l'identité de l'appel, pas sa réponse : chaque appel a le sien.
+                assert!(r.as_object_mut().and_then(|o| o.remove("run")).is_some_and(|run| run.is_string()), "{outil} : la réponse porte son run");
+                r
             };
             let nu = avec(None);
             let markdown = avec(Some("markdown"));
