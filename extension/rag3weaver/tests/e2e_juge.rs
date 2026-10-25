@@ -113,34 +113,31 @@ fn journal(host: &DaemonHost, backend: &str, run: &str) -> Value {
     }
 }
 
-/// **Le juge, de bout en bout, sur faux modèle.**
-#[test]
-#[ignore]
-fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
-    let d = tempfile::tempdir().unwrap();
-    let gabarits = d.path().join("templates");
+/// Le banc : une mémoire, un backend de code qui déclare `bilans` vers elle,
+/// un hôte sur le faux modèle ; rend l'hôte, la mémoire, l'id du backend.
+fn banc(d: &Path, vu: Arc<Mutex<Vu>>) -> (DaemonHost, PathBuf, String) {
+    let gabarits = d.join("templates");
     copier(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits);
     // La mémoire.
     let memoire = gabarits.join("backends/memory/backend.json");
     let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&memoire).unwrap()).unwrap();
-    m["database"] = json!(d.path().join("memoire.rag3db").display().to_string());
+    m["database"] = json!(d.join("memoire.rag3db").display().to_string());
     std::fs::write(&memoire, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     // Le backend de code jugé : un arbre, sa base, et `bilans` vers la mémoire.
-    let arbre = d.path().join("code");
+    let arbre = d.join("code");
     std::fs::create_dir_all(&arbre).unwrap();
     std::fs::write(arbre.join("main.rs"), "fn main() {}\n").unwrap();
     let code = gabarits.join("backends/code/backend.json");
     let mut c: Value = serde_json::from_str(&std::fs::read_to_string(&code).unwrap()).unwrap();
-    c["database"] = json!(d.path().join("code.rag3db").display().to_string());
+    c["database"] = json!(d.join("code.rag3db").display().to_string());
     c["workspace"]["root"] = json!(arbre.display().to_string());
     c["bilans"] = json!({ "memoire": memoire.display().to_string() });
     std::fs::write(&code, serde_json::to_string_pretty(&c).unwrap()).unwrap();
 
-    let vu = Arc::new(Mutex::new(Vu::default()));
     let host = DaemonHost::new()
-        .with_runs_root(d.path().join("runs"))
-        .with_chats_root(d.path().join("chats"))
-        .with_racine_des_taches(d.path().join("taches"))
+        .with_runs_root(d.join("runs"))
+        .with_chats_root(d.join("chats"))
+        .with_racine_des_taches(d.join("taches"))
         .with_chat_model(faux(vu.clone()));
     // Hébergé par un premier appel ; son id, dans l'état de l'hôte.
     let s = host.open_session("le témoin", None, Vec::new(), None);
@@ -154,6 +151,17 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
         .as_str()
         .unwrap()
         .to_string();
+
+    (host, memoire, id)
+}
+
+/// **Le juge, de bout en bout, sur faux modèle.**
+#[test]
+#[ignore]
+fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
+    let d = tempfile::tempdir().unwrap();
+    let vu = Arc::new(Mutex::new(Vu::default()));
+    let (host, memoire, id) = banc(d.path(), vu.clone());
 
     // Première session.
     let r1 = host.chat_turn(&id, "Lis main.rs et dis-moi ce qu'il fait.").expect("le tour");
@@ -189,4 +197,27 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
     assert_eq!(b2["fiche"], b1["fiche"], "la même fiche");
     assert!(vu.lock().unwrap().precedents.last().is_some_and(|p| p.contains("Note 8/10")), "le second juge a lu le premier bilan");
     assert_eq!(b2["verdict"]["comparaison"]["verdict"], "pareil", "{b2}");
+}
+
+/// **Un bilan qu'il faut demander n'existerait pas** (c7) : l'hôte servi juge
+/// lui-même la fin d'un tour du backend qui déclare `bilans`, et la fiche
+/// apparaît dans la mémoire sans qu'on appelle le juge.
+#[test]
+#[ignore]
+fn le_juge_se_declenche_seul_a_la_fin_d_un_tour() {
+    let d = tempfile::tempdir().unwrap();
+    let (host, memoire, id) = banc(d.path(), Arc::new(Mutex::new(Vu::default())));
+    let host = Arc::new(host);
+    host.servir_les_bilans();
+    host.chat_turn(&id, "Lis main.rs et dis-moi ce qu'il fait.").expect("le tour");
+    let s = host.open_session("le témoin", None, Vec::new(), None);
+    let fin = Instant::now() + Duration::from_secs(60);
+    loop {
+        let apports = host.call(Some(&s), &memoire, "recall_apports", json!({ "query": "bilan", "options": { "limit": 5, "filter_condition": { "field": { "key": "fiche", "value": "bilan : lis main.rs et dis-moi ce qu'il fait" } } } }));
+        if apports.to_string().contains("Note 8/10") {
+            break;
+        }
+        assert!(Instant::now() < fin, "aucun bilan en 60 s : le juge ne s'est pas déclenché seul ({apports})");
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }

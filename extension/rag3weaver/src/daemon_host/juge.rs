@@ -15,6 +15,22 @@ use crate::llm::{GenOptions, ResponseFormat, StringSink, ToolCall, Turn};
 use crate::tools::ToolDef;
 use std::sync::atomic::AtomicBool;
 
+/// **La file des bilans** : la fin d'un tour y dépose `(backend, run)` quand le
+/// backend déclare `bilans` ; un fil de fond tenu par le serveur
+/// ([`DaemonHost::servir_les_bilans`]) les juge un par un. Un bilan qu'il faut
+/// demander n'existerait pas (c7).
+pub struct FileDesBilans {
+    envoi: std::sync::mpsc::Sender<(String, String)>,
+    reception: Mutex<Option<std::sync::mpsc::Receiver<(String, String)>>>,
+}
+
+impl Default for FileDesBilans {
+    fn default() -> Self {
+        let (envoi, reception) = std::sync::mpsc::channel();
+        Self { envoi, reception: Mutex::new(Some(reception)) }
+    }
+}
+
 /// Ce qu'un outil du juge rend au plus au modèle.
 const BORNE: usize = 24 * 1024;
 
@@ -173,6 +189,11 @@ impl DaemonHost {
     /// et le verdict, et les tickets proposés. Refusé, en le disant, si le
     /// backend ne déclare pas `bilans` ou si le run n'a pas de journal.
     pub fn juger(&self, backend_id: &str, run: &str) -> Result<Value, String> {
+        // Le juge ne juge jamais ses propres runs (ils n'ont pas de journal ; et
+        // un appel qui le demanderait est refusé en le disant).
+        if run.starts_with("juge-") {
+            return Err(format!("{run} est un run du juge : il ne se juge pas lui-même"));
+        }
         let cible = self.hote_par_id(backend_id)?;
         let (memoire_manifeste, modele) = self.with_backend(&cible, |b| {
             let p = b.prepared();
@@ -251,6 +272,44 @@ impl DaemonHost {
             "tickets": tickets,
             "enquete": { "iterations": enquete.iterations, "ms": juge_ms },
         }))
+    }
+
+    /// Dépose un bilan à faire, si le backend déclare `bilans` (la fin d'un tour).
+    pub(super) fn demander_un_bilan(&self, hosted: &Arc<Hosted>, run: &str) {
+        let declare = self.with_backend(hosted, |b| b.prepared().manifest.bilans.is_some()).unwrap_or(false);
+        if declare {
+            let _ = self.bilans.envoi.send((hosted.id.clone(), run.to_string()));
+        }
+    }
+
+    /// **Le fil des bilans**, lancé une fois par le serveur : il attend que le
+    /// journal du run soit complet (ses tours ajoutés), puis le juge ; un refus
+    /// ou une panne se disent, et le fil continue. Il finit avec l'hôte.
+    pub fn servir_les_bilans(self: &Arc<Self>) {
+        let Some(reception) = self.bilans.reception.lock().unwrap_or_else(|p| p.into_inner()).take() else { return };
+        let hote = Arc::downgrade(self);
+        let _ = std::thread::Builder::new().name("juge".into()).spawn(move || {
+            for (backend, run) in reception {
+                let Some(h) = hote.upgrade() else { break };
+                let fin = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                while !h
+                    .journal
+                    .fichier(&backend, &run)
+                    .and_then(|p| std::fs::read(p).ok())
+                    .and_then(|o| serde_json::from_slice::<Value>(&o).ok())
+                    .is_some_and(|v| v["tours"].is_array() || v["appel"].is_object())
+                {
+                    if std::time::Instant::now() > fin {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                match h.juger(&backend, &run) {
+                    Ok(v) => eprintln!("[juge] {backend} {run} : {} (note {})", v["fiche"], v["verdict"]["note"]),
+                    Err(e) => eprintln!("[juge] {backend} {run} : {e}"),
+                }
+            }
+        });
     }
 
     /// La fiche (créée si besoin, `via: juge`), le L0 (le journal, au chemin),

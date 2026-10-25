@@ -258,6 +258,10 @@ impl DaemonHost {
         let resultat = self
             .with_backend(&hosted, |b| self.run_chat_turn(b, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par))
             .and_then(|r| r);
+        // Un tour fini : son bilan, si le backend déclare `bilans` (page 04).
+        if resultat.is_ok() {
+            self.demander_un_bilan(&hosted, &run_id);
+        }
         {
             let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(e) = chats.get_mut(backend_id) {

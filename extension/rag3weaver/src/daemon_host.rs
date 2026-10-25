@@ -179,6 +179,8 @@ pub struct DaemonHost {
     chat_meter: Arc<crate::meter::Meter>,
     /// Le journal des runs (`RAG3WEAVER_RUNS_DIR`) : un fichier par run racine.
     journal: Arc<journal_des_runs::JournalDesRuns>,
+    /// Les bilans à faire, jugés par le fil que le serveur lance.
+    bilans: juge::FileDesBilans,
 }
 
 /// Les tâches de l'agent : une branche, un worktree, une base à soi.
@@ -254,6 +256,7 @@ impl DaemonHost {
             chat_model: chat::default_chat_model(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
+            bilans: juge::FileDesBilans::default(),
         }
     }
 
@@ -1044,6 +1047,8 @@ impl DaemonServer {
     pub fn serve(self, host: Arc<DaemonHost>, token: Option<String>) {
         use std::sync::atomic::Ordering;
         let stopper = self.stopper();
+        // Les bilans de session des backends qui les déclarent (page 04).
+        host.servir_les_bilans();
         // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
         // session de client mort ne se fermerait qu'à la lecture de l'état.
         let releve = {
