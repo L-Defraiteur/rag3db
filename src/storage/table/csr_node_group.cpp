@@ -68,12 +68,18 @@ void CSRNodeGroup::initializeScanState(const Transaction* transaction,
     auto& nodeGroupScanState = relScanState.nodeGroupScanState->cast<CSRNodeGroupScanState>();
     if (relScanState.nodeGroupIdx != nodeGroupIdx || relScanState.randomLookup) {
         relScanState.nodeGroupIdx = nodeGroupIdx;
-        if (persistentChunkGroup) {
+        {
+            // Les blocs du groupe, tenus le temps du balayage.
+            const auto lock = chunkedGroups.lock();
+            nodeGroupScanState.groups = chunkedGroups.getAllGroups(lock);
+            nodeGroupScanState.persistent = persistentChunkGroup;
+        }
+        if (nodeGroupScanState.persistent) {
             initScanForCommittedPersistent(transaction, relScanState, nodeGroupScanState);
         }
     }
     // Switch to a new Vector of bound nodes (i.e., new csr lists) in the node group.
-    if (persistentChunkGroup) {
+    if (nodeGroupScanState.persistent) {
         nodeGroupScanState.nextRowToScan = 0;
         nodeGroupScanState.numCachedRows = 0;
         nodeGroupScanState.nextCachedRowToScan = 0;
@@ -90,7 +96,7 @@ void CSRNodeGroup::initScanForCommittedPersistent(const Transaction* transaction
     RelTableScanState& relScanState, CSRNodeGroupScanState& nodeGroupScanState) const {
     // Scan the csr header chunks from disk.
     ChunkState offsetState, lengthState;
-    auto& csrChunkGroup = persistentChunkGroup->cast<ChunkedCSRNodeGroup>();
+    auto& csrChunkGroup = nodeGroupScanState.persistent->cast<ChunkedCSRNodeGroup>();
     const auto& csrHeader = csrChunkGroup.getCSRHeader();
     // We are switching to a new node group.
     // Initialize the scan states of a new node group for the csr header.
@@ -104,7 +110,7 @@ void CSRNodeGroup::initScanForCommittedPersistent(const Transaction* transaction
             relScanState.columnIDs[i] == ROW_IDX_COLUMN_ID) {
             continue;
         }
-        auto& chunk = persistentChunkGroup->getColumnChunk(relScanState.columnIDs[i]);
+        auto& chunk = nodeGroupScanState.persistent->getColumnChunk(relScanState.columnIDs[i]);
         chunk.initializeScanState(nodeGroupScanState.chunkStates[i], relScanState.columns[i]);
     }
     KU_ASSERT(csrHeader.offset->getNumValues() == csrHeader.length->getNumValues());
@@ -206,7 +212,7 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedPersistentWithCache(const Transac
         const auto numToScan =
             std::min(nodeGroupScanState.numTotalRows - nodeGroupScanState.nextRowToScan,
                 DEFAULT_VECTOR_CAPACITY);
-        persistentChunkGroup->scan(transaction, tableState, nodeGroupScanState,
+        nodeGroupScanState.persistent->scan(transaction, tableState, nodeGroupScanState,
             nodeGroupScanState.nextRowToScan, numToScan);
         nodeGroupScanState.numCachedRows = numToScan;
         nodeGroupScanState.nextRowToScan += numToScan;
@@ -237,7 +243,8 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedPersistentWithoutCache(
                           nodeGroupScanState.nextRowToScan;
     const auto numToScan =
         std::min(csrListLength - nodeGroupScanState.nextRowToScan, DEFAULT_VECTOR_CAPACITY);
-    persistentChunkGroup->scan(transaction, tableState, nodeGroupScanState, startRow, numToScan);
+    nodeGroupScanState.persistent->scan(transaction, tableState, nodeGroupScanState, startRow,
+        numToScan);
     nodeGroupScanState.nextRowToScan += numToScan;
     tableState.setNodeIDVectorToFlat(
         tableState.cachedBoundNodeSelVector[tableState.currBoundNodeIdx]);
@@ -298,19 +305,15 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemSequential(const Transaction
     if (numRows == 0) {
         return NODE_GROUP_SCAN_EMPTY_RESULT;
     }
-    // Le bloc est gardé en propriété partagée le temps du balayage : entre le verrou de la
-    // collection, rendu ici, et inMemAppendMtx, l'annulation d'une insertion d'une autre
-    // transaction peut retirer les blocs de queue vidés (ticket du 18 octobre 2026).
-    std::shared_ptr<const ChunkedNodeGroup> chunkedGroup;
-    {
-        const auto lock = chunkedGroups.lock();
-        if (chunkIdx >= chunkedGroups.getNumGroups(lock)) {
-            // Le bloc a été retiré par l'annulation d'un COPY après la copie de la liste : ses
-            // lignes, et toutes celles qui suivent dans cette liste, sont annulées.
-            nodeGroupScanState.nextRowToScan = nodeGroupScanState.inMemCSRList.rowIndices[1];
-            return NODE_GROUP_SCAN_EMPTY_RESULT;
-        }
-        chunkedGroup = chunkedGroups.getGroupShared(lock, chunkIdx);
+    // Le bloc, parmi ceux que l'état du balayage tient (il survit ainsi à l'annulation d'une
+    // insertion d'une autre transaction, qui retire les blocs de queue vidés : ticket du 18
+    // octobre 2026 ; ses lignes annulées sont filtrées par leurs versions).
+    const auto* chunkedGroup = scanGroupAt(nodeGroupScanState, chunkIdx);
+    if (!chunkedGroup) {
+        // La liste désigne un bloc que le groupe n'a pas : ses lignes, et toutes celles qui
+        // suivent dans cette liste, sont annulées.
+        nodeGroupScanState.nextRowToScan = nodeGroupScanState.inMemCSRList.rowIndices[1];
+        return NODE_GROUP_SCAN_EMPTY_RESULT;
     }
     {
         // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit.
@@ -338,8 +341,8 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
         return NODE_GROUP_SCAN_EMPTY_RESULT;
     }
     row_idx_t nextRow = 0;
-    // En propriété partagée : voir scanCommittedInMemSequential.
-    std::shared_ptr<ChunkedNodeGroup> chunkedGroup;
+    // Tenu par l'état du balayage : voir scanCommittedInMemSequential.
+    const ChunkedNodeGroup* chunkedGroup = nullptr;
     node_group_idx_t currentChunkIdx = INVALID_NODE_GROUP_IDX;
     sel_t numSelected = 0;
     // Le commit d'un autre fil peut ajouter des lignes à ce bloc pendant qu'on le lit : le verrou
@@ -356,14 +359,8 @@ NodeGroupScanResult CSRNodeGroup::scanCommittedInMemRandom(const Transaction* tr
         if (chunkIdx != currentChunkIdx) {
             currentChunkIdx = chunkIdx;
             appendGuard.unlock();
-            {
-                const auto lock = chunkedGroups.lock();
-                // Bloc retiré par l'annulation d'un COPY après la copie de la liste : ses lignes
-                // sont annulées, on les saute.
-                chunkedGroup = chunkIdx < chunkedGroups.getNumGroups(lock) ?
-                                   chunkedGroups.getGroupShared(lock, chunkIdx) :
-                                   nullptr;
-            }
+            // Nul si la liste désigne un bloc que le groupe n'a pas : lignes annulées, sautées.
+            chunkedGroup = scanGroupAt(nodeGroupScanState, chunkIdx);
             appendGuard.lock();
         }
         if (!chunkedGroup || rowInChunk >= chunkedGroup->getNumRows()) {

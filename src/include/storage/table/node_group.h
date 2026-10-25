@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <shared_mutex>
 
 #include "common/uniq_lock.h"
@@ -27,6 +28,14 @@ struct NodeGroupScanState {
     common::row_idx_t nextRowToScan = 0;
     // State of each chunk in the checkpointed chunked group.
     std::vector<ChunkState> chunkStates;
+    // Les blocs du groupe au moment où le balayage a commencé, tenus en propriété partagée :
+    // un point de reprise qui échange la liste des blocs (le bloc neuf de V2-1b) n'enlève rien
+    // sous les pieds d'un lecteur, et chunkStates reste accordé au bloc sur disque qu'il
+    // décrit. Un bloc ajouté depuis (une insertion locale de la même transaction, ou une
+    // validation d'une autre, dont les lignes lui sont de toute façon invisibles) s'y ajoute à la
+    // demande (NodeGroup::extendScanGroups) ; une liste échangée par un point de reprise, jamais :
+    // le lecteur finit sur la sienne.
+    std::vector<std::shared_ptr<ChunkedNodeGroup>> groups;
 
     explicit NodeGroupScanState() {}
     explicit NodeGroupScanState(common::idx_t numChunks) { chunkStates.resize(numChunks); }
@@ -167,8 +176,6 @@ public:
 
     bool lookup(const transaction::Transaction* transaction, const TableScanState& state,
         common::sel_t posInSel = 0) const;
-    bool lookupNoLock(const transaction::Transaction* transaction, const TableScanState& state,
-        common::sel_t posInSel = 0) const;
     // La lecture d'une ligne sans le verrou du groupe, pour qui lit beaucoup et en parallèle
     // (la recherche HNSW lit un vecteur par nœud visité) : elle ne tient que la garde
     // partagée contre l'ajout en mémoire.
@@ -247,12 +254,27 @@ protected:
 
 protected:
     void checkpointDataTypesNoLock(const NodeGroupCheckpointState& state);
+    // Les blocs tenus par un balayage (NodeGroupScanState::groups) : l'instantané de la liste
+    // s'il n'en a pas encore, sinon les blocs ajoutés depuis, si la liste vivante commence
+    // encore par le même bloc. Après un échange au point de reprise, le lecteur garde la sienne.
+    void extendScanGroups(const common::UniqLock& lock, NodeGroupScanState& scanState) const;
+    // Le bloc de ce rang parmi ceux que le balayage tient, en l'étendant s'il le faut ; nul si
+    // la liste n'a pas ce rang.
+    const ChunkedNodeGroup* scanGroupAt(NodeGroupScanState& scanState,
+        common::idx_t chunkedGroupIdx) const;
+    // Le rang du bloc qui porte une ligne, et la ligne dans ce bloc : le premier bloc porte ses
+    // propres lignes, les suivants en font CHUNKED_NODE_GROUP_CAPACITY chacun.
+    static std::pair<common::idx_t, common::row_idx_t> findChunkedGroupIdx(
+        const std::vector<std::shared_ptr<ChunkedNodeGroup>>& groups, common::row_idx_t rowIdx);
 
 private:
     std::pair<common::idx_t, common::row_idx_t> findChunkedGroupIdxFromRowIdxNoLock(
         common::row_idx_t rowIdx) const;
     ChunkedNodeGroup* findChunkedGroupFromRowIdx(const common::UniqLock& lock,
         common::row_idx_t rowIdx) const;
+    // La ligne cherchée, lue dans les blocs que le balayage tient ; rien si aucun ne la porte.
+    std::optional<bool> lookupInScanGroups(const transaction::Transaction* transaction,
+        const TableScanState& state, common::sel_t posInSel) const;
     // Le même bloc en propriété partagée, pour l'utiliser hors du verrou de la collection.
     std::shared_ptr<ChunkedNodeGroup> findChunkedGroupSharedFromRowIdx(const common::UniqLock& lock,
         common::row_idx_t rowIdx) const;
