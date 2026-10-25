@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Un point de reprise ne fige plus les lecteurs.** Une lecture entre,
+  lit le dernier validé et rend la main pendant qu'il s'écrit ; les blocs neufs se
+  bâtissent hors des verrous et s'échangent sous eux. 66994dd43.
 - **25 oct. — Le juge de session.** Un agent relit chaque tour du chat par son
   journal, rejoue ce qui lit, vérifie le résultat, se compare aux sessions
   précédentes de la même tâche et range sa fiche de bilan dans la mémoire ; sur
