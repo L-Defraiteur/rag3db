@@ -121,9 +121,12 @@ True
 ---- ok
 -STATEMENT CHECKPOINT;
 ---- ok
-# allow margin equal to the largest page range for a column chunk in the table
+# allow margin equal to the largest page range for a column chunk in the table. Depuis V2-1b, un
+# segment changé est rebâti entier sur des pages neuves : le second COPY de knows libère les pages
+# de l'ancienne forme de ses segments (99 pages libres au lieu de 87 avec la réécriture en place),
+# knows1 en réemploie 89, il en reste 10 (contre 5) et le fichier n'a grossi que de 5 pages.
 -STATEMENT CALL fsm_info() with sum(num_pages) as num_free_pages call storage_info('knows1') with num_free_pages, max(num_pages) as largest_range
-            return num_free_pages is null or largest_range >= num_free_pages or 5 >= num_free_pages
+            return num_free_pages is null or largest_range >= num_free_pages or 12 >= num_free_pages
 ---- 1
 True
 

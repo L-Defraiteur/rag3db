@@ -193,6 +193,7 @@ public:
         common::row_idx_t numRows, common::transaction_t commitTS) const;
     virtual void rollbackInsert(common::row_idx_t startRow);
     void reclaimStorage(PageAllocator& pageAllocator) const;
+    void retireStorage(PageAllocator& pageAllocator, const common::UniqLock& lock) const;
     virtual void reclaimStorage(PageAllocator& pageAllocator, const common::UniqLock& lock) const;
 
     virtual void checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointState& state);

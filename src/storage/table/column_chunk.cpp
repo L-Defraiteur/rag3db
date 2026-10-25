@@ -58,6 +58,15 @@ ColumnChunk::ColumnChunk(bool enableCompression, std::unique_ptr<ColumnChunkData
 }
 ColumnChunk::ColumnChunk(bool enableCompression,
     std::vector<std::unique_ptr<ColumnChunkData>> segments)
+    : enableCompression{enableCompression} {
+    data.reserve(segments.size());
+    for (auto& segment : segments) {
+        data.push_back(std::move(segment));
+    }
+}
+
+ColumnChunk::ColumnChunk(bool enableCompression,
+    std::vector<std::shared_ptr<ColumnChunkData>> segments)
     : enableCompression{enableCompression}, data{std::move(segments)} {}
 
 void ColumnChunk::initializeScanState(ChunkState& state, const Column* column) const {
@@ -238,6 +247,16 @@ void ColumnChunk::reclaimStorage(PageAllocator& pageAllocator) const {
     }
 }
 
+void ColumnChunk::retireStorage(PageAllocator& pageAllocator) const {
+    for (const auto& segment : data) {
+        segment->retireStorage(pageAllocator);
+    }
+}
+
+std::unique_ptr<ColumnChunk> ColumnChunk::sharedView() const {
+    return std::make_unique<ColumnChunk>(enableCompression, data);
+}
+
 void ColumnChunk::append(common::ValueVector* vector, const common::SelectionView& selView) {
     data.back()->append(vector, selView);
 }
@@ -284,8 +303,10 @@ void ColumnChunk::write(Column& column, ChunkState& state, offset_t dstOffset,
     }
 }
 
-void ColumnChunk::checkpoint(Column& column,
-    std::vector<ChunkCheckpointState>&& chunkCheckpointStates, PageAllocator& pageAllocator) {
+std::unique_ptr<ColumnChunk> ColumnChunk::checkpoint(Column& column,
+    std::vector<ChunkCheckpointState>&& chunkCheckpointStates, PageAllocator& pageAllocator) const {
+    std::vector<std::shared_ptr<ColumnChunkData>> newData;
+    newData.reserve(data.size());
     offset_t segmentStart = 0;
     for (size_t i = 0; i < data.size(); i++) {
         std::vector<SegmentCheckpointState> segmentCheckpointStates;
@@ -310,24 +331,20 @@ void ColumnChunk::checkpoint(Column& column,
                     startOffsetInSegment, endOffset - startOffset});
             }
         }
-        auto segmentEnd = segmentStart + segment->getNumValues();
-        // If the segment was split during checkpointing we need to insert the new segments into the
-        // ColumnChunk
-        auto newSegments = column.checkpointSegment(
-            ColumnCheckpointState(*segment, std::move(segmentCheckpointStates)), pageAllocator);
-        if (!newSegments.empty()) {
-            auto oldSize = data.size();
-            data.resize(data.size() - 1 + newSegments.size());
-            std::move_backward(data.begin() + i, data.begin() + oldSize, data.end());
-            for (size_t j = 0; j < newSegments.size(); j++) {
-                data[i + j] = std::move(newSegments[j]);
+        const auto segmentEnd = segmentStart + segment->getNumValues();
+        if (segmentCheckpointStates.empty()) {
+            // Rien n'a changé dans ce segment : le bloc neuf le reprend tel quel, mêmes pages.
+            newData.push_back(segment);
+        } else {
+            for (auto& fresh : column.checkpointSegment(
+                     ColumnCheckpointState(*segment, std::move(segmentCheckpointStates)),
+                     pageAllocator)) {
+                newData.push_back(std::move(fresh));
             }
-            // We want to increment by a total of newSegments.size() but we increment i at the end
-            // of each loop body
-            i += newSegments.size() - 1;
         }
         segmentStart = segmentEnd;
     }
+    return std::make_unique<ColumnChunk>(enableCompression, std::move(newData));
 }
 
 } // namespace storage

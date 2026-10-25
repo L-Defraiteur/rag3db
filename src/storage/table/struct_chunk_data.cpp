@@ -94,6 +94,13 @@ void StructChunkData::reclaimStorage(PageAllocator& pageAllocator) {
     }
 }
 
+void StructChunkData::retireStorage(PageAllocator& pageAllocator) {
+    ColumnChunkData::retireStorage(pageAllocator);
+    for (const auto& childChunk : childChunks) {
+        childChunk->retireStorage(pageAllocator);
+    }
+}
+
 uint64_t StructChunkData::getSizeOnDisk() const {
     uint64_t size = ColumnChunkData::getSizeOnDisk();
     for (const auto& childChunk : childChunks) {

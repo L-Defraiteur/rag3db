@@ -399,133 +399,41 @@ offset_t Column::appendValues(ColumnChunkData& persistentChunk, SegmentState& st
     return startOffset;
 }
 
-bool Column::isEndOffsetOutOfPagesCapacity(const ColumnChunkMetadata& metadata,
-    offset_t endOffset) const {
-    if (metadata.compMeta.compression != CompressionType::CONSTANT &&
-        (metadata.compMeta.numValues(RAG3DB_PAGE_SIZE, dataType) *
-            metadata.getNumDataPages(dataType.getPhysicalType())) <= endOffset) {
-        // Note that for constant compression, `metadata.numPages` will be equal to 0.
-        // Thus, this function will always return true.
-        return true;
-    }
-    return false;
-}
-
-void Column::checkpointColumnChunkInPlace(SegmentState& state,
-    const ColumnCheckpointState& checkpointState, PageAllocator& pageAllocator) const {
-    for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
-        KU_ASSERT(segmentCheckpointState.numRows > 0);
-        state.column->writeSegment(checkpointState.persistentData, state,
-            segmentCheckpointState.offsetInSegment, segmentCheckpointState.chunkData,
-            segmentCheckpointState.startRowInData, segmentCheckpointState.numRows);
-    }
-    // writeSegment doesn't update numValues, just the metadata
-    // TODO(bmwinger): either have all writes update numValues, or have writeSegment update it
-    // directly
-    checkpointState.persistentData.resetNumValuesFromMetadata();
-    if (nullColumn) {
-        checkpointNullData(checkpointState, pageAllocator);
-    }
-}
-
-void Column::checkpointNullData(const ColumnCheckpointState& checkpointState,
-    PageAllocator& pageAllocator) const {
-    std::vector<SegmentCheckpointState> nullSegmentCheckpointStates;
-    for (const auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
-        KU_ASSERT(segmentCheckpointState.chunkData.hasNullData());
-        nullSegmentCheckpointStates.emplace_back(*segmentCheckpointState.chunkData.getNullData(),
-            segmentCheckpointState.startRowInData, segmentCheckpointState.offsetInSegment,
-            segmentCheckpointState.numRows);
-    }
-    KU_ASSERT(checkpointState.persistentData.hasNullData());
-    nullColumn->checkpointSegment(
-        ColumnCheckpointState(*checkpointState.persistentData.getNullData(),
-            std::move(nullSegmentCheckpointStates)),
-        pageAllocator, false);
-}
-
-std::vector<std::unique_ptr<ColumnChunkData>> Column::checkpointColumnChunkOutOfPlace(
-    const SegmentState& state, const ColumnCheckpointState& checkpointState,
-    PageAllocator& pageAllocator, bool canSplitSegment) const {
-    const auto numRows = std::max(checkpointState.endRowIdxToWrite, state.metadata.numValues);
-    checkpointState.persistentData.setToInMemory();
-    checkpointState.persistentData.resize(numRows);
-    KU_ASSERT(checkpointState.persistentData.getNumValues() == 0);
-    scanSegment(state, &checkpointState.persistentData, 0, state.metadata.numValues);
-    state.reclaimAllocatedPages(pageAllocator);
-    // TODO(bmwinger): for simple compression types, we can predict whether or not we will need to
-    // split the segment and avoid having to re-write it multiple times
-    for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
-        checkpointState.persistentData.write(&segmentCheckpointState.chunkData,
-            segmentCheckpointState.startRowInData, segmentCheckpointState.offsetInSegment,
-            segmentCheckpointState.numRows);
-    }
-    // Finalize is necessary prior to splitting for strings and lists so that pruned values don't
-    // have an impact on the number/size of segments It should not be necessary after splitting
-    // since the function is used to prune unused values (or duplicated dictionary entries in the
-    // case of strings) and those will never be introduced when splitting.
-    checkpointState.persistentData.finalize();
-    if (canSplitSegment && checkpointState.persistentData.shouldSplit()) {
-        auto newSegments = checkpointState.persistentData.split();
-        for (auto& segment : newSegments) {
-            segment->flush(pageAllocator);
-        }
-        return newSegments;
-    }
-    checkpointState.persistentData.flush(pageAllocator);
-    return {};
-}
-
-bool Column::canCheckpointInPlace(const SegmentState& state,
-    const ColumnCheckpointState& checkpointState) const {
-    if (isEndOffsetOutOfPagesCapacity(checkpointState.persistentData.getMetadata(),
-            checkpointState.endRowIdxToWrite)) {
-        return false;
-    }
-    if (checkpointState.persistentData.getMetadata().compMeta.canAlwaysUpdateInPlace()) {
-        return true;
-    }
-
-    InPlaceUpdateLocalState localUpdateState{};
-    for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
-        auto& chunkData = segmentCheckpointState.chunkData;
-        if (chunkData.getNumValues() != 0 &&
-            !state.metadata.compMeta.canUpdateInPlace(chunkData.getData(),
-                segmentCheckpointState.startRowInData, segmentCheckpointState.numRows,
-                dataType.getPhysicalType(), localUpdateState, chunkData.getNullMask())) {
-            return false;
-        }
-    }
-    return true;
-}
-
 std::vector<std::unique_ptr<ColumnChunkData>> Column::checkpointSegment(
     ColumnCheckpointState&& checkpointState, PageAllocator& pageAllocator,
     bool canSplitSegment) const {
     if (checkpointState.segmentCheckpointStates.empty()) {
         return {};
     }
+    auto& persistent = checkpointState.persistentData;
     SegmentState chunkState;
-    checkpointState.persistentData.initializeScanState(chunkState, this);
-    if (canCheckpointInPlace(chunkState, checkpointState)) {
-        checkpointColumnChunkInPlace(chunkState, checkpointState, pageAllocator);
-
-        if (chunkState.metadata.compMeta.compression == CompressionType::ALP) {
-            if (dataType.getPhysicalType() == PhysicalTypeID::DOUBLE) {
-                chunkState.getExceptionChunk<double>()->finalizeAndFlushToDisk(chunkState);
-            } else if (dataType.getPhysicalType() == PhysicalTypeID::FLOAT) {
-                chunkState.getExceptionChunk<float>()->finalizeAndFlushToDisk(chunkState);
-            } else {
-                KU_UNREACHABLE;
-            }
-            checkpointState.persistentData.getMetadata().compMeta.floatMetadata()->exceptionCount =
-                chunkState.metadata.compMeta.floatMetadata()->exceptionCount;
-        }
-        return {};
-    } else {
-        return checkpointColumnChunkOutOfPlace(chunkState, checkpointState, pageAllocator,
-            canSplitSegment);
+    persistent.initializeScanState(chunkState, this);
+    // Une copie en mémoire du segment persistant (ses pages relues), les écritures fusionnées
+    // dedans, puis le tout écrit sur des pages neuves : l'objet persistant n'est jamais touché.
+    const auto numRows = std::max(checkpointState.endRowIdxToWrite, chunkState.metadata.numValues);
+    auto fresh = ColumnChunkFactory::createColumnChunkData(persistent.getMemoryManager(),
+        dataType.copy(), enableCompression, numRows, ResidencyState::IN_MEMORY,
+        persistent.hasNullData());
+    scanSegment(chunkState, fresh.get(), 0, chunkState.metadata.numValues);
+    for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
+        fresh->write(&segmentCheckpointState.chunkData, segmentCheckpointState.startRowInData,
+            segmentCheckpointState.offsetInSegment, segmentCheckpointState.numRows);
     }
+    // Finalize is necessary prior to splitting for strings and lists so that pruned values don't
+    // have an impact on the number/size of segments.
+    fresh->finalize();
+    std::vector<std::unique_ptr<ColumnChunkData>> segments;
+    if (canSplitSegment && fresh->shouldSplit()) {
+        segments = fresh->split();
+    } else {
+        segments.push_back(std::move(fresh));
+    }
+    for (auto& segment : segments) {
+        segment->flush(pageAllocator);
+    }
+    // L'ancien segment rend ses pages quand plus personne ne le tient.
+    persistent.retireStorage(pageAllocator);
+    return segments;
 }
 
 std::unique_ptr<Column> ColumnFactory::createColumn(std::string name, PhysicalTypeID physicalType,

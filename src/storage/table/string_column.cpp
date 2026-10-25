@@ -111,16 +111,6 @@ void StringColumn::writeSegment(ColumnChunkData& persistentChunk, SegmentState& 
         dstOffsetInSegment + numValues - 1, minWritten, maxWritten);
 }
 
-std::vector<std::unique_ptr<ColumnChunkData>> StringColumn::checkpointSegment(
-    ColumnCheckpointState&& checkpointState, PageAllocator& pageAllocator,
-    bool canSplitSegment) const {
-    auto& persistentData = checkpointState.persistentData;
-    auto result =
-        Column::checkpointSegment(std::move(checkpointState), pageAllocator, canSplitSegment);
-    persistentData.syncNumValues();
-    return result;
-}
-
 void StringColumn::scanSegment(const SegmentState& state, offset_t startOffsetInChunk,
     row_idx_t numValuesToScan, ValueVector* resultVector, offset_t offsetInResult) const {
     if (nullColumn) {
@@ -267,47 +257,6 @@ void StringColumn::scanFiltered(const SegmentState& state, offset_t startOffsetI
     dictionary.scan(getChildState(state, ChildStateIndex::OFFSET),
         getChildState(state, ChildStateIndex::DATA), offsetsToScan, resultVector,
         getChildState(state, ChildStateIndex::INDEX).metadata);
-}
-
-bool StringColumn::canCheckpointInPlace(const SegmentState& state,
-    const ColumnCheckpointState& checkpointState) const {
-    row_idx_t strLenToAdd = 0u;
-    idx_t numStrings = 0u;
-    for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
-        auto& strChunk = segmentCheckpointState.chunkData.cast<StringChunkData>();
-        numStrings += segmentCheckpointState.numRows;
-        for (auto i = 0u; i < segmentCheckpointState.numRows; i++) {
-            if (strChunk.getNullData()->isNull(segmentCheckpointState.startRowInData + i)) {
-                continue;
-            }
-            strLenToAdd += strChunk.getStringLength(segmentCheckpointState.startRowInData + i);
-        }
-    }
-    if (!dictionary.canCommitInPlace(state, numStrings, strLenToAdd)) {
-        return false;
-    }
-    return canIndexCommitInPlace(state, numStrings, checkpointState.endRowIdxToWrite);
-}
-
-bool StringColumn::canIndexCommitInPlace(const SegmentState& state, uint64_t numStrings,
-    offset_t maxOffset) const {
-    const SegmentState& indexState = getChildState(state, ChildStateIndex::INDEX);
-    if (indexColumn->isEndOffsetOutOfPagesCapacity(indexState.metadata, maxOffset)) {
-        return false;
-    }
-    if (indexState.metadata.compMeta.canAlwaysUpdateInPlace()) {
-        return true;
-    }
-    const auto totalStringsAfterUpdate =
-        getChildState(state, ChildStateIndex::OFFSET).metadata.numValues + numStrings;
-    InPlaceUpdateLocalState localUpdateState{};
-    // Check if the index column can store the largest new index in-place
-    if (!indexState.metadata.compMeta.canUpdateInPlace(
-            reinterpret_cast<const uint8_t*>(&totalStringsAfterUpdate), 0 /*pos*/, 1 /*numValues*/,
-            PhysicalTypeID::UINT32, localUpdateState)) {
-        return false;
-    }
-    return true;
 }
 
 } // namespace storage

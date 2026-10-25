@@ -22,9 +22,6 @@ public:
         common::offset_t dstOffsetInSegment, const ColumnChunkData& data,
         common::offset_t srcOffset, common::length_t numValues) const override;
 
-    std::vector<std::unique_ptr<ColumnChunkData>> checkpointSegment(
-        ColumnCheckpointState&& checkpointState, PageAllocator& pageAllocator,
-        bool canSplitSegment = true) const override;
 
     const DictionaryColumn& getDictionary() const { return dictionary; }
     const Column* getIndexColumn() const { return indexColumn.get(); }
@@ -51,11 +48,7 @@ protected:
         common::ValueVector* resultVector, uint32_t posInVector) const override;
 
 private:
-    bool canCheckpointInPlace(const SegmentState& state,
-        const ColumnCheckpointState& checkpointState) const override;
 
-    bool canIndexCommitInPlace(const SegmentState& state, uint64_t numStrings,
-        common::offset_t maxOffset) const;
 
 private:
     // Main column stores indices of values in the dictionary
