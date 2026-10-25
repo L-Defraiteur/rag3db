@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Les requêtes préparées ne s'accumulent plus.** Une préparation porte
+  sa requête et la rend en mourant : quatre lecteurs d'un vrai dépôt tiennent dans
+  7,1 Go au lieu de 30. fb4d83b65.
 - **25 oct. — Un service revenu est repris sans rien redémarrer.** Un backend
   ouvert sans son service d'embarquement le retente, et se rouvre de lui-même dès
   qu'il répond : les vecteurs reprennent, l'avertissement dit toujours le vrai.
