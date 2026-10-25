@@ -96,6 +96,20 @@ bool HNSWIndexUtils::validateIndexExistence(const main::ClientContext& context,
     case IndexOperation::CREATE: {
         if (indexExists(context, transaction, tableEntry, indexName)) {
             throwIfBehindItsTable(context, tableEntry, indexName);
+            // Un index dont la construction n'a pas fini ((A) : requête du CREATE morte, ou relu
+            // du disque dans un état autre que READY) n'est pas « déjà là » : le CREATE le refuse
+            // par le même nom qu'un index en retard sur sa table, et l'appelant qui sait rebâtir
+            // celui-là (rag3weaver, CREATE avec skip_if_exists à l'ouverture) rebâtit celui-ci.
+            const auto buildState = storage::StorageManager::Get(context)
+                                        ->getTable(tableEntry->getTableID())
+                                        ->cast<storage::NodeTable>()
+                                        .getIndexBuildState(indexName, transaction);
+            if (buildState == storage::IndexBuildState::INCOMPLETE) {
+                throw common::RuntimeException{common::stringFormat(
+                    "Index {} {} {}: its build did not finish (state INCOMPLETE). Drop it and "
+                    "build it again.",
+                    indexName, HNSWIndexUtils::INDEX_BEHIND_ITS_TABLE, tableEntry->getName())};
+            }
             switch (conflictAction) {
             case common::ConflictAction::ON_CONFLICT_THROW:
                 throw common::BinderException{common::stringFormat(
