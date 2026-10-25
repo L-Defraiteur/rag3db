@@ -235,6 +235,42 @@ pub fn declarations_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &Usages
             });
         }
     }
+    // **Une fonction libre** (un prototype C/C++ au niveau du fichier) n'a pas de conteneur que
+    // HAS_PARENT atteigne : sa déclaration est une ligne d'un scope de fichier, cherchée par le nom,
+    // puis confirmée en relisant le JSON (le même déclarant que la visibilité, `code::Declarants`).
+    let sans: Vec<&Item> = definitions.iter().filter(|x| !out.iter().any(|d| d.definition.as_deref() == Some(x.uuid.as_str()))).collect();
+    if !sans.is_empty() {
+        let mut champs = vec![rag3weaver_ir::Column::Node(cfg.title.clone())];
+        champs.extend(cfg.path_fields.iter().map(|f| rag3weaver_ir::Column::Node(f.clone())));
+        champs.push(rag3weaver_ir::Column::Node(d.field.clone()));
+        champs.push(rag3weaver_ir::Column::Node(cfg.kind_field.clone()));
+        let q = catalog
+            .dialect_arc()
+            .select(&rag3weaver_ir::Select::filtered(&rel.to, rag3weaver_ir::Predicate::Contains { field: d.field.clone(), param: "nom".into() }, champs))
+            .map_err(|e| format!("UsagesNode: {e}"))?;
+        let lignes = catalog
+            .execute_read_with_params(&q, &[QueryParam::new("nom", CypherValue::String(format!("\"{name}\"")))])
+            .map_err(|e| format!("UsagesNode: {e}"))?;
+        for r in &lignes.rows {
+            if texte(r.get(2 + n)) != "module" {
+                continue;
+            }
+            let container = texte(r.first());
+            let path = (0..n).map(|i| texte(r.get(1 + i))).find(|p| !p.is_empty()).unwrap_or_default();
+            let Ok(serde_json::Value::Array(entrees)) = serde_json::from_str::<serde_json::Value>(&texte(r.get(1 + n))) else { continue };
+            for e in entrees.iter().filter(|e| e.get("name").and_then(|v| v.as_str()) == Some(name) && e.get("kind").and_then(|v| v.as_str()) == Some("function")) {
+                for def in &sans {
+                    out.push(Declaration {
+                        definition: Some(def.uuid.clone()),
+                        container: container.clone(),
+                        path: path.clone(),
+                        line: e.get("line").and_then(|v| v.as_i64()),
+                        signature: e.get("signature").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    });
+                }
+            }
+        }
+    }
     out.sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
     out.dedup();
     Ok(out)
@@ -620,9 +656,14 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
         let idx: Vec<usize> = (0..usages.len()).filter(|&i| usages[i].guessed && &usages[i].relation == used).collect();
         if !idx.is_empty() {
             let couples: Vec<(&str, Vec<&str>)> = idx.iter().map(|&i| (usages[i].user.uuid.as_str(), defs.clone())).collect();
-            let invisibles = crate::code::mentions_sans_definisseur_visible(catalog, &couples).map_err(err)?;
+            let invisibles = crate::code::mentions_sans_definisseur_visible(catalog, name, &couples).map_err(err)?;
             for (&i, inv) in idx.iter().zip(invisibles) {
-                usages[i].invisible = inv;
+                // La résolution n'a rien deviné, elle s'est abstenue : jamais les deux à la fois
+                // (une interface qui lit `guessed` le compterait « par le nom »).
+                if inv {
+                    usages[i].invisible = true;
+                    usages[i].guessed = false;
+                }
             }
         }
     }
