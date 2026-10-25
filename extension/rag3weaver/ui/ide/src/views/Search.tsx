@@ -6,7 +6,7 @@ import { fileLink, symbolLink } from "@/views/File";
 
 // **La recherche** (page 08, vue 4) : le JSON de `search_code` tel que la session
 // recherche le rend — `result[]` (uuid, score, entity, `data` en snake_case, `chunk`,
-// `signal`, `signals[{label, score, rank}]`, bientôt `highlights[{start, end,
+// `signal`, `signals[{label, score, rank}]`, bientôt `chunk.highlights[{start, end,
 // source}]` en unités UTF-16 dans `chunk.text`), `metadata["render.meta"]` (les
 // signaux actifs, les comptes, `warnings` dont la ligne « index : » en tête),
 // `freshness`. Les repères DOM sont ceux de l'ancienne page : `#vue .resultat`,
@@ -23,7 +23,7 @@ type Hit = {
   signals?: Signal[];
   highlights?: Highlight[];
   data?: { file_path?: string; name?: string; start_line?: number; end_line?: number; scope_type?: string; signature?: string };
-  chunk?: { text?: string; startLine?: number; endLine?: number };
+  chunk?: { text?: string; startLine?: number; endLine?: number; highlights?: Highlight[] };
 };
 type Meta = { signals?: string[]; warnings?: string[]; bm25Count?: number; vectorCount?: number; sparseCount?: number; fusedCount?: number; rerankedCount?: number; partial?: boolean; consistency?: string; searchTimeMs?: number };
 type Freshness = { lag_files?: number; dirty?: boolean };
@@ -94,7 +94,10 @@ export function Search({ id, state }: { id: string; state: HostState }) {
   const warnings = meta.warnings ?? [];
   const indexState = warnings.find((w) => w.startsWith("index : "));
   const others = warnings.filter((w) => !w.startsWith("index : "));
-  const hasHighlights = hits.some((h) => h.highlights?.length);
+  // Les surlignages vivent dans le morceau (ils désignent ce qu'ils surlignent, et
+  // survivent à la fusion) ; la forme au niveau du résultat passe aussi.
+  const highlightsOf = (h: Hit) => h.chunk?.highlights ?? h.highlights;
+  const hasHighlights = hits.some((h) => highlightsOf(h)?.length);
 
   const toggleRerank = (checked: boolean) => {
     const p = new URLSearchParams(location.search);
@@ -146,7 +149,7 @@ export function Search({ id, state }: { id: string; state: HostState }) {
                     <span className="score text-xs" title="le score de l'ordre rendu">★ {Number(x.score ?? 0).toFixed(3)}</span>
                   </div>
                   {(x.signals ?? []).length ? <div className="signaux note text-xs text-muted-foreground">{x.signals!.map((s) => `${s.label} n°${s.rank} (${Number(s.score).toFixed(3)})`).join(" · ")}</div> : null}
-                  {excerpt ? <Excerpt text={excerpt} highlights={x.highlights} /> : null}
+                  {excerpt ? <Excerpt text={excerpt} highlights={highlightsOf(x)} /> : null}
                 </div>
               );
             })}
