@@ -84,30 +84,38 @@ Le canal des sessions Claude n'est pas utilisé.
 peut juger son plan accompli ou obsolète, le clore avec sa raison et en ouvrir un autre. Les
 seules contraintes dures sont le budget du pas (douze appels sans `tour_fini`) et l'arrêt (C4).
 
-**Le plan courant** est l'état vivant de la tâche :
-- dans `<dossier de la tâche>/plan.json`, que l'hôte lit à chaque frontière (reste-t-il un
-  élément faisable ou bloqué ?) et injecte ;
-- et sur la fiche de session, son état vivant.
+**Le plan courant** vit dans `<dossier de la tâche>/plan.json`, et seulement là (96). L'hôte le
+lit à chaque frontière (reste-t-il un élément faisable ou bloqué ?) et l'injecte. On ne le
+double pas en base :
+- un champ de Fiche changerait le schéma du gabarit `memory` ;
+- un L1 réécrit à chaque édition casserait l'histoire.
+
+L'état vivant d'une fiche, dans ce modèle, c'est son L2, recalculé depuis les L1 (M5).
 
 **Les plans clos vont en mémoire, sur la fiche de session** (la vision du 4 octobre : le
-contexte comme une vue des fiches).
+contexte comme une vue des fiches ; forme relue par 96).
 - La fiche de session est celle que le juge range déjà (page 04, nom stable par
-  `nom_de_tache`), dans la mémoire déclarée (`bilans.memoire`).
-- Pour un équipier, son nom vient de la demande, pas du premier message d'un pas : chaque pas
-  commence par l'injection de la frontière, et le juge doit ranger tous les pas sur la même
-  fiche.
-- Chaque plan clos y devient un L1 de section `plan`, avec :
-  - son JSON entier : la demande, la proposition, les éléments et leurs statuts finaux, la
-    raison de la clôture ;
-  - ses références :
-    - les fiches sujets touchées pendant ce plan : les fichiers, les outils par leurs ancres
-      `outil:<nom>`, les concepts ;
-    - les L1 précis de ces fiches que ses pas ont produits ou lus (par exemple les « defauts »
-      que le juge a rangés pour ses runs).
+  `nom_de_tache`), dans la mémoire déclarée (`bilans.memoire`). Pour un équipier, son nom vient
+  de la demande, pas du premier message d'un pas : chaque pas commence par l'injection de la
+  frontière, et le juge doit ranger tous les pas sur la même fiche.
+- **Un L1 par plan clos, section exactement `plan`.** Le numéro va dans la source,
+  `sources/<jour>-<tâche>-plan-<n>.md`, dont le L0 est le plan rendu lisible. Le texte donne la
+  demande, la proposition, les éléments par statut final et la raison de la clôture, puis le
+  bloc ```json entier.
+- **Ses références sont sur l'apport, par `citer_source`** (pas des ancres de la fiche : ce
+  qu'un plan a touché est son histoire) :
+  - `path:<chemin relatif au dépôt>` pour un fichier, et `symbol` (`chemin#Nom`) pour un
+    symbole ;
+  - `outil:<nom>`, la valeur de l'ancre des fiches d'outils ;
+  - `doc:sources/<jour>-<run>.md#bilan|#defauts`, la même Ref que le juge a posée pour les
+    apports de ses pas.
+
+  `cited_by` rend ainsi le plan depuis un fichier, un outil ou le journal d'un run.
+- **Les concepts ne sont ni un champ ni une Ref** : un concept est une fiche, et c'est
+  l'archiviste qui classe (M4). Une intuition de l'agent va en texte dans le bloc json
+  (`concepts`), comme indication.
 - Relancé, l'agent lit le plan courant et peut remonter aux plans clos. Le juge, qui range son
   bilan sur la même fiche, voit le plan à côté du run.
-- La forme de ce L1 et de ses références est relue avec 96, comme la fiche par outil. Les
-  concepts sont à trancher avec lui.
 
 ## Ses outils
 
