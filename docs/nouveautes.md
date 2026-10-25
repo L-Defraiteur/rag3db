@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — L'IDE change de peau.** Le cadre et le chat passent en React, shadcn/ui
+  et lucide : mode sombre, les backends en cartes avec leurs tâches, le chat de la
+  tâche et de l'atelier sur la forme du deck builder avec les outils dépliés pendant
+  le flux ; le bundle est bâti par le dépôt, embarqué et vérifié, jamais chargé
+  d'ailleurs. Les autres vues suivent une à une. 81fdc2f40.
 - **25 oct. — La recherche trouve ce qu'on a sous les yeux.** La requête entière part
   à lucivy telle quelle, en parallèle d'une recherche par mots, et l'exact passe
   devant la fusion : « Vue d'ensemble » rend sa page aux rangs 1, 2, 3 au lieu
