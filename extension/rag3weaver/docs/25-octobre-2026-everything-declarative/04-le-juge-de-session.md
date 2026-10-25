@@ -60,9 +60,22 @@ rejouées par le juge à chaque lot important) vient après, sur lui.
    **La voie générale, à trancher par Lucie** : ouvrir aux agents la liste blanche des nœuds d'une
    réaction. Une réaction déclarée sur `RunFinished` porterait alors le juge, comme tout autre
    agent, sans code dans l'hôte.
-5. **La fiche de bilan.** Le sujet est la tâche demandée : l'intitulé normalisé du premier message
-   du tour, ou le gabarit ou l'outil visé. Chaque session apporte un L1. Les champs suivent la
-   demande de c7 :
+5. **La fiche de bilan**, dans la mémoire, sous la forme relue par 96 :
+   - **Une Fiche ordinaire** : `via: "juge"`, `author` vide (l'hôte le posera, lot M7 de la
+     mémoire). Elle a une ancre (`ancrer_fiche`) par outil ou gabarit jugé, genre `outil` ou
+     `gabarit` (créé une fois par `create_ref_type`), valeur `outil:<nom>` ou `gabarit:<nom>`.
+     `cited_by(value: "outil:read_file")` rend alors tous les bilans de cet outil.
+   - **Son nom est stable**, puisque l'identité d'une Fiche est `name`, au caractère près. Une
+     tâche du banc a le sien, déclaré. Un tour ordinaire prend `bilan : ` suivi de l'intitulé du
+     premier message, passé par une seule fonction, `nom_de_tache` : minuscules, espaces repliés,
+     ponctuation de bord retirée. Le message entier va dans `about` et dans le bilan.
+   - **La Source (L0)** est le journal du run, écrit à son chemin `sources/<date>-<uuid>.md`.
+     Elle est immuable.
+   - **Un Apport (L1) par session**, section `bilan`. Son texte est le bilan lisible, tel que Lucie
+     le lit dans `fiches/<uuid>.md`, suivi d'un bloc ```json du schéma, qui se relit par programme
+     et se cherche en plein texte.
+
+   Les rubriques du bilan suivent la demande de c7 :
    - note et confiance ;
    - objectif atteint, partiel ou non, chaque fait *dit* ou *déduit* ;
    - par outil : appels, échecs, retours ambigus, appels inutiles ;
@@ -73,8 +86,7 @@ rejouées par le juge à chaque lot important) vient après, sur lui.
    - **la comparaison avec les bilans précédents** : amélioration, régression ou pareil, et sur
      quoi.
 
-   La forme de la fiche est relue par la mémoire (96). Le L2 attend l'archiviste : le juge ne
-   l'écrit pas.
+   Le L2 attend l'archiviste : le juge ne l'écrit pas.
 6. **La vue « bilans »** dans l'IDE, par fiche : ses apports dans l'ordre, la tendance de la note,
    les tickets proposés.
 
@@ -98,5 +110,5 @@ rejouées par le juge à chaque lot important) vient après, sur lui.
   - le journal est générique, celui des runs de l'hôte, borné ;
   - ce soir, le juge est lancé par l'hôte (`bilans`, ou à la demande) ;
   - le L2 revient à l'archiviste ; le juge écrit la fiche et les L1.
-- À relire par la mémoire (96) : la forme de la fiche de bilan.
+- Relu par la mémoire (96) : la forme de la fiche, reportée au §5.
 - À trancher par Lucie : ouvrir les réactions aux agents (la voie générale du déclenchement).
