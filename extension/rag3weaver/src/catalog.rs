@@ -393,6 +393,10 @@ pub struct Catalog {
     sparse_handles: HashMap<String, Arc<sparse_vector::handle::SparseHandle>>,
     /// Les fautes armées par un témoin sur **ce** catalogue ([`crate::fautes_de_test`]).
     fautes_de_test: crate::fautes_de_test::FautesDeTest,
+    /// Le seuil du COPY des liens réglé sur ce catalogue ([`Self::set_link_copy_threshold`]).
+    link_copy_threshold: Option<usize>,
+    /// Les fichiers par paquet réglés sur ce catalogue ([`Self::set_file_batch_size`]).
+    file_batch_size: Option<usize>,
     /// Le journal du drain en cours ([`crate::ecritures`]) : ce que ses nœuds
     /// ont réellement écrit, publié au succès.
     journal_des_ecritures: crate::ecritures::Ecritures,
@@ -660,6 +664,8 @@ fn read_threads() -> u64 {
             blob_buffer: None,
             sparse_handles: HashMap::new(),
             fautes_de_test: Default::default(),
+            link_copy_threshold: None,
+            file_batch_size: None,
             journal_des_ecritures: Default::default(),
             evenements_retenus: Vec::new(),
             fenetres_de_retenue: 0,
@@ -3487,6 +3493,9 @@ fn read_threads() -> u64 {
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
         services.register(crate::fautes_de_test::SERVICE, self.fautes_de_test.clone());
+        if let Some(seuil) = self.link_copy_threshold {
+            services.register(crate::dataflow::record_nodes::LINK_COPY_THRESHOLD_SERVICE, seuil);
+        }
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         if let Some(ref prouves) = self.proven_present {
@@ -8831,6 +8840,9 @@ fn read_threads() -> u64 {
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
         services.register(crate::fautes_de_test::SERVICE, self.fautes_de_test.clone());
+        if let Some(seuil) = self.link_copy_threshold {
+            services.register(crate::dataflow::record_nodes::LINK_COPY_THRESHOLD_SERVICE, seuil);
+        }
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         if let Some(ref prouves) = self.proven_present {
@@ -9147,6 +9159,41 @@ fn read_threads() -> u64 {
     /// liens de `relation` échoue, sur ce catalogue seulement.
     pub fn injecter_faute_de_lien(&mut self, relation: &str, groupe: usize) {
         self.fautes_de_test.lien = Some((relation.to_string(), groupe));
+    }
+
+    /// **Arrête la synchronisation d'une source après le paquet `rang`**
+    /// (à partir de 0), sur ce catalogue seulement : le crochet des témoins de
+    /// l'arrêt, qui lisaient `RAG3WEAVER_TEST_STOP_AFTER_BATCH` pour tout le
+    /// processus. `None` le retire.
+    pub fn stop_after_batch(&mut self, rang: Option<usize>) {
+        self.fautes_de_test.stop_after_batch = rang;
+    }
+
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
+    pub(crate) fn test_stop_after_batch(&self) -> Option<usize> {
+        self.fautes_de_test.stop_after_batch
+    }
+
+    /// **Le seuil du COPY des liens de ce catalogue** : au-delà de ce nombre
+    /// de paires d'une relation dans un drain, les liens partent en masse.
+    /// `None` : `RAG3WEAVER_LINK_COPY_THRESHOLD`, sinon 200. Un témoin qui
+    /// compare les deux chemins règle **son** catalogue ; la variable posée
+    /// par un test valait pour tout le processus et faisait passer par lots
+    /// les témoins voisins (19 octobre 2026).
+    pub fn set_link_copy_threshold(&mut self, seuil: Option<usize>) {
+        self.link_copy_threshold = seuil;
+    }
+
+    /// **Le nombre de fichiers par paquet d'une synchronisation** sur ce
+    /// catalogue : l'emporte sur l'option et sur `RAG3WEAVER_BATCH_FILES`.
+    /// `None` : l'option.
+    pub fn set_file_batch_size(&mut self, n: Option<usize>) {
+        self.file_batch_size = n;
+    }
+
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
+    pub(crate) fn file_batch_size(&self) -> Option<usize> {
+        self.file_batch_size
     }
 
     /// Désarme les fautes des témoins sur ce catalogue.

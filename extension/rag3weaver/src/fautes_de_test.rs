@@ -25,4 +25,8 @@ pub struct FautesDeTest {
     pub insertion: Option<(String, usize)>,
     /// Le n-ième groupe de liens de cette relation échoue.
     pub lien: Option<(String, usize)>,
+    /// La synchronisation d'une source s'arrête après ce paquet (le rang, à
+    /// partir de 0), comme sur une demande d'arrêt. Avant le 19 octobre 2026,
+    /// `RAG3WEAVER_TEST_STOP_AFTER_BATCH`, pour tout le processus.
+    pub stop_after_batch: Option<usize>,
 }

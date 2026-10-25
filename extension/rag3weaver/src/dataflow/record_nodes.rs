@@ -647,7 +647,8 @@ struct ResolvedLink {
 }
 
 /// Au-delà de ce nombre d'arêtes dans une relation, le lot part par COPY.
-/// `RAG3WEAVER_LINK_COPY_THRESHOLD` le règle, pour mesurer.
+/// Le catalogue le règle ([`crate::Catalog::set_link_copy_threshold`]), et
+/// `RAG3WEAVER_LINK_COPY_THRESHOLD` en est le défaut, pour mesurer.
 ///
 /// **200, pas 2 000** (3 octobre 2026). Mesuré sur `src/` du moteur (1 643
 /// fichiers, paquets de 64), dans la même série : 48 s avec 200, 92 s avec
@@ -669,11 +670,19 @@ fn fautes_de_test(ctx: &NodeContext) -> crate::fautes_de_test::FautesDeTest {
     ctx.service::<crate::fautes_de_test::FautesDeTest>(crate::fautes_de_test::SERVICE).cloned().unwrap_or_default()
 }
 
-fn copy_seuil() -> usize {
-    std::env::var("RAG3WEAVER_LINK_COPY_THRESHOLD")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(COPY_SEUIL)
+/// La clé du service qui porte le seuil réglé sur le catalogue
+/// ([`crate::Catalog::set_link_copy_threshold`]).
+pub(crate) const LINK_COPY_THRESHOLD_SERVICE: &str = "link_copy_threshold";
+
+/// Le seuil du catalogue de ce drain, sinon `RAG3WEAVER_LINK_COPY_THRESHOLD`,
+/// sinon [`COPY_SEUIL`].
+fn copy_seuil(ctx: &NodeContext) -> usize {
+    ctx.service::<usize>(LINK_COPY_THRESHOLD_SERVICE).copied().unwrap_or_else(|| {
+        std::env::var("RAG3WEAVER_LINK_COPY_THRESHOLD")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(COPY_SEUIL)
+    })
 }
 
 /// **Un fichier CSV à nous seuls.** Le processus, un compteur, et l'instant :
@@ -1323,7 +1332,7 @@ impl Node for LinkRecordNode {
             // arêtes en 47 ms au lieu de 158 s (6 septembre 2026). La
             // sémantique de MERGE est gardée : dédoublonnage dans le lot, et
             // les paires déjà posées écartées quand la table n'est pas vide.
-            if indices.len() >= copy_seuil() {
+            if indices.len() >= copy_seuil(ctx) {
                 if let Some((from, to)) = ends.as_ref() {
                     match copier_les_liens(ctx, conn.as_ref(), dialect.as_ref(), rel_name, (from, to), prop_keys, indices, &resolved, &items, &mut presents_connus) {
                         Ok(Some(ecrites_ici)) => {

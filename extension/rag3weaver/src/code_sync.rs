@@ -944,10 +944,12 @@ fn synchroniser_la_source(
 }
 
 /// L'arrêt est-il demandé après ce paquet ? Le drapeau des options, ou le
-/// crochet de test `RAG3WEAVER_TEST_STOP_AFTER_BATCH=<rang>`.
-fn arret_demande(options: &SourceSyncOptions, rang: usize) -> bool {
+/// crochet des témoins, porté par le catalogue
+/// ([`Catalog::stop_after_batch`]) : jamais lu dans l'environnement du
+/// processus, où il arrêtait les synchronisations des suites voisines.
+fn arret_demande(catalog: &Catalog, options: &SourceSyncOptions, rang: usize) -> bool {
     options.stop.as_ref().is_some_and(|s| s.load(std::sync::atomic::Ordering::SeqCst))
-        || std::env::var("RAG3WEAVER_TEST_STOP_AFTER_BATCH").ok().and_then(|v| v.parse::<usize>().ok()) == Some(rang)
+        || catalog.test_stop_after_batch() == Some(rang)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1044,9 +1046,12 @@ fn synchroniser(
             catalog.begin_fresh_ingest(&[FILE, SCOPE, LIBRARY, SYMBOL], &[(SCOPE, s_scopes), (FILE, s_files)]);
         }
     }
-    let nombre_de_paquets = retenus.chunks(options.batch_files.max(1)).len();
+    // Le réglage du catalogue l'emporte (un témoin règle le sien, sans
+    // toucher l'environnement du processus).
+    let par_paquet = catalog.file_batch_size().unwrap_or(options.batch_files).max(1);
+    let nombre_de_paquets = retenus.chunks(par_paquet).len();
     let par_validation = paquets_par_validation();
-    for (rang_du_paquet, paquet) in retenus.chunks(options.batch_files.max(1)).enumerate() {
+    for (rang_du_paquet, paquet) in retenus.chunks(par_paquet).enumerate() {
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
         marquer_lus(&registry_key(source), paquet);
@@ -1167,7 +1172,7 @@ fn synchroniser(
         progress(avancement);
         // **L'arrêt propre**, à la seule frontière sûre : un paquet validé
         // (ou hors transaction), et pas le dernier.
-        if (!tx || valider) && rang_du_paquet + 1 < nombre_de_paquets && arret_demande(options, rang_du_paquet) {
+        if (!tx || valider) && rang_du_paquet + 1 < nombre_de_paquets && arret_demande(catalog, options, rang_du_paquet) {
             catalog.end_fresh_ingest();
             return Err(format!(
                 "{SYNC_SUSPENDED} : {} fichiers sur {} faits, au paquet {} sur {} ; relancer reprend là",
