@@ -15,6 +15,7 @@ matin puis la reprise du 25 à 13 h 30.
 | 25 oct. 17 h 27 | vector : le degré converti explicitement (MSVC C2398, AppleClang) | 04063ee06 | Windows et macOS rebâtissent l'extension vecteur ; base de la lib de la bascule 41/42 |
 | 25 oct. 18 h 31 | V2-1b pièce 1 : le segment neuf au point de reprise | 6b63e4922 | un segment changé est rebâti sur des pages neuves, l'ancien rend ses pages à sa mort ; plus de réécriture en place ni d'ombre pour les colonnes ; format inchangé ; témoin `checkpoint_new_segment_test.cpp` (4 cas) ; mesure : une ligne modifiée = 344 Kio des deux côtés, 1 % = 2,97 Mio contre 3,53, 10 % = 2,97 contre 5,79 (page 18 §6) |
 | 25 oct. 19 h 50 | V2-1c : un point de reprise ne fige plus les lecteurs nouveaux | 66994dd43 | porte à deux niveaux (`checkpointWriting`, écriture hors du verrou public), bloc neuf bâti hors du verrou de la collection et échangé sous lui, pages ombres recopiées sous le verrou de page ; emporte la pièce 2 de V2-1b ; témoin `checkpoint_under_readers_test.cpp` (3 cas) ; `ReadDuringACheckpointDoesNotWait` vert (2,5 ms pendant 1 057 ms), sorti de known_red ; ASAN sans rapport ; format inchangé (page 18 §7) |
+| 25 oct. 21 h 10 | V2-2a+2b : un lecteur ouvert avant le point de reprise n'est plus attendu | f8c0c8df0 | il relit sa génération des blocs (nœuds : la liste ; CSR : persistant, blocs, copie de l'index), gardée jusqu'au point de reprise suivant ; T et F du gestionnaire au Checkpointer ; la fonte à F essayée d'abord perdait ]F, T] à la réouverture (page 19 §3) ; témoin `checkpoint_open_reader_test.cpp` ; deux témoins qui tenaient un lecteur réécrits avec un écrivain et doublés ; format inchangé |
 
 Docs poussées : page 18 (V2-1, onze obstacles et ce qui est tranché, §5 écrit avec le lot) ;
 tickets : quatre défauts des numéros de colonnes (tous fermés le 25), la CI rouge (cassert et
@@ -71,8 +72,9 @@ annoncés. L'arbre principal a coupé le chemin par lequel `batir.sh` posait cou
 
 1. `ci-cassert-geo` vers master à la fenêtre ; le commit de formatage pur (clang-format-18,
    `.clang-format-ignore` pour les annexes des docs) dans la fenêtre du ticket CI.
-2. Le compteur d'octets du point de reprise (`v21b-compteur`), petit lot à part après V2-1c.
-3. V2-2 (les lecteurs ouverts avant le point de reprise, les écrivains pendant : l'instantané,
-   obstacle 4) et l'écriture à la demande des pages validées (page 17 §3.1) ; l'ADD paresseux
-   (page 16) ; selon la file de l'orchestration.
+2. Le retrait des générations dans toutes les tables (`v22-retrait`, rebasé sur master), petit
+   lot après rejeu réduit, avec la forme du banc pour son témoin ; relire le rebase de hotfixs sur
+   `transaction_manager`.
+3. V2-2c (journal scellé à T et journal neuf, format 44 ; la porte ouverte aux écrivains
+   nouveaux ; la garde de groupe) ; V2-3 ; l'écriture à la demande (page 17 §3.1).
 4. Lecture en mémoire (wip `lecture-en-memoire`, 8c83302d4, poussé tel quel), E11 (I2).

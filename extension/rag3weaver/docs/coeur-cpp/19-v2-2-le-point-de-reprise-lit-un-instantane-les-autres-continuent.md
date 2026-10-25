@@ -66,7 +66,7 @@ page dit pourquoi ce n'est pas une porte de plus, et la forme qui le permet.
 10. `oldestActiveSnapshotNoLock(committing)` (`transaction_manager.cpp:99-108`) donne déjà le
     plus vieux `snapshotFloorTS` des transactions actives.
 
-## 3. La forme : les générations (écrite le 25 octobre au soir, après un premier essai)
+## 3. La forme : les générations (écrite le 25 octobre au soir, après un premier essai ; sur master en f8c0c8df0)
 
 Un premier essai a suivi la forme « fondre jusqu'à F, porter les versions postérieures dans le
 bloc neuf » (branche `v22a-instantane`, 9101ec942) : elle marche en mémoire (le lecteur ouvert
