@@ -95,16 +95,30 @@ fn three_items(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel
                 }
                 (2, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "changelog", "succeeded": false, "done": "j'ai relu le dépôt", "remaining": "écrire le CHANGELOG" }))])),
                 // Pas 3 : le CHANGELOG. Pas 4 : le titre.
-                (3, 0) => answer(turns, opts, sink, "", calls(&[("edit_file", edit("CHANGELOG.md", "# Changelog\n"))])),
+                (3, 0) => answer(turns, opts, sink, "", calls(&[
+                    ("edit_file", edit("CHANGELOG.md", "# Changelog\n")),
+                    ("propose", json!({ "text": "Voudrais-tu aussi un CONTRIBUTING.md ? Ce n'est pas dans la demande.", "item": "contrib" })),
+                ])),
+                (3, 2) => {
+                    use std::io::Write;
+                    let mut f = std::fs::OpenOptions::new().append(true).open(&mailbox).unwrap();
+                    writeln!(f, "{}", json!({ "at": 2, "from": "supervisor", "kind": "answer", "item": "contrib", "text": "Oui, vas-y pour le CONTRIBUTING." })).unwrap();
+                    answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "changelog", "succeeded": true, "done": "CHANGELOG écrit ; CONTRIBUTING proposé", "remaining": "" }))]))
+                }
                 (3, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "changelog", "succeeded": true, "done": "CHANGELOG écrit", "remaining": "" }))])),
-                (4, 0) => answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "README.md", "old": "# Doc", "new": "# Petit dépôt" }))])),
+                (4, 0) => answer(turns, opts, sink, "", calls(&[
+                    ("edit_plan", json!({ "item": { "id": "contrib", "text": "Écrire CONTRIBUTING.md (proposé, accepté)", "status": "todo", "alone": true } })),
+                    ("edit_file", json!({ "path": "README.md", "old": "# Doc", "new": "# Petit dépôt" })),
+                ])),
                 (4, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "titre", "succeeded": true, "done": "titre posé", "remaining": "" }))])),
-                // Pas 5 : plus rien : compte rendu, clôture, step_done.
-                (5, 0) => answer(turns, opts, sink, "", calls(&[
+                (5, 0) => answer(turns, opts, sink, "", calls(&[("edit_file", edit("CONTRIBUTING.md", "# Contribuer\n"))])),
+                (5, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "contrib", "succeeded": true, "done": "CONTRIBUTING écrit", "remaining": "" }))])),
+                // Pas 6 : plus rien : compte rendu, clôture, step_done.
+                (6, 0) => answer(turns, opts, sink, "", calls(&[
                     ("report", json!({ "text": "La doc est écrite : README (titre validé), CHANGELOG." })),
                     ("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "les trois éléments sont faits", "concepts": ["documentation"] } })),
                 ])),
-                (5, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "compte rendu", "remaining": "" }))])),
+                (6, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "compte rendu", "remaining": "" }))])),
                 _ => answer(turns, opts, sink, "Je n'ai plus rien à faire.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "", "remaining": "" }))])),
             }
         })))
@@ -127,7 +141,7 @@ fn the_teammate_works_a_three_item_plan_step_by_step() {
     let host = host.with_chat_model(three_items(seen.clone(), files.mailbox_path()));
     files.append("supervisor", "request", None, "Écris la doc du petit dépôt : un README, un CHANGELOG ; le titre reste à valider.").unwrap();
     let outcome = host.run_teammate(&h.id, "doc").expect("l'équipier tourne");
-    assert_eq!(outcome.steps.len(), 5, "{outcome:?}");
+    assert_eq!(outcome.steps.len(), 6, "{outcome:?}");
     assert_eq!(outcome.ended, "plus rien à faire : compte rendu");
 
     // La boîte : la question au pas 1, la réponse, quatre step_done, le compte rendu, la fin.
@@ -136,7 +150,13 @@ fn the_teammate_works_a_three_item_plan_step_by_step() {
     assert_eq!(kinds[0], ("supervisor".into(), "request".into()));
     assert_eq!(kinds[1], ("teammate".into(), "question".into()), "{kinds:?}");
     assert_eq!(boite[1]["item"], "titre");
-    assert_eq!(boite.iter().filter(|l| l["kind"] == "step_done").count(), 5, "{kinds:?}");
+    assert_eq!(boite.iter().filter(|l| l["kind"] == "step_done").count(), 6, "{kinds:?}");
+    // Le hors-plan : une proposition pendant le pas 3, le plan continue (le
+    // step_done du pas 3 suit la proposition), et le « oui » à la frontière du
+    // pas 4 ouvre l'élément.
+    let proposition = boite.iter().position(|l| l["kind"] == "proposal").expect("la proposition dans la boîte");
+    assert_eq!(boite[proposition]["item"], "contrib");
+    assert!(boite[proposition + 1..].iter().any(|l| l["kind"] == "step_done" && l["item"] == "changelog"), "le plan continue après la proposition : {kinds:?}");
     assert!(boite.iter().any(|l| l["kind"] == "report" && l["from"] == "teammate"), "{kinds:?}");
     assert_eq!(kinds.last().unwrap(), &("host".into(), "ended".into()));
 
@@ -147,8 +167,9 @@ fn the_teammate_works_a_three_item_plan_step_by_step() {
     // Le budget : la treizième lecture refusée, en nommant step_done.
     assert_eq!(seen.refusals.len(), 1, "{:?}", seen.refusals);
     assert!(seen.refusals[0].contains("step_done"));
+    assert!(seen.frontiers[3].contains("Oui, vas-y pour le CONTRIBUTING") && seen.frontiers[3].contains("(élément contrib)"), "{}", seen.frontiers[3]);
     // Le dernier pas sait qu'il ne reste rien.
-    assert!(seen.frontiers[4].contains("rends compte"), "{}", seen.frontiers[4]);
+    assert!(seen.frontiers[5].contains("rends compte"), "{}", seen.frontiers[5]);
 
     // Deux runs journalisés au moins, chacun avec son step_done et la demande.
     let runs: Vec<String> = outcome.steps.iter().filter_map(|s| s["run"].as_str().map(str::to_string)).collect();
@@ -170,13 +191,13 @@ fn the_teammate_works_a_three_item_plan_step_by_step() {
     // Le plan clos, avec ses pas et ses notions ; plus de plan vivant.
     let clos = files.closed();
     assert_eq!(clos.len(), 1);
-    assert_eq!((clos[0].state, clos[0].items.iter().filter(|i| i.status == Status::Done).count(), clos[0].concepts.clone()), (PlanState::Accomplished, 3, vec!["documentation".to_string()]));
-    assert_eq!(clos[0].steps.len(), 5, "{:?}", clos[0].steps);
+    assert_eq!((clos[0].state, clos[0].items.iter().filter(|i| i.status == Status::Done).count(), clos[0].concepts.clone()), (PlanState::Accomplished, 4, vec!["documentation".to_string()]));
+    assert_eq!(clos[0].steps.len(), 6, "{:?}", clos[0].steps);
     assert!(files.read_plans().plans.is_empty());
     // Les fichiers sont sur la branche de la tâche.
     let racine = &t.workspace.as_ref().unwrap().racine;
     assert_eq!(std::fs::read_to_string(racine.join("README.md")).unwrap(), "# Petit dépôt\n");
-    assert!(racine.join("CHANGELOG.md").is_file());
+    assert!(racine.join("CHANGELOG.md").is_file() && racine.join("CONTRIBUTING.md").is_file());
 }
 
 /// **Le plan n'est pas obligatoire, et un plan actif oblige** (Lucie) : une
