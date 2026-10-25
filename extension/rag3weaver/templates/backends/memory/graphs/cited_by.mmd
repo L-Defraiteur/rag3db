@@ -13,7 +13,7 @@
 
 graph LR
     params["RhaiNode(script_id=cited_by_params, inputs='cite,under,genres,states,authors,since,limit,offset', cite=$value, under=$under, genres=$genres, states=$states, authors=$authors, since=$since, limit=$limit, offset=$offset)"]
-    plan["PlanNode(plan=@plans/cited_by.json)"]
+    plan["PlanNode(plan='@builtin:backends/memory/plans/cited_by.json')"]
     render["RenderResultsNode(format=$format, group=false)"]
     params -->|result:params| plan
     plan -->|results| render

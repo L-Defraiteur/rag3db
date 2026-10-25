@@ -67,8 +67,12 @@ pub fn param_schema(param: &ConfigParam) -> Value {
             // Le sous-schéma déclaré par le nœud, tel quel ; description et
             // défaut de la fiche par-dessus.
             Some(Value::Object(declared)) => schema.extend(declared.clone()),
+            // Sans sous-schéma, le défaut dit la forme : un `json = []` attend
+            // une liste (des genres, des états), et un objet sinon. Typé
+            // `object` d'office, la liste du défaut se refusait elle-même.
             _ => {
-                schema.insert("type".into(), json!("object"));
+                let forme = if matches!(param.default, Some(Value::Array(_))) { "array" } else { "object" };
+                schema.insert("type".into(), json!(forme));
             }
         },
     }
@@ -253,6 +257,22 @@ mod tests {
             assert_eq!(param_schema(&p)["type"], expected);
             assert!(param_schema(&p).get("default").is_none());
         }
+    }
+
+    #[test]
+    fn a_json_param_whose_default_is_a_list_expects_a_list() {
+        let p = |default| ConfigParam {
+            name: "genres".into(),
+            param_type: ConfigParamType::Json,
+            required: false,
+            default,
+            description: "d".into(),
+            choices: None,
+            json_schema: None,
+        };
+        assert_eq!(param_schema(&p(Some(json!([]))))["type"], "array");
+        assert_eq!(param_schema(&p(Some(json!({}))))["type"], "object");
+        assert_eq!(param_schema(&p(None))["type"], "object");
     }
 
     #[test]
