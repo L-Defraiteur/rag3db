@@ -1280,6 +1280,7 @@ impl PreparedBackend {
             // faux refuse le gabarit.
             crate::dataflow::plan_node::resoudre_les_plans(&mut tool, |chemin| lire_texte(lecteur, &directory.join(chemin)), &schema_des_plans)
                 .map_err(|e| format!("{name}: {e}"))?;
+            crate::dataflow::render_nodes::verifier_le_cablage(name, tool.template())?;
             for key in attachment.bindings.keys() {
                 if !tool.params().iter().any(|p| p.name == key.as_str()) {
                     return Err(format!("{name}: unknown binding {key}"));

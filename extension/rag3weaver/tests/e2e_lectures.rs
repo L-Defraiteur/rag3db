@@ -298,6 +298,83 @@ fn outline_rend_le_plan_d_un_fichier_par_un_plan_declare() {
     assert!(refus.contains("path"), "un appel sans path nomme le paramètre : {refus}");
 }
 
+/// **`outline` en json, pour une interface** (la vue outline de l'IDE) : le rendu d'un Plan
+/// déclaré rend ses lignes, son total et sa provenance, toujours ces trois clés. Les lignes sont
+/// celles du Plan (`returns`), dans l'ordre du fichier ; la provenance est celle que l'outil dit
+/// en markdown, mot pour mot. Un chemin sans scope rend des lignes vides et un total nul.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn outline_en_json_rend_les_lignes_du_plan_son_total_et_sa_provenance() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::{json, Value};
+    use std::time::{Duration, Instant};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code(tmp.path(), "outline-json");
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    while !std::fs::read_to_string(&journal).unwrap_or_default().contains("indexation terminée") {
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    // Le texte rendu par l'outil, où qu'il soit dans la réponse.
+    let texte = |v: Value| -> String {
+        match v {
+            Value::String(s) => s,
+            autre => autre["result"].as_str().map(str::to_string).unwrap_or_else(|| autre.to_string()),
+        }
+    };
+    // En json, le résultat est un objet (pas un texte) : la ligne de fraîcheur de l'index va dans
+    // `freshness`, elle ne le préfixe pas.
+    let json_de = |args: Value| -> Value {
+        let r = backend.call("outline", args).expect("outline en json");
+        assert!(r["result"].is_object(), "un objet, pas un texte : {r}");
+        r["result"].clone()
+    };
+    let v = json_de(json!({"path": "src/a.rs", "format": "json"}));
+    eprintln!("{v}");
+    let mut cles: Vec<&String> = v.as_object().expect("un objet").keys().collect();
+    cles.sort();
+    assert_eq!(cles, ["provenance", "rows", "total"], "les trois clés, toujours : {v}");
+    let noms: Vec<&str> = v["rows"].as_array().unwrap().iter().filter_map(|r| r["name"].as_str()).collect();
+    assert_eq!(noms, ["alpha", "beta"], "dans l'ordre du fichier : {v}");
+    let alpha = &v["rows"][0];
+    assert_eq!((alpha["start_line"].clone(), alpha["end_line"].clone()), (json!(1), json!(3)), "les lignes : {alpha}");
+    for champ in ["_uuid", "scope_type", "parent_name", "signature", "file_path", "language"] {
+        assert!(alpha.get(champ).is_some(), "la colonne {champ} du Plan : {alpha}");
+    }
+    assert_eq!(v["total"], json!(2), "{v}");
+    let markdown = texte(backend.call("outline", json!({"path": "src/a.rs"})).expect("outline"));
+    // La marque d'avant, octet pour octet (apostrophe droite comprise) : le markdown ne change
+    // pas, il la lit maintenant dans l'outil au lieu de l'avoir en dur.
+    const MARQUE: &str = "Lu par l'analyseur (tree-sitter), pas par un compilateur : une macro peut cacher un scope.";
+    assert_eq!(v["provenance"], json!(MARQUE), "{v}");
+    // Le markdown entier, octet pour octet, tel que master le rendait avant ce lot (capturé le
+    // 25 octobre 2026 sur bc0215cdc), hors la ligne d'état de l'index, qui porte un chemin
+    // temporaire.
+    let avant = "**2 scopes**, dans l'ordre du fichier :\n\n- function `alpha` — src/a.rs:1-3\n  `fn alpha() -> u32`\n- function `beta` — src/a.rs:5-7\n  `fn beta() -> u32`\n\n_Lu par l'analyseur (tree-sitter), pas par un compilateur : une macro peut cacher un scope._";
+    let corps = markdown.split_once("\n\n").filter(|(etat, _)| etat.starts_with("> index")).map_or(markdown.as_str(), |(_, reste)| reste);
+    assert_eq!(corps, avant, "le markdown d'outline ne change pas");
+
+    // Le plafond de limit vaut aussi en json, et le total reste compté au-delà : une vue sait
+    // qu'il en manque.
+    let borne = json_de(json!({"path": "src/a.rs", "format": "json", "limit": 1}));
+    assert_eq!((borne["rows"].as_array().unwrap().len(), borne["total"].clone()), (1, json!(2)), "rows < total : {borne}");
+
+    let vide = json_de(json!({"path": "src/absent.rs", "format": "json"}));
+    assert_eq!((vide["rows"].clone(), vide["total"].clone()), (json!([]), json!(0)), "{vide}");
+}
+
 /// **Aucune prise bloquante du mutex du catalogue sur le chemin d'une lecture**
 /// (19 octobre 2026). La garde des nœuds de lecture (`lecture_sans_mutex_tests`)
 /// n'avait pas vu `Backend::run`, qui prenait le mutex à chaque appel pour le
