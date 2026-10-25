@@ -1,0 +1,8 @@
+# Les planchers de la lib du moteur : un commit du moteur par ligne, que toute
+# lib choisie au magasin doit contenir (son identifiant porte le commit de son
+# bâti), puis la raison. `rag3db_libs.py verifier` les lit ; `lib_du_magasin`
+# (run_e2e.sh, cargo_magasin.sh) refuse une lib en dessous, et `courant` ne se
+# pose pas sur elle. Un plancher s'ajoute quand le crate cesse de contourner un
+# défaut du moteur que ce commit corrige.
+4f9274a38769a085ab0009a89d1b7dba7597e568 une base réserve son adressage par tranches de 16 Gio, plus 8 Tio d'un bloc : sans elles, un processus n'ouvre qu'une quinzaine de bases, et les témoins de la lib (le contournement cfg(test) de bc2cb48e7 est retiré) échouent sur « Mmap for size 8796093022208 failed »
+a45a15adf2347de1f089ab7d00ee7d36d46e02d0 un COPY de relations annulé ne fait plus disparaître les relations persistantes du nœud : sans lui, le ROLLBACK d'un drain de liens par COPY (la pièce 1 de la mémoire, 60348d75a) perd les liens validés avant la transaction

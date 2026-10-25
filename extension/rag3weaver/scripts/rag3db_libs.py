@@ -13,6 +13,7 @@ Un dossier par identifiant, immuable une fois publié, sous
 Sous-commandes :
     publier <dossier de bâti> [--racine <arbre>] [--sans-courant]
     courant [--poser <id>]   rend le dossier résolu, ou change le lien
+    verifier <dossier|id>    la lib contient-elle les planchers (planchers-de-la-lib) ?
     liste                    les identifiants, et ce qui retient chacun
     menage [--garder N] [--simuler]
 
@@ -172,10 +173,68 @@ def publier(bati: Path, racine: Path, poser_courant: bool) -> None:
         poser(ident)
 
 
+# ── les planchers : les commits du moteur qu'une lib doit contenir ──────────
+
+PLANCHERS = Path(__file__).resolve().parent / "planchers-de-la-lib"
+
+
+def planchers() -> list[tuple[str, str]]:
+    """(commit, raison) de `planchers-de-la-lib` ; aucun fichier : aucun plancher."""
+    if not PLANCHERS.exists():
+        return []
+    out = []
+    for ligne in PLANCHERS.read_text().splitlines():
+        ligne = ligne.strip()
+        if not ligne or ligne.startswith("#"):
+            continue
+        commit, _, raison = ligne.partition(" ")
+        out.append((commit, raison.strip()))
+    return out
+
+
+def commit_du_bati(ident: str) -> str | None:
+    m = re.match(r"rag3db-build-([0-9a-f]{40})-", ident)
+    return m.group(1) if m else None
+
+
+def manques(ident: str) -> tuple[list[tuple[str, str]], list[str]]:
+    """Les planchers que la lib `ident` ne contient pas, et ce qui n'a pas pu
+    se dire (un commit que le dépôt de ce script ne connaît pas : dit, pas
+    refusé — on ne refuse que ce que git prouve absent)."""
+    commit = commit_du_bati(ident)
+    if not commit:
+        return [], [f"{ident} : pas de commit dans l'identifiant, planchers non vérifiés"]
+    depot = Path(__file__).resolve().parent
+    absents, inconnus = [], []
+    for plancher, raison in planchers():
+        r = subprocess.run(["git", "-C", str(depot), "merge-base", "--is-ancestor", plancher, commit],
+                           capture_output=True, text=True)
+        if r.returncode == 1:
+            absents.append((plancher, raison))
+        elif r.returncode != 0:
+            inconnus.append(f"plancher {plancher[:9]} contre {commit[:9]} : git ne sait pas ({r.stderr.strip()})")
+    return absents, inconnus
+
+
+def verifier(cible: str) -> None:
+    """Refuse (code 2) une lib qui ne contient pas un plancher, en le nommant."""
+    d = Path(cible)
+    ident = (d / "BUILD_ID").read_text().strip() if (d / "BUILD_ID").exists() else d.name
+    absents, inconnus = manques(ident)
+    for i in inconnus:
+        print(f"⚠ {i}", file=sys.stderr)
+    if absents:
+        refus(f"la lib {ident} ne contient pas " + " ; ni ".join(f"{c[:9]} — {r}" for c, r in absents)
+              + " : prenez courant, ou une lib bâtie après")
+
+
 def poser(ident: str) -> None:
     m_dir = magasin()
     if not (m_dir / ident).is_dir():
         refus(f"{ident} n'est pas au magasin {m_dir}")
+    # `courant` ne se pose jamais sur une lib sous un plancher : toutes les
+    # passes la prendraient.
+    verifier(str(m_dir / ident))
     tmp = m_dir / f".courant-{os.getpid()}"
     if tmp.is_symlink() or tmp.exists():
         tmp.unlink()
@@ -295,6 +354,8 @@ def main() -> None:
     pc = sub.add_parser("courant")
     pc.add_argument("--poser")
     sub.add_parser("liste")
+    pv = sub.add_parser("verifier")
+    pv.add_argument("cible")
     pm = sub.add_parser("menage")
     pm.add_argument("--garder", type=int, default=10)
     pm.add_argument("--simuler", action="store_true")
@@ -311,7 +372,11 @@ def main() -> None:
             print(os.path.realpath(c))
     elif a.cmd == "liste":
         for i, r in raisons(magasin(), 10).items():
-            print(f"{i} : {', '.join(r) or 'rien ne le retient'}")
+            absents, _ = manques(i)
+            sous = f" — SOUS LE PLANCHER {', '.join(c[:9] for c, _ in absents)}" if absents else ""
+            print(f"{i} : {', '.join(r) or 'rien ne le retient'}{sous}")
+    elif a.cmd == "verifier":
+        verifier(a.cible)
     elif a.cmd == "menage":
         menage(a.garder, a.simuler)
 
