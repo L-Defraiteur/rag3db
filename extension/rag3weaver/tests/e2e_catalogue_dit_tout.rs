@@ -532,12 +532,14 @@ fn dix_mille_liens_sortent_en_une_annonce_tronquee_au_compte_juste() {
     assert_eq!(r[0]["added"].as_array().map(Vec::len), Some(1_000), "au plus le plafond");
 }
 
-/// **Une relation à propriétés copiée sans elles** (19 octobre 2026) : le COPY
-/// nomme toutes les propriétés déclarées et laisse vides celles que le lot ne
-/// porte pas. Sans liste de colonnes, le moteur attendait toutes celles de la
-/// table et la base devait être rouverte. 250 paires sans propriété d'une
-/// relation qui en déclare deux : posées par COPY, propriétés à NULL ; puis
-/// 250 autres qui en portent une, l'autre restant NULL.
+/// **Une relation à propriétés copiée sans elles** (19 octobre 2026, filet
+/// retiré le 25) : le COPY nomme toutes les propriétés déclarées et écrit au
+/// mot NULL celles que le lot ne porte pas, texte comme entier. Sans liste de
+/// colonnes, le moteur attendait toutes celles de la table et la base devait
+/// être rouverte ; et avant dcbaef7b1, il refusait le mot NULL dans une colonne
+/// entière (ce témoin rougit sous une lib d'avant). 250 paires sans propriété
+/// d'une relation qui en déclare deux : posées par COPY, propriétés à NULL ;
+/// puis 250 autres qui en portent une, l'autre restant NULL.
 #[test]
 #[ignore]
 fn une_relation_a_proprietes_se_copie_sans_elles() {
