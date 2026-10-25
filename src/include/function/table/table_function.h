@@ -153,6 +153,11 @@ struct RAG3DB_API TableFunction final : Function {
     table_func_init_local_t initLocalStateFunc = nullptr;
     table_func_init_output_t initOutputFunc = nullptr;
     table_func_can_parallel_t canParallelFunc = [] { return true; };
+    // Vrai pour une fonction appelée seule (CALL f(...)) qui n'écrit rien dans la base : elle
+    // ne touche qu'un objet de la connexion (un graphe projeté, GraphEntrySet) et passe dans une
+    // transaction READ ONLY. Faux par défaut : un CALL autonome est une écriture
+    // (CREATE_VECTOR_INDEX, COPY, …), voir StatementReadWriteAnalyzer.
+    bool connectionScopedOnly = false;
     table_func_progress_t progressFunc = [](TableFuncSharedState*) { return 0.0; };
     table_func_finalize_t finalizeFunc = [](auto, auto) {};
     table_func_rewrite_t rewriteFunc = nullptr;
