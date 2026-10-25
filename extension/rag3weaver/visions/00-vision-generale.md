@@ -520,6 +520,33 @@ moteur C++ et de rag3weaver avant la sortie du paquet npm. À vérifier avant
 tout envoi de code chez Google : les conditions de lecture et de conservation
 du source. Et rien ne part vers les amonts : les correctifs restent nos lots.
 
+### La voix sur toute interface de chat (Lucie, 25 octobre 2026)
+
+Une graine, pour un chantier à part : tout produit qui expose une interface de
+chat (l'atelier, l'IDE, l'application empaquetée dans Electron, un pod chez un
+client) doit pouvoir s'écouter et parler, sans ajouter un environnement Python
+pour ça. Ce que Lucie a relevé, à vérifier avant d'en faire une dépendance :
+
+- **voicepipe** (crate Rust) : le pipeline de la parole, et non les moteurs.
+  Détection de début et de fin de parole, VAD, transcription en flux, découpe
+  des réponses en phrases pour la synthèse, génération anticipée des segments,
+  interruption (barge-in) et annulation, et un trait `Llm` qu'on implémente
+  nous-mêmes : c'est là que rag3weaver se branche, avec ses agents et ses
+  DAG. Les moteurs STT et TTS se branchent à côté. Sa maturité est à mesurer.
+- **Pocket TTS en Rust** (Kyutai) : des binaires autonomes, sans Python ni
+  PyTorch, pour une synthèse vocale locale dans un processus dédié.
+- **voxkit**, à regarder aussi : les abstractions VAD, STT, TTS, micro et
+  lecture, mais moins complet sur les tours de parole.
+
+L'architecture envisagée : Electron (micro, sortie audio, interface) →
+voicepipe (VAD, tours de parole, barge-in, flux audio) → rag3weaver (les
+agents et les DAG, par le trait `Llm`) → Pocket TTS Rust (la synthèse locale).
+Ce qui resterait à écrire : le transport audio et le branchement des moteurs ;
+ce qu'on éviterait d'écrire : toute la logique des interruptions et des tours
+de parole. Rien n'est décidé ni commencé : c'est un chantier propre, qui vient
+quand le chat lui-même (l'atelier dans l'IDE, l'agent qui code dans une tâche)
+est stable.
+
 ## 8. Ce qui n'est pas décidé
 
 - **S'intégrer à l'usage, une graine** (Lucie, 11 octobre 2026, à propos
