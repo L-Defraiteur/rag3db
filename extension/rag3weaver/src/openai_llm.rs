@@ -85,6 +85,9 @@ pub struct OpenAiLlm {
     stream_tool_arguments: bool,
     /// `tool_choice: "validated"` — voir [`OpenAiLlm::with_validated_tool_choice`].
     google_validated_tool_choice: bool,
+    /// Le budget de raisonnement déclaré (`models.llm.reasoning`), envoyé
+    /// quand l'appel ne fixe pas le sien. Absent : rien n'est envoyé.
+    reasoning_default: Option<crate::llm::ReasoningEffort>,
     retry: RetryPolicy,
     clock: std::sync::Arc<dyn Clock>,
     /// État du générateur de gigue. `with_jitter_seed` le fixe pour les tests.
@@ -114,6 +117,7 @@ impl OpenAiLlm {
             google_extras: false,
             stream_tool_arguments: false,
             google_validated_tool_choice: false,
+            reasoning_default: None,
             retry: RetryPolicy::default(),
             clock: std::sync::Arc::new(SystemClock),
             jitter_state: std::sync::atomic::AtomicU64::new(
@@ -331,6 +335,13 @@ impl OpenAiLlm {
         self
     }
 
+    /// Le budget de raisonnement par défaut de ce modèle : envoyé
+    /// (`reasoning_effort`) quand l'appel ne fixe pas le sien.
+    pub fn with_reasoning_default(mut self, effort: crate::llm::ReasoningEffort) -> Self {
+        self.reasoning_default = Some(effort);
+        self
+    }
+
     pub fn with_context_len(mut self, n: usize) -> Self {
         self.context_len = n;
         self
@@ -362,7 +373,7 @@ impl OpenAiLlm {
         // elle est avalée en silence, mesures à l'appui dans
         // `ReasoningEffort`. `reasoning_effort`, lui, est validé : une valeur
         // invalide répond 400 en nommant celles qu'il accepte.
-        if let Some(effort) = opts.reasoning {
+        if let Some(effort) = opts.reasoning.or(self.reasoning_default) {
             body.insert("reasoning_effort".into(), json!(effort.as_str()));
         }
         // Indépendant de `tools` : on peut vouloir une sortie structurée sans
@@ -1345,6 +1356,14 @@ fn read_sse(
         if let Some(u) = chunk.get("usage").filter(|u| !u.is_null()) {
             usage.prompt_tokens = u["prompt_tokens"].as_u64().unwrap_or(0) as usize;
             usage.completion_tokens = u["completion_tokens"].as_u64().unwrap_or(0) as usize;
+            // Les jetons de raisonnement, compris dans `completion_tokens`
+            // (protocole compatible OpenAI). Deux orthographes, comme pour le
+            // cache : `completion_tokens_details` ou, quand Gemini transparaît,
+            // `thoughts_token_count`.
+            usage.reasoning_tokens = u["completion_tokens_details"]["reasoning_tokens"]
+                .as_u64()
+                .or_else(|| u["thoughts_token_count"].as_u64())
+                .unwrap_or(0) as usize;
             // La part servie depuis le cache. Le fournisseur l'envoie, on la
             // jetait — et sans elle un coût est faux d'un ordre de grandeur.
             //
@@ -1929,6 +1948,46 @@ mod tests {
         let a1 = calls[1]["function"]["arguments"].as_str().unwrap();
         assert_eq!(serde_json::from_str::<Value>(a0).unwrap()["new"], "a\nb");
         assert_eq!(a1, "{}");
+    }
+
+    /// **Le budget de raisonnement déclaré** (`models.llm.reasoning`) part en
+    /// `reasoning_effort` quand l'appel ne fixe pas le sien ; l'appel qui le
+    /// fixe l'emporte ; absent des deux côtés, rien n'est envoyé (le modèle
+    /// raisonne à son défaut — Lucie, 25 octobre 2026).
+    #[test]
+    fn the_declared_reasoning_budget_is_sent_only_when_set() {
+        use crate::llm::ReasoningEffort;
+        let turns = [Turn::user("bonjour")];
+        let sans = OpenAiLlm::new("http://x/v1", "m");
+        assert!(sans.request_body(&turns, &GenOptions::default()).get("reasoning_effort").is_none());
+        let declare = OpenAiLlm::new("http://x/v1", "m").with_reasoning_default(ReasoningEffort::Low);
+        assert_eq!(declare.request_body(&turns, &GenOptions::default())["reasoning_effort"], "low");
+        let appel = GenOptions::default().with_reasoning(ReasoningEffort::High);
+        assert_eq!(declare.request_body(&turns, &appel)["reasoning_effort"], "high", "l'appel l'emporte");
+        // Et depuis la déclaration, par `connect_llm`.
+        let source: crate::model_source::ModelSource = serde_json::from_value(serde_json::json!({
+            "provider": "compatible", "protocol": "openai", "model": "m", "address": "http://127.0.0.1:1/v1", "reasoning": "minimal",
+        }))
+        .unwrap();
+        let (llm, _) = crate::model_source::connect_llm(&source).unwrap();
+        assert_eq!(llm.request_body(&turns, &GenOptions::default())["reasoning_effort"], "minimal");
+    }
+
+    /// **Les jetons de raisonnement se lisent** dans `usage` : sous
+    /// `completion_tokens_details.reasoning_tokens` (compatible OpenAI) ou
+    /// `thoughts_token_count` (Gemini qui transparaît) ; 0 quand rien ne les dit.
+    #[test]
+    fn reasoning_tokens_are_read_from_the_usage() {
+        let fin = r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#;
+        let texte = r#"{"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}"#;
+        for (usage, attendu) in [
+            (r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":50,"completion_tokens_details":{"reasoning_tokens":30}}}"#, 30),
+            (r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":50,"thoughts_token_count":42}}"#, 42),
+            (r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":50}}"#, 0),
+        ] {
+            let (_, u) = replay(&[texte, fin, usage], &GenOptions::default(), &mut crate::llm::StringSink::default());
+            assert_eq!((u.completion_tokens, u.reasoning_tokens), (50, attendu), "{usage}");
+        }
     }
 
     #[test]
