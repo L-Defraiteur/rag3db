@@ -4,7 +4,100 @@ Seconde session cœur C++, ouverte le 10 octobre 2026 : les correctifs et les ti
 pour que la session « coeur c++ » reste sur la stèle. Elle ne touche pas `src/transaction/` ni
 `src/storage/` (journal, tampon, verrous) sans demander à « coeur c++ » ; elle ne corrige dans
 `extension/vector/` qu'avec l'accord du banc.
-**Dernière mise à jour : 11 octobre 2026, 0 h 30 — la nuit du 10 au 11 : quatre lots dans master (analyze, IGNORE_ERRORS, B8 fermé, contrôle de bâti), trois tickets requalifiés.**
+**Dernière mise à jour : 25 octobre 2026, 21 h 15 — le rattrapage et les requêtes préparées sur master ; (A) lots 1 et 3 prêts sur create-concurrently-etat-3, la chaîne à lancer après les mesures de la fenêtre.**
+
+## Le 25 octobre 2026 — reprise : de quoi reprendre seul
+
+### Sur master aujourd'hui (hotfixs)
+- **6fe9ffe9b** : le rattrapage d'un CREATE sort ensemble les lignes déplacées et les supprimées,
+  puis les réinsère (searchState.outOfGraph, findLiveUpperNode dans insertToLayer). Le repli de
+  repairEntryPoint est resté à la conduite de master : avec le lot, RegionDelete/SetNullFirstAllButFive
+  rougissait 2 fois sur 26, contre 0 sur 25 sur master.
+- **fb4d83b65** (témoins 05a663402) : une requête préparée porte sa requête liée
+  (`shared_ptr<CachedPreparedStatement>`), et CachedPreparedStatementManager disparaît. Témoin
+  réel de G : 30,0 → 7,1 Go. L'ABI change. La bascule est faite (courant = rag3db-build-04063ee06
+  aux deux postes, 17 h 43).
+- Tickets : 758f73fab (les lignes d'un COPY forcé validé après un CREATE restent hors du graphe),
+  26db89a10 (une interruption tombée entre deux instructions d'une requête réécrite est perdue).
+
+### (A), lots 1 et 3 fondus, et la parade du crate — à pousser
+- **Branche `create-concurrently-etat-3` = cd56a324f, sur master bb3cf75f8**, 8 commits. Les
+  branches `create-concurrently-etat` et `-2` sont des états d'avant les rebases : ne pas les
+  rejouer.
+- **Forme retenue avec le cœur.** L'état est porté au holder (READY, NOTED, MAINTAINED,
+  INCOMPLETE), versionné comme createdTS. Il est persisté au format 43 et journalisé par
+  INDEX_STATE. Le CREATE se fait en trois temps : T_A (_CREATE_HNSW_NOTE), puis l'attente des
+  écrivains plus anciens (_WAIT_HNSW_WRITERS), puis T_B (bâti, rattrapage de (δ), READY). Un jeton
+  par requête : un NOTED dont la requête est morte se lit INCOMPLETE. Les recherches sont refusées
+  par le nom de l'état. Un CREATE skip_if_exists sur un INCOMPLETE est refusé par « is behind its
+  table », et rag3weaver le rebâtit par son chemin existant. SHOW_INDEXES gagne une colonne
+  `state` en dernier.
+- **Parade du crate**, relue par la session recherche : la garde de l'index vectoriel lit
+  SHOW_INDEXES par nom de colonne (`RETURN *`). Si `state` manque, il vaut READY (lib d'avant le 43).
+  INCOMPLETE ou « en construction » rend la branche Indisponible, avec sa raison dite.
+- **Preuves déjà acquises** (sur l'ancienne base, luciepc) :
+  - les 4 témoins VectorIndexCreateStates sont rouges sur master et verts avec le lot ;
+  - les voisins VectorIndexRebuild et VectorIndexRetention.RolledBackCreateCanBeRedone sont verts
+    dans rag3db-dbg.
+  Les passes lancées ce soir sur l'ancienne base ne valent pas pour le push : la liste finale
+  (`~/.cache/rag3db-tickets-notes/etat-liste2.log`) et le témoin produit rouge/vert
+  (`e2e-etat-rouge.log`, `e2e-etat-vert.log`).
+- **La chaîne à lancer** (permise ce soir par c7, après les mesures, sur luciepc qui porte deux
+  lourds ; le cœur peut y jouer V2-2 en même temps). Le mbox est déjà à luciepc :
+  `ssh luciepc "bash -c 'setsid nohup bash ~/.cache/rag3db-tickets-notes/chaine-a.sh bb3cf75f8 a.mbox a > /dev/null 2>&1 < /dev/null &'"`
+  Elle enchaîne quatre étapes et s'arrête au premier rouge :
+  1. lib-lot.sh : git am sur la base, puis la lib build/lecteurs-csv, sans publication ;
+  2. e2e-code-lot.sh : e2e_code sur cette lib, prouvée par « ▸ moteur lié » ;
+  3. e2e-lectures-temoin.sh : le témoin produit la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel ;
+  4. lot-luciepc.sh : la liste complète. Si « verdict VERT », il fait le fetch, refuse si master a
+     reçu du code moteur depuis la base, rebase, pousse sans force et écrit les trois contrôles.
+  Journaux : `a-chaine.log`, puis `a-liste.log`. **Au premier rouge, on s'arrête et on le dit à
+  c7 : pas de second passage sans relecture.** Après le push : le hash à c7, à l'arbre principal
+  et au cœur (V2-2 attend après ce lot), avec les trois contrôles dans le message.
+- **Le format 43 entre dans la bascule de demain** (décision de c7). Une lib 43 écrit des bases
+  qu'une lib 42 refuse. Avant la bascule, la parade du crate tourne contre courant (04063ee06)
+  sans la colonne `state`. Le témoin produit, lui, exige une lib 43 et le dit par un assert clair.
+
+### Les deux mesures de la fenêtre calme (luciepc, sur le mot de c7, vers 22 h 30)
+- Les binaires sont prébâtis : rag3db-mes-a (master avec le témoin de (A)), -b (d9b67e5d5
+  chronométré), -c (6fe9ffe9b chronométré). On lance :
+  `ssh luciepc "bash -c 'setsid nohup bash ~/.cache/rag3db-tickets-notes/mesure-calme.sh > /dev/null 2>&1 < /dev/null &'"`
+  Chaque passe tourne sous `poste mesure`, avec la charge relevée avant et après.
+- Lecture de `mesure-calme.log` :
+  - **le témoin** : « create under 40 writers: X ms, … the longest Y ms ». La borne est de 5 s,
+    et la ligne known_red le tient pour rouge.
+  - **le rattrapage** : « TCCHRONO catchUp del=… upd=N … : M ms ». On compare M/N (ms par ligne
+    déplacée) entre b (ancien) et c (nouveau).
+  Sous une charge de 61 à 123, ce soir, le résultat n'était pas concluant : ancien 4,3 et 6,1 ms,
+  nouveau 11,3 et 4,6 ms. Si c dépasse nettement b au calme, je réécris la sortie des lignes
+  déplacées avec leur réinsertion comme ancre, comme le faisait updateInternal. Sinon (A)
+  l'absorbe (T_C hors validation).
+- Ensuite : les chiffres à c7, puis la chaîne ci-dessus.
+
+### Qui attend le mot de qui
+- **c7** : le mot des mesures (vers 22 h 30), puis la chaîne dans la foulée.
+- **Après le push** : l'arbre principal rebâtit la lib unique à la bascule de demain (format 43).
+- **Le cœur** : il pousse V2-2 après mon lot, et préviendra avant tout push qui touche
+  transaction_manager.
+- **Lots suivants de (A)** (page 07, §6) : les notes des écrivains et le nœud absent (2), T_C
+  (4), la reprise et le DROP (5), la famine du bâti (6).
+
+### Ménage de fin de session
+- **luciepc** : les worktrees rag3db-tickets, rag3db-dbg et rag3db-mes-{a,b,c} (`git -C
+  ~/git_workspaces/rag3db worktree remove --force …`, après la chaîne), et le target
+  `~/.cache/rag3weaver-build/target-hotfixs`.
+- **Ici** : rag3db-a13 (après le push) et rag3db-cic (son témoin est repris dans le lot).
+- Jamais de fichiers laissés dans l'arbre de Lucie.
+
+### Fautes et leçons du jour
+- **Mon banc tournait sous `poste mesure`, qui est exclusif**, et sept travaux attendaient
+  derrière. Le comparateur passe désormais sous `poste lourd` dans tous mes scripts.
+- **Un rouge connu devenu vert ne compte plus comme rouge.** La garde de liste-cpp.sh l'écrit
+  « banc code 1 — seulement des rouges connus devenus verts ».
+- **Un test qui mesure des temps sous charge ne tranche rien.** La pente CostPerBatchSettles est
+  passée en probabilistic (banc).
+- **Le premier départage de RegionDelete (0 sur 5 de chaque côté) ne voyait rien.** Vingt passes
+  par côté ont trouvé le lot fautif.
 
 ## L'arbre (depuis le 10 octobre au soir)
 

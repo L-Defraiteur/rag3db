@@ -3,7 +3,60 @@
 Ce qui est affirmé porte un fichier et une ligne (à `d2bd94630` ou `ba11e003b`) ou une mesure ;
 le reste est dit « non vérifié ». Complète les relevés de la session cœur C++ (stèle) :
 `../3-octobre-2026-23h31/coeur-cpp/02-knowledge-dump.md`.
-**Dernière mise à jour : 11 octobre 2026, 0 h 30.**
+**Dernière mise à jour : 25 octobre 2026, 21 h 15.**
+
+## Le 25 octobre 2026 — ce que le code fait désormais (à create-concurrently-etat-3)
+
+- **L'état de construction d'un index** (`IndexBuildState`, storage/index/index.h).
+  - READY vaut 0 : un holder d'avant le format 43 est prêt.
+  - Les transitions sont versionnées comme createdTS : markBuildState(txID), puis
+    commitBuildState(ts) par un INDEX_CHANGE de genre BUILD_STATE, ou rollbackBuildState.
+  - buildStateFor(id, startTS) donne l'état vu à l'instantané (les recherches et SHOW_INDEXES).
+    committedBuildState() donne le dernier état validé, que les écrivains lisent sous le verrou
+    d'index.
+  - withBuilder : un NOTED ou MAINTAINED dont le jeton (`ClientContext::newQueryScopedToken`,
+    rendu en fin de queryNoLock) est mort vaut INCOMPLETE. Il en va de même d'un état relu du
+    disque ou du journal, puisqu'il n'a pas de jeton.
+- **Les écrivains** ne touchent un holder que s'il est READY ou MAINTAINED (`receivesWrites`) :
+  isWritableIndex, initUpdateState, l'étape 3 de la validation et la finalisation du COPY.
+- **Les refus.**
+  - captureVisibleIndexes : « Index X of table T is under construction (state NOTED) … » ou
+    « … is incomplete: its build did not finish. Rebuild it: drop it, then create it again. »
+  - validateIndexExistence(CREATE) sur un INCOMPLETE : « Index X is behind its table T: its build
+    did not finish (state INCOMPLETE) ».
+- **Le CREATE réécrit** (rewriteCreateHNSWQuery) : BEGIN, les deux CREATE REL TABLE,
+  _CREATE_HNSW_NOTE, COMMIT ; puis _WAIT_HNSW_WRITERS ; puis BEGIN, [cache], _CREATE_HNSW_INDEX,
+  RETURN, COMMIT.
+  - Le bind interne du bâti saute la vérification d'existence.
+  - finalizeHNSWTableFinalizeFunc appelle `NodeTable::completeNotedIndex` (l'index bâti remplace
+    l'index vide, transition vers READY), puis le rattrapage de (δ) en action d'avant validation,
+    et le point de reprise forcé.
+- **L'attente des écrivains plus anciens** :
+  `TransactionManager::waitForWriteTransactionsStartedBefore(ctx, startTS, self)`, exportée
+  membre par membre (la classe ne l'est pas). Elle attend sur transactionsChanged sous le verrou
+  public ; le seuil est le startTS de sa propre transaction. D'après le cœur, il n'y a pas
+  d'interblocage avec checkpointWriting de V2-1c.
+- **La validation forcée de T_B attend toutes les autres transactions, lecteurs compris.** C'est
+  ce qui ferme le trou de l'écrivain parti pendant NOTÉ (mesuré : le CREATE finit 5,3 s après
+  lui). Un lecteur ouvert pendant tout le CREATE le fait donc expirer
+  (RolledBackCreateCanBeRedone) ; l'index reste alors INCOMPLETE.
+- **Le format 43** :
+  - un octet d'état après chaque holder (IndexHolder::serialize ; relu dans NodeTable::deserialize
+    si la version vaut 0 ou est supérieure à 42) ;
+  - le type de journal INDEX_STATE_RECORD = 19 (IndexStateRecord, replayIndexStateRecord).
+- **SHOW_INDEXES** : la colonne `state` est la 7e et dernière, lue au holder. Une entrée sans
+  holder s'y dit INCOMPLETE.
+- **La marche T0** : une instruction qui échoue dans un bloc explicite laisse la transaction
+  ouverte et marquée en échec. Il faut ROLLBACK : un COMMIT serait refusé. C'est vrai aussi du
+  bloc de T_B d'un CREATE en échec.
+- **Une interruption ne vaut que pour l'instruction en cours** (executeNoLock appelle
+  resetActiveQuery). Voir le ticket 26db89a10.
+- **Le coût du rattrapage du nouveau chemin** (instrumentation jetable, une passe, charge 70) :
+  1 787 lignes déplacées ; sortie 0,15 s ; finalizeDelete 1,7 s de réécriture de 34 291 voisins,
+  plus 1,3 s de joignabilité sans ancre ; réinsertion 9,1 s ; rétrécissement 1,5 s ; environ 14 s
+  au total, pour un CREATE de 55 s. L'essentiel est le bâti affamé par la charge.
+- **Le témoin d'acceptation de (A) sur master**, sous une charge de 30 à 70 : CREATE de 48 à 61 s,
+  attente la plus longue de 41 à 56 s (contre 9 à 11 s le 19). Il se départage seulement au calme.
 
 ## Le tampon, le journal local et les doublures
 
