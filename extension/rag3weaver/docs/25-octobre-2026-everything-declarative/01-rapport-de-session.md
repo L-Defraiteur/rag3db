@@ -17,6 +17,11 @@ dans `02-knowledge-dump.md`.
 | `8ef9791dd` | le relais du flux de l'IDE a ses propres fils (ticket fermé : la vue vivante gelée par un graphe long) |
 | `cbb41d312` | la vue outline : le rendu d'un Plan en json (`a60ecd618`), la fiche d'un fichier montre le plan d'outline |
 | `ca53f8e3f` | le code des pages de l'IDE et de l'atelier en fichiers servis (`ide/page.js`, `atelier/page.js`) |
+| `ae127d634` | le chat qui code dans une tâche (page 03) |
+| `3ec37ef1e` | l'étape navigateur à part de la lib |
+| `e66523714`, `4b64a98e5` | le journal des runs et le juge de session (page 04) |
+| `bdf5929c7` | le juge des outils (page 05) : deux rapports, des défauts typés par genre et gravité avec preuve et forme proposée, une fiche par outil ; sur Gemini, l'outil de banc faux est nommé en quatre genres |
+| `82db9a463` | le journal des runs borné par poids (5 Gio) et par âge (90 jours), en zstd, avec des runs épinglés (page 06) |
 
 ## Le témoin du chat dans la page : quatre défauts, un seul symptôme
 
@@ -88,6 +93,34 @@ ligne et à son symbole, et la provenance s'affiche sous le plan.
   - la lib épinglée par identifiant, `rag3db-build-04063ee06…`, jamais par `courant` ;
   - les anciennes versions sont dans `.avant-openai` et `.avant-04063ee06`.
 - Chaque passe de push dit la lib liée (« lib du magasin », « moteur lié »).
+
+## Le soir : le juge des outils, le journal par poids, l'équipier
+
+- **Le juge des outils** (`bdf5929c7`). Lucie voulait des jugements d'outils détaillés : deux
+  rapports à la fin de l'enquête (les outils, puis la session), quinze genres de défaut dont
+  `autre` à libellé, trois gravités toujours présentes, une fiche par outil qui suit la définition
+  (livré : commune ; propre : par backend), la provenance par `citer_source`. Le témoin Gemini a
+  dépassé la commande : sur un outil de banc au schéma faux et au retour faux, il a nommé les
+  quatre genres attendus et trois de plus, chacun avec son `call_id` et une forme corrigée, en
+  31 s. Deux rouges en route : la vue `/ide/bilans` ne trouvait pas les fiches d'outils (requête
+  « bilan »), et un témoin cherchait le retour ambigu dans le bilan de session alors qu'il vit
+  dans la fiche de l'outil.
+- **Le journal par poids** (`82db9a463`). « Par poids plutôt que par nombre, au moins 5 Go. »
+  Une borne de 5 Gio tous backends, une borne d'âge de 90 jours, zstd, des runs épinglés
+  (déclaration d'outil, défaut bloquant, appel explicite). Mesuré : un run pèse 1 à 4 Kio, moins
+  d'un Kio compressé, taux ×2,3 à ×4,3 et non ×5 à ×10 — les petits fichiers se compressent
+  moins. Trois mois de runs tiennent dans environ 270 Mio : c'est l'âge qui tranchera. Le
+  premier push s'est arrêté sur « arbre sale » : la ligne zstd du `Cargo.lock` n'était pas
+  commitée ; amendée dans le worktree de la passe, poussée sous un nom neuf.
+- **L'équipier** (page 07, branche `equipier-1`, en cours). Un agent sur Gemini qui travaille seul
+  par pas et parle à un superviseur par une boîte aux lettres. La boucle de l'agent gagne les
+  outils qui terminent (`step_done` finit le pas) ; le plan n'est pas obligatoire, au plus un
+  actif, des plans en pause rappelés à chaque frontière ; le hors-plan part en `proposal` par
+  `suggest`. Sur faux modèle : trois éléments dont un à valider, la réponse lue à la frontière,
+  le budget, la pause rappelée, l'arrêt — verts. Sur Gemini : la doc d'un dépôt de test en un
+  pas sans plan, 18 s ; deux rouges du banc, pas de l'équipier : un manifeste non commité est
+  invisible à la tâche (worktree du HEAD), et `propose` est déjà un outil du backend (Vertex
+  refuse le doublon).
 
 ## Comment reprendre
 

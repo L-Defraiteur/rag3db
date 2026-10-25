@@ -65,3 +65,30 @@ Celui-ci ajoute ce que la journée a appris.
   pèse environ 5,5 Go.
 - Le shell distant est fish : tout ce qui a des boucles ou `$(…)` passe par un script bash
   copié puis lancé.
+
+## Le juge, le journal, l'équipier (le soir)
+
+- **Un outil ne peut pas arrêter la boucle qui l'appelle** (`agent.rs`) : seuls `pause_dialogue`
+  et `confirm_pause` étaient interceptés. `Agent::with_terminal_tools` déclare des noms dont
+  l'appel réussi finit le tour (`StopReason::Terminal { tool, arguments, result }`) ; la boucle
+  sort à la fin du tour, l'historique reste rejouable. `ChatRunOptions.terminal_tools` le porte
+  jusqu'au chat de l'hôte.
+- **`recall_apports` et `recall_fiches` cherchent par le mot** : une fiche « outil : read_file »
+  ne répond pas à la requête « bilan ». La vue des bilans interroge par « bilan » puis par
+  « outil », et les apports par le nom de leur fiche.
+- **`get_fiche` répond même quand la fiche n'existe pas** : elle existe si la réponse porte son
+  nom (JSON échappé).
+- **Une tâche est un worktree du HEAD du dossier du backend** (`code-tree add` en fait un dépôt
+  et commite). Un manifeste modifié et non commité ne suit pas : une clé `bilans` ajoutée à la
+  main doit être commitée avant d'ouvrir la tâche.
+- **Vertex refuse deux déclarations d'outil du même nom** (« Duplicate function declaration »).
+  `propose` est l'outil des propositions de déclaration ; celui du hors-plan de l'équipier
+  s'appelle `suggest`, et les outils du pas filtrent les homonymes du backend.
+- **Le journal des runs d'un équipier porte `demande`** : sans elle, le juge nommerait la fiche
+  de session par le premier message de l'agent, qui est la frontière du pas — une fiche par pas.
+- **Le `Cargo.lock` du crate est dans le dépôt** : une dépendance directe ajoutée (zstd) y écrit
+  une ligne, à commiter avec le lot, sinon la passe de push s'arrête sur « arbre sale ».
+- **zstd sur de petits JSON** : ×2 à ×4, pas ×5 à ×10. Un run ordinaire pèse 1 à 4 Kio.
+- **`RhaiNode` inline** : `script='…'` avec `input` comme variable d'entrée ; pas de guillemets
+  doubles dans un script inline (le `.mmd` les tient), les accents graves de Rhai (`\`main.rs\``)
+  passent.

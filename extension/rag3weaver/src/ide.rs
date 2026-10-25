@@ -18,6 +18,8 @@
 //! | `GET /ide/taches?backend=<id>[&nom=<n>]` | les tâches de l'agent, ou la relecture d'une (fichiers, graphes, témoins) |
 //! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom, message}`, rejeter `{backend, nom, why}` |
 //! | `GET /ide/bilans?backend=<id>` | les bilans du backend : ses fiches (via juge), leurs apports dans l'ordre et leurs notes |
+//! | `GET /ide/teammate?backend=<id>&task=<nom>` | l'équipier d'une tâche : sa boîte, ses plans vivants et clos, s'il tourne |
+//! | `POST /ide/teammate/mailbox` | écrire à l'équipier `{backend, task, kind, item?, text}` : une `request` ouvre la tâche et le lance, un `stop` arrête le pas |
 //! | `POST /ide/runs/epingler` | épingler un run `{backend, run, raison}` : son journal ne tombe jamais (ni poids ni âge) |
 //! | `POST /ide/bilans` | juger un run `{backend, run}` : le juge relit son journal et range sa fiche dans la mémoire déclarée (`bilans`) |
 //! | `POST /ide/runs/arreter` | arrêter un run en vol `{backend, run}`, au nom de l'IDE (C4) |
@@ -604,6 +606,37 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
                 Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
                 Ok(c) => match host.juger(c["backend"].as_str().unwrap_or_default(), c["run"].as_str().unwrap_or_default()) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("GET", "/ide/teammate") => {
+            // **L'équipier d'une tâche** (page 07) : sa boîte, ses plans vivants,
+            // ses plans clos, et s'il tourne.
+            let (backend, task) = (param("backend").unwrap_or_default(), param("task").unwrap_or_default());
+            let v = match host.teammate_files(&backend, &task) {
+                Ok(f) => json!({ "ok": true, "result": { "mailbox": f.mailbox(), "plans": f.read_plans(), "closed": f.closed(), "running": host.teammate_running(&backend, &task) } }),
+                Err(e) => json!({ "ok": false, "error": e }),
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/teammate/mailbox") => {
+            // **Écrire à l'équipier** : `{backend, task, kind, item?, text, from?}`.
+            // Une `request` ouvre la tâche et lance l'équipier ; un `stop`
+            // arrête le pas en cours tout de suite.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match host.post_to_teammate(
+                    c["backend"].as_str().unwrap_or_default(),
+                    c["task"].as_str().unwrap_or_default(),
+                    c["from"].as_str().unwrap_or("supervisor"),
+                    c["kind"].as_str().unwrap_or_default(),
+                    c["item"].as_str(),
+                    c["text"].as_str().unwrap_or_default(),
+                ) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
                 },

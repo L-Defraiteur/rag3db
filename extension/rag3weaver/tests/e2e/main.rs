@@ -112,6 +112,8 @@ mod e2e_drain_unified;
 mod e2e_embarqueur_absent;
 #[path = "../e2e_entites_derivees.rs"]
 mod e2e_entites_derivees;
+#[path = "../e2e_equipier.rs"]
+mod e2e_equipier;
 #[path = "../e2e_estimate.rs"]
 mod e2e_estimate;
 #[path = "../e2e_etat_non_declare.rs"]

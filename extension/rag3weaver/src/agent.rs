@@ -542,6 +542,16 @@ pub enum StopReason {
     Held {
         port: AgentPort,
     },
+    /// **Un outil qui termine a été appelé et a réussi**
+    /// ([`Agent::with_terminal_tools`]) : l'agent a déclaré la fin de son pas.
+    /// Comme une pause, c'est une décision, pas une limite.
+    Terminal {
+        tool: String,
+        /// Les arguments tels que le modèle les a envoyés.
+        arguments: String,
+        /// Ce que l'outil a rendu.
+        result: String,
+    },
 }
 
 /// **Pourquoi un agent se tait**, et donc ce qui le réveillera.
@@ -708,6 +718,10 @@ pub struct Agent<'a> {
     stopped_by: Option<Arc<std::sync::Mutex<Option<String>>>>,
     /// Lire sa boîte (`run.<id>.inbox`) entre deux tours.
     inbox: bool,
+    /// **Les outils qui terminent** : leur appel réussi arrête la boucle après
+    /// le tour (`StopReason::Terminal`). Un outil ne peut pas arrêter la boucle
+    /// qui l'appelle ; un nom déclaré ici, si (le `tour_fini` de l'équipier).
+    terminal_tools: Vec<String>,
     /// Les postures de la session : où s'inscrit une pause, et où se lit un
     /// blocage. Partagées — c'est tout l'intérêt.
     postures: Option<Arc<crate::postures::Postures>>,
@@ -788,6 +802,7 @@ impl<'a> Agent<'a> {
             run_id: None,
             stopped_by: None,
             inbox: false,
+            terminal_tools: Vec::new(),
             postures: None,
             session: None,
             meter: None,
@@ -1072,6 +1087,15 @@ impl<'a> Agent<'a> {
     /// granularité à laquelle l'agent raisonne. Demande `with_events`.
     pub fn with_inbox(mut self) -> Self {
         self.inbox = true;
+        self
+    }
+
+    /// **Les outils qui terminent** : un appel réussi à l'un d'eux arrête la
+    /// boucle à la fin du tour, comme une pause, avec
+    /// [`StopReason::Terminal`]. Les autres appels du même tour ont leur
+    /// résultat : l'historique reste rejouable.
+    pub fn with_terminal_tools(mut self, names: Vec<String>) -> Self {
+        self.terminal_tools = names;
         self
     }
 
@@ -1966,6 +1990,12 @@ impl<'a> Agent<'a> {
                     }
                 };
                 run.tool_calls += 1;
+                // **Un outil qui termine**, réussi : la boucle sortira à la fin
+                // du tour, comme pour une pause.
+                if !held_call && self.terminal_tools.contains(&call.name) && error_detail(&result.content).is_none() && !paused {
+                    run.stop = StopReason::Terminal { tool: call.name.clone(), arguments: call.arguments.clone(), result: result.content.clone() };
+                    paused = true;
+                }
                 if self.events.is_some() {
                     let error_kind = error_kind(&result.content);
                     self.emit(crate::events::CatalogEvent::ToolCallFinished {
@@ -1996,7 +2026,8 @@ impl<'a> Agent<'a> {
                 turns.push(result);
             }
 
-            // Une pause a été prononcée pendant ce tour : on sort. Les autres
+            // Une pause a été prononcée pendant ce tour, ou un outil qui termine
+            // a réussi : on sort. Les autres
             // appels du même tour ont eu leur résultat — l'historique reste
             // bien formé, il est rejouable tel quel.
             if paused {

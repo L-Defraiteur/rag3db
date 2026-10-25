@@ -817,12 +817,59 @@ async function tache(id, nom) {
       pourquoi,
       el("button", { id: "rejeter", onclick: () => agir("rejeter", { why: pourquoi.value || "rejetée dans l'IDE" }) }, "Rejeter"),
       note),
+    await equipierDeTache(id, nom),
     fichiers.length ? "" : el("p", { class: "note" }, "La branche ne change encore rien."),
     ...graphes.map(sectionDeGraphe),
     ...fichiers.map((f) => el("section", { class: "fichier-de-tache", "data-genre": f.genre, "data-path": f.path },
       el("h2", {}, (f.genre === "code" ? "code · " : f.genre === "depot" ? "dépôt · " : "") + f.path + (f.avant == null ? " (neuf)" : f.apres == null ? " (retiré)" : "")),
       el("div", { class: "diff" }, difference(f.avant ?? "", f.apres ?? "")))),
   ));
+}
+
+// **L'équipier d'une tâche** (page 07) : sa boîte aux lettres, ses plans vivants
+// et clos, et de quoi lui écrire — une demande, une consigne, une réponse à un
+// bloquant, ou l'arrêt. Le superviseur lit le même fichier par un script.
+async function equipierDeTache(id, task) {
+  const r = await (await fetch(`/ide/teammate?${new URLSearchParams({ backend: id, task })}`)).json();
+  if (!r.ok) return el("section", { class: "equipier" }, el("h2", {}, "Équipier"), el("p", { class: "refus" }, r.error));
+  const { mailbox, plans, closed, running } = r.result;
+  const statut = (i) => ({ todo: "à faire", doing: "en cours", done: "fait", blocked: "bloqué", dropped: "abandonné" })[i.status] ?? i.status;
+  const plan = (p, etat) => el("div", { class: "plan", "data-number": p.number, "data-state": p.state },
+    el("h3", {}, `Plan n° ${p.number} — ${etat}${p.reason ? ` (${p.reason})` : ""}`),
+    el("p", {}, el("b", {}, "Demande : "), p.request),
+    el("p", {}, el("b", {}, "Proposition : "), p.proposal),
+    el("ul", {}, ...p.items.map((i) => el("li", { "data-status": i.status },
+      el("code", {}, i.id), ` ${i.text} — ${statut(i)}${i.alone ? "" : " · à valider"}`,
+      i.question ? el("span", { class: "note" }, ` — question : ${i.question}`) : "",
+      i.reason ? el("span", { class: "note" }, ` — ${i.reason}`) : ""))),
+    p.steps?.length ? el("p", { class: "note" }, `${p.steps.length} pas`) : "");
+  const ligne = (l) => el("li", { "data-kind": l.kind, "data-from": l.from },
+    el("span", { class: "meta" }, `${new Date(l.at).toLocaleTimeString()} · ${l.from} · ${l.kind}${l.item ? ` [${l.item}]` : ""} `), l.text);
+  const genre = el("select", { id: "equipier-kind", "aria-label": "genre du message" },
+    ...[["request", "demande"], ["instruction", "consigne"], ["answer", "réponse à un bloquant"], ["stop", "arrêt"]].map(([v, t]) => el("option", { value: v }, t)));
+  const element = el("input", { id: "equipier-item", placeholder: "élément (pour une réponse)", "aria-label": "élément" });
+  const texte = el("input", { id: "equipier-text", placeholder: "écrire à l'équipier", "aria-label": "message à l'équipier" });
+  const note = el("span", { class: "note", id: "equipier-note" }, "");
+  const envoyer = async () => {
+    note.textContent = "envoi…";
+    const rep = await (await fetch("/ide/teammate/mailbox", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backend: id, task, kind: genre.value, item: element.value || undefined, text: texte.value, from: "ide" }) })).json();
+    if (!rep.ok) { note.textContent = rep.error; return; }
+    note.textContent = rep.result.started ? "envoyé ; l'équipier part" : "envoyé";
+    texte.value = "";
+    montrer();
+  };
+  const actif = plans.plans.filter((p) => p.state === "active");
+  const pause = plans.plans.filter((p) => p.state === "paused");
+  return el("section", { class: "equipier", "data-running": String(running) },
+    el("h2", {}, `Équipier${running ? " — en train de travailler" : ""}`),
+    actif.length || pause.length || closed.length ? "" : el("p", { class: "note" }, "Pas de plan : une petite demande se fait sans."),
+    ...actif.map((p) => plan(p, "actif")),
+    ...pause.map((p) => plan(p, "en pause")),
+    closed.length ? el("details", {}, el("summary", {}, `${closed.length} plan(s) clos`), ...closed.map((p) => plan(p, p.state === "accomplished" ? "accompli" : "obsolète"))) : "",
+    el("h3", {}, "Boîte aux lettres"),
+    mailbox.length ? el("ul", { class: "boite" }, ...mailbox.map(ligne)) : el("p", { class: "note" }, "Rien encore."),
+    el("div", { class: "actions" }, genre, element, texte, el("button", { id: "equipier-envoyer", onclick: envoyer }, "Écrire"), note));
 }
 
 // ─── Les réactions ((b)) ───────────────────────────────────────────────────
