@@ -71,6 +71,18 @@ Ce qu'on en lit :
   mention du membre d'enum `PhysicalTypeID::UINT32` reliée à la fonction `LogicalType::UINT32()`) :
   au moins 212 mauvaises sur 300. Les homonymes se comptent avant le filtre.
 
+### Son coût
+
+- **La lecture des includes** (toute la table File, une fois par lot qui a du C/C++) coûte quelques
+  millisecondes à la montre (« symboles · includes », 3 à 6 ms).
+- **La lecture des déclarants** (« symboles · déclarants ») est la pièce qui pèse : de l'ordre de
+  « choisir et lier » pour un lot de deux `.cpp` touchés.
+- **La borne par fichier** (les déclarants lus seulement dans les en-têtes des fermetures du lot) fait
+  tomber les lignes lues de 4 075 à 2 233 au même témoin (−45 %). Elle ne revendique **aucun gain de
+  temps** : les deux témoins ont tourné sous une charge de 43 puis 15 (d'autres compilations et e2e à
+  luciepc), et ce qu'ils disent du temps ne vaut rien. Le coût réel se profilera à une fenêtre calme
+  (eu-stack ou le profil du moteur), avant tout réglage.
+
 ## Deux juges faux, et pourquoi
 
 1. **Le premier juge comparait des chemins de deux arbres.** `compile_commands.json` venait de
