@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Le plan d'un fichier dans l'IDE.** La fiche d'un fichier montre ses
+  scopes imbriqués, rendus par l'outil `outline` en JSON (un Plan déclaré), chacun
+  vers sa ligne et son symbole, avec ce que vaut cette lecture. cbb41d312.
 - **25 oct. — La recherche dit ce que chaque signal a trouvé.** Chaque résultat porte
   le score et le rang du plein texte et des vecteurs, et `search_code` rend sa méta
   en JSON. 0427c2c2d.
