@@ -29,6 +29,8 @@ public:
     void logDropCatalogEntryRecord(uint64_t tableID, catalog::CatalogEntryType type);
     void logAlterCatalogEntryRecord(const binder::BoundAlterInfo* alterInfo);
     void logUpdateSequenceRecord(common::sequence_id_t sequenceID, uint64_t kCount);
+    void logIndexStateRecord(common::table_id_t tableID, const std::string& indexName,
+        uint8_t buildState);
 
     void logTableInsertion(common::table_id_t tableID, common::TableType tableType,
         common::row_idx_t numRows, const std::vector<common::ValueVector*>& vectors);

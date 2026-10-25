@@ -81,6 +81,12 @@ void LocalWAL::logRelUpdate(table_id_t tableID, column_id_t columnID, ValueVecto
     addNewWALRecord(walRecord);
 }
 
+void LocalWAL::logIndexStateRecord(table_id_t tableID, const std::string& indexName,
+    uint8_t buildState) {
+    IndexStateRecord walRecord(tableID, indexName, buildState);
+    addNewWALRecord(walRecord);
+}
+
 void LocalWAL::logUpdateSequenceRecord(sequence_id_t sequenceID, uint64_t kCount) {
     UpdateSequenceRecord walRecord(sequenceID, kCount);
     addNewWALRecord(walRecord);

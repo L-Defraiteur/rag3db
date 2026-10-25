@@ -140,7 +140,7 @@ Binder exception: Blind search upper selectivity threshold is set to 0.800000, b
 ---- ok
 -STATEMENT CALL SHOW_INDEXES() RETURN *
 ---- 1
-embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);
+embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);|READY
 -STATEMENT DROP TABLE embeddings;
 ---- error
 Binder exception: Cannot delete node table embeddings because it is referenced by index e_hnsw_index.
@@ -157,7 +157,7 @@ Binder exception: Cannot delete node table embeddings because it is referenced b
 ---- ok
 -STATEMENT CALL SHOW_INDEXES() RETURN *
 ---- 1
-embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);
+embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);|READY
 -STATEMENT ALTER TABLE embeddings DROP vec;
 ---- error
 Binder exception: Cannot drop property vec in table embeddings because it is used in one or more indexes. Please remove the associated indexes before attempting to drop this property.
