@@ -2388,22 +2388,44 @@ TEST_F(VectorIndexCreateStates, ASearchDuringTheBuildIsRefusedByItsState) {
                                      << served->getErrorMessage();
 }
 
-// Une lecture sur un instantané d'avant le CREATE ne voit pas l'index : elle dit qu'il n'existe
-// pas, jamais qu'il est en construction.
+// Une lecture sur un instantané d'avant le CREATE ne voit pas l'index : interrogée après la
+// validation de T_A (une autre connexion le voit alors en construction), elle dit qu'il n'existe
+// pas, jamais qu'il est en construction. Elle valide ensuite : la validation forcée de T_B
+// attend toutes les transactions ouvertes, lecteurs compris (page 07, §3 bis.3).
 TEST_F(VectorIndexCreateStates, ASnapshotBeforeTheCreateSaysTheIndexDoesNotExist) {
     rag3db::main::Connection reader(database.get());
     ASSERT_TRUE(reader.query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
     ASSERT_TRUE(reader.query("MATCH (n:C) RETURN count(n);")->isSuccess());
-    auto result = conn->query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
-    ASSERT_TRUE(result->isSuccess()) << "[check: setup] " << result->getErrorMessage();
+    std::atomic<bool> created{false};
+    rag3db::main::Connection creator(database.get());
+    auto creating = std::async(std::launch::async, [&] {
+        auto result =
+            creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+        created = true;
+        return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+    });
+    rag3db::main::Connection watcher(database.get());
+    bool noted = false;
+    // Court : sur master, le CREATE attend ce lecteur dès sa validation, sous un délai.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (!noted && !created.load() && std::chrono::steady_clock::now() < deadline) {
+        auto result = watcher.query(searchFor(movedRowVector(0)));
+        noted = !result->isSuccess() &&
+                result->getErrorMessage().find("is under construction") != std::string::npos;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     auto old = reader.query(searchFor(movedRowVector(0)));
     const auto message = old->isSuccess() ? std::string("<success>") : old->getErrorMessage();
-    std::cerr << "  search on a snapshot before the CREATE: " << message.substr(0, 200) << "\n";
+    old.reset();
+    ASSERT_TRUE(reader.query("COMMIT;")->isSuccess());
+    const auto outcome = creating.get();
+    std::cerr << "  search on a snapshot before the CREATE (index seen NOTED by others: "
+              << (noted ? "yes" : "no") << "): " << message.substr(0, 200) << "\n";
+    ASSERT_EQ(outcome, "ok") << "[check: setup] " << outcome;
     EXPECT_NE(message.find("doesn't have an index"), std::string::npos)
         << "[check: snapshot-before-create-says-no-index] " << message;
     EXPECT_EQ(message.find("under construction"), std::string::npos)
         << "[check: snapshot-before-create-says-no-index] " << message;
-    reader.query("COMMIT;");
 }
 
 // Un écrivain parti pendant NOTÉ (après la validation de T_A) insère et déplace des vecteurs, et
