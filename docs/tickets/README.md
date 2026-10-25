@@ -131,10 +131,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (168), dans `closed/`
+### Fermés (169), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le témoin du sous-graphe de valeurs annulé rougit sous charge](closed/2026-10-25-le-temoin-du-sous-graphe-de-valeurs-annule-rougit-sous-charge.md) | fermé — 2e205927a : annuler sur une barrière, le nœud entré | faux rouge d'un témoin | non | oui (annulation_tests) |
 | [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](closed/2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | corrigé (25 octobre 2026) — une seule clé, le numéro de colonne ; témoin `StableColumnIDs.AVectorIndexIsCreatedOnATableWhereAPropertyWasDropped` | blocage nommé « Miss cached column » | oui | oui |
 | [Un ADD COLUMN sur une relation après le DROP de sa dernière propriété range la colonne locale au mauvais numéro](closed/2026-10-19-un-add-column-sur-une-relation-apres-le-drop-de-sa-derniere-propriete-range-la-colonne-locale-au-mauvais-numero.md) | corrigé (25 octobre 2026, V2-1a) — la table locale range la colonne ajoutée à son numéro ; témoin `StableColumnIDs.AnAddOnARelationAfterDroppingItsLastPropertyWritesTheRightColumn` | valeur dans une autre colonne ou hors du vecteur | oui | oui |
 | [Un groupe vidé par le point de reprise garde la colonne supprimée](closed/2026-10-19-un-groupe-vide-par-le-point-de-reprise-garde-la-colonne-supprimee.md) | corrigé (25 octobre 2026, V2-1a) — un bloc vidé garde une entrée par numéro ; témoin `StableColumnIDs.AGroupEmptiedByTheCheckpointKeepsTheHole` | bloc et types décalés | oui | oui |

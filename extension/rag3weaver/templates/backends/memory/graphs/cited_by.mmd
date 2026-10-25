@@ -1,0 +1,19 @@
+%% tool: cited_by
+%% description: Les fiches qui citent une chose — un fichier, un dossier, un symbole, un source : celles qui y sont ancrées, et celles dont un apport (L1) la cite. Pour chacune, ses Refs qui répondent et ses apports qui la citent. Les plus récentes d'abord, par leur dernier apport (une fiche ancienne qui reçoit un L1 neuf remonte), sinon par leur date ; le total est compté.
+%% param: value string! -- La valeur citée, en forme normale (ex. 'git:github.com/x/y:src/a.rs', ou 'doc:sources/2026-10-25.md').
+%% param: under bool = true -- Aussi ce qui est dessous : un dossier (valeur + '/'), un fichier et ses symboles (valeur + '#').
+%% param: genres json = [] -- Les genres de Ref gardés (ex. ["path", "symbol"]) ; vide : tous.
+%% param: states json = [] -- Les états de fiche gardés (ex. ["current"]) ; vide : tous.
+%% param: authors json = [] -- Les auteurs de fiche gardés ; vide : tous.
+%% param: since int = 0 -- Les fiches mises à jour depuis cet instant (ms) ; 0 : toutes.
+%% param: limit int = 20 -- Fiches rendues au plus (plafond 200).
+%% param: offset int = 0 -- Fiches sautées, pour la page suivante.
+%% param: format string = "markdown" -- markdown, ou json.
+%% result: render.text
+
+graph LR
+    params["RhaiNode(script_id=cited_by_params, inputs='cite,under,genres,states,authors,since,limit,offset', cite=$value, under=$under, genres=$genres, states=$states, authors=$authors, since=$since, limit=$limit, offset=$offset)"]
+    plan["PlanNode(plan='@builtin:backends/memory/plans/cited_by.json')"]
+    render["RenderResultsNode(format=$format, group=false)"]
+    params -->|result:params| plan
+    plan -->|results| render

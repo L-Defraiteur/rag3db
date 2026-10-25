@@ -40,7 +40,12 @@ impl NodeFactory for RhaiNodeFactory {
                 param(
                     "value",
                     ConfigParamType::Json,
-                    "Input when no edge supplies value",
+                    "Input when no edge supplies value; any other key is a field of it",
+                ),
+                param(
+                    "inputs",
+                    ConfigParamType::String,
+                    "The fields the script reads, comma-separated; required when fields are given by key, and any other key is refused",
                 ),
             ],
         }
@@ -49,9 +54,45 @@ impl NodeFactory for RhaiNodeFactory {
         if config["script"].is_string() == config["script_id"].is_string() {
             return Err("provide exactly one of script and script_id".into());
         }
+        // One key per field: Mermaid cannot write an object, but it writes one
+        // key per tool parameter (`RhaiNode(script_id=x, inputs="path", path=$path)`).
+        // Every key other than script, script_id, value and inputs is a field of
+        // the input. A script cannot be read ahead like a Plan, so the fields it
+        // reads are declared in `inputs`, and any other key is refused by name:
+        // lost silently, a mistyped key would leave the script without its field.
+        let mut config = config.clone();
+        if let Value::Object(keys) = &mut config {
+            let fields: serde_json::Map<String, Value> = keys
+                .iter()
+                .filter(|(k, _)| !matches!(k.as_str(), "script" | "script_id" | "value" | "inputs"))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            if !fields.is_empty() {
+                let declared: Vec<String> = match keys.get("inputs") {
+                    Some(Value::String(list)) => list.split(',').map(|f| f.trim().to_string()).filter(|f| !f.is_empty()).collect(),
+                    Some(Value::Array(list)) => list.iter().filter_map(|f| f.as_str().map(str::to_string)).collect(),
+                    None => {
+                        let names: Vec<&String> = fields.keys().collect();
+                        return Err(format!("fields {names:?} are given by key: declare the fields the script reads in `inputs`"));
+                    }
+                    Some(other) => return Err(format!("`inputs` is a comma-separated list or a JSON array, not {other}")),
+                };
+                let unknown: Vec<&String> = fields.keys().filter(|k| !declared.contains(*k)).collect();
+                if !unknown.is_empty() {
+                    return Err(format!("the script does not read {unknown:?} — its inputs: {declared:?}"));
+                }
+                let mut value = match keys.get("value") {
+                    None | Some(Value::Null) => serde_json::Map::new(),
+                    Some(Value::Object(m)) => m.clone(),
+                    Some(other) => return Err(format!("value is not an object ({other}) and other keys are fields of it")),
+                };
+                value.extend(fields);
+                keys.insert("value".into(), Value::Object(value));
+            }
+        }
         Ok(Box::new(RhaiNode {
             name: name.into(),
-            config: config.clone(),
+            config,
         }))
     }
 }
