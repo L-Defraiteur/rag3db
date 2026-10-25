@@ -705,3 +705,56 @@ fn la_recherche_rend_les_mots_pendant_le_rattrapage_des_vecteurs() {
 fn la_recherche_rend_les_mots_quand_l_index_vectoriel_manque() {
     la_recherche_se_replie_sans_l_index_vectoriel("repli-absent", false, "is missing");
 }
+
+/// **La recherche dit ce que chaque signal a dit** (pièce 1 de la recherche de
+/// l'IDE, docs/12-octobre-2026-recherche/06). Avant : la fusion ne gardait
+/// qu'un score par résultat, et `search_code` ne rendait sa méta que réécrite
+/// dans le markdown ; une page ne pouvait montrer ni les scores par signal ni
+/// un repli sans relire du texte. Après : chaque résultat fusionné porte le
+/// score brut et le rang de chaque signal qui l'a trouvé, et la réponse porte
+/// la méta en JSON (`metadata["render.meta"]`), repli compris.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn la_recherche_rend_chaque_signal_et_sa_meta() {
+    use serde_json::{json, Value};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), "signaux-un-a-un");
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let cherche = || backend.call_in(&cellule, "search_code", json!({"query": "alpha", "options": {}, "mode": "indexed"})).expect("la recherche");
+    // Les vecteurs suivent l'index : on attend que le dense réponde.
+    let debut = std::time::Instant::now();
+    let r = loop {
+        let r = cherche();
+        if !r.to_string().contains("dense signal") || debut.elapsed() > std::time::Duration::from_secs(120) {
+            break r;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    };
+
+    let alpha = r["result"]
+        .as_array()
+        .and_then(|rs| rs.iter().find(|x| x["data"]["name"] == "alpha"))
+        .unwrap_or_else(|| panic!("alpha est trouvé : {r}"));
+    let signaux: Vec<&Value> = alpha["signals"].as_array().map(|v| v.iter().collect()).unwrap_or_default();
+    let de = |nom: &str| signaux.iter().find(|s| s["label"] == nom).copied();
+    for nom in ["bm25", "vector"] {
+        let s = de(nom).unwrap_or_else(|| panic!("le signal {nom} est dit sur alpha : {alpha}"));
+        assert!(s["score"].as_f64().is_some_and(f64::is_finite), "{nom} : son score brut : {s}");
+        assert!(s["rank"].as_u64().is_some_and(|r| r >= 1), "{nom} : son rang : {s}");
+    }
+    let meta = &r["metadata"]["render.meta"];
+    assert!(meta["warnings"].is_array(), "la méta en JSON : {}", r["metadata"]);
+    assert!(meta["bm25Count"].as_u64().is_some_and(|n| n >= 1), "les compteurs : {meta}");
+
+    // Le repli se lit dans la méta, sans relire le markdown.
+    {
+        let cat = backend.catalog.lock().unwrap();
+        let index = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle").index;
+        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{index}')")).expect("le retrait");
+    }
+    let apres = cherche();
+    let avertis = apres["metadata"]["render.meta"]["warnings"].to_string();
+    assert!(avertis.contains("dense signal is not available"), "le repli dans la méta : {}", apres["metadata"]);
+}
