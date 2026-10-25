@@ -2670,19 +2670,20 @@ impl Catalog {
                 // **La visibilité par les #include** (C/C++, révisé par c7 le 25 octobre 2026) : un
                 // définisseur n'est candidat que si son fichier est dans la fermeture des #include
                 // du mentionneur, ou si un en-tête de même nom de base l'est (la définition d'un
-                // .cpp que son .h déclare : marquée « entete », mesurée à part), ou si c'est une source
-                // qui inclut elle-même un en-tête de cette fermeture (une classe éclatée en plusieurs
-                // .cpp, `transform_ddl.cpp` qui inclut `transformer.h` : marquée « co-inclusion »,
-                // mesurée à part elle aussi). La forme exacte est le ticket
-                // docs/tickets/2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md. Une
-                // base sans les includes (nuls) ne filtre rien.
+                // .cpp que son .h déclare : marquée « entete », mesurée à part). Une classe éclatée en
+                // plusieurs .cpp, dont l'en-tête déclarant porte un autre nom de base (transformer.h →
+                // transform_ddl.cpp), n'est pas vue : c'est le ticket de la forme exacte,
+                // docs/tickets/2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md. La
+                // règle « une source qui inclut un en-tête de la fermeture est visible » a été mesurée
+                // et retirée : l'en-tête commun la rend presque toujours vraie (sur code-lourd, elle
+                // rendait 143 des 169 arêtes fausses que le filtre ôtait). Une base sans les includes
+                // (nuls) ne filtre rien.
                 //
                 // **La visibilité ôte des candidats, elle n'en désigne jamais** (mesure du 25 octobre
                 // sur code-lourd : recompter les homonymes après le filtre promouvait 6 089 arêtes par
                 // le nom, fausses à 80 % selon clangd) : `homonymes` reste le compte d'avant, comme
                 // pour la garde de langage.
                 let mut par_entete: std::collections::HashSet<String> = std::collections::HashSet::new();
-                let mut par_coinclusion: std::collections::HashSet<String> = std::collections::HashSet::new();
                 let vue = if de_ma_famille == Some("c++") && m.kind != "HAS_PARENT" {
                     fichiers.get(&m.from).and_then(|f| vues.entry(f.clone()).or_insert_with(|| inclusions.vue(f).map(std::rc::Rc::new)).clone())
                 } else {
@@ -2698,15 +2699,7 @@ impl Catalog {
                                     par_entete.insert((*d).clone());
                                     true
                                 }
-                                Some(f) => match inclusions.inclut_l_un_de(f, &vue.fichiers) {
-                                    Some(true) => {
-                                        par_coinclusion.insert((*d).clone());
-                                        true
-                                    }
-                                    Some(false) => false,
-                                    // Les includes du définisseur ne sont pas connus : rien ne l'ôte.
-                                    None => true,
-                                },
+                                Some(_) => false,
                                 None => true,
                             })
                             .cloned()
@@ -2758,14 +2751,7 @@ impl Catalog {
                 if USAGE_RELATIONS.contains(&rel) {
                     usage.insert("resolution".to_string(), s(resolution.as_str()));
                     if vue.is_some() {
-                        let par = if par_entete.contains(&target) {
-                            "entete"
-                        } else if par_coinclusion.contains(&target) {
-                            "co-inclusion"
-                        } else {
-                            "inclusion"
-                        };
-                        usage.insert("visibility".to_string(), s(par));
+                        usage.insert("visibility".to_string(), s(if par_entete.contains(&target) { "entete" } else { "inclusion" }));
                     }
                 }
                 self.link_jusqu_a(rel, RefOrUuid::Uuid(m.from.clone()), RefOrUuid::Uuid(target.clone()), usage.clone(), crate::disponibilite::Disponibilites::AUCUNE)?;
@@ -3560,19 +3546,6 @@ impl Inclusions {
             .get(nom)
             .map(|v| v.iter().filter(|p| p.as_str() == ecrit.as_ref() || p.ends_with(&format!("/{ecrit}"))).collect())
             .unwrap_or_default()
-    }
-
-    /// **Une source qui inclut un en-tête de `vus`** : `Some(true)` si `fichier` est un .c/.cc/.cpp
-    /// dont un include désigne un fichier de `vus` (la classe éclatée : `transform_ddl.cpp` inclut
-    /// `transformer.h`) ; `None` si ses includes ne sont pas connus ; `Some(false)` sinon, et pour
-    /// un en-tête (sa visibilité passe par la fermeture).
-    fn inclut_l_un_de(&self, fichier: &str, vus: &std::collections::HashSet<String>) -> Option<bool> {
-        let ext = fichier.rsplit_once('.').map_or("", |(_, e)| e);
-        if !matches!(ext, "c" | "cc" | "cpp" | "cxx" | "c++") {
-            return Some(false);
-        }
-        let incs = self.includes.get(fichier)?.as_ref()?;
-        Some(incs.iter().any(|inc| self.cibles(fichier, inc).into_iter().any(|c| vus.contains(c))))
     }
 
     /// **Ce que voit `fichier`** : la fermeture de ses #include. `None` si les includes d'un fichier
@@ -4405,19 +4378,6 @@ mod tests_resolution {
         poser(&mut inc, "/q/b.h", None);
         poser(&mut inc, "/q/c.h", Some(&[]));
         assert!(inc.vue("/q/a.cpp").is_none(), "une fermeture qui touche des includes inconnus ne filtre rien");
-
-        // **La classe éclatée** : transformer.cpp et transform_ddl.cpp incluent tous deux
-        // transformer.h ; la seconde source est vue de la première par co-inclusion.
-        poser(&mut inc, "/t/transformer.h", Some(&[]));
-        poser(&mut inc, "/t/transformer.cpp", Some(&["transformer.h"]));
-        poser(&mut inc, "/t/transform_ddl.cpp", Some(&["transformer.h"]));
-        poser(&mut inc, "/t/autre.cpp", Some(&[]));
-        poser(&mut inc, "/t/inconnu.cpp", None);
-        let vue = inc.vue("/t/transformer.cpp").unwrap();
-        assert_eq!(inc.inclut_l_un_de("/t/transform_ddl.cpp", &vue.fichiers), Some(true), "une source qui inclut un en-tête vu");
-        assert_eq!(inc.inclut_l_un_de("/t/autre.cpp", &vue.fichiers), Some(false));
-        assert_eq!(inc.inclut_l_un_de("/t/inconnu.cpp", &vue.fichiers), None, "des includes inconnus n'ôtent rien");
-        assert_eq!(inc.inclut_l_un_de("/t/transformer.h", &vue.fichiers), Some(false), "un en-tête passe par la fermeture");
     }
 
     #[test]
