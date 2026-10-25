@@ -116,3 +116,28 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
 - Témoins : `ide::tests::le_bundle_de_l_ide_est_celui_que_son_manifeste_decrit` (sha256 des
   octets embarqués = `bundle.json`, versions = `package.json`, `index.html` charge le bundle) ;
   `navigateur::le_cadre_de_l_ide_se_rend_dans_les_deux_modes`.
+
+## Ce qui est fait (vue 2 : le chat)
+
+- `src/views/Chat.tsx`, un seul composant pour le chat de la tâche et celui de l'atelier, sur la
+  forme de `ui/chat` : la colonne des conversations (`#sessions` : ce backend et ses tâches, ou la
+  tâche et son parent), l'en-tête (`#name`, `#model` « modèle : … » ou « chat éteint : … »,
+  `#status`), le fil (`#messages`, `article.message.user|assistant|error` avec `.role` et `.body`,
+  `.en-cours` pendant le tour), la saisie (`#composer`, `#message`, `#send`, `#stop` ; Entrée
+  envoie, Maj + Entrée saute une ligne), la reprise après rechargement (un run en cours relu à
+  l'ouverture et à chaque réouverture du flux, `window.__ide.relireLeChat`).
+- Ce qui s'ajoute à `ui/chat` : les outils dépliés pendant le flux (`details.outil` par appel,
+  `data-outil`, `data-appel`, `data-ok` ; `summary` le nom, `pre` les arguments puis le résultat),
+  les propositions du tour (`.proposition-du-tour a[data-proposition]`), le lien vers la relecture
+  quand un tour a écrit (`.tache-du-tour a[data-tache]`), les liens « relecture » et « bilans »
+  dans l'en-tête, la consommation (`#chat-conso`).
+- Le flux : un bus dans la page (`onFlux` / `dispatchFlux`) ; `RunStarted` nommé `chat:<id>`
+  donne le run (le bouton Arrêter), `Token` remplit la réponse, `ToolCallStarted` /
+  `ToolCallFinished` les blocs d'outil, `PropositionChanged` les liens ; la réponse du tour pose le
+  texte entier, les fichiers écrits et la tâche.
+- L'hôte sert la page nouvelle pour `/ide/code/<id>/chat` (`VUES_PORTEES`).
+- Les deux témoins navigateur du chat (`chat::tests::le_chat_se_mene_et_s_arrete_dans_la_page`,
+  `chat_qui_code::le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page`) lisent les repères de
+  `ui/chat` : `#model`, `#status`, `#message`, `#send`, `#stop`, `article.message.assistant`,
+  `details.outil[data-outil]`, `.proposition-du-tour`, `.tache-du-tour` — changés dans le même
+  commit que la vue.
