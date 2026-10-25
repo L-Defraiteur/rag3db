@@ -7,6 +7,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Les colonnes gardent leur numéro pour toujours.** Une colonne
+  supprimée laisse un trou à sa place au lieu de faire renuméroter les autres au
+  point de reprise : plus rien ne bouge sous les plans liés, première marche vers
+  un point de reprise qui ne fige personne (V2-1a, format 42). 4ae060070.
+- **25 oct. — Le raisonnement se règle et se compte.** Chaque modèle déclare son
+  budget de raisonnement (`models.llm.reasoning`, absent par défaut), et un run
+  compte à part les jetons de raisonnement et ceux servis par le cache. 527a0356c.
 - **25 oct. — Le chat de l'atelier est dans l'IDE.** Un agent qui lit tes gabarits
   et propose une modification depuis le navigateur, rien d'écrit avant Appliquer,
   jugé sur le résultat avec Gemini (« fais compter le compteur par cinq » : l'aperçu
