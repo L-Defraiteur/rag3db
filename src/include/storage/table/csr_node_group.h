@@ -287,20 +287,23 @@ private:
     NodeGroupScanResult scanCommittedInMemRandom(const transaction::Transaction* transaction,
         const RelTableScanState& tableState, CSRNodeGroupScanState& nodeGroupScanState) const;
 
-    void checkpointInMemOnly(const common::UniqLock& lock, NodeGroupCheckpointState& state);
-    void checkpointInMemAndOnDisk(const common::UniqLock& lock, NodeGroupCheckpointState& state);
+    // Le point de reprise bâtit sur la liste des blocs en mémoire prise sous le verrou puis
+    // rendue (`groups`, voir NodeGroup::checkpoint) ; le bloc persistant neuf est posé par
+    // finalizeCheckpoint, sous le verrou, avec le vidage des blocs en mémoire.
+    void checkpointInMemOnly(const ChunkedGroups& groups, NodeGroupCheckpointState& state);
+    void checkpointInMemAndOnDisk(const ChunkedGroups& groups, NodeGroupCheckpointState& state);
 
-    void populateCSRLengthInMemOnly(const common::UniqLock& lock, common::offset_t numNodes,
+    void populateCSRLengthInMemOnly(const ChunkedGroups& groups, common::offset_t numNodes,
         const CSRNodeGroupCheckpointState& csrState);
 
-    void collectRegionChangesAndUpdateHeaderLength(const common::UniqLock& lock, CSRRegion& region,
+    void collectRegionChangesAndUpdateHeaderLength(const ChunkedGroups& groups, CSRRegion& region,
         const CSRNodeGroupCheckpointState& csrState) const;
-    void collectInMemRegionChangesAndUpdateHeaderLength(const common::UniqLock& lock,
+    void collectInMemRegionChangesAndUpdateHeaderLength(const ChunkedGroups& groups,
         CSRRegion& region, const CSRNodeGroupCheckpointState& csrState) const;
-    void collectOnDiskRegionChangesAndUpdateHeaderLength(const common::UniqLock& lock,
+    void collectOnDiskRegionChangesAndUpdateHeaderLength(const ChunkedGroups& groups,
         CSRRegion& region, const CSRNodeGroupCheckpointState& csrState) const;
 
-    std::vector<CSRRegion> collectLeafRegionsAndCSRLength(const common::UniqLock& lock,
+    std::vector<CSRRegion> collectLeafRegionsAndCSRLength(const ChunkedGroups& groups,
         const CSRNodeGroupCheckpointState& csrState) const;
     void collectPersistentUpdatesInRegion(CSRRegion& region,
         const CSRNodeGroupCheckpointState& csrState) const;
@@ -318,14 +321,17 @@ private:
     // columnID désigne la colonne dans le groupe persistant, les groupes en mémoire et
     // dataTypes ; checkpointColumnIdx, sa position dans csrState.columnIDs, qui indexe
     // csrState.columns et CSRRegion::hasUpdates. Ils diffèrent après un DROP de colonne.
-    std::unique_ptr<ColumnChunk> checkpointColumn(const common::UniqLock& lock,
+    std::unique_ptr<ColumnChunk> checkpointColumn(const ChunkedGroups& groups,
         common::column_id_t columnID, common::idx_t checkpointColumnIdx,
         const CSRNodeGroupCheckpointState& csrState, const std::vector<CSRRegion>& regions) const;
-    std::vector<ChunkCheckpointState> checkpointColumnInRegion(const common::UniqLock& lock,
+    std::vector<ChunkCheckpointState> checkpointColumnInRegion(const ChunkedGroups& groups,
         common::column_id_t columnID, common::idx_t checkpointColumnIdx,
         const CSRNodeGroupCheckpointState& csrState, const CSRRegion& region) const;
     ChunkedCSRHeader checkpointCSRHeaderColumns(const CSRNodeGroupCheckpointState& csrState) const;
-    void finalizeCheckpoint(const common::UniqLock& lock);
+    // L'échange, sous le verrou : le bloc persistant neuf (ou aucun) remplace l'ancien, les
+    // blocs en mémoire et l'index des listes sont vidés. L'ancien bloc meurt avec son dernier
+    // lecteur.
+    void finalizeCheckpoint(std::unique_ptr<ChunkedNodeGroup> newPersistent);
 
 private:
     // En propriété partagée : un balayage en cours le tient (CSRNodeGroupScanState::persistent)

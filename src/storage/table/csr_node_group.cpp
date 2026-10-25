@@ -690,14 +690,19 @@ void CSRNodeGroup::rollbackInsert(row_idx_t startRow) {
 }
 
 void CSRNodeGroup::checkpoint(MemoryManager&, NodeGroupCheckpointState& state) {
-    const auto lock = chunkedGroups.lock();
+    // La liste des blocs en mémoire, prise sous le verrou puis rendue (voir NodeGroup::checkpoint).
+    ChunkedGroups groups;
+    {
+        const auto lock = chunkedGroups.lock();
+        groups = chunkedGroups.getAllGroups(lock);
+    }
     // Les trous d'abord (voir NodeGroup::checkpoint) : la copie vidée reprend ses numéros avec
     // dataTypes.
     checkpointDataTypesNoLock(state);
     if (!persistentChunkGroup) {
-        checkpointInMemOnly(lock, state);
+        checkpointInMemOnly(groups, state);
     } else {
-        checkpointInMemAndOnDisk(lock, state);
+        checkpointInMemAndOnDisk(groups, state);
     }
 }
 
@@ -734,7 +739,8 @@ static std::unique_ptr<ChunkedCSRNodeGroup> rebuildPersistentChunkGroup(
         old.getStartRowIdx());
 }
 
-void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheckpointState& state) {
+void CSRNodeGroup::checkpointInMemAndOnDisk(const ChunkedGroups& groups,
+    NodeGroupCheckpointState& state) {
     // TODO(Guodong): Should skip early here if no changes in the node group, so we avoid scanning
     // the csr header. Case: No insertions/deletions in persistent chunk and no in-mem chunks.
     auto& csrState = state.cast<CSRNodeGroupCheckpointState>();
@@ -745,7 +751,7 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheck
     // TODO(Guodong): Find max node offset in the node group.
     csrState.newHeader->setNumValues(StorageConfig::NODE_GROUP_SIZE);
     csrState.newHeader->copyFrom(*csrState.oldHeader);
-    auto leafRegions = collectLeafRegionsAndCSRLength(lock, csrState);
+    auto leafRegions = collectLeafRegionsAndCSRLength(groups, csrState);
     KU_ASSERT(std::is_sorted(leafRegions.begin(), leafRegions.end(),
         [](const auto& a, const auto& b) { return a.regionIdx < b.regionIdx; }));
     const auto regionsToCheckpoint = mergeRegionsToCheckpoint(csrState, leafRegions);
@@ -754,16 +760,15 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheck
         // We should reset the version and update info of the persistent chunked group.
         // Rien à réécrire : un bloc neuf qui reprend tout (mêmes pages), sans versions ni
         // mises à jour ; l'ancien n'est pas touché.
-        persistentChunkGroup =
-            rebuildPersistentChunkGroup(persistentChunkGroup->cast<ChunkedCSRNodeGroup>(),
-                std::vector<std::unique_ptr<ColumnChunk>>(persistentChunkGroup->getNumColumns()),
-                std::nullopt, csrState);
         // Aucune région à réécrire ne veut pas dire « rien en mémoire » : des relations créées
         // puis supprimées depuis le dernier point de reprise y sont encore, et le parcours
         // ci-dessus vient de marquer leurs entrées d'index invalides. Elles ne comptent plus
         // pour rien : la partie en mémoire se vide ici comme à la fin d'un point de reprise
         // ordinaire. Sans cela, le balayage suivant suivait une entrée invalide hors des blocs.
-        finalizeCheckpoint(lock);
+        finalizeCheckpoint(
+            rebuildPersistentChunkGroup(persistentChunkGroup->cast<ChunkedCSRNodeGroup>(),
+                std::vector<std::unique_ptr<ColumnChunk>>(persistentChunkGroup->getNumColumns()),
+                std::nullopt, csrState));
         return;
     }
     if (regionsToCheckpoint.size() == 1 &&
@@ -790,26 +795,28 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheck
             numTuplesAfterCheckpoint += csrState.newHeader->getCSRLength(i);
         }
     }
+    std::unique_ptr<ChunkedNodeGroup> newPersistent;
     if (numTuplesAfterCheckpoint == 0) {
-        retireStorage(csrState.pageAllocator, lock);
+        // Plus aucune relation : pas de bloc persistant neuf, et les pages de l'ancien et des
+        // blocs en mémoire reviennent à leur mort.
+        retireStorage(csrState.pageAllocator, groups);
         persistentChunkGroup->retireStorage(csrState.pageAllocator);
-        persistentChunkGroup = nullptr;
     } else {
         KU_ASSERT(csrState.newHeader->sanityCheck());
         std::vector<std::unique_ptr<ColumnChunk>> newChunks(persistentChunkGroup->getNumColumns());
         for (auto i = 0u; i < csrState.columnIDs.size(); i++) {
             newChunks[csrState.columnIDs[i]] =
-                checkpointColumn(lock, csrState.columnIDs[i], i, csrState, regionsToCheckpoint);
+                checkpointColumn(groups, csrState.columnIDs[i], i, csrState, regionsToCheckpoint);
         }
         auto header = checkpointCSRHeaderColumns(csrState);
-        persistentChunkGroup =
+        newPersistent =
             rebuildPersistentChunkGroup(persistentChunkGroup->cast<ChunkedCSRNodeGroup>(),
                 std::move(newChunks), std::move(header), csrState);
     }
-    finalizeCheckpoint(lock);
+    finalizeCheckpoint(std::move(newPersistent));
 }
 
-std::vector<CSRRegion> CSRNodeGroup::collectLeafRegionsAndCSRLength(const UniqLock& lock,
+std::vector<CSRRegion> CSRNodeGroup::collectLeafRegionsAndCSRLength(const ChunkedGroups& groups,
     const CSRNodeGroupCheckpointState& csrState) const {
     std::vector<CSRRegion> leafRegions;
     constexpr auto numLeafRegions =
@@ -817,7 +824,7 @@ std::vector<CSRRegion> CSRNodeGroup::collectLeafRegionsAndCSRLength(const UniqLo
     leafRegions.reserve(numLeafRegions);
     for (auto leafRegionIdx = 0u; leafRegionIdx < numLeafRegions; leafRegionIdx++) {
         CSRRegion region(leafRegionIdx, 0 /*level*/);
-        collectRegionChangesAndUpdateHeaderLength(lock, region, csrState);
+        collectRegionChangesAndUpdateHeaderLength(groups, region, csrState);
         leafRegions.push_back(std::move(region));
     }
     return leafRegions;
@@ -836,7 +843,7 @@ void CSRNodeGroup::redistributeCSRRegions(const CSRNodeGroupCheckpointState& csr
     csrState.newHeader->finalizeCSRRegionEndOffsets(rightCSROffsetOfRegions);
 }
 
-std::unique_ptr<ColumnChunk> CSRNodeGroup::checkpointColumn(const UniqLock& lock,
+std::unique_ptr<ColumnChunk> CSRNodeGroup::checkpointColumn(const ChunkedGroups& groups,
     column_id_t columnID, idx_t checkpointColumnIdx, const CSRNodeGroupCheckpointState& csrState,
     const std::vector<CSRRegion>& regions) const {
     std::vector<ChunkCheckpointState> chunkCheckpointStates;
@@ -847,7 +854,7 @@ std::unique_ptr<ColumnChunk> CSRNodeGroup::checkpointColumn(const UniqLock& lock
             continue;
         }
         auto regionCheckpointStates =
-            checkpointColumnInRegion(lock, columnID, checkpointColumnIdx, csrState, region);
+            checkpointColumnInRegion(groups, columnID, checkpointColumnIdx, csrState, region);
         // If there are no rows to write for the region, we don't aggressively reclaim the space in
         // the region, but keep deleted rows as gaps. This can happen when all rows are deleted
         // within the region.
@@ -1062,9 +1069,9 @@ static void fillCSRGaps(CheckpointReadCursor& readCursor, CheckpointWriteCursor&
     readCursor.advance(numOldGapsRemaining);
 }
 
-std::vector<ChunkCheckpointState> CSRNodeGroup::checkpointColumnInRegion(const UniqLock& lock,
-    column_id_t columnID, idx_t checkpointColumnIdx, const CSRNodeGroupCheckpointState& csrState,
-    const CSRRegion& region) const {
+std::vector<ChunkCheckpointState> CSRNodeGroup::checkpointColumnInRegion(
+    const ChunkedGroups& groups, column_id_t columnID, idx_t checkpointColumnIdx,
+    const CSRNodeGroupCheckpointState& csrState, const CSRRegion& region) const {
     const auto leftCSROffset = csrState.oldHeader->getStartCSROffset(region.leftNodeOffset);
     KU_ASSERT(leftCSROffset == csrState.newHeader->getStartCSROffset(region.leftNodeOffset));
     const auto rightCSROffset = csrState.oldHeader->getEndCSROffset(region.rightNodeOffset);
@@ -1111,8 +1118,7 @@ std::vector<ChunkCheckpointState> CSRNodeGroup::checkpointColumnInRegion(const U
                 }
                 auto [chunkIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
                     StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-                const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
-                writeInMemoryCSRInsertion(writeCursor, *chunkedGroup, rowInChunk, columnID,
+                writeInMemoryCSRInsertion(writeCursor, *groups[chunkIdx], rowInChunk, columnID,
                     chunkState);
             }
         }
@@ -1152,15 +1158,18 @@ ChunkedCSRHeader CSRNodeGroup::checkpointCSRHeaderColumns(
     return ChunkedCSRHeader{std::move(offset), std::move(length)};
 }
 
-void CSRNodeGroup::collectRegionChangesAndUpdateHeaderLength(const UniqLock& lock,
+void CSRNodeGroup::collectRegionChangesAndUpdateHeaderLength(const ChunkedGroups& groups,
     CSRRegion& region, const CSRNodeGroupCheckpointState& csrState) const {
-    collectInMemRegionChangesAndUpdateHeaderLength(lock, region, csrState);
-    collectOnDiskRegionChangesAndUpdateHeaderLength(lock, region, csrState);
+    collectInMemRegionChangesAndUpdateHeaderLength(groups, region, csrState);
+    collectOnDiskRegionChangesAndUpdateHeaderLength(groups, region, csrState);
 }
 
-void CSRNodeGroup::collectInMemRegionChangesAndUpdateHeaderLength(const UniqLock& lock,
+void CSRNodeGroup::collectInMemRegionChangesAndUpdateHeaderLength(const ChunkedGroups& groups,
     CSRRegion& region, const CSRNodeGroupCheckpointState& csrState) const {
     row_idx_t numInsertionsInRegion = 0u;
+    // Les listes de l'index changent (entrées invalidées, listes dépliées) pendant qu'un lecteur
+    // peut en copier une (scanCommittedInMem, sous le verrou partagé) : exclusif ici.
+    const std::unique_lock indexGuard{csrIndexMtx};
     if (csrIndex) {
         for (auto nodeOffset = region.leftNodeOffset; nodeOffset <= region.rightNodeOffset;
              nodeOffset++) {
@@ -1171,8 +1180,7 @@ void CSRNodeGroup::collectInMemRegionChangesAndUpdateHeaderLength(const UniqLock
                 const auto row = rows[i];
                 auto [chunkIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
                     StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-                const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
-                if (chunkedGroup->isDeleted(&DUMMY_CHECKPOINT_TRANSACTION, rowInChunk)) {
+                if (groups[chunkIdx]->isDeleted(&DUMMY_CHECKPOINT_TRANSACTION, rowInChunk)) {
                     csrIndex->indices[nodeOffset].turnToNonSequential();
                     csrIndex->indices[nodeOffset].setInvalid(i);
                     numInMemDeletionsInCSR++;
@@ -1190,7 +1198,7 @@ void CSRNodeGroup::collectInMemRegionChangesAndUpdateHeaderLength(const UniqLock
     region.sizeChange += static_cast<int64_t>(numInsertionsInRegion);
 }
 
-void CSRNodeGroup::collectOnDiskRegionChangesAndUpdateHeaderLength(const UniqLock&,
+void CSRNodeGroup::collectOnDiskRegionChangesAndUpdateHeaderLength(const ChunkedGroups&,
     CSRRegion& region, const CSRNodeGroupCheckpointState& csrState) const {
     collectPersistentUpdatesInRegion(region, csrState);
     int64_t numDeletionsInRegion = 0u;
@@ -1248,9 +1256,10 @@ static DataChunk initScanDataChunk(const CSRNodeGroupCheckpointState& csrState,
     return dataChunk;
 }
 
-void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpointState& state) {
+void CSRNodeGroup::checkpointInMemOnly(const ChunkedGroups& groups,
+    NodeGroupCheckpointState& state) {
     auto numRels = 0u;
-    for (auto& chunkedGroup : chunkedGroups.getAllGroups(lock)) {
+    for (auto& chunkedGroup : groups) {
         numRels += chunkedGroup->getNumRows();
     }
     if (numRels == 0) {
@@ -1262,7 +1271,7 @@ void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpoint
         false /*enableCompression*/, StorageConfig::NODE_GROUP_SIZE);
     const auto numNodes = csrIndex->getMaxOffsetWithRels() + 1;
     csrState.newHeader->setNumValues(numNodes);
-    populateCSRLengthInMemOnly(lock, numNodes, csrState);
+    populateCSRLengthInMemOnly(groups, numNodes, csrState);
     const auto rightCSROffsetsOfRegions =
         csrState.newHeader->populateStartCSROffsetsFromLength(true /* leaveGap */);
     csrState.newHeader->populateEndCSROffsetFromStartAndLength();
@@ -1284,6 +1293,8 @@ void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpoint
     scanState->columns = columns;
     scanState->nodeGroupScanState =
         std::make_unique<CSRNodeGroupScanState>(csrState.columnIDs.size());
+    // Les recherches lisent ces blocs-là (NodeGroupScanState::groups), pas la liste vivante.
+    scanState->nodeGroupScanState->groups = groups;
 
     auto dummyChunk = initScanDataChunk(csrState, dataTypes);
     for (auto i = 0u; i < dummyChunk.getNumValueVectors(); i++) {
@@ -1320,7 +1331,7 @@ void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpoint
             scanChunk.state->getSelVectorUnsafe().setSelSize(numRowsToAppend);
             if (numRowsToAppend > 0) {
                 [[maybe_unused]] auto res =
-                    lookupMultiple(lock, &DUMMY_CHECKPOINT_TRANSACTION, *scanState);
+                    lookupMultiple(&DUMMY_CHECKPOINT_TRANSACTION, *scanState);
                 for (auto idx = 0u; idx < numColumnsToCheckpoint; idx++) {
                     dataChunksToFlush[idx]->append(scanChunk.valueVectors[idx].get(),
                         scanChunk.state->getSelVector());
@@ -1355,19 +1366,15 @@ void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpoint
     auto flushedGroup = std::make_unique<ChunkedCSRNodeGroup>(
         ChunkedCSRHeader(false /*enableCompression*/, std::move(*csrState.newHeader)),
         std::move(dataChunksToFlush), 0);
-    persistentChunkGroup = std::make_unique<ChunkedCSRNodeGroup>(*state.mm, *flushedGroup,
-        std::span{dataTypes}, std::span{csrState.columnIDs});
-    // TODO(Guodong): Use `finalizeCheckpoint`.
-    chunkedGroups.clear(lock);
-    // Set `numRows` back to 0 is to reflect that the in mem part of the node group is empty.
-    numRows = 0;
-    csrIndex.reset();
-    clearDeadHints();
+    finalizeCheckpoint(std::make_unique<ChunkedCSRNodeGroup>(*state.mm, *flushedGroup,
+        std::span{dataTypes}, std::span{csrState.columnIDs}));
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
-void CSRNodeGroup::populateCSRLengthInMemOnly(const UniqLock& lock, offset_t numNodes,
+void CSRNodeGroup::populateCSRLengthInMemOnly(const ChunkedGroups& groups, offset_t numNodes,
     const CSRNodeGroupCheckpointState& csrState) {
+    // Les listes changent (voir collectInMemRegionChangesAndUpdateHeaderLength) : exclusif.
+    const std::unique_lock indexGuard{csrIndexMtx};
     for (auto offset = 0u; offset < numNodes; offset++) {
         auto rows = csrIndex->indices[offset].getRows();
         const length_t length = rows.size();
@@ -1376,9 +1383,8 @@ void CSRNodeGroup::populateCSRLengthInMemOnly(const UniqLock& lock, offset_t num
             const auto row = rows[i];
             auto [chunkIdx, rowInChunk] =
                 StorageUtils::getQuotientRemainder(row, StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-            const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
             const auto isDeleted =
-                chunkedGroup->isDeleted(&DUMMY_CHECKPOINT_TRANSACTION, rowInChunk);
+                groups[chunkIdx]->isDeleted(&DUMMY_CHECKPOINT_TRANSACTION, rowInChunk);
             if (isDeleted) {
                 csrIndex->indices[offset].turnToNonSequential();
                 csrIndex->indices[offset].setInvalid(i);
@@ -1459,16 +1465,23 @@ bool CSRNodeGroup::isWithinDensityBound(const InMemChunkedCSRHeader& header,
     return ratio <= getHighDensity(region.level);
 }
 
-void CSRNodeGroup::finalizeCheckpoint(const UniqLock& lock) {
-    // Clean up versions and in mem chunked groups.
-    if (persistentChunkGroup) {
-        persistentChunkGroup->resetNumRowsFromChunks();
-        persistentChunkGroup->resetVersionAndUpdateInfo();
+void CSRNodeGroup::finalizeCheckpoint(std::unique_ptr<ChunkedNodeGroup> newPersistent) {
+    // Le bloc neuf n'a ni versions ni mises à jour : il est le dernier validé.
+    if (newPersistent) {
+        newPersistent->resetNumRowsFromChunks();
+        newPersistent->resetVersionAndUpdateInfo();
     }
+    // L'échange, en une fois sous le verrou : un balayage qui commence ensuite prend le bloc
+    // neuf et une liste vide ; un balayage en cours garde les siens.
+    const auto lock = chunkedGroups.lock();
+    persistentChunkGroup = std::move(newPersistent);
     chunkedGroups.clear(lock);
     // Set `numRows` back to 0 is to reflect that the in mem part of the node group is empty.
     numRows = 0;
-    csrIndex.reset();
+    {
+        const std::unique_lock indexGuard{csrIndexMtx};
+        csrIndex.reset();
+    }
     clearDeadHints();
 }
 
