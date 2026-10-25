@@ -116,6 +116,18 @@ fn journal(host: &DaemonHost, backend: &str, run: &str) -> Value {
 /// Le banc : une mémoire, un backend de code qui déclare `bilans` vers elle,
 /// un hôte sur le faux modèle ; rend l'hôte, la mémoire, l'id du backend.
 fn banc(d: &Path, vu: Arc<Mutex<Vu>>) -> (DaemonHost, PathBuf, String) {
+    let modele = faux(vu);
+    banc_avec(d, modele.clone(), Some(modele), None)
+}
+
+/// Le banc, modèles donnés (le chat, le juge), et, s'il le faut, une
+/// description de `read_file` qui ment (le retour ambigu volontaire).
+fn banc_avec(
+    d: &Path,
+    chat: rag3weaver::daemon_host::chat::ChatModel,
+    juge: Option<rag3weaver::daemon_host::chat::ChatModel>,
+    description_de_read_file: Option<&str>,
+) -> (DaemonHost, PathBuf, String) {
     let gabarits = d.join("templates");
     copier(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits);
     // La mémoire.
@@ -132,13 +144,21 @@ fn banc(d: &Path, vu: Arc<Mutex<Vu>>) -> (DaemonHost, PathBuf, String) {
     c["database"] = json!(d.join("code.rag3db").display().to_string());
     c["workspace"]["root"] = json!(arbre.display().to_string());
     c["bilans"] = json!({ "memoire": memoire.display().to_string() });
+    if let Some(desc) = description_de_read_file {
+        c["tools"]["read_file"]["description"] = json!(desc);
+    }
     std::fs::write(&code, serde_json::to_string_pretty(&c).unwrap()).unwrap();
 
     let host = DaemonHost::new()
         .with_runs_root(d.join("runs"))
         .with_chats_root(d.join("chats"))
         .with_racine_des_taches(d.join("taches"))
-        .with_chat_model(faux(vu.clone()));
+        .with_chat_model(chat);
+    // Sans modèle du juge donné : celui de l'hôte (Vertex).
+    let host = match juge {
+        Some(j) => host.with_juge_model(j),
+        None => host,
+    };
     // Hébergé par un premier appel ; son id, dans l'état de l'hôte.
     let s = host.open_session("le témoin", None, Vec::new(), None);
     let lu = host.call(Some(&s), &code, "read_file", json!({ "path": "main.rs" }));
@@ -229,4 +249,67 @@ fn le_juge_se_declenche_seul_a_la_fin_d_un_tour() {
         assert!(Instant::now() < fin, "aucun bilan en 60 s : le juge ne s'est pas déclenché seul ({apports})");
         std::thread::sleep(Duration::from_millis(200));
     }
+}
+
+/// Un faux chat qui croit une description d'outil qui ment : `read_file` dit
+/// rendre le nombre de lignes, il rend le contenu, et l'agent répond comme s'il
+/// n'avait vu qu'un compte.
+fn chat_qui_croit() -> rag3weaver::daemon_host::chat::ChatModel {
+    Arc::new(|_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-chat", 8192, |turns, opts, sink| {
+            if turns.last().is_some_and(|t| t.role == "tool") {
+                return MockLlm::new("main.rs a une seule ligne ; read_file n'en donne que le compte, je n'ai donc pas vu ce qu'il fait.").generate(turns, opts, sink);
+            }
+            MockLlm::new("").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]).generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le juge sur Gemini, jugé sur le résultat** (page 04 ; comme K3) : une
+/// session porte un retour ambigu volontaire (la description de `read_file`
+/// ment : « le nombre de lignes, jamais le contenu ») ; le verdict doit le
+/// nommer sur `read_file` (un retour ambigu, une correction ou un ticket). Une
+/// seconde session de la même tâche doit être comparée à la première (pas
+/// « premier »). La mesure du juge est dite.
+///
+/// Ignoré par défaut ; sans `GOOGLE_CLOUD_PROJECT` et des identifiants
+/// (`GOOGLE_APPLICATION_CREDENTIALS`), il se saute nommément — un rouge sous
+/// `RAG3WEAVER_EXIGER_GEMINI=1`.
+#[test]
+#[ignore]
+fn le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session() {
+    const TEMOIN: &str = "le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session";
+    let projet = std::env::var("GOOGLE_CLOUD_PROJECT").ok().filter(|p| !p.is_empty());
+    let cles = std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").map(PathBuf::from).filter(|p| p.is_file());
+    if projet.is_none() || cles.is_none() {
+        let raison = "GOOGLE_CLOUD_PROJECT ou GOOGLE_APPLICATION_CREDENTIALS manque";
+        if std::env::var("RAG3WEAVER_EXIGER_GEMINI").as_deref() == Ok("1") {
+            panic!("{TEMOIN} : {raison}, et RAG3WEAVER_EXIGER_GEMINI=1");
+        }
+        eprintln!("SAUTÉ {TEMOIN} : {raison}");
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (host, _memoire, id) = banc_avec(d.path(), chat_qui_croit(), None, Some("Rend le nombre de lignes du fichier, jamais son contenu."));
+    let session = |n: usize| -> Value {
+        let r = host.chat_turn(&id, "Lis main.rs et dis-moi ce qu'il fait.").expect("le tour");
+        let run = r["run"].as_str().unwrap().to_string();
+        journal(&host, &id, &run);
+        let debut = Instant::now();
+        let b = host.juger(&id, &run).unwrap_or_else(|e| panic!("le juge, session {n} : {e}"));
+        eprintln!("MESURE juge sur Gemini, session {n} : {} ms, {} itération(s)", debut.elapsed().as_millis(), b["enquete"]["iterations"]);
+        eprintln!("bilan {n} : {}", b["verdict"]);
+        b
+    };
+    let b1 = session(1);
+    let v = &b1["verdict"];
+    let nomme = v["outils"].as_array().into_iter().flatten().any(|o| o["outil"] == "read_file" && o["ambigus"].as_array().is_some_and(|a| !a.is_empty()))
+        || v["a_corriger"].as_array().into_iter().flatten().any(|a| a["outil"] == "read_file")
+        || b1["tickets"].as_array().into_iter().flatten().any(|t| t["outil"] == "read_file");
+    assert!(nomme, "le juge n'a pas nommé le retour ambigu de read_file : {b1}");
+    let b2 = session(2);
+    assert_eq!(b2["fiche"], b1["fiche"], "la même fiche");
+    assert_ne!(b2["verdict"]["comparaison"]["verdict"], "premier", "la seconde session n'est pas comparée à la première : {b2}");
+    let vue = host.bilans_de(&id).unwrap();
+    assert_eq!(vue["fiches"][0]["apports"].as_array().map(Vec::len), Some(2), "{vue}");
 }

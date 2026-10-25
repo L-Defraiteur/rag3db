@@ -181,6 +181,9 @@ pub struct DaemonHost {
     journal: Arc<journal_des_runs::JournalDesRuns>,
     /// Les bilans à faire, jugés par le fil que le serveur lance.
     bilans: juge::FileDesBilans,
+    /// Le modèle du juge (par défaut celui de l'hôte, Vertex) : à part de celui
+    /// du chat, pour juger un chat d'un modèle par un autre.
+    juge_model: chat::ChatModel,
 }
 
 /// Les tâches de l'agent : une branche, un worktree, une base à soi.
@@ -257,6 +260,7 @@ impl DaemonHost {
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
             bilans: juge::FileDesBilans::default(),
+            juge_model: chat::default_chat_model(),
         }
     }
 

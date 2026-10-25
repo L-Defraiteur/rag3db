@@ -198,7 +198,7 @@ impl DaemonHost {
         let (memoire_manifeste, modele) = self.with_backend(&cible, |b| {
             let p = b.prepared();
             let memoire = p.manifest.bilans.as_ref().map(|d| if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) });
-            (memoire, (self.chat_model)(b))
+            (memoire, (self.juge_model)(b))
         })?;
         // Le manifeste jugé, par son nom de fichier dans son dossier : ce que
         // ses tickets proposent de changer.
@@ -318,6 +318,12 @@ impl DaemonHost {
             sortie.push(json!({ "fiche": nom, "about": data["about"], "apports": liste }));
         }
         Ok(json!({ "declare": true, "fiches": sortie }))
+    }
+
+    /// Le modèle du juge (un faux pour les témoins).
+    pub fn with_juge_model(mut self, model: chat::ChatModel) -> Self {
+        self.juge_model = model;
+        self
     }
 
     /// Dépose un bilan à faire, si le backend déclare `bilans` (la fin d'un tour).
