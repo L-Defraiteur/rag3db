@@ -22,31 +22,31 @@ fiabilité. Ce lot est équipier-1.
 
 1. **La demande** arrive par la boîte aux lettres. L'hôte ouvre la tâche si elle n'existe pas,
    puis lance le premier pas.
-2. **Le mini-plan.** Le premier pas écrit le mini-plan par `editer_le_plan` ; l'agent le
+2. **Le mini-plan.** Le premier pas écrit le mini-plan par `edit_plan` ; l'agent le
    réédite ensuite librement (plus bas). Il contient la
    demande telle que l'agent la comprend, ce qu'il propose, puis des éléments. Chaque élément
    porte :
-   - un statut : `a_faire`, `en_cours`, `fait`, `bloque`, `abandonne` ;
-   - `seul` (faisable sans validation), ou bien `validation` avec la question posée.
+   - un statut : `todo`, `doing`, `done`, `blocked`, `dropped` ;
+   - `alone` (faisable sans validation), ou bien `needs_validation` avec la question posée.
 
    Chaque élément à valider part dans la boîte à l'édition qui le pose : les bloquants
    d'abord. L'agent attaque ensuite le premier élément faisable seul, sans attendre la réponse.
 3. **Le pas.** L'agent travaille un élément, puis appelle
-   `tour_fini { element, reussi, fait, reste }`. L'appel finit le pas :
-   - réussi : l'élément passe à `fait` ;
+   `step_done { item, succeeded, done, remaining }`. L'appel finit le pas :
+   - réussi : l'élément passe à `done` ;
    - raté : l'élément garde son statut, avec sa raison ;
    - dans les deux cas, une ligne part dans la boîte.
 
    Un pas est un tour de chat, donc un run du journal et un bilan du juge.
-4. **Le budget du pas.** Au-delà de douze appels d'outil sans `tour_fini`, l'hôte refuse tout
-   autre appel par le même message : « déclare d'abord tour_fini (réussi ou non, ce qui est fait,
+4. **Le budget du pas.** Au-delà de douze appels d'outil sans `step_done`, l'hôte refuse tout
+   autre appel par le même message : « déclare d'abord step_done (réussi ou non, ce qui est fait,
    ce qui reste) ». Le refus est une réponse d'outil : l'agent le lit et s'y plie.
 5. **La frontière.** Entre deux pas, l'hôte injecte dans la conversation, comme un message, ce
    qui est arrivé dans la boîte pendant le pas (réponses aux bloquants, consignes nouvelles) et le
    mini-plan courant. La conversation est la même pour ce lot. La compaction par les fiches est
    pour équipier-2.
 6. **La fin.**
-   - Plus d'élément faisable ni bloqué : l'agent rend compte (`rendre_compte`), et l'équipier
+   - Plus d'élément faisable ni bloqué : l'agent rend compte (`report`), et l'équipier
      s'arrête.
    - Seulement des éléments bloqués : il attend la boîte. Une réponse qui arrive le relance.
 
@@ -60,20 +60,19 @@ Il y a deux voies :
 
 ## La boîte aux lettres
 
-- **Un fichier par tâche**, `<dossier de la tâche>/boite.jsonl`, lisible sans IDE. Une ligne
-  par message : `{instant, de, genre, element?, texte}`. Les genres sont `demande`, `consigne`,
-  `reponse` (à un bloquant), `question` (un bloquant posé), `tour_fini`, `compte_rendu` et
-  `arret`.
-- **Un sujet du bus** par tâche, `boite.<tâche>`, où chaque ligne est aussi publiée.
-- **Le superviseur écrit** par `POST /ide/equipier/boite {backend, tache, genre, element?,
-  texte}`. La route ajoute la ligne au fichier et la publie. Un réacteur de l'hôte écoute le
+- **Un fichier par tâche**, `<dossier de la tâche>/mailbox.jsonl`, lisible sans IDE. Une ligne
+  par message : `{at, from, kind, item?, text}`. Les genres (`kind`) sont `request`, `instruction`,
+  `answer` (à un bloquant), `question` (un bloquant posé), `step_done`, `report` et `stop`.
+- **Un sujet du bus** par tâche, `mailbox.<task>`, où chaque ligne est aussi publiée.
+- **Le superviseur écrit** par `POST /ide/teammate/mailbox {backend, task, kind, item?,
+  text}`. La route ajoute la ligne au fichier et la publie. Un réacteur de l'hôte écoute le
   sujet :
-  - une `demande` à une tâche absente l'ouvre ;
+  - une `request` à une tâche absente l'ouvre ;
   - un message à un équipier qui attend le relance.
 
   Une ligne ajoutée au fichier à la main est lue à la frontière suivante, mais ne réveille pas
   un équipier qui attend (pas de surveillance de fichier dans ce lot).
-- **L'agent écrit** par `rendre_compte`, et `tour_fini` y ajoute sa ligne.
+- **L'agent écrit** par `report`, et `step_done` y ajoute sa ligne.
 - **L'IDE** montre la boîte et le mini-plan dans la vue de la tâche.
 
 Le canal des sessions Claude n'est pas utilisé.
@@ -82,7 +81,7 @@ Le canal des sessions Claude n'est pas utilisé.
 
 **Pas de harnais sur le plan.** L'agent édite ses éléments quand il veut, comme il le sent. Il
 peut juger son plan accompli ou obsolète, le clore avec sa raison et en ouvrir un autre. Les
-seules contraintes dures sont le budget du pas (douze appels sans `tour_fini`) et l'arrêt (C4).
+seules contraintes dures sont le budget du pas (douze appels sans `step_done`) et l'arrêt (C4).
 
 **Le plan courant** vit dans `<dossier de la tâche>/plan.json`, et seulement là (96). L'hôte le
 lit à chaque frontière (reste-t-il un élément faisable ou bloqué ?) et l'injecte. On ne le
@@ -121,14 +120,14 @@ contexte comme une vue des fiches ; forme relue par 96).
 
 - Ceux du chat qui code dans une tâche, rien de plus. Les tests, la fusion et le push restent à
   une session Claude ou au superviseur.
-- `editer_le_plan` :
+- `edit_plan` :
   - poser le plan entier ;
   - changer, ajouter ou retirer un élément (statut, raison, question) ;
-  - ou clore ce plan (`accompli` ou `obsolete`, avec sa raison) et en ouvrir un autre.
-- `tour_fini { element, reussi, fait, reste }` : il finit le pas. La boucle de l'agent apprend
+  - ou clore ce plan (`accomplished` ou `obsolete`, avec sa raison) et en ouvrir un autre.
+- `step_done { item, succeeded, done, remaining }` : il finit le pas. La boucle de l'agent apprend
   un **outil qui termine** : un nom déclaré terminal arrête la boucle après sa réponse
   (`StopReason::Terminal`). C'est générique : `pause_dialogue` en est le cas d'origine.
-- `rendre_compte { texte }`.
+- `report { texte }`.
 
 ## La montée
 
@@ -143,12 +142,19 @@ reste au superviseur.
 
 - **Sur faux modèle** : un plan à trois éléments, dont un à valider.
   - Le bloquant part dans la boîte, et les deux autres se font en deux pas : deux runs
-    journalisés, deux `tour_fini`.
+    journalisés, deux `step_done`.
   - La réponse du superviseur écrite pendant le pas 1 est lue à la frontière.
-  - Le budget force un `tour_fini` sur un pas qui s'étire.
+  - Le budget force un `step_done` sur un pas qui s'étire.
   - L'arrêt passe tout de suite.
 - **Sur Gemini (exigé)** : la tâche « doc sur un dépôt de test » de bout en bout. Le juge rend un
   bilan à chaque pas, et la doc est sur la branche de la tâche.
+
+## Les noms
+
+Les identifiants sont en anglais (règle du 6 septembre) : l'agent `teammate`, `edit_plan`,
+`step_done`, `report`, `plan.json`, `mailbox.jsonl`, le sujet `mailbox.<task>`, la route
+`/ide/teammate/mailbox`, `StopReason::Terminal` et `with_terminal_tools`. Le français reste
+pour la doc, les commits et les textes rendus à l'humain.
 
 ## Ce qui n'est pas décidé
 
