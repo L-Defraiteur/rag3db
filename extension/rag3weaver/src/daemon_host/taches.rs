@@ -305,7 +305,7 @@ impl DaemonHost {
         }
     }
 
-    fn hote_par_id(&self, id: &str) -> Result<Arc<Hosted>, String> {
+    pub(super) fn hote_par_id(&self, id: &str) -> Result<Arc<Hosted>, String> {
         self.backends
             .lock()
             .unwrap_or_else(|p| p.into_inner())
