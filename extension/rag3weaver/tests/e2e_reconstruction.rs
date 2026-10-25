@@ -200,7 +200,7 @@ fn requete(b: &Backend, q: &str) -> Vec<Vec<CypherValue>> {
 
 #[test]
 #[ignore]
-fn les_fiches_d_une_base_perdue_reviennent_par_leur_bloc_machine_et_un_lien_vers_une_ligne_sans_fichier_se_compte() {
+fn les_fiches_d_une_base_perdue_reviennent_par_leur_bloc_machine_et_une_ligne_sans_fichier_voyage_avec_le_bloc() {
     let dir = tempfile::tempdir().expect("dossier");
     let vivante = ouvrir(&manifeste_compose(dir.path(), "backend.json", "base.rag3db"));
     let sujet = vivante.call("put_sujet", json!({"record": {"name": "Le WAL", "about": "La reprise, --> et & dedans."}})).expect("le sujet")["result"]["uuid"]
@@ -239,12 +239,19 @@ fn les_fiches_d_une_base_perdue_reviennent_par_leur_bloc_machine_et_un_lien_vers
     let rapport = neuve.rebuild_from_files().expect("la reconstruction");
     assert_eq!(rapport["Sujet"]["restored"], 1, "{rapport}");
     assert_eq!(rapport["Note"]["restored"], 2, "{rapport}");
-    assert_eq!(rapport["links"]["posed"], 2, "{rapport}");
-    assert_eq!(rapport["links"]["to_absent_rows"], json!({"Ref": 1}), "la citation vers une Ref sans fichier se compte : {rapport}");
+    // La Ref n'a pas de fichier : citée par une note du bloc, elle y voyage
+    // (la fermeture du bloc), et la citation se repose.
+    assert_eq!(rapport["Ref"]["restored"], 1, "{rapport}");
+    assert_eq!(rapport["links"]["posed"], 3, "{rapport}");
+    assert_eq!(rapport["links"]["to_absent_rows"], json!({}), "aucun lien vers une ligne absente : {rapport}");
     assert_eq!(requete(&neuve, sujets), s0, "le sujet revient champ à champ, son texte avec --> et & compris");
     assert_eq!(requete(&neuve, notes), n0, "les notes reviennent champ à champ, depuis le bloc du sujet");
     assert_eq!(requete(&neuve, a_note), l0, "les liens du sujet à ses notes sont reposés");
-    assert!(requete(&neuve, "MATCH (r:Ref) RETURN r._uuid").is_empty(), "la Ref, sans fichier, n'est pas devinée");
+    assert_eq!(
+        requete(&neuve, "MATCH (:Note {titre: 'rejeu'})-[:CITE]->(r:Ref) RETURN r.cle"),
+        vec![vec![CypherValue::String("src/storage/wal.cpp".into())]],
+        "la Ref revient par le bloc qui la cite, et la citation avec elle"
+    );
 }
 
 // ── M3c : la comparaison à l'ouverture, la vérification à blanc ────────────
