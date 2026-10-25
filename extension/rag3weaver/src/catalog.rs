@@ -6345,8 +6345,9 @@ fn read_threads() -> u64 {
             _ => runtime.execute(&mut graph),
         };
         // Ce que le graphe d'ingestion a posé est annoncé par « ingested »,
-        // plus bas : son journal ne doit pas ressortir en « created ».
-        self.journal_des_ecritures.prendre();
+        // plus bas : son journal ne doit pas ressortir en « created ». À
+        // l'échec, il dit ce que les nœuds terminés ont posé quand même.
+        let journal_de_l_ingestion = self.journal_des_ecritures.prendre();
         // Le total de l'exécution ; les nœuds eux-mêmes sont ajoutés plus bas.
         // La différence est ce que le runtime fait autour d'eux — les points
         // de reprise, surtout.
@@ -6457,7 +6458,19 @@ fn read_threads() -> u64 {
                 res.absorber_les_echecs(&Self::relever_les_echecs(&canal));
                 Ok(res)
             }
-            Err(e) => Err(CatalogError::DbError(format!("ingest_entities failed: {e}"))),
+            Err(e) => {
+                // **Un graphe tombé a pu écrire** : rien ne défait les nœuds
+                // terminés (le point de reprise les garde pour la reprise). Ce
+                // qu'ils ont posé s'annonce — retenu sous une transaction, que
+                // son rollback jette (ticket « des écritures ne passent pas par
+                // le journal », 19 octobre 2026).
+                for (entite, uuids) in journal_de_l_ingestion.posees {
+                    if self.entity_configs.contains_key(&entite) && !uuids.is_empty() {
+                        self.publier(CatalogEvent::entites_changees(&entite, uuids.into_iter().collect(), "ingested"));
+                    }
+                }
+                Err(CatalogError::DbError(format!("ingest_entities failed: {e}")))
+            }
         }
     }
 
@@ -8590,8 +8603,14 @@ fn read_threads() -> u64 {
                 res
             }
             Err(e) => {
-                // Un graphe tombé n'annonce rien de ce qu'il avait commencé.
-                self.journal_des_ecritures.prendre();
+                // **Un graphe tombé a pu écrire** : rien ne défait les nœuds
+                // terminés, que le point de reprise garde pour la reprise. Ce
+                // qu'ils ont écrit s'annonce — retenu sous une transaction, que
+                // son rollback jette ; la reprise n'annoncera que les siens.
+                let updates = std::mem::take(&mut *update_results.lock().unwrap_or_else(|e| e.into_inner()));
+                let deletes = std::mem::take(&mut *delete_results.lock().unwrap_or_else(|e| e.into_inner()));
+                let journal = self.journal_des_ecritures.prendre();
+                self.publier_le_journal(journal, &updates, &deletes);
                 eprintln!("[rag3weaver] drain FAILED: {e}");
                 self.emit_event(CatalogEvent::Error {
                     context: "drain".to_string(),
@@ -8946,7 +8965,9 @@ fn read_threads() -> u64 {
                 res
             }
             Err(e) => {
-                self.journal_des_ecritures.prendre();
+                // Ce que les nœuds terminés ont posé s'annonce (voir `drainer`).
+                let journal = self.journal_des_ecritures.prendre();
+                self.publier_le_journal(journal, &[], &[]);
                 self.emit_event(CatalogEvent::Error {
                     context: "flush_insertions".to_string(),
                     message: format!("insert-only dataflow failed: {e}"),
@@ -9122,9 +9143,14 @@ fn read_threads() -> u64 {
         let canal = self.enregistrer_les_services_d_ingestion(&mut services);
         // Les résultats partagés que les nœuds d'écriture exigent — une reprise
         // sans eux tombait sur `ok_or` dès le premier nœud de mise à jour.
-        services.register("update_results", Arc::new(Mutex::new(Vec::<UpdateResult>::new())));
-        services.register("delete_results", Arc::new(Mutex::new(Vec::<DeleteResult>::new())));
+        let update_results = Arc::new(Mutex::new(Vec::<UpdateResult>::new()));
+        let delete_results = Arc::new(Mutex::new(Vec::<DeleteResult>::new()));
+        services.register("update_results", update_results.clone());
+        services.register("delete_results", delete_results.clone());
         services.register("chunk_counts", Arc::new(Mutex::new(HashMap::<String, (usize, usize)>::new())));
+        // Le journal de la reprise seulement : ce que le drain tombé avait
+        // écrit s'est annoncé à sa chute.
+        self.journal_des_ecritures.prendre();
 
         // Le cache de découpe, pour ce que la reprise redécoupe.
         self.warm_chunker_cache();
@@ -9136,9 +9162,14 @@ fn read_threads() -> u64 {
         let node_count = graph.nodes.len();
         let runtime = DataflowRuntime::with_services(node_count + 20, services);
 
-        match runtime
-            .execute_with_checkpoint(&mut graph, store.as_ref(), execution_id)
-        {
+        let resultat = runtime.execute_with_checkpoint(&mut graph, store.as_ref(), execution_id);
+        // Réussie ou non, la reprise annonce ce qu'elle a écrit (« le
+        // catalogue dit tout », ticket du 19 octobre 2026).
+        let updates = std::mem::take(&mut *update_results.lock().unwrap_or_else(|e| e.into_inner()));
+        let deletes = std::mem::take(&mut *delete_results.lock().unwrap_or_else(|e| e.into_inner()));
+        let journal = self.journal_des_ecritures.prendre();
+        self.publier_le_journal(journal, &updates, &deletes);
+        match resultat {
             Ok(_) => {
                 self.drain_counters.flush_count += 1;
                 let mut res = FlushResult {
