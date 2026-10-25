@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — La mémoire dans des fichiers qu'on lit.** Chaque fiche est un fichier
+  Markdown (son état, ses ancres, ses apports) ; si la base se perd, elle revient
+  entière de son dossier. d72bcf5e0.
 - **25 oct. — Le plan d'un fichier dans l'IDE.** La fiche d'un fichier montre ses
   scopes imbriqués, rendus par l'outil `outline` en JSON (un Plan déclaré), chacun
   vers sa ligne et son symbole, avec ce que vaut cette lecture. cbb41d312.
