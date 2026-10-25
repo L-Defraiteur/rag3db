@@ -728,7 +728,7 @@ fn la_recherche_se_replie_sans_l_index_vectoriel(nom: &str, drapeau: bool, raiso
             v.sort();
             v[v.len() / 2]
         };
-        let question = "CALL SHOW_INDEXES() RETURN table_name, index_name, extension_loaded";
+        let question = "CALL SHOW_INDEXES() RETURN *";
         let questions: Vec<u128> = (0..100)
             .map(|_| {
                 let t = Instant::now();
@@ -781,6 +781,92 @@ fn la_recherche_rend_les_mots_pendant_le_rattrapage_des_vecteurs() {
 #[ignore]
 fn la_recherche_rend_les_mots_quand_l_index_vectoriel_manque() {
     la_recherche_se_replie_sans_l_index_vectoriel("repli-absent", false, "is missing");
+}
+
+/// **Une recherche pendant un CREATE de l'index vectoriel ne fait pas tomber
+/// la recherche hybride** ((A), le CREATE concurrent du moteur, page 07 de
+/// coeur-cpp-tickets). Le CREATE pose d'abord l'entrée et un index NOTED,
+/// visible, puis attend les écrivains plus anciens avant de bâtir. Avant la
+/// parade : `SHOW_INDEXES` disait l'index lisible, la branche dense le
+/// lisait, le moteur la refusait (« is under construction ») et le refus
+/// condamnait la transaction que partagent les signaux de l'appel. Après : les
+/// mots répondent, et la réponse dit que le dense est en construction. Le
+/// CREATE est retenu par un écrivain ouvert avant lui, sur une autre
+/// connexion, que le témoin valide ensuite : le dense revient.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel() {
+    use serde_json::json;
+    use std::time::{Duration, Instant};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), "repli-construction");
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let cherche = || backend.call_in(&cellule, "search_code", json!({"query": "alpha", "options": {}, "mode": "indexed"}));
+    let debut = Instant::now();
+    loop {
+        let r = cherche().expect("la recherche avant le CREATE").to_string();
+        if !r.contains("dense signal") || debut.elapsed() > Duration::from_secs(120) {
+            assert!(!r.contains("dense signal"), "avant le CREATE, le dense répond : {r}");
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    let (index, colonne, conn) = {
+        let cat = backend.catalog.lock().unwrap();
+        let stockage = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle");
+        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{}')", stockage.index)).expect("le retrait");
+        (stockage.index, stockage.column, cat.conn_arc())
+    };
+    // L'écrivain ouvert avant le CREATE : le CREATE l'attend entre T_A et T_B.
+    let ecrivain = conn.read_connection(2).expect("une connexion pour l'écrivain");
+    ecrivain.begin().expect("le BEGIN de l'écrivain");
+    ecrivain
+        .execute("MERGE (m:_catalog_meta {_key: 'temoin_create_retenu'}) SET m._value = 'x'")
+        .expect("l'écriture de l'écrivain");
+    let createur = conn.read_connection(4).expect("une connexion pour le CREATE");
+    let (index_c, colonne_c) = (index.clone(), colonne.clone());
+    let fil = std::thread::spawn(move || {
+        createur
+            .execute(&format!("CALL CREATE_VECTOR_INDEX('Scope_Chunk', '{index_c}', '{colonne_c}', metric := 'cosine')"))
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    });
+
+    // L'index NOTED, vu par SHOW_INDEXES (la colonne `state`, format 43).
+    let lecteur = conn.read_connection(1).expect("une connexion pour regarder");
+    let debut = Instant::now();
+    loop {
+        let lignes = lecteur.execute("CALL SHOW_INDEXES() RETURN *").expect("SHOW_INDEXES").rows;
+        let ligne = lignes.iter().find(|l| l.get(1).and_then(|v| v.as_str()) == Some(index.as_str()));
+        if let Some(l) = ligne {
+            assert!(l.len() > 6, "la lib liée n'a pas l'état d'index (format 43 du moteur) : ce témoin ne se joue pas dessus ({l:?})");
+            if l.get(6).and_then(|v| v.as_str()) == Some("NOTED") {
+                break;
+            }
+        }
+        assert!(debut.elapsed() < Duration::from_secs(30), "l'index n'a jamais été vu NOTED : {lignes:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let pendant = cherche().unwrap_or_else(|e| panic!("la recherche tombe en entier pendant le CREATE : {e}")).to_string();
+    assert!(pendant.contains("a.rs"), "les mots répondent pendant le CREATE : {pendant}");
+    assert!(pendant.contains("dense signal is not available"), "la réponse dit que le dense manque : {pendant}");
+    assert!(pendant.contains("under construction"), "et pourquoi (under construction) : {pendant}");
+
+    ecrivain.execute("COMMIT").expect("le COMMIT de l'écrivain");
+    fil.join().expect("le fil du CREATE").expect("le CREATE");
+    let debut = Instant::now();
+    loop {
+        let r = cherche().expect("la recherche après le CREATE").to_string();
+        if !r.contains("dense signal") {
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(60), "le dense ne revient pas après le CREATE : {r}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }
 
 /// **La recherche dit ce que chaque signal a dit** (pièce 1 de la recherche de

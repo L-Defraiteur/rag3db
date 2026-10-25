@@ -1843,8 +1843,12 @@ impl SchemaDialect for Rag3dbDialect {
     /// chargée ne se lit pas non plus. Sans `WHERE` ni paramètre : le filtre
     /// se fait à la lecture des lignes (un nom de paramètre réservé, `$table`,
     /// faisait échouer l'analyse, et l'échec condamnait l'instantané).
+    /// `RETURN *` : une lib du format 43 ajoute la colonne `state` (l'état de
+    /// construction d'un index, le CREATE concurrent du moteur) en dernier,
+    /// une lib d'avant ne l'a pas ; nommer la colonne refuserait l'une ou
+    /// l'autre. Les colonnes se lisent par position (index_vectoriel_illisible).
     fn vector_index_listing(&self) -> Option<String> {
-        Some("CALL SHOW_INDEXES() RETURN table_name, index_name, extension_loaded".to_string())
+        Some("CALL SHOW_INDEXES() RETURN *".to_string())
     }
 
     fn create_meta_table(&self) -> String {
