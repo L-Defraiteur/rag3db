@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { dispatchFlux, fetchState, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
+import { Search } from "@/views/Search";
 import { applyTheme, effectiveTheme, storedTheme, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
 
@@ -81,6 +82,7 @@ function View({ state }: { state: HostState }) {
   const r = route();
   if (r.view === "chat" && r.id) return <Chat id={r.id} state={state} />;
   if (r.view === "fichier" && r.id) return <File id={r.id} path={r.rest ?? ""} state={state} />;
+  if (r.view === "recherche" && r.id) return <Search id={r.id} state={state} />;
   return <Home state={state} />;
 }
 

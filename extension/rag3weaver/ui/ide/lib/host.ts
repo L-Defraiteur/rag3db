@@ -108,3 +108,26 @@ export function route(): { view: string; id?: string; rest?: string } {
   if (!m) return { view: "home" };
   return { view: m[2], id: m[1], rest: decodeURIComponent(m[3] ?? "") };
 }
+
+/// La réponse entière du graphe d'un outil ({ result, metadata, freshness, … }) :
+/// pour une vue qui montre aussi ce que l'hôte dit à côté de la sortie.
+export async function callFull(manifest: string, name: string, args: unknown): Promise<Record<string, unknown>> {
+  const r = await (await fetch("/ide/call", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ manifest, name, arguments: args }),
+  })).json();
+  if (!r.ok) throw new Error(r.error ?? `${name} : échec`);
+  return r.result ?? {};
+}
+
+/// La sortie d'un outil sous l'enveloppe d'une lecture du catalogue ({ status, result })
+/// s'il y en a une ; un `result` nul est l'erreur que `status` dit.
+export function unwrap(s: unknown): { value: unknown; status?: string } {
+  if (!s || typeof s !== "object" || Array.isArray(s)) return { value: s };
+  const o = s as Record<string, unknown>;
+  const keys = Object.keys(o);
+  if (keys.length !== 2 || !keys.includes("status") || !keys.includes("result")) return { value: s };
+  if (o.result === null) throw new Error(String(o.status));
+  return { value: o.result, status: String(o.status) };
+}
