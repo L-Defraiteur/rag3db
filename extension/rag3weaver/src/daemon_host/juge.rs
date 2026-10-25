@@ -221,7 +221,7 @@ impl DaemonHost {
         let memoire_manifeste = memoire_manifeste.ok_or("ce backend ne déclare pas `bilans` : rien ne range ses bilans")?;
         let llm = modele.map_err(|why| format!("le juge n'a pas de modèle : {why}"))?;
         let chemin = self.journal.fichier(backend_id, run).ok_or_else(|| format!("le run {run} n'a pas de journal (pas fini, ou effacé)"))?;
-        let journal: Value = serde_json::from_slice(&std::fs::read(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?).map_err(|e| e.to_string())?;
+        let journal: Value = journal_des_runs::lire_le_fichier(&chemin)?;
         let memoire = self.hosted(&memoire_manifeste)?;
 
         // La tâche ciblee : le premier message de l'agent, sinon l'outil appelé.
@@ -310,6 +310,18 @@ impl DaemonHost {
         })?;
         let ecrit = self.ecrire_le_bilan(&memoire, &fiche, &intitule, run, &journal, &texte, &verdict, &bilan_des_outils, &identites, &nom_du_backend)?;
         let tickets = self.proposer_les_tickets(&cible, propre.as_deref(), &bilan_des_outils, &fiche);
+        // **Un défaut bloquant rangé épingle le run** (page 06) : c'est sa preuve,
+        // qu'on doit pouvoir relire longtemps après.
+        let bloquants: Vec<&str> = bilan_des_outils["outils"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|o| o["defauts"]["bloquant"].as_array().is_some_and(|b| !b.is_empty()))
+            .filter_map(|o| o["outil"].as_str())
+            .collect();
+        if !bloquants.is_empty() {
+            self.journal.epingler(backend_id, run, &format!("défaut bloquant rangé par le juge ({})", bloquants.join(", ")));
+        }
         Ok(json!({
             "fiche": fiche,
             "intitule": intitule,
@@ -413,9 +425,7 @@ impl DaemonHost {
                 let fin = std::time::Instant::now() + std::time::Duration::from_secs(30);
                 while !h
                     .journal
-                    .fichier(&backend, &run)
-                    .and_then(|p| std::fs::read(p).ok())
-                    .and_then(|o| serde_json::from_slice::<Value>(&o).ok())
+                    .lire(&backend, &run)
                     .is_some_and(|v| v["tours"].is_array() || v["appel"].is_object())
                 {
                     if std::time::Instant::now() > fin {
