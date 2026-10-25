@@ -7,7 +7,9 @@
 //!   d'un fichier (`valeur#…`), jamais un voisin qui partage le préfixe
 //!   (`src/storagex`) ;
 //! - chaque fiche rend ses Refs qui répondent et ses apports qui citent, rien
-//!   d'autre ; les plus récentes d'abord ; le total compté, la page bornée.
+//!   d'autre ; le total compté, la page bornée ;
+//! - **les plus récentes d'abord, par leur dernier apport** : une fiche ancienne
+//!   qui reçoit un L1 neuf passe devant ; sans apport, la date de la fiche.
 //!
 //! Sur le vrai gabarit `memory` (ses signaux : `RAG3WEAVER_EMBED_SERVICE`).
 //!
@@ -135,6 +137,13 @@ fn un_dossier_rend_les_fiches_ancrees_dessous_par_date_et_seulement_leurs_refs_q
     // Un état gardé.
     let (fiches, _) = cite(&b, json!({"value": "src/storage/wal", "states": ["current"]}));
     assert_eq!(noms(&fiches), ["le rejeu"]);
+
+    // La fiche la plus ancienne reçoit un L1 neuf : elle passe devant, sa
+    // propre date n'ayant pas bougé.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    apport_qui_cite(&b, "le rejeu", "Rejeu");
+    let (fiches, _) = cite(&b, json!({"value": "src/storage/wal"}));
+    assert_eq!(noms(&fiches), ["le rejeu", "l'ouverture"], "par le dernier apport : {fiches:?}");
 }
 
 #[test]
