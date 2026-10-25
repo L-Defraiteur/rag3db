@@ -565,6 +565,27 @@ pub(crate) fn merge_stream_elements(a: PortValue, b: PortValue) -> Result<PortVa
     super::port::merge_port_values(a, b)
 }
 
+/// **Le pli d'un flux en une valeur**, pour une entrée `Complete` : chaque
+/// élément se fond au précédent ([`merge_stream_elements`]). Un pli impossible
+/// se refuse en nommant `ou` (le nœud et son port) et l'élément où il casse
+/// (25 octobre 2026) ; il rendait `PortValue::Trigger` en silence, qu'une
+/// valeur suivante effaçait — le dernier élément si leur nombre était impair,
+/// rien s'il était pair. Aucun élément : `None`.
+pub(crate) fn plier(elements: impl IntoIterator<Item = PortValue>, ou: &str) -> Result<Option<PortValue>, String> {
+    let mut it = elements.into_iter();
+    let Some(mut acc) = it.next() else { return Ok(None) };
+    for (i, b) in it.enumerate() {
+        acc = merge_stream_elements(acc, b).map_err(|e| {
+            format!(
+                "{ou} : le flux ne se lit pas en une valeur, son élément {} ne se fond pas au précédent ({e}) — \
+                 lisez cette entrée élément par élément (PerElement), ou appelez un sous-graphe par élément (ForEachNode)",
+                i + 2
+            )
+        })?;
+    }
+    Ok(Some(acc))
+}
+
 /// **Le jeton d'annulation** d'un run (voir [`NodeContext::cancellation`]).
 #[derive(Clone)]
 pub struct CancelToken {
