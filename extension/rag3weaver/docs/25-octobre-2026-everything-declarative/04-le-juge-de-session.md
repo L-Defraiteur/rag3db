@@ -31,8 +31,8 @@ rejouées par le juge à chaque lot important) vient après, sur lui.
    - la tâche et les propositions.
 
    Le juge le lit, et le DAG vivant pourra rejouer un run passé. Le journal est borné en taille
-   par run et en nombre par backend, par un réglage ; les plus vieux sont effacés, et l'hôte le
-   dit.
+   par run, et en poids et en âge pour tout l'hôte (page 06 : il remplace la borne en nombre
+   par backend) ; les plus vieux sont effacés, et l'hôte le dit.
 2. **Le juge, un agent déclaré** : `templates/agents/juge/juge.json`, un `ChatConfig` (son message
    système, son modèle, ses outils permis), plus `bilan.schema.json`, le schéma de sa sortie
    finale. `ChatConfig` gagne `response_schema`, que `run_with` pose en `response_format` sur le

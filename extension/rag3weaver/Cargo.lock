@@ -6840,6 +6840,7 @@ dependencies = [
  "ureq 3.4.0",
  "wgpu",
  "windows-sys 0.59.0",
+ "zstd 0.13.3",
 ]
 
 [[package]]
