@@ -53,6 +53,30 @@ n'est pas mesuré sur notre code : la pièce mesure, sur des requêtes réelles 
 l'ordre avant et après et la latence ; Lucie tranchera le défaut sur les chiffres. Le manifeste
 de l'hôte de Lucie n'est pas touché (G le tient).
 
+### 3.1 La mesure (25 octobre 2026, luciepc)
+
+`tests/sonde_reclassement.rs`, sur une copie par reflink de `code-lourd` (la base du 19 octobre,
+lib `04063ee06`), les gabarits de cette branche, le relecteur `bge-reranker-v2-m3` du démon de
+7879 sur 20 candidats. Huit questions en langue naturelle (six en français, deux en anglais), trois
+appels chacune, la médiane ; sous `poste mesure`.
+
+| question | fusion | avec relecture | ce que la relecture change dans les cinq premiers |
+|---|---|---|---|
+| où un run par niveaux vérifie-t-il qu'il a été annulé | 732 ms | 1256 ms | `node.rs:cancellation` et `CancelToken` montent ; `run_level_auto` sort — mieux, en partie |
+| comment la recherche se replie quand l'index vectoriel est retiré | 440 ms | 935 ms | `rebuild_detached_vector_indexes` et des tests de l'index vectoriel montent — mitigé |
+| qui borne le nombre de runs lancés en fond | 656 ms | 1185 ms | la page de la commande en fond et `RunCommandNode` montent, lucivy sort — mieux |
+| comment le point de reprise écrit les pages modifiées | 568 ms | 1027 ms | des tests d'ouverture en lecture seule montent — mitigé |
+| où le binder refuse un index qui n'existe pas | 402 ms | 838 ms | `ensure_vector_index` et `validateIndexExistence` montent — mieux |
+| comment la montre réindexe un fichier modifié | 263 ms | 739 ms | `reindex_on_change.mmd` passe premier — mieux |
+| how does the hybrid search fuse bm25 and vector scores | 257 ms | 731 ms | des plans de février passent devant le gabarit hybride — moins bien |
+| where is the read-only snapshot of a tool call opened | 744 ms | 1213 ms | `backend_code.rs:monte` et `ReadOnlyOpenPhase` montent — mitigé |
+
+**Ce que disent les chiffres** : la relecture coûte de 436 à 529 ms par recherche (la latence
+multipliée par 1,6 à 2,8), et change l'ordre des cinq premiers sur les huit questions. Le gain est
+inégal : meilleur sur quatre, moins bon sur une, mitigé sur trois. Le jugement est le mien, sans
+vérité de référence ; la base date du 19 octobre, et plusieurs bonnes réponses d'aujourd'hui n'y
+sont pas. **À la demande, donc, pas par défaut** : c'est la recommandation, Lucie tranche.
+
 ## 4. Pièce 3 : la page affiche ce que l'hôte rend
 
 Par résultat : le score, les scores par signal, l'extrait. En tête : l'état de l'index et la
