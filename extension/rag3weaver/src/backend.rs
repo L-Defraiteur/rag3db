@@ -2318,6 +2318,7 @@ const SEARCH_NODES: &[&str] = &[
     "LabelResultsNode",
     "FuseResultsNode",
     "RerankNode",
+    "HighlightNode",
     "PaginateNode",
     "ResolveParentNode",
     "RenderResultsNode",
