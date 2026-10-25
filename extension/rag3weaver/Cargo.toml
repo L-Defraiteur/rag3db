@@ -502,25 +502,28 @@ cubek-std = { git = "https://github.com/L-Defraiteur/cubek", rev = "7ba8affd" }
 cubek-tile = { git = "https://github.com/L-Defraiteur/cubek", rev = "7ba8affd" }
 # **lucivy, temporaire, jusqu'à la publication par Lucie** (25 octobre 2026).
 # Ticket : docs/tickets/2026-10-25-retirer-le-patch-lucivy-a-la-publication.md.
-# La branche `correctifs-rag3db-19-octobre` de son dépôt, épinglée à bb07627,
-# porte deux correctifs de lucivy-core 4.3.0 : le commit d'un shard ne se fige
-# plus sous des recherches pendant une réindexation (dbb7d6e), et une écriture
-# vers un shard sans écrivain devient une erreur au lieu d'un Ok (bb07627).
+# La branche `4.3.1` de son dépôt, épinglée à a925d94 (sa 4.3.1, pas encore
+# publiée), porte les correctifs de lucivy-core 4.3.0 que rag3db a trouvés : une
+# recherche sous commits concurrents ne panique plus (l'IDF borné) et ne peut
+# plus tuer l'acteur d'un shard (catch_unwind), cause des gels et des pertes de
+# documents par blocs ; un seul commit en vol par shard, ses messages différés
+# rejoués sur place et dans l'ordre (Drain compris) ; une écriture vers un shard
+# sans écrivain devient une erreur au lieu d'un Ok. Avant le 25 octobre : bb07627.
 # Les quatorze crates du dépôt présents dans le lock, ensemble, comme pour burn.
-ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-lucivy-bitpacker = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-lucivy-columnar = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-lucivy-common = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-lucivy-query-grammar = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-lucivy-sstable = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-lucivy-stacker = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-lucivy-tokenizer-api = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-ld-ownedbytes = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-lucivy-fst = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
-sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "bb07627" }
+ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-lucivy-bitpacker = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-lucivy-columnar = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-lucivy-common = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-lucivy-query-grammar = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-lucivy-sstable = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-lucivy-stacker = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-lucivy-tokenizer-api = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+ld-ownedbytes = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+lucivy-fst = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
+sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
 
 [[bin]]
 name = "rag3weaver-backend"
