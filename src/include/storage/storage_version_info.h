@@ -34,14 +34,18 @@ struct StorageVersionInfo {
     //   42 : les numéros de colonnes ne changent jamais (plus de renumérotation au point de
     //        reprise) ; un bloc sur disque garde une entrée par numéro, et dit pour chacune si
     //        la colonne y est (une colonne supprimée laisse un trou).
+    //   43 : un holder d'index porte son état de construction (un octet après sa description,
+    //        IndexBuildState) ; le journal connaît l'enregistrement INDEX_STATE_RECORD ((A), le
+    //        CREATE concurrent).
     // Une base plus récente que ce moteur est refusée en le disant, en lecture comme en
     // écriture ; une base plus ancienne, jusqu'à OLDEST_READABLE_STORAGE_VERSION, s'ouvre et son
     // premier point de reprise la passe à la version courante, au bâti courant.
-    static constexpr storage_version_t STORAGE_FORMAT_VERSION = 42;
+    static constexpr storage_version_t STORAGE_FORMAT_VERSION = 43;
     static constexpr storage_version_t OLDEST_READABLE_STORAGE_VERSION = 39;
     static constexpr storage_version_t VERSION_BEFORE_DATA_FILE_EXTENT = 39;
     static constexpr storage_version_t VERSION_BEFORE_WRITER_BUILD_ID = 40;
     static constexpr storage_version_t VERSION_BEFORE_COLUMN_HOLES = 41;
+    static constexpr storage_version_t VERSION_BEFORE_INDEX_BUILD_STATE = 42;
     static RAG3DB_API storage_version_t getStorageVersion();
     // L'identifiant de bâti de ce moteur (cmake/build_id.cmake), celui que l'en-tête de base et
     // le journal portent comme « dernier écrivain ».
