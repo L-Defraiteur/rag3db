@@ -218,7 +218,12 @@ impl DaemonHost {
         )?;
 
         // Le dernier pas : le verdict, dans la forme fixe du schéma.
+        // La session ne garde pas le message système : le verdict le reprend, pour
+        // que le modèle le rende en juge.
         let mut tours = session.turns.clone();
+        if tours.first().is_none_or(|t| t.role != "system") {
+            tours.insert(0, Turn::system(&config.system_prompt));
+        }
         tours.push(Turn::user("Rends maintenant ton verdict, entier, dans la forme demandée."));
         let opts = GenOptions {
             max_tokens: config.max_output_tokens,
