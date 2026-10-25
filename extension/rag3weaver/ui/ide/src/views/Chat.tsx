@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Square, SendHorizontal, MessageSquare, FileDiff, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { fetchChat, onFlux, sendChat, shortName, stopRun, type Backend, type ChatTurn, type FluxEvent, type HostState, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
@@ -9,6 +11,16 @@ import { fetchChat, onFlux, sendChat, shortName, stopRun, type Backend, type Cha
 // rechargement — branchée sur le flux du chat de l'hôte ; plus les outils
 // dépliés sous la réponse pendant le flux, le lien vers la relecture quand un
 // tour a écrit, et le lien « bilans ». Un seul composant pour les deux chats.
+
+// **Le Markdown des réponses** (c7, 25 octobre 2026) : `marked` le rend, `dompurify`
+// l'assainit — le texte vient d'un modèle, un `<script>` ou un gestionnaire
+// d'événement y sont neutralisés. Le message de la personne reste du texte.
+marked.setOptions({ gfm: true, breaks: true });
+function renderMarkdown(text: string): string {
+  // Rogné : marked finit par un retour à la ligne, qui ferait un nœud texte de plus
+  // dans `.body` (un témoin compare son texte à l'égal).
+  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { USE_PROFILES: { html: true } }).trim();
+}
 
 type ToolBlock = { id: string; name: string; args: string; result?: string; ok?: boolean };
 type Item =
@@ -213,7 +225,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                   <div className={`role text-xs font-semibold mb-1.5 ${it.role === "user" ? "text-blue-400" : it.role === "error" ? "text-destructive" : "text-primary"}`}>
                     {it.role === "user" ? "Vous" : it.role === "error" ? "Erreur" : "Agent"}
                   </div>
-                  <div className="body whitespace-pre-wrap break-words">{it.text}</div>
+                  {it.role === "assistant" && !it.live ? (
+                    <div className="body markdown break-words" dangerouslySetInnerHTML={{ __html: renderMarkdown(it.text) }} />
+                  ) : (
+                    <div className="body whitespace-pre-wrap break-words">{it.text}</div>
+                  )}
                   {it.tools.map((t) => (
                     <details key={t.id} className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground" data-outil={t.name} data-appel={t.id} data-ok={t.ok === undefined ? undefined : String(t.ok)}>
                       <summary className="cursor-pointer text-foreground/80">
