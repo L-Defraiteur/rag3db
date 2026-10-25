@@ -254,7 +254,7 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
     assert!(f.to_string().contains("\"via\":\"juge\""), "la fiche, via juge : {f}");
     let apports = appeler_memoire("recall_apports", json!({ "query": "bilan", "options": { "limit": 5, "filter_condition": { "field": { "key": "fiche", "value": b1["fiche"] } } } }));
     let texte = apports.to_string();
-    assert!(texte.contains("Note 8/10") && texte.contains("```json") && texte.contains("(End of file - 1 lines)"), "le L1 lisible, son JSON, le retour ambigu nommé : {apports}");
+    assert!(texte.contains("Note 8/10") && texte.contains("```json"), "le L1 lisible et son JSON : {apports}");
 
     // Seconde session, même tâche : le juge retrouve la première et s'y compare.
     let r2 = host.chat_turn(&id, "Lis main.rs et dis-moi ce qu'il fait.").expect("le second tour");
@@ -276,7 +276,7 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
     assert_eq!(apports_outil.len(), 2, "un apport « defauts » par run jugé : {vue}");
     let d = &apports_outil[1]["defauts"];
     assert_eq!((d["bloquant"].as_array().map(Vec::len), d["genant"].as_array().map(Vec::len), d["mineur"].as_array().map(Vec::len)), (Some(0), Some(1), Some(2)), "{vue}");
-    assert!(apports_outil[1]["texte"].as_str().is_some_and(|t| t.contains("Gênants") && t.contains("autre — numérotation des lignes")), "{vue}");
+    assert!(apports_outil[1]["texte"].as_str().is_some_and(|t| t.contains("Gênants") && t.contains("(End of file - 1 lines)") && t.contains("autre — numérotation des lignes")), "{vue}");
     let notes: Vec<Value> = fiches[0]["apports"].as_array().unwrap().iter().map(|a| a["note"].clone()).collect();
     assert_eq!(notes, vec![json!(8), json!(8)], "{vue}");
     assert_eq!(fiches[0]["apports"][1]["comparaison"]["verdict"], "pareil", "{vue}");
