@@ -783,6 +783,34 @@ fn la_recherche_rend_les_mots_quand_l_index_vectoriel_manque() {
     la_recherche_se_replie_sans_l_index_vectoriel("repli-absent", false, "is missing");
 }
 
+/// **Le second cas, par le langage** (l'arbre principal, 25 octobre 2026) : `language` compose
+/// son filtre par un autre chemin du gabarit que `scope`. La recherche dense bornée à un langage
+/// répond elle aussi, sans que la projection soit refusée sous l'instantané.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn la_branche_dense_filtree_par_langage_repond_dans_l_instantane_de_l_appel() {
+    use serde_json::json;
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), "dense-filtre-langage");
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let cherche = |args: serde_json::Value| backend.call_in(&cellule, "search_code", args).map(|r| r.to_string());
+    let debut = std::time::Instant::now();
+    loop {
+        let r = cherche(json!({"query": "alpha", "options": {}, "mode": "indexed"})).expect("la recherche sans filtre");
+        if !r.contains("dense signal") {
+            break;
+        }
+        assert!(debut.elapsed() < std::time::Duration::from_secs(120), "le dense ne répond pas, même sans filtre : {r}");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    let filtree = cherche(json!({"query": "alpha", "options": {}, "mode": "indexed", "language": "rust"}))
+        .unwrap_or_else(|e| panic!("la recherche filtrée tombe : {e}"));
+    assert!(!filtree.contains("read-only transaction"), "la projection du dense filtré est refusée dans l'instantané : {filtree}");
+    assert!(!filtree.contains("dense signal"), "le dense filtré répond : {filtree}");
+    assert!(filtree.contains("a.rs"), "et la réponse a ses lignes : {filtree}");
+}
+
 /// **La recherche dit ce que chaque signal a dit** (pièce 1 de la recherche de
 /// l'IDE, docs/12-octobre-2026-recherche/06). Avant : la fusion ne gardait
 /// qu'un score par résultat, et `search_code` ne rendait sa méta que réécrite
