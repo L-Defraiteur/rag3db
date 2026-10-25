@@ -134,9 +134,11 @@ VectorIndexI2.SetsOnDifferentRowsDoNotWait vector-sets-on-different-rows-do-not-
 VectorIndexI2.OverlappingDeletesNeitherBlockNorConflict overlapping-deletes-do-not-block
 #
 # Le point de reprise qui ne fige personne (ticket
-# 2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire, voie 2) : un
-# CHECKPOINT retient les BEGIN et les lectures le temps de s'écrire, et le tampon ne rend pas une page
-# validée non reportée. Joués rouges trois fois sur trois le 18 octobre sur luciepc. Pour le cœur C++.
+# 2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire, voie 2). Joués
+# rouges trois fois sur trois le 18 octobre sur luciepc. Depuis V2-1c (66994dd43, la porte à deux
+# niveaux), une lecture passe pendant l'écriture d'un CHECKPOINT (ReadDuringACheckpointDoesNotWait,
+# sorti de cette liste). Restent : un BEGIN d'écrivain attend encore la fin de l'écriture (V2-2), et
+# le tampon ne rend pas une page validée non reportée (l'écriture à la demande). Pour le cœur C++.
 CheckpointNoStall.BeginDuringACheckpointDoesNotWait begin-during-a-checkpoint-does-not-wait
 CheckpointNoStall.CommittedPagesAreWrittenOutWhenTheBufferIsFull committed-pages-are-written-out-when-the-buffer-is-full
 CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly crash-after-written-out-pages-replays-exactly
