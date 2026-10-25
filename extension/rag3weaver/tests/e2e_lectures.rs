@@ -1183,7 +1183,7 @@ fn les_morceaux_du_seul_dense_se_surlignent_a_l_affichage() {
     let surlignes = morceau["chunk"]["highlights"].as_array().cloned().unwrap_or_default();
     assert!(!surlignes.is_empty(), "un morceau du seul dense porte ses surlignages : {morceau}");
     let unites: Vec<u16> = texte.encode_utf16().collect();
-    let termes = ["fusion", "rangs"];
+    let termes = ["fusion", "des", "rangs"];
     for h in &surlignes {
         let (a, b) = (h["start"].as_u64().unwrap() as usize, h["end"].as_u64().unwrap() as usize);
         let passage = String::from_utf16(&unites[a..b]).unwrap().to_lowercase();
