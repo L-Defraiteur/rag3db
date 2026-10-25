@@ -388,6 +388,38 @@ mod tests {
         assert_eq!(compte(&j.conn()), 2);
     }
 
+    /// **Un lecteur ouvert ne retient pas le point de reprise d'un COPY** (25
+    /// octobre 2026, la raison d'être du plafond) : un instantané tenu, sous un
+    /// plafond que rien n'atteint ; l'écrivain valide un COPY, qui force un point
+    /// de reprise. Avant V2-2 du cœur, ce point de reprise attend le lecteur et
+    /// échoue au bout de 5 s ; avec V2-2 (f8c0c8df0), il passe, et le lecteur
+    /// relit sa génération jusqu'à la fin de son instantané. Vert, il dit que le
+    /// plafond peut se relâcher ; tant que `courant` n'a pas V2-2, il est rouge.
+    #[test]
+    #[ignore = "rouge connu sous courant 3724accba (le point de reprise attend le lecteur ouvert, 5 s puis échec) ; vert avec la lib de V2-2 (f8c0c8df0) : se retire quand courant la porte"]
+    fn un_lecteur_ouvert_ne_retient_pas_le_point_de_reprise_d_un_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ecrivain, mut p) = pool(dir.path(), 2);
+        Arc::get_mut(&mut p).unwrap().duree_max = Duration::from_secs(60);
+        ecrivain.execute("CREATE (:T {id: 1})").unwrap();
+        let csv = dir.path().join("t.csv");
+        std::fs::write(&csv, "2\n3\n4\n").unwrap();
+        let i = p.instantane(ATTENTE).expect("un instantané");
+        let c = i.conn();
+        assert_eq!(compte(&c), 1, "l'instantané est ouvert à sa première requête");
+        let t = Instant::now();
+        let copie = ecrivain.execute(&format!("COPY T FROM '{}'", csv.display()));
+        let duree = t.elapsed();
+        assert!(copie.is_ok(), "le COPY se valide pendant qu'un lecteur tient son instantané ({duree:?}) : {copie:?}");
+        assert!(duree < Duration::from_secs(2), "sans attendre le lecteur : {duree:?}");
+        assert_eq!(compte(&c), 1, "le lecteur relit sa génération");
+        assert_eq!(p.ecourtes(), 0, "sans que le plafond ait servi");
+        drop(c);
+        drop(i);
+        let j = p.instantane(ATTENTE).expect("de nouveau");
+        assert_eq!(compte(&j.conn()), 4, "un instantané neuf voit le COPY");
+    }
+
     /// **Ce que coûte un instantané**, à part (la mesure de L6, 19 octobre
     /// 2026) : `BEGIN TRANSACTION READ ONLY` puis `COMMIT` sur une connexion du
     /// pool, sans requête entre les deux, contre une requête seule. Rien
