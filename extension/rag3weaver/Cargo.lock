@@ -4975,8 +4975,8 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "ld-lucivy"
-version = "4.3.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+version = "4.3.1"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -5035,7 +5035,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-bitpacker"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "bitpacking",
 ]
@@ -5043,7 +5043,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-columnar"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -5058,7 +5058,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-common"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -5070,7 +5070,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-query-grammar"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "fnv",
  "nom 7.1.3",
@@ -5082,7 +5082,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-sstable"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "futures-util",
  "itertools 0.14.0",
@@ -5094,7 +5094,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-stacker"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "ld-lucivy-common",
  "murmurhash32",
@@ -5103,7 +5103,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-tokenizer-api"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "serde",
 ]
@@ -5111,7 +5111,7 @@ dependencies = [
 [[package]]
 name = "ld-ownedbytes"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -5332,16 +5332,16 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "luciole"
-version = "4.3.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+version = "4.3.1"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "flume",
 ]
 
 [[package]]
 name = "lucistore"
-version = "4.3.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+version = "4.3.1"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "serde",
  "serde_json",
@@ -5349,8 +5349,8 @@ dependencies = [
 
 [[package]]
 name = "lucivy-core"
-version = "4.3.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+version = "4.3.1"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "ld-lucivy",
  "luciole",
@@ -5364,7 +5364,7 @@ dependencies = [
 [[package]]
 name = "lucivy-fst"
 version = "0.1.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "utf8-ranges",
 ]
@@ -7884,8 +7884,8 @@ dependencies = [
 
 [[package]]
 name = "sparse-vector"
-version = "4.3.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=bb07627#bb0762732b457e15b8e41060a67cf52bf880431b"
+version = "4.3.1"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
 dependencies = [
  "bincode",
  "crc32fast",

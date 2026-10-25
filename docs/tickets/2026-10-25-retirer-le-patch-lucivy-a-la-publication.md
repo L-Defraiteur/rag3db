@@ -2,7 +2,7 @@
 
 - **État** : ouvert, le 25 octobre 2026 (G, sur décision de Lucie relayée par l'orchestration).
   rag3weaver prend lucivy par un `[patch.crates-io]` **temporaire** : la branche
-  `correctifs-rag3db-19-octobre` du dépôt https://github.com/L-Defraiteur/lucivy, épinglée à `bb07627`.
+  `4.3.1` du dépôt https://github.com/L-Defraiteur/lucivy, épinglée à `a925d94` (depuis le 25 octobre au soir ; avant, `correctifs-rag3db-19-octobre` à `bb07627`).
   Il en sera ainsi jusqu'à ce que Lucie approuve cette branche sur main et publie une version.
 - **Gravité** : aucune en service. C'est une dette de construction : rag3weaver ne prend plus lucivy
   par sa version publiée, ce qui est notre règle.
@@ -26,7 +26,7 @@ main plus tard, dans une session lucivy. D'ici là, le patch porte les deux corr
 
 - `extension/rag3weaver/Cargo.toml`, bloc `[patch.crates-io]` : les quatorze crates du dépôt lucivy
   qui sont dans le lock (ld-lucivy, lucivy-core, luciole, lucistore, sparse-vector, lucivy-fst et les
-  ld-lucivy-* / ld-ownedbytes en 0.27.0), tous pris à `bb07627`. Ils sont patchés ensemble : un seul
+  ld-lucivy-* / ld-ownedbytes en 0.27.0), tous pris à `a925d94`. Ils sont patchés ensemble : un seul
   crate patché tirerait ses voisins du même dépôt en double de ceux du registre.
 - `extension/rag3weaver/Cargo.lock` : ces quatorze crates pointent vers le dépôt git.
 

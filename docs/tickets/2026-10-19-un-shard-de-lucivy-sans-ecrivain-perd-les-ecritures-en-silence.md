@@ -53,6 +53,6 @@ Un témoin rejoue la recette et exige l'erreur. Puis rag3weaver prend la version
 
 ## Ses filets
 
-- `extension/rag3weaver/Cargo.toml`, bloc `[patch.crates-io]` (lucivy, à `bb07627`) : rag3weaver prend
+- `extension/rag3weaver/Cargo.toml`, bloc `[patch.crates-io]` (lucivy, à `a925d94`, la 4.3.1 de Lucie, depuis le 25 octobre au soir) : rag3weaver prend
   ce correctif sous un patch temporaire depuis le 25 octobre 2026, jusqu'à la publication par
   Lucie. Son retrait a son ticket : `2026-10-25-retirer-le-patch-lucivy-a-la-publication.md`.
