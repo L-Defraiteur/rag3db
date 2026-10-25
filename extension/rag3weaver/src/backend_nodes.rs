@@ -204,8 +204,9 @@ impl Node for EntityRecordNode {
             }
             // **Une ligne revient telle qu'elle était** : un écrivain qui ne
             // passe pas par ce nœud (add_ref, create_ref_type) n'a pas posé les
-            // champs du serveur. Leur absence se valide comme un entier présent,
-            // et la ligne s'écrit sans eux — la parité, pas une date inventée.
+            // champs du serveur. Leur absence se valide comme un entier présent
+            // (1 : une révision commence à 1, une date est positive), et la
+            // ligne s'écrit sans eux — la parité, pas une date inventée.
             let serveur: Vec<&str> = [&policy.created_at, &policy.updated_at, &policy.revision]
                 .into_iter()
                 .flatten()
@@ -215,7 +216,7 @@ impl Node for EntityRecordNode {
             let mut a_valider = input.clone();
             if let Some(o) = a_valider.as_object_mut() {
                 for champ in &serveur {
-                    o.entry(champ.to_string()).or_insert(json!(0));
+                    o.entry(champ.to_string()).or_insert(json!(1));
                 }
             }
             validator.validate(&a_valider).map_err(|e| e.to_string())?;
