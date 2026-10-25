@@ -65,7 +65,7 @@ fn three_items(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel
                     seen.lock().unwrap().refusals.push(r.clone());
                 }
             }
-            let edit = |path: &str, text: &str| json!({ "path": path, "old": "", "new": text, "create": true });
+            let edit = |path: &str, text: &str| json!({ "path": path, "content": text });
             match (step, results.len()) {
                 // Pas 1 : le plan, puis le README, puis step_done. Entre les deux,
                 // « le superviseur » répond au bloquant dans la boîte.
@@ -205,7 +205,7 @@ fn small_then_long(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatM
                     use std::io::Write;
                     let mut f = std::fs::OpenOptions::new().append(true).open(&mailbox).unwrap();
                     writeln!(f, "{}", json!({ "at": 1, "from": "supervisor", "kind": "request", "text": "Centre le div, c'est urgent." })).unwrap();
-                    answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "README.md", "old": "", "new": "# Doc\n", "create": true }))]))
+                    answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "README.md", "content": "# Doc\n" }))]))
                 }
                 (true, 1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "readme", "succeeded": true, "done": "README", "remaining": "" }))])),
                 // Pas 2 : la frontière demande une décision : pause, puis le petit plan du div.

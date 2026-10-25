@@ -620,6 +620,7 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool) -> S
     m.push('\n');
     match (active, new_request, last) {
         (Some(_), true, _) => m.push_str("Une demande nouvelle est arrivée pendant un plan actif : décide d'abord par edit_plan (continue, pause ou close), puis travaille, puis step_done.\n"),
+        (Some(_), false, true) if !paused.is_empty() => m.push_str("Il ne reste rien de faisable ni de bloqué dans le plan actif : clos-le (edit_plan close), puis reprends un plan en pause (resume) ou clos-le aussi, puis step_done.\n"),
         (Some(_), false, true) => m.push_str("Il ne reste rien de faisable ni de bloqué : rends compte (report), clos le plan comme accompli (edit_plan close), puis appelle step_done.\n"),
         (Some(_), false, false) => m.push_str("Travaille un élément (le premier faisable seul, ou celui que la boîte débloque), puis step_done.\n"),
         (None, _, _) if !paused.is_empty() && !new_request => m.push_str("Aucun plan actif : reprends un plan en pause (resume) ou clos-le, puis travaille, puis step_done.\n"),
@@ -732,6 +733,8 @@ impl DaemonHost {
         let mut outcome = Outcome::default();
         let mut read = files.read_cursor();
         let mut stalled = 0usize;
+        // Un plan a-t-il existé pendant ce lancement ? (la fin le dit autrement)
+        let mut plan_seen = false;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         for number in 1..=MAX_STEPS {
             let lines = files.mailbox();
@@ -743,6 +746,7 @@ impl DaemonHost {
                 return Ok(outcome);
             }
             let plans = files.read_plans();
+            plan_seen |= !plans.plans.is_empty();
             let active = plans.active();
             let alone = active.is_some_and(|p| p.next_alone().is_some());
             let waiting = active.is_some_and(|p| !p.waiting().is_empty());
@@ -788,12 +792,17 @@ impl DaemonHost {
                 outcome.ended = format!("arrêté par {}", r["stopped_by"]);
                 return Ok(outcome);
             }
-            // Fini : le dernier pas a rendu compte, ou une demande sans plan est faite.
-            let plans_after = files.read_plans();
-            if last || (plans_after.active().is_none() && plans_after.paused().is_empty() && declared.is_some()) {
-                outcome.ended = if last { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
+            // **La fin se juge après le pas**, sur les plans : plus aucun plan
+            // vivant (ni actif ni en pause) et un pas déclaré fini. Un plan actif
+            // qui n'a plus rien à faire n'est pas la fin : l'agent le clôt, puis
+            // reprend un plan en pause ou le clôt aussi (Lucie).
+            let after = files.read_plans();
+            plan_seen |= !step.closed_plans().is_empty();
+            if after.active().is_none() && after.paused().is_empty() && declared.is_some() {
+                outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
                 return Ok(outcome);
             }
+            let _ = last;
             match &declared {
                 Some(d) if d["succeeded"] == true => stalled = 0,
                 _ => stalled += 1,

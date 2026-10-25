@@ -220,6 +220,23 @@ impl JournalDesRuns {
         [format!("{run}.{EXTENSION}"), format!("{run}.json")].into_iter().map(|n| dossier.join(n)).find(|p| p.is_file())
     }
 
+    /// Les runs écrits d'un backend, du plus vieux au plus récent.
+    pub fn runs_de(&self, backend: &str) -> Vec<String> {
+        let mut v: Vec<(SystemTime, String)> = std::fs::read_dir(self.racine.join(backend))
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| est_un_journal(p))
+            .filter_map(|p| {
+                let nom = p.file_name()?.to_str()?.trim_end_matches(".zst").trim_end_matches(".json").to_string();
+                Some((std::fs::metadata(&p).and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH), nom))
+            })
+            .collect();
+        v.sort();
+        v.into_iter().map(|(_, n)| n).collect()
+    }
+
     /// Le journal d'un run, s'il est écrit et se lit.
     pub fn lire(&self, backend: &str, run: &str) -> Option<Value> {
         lire_le_fichier(&self.fichier(backend, run)?).ok()
