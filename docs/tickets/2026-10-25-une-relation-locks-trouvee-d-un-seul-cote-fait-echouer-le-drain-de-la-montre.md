@@ -1,10 +1,13 @@
 # Une relation LOCKS trouvée d'un seul côté fait échouer le drain de la montre
 
 - **État** : ouvert, le 25 octobre 2026. Signalé par G, à la demande de l'orchestration ; confié
-  à la seconde session cœur C++ (hotfixs). Cause non trouvée, aucun correctif écrit.
-- **Gravité** : écriture refusée, et des fichiers restent en erreur. La garde fait son travail et
-  rien n'est écrit à moitié. Mais soit la base porte une arête à moitié écrite, soit la garde voit
-  mal une arête valide.
+  à la seconde session cœur C++ (hotfixs). **Forme réelle relevée le 25 à 22 h 55** (section « Le
+  relevé complet ») : des longueurs ou des débuts de liste CSR faux dans deux tables de liens, LOCKS
+  et QUERIES, antérieurs à la bascule. Cause non trouvée, aucun correctif moteur écrit.
+- **Gravité** : lectures fausses et écriture refusée. Les deux tables rendent des lignes qui
+  n'existent pas (relation 0 vers le nœud 0), en perdent d'autres d'un côté, et en rattachent à un
+  mauvais nœud selon le sens lu. La garde de `RelTableData::update` ne voit que les demi-arêtes
+  qu'une mise à jour touche.
 - **Atteignable en service** : oui. C'est l'hôte de Lucie, sur la base du dépôt de code, depuis
   le réveil de 17 h 43 sur la lib 04063ee06. Jamais avant.
 - **Touche rag3weaver** : oui, par le drain de la montre (gabarit de code, table de liens LOCKS).
@@ -87,6 +90,53 @@ par les internes, d'où vient l'écart dans le sens avant (une relation supprim�
 un identifiant réutilisé), et chercher sous quel lot il a pu s'écrire avant le 25 (les COPY de
 relations annulés, le rollback du CSR).
 
+## Le relevé complet du 25 octobre, 22 h 30 – 22 h 55 (copies, jamais la base vivante)
+
+**Méthode** : pour chaque table de liens, chaque sens est lu nœud par nœud, par une requête ancrée
+sur un bout (`WHERE offset(id(a)) = …` pour le sens avant depuis chaque source, `offset(id(b))` pour
+le sens arrière depuis chaque destination). Les deux ensembles (relation, source, destination) sont
+comparés : relation d'un seul côté, relation vue deux fois, bouts différents. Un balayage sans
+ancre ne suffit pas : les deux formes `(a)-[r]->(b)` et `(b)<-[r]-(a)` rendent ici les mêmes
+ensembles (le planificateur prend le même sens). Programme : `~/.cache/rag3db-locks/ancre.cpp`, lié
+à la lib 04063ee06, lecture seule.
+
+**Copie de la base vivante à 21 h 26** (`maintenant-21h26`, recopiée en reflink) :
+
+| Table | Paire | Sens avant | Sens arrière | Écarts |
+|---|---|---|---|---|
+| LOCKS | Scope → Symbol | 429 | 514 | **729** |
+| QUERIES | Scope → Symbol | 22 274 | 22 278 | **876** |
+| MENTIONS, DEFINES, REGISTERS | Scope → Symbol | égaux | égaux | 0 |
+| DEFINED_IN, CONSUMES, CONSUMED_BY, PARENT_OF, HAS_PARENT, IMPLEMENTS, INHERITS_FROM, USES_LIBRARY, les trois *_CHUNKED_FROM | | égaux | égaux | 0 |
+
+La méthode est donc validée sur onze tables saines. Ce n'est pas la paire de nœuds : trois autres
+tables Scope → Symbol sont saines.
+
+**La forme des écarts** :
+
+- **Des cases vides lues comme des lignes**, dans les deux sens : 79 sources de LOCKS lisent au sens
+  avant « relation 0 → Symbol 0 », et des destinations lisent au sens arrière « relation 0 ← Scope
+  0 » (jusqu'à cinq fois pour un même nœud). QUERIES en a 286 au sens arrière. Ce sont des
+  longueurs de liste plus grandes que les données écrites.
+- **De vraies relations absentes d'un sens** : 144 relations de LOCKS ne sont qu'au sens arrière,
+  dont la 851 du drain et sa voisine 852.
+- **Des relations rattachées au mauvais nœud** : 304 relations de QUERIES ont la même source dans
+  les deux sens mais pas la même destination (la 10003 : Symbol 3344 au sens avant, 3389 au sens
+  arrière). Ce sont des débuts de liste décalés entre nœuds voisins, sur des destinations très
+  chargées.
+
+**Antérieur à la bascule** : l'instantané `bascule-04063ee06` (copie, lu par la même méthode) donne
+déjà 717 écarts sur LOCKS. Ni la migration 41 → 42 ni V2-1a. La bascule 43 n'est pas bloquée par ce
+ticket (décision de l'orchestration).
+
+**La réparation d'une demi-arête ne suffit pas.** L'outil `tools/repair_half_edge` (branche
+`reparer-demi-arete`, 040daaecc) efface la 851 du seul sens qui la porte, sur une copie, puis
+écrit un point de reprise. Relue : la 851 n'est plus dans aucun sens, et le compte passe de 514 à
+513. Mais le drain retombe aussitôt sur la 852, et les lignes vides restent. **Décision de Lucie
+(25 oct. au soir)** : pas de réparation partielle. G rebâtit la base du dépôt de code dans une base
+neuve, et l'échange n'a lieu que si le relevé de la base neuve donne zéro écart. Sinon, c'est le
+témoin du défaut moteur, et rien ne s'échange.
+
 ## Ce que la bascule 43 attend
 
 **La bascule au format 43 (prévue le 26 octobre) attend la lecture du point 1 ci-dessous**
@@ -96,9 +146,12 @@ peut-être déjà perdu un sens. La lecture se fait le 26 au matin, en premier.
 
 ## Pour avancer
 
-1. Sur une **copie** de `bascule-04063ee06` (jamais la base vivante, l'hôte tourne), lire la
-   relation 851 de LOCKS depuis le nœud 16249 dans les deux sens, avec la lib d'avant (format 41)
-   puis avec 04063ee06. Elle existe des deux côtés avant la bascule, ou déjà d'un seul ?
-2. Faire de même sur une copie de la base vivante, prise par l'instantané de l'arbre principal.
-3. Selon la réponse : un témoin rouge (une table de liens migrée, puis une mise à jour de relation
-   après un point de reprise au format 42) avant tout correctif.
+1. Le relevé de la base neuve de G, par la même méthode : zéro écart, ou le défaut se reproduit
+   sur une base fraîche (et on le tient).
+2. Un témoin C++ rouge : réécrire en boucle les arêtes d'un nœud (effacer puis recréer, comme la
+   montre à chaque drain) dans une table de liens clairsemée, avec des destinations chargées, sous
+   lecteurs concurrents et points de reprise ; le relevé des deux sens doit rester égal.
+3. La cause et un correctif générique : une liste qu'on réécrit garde ses bornes cohérentes des
+   deux côtés, ou la réécriture est refusée.
+4. Le CALL de réparation (la forme produit de `repair_half_edge`), et le relevé ancré versé à
+   `tools/check_rel_directions`.
