@@ -109,6 +109,7 @@ public:
     TableStats getStats() const { return nodeGroups->getStats(); }
 
     void reclaimStorage(PageAllocator& pageAllocator) const;
+    void retireGenerationsBefore(common::transaction_t oldestReaderTS);
     void checkpoint(const std::vector<common::column_id_t>& columnIDs,
         PageAllocator& pageAllocator, common::transaction_t checkpointTS,
         common::transaction_t oldestReaderTS);
