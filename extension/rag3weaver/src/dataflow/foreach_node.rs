@@ -762,4 +762,39 @@ mod tests {
         let e = resoudre_les_sous_graphes(&mut outil("graph='@graphs/script.mmd'"), &lire, &reg).unwrap_err();
         assert!(e.contains("graphs/script.mmd") && e.contains("script"), "{e}");
     }
+
+    /// **Un manifeste qui cite un sous-graphe absent ou faux se refuse à son
+    /// chargement**, en nommant l'outil et le fichier (`PreparedBackend::load`,
+    /// avant toute base).
+    #[test]
+    fn un_manifeste_qui_cite_un_sous_graphe_absent_ou_faux_se_refuse_au_chargement() {
+        let charger = |sous: Option<&str>| -> String {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::create_dir_all(dir.path().join("graphs")).unwrap();
+            if let Some(texte) = sous {
+                std::fs::write(dir.path().join("graphs/section.mmd"), texte).unwrap();
+            }
+            std::fs::write(
+                dir.path().join("archive.mmd"),
+                "%% tool: archive\n%% description: d\n%% result: chaque.report\n\ngraph LR\n    chaque[\"ForEachNode(graph='@graphs/section.mmd')\"]\n",
+            )
+            .unwrap();
+            let m = json!({
+                "version": 1, "name": "foreach", "database": "base.rag3db",
+                "embeddings": {"address": "127.0.0.1:9", "model": "none", "dimensions": 8},
+                "entities": {},
+                "tools": {"archive": {"graph": "archive.mmd"}}
+            });
+            let chemin = dir.path().join("backend.json");
+            std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+            match crate::backend::PreparedBackend::load(&chemin) {
+                Err(e) => e,
+                Ok(_) => "chargé".into(),
+            }
+        };
+        let e = charger(None);
+        assert!(e.contains("archive") && e.contains("graphs/section.mmd"), "absent : {e}");
+        let e = charger(Some("pas un graphe"));
+        assert!(e.contains("archive") && e.contains("graphs/section.mmd"), "faux : {e}");
+    }
 }
