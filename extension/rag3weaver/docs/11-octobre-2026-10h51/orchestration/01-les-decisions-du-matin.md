@@ -1791,3 +1791,52 @@ où elle vit.
   notre graphe (définition, références, type, plan du fichier,
   implémentations, hiérarchie d'appels), par l'IR du Plan, à garder ou non
   ensuite.
+
+- **25 octobre, l'après-midi : la file du 19 atterrit, et l'hôte de Lucie
+  bascule.** Toutes les sessions relancées à 13 h, la file reprise dans
+  l'ordre du 19, un lot à la fois, chacun rejoué sur le master du moment.
+  Atterris dans l'ordre : l'IR du Plan et le PlanNode (c1e6f7dd1, le plafond
+  intégré) ; les échecs d'index nommés (f6d19317a) ; les quatre lots de la
+  mémoire (b6270fc19 les réglages de test fuyants, 2c44d9f38 la reprise qui
+  perdait les liens, 02454ac98 l'undo des liens, c3fdcb979 les écritures
+  muettes) ; le lot (3) du cœur (58b46a9bf, COMMIT sur transaction partie) et
+  la lib unique qui porte les trois correctifs du 19, `courant` aux deux
+  postes (ABI inchangée, e2e_code 27 sur 27) ; l'allègement des langages
+  (610d41cf4) ; les cinq commits d'everything declarative (2fef5fb90 le
+  contournement 1 Tio retiré et les planchers du magasin, 95c985c4c C4 un
+  seul chemin d'arrêt pour tout run, a13b22417 K1 le chat de l'atelier
+  service de l'hôte, 657e568bd K2 sa vue, a454d6a91 K3 le témoin sur Gemini
+  jugé sur le résultat) ; la pagination de l'IR sans #[ignore] (5881f809e) ;
+  le vérificateur de planchers qui ne compte plus un plancher non jugé comme
+  tenu (82c4f7ff9) ; le retrait du filet copier_les_liens avec son plancher
+  dcbaef7b1 (388f2260b) ; la pente d'insertion en probabiliste par le banc
+  (d9b67e5d5) ; le rattrapage HNSW de hotfixs (6fe9ffe9b) ; le patch lucivy
+  temporaire (44c790c20, quatorze crates sur la branche de Lucie à bb07627,
+  ticket de retrait) ; le témoin du chat qui attend « flux : ouvert »
+  (067bb8814) ; outline, le premier Plan déclaré (89b5d5dbd, avec trois
+  pièces génériques de l'IR et le refus des clés inconnues). **L'hôte de
+  Lucie** est bâti sur luciepc, copié ici, essayé sur un port à part, puis
+  basculé à 15 h 44 (44c790c20, lib 58b46a9bf), son IDE vérifié dans un
+  vrai navigateur, sa base réindexée à partir de 15 h 46. **Règles de Lucie
+  du jour** : chaque commit se pousse dans la minute sur une branche à son
+  nom, master seul attend le vert ; pas de compilateur dans le produit mais
+  clangd en oracle (300 CONSUMES C++ : 75 % justes, 8 % fausses, « nom » à
+  17 %), étendu à Rust, TypeScript, Python, Go ; le budget de raisonnement
+  réglable par modèle dans models.llm, libre par défaut ; bâtir l'hôte sur
+  luciepc et copier le binaire ici. **Trouvé et tranché** : la forme de
+  visibilité par les #include (une relation File → File INCLUDES, aucune
+  liste) retenue contre une liste de noms de bibliothèques ; les 32 Go des
+  lecteurs sont le magasin des requêtes préparées du moteur, hérité de
+  l'amont (ticket 6005e11cc), que hotfixs corrige en faisant porter sa
+  préparation au PreparedStatement, sans magasin ; la CI de master est rouge
+  depuis le 18 pour un <cassert> dans geo (corrigé sur branche) et un
+  formatage clang-format-18 dérivé depuis la bifurcation, à faire dans une
+  fenêtre ; le nettoyage à 30 jours de Claude Code avait effacé les sessions
+  lucivy des deux postes, `cleanupPeriodDays` passe à 3650 ; lucivy publie
+  par sa CI sur un tag v*, donc un tag est une publication. **En attente** :
+  le format 41 et V2-1a du cœur (prêts, push au vert, mise en service par la
+  bascule coordonnée), M3 de la mémoire, R1 d'everything declarative, la
+  fenêtre calme du banc et la mesure 7e/9e de codeparsers (21 h 30
+  provisoire), alpha.3 par G. **À Lucie** : le recul de fmt/format.h pour
+  tree-sitter 0.27, la fusion et le tag de lucivy 4.3.1, une unité systemd
+  pour les tunnels d'embarquement du portable.
