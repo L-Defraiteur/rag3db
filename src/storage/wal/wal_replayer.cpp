@@ -496,6 +496,9 @@ void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
     case WALRecordType::UPDATE_SEQUENCE_RECORD: {
         replayUpdateSequenceRecord(walRecord);
     } break;
+    case WALRecordType::INDEX_STATE_RECORD: {
+        replayIndexStateRecord(walRecord);
+    } break;
     case WALRecordType::LOAD_EXTENSION_RECORD: {
         replayLoadExtensionRecord(walRecord);
     } break;
@@ -835,6 +838,19 @@ void WALReplayer::replayUpdateSequenceRecord(const WALRecord& walRecord) const {
         Catalog::Get(clientContext)
             ->getSequenceEntry(transaction::Transaction::Get(clientContext), sequenceID);
     entry->nextKVal(transaction::Transaction::Get(clientContext), sequenceEntryRecord.kCount);
+}
+
+void WALReplayer::replayIndexStateRecord(const WALRecord& walRecord) const {
+    // L'état se pose sur le holder s'il est là : un holder créé par une transaction dont le
+    // journal ne porte que l'entrée au catalogue (T_A) n'existe pas au rejeu, et l'index se dit
+    // alors « behind its table », à rebâtir, comme tout index sans holder.
+    const auto& record = walRecord.constCast<IndexStateRecord>();
+    auto* table = StorageManager::Get(clientContext)->getTable(record.tableID);
+    if (table == nullptr) {
+        return;
+    }
+    table->cast<NodeTable>().setIndexBuildStateForRecovery(record.indexName,
+        static_cast<IndexBuildState>(record.buildState));
 }
 
 void WALReplayer::replayLoadExtensionRecord(const WALRecord& walRecord) const {

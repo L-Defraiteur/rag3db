@@ -130,6 +130,15 @@ public:
 
     void setDefaultDatabase(AttachedRag3dbDatabase* defaultDatabase_);
     bool hasDefaultDatabase() const;
+    // Un jeton qui vit le temps de la requête en cours (toutes les instructions d'une réécriture
+    // comprises) et meurt à sa fin, qu'elle réussisse ou non, ou avec la connexion. Le CREATE
+    // concurrent le confie au holder qu'il construit : sans lui, l'index est INCOMPLETE.
+    std::weak_ptr<void> newQueryScopedToken() {
+        auto token = std::make_shared<uint8_t>(0);
+        queryScopedTokens.push_back(token);
+        return token;
+    }
+
     void setUseInternalCatalogEntry(bool useInternalCatalogEntry) {
         this->useInternalCatalogEntry_ = useInternalCatalogEntry;
     }
@@ -240,6 +249,7 @@ private:
     std::unique_ptr<graph::GraphEntrySet> graphEntrySet;
     // Whether the query can access internal tables/sequences or not.
     bool useInternalCatalogEntry_ = false;
+    std::vector<std::shared_ptr<void>> queryScopedTokens;
     // Whether the transaction should be rolled back on destruction. If the parent database is
     // closed, the rollback should be prevented or it will SEGFAULT.
     bool preventTransactionRollbackOnDestruction = false;

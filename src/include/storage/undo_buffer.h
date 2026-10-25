@@ -63,6 +63,7 @@ private:
 
 class Table;
 class NodeTable;
+enum class IndexChangeKind : uint8_t;
 class UpdateInfo;
 class VersionInfo;
 struct VectorUpdateInfo;
@@ -103,7 +104,7 @@ public:
     // copie de l'entrée du catalogue rend son indice à l'annulation ; sans ce retrait, l'ADD
     // suivant reprenait l'indice et relisait la colonne morte (ticket du 18 octobre 2026).
     void createAddColumn(Table& table);
-    void createIndexChange(NodeTable& table, uint64_t holderID, bool isCreate);
+    void createIndexChange(NodeTable& table, uint64_t holderID, IndexChangeKind kind);
 
     void commit(common::transaction_t commitTS) const;
     // Après commit : pour chaque groupe où cette transaction a supprimé des lignes, la

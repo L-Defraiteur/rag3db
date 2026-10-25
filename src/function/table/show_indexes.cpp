@@ -4,6 +4,8 @@
 #include "function/table/bind_data.h"
 #include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
+#include "storage/storage_manager.h"
+#include "storage/table/node_table.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::catalog;
@@ -20,12 +22,15 @@ struct IndexInfo {
     std::vector<std::string> properties;
     bool dependencyLoaded;
     std::string indexDefinition;
+    std::string state;
 
     IndexInfo(std::string tableName, std::string indexName, std::string indexType,
-        std::vector<std::string> properties, bool dependencyLoaded, std::string indexDefinition)
+        std::vector<std::string> properties, bool dependencyLoaded, std::string indexDefinition,
+        std::string state)
         : tableName{std::move(tableName)}, indexName{std::move(indexName)},
           indexType{std::move(indexType)}, properties{std::move(properties)},
-          dependencyLoaded{dependencyLoaded}, indexDefinition{std::move(indexDefinition)} {}
+          dependencyLoaded{dependencyLoaded}, indexDefinition{std::move(indexDefinition)},
+          state{std::move(state)} {}
 };
 
 struct ShowIndexesBindData final : TableFuncBindData {
@@ -58,6 +63,7 @@ static offset_t internalTableFunc(const TableFuncMorsel& morsel, const TableFunc
         propertyVector.setValue(i, listEntry);
         output.getValueVectorMutable(4).setValue(i, indexInfo.dependencyLoaded);
         output.getValueVectorMutable(5).setValue(i, indexInfo.indexDefinition);
+        output.getValueVectorMutable(6).setValue(i, indexInfo.state);
     }
     return numTuplesToOutput;
 }
@@ -76,6 +82,11 @@ static binder::expression_vector bindColumns(const TableFuncBindInput& input) {
     columnNames.emplace_back("extension_loaded");
     columnTypes.emplace_back(LogicalType::BOOL());
     columnNames.emplace_back("index_definition");
+    columnTypes.emplace_back(LogicalType::STRING());
+    // L'état de construction, lu au holder du stockage comme le lit une recherche : READY,
+    // NOTED, MAINTAINED, ou INCOMPLETE (à retirer puis à refaire), ce que dit aussi une entrée
+    // sans holder (détachée au rejeu du journal).
+    columnNames.emplace_back("state");
     columnTypes.emplace_back(LogicalType::STRING());
     columnNames = TableFunction::extractYieldVariables(columnNames, input.yieldVariables);
     return input.binder->createVariables(columnNames, columnTypes);
@@ -105,8 +116,18 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
             IndexToCypherInfo info{context, exportFileInfo};
             indexDefinition = auxInfo.toCypher(*indexEntry, info);
         }
+        std::string state = storage::indexBuildStateToString(storage::IndexBuildState::INCOMPLETE);
+        auto* table = storage::StorageManager::Get(*context)->getTable(indexEntry->getTableID());
+        if (table->getTableType() == TableType::NODE) {
+            const auto buildState =
+                table->cast<storage::NodeTable>().getIndexBuildState(indexName, transaction);
+            if (buildState.has_value()) {
+                state = storage::indexBuildStateToString(*buildState);
+            }
+        }
         indexesInfo.emplace_back(std::move(tableName), std::move(indexName), std::move(indexType),
-            std::move(propertyNames), dependencyLoaded, std::move(indexDefinition));
+            std::move(propertyNames), dependencyLoaded, std::move(indexDefinition),
+            std::move(state));
     }
     return std::make_unique<ShowIndexesBindData>(indexesInfo, bindColumns(*input),
         indexesInfo.size());

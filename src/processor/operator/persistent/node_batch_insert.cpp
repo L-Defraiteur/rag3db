@@ -329,6 +329,11 @@ void NodeBatchInsert::finalize(ExecutionContext* context) {
         if (index.isDetached() || !NodeTable::isIndexVisible(index, transaction)) {
             continue;
         }
+        // Un index pas encore bâti (NOTED) ou à refaire ne reçoit pas les lignes du COPY : la
+        // validation du bâti les rattrape (page 07, §3 bis.5, en attendant les notes).
+        if (index.isLoaded() && !index.receivesWrites()) {
+            continue;
+        }
         index.finalize(clientContext);
     }
     if (nodeSharedState->stats.has_value()) {

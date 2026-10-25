@@ -357,6 +357,11 @@ std::unique_ptr<QueryResult> ClientContext::query(std::string_view query,
 
 std::unique_ptr<QueryResult> ClientContext::queryNoLock(std::string_view query,
     std::optional<uint64_t> queryID, QueryConfig config) {
+    // Les jetons de la requête meurent avec elle, par quelque chemin qu'elle finisse.
+    struct ReleaseQueryScopedTokens {
+        std::vector<std::shared_ptr<void>>& tokens;
+        ~ReleaseQueryScopedTokens() { tokens.clear(); }
+    } releaseTokens{queryScopedTokens};
     auto parsedStatements = std::vector<std::shared_ptr<Statement>>();
     try {
         parsedStatements = parseQuery(query);

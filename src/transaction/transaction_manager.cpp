@@ -316,6 +316,28 @@ TransactionManager* TransactionManager::Get(const main::ClientContext& context) 
     return context.getDatabase()->getTransactionManager();
 }
 
+void TransactionManager::waitForWriteTransactionsStartedBefore(
+    const main::ClientContext& clientContext, common::transaction_t startTS,
+    const Transaction* self) {
+    std::unique_lock publicLock{mtxForSerializingPublicFunctionCalls};
+    std::optional<common::TaskScheduler::BlockingWait> blocking;
+    const auto olderWritersLeft = [this, startTS, self] {
+        return std::ranges::none_of(activeTransactions, [startTS, self](const auto& transaction) {
+            return transaction.get() != self && transaction->isWriteTransaction() &&
+                   transaction->getStartTS() < startTS;
+        });
+    };
+    if (!olderWritersLeft()) {
+        yieldWorkerWhileWaiting(blocking, &clientContext);
+    }
+    if (!transactionsChanged.wait_for(publicLock,
+            std::chrono::microseconds(checkpointWaitTimeoutInMicros), olderWritersLeft)) {
+        throw TransactionManagerException(common::stringFormat(
+            "{}: one of them is still open. Close it and create the index again.",
+            TIMEOUT_WAITING_FOR_OLDER_WRITERS));
+    }
+}
+
 void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
     const main::ClientContext* clientContext, std::unique_lock<std::mutex>& publicLock,
     const Transaction* staying) {

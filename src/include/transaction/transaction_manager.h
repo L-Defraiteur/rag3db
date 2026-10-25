@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 
+#include "common/api.h"
 #include "common/constants.h"
 #include "common/uniq_lock.h"
 #include "storage/checkpointer.h"
@@ -60,7 +61,18 @@ public:
 
     void checkpoint(main::ClientContext& clientContext);
 
-    static TransactionManager* Get(const main::ClientContext& context);
+    // Le CREATE concurrent ((A), page 07, §3 bis.2) : attend que toute transaction d'écriture
+    // commencée avant `startTS` (sauf `self`) soit partie. Elle ne voyait pas l'index, et n'aurait
+    // rien noté. Les lecteurs n'écrivent rien, et ne retardent pas le bâtisseur. Personne n'est
+    // retenu : ni point de reprise, ni BEGIN arrêté. Lève par son nom au-delà du délai du point
+    // de reprise.
+    // Exportés un à un (la classe ne l'est pas) : l'extension vector les appelle.
+    RAG3DB_API void waitForWriteTransactionsStartedBefore(const main::ClientContext& clientContext,
+        common::transaction_t startTS, const Transaction* self);
+    static constexpr const char* TIMEOUT_WAITING_FOR_OLDER_WRITERS =
+        "Timeout waiting for the write transactions that started before the index was created";
+
+    RAG3DB_API static TransactionManager* Get(const main::ClientContext& context);
 
     // The start of the error that every statement gets once a checkpoint of this database has
     // failed while writing, until the database is closed and reopened. See checkpointNoLock.
