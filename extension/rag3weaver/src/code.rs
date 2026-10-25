@@ -2649,6 +2649,23 @@ impl Catalog {
                 .map(|d| parent_de(d).to_string())
                 .collect();
             let mut libres: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+            // Les en-têtes des fermetures du lot : un déclarant hors de toutes ne rend rien visible
+            // (relecture de l'arbre principal : la requête se borne par eux dès la base).
+            let mut en_tetes: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+            for sym in uuids {
+                if !definers_by_symbol.get(sym).into_iter().flatten().any(|d| cpp(d)) {
+                    continue;
+                }
+                for m in mentioners_by_symbol.get(sym).into_iter().flatten() {
+                    if familles.get(m.from.as_str()).copied().flatten() != Some("c++") {
+                        continue;
+                    }
+                    let Some(f) = fichiers.get(&m.from) else { continue };
+                    if let Some(vue) = vues.entry(f.clone()).or_insert_with(|| inclusions.vue(f).map(std::rc::Rc::new)).clone() {
+                        en_tetes.extend(vue.fichiers.iter().filter(|x| est_un_en_tete(x)).cloned());
+                    }
+                }
+            }
             for sym in uuids {
                 let Some(nom) = noms.get(sym) else { continue };
                 let defs: Vec<&String> = definers_by_symbol.get(sym).into_iter().flatten().filter(|d| cpp(d) && parent_de(d).is_empty()).collect();
@@ -2667,10 +2684,27 @@ impl Catalog {
                     }
                 }
             }
-            let (declarants, requetes) =
-                Declarants::charger_par(self.dialect_arc().as_ref(), |q, p| self.conn().execute_with_params(q, p).map_err(|e| CatalogError::DbError(e.to_string())), &conteneurs, &libres)?;
+            let (declarants, requetes) = Declarants::charger_par(
+                self.dialect_arc().as_ref(),
+                |q, p| self.conn().execute_with_params(q, p).map_err(|e| CatalogError::DbError(e.to_string())),
+                &conteneurs,
+                &libres,
+                &en_tetes,
+            )?;
             report.declarant_queries += requetes.0;
             report.declarant_rows_read += requetes.1;
+            // À la montre seulement (la ligne d'un fichier réindexé), le poids des déclarants se dit :
+            // jamais à chaque lot d'une indexation entière.
+            if crate::ingest_profile::recording() {
+                eprintln!(
+                    "[montre] déclarants : {} requête(s), {} ligne(s) lue(s), {} en-tête(s) de fermeture, {} conteneur(s), {} fonction(s) libre(s)",
+                    requetes.0,
+                    requetes.1,
+                    en_tetes.len(),
+                    conteneurs.len(),
+                    libres.len()
+                );
+            }
             (noms, declarants)
         };
         crate::ingest_profile::add("symboles · déclarants", t);
@@ -3609,8 +3643,16 @@ pub fn mentions_sans_definisseur_visible(catalog: &dyn crate::read_view::ReadCat
         couples.iter().flat_map(|(_, ds)| ds.iter()).filter(|(f, p)| cpp(f) && !p.is_empty()).map(|(_, p)| p.to_string()).collect();
     let libres: std::collections::BTreeSet<String> =
         if couples.iter().flat_map(|(_, ds)| ds.iter()).any(|(f, p)| cpp(f) && p.is_empty()) { [nom.to_string()].into() } else { Default::default() };
-    let (declarants, _) = Declarants::charger_par(dialecte.as_ref(), |q, p| catalog.execute_read_with_params(q, p), &conteneurs, &libres)?;
     let mut vues: HashMap<&str, Option<Vue>> = HashMap::new();
+    let mut en_tetes: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for (m, _) in &couples {
+        if cpp(m) {
+            if let Some(vue) = vues.entry(m).or_insert_with(|| inclusions.vue(m)) {
+                en_tetes.extend(vue.fichiers.iter().filter(|x| est_un_en_tete(x)).cloned());
+            }
+        }
+    }
+    let (declarants, _) = Declarants::charger_par(dialecte.as_ref(), |q, p| catalog.execute_read_with_params(q, p), &conteneurs, &libres, &en_tetes)?;
     Ok(couples
         .iter()
         .map(|(m, defs)| {
@@ -3676,6 +3718,7 @@ impl Declarants {
         executer: impl Fn(&str, &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult, CatalogError>,
         conteneurs: &std::collections::BTreeSet<String>,
         libres: &std::collections::BTreeSet<String>,
+        en_tetes: &std::collections::BTreeSet<String>,
     ) -> Result<(Self, (usize, usize)), CatalogError> {
         use crate::connection::QueryParam;
         use rag3weaver_ir::{Column, Predicate, Select};
@@ -3683,6 +3726,13 @@ impl Declarants {
         let mut requetes = 0;
         let mut lignes = 0;
         let colonnes = |extra: &str| vec![Column::Node(extra.into()), Column::Node("file_path".into()), Column::Node("declarations".into())];
+        // Aucun en-tête dans les fermetures : aucun déclarant ne peut rien rendre visible.
+        if en_tetes.is_empty() {
+            return Ok((out, (0, 0)));
+        }
+        // Un seul paramètre liste (`IN $fichiers`, `= ANY($fichiers)`), quel que soit son nombre.
+        let fichiers = CypherValue::List(en_tetes.iter().map(|f| CypherValue::String(f.clone())).collect());
+        let dans_les_fermetures = || Predicate::In { field: "file_path".into(), param: "fichiers".into() };
         if !conteneurs.is_empty() {
             // Les conteneurs par leur nom **et leur genre** : sans le genre, le In ramènerait aussi les
             // Function homonymes de leur classe (un constructeur `Transformer::Transformer()`), que
@@ -3692,13 +3742,14 @@ impl Declarants {
                 Predicate::AllOf(vec![
                     Predicate::In { field: "name".into(), param: "conteneurs".into() },
                     Predicate::In { field: "scope_type".into(), param: "genres".into() },
+                    dans_les_fermetures(),
                 ]),
                 colonnes("name"),
             );
             let requete = dialecte.select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
             let liste = CypherValue::List(conteneurs.iter().map(|c| CypherValue::String(c.clone())).collect());
             let genres = CypherValue::List(GENRES_DECLARANTS.iter().map(|g| CypherValue::String(g.to_string())).collect());
-            let rows = executer(&requete, &[QueryParam::new("conteneurs", liste), QueryParam::new("genres", genres)])?;
+            let rows = executer(&requete, &[QueryParam::new("conteneurs", liste), QueryParam::new("genres", genres), QueryParam::new("fichiers", fichiers.clone())])?;
             requetes += 1;
             lignes += rows.rows.len();
             for r in &rows.rows {
@@ -3716,9 +3767,13 @@ impl Declarants {
             let crible = Predicate::AnyOf(
                 (0..tranche.len()).map(|i| Predicate::Contains { field: "declarations".into(), param: format!("nom{i}") }).collect(),
             );
-            let lire = Select::filtered(SCOPE, Predicate::AllOf(vec![Predicate::Equals { field: "scope_type".into(), param: "genre".into() }, crible]), colonnes("scope_type"));
+            let lire = Select::filtered(
+                SCOPE,
+                Predicate::AllOf(vec![Predicate::Equals { field: "scope_type".into(), param: "genre".into() }, dans_les_fermetures(), crible]),
+                colonnes("scope_type"),
+            );
             let requete = dialecte.select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
-            let mut params = vec![QueryParam::new("genre", CypherValue::String(SCOPE_DE_FICHIER.into()))];
+            let mut params = vec![QueryParam::new("genre", CypherValue::String(SCOPE_DE_FICHIER.into())), QueryParam::new("fichiers", fichiers.clone())];
             params.extend(tranche.iter().enumerate().map(|(i, n)| QueryParam::new(&format!("nom{i}"), CypherValue::String(format!("\"{n}\"")))));
             let rows = executer(&requete, &params)?;
             requetes += 1;
