@@ -37,3 +37,12 @@ pas quand rien n'est déclaré. Si le service répond, il marque le backend à r
 ## Ce qu'il faut pour le fermer
 
 La reprise ci-dessus et son témoin.
+
+## Revu le 25 octobre 2026
+
+Vu en service sur l'hôte de Lucie, réveillé par sa socket avant ses tunnels d'embarquement : un
+index sans aucun vecteur, la recherche dense en repli, et l'avertissement resté faux dans
+`daemon_status`. Seule une réouverture du backend l'a réparé. Le récit et un second défaut, l'index
+vectoriel retiré pour rattrapage qui ne revient pas sans index, sont dans
+`2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md`.
+

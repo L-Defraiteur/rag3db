@@ -1,6 +1,9 @@
 # Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas
 
-- **État** : ouvert, le 25 octobre 2026 (G). Le lot est en cours chez G.
+- **État** : ouvert, le 25 octobre 2026 (G). **Le défaut 1 est celui du ticket du 11 octobre**
+  `2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md`, pris alors par
+  l'arbre principal : ce ticket-ci n'en est que la nouvelle occurrence, et l'attribution du correctif
+  se décide entre l'arbre principal et G. Le défaut 2 (l'index vectoriel retiré) est neuf.
 - **Gravité** : réponse fausse en silence. L'état dit « vectors running 97 % » et garde un avertissement
   faux, alors que rien ne se calcule ; la recherche dense se replie.
 - **Atteignable en service** : oui. Il suffit d'ouvrir un backend quand le service d'embarquement n'est
