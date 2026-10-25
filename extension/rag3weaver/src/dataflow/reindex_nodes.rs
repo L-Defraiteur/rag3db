@@ -550,4 +550,15 @@ mod tests {
              analyser le fichier 12 ms ; hors phase : drain · liens 5 ms"
         );
     }
+
+    /// **Un fichier en erreur dit pourquoi** (25 octobre 2026) : la cause du
+    /// moteur sur la ligne du journal de l'hôte, sur une seule ligne.
+    #[test]
+    fn a_failed_file_says_why_in_the_host_journal() {
+        let cause = "src/a.rs : Relationship 851 of table LOCKS was not found in the forward direction,\n among the relationships of node 16249.";
+        let line = super::journal_line("src/a.rs", &Err(cause.to_string()), std::time::Duration::ZERO, std::time::Duration::ZERO, &[]);
+        assert!(line.starts_with("[montre] src/a.rs en erreur : "), "{line}");
+        assert!(line.ends_with("— cause : src/a.rs : Relationship 851 of table LOCKS was not found in the forward direction, among the relationships of node 16249."), "{line}");
+        assert!(!line.contains('\n'), "une seule ligne : {line}");
+    }
 }
