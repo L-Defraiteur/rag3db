@@ -4600,6 +4600,19 @@ impl Backend {
         if !entites.is_empty() && crate::code_sync::avant_la_regle(&cat).unwrap_or(false) {
             avertissements.push(crate::code_sync::AVANT_LA_REGLE.to_string());
         }
+        // **La garde des comptes du dernier index** : documents contre
+        // lignes, par entité ; un écart se dit aussi en avertissement.
+        if let Some(Value::Object(comptes)) = cat.comptes_notes_du_plein_texte() {
+            for (entite, c) in &comptes {
+                if c["documents"] != c["rows"] {
+                    avertissements.push(format!(
+                        "plein texte de « {entite} » au dernier index : {} documents pour {} lignes — des écritures ont été perdues",
+                        c["documents"], c["rows"]
+                    ));
+                }
+            }
+            etats.insert("fts_counts".into(), Value::Object(comptes));
+        }
         // **Un index vectoriel retiré se dit en clair** : la recherche dense
         // de cette entité ne répond pas tant qu'il manque, et ce n'est pas
         // « running 97 % » (hôte de Lucie, 25 octobre 2026). Ce qui reste à

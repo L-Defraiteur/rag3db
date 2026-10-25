@@ -494,6 +494,29 @@ fn run_index(
         log(journal, &format!("{n} fichiers écartés : {reason}"));
     }
 
+    // **La garde des comptes, dite** : chaque entité au plein texte, ses
+    // documents contre ses lignes, zéro écart attendu. Un écart est une
+    // écriture perdue en silence, d'où qu'elle vienne (25 octobre 2026 :
+    // lucivy-core perdait des documents sous lectures concurrentes, les
+    // commits rendant Ok). Dit au journal, gardé pour l'état.
+    {
+        let cat = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+        let comptes = cat.comptes_du_plein_texte();
+        let ecarts: Vec<String> = comptes
+            .iter()
+            .filter(|(_, d, l)| d != l)
+            .map(|(e, d, l)| format!("{e} : {d} documents pour {l} lignes"))
+            .collect();
+        if ecarts.is_empty() {
+            log(journal, &format!("plein texte vérifié : autant de documents que de lignes ({} entité(s))", comptes.len()));
+        } else {
+            log(journal, &format!("plein texte : écart entre documents et lignes — {}", ecarts.join(" ; ")));
+        }
+        if let Err(e) = cat.noter_les_comptes_du_plein_texte(&comptes) {
+            log(journal, &format!("avertissement : comptes du plein texte non notés ({e})"));
+        }
+    }
+
     // **Les morceaux enregistrés sans texte, réécrits** avant les vecteurs :
     // leurs entités sont redécoupées depuis leur contenu, et les morceaux
     // neufs entrent dans la dette d'embarquement de la passe qui suit.
@@ -946,6 +969,46 @@ mod tests {
         assert_eq!(etat.text, crate::catalog::Level::Failed, "{etat:?}");
         let raisons = catalog.lock().unwrap().index_failures_for(Some(crate::code::SCOPE));
         assert!(raisons.iter().any(|(g, r)| g == crate::catalog::PLEIN_TEXTE_INDEX && r.contains("plein texte")), "{raisons:?}");
+    }
+
+    /// **La garde des comptes du plein texte, dite à la fin d'un index**
+    /// (25 octobre 2026) : le journal dit « vérifié » quand chaque entité a
+    /// autant de documents que de lignes, l'état garde les comptes ; et un
+    /// écart (ici, un document de plus dans l'index que de lignes dans la
+    /// base) se compte, au lieu de passer en silence.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn la_fin_d_un_index_dit_les_comptes_du_plein_texte() {
+        let fichiers: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let config = crate::CatalogConfig { name: Some("comptes".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("le fil d'indexation");
+        let lignes: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+        let _ = std::fs::remove_file(&journal);
+        assert_eq!(lignes.last().map(String::as_str), Some(DONE_LINE), "{lignes:?}");
+        assert!(
+            lignes.iter().any(|l| l.starts_with("plein texte vérifié : autant de documents que de lignes")),
+            "la fin d'un index dit les comptes : {lignes:?}"
+        );
+        let cat = catalog.lock().unwrap();
+        let notes = cat.comptes_notes_du_plein_texte().expect("les comptes notés pour l'état");
+        let scope = &notes[crate::code::SCOPE];
+        assert!(scope["documents"].as_u64().unwrap() > 0 && scope["documents"] == scope["rows"], "{notes}");
+
+        // Un document que la base n'a pas : l'écart se compte.
+        let table = cat.resolve_search_target(crate::code::SCOPE).unwrap().parent_table;
+        let handle = cat.fts_handles().get(&table).expect("le plein texte de Scope").clone();
+        handle.add_document_json(u64::MAX - 7, &serde_json::json!({})).expect("un document fantôme");
+        handle.commit().expect("commit");
+        let comptes = cat.comptes_du_plein_texte();
+        let (_, docs, lignes) = comptes.iter().find(|(e, _, _)| e == crate::code::SCOPE).expect("Scope compté").clone();
+        assert_eq!(docs, lignes + 1, "un document de trop se compte : {comptes:?}");
     }
 
     #[test]

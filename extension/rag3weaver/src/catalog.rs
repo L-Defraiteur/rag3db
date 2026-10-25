@@ -573,6 +573,8 @@ pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 /// Clé de `_catalog_meta` : le dernier compte des morceaux enregistrés sans
 /// texte ([`Catalog::chunks_sans_texte`]).
 pub const CHUNKS_SANS_TEXTE_KEY: &str = "chunks_without_text";
+/// La méta des comptes du plein texte relevés à la fin du dernier index.
+pub const COMPTES_DU_PLEIN_TEXTE_KEY: &str = "fts_counts_at_index_end";
 
 /// Ce que `embedding_choice` porte : le modèle, la phrase qui l'a décidé, et
 /// quand. Pour qui se demandera dans six mois pourquoi cet index est en 107m.
@@ -1177,6 +1179,39 @@ fn read_threads() -> u64 {
         }
         crate::ingest_profile::add("garde des comptes du plein texte", t);
         Ok(ecarts)
+    }
+
+    /// **La garde des comptes, en lecture** : pour chaque entité au plein
+    /// texte, `(entité, documents de l'index, lignes de la table)`. Un écart
+    /// est une écriture perdue en silence ; l'index le dit à sa fin
+    /// (25 octobre 2026). Sans rien rebâtir, à l'inverse de
+    /// [`Self::check_fts_counts`] à l'ouverture.
+    pub fn comptes_du_plein_texte(&self) -> Vec<(String, u64, u64)> {
+        let mut comptes: Vec<(String, u64, u64)> = Vec::new();
+        for entity in self.entity_configs.keys() {
+            let Ok(target) = self.resolve_search_target(entity) else { continue };
+            if !target.default_signals.bm25() || self.fts_rebuild.contains(&target.parent_table) {
+                continue;
+            }
+            let Some(docs) = self.fts_handles.get(&target.parent_table).map(|h| h.num_docs()) else { continue };
+            comptes.push((entity.clone(), docs, self.count_rows_of(entity) as u64));
+        }
+        comptes.sort();
+        comptes
+    }
+
+    /// Les comptes relevés à la fin du dernier index, pour l'état.
+    pub fn noter_les_comptes_du_plein_texte(&self, comptes: &[(String, u64, u64)]) -> Result<(), CatalogError> {
+        let v: serde_json::Map<String, serde_json::Value> = comptes
+            .iter()
+            .map(|(e, d, l)| (e.clone(), serde_json::json!({ "documents": d, "rows": l })))
+            .collect();
+        self.persist_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY, &serde_json::Value::Object(v).to_string())
+    }
+
+    /// Les comptes du dernier index, s'il y en a eu un.
+    pub fn comptes_notes_du_plein_texte(&self) -> Option<serde_json::Value> {
+        self.read_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY).ok().flatten().and_then(|v| serde_json::from_str(&v).ok())
     }
 
     pub fn verify_fts_files(&mut self) {
