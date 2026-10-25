@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import { Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { fetchState, openFlux, type FluxStatus, type HostState } from "@/lib/host";
+import { dispatchFlux, fetchState, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
+import { Chat } from "@/views/Chat";
 import { applyTheme, effectiveTheme, storedTheme, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
 
@@ -21,13 +22,15 @@ function App() {
   useEffect(() => {
     const reload = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
     reload();
-    return openFlux(
-      () => {},
-      (s: FluxStatus) => {
-        setFlux(s);
-        if (s === "ouvert") reload();
-      },
-    );
+    return openFlux(dispatchFlux, (s: FluxStatus) => {
+      setFlux(s);
+      if (s === "ouvert") {
+        reload();
+        // Les vues relisent leur état à chaque ouverture du flux (le chat : un
+        // tour parti avant, à rattacher).
+        dispatchFlux({ sujet: "flux", backend: "*", evenement: { kind: "ouvert" } });
+      }
+    });
   }, []);
 
   const dark = effectiveTheme(theme) === "dark";
@@ -58,7 +61,7 @@ function App() {
             {error}
           </p>
         ) : state ? (
-          <Home state={state} />
+          <View state={state} />
         ) : (
           <p className="text-muted-foreground">
             <Badge variant="outline">…</Badge> l'état de l'hôte se lit
@@ -67,6 +70,14 @@ function App() {
       </main>
     </div>
   );
+}
+
+// La vue que l'URL nomme ; une vue non portée n'arrive pas ici : l'hôte la sert
+// depuis l'ancienne page.
+function View({ state }: { state: HostState }) {
+  const r = route();
+  if (r.view === "chat" && r.id) return <Chat id={r.id} state={state} />;
+  return <Home state={state} />;
 }
 
 createRoot(document.getElementById("root")!).render(

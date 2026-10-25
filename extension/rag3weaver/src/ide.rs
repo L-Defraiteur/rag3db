@@ -395,6 +395,17 @@ fn jeton_du_cookie(request: &tiny_http::Request) -> Option<String> {
         .map(|(_, v)| v.to_string())
 }
 
+/// **Les vues portées sur la page nouvelle** (page 08) : `/ide/code/<id>/<vue>…`
+/// pour ces vues est servi par le bundle ; les autres, par l'ancienne page.
+const VUES_PORTEES: &[&str] = &["chat"];
+
+fn vue_portee(path: &str) -> bool {
+    let Some(reste) = path.strip_prefix("/ide/code/") else { return false };
+    let mut parts = reste.split('/').filter(|s| !s.is_empty());
+    let _id = parts.next();
+    parts.next().is_some_and(|vue| VUES_PORTEES.contains(&vue))
+}
+
 /// Un fichier du bundle de l'IDE, embarqué (`templates/ide/app/<nom>`) ; absent,
 /// un bâti sans `scripts/ide_bundle.sh` : la réponse le dit.
 fn bundle(nom: &str) -> Vec<u8> {
@@ -475,6 +486,9 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let _ = request.respond(reponse_octets(200, "text/css; charset=utf-8", bundle("app.css")));
         }
         ("GET", "/ide") | ("GET", "/ide/") => {
+            let _ = request.respond(reponse_octets(200, "text/html; charset=utf-8", bundle("index.html")));
+        }
+        ("GET", p) if vue_portee(p) => {
             let _ = request.respond(reponse_octets(200, "text/html; charset=utf-8", bundle("index.html")));
         }
         ("GET", "/ide/page.js") => {

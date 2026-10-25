@@ -52,3 +52,59 @@ export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStat
   (window as unknown as { __ide?: { flux?: EventSource } }).__ide = { flux: source };
   return () => source.close();
 }
+
+// **Le bus du flux dans la page** : une vue s'abonne aux événements que le
+// cadre reçoit (un seul `EventSource` pour toute la page).
+type Listener = (e: FluxEvent) => void;
+const listeners = new Set<Listener>();
+export function onFlux(l: Listener): () => void {
+  listeners.add(l);
+  return () => listeners.delete(l);
+}
+export function dispatchFlux(e: FluxEvent) {
+  for (const l of listeners) l(e);
+}
+
+export type ChatTurn = {
+  role: "user" | "assistant" | "tool" | "system";
+  content?: string;
+  tool_calls?: { id: string; name: string; arguments: string }[];
+  tool_call_id?: string;
+  tool_name?: string;
+};
+export type ChatState = { on: boolean; model: string | null; why: string | null; run: string | null; turns: ChatTurn[]; orphans: { pourquoi: string }[] };
+
+export async function fetchChat(backend: string): Promise<ChatState> {
+  const r = await (await fetch(`/ide/chat?${new URLSearchParams({ backend })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  return r.result;
+}
+
+export type TurnResult = {
+  run: string;
+  text: string;
+  stopped_by: string | null;
+  consumed: { slug: string; amount: number; unit: string }[];
+  propositions: { id: number; paths?: string[]; accepted?: boolean }[];
+  tache: Task | null;
+  fichiers: string[];
+};
+
+export async function sendChat(backend: string, message: string): Promise<TurnResult> {
+  const r = await (await fetch("/ide/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, message }) })).json();
+  if (!r.ok) throw new Error(r.error);
+  return r.result;
+}
+
+export async function stopRun(backend: string, run: string): Promise<void> {
+  const r = await (await fetch("/ide/runs/arreter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, run }) })).json();
+  if (!r.ok) throw new Error(r.error);
+}
+
+/// L'URL de la page lue comme une route : l'accueil, ou une vue d'un backend.
+export function route(): { view: string; id?: string; rest?: string } {
+  const p = location.pathname.replace(/\/+$/, "") || "/ide";
+  const m = p.match(/^\/ide\/code\/([^/]+)\/([a-z]+)(?:\/(.*))?$/);
+  if (!m) return { view: "home" };
+  return { view: m[2], id: m[1], rest: decodeURIComponent(m[3] ?? "") };
+}

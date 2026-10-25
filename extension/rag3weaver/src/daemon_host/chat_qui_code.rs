@@ -239,9 +239,9 @@ fn le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page() {
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
     n.aller(
         &format!("{racine}/ide/code/{tache_id}/chat"),
-        "document.querySelector('#chat-note')?.textContent === 'modèle : faux-modele' && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+        "document.querySelector('#model')?.textContent === 'modèle : faux-modele' && document.getElementById('lien')?.textContent === 'flux : ouvert'",
     );
-    n.evaluer("document.querySelector('#chat-message').value = 'dis salut au lieu de bonjour'; document.querySelector('#chat-envoyer').click()");
+    n.evaluer("document.querySelector('#message').value = 'dis salut au lieu de bonjour'; document.querySelector('#send').click()");
     // L'hôte d'abord : le tour fini, et le fichier écrit dans la tâche.
     let ecrit = PathBuf::from(t["workspace"]["racine"].as_str().unwrap()).join("src/lib.rs");
     let borne = std::time::Instant::now() + std::time::Duration::from_secs(120);
@@ -250,9 +250,9 @@ fn le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     n.attendre(
-        "document.querySelector('#chat-note')?.textContent === 'fini' \
-         && document.querySelector('.tour.assistant:last-child .tache-du-tour a[data-tache=\"salut\"]') \
-         && document.querySelector('.tour.assistant:last-child .tache-du-tour')?.textContent.startsWith('src/lib.rs — sur la branche agent/salut')",
+        "document.querySelector('#status')?.textContent === 'fini' \
+         && [...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('.tache-du-tour a[data-tache=\"salut\"]') \
+         && [...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('.tache-du-tour')?.textContent.startsWith('src/lib.rs — sur la branche agent/salut')",
         "l'hôte a écrit la tâche, et la bulle ne mène pas à sa relecture",
     );
     n.evaluer("document.querySelector('.tache-du-tour a[data-tache]').click()");

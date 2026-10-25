@@ -324,16 +324,16 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
     n.aller(
         &format!("{racine}/ide/code/{id}/chat"),
-        "document.querySelector('#chat-note')?.textContent === 'modèle : faux-modele' && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+        "document.querySelector('#model')?.textContent === 'modèle : faux-modele' && document.getElementById('lien')?.textContent === 'flux : ouvert'",
     );
 
     // Un tour qui propose.
-    n.evaluer("document.querySelector('#chat-message').value = 'écris une note'; document.querySelector('#chat-envoyer').click()");
+    n.evaluer("document.querySelector('#message').value = 'écris une note'; document.querySelector('#send').click()");
     n.attendre(
-        "document.querySelector('#chat-note')?.textContent === 'fini' \
-         && document.querySelector('.tour.assistant .proposition-du-tour a[data-proposition]') \
-         && [...document.querySelectorAll('.tour.assistant .outils li')].some(li => li.textContent.startsWith('propose')) \
-         && document.querySelector('.tour.assistant:last-child pre')?.textContent === \"Proposé : une note de l'agent.\"",
+        "document.querySelector('#status')?.textContent === 'fini' \
+         && document.querySelector('article.message.assistant .proposition-du-tour a[data-proposition]') \
+         && [...document.querySelectorAll('article.message.assistant details.outil')].some(d => d.dataset.outil === 'propose') \
+         && [...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('.body')?.textContent === \"Proposé : une note de l'agent.\"",
         "le tour, son outil, sa proposition et sa réponse",
     );
     assert!(!depot.join("notes.md").exists(), "un tour en approbation a écrit");
@@ -345,41 +345,41 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     // connaît jamais son run (ni Arrêter, ni jetons).
     n.aller(
         &format!("{racine}/ide/code/{id}/chat"),
-        "document.querySelector('#chat-envoyer') && !document.querySelector('#chat-envoyer').disabled \
+        "document.querySelector('#send') && !document.querySelector('#send').disabled \
          && document.getElementById('lien')?.textContent === 'flux : ouvert'",
     );
-    n.evaluer("document.querySelector('#chat-message').value = 'parle, lentement'; document.querySelector('#chat-envoyer').click()");
+    n.evaluer("document.querySelector('#message').value = 'parle, lentement'; document.querySelector('#send').click()");
     attendre_l_hote(true, "le tour lent en vol");
     n.attendre(
-        "!document.querySelector('#chat-arreter').hidden && document.querySelector('.tour.en-cours pre')?.textContent.includes('encore')",
+        "!document.querySelector('#stop').hidden && document.querySelector('article.message.en-cours .body')?.textContent.includes('encore')",
         "l'hôte a le tour lent en vol, et la page ne montre pas Arrêter ni ses jetons dans la bulle",
     );
-    n.evaluer("document.querySelector('#chat-arreter').click()");
+    n.evaluer("document.querySelector('#stop').click()");
     attendre_l_hote(false, "le tour lent arrêté");
     n.attendre(
-        "document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden",
+        "document.querySelector('#status')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#stop').hidden",
         "l'hôte a arrêté le tour, et la page ne dit pas « arrêté dans l'IDE »",
     );
 
     // Un tour envoyé flux fermé : la page n'a jamais son RunStarted. À
     // l'ouverture du flux (son onopen, appelé jusqu'à ce que l'hôte ait le run
     // en vol), la page relit l'état du chat, et Arrêter apparaît quand même.
-    n.evaluer("window.__ide.flux.close(); document.querySelector('#chat-message').value = 'parle, lentement, sans flux'; document.querySelector('#chat-envoyer').click()");
+    n.evaluer("window.__ide.flux.close(); document.querySelector('#message').value = 'parle, lentement, sans flux'; document.querySelector('#send').click()");
     attendre_l_hote(true, "le tour parti flux fermé en vol");
     n.attendre(
-        "(window.__ide.flux.onopen(), !document.querySelector('#chat-arreter').hidden && document.querySelector('#chat-note')?.textContent === \"l'agent travaille…\")",
+        "(window.__ide.flux.onopen(), !document.querySelector('#stop').hidden && document.querySelector('#status')?.textContent === \"l'agent travaille…\")",
         "le tour parti flux fermé, Arrêter rendu par la relecture",
     );
-    n.evaluer("document.querySelector('#chat-arreter').click()");
+    n.evaluer("document.querySelector('#stop').click()");
     attendre_l_hote(false, "le tour parti flux fermé arrêté");
-    n.attendre("document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden", "le tour parti flux fermé, arrêté dans l'IDE");
+    n.attendre("document.querySelector('#status')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#stop').hidden", "le tour parti flux fermé, arrêté dans l'IDE");
 
     // Un tour qui propose, flux toujours fermé : le lien de sa proposition
     // vient de la réponse du tour (le flux peut la dire après sa fin).
-    n.evaluer("document.querySelector('#chat-message').value = 'écris une autre note'; document.querySelector('#chat-envoyer').click()");
+    n.evaluer("document.querySelector('#message').value = 'écris une autre note'; document.querySelector('#send').click()");
     n.attendre(
-        "document.querySelector('#chat-note')?.textContent === 'fini' \
-         && document.querySelector('.tour.assistant:last-child .proposition-du-tour a[data-proposition]')",
+        "document.querySelector('#status')?.textContent === 'fini' \
+         && [...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('.proposition-du-tour a[data-proposition]')",
         "le tour qui propose flux fermé, le lien de sa proposition",
     );
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
