@@ -204,7 +204,10 @@ impl DaemonHost {
         std::fs::create_dir_all(&state_dir).map_err(|e| format!("{} : {e}", state_dir.display()))?;
         config.state_dir = state_dir;
         let outils = OutilsDuJuge { host: self, cible: cible.clone(), journal: &journal, memoire: memoire.clone(), fiche: &fiche };
+        // Le message système vit dans la session (comme pour le chat de l'hôte) :
+        // `run_with` ne le prend pas de la config.
         let mut session = ChatSession::default();
+        session.turns.insert(0, Turn::system(&config.system_prompt));
         let debut = std::time::Instant::now();
         let silencieux: EventHandler = Arc::new(|_| {});
         let enquete = session.run_with(
