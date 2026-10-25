@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (39)
+### Ouverts — moteur (38)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -46,7 +46,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 |---|---|---|---|---|
 | [Une instruction qui échoue condamne une transaction en lecture seule](2026-10-25-une-instruction-qui-echoue-condamne-une-transaction-en-lecture-seule.md) | ouvert — pour le cœur C++ (deux formes à trancher) | blocage d'une lecture entière | oui (toute lecture d'outil sous L6) | oui |
 | [Les lignes d'un COPY forcé validé après un CREATE restent hors du graphe](2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md) | ouvert — mesure du balayage dans la fenêtre au calme du banc, puis qui reconstruit et à quel seuil | lenteur | pas aujourd'hui (CREATE et COPY sous Mutex<Catalog>) ; dès (A) | oui (reconstruction) |
-| [Chaque requête préparée reste en mémoire pour la vie de sa connexion](2026-10-25-chaque-requete-preparee-reste-en-memoire-pour-la-vie-de-sa-connexion.md) | ouvert — détenteur trouvé (`CachedPreparedStatementManager`, jamais vidé ; Kuzu #5846) ; aucun correctif | mémoire sans borne (≈ 1,7 Go/min avec quatre lecteurs) | oui | oui |
 | [La CI de master est rouge depuis le 18 octobre : un `<cassert>` dans geo et le format clang](2026-10-25-la-ci-de-master-est-rouge-depuis-le-18-octobre-cassert-dans-geo-et-format-clang.md) | ouvert — le cassert corrigé sur `ci-cassert-geo` (baf19b9e5, vers master à la fenêtre) ; le formatage attend une fenêtre : `.clang-format-ignore` pour les annexes des docs + un commit de formatage pur par clang-format-18 (la version de la CI n'a pas changé) | aucun run vert du CI Workflow | non (CI) | non |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
@@ -129,10 +128,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (173), dans `closed/`
+### Fermés (174), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Chaque requête préparée reste en mémoire pour la vie de sa connexion](closed/2026-10-25-chaque-requete-preparee-reste-en-memoire-pour-la-vie-de-sa-connexion.md) | corrigé (la préparation porte sa requête et la rend en mourant ; le magasin de la connexion disparaît ; témoin réel 30,0 → 7,1 Go) | la mémoire croît sans borne | oui | oui (chaque appel prépare) |
 | [Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas](closed/2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md) | corrigé — lot embarqueur-revenu (25 oct. 2026) : l'index retiré revient dès la dette soldée, l'état le dit | réponse fausse en silence (état « running 97 % », recherche dense en repli) | oui | oui |
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](closed/2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | corrigé — lot embarqueur-revenu (25 oct. 2026) : le service revenu est repris par réouverture | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
 | [Le témoin du chat dans la page rougit sous la lib entière](closed/2026-10-25-le-temoin-du-chat-dans-la-page-rougit-sous-la-lib-entiere.md) | corrigé `930cccc96` (le lien de la proposition vient aussi de la réponse du tour) | test instable | non (le test) | oui (`daemon_host/chat.rs`) |

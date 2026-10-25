@@ -10,7 +10,6 @@
 #include "common/types/value/value.h"
 #include "function/table/scan_replacement.h"
 #include "main/client_config.h"
-#include "main/prepared_statement_manager.h"
 #include "main/query_result.h"
 #include "prepared_statement.h"
 
@@ -124,10 +123,6 @@ public:
     Database* getDatabase() const;
     AttachedRag3dbDatabase* getAttachedDatabase() const;
 
-    const CachedPreparedStatementManager& getCachedPreparedStatementManager() const {
-        return cachedPreparedStatementManager;
-    }
-
     bool isInMemory() const;
 
     static std::string getEnvVariable(const std::string& name);
@@ -225,8 +220,6 @@ private:
     ClientConfig clientConfig;
     // Current query.
     ActiveQuery activeQuery;
-    // Cache prepare statement.
-    CachedPreparedStatementManager cachedPreparedStatementManager;
     // Transaction context.
     std::unique_ptr<transaction::TransactionContext> transactionContext;
     // Replace external object as pointer Value;
