@@ -73,7 +73,7 @@ Les rouges de l'après-midi, tous vus avant master sauf le premier :
    - rouvrir ;
    - écrire la fiche « régime GPU », la Source et l'apport ;
    - vérifier, et dire les deux lignes avant et après.
-2. **Les roadmaps et les visions en mémoire** : le design est à la page 03, il attend le mot de Lucie.
+2. **Les roadmaps et les visions en mémoire** : le design est à la page 03 ; **l'identité des agents et la fusion entre mémoires**, à la page 04. Les deux attendent le mot de Lucie.
 3. **La forme des fiches de bilan du juge** d'everything declarative : relue, réponses dans sa page §5 (branche juge-1).
 4. **En fin de session**, effacer les worktrees et les targets :
    - ici : `wt-*-96` ;
