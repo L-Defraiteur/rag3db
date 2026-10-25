@@ -1019,15 +1019,20 @@ impl Node for RenderResultsNode {
         // provenance vont dans sa vue).
         let rows: Option<serde_json::Value> = ctx.take_input("rows").and_then(take_or_clone::<serde_json::Value>);
         let total: Option<serde_json::Value> = ctx.take_input("total").and_then(take_or_clone::<serde_json::Value>);
-        let text = if self.json && self.json_of_rows {
+        if self.json && self.json_of_rows {
             // **Les lignes d'un Plan, pour une interface** : toujours les trois
             // clés, une interface lit un schéma stable. `rows` tel que PlanNode
-            // le sort.
+            // le sort. `text` porte l'objet, pas sa chaîne : la réponse d'un
+            // outil reste un objet, que la ligne de fraîcheur de l'index ne
+            // préfixe pas (elle va dans `freshness`, comme pour read_file en json).
             let Some(rows) = rows else {
                 return Err(format!("RenderResultsNode: {REFUS_SANS_ROWS}"));
             };
-            serde_json::json!({ "rows": rows, "total": total, "provenance": self.provenance }).to_string()
-        } else if self.json {
+            ctx.set_output("text", PortValue::new(serde_json::json!({ "rows": rows, "total": total, "provenance": self.provenance })));
+            ctx.set_output("results", PortValue::new(results));
+            return Ok(());
+        }
+        let text = if self.json {
             if rows.is_some() || total.is_some() {
                 return Err(format!("RenderResultsNode: {REFUS_ROWS_PERDUES}"));
             }
@@ -1841,7 +1846,9 @@ mod rows_tests {
             g.connect("plan", p, "render", p).unwrap();
         }
         let out = DataflowRuntime::new(10).execute(&mut g)?;
-        Ok(out.get("render", "text").and_then(|v| v.downcast::<String>()).cloned().expect("le texte du rendu"))
+        // Un texte, ou l'objet que json=rows pose sur `text`.
+        let v = out.get("render", "text").expect("le texte du rendu");
+        Ok(v.downcast::<String>().cloned().or_else(|| v.downcast::<Value>().map(Value::to_string)).expect("du texte ou du json"))
     }
 
     fn lignes() -> Value {

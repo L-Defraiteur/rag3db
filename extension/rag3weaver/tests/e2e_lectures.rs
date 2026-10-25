@@ -334,9 +334,15 @@ fn outline_en_json_rend_les_lignes_du_plan_son_total_et_sa_provenance() {
             autre => autre["result"].as_str().map(str::to_string).unwrap_or_else(|| autre.to_string()),
         }
     };
-    let rendu = texte(backend.call("outline", json!({"path": "src/a.rs", "format": "json"})).expect("outline en json"));
-    eprintln!("{rendu}");
-    let v: Value = serde_json::from_str(&rendu).unwrap_or_else(|e| panic!("du json : {e} — {rendu}"));
+    // En json, le résultat est un objet (pas un texte) : la ligne de fraîcheur de l'index va dans
+    // `freshness`, elle ne le préfixe pas.
+    let json_de = |args: Value| -> Value {
+        let r = backend.call("outline", args).expect("outline en json");
+        assert!(r["result"].is_object(), "un objet, pas un texte : {r}");
+        r["result"].clone()
+    };
+    let v = json_de(json!({"path": "src/a.rs", "format": "json"}));
+    eprintln!("{v}");
     let mut cles: Vec<&String> = v.as_object().expect("un objet").keys().collect();
     cles.sort();
     assert_eq!(cles, ["provenance", "rows", "total"], "les trois clés, toujours : {v}");
@@ -362,12 +368,10 @@ fn outline_en_json_rend_les_lignes_du_plan_son_total_et_sa_provenance() {
 
     // Le plafond de limit vaut aussi en json, et le total reste compté au-delà : une vue sait
     // qu'il en manque.
-    let borne = texte(backend.call("outline", json!({"path": "src/a.rs", "format": "json", "limit": 1})).expect("outline borné"));
-    let borne: Value = serde_json::from_str(&borne).unwrap();
+    let borne = json_de(json!({"path": "src/a.rs", "format": "json", "limit": 1}));
     assert_eq!((borne["rows"].as_array().unwrap().len(), borne["total"].clone()), (1, json!(2)), "rows < total : {borne}");
 
-    let vide = texte(backend.call("outline", json!({"path": "src/absent.rs", "format": "json"})).expect("outline d'un chemin absent"));
-    let vide: Value = serde_json::from_str(&vide).unwrap();
+    let vide = json_de(json!({"path": "src/absent.rs", "format": "json"}));
     assert_eq!((vide["rows"].clone(), vide["total"].clone()), (json!([]), json!(0)), "{vide}");
 }
 
