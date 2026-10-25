@@ -96,6 +96,10 @@ fn manifeste(dir: &Path) -> PathBuf {
         let schema = e["schema"].as_str().unwrap().to_string();
         e["schema"] = json!(memoire.join(schema).display().to_string());
         e["config"]["signals"] = json!([]);
+        // Le dossier de la mémoire n'est pas l'objet de cette suite (e2e_memoire_fichiers).
+        if let Some(o) = e.as_object_mut() {
+            o.remove("files");
+        }
         e
     };
 

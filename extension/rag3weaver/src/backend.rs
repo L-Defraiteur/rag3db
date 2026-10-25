@@ -1150,6 +1150,23 @@ impl PreparedBackend {
             mappings.insert(name.clone(), mapping);
             entities.insert(name.clone(), config);
         }
+        // Tous les miroirs connus : chacun apprend quelles entités n'ont pas de
+        // fichier à elles (leurs lignes voyagent dans les blocs qui les citent).
+        let sans_fichier: BTreeSet<String> =
+            manifest.entities.keys().filter(|e| !miroirs.contains_key(*e)).cloned().collect();
+        // Relatifs à la racine (commune à tous les miroirs d'un manifeste).
+        let dossier = |m: &crate::fichiers_entite::Miroir| -> PathBuf { PathBuf::from(&m.decl.dir) };
+        for (nom, m) in &miroirs {
+            let _ = m.sans_fichier.set(sans_fichier.clone());
+            let le_mien = dossier(m);
+            let voisins: Vec<PathBuf> = miroirs
+                .iter()
+                .filter(|(autre, _)| *autre != nom)
+                .map(|(_, a)| dossier(a))
+                .filter(|d| d != &le_mien && (le_mien.as_os_str().is_empty() || d.starts_with(&le_mien)))
+                .collect();
+            let _ = m.dossiers_voisins.set(voisins);
+        }
         if let Some(ui) = &manifest.ui_state {
             if !entities.contains_key(&ui.entity) {
                 return Err(format!(
@@ -4120,7 +4137,10 @@ impl Backend {
             let Some(ligne) = cat.get(entite, u).map_err(|e| e.to_string())? else { continue };
             let mut champs = serde_json::Map::new();
             for (k, v) in ligne {
-                if k.starts_with('_') || crate::scope::is_scope_column(&k) || matches!(v, crate::connection::CypherValue::Null) {
+                // Les vecteurs (`embedding…`) se recalculent : une base
+                // reconstruite à blanc ne les a pas encore, et ils ne disent
+                // rien de ce que les fichiers portent.
+                if k.starts_with('_') || crate::scope::is_scope_column(&k) || crate::schema::is_builtin_column(&k) || matches!(v, crate::connection::CypherValue::Null) {
                     continue;
                 }
                 champs.insert(k, serde_json::to_value(v).map_err(|e| e.to_string())?);

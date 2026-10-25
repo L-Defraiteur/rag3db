@@ -1,0 +1,33 @@
+# {{ record.name }}
+
+{{ record.about }}
+
+## État
+{% for e in related.etat %}
+{{ e.resume }}
+
+### Faits
+{% for f in e.faits %}
+- {{ f.texte }} — *{{ f.nature }}*
+{% endfor %}
+{% else %}
+*Pas encore d'état : il se calcule depuis les apports.*
+{% endfor %}
+
+## Ancres
+{% for r in related.ancres %}
+- `{{ r.genre }}` : `{{ r.valeur }}`
+{% else %}
+*Aucune.*
+{% endfor %}
+
+## Apports
+{% for a in related.apports %}
+### {{ a.section }} — {{ a.created_at | date }}{% if a.author %}, {{ a.author }}{% endif %}
+
+Source : [{{ a.source }}](../{{ a.source }}), section « {{ a.section }} » · {{ a.niveau }} · {{ a.state }}
+
+{{ a.texte }}
+{% else %}
+*Aucun.*
+{% endfor %}

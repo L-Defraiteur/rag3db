@@ -160,6 +160,8 @@ mod e2e_mcp_hote_designe;
 mod e2e_mcp_sigterm;
 #[path = "../e2e_mcp_stdio.rs"]
 mod e2e_mcp_stdio;
+#[path = "../e2e_memoire_fichiers.rs"]
+mod e2e_memoire_fichiers;
 #[path = "../e2e_memoire_modele.rs"]
 mod e2e_memoire_modele;
 #[path = "../e2e_mesure_impact.rs"]

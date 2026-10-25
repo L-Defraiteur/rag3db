@@ -46,6 +46,8 @@ pub(crate) mod jouable {
         fn absolutiser(v: &mut Value, gabarit: &Path) {
             const CLES: &[&str] = &[
                 "graph", "schema", "input_schema",
+                // Le gabarit jinja d'un fichier composé (`files.template`).
+                "template",
                 // Les scripts d'un manifeste sont une table nom → chemin : la
                 // clé est le nom du script, pas « script ». On les prend donc
                 // par leur extension, plus bas.

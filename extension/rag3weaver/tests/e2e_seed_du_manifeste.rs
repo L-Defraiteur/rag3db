@@ -25,6 +25,10 @@ fn manifeste(dir: &Path, seed: Value) -> PathBuf {
     let schema = genre["schema"].as_str().unwrap().to_string();
     genre["schema"] = json!(memoire.join(schema).display().to_string());
     genre["config"]["signals"] = json!([]);
+    // Le dossier de la mémoire n'est pas l'objet de cette suite (e2e_memoire_fichiers).
+    if let Some(o) = genre.as_object_mut() {
+        o.remove("files");
+    }
     let m = json!({
         "version": 1, "name": "semis", "database": "base.rag3db",
         "embeddings": {"address": "127.0.0.1:9", "model": "none", "dimensions": 8},

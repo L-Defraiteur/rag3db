@@ -840,6 +840,14 @@ pub fn rendre<T: serde::Serialize>(donnees: &T, gabarit: &str) -> Result<String,
         minijinja::Value::from_serialize(value)
     });
     env.add_filter("tree", |v: minijinja::Value| structured_tree(&serde_json::to_value(v).unwrap_or(serde_json::Value::Null)));
+    // `{{ n.created_at | date }}` : des millisecondes depuis l'époque, en
+    // UTC, pour qu'un fichier réécrit sur un autre poste reste identique.
+    env.add_filter("date", |v: minijinja::Value| -> String {
+        match v.as_i64().and_then(|ms| jiff::Timestamp::from_millisecond(ms).ok()) {
+            Some(t) => t.strftime("%Y-%m-%d %H:%M UTC").to_string(),
+            None => v.to_string(),
+        }
+    });
     env.add_template("vue", gabarit).map_err(|e| format!("gabarit invalide : {e}"))?;
     let tpl = env.get_template("vue").map_err(|e| format!("gabarit : {e}"))?;
     tpl.render(donnees).map_err(|e| format!("gabarit : {e}"))
