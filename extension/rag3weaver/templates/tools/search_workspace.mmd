@@ -2,7 +2,7 @@
 %% description: Cherche dans un espace de travail, et choisit seul comment : l'index (mots et sens) quand il est prêt, le balayage des fichiers (mots exacts) quand rien n'est encore indexé. La réponse dit toujours d'où elle vient — une ligne d'état quand l'index n'est pas entier.
 %% param: target string! -- Entité où chercher (un binding du manifeste, en général).
 %% param: query string! -- Description naturelle, nom, identifiant.
-%% param: options json! -- SearchOptions : filter_condition, limit, offset, signals, consistency, rerank. rerank {"candidates": 20} fait relire les 20 premiers résultats par un cross-encoder (une vraie question en langue naturelle ; inutile sur un identifiant) ; sans relecteur configuré, la réponse le dit. Pendant une réindexation, consistency « eventual » (défaut) répond sur l'état validé d'avant sans l'attendre, et peut ne pas voir vos propres écritures en file ; « strict » l'attend.
+%% param: options json! -- SearchOptions : filter_condition, limit, offset, signals, consistency, rerank, highlights. highlights « sparse » ajoute aux morceaux sans surlignage lucivy des passages à surligner (environ 300 ms, utile seulement à qui affiche les morceaux). rerank {"candidates": 20} fait relire les 20 premiers résultats par un cross-encoder (une vraie question en langue naturelle ; inutile sur un identifiant) ; sans relecteur configuré, la réponse le dit. Pendant une réindexation, consistency « eventual » (défaut) répond sur l'état validé d'avant sans l'attendre, et peut ne pas voir vos propres écritures en file ; « strict » l'attend.
 %% param: scope string = "" -- Borner la réponse à ces chemins relatifs à la racine, séparés par | (src/|test/) ; vide : tout l'index. Composé avec le filtre des options.
 %% param: language string = "" -- Borner la réponse à ces langages, séparés par | (cpp|rust) ; vide : tous.
 %% param: mode string = "auto" -- auto (l'état de l'index décide), indexed (toujours l'index), scan (toujours le balayage).
@@ -27,6 +27,12 @@
 %% relecteur, il le dit dans la méta, jamais en silence. `keep_signal` garde la
 %% provenance (`bm25+vector`), et sa ligne s'ajoute à `signals`.
 %%
+%% **Le surlignage à l'affichage, à la demande** (26 octobre 2026) :
+%% `HighlightNode`, après la pagination, lit `options.highlights` ; « sparse »
+%% surligne les morceaux de la page que lucivy n'a pas surlignés (le creux de
+%% bge-m3, borné à 1 s, sinon les mots de la requête, et la méta le dit). La
+%% page de l'IDE le demande ; un agent qui n'affiche pas ne le paie pas.
+%%
 %% **La requête entière devant** (Lucie, 25 octobre 2026) : sur lucivy, le
 %% plein texte cherche la requête entière (un `contains` relâché à distance 1,
 %% comme la démo WASM) et, pour plusieurs mots, les mots ; la première sort
@@ -46,6 +52,7 @@ graph LR
     fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4', dominant='bm25_exact')"]
     rerank["RerankNode(keep_signal=true)"]
     paginate["PaginateNode"]
+    highlight["HighlightNode"]
     resolve["ResolveParentNode"]
     render["RenderResultsNode"]
     source -->|query| bm25
@@ -55,6 +62,7 @@ graph LR
     source -->|query| fuse
     source -->|query| rerank
     source -->|query| paginate
+    source -->|query| highlight
     source -->|query| resolve
     source -->|query| render
     source -->|meta| render
@@ -63,6 +71,7 @@ graph LR
     sparse -->|meta| render
     scan -->|meta| render
     rerank -->|meta| render
+    highlight -->|meta| render
     bm25 -->|results:bm25| fuse
     bm25 -->|exact:signals| fuse
     bm25 -->|status| fuse
@@ -72,6 +81,7 @@ graph LR
     sparse -->|status| fuse
     fuse -->|results| rerank
     rerank -->|results| paginate
-    paginate -->|results| resolve
+    paginate -->|results| highlight
+    highlight -->|results| resolve
     resolve -->|results| render
     scan -->|results| render
