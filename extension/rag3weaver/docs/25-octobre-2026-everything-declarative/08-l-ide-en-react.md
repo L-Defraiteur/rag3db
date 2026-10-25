@@ -86,13 +86,33 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
   `#dag-etat`, `.proposition`, `#fusionner`, `#rejeter`, `#chat-message`…) : gardés tels quels
   dans les composants, ou changés avec le témoin dans le même commit.
 
-## Ce qui n'est pas décidé
+## Tranché par c7, et prouvé au premier bâti
 
-- Tailwind par le CLI (`@tailwindcss/cli`) ou par le plugin esbuild : le CLI est le plus court,
-  et le `--check` compare des octets, donc l'un ou l'autre doit être déterministe ; à vérifier au
-  premier bâti sur les deux postes (même node, même lock).
-- Le mode sombre : la page actuelle a le sien ; shadcn en a un (`class="dark"`). On suit celui de
-  l'OS, comme aujourd'hui, jusqu'à ce que Lucie dise.
-- L'ancienne page et la nouvelle se partagent `/ide/` : l'ancienne passe à `/ide/ancienne/` dès la
-  vue 1, ou la nouvelle n'y vient qu'à la vue 2 ? Je propose la première : Lucie voit le cadre neuf
-  tout de suite, et chaque vue non portée ouvre l'ancienne dans son URL d'avant.
+- **Tailwind par la CLI épinglée** (`@tailwindcss/cli` 4.3.3), et le bâti est déterministe :
+  deux `scripts/ide_bundle.sh --check` successifs après un bâti rendent VERT sur ce poste
+  (node 22.23, `npm ci` sur le lock) ; esbuild n'écrit ni date ni chemin absolu (`legalComments:
+  none`, pas de source map servie). La preuve se rejoue à chaque passe par l'étape `--check`.
+- **Le mode sombre dès le cadre**, par les variables CSS de shadcn (`:root` et `.dark`) : la
+  préférence du système par défaut, un bouton dans l'en-tête (`#theme`, lucide Sun / Moon), le
+  choix gardé dans `localStorage` (`ide-theme`) et posé avant le premier rendu par un script de
+  `index.html`. Témoin navigateur : la classe `dark` et la couleur de fond basculent au clic, le
+  choix tient au rechargement.
+- **`/ide/` dès la vue 1** : l'hôte sert la page nouvelle à `/ide` et `/ide/`, l'ancienne pour
+  toute autre URL (`/ide/code/<id>/<vue>/…`) tant que la vue n'est pas portée, et toujours sous
+  `/ide/ancienne/…` ; l'ancienne page lit son URL sous ce préfixe. Les liens de l'accueil neuf
+  restent `/ide/code/<id>/<vue>/`, donc les témoins de l'ancienne page passent par le nouvel accueil
+  sans changer (`#vue h1` « Backends », un lien `/ide/code/<id>/arbre/` par backend).
+
+## Ce qui est fait (vue 1)
+
+- `ui/ide/` : `package.json` et `package-lock.json` épinglés, `build.mjs`, `tsconfig.json`,
+  `components.json`, les composants shadcn copiés (`button`, `badge`, `card`, `tabs`, `sheet`,
+  `separator`, `tooltip`, `scroll-area`), `lib/utils.ts`, `lib/host.ts` (l'état, l'appel, le
+  flux), `lib/theme.ts`, `src/main.tsx` (le cadre), `src/views/Home.tsx` (l'accueil : les backends
+  en cartes, leurs vues, leurs tâches), `src/app.css` (le thème), `LICENSES.md`.
+- `templates/ide/app/` : `index.html`, `app.js` (235 Kio minifié : React, les primitives radix de
+  huit composants, lucide à la demande), `app.css` (29 Kio), `bundle.json`.
+- L'hôte : `/ide/app.js`, `/ide/app.css`, `/ide/` neuf, `/ide/ancienne/…`.
+- Témoins : `ide::tests::le_bundle_de_l_ide_est_celui_que_son_manifeste_decrit` (sha256 des
+  octets embarqués = `bundle.json`, versions = `package.json`, `index.html` charge le bundle) ;
+  `navigateur::le_cadre_de_l_ide_se_rend_dans_les_deux_modes`.
