@@ -1269,22 +1269,8 @@ impl PreparedBackend {
             // **Les Plans déclarés** (`PlanNode(plan=@plans/…)`) : lus et vérifiés
             // ici, contre leur forme et contre le schéma du manifeste ; un Plan
             // faux refuse le gabarit.
-            let plans: Vec<(String, String)> = tool
-                .template()
-                .nodes
-                .iter()
-                .filter(|n| n.node_type == crate::dataflow::plan_node::NODE_TYPE)
-                .filter_map(|n| n.config.get("plan").and_then(Value::as_str).map(|c| (n.name.clone(), c.to_string())))
-                .collect();
-            for (noeud, cite) in plans {
-                let lu = crate::dataflow::plan_node::lire_le_plan(
-                    &cite,
-                    |chemin| lire_texte(lecteur, &directory.join(chemin)),
-                    &schema_des_plans,
-                )
+            crate::dataflow::plan_node::resoudre_les_plans(&mut tool, |chemin| lire_texte(lecteur, &directory.join(chemin)), &schema_des_plans)
                 .map_err(|e| format!("{name}: {e}"))?;
-                tool.remplacer_config(&noeud, "plan", lu);
-            }
             for key in attachment.bindings.keys() {
                 if !tool.params().iter().any(|p| p.name == key.as_str()) {
                     return Err(format!("{name}: unknown binding {key}"));
