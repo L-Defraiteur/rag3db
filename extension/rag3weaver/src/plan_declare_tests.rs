@@ -162,7 +162,7 @@ fn la_pagination_et_les_filtres_facultatifs() {
 /// connexion ; elles impriment ce qu'elles rendent. Corrigé par 8b98f19f7 ; la
 /// recette reste, pour la rejouer sur une autre lib.
 #[test]
-#[ignore]
+#[ignore = "recette d'exploration, n'affirme rien : elle imprime ce que rend chaque variante ; défaut corrigé par 8b98f19f7, docs/tickets/closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md"]
 fn isoler_le_compte_sous_une_liste_en_parametre() {
     use crate::connection::QueryParam;
     let dir = tempfile::tempdir().unwrap();
