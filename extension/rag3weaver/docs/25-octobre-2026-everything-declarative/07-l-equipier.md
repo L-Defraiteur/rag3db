@@ -45,10 +45,14 @@ fiabilité. Ce lot est équipier-1.
    qui est arrivé dans la boîte pendant le pas (réponses aux bloquants, consignes nouvelles) et le
    mini-plan courant. La conversation est la même pour ce lot. La compaction par les fiches est
    pour équipier-2.
-6. **La fin.**
-   - Plus d'élément faisable ni bloqué : l'agent rend compte (`report`), et l'équipier
-     s'arrête.
-   - Seulement des éléments bloqués : il attend la boîte. Une réponse qui arrive le relance.
+6. **La fin se juge après le pas, sur les plans.** L'équipier s'arrête quand il n'y a plus
+   aucun plan vivant (ni actif, ni en pause) et que le pas a été déclaré fini : « plus rien à
+   faire : compte rendu » s'il y a eu un plan, « fait sans plan » sinon. Un plan actif qui n'a
+   plus rien à faire n'est pas la fin : la frontière dit de le clore, puis de reprendre un plan
+   en pause ou de le clore aussi. Avec seulement des éléments qui attendent le superviseur, il
+   attend la boîte ; une ligne qui arrive le relance. La fin s'écrit dans la boîte (`ended`,
+   de `host`), et l'équipier garde dans `mailbox.read` combien de lignes il a lues : relancé
+   plus tard, il ne relit pas les anciennes.
 
 ## Les messages
 
@@ -73,7 +77,8 @@ Il y a deux voies :
   Une ligne ajoutée au fichier à la main est lue à la frontière suivante, mais ne réveille pas
   un équipier qui attend (pas de surveillance de fichier dans ce lot).
 - **L'agent écrit** par `report`, et `step_done` y ajoute sa ligne.
-- **L'IDE** montre la boîte et le mini-plan dans la vue de la tâche.
+- **L'IDE** lit `GET /ide/teammate?backend=&task=` : la boîte, les plans vivants, les plans
+  clos, et si l'équipier tourne.
 
 Le canal des sessions Claude n'est pas utilisé.
 
