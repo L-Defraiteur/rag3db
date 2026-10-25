@@ -194,8 +194,13 @@ pub(crate) fn journal_line(
         Ok(Outcome::Deferred) => "remis à l'indexation entière",
         Err(_) => "en erreur",
     };
+    // La cause d'un échec, sur la même ligne.
+    let cause = match outcome {
+        Err(e) => format!(" — cause : {}", e.split_whitespace().collect::<Vec<_>>().join(" ")),
+        Ok(_) => String::new(),
+    };
     format!(
-        "[montre] {path} {verbe} : verrou attendu {} ms, tenu {} ms — {corps}{hors}",
+        "[montre] {path} {verbe} : verrou attendu {} ms, tenu {} ms — {corps}{hors}{cause}",
         waited.as_millis(),
         held.as_millis()
     )
@@ -370,7 +375,15 @@ impl Node for ReindexFileNode {
                     Outcome::Reindexed
                 })
             } else {
-                Err("au moins un fichier en échec".to_string())
+                // La cause exacte de chaque fichier en échec, dans la ligne du
+                // journal de l'hôte : un refus du moteur se reconnaît sans
+                // aller lire le journal de la réaction (les 27 fichiers en
+                // erreur du 25 octobre ne disaient pas sur quelle arête).
+                let causes: Vec<String> = verdicts
+                    .iter()
+                    .filter_map(|(p, _, r)| r.as_ref().err().map(|e| format!("{p} : {e}")))
+                    .collect();
+                Err(causes.join(" ; "))
             };
             eprintln!("{}", journal_line(&etiquette, &resume, waited, tenu, &steps));
             for (path, present, verdict) in verdicts {
