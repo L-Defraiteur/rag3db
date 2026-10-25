@@ -488,7 +488,9 @@ async function recherche(id) {
   const reclasser = params.get("reclasser") === "1";
   document.querySelector("#chercher input").value = q;
   fil.append(" · recherche");
-  const options = { limit: 30 };
+  // La page affiche les morceaux : elle demande leurs surlignages, le creux
+  // compris pour ceux que lucivy n'a pas surlignés (`HighlightNode`).
+  const options = { limit: 30, highlights: "sparse" };
   if (reclasser) options.rerank = { candidates: 20 };
   const reponse = await appelerEntier(id, "search_code", { query: q, options });
   const r = sortie(reponse?.result);
