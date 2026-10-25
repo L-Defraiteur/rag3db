@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Un dossier qui dit de quoi il parle.** Chaque fiche porte la version
+  de son format, et le dossier un `manifeste.yaml` : une base reconstruite après un
+  changement de format relit les anciens fichiers par leurs migrations, ou dit
+  lesquels elle ne sait pas lire. bea6c6a98.
 - **25 oct. — La recherche de l'IDE montre ce que l'hôte sait.** Chaque résultat
   avec son score et ce que chaque signal en a dit, l'état de l'index en tête, les
   replis en pied, et une case pour faire relire. b0e5451d0.
