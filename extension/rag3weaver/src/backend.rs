@@ -169,6 +169,7 @@ impl EmbeddingService {
             context_tokens: None,
             params: Default::default(),
             timeout_secs: self.timeout_secs,
+            reasoning: None,
         }
     }
 }
