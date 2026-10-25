@@ -466,15 +466,15 @@ pub trait SchemaDialect: Send + Sync {
     /// en masse puis reconstruire (doc 18).
     fn drop_vector_index(&self, table: &str, index_name: &str) -> String;
 
-    /// **L'index vectoriel, vu de la transaction qui lit** (ticket
+    /// **Les index vectoriels, vus de la transaction qui lit** (ticket
     /// 2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere) :
-    /// une requête qui rend une ligne si l'index existe (ou si la lecture
-    /// n'en a pas besoin), sa seule colonne vraie s'il se lit, et aucune
-    /// s'il manque. Elle ne peut pas échouer au
-    /// binder quand l'index manque ; la lecture d'un index absent, elle,
-    /// condamne la transaction en lecture que partagent les signaux d'un
-    /// appel (L6).
-    fn vector_index_presence(&self, table: &str, index_name: &str) -> (String, Vec<crate::connection::QueryParam>);
+    /// une requête sans paramètre qui rend une ligne par index, trois colonnes
+    /// (table, nom de l'index, l'index se lit-il). `None` quand la lecture
+    /// dense n'a pas besoin d'index. Elle ne peut échouer ni à l'analyse ni
+    /// au binder : une instruction qui échoue condamne la transaction en
+    /// lecture que partagent les signaux d'un appel (L6), et la lecture d'un
+    /// index absent le faisait.
+    fn vector_index_listing(&self) -> Option<String>;
 
     // ── Internal tables ──────────────────────────────────────────────────
 
@@ -1840,13 +1840,11 @@ impl SchemaDialect for Rag3dbDialect {
 
     /// `SHOW_INDEXES` lit le catalogue de la transaction : il voit l'état même
     /// que verrait `QUERY_VECTOR_INDEX`. Un index dont l'extension n'est pas
-    /// chargée ne se lit pas non plus.
-    fn vector_index_presence(&self, table: &str, index_name: &str) -> (String, Vec<crate::connection::QueryParam>) {
-        use crate::connection::QueryParam;
-        (
-            "CALL SHOW_INDEXES() WHERE table_name = $table AND index_name = $index RETURN extension_loaded".to_string(),
-            vec![QueryParam::new("table", table), QueryParam::new("index", index_name)],
-        )
+    /// chargée ne se lit pas non plus. Sans `WHERE` ni paramètre : le filtre
+    /// se fait à la lecture des lignes (un nom de paramètre réservé, `$table`,
+    /// faisait échouer l'analyse, et l'échec condamnait l'instantané).
+    fn vector_index_listing(&self) -> Option<String> {
+        Some("CALL SHOW_INDEXES() RETURN table_name, index_name, extension_loaded".to_string())
     }
 
     fn create_meta_table(&self) -> String {
@@ -3046,8 +3044,8 @@ impl SchemaDialect for PostgresDialect {
 
     /// pgvector lit la colonne même sans index (un balayage) : l'absence d'un
     /// index ne rend jamais la branche dense illisible ici.
-    fn vector_index_presence(&self, _table: &str, _index_name: &str) -> (String, Vec<crate::connection::QueryParam>) {
-        ("SELECT true".to_string(), vec![])
+    fn vector_index_listing(&self) -> Option<String> {
+        None
     }
 
     fn create_meta_table(&self) -> String {

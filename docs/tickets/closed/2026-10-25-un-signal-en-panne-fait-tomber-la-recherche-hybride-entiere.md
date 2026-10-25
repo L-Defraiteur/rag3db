@@ -44,9 +44,11 @@ La cause : sous L6, les signaux d'un appel lisent dans une seule transaction `RE
 le creux et la résolution des morceaux tombaient ensuite sur le refus.
 
 - `VectorSearchNode` demande d'abord à l'instantané si son index se lit
-  (`SchemaDialect::vector_index_presence` : `CALL SHOW_INDEXES()` pour rag3db, qui lit le
-  catalogue de la transaction ; toujours vrai pour pgvector, qui lit la colonne sans index).
-  Cette question ne peut pas échouer au binder.
+  (`SchemaDialect::vector_index_listing` : `CALL SHOW_INDEXES()` pour rag3db, sans paramètre,
+  qui lit le catalogue de la transaction ; rien pour pgvector, qui lit la colonne sans index).
+  Cette question ne peut échouer ni à l'analyse ni au binder. Une première forme,
+  `WHERE table_name = $table`, échouait à l'analyse (`table` est réservé) et condamnait
+  l'instantané à son tour : les témoins l'ont vue rouge dès la recherche d'avant le retrait.
 - Absent, la branche se replie en **indisponible** (pas en échec), sans qu'aucune instruction
   n'échoue : la transaction reste saine, les autres signaux répondent.
 - La raison est dite dans la réponse (`meta.warnings`, rendue en pied) : « the vector index `…`

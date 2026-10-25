@@ -641,12 +641,11 @@ fn la_recherche_se_replie_sans_l_index_vectoriel(nom: &str, drapeau: bool, raiso
             v.sort();
             v[v.len() / 2]
         };
-        let index = backend.catalog.lock().unwrap().vector_storage("Scope_Chunk").expect("le stockage").index;
-        let question = format!("CALL SHOW_INDEXES() WHERE table_name = 'Scope_Chunk' AND index_name = '{index}' RETURN extension_loaded");
+        let question = "CALL SHOW_INDEXES() RETURN table_name, index_name, extension_loaded";
         let questions: Vec<u128> = (0..100)
             .map(|_| {
                 let t = Instant::now();
-                backend.catalog.lock().unwrap().execute_read_with_params(&question, &[]).expect("la question");
+                backend.catalog.lock().unwrap().execute_read_with_params(question, &[]).expect("la question");
                 t.elapsed().as_micros()
             })
             .collect();

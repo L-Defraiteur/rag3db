@@ -151,7 +151,9 @@ fn replier_la_branche(
 /// non en échec. La question passe par le catalogue du moteur, qui ne peut pas
 /// échouer au binder : lire l'index absent, lui, condamnait la transaction en
 /// lecture que partagent tous les signaux de l'appel (L6), et le plein texte
-/// tombait avec. La raison vient du drapeau que pose le rattrapage
+/// tombait avec. La question elle-même est sans paramètre : une requête qui
+/// échoue à l'analyse condamne l'instantané de la même façon. La raison vient
+/// du drapeau que pose le rattrapage
 /// (`Catalog::ajuster_l_index_pour_le_retard`), lu dans le même instantané.
 fn index_vectoriel_illisible(
     conn: &dyn crate::connection::DbConnection,
@@ -159,25 +161,23 @@ fn index_vectoriel_illisible(
     table: &str,
     index: &str,
 ) -> Option<Chute> {
-    let (requete, params) = dialect.vector_index_presence(table, index);
-    let lignes = match conn.execute_with_params(&requete, &params) {
+    let requete = dialect.vector_index_listing()?;
+    let lignes = match conn.execute(&requete) {
         Ok(r) => r.rows,
         Err(e) => return Some(Chute::Echec(format!("VectorSearchNode: vector index check failed: {e}"))),
     };
-    match lignes.first().map(|l| l.first().and_then(|v| v.as_bool()).unwrap_or(true)) {
+    let lisible = lignes
+        .iter()
+        .find(|l| l.first().and_then(|v| v.as_str()) == Some(table) && l.get(1).and_then(|v| v.as_str()) == Some(index))
+        .map(|l| l.get(2).and_then(|v| v.as_bool()).unwrap_or(true));
+    match lisible {
         Some(true) => None,
         Some(false) => Some(Chute::Indisponible(format!(
             "the vector index `{index}` exists but its extension is not loaded — answering from the other signals"
         ))),
         None => {
             let cle = format!("vector_index_dropped:{table}:{index}");
-            let parametre = [crate::connection::QueryParam::new("cle", cle.as_str())];
-            let tombe = conn.execute_with_params(&dialect.load_meta_by_prefix("cle"), &parametre).is_ok_and(|r| {
-                r.rows.iter().any(|l| {
-                    l.first().and_then(|v| v.as_str()) == Some(cle.as_str())
-                        && l.get(1).and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty())
-                })
-            });
+            let tombe = crate::catalog::Catalog::read_meta_key_on(dialect, conn, &cle).ok().flatten().is_some_and(|v| !v.is_empty());
             Some(Chute::Indisponible(if tombe {
                 format!("the vector index `{index}` is dropped while its vectors catch up — answering from the other signals")
             } else {
