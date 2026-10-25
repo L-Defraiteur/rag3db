@@ -356,3 +356,22 @@ le `mv` laisse les instances en cours sur leur ancien fichier, et `scp` ne
 garde pas le bit d'exécution (il a manqué quelques secondes sur luciepc au
 premier déploiement). Versions précédentes gardées à côté :
 `poste.avant-11oct`, `poste.avant-push`, `poste.avant-relais`.
+
+## Le garde du rebase, dans tout script de fonte (everything declarative, 25 octobre 2026)
+
+Un script `set -e` a continué après un `git rebase` arrêté sur un conflit : la ligne
+`[ ! -d "$d/rebase-merge" ] && echo "pas de rebase en cours"` n'est pas un garde — un `[` faux dans
+un `&&` ne sort pas —, et `git rev-parse --short HEAD` a rendu la tête de master, qui est partie
+dans la branche poussée et dans le script de passe (une passe lancée sur le mauvais hash, arrêtée à
+la main). Le garde, juste après le rebase et **avant toute lecture de HEAD** :
+
+```bash
+git rebase -q "$M" || true
+d=$(git rev-parse --git-dir)
+if [ -d "$d/rebase-merge" ] || [ -d "$d/rebase-apply" ]; then
+  echo "ARRÊT : rebase en conflit"; git status --short | grep '^UU'; exit 1
+fi
+```
+
+Le contrôle d'ancêtre (`git merge-base --is-ancestor`) ne suffit pas : pendant un rebase arrêté,
+HEAD est la tête de master, et il passe (ticket du 18 octobre, même cause).
