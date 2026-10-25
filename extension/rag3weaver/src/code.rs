@@ -2693,13 +2693,13 @@ impl Catalog {
                     Some(vue) => std::borrow::Cow::Owned(
                         definers
                             .iter()
-                            .filter(|d| match fichiers.get(*d) {
-                                Some(f) if vue.fichiers.contains(f) => true,
-                                Some(f) if vue.par_entete(f) => {
+                            .filter(|d| match fichiers.get(*d).map(|f| vue.visibilite(f)) {
+                                Some(Some("entete")) => {
                                     par_entete.insert((*d).clone());
                                     true
                                 }
-                                Some(_) => false,
+                                Some(Some(_)) => true,
+                                Some(None) => false,
                                 None => true,
                             })
                             .cloned()
@@ -3472,6 +3472,60 @@ fn famille_de_langage(chemin: &str) -> Option<&'static str> {
     })
 }
 
+/// **Les mentions qu'aucun définisseur visible ne reçoit**, relu par un outil de lecture
+/// (`usages`, `impact`) : pour chaque couple (uuid du scope mentionneur, uuids des scopes qui
+/// définissent le nom), `true` si le mentionneur est C/C++, que sa fermeture d'includes est complète, et qu'aucune
+/// définition C/C++ ne lui est visible par la règle de la résolution ([`Vue::visibilite`]). C'est
+/// l'abstention que la résolution a comptée, dite à qui lit (décidé par c7 le 25 octobre 2026 :
+/// « un appelant perdu en silence ment par omission »). Les includes se lisent par `catalog`, la
+/// vue de lecture de l'outil, jamais par le catalogue derrière son mutex, et seulement si un
+/// mentionneur est C/C++.
+pub fn mentions_sans_definisseur_visible(catalog: &dyn crate::read_view::ReadCatalog, couples: &[(&str, Vec<&str>)]) -> Result<Vec<bool>, CatalogError> {
+    let cpp = |f: &str| famille_de_langage(f) == Some("c++");
+    // Les fichiers par `Scope.file_path`, la clé que la résolution compare aux includes (`repo_path`,
+    // que le rendu affiche, peut en différer).
+    let uuids: Vec<CypherValue> = couples
+        .iter()
+        .flat_map(|(m, defs)| std::iter::once(*m).chain(defs.iter().copied()))
+        .collect::<std::collections::BTreeSet<&str>>()
+        .into_iter()
+        .map(|u| CypherValue::String(u.to_string()))
+        .collect();
+    let lire = rag3weaver_ir::Select::by_uuids(SCOPE, vec![rag3weaver_ir::Column::Node("file_path".into())]);
+    let requete = catalog.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+    let lignes = catalog.execute_read_with_params(&requete, &[crate::connection::QueryParam::new("uuids", CypherValue::List(uuids))])?;
+    let fichier: HashMap<String, String> = lignes
+        .rows
+        .iter()
+        .filter_map(|r| match (r.first(), r.get(1)) {
+            (Some(CypherValue::String(u)), Some(CypherValue::String(f))) => Some((u.clone(), f.clone())),
+            _ => None,
+        })
+        .collect();
+    let couples: Vec<(&str, Vec<&str>)> = couples
+        .iter()
+        .map(|(m, defs)| (fichier.get(*m).map_or("", |f| f.as_str()), defs.iter().map(|d| fichier.get(*d).map_or("", |f| f.as_str())).collect()))
+        .collect();
+    if !couples.iter().any(|(m, _)| cpp(m)) {
+        return Ok(vec![false; couples.len()]);
+    }
+    let inclusions = Inclusions::charger_par(catalog.dialect_arc().as_ref(), |q| catalog.execute_read_with_params(q, &[]))?;
+    let mut vues: HashMap<&str, Option<Vue>> = HashMap::new();
+    Ok(couples
+        .iter()
+        .map(|(m, defs)| {
+            if !cpp(m) {
+                return false;
+            }
+            let Some(vue) = vues.entry(m).or_insert_with(|| inclusions.vue(m)) else { return false };
+            // Sans définition C/C++, l'abstention est celle de la garde de langage, pas des
+            // includes ; une définition sans fichier connu ne s'ôte pas, comme à la résolution.
+            let defs_cpp: Vec<&&str> = defs.iter().filter(|d| d.is_empty() || cpp(d)).collect();
+            !defs_cpp.is_empty() && !defs_cpp.iter().any(|d| d.is_empty() || vue.visibilite(d).is_some())
+        })
+        .collect())
+}
+
 /// **Ce qu'un fichier C/C++ voit** : la fermeture de ses #include (lui compris), et les noms de
 /// base des en-têtes qu'elle contient.
 #[derive(Debug, Default)]
@@ -3481,6 +3535,19 @@ struct Vue {
 }
 
 impl Vue {
+    /// **La règle de visibilité, une seule** : par où `fichier` (celui d'un définisseur) est vu
+    /// du mentionneur dont c'est la vue — « inclusion », « entete », ou `None` (invisible). La
+    /// résolution et la lecture (`usages`, `impact`) la partagent : jamais deux règles qui divergent.
+    fn visibilite(&self, fichier: &str) -> Option<&'static str> {
+        if self.fichiers.contains(fichier) {
+            Some("inclusion")
+        } else if self.par_entete(fichier) {
+            Some("entete")
+        } else {
+            None
+        }
+    }
+
     /// Un .c/.cc/.cpp que la fermeture ne contient pas, mais dont un en-tête de même nom de base y
     /// est : la définition que cet en-tête déclare (`node_table.cpp` ↔ `node_table.h`).
     fn par_entete(&self, fichier: &str) -> bool {
@@ -3501,11 +3568,21 @@ struct Inclusions {
 }
 
 impl Inclusions {
+    /// Par la connexion du catalogue : la résolution voit les fichiers de son propre lot.
     fn charger(cat: &Catalog) -> Result<Self, CatalogError> {
+        Self::charger_par(cat.dialect_arc().as_ref(), |q| cat.conn().execute_with_params(q, &[]).map_err(|e| CatalogError::DbError(e.to_string())))
+    }
+
+    /// Lit `path` et `includes` de toute la table File par `executer` : la connexion d'écriture pour
+    /// la résolution, la vue de lecture (son instantané) pour un outil.
+    fn charger_par(
+        dialecte: &dyn crate::dialect::SchemaDialect,
+        executer: impl Fn(&str) -> Result<crate::connection::QueryResult, CatalogError>,
+    ) -> Result<Self, CatalogError> {
         use rag3weaver_ir::{Column, Select};
         let lire = Select::all(FILE, vec![Column::Node("path".into()), Column::Node("includes".into())]);
-        let requete = cat.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        let rows = cat.conn().execute_with_params(&requete, &[]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let requete = dialecte.select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let rows = executer(&requete)?;
         let mut out = Inclusions::default();
         for row in &rows.rows {
             let Some(CypherValue::String(chemin)) = row.first() else { continue };
