@@ -230,7 +230,12 @@ def verifier(cible: str) -> None:
     Code 2 : un plancher manque, nommé. **Code 3 : un plancher n'a pas pu se
     juger** (un dépôt sans l'historique du moteur, une lib sans commit) — un
     plancher non jugé ne compte jamais comme tenu (96, 25 octobre 2026)."""
+    # `courant` et un identifiant nu se résolvent au magasin, comme le fait la
+    # sous-commande `courant` : `verifier courant` juge la lib que le lien
+    # désigne, pas le mot (96, 25 octobre 2026).
     d = Path(cible)
+    if cible == "courant" or (not d.exists() and (magasin() / cible).exists()):
+        d = Path(os.path.realpath(magasin() / cible))
     ident = (d / "BUILD_ID").read_text().strip() if (d / "BUILD_ID").exists() else d.name
     absents, inconnus = manques(ident)
     for i in inconnus:
@@ -241,8 +246,13 @@ def verifier(cible: str) -> None:
               file=sys.stderr)
         sys.exit(2)
     if inconnus:
-        print(f"rag3db_libs : VERDICT : NON JUGÉ — {len(inconnus)} plancher(s) sans réponse de git pour {ident} : "
-              "jouez depuis un dépôt qui a l'historique du moteur (pas un clone superficiel)", file=sys.stderr)
+        # La cause dite telle qu'elle est, avec son remède.
+        if commit_du_bati(ident) is None:
+            remede = ("l'identifiant ne porte pas de commit : donnez le dossier de la lib, son identifiant "
+                      "complet, ou `courant`")
+        else:
+            remede = "git ne connaît pas un plancher : jouez depuis un dépôt qui a l'historique du moteur (pas un clone superficiel)"
+        print(f"rag3db_libs : VERDICT : NON JUGÉ — {ident} : {remede}", file=sys.stderr)
         sys.exit(3)
     print(f"rag3db_libs : VERDICT : planchers tenus ({len(planchers())}) par {ident}", file=sys.stderr)
 
