@@ -848,6 +848,21 @@ fn la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel() {
         std::thread::sleep(Duration::from_millis(200));
     }
 
+    // **La capacité de la lib liée** : l'état d'un index (NOTED, la colonne `state` de
+    // SHOW_INDEXES) n'existe qu'au format 43. Sous une lib d'avant, ce témoin n'a rien à juger :
+    // il le dit et rend la main, comme un plancher ; il se juge de lui-même après la bascule.
+    let a_l_etat = std::env::var("RAG3WEAVER_MOTEUR_ANCIEN").as_deref() != Ok("1") && {
+        let cat = backend.catalog.lock().unwrap();
+        let stockage = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle");
+        let lignes = cat.execute_raw("CALL SHOW_INDEXES() RETURN *").expect("SHOW_INDEXES").rows;
+        let ligne = lignes.iter().find(|l| l.get(1).and_then(|v| v.as_str()) == Some(stockage.index.as_str()));
+        ligne.expect("l'index vectoriel dans SHOW_INDEXES avant le CREATE").len() > 6
+    };
+    if !a_l_etat {
+        eprintln!("non jugé : la lib n'a pas la colonne state (format 43 requis), bascule à venir");
+        return;
+    }
+
     let (index, colonne, conn) = {
         let cat = backend.catalog.lock().unwrap();
         let stockage = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle");
