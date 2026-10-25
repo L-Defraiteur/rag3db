@@ -24,7 +24,7 @@ refused: it would have reached one direction only.
 
 - Il y a trois occurrences dans `~/.local/state/rag3weaver/daemon.log` (lignes 1861, 2074 et 2464).
   La liste, avec le journal depuis 21 h 12, est copiée dans
-  `~/.cache/rag3weaver-build/temoins-3724accba/locks-trois-occurrences.txt`.
+  `~/.cache/rag3weaver-build/temoins-rust-348fa758b/locks-trois-occurrences.txt`.
 - La base est `~/.local/share/rag3weaver/code-rag3db-depot.rag3db`, passée au format 42 à
   18 h 32.
 - Dans le même drain, juste après la troisième occurrence, des fichiers restent en erreur :
