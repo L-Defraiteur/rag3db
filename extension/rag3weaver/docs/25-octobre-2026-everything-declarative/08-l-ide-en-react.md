@@ -191,3 +191,22 @@ Markdown se rend à la fin du tour. Le bundle passe de 259 à 338 Kio. Témoin n
 (`chat_qui_code::le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise`) : gras, liste
 et bloc de code rendus dans `.body.markdown` ; un `<script>` glissé dans la réponse n'est ni dans
 le DOM ni exécuté, le texte autour reste.
+
+## Ce qui est fait (vue 5 : les tâches et la relecture)
+
+- `src/views/Tasks.tsx` : la liste des tâches ouvertes (`#taches tr[data-nom]` : branche, copie de
+  base, ses vues, ses propositions, son chat), les fermées (`#taches-fermees li[data-nom][data-etat]`),
+  l'ouverture (`#tache-nom`, `#ouvrir-tache`, `#tache-note`) qui relit l'état de l'hôte.
+- `src/views/TaskReview.tsx` : la branche et son départ, « la base a bougé », les témoins de la
+  branche (`#temoins`), fusionner et rejeter (`#message`, `#fusionner`, `#pourquoi`, `#rejeter`,
+  `#tache-note`, puis la liste), la différence ligne à ligne de chaque fichier
+  (`section.fichier-de-tache[data-genre][data-path] .diff .plus|.moins`, `lib/diff.ts` : la plus
+  longue sous-suite commune, comme avant), les graphes changés **en texte** —
+  `section.graphe-propose[data-cible]` avec ses nœuds en `li.ajoute|change|retire[data-nom]` ; le
+  dessin SVG vient avec la vue 7, et le témoin de la relecture lit la liste dans le même commit —,
+  et **l'équipier** de la tâche (`section.equipier[data-running]` : plans actif, en pause, clos ;
+  la boîte ; écrire une demande, une consigne, une réponse, l'arrêt), porté de l'ancienne page.
+- `VUES_PORTEES` : `chat`, `fichier`, `recherche`, `taches`.
+- Au passage : la vue 4 demande `highlights: "sparse"` à `search_code` (c7 d'après Lucie : le
+  surlignage des morceaux trouvés par le seul dense se calcule à l'affichage, sur demande), et le
+  témoin de l'aperçu dit comment préparer les paquets React quand ils manquent.
