@@ -601,6 +601,9 @@
       "to": "Apport"
     }
   },
+  "scripts": {
+    "cited_by_params": "scripts/cited_by_params.rhai"
+  },
   "tools": {
     "put_memory": {
       "graph": "../notebook/graphs/put.mmd",
@@ -799,6 +802,15 @@
         {
           "node": "render",
           "port": "meta"
+        }
+      ]
+    },
+    "cited_by": {
+      "graph": "graphs/cited_by.mmd",
+      "metadata": [
+        {
+          "node": "plan",
+          "port": "total"
         }
       ]
     }

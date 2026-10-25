@@ -40,7 +40,7 @@ impl NodeFactory for RhaiNodeFactory {
                 param(
                     "value",
                     ConfigParamType::Json,
-                    "Input when no edge supplies value",
+                    "Input when no edge supplies value; any other key is a field of it",
                 ),
             ],
         }
@@ -49,9 +49,29 @@ impl NodeFactory for RhaiNodeFactory {
         if config["script"].is_string() == config["script_id"].is_string() {
             return Err("provide exactly one of script and script_id".into());
         }
+        // One key per field: Mermaid cannot write an object, but it writes one
+        // key per tool parameter (`RhaiNode(script_id=x, path=$path)`). Every
+        // key other than script, script_id and value is a field of the input.
+        let mut config = config.clone();
+        if let Value::Object(keys) = &mut config {
+            let fields: serde_json::Map<String, Value> = keys
+                .iter()
+                .filter(|(k, _)| !matches!(k.as_str(), "script" | "script_id" | "value"))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            if !fields.is_empty() {
+                let mut value = match keys.get("value") {
+                    None | Some(Value::Null) => serde_json::Map::new(),
+                    Some(Value::Object(m)) => m.clone(),
+                    Some(other) => return Err(format!("value is not an object ({other}) and other keys are fields of it")),
+                };
+                value.extend(fields);
+                keys.insert("value".into(), Value::Object(value));
+            }
+        }
         Ok(Box::new(RhaiNode {
             name: name.into(),
-            config: config.clone(),
+            config,
         }))
     }
 }
