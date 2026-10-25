@@ -681,7 +681,9 @@ impl NodeFactory for SearchSourceNodeFactory {
     // que seule la projection du dense en a besoin ; ses signaux lisent chacun
     // l'état validé du moment, comme avant L6.
     fn snapshot_safe(&self, config: &serde_json::Value) -> bool {
-        let vide = |cle: &str| config.get(cle).and_then(|v| v.as_str()).map_or(true, |s| s.trim().is_empty());
+        // Une marque non liée (`$scope`, le gabarit avant l'appel) n'est pas un
+        // filtre : le gabarit lit, l'appel instancié décide.
+        let vide = |cle: &str| config.get(cle).and_then(|v| v.as_str()).map_or(true, |s| s.trim().is_empty() || s.starts_with('$'));
         let options = match config.get("options") {
             Some(serde_json::Value::String(s)) => serde_json::from_str(s).unwrap_or(serde_json::Value::Null),
             Some(v) => v.clone(),
@@ -1570,6 +1572,8 @@ mod tests {
         let f = SearchSourceNodeFactory;
         let sans = serde_json::json!({"scope": "", "language": "", "options": {"limit": 10}});
         assert!(f.snapshot_safe(&sans), "sans filtre, sous l'instantané");
+        let gabarit = serde_json::json!({"scope": "$scope", "language": "$language", "options": "$options"});
+        assert!(f.snapshot_safe(&gabarit), "le gabarit avant l'appel lit sous l'instantané");
         for filtree in [
             serde_json::json!({"scope": "src/"}),
             serde_json::json!({"language": "rust"}),
