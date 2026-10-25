@@ -109,6 +109,7 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         components_watch: Mutex::new(None),
         propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        ecarts_des_fichiers: Mutex::new(None),
         decider: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
         version: std::sync::atomic::AtomicU64::new(0),

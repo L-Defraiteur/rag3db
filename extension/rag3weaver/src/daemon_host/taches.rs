@@ -292,6 +292,8 @@ impl DaemonHost {
     pub(super) fn surcharges_de(&self, manifest: &Path) -> Option<Surcharges> {
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).map(|t| Surcharges {
             database: Some(t.copie.base.clone()),
+            files_root: None,
+            sans_reactions: false,
             declarations: Some(crate::propositions::ModeDeclarations::Auto),
             workspace: t.workspace.as_ref().map(|w| (w.racine.clone(), w.ecrit)),
         })

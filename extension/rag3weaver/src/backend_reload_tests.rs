@@ -69,6 +69,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         components_watch: Mutex::new(None),
         propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        ecarts_des_fichiers: Mutex::new(None),
     };
     (dir, backend)
 }

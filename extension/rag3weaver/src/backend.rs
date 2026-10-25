@@ -713,6 +713,14 @@ pub struct OutputPort {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Surcharges {
     pub database: Option<PathBuf>,
+    /// La racine des fichiers des entités (`files_root`), à la place de celle
+    /// du manifeste : la vérification à blanc (lot M3c) relit une copie des
+    /// dossiers, pour qu'aucune réaction ne réécrive les vrais.
+    pub files_root: Option<PathBuf>,
+    /// Ouvrir sans monter les réactions, le miroir ni les montres : la base
+    /// temporaire de la vérification à blanc (lot M3c) ne doit rien déclencher
+    /// (une réaction qui appelle un modèle, un miroir qui réécrit).
+    pub sans_reactions: bool,
     pub declarations: Option<crate::propositions::ModeDeclarations>,
     /// La racine du workspace (absolue) et si la tâche y écrit : jamais la
     /// racine de l'arbre principal quand celle-ci est dans un dépôt git.
@@ -1643,6 +1651,17 @@ impl PreparedBackend {
         if let Some(mode) = surcharges.declarations {
             self.manifest.declarations = mode;
         }
+        if let Some(racine) = &surcharges.files_root {
+            self.miroirs = self
+                .miroirs
+                .iter()
+                .map(|(e, m)| {
+                    let mut m = (**m).clone();
+                    m.racine = racine.clone();
+                    (e.clone(), Arc::new(m))
+                })
+                .collect();
+        }
         if let (Some((racine, ecrit)), Some(w)) = (&surcharges.workspace, self.manifest.workspace.as_mut()) {
             w.root = racine.clone();
             w.read_only = !ecrit;
@@ -1704,7 +1723,7 @@ impl PreparedBackend {
         if self.manifest.graph_tool {
             tools.push(graph_tool_definition());
         }
-        json!({"name":self.manifest.name,"version":self.manifest.version,"database":self.path(&self.manifest.database),"fts":"lucivy","embeddings":self.embed,"payloads":self.mappings,"tools":tools,"capabilities":["journal","journal_read","index_state"]})
+        json!({"name":self.manifest.name,"version":self.manifest.version,"database":self.path(&self.manifest.database),"fts":"lucivy","embeddings":self.embed,"payloads":self.mappings,"tools":tools,"capabilities":["journal","journal_read","index_state","verify_files"]})
     }
     /// La déclaration de l'embarquement dense de ce backend.
     pub fn embed_source(&self) -> &crate::model_source::ModelSource {
@@ -1990,17 +2009,40 @@ impl PreparedBackend {
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            ecarts_des_fichiers: Mutex::new(None),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
         // `"reactions"` lue, validée, puis montée par personne serait
         // exactement la déclaration inerte qu'on écrit en boucle dans ce
         // dépôt. Sans réaction déclarée, aucun réacteur ne démarre.
-        backend.mount_reactions()?;
+        if !backend.prepared().surcharges.sans_reactions {
+            backend.mount_reactions()?;
+        }
         backend.seed()?;
-        backend.regenerer_les_fichiers_composes()?;
+        let regeneres = backend.regenerer_les_fichiers_composes()?;
+        backend.comparer_les_fichiers_a_l_ouverture(regeneres);
         Ok(backend)
     }
+}
+
+/// Copie les `.md` d'un dossier (sous-dossiers compris) sous `vers` : la copie
+/// que relit la vérification à blanc.
+fn copier_les_md(de: &Path, vers: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(vers).map_err(|e| format!("{} : {e}", vers.display()))?;
+    if !de.exists() {
+        return Ok(());
+    }
+    for e in std::fs::read_dir(de).map_err(|e| format!("{} : {e}", de.display()))? {
+        let e = e.map_err(|e| e.to_string())?;
+        let (source, cible) = (e.path(), vers.join(e.file_name()));
+        if e.file_type().map_err(|e| e.to_string())?.is_dir() {
+            copier_les_md(&source, &cible)?;
+        } else if source.extension().is_some_and(|x| x == "md") {
+            std::fs::copy(&source, &cible).map_err(|e| format!("{} : {e}", source.display()))?;
+        }
+    }
+    Ok(())
 }
 
 /// **Ce qu'un outil à harnais rend à lire**, pour tous les transports (MCP,
@@ -2487,6 +2529,10 @@ pub struct Backend {
     /// Le backend déclare du vecteur et a démarré sans service : la phrase
     /// dite à l'ouverture, redite dans `describe` et `index_state`.
     avertissement_sans_service: Option<String>,
+    /// **Ce que la comparaison d'ouverture a trouvé entre les dossiers et la
+    /// base** (lot M3c) : chaque fichier propre contre sa ligne, dans les deux
+    /// sens, et les fichiers composés régénérés. `index_state` le dit.
+    ecarts_des_fichiers: Mutex<Option<Value>>,
 }
 impl Backend {
     /// Les avertissements d'ouverture, pour le reçu du backend ; vide quand
@@ -3923,6 +3969,177 @@ impl Backend {
         Ok(Value::Object(rapport))
     }
 
+    /// **Les lignes d'une entité**, par uuid : leurs champs, sans colonnes
+    /// internes ni cellule — ce que comparent l'ouverture et la vérification.
+    fn lignes_de(cat: &Catalog, entite: &str) -> Result<BTreeMap<String, serde_json::Map<String, Value>>, String> {
+        crate::schema::validate_identifier(entite, "entity").map_err(|e| e.to_string())?;
+        let uuids = cat.execute_raw(&format!("MATCH (n:`{entite}`) RETURN n._uuid")).map_err(|e| e.to_string())?;
+        let mut out = BTreeMap::new();
+        for row in &uuids.rows {
+            let Some(u) = row.first().and_then(|v| v.as_str()) else { continue };
+            let Some(ligne) = cat.get(entite, u).map_err(|e| e.to_string())? else { continue };
+            let mut champs = serde_json::Map::new();
+            for (k, v) in ligne {
+                if k.starts_with('_') || crate::scope::is_scope_column(&k) || matches!(v, crate::connection::CypherValue::Null) {
+                    continue;
+                }
+                champs.insert(k, serde_json::to_value(v).map_err(|e| e.to_string())?);
+            }
+            out.insert(u.to_string(), champs);
+        }
+        Ok(out)
+    }
+
+    /// **Chaque fichier propre contre sa ligne, dans les deux sens** (lot M3c) :
+    /// un fichier sans ligne, une ligne sans fichier, un fichier illisible, un
+    /// champ porté par le fichier qui diffère de la base. Rend les écarts par
+    /// entité et leur total. Les fichiers composés n'y sont pas : la base les
+    /// régénère (§5 bis), elle fait foi.
+    pub fn compare_files_to_base(&self) -> Result<(Value, usize), String> {
+        let prepared = self.prepared();
+        let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+        let mut par_entite = serde_json::Map::new();
+        let mut total = 0usize;
+        let mut miroirs: Vec<(&String, &Arc<crate::fichiers_entite::Miroir>)> = prepared.miroirs.iter().collect();
+        miroirs.sort_by(|a, b| a.0.cmp(b.0));
+        for (entite, m) in miroirs.into_iter().filter(|(_, m)| !m.est_compose()) {
+            let lignes = Self::lignes_de(&cat, entite)?;
+            let portes: Vec<&str> = m.decl.header.iter().map(String::as_str).chain(m.decl.body.as_deref()).collect();
+            let mut ecarts = Vec::new();
+            let mut vus = std::collections::BTreeSet::new();
+            for rel in m.lister()? {
+                let (uuid, champs) = match m.lire(&rel).and_then(|t| m.relire(&t)) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        ecarts.push(json!({"kind": "unreadable", "file": rel, "reason": e}));
+                        continue;
+                    }
+                };
+                vus.insert(uuid.clone());
+                let Some(ligne) = lignes.get(&uuid) else {
+                    ecarts.push(json!({"kind": "file_without_row", "file": rel, "uuid": uuid}));
+                    continue;
+                };
+                for champ in &portes {
+                    let (f, b) = (champs.get(*champ), ligne.get(*champ));
+                    if f != b {
+                        ecarts.push(json!({"kind": "field", "file": rel, "uuid": uuid, "field": champ, "file_value": f, "base_value": b}));
+                    }
+                }
+            }
+            for uuid in lignes.keys().filter(|u| !vus.contains(*u)) {
+                ecarts.push(json!({"kind": "row_without_file", "uuid": uuid}));
+            }
+            total += ecarts.len();
+            if !ecarts.is_empty() {
+                par_entite.insert(entite.clone(), json!(ecarts));
+            }
+        }
+        Ok((Value::Object(par_entite), total))
+    }
+
+    /// La comparaison de l'ouverture, gardée pour `index_state` : les fichiers
+    /// composés régénérés depuis la base, et les écarts des fichiers propres.
+    fn comparer_les_fichiers_a_l_ouverture(&self, regeneres: usize) {
+        if self.prepared().miroirs.is_empty() {
+            return;
+        }
+        let etat = match self.compare_files_to_base() {
+            Ok((par_entite, total)) => {
+                if total > 0 {
+                    eprintln!("[backend] dossier ≠ base : {total} écart(s) — index_state les nomme");
+                }
+                json!({"regenerated": regeneres, "gaps": total, "by_entity": par_entite})
+            }
+            Err(e) => json!({"regenerated": regeneres, "error": e}),
+        };
+        *self.ecarts_des_fichiers.lock().unwrap_or_else(|e| e.into_inner()) = Some(etat);
+    }
+
+    /// **La vérification à blanc** (lot M3c, « memoire verifier ») : les
+    /// dossiers copiés dans un répertoire temporaire, une base neuve à côté,
+    /// ouverte sans réactions, reconstruite depuis la copie
+    /// ([`Self::rebuild_from_files`]), puis comparée à la base vivante, entité
+    /// par entité (les lignes, champ à champ) et relation par relation (les
+    /// paires). Rien n'est écrit dans les vrais dossiers ni dans la vraie base.
+    /// Une entité que les fichiers ne portent pas (ni fichier, ni bloc) rend
+    /// ses lignes en `missing` : c'est ce qu'une base perdue perdrait.
+    pub fn verify_files(&self) -> Result<Value, String> {
+        let prepared = self.prepared();
+        let Some(racine) = prepared.miroirs.values().next().map(|m| m.racine.clone()) else {
+            return Ok(json!({"files": false, "ok": true}));
+        };
+        let tmp = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let copie = tmp.path().join("fichiers");
+        copier_les_md(&racine, &copie)?;
+        let surcharges = Surcharges {
+            database: Some(tmp.path().join("verification.rag3db")),
+            files_root: Some(copie),
+            sans_reactions: true,
+            ..prepared.surcharges.clone()
+        };
+        let p2 = PreparedBackend::load(&prepared.manifest_path)?.avec_surcharges(surcharges);
+        let base = p2.path(&p2.manifest.database);
+        let conn = crate::Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
+        let mut b2 = p2.open(Box::new(conn), None)?;
+        let reconstruction = b2.rebuild_from_files();
+        let mut entites = serde_json::Map::new();
+        let mut relations = serde_json::Map::new();
+        let mut ok = reconstruction.is_ok();
+        if reconstruction.is_ok() {
+            let vivante = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            let refaite = b2.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            let mut noms: Vec<&String> = prepared.manifest.entities.keys().collect();
+            noms.sort();
+            for e in noms {
+                let (a, b) = (Self::lignes_de(&vivante, e)?, Self::lignes_de(&refaite, e)?);
+                let manquantes: Vec<&String> = a.keys().filter(|u| !b.contains_key(*u)).collect();
+                let en_trop: Vec<&String> = b.keys().filter(|u| !a.contains_key(*u)).collect();
+                let mut differentes = Vec::new();
+                for (u, champs) in &a {
+                    let Some(autres) = b.get(u) else { continue };
+                    let cles: std::collections::BTreeSet<&String> = champs.keys().chain(autres.keys()).collect();
+                    for k in cles {
+                        if champs.get(k) != autres.get(k) {
+                            differentes.push(json!({"uuid": u, "field": k, "live": champs.get(k), "rebuilt": autres.get(k)}));
+                        }
+                    }
+                }
+                ok &= manquantes.is_empty() && en_trop.is_empty() && differentes.is_empty();
+                entites.insert(e.clone(), json!({"rows": a.len(), "missing": manquantes, "extra": en_trop, "differing": differentes}));
+            }
+            let mut rels: Vec<String> = vivante.relation_names();
+            rels.sort();
+            for r in rels {
+                let Some(def) = vivante.get_relation_def(&r).cloned() else { continue };
+                if !prepared.manifest.entities.contains_key(&def.from) || !prepared.manifest.entities.contains_key(&def.to) {
+                    continue;
+                }
+                let q = format!("MATCH (a:`{}`)-[:`{r}`]->(b:`{}`) RETURN a._uuid, b._uuid", def.from, def.to);
+                let paires = |c: &Catalog| -> Result<std::collections::BTreeSet<(String, String)>, String> {
+                    Ok(c.execute_raw(&q)
+                        .map_err(|e| e.to_string())?
+                        .rows
+                        .iter()
+                        .filter_map(|l| Some((l.first()?.as_str()?.to_string(), l.get(1)?.as_str()?.to_string())))
+                        .collect())
+                };
+                let (a, b) = (paires(&vivante)?, paires(&refaite)?);
+                let manquantes: Vec<&(String, String)> = a.difference(&b).collect();
+                let en_trop: Vec<&(String, String)> = b.difference(&a).collect();
+                ok &= manquantes.is_empty() && en_trop.is_empty();
+                relations.insert(r, json!({"pairs": a.len(), "missing": manquantes, "extra": en_trop}));
+            }
+        }
+        let _ = b2.shutdown();
+        Ok(json!({
+            "ok": ok,
+            "rebuild": reconstruction.unwrap_or_else(|e| json!({"error": e})),
+            "entities": entites,
+            "relations": relations,
+        }))
+    }
+
     pub fn seed(&self) -> Result<usize, String> {
         let prepared = self.prepared();
         if prepared.manifest.seed.is_empty() {
@@ -4081,13 +4298,36 @@ impl Backend {
     /// `Message` — le format de [`crate::dataflow::trace_nodes::record_runs_and_messages`].
     /// Ils deviennent `Run`, `Message`, `Conversation`, `Participant` liés :
     /// cherchables comme le reste, et relisibles par un agent plus tard.
+    /// **L'état de l'index**, et celui des dossiers d'entités (lot M3c) :
+    /// `files` dit ce que la comparaison d'ouverture a trouvé, et
+    /// « dossier ≠ base : N écarts » rejoint les avertissements.
+    pub fn index_states(&self) -> Result<Value, String> {
+        let mut etats = self.index_states_du_code()?;
+        if let Some(fichiers) = self.ecarts_des_fichiers.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            if let Some(o) = etats.as_object_mut() {
+                let ecarts = fichiers["gaps"].as_u64().unwrap_or(0);
+                o.insert("files".into(), fichiers);
+                if ecarts > 0 {
+                    let ligne = format!("dossier ≠ base : {ecarts} écart(s) — files.by_entity les nomme");
+                    match o.get_mut("warnings").and_then(Value::as_array_mut) {
+                        Some(a) => a.push(json!(ligne)),
+                        None => {
+                            o.insert("warnings".into(), json!([ligne]));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(etats)
+    }
+
     /// **L'état de l'index, par entité du schéma nommé** — pour la ligne de
     /// statut de l'application : ce qu'un harnais sait, il le dit lui-même
     /// plutôt que de compter sur le modèle pour le répéter (décision du
     /// 4 octobre, après les rejeux T1). Une indexation qui tient le verrou
     /// au-delà de l'attente d'une lecture rend `"busy": true`, avec ce qui se
     /// lit hors du catalogue (montres, reprise, embarquement, avertissements).
-    pub fn index_states(&self) -> Result<Value, String> {
+    fn index_states_du_code(&self) -> Result<Value, String> {
         #[cfg(not(feature = "code"))]
         {
             return Ok(json!({}));
@@ -4817,6 +5057,7 @@ mod tests {
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            ecarts_des_fichiers: Mutex::new(None),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -5033,6 +5274,7 @@ mod tests {
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            ecarts_des_fichiers: Mutex::new(None),
         }
     }
 
