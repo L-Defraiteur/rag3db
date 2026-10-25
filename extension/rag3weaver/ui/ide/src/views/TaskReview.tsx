@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, X, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { lineDiff } from "@/lib/diff";
+import { GraphDiffSection, type GraphDiff } from "@/lib/graph";
 import { shortName, type HostState } from "@/lib/host";
 
 // **La relecture d'une tâche** (page 08, vue 5) : la branche et son départ, les
@@ -14,7 +14,6 @@ import { shortName, type HostState } from "@/lib/host";
 // [data-genre][data-path] .diff .plus|.moins`, `section.graphe-propose[data-cible]`
 // (ses nœuds en `li.ajoute|change|retire[data-nom]`).
 type File = { genre: string; path: string; avant: string | null; apres: string | null };
-type GraphDiff = { cible: Record<string, string>; diff: { ajoutes: string[]; changes: string[]; retires: string[]; aretes_ajoutees: string[]; aretes_retirees: string[] } };
 type Review = { tache: { nom: string; id: string; branche: string; depart: string }; fichiers: File[]; graphes: GraphDiff[]; temoins: { chargement: boolean; refus?: string }; base_a_bouge: boolean };
 type Plan = { number: number; request: string; proposal: string; state: string; reason?: string; items: { id: string; text: string; status: string; alone: boolean; question?: string; reason?: string }[]; steps?: string[] };
 type Teammate = { mailbox: Record<string, unknown>[]; plans: { plans: Plan[] }; closed: Plan[]; running: boolean };
@@ -171,21 +170,7 @@ export function TaskReview({ id, name, state }: { id: string; name: string; stat
             <span className="note text-xs text-muted-foreground" id="tache-note">{note}</span>
           </div>
           {r.fichiers.length ? null : <p className="note text-sm text-muted-foreground">La branche ne change encore rien.</p>}
-          {r.graphes.map((g, k) => {
-            const [genre, nom] = Object.entries(g.cible)[0] ?? ["", ""];
-            const d = g.diff;
-            return (
-              <section key={k} className="graphe-propose rounded-lg border px-3 py-2" data-cible={`${genre}:${nom}`}>
-                <h2 className="text-base font-semibold">graphe — {genre} {nom}</h2>
-                <p className="note text-xs text-muted-foreground">{d.ajoutes.length} ajouté(s), {d.changes.length} changé(s), {d.retires.length} retiré(s) ; {d.aretes_ajoutees.length} arête(s) ajoutée(s), {d.aretes_retirees.length} retirée(s). Le dessin vient avec la vue du graphe.</p>
-                <ul className="noeuds flex flex-wrap gap-1.5 text-xs mt-1">
-                  {d.ajoutes.map((n) => <li key={`a${n}`} className="ajoute" data-nom={n}><Badge className="bg-green-600/80">+ {n}</Badge></li>)}
-                  {d.changes.map((n) => <li key={`c${n}`} className="change" data-nom={n}><Badge variant="secondary">~ {n}</Badge></li>)}
-                  {d.retires.map((n) => <li key={`r${n}`} className="retire" data-nom={n}><Badge variant="destructive">− {n}</Badge></li>)}
-                </ul>
-              </section>
-            );
-          })}
+          {r.graphes.map((g, k) => <GraphDiffSection key={k} g={g} />)}
           {r.fichiers.map((f) => (
             <section key={f.path} className="fichier-de-tache rounded-lg border overflow-hidden" data-genre={f.genre} data-path={f.path}>
               <h2 className="text-sm font-semibold px-3 py-2 border-b bg-muted/40">{(f.genre === "code" ? "code · " : f.genre === "depot" ? "dépôt · " : "") + f.path + (f.avant == null ? " (neuf)" : f.apres == null ? " (retiré)" : "")}</h2>

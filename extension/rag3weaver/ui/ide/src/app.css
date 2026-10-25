@@ -113,6 +113,15 @@ mark.surligne[data-source="query_words"] { background: transparent; text-decorat
 .markdown blockquote { border-left: 3px solid var(--border); padding-left: 0.8em; color: var(--muted-foreground); }
 .markdown table { border-collapse: collapse; } .markdown th, .markdown td { border: 1px solid var(--border); padding: 0.2em 0.5em; }
 
+/* Les graphes (le DAG vivant, le diff d'une proposition, le papillon). */
+.graphe-svg g.etape.passe rect { fill: color-mix(in oklch, var(--primary) 20%, var(--card)); }
+.graphe-svg g.etape.echec rect { stroke: var(--destructive); stroke-width: 2; }
+.graphe-svg g.etape.ajoute rect { stroke: oklch(0.6 0.17 145); stroke-width: 2; }
+.graphe-svg g.etape.change rect { stroke: oklch(0.7 0.16 70); stroke-width: 2; }
+.graphe-svg g.etape.retire rect { stroke: var(--destructive); stroke-dasharray: 4 3; }
+.graphe-svg path.ajoutee { stroke: oklch(0.6 0.17 145); stroke-opacity: 1; }
+.graphe-svg path.retiree { stroke: var(--destructive); stroke-dasharray: 4 3; }
+
 @layer base {
   * { @apply border-border outline-ring/50; }
   body { @apply bg-background text-foreground; }
