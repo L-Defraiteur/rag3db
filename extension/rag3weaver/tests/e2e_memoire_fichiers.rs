@@ -128,6 +128,14 @@ fn la_memoire_s_ecrit_dans_des_fichiers_lisibles_et_son_bloc_se_ferme() {
                     "### Reprise".into(), format!("[{SOURCE}](../{SOURCE})"), "UTC".into()] {
         assert!(fiche.contains(&attendu), "la fiche dit « {attendu} » : {fiche}");
     }
+    // Le dossier se décrit : son gabarit, son format, les genres, les relations et leur sens.
+    drop(b);
+    let b = ouvrir(&dir.path().join("templates/backends/memory/backend.json"));
+    let dossier = std::fs::read_to_string(racine.join("manifeste.yaml")).expect("le manifeste du dossier");
+    for attendu in ["nom: memory", "format: 1", "genres:", "- doc", "- path", "ANCRE:", "une fiche est ancrée"] {
+        assert!(dossier.contains(attendu), "le manifeste du dossier dit « {attendu} » : {dossier}");
+    }
+    drop(b);
     let bloc = &fiche[fiche.find(rag3weaver::fichiers_entite::DEBUT_DU_BLOC).expect("le bloc machine")..];
     assert!(bloc.contains(&format!("{SOURCE}#Reprise")), "la Ref doc: citée par l'apport voyage dans le bloc : {bloc}");
     assert!(!bloc.contains("embedding"), "aucune colonne de vecteur dans le bloc : {bloc}");
