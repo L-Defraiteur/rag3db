@@ -90,6 +90,11 @@ pub struct BackendManifest {
     /// déclare.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub files_root: Option<PathBuf>,
+    /// **Le format des fichiers** sous `files_root` : la version écrite dans
+    /// chaque en-tête, ses migrations, les listes que le manifeste du dossier
+    /// nomme ([`crate::fichiers_entite::FilesFormat`]).
+    #[serde(default)]
+    pub files_format: crate::fichiers_entite::FilesFormat,
     /// **Les routes** : `"GET /products/{key}": {"tool": …, "view": …}`. Une
     /// adresse mène à un outil déclaré (le contrôleur), son résultat à une vue
     /// du dossier `views/` ([`crate::routes`]).
@@ -288,6 +293,10 @@ pub struct BackendRelation {
     pub from_states: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to_states: Option<Vec<String>>,
+    /// Le sens de la relation, en une ligne : ce que le manifeste du dossier
+    /// des fichiers en dit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// La clé du service qui porte les politiques d'écriture des relations
@@ -1156,8 +1165,21 @@ impl PreparedBackend {
             manifest.entities.keys().filter(|e| !miroirs.contains_key(*e)).cloned().collect();
         // Relatifs à la racine (commune à tous les miroirs d'un manifeste).
         let dossier = |m: &crate::fichiers_entite::Miroir| -> PathBuf { PathBuf::from(&m.decl.dir) };
+        let mut migrations = Vec::new();
+        for mig in &manifest.files_format.migrations {
+            let script = lire_texte(lecteur, &directory.join(&mig.script))
+                .map_err(|e| format!("files_format.migrations ({} → {}) : {e}", mig.from, mig.to))?;
+            migrations.push((mig.from, mig.to, script));
+        }
+        let format = Arc::new(crate::fichiers_entite::FormatDuDossier {
+            version: manifest.files_format.version,
+            gabarit: manifest.name.clone(),
+            gabarit_version: manifest.version,
+            migrations,
+        });
         for (nom, m) in &miroirs {
             let _ = m.sans_fichier.set(sans_fichier.clone());
+            let _ = m.format.set(format.clone());
             let le_mien = dossier(m);
             let voisins: Vec<PathBuf> = miroirs
                 .iter()
@@ -2097,7 +2119,9 @@ fn copier_les_md(de: &Path, vers: &Path) -> Result<(), String> {
         let (source, cible) = (e.path(), vers.join(e.file_name()));
         if e.file_type().map_err(|e| e.to_string())?.is_dir() {
             copier_les_md(&source, &cible)?;
-        } else if source.extension().is_some_and(|x| x == "md") {
+        } else if source.extension().is_some_and(|x| x == "md")
+            || e.file_name() == crate::fichiers_entite::MANIFESTE_DU_DOSSIER
+        {
             std::fs::copy(&source, &cible).map_err(|e| format!("{} : {e}", source.display()))?;
         }
     }
@@ -3974,6 +3998,21 @@ impl Backend {
     /// des vues de la base, relus seulement quand la base est perdue (lot M3b).
     pub fn rebuild_from_files(&self) -> Result<Value, String> {
         let prepared = self.prepared();
+        // Le dossier dit d'abord de quel schéma il parle : sans manifeste, ou
+        // d'un autre gabarit, ou d'un format qu'aucune migration ne rejoint,
+        // rien ne se reconstruit.
+        if let Some(m) = prepared.miroirs.values().next() {
+            match crate::fichiers_entite::lire_le_manifeste_du_dossier(&m.racine)? {
+                None => {
+                    return Err(format!(
+                        "{} n'a pas de {} : rien ne dit de quel schéma ce dossier parle — rien n'est reconstruit",
+                        m.racine.display(),
+                        crate::fichiers_entite::MANIFESTE_DU_DOSSIER
+                    ))
+                }
+                Some(lu) => m.format().juger_le_manifeste(&lu).map_err(|e| format!("{e} — rien n'est reconstruit"))?,
+            }
+        }
         {
             let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
             let mut pleines = Vec::new();
@@ -4004,7 +4043,7 @@ impl Backend {
         let mut sans_bloc: BTreeMap<String, Vec<Value>> = BTreeMap::new();
         for (entite, m) in miroirs.iter().filter(|(_, m)| m.est_compose()) {
             for rel in m.lister()? {
-                match m.lire(&rel).and_then(|t| crate::fichiers_entite::Miroir::relire_le_bloc(&t)) {
+                match m.lire(&rel).and_then(|t| m.relire_le_bloc(&t)) {
                     Ok(Some(lignes)) => {
                         for l in lignes {
                             du_bloc.entry((l.entity.clone(), l.uuid.clone())).or_insert(l);
@@ -4204,7 +4243,14 @@ impl Backend {
         if self.prepared().miroirs.is_empty() {
             return;
         }
-        let etat = match self.compare_files_to_base() {
+        // **Le manifeste du dossier d'abord** : un dossier qui parle d'un autre
+        // schéma se dit, et son manifeste n'est pas réécrit par-dessus ; un
+        // dossier qui a des fichiers sans manifeste se dit aussi.
+        let dossier = self.juger_et_ecrire_le_manifeste_du_dossier();
+        if let Some(e) = &dossier {
+            eprintln!("[backend] {e}");
+        }
+        let mut etat = match self.compare_files_to_base() {
             Ok((par_entite, total)) => {
                 if total > 0 {
                     eprintln!("[backend] dossier ≠ base : {total} écart(s) — index_state les nomme");
@@ -4213,7 +4259,84 @@ impl Backend {
             }
             Err(e) => json!({"regenerated": regeneres, "error": e}),
         };
+        if let Some(e) = dossier {
+            etat["manifest"] = json!(e);
+        }
         *self.ecarts_des_fichiers.lock().unwrap_or_else(|e| e.into_inner()) = Some(etat);
+    }
+
+    /// Juge le manifeste du dossier contre ce gabarit et, s'il parle du même
+    /// schéma (ou si le dossier est vide), le réécrit depuis le gabarit. Rend ce
+    /// qui se dit quand il ne le réécrit pas.
+    fn juger_et_ecrire_le_manifeste_du_dossier(&self) -> Option<String> {
+        let prepared = self.prepared();
+        let m = prepared.miroirs.values().next()?;
+        let refus = match crate::fichiers_entite::lire_le_manifeste_du_dossier(&m.racine) {
+            Ok(Some(lu)) => m.format().juger_le_manifeste(&lu).err(),
+            Ok(None) if crate::fichiers_entite::a_des_fichiers(&m.racine) => Some(format!(
+                "{} a des fichiers mais pas de {} : rien ne dit de quel schéma il parle",
+                m.racine.display(),
+                crate::fichiers_entite::MANIFESTE_DU_DOSSIER
+            )),
+            Ok(None) => None,
+            Err(e) => Some(e),
+        };
+        if refus.is_some() {
+            return refus;
+        }
+        crate::fichiers_entite::ecrire_le_manifeste_du_dossier(&m.racine, &self.manifeste_du_dossier()).err()
+    }
+
+    /// **Le manifeste du dossier**, depuis le gabarit : son nom et sa version,
+    /// le format des fichiers, où chaque entité range les siens, les listes
+    /// déclarées (`files_format.lists`, lues dans la base), les relations et
+    /// leur sens, et l'instant.
+    pub fn manifeste_du_dossier(&self) -> Value {
+        let prepared = self.prepared();
+        let mut entites = serde_json::Map::new();
+        let mut miroirs: Vec<_> = prepared.miroirs.iter().collect();
+        miroirs.sort_by(|a, b| a.0.cmp(b.0));
+        for (e, m) in miroirs {
+            entites.insert(
+                e.clone(),
+                json!({"dossier": m.decl.dir, "fichier": if m.est_compose() { "composé (vue de la base, avec son bloc machine)" } else { "propre (le fichier fait foi)" }}),
+            );
+        }
+        let mut listes = serde_json::Map::new();
+        {
+            let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            for (nom, cible) in &prepared.manifest.files_format.lists {
+                let valeurs: Vec<Value> = cible
+                    .split_once('.')
+                    .filter(|(e, f)| {
+                        crate::schema::validate_identifier(e, "entity").is_ok() && crate::schema::validate_identifier(f, "field").is_ok()
+                    })
+                    .and_then(|(e, f)| cat.execute_raw(&format!("MATCH (n:`{e}`) RETURN n.`{f}` ORDER BY n.`{f}`")).ok())
+                    .map(|r| r.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(|v| json!(v))).collect())
+                    .unwrap_or_default();
+                listes.insert(nom.clone(), Value::Array(valeurs));
+            }
+        }
+        let mut relations = serde_json::Map::new();
+        let mut noms: Vec<&String> = prepared.manifest.relations.keys().collect();
+        noms.sort();
+        for nom in noms {
+            let r = &prepared.manifest.relations[nom];
+            relations.insert(
+                nom.clone(),
+                json!({"de": r.def.from, "vers": r.def.to,
+                       "sens": r.description.clone().unwrap_or_else(|| format!("{} → {}", r.def.from, r.def.to))}),
+            );
+        }
+        let ecrit = jiff::Timestamp::now().strftime("%Y-%m-%d %H:%M:%S UTC").to_string();
+        json!({
+            "gabarit": {"nom": prepared.manifest.name, "version": prepared.manifest.version},
+            "format": prepared.manifest.files_format.version,
+            "ecrit_le": ecrit,
+            "entites": entites,
+            "listes": listes,
+            "relations": relations,
+        })
     }
 
     /// **La vérification à blanc** (lot M3c, « memoire verifier ») : les
@@ -4466,9 +4589,14 @@ impl Backend {
         if let Some(fichiers) = self.ecarts_des_fichiers.lock().unwrap_or_else(|e| e.into_inner()).clone() {
             if let Some(o) = etats.as_object_mut() {
                 let ecarts = fichiers["gaps"].as_u64().unwrap_or(0);
+                let manifeste = fichiers["manifest"].as_str().map(|e| format!("dossier : {e}"));
                 o.insert("files".into(), fichiers);
+                let mut lignes = Vec::new();
                 if ecarts > 0 {
-                    let ligne = format!("dossier ≠ base : {ecarts} écart(s) — files.by_entity les nomme");
+                    lignes.push(format!("dossier ≠ base : {ecarts} écart(s) — files.by_entity les nomme"));
+                }
+                lignes.extend(manifeste);
+                for ligne in lignes {
                     match o.get_mut("warnings").and_then(Value::as_array_mut) {
                         Some(a) => a.push(json!(ligne)),
                         None => {

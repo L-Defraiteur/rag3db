@@ -111,7 +111,7 @@ fn la_reaction_ecrit_le_fichier_du_sujet_et_le_reecrit_quand_une_note_liee_chang
     let uuid = r["result"]["uuid"].as_str().unwrap().to_string();
     let fichier = dir.path().join("fichiers/sujets").join(format!("{uuid}.md"));
     let texte = attendre(&fichier, "# le WAL");
-    assert!(texte.starts_with(&format!("---\nuuid: \"{uuid}\"\nname: \"le WAL\"\netat: \"courant\"\nrevision: 1\n---\n")), "{texte}");
+    assert!(texte.starts_with(&format!("---\nuuid: \"{uuid}\"\nformat: 1\nname: \"le WAL\"\netat: \"courant\"\nrevision: 1\n---\n")), "{texte}");
 
     b.call("put_note", json!({"record": {"titre": "rejeu", "texte": "en entier", "etat": "courant"}})).expect("la note");
     b.call("noter", json!({"links": [{"from": {"name": "le WAL"}, "to": {"titre": "rejeu"}}]})).expect("le lien");

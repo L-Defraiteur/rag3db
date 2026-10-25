@@ -84,7 +84,7 @@ fn un_put_ecrit_le_fichier_avant_la_ligne_et_dit_son_chemin() {
     let texte = std::fs::read_to_string(dir.path().join("fichiers").join(rel)).expect("le fichier existe");
     let (yaml, corps) = rag3weaver::en_tete::separer(&texte).expect("un en-tête");
     assert_eq!(corps, "# Reprise\n\nLe journal se rejoue.\n", "le corps tel quel");
-    assert!(yaml.starts_with(&format!("uuid: \"{uuid}\"\ntitre: \"Le WAL : la reprise\"\netiquette: \"no\"\nrevision: 1\n")), "{yaml}");
+    assert!(yaml.starts_with(&format!("uuid: \"{uuid}\"\nformat: 1\ntitre: \"Le WAL : la reprise\"\netiquette: \"no\"\nrevision: 1\n")), "{yaml}");
 
     // Une seconde écriture réécrit le même fichier (même nom), avec la révision suivante.
     b.call("put_note", json!({"record": {"titre": "Le WAL : la reprise", "corps": "# Reprise\n\nRejoué en entier.\n"}, "expected_revision": 1}))
