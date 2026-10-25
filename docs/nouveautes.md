@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Un lecteur ouvert avant le point de reprise n'est plus attendu.** Il relit
+  sa génération, gardée à côté jusqu'au point de reprise suivant ; un lecteur nouveau voit
+  l'écriture. f8c0c8df0.
 - **25 oct. — Le juge juge aussi les outils.** À chaque run, un second rapport
   par outil appelé : un défaut typé par genre (paramètre manquant ou mal nommé,
   retour bavard, hors sujet, incohérent…) et par gravité, avec sa preuve exacte et
