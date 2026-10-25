@@ -34,7 +34,9 @@
                      "fields": ["source", "section", "niveau", "state", "author", "created_at", "texte"],
                      "filter": {"let": "apport_qui_cite"}}}
       ],
-      "order_by": [{"coalesce": ["updated_at", "created_at"], "desc": true}, {"field": "_uuid"}],
+      "order_by": [{"coalesce": [{"max": {"relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport", "field": "created_at"}},
+                                 "updated_at", "created_at"], "desc": true},
+                   {"field": "_uuid"}],
       "limit":  {"param": "limit", "max": 200},
       "offset": {"param": "offset"}
     }},
