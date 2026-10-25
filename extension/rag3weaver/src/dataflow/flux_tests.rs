@@ -257,10 +257,12 @@ fn an_unconnected_stream_changes_neither_the_executor_nor_the_output() {
     assert!(connected.has_streams().unwrap(), "branché, le flux fait passer au concurrent");
 }
 
-/// Un producteur de flux fini d'objets JSON : `n` éléments `{"i": k}`.
+/// Un producteur de flux fini d'objets JSON : `n` éléments `{"i": k}`, sur un
+/// port de type `port_type` (`Map` : refusé au bâti ; `Any` : à l'exécution).
 struct JsonBurst {
     name: String,
     n: usize,
+    port_type: PortType,
 }
 
 impl Node for JsonBurst {
@@ -274,7 +276,7 @@ impl Node for JsonBurst {
         vec![]
     }
     fn outputs(&self) -> Vec<PortDef> {
-        vec![PortDef::value("out", PortType::Map, true).stream(PortKind::Finite)]
+        vec![PortDef::value("out", self.port_type, true).stream(PortKind::Finite)]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         for k in 1..=self.n {
@@ -297,7 +299,7 @@ impl Node for JsonWhole {
         &self.name
     }
     fn inputs(&self) -> Vec<PortDef> {
-        vec![PortDef::value("record", PortType::Map, true)]
+        vec![PortDef::value("record", PortType::Any, true)]
     }
     fn outputs(&self) -> Vec<PortDef> {
         vec![PortDef::value("seen", PortType::Text, true)]
@@ -323,19 +325,22 @@ impl Node for JsonWhole {
 #[test]
 fn un_pli_impossible_d_un_flux_vers_une_entree_complete_se_refuse_en_le_nommant() {
     let mut refus = Vec::new();
-    for n in [2usize, 3] {
+    // `Map` se refuse au bâti (la vérification des genres) ; `Any` ne dit rien
+    // d'avance et se refuse à l'exécution (le pli).
+    for (n, port_type) in [(2usize, PortType::Map), (3, PortType::Map), (2, PortType::Any), (3, PortType::Any)] {
         let mut g = DataflowGraph::new();
-        g.add_node(Box::new(JsonBurst { name: "sections".into(), n })).unwrap();
+        g.add_node(Box::new(JsonBurst { name: "sections".into(), n, port_type })).unwrap();
         g.add_node(Box::new(JsonWhole { name: "ecrire".into() })).unwrap();
         g.connect("sections", "out", "ecrire", "record").unwrap();
         let r = DataflowRuntime::new(100).execute(&mut g);
         let vu = r.as_ref().ok().and_then(|o| o.get("ecrire", "seen").cloned()).and_then(take_or_clone::<String>);
-        eprintln!("[pli] N={n} : {}", match (&r, &vu) {
+        eprintln!("[pli] N={n} {port_type:?} : {}", match (&r, &vu) {
             (Err(e), _) => format!("refusé : {e}"),
             (Ok(_), Some(v)) => format!("accepté, le lecteur a vu {v}"),
             (Ok(_), None) => "accepté, rien rendu".to_string(),
         });
         refus.push((n, r.err(), vu));
+        let _ = port_type;
     }
     // Tout est imprimé avant d'exiger : les deux parités se lisent dans la sortie.
     for (n, e, vu) in refus {
