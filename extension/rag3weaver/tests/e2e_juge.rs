@@ -197,6 +197,15 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
     assert_eq!(b2["fiche"], b1["fiche"], "la même fiche");
     assert!(vu.lock().unwrap().precedents.last().is_some_and(|p| p.contains("Note 8/10")), "le second juge a lu le premier bilan");
     assert_eq!(b2["verdict"]["comparaison"]["verdict"], "pareil", "{b2}");
+
+    // La vue « bilans » : la fiche, ses deux apports dans l'ordre, leurs notes, la comparaison.
+    let vue = host.bilans_de(&id).unwrap_or_else(|e| panic!("les bilans : {e}"));
+    assert_eq!(vue["declare"], true, "{vue}");
+    let fiches = vue["fiches"].as_array().unwrap();
+    assert_eq!(fiches.len(), 1, "{vue}");
+    let notes: Vec<Value> = fiches[0]["apports"].as_array().unwrap().iter().map(|a| a["note"].clone()).collect();
+    assert_eq!(notes, vec![json!(8), json!(8)], "{vue}");
+    assert_eq!(fiches[0]["apports"][1]["comparaison"]["verdict"], "pareil", "{vue}");
 }
 
 /// **Un bilan qu'il faut demander n'existerait pas** (c7) : l'hôte servi juge

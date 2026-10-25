@@ -17,6 +17,7 @@
 //! | `POST /ide/propositions[/appliquer\|/rejeter]` | proposer `{backend, files, reason}`, appliquer `{backend, id}`, rejeter `{backend, id, why}` |
 //! | `GET /ide/taches?backend=<id>[&nom=<n>]` | les tâches de l'agent, ou la relecture d'une (fichiers, graphes, témoins) |
 //! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom, message}`, rejeter `{backend, nom, why}` |
+//! | `GET /ide/bilans?backend=<id>` | les bilans du backend : ses fiches (via juge), leurs apports dans l'ordre et leurs notes |
 //! | `POST /ide/bilans` | juger un run `{backend, run}` : le juge relit son journal et range sa fiche dans la mémoire déclarée (`bilans`) |
 //! | `POST /ide/runs/arreter` | arrêter un run en vol `{backend, run}`, au nom de l'IDE (C4) |
 //! | `GET /ide/chat?backend=<id>` | le chat de l'atelier : allumé ou non, le run en cours, le fil, les orphelines (page 11) |
@@ -584,6 +585,13 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
                 },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("GET", "/ide/bilans") => {
+            let v = match host.bilans_de(&param("backend").unwrap_or_default()) {
+                Ok(v) => json!({ "ok": true, "result": v }),
+                Err(e) => json!({ "ok": false, "error": e }),
             };
             let _ = request.respond(json_(200, &v));
         }

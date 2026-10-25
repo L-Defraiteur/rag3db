@@ -274,6 +274,52 @@ impl DaemonHost {
         }))
     }
 
+    /// **Les bilans d'un backend**, pour la vue « bilans » de l'IDE : ses fiches
+    /// (`via: juge`) dans la mémoire qu'il déclare, chacune avec ses apports dans
+    /// l'ordre et la note de chacun (lue dans son bloc json), d'où la tendance.
+    pub fn bilans_de(&self, backend_id: &str) -> Result<Value, String> {
+        let cible = self.hote_par_id(backend_id)?;
+        let memoire = self.with_backend(&cible, |b| {
+            let p = b.prepared();
+            p.manifest.bilans.as_ref().map(|d| if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) })
+        })?;
+        let Some(memoire) = memoire else {
+            return Ok(json!({ "declare": false, "fiches": [] }));
+        };
+        let memoire = self.hosted(&memoire)?;
+        let appeler = |outil: &str, args: Value| -> Result<Value, String> { self.with_backend(&memoire, |b| b.call(outil, args)).and_then(|r| r) };
+        let lignes = |r: &Value| -> Vec<Value> {
+            match &r["result"] {
+                Value::Array(a) => a.clone(),
+                Value::Object(o) => o.get("results").and_then(Value::as_array).cloned().unwrap_or_default(),
+                _ => Vec::new(),
+            }
+        };
+        let fiches = appeler("recall_fiches", json!({ "query": "bilan", "options": { "limit": 100, "filter_condition": { "field": { "key": "via", "value": "juge" } } } }))?;
+        let mut sortie = Vec::new();
+        for f in lignes(&fiches) {
+            let data = if f["data"].is_object() { f["data"].clone() } else { f.clone() };
+            let Some(nom) = data["name"].as_str().map(str::to_string) else { continue };
+            let apports = appeler("recall_apports", json!({ "query": "bilan", "options": { "limit": 100, "filter_condition": { "field": { "key": "fiche", "value": nom } } } }))?;
+            let mut liste: Vec<Value> = lignes(&apports)
+                .into_iter()
+                .map(|a| if a["data"].is_object() { a["data"].clone() } else { a })
+                .map(|a| {
+                    let texte = a["texte"].as_str().unwrap_or_default().to_string();
+                    let verdict = texte
+                        .rsplit_once("```json\n")
+                        .and_then(|(_, j)| j.split_once("\n```"))
+                        .and_then(|(j, _)| serde_json::from_str::<Value>(j).ok())
+                        .unwrap_or(Value::Null);
+                    json!({ "source": a["source"], "creee": a["created_at"], "texte": texte, "note": verdict["note"], "comparaison": verdict["comparaison"] })
+                })
+                .collect();
+            liste.sort_by_key(|a| a["creee"].as_i64().unwrap_or(0));
+            sortie.push(json!({ "fiche": nom, "about": data["about"], "apports": liste }));
+        }
+        Ok(json!({ "declare": true, "fiches": sortie }))
+    }
+
     /// Dépose un bilan à faire, si le backend déclare `bilans` (la fin d'un tour).
     pub(super) fn demander_un_bilan(&self, hosted: &Arc<Hosted>, run: &str) {
         let declare = self.with_backend(hosted, |b| b.prepared().manifest.bilans.is_some()).unwrap_or(false);
