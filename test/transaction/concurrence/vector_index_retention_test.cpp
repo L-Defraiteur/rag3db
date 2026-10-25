@@ -106,10 +106,30 @@ TEST_F(VectorIndexRetention, RolledBackCreateCanBeRedone) {
             << "[check: create-fails-behind-a-reader] le CREATE devait échouer sur le délai";
         ok(reader, "COMMIT;");
     }
+    // Depuis le CREATE concurrent ((A)), l'entrée et le holder sont de T_A, validée avant le bâti :
+    // le CREATE qui échoue au bâti laisse un index INCOMPLETE. Il ne se refait pas par-dessus (un
+    // CREATE le refuse en disant de le retirer) ; DROP puis CREATE le rebâtissent.
+    auto shown = conn->query("CALL SHOW_INDEXES() RETURN index_name, state;");
+    std::string state = "<absent>";
+    if (shown->isSuccess() && shown->hasNext()) {
+        state = shown->getNext()->getValue(1)->toString();
+    }
+    shown.reset();
+    std::cerr << "  [rétention] état après le CREATE annulé : " << state << "\n";
+    EXPECT_EQ(state, "INCOMPLETE") << "[check: rolled-back-create-can-be-redone]";
+    auto refused = conn->query(
+        "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+    const auto refusal = refused->isSuccess() ? std::string("réussi") : refused->getErrorMessage();
+    std::cerr << "  [rétention] CREATE par-dessus l'index incomplet : " << refusal.substr(0, 200)
+              << "\n";
+    EXPECT_NE(refusal.find("is behind its table"), std::string::npos)
+        << "[check: rolled-back-create-can-be-redone] " << refusal;
+    refused.reset();
+    ok(*conn, "CALL DROP_VECTOR_INDEX('Doc', 'doc_index');");
     auto result = conn->query(
         "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
     const auto message = result->isSuccess() ? std::string() : result->getErrorMessage();
-    std::cerr << "  [rétention] CREATE après un CREATE annulé : "
+    std::cerr << "  [rétention] CREATE après DROP : "
               << (result->isSuccess() ? std::string("réussi") : message.substr(0, 200)) << "\n";
     EXPECT_TRUE(result->isSuccess()) << "[check: rolled-back-create-can-be-redone] " << message;
     if (result->isSuccess()) {
