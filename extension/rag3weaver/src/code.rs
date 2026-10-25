@@ -2575,6 +2575,7 @@ impl Catalog {
         let t = std::time::Instant::now();
         let (parents, fichiers, genres, origines, de_trait) = self.parents_et_fichiers(&a_departager)?;
         let borne = borne_ambigu();
+        let familles: HashMap<&str, Option<&'static str>> = fichiers.iter().map(|(u, f)| (u.as_str(), famille_de_langage(f))).collect();
         crate::ingest_profile::add("symboles · parents et fichiers", t);
         let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
         for sym in uuids {
@@ -2604,12 +2605,20 @@ impl Catalog {
                 // Une résolution ne traverse pas les langages : les définisseurs d'une autre
                 // famille ne sont pas candidats (révisé par c7 sur la mesure du 19 octobre 2026).
                 let homonymes = definers.len();
-                let definers: Vec<String> = definers.iter().filter(|d| meme_langage(fichiers.get(&m.from), fichiers.get(*d))).cloned().collect();
-                if definers.is_empty() {
+                // La famille se lit une fois par scope (`familles`), et la liste ne se recopie que
+                // si le filtre en retire un : le cas courant (un seul langage) ne coûte rien.
+                let de_ma_famille = familles.get(m.from.as_str()).copied().flatten();
+                let garde = |d: &String| meme_famille(de_ma_famille, familles.get(d.as_str()).copied().flatten());
+                let filtres: std::borrow::Cow<[String]> = if definers.iter().all(garde) {
+                    std::borrow::Cow::Borrowed(definers.as_slice())
+                } else {
+                    std::borrow::Cow::Owned(definers.iter().filter(|d| garde(d)).cloned().collect())
+                };
+                if filtres.is_empty() {
                     report.abstained_cross_language += 1;
                     continue;
                 }
-                let definers = &definers;
+                let definers: &[String] = &filtres;
                 let cibles: Vec<(String, Resolution)> = match choose_target(&m, definers, &parents, &fichiers, &genres, &de_trait, &reexports) {
                     // Le filtre des langages ôte des candidats, il n'en désigne pas : un nom que
                     // plusieurs langages définissent, unique dans le sien, ne se résout pas par le
@@ -3370,8 +3379,14 @@ fn famille_de_langage(chemin: &str) -> Option<&'static str> {
 /// **Une résolution ne traverse pas les langages** : une mention ne vise qu'un définisseur de sa
 /// famille. Un fichier de langage inconnu ne restreint rien ; un gabarit peut nommer du code
 /// (le lien déclaré entre langages : un nœud et son type Rust).
+#[cfg(test)]
 fn meme_langage(mentionneur: Option<&String>, definisseur: Option<&String>) -> bool {
-    match (mentionneur.and_then(|f| famille_de_langage(f)), definisseur.and_then(|f| famille_de_langage(f))) {
+    meme_famille(mentionneur.and_then(|f| famille_de_langage(f)), definisseur.and_then(|f| famille_de_langage(f)))
+}
+
+/// [`meme_langage`] sur des familles déjà lues.
+fn meme_famille(mentionneur: Option<&'static str>, definisseur: Option<&'static str>) -> bool {
+    match (mentionneur, definisseur) {
         (Some("gabarit"), _) | (None, _) | (_, None) => true,
         (Some(a), Some(b)) => a == b,
     }
