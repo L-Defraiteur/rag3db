@@ -1030,6 +1030,24 @@ function suivreLeChat(d) {
   }
 }
 
+// À chaque ouverture du flux, le chat montré relit son état : un tour parti
+// avant (la page à peine chargée, ou le flux coupé puis repris) a publié son
+// RunStarted à un flux qui n'avait pas cette fenêtre. Le run en vol que l'hôte
+// connaît devient celui de la page, Arrêter avec. Seulement pendant un tour
+// que la page attend : une réponse tardive ne rallume pas un tour fini.
+async function relireLeChat() {
+  const v = chatVivant;
+  if (!v || route().vue !== "chat") return;
+  const r = await (await fetch(`/ide/chat?${new URLSearchParams({ backend: v.id })}`)).json();
+  const run = r.ok ? r.result.run : null;
+  if (!run || v !== chatVivant || !v.bulle?.classList.contains("en-cours") || v.run === run) return;
+  v.run = run;
+  window.__chat = { run, evenements: [] };
+  v.arreter.hidden = false;
+}
+// Pour un témoin : le flux de la page, et sa relecture du chat.
+window.__ide = { relireLeChat };
+
 // ─── Le DAG vivant (C2) ────────────────────────────────────────────────────
 // Le graphe d'un outil, d'une réaction ou d'un composant (/ide/graphe), dessiné
 // par couches de gauche à droite ; le sujet `dataflow` du flux l'allume. Le run
@@ -1229,7 +1247,8 @@ montrer();
 // allume le DAG montré.
 const lien = document.getElementById("lien");
 const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens");
-source.onopen = () => { lien.textContent = "flux : ouvert"; };
+source.onopen = () => { lien.textContent = "flux : ouvert"; relireLeChat().catch(() => {}); };
+window.__ide.flux = source;
 source.onerror = () => { lien.textContent = "flux : coupé, reprise…"; };
 let relire = null;
 source.onmessage = (e) => {
