@@ -233,9 +233,9 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
         .unwrap();
     let aretes: Vec<String> = r.rows.iter().map(|x| x.iter().map(|v| v.as_str().unwrap_or("∅").to_string()).collect::<Vec<_>>().join(" ")).collect();
     eprintln!("{aretes:#?}\n{rapport:?}");
-    assert!(aretes.iter().any(|a| a == "run /projet/x/helper.h nom inclusion"), "le helper inclus, seul candidat : {aretes:#?}");
+    assert!(aretes.iter().any(|a| a == "run x/helper.h nom inclusion"), "le helper inclus, seul candidat : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.contains("y/helper.h")), "l'homonyme non inclus n'est pas lié : {aretes:#?}");
-    assert!(aretes.iter().any(|a| a.starts_with("use_compute /projet/z/calc.cpp ") && a.ends_with(" entete")), "la définition vue par son en-tête : {aretes:#?}");
+    assert!(aretes.iter().any(|a| a.starts_with("use_compute z/calc.cpp ") && a.ends_with(" entete")), "la définition vue par son en-tête : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.contains("w/other.cpp")), "l'homonyme de w/ n'est pas vu : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.starts_with("lone ")), "sans include, l'abstention : {aretes:#?}");
     assert!(rapport.abstained_invisible >= 1, "l'abstention se compte : {rapport:?}");
