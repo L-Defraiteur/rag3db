@@ -39,6 +39,16 @@
 //   tue par SIGKILL, base ouverte, dès la validation. writer-commits-during-a-checkpoint : la
 //   validation est faite avant la fin du point de reprise ; committed-row-survives-a-crash-during-
 //   the-checkpoint : la base rouverte porte la ligne.
+// - CheckpointOpenReader.OpenReaderStillSeesARowDeletedAfterItsBegin (V2-2a, la suppression) : la
+//   ligne relue par le lecteur est supprimée et validée entre son BEGIN et le CHECKPOINT ; il doit
+//   encore la voir pendant et après (la suppression portée avec son horodatage).
+// - CheckpointNoStall.WriterCommittedWhileTheCheckpointWritesSurvivesItsDeath (V2-2c, le journal
+//   scellé) : dans un fils, un Checkpointer qui, après checkpointStorage (toutes les tables
+//   reportées, avant le catalogue et l'en-tête : le point le plus proche de « entre deux tables »
+//   sans crochet dans le moteur), laisse un écrivain valider jusqu'à 3 s, puis tue le processus
+//   base ouverte. writer-commits-while-the-checkpoint-writes : l'écrivain a validé dans cette
+//   fenêtre ; committed-row-survives-the-checkpoints-death : la base rouverte porte sa ligne (le
+//   journal scellé, sans CHECKPOINT final, rejoué, puis le journal neuf).
 
 #ifndef __SINGLE_THREADED__
 
@@ -57,11 +67,13 @@
 #include <thread>
 #include <vector>
 
+#include "../flaky_checkpointer.h"
 #include "bench_harness.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
+#include "storage/checkpointer.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -422,6 +434,91 @@ TEST_F(CheckpointNoStall, WriterCommittedDuringACheckpointSurvivesACrash) {
     EXPECT_EQ(during, 1) << "[check: writer-commits-during-a-checkpoint] the writer committed only "
                             "after the checkpoint ended";
     EXPECT_EQ(present, 1) << "[check: committed-row-survives-a-crash-during-the-checkpoint]";
+}
+
+TEST_F(CheckpointOpenReader, OpenReaderStillSeesARowDeletedAfterItsBegin) {
+    prepareACostlyCheckpoint();
+    openReaderAcrossACheckpoint(
+        "MATCH (d:Doc) RETURN count(d), sum(CASE WHEN d.id = 9 THEN 1 ELSE 0 END);",
+        {"MATCH (d:Doc {id: 9}) DELETE d;"});
+}
+
+// L'écrivain de V2-2c (le journal scellé) : le Checkpointer le laisse valider après avoir reporté
+// les tables, puis meurt.
+std::atomic<bool> writerCommittedInTheWindow{false};
+
+class CheckpointerDyingAfterStorage final : public rag3db::storage::Checkpointer {
+public:
+    explicit CheckpointerDyingAfterStorage(rag3db::main::ClientContext& context)
+        : Checkpointer(context) {}
+
+protected:
+    bool checkpointStorage() override {
+        const auto changed = Checkpointer::checkpointStorage();
+        const auto deadline = Clock::now() + std::chrono::seconds(3);
+        while (!writerCommittedInTheWindow.load() && Clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        kill(getpid(), SIGKILL);
+        _exit(9);
+        return changed;
+    }
+};
+
+TEST_F(CheckpointNoStall, WriterCommittedWhileTheCheckpointWritesSurvivesItsDeath) {
+    namespace fs = std::filesystem;
+    const auto logPath = databasePath + ".sealed";
+    fs::create_directories(fs::path(databasePath).parent_path());
+    fs::remove(logPath);
+    const auto pid = fork();
+    if (pid == 0) {
+        concurrency::disableCoreDumps();
+        prepareACostlyCheckpoint();
+        const FlakyCheckpointer dying([](rag3db::main::ClientContext& context) {
+            return std::make_unique<CheckpointerDyingAfterStorage>(context);
+        });
+        dying.setCheckpointer(*conn->getClientContext());
+        std::thread checkpoint([&] { conn->query("CHECKPOINT;"); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        rag3db::main::Connection writer(database.get());
+        const bool begun = writer.query("BEGIN TRANSACTION;")->isSuccess();
+        const bool created =
+            begun &&
+            writer.query(stringFormat("CREATE (:Doc {id: 70000000, vec: {}});", vectorLiteral(3)))
+                ->isSuccess();
+        const bool committed = created && writer.query("COMMIT;")->isSuccess();
+        {
+            std::ofstream log(logPath);
+            log << "committed " << committed << std::endl;
+        }
+        writerCommittedInTheWindow = committed;
+        checkpoint.join();
+        // Le Checkpointer tue le processus ; s'il ne l'a pas fait, mourir ici, base ouverte.
+        kill(getpid(), SIGKILL);
+        _exit(9);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+        << "[check: plan] the child was not killed, status " << status;
+    std::string word;
+    int committed = 0;
+    {
+        std::ifstream in(logPath);
+        in >> word >> committed;
+    }
+    createDBAndConn();
+    concurrency::applyBenchSettings(*conn);
+    auto count = conn->query("MATCH (d:Doc {id: 70000000}) RETURN count(d);");
+    ASSERT_TRUE(count->isSuccess()) << "[check: query] " << count->getErrorMessage();
+    const auto present = count->getNext()->getValue(0)->getValue<int64_t>();
+    std::cerr << "  [journal scellé] l'écrivain a validé pendant l'écriture du point de reprise : "
+              << committed << " ; ligne à la réouverture : " << present << "\n";
+    EXPECT_EQ(committed, 1) << "[check: writer-commits-while-the-checkpoint-writes] the writer "
+                               "could not commit before the checkpoint died";
+    EXPECT_EQ(present, static_cast<int64_t>(committed))
+        << "[check: committed-row-survives-the-checkpoints-death] committed " << committed
+        << ", present " << present;
 }
 
 } // namespace
