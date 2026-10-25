@@ -78,3 +78,22 @@ d'autres sessions), et a été retirée le 12 octobre.
 La compaction de la liste d'un nœud au commit : retirer de `rowIndices` les lignes que ce commit
 tue (elles restent dans le groupe pour les lecteurs d'avant, jusqu'au point de reprise). Le témoin
 vert, joué plusieurs fois.
+
+## Rejoué le 25 octobre 2026 (banc)
+
+Master 6005e11cc, à luciepc, trois passes sous `poste mesure`, la charge relevée avant chacune :
+load sur une minute de 6,3 à 7,9 (au-dessus de la référence d'octobre, environ 0,2 par cœur),
+sans compilation ni test parallèle, et les moyennes sur 5 et 15 minutes encore hautes (15 à 23).
+
+| passe | sans point de reprise, 5 premiers → 5 derniers | avec point de reprise, 5 derniers | rapport |
+|---|---|---|---|
+| 1 | 110 → 164 ms | 122 ms | ×1,35 |
+| 2 | 76 → 158 ms | 119 ms | ×1,32 |
+| 3 | 76 → 156 ms | 119 ms | ×1,32 |
+
+Les chiffres retrouvent ceux d'octobre à 5 % près : la pente n'a pas changé sur master, et le défaut
+reste entier. Une passe du cœur prise pendant son comparateur complet avait vu ×0,61 : sous cette
+charge, tout ralentit d'environ trois fois, et la courbe avec point de reprise plus que l'autre. Le
+témoin quitte donc `known_red.txt` pour `probabilistic.txt`, puisque c'est une borne de temps qui
+dépend de la charge. Il se juge seul, sous `poste mesure`, avec la charge relevée.
+

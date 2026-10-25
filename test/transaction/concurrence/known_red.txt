@@ -113,17 +113,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine 
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
-# La pente de l'insertion sous HNSW sans point de reprise (ticket
-# 2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot), revenue de
-# probabilistic.txt le 12 octobre. Le rapport des 5 derniers lots sans point de reprise sur ceux avec
-# (borne ×1,2) : ×1,5-1,74 sur cinq passes avant la compaction des lignes mortes du CSR ; ×1,17,
-# ×1,55, ×1,20 sur la compaction seule ; puis, sur master avec la compaction et 2bd65cbb8 de
-# hotfixs, ×1,37 (cœur) et ×1,39, ×1,40, ×1,37 (banc, sous `poste mesure`) : 4 rouges sur 4, un
-# rouge constant. Ce qui croît encore (profil eu-stack, lots 0-15 contre 50-63) : la lecture en
-# mémoire, ligne à ligne, de ce qui a été écrit depuis le dernier point de reprise
-# (scanCommittedInMemRandom 4 → 27 %, VersionInfo::isSelected 0 → 18 %). Pour le cœur C++.
-VectorIndexInsertSlope.CostPerBatchSettles insert-cost-without-checkpoint-stays-close
-#
 #
 # Un BEGIN refusé laisse la connexion en transaction explicite sans transaction (ticket
 # 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction) : le MERGE qui suit le refus

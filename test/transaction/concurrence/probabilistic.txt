@@ -74,3 +74,14 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstCopy
 # première, vaut 2 648 064). Revenu de known_red.txt le même jour. Le défaut demeure ; un témoin
 # qui mesure la fuite sans dépendre du moment des morts reste à écrire.
 JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt
+#
+# La pente de l'insertion sous HNSW sans point de reprise (ticket
+# 2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot), sortie de
+# known_red.txt le 25 octobre : c'est une borne de temps qui dépend de la charge. Machine calme, elle
+# est rouge sans exception : le rapport des 5 derniers lots sans point de reprise sur ceux avec
+# (borne ×1,2) vaut ×1,37 à ×1,40 en octobre, et ×1,32 à ×1,35 sur master 6005e11cc le 25 octobre
+# (trois rouges sur trois sous `poste mesure`, à luciepc). Sous la charge d'un comparateur complet,
+# tout ralentit d'environ trois fois, et la courbe avec point de reprise plus que l'autre : le
+# 25 octobre, ×0,61, un « known red turned green » à tort dans le compare du cœur. Le défaut reste
+# entier : se juger seul, sous `poste mesure`, avec la charge relevée.
+VectorIndexInsertSlope.CostPerBatchSettles
