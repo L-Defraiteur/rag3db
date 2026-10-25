@@ -372,3 +372,38 @@ fn un_appel_mcp_laisse_ce_qu_il_a_rendu_dans_le_journal_de_son_run() {
     assert!(appel["rendu"].to_string().contains("bonjour"), "le résultat tel que l'appelant l'a reçu : {appel}");
     assert_eq!(journal["fin"]["kind"], "RunFinished", "{journal}");
 }
+
+/// **Le rendu journalisé d'un appel est entier** (c7, 25 octobre 2026) : une
+/// lecture de 200 Kio par `/call` laisse dans le journal du run tout ce que
+/// l'appelant a reçu — la dernière ligne comprise, rien de « tronqué ». Une
+/// borne coupe les événements d'un run (page 06), jamais son rendu final.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn le_rendu_journalise_d_un_appel_est_entier() {
+    let d = tempfile::tempdir().unwrap();
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut gros = String::new();
+    for i in 0..4000 {
+        gros.push_str(&format!("pub const LIGNE_{i:04}: &str = \"une ligne qui pèse pour dépasser soixante-quatre kibioctets\";\n"));
+    }
+    std::fs::write(depot.join("src/gros.rs"), &gros).unwrap();
+    let host = hote(d.path(), qui_edite(Arc::new(Mutex::new(Vec::new())))).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    let session = host.open_session("claude-code", None, Vec::new(), None);
+    let r = host.call(Some(&session), &manifeste, "read_file", json!({ "path": "src/gros.rs", "limit": 5000 }));
+    let run = r["result"]["run"].as_str().unwrap_or_else(|| panic!("la réponse porte son run : {r}")).to_string();
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let journal = loop {
+        let lu = host.journal_des_runs().lire(&h.id, &run).filter(|v| v["appel"].is_object());
+        if let Some(v) = lu {
+            break v;
+        }
+        assert!(std::time::Instant::now() < fin, "le journal de l'appel {run} n'est jamais écrit, ou jamais complété");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    let rendu = journal["appel"]["rendu"].to_string();
+    assert!(rendu.len() > 64 * 1024, "le rendu dépasse l'ancienne borne : {} octets", rendu.len());
+    assert!(journal["appel"]["rendu"].get("tronque").is_none(), "rien de tronqué : {}", &rendu[..200]);
+    assert!(rendu.contains("LIGNE_3999"), "la dernière ligne est dans le journal");
+    assert_eq!(journal["appel"]["rendu"].to_string(), r["result"]["result"].to_string(), "le journal porte exactement ce que l'appelant a reçu");
+}
