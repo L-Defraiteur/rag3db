@@ -559,6 +559,8 @@ pub fn builtin_template(name: &str) -> Option<&'static str> {
         "compact" => Some(COMPACT_TEMPLATE),
         "tree" => Some(include_str!("../../templates/render/tree.md.jinja")),
         "schema" => Some(SCHEMA_TEMPLATE),
+        // Le plan d'un fichier, rendu par l'outil livré `outline`.
+        "outline" => Some(include_str!("../../templates/render/outline.md.jinja")),
         _ => None,
     }
 }

@@ -1,0 +1,23 @@
+{
+  "let": {
+    "du_fichier": {
+      "all_of": [
+        {"equals": {"field": "file_path", "param": "path"}},
+        {"optional": {"equals": {"field": "source", "param": "source"}}}
+      ]
+    }
+  },
+  "forms": {
+    "scopes": {
+      "select": {
+        "table": "Scope",
+        "filter": {"let": "du_fichier"},
+        "returns": ["_uuid", "name", "scope_type", "start_line", "end_line", "parent_name", "signature", "file_path", "language"],
+        "order_by": [{"field": "start_line"}, {"field": "end_line", "desc": true}, {"field": "_uuid"}],
+        "limit": {"param": "limit", "max": 2000}
+      }
+    },
+    "total": {"count": {"matching": {"table": "Scope", "filter": {"let": "du_fichier"}}}}
+  },
+  "outputs": {"rows": "scopes", "total": "total", "results": {"form": "scopes", "uuid": "_uuid", "entity": "Scope"}}
+}

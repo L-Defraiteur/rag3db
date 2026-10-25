@@ -552,6 +552,19 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 
 /// Déclare `File`, `Scope`, `Library` et les neuf relations. Idempotent
 /// (`register_entity` / `register_relation` le sont).
+/// **Le schéma du code, tel qu'un Plan déclaré le lit** : les champs de chaque entité (`_uuid`
+/// compris) et les deux bouts de chaque relation. Le chargeur d'un backend dont
+/// `workspace.index = "code"` l'ajoute au schéma de son manifeste, qui ne déclare pas ces
+/// entités : sans lui, un Plan sur `Scope` serait refusé au chargement.
+pub fn plan_schema() -> (BTreeMap<String, std::collections::BTreeSet<String>>, BTreeMap<String, (String, String)>) {
+    let tables = [(FILE, file_config()), (SCOPE, scope_config(ChunkingConfig::default())), (LIBRARY, library_config()), (SYMBOL, symbol_config())]
+        .into_iter()
+        .map(|(nom, e)| (nom.to_string(), e.fields.keys().cloned().chain(["_uuid".to_string()]).collect()))
+        .collect();
+    let relations = RELATIONS.iter().map(|(rel, from, to)| (rel.to_string(), (from.to_string(), to.to_string()))).collect();
+    (tables, relations)
+}
+
 pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<(), CatalogError> {
     catalog.register_entity(FILE, file_config())?;
     catalog.register_entity(SCOPE, scope_config(scope_chunking))?;

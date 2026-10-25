@@ -1,0 +1,11 @@
+%% tool: outline
+%% description: Le plan d'un fichier, comme le donne un serveur de langage : ses scopes dans l'ordre (classes, fonctions, méthodes…), avec leur genre, leurs lignes et leur signature. Lu dans l'index, sans ouvrir le fichier ; pour s'orienter avant read, ou pour savoir ce qu'un fichier définit.
+%% param: path string! -- Le chemin du fichier, tel que list_files ou search_code le rendent (ex. 'src/main/database.cpp').
+%% param: source string = "" -- La source de l'index, quand le même chemin existe dans deux (vide : toutes).
+%% param: limit int = 500 -- Scopes rendus au plus (plafond 2000) ; le total est compté.
+%% result: render.text
+
+graph LR
+    plan["PlanNode(plan=@plans/outline.json, path=$path, source=$source, limit=$limit)"]
+    render["RenderResultsNode(template='outline', group=false)"]
+    plan -->|results| render
