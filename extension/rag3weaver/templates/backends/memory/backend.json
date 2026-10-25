@@ -2,6 +2,7 @@
   "version": 1,
   "name": "memory",
   "database": "data/memory.rag3db",
+  "files_root": "fichiers",
   "embeddings": {
     "address": "",
     "model": "bge-m3",
@@ -282,6 +283,20 @@
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision"
+      },
+      "files": {
+        "dir": "genres",
+        "name": "{name}.md",
+        "header": [
+          "name",
+          "forme",
+          "script",
+          "etat",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "body": "description"
       }
     },
     "Fiche": {
@@ -361,6 +376,35 @@
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision"
+      },
+      "files": {
+        "dir": "fiches",
+        "name": "{uuid}.md",
+        "header": [
+          "name",
+          "about",
+          "state",
+          "author",
+          "via",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "template": "gabarits/fiche.md.jinja",
+        "related": {
+          "etat": {
+            "relation": "ETAT_DE",
+            "direction": "incoming"
+          },
+          "apports": {
+            "relation": "A_POUR_APPORT",
+            "order_by": "created_at"
+          },
+          "ancres": {
+            "relation": "ANCRE",
+            "order_by": "valeur"
+          }
+        }
       }
     },
     "Apport": {
@@ -510,6 +554,22 @@
         "updated_at": "updated_at",
         "revision": "revision",
         "immutable": true
+      },
+      "files": {
+        "dir": "",
+        "name": "{chemin}",
+        "header": [
+          "chemin",
+          "titre",
+          "origine",
+          "session",
+          "author",
+          "via",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "body": "contenu"
       }
     },
     "Rangement": {

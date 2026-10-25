@@ -110,7 +110,10 @@ pub struct LienDuBloc {
 fn ligne_du_bloc(cat: &crate::catalog::Catalog, entite: &str, uuid: &str, record: &Value) -> Result<LigneDuBloc, String> {
     let mut fields = Map::new();
     for (k, v) in record.as_object().into_iter().flatten() {
-        if k.starts_with('_') || k == "uuid" || crate::scope::is_scope_column(k) || v.is_null() {
+        // Une colonne que rag3weaver pose lui-même (les vecteurs `embedding…`,
+        // qui ne commencent pas par `_`) n'est pas une donnée de la ligne : elle
+        // se recalcule, et mille flottants n'ont rien à faire dans un fichier.
+        if k.starts_with('_') || k == "uuid" || crate::scope::is_scope_column(k) || crate::schema::is_builtin_column(k) || v.is_null() {
             continue;
         }
         fields.insert(k.clone(), v.clone());
@@ -173,6 +176,11 @@ pub struct Miroir {
     /// Le schéma de l'entité, avec `uuid` (que l'en-tête porte toujours) : ce
     /// qui relit un fichier ([`Self::relire`], lot M3).
     pub schema: Value,
+    /// Les entités du manifeste **sans fichier à elles**, posées au chargement
+    /// une fois tous les miroirs connus : une ligne de l'une d'elles, atteinte
+    /// par un lien sortant d'une ligne du bloc, voyage avec le bloc (une Ref
+    /// `doc:` citée par un apport). Sans elle, la base perdue la perdrait.
+    pub sans_fichier: std::sync::OnceLock<std::collections::BTreeSet<String>>,
 }
 
 /// Un nom de champ entre accolades dans `name`.
@@ -256,7 +264,7 @@ impl Miroir {
         if let Some(props) = schema["properties"].as_object_mut() {
             props.insert("uuid".into(), serde_json::json!({"type": "string"}));
         }
-        Ok(Self { entite: entite.to_string(), racine, decl, gabarit, schema })
+        Ok(Self { entite: entite.to_string(), racine, decl, gabarit, schema, sans_fichier: std::sync::OnceLock::new() })
     }
 
     /// **Relit le fichier d'une ligne** (lot M3, la reconstruction) : l'en-tête,
@@ -463,6 +471,35 @@ impl Miroir {
                 if let Some(u) = l["uuid"].as_str() {
                     lignes.push(ligne_du_bloc(cat, &entite_liee, u, l)?);
                 }
+            }
+        }
+        // **La fermeture du bloc** : une ligne sans fichier à elle, atteinte par
+        // un lien sortant d'une ligne du bloc, y entre aussi, et ainsi de suite
+        // (une seule fois chacune). Elle n'a pas d'autre endroit où survivre.
+        if let Some(sans) = self.sans_fichier.get() {
+            let mut vus: std::collections::BTreeSet<String> = lignes.iter().map(|l| l.uuid.clone()).collect();
+            let mut i = 0;
+            while i < lignes.len() {
+                let mut cibles = Vec::new();
+                for (relation, liens) in &lignes[i].links {
+                    let Some(def) = cat.get_relation_def(relation) else { continue };
+                    if !sans.contains(&def.to) {
+                        continue;
+                    }
+                    for l in liens {
+                        cibles.push((def.to.clone(), l.to.clone()));
+                    }
+                }
+                for (entite, u) in cibles {
+                    if !vus.insert(u.clone()) {
+                        continue;
+                    }
+                    if let Some(ligne) = cat.get(&entite, &u).map_err(|e| e.to_string())? {
+                        let ligne = serde_json::to_value(&ligne).map_err(|e| e.to_string())?;
+                        lignes.push(ligne_du_bloc(cat, &entite, &u, &ligne)?);
+                    }
+                }
+                i += 1;
             }
         }
         if !corps.is_empty() && !corps.ends_with('\n') {
