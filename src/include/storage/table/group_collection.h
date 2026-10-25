@@ -56,6 +56,12 @@ public:
         KU_UNUSED(lock);
         groups.push_back(std::move(group));
     }
+    void appendGroup(const common::UniqLock& lock, std::shared_ptr<T> group) {
+        KU_ASSERT(group);
+        KU_ASSERT(lock.isLocked());
+        KU_UNUSED(lock);
+        groups.push_back(std::move(group));
+    }
     T* getGroup(const common::UniqLock& lock, common::idx_t groupIdx) const {
         KU_ASSERT(lock.isLocked());
         KU_UNUSED(lock);

@@ -134,6 +134,8 @@ struct CSRNodeGroupScanState final : NodeGroupScanState {
     // partagée (voir NodeGroupScanState::groups pour les blocs en mémoire) : header et
     // chunkStates le décrivent, un point de reprise qui le remplace ne le retire pas au lecteur.
     std::shared_ptr<ChunkedNodeGroup> persistent;
+    // L'index des listes en mémoire de la même génération (V2-2) ; nul : rien en mémoire.
+    std::shared_ptr<const CSRIndex> csrIndex;
 
     // This is for local scan state where we don't need `header`.
     explicit CSRNodeGroupScanState()
@@ -331,7 +333,8 @@ private:
     // L'échange, sous le verrou : le bloc persistant neuf (ou aucun) remplace l'ancien, les
     // blocs en mémoire et l'index des listes sont vidés. L'ancien bloc meurt avec son dernier
     // lecteur.
-    void finalizeCheckpoint(std::unique_ptr<ChunkedNodeGroup> newPersistent);
+    void finalizeCheckpoint(std::unique_ptr<ChunkedNodeGroup> newPersistent,
+        const ChunkedGroups& oldGroups, const NodeGroupCheckpointState& state);
 
 private:
     // En propriété partagée : un balayage en cours le tient (CSRNodeGroupScanState::persistent)
@@ -342,11 +345,26 @@ private:
     // and copy its lists. Appends take this mutex exclusively, scans share it. The checkpoint
     // needs nothing more: no transaction runs while it rewrites or frees the index.
     mutable std::shared_mutex csrIndexMtx;
-    std::unique_ptr<CSRIndex> csrIndex;
-    bool hasCSRIndex() const {
-        std::shared_lock lck{csrIndexMtx};
-        return csrIndex != nullptr;
-    }
+    // En propriété partagée : une génération précédente et les balayages d'une transaction
+    // ouverte avant le point de reprise le tiennent (V2-2).
+    std::shared_ptr<CSRIndex> csrIndex;
+    // V2-2 : une génération précédente d'un groupe CSR : son bloc persistant, ses blocs en
+    // mémoire et l'index de leurs listes, pour les transactions d'instantané antérieur au point
+    // de reprise qui l'a remplacée.
+    struct CSRPreviousGeneration {
+        common::transaction_t checkpointTS;
+        std::shared_ptr<ChunkedNodeGroup> persistent;
+        ChunkedGroups groups;
+        std::shared_ptr<const CSRIndex> csrIndex;
+    };
+    std::vector<CSRPreviousGeneration> csrPreviousGenerations; // sous chunkedGroups.lock()
+    // L'index d'avant le bâti, intact, pour la génération gardée (le bâti travaille sur une
+    // copie) ; posé par checkpoint, consommé par finalizeCheckpoint.
+    std::shared_ptr<const CSRIndex> indexBeforeCheckpoint;
+    // Ce qu'un balayage d'instantané startTS lit : la génération gardée qui le précède, sinon
+    // le vivant. Sous le verrou de chunkedGroups.
+    void takeGenerationFor(const common::UniqLock& lock, common::transaction_t startTS,
+        CSRNodeGroupScanState& scanState) const;
 
     // Les nœuds dont une suppression en mémoire a laissé des lignes mortes dans la liste
     // (notés par delete_, hors de NodeCSRIndex que les lecteurs copient). Un verrou feuille :

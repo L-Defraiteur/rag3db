@@ -54,6 +54,15 @@ public:
     // à défaire que Checkpointer::rollback ne défasse : le point de reprise est refusé, nommé,
     // et la base reste ouverte (ticket du ROLLBACK sous un tampon plein, défaut 3). Après, la
     // base est à rouvrir (TransactionManager::checkpointFailed).
+    // Le point de reprise en cours (V2-2, posé par le Checkpointer) : son horodatage T et le
+    // plus vieux instantané ouvert F. F < T : les groupes gardent leur ancienne génération.
+    void setCheckpointTimestamps(common::transaction_t checkpointTS_,
+        common::transaction_t oldestReaderTS_) {
+        checkpointTS = checkpointTS_;
+        oldestReaderTS = oldestReaderTS_;
+    }
+    common::transaction_t getCheckpointTS() const { return checkpointTS; }
+    common::transaction_t getOldestReaderTS() const { return oldestReaderTS; }
     void markCheckpointChangedMemory() { checkpointChangedMemory = true; }
     bool* getCheckpointChangedMemoryFlag() { return &checkpointChangedMemory; }
     bool hasCheckpointChangedMemory() const { return checkpointChangedMemory; }
@@ -100,6 +109,8 @@ private:
 private:
     std::mutex mtx;
     bool checkpointChangedMemory = false;
+    common::transaction_t checkpointTS = 0;
+    common::transaction_t oldestReaderTS = 0;
     std::string databasePath;
     std::unique_ptr<storage::DatabaseHeader> databaseHeader;
     bool readOnly;

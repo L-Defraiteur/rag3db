@@ -182,10 +182,31 @@ static void initializeScanStateForChunkedGroup(const TableScanState& state,
     }
 }
 
-void NodeGroup::initializeScanState(const Transaction*, const UniqLock& lock,
+void NodeGroup::initializeScanState(const Transaction* transaction, const UniqLock& lock,
     TableScanState& state) const {
-    state.nodeGroupScanState->groups = chunkedGroups.getAllGroups(lock);
+    state.nodeGroupScanState->groups = groupsFor(lock, transaction->getStartTS());
     initializeScanStateFromGroups(state);
+}
+
+const ChunkedGroups& NodeGroup::groupsFor(const UniqLock& lock, transaction_t startTS) const {
+    for (const auto& generation : previousGenerations) {
+        if (startTS < generation.checkpointTS) {
+            return generation.groups;
+        }
+    }
+    return chunkedGroups.getAllGroups(lock);
+}
+
+void NodeGroup::retireAndKeepGeneration(const UniqLock&, ChunkedGroups oldGroups,
+    const NodeGroupCheckpointState& state) {
+    // Une génération dont le point de reprise précède le plus vieux instantané ouvert n'a plus
+    // de lecteur : ses blocs meurent, et leurs pages reviennent (retireStorage les a marquées).
+    std::erase_if(previousGenerations, [&state](const PreviousGeneration& generation) {
+        return generation.checkpointTS <= state.oldestReaderTS;
+    });
+    if (state.keepsPreviousGeneration()) {
+        previousGenerations.push_back({state.checkpointTS, std::move(oldGroups)});
+    }
 }
 
 void NodeGroup::initializeScanStateFromGroups(TableScanState& state) const {
@@ -535,6 +556,10 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
     {
         const auto lock = chunkedGroups.lock();
         groups = chunkedGroups.getAllGroups(lock);
+        // Scellé : ce qui s'ajoute pendant le bâti ouvre un bloc neuf, gardé à l'échange.
+        if (!groups.empty() && groups.back()->getResidencyState() == ResidencyState::IN_MEMORY) {
+            groups.back()->seal();
+        }
     }
     KU_ASSERT(!groups.empty());
     // Les trous d'abord : le bloc vidé (flushEmpty) et la copie fusionnée qui reprend ses
@@ -564,8 +589,17 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
     // Déjà posé après la copie fusionnée ; l'échange, lui, ne se défait pas non plus.
     state.markChangedMemory();
     const auto lock = chunkedGroups.lock();
+    // Les blocs ajoutés depuis la prise (après le dernier bloc pris, scellé) : gardés derrière
+    // le bloc neuf, qui a fondu toutes les lignes des blocs pris, donc leur startRowIdx suit.
+    const auto& live = chunkedGroups.getAllGroups(lock);
+    ChunkedGroups appendedSince(live.begin() + std::min(groups.size(), live.size()), live.end());
     chunkedGroups.clear(lock);
     chunkedGroups.appendGroup(lock, std::move(checkpointedChunkedGroup));
+    for (auto& appended : appendedSince) {
+        chunkedGroups.appendGroup(lock, std::move(appended));
+    }
+    // L'ancienne liste reste lisible des transactions ouvertes avant ce point de reprise.
+    retireAndKeepGeneration(lock, std::move(groups), state);
 }
 
 // Les numéros ne bougent pas : une colonne qui n'est plus dans le point de reprise (supprimée)
@@ -877,11 +911,16 @@ bool NodeGroup::isVisible(const Transaction* transaction, row_idx_t rowIdxInGrou
 bool NodeGroup::isVisible(transaction_t startTS, transaction_t transactionID,
     row_idx_t rowIdxInGroup) const {
     // En propriété partagée : le bloc est lu hors du verrou de la collection, et l'annulation
-    // d'une insertion d'une autre transaction peut l'en retirer entre-temps.
+    // d'une insertion d'une autre transaction peut l'en retirer entre-temps. Dans la génération
+    // de l'instantané (V2-2).
     std::shared_ptr<ChunkedNodeGroup> chunkedGroup;
     {
         const auto lock = chunkedGroups.lock();
-        chunkedGroup = findChunkedGroupSharedFromRowIdx(lock, rowIdxInGroup);
+        const auto& groups = groupsFor(lock, startTS);
+        const auto chunkedGroupIdx = findChunkedGroupIdx(groups, rowIdxInGroup).first;
+        if (chunkedGroupIdx != INVALID_CHUNKED_GROUP_IDX) {
+            chunkedGroup = groups[chunkedGroupIdx];
+        }
     }
     if (!chunkedGroup) {
         return false;
@@ -935,16 +974,20 @@ bool NodeGroup::isVisibleNoLock(const Transaction* transaction, row_idx_t rowIdx
 
 bool NodeGroup::isDeleted(const Transaction* transaction, offset_t offsetInGroup) const {
     const auto lock = chunkedGroups.lock();
-    const auto* chunkedGroup = findChunkedGroupFromRowIdx(lock, offsetInGroup);
-    KU_ASSERT(chunkedGroup);
-    return chunkedGroup->isDeleted(transaction, offsetInGroup - chunkedGroup->getStartRowIdx());
+    const auto& groups = groupsFor(lock, transaction->getStartTS());
+    const auto chunkedGroupIdx = findChunkedGroupIdx(groups, offsetInGroup).first;
+    KU_ASSERT(chunkedGroupIdx != INVALID_CHUNKED_GROUP_IDX);
+    const auto& chunkedGroup = *groups[chunkedGroupIdx];
+    return chunkedGroup.isDeleted(transaction, offsetInGroup - chunkedGroup.getStartRowIdx());
 }
 
 bool NodeGroup::isInserted(const Transaction* transaction, offset_t offsetInGroup) const {
     const auto lock = chunkedGroups.lock();
-    const auto* chunkedGroup = findChunkedGroupFromRowIdx(lock, offsetInGroup);
-    KU_ASSERT(chunkedGroup);
-    return chunkedGroup->isInserted(transaction, offsetInGroup - chunkedGroup->getStartRowIdx());
+    const auto& groups = groupsFor(lock, transaction->getStartTS());
+    const auto chunkedGroupIdx = findChunkedGroupIdx(groups, offsetInGroup).first;
+    KU_ASSERT(chunkedGroupIdx != INVALID_CHUNKED_GROUP_IDX);
+    const auto& chunkedGroup = *groups[chunkedGroupIdx];
+    return chunkedGroup.isInserted(transaction, offsetInGroup - chunkedGroup.getStartRowIdx());
 }
 
 void NodeGroup::applyFuncToChunkedGroups(version_record_handler_op_t func, row_idx_t startRow,

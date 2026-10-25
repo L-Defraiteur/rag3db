@@ -628,7 +628,9 @@ bool RelTable::checkpoint(main::ClientContext* context, TableCatalogEntry* table
             columnIDs.push_back(tableEntry->getColumnID(property.getName()));
         }
         for (auto& directedRelData : directedRelData) {
-            directedRelData->checkpoint(columnIDs, pageAllocator);
+            directedRelData->checkpoint(columnIDs, pageAllocator,
+                StorageManager::Get(*context)->getCheckpointTS(),
+                StorageManager::Get(*context)->getOldestReaderTS());
         }
         hasChanges = false;
     }
