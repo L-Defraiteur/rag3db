@@ -134,6 +134,30 @@ pub fn search_hits(
     limit: usize,
     allowed_ids: Option<&[u64]>,
 ) -> Result<Vec<(u64, f64, std::collections::HashMap<String, Vec<(usize, usize)>>)>, String> {
+    Ok(search_hits_with_text(handle, query_config, limit, allowed_ids)?
+        .into_iter()
+        .map(|(offset, score, hl)| {
+            let spans = hl
+                .into_iter()
+                .map(|(f, v)| (f, v.into_iter().map(|(a, b, _)| (a, b)).collect()))
+                .collect();
+            (offset, score, spans)
+        })
+        .collect())
+}
+
+/// Le même, chaque span avec **son texte**, lu dans la valeur stockée du champ
+/// (25 octobre 2026, les surlignages de l'IDE) : c'est ce texte qui permet de
+/// placer le span dans un morceau rogné de ses blancs (voir
+/// [`crate::search::chunk_highlights`]). Un span qui ne tombe pas sur des
+/// frontières de caractère porte un texte vide.
+pub fn search_hits_with_text(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    query_config: &lucivy_core::query::QueryConfig,
+    limit: usize,
+    allowed_ids: Option<&[u64]>,
+) -> Result<Vec<(u64, f64, std::collections::HashMap<String, Vec<(usize, usize, String)>>)>, String> {
+    use ld_lucivy::schema::document::Value;
     let sink = Arc::new(ld_lucivy::query::HighlightSink::new());
 
     let results = match allowed_ids {
@@ -161,8 +185,16 @@ pub fn search_hits(
             .unwrap_or_default()
             .into_iter()
             .map(|(field, spans)| {
-                let pairs: Vec<(usize, usize)> =
-                    spans.into_iter().map(|s| (s[0], s[1])).collect();
+                let valeur = handle.field(&field).and_then(|f| {
+                    doc.field_values().find(|(g, _)| *g == f).and_then(|(_, v)| v.as_value().as_str().map(str::to_string))
+                });
+                let pairs: Vec<(usize, usize, String)> = spans
+                    .into_iter()
+                    .map(|s| {
+                        let texte = valeur.as_deref().and_then(|v| v.get(s[0]..s[1])).unwrap_or_default().to_string();
+                        (s[0], s[1], texte)
+                    })
+                    .collect();
                 (field, pairs)
             })
             .collect();

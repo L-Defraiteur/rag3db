@@ -563,6 +563,81 @@ pub struct ChunkInfo {
     pub end_line: usize,
     pub start_char: usize,
     pub end_char: usize,
+    /// Ce qui est à surligner dans `text`, en unités UTF-16 (l'indice d'une
+    /// chaîne JavaScript) : la page le rend tel quel. Absent : rien.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub highlights: Vec<Highlight>,
+}
+
+/// **Un passage à surligner** dans le texte d'un morceau (25 octobre 2026,
+/// accordé avec la page de l'IDE) : `[start, end)` en unités UTF-16 de
+/// `chunk.text`, et le signal qui l'a trouvé (`lucivy`, puis `sparse`,
+/// `query_words`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Highlight {
+    pub start: usize,
+    pub end: usize,
+    pub source: String,
+}
+
+/// La source des surlignages rendus par lucivy.
+pub const HIGHLIGHT_LUCIVY: &str = "lucivy";
+
+/// **Les spans d'un champ, placés dans le texte d'un morceau.**
+///
+/// `spans` : `(début, fin, texte surligné)` en octets de la valeur du champ,
+/// le référentiel de `start_char`/`end_char` du morceau (des octets malgré leur
+/// nom). Le morceau peut avoir été rogné de ses blancs (`Chunker` : `trim` sans
+/// déplacer `start_byte`) : on ne sait pas de combien à partir des seules
+/// bornes, alors on le retrouve en vérifiant que le texte surligné est bien là,
+/// au décalage près des blancs ôtés. Un span qui ne tombe pas entier dans le
+/// morceau, ou dont le texte n'y est pas, est omis : absent, jamais faux.
+/// Les passages qui se chevauchent sont fondus ; le rendu est trié.
+pub fn chunk_highlights(
+    chunk_text: &str,
+    chunk_start: usize,
+    chunk_end: usize,
+    spans: &[(usize, usize, &str)],
+    source: &str,
+) -> Vec<Highlight> {
+    // Les blancs ôtés, en tête et en queue ensemble : la borne du décalage.
+    let jeu = (chunk_end.saturating_sub(chunk_start)).saturating_sub(chunk_text.len());
+    let mut octets: Vec<(usize, usize)> = Vec::new();
+    for &(debut, fin, texte) in spans {
+        if texte.is_empty() || debut < chunk_start || fin > chunk_end || fin - debut != texte.len() {
+            continue;
+        }
+        let local = debut - chunk_start;
+        let place = (0..=jeu.min(local))
+            .map(|k| local - k)
+            .find(|&s| chunk_text.get(s..s + texte.len()) == Some(texte));
+        if let Some(s) = place {
+            octets.push((s, s + texte.len()));
+        }
+    }
+    octets.sort_unstable();
+    let mut fondus: Vec<(usize, usize)> = Vec::new();
+    for (s, e) in octets {
+        match fondus.last_mut() {
+            Some(der) if s <= der.1 => der.1 = der.1.max(e),
+            _ => fondus.push((s, e)),
+        }
+    }
+    let utf16 = |o: usize| chunk_text[..o].encode_utf16().count();
+    fondus
+        .into_iter()
+        .map(|(s, e)| Highlight { start: utf16(s), end: utf16(e), source: source.to_string() })
+        .collect()
+}
+
+/// Ajoute à `dst` les passages de `src` qu'il n'a pas, et garde l'ordre.
+pub fn merge_highlights(dst: &mut Vec<Highlight>, src: &[Highlight]) {
+    for h in src {
+        if !dst.contains(h) {
+            dst.push(h.clone());
+        }
+    }
+    dst.sort_by(|a, b| (a.start, a.end).cmp(&(b.start, b.end)));
 }
 
 /// Chunk with source entity attribution (used in Detailed mode).
@@ -583,6 +658,9 @@ pub struct AttributedChunk {
     pub source_uuid: String,
     /// Source field name (e.g. "content", "summary", "absolute_path").
     pub source_field: String,
+    /// Comme [`ChunkInfo::highlights`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub highlights: Vec<Highlight>,
 }
 
 /// Per-result BM25 diagnostic: what happened when matching highlights to chunks.
@@ -1315,6 +1393,7 @@ pub fn resolve_vector_chunks_with_dialect(
                     source_entity: meta.source_entity.clone(),
                     source_uuid: meta.source_uuid.clone(),
                     source_field: meta.source_field.clone(),
+                    highlights: Vec::new(),
                 });
             }
         }
@@ -1347,6 +1426,7 @@ pub fn resolve_vector_chunks_with_dialect(
                 end_line: meta.end_line,
                 start_char: meta.start_char,
                 end_char: meta.end_char,
+                highlights: Vec::new(),
             };
             let entry = parent_best.entry(meta.parent_uuid.clone());
             match entry {
@@ -1519,6 +1599,46 @@ fn build_contains_clauses(
     }
 }
 
+/// Les spans avec leur texte (`[début, fin, texte]`) ; un span sans texte en
+/// porte un vide, et `chunk_highlights` l'omet.
+fn parse_highlight_texts(json: &str) -> HashMap<String, Vec<(usize, usize, String)>> {
+    let parsed: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+    let mut result = HashMap::new();
+    for (field, ranges) in parsed.as_object().into_iter().flatten() {
+        let spans: Vec<(usize, usize, String)> = ranges
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|t| {
+                let a = t.as_array()?;
+                Some((a.first()?.as_u64()? as usize, a.get(1)?.as_u64()? as usize, a.get(2).and_then(|x| x.as_str()).unwrap_or_default().to_string()))
+            })
+            .collect();
+        result.insert(field.clone(), spans);
+    }
+    result
+}
+
+/// **Les surlignages lucivy d'un morceau**, depuis les spans d'un hit : ceux du
+/// champ du morceau (une entité simple), ou ceux de `_content` ramenés au champ
+/// par `content_offset` (une KB, offsets globaux dans la concaténation).
+fn lucivy_highlights_of(chunk: &ChunkRecord, textes: &HashMap<String, Vec<(usize, usize, String)>>) -> Vec<Highlight> {
+    let mut spans: Vec<(usize, usize, &str)> = Vec::new();
+    if let Some(v) = textes.get("_content") {
+        spans.extend(
+            v.iter()
+                .filter(|(a, _, _)| *a >= chunk.content_offset)
+                .map(|(a, b, t)| (a - chunk.content_offset, b - chunk.content_offset, t.as_str())),
+        );
+    }
+    if !chunk.parent_field.is_empty() {
+        if let Some(v) = textes.get(&chunk.parent_field) {
+            spans.extend(v.iter().map(|(a, b, t)| (*a, *b, t.as_str())));
+        }
+    }
+    chunk_highlights(&chunk.text, chunk.start_char, chunk.end_char, &spans, HIGHLIGHT_LUCIVY)
+}
+
 /// Parse highlights JSON: `{"body":[[100,200]],"title":[[5,15]]}` → HashMap
 fn parse_highlights_json(json: &str) -> HashMap<String, Vec<(usize, usize)>> {
     let mut result = HashMap::new();
@@ -1609,7 +1729,7 @@ pub fn search_bm25_chunked(
         serde_json::from_str(&json_query)
             .map_err(|e| CatalogError::DbError(format!("QueryConfig invalide: {e}")))?;
 
-    let raw = crate::fts_handle::search_hits(handle, &query_config, limit, allowed_ids)
+    let raw = crate::fts_handle::search_hits_with_text(handle, &query_config, limit, allowed_ids)
         .map_err(CatalogError::DbError)?;
 
     // Avertissements honnêtes du moteur (littéral trop court, regex sans
@@ -1637,9 +1757,11 @@ pub fn search_bm25_chunked(
             let obj: serde_json::Map<String, serde_json::Value> = hl
                 .into_iter()
                 .map(|(f, spans)| {
+                    // Le texte du span en troisième : `parse_highlights_json`
+                    // ne lit que les deux premiers, les surlignages le lisent.
                     let arr: Vec<serde_json::Value> = spans
                         .into_iter()
-                        .map(|(a, b)| serde_json::json!([a, b]))
+                        .map(|(a, b, texte)| serde_json::json!([a, b, texte]))
                         .collect();
                     (f, serde_json::Value::Array(arr))
                 })
@@ -1954,6 +2076,7 @@ pub fn search_texte_natif(
                 end_line: entier(&d, "_end_line"),
                 start_char: entier(&d, "_start_char"),
                 end_char: entier(&d, "_end_char"),
+                highlights: Vec::new(),
             },
             score,
         ));
@@ -2046,6 +2169,7 @@ fn finish_bm25_chunked(
     let mut results: Vec<SearchResult> = Vec::new();
     for (offset, score, hl_json) in &hits {
         let highlights = parse_highlights_json(hl_json);
+        let textes = parse_highlight_texts(hl_json);
 
         let parent = match parents.get(offset) {
             Some(p) => p,
@@ -2173,6 +2297,7 @@ fn finish_bm25_chunked(
                         source_entity: c.source_entity.clone(),
                         source_uuid: c.source_uuid.clone(),
                         source_field: c.parent_field.clone(),
+                        highlights: lucivy_highlights_of(c, &textes),
                     })
                     .collect();
                 results.push(SearchResult {
@@ -2208,6 +2333,7 @@ fn finish_bm25_chunked(
                             end_line: c.end_line,
                             start_char: c.start_char,
                             end_char: c.end_char,
+                            highlights: lucivy_highlights_of(c, &textes),
                         }),
                         chunks: None,
                     });
@@ -2301,8 +2427,16 @@ pub fn fuse_signals(
                         e.insert(chunk.clone());
                     }
                     std::collections::hash_map::Entry::Occupied(mut e) => {
-                        if chunk.score > e.get().score {
-                            e.insert(chunk.clone());
+                        // Le même morceau vu par deux signaux : les surlignages
+                        // de l'un ne se perdent pas quand l'autre l'emporte.
+                        let meme = e.get().uuid == chunk.uuid;
+                        let perdant = if chunk.score > e.get().score {
+                            std::mem::replace(e.get_mut(), chunk.clone()).highlights
+                        } else {
+                            chunk.highlights.clone()
+                        };
+                        if meme {
+                            merge_highlights(&mut e.get_mut().highlights, &perdant);
                         }
                     }
                 }
@@ -2312,9 +2446,12 @@ pub fn fuse_signals(
                 for ac in chunks {
                     // Deduplicate by chunk UUID, keep best score
                     if let Some(existing) = merged.iter_mut().find(|c| c.uuid == ac.uuid) {
-                        if ac.score > existing.score {
-                            *existing = ac.clone();
-                        }
+                        let perdant = if ac.score > existing.score {
+                            std::mem::replace(existing, ac.clone()).highlights
+                        } else {
+                            ac.highlights.clone()
+                        };
+                        merge_highlights(&mut existing.highlights, &perdant);
                     } else {
                         merged.push(ac.clone());
                     }
@@ -3241,5 +3378,58 @@ mod tests {
         let response = Catalog::rechercher(&catalog, "Product", "shoes", SearchOptions::default())
             .unwrap();
         assert_eq!(response.meta.target, "Product");
+    }
+}
+
+/// **Les surlignages d'un morceau** (25 octobre 2026) : des spans en octets du
+/// champ, placés dans un texte rogné, rendus en UTF-16.
+#[cfg(test)]
+mod tests_surlignages {
+    use super::*;
+
+    fn en_utf16(texte: &str, h: &Highlight) -> String {
+        let u: Vec<u16> = texte.encode_utf16().collect();
+        String::from_utf16(&u[h.start..h.end]).unwrap()
+    }
+
+    #[test]
+    fn un_span_se_place_dans_un_morceau_rogne_et_se_compte_en_utf16() {
+        // Le champ : des blancs en tête (rognés par le découpeur), un accent
+        // et un emoji avant la phrase (2 octets / 1 unité, 4 octets / 2 unités).
+        let champ = "\n\n  Été 🙂 : Vue d'ensemble du moteur\n";
+        let texte = champ.trim();
+        let debut = champ.find("Vue").unwrap();
+        let fin = debut + "Vue d'ensemble".len();
+        let h = chunk_highlights(texte, 0, champ.len(), &[(debut, fin, &champ[debut..fin])], HIGHLIGHT_LUCIVY);
+        assert_eq!(h.len(), 1, "{h:?}");
+        assert_eq!(en_utf16(texte, &h[0]), "Vue d'ensemble");
+        assert_eq!(h[0].start, "Été 🙂 : ".encode_utf16().count());
+        assert_eq!(h[0].source, "lucivy");
+    }
+
+    #[test]
+    fn un_span_hors_du_morceau_ou_au_texte_absent_est_omis() {
+        let champ = "alpha beta gamma";
+        // Le morceau couvre « beta gamma » (octets 6..16).
+        let texte = &champ[6..];
+        let hors = (0, 5, "alpha");
+        let faux = (6, 10, "zzzz");
+        let a_cheval = (4, 10, &champ[4..10]);
+        let bon = (11, 16, "gamma");
+        let h = chunk_highlights(texte, 6, 16, &[hors, faux, a_cheval, bon], HIGHLIGHT_LUCIVY);
+        assert_eq!(h.iter().map(|x| en_utf16(texte, x)).collect::<Vec<_>>(), vec!["gamma"]);
+    }
+
+    #[test]
+    fn des_passages_qui_se_chevauchent_se_fondent() {
+        let texte = "Vue d'ensemble";
+        let h = chunk_highlights(texte, 0, texte.len(), &[(4, 14, "d'ensemble"), (0, 3, "Vue"), (0, 14, texte)], HIGHLIGHT_LUCIVY);
+        assert_eq!(h.len(), 1, "{h:?}");
+        assert_eq!(en_utf16(texte, &h[0]), texte);
+        let mut dst = vec![Highlight { start: 4, end: 8, source: "sparse".into() }];
+        merge_highlights(&mut dst, &h);
+        merge_highlights(&mut dst, &h);
+        assert_eq!(dst.len(), 2, "l'union garde chaque passage une fois, triés : {dst:?}");
+        assert_eq!(dst[0].start, 0);
     }
 }

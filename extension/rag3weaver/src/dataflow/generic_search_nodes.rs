@@ -3627,6 +3627,7 @@ mod tests {
             end_line: 0,
             start_char: 0,
             end_char: 0,
+            highlights: Vec::new(),
         });
         r
     }

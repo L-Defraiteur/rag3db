@@ -1527,6 +1527,7 @@ mod tests {
             end_line: 2,
             start_char: 0,
             end_char: 0,
+            highlights: Vec::new(),
         });
         let md = render_results_markdown(&[r], 40);
         let quoted = md.lines().find(|l| l.trim_start().starts_with("> ")).expect("un extrait");
@@ -1717,6 +1718,7 @@ mod tests {
             end_line: 228,
             start_char: 0,
             end_char: 0,
+            highlights: Vec::new(),
         });
         let md = render_results_markdown(&[r], 300);
         assert_eq!(md.matches(signature).count(), 1, "une seule fois, pas deux :\n{md}");
