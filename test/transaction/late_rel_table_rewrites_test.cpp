@@ -35,6 +35,8 @@ class LateRelTableRewrites : public EmptyDBTest {
 protected:
     void SetUp() override {
         EmptyDBTest::SetUp();
+        // Le tampon des tests est petit ; 145 000 nœuds et la table de liens demandent plus.
+        systemConfig->bufferPoolSize = 2ull * 1024 * 1024 * 1024;
         createDBAndConn();
     }
 
