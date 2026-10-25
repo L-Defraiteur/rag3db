@@ -206,6 +206,8 @@ mod e2e_reaction_groupee;
 mod e2e_reaction_montee;
 #[path = "../e2e_recherche_dense_apres_suppressions.rs"]
 mod e2e_recherche_dense_apres_suppressions;
+#[path = "../e2e_reconstruction.rs"]
+mod e2e_reconstruction;
 #[path = "../e2e_repli_de_branche.rs"]
 mod e2e_repli_de_branche;
 #[path = "../e2e_reprise_durcie.rs"]

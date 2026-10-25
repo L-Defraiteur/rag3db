@@ -3755,6 +3755,81 @@ impl Backend {
         Ok(ecrits)
     }
 
+    /// **Reconstruit la base depuis les fichiers** (lot M3 de la mémoire,
+    /// `docs/18-octobre-2026-memoire-longue/04-…` §5 et §5 bis). Une base neuve,
+    /// ouverte sur les mêmes fichiers : chaque entité à fichier propre (la
+    /// `Source`) est relue fichier par fichier ([`crate::fichiers_entite::Miroir::relire`])
+    /// et chaque ligne posée par `EntityRecordNode` en **restauration** — dates
+    /// et révision lues du fichier, uuid vérifié contre son identité. Une base
+    /// qui porte autre chose que ses lignes semées est refusée, en le disant :
+    /// une reconstruction ne fusionne pas.
+    ///
+    /// Rend, par entité : `restored`, `already_there` (une ligne semée à
+    /// l'ouverture), `refused` (le fichier et la raison), `fields_not_carried`
+    /// (ce que ses fichiers ne portent pas, donc ce qu'elle perdrait). Les
+    /// entités à fichier composé sont dites (`composite`) : leurs fichiers sont
+    /// des vues de la base, relus seulement quand la base est perdue (lot M3b).
+    pub fn rebuild_from_files(&self) -> Result<Value, String> {
+        let prepared = self.prepared();
+        {
+            let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            let mut pleines = Vec::new();
+            let mut entites: Vec<&String> = prepared.manifest.entities.keys().collect();
+            entites.sort();
+            for e in entites {
+                let n = cat.count(e).map_err(|e| e.to_string())?;
+                let semees = prepared.manifest.seed.get(e).map(Vec::len).unwrap_or(0);
+                if n > semees {
+                    pleines.push(format!("{e} : {n} ligne(s), dont {semees} semée(s)"));
+                }
+            }
+            if !pleines.is_empty() {
+                return Err(format!(
+                    "rebuild : la base n'est pas vide ({}) — une reconstruction part d'une base neuve ou perdue, \
+                     elle ne fusionne pas",
+                    pleines.join(" ; ")
+                ));
+            }
+        }
+        let policy = NodeTypePolicy::only(["EntityRecordNode"]);
+        let mut rapport = serde_json::Map::new();
+        let mut miroirs: Vec<(&String, &Arc<crate::fichiers_entite::Miroir>)> = prepared.miroirs.iter().collect();
+        miroirs.sort_by(|a, b| a.0.cmp(b.0));
+        for (entite, m) in miroirs {
+            if m.est_compose() {
+                rapport.insert(entite.clone(), json!({"composite": true}));
+                continue;
+            }
+            let (mut restaurees, mut deja_la) = (0usize, 0usize);
+            let mut refus = Vec::new();
+            for rel in m.lister()? {
+                let restaurer = || -> Result<(), String> {
+                    let texte = m.lire(&rel)?;
+                    let (uuid, champs) = m.relire(&texte)?;
+                    let def = GraphDefinition {
+                        nodes: vec![crate::dataflow::checkpoint::NodeDef {
+                            name: "rebuild".into(),
+                            node_type: "EntityRecordNode".into(),
+                            config: json!({"entity": entite, "action": "restore", "record": champs, "uuid": uuid}),
+                        }],
+                        edges: vec![],
+                    };
+                    self.execute_plan_avec(&prepared, ("rebuild", "record"), &def, &[], &policy, None, true).map(|_| ())
+                };
+                match restaurer() {
+                    Ok(()) => restaurees += 1,
+                    Err(e) if e.contains("the row already exists") => deja_la += 1,
+                    Err(e) => refus.push(json!({"file": rel, "reason": e})),
+                }
+            }
+            rapport.insert(
+                entite.clone(),
+                json!({"restored": restaurees, "already_there": deja_la, "refused": refus, "fields_not_carried": m.champs_non_portes()}),
+            );
+        }
+        Ok(Value::Object(rapport))
+    }
+
     pub fn seed(&self) -> Result<usize, String> {
         let prepared = self.prepared();
         if prepared.manifest.seed.is_empty() {
@@ -3830,11 +3905,31 @@ impl Backend {
         policy: &NodeTypePolicy,
         target: Option<GraphTarget>,
     ) -> Result<Value, String> {
+        self.execute_plan_avec(prepared, result_port, def, metadata_ports, policy, target, false)
+    }
+
+    /// [`Self::execute_plan`], et, si `restauration`, le service qui permet
+    /// l'action `restore` d'`EntityRecordNode` : la reconstruction depuis les
+    /// fichiers seulement (lot M3), jamais un outil.
+    #[allow(clippy::too_many_arguments)]
+    fn execute_plan_avec(
+        &self,
+        prepared: &PreparedBackend,
+        result_port: (&str, &str),
+        def: &GraphDefinition,
+        metadata_ports: &[OutputPort],
+        policy: &NodeTypePolicy,
+        target: Option<GraphTarget>,
+        restauration: bool,
+    ) -> Result<Value, String> {
         let mut graph =
             build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
         // Des services neufs à chaque appel : les appels parallèles de l'hôte
         // (lot L5) ne partagent rien d'ici, et l'arrêt garde toutes les poignées.
         let mut services = self.build_services(prepared);
+        if restauration {
+            services.register(crate::backend_nodes::SERVICE_RESTAURATION, true);
+        }
         self.poser_l_instantane(prepared, def, &mut services);
         // **Le run se publie** (`RunStarted`, `NodeRun`, `RunFinished`) sur
         // `dataflow`, dans la cellule de l'appel : ce qu'un appel exécute se
