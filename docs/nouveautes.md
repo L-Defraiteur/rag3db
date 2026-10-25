@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Trier par ce qui arrive aux liens.** Un Plan déclaré s'ordonne par le
+  max ou le min d'un champ des lignes liées (les fiches par la date de leur dernier
+  apport), en Cypher comme en SQL. beda3d8f1.
 - **25 oct. — Les colonnes gardent leur numéro pour toujours.** Une colonne
   supprimée laisse un trou à sa place au lieu de faire renuméroter les autres au
   point de reprise : plus rien ne bouge sous les plans liés, première marche vers
