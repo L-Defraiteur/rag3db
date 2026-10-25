@@ -1515,6 +1515,14 @@ void CSRNodeGroup::finalizeCheckpoint(std::unique_ptr<ChunkedNodeGroup> newPersi
     clearDeadHints();
 }
 
+void CSRNodeGroup::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    NodeGroup::retireGenerationsBefore(oldestReaderTS);
+    const auto lock = chunkedGroups.lock();
+    std::erase_if(csrPreviousGenerations, [oldestReaderTS](const CSRPreviousGeneration& generation) {
+        return generation.checkpointTS <= oldestReaderTS;
+    });
+}
+
 void CSRNodeGroup::takeGenerationFor(const UniqLock& lock, transaction_t startTS,
     CSRNodeGroupScanState& scanState) const {
     for (const auto& generation : csrPreviousGenerations) {

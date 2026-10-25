@@ -327,6 +327,7 @@ public:
         PageAllocator& pageAllocator) override;
     void rollbackCheckpoint() override;
     void reclaimStorage(PageAllocator& pageAllocator) const override;
+    void retireGenerationsBefore(common::transaction_t oldestReaderTS) override;
 
     void rollbackPKIndexInsert(main::ClientContext* context, common::row_idx_t startRow,
         common::row_idx_t numRows_, common::node_group_idx_t nodeGroupIdx_);

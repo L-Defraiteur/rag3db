@@ -263,6 +263,17 @@ void NodeGroupCollection::reclaimStorage(PageAllocator& pageAllocator) const {
     }
 }
 
+void NodeGroupCollection::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    std::vector<std::shared_ptr<NodeGroup>> groups;
+    {
+        const auto lock = nodeGroups.lock();
+        groups = nodeGroups.getAllGroups(lock);
+    }
+    for (auto& nodeGroup : groups) {
+        nodeGroup->retireGenerationsBefore(oldestReaderTS);
+    }
+}
+
 void NodeGroupCollection::rollbackInsert(row_idx_t numRows_, bool updateNumRows) {
     const auto lock = nodeGroups.lock();
 

@@ -1123,6 +1123,10 @@ void NodeTable::reclaimStorage(PageAllocator& pageAllocator) const {
     getPKIndex()->reclaimStorage(pageAllocator);
 }
 
+void NodeTable::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    nodeGroups->retireGenerationsBefore(oldestReaderTS);
+}
+
 TableStats NodeTable::getStats(const Transaction* transaction) const {
     auto stats = nodeGroups->getStats();
     if (const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID)) {
