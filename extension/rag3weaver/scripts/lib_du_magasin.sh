@@ -20,6 +20,10 @@ lib_du_magasin() {
          "(python3 $outil publier <dossier de bâti>), ou laissez RAG3DB_LIB vide" >&2
     return 2
   fi
+  # Les planchers (`planchers-de-la-lib`) : une lib qui ne contient pas un
+  # correctif du moteur dont le crate dépend est refusée, en le nommant, au
+  # lieu de rougir des témoins plus loin (87a362e30 forcée, le 19 octobre 2026).
+  python3 "$outil" verifier "$dossier" || return 2
   (cd "$dossier" && pwd -P)
 }
 

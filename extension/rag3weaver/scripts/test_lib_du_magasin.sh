@@ -76,4 +76,18 @@ cas $? "exporter_la_lib sans argument, RAG3DB_LIB=bati : le bâti de RAG3DB_BUIL
 ( RAG3DB_LIB=rag3db-build-Z exporter_la_lib /bati 2>/dev/null )
 [ $? = 2 ]
 cas $? "exporter_la_lib sur un identifiant absent : refus (code 2), rien d'exporté"
+# Les planchers : une lib dont le bâti ne contient pas un correctif dont le
+# crate dépend est refusée au choix, en le nommant (seulement si le dépôt a
+# l'historique du moteur ; un clone superficiel ne prouve rien).
+SOUS=rag3db-build-87a362e304200776000095c5a3d6531373560d9a-Release-p12
+if git -C "$ICI" cat-file -e 87a362e304200776000095c5a3d6531373560d9a^{commit} 2>/dev/null \
+   && git -C "$ICI" cat-file -e 4f9274a38769a085ab0009a89d1b7dba7597e568^{commit} 2>/dev/null; then
+  bati sous "$SOUS"
+  dit="$(lib_du_magasin "$SOUS" 2>&1 >/dev/null)"; c=$?
+  [ $c = 2 ] && [[ "$dit" == *4f9274a38* ]]
+  cas $? "une lib sous un plancher : refus au choix (code 2), le correctif manquant nommé"
+else
+  echo "SAUTÉ  les planchers : le dépôt n'a pas l'historique du moteur"
+fi
+
 exit $echec

@@ -290,16 +290,13 @@ impl Rag3dbConnection {
         let mut config = rag3db::SystemConfig::default();
         if let Some(v) = std::env::var("RAG3DB_MAX_DB_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
             config = config.max_db_size(v);
-        } else if cfg!(test) {
-            // **Les témoins de la lib ouvrent des dizaines de bases sur disque en
-            // parallèle**, dans un seul processus : à 8 TiB chacune, seize
-            // suffisent à épuiser les 128 TiB adressables, et la dix-septième
-            // échoue au hasard (« Mmap for size 8796093022208 failed », la passe
-            // du 19 octobre 2026 : deux témoins de `copie_liens_tests` rouges
-            // quand deux témoins de tâches ont ouvert quatre bases de plus). Une
-            // base de témoin ne dépasse pas 1 TiB ; le produit garde 8 TiB.
-            config = config.max_db_size(Self::IN_MEMORY_MAX_DB_SIZE);
         }
+        // Sans `RAG3DB_MAX_DB_SIZE`, le défaut du moteur : depuis 4f9274a38, une
+        // base réserve son adressage par tranches de 16 Gio qui grandissent
+        // avec elle, et un processus en ouvre des milliers. (Le contournement
+        // des témoins — 1 Tio par base sous `cfg!(test)`, bc2cb48e7 — est
+        // retiré ; une lib plus ancienne est refusée par les planchers du
+        // magasin, `scripts/planchers-de-la-lib`.)
         if let Some(v) = choice.bytes {
             config = config.buffer_pool_size(v);
         }

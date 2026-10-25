@@ -45,6 +45,19 @@ def publier(magasin: Path, bati: Path, *extra: str) -> subprocess.CompletedProce
     return outil(magasin, "publier", str(bati), "--racine", str(bati / "arbre"), *extra)
 
 
+# Deux bâtis réels du moteur : 87a362e30 est sous les planchers (ni les
+# tranches de 16 Gio, 4f9274a38, ni le ROLLBACK du COPY de relations,
+# a45a15adf) ; 4f9274a38 les contient.
+SOUS_LE_PLANCHER = "rag3db-build-87a362e304200776000095c5a3d6531373560d9a-Release-p12"
+AU_PLANCHER = "rag3db-build-4f9274a38769a085ab0009a89d1b7dba7597e568-Release-p12"
+
+
+def git_connait(*commits: str) -> bool:
+    """Le dépôt de ce script a-t-il ces commits (pas un clone superficiel) ?"""
+    return all(subprocess.run(["git", "-C", str(OUTIL.parent), "cat-file", "-e", f"{c}^{{commit}}"],
+                              capture_output=True).returncode == 0 for c in commits)
+
+
 class Magasin(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -53,6 +66,26 @@ class Magasin(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    @unittest.skipUnless(git_connait("87a362e304200776000095c5a3d6531373560d9a", "4f9274a38769a085ab0009a89d1b7dba7597e568",
+                                      "a45a15adf2347de1f089ab7d00ee7d36d46e02d0"),
+                         "le dépôt n'a pas l'historique du moteur (clone superficiel)")
+    def test_une_lib_sous_un_plancher_est_refusee_et_courant_ne_s_y_pose_pas(self):
+        for nom, ident in [("sous", SOUS_LE_PLANCHER), ("au", AU_PLANCHER)]:
+            r = publier(self.magasin, faux_bati(self.racine, nom, ident), "--sans-courant")
+            self.assertEqual(r.returncode, 0, r.stderr)
+        r = outil(self.magasin, "verifier", str(self.magasin / SOUS_LE_PLANCHER))
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("4f9274a38", r.stderr)
+        self.assertIn("a45a15adf", r.stderr)
+        r = outil(self.magasin, "courant", "--poser", SOUS_LE_PLANCHER)
+        self.assertEqual(r.returncode, 2, "courant posé sur une lib sous le plancher")
+        self.assertFalse((self.magasin / "courant").exists())
+        self.assertEqual(outil(self.magasin, "verifier", str(self.magasin / AU_PLANCHER)).returncode, 0)
+        self.assertEqual(outil(self.magasin, "courant", "--poser", AU_PLANCHER).returncode, 0)
+        liste = outil(self.magasin, "liste").stdout
+        self.assertIn(f"{SOUS_LE_PLANCHER} : ", liste)
+        self.assertIn("SOUS LE PLANCHER 4f9274a38, a45a15adf", liste)
 
     def test_publier_pose_un_dossier_immuable_et_courant(self):
         bati = faux_bati(self.racine, "a", "rag3db-build-A")
