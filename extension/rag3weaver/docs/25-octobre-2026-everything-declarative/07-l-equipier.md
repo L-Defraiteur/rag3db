@@ -66,7 +66,8 @@ Il y a deux voies :
 
 - **Un fichier par tâche**, `<dossier de la tâche>/mailbox.jsonl`, lisible sans IDE. Une ligne
   par message : `{at, from, kind, item?, text}`. Les genres (`kind`) sont `request`, `instruction`,
-  `answer` (à un bloquant), `question` (un bloquant posé), `step_done`, `report` et `stop`.
+  `answer` (à un bloquant ou à une proposition), `question` (un bloquant posé), `proposal` (le
+  hors-plan), `step_done`, `report`, `stop` et `ended` (la fin, écrite par l'hôte).
 - **Un sujet du bus** par tâche, `mailbox.<task>`, où chaque ligne est aussi publiée.
 - **Le superviseur écrit** par `POST /ide/teammate/mailbox {backend, task, kind, item?,
   text}`. La route ajoute la ligne au fichier et la publie. Un réacteur de l'hôte écoute le
@@ -76,13 +77,20 @@ Il y a deux voies :
 
   Une ligne ajoutée au fichier à la main est lue à la frontière suivante, mais ne réveille pas
   un équipier qui attend (pas de surveillance de fichier dans ce lot).
-- **L'agent écrit** par `report`, et `step_done` y ajoute sa ligne.
+- **L'agent écrit** par `report` et `propose`, et `step_done` y ajoute sa ligne.
 - **L'IDE** lit `GET /ide/teammate?backend=&task=` : la boîte, les plans vivants, les plans
   clos, et si l'équipier tourne.
 
 Le canal des sessions Claude n'est pas utilisé.
 
 ## Le mini-plan : libre, puis gardé en mémoire (Lucie)
+
+**Autonomie maximale** (Lucie). L'agent clôt seul ses éléments et son plan (`accomplished`) ; il
+ne demande rien pour ce qui est dans le plan. Une `question` ne sert qu'à un vrai bloquant. Le
+**hors-plan** — une direction que la demande n'a pas prévue — part dans la boîte comme une
+`proposal` (« voudrais-tu qu'on pousse dans ce sens ? », avec l'élément qu'elle ouvrirait), et
+l'agent continue le plan courant sans attendre ; il n'ouvre pas cette direction sans le mot du
+superviseur. La réponse arrive à une frontière, comme pour un bloquant.
 
 **Pas de harnais sur le plan.** L'agent édite ses éléments quand il veut, comme il le sent. Il
 peut juger son plan accompli ou obsolète, le clore avec sa raison et en ouvrir un autre. Les
@@ -132,7 +140,8 @@ contexte comme une vue des fiches ; forme relue par 96).
 - `step_done { item, succeeded, done, remaining }` : il finit le pas. La boucle de l'agent apprend
   un **outil qui termine** : un nom déclaré terminal arrête la boucle après sa réponse
   (`StopReason::Terminal`). C'est générique : `pause_dialogue` en est le cas d'origine.
-- `report { texte }`.
+- `report { text }`.
+- `propose { text, item? }` : le hors-plan, dans la boîte ; l'agent continue le plan.
 
 ## La montée
 
@@ -150,6 +159,8 @@ reste au superviseur.
     journalisés, deux `step_done`.
   - La réponse du superviseur écrite pendant le pas 1 est lue à la frontière.
   - Le budget force un `step_done` sur un pas qui s'étire.
+  - Une proposition écrite pendant un pas ; le plan continue ; la réponse « oui » à la frontière
+    ouvre l'élément.
   - L'arrêt passe tout de suite.
 - **Sur Gemini (exigé)** : la tâche « doc sur un dépôt de test » de bout en bout. Le juge rend un
   bilan à chaque pas, et la doc est sur la branche de la tâche.
