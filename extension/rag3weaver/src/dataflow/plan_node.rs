@@ -243,10 +243,6 @@ impl Node for PlanNode {
     }
 }
 
-/// **Le Plan d'un `PlanNode`, lu au chargement** : `@chemin` relatif au
-/// manifeste, lu, vérifié contre sa forme et contre `schema` ; le Plan lu
-/// remplace la citation dans la configuration du nœud. Une erreur nomme le
-/// fichier.
 /// **Les Plans cités par un outil, lus et vérifiés**, à la place de leur citation : une seule
 /// boucle, que le chargeur d'un manifeste (`backend.rs`) et le test des outils livrés
 /// (`chaque_gabarit_d_outil_livre_se_construit`) appellent tous deux — un test qui recopierait la
@@ -270,6 +266,10 @@ pub fn resoudre_les_plans(
     Ok(())
 }
 
+/// **Le Plan d'un `PlanNode`, lu au chargement** : `@chemin` relatif au
+/// manifeste, lu, vérifié contre sa forme et contre `schema` ; le Plan lu
+/// remplace la citation dans la configuration du nœud. Une erreur nomme le
+/// fichier.
 pub fn lire_le_plan(cite: &str, lire: impl Fn(&str) -> Result<String, String>, schema: &rag3weaver_ir::PlanSchema) -> Result<Value, String> {
     let Some(chemin) = cite.strip_prefix('@') else {
         return Err(format!("{NODE_TYPE}: `plan` se cite par @plans/<fichier>.json, pas « {cite} »"));
