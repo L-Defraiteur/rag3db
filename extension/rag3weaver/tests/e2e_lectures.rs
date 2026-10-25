@@ -1011,3 +1011,98 @@ fn la_requete_entiere_passe_devant_les_mots() {
         );
     }
 }
+
+/// **La première recherche après l'ouverture ne perd pas le plein texte en silence** (Lucie,
+/// 25 octobre 2026 : à l'ouverture de l'IDE, « rag3weaver » ne rendait que le dense). Le plein
+/// texte s'ouvre sous le verrou du catalogue ; une recherche tombée pendant que la montre le
+/// tient trouvait une vue sans poignée, et sa branche disait « l'entité n'a pas été enregistrée ».
+/// Ici une base indexée, rouverte ; un fil tient le catalogue. Tenu brièvement, la recherche
+/// attend la poignée et le plein texte répond ; tenu longtemps, elle répond sans attendre au-delà
+/// de sa borne, et dit que le plein texte est absent parce qu'une indexation tient l'index.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn la_premiere_recherche_apres_l_ouverture_dit_ou_est_le_plein_texte() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::{json, Value};
+    use std::time::{Duration, Instant};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code(tmp.path(), "premiere-recherche");
+    let ouvrir = || {
+        let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+        let base = prepared.path(&prepared.manifest.database);
+        prepared
+            .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
+            .expect("l'ouverture")
+    };
+    {
+        let mut backend = ouvrir();
+        let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
+        let journal = lance
+            .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+            .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+            .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+            .to_string();
+        let debut = Instant::now();
+        loop {
+            let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+            if lu.contains("indexation terminée") {
+                break;
+            }
+            assert!(!lu.contains("indexation échouée"), "{lu}");
+            assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        backend.shutdown().expect("l'arrêt");
+    }
+
+    // Rouvre, un fil tient le catalogue `tenu`, cherche aussitôt.
+    let chercher_tenu = |tenu: Duration| -> (Value, u128) {
+        let mut backend = ouvrir();
+        let cellule = backend.catalog.lock().unwrap().scope().clone();
+        let (pret, attendre) = std::sync::mpsc::channel();
+        let montre = {
+            let catalog = backend.catalog.clone();
+            std::thread::spawn(move || {
+                let _tenu = catalog.lock().unwrap();
+                pret.send(()).unwrap();
+                std::thread::sleep(tenu);
+            })
+        };
+        attendre.recv().unwrap();
+        let t = Instant::now();
+        let r = backend
+            .call_in(&cellule, "search_code", json!({"query": "alpha", "options": {}, "mode": "indexed"}))
+            .expect("search_code");
+        let ms = t.elapsed().as_millis();
+        montre.join().unwrap();
+        backend.shutdown().expect("l'arrêt");
+        (r, ms)
+    };
+
+    let (bref, ms) = chercher_tenu(Duration::from_millis(300));
+    eprintln!("[première recherche] tenu 300 ms : {ms} ms");
+    let signaux = |r: &Value| -> Vec<String> {
+        r["result"].as_array().into_iter().flatten()
+            .flat_map(|x| x["signals"].as_array().cloned().unwrap_or_default())
+            .filter_map(|s| s["label"].as_str().map(str::to_string))
+            .collect()
+    };
+    assert!(
+        signaux(&bref).iter().any(|l| l.starts_with("bm25")),
+        "tenu brièvement, la recherche attend sa poignée et le plein texte répond : {bref}"
+    );
+
+    let (long, ms) = chercher_tenu(Duration::from_secs(6));
+    eprintln!("[première recherche] tenu 6 s : {ms} ms");
+    assert!(ms < 4000, "tenu longtemps, la recherche n'attend pas au-delà de sa borne : {ms} ms");
+    let meta = &long["metadata"]["render.meta"];
+    let avert = meta["warnings"].to_string();
+    assert!(
+        avert.contains("plein texte absent : indexation en cours"),
+        "la réponse dit pourquoi le plein texte manque : {long}"
+    );
+    assert!(!avert.contains("n'a pas été enregistrée"), "et ne l'accuse pas d'un autre défaut : {long}");
+    assert_eq!(meta["partial"], json!(true), "le résultat est marqué partiel : {long}");
+}
