@@ -208,9 +208,9 @@ fn les_requetes_de_usages_passent_par_l_index() {
 /// - `solo`, seul de son nom, défini dans un en-tête que `run` inclut : lié, « inclusion ».
 /// - deux `helper` homonymes, `run` inclut l'un : aucune arête par le nom, ni vers l'un ni vers l'autre.
 /// - `compute`, déclaré par `calc.h`, défini dans `calc.cpp` : vu par l'en-tête homonyme, « entete ».
-/// - `drop_it`, défini dans `t/ddl.cpp`, déclaré par `transformer.h`, appelé depuis
-///   `t/transformer.cpp` : la classe éclatée, que l'en-tête d'un autre nom de base ne fait pas voir.
-///   Aucune arête : c'est le ticket de la forme exacte (la règle de co-inclusion, mesurée, est retirée).
+/// - `drop_it`, déclaré par `transformer.h` (un prototype au niveau du fichier), défini dans
+///   `t/ddl.cpp`, appelé depuis `t/transformer.cpp` qui inclut l'en-tête : vu par sa déclaration,
+///   « declaration » (la forme exacte, pas 2 ; la co-inclusion, mesurée, a été retirée).
 /// - `lone` appelle `solo` sans rien inclure : il s'abstient, et l'abstention se compte.
 /// - une arête Rust du même lot ne porte pas de visibilité.
 #[test]
@@ -247,7 +247,7 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     assert!(aretes.iter().any(|a| a == "run x/solo.h nom inclusion"), "le seul de son nom, inclus : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.contains("helper.h")), "deux homonymes, un seul inclus : aucune arête par le nom : {aretes:#?}");
     assert!(aretes.iter().any(|a| a.starts_with("use_compute z/calc.cpp ") && a.ends_with(" entete")), "la définition vue par son en-tête : {aretes:#?}");
-    assert!(!aretes.iter().any(|a| a.starts_with("transform ")), "la classe éclatée n'est pas vue (le ticket de la forme exacte) : {aretes:#?}");
+    assert!(aretes.iter().any(|a| a.starts_with("transform t/ddl.cpp ") && a.ends_with(" declaration")), "vu par sa déclaration : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.starts_with("lone ")), "sans include, l'abstention : {aretes:#?}");
     assert!(aretes.iter().any(|a| a.starts_with("rcall r/lib.rs ") && a.ends_with(" ∅")), "une arête Rust du même lot ne porte pas de visibilité : {aretes:#?}");
     assert!(rapport.abstained_invisible >= 1, "l'abstention se compte : {rapport:?}");
@@ -275,6 +275,61 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     eprintln!("{impact}");
     assert!(impact.contains("1 mention(s) C/C++ sans définisseur visible par leurs #include"), "impact le compte : {impact}");
     assert!(!impact.lines().any(|l| l.contains(" lone ")), "impact ne suit pas lone : {impact}");
+}
+
+/// **La forme exacte** (pas 2, décidé par c7 le 25 octobre 2026) : un définisseur C/C++ est visible
+/// si une de ses déclarations est dans la fermeture des #include du mentionneur, avec le même nom
+/// et le même conteneur. La déclaration est celle que codeparsers relève déjà : une ligne du champ
+/// `declarations` de sa classe, de son namespace ou, pour un prototype au niveau du fichier, de son
+/// file_scope ; jamais un scope, donc jamais un définisseur homonyme.
+/// - la classe éclatée : `Transformer::drop_it` déclaré dans `transformer.h`, défini dans `ddl.cpp`,
+///   appelé depuis `transformer.cpp` : lié, « declaration » ;
+/// - `Other::drop_it`, déclaré dans un en-tête que personne n'inclut ici : pas lié ;
+/// - `compute2`, prototype de `calc_api.h`, défini dans `impl.cpp` : un seul définisseur (DEFINES),
+///   lié depuis `user.cpp`, « declaration », et `usages` rend la définition « déclaré api/calc_api.h:2 ».
+#[test]
+#[ignore]
+fn un_definisseur_cpp_se_voit_par_sa_declaration() {
+    let catalog = setup();
+    {
+        let mut cat = catalog.lock().unwrap();
+        let fichiers: Vec<(String, String)> = [
+            ("t/transformer.h", "#pragma once\nclass Transformer {\npublic:\n    int drop_it();\n    int transform();\n};\n"),
+            ("t/ddl.cpp", "#include \"transformer.h\"\n\nint Transformer::drop_it() {\n    return 4;\n}\n"),
+            ("t/transformer.cpp", "#include \"transformer.h\"\n\nint Transformer::transform() {\n    return drop_it();\n}\n"),
+            ("o/other.h", "#pragma once\nclass Other {\npublic:\n    int drop_it();\n};\n"),
+            ("o/other.cpp", "#include \"other.h\"\n\nint Other::drop_it() {\n    return 5;\n}\n"),
+            ("api/calc_api.h", "#pragma once\nint compute2();\n"),
+            ("api/impl.cpp", "#include \"calc_api.h\"\n\nint compute2() {\n    return 6;\n}\n"),
+            ("app/user.cpp", "#include \"../api/calc_api.h\"\n\nint use2() {\n    return compute2();\n}\n"),
+        ]
+        .iter()
+        .map(|(p, c)| (p.to_string(), c.to_string()))
+        .collect();
+        let rapport = cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+        let r = cat
+            .execute_raw(
+                "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name IN ['transform', 'use2'] \
+                 RETURN a.name, b.file_path, r.resolution, r.visibility ORDER BY a.name, b.file_path",
+            )
+            .unwrap();
+        let aretes: Vec<String> = r.rows.iter().map(|x| x.iter().map(|v| v.as_str().unwrap_or("∅").to_string()).collect::<Vec<_>>().join(" ")).collect();
+        eprintln!("{aretes:#?}\n{rapport:?}");
+        assert!(aretes.iter().any(|a| a.starts_with("transform t/ddl.cpp ") && a.ends_with(" declaration")), "la classe éclatée, vue par sa déclaration : {aretes:#?}");
+        assert!(!aretes.iter().any(|a| a.contains("o/other.cpp")), "Other::drop_it n'est pas déclaré dans la fermeture : {aretes:#?}");
+        assert!(aretes.iter().any(|a| a.starts_with("use2 api/impl.cpp ") && a.ends_with(" declaration")), "la fonction libre, vue par son prototype : {aretes:#?}");
+        let d = cat.execute_raw("MATCH (s:Scope)-[:DEFINES]->(y:Symbol) WHERE y.name = 'compute2' RETURN s.file_path").unwrap();
+        let definisseurs: Vec<String> = d.rows.iter().map(|x| x[0].as_str().unwrap_or("").to_string()).collect();
+        assert_eq!(definisseurs, vec!["api/impl.cpp".to_string()], "une déclaration n'est jamais un définisseur");
+    }
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let usages = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "compute2"})).unwrap().to_string();
+    eprintln!("{usages}");
+    assert!(usages.contains("déclaré api/calc_api.h:2"), "usages rend la définition avec sa déclaration : {usages}");
 }
 
 /// **Une arête devinée se dit, et ne se suit pas** (ticket « une arête ne
