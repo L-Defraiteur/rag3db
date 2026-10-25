@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **26 oct. — Créer l'index vectoriel ne fige plus les écritures.** Le CREATE pose
+  l'index, attend seulement les écrivains déjà ouverts, puis bâtit pendant que les
+  autres écrivent ; un index en construction ou incomplet se dit dans SHOW_INDEXES,
+  et la recherche répond par les mots en attendant. Format 43. 97daa41ed.
 - **25 oct. — L'IDE change de peau.** Le cadre et le chat passent en React, shadcn/ui
   et lucide : mode sombre, les backends en cartes avec leurs tâches, le chat de la
   tâche et de l'atelier sur la forme du deck builder avec les outils dépliés pendant
