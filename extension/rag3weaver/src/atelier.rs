@@ -4,6 +4,8 @@
 //!
 //! - `GET /_atelier` — la page : le chat à gauche ; à droite la page produite
 //!   (une route GET du backend), le graphe de l'outil touché, le journal ;
+//! - `GET /_atelier/page.js` — le code de la page, en fichier (lisible par les
+//!   outils de code, comme le reste) ;
 //! - `GET /_atelier/events` — un seul flux d'événements serveur : les jetons
 //!   et les outils du chat, et les gestes de l'hôte (`declared`, `refused`,
 //!   `reloaded`) ;

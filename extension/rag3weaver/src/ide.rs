@@ -10,6 +10,7 @@
 //! |---|---|
 //! | `GET /ide/entrer?jeton=…` | le jeton local posé en cookie (`HttpOnly`, `SameSite=Strict`), puis la page |
 //! | `GET /ide`, `GET /ide/…` | la page (une seule, qui lit son URL) |
+//! | `GET /ide/page.js` | le code de la page, en fichier (lisible par les outils de code, comme le reste) |
 //! | `GET /ide/graphe?backend=<id>&tool=…` | le graphe d'un outil (ou `reaction=`, `component=`), en JSON |
 //! | `GET /ide/reactions?backend=<id>` | les réactions du backend, ses runs, l'état de ses montres |
 //! | `GET /ide/propositions?backend=<id>[&id=<n>]` | les propositions, ou le détail d'une (diffs, graphes avant/après) |
