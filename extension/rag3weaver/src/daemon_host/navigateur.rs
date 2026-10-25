@@ -468,7 +468,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             format!("{racine}/ide/code/{id}/fichier/src/compteur.rs"),
             // Le plan d'outline en json : `inc` sous son impl (une profondeur), vers sa ligne et
             // son symbole, et la provenance que l'outil dit.
-            r#"(() => { const d = [...document.querySelectorAll('#plan .scope')].find(s => s.querySelector('a')?.textContent === 'inc'); return d && d.style.getPropertyValue('--profondeur').trim() === '1' && d.querySelector('a[href="#L4"]') && d.querySelector('a[href$="/symbole/inc"]') && document.querySelector('#plan-provenance')?.textContent.includes('pas par un compilateur'); })()"#,
+            r##"(() => { const d = [...document.querySelectorAll('#plan .scope')].find(s => s.querySelector('a')?.textContent === 'inc'); return d && d.style.getPropertyValue('--profondeur').trim() === '1' && d.querySelector('a[href="#L4"]') && d.querySelector('a[href$="/symbole/inc"]') && document.querySelector('#plan-provenance')?.textContent.includes('pas par un compilateur'); })()"##,
         ),
         (
             "un symbole",

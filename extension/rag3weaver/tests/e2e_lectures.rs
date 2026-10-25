@@ -353,7 +353,12 @@ fn outline_en_json_rend_les_lignes_du_plan_son_total_et_sa_provenance() {
     // pas, il la lit maintenant dans l'outil au lieu de l'avoir en dur.
     const MARQUE: &str = "Lu par l'analyseur (tree-sitter), pas par un compilateur : une macro peut cacher un scope.";
     assert_eq!(v["provenance"], json!(MARQUE), "{v}");
-    assert!(markdown.trim_end().ends_with(&format!("\n_{MARQUE}_")), "le pied du markdown, inchangé : {markdown:?}");
+    // Le markdown entier, octet pour octet, tel que master le rendait avant ce lot (capturé le
+    // 25 octobre 2026 sur bc0215cdc), hors la ligne d'état de l'index, qui porte un chemin
+    // temporaire.
+    let avant = "**2 scopes**, dans l'ordre du fichier :\n\n- function `alpha` — src/a.rs:1-3\n  `fn alpha() -> u32`\n- function `beta` — src/a.rs:5-7\n  `fn beta() -> u32`\n\n_Lu par l'analyseur (tree-sitter), pas par un compilateur : une macro peut cacher un scope._";
+    let corps = markdown.split_once("\n\n").filter(|(etat, _)| etat.starts_with("> index")).map_or(markdown.as_str(), |(_, reste)| reste);
+    assert_eq!(corps, avant, "le markdown d'outline ne change pas");
 
     // Le plafond de limit vaut aussi en json, et le total reste compté au-delà : une vue sait
     // qu'il en manque.
