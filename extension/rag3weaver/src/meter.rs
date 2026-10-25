@@ -51,8 +51,12 @@ pub enum Unit {
     /// parce qu'ils coûtent environ dix fois moins : les confondre fausse le
     /// total d'un ordre de grandeur, et dans le sens qui flatte.
     CachedInputTokens,
-    /// Jetons générés.
+    /// Jetons générés, **hors raisonnement**.
     OutputTokens,
+    /// Jetons de raisonnement : générés et facturés comme une sortie, mais
+    /// jamais montrés. Séparés de `OutputTokens` pour qu'on voie ce que le
+    /// raisonnement coûte (le budget de `models.llm.reasoning`).
+    ReasoningTokens,
     /// Secondes d'audio — STT en entrée, TTS en sortie.
     AudioSeconds,
     /// Caractères — certains TTS facturent ainsi.
@@ -68,6 +72,7 @@ impl Unit {
             Self::InputTokens => "input_tokens",
             Self::CachedInputTokens => "cached_input_tokens",
             Self::OutputTokens => "output_tokens",
+            Self::ReasoningTokens => "reasoning_tokens",
             Self::AudioSeconds => "audio_seconds",
             Self::Characters => "characters",
             Self::Images => "images",
