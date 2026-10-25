@@ -12,6 +12,8 @@ matin puis la reprise du 25 à 13 h 30.
 | 25 oct. 14 h 12 | COMMIT dont le point de reprise échoue après la validation | 58b46a9bf | `TransactionManager::isActive`, `TransactionContext::commit` n'annule plus une transaction que le gestionnaire a retirée ; témoin du banc sorti de `known_red`, prouvé sous ASAN par le banc (3/3, 0 rapport) |
 | 25 oct. 15 h 54 | format de stockage 41 : version posée à la main, bâti écrivain, refus nommés | f84433579 | `STORAGE_FORMAT_VERSION` (CATALOG_VERSION_NO), en-tête avec le bâti du dernier écrivain, `FormatRecord` (type 253) en tête du journal, `StorageVersionException` dans les deux sens, base ancienne estampillée au point de reprise ; témoin par octets, compilable sur master ; ticket de Lucie du 18 fermé |
 | 25 oct. 16 h 33 | V2-1a : les numéros de colonnes ne changent jamais (format 42) | 4ae060070 | une colonne supprimée laisse un trou (entrée nulle, type ANY) ; plus de `vacuumColumnIDs` ni de `renumberColumns` au point de reprise ; bloc sur disque avec un octet « présente » par numéro ; témoin `stable_column_ids_test.cpp` (9 cas) ; quatre tickets du 19 fermés |
+| 25 oct. 17 h 27 | vector : le degré converti explicitement (MSVC C2398, AppleClang) | 04063ee06 | Windows et macOS rebâtissent l'extension vecteur ; base de la lib de la bascule 41/42 |
+| 25 oct. 18 h 31 | V2-1b pièce 1 : le segment neuf au point de reprise | 6b63e4922 | un segment changé est rebâti sur des pages neuves, l'ancien rend ses pages à sa mort ; plus de réécriture en place ni d'ombre pour les colonnes ; format inchangé ; témoin `checkpoint_new_segment_test.cpp` (4 cas) ; mesure : une ligne modifiée = 344 Kio des deux côtés, 1 % = 2,97 Mio contre 3,53, 10 % = 2,97 contre 5,79 (page 18 §6) |
 
 Docs poussées : page 18 (V2-1, onze obstacles et ce qui est tranché, §5 écrit avec le lot) ;
 tickets : quatre défauts des numéros de colonnes (tous fermés le 25), la CI rouge (cassert et
@@ -45,6 +47,11 @@ Reproduits au shell (compte à 0 après réouverture), deux cas ajoutés au tém
 - `EmptyDBTest` ne crée pas la connexion ; un CSV d'une ligne sans `header=false` est pris pour
   un en-tête ; `DUMMY_TRANSACTION` ne voit pas le catalogue validé (prendre
   `DUMMY_CHECKPOINT_TRANSACTION` hors requête).
+- Un témoin « pages libres » vise le seul cas où master restait en place (segment 16 bits, valeur
+  dans l'intervalle) : hors intervalle du bitpacking ou segment qui remplit ses pages pile,
+  l'ancien chemin réécrivait déjà hors place.
+- Le shell `rag3db` ne se pilote pas par un tube (il attend la réponse de ESC[6n) : toujours
+  `< fichier` ; `poste` est `~/.cache/rag3weaver-build/poste`.
 - Les écarts du banc jugés sur la base d'origine : l'intermittent de (δ) (course du test, fermé
   par 6fe9ffe9b), `CostPerBatchSettles` (borne de temps sous la charge, passé en probabilistic
   par le banc).
@@ -61,9 +68,9 @@ annoncés. L'arbre principal a coupé le chemin par lequel `batir.sh` posait cou
 
 1. `ci-cassert-geo` vers master à la fenêtre ; le commit de formatage pur (clang-format-18,
    `.clang-format-ignore` pour les annexes des docs) dans la fenêtre du ticket CI.
-2. V2-1b : bloc neuf au point de reprise, plus de pages ombres pour les colonnes, balayages qui
-   tiennent leur bloc, pages rendues à la mort du bloc ; mesure de l'amplification sur le banc des
-   vingt (une grande table, une ligne modifiée), chiffres au commit, décision de Lucie.
-3. V2-1c : la porte à deux niveaux, l'écriture hors du verrou public ;
-   `ReadDuringACheckpointDoesNotWait` au vert.
+2. V2-1b : pièce 1 sur master, mesure faite (page 18 §6) ; pièce 2 (`v21b-balayages-2`, les
+   balayages tiennent leurs blocs) et compteur d'octets (`v21b-compteur-2`) sur branches, sans
+   témoin possible avant V2-1c, qu'ils rejoignent.
+3. V2-1c : la porte à deux niveaux, le bloc neuf bâti hors du verrou et échangé sous les lecteurs ;
+   `ReadDuringACheckpointDoesNotWait` au vert et une lecture juste à travers un point de reprise.
 4. Lecture en mémoire (wip `lecture-en-memoire`, 8c83302d4, poussé tel quel), E11 (I2).

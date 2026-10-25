@@ -199,3 +199,61 @@ format d'un bloc sur disque) :
   ADD local sur relation après le DROP de la dernière propriété, clé du cache HNSW) tombent avec
   cette forme ou par une ligne (le cache), chacun avec son témoin dans
   `test/transaction/stable_column_ids_test.cpp`.
+
+## 6. V2-1b pièce 1, tel qu'écrit, et ce que ça coûte en octets (25 octobre 2026)
+
+Sur master en 6b63e4922. Au point de reprise, `Column::checkpointSegment` bâtit en mémoire une
+copie du segment persistant (`scanSegment`), y fond les écritures, la finalise, la découpe s'il
+faut, et écrit des segments neufs sur des pages neuves (`flush`) ; l'objet persistant n'est jamais
+modifié. `canCheckpointInPlace`, `checkpointColumnChunkInPlace`, `checkpointNullData`,
+`checkpointColumnChunkOutOfPlace`, `isEndOffsetOutOfPagesCapacity` et leurs variantes chaîne,
+structure et liste n'existent plus : plus de page ombre pour une colonne. `ColumnChunk::checkpoint`
+est `const` et rend un `ColumnChunk` neuf dont les segments inchangés sont partagés
+(`shared_ptr<ColumnChunkData>`) et les segments changés rebâtis ; `NodeGroup::checkpointInMemAndOnDisk`
+compose le bloc neuf à partir de ces colonnes sans rien déplacer de l'ancien bloc, et les groupes
+CSR font de même par `rebuildPersistentChunkGroup`. Les pages de l'ancien bloc sont rendues à sa
+mort (`retireStorage` pose `retiredBy`, `~ColumnChunkData` appelle `freePageRange` ; l'en-tête CSR
+suit par l'override de `ChunkedCSRNodeGroup`), donc après le dernier lecteur qui le tient, ce qui
+prépare V2-1c. Le format de stockage ne change pas (42). Témoin :
+`test/transaction/checkpoint_new_segment_test.cpp`.
+
+Deux choses apprises par le témoin. L'ancien chemin réécrivait déjà hors place quand la valeur
+neuve sortait de l'intervalle du bitpacking, et aussi quand le segment remplissait exactement ses
+pages (`isEndOffsetOutOfPagesCapacity` : 45 568 valeurs sur 46 bits = 64 pages pile) : un témoin
+par pages libres doit viser le seul cas où master restait en place, un segment 16 bits et une
+valeur dans l'intervalle. Et la marge de `FSMReclaimRelNewTable` passe de 5 à 12 pages sans fuite :
+99 pages libérées contre 87 après le second COPY, 89 réemployées, fichier plus long de 5 pages.
+
+**La mesure** (banc `banc-amplification.sh` : 2 000 000 de lignes, cinq colonnes, 128 Mo, un
+CHECKPOINT par cycle ; octets comptés par `FileInfo::writeFile` sur tout le point de reprise,
+compteur de la branche `v21b-compteur-2` lu dans `[checkpoint-profile]`, picoré sur la sonde pour
+master) :
+
+| cycle | master 04063ee06, octets (table) | lot 6b63e4922, octets (table) |
+|---|---|---|
+| une ligne INT64 modifiée (×3, identiques) | 344 233 (184 320) | 344 233 (184 320) |
+| une ligne STRING modifiée | 422 057 (262 144) | 422 057 (262 144) |
+| 20 000 lignes (1 %) | 3 527 905 (2 260 992) | 2 973 865 (2 813 952) |
+| 200 000 lignes (10 %) | 5 793 313 | 2 973 865 (2 813 952) |
+| point de reprise sans changement | 12 496 | 12 477 |
+
+Pour une ligne, le lot écrit exactement autant que master : master réécrivait déjà le segment
+entier (45 pages de 4 Kio pour 131 072 valeurs sur ~11 bits), copié dans l'ombre puis appliqué ;
+le lot l'écrit une fois. Les 160 Kio restants (métadonnées des groupes, catalogue, enregistrement
+de point de reprise) sont les mêmes. Dès que plusieurs lignes d'un même segment changent, le lot
+écrit moins : chaque segment touché est rebâti une fois (16 groupes × 184 Kio), master paie l'ombre
+et son application. Le fichier du lot est plus long de 2,7 Mo après six cycles : les pages d'un
+segment remplacé reviennent au point de reprise suivant, pas au même, un cycle d'avance de pages
+neuves, borné (quatrième cas du témoin). Les durées ne se comparent pas (master mesuré sous une
+charge de 50, le lot après). Le grain de l'écriture reste le segment, des deux côtés : une ligne
+modifiée = un segment réécrit ; un grain plus fin serait un lot à part, après V2-1c.
+
+**Pièce 2** (branche `v21b-balayages-2`, pas sur master seule) : `NodeGroupScanState::groups` est
+l'instantané de la liste des blocs en `shared_ptr`, pris par `initializeScanState` ;
+`CSRNodeGroupScanState::persistent` tient le bloc persistant CSR (`persistentChunkGroup` passe en
+`shared_ptr`). Balayages, recherches et lectures CSR lisent ces blocs, plus la liste vivante ; un
+bloc ajouté depuis s'ajoute à la demande (`extendScanGroups`) tant que la liste commence par le
+même bloc, jamais après un échange au point de reprise. Rien d'observable avant V2-1c, puisque le
+point de reprise attend aujourd'hui toutes les transactions (`TransactionManager::checkpointNoLock`)
+: son témoin est celui de V2-1c, qu'elle rejoint.
+
