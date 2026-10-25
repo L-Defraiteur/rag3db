@@ -1,12 +1,14 @@
 {
   "sha256": {
-    "app.js": "11b4b5eabc7ba2f7b9c414565cfdf035ecb4d13160862601115254659f209971",
-    "app.css": "c278ebce68450eed56ad7e1d5e19922fb6d2941e3c7df11b0d4186e560351d5a"
+    "app.js": "f52ad2b20973d1a70a6b9b91399cb5cda751ccd1bf29d5d2f23a0bd02fdde4af",
+    "app.css": "9c525ce564dbfa93cc5b79df9baf67689d0e99e70e5693e72b2b3a589c6408ff"
   },
   "versions": {
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "dompurify": "3.4.17",
     "lucide-react": "1.61.0",
+    "marked": "18.1.1",
     "radix-ui": "1.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",

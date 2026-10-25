@@ -408,3 +408,66 @@ fn le_rendu_journalise_d_un_appel_est_entier() {
     // reçu, pas plus — et pas moins.)
     assert_eq!(journal["appel"]["rendu"].to_string(), r["result"]["result"].to_string(), "le journal porte exactement ce que l'appelant a reçu");
 }
+
+/// Un faux modèle qui répond en Markdown, avec un `<script>` glissé dans la réponse.
+fn qui_repond_en_markdown() -> ChatModel {
+    Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-markdown", 8192, move |turns, opts, sink| {
+            MockLlm::new("**Trois choses** à lire :\n\n- la première\n- la seconde\n\n```rust\nfn salut() {}\n```\n\n<script>window.__pwned = 1</script> fin.").generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le Markdown d'une réponse se rend, et un script s'y neutralise** (c7, 25
+/// octobre 2026) : gras, liste et bloc de code rendus dans le fil du chat ; le
+/// `<script>` de la réponse n'est ni dans le DOM ni exécuté ; la console est vide.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise() {
+    use super::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let (taches, chats) = (d.path().join("taches"), d.path().join("chats"));
+    let (adresse, fil) = super::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_repond_en_markdown()));
+    let racine = format!("http://{adresse}");
+    let ide = |route: &str, corps: Option<Value>| -> Value {
+        let a = crate::daemon::agent();
+        let mut r = match corps {
+            Some(c) => a.post(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(c.to_string()).unwrap(),
+            None => a.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap(),
+        };
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let decrit = ide("/ide/describe", Some(json!({ "manifest": manifeste })));
+    assert_eq!(decrit["ok"], true, "{decrit}");
+    let id = ide("/ide/etat", None)["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifeste.to_string_lossy().as_ref()))
+        .unwrap_or_else(|| panic!("le backend n'est pas dans l'état"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "document.querySelector('#root #vue')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#model')?.textContent === 'modèle : faux-markdown'");
+    n.evaluer("document.querySelector('#message').value = 'dis-moi trois choses'; document.querySelector('#send').click()");
+    n.attendre(
+        "document.querySelector('#status')?.textContent === 'fini' \
+         && (() => { const b = [...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('.body.markdown'); \
+              return b && b.querySelector('strong')?.textContent === 'Trois choses' && b.querySelectorAll('li').length === 2 && b.querySelector('pre code')?.textContent.includes('fn salut()'); })()",
+        "le Markdown rendu : gras, liste, bloc de code",
+    );
+    assert_eq!(n.evaluer("document.querySelectorAll('article.message.assistant script').length"), json!(0), "aucun script dans le fil");
+    assert_eq!(n.evaluer("typeof window.__pwned"), json!("undefined"), "le script de la réponse n'a pas tourné");
+    assert!(n.evaluer("[...document.querySelectorAll('article.message.assistant')].at(-1)?.textContent.includes('fin.')").as_bool().unwrap(), "le texte autour du script reste");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
