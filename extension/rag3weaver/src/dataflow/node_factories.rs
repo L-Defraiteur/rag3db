@@ -673,7 +673,13 @@ impl NodeFactory for SearchSourceNodeFactory {
     // refusée sous la transaction en lecture seule de l'instantané : la recherche
     // entière tombait. Un appel filtré lit donc hors de l'instantané, comme avant
     // L6, jusqu'à ce que le moteur permette la projection sous READ ONLY (un objet
-    // de la connexion, correctif du cœur) ; il pourra alors y revenir.
+    // de la connexion : le lot du cœur « projection-lecture-seule ») ; il pourra
+    // alors y revenir, en rendant ici `true` sans condition.
+    //
+    // **Le coût, jusque-là** : la décision vaut pour tout l'appel. Une recherche
+    // filtrée perd l'instantané pour tous ses signaux, plein texte compris, alors
+    // que seule la projection du dense en a besoin ; ses signaux lisent chacun
+    // l'état validé du moment, comme avant L6.
     fn snapshot_safe(&self, config: &serde_json::Value) -> bool {
         let vide = |cle: &str| config.get(cle).and_then(|v| v.as_str()).map_or(true, |s| s.trim().is_empty());
         let options = match config.get("options") {
