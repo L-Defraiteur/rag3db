@@ -478,14 +478,17 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
         (
             // La recherche dit ce qu'elle sait (pièce 3, docs/12-octobre-2026-recherche/06) :
             // le score et les scores par signal de chaque résultat, l'état de l'index en
-            // tête, les avertissements en pied — ici le repli dense, l'index étant bâti
-            // sans service d'embarquement —, et la case « reclasser ».
+            // tête, et la case « reclasser ». Le repli dense n'est pas exigé ici : il dépend
+            // du service d'embarquement de l'environnement (vu le 25 octobre : la passe le
+            // pose, et l'index avait ses vecteurs).
             "la recherche",
             format!("{racine}/ide/code/{id}/recherche?q=arrivee"),
-            "[...document.querySelectorAll('#vue .resultat a')].some(a => a.textContent.startsWith('src/arrivee.rs')) && document.querySelector('#vue .resultat .score') && document.querySelector('#vue .resultat .signaux') && document.querySelector('#recherche-etat') && document.querySelector('#vue .avertissements')?.textContent.includes('dense signal is not available') && document.querySelector('#reclasser') && !document.querySelector('#reclasser').checked",
+            "[...document.querySelectorAll('#vue .resultat a')].some(a => a.textContent.startsWith('src/arrivee.rs')) && document.querySelector('#vue .resultat .score') && document.querySelector('#vue .resultat .signaux') && document.querySelector('#recherche-etat') && document.querySelector('#reclasser') && !document.querySelector('#reclasser').checked",
         ),
         (
-            // Reclasser sans relecteur configuré : la page le dit, la case est cochée.
+            // Reclasser sans relecteur configuré : la page le dit en pied (les avertissements),
+            // la case est cochée. Aucun relecteur n'est déclaré ici, quel que soit
+            // l'environnement.
             "la recherche à reclasser",
             format!("{racine}/ide/code/{id}/recherche?q=arrivee&reclasser=1"),
             "document.querySelector('#reclasser')?.checked && document.querySelector('#vue .avertissements')?.textContent.includes('aucun reranker configuré')",
