@@ -537,7 +537,9 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
 
     // L'édition (B1, page 05 §4), dans CodeMirror : Modifier, tout sélectionner et
     // taper au clavier, Ctrl-S ; le disque porte le texte tapé.
-    n.aller(&format!("{racine}/ide/code/{id}/fichier/main.rs"), "document.querySelector('#L1')");
+    // L'édition reste sur l'ancienne page jusqu'à ce qu'elle soit portée (page 08,
+    // vue 3) : « Modifier » de la vue neuve y mène ; le témoin y va tout droit.
+    n.aller(&format!("{racine}/ide/ancienne/code/{id}/fichier/main.rs"), "document.querySelector('#L1')");
     n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent === 'Modifier').click()");
     n.attendre("document.querySelector('.edition .cm-content')?.innerText.includes('fn depart()')", "l'éditeur CodeMirror");
     let avis = |texte: &str| format!("document.querySelector('.barre .note')?.textContent === {}", json!(texte));
