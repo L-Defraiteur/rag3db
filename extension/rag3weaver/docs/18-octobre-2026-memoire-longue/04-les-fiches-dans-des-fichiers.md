@@ -7,6 +7,8 @@ sujets, un classeur L1/L2/L3). Son inquiétude reste le fil : « il ne faut pas 
 l'habitude, et qu'au dernier moment on dise : l'ancien index est corrompu, on doit
 reconstruire ». Rien n'est codé ; `seed` et `cited_by` (le Plan) passent avant.*
 
+*Mise à jour du 25 octobre 2026 : M1, M2 et M3 sont faits ; ce que M3 a livré est au §5 ter.*
+
 ## 1. Le modèle : la fiche est le sujet
 
 - **Une fiche = un sujet**, avec ses **ancres** (les Refs `path`, `symbol`, et les autres
@@ -178,6 +180,43 @@ ne suivent pas le même ordre, et la reconstruction ne doit pas se tromper de se
 **Le témoin de M2c** : un lien `A_POUR_APPORT` posé après coup, une transition de la
 fiche, puis une consolidation (L1 bis) — et chaque fois, le fichier de la fiche se
 réécrit sans qu'aucun écrivain l'ait demandé.
+
+## 5 ter. Ce que M3 a livré (25 octobre 2026)
+
+- **`rebuild_from_files`** pose chaque ligne par `EntityRecordNode` en action `restore`,
+  permise seulement quand le service de restauration est enregistré (seul `rebuild` le
+  fait, jamais un outil) : les dates et la révision viennent du fichier, l'uuid doit
+  correspondre à l'identité, une ligne déjà là est refusée, le fichier n'est pas réécrit.
+  Une base qui n'est ni vide ni perdue (une entité qui tient plus que son `seed`) est
+  refusée, et le refus nomme l'entité et son compte. Le rapport dit, par entité, les
+  lignes restaurées, déjà là, refusées, et **les champs que les fichiers ne portent pas**
+  (`fields_not_carried`) au lieu de les perdre en silence.
+- **Le bloc machine** (M3b) : un fichier composé finit par un commentaire HTML
+  (`<!-- rag3weaver: les lignes de ce fichier, pour reconstruire la base si elle est
+  perdue … -->`), produit **depuis le schéma**, pour toute entité à fichier composé : le
+  YAML des lignes que le fichier montre (entité, uuid, champs déclarés, liens sortants avec
+  leurs propriétés). `&` et `-->` s'échappent. Le rendu jinja reste pour l'œil ; la
+  reconstruction ne lit que le bloc. Un lien vers une entité sans fichier (une `Ref`) **se
+  compte** (`links.to_absent_rows`) et n'est jamais deviné.
+- **À l'ouverture** (M3c), chaque fichier propre se relit contre sa ligne, dans les deux
+  sens : fichier illisible, fichier sans ligne, ligne sans fichier, champ porté qui
+  diffère (les deux valeurs dites). Champ à champ plutôt que par empreinte : un écart se
+  nomme. `index_state` porte `files` (`regenerated`, `gaps`, `by_entity`) et
+  l'avertissement « dossier ≠ base : N écart(s) ». Les fichiers composés n'y sont pas
+  comparés : en marche, la base les régénère (§5 bis).
+- **La vérification à blanc** (M3c) : `verify_files` — op de l'hôte, capacité dite par
+  `describe`, et `rag3weaver-backend files verify <backend.json>` (sortie 1 si la base et
+  les fichiers diffèrent) — copie les `.md` dans un répertoire jetable, y ouvre une base
+  neuve sans réactions, la reconstruit, puis compare entité par entité (lignes manquantes,
+  en trop, champs qui diffèrent) et relation par relation (paires manquantes, en trop) à
+  la base vivante. Rien n'est écrit à côté de la vraie base. `files rebuild
+  <backend.json>` reconstruit hors de l'hôte.
+- **Les témoins** : `e2e_reconstruction` (parité champ à champ, dates et révision
+  comprises ; le refus d'une base pleine ; le champ non porté ; une base perdue qui revient
+  par ses blocs ; l'écart dit à l'ouverture ; la vérification à blanc qui voit un champ
+  édité).
+- **Pas encore** : les vecteurs ne se comparent pas (ils se recalculent à l'ouverture) ;
+  les sources de la mémoire suivront avec le câblage du gabarit sur ses fichiers.
 
 ## 6. L'édition à la main, l'auteur, le partage
 
