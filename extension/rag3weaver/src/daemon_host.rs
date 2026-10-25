@@ -647,23 +647,16 @@ impl DaemonHost {
 
     /// **Ce qu'un appel d'outil a rendu à son appelant**, dans le journal de son
     /// run (page 04 du 25 octobre 2026) : le client (un Claude Code, l'IDE),
-    /// l'outil, ses arguments et le résultat tel qu'il l'a reçu, borné. C'est ce
-    /// que le juge regarde quand l'agent n'est pas notre chat.
+    /// l'outil, ses arguments et le résultat tel qu'il l'a reçu, **entier**. Le
+    /// run garde ce que l'écran a montré : une borne coupe les événements
+    /// intermédiaires (page 06), jamais le rendu final ni les arguments (c7, 25
+    /// octobre 2026 : deux recherches journalisées à 4 et 12 rendus sur 30 par
+    /// une borne de 64 Kio qui vivait ici). C'est ce que le juge regarde quand
+    /// l'agent n'est pas notre chat.
     fn journaliser_l_appel(&self, backend: &str, client: &str, outil: &str, arguments: &Value, reponse: &Value) {
         let Some(run) = reponse["run"].as_str() else { return };
-        const BORNE: usize = 64 * 1024;
-        let rendu = reponse["result"].to_string();
-        let rendu = if rendu.len() > BORNE {
-            let mut coupe = BORNE;
-            while !rendu.is_char_boundary(coupe) {
-                coupe -= 1;
-            }
-            json!({ "tronque": rendu.len(), "debut": &rendu[..coupe] })
-        } else {
-            reponse["result"].clone()
-        };
         let mut ajouts = serde_json::Map::new();
-        ajouts.insert("appel".into(), json!({ "client": client, "outil": outil, "arguments": arguments, "rendu": rendu }));
+        ajouts.insert("appel".into(), json!({ "client": client, "outil": outil, "arguments": arguments, "rendu": reponse["result"].clone() }));
         self.journal.ajouter(backend, run, ajouts);
         if journal_des_runs::declare_un_outil(outil, arguments) && reponse["ok"] != false {
             self.journal.epingler(backend, run, &format!("déclaration d'un outil ({outil}, par {client})"));
