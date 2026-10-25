@@ -50,3 +50,9 @@ Dans lucivy-core : un `Insert` ou un `Delete` sur un shard sans écrivain rend u
 l'appelant (la réponse passe par l'acteur, ou bien le `ShardedHandle` refuse avant d'envoyer) ; le
 résultat de `add_document` n'est plus jeté ; un `Commit` sans écrivain dit qu'il n'a rien validé.
 Un témoin rejoue la recette et exige l'erreur. Puis rag3weaver prend la version publiée.
+
+## Ses filets
+
+- `extension/rag3weaver/Cargo.toml`, bloc `[patch.crates-io]` (lucivy, à `bb07627`) : rag3weaver prend
+  ce correctif sous un patch temporaire depuis le 25 octobre 2026, jusqu'à la publication par
+  Lucie. Son retrait a son ticket : `2026-10-25-retirer-le-patch-lucivy-a-la-publication.md`.

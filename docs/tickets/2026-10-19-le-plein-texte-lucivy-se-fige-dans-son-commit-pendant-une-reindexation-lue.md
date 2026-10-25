@@ -94,3 +94,9 @@ tour 1 n'est pas réindexé ». Il se saute sans `RAG3WEAVER_MESURE_ARBRE` et le
 Lucie choisit sa voie : une 4.3.1 publiée, prise aussitôt ici ; ou un `[patch.crates-io]`
 provisoire, qu'elle autorise. Le témoin de mesure doit ensuite passer ses trois tours sur la lib
 qui porte la version corrigée.
+
+## Ses filets
+
+- `extension/rag3weaver/Cargo.toml`, bloc `[patch.crates-io]` (lucivy, à `bb07627`) : rag3weaver prend
+  ce correctif sous un patch temporaire depuis le 25 octobre 2026, jusqu'à la publication par
+  Lucie. Son retrait a son ticket : `2026-10-25-retirer-le-patch-lucivy-a-la-publication.md`.
