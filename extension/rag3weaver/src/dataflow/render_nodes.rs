@@ -1246,6 +1246,7 @@ mod tests {
             other_children: None,
             graph: None,
             signal: None,
+            signals: Vec::new(),
         };
 
         let through = |lens: PathLens| render_results_through(std::slice::from_ref(&r), 200, false, &lens);
@@ -1310,6 +1311,7 @@ mod tests {
             other_children: None,
             graph: None,
             signal: None,
+            signals: Vec::new(),
         }
     }
 

@@ -313,6 +313,7 @@ mod tests {
                 matched_children: None,
                 other_children: None,
                 graph: None,
+                signals: Vec::new(),
             },
             UnifiedResult {
                 signal: None,
@@ -326,6 +327,7 @@ mod tests {
                 matched_children: None,
                 other_children: None,
                 graph: None,
+                signals: Vec::new(),
             },
         ]);
         assert_eq!(summarize_port_value(&val), "Results(2)");

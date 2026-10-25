@@ -215,6 +215,7 @@ impl Node for ScanFilesNode {
                     other_children: None,
                     graph: None,
                     signal: Some("scan".to_string()),
+                    signals: Vec::new(),
                 }
             })
             .collect();

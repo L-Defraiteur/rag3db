@@ -22,6 +22,12 @@
       "bindings": {
         "target": "Scope"
       },
+      "metadata": [
+        {
+          "node": "render",
+          "port": "meta"
+        }
+      ],
       "policy": {
         "read_files": true
       },

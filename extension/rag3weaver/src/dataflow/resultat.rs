@@ -50,6 +50,22 @@ pub struct UnifiedResult {
     /// chaque branche par son nom.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signal: Option<String>,
+    /// **Ce que chaque signal a dit de ce résultat** : son score brut et son
+    /// rang dans sa propre liste, avant que la fusion n'en garde qu'un
+    /// (`score`). Rempli par `FuseResultsNode`, complété par `RerankNode` ;
+    /// vide hors fusion. C'est ce que la vue de recherche de l'IDE montre
+    /// (docs/12-octobre-2026-recherche/06).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub signals: Vec<SignalScore>,
+}
+
+/// Le score brut d'un signal pour un résultat, et son rang (1 = premier) dans
+/// la liste de ce signal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SignalScore {
+    pub label: String,
+    pub score: f64,
+    pub rank: usize,
 }
 
 impl From<SearchResult> for UnifiedResult {
@@ -66,6 +82,7 @@ impl From<SearchResult> for UnifiedResult {
             other_children: None,
             graph: None,
             signal: None,
+            signals: Vec::new(),
         }
     }
 }
@@ -155,6 +172,7 @@ mod tests {
             matched_children: None,
             other_children: Some(vec![]),
             graph: None,
+            signals: Vec::new(),
         };
         let sr: SearchResult = ur.into();
         assert_eq!(sr.uuid, "u1");
@@ -185,6 +203,7 @@ mod tests {
             matched_children: None,
             other_children: None,
             graph: None,
+            signals: Vec::new(),
         };
         let (entity, uuid) = source_info(&ur).unwrap();
         assert_eq!(entity, "Directory");
@@ -205,6 +224,7 @@ mod tests {
             matched_children: None,
             other_children: None,
             graph: None,
+            signals: Vec::new(),
         };
         let (entity, uuid) = source_info(&ur).unwrap();
         assert_eq!(entity, "Directory");
@@ -226,6 +246,7 @@ mod tests {
             matched_children: None,
             other_children: None,
             graph: None,
+            signals: Vec::new(),
         };
         assert_eq!(source_info(&ur), Some(("SomeKB".to_string(), "x".to_string())));
     }

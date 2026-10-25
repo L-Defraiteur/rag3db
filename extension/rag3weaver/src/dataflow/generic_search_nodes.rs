@@ -2020,6 +2020,10 @@ impl Node for FuseResultsNode {
         // Encode the typed identity only while scoring; external UUIDs remain untouched.
         let identity = |r: &UnifiedResult| serde_json::to_string(&(&r.entity, &r.uuid)).unwrap();
         let mut originals: HashMap<String, Vec<(String, UnifiedResult)>> = HashMap::new();
+        // **Ce que chaque signal a dit**, avant que la fusion n'en garde qu'un
+        // score : le score brut et le rang dans la liste du signal (pièce 1 de
+        // la recherche de l'IDE).
+        let mut evidence: HashMap<String, Vec<crate::dataflow::resultat::SignalScore>> = HashMap::new();
         let mut lists = Vec::new();
         for (label, rows) in groups {
             let mut cfg = self.signal_config(&label, &base, source);
@@ -2030,6 +2034,11 @@ impl Node for FuseResultsNode {
                 let id = identity(&r);
                 originals.entry(id.clone()).or_default().push((label.clone(), r.clone()));
                 if seen.insert(id.clone()) {
+                    evidence.entry(id.clone()).or_default().push(crate::dataflow::resultat::SignalScore {
+                        label: label.clone(),
+                        score: r.score,
+                        rank: scored.len() + 1,
+                    });
                     let mut sr = SearchResult::from(r);
                     sr.uuid = id;
                     scored.push(sr);
@@ -2046,12 +2055,14 @@ impl Node for FuseResultsNode {
         let mut fused = Vec::new();
         for sr in scores {
             let occurrences = originals.remove(&sr.uuid).unwrap_or_default();
+            let dits = evidence.remove(&sr.uuid).unwrap_or_default();
             if self.duplicates == DuplicatePolicy::Keep {
                 // Keep the original evidence and branch label on each occurrence.
                 // The score remains the object's fused score, not a raw branch score.
                 for (label, mut r) in occurrences {
                     r.score = sr.score;
                     r.signal = Some(label);
+                    r.signals = dits.clone();
                     fused.push(r);
                 }
                 continue;
@@ -2059,6 +2070,7 @@ impl Node for FuseResultsNode {
             let Some((_, first)) = occurrences.first() else {continue;};
             let mut u = first.clone();
             u.score = sr.score;
+            u.signals = dits;
             u.chunk = sr.chunk;
             u.chunks = sr.chunks;
             let mut labels = Vec::new();
@@ -2953,6 +2965,7 @@ mod tests {
             matched_children: None,
             other_children: None,
             graph: None,
+            signals: Vec::new(),
         }
     }
 
@@ -3026,6 +3039,34 @@ mod tests {
         assert!(results.len() >= 2);
         // "a" should be first (appears in both signals)
         assert_eq!(results[0].uuid, "a");
+    }
+
+    /// **Chaque signal dit le sien** (pièce 1 de la recherche de l'IDE) : le
+    /// résultat fusionné porte le score brut et le rang de chaque signal qui
+    /// l'a trouvé, à côté du score fusionné.
+    #[test]
+    fn fuse_keeps_each_signal_score_and_rank() {
+        let mut node = FuseResultsNode::new("fuse");
+        let mut ctx = NodeContext::new();
+        ctx.set_input("vector", PortValue::new(vec![make_unified_result("a", 0.9), make_unified_result("c", 0.5)]));
+        ctx.set_input("bm25", PortValue::new(vec![make_unified_result("b", 0.8), make_unified_result("a", 0.6)]));
+        node.execute(&mut ctx).unwrap();
+        let results = results_of(&mut ctx);
+        let dits = |uuid: &str| {
+            let mut v: Vec<(String, f64, usize)> = results
+                .iter()
+                .find(|r| r.uuid == uuid)
+                .unwrap()
+                .signals
+                .iter()
+                .map(|s| (s.label.clone(), s.score, s.rank))
+                .collect();
+            v.sort_by(|x, y| x.0.cmp(&y.0));
+            v
+        };
+        assert_eq!(dits("a"), vec![("bm25".to_string(), 0.6, 2), ("vector".to_string(), 0.9, 1)]);
+        assert_eq!(dits("b"), vec![("bm25".to_string(), 0.8, 1)]);
+        assert_eq!(dits("c"), vec![("vector".to_string(), 0.5, 2)]);
     }
 
     fn tagged(uuid: &str, score: f64, signal: &str) -> UnifiedResult {

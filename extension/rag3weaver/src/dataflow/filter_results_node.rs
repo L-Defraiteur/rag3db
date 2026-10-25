@@ -186,6 +186,7 @@ mod tests {
             other_children: None,
             graph: None,
             signal: None,
+            signals: Vec::new(),
         }
     }
 

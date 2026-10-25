@@ -3074,6 +3074,7 @@ mod tests {
             matched_children: None,
             other_children: None,
             graph: None,
+            signals: Vec::new(),
         };
         let rendered = render_port_value(&PortValue::new(vec![r])).unwrap();
         let v: Value = serde_json::from_str(&rendered).unwrap();

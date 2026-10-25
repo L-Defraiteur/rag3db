@@ -100,7 +100,7 @@ pub use graph::{DataflowGraph, Edge};
 pub use node::{CancelCause, CancelToken, Cancelled, EmitSink, Node, NodeContext, NodeLogEntry, NodeLogLevel, Stopped};
 pub use observe::{TapEvent, TapSpec};
 pub use port::{merge_port_values, BatchPayload, PortDef, PortType, PortValue, QueryPayload};
-pub use resultat::{source_info, ChildSummary, UnifiedResult};
+pub use resultat::{source_info, ChildSummary, SignalScore, UnifiedResult};
 pub use field_weight::FieldWeightNode;
 pub use filter_results_node::FilterResultsNode;
 pub use record::{DataflowRecorder, RecordRetention, RecordSink};

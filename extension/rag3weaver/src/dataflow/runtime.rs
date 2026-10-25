@@ -2032,6 +2032,7 @@ mod tests {
             matched_children: None,
             other_children: None,
             graph: None,
+            signals: Vec::new(),
         }
     }
 
