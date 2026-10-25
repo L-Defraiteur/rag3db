@@ -224,3 +224,37 @@ le DOM ni exécuté, le texte autour reste.
   son service d'embarquement).
 - `VUES_PORTEES` : `chat`, `fichier`, `recherche`, `taches`, `bilans`. Reste la vue 7 (le graphe,
   le DAG vivant, l'aperçu, les réactions, les propositions, l'arbre, le symbole), puis l'édition.
+
+## Règle du bundle : les champs ne sont pas contrôlés par React
+
+Un témoin navigateur pose une valeur par le DOM (`input.value = …`) puis clique ; une saisie
+automatique du navigateur fait pareil. Un champ contrôlé par React (`value` + `onChange`) ne voit
+pas cette valeur : son état reste vide, et le clic envoie du vide — le chat, puis l'ouverture
+d'une tâche, ont rougi ainsi. **Règle** : les champs de l'IDE sont non contrôlés, lus par une
+référence au moment de l'action (`useRef`, `defaultValue`), jamais par un état React. Un témoin qui
+pose une valeur par le DOM doit la voir partir.
+
+## Ce qui est fait (vue 7 : l'arbre, le symbole, le graphe, le DAG vivant, les réactions, les propositions)
+
+- `Tree.tsx` : les dossiers puis les fichiers sous un préfixe (`#vue li a` dans cet ordre), lignes,
+  « modifié depuis l'index », « non indexé ».
+- `Symbol.tsx` : **chaque section se rend dès que sa réponse arrive** — définitions et usages par
+  genre (`usages`), ce qui en dépend (`impact`), ce qu'il appelle (`callees`), « en cours… » pour les
+  autres (c7 : sous charge, le `Promise.all` de l'ancienne page laissait « Chargement… »).
+- `Graph.tsx` : le voisinage en papillon (`svg g.noeud`, `g.noeud.centre`), impact à gauche,
+  appelés à droite, trois niveaux, les rattachements par le nom en pointillé.
+- `lib/graph.tsx` : le dessin partagé par couches (`g.etape[data-nom]`, `text.duree`), et la section
+  du diff d'un graphe (`section.graphe-propose[data-cible] g.etape.ajoute|change|retire`), reprise
+  par la relecture d'une tâche (le témoin relit le nœud changé dans le SVG) et les propositions.
+- `Dag.tsx` : la liste des graphes d'outils (`/ide/describe`), le DAG d'un outil, d'une réaction ou
+  d'un composant, allumé par le flux (`RunStarted` sur sa cible, `NodeRun` → `passe|echec` et la
+  durée, `RunFinished`), `#dag-etat`, `#arreter-run` et `#arret-note` (C4).
+- `Reactions.tsx` : les réactions déclarées, les montres, `#montre-vue`, les runs récents
+  (`#runs-recents tr[data-reaction][data-run]`, `td.fin`, `button.arreter`, les écritures cumulées
+  par entité et changement ou par relation dans `td.ecrit ul.ecritures li`).
+- `Propositions.tsx` : la liste relue au sujet `declarations` (`#propositions tr[data-id][data-etat]`),
+  le détail (`.proposition[data-etat]`, `#proposition-etat`, `#appliquer`, `#pourquoi`, `#rejeter`,
+  `#proposition-note`, l'aperçu `.apercu-propose`, le diff de chaque graphe, la différence de chaque
+  fichier).
+- `VUES_PORTEES` : toutes les vues de l'ancienne page sauf l'édition d'un fichier (vue 3b). Le bundle
+  pèse 388 Kio.

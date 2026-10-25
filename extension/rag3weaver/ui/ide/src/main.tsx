@@ -10,6 +10,12 @@ import { Search } from "@/views/Search";
 import { Tasks } from "@/views/Tasks";
 import { TaskReview } from "@/views/TaskReview";
 import { Bilans } from "@/views/Bilans";
+import { Tree } from "@/views/Tree";
+import { Symbol } from "@/views/Symbol";
+import { GraphView } from "@/views/Graph";
+import { Dag } from "@/views/Dag";
+import { Reactions } from "@/views/Reactions";
+import { Propositions } from "@/views/Propositions";
 import { applyTheme, effectiveTheme, storedTheme, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
 
@@ -88,6 +94,12 @@ function View({ state, reload }: { state: HostState; reload: () => Promise<unkno
   if (r.view === "fichier" && r.id) return <File id={r.id} path={r.rest ?? ""} state={state} />;
   if (r.view === "recherche" && r.id) return <Search id={r.id} state={state} />;
   if (r.view === "bilans" && r.id) return <Bilans id={r.id} state={state} />;
+  if (r.view === "arbre" && r.id) return <Tree id={r.id} dir={r.rest ?? ""} state={state} />;
+  if (r.view === "symbole" && r.id) return <Symbol id={r.id} name={r.rest ?? ""} state={state} />;
+  if (r.view === "graphe" && r.id) return <GraphView id={r.id} name={r.rest ?? ""} state={state} />;
+  if (r.view === "dag" && r.id) return <Dag id={r.id} rest={r.rest ?? ""} state={state} />;
+  if (r.view === "reactions" && r.id) return <Reactions id={r.id} state={state} />;
+  if (r.view === "propositions" && r.id) return <Propositions id={r.id} rest={r.rest ?? ""} state={state} />;
   return <Home state={state} />;
 }
 
