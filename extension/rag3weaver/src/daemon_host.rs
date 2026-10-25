@@ -184,6 +184,8 @@ pub struct DaemonHost {
     /// Le modèle du juge (par défaut celui de l'hôte, Vertex) : à part de celui
     /// du chat, pour juger un chat d'un modèle par un autre.
     juge_model: chat::ChatModel,
+    /// Les équipiers qui tournent, par `<parent>/<tâche>` ([`teammate`]).
+    teammates: Mutex<std::collections::HashSet<String>>,
 }
 
 /// Les tâches de l'agent : une branche, un worktree, une base à soi.
@@ -197,6 +199,10 @@ pub mod journal_des_runs;
 
 /// Le juge de session : un agent déclaré qui relit un run et range son bilan.
 pub mod juge;
+
+/// L'équipier : un agent qui accomplit une tâche seul, par pas, et parle à un
+/// superviseur par une boîte aux lettres.
+pub mod teammate;
 
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
@@ -261,6 +267,7 @@ impl DaemonHost {
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
             bilans: juge::FileDesBilans::default(),
             juge_model: chat::default_chat_model(),
+            teammates: Mutex::new(std::collections::HashSet::new()),
         }
     }
 

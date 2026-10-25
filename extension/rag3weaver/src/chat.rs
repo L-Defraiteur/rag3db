@@ -187,6 +187,8 @@ pub struct ChatRunOptions {
     pub run_id: Option<String>,
     pub meter: Option<Arc<crate::meter::Meter>>,
     pub stopped_by: Option<Arc<std::sync::Mutex<Option<String>>>>,
+    /// Les outils dont l'appel réussi finit le tour ([`Agent::with_terminal_tools`]).
+    pub terminal_tools: Vec<String>,
 }
 
 impl ChatSession {
@@ -262,6 +264,9 @@ impl ChatSession {
         }
         if let Some(stopped_by) = options.stopped_by {
             agent = agent.with_stopped_by(stopped_by);
+        }
+        if !options.terminal_tools.is_empty() {
+            agent = agent.with_terminal_tools(options.terminal_tools);
         }
         agent
             .with_events(bus)

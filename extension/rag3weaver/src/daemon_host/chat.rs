@@ -225,6 +225,14 @@ impl DaemonHost {
     /// **Un tour de chat** sur le backend `backend_id`. Rend le texte, le run,
     /// qui l'a arrêté s'il l'a été, et ce qu'il a consommé.
     pub fn chat_turn(&self, backend_id: &str, message: &str) -> Result<Value, String> {
+        self.chat_turn_with(backend_id, message, None)
+    }
+
+    /// Le même tour, **comme un pas d'équipier** quand `step` est donné (page
+    /// 07) : le message système de l'équipier s'ajoute, ses outils (`edit_plan`,
+    /// `step_done`, `report`) et son budget enveloppent ceux du chat, `step_done`
+    /// termine le tour, et le journal du run dit la demande (la fiche du juge).
+    pub fn chat_turn_with(&self, backend_id: &str, message: &str, step: Option<&super::teammate::Step>) -> Result<Value, String> {
         let hosted = self.hote_par_id(backend_id)?;
         let run_id = crate::events::new_run_id("agent");
         // L'arrêt du tour : lever son drapeau et dire qui l'a demandé.
@@ -256,7 +264,7 @@ impl DaemonHost {
             (std::mem::take(&mut e.session), en_vol)
         };
         let resultat = self
-            .with_backend(&hosted, |b| self.run_chat_turn(b, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par))
+            .with_backend(&hosted, |b| self.run_chat_turn(b, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, step))
             .and_then(|r| r);
         // Un tour fini : son bilan, si le backend déclare `bilans` (page 04).
         if resultat.is_ok() {
@@ -284,11 +292,16 @@ impl DaemonHost {
         message: &str,
         annule: Arc<AtomicBool>,
         arrete_par: Arc<Mutex<Option<String>>>,
+        step: Option<&super::teammate::Step>,
     ) -> Result<Value, String> {
         let llm = (self.chat_model)(b).map_err(|why| format!("le chat est éteint : {why}"))?;
         // Une tâche : le backend porte sa surcharge de workspace (son worktree).
         let dans_une_tache = b.prepared().surcharges().workspace.is_some();
-        let prompt = system_prompt(b.mode_declarations(), dans_une_tache);
+        let mut prompt = system_prompt(b.mode_declarations(), dans_une_tache);
+        if let Some(s) = step {
+            prompt.push_str("\n\n");
+            prompt.push_str(s.system_prompt());
+        }
         // Le message système suit le mode de la déclaration : il est réécrit à
         // chaque tour (une tâche fusionnée, un mode changé).
         match session.turns.first_mut() {
@@ -323,11 +336,16 @@ impl DaemonHost {
         };
         let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
         let outils = OutilsDuChat::de(b, &declares, dans_une_tache);
+        let du_pas = step.map(|s| super::teammate::StepTools { inner: &outils, step: s });
+        let boite: &(dyn crate::agent::ToolBox + Sync) = match &du_pas {
+            Some(p) => p,
+            None => &outils,
+        };
         let avant = session.turns.len();
         let fait = session.run_with(
             message,
             llm.as_ref(),
-            &outils,
+            boite,
             &config,
             events,
             annule,
@@ -336,6 +354,7 @@ impl DaemonHost {
                 run_id: Some(run_id.to_string()),
                 meter: Some(self.chat_meter.clone()),
                 stopped_by: Some(arrete_par.clone()),
+                terminal_tools: step.map(|_| super::teammate::Step::terminal_tools()).unwrap_or_default(),
             },
         );
         let consomme: Vec<Value> = self
@@ -358,6 +377,10 @@ impl DaemonHost {
             ajouts.insert("tache".into(), tache.clone());
             ajouts.insert("fichiers".into(), json!(fichiers));
             ajouts.insert("propositions".into(), json!(propositions));
+            if let Some(s) = step {
+                ajouts.insert("demande".into(), json!(s.request));
+                ajouts.insert("pas".into(), json!(s.number));
+            }
             self.journal.ajouter(backend_id, run_id, ajouts);
         }
         let reponse = |text: &str| {
