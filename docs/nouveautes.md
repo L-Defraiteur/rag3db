@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — L'équipier.** Un agent qui accomplit une tâche seul, par pas, et parle à
+  un superviseur par une boîte aux lettres ; un plan quand il le faut, le hors-plan en
+  proposition, et le juge à chaque pas ; sur Gemini, la doc d'un dépôt de test en un
+  pas, notée 10. 0ab04909a.
 - **25 oct. — Un lecteur ouvert avant le point de reprise n'est plus attendu.** Il relit
   sa génération, gardée à côté jusqu'au point de reprise suivant ; un lecteur nouveau voit
   l'écriture. f8c0c8df0.
