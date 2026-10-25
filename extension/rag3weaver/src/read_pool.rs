@@ -396,7 +396,7 @@ mod tests {
     /// relit sa génération jusqu'à la fin de son instantané. Vert, il dit que le
     /// plafond peut se relâcher ; tant que `courant` n'a pas V2-2, il est rouge.
     #[test]
-    #[ignore = "rouge connu sous courant 3724accba (le point de reprise attend le lecteur ouvert, 5 s puis échec) ; vert avec la lib de V2-2 (f8c0c8df0) : se retire quand courant la porte"]
+    #[ignore = "rouge connu sous courant 04063ee06 (comme sous 58b46a9bf et 3724accba : CHECKPOINT attend le lecteur ouvert, 5 s puis Timeout) ; vert sous la lib de V2-2 (f8c0c8df0, 2 ms) : se retire quand courant la porte"]
     fn un_lecteur_ouvert_ne_retient_pas_le_point_de_reprise_d_un_copy() {
         let dir = tempfile::tempdir().unwrap();
         let (ecrivain, mut p) = pool(dir.path(), 2);
