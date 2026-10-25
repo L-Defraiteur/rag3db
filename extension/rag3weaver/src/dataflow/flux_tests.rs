@@ -256,3 +256,86 @@ fn an_unconnected_stream_changes_neither_the_executor_nor_the_output() {
     connected.connect("llm", "tokens", "tok", "in").unwrap();
     assert!(connected.has_streams().unwrap(), "branché, le flux fait passer au concurrent");
 }
+
+/// Un producteur de flux fini d'objets JSON : `n` éléments `{"i": k}`.
+struct JsonBurst {
+    name: String,
+    n: usize,
+}
+
+impl Node for JsonBurst {
+    fn node_type(&self) -> &str {
+        "JsonBurst"
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![]
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("out", PortType::Map, true).stream(PortKind::Finite)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        for k in 1..=self.n {
+            ctx.emit("out", PortValue::new(serde_json::json!({ "i": k })))?;
+        }
+        Ok(())
+    }
+}
+
+/// Lit le tout (`Complete`) d'un port de valeur JSON et dit ce qu'il a vu.
+struct JsonWhole {
+    name: String,
+}
+
+impl Node for JsonWhole {
+    fn node_type(&self) -> &str {
+        "JsonWhole"
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("record", PortType::Map, true)]
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        vec![PortDef::value("seen", PortType::Text, true)]
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let vu = match ctx.take_input("record") {
+            None => "rien".to_string(),
+            Some(v) if v.is_trigger() => "un Trigger".to_string(),
+            Some(v) => take_or_clone::<serde_json::Value>(v).map_or("autre chose".into(), |j| j.to_string()),
+        };
+        ctx.set_output("seen", PortValue::new(vu));
+        Ok(())
+    }
+}
+
+/// **Un pli impossible se refuse en nommant les types** (25 octobre 2026,
+/// l'archive de la mémoire longue) : N objets JSON émis sur un flux fini vers
+/// une entrée `Complete` ne se fondent pas ; le pli rendait `PortValue::Trigger`
+/// en silence (concurrent.rs, `unwrap_or(PortValue::Trigger)`), qu'une valeur
+/// suivante efface — le lecteur voyait le dernier élément si N est impair, un
+/// Trigger si N est pair, sans erreur. Le run doit refuser, en nommant le nœud,
+/// le port et ce qui ne se fond pas.
+#[test]
+#[ignore = "rouge connu : docs/tickets/2026-10-25-un-pli-impossible-d-un-flux-rend-un-trigger-en-silence.md"]
+fn un_pli_impossible_d_un_flux_vers_une_entree_complete_se_refuse_en_le_nommant() {
+    for n in [2usize, 3] {
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(JsonBurst { name: "sections".into(), n })).unwrap();
+        g.add_node(Box::new(JsonWhole { name: "ecrire".into() })).unwrap();
+        g.connect("sections", "out", "ecrire", "record").unwrap();
+        let r = DataflowRuntime::new(100).execute(&mut g);
+        let vu = r.as_ref().ok().and_then(|o| o.get("ecrire", "seen").cloned()).and_then(take_or_clone::<String>);
+        eprintln!("[pli] N={n} : {}", match (&r, &vu) {
+            (Err(e), _) => format!("refusé : {e}"),
+            (Ok(_), Some(v)) => format!("accepté, le lecteur a vu {v}"),
+            (Ok(_), None) => "accepté, rien rendu".to_string(),
+        });
+        let e = r.err().unwrap_or_else(|| panic!("N={n} : le pli de {n} objets JSON passe en silence (le lecteur a vu {vu:?})"));
+        assert!(e.contains("ecrire") && e.contains("record"), "N={n} : le refus nomme le nœud et le port : {e}");
+    }
+}
