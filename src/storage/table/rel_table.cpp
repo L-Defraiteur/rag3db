@@ -566,6 +566,12 @@ void RelTable::reclaimStorage(PageAllocator& pageAllocator) const {
     }
 }
 
+void RelTable::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    for (auto& relData : directedRelData) {
+        relData->retireGenerationsBefore(oldestReaderTS);
+    }
+}
+
 void RelTable::updateRelOffsets(const LocalRelTable& localRelTable,
     const row_idx_vec_t& activeRows) {
     auto& localNodeGroup = localRelTable.getLocalNodeGroup();

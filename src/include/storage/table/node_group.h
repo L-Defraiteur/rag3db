@@ -208,6 +208,8 @@ public:
     void applyFuncToChunkedGroups(version_record_handler_op_t func, common::row_idx_t startRow,
         common::row_idx_t numRows, common::transaction_t commitTS) const;
     virtual void rollbackInsert(common::row_idx_t startRow);
+    // V2-2 : retire les générations précédentes que plus aucune transaction ne précède.
+    virtual void retireGenerationsBefore(common::transaction_t oldestReaderTS);
     void reclaimStorage(PageAllocator& pageAllocator) const;
     void retireStorage(PageAllocator& pageAllocator, const ChunkedGroups& groups) const;
     virtual void reclaimStorage(PageAllocator& pageAllocator, const common::UniqLock& lock) const;

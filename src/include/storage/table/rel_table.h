@@ -215,6 +215,7 @@ public:
         PageAllocator& pageAllocator) override;
     void rollbackCheckpoint() override {};
     void reclaimStorage(PageAllocator& pageAllocator) const override;
+    void retireGenerationsBefore(common::transaction_t oldestReaderTS) override;
 
     common::row_idx_t getNumTotalRows(const transaction::Transaction* transaction) override;
 
