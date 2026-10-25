@@ -140,6 +140,11 @@ fn la_recherche_contre_lucivy_seul_sur_les_requetes_de_lucie() {
             }
             (lignes, total)
         };
+        // Ce que la méta dit, quand un premier de l'oracle manque.
+        let avertis = reponse["metadata"]["render.meta"]["warnings"].to_string();
+        if oracle.iter().any(|o| !rendus.iter().any(|x| cle(x) == *o)) {
+            println!("<!-- {q} : méta {} ; avertissements {avertis} -->", reponse["metadata"]["render.meta"]);
+        }
         if oracle.is_empty() {
             println!("| {q} | 0 | — | — | — | {premier} |");
             continue;

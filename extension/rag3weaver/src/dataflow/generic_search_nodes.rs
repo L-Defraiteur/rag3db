@@ -3003,12 +3003,14 @@ mod tests {
         let node = BM25SearchNode::new("bm25", 10);
         assert_eq!(node.inputs().len(), 1);
         assert_eq!(node.inputs()[0].name, "query");
-        // Trois sorties : les résultats, ce que le moteur a dit d'eux, et le
-        // statut de la branche (repli par branche, 5 octobre 2026).
-        assert_eq!(node.outputs().len(), 3);
+        // Quatre sorties : les résultats, ce que le moteur a dit d'eux, le
+        // statut de la branche (repli par branche, 5 octobre 2026), et ce que
+        // la requête entière a trouvé (`exact`, 25 octobre 2026).
+        assert_eq!(node.outputs().len(), 4);
         assert_eq!(node.outputs()[0].name, "results");
         assert_eq!(node.outputs()[1].name, "meta");
         assert_eq!(node.outputs()[2].name, "status");
+        assert_eq!(node.outputs()[3].name, "exact");
         assert_eq!(node.node_type(), "BM25SearchNode");
     }
 
@@ -3180,9 +3182,9 @@ mod tests {
         assert_eq!(dits("c"), vec![("vector".to_string(), 0.5, 2)]);
     }
 
-    /// **Une étiquette dominante passe devant** (25 octobre 2026) : `c`, trouvé
-    /// par la seule requête entière, passe devant `b`, que deux signaux voient
-    /// et que la RRF aurait mis devant ; puis l'ordre de la fusion.
+    /// **Une étiquette dominante passe devant** (25 octobre 2026) : `c` et `d`,
+    /// trouvés par la seule requête entière, passent devant `b`, que deux
+    /// signaux voient, dans leur rang ; puis l'ordre de la fusion.
     #[test]
     fn a_dominant_label_goes_first() {
         let mut ctx = NodeContext::new();
@@ -3193,13 +3195,6 @@ mod tests {
         let ordre: Vec<String> = results_of(&mut ctx).into_iter().map(|r| r.uuid).collect();
         assert_eq!(ordre, vec!["c", "d", "b", "a"]);
 
-        // Sans dominante, la RRF met b (deux signaux) devant c (un seul).
-        let mut ctx = NodeContext::new();
-        ctx.set_input("vector", PortValue::new(vec![make_unified_result("b", 0.9), make_unified_result("a", 0.8)]));
-        ctx.set_input("bm25", PortValue::new(vec![make_unified_result("b", 3.0)]));
-        ctx.set_input("signals", PortValue::new(vec![tagged("c", 5.0, "bm25_exact"), tagged("d", 4.0, "bm25_exact")]));
-        FuseResultsNode::new("fuse").execute(&mut ctx).unwrap();
-        assert_eq!(results_of(&mut ctx).first().map(|r| r.uuid.clone()), Some("b".to_string()));
     }
 
     fn tagged(uuid: &str, score: f64, signal: &str) -> UnifiedResult {
