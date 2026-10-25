@@ -50,8 +50,10 @@ SERVEURS = {
     "cpp": (["clangd", "--compile-commands-dir={cc}", "--background-index=false", "--log=error", "-j=6",
              "--pch-storage=memory", "--header-insertion=never"], {"": "cpp"}, {}, False),
     "rust": (["rust-analyzer"], {"": "rust"},
-             {"checkOnSave": False, "check": {"command": ""}, "cachePriming": {"enable": False},
-              "cargo": {"buildScripts": {"enable": False}}, "procMacro": {"enable": False}}, True),
+             # Toutes les features : un module sous `cfg(feature = "daemon")` est sinon hors du graphe
+             # des crates, et chaque question y rend un muet (144 sur 300 le 25 octobre 2026).
+             {"checkOnSave": False, "check": {"command": "check"}, "cachePriming": {"enable": False},
+              "cargo": {"features": "all", "buildScripts": {"enable": False}}, "procMacro": {"enable": False}}, True),
     "typescript": (["typescript-language-server", "--stdio"],
                    {".tsx": "typescriptreact", ".jsx": "javascriptreact", ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", "": "typescript"},
                    # Un TypeScript 5 : la 7 (le portage natif) n'a plus de tsserver.js, et le serveur refuse alors
@@ -102,6 +104,11 @@ class Serveur:
         self.p = subprocess.Popen(commande, cwd=racine_projet, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.n = 0
         self.reponses = {}
+        self.options = options
+        # Les travaux annoncés par `$/progress` (l'indexation du projet) : en cours, et le dernier signe.
+        self.en_cours = set()
+        self.progres_vu = False
+        self.dernier_signe = time.time()
         self.cv = threading.Condition()
         threading.Thread(target=self._lire, daemon=True).start()
         uri = f"file://{racine_projet}"
@@ -140,7 +147,31 @@ class Serveur:
             elif "id" in corps and "method" in corps:
                 # Une requête du serveur (workspace/configuration, window/workDoneProgress/create) :
                 # une réponse vide, qu'il n'attende pas.
-                self._envoyer({"jsonrpc": "2.0", "id": corps["id"], "result": [None] * len(corps.get("params", {}).get("items", [])) if corps["method"] == "workspace/configuration" else None})
+                # workspace/configuration reçoit nos options : une réponse nulle ramènerait rust-analyzer
+                # à ses défauts (sans les features).
+                self._envoyer({"jsonrpc": "2.0", "id": corps["id"], "result": [self.options] * len(corps.get("params", {}).get("items", [])) if corps["method"] == "workspace/configuration" else None})
+            elif corps.get("method") == "$/progress":
+                v = corps.get("params", {}).get("value", {})
+                with self.cv:
+                    self.progres_vu = True
+                    self.dernier_signe = time.time()
+                    if v.get("kind") == "begin":
+                        self.en_cours.add(str(corps["params"].get("token")))
+                    elif v.get("kind") == "end":
+                        self.en_cours.discard(str(corps["params"].get("token")))
+                    self.cv.notify_all()
+
+    def attendre_le_repos(self, calme=30, plafond=1800):
+        """Attendre que le serveur ait fini d'indexer : un travail annoncé par `$/progress`, puis aucun en
+        cours depuis `calme` secondes. Un serveur qui n'annonce rien en `calme` secondes est tenu prêt."""
+        t0 = time.time()
+        with self.cv:
+            while time.time() < t0 + plafond:
+                repos = not self.en_cours and time.time() - self.dernier_signe >= calme
+                if repos and (self.progres_vu or time.time() - t0 >= calme):
+                    return time.time() - t0
+                self.cv.wait(2)
+        return None
 
     def appel(self, methode, params, delai=120):
         self.n += 1
@@ -231,6 +262,9 @@ def main():
     for a in echantillon:
         par_fichier[a["de"]].append(a)
     s = Serveur(commande, projet, options)
+    if indexe:
+        attente = s.attendre_le_repos()
+        print(f"{langage} : indexation " + (f"finie en {attente:.0f} s" if attente is not None else "pas finie au plafond (30 min)"), flush=True)
     verdicts = Counter()
     par_marque = defaultdict(Counter)
     t0 = time.time()
