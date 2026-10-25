@@ -572,3 +572,49 @@ fn une_relation_a_proprietes_se_copie_sans_elles() {
     assert_eq!(compte("MATCH (:Fiche)-[r:CITE]->(:Sujet) WHERE r.raison IS NULL AND r.poids IS NULL RETURN count(r)"), CypherValue::Int(250));
     assert_eq!(compte("MATCH (:Fiche)-[r:CITE]->(:Sujet) WHERE r.raison = 'lue' AND r.poids IS NULL RETURN count(r)"), CypherValue::Int(250));
 }
+
+/// **Un drain tombé, puis repris, dit tout ce qu'il a écrit** (ticket « des
+/// écritures ne passent pas par le journal », 19 octobre 2026). Le drain tombe
+/// sur son nœud de liens : les lignes posées par son nœud d'insertion, terminé,
+/// restent en base (rien ne le défait, le point de reprise le garde) et
+/// s'annoncent à la chute. La reprise ne rejoue que les liens, et les annonce.
+/// Avant : la chute jetait le journal, la reprise ne publiait rien.
+#[test]
+#[ignore]
+fn un_drain_tombe_puis_repris_dit_tout_ce_qu_il_a_ecrit() {
+    let (mut cat, mut rx) = catalogue();
+    cat.ingest_entities("Fiche", vec![ligne("f", "x")]).expect("fiche");
+    cat.ingest_entities("Sujet", vec![ligne("s", "x")]).expect("sujet");
+    vider(&mut rx);
+    let (fu, su) = (uuid(&cat, "Fiche", "f"), uuid(&cat, "Sujet", "s"));
+    // Une fiche née dans le drain, et un lien entre deux lignes d'avant. (Un
+    // lien vers la fiche née perd son bout à la reprise : ticket « une reprise
+    // de drain perd les liens vers les lignes nées dans le même drain », son
+    // témoin à lui.)
+    cat.create_jusqu_a("Fiche", ligne("g", "x"), rag3weaver::disponibilite::Disponibilites::AUCUNE)
+        .expect("une fiche en file");
+    cat.link_jusqu_a("ANCRE", fu.as_str(), su.as_str(), BTreeMap::new(), rag3weaver::disponibilite::Disponibilites::AUCUNE)
+        .expect("un lien en file");
+    cat.set_fail_node(Some("links"));
+    let tombe = cat.drain();
+    cat.set_fail_node(None);
+    assert!(tombe.failed > 0, "le drain doit tomber : {tombe:?}");
+    let e = vider(&mut rx);
+    let gu = uuid(&cat, "Fiche", "g");
+    assert!(
+        changes(&e, "created").iter().any(|c| c["uuids"].as_array().is_some_and(|u| u.iter().any(|x| x == gu.as_str()))),
+        "la ligne posée avant la chute s'annonce : {e:?}"
+    );
+    assert!(relations_changees(&e, "ANCRE").is_empty(), "aucun lien n'est posé avant la reprise : {e:?}");
+
+    let execution = cat.check_pending_checkpoints().expect("les reprises")[0].clone();
+    cat.drain_resume(&execution).expect("la reprise");
+    let e = vider(&mut rx);
+    let r = relations_changees(&e, "ANCRE");
+    assert_eq!(r.len(), 1, "la reprise annonce ses liens : {e:?}");
+    assert_eq!(r[0]["count"], 1, "{:?}", r[0]);
+    assert_eq!(r[0]["added"], serde_json::json!([[fu, su]]), "{:?}", r[0]);
+    assert!(changes(&e, "created").is_empty(), "la reprise ne réannonce pas ce que la chute a dit : {e:?}");
+    cat.drain();
+    assert!(vider(&mut rx).is_empty(), "rien ne ressort en retard");
+}
