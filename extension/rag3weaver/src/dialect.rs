@@ -468,8 +468,9 @@ pub trait SchemaDialect: Send + Sync {
 
     /// **Les index vectoriels, vus de la transaction qui lit** (ticket
     /// 2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere) :
-    /// une requête sans paramètre qui rend une ligne par index, trois colonnes
-    /// (table, nom de l'index, l'index se lit-il). `None` quand la lecture
+    /// une requête sans paramètre qui rend une ligne par index, lue par le nom
+    /// de ses colonnes : `table_name`, `index_name`, `extension_loaded`, et
+    /// `state` (l'état de construction) à partir du format 43 du moteur. `None` quand la lecture
     /// dense n'a pas besoin d'index. Elle ne peut échouer ni à l'analyse ni
     /// au binder : une instruction qui échoue condamne la transaction en
     /// lecture que partagent les signaux d'un appel (L6), et la lecture d'un
@@ -1846,7 +1847,7 @@ impl SchemaDialect for Rag3dbDialect {
     /// `RETURN *` : une lib du format 43 ajoute la colonne `state` (l'état de
     /// construction d'un index, le CREATE concurrent du moteur) en dernier,
     /// une lib d'avant ne l'a pas ; nommer la colonne refuserait l'une ou
-    /// l'autre. Les colonnes se lisent par position (index_vectoriel_illisible).
+    /// l'autre. Les colonnes se lisent par leur nom (index_vectoriel_illisible).
     fn vector_index_listing(&self) -> Option<String> {
         Some("CALL SHOW_INDEXES() RETURN *".to_string())
     }
