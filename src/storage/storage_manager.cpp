@@ -208,6 +208,11 @@ bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pag
     const auto relGroupEntries = catalog->getRelGroupEntries(&DUMMY_CHECKPOINT_TRANSACTION);
     CheckpointProfile profile;
     auto nodeMs = 0.0, relMs = 0.0;
+    // V2-2 : les générations que plus personne ne lit partent, dans toutes les tables, qu'elles
+    // changent ou non à ce point de reprise.
+    for (auto& [tableID, table] : tables) {
+        table->retireGenerationsBefore(oldestReaderTS);
+    }
 
     for (const auto entry : nodeTableEntries) {
         if (!tables.contains(entry->getTableID())) {

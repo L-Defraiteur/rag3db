@@ -348,5 +348,9 @@ void RelTableData::reclaimStorage(PageAllocator& pageAllocator) const {
     nodeGroups->reclaimStorage(pageAllocator);
 }
 
+void RelTableData::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    nodeGroups->retireGenerationsBefore(oldestReaderTS);
+}
+
 } // namespace storage
 } // namespace rag3db

@@ -192,6 +192,10 @@ public:
         PageAllocator& pageAllocator) = 0;
     virtual void rollbackCheckpoint() = 0;
     virtual void reclaimStorage(PageAllocator& pageAllocator) const = 0;
+    // V2-2 : retire les générations précédentes des groupes que plus aucune transaction ne
+    // précède (celles dont le point de reprise est au plus tard oldestReaderTS). Appelé au
+    // départ de chaque point de reprise, pour toutes les tables.
+    virtual void retireGenerationsBefore(common::transaction_t /*oldestReaderTS*/) {}
 
     virtual common::row_idx_t getNumTotalRows(const transaction::Transaction* transaction) = 0;
 

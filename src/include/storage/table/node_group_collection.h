@@ -99,6 +99,7 @@ public:
 
     void checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointState& state);
     void reclaimStorage(PageAllocator& pageAllocator) const;
+    void retireGenerationsBefore(common::transaction_t oldestReaderTS);
 
     TableStats getStats() const {
         auto lock = nodeGroups.lock();
