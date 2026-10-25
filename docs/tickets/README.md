@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (38)
+### Ouverts — moteur (39)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une interruption tombée entre deux instructions d'une requête réécrite est perdue](2026-10-25-une-interruption-tombee-entre-deux-instructions-d-une-requete-reecrite-est-perdue.md) | ouvert — pour le cœur C++ ; l'interruption vaudrait pour la requête, pas pour l'instruction | interruption ignorée | oui (CREATE/DROP d'index réécrits, surtout pendant une attente) | oui (arrêt d'un run pendant un CREATE) |
 | [Une instruction qui échoue condamne une transaction en lecture seule](2026-10-25-une-instruction-qui-echoue-condamne-une-transaction-en-lecture-seule.md) | ouvert — pour le cœur C++ (deux formes à trancher) | blocage d'une lecture entière | oui (toute lecture d'outil sous L6) | oui |
 | [Les lignes d'un COPY forcé validé après un CREATE restent hors du graphe](2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md) | ouvert — mesure du balayage dans la fenêtre au calme du banc, puis qui reconstruit et à quel seuil | lenteur | pas aujourd'hui (CREATE et COPY sous Mutex<Catalog>) ; dès (A) | oui (reconstruction) |
 | [La CI de master est rouge depuis le 18 octobre : un `<cassert>` dans geo et le format clang](2026-10-25-la-ci-de-master-est-rouge-depuis-le-18-octobre-cassert-dans-geo-et-format-clang.md) | ouvert — le cassert corrigé sur `ci-cassert-geo` (baf19b9e5, vers master à la fenêtre) ; le formatage attend une fenêtre : `.clang-format-ignore` pour les annexes des docs + un commit de formatage pur par clang-format-18 (la version de la CI n'a pas changé) | aucun run vert du CI Workflow | non (CI) | non |
