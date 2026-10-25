@@ -46,6 +46,15 @@ sous `poste mesure`, la latence d'une recherche à k = 10 pour N = 0, 1 000, 10 
 lignes hors du graphe, à la dimension du produit (768). Ce chiffre dira à partir de quel N la
 reconstruction vaut son coût.
 
+La mesure est écrite, `VectorIndexUpdate.MeasureSearchOverRowsOutsideTheGraph` (banc, 25 octobre).
+Elle n'a encore rien mesuré : à la fenêtre du 25, le COPY des 120 000 vecteurs de dimension 768 a
+rempli le tampon d'1 Gio de la fixture, et le point de reprise manqué a condamné la base. Le moteur
+a refusé proprement tout ce qui a suivi (CREATE, CHECKPOINT, BEGIN READ ONLY). L'assistant du
+témoin, lui, n'a pas lu le refus du BEGIN : il a lu le catalogue sous une transaction nulle,
+d'où un SIGSEGV dans le témoin, pas dans le moteur. Corrigé sur banc-hors-graphe-4 (b032cbfe4) :
+un tampon de 4 Gio, un BEGIN refusé dit par les assistants, et l'arrêt sur une préparation
+manquée. La mesure se rejoue à la prochaine fenêtre calme.
+
 ## La question pour le produit
 
 La règle « un index ne se pense pas » demande que personne n'ait à y penser. Il faut donc dire qui

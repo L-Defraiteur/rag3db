@@ -37,6 +37,14 @@ validation, pendant que les autres écrivent. Elle ne converge pas, parce qu'un 
 ce que vingt produisent, et ses arêtes accumulées remplissent le tampon (CREATE refusé au bout
 de 86 s). Elle est gardée, non commitée, dans les notes de la session.
 
+### Le 25 octobre, à 8 fils (banc, fenêtre calme)
+
+`TwentyWriters.DdlEveryMinute` à 8 fils sur luciepc, de part et d'autre de V2-1c (f92b21d56 et
+cbf0f9975). Le CREATE dure 1 106 s avant et 1 072 s après. Pendant ce temps, 40 attentes
+d'écrivains Doc, 4 de Note et 8 de lecteurs commencent dans ses six premières secondes et ne
+finissent qu'avec lui. V2-1c ne les change pas : il libère les lecteurs du point de reprise, pas du
+rattrapage. Rapport : `extension/rag3weaver/docs/25-octobre-2026-banc/01-fenetre-du-25-octobre.md`.
+
 ## Témoin
 
 À écrire avec (A) : sous vingt écrivains, aucune transaction n'attend plus d'une borne écrite
