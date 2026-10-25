@@ -166,14 +166,31 @@ fn index_vectoriel_illisible(
         Ok(r) => r.rows,
         Err(e) => return Some(Chute::Echec(format!("VectorSearchNode: vector index check failed: {e}"))),
     };
-    let lisible = lignes
+    // Les colonnes de `SHOW_INDEXES() RETURN *` : table_name, index_name,
+    // index_type, property_names, extension_loaded, index_definition, et, à
+    // partir du format 43 du moteur, state. Une lib d'avant n'a pas `state` :
+    // l'index est alors prêt dès qu'il est là, comme avant.
+    let ligne = lignes
         .iter()
-        .find(|l| l.first().and_then(|v| v.as_str()) == Some(table) && l.get(1).and_then(|v| v.as_str()) == Some(index))
-        .map(|l| l.get(2).and_then(|v| v.as_bool()).unwrap_or(true));
+        .find(|l| l.first().and_then(|v| v.as_str()) == Some(table) && l.get(1).and_then(|v| v.as_str()) == Some(index));
+    let lisible = ligne.map(|l| {
+        let chargee = l.get(4).and_then(|v| v.as_bool()).unwrap_or(true);
+        let etat = l.get(6).and_then(|v| v.as_str()).unwrap_or("READY").to_string();
+        (chargee, etat)
+    });
     match lisible {
-        Some(true) => None,
-        Some(false) => Some(Chute::Indisponible(format!(
+        Some((true, etat)) if etat == "READY" => None,
+        Some((false, _)) => Some(Chute::Indisponible(format!(
             "the vector index `{index}` exists but its extension is not loaded — answering from the other signals"
+        ))),
+        // Un CREATE le construit : l'entrée est visible, la recherche dense
+        // serait refusée (« is under construction ») et condamnerait la
+        // transaction que partagent les signaux de l'appel.
+        Some((true, etat)) if etat == "INCOMPLETE" => Some(Chute::Indisponible(format!(
+            "the vector index `{index}` is incomplete and will be rebuilt — answering from the other signals"
+        ))),
+        Some((true, _)) => Some(Chute::Indisponible(format!(
+            "the vector index `{index}` is under construction — answering from the other signals"
         ))),
         None => {
             let cle = format!("vector_index_dropped:{table}:{index}");
