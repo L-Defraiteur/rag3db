@@ -5,7 +5,6 @@
 use super::chat::ChatModel;
 use super::chat_qui_code::{depot_inscrit, hote};
 use super::teammate::{PlanState, Status, STEP_BUDGET};
-use super::DaemonHost;
 use crate::llm::{CallbackLlm, Llm, MockLlm, Turn};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};

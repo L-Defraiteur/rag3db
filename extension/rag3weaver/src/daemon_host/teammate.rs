@@ -69,12 +69,6 @@ pub enum PlanState {
     Obsolete,
 }
 
-impl PlanState {
-    fn closed(self) -> bool {
-        matches!(self, PlanState::Accomplished | PlanState::Obsolete)
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
     pub id: String,
