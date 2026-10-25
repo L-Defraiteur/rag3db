@@ -41,3 +41,17 @@ chantier ou réindex complet ». Le portable est en mode éco : les durées comp
 - 23 h 40 — la page du chat est rendue en Chrome sans tête piloté par CDP, sur l'hôte vivant : en-tête « Chat de
   l'atelier · backends/code », « modèle : google/gemini-3.8-flash », conversation et champ de saisie, console
   sans erreur. Une remarque à everything declarative : le Markdown des réponses s'affiche brut.
+- 23 h 46 — verdict de hotfixs sur la base neuve : 0 écart sur les 18 tables de liens (LOCKS : 506 relations
+  dans chaque sens ; QUERIES 21 806 ; MENTIONS 396 818…). Échange annoncé pour 23 h 55 aux sessions.
+- 23 h 55 — étape 3, l'échange. L'hôte s'arrête proprement (la vivante n'a plus de .wal). L'instantané
+  locks-25-oct est vert (base 1 261 416 448 octets, fts 1 097 029 794, copies identiques), avec RETOUR.sh ;
+  les fichiers d'origine sont déplacés dans instantanes/locks-25-oct/originaux/, rien n'est effacé. La base
+  neuve prend le nom canonique (fichier, .fts, .extensions) ; le manifeste de Lucie est inchangé, et
+  rag3db-neuf.json est renommé en .fait-locks-25-oct.
+- 23 h 55 m 23 s — réveil vert : même binaire a4df1b50, lib 04063ee06, MainPID 3559518, jeton inchangé.
+  35 fichiers en retard à l'ouverture, plus aucun à 23 h 58 ; fts_counts concorde (autant de documents que
+  de lignes dans les quatre entités) ; le journal ne montre aucune erreur. La journée de montre de hotfixs
+  part de là.
+- Pour la pose du matin : f5edfdb6c et 45308bce9 (la première recherche après l'ouverture), 7c7a69578 (vue
+  3), c10dabb71 (vue 4) ; à suivre, le Markdown du chat, les surlignages et « rien de probant ».
+
