@@ -608,10 +608,19 @@ impl DataflowRuntime {
         // Build initial checkpoint if new execution
         let checkpoint = match existing {
             Some(cp) => {
-                // Resume: restore initial_inputs from checkpoint into the graph
+                // Resume: restore initial_inputs from checkpoint into the graph.
+                // D'abord les clés des lignes enregistrées : un lien qui vise
+                // une ligne née dans le même drain n'a que sa clé, et la
+                // retrouve ici (19 octobre 2026).
+                let mut cles = std::collections::HashMap::new();
+                for ports in cp.initial_inputs.values() {
+                    for cpv in ports.values() {
+                        cles.extend(crate::dataflow::checkpoint::correspondances_des_entites(cpv)?);
+                    }
+                }
                 for (node_name, ports) in &cp.initial_inputs {
                     for (port_name, cpv) in ports {
-                        let port_value = port_value_from_checkpoint(cpv.clone()).map_err(|e| {
+                        let port_value = crate::dataflow::checkpoint::port_value_from_checkpoint_avec(cpv.clone(), &cles).map_err(|e| {
                             format!("reprise de « {execution_id} » impossible, l'entrée {node_name}.{port_name} ne se relit pas : {e}")
                         })?;
                         graph

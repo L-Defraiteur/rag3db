@@ -284,3 +284,29 @@ fn le_magasin_cypher_tient_le_contrat() {
     rag3weaver::dataflow::checkpoint_store::verifier_conformite(&store, "cypher")
         .unwrap_or_else(|e| panic!("{e}"));
 }
+
+/// **Une reprise garde les liens vers les lignes nées dans le même drain**
+/// (19 octobre 2026). Le point de reprise enregistre les entrées avant
+/// qu'aucun nœud ne tourne : le lien `WRITTEN_BY` entre deux créations du lot
+/// n'y a que les clés de corrélation de ses bouts. La reprise les rendait en
+/// uuid vide, et le lien disparaissait sans un mot (`checkpoint_fail_and_resume`
+/// comptait les lignes, jamais le lien). Elle les retrouve maintenant par les
+/// lignes du même point de reprise.
+#[test]
+#[ignore]
+fn une_reprise_garde_les_liens_vers_les_lignes_nees_dans_le_drain() {
+    let mut catalog = make_catalog();
+    catalog.initialize().unwrap();
+    let doc_ref = catalog.create("Document", make_doc("Le lien survit")).unwrap();
+    let author_ref = catalog.create("Author", make_author("Alma")).unwrap();
+    catalog.link("WRITTEN_BY", doc_ref, author_ref, BTreeMap::new()).unwrap();
+    catalog.set_fail_node(Some("links"));
+    let tombe = catalog.drain();
+    catalog.set_fail_node(None);
+    assert!(tombe.failed > 0, "le drain tombe sur ses liens");
+    let execution = catalog.check_pending_checkpoints().unwrap()[0].clone();
+    let reprise = catalog.drain_resume(&execution).unwrap();
+    assert_eq!(reprise.failed, 0, "{reprise:?}");
+    let liens = catalog.execute_raw("MATCH (:Document)-[r:WRITTEN_BY]->(:Author) RETURN count(r)").unwrap();
+    assert_eq!(liens.rows[0][0], CypherValue::Int(1), "le lien entre deux lignes nées dans le drain est posé par la reprise");
+}
