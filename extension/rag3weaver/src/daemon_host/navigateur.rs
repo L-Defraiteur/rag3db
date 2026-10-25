@@ -520,6 +520,13 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             "document.querySelector('#reclasser')?.checked && document.querySelector('#vue .avertissements')?.textContent.includes('aucun reranker configuré')",
         ),
         (
+            // La vue des bilans (page 08, vue 6) sur un backend qui ne déclare pas
+            // `bilans` : elle le dit, sans alerte ni erreur.
+            "les bilans",
+            format!("{racine}/ide/code/{id}/bilans"),
+            "document.querySelector('#root #vue #bilans-absents')",
+        ),
+        (
             "la liste des graphes",
             format!("{racine}/ide/code/{id}/dag/"),
             "[...document.querySelectorAll('#vue li a')].some(a => a.textContent === 'usages')",
