@@ -404,7 +404,7 @@ fn jeton_du_cookie(request: &tiny_http::Request) -> Option<String> {
 
 /// **Les vues portées sur la page nouvelle** (page 08) : `/ide/code/<id>/<vue>…`
 /// pour ces vues est servi par le bundle ; les autres, par l'ancienne page.
-const VUES_PORTEES: &[&str] = &["chat", "fichier", "recherche"];
+const VUES_PORTEES: &[&str] = &["chat", "fichier", "recherche", "taches"];
 
 fn vue_portee(path: &str) -> bool {
     let Some(reste) = path.strip_prefix("/ide/code/") else { return false };

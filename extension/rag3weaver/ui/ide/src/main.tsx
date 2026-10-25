@@ -7,6 +7,8 @@ import { dispatchFlux, fetchState, openFlux, route, type FluxStatus, type HostSt
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
 import { Search } from "@/views/Search";
+import { Tasks } from "@/views/Tasks";
+import { TaskReview } from "@/views/TaskReview";
 import { applyTheme, effectiveTheme, storedTheme, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
 
@@ -21,13 +23,13 @@ function App() {
   const [theme, setTheme] = useState<Theme>(storedTheme());
 
   useEffect(() => applyTheme(theme), [theme]);
+  const reloadState = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
   useEffect(() => {
-    const reload = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
-    reload();
+    reloadState();
     return openFlux(dispatchFlux, (s: FluxStatus) => {
       setFlux(s);
       if (s === "ouvert") {
-        reload();
+        reloadState();
         // Les vues relisent leur état à chaque ouverture du flux (le chat : un
         // tour parti avant, à rattacher).
         dispatchFlux({ sujet: "flux", backend: "*", evenement: { kind: "ouvert" } });
@@ -65,7 +67,7 @@ function App() {
             {error}
           </p>
         ) : state ? (
-          <View state={state} />
+          <View state={state} reload={reloadState} />
         ) : (
           <p className="text-muted-foreground">
             <Badge variant="outline">…</Badge> l'état de l'hôte se lit
@@ -78,8 +80,9 @@ function App() {
 
 // La vue que l'URL nomme ; une vue non portée n'arrive pas ici : l'hôte la sert
 // depuis l'ancienne page.
-function View({ state }: { state: HostState }) {
+function View({ state, reload }: { state: HostState; reload: () => Promise<unknown> }) {
   const r = route();
+  if (r.view === "taches" && r.id) return r.rest ? <TaskReview id={r.id} name={r.rest} state={state} /> : <Tasks id={r.id} state={state} onChanged={reload} />;
   if (r.view === "chat" && r.id) return <Chat id={r.id} state={state} />;
   if (r.view === "fichier" && r.id) return <File id={r.id} path={r.rest ?? ""} state={state} />;
   if (r.view === "recherche" && r.id) return <Search id={r.id} state={state} />;
