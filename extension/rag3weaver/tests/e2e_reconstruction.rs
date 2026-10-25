@@ -172,7 +172,7 @@ fn manifeste_compose(dir: &Path, nom: &str, base: &str) -> PathBuf {
                 "config": {"fields": {"titre": {"type": "string", "isTitle": true}, "texte": {"type": "string", "isContent": true}}, "hashsafe": ["titre"], "signals": []},
                 "writes": ecrit},
             "Ref": {"schema": "ref.json",
-                "config": {"fields": {"cle": {"type": "string", "isTitle": true}}, "hashsafe": ["cle"], "signals": []},
+                "config": {"fields": {"cle": {"type": "string", "isContent": true}}, "hashsafe": ["cle"], "signals": []},
                 "writes": ecrit}
         },
         "relations": {"A_NOTE": {"from": "Sujet", "to": "Note"}, "CITE": {"from": "Note", "to": "Ref"}},
