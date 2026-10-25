@@ -92,3 +92,23 @@ Celui-ci ajoute ce que la journée a appris.
 - **`RhaiNode` inline** : `script='…'` avec `input` comme variable d'entrée ; pas de guillemets
   doubles dans un script inline (le `.mmd` les tient), les accents graves de Rhai (`\`main.rs\``)
   passent.
+## L'IDE en React (la nuit)
+
+- **`build.rs` embarque tout `templates/`** : un bundle commité sous `templates/ide/app/` est
+  servi par `builtin_templates::get("ide/app/app.js")` sans rien d'autre. Le bâti Rust n'a pas
+  besoin de node.
+- **esbuild + `@tailwindcss/cli` donnent un bâti déterministe** (`legalComments: none`, pas de
+  source map, pas de date) : `--check` rebâtit dans un dossier temporaire et compare les sha256.
+- **`shadcn add` écrit `import { cn } from "cn"`** quand il ne lit pas l'alias `@/lib/utils`
+  (components.json posé après coup) et ajoute une dépendance `cn` parasite au `package.json` :
+  relire le diff de `package.json` après chaque `shadcn add`.
+- **`git mv -k` se tait quand il ne déplace rien** et rend 0 : un `|| mv` derrière ne se joue
+  jamais. Vérifier le déplacement avant d'effacer le dossier d'origine.
+- **`cargo update -w --offline` échoue dans un worktree sans `RAG3DB_LIB`** (le build script de
+  rag3db-sys) : une dépendance directe déjà dans l'arbre (`sha2 0.10.9`) se pose à la main dans la
+  liste du paquet `rag3weaver` du `Cargo.lock`, par ordre alphabétique.
+- **Les témoins navigateur suivent les repères DOM** : porter une vue, c'est changer ses témoins
+  dans le même commit (les deux témoins du chat lisent maintenant `#model`, `#status`, `#message`,
+  `#send`, `#stop`, `article.message.assistant`, `details.outil`).
+- **Un accueil sans backend n'a pas de `h1`** : un témoin d'entrée qui attend « Backends » rougit
+  sur un hôte nu ; lire le texte « aucun backend » aussi.

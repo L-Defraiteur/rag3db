@@ -1301,7 +1301,8 @@ function vivre(d) {
 // ─── Le routage, et le flux ───────────────────────────────────────────────
 
 function route() {
-  const p = location.pathname.replace(/\/+$/, "") || "/ide";
+  // `/ide/ancienne/…` : l'ancienne page servie à côté de la nouvelle (page 08).
+  const p = location.pathname.replace(/^\/ide\/ancienne(?=\/|$)/, "/ide").replace(/\/+$/, "") || "/ide";
   const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches|chat|bilans)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };

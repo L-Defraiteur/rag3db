@@ -9,7 +9,9 @@
 //! | route | |
 //! |---|---|
 //! | `GET /ide/entrer?jeton=…` | le jeton local posé en cookie (`HttpOnly`, `SameSite=Lax`), puis la page |
-//! | `GET /ide`, `GET /ide/…` | la page (une seule, qui lit son URL) |
+//! | `GET /ide`, `GET /ide/` | la page nouvelle (React, page 08) : le bundle commité `templates/ide/app`, embarqué |
+//! | `GET /ide/app.js`, `GET /ide/app.css` | le bundle, servi d'ici (jamais d'un CDN) |
+//! | `GET /ide/…`, `GET /ide/ancienne/…` | l'ancienne page (une seule, qui lit son URL) : les vues pas encore portées |
 //! | `GET /ide/page.js` | le code de la page, en fichier (lisible par les outils de code, comme le reste) |
 //! | `GET /ide/graphe?backend=<id>&tool=…` | le graphe d'un outil (ou `reaction=`, `component=`), en JSON |
 //! | `GET /ide/reactions?backend=<id>` | les réactions du backend, ses runs, l'état de ses montres |
@@ -400,6 +402,32 @@ fn jeton_du_cookie(request: &tiny_http::Request) -> Option<String> {
         .map(|(_, v)| v.to_string())
 }
 
+/// **Les vues portées sur la page nouvelle** (page 08) : `/ide/code/<id>/<vue>…`
+/// pour ces vues est servi par le bundle ; les autres, par l'ancienne page.
+const VUES_PORTEES: &[&str] = &["chat"];
+
+fn vue_portee(path: &str) -> bool {
+    let Some(reste) = path.strip_prefix("/ide/code/") else { return false };
+    let mut parts = reste.split('/').filter(|s| !s.is_empty());
+    let _id = parts.next();
+    parts.next().is_some_and(|vue| VUES_PORTEES.contains(&vue))
+}
+
+/// Un fichier du bundle de l'IDE, embarqué (`templates/ide/app/<nom>`) ; absent,
+/// un bâti sans `scripts/ide_bundle.sh` : la réponse le dit.
+fn bundle(nom: &str) -> Vec<u8> {
+    crate::builtin_templates::get(&format!("ide/app/{nom}"))
+        .map(<[u8]>::to_vec)
+        .unwrap_or_else(|| format!("/* le bundle de l'IDE n'est pas embarqué : scripts/ide_bundle.sh ({nom}) */").into_bytes())
+}
+
+fn reponse_octets(statut: u16, type_: &str, corps: Vec<u8>) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
+    tiny_http::Response::from_data(corps)
+        .with_status_code(statut)
+        .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], type_.as_bytes()).expect("en-tête littéral"))
+        .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..]).expect("en-tête littéral"))
+}
+
 fn reponse(statut: u16, type_: &str, corps: String) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
     tiny_http::Response::from_string(corps)
         .with_status_code(statut)
@@ -453,6 +481,22 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let depuis = entete(&request, "Last-Event-ID").map(str::to_string).or_else(|| param("depuis")).and_then(|v| v.trim().parse::<u64>().ok());
             let ecrivain = request.into_writer();
             host.ide_flux().abonner(ecrivain, sujets, depuis);
+        }
+        // **La page nouvelle** (page 08 du 25 octobre 2026) : le bundle React commité
+        // sous templates/ide/app, embarqué avec les gabarits et servi d'ici — jamais
+        // d'un CDN. L'accueil est porté ; une vue qui ne l'est pas encore est servie
+        // par l'ancienne page, et `/ide/ancienne/…` la donne toujours.
+        ("GET", "/ide/app.js") => {
+            let _ = request.respond(reponse_octets(200, "text/javascript; charset=utf-8", bundle("app.js")));
+        }
+        ("GET", "/ide/app.css") => {
+            let _ = request.respond(reponse_octets(200, "text/css; charset=utf-8", bundle("app.css")));
+        }
+        ("GET", "/ide") | ("GET", "/ide/") => {
+            let _ = request.respond(reponse_octets(200, "text/html; charset=utf-8", bundle("index.html")));
+        }
+        ("GET", p) if vue_portee(p) => {
+            let _ = request.respond(reponse_octets(200, "text/html; charset=utf-8", bundle("index.html")));
         }
         ("GET", "/ide/page.js") => {
             let _ = request.respond(reponse(200, "text/javascript; charset=utf-8", PAGE_JS.to_string()));
@@ -921,6 +965,28 @@ mod tests {
             reste = &reste[i + 1..];
         }
         assert!(PAGE.contains(r#"<script type="module" src="/ide/page.js"></script>"#));
+    }
+
+    /// **Le bundle servi est celui que `bundle.json` décrit** (page 08) : les
+    /// octets embarqués d'`app.js` et d'`app.css` ont l'empreinte sha256 que le
+    /// bâti a écrite, et les versions épinglées sont celles de `ui/ide/package.json`.
+    /// Un bundle rebâti sans son manifeste, ou un `package.json` monté de version
+    /// sans rebâti, rougit ici — avant même l'étape `ide_bundle.sh --check`.
+    #[test]
+    fn le_bundle_de_l_ide_est_celui_que_son_manifeste_decrit() {
+        use sha2::Digest;
+        let manifeste: Value = serde_json::from_slice(crate::builtin_templates::get("ide/app/bundle.json").expect("templates/ide/app/bundle.json")).unwrap();
+        for nom in ["app.js", "app.css"] {
+            let octets = crate::builtin_templates::get(&format!("ide/app/{nom}")).unwrap_or_else(|| panic!("templates/ide/app/{nom} embarqué"));
+            let empreinte = format!("{:x}", sha2::Sha256::digest(octets));
+            assert_eq!(manifeste["sha256"][nom], empreinte, "{nom} : le bundle servi n'est pas celui du manifeste — relancer scripts/ide_bundle.sh");
+        }
+        let pkg: Value = serde_json::from_str(include_str!("../ui/ide/package.json")).unwrap();
+        for (nom, version) in pkg["dependencies"].as_object().unwrap().iter().chain(pkg["devDependencies"].as_object().unwrap()) {
+            assert_eq!(&manifeste["versions"][nom], version, "{nom} : package.json a bougé sans rebâti");
+        }
+        let index = String::from_utf8_lossy(crate::builtin_templates::get("ide/app/index.html").unwrap());
+        assert!(index.contains(r#"<script type="module" src="/ide/app.js"></script>"#) && index.contains(r#"href="/ide/app.css""#), "{index}");
         assert!(PAGE_JS.contains("function route()"), "le code de la page est dans page.js");
         let atelier = include_str!("atelier/page.html");
         assert!(!atelier.contains("<script type=\"module\">"), "du code en ligne dans la page de l'atelier");

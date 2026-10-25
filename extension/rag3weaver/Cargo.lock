@@ -6819,6 +6819,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_norway",
+ "sha2 0.10.9",
  "sparse-vector",
  "swc_common",
  "swc_ecma_ast",
