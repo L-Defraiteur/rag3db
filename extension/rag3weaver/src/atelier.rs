@@ -38,6 +38,8 @@ use std::time::{Duration, SystemTime};
 pub const PREFIX: &str = "/_atelier";
 
 const PAGE: &str = include_str!("atelier/page.html");
+/// Le code de la page, en fichier (`GET /_atelier/page.js`).
+const PAGE_JS: &str = include_str!("atelier/page.js");
 
 const SYSTEM_PROMPT: &str = "You work on a declared backend: its manifest, tool graphs \
 (mermaid), JSON schemas, scripted nodes (TypeScript) and views (HTML templates) are files you \
@@ -325,6 +327,12 @@ impl Atelier {
                 status: 200,
                 content_type: "text/html; charset=utf-8",
                 body: PAGE.to_string(),
+                result: None,
+            },
+            ("GET", "/_atelier/page.js") => RouteResponse {
+                status: 200,
+                content_type: "text/javascript; charset=utf-8",
+                body: PAGE_JS.to_string(),
                 result: None,
             },
             ("GET", "/_atelier/events") => {

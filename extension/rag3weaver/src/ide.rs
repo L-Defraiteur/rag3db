@@ -56,6 +56,9 @@ const TAMPON: usize = 2048;
 const BATTEMENT: std::time::Duration = std::time::Duration::from_secs(15);
 
 const PAGE: &str = include_str!("ide/page.html");
+/// Le code de la page, en fichier (`GET /ide/page.js`) : lisible par un serveur
+/// de langage et par l'index de code, comme le reste du code.
+const PAGE_JS: &str = include_str!("ide/page.js");
 
 /// Un chemin de l'IDE ?
 pub fn est_a_lui(path: &str) -> bool {
@@ -432,6 +435,9 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let ecrivain = request.into_writer();
             host.ide_flux().abonner(ecrivain, sujets, depuis);
         }
+        ("GET", "/ide/page.js") => {
+            let _ = request.respond(reponse(200, "text/javascript; charset=utf-8", PAGE_JS.to_string()));
+        }
         ("GET", "/ide/registre.js") => {
             let _ = request.respond(reponse(200, "text/javascript; charset=utf-8", crate::components::modules::REGISTRE.to_string()));
         }
@@ -768,7 +774,7 @@ mod tests {
                 assert!(attache["bindings"].get(p).is_none(), "{outil} : « {p} » est lié par le manifeste, la page ne peut pas le passer");
             }
         }
-        let appeles: HashSet<String> = PAGE
+        let appeles: HashSet<String> = PAGE_JS
             .split("appeler(id, \"")
             .skip(1)
             .filter_map(|r| r.split('"').next().map(str::to_string))
@@ -777,6 +783,25 @@ mod tests {
         for a in &appeles {
             assert!(outils.contains_key(a), "la page appelle « {a} », absent du bloc outils");
         }
+    }
+
+    /// **La page n'a pas de code en ligne** : ses scripts sont des fichiers
+    /// servis par l'hôte (sauf le bloc `outils`, des données), que les outils de
+    /// code lisent comme le reste. La page charge `/ide/page.js`, et cette route
+    /// le sert avant la page de repli.
+    #[test]
+    fn the_page_code_is_a_served_file() {
+        let mut reste = PAGE;
+        while let Some(i) = reste.find("<script") {
+            let balise = &reste[i..i + reste[i..].find('>').unwrap()];
+            assert!(balise.contains(" src=") || balise.contains("application/json"), "du code en ligne dans la page : {balise}");
+            reste = &reste[i + 1..];
+        }
+        assert!(PAGE.contains(r#"<script type="module" src="/ide/page.js"></script>"#));
+        assert!(PAGE_JS.contains("function route()"), "le code de la page est dans page.js");
+        let atelier = include_str!("atelier/page.html");
+        assert!(!atelier.contains("<script type=\"module\">"), "du code en ligne dans la page de l'atelier");
+        assert!(atelier.contains(r#"<script type="module" src="/_atelier/page.js"></script>"#));
     }
 
     /// **Les routes de l'aperçu** (lot 3) : la page pour un composant ; ses
