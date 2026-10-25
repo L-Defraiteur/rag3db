@@ -892,3 +892,43 @@ fn search_code_reclasse_a_la_demande_et_dit_quand_il_ne_peut_pas() {
     // Sans demande, le relecteur configuré ne fait rien.
     assert_eq!(noms(&cherche(json!({}))), noms(&sans), "à la demande seulement");
 }
+
+/// **Une recherche dense bornée à un chemin tient sous l'instantané** (25 octobre 2026,
+/// le soir : `search_code « cpu_count », scope benchmark/` tombait sur l'hôte de Lucie).
+/// Un `scope` filtre la branche dense par une projection de graphe
+/// (`PROJECT_GRAPH_CYPHER`), une écriture pour le moteur : sous la transaction en
+/// lecture seule que partagent les signaux d'un appel (L6), elle était refusée
+/// (« Can not execute a write query inside a read-only transaction »), et la recherche
+/// entière avec. Ici, par `call_in` comme une session de l'hôte, sur un vrai index
+/// vectoriel : la recherche bornée répond par ses deux signaux, sans erreur.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn une_recherche_dense_bornee_a_un_chemin_tient_sous_l_instantane() {
+    use serde_json::{json, Value};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), "dense-borne");
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let cherche = |scope: &str| backend.call_in(&cellule, "search_code", json!({"query": "alpha", "options": {}, "mode": "indexed", "scope": scope}));
+    // Les vecteurs suivent l'index : on attend que le dense réponde sans borne.
+    let debut = std::time::Instant::now();
+    loop {
+        let r = cherche("").expect("la recherche sans borne").to_string();
+        if !r.contains("dense signal") || debut.elapsed() > std::time::Duration::from_secs(120) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+
+    let borne = cherche("src/").unwrap_or_else(|e| panic!("la recherche bornée à src/ tombe : {e}"));
+    let texte = borne.to_string();
+    assert!(!texte.contains("read-only transaction"), "la projection passe sous l'instantané : {texte}");
+    assert!(!texte.contains("dense signal"), "le dense répond, borné : {texte}");
+    let alpha: Option<&Value> = borne["result"].as_array().and_then(|rs| rs.iter().find(|x| x["data"]["name"] == "alpha"));
+    let alpha = alpha.unwrap_or_else(|| panic!("alpha est trouvé dans src/ : {texte}"));
+    assert!(
+        alpha["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "vector")),
+        "le signal dense a trouvé alpha : {alpha}"
+    );
+}
