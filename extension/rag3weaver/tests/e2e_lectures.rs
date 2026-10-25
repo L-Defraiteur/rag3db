@@ -661,11 +661,17 @@ impl rag3weaver::embedder::Embedder for GraniteDeHachage {
 /// (`GraniteDeHachage`), indexé jusqu'à la ligne de fin de son journal.
 #[cfg(feature = "code")]
 fn code_indexe_avec_vecteurs(dir: &std::path::Path, nom: &str) -> rag3weaver::backend::Backend {
+    code_indexe_avec_vecteurs_sur(dir, nom, None)
+}
+
+/// Le même, sur une copie de `depot` au lieu du petit dépôt.
+#[cfg(feature = "code")]
+fn code_indexe_avec_vecteurs_sur(dir: &std::path::Path, nom: &str, depot: Option<&std::path::Path>) -> rag3weaver::backend::Backend {
     use rag3weaver::backend::PreparedBackend;
     use serde_json::json;
     use std::time::{Duration, Instant};
 
-    let prepared = PreparedBackend::load(&manifeste_code(dir, nom)).expect("le manifeste charge");
+    let prepared = PreparedBackend::load(&manifeste_code_sur(dir, nom, depot)).expect("le manifeste charge");
     let base = prepared.path(&prepared.manifest.database);
     let backend = prepared
         .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
@@ -959,4 +965,49 @@ fn une_recherche_dense_bornee_a_un_chemin_tient_sous_l_instantane() {
         alpha["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "vector")),
         "le signal dense a trouvé alpha : {alpha}"
     );
+}
+
+/// **La requête entière passe devant les mots** (Lucie, 25 octobre 2026 : « je prends un bout
+/// d'une recherche précédente, je recherche, et je retrouve des trucs moins relevants que le truc
+/// que j'avais exactement visu »). Un document contient « Vue d'ensemble » ; des morceaux courts
+/// ne contiennent que « vue » ou « ensemble ». Avant : le plein texte cherchait les mots un à un
+/// (un OU de sous-chaînes), et le morceau le plus court gagnait. Après : lucivy reçoit la requête
+/// entière, comme la démo WASM, et ce qu'elle trouve (`bm25_exact`) domine la fusion. Avec
+/// l'apostrophe droite comme avec la typographique.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn la_requete_entiere_passe_devant_les_mots() {
+    use serde_json::json;
+
+    let depot = tempfile::tempdir().unwrap();
+    let ecrire = |chemin: &str, texte: &str| {
+        let p = depot.path().join(chemin);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, texte).unwrap();
+    };
+    ecrire("doc/architecture.md", "# Architecture\n\n## Vue d'ensemble\n\nLe moteur range les documents et les relie entre eux.\n");
+    ecrire("vues.rs", "pub fn vues() -> Vec<u8> {\n    let vues = vec![];\n    vues\n}\n");
+    ecrire("vue.rs", "pub fn vue() -> u32 {\n    1\n}\n");
+    ecrire("ensemble.rs", "pub fn ensemble() -> u32 {\n    7\n}\n");
+    ecrire("revue.rs", "pub fn revue_de_vue() -> u32 {\n    vue_large() + 2\n}\n");
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "requete-entiere", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    for requete in ["Vue d'ensemble", "Vue d’ensemble"] {
+        let r = backend
+            .call_in(&cellule, "search_code", json!({"query": requete, "options": {"limit": 10}, "mode": "indexed"}))
+            .unwrap_or_else(|e| panic!("« {requete} » : {e}"));
+        let premier = &r["result"][0];
+        assert_eq!(
+            premier["data"]["file_path"].as_str(),
+            Some("src/doc/architecture.md"),
+            "« {requete} » : le document qui contient la phrase passe premier : {r}"
+        );
+        assert!(
+            premier["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "bm25_exact" && x["rank"] == 1)),
+            "« {requete} » : trouvé par la requête entière, au rang 1 : {premier}"
+        );
+    }
 }
