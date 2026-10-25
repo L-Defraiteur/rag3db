@@ -260,7 +260,8 @@ fn selon_le_message() -> ChatModel {
 /// le lien vers la proposition qu'il a faite, puis sa réponse ; la proposition
 /// est dans la vue des propositions, rien n'est écrit. Un second tour, lent :
 /// Arrêter le coupe par le même chemin que tout run, et la page dit « arrêté
-/// dans l'IDE ». La console reste vide.
+/// dans l'IDE ». Un troisième, envoyé flux fermé : la relecture de l'ouverture
+/// du flux rend Arrêter à la page. La console reste vide.
 #[cfg(unix)]
 #[test]
 fn le_chat_se_mene_et_s_arrete_dans_la_page() {
@@ -320,6 +321,17 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     n.attendre("!document.querySelector('#chat-arreter').hidden && document.querySelector('.tour.en-cours pre')?.textContent.includes('encore')", "le tour lent, en cours, ses jetons dans la bulle");
     n.evaluer("document.querySelector('#chat-arreter').click()");
     n.attendre("document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden", "le tour arrêté dans l'IDE");
+
+    // Un tour envoyé flux fermé : la page n'a jamais son RunStarted. À
+    // l'ouverture du flux (son onopen, appelé jusqu'à ce que l'hôte ait le run
+    // en vol), la page relit l'état du chat, et Arrêter apparaît quand même.
+    n.evaluer("window.__ide.flux.close(); document.querySelector('#chat-message').value = 'parle, lentement, sans flux'; document.querySelector('#chat-envoyer').click()");
+    n.attendre(
+        "(window.__ide.flux.onopen(), !document.querySelector('#chat-arreter').hidden && document.querySelector('#chat-note')?.textContent === \"l'agent travaille…\")",
+        "le tour parti flux fermé, Arrêter rendu par la relecture",
+    );
+    n.evaluer("document.querySelector('#chat-arreter').click()");
+    n.attendre("document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden", "le tour parti flux fermé, arrêté dans l'IDE");
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
 
     drop(n);
