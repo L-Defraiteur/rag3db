@@ -95,6 +95,11 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Les surlignages de la recherche, par source (page 08, vue 4). */
+mark.surligne { background: color-mix(in oklch, var(--primary) 25%, transparent); color: inherit; border-radius: 2px; }
+mark.surligne[data-source="sparse"] { background: color-mix(in oklch, var(--ring) 30%, transparent); }
+mark.surligne[data-source="query_words"] { background: transparent; text-decoration: underline dotted; }
+
 @layer base {
   * { @apply border-border outline-ring/50; }
   body { @apply bg-background text-foreground; }
