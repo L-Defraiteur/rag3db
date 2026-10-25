@@ -111,6 +111,7 @@ public:
     uint64_t getSizeOnDisk() const override;
     uint64_t getSizeOnDiskInMemoryStats() const override;
     void reclaimStorage(PageAllocator& pageAllocator) override;
+    void retireStorage(PageAllocator& pageAllocator) override;
 
 protected:
     void copyListValues(const common::list_entry_t& entry, common::ValueVector* dataVector);

@@ -57,19 +57,6 @@ ChunkedNodeGroup::ChunkedNodeGroup(std::vector<std::unique_ptr<ColumnChunk>> chu
     }
 }
 
-// Les colonnes gardées restent à leur numéro ; les autres (supprimées) deviennent des trous, et
-// restent dans base pour que reclaimStorage rende leurs pages.
-ChunkedNodeGroup::ChunkedNodeGroup(ChunkedNodeGroup& base,
-    const std::vector<column_id_t>& keptColumns)
-    : format{base.format}, residencyState{base.residencyState}, startRowIdx{base.startRowIdx},
-      capacity{base.capacity}, numRows{base.numRows.load()} {
-    chunks.resize(base.getNumColumns());
-    for (const auto columnID : keptColumns) {
-        KU_ASSERT(columnID < base.getNumColumns() && base.hasColumnChunk(columnID));
-        chunks[columnID] = base.moveColumnChunk(columnID);
-    }
-}
-
 ChunkedNodeGroup::ChunkedNodeGroup(InMemChunkedNodeGroup& base,
     const std::vector<column_id_t>& selectedColumns, NodeGroupDataFormat format)
     : format{format}, residencyState{ResidencyState::IN_MEMORY}, startRowIdx{base.getStartRowIdx()},
@@ -645,6 +632,14 @@ void ChunkedNodeGroup::reclaimStorage(PageAllocator& pageAllocator) const {
     for (auto& columnChunk : chunks) {
         if (columnChunk) {
             columnChunk->reclaimStorage(pageAllocator);
+        }
+    }
+}
+
+void ChunkedNodeGroup::retireStorage(PageAllocator& pageAllocator) const {
+    for (auto& columnChunk : chunks) {
+        if (columnChunk) {
+            columnChunk->retireStorage(pageAllocator);
         }
     }
 }

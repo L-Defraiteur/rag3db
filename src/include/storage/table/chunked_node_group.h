@@ -130,8 +130,6 @@ public:
     ChunkedNodeGroup(InMemChunkedNodeGroup& base,
         const std::vector<common::column_id_t>& selectedColumns,
         NodeGroupDataFormat format = NodeGroupDataFormat::REGULAR);
-    ChunkedNodeGroup(ChunkedNodeGroup& base,
-        const std::vector<common::column_id_t>& selectedColumns);
     ChunkedNodeGroup(MemoryManager& mm, ChunkedNodeGroup& base,
         std::span<const common::LogicalType> columnTypes,
         std::span<const common::column_id_t> baseColumnIDs);
@@ -275,6 +273,8 @@ public:
     void rollbackDelete(common::row_idx_t startRow, common::row_idx_t numRows_,
         common::transaction_t commitTS);
     virtual void reclaimStorage(PageAllocator& pageAllocator) const;
+    // Les pages de ce bloc reviennent à la mort de ses segments (voir ColumnChunkData).
+    virtual void retireStorage(PageAllocator& pageAllocator) const;
 
     uint64_t getEstimatedMemoryUsage() const;
 

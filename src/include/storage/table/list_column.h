@@ -64,9 +64,6 @@ public:
     Column* getSizeColumn() const { return sizeColumn.get(); }
     Column* getDataColumn() const { return dataColumn.get(); }
 
-    std::vector<std::unique_ptr<ColumnChunkData>> checkpointSegment(
-        ColumnCheckpointState&& checkpointState, PageAllocator& pageAllocator,
-        bool canSplitSegment = true) const override;
 
 protected:
     void scanSegment(const SegmentState& state, common::offset_t startOffsetInChunk,

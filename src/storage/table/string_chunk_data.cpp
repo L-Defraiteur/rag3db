@@ -271,6 +271,13 @@ void StringChunkData::reclaimStorage(PageAllocator& pageAllocator) {
     dictionaryChunk->getStringDataChunk()->reclaimStorage(pageAllocator);
 }
 
+void StringChunkData::retireStorage(PageAllocator& pageAllocator) {
+    ColumnChunkData::retireStorage(pageAllocator);
+    indexColumnChunk->retireStorage(pageAllocator);
+    dictionaryChunk->getOffsetChunk()->retireStorage(pageAllocator);
+    dictionaryChunk->getStringDataChunk()->retireStorage(pageAllocator);
+}
+
 uint64_t StringChunkData::getSizeOnDisk() const {
     return ColumnChunkData::getSizeOnDisk() + indexColumnChunk->getSizeOnDisk() +
            dictionaryChunk->getOffsetChunk()->getSizeOnDisk() +
