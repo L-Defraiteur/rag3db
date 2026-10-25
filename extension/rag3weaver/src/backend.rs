@@ -2578,7 +2578,7 @@ impl Backend {
                 for m in &composes {
                     // Une annonce de liens tronquée ne nomme pas tout ce qu'elle
                     // touche : les fichiers de l'entité se régénèrent tous.
-                    if evenements.iter().any(|e| m.lit_une_annonce_tronquee(e)) {
+                    if evenements.iter().any(|e| m.lit_une_annonce_tronquee(&cat, e)) {
                         if let Err(e) = m.regenerer_tout(&cat) {
                             eprintln!("[miroir] {} : {e}", m.entite);
                         }
@@ -3822,9 +3822,25 @@ impl Backend {
         let mut rapport = serde_json::Map::new();
         let mut miroirs: Vec<(&String, &Arc<crate::fichiers_entite::Miroir>)> = prepared.miroirs.iter().collect();
         miroirs.sort_by(|a, b| a.0.cmp(b.0));
-        for (entite, m) in miroirs {
+        // Les fichiers composés d'abord lus : leurs blocs machine portent des
+        // lignes de plusieurs entités, posées après celles des fichiers propres.
+        let mut du_bloc: BTreeMap<(String, String), crate::fichiers_entite::LigneDuBloc> = BTreeMap::new();
+        let mut sans_bloc: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+        for (entite, m) in miroirs.iter().filter(|(_, m)| m.est_compose()) {
+            for rel in m.lister()? {
+                match m.lire(&rel).and_then(|t| crate::fichiers_entite::Miroir::relire_le_bloc(&t)) {
+                    Ok(Some(lignes)) => {
+                        for l in lignes {
+                            du_bloc.entry((l.entity.clone(), l.uuid.clone())).or_insert(l);
+                        }
+                    }
+                    Ok(None) => sans_bloc.entry((*entite).clone()).or_default().push(json!({"file": rel, "reason": "no machine block (written before M3b, or by hand): its rows cannot be read back"})),
+                    Err(e) => sans_bloc.entry((*entite).clone()).or_default().push(json!({"file": rel, "reason": e})),
+                }
+            }
+        }
+        for (entite, m) in miroirs.iter().copied() {
             if m.est_compose() {
-                rapport.insert(entite.clone(), json!({"composite": true}));
                 continue;
             }
             let (mut restaurees, mut deja_la) = (0usize, 0usize);
@@ -3854,6 +3870,83 @@ impl Backend {
                 json!({"restored": restaurees, "already_there": deja_la, "refused": refus, "fields_not_carried": m.champs_non_portes()}),
             );
         }
+        // **Les lignes des blocs machine** (lot M3b), par entité, puis leurs liens.
+        let mut par_entite: BTreeMap<String, (usize, usize, Vec<Value>)> = BTreeMap::new();
+        for ((entite, uuid), l) in &du_bloc {
+            let def = GraphDefinition {
+                nodes: vec![crate::dataflow::checkpoint::NodeDef {
+                    name: "rebuild".into(),
+                    node_type: "EntityRecordNode".into(),
+                    config: json!({"entity": entite, "action": "restore", "record": l.fields, "uuid": uuid}),
+                }],
+                edges: vec![],
+            };
+            let compte = par_entite.entry(entite.clone()).or_default();
+            match self.execute_plan_avec(&prepared, ("rebuild", "record"), &def, &[], &policy, None, true) {
+                Ok(_) => compte.0 += 1,
+                Err(e) if e.contains("the row already exists") => compte.1 += 1,
+                Err(e) => compte.2.push(json!({"uuid": uuid, "reason": e})),
+            }
+        }
+        let mut poses = 0usize;
+        let mut vers_absentes: BTreeMap<String, usize> = BTreeMap::new();
+        let mut liens_refuses = Vec::new();
+        {
+            let mut cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+            let mut vus = std::collections::BTreeSet::new();
+            for l in du_bloc.values() {
+                for (relation, liens) in &l.links {
+                    let Some(def) = cat.get_relation_def(relation).cloned() else {
+                        liens_refuses.push(json!({"relation": relation, "reason": "relation not declared"}));
+                        continue;
+                    };
+                    for lien in liens {
+                        if !vus.insert((relation.clone(), l.uuid.clone(), lien.to.clone())) {
+                            continue;
+                        }
+                        // Une cible qui n'est ni dans un fichier ni semée est
+                        // perdue avec la base : comptée et dite, jamais devinée.
+                        if cat.get(&def.to, &lien.to).map_err(|e| e.to_string())?.is_none() {
+                            *vers_absentes.entry(def.to.clone()).or_default() += 1;
+                            continue;
+                        }
+                        if cat.get(&l.entity, &l.uuid).map_err(|e| e.to_string())?.is_none() {
+                            *vers_absentes.entry(l.entity.clone()).or_default() += 1;
+                            continue;
+                        }
+                        let props: BTreeMap<String, crate::connection::CypherValue> =
+                            serde_json::from_value(Value::Object(lien.props.clone())).map_err(|e| e.to_string())?;
+                        match cat.link(relation, l.uuid.as_str(), lien.to.as_str(), props) {
+                            Ok(_) => poses += 1,
+                            Err(e) => liens_refuses.push(json!({"relation": relation, "from": l.uuid, "to": lien.to, "reason": e.to_string()})),
+                        }
+                    }
+                }
+            }
+            cat.drain();
+        }
+        for (entite, refus) in &sans_bloc {
+            let r = rapport.entry(entite.clone()).or_insert_with(|| json!({}));
+            r["refused"] = json!(refus);
+        }
+        for (entite, (restaurees, deja_la, refus)) in par_entite {
+            let r = rapport.entry(entite.clone()).or_insert_with(|| json!({"restored": 0, "already_there": 0, "refused": []}));
+            r["restored"] = json!(r["restored"].as_u64().unwrap_or(0) as usize + restaurees);
+            r["already_there"] = json!(r["already_there"].as_u64().unwrap_or(0) as usize + deja_la);
+            let mut tous: Vec<Value> = r["refused"].as_array().cloned().unwrap_or_default();
+            tous.extend(refus);
+            r["refused"] = json!(tous);
+            r["from_machine_blocks"] = json!(true);
+        }
+        for (entite, m) in miroirs.iter().filter(|(_, m)| m.est_compose()) {
+            let r = rapport.entry((*entite).clone()).or_insert_with(|| json!({}));
+            r["composite"] = json!(true);
+            let _ = m;
+        }
+        rapport.insert(
+            "links".into(),
+            json!({"posed": poses, "to_absent_rows": vers_absentes, "refused": liens_refuses}),
+        );
         Ok(Value::Object(rapport))
     }
 

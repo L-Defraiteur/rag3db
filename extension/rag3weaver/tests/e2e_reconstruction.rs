@@ -121,3 +121,123 @@ fn un_champ_que_les_fichiers_ne_portent_pas_est_dit() {
     assert_eq!(rapport["Note"]["restored"], 1, "{rapport}");
     assert_eq!(rapport["Note"]["fields_not_carried"], json!(["etiquette"]), "le champ perdu se dit : {rapport}");
 }
+
+// ── M3b : les fichiers composés, par leur bloc machine ─────────────────────
+
+fn schema(dir: &Path, nom: &str, champs: &[&str]) {
+    let mut props = serde_json::Map::new();
+    for c in champs {
+        props.insert(c.to_string(), json!({"type": "string", "minLength": 1}));
+    }
+    for c in ["revision", "created_at", "updated_at"] {
+        props.insert(c.into(), json!({"type": "integer"}));
+    }
+    let mut requis: Vec<&str> = champs.to_vec();
+    requis.extend(["revision", "created_at", "updated_at"]);
+    std::fs::write(
+        dir.join(nom),
+        serde_json::to_vec_pretty(&json!({"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+            "additionalProperties": false, "required": requis, "properties": props}))
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+/// Un sujet à fichier composé qui lit ses notes (`A_NOTE`) ; les notes n'ont
+/// pas de fichier à elles ; une note cite une Ref, sans fichier non plus.
+fn manifeste_compose(dir: &Path, nom: &str, base: &str) -> PathBuf {
+    schema(dir, "sujet.json", &["name", "about"]);
+    schema(dir, "note.json", &["titre", "texte"]);
+    schema(dir, "ref.json", &["cle"]);
+    std::fs::write(
+        dir.join("sujet.md.jinja"),
+        "# {{ record.name }}\n\n{{ record.about }}\n\n## Notes\n{% for n in related.notes %}\n- {{ n.titre }} : {{ n.texte }}\n{% endfor %}\n",
+    )
+    .unwrap();
+    let tpl = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    let put = tpl.join("backends/notebook/graphs/put.mmd");
+    let lien = tpl.join("tools/link.mmd");
+    let ecrit = json!({"created_at": "created_at", "updated_at": "updated_at", "revision": "revision"});
+    let m = json!({
+        "version": 1, "name": "compose", "database": base, "files_root": "fichiers",
+        "embeddings": {"address": "127.0.0.1:9", "model": "none", "dimensions": 8},
+        "vector_extension": crate::common::vector_extension(),
+        "entities": {
+            "Sujet": {"schema": "sujet.json",
+                "config": {"fields": {"name": {"type": "string", "isTitle": true}, "about": {"type": "string", "isContent": true}}, "hashsafe": ["name"], "signals": []},
+                "writes": ecrit,
+                "files": {"dir": "sujets", "name": "{uuid}.md", "header": ["name"], "template": "sujet.md.jinja",
+                          "related": {"notes": {"relation": "A_NOTE", "order_by": "titre"}}}},
+            "Note": {"schema": "note.json",
+                "config": {"fields": {"titre": {"type": "string", "isTitle": true}, "texte": {"type": "string", "isContent": true}}, "hashsafe": ["titre"], "signals": []},
+                "writes": ecrit},
+            "Ref": {"schema": "ref.json",
+                "config": {"fields": {"cle": {"type": "string", "isTitle": true}}, "hashsafe": ["cle"], "signals": []},
+                "writes": ecrit}
+        },
+        "relations": {"A_NOTE": {"from": "Sujet", "to": "Note"}, "CITE": {"from": "Note", "to": "Ref"}},
+        "tools": {
+            "put_sujet": {"graph": put, "bindings": {"entity": "Sujet"}, "input_payloads": {"record": {"entity": "Sujet", "view": "editable"}}},
+            "put_note": {"graph": put, "bindings": {"entity": "Note"}, "input_payloads": {"record": {"entity": "Note", "view": "editable"}}},
+            "put_ref": {"graph": put, "bindings": {"entity": "Ref"}, "input_payloads": {"record": {"entity": "Ref", "view": "editable"}}},
+            "noter": {"graph": lien, "bindings": {"relation": "A_NOTE"}},
+            "citer": {"graph": lien, "bindings": {"relation": "CITE"}}
+        }
+    });
+    let chemin = dir.join(nom);
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    chemin
+}
+
+fn requete(b: &Backend, q: &str) -> Vec<Vec<CypherValue>> {
+    b.catalog.lock().unwrap().execute_raw(q).unwrap_or_else(|e| panic!("{q} : {e}")).rows
+}
+
+#[test]
+#[ignore]
+fn les_fiches_d_une_base_perdue_reviennent_par_leur_bloc_machine_et_un_lien_vers_une_ligne_sans_fichier_se_compte() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let vivante = ouvrir(&manifeste_compose(dir.path(), "backend.json", "base.rag3db"));
+    let sujet = vivante.call("put_sujet", json!({"record": {"name": "Le WAL", "about": "La reprise, --> et & dedans."}})).expect("le sujet")["result"]["uuid"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    vivante.call("put_note", json!({"record": {"titre": "rejeu", "texte": "en entier"}})).expect("une note");
+    vivante.call("put_note", json!({"record": {"titre": "tampon", "texte": "les pages"}})).expect("une note");
+    vivante.call("put_ref", json!({"record": {"cle": "src/storage/wal.cpp"}})).expect("une ref");
+    vivante.call("citer", json!({"links": [{"from": {"titre": "rejeu"}, "to": {"cle": "src/storage/wal.cpp"}}]})).expect("la citation");
+    vivante
+        .call("noter", json!({"links": [{"from": {"name": "Le WAL"}, "to": {"titre": "rejeu"}}, {"from": {"name": "Le WAL"}, "to": {"titre": "tampon"}}]}))
+        .expect("les notes du sujet");
+    // Le fichier composé, réécrit par la réaction de miroir : son bloc porte le
+    // sujet, ses deux notes et la citation.
+    let fichier = dir.path().join("fichiers/sujets").join(format!("{sujet}.md"));
+    let debut = std::time::Instant::now();
+    loop {
+        let texte = std::fs::read_to_string(&fichier).unwrap_or_default();
+        if texte.contains("CITE") && texte.contains("tampon") && texte.contains("rejeu") {
+            assert!(texte.contains(rag3weaver::fichiers_entite::DEBUT_DU_BLOC), "{texte}");
+            break;
+        }
+        assert!(debut.elapsed() < std::time::Duration::from_secs(5), "le bloc machine n'est pas complet après 5 s : {texte}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let sujets = "MATCH (n:Sujet) RETURN n._uuid, n.name, n.about, n.revision, n.created_at, n.updated_at ORDER BY n._uuid";
+    let notes = "MATCH (n:Note) RETURN n._uuid, n.titre, n.texte, n.revision, n.created_at, n.updated_at ORDER BY n._uuid";
+    let a_note = "MATCH (a:Sujet)-[:A_NOTE]->(b:Note) RETURN a._uuid, b._uuid ORDER BY b._uuid";
+    let (s0, n0, l0) = (requete(&vivante, sujets), requete(&vivante, notes), requete(&vivante, a_note));
+    assert_eq!((s0.len(), n0.len(), l0.len()), (1, 2, 2));
+    drop(vivante);
+
+    // La base est perdue : une base neuve, sur les mêmes fichiers.
+    let neuve = ouvrir(&manifeste_compose(dir.path(), "neuve.json", "neuve.rag3db"));
+    let rapport = neuve.rebuild_from_files().expect("la reconstruction");
+    assert_eq!(rapport["Sujet"]["restored"], 1, "{rapport}");
+    assert_eq!(rapport["Note"]["restored"], 2, "{rapport}");
+    assert_eq!(rapport["links"]["posed"], 2, "{rapport}");
+    assert_eq!(rapport["links"]["to_absent_rows"], json!({"Ref": 1}), "la citation vers une Ref sans fichier se compte : {rapport}");
+    assert_eq!(requete(&neuve, sujets), s0, "le sujet revient champ à champ, son texte avec --> et & compris");
+    assert_eq!(requete(&neuve, notes), n0, "les notes reviennent champ à champ, depuis le bloc du sujet");
+    assert_eq!(requete(&neuve, a_note), l0, "les liens du sujet à ses notes sont reposés");
+    assert!(requete(&neuve, "MATCH (r:Ref) RETURN r._uuid").is_empty(), "la Ref, sans fichier, n'est pas devinée");
+}
