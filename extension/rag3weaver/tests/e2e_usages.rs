@@ -208,8 +208,9 @@ fn les_requetes_de_usages_passent_par_l_index() {
 /// - `solo`, seul de son nom, défini dans un en-tête que `run` inclut : lié, « inclusion ».
 /// - deux `helper` homonymes, `run` inclut l'un : aucune arête par le nom, ni vers l'un ni vers l'autre.
 /// - `compute`, déclaré par `calc.h`, défini dans `calc.cpp` : vu par l'en-tête homonyme, « entete ».
-/// - `drop_it`, défini dans `t/ddl.cpp` qui inclut `transformer.h`, appelé depuis `t/transformer.cpp`
-///   qui l'inclut aussi : vu par co-inclusion, « co-inclusion ».
+/// - `drop_it`, défini dans `t/ddl.cpp`, déclaré par `transformer.h`, appelé depuis
+///   `t/transformer.cpp` : la classe éclatée, que l'en-tête d'un autre nom de base ne fait pas voir.
+///   Aucune arête : c'est le ticket de la forme exacte (la règle de co-inclusion, mesurée, est retirée).
 /// - `lone` appelle `solo` sans rien inclure : il s'abstient, et l'abstention se compte.
 /// - une arête Rust du même lot ne porte pas de visibilité.
 #[test]
@@ -246,7 +247,7 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     assert!(aretes.iter().any(|a| a == "run x/solo.h nom inclusion"), "le seul de son nom, inclus : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.contains("helper.h")), "deux homonymes, un seul inclus : aucune arête par le nom : {aretes:#?}");
     assert!(aretes.iter().any(|a| a.starts_with("use_compute z/calc.cpp ") && a.ends_with(" entete")), "la définition vue par son en-tête : {aretes:#?}");
-    assert!(aretes.iter().any(|a| a.starts_with("transform t/ddl.cpp ") && a.ends_with(" co-inclusion")), "la classe éclatée, vue par co-inclusion : {aretes:#?}");
+    assert!(!aretes.iter().any(|a| a.starts_with("transform ")), "la classe éclatée n'est pas vue (le ticket de la forme exacte) : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.starts_with("lone ")), "sans include, l'abstention : {aretes:#?}");
     assert!(aretes.iter().any(|a| a.starts_with("rcall r/lib.rs ") && a.ends_with(" ∅")), "une arête Rust du même lot ne porte pas de visibilité : {aretes:#?}");
     assert!(rapport.abstained_invisible >= 1, "l'abstention se compte : {rapport:?}");
