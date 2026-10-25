@@ -19,7 +19,7 @@ use super::checkpoint::{
 };
 
 use super::graph::DataflowGraph;
-use super::node::{merge_stream_elements, CancelCause, Node, NodeContext};
+use super::node::{plier, CancelCause, Node, NodeContext};
 use super::observe::EdgeTap;
 use super::port::{merge_port_values, PortDef, PortValue};
 use super::runtime::{DataflowEvent, DataflowOutput, DataflowRuntime, PortSnapshot};
@@ -618,6 +618,7 @@ impl DataflowRuntime {
         ctx.set_open_inputs(plan.open_inputs.clone());
         ctx.set_input_kinds(plan.input_kinds.clone());
         let mut missing: Option<String> = None;
+        let mut pli_impossible: Option<String> = None;
         for input in &plan.inputs {
             let port = input.name.to_string();
             let initial = plan.initial.get(&port).cloned();
@@ -645,22 +646,32 @@ impl DataflowRuntime {
                 }
             } else {
                 // Chaque canal est un flux, fusionné en entier ; les canaux d'un
-                // même port se fusionnent comme un fan-in d'aujourd'hui.
-                let per_channel: Vec<PortValue> = complete
-                    .remove(&port)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter_map(|elements| {
-                        let mut it = elements.into_iter();
-                        let first = it.next()?;
-                        Some(it.fold(first, |a, b| merge_stream_elements(a, b).unwrap_or(PortValue::Trigger)))
-                    })
-                    .collect();
-                let merged = per_channel
-                    .into_iter()
-                    .reduce(|a, b| merge_port_values(a, b).unwrap_or(PortValue::Trigger))
-                    .or(initial);
-                if let Some(v) = merged {
+                // même port se fusionnent comme un fan-in d'aujourd'hui. Un pli
+                // impossible fait échouer le nœud en le nommant (il rendait un
+                // Trigger en silence, 25 octobre 2026).
+                let ou = format!("« {} », entrée « {port} »", plan.name);
+                let mut merged: Option<PortValue> = None;
+                for elements in complete.remove(&port).unwrap_or_default() {
+                    let v = match plier(elements, &ou) {
+                        Ok(Some(v)) => v,
+                        Ok(None) => continue,
+                        Err(e) => {
+                            pli_impossible.get_or_insert(e);
+                            continue;
+                        }
+                    };
+                    merged = Some(match merged {
+                        None => v,
+                        Some(a) => match merge_port_values(a, v) {
+                            Ok(m) => m,
+                            Err(e) => {
+                                pli_impossible.get_or_insert(format!("{ou} : deux producteurs ne se fondent pas en une valeur ({e})"));
+                                PortValue::Trigger
+                            }
+                        },
+                    });
+                }
+                if let Some(v) = merged.or(initial) {
                     has_data = true;
                     ctx.set_input(&port, v);
                 }
@@ -671,6 +682,15 @@ impl DataflowRuntime {
                     plan.producers.get(&port).map(|p| p.join(", ")).unwrap_or_else(|| "l'entrée du sous-graphe".into())
                 ));
             }
+        }
+        if let Some(error) = pli_impossible {
+            hub.cancel(CancelCause::Failed { node: plan.worker_name.clone() });
+            if let Some(tx) = &plan.persist {
+                let _ = tx.send(Persist::Failed { node: plan.name.clone(), error: error.clone() });
+            }
+            binding.finish();
+            self.emit(DataflowEvent::NodeFailed { node: plan.name.clone(), error: error.clone() });
+            return Ended::Failed(error);
         }
         if let Some(reason) = missing {
             binding.finish();
