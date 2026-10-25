@@ -1219,6 +1219,9 @@ mod navigateur;
 mod apercu_a_chaud;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sur_un_depot;
+/// L'équipier sur faux modèle (page 07 du 25 octobre 2026).
+#[cfg(all(test, unix, feature = "code"))]
+mod teammate_tests;
 /// Le chat qui code dans une tâche (page 03 du 25 octobre 2026).
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_qui_code;

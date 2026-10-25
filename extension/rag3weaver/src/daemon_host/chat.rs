@@ -222,6 +222,11 @@ impl DaemonHost {
         }))
     }
 
+    /// Le run du tour de chat en cours sur un backend, s'il y en a un.
+    pub(super) fn run_du_chat_en_cours(&self, backend_id: &str) -> Option<String> {
+        self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(backend_id).and_then(|e| e.busy.clone())
+    }
+
     /// **Un tour de chat** sur le backend `backend_id`. Rend le texte, le run,
     /// qui l'a arrêté s'il l'a été, et ce qu'il a consommé.
     pub fn chat_turn(&self, backend_id: &str, message: &str) -> Result<Value, String> {

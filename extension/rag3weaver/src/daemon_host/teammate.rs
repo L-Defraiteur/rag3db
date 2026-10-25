@@ -201,6 +201,14 @@ impl TeammateFiles {
         let clos = self.closed().last().map(|p| p.number).unwrap_or(0);
         vivants.max(clos) + 1
     }
+    /// Combien de lignes de la boîte l'équipier a déjà lues (gardé entre deux
+    /// lancements : une relance ne relit pas les anciennes).
+    pub fn read_cursor(&self) -> usize {
+        std::fs::read_to_string(self.dir.join("mailbox.read")).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0)
+    }
+    pub fn write_cursor(&self, n: usize) {
+        let _ = std::fs::write(self.dir.join("mailbox.read"), n.to_string());
+    }
     /// Les lignes de la boîte, toutes.
     pub fn mailbox(&self) -> Vec<Value> {
         std::fs::read_to_string(self.mailbox_path())
@@ -665,7 +673,7 @@ impl DaemonHost {
         let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication()).ok();
         publish(bus.as_ref(), task, &line);
         if kind == "stop" {
-            if let Some(run) = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(&t.id).and_then(|e| e.busy.clone()) {
+            if let Some(run) = self.run_du_chat_en_cours(&t.id) {
                 let _ = self.stop_run(&t.id, &run, from);
             }
         }
@@ -683,14 +691,14 @@ impl DaemonHost {
                 return false;
             }
         }
-        let (host, parent, task) = (Arc::downgrade(self), parent.to_string(), task.to_string());
+        let (host, parent, task, cle) = (Arc::downgrade(self), parent.to_string(), task.to_string(), key.clone());
         let lance = std::thread::Builder::new().name(format!("teammate-{task}")).spawn(move || {
             if let Some(h) = host.upgrade() {
                 match h.run_teammate(&parent, &task) {
                     Ok(o) => eprintln!("[équipier] {parent}/{task} : {} pas, {}", o.steps.len(), o.ended),
                     Err(e) => eprintln!("[équipier] {parent}/{task} : {e}"),
                 }
-                h.teammates.lock().unwrap_or_else(|p| p.into_inner()).remove(&key);
+                h.teammates.lock().unwrap_or_else(|p| p.into_inner()).remove(&cle);
             }
         });
         if lance.is_err() {
@@ -710,20 +718,32 @@ impl DaemonHost {
     /// arrêt, ou quand l'agent tourne en rond. Sans rien à faire mais des
     /// éléments qui attendent le superviseur, elle attend la boîte.
     pub fn run_teammate(&self, parent: &str, task: &str) -> Result<Outcome, String> {
-        let t = self.tache(parent, task).ok_or_else(|| format!("pas de tâche « {task} » sur {parent}"))?;
         let files = self.teammate_files(parent, task)?;
+        let outcome = self.teammate_loop(parent, task, &files)?;
+        // La fin, dans la boîte : le superviseur la lit sans IDE.
+        let line = files.append("host", "ended", None, &outcome.ended)?;
+        if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {
+            publish(Some(&bus), task, &line);
+        }
+        files.write_cursor(files.mailbox().len());
+        Ok(outcome)
+    }
+
+    fn teammate_loop(&self, parent: &str, task: &str, files: &TeammateFiles) -> Result<Outcome, String> {
+        let t = self.tache(parent, task).ok_or_else(|| format!("pas de tâche « {task} » sur {parent}"))?;
         let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication())?;
         // L'abonnement au sujet de la boîte, pris avant de lire : une ligne
         // arrivée entre la lecture et l'attente réveille quand même.
         let mut wake = bus.subscribe(&mailbox_topic(task));
         let mut outcome = Outcome::default();
-        let mut read = 0usize;
+        let mut read = files.read_cursor();
         let mut stalled = 0usize;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         for number in 1..=MAX_STEPS {
             let lines = files.mailbox();
             let news: Vec<Value> = lines.iter().skip(read).filter(|l| l["from"] != "teammate" && l["from"] != "host").cloned().collect();
             read = lines.len();
+            files.write_cursor(read);
             if news.iter().any(|l| l["kind"] == "stop") {
                 outcome.ended = "arrêté par la boîte".into();
                 return Ok(outcome);
@@ -901,7 +921,7 @@ mod tests {
     }
 
     fn call(name: &str, args: Value) -> ToolCall {
-        ToolCall { id: "c".into(), name: name.into(), arguments: args.to_string() }
+        ToolCall { id: "c".into(), name: name.into(), arguments: args.to_string(), provider_extra: None }
     }
 
     /// Le plan s'écrit, ses questions partent dans la boîte, `step_done` passe

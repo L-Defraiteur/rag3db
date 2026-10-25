@@ -22,7 +22,7 @@ const LIB: &str = "pub fn bonjour() -> &'static str {\n    \"bonjour\"\n}\n";
 /// Un petit dépôt git qui n'est pas rag3weaver, inscrit par `code-tree add`
 /// (qui pose `task_writes`) ; `task_writes: false` le retire, comme un
 /// manifeste écrit à la main qui ne le dit pas.
-fn depot_inscrit(d: &Path, task_writes: bool) -> (PathBuf, PathBuf) {
+pub(super) fn depot_inscrit(d: &Path, task_writes: bool) -> (PathBuf, PathBuf) {
     let depot = d.join("petit-depot");
     std::fs::create_dir_all(depot.join("src")).unwrap();
     std::fs::write(depot.join("src/lib.rs"), LIB).unwrap();
@@ -92,7 +92,7 @@ fn qui_edite(vus: Arc<Mutex<Vec<Vec<String>>>>) -> ChatModel {
     })
 }
 
-fn hote(d: &Path, model: ChatModel) -> DaemonHost {
+pub(super) fn hote(d: &Path, model: ChatModel) -> DaemonHost {
     DaemonHost::new()
         .with_background(Arc::new(crate::dataflow::background::Registry::new()))
         .with_racine_des_taches(d.join("taches"))
