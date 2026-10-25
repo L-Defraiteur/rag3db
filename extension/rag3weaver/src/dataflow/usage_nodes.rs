@@ -99,6 +99,10 @@ pub struct Usage {
     /// ne départageait, chacun relié. Dit, jamais tu.
     #[serde(default)]
     pub ambigu: bool,
+    /// Trouvé par le rendez-vous, depuis un fichier C/C++ dont aucun définisseur n'est visible
+    /// par les #include : la résolution s'est abstenue (`code::mentions_sans_definisseur_visible`).
+    #[serde(default)]
+    pub invisible: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -118,6 +122,9 @@ pub struct UsagesReport {
     pub scope: QueryScope,
     pub scope_hidden_definitions: usize,
     pub scope_hidden_usages: usize,
+    /// Usages C/C++ du rendez-vous sans définisseur visible par leurs #include (après la portée).
+    #[serde(default)]
+    pub invisible_usages: usize,
 }
 
 pub use crate::work_domain::QueryScope;
@@ -298,7 +305,7 @@ pub fn virtual_usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &Usag
             let ambigu = cfg.edge_mark.is_doubtful(&marque);
             if let Some(b) = out.iter_mut().find(|b| b.base.uuid == def) {
                 if !b.callers.iter().any(|c| c.user.uuid == user.uuid && c.user.line == user.line) {
-                    b.callers.push(Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu });
+                    b.callers.push(Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu, invisible: false });
                 }
             }
         }
@@ -573,7 +580,7 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
                 let marque = texte(r.get(debut + 3));
                 let guessed = cfg.edge_mark.is_guessed(&marque);
                 let ambigu = cfg.edge_mark.is_doubtful(&marque);
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu });
+                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu, invisible: false });
             }
         }
     }
@@ -601,7 +608,21 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
                 }
                 // Le rendez-vous n'a rien relié : attribué au seul définisseur
                 // pour le rangement, mais par le nom seul — dit tel.
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: true, ambigu: false });
+                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: true, ambigu: false, invisible: false });
+            }
+        }
+    }
+    // **Ce que la résolution a tu se dit** : un usager du rendez-vous venu d'un fichier C/C++,
+    // dont aucune définition n'est visible par ses #include, s'est abstenu ; il reste listé, marqué.
+    #[cfg(feature = "code")]
+    if let Some(used) = &cfg.used_by {
+        let defs: Vec<&str> = definitions.iter().map(|d| d.uuid.as_str()).collect();
+        let idx: Vec<usize> = (0..usages.len()).filter(|&i| usages[i].guessed && &usages[i].relation == used).collect();
+        if !idx.is_empty() {
+            let couples: Vec<(&str, Vec<&str>)> = idx.iter().map(|&i| (usages[i].user.uuid.as_str(), defs.clone())).collect();
+            let invisibles = crate::code::mentions_sans_definisseur_visible(catalog, &couples).map_err(err)?;
+            for (&i, inv) in idx.iter().zip(invisibles) {
+                usages[i].invisible = inv;
             }
         }
     }
@@ -624,6 +645,7 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
         scope_hidden_usages = avant - usages.len();
     }
     usages.sort_by(|a, b| (&a.user.path, a.user.line, &a.user.title).cmp(&(&b.user.path, b.user.line, &b.user.title)));
+    let invisible_usages = usages.iter().filter(|u| u.invisible).count();
     Ok(UsagesReport {
         name: nom_demande.to_string(),
         definitions,
@@ -635,6 +657,7 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
         scope: scope.clone(),
         scope_hidden_definitions,
         scope_hidden_usages,
+        invisible_usages,
     })
 }
 
@@ -709,6 +732,12 @@ impl UsagesReport {
                 self.scope_hidden_usages
             ));
         }
+        if self.invisible_usages > 0 {
+            out.push_str(&format!(
+                "{} mention(s) C/C++ sans définisseur visible par leurs #include : un en-tête non indexé, ou une définition dans un autre fichier — marquée(s) « (invisible par les #include) », non reliée(s).\n\n",
+                self.invisible_usages
+            ));
+        }
         let defs = &self.definitions;
         out.push_str(&format!("## Définitions ({})", defs.len()));
         if self.definitions_hidden > 0 {
@@ -772,7 +801,11 @@ impl UsagesReport {
                 } else {
                     String::new()
                 };
-                let devine = if u.guessed { " (par le nom)" } else if u.ambigu { " (ambigu : un des homonymes)" } else { "" };
+                let devine = if u.invisible {
+                    " (invisible par les #include)"
+                } else if u.guessed {
+                    " (par le nom)"
+                } else if u.ambigu { " (ambigu : un des homonymes)" } else { "" };
                 out.push_str(&format!("- {} {} — {}{cible}{devine}\n", u.user.kind, u.user.title, lieu(&u.user)));
             }
             if v.len() > limit {

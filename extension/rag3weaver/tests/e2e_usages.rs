@@ -252,6 +252,29 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     assert!(aretes.iter().any(|a| a.starts_with("rcall r/lib.rs ") && a.ends_with(" ∅")), "une arête Rust du même lot ne porte pas de visibilité : {aretes:#?}");
     assert!(rapport.abstained_invisible >= 1, "l'abstention se compte : {rapport:?}");
     assert!(rapport.include_files_read >= 10, "le coût se compte : {rapport:?}");
+    drop(cat);
+
+    // **Ce que la résolution a tu se dit** (c7, 25 octobre 2026) : `lone` appelle `solo` sans
+    // l'inclure ; usages le liste, marqué, et le compte ; impact ne le suit pas et le compte.
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    let services = Arc::new(services);
+    let outil = |gabarit: &str, args: serde_json::Value| {
+        let tool = GraphTool::from_mermaid(gabarit).unwrap().bind(&registry).unwrap();
+        tool.execute(&registry, services.clone(), &args).unwrap().to_string()
+    };
+    let usages = outil(include_str!("../templates/tools/usages.mmd"), serde_json::json!({"name": "solo"}));
+    eprintln!("{usages}");
+    assert!(usages.contains("1 mention(s) C/C++ sans définisseur visible par leurs #include"), "le compte en tête : {usages}");
+    let ligne = usages.lines().find(|l| l.contains(" lone —")).unwrap_or_else(|| panic!("lone absent : {usages}"));
+    assert!(ligne.ends_with("(invisible par les #include)"), "lone marqué : {usages}");
+    assert!(!usages.lines().any(|l| l.contains(" run —") && l.contains("invisible")), "run, qui inclut solo.h, n'est pas marqué : {usages}");
+    let impact = outil(include_str!("../templates/tools/impact.mmd"), serde_json::json!({"name": "solo"}));
+    eprintln!("{impact}");
+    assert!(impact.contains("1 mention(s) C/C++ sans définisseur visible par leurs #include"), "impact le compte : {impact}");
+    assert!(!impact.lines().any(|l| l.contains(" lone ")), "impact ne suit pas lone : {impact}");
 }
 
 /// **Une arête devinée se dit, et ne se suit pas** (ticket « une arête ne
