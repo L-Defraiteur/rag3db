@@ -142,7 +142,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -153,7 +153,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -708,7 +708,7 @@ version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d314cc62af2b6b0c65780555abb4d02a03dd3b799cd42419044f0c38d99738c0"
 dependencies = [
- "darling 0.21.3",
+ "darling 0.20.11",
  "ident_case",
  "prettyplease 0.2.37",
  "proc-macro2",
@@ -1581,7 +1581,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2544,7 +2544,6 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim",
  "syn 2.0.115",
 ]
 
@@ -2844,7 +2843,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3137,7 +3136,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4976,7 +4975,8 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "ld-lucivy"
 version = "4.3.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad40f1edbc2e71f0dfed25ca4ad70a05922ca6b98e3095524fa138a679416024"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -5035,7 +5035,8 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-bitpacker"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978c2d804c3f359f3dbcad23513dac144238e56d69a913fb5c4fcf14c00b64ea"
 dependencies = [
  "bitpacking",
 ]
@@ -5043,7 +5044,8 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-columnar"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bffb2a7e6bc5395e2d08403c6d1e8e2b28d4ee71f85ecdd9824e9bb04e41153d"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -5058,7 +5060,8 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-common"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93681da4c8134a31199bc33db7ab08c49aee2c4991c9b6be635dbe602691b1e7"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -5070,7 +5073,8 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-query-grammar"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49e2c16325246a5a0415a7d62c64fbb5f224b8d9911f6eea08d34708ba11c94f"
 dependencies = [
  "fnv",
  "nom 7.1.3",
@@ -5082,7 +5086,8 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-sstable"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b5e31574e133ec4a5b60a0102467dfdc9d3581da8c662a812deae3bbeb968c3"
 dependencies = [
  "futures-util",
  "itertools 0.14.0",
@@ -5094,7 +5099,8 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-stacker"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c35de8195caa7236fd624213345692accc49b453d32203d113f5e9ae35d2c59"
 dependencies = [
  "ld-lucivy-common",
  "murmurhash32",
@@ -5103,7 +5109,8 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-tokenizer-api"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "193d510c6e3be805e15ea388d0b1c6f52aef048398192f6a7dfaac4c45ea11c1"
 dependencies = [
  "serde",
 ]
@@ -5111,7 +5118,8 @@ dependencies = [
 [[package]]
 name = "ld-ownedbytes"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfdf08a19466c101607628d4cf460161f2dd67687744ec0b38faec1ac3420206"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -5333,7 +5341,8 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 [[package]]
 name = "luciole"
 version = "4.3.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bafdfd93d7e4abc97891aece267ad2780c599bbfffce2584b4b57f787a7ecf1"
 dependencies = [
  "flume",
 ]
@@ -5341,7 +5350,8 @@ dependencies = [
 [[package]]
 name = "lucistore"
 version = "4.3.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "756700adc0b3e55a5b8451bcf2dbd70e1e4bad947d92b583070ebfa6b1c593e4"
 dependencies = [
  "serde",
  "serde_json",
@@ -5350,7 +5360,8 @@ dependencies = [
 [[package]]
 name = "lucivy-core"
 version = "4.3.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4482d7052bde8f19084e3efbb312bc47e8697985cd26e5ff671c0716cdba1789"
 dependencies = [
  "ld-lucivy",
  "luciole",
@@ -5364,7 +5375,8 @@ dependencies = [
 [[package]]
 name = "lucivy-fst"
 version = "0.1.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b115e0f273fd22356e2bfa42bcfe8f7c976a8b6cfd15e13ef6c537fc1d82af2"
 dependencies = [
  "utf8-ranges",
 ]
@@ -7440,7 +7452,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7868,7 +7880,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7885,7 +7897,8 @@ dependencies = [
 [[package]]
 name = "sparse-vector"
 version = "4.3.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=a925d94#a925d940a852be08bc58ed5e8ca24bd87944fd08"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bd7318d2f0a6006012fcdf5a4d0bda6ec45e4f4060982878c7e7a5ca9b10a5e"
 dependencies = [
  "bincode",
  "crc32fast",
@@ -8612,10 +8625,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0136791f7c95b1f6dd99f9cc786b91bb81c3800b639b3478e561ddb7be95e5f1"
 dependencies = [
  "fastrand",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -10075,7 +10088,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

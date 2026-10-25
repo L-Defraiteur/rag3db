@@ -1,6 +1,6 @@
 # Le plein texte lucivy se fige dans son commit pendant une réindexation lue
 
-- **État** : ouvert, **cause trouvée, correctif prêt dans lucivy** (G, 19 octobre 2026) ; il attend la décision de Lucie (une 4.3.1 de `lucivy-core`, ou un `[patch.crates-io]` provisoire). Page de choix : `extension/rag3weaver/docs/optimiseur/19-octobre-2026-02h05/04-lucivy-deux-correctifs-a-ton-choix.md`. Vu trois passes sur trois (une avec L6, deux sur master 745989605 sans L6).
+- **État** : **corrigé** dans lucivy 4.3.1, publiée par Lucie le 25 octobre 2026, et prise par rag3weaver à sa version publiée. La cause était plus large que la réentrance du commit : une panique de l'IDF (bm25.rs, `assert!(doc_count >= doc_freq)`) sous commits concurrents tuait l'acteur d'un shard. La 4.3.1 borne l'IDF, protège le Search (catch_unwind), garde un seul commit en vol et rejoue ses différés sur place, Drain compris. Preuves : la recette sharded_handle 80 fois sur 80 sous charge, et le témoin réel à quatre lecteurs en 3 tours.
 - **Suivi par** : G (optimiseur).
 - **Gravité** : blocage — la montre ne réindexe plus rien, sans erreur ; les lectures continuent sur l'état d'avant (« Une écriture de l'index est en cours »).
 - **Atteignable en service** : oui, a priori. C'est le régime ordinaire d'un hôte de code : un agent lit pendant que des fichiers changent sur le disque.
