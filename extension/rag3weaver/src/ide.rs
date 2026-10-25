@@ -17,6 +17,8 @@
 //! | `POST /ide/propositions[/appliquer\|/rejeter]` | proposer `{backend, files, reason}`, appliquer `{backend, id}`, rejeter `{backend, id, why}` |
 //! | `GET /ide/taches?backend=<id>[&nom=<n>]` | les tâches de l'agent, ou la relecture d'une (fichiers, graphes, témoins) |
 //! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom, message}`, rejeter `{backend, nom, why}` |
+//! | `GET /ide/bilans?backend=<id>` | les bilans du backend : ses fiches (via juge), leurs apports dans l'ordre et leurs notes |
+//! | `POST /ide/bilans` | juger un run `{backend, run}` : le juge relit son journal et range sa fiche dans la mémoire déclarée (`bilans`) |
 //! | `POST /ide/runs/arreter` | arrêter un run en vol `{backend, run}`, au nom de l'IDE (C4) |
 //! | `GET /ide/chat?backend=<id>` | le chat de l'atelier : allumé ou non, le run en cours, le fil, les orphelines (page 11) |
 //! | `POST /ide/chat` | un tour `{backend, message}` : publié sur `agent` et `tokens`, inscrit dans les runs en vol |
@@ -586,6 +588,27 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        ("GET", "/ide/bilans") => {
+            let v = match host.bilans_de(&param("backend").unwrap_or_default()) {
+                Ok(v) => json!({ "ok": true, "result": v }),
+                Err(e) => json!({ "ok": false, "error": e }),
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/bilans") => {
+            // **Juger un run à la demande** (page 04) : le juge relit le run par
+            // son journal et range sa fiche dans la mémoire que le backend
+            // déclare. Un refus (pas de `bilans`, pas de journal) est une réponse.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match host.juger(c["backend"].as_str().unwrap_or_default(), c["run"].as_str().unwrap_or_default()) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
         ("POST", "/ide/runs/arreter") => {
             // **Arrêter un run depuis la page** (C4) : le même chemin d'arrêt
             // que tout run, au nom de l'IDE. Un refus est une réponse.
@@ -795,9 +818,7 @@ mod tests {
     /// bloc `outils` de la page nomme chaque outil appelé et ses paramètres ;
     /// chacun existe dans le manifeste du gabarit, et chaque paramètre est
     /// déclaré par son graphe (`%% param:`) sans être lié par le manifeste. Et
-    /// chaque `appeler(…, "outil", …)` de la page est dans le bloc, comme chaque
-    /// `appelerEntier(…, "outil", …)` (la réponse entière, pour la recherche) :
-    /// une forme oubliée sortirait ses appels de la garde sans bruit.
+    /// chaque `appeler(…, "outil", …)` de la page est dans le bloc.
     #[test]
     fn the_page_only_calls_what_the_code_template_serves() {
         let debut = PAGE.find(r#"<script type="application/json" id="outils">"#).expect("le bloc outils");
@@ -821,12 +842,11 @@ mod tests {
                 assert!(attache["bindings"].get(p).is_none(), "{outil} : « {p} » est lié par le manifeste, la page ne peut pas le passer");
             }
         }
-        let appeles: HashSet<String> = ["appeler(id, \"", "appelerEntier(id, \""]
-            .iter()
-            .flat_map(|forme| PAGE_JS.split(*forme).skip(1))
+        let appeles: HashSet<String> = PAGE_JS
+            .split("appeler(id, \"")
+            .skip(1)
             .filter_map(|r| r.split('"').next().map(str::to_string))
             .collect();
-        assert!(appeles.contains("search_code"), "la recherche, appelée par appelerEntier, est vue par la garde");
         assert!(!appeles.is_empty());
         for a in &appeles {
             assert!(outils.contains_key(a), "la page appelle « {a} », absent du bloc outils");

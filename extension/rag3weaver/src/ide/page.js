@@ -27,10 +27,7 @@ function backend(id) {
   return (etat?.backends ?? []).find((b) => b.id === id);
 }
 
-// La réponse entière du graphe de l'outil ({ result, metadata, freshness,
-// validation, … }) : pour une vue qui montre aussi ce que l'hôte dit à côté de
-// la sortie (la recherche : sa méta, la fraîcheur de l'index).
-async function appelerEntier(id, nom, args) {
+async function appeler(id, nom, args) {
   const b = backend(id);
   if (!b) throw new Error(`backend inconnu : ${id}`);
   const r = await fetch("/ide/call", {
@@ -40,20 +37,15 @@ async function appelerEntier(id, nom, args) {
   });
   const v = await r.json();
   if (!v.ok) throw new Error(v.error ?? `${nom} : échec`);
-  return v.result;
-}
-
-async function appeler(id, nom, args) {
-  const r = await appelerEntier(id, nom, args);
   // `/ide/call` rend la réponse du graphe de l'outil ({ result, metadata,
   // validation, … }) : ce que la vue lit est sa sortie, `result` (le témoin des
   // deux fenêtres l'a montré, 18 octobre 2026 : `r.text` et `r.content` étaient
   // lus un cran trop haut).
-  if (r && typeof r === "object" && "result" in r) return sortie(r.result);
+  if (v.result && typeof v.result === "object" && "result" in v.result) return sortie(v.result.result);
   // Toute réponse d'un outil du backend porte `result` : ce repli ne devrait
   // jamais servir, et s'il sert, une forme inattendue ne passe pas en silence.
-  console.warn(`${nom} : réponse de /ide/call sans « result », rendue telle quelle`, r);
-  return r;
+  console.warn(`${nom} : réponse de /ide/call sans « result », rendue telle quelle`, v.result);
+  return v.result;
 }
 
 // Une lecture du catalogue (usages, impact, callees…) enveloppe sa sortie de
@@ -124,6 +116,7 @@ async function accueil() {
         el("a", { href: `/ide/code/${b.id}/propositions/` }, "propositions"),
         b.tache ? el("span", { class: "pastille" }, `tâche ${b.tache.nom}`) : el("a", { href: `/ide/code/${b.id}/taches/` }, "tâches"),
         el("a", { href: `/ide/code/${b.id}/chat` }, "chat"),
+        el("a", { href: `/ide/code/${b.id}/bilans` }, "bilans"),
         el("span", { class: "meta" }, b.manifest),
         el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
         (b.template_drift ?? []).length ? el("span", { class: "meta" }, `${b.template_drift.length} gabarit(s) local(aux) différent(s) du livré`) : "",
@@ -454,75 +447,23 @@ async function symbole(id, nom) {
   );
 }
 
-// **La recherche dit ce qu'elle sait** (pièce 3, docs/12-octobre-2026-recherche/06) :
-// tout vient de la réponse de `search_code`, rien n'est relu dans son markdown.
-// En tête, l'état de l'index (la ligne « index : » de la méta) et sa fraîcheur ;
-// par résultat, le score, ce que chaque signal en a dit (score brut et rang) et
-// l'extrait ; en pied, les avertissements (un signal en repli, un relecteur
-// absent). « Reclasser » est dans l'URL, comme la requête : la page n'a pas
-// d'état que l'hôte n'ait pas.
 async function recherche(id) {
   filDAriane(id, "", false);
-  const params = new URLSearchParams(location.search);
-  const q = params.get("q") ?? "";
-  // Le formulaire de l'en-tête repart sans `reclasser` : la relecture se
-  // décide question par question (elle coûte une demi-seconde).
-  const reclasser = params.get("reclasser") === "1";
+  const q = new URLSearchParams(location.search).get("q") ?? "";
   document.querySelector("#chercher input").value = q;
   fil.append(" · recherche");
-  const options = { limit: 30 };
-  if (reclasser) options.rerank = { candidates: 20 };
-  const reponse = await appelerEntier(id, "search_code", { query: q, options });
-  const r = sortie(reponse?.result);
-  // La méta porte le nom du nœud qui la rend dans le graphe de search_code
-  // (`render`, port `meta`, déclaré par le gabarit) : un renommage viderait
-  // l'en-tête sans erreur ; le témoin navigateur, qui exige la ligne d'état,
-  // le verrait.
-  const meta = reponse?.metadata?.["render.meta"] ?? {};
-  const avertis = meta.warnings ?? [];
-  const etatIndex = avertis.find((w) => w.startsWith("index : "));
-  const autres = avertis.filter((w) => !w.startsWith("index : "));
-  const resultats = Array.isArray(r) ? r : [];
-  const caseReclasser = el("input", { type: "checkbox", id: "reclasser", onchange: (e) => {
-    const p = new URLSearchParams(location.search);
-    if (e.target.checked) p.set("reclasser", "1"); else p.delete("reclasser");
-    location.search = p.toString();
-  } });
-  caseReclasser.checked = reclasser;
+  const r = await appeler(id, "search_code", { query: q, options: { limit: 30 } });
   vue.replaceChildren(
     el("h1", {}, `« ${q} »`),
-    el("p", { id: "recherche-etat", class: "note" }, etatRecherche(etatIndex, reponse?.freshness, meta, resultats.length)),
-    el("p", { class: "note" }, el("label", {}, caseReclasser, " reclasser : un relecteur relit les 20 premiers (plus lent ; pour une question en phrases)")),
-    ...resultats.map((x) => {
+    ...(Array.isArray(r) ? r : []).map((x) => {
       const d = x.data ?? {};
-      const extrait = x.chunk?.text ?? d.signature ?? "";
       return el("div", { class: "resultat" },
         el("a", { href: lienFichier(id, d.file_path ?? "", d.start_line) }, `${d.file_path ?? "?"}:${d.start_line ?? ""}`),
         " ", d.name ? el("a", { href: lienSymbole(id, d.name) }, d.name) : "",
         " ", el("span", { class: "meta note" }, `${d.scope_type ?? x.entity ?? ""} · ${x.signal ?? ""}`),
-        " ", el("span", { class: "score", title: "le score de l'ordre rendu" }, `★ ${Number(x.score ?? 0).toFixed(3)}`),
-        (x.signals ?? []).length
-          ? el("div", { class: "signaux note" }, x.signals.map((s) => `${s.label} n°${s.rank} (${Number(s.score).toFixed(3)})`).join(" · "))
-          : "",
-        extrait ? el("pre", {}, extrait.length > 600 ? `${extrait.slice(0, 600)}…` : extrait) : "");
+        d.signature ? el("pre", {}, d.signature) : "");
     }),
-    autres.length ? el("ul", { class: "avertissements" }, autres.map((w) => el("li", {}, `⚠ ${w}`))) : "",
   );
-}
-
-// La ligne de tête : l'état de l'index tel que la méta le dit, sinon « à jour »,
-// la fraîcheur (fichiers en retard, arbre modifié), et ce que la recherche a
-// compté.
-function etatRecherche(etatIndex, f, meta, n) {
-  const morceaux = [etatIndex ?? "index : à jour"];
-  if (f?.lag_files) morceaux.push(`${f.lag_files} fichier(s) en retard sur l'arbre`);
-  if (f?.dirty) morceaux.push("arbre modifié depuis l'index");
-  const comptes = [];
-  if (meta.bm25Count != null) comptes.push(`mots ${meta.bm25Count}`);
-  if (meta.vectorCount != null) comptes.push(`sens ${meta.vectorCount}`);
-  if (meta.rerankedCount) comptes.push(`relus ${meta.rerankedCount}`);
-  morceaux.push(`${n} résultat(s)${comptes.length ? ` (${comptes.join(", ")})` : ""}`);
-  return morceaux.join(" · ");
 }
 
 // Le voisinage en papillon : ce qui en dépend à gauche (impact), ce qu'il
@@ -627,6 +568,30 @@ function sectionDeGraphe(g) {
         el("h2", {}, `graphe — ${genre} ${nom}`),
         el("p", { class: "note" }, `${d.ajoutes.length} ajouté(s), ${d.changes.length} changé(s), ${d.retires.length} retiré(s) ; ${d.aretes_ajoutees.length} arête(s) ajoutée(s), ${d.aretes_retirees.length} retirée(s).`),
         el("div", { class: "graphe" }, dessin));
+}
+
+// **Les bilans** (page 04 du 25 octobre 2026) : ce que le juge de session a
+// rangé dans la mémoire, par fiche (une tâche) — ses apports dans l'ordre, la
+// tendance de la note, et chaque bilan lisible tel qu'il est écrit.
+async function bilans(id) {
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · bilans");
+  const r = await (await fetch(`/ide/bilans?${new URLSearchParams({ backend: id })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const { declare, fiches } = r.result;
+  vue.replaceChildren(
+    el("h1", {}, "Bilans de session"),
+    declare
+      ? el("p", { class: "note" }, "Le juge relit chaque tour du chat de ce backend, et range ici son bilan, par tâche.")
+      : el("p", { class: "note", id: "bilans-absents" }, "Ce backend ne déclare pas `bilans` : ses tours ne sont pas jugés."),
+    ...(fiches.length || !declare ? [] : [el("p", { class: "note" }, "aucun bilan encore")]),
+    ...fiches.map((f) => el("section", { class: "fiche-de-bilan", "data-fiche": f.fiche },
+      el("h2", {}, f.fiche),
+      el("p", { class: "note tendance" }, `notes : ${f.apports.map((a) => a.note ?? "?").join(" → ")}${f.apports.length > 1 ? ` · ${f.apports.at(-1).comparaison?.verdict ?? ""}` : ""}`),
+      ...f.apports.map((a) => el("details", { class: "apport-de-bilan" },
+        el("summary", {}, `note ${a.note ?? "?"} · ${a.source ?? ""}`),
+        el("pre", {}, a.texte))))),
+  );
 }
 
 async function propositions(id, reste) {
@@ -1179,7 +1144,7 @@ function vivre(d) {
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches|chat)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches|chat|bilans)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -1221,6 +1186,7 @@ async function vueDe(r) {
     case "propositions": return await propositions(r.id, r.reste);
     case "taches": return await taches(r.id, r.reste);
     case "chat": return await chat(r.id);
+    case "bilans": return await bilans(r.id);
     default: return await accueil();
   }
 }

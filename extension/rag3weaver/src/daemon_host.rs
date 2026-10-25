@@ -177,6 +177,13 @@ pub struct DaemonHost {
     chat_model: chat::ChatModel,
     /// Ce que les chats ont consommé, par run et par slug.
     chat_meter: Arc<crate::meter::Meter>,
+    /// Le journal des runs (`RAG3WEAVER_RUNS_DIR`) : un fichier par run racine.
+    journal: Arc<journal_des_runs::JournalDesRuns>,
+    /// Les bilans à faire, jugés par le fil que le serveur lance.
+    bilans: juge::FileDesBilans,
+    /// Le modèle du juge (par défaut celui de l'hôte, Vertex) : à part de celui
+    /// du chat, pour juger un chat d'un modèle par un autre.
+    juge_model: chat::ChatModel,
 }
 
 /// Les tâches de l'agent : une branche, un worktree, une base à soi.
@@ -184,6 +191,12 @@ pub mod taches;
 
 /// Le chat de l'atelier dans l'IDE : l'agent des gabarits, par backend.
 pub mod chat;
+
+/// Le journal des runs de l'hôte : un fichier par run racine, borné.
+pub mod journal_des_runs;
+
+/// Le juge de session : un agent déclaré qui relit un run et range son bilan.
+pub mod juge;
 
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
@@ -245,7 +258,21 @@ impl DaemonHost {
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
+            journal: journal_des_runs::JournalDesRuns::par_defaut(),
+            bilans: juge::FileDesBilans::default(),
+            juge_model: chat::default_chat_model(),
         }
+    }
+
+    /// Le journal des runs, sous une autre racine (les témoins).
+    pub fn with_runs_root(mut self, racine: PathBuf) -> Self {
+        self.journal = journal_des_runs::JournalDesRuns::new(racine);
+        self
+    }
+
+    /// Le journal des runs.
+    pub fn journal_des_runs(&self) -> &Arc<journal_des_runs::JournalDesRuns> {
+        &self.journal
     }
 
     /// Le flux de l'IDE.
@@ -458,6 +485,8 @@ impl DaemonHost {
             // neuf, relayé à son tour, et l'ancien relais finit avec l'ancien bus.
             let bus = slot.as_ref().expect("ouvert juste au-dessus").catalog.lock().unwrap_or_else(|p| p.into_inner()).event_bus();
             self.ide.relayer(&hosted.manifest.display().to_string(), &bus);
+            // Et suivi par le journal des runs, sous l'id du backend.
+            self.journal.suivre(&hosted.id, &bus);
             *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
             hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
@@ -599,6 +628,7 @@ impl DaemonHost {
         let result = self.check_session(session).and_then(|s| {
             let cell = cell_of(&s)?;
             let hosted = self.hosted(manifest)?;
+            let (client, appel) = (s.client.clone(), arguments.clone());
             // L'IDE appelle au nom de l'humain : `task_writes` ne vise que l'agent.
             let humain = self.ide_session.get().is_some_and(|ide| *ide == s.id);
             self.with_backend(&hosted, |b| match (&cell, humain) {
@@ -610,8 +640,31 @@ impl DaemonHost {
                 (None, true) => b.call_humain(name, arguments),
             })
             .and_then(|r| r)
+            .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, name, &appel, r))
         });
         op_response(result)
+    }
+
+    /// **Ce qu'un appel d'outil a rendu à son appelant**, dans le journal de son
+    /// run (page 04 du 25 octobre 2026) : le client (un Claude Code, l'IDE),
+    /// l'outil, ses arguments et le résultat tel qu'il l'a reçu, borné. C'est ce
+    /// que le juge regarde quand l'agent n'est pas notre chat.
+    fn journaliser_l_appel(&self, backend: &str, client: &str, outil: &str, arguments: &Value, reponse: &Value) {
+        let Some(run) = reponse["run"].as_str() else { return };
+        const BORNE: usize = 64 * 1024;
+        let rendu = reponse["result"].to_string();
+        let rendu = if rendu.len() > BORNE {
+            let mut coupe = BORNE;
+            while !rendu.is_char_boundary(coupe) {
+                coupe -= 1;
+            }
+            json!({ "tronque": rendu.len(), "debut": &rendu[..coupe] })
+        } else {
+            reponse["result"].clone()
+        };
+        let mut ajouts = serde_json::Map::new();
+        ajouts.insert("appel".into(), json!({ "client": client, "outil": outil, "arguments": arguments, "rendu": rendu }));
+        self.journal.ajouter(backend, run, ajouts);
     }
 
     /// **Arrête un run** d'un backend hébergé, au nom de `by` (C4) : un run
@@ -998,6 +1051,8 @@ impl DaemonServer {
     pub fn serve(self, host: Arc<DaemonHost>, token: Option<String>) {
         use std::sync::atomic::Ordering;
         let stopper = self.stopper();
+        // Les bilans de session des backends qui les déclarent (page 04).
+        host.servir_les_bilans();
         // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
         // session de client mort ne se fermerait qu'à la lecture de l'état.
         let releve = {
