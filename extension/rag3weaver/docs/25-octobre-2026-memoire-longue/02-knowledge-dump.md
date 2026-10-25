@@ -83,7 +83,13 @@ Ce qu'une session qui reprend doit savoir, et que le code ne dit pas.
 - **`manifeste.yaml`** à la racine des fichiers est écrit à chaque ouverture, sauf si le dossier parle d'un autre schéma, ou s'il a des fichiers sans manifeste. Dans ces deux cas, l'ouverture le dit dans `index_state.files.manifest` avec un avertissement, et `rebuild_from_files` refuse.
 - **Les relations** d'un manifeste prennent une `description` d'une ligne, celle que le manifeste du dossier recopie.
 
-## La migration de la fiche de Lucie : la recette
+## La migration de la fiche de Lucie : faite le 25 à 23 h (page 05)
+
+- **Par les routes de l'hôte**, sans l'arrêter : `POST /session`, `POST /backend/close {manifest}`, l'instantané tout de suite (tout appel rouvre un backend fermé), le dossier de configuration remplacé par une copie fraîche de `templates/` (database, files_root en absolu), `POST /backend/open {manifest}`, puis `POST /call {manifest, name, arguments}`. Le jeton (`daemon.token`) en Bearer, jamais affiché.
+- **L'ancien dossier** : `~/.config/rag3weaver/memoire-longue.avant-25-oct/` ; **l'instantané** : `~/.local/share/rag3weaver/instantanes/migration-fiche-25-oct/` avec son `RETOUR.sh` ; **les fichiers** : `/home/lucied/memoire-longue/`.
+- `cited_by` prend la valeur sans préfixe de genre ; le client MCP garde sa liste d'outils en cache.
+
+## La migration de la fiche de Lucie : la recette (telle qu'écrite avant)
 
 - **L'instantané** : `~/.cache/rag3weaver-notes-A/instantanes.sh <étiquette> <base.rag3db>` (le script de l'arbre principal). Il refuse si un processus tient un fichier de la base, copie en reflink sous `~/.local/share/rag3weaver/instantanes/<étiquette>/` et écrit `RETOUR.sh` à côté.
 - **Sans arrêter son hôte** : unregister de memoire-longue par l'hôte, l'instantané, le manifeste mis au gabarit livré, puis la réouverture par l'hôte. Prévenir c7 avant l'unregister.

@@ -63,16 +63,13 @@ Les rouges de l'après-midi, tous vus avant master sauf le premier :
 - **Le garde de fraîcheur.** Avec un commit du moteur plus récent que la lib du magasin, `RAG3WEAVER_MOTEUR_ANCIEN` doit rester posé.
 - **Deux témoins sous charge.** Le navigateur de l'IDE et le chat ont rougi sous la charge de la lib entière, et sont verts joués seuls. Ils sont ticketés ou corrigés par leurs sessions.
 
+## La nuit : la migration de la fiche de Lucie, faite
+
+À 23 h, sur le mot de c7 et après le « relancé » de G : memoire-longue fermée par l'hôte sans l'arrêter, instantané `migration-fiche-25-oct`, manifeste au gabarit livré (fichiers sous `/home/lucied/memoire-longue/`), réouverture, la Source, la Fiche « régime GPU » et son apport L1 écrits et relus. Les deux lignes d'origine sont identiques champ à champ avant et après ; rien n'est effacé. La page 05 dit tout, dont trois choses à savoir : `cited_by` prend la valeur sans préfixe de genre, un client MCP ne voit pas les outils nouveaux avant son redémarrage, et le genre « fichier » du 19 octobre n'a pas de fichier.
+
 ## Ce qui attend
 
-1. **La migration de la fiche de Lucie**, après le rebâti des hôtes de ce soir (il doit porter bea6c6a98) et sa réponse sur l'emplacement du dossier. Elle passe par son hôte :
-   - annoncer à c7 ;
-   - fermer la base (unregister) ;
-   - `instantanes.sh migration-fiche-25-oct` ;
-   - mettre le manifeste au gabarit livré ;
-   - rouvrir ;
-   - écrire la fiche « régime GPU », la Source et l'apport ;
-   - vérifier, et dire les deux lignes avant et après.
+1. **M4, l'archiviste**, comme prévu, maintenant que la mémoire réelle est sur le gabarit livré ; il relira Memory et Subject.
 2. **Les roadmaps et les visions en mémoire** : le design est à la page 03 ; **l'identité des agents et la fusion entre mémoires**, à la page 04. Les deux attendent le mot de Lucie.
 3. **La forme des fiches de bilan du juge** d'everything declarative : relue, réponses dans sa page §5 (branche juge-1).
 4. **En fin de session**, effacer les worktrees et les targets :
