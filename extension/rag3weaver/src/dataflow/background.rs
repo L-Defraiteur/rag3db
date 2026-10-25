@@ -266,6 +266,24 @@ impl Registry {
         Ok(())
     }
 
+    /// **Arrête un run au nom d'un tiers qui a l'autorité de l'hôte** (l'IDE,
+    /// C4) : pas de contrôle de parenté, et `name` est dit comme auteur de
+    /// l'arrêt (cause `requested`).
+    pub fn cancel_on_behalf(&self, who: &str, name: &str) -> Result<(), String> {
+        let Some((handle, e)) = self.find(who) else {
+            return Err(format!("aucun run en fond « {who} »"));
+        };
+        if !(e.is_alive)() {
+            return Err(format!("#{handle} a déjà fini"));
+        }
+        e.cause
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get_or_insert_with(|| (cause::REQUESTED.to_string(), name.to_string()));
+        (e.stop)();
+        Ok(())
+    }
+
     /// Arrêté parce que son parent a fini ou a été annulé (`WithParent`).
     fn cancel_by_parent(&self, handle: &str) -> Result<(), String> {
         let Some((_, e)) = self.find(handle) else {

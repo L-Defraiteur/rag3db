@@ -391,9 +391,11 @@ impl DataflowRuntime {
     }
 
     /// **La poignée d'arrêt** : l'hôte la prend avant le run et la déclenche
-    /// quand la durée de l'agent se ferme. Un graphe à flux s'arrête (les
-    /// nœuds en cours finissent `Cancelled`, le run rend `Ok`) ; un graphe de
-    /// valeurs, qui finit seul, ne la regarde pas.
+    /// quand la durée de l'agent se ferme, ou quand on arrête le run
+    /// (`RunsInFlight::stop`, C4). Un graphe à flux s'arrête (les nœuds en
+    /// cours finissent `Cancelled`, le run rend `Ok`) ; un graphe de valeurs
+    /// s'arrête au niveau suivant, et ses nœuds la lisent par leur jeton
+    /// (`ctx.cancellation()`).
     pub fn cancel_handle(&self) -> super::concurrent::CancelHandle {
         self.cancel.clone()
     }
@@ -1172,6 +1174,12 @@ impl DataflowRuntime {
     ) -> Result<DataflowOutput, String> {
         let run_id = run_id.to_string();
         let started = Instant::now();
+        // En vol le temps du run, si les services portent le registre : un
+        // seul chemin d'arrêt pour tout run (C4).
+        let _en_vol = self
+            .services
+            .get::<super::runs_in_flight::RunsInFlight>(super::runs_in_flight::RUNS_IN_FLIGHT_SERVICE)
+            .map(|r| r.register(&run_id, self.cancel.clone()));
         self.emit_run_started(&run_id, graph);
         let result = self.execute_inner(graph, &run_id).await;
         self.emit_run_finished(&run_id, started.elapsed().as_millis() as u64, result.is_ok());
@@ -1231,7 +1239,12 @@ impl DataflowRuntime {
     /// échec sous le concurrent, un interblocage).
     pub(super) fn emit_run_finished(&self, run_id: &str, ms: u64, ok: bool) {
         let cause = self.take_stop(run_id);
-        self.emit_run_finished_because(run_id, ms, ok, cause.as_ref().map(super::concurrent::cause_label), None);
+        // Un arrêt demandé dit qui l'a demandé (`cancel_by`).
+        let by = match cause {
+            Some(super::node::CancelCause::External) => self.cancel.requested_by(),
+            _ => None,
+        };
+        self.emit_run_finished_because(run_id, ms, ok, cause.as_ref().map(super::concurrent::cause_label), by);
     }
 
     /// Note la cause d'arrêt d'un run, s'il a été arrêté.
