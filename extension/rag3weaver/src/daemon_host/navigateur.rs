@@ -578,6 +578,60 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     eprintln!("le run de reindex_on_change a écrit : {ecrit}");
     assert!(n.erreurs.is_empty(), "la vue des réactions : erreurs à la console : {:#?}", n.erreurs);
 
+    // **Arrêter un run depuis la page** (C4). Un outil lent — `wait_output` sur
+    // un journal où rien ne viendra, une minute d'attente — appelé comme le
+    // ferait un agent ; son DAG vivant montre le run en cours et le bouton
+    // Arrêter. Le clic l'arrête par le même chemin que tout run : le run finit
+    // arrêté dans l'IDE, l'appel rend « Arrêté », aucun nœud n'est en échec.
+    n.aller(
+        &format!("{racine}/ide/code/{id}/dag/tool/wait_output"),
+        "document.querySelectorAll('#vue svg g.etape').length >= 1 && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+    let journal = crate::dataflow::run_nodes::dossier_journaux().join(format!("temoin-c4-{}.log", std::process::id()));
+    let lent = {
+        let (adresse, manifeste, journal) = (adresse.clone(), manifeste.clone(), journal.to_string_lossy().to_string());
+        std::thread::spawn(move || -> Value {
+            let mut r = crate::daemon::agent()
+                .post(format!("http://{adresse}/ide/call"))
+                .header("Cookie", "rag3weaver_ide=j")
+                .header("content-type", "application/json")
+                .send(json!({ "manifest": manifeste, "name": "wait_output", "arguments": { "journal": journal, "pattern": "jamais", "timeout_s": 60 } }).to_string())
+                .unwrap();
+            serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+        })
+    };
+    n.attendre(
+        "document.querySelector('#dag-etat')?.textContent.endsWith(': en cours') && !document.querySelector('#arreter-run').hidden",
+        "le run lent en cours, et le bouton Arrêter",
+    );
+    let debut = Instant::now();
+    n.evaluer("document.querySelector('#arreter-run').click()");
+    n.attendre("document.querySelector('#dag-etat')?.textContent.includes(\"arrêté dans l'IDE\")", "le run arrêté dans l'IDE");
+    let rendu = lent.join().unwrap();
+    assert!(debut.elapsed() < Duration::from_secs(20), "l'arrêt a pris {:?}", debut.elapsed());
+    assert_eq!(rendu["ok"], true, "{rendu}");
+    assert!(rendu.to_string().contains("Arrêté"), "l'appel dit qu'il a été arrêté : {rendu}");
+    assert_eq!(n.evaluer("document.querySelectorAll('#vue g.etape.echec').length"), json!(0), "un arrêt n'est pas un échec");
+    assert!(n.evaluer("document.querySelector('#arreter-run').hidden") == json!(true), "le bouton reste après la fin");
+
+    // Arrêter un run déjà fini : un refus nommé, et rien ne bouge.
+    let etat = n.evaluer("document.querySelector('#dag-etat').textContent");
+    let run = etat.as_str().unwrap().strip_prefix("run ").and_then(|r| r.split(' ').next()).unwrap().to_string();
+    let refus: Value = {
+        let mut r = crate::daemon::agent()
+            .post(format!("http://{adresse}/ide/runs/arreter"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "backend": id, "run": run }).to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    assert_eq!(refus["ok"], false, "{refus}");
+    assert!(refus["error"].as_str().unwrap().contains(&format!("aucun run « {run} » en vol")), "{refus}");
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(n.evaluer("document.querySelector('#dag-etat').textContent"), etat, "un refus a fait bouger la page");
+    assert!(n.erreurs.is_empty(), "l'arrêt depuis la page : erreurs à la console : {:#?}", n.erreurs);
+
     drop(n);
     let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);

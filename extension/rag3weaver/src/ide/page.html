@@ -876,7 +876,8 @@ function suivreLesReactions(d) {
   if (ev.kind === "FileChanged") {
     v.vu.textContent = `Dernier fichier vu par la montre « ${ev.watch} » : ${ev.path} (${ev.change}, ${heure}).`;
   } else if (ev.kind === "RunStarted" && ev.target?.reaction) {
-    const fin = el("td", { class: "fin" }, "en cours");
+    const fin = el("td", { class: "fin" }, "en cours ",
+      el("button", { class: "arreter", onclick: (e) => arreterUnRun(route().id, ev.run, e.target) }, "Arrêter"));
     const ligne = el("tr", { "data-reaction": ev.target.reaction, "data-run": ev.run },
       el("td", {}, heure),
       el("td", {}, el("a", { href: `/ide/code/${route().id}/dag/reaction/${encodeURIComponent(ev.target.reaction)}` }, ev.target.reaction)),
@@ -904,7 +905,7 @@ function suivreLesReactions(d) {
     acc.li.textContent = acc.texte;
   } else if (ev.kind === "RunFinished" && v.lignes.has(ev.run)) {
     const fin = v.lignes.get(ev.run);
-    fin.textContent = `${ev.ok ? "fini" : "échoué"} en ${ev.ms} ms`;
+    fin.textContent = finDuRun(ev);
     if (!ev.ok) fin.classList.add("echec");
   }
 }
@@ -992,15 +993,35 @@ async function dag(id, reste) {
   const g = r.result;
   const { dessin, parNom } = dessinerGraphe(g);
   const etatDuRun = el("p", { class: "note", id: "dag-etat" }, "En attente d'un run de ce graphe…");
+  const arretNote = el("span", { class: "note", id: "arret-note" }, "");
+  const arreter = el("button", { id: "arreter-run", hidden: true, onclick: () => dagVivant?.run && arreterUnRun(id, dagVivant.run, arretNote) }, "Arrêter");
   vue.replaceChildren(
     el("h1", {}, `${nom}`),
     el("p", { class: "note" }, `${genre === "tool" ? "Outil" : genre === "reaction" ? "Réaction" : "Composant"}, ${g.nodes.length} nœud(s), ${g.edges.length} arête(s)${g.source ? " — " + g.source : ""}.`),
     etatDuRun,
+    el("p", { class: "barre" }, arreter, arretNote),
     g.nodes.length
       ? el("div", { class: "graphe" }, dessin)
       : el("p", { class: "note" }, "Ce graphe est vide."),
   );
-  dagVivant = { manifest: b.manifest, cible: JSON.stringify({ [genre]: nom }), run: null, noeuds: parNom, etat: etatDuRun };
+  dagVivant = { manifest: b.manifest, cible: JSON.stringify({ [genre]: nom }), run: null, noeuds: parNom, etat: etatDuRun, arreter, arretNote };
+}
+
+// **Arrêter un run depuis la page** (C4) : le même chemin d'arrêt que tout run,
+// au nom de l'IDE. La fin du run (`RunFinished`, `cancelled_by`) le dira ; un
+// refus (le run a fini entre-temps) se dit dans `note`.
+async function arreterUnRun(id, run, note) {
+  note.textContent = "arrêt demandé…";
+  const r = await (await fetch("/ide/runs/arreter", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, run }),
+  })).json();
+  note.textContent = r.ok ? "" : r.error;
+}
+
+// La fin d'un run, dite : arrêté (par qui), fini ou échoué.
+function finDuRun(ev) {
+  if (ev.cancelled_by) return `arrêté ${ev.cancelled_by === "ide" ? "dans l'IDE" : `par ${ev.cancelled_by}`} après ${ev.ms} ms`;
+  return `${ev.ok ? "fini" : "échoué"} en ${ev.ms} ms`;
 }
 
 // Un événement `dataflow` du flux, pour le DAG montré.
@@ -1015,6 +1036,8 @@ function vivre(d) {
       g.querySelector("text.duree").textContent = "";
     }
     v.etat.textContent = `run ${ev.run} : en cours`;
+    v.arreter.hidden = false;
+    v.arretNote.textContent = "";
     return;
   }
   if (!v.run || ev.run !== v.run) return;
@@ -1024,7 +1047,8 @@ function vivre(d) {
     g.classList.add(ev.ok === false || ev.error ? "echec" : "passe");
     g.querySelector("text.duree").textContent = `${ev.ms} ms`;
   } else if (ev.kind === "RunFinished") {
-    v.etat.textContent = `run ${ev.run} : ${ev.ok ? "fini" : "échoué"} en ${ev.ms} ms`;
+    v.etat.textContent = `run ${ev.run} : ${finDuRun(ev)}`;
+    v.arreter.hidden = true;
   }
 }
 

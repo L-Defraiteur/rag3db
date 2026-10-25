@@ -21,6 +21,7 @@ pub(crate) mod kinds;
 pub(crate) mod stream;
 pub(crate) mod concurrent;
 pub use concurrent::CancelHandle;
+pub use runs_in_flight::{RunsInFlight, RUNS_IN_FLIGHT_SERVICE};
 #[cfg(test)]
 mod flux_tests;
 #[cfg(test)]
@@ -60,6 +61,7 @@ pub mod schema_nodes;
 pub mod filter_results_node;
 pub mod generic_search_nodes;
 pub mod reactor;
+pub mod runs_in_flight;
 pub mod render_nodes;
 pub mod trace_nodes;
 pub mod migration_nodes;
