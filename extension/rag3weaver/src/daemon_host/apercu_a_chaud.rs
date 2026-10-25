@@ -22,7 +22,7 @@ fn paquets_ou_saut(temoin: &str) -> Option<std::path::PathBuf> {
     if let Some(d) = dossier.filter(|d| d.join("react-refresh/package.json").is_file()) {
         return Some(d);
     }
-    let raison = "RAG3WEAVER_PAQUETS_REACT ne désigne pas les paquets React (scripts/paquets_react.sh)";
+    let raison = "RAG3WEAVER_PAQUETS_REACT ne désigne pas les paquets React : préparer par scripts/paquets_react.sh <dossier>, puis exporter la variable (docs/procedures/push-d-un-lot.md)";
     if std::env::var("RAG3WEAVER_EXIGER_NAVIGATEUR").as_deref() == Ok("1") {
         panic!("{temoin} : {raison}, et RAG3WEAVER_EXIGER_NAVIGATEUR=1");
     }

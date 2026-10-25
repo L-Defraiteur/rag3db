@@ -76,7 +76,11 @@ export function Search({ id, state }: { id: string; state: HostState }) {
 
   useEffect(() => {
     if (!backend || !q) return;
-    const options: Record<string, unknown> = { limit: 30 };
+    // Les surlignages des morceaux trouvés par le seul dense se calculent à
+    // l'affichage, et seulement si l'appel le demande (c7, d'après Lucie) : le
+    // creux de bge-m3 (`source: "sparse"`), ou les mots de la requête en repli,
+    // dit alors par un avertissement.
+    const options: Record<string, unknown> = { limit: 30, highlights: "sparse" };
     if (rerank) options.rerank = { candidates: 20 };
     callFull(backend.manifest, "search_code", { query: q, options })
       .then((r) => {
