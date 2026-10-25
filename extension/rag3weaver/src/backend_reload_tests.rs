@@ -70,6 +70,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         runs_in_flight: crate::dataflow::RunsInFlight::new(),
+        ecarts_des_fichiers: Mutex::new(None),
     };
     (dir, backend)
 }
