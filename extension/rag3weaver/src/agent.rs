@@ -703,6 +703,9 @@ pub struct Agent<'a> {
     name: String,
     /// L'identifiant du prochain run, s'il est choisi ; sinon généré.
     run_id: Option<String>,
+    /// Qui a arrêté le run, s'il a été arrêté (un tour de chat arrêté depuis
+    /// l'IDE, C4) : `RunFinished` le dit, cause `requested`.
+    stopped_by: Option<Arc<std::sync::Mutex<Option<String>>>>,
     /// Lire sa boîte (`run.<id>.inbox`) entre deux tours.
     inbox: bool,
     /// Les postures de la session : où s'inscrit une pause, et où se lit un
@@ -783,6 +786,7 @@ impl<'a> Agent<'a> {
             events: None,
             name: "agent".to_string(),
             run_id: None,
+            stopped_by: None,
             inbox: false,
             postures: None,
             session: None,
@@ -1042,6 +1046,14 @@ impl<'a> Agent<'a> {
     /// Le nom de l'agent dans ses événements (défaut : `agent`).
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
+        self
+    }
+
+    /// **Qui l'arrête** : la case que remplit celui qui arrête le run (le
+    /// registre des runs en vol). Remplie à la fin, `RunFinished` dit
+    /// `requested` et qui, comme pour un run de graphe.
+    pub fn with_stopped_by(mut self, stopped_by: Arc<std::sync::Mutex<Option<String>>>) -> Self {
+        self.stopped_by = Some(stopped_by);
         self
     }
 
@@ -1383,13 +1395,14 @@ impl<'a> Agent<'a> {
         if let Some(directory) = &self.directory {
             directory.release(&self.name, &run_id);
         }
+        let cancelled_by = self.stopped_by.as_ref().and_then(|s| s.lock().unwrap_or_else(|p| p.into_inner()).clone());
         self.emit(crate::events::CatalogEvent::RunFinished {
             run: run_id,
             kind: "agent".to_string(),
             ms: run_started.elapsed().as_millis() as u64,
             ok: outcome.is_ok(),
-            cause: None,
-            cancelled_by: None,
+            cause: cancelled_by.as_ref().map(|_| crate::dataflow::background::cause::REQUESTED.to_string()),
+            cancelled_by,
         });
         outcome
     }

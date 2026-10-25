@@ -17,6 +17,8 @@
 //! | `GET /ide/taches?backend=<id>[&nom=<n>]` | les tâches de l'agent, ou la relecture d'une (fichiers, graphes, témoins) |
 //! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom, message}`, rejeter `{backend, nom, why}` |
 //! | `POST /ide/runs/arreter` | arrêter un run en vol `{backend, run}`, au nom de l'IDE (C4) |
+//! | `GET /ide/chat?backend=<id>` | le chat de l'atelier : allumé ou non, le run en cours, le fil, les orphelines (page 11) |
+//! | `POST /ide/chat` | un tour `{backend, message}` : publié sur `agent` et `tokens`, inscrit dans les runs en vol |
 //! | `GET /ide/etat` | l'état de l'hôte (`/etat`) |
 //! | `POST /ide/call` | `{manifest, name, arguments}`, comme `/call`, dans la session de l'IDE |
 //! | `POST /ide/describe` | `{manifest}`, comme `/describe` |
@@ -542,6 +544,32 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                 },
             };
             let _ = request.respond(json_(statut, &v));
+        }
+        ("GET", "/ide/chat") => {
+            // **Le chat de l'atelier** (page 11) : allumé ou non, le run en
+            // cours, le fil de la session, les sessions orphelines.
+            let v = match param("backend") {
+                None => json!({ "ok": false, "error": "chat : il faut backend=<id>" }),
+                Some(id) => match host.chat_state(&id) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/chat") => {
+            // Un tour : il publie sur le bus du backend (`agent`, `tokens`) et
+            // rend à sa fin le texte, le run et ce qu'il a consommé. Un refus
+            // (éteint, un tour déjà en cours) est une réponse.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match host.chat_turn(c["backend"].as_str().unwrap_or_default(), c["message"].as_str().unwrap_or_default()) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
         }
         ("POST", "/ide/runs/arreter") => {
             // **Arrêter un run depuis la page** (C4) : le même chemin d'arrêt
