@@ -55,7 +55,12 @@ def publier(magasin: Path, bati: Path, *extra: str) -> subprocess.CompletedProce
 # tranches de 16 Gio, 4f9274a38, ni le ROLLBACK du COPY de relations,
 # a45a15adf) ; 4f9274a38 les contient.
 SOUS_LE_PLANCHER = "rag3db-build-87a362e304200776000095c5a3d6531373560d9a-Release-p12"
-AU_PLANCHER = "rag3db-build-4f9274a38769a085ab0009a89d1b7dba7597e568-Release-p12"
+# Au plancher : le commit où ce script se trouve. Tout plancher est un
+# ancêtre de master, ce qui reste vrai quand un plancher s'ajoute — un commit
+# fixe (4f9274a38) est passé sous le plancher dcbaef7b1 le jour où il est entré.
+_TETE = subprocess.run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
+                       capture_output=True, text=True).stdout.strip()
+AU_PLANCHER = f"rag3db-build-{_TETE}-Release-p12"
 
 
 def git_connait(*commits: str) -> bool:
@@ -112,10 +117,27 @@ class Magasin(unittest.TestCase):
         self.assertIn("VERDICT : NON JUGÉ", r.stderr.strip().splitlines()[-1])
         self.assertEqual(outil(self.magasin, "courant", "--poser", AU_PLANCHER, env=env).returncode, 3)
         self.assertFalse((self.magasin / "courant").exists())
-        # Une lib sans commit dans son identifiant ne se juge pas non plus.
+        self.assertIn("git ne connaît pas un plancher", r.stderr.strip().splitlines()[-1])
+        # Une lib sans commit dans son identifiant ne se juge pas non plus, et
+        # le verdict dit que c'est l'identifiant, pas le dépôt.
         publier(self.magasin, faux_bati(self.racine, "sans", "rag3db-build-SANS"), "--sans-courant")
         r = outil(self.magasin, "verifier", str(self.magasin / "rag3db-build-SANS"), env={"RAG3DB_LIBS_PLANCHERS": LES_PLANCHERS})
         self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertIn("l'identifiant ne porte pas de commit", r.stderr.strip().splitlines()[-1])
+
+    @unittest.skipUnless(git_connait("4f9274a38769a085ab0009a89d1b7dba7597e568", "a45a15adf2347de1f089ab7d00ee7d36d46e02d0"),
+                         "le dépôt n'a pas l'historique du moteur (clone superficiel)")
+    def test_verifier_courant_et_un_identifiant_nu_jugent_la_lib_du_magasin(self):
+        """96, 25 octobre 2026 : `verifier courant` jugeait le mot, pas la lib
+        que le lien désigne. Le mot `courant` et un identifiant nu se
+        résolvent au magasin."""
+        les = {"RAG3DB_LIBS_PLANCHERS": LES_PLANCHERS}
+        publier(self.magasin, faux_bati(self.racine, "au", AU_PLANCHER), "--sans-courant")
+        self.assertEqual(outil(self.magasin, "courant", "--poser", AU_PLANCHER, env=les).returncode, 0)
+        for cible in ["courant", AU_PLANCHER]:
+            r = outil(self.magasin, "verifier", cible, env=les)
+            self.assertEqual(r.returncode, 0, f"{cible} : {r.stderr}")
+            self.assertIn("planchers tenus", r.stderr.strip().splitlines()[-1])
 
     def test_publier_pose_un_dossier_immuable_et_courant(self):
         bati = faux_bati(self.racine, "a", "rag3db-build-A")
