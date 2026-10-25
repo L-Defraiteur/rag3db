@@ -19,7 +19,7 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
-use super::port::{PortDef, PortKind, Posture};
+use super::port::{PortDef, PortKind, PortType, Posture};
 
 /// Les ports d'un nœud, tels que la résolution les lit.
 pub(crate) struct NodePorts {
@@ -166,6 +166,47 @@ pub(crate) fn refuse_complete_on_open(
                 "{}.{} porte un flux ouvert (Open) : {}.{} le lit en entier (Complete) et l'attendrait pour \
                  toujours ; il doit le lire élément par élément (PerElement)",
                 e.from_node, e.from_port, e.to_node, e.to_port
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Les types de port dont plusieurs valeurs se fondent en une
+/// (`port::merge_port_values`, `node::merge_stream_elements`) : le texte bout à
+/// bout, les résultats, les enfants, les paires d'uuids, les métas. `Any` ne dit
+/// rien d'avance : l'exécution juge son pli.
+fn se_fond(t: PortType) -> bool {
+    matches!(t, PortType::Text | PortType::Results | PortType::Children | PortType::Uuids | PortType::Meta | PortType::Any)
+}
+
+/// **Le refus `Complete ← Finite` d'un type qui ne se fond pas**, au bâti du
+/// graphe (25 octobre 2026) : une entrée qui lit le tout reçoit le pli des
+/// éléments du flux, et le pli d'objets (`Map`, des lots, une sortie de
+/// modèle…) n'existe pas — il rendait un Trigger en silence. L'exécution refuse
+/// aussi ([`super::node::plier`]) ce qui passerait quand même (un `Any`).
+pub(crate) fn refuse_complete_on_finite_unfoldable(
+    nodes: &[NodePorts],
+    edges: &[EdgeRef],
+    kind_of: impl Fn(&str, &str) -> Option<PortKind>,
+) -> Result<(), String> {
+    let by_name: HashMap<&str, &NodePorts> = nodes.iter().map(|n| (n.name.as_str(), n)).collect();
+    for e in edges {
+        let Some(PortKind::Finite) = kind_of(&e.from_node, &e.from_port) else { continue };
+        let Some(sortie) = by_name.get(e.from_node.as_str()).and_then(|n| n.outputs.iter().find(|o| o.name == e.from_port)) else { continue };
+        if se_fond(sortie.port_type) {
+            continue;
+        }
+        let posture = by_name
+            .get(e.to_node.as_str())
+            .and_then(|n| n.inputs.iter().find(|i| i.name == e.to_port))
+            .map(|i| i.posture);
+        if posture == Some(Posture::Complete) {
+            return Err(format!(
+                "{}.{} porte un flux fini de {:?}, qui ne se fond pas en une valeur : {}.{} le lit en entier (Complete) \
+                 et ne verrait ni chaque élément ni le flux entier ; lisez-le élément par élément (PerElement), \
+                 ou appelez un sous-graphe par élément (ForEachNode)",
+                e.from_node, e.from_port, sortie.port_type, e.to_node, e.to_port
             ));
         }
     }

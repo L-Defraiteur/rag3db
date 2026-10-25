@@ -341,7 +341,8 @@ impl DataflowGraph {
     pub fn validate_streams(&self) -> Result<(), String> {
         let kinds = self.resolved_kinds()?;
         let (nodes, edges) = self.kinds_input();
-        super::kinds::refuse_complete_on_open(&nodes, &edges, |n, p| kinds.get(&(n.to_string(), p.to_string())).copied())
+        super::kinds::refuse_complete_on_open(&nodes, &edges, |n, p| kinds.get(&(n.to_string(), p.to_string())).copied())?;
+        super::kinds::refuse_complete_on_finite_unfoldable(&nodes, &edges, |n, p| kinds.get(&(n.to_string(), p.to_string())).copied())
     }
 
     /// Le graphe a-t-il une sortie en flux **branchée**, une fois les genres
