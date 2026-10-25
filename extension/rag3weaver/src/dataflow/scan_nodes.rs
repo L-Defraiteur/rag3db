@@ -208,6 +208,7 @@ impl Node for ScanFilesNode {
                         end_line: h.best_line_no,
                         start_char: 0,
                         end_char: 0,
+                        highlights: Vec::new(),
                     }),
                     chunks: None,
                     relation: None,
