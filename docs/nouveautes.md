@@ -84,7 +84,7 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 - **25 oct. — Tout run s'arrête d'un clic.** Un seul chemin d'arrêt pour tout ce qui
   tourne dans l'hôte, et le bouton Arrêter dans le DAG vivant. 95c985c4c.
 - **25 oct. — Un oracle juge nos relations.** clangd compare 300 relations C++ à la
-  vérité du compilateur : 75 % justes, 8 % fausses, et on sait lesquelles. Rust,
+  vérité du compilateur : 73 % justes, 5 % fausses sous le juge strict (218 et 14 sur 300), et on sait lesquelles. Rust,
   TypeScript, Python, Go suivent. Branche codeparsers/oracle-clangd.
 - **25 oct. — lucivy ne se fige plus.** Le plein texte ne se bloque plus sous lecteurs
   et réindexation, et un shard sans écrivain ne perd plus d'écriture ; pris par une

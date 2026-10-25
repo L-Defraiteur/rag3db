@@ -1820,7 +1820,7 @@ où elle vit.
   vrai navigateur, sa base réindexée à partir de 15 h 46. **Règles de Lucie
   du jour** : chaque commit se pousse dans la minute sur une branche à son
   nom, master seul attend le vert ; pas de compilateur dans le produit mais
-  clangd en oracle (300 CONSUMES C++ : 75 % justes, 8 % fausses, « nom » à
+  clangd en oracle (300 CONSUMES C++ : 73 % justes, 5 % fausses sous le juge strict rejugé le soir même, « nom » à
   17 %), étendu à Rust, TypeScript, Python, Go ; le budget de raisonnement
   réglable par modèle dans models.llm, libre par défaut ; bâtir l'hôte sur
   luciepc et copier le binaire ici. **Trouvé et tranché** : la forme de
