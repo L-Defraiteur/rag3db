@@ -6,6 +6,7 @@
 
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
+#include "common/file_system/file_info.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/random_engine.h"
 #include "common/serializer/in_mem_file_writer.h"
@@ -213,14 +214,17 @@ bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pag
             throw RuntimeException(stringFormat(
                 "Checkpoint failed: table {} not found in storage manager.", entry->getName()));
         }
+        const auto bytesBefore = common::FileInfo::bytesWritten();
         const auto changed = tables.at(entry->getTableID())->checkpoint(context, entry, pageAllocator);
         hasChanges = changed || hasChanges;
         if (CheckpointProfile::enabled()) {
             const auto ms = profile.lap();
             nodeMs += ms;
             if (ms >= 1.0) {
-                fprintf(stderr, "[checkpoint-profile]     table %s : %.1f ms%s\n",
-                    entry->getName().c_str(), ms, changed ? "" : " (inchangée)");
+                fprintf(stderr, "[checkpoint-profile]     table %s : %.1f ms, %lu octets ecrits%s\n",
+                    entry->getName().c_str(), ms,
+                    static_cast<unsigned long>(common::FileInfo::bytesWritten() - bytesBefore),
+                    changed ? "" : " (inchangée)");
             }
         }
     }
@@ -230,14 +234,18 @@ bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pag
                 throw RuntimeException(stringFormat(
                     "Checkpoint failed: table {} not found in storage manager.", entry->getName()));
             }
+            const auto bytesBefore = common::FileInfo::bytesWritten();
             const auto changed = tables.at(info.oid)->checkpoint(context, entry, pageAllocator);
             hasChanges = changed || hasChanges;
             if (CheckpointProfile::enabled()) {
                 const auto ms = profile.lap();
                 relMs += ms;
                 if (ms >= 1.0) {
-                    fprintf(stderr, "[checkpoint-profile]     relations %s : %.1f ms%s\n",
-                        entry->getName().c_str(), ms, changed ? "" : " (inchangée)");
+                    fprintf(stderr,
+                        "[checkpoint-profile]     relations %s : %.1f ms, %lu octets ecrits%s\n",
+                        entry->getName().c_str(), ms,
+                        static_cast<unsigned long>(common::FileInfo::bytesWritten() - bytesBefore),
+                        changed ? "" : " (inchangée)");
                 }
             }
         }
