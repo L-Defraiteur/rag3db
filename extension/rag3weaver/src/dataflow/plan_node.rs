@@ -36,6 +36,23 @@ fn non_resolu(cite: &str) -> String {
     format!("{NODE_TYPE}: le Plan « {cite} » n'a pas été lu au chargement — un PlanNode se déclare dans un outil du manifeste")
 }
 
+/// **Un paramètre que le Plan ne lit pas est une faute de nom**, refusée en le nommant avec ceux
+/// que le Plan lit. Perdu en silence, `sourc=$source` faisait disparaître `source`, et sous
+/// `optional` le filtre tombait sans erreur.
+fn refuser_les_inconnus<'a>(plan: &DeclaredPlan, cles: impl Iterator<Item = &'a String>) -> Result<(), String> {
+    let lus = plan.param_names();
+    let inconnus: Vec<&String> = cles.filter(|k| !lus.contains(*k)).collect();
+    if inconnus.is_empty() {
+        return Ok(());
+    }
+    let noms = |v: Vec<&String>| v.iter().map(|k| format!("« {k} »")).collect::<Vec<_>>().join(", ");
+    Err(format!(
+        "{NODE_TYPE}: le Plan ne lit pas {} — ses paramètres : {}",
+        noms(inconnus),
+        if lus.is_empty() { "aucun".to_string() } else { noms(lus.iter().collect()) }
+    ))
+}
+
 pub struct PlanNodeFactory;
 
 impl NodeFactory for PlanNodeFactory {
@@ -59,6 +76,7 @@ impl NodeFactory for PlanNodeFactory {
                 params.insert(k.clone(), v.clone());
             }
         }
+        refuser_les_inconnus(&plan, params.keys())?;
         Ok(Box::new(PlanNode { name: name.to_string(), plan, params }))
     }
 
@@ -130,7 +148,10 @@ impl Node for PlanNode {
 
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
         let params = match ctx.input("params").and_then(|p| p.downcast::<Value>()) {
-            Some(Value::Object(m)) => m.clone(),
+            Some(Value::Object(m)) => {
+                refuser_les_inconnus(&self.plan, m.keys())?;
+                m.clone()
+            }
             Some(autre) => return Err(format!("{NODE_TYPE}: l'entrée params n'est pas un objet ({autre})")),
             None => self.params.clone(),
         };
@@ -226,6 +247,29 @@ impl Node for PlanNode {
 /// manifeste, lu, vérifié contre sa forme et contre `schema` ; le Plan lu
 /// remplace la citation dans la configuration du nœud. Une erreur nomme le
 /// fichier.
+/// **Les Plans cités par un outil, lus et vérifiés**, à la place de leur citation : une seule
+/// boucle, que le chargeur d'un manifeste (`backend.rs`) et le test des outils livrés
+/// (`chaque_gabarit_d_outil_livre_se_construit`) appellent tous deux — un test qui recopierait la
+/// boucle jugerait une autre résolution que celle du chargeur.
+pub fn resoudre_les_plans(
+    outil: &mut super::graph_tool::GraphTool,
+    lire: impl Fn(&str) -> Result<String, String>,
+    schema: &rag3weaver_ir::PlanSchema,
+) -> Result<(), String> {
+    let plans: Vec<(String, String)> = outil
+        .template()
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NODE_TYPE)
+        .filter_map(|n| n.config.get("plan").and_then(Value::as_str).map(|c| (n.name.clone(), c.to_string())))
+        .collect();
+    for (noeud, cite) in plans {
+        let lu = lire_le_plan(&cite, &lire, schema)?;
+        outil.remplacer_config(&noeud, "plan", lu);
+    }
+    Ok(())
+}
+
 pub fn lire_le_plan(cite: &str, lire: impl Fn(&str) -> Result<String, String>, schema: &rag3weaver_ir::PlanSchema) -> Result<Value, String> {
     let Some(chemin) = cite.strip_prefix('@') else {
         return Err(format!("{NODE_TYPE}: `plan` se cite par @plans/<fichier>.json, pas « {cite} »"));

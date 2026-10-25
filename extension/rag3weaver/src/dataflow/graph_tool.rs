@@ -3157,26 +3157,8 @@ mod tests {
                     continue;
                 }
             };
-            let plans: Vec<(String, String)> = outil
-                .template()
-                .nodes
-                .iter()
-                .filter(|n| n.node_type == crate::dataflow::plan_node::NODE_TYPE)
-                .filter_map(|n| n.config.get("plan").and_then(serde_json::Value::as_str).map(|c| (n.name.clone(), c.to_string())))
-                .collect();
-            let mut plan_faux = false;
-            for (noeud, cite) in plans {
-                match crate::dataflow::plan_node::lire_le_plan(&cite, |c| Err(format!("{c} : un outil livré cite son Plan par @builtin:")), &schema_des_plans) {
-                    Ok(lu) => {
-                        outil.remplacer_config(&noeud, "plan", lu);
-                    }
-                    Err(e) => {
-                        echecs.push(format!("{nom} : {e}"));
-                        plan_faux = true;
-                    }
-                }
-            }
-            if plan_faux {
+            if let Err(e) = crate::dataflow::plan_node::resoudre_les_plans(&mut outil, |c| Err(format!("{c} : un outil livré cite son Plan par @builtin:")), &schema_des_plans) {
+                echecs.push(format!("{nom} : {e}"));
                 continue;
             }
             let mut args = serde_json::Map::new();
