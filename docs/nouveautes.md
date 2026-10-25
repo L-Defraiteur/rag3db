@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **25 oct. — Une recherche ne peut plus tuer un écrivain.** Le plein texte (lucivy
+  4.3.1) ne panique plus sous validations concurrentes, et une recherche en échec
+  ne fait plus perdre d'écriture ni geler une validation ; prouvé 80 fois sur 80
+  sous charge et par le témoin réel à quatre lecteurs. 277f8b11d.
 - **25 oct. — La mémoire dans des fichiers qu'on lit.** Chaque fiche est un fichier
   Markdown (son état, ses ancres, ses apports) ; si la base se perd, elle revient
   entière de son dossier. d72bcf5e0.
