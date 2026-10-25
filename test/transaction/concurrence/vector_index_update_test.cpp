@@ -1166,10 +1166,24 @@ struct HNSWStorageInfoMirror : rag3db::storage::IndexStorageInfo {
     offset_t numCheckpointedNodes;
 };
 
+// La transaction de lecture des assistants qui suivent : refusée (une base condamnée par un point
+// de reprise manqué), les internes liraient le catalogue sous une transaction nulle ; l'échec est
+// dit et l'assistant rend 0 sans les toucher.
+bool beginReadOnly(rag3db::main::Connection& connection) {
+    auto begin = connection.query("BEGIN TRANSACTION READ ONLY;");
+    if (!begin->isSuccess()) {
+        ADD_FAILURE() << "[check: begin] " << begin->getErrorMessage();
+        return false;
+    }
+    return true;
+}
+
 // Le compte des lignes reliées de l'index, lu ou, avec newCount, écrit par les internes.
 offset_t indexedRowCount(rag3db::main::Connection& connection, const std::string& table,
     const std::string& index, std::optional<offset_t> newCount = std::nullopt) {
-    EXPECT_TRUE(connection.query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
+    if (!beginReadOnly(connection)) {
+        return 0;
+    }
     auto* context = connection.getClientContext();
     auto* transaction = rag3db::transaction::Transaction::Get(*context);
     const auto* entry =
@@ -1192,7 +1206,9 @@ offset_t indexedRowCount(rag3db::main::Connection& connection, const std::string
 // voit pas, lue par les internes.
 int64_t lowerGraphEdgeCount(rag3db::main::Connection& connection, const std::string& table,
     const std::string& index) {
-    EXPECT_TRUE(connection.query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
+    if (!beginReadOnly(connection)) {
+        return 0;
+    }
     auto* context = connection.getClientContext();
     auto* transaction = rag3db::transaction::Transaction::Get(*context);
     const auto* entry =
@@ -1211,7 +1227,9 @@ int64_t lowerGraphEdgeCount(rag3db::main::Connection& connection, const std::str
 // internes.
 offset_t upperEntryPointOf(rag3db::main::Connection& connection, const std::string& table,
     const std::string& index, std::optional<offset_t> newEntryPoint = std::nullopt) {
-    EXPECT_TRUE(connection.query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
+    if (!beginReadOnly(connection)) {
+        return 0;
+    }
     auto* context = connection.getClientContext();
     auto* transaction = rag3db::transaction::Transaction::Get(*context);
     const auto* entry =
@@ -2200,6 +2218,19 @@ TEST_F(VectorIndexUpdate, AnInvalidUpperEntryPointIsTakenFromTheUpperLayer) {
     EXPECT_TRUE(failed.empty()) << checks;
 }
 
+// Les 120 000 vecteurs de dimension 768 de la mesure qui suit ne tiennent pas dans le tampon d'1 Gio
+// de VectorIndexUpdate : le COPY le remplissait et condamnait la base (fenêtre du 25 octobre 2026).
+class VectorIndexMeasure : public VectorIndexUpdate {
+public:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        systemConfig->bufferPoolSize = 4ull * 1024 * 1024 * 1024;
+        createDBAndConn();
+        mustRun("CALL auto_checkpoint=false;");
+        concurrency::loadVectorExtension(*conn);
+    }
+};
+
 // La mesure du ticket des lignes hors du graphe (hotfixs, 25 octobre) : une recherche lit une à une les
 // lignes au-delà du compte des lignes reliées (numCheckpointedNodes), par searchFromUnCheckpointed
 // (un getEmbedding et une distance par ligne). Une table de TOTAL vecteurs de dimension 768, indexée
@@ -2207,7 +2238,7 @@ TEST_F(VectorIndexUpdate, AnInvalidUpperEntryPointIsTakenFromTheUpperLayer) {
 // balayer, à N exact et sans dépendre de la course d'un CREATE ; 50 recherches à k = 10, médiane
 // et p95 ; le compte est rendu après. Une mesure : sautée sans CONCURRENCE_MEASURE=1, à jouer sous
 // `poste mesure`, dans une fenêtre calme, la charge relevée.
-TEST_F(VectorIndexUpdate, MeasureSearchOverRowsOutsideTheGraph) {
+TEST_F(VectorIndexMeasure, MeasureSearchOverRowsOutsideTheGraph) {
     if (std::getenv("CONCURRENCE_MEASURE") == nullptr) {
         GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1, under `poste mesure`";
     }
@@ -2240,18 +2271,27 @@ TEST_F(VectorIndexUpdate, MeasureSearchOverRowsOutsideTheGraph) {
     }
     mustRun("COPY Far FROM '" + csv + "' (header=false);");
     std::filesystem::remove(csv);
+    if (HasFatalFailure()) {
+        return;
+    }
     const auto createStart = std::chrono::steady_clock::now();
     createIndex();
     const auto createMs = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - createStart)
                               .count();
     mustRun("CHECKPOINT;");
+    if (HasFatalFailure()) {
+        return;
+    }
     ASSERT_EQ(indexedRowCount(*conn, table, "doc_index"), static_cast<offset_t>(TOTAL))
         << "[check: setup] the mirror of HNSWStorageInfo does not read the index's row count";
     std::cerr << "  [hors du graphe] " << TOTAL << " vecteurs de dimension " << DIMENSION
               << ", CREATE " << createMs << " ms\n";
     for (const int64_t outside : {0, 1'000, 10'000, 100'000}) {
         indexedRowCount(*conn, table, "doc_index", static_cast<offset_t>(TOTAL - outside));
+        if (HasFailure()) {
+            return;
+        }
         std::vector<double> durations;
         for (auto search = 0; search < SEARCHES; ++search) {
             const auto query = vectorOf(1'000'000 + search);
