@@ -23,6 +23,22 @@
 //   crash-after-written-out-pages-replays-exactly : le fils a validé TARGET lignes (des pages ont
 //   donc été rendues), et la base rouverte en porte exactement le nombre que son journal dit
 //   validé.
+//
+// Les témoins de V2-2 (page 19 des docs coeur-cpp, 38baca51a), écrits avant le lot :
+// - CheckpointNoStall.OpenReaderOnNodesIsNotWaitedFor (V2-2a) : un lecteur ouvre une transaction
+//   en lecture seule et lit un compte et une somme sur une table de nœuds que le point de reprise
+//   réécrit ; un écrivain modifie une ligne et en crée une, et valide ; puis CHECKPOINT, lecteur
+//   toujours ouvert. checkpoint-does-not-wait-for-an-open-reader : le CHECKPOINT réussit pendant
+//   que le lecteur reste ouvert (aujourd'hui, il attend son départ jusqu'au délai, 5 s, et échoue)
+//   ; open-reader-keeps-its-snapshot : le lecteur relit la même chose pendant et après le point de
+//   reprise, sans voir l'écriture validée après son BEGIN.
+// - CheckpointNoStall.OpenReaderOnRelsIsNotWaitedFor (V2-2b) : la même chose sur une table de
+//   relations dont une propriété a été réécrite en entier.
+// - CheckpointNoStall.WriterCommittedDuringACheckpointSurvivesACrash (V2-2c) : dans un fils, un
+//   CHECKPOINT coûteux part ; 30 ms après, un écrivain fait BEGIN, une ligne, COMMIT ; le fils se
+//   tue par SIGKILL, base ouverte, dès la validation. writer-commits-during-a-checkpoint : la
+//   validation est faite avant la fin du point de reprise ; committed-row-survives-a-crash-during-
+//   the-checkpoint : la base rouverte porte la ligne.
 
 #ifndef __SINGLE_THREADED__
 
@@ -30,6 +46,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -38,6 +55,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "bench_harness.h"
 #include "common/string_format.h"
@@ -245,6 +263,165 @@ TEST_F(CheckpointNoStall, CrashAfterWrittenOutPagesReplaysExactly) {
         << "[check: crash-after-written-out-pages-replays-exactly] the child committed " << logged
         << " rows of " << TARGET << " (fewer means the buffer refused instead of writing pages "
         << "out), the reopened database holds " << reopened;
+}
+
+// Une base de relations dont une propriété a été réécrite après le dernier point de reprise : le
+// prochain CHECKPOINT a les pages de la table de relations à reporter.
+constexpr int64_t REL_NODES = 10'000;
+constexpr int64_t REL_EDGES = 300'000;
+
+class CheckpointOpenReader : public CheckpointNoStall {
+protected:
+    void prepareACostlyRelCheckpoint() {
+        systemConfig->bufferPoolSize = 2ull * 1024 * 1024 * 1024;
+        createDBAndConn();
+        concurrency::applyBenchSettings(*conn);
+        ok(*conn, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY);");
+        ok(*conn, "CREATE REL TABLE Link(FROM Doc TO Doc, weight INT64);");
+        ok(*conn, stringFormat("UNWIND range(0, {}) AS i CREATE (:Doc {id: i});", REL_NODES - 1));
+        const auto path = databasePath + ".links.csv";
+        {
+            std::ofstream out(path);
+            std::mt19937 engine(3);
+            std::uniform_int_distribution<int64_t> any(0, REL_NODES - 1);
+            for (int64_t i = 0; i < REL_EDGES; ++i) {
+                out << any(engine) << "," << any(engine) << "," << i << "\n";
+            }
+        }
+        ok(*conn, "COPY Link FROM '" + path + "' (header=false);");
+        std::filesystem::remove(path);
+        ok(*conn, "CHECKPOINT;");
+        ok(*conn, "MATCH ()-[l:Link]->() SET l.weight = l.weight + 1;");
+    }
+
+    static std::string read(rag3db::main::Connection& connection, const std::string& query) {
+        auto result = connection.query(query);
+        if (!result->isSuccess()) {
+            return "ERREUR : " + result->getErrorMessage().substr(0, 160);
+        }
+        std::string out;
+        while (result->hasNext()) {
+            out += result->getNext()->toString();
+        }
+        return out;
+    }
+
+    // Le lecteur ouvert avant le CHECKPOINT : il lit, l'écrivain valide, le CHECKPOINT part sur la
+    // connexion principale ; le lecteur relit 30 ms après son départ et après sa fin, puis ferme.
+    void openReaderAcrossACheckpoint(const std::string& query,
+        const std::vector<std::string>& writes) {
+        rag3db::main::Connection reader(database.get());
+        rag3db::main::Connection writer(database.get());
+        ok(reader, "BEGIN TRANSACTION READ ONLY;");
+        const auto before = read(reader, query);
+        for (const auto& write : writes) {
+            ok(writer, write);
+        }
+        const auto seenByOthers = read(writer, query);
+        const auto start = Clock::now();
+        std::atomic<bool> done{false};
+        double checkpointMs = 0;
+        std::string checkpointError;
+        std::thread checkpoint([&] {
+            auto result = conn->query("CHECKPOINT;");
+            checkpointMs = msSince(start);
+            checkpointError = result->isSuccess() ? "" : result->getErrorMessage();
+            done = true;
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        const auto during = read(reader, query);
+        const bool checkpointEndedFirst = done.load();
+        checkpoint.join();
+        const auto after = read(reader, query);
+        reader.query("COMMIT;");
+        std::cerr << "  [lecteur ouvert] CHECKPOINT " << checkpointMs << " ms"
+                  << (checkpointError.empty() ?
+                             "" :
+                             " (refusé : " + checkpointError.substr(0, 120) + ")")
+                  << " ; le lecteur lit avant « " << before << " », pendant « " << during
+                  << " », après « " << after << " » ; les autres lisent « " << seenByOthers
+                  << " »\n";
+        ASSERT_NE(seenByOthers, before)
+            << "[check: plan] the writes did not change what the query reads: nothing is witnessed";
+        ASSERT_FALSE(checkpointEndedFirst)
+            << "[check: plan] the checkpoint ended before the read made during it";
+        EXPECT_TRUE(checkpointError.empty())
+            << "[check: checkpoint-does-not-wait-for-an-open-reader] the CHECKPOINT, with a reader "
+               "open, took "
+            << checkpointMs << " ms and was refused: " << checkpointError;
+        EXPECT_TRUE(during == before && after == before)
+            << "[check: open-reader-keeps-its-snapshot] before « " << before << " », during « "
+            << during << " », after « " << after << " »";
+    }
+};
+
+TEST_F(CheckpointOpenReader, OpenReaderOnNodesIsNotWaitedFor) {
+    prepareACostlyCheckpoint();
+    openReaderAcrossACheckpoint("MATCH (d:Doc) RETURN count(d), sum(d.vec[1]);",
+        {stringFormat("MATCH (d:Doc {id: 7}) SET d.vec = {};", vectorLiteral(424242)),
+            stringFormat("CREATE (:Doc {id: 50000000, vec: {}});", vectorLiteral(1))});
+}
+
+TEST_F(CheckpointOpenReader, OpenReaderOnRelsIsNotWaitedFor) {
+    prepareACostlyRelCheckpoint();
+    openReaderAcrossACheckpoint("MATCH ()-[l:Link]->() RETURN count(l), sum(l.weight);",
+        {"MATCH (a:Doc {id: 1}), (b:Doc {id: 2}) CREATE (a)-[:Link {weight: 1000000}]->(b);",
+            "MATCH ()-[l:Link]->() WHERE l.weight = 6 SET l.weight = 7000000;"});
+}
+
+TEST_F(CheckpointNoStall, WriterCommittedDuringACheckpointSurvivesACrash) {
+    namespace fs = std::filesystem;
+    const auto logPath = databasePath + ".writer";
+    fs::create_directories(fs::path(databasePath).parent_path());
+    fs::remove(logPath);
+    const auto pid = fork();
+    if (pid == 0) {
+        concurrency::disableCoreDumps();
+        prepareACostlyCheckpoint();
+        rag3db::main::Connection writer(database.get());
+        std::atomic<bool> checkpointDone{false};
+        std::thread checkpoint([&] {
+            conn->query("CHECKPOINT;");
+            checkpointDone = true;
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        const bool begun = writer.query("BEGIN TRANSACTION;")->isSuccess();
+        const bool created =
+            begun &&
+            writer.query(stringFormat("CREATE (:Doc {id: 60000000, vec: {}});", vectorLiteral(2)))
+                ->isSuccess();
+        const bool committed = created && writer.query("COMMIT;")->isSuccess();
+        const bool during = !checkpointDone.load();
+        {
+            std::ofstream log(logPath);
+            log << "committed " << committed << " during " << during << std::endl;
+        }
+        // Mourir base ouverte, le point de reprise peut-être encore en cours.
+        kill(getpid(), SIGKILL);
+        _exit(9);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+        << "[check: plan] the child was not killed, status " << status;
+    std::string word;
+    int committed = 0;
+    int during = 0;
+    {
+        std::ifstream in(logPath);
+        in >> word >> committed >> word >> during;
+    }
+    ASSERT_EQ(committed, 1) << "[check: plan] the writer did not commit";
+    createDBAndConn();
+    concurrency::applyBenchSettings(*conn);
+    auto count = conn->query("MATCH (d:Doc {id: 60000000}) RETURN count(d);");
+    ASSERT_TRUE(count->isSuccess()) << "[check: query] " << count->getErrorMessage();
+    const auto present = count->getNext()->getValue(0)->getValue<int64_t>();
+    std::cerr << "  [écrivain tué] validé pendant le point de reprise : " << during
+              << " ; ligne à la réouverture : " << present << "\n";
+    EXPECT_EQ(during, 1) << "[check: writer-commits-during-a-checkpoint] the writer committed only "
+                            "after the checkpoint ended";
+    EXPECT_EQ(present, 1) << "[check: committed-row-survives-a-crash-during-the-checkpoint]";
 }
 
 } // namespace
