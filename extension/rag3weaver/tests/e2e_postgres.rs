@@ -2024,3 +2024,69 @@ fn un_plan_declare_se_rend_et_se_joue_en_sql() {
     let (_, uuids, total) = jouer(json!({"value": "x", "value_dir": "d:sr_/", "limit": 10, "offset": 0}));
     assert!(uuids.is_empty() && total == 0, "{uuids:?}");
 }
+
+/// **L'ordre par l'extrême des lignes liées, en SQL** (25 octobre 2026) : une
+/// sous-requête corrélée `(SELECT max(…) …)` dans l'`ORDER BY`, seule (son NULL
+/// en dernier, `NULLS LAST`) ou dans un `coalesce` — les mêmes fiches et les
+/// mêmes réponses que `plan_declare_tests` sur rag3db.
+#[test]
+#[ignore]
+fn un_ordre_par_extreme_des_lignes_liees_se_joue_en_sql() {
+    use rag3weaver::plan::{run_plan, PlanOptions};
+    use rag3weaver_ir::{DeclaredPlan, Value};
+    use serde_json::json;
+    let _garde = VERROU_BASE.lock().unwrap_or_else(|e| e.into_inner());
+    let conn = ouvrir();
+    table_rase(conn.as_ref());
+    for q in [
+        r#"CREATE TABLE Memory (_uuid text PRIMARY KEY, kind text, created_at bigint, updated_at bigint)"#,
+        r#"CREATE TABLE Apport (_uuid text PRIMARY KEY, niveau text, created_at bigint)"#,
+        r#"CREATE TABLE A_POUR_APPORT (from_uuid text, to_uuid text)"#,
+        r#"INSERT INTO Memory VALUES ('g1','rule',1,10), ('g2','rule',2,50), ('g3','rule',3,30)"#,
+        r#"INSERT INTO Apport VALUES ('p1','L1',100), ('p3a','L1',20), ('p3b','L2',200)"#,
+        r#"INSERT INTO A_POUR_APPORT VALUES ('g1','p1'), ('g3','p3a'), ('g3','p3b')"#,
+    ] {
+        conn.execute(q).unwrap_or_else(|e| panic!("{q} : {e}"));
+    }
+    let par = |cle: serde_json::Value| {
+        DeclaredPlan::from_json(
+            &json!({
+                "forms": {"fiches": {"select": {
+                    "table": "Memory",
+                    "filter": {"equals": {"field": "kind", "param": "k"}},
+                    "returns": ["_uuid",
+                        {"collect": {"as": "apports", "relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport", "fields": ["niveau"]}}],
+                    "order_by": [cle, {"field": "_uuid"}],
+                    "limit": {"param": "limit", "max": 10},
+                    "offset": {"param": "offset"}
+                }}},
+                "outputs": {"rows": "fiches"}
+            })
+            .to_string(),
+        )
+        .unwrap()
+    };
+    let jouer = |plan: &DeclaredPlan, params: serde_json::Value| -> Vec<String> {
+        plan.check().unwrap();
+        let params: BTreeMap<String, Value> = serde_json::from_value(params).unwrap();
+        let lie = plan.bind(&params).unwrap();
+        let r = run_plan(&PostgresDialect, conn.as_ref(), &lie.plan, PlanOptions { no_transaction: true, ..Default::default() })
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        r.outputs["fiches"].rows.iter().map(|l| l[0].as_str().unwrap().to_string()).collect()
+    };
+    let max = |filtre: bool| {
+        let mut m = json!({"relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport", "field": "created_at"});
+        if filtre {
+            m["filter"] = json!({"optional": {"equals": {"field": "niveau", "param": "niveau"}}});
+        }
+        m
+    };
+    let dernier = par(json!({"coalesce": [{"max": max(true)}, "updated_at", "created_at"], "desc": true}));
+    assert_eq!(jouer(&dernier, json!({"k": "rule", "niveau": "L1", "limit": 10, "offset": 0})), ["g1", "g2", "g3"]);
+    assert_eq!(jouer(&dernier, json!({"k": "rule", "limit": 10, "offset": 0})), ["g3", "g1", "g2"]);
+    assert_eq!(jouer(&dernier, json!({"k": "rule", "limit": 2, "offset": 1})), ["g1", "g2"]);
+    let seul = par(json!({"max": max(false), "desc": true}));
+    assert_eq!(jouer(&seul, json!({"k": "rule", "limit": 10, "offset": 0})), ["g3", "g1", "g2"], "le NULL en dernier");
+    let min = par(json!({"min": max(false)}));
+    assert_eq!(jouer(&min, json!({"k": "rule", "limit": 10, "offset": 0})), ["g3", "g1", "g2"], "le NULL en dernier, croissant aussi");
+}

@@ -115,6 +115,104 @@ fn uuids(lignes: &[Vec<CypherValue>]) -> Vec<String> {
     lignes.iter().map(|l| match &l[0] { CypherValue::String(s) => s.clone(), autre => panic!("{autre:?}") }).collect()
 }
 
+/// Des fiches et leurs apports (25 octobre 2026, l'ordre par extrême) : g1,
+/// ancienne (10), reçoit un L1 neuf (100) ; g2, à 50, n'a aucun apport ; g3, à
+/// 30, a un L1 ancien (20) et un L2 neuf (200).
+fn base_des_apports(dir: &std::path::Path) -> Rag3dbConnection {
+    let c = Rag3dbConnection::new(&dir.join("apports.rag3db")).unwrap();
+    for q in [
+        "CREATE NODE TABLE Memory(_uuid STRING, kind STRING, created_at INT64, updated_at INT64, PRIMARY KEY(_uuid))",
+        "CREATE NODE TABLE Apport(_uuid STRING, niveau STRING, created_at INT64, PRIMARY KEY(_uuid))",
+        "CREATE REL TABLE A_POUR_APPORT(FROM Memory TO Apport)",
+        "CREATE (:Memory {_uuid: 'g1', kind: 'rule', created_at: 1, updated_at: 10})",
+        "CREATE (:Memory {_uuid: 'g2', kind: 'rule', created_at: 2, updated_at: 50})",
+        "CREATE (:Memory {_uuid: 'g3', kind: 'rule', created_at: 3, updated_at: 30})",
+        "CREATE (:Apport {_uuid: 'p1', niveau: 'L1', created_at: 100})",
+        "CREATE (:Apport {_uuid: 'p3a', niveau: 'L1', created_at: 20})",
+        "CREATE (:Apport {_uuid: 'p3b', niveau: 'L2', created_at: 200})",
+        "MATCH (m:Memory {_uuid: 'g1'}), (a:Apport {_uuid: 'p1'}) CREATE (m)-[:A_POUR_APPORT]->(a)",
+        "MATCH (m:Memory {_uuid: 'g3'}), (a:Apport {_uuid: 'p3a'}) CREATE (m)-[:A_POUR_APPORT]->(a)",
+        "MATCH (m:Memory {_uuid: 'g3'}), (a:Apport {_uuid: 'p3b'}) CREATE (m)-[:A_POUR_APPORT]->(a)",
+    ] {
+        c.execute(q).unwrap_or_else(|e| panic!("{q} : {e}"));
+    }
+    c
+}
+
+/// Les fiches, ordonnées par `cle` puis `_uuid`, paginées, avec la liste de
+/// leurs apports (l'extrême et la liste dans la même requête) et leur total.
+fn par_extreme(cle: serde_json::Value) -> DeclaredPlan {
+    DeclaredPlan::from_json(
+        &json!({
+            "forms": {
+                "fiches": {"select": {
+                    "table": "Memory",
+                    "filter": {"equals": {"field": "kind", "param": "k"}},
+                    "returns": ["_uuid",
+                        {"collect": {"as": "apports", "relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport", "fields": ["niveau"]}}],
+                    "order_by": [cle, {"field": "_uuid"}],
+                    "limit": {"param": "limit", "max": 10},
+                    "offset": {"param": "offset"}
+                }},
+                "total": {"count": {"matching": {"table": "Memory", "filter": {"equals": {"field": "kind", "param": "k"}}}}}
+            },
+            "outputs": {"rows": "fiches", "total": "total"}
+        })
+        .to_string(),
+    )
+    .unwrap()
+}
+
+fn apport_le_plus_recent(filtre: bool) -> serde_json::Value {
+    let mut max = json!({"relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport", "field": "created_at"});
+    if filtre {
+        max["filter"] = json!({"optional": {"equals": {"field": "niveau", "param": "niveau"}}});
+    }
+    max
+}
+
+/// **« Les fiches triées par la date de leur dernier L1 »** (la forme de la
+/// mémoire) : `coalesce(max(L1.created_at), updated_at, created_at)` décroissant.
+/// Une fiche ancienne qui reçoit un L1 neuf passe devant ; une fiche sans L1
+/// retombe sur sa date ; le filtre de l'extrême écarte le L2, et absent (sous
+/// `optional`), il les compte tous.
+#[test]
+fn le_dernier_apport_ordonne_les_fiches_et_une_fiche_sans_apport_retombe_sur_sa_date() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = base_des_apports(dir.path());
+    let p = par_extreme(json!({"coalesce": [{"max": apport_le_plus_recent(true)}, "updated_at", "created_at"], "desc": true}));
+    // L1 seulement : g1 (100), g2 (50, sa date), g3 (20, son L1).
+    let (lignes, total) = jouer(&c, &p, json!({"k": "rule", "niveau": "L1", "limit": 10, "offset": 0}));
+    assert_eq!(uuids(&lignes), ["g1", "g2", "g3"]);
+    assert_eq!(total, 3);
+    // La liste et l'extrême dans la même requête : g3 garde ses deux apports.
+    let CypherValue::List(apports) = &lignes[2][1] else { panic!("{:?}", lignes[2]) };
+    assert_eq!(apports.len(), 2, "{apports:?}");
+    let CypherValue::List(aucun) = &lignes[1][1] else { panic!("{:?}", lignes[1]) };
+    assert!(aucun.is_empty(), "g2 n'a aucun apport : {aucun:?}");
+    // Sans niveau (l'optional retiré) : le L2 de g3 (200) compte, g3 passe devant.
+    let (lignes, _) = jouer(&c, &p, json!({"k": "rule", "limit": 10, "offset": 0}));
+    assert_eq!(uuids(&lignes), ["g3", "g1", "g2"]);
+    // Paginé : la seconde page suit la première, sans saut ni répétition.
+    let (page, _) = jouer(&c, &p, json!({"k": "rule", "limit": 2, "offset": 1}));
+    assert_eq!(uuids(&page), ["g1", "g2"]);
+}
+
+/// **Un extrême seul : son NULL se range après les autres, dans les deux
+/// sens** — g2, sans apport, est dernier en `max` décroissant comme en `min`
+/// croissant.
+#[test]
+fn un_extreme_seul_range_la_fiche_sans_apport_en_dernier_dans_les_deux_sens() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = base_des_apports(dir.path());
+    let max = par_extreme(json!({"max": apport_le_plus_recent(false), "desc": true}));
+    let (lignes, _) = jouer(&c, &max, json!({"k": "rule", "limit": 10, "offset": 0}));
+    assert_eq!(uuids(&lignes), ["g3", "g1", "g2"], "max décroissant : 200, 100, puis le NULL");
+    let min = par_extreme(json!({"min": apport_le_plus_recent(false)}));
+    let (lignes, _) = jouer(&c, &min, json!({"k": "rule", "limit": 10, "offset": 0}));
+    assert_eq!(uuids(&lignes), ["g3", "g1", "g2"], "min croissant : 20, 100, puis le NULL");
+}
+
 #[test]
 fn un_dossier_rend_ce_qui_est_dessous_par_date_avec_ses_refs_et_son_total() {
     let dir = tempfile::tempdir().unwrap();
