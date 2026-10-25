@@ -215,10 +215,18 @@ uint64_t NodeGroupCollection::getEstimatedMemoryUsage() const {
 void NodeGroupCollection::checkpoint(MemoryManager& memoryManager,
     NodeGroupCheckpointState& state) {
     KU_ASSERT(residency == ResidencyState::ON_DISK);
-    const auto lock = nodeGroups.lock();
-    for (const auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
+    // La liste des groupes est prise sous le verrou puis rendue : chaque groupe se bâtit sous
+    // le sien, et un lecteur qui entre dans la table pendant ce temps (getNodeGroupShared)
+    // n'attend pas la table entière (V2-1c). Aucun écrivain ne tourne : la liste ne bouge pas.
+    std::vector<std::shared_ptr<NodeGroup>> groups;
+    {
+        const auto lock = nodeGroups.lock();
+        groups = nodeGroups.getAllGroups(lock);
+    }
+    for (const auto& nodeGroup : groups) {
         nodeGroup->checkpoint(memoryManager, state);
     }
+    const auto lock = nodeGroups.lock();
     // Les numéros ne bougent pas : une colonne supprimée devient un trou (ANY) à son numéro, et
     // les statistiques gardent leur entrée (jamais relue) au même numéro.
     for (auto columnID = 0u; columnID < types.size(); columnID++) {
