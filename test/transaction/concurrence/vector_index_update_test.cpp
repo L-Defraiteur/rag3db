@@ -2545,6 +2545,17 @@ TEST_F(VectorIndexCreateStates, AnInterruptedCreateLeavesAnIndexToRebuild) {
     EXPECT_EQ(shown->getNext()->getValue(0)->toString(), "INCOMPLETE")
         << "[check: interrupted-create-leaves-incomplete]";
     shown.reset();
+    // Le CREATE qui saute un index existant ne saute pas un index incomplet : il le refuse par le
+    // nom que rag3weaver sait réparer (« is behind its table », retirer puis rebâtir).
+    auto skipped = conn->query(
+        "CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2', skip_if_exists := true);");
+    const auto skipMessage =
+        skipped->isSuccess() ? std::string("<success>") : skipped->getErrorMessage();
+    std::cerr << "  CREATE skip_if_exists on the incomplete index: " << skipMessage.substr(0, 240)
+              << "\n";
+    EXPECT_NE(skipMessage.find("is behind its table"), std::string::npos)
+        << "[check: incomplete-index-not-skipped-by-create] " << skipMessage;
+    skipped.reset();
     auto dropped = conn->query("CALL DROP_VECTOR_INDEX('C', 'c_index');");
     EXPECT_TRUE(dropped->isSuccess()) << "[check: incomplete-index-dropped] "
                                       << dropped->getErrorMessage();
