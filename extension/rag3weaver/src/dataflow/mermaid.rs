@@ -266,6 +266,13 @@ fn parse_value(
     // stay `"42"`.
     if raw.starts_with('$') {
         let var_name = &raw[1..];
+        // **Un chemin pointé** (`$element.title`, ForEachNode, 25 octobre
+        // 2026) : sa racine doit être une variable ; le chemin suit sa valeur, et
+        // la substitution de l'appel le résout dans l'objet.
+        if let (None, Some((racine, chemin))) = (vars.get(var_name), var_name.split_once('.')) {
+            let val = vars.get(racine).ok_or_else(|| MermaidError::UnknownVariable { line: line_num, var: racine.to_string() })?;
+            return Ok(serde_json::Value::String(format!("{val}.{chemin}")));
+        }
         let val = vars.get(var_name).ok_or_else(|| MermaidError::UnknownVariable {
             line: line_num,
             var: var_name.to_string(),
