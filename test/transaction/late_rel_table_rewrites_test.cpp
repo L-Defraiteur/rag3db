@@ -14,6 +14,7 @@
 
 #include <atomic>
 #include <map>
+#include <mutex>
 #include <random>
 #include <set>
 #include <string>
@@ -167,6 +168,104 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderDrains) {
     sources.insert(0);
     destinations.insert(0);
 
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base ouverte";
+    ok("CHECKPOINT;");
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
+// Le même régime avec deux écrivains à la fois, dont l'un annule une transaction sur trois après
+// avoir écrit (un drain en échec est défait) : les deux réécrivent les arêtes de sources voisines
+// vers les mêmes destinations chargées, donc dans les mêmes groupes CSR des deux sens.
+TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderConcurrentAndRolledBackDrains) {
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(NUM_SCOPES - 1) + ") AS i CREATE (:Scope {id: i});");
+    ok("UNWIND range(0, " + std::to_string(NUM_SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64);");
+
+    const std::vector<int64_t> hot{3344, 3389, 9179, 13803, 17616};
+    std::mutex touchedMutex;
+    std::set<int64_t> sources, destinations;
+    std::atomic<bool> stop{false};
+    std::atomic<int> refused{0}, rolledBack{0}, committed{0};
+    std::thread reader([&] {
+        Connection connection(database.get());
+        while (!stop.load()) {
+            connection.query("BEGIN TRANSACTION READ ONLY;");
+            connection.query("MATCH (b:Symbol)<-[r:R]-(a:Scope) RETURN count(*);");
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            connection.query("COMMIT;");
+        }
+    });
+    auto writer = [&](int id, bool rollsBack) {
+        Connection connection(database.get());
+        std::mt19937_64 random{20261026u + id};
+        // Les deux écrivains travaillent dans la même bande de sources : mêmes groupes CSR.
+        for (int round = 0; round < 200; round++) {
+            const auto first = 20000 + static_cast<int64_t>(random() % 4000);
+            const auto count = 1 + static_cast<int64_t>(random() % 6);
+            std::string ids, pairs;
+            for (auto s = first; s < first + count; s++) {
+                ids += (ids.empty() ? "" : ",") + std::to_string(s);
+                for (int e = 0; e < 3; e++) {
+                    const auto dst = random() % 3 == 0 ?
+                                         static_cast<int64_t>(random() % NUM_SYMBOLS) :
+                                         hot[random() % hot.size()];
+                    pairs += (pairs.empty() ? "" : ",") + std::string("[") + std::to_string(s) +
+                             "," + std::to_string(dst) + "," + std::to_string(round) + "]";
+                    std::lock_guard lock{touchedMutex};
+                    destinations.insert(dst);
+                }
+                std::lock_guard lock{touchedMutex};
+                sources.insert(s);
+            }
+            const auto rollback = rollsBack && random() % 3 == 0;
+            if (!connection.query("BEGIN TRANSACTION;")->isSuccess()) {
+                refused++;
+                continue;
+            }
+            auto step = [&](const std::string& query) {
+                return connection.query(query)->isSuccess();
+            };
+            const auto written = step("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;") &&
+                                 step("UNWIND [" + pairs +
+                                      "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) "
+                                      "MERGE (a)-[r:R]->(b) SET r.line = p[3];");
+            if (!written) {
+                // Refusée (un verrou tenu par l'autre écrivain) : la transaction est déjà défaite.
+                refused++;
+                connection.query("ROLLBACK;");
+            } else if (rollback) {
+                rolledBack++;
+                connection.query("ROLLBACK;");
+            } else if (connection.query("COMMIT;")->isSuccess()) {
+                committed++;
+            } else {
+                refused++;
+            }
+            if (id == 0 && round % 50 == 49) {
+                connection.query("CHECKPOINT;");
+            }
+        }
+    };
+    std::thread first(writer, 0, false), second(writer, 1, true);
+    first.join();
+    second.join();
+    stop = true;
+    reader.join();
+    std::cout << "validées " << committed << ", annulées " << rolledBack << ", refusées " << refused
+              << "\n";
+    for (auto dst : hot) {
+        destinations.insert(dst);
+    }
+    sources.insert(0);
+    destinations.insert(0);
+
+    EXPECT_GT(committed.load(), 100);
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base ouverte";
     ok("CHECKPOINT;");
     conn.reset();
