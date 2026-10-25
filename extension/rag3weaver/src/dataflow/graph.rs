@@ -50,16 +50,17 @@ impl DataflowGraph {
     }
 
     /// Les flux posés d'avance, fusionnés en valeurs initiales (l'exécuteur
-    /// par niveaux, qui ne lit pas d'élément).
-    pub(crate) fn merge_initial_streams(&mut self, into: &mut HashMap<String, HashMap<String, PortValue>>) {
+    /// par niveaux, qui ne lit pas d'élément). Un pli impossible se refuse en
+    /// le nommant ([`super::node::plier`]).
+    pub(crate) fn merge_initial_streams(&mut self, into: &mut HashMap<String, HashMap<String, PortValue>>) -> Result<(), String> {
         for (node, ports) in std::mem::take(&mut self.initial_streams) {
             for (port, elements) in ports {
-                let mut it = elements.into_iter();
-                let Some(first) = it.next() else { continue };
-                let merged = it.fold(first, |a, b| super::node::merge_stream_elements(a, b).unwrap_or(PortValue::Trigger));
-                into.entry(node.clone()).or_default().insert(port, merged);
+                if let Some(merged) = super::node::plier(elements, &format!("« {node} », entrée « {port} »"))? {
+                    into.entry(node.clone()).or_default().insert(port, merged);
+                }
             }
         }
+        Ok(())
     }
 
     pub fn set_initial_input(&mut self, node_name: &str, port: &str, value: PortValue) {
