@@ -292,8 +292,17 @@ impl Navigateur {
     }
 
     /// Attend que `condition` soit vraie, 20 s au plus.
+    /// Attend que `condition` soit vraie : vingt secondes de **calme** — tant qu'un
+    /// appel de la page à l'hôte est en vol (`window.__temoin_en_vol`), la page
+    /// travaille, et le témoin attend l'appel, pas une durée (sous charge 8-14 à
+    /// luciepc, `callees` de la vue d'un symbole dépassait 20 s : un rouge sur
+    /// trois dans le lot, 2/2 vert seul — hotfixs, nuit du 25 octobre 2026). Deux
+    /// minutes au plus en tout : au-delà, c'est une vraie panne.
     pub(crate) fn attendre(&mut self, condition: &str, quoi: &str) {
-        let fin = Instant::now() + Duration::from_secs(20);
+        const CALME: Duration = Duration::from_secs(20);
+        const TOUT: Duration = Duration::from_secs(120);
+        let depart = Instant::now();
+        let mut calme_depuis = Instant::now();
         loop {
             let r = self.commande(
                 "Runtime.evaluate",
@@ -302,10 +311,19 @@ impl Navigateur {
             if r["result"]["value"] == true {
                 return;
             }
-            if Instant::now() > fin {
+            let en_vol = self.evaluer("(window.__temoin_en_vol ?? new Map()).size");
+            if en_vol.as_u64().unwrap_or(0) > 0 {
+                calme_depuis = Instant::now();
+            }
+            if calme_depuis.elapsed() > CALME || depart.elapsed() > TOUT {
                 let vue = self.evaluer("document.getElementById('vue')?.innerText ?? document.body?.innerText ?? ''");
                 let en_vol = self.evaluer("[...(window.__temoin_en_vol ?? new Map()).values()]");
-                panic!("{quoi} : « {condition} » jamais vraie en 20 s ; la vue : {vue} ; en vol : {en_vol} ; erreurs : {:?}", self.erreurs);
+                panic!(
+                    "{quoi} : « {condition} » jamais vraie en {} s ({} s de calme) ; la vue : {vue} ; en vol : {en_vol} ; erreurs : {:?}",
+                    depart.elapsed().as_secs(),
+                    calme_depuis.elapsed().as_secs(),
+                    self.erreurs
+                );
             }
             while self.recevoir(Duration::from_millis(100)).is_some() {}
         }
