@@ -128,10 +128,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (174), dans `closed/`
+### Fermés (175), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La vue vivante de l'IDE gelée par un graphe long](closed/2026-10-25-la-vue-vivante-de-l-ide-gelee-par-un-graphe-long.md) | corrigé (chaque relais du flux de l'IDE a son fil, hors du runtime des graphes ; sonde 3/3 rouge avant) | la vue vivante se fige | oui | oui (`Flux::relayer`) |
 | [Chaque requête préparée reste en mémoire pour la vie de sa connexion](closed/2026-10-25-chaque-requete-preparee-reste-en-memoire-pour-la-vie-de-sa-connexion.md) | corrigé (la préparation porte sa requête et la rend en mourant ; le magasin de la connexion disparaît ; témoin réel 30,0 → 7,1 Go) | la mémoire croît sans borne | oui | oui (chaque appel prépare) |
 | [Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas](closed/2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md) | corrigé — lot embarqueur-revenu (25 oct. 2026) : l'index retiré revient dès la dette soldée, l'état le dit | réponse fausse en silence (état « running 97 % », recherche dense en repli) | oui | oui |
 | [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](closed/2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | corrigé — lot embarqueur-revenu (25 oct. 2026) : le service revenu est repris par réouverture | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |

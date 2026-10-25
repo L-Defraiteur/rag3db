@@ -292,6 +292,27 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     };
     assert_eq!(decrit["ok"], true, "{decrit}");
 
+    // **Les barrières sont sur l'hôte** (25 octobre 2026, le troisième rouge sous la lib
+    // entière) : avant de regarder la page, le témoin attend que l'hôte ait fait la chose — le
+    // tour en vol, ou fini. La page a ensuite 20 s pour la montrer ; si elle ne le fait pas,
+    // c'est la page ou le flux qui a manqué, et le message le dit.
+    let tour_en_vol = || -> Option<String> {
+        let mut r = crate::daemon::agent()
+            .get(format!("{racine}/ide/chat?backend={id}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .call()
+            .ok()?;
+        let v: Value = serde_json::from_str(&r.body_mut().read_to_string().ok()?).ok()?;
+        v["result"]["run"].as_str().map(str::to_string)
+    };
+    let attendre_l_hote = |en_vol: bool, quoi: &str| {
+        let borne = Instant::now() + Duration::from_secs(120);
+        while tour_en_vol().is_some() != en_vol {
+            assert!(Instant::now() < borne, "l'hôte, en 120 s : {quoi} jamais vu (sûreté : le tour ne part pas, ou ne s'arrête pas)");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+
     let mut n = Navigateur::lancer(&binaire);
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
     n.aller(
@@ -321,19 +342,29 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
          && document.getElementById('lien')?.textContent === 'flux : ouvert'",
     );
     n.evaluer("document.querySelector('#chat-message').value = 'parle, lentement'; document.querySelector('#chat-envoyer').click()");
-    n.attendre("!document.querySelector('#chat-arreter').hidden && document.querySelector('.tour.en-cours pre')?.textContent.includes('encore')", "le tour lent, en cours, ses jetons dans la bulle");
+    attendre_l_hote(true, "le tour lent en vol");
+    n.attendre(
+        "!document.querySelector('#chat-arreter').hidden && document.querySelector('.tour.en-cours pre')?.textContent.includes('encore')",
+        "l'hôte a le tour lent en vol, et la page ne montre pas Arrêter ni ses jetons dans la bulle",
+    );
     n.evaluer("document.querySelector('#chat-arreter').click()");
-    n.attendre("document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden", "le tour arrêté dans l'IDE");
+    attendre_l_hote(false, "le tour lent arrêté");
+    n.attendre(
+        "document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden",
+        "l'hôte a arrêté le tour, et la page ne dit pas « arrêté dans l'IDE »",
+    );
 
     // Un tour envoyé flux fermé : la page n'a jamais son RunStarted. À
     // l'ouverture du flux (son onopen, appelé jusqu'à ce que l'hôte ait le run
     // en vol), la page relit l'état du chat, et Arrêter apparaît quand même.
     n.evaluer("window.__ide.flux.close(); document.querySelector('#chat-message').value = 'parle, lentement, sans flux'; document.querySelector('#chat-envoyer').click()");
+    attendre_l_hote(true, "le tour parti flux fermé en vol");
     n.attendre(
         "(window.__ide.flux.onopen(), !document.querySelector('#chat-arreter').hidden && document.querySelector('#chat-note')?.textContent === \"l'agent travaille…\")",
         "le tour parti flux fermé, Arrêter rendu par la relecture",
     );
     n.evaluer("document.querySelector('#chat-arreter').click()");
+    attendre_l_hote(false, "le tour parti flux fermé arrêté");
     n.attendre("document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden", "le tour parti flux fermé, arrêté dans l'IDE");
 
     // Un tour qui propose, flux toujours fermé : le lien de sa proposition
