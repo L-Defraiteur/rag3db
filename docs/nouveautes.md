@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Octobre 2026
 
+- **26 oct. — La recherche surligne ce qu'elle a trouvé.** Les positions rendues par
+  lucivy arrivent jusqu'à la page, au caractère, dans l'extrait de chaque résultat ; et
+  l'avertissement « rien de probant » se tait quand la phrase entière a été trouvée.
+  11d350001.
 - **26 oct. — Un graphe dans un graphe, une fois par élément.** Un manifeste cite un
   sous-graphe par fichier et l'appelle une fois ou par élément d'un flux, les résultats
   rendus dans l'ordre ; et un flux qui ne se lit pas en une seule valeur est refusé au
