@@ -410,6 +410,7 @@ mod tests {
         let t = Instant::now();
         let copie = ecrivain.execute(&format!("COPY T FROM '{}'", csv.display()));
         let duree = t.elapsed();
+        eprintln!("[plafond] COPY validé en {duree:?} pendant l'instantané : {:?}", copie.as_ref().map(|_| ()));
         assert!(copie.is_ok(), "le COPY se valide pendant qu'un lecteur tient son instantané ({duree:?}) : {copie:?}");
         assert!(duree < Duration::from_secs(2), "sans attendre le lecteur : {duree:?}");
         assert_eq!(compte(&c), 1, "le lecteur relit sa génération");
