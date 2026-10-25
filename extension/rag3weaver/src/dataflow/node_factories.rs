@@ -1547,6 +1547,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Décider et aiguiller (les agents qui se parlent, lot 2).
     registry.register(Box::new(super::decide_nodes::DecideNodeFactory));
     registry.register(Box::new(super::decide_nodes::RouteNodeFactory));
+    // Les sections d'un Markdown, pour l'archiviste (M4).
+    registry.register(Box::new(super::split_sections::SplitSectionsNodeFactory));
     registry.register(Box::new(super::token_nodes::TokenEventsFactory));
     registry.register(Box::new(super::token_nodes::SpotFactory));
     // Code
