@@ -1424,7 +1424,10 @@ impl<'a> Agent<'a> {
             .by(run_id, self.name.clone())
             .with(crate::meter::Unit::InputTokens, plein as u64)
             .with(crate::meter::Unit::CachedInputTokens, usage.cached_prompt_tokens as u64)
-            .with(crate::meter::Unit::OutputTokens, usage.completion_tokens as u64);
+            // Le raisonnement est compris dans `completion_tokens` : compté à
+            // part, et retiré de la sortie pour ne pas compter deux fois.
+            .with(crate::meter::Unit::OutputTokens, usage.completion_tokens.saturating_sub(usage.reasoning_tokens) as u64)
+            .with(crate::meter::Unit::ReasoningTokens, usage.reasoning_tokens as u64);
         if c.is_empty() {
             return;
         }
@@ -2046,6 +2049,10 @@ impl<'a> Agent<'a> {
 fn accumulate(total: &mut Usage, one: &Usage) {
     total.prompt_tokens += one.prompt_tokens;
     total.completion_tokens += one.completion_tokens;
+    // La part servie par le cache et celle du raisonnement : sans elles, le
+    // total d'un run comptait tout le cache au plein tarif (25 octobre 2026).
+    total.cached_prompt_tokens += one.cached_prompt_tokens;
+    total.reasoning_tokens += one.reasoning_tokens;
     total.ms += one.ms;
     total.retries += one.retries;
     total.recovered_calls += one.recovered_calls;
@@ -2486,6 +2493,57 @@ mod tests {
         assert!(sortie("llm.gemini-3.5-flash").is_some_and(|n| n > 0), "{totaux:?}");
         assert!(sortie("llm.gemini-3.8-flash").is_some_and(|n| n > 0), "{totaux:?}");
         assert!(totaux.keys().all(|(slug, _)| !slug.contains('/')), "{totaux:?}");
+    }
+
+    /// **Le raisonnement est compté à part, et pas deux fois** : 50 jetons
+    /// générés dont 30 de raisonnement font 20 de sortie et 30 de
+    /// raisonnement, sous le slug du modèle.
+    #[test]
+    fn reasoning_tokens_are_metered_apart_and_not_twice() {
+        let meter = Arc::new(crate::meter::Meter::new());
+        let tools = toolbox(vec![]);
+        let llm = CallbackLlm::new("google/gemini-3.8-flash", 4096, |t, o, s| {
+            let (fin, mut u) = MockLlm::new("réponse").generate(t, o, s)?;
+            u.completion_tokens = 50;
+            u.reasoning_tokens = 30;
+            Ok((fin, u))
+        });
+        Agent::new(&llm, &tools).with_meter(meter.clone()).run(&mut start(), &mut StringSink::default()).unwrap();
+        let totaux = meter.totals();
+        let u = |unite| totaux.get(&("llm.gemini-3.8-flash".to_string(), unite)).copied();
+        assert_eq!(u(crate::meter::Unit::OutputTokens), Some(20), "{totaux:?}");
+        assert_eq!(u(crate::meter::Unit::ReasoningTokens), Some(30), "{totaux:?}");
+    }
+
+    /// **Le total d'un run cumule le cache et le raisonnement** : deux appels
+    /// — un outil, puis la réponse, celle-ci servie en partie par le cache et
+    /// raisonnée — font un `AgentRun.usage` qui porte les deux parts.
+    #[test]
+    fn a_run_total_carries_cache_and_reasoning() {
+        let tools = toolbox(vec![("search", "trouvé")]);
+        let appels = std::sync::atomic::AtomicUsize::new(0);
+        let llm = CallbackLlm::new("m", 4096, move |t, o, s| {
+            let (premier, modele) = match appels.fetch_add(1, std::sync::atomic::Ordering::SeqCst) {
+                0 => (true, MockLlm::new("").with_tool_calls(vec![("search", r#"{"query":"x"}"#)])),
+                _ => (false, MockLlm::new("réponse")),
+            };
+            let (fin, mut u) = modele.generate(t, o, s)?;
+            u.prompt_tokens = 100;
+            u.completion_tokens = 40;
+            if !premier {
+                u.cached_prompt_tokens = 80;
+                u.reasoning_tokens = 25;
+            }
+            Ok((fin, u))
+        });
+        let run = Agent::new(&llm, &tools).run(&mut start(), &mut StringSink::default()).unwrap();
+        assert_eq!(run.iterations, 2, "{run:?}");
+        assert_eq!(
+            (run.usage.prompt_tokens, run.usage.cached_prompt_tokens, run.usage.completion_tokens, run.usage.reasoning_tokens),
+            (200, 80, 80, 25),
+            "{:?}",
+            run.usage
+        );
     }
 
     // ── 2. Un outil, puis la réponse ────────────────────────────────
