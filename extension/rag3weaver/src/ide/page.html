@@ -67,7 +67,7 @@
   .code a.id { color: inherit; }
   .code a.id:hover { color: var(--accent); text-decoration: underline; }
   aside { font-size: 14px; }
-  aside .scope { padding: 3px 0; border-bottom: 1px solid var(--trait); }
+  aside .scope { padding: 3px 0 3px calc(var(--profondeur, 0) * 14px); border-bottom: 1px solid var(--trait); }
   .pastille { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: var(--accent-doux); color: var(--accent); }
   .resultat { padding: 8px 0; border-bottom: 1px solid var(--trait); }
   .resultat pre { margin: 4px 0 0; font: 12px/1.45 var(--mono); white-space: pre-wrap; color: var(--doux); }
@@ -305,7 +305,11 @@ async function fichier(id, chemin) {
   edition = null; // la vue de lecture : aucune édition en cours
   filDAriane(id, chemin, true);
   const offset = Number(new URLSearchParams(location.search).get("depuis") ?? 1) || 1;
-  const r = await appeler(id, "read_file", { path: chemin, offset, limit: 2000, format: "json" });
+  const [r, plan] = await Promise.all([
+    appeler(id, "read_file", { path: chemin, offset, limit: 2000, format: "json" }),
+    // Le plan du fichier : l'outil outline, en json ({rows, total, provenance}).
+    appeler(id, "outline", { path: chemin, format: "json" }).then((t) => (typeof t === "string" ? JSON.parse(t) : t)).catch((e) => ({ erreur: e.message })),
+  ]);
   const corps = el("tbody");
   for (const brute of r.text.split("\n")) {
     const m = brute.match(/^(\d+)\| ?(.*)$/);
@@ -315,11 +319,7 @@ async function fichier(id, chemin) {
       el("td", { class: "n" }, el("a", { href: `#L${n}` }, n)),
       el("td", {}, ligneCliquable(id, m[2]))));
   }
-  const scopes = (r.scopes ?? []).map((s) =>
-    el("div", { class: "scope" },
-      el("a", { href: `#L${s.start_line}` }, s.name),
-      " ", el("span", { class: "meta note" }, `${s.scope_type} ${s.start_line}–${s.end_line}`),
-      " ", el("a", { href: lienSymbole(id, s.name), title: "usages, impact, appelés" }, "→")));
+  const scopes = planDuFichier(id, plan);
   vue.replaceChildren(
     el("h1", {}, chemin),
     el("p", { class: "barre" }, el("button", { onclick: () => editer(id, chemin) }, "Modifier")),
@@ -329,10 +329,35 @@ async function fichier(id, chemin) {
       r.has_more ? el("span", {}, " · ", el("a", { href: `${location.pathname}?depuis=${r.offset + r.lines_read}` }, "la suite")) : ""),
     el("div", { class: "grille" },
       el("div", { class: "code" }, el("table", {}, corps)),
-      el("aside", {}, el("h2", {}, "Dans ce fichier"), scopes.length ? scopes : el("p", { class: "note" }, "aucun scope")),
+      el("aside", { id: "plan" }, el("h2", {}, "Dans ce fichier"), ...scopes),
     ),
   );
   vise();
+}
+
+// Le plan d'un fichier, tel que le rend outline en json : ses scopes dans
+// l'ordre du fichier, chacun sous celui qui le contient (par les lignes, pas
+// par le nom : deux scopes peuvent porter le même), vers sa ligne et vers son
+// symbole ; la provenance que l'outil dit, et ce qui manque si `limit` a borné.
+function planDuFichier(id, plan) {
+  if (plan.erreur) return [el("p", { class: "note" }, `le plan : ${plan.erreur}`)];
+  const lignes = plan.rows ?? [];
+  const pile = [];
+  const scopes = lignes.map((s) => {
+    while (pile.length && pile[pile.length - 1] < s.start_line) pile.pop();
+    const profondeur = pile.length;
+    pile.push(s.end_line);
+    return el("div", { class: "scope", style: `--profondeur: ${profondeur}`, title: s.signature ?? "", "data-ligne": s.start_line },
+      el("a", { href: `#L${s.start_line}` }, s.name),
+      " ", el("span", { class: "meta note" }, `${s.scope_type} ${s.start_line}–${s.end_line}`),
+      " ", el("a", { href: lienSymbole(id, s.name), title: "usages, impact, appelés" }, "→"));
+  });
+  return [
+    ...(scopes.length ? scopes : [el("p", { class: "note" }, "aucun scope")]),
+    typeof plan.total === "number" && plan.total > lignes.length
+      ? el("p", { class: "note", id: "plan-borne" }, `${lignes.length} scopes montrés sur ${plan.total}`) : "",
+    plan.provenance ? el("p", { class: "note", id: "plan-provenance" }, plan.provenance) : "",
+  ];
 }
 
 // ─── L'édition humaine (B1, page 05 §4) ──────────────────────────────────────

@@ -394,6 +394,8 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     std::fs::create_dir_all(arbre.join("src")).unwrap();
     std::fs::write(arbre.join("main.rs"), "fn main() {\n    depart();\n}\n\nfn depart() {\n    arrivee();\n}\n").unwrap();
     std::fs::write(arbre.join("src/arrivee.rs"), "pub fn arrivee() {\n    let _ = 1;\n}\n").unwrap();
+    // Un scope dans un autre, pour le plan du fichier (outline) : la méthode sous son impl.
+    std::fs::write(arbre.join("src/compteur.rs"), "pub struct Compteur;\n\nimpl Compteur {\n    pub fn inc(&self) {}\n}\n").unwrap();
     let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
     let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
@@ -460,6 +462,13 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             "un fichier",
             format!("{racine}/ide/code/{id}/fichier/main.rs"),
             "document.querySelector('#L5')?.innerText.includes('fn depart()') && document.querySelector('#vue a.id[href$=\"/symbole/arrivee\"]') && [...document.querySelectorAll('#vue aside a')].some(a => a.textContent === 'depart')",
+        ),
+        (
+            "le plan d'un fichier",
+            format!("{racine}/ide/code/{id}/fichier/src/compteur.rs"),
+            // Le plan d'outline en json : `inc` sous son impl (une profondeur), vers sa ligne et
+            // son symbole, et la provenance que l'outil dit.
+            r##"(() => { const d = [...document.querySelectorAll('#plan .scope')].find(s => s.querySelector('a')?.textContent === 'inc'); return d && d.style.getPropertyValue('--profondeur').trim() === '1' && d.querySelector('a[href="#L4"]') && d.querySelector('a[href$="/symbole/inc"]') && document.querySelector('#plan-provenance')?.textContent.includes('pas par un compilateur'); })()"##,
         ),
         (
             "un symbole",
