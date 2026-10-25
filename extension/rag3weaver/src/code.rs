@@ -2618,8 +2618,8 @@ impl Catalog {
         let (parents, fichiers, genres, origines, de_trait) = self.parents_et_fichiers(&a_departager)?;
         let borne = borne_ambigu();
         let familles: HashMap<&str, Option<&'static str>> = fichiers.iter().map(|(u, f)| (u.as_str(), famille_de_langage(f))).collect();
-        // Les #include du C/C++ indexé, lus une fois par lot quand un mentionneur en est.
         crate::ingest_profile::add("symboles · parents et fichiers", t);
+        // Les #include du C/C++ indexé, lus une fois par lot quand un mentionneur en est.
         let t = std::time::Instant::now();
         let inclusions = if familles.values().any(|f| *f == Some("c++")) { Inclusions::charger(self)? } else { Inclusions::default() };
         report.include_files_read += inclusions.includes.len();
