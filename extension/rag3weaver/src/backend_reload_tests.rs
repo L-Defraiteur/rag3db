@@ -54,6 +54,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
     let backend = Backend {
         read_view: catalog.read_view_cell(),
         avertissement_sans_service: None,
+        embarqueur_a_retenter: None,
         decider: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
         version: std::sync::atomic::AtomicU64::new(0),
