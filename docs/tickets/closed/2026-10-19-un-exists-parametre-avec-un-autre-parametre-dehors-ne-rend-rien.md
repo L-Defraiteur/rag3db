@@ -41,10 +41,12 @@ rien non plus.
 
 ## Le témoin
 
-`plan_declare_tests::isoler_le_compte_sous_une_liste_en_parametre`, ignoré, dans le lot de l'IR
-du Plan (`extension/rag3weaver/src/plan_declare_tests.rs`). Il joue chaque variante sur la
-connexion, sans le Plan, et imprime ce qu'elle rend. Un témoin C++ déterministe reste à écrire
-côté moteur (`test/` : la recette ci-dessus, et l'attendu exact).
+Côté produit, `plan_declare_tests::la_pagination_et_les_filtres_facultatifs`
+(`extension/rag3weaver/src/plan_declare_tests.rs`) : rouge sous 4f9274a38 (le total vaut 0),
+vert sous 8b98f19f7. La recette d'exploration du 19 octobre
+(`isoler_le_compte_sous_une_liste_en_parametre`, 25 variantes imprimées sans attendu) est
+retirée le 25 octobre 2026 : la recette ci-dessus la garde, et le témoin du moteur plus bas
+affirme ce qu'elle montrait.
 
 ## La cause
 
