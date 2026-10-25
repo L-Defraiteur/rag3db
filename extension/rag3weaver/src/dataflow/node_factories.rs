@@ -1320,6 +1320,31 @@ impl NodeFactory for FuseResultsNodeFactory {
     }
 }
 
+/// Factory for HighlightNode (sans config : l'option vient de la requête).
+pub struct HighlightNodeFactory;
+
+impl NodeFactory for HighlightNodeFactory {
+    // L6 : ne fait que lire (le service creux est hors de la base).
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
+    fn create(&self, name: &str, _config: &serde_json::Value) -> Result<Box<dyn super::node::Node>, String> {
+        Ok(Box::new(super::highlight_nodes::HighlightNode::new(name)))
+    }
+    fn node_type(&self) -> &'static str {
+        "HighlightNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "HighlightNode".into(),
+            description: "Surligne les morceaux de la page que lucivy n'a pas surlignés (le creux de bge-m3, sinon les mots de la requête), sur demande (`options.highlights = \"sparse\"`)".into(),
+            inputs: vec![PortDef::value("results", PortType::Results, true), query_in()],
+            outputs: vec![results_out(), meta_out()],
+            config_params: Vec::new(),
+        }
+    }
+}
+
 /// Factory for RerankNode (config: candidates, service, signal).
 pub struct RerankNodeFactory;
 
@@ -1523,6 +1548,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(SparseSearchNodeFactory));
     registry.register(Box::new(FuseResultsNodeFactory));
     registry.register(Box::new(RerankNodeFactory));
+    registry.register(Box::new(HighlightNodeFactory));
     registry.register(Box::new(ResolveParentNodeFactory));
     registry.register(Box::new(PaginateNodeFactory));
     registry.register(Box::new(MarquerDecoupeNodeFactory));

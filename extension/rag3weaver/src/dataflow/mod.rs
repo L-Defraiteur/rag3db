@@ -60,6 +60,7 @@ pub mod run_nodes;
 pub mod schema_nodes;
 pub mod filter_results_node;
 pub mod generic_search_nodes;
+pub mod highlight_nodes;
 pub mod reactor;
 pub mod runs_in_flight;
 pub mod render_nodes;
