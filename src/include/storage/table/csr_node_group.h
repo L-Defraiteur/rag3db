@@ -245,6 +245,7 @@ public:
     // d'un nœud désigne encore des lignes retirées du bloc, puis réemployées par l'insertion
     // suivante sous un autre nœud.
     void rollbackInsert(common::row_idx_t startRow) override;
+    void retireGenerationsBefore(common::transaction_t oldestReaderTS) override;
     void reclaimStorage(PageAllocator& pageAllocator, const common::UniqLock& lock) const override;
 
     // Vide : aucune ligne en mémoire et rien dans le bloc persistant (un bloc persistant vidé
