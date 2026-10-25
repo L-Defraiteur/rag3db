@@ -5508,7 +5508,10 @@ mod tests {
                 if let Some(f) = format {
                     a["format"] = json!(f);
                 }
-                backend.call(outil, a).unwrap_or_else(|e| panic!("{outil} {format:?} : {e}"))
+                let mut r = backend.call(outil, a).unwrap_or_else(|e| panic!("{outil} {format:?} : {e}"));
+                // `run` est l'identité de l'appel, pas sa réponse : chaque appel a le sien.
+                assert!(r.as_object_mut().and_then(|o| o.remove("run")).is_some_and(|run| run.is_string()), "{outil} : la réponse porte son run");
+                r
             };
             let nu = avec(None);
             let markdown = avec(Some("markdown"));
