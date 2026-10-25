@@ -17,10 +17,12 @@ use super::runtime::{DataflowEvent, DataflowRuntime};
 use super::services::ServiceRegistry;
 
 /// Attend sur le jeton (au plus 5 s), et note s'il a été réveillé par
-/// l'annulation.
+/// l'annulation ; `entered`, s'il est là, compte ses entrées (une barrière
+/// pour qui doit annuler pendant l'attente).
 struct Wait {
     name: String,
     woken: Arc<AtomicUsize>,
+    entered: Option<Arc<AtomicUsize>>,
 }
 
 impl Node for Wait {
@@ -34,6 +36,9 @@ impl Node for Wait {
         vec![PortDef::value("out", PortType::Any, false)]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        if let Some(e) = &self.entered {
+            e.fetch_add(1, Ordering::SeqCst);
+        }
         if ctx.cancellation().wait_timeout(Duration::from_secs(5)) {
             self.woken.fetch_add(1, Ordering::SeqCst);
         }
@@ -42,21 +47,33 @@ impl Node for Wait {
     }
 }
 
-/// Dort sans regarder le jeton : un appel bloquant qui ne coopère pas.
-struct Sleep(Duration);
+/// Bloque sans regarder le jeton : un appel qui ne coopère pas. Il note son
+/// entrée, ne rend la main qu'une fois l'annulation posée (`cancelled`, levé
+/// par [`cancel_when`] ; au plus 10 s), puis note qu'il a fini son appel.
+/// L'annulation tombe ainsi pendant l'appel, quelle que soit la charge.
+struct Blocking {
+    entered: Arc<AtomicUsize>,
+    cancelled: Arc<AtomicBool>,
+    finished: Arc<AtomicBool>,
+}
 
-impl Node for Sleep {
+impl Node for Blocking {
     fn name(&self) -> &str {
-        "sleep"
+        "bloque"
     }
     fn node_type(&self) -> &str {
-        "Sleep"
+        "Blocking"
     }
     fn outputs(&self) -> Vec<PortDef> {
         vec![PortDef::value("out", PortType::Any, false)]
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
-        std::thread::sleep(self.0);
+        self.entered.fetch_add(1, Ordering::SeqCst);
+        let fin = Instant::now() + Duration::from_secs(10);
+        while !self.cancelled.load(Ordering::SeqCst) && Instant::now() < fin {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        self.finished.store(true, Ordering::SeqCst);
         ctx.set_output("out", PortValue::new(1u32));
         Ok(())
     }
@@ -105,6 +122,31 @@ fn cancel_after(rt: &DataflowRuntime, ms: u64) {
     });
 }
 
+/// Annule le run quand `pret` est vrai : une barrière, plus une durée. Au
+/// bout de 10 s sans elle, annule quand même — le témoin dit alors que la
+/// barrière est tombée, plutôt que d'attendre. Rend un drapeau levé une fois
+/// l'annulation posée.
+fn cancel_when(rt: &DataflowRuntime, pret: impl Fn() -> bool + Send + 'static) -> Arc<AtomicBool> {
+    let stop = rt.cancel_handle();
+    let posee = Arc::new(AtomicBool::new(false));
+    let drapeau = posee.clone();
+    std::thread::spawn(move || {
+        let fin = Instant::now() + Duration::from_secs(10);
+        while !pret() && Instant::now() < fin {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        stop.cancel();
+        drapeau.store(true, Ordering::SeqCst);
+    });
+    posee
+}
+
+/// `true` quand `compteur` a atteint `n` : la barrière de [`cancel_when`].
+fn reached(compteur: &Arc<AtomicUsize>, n: usize) -> impl Fn() -> bool + Send + 'static {
+    let c = compteur.clone();
+    move || c.load(Ordering::SeqCst) >= n
+}
+
 fn with_bus() -> (DataflowRuntime, async_broadcast::Receiver<crate::events::Event>) {
     let bus = Arc::new(crate::events::EventBus::new(256));
     let rx = bus.subscribe(crate::events::topic::DATAFLOW);
@@ -121,7 +163,7 @@ fn a_levels_run_stops_between_nodes_and_says_why() {
     let woken = Arc::new(AtomicUsize::new(0));
     let ran = Arc::new(AtomicBool::new(false));
     let mut g = DataflowGraph::new();
-    g.add_node(Box::new(Wait { name: "attend".into(), woken: woken.clone() })).unwrap();
+    g.add_node(Box::new(Wait { name: "attend".into(), woken: woken.clone(), entered: None })).unwrap();
     g.add_node(Box::new(Mark(ran.clone()))).unwrap();
     g.connect("attend", "out", "mark", "in").unwrap();
     assert!(!g.has_streams().unwrap(), "un graphe de valeurs : l'exécuteur par niveaux");
@@ -151,36 +193,41 @@ fn a_levels_run_stops_between_nodes_and_says_why() {
 }
 
 /// **2. Niveaux, en parallèle** : deux nœuds d'un même niveau (deux fils)
-/// attendent sur le jeton ; les deux se réveillent.
+/// attendent sur le jeton ; les deux se réveillent. L'annulation tombe quand
+/// les deux attendent (une barrière), pas à une durée du premier départ.
 #[test]
 fn a_parallel_level_stops_every_node() {
-    let woken = Arc::new(AtomicUsize::new(0));
+    let (woken, entered) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
     let mut g = DataflowGraph::new();
-    g.add_node(Box::new(Wait { name: "un".into(), woken: woken.clone() })).unwrap();
-    g.add_node(Box::new(Wait { name: "deux".into(), woken: woken.clone() })).unwrap();
+    g.add_node(Box::new(Wait { name: "un".into(), woken: woken.clone(), entered: Some(entered.clone()) })).unwrap();
+    g.add_node(Box::new(Wait { name: "deux".into(), woken: woken.clone(), entered: Some(entered.clone()) })).unwrap();
     let rt = DataflowRuntime::new(10);
-    cancel_after(&rt, 50);
-    let t = Instant::now();
+    cancel_when(&rt, reached(&entered, 2));
     let out = rt.execute(&mut g).unwrap();
-    assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
+    assert_eq!(entered.load(Ordering::SeqCst), 2, "les deux nœuds ne sont pas entrés en 10 s : la barrière est tombée");
+    // Réveillés par l'annulation, pas au bout de leurs 5 s.
     assert_eq!(woken.load(Ordering::SeqCst), 2);
     assert!(out.stopped().is_some());
 }
 
 /// **3. Un nœud qui ne coopère pas** finit son appel ; le suivant ne part
-/// pas.
+/// pas. L'annulation tombe pendant l'appel (une barrière) : avant, elle
+/// tombait 50 ms après son départ, et un fil d'annulation endormi plus que
+/// l'appel sous charge laissait partir le suivant.
 #[test]
 fn a_non_cooperating_node_finishes_and_the_next_one_does_not_start() {
     let ran = Arc::new(AtomicBool::new(false));
-    let mut g = DataflowGraph::new();
-    g.add_node(Box::new(Sleep(Duration::from_millis(300)))).unwrap();
-    g.add_node(Box::new(Mark(ran.clone()))).unwrap();
-    g.connect("sleep", "out", "mark", "in").unwrap();
+    let (entered, finished) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicBool::new(false)));
     let rt = DataflowRuntime::new(10);
-    cancel_after(&rt, 50);
-    let t = Instant::now();
+    // L'appel rend la main quand l'annulation est posée, pas avant.
+    let cancelled = cancel_when(&rt, reached(&entered, 1));
+    let mut g = DataflowGraph::new();
+    g.add_node(Box::new(Blocking { entered: entered.clone(), cancelled, finished: finished.clone() })).unwrap();
+    g.add_node(Box::new(Mark(ran.clone()))).unwrap();
+    g.connect("bloque", "out", "mark", "in").unwrap();
     let out = rt.execute(&mut g).unwrap();
-    assert!(t.elapsed() >= Duration::from_millis(300), "le sommeil n'est pas interrompu");
+    assert_eq!(entered.load(Ordering::SeqCst), 1, "l'appel n'est jamais entré en 10 s : la barrière est tombée");
+    assert!(finished.load(Ordering::SeqCst), "l'appel n'est pas interrompu : il finit");
     assert!(out.stopped().is_some());
     assert!(!ran.load(Ordering::SeqCst), "le suivant ne part pas");
 }
@@ -232,11 +279,12 @@ fn a_node_failing_because_of_the_cancel_is_stopped_not_failed() {
     assert_eq!(arretes, ["tombe"]);
 }
 
-struct WaitFactory(Arc<AtomicUsize>);
+/// Des `Wait` qui comptent leurs entrées (`.1`).
+struct WaitFactory(Arc<AtomicUsize>, Arc<AtomicUsize>);
 
 impl NodeFactory for WaitFactory {
     fn create(&self, name: &str, _: &serde_json::Value) -> Result<Box<dyn Node>, String> {
-        Ok(Box::new(Wait { name: name.into(), woken: self.0.clone() }))
+        Ok(Box::new(Wait { name: name.into(), woken: self.0.clone(), entered: Some(self.1.clone()) }))
     }
     fn node_type(&self) -> &str {
         "Wait"
@@ -254,12 +302,17 @@ impl NodeFactory for WaitFactory {
 
 /// **4. Un sous-graphe de valeurs meurt avec son parent par niveaux** : le
 /// parent annulé arrête le nœud intérieur qui attend (avant ce lot, il
-/// attendait ses 5 s).
+/// attendait ses 5 s, et n'était pas réveillé).
+///
+/// L'annulation tombe quand le nœud intérieur est entré, pas à une durée du
+/// démarrage du parent : sous charge (rouge une fois chez la mémoire, 25
+/// octobre 2026), elle tombait avant que le sous-graphe lance son niveau, qui
+/// était alors sauté — juste, mais pas ce que le témoin regarde.
 #[test]
 fn a_value_subgraph_dies_with_its_levels_parent() {
-    let woken = Arc::new(AtomicUsize::new(0));
+    let (woken, entered) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
     let mut registry = NodeRegistry::new();
-    registry.register(Box::new(WaitFactory(woken.clone())));
+    registry.register(Box::new(WaitFactory(woken.clone(), entered.clone())));
     let def = GraphDefinition {
         nodes: vec![NodeDef { name: "dedans".into(), node_type: "Wait".into(), config: serde_json::json!({}) }],
         edges: vec![],
@@ -268,10 +321,10 @@ fn a_value_subgraph_dies_with_its_levels_parent() {
     let mut g = DataflowGraph::new();
     g.add_node(Box::new(gn)).unwrap();
     let rt = DataflowRuntime::new(10);
-    cancel_after(&rt, 50);
-    let t = Instant::now();
+    cancel_when(&rt, reached(&entered, 1));
     rt.execute(&mut g).unwrap();
-    assert!(t.elapsed() < Duration::from_secs(2), "le sous-graphe attend encore : {:?}", t.elapsed());
+    assert_eq!(entered.load(Ordering::SeqCst), 1, "le nœud intérieur n'est jamais entré en 10 s : la barrière est tombée, le témoin n'a rien vu");
+    // Réveillé par l'annulation, pas au bout de ses 5 s.
     assert_eq!(woken.load(Ordering::SeqCst), 1, "le nœud intérieur a vu l'annulation");
 }
 
