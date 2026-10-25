@@ -2027,6 +2027,29 @@ impl PreparedBackend {
     }
 }
 
+/// Un répertoire sous le dossier temporaire du système, effacé à la sortie de
+/// sa portée ; `tempfile` n'est qu'une dépendance de développement.
+struct RepertoireJetable(PathBuf);
+
+impl RepertoireJetable {
+    fn nouveau(nom: &str) -> Result<Self, String> {
+        let instant = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let chemin = std::env::temp_dir().join(format!("rag3weaver-{nom}-{}-{instant}", std::process::id()));
+        std::fs::create_dir_all(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        Ok(Self(chemin))
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for RepertoireJetable {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 /// Copie les `.md` d'un dossier (sous-dossiers compris) sous `vers` : la copie
 /// que relit la vérification à blanc.
 fn copier_les_md(de: &Path, vers: &Path) -> Result<(), String> {
@@ -4098,7 +4121,7 @@ impl Backend {
         let Some(racine) = prepared.miroirs.values().next().map(|m| m.racine.clone()) else {
             return Ok(json!({"files": false, "ok": true}));
         };
-        let tmp = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let tmp = RepertoireJetable::nouveau("verification")?;
         let copie = tmp.path().join("fichiers");
         copier_les_md(&racine, &copie)?;
         let surcharges = Surcharges {
