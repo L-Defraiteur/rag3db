@@ -92,7 +92,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [À la libération du poste, une mesure et des travaux lourds entrent ensemble](2026-10-25-a-la-liberation-du-poste-une-mesure-et-des-lourds-entrent-ensemble.md) | ouvert — la porte de scripts/poste ne fait pas passer la mesure seule ; correctif à G | réponse fausse en silence (une mesure sous charge) | oui (luciepc) | oui (scripts/poste) |
+| [À la libération du poste, une mesure et des travaux lourds entrent ensemble](2026-10-25-a-la-liberation-du-poste-une-mesure-et-des-lourds-entrent-ensemble.md) | ouvert — hypothèse lue dans le code (flock n'ordonne pas les réveils), le cas de 22 h 26 était une fausse alerte ; témoin à G | réponse fausse en silence, si elle se vérifie | oui (luciepc) | oui (scripts/poste) |
 | [fmt/format.h : depuis tree-sitter 0.27, une macro est lue comme un corps de fonction](2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md) | ouvert — recul accepté par Lucie avec le passage à 0.27 ; aucun correctif | réponse fausse (39 fonctions sous un parent anonyme, un fichier tiers) | oui | oui (codeparsers) |
 | [Le témoin du chat rougit encore sous la lib entière, sur le tour lent](2026-10-25-le-temoin-du-chat-rougit-encore-sur-le-tour-lent.md) | ouvert — pour everything declarative | test instable | non (le test) | oui (`daemon_host/chat.rs`) |
 | [Retirer le patch lucivy à la publication](2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | ouvert — `[patch.crates-io]` temporaire vers la branche 4.3.1 (a925d94), jusqu'à la publication par Lucie | dette de construction | non | oui (Cargo.toml, Cargo.lock) |

@@ -1,8 +1,12 @@
 # À la libération du poste, une mesure et des travaux lourds entrent ensemble
 
-- **État** : ouvert, le 25 octobre 2026. Relevé par hotfixs, confié à G par l'orchestration ; le
-  correctif suit la pose des hôtes du soir.
-- **Gravité** : réponse fausse en silence. Une mesure qui a couru sous charge rend un chiffre qui ne
+- **État** : ouvert, **une hypothèse lue dans le code, pas un défaut constaté** (corrigé le 25 octobre 2026
+  à 23 h 25). Le cas de 22 h 26 n'en était pas une instance : le relevé s'était fié aux heures de fin
+  des journaux. Les `.ninja_log` datent le départ des deux bâtis lourds à 22 h 27 m 06 s, la seconde où
+  la mesure `temoin-1` (partie vers 22 h 26 m 20 s) a rendu le poste : la porte a tenu. Reste
+  l'hypothèse ci-dessous (flock n'ordonne pas les réveils). Elle ne devient un défaut que si le témoin
+  la reproduit ; sinon, le ticket se ferme avec la preuve de dizaines de rejeux. Pas prioritaire.
+- **Gravité** (si l'hypothèse se vérifie) : réponse fausse en silence. Une mesure qui a couru sous charge rend un chiffre qui ne
   vaut rien, et rien ne le dit.
 - **Atteignable en service** : oui, à luciepc, dès que plusieurs sessions attendent le poste
   ensemble. C'est l'usage ordinaire du soir.
@@ -11,10 +15,8 @@
 ## Ce que c'est
 
 La règle de `poste` : une mesure est exclusive et prioritaire. Dès qu'une mesure attend, plus aucun
-travail lourd n'entre ; un lourd qui attend ne part qu'après elle. Le 25 octobre à 22 h 26, à
-luciepc, à la libération de la passe `equipierp3`, trois travaux sont entrés en même temps : la mesure
-`temoin-1` et deux bâtis lourds (`bati-demi`, la lib de la chaîne). La mesure a couru sous charge, et
-son chiffre a été écarté.
+travail lourd n'entre ; un lourd qui attend ne part qu'après elle. Le relevé du 25 octobre à 22 h 26
+(une mesure et deux bâtis lourds entrés ensemble) s'est révélé faux : voir l'État.
 
 La porte aujourd'hui (scripts/poste, l. 363 à 380) :
 - une mesure prend `porte.lock` en exclusif et le garde, puis `poste.lock` en exclusif ;
