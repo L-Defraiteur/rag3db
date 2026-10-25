@@ -1,6 +1,6 @@
 # Le témoin du sous-graphe de valeurs annulé rougit sous charge
 
-- **État** : ouvert — vu une fois, aucun correctif
+- **État** : fermé — 2e205927a (everything declarative) : le témoin annule sur une barrière, une fois le nœud intérieur entré
 - **Gravité** : faux rouge d'un témoin, sans défaut connu du produit
 - **Atteignable en service** : non (c'est le témoin qui dépend de l'ordre)
 - **Touche rag3weaver** : oui (`src/dataflow/annulation_tests.rs`)
@@ -26,3 +26,12 @@ Que le témoin juge ce qu'il promet : le sous-graphe s'arrête avant ses 5 s, et
 intérieur n'achève pas son attente. Par exemple, compter « attente achevée sans
 annulation » plutôt que « réveillé par l'annulation », ou n'armer l'annulation qu'une fois
 le nœud intérieur entré dans son attente (une barrière).
+
+## Fermeture
+
+2e205927a (everything declarative, 25 oct. 2026). La cause était plus précise que la
+piste : `cancel_after` annulait 50 ms après le départ du parent, alors que le nœud
+intérieur ne part qu'une fois le sous-graphe construit et son runtime lancé. Sous charge,
+l'annulation tombait avant, la boucle des niveaux sautait le seul niveau, et le nœud ne
+tournait jamais. Le moteur avait raison. Le témoin annule maintenant sur une barrière (le
+nœud qui attend est entré), comme deux autres témoins du même fichier.

@@ -83,14 +83,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (41)
+### Ouverts — produit (40)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Le témoin du sous-graphe de valeurs annulé rougit sous charge](2026-10-25-le-temoin-du-sous-graphe-de-valeurs-annule-rougit-sous-charge.md) | ouvert — vu une fois au rejeu de cited_by, vert au suivant ; aucun correctif | faux rouge d'un témoin | non | oui (annulation_tests) |
 | [Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas](2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md) | ouvert — lot en cours chez G | réponse fausse en silence (état « running 97 % », recherche dense en repli) | oui | oui |
 | [Un signal en panne fait tomber la recherche hybride entière](2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere.md) | ouvert — confié à la session « recherche » | blocage (search_code ne répond plus) | oui | oui |
 | [Retirer le patch lucivy à la publication](2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | ouvert — `[patch.crates-io]` temporaire vers la branche correctifs-rag3db-19-octobre (bb07627), jusqu'à la publication par Lucie | dette de construction | non | oui (Cargo.toml, Cargo.lock) |
@@ -132,10 +131,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (168), dans `closed/`
+### Fermés (169), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le témoin du sous-graphe de valeurs annulé rougit sous charge](closed/2026-10-25-le-temoin-du-sous-graphe-de-valeurs-annule-rougit-sous-charge.md) | fermé — 2e205927a : annuler sur une barrière, le nœud entré | faux rouge d'un témoin | non | oui (annulation_tests) |
 | [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](closed/2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | corrigé (25 octobre 2026) — une seule clé, le numéro de colonne ; témoin `StableColumnIDs.AVectorIndexIsCreatedOnATableWhereAPropertyWasDropped` | blocage nommé « Miss cached column » | oui | oui |
 | [Un ADD COLUMN sur une relation après le DROP de sa dernière propriété range la colonne locale au mauvais numéro](closed/2026-10-19-un-add-column-sur-une-relation-apres-le-drop-de-sa-derniere-propriete-range-la-colonne-locale-au-mauvais-numero.md) | corrigé (25 octobre 2026, V2-1a) — la table locale range la colonne ajoutée à son numéro ; témoin `StableColumnIDs.AnAddOnARelationAfterDroppingItsLastPropertyWritesTheRightColumn` | valeur dans une autre colonne ou hors du vecteur | oui | oui |
 | [Un groupe vidé par le point de reprise garde la colonne supprimée](closed/2026-10-19-un-groupe-vide-par-le-point-de-reprise-garde-la-colonne-supprimee.md) | corrigé (25 octobre 2026, V2-1a) — un bloc vidé garde une entrée par numéro ; témoin `StableColumnIDs.AGroupEmptiedByTheCheckpointKeepsTheHole` | bloc et types décalés | oui | oui |
