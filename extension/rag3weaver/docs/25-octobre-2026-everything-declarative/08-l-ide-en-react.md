@@ -157,3 +157,23 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
   `/ide/ancienne/code/<id>/fichier/<chemin>`, et les deux témoins qui éditent (`les vues de
   l'IDE`, `le dépôt d'à côté`) y vont tout droit pour cette partie.
 - `VUES_PORTEES` : `chat`, `fichier`.
+
+## Ce qui est fait (vue 4 : la recherche)
+
+- `src/views/Search.tsx`, sur le JSON de `search_code` convenu avec la session recherche (voir
+  plus bas) : le formulaire (`#chercher`), le titre « q », la ligne d'état (`#recherche-etat` : la
+  ligne « index : » de `warnings`, la fraîcheur, les comptes mots / sens / creux / relus, « partiel »),
+  la case `#reclasser` (`&reclasser=1` → `options.rerank = { candidates: 20 }`), les résultats
+  (`.resultat` : le fichier vers sa ligne, le symbole, `.meta` type · signal, `.score`, `.signaux`
+  « label n°rang (score) », l'extrait borné à 600 caractères), les avertissements en pied
+  (`.avertissements`), et l'enveloppe `{status, result}` d'une lecture dépliée (`unwrap`).
+- **Les surlignages** : `highlights: [{start, end, source}]` par résultat, en unités UTF-16 dans
+  `chunk.text`, rendus par `mark.surligne[data-source]` (trois styles : lucivy, sparse,
+  query_words) avec une légende quand il y en a. Le champ n'existe pas encore : la vue l'attend.
+- Le JSON : `result[]` (uuid, score, entity, `data` en snake_case, `chunk`, `signal`,
+  `signals[{label, score, rank}]` — `bm25_exact` et `rerank` sont des labels de plus),
+  `metadata["render.meta"]` (signals, consistency, partial, les comptes, `warnings` omis si vide),
+  `freshness` en snake_case ; pas de `total`, le nombre rendu est `result.length`.
+- `VUES_PORTEES` : `chat`, `fichier`, `recherche`. Les deux témoins de la recherche (« la
+  recherche », « la recherche à reclasser » dans les vues de l'IDE) passent par la page neuve avec
+  leurs repères inchangés.
