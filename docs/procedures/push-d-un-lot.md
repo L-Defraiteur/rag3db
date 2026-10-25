@@ -23,7 +23,14 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   entière** sous le jeu le plus large :
   `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm` (`RAG3WEAVER_PG` posé).
 - **L'étape navigateur** à part, après la lib : `FEATURES=… scripts/temoins_navigateur.sh`
-  (`RAG3WEAVER_EXIGER_NAVIGATEUR=1`).
+  (`RAG3WEAVER_EXIGER_NAVIGATEUR=1`). Depuis l'IDE en React (25 octobre 2026), elle **exige les
+  paquets React** de l'aperçu à chaud : une fois par poste, `scripts/paquets_react.sh <dossier>`
+  (react, react-dom, scheduler, react-refresh épinglés, déballés par `npm pack`), puis
+  `export RAG3WEAVER_PAQUETS_REACT=<dossier>` au début de la passe (à luciepc :
+  `/home/lucied/.cache/rag3weaver-build/I-paquets-react`). Sans la variable ou sans le dossier,
+  les témoins de l'aperçu rougissent en le disant : « RAG3WEAVER_PAQUETS_REACT ne désigne pas les
+  paquets React : préparer par scripts/paquets_react.sh <dossier> ». Chrome ou Chromium sur le
+  poste, et `RAG3WEAVER_PAQUETS_REACT` posé, c'est tout ce que l'étape demande.
 - **Les e2e du changement** (une suite par appel de `run_e2e.sh`, lire « running N tests ») :
   `e2e_postgres` si `code.rs`, l'IR ou un gabarit sont touchés ; `e2e_lectures` si le bus,
   `Backend::run` ou l'hôte ; les `e2e_tx_*` si le catalogue ; `e2e_juge` et `e2e_equipier` (Gemini
