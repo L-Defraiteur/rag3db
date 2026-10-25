@@ -167,7 +167,8 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
   (`.resultat` : le fichier vers sa ligne, le symbole, `.meta` type · signal, `.score`, `.signaux`
   « label n°rang (score) », l'extrait borné à 600 caractères), les avertissements en pied
   (`.avertissements`), et l'enveloppe `{status, result}` d'une lecture dépliée (`unwrap`).
-- **Les surlignages** : `highlights: [{start, end, source}]` par résultat, en unités UTF-16 dans
+- **Les surlignages** : `chunk.highlights: [{start, end, source}]` (dans le morceau : il désigne ce
+  qu'il surligne et survit à la fusion ; la forme au niveau du résultat passe aussi), en unités UTF-16 dans
   `chunk.text`, rendus par `mark.surligne[data-source]` (trois styles : lucivy, sparse,
   query_words) avec une légende quand il y en a. Le champ n'existe pas encore : la vue l'attend.
 - Le JSON : `result[]` (uuid, score, entity, `data` en snake_case, `chunk`, `signal`,
