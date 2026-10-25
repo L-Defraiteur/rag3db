@@ -208,7 +208,7 @@ fn str_param(config: &Value, key: &str, default: &str) -> Result<String, String>
 }
 
 fn param(name: &'static str, param_type: ConfigParamType, default: Value, description: &'static str) -> ConfigParam {
-    ConfigParam { name: name.into(), param_type, required: false, default: Some(default), description: description.into() }
+    ConfigParam { name: name.into(), param_type, required: false, default: Some(default), description: description.into(), choices: None, json_schema: None }
 }
 
 impl NodeFactory for SplitSectionsNodeFactory {
