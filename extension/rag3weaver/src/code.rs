@@ -2023,6 +2023,9 @@ pub struct CodeIngestReport {
     /// Mentions C/C++ dont aucun définisseur n'est visible par les #include du mentionneur :
     /// aucune arête (une libc, une std ou une bibliothèque non indexée n'a pas de candidat).
     pub abstained_invisible: usize,
+    /// Fichiers C/C++ dont les #include ont été lus pour la visibilité (toute la table File, une
+    /// fois par résolution d'un lot qui a du C/C++) : le coût du pas 1, que les arêtes INCLUDES ôteront.
+    pub include_files_read: usize,
     /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
     /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
     pub mentions_read: usize,
@@ -2616,9 +2619,12 @@ impl Catalog {
         let borne = borne_ambigu();
         let familles: HashMap<&str, Option<&'static str>> = fichiers.iter().map(|(u, f)| (u.as_str(), famille_de_langage(f))).collect();
         // Les #include du C/C++ indexé, lus une fois par lot quand un mentionneur en est.
-        let inclusions = if familles.values().any(|f| *f == Some("c++")) { Inclusions::charger(self)? } else { Inclusions::default() };
-        let mut vues: HashMap<String, Option<std::rc::Rc<Vue>>> = HashMap::new();
         crate::ingest_profile::add("symboles · parents et fichiers", t);
+        let t = std::time::Instant::now();
+        let inclusions = if familles.values().any(|f| *f == Some("c++")) { Inclusions::charger(self)? } else { Inclusions::default() };
+        report.include_files_read += inclusions.includes.len();
+        crate::ingest_profile::add("symboles · includes", t);
+        let mut vues: HashMap<String, Option<std::rc::Rc<Vue>>> = HashMap::new();
         let _chrono = crate::ingest_profile::Chrono::new("symboles · choisir et lier");
         for sym in uuids {
             let no_definer: Vec<String> = Vec::new();
@@ -3534,8 +3540,11 @@ impl Inclusions {
             .unwrap_or_default()
     }
 
-    /// **Ce que voit `fichier`** : la fermeture de ses #include. `None` si ses includes ne sont pas
-    /// connus (une base d'avant le champ) : la visibilité ne filtre alors rien.
+    /// **Ce que voit `fichier`** : la fermeture de ses #include. `None` si les includes d'un fichier
+    /// de la fermeture ne sont pas connus (une base d'avant le champ, ou mi-réanalysée : la montre
+    /// ne repose que les fichiers changés) : la fermeture est incomplète, la visibilité ne filtre
+    /// alors rien, plutôt qu'abstenir à tort ce qu'un en-tête inconnu inclut. Un include qui ne
+    /// désigne aucun fichier indexé (une std, une libc) n'est pas une inconnue.
     fn vue(&self, fichier: &str) -> Option<Vue> {
         self.includes.get(fichier)?.as_ref()?;
         let mut vue = Vue::default();
@@ -3544,10 +3553,14 @@ impl Inclusions {
             if !vue.fichiers.insert(f.clone()) {
                 continue;
             }
-            if let Some(Some(incs)) = self.includes.get(&f) {
-                for inc in incs {
-                    a_suivre.extend(self.cibles(&f, inc).into_iter().filter(|c| !vue.fichiers.contains(*c)).cloned());
+            match self.includes.get(&f) {
+                Some(None) => return None,
+                Some(Some(incs)) => {
+                    for inc in incs {
+                        a_suivre.extend(self.cibles(&f, inc).into_iter().filter(|c| !vue.fichiers.contains(*c)).cloned());
+                    }
                 }
+                None => {}
             }
         }
         for f in &vue.fichiers {
