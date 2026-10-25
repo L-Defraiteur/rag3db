@@ -12,7 +12,7 @@ mémoire longue du 25 octobre, §3).
 - **Une écriture par élément.** Un nœud d'écriture lit son entrée en `Complete`. Branché derrière un
   flux de N objets, il recevait leur pli : deux objets JSON ne se fondent pas, et le pli rendait
   `PortValue::Trigger` en silence, qu'une valeur suivante effaçait — le dernier élément si N est
-  impair, rien s'il est pair. Le ticket : `docs/tickets/2026-10-25-un-pli-impossible-d-un-flux-rend-un-trigger-en-silence.md`.
+  impair, rien s'il est pair. Le ticket : `docs/tickets/closed/2026-10-25-un-pli-impossible-d-un-flux-rend-un-trigger-en-silence.md`.
 
 ## Ce qui se déclare maintenant
 
