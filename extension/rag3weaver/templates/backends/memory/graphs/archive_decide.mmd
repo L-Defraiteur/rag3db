@@ -1,0 +1,17 @@
+%% graph: archive_decide
+%% description: Une section (l'élément) : les fiches candidates par la recherche, puis la décision fermée du modèle (une candidate, none, create), rendue comme l'élément des écritures (kind, fiche, records, liens, provenance). Appelé une fois par section par le ForEachNode de archive.
+%% param: element json! -- La section : {title, level, text, anchor, index, chemin, titre, origine}.
+%% param: candidates int = 5 -- Fiches candidates gardées.
+%% param: allow_create bool = true -- create permis.
+%% param: instruction string! -- Ce que l'étiquette veut dire, pour le modèle.
+%% param: search_options json! -- Les options de la recherche de candidates (limit…).
+%% result: decided.result
+
+graph LR
+    recall["GraphNode(graph='@builtin:tools/search_structured.mmd', target='Fiche', query=$element.text, options=$search_options)"]
+    prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create', section=$element, candidates=$candidates, allow_create=$allow_create)"]
+    decide["Decide(via='llm', labels_from='candidates', labels='none|create', field='prompt', as='verdict', instruction=$instruction)"]
+    decided["RhaiNode(script_id=archive_decided, inputs='allow_create', allow_create=$allow_create)"]
+    recall -->|result| prepare
+    prepare -->|result| decide
+    decide -->|element| decided

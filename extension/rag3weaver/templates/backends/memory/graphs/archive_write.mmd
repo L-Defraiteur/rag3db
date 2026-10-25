@@ -1,0 +1,9 @@
+%% graph: archive_write
+%% description: L'apport L1 d'une section décidée, écrit sur sa fiche (kind = fiche). Rend l'élément tel quel pour l'étage des liens ; si l'écriture échoue, l'appel échoue.
+%% param: element json! -- L'élément décidé (archive_decided) : apport_record, apport_key, links, doc_value…
+%% result: out.result
+
+graph LR
+    write["EntityRecordNode(entity='Apport', action='put', record=$element.apport_record)"]
+    out["RhaiNode(script_id=archive_pass, inputs='element', element=$element)"]
+    write -->|record| out

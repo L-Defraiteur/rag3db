@@ -1,0 +1,12 @@
+%% graph: archive_link
+%% description: L'apport d'une section rangé sur sa fiche (A_POUR_APPORT) et sa provenance posée (la Ref doc:<chemin>#<titre>, APPORT_CITE). Rend {title, kind, fiche, source, section, verdict} ; une provenance non posée fait échouer l'appel.
+%% param: element json! -- L'élément décidé, après l'écriture de son apport.
+%% result: out.result
+
+graph LR
+    link["RelationBatchNode(relation='A_POUR_APPORT', links=$element.links)"]
+    check["RhaiNode(script_id=archive_linked, inputs='element', element=$element)"]
+    cite["AddRefNode(genre='doc', valeur=$element.doc_value, fiche=$element.apport_key, refs_entity='Ref', types_entity='RefType', from_entity='Apport', relation='APPORT_CITE')"]
+    out["RhaiNode(script_id=archive_summary, inputs='element', element=$element)"]
+    link -->|report| check
+    cite -->|report| out
