@@ -668,6 +668,86 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     fil.join().unwrap();
 }
 
+/// **La marge d'un fichier sans l'outil outline** (G, 25 octobre 2026) : le
+/// manifeste de code de Lucie n'expose pas `outline`, et la marge « Dans ce
+/// fichier » restait vide sans rien dire. Sur un manifeste qui retire `outline`,
+/// la marge montre encore les scopes du fichier (ceux que `read_file` rend), et
+/// dit pourquoi le plan d'outline manque.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn la_marge_d_un_fichier_se_rend_sans_l_outil_outline() {
+    let Some(binaire) = navigateur_ou_saut("la_marge_d_un_fichier_se_rend_sans_l_outil_outline") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(arbre.join("src")).unwrap();
+    std::fs::write(arbre.join("src/compteur.rs"), "pub struct Compteur;\n\nimpl Compteur {\n    pub fn inc(&self) {}\n}\n").unwrap();
+    let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    // Le manifeste de Lucie : onze outils, pas outline.
+    assert!(m["tools"].as_object_mut().unwrap().remove("outline").is_some(), "le gabarit expose outline");
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let manifeste = manifeste.to_string_lossy().to_string();
+
+    let (adresse, fil) = super::tests::hote_garde("j");
+    let appeler = |nom: &str, args: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("http://{adresse}/ide/call"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste, "name": nom, "arguments": args }).to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let index = appeler("index", json!({ "confirm": true }));
+    assert_eq!(index["ok"], true, "{index}");
+    let debut = Instant::now();
+    loop {
+        let lu = appeler("read_file", json!({ "path": "src/compteur.rs", "format": "json" }));
+        if lu["ok"] == true && lu["result"]["result"]["scopes"].as_array().is_some_and(|s| s.iter().any(|x| x["name"] == "inc")) {
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(60), "inc n'est pas indexé en 60 s : {lu}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let refus = appeler("outline", json!({ "path": "src/compteur.rs", "format": "json" }));
+    assert_eq!(refus["ok"], false, "outline n'est pas exposé par ce manifeste : {refus}");
+    let etat: Value = {
+        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let id = etat["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifeste.as_str()))
+        .unwrap_or_else(|| panic!("le backend n'est pas dans l'état : {etat}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let mut n = Navigateur::lancer(&binaire);
+    let racine = format!("http://{adresse}");
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
+    // La marge : les scopes du fichier, vers leur ligne et leur symbole, et le
+    // repli dit pourquoi le plan d'outline manque.
+    n.aller(
+        &format!("{racine}/ide/code/{id}/fichier/src/compteur.rs"),
+        r##"(() => { const d = [...document.querySelectorAll('#plan .scope')].find(s => s.querySelector('a')?.textContent === 'inc'); return d && d.querySelector('a[href="#L4"]') && d.querySelector('a[href$="/symbole/inc"]') && document.querySelector('#plan-repli')?.textContent.includes('outline'); })()"##,
+    );
+    let alertes = n.evaluer("[...document.querySelectorAll('.alerte')].map(e => e.textContent)");
+    assert_eq!(alertes, json!([]), "la marge sans outline montre une alerte");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **L'IDE d'un vrai hôte, en lecture seule** (19 octobre 2026) : le même
 /// parcours que [`les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur`],
 /// contre un hôte en service et l'un de ses backends de code, sans rien

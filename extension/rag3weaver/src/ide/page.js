@@ -199,7 +199,11 @@ async function fichier(id, chemin) {
       el("td", { class: "n" }, el("a", { href: `#L${n}` }, n)),
       el("td", {}, ligneCliquable(id, m[2]))));
   }
-  const scopes = planDuFichier(id, plan);
+  // **La marge ne dépend pas d'un outil que le manifeste peut ne pas exposer**
+  // (G, 25 octobre 2026 : le manifeste de Lucie n'expose pas outline, la marge
+  // restait vide sans rien dire). Le plan d'outline d'abord ; sinon les scopes
+  // que read_file rend déjà, en disant pourquoi.
+  const scopes = plan.erreur ? planDepuisLaLecture(id, r.scopes ?? [], plan.erreur) : planDuFichier(id, plan);
   vue.replaceChildren(
     el("h1", {}, chemin),
     el("p", { class: "barre" }, el("button", { onclick: () => editer(id, chemin) }, "Modifier")),
@@ -219,6 +223,19 @@ async function fichier(id, chemin) {
 // l'ordre du fichier, chacun sous celui qui le contient (par les lignes, pas
 // par le nom : deux scopes peuvent porter le même), vers sa ligne et vers son
 // symbole ; la provenance que l'outil dit, et ce qui manque si `limit` a borné.
+// Le repli de la marge : les scopes de read_file (sans imbrication ni provenance).
+function planDepuisLaLecture(id, scopes, pourquoi) {
+  const lignes = scopes.map((s) =>
+    el("div", { class: "scope", title: s.signature ?? "", "data-ligne": s.start_line },
+      el("a", { href: `#L${s.start_line}` }, s.name),
+      " ", el("span", { class: "meta note" }, `${s.scope_type} ${s.start_line}–${s.end_line}`),
+      " ", el("a", { href: lienSymbole(id, s.name), title: "usages, impact, appelés" }, "→")));
+  return [
+    ...(lignes.length ? lignes : [el("p", { class: "note" }, "aucun scope")]),
+    el("p", { class: "note", id: "plan-repli" }, `scopes lus avec le fichier : le plan d'outline n'est pas disponible (${pourquoi})`),
+  ];
+}
+
 function planDuFichier(id, plan) {
   if (plan.erreur) return [el("p", { class: "note" }, `le plan : ${plan.erreur}`)];
   const lignes = plan.rows ?? [];
