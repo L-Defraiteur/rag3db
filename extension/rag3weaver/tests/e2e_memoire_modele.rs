@@ -30,6 +30,12 @@ fn crate_dir() -> &'static Path {
 /// Le gabarit `memory` dans une copie de `templates/`, son extension vector
 /// prise au bâti (comme le banc des fiches classées).
 fn ouvrir(dir: &Path) -> Backend {
+    ouvrir_avec(dir, |_, _| {})
+}
+
+/// Le même gabarit, et une retouche du dossier copié et du manifeste avant
+/// l'ouverture (un modèle déclaré, un outil d'essai).
+fn ouvrir_avec(dir: &Path, retoucher: impl Fn(&Path, &mut Value)) -> Backend {
     fn copier(src: &Path, dst: &Path) {
         std::fs::create_dir_all(dst).unwrap();
         for e in std::fs::read_dir(src).unwrap() {
@@ -46,6 +52,7 @@ fn ouvrir(dir: &Path) -> Backend {
     let manifeste = dir.join("templates/backends/memory/backend.json");
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
     m["vector_extension"] = json!(crate::common::vector_extension());
+    retoucher(&dir.join("templates/backends/memory"), &mut m);
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     let prepared = PreparedBackend::load(&manifeste).expect("le gabarit memory charge");
     let (embedder, _) = prepared.connect_embedder().unwrap_or_else(|e| {
@@ -128,4 +135,60 @@ fn les_outils_d_avant_le_modele_marchent_encore() {
     appel(&b, "put_subject", json!({"record": {"name": "régime GPU", "about": "le rapport cyclique des passes", "state": "current"}}));
     appel(&b, "put_memory", json!({"record": {"claim": "Un rapport cyclique de 70 % garde l'écran utilisable.", "why": "mesuré", "kind": "fact",
                                               "origin": "inferred", "said_as": "", "reach": "person", "state": "current"}}));
+}
+
+/// Un outil d'essai : l'élément donné passe par `Decide via='llm'`.
+#[cfg(feature = "openai-llm")]
+const DECIDE_ESSAI: &str = "%% tool: decide_essai
+%% description: Un Decide par le modèle déclaré, pour le témoin.
+%% param: element json! -- L'élément à étiqueter ({text}).
+%% result: decide.element
+
+graph LR
+    source[\"RhaiNode(script='input', value=$element)\"]
+    decide[\"Decide(via='llm', labels='oui|non', field='text', as='verdict')\"]
+    source -->|result| decide
+";
+
+/// **`models.llm` est joint à l'ouverture et sert les graphes du backend** (M4).
+/// Avant, seuls le chat et le juge lisaient la déclaration : un `Decide
+/// via='llm'` dans un graphe d'outil disait « ni 'decider' ni 'llm' servi »
+/// alors que le manifeste déclarait le modèle. Ici le modèle déclaré est un faux
+/// serveur SSE local qui répond `{"label": "oui"}` : l'outil rend l'élément
+/// étiqueté, et le serveur a bien reçu la requête. Sans déclaration, c'est
+/// « ni decider ni llm ».
+#[cfg(feature = "openai-llm")]
+#[test]
+#[ignore]
+fn un_modele_declare_au_manifeste_sert_les_graphes_du_backend() {
+    let outil = |dossier: &Path, m: &mut Value| {
+        std::fs::write(dossier.join("graphs/decide_essai.mmd"), DECIDE_ESSAI).unwrap();
+        m["tools"]["decide_essai"] = json!({"graph": "graphs/decide_essai.mmd"});
+    };
+    // Sans modèle déclaré : le graphe le dit, et nomme ce qui manque.
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir_avec(dir.path(), outil);
+    let e = b.call("decide_essai", json!({"element": {"text": "bonjour"}})).err().expect("sans modèle, l'outil refuse");
+    assert!(e.contains("ni 'decider' ni 'llm' servi"), "{e}");
+    drop(b);
+    // Avec `models.llm` : le modèle est joint à l'ouverture et le graphe l'appelle.
+    // Le modèle est un faux serveur SSE local (tests/common/fake_sse.rs) qui
+    // répond l'étiquette « oui » en JSON, comme un modèle sous schéma strict.
+    let serveur = crate::common::fake_sse::FakeServer::start(
+        vec![
+            r#"{"id":"d1","choices":[{"index":0,"delta":{"role":"assistant","content":"{\"label\": \"oui\"}"},"finish_reason":null}]}"#.into(),
+            r#"{"id":"d1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#.into(),
+        ],
+        false,
+    );
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir_avec(dir.path(), |dossier, m| {
+        outil(dossier, m);
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let r = appel(&b, "decide_essai", json!({"element": {"text": "bonjour"}}));
+    assert_eq!(r["verdict"], json!("oui"), "l'élément ressort étiqueté par le modèle déclaré : {r}");
+    let requete = serveur.request.recv_timeout(std::time::Duration::from_secs(5)).expect("le faux modèle a reçu la requête");
+    assert!(requete.contains("bonjour") && requete.contains("faux"), "la requête porte le texte et le modèle déclaré : {requete}");
 }

@@ -1955,6 +1955,19 @@ impl PreparedBackend {
         if let Some(source) = self.manifest.models.get(&crate::model_source::Capability::Ocr) {
             cat.set_ocr(crate::model_source::connect_ocr(source)?.0);
         }
+        // Le modèle de langage déclaré (`models.llm`) : joint à l'ouverture,
+        // il devient le service `llm` des graphes du backend (`Decide
+        // via='llm'`, `LlmNode`). Avant, seuls le chat et le juge le lisaient,
+        // chacun pour soi : un graphe d'outil qui en avait besoin disait « ni
+        // decider ni llm servi » alors que le manifeste le déclarait (M4).
+        #[cfg(feature = "openai-llm")]
+        if let Some(source) = self.manifest.models.get(&crate::model_source::Capability::Llm) {
+            cat.set_llm(Arc::new(crate::model_source::connect_llm(source)?.0));
+        }
+        #[cfg(not(feature = "openai-llm"))]
+        if self.manifest.models.contains_key(&crate::model_source::Capability::Llm) {
+            return Err("models.llm est déclaré, mais ce bâti n'a pas la feature `openai-llm` : le modèle ne peut pas se joindre".into());
+        }
         let veut_le_creux = self.entities.values().any(|config| config.signals.sparse())
             || self
                 .manifest
