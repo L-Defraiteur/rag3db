@@ -30,7 +30,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::form::{Collect, Column, Count, Limit, Offset, OrderBy, Predicate, Select};
+use crate::form::{Aggregate, Collect, Column, Count, Extremum, Limit, Offset, Predicate, Select, Term};
 use crate::plan::{Form, Plan};
 use crate::value::{QueryParam, Value};
 
@@ -117,12 +117,8 @@ impl DeclaredPlan {
                     if let Some(p) = &s.filter {
                         p.params(&mut out);
                     }
-                    for c in &s.returns {
-                        if let Column::Collect(c) = c {
-                            if let Some(p) = &c.filter {
-                                p.params(&mut out);
-                            }
-                        }
+                    for p in s.sub_filters() {
+                        p.params(&mut out);
                     }
                     if let Some(Limit::Param { param, .. }) = &s.limit {
                         out.insert(param.clone());
@@ -166,10 +162,8 @@ impl DeclaredPlan {
                 // ouverts : ils comptent comme s'ils étaient gardés).
                 let mut sonde = s.clone();
                 sonde.filter = s.filter.as_ref().map(|p| self.deplier(p, &mut Vec::new())).transpose().map_err(ctx)?.map(ouvrir);
-                for c in &mut sonde.returns {
-                    if let Column::Collect(c) = c {
-                        c.filter = c.filter.as_ref().map(|p| self.deplier(p, &mut Vec::new())).transpose().map_err(ctx)?.map(ouvrir);
-                    }
+                for f in sonde.sub_filters_mut() {
+                    *f = f.as_ref().map(|p| self.deplier(p, &mut Vec::new())).transpose().map_err(ctx)?.map(ouvrir);
                 }
                 if let Some(Limit::Param { max: Some(m), .. }) = &sonde.limit {
                     sonde.limit = Some(Limit::Literal(*m));
@@ -239,9 +233,11 @@ impl DeclaredPlan {
                     }
                 };
                 for k in &s.order_by {
-                    match &k.by {
-                        OrderBy::Field(c) => champ(c)?,
-                        OrderBy::Coalesce(v) => v.iter().try_for_each(|c| champ(c))?,
+                    for t in k.by.terms().0 {
+                        match t {
+                            Term::Field(c) => champ(c)?,
+                            Term::Extremum(x, a) => self.verifier_extreme(x, a, table, schema).map_err(ctx)?,
+                        }
                     }
                 }
                 for c in &s.returns {
@@ -264,6 +260,21 @@ impl DeclaredPlan {
         }
         if let Some(p) = &c.filter {
             self.verifier_contre(p, &c.end, schema)?;
+        }
+        Ok(())
+    }
+
+    /// Un extrême de l'ordre : la relation mène de la table à `end` dans son
+    /// sens, `field` est un champ de `end`, le filtre se lit sur `end`.
+    fn verifier_extreme(&self, x: Extremum, a: &Aggregate, depuis: &str, schema: &PlanSchema) -> Result<(), String> {
+        let ctx = |m: String| format!("l'ordre par {} de « {} » : {m}", x.function(), a.field);
+        verifier_bout(&a.relation, a.direction, depuis, &a.end, schema).map_err(ctx)?;
+        let champs = schema.tables.get(&a.end).ok_or_else(|| ctx(format!("la table « {} » n'est pas déclarée", a.end)))?;
+        if !champs.contains(&a.field) {
+            return Err(ctx(format!("la table « {} » n'a pas de champ « {} »", a.end, a.field)));
+        }
+        if let Some(p) = &a.filter {
+            self.verifier_contre(p, &a.end, schema).map_err(ctx)?;
         }
         Ok(())
     }
@@ -349,10 +360,8 @@ impl DeclaredPlan {
                 DeclaredForm::Select(s) => {
                     let mut s = s.clone();
                     s.filter = lier(&s.filter, &mut noms).map_err(ctx)?;
-                    for c in &mut s.returns {
-                        if let Column::Collect(c) = c {
-                            c.filter = lier(&c.filter, &mut noms).map_err(ctx)?;
-                        }
+                    for f in s.sub_filters_mut() {
+                        *f = lier(f, &mut noms).map_err(ctx)?;
                     }
                     if let Some(Limit::Param { param, max }) = &s.limit {
                         let n = entier(params, param).map_err(ctx)?;
@@ -398,11 +407,7 @@ fn predicats_de(f: &DeclaredForm) -> Vec<&Predicate> {
     match f {
         DeclaredForm::Select(s) => {
             let mut v: Vec<&Predicate> = s.filter.iter().collect();
-            for c in &s.returns {
-                if let Column::Collect(c) = c {
-                    v.extend(c.filter.iter());
-                }
-            }
+            v.extend(s.sub_filters());
             v
         }
         DeclaredForm::Count(Count::Matching { filter, .. }) => filter.iter().collect(),
@@ -539,6 +544,7 @@ fn lier_predicat(p: &Predicate, params: &BTreeMap<String, Value>, noms: &mut BTr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::form::OrderBy;
     use serde_json::json;
 
     fn plan(v: serde_json::Value) -> Result<DeclaredPlan, String> {
@@ -650,5 +656,72 @@ mod tests {
         schema.relations.insert("CITE".into(), ("Memory".into(), "Ref".into()));
         let e = p.check_schema(&schema).unwrap_err();
         assert!(e.contains("CITE") && e.contains("Subject"), "{e}");
+    }
+
+    /// La fiche et ses L1, pour l'ordre par extrême.
+    fn schema_des_apports() -> PlanSchema {
+        let mut schema = PlanSchema::default();
+        let champs = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>();
+        schema.tables.insert("Memory".into(), champs(&["_uuid", "kind", "created_at", "updated_at"]));
+        schema.tables.insert("Apport".into(), champs(&["_uuid", "niveau", "created_at"]));
+        schema.relations.insert("A_POUR_APPORT".into(), ("Memory".into(), "Apport".into()));
+        schema
+    }
+
+    /// `{"coalesce": [{"max": …}, "updated_at", "created_at"]}` : la forme de la
+    /// mémoire (« les fiches triées par la date de leur dernier L1 »).
+    fn ordre_par_dernier_apport(filtre: Option<serde_json::Value>) -> serde_json::Value {
+        let mut max = json!({"relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport", "field": "created_at"});
+        if let Some(f) = filtre {
+            max["filter"] = f;
+        }
+        let mut v = base(json!({"equals": {"field": "kind", "param": "k"}}));
+        v["forms"]["f"]["select"]["order_by"] = json!([{"coalesce": [{"max": max}, "updated_at", "created_at"], "desc": true}, {"field": "_uuid"}]);
+        v
+    }
+
+    /// **L'ordre par extrême se lit, s'écrit à l'identique et se vérifie** :
+    /// le JSON relu rend le même Plan ; la relation, son sens, `end` et `field`
+    /// se vérifient contre le schéma, en nommant ce qui manque.
+    #[test]
+    fn un_ordre_par_extreme_des_lignes_liees_se_lit_et_se_verifie() {
+        let p = plan(ordre_par_dernier_apport(None)).unwrap();
+        p.check().unwrap();
+        p.check_schema(&schema_des_apports()).unwrap();
+        assert_eq!(DeclaredPlan::from_json(&serde_json::to_string(&p).unwrap()).unwrap(), p, "aller-retour en JSON");
+        let mut sans_champ = schema_des_apports();
+        sans_champ.tables.get_mut("Apport").unwrap().remove("created_at");
+        let e = p.check_schema(&sans_champ).unwrap_err();
+        assert!(e.contains("max") && e.contains("Apport") && e.contains("created_at"), "{e}");
+        let mut a_l_envers = ordre_par_dernier_apport(None);
+        a_l_envers["forms"]["f"]["select"]["order_by"][0]["coalesce"][0]["max"]["direction"] = json!("incoming");
+        let e = plan(a_l_envers).unwrap().check_schema(&schema_des_apports()).unwrap_err();
+        assert!(e.contains("A_POUR_APPORT") && e.contains("incoming"), "{e}");
+        let mut faute = ordre_par_dernier_apport(None);
+        faute["forms"]["f"]["select"]["order_by"][0]["coalesce"][0]["max"]["feild"] = json!("x");
+        assert!(plan(faute).is_err(), "un champ inconnu de l'extrême ne se lit pas");
+    }
+
+    /// **Le filtre d'un extrême se lie comme les autres** : ses paramètres sont
+    /// lus par le Plan (`param_names`), son `optional` absent disparaît, et
+    /// hors `optional` un absent est refusé en le nommant.
+    #[test]
+    fn le_filtre_d_un_extreme_se_lie_et_ses_parametres_sont_ceux_du_plan() {
+        let p = plan(ordre_par_dernier_apport(Some(json!({"optional": {"equals": {"field": "niveau", "param": "niveau"}}})))).unwrap();
+        p.check().unwrap();
+        p.check_schema(&schema_des_apports()).unwrap();
+        assert!(p.param_names().contains("niveau"), "{:?}", p.param_names());
+        let lie = p.bind(&params(json!({"k": "rule"}))).unwrap();
+        let Form::Select(s) = &lie.plan.nodes[0].form else { panic!() };
+        let OrderBy::Coalesce(termes) = &s.order_by[0].by else { panic!("{:?}", s.order_by) };
+        let crate::form::OrderTerm::Max { max } = &termes[0] else { panic!("{termes:?}") };
+        assert_eq!(max.filter, None, "l'optional absent disparaît");
+        let lie = p.bind(&params(json!({"k": "rule", "niveau": "L1"}))).unwrap();
+        let Form::Select(s) = &lie.plan.nodes[0].form else { panic!() };
+        let OrderBy::Coalesce(termes) = &s.order_by[0].by else { panic!() };
+        let crate::form::OrderTerm::Max { max } = &termes[0] else { panic!() };
+        assert_eq!(max.filter, Some(Predicate::Equals { field: "niveau".into(), param: "niveau".into() }));
+        let dur = plan(ordre_par_dernier_apport(Some(json!({"equals": {"field": "niveau", "param": "niveau"}})))).unwrap();
+        assert!(dur.bind(&params(json!({"k": "rule"}))).unwrap_err().contains("niveau"));
     }
 }
