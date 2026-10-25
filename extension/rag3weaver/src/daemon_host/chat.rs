@@ -258,6 +258,10 @@ impl DaemonHost {
         let resultat = self
             .with_backend(&hosted, |b| self.run_chat_turn(b, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par))
             .and_then(|r| r);
+        // Un tour fini : son bilan, si le backend déclare `bilans` (page 04).
+        if resultat.is_ok() {
+            self.demander_un_bilan(&hosted, &run_id);
+        }
         {
             let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(e) = chats.get_mut(backend_id) {
@@ -345,6 +349,17 @@ impl DaemonHost {
         let propositions = propositions_du_tour(du_tour);
         let fichiers = fichiers_ecrits_du_tour(du_tour, &outils.ecrivent);
         let tache = if dans_une_tache { self.tache_de(manifest) } else { Value::Null };
+        // Le journal du run : les tours de ce tour, tels que le modèle les a
+        // reçus, la tâche, ce qu'il a écrit et proposé.
+        {
+            let mut ajouts = serde_json::Map::new();
+            ajouts.insert("chat".into(), json!(backend_id));
+            ajouts.insert("tours".into(), serde_json::to_value(du_tour).unwrap_or(Value::Null));
+            ajouts.insert("tache".into(), tache.clone());
+            ajouts.insert("fichiers".into(), json!(fichiers));
+            ajouts.insert("propositions".into(), json!(propositions));
+            self.journal.ajouter(backend_id, run_id, ajouts);
+        }
         let reponse = |text: &str| {
             json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers })
         };

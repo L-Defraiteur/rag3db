@@ -142,6 +142,8 @@ mod e2e_impact_fichier;
 mod e2e_invariant_des_vecteurs;
 #[path = "../e2e_journal_de_conversation.rs"]
 mod e2e_journal_de_conversation;
+#[path = "../e2e_juge.rs"]
+mod e2e_juge;
 #[path = "../e2e_lecture_du_catalogue.rs"]
 mod e2e_lecture_du_catalogue;
 #[path = "../e2e_lecture_mermaid.rs"]

@@ -124,6 +124,7 @@ async function accueil() {
         el("a", { href: `/ide/code/${b.id}/propositions/` }, "propositions"),
         b.tache ? el("span", { class: "pastille" }, `tâche ${b.tache.nom}`) : el("a", { href: `/ide/code/${b.id}/taches/` }, "tâches"),
         el("a", { href: `/ide/code/${b.id}/chat` }, "chat"),
+        el("a", { href: `/ide/code/${b.id}/bilans` }, "bilans"),
         el("span", { class: "meta" }, b.manifest),
         el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
         (b.template_drift ?? []).length ? el("span", { class: "meta" }, `${b.template_drift.length} gabarit(s) local(aux) différent(s) du livré`) : "",
@@ -627,6 +628,30 @@ function sectionDeGraphe(g) {
         el("h2", {}, `graphe — ${genre} ${nom}`),
         el("p", { class: "note" }, `${d.ajoutes.length} ajouté(s), ${d.changes.length} changé(s), ${d.retires.length} retiré(s) ; ${d.aretes_ajoutees.length} arête(s) ajoutée(s), ${d.aretes_retirees.length} retirée(s).`),
         el("div", { class: "graphe" }, dessin));
+}
+
+// **Les bilans** (page 04 du 25 octobre 2026) : ce que le juge de session a
+// rangé dans la mémoire, par fiche (une tâche) — ses apports dans l'ordre, la
+// tendance de la note, et chaque bilan lisible tel qu'il est écrit.
+async function bilans(id) {
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · bilans");
+  const r = await (await fetch(`/ide/bilans?${new URLSearchParams({ backend: id })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const { declare, fiches } = r.result;
+  vue.replaceChildren(
+    el("h1", {}, "Bilans de session"),
+    declare
+      ? el("p", { class: "note" }, "Le juge relit chaque tour du chat de ce backend, et range ici son bilan, par tâche.")
+      : el("p", { class: "note", id: "bilans-absents" }, "Ce backend ne déclare pas `bilans` : ses tours ne sont pas jugés."),
+    ...(fiches.length || !declare ? [] : [el("p", { class: "note" }, "aucun bilan encore")]),
+    ...fiches.map((f) => el("section", { class: "fiche-de-bilan", "data-fiche": f.fiche },
+      el("h2", {}, f.fiche),
+      el("p", { class: "note tendance" }, `notes : ${f.apports.map((a) => a.note ?? "?").join(" → ")}${f.apports.length > 1 ? ` · ${f.apports.at(-1).comparaison?.verdict ?? ""}` : ""}`),
+      ...f.apports.map((a) => el("details", { class: "apport-de-bilan" },
+        el("summary", {}, `note ${a.note ?? "?"} · ${a.source ?? ""}`),
+        el("pre", {}, a.texte))))),
+  );
 }
 
 async function propositions(id, reste) {
@@ -1179,7 +1204,7 @@ function vivre(d) {
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches|chat)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches|chat|bilans)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -1221,6 +1246,7 @@ async function vueDe(r) {
     case "propositions": return await propositions(r.id, r.reste);
     case "taches": return await taches(r.id, r.reste);
     case "chat": return await chat(r.id);
+    case "bilans": return await bilans(r.id);
     default: return await accueil();
   }
 }

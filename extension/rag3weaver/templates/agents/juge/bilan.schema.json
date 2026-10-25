@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resume", "note", "confiance", "objectif", "faits", "outils", "frictions", "attentes", "manquait", "a_corriger", "comparaison"],
+  "properties": {
+    "resume": { "type": "string", "description": "Le jugement en deux phrases." },
+    "note": { "type": "integer", "minimum": 0, "maximum": 10 },
+    "confiance": { "type": "string", "enum": ["faible", "moyenne", "haute"] },
+    "objectif": { "type": "string", "enum": ["atteint", "partiel", "non"] },
+    "faits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["texte", "nature"],
+        "properties": { "texte": { "type": "string" }, "nature": { "type": "string", "enum": ["dit", "deduit"] } }
+      }
+    },
+    "outils": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outil", "appels", "echecs", "inutiles", "ambigus"],
+        "properties": {
+          "outil": { "type": "string" },
+          "appels": { "type": "integer" },
+          "echecs": { "type": "integer" },
+          "inutiles": { "type": "integer", "description": "Appels inutiles ou répétés." },
+          "ambigus": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["retour", "cru"],
+              "properties": { "retour": { "type": "string", "description": "Le texte exact du retour." }, "cru": { "type": "string", "description": "Ce que l'agent a cru qu'il voulait dire." } }
+            }
+          }
+        }
+      }
+    },
+    "frictions": { "type": "array", "items": { "type": "string" }, "description": "Reformulations, questions redemandées, boucles, action annoncée sans outil." },
+    "attentes": { "type": "array", "items": { "type": "string" }, "description": "Appels lents, reprises." },
+    "manquait": { "type": "array", "items": { "type": "string" }, "description": "L'outil ou le gabarit voulu, qui n'existe pas." },
+    "a_corriger": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outil", "phrase", "proposee"],
+        "properties": {
+          "outil": { "type": "string" },
+          "phrase": { "type": "string", "description": "La phrase de sa description, ou son retour, qui a trompé." },
+          "proposee": { "type": "string", "description": "La description proposée à la place, entière." }
+        }
+      }
+    },
+    "comparaison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "sur"],
+      "properties": {
+        "verdict": { "type": "string", "enum": ["premier", "amelioration", "regression", "pareil"] },
+        "sur": { "type": "string", "description": "Sur quoi, au regard des bilans précédents de la même tâche." }
+      }
+    }
+  }
+}
