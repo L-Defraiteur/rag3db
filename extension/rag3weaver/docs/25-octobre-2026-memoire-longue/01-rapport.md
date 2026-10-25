@@ -47,14 +47,33 @@ cours, `origin/master` = le hash après fetch).
 - **Les rebases ont conflictué**, mécaniquement : l'index des tickets, et les littéraux de
   `Backend` après K1. À chaque fois, un nom de branche neuf, sans force.
 
+## L'après-midi : quatre lots de plus sur master
+
+| hash | lot | ce qu'il change |
+|---|---|---|
+| 665a4a97c | `cited_by` | Les fiches qui citent une chose (un chemin, un dossier, un symbole, un source), ancrées à elle ou par un apport qui la cite, lues par un Plan déclaré, sans Cypher. Elles se rangent par leur dernier apport (la clé « max » de l'arbre principal, beda3d8f1). Deux changements génériques : le RhaiNode prend une clé de config par champ et déclare ses `inputs` ; un paramètre json au défaut liste attend une liste. |
+| 195358024 | le rouge openai-llm | `cited_by` avait rougi master : le témoin du mode strict visait les `signals` d'EmbedNode, qui sont une liste. Il vise maintenant un json sans défaut. La cause du trou : mon tour jouait la lib sans `openai-llm`, et la règle vaut maintenant pour toutes les sessions. |
+| d72bcf5e0 | la mémoire dans ses fichiers | Une source à son chemin, un genre à `genres/`, une fiche composée (État, Ancres, Apports). La fermeture du bloc machine : une ligne sans fichier y voyage. Trois défauts de M3 que la mémoire réelle a révélés : les vecteurs dans le bloc, les lignes sans champs du serveur, et une entité à la racine qui relisait les dossiers des autres. |
+| bea6c6a98 | la version du format, le manifeste du dossier | `format: N` dans chaque en-tête et chaque bloc, avec des migrations Rhai déclarées. `manifeste.yaml` à la racine des fichiers, engendré depuis le gabarit. Un dossier sans manifeste, d'un autre gabarit ou d'un format inconnu se dit. C'était la demande de Lucie : « faut-il versionner ? ». |
+
+Les rouges de l'après-midi, tous vus avant master sauf le premier :
+- **Le rouge openai-llm.** Mon tour jouait la lib sans cette feature, et 80 tests manquaient. Je l'ai corrigé dans le tour.
+- **Un faux diff.** Un diff à deux points tiré après un fetch défaisait 276 lignes de master. Je l'ai vu au `--stat` avant qu'il ne serve ; la règle est maintenant le diff à trois points.
+- **La bascule de 17 h 43.** Elle a eu lieu pendant un rejeu. La lib s'épingle désormais au départ du tour.
+- **Le garde de fraîcheur.** Avec un commit du moteur plus récent que la lib du magasin, `RAG3WEAVER_MOTEUR_ANCIEN` doit rester posé.
+- **Deux témoins sous charge.** Le navigateur de l'IDE et le chat ont rougi sous la charge de la lib entière, et sont verts joués seuls. Ils sont ticketés ou corrigés par leurs sessions.
+
 ## Ce qui attend
 
-1. **`cited_by` par PlanNode**, sur le master d'outline (le PlanNode y prend un paramètre
-   par clé). La page 04 §7 vise la Fiche (ANCRE vers les Ref, A_POUR_APPORT vers les L1) et
-   non plus Memory/CITE comme la fixture de l'IR. Le tri « par la date du dernier L1 »
-   demande un ordre sur un agrégat de lignes liées, que l'IR n'a pas : soit une clé d'ordre
-   de plus, soit le tri sur la date de la fiche. Ce choix se dira avec le lot.
-2. **Le gabarit mémoire câblé sur ses fichiers**, et la migration de la fiche de Lucie.
+1. **La migration de la fiche de Lucie**, après le rebâti des hôtes de ce soir (il doit porter bea6c6a98) et sa réponse sur l'emplacement du dossier. Elle passe par son hôte :
+   - annoncer à c7 ;
+   - fermer la base (unregister) ;
+   - `instantanes.sh migration-fiche-25-oct` ;
+   - mettre le manifeste au gabarit livré ;
+   - rouvrir ;
+   - écrire la fiche « régime GPU », la Source et l'apport ;
+   - vérifier, et dire les deux lignes avant et après.
+2. **La forme des fiches de bilan du juge** d'everything declarative : relue, réponses dans sa page §5 (branche juge-1).
 3. **En fin de session**, effacer les worktrees et les targets :
    - ici : `wt-*-96` ;
    - à luciepc : `rag3db-p1-96`, `p1r-96`, `p1sans-96`, `seed96`, et les `target-96*`.

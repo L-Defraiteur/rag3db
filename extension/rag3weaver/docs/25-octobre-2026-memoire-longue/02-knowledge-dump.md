@@ -67,3 +67,26 @@ Ce qu'une session qui reprend doit savoir, et que le code ne dit pas.
   - Le rendu prend `group=false`, comme outline, pour garder l'ordre des dates.
 - **La Fiche** n'a que name, about, state, author, via, revision et les dates. Les
   `returns` de la fixture ne s'y appliquent donc pas.
+
+## Le soir : ce qui a changé dans le tour
+
+- **La lib s'épingle au départ.** `LIB_EPINGLEE` vaut le nom résolu de `courant`, et `RAG3DB_LIB` comme le contrôle des planchers jugent cette lib-là. La bascule de 17 h 43 a eu lieu au milieu d'un rejeu.
+- **`RAG3WEAVER_MOTEUR_ANCIEN=1` reste posé.** Un commit du moteur plus récent que la lib du magasin (6b63e4922) faisait refuser toutes les suites par le garde de fraîcheur de `run_e2e.sh`.
+- **La lib entière se joue sous `…,postgres,openai-llm`.** Sans cette feature, 80 tests ne jouaient pas, dont celui qui a rougi master après `cited_by`.
+- **`cargo clean -p rag3weaver -p rag3db`** : les liaisons se rebâtissent à chaque passe, depuis le changement d'ABI.
+- **Le diff du lot se tire à trois points** (`origin/master...HEAD`), puis on lit son `--stat`.
+
+## Les fichiers, depuis bea6c6a98
+
+- **`format: N`** suit `uuid` dans chaque en-tête, et `format:` ouvre le YAML de chaque bloc machine.
+- **Le manifeste du backend** déclare `files_format: {version, migrations: [{from, to, script}], lists: {"genres": "RefType.name"}}`. Un script de migration reçoit `input = #{entity, fields}` et rend les champs.
+- **`manifeste.yaml`** à la racine des fichiers est écrit à chaque ouverture, sauf si le dossier parle d'un autre schéma, ou s'il a des fichiers sans manifeste. Dans ces deux cas, l'ouverture le dit dans `index_state.files.manifest` avec un avertissement, et `rebuild_from_files` refuse.
+- **Les relations** d'un manifeste prennent une `description` d'une ligne, celle que le manifeste du dossier recopie.
+
+## La migration de la fiche de Lucie : la recette
+
+- **L'instantané** : `~/.cache/rag3weaver-notes-A/instantanes.sh <étiquette> <base.rag3db>` (le script de l'arbre principal). Il refuse si un processus tient un fichier de la base, copie en reflink sous `~/.local/share/rag3weaver/instantanes/<étiquette>/` et écrit `RETOUR.sh` à côté.
+- **Sans arrêter son hôte** : unregister de memoire-longue par l'hôte, l'instantané, le manifeste mis au gabarit livré, puis la réouverture par l'hôte. Prévenir c7 avant l'unregister.
+- **L'avant** (25 oct.) :
+  - la Memory 1fb42f63 sur le rapport cyclique de 70 % : fact, inferred, person, current, revision 1, created_at 1791682063181 ;
+  - le Subject « régime GPU ».
