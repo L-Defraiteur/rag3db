@@ -1174,10 +1174,11 @@ TEST_F(SingleWriterCrash, DeathAfterASuccessfulCopy) {
     EXPECT_EQ(queryInt("MATCH (c:C) RETURN count(*);"), 1000) << "[check: copy-survives-death] ";
 }
 
-// Le point de reprise automatique, quand une transaction reste ouverte au-delà du délai : il
+// Le point de reprise automatique, quand un ÉCRIVAIN reste ouvert au-delà du délai : il
 // est reporté, l'écriture validée ne rend pas d'erreur, et il se fait à une validation
 // suivante, une fois la transaction fermée (comme PostgreSQL, un point de reprise ne fait
-// jamais échouer une validation).
+// jamais échouer une validation). Depuis V2-2 (25 octobre 2026), un lecteur ouvert ne retient
+// plus rien : c'est le témoin suivant.
 TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
     mustRun("CALL auto_checkpoint=false;");
     mustRun("CREATE NODE TABLE P(id INT64 PRIMARY KEY);");
@@ -1186,8 +1187,8 @@ TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
     mustRun("CALL checkpoint_threshold=1;");
     mustRun("CALL auto_checkpoint=true;");
     rag3db::main::Connection other(database.get());
-    other.query("BEGIN TRANSACTION READ ONLY;");
-    other.query("MATCH (p:P) RETURN count(*);");
+    other.query("BEGIN TRANSACTION;");
+    other.query("CREATE (:P {id: 777777});");
     auto write = conn->query("CREATE (:P {id: 999999});");
     EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
                                     << write->getErrorMessage();
@@ -1203,7 +1204,40 @@ TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
     next.reset();
     EXPECT_LT(walSize(), walBefore) << "[check: postponed-checkpoint-done] the journal should "
                                        "have been folded once the open transaction closed";
-    EXPECT_EQ(queryInt("MATCH (p:P) WHERE p.id + 0 >= 999999 RETURN count(*);"), 2)
+    EXPECT_EQ(queryInt("MATCH (p:P) WHERE p.id + 0 >= 777777 RETURN count(*);"), 3)
+        << "[check: rows-present] ";
+}
+
+// Un lecteur resté ouvert ne retient pas le point de reprise automatique (V2-2) : il se fait à
+// la validation qui franchit le seuil, le journal est replié aussitôt, et le lecteur relit sa
+// génération.
+TEST_F(SingleWriterCrash, AutoCheckpointIsNotPostponedByAnOpenReader) {
+    mustRun("CALL auto_checkpoint=false;");
+    mustRun("CREATE NODE TABLE P(id INT64 PRIMARY KEY);");
+    mustRun("UNWIND range(1, 1000) AS i CREATE (:P {id: i});");
+    mustRun("CHECKPOINT;");
+    const auto walFolded = walSize();
+    mustRun("CALL checkpoint_threshold=1;");
+    mustRun("CALL auto_checkpoint=true;");
+    rag3db::main::Connection other(database.get());
+    other.query("BEGIN TRANSACTION READ ONLY;");
+    auto before = other.query("MATCH (p:P) RETURN count(*);");
+    ASSERT_TRUE(before->isSuccess());
+    const auto countBefore = before->getNext()->getValue(0)->getValue<int64_t>();
+    before.reset();
+    auto write = conn->query("CREATE (:P {id: 999999});");
+    EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
+                                    << write->getErrorMessage();
+    write.reset();
+    EXPECT_LE(walSize(), walFolded) << "[check: checkpoint-not-postponed-by-a-reader] the "
+                                      "journal should have been folded right away";
+    auto during = other.query("MATCH (p:P) RETURN count(*);");
+    ASSERT_TRUE(during->isSuccess());
+    EXPECT_EQ(during->getNext()->getValue(0)->getValue<int64_t>(), countBefore)
+        << "[check: reader-keeps-its-snapshot] ";
+    during.reset();
+    other.query("COMMIT;");
+    EXPECT_EQ(queryInt("MATCH (p:P) WHERE p.id + 0 >= 999999 RETURN count(*);"), 1)
         << "[check: rows-present] ";
 }
 

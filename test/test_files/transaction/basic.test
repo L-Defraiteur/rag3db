@@ -41,6 +41,7 @@ Connection already has an active transaction. Cannot start a transaction within 
 ---- 1
 Alice
 
+# Un écrivain ouvert retient un CHECKPOINT jusqu'au délai (inchangé).
 -CASE CheckpointTimeoutErrorTest
 -SKIP_IN_MEM
 -CHECKPOINT_WAIT_TIMEOUT 10000
@@ -49,7 +50,9 @@ Alice
 -STATEMENT CREATE NODE TABLE person(ID INT64, age INT64, PRIMARY KEY(ID));
 ---- ok
 -CREATE_CONNECTION conn1
--STATEMENT [conn1] BEGIN TRANSACTION READ ONLY;
+-STATEMENT [conn1] BEGIN TRANSACTION;
+---- ok
+-STATEMENT [conn1] CREATE (:person {ID: 5, age: 5});
 ---- ok
 -CREATE_CONNECTION conn2
 -STATEMENT [conn2] BEGIN TRANSACTION;
@@ -61,8 +64,41 @@ Alice
 -STATEMENT [conn2] CHECKPOINT;
 ---- error
 Timeout waiting for active transactions to leave the system before checkpointing. If you have an open transaction, please close it and try again.
+-STATEMENT [conn1] ROLLBACK
+---- ok
+
+# Depuis V2-2 (25 octobre 2026), un lecteur ouvert n'est plus attendu par un CHECKPOINT : il
+# passe, le lecteur relit sa génération (sa vue d'avant), un lecteur nouveau voit l'écriture.
+-CASE CheckpointDoesNotWaitForAnOpenReader
+-SKIP_IN_MEM
+-CHECKPOINT_WAIT_TIMEOUT 10000
+-STATEMENT CALL auto_checkpoint=false
+---- ok
+-STATEMENT CREATE NODE TABLE person(ID INT64, age INT64, PRIMARY KEY(ID));
+---- ok
+-STATEMENT CREATE (:person {ID: 0, age: 1});
+---- ok
+-STATEMENT CHECKPOINT;
+---- ok
+-CREATE_CONNECTION conn1
+-STATEMENT [conn1] BEGIN TRANSACTION READ ONLY;
+---- ok
 -STATEMENT [conn1] MATCH (a:person) WHERE a.ID=0 RETURN a.age;
----- 0
+---- 1
+1
+-CREATE_CONNECTION conn2
+-STATEMENT [conn2] MATCH (a:person) WHERE a.ID=0 set a.age=70;
+---- ok
+-STATEMENT [conn2] CHECKPOINT;
+---- ok
+-STATEMENT [conn1] MATCH (a:person) WHERE a.ID=0 RETURN a.age;
+---- 1
+1
+-STATEMENT [conn1] COMMIT
+---- ok
+-STATEMENT [conn1] MATCH (a:person) WHERE a.ID=0 RETURN a.age;
+---- 1
+70
 
 -CASE AutoCheckpointTimeoutErrorTest
 -SKIP_IN_MEM
