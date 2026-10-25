@@ -49,6 +49,14 @@ public:
 
     common::idx_t getNumVectors() const { return vectorsInfo.size(); }
 
+    // V2-2 : la version brute d'une ligne (INVALID_TRANSACTION : aucune, la ligne est insérée
+    // pour tous, ou jamais supprimée), et sa pose directe, sans jugement ni conflit : c'est ce
+    // qui porte dans un bloc neuf les versions postérieures au point de fonte.
+    common::transaction_t insertionVersionOf(common::row_idx_t rowIdx) const;
+    common::transaction_t deletionVersionOf(common::row_idx_t rowIdx) const;
+    void setInsertion(common::row_idx_t rowIdx, common::transaction_t version);
+    void setDeletion(common::row_idx_t rowIdx, common::transaction_t version);
+
     void commitInsert(common::row_idx_t startRow, common::row_idx_t numRows,
         common::transaction_t commitTS);
     void rollbackInsert(common::row_idx_t startRow, common::row_idx_t numRows);

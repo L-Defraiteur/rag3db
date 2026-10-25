@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <shared_mutex>
 
 #include "column_chunk_data.h"
@@ -101,6 +102,15 @@ public:
     // s'allonge d'une version par transaction de mise à jour jusqu'au point de reprise.
     void iterateVectorInfo(const transaction::Transaction* transaction, common::idx_t idx,
         const std::function<bool(const VectorUpdateInfo&)>& func) const;
+
+    // V2-2 : copie dans celui-ci les versions de `from` postérieures à `foldTS` (horodatages
+    // validés après, ou identifiants de transactions en cours), ligne par ligne, à la ligne que
+    // `newRowOf` donne (INVALID_ROW_IDX : la ligne n'est pas dans le bloc neuf), de la plus
+    // ancienne à la plus récente comme la chaîne d'origine. `from` peut être lu par d'autres
+    // pendant ce temps (verrous partagés) ; celui-ci n'est encore vu de personne.
+    void carryVersionsAfter(common::transaction_t foldTS, const UpdateInfo& from,
+        MemoryManager& memoryManager, const common::LogicalType& dataType,
+        const std::function<common::row_idx_t(common::row_idx_t)>& newRowOf);
 
     void commit(common::idx_t vectorIdx, VectorUpdateInfo* info, common::transaction_t commitTS);
     void rollback(common::idx_t vectorIdx, common::transaction_t version);

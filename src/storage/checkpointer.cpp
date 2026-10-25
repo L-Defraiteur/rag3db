@@ -21,13 +21,18 @@
 #include "storage/shadow_utils.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/local_wal.h"
+#include "transaction/transaction_manager.h"
 
 namespace rag3db {
 namespace storage {
 
 Checkpointer::Checkpointer(main::ClientContext& clientContext)
     : clientContext{clientContext},
-      isInMemory{main::DBConfig::isDBPathInMemory(clientContext.getDatabasePath())} {}
+      isInMemory{main::DBConfig::isDBPathInMemory(clientContext.getDatabasePath())} {
+    foldTransaction = std::make_unique<transaction::Transaction>(
+        transaction::TransactionType::CHECKPOINT, transaction::Transaction::DUMMY_TRANSACTION_ID,
+        transaction::TransactionManager::Get(clientContext)->getCheckpointFoldTS());
+}
 
 Checkpointer::~Checkpointer() = default;
 
@@ -146,6 +151,7 @@ void Checkpointer::holdReadersLock() {
 bool Checkpointer::checkpointStorage() {
     const auto storageManager = StorageManager::Get(clientContext);
     auto pageAllocator = storageManager->getDataFH()->getPageManager();
+    storageManager->setCheckpointSnapshot(foldTransaction.get());
     return storageManager->checkpoint(&clientContext, *pageAllocator);
 }
 

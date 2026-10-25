@@ -65,6 +65,10 @@ struct NodeGroupCheckpointState {
     // Le drapeau du point de reprise (StorageManager::markCheckpointChangedMemory), posé juste
     // avant le premier échange de groupes.
     bool* changedMemory = nullptr;
+    // V2-2 : l'instantané du point de reprise (startTS = F, le point de fonte) : ce qui est
+    // validé à F se fond, ce qui est postérieur se porte en versions dans le bloc neuf. Nul :
+    // le dernier validé (DUMMY_CHECKPOINT_TRANSACTION), tout se fond.
+    const transaction::Transaction* snapshot = nullptr;
 
     void markChangedMemory() const {
         if (changedMemory) {
@@ -290,8 +294,14 @@ private:
         const ChunkedGroups& groups, const NodeGroupCheckpointState& state) const;
     std::unique_ptr<ChunkedNodeGroup> checkpointInMemAndOnDisk(MemoryManager& memoryManager,
         const ChunkedGroups& groups, NodeGroupCheckpointState& state) const;
+    // Les versions du bloc neuf : les suppressions validées à l'instantané fondues (version 0),
+    // les suppressions et insertions postérieures portées avec leur version (V2-2).
     std::unique_ptr<VersionInfo> checkpointVersionInfo(const ChunkedGroups& groups,
-        const transaction::Transaction* transaction) const;
+        const transaction::Transaction* snapshot) const;
+    // Porte dans les chunks neufs les mises à jour postérieures à l'instantané, des blocs pris
+    // (le persistant à l'identique, les blocs en mémoire décalés de leur position).
+    void carryUpdatesAfter(const ChunkedGroups& groups, const NodeGroupCheckpointState& state,
+        std::vector<std::unique_ptr<ColumnChunk>>& newChunks) const;
     // L'état de balayage posé sur les blocs qu'il tient déjà (NodeGroupScanState::groups).
     void initializeScanStateFromGroups(TableScanState& state) const;
 
@@ -299,7 +309,8 @@ private:
     common::row_idx_t getNumResidentRows(const ChunkedGroups& groups) const;
     template<ResidencyState SCAN_RESIDENCY_STATE>
     std::unique_ptr<InMemChunkedNodeGroup> scanAllInsertedAndVersions(MemoryManager& memoryManager,
-        const ChunkedGroups& groups, const std::vector<common::column_id_t>& columnIDs,
+        const ChunkedGroups& groups, const transaction::Transaction* snapshot,
+        const std::vector<common::column_id_t>& columnIDs,
         const std::vector<const Column*>& columns) const;
 
     virtual NodeGroupScanResult scanInternal(const common::UniqLock& lock,
@@ -311,7 +322,7 @@ private:
 
     void scanCommittedUpdatesForColumn(std::vector<ChunkCheckpointState>& chunkCheckpointStates,
         MemoryManager& memoryManager, const ChunkedGroups& groups, common::column_id_t columnID,
-        const Column* column) const;
+        const Column* column, const NodeGroupCheckpointState& state) const;
 
 protected:
     MemoryManager& mm;

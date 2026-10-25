@@ -80,6 +80,12 @@ public:
     // Les verrous des écritures parallèles. Une transaction les prend pendant ses écritures ;
     // ils sont rendus quand elle quitte le système, validée ou annulée.
     LockManager& getLockManager() { return lockManager; }
+    // L'instantané du point de reprise en cours (V2-2), posé par checkpointNoLock sous le verrou
+    // public au départ de l'écriture : T, tout ce qui est validé ; F, le plus vieux instantané
+    // des lecteurs restés ouverts (T s'il n'y en a pas). Ce qui est validé à F se fond, le reste
+    // se porte en versions. Hors point de reprise : le dernier validé (tout se fond).
+    common::transaction_t getCheckpointFoldTS() const { return checkpointFoldTS; }
+    common::transaction_t getCheckpointSnapshotTS() const { return checkpointSnapshotTS; }
     // Marche V2 : l'instantané d'une transaction qui n'a rien écrit est repris au dernier
     // horodatage de validation — après l'attente de ses verrous annoncés, elle lit l'état
     // d'après l'attente, et n'échoue jamais à la sérialisation sur ce qu'elle a annoncé.
@@ -98,8 +104,11 @@ private:
     // (A7) ne bloquent pas : quand il ne reste qu'elles, elles valident à leur tour, et le point
     // de reprise qui suit les contient. Lève une TransactionManagerException si le délai
     // expire, et rouvre alors le démarrage.
+    // readersToo : une validation forcée ou une action d'avant validation attend tout le
+    // monde ; un point de reprise ordinaire n'attend que les écrivains (V2-2 : les lecteurs
+    // gardent leur instantané, le point de reprise fond jusqu'au plus vieux d'entre eux).
     void stopNewTransactionsAndWaitForOthersNoLock(const main::ClientContext* clientContext,
-        std::unique_lock<std::mutex>& publicLock, const Transaction* staying);
+        std::unique_lock<std::mutex>& publicLock, const Transaction* staying, bool readersToo);
     // A7 : une validation qui veut un point de reprise alors qu'un autre attend se range dans la
     // file au lieu d'attendre la fin du premier. Rend vrai si elle a validé et qu'un point de
     // reprise commencé après sa validation s'est écrit ; faux si le point de reprise en attente
@@ -147,6 +156,8 @@ private:
     // Vrai tant qu'un point de reprise attend le départ des transactions ou s'écrit : aucun
     // écrivain ne démarre. Réveils par transactionsChanged. Gardé par le verrou public.
     bool checkpointPending = false;
+    common::transaction_t checkpointFoldTS = Transaction::LATEST_COMMITTED_TS;
+    common::transaction_t checkpointSnapshotTS = Transaction::LATEST_COMMITTED_TS;
     // Vrai pendant l'écriture elle-même, hors du verrou public : les lecteurs entrent (V2-1c).
     bool checkpointWriting = false;
     std::condition_variable transactionsChanged;

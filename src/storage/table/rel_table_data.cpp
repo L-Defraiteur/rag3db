@@ -303,13 +303,14 @@ void RelTableData::pushInsertInfo(const Transaction* transaction, const CSRNodeG
 }
 
 void RelTableData::checkpoint(const std::vector<column_id_t>& columnIDs,
-    PageAllocator& pageAllocator) {
+    PageAllocator& pageAllocator, const transaction::Transaction* snapshot) {
     std::vector<Column*> checkpointColumnPtrs;
     for (const auto columnID : columnIDs) {
         checkpointColumnPtrs.push_back(columns[columnID].get());
     }
     CSRNodeGroupCheckpointState state{columnIDs, std::move(checkpointColumnPtrs), pageAllocator, mm,
         csrHeaderColumns.offset.get(), csrHeaderColumns.length.get()};
+    state.snapshot = snapshot;
     nodeGroups->checkpoint(*mm, state);
     // Les numéros ne bougent pas : une colonne supprimée laisse un trou à son numéro.
     for (auto columnID = 0u; columnID < columns.size(); columnID++) {

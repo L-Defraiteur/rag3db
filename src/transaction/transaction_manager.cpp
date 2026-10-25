@@ -136,7 +136,8 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
             // journal) ne devient visible que si ce point de reprise peut se faire : on attend
             // d'abord le départ des autres transactions. Si le délai expire, l'exception sort
             // avant la validation, l'appelant annule, et l'erreur dit vrai : rien n'est validé.
-            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, lck, transaction);
+            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, lck, transaction,
+                true /* readersToo */);
         }
         // Une action d'avant validation (Transaction::addPreCommitAction) lit ce que les autres
         // ont validé : elle veut qu'ils soient tous partis. Une validation forcée les a déjà
@@ -144,7 +145,8 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
         // même délai, et les BEGIN reprennent dès la validation faite.
         const auto waitsWithoutCheckpoint = !forced && transaction->hasPreCommitActions();
         if (waitsWithoutCheckpoint) {
-            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, lck, transaction);
+            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, lck, transaction,
+                true /* readersToo */);
         }
         lastTimestamp++;
         transaction->commitTS = lastTimestamp;
@@ -172,7 +174,9 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
             if (checkpointPending) {
                 // Un point de reprise est déjà demandé ou en attente : il contiendra celle-ci.
                 postponeCheckpointNoLock();
-            } else if (activeTransactions.empty()) {
+            } else if (!hasActiveWriteTransactionNoLock()) {
+                // Des lecteurs seuls : ils ne sont plus attendus (V2-2), le point de reprise
+                // fond jusqu'à leur plus vieux instantané.
                 checkpointNoLock(clientContext, lck);
             } else if (std::ranges::any_of(activeTransactions,
                            [this](const auto& active) {
@@ -320,7 +324,7 @@ TransactionManager* TransactionManager::Get(const main::ClientContext& context) 
 
 void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
     const main::ClientContext* clientContext, std::unique_lock<std::mutex>& publicLock,
-    const Transaction* staying) {
+    const Transaction* staying, bool readersToo) {
     std::optional<common::TaskScheduler::BlockingWait> blocking;
     // Un seul point de reprise attend à la fois ; une validation qui en veut un pendant ce temps
     // se range dans la file (commitInCheckpointQueueNoLock) au lieu d'attendre ici. Une demande
@@ -334,12 +338,14 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
         transactionsChanged.wait(publicLock, [this] { return !checkpointPending; });
     }
     checkpointPending = true;
-    const auto othersLeftOrQueued = [this, staying] {
-        return std::ranges::all_of(activeTransactions, [this, staying](const auto& transaction) {
-            return transaction.get() == staying ||
-                   std::ranges::find(queuedCheckpointCommits, transaction.get()) !=
-                       queuedCheckpointCommits.end();
-        });
+    const auto othersLeftOrQueued = [this, staying, readersToo] {
+        return std::ranges::all_of(activeTransactions,
+            [this, staying, readersToo](const auto& transaction) {
+                return transaction.get() == staying ||
+                       (!readersToo && transaction->isReadOnly()) ||
+                       std::ranges::find(queuedCheckpointCommits, transaction.get()) !=
+                           queuedCheckpointCommits.end();
+            });
     };
     // wait_for relâche le verrou public : les transactions ouvertes peuvent valider ou annuler.
     if (!othersLeftOrQueued()) {
@@ -358,9 +364,12 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
         // pas seulement sorties de la file : une validation rangée qui échoue reste active,
         // à moitié appliquée, jusqu'à son annulation, et le point de reprise ne doit pas
         // l'écrire. L'attente est bornée comme la première.
-        const auto othersLeft = [this, staying] {
+        const auto othersLeft = [this, staying, readersToo] {
             return std::ranges::all_of(activeTransactions,
-                [staying](const auto& transaction) { return transaction.get() == staying; });
+                [staying, readersToo](const auto& transaction) {
+                    return transaction.get() == staying ||
+                           (!readersToo && transaction->isReadOnly());
+                });
         };
         commitQueuedNow = true;
         transactionsChanged.notify_all();
@@ -473,7 +482,7 @@ void TransactionManager::waitUntilNewTransactionsAreAllowed(bool readOnly) {
 
 void TransactionManager::writeRequestedCheckpointIfLastNoLock(main::ClientContext& clientContext,
     std::unique_lock<std::mutex>& publicLock) {
-    if (!autoCheckpointRequested || !activeTransactions.empty()) {
+    if (!autoCheckpointRequested || hasActiveWriteTransactionNoLock()) {
         return;
     }
     autoCheckpointRequested = false;
@@ -562,9 +571,19 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext,
     // query.
     if (!newTransactionsAlreadyStopped) {
         try {
-            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, publicLock, nullptr);
+            stopNewTransactionsAndWaitForOthersNoLock(&clientContext, publicLock, nullptr,
+                false /* readersToo */);
         } catch (std::exception& e) {
             throw CheckpointException{e};
+        }
+    }
+    // L'instantané de ce point de reprise (V2-2) : T, tout ce qui est validé ; F, le plus vieux
+    // instantané des lecteurs restés ouverts. Posé avant de construire le Checkpointer, qui le lit.
+    checkpointSnapshotTS = lastTimestamp;
+    checkpointFoldTS = lastTimestamp;
+    for (const auto& active : activeTransactions) {
+        if (active->snapshotFloorTS < checkpointFoldTS) {
+            checkpointFoldTS = active->snapshotFloorTS;
         }
     }
     // Le démarrage reste interdit jusqu'à la fin de l'écriture, quelle qu'en soit l'issue.

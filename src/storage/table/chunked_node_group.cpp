@@ -584,6 +584,22 @@ bool ChunkedNodeGroup::hasUpdates() const {
     return false;
 }
 
+transaction_t ChunkedNodeGroup::insertionVersionOf(row_idx_t rowInChunk) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return INVALID_TRANSACTION;
+    }
+    std::shared_lock lck{versionInfoMtx};
+    return versionInfo ? versionInfo->insertionVersionOf(rowInChunk) : INVALID_TRANSACTION;
+}
+
+transaction_t ChunkedNodeGroup::deletionVersionOf(row_idx_t rowInChunk) const {
+    if (!mayHaveVersionInfo.load(std::memory_order_acquire)) {
+        return INVALID_TRANSACTION;
+    }
+    std::shared_lock lck{versionInfoMtx};
+    return versionInfo ? versionInfo->deletionVersionOf(rowInChunk) : INVALID_TRANSACTION;
+}
+
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
 void ChunkedNodeGroup::commitInsert(row_idx_t startRow, row_idx_t numRowsToCommit,
     transaction_t commitTS) {

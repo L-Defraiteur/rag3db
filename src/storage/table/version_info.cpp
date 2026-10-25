@@ -29,6 +29,13 @@ struct VectorVersionInfo {
     transaction_t sameDeletionVersion;
     InsertionStatus insertionStatus;
     DeletionStatus deletionStatus;
+    // Une ligne insérée « pour tous » quand un tableau doit être posé (V2-2).
+    static constexpr transaction_t DUMMY_START_TIMESTAMP_VERSION = 0;
+
+    transaction_t insertionVersionOf(row_idx_t rowIdx) const;
+    transaction_t deletionVersionOf(row_idx_t rowIdx) const;
+    void setInsertionVersion(row_idx_t rowIdx, transaction_t version);
+    void setDeletionVersion(row_idx_t rowIdx, transaction_t version);
 
     VectorVersionInfo()
         : sameInsertionVersion{INVALID_TRANSACTION}, sameDeletionVersion{INVALID_TRANSACTION},
@@ -317,6 +324,51 @@ void VectorVersionInfo::initDeletionVersionArray() {
     deletedVersions->fill(INVALID_TRANSACTION);
 }
 
+transaction_t VectorVersionInfo::insertionVersionOf(row_idx_t rowIdx) const {
+    if (insertionStatus != InsertionStatus::CHECK_VERSION) {
+        return INVALID_TRANSACTION;
+    }
+    if (isSameInsertionVersion()) {
+        return sameInsertionVersion;
+    }
+    return insertedVersions ? insertedVersions->operator[](rowIdx) : INVALID_TRANSACTION;
+}
+
+transaction_t VectorVersionInfo::deletionVersionOf(row_idx_t rowIdx) const {
+    if (deletionStatus != DeletionStatus::CHECK_VERSION) {
+        return INVALID_TRANSACTION;
+    }
+    if (isSameDeletionVersion()) {
+        return sameDeletionVersion;
+    }
+    return deletedVersions ? deletedVersions->operator[](rowIdx) : INVALID_TRANSACTION;
+}
+
+void VectorVersionInfo::setInsertionVersion(row_idx_t rowIdx, transaction_t version) {
+    if (!insertedVersions) {
+        // Les autres lignes gardent ce qu'elles étaient : insérées pour tous (version 0, que
+        // tout instantané dépasse) ou par la version commune.
+        const auto others =
+            isSameInsertionVersion() ? sameInsertionVersion : DUMMY_START_TIMESTAMP_VERSION;
+        initInsertionVersionArray();
+        insertedVersions->fill(others);
+        sameInsertionVersion = INVALID_TRANSACTION;
+    }
+    insertionStatus = InsertionStatus::CHECK_VERSION;
+    insertedVersions->operator[](rowIdx) = version;
+}
+
+void VectorVersionInfo::setDeletionVersion(row_idx_t rowIdx, transaction_t version) {
+    if (!deletedVersions) {
+        const auto others = isSameDeletionVersion() ? sameDeletionVersion : INVALID_TRANSACTION;
+        initDeletionVersionArray();
+        deletedVersions->fill(others);
+        sameDeletionVersion = INVALID_TRANSACTION;
+    }
+    deletionStatus = DeletionStatus::CHECK_VERSION;
+    deletedVersions->operator[](rowIdx) = version;
+}
+
 bool VectorVersionInfo::isSameInsertionVersion() const {
     return sameInsertionVersion != INVALID_TRANSACTION;
 }
@@ -334,10 +386,14 @@ void VectorVersionInfo::serialize(Serializer& serializer) const {
             KU_UNUSED(deleted);
         }
     }
-    KU_ASSERT(insertionStatus == InsertionStatus::NO_INSERTED ||
-              insertionStatus == InsertionStatus::ALWAYS_INSERTED);
+    // Des versions d'insertion gardées en mémoire (V2-2 : lignes validées après le point de
+    // fonte, pour les lecteurs ouverts avant) s'écrivent « insérées pour tous » : après une
+    // réouverture, aucune transaction ne les précède.
+    const auto writtenInsertionStatus = insertionStatus == InsertionStatus::NO_INSERTED ?
+                                            InsertionStatus::NO_INSERTED :
+                                            InsertionStatus::ALWAYS_INSERTED;
     serializer.writeDebuggingInfo("insertion_status");
-    serializer.serializeValue<InsertionStatus>(insertionStatus);
+    serializer.serializeValue<InsertionStatus>(writtenInsertionStatus);
     serializer.writeDebuggingInfo("deletion_status");
     serializer.serializeValue<DeletionStatus>(deletionStatus);
     switch (deletionStatus) {
@@ -459,6 +515,36 @@ bool VersionInfo::delete_(transaction_t transactionID, const row_idx_t rowIdx) {
         vectorVersionInfo.insertionStatus = VectorVersionInfo::InsertionStatus::ALWAYS_INSERTED;
     }
     return vectorVersionInfo.delete_(transactionID, rowIdxInVector);
+}
+
+transaction_t VersionInfo::insertionVersionOf(row_idx_t rowIdx) const {
+    auto [vectorIdx, rowIdxInVector] =
+        StorageUtils::getQuotientRemainder(rowIdx, DEFAULT_VECTOR_CAPACITY);
+    const auto* vectorVersion = getVectorVersionInfo(vectorIdx);
+    return vectorVersion ? vectorVersion->insertionVersionOf(rowIdxInVector) : INVALID_TRANSACTION;
+}
+
+transaction_t VersionInfo::deletionVersionOf(row_idx_t rowIdx) const {
+    auto [vectorIdx, rowIdxInVector] =
+        StorageUtils::getQuotientRemainder(rowIdx, DEFAULT_VECTOR_CAPACITY);
+    const auto* vectorVersion = getVectorVersionInfo(vectorIdx);
+    return vectorVersion ? vectorVersion->deletionVersionOf(rowIdxInVector) : INVALID_TRANSACTION;
+}
+
+void VersionInfo::setInsertion(row_idx_t rowIdx, transaction_t version) {
+    auto [vectorIdx, rowIdxInVector] =
+        StorageUtils::getQuotientRemainder(rowIdx, DEFAULT_VECTOR_CAPACITY);
+    getOrCreateVersionInfo(vectorIdx).setInsertionVersion(rowIdxInVector, version);
+}
+
+void VersionInfo::setDeletion(row_idx_t rowIdx, transaction_t version) {
+    auto [vectorIdx, rowIdxInVector] =
+        StorageUtils::getQuotientRemainder(rowIdx, DEFAULT_VECTOR_CAPACITY);
+    auto& vectorVersionInfo = getOrCreateVersionInfo(vectorIdx);
+    if (vectorVersionInfo.insertionStatus == VectorVersionInfo::InsertionStatus::NO_INSERTED) {
+        vectorVersionInfo.insertionStatus = VectorVersionInfo::InsertionStatus::ALWAYS_INSERTED;
+    }
+    vectorVersionInfo.setDeletionVersion(rowIdxInVector, version);
 }
 
 bool VersionInfo::isSelected(transaction_t startTS, transaction_t transactionID,

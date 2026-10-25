@@ -19,6 +19,10 @@ class RelGroupCatalogEntry;
 struct RelTableCatalogInfo;
 } // namespace catalog
 
+namespace transaction {
+class Transaction;
+} // namespace transaction
+
 namespace storage {
 class Table;
 class NodeTable;
@@ -54,6 +58,12 @@ public:
     // à défaire que Checkpointer::rollback ne défasse : le point de reprise est refusé, nommé,
     // et la base reste ouverte (ticket du ROLLBACK sous un tampon plein, défaut 3). Après, la
     // base est à rouvrir (TransactionManager::checkpointFailed).
+    // L'instantané du point de reprise en cours (V2-2, posé par le Checkpointer) : les tables
+    // fondent jusqu'à son startTS et portent le reste. Nul : tout se fond.
+    void setCheckpointSnapshot(const transaction::Transaction* snapshot) {
+        checkpointSnapshot = snapshot;
+    }
+    const transaction::Transaction* getCheckpointSnapshot() const { return checkpointSnapshot; }
     void markCheckpointChangedMemory() { checkpointChangedMemory = true; }
     bool* getCheckpointChangedMemoryFlag() { return &checkpointChangedMemory; }
     bool hasCheckpointChangedMemory() const { return checkpointChangedMemory; }
@@ -100,6 +110,7 @@ private:
 private:
     std::mutex mtx;
     bool checkpointChangedMemory = false;
+    const transaction::Transaction* checkpointSnapshot = nullptr;
     std::string databasePath;
     std::unique_ptr<storage::DatabaseHeader> databaseHeader;
     bool readOnly;

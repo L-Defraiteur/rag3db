@@ -110,7 +110,7 @@ public:
 
     void reclaimStorage(PageAllocator& pageAllocator) const;
     void checkpoint(const std::vector<common::column_id_t>& columnIDs,
-        PageAllocator& pageAllocator);
+        PageAllocator& pageAllocator, const transaction::Transaction* snapshot);
 
     void pushInsertInfo(const transaction::Transaction* transaction, const CSRNodeGroup& nodeGroup,
         common::row_idx_t numRows_, CSRNodeGroupScanSource source);

@@ -57,6 +57,9 @@ private:
     static void returnOwnerlessPages(const DatabaseHeader& header, StorageManager* storageManager);
 
     PageRange serializeCatalog(const catalog::Catalog& catalog, StorageManager& storageManager);
+    // L'instantané de ce point de reprise (V2-2) : une transaction CHECKPOINT à startTS = F,
+    // lue par les tables pour fondre jusqu'à F et porter le reste.
+    std::unique_ptr<transaction::Transaction> foldTransaction;
     PageRange serializeMetadata(const catalog::Catalog& catalog, StorageManager& storageManager);
 
 protected:

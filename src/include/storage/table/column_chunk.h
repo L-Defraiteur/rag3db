@@ -226,6 +226,13 @@ public:
     bool hasUpdates(const transaction::Transaction* transaction, common::row_idx_t startRow,
         common::length_t numRows) const;
     void resetUpdateInfo() { updateInfo.reset(); }
+    // V2-2 : porte dans celui-ci les versions de `old` postérieures à `foldTS` (voir
+    // UpdateInfo::carryVersionsAfter).
+    void carryVersionsAfter(common::transaction_t foldTS, const ColumnChunk& old,
+        MemoryManager& memoryManager,
+        const std::function<common::row_idx_t(common::row_idx_t)>& newRowOf) {
+        updateInfo.carryVersionsAfter(foldTS, old.updateInfo, memoryManager, getDataType(), newRowOf);
+    }
 
     MergedColumnChunkStats getMergedColumnChunkStats() const;
 

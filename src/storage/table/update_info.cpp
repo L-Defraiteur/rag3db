@@ -155,6 +155,73 @@ static bool validateUpdateChain(const UpdateNode& updatedNode, const VectorUpdat
 }
 #endif
 
+void UpdateInfo::carryVersionsAfter(transaction_t foldTS, const UpdateInfo& from,
+    MemoryManager& memoryManager, const LogicalType& dataType,
+    const std::function<row_idx_t(row_idx_t)>& newRowOf) {
+    idx_t numOldVectors = 0;
+    {
+        std::shared_lock lock{from.mtx};
+        numOldVectors = from.updates.size();
+    }
+    for (auto oldVectorIdx = 0u; oldVectorIdx < numOldVectors; oldVectorIdx++) {
+        const UpdateNode* oldNode = nullptr;
+        {
+            std::shared_lock lock{from.mtx};
+            if (oldVectorIdx >= from.updates.size()) {
+                break;
+            }
+            oldNode = from.updates[oldVectorIdx].get();
+        }
+        if (!oldNode) {
+            continue;
+        }
+        std::shared_lock chainLock{oldNode->mtx};
+        // La chaîne va de la plus récente à la plus ancienne : on la remonte pour porter dans
+        // l'ordre du temps.
+        std::vector<const VectorUpdateInfo*> toCarry;
+        for (auto current = oldNode->info.get(); current; current = current->getPrev()) {
+            if (current->version > foldTS) {
+                toCarry.push_back(current);
+            }
+        }
+        for (auto it = toCarry.rbegin(); it != toCarry.rend(); ++it) {
+            const auto& old = **it;
+            for (auto i = 0u; i < old.numRowsUpdated; i++) {
+                const auto newRow =
+                    newRowOf(oldVectorIdx * DEFAULT_VECTOR_CAPACITY + old.rowsInVector[i]);
+                if (newRow == INVALID_ROW_IDX) {
+                    continue;
+                }
+                auto [newVectorIdx, newRowInVector] =
+                    StorageUtils::getQuotientRemainder(newRow, DEFAULT_VECTOR_CAPACITY);
+                UpdateNode& node = getOrCreateUpdateNode(newVectorIdx);
+                std::unique_lock newChainLock{node.mtx};
+                VectorUpdateInfo* target = nullptr;
+                for (auto current = node.info.get(); current; current = current->getPrev()) {
+                    if (current->version == old.version) {
+                        target = current;
+                        break;
+                    }
+                }
+                if (!target) {
+                    auto fresh = std::make_unique<VectorUpdateInfo>(memoryManager, old.version,
+                        dataType.copy());
+                    target = fresh.get();
+                    auto head = std::move(node.info);
+                    if (head) {
+                        head->next = fresh.get();
+                    }
+                    fresh->prev = std::move(head);
+                    node.info = std::move(fresh);
+                }
+                target->rowsInVector[target->numRowsUpdated] = newRowInVector;
+                target->data->write(old.data.get(), i, target->numRowsUpdated, 1);
+                target->numRowsUpdated++;
+            }
+        }
+    }
+}
+
 void UpdateInfo::commit(idx_t vectorIdx, VectorUpdateInfo* info, transaction_t commitTS) {
     auto& updateNode = getUpdateNode(vectorIdx);
     std::unique_lock chainLock{updateNode.mtx};
