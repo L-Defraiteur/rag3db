@@ -22,11 +22,17 @@ rejouées par le juge à chaque lot important) vient après, sur lui.
 
 ## Ce que le lot pose
 
-1. **Le journal d'un tour.** À la fin de chaque tour du chat, l'hôte écrit
-   `chats_root/<id>/runs/<run>.json`. Il contient les événements du run, lus sur `run.<id>`
-   pendant le tour, et les tours de ce run (messages, appels avec leurs arguments, résultats tels
-   que le modèle les a reçus), avec la tâche et les propositions. C'est la source du juge : il ne
-   se fie à aucun tampon.
+1. **Le journal des runs de l'hôte** (c7 : générique, pas propre au chat). À la fin de **tout**
+   run (un appel d'outil, une réaction, un tour de chat), l'hôte écrit
+   `runs_root/<backend>/<run>.json`. Il y met :
+   - les événements du bus pour ce run ;
+   - les résultats tels que le modèle ou l'appelant les a reçus (les tours d'un chat, la sortie
+     d'un appel) ;
+   - la tâche et les propositions.
+
+   Le juge le lit, et le DAG vivant pourra rejouer un run passé. Le journal est borné en taille
+   par run et en nombre par backend, par un réglage ; les plus vieux sont effacés, et l'hôte le
+   dit.
 2. **Le juge, un agent déclaré** : `templates/agents/juge/juge.json`, un `ChatConfig` (son message
    système, son modèle, ses outils permis), plus `bilan.schema.json`, le schéma de sa sortie
    finale. `ChatConfig` gagne `response_schema`, que `run_with` pose en `response_format` sur le
@@ -45,10 +51,15 @@ rejouées par le juge à chaque lot important) vient après, sur lui.
    - `proposer_un_ticket` : une proposition sur la clé `description` d'un outil du backend jugé (le
      texte exact du retour ambigu, et ce que le modèle a cru), appliquée ou rejetée comme les
      autres propositions.
-4. **Le déclenchement.** Ce n'est pas une réaction, puisqu'elles ne portent pas d'agent : c'est
-   l'hôte qui lance le juge, en fond, à la fin d'un tour, quand le manifeste du backend jugé dit
-   `"bilans": { "memoire": "<manifeste de la mémoire>" }`. On peut aussi le lancer à la demande,
-   par `POST /ide/bilans {backend, run}`. Un juge par tour, jamais sur ses propres runs.
+4. **Le déclenchement**, pour ce soir (c7). Ce n'est pas une réaction, puisqu'elles ne portent
+   pas d'agent : c'est l'hôte qui lance le juge, en fond, à la fin d'un tour, quand le manifeste du
+   backend jugé dit `"bilans": { "memoire": "<manifeste de la mémoire>" }`. On peut aussi le
+   lancer à la demande, par `POST /ide/bilans {backend, run}`. Un juge par tour, et **jamais sur
+   ses propres runs**.
+
+   **La voie générale, à trancher par Lucie** : ouvrir aux agents la liste blanche des nœuds d'une
+   réaction. Une réaction déclarée sur `RunFinished` porterait alors le juge, comme tout autre
+   agent, sans code dans l'hôte.
 5. **La fiche de bilan.** Le sujet est la tâche demandée : l'intitulé normalisé du premier message
    du tour, ou le gabarit ou l'outil visé. Chaque session apporte un L1. Les champs suivent la
    demande de c7 :
@@ -81,9 +92,11 @@ rejouées par le juge à chaque lot important) vient après, sur lui.
     », avec sur quoi).
   - Comme K3 : #[ignore], exigé, avec sa mesure.
 
-## Ce que je tranche, ou demande
+## Ce qui est tranché, et ce qui reste
 
-- Le journal d'un tour, et le juge lancé par l'hôte plutôt que par une réaction : neuf, à
-  confirmer (c7).
-- La forme de la fiche de bilan : à relire par la mémoire (96).
-- Le L2 n'est pas écrit par le juge : il attend l'archiviste.
+- Tranché par c7 :
+  - le journal est générique, celui des runs de l'hôte, borné ;
+  - ce soir, le juge est lancé par l'hôte (`bilans`, ou à la demande) ;
+  - le L2 revient à l'archiviste ; le juge écrit la fiche et les L1.
+- À relire par la mémoire (96) : la forme de la fiche de bilan.
+- À trancher par Lucie : ouvrir les réactions aux agents (la voie générale du déclenchement).
