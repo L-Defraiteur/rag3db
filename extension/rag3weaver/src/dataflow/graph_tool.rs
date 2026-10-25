@@ -341,14 +341,34 @@ pub fn substitute_definition(def: &GraphDefinition, args: &Map<String, Value>) -
     out
 }
 
+/// **Un chemin pointé** dans un argument objet (`$element.text`, 25 octobre
+/// 2026, `ForEachNode`) : `nom` puis `.champ`… tant que l'argument est un objet.
+/// Rend la valeur atteinte et la longueur du texte consommé après `$`, ou
+/// `None` si `nom` n'est pas un argument. Sur un argument qui n'est pas un objet,
+/// le chemin s'arrête à son nom : `$chemin.rs` garde son sens d'avant.
+fn resolve_path<'a>(after: &str, args: &'a Map<String, Value>) -> Option<(&'a Value, usize)> {
+    let mot = |s: &str| s.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(s.len());
+    let end = mot(after);
+    if end == 0 {
+        return None;
+    }
+    let mut v = args.get(&after[..end])?;
+    let mut used = end;
+    while let (Value::Object(o), Some(rest)) = (v, after[used..].strip_prefix('.')) {
+        let n = mot(rest);
+        let Some(next) = (n > 0).then(|| o.get(&rest[..n])).flatten() else { break };
+        v = next;
+        used += 1 + n;
+    }
+    Some((v, used))
+}
+
 fn substitute_value(v: &Value, args: &Map<String, Value>) -> Value {
     match v {
         Value::String(s) => {
             if let Some(name) = s.strip_prefix('$') {
-                if !name.is_empty()
-                    && name.chars().all(|c| c.is_alphanumeric() || c == '_')
-                {
-                    if let Some(replacement) = args.get(name) {
+                if let Some((replacement, used)) = resolve_path(name, args) {
+                    if used == name.len() {
                         return replacement.clone();
                     }
                 }
@@ -382,9 +402,17 @@ fn interpolate(s: &str, args: &Map<String, Value>) -> String {
             rest = after;
             continue;
         }
-        match args.get(&after[..end]) {
-            Some(Value::String(v)) => out.push_str(v),
-            Some(other) => out.push_str(&other.to_string()),
+        match resolve_path(after, args) {
+            Some((Value::String(v), used)) => {
+                out.push_str(v);
+                rest = &after[used..];
+                continue;
+            }
+            Some((other, used)) => {
+                out.push_str(&other.to_string());
+                rest = &after[used..];
+                continue;
+            }
             None => {
                 out.push('$');
                 out.push_str(&after[..end]);

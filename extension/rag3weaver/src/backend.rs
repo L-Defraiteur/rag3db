@@ -1042,6 +1042,11 @@ impl PreparedBackend {
         nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
         nodes.register(Box::new(crate::dataflow::plan_node::PlanNodeFactory));
+        // Les sous-graphes cités (GraphNode, ForEachNode) : leur registre est
+        // celui-ci, posé une fois bâti, plus bas.
+        let registre_des_sous_graphes = crate::dataflow::foreach_node::RegistreDesSousGraphes::default();
+        nodes.register(Box::new(crate::dataflow::foreach_node::CitedGraphNodeFactory { registre: registre_des_sous_graphes.clone() }));
+        nodes.register(Box::new(crate::dataflow::foreach_node::ForEachNodeFactory { registre: registre_des_sous_graphes.clone() }));
         // ── Les nœuds scriptés du dossier `nodes/` ──────────────────────────
         //
         // Découverts, pas listés : un dossier de déclarations se copie tel
@@ -1312,6 +1317,7 @@ impl PreparedBackend {
         };
         let mut after_hooks = BTreeMap::new();
         let mut tools = BTreeMap::new();
+        let mut types_des_sous_graphes: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut tool_schemas = BTreeMap::new();
         let mut tool_validators = HashMap::new();
         for (name, attachment) in &manifest.tools {
@@ -1331,6 +1337,11 @@ impl PreparedBackend {
             // faux refuse le gabarit.
             crate::dataflow::plan_node::resoudre_les_plans(&mut tool, |chemin| lire_texte(lecteur, &directory.join(chemin)), &schema_des_plans)
                 .map_err(|e| format!("{name}: {e}"))?;
+            // Les sous-graphes cités : lus, liés et vérifiés comme les Plans ;
+            // leurs types de nœuds passent sous la politique de l'outil.
+            let types = crate::dataflow::foreach_node::resoudre_les_sous_graphes(&mut tool, &|chemin| lire_texte(lecteur, &directory.join(chemin)), &nodes)
+                .map_err(|e| format!("{name}: {e}"))?;
+            types_des_sous_graphes.insert(name.clone(), types);
             crate::dataflow::render_nodes::verifier_le_cablage(name, tool.template())?;
             for key in attachment.bindings.keys() {
                 if !tool.params().iter().any(|p| p.name == key.as_str()) {
@@ -1493,6 +1504,7 @@ impl PreparedBackend {
                         .nodes
                         .iter()
                         .map(|n| n.node_type.clone())
+                        .chain(types_des_sous_graphes.get(name).into_iter().flatten().cloned())
                         .filter(|t| !scripted_types.contains(t)),
                     &attachment.policy,
                     manifest.workspace.as_ref(),
@@ -1638,7 +1650,11 @@ impl PreparedBackend {
             tools,
             after_hooks,
             reactions,
-            nodes: Arc::new(nodes),
+            nodes: {
+                let nodes = Arc::new(nodes);
+                registre_des_sous_graphes.poser(&nodes);
+                nodes
+            },
             tool_schemas,
             tool_validators,
             harnesses,
@@ -5268,7 +5284,7 @@ mod tests {
         let reactif = crate::backend_code::reaction_nodes();
         assert_eq!(
             outil.len(),
-            38,
+            40,
             "la liste des nœuds d'outil a changé ({} entrées) : si c'est voulu, corrigez \
              ce compte dans le même commit — et dites pourquoi dans son message",
             outil.len()
