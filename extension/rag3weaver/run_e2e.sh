@@ -415,13 +415,28 @@ FEATURES="rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres${EXTRA_FEATU
 PG_DANS_LA_PASSE=false
 PG_RAISON=""
 PG_URL="${RAG3WEAVER_PG:-postgres://rag3weaver:rag3weaver@localhost:5433/rag3weaver_test}"
-PG_HOTE=$(printf '%s' "$PG_URL" | sed -E 's|.*@([^:/]+).*|\1|')
-PG_PORT=$(printf '%s' "$PG_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
+# Les deux formes que lit tokio-postgres : l'URL (`postgres://u:p@hôte:port/base`) et les
+# mots-clés (`host=… port=…`, port 5432 par défaut). Une adresse que la sonde ne sait pas lire se
+# dit telle, jamais « rien n'écoute » : le 25 octobre 2026, la forme à mots-clés sondait
+# « host=…:host=… » et sautait la suite en accusant un conteneur bien vivant.
+PG_HOTE=""; PG_PORT=""
+case "$PG_URL" in
+  postgres://*|postgresql://*)
+    PG_HOTE=$(printf '%s' "$PG_URL" | sed -nE 's|^[a-z]+://([^@/]*@)?(\[[^]]+\]\|[^:/?]+).*|\2|p' | tr -d '[]')
+    PG_PORT=$(printf '%s' "$PG_URL" | sed -nE 's|^[a-z]+://([^@/]*@)?(\[[^]]+\]\|[^:/?]+):([0-9]+).*|\3|p')
+    [ -n "$PG_HOTE" ] && PG_PORT=${PG_PORT:-5432} ;;
+  *host=*)
+    PG_HOTE=$(printf '%s' " $PG_URL" | sed -nE 's|.*[[:space:]]host=([^[:space:]]+).*|\1|p')
+    PG_PORT=$(printf '%s' " $PG_URL" | sed -nE 's|.*[[:space:]]port=([0-9]+).*|\1|p')
+    [ -n "$PG_HOTE" ] && PG_PORT=${PG_PORT:-5432} ;;
+esac
 # `/dev/tcp` de bash plutôt que `nc` : la première version employait `nc`, qui
 # n'est **pas installé ici**. La sonde ne pouvait donc jamais répondre oui, et
 # aurait écarté postgres pour toujours en croyant l'avoir vérifié — le défaut
 # même qu'elle est censée prévenir, dans l'outil qui le prévient.
-if [ -z "${RAG3WEAVER_SANS_PG:-}" ]; then
+if [ -z "${RAG3WEAVER_SANS_PG:-}" ] && { [ -z "$PG_HOTE" ] || ! [[ "$PG_PORT" =~ ^[0-9]+$ ]]; }; then
+  PG_RAISON="adresse RAG3WEAVER_PG illisible : « $PG_URL » (attendu postgres://u:p@hôte:port/base ou host=… port=…)"
+elif [ -z "${RAG3WEAVER_SANS_PG:-}" ]; then
   if timeout 2 bash -c "echo > /dev/tcp/$PG_HOTE/$PG_PORT" 2>/dev/null; then
     PG_DANS_LA_PASSE=true
   else
