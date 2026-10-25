@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -25,6 +26,11 @@ struct RAG3DB_API FileInfo {
     int64_t readFile(void* buf, size_t nbyte);
 
     void writeFile(const uint8_t* buffer, uint64_t numBytes, uint64_t offset);
+    // Les octets passés à writeFile depuis le début du processus, tous fichiers confondus :
+    // la mesure de ce qu'un point de reprise écrit (différence avant/après, dans
+    // [checkpoint-profile]). Compté avant l'appel au système de fichiers, donc aussi ce qu'une
+    // écriture refusée aurait écrit.
+    static uint64_t bytesWritten() { return totalBytesWritten.load(std::memory_order_relaxed); }
 
     void syncFile() const;
 
@@ -61,6 +67,9 @@ struct RAG3DB_API FileInfo {
     const std::string path;
 
     FileSystem* fileSystem;
+
+private:
+    static std::atomic<uint64_t> totalBytesWritten;
 };
 
 } // namespace common
