@@ -1755,8 +1755,17 @@ impl PreparedBackend {
             Err(erreur) => (None, Some(self.raison_sans_service(&erreur))),
         }
     }
+    /// **Un service déclaré, mais pas joint** : le seul manque qui peut se
+    /// résoudre seul (le service démarre après le backend). Un modèle local
+    /// indisponible ou rien de déclaré ne se retentent pas.
+    pub(crate) fn service_a_retenter(&self) -> bool {
+        use crate::model_source::{Capability, Provider};
+        self.needs_embeddings()
+            && self.embed.provider != Provider::Local
+            && !self.embed.addresses(Capability::Embed, &|k| std::env::var(k).ok()).is_empty()
+    }
     /// La raison du manque, et quoi faire, d'après la déclaration.
-    fn raison_sans_service(&self, erreur: &str) -> String {
+    pub(crate) fn raison_sans_service(&self, erreur: &str) -> String {
         use crate::model_source::{Capability, Provider};
         let adresses = self.embed.addresses(Capability::Embed, &|k| std::env::var(k).ok());
         match self.embed.provider {
@@ -1766,8 +1775,8 @@ impl PreparedBackend {
                  RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)"
             ),
             _ => format!(
-                "service déclaré mais pas joint ({}) — démarrez-le ; l'index rattrapera la dette \
-                 à la réouverture : {erreur}",
+                "service déclaré mais pas joint ({}) — démarrez-le ; il est repris dès qu'il \
+                 répond, et l'index suivant rattrape la dette : {erreur}",
                 adresses.join(", ")
             ),
         }
@@ -1820,6 +1829,14 @@ impl PreparedBackend {
         } else {
             None
         };
+        let embarqueur_a_retenter = (sans_service && self.service_a_retenter()).then(|| {
+            Mutex::new(RetenteEmbarqueur {
+                dernier_essai: std::time::Instant::now(),
+                intervalle: INTERVALLE_DE_RETENTE_EMBARQUEUR,
+                revenu: false,
+                raison: raison.clone().unwrap_or_else(|| Self::QUOI_FAIRE_SANS_SERVICE.to_string()),
+            })
+        });
         let embedder = match embedder {
             Some(e) => {
                 if e.is_mock()
@@ -1989,6 +2006,7 @@ impl PreparedBackend {
         let backend = Backend {
             decider,
             avertissement_sans_service,
+            embarqueur_a_retenter,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
             // La vue de lecture, publiée une dernière fois le catalogue monté.
@@ -2556,16 +2574,86 @@ pub struct Backend {
     /// Le backend déclare du vecteur et a démarré sans service : la phrase
     /// dite à l'ouverture, redite dans `describe` et `index_state`.
     avertissement_sans_service: Option<String>,
+    /// **Le service était déclaré mais pas joint à l'ouverture** : il se
+    /// retente (au plus une fois par intervalle), et l'avertissement dit le
+    /// dernier essai. Ticket du 11 octobre 2026, « un service injoignable à
+    /// l'ouverture fige le backend en plein texte ».
+    embarqueur_a_retenter: Option<Mutex<RetenteEmbarqueur>>,
     /// **Ce que la comparaison d'ouverture a trouvé entre les dossiers et la
     /// base** (lot M3c) : chaque fichier propre contre sa ligne, dans les deux
     /// sens, et les fichiers composés régénérés. `index_state` le dit.
     ecarts_des_fichiers: Mutex<Option<Value>>,
 }
+/// Entre deux essais de rejoindre un service d'embarquement manquant.
+pub const INTERVALLE_DE_RETENTE_EMBARQUEUR: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Le dernier essai de rejoindre le service manquant à l'ouverture.
+struct RetenteEmbarqueur {
+    dernier_essai: std::time::Instant,
+    intervalle: std::time::Duration,
+    /// Le service a répondu, avec l'identité déclarée : acquis.
+    revenu: bool,
+    /// La raison du dernier échec, dite par l'avertissement.
+    raison: String,
+}
+
 impl Backend {
     /// Les avertissements d'ouverture, pour le reçu du backend ; vide quand
     /// tout ce qui est déclaré est servi.
     pub fn avertissements(&self) -> Vec<String> {
-        self.avertissement_sans_service.iter().cloned().collect()
+        let Some(retente) = &self.embarqueur_a_retenter else {
+            return self.avertissement_sans_service.iter().cloned().collect();
+        };
+        // L'état dit ce qui est vrai maintenant : chaque lecture des
+        // avertissements retente (au plus une fois par intervalle).
+        self.embarqueur_revenu();
+        let r = retente.lock().unwrap_or_else(|p| p.into_inner());
+        vec![if r.revenu {
+            format!(
+                "{} — le service répond de nouveau : le backend se rouvre au prochain appel pour le reprendre",
+                PreparedBackend::AVERTISSEMENT_SANS_SERVICE
+            )
+        } else {
+            format!("{} — {}", PreparedBackend::AVERTISSEMENT_SANS_SERVICE, r.raison)
+        }]
+    }
+    /// **Le service d'embarquement manquant à l'ouverture répond-il
+    /// maintenant ?** Faux si rien n'est à retenter. Sinon, au plus une fois
+    /// par intervalle, l'embarqueur de la déclaration est rejoint (et son
+    /// identité vérifiée comme à l'ouverture) ; un succès reste acquis, un
+    /// échec remplace la raison dite. Vrai : ce backend doit être rouvert
+    /// pour le prendre — la réouverture rebâtit tout ce qui tient
+    /// l'embarqueur (catalogue, vue de lecture, montres), ce qu'un échange à
+    /// chaud ne ferait pas.
+    pub fn embarqueur_revenu(&self) -> bool {
+        let Some(retente) = &self.embarqueur_a_retenter else { return false };
+        let mut r = retente.lock().unwrap_or_else(|p| p.into_inner());
+        if r.revenu {
+            return true;
+        }
+        if r.dernier_essai.elapsed() < r.intervalle {
+            return false;
+        }
+        r.dernier_essai = std::time::Instant::now();
+        let prepared = self.prepared();
+        match prepared.connect_embedder() {
+            Ok((e, _)) if !e.is_mock() && e.name() == prepared.embed.model && e.dim() == prepared.embed_dimensions() => {
+                eprintln!("[backend] le service d'embarquement répond de nouveau ({}) : le backend se rouvre pour le reprendre", e.name());
+                r.revenu = true;
+            }
+            Ok((e, _)) => {
+                r.raison = format!("le service répond, mais avec un autre modèle ({} en dimension {}) que la déclaration", e.name(), e.dim());
+            }
+            Err(erreur) => r.raison = prepared.raison_sans_service(&erreur),
+        }
+        r.revenu
+    }
+    /// L'intervalle entre deux essais (défaut
+    /// [`INTERVALLE_DE_RETENTE_EMBARQUEUR`]) ; les témoins le raccourcissent.
+    pub fn set_intervalle_de_retente_embarqueur(&self, intervalle: std::time::Duration) {
+        if let Some(retente) = &self.embarqueur_a_retenter {
+            retente.lock().unwrap_or_else(|p| p.into_inner()).intervalle = intervalle;
+        }
     }
     /// `describe()` du manifeste, plus les avertissements d'ouverture sous
     /// `warnings` — c'est le reçu que lit qui lance le backend en service.
@@ -4512,6 +4600,21 @@ impl Backend {
         if !entites.is_empty() && crate::code_sync::avant_la_regle(&cat).unwrap_or(false) {
             avertissements.push(crate::code_sync::AVANT_LA_REGLE.to_string());
         }
+        // **Un index vectoriel retiré se dit en clair** : la recherche dense
+        // de cette entité ne répond pas tant qu'il manque, et ce n'est pas
+        // « running 97 % » (hôte de Lucie, 25 octobre 2026). Ce qui reste à
+        // embarquer, et qu'il revient dès que c'est soldé.
+        for (table, _, index) in cat.index_vectoriels_retires().unwrap_or_default() {
+            let reste = cat.vector_storage(&table).map(|s| cat.count_marqueur_manquant(&table, &s.marker)).unwrap_or(0);
+            let entite = table.strip_suffix("_Chunk").unwrap_or(&table).to_string();
+            if let Some(Value::Object(e)) = etats.get_mut(&entite) {
+                e.insert("vector_index".into(), json!({ "dropped": index, "missing": reste }));
+            }
+            avertissements.push(format!(
+                "index vectoriel `{index}` retiré le temps d'un rattrapage : {reste} morceau(x) de « {entite} » sans vecteur ; \
+                 la recherche dense de « {entite} » ne répond pas avant son retour, dès la dette soldée (par la montre ou un index)"
+            ));
+        }
         if !avertissements.is_empty() {
             etats.insert("warnings".into(), json!(avertissements));
         }
@@ -5090,6 +5193,7 @@ mod tests {
         let backend = Backend {
             decider: None,
             avertissement_sans_service: None,
+            embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
             read_view: {
@@ -5310,6 +5414,7 @@ mod tests {
         Backend {
             decider: None,
             avertissement_sans_service: None,
+            embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
             read_view: {

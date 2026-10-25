@@ -834,6 +834,18 @@ fn run() -> Result<(), String> {
     let mut calls = 0usize;
     let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
     for line in io::stdin().lock().lines() {
+        // **Le service d'embarquement manquant à l'ouverture répond de
+        // nouveau** : le backend est fermé proprement et rouvert avant cette
+        // requête, pour la servir avec l'embarqueur (comme l'hôte du démon).
+        if backend.embarqueur_revenu() {
+            eprintln!("[rag3weaver] le service d'embarquement répond — le backend est rouvert pour le prendre");
+            backend.shutdown()?;
+            drop(backend);
+            let prepared = PreparedBackend::load(Path::new(&path))?;
+            let (embedder, raison) = prepared.embedder_or_absent();
+            let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
+            backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
+        }
         let request: Result<Value, String> = line.map_err(|e| e.to_string())
             .and_then(|line| serde_json::from_str(&line).map_err(|e| e.to_string()));
         if request.as_ref().ok().is_some_and(|v| v["op"] == "shutdown") {

@@ -100,3 +100,79 @@ fn sans_service_l_index_est_en_plein_texte_et_la_dette_se_lit() {
         r.meta.warnings
     );
 }
+
+/// Un embarqueur de témoin au nom et à la dimension du modèle attendu.
+struct Regle;
+
+impl rag3weaver::Embedder for Regle {
+    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::EmbedError> {
+        Ok(textes.iter().map(|t| {
+            let mut v = vec![0.0f32; DIM];
+            v[t.len() % DIM] = 1.0;
+            v
+        }).collect())
+    }
+    fn dim(&self) -> usize {
+        DIM
+    }
+    fn name(&self) -> &str {
+        MODELE
+    }
+}
+
+/// **Un index vectoriel retiré le temps d'un rattrapage revient dès la dette
+/// soldée, par la montre** (hôte de Lucie, 25 octobre 2026). Au-delà du seuil,
+/// la première passe retire l'index ; la montre fait des passes de 512 (une
+/// par lot) ; celle qui solde la dette doit le rebâtir. Avant, seule une passe
+/// qui *commençait* sans dette le rebâtissait : la montre ne le faisait
+/// jamais, et la recherche dense ne répondait plus jusqu'à un `index` manuel.
+#[test]
+#[ignore]
+fn un_index_vectoriel_retire_revient_des_la_dette_soldee_par_la_montre() {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
+        .expect("extension vecteur");
+    let config = CatalogConfig { name: Some("index-retire".into()), embedding_dim: DIM, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(AbsentEmbedder::new(MODELE, DIM)), config);
+    catalog.initialize().expect("initialize");
+    register_code_schema(&mut catalog, default_scope_chunking()).expect("schéma du code");
+
+    // Une dette au-delà du seuil (1500 morceaux en dimension 32), sans service.
+    let corpus: Vec<(String, String)> = (0..1700)
+        .map(|i| (format!("src/m{i:04}.rs"), format!("pub fn mesure_{i}() -> u32 {{ {i} }}\n")))
+        .collect();
+    let options = SourceSyncOptions { batch_files: 256, exige: Disponibilites::TOUT, ..Default::default() };
+    let r = sync_source(&mut catalog, &Snapshot::new("depot", corpus), &options, &mut |_| {}).expect("synchroniser");
+    assert_eq!(r.failed, 0, "{r:?}");
+    let dette = catalog.index_progress_for(SCOPE).unwrap().dense_missing();
+    println!("▸ dette : {dette} morceaux");
+    assert!(dette > 1500, "la dette doit dépasser le seuil pour que l'index tombe : {dette}");
+
+    // Le service est là ; la montre rattrape, une passe de 512 par lot.
+    catalog.set_embedder(Arc::new(Regle));
+    let partage = Arc::new(Mutex::new(catalog));
+    let mut retire_vu = false;
+    for passe in 1..=20 {
+        Catalog::embarquer_le_retard_hors_verrou(&partage, Disponibilites::TOUT, 512, None).expect("passe de la montre");
+        let cat = partage.lock().unwrap();
+        let reste = cat.index_progress_for(SCOPE).unwrap().dense_missing();
+        let retires = cat.index_vectoriels_retires().expect("drapeaux");
+        println!("▸ passe {passe} : {reste} sans vecteur, index retirés : {retires:?}");
+        retire_vu |= !retires.is_empty();
+        if reste == 0 {
+            assert!(retire_vu, "l'index est bien tombé pendant le rattrapage");
+            assert!(retires.is_empty(), "la passe qui solde la dette rebâtit l'index : {retires:?}");
+            break;
+        }
+        assert!(passe < 20, "la dette ne se solde pas : {reste}");
+    }
+
+    // La recherche dense répond de nouveau.
+    let r = Catalog::rechercher(&partage, SCOPE, "mesure_7", SearchOptions {
+        signals: Some(SearchSignals::VECTOR),
+        ..Default::default()
+    })
+    .expect("recherche dense");
+    println!("▸ {} résultats ; avertissements : {:?}", r.results.len(), r.meta.warnings);
+    assert!(!r.results.is_empty(), "la recherche dense répond : {:?}", r.meta.warnings);
+}

@@ -2279,6 +2279,19 @@ fn read_threads() -> u64 {
     /// résultats **en silence** — exactement le défaut qu'on s'est promis de
     /// ne plus écrire.
     fn restore_dropped_vector_indexes(&mut self) -> Result<(), CatalogError> {
+        for (table, column, index) in self.index_vectoriels_retires()? {
+            eprintln!(
+                "[rag3weaver] index vectoriel '{index}' laissé détruit par un chargement en masse interrompu — reconstruction"
+            );
+            self.rebuild_vector_index(&table, &column, &index)?;
+        }
+        Ok(())
+    }
+
+    /// **Les index vectoriels retirés** — pour un chargement en masse ou le
+    /// temps d'un rattrapage : `(table de chunks, colonne, index)`, d'après
+    /// leur drapeau en méta (`vector_index_dropped:…`, non vide).
+    pub fn index_vectoriels_retires(&self) -> Result<Vec<(String, String, String)>, CatalogError> {
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         let result = self
             .conn
@@ -2311,13 +2324,7 @@ fn read_threads() -> u64 {
                 })
             })
             .collect();
-        for (table, column, index) in pending {
-            eprintln!(
-                "[rag3weaver] index vectoriel '{index}' laissé détruit par un chargement en masse interrompu — reconstruction"
-            );
-            self.rebuild_vector_index(&table, &column, &index)?;
-        }
-        Ok(())
+        Ok(pending)
     }
 
     /// Tous les index vectoriels déclarés, **tous modèles confondus** :
@@ -3931,7 +3938,7 @@ fn read_threads() -> u64 {
         self.read_meta_key(CHUNKS_SANS_TEXTE_KEY).ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0)
     }
 
-    fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> usize {
+    pub(crate) fn count_marqueur_manquant(&self, table: &str, marqueur: &str) -> usize {
         let requete = self.dialect.count_marqueur_manquant(table, marqueur);
         self.conn
             .execute(&requete)
@@ -4339,6 +4346,19 @@ fn read_threads() -> u64 {
     fn finir_l_embarquement(&mut self, total: usize, limite: usize) -> Result<usize, CatalogError> {
         self.flush_blob_store("rattrapage")?;
         self.signaler_les_troncatures("rattrapage");
+        // **Un index retiré le temps du rattrapage revient dès que sa dette
+        // est soldée**, par la passe qui la solde — celle d'un index comme
+        // celle de la montre, qui n'en fait qu'une. Avant, seule une passe
+        // qui *commençait* sans dette le rebâtissait : la montre ne le
+        // faisait jamais, et l'index restait absent jusqu'à un `index` lancé
+        // à la main (hôte de Lucie, 25 octobre 2026).
+        for (table, _, index) in self.index_vectoriels_retires()? {
+            let Ok(storage) = self.vector_storage(&table) else { continue };
+            if storage.index == index {
+                let retard = self.count_marqueur_manquant(&table, &storage.marker);
+                self.ajuster_l_index_pour_le_retard(&table, &storage, retard)?;
+            }
+        }
         // Le tour est fait. S'il restait plus que la borne quelque part, il en
         // reste encore : l'indice reste posé et la passe suivante reprendra.
         if total < limite {

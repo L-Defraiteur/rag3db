@@ -750,3 +750,81 @@ fn les_appels_d_un_backend_ne_font_pas_la_queue_derriere_un_appel_retenu() {
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// Un embarqueur de témoin : le nom et la dimension que le manifeste déclare
+/// (`none`, 8), et pas un factice — l'identité se vérifie comme pour un vrai.
+struct Nul8;
+
+impl rag3weaver::Embedder for Nul8 {
+    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::EmbedError> {
+        Ok(textes.iter().map(|t| {
+            let mut v = vec![0.0f32; 8];
+            v[t.len() % 8] = 1.0;
+            v
+        }).collect())
+    }
+    fn dim(&self) -> usize {
+        8
+    }
+    fn name(&self) -> &str {
+        "none"
+    }
+}
+
+/// **Un service d'embarquement revenu après l'ouverture est repris**
+/// (ticket du 11 octobre 2026, revu sur l'hôte de Lucie le 25) : le backend
+/// s'ouvre sans lui, en le disant ; le service démarre ; l'appel suivant est
+/// servi par un backend rouvert avec l'embarqueur, sans l'avertissement.
+/// Avant, l'absent restait pour la vie du backend, et l'avertissement aussi.
+#[test]
+#[ignore]
+fn un_service_revenu_apres_l_ouverture_est_repris() {
+    let d = dossier("service-revenu");
+    // Un port libre, relâché : rien n'y écoute à l'ouverture.
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let m = manifeste(&d);
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&m).unwrap()).unwrap();
+    v["embeddings"]["address"] = json!(format!("127.0.0.1:{port}"));
+    v["entities"]["Fiche"]["config"]["signals"] = json!(["bm25", "vector"]);
+    std::fs::write(&m, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+    // L'hôte ordinaire, l'intervalle entre deux essais ramené à zéro.
+    let host = DaemonHost::with_opener(Box::new(|prepared: PreparedBackend| {
+        let base = prepared.path(&prepared.manifest.database);
+        let conn = Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
+        let (embarqueur, raison) = prepared.embedder_or_absent();
+        let backend = prepared.open_with_reason(Box::new(conn), embarqueur, raison)?;
+        backend.set_intervalle_de_retente_embarqueur(Duration::ZERO);
+        Ok(backend)
+    }));
+    let s = host.open_session("témoin", None, vec![], None);
+
+    // 1. Sans service : le backend s'ouvre et le dit.
+    let avant = ok(&host.describe(Some(&s), &m)).clone();
+    let dit = avant["warnings"].to_string();
+    assert!(dit.contains("pas joint"), "l'ouverture dit le service pas joint : {avant}");
+
+    // 2. Le service démarre au port déclaré.
+    let ecoute = std::net::TcpListener::bind(format!("127.0.0.1:{port}")).expect("le port relâché se reprend");
+    std::thread::spawn(move || {
+        let _ = rag3weaver::daemon::EmbedDaemon::new(Arc::new(Nul8)).servir_lie(ecoute);
+    });
+    let adresse = format!("127.0.0.1:{port}");
+    assert!(
+        (0..500).any(|_| {
+            std::thread::sleep(Duration::from_millis(10));
+            rag3weaver::daemon::DaemonEmbedder::joindre(&adresse).is_ok()
+        }),
+        "le service de témoin répond"
+    );
+
+    // 3. L'appel suivant est servi par un backend rouvert, avec l'embarqueur.
+    let apres = ok(&host.describe(Some(&s), &m)).clone();
+    assert!(apres.get("warnings").is_none(), "plus d'avertissement une fois le service repris : {apres}");
+    let etat = host.state();
+    let ouvert = etat["backends"][0]["opened"].as_i64().unwrap();
+    assert_eq!(ouvert, 2, "le backend rouvert pour prendre le service : {etat}");
+    ok(&put(&host, &s, &m, "put_fiche", "avec-vecteur"));
+    assert!(fiche(&host, &s, &m, "avec-vecteur").is_some(), "le backend rouvert sert les outils");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}

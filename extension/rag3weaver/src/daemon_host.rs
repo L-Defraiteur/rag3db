@@ -371,7 +371,33 @@ impl DaemonHost {
             let mut slot = self.ecrire_le_slot(hosted)?;
             self.open_slot(hosted, &mut slot)?;
         }
-        let slot = hosted.backend.read().unwrap_or_else(|p| p.into_inner());
+        // **Le service d'embarquement manquant à l'ouverture répond de
+        // nouveau** : le backend est fermé proprement et rouvert avant de
+        // servir cet appel, qui part ainsi avec l'embarqueur (un index ne
+        // repart pas sur l'absent). Une seule fois par appel ; une
+        // indexation en cours refuse la fermeture, et la réouverture attend
+        // l'appel suivant. Ticket du 11 octobre 2026.
+        let mut rouvert = false;
+        let slot = loop {
+            let slot = hosted.backend.read().unwrap_or_else(|p| p.into_inner());
+            let revenu = slot.as_ref().is_some_and(|b| b.embarqueur_revenu());
+            if !revenu || rouvert {
+                break slot;
+            }
+            rouvert = true;
+            let instance = hosted.opened.load(std::sync::atomic::Ordering::SeqCst);
+            drop(slot);
+            let mut ecrit = self.ecrire_le_slot(hosted)?;
+            if ecrit.is_some() && hosted.opened.load(std::sync::atomic::Ordering::SeqCst) == instance {
+                match self.close_slot(hosted, &mut ecrit) {
+                    Ok(_) => {
+                        eprintln!("[démon] {} : le service d'embarquement répond — le backend est rouvert pour le prendre", hosted.manifest.display());
+                        self.open_slot(hosted, &mut ecrit)?;
+                    }
+                    Err(e) => eprintln!("[démon] {} : le service d'embarquement répond, réouverture remise ({e})", hosted.manifest.display()),
+                }
+            }
+        };
         let Some(backend) = slot.as_ref() else {
             return Err(format!("{NOT_HOSTED} : {} a été fermé pendant cet appel ; recommencez", hosted.manifest.display()));
         };
