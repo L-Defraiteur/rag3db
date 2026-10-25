@@ -33,6 +33,7 @@
 #include "main/client_context.h"
 #include "main/connection.h"
 #include "main/database.h"
+#include "processor/result/flat_tuple.h"
 #include "storage/buffer_manager/memory_manager.h"
 #include "storage/storage_manager.h"
 #include "storage/table/rel_table.h"
