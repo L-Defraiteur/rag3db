@@ -35,6 +35,8 @@ fn copier(src: &Path, dst: &Path) {
 struct Vu {
     rejoue: Vec<String>,
     precedents: Vec<String>,
+    /// Ce que `lire_le_run` a rendu, vu au moment des rapports.
+    declarations: Vec<String>,
 }
 
 /// Un faux modèle qui sert le chat (lire `main.rs`, puis répondre) et le juge
@@ -52,18 +54,35 @@ fn faux(vu: Arc<Mutex<Vu>>) -> rag3weaver::daemon_host::chat::ChatModel {
                 }
                 return MockLlm::new("").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]).generate(turns, opts, sink);
             }
-            if opts.response_format.is_some() {
-                // Le dernier pas : le verdict. Il se compare au précédent s'il l'a vu.
+            if let Some(rag3weaver::llm::ResponseFormat::JsonSchema { name, .. }) = &opts.response_format {
+                // Les deux rapports de la fin (page 05) : les outils, puis la session.
+                if name == "bilan_des_outils" {
+                    vu.lock().unwrap().declarations.push(outils_vus[0].content.clone());
+                    let defaut = |genre: &str, libelle: &str, preuve: &str, proposee: &str| json!({
+                        "genre": genre, "libelle": libelle, "call_id": "c-read", "preuve": preuve,
+                        "ce_que_l_agent_en_a_fait": "il a résumé le fichier", "proposee": proposee,
+                    });
+                    let outils = json!({ "outils": [{
+                        "outil": "read_file", "appels": 1, "echecs": 0, "inutiles": 0, "part_utilisee": 0.6,
+                        "defauts": {
+                            "bloquant": [],
+                            "genant": [defaut("retour_incomplet_ou_ambigu", "", "(End of file - 1 lines)", "« main.rs : 1 ligne, fin du fichier »")],
+                            "mineur": [
+                                defaut("description_trompeuse", "", "Lit un fichier", "Lit un fichier du projet, avec ses numéros de ligne ; la dernière ligne dit combien le fichier en a."),
+                                defaut("autre", "numérotation des lignes", "00001| fn main() {}", "les numéros à part, dans un champ"),
+                            ],
+                        },
+                    }]});
+                    return MockLlm::new(outils.to_string().as_str()).generate(turns, opts, sink);
+                }
+                // Le bilan de session : il se compare au précédent s'il l'a vu.
                 let deja = turns.iter().any(|t| t.role == "tool" && t.tool_name.as_deref() == Some("bilans_precedents") && t.content.contains("Note "));
                 let verdict = json!({
                     "resume": "Le tour a lu main.rs et l'a résumé.",
                     "note": 8, "confiance": "haute", "objectif": "atteint",
                     "faits": [{ "texte": "read_file a rendu main.rs entier", "nature": "dit" }],
-                    "outils": [{ "outil": "read_file", "appels": 1, "echecs": 0, "inutiles": 0,
-                                 "ambigus": [{ "retour": "(End of file - 1 lines)", "cru": "le fichier est vide" }] }],
-                    "frictions": [], "attentes": [], "manquait": [],
-                    "a_corriger": [{ "outil": "read_file", "phrase": "(End of file - 1 lines)",
-                                     "proposee": "Lit un fichier du projet, avec ses numéros de ligne ; la dernière ligne dit combien le fichier en a." }],
+                    "renvois_bloquants": [],
+                    "frictions": [], "attentes": [],
                     "comparaison": if deja { json!({ "verdict": "pareil", "sur": "la même lecture que la session précédente" }) }
                                    else { json!({ "verdict": "premier", "sur": "aucun bilan précédent" }) },
                 });
@@ -197,7 +216,13 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
         assert!(v.rejoue.first().is_some_and(|r| r.contains("fn main()")), "le juge a rejoué read_file : {:?}", v.rejoue);
     }
     let ticket = &b1["tickets"][0];
-    assert!(ticket["proposition"].is_u64(), "un ticket sur la description de read_file : {b1}");
+    assert!(ticket["proposition"].is_u64(), "un ticket sur la description trompeuse de read_file : {b1}");
+    assert_eq!(b1["tickets"].as_array().map(Vec::len), Some(1), "seule description_trompeuse devient une proposition : {b1}");
+    assert!(
+        vu.lock().unwrap().declarations.first().is_some_and(|d| d.contains("\"declarations\"") && d.contains("\"parametres\"") && d.contains("\"path\"")),
+        "lire_le_run rend la déclaration de read_file telle que l'agent l'a vue"
+    );
+    assert_eq!(b1["fiches_des_outils"], json!(["outil : read_file"]), "un outil livré : une fiche commune : {b1}");
 
     // La fiche dans la mémoire : la Fiche via juge, l'apport « bilan » avec son JSON.
     let appeler_memoire = |outil: &str, args: Value| -> Value {
@@ -222,8 +247,15 @@ fn le_juge_relit_un_tour_range_sa_fiche_et_compare_la_session_suivante() {
     // La vue « bilans » : la fiche, ses deux apports dans l'ordre, leurs notes, la comparaison.
     let vue = host.bilans_de(&id).unwrap_or_else(|e| panic!("les bilans : {e}"));
     assert_eq!(vue["declare"], true, "{vue}");
-    let fiches = vue["fiches"].as_array().unwrap();
+    let (outils, fiches): (Vec<Value>, Vec<Value>) = vue["fiches"].as_array().unwrap().iter().cloned().partition(|f| f["outil"] == true);
     assert_eq!(fiches.len(), 1, "{vue}");
+    // La fiche de l'outil : un L1 « defauts » par run, classés par gravité, l'autre à libellé.
+    assert_eq!(outils.len(), 1, "{vue}");
+    let apports_outil = outils[0]["apports"].as_array().unwrap();
+    assert_eq!(apports_outil.len(), 2, "un apport « defauts » par run jugé : {vue}");
+    let d = &apports_outil[1]["defauts"];
+    assert_eq!((d["bloquant"].as_array().map(Vec::len), d["genant"].as_array().map(Vec::len), d["mineur"].as_array().map(Vec::len)), (Some(0), Some(1), Some(2)), "{vue}");
+    assert!(apports_outil[1]["texte"].as_str().is_some_and(|t| t.contains("Gênants") && t.contains("autre — numérotation des lignes")), "{vue}");
     let notes: Vec<Value> = fiches[0]["apports"].as_array().unwrap().iter().map(|a| a["note"].clone()).collect();
     assert_eq!(notes, vec![json!(8), json!(8)], "{vue}");
     assert_eq!(fiches[0]["apports"][1]["comparaison"]["verdict"], "pareil", "{vue}");
@@ -303,10 +335,10 @@ fn le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session() {
         b
     };
     let b1 = session(1);
-    let v = &b1["verdict"];
-    let nomme = v["outils"].as_array().into_iter().flatten().any(|o| o["outil"] == "read_file" && o["ambigus"].as_array().is_some_and(|a| !a.is_empty()))
-        || v["a_corriger"].as_array().into_iter().flatten().any(|a| a["outil"] == "read_file")
-        || b1["tickets"].as_array().into_iter().flatten().any(|t| t["outil"] == "read_file");
+    // Le bilan des outils (page 05) : un défaut sur read_file, quelle que soit sa gravité.
+    let nomme = b1["bilan_des_outils"]["outils"].as_array().into_iter().flatten().any(|o| {
+        o["outil"] == "read_file" && ["bloquant", "genant", "mineur"].iter().any(|g| o["defauts"][*g].as_array().is_some_and(|d| !d.is_empty()))
+    }) || b1["tickets"].as_array().into_iter().flatten().any(|t| t["outil"] == "read_file");
     assert!(nomme, "le juge n'a pas nommé le retour ambigu de read_file : {b1}");
     let b2 = session(2);
     assert_eq!(b2["fiche"], b1["fiche"], "la même fiche");

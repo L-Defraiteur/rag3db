@@ -74,12 +74,22 @@ Le message système dit quatre choses :
 - un retour que l'agent a dû relire ou redemander est un défaut de l'outil avant d'être une
   friction de l'agent.
 
-## Le rangement (c7, 96 relit la forme)
+## Le rangement (c7, relu par 96)
 
-- **Une fiche par outil**, nommée de façon stable « outil : <nom> », `via: juge`, ancrée
-  `outil:<nom>`. Chaque run jugé y ajoute un L1 de section `defauts`, de source le journal du run.
-  Son texte donne les défauts de cet outil dans ce run, classés par gravité, avec la part utilisée
-  et le bloc json.
+- **Une fiche par outil, qui suit la définition, pas l'instance** (96, c7) :
+  - un outil dont le graphe est livré (`@builtin:` ou `templates/tools/`) a une fiche commune,
+    « outil : <nom> », quels que soient les backends qui l'exposent ;
+  - un outil dont le graphe vient du manifeste d'un backend a « outil : <backend> / <nom> ».
+
+  La fiche est marquée `via: juge` et ancrée deux fois : `outil:<nom>` (tous les homonymes) et
+  `gabarit:<chemin du graphe>` (le code jugé).
+- Chaque run jugé y ajoute un L1 de section exactement `defauts`, de source le journal du run. Son
+  texte donne les défauts de cet outil dans ce run, classés par gravité, avec la part utilisée, **le
+  backend du run** et le bloc json.
+- **La provenance de chaque apport** passe par `citer_source` : `doc:sources/<jour>-<run>.md#bilan`
+  ou `#defauts`. Depuis le journal d'un run, `cited_by` rend la fiche de la tâche et toutes les fiches
+  d'outils qu'il a nourries. Une même source porte ainsi plusieurs apports, sur plusieurs fiches :
+  la clé (fiche, source, section) reste unique (96).
 - **Le bilan de session** reste sur la fiche de la tâche (page 04), avec son renvoi aux défauts
   bloquants.
 - `cited_by(value: "outil:read_file")` rend la fiche de l'outil et les fiches des tâches qui l'ont
@@ -114,3 +124,16 @@ Les fiches de tâche renvoient à leurs outils.
   retour mêle du hors-sujet et change de forme entre deux appels. Le juge nomme les quatre défauts
   (`parametre_devrait_etre_optionnel`, `parametre_mal_nomme`, `retour_hors_sujet`,
   `retour_incoherent`), chacun avec son `call_id`, et propose la forme corrigée.
+
+## La suite (visions/00-vision-generale.md §7)
+
+La graine de Lucie, « Le juge sur les outils que les agents déclarent : bac à sable et
+surveillance », dit l'ordre :
+1. le bilan des outils (ce lot) ;
+2. la marque `a_surveiller` ;
+3. l'estampille de l'outil déclaré : auteur, run, instant (la proposition les a, le manifeste
+   appliqué les perd) ;
+4. la réaction qui adresse ;
+5. le bac à sable, avec ses essais.
+
+Rien de cela n'entre dans ce lot.

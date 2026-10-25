@@ -1,0 +1,227 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outils"
+  ],
+  "properties": {
+    "outils": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outil",
+          "appels",
+          "echecs",
+          "inutiles",
+          "part_utilisee",
+          "defauts"
+        ],
+        "properties": {
+          "outil": {
+            "type": "string"
+          },
+          "appels": {
+            "type": "integer"
+          },
+          "echecs": {
+            "type": "integer"
+          },
+          "inutiles": {
+            "type": "integer",
+            "description": "Appels inutiles ou répétés."
+          },
+          "part_utilisee": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "La part du retour que l'agent a réellement utilisée."
+          },
+          "defauts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "bloquant",
+              "genant",
+              "mineur"
+            ],
+            "properties": {
+              "bloquant": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "genre",
+                    "libelle",
+                    "call_id",
+                    "preuve",
+                    "ce_que_l_agent_en_a_fait",
+                    "proposee"
+                  ],
+                  "properties": {
+                    "genre": {
+                      "type": "string",
+                      "enum": [
+                        "parametre_manquant",
+                        "parametre_mal_nomme",
+                        "parametre_devrait_etre_optionnel",
+                        "parametre_devrait_etre_obligatoire",
+                        "format_de_parametre",
+                        "retour_mal_forme",
+                        "retour_incoherent",
+                        "retour_bavard",
+                        "retour_hors_sujet",
+                        "retour_incomplet_ou_ambigu",
+                        "description_trompeuse",
+                        "erreur_muette",
+                        "outil_manquant",
+                        "outils_a_fondre",
+                        "autre"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string",
+                      "description": "Pour le genre autre : le nom court du défaut. Vide sinon."
+                    },
+                    "call_id": {
+                      "type": "string",
+                      "description": "L'appel où se voit le défaut."
+                    },
+                    "preuve": {
+                      "type": "string",
+                      "description": "Le texte exact : les arguments envoyés, ou l'extrait du retour reçu."
+                    },
+                    "ce_que_l_agent_en_a_fait": {
+                      "type": "string",
+                      "description": "Pour un retour : ce que l'agent en a fait au tour suivant."
+                    },
+                    "proposee": {
+                      "type": "string",
+                      "description": "La forme proposée à la place, entière : un fragment de schéma de paramètres, la forme du retour, ou la description."
+                    }
+                  }
+                }
+              },
+              "genant": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "genre",
+                    "libelle",
+                    "call_id",
+                    "preuve",
+                    "ce_que_l_agent_en_a_fait",
+                    "proposee"
+                  ],
+                  "properties": {
+                    "genre": {
+                      "type": "string",
+                      "enum": [
+                        "parametre_manquant",
+                        "parametre_mal_nomme",
+                        "parametre_devrait_etre_optionnel",
+                        "parametre_devrait_etre_obligatoire",
+                        "format_de_parametre",
+                        "retour_mal_forme",
+                        "retour_incoherent",
+                        "retour_bavard",
+                        "retour_hors_sujet",
+                        "retour_incomplet_ou_ambigu",
+                        "description_trompeuse",
+                        "erreur_muette",
+                        "outil_manquant",
+                        "outils_a_fondre",
+                        "autre"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string",
+                      "description": "Pour le genre autre : le nom court du défaut. Vide sinon."
+                    },
+                    "call_id": {
+                      "type": "string",
+                      "description": "L'appel où se voit le défaut."
+                    },
+                    "preuve": {
+                      "type": "string",
+                      "description": "Le texte exact : les arguments envoyés, ou l'extrait du retour reçu."
+                    },
+                    "ce_que_l_agent_en_a_fait": {
+                      "type": "string",
+                      "description": "Pour un retour : ce que l'agent en a fait au tour suivant."
+                    },
+                    "proposee": {
+                      "type": "string",
+                      "description": "La forme proposée à la place, entière : un fragment de schéma de paramètres, la forme du retour, ou la description."
+                    }
+                  }
+                }
+              },
+              "mineur": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "genre",
+                    "libelle",
+                    "call_id",
+                    "preuve",
+                    "ce_que_l_agent_en_a_fait",
+                    "proposee"
+                  ],
+                  "properties": {
+                    "genre": {
+                      "type": "string",
+                      "enum": [
+                        "parametre_manquant",
+                        "parametre_mal_nomme",
+                        "parametre_devrait_etre_optionnel",
+                        "parametre_devrait_etre_obligatoire",
+                        "format_de_parametre",
+                        "retour_mal_forme",
+                        "retour_incoherent",
+                        "retour_bavard",
+                        "retour_hors_sujet",
+                        "retour_incomplet_ou_ambigu",
+                        "description_trompeuse",
+                        "erreur_muette",
+                        "outil_manquant",
+                        "outils_a_fondre",
+                        "autre"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string",
+                      "description": "Pour le genre autre : le nom court du défaut. Vide sinon."
+                    },
+                    "call_id": {
+                      "type": "string",
+                      "description": "L'appel où se voit le défaut."
+                    },
+                    "preuve": {
+                      "type": "string",
+                      "description": "Le texte exact : les arguments envoyés, ou l'extrait du retour reçu."
+                    },
+                    "ce_que_l_agent_en_a_fait": {
+                      "type": "string",
+                      "description": "Pour un retour : ce que l'agent en a fait au tour suivant."
+                    },
+                    "proposee": {
+                      "type": "string",
+                      "description": "La forme proposée à la place, entière : un fragment de schéma de paramètres, la forme du retour, ou la description."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
