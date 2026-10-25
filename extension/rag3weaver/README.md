@@ -169,6 +169,47 @@ rag3weaver is not a library an agent calls; it is where the agent runs.
   (a text, a closed list of options, a probability per option), an
   OpenAI-compatible client or a local server; streaming is in the trait.
 
+### Working alone: steps, a judge, a memory
+
+An agent that works on its own is not one long turn. It writes a **mini-plan**,
+does one item per **step**, declares the step done or failed, and is relaunched
+with what arrived meanwhile. Every step is a **run** in the host's journal, and a
+**judge** reads each run: one verdict on the session, one on every tool it
+called. Both land in the memory as fiches, where the trend across runs is what
+decides the next move. The supervisor (a person, or an orchestrating agent) only
+ever writes to a mailbox.
+
+```mermaid
+flowchart TD
+    S["Supervisor<br/>a person, or an orchestrating agent"] -->|"request, answers to blockers"| B[("Mailbox<br/>one file per task + a bus topic")]
+    B -->|"opens or wakes the task"| A["Agent on the task branch<br/>read, search, edit; no commands"]
+    A -->|"writes, edits, closes"| P["Mini-plan<br/>request as understood, proposal,<br/>items: todo / doing / done / blocked"]
+    P -->|"blockers need a validation"| B
+    A -->|"one step = one item"| T{"tour_fini<br/>succeeded?"}
+    T -->|"yes: item done"| R["Relaunch<br/>inbox and current plan injected"]
+    T -->|"no: reason kept, plan edited"| R
+    R --> A
+    H["Host budget<br/>12 calls without tour_fini: refused"] -.-> A
+    C["Stop (C4)"] -.->|"immediately"| A
+    A -.->|"each step is a run"| J["Run journal<br/>calls, results as received, durations<br/>bounded by weight and age, pinned runs kept"]
+    J --> G["Judge<br/>a Gemini agent: reads the run, replays what reads,<br/>opens the result, compares to earlier verdicts"]
+    G -->|"session verdict<br/>score, facts, frictions, trend"| F[("Task fiche<br/>current plan, closed plans, verdicts")]
+    G -->|"tool verdict<br/>typed defects with proof, severity, proposed shape"| O[("Tool fiche<br/>one per tool, across all tasks")]
+    P -->|"closed plans"| F
+```
+
+What is on master: the run journal and the session judge (`4b64a98e5`), the
+tool verdicts (`bdf5929c7`: missing or misnamed parameter, a parameter that
+should be optional, a return that is malformed, inconsistent, verbose, off-topic
+or incomplete, each with its call id and a proposed shape, kept in a fiche per
+tool), the journal bounded by weight and age with pinned runs (`82db9a463`), and
+the chat that codes inside a task on a foreign repository (`ae127d634`). The
+step loop, the mini-plan and the mailbox are the lot in progress
+(`docs/25-octobre-2026-everything-declarative/07-l-equipier.md`). A tool that
+the judge keeps flagging is the signal to change the tool; a declared tool
+born under watch, a sandbox for its trial calls, and the judge addressing its
+author are the seed after that (`visions/00-vision-generale.md`, §7).
+
 The binaries `rag3weaver-backend` and `rag3weaver-chat` are this runtime served
 over HTTP, with sections rendered after each tool so that a person reading over
 the agent's shoulder sees what it did.
