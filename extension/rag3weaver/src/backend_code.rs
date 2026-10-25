@@ -260,6 +260,10 @@ const BASE_NODES: &[&str] = &[
     "RhaiNode",
     // Un Plan déclaré : il ne fait que lire.
     "PlanNode",
+    // Un sous-graphe cité, appelé une fois ou par élément : ses propres types de
+    // nœuds passent sous la politique de l'outil (backend.rs), il n'élargit rien.
+    "GraphNode",
+    "ForEachNode",
     "EntityRecordNode",
     "EntityBatchNode",
     "SnapshotFinishNode",
