@@ -221,3 +221,103 @@ fn le_message_systeme_dit_le_verbe_du_mode() {
     // Le reste est le même texte.
     assert_eq!(a.split("To change them").next(), t.split("To change them").next());
 }
+
+/// Un faux modèle sans état, piloté par la conversation : après le résultat
+/// d'un outil, il répond ; sur un message qui contient « lent », il parle
+/// jusqu'à ce qu'on l'arrête (une barrière) ; sinon il propose `notes.md`.
+#[cfg(unix)]
+fn selon_le_message() -> ChatModel {
+    Arc::new(|_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| {
+            let dernier = turns.last().map(|t| (t.role.clone(), t.content.clone())).unwrap_or_default();
+            if dernier.0 == "tool" {
+                return MockLlm::new("Proposé : une note de l'agent.").generate(turns, opts, sink);
+            }
+            if dernier.1.contains("lent") {
+                // Tenu ouvert jusqu'à son arrêt, comme `lent` : une barrière.
+                let borne = Instant::now() + Duration::from_secs(120);
+                while Instant::now() < borne {
+                    if sink.on_token("encore ") == Flow::Stop {
+                        sink.on_finish(&Finish::cancelled());
+                        return Ok((Finish::cancelled(), Usage::default()));
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                return Err(crate::llm::LlmError::Model("faux modèle : jamais arrêté en 120 s".into()));
+            }
+            let proposition = json!({
+                "files": [{ "path": "notes.md", "content": "# Une note de l'agent\n" }],
+                "reason": "une note de l'agent",
+            })
+            .to_string();
+            MockLlm::new("").with_tool_calls(vec![(crate::declare::PROPOSE, proposition.as_str())]).generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le chat dans la page de l'IDE** (K2), dans un vrai navigateur, sur un faux
+/// modèle. Un message envoyé : la bulle de l'agent montre son appel d'outil,
+/// le lien vers la proposition qu'il a faite, puis sa réponse ; la proposition
+/// est dans la vue des propositions, rien n'est écrit. Un second tour, lent :
+/// Arrêter le coupe par le même chemin que tout run, et la page dit « arrêté
+/// dans l'IDE ». La console reste vide.
+#[cfg(unix)]
+#[test]
+fn le_chat_se_mene_et_s_arrete_dans_la_page() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_chat_se_mene_et_s_arrete_dans_la_page";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(selon_le_message());
+    drop(host);
+    let depot = manifeste.parent().unwrap().to_path_buf();
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(selon_le_message())
+    });
+    let racine = format!("http://{adresse}");
+    let decrit: Value = {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}/ide/describe"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste }).to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    assert_eq!(decrit["ok"], true, "{decrit}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/code/{id}/chat"),
+        "document.querySelector('#chat-note')?.textContent === 'modèle : faux-modele' && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+
+    // Un tour qui propose.
+    n.evaluer("document.querySelector('#chat-message').value = 'écris une note'; document.querySelector('#chat-envoyer').click()");
+    n.attendre(
+        "document.querySelector('#chat-note')?.textContent === 'fini' \
+         && document.querySelector('.tour.assistant .proposition-du-tour a[data-proposition]') \
+         && [...document.querySelectorAll('.tour.assistant .outils li')].some(li => li.textContent.startsWith('propose')) \
+         && document.querySelector('.tour.assistant:last-child pre')?.textContent === \"Proposé : une note de l'agent.\"",
+        "le tour, son outil, sa proposition et sa réponse",
+    );
+    assert!(!depot.join("notes.md").exists(), "un tour en approbation a écrit");
+    n.evaluer("document.querySelector('.proposition-du-tour a').click()");
+    n.attendre("document.querySelector('#vue h1')?.textContent.startsWith('Proposition') || location.pathname.includes('/propositions/')", "la proposition du tour, ouverte");
+
+    // Un tour lent, arrêté depuis la page.
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#chat-envoyer') && !document.querySelector('#chat-envoyer').disabled");
+    n.evaluer("document.querySelector('#chat-message').value = 'parle, lentement'; document.querySelector('#chat-envoyer').click()");
+    n.attendre("!document.querySelector('#chat-arreter').hidden && document.querySelector('.tour.en-cours pre')?.textContent.includes('encore')", "le tour lent, en cours, ses jetons dans la bulle");
+    n.evaluer("document.querySelector('#chat-arreter').click()");
+    n.attendre("document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden", "le tour arrêté dans l'IDE");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}

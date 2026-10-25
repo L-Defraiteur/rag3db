@@ -36,6 +36,15 @@
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--doux); margin: 20px 0 8px; }
   .note { color: var(--doux); font-size: 13px; }
   .alerte { color: var(--alerte); }
+  /* Le chat de l'atelier (page 11) : le fil, une bulle par tour, ses outils. */
+  .chat { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; max-width: 880px; }
+  .chat .tour { border: 1px solid var(--trait); border-radius: 8px; padding: 8px 12px; background: var(--surface); }
+  .chat .tour.user { background: var(--accent-doux); align-self: flex-end; max-width: 85%; }
+  .chat .tour.en-cours { border-style: dashed; }
+  .chat .tour pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+  .chat .outils { margin: 6px 0 0; padding-left: 18px; font-family: var(--mono); font-size: 12px; color: var(--doux); }
+  #chat-message { font: inherit; width: min(880px, 100%); padding: 6px 8px; border: 1px solid var(--trait);
+    border-radius: 6px; background: var(--surface); color: var(--texte); }
   /* L'édition humaine (B1) : le tampon, la barre, la différence. */
   .edition .cm-editor { border: 1px solid var(--trait); background: var(--surface); }
   .edition textarea { width: 100%; min-height: 70vh; font: 13px/1.5 var(--mono); background: var(--surface);
@@ -235,6 +244,7 @@ async function accueil() {
         el("a", { href: `/ide/code/${b.id}/reactions/` }, "réactions"),
         el("a", { href: `/ide/code/${b.id}/propositions/` }, "propositions"),
         b.tache ? el("span", { class: "pastille" }, `tâche ${b.tache.nom}`) : el("a", { href: `/ide/code/${b.id}/taches/` }, "tâches"),
+        el("a", { href: `/ide/code/${b.id}/chat` }, "chat"),
         el("span", { class: "meta" }, b.manifest),
         el("span", { class: "meta" }, b.open ? "ouvert" : "fermé"),
         (b.template_drift ?? []).length ? el("span", { class: "meta" }, `${b.template_drift.length} gabarit(s) local(aux) différent(s) du livré`) : "",
@@ -910,6 +920,107 @@ function suivreLesReactions(d) {
   }
 }
 
+// ─── Le chat de l'atelier (page 11) ────────────────────────────────────────
+// L'agent dont l'objet est le gabarit, servi par l'hôte. La page n'a pas
+// d'état que l'hôte n'ait pas : le fil vient de GET /ide/chat ; pendant un
+// tour, le flux montre ses jetons, ses outils et ses propositions, et Arrêter
+// passe par le même chemin que tout run (C4).
+
+let chatVivant = null; // { id, manifest, fil, run, bulle, outils, arreter, note, conso }
+
+function tourDuChat(t) {
+  const appels = (t.tool_calls ?? []).map((c) => el("li", { "data-outil": c.name }, c.name));
+  return el("div", { class: `tour ${t.role}`, "data-role": t.role },
+    t.content ? el("pre", {}, t.content) : "",
+    appels.length ? el("ul", { class: "outils" }, appels) : "");
+}
+
+async function chat(id) {
+  const b = backend(id);
+  fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · chat");
+  const r = await (await fetch(`/ide/chat?${new URLSearchParams({ backend: id })}`)).json();
+  if (!r.ok) throw new Error(r.error);
+  const s = r.result;
+  const filDuChat = el("div", { class: "chat", id: "chat-fil" }, s.turns.filter((t) => t.role !== "tool").map(tourDuChat));
+  const note = el("span", { class: "note", id: "chat-note" }, s.on ? `modèle : ${s.model}` : `chat éteint : ${s.why}`);
+  const message = el("textarea", { id: "chat-message", rows: 3, placeholder: "Demandez à l'agent…", "aria-label": "message à l'agent" });
+  message.disabled = !s.on;
+  const envoyer = el("button", { id: "chat-envoyer", onclick: () => envoyerAuChat(id) }, "Envoyer");
+  envoyer.disabled = !s.on;
+  const arreter = el("button", { id: "chat-arreter", onclick: () => chatVivant?.run && arreterUnRun(id, chatVivant.run, note) }, "Arrêter");
+  arreter.hidden = !s.run;
+  const conso = el("p", { class: "note", id: "chat-conso" }, "");
+  vue.replaceChildren(
+    el("h1", {}, "Chat de l'atelier"),
+    el("p", { class: "note" }, b.tache
+      ? "Une tâche : l'agent déclare sur sa branche ; la relecture et la fusion sont dans les tâches."
+      : "L'agent propose ; vous appliquez ou rejetez dans les propositions."),
+    s.orphans?.length ? el("p", { class: "alerte", id: "chat-orphelines" },
+      `${s.orphans.length} session(s) orpheline(s), jamais rouvertes : ${s.orphans.map((o) => o.pourquoi).join(" ; ")}`) : "",
+    filDuChat,
+    el("div", { class: "barre" }, message, envoyer, arreter, note),
+    conso,
+  );
+  chatVivant = { id, manifest: b.manifest, fil: filDuChat, run: s.run ?? null, bulle: null, outils: null, arreter, note, conso };
+}
+
+async function envoyerAuChat(id) {
+  const v = chatVivant;
+  const m = document.getElementById("chat-message");
+  const texte = m.value.trim();
+  if (!v || !texte) return;
+  m.value = "";
+  v.fil.append(tourDuChat({ role: "user", content: texte }));
+  v.outils = el("ul", { class: "outils" });
+  v.bulle = el("div", { class: "tour assistant en-cours", "data-role": "assistant" }, el("pre", {}, ""), v.outils);
+  v.fil.append(v.bulle);
+  v.note.textContent = "l'agent travaille…";
+  const r = await (await fetch("/ide/chat", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, message: texte }),
+  })).json();
+  v.bulle.classList.remove("en-cours");
+  v.arreter.hidden = true;
+  v.run = null;
+  if (!r.ok) { v.note.textContent = r.error; return; }
+  const res = r.result;
+  if (res.text) v.bulle.querySelector("pre").textContent = res.text;
+  v.bulle.dataset.run = res.run;
+  v.note.textContent = res.stopped_by ? `arrêté ${res.stopped_by === "ide" ? "dans l'IDE" : `par ${res.stopped_by}`}` : "fini";
+  v.conso.textContent = res.consumed?.length
+    ? `consommé : ${res.consumed.map((c) => `${c.slug} ${c.amount} ${c.unit}`).join(", ")}`
+    : "";
+}
+
+// Un événement du flux, pour le chat montré.
+function suivreLeChat(d) {
+  const v = chatVivant;
+  const ev = d.evenement ?? {};
+  if (!v || route().vue !== "chat" || d.backend !== v.manifest) return;
+  if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${v.id}`) {
+    v.run = ev.run;
+    v.arreter.hidden = false;
+    return;
+  }
+  // Une proposition faite pendant le tour : un lien vers elle, dans la bulle.
+  if (ev.kind === "PropositionChanged" && ev.change === "proposed" && v.bulle && v.run) {
+    v.bulle.append(el("p", { class: "proposition-du-tour" },
+      el("a", { href: `/ide/code/${v.id}/propositions/${ev.id}`, "data-proposition": ev.id }, `proposition #${ev.id}`),
+      ` — ${(ev.paths ?? []).join(", ")}${ev.accepted === false ? " (refusée à la validation)" : ""}`));
+    return;
+  }
+  if (!v.run || ev.run !== v.run) return;
+  if (ev.kind === "Token" && v.bulle) {
+    v.bulle.querySelector("pre").textContent += ev.text;
+  } else if (ev.kind === "ToolCallStarted" && v.outils) {
+    v.outils.append(el("li", { "data-outil": ev.tool, "data-appel": ev.call_id }, `${ev.tool}…`));
+  } else if (ev.kind === "ToolCallFinished" && v.outils) {
+    const li = v.outils.querySelector(`li[data-appel="${CSS.escape(String(ev.call_id))}"]`);
+    if (li) li.textContent = `${ev.tool} : ${ev.ok === false ? `refusé (${ev.error_kind ?? "erreur"})` : "fait"}`;
+  } else if (ev.kind === "RunFinished") {
+    v.arreter.hidden = true;
+  }
+}
+
 // ─── Le DAG vivant (C2) ────────────────────────────────────────────────────
 // Le graphe d'un outil, d'une réaction ou d'un composant (/ide/graphe), dessiné
 // par couches de gauche à droite ; le sujet `dataflow` du flux l'allume. Le run
@@ -1015,7 +1126,9 @@ async function arreterUnRun(id, run, note) {
   const r = await (await fetch("/ide/runs/arreter", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, run }),
   })).json();
-  note.textContent = r.ok ? "" : r.error;
+  // N'efface que son propre avis : la fin du run a pu écrire la sienne avant.
+  if (!r.ok) note.textContent = r.error;
+  else if (note.textContent === "arrêt demandé…") note.textContent = "";
 }
 
 // La fin d'un run, dite : arrêté (par qui), fini ou échoué.
@@ -1056,7 +1169,7 @@ function vivre(d) {
 
 function route() {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
-  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches)(?:\/(.*))?$/);
+  const m = p.match(/^\/ide\/code\/([^/]+)\/(arbre|fichier|symbole|graphe|recherche|dag|reactions|propositions|taches|chat)(?:\/(.*))?$/);
   if (!m) return { vue: "accueil" };
   return { vue: m[2], id: m[1], reste: decodeURIComponent(m[3] ?? "") };
 }
@@ -1097,6 +1210,7 @@ async function vueDe(r) {
     case "reactions": return await reactions(r.id);
     case "propositions": return await propositions(r.id, r.reste);
     case "taches": return await taches(r.id, r.reste);
+    case "chat": return await chat(r.id);
     default: return await accueil();
   }
 }
@@ -1105,12 +1219,16 @@ montrer();
 // Le flux : un fichier qui change se relit dans la vue qui le montre ; un run
 // allume le DAG montré.
 const lien = document.getElementById("lien");
-const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations");
+const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens");
 source.onopen = () => { lien.textContent = "flux : ouvert"; };
 source.onerror = () => { lien.textContent = "flux : coupé, reprise…"; };
 let relire = null;
 source.onmessage = (e) => {
   const d = JSON.parse(e.data);
+  // Le chat : son run d'agent, ses appels d'outil et sa consommation sur
+  // `agent`, ses jetons sur `tokens`, ses propositions sur `declarations`.
+  suivreLeChat(d);
+  if (d.sujet === "agent" || d.sujet === "tokens") return;
   // Les runs passent par `dataflow` (un appel d'outil par l'hôte), `reactions`
   // (une réaction) ou `catalog` (une ingestion) : le DAG vivant les lit tous.
   // Une proposition a changé : la vue des propositions se relit.
