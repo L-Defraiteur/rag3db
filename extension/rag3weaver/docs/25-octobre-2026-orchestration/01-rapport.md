@@ -119,3 +119,37 @@ contrôle qui exclut le code vendu (9bf7aca5c, 0aebf4703).
   déclenché par l'hôte en attendant).
 - Le chat qui code : jamais d'écriture hors tâche, pas de commandes ; le
   chat n'ouvre pas de tâche lui-même.
+
+## La nuit du 25 au 26 (écrit à 23 h 10, Lucie dort)
+
+Ce qui est sur master depuis le rapport de 19 h 40 : juge des outils (bdf5929c7),
+journal par poids (82db9a463), V2-2a+2b (f8c0c8df0), compteur d'octets (5651ac341),
+test du plafond L6 (a3c263ea9), dense borné hors instantané (25d9bb4aa), cause dans
+la ligne de la montre (1f261daa5), procédure de bascule de lib (a663c871d), pages
+de 96 (roadmaps 23aa868e9, identité 17ed1458d), rapport du banc (d9fb6498d), ticket
+de la porte (336bea975), README avec le schéma (348fa758b), nouveautes (57085cd35).
+Le fil (01-les-decisions-du-matin) porte la soirée en détail.
+
+Ce qui court cette nuit, et qui doit dire son hash et ses preuves dans un message
+à l'orchestration :
+- everything declarative : équipier-1 (passe rejouée sur master), lot IDE groupé
+  (marge sans outline, cookie Lax), rendu journalisé entier, puis l'IDE en React
+  (page 08, cadre et chat d'abord).
+- recherche : requête entière (contains distance 1 + booléen en parallèle, l'exact
+  domine), hash vers 23 h 05 ; puis surlignages (lucivy, creux bge-m3), puis la vue
+  « mes recherches » avec les clics et la recherche sans dossier.
+- G : pose au hash de recherche ; rebâti de code-rag3db-depot dans une base neuve ;
+  échange à une pose si hotfixs relève zéro écart ; porte de `poste`.
+- hotfixs : chaîne de (A) (create-concurrently-etat-5, format 43), relevé des tables
+  de liens, (B) : témoin des longueurs CSR fausses façon montre.
+- cœur : passe de projection-lecture-seule à luciepc, push demain matin ; la lib
+  unique V2-2 + projection par la procédure, puis le lot du plafond L6 (arbre).
+- codeparsers : file de luciepc à mon mot vers minuit (includes-2, binaires, montre,
+  série 7e/9e à luciepc), push d'INCLUDES.
+- 96 : migration de la fiche de Lucie vers ~/memoire-longue/ après la pose de G,
+  puis M4.
+
+Pour Lucie au matin : le dossier ~/memoire-longue/ pris par défaut ; les trois
+questions de chaque page de 96 ; la bascule 43 (A) et la lib unique du cœur ; les
+tickets lucivy (apostrophe typographique, clés ignorées en silence) à son mot ;
+rag3db-service de luciepc à effacer à son mot ; le relevé de la base neuve.

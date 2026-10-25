@@ -1890,3 +1890,87 @@ où elle vit.
   chiffres, la vue outline et le JS de l'IDE en fichiers, les pièces 2 et 3
   de la recherche, V2-1b, le CREATE concurrent, le commit de formatage de la
   CI.
+
+## 25 octobre 2026, la soirée (20 h – 23 h) : le juge des outils, l'équipier, le premier usage réel de l'IDE
+
+- **Le juge juge aussi les outils** (bdf5929c7) : deux rapports finaux, bilan de
+  session et bilan des outils ; défauts typés par genre et gravité (paramètre
+  manquant ou mal nommé, devrait être optionnel, format de paramètre, retour mal
+  formé, incohérent, bavard, hors sujet, incomplet ou ambigu, description
+  trompeuse, erreur muette, outil manquant, outils à fondre, autre à libellé),
+  chacun avec preuve, gravité et forme proposée ; une fiche par outil ancrée
+  `outil:<nom>` ; seule la description trompeuse devient une proposition
+  applicable. Lucie : « qu'il hésite pas à faire propositions pour changer
+  format ». Témoin Gemini : sept défauts nommés sur un outil volontairement faux.
+- **Le journal des runs borné au poids** (82db9a463) : 5 Gio tous backends et
+  90 jours, la première borne atteinte, fichiers .json.zst, runs épinglés (déclaration
+  d'un outil, défaut bloquant, appel explicite). Lucie : « au moins 5 Go, par
+  poids plutôt que par nombre » ; 3 000 sessions par jour sur 3 mois ≈ 270 Mio.
+- **L'équipier** (lot equipier-1, page 07 d'everything declarative, en passe) : un
+  agent Gemini qui travaille par pas avec un mini-plan facultatif (états active,
+  paused, accomplished, obsolete ; au plus un actif ; les plans en pause rappelés
+  à chaque frontière ; les plans clos en L1 « plan » de la fiche de session),
+  `step_done`, budget de l'hôte (12 appels), l'arrêt tout de suite et le reste à
+  la frontière, une mailbox par tâche pour le superviseur, le hors-plan en
+  `suggest` (proposition), tout en anglais. Lucie : « un chemin vers la
+  vérification de fiabilité, une mutation progressive vers un vrai usage du
+  produit code ». Le README de rag3weaver porte le schéma Mermaid (9835e4ad4).
+- **Les pages de 96** : roadmaps et visions en fiches (4b4b18c23 puis 23aa868e9 :
+  un plan à trois horizons, Refs `fiche`, `after`, `enables`, `horizon` ; la phase
+  se clôt par l'agent, le hors-plan remonte en proposition) ; l'identité des
+  agents (17ed1458d : clé stable = les noms courts c7, 73, G, 96 ; alias et
+  handles en L1 datés ; `whois` ; apport `identity` à chaque compaction ; la
+  mémoire n'est à personne, fusion automatique des sujets partagés par une
+  réaction `merge-detector`). Vocabulaire retenu : agent / session / runtime /
+  worktree. Trois questions à Lucie en fin de chaque page.
+- **Le moteur** : V2-1c sur master (66994dd43) puis V2-2a+2b (f8c0c8df0) : un
+  lecteur ouvert avant le point de reprise relit sa génération ; mesure du banc
+  avant/après V2-1c : lectures pendant un CHECKPOINT de 7 bloquées 1,1e6 ms à
+  2 308 à 0,46 ms ; test du plafond L6 sur master (a3c263ea9) : 5,000 s avant V2-2,
+  2 ms sous V2-2. Le compteur d'octets (5651ac341) : 131 113 octets écrits pour une
+  ligne. Format inchangé (42), pas de bascule.
+- **La bascule de lib ratée et rattrapée** : la lib 3724accba (V2-1c) posée à
+  21 h 12 a cassé la recherche dense bornée et la marge de l'IDE ; diagnostic
+  retourné deux fois (ce n'était ni la lib ni les commits de recherche : le
+  moteur refuse PROJECT_GRAPH_CYPHER sous READ ONLY depuis toujours, et la branche
+  dense filtrée tourne sous l'instantané L6 depuis L6 sans qu'aucun témoin
+  l'ait exercée ; la marge dépendait d'`outline`, absent du manifeste de Lucie).
+  Correctifs : produit (25d9bb4aa, la recherche filtrée sort de l'instantané par
+  appel), moteur chez le cœur (projection-lecture-seule, demain), `outline` au
+  manifeste de Lucie sur son mot, repli générique de la marge chez everything
+  declarative. Courant est revenu à 04063ee06. Le verdict d'une lib gagne
+  e2e_lectures (dense filtré par le pool) et l'essai IDE d'un vrai hôte avant la
+  pose ; procédure docs/procedures/bascule-de-lib.md (a663c871d). Leçon : le
+  magasin nomme par le dernier commit moteur, pas par le master.
+- **Le premier usage réel de l'IDE par Lucie** (22 h) : la recherche « biaisée »
+  (un fragment exact copié d'un résultat revient derrière ; « Vue d'ensemble »
+  absent des 30 ; lucivy seul le trouve), pas de surlignage, impossible de
+  chercher sans dossier, le chat « affreux ». Causes lues dans les runs : le
+  plein texte découpait la requête en OU de sous-chaînes (un morceau de
+  9 caractères 6e), puis la RRF noyait le signal seul (1/61 contre 2/65).
+  Décisions de Lucie : la requête entière à lucivy (« pas besoin de découper,
+  lucivy fait très bien multi-token »), « distance 1 direct relaxed, puis
+  boolean, deux requêtes en parallèle, les exacts devant les unionnés » ; le
+  surlignage de lucivy affiché au caractère, le creux de bge-m3 pour le dense
+  seul ; une vue « mes recherches » avec les clics ; l'IDE entier en React,
+  shadcn/ui et lucide (« là c'est très moche »), le chat sur la forme de ui/chat
+  (le chat Magic, « déjà cool »). Tout se rejoue depuis les runs journalisés :
+  « j'aimerais éviter qu'on n'ait pas de logs de ce que j'ai cherché ».
+- **La table LOCKS de sa base de code est abîmée** : 729 écarts entre les deux
+  sens (hotfixs, sur copie), déjà 717 avant la bascule ; 27 fichiers du moteur en
+  retard dans son index. Lucie : rebâti complet dans une base neuve cette nuit
+  (G), échange à une pose si le relevé est à zéro ; le bloquant de fond est le
+  témoin moteur des longueurs CSR fausses (hotfixs, (B)). Outil
+  `tools/repair_half_edge` (040daaecc) prouvé sur copie.
+- **Autres** : lucivy 4.3.1 publiée (session lucivy, sur le mot de Lucie) ;
+  INCLUDES tranché par le départage clangd (forme exacte 299/1 ; 196 « en-tête
+  seul » faux ; verdicts Rust/Python/TS retirés jusqu'au rejugement) ; les
+  unités d'embarquement de luciepc basculées (26 s, parité 0) ; un `yes`
+  orphelin de 7 h arrêté par pid ; cookie de l'IDE en Lax ; ticket de la porte
+  de `poste` (336bea975).
+- **La nuit** : Lucie dort à 23 h, « autonomie, les bloquants d'abord, jamais de
+  concessions fainéantes », portable en mode éco (aucune mesure ici, les
+  mesures à luciepc). En cours : équipier-1 en passe, lot IDE groupé, requête
+  entière (hash ~23 h 05), pose de G puis rebâti de la base de code, migration
+  de la fiche mémoire vers ~/memoire-longue/, chaîne (A) de hotfixs, passe de
+  projection du cœur, file de codeparsers vers minuit.
