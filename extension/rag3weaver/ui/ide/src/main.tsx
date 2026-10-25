@@ -41,8 +41,10 @@ function App() {
           rag3weaver
         </a>
         <span className="text-xs text-muted-foreground">IDE</span>
-        <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground" id="lien" data-flux={flux}>
-          <Radio className="size-3" aria-hidden /> flux : {flux}
+        <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+          <Radio className="size-3" aria-hidden />
+          {/* Le texte exact « flux : ouvert » : les témoins le lisent à l'égal. */}
+          <span id="lien" data-flux={flux}>{`flux : ${flux}`}</span>
         </span>
         <Button
           variant="ghost"
