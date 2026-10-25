@@ -17,7 +17,9 @@ import { fetchChat, onFlux, sendChat, shortName, stopRun, type Backend, type Cha
 // d'événement y sont neutralisés. Le message de la personne reste du texte.
 marked.setOptions({ gfm: true, breaks: true });
 function renderMarkdown(text: string): string {
-  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { USE_PROFILES: { html: true } });
+  // Rogné : marked finit par un retour à la ligne, qui ferait un nœud texte de plus
+  // dans `.body` (un témoin compare son texte à l'égal).
+  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { USE_PROFILES: { html: true } }).trim();
 }
 
 type ToolBlock = { id: string; name: string; args: string; result?: string; ok?: boolean };
