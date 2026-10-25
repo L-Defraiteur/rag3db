@@ -202,10 +202,8 @@ impl Node for PlanNode {
                 .map(|ligne| noms.iter().cloned().zip(ligne.iter().cloned()).filter(|(n, _)| !n.is_empty()).collect())
                 .collect())
         };
-        let en_json = |l: &BTreeMap<String, CypherValue>| serde_json::to_value(l).unwrap_or(Value::Null);
-
         if let Some(f) = &lie.rows {
-            let rows: Vec<Value> = lignes(f)?.iter().map(en_json).collect();
+            let rows: Vec<Value> = lignes(f)?.iter().map(ligne_en_json).collect::<Result<_, _>>()?;
             ctx.set_output("rows", PortValue::new(Value::Array(rows)));
         }
         if let Some(t) = &lie.total {
@@ -241,6 +239,20 @@ impl Node for PlanNode {
         }
         Ok(())
     }
+}
+
+/// **Une ligne en objet JSON**, une clé par colonne. Une valeur qui ne se rend pas en JSON (un
+/// `Blob`, une valeur typée de paramètre) refuse en nommant sa colonne : rendue `null` en entier,
+/// la ligne disparaissait de `rows` sans erreur.
+fn ligne_en_json(l: &BTreeMap<String, CypherValue>) -> Result<Value, String> {
+    l.iter()
+        .map(|(colonne, v)| {
+            serde_json::to_value(v)
+                .map(|v| (colonne.clone(), v))
+                .map_err(|e| format!("{NODE_TYPE}: la colonne « {colonne} » ne se rend pas en JSON ({e}) — un Plan déclaré ne lit pas de Blob"))
+        })
+        .collect::<Result<serde_json::Map<_, _>, _>>()
+        .map(Value::Object)
 }
 
 /// **Les Plans cités par un outil, lus et vérifiés**, à la place de leur citation : une seule
@@ -318,5 +330,19 @@ mod tests {
         let dans_params = json!({"plan": plan(), "params": {"path": "a.rs", "srce": "s"}});
         let e = PlanNodeFactory.create("p", &dans_params).err().expect("la même garde vaut pour params");
         assert!(e.contains("srce"), "{e}");
+    }
+
+    /// **Une ligne qui ne se rend pas en JSON refuse en nommant sa colonne** (25 octobre 2026) :
+    /// un `Blob` faisait de la ligne entière un `null` dans `rows`, sans erreur.
+    #[test]
+    fn une_colonne_qui_ne_se_rend_pas_en_json_est_nommee() {
+        let mut l = BTreeMap::new();
+        l.insert("_uuid".to_string(), CypherValue::String("a".into()));
+        l.insert("n".to_string(), CypherValue::Int(5));
+        l.insert("liste".to_string(), CypherValue::List(vec![CypherValue::Int(1)]));
+        assert_eq!(ligne_en_json(&l).unwrap(), json!({"_uuid": "a", "n": 5, "liste": [1]}), "un JSON naturel, sans étiquette de type");
+        l.insert("brut".to_string(), CypherValue::Blob(vec![1, 2]));
+        let e = ligne_en_json(&l).unwrap_err();
+        assert!(e.contains("brut"), "{e}");
     }
 }
