@@ -243,3 +243,36 @@ pub fn lire_le_plan(cite: &str, lire: impl Fn(&str) -> Result<String, String>, s
     plan.check_schema(schema).map_err(|e| format!("{chemin} : {e}"))?;
     serde_json::to_value(&plan).map_err(|e| format!("{chemin} : {e}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Le Plan d'`outline`, réduit : un chemin obligatoire, une source optionnelle, un plafond.
+    fn plan() -> Value {
+        json!({
+            "let": {"du_fichier": {"all_of": [
+                {"equals": {"field": "file_path", "param": "path"}},
+                {"optional": {"equals": {"field": "source", "param": "source"}}}
+            ]}},
+            "forms": {"scopes": {"select": {"table": "Scope", "filter": {"let": "du_fichier"}, "returns": ["_uuid"],
+                "order_by": [{"field": "_uuid"}], "limit": {"param": "limit", "max": 10}}}},
+            "outputs": {"rows": "scopes"}
+        })
+    }
+
+    /// **Une clé que le Plan ne lit pas est refusée, nommée** (relecture de l'arbre principal, 25
+    /// octobre 2026) : `sourc=$source` perdait `source` en silence, et sous `optional` le filtre
+    /// tombait — l'outil répondait sur toutes les sources, sans erreur.
+    #[test]
+    fn une_cle_que_le_plan_ne_lit_pas_est_refusee_en_la_nommant() {
+        let bonne = json!({"plan": plan(), "path": "a.rs", "source": "s", "limit": 5});
+        assert!(PlanNodeFactory.create("p", &bonne).is_ok(), "les paramètres du Plan passent");
+        let mal_tapee = json!({"plan": plan(), "path": "a.rs", "sourc": "s"});
+        let e = PlanNodeFactory.create("p", &mal_tapee).err().expect("une clé mal tapée se refuse");
+        assert!(e.contains("sourc") && e.contains("source") && e.contains("path") && e.contains("limit"), "elle est nommée, avec ceux du Plan : {e}");
+        let dans_params = json!({"plan": plan(), "params": {"path": "a.rs", "srce": "s"}});
+        let e = PlanNodeFactory.create("p", &dans_params).err().expect("la même garde vaut pour params");
+        assert!(e.contains("srce"), "{e}");
+    }
+}
