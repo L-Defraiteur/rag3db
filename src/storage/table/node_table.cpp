@@ -1052,8 +1052,9 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
     PageAllocator& pageAllocator) {
     const bool ret = hasChanges;
     if (hasChanges) {
-        // Aucune transaction n'est ouverte : un index retiré et validé n'est plus visible de
-        // personne, on l'efface (comme reclaimDroppedTables pour les tables).
+        // Aucun écrivain n'est ouvert, et un lecteur entré pendant l'écriture (V2-1c) a pour
+        // instantané le dernier état validé, où un index retiré et validé n'existe plus : il
+        // n'est plus visible de personne, on l'efface (comme reclaimDroppedTables).
         reclaimDroppedIndexes();
         // Deleted columns are vacuumed and not checkpointed. Les colonnes ne quittent la table
         // qu'après le point de reprise des groupes : un échec avant leur premier échange laisse la
