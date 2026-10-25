@@ -29,6 +29,9 @@ enum class WALRecordType : uint8_t {
     DROP_CATALOG_ENTRY_RECORD = 16,
     ALTER_TABLE_ENTRY_RECORD = 17,
     UPDATE_SEQUENCE_RECORD = 18,
+    // Format 43 : l'état de construction d'un index ((A), le CREATE concurrent), rejoué sur son
+    // holder. Un moteur d'avant le refuse comme un type inconnu, après le FormatRecord.
+    INDEX_STATE_RECORD = 19,
     TABLE_INSERTION_RECORD = 30,
     NODE_DELETION_RECORD = 31,
     NODE_UPDATE_RECORD = 32,
@@ -179,6 +182,22 @@ struct UpdateSequenceRecord final : WALRecord {
 
     void serialize(common::Serializer& serializer) const override;
     static std::unique_ptr<UpdateSequenceRecord> deserialize(common::Deserializer& deserializer);
+};
+
+struct IndexStateRecord final : WALRecord {
+    common::table_id_t tableID;
+    std::string indexName;
+    uint8_t buildState;
+
+    IndexStateRecord()
+        : WALRecord{WALRecordType::INDEX_STATE_RECORD}, tableID{common::INVALID_TABLE_ID},
+          buildState{0} {}
+    IndexStateRecord(common::table_id_t tableID, std::string indexName, uint8_t buildState)
+        : WALRecord{WALRecordType::INDEX_STATE_RECORD}, tableID{tableID},
+          indexName{std::move(indexName)}, buildState{buildState} {}
+
+    void serialize(common::Serializer& serializer) const override;
+    static std::unique_ptr<IndexStateRecord> deserialize(common::Deserializer& deserializer);
 };
 
 struct TableInsertionRecord final : WALRecord {
