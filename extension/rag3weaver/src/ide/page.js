@@ -638,7 +638,9 @@ async function bilans(id) {
   fil.replaceChildren(el("a", { href: "/ide/" }, "backends"), " · ", nomCourt(b.manifest), " · bilans");
   const r = await (await fetch(`/ide/bilans?${new URLSearchParams({ backend: id })}`)).json();
   if (!r.ok) throw new Error(r.error);
-  const { declare, fiches } = r.result;
+  const { declare } = r.result;
+  const fiches = r.result.fiches.filter((f) => !f.outil);
+  const outils = r.result.fiches.filter((f) => f.outil);
   vue.replaceChildren(
     el("h1", {}, "Bilans de session"),
     declare
@@ -651,6 +653,38 @@ async function bilans(id) {
       ...f.apports.map((a) => el("details", { class: "apport-de-bilan" },
         el("summary", {}, `note ${a.note ?? "?"} · ${a.source ?? ""}`),
         el("pre", {}, a.texte))))),
+    ...(outils.length ? [el("h1", {}, "Les outils")] : []),
+    ...outils.map(ficheDOutil),
+  );
+}
+
+// **La fiche d'un outil** (page 05) : ses défauts run après run. La tendance par
+// genre (un défaut qui revient est le signal qu'on change l'outil), les `autre`
+// groupés par libellé (le candidat au prochain genre), puis les défauts du
+// dernier run, par gravité.
+function ficheDOutil(f) {
+  const gravites = ["bloquant", "genant", "mineur"];
+  const parGenre = new Map();
+  const autres = new Map();
+  f.apports.forEach((a, i) => {
+    for (const g of gravites) for (const d of a.defauts?.[g] ?? []) {
+      const cle = d.genre === "autre" ? `autre — ${d.libelle}` : d.genre;
+      if (!parGenre.has(cle)) parGenre.set(cle, Array(f.apports.length).fill(0));
+      parGenre.get(cle)[i] += 1;
+      if (d.genre === "autre") autres.set(d.libelle, (autres.get(d.libelle) ?? 0) + 1);
+    }
+  });
+  const dernier = f.apports.at(-1);
+  return el("section", { class: "fiche-d-outil", "data-fiche": f.fiche },
+    el("h2", {}, f.fiche),
+    el("ul", { class: "tendance-par-genre" }, [...parGenre.entries()].map(([genre, n]) =>
+      el("li", { "data-genre": genre }, `${genre} : ${n.join(" → ")}`))),
+    autres.size ? el("p", { class: "note autres" }, `autres, par libellé : ${[...autres.entries()].map(([l, n]) => `${l} (${n})`).join(", ")}`) : "",
+    ...(dernier ? gravites.map((g) => el("div", { class: `gravite ${g}`, "data-gravite": g },
+      el("h3", {}, `${g} (${(dernier.defauts?.[g] ?? []).length})`),
+      el("ul", {}, (dernier.defauts?.[g] ?? []).map((d) => el("li", {},
+        `${d.genre === "autre" ? `autre — ${d.libelle}` : d.genre} (appel ${d.call_id}) : « ${d.preuve} » → ${d.proposee}`))))) : []),
+    ...f.apports.map((a) => el("details", { class: "apport-de-bilan" }, el("summary", {}, a.source ?? ""), el("pre", {}, a.texte))),
   );
 }
 
