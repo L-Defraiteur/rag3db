@@ -1019,34 +1019,24 @@ fn copier_les_liens(
     items: &[RelationRecord],
     presents_connus: &mut HashMap<String, HashSet<String>>,
 ) -> Result<Option<Vec<usize>>, String> {
-    // **Les colonnes du COPY** : celles que le groupe fournit. Un groupe sans
-    // propriété vers une relation qui en déclare doit en nommer une : sans
-    // liste, le moteur attend toutes les colonnes de la table (« expected 12
-    // values per row, but got 2 », puis la base à rouvrir : `copie_liens_tests`,
-    // 19 octobre 2026, quand `poser_la_donnee` a reçu les bouts déclarés). Il
-    // nomme une propriété texte, écrite au mot NULL convenu ; le moteur ne lit
-    // pas ce mot dans une colonne entière (ticket
-    // `2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere`),
-    // et une relation sans propriété texte passe par lots, qui laissent à NULL.
+    // **Les colonnes du COPY** : celles que le groupe fournit, puis les autres
+    // propriétés déclarées de la relation, au mot NULL convenu. Sans liste, le
+    // moteur attend toutes les colonnes de la table (« expected 12 values per
+    // row, but got 2 », puis la base à rouvrir : `copie_liens_tests`,
+    // 19 octobre 2026) ; nommer chaque colonne garde le COPY pour tous les
+    // groupes, et laisse à NULL ce que le groupe ne porte pas, comme MERGE.
+    // Le moteur lit le mot NULL dans toute colonne depuis dcbaef7b1 (plancher
+    // de la lib) ; avant, une colonne entière le refusait, et un filet ne
+    // nommait qu'une colonne texte (19 octobre 2026, retiré le 25).
     let mut colonnes: Vec<String> = prop_keys.to_vec();
-    if colonnes.is_empty() {
-        if let Some(declarees) = ctx
-            .service::<crate::config::CatalogConfig>("config")
-            .and_then(|c| c.relations.get(rel_name))
-            .and_then(|d| d.properties.as_ref())
-            .filter(|p| !p.is_empty())
-        {
-            let mut textes: Vec<&String> = declarees
-                .iter()
-                .filter(|(_, f)| matches!(f.field_type, crate::config::FieldType::String | crate::config::FieldType::Text))
-                .map(|(k, _)| k)
-                .collect();
-            textes.sort();
-            match textes.first() {
-                Some(t) => colonnes.push((*t).clone()),
-                None => return Ok(None),
-            }
-        }
+    if let Some(declarees) = ctx
+        .service::<crate::config::CatalogConfig>("config")
+        .and_then(|c| c.relations.get(rel_name))
+        .and_then(|d| d.properties.as_ref())
+    {
+        let mut autres: Vec<&String> = declarees.keys().filter(|k| !prop_keys.contains(k)).collect();
+        autres.sort();
+        colonnes.extend(autres.into_iter().cloned());
     }
     let chemin = fichier_csv("liens", rel_name);
     let charge = rag3weaver_ir::Write::Load {
