@@ -197,6 +197,13 @@ const ChunkedGroups& NodeGroup::groupsFor(const UniqLock& lock, transaction_t st
     return chunkedGroups.getAllGroups(lock);
 }
 
+void NodeGroup::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    const auto lock = chunkedGroups.lock();
+    std::erase_if(previousGenerations, [oldestReaderTS](const PreviousGeneration& generation) {
+        return generation.checkpointTS <= oldestReaderTS;
+    });
+}
+
 void NodeGroup::retireAndKeepGeneration(const UniqLock&, ChunkedGroups oldGroups,
     const NodeGroupCheckpointState& state) {
     // Une génération dont le point de reprise précède le plus vieux instantané ouvert n'a plus
