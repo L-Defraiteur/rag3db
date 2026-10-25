@@ -11,6 +11,8 @@ Lues dans `node_modules/<paquet>/package.json` (champ `license`) le 25 octobre 2
 | class-variance-authority | 0.7.1 | Apache-2.0 | les variantes des composants |
 | clsx | 2.1.1 | MIT | les classes conditionnelles |
 | tailwind-merge | 3.3.1 | MIT | la fusion des classes |
+| marked | 18.1.1 | MIT | le Markdown des réponses du chat |
+| dompurify | 3.4.17 | (MPL-2.0 OR Apache-2.0) | l'assainissement du HTML rendu (le texte vient d'un modèle) |
 | esbuild | 0.28.2 | MIT | le bâti du script (outil, pas servi) |
 | tailwindcss, @tailwindcss/cli | 4.3.3 | MIT | le bâti de la feuille (outil, pas servi) |
 | typescript | 5.9.3 | Apache-2.0 | la vérification des types (outil, pas servi) |
