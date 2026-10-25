@@ -745,7 +745,8 @@ fn la_recherche_rend_chaque_signal_et_sa_meta() {
         assert!(s["rank"].as_u64().is_some_and(|r| r >= 1), "{nom} : son rang : {s}");
     }
     let meta = &r["metadata"]["render.meta"];
-    assert!(meta["warnings"].is_array(), "la méta en JSON : {}", r["metadata"]);
+    // `warnings` est omis quand il est vide : ici, rien à dire.
+    assert!(meta.is_object() && !meta.to_string().contains("dense signal"), "la méta en JSON : {}", r["metadata"]);
     assert!(meta["bm25Count"].as_u64().is_some_and(|n| n >= 1), "les compteurs : {meta}");
 
     // Le repli se lit dans la méta, sans relire le markdown.
