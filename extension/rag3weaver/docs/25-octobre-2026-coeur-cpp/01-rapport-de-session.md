@@ -14,6 +14,7 @@ matin puis la reprise du 25 à 13 h 30.
 | 25 oct. 16 h 33 | V2-1a : les numéros de colonnes ne changent jamais (format 42) | 4ae060070 | une colonne supprimée laisse un trou (entrée nulle, type ANY) ; plus de `vacuumColumnIDs` ni de `renumberColumns` au point de reprise ; bloc sur disque avec un octet « présente » par numéro ; témoin `stable_column_ids_test.cpp` (9 cas) ; quatre tickets du 19 fermés |
 | 25 oct. 17 h 27 | vector : le degré converti explicitement (MSVC C2398, AppleClang) | 04063ee06 | Windows et macOS rebâtissent l'extension vecteur ; base de la lib de la bascule 41/42 |
 | 25 oct. 18 h 31 | V2-1b pièce 1 : le segment neuf au point de reprise | 6b63e4922 | un segment changé est rebâti sur des pages neuves, l'ancien rend ses pages à sa mort ; plus de réécriture en place ni d'ombre pour les colonnes ; format inchangé ; témoin `checkpoint_new_segment_test.cpp` (4 cas) ; mesure : une ligne modifiée = 344 Kio des deux côtés, 1 % = 2,97 Mio contre 3,53, 10 % = 2,97 contre 5,79 (page 18 §6) |
+| 25 oct. 19 h 50 | V2-1c : un point de reprise ne fige plus les lecteurs nouveaux | 66994dd43 | porte à deux niveaux (`checkpointWriting`, écriture hors du verrou public), bloc neuf bâti hors du verrou de la collection et échangé sous lui, pages ombres recopiées sous le verrou de page ; emporte la pièce 2 de V2-1b ; témoin `checkpoint_under_readers_test.cpp` (3 cas) ; `ReadDuringACheckpointDoesNotWait` vert (2,5 ms pendant 1 057 ms), sorti de known_red ; ASAN sans rapport ; format inchangé (page 18 §7) |
 
 Docs poussées : page 18 (V2-1, onze obstacles et ce qui est tranché, §5 écrit avec le lot) ;
 tickets : quatre défauts des numéros de colonnes (tous fermés le 25), la CI rouge (cassert et
@@ -50,6 +51,8 @@ Reproduits au shell (compte à 0 après réouverture), deux cas ajoutés au tém
 - Un témoin « pages libres » vise le seul cas où master restait en place (segment 16 bits, valeur
   dans l'intervalle) : hors intervalle du bitpacking ou segment qui remplit ses pages pile,
   l'ancien chemin réécrivait déjà hors place.
+- Le produit d'une passe se joue avec HEAD au dernier commit **moteur** du lot : la lib publiée
+  porte cet identifiant-là (common/build_id), pas celui d'un commit de tests ou de docs au-dessus.
 - Le shell `rag3db` ne se pilote pas par un tube (il attend la réponse de ESC[6n) : toujours
   `< fichier` ; `poste` est `~/.cache/rag3weaver-build/poste`.
 - Les écarts du banc jugés sur la base d'origine : l'intermittent de (δ) (course du test, fermé
@@ -68,9 +71,8 @@ annoncés. L'arbre principal a coupé le chemin par lequel `batir.sh` posait cou
 
 1. `ci-cassert-geo` vers master à la fenêtre ; le commit de formatage pur (clang-format-18,
    `.clang-format-ignore` pour les annexes des docs) dans la fenêtre du ticket CI.
-2. V2-1b : pièce 1 sur master, mesure faite (page 18 §6) ; pièce 2 (`v21b-balayages-2`, les
-   balayages tiennent leurs blocs) et compteur d'octets (`v21b-compteur-2`) sur branches, sans
-   témoin possible avant V2-1c, qu'ils rejoignent.
-3. V2-1c : la porte à deux niveaux, le bloc neuf bâti hors du verrou et échangé sous les lecteurs ;
-   `ReadDuringACheckpointDoesNotWait` au vert et une lecture juste à travers un point de reprise.
+2. Le compteur d'octets du point de reprise (`v21b-compteur`), petit lot à part après V2-1c.
+3. V2-2 (les lecteurs ouverts avant le point de reprise, les écrivains pendant : l'instantané,
+   obstacle 4) et l'écriture à la demande des pages validées (page 17 §3.1) ; l'ADD paresseux
+   (page 16) ; selon la file de l'orchestration.
 4. Lecture en mémoire (wip `lecture-en-memoire`, 8c83302d4, poussé tel quel), E11 (I2).

@@ -257,3 +257,57 @@ même bloc, jamais après un échange au point de reprise. Rien d'observable ava
 point de reprise attend aujourd'hui toutes les transactions (`TransactionManager::checkpointNoLock`)
 : son témoin est celui de V2-1c, qu'elle rejoint.
 
+## 7. V2-1c, tel qu'écrit (25 octobre 2026) : un lecteur nouveau entre pendant l'écriture
+
+Sur master en 66994dd43, avec la pièce 2 de V2-1b (les balayages tiennent leurs blocs) qu'elle
+emporte. Passe complète verte, produit vert sur la lib du lot, banc 12 rouges / 297 verts, ASAN
+sans rapport (témoin, `CheckpointNoStall`, `transaction_test`).
+
+**La porte (obstacles 1, 3).** `checkpointPending` retient les écrivains comme avant, du début
+de l'attente des départs à la fin de l'écriture ; `checkpointWriting`, posé par
+`checkpointNoLock` juste avant `Checkpointer::writeCheckpoint` et levé juste après, dit que
+l'écriture est en cours. `waitWhileCheckpointPendingNoLock(readOnly)` : un écrivain attend tant
+que `checkpointPending` ; un lecteur n'attend que `checkpointPending && !checkpointWriting`,
+c'est-à-dire l'attente des départs et une demande automatique (bornée à 250 ms, comme avant).
+`checkpointNoLock` **relâche le verrou public** le temps de l'écriture et le reprend pour poser
+l'issue (succès, refus avant tout changement, panne) : un lecteur commence, valide
+(`clearTransactionNoLock`) et annule sous ce verrou pendant qu'elle dure. Un BEGIN explicite
+READ ONLY suit la même règle dans le fil de l'appelant (`waitUntilNewTransactionsAreAllowed(true)`).
+Ce que lit ce lecteur : `lastTimestamp` ne bouge pas pendant l'écriture (aucun écrivain ne
+valide), son instantané est le dernier validé, exactement ce que le point de reprise écrit.
+
+**Les pages ombres (obstacle 8).** Les colonnes n'en ont plus (V2-1b), mais les index (clé
+primaire, tableaux sur disque, débordement) passent encore par l'ombre, et un lecteur peut lire
+leurs pages pendant la recopie : `ShadowFile::applyShadowPages` recopie maintenant sous le verrou
+de la page (`BufferManager::updateFrameIfPageIsInFrame` : prise du verrou depuis UNLOCKED ou
+MARKED, attente d'une page épinglée ou en éviction, rien pour une page évincée, puis `unlock()`
+qui change la version : une lecture optimiste commencée avant recommence). L'ancienne recopie
+sans verrou supposait un seul fil.
+
+**Les verrous internes (obstacle 10).** `NodeGroupCollection::checkpoint` prend la liste des
+groupes sous son verrou puis le rend ; `NodeGroup::checkpoint` et `CSRNodeGroup::checkpoint`
+prennent la liste des blocs (`ChunkedGroups`, des `shared_ptr`) sous `chunkedGroups.lock()`, le
+rendent, bâtissent le bloc neuf sur cette liste (toutes les fonctions du bâti lisent `groups`,
+plus `chunkedGroups`), puis échangent sous le verrou en une fois : clear + append pour un groupe
+régulier, `finalizeCheckpoint(newPersistent)` pour un groupe CSR (le bloc persistant neuf ou
+aucun, le vidage des blocs en mémoire et de l'index des listes). Un lecteur qui entre dans la
+table ou dans le groupe pendant le bâti n'attend que l'échange. Aucun écrivain ne tourne : la
+liste ne bouge pas entre la prise et l'échange. L'index des listes CSR est écrit par le bâti
+(entrées invalidées, listes dépliées) et vidé par l'échange pendant qu'un lecteur peut en copier
+une liste : ces écritures prennent `csrIndexMtx` en exclusif.
+
+**Ce qui ne change pas.** Un écrivain nouveau attend la fin de l'écriture (ses blocs sont ceux
+qu'elle échange : V2-2) ; un lecteur ouvert avant le point de reprise est attendu par lui
+(obstacle 4, l'instantané : V2-2) ; les validations forcées gardent leur attente ; `ReadersLock`
+entre processus ; l'écriture à la demande des pages validées (page 17 §3.1) reste à faire. Le
+ticket du 18 octobre le dit.
+
+**Le témoin** : `test/transaction/checkpoint_under_readers_test.cpp`, un `Checkpointer` doublé
+qui dort 1,5 s après l'écriture des tables (les blocs neufs échangés) : une lecture par clé et
+un balayage entier commencés pendant rendent la main en moins de 500 ms et lisent le dernier
+validé ; un lecteur ouvert pendant (BEGIN READ ONLY sans attendre) relit la même chose après,
+et la base rouverte porte ce que le point de reprise a écrit ; un écrivain nouveau attend encore
+(dit pour qu'un lot qui le change le sache). Sur master, les deux premiers rougissent par la
+durée. Le témoin du banc `CheckpointNoStall.ReadDuringACheckpointDoesNotWait` passe au vert ;
+`BeginDuringACheckpointDoesNotWait` reste rouge (son BEGIN est un écrivain).
+
