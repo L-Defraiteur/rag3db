@@ -987,11 +987,24 @@ async function envoyerAuChat(id) {
   if (!r.ok) { v.note.textContent = r.error; return; }
   const res = r.result;
   if (res.text) v.bulle.querySelector("pre").textContent = res.text;
+  // Les propositions du tour viennent aussi de sa réponse : le flux les dit
+  // sur `declarations`, relayé à part d'`agent`, et peut les donner après la
+  // fin du tour.
+  for (const p of res.propositions ?? []) lienDeProposition(v, v.bulle, p);
   v.bulle.dataset.run = res.run;
   v.note.textContent = res.stopped_by ? `arrêté ${res.stopped_by === "ide" ? "dans l'IDE" : `par ${res.stopped_by}`}` : "fini";
   v.conso.textContent = res.consumed?.length
     ? `consommé : ${res.consumed.map((c) => `${c.slug} ${c.amount} ${c.unit}`).join(", ")}`
     : "";
+}
+
+// Le lien d'une proposition du tour dans sa bulle (`p` : id, paths,
+// accepted), une fois : le flux et la réponse du tour la disent tous deux.
+function lienDeProposition(v, bulle, p) {
+  if (bulle.querySelector(`a[data-proposition="${CSS.escape(String(p.id))}"]`)) return;
+  bulle.append(el("p", { class: "proposition-du-tour" },
+    el("a", { href: `/ide/code/${v.id}/propositions/${p.id}`, "data-proposition": p.id }, `proposition #${p.id}`),
+    ` — ${(p.paths ?? []).join(", ")}${p.accepted === false ? " (refusée à la validation)" : ""}`));
 }
 
 // Un événement du flux, pour le chat montré.
@@ -1001,31 +1014,37 @@ function suivreLeChat(d) {
   if (!v || route().vue !== "chat" || d.backend !== v.manifest) return;
   if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${v.id}`) {
     v.run = ev.run;
+    if (v.bulle) v.bulle.dataset.run = ev.run;
     window.__chat = { run: ev.run, evenements: [] };
     v.arreter.hidden = false;
     return;
   }
   // Une proposition faite pendant le tour : un lien vers elle, dans la bulle.
   if (ev.kind === "PropositionChanged" && ev.change === "proposed" && v.bulle && v.run) {
-    v.bulle.append(el("p", { class: "proposition-du-tour" },
-      el("a", { href: `/ide/code/${v.id}/propositions/${ev.id}`, "data-proposition": ev.id }, `proposition #${ev.id}`),
-      ` — ${(ev.paths ?? []).join(", ")}${ev.accepted === false ? " (refusée à la validation)" : ""}`));
+    lienDeProposition(v, v.bulle, ev);
     return;
   }
-  if (!v.run || ev.run !== v.run) return;
-  if (d.sujet === "agent") {
+  // La bulle de ce run : celle du tour en cours, ou une bulle déjà finie —
+  // le flux relaie chaque sujet à part, et peut dire un appel d'outil après
+  // la réponse du tour.
+  if (!ev.run) return;
+  const bulle = v.fil.querySelector(`.tour.assistant[data-run="${CSS.escape(String(ev.run))}"]`);
+  if (!bulle) return;
+  if (d.sujet === "agent" && window.__chat.run === ev.run) {
     window.__chat.evenements.push({ kind: ev.kind, at_ms: d.at_ms, ms: ev.ms ?? null, tool: ev.tool ?? null,
       iteration: ev.iteration ?? null, prompt_tokens: ev.prompt_tokens ?? null, completion_tokens: ev.completion_tokens ?? null,
       retries: ev.retries ?? null, finish: ev.finish ?? null, ok: ev.ok ?? null });
   }
-  if (ev.kind === "Token" && v.bulle) {
-    v.bulle.querySelector("pre").textContent += ev.text;
-  } else if (ev.kind === "ToolCallStarted" && v.outils) {
-    v.outils.append(el("li", { "data-outil": ev.tool, "data-appel": ev.call_id }, `${ev.tool}…`));
-  } else if (ev.kind === "ToolCallFinished" && v.outils) {
-    const li = v.outils.querySelector(`li[data-appel="${CSS.escape(String(ev.call_id))}"]`);
+  const outils = bulle.querySelector(".outils");
+  if (ev.kind === "Token") {
+    // Pendant le tour seulement : sa réponse pose ensuite le texte entier.
+    if (v.run === ev.run) bulle.querySelector("pre").textContent += ev.text;
+  } else if (ev.kind === "ToolCallStarted" && outils) {
+    outils.append(el("li", { "data-outil": ev.tool, "data-appel": ev.call_id }, `${ev.tool}…`));
+  } else if (ev.kind === "ToolCallFinished" && outils) {
+    const li = outils.querySelector(`li[data-appel="${CSS.escape(String(ev.call_id))}"]`);
     if (li) li.textContent = `${ev.tool} : ${ev.ok === false ? `refusé (${ev.error_kind ?? "erreur"})` : "fait"}`;
-  } else if (ev.kind === "RunFinished") {
+  } else if (ev.kind === "RunFinished" && v.run === ev.run) {
     v.arreter.hidden = true;
   }
 }
@@ -1042,6 +1061,7 @@ async function relireLeChat() {
   const run = r.ok ? r.result.run : null;
   if (!run || v !== chatVivant || !v.bulle?.classList.contains("en-cours") || v.run === run) return;
   v.run = run;
+  v.bulle.dataset.run = run;
   window.__chat = { run, evenements: [] };
   v.arreter.hidden = false;
 }
