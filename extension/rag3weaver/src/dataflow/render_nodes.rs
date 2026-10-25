@@ -253,6 +253,13 @@ pub struct ResultsView {
     /// change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+    /// **Ce que valent ces lignes**, dit par l'outil (`provenance=` du nœud) :
+    /// « lu par l'analyseur, pas par un compilateur ». Un gabarit la rend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<String>,
+    /// Le total compté par un Plan (son entrée `total`), quand il est branché.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -541,6 +548,8 @@ pub fn build_view_with(
         has_graph,
         domain: None,
         warnings: Vec::new(),
+        provenance: None,
+        total: None,
     }
 }
 
@@ -873,6 +882,9 @@ pub fn render_results_through(
 pub struct RenderResultsNode {
     node_name: String,
     json: bool,
+    /// En json : les lignes d'un Plan (`rows`, `total`) plutôt que `results`.
+    json_of_rows: bool,
+    provenance: Option<String>,
     max_chars: usize,
     group: bool,
     lens: PathLens,
@@ -884,6 +896,8 @@ impl RenderResultsNode {
         Self {
             node_name: name.to_string(),
             json: false,
+            json_of_rows: false,
+            provenance: None,
             max_chars: DEFAULT_MAX_CHARS,
             group: true,
             lens: PathLens::default(),
@@ -899,6 +913,17 @@ impl RenderResultsNode {
     /// `true` : le JSON brut, pour un appelant qui est un programme.
     pub fn with_json(mut self, json: bool) -> Self {
         self.json = json;
+        self
+    }
+    /// En json, rendre les lignes d'un Plan (`rows`, `total`, `provenance`)
+    /// plutôt que les résultats bruts.
+    pub fn with_json_of_rows(mut self, rows: bool) -> Self {
+        self.json_of_rows = rows;
+        self
+    }
+    /// Ce que valent ces lignes, dit par l'outil.
+    pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
+        self.provenance = Some(provenance.into());
         self
     }
     pub fn with_max_chars(mut self, max_chars: usize) -> Self {
@@ -964,6 +989,8 @@ impl Node for RenderResultsNode {
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
         Some(Box::new(serde_json::json!({
             "format": if self.json { "json" } else { "markdown" },
+            "json": if self.json_of_rows { "rows" } else { "results" },
+            "provenance": self.provenance,
             "max_chars": self.max_chars,
             "group": self.group,
             "template": self.template,
@@ -988,7 +1015,27 @@ impl Node for RenderResultsNode {
         let query: Option<QueryPayload> = ctx.take_input("query").and_then(take_or_clone::<QueryPayload>);
         let meta: Option<crate::search::SearchMeta> =
             ctx.take_input("meta").and_then(take_or_clone::<crate::search::SearchMeta>);
+        // En markdown, rows est lu et laissé : le gabarit lit results (total et
+        // provenance vont dans sa vue).
+        let rows: Option<serde_json::Value> = ctx.take_input("rows").and_then(take_or_clone::<serde_json::Value>);
+        let total: Option<serde_json::Value> = ctx.take_input("total").and_then(take_or_clone::<serde_json::Value>);
+        if self.json && self.json_of_rows {
+            // **Les lignes d'un Plan, pour une interface** : toujours les trois
+            // clés, une interface lit un schéma stable. `rows` tel que PlanNode
+            // le sort. `text` porte l'objet, pas sa chaîne : la réponse d'un
+            // outil reste un objet, que la ligne de fraîcheur de l'index ne
+            // préfixe pas (elle va dans `freshness`, comme pour read_file en json).
+            let Some(rows) = rows else {
+                return Err(format!("RenderResultsNode: {REFUS_SANS_ROWS}"));
+            };
+            ctx.set_output("text", PortValue::new(serde_json::json!({ "rows": rows, "total": total, "provenance": self.provenance })));
+            ctx.set_output("results", PortValue::new(results));
+            return Ok(());
+        }
         let text = if self.json {
+            if rows.is_some() || total.is_some() {
+                return Err(format!("RenderResultsNode: {REFUS_ROWS_PERDUES}"));
+            }
             serde_json::to_string(&results).map_err(|e| format!("RenderResultsNode: {e}"))?
         } else {
             // **Par rapport à où l'agent se tient.**
@@ -1022,6 +1069,8 @@ impl Node for RenderResultsNode {
                 view.status = etat.into_iter().next();
                 view.warnings = reste;
             }
+            view.provenance = self.provenance.clone();
+            view.total = total;
             // **Le domaine dit ce qu'il ne montre pas.** Sans cette ligne, un
             // agent ne peut pas distinguer « ça n'existe pas » de « ce n'est
             // pas dans mon champ », et l'absence devient un mensonge par
@@ -1049,6 +1098,43 @@ impl Node for RenderResultsNode {
     }
 }
 
+/// json=rows sans les lignes d'un Plan.
+const REFUS_SANS_ROWS: &str = "json=rows, mais l'entrée rows n'est pas branchée — branchez le port rows d'un PlanNode";
+/// json=results avec les lignes d'un Plan branchées : elles seraient perdues.
+const REFUS_ROWS_PERDUES: &str =
+    "format json sur results, mais rows ou total est branchée — elles seraient perdues ; json=rows pour rendre les lignes d'un Plan";
+
+/// **Le câblage d'un rendu, vu au chargement d'un outil** : la fabrique ne voit
+/// pas les arêtes, le chargeur du manifeste si. `json=rows` sans arête vers
+/// `rows`, ou `json=results` avec une arête vers `rows` ou `total`, refusent
+/// le gabarit en le nommant, plutôt que de rougir au premier appel.
+/// L'exécution garde ses refus, pour un graphe bâti hors d'un manifeste.
+///
+/// Le chargement n'est pas plus strict que l'exécution (relecture de l'arbre
+/// principal) : il ne refuse que si le format peut valoir json (`json` écrit,
+/// ou un paramètre `$…`) ; en markdown, total et rows vont à la vue. Et une
+/// clé liée à un paramètre (`json=$json`) n'a pas de valeur au chargement :
+/// elle se juge à l'exécution.
+pub fn verifier_le_cablage(outil: &str, def: &super::GraphDefinition) -> Result<(), String> {
+    let lie = |v: Option<&serde_json::Value>| v.and_then(|v| v.as_str()).is_some_and(|s| s.starts_with('$'));
+    for n in def.nodes.iter().filter(|n| n.node_type == "RenderResultsNode") {
+        let format = n.config.get("format");
+        let peut_etre_json = lie(format) || format.and_then(|v| v.as_str()) == Some("json");
+        if !peut_etre_json || lie(n.config.get("json")) {
+            continue;
+        }
+        let vers = |port: &str| def.edges.iter().any(|e| e.to_node == n.name && e.to_port == port);
+        let de_rows = n.config.get("json").and_then(|v| v.as_str()) == Some("rows");
+        if de_rows && !vers("rows") {
+            return Err(format!("{outil}: le rendu {} : {REFUS_SANS_ROWS}", n.name));
+        }
+        if !de_rows && (vers("rows") || vers("total")) {
+            return Err(format!("{outil}: le rendu {} : {REFUS_ROWS_PERDUES}", n.name));
+        }
+    }
+    Ok(())
+}
+
 pub struct RenderResultsNodeFactory;
 
 impl NodeFactory for RenderResultsNodeFactory {
@@ -1062,6 +1148,14 @@ impl NodeFactory for RenderResultsNodeFactory {
             None | Some("markdown") => {}
             Some("json") => node = node.with_json(true),
             Some(other) => return Err(format!("RenderResultsNode: unknown format '{other}' (markdown | json)")),
+        }
+        match config.get("json").and_then(|v| v.as_str()) {
+            None | Some("results") => {}
+            Some("rows") => node = node.with_json_of_rows(true),
+            Some(other) => return Err(format!("RenderResultsNode: unknown json '{other}' (results | rows)")),
+        }
+        if let Some(p) = config.get("provenance").and_then(|v| v.as_str()) {
+            node = node.with_provenance(p);
         }
         if let Some(n) = config.get("max_chars").and_then(|v| v.as_u64()) {
             node = node.with_max_chars(n as usize);
@@ -1093,11 +1187,13 @@ impl NodeFactory for RenderResultsNodeFactory {
     fn schema(&self) -> NodeSchema {
         NodeSchema {
             node_type: "RenderResultsNode".into(),
-            description: "Renders results as markdown on 'text' through a template (nulls, internal fields and embeddings dropped) and passes them through on 'results'".into(),
+            description: "Renders results as markdown on 'text' through a template (nulls, internal fields and embeddings dropped) and passes them through on 'results'. In format json with json=rows, 'text' carries a JSON object (a serde_json::Value, not its string) — {rows, total, provenance} — so a tool's response stays an object, like the 'result' (Map) of the code-reading tools in json".into(),
             inputs: vec![
                 PortDef::value("results", PortType::Results, false),
                 PortDef::value("query", PortType::Query, false),
                 PortDef::value("meta", PortType::Meta, false),
+                PortDef::value("rows", PortType::Map, false),
+                PortDef::value("total", PortType::Map, false),
             ],
             outputs: vec![
                 PortDef::value("text", PortType::Text, false),
@@ -1113,6 +1209,24 @@ impl NodeFactory for RenderResultsNodeFactory {
                     default: Some(serde_json::json!("markdown")),
                     description: "markdown (compact, for a model) | json (raw, for a program)".into(),
                     choices: Some(Choices::fixed(["markdown", "json"])),
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "json".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("results")),
+                    description: "En format json : results (les résultats bruts) | rows (les lignes d'un Plan : {rows, total, provenance}, les trois clés toujours là)".into(),
+                    choices: Some(Choices::fixed(["results", "rows"])),
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "provenance".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Ce que valent ces lignes, d'où elles viennent, dit par l'outil (« lu par l'analyseur, pas par un compilateur ») : dans le json, et dans la vue du gabarit".into(),
+                    choices: None,
                     json_schema: None,
                 },
                 ConfigParam {
@@ -1690,5 +1804,139 @@ mod tree_tests {
         let rendered=render_view(&view,builtin_template("tree").unwrap()).unwrap();
         assert!(rendered.contains(&"z".repeat(1000)));
         assert!(rendered.contains("unique nested effect"));
+    }
+}
+
+/// **Les lignes d'un Plan, rendues pour une interface** (`json=rows`), et les
+/// refus qui empêchent qu'elles se perdent.
+#[cfg(test)]
+mod rows_tests {
+    use super::*;
+    use crate::dataflow::{DataflowGraph, DataflowRuntime};
+    use serde_json::{json, Value};
+
+    /// Un amont qui pose ce qu'on lui donne sur `rows`, `total` et `results`.
+    struct Amont {
+        rows: Option<Value>,
+        total: Option<Value>,
+    }
+
+    impl Node for Amont {
+        fn name(&self) -> &str {
+            "plan"
+        }
+        fn node_type(&self) -> &'static str {
+            "Amont"
+        }
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![
+                PortDef::value("rows", PortType::Map, false),
+                PortDef::value("total", PortType::Map, false),
+                PortDef::value("results", PortType::Results, false),
+            ]
+        }
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            if let Some(r) = self.rows.take() {
+                ctx.set_output("rows", PortValue::new(r));
+            }
+            if let Some(t) = self.total.take() {
+                ctx.set_output("total", PortValue::new(t));
+            }
+            ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+            Ok(())
+        }
+    }
+
+    const PROVENANCE: &str = "Lu par l’analyseur (tree-sitter), pas par un compilateur.";
+
+    /// Rend avec `config`, l'amont branché sur `ports` ; le texte, ou le refus.
+    fn rendre(config: Value, amont: Amont, ports: &[&str]) -> Result<String, String> {
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(amont)).unwrap();
+        g.add_node(RenderResultsNodeFactory.create("render", &config)?).unwrap();
+        for p in ports {
+            g.connect("plan", p, "render", p).unwrap();
+        }
+        let out = DataflowRuntime::new(10).execute(&mut g)?;
+        // Un texte, ou l'objet que json=rows pose sur `text`.
+        let v = out.get("render", "text").expect("le texte du rendu");
+        Ok(v.downcast::<String>().cloned().or_else(|| v.downcast::<Value>().map(Value::to_string)).expect("du texte ou du json"))
+    }
+
+    fn lignes() -> Value {
+        json!([{"name": "Compteur", "start_line": 1, "parent_name": null}, {"name": "inc", "start_line": 2, "parent_name": "Compteur"}])
+    }
+
+    /// json=rows : les trois clés, toujours ; `rows` tel que l'amont le sort.
+    #[test]
+    fn json_of_rows_has_three_fixed_keys() {
+        let config = json!({"format": "json", "json": "rows", "provenance": PROVENANCE});
+        let t = rendre(config.clone(), Amont { rows: Some(lignes()), total: Some(json!(7)) }, &["rows", "total", "results"]).unwrap();
+        let v: Value = serde_json::from_str(&t).unwrap();
+        assert_eq!(v, json!({"rows": lignes(), "total": 7, "provenance": PROVENANCE}));
+        // Sans total ni provenance : les clés restent, à null.
+        let t = rendre(json!({"format": "json", "json": "rows"}), Amont { rows: Some(json!([])), total: None }, &["rows"]).unwrap();
+        let v: Value = serde_json::from_str(&t).unwrap();
+        assert_eq!(v, json!({"rows": [], "total": null, "provenance": null}));
+    }
+
+    /// Le json par défaut (`results`) ne change pas : les résultats bruts.
+    #[test]
+    fn json_of_results_is_unchanged() {
+        let t = rendre(json!({"format": "json"}), Amont { rows: None, total: None }, &["results"]).unwrap();
+        assert_eq!(t, "[]");
+    }
+
+    /// La provenance et le total vont dans la vue du gabarit markdown.
+    #[test]
+    fn provenance_and_total_reach_the_markdown_view() {
+        let config = json!({"json": "rows", "provenance": PROVENANCE, "template": "{{ provenance }} / {{ total }}"});
+        let t = rendre(config, Amont { rows: Some(lignes()), total: Some(json!(7)) }, &["rows", "total", "results"]).unwrap();
+        assert_eq!(t, format!("{PROVENANCE} / 7"));
+    }
+
+    /// Les refus, nommés : une valeur de `json` inconnue à la construction ;
+    /// json=rows sans `rows`, json=results avec `rows` ou `total`, à
+    /// l'exécution comme au chargement.
+    #[test]
+    fn what_would_be_lost_is_refused_by_name() {
+        let e = RenderResultsNodeFactory.create("render", &json!({"json": "lignes"})).err().expect("une valeur inconnue");
+        assert!(e.contains("lignes") && e.contains("results | rows"), "{e}");
+
+        let e = rendre(json!({"format": "json", "json": "rows"}), Amont { rows: None, total: None }, &["results"]).unwrap_err();
+        assert!(e.contains("json=rows") && e.contains("rows n'est pas branchée"), "{e}");
+        let e = rendre(json!({"format": "json"}), Amont { rows: Some(lignes()), total: None }, &["rows", "results"]).unwrap_err();
+        assert!(e.contains("elles seraient perdues"), "{e}");
+        let e = rendre(json!({"format": "json"}), Amont { rows: None, total: Some(json!(3)) }, &["total", "results"]).unwrap_err();
+        assert!(e.contains("elles seraient perdues"), "{e}");
+
+        // Au chargement d'un outil : les mêmes, par les arêtes, quand le format
+        // peut valoir json (écrit, ou lié à un paramètre comme outline).
+        let def_avec = |config: Value, ports: &[&str]| crate::dataflow::GraphDefinition {
+            nodes: vec![
+                crate::dataflow::NodeDef { name: "plan".into(), node_type: "PlanNode".into(), config: json!({}) },
+                crate::dataflow::NodeDef { name: "render".into(), node_type: "RenderResultsNode".into(), config },
+            ],
+            edges: ports
+                .iter()
+                .map(|p| crate::dataflow::EdgeDef { from_node: "plan".into(), from_port: (*p).into(), to_node: "render".into(), to_port: (*p).into() })
+                .collect(),
+        };
+        let def = |json_de: &str, ports: &[&str]| def_avec(json!({"format": "json", "json": json_de}), ports);
+        assert!(verifier_le_cablage("t", &def("rows", &["results", "rows", "total"])).is_ok());
+        assert!(verifier_le_cablage("t", &def("results", &["results"])).is_ok());
+        let e = verifier_le_cablage("t", &def("rows", &["results"])).unwrap_err();
+        assert!(e.starts_with("t: le rendu render") && e.contains("rows n'est pas branchée"), "{e}");
+        let e = verifier_le_cablage("t", &def("results", &["results", "total"])).unwrap_err();
+        assert!(e.contains("elles seraient perdues"), "{e}");
+        // Le format lié à un paramètre (format=$format) peut valoir json : jugé.
+        let e = verifier_le_cablage("t", &def_avec(json!({"format": "$format"}), &["results", "rows"])).unwrap_err();
+        assert!(e.contains("elles seraient perdues"), "{e}");
+        // Le chargement n'est pas plus strict que l'exécution : en markdown (écrit,
+        // ou par défaut), total et rows vont à la vue, rien n'est perdu.
+        assert!(verifier_le_cablage("t", &def_avec(json!({"format": "markdown"}), &["results", "total"])).is_ok());
+        assert!(verifier_le_cablage("t", &def_avec(json!({}), &["results", "rows", "total"])).is_ok());
+        // Une clé liée n'a pas de valeur au chargement : jugée à l'exécution.
+        assert!(verifier_le_cablage("t", &def_avec(json!({"format": "$format", "json": "$json"}), &["results", "rows"])).is_ok());
     }
 }
