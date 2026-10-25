@@ -1,7 +1,7 @@
 {
   "sha256": {
-    "app.js": "84d93135fdedc9425978fc47787255ef3816e4a61f9131e0398ec861f446b114",
-    "app.css": "a6ede068ab3089e347d9da7458c23ca2c8818452f2608f3dcd9c311fc93fb7f8"
+    "app.js": "d501de125107dacfecf859db2bce7d82554de8cf29a9de6699a3280c3f6fab92",
+    "app.css": "eb472f413337c08ec115d15f845ef0157c853197aaf60c17924bec87fa63dfa9"
   },
   "versions": {
     "class-variance-authority": "0.7.1",
