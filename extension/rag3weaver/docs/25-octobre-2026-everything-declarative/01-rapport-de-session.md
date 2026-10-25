@@ -22,6 +22,10 @@ dans `02-knowledge-dump.md`.
 | `e66523714`, `4b64a98e5` | le journal des runs et le juge de session (page 04) |
 | `bdf5929c7` | le juge des outils (page 05) : deux rapports, des défauts typés par genre et gravité avec preuve et forme proposée, une fiche par outil ; sur Gemini, l'outil de banc faux est nommé en quatre genres |
 | `82db9a463` | le journal des runs borné par poids (5 Gio) et par âge (90 jours), en zstd, avec des runs épinglés (page 06) |
+| `0ab04909a` | l'équipier (page 07) : un agent sur Gemini qui travaille seul par pas et parle à un superviseur par une boîte aux lettres ; plan facultatif, hors-plan en proposition, le juge à chaque pas |
+| `400813249` | le lot IDE groupé : la marge « Dans ce fichier » se replie sans `outline`, le cookie de l'IDE en `SameSite=Lax` |
+| `c4472d61a` | le rendu journalisé d'un appel `/call` est entier (la borne de 64 Kio retirée) |
+| `81fdc2f40` | l'IDE en React, vues 1 et 2 (page 08) : la chaîne de bâti (bundle commité, embarqué, vérifié), le cadre avec le mode sombre, le chat sur la forme de `ui/chat` |
 
 ## Le témoin du chat dans la page : quatre défauts, un seul symptôme
 
@@ -144,6 +148,17 @@ ligne et à son symbole, et la provenance s'affiche sous le plan.
   déterministe : deux `--check` verts), le cadre avec le mode sombre (vue 1), puis le chat de la
   tâche et de l'atelier sur la forme de `ui/chat` (vue 2), un seul composant. L'ancienne page reste
   servie pour les vues non portées et sous `/ide/ancienne/`.
+
+## Comment reprendre (nuit du 25)
+
+- Les vues 3 (fichier et marge) et 4 (recherche) de l'IDE en React, chacune un push, sur un
+  worktree neuf : `npm ci` dans `ui/ide`, `scripts/ide_bundle.sh` avant chaque commit (le témoin
+  du bundle rougit sinon). Le JSON de la recherche est convenu avec la session recherche (voir la
+  mémoire `ide-react-vues-3-a-7`). Puis 5 à 7.
+- Les worktrees de luciepc `rag3db-I-apres` (push) et `rag3db-I-mesure` (essais) et leurs
+  targets sont gardés pour ces vues ; à effacer à la fin.
+- Le garde de rebase dans les scripts de fonte : `if [ -d rebase-merge ] …; then exit 1; fi`,
+  jamais un `[ ] && echo`.
 
 ## Comment reprendre
 
