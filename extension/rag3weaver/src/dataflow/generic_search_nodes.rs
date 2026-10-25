@@ -1509,7 +1509,15 @@ impl Node for BM25SearchNode {
             match exact {
                 Ok(exact) => {
                     let mut tout = exact.clone();
-                    if let Some((mots, avert)) = mots {
+                    if let Some((mots, mut avert)) = mots {
+                        // La confiance se mesure sur le premier rendu : celui
+                        // de la requête entière quand elle a trouvé. La phrase
+                        // de la recherche par mots parlerait de son premier à
+                        // elle, qui passe derrière (G, 25 octobre 2026 : « rien
+                        // de probant » sur une phrase trouvée dix fois).
+                        if !exact.is_empty() {
+                            avert.retain(|w| !w.starts_with(crate::search::RIEN_DE_PROBANT));
+                        }
                         node_warnings.extend(avert);
                         match mots {
                             Ok(mots) => {

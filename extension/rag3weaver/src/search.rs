@@ -1752,6 +1752,10 @@ pub const SEUIL_CONFIANCE: f64 = 0.88;
 /// La confiance est recalculée **ici**, en Jaro pur sur le texte rendu, et pas
 /// tirée du score de classement : voir [`SEUIL_CONFIANCE`] pour pourquoi les
 /// deux nombres ne peuvent pas être le même.
+/// Le début de la phrase de [`marquer_la_confiance`] : un nœud qui fond deux
+/// recherches ne garde que celle de la liste dont il rend le premier.
+pub(crate) const RIEN_DE_PROBANT: &str = "le plein texte n'a rien de probant";
+
 fn marquer_la_confiance(query: &str, resultats: &[SearchResult], warnings: &mut Vec<String>) {
     let Some(premier) = resultats.first() else { return };
     // Le texte du meilleur candidat : celui du chunk s'il y en a un, sinon les
@@ -1780,7 +1784,7 @@ fn marquer_la_confiance(query: &str, resultats: &[SearchResult], warnings: &mut 
         // rapprocher ce qui ne partage aucun mot. Une phrase qui affirme plus
         // que ce qu'elle a mesuré est exactement le défaut qu'on répare.
         warnings.push(format!(
-            "le plein texte n'a rien de probant pour « {query} » : son meilleur \
+            "{RIEN_DE_PROBANT} pour « {query} » : son meilleur \
              candidat est à {confiance:.2} de similarité lexicale, sous le seuil de \
              {SEUIL_CONFIANCE:.2} — il partage des mots avec la requête sans forcément \
              y répondre. Un autre signal peut avoir mieux trouvé."
