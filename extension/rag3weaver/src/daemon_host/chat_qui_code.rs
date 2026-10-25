@@ -110,7 +110,7 @@ fn le_chat_d_une_tache_edite_sa_branche_et_laisse_le_principal_intact() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
     let vus = Arc::new(Mutex::new(Vec::new()));
-    let host = hote(d.path(), qui_edite(vus.clone()));
+    let host = hote(d.path(), qui_edite(vus.clone())).with_runs_root(d.path().join("runs"));
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
     let avant = empreinte(&depot);
@@ -125,6 +125,31 @@ fn le_chat_d_une_tache_edite_sa_branche_et_laisse_le_principal_intact() {
     let propose = vus.lock().unwrap().first().cloned().unwrap_or_default();
     assert!(propose.iter().any(|n| n == "edit_file"), "edit_file est proposé dans une tâche : {propose:?}");
     assert!(!propose.iter().any(|n| n == "run_command"), "aucune commande dans le chat : {propose:?}");
+
+    // **Le journal du run** (page 04) : ses événements, l'appel edit_file avec ses
+    // arguments, les tours tels que le modèle les a reçus, la tâche, le fichier.
+    let run = r["run"].as_str().unwrap();
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let journal = loop {
+        let lu = host
+            .journal_des_runs()
+            .fichier(&t.id, run)
+            .and_then(|p| serde_json::from_slice::<Value>(&std::fs::read(p).ok()?).ok())
+            .filter(|v| v["tours"].is_array());
+        if let Some(v) = lu {
+            break v;
+        }
+        assert!(std::time::Instant::now() < fin, "le journal du run {run} n'est jamais écrit, ou jamais complété");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    let evenements = journal["evenements"].as_array().unwrap();
+    assert!(
+        evenements.iter().any(|e| e["kind"] == "ToolCallStarted" && e["tool"] == "edit_file" && e["arguments"].as_str().is_some_and(|a| a.contains("salut"))),
+        "l'appel edit_file et ses arguments : {evenements:?}"
+    );
+    assert_eq!(journal["fin"]["kind"], "RunFinished", "{journal}");
+    assert!(journal["tours"].as_array().unwrap().iter().any(|t| t["role"] == "tool"), "le résultat tel que le modèle l'a reçu : {journal}");
+    assert_eq!((journal["tache"]["nom"].clone(), journal["fichiers"].clone()), (json!("salut"), json!(["src/lib.rs"])), "{journal}");
 
     assert!(empreinte(&depot) == avant, "le dépôt de l'utilisateur a changé (fichiers ou HEAD)");
 }

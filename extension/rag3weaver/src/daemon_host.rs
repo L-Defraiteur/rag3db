@@ -177,6 +177,8 @@ pub struct DaemonHost {
     chat_model: chat::ChatModel,
     /// Ce que les chats ont consommé, par run et par slug.
     chat_meter: Arc<crate::meter::Meter>,
+    /// Le journal des runs (`RAG3WEAVER_RUNS_DIR`) : un fichier par run racine.
+    journal: Arc<journal_des_runs::JournalDesRuns>,
 }
 
 /// Les tâches de l'agent : une branche, un worktree, une base à soi.
@@ -184,6 +186,9 @@ pub mod taches;
 
 /// Le chat de l'atelier dans l'IDE : l'agent des gabarits, par backend.
 pub mod chat;
+
+/// Le journal des runs de l'hôte : un fichier par run racine, borné.
+pub mod journal_des_runs;
 
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
@@ -245,7 +250,19 @@ impl DaemonHost {
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
+            journal: journal_des_runs::JournalDesRuns::par_defaut(),
         }
+    }
+
+    /// Le journal des runs, sous une autre racine (les témoins).
+    pub fn with_runs_root(mut self, racine: PathBuf) -> Self {
+        self.journal = journal_des_runs::JournalDesRuns::new(racine);
+        self
+    }
+
+    /// Le journal des runs.
+    pub fn journal_des_runs(&self) -> &Arc<journal_des_runs::JournalDesRuns> {
+        &self.journal
     }
 
     /// Le flux de l'IDE.
@@ -458,6 +475,8 @@ impl DaemonHost {
             // neuf, relayé à son tour, et l'ancien relais finit avec l'ancien bus.
             let bus = slot.as_ref().expect("ouvert juste au-dessus").catalog.lock().unwrap_or_else(|p| p.into_inner()).event_bus();
             self.ide.relayer(&hosted.manifest.display().to_string(), &bus);
+            // Et suivi par le journal des runs, sous l'id du backend.
+            self.journal.suivre(&hosted.id, &bus);
             *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
             hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }

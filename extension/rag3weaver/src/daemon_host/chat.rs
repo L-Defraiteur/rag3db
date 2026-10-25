@@ -345,6 +345,17 @@ impl DaemonHost {
         let propositions = propositions_du_tour(du_tour);
         let fichiers = fichiers_ecrits_du_tour(du_tour, &outils.ecrivent);
         let tache = if dans_une_tache { self.tache_de(manifest) } else { Value::Null };
+        // Le journal du run : les tours de ce tour, tels que le modèle les a
+        // reçus, la tâche, ce qu'il a écrit et proposé.
+        {
+            let mut ajouts = serde_json::Map::new();
+            ajouts.insert("chat".into(), json!(backend_id));
+            ajouts.insert("tours".into(), serde_json::to_value(du_tour).unwrap_or(Value::Null));
+            ajouts.insert("tache".into(), tache.clone());
+            ajouts.insert("fichiers".into(), json!(fichiers));
+            ajouts.insert("propositions".into(), json!(propositions));
+            self.journal.ajouter(backend_id, run_id, ajouts);
+        }
         let reponse = |text: &str| {
             json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers })
         };
