@@ -41,6 +41,9 @@ Connection already has an active transaction. Cannot start a transaction within 
 ---- 1
 Alice
 
+# Depuis V2-2 (25 octobre 2026), un lecteur ouvert n'est plus attendu par un CHECKPOINT : il
+# passe, et le lecteur relit sa génération (sa vue d'avant). Le cas gardait le nom de l'erreur
+# qu'il attendait ; il dit maintenant ce qui est.
 -CASE CheckpointTimeoutErrorTest
 -SKIP_IN_MEM
 -CHECKPOINT_WAIT_TIMEOUT 10000
@@ -48,9 +51,15 @@ Alice
 ---- ok
 -STATEMENT CREATE NODE TABLE person(ID INT64, age INT64, PRIMARY KEY(ID));
 ---- ok
+-STATEMENT CREATE (:person {ID: 0, age: 1});
+---- ok
+-STATEMENT CHECKPOINT;
+---- ok
 -CREATE_CONNECTION conn1
 -STATEMENT [conn1] BEGIN TRANSACTION READ ONLY;
 ---- ok
+-STATEMENT [conn1] MATCH (a:person) WHERE a.ID=0 RETURN a.age;
+---- 1
 -CREATE_CONNECTION conn2
 -STATEMENT [conn2] BEGIN TRANSACTION;
 ---- ok
@@ -59,10 +68,13 @@ Alice
 -STATEMENT [conn2] COMMIT
 ---- ok
 -STATEMENT [conn2] CHECKPOINT;
----- error
-Timeout waiting for active transactions to leave the system before checkpointing. If you have an open transaction, please close it and try again.
+---- ok
 -STATEMENT [conn1] MATCH (a:person) WHERE a.ID=0 RETURN a.age;
----- 0
+---- 1
+-STATEMENT [conn1] COMMIT
+---- ok
+-STATEMENT [conn1] MATCH (a:person) WHERE a.ID=0 RETURN a.age;
+---- 70
 
 -CASE AutoCheckpointTimeoutErrorTest
 -SKIP_IN_MEM
