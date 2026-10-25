@@ -88,16 +88,28 @@ va avec. La récursion s'arrête au pas, qui n'a pas de fiche.
 
 ## 5. Qui clôt une phase
 
+Tranché par Lucie le 25 octobre au soir : **les agents travaillent au maximum en autonomie**.
+Celui qui accomplit une chose la clôt, à tous les horizons ; ce qui remonte au superviseur,
+humain ou agent, c'est seulement le hors-plan.
+
 | horizon | qui | comment |
 |---|---|---|
 | le pas | l'agent | `step_done` (page 07) |
 | le lot | l'agent clôt son plan ; le superviseur fusionne ou rejette la tâche | le L1 `plan` suivant porte `closed` |
-| la phase | **un humain** : Lucie, ou le superviseur | `put_fiche` vers `retired`, et un L1 de section `closure` qui dit la raison, ce qui a atterri (le hash) et cite `doc:docs/nouveautes.md#<mois>` |
+| la phase | **l'agent qui l'a accomplie** | `put_fiche` vers `retired`, et un L1 de section `closure` qui dit la raison, ce qui a atterri (le hash) et cite `doc:docs/nouveautes.md#<mois>` |
 | la vision | personne | une vision ne se clôt pas ; abandonnée, elle passe `retired` avec son L1 `closure`. « Atteinte » se lit : toutes ses phases `enables` sont closes, ce que le Plan de rendu calcule et que personne n'écrit |
+
+**Le hors-plan remonte, le plan continue.** Quand l'agent voit une direction que le plan ne
+prévoit pas, il écrit une petite proposition au superviseur (« voudrais-tu qu'on pousse dans
+ce sens ? ») et poursuit le plan en attendant la réponse. Il ne clôt ni n'ouvre une phase hors
+plan sans ce mot. Dans le modèle, la proposition est un apport de section `proposal` sur la
+fiche de la roadmap ou de la phase concernée, citant au besoin `enables:<vision>` ; acceptée,
+elle devient un redécoupage, donc un L1 `plan` neuf (§3).
 
 Le juge **ne change jamais un état**. Quand la tendance des bilans d'une phase le permet
 (tous ses lots fusionnés, les bilans verts), il écrit un apport de section `trend` sur la
-fiche de la phase : « prête à clore, voici pourquoi ». L'humain lit, puis clôt ou non.
+fiche de la phase : « prête à clore, voici pourquoi ». L'agent qui porte la phase lit, puis
+clôt ou non.
 
 Le statut d'un élément dans le json (`todo`, `doing`, `done`, `blocked`, `dropped`) et l'état
 de la fiche de la phase (`proposed`, `current`, `retired`) ne sont pas deux vérités : le json
