@@ -175,15 +175,21 @@ def publier(bati: Path, racine: Path, poser_courant: bool) -> None:
 
 # ── les planchers : les commits du moteur qu'une lib doit contenir ──────────
 
-PLANCHERS = Path(__file__).resolve().parent / "planchers-de-la-lib"
+def fichier_des_planchers() -> Path:
+    """`planchers-de-la-lib` à côté de ce script, ou `RAG3DB_LIBS_PLANCHERS`
+    (un témoin y met les siens)."""
+    if os.environ.get("RAG3DB_LIBS_PLANCHERS"):
+        return Path(os.environ["RAG3DB_LIBS_PLANCHERS"])
+    return Path(__file__).resolve().parent / "planchers-de-la-lib"
 
 
 def planchers() -> list[tuple[str, str]]:
-    """(commit, raison) de `planchers-de-la-lib` ; aucun fichier : aucun plancher."""
-    if not PLANCHERS.exists():
+    """(commit, raison) des planchers ; aucun fichier : aucun plancher."""
+    f = fichier_des_planchers()
+    if not f.exists():
         return []
     out = []
-    for ligne in PLANCHERS.read_text().splitlines():
+    for ligne in f.read_text().splitlines():
         ligne = ligne.strip()
         if not ligne or ligne.startswith("#"):
             continue
@@ -201,9 +207,11 @@ def manques(ident: str) -> tuple[list[tuple[str, str]], list[str]]:
     """Les planchers que la lib `ident` ne contient pas, et ce qui n'a pas pu
     se dire (un commit que le dépôt de ce script ne connaît pas : dit, pas
     refusé — on ne refuse que ce que git prouve absent)."""
+    if not planchers():
+        return [], []
     commit = commit_du_bati(ident)
     if not commit:
-        return [], [f"{ident} : pas de commit dans l'identifiant, planchers non vérifiés"]
+        return [], [f"{ident} : pas de commit dans l'identifiant, les planchers ne se jugent pas"]
     depot = Path(__file__).resolve().parent
     absents, inconnus = [], []
     for plancher, raison in planchers():
@@ -217,15 +225,26 @@ def manques(ident: str) -> tuple[list[tuple[str, str]], list[str]]:
 
 
 def verifier(cible: str) -> None:
-    """Refuse (code 2) une lib qui ne contient pas un plancher, en le nommant."""
+    """Juge une lib contre les planchers, et le dit en dernière ligne (sur la
+    sortie d'erreur : la sortie standard de `lib_du_magasin` est un chemin).
+    Code 2 : un plancher manque, nommé. **Code 3 : un plancher n'a pas pu se
+    juger** (un dépôt sans l'historique du moteur, une lib sans commit) — un
+    plancher non jugé ne compte jamais comme tenu (96, 25 octobre 2026)."""
     d = Path(cible)
     ident = (d / "BUILD_ID").read_text().strip() if (d / "BUILD_ID").exists() else d.name
     absents, inconnus = manques(ident)
     for i in inconnus:
         print(f"⚠ {i}", file=sys.stderr)
     if absents:
-        refus(f"la lib {ident} ne contient pas " + " ; ni ".join(f"{c[:9]} — {r}" for c, r in absents)
-              + " : prenez courant, ou une lib bâtie après")
+        print(f"rag3db_libs : VERDICT : SOUS LE PLANCHER — la lib {ident} ne contient pas "
+              + " ; ni ".join(f"{c[:9]} — {r}" for c, r in absents) + " : prenez courant, ou une lib bâtie après",
+              file=sys.stderr)
+        sys.exit(2)
+    if inconnus:
+        print(f"rag3db_libs : VERDICT : NON JUGÉ — {len(inconnus)} plancher(s) sans réponse de git pour {ident} : "
+              "jouez depuis un dépôt qui a l'historique du moteur (pas un clone superficiel)", file=sys.stderr)
+        sys.exit(3)
+    print(f"rag3db_libs : VERDICT : planchers tenus ({len(planchers())}) par {ident}", file=sys.stderr)
 
 
 def poser(ident: str) -> None:

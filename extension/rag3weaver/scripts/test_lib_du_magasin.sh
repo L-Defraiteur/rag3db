@@ -9,6 +9,8 @@ ICI="$(cd "$(dirname "$0")" && pwd)"
 T="$(mktemp -d "${TMPDIR:-/tmp}/test-lib-magasin.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
 export RAG3DB_LIBS_DIR="$T/magasin"
+# Sans planchers (un fichier absent) : les bâtis factices n'ont pas de commit.
+export RAG3DB_LIBS_PLANCHERS="$T/sans-planchers"
 echec=0
 cas() { if [ "$1" = 0 ]; then echo "OK     $2"; else echo "ÉCHEC  $2"; echec=1; fi; }
 
@@ -83,7 +85,9 @@ SOUS=rag3db-build-87a362e304200776000095c5a3d6531373560d9a-Release-p12
 if git -C "$ICI" cat-file -e 87a362e304200776000095c5a3d6531373560d9a^{commit} 2>/dev/null \
    && git -C "$ICI" cat-file -e 4f9274a38769a085ab0009a89d1b7dba7597e568^{commit} 2>/dev/null; then
   bati sous "$SOUS"
+  export RAG3DB_LIBS_PLANCHERS="$ICI/planchers-de-la-lib"
   dit="$(lib_du_magasin "$SOUS" 2>&1 >/dev/null)"; c=$?
+  export RAG3DB_LIBS_PLANCHERS="$T/sans-planchers"
   [ $c = 2 ] && [[ "$dit" == *4f9274a38* ]]
   cas $? "une lib sous un plancher : refus au choix (code 2), le correctif manquant nommé"
 else

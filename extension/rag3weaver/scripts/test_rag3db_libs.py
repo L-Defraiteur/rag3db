@@ -36,8 +36,14 @@ def faux_bati(racine: Path, nom: str, ident: str, ext_ident: str | None = None, 
     return racine / nom
 
 
+# Les témoins jouent sans planchers (un fichier absent : aucun plancher), sauf
+# ceux qui disent les leurs : leurs bâtis factices n'ont pas de commit.
+SANS_PLANCHERS = str(Path(tempfile.gettempdir()) / "rag3db-libs-sans-planchers-absent")
+LES_PLANCHERS = str(OUTIL.parent / "planchers-de-la-lib")
+
+
 def outil(magasin: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    e = dict(os.environ, RAG3DB_LIBS_DIR=str(magasin), **(env or {}))
+    e = {**os.environ, "RAG3DB_LIBS_DIR": str(magasin), "RAG3DB_LIBS_PLANCHERS": SANS_PLANCHERS, **(env or {})}
     return subprocess.run([sys.executable, OUTIL, *args], capture_output=True, text=True, env=e)
 
 
@@ -71,21 +77,45 @@ class Magasin(unittest.TestCase):
                                       "a45a15adf2347de1f089ab7d00ee7d36d46e02d0"),
                          "le dépôt n'a pas l'historique du moteur (clone superficiel)")
     def test_une_lib_sous_un_plancher_est_refusee_et_courant_ne_s_y_pose_pas(self):
+        les = {"RAG3DB_LIBS_PLANCHERS": LES_PLANCHERS}
         for nom, ident in [("sous", SOUS_LE_PLANCHER), ("au", AU_PLANCHER)]:
             r = publier(self.magasin, faux_bati(self.racine, nom, ident), "--sans-courant")
             self.assertEqual(r.returncode, 0, r.stderr)
-        r = outil(self.magasin, "verifier", str(self.magasin / SOUS_LE_PLANCHER))
+        r = outil(self.magasin, "verifier", str(self.magasin / SOUS_LE_PLANCHER), env=les)
         self.assertEqual(r.returncode, 2, r.stderr)
         self.assertIn("4f9274a38", r.stderr)
         self.assertIn("a45a15adf", r.stderr)
-        r = outil(self.magasin, "courant", "--poser", SOUS_LE_PLANCHER)
+        self.assertIn("VERDICT : SOUS LE PLANCHER", r.stderr.strip().splitlines()[-1])
+        r = outil(self.magasin, "courant", "--poser", SOUS_LE_PLANCHER, env=les)
         self.assertEqual(r.returncode, 2, "courant posé sur une lib sous le plancher")
         self.assertFalse((self.magasin / "courant").exists())
-        self.assertEqual(outil(self.magasin, "verifier", str(self.magasin / AU_PLANCHER)).returncode, 0)
-        self.assertEqual(outil(self.magasin, "courant", "--poser", AU_PLANCHER).returncode, 0)
-        liste = outil(self.magasin, "liste").stdout
+        r = outil(self.magasin, "verifier", str(self.magasin / AU_PLANCHER), env=les)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("VERDICT : planchers tenus", r.stderr.strip().splitlines()[-1])
+        self.assertEqual(outil(self.magasin, "courant", "--poser", AU_PLANCHER, env=les).returncode, 0)
+        liste = outil(self.magasin, "liste", env=les).stdout
         self.assertIn(f"{SOUS_LE_PLANCHER} : ", liste)
         self.assertIn("SOUS LE PLANCHER 4f9274a38, a45a15adf", liste)
+
+    def test_un_plancher_que_git_ne_peut_juger_n_est_jamais_tenu(self):
+        """96, 25 octobre 2026 : un plancher sans réponse de git (un commit que
+        le dépôt ne connaît pas, une lib sans commit) rendait 0, et comptait
+        comme tenu. Code 3, et le verdict le dit en dernière ligne ; courant ne
+        se pose pas."""
+        inconnu = self.racine / "planchers-inconnus"
+        inconnu.write_text("0123456789abcdef0123456789abcdef01234567 un correctif que ce dépôt ne connaît pas\n")
+        env = {"RAG3DB_LIBS_PLANCHERS": str(inconnu)}
+        r = publier(self.magasin, faux_bati(self.racine, "au", AU_PLANCHER), "--sans-courant")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = outil(self.magasin, "verifier", str(self.magasin / AU_PLANCHER), env=env)
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertIn("VERDICT : NON JUGÉ", r.stderr.strip().splitlines()[-1])
+        self.assertEqual(outil(self.magasin, "courant", "--poser", AU_PLANCHER, env=env).returncode, 3)
+        self.assertFalse((self.magasin / "courant").exists())
+        # Une lib sans commit dans son identifiant ne se juge pas non plus.
+        publier(self.magasin, faux_bati(self.racine, "sans", "rag3db-build-SANS"), "--sans-courant")
+        r = outil(self.magasin, "verifier", str(self.magasin / "rag3db-build-SANS"), env={"RAG3DB_LIBS_PLANCHERS": LES_PLANCHERS})
+        self.assertEqual(r.returncode, 3, r.stderr)
 
     def test_publier_pose_un_dossier_immuable_et_courant(self):
         bati = faux_bati(self.racine, "a", "rag3db-build-A")
