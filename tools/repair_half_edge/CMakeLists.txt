@@ -1,0 +1,2 @@
+add_executable(repair_half_edge repair_half_edge.cpp)
+target_link_libraries(repair_half_edge PRIVATE rag3db)

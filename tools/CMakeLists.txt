@@ -15,4 +15,5 @@ if(${BUILD_BENCHMARK})
 endif()
 if(${BUILD_WASM})
     add_subdirectory(wasm)
-endif()
+endif()# Hors du bâti ordinaire : se bâtit par --target repair_half_edge.
+add_subdirectory(repair_half_edge EXCLUDE_FROM_ALL)
