@@ -220,6 +220,7 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
         ("w/other.cpp", "int compute() {\n    return 4;\n}\n"),
         ("app/use.cpp", "#include \"../z/calc.h\"\n\nint use_compute() {\n    return compute();\n}\n"),
         ("app/lone.cpp", "int lone() {\n    return helper();\n}\n"),
+        ("r/lib.rs", "pub fn rhelper() -> i32 {\n    1\n}\n\npub fn rcall() -> i32 {\n    rhelper()\n}\n"),
     ]
     .iter()
     .map(|(p, c)| (p.to_string(), c.to_string()))
@@ -227,7 +228,7 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     let rapport = cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
     let r = cat
         .execute_raw(
-            "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name IN ['run', 'use_compute', 'lone'] \
+            "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name IN ['run', 'use_compute', 'lone', 'rcall'] \
              RETURN a.name, b.file_path, r.resolution, r.visibility ORDER BY a.name, b.file_path",
         )
         .unwrap();
@@ -238,7 +239,9 @@ fn un_definisseur_cpp_se_voit_par_ses_includes() {
     assert!(aretes.iter().any(|a| a.starts_with("use_compute z/calc.cpp ") && a.ends_with(" entete")), "la définition vue par son en-tête : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.contains("w/other.cpp")), "l'homonyme de w/ n'est pas vu : {aretes:#?}");
     assert!(!aretes.iter().any(|a| a.starts_with("lone ")), "sans include, l'abstention : {aretes:#?}");
+    assert!(aretes.iter().any(|a| a.starts_with("rcall r/lib.rs ") && a.ends_with(" ∅")), "une arête Rust du même lot ne porte pas de visibilité : {aretes:#?}");
     assert!(rapport.abstained_invisible >= 1, "l'abstention se compte : {rapport:?}");
+    assert!(rapport.include_files_read >= 7, "le coût se compte : {rapport:?}");
 }
 
 /// **Une arête devinée se dit, et ne se suit pas** (ticket « une arête ne
