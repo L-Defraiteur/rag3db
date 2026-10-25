@@ -18,6 +18,10 @@ préhistoriques ». Son dimensionnement : 3 000 sessions par jour, gardées troi
 - **La borne d'un run** reste : `RAG3WEAVER_RUN_MAX_OCTETS`, 2 Mio d'événements. Au-delà, le
   milieu tombe, et le fichier le dit (`evenements_tronques`). C'est un plafond, pas une taille :
   un appel d'outil ordinaire pèse quelques Kio (les mesures plus bas).
+- **Ce que l'écran a montré ne se coupe jamais** (c7, le soir) : une borne coupe les événements
+  intermédiaires, jamais le rendu final d'un appel ni ses arguments. La borne de 64 Kio qui vivait
+  sur le `rendu` d'un `/call` journalisait deux recherches à 4 et 12 résultats sur 30
+  (`{tronque, debut}`) : elle est retirée. Témoin : une lecture de 200 Kio, journalisée entière.
 
 L'hôte relève les journaux du disque à la première écriture, puis tient le compte à chaque
 écriture et à chaque effacement. Relever le disque à chaque run coûterait un parcours de
