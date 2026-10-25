@@ -1440,7 +1440,25 @@ pub fn build_bm25_query(
                 })
             }
         }
-        BM25Mode::Contains => build_contains_clauses(query, fields, distance, false, false),
+        BM25Mode::Contains => {
+            // **Les deux apostrophes** (25 octobre 2026, note de la session
+            // lucivy) : lucivy compte « ’ » comme du contenu et « ' » comme un
+            // séparateur. Un texte français écrit avec l'une ne se trouve pas
+            // par l'autre, même à distance 1 ; la requête part sous ses deux
+            // formes.
+            let formes = formes_de_l_apostrophe(query);
+            if formes.len() == 1 {
+                build_contains_clauses(query, fields, distance, false, false)
+            } else {
+                serde_json::json!({
+                    "type": "boolean",
+                    "should": formes
+                        .iter()
+                        .map(|f| build_contains_clauses(f, fields, distance, false, false))
+                        .collect::<Vec<_>>(),
+                })
+            }
+        }
         BM25Mode::Regex => build_contains_clauses(query, fields, distance, true, false),
         // distance is forced to 0: lucivy treats any distance > 0 as relaxed,
         // which would silently defeat strict_separators.
@@ -1448,6 +1466,21 @@ pub fn build_bm25_query(
     };
 
     obj.to_string()
+}
+
+/// La requête sous ses formes d'apostrophe : elle-même s'il n'y en a pas,
+/// sinon la forme droite (« ' ») et la forme typographique (« ’ »).
+pub fn formes_de_l_apostrophe(query: &str) -> Vec<String> {
+    if !query.contains('\'') && !query.contains('’') {
+        return vec![query.to_string()];
+    }
+    let droite = query.replace('’', "'");
+    let typographique = query.replace('\'', "’");
+    if droite == typographique {
+        vec![droite]
+    } else {
+        vec![droite, typographique]
+    }
 }
 
 /// Build contains clause(s) for one value across fields.

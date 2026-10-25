@@ -217,6 +217,12 @@ fn brique_2_quel_signal_ment() {
             eprintln!("[{etiquette}] {} « {q} » → {}", if ok { "✓" } else { "✗" }, l.join(" · "));
         }
         eprintln!("[{etiquette}] {justes}/3");
+        // **Les questions ne reculent pas** (25 octobre 2026) : la requête
+        // entière passe devant, mais la recherche par mots (l'IDF) garde le
+        // 3/3 du 29 août pour une question qui n'est pas une sous-chaîne.
+        if etiquette == "plein texte seul" {
+            assert_eq!(justes, 3, "le plein texte seul rend ses trois questions");
+        }
     }
 }
 

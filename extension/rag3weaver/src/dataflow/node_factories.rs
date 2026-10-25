@@ -1052,7 +1052,10 @@ impl NodeFactory for BM25SearchNodeFactory {
             node_type: "BM25SearchNode".into(),
             description: "BM25 full-text search with highlight→chunk resolution".into(),
             inputs: vec![query_in()],
-            outputs: vec![results_out(), meta_out(), status_out()],
+            // `exact` : les résultats de la requête entière seule (le mode par
+            // défaut sur lucivy), étiquetés `<signal>_exact`, qu'une fusion peut
+            // déclarer dominants ; facultatif, `results` les porte aussi, devant.
+            outputs: vec![results_out(), meta_out(), status_out(), PortDef::value("exact", PortType::Results, false)],
             config_params: vec![
                 limit_param(),
                 ConfigParam {
@@ -1215,6 +1218,11 @@ impl NodeFactory for FuseResultsNodeFactory {
                 node = node.with_boost(label);
             }
         }
+        if let Some(d) = config.get("dominant") {
+            for label in parse_str_list(d, "FuseResultsNode", "dominant")? {
+                node = node.with_dominant(label);
+            }
+        }
         if let Some(k) = config.get("top_k") {
             let k = k.as_u64().ok_or("FuseResultsNode: 'top_k' must be an integer")? as usize;
             node = node.with_top_k(k);
@@ -1285,6 +1293,15 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: None,
                     description: "Étiquettes en rôle boost, 'a,b' : elles modulent le score fusionné au lieu d'y entrer".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "dominant".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Étiquettes dominantes, 'a,b' dans l'ordre : un résultat qu'elles ont trouvé passe devant, par étiquette puis par rang ; le reste suit l'ordre de la fusion".into(),
                     choices: None,
                     json_schema: None,
                 },

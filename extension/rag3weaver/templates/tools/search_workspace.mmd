@@ -27,6 +27,13 @@
 %% relecteur, il le dit dans la méta, jamais en silence. `keep_signal` garde la
 %% provenance (`bm25+vector`), et sa ligne s'ajoute à `signals`.
 %%
+%% **La requête entière devant** (Lucie, 25 octobre 2026) : sur lucivy, le
+%% plein texte cherche la requête entière (un `contains` relâché à distance 1,
+%% comme la démo WASM) et, pour plusieurs mots, les mots ; la première sort
+%% aussi sur `exact`, étiquetée `bm25_exact`, que la fusion déclare dominante :
+%% un résultat qui contient la requête passe devant les signaux qui ne l'ont
+%% qu'approchée.
+%%
 %% Ce graphe demande la politique `read_files` : le balayage lit les
 %% fichiers de la source, comme `read` ou `grep`.
 
@@ -36,7 +43,7 @@ graph LR
     vector["VectorSearchNode"]
     sparse["SparseSearchNode"]
     scan["ScanFilesNode"]
-    fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4')"]
+    fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4', dominant='bm25_exact')"]
     rerank["RerankNode(keep_signal=true)"]
     paginate["PaginateNode"]
     resolve["ResolveParentNode"]
@@ -57,6 +64,7 @@ graph LR
     scan -->|meta| render
     rerank -->|meta| render
     bm25 -->|results:bm25| fuse
+    bm25 -->|exact:signals| fuse
     bm25 -->|status| fuse
     vector -->|results:vector| fuse
     vector -->|status| fuse

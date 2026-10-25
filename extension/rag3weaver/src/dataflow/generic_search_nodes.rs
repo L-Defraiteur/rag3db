@@ -1360,30 +1360,81 @@ impl Node for BM25SearchNode {
             .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
             .cloned()
             .ok_or("BM25SearchNode: 'dialect' service not registered")?;
-        let results = search_bm25_chunked(
-            &*conn,
-            dialect.as_ref(),
-            &target,
-            &query_str,
-            fields,
-            // Le gabarit s'il a parlé, sinon la requête — dont les défauts sont
-            // ceux du monolithe (`Auto`, distance 1). Le nœud disait
-            // `Contains` et 0 : celui-là même qui rend zéro sur une phrase
-            // française — B10 de la réconciliation.
-            self.mode.unwrap_or(options.bm25_mode),
-            self.fuzzy_distance.unwrap_or(options.fuzzy_distance),
-            limite,
-            allowed.as_deref(),
-            &target.enrich_fields,
-            self.result_mode.unwrap_or(options.result_mode),
-            diag_bm25.as_mut(),
-            // Les avertissements sont collectés puis remontés par la méta.
-            &mut node_warnings,
-            // Handle FTS de la table parente si le service l'expose ; sinon on
-            // reste sur le chemin C++.
-            fts_handle.as_deref(),
-        );
+        // Le gabarit s'il a parlé, sinon la requête — dont les défauts sont
+        // ceux du monolithe (`Auto`, distance 1). Le nœud disait `Contains` et
+        // 0 : celui-là même qui rend zéro sur une phrase française — B10 de la
+        // réconciliation.
+        let mode = self.mode.unwrap_or(options.bm25_mode);
+        let distance = self.fuzzy_distance.unwrap_or(options.fuzzy_distance);
+        let result_mode = self.result_mode.unwrap_or(options.result_mode);
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let cherche = |mode: BM25Mode, distance: u8, diag: Option<&mut crate::search::SearchDiagnostics>, avert: &mut Vec<String>| {
+            search_bm25_chunked(
+                &*conn,
+                dialect.as_ref(),
+                &target,
+                &query_str,
+                fields,
+                mode,
+                distance,
+                limite,
+                allowed.as_deref(),
+                &target.enrich_fields,
+                result_mode,
+                diag,
+                avert,
+                // Le handle FTS de la table parente ; son absence est une
+                // erreur nommée (voir `search_bm25_chunked`).
+                fts_handle.as_deref(),
+            )
+        };
+
+        // **Deux requêtes, la requête entière devant** (Lucie, 25 octobre
+        // 2026 : « uniquement distance 1 direct relaxed, puis boolean, deux
+        // requêtes faites en parallèle, les résultats exacts passent devant
+        // les unionnés »). Sous le mode par défaut, lucivy reçoit la requête
+        // **entière**, comme la démo WASM : un `contains` relâché à distance
+        // 1, ses deux apostrophes ; et, pour plusieurs mots, la recherche par
+        // mots (`Parse`, l'IDF : les questions du 29 août). Les résultats de la
+        // première passent devant ; ceux de la seconde suivent sans doublon.
+        // La première sort aussi sur le port `exact`, sous l'étiquette
+        // `<signal>_exact`, pour qu'une fusion la déclare dominante.
+        let (results, exacts) = if matches!(mode, BM25Mode::Auto) {
+            let plusieurs_mots = query_str.split_whitespace().take(2).count() > 1;
+            let (exact, mots) = std::thread::scope(|s| {
+                let fil = plusieurs_mots.then(|| {
+                    s.spawn(|| {
+                        let mut avert = Vec::new();
+                        let r = cherche(BM25Mode::Parse, distance, None, &mut avert);
+                        (r, avert)
+                    })
+                });
+                let exact = cherche(BM25Mode::Contains, 1, diag_bm25.as_mut(), &mut node_warnings);
+                (exact, fil.map(|f| f.join().unwrap_or_else(|_| (Ok(Vec::new()), vec!["la recherche par mots a paniqué".to_string()]))))
+            });
+            match exact {
+                Ok(exact) => {
+                    let mut tout = exact.clone();
+                    if let Some((mots, avert)) = mots {
+                        node_warnings.extend(avert);
+                        match mots {
+                            Ok(mots) => {
+                                let vus: std::collections::HashSet<(Option<String>, String)> =
+                                    exact.iter().map(|r| (r.entity.clone(), r.uuid.clone())).collect();
+                                tout.extend(mots.into_iter().filter(|r| !vus.contains(&(r.entity.clone(), r.uuid.clone()))));
+                            }
+                            // La recherche par mots tombée : la requête entière
+                            // répond seule, et le dit.
+                            Err(e) => node_warnings.push(format!("BM25SearchNode: la recherche par mots a échoué ({e}) ; la requête entière répond seule")),
+                        }
+                    }
+                    (Ok(tout), Some(exact))
+                }
+                Err(e) => (Err(e), None),
+            }
+        } else {
+            (cherche(mode, distance, diag_bm25.as_mut(), &mut node_warnings), None)
+        };
         let results = match results {
             Ok(r) => r,
             Err(e) => {
@@ -1415,7 +1466,11 @@ impl Node for BM25SearchNode {
             ctx.warn(w);
         }
 
-        let unified = finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &label)?;
+        if let Some(exacts) = exacts {
+            let unified = finish_signal(ctx, "BM25SearchNode", &target, exacts, result_mode, &format!("{label}_exact"))?;
+            ctx.set_output("exact", PortValue::new(unified));
+        }
+        let unified = finish_signal(ctx, "BM25SearchNode", &target, results, result_mode, &label)?;
         let nombre = unified.len();
         ctx.set_output("results", PortValue::new(unified));
         statut_disponible(ctx, &label);
@@ -1796,6 +1851,12 @@ pub struct FuseResultsNode {
     weights: HashMap<String, f64>,
     default_weights: HashMap<String, f64>,
     boost: HashSet<String>,
+    /// **Les étiquettes dominantes**, dans l'ordre : un résultat qu'elles ont
+    /// trouvé passe devant tous les autres, par étiquette puis par son rang
+    /// dans elle ; le reste suit dans l'ordre de la fusion. C'est la requête
+    /// entière du plein texte (`bm25_exact`) qui ne se noie plus sous des
+    /// signaux faibles (Lucie, 25 octobre 2026).
+    dominant: Vec<String>,
     top_k: Option<usize>,
     signal: Option<String>,
 }
@@ -1810,6 +1871,7 @@ impl FuseResultsNode {
             weights: HashMap::new(),
             default_weights: HashMap::new(),
             boost: HashSet::new(),
+            dominant: Vec::new(),
             top_k: None,
             signal: None,
         }
@@ -1845,6 +1907,12 @@ impl FuseResultsNode {
     }
 
     /// Étiquette en rôle `Boost` (module le score fusionné au lieu d'y entrer).
+    /// Déclare une étiquette dominante (voir le champ `dominant`).
+    pub fn with_dominant(mut self, label: impl Into<String>) -> Self {
+        self.dominant.push(label.into());
+        self
+    }
+
     pub fn with_boost(mut self, label: impl Into<String>) -> Self {
         self.boost.insert(label.into());
         self
@@ -1948,6 +2016,7 @@ impl Node for FuseResultsNode {
             "weights": self.weights.iter().collect::<std::collections::BTreeMap<_, _>>(),
             "default_weights": self.default_weights.iter().collect::<std::collections::BTreeMap<_, _>>(),
             "boost": boost,
+            "dominant": self.dominant,
             "top_k": self.top_k,
             "signal": self.signal,
         })))
@@ -2096,6 +2165,27 @@ impl Node for FuseResultsNode {
             }
             u.signal = Some(self.signal.clone().unwrap_or_else(|| if labels.is_empty(){label_out.clone()}else{labels.join("+")}));
             fused.push(u);
+        }
+
+        // **Les dominants devant** : par étiquette dominante puis par rang
+        // dans elle ; les autres gardent l'ordre de la fusion.
+        if !self.dominant.is_empty() {
+            let cle = |u: &UnifiedResult| -> Option<(usize, usize)> {
+                self.dominant
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(d, label)| u.signals.iter().find(|s| &s.label == label).map(|s| (d, s.rank)))
+                    .min()
+            };
+            let mut ranges: Vec<(Option<(usize, usize)>, usize, UnifiedResult)> =
+                fused.into_iter().enumerate().map(|(i, u)| (cle(&u), i, u)).collect();
+            ranges.sort_by(|a, b| match (a.0, b.0) {
+                (Some(x), Some(y)) => x.cmp(&y).then(a.1.cmp(&b.1)),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.1.cmp(&b.1),
+            });
+            fused = ranges.into_iter().map(|(_, _, u)| u).collect();
         }
 
         ctx.set_output("results", PortValue::new(fused));
@@ -3088,6 +3178,28 @@ mod tests {
         assert_eq!(dits("a"), vec![("bm25".to_string(), 0.6, 2), ("vector".to_string(), 0.9, 1)]);
         assert_eq!(dits("b"), vec![("bm25".to_string(), 0.8, 1)]);
         assert_eq!(dits("c"), vec![("vector".to_string(), 0.5, 2)]);
+    }
+
+    /// **Une étiquette dominante passe devant** (25 octobre 2026) : `c`, trouvé
+    /// par la seule requête entière, passe devant `b`, que deux signaux voient
+    /// et que la RRF aurait mis devant ; puis l'ordre de la fusion.
+    #[test]
+    fn a_dominant_label_goes_first() {
+        let mut ctx = NodeContext::new();
+        ctx.set_input("vector", PortValue::new(vec![make_unified_result("b", 0.9), make_unified_result("a", 0.8)]));
+        ctx.set_input("bm25", PortValue::new(vec![make_unified_result("b", 3.0)]));
+        ctx.set_input("signals", PortValue::new(vec![tagged("c", 5.0, "bm25_exact"), tagged("d", 4.0, "bm25_exact")]));
+        FuseResultsNode::new("fuse").with_dominant("bm25_exact").execute(&mut ctx).unwrap();
+        let ordre: Vec<String> = results_of(&mut ctx).into_iter().map(|r| r.uuid).collect();
+        assert_eq!(ordre, vec!["c", "d", "b", "a"]);
+
+        // Sans dominante, la RRF met b (deux signaux) devant c (un seul).
+        let mut ctx = NodeContext::new();
+        ctx.set_input("vector", PortValue::new(vec![make_unified_result("b", 0.9), make_unified_result("a", 0.8)]));
+        ctx.set_input("bm25", PortValue::new(vec![make_unified_result("b", 3.0)]));
+        ctx.set_input("signals", PortValue::new(vec![tagged("c", 5.0, "bm25_exact"), tagged("d", 4.0, "bm25_exact")]));
+        FuseResultsNode::new("fuse").execute(&mut ctx).unwrap();
+        assert_eq!(results_of(&mut ctx).first().map(|r| r.uuid.clone()), Some("b".to_string()));
     }
 
     fn tagged(uuid: &str, score: f64, signal: &str) -> UnifiedResult {
