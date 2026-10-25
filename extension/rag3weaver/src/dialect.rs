@@ -1347,17 +1347,27 @@ fn fondable(s: &rag3weaver_ir::Select) -> bool {
         && !s.returns.iter().any(|c| matches!(c, rag3weaver_ir::Column::Collect(_)))
 }
 
-/// Une clé d'ordre, sur l'alias `m` : un champ ou `coalesce(…)`, et `DESC`.
-fn cle_d_ordre(quote: impl Fn(&str) -> String, k: &rag3weaver_ir::OrderKey) -> String {
-    let expr = match &k.by {
-        rag3weaver_ir::OrderBy::Field(f) => format!("m.{}", quote(f)),
-        rag3weaver_ir::OrderBy::Coalesce(v) => format!("coalesce({})", v.iter().map(|f| format!("m.{}", quote(f))).collect::<Vec<_>>().join(", ")),
-    };
-    if k.desc {
-        format!("{expr} DESC")
-    } else {
-        expr
-    }
+/// Une clé d'ordre, sur l'alias `m` : un champ, un extrême des lignes liées
+/// (rendu par `extreme`, propre au dialecte), ou `coalesce(…)` de plusieurs ;
+/// et `DESC`. Rend l'expression, sa direction, et si la clé est un extrême
+/// seul : son NULL (aucune ligne liée ne répond) se range alors après les
+/// autres, dans les deux sens, et chaque dialecte le dit à sa façon.
+fn cle_d_ordre(
+    quote: impl Fn(&str) -> String,
+    k: &rag3weaver_ir::OrderKey,
+    extreme: &mut dyn FnMut(rag3weaver_ir::Extremum, &rag3weaver_ir::Aggregate) -> String,
+) -> (String, &'static str, bool) {
+    let (termes, coalesce) = k.by.terms();
+    let seul_extreme = !coalesce && matches!(termes.first(), Some(rag3weaver_ir::Term::Extremum(..)));
+    let rendus: Vec<String> = termes
+        .into_iter()
+        .map(|t| match t {
+            rag3weaver_ir::Term::Field(f) => format!("m.{}", quote(f)),
+            rag3weaver_ir::Term::Extremum(x, a) => extreme(x, a),
+        })
+        .collect();
+    let expr = if coalesce { format!("coalesce({})", rendus.join(", ")) } else { rendus.join(", ") };
+    (expr, if k.desc { " DESC" } else { "" }, seul_extreme)
 }
 
 /// `limit` et `offset` d'une sélection liée, en nombres ; un paramètre non lié
@@ -1496,11 +1506,6 @@ impl SchemaDialect for Rag3dbDialect {
         let (limit, offset) = borne_et_saut(select)?;
         let mut n = 0;
         let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", rag3db_condition_sur(p, "m", &mut n))).unwrap_or_default();
-        let ordre = if select.order_by.is_empty() {
-            String::new()
-        } else {
-            format!(" ORDER BY {}", select.order_by.iter().map(|k| cle_d_ordre(|f| self.quote(f), k)).collect::<Vec<_>>().join(", "))
-        };
         let borne = format!(
             "{}{}",
             offset.map(|o| format!(" SKIP {o}")).unwrap_or_default(),
@@ -1511,12 +1516,37 @@ impl SchemaDialect for Rag3dbDialect {
         } else {
             format!("MATCH (m:{})", self.quote(&select.table))
         };
+        let mut corps = String::new();
+        let mut porte: Vec<String> = select.by_uuids.then(|| "u".to_string()).into_iter().chain(["m".to_string()]).collect();
+        // **Les extrêmes de l'ordre** : un `OPTIONAL MATCH` par extrême, réduit
+        // par `max` ou `min` en une valeur `k<i>` que l'`ORDER BY` lit. Avant
+        // les listes : la réduction se groupe alors par `m` seul, jamais par une
+        // liste déjà collectée. Une ligne sans lien rend NULL.
+        let mut extremes = 0;
+        let mut cles = Vec::new();
+        for k in &select.order_by {
+            let mut extreme = |x: rag3weaver_ir::Extremum, a: &rag3weaver_ir::Aggregate| {
+                let (y, nom) = (format!("a{extremes}"), format!("k{extremes}"));
+                extremes += 1;
+                let motif = match a.direction {
+                    rag3weaver_ir::Direction::Outgoing => format!("(m)-[:{}]->({y}:{})", self.quote(&a.relation), self.quote(&a.end)),
+                    rag3weaver_ir::Direction::Incoming => format!("(m)<-[:{}]-({y}:{})", self.quote(&a.relation), self.quote(&a.end)),
+                };
+                let condition = a.filter.as_ref().map(|f| format!(" WHERE {}", rag3db_condition_sur(f, &y, &mut n))).unwrap_or_default();
+                corps.push_str(&format!(" OPTIONAL MATCH {motif}{condition} WITH {}, {}({y}.{}) AS {nom}", porte.join(", "), x.function(), self.quote(&a.field)));
+                porte.push(nom.clone());
+                nom
+            };
+            let (expr, sens, seul_extreme) = cle_d_ordre(|f| self.quote(f), k, &mut extreme);
+            // rag3db n'écrit pas `NULLS LAST` : le NULL se range par une clé
+            // de plus, fausse avant vraie.
+            cles.push(if seul_extreme { format!("{expr} IS NULL, {expr}{sens}") } else { format!("{expr}{sens}") });
+        }
+        let ordre = if cles.is_empty() { String::new() } else { format!(" ORDER BY {}", cles.join(", ")) };
         // **Les lignes liées** : un `OPTIONAL MATCH` par liste, réduit par
         // `collect` avant la suivante (sinon elles se multiplient entre elles).
         // Une ligne sans lien rend une liste vide : `collect` ne garde pas les
         // NULL que l'`OPTIONAL MATCH` laisse.
-        let mut corps = String::new();
-        let mut porte: Vec<String> = select.by_uuids.then(|| "u".to_string()).into_iter().chain(["m".to_string()]).collect();
         for (i, c) in select.returns.iter().filter_map(|c| if let Column::Collect(c) = c { Some(c) } else { None }).enumerate() {
             let x = format!("c{i}");
             let motif = match c.direction {
@@ -2540,11 +2570,31 @@ impl SchemaDialect for PostgresDialect {
         }
         let table = self.quote(&select.table);
         let filtre = select.filter.as_ref().map(|p| format!(" WHERE {}", postgres_condition_sur(self, p, "m", &mut n))).unwrap_or_default();
-        let ordre = if select.order_by.is_empty() {
-            String::new()
-        } else {
-            format!(" ORDER BY {}", select.order_by.iter().map(|k| cle_d_ordre(|f| self.quote(f), k)).collect::<Vec<_>>().join(", "))
-        };
+        // **Les extrêmes de l'ordre**, par une sous-requête corrélée, comme les
+        // listes : NULL quand aucune ligne liée ne répond.
+        let mut extremes = 0;
+        let mut cles = Vec::new();
+        for k in &select.order_by {
+            let mut extreme = |x: rag3weaver_ir::Extremum, a: &rag3weaver_ir::Aggregate| {
+                let (r, y) = (format!("ra{extremes}"), format!("a{extremes}"));
+                extremes += 1;
+                let (vers, depuis) = match a.direction {
+                    rag3weaver_ir::Direction::Outgoing => ("to_uuid", "from_uuid"),
+                    rag3weaver_ir::Direction::Incoming => ("from_uuid", "to_uuid"),
+                };
+                let condition = a.filter.as_ref().map(|f| format!(" AND {}", postgres_condition_sur(self, f, &y, &mut n))).unwrap_or_default();
+                format!(
+                    "(SELECT {}({y}.{}) FROM {} AS {r} JOIN {} AS {y} ON {y}.\"_uuid\" = {r}.\"{vers}\" WHERE {r}.\"{depuis}\" = m.\"_uuid\"{condition})",
+                    x.function(),
+                    self.quote(&a.field),
+                    self.quote(&a.relation),
+                    self.quote(&a.end)
+                )
+            };
+            let (expr, sens, seul_extreme) = cle_d_ordre(|f| self.quote(f), k, &mut extreme);
+            cles.push(if seul_extreme { format!("{expr}{sens} NULLS LAST") } else { format!("{expr}{sens}") });
+        }
+        let ordre = if cles.is_empty() { String::new() } else { format!(" ORDER BY {}", cles.join(", ")) };
         let borne = format!(
             "{}{}",
             limit.map(|l| format!(" LIMIT {l}")).unwrap_or_default(),
