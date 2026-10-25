@@ -2029,6 +2029,9 @@ pub struct CodeIngestReport {
     /// Requêtes des déclarants C/C++ (la forme exacte) : une pour les conteneurs du lot, une par
     /// tranche de fonctions libres restées invisibles. Leur nombre par lot, que le profil suit.
     pub declarant_queries: usize,
+    /// Lignes que ces requêtes ont ramenées (des conteneurs et des scopes de fichier, avec leur
+    /// JSON `declarations`) : le poids du pas 2, qu'un namespace commun à toute la base peut gonfler.
+    pub declarant_rows_read: usize,
     /// Mentions relues pour résoudre les noms du lot : la mesure de ce que la
     /// résolution coûte en lecture, qui ne doit suivre que le lot, pas la base.
     pub mentions_read: usize,
@@ -2666,7 +2669,8 @@ impl Catalog {
             }
             let (declarants, requetes) =
                 Declarants::charger_par(self.dialect_arc().as_ref(), |q, p| self.conn().execute_with_params(q, p).map_err(|e| CatalogError::DbError(e.to_string())), &conteneurs, &libres)?;
-            report.declarant_queries += requetes;
+            report.declarant_queries += requetes.0;
+            report.declarant_rows_read += requetes.1;
             (noms, declarants)
         };
         crate::ingest_profile::add("symboles · déclarants", t);
@@ -3640,6 +3644,14 @@ struct Declarants {
 
 /// Le genre d'un scope de fichier (`scope_type_name(ScopeInfoType::Module)`).
 const SCOPE_DE_FICHIER: &str = "module";
+/// Les genres d'un conteneur qui déclare (une struct C++ est une `class` pour codeparsers).
+const GENRES_DECLARANTS: [&str; 3] = ["class", "interface", "namespace"];
+
+/// Un en-tête C/C++, par son extension.
+fn est_un_en_tete(fichier: &str) -> bool {
+    matches!(fichier.rsplit_once('.').map_or("", |(_, e)| e), "h" | "hh" | "hpp" | "hxx" | "h++" | "inl" | "ipp" | "tcc")
+}
+
 /// Les fonctions libres dont on lit les déclarants, par requête (une tranche de `AnyOf`).
 const LIBRES_PAR_REQUETE: usize = 200;
 
@@ -3658,27 +3670,42 @@ fn noms_declares(json: &str) -> std::collections::HashSet<String> {
 impl Declarants {
     /// Lit les déclarants des `conteneurs` (une requête, `In` sur le nom) et ceux des fonctions
     /// `libres` (par tranches, `AnyOf` de `Contains` sur `declarations`, confirmés en relisant le
-    /// JSON). Rend aussi le nombre de requêtes faites.
+    /// JSON). Rend aussi le nombre de requêtes faites et de lignes ramenées.
     fn charger_par(
         dialecte: &dyn crate::dialect::SchemaDialect,
         executer: impl Fn(&str, &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult, CatalogError>,
         conteneurs: &std::collections::BTreeSet<String>,
         libres: &std::collections::BTreeSet<String>,
-    ) -> Result<(Self, usize), CatalogError> {
+    ) -> Result<(Self, (usize, usize)), CatalogError> {
         use crate::connection::QueryParam;
         use rag3weaver_ir::{Column, Predicate, Select};
         let mut out = Declarants::default();
         let mut requetes = 0;
+        let mut lignes = 0;
         let colonnes = |extra: &str| vec![Column::Node(extra.into()), Column::Node("file_path".into()), Column::Node("declarations".into())];
         if !conteneurs.is_empty() {
-            let lire = Select::filtered(SCOPE, Predicate::In { field: "name".into(), param: "conteneurs".into() }, colonnes("name"));
+            // Les conteneurs par leur nom **et leur genre** : sans le genre, le In ramènerait aussi les
+            // Function homonymes de leur classe (un constructeur `Transformer::Transformer()`), que
+            // seul un JSON vide écarterait, par hasard (relecture de l'arbre principal).
+            let lire = Select::filtered(
+                SCOPE,
+                Predicate::AllOf(vec![
+                    Predicate::In { field: "name".into(), param: "conteneurs".into() },
+                    Predicate::In { field: "scope_type".into(), param: "genres".into() },
+                ]),
+                colonnes("name"),
+            );
             let requete = dialecte.select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
             let liste = CypherValue::List(conteneurs.iter().map(|c| CypherValue::String(c.clone())).collect());
-            let rows = executer(&requete, &[QueryParam::new("conteneurs", liste)])?;
+            let genres = CypherValue::List(GENRES_DECLARANTS.iter().map(|g| CypherValue::String(g.to_string())).collect());
+            let rows = executer(&requete, &[QueryParam::new("conteneurs", liste), QueryParam::new("genres", genres)])?;
             requetes += 1;
+            lignes += rows.rows.len();
             for r in &rows.rows {
                 let (Some(CypherValue::String(c)), Some(CypherValue::String(f)), Some(CypherValue::String(j))) = (r.first(), r.get(1), r.get(2)) else { continue };
-                if famille_de_langage(f) != Some("c++") || j.is_empty() {
+                // Un en-tête : une source ne déclare guère pour une autre, et sa propre définition
+                // est déjà vue par inclusion.
+                if famille_de_langage(f) != Some("c++") || !est_un_en_tete(f) || j.is_empty() {
                     continue;
                 }
                 out.par_conteneur.entry(c.clone()).or_default().push((f.clone(), noms_declares(j)));
@@ -3695,6 +3722,7 @@ impl Declarants {
             params.extend(tranche.iter().enumerate().map(|(i, n)| QueryParam::new(&format!("nom{i}"), CypherValue::String(format!("\"{n}\"")))));
             let rows = executer(&requete, &params)?;
             requetes += 1;
+            lignes += rows.rows.len();
             let voulus: std::collections::HashSet<&str> = tranche.iter().map(|n| n.as_str()).collect();
             for r in &rows.rows {
                 let (Some(CypherValue::String(f)), Some(CypherValue::String(j))) = (r.get(1), r.get(2)) else { continue };
@@ -3708,7 +3736,7 @@ impl Declarants {
                 }
             }
         }
-        Ok((out, requetes))
+        Ok((out, (requetes, lignes)))
     }
 
     /// `nom`, de conteneur `parent` (vide : une fonction libre), est-il déclaré dans un fichier
