@@ -51,28 +51,30 @@ pub fn query_word_highlights(query: &str, text: &str) -> Vec<Highlight> {
     if termes.is_empty() {
         return Vec::new();
     }
-    let mut spans: Vec<(usize, usize, &str)> = Vec::new();
+    // Les mots du texte, par leurs bornes en octets.
+    let mut mots: Vec<(usize, usize)> = Vec::new();
     let mut debut: Option<usize> = None;
-    let fermer = |d: usize, f: usize, spans: &mut Vec<(usize, usize, &str)>| {
-        let mot = &text[d..f];
-        let bas = mot.to_lowercase();
-        if termes.iter().any(|t| bas.contains(t.as_str())) {
-            spans.push((d, f, mot));
-        }
-    };
     for (i, c) in text.char_indices() {
         match (c.is_alphanumeric(), debut) {
             (true, None) => debut = Some(i),
             (false, Some(d)) => {
-                fermer(d, i, &mut spans);
+                mots.push((d, i));
                 debut = None;
             }
             _ => {}
         }
     }
     if let Some(d) = debut {
-        fermer(d, text.len(), &mut spans);
+        mots.push((d, text.len()));
     }
+    let spans: Vec<(usize, usize, &str)> = mots
+        .into_iter()
+        .map(|(d, f)| (d, f, &text[d..f]))
+        .filter(|(_, _, mot)| {
+            let bas = mot.to_lowercase();
+            termes.iter().any(|t| bas.contains(t.as_str()))
+        })
+        .collect();
     chunk_highlights(text, 0, text.len(), &spans, HIGHLIGHT_QUERY_WORDS)
 }
 
