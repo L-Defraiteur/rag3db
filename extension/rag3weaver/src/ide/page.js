@@ -27,7 +27,10 @@ function backend(id) {
   return (etat?.backends ?? []).find((b) => b.id === id);
 }
 
-async function appeler(id, nom, args) {
+// La réponse entière du graphe de l'outil ({ result, metadata, freshness,
+// validation, … }) : pour une vue qui montre aussi ce que l'hôte dit à côté de
+// la sortie (la recherche : sa méta, la fraîcheur de l'index).
+async function appelerEntier(id, nom, args) {
   const b = backend(id);
   if (!b) throw new Error(`backend inconnu : ${id}`);
   const r = await fetch("/ide/call", {
@@ -37,15 +40,20 @@ async function appeler(id, nom, args) {
   });
   const v = await r.json();
   if (!v.ok) throw new Error(v.error ?? `${nom} : échec`);
+  return v.result;
+}
+
+async function appeler(id, nom, args) {
+  const r = await appelerEntier(id, nom, args);
   // `/ide/call` rend la réponse du graphe de l'outil ({ result, metadata,
   // validation, … }) : ce que la vue lit est sa sortie, `result` (le témoin des
   // deux fenêtres l'a montré, 18 octobre 2026 : `r.text` et `r.content` étaient
   // lus un cran trop haut).
-  if (v.result && typeof v.result === "object" && "result" in v.result) return sortie(v.result.result);
+  if (r && typeof r === "object" && "result" in r) return sortie(r.result);
   // Toute réponse d'un outil du backend porte `result` : ce repli ne devrait
   // jamais servir, et s'il sert, une forme inattendue ne passe pas en silence.
-  console.warn(`${nom} : réponse de /ide/call sans « result », rendue telle quelle`, v.result);
-  return v.result;
+  console.warn(`${nom} : réponse de /ide/call sans « result », rendue telle quelle`, r);
+  return r;
 }
 
 // Une lecture du catalogue (usages, impact, callees…) enveloppe sa sortie de
@@ -446,23 +454,69 @@ async function symbole(id, nom) {
   );
 }
 
+// **La recherche dit ce qu'elle sait** (pièce 3, docs/12-octobre-2026-recherche/06) :
+// tout vient de la réponse de `search_code`, rien n'est relu dans son markdown.
+// En tête, l'état de l'index (la ligne « index : » de la méta) et sa fraîcheur ;
+// par résultat, le score, ce que chaque signal en a dit (score brut et rang) et
+// l'extrait ; en pied, les avertissements (un signal en repli, un relecteur
+// absent). « Reclasser » est dans l'URL, comme la requête : la page n'a pas
+// d'état que l'hôte n'ait pas.
 async function recherche(id) {
   filDAriane(id, "", false);
-  const q = new URLSearchParams(location.search).get("q") ?? "";
+  const params = new URLSearchParams(location.search);
+  const q = params.get("q") ?? "";
+  const reclasser = params.get("reclasser") === "1";
   document.querySelector("#chercher input").value = q;
   fil.append(" · recherche");
-  const r = await appeler(id, "search_code", { query: q, options: { limit: 30 } });
+  const options = { limit: 30 };
+  if (reclasser) options.rerank = { candidates: 20 };
+  const reponse = await appelerEntier(id, "search_code", { query: q, options });
+  const r = sortie(reponse?.result);
+  const meta = reponse?.metadata?.["render.meta"] ?? {};
+  const avertis = meta.warnings ?? [];
+  const etatIndex = avertis.find((w) => w.startsWith("index : "));
+  const autres = avertis.filter((w) => !w.startsWith("index : "));
+  const resultats = Array.isArray(r) ? r : [];
+  const case_ = el("input", { type: "checkbox", id: "reclasser", onchange: (e) => {
+    const p = new URLSearchParams(location.search);
+    if (e.target.checked) p.set("reclasser", "1"); else p.delete("reclasser");
+    location.search = p.toString();
+  } });
+  case_.checked = reclasser;
   vue.replaceChildren(
     el("h1", {}, `« ${q} »`),
-    ...(Array.isArray(r) ? r : []).map((x) => {
+    el("p", { id: "recherche-etat", class: "note" }, etatRecherche(etatIndex, reponse?.freshness, meta, resultats.length)),
+    el("p", { class: "note" }, el("label", {}, case_, " reclasser (un relecteur relit les 20 premiers ; pour une vraie question)")),
+    ...resultats.map((x) => {
       const d = x.data ?? {};
+      const extrait = x.chunk?.text ?? d.signature ?? "";
       return el("div", { class: "resultat" },
         el("a", { href: lienFichier(id, d.file_path ?? "", d.start_line) }, `${d.file_path ?? "?"}:${d.start_line ?? ""}`),
         " ", d.name ? el("a", { href: lienSymbole(id, d.name) }, d.name) : "",
         " ", el("span", { class: "meta note" }, `${d.scope_type ?? x.entity ?? ""} · ${x.signal ?? ""}`),
-        d.signature ? el("pre", {}, d.signature) : "");
+        " ", el("span", { class: "score", title: "le score de l'ordre rendu" }, `★ ${Number(x.score ?? 0).toFixed(3)}`),
+        (x.signals ?? []).length
+          ? el("div", { class: "signaux note" }, x.signals.map((s) => `${s.label} n°${s.rank} (${Number(s.score).toFixed(3)})`).join(" · "))
+          : "",
+        extrait ? el("pre", {}, extrait.length > 600 ? `${extrait.slice(0, 600)}…` : extrait) : "");
     }),
+    autres.length ? el("ul", { class: "avertissements" }, autres.map((w) => el("li", {}, `⚠ ${w}`))) : "",
   );
+}
+
+// La ligne de tête : l'état de l'index tel que la méta le dit, sinon « à jour »,
+// la fraîcheur (fichiers en retard, arbre modifié), et ce que la recherche a
+// compté.
+function etatRecherche(etatIndex, f, meta, n) {
+  const morceaux = [etatIndex ?? "index : à jour"];
+  if (f?.lag_files) morceaux.push(`${f.lag_files} fichier(s) en retard sur l'arbre`);
+  if (f?.dirty) morceaux.push("arbre modifié depuis l'index");
+  const comptes = [];
+  if (meta.bm25Count != null) comptes.push(`mots ${meta.bm25Count}`);
+  if (meta.vectorCount != null) comptes.push(`sens ${meta.vectorCount}`);
+  if (meta.rerankedCount) comptes.push(`relus ${meta.rerankedCount}`);
+  morceaux.push(`${n} résultat(s)${comptes.length ? ` (${comptes.join(", ")})` : ""}`);
+  return morceaux.join(" · ");
 }
 
 // Le voisinage en papillon : ce qui en dépend à gauche (impact), ce qu'il

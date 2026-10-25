@@ -71,6 +71,10 @@
   .pastille { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: var(--accent-doux); color: var(--accent); }
   .resultat { padding: 8px 0; border-bottom: 1px solid var(--trait); }
   .resultat pre { margin: 4px 0 0; font: 12px/1.45 var(--mono); white-space: pre-wrap; color: var(--doux); }
+  /* La recherche dit ce qu'elle sait (pièce 3) : le score, chaque signal, les avertissements. */
+  .resultat .score { font-size: 12px; font-family: var(--mono); color: var(--accent); }
+  .resultat .signaux { font-family: var(--mono); font-size: 12px; margin-top: 2px; }
+  .avertissements { margin: 16px 0 0; padding-left: 18px; color: var(--alerte); font-size: 13px; }
   .graphe { background: var(--surface); border: 1px solid var(--trait); border-radius: 8px; overflow: auto; }
   .graphe svg { display: block; }
   .graphe .noeud rect { fill: var(--fond); stroke: var(--trait); }
