@@ -184,24 +184,32 @@ impl Flux {
         self.abonnes.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
 
-    /// **Relaie le bus d'un backend** qui vient de s'ouvrir : une tâche par
+    /// **Relaie le bus d'un backend** qui vient de s'ouvrir : un fil par
     /// sujet, qui finit quand le bus se ferme (le backend fermé ou rouvert,
     /// dont le nouveau bus est relayé à son tour).
+    ///
+    /// **Un fil à lui, pas une tâche du runtime des graphes** (25 octobre
+    /// 2026) : ce runtime a deux fils pour tout le processus, et les nœuds qui
+    /// bloquent les y tiennent. Le témoin du chat dans la page rougissait sous
+    /// la lib entière : le tour publiait, le relais attendait derrière les
+    /// graphes des autres témoins, la page ne voyait rien en 20 s. En service,
+    /// un graphe long gelait de même la vue vivante de l'IDE.
     pub fn relayer(self: &Arc<Self>, backend: &str, bus: &EventBus) {
         for sujet in SUJETS {
             let mut rx = bus.subscribe(sujet);
             let (flux, backend, sujet) = (Arc::downgrade(self), backend.to_string(), sujet.to_string());
-            crate::dataflow::rt::runtime().spawn(async move {
-                loop {
-                    let evenement = match rx.recv().await {
-                        Ok(e) => e.to_json(),
-                        Err(async_broadcast::RecvError::Overflowed(n)) => json!({ "kind": "EventsMissed", "count": n }),
-                        Err(async_broadcast::RecvError::Closed) => break,
-                    };
-                    let Some(flux) = flux.upgrade() else { break };
-                    flux.publier(&sujet, &backend, evenement);
-                }
+            let lance = std::thread::Builder::new().name(format!("ide-relais-{sujet}")).spawn(move || loop {
+                let evenement = match rx.recv_blocking() {
+                    Ok(e) => e.to_json(),
+                    Err(async_broadcast::RecvError::Overflowed(n)) => json!({ "kind": "EventsMissed", "count": n }),
+                    Err(async_broadcast::RecvError::Closed) => break,
+                };
+                let Some(flux) = flux.upgrade() else { break };
+                flux.publier(&sujet, &backend, evenement);
             });
+            if let Err(e) = lance {
+                eprintln!("[ide] le relais de « {sujet} » ne part pas : {e}");
+            }
         }
     }
 }
@@ -714,6 +722,42 @@ mod tests {
         let t = vieille.texte();
         assert!(t.contains("event: lacune"), "{}", &t[..t.len().min(300)]);
         assert_eq!(vieille.ids().len(), TAMPON, "puis tout ce que le tampon garde");
+    }
+
+    /// **Le relais ne dépend pas du runtime des graphes** : ses deux fils tenus
+    /// par des nœuds qui bloquent (comme sous la lib entière), un événement du
+    /// bus arrive quand même à la fenêtre, tout de suite. Avant, il attendait
+    /// qu'un fil se libère.
+    #[test]
+    fn the_relay_does_not_wait_for_the_graph_runtime() {
+        let flux = Flux::new();
+        let bus = EventBus::new(64);
+        flux.relayer("/x/backend.json", &bus);
+        let fenetre = Capture::default();
+        flux.abonner(Box::new(fenetre.clone()), None, None);
+        // Les deux fils du runtime tenus 1,5 s (court : les autres témoins du
+        // processus le partagent), et la preuve qu'ils le sont.
+        let tenus = Arc::new(std::sync::Barrier::new(3));
+        for _ in 0..2 {
+            let tenus = tenus.clone();
+            crate::dataflow::rt::runtime().spawn(async move {
+                tenus.wait();
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+            });
+        }
+        tenus.wait();
+        let envoi = std::time::Instant::now();
+        bus.emit(crate::events::Event::FileChanged {
+            watch: "code".into(),
+            path: "src/lib.rs".into(),
+            change: "modified".into(),
+            hash: "h".into(),
+            at_ms: 1,
+        });
+        while fenetre.ids().is_empty() && envoi.elapsed() < std::time::Duration::from_millis(500) {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!fenetre.ids().is_empty(), "l'événement a attendu les fils du runtime des graphes : rien en {:?}", envoi.elapsed());
     }
 
     /// **Le bus d'un backend est relayé** : un `FileChanged` émis sur le bus
