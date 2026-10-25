@@ -1215,3 +1215,45 @@ fn la_premiere_recherche_apres_l_ouverture_dit_ou_est_le_plein_texte() {
     assert!(!avert.contains("n'a pas été enregistrée"), "et ne l'accuse pas d'un autre défaut : {long}");
     assert_eq!(meta["partial"], json!(true), "le résultat est marqué partiel : {long}");
 }
+
+/// **Chaque résultat dit quoi surligner** (25 octobre 2026, la vue de recherche de l'IDE) : le
+/// morceau rendu porte `highlights`, des passages `[start, end)` en unités UTF-16 de
+/// `chunk.text`, trouvés par lucivy. Le fichier commence par des blancs (le découpeur les rogne
+/// sans déplacer le début du morceau) et la phrase suit un accent et un emoji (des octets qui ne
+/// sont pas des unités UTF-16) : chaque passage, découpé tel que la page le fera, est un bout de
+/// la requête.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn chaque_resultat_dit_quoi_surligner() {
+    use serde_json::json;
+
+    let depot = tempfile::tempdir().unwrap();
+    let p = depot.path().join("doc/architecture.md");
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(&p, "\n\n   # Été 🙂 architecture\n\n## Vue d'ensemble\n\nLe moteur range les documents.\n").unwrap();
+    std::fs::write(depot.path().join("vue.rs"), "pub fn vue() -> u32 {\n    1\n}\n").unwrap();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "surlignages", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": "Vue d'ensemble", "options": {"limit": 5}, "mode": "indexed"}))
+        .expect("search_code");
+    let premier = &r["result"][0];
+    assert_eq!(premier["data"]["file_path"].as_str(), Some("src/doc/architecture.md"), "{r}");
+    let texte = premier["chunk"]["text"].as_str().unwrap_or_else(|| panic!("le morceau : {premier}"));
+    let surlignes = premier["chunk"]["highlights"].as_array().unwrap_or_else(|| panic!("des surlignages : {premier}"));
+    assert!(!surlignes.is_empty(), "{premier}");
+    let unites: Vec<u16> = texte.encode_utf16().collect();
+    let mut vus = Vec::new();
+    for h in surlignes {
+        let (a, b) = (h["start"].as_u64().unwrap() as usize, h["end"].as_u64().unwrap() as usize);
+        assert!(a < b && b <= unites.len(), "{h} dans {texte:?}");
+        let passage = String::from_utf16(&unites[a..b]).unwrap().to_lowercase();
+        assert_eq!(h["source"], "lucivy", "{h}");
+        assert!("vue d'ensemble".contains(&passage), "« {passage} » est un bout de la requête : {premier}");
+        vus.push(passage);
+    }
+    assert!(vus.iter().any(|p| p.contains("ensemble")), "le passage de la phrase est surligné : {vus:?}");
+}
