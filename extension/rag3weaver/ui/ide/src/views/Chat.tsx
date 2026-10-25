@@ -74,11 +74,13 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       setItems((cur) => cur.map((i) => (i.kind === "message" && i.live ? f(i) : i)));
     return onFlux((d: FluxEvent) => {
       const ev = d.evenement ?? {};
-      if (!backend || d.backend !== backend.manifest) return;
+      // Le flux rouvert (page à peine chargée, flux coupé puis repris) : l'état
+      // du chat se relit, avant tout filtre — ce signal n'a pas de backend.
       if (d.sujet === "flux" && ev.kind === "ouvert") {
         reload().catch(() => {});
         return;
       }
+      if (!backend || d.backend !== backend.manifest) return;
       if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${id}`) {
         setRun(String(ev.run));
         setBusy(true);
