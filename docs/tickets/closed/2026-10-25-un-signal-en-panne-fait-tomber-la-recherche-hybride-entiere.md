@@ -1,6 +1,6 @@
 # Un signal en panne fait tomber la recherche hybride entière
 
-- **État** : ouvert, le 25 octobre 2026 (vu par G sur l'hôte de Lucie ; confié à la session « recherche »).
+- **État** : corrigé le 25 octobre 2026 (session « recherche ») : la branche dense demande à l'instantané si son index se lit avant de le lire. Ouvert le même jour (vu par G sur l'hôte de Lucie).
 - **Gravité** : blocage. `search_code` ne répond plus du tout, alors que le plein texte est prêt.
 - **Atteignable en service** : oui. Il suffit d'un rattrapage de vecteurs au-delà du seuil (2000 morceaux), qui retire l'index vectoriel par conception.
 - **Touche rag3weaver** : oui (`FuseResultsNode`, `BM25SearchNode`, `VectorSearchNode`).
@@ -35,3 +35,26 @@ répond seul en disant que la branche dense manque.
 
 Chaque branche lit dans sa propre transaction, ou la branche dense vérifie que son index existe avant
 de lire. Une branche en panne se dit dans la réponse ; les autres répondent quand même.
+
+## Le correctif (25 octobre 2026)
+
+La cause : sous L6, les signaux d'un appel lisent dans une seule transaction `READ ONLY`
+(`read_pool.rs`), et le moteur condamne une transaction manuelle dès qu'une de ses instructions
+échoue (marche T0). Le `QUERY_VECTOR_INDEX` d'un index absent échouait au binder ; le plein texte,
+le creux et la résolution des morceaux tombaient ensuite sur le refus.
+
+- `VectorSearchNode` demande d'abord à l'instantané si son index se lit
+  (`SchemaDialect::vector_index_presence` : `CALL SHOW_INDEXES()` pour rag3db, qui lit le
+  catalogue de la transaction ; toujours vrai pour pgvector, qui lit la colonne sans index).
+  Cette question ne peut pas échouer au binder.
+- Absent, la branche se replie en **indisponible** (pas en échec), sans qu'aucune instruction
+  n'échoue : la transaction reste saine, les autres signaux répondent.
+- La raison est dite dans la réponse (`meta.warnings`, rendue en pied) : « the vector index `…`
+  is dropped while its vectors catch up » si le drapeau `vector_index_dropped:{table}:{index}`
+  est posé, sinon « the vector index `…` is missing ».
+- Témoins (`tests/e2e_lectures.rs`, par `call_in`, sous l'instantané) :
+  `la_recherche_rend_les_mots_pendant_le_rattrapage_des_vecteurs` et
+  `la_recherche_rend_les_mots_quand_l_index_vectoriel_manque`.
+
+Reste, pour le cœur : une autre faute d'une branche condamnerait encore l'instantané partagé.
+Ticket `2026-10-25-une-instruction-qui-echoue-condamne-une-transaction-en-lecture-seule`.

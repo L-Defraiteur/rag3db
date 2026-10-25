@@ -145,6 +145,48 @@ fn replier_la_branche(
     Ok(())
 }
 
+/// **L'index vectoriel se lit-il, dans la transaction de l'appel ?** (ticket
+/// 2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere).
+/// `None` s'il se lit ; sinon la chute de la branche dense, indisponible et
+/// non en échec. La question passe par le catalogue du moteur, qui ne peut pas
+/// échouer au binder : lire l'index absent, lui, condamnait la transaction en
+/// lecture que partagent tous les signaux de l'appel (L6), et le plein texte
+/// tombait avec. La raison vient du drapeau que pose le rattrapage
+/// (`Catalog::ajuster_l_index_pour_le_retard`), lu dans le même instantané.
+fn index_vectoriel_illisible(
+    conn: &dyn crate::connection::DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    table: &str,
+    index: &str,
+) -> Option<Chute> {
+    let (requete, params) = dialect.vector_index_presence(table, index);
+    let lignes = match conn.execute_with_params(&requete, &params) {
+        Ok(r) => r.rows,
+        Err(e) => return Some(Chute::Echec(format!("VectorSearchNode: vector index check failed: {e}"))),
+    };
+    match lignes.first().map(|l| l.first().and_then(|v| v.as_bool()).unwrap_or(true)) {
+        Some(true) => None,
+        Some(false) => Some(Chute::Indisponible(format!(
+            "the vector index `{index}` exists but its extension is not loaded — answering from the other signals"
+        ))),
+        None => {
+            let cle = format!("vector_index_dropped:{table}:{index}");
+            let parametre = [crate::connection::QueryParam::new("cle", cle.as_str())];
+            let tombe = conn.execute_with_params(&dialect.load_meta_by_prefix("cle"), &parametre).is_ok_and(|r| {
+                r.rows.iter().any(|l| {
+                    l.first().and_then(|v| v.as_str()) == Some(cle.as_str())
+                        && l.get(1).and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty())
+                })
+            });
+            Some(Chute::Indisponible(if tombe {
+                format!("the vector index `{index}` is dropped while its vectors catch up — answering from the other signals")
+            } else {
+                format!("the vector index `{index}` is missing — answering from the other signals")
+            }))
+        }
+    }
+}
+
 /// Le statut « disponible », émis au succès d'une branche.
 fn statut_disponible(ctx: &mut NodeContext, label: &str) {
     ctx.set_output(
@@ -922,6 +964,25 @@ impl Node for VectorSearchNode {
             }
         };
 
+        // Le dialecte du service, pas rag3db en dur : la question de l'index
+        // comme la résolution des chunks plus bas.
+        let dialect = ctx
+            .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .cloned()
+            .ok_or("'dialect' service not found")?;
+        if let Some(chute) = index_vectoriel_illisible(&*conn, dialect.as_ref(), &target.chunk_table, &index_name) {
+            return replier_la_branche(
+                ctx,
+                strict,
+                &label,
+                "dense",
+                &query_str,
+                &target.name,
+                crate::search::SearchSignals::VECTOR,
+                chute,
+            );
+        }
+
         let backend = moteur_de_recherche(ctx, &conn);
         let chunk_results = search_vector_via_backend(
             backend.as_ref(),
@@ -955,10 +1016,6 @@ impl Node for VectorSearchNode {
         // **Le dialecte du service, pas rag3db en dur** : sans lui, ce chemin
         // résolvait les chunks en Cypher sur PostgreSQL — B2 de la
         // réconciliation du 6 septembre 2026.
-        let dialect = ctx
-            .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
-            .cloned()
-            .ok_or("'dialect' service not found")?;
         let results = crate::search::resolve_vector_chunks_with_dialect(
             &*conn,
             &target,

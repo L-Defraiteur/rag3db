@@ -466,6 +466,16 @@ pub trait SchemaDialect: Send + Sync {
     /// en masse puis reconstruire (doc 18).
     fn drop_vector_index(&self, table: &str, index_name: &str) -> String;
 
+    /// **L'index vectoriel, vu de la transaction qui lit** (ticket
+    /// 2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere) :
+    /// une requête qui rend une ligne si l'index existe (ou si la lecture
+    /// n'en a pas besoin), sa seule colonne vraie s'il se lit, et aucune
+    /// s'il manque. Elle ne peut pas échouer au
+    /// binder quand l'index manque ; la lecture d'un index absent, elle,
+    /// condamne la transaction en lecture que partagent les signaux d'un
+    /// appel (L6).
+    fn vector_index_presence(&self, table: &str, index_name: &str) -> (String, Vec<crate::connection::QueryParam>);
+
     // ── Internal tables ──────────────────────────────────────────────────
 
     /// CREATE TABLE for the `_catalog_meta` key-value store.
@@ -1828,6 +1838,17 @@ impl SchemaDialect for Rag3dbDialect {
         format!("CALL DROP_VECTOR_INDEX('{table}', '{index_name}', skip_if_not_exists := true)")
     }
 
+    /// `SHOW_INDEXES` lit le catalogue de la transaction : il voit l'état même
+    /// que verrait `QUERY_VECTOR_INDEX`. Un index dont l'extension n'est pas
+    /// chargée ne se lit pas non plus.
+    fn vector_index_presence(&self, table: &str, index_name: &str) -> (String, Vec<crate::connection::QueryParam>) {
+        use crate::connection::QueryParam;
+        (
+            "CALL SHOW_INDEXES() WHERE table_name = $table AND index_name = $index RETURN extension_loaded".to_string(),
+            vec![QueryParam::new("table", table), QueryParam::new("index", index_name)],
+        )
+    }
+
     fn create_meta_table(&self) -> String {
         "CREATE NODE TABLE IF NOT EXISTS _catalog_meta(\n    \
          _key STRING,\n    \
@@ -3021,6 +3042,12 @@ impl SchemaDialect for PostgresDialect {
 
     fn drop_vector_index(&self, _table: &str, index_name: &str) -> String {
         format!("DROP INDEX IF EXISTS {}", self.quote(index_name))
+    }
+
+    /// pgvector lit la colonne même sans index (un balayage) : l'absence d'un
+    /// index ne rend jamais la branche dense illisible ici.
+    fn vector_index_presence(&self, _table: &str, _index_name: &str) -> (String, Vec<crate::connection::QueryParam>) {
+        ("SELECT true".to_string(), vec![])
     }
 
     fn create_meta_table(&self) -> String {
