@@ -100,20 +100,40 @@ alors et rendent leurs pages (`retireStorage` les avait marquées, V2-1b (d)). L
 mémoire des anciens blocs des groupes changés, le temps d'un lecteur long : c'est le §3.7, mesuré
 d'abord.
 
-**Les écritures pendant la fenêtre d'un groupe** (V2-2c). Le dernier bloc en mémoire est scellé
-à la prise de la liste (`ChunkedNodeGroup::seal`) ; ce qui s'ajoute ensuite ouvre un bloc neuf,
-gardé derrière le bloc neuf à l'échange d'un groupe de nœuds. Pour un groupe CSR, un bloc ajouté
-décalerait les numéros de lignes de l'index des listes : les écritures d'un groupe CSR entre la
-prise et l'échange attendront une garde du groupe (partagée pour écrire, exclusive pour
-l'échange), pas une liste. Les mises à jour et suppressions à l'instruction dans l'ancien bloc
-pendant la fenêtre (versions non validées) passeraient à la génération précédente et non au bloc
-neuf : la même garde les retient le temps de l'échange. Le tampon d'annulation pointe dans
-l'ancien bloc : avec la garde, une version non validée n'est jamais dans un bloc remplacé.
+**Les écrivains pendant l'écriture** (V2-2c, forme précisée le 25 au soir). Les écrivains actifs
+au départ du point de reprise sont encore attendus (V2-3 lèvera cette attente) ; une fois
+l'écriture commencée, un écrivain nouveau **commence** sans attendre, **insère** (ses lignes sont
+locales jusqu'à la validation ; à la validation elles s'ajoutent dans un bloc neuf, après le
+dernier bloc scellé à la prise, `ChunkedNodeGroup::seal`, et l'échange d'un groupe de nœuds garde
+ces blocs derrière le bloc neuf), et **valide** pendant l'écriture (journal neuf, ci-dessous).
+Ce qu'il ne fait pas sans attendre : une mise à jour ou une suppression à l'instruction dans un
+groupe **pas encore échangé** par ce point de reprise. La raison est le tampon d'annulation, qui
+pointe dans le bloc où la version non validée a été écrite (`VectorUpdateRecord`, `UpdateInfo*`
+brut ; `VersionRecord` résolu dans la liste vivante) : écrite dans l'ancien bloc, elle resterait
+dans la génération précédente et le bloc neuf ne la verrait jamais. Donc une **garde par
+groupe** : `update`/`delete_` la prennent en partagé le temps de trouver le bloc et d'écrire ;
+le point de reprise la tient en exclusif de la prise de la liste à l'échange du groupe. Un
+écrivain qui tombe sur un groupe en cours attend la fin de ce groupe (des dizaines à quelques
+centaines de millisecondes), pas la fin du point de reprise. Pour un groupe CSR, un bloc
+ajouté pendant la fenêtre décalerait les numéros de lignes de l'index des listes : la même
+garde couvre l'ajout à la validation (`CSRNodeGroup::append`), qui attend l'échange.
 
-**La porte, le journal, le catalogue** (V2-2c, inchangés par rapport à la première rédaction) :
-le point de reprise attend encore les écrivains actifs à son départ ; `checkpointWriting` ouvre
-ensuite la porte à tout le monde ; le journal scellé à T et un journal neuf (format 44) ; le
-catalogue et l'en-tête à T.
+**Le journal scellé à T** (V2-2c). Sous le verrou du journal, au départ de l'écriture : le
+fichier courant est vidé de ses tampons, fermé et **renommé** `<base>.wal.1` ; le journal
+`<base>.wal` renaît au premier enregistrement suivant (en-tête, `FormatRecord`), et les
+validations d'après T y vont. À la fin, l'enregistrement CHECKPOINT s'ajoute au scellé, qui est
+supprimé ; le neuf continue. Rejeu : un `.wal.1` fini par CHECKPOINT s'achève (pages fantômes)
+puis est supprimé, et `.wal` se rejoue ; un `.wal.1` sans CHECKPOINT final (mort pendant
+l'écriture) se rejoue jusqu'à son dernier COMMIT, puis `.wal`, et le fichier fantôme est jeté
+(il appartient au point de reprise interrompu). `dryReplay`, l'identité d'ouverture en lecture
+seule et `ReadersLock` comptent les deux fichiers. Format 44.
+
+**Le catalogue à T** (V2-2c). `CatalogSet::serialize` prend, pour chaque entrée, la version
+validée au plus tard à T (la chaîne des versions, `getTimestamp() ≤ T`), et non la dernière
+validée : une table créée pendant l'écriture n'est pas dans ce point de reprise, ni son
+stockage ; elle revient par le journal neuf. Les statistiques et le gestionnaire de pages se
+sérialisent après l'échange de tous les groupes ; les pages allouées après T sont des pages que
+l'en-tête à T ne désigne pas, et `returnOwnerlessPages` les rend au rejeu comme aujourd'hui.
 
 ### 3.7 Ce que ça coûte
 
