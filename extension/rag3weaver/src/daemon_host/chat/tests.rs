@@ -121,6 +121,8 @@ fn un_tour_propose_et_se_voit_sur_le_bus_du_backend() {
     assert_eq!(propositions[0].raison, "une note de l'agent");
     assert!(propositions[0].refus.is_none(), "{:?}", propositions[0].refus);
     assert!(!depot.join("notes.md").exists(), "un tour en approbation a écrit");
+    // La réponse du tour la porte, sous la forme de PropositionChanged.
+    assert_eq!(r["propositions"], json!([{ "id": propositions[0].id, "paths": ["notes.md"], "accepted": true }]), "{r}");
 
     // Le bus du backend : le run de l'agent, son appel d'outil, ses jetons.
     let a = vider(&mut agent);
@@ -261,7 +263,8 @@ fn selon_le_message() -> ChatModel {
 /// est dans la vue des propositions, rien n'est écrit. Un second tour, lent :
 /// Arrêter le coupe par le même chemin que tout run, et la page dit « arrêté
 /// dans l'IDE ». Un troisième, envoyé flux fermé : la relecture de l'ouverture
-/// du flux rend Arrêter à la page. La console reste vide.
+/// du flux rend Arrêter à la page. Un quatrième, qui propose flux fermé : le
+/// lien de la proposition vient de la réponse du tour. La console reste vide.
 #[cfg(unix)]
 #[test]
 fn le_chat_se_mene_et_s_arrete_dans_la_page() {
@@ -332,6 +335,15 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     );
     n.evaluer("document.querySelector('#chat-arreter').click()");
     n.attendre("document.querySelector('#chat-note')?.textContent === \"arrêté dans l'IDE\" && document.querySelector('#chat-arreter').hidden", "le tour parti flux fermé, arrêté dans l'IDE");
+
+    // Un tour qui propose, flux toujours fermé : le lien de sa proposition
+    // vient de la réponse du tour (le flux peut la dire après sa fin).
+    n.evaluer("document.querySelector('#chat-message').value = 'écris une autre note'; document.querySelector('#chat-envoyer').click()");
+    n.attendre(
+        "document.querySelector('#chat-note')?.textContent === 'fini' \
+         && document.querySelector('.tour.assistant:last-child .proposition-du-tour a[data-proposition]')",
+        "le tour qui propose flux fermé, le lien de sa proposition",
+    );
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
 
     drop(n);

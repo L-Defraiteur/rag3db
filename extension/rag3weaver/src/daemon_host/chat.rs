@@ -304,6 +304,7 @@ impl DaemonHost {
             })
         };
         let outils = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
+        let avant = session.turns.len();
         let fait = session.run_with(
             message,
             llm.as_ref(),
@@ -325,13 +326,38 @@ impl DaemonHost {
             .map(|((slug, unite), n)| json!({ "slug": slug, "unit": unite.as_str(), "amount": n }))
             .collect();
         let arrete = arrete_par.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let propositions = propositions_du_tour(session.turns.get(avant..).unwrap_or_default());
         match fait {
-            Ok(run) => Ok(json!({ "run": run_id, "text": run.text, "stopped_by": arrete, "consumed": consomme })),
+            Ok(run) => Ok(json!({ "run": run_id, "text": run.text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions })),
             // Un tour arrêté n'est pas une panne : il dit qui l'a arrêté.
-            Err(_) if arrete.is_some() => Ok(json!({ "run": run_id, "text": "", "stopped_by": arrete, "consumed": consomme })),
+            Err(_) if arrete.is_some() => {
+                Ok(json!({ "run": run_id, "text": "", "stopped_by": arrete, "consumed": consomme, "propositions": propositions }))
+            }
             Err(e) => Err(e),
         }
     }
+}
+
+/// **Les propositions qu'un tour a faites**, lues dans ses résultats de
+/// `propose`, sous la forme de `PropositionChanged` (id, chemins, acceptée).
+/// La réponse du tour les porte : le flux les dit aussi, mais sur
+/// `declarations`, relayé à part d'`agent` — une page peut voir le tour fini
+/// avant elles.
+fn propositions_du_tour(turns: &[crate::llm::Turn]) -> Vec<Value> {
+    turns
+        .iter()
+        .filter(|t| t.role == "tool" && t.tool_name.as_deref() == Some(crate::declare::PROPOSE))
+        .filter_map(|t| serde_json::from_str::<Value>(&t.content).ok())
+        .filter(|r| r["ok"] == true)
+        .map(|r| {
+            let p = &r["proposal"];
+            json!({
+                "id": p["id"],
+                "paths": p["fichiers"].as_array().into_iter().flatten().map(|f| f["path"].clone()).collect::<Vec<_>>(),
+                "accepted": p["refus"].is_null(),
+            })
+        })
+        .collect()
 }
 
 /// Le chemin d'une session sur le disque, pour les témoins.
