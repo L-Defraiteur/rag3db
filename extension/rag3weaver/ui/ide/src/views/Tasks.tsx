@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GitBranch, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,9 @@ export function Tasks({ id, state, onChanged }: { id: string; state: HostState; 
   const backend = state.backends.find((b) => b.id === id);
   const [list, setList] = useState<{ ouvertes: Open[]; fermees: Closed[] } | null>(null);
   const [note, setNote] = useState("");
-  const [name, setName] = useState("");
+  // Les champs ne sont pas contrôlés par React : une valeur posée par le DOM
+  // (un témoin, une saisie automatique) se lit là.
+  const name = useRef<HTMLInputElement>(null);
   const load = async () => {
     const r = await (await fetch(`/ide/taches?${new URLSearchParams({ backend: id })}`)).json();
     if (!r.ok) throw new Error(r.error);
@@ -27,13 +29,13 @@ export function Tasks({ id, state, onChanged }: { id: string; state: HostState; 
   }, [id]);
   const open = async () => {
     setNote("copie de la base, worktree…");
-    const r = await (await fetch("/ide/taches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, nom: name }) })).json();
+    const r = await (await fetch("/ide/taches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, nom: name.current?.value ?? "" }) })).json();
     if (!r.ok) {
       setNote(r.error);
       return;
     }
     setNote("");
-    setName("");
+    if (name.current) name.current.value = "";
     await onChanged();
     await load();
   };
@@ -46,7 +48,7 @@ export function Tasks({ id, state, onChanged }: { id: string; state: HostState; 
       <h1 className="text-xl font-semibold mb-1">Tâches de l'agent</h1>
       <p className="note text-sm text-muted-foreground mb-4">Une tâche : une branche à elle, un worktree, une copie de la base. L'agent y déclare ; on relit, puis on fusionne ou on rejette.</p>
       <div className="barre flex flex-wrap items-center gap-2 mb-4">
-        <input id="tache-nom" value={name} onChange={(e) => setName(e.target.value)} placeholder="nom de la tâche" aria-label="nom de la tâche" className="rounded-md border bg-input/30 px-3 py-1.5 text-sm" />
+        <input id="tache-nom" ref={name} placeholder="nom de la tâche" aria-label="nom de la tâche" className="rounded-md border bg-input/30 px-3 py-1.5 text-sm" />
         <Button id="ouvrir-tache" size="sm" onClick={open}>
           <Plus className="size-3.5" /> Ouvrir une tâche
         </Button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, X, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,9 +58,9 @@ function PlanCard({ p, label }: { p: Plan; label: string }) {
 function TeammateSection({ backend, task }: { backend: string; task: string }) {
   const [t, setT] = useState<Teammate | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [kind, setKind] = useState("request");
-  const [item, setItem] = useState("");
-  const [text, setText] = useState("");
+  const kind = useRef<HTMLSelectElement>(null);
+  const item = useRef<HTMLInputElement>(null);
+  const text = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState("");
   const load = () =>
     fetch(`/ide/teammate?${new URLSearchParams({ backend, task })}`)
@@ -71,13 +71,13 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
   }, [backend, task]);
   const send = async () => {
     setNote("envoi…");
-    const r = await (await fetch("/ide/teammate/mailbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, task, kind, item: item || undefined, text, from: "ide" }) })).json();
+    const r = await (await fetch("/ide/teammate/mailbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, task, kind: kind.current?.value ?? "request", item: item.current?.value || undefined, text: text.current?.value ?? "", from: "ide" }) })).json();
     if (!r.ok) {
       setNote(r.error);
       return;
     }
     setNote(r.result.started ? "envoyé ; l'équipier part" : "envoyé");
-    setText("");
+    if (text.current) text.current.value = "";
     await load();
   };
   if (err) return <section className="equipier mt-6"><h2 className="text-base font-semibold">Équipier</h2><p className="refus text-destructive text-sm">{err}</p></section>;
@@ -110,14 +110,14 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
         <p className="note text-sm text-muted-foreground">Rien encore.</p>
       )}
       <div className="actions flex flex-wrap items-center gap-2">
-        <select id="equipier-kind" aria-label="genre du message" value={kind} onChange={(e) => setKind(e.target.value)} className="rounded-md border bg-input/30 px-2 py-1.5 text-sm">
+        <select id="equipier-kind" aria-label="genre du message" ref={kind} defaultValue="request" className="rounded-md border bg-input/30 px-2 py-1.5 text-sm">
           <option value="request">demande</option>
           <option value="instruction">consigne</option>
           <option value="answer">réponse à un bloquant</option>
           <option value="stop">arrêt</option>
         </select>
-        <input id="equipier-item" value={item} onChange={(e) => setItem(e.target.value)} placeholder="élément (pour une réponse)" aria-label="élément" className="rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
-        <input id="equipier-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="écrire à l'équipier" aria-label="message à l'équipier" className="flex-1 min-w-48 rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
+        <input id="equipier-item" ref={item} placeholder="élément (pour une réponse)" aria-label="élément" className="rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
+        <input id="equipier-text" ref={text} placeholder="écrire à l'équipier" aria-label="message à l'équipier" className="flex-1 min-w-48 rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
         <Button id="equipier-envoyer" size="sm" onClick={send}>Écrire</Button>
         <span className="note text-xs text-muted-foreground" id="equipier-note">{note}</span>
       </div>
@@ -130,8 +130,8 @@ export function TaskReview({ id, name, state }: { id: string; name: string; stat
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const [why, setWhy] = useState("");
-  const [message, setMessage] = useState("");
+  const why = useRef<HTMLInputElement>(null);
+  const message = useRef<HTMLInputElement>(null);
   useEffect(() => {
     fetch(`/ide/taches?${new URLSearchParams({ backend: id, nom: name })}`)
       .then((x) => x.json())
@@ -164,10 +164,10 @@ export function TaskReview({ id, name, state }: { id: string; name: string; stat
           <p id="temoins" className="text-sm">{r.temoins.chargement ? "Témoins : la branche se charge entière." : "Témoins : la branche ne se charge pas."}</p>
           {r.temoins.refus ? <pre className="refus text-destructive text-xs whitespace-pre-wrap">{r.temoins.refus}</pre> : null}
           <div className="actions flex flex-wrap items-center gap-2">
-            <input id="message" value={message} onChange={(e) => setMessage(e.target.value)} placeholder={`message (la tâche ${name})`} aria-label="message de la fusion" className="rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
-            <Button id="fusionner" size="sm" onClick={() => act("fusionner", { message })}><Check className="size-3.5" /> Fusionner</Button>
-            <input id="pourquoi" value={why} onChange={(e) => setWhy(e.target.value)} placeholder="pourquoi rejeter" aria-label="pourquoi rejeter" className="rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
-            <Button id="rejeter" size="sm" variant="outline" onClick={() => act("rejeter", { why: why || "rejetée dans l'IDE" })}><X className="size-3.5" /> Rejeter</Button>
+            <input id="message" ref={message} placeholder={`message (la tâche ${name})`} aria-label="message de la fusion" className="rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
+            <Button id="fusionner" size="sm" onClick={() => act("fusionner", { message: message.current?.value ?? "" })}><Check className="size-3.5" /> Fusionner</Button>
+            <input id="pourquoi" ref={why} placeholder="pourquoi rejeter" aria-label="pourquoi rejeter" className="rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
+            <Button id="rejeter" size="sm" variant="outline" onClick={() => act("rejeter", { why: why.current?.value || "rejetée dans l'IDE" })}><X className="size-3.5" /> Rejeter</Button>
             <span className="note text-xs text-muted-foreground" id="tache-note">{note}</span>
           </div>
           {r.fichiers.length ? null : <p className="note text-sm text-muted-foreground">La branche ne change encore rien.</p>}
