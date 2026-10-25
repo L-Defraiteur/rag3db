@@ -1257,3 +1257,63 @@ fn chaque_resultat_dit_quoi_surligner() {
     }
     assert!(vus.iter().any(|p| p.contains("ensemble")), "le passage de la phrase est surligné : {vus:?}");
 }
+
+/// **Les morceaux que lucivy n'a pas surlignés le sont à l'affichage** (26 octobre 2026, décision
+/// de Lucie : « calculé à l'affichage sur les chunks trouvés uniquement par dense »). Une recherche
+/// par le seul vecteur rend des morceaux sans spans ; avec `highlights: "sparse"`, chacun porte des
+/// passages qui sont des mots de la requête : le creux de bge-m3 quand un service creux répond,
+/// sinon les mots de la requête, et la méta dit le repli. Sans l'option, rien : un agent qui
+/// n'affiche pas ne paie pas.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn les_morceaux_du_seul_dense_se_surlignent_a_l_affichage() {
+    use serde_json::{json, Value};
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "surlignage-creux", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let chercher = |options: Value| {
+        backend
+            .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": options, "mode": "indexed"}))
+            .expect("search_code")
+    };
+
+    let r = chercher(json!({"signals": ["vector"], "limit": 5, "highlights": "sparse"}));
+    let resultats = r["result"].as_array().cloned().unwrap_or_default();
+    let morceau = resultats
+        .iter()
+        .find(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("fusion")))
+        .unwrap_or_else(|| panic!("le dense rend le morceau de fusion.rs : {r}"));
+    let texte = morceau["chunk"]["text"].as_str().unwrap();
+    let surlignes = morceau["chunk"]["highlights"].as_array().cloned().unwrap_or_default();
+    assert!(!surlignes.is_empty(), "un morceau du seul dense porte ses surlignages : {morceau}");
+    let unites: Vec<u16> = texte.encode_utf16().collect();
+    let termes = ["fusion", "rangs"];
+    for h in &surlignes {
+        let (a, b) = (h["start"].as_u64().unwrap() as usize, h["end"].as_u64().unwrap() as usize);
+        let passage = String::from_utf16(&unites[a..b]).unwrap().to_lowercase();
+        assert!(
+            termes.iter().any(|t| passage.contains(t) || t.contains(passage.as_str())),
+            "« {passage} » vient de la requête : {morceau}"
+        );
+        assert!(h["source"] == "sparse" || h["source"] == "query_words", "{h}");
+        assert_ne!(h["source"], "lucivy", "le plein texte n'a pas cherché : {h}");
+    }
+    let avertissements = r["metadata"]["render.meta"]["warnings"].to_string();
+    if surlignes.iter().any(|h| h["source"] == "query_words") {
+        assert!(
+            avertissements.contains("surlignage creux indisponible") || resultats.iter().any(|x| x["chunk"]["highlights"].as_array().is_some_and(|v| v.iter().any(|h| h["source"] == "sparse"))),
+            "un repli sur les mots de la requête se dit : {avertissements}"
+        );
+    }
+
+    let sans = chercher(json!({"signals": ["vector"], "limit": 5}));
+    assert!(
+        sans["result"].as_array().into_iter().flatten().all(|x| x["chunk"]["highlights"].is_null()),
+        "sans l'option, rien n'est surligné : {sans}"
+    );
+}
