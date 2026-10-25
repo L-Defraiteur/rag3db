@@ -1154,8 +1154,18 @@ impl PreparedBackend {
         // fichier à elles (leurs lignes voyagent dans les blocs qui les citent).
         let sans_fichier: BTreeSet<String> =
             manifest.entities.keys().filter(|e| !miroirs.contains_key(*e)).cloned().collect();
-        for m in miroirs.values() {
+        // Relatifs à la racine (commune à tous les miroirs d'un manifeste).
+        let dossier = |m: &crate::fichiers_entite::Miroir| -> PathBuf { PathBuf::from(&m.decl.dir) };
+        for (nom, m) in &miroirs {
             let _ = m.sans_fichier.set(sans_fichier.clone());
+            let le_mien = dossier(m);
+            let voisins: Vec<PathBuf> = miroirs
+                .iter()
+                .filter(|(autre, _)| *autre != nom)
+                .map(|(_, a)| dossier(a))
+                .filter(|d| d != &le_mien && (le_mien.as_os_str().is_empty() || d.starts_with(&le_mien)))
+                .collect();
+            let _ = m.dossiers_voisins.set(voisins);
         }
         if let Some(ui) = &manifest.ui_state {
             if !entities.contains_key(&ui.entity) {

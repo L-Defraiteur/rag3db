@@ -202,7 +202,23 @@ impl Node for EntityRecordNode {
             if old.is_some() {
                 return Err("restore: the row already exists — a rebuild starts from an empty base".into());
             }
-            validator.validate(&input).map_err(|e| e.to_string())?;
+            // **Une ligne revient telle qu'elle était** : un écrivain qui ne
+            // passe pas par ce nœud (add_ref, create_ref_type) n'a pas posé les
+            // champs du serveur. Leur absence se valide comme un entier présent,
+            // et la ligne s'écrit sans eux — la parité, pas une date inventée.
+            let serveur: Vec<&str> = [&policy.created_at, &policy.updated_at, &policy.revision]
+                .into_iter()
+                .flatten()
+                .map(String::as_str)
+                .chain(policy.transition_dates.iter().map(|t| t.timestamp_field.as_str()))
+                .collect();
+            let mut a_valider = input.clone();
+            if let Some(o) = a_valider.as_object_mut() {
+                for champ in &serveur {
+                    o.entry(champ.to_string()).or_insert(json!(0));
+                }
+            }
+            validator.validate(&a_valider).map_err(|e| e.to_string())?;
             let mut data = mapping.record(&input)?;
             cell.stamp(&mut data);
             let report = cat.ingest_entities(entity, vec![data]).map_err(|e| e.to_string())?;
