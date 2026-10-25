@@ -33,6 +33,7 @@ const LIB: &str = "pub fn bonjour() -> &'static str {\n    \"bonjour\"\n}\n";
 /// 6. L'humain, lui, édite le principal dans l'IDE (CodeMirror, B1 de G) :
 ///    `task_writes` ne vise que l'agent.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide() {
     const TEMOIN: &str = "l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide";

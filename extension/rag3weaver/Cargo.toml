@@ -190,6 +190,11 @@ rhai = { version = "1.26.1", features = ["serde", "sync", "no_module"] }
 # est le chemin produit (AMD/NVIDIA/Apple/navigateur, un seul code) ; candle
 # reste l'oracle de parité, jamais une dépendance produit.
 default = []
+# **Les témoins navigateur** (Chrome sans tête) : une étape de passe à part, jouée seule après la
+# lib (scripts/temoins_navigateur.sh), jamais dans `cargo test --lib`. Sous la lib entière, les
+# 24 cœurs tenus, la page ne rendait pas en 20 s (c7, 25 octobre 2026, quatre rouges). Sans la
+# feature, ces témoins sont ignorés, avec la raison.
+navigateur = []
 candle-embedder = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 cuda = ["dep:candle-core", "dep:candle-nn", "candle-core/cuda", "candle-nn/cuda"]

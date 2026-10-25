@@ -61,8 +61,15 @@ pub(crate) fn trouver_navigateur() -> Option<PathBuf> {
 }
 
 /// Le navigateur, ou `None` après la ligne `SAUTÉ` ; un rouge si
-/// `RAG3WEAVER_EXIGER_NAVIGATEUR=1`.
+/// `RAG3WEAVER_EXIGER_NAVIGATEUR=1`. Un témoin navigateur se joue dans son
+/// étape, sous la feature `navigateur` (`scripts/temoins_navigateur.sh`) ; joué
+/// sans elle, il le dit (un rouge, pas un saut).
 pub(crate) fn navigateur_ou_saut(temoin: &str) -> Option<PathBuf> {
+    // Un témoin navigateur se joue dans son étape, pas dans la lib : sans la
+    // feature, il est ignoré ; joué quand même (--ignored), il le dit.
+    if !cfg!(feature = "navigateur") {
+        panic!("{temoin} est un témoin navigateur : il se joue dans son étape (--features navigateur, scripts/temoins_navigateur.sh), pas dans la lib");
+    }
     if let Some(p) = trouver_navigateur() {
         return Some(p);
     }
@@ -383,6 +390,7 @@ exports.createRoot = function (racine) { return { render: function (e) { racine.
 /// contenu attendu ; puis la vue d'un fichier se modifie et s'enregistre, et le
 /// disque porte le texte tapé.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 #[test]
 fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     let Some(binaire) = navigateur_ou_saut("les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur") else {
@@ -667,7 +675,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
 /// pas modifié depuis l'index, et l'un de ses scopes.
 ///
 /// Ignoré par défaut ; se joue par
-/// `RAG3WEAVER_TEMOIN_HOTE=127.0.0.1:7970 RAG3WEAVER_TEMOIN_MANIFESTE=<backend.json> cargo test --lib -- --ignored l_ide_d_un_vrai_hote`.
+/// `RAG3WEAVER_TEMOIN_HOTE=127.0.0.1:7970 RAG3WEAVER_TEMOIN_MANIFESTE=<backend.json> cargo test --lib --features navigateur -- --ignored l_ide_d_un_vrai_hote`.
 /// Le jeton est lu dans `RAG3WEAVER_TEMOIN_JETON_FICHIER` (par défaut
 /// `~/.local/share/rag3weaver/daemon.token`), jamais écrit nulle part.
 #[test]
