@@ -31,6 +31,8 @@ text-splitter = { version = "0.28", features = ["markdown"] }
 rag3weaver-ir = { path = "ir" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Le témoin du bundle de l'IDE (templates/ide/app/bundle.json porte des sha256, écrits par node).
+sha2 = "0.10"
 # Le journal des runs, compressé à l'écriture (déjà dans l'arbre par ses dépendances).
 zstd = "0.13"
 # L'en-tête YAML des fichiers d'une entité (`src/en_tete.rs`, lot M2 de la

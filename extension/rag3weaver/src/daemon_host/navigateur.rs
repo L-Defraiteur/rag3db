@@ -668,6 +668,40 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     fil.join().unwrap();
 }
 
+/// **Le cadre de l'IDE en React** (page 08, vue 1) : l'accueil se rend depuis le
+/// bundle embarqué, le flux s'ouvre, et le mode sombre suit le bouton de
+/// l'en-tête — un témoin par mode : la classe `dark` sur `<html>` et la couleur
+/// de fond qui change avec elle, le choix gardé au rechargement, sans erreur à
+/// la console.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn le_cadre_de_l_ide_se_rend_dans_les_deux_modes() {
+    let Some(binaire) = navigateur_ou_saut("le_cadre_de_l_ide_se_rend_dans_les_deux_modes") else {
+        return;
+    };
+    let (adresse, fil) = super::tests::hote_garde("j");
+    let racine = format!("http://{adresse}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "document.querySelector('#root #vue') && document.querySelector('#entete #theme') && document.querySelector('#lien')?.dataset.flux === 'ouvert'");
+    let fond = |n: &mut Navigateur| n.evaluer("getComputedStyle(document.body).backgroundColor");
+    let sombre_avant = n.evaluer("document.documentElement.classList.contains('dark')").as_bool().unwrap();
+    let fond_avant = fond(&mut n);
+    n.evaluer("document.querySelector('#theme').click()");
+    n.attendre(&format!("document.documentElement.classList.contains('dark') === {}", !sombre_avant), "le mode bascule au clic");
+    let fond_apres = fond(&mut n);
+    assert_ne!(fond_avant, fond_apres, "la couleur de fond suit le mode");
+    assert_eq!(n.evaluer("localStorage.getItem('ide-theme')"), json!(if sombre_avant { "light" } else { "dark" }), "le choix est gardé");
+    // Rechargée, la page garde le choix avant le premier rendu.
+    n.aller(&format!("{racine}/ide/"), "document.querySelector('#root #vue')");
+    assert_eq!(n.evaluer("document.documentElement.classList.contains('dark')"), json!(!sombre_avant), "le mode choisi tient au rechargement");
+    assert!(n.erreurs.is_empty(), "le cadre : erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **L'IDE d'un vrai hôte, en lecture seule** (19 octobre 2026) : le même
 /// parcours que [`les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur`],
 /// contre un hôte en service et l'un de ses backends de code, sans rien

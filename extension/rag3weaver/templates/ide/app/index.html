@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>rag3weaver · IDE</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/ide/app.css">
+<script>
+// Le mode avant le premier rendu : le choix gardé, sinon la préférence du système.
+try { var t = localStorage.getItem("ide-theme"); if (t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)) document.documentElement.classList.add("dark"); } catch (e) {}
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/ide/app.js"></script>
+</body>
+</html>

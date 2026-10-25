@@ -1,0 +1,22 @@
+{
+  "sha256": {
+    "app.js": "0a9686d9a1a81041add2ca167e3977b4122a8e8da2bd5c4162e3b07dcb25012e",
+    "app.css": "bfb5b37e14dde5acc146b045e0905a162f2f24c679f9c39ea5f918a5237fbafc"
+  },
+  "versions": {
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.61.0",
+    "radix-ui": "1.4.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "tailwind-merge": "3.3.1",
+    "@tailwindcss/cli": "4.3.3",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "esbuild": "0.28.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3"
+  },
+  "node": "v22.23.3"
+}
