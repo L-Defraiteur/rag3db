@@ -137,7 +137,7 @@ fn journal(host: &DaemonHost, backend: &str, run: &str) -> Value {
 /// un hôte sur le faux modèle ; rend l'hôte, la mémoire, l'id du backend.
 fn banc(d: &Path, vu: Arc<Mutex<Vu>>) -> (DaemonHost, PathBuf, String) {
     let modele = faux(vu);
-    banc_avec(d, modele.clone(), Some(modele), None)
+    banc_avec(d, modele.clone(), Some(modele), None, false)
 }
 
 /// Le banc, modèles donnés (le chat, le juge), et, s'il le faut, une
@@ -147,6 +147,7 @@ fn banc_avec(
     chat: rag3weaver::daemon_host::chat::ChatModel,
     juge: Option<rag3weaver::daemon_host::chat::ChatModel>,
     description_de_read_file: Option<&str>,
+    outil_de_banc: bool,
 ) -> (DaemonHost, PathBuf, String) {
     let gabarits = d.join("templates");
     copier(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits);
@@ -166,6 +167,26 @@ fn banc_avec(
     c["bilans"] = json!({ "memoire": memoire.display().to_string() });
     if let Some(desc) = description_de_read_file {
         c["tools"]["read_file"]["description"] = json!(desc);
+    }
+    if outil_de_banc {
+        // **Un outil de banc au schéma et au retour volontairement faux** (page 05) :
+        // il dit chercher dans tout le projet mais exige `fichier` (qui devrait être
+        // optionnel) ; `ligne` porte le mot cherché (un nom trompeur) ; son retour
+        // change de forme d'un appel à l'autre et mêle une biographie hors sujet.
+        let graphe = gabarits.join("backends/code/graphs/chercher_dans.mmd");
+        std::fs::create_dir_all(graphe.parent().unwrap()).unwrap();
+        std::fs::write(
+            &graphe,
+            "%% tool: chercher_dans\n\
+             %% description: Cherche un mot dans tout le projet.\n\
+             %% param: fichier string! -- Le fichier.\n\
+             %% param: ligne string! -- Le mot cherché.\n\
+             %% result: run.result\n\n\
+             graph LR\n    \
+             run[\"RhaiNode(script='if input.fichier == `main.rs` { #{trouve: true, fichier: input.fichier, auteur: `L auteur du projet a grandi au Bresil, fait de la voile et a trois chats.`} } else { `pas trouve dans ` + input.fichier + ` ; l auteur aime la voile` }', inputs='fichier,ligne', fichier=$fichier, ligne=$ligne)\"]\n",
+        )
+        .unwrap();
+        c["tools"]["chercher_dans"] = json!({ "graph": "graphs/chercher_dans.mmd" });
     }
     std::fs::write(&code, serde_json::to_string_pretty(&c).unwrap()).unwrap();
 
@@ -323,7 +344,7 @@ fn le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session() {
         return;
     }
     let d = tempfile::tempdir().unwrap();
-    let (host, _memoire, id) = banc_avec(d.path(), chat_qui_croit(), None, Some("Rend le nombre de lignes du fichier, jamais son contenu."));
+    let (host, _memoire, id) = banc_avec(d.path(), chat_qui_croit(), None, Some("Rend le nombre de lignes du fichier, jamais son contenu."), false);
     let session = |n: usize| -> Value {
         let r = host.chat_turn(&id, "Lis main.rs et dis-moi ce qu'il fait.").expect("le tour");
         let run = r["run"].as_str().unwrap().to_string();
@@ -345,4 +366,59 @@ fn le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session() {
     assert_ne!(b2["verdict"]["comparaison"]["verdict"], "premier", "la seconde session n'est pas comparée à la première : {b2}");
     let vue = host.bilans_de(&id).unwrap();
     assert_eq!(vue["fiches"][0]["apports"].as_array().map(Vec::len), Some(2), "{vue}");
+}
+
+/// Un faux chat qui se sert de l'outil de banc : il doit nommer un fichier pour
+/// chercher dans tout le projet, appelle deux fois, et répond.
+fn chat_qui_cherche() -> rag3weaver::daemon_host::chat::ChatModel {
+    Arc::new(|_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-chat", 8192, |turns, opts, sink| {
+            let resultats = turns.iter().filter(|t| t.role == "tool").count();
+            match resultats {
+                0 => MockLlm::new("").with_tool_calls(vec![("chercher_dans", r#"{"fichier":"main.rs","ligne":"main"}"#)]).generate(turns, opts, sink),
+                1 => MockLlm::new("").with_tool_calls(vec![("chercher_dans", r#"{"fichier":"lib.rs","ligne":"main"}"#)]).generate(turns, opts, sink),
+                _ => MockLlm::new("Le mot main est dans main.rs ; je n'ai pas pu chercher dans tout le projet sans nommer chaque fichier.").generate(turns, opts, sink),
+            }
+        })))
+    })
+}
+
+/// **Le juge des outils sur Gemini, jugé sur le résultat** (page 05) : un outil de
+/// banc au schéma faux (un paramètre obligatoire qui devrait être optionnel, un
+/// nom trompeur) et au retour faux (hors sujet, et de forme changeante entre deux
+/// appels). Le bilan des outils doit nommer les quatre défauts, chacun avec un
+/// call_id et une forme proposée.
+#[test]
+#[ignore]
+fn le_juge_des_outils_sur_gemini_nomme_les_defauts_de_schema_et_de_retour() {
+    const TEMOIN: &str = "le_juge_des_outils_sur_gemini_nomme_les_defauts_de_schema_et_de_retour";
+    let projet = std::env::var("GOOGLE_CLOUD_PROJECT").ok().filter(|p| !p.is_empty());
+    let cles = std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").map(PathBuf::from).filter(|p| p.is_file());
+    if projet.is_none() || cles.is_none() {
+        let raison = "GOOGLE_CLOUD_PROJECT ou GOOGLE_APPLICATION_CREDENTIALS manque";
+        if std::env::var("RAG3WEAVER_EXIGER_GEMINI").as_deref() == Ok("1") {
+            panic!("{TEMOIN} : {raison}, et RAG3WEAVER_EXIGER_GEMINI=1");
+        }
+        eprintln!("SAUTÉ {TEMOIN} : {raison}");
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (host, _memoire, id) = banc_avec(d.path(), chat_qui_cherche(), None, None, true);
+    let r = host.chat_turn(&id, "Cherche le mot main dans tout le projet.").expect("le tour");
+    let run = r["run"].as_str().unwrap().to_string();
+    journal(&host, &id, &run);
+    let debut = Instant::now();
+    let b = host.juger(&id, &run).unwrap_or_else(|e| panic!("le juge : {e}"));
+    eprintln!("MESURE juge des outils sur Gemini : {} ms, {} itération(s)", debut.elapsed().as_millis(), b["enquete"]["iterations"]);
+    eprintln!("bilan des outils : {}", b["bilan_des_outils"]);
+    let outil = b["bilan_des_outils"]["outils"]
+        .as_array()
+        .and_then(|o| o.iter().find(|o| o["outil"] == "chercher_dans"))
+        .unwrap_or_else(|| panic!("aucun bilan pour chercher_dans : {b}"))
+        .clone();
+    let defauts: Vec<Value> = ["bloquant", "genant", "mineur"].iter().flat_map(|g| outil["defauts"][*g].as_array().cloned().unwrap_or_default()).collect();
+    let nomme = |genre: &str| defauts.iter().any(|d| d["genre"] == genre && d["call_id"].as_str().is_some_and(|c| !c.is_empty()) && d["proposee"].as_str().is_some_and(|p| !p.is_empty()));
+    for genre in ["parametre_devrait_etre_optionnel", "parametre_mal_nomme", "retour_hors_sujet", "retour_incoherent"] {
+        assert!(nomme(genre), "le juge n'a pas nommé {genre} avec son call_id et sa forme : {outil}");
+    }
 }
