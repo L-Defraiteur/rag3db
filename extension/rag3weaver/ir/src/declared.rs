@@ -102,7 +102,6 @@ impl DeclaredPlan {
         serde_json::from_str(texte).map_err(|e| format!("Plan illisible : {e}"))
     }
 
-    /// **La vérification au chargement**, sans schéma.
     /// **Les paramètres que le Plan lit** : ceux de ses conditions (`let` compris), de ses listes
     /// liées, de ses `limit` et `offset` liés. Un appel qui en donne un autre se trompe de nom ; le
     /// nœud qui l'exécute le refuse en le nommant, plutôt que de le perdre en silence (sous
@@ -139,6 +138,7 @@ impl DeclaredPlan {
         out
     }
 
+    /// **La vérification au chargement**, sans schéma.
     pub fn check(&self) -> Result<(), String> {
         if self.forms.is_empty() {
             return Err("Plan : aucune forme".into());
