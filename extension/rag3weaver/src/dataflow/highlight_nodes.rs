@@ -331,6 +331,37 @@ mod tests {
         assert!(h.iter().all(|x| x.source == HIGHLIGHT_SPARSE));
     }
 
+    /// **La sonde du vrai chemin** : le service creux (`RAG3WEAVER_SONDE_CREUX`, une adresse),
+    /// le tokenizer de bge-m3 de ce poste et le placement. À jouer nommément
+    /// (`-- --ignored sonde_le_creux_reel --nocapture`) ; sans l'adresse, elle échoue au lieu de
+    /// se sauter.
+    #[cfg(all(feature = "burn-embedder", feature = "daemon"))]
+    #[test]
+    #[ignore]
+    fn sonde_le_creux_reel() {
+        let adresse = std::env::var("RAG3WEAVER_SONDE_CREUX").expect("RAG3WEAVER_SONDE_CREUX : l'adresse du service bge-m3");
+        let service = crate::daemon::embeddings::DaemonEmbedder::joindre(&adresse).expect("le service répond");
+        let embarqueur: Arc<dyn SparseEmbedder> = Arc::new(service);
+        let requete = "fusion des rangs réciproques";
+        let textes = vec![
+            "/// La fusion RRF : chaque signal pèse 1/(k + rang), k = 60.\npub fn fuse_signals(listes: &[Vec<Resultat>]) -> Vec<Resultat> {".to_string(),
+            "Le rang réciproque d'un document additionne ses places dans chaque liste.".to_string(),
+            "pub fn ouvrir_la_base(chemin: &Path) -> Result<Base, Erreur> {".to_string(),
+        ];
+        let t = std::time::Instant::now();
+        let rendus = surligner_par_le_creux(Some(embarqueur), requete, None, &textes).expect("le creux répond");
+        eprintln!("[sonde creux] {} ms pour {} textes", t.elapsed().as_millis(), textes.len());
+        for (texte, h) in textes.iter().zip(&rendus) {
+            let vus: Vec<String> = h.iter().map(|x| format!("{}:{}", x.source, en_utf16(texte, x))).collect();
+            eprintln!("[sonde creux] {vus:?} dans {texte:?}");
+        }
+        let premiers: Vec<String> = rendus[0].iter().map(|x| en_utf16(&textes[0], x).to_lowercase()).collect();
+        assert!(
+            rendus[0].iter().all(|x| x.source == HIGHLIGHT_SPARSE) && premiers.iter().any(|p| p.contains("fusion")),
+            "le creux surligne « fusion » dans le premier texte : {premiers:?}"
+        );
+    }
+
     #[test]
     fn sans_id_partage_le_creux_ne_surligne_rien() {
         let requete = SparseVector { indices: vec![5], values: vec![0.5] };
