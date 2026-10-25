@@ -43,6 +43,8 @@ function_set DropProjectedGraphFunction::getFunctionSet() {
     func->initSharedStateFunc = TableFunction::initEmptySharedState;
     func->initLocalStateFunc = TableFunction::initEmptyLocalState;
     func->canParallelFunc = []() { return false; };
+    // Un graphe projeté est un objet de la connexion, pas une écriture de la base.
+    func->connectionScopedOnly = true;
     functionSet.push_back(std::move(func));
     return functionSet;
 }
