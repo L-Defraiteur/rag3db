@@ -114,11 +114,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine s
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
 #
-# Un BEGIN refusé laisse la connexion en transaction explicite sans transaction (ticket
-# 2026-10-18-un-begin-refuse-laisse-la-connexion-sans-transaction) : le MERGE qui suit le refus
-# plante (signal 11, transaction nulle). Joué rouge le 18 octobre sur luciepc (54f060342, branche du scénario). Pour le cœur
-# C++.
-#
 # Un bâti d'index prend tous les fils de travail (ticket
 # 2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions) : à deux fils, un
 # lecteur attend la phase parallèle entière du bâti. Pour le cœur C++ ou hotfixs.
@@ -146,9 +141,3 @@ CheckpointNoStall.BeginDuringACheckpointDoesNotWait begin-during-a-checkpoint-do
 CheckpointNoStall.ReadDuringACheckpointDoesNotWait read-during-a-checkpoint-does-not-wait
 CheckpointNoStall.CommittedPagesAreWrittenOutWhenTheBufferIsFull committed-pages-are-written-out-when-the-buffer-is-full
 CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly crash-after-written-out-pages-replays-exactly
-#
-# Un COMMIT dont le point de reprise échoue après la validation fait annuler une transaction déjà
-# détruite (ticket 2026-10-18-un-commit-dont-le-point-de-reprise-echoue-annule-une-transaction-deja-
-# partie) : en Release, « Invalid transaction type to rollback » puis SIGABRT à la fermeture ; sous
-# ASAN, heap-use-after-free dans TransactionManager::rollback. Joué trois fois sur trois de chaque
-# côté le 18 octobre sur luciepc. Pour le cœur C++.
