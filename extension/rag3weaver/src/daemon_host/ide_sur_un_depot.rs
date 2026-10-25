@@ -203,8 +203,9 @@ fn l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide() {
     }
     n.aller(&format!("{racine}/ide/code/{id}/fichier/src/lib.rs"), "document.querySelector('#L2')?.innerText.includes('\"salut\"')");
 
-    // L'humain édite le principal dans l'IDE (B1) : Modifier, taper, Ctrl-S.
-    n.aller(&format!("{racine}/ide/code/{id}/fichier/README.md"), "document.querySelector('#L1')");
+    // L'humain édite le principal dans l'IDE (B1) : Modifier, taper, Ctrl-S. L'édition
+    // reste sur l'ancienne page jusqu'à ce qu'elle soit portée (page 08, vue 3).
+    n.aller(&format!("{racine}/ide/ancienne/code/{id}/fichier/README.md"), "document.querySelector('#L1')");
     n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent === 'Modifier').click()");
     n.attendre("document.querySelector('.edition .cm-content')?.innerText.includes('Petit dépôt')", "l'éditeur CodeMirror");
     let neuf = "# Petit dépôt\n\nÉdité par l'humain.\n";
