@@ -70,6 +70,97 @@ fn sortant() -> String {
     "outgoing".into()
 }
 
+/// L'ouverture du bloc machine d'un fichier composé (lot M3b) : un commentaire
+/// HTML, invisible au rendu (Obsidian comme tout Markdown), en YAML comme
+/// l'en-tête.
+pub const DEBUT_DU_BLOC: &str = "<!-- rag3weaver: les lignes de ce fichier, pour reconstruire la base si elle est perdue — écrit par le harnais, ne pas éditer\n";
+/// Sa fermeture.
+pub const FIN_DU_BLOC: &str = "-->\n";
+
+/// **Le bloc machine** : les lignes qu'un fichier composé rend, chacune entière,
+/// avec ses liens sortants — de quoi reposer la ligne, ses lignes liées et leurs
+/// relations, si la base est perdue. Produit depuis le schéma et le catalogue,
+/// pour toute entité à fichier composé, jamais par un gabarit.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct BlocMachine {
+    pub rows: Vec<LigneDuBloc>,
+}
+
+/// Une ligne du bloc : son entité, son uuid, ses champs (sans les colonnes
+/// internes ni la cellule), et ses liens sortants par relation.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct LigneDuBloc {
+    pub entity: String,
+    pub uuid: String,
+    pub fields: Map<String, Value>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub links: BTreeMap<String, Vec<LienDuBloc>>,
+}
+
+/// Un lien sortant d'une ligne du bloc : sa cible, et ses propriétés s'il en a.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct LienDuBloc {
+    pub to: String,
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub props: Map<String, Value>,
+}
+
+/// Une ligne du bloc, depuis sa ligne de base : ses champs déclarés, et ses
+/// liens sortants par toutes les relations qui partent de son entité.
+fn ligne_du_bloc(cat: &crate::catalog::Catalog, entite: &str, uuid: &str, record: &Value) -> Result<LigneDuBloc, String> {
+    let mut fields = Map::new();
+    for (k, v) in record.as_object().into_iter().flatten() {
+        if k.starts_with('_') || k == "uuid" || crate::scope::is_scope_column(k) || v.is_null() {
+            continue;
+        }
+        fields.insert(k.clone(), v.clone());
+    }
+    let mut links = BTreeMap::new();
+    let mut relations = cat.relation_names();
+    relations.sort();
+    for relation in relations {
+        let Some(def) = cat.get_relation_def(&relation).cloned() else { continue };
+        if def.from != entite {
+            continue;
+        }
+        crate::schema::validate_identifier(&relation, "relation").map_err(|e| e.to_string())?;
+        let mut props: Vec<String> = def.properties.as_ref().map(|p| p.keys().cloned().collect()).unwrap_or_default();
+        props.sort();
+        let colonnes: String = props.iter().map(|p| format!(", r.`{p}`")).collect();
+        let requete = format!(
+            "MATCH (a:`{entite}` {{_uuid: $u}})-[r:`{relation}`]->(b:`{}`) RETURN b._uuid{colonnes} ORDER BY b._uuid",
+            def.to
+        );
+        let lu = cat
+            .execute_raw_with_params(&requete, &[crate::connection::QueryParam::new("u", crate::connection::CypherValue::String(uuid.to_string()))])
+            .map_err(|e| e.to_string())?;
+        let mut liens = Vec::new();
+        for row in &lu.rows {
+            let Some(to) = row.first().and_then(|v| v.as_str()) else { continue };
+            let mut p = Map::new();
+            for (k, v) in props.iter().zip(row.iter().skip(1)) {
+                if !matches!(v, crate::connection::CypherValue::Null) {
+                    p.insert(k.clone(), serde_json::to_value(v).map_err(|e| e.to_string())?);
+                }
+            }
+            liens.push(LienDuBloc { to: to.to_string(), props: p });
+        }
+        if !liens.is_empty() {
+            links.insert(relation, liens);
+        }
+    }
+    Ok(LigneDuBloc { entity: entite.to_string(), uuid: uuid.to_string(), fields, links })
+}
+
+/// Le texte du bloc. Une valeur ne peut pas fermer le commentaire : `-->` et
+/// `&` y sont échappés (`--&gt;`, `&amp;`), et [`Miroir::relire_le_bloc`] les
+/// rend.
+fn ecrire_le_bloc(lignes: &[LigneDuBloc]) -> Result<String, String> {
+    let yaml = serde_norway::to_string(&BlocMachine { rows: lignes.to_vec() }).map_err(|e| e.to_string())?;
+    let yaml = yaml.replace('&', "&amp;").replace("-->", "--&gt;");
+    Ok(format!("\n{DEBUT_DU_BLOC}{yaml}{FIN_DU_BLOC}"))
+}
+
 /// Le miroir d'une entité, prêt à écrire.
 #[derive(Debug, Clone)]
 pub struct Miroir {
@@ -361,10 +452,39 @@ impl Miroir {
             liees.insert(nom.clone(), Value::Array(lignes));
         }
         let contexte = serde_json::json!({"uuid": uuid, "record": record, "related": liees});
-        let corps = crate::dataflow::render_nodes::rendre(&contexte, gabarit)?;
+        let mut corps = crate::dataflow::render_nodes::rendre(&contexte, gabarit)?;
+        // Le bloc machine (lot M3b) : ce que la reconstruction relit si la base
+        // est perdue. Écrit par le harnais, jamais par le gabarit.
+        let mut lignes = vec![ligne_du_bloc(cat, &self.entite, uuid, &record)?];
+        for (nom, r) in &self.decl.related {
+            let Some(def) = cat.get_relation_def(&r.relation) else { continue };
+            let entite_liee = if r.direction == "incoming" { def.from.clone() } else { def.to.clone() };
+            for l in liees[nom].as_array().into_iter().flatten() {
+                if let Some(u) = l["uuid"].as_str() {
+                    lignes.push(ligne_du_bloc(cat, &entite_liee, u, l)?);
+                }
+            }
+        }
+        if !corps.is_empty() && !corps.ends_with('\n') {
+            corps.push('\n');
+        }
+        corps.push_str(&ecrire_le_bloc(&lignes)?);
         let rel = self.chemin_relatif(uuid, &record)?;
         let ecrit = self.ecrire_texte(&rel, &self.rendre_avec(uuid, &record, &corps))?;
         Ok(Some((rel, ecrit)))
+    }
+
+    /// **Relit le bloc machine d'un fichier composé** (lot M3b) : les lignes
+    /// qu'il porte — la sienne, puis ses lignes liées —, chacune avec ses
+    /// champs et ses liens sortants. `None` : un fichier sans bloc (écrit avant
+    /// M3b, ou à la main).
+    pub fn relire_le_bloc(texte: &str) -> Result<Option<Vec<LigneDuBloc>>, String> {
+        let Some(debut) = texte.rfind(DEBUT_DU_BLOC) else { return Ok(None) };
+        let reste = &texte[debut + DEBUT_DU_BLOC.len()..];
+        let fin = reste.find(FIN_DU_BLOC).ok_or("bloc machine sans fin")?;
+        let yaml = reste[..fin].replace("--&gt;", "-->").replace("&amp;", "&");
+        let bloc: BlocMachine = serde_norway::from_str(&yaml).map_err(|e| format!("bloc machine illisible : {e}"))?;
+        Ok(Some(bloc.rows))
     }
 
     /// **Les lignes de cette entité qu'un événement du catalogue touche** : ses
@@ -372,10 +492,25 @@ impl Miroir {
     /// `related`, ou les bouts d'un lien posé ou retiré par une de ces relations.
     /// Un `RelationsChanged` tronqué d'une relation que ce fichier lit : ses
     /// listes ne nomment pas toutes les paires, [`Self::touchees`] n'y suffit pas.
-    pub fn lit_une_annonce_tronquee(&self, evenement: &Value) -> bool {
-        evenement["kind"] == "RelationsChanged"
-            && evenement["truncated"] == true
-            && self.decl.related.values().any(|r| evenement["relation"] == r.relation.as_str())
+    /// Le bloc machine porte aussi les liens sortants de la ligne et de ses
+    /// lignes liées : une annonce tronquée partie de l'une de leurs entités
+    /// compte de même (lot M3b).
+    pub fn lit_une_annonce_tronquee(&self, cat: &crate::catalog::Catalog, evenement: &Value) -> bool {
+        if evenement["kind"] != "RelationsChanged" || evenement["truncated"] != true {
+            return false;
+        }
+        if self.decl.related.values().any(|r| evenement["relation"] == r.relation.as_str()) {
+            return true;
+        }
+        if !self.est_compose() {
+            return false;
+        }
+        let depart = evenement["from_entity"].as_str().unwrap_or("");
+        depart == self.entite
+            || self.decl.related.values().any(|r| {
+                cat.get_relation_def(&r.relation)
+                    .is_some_and(|d| if r.direction == "incoming" { d.from == depart } else { d.to == depart })
+            })
     }
 
     pub fn touchees(&self, cat: &crate::catalog::Catalog, evenement: &Value) -> Vec<String> {
@@ -395,37 +530,35 @@ impl Miroir {
                 }
                 // Une ligne liée qui change : ses propriétaires, en remontant la relation.
                 for r in self.decl.related.values() {
-                    let Some(def) = cat.get_relation_def(&r.relation) else { continue };
-                    let (bout_lie, sens_retour) = if r.direction == "incoming" {
-                        (&def.from, crate::search_strategy::ExpansionDirection::Outgoing)
-                    } else {
-                        (&def.to, crate::search_strategy::ExpansionDirection::Incoming)
-                    };
-                    if bout_lie != entite || uuids.is_empty() {
-                        continue;
-                    }
-                    if let Ok(proprietaires) = crate::dataflow::search_nodes::fetch_related_in(
-                        cat.dialect_arc().as_ref(),
-                        cat.conn(),
-                        &uuids,
-                        &r.relation,
-                        sens_retour,
-                        0,
-                    ) {
-                        for enfants in proprietaires.values() {
-                            out.extend(enfants.iter().filter(|c| c.entity == self.entite).map(|c| c.uuid.clone()));
-                        }
-                    }
+                    out.extend(self.proprietaires(cat, r, entite, &uuids));
                 }
             }
             Some("RelationsChanged") => {
                 let relation = evenement["relation"].as_str().unwrap_or("");
-                for r in self.decl.related.values().filter(|r| r.relation == relation) {
-                    let cote = if r.direction == "incoming" { 1 } else { 0 };
+                let bout = |cote: usize| -> Vec<String> {
+                    let mut v = Vec::new();
                     for liste in ["added", "removed"] {
                         if let Some(paires) = evenement[liste].as_array() {
-                            out.extend(paires.iter().filter_map(|p| p[cote].as_str().map(str::to_string)));
+                            v.extend(paires.iter().filter_map(|p| p[cote].as_str().map(str::to_string)));
                         }
+                    }
+                    v
+                };
+                for r in self.decl.related.values().filter(|r| r.relation == relation) {
+                    out.extend(bout(if r.direction == "incoming" { 1 } else { 0 }));
+                }
+                // **Le bloc machine porte les liens sortants** de la ligne et de
+                // ses lignes liées (lot M3b) : un lien posé ou retiré depuis
+                // l'une d'elles réécrit le fichier, même par une relation que le
+                // gabarit ne lit pas (une ancre vers une Ref).
+                if self.est_compose() {
+                    let depart = evenement["from_entity"].as_str().unwrap_or("");
+                    let departs = bout(0);
+                    if depart == self.entite {
+                        out.extend(departs.iter().cloned());
+                    }
+                    for r in self.decl.related.values() {
+                        out.extend(self.proprietaires(cat, r, depart, &departs));
                     }
                 }
             }
@@ -433,6 +566,35 @@ impl Miroir {
         }
         out.sort();
         out.dedup();
+        out
+    }
+
+    /// Les lignes de cette entité qui ont parmi leurs lignes liées (la famille
+    /// `r`) l'une des lignes `uuids` de l'entité `entite` : en remontant la
+    /// relation de la famille.
+    fn proprietaires(&self, cat: &crate::catalog::Catalog, r: &RelatedDecl, entite: &str, uuids: &[String]) -> Vec<String> {
+        let Some(def) = cat.get_relation_def(&r.relation) else { return Vec::new() };
+        let (bout_lie, sens_retour) = if r.direction == "incoming" {
+            (&def.from, crate::search_strategy::ExpansionDirection::Outgoing)
+        } else {
+            (&def.to, crate::search_strategy::ExpansionDirection::Incoming)
+        };
+        if bout_lie != entite || uuids.is_empty() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        if let Ok(proprietaires) = crate::dataflow::search_nodes::fetch_related_in(
+            cat.dialect_arc().as_ref(),
+            cat.conn(),
+            uuids,
+            &r.relation,
+            sens_retour,
+            0,
+        ) {
+            for enfants in proprietaires.values() {
+                out.extend(enfants.iter().filter(|c| c.entity == self.entite).map(|c| c.uuid.clone()));
+            }
+        }
         out
     }
 
