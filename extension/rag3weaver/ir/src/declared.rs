@@ -103,6 +103,42 @@ impl DeclaredPlan {
     }
 
     /// **La vérification au chargement**, sans schéma.
+    /// **Les paramètres que le Plan lit** : ceux de ses conditions (`let` compris), de ses listes
+    /// liées, de ses `limit` et `offset` liés. Un appel qui en donne un autre se trompe de nom ; le
+    /// nœud qui l'exécute le refuse en le nommant, plutôt que de le perdre en silence (sous
+    /// `optional`, un nom mal tapé retirait le filtre sans erreur).
+    pub fn param_names(&self) -> std::collections::BTreeSet<String> {
+        let mut out = std::collections::BTreeSet::new();
+        for p in self.lets.values() {
+            p.params(&mut out);
+        }
+        for f in self.forms.values() {
+            match f {
+                DeclaredForm::Select(s) => {
+                    if let Some(p) = &s.filter {
+                        p.params(&mut out);
+                    }
+                    for c in &s.returns {
+                        if let Column::Collect(c) = c {
+                            if let Some(p) = &c.filter {
+                                p.params(&mut out);
+                            }
+                        }
+                    }
+                    if let Some(Limit::Param { param, .. }) = &s.limit {
+                        out.insert(param.clone());
+                    }
+                    if let Some(Offset::Param { param }) = &s.offset {
+                        out.insert(param.clone());
+                    }
+                }
+                DeclaredForm::Count(Count::Matching { filter: Some(p), .. } | Count::EdgesMatching { filter: p, .. }) => p.params(&mut out),
+                DeclaredForm::Count(_) => {}
+            }
+        }
+        out
+    }
+
     pub fn check(&self) -> Result<(), String> {
         if self.forms.is_empty() {
             return Err("Plan : aucune forme".into());

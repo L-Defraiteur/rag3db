@@ -344,6 +344,23 @@ impl Predicate {
         }
     }
 
+    /// Les **paramètres** que la condition lit (pas ses champs) : ce qu'un appel doit lier.
+    pub(crate) fn params(&self, out: &mut std::collections::BTreeSet<String>) {
+        match self {
+            Predicate::Equals { param, .. }
+            | Predicate::Contains { param, .. }
+            | Predicate::AtLeast { param, .. }
+            | Predicate::In { param, .. }
+            | Predicate::StartsWith { param, .. } => {
+                out.insert(param.clone());
+            }
+            Predicate::Through { filter: Some(f), .. } => f.params(out),
+            Predicate::Optional(p) => p.params(out),
+            Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().for_each(|p| p.params(out)),
+            Predicate::Through { filter: None, .. } | Predicate::Let(_) | Predicate::Compiled(_) => {}
+        }
+    }
+
     pub(crate) fn names(&self, out: &mut Vec<String>) {
         match self {
             Predicate::Equals { field, param }
