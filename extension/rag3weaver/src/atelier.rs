@@ -4,6 +4,8 @@
 //!
 //! - `GET /_atelier` — la page : le chat à gauche ; à droite la page produite
 //!   (une route GET du backend), le graphe de l'outil touché, le journal ;
+//! - `GET /_atelier/page.js` — le code de la page, en fichier (lisible par les
+//!   outils de code, comme le reste) ;
 //! - `GET /_atelier/events` — un seul flux d'événements serveur : les jetons
 //!   et les outils du chat, et les gestes de l'hôte (`declared`, `refused`,
 //!   `reloaded`) ;
@@ -38,6 +40,8 @@ use std::time::{Duration, SystemTime};
 pub const PREFIX: &str = "/_atelier";
 
 const PAGE: &str = include_str!("atelier/page.html");
+/// Le code de la page, en fichier (`GET /_atelier/page.js`).
+const PAGE_JS: &str = include_str!("atelier/page.js");
 
 const SYSTEM_PROMPT: &str = "You work on a declared backend: its manifest, tool graphs \
 (mermaid), JSON schemas, scripted nodes (TypeScript) and views (HTML templates) are files you \
@@ -325,6 +329,12 @@ impl Atelier {
                 status: 200,
                 content_type: "text/html; charset=utf-8",
                 body: PAGE.to_string(),
+                result: None,
+            },
+            ("GET", "/_atelier/page.js") => RouteResponse {
+                status: 200,
+                content_type: "text/javascript; charset=utf-8",
+                body: PAGE_JS.to_string(),
                 result: None,
             },
             ("GET", "/_atelier/events") => {

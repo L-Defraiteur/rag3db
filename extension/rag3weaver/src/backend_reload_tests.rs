@@ -982,8 +982,14 @@ fn the_atelier_page_is_served_and_says_why_the_chat_is_off() {
     };
     let page = http(port, "GET /_atelier HTTP/1.1");
     assert!(
-        page.starts_with("HTTP/1.1 200") && page.contains("EventSource"),
+        page.starts_with("HTTP/1.1 200") && page.contains(r#"src="/_atelier/page.js""#),
         "{page}"
+    );
+    // Le code de la page est un fichier servi, plus en ligne.
+    let code = http(port, "GET /_atelier/page.js HTTP/1.1");
+    assert!(
+        code.starts_with("HTTP/1.1 200") && code.contains("text/javascript") && code.contains("EventSource"),
+        "{code}"
     );
     let state = http(port, "GET /_atelier/state HTTP/1.1");
     let body: Value = serde_json::from_str(state.split("\r\n\r\n").nth(1).unwrap()).unwrap();
