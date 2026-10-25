@@ -6,3 +6,4 @@
 # défaut du moteur que ce commit corrige.
 4f9274a38769a085ab0009a89d1b7dba7597e568 une base réserve son adressage par tranches de 16 Gio, plus 8 Tio d'un bloc : sans elles, un processus n'ouvre qu'une quinzaine de bases, et les témoins de la lib (le contournement cfg(test) de bc2cb48e7 est retiré) échouent sur « Mmap for size 8796093022208 failed »
 a45a15adf2347de1f089ab7d00ee7d36d46e02d0 un COPY de relations annulé ne fait plus disparaître les relations persistantes du nœud : sans lui, le ROLLBACK d'un drain de liens par COPY (la pièce 1 de la mémoire, 60348d75a) perd les liens validés avant la transaction
+dcbaef7b1fd104f16e6c0dcb16ae027b9e7a092c le mot NULL d'un COPY vaut pour toutes les colonnes, pas seulement le texte : sans lui, copier_les_liens d'un groupe sans propriété vers une relation à propriété non texte (le line de MENTIONS) voit son COPY refusé, et la base est à rouvrir (le filet du 19 octobre est retiré)
