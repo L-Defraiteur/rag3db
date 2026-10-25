@@ -2262,6 +2262,13 @@ impl Node for RerankNode {
             return Ok(());
         };
 
+        // Rien à relire (le balayage, ou aucune réponse) : on ne dérange pas
+        // le relecteur. Sa présence, elle, a déjà été dite plus haut.
+        if results.is_empty() {
+            ctx.set_output("results", PortValue::new(results));
+            return Ok(());
+        }
+
         // **Le plancher du pool** : au moins `limit + offset`, sinon la
         // pagination coupe dans des résultats que le cross-encoder n'a pas vus.
         let pool = candidats
@@ -2277,7 +2284,8 @@ impl Node for RerankNode {
             if results.iter().any(|r| r.data.is_none()) && !target.enrich_fields.is_empty() {
                 let conn = ctx.service::<ConnService>("conn").map(|c| c.0.clone());
                 let backend = conn.as_ref().map(|c| moteur_de_recherche(ctx, c));
-                let signaux: Vec<Option<String>> = results.iter().map(|r| r.signal.clone()).collect();
+                let signaux: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> =
+                    results.iter().map(|r| (r.signal.clone(), r.signals.clone())).collect();
                 let mut plats: Vec<SearchResult> =
                     results.iter().cloned().map(SearchResult::from).collect();
                 let issue = match backend {
@@ -2291,9 +2299,10 @@ impl Node for RerankNode {
                         results = plats
                             .into_iter()
                             .zip(signaux)
-                            .map(|(r, sig)| {
+                            .map(|(r, (sig, dits))| {
                                 let mut u = UnifiedResult::from(r);
                                 u.signal = sig;
+                                u.signals = dits;
                                 u
                             })
                             .collect();
@@ -2337,11 +2346,20 @@ impl Node for RerankNode {
                         .unwrap_or(std::cmp::Ordering::Equal)
                         .then(a.cmp(&b))
                 });
+                // Le score du relecteur devient le score du résultat, et sa
+                // ligne s'ajoute à ce que chaque signal a dit (pièce 2 de la
+                // recherche de l'IDE) : la page montre l'avant et l'après.
                 let mut reordered: Vec<UnifiedResult> = idx
                     .into_iter()
-                    .map(|i| {
+                    .enumerate()
+                    .map(|(rang, i)| {
                         let mut r = results[i].clone();
                         r.score = scores[i] as f64;
+                        r.signals.push(crate::dataflow::resultat::SignalScore {
+                            label: label.clone(),
+                            score: scores[i] as f64,
+                            rank: rang + 1,
+                        });
                         r
                     })
                     .collect();
@@ -3511,6 +3529,37 @@ mod tests {
         assert_eq!(order, vec!["b", "c", "a", "d"], "head reordered, d stays last");
         assert!((out[0].score - 1.0).abs() < 1e-6, "score replaced by the reranker's");
         assert_eq!(out[0].signal.as_deref(), Some("rerank"));
+    }
+
+    /// **Le relecteur ajoute sa ligne** (pièce 2 de la recherche de l'IDE) : ce
+    /// que chaque signal a dit reste, et le score et le rang du relecteur s'y
+    /// ajoutent ; la provenance (`keep_signal`) ne change pas.
+    #[test]
+    fn the_reranker_adds_its_line_to_what_each_signal_said() {
+        use crate::dataflow::resultat::SignalScore;
+        let mut services = super::super::services::ServiceRegistry::new();
+        services.register::<Arc<dyn Reranker>>("reranker", Arc::new(crate::reranker::MockReranker));
+        let mut ctx = NodeContext::with_services(Arc::new(services));
+        let mut a = with_text("a", 0.9, "nothing relevant");
+        a.signal = Some("bm25".into());
+        a.signals = vec![SignalScore { label: "bm25".into(), score: 3.2, rank: 1 }];
+        let mut b = with_text("b", 0.8, "rust memory safety");
+        b.signal = Some("bm25".into());
+        b.signals = vec![SignalScore { label: "bm25".into(), score: 2.1, rank: 2 }];
+        ctx.set_input("results", PortValue::new(vec![a, b]));
+        ctx.set_input("query", PortValue::new(query_payload("rust memory safety")));
+        RerankNode::new("rerank").with_candidates(2).with_keep_signal(true).execute(&mut ctx).unwrap();
+        let out = results_of(&mut ctx);
+        assert_eq!(out[0].uuid, "b", "le relecteur remonte b");
+        assert_eq!(out[0].signal.as_deref(), Some("bm25"), "la provenance reste");
+        assert_eq!(
+            out[0].signals,
+            vec![
+                SignalScore { label: "bm25".into(), score: 2.1, rank: 2 },
+                SignalScore { label: "rerank".into(), score: 1.0, rank: 1 },
+            ]
+        );
+        assert_eq!(out[1].signals.last().map(|s| (s.label.as_str(), s.rank)), Some(("rerank", 2)));
     }
 
     /// Sans service reranker : avertissement, ordre conservé, jamais d'échec.
