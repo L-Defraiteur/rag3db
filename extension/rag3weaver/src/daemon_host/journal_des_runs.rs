@@ -225,6 +225,15 @@ impl JournalDesRuns {
         lire_le_fichier(&self.fichier(backend, run)?).ok()
     }
 
+    /// **Ce que pèse le journal d'un run** : son JSON, son fichier compressé, et
+    /// le taux (les mesures de la page 06).
+    pub fn mesurer(&self, backend: &str, run: &str) -> Option<String> {
+        let p = self.fichier(backend, run)?;
+        let json = serde_json::to_vec(&lire_le_fichier(&p).ok()?).ok()?.len() as f64;
+        let disque = std::fs::metadata(&p).ok()?.len() as f64;
+        Some(format!("{:.1} Kio en JSON, {:.1} Kio compressé (×{:.1})", json / 1024.0, disque / 1024.0, json / disque.max(1.0)))
+    }
+
     /// Le poids du journal entier, tel que la borne le compte (relevé s'il ne
     /// l'est pas encore).
     pub fn octets(&self) -> u64 {

@@ -125,6 +125,7 @@ fn journal(host: &DaemonHost, backend: &str, run: &str) -> Value {
             .lire(backend, run)
             .filter(|v| v["tours"].is_array());
         if let Some(v) = lu {
+            eprintln!("MESURE journal d'un tour de chat : {}", host.journal_des_runs().mesurer(backend, run).unwrap_or_default());
             return v;
         }
         assert!(Instant::now() < fin, "le journal du run {run} n'est jamais écrit");

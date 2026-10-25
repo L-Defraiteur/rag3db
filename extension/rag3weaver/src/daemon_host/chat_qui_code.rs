@@ -141,6 +141,7 @@ fn le_chat_d_une_tache_edite_sa_branche_et_laisse_le_principal_intact() {
         assert!(std::time::Instant::now() < fin, "le journal du run {run} n'est jamais écrit, ou jamais complété");
         std::thread::sleep(std::time::Duration::from_millis(20));
     };
+    eprintln!("MESURE journal d'un tour qui code : {}", host.journal_des_runs().mesurer(&t.id, run).unwrap_or_default());
     let evenements = journal["evenements"].as_array().unwrap();
     assert!(
         evenements.iter().any(|e| e["kind"] == "ToolCallStarted" && e["tool"] == "edit_file" && e["arguments"].as_str().is_some_and(|a| a.contains("salut"))),
@@ -365,6 +366,7 @@ fn un_appel_mcp_laisse_ce_qu_il_a_rendu_dans_le_journal_de_son_run() {
         assert!(std::time::Instant::now() < fin, "le journal de l'appel {run} n'est jamais écrit, ou jamais complété");
         std::thread::sleep(std::time::Duration::from_millis(20));
     };
+    eprintln!("MESURE journal d'un appel d'outil : {}", host.journal_des_runs().mesurer(&h.id, &run).unwrap_or_default());
     let appel = &journal["appel"];
     assert_eq!((appel["client"].clone(), appel["outil"].clone(), appel["arguments"]["path"].clone()), (json!("claude-code"), json!("read_file"), json!("src/lib.rs")), "{appel}");
     assert!(appel["rendu"].to_string().contains("bonjour"), "le résultat tel que l'appelant l'a reçu : {appel}");
