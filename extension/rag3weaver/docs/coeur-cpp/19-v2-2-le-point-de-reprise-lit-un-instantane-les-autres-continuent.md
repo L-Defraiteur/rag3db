@@ -151,8 +151,10 @@ forme.
   neuf). À la fin, l'enregistrement CHECKPOINT va dans le scellé, qui est supprimé ; le neuf
   continue. Rejeu : un scellé sans CHECKPOINT final se rejoue puis le neuf ; un scellé fini par
   CHECKPOINT se termine (pages fantômes) puis le neuf se rejoue ; `dryReplay`, l'identité
-  d'ouverture en lecture seule et `ReadersLock` lisent les deux fichiers. Format 43 (le journal
-  porte le `FormatRecord` ; un journal double est refusé par une lib d'avant, ce qui est voulu).
+  d'ouverture en lecture seule et `ReadersLock` lisent les deux fichiers. **Format 44** (le 43 est
+  à hotfixs, l'état d'index de `create-concurrently-etat`, bascule du 26 octobre) : le journal
+  porte le `FormatRecord`, un journal double est refusé par une lib d'avant, ce qui est voulu ;
+  sa propre bascule, réglée par l'orchestration.
 - **Catalogue et métadonnées à T.** `CatalogSet::serialize` prend l'entrée visible à T
   (`getEntryOfTimestamp`), pas la dernière validée ; une table créée après T n'est pas dans ce
   point de reprise, son stockage non plus (elle revient par le journal neuf). Les statistiques
@@ -166,8 +168,12 @@ forme.
 Les chaînes de versions `> F` sont copiées, pas partagées : le coût est proportionnel à ce qui a
 été validé pendant la fenêtre d'un lecteur long, et se résorbe au point de reprise suivant (F
 avance). Un lecteur très long (heures) fait grossir les chaînes : c'est le prix de PostgreSQL
-aussi (le vacuum attend), à borner par un plafond nommé (un lecteur dont l'instantané est plus
-vieux que N points de reprise est refermé avec l'erreur de sérialisation A4′), lot à part.
+aussi (le vacuum attend). Décision de l'orchestration (25 octobre au soir, soumise à Lucie) :
+**pas de plafond à l'aveugle** ; d'abord la mesure (le lecteur long du scénario du banc, et le
+témoin d'un lecteur long pendant un COPY forcé que prépare l'arbre principal), puis un plafond
+nommé à la manière d'`old_snapshot_threshold` de PostgreSQL : un lecteur trop vieux reçoit
+« snapshot too old » au lieu de bloquer le monde, **éteint par défaut** tant que la mesure ne dit
+pas qu'il faut l'allumer. Lot à part.
 
 ## 4. L'ordre des pièces, et le témoin de chacune
 
