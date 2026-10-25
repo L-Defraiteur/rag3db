@@ -1840,3 +1840,53 @@ où elle vit.
   provisoire), alpha.3 par G. **À Lucie** : le recul de fmt/format.h pour
   tree-sitter 0.27, la fusion et le tag de lucivy 4.3.1, une unité systemd
   pour les tunnels d'embarquement du portable.
+
+- **25 octobre, la soirée : la bascule du format 41/42.** Après le fil de
+  l'après-midi, encore quinze lots sur master, dans l'ordre : le repli de la
+  recherche (d6abc051f : un signal absent ne fait plus tomber search_code, il
+  se dit), cited_by de la mémoire (665a4a97c, trié par le dernier apport grâce
+  à l'ordre par extrême de l'IR, beda3d8f1), le correctif du chat et les
+  témoins d'annulation sur barrière (930cccc96, 2e205927a), l'embarqueur qui
+  retente et l'index retiré qui revient (2a5a38cb0), les comptes du plein
+  texte à la fin de chaque index (4d1a4a0ee), la ligne d'un Plan qui ne se
+  rend pas en JSON refusée en la nommant (9b7f09e70), le correctif du schéma
+  d'un paramètre liste (195358024, qui ferme le rouge de master que cited_by
+  avait posé sur un test compilé seulement sous openai-llm), les requêtes
+  préparées qui portent leur préparation (fb4d83b65 : 7,1 Go au lieu de 30
+  pour quatre lecteurs), la ligne MSVC/AppleClang de hnsw_index.cpp
+  (04063ee06, qui rouvre Windows et macOS à alpha.3), tree-sitter 0.27 avec
+  le ticket de fmt (dfb706b07), la pièce 1 de la recherche de l'IDE
+  (0427c2c2d : chaque résultat porte le score de chaque signal). **La bascule**,
+  à 17 h 41 – 17 h 43 : lib unique bâtie sur 04063ee06 et prouvée (e2e_code
+  27/27, ABI lue : deux destructeurs du magasin de requêtes préparées
+  retirés, cinq symboles ajoutés, aucune vtable changée) ; hôtes bâtis
+  contre elle explicitement et essayés sur un port à part aux deux postes ;
+  annonce aux sessions MCP ; arrêt propre des deux hôtes et de leurs sockets,
+  binaires posés ; instantanés reflink des quatre bases partagées
+  (memoire-longue, code-rag3db-depot ici ; code-principal, code-lourd à
+  luciepc), tailles vérifiées, aucun .wal ; réveil sur RAG3DB_LIBRARY_DIR
+  explicite, IDE de Lucie vérifié au navigateur ; `courant` posé ensuite aux
+  deux postes, une fois la dernière passe qui le lisait finie. Les bases
+  passent en 42 à leur premier point de reprise ; le retour n'existe plus que
+  par RETOUR.sh. **Règles du soir** : la lib entière d'un tour se joue sous le
+  jeu de features le plus large (openai-llm compris : 1 841 tests contre
+  1 761) ; une passe épingle RAG3DB_LIB, une bascule ne change rien sous
+  elle ; un rouge connu sur master nu, ticketé et étranger au lot, ne bloque
+  pas le push s'il est dit ; aucun modèle d'essai à côté du vrai sur la carte
+  de luciepc (sept réinitialisations de l'anneau graphique) ; les tunnels
+  d'embarquement du portable sont une unité systemd. **Défauts trouvés et
+  corrigés par les témoins** : le lien d'une proposition perdu après le tour,
+  le relais de l'IDE qui gelait sous un graphe long (deux fils de runtime
+  partagés ; relais sur son propre fil), une préparation exécutée sur une
+  autre connexion, le `null` silencieux d'une ligne de Plan, la sonde PostgreSQL
+  qui disait « rien n'écoute » sur une adresse illisible, un index vectoriel
+  retiré qui ne revenait pas. **Lucivy** : la session lucivy a trouvé la cause
+  probable des gels et pertes (une assertion de BM25 sous validations
+  concurrentes qui tue l'acteur d'un shard), rag3db ré-épinglera sur 4.3.1
+  prouvée ; la décision du tag est à Lucie, après le rouge Python réglé.
+  **Reste pour la nuit** : la fenêtre calme de 21 h 30 (banc, unités
+  d'embarquement de luciepc, mesure 7e/9e de codeparsers sur le portable si
+  Lucie le permet), alpha.3 sur les trois plateformes, INCLUDES avec ses
+  chiffres, la vue outline et le JS de l'IDE en fichiers, les pièces 2 et 3
+  de la recherche, V2-1b, le CREATE concurrent, le commit de formatage de la
+  CI.
