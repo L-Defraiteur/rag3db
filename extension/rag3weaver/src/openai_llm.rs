@@ -2810,17 +2810,23 @@ mod tests {
     #[test]
     fn a_json_param_is_an_open_object_and_strict_mode_says_so() {
         // La dette documentée dans `tools.rs` : un `ConfigParamType::Json`
-        // devient un objet libre, sans `additionalProperties`. Le mode strict
-        // le refuse — c'est le premier endroit où cette dette se paie.
+        // sans sous-schéma ni défaut liste devient un objet libre, sans
+        // `additionalProperties`. Le mode strict le refuse — c'est le premier
+        // endroit où cette dette se paie. (Les `signals` d'EmbedNode, visés
+        // jusqu'au 25 oct. 2026, sont une liste : leur défaut en est une, et
+        // le schéma dit désormais `array`.)
         let registry = {
             let mut r = crate::dataflow::node_registry::NodeRegistry::new();
             crate::dataflow::register_builtins(&mut r);
             r
         };
-        let embed = crate::tools::tool_def(&registry.schema("EmbedNode").unwrap());
-        let err = check_strict_schema(&embed.parameters).unwrap_err();
-        assert!(err.contains("#/signals"), "le chemin du sous-objet : {err}");
+        let search = crate::tools::tool_def(&registry.schema("SearchSourceNode").unwrap());
+        assert_eq!(search.parameters["properties"]["options"]["type"], "object");
+        let err = check_strict_schema(&search.parameters).unwrap_err();
+        assert!(err.contains("#/options"), "le chemin du sous-objet : {err}");
         assert!(err.contains("additionalProperties"), "{err}");
+        let embed = crate::tools::tool_def(&registry.schema("EmbedNode").unwrap());
+        assert_eq!(embed.parameters["properties"]["signals"]["type"], "array", "une liste se dit liste");
     }
 
     #[test]
