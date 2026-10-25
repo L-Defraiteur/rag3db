@@ -11,7 +11,6 @@ use crate::code::analyze;
 use crate::embedder::HashEmbedder;
 use crate::{Catalog, CatalogConfig, Rag3dbConnection};
 
-const SEUIL: &str = "RAG3WEAVER_LINK_COPY_THRESHOLD";
 
 fn depot() -> Vec<(String, String)> {
     vec![
@@ -52,8 +51,7 @@ fn fichiers_reels() -> Vec<(String, String)> {
 
 /// Le premier index de ces fichiers par `sync_source` (le chemin de `index` :
 /// Bulk, des paquets, les relations différées), un fichier par paquet.
-fn aretes_par_la_synchronisation(seuil: &str) -> Vec<String> {
-    std::env::set_var(SEUIL, seuil);
+fn aretes_par_la_synchronisation(seuil: usize) -> Vec<String> {
     let d = tempfile::tempdir().unwrap();
     let conn = Rag3dbConnection::new(&d.path().join("base.rag3db")).expect("la base");
     let mut cat = Catalog::new(
@@ -62,6 +60,10 @@ fn aretes_par_la_synchronisation(seuil: &str) -> Vec<String> {
         CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
     );
     cat.initialize().unwrap();
+    // Le seuil réglé sur ce catalogue, pas dans l'environnement du processus :
+    // la variable faisait passer par lots les témoins voisins de la lib
+    // (`copie_liens_tests`, faux vert du 19 octobre 2026).
+    cat.set_link_copy_threshold(Some(seuil));
     crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
     let source = crate::code_tools::Snapshot::new("depot", fichiers_reels());
     let options = crate::code_sync::SourceSyncOptions { batch_files: 64, ..Default::default() };
@@ -88,9 +90,8 @@ fn ecart(a: &[String], b: &[String]) -> (Vec<String>, Vec<String>) {
 
 #[test]
 fn les_aretes_du_premier_index_ne_dependent_pas_du_chemin_d_ecriture() {
-    let par_lots = aretes_par_la_synchronisation("1000000000");
-    let par_copy = aretes_par_la_synchronisation("1");
-    std::env::remove_var(SEUIL);
+    let par_lots = aretes_par_la_synchronisation(1_000_000_000);
+    let par_copy = aretes_par_la_synchronisation(1);
     let compte = |v: &[String]| {
         let mut m = std::collections::BTreeMap::<String, usize>::new();
         for a in v {
@@ -109,8 +110,7 @@ fn les_aretes_du_premier_index_ne_dependent_pas_du_chemin_d_ecriture() {
 }
 
 /// Les arêtes de la base, `relation de -> vers`, triées.
-fn aretes(seuil: &str) -> Vec<String> {
-    std::env::set_var(SEUIL, seuil);
+fn aretes(seuil: usize) -> Vec<String> {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let mut cat = Catalog::new(
         Box::new(conn),
@@ -118,6 +118,10 @@ fn aretes(seuil: &str) -> Vec<String> {
         CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
     );
     cat.initialize().unwrap();
+    // Le seuil réglé sur ce catalogue, pas dans l'environnement du processus :
+    // la variable faisait passer par lots les témoins voisins de la lib
+    // (`copie_liens_tests`, faux vert du 19 octobre 2026).
+    cat.set_link_copy_threshold(Some(seuil));
     crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
     cat.ingest_code(&analyze("/depot", depot())).unwrap();
     let r = cat.execute_raw("MATCH (a)-[r]->(b) RETURN label(r), a._uuid, b._uuid").unwrap();
@@ -133,9 +137,8 @@ fn aretes(seuil: &str) -> Vec<String> {
 
 #[test]
 fn les_aretes_d_un_index_ne_dependent_pas_du_chemin_d_ecriture() {
-    let par_lots = aretes("1000000000");
-    let par_copy = aretes("1");
-    std::env::remove_var(SEUIL);
+    let par_lots = aretes(1_000_000_000);
+    let par_copy = aretes(1);
     let seulement_lots: Vec<&String> = par_lots.iter().filter(|a| !par_copy.contains(a)).collect();
     let seulement_copy: Vec<&String> = par_copy.iter().filter(|a| !par_lots.contains(a)).collect();
     assert!(

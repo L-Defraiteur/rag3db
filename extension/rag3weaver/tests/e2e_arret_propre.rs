@@ -41,6 +41,9 @@ fn catalogue(dossier: &Path) -> Arc<Mutex<Catalog>> {
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(16)), config);
     catalog.initialize().unwrap();
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    // Des paquets de 8 fichiers, réglés sur ce catalogue : la variable du
+    // processus valait pour les suites voisines du même binaire.
+    catalog.set_file_batch_size(Some(8));
     Arc::new(Mutex::new(catalog))
 }
 
@@ -85,12 +88,12 @@ fn comptes(catalog: &Arc<Mutex<Catalog>>) -> BTreeMap<String, i64> {
     out
 }
 
-/// Les trois cas dans un seul test : ils posent des variables
-/// d'environnement que des tests parallèles se disputeraient.
+/// Les trois cas dans un seul test. Le crochet d'arrêt et la taille des
+/// paquets sont réglés sur le catalogue de chaque cas, plus dans
+/// l'environnement du processus (19 octobre 2026).
 #[test]
 #[ignore]
 fn une_indexation_arretee_entre_deux_paquets_se_reprend_aux_comptes_d_une_passe_sans_arret() {
-    std::env::set_var("RAG3WEAVER_BATCH_FILES", "8");
 
     // Le témoin : sans arrêt.
     let d_temoin = dossier("temoin");
@@ -104,9 +107,9 @@ fn une_indexation_arretee_entre_deux_paquets_se_reprend_aux_comptes_d_une_passe_
     //    relance, sans `takeover`, reprend et va au bout.
     let d_crochet = dossier("crochet");
     let crochet = catalogue(&d_crochet);
-    std::env::set_var("RAG3WEAVER_TEST_STOP_AFTER_BATCH", "1");
+    crochet.lock().unwrap().stop_after_batch(Some(1));
     let arretee = indexer(&crochet);
-    std::env::remove_var("RAG3WEAVER_TEST_STOP_AFTER_BATCH");
+    crochet.lock().unwrap().stop_after_batch(None);
     let derniere = arretee.last().cloned().unwrap_or_default();
     assert!(derniere.starts_with(STOPPED_PREFIX), "l'indexation s'arrête au paquet 2 et le dit : {arretee:?}");
     assert!(derniere.contains("au paquet 2 sur"), "{derniere}");
@@ -149,7 +152,6 @@ fn une_indexation_arretee_entre_deux_paquets_se_reprend_aux_comptes_d_une_passe_
     assert_eq!(reprise.last().map(String::as_str), Some(DONE_LINE), "{reprise:?}");
     assert_eq!(comptes(&serveur), attendu, "la reprise après fermeture rend les comptes d'une passe sans arrêt");
 
-    std::env::remove_var("RAG3WEAVER_BATCH_FILES");
     for d in [d_temoin, d_crochet, d_serveur, d_voisin] {
         let _ = std::fs::remove_dir_all(d);
     }
