@@ -54,8 +54,10 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
     // We acquire the lock for starting new transactions. In case this cannot be acquired, this
     // ensures calls to other public functions are not restricted.
     std::unique_lock publicFunctionLck{mtxForSerializingPublicFunctionCalls};
-    // Pas de nouvelle transaction pendant qu'un point de reprise attend ou s'écrit.
-    waitWhileCheckpointPendingNoLock(&clientContext, publicFunctionLck);
+    // Pas de nouvel écrivain pendant qu'un point de reprise attend ou s'écrit ; pas de nouveau
+    // lecteur pendant qu'il attend les départs.
+    waitWhileCheckpointPendingNoLock(&clientContext, publicFunctionLck,
+        type == TransactionType::READ_ONLY);
     throwIfCheckpointFailedNoLock();
     switch (type) {
     case TransactionType::READ_ONLY: {
@@ -438,14 +440,20 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
 }
 
 void TransactionManager::waitWhileCheckpointPendingNoLock(const main::ClientContext* clientContext,
-    std::unique_lock<std::mutex>& publicLock) {
+    std::unique_lock<std::mutex>& publicLock, bool readOnly) {
     std::optional<common::TaskScheduler::BlockingWait> blocking;
-    if (checkpointPending) {
+    // Un écrivain attend tant qu'un point de reprise est demandé, attendu ou écrit ; un lecteur
+    // n'attend que l'attente des départs (et une demande automatique, bornée) : pendant
+    // l'écriture, il entre.
+    const auto held = [this, readOnly] {
+        return checkpointPending && !(readOnly && checkpointWriting);
+    };
+    if (held()) {
         yieldWorkerWhileWaiting(blocking, clientContext);
     }
     // Une demande automatique (A8) ne retient pas plus de AUTO_CHECKPOINT_WAIT : au-delà, elle est
     // abandonnée, et le point de reprise reporté (un écrivain long la tient).
-    while (checkpointPending) {
+    while (held()) {
         if (autoCheckpointRequested) {
             const auto deadline = autoCheckpointRequestedAt + AUTO_CHECKPOINT_WAIT;
             if (transactionsChanged.wait_until(publicLock, deadline) == std::cv_status::timeout &&
@@ -458,9 +466,9 @@ void TransactionManager::waitWhileCheckpointPendingNoLock(const main::ClientCont
     }
 }
 
-void TransactionManager::waitUntilNewTransactionsAreAllowed() {
+void TransactionManager::waitUntilNewTransactionsAreAllowed(bool readOnly) {
     std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
-    waitWhileCheckpointPendingNoLock(nullptr, lck);
+    waitWhileCheckpointPendingNoLock(nullptr, lck, readOnly);
 }
 
 void TransactionManager::writeRequestedCheckpointIfLastNoLock(main::ClientContext& clientContext,
@@ -567,7 +575,22 @@ void TransactionManager::checkpointNoLock(main::ClientContext& clientContext,
     const auto carriesForcedCommit = checkpointCarriesForcedCommit;
     checkpointCarriesForcedCommit = false;
     try {
-        checkpointer->writeCheckpoint();
+        // L'écriture se fait hors du verrou public : les lecteurs nouveaux entrent (la porte
+        // « tout le monde » est levée, checkpointWriting), commencent, valident et annulent
+        // pendant qu'elle dure ; les écrivains et les autres CHECKPOINT restent dehors
+        // (checkpointPending). Le verrou est repris avant de poser l'issue, quelle qu'elle soit.
+        checkpointWriting = true;
+        transactionsChanged.notify_all();
+        publicLock.unlock();
+        try {
+            checkpointer->writeCheckpoint();
+        } catch (...) {
+            publicLock.lock();
+            checkpointWriting = false;
+            throw;
+        }
+        publicLock.lock();
+        checkpointWriting = false;
         walSizeAtLastPostponeWarning = 0;
         lastCompletedCheckpoint = checkpointNumber;
         allowNewTransactionsNoLock();

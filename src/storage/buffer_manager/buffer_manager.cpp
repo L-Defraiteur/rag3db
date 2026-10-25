@@ -463,14 +463,31 @@ void BufferManager::removeFilePagesFromFrames(FileHandle& fileHandle) {
     }
 }
 
-void BufferManager::updateFrameIfPageIsInFrameWithoutLock(file_idx_t fileIdx,
-    const uint8_t* newPage, page_idx_t pageIdx) {
+void BufferManager::updateFrameIfPageIsInFrame(file_idx_t fileIdx, const uint8_t* newPage,
+    page_idx_t pageIdx) {
     KU_ASSERT(fileIdx < fileHandles.size());
     auto& fileHandle = *fileHandles[fileIdx];
     auto state = fileHandle.getPageState(pageIdx);
-    if (state && state->getState() != PageState::EVICTED) {
-        memcpy(getFrame(fileHandle, pageIdx), newPage, RAG3DB_PAGE_SIZE);
+    if (!state) {
+        return;
     }
+    while (true) {
+        const auto current = state->getStateAndVersion();
+        if (PageState::getState(current) == PageState::EVICTED) {
+            // Pas de cadre : la prochaine lecture charge la page du fichier, déjà à jour.
+            return;
+        }
+        if (PageState::getState(current) == PageState::LOCKED) {
+            // Épinglée par un lecteur, ou en cours d'éviction : on attend qu'elle soit rendue.
+            continue;
+        }
+        if (state->tryLock(current)) {
+            break;
+        }
+    }
+    memcpy(getFrame(fileHandle, pageIdx), newPage, RAG3DB_PAGE_SIZE);
+    // La version change : une lecture optimiste commencée avant recommence.
+    state->unlock();
 }
 
 void BufferManager::removePageFromFrameIfNecessary(FileHandle& fileHandle, page_idx_t pageIdx) {

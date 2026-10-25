@@ -48,7 +48,8 @@ public:
     // Attend qu'aucun point de reprise ne retienne les nouvelles transactions, dans le fil de
     // l'appelant : un BEGIN explicite s'exécute sur un fil du planificateur, et y attendre
     // tiendrait un fil dont les transactions ouvertes ont besoin pour valider et partir (A8).
-    void waitUntilNewTransactionsAreAllowed();
+    // Un lecteur n'attend que la porte « tout le monde » (voir waitWhileCheckpointPendingNoLock).
+    void waitUntilNewTransactionsAreAllowed(bool readOnly);
     void rollback(main::ClientContext& clientContext, Transaction* transaction);
     // Vrai tant que la transaction est dans le système. Une validation dont le point de reprise
     // qui suit échoue lève après l'avoir retirée (et détruite) : la connexion le demande avant
@@ -111,8 +112,13 @@ private:
     void writeRequestedCheckpointIfLastNoLock(main::ClientContext& clientContext,
         std::unique_lock<std::mutex>& publicLock);
     void cancelAutoCheckpointRequestNoLock();
+    // La porte à deux niveaux (V2-1c). checkpointPending retient les écrivains du début de
+    // l'attente des départs à la fin de l'écriture ; checkpointWriting dit que l'écriture est en
+    // cours, hors du verrou public : un lecteur nouveau entre alors, commence, valide et annule
+    // sans attendre. Il ne lit que ce que le point de reprise écrit (le dernier validé, aucun
+    // écrivain ne tourne) et tient ses blocs (NodeGroupScanState::groups).
     void waitWhileCheckpointPendingNoLock(const main::ClientContext* clientContext,
-        std::unique_lock<std::mutex>& publicLock);
+        std::unique_lock<std::mutex>& publicLock, bool readOnly);
     void allowNewTransactionsNoLock();
     // Un point de reprise automatique reporté, parce qu'une autre transaction est ouverte.
     void postponeCheckpointNoLock();
@@ -138,9 +144,11 @@ private:
     // Une seule fonction publique à la fois, sauf pendant l'attente d'un point de reprise, qui
     // relâche ce verrou pour que les transactions ouvertes puissent valider ou annuler.
     std::mutex mtxForSerializingPublicFunctionCalls;
-    // Vrai tant qu'un point de reprise attend le départ des transactions ou s'écrit : aucune
-    // transaction ne démarre. Réveils par transactionsChanged. Gardé par le verrou public.
+    // Vrai tant qu'un point de reprise attend le départ des transactions ou s'écrit : aucun
+    // écrivain ne démarre. Réveils par transactionsChanged. Gardé par le verrou public.
     bool checkpointPending = false;
+    // Vrai pendant l'écriture elle-même, hors du verrou public : les lecteurs entrent (V2-1c).
+    bool checkpointWriting = false;
     std::condition_variable transactionsChanged;
     // A7, la file des points de reprise. Les validations qui veulent un point de reprise et en
     // trouvent un en attente ; quand il ne reste qu'elles, le point de reprise en attente pose

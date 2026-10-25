@@ -529,7 +529,8 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
                 // Le BEGIN s'exécute sur un fil du planificateur ; s'il y attendait la fin d'un
                 // point de reprise, il tiendrait un fil dont les transactions ouvertes ont besoin
                 // pour valider et partir. Il attend donc ici, dans le fil de l'appelant (A8).
-                localDatabase->getTransactionManager()->waitUntilNewTransactionsAreAllowed();
+                localDatabase->getTransactionManager()->waitUntilNewTransactionsAreAllowed(
+                    action == transaction::TransactionAction::BEGIN_READ);
             }
         }
         // A statement prepared before the failure must be refused like any other.
