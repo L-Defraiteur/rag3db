@@ -84,14 +84,13 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (39)
+### Ouverts — produit (37)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas](2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md) | ouvert — lot en cours chez G | réponse fausse en silence (état « running 97 % », recherche dense en repli) | oui | oui |
 | [Retirer le patch lucivy à la publication](2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | ouvert — `[patch.crates-io]` temporaire vers la branche correctifs-rag3db-19-octobre (bb07627), jusqu'à la publication par Lucie | dette de construction | non | oui (Cargo.toml, Cargo.lock) |
 | [Un Plan qui écrit ne s'annonce pas](2026-10-19-un-plan-qui-ecrit-ne-s-annonce-pas.md) | ouvert — décision de forme au premier appelant écrivant | réponse fausse en silence (pour qui écoute `catalog`) | non (aucun appelant en service) | oui |
 | [Un shard de lucivy sans écrivain perd les écritures en silence](2026-10-19-un-shard-de-lucivy-sans-ecrivain-perd-les-ecritures-en-silence.md) | ouvert — dans lucivy-core 4.3.0 : sans écrivain, un Insert est jeté et un Delete sauté avec Ok ; correctif dans lucivy (bb07627), pris par rag3weaver sous patch temporaire en attendant la publication | perte silencieuse | pas aujourd'hui (rag3weaver garde ses écrivains) ; dès qu'un appelant en lâche un | oui (appelant) |
@@ -104,7 +103,6 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Une lecture refusée pendant une réaction en chaîne, environ une fois sur neuf](2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md) | ouvert — pour everything declarative | test instable, peut-être en service | peut-être | oui (`reindex_nodes.rs`, `catalog_read.rs`) |
 | [Un index entier se fige pendant un checkout, et la mémoire de l'hôte monte](2026-10-11-l-index-entier-se-fige-pendant-un-checkout.md) | ouvert — non reproduit, recette de diagnostic | blocage, mémoire | oui (checkout ou lib remplacée pendant un index) | oui |
 | [Un backend de code dont la racine a disparu rend une erreur brute et se dit ouvert](2026-10-11-un-backend-de-code-dont-la-racine-a-disparu-rend-une-erreur-brute-et-se-dit-ouvert.md) | ouvert (relevé par le cœur C++, demande de Lucie) | réponse fausse / confort — erreur brute, « catalogue occupé » | oui (worktree effacé, manifeste chargé) | oui (démon, MCP du code) |
-| [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | ouvert — pris par l'arbre principal, après sa file | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
 | [Le journal de l'hôte du démon n'a ni heure ni auteur](2026-10-11-le-journal-de-l-hote-n-a-ni-heure-ni-auteur.md) | ouvert | diagnostic impossible | oui, toujours | oui (et seulement) |
 | [L'hôte du démon hérite de l'environnement du premier client qui le lance](2026-10-11-l-hote-herite-de-l-environnement-du-premier-client.md) | ouvert — côté hôte, arbre principal | réponse fausse ou blocage (un service d'embarquement manque) | oui, dès qu'un hôte sert des backends aux services différents | oui (et seulement) |
 | [La pause n'adresse pas son interlocuteur par l'annuaire](2026-10-11-la-pause-n-adresse-pas-par-l-annuaire.md) | ouvert | réponse fausse (le pair n'est pas prévenu) | oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair | oui |
@@ -131,10 +129,12 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (171), dans `closed/`
+### Fermés (173), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas](closed/2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md) | corrigé — lot embarqueur-revenu (25 oct. 2026) : l'index retiré revient dès la dette soldée, l'état le dit | réponse fausse en silence (état « running 97 % », recherche dense en repli) | oui | oui |
+| [Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte](closed/2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md) | corrigé — lot embarqueur-revenu (25 oct. 2026) : le service revenu est repris par réouverture | réponse dégradée, dette silencieuse | oui, un hôte qui démarre avant son service | oui (et seulement) |
 | [Le témoin du chat dans la page rougit sous la lib entière](closed/2026-10-25-le-temoin-du-chat-dans-la-page-rougit-sous-la-lib-entiere.md) | corrigé `930cccc96` (le lien de la proposition vient aussi de la réponse du tour) | test instable | non (le test) | oui (`daemon_host/chat.rs`) |
 | [Un signal en panne fait tomber la recherche hybride entière](closed/2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere.md) | corrigé (25 octobre 2026, la branche dense demande à l'instantané si son index se lit) | blocage (search_code ne répondait plus) | oui | oui |
 | [Le témoin du sous-graphe de valeurs annulé rougit sous charge](closed/2026-10-25-le-temoin-du-sous-graphe-de-valeurs-annule-rougit-sous-charge.md) | fermé — 2e205927a : annuler sur une barrière, le nœud entré | faux rouge d'un témoin | non | oui (annulation_tests) |

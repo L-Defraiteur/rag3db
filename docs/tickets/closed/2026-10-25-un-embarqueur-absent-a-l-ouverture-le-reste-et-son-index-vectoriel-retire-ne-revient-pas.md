@@ -1,9 +1,6 @@
 # Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas
 
-- **État** : ouvert, le 25 octobre 2026 (G). **Le défaut 1 est celui du ticket du 11 octobre**
-  `2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md`, pris alors par
-  l'arbre principal : ce ticket-ci n'en est que la nouvelle occurrence, et l'attribution du correctif
-  se décide entre l'arbre principal et G. Le défaut 2 (l'index vectoriel retiré) est neuf.
+- **État** : **corrigé** par le lot `embarqueur-revenu` (25 octobre 2026, G). Défaut 1 : voir `2026-10-11-un-service-injoignable-a-l-ouverture-fige-le-backend-en-plein-texte.md`, fermé avec lui. Défaut 2 : la fin de chaque passe d'embarquement recompte la dette des index retirés et rebâtit ceux qui sont soldés (la montre comme un index) ; tant qu'un index est retiré, `index_state` le dit (`vector_index`, un avertissement). Témoin : `e2e_embarqueur_absent::un_index_vectoriel_retire_revient_des_la_dette_soldee_par_la_montre`, rouge sans le correctif (index restés retirés, dette à 0), vert avec (rebâtis à la passe qui solde).
 - **Gravité** : réponse fausse en silence. L'état dit « vectors running 97 % » et garde un avertissement
   faux, alors que rien ne se calcule ; la recherche dense se replie.
 - **Atteignable en service** : oui. Il suffit d'ouvrir un backend quand le service d'embarquement n'est

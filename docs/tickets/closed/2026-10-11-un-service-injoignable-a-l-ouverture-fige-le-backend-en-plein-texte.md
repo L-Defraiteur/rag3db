@@ -1,7 +1,6 @@
 # Un service d'embarquement injoignable à l'ouverture fige le backend en plein texte pour la vie de l'hôte
 
-- **État** : ouvert (11 octobre 2026). Relevé par l'arbre principal à la relecture du lot
-  `embarqueur-absent-portes` de G. **Pris par l'arbre principal**, après sa file.
+- **État** : **corrigé** par le lot `embarqueur-revenu` (25 octobre 2026, G) : un backend ouvert sans son service le retente au plus une fois par 30 s, à chaque état et avant chaque appel ; le service revenu, l'hôte (et la porte autonome) rouvre le backend avant de servir l'appel. Témoin : `e2e_demon_hote::un_service_revenu_apres_l_ouverture_est_repris`, rouge sans le correctif, vert avec.
 - **Gravité** : réponse dégradée sans fin, et une dette qui grossit en silence
 - **Atteignable en service** : oui, dès qu'un hôte démarre avant le service d'embarquement
   qu'il déclare. C'est le cas d'un démarrage de luciepc, où l'hôte et les services partent
