@@ -9,6 +9,7 @@ import { File } from "@/views/File";
 import { Search } from "@/views/Search";
 import { Tasks } from "@/views/Tasks";
 import { TaskReview } from "@/views/TaskReview";
+import { Bilans } from "@/views/Bilans";
 import { applyTheme, effectiveTheme, storedTheme, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
 
@@ -86,6 +87,7 @@ function View({ state, reload }: { state: HostState; reload: () => Promise<unkno
   if (r.view === "chat" && r.id) return <Chat id={r.id} state={state} />;
   if (r.view === "fichier" && r.id) return <File id={r.id} path={r.rest ?? ""} state={state} />;
   if (r.view === "recherche" && r.id) return <Search id={r.id} state={state} />;
+  if (r.view === "bilans" && r.id) return <Bilans id={r.id} state={state} />;
   return <Home state={state} />;
 }
 
