@@ -52,7 +52,26 @@ tombé, puis garde la réponse.
 
 ## Ce que pèse un run
 
-MESURES
+Mesuré le 25 octobre 2026. « JSON » est le journal compact (ce lot n'écrit plus de JSON indenté),
+« zstd » est le fichier sur le disque.
+
+| run | JSON | zstd | taux |
+|---|---|---|---|
+| appels MCP réels sur l'hôte de luciepc (3 événements) | 0,7 Kio | 0,25 Kio | ×2,8 |
+| idem (7 événements) | 1,3 Kio | 0,32 Kio | ×3,9 |
+| idem, `search_code` (12 événements) | 2,7 Kio | 0,85 Kio | ×3,2 |
+| un appel d'outil par /call (`chat_qui_code`) | 0,9 Kio | 0,4 Kio | ×2,3 |
+| un tour qui code (`chat_qui_code` : edit_file, tours, tâche) | 2,9 Kio | 1,0 Kio | ×3,1 |
+| un tour de chat (`e2e_juge`, cinq runs) | 2,7 à 4,2 Kio | 0,8 à 1,0 Kio | ×3,1 à ×4,3 |
+
+Ce qu'on en lit :
+- Un run ordinaire pèse un à quatre Kio en JSON, moins d'un Kio compressé.
+- Le taux est de ×2 à ×4, pas ×5 à ×10 : un petit fichier se compresse moins, faute de
+  répétitions. Un long tour de chat (des dizaines d'appels, des retours de plusieurs Kio) devrait
+  se compresser mieux ; il reste à mesurer sur une vraie session.
+- À un Kio par run, les 270 000 runs de trois mois pèsent environ 270 Mio, vingt fois sous la
+  borne. Les 5 Gio ne seront atteints que par de longues sessions. C'est alors la borne d'âge qui
+  tranche le plus souvent.
 
 ## Les témoins
 
