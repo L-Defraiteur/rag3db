@@ -87,13 +87,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (40)
+### Ouverts — produit (41)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le témoin du sous-graphe de valeurs annulé rougit sous charge](2026-10-25-le-temoin-du-sous-graphe-de-valeurs-annule-rougit-sous-charge.md) | ouvert — vu une fois au rejeu de cited_by, vert au suivant ; aucun correctif | faux rouge d'un témoin | non | oui (annulation_tests) |
 | [Un embarqueur absent à l'ouverture le reste, et son index vectoriel retiré ne revient pas](2026-10-25-un-embarqueur-absent-a-l-ouverture-le-reste-et-son-index-vectoriel-retire-ne-revient-pas.md) | ouvert — lot en cours chez G | réponse fausse en silence (état « running 97 % », recherche dense en repli) | oui | oui |
 | [Un signal en panne fait tomber la recherche hybride entière](2026-10-25-un-signal-en-panne-fait-tomber-la-recherche-hybride-entiere.md) | ouvert — confié à la session « recherche » | blocage (search_code ne répond plus) | oui | oui |
 | [Retirer le patch lucivy à la publication](2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | ouvert — `[patch.crates-io]` temporaire vers la branche correctifs-rag3db-19-octobre (bb07627), jusqu'à la publication par Lucie | dette de construction | non | oui (Cargo.toml, Cargo.lock) |
