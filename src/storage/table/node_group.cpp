@@ -186,9 +186,38 @@ void NodeGroup::initializeScanState(const Transaction*, const UniqLock& lock,
     TableScanState& state) const {
     auto& nodeGroupScanState = *state.nodeGroupScanState;
     nodeGroupScanState.chunkedGroupIdx = 0;
-    ChunkedNodeGroup* firstChunkedGroup = chunkedGroups.getFirstGroup(lock);
+    nodeGroupScanState.groups = chunkedGroups.getAllGroups(lock);
+    KU_ASSERT(!nodeGroupScanState.groups.empty());
+    const auto* firstChunkedGroup = nodeGroupScanState.groups.front().get();
     nodeGroupScanState.nextRowToScan = firstChunkedGroup->getStartRowIdx();
     initializeScanStateForChunkedGroup(state, firstChunkedGroup);
+}
+
+void NodeGroup::extendScanGroups(const UniqLock& lock, NodeGroupScanState& scanState) const {
+    const auto& live = chunkedGroups.getAllGroups(lock);
+    auto& held = scanState.groups;
+    if (held.empty()) {
+        held = live;
+        return;
+    }
+    if (live.empty() || live.front() != held.front()) {
+        return;
+    }
+    for (auto i = held.size(); i < live.size(); i++) {
+        held.push_back(live[i]);
+    }
+}
+
+const ChunkedNodeGroup* NodeGroup::scanGroupAt(NodeGroupScanState& scanState,
+    idx_t chunkedGroupIdx) const {
+    if (chunkedGroupIdx >= scanState.groups.size()) {
+        const auto lock = chunkedGroups.lock();
+        extendScanGroups(lock, scanState);
+        if (chunkedGroupIdx >= scanState.groups.size()) {
+            return nullptr;
+        }
+    }
+    return scanState.groups[chunkedGroupIdx].get();
 }
 
 void applySemiMaskFilter(const TableScanState& state, row_idx_t numRowsToScan,
@@ -224,20 +253,21 @@ NodeGroupScanResult NodeGroup::scan(const Transaction* transaction, TableScanSta
     // TODO(Guodong): Move the locked part of figuring out the chunked group to initScan.
     const auto lock = chunkedGroups.lock();
     auto& nodeGroupScanState = *state.nodeGroupScanState;
-    KU_ASSERT(nodeGroupScanState.chunkedGroupIdx < chunkedGroups.getNumGroups(lock));
-    const auto chunkedGroup = chunkedGroups.getGroup(lock, nodeGroupScanState.chunkedGroupIdx);
+    auto& groups = nodeGroupScanState.groups;
+    KU_ASSERT(nodeGroupScanState.chunkedGroupIdx < groups.size());
+    const auto* chunkedGroup = groups[nodeGroupScanState.chunkedGroupIdx].get();
     if (nodeGroupScanState.nextRowToScan >=
         chunkedGroup->getNumRows() + chunkedGroup->getStartRowIdx()) {
         nodeGroupScanState.chunkedGroupIdx++;
-        if (nodeGroupScanState.chunkedGroupIdx >= chunkedGroups.getNumGroups(lock)) {
-            return NODE_GROUP_SCAN_EMPTY_RESULT;
+        if (nodeGroupScanState.chunkedGroupIdx >= groups.size()) {
+            extendScanGroups(lock, nodeGroupScanState);
+            if (nodeGroupScanState.chunkedGroupIdx >= groups.size()) {
+                return NODE_GROUP_SCAN_EMPTY_RESULT;
+            }
         }
-        ChunkedNodeGroup* currentChunkedGroup =
-            chunkedGroups.getGroup(lock, nodeGroupScanState.chunkedGroupIdx);
-        initializeScanStateForChunkedGroup(state, currentChunkedGroup);
+        initializeScanStateForChunkedGroup(state, groups[nodeGroupScanState.chunkedGroupIdx].get());
     }
-    const auto& chunkedGroupToScan =
-        *chunkedGroups.getGroup(lock, nodeGroupScanState.chunkedGroupIdx);
+    const auto& chunkedGroupToScan = *groups[nodeGroupScanState.chunkedGroupIdx];
     KU_ASSERT(nodeGroupScanState.nextRowToScan >= chunkedGroupToScan.getStartRowIdx());
     const auto rowIdxInChunkToScan =
         nodeGroupScanState.nextRowToScan - chunkedGroupToScan.getStartRowIdx();
@@ -284,20 +314,29 @@ NodeGroupScanResult NodeGroup::scanInternal(const UniqLock& lock, Transaction* t
     // Only meant for scanning once
     KU_ASSERT(numRowsToScan <= DEFAULT_VECTOR_CAPACITY);
 
-    auto startRowIdxInGroup = getStartRowIdxInGroupNoLock();
+    auto& nodeGroupScanState = *state.nodeGroupScanState;
+    auto& groups = nodeGroupScanState.groups;
+    if (groups.empty()) {
+        extendScanGroups(lock, nodeGroupScanState);
+    }
+    KU_ASSERT(!groups.empty());
+    auto startRowIdxInGroup = groups.front()->getStartRowIdx();
     if (startOffsetInGroup < startRowIdxInGroup) {
         numRowsToScan = std::min(numRowsToScan, startRowIdxInGroup - startOffsetInGroup);
         // If the scan starts before the first row in the group, skip the deleted part and return.
         return NodeGroupScanResult{startOffsetInGroup, numRowsToScan};
     }
 
-    auto& nodeGroupScanState = *state.nodeGroupScanState;
     nodeGroupScanState.nextRowToScan = startOffsetInGroup;
 
-    auto [newChunkedGroupIdx, _] = findChunkedGroupIdxFromRowIdxNoLock(startOffsetInGroup);
+    auto newChunkedGroupIdx = findChunkedGroupIdx(groups, startOffsetInGroup).first;
+    if (newChunkedGroupIdx == INVALID_CHUNKED_GROUP_IDX) {
+        extendScanGroups(lock, nodeGroupScanState);
+        newChunkedGroupIdx = findChunkedGroupIdx(groups, startOffsetInGroup).first;
+    }
     KU_ASSERT(newChunkedGroupIdx != INVALID_CHUNKED_GROUP_IDX);
 
-    const auto* chunkedGroupToScan = chunkedGroups.getGroup(lock, newChunkedGroupIdx);
+    const auto* chunkedGroupToScan = groups[newChunkedGroupIdx].get();
     if (newChunkedGroupIdx != nodeGroupScanState.chunkedGroupIdx) {
         // If the chunked group matches the scan state, don't re-initialize it.
         // E.g., we may scan a group multiple times in parts
@@ -319,16 +358,19 @@ NodeGroupScanResult NodeGroup::scanInternal(const UniqLock& lock, Transaction* t
     return NodeGroupScanResult{startOffsetInGroup, numRowsScanned};
 }
 
-bool NodeGroup::lookupNoLock(const Transaction* transaction, const TableScanState& state,
-    sel_t posInSel) const {
+std::optional<bool> NodeGroup::lookupInScanGroups(const Transaction* transaction,
+    const TableScanState& state, sel_t posInSel) const {
     auto& nodeGroupScanState = *state.nodeGroupScanState;
     const auto pos = state.rowIdxVector->state->getSelVector().getSelectedPositions()[posInSel];
     KU_ASSERT(!state.rowIdxVector->isNull(pos));
     const auto rowIdx = state.rowIdxVector->getValue<row_idx_t>(pos);
-    const ChunkedNodeGroup* chunkedGroupToScan = findChunkedGroupFromRowIdxNoLock(rowIdx);
-    KU_ASSERT(chunkedGroupToScan);
-    const auto rowIdxInChunkedGroup = rowIdx - chunkedGroupToScan->getStartRowIdx();
-    return chunkedGroupToScan->lookup(transaction, state, nodeGroupScanState, rowIdxInChunkedGroup,
+    const auto chunkedGroupIdx = findChunkedGroupIdx(nodeGroupScanState.groups, rowIdx).first;
+    if (chunkedGroupIdx == INVALID_CHUNKED_GROUP_IDX) {
+        return std::nullopt;
+    }
+    const auto& chunkedGroupToScan = *nodeGroupScanState.groups[chunkedGroupIdx];
+    const auto rowIdxInChunkedGroup = rowIdx - chunkedGroupToScan.getStartRowIdx();
+    return chunkedGroupToScan.lookup(transaction, state, nodeGroupScanState, rowIdxInChunkedGroup,
         posInSel);
 }
 
@@ -336,15 +378,13 @@ bool NodeGroup::lookupMultiple(const UniqLock& lock, const Transaction* transact
     const TableScanState& state) const {
     idx_t numTuplesFound = 0;
     for (auto i = 0u; i < state.rowIdxVector->state->getSelVector().getSelSize(); i++) {
-        auto& nodeGroupScanState = *state.nodeGroupScanState;
-        const auto pos = state.rowIdxVector->state->getSelVector().getSelectedPositions()[i];
-        KU_ASSERT(!state.rowIdxVector->isNull(pos));
-        const auto rowIdx = state.rowIdxVector->getValue<row_idx_t>(pos);
-        const ChunkedNodeGroup* chunkedGroupToScan = findChunkedGroupFromRowIdx(lock, rowIdx);
-        KU_ASSERT(chunkedGroupToScan);
-        const auto rowIdxInChunkedGroup = rowIdx - chunkedGroupToScan->getStartRowIdx();
-        numTuplesFound += chunkedGroupToScan->lookup(transaction, state, nodeGroupScanState,
-            rowIdxInChunkedGroup, i);
+        auto found = lookupInScanGroups(transaction, state, i);
+        if (!found) {
+            extendScanGroups(lock, *state.nodeGroupScanState);
+            found = lookupInScanGroups(transaction, state, i);
+        }
+        KU_ASSERT(found);
+        numTuplesFound += found.value_or(false);
     }
     return numTuplesFound == state.rowIdxVector->state->getSelVector().getSelSize();
 }
@@ -352,13 +392,33 @@ bool NodeGroup::lookupMultiple(const UniqLock& lock, const Transaction* transact
 bool NodeGroup::lookup(const Transaction* transaction, const TableScanState& state,
     sel_t posInSel) const {
     const auto lock = chunkedGroups.lock();
-    return lookupNoLock(transaction, state, posInSel);
+    if (const auto found = lookupInScanGroups(transaction, state, posInSel)) {
+        return *found;
+    }
+    extendScanGroups(lock, *state.nodeGroupScanState);
+    const auto found = lookupInScanGroups(transaction, state, posInSel);
+    KU_ASSERT(found);
+    return found.value_or(false);
 }
 
 bool NodeGroup::lookupSharedLock(const Transaction* transaction, const TableScanState& state,
     sel_t posInSel) const {
+    {
+        const std::shared_lock appendGuard{inMemAppendMtx};
+        if (const auto found = lookupInScanGroups(transaction, state, posInSel)) {
+            return *found;
+        }
+    }
+    // Un bloc ajouté depuis l'instantané : la garde est rendue avant le verrou de la
+    // collection, qui se prend toujours avant elle.
+    {
+        const auto lock = chunkedGroups.lock();
+        extendScanGroups(lock, *state.nodeGroupScanState);
+    }
     const std::shared_lock appendGuard{inMemAppendMtx};
-    return lookupNoLock(transaction, state, posInSel);
+    const auto found = lookupInScanGroups(transaction, state, posInSel);
+    KU_ASSERT(found);
+    return found.value_or(false);
 }
 
 bool NodeGroup::lookupMultiple(const Transaction* transaction, const TableScanState& state) const {
@@ -698,22 +758,27 @@ std::unique_ptr<NodeGroup> NodeGroup::deserialize(MemoryManager& mm, Deserialize
     }
 }
 
-std::pair<idx_t, row_idx_t> NodeGroup::findChunkedGroupIdxFromRowIdxNoLock(row_idx_t rowIdx) const {
-    if (chunkedGroups.getNumGroupsNoLock() == 0 || rowIdx < getStartRowIdxInGroupNoLock()) {
+std::pair<idx_t, row_idx_t> NodeGroup::findChunkedGroupIdx(
+    const std::vector<std::shared_ptr<ChunkedNodeGroup>>& groups, row_idx_t rowIdx) {
+    if (groups.empty() || rowIdx < groups.front()->getStartRowIdx()) {
         return {INVALID_CHUNKED_GROUP_IDX, INVALID_START_ROW_IDX};
     }
-    rowIdx -= getStartRowIdxInGroupNoLock();
-    const auto numRowsInFirstGroup = chunkedGroups.getFirstGroupNoLock()->getNumRows();
+    rowIdx -= groups.front()->getStartRowIdx();
+    const auto numRowsInFirstGroup = groups.front()->getNumRows();
     if (rowIdx < numRowsInFirstGroup) {
         return {0, rowIdx};
     }
     rowIdx -= numRowsInFirstGroup;
     const auto chunkedGroupIdx = rowIdx / StorageConfig::CHUNKED_NODE_GROUP_CAPACITY + 1;
     const auto rowIdxInChunk = rowIdx % StorageConfig::CHUNKED_NODE_GROUP_CAPACITY;
-    if (chunkedGroupIdx >= chunkedGroups.getNumGroupsNoLock()) {
+    if (chunkedGroupIdx >= groups.size()) {
         return {INVALID_CHUNKED_GROUP_IDX, INVALID_START_ROW_IDX};
     }
     return {chunkedGroupIdx, rowIdxInChunk};
+}
+
+std::pair<idx_t, row_idx_t> NodeGroup::findChunkedGroupIdxFromRowIdxNoLock(row_idx_t rowIdx) const {
+    return findChunkedGroupIdx(chunkedGroups.getAllGroupsNoLock(), rowIdx);
 }
 
 ChunkedNodeGroup* NodeGroup::findChunkedGroupFromRowIdx(const UniqLock& lock,
