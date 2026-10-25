@@ -836,3 +836,59 @@ fn la_recherche_rend_chaque_signal_et_sa_meta() {
     let avertis = apres["metadata"]["render.meta"]["warnings"].to_string();
     assert!(avertis.contains("dense signal is not available"), "le repli dans la méta : {}", apres["metadata"]);
 }
+
+/// **search_code reclasse à la demande, et dit quand il ne le peut pas**
+/// (pièce 2 de la recherche de l'IDE, docs/12-octobre-2026-recherche/06).
+/// Avant : son graphe n'avait pas de relecteur ; `options.rerank` grossissait
+/// seulement le sur-fetch, sans rien reclasser ni rien dire. Après : sans
+/// relecteur configuré, la méta le dit ; avec un relecteur, l'ordre suit ses
+/// scores et sa ligne s'ajoute à ce que chaque signal a dit. Sans demande,
+/// rien ne change.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn search_code_reclasse_a_la_demande_et_dit_quand_il_ne_peut_pas() {
+    use serde_json::{json, Value};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), "reclasse");
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let cherche = |options: Value| backend.call_in(&cellule, "search_code", json!({"query": "alpha", "options": options, "mode": "indexed"})).expect("la recherche");
+    let noms = |r: &Value| -> Vec<String> {
+        r["result"].as_array().map(|v| v.iter().filter_map(|x| x["data"]["name"].as_str().map(str::to_string)).collect()).unwrap_or_default()
+    };
+    // Les vecteurs suivent l'index : on attend que le dense réponde, et que
+    // beta soit dans les réponses (par le sens) pour que l'ordre puisse changer.
+    let debut = std::time::Instant::now();
+    let sans = loop {
+        let r = cherche(json!({}));
+        if (!r.to_string().contains("dense signal") && noms(&r).iter().any(|n| n == "beta")) || debut.elapsed() > std::time::Duration::from_secs(120) {
+            break r;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    };
+    assert_eq!(noms(&sans).first().map(String::as_str), Some("alpha"), "sans relecture, les mots mettent alpha devant : {sans}");
+    assert!(noms(&sans).iter().any(|n| n == "beta"), "beta est trouvé : {sans}");
+
+    // Demandé sans relecteur : la méta le dit, l'ordre ne change pas.
+    let demande = cherche(json!({"rerank": {"candidates": 20}}));
+    let avertis = demande["metadata"]["render.meta"]["warnings"].to_string();
+    assert!(avertis.contains("aucun reranker configuré"), "la demande sans relecteur se dit : {}", demande["metadata"]);
+    assert_eq!(noms(&demande), noms(&sans), "et l'ordre de fusion reste");
+
+    // Avec un relecteur qui préfère le corps de beta (« 41 ») : beta passe devant.
+    backend.catalog.lock().unwrap().set_reranker(std::sync::Arc::new(rag3weaver::CallbackReranker::new("préfère-41", |_q, passages| {
+        Ok(passages.iter().map(|p| if p.contains("41") { 1.0 } else { 0.0 }).collect())
+    })));
+    let relu = cherche(json!({"rerank": {"candidates": 20}}));
+    assert_eq!(noms(&relu).first().map(String::as_str), Some("beta"), "le relecteur décide de l'ordre : {relu}");
+    let premier = &relu["result"][0];
+    assert!(
+        premier["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "rerank" && x["rank"] == 1)),
+        "sa ligne s'ajoute à ce que chaque signal a dit : {premier}"
+    );
+    assert!(relu["metadata"]["render.meta"]["rerankedCount"].as_u64().is_some_and(|n| n >= 2), "{}", relu["metadata"]);
+
+    // Sans demande, le relecteur configuré ne fait rien.
+    assert_eq!(noms(&cherche(json!({}))), noms(&sans), "à la demande seulement");
+}
