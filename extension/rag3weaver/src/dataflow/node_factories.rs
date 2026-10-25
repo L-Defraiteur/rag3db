@@ -667,9 +667,22 @@ impl NodeFactory for EmbedNodeFactory {
 pub struct SearchSourceNodeFactory;
 
 impl NodeFactory for SearchSourceNodeFactory {
-    // L6 : ne fait que lire.
-    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
-        true
+    // L6 : ne fait que lire, **sauf filtre** (25 octobre 2026). Un `scope`, un
+    // `language` ou un `filter_condition` fait passer la branche dense par une
+    // projection de graphe (`PROJECT_GRAPH_CYPHER`), une écriture pour le moteur,
+    // refusée sous la transaction en lecture seule de l'instantané : la recherche
+    // entière tombait. Un appel filtré lit donc hors de l'instantané, comme avant
+    // L6, jusqu'à ce que le moteur permette la projection sous READ ONLY (un objet
+    // de la connexion, correctif du cœur) ; il pourra alors y revenir.
+    fn snapshot_safe(&self, config: &serde_json::Value) -> bool {
+        let vide = |cle: &str| config.get(cle).and_then(|v| v.as_str()).map_or(true, |s| s.trim().is_empty());
+        let options = match config.get("options") {
+            Some(serde_json::Value::String(s)) => serde_json::from_str(s).unwrap_or(serde_json::Value::Null),
+            Some(v) => v.clone(),
+            None => serde_json::Value::Null,
+        };
+        let filtre = options.get("filter_condition").is_some_and(|f| !f.is_null());
+        vide("scope") && vide("language") && !filtre
     }
     fn create(
         &self,
@@ -1542,6 +1555,24 @@ pub const BUILTIN_NODE_COUNT: usize = 54 + if cfg!(feature = "code") { 15 } else
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Une recherche filtrée ne lit pas sous l'instantané** (25 octobre 2026) :
+    /// son filtre passe la branche dense par une projection de graphe, que le
+    /// moteur refuse sous READ ONLY. Sans filtre, l'instantané reste.
+    #[test]
+    fn une_recherche_filtree_ne_lit_pas_sous_l_instantane() {
+        let f = SearchSourceNodeFactory;
+        let sans = serde_json::json!({"scope": "", "language": "", "options": {"limit": 10}});
+        assert!(f.snapshot_safe(&sans), "sans filtre, sous l'instantané");
+        for filtree in [
+            serde_json::json!({"scope": "src/"}),
+            serde_json::json!({"language": "rust"}),
+            serde_json::json!({"options": {"filter_condition": {"field": "file_path", "op": "starts_with", "value": "src/"}}}),
+            serde_json::json!({"options": "{\"filter_condition\": {\"field\": \"x\"}}"}),
+        ] {
+            assert!(!f.snapshot_safe(&filtree), "filtrée, hors de l'instantané : {filtree}");
+        }
+    }
 
     #[test]
     fn enumerated_params_are_exact_lists_without_aliases() {
