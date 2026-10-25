@@ -79,6 +79,9 @@ pub struct Miroir {
     pub decl: FilesDecl,
     /// Le texte du gabarit d'un fichier composé, lu au chargement.
     pub gabarit: Option<String>,
+    /// Le schéma de l'entité, avec `uuid` (que l'en-tête porte toujours) : ce
+    /// qui relit un fichier ([`Self::relire`], lot M3).
+    pub schema: Value,
 }
 
 /// Un nom de champ entre accolades dans `name`.
@@ -158,7 +161,82 @@ impl Miroir {
             }
             None => None,
         };
-        Ok(Self { entite: entite.to_string(), racine, decl, gabarit })
+        let mut schema = schema.clone();
+        if let Some(props) = schema["properties"].as_object_mut() {
+            props.insert("uuid".into(), serde_json::json!({"type": "string"}));
+        }
+        Ok(Self { entite: entite.to_string(), racine, decl, gabarit, schema })
+    }
+
+    /// **Relit le fichier d'une ligne** (lot M3, la reconstruction) : l'en-tête,
+    /// typé par le schéma, et le corps dans son champ. Rend l'uuid et les champs.
+    /// L'inverse exact de [`Self::rendre`] : un fichier écrit par le harnais se
+    /// relit en la ligne qui l'a écrit. Un fichier composé se relit par son bloc
+    /// machine, pas d'ici : son corps est une vue.
+    pub fn relire(&self, texte: &str) -> Result<(String, Map<String, Value>), String> {
+        if self.est_compose() {
+            return Err(format!("{} : un fichier composé ne se relit pas par son corps", self.entite));
+        }
+        let (yaml, corps) = crate::en_tete::separer(texte).ok_or_else(|| "pas d'en-tête fermé par ---".to_string())?;
+        let mut champs = crate::en_tete::lire_en_tete(yaml, &self.schema)?;
+        let uuid = match champs.remove("uuid") {
+            Some(Value::String(u)) if !u.is_empty() => u,
+            _ => return Err("l'en-tête ne porte pas d'uuid".into()),
+        };
+        // Le corps vide d'un champ absent ne devient pas une chaîne vide.
+        if let Some(b) = &self.decl.body {
+            if !corps.is_empty() {
+                champs.insert(b.clone(), Value::String(corps.to_string()));
+            }
+        }
+        Ok((uuid, champs))
+    }
+
+    /// **Les fichiers de cette entité**, relatifs à la racine, triés : tous les
+    /// `.md` sous `dir`, sous-dossiers compris (un nom par champ peut contenir des
+    /// `/`) ; un temporaire d'écriture (`.md.ecriture`) n'en est pas un.
+    pub fn lister(&self) -> Result<Vec<String>, String> {
+        let base = if self.decl.dir.is_empty() { self.racine.clone() } else { self.racine.join(&self.decl.dir) };
+        let mut out = Vec::new();
+        if !base.exists() {
+            return Ok(out);
+        }
+        let mut pile = vec![base];
+        while let Some(d) = pile.pop() {
+            for e in std::fs::read_dir(&d).map_err(|e| format!("{} : {e}", d.display()))? {
+                let e = e.map_err(|e| e.to_string())?;
+                let chemin = e.path();
+                let genre = e.file_type().map_err(|e| e.to_string())?;
+                if genre.is_dir() {
+                    pile.push(chemin);
+                } else if chemin.extension().is_some_and(|x| x == "md") {
+                    let rel = chemin.strip_prefix(&self.racine).map_err(|e| e.to_string())?;
+                    out.push(rel.to_string_lossy().into_owned());
+                }
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
+    /// Le texte d'un fichier, relatif à la racine, lu réellement sous elle.
+    pub fn lire(&self, rel: &str) -> Result<String, String> {
+        let chemin = sous_la_racine(&self.racine, rel)?;
+        std::fs::read_to_string(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+    }
+
+    /// Les champs du schéma qu'un fichier de cette entité ne porte pas (ni en
+    /// en-tête, ni en corps) : ce qu'une reconstruction depuis les fichiers
+    /// perdrait, dit plutôt que perdu en silence.
+    pub fn champs_non_portes(&self) -> Vec<String> {
+        let portes: std::collections::BTreeSet<&str> =
+            self.decl.header.iter().map(String::as_str).chain(self.decl.body.as_deref()).chain(["uuid"]).collect();
+        let mut out: Vec<String> = self.schema["properties"]
+            .as_object()
+            .map(|p| p.keys().filter(|k| !portes.contains(k.as_str())).cloned().collect())
+            .unwrap_or_default();
+        out.sort();
+        out
     }
 
     /// Un fichier composé : une vue de la base, réécrite par la réaction de miroir.
