@@ -82,6 +82,8 @@ mod e2e_charge_ingestion;
 mod e2e_checkpoint;
 #[path = "../e2e_chemin_de_masse.rs"]
 mod e2e_chemin_de_masse;
+#[path = "../e2e_cited_by.rs"]
+mod e2e_cited_by;
 #[path = "../e2e_cloud_code_agent.rs"]
 mod e2e_cloud_code_agent;
 #[path = "../e2e_cloud_schema_probe.rs"]

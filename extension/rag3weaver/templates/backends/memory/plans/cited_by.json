@@ -1,0 +1,44 @@
+{
+  "let": {
+    "ref_qui_repond": {"all_of": [
+      {"optional": {"in": {"field": "genre", "param": "genres"}}},
+      {"any_of": [
+        {"equals":      {"field": "valeur", "param": "value"}},
+        {"optional": {"starts_with": {"field": "valeur", "param": "value_dir"}}},
+        {"optional": {"starts_with": {"field": "valeur", "param": "value_sym"}}}
+      ]}
+    ]},
+    "apport_qui_cite": {"through": {"relation": "APPORT_CITE", "direction": "outgoing", "end": "Ref",
+                                    "filter": {"let": "ref_qui_repond"}}},
+    "fiche_gardee": {"all_of": [
+      {"any_of": [
+        {"through": {"relation": "ANCRE", "direction": "outgoing", "end": "Ref",
+                     "filter": {"let": "ref_qui_repond"}}},
+        {"through": {"relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport",
+                     "filter": {"let": "apport_qui_cite"}}}
+      ]},
+      {"optional": {"in":       {"field": "state",      "param": "states"}}},
+      {"optional": {"in":       {"field": "author",     "param": "authors"}}},
+      {"optional": {"at_least": {"field": "updated_at", "param": "since"}}}
+    ]}
+  },
+  "forms": {
+    "fiches": {"select": {
+      "table": "Fiche",
+      "filter": {"let": "fiche_gardee"},
+      "returns": [
+        "_uuid", "name", "about", "state", "author", "created_at", "updated_at",
+        {"collect": {"as": "refs", "relation": "ANCRE", "direction": "outgoing", "end": "Ref",
+                     "fields": ["genre", "valeur", "etat"], "filter": {"let": "ref_qui_repond"}}},
+        {"collect": {"as": "apports", "relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport",
+                     "fields": ["source", "section", "niveau", "state", "author", "created_at", "texte"],
+                     "filter": {"let": "apport_qui_cite"}}}
+      ],
+      "order_by": [{"coalesce": ["updated_at", "created_at"], "desc": true}, {"field": "_uuid"}],
+      "limit":  {"param": "limit", "max": 200},
+      "offset": {"param": "offset"}
+    }},
+    "total": {"count": {"matching": {"table": "Fiche", "filter": {"let": "fiche_gardee"}}}}
+  },
+  "outputs": {"rows": "fiches", "total": "total", "results": {"form": "fiches", "uuid": "_uuid", "entity": "Fiche"}}
+}
