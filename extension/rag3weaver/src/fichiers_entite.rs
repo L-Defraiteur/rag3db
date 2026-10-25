@@ -507,7 +507,7 @@ impl Miroir {
     /// perdrait, dit plutôt que perdu en silence.
     pub fn champs_non_portes(&self) -> Vec<String> {
         let portes: std::collections::BTreeSet<&str> =
-            self.decl.header.iter().map(String::as_str).chain(self.decl.body.as_deref()).chain(["uuid"]).collect();
+            self.decl.header.iter().map(String::as_str).chain(self.decl.body.as_deref()).chain(["uuid", "format"]).collect();
         let mut out: Vec<String> = self.schema["properties"]
             .as_object()
             .map(|p| p.keys().filter(|k| !portes.contains(k.as_str())).cloned().collect())
