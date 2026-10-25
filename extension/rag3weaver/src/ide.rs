@@ -8,7 +8,7 @@
 //!
 //! | route | |
 //! |---|---|
-//! | `GET /ide/entrer?jeton=…` | le jeton local posé en cookie (`HttpOnly`, `SameSite=Strict`), puis la page |
+//! | `GET /ide/entrer?jeton=…` | le jeton local posé en cookie (`HttpOnly`, `SameSite=Lax`), puis la page |
 //! | `GET /ide`, `GET /ide/…` | la page (une seule, qui lit son URL) |
 //! | `GET /ide/page.js` | le code de la page, en fichier (lisible par les outils de code, comme le reste) |
 //! | `GET /ide/graphe?backend=<id>&tool=…` | le graphe d'un outil (ou `reaction=`, `component=`), en JSON |
@@ -31,7 +31,12 @@
 //! **Le jeton** : une fenêtre ouverte par l'URL d'entrée reçoit le cookie, et
 //! toutes les fenêtres du navigateur l'ont ensuite — rien n'est gardé par
 //! onglet, et le jeton ne traîne pas dans l'URL des vues. Un appelant qui
-//! porte `Authorization: Bearer` passe aussi.
+//! porte `Authorization: Bearer` passe aussi. Le cookie est `SameSite=Lax`, pas
+//! `Strict` : l'URL d'entrée se clique depuis une autre application (un
+//! terminal, un chat), et un navigateur ne renvoie pas un cookie `Strict` sur la
+//! redirection d'une navigation venue d'ailleurs — `/ide/` répondait 403 au
+//! premier clic, et F5 arrangeait tout (Lucie, 25 octobre 2026). `Lax` suit une
+//! navigation GET de premier niveau et refuse autant un POST étranger.
 //!
 //! **Le flux** : chaque backend ouvert par l'hôte voit ses sujets relayés
 //! ([`SUJETS`]). Un événement porte un `id:` croissant ; une fenêtre qui se
@@ -417,7 +422,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
     if method == "GET" && path == "/ide/entrer" {
         let jeton = param("jeton").unwrap_or_default();
         let r = if juste(&jeton) {
-            let cookie = format!("{COOKIE}={jeton}; HttpOnly; SameSite=Strict; Path={PREFIX}");
+            let cookie = format!("{COOKIE}={jeton}; HttpOnly; SameSite=Lax; Path={PREFIX}");
             tiny_http::Response::from_string(String::new())
                 .with_status_code(303)
                 .with_header(tiny_http::Header::from_bytes(&b"Location"[..], &b"/ide/"[..]).expect("en-tête littéral"))

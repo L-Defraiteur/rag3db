@@ -748,6 +748,33 @@ fn la_marge_d_un_fichier_se_rend_sans_l_outil_outline() {
     fil.join().unwrap();
 }
 
+/// **L'entrée par un lien venu d'ailleurs** (Lucie, 25 octobre 2026) : l'URL de
+/// `rag3weaver-backend ide` cliquée depuis une autre application. Une page d'une
+/// autre origine porte le lien ; au premier clic, la redirection vers `/ide/`
+/// porte le cookie et l'accueil se rend — pas de « bad token », pas de F5.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn l_entree_par_un_lien_venu_d_ailleurs_ouvre_la_page_au_premier_clic() {
+    let Some(binaire) = navigateur_ou_saut("l_entree_par_un_lien_venu_d_ailleurs_ouvre_la_page_au_premier_clic") else {
+        return;
+    };
+    let (adresse, fil) = super::tests::hote_garde("j");
+    let racine = format!("http://{adresse}");
+    let mut n = Navigateur::lancer(&binaire);
+    // Une page d'une autre origine (opaque) qui porte le lien d'entrée : le clic
+    // est une navigation venue d'ailleurs, comme depuis un terminal ou un chat.
+    let ailleurs = format!("data:text/html,<a id=\"entree\" href=\"{racine}/ide/entrer?jeton=j\">entrer</a>");
+    n.aller(&ailleurs, "document.querySelector('#entree')");
+    n.evaluer("document.querySelector('#entree').click()");
+    n.attendre("location.pathname === '/ide/' && document.querySelector('#vue h1')?.textContent === 'Backends'", "l'accueil au premier clic");
+    assert!(n.erreurs.is_empty(), "l'entrée par un lien externe : erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **L'IDE d'un vrai hôte, en lecture seule** (19 octobre 2026) : le même
 /// parcours que [`les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur`],
 /// contre un hôte en service et l'un de ses backends de code, sans rien

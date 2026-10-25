@@ -1315,7 +1315,7 @@ mod tests {
 
     /// **L'entrée de l'IDE** (page 05 §2, lot A2) : sans jeton, rien ; l'URL
     /// d'entrée avec un faux jeton est refusée ; avec le bon, un 303 vers la
-    /// page et le cookie `HttpOnly; SameSite=Strict`. Avec ce cookie seul, la
+    /// page et le cookie `HttpOnly; SameSite=Lax`. Avec ce cookie seul, la
     /// page, l'état, `/ide/call` (dans la session de l'IDE, sans que la page en
     /// ouvre une) et le flux répondent.
     #[test]
@@ -1329,7 +1329,7 @@ mod tests {
         let entree = get("/ide/entrer?jeton=le-bon", "");
         assert!(entree.starts_with("HTTP/1.1 303"), "{entree}");
         assert!(entree.contains("Location: /ide/"), "{entree}");
-        assert!(entree.contains("Set-Cookie: rag3weaver_ide=le-bon; HttpOnly; SameSite=Strict; Path=/ide"), "{entree}");
+        assert!(entree.contains("Set-Cookie: rag3weaver_ide=le-bon; HttpOnly; SameSite=Lax; Path=/ide"), "{entree}");
         let cookie = "Cookie: autre=1; rag3weaver_ide=le-bon\r\n";
         let page = brut(&adresse, &format!("GET /ide/code/b/fichier/src/lib.rs HTTP/1.1\r\nHost: x\r\n{cookie}Connection: close\r\n\r\n"), "</html>");
         assert!(page.starts_with("HTTP/1.1 200") && page.contains("text/html") && page.contains("IDE rag3weaver"), "toute vue sert la page");
