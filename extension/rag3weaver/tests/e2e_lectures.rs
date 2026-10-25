@@ -633,6 +633,37 @@ fn la_recherche_se_replie_sans_l_index_vectoriel(nom: &str, drapeau: bool, raiso
     assert!(avant.contains("a.rs"), "avant le retrait : {avant}");
     assert!(!avant.contains("dense signal"), "avant le retrait, le dense répond : {avant}");
 
+    // **Le coût de la question** que pose désormais la branche dense, à côté
+    // d'une recherche entière : cent de chaque, la médiane.
+    {
+        use std::time::Instant;
+        let mediane = |mut v: Vec<u128>| {
+            v.sort();
+            v[v.len() / 2]
+        };
+        let index = backend.catalog.lock().unwrap().vector_storage("Scope_Chunk").expect("le stockage").index;
+        let question = format!("CALL SHOW_INDEXES() WHERE table_name = 'Scope_Chunk' AND index_name = '{index}' RETURN extension_loaded");
+        let questions: Vec<u128> = (0..100)
+            .map(|_| {
+                let t = Instant::now();
+                backend.catalog.lock().unwrap().execute_read_with_params(&question, &[]).expect("la question");
+                t.elapsed().as_micros()
+            })
+            .collect();
+        let recherches: Vec<u128> = (0..100)
+            .map(|_| {
+                let t = Instant::now();
+                cherche().expect("la recherche");
+                t.elapsed().as_micros()
+            })
+            .collect();
+        eprintln!(
+            "[mesure repli dense] SHOW_INDEXES : {} µs ; search_code entier : {} µs (médianes sur 100)",
+            mediane(questions),
+            mediane(recherches)
+        );
+    }
+
     {
         let cat = backend.catalog.lock().unwrap();
         let index = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle").index;
