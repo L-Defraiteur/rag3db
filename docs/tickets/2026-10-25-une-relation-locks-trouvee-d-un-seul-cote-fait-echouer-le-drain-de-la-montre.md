@@ -51,6 +51,13 @@ avant elle, un seul sens était modifié, en silence.
    hors du verrou (3724accba), dans la lib actuelle de l'hôte. Mais le défaut précède cette lib :
    il est vu dès 04063ee06.
 
+## Ce que la bascule 43 attend
+
+**La bascule au format 43 (prévue le 26 octobre) attend la lecture du point 1 ci-dessous**
+(décision de l'orchestration, 25 octobre au soir). Si la piste est la migration 41 → 42, ou les
+trous de colonnes d'une table de liens migrée, on ne migre pas encore une base dont une migration a
+peut-être déjà perdu un sens. La lecture se fait le 26 au matin, en premier.
+
 ## Pour avancer
 
 1. Sur une **copie** de `bascule-04063ee06` (jamais la base vivante, l'hôte tourne), lire la
