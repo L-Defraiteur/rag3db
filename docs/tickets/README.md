@@ -85,13 +85,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (40)
+### Ouverts — produit (41)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le témoin des vues de l'IDE rougit sous le lot des témoins navigateur](2026-10-25-le-temoin-des-vues-de-l-ide-rougit-sous-le-lot.md) | ouvert — pour everything declarative ; 1 rouge sur 3 passes du lot sous charge, 2/2 seul ; la vue d'un symbole reste sur « Chargement… », callees en vol | faux rouge de passe de push | non (le témoin) | oui (daemon_host/navigateur.rs) |
 | [À la libération du poste, une mesure et des travaux lourds entrent ensemble](2026-10-25-a-la-liberation-du-poste-une-mesure-et-des-lourds-entrent-ensemble.md) | ouvert — hypothèse lue dans le code (flock n'ordonne pas les réveils), le cas de 22 h 26 était une fausse alerte ; témoin à G | réponse fausse en silence, si elle se vérifie | oui (luciepc) | oui (scripts/poste) |
 | [fmt/format.h : depuis tree-sitter 0.27, une macro est lue comme un corps de fonction](2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md) | ouvert — recul accepté par Lucie avec le passage à 0.27 ; aucun correctif | réponse fausse (39 fonctions sous un parent anonyme, un fichier tiers) | oui | oui (codeparsers) |
 | [Le témoin du chat rougit encore sous la lib entière, sur le tour lent](2026-10-25-le-temoin-du-chat-rougit-encore-sur-le-tour-lent.md) | ouvert — pour everything declarative | test instable | non (le test) | oui (`daemon_host/chat.rs`) |
