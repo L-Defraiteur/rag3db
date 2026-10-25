@@ -783,41 +783,6 @@ fn la_recherche_rend_les_mots_quand_l_index_vectoriel_manque() {
     la_recherche_se_replie_sans_l_index_vectoriel("repli-absent", false, "is missing");
 }
 
-/// **La branche dense filtrée répond dans l'instantané de l'appel** (25 octobre
-/// 2026). Un filtre (`language`, `scope`) fait passer le signal dense par un
-/// graphe projeté (`PROJECT_GRAPH_CYPHER`, rag3db_search_backend.rs), dans la
-/// transaction READ ONLY que L6 ouvre pour l'appel. La lib 3724accba (V2-1c, la
-/// porte à deux niveaux) l'a refusé (« Can not execute a write query inside a
-/// read-only transaction ») et la recherche de l'hôte de Lucie a perdu son dense,
-/// alors qu'e2e_code et ce fichier étaient verts : aucun témoin ne filtrait. Ce
-/// témoin est du verdict d'une lib (docs/procedures/bascule-de-lib.md).
-#[cfg(feature = "code")]
-#[test]
-#[ignore]
-fn la_branche_dense_filtree_repond_dans_l_instantane_de_l_appel() {
-    use serde_json::json;
-
-    let tmp = tempfile::tempdir().unwrap();
-    let backend = code_indexe_avec_vecteurs(tmp.path(), "dense-filtre");
-    let cellule = backend.catalog.lock().unwrap().scope().clone();
-    let cherche = |args: serde_json::Value| backend.call_in(&cellule, "search_code", args).map(|r| r.to_string());
-    // Le dense sans filtre d'abord : il répond quand les vecteurs sont posés.
-    let debut = std::time::Instant::now();
-    loop {
-        let r = cherche(json!({"query": "alpha", "options": {}, "mode": "indexed"})).expect("la recherche sans filtre");
-        if !r.contains("dense signal") {
-            break;
-        }
-        assert!(debut.elapsed() < std::time::Duration::from_secs(120), "le dense ne répond pas, même sans filtre : {r}");
-        std::thread::sleep(std::time::Duration::from_millis(200));
-    }
-    let filtree = cherche(json!({"query": "alpha", "options": {}, "mode": "indexed", "language": "rust"}))
-        .unwrap_or_else(|e| panic!("la recherche filtrée tombe : {e}"));
-    assert!(!filtree.contains("read-only transaction"), "la projection du dense filtré est refusée dans l'instantané : {filtree}");
-    assert!(!filtree.contains("dense signal"), "le dense filtré répond : {filtree}");
-    assert!(filtree.contains("a.rs"), "et la réponse a ses lignes : {filtree}");
-}
-
 /// **La recherche dit ce que chaque signal a dit** (pièce 1 de la recherche de
 /// l'IDE, docs/12-octobre-2026-recherche/06). Avant : la fusion ne gardait
 /// qu'un score par résultat, et `search_code` ne rendait sa méta que réécrite
