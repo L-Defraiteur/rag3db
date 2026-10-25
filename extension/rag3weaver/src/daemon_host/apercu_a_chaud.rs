@@ -491,7 +491,7 @@ fn une_tache_se_relit_puis_se_fusionne_dans_l_ide() {
     n.aller(
         &format!("{racine}/ide/code/{id}/taches/par-cinq"),
         "[...document.querySelectorAll('.diff .plus')].some(l => l.textContent.includes('n + 5')) \
-         && document.querySelector('section.graphe-propose[data-cible=\"component:Compteur\"] .change[data-nom=\"plus\"]') \
+         && document.querySelector('section.graphe-propose[data-cible=\"component:Compteur\"] g.etape.change[data-nom=\"plus\"]') \
          && document.querySelector('#temoins')?.textContent === 'Témoins : la branche se charge entière.'",
     );
 
