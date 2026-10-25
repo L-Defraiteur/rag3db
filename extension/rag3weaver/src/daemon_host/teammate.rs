@@ -17,7 +17,7 @@
 //!   tout de suite (`stop_run`).
 //! - Autonomie maximale (Lucie) : l'agent clôt seul ses éléments et son plan, ne
 //!   demande rien pour ce qui est dans le plan ; le hors-plan part en `proposal`
-//!   (`propose`) et le plan continue sans attendre la réponse.
+//!   (`suggest`) et le plan continue sans attendre la réponse.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -32,7 +32,8 @@ use crate::tools::ToolDef;
 pub const EDIT_PLAN: &str = "edit_plan";
 pub const STEP_DONE: &str = "step_done";
 pub const REPORT: &str = "report";
-pub const PROPOSE: &str = "propose";
+/// `propose` est pris par les propositions de déclaration : l'outil du hors-plan s'appelle `suggest`.
+pub const SUGGEST: &str = "suggest";
 /// Les appels d'outil permis dans un pas avant que `step_done` soit exigé.
 pub const STEP_BUDGET: usize = 12;
 /// Les pas d'un équipier lancé, au plus (un garde-fou, pas un réglage du grain).
@@ -49,7 +50,7 @@ You are a teammate: you carry out tasks on your own, step by step, and talk to a
 - At most one plan is active. When a new request arrives while a plan is active, decide explicitly with edit_plan: `continue` (the request joins it or waits), `pause` (with a reason), or `close` as obsolete. A paused plan stays listed at every step until you `resume` it or close it.
 - A step is one piece of work: do it with your tools, then call step_done { item, succeeded, done, remaining } (item may be empty without a plan). step_done ends the step.
 - Maximum autonomy: you close your items and your plan (accomplished) yourself, and you ask nothing about what is in the plan. A `question` is only for a real blocker you cannot decide. Never wait for an answer: send the blocking questions first, then work on what you can do alone.
-- Out of plan: when you see a direction the request did not ask for, write a short proposal to the supervisor (propose: « voudrais-tu qu'on pousse dans ce sens ? », with the item it would open), then keep working on the current plan. Do not open that direction without the supervisor's word; the answer arrives at a later step, like an answer to a blocker.
+- Out of plan: when you see a direction the request did not ask for, write a short proposal to the supervisor (suggest: « voudrais-tu qu'on pousse dans ce sens ? », with the item it would open), then keep working on the current plan. Do not open that direction without the supervisor's word; the answer arrives at a later step, like an answer to a blocker.
 - Each step starts with the mailbox (answers, new requests) and your plans. Read them before acting.
 - At most 12 tool calls per step; after that, only step_done is accepted.
 - When nothing is left, report what was done (report), close the active plan as accomplished, and call step_done.
@@ -463,10 +464,10 @@ impl Step {
                 }
                 reply(self.post("report", None, text).map(|_| json!({ "ok": true })))
             }
-            PROPOSE => {
+            SUGGEST => {
                 let text = args["text"].as_str().unwrap_or_default();
                 if text.trim().is_empty() {
-                    return reply(Err("propose.text est vide".into()));
+                    return reply(Err("suggest.text est vide".into()));
                 }
                 reply(self.post("proposal", args["item"].as_str(), text).map(|_| json!({ "ok": true, "note": "proposé ; continue le plan courant, la réponse viendra à une frontière" })))
             }
@@ -555,7 +556,7 @@ impl Step {
                 }),
             },
             ToolDef {
-                name: PROPOSE.into(),
+                name: SUGGEST.into(),
                 description: "Propose au superviseur une direction hors du plan (« voudrais-tu qu'on pousse dans ce sens ? »), avec l'id de l'élément qu'elle ouvrirait. Tu continues le plan courant sans attendre ; tu n'ouvres pas cette direction sans sa réponse.".into(),
                 parameters: json!({ "type": "object", "properties": { "text": { "type": "string" }, "item": { "type": "string", "description": "l'id de l'élément que la proposition ouvrirait" } }, "required": ["text"] }),
             },
@@ -586,8 +587,11 @@ impl crate::agent::ToolBox for StepTools<'_> {
         self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.inner.call_with(call, run, inv))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
-        let mut defs = self.inner.tool_defs();
-        defs.extend(Step::tool_defs());
+        // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
+        // deux déclarations du même nom (Vertex : « Duplicate function declaration »).
+        let ours = Step::tool_defs();
+        let mut defs: Vec<ToolDef> = self.inner.tool_defs().into_iter().filter(|d| !ours.iter().any(|o| o.name == d.name)).collect();
+        defs.extend(ours);
         defs
     }
     fn is_async(&self, tool: &str) -> bool {
@@ -731,13 +735,19 @@ impl DaemonHost {
     /// éléments qui attendent le superviseur, elle attend la boîte.
     pub fn run_teammate(&self, parent: &str, task: &str) -> Result<Outcome, String> {
         let files = self.teammate_files(parent, task)?;
-        let outcome = self.teammate_loop(parent, task, &files)?;
-        // La fin, dans la boîte : le superviseur la lit sans IDE.
+        // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
+        let outcome = match self.teammate_loop(parent, task, &files) {
+            Ok(o) => o,
+            Err(e) => Outcome { steps: Vec::new(), ended: format!("erreur : {e}") },
+        };
         let line = files.append("host", "ended", None, &outcome.ended)?;
         if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {
             publish(Some(&bus), task, &line);
         }
         files.write_cursor(files.mailbox().len());
+        if outcome.ended.starts_with("erreur : ") {
+            return Err(outcome.ended);
+        }
         Ok(outcome)
     }
 
@@ -917,7 +927,7 @@ impl DaemonHost {
         paths.dedup();
         outils.sort();
         outils.dedup();
-        outils.retain(|o| !matches!(o.as_str(), EDIT_PLAN | STEP_DONE | REPORT | PROPOSE));
+        outils.retain(|o| !matches!(o.as_str(), EDIT_PLAN | STEP_DONE | REPORT | SUGGEST));
         refs.extend(paths.iter().map(|p| ("path", format!("path:{p}"))));
         refs.extend(outils.iter().map(|o| ("outil", format!("outil:{o}"))));
         for genre in ["doc", "path", "outil"] {

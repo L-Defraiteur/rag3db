@@ -97,7 +97,7 @@ fn three_items(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel
                 // Pas 3 : le CHANGELOG. Pas 4 : le titre.
                 (3, 0) => answer(turns, opts, sink, "", calls(&[
                     ("edit_file", edit("CHANGELOG.md", "# Changelog\n")),
-                    ("propose", json!({ "text": "Voudrais-tu aussi un CONTRIBUTING.md ? Ce n'est pas dans la demande.", "item": "contrib" })),
+                    ("suggest", json!({ "text": "Voudrais-tu aussi un CONTRIBUTING.md ? Ce n'est pas dans la demande.", "item": "contrib" })),
                 ])),
                 (3, 2) => {
                     use std::io::Write;

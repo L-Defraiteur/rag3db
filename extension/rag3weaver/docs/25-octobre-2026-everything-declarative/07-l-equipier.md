@@ -77,7 +77,7 @@ Il y a deux voies :
 
   Une ligne ajoutée au fichier à la main est lue à la frontière suivante, mais ne réveille pas
   un équipier qui attend (pas de surveillance de fichier dans ce lot).
-- **L'agent écrit** par `report` et `propose`, et `step_done` y ajoute sa ligne.
+- **L'agent écrit** par `report` et `suggest`, et `step_done` y ajoute sa ligne.
 - **L'IDE** lit `GET /ide/teammate?backend=&task=` : la boîte, les plans vivants, les plans
   clos, et si l'équipier tourne.
 
@@ -141,7 +141,8 @@ contexte comme une vue des fiches ; forme relue par 96).
   un **outil qui termine** : un nom déclaré terminal arrête la boucle après sa réponse
   (`StopReason::Terminal`). C'est générique : `pause_dialogue` en est le cas d'origine.
 - `report { text }`.
-- `propose { text, item? }` : le hors-plan, dans la boîte ; l'agent continue le plan.
+- `suggest { text, item? }` : le hors-plan, dans la boîte (`proposal`) ; l'agent continue le plan.
+  (`propose` est pris par les propositions de déclaration : Vertex refuse deux outils du même nom.)
 
 ## La montée
 
@@ -168,7 +169,7 @@ reste au superviseur.
 ## Les noms
 
 Les identifiants sont en anglais (règle du 6 septembre) : l'agent `teammate`, `edit_plan`,
-`step_done`, `report`, `plan.json`, `mailbox.jsonl`, le sujet `mailbox.<task>`, la route
+`step_done`, `report`, `suggest`, `plan.json`, `mailbox.jsonl`, le sujet `mailbox.<task>`, la route
 `/ide/teammate/mailbox`, `StopReason::Terminal` et `with_terminal_tools`. Le français reste
 pour la doc, les commits et les textes rendus à l'humain.
 
