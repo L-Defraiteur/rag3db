@@ -93,7 +93,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Des écritures ne passent pas par le journal du catalogue et ne s'annoncent pas](2026-10-19-des-ecritures-ne-passent-pas-par-le-journal-et-ne-s-annoncent-pas.md) | ouvert — le PlanNode, le retour d'une mise de côté, la marque d'absence, la reprise d'un drain | réponse fausse en silence (pour qui écoute `catalog`) | oui (PlanNode) | oui |
+| [Un Plan qui écrit ne s'annonce pas](2026-10-19-un-plan-qui-ecrit-ne-s-annonce-pas.md) | ouvert — décision de forme au premier appelant écrivant | réponse fausse en silence (pour qui écoute `catalog`) | non (aucun appelant en service) | oui |
 | [L'annulation d'un lot de liens retire aussi les paires qui existaient avant lui](2026-10-19-l-annulation-d-un-lot-de-liens-retire-aussi-les-paires-qui-existaient.md) | ouvert — témoin à écrire | perte (des arêtes d'avant le lot, et les propriétés d'une déliaison reposée) | peu (annulation hors transaction) | oui |
 | [Un shard de lucivy sans écrivain perd les écritures en silence](2026-10-19-un-shard-de-lucivy-sans-ecrivain-perd-les-ecritures-en-silence.md) | ouvert — dans lucivy-core 4.3.0 : sans écrivain, un Insert est jeté et un Delete sauté avec Ok ; correctif prêt dans lucivy (bb07627), non publié ; à Lucie de trancher | perte silencieuse | pas aujourd'hui (rag3weaver garde ses écrivains) ; dès qu'un appelant en lâche un | oui (appelant) |
 | [Le plein texte lucivy se fige dans son commit pendant une réindexation lue](2026-10-19-le-plein-texte-lucivy-se-fige-dans-son-commit-pendant-une-reindexation-lue.md) | ouvert — cause trouvée (réentrance du commit sous des recherches), correctif prêt dans lucivy, non publié ; à Lucie de trancher (4.3.1 ou patch provisoire) | blocage (la montre ne réindexe plus, sans erreur) | oui | oui (correctif dans lucivy) |
@@ -132,10 +132,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (158), dans `closed/`
+### Fermés (159), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Des écritures ne passent pas par le journal du catalogue et ne s'annoncent pas](closed/2026-10-19-des-ecritures-ne-passent-pas-par-le-journal-et-ne-s-annoncent-pas.md) | corrigé (l'annulation d'une fin qui transitionne s'annonce ; un drain tombé, une pose, une ingestion et une reprise annoncent ce qu'ils ont écrit ; le Plan a son ticket) | réponse fausse en silence | oui | oui |
 | [Le COPY ne lit pas le mot NULL convenu hors d'une colonne texte](closed/2026-10-19-le-copy-de-relations-ne-lit-pas-le-mot-null-dans-une-colonne-entiere.md) | corrigé (19 octobre 2026) — `null_strings` vaut pour toutes les colonnes ; le filet de `copier_les_liens` reste au produit | blocage, base à rouvrir | non, par le filet | oui (son filet) |
 | [Un EXISTS paramétré, avec un autre paramètre hors de lui, ne rend rien](closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md) | corrigé (19 octobre 2026) — la préparation voit les paramètres d'une sous-requête ; le produit rend `through` en `EXISTS` quand sa lib est `courant` | réponse fausse (zéro ligne, en silence) | oui (un Plan déclaré : through filtré et un autre paramètre) | oui |
 | [Une méthode propre contre une méthode de trait de même nom](closed/2026-10-19-une-methode-propre-contre-une-methode-de-trait-de-meme-nom.md) | corrigé (codeparsers `trait_impl`, la méthode propre passe avant à types égaux ; témoin d'impact vert par le vrai chemin) | relation manquante | oui, `impact row_to_map` | oui (`code.rs`, codeparsers) |

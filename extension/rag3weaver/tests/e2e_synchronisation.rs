@@ -1277,3 +1277,33 @@ fn le_creux_d_une_ligne_retiree_quitte_l_index() {
     assert_eq!(apres_retour, pleines, "la ligne revenue a son creux, une fois");
     assert_eq!(creux.iter().filter(|u| **u == a3).count(), 1, "elle ressort en creux, une fois : {creux:?}");
 }
+
+/// **L'annulation d'une fin qui transitionne s'annonce** (ticket « des
+/// écritures ne passent pas par le journal », 19 octobre 2026) : les lignes
+/// rendues à leur état d'avant sortent sur `catalog` en `transitioned`, de
+/// l'état de la transition déclarée à leur état d'avant. Elles étaient écrites
+/// en Cypher brut, sans rien dire : un fichier composé ou une réaction ne les
+/// voyait pas revenir.
+#[test]
+#[ignore]
+fn l_annulation_d_une_fin_qui_transitionne_s_annonce() {
+    let (mut catalog, s2) = archivage();
+    let fin = finir(&mut catalog, "A", &s2, SnapshotFinishOptions::default()).unwrap();
+    assert_eq!(fin.transitioned.len(), 2, "{fin:?}");
+    let mut rx = catalog.subscribe();
+    let annulation = catalog.undo_snapshot_finish("Fiche", &perimetre("A"), &fin.session).unwrap();
+    let mut evenements = Vec::new();
+    while let Ok(e) = rx.try_recv() {
+        evenements.push(e.to_json());
+    }
+    let t: Vec<&serde_json::Value> =
+        evenements.iter().filter(|e| e["kind"] == "EntitiesChanged" && e["change"] == "transitioned").collect();
+    assert_eq!(t.len(), 1, "{evenements:?}");
+    assert_eq!(t[0]["from_state"], "archivee");
+    assert_eq!(t[0]["to_state"], "active");
+    let mut annoncees: Vec<String> = t[0]["uuids"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+    annoncees.sort();
+    let mut rendues = annulation.reverted.clone();
+    rendues.sort();
+    assert_eq!(annoncees, rendues);
+}

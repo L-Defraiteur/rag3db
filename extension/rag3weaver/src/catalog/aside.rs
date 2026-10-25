@@ -28,6 +28,7 @@ use super::synchronisation::SnapshotFinish;
 use super::{Catalog, CatalogError};
 use crate::config::OnMissing;
 use crate::connection::{CypherValue, QueryParam};
+use crate::events::CatalogEvent;
 
 /// Une purge vide au plus ce nombre de copies par passe : elle ne bloque
 /// jamais une écriture.
@@ -451,6 +452,10 @@ impl Catalog {
                 .filter_map(|row| Some((row.get("_uuid")?.as_str()?.to_string(), row)))
                 .collect();
             let mut items = Vec::new();
+            // Les lignes rendues à leur état d'avant, par état : elles
+            // s'annoncent comme une transition (de `to` à cet état), sans en
+            // être une pour la machine à états.
+            let mut rendues: BTreeMap<String, Vec<String>> = BTreeMap::new();
             for uuid in &report.transitioned {
                 let Some(row) = current.get(uuid) else {
                     undo.kept.push((uuid.clone(), "introuvable".into()));
@@ -472,6 +477,7 @@ impl Catalog {
                 m.insert("state".into(), CypherValue::String(before.clone()));
                 items.push(CypherValue::Map(m));
                 undo.reverted.push(uuid.clone());
+                rendues.entry(before.clone()).or_default().push(uuid.clone());
             }
             if !items.is_empty() {
                 self.conn
@@ -480,6 +486,17 @@ impl Catalog {
                         &[QueryParam::new("items", CypherValue::List(items))],
                     )
                     .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                // « Le catalogue dit tout » : l'état rendu s'annonce, au commit
+                // sous une transaction (ticket « des écritures ne passent pas
+                // par le journal », 19 octobre 2026).
+                for (avant, uuids) in rendues {
+                    let mut e = CatalogEvent::entites_changees(entity_name, uuids, "transitioned");
+                    if let CatalogEvent::EntitiesChanged { from_state, to_state, .. } = &mut e {
+                        *from_state = Some(to.clone());
+                        *to_state = Some(avant);
+                    }
+                    self.publier(e);
+                }
             }
         }
 

@@ -1,7 +1,8 @@
 # Des écritures ne passent pas par le journal du catalogue et ne s'annoncent pas
 
-- **État** : ouvert (relevé le 19 octobre 2026 par l'arbre principal, à la relecture de la
-  pièce 1 « le catalogue dit tout » de la session mémoire longue)
+- **État** : corrigé par le commit qui déplace ce ticket (19 octobre 2026, session mémoire longue). Le
+  chemin du Plan (`Catalog::run_plan`), sans appelant en service, a son ticket à lui :
+  `2026-10-19-un-plan-qui-ecrit-ne-s-annonce-pas.md`
 - **Gravité** : réponse fausse en silence pour qui écoute : une réaction, le miroir des
   fichiers composés ou une page de l'IDE ne voient pas ces écritures. Ni perte ni blocage.
 - **Atteignable en service** : oui pour le PlanNode, dès qu'un outil déclaré écrit par un plan ;
@@ -41,3 +42,21 @@ l'événement attendu (rien sous un ROLLBACK).
 Le PlanNode passe par le catalogue (`set_in_transaction`, `publier` au COMMIT, jeter au
 ROLLBACK) ou reçoit le journal comme un drain ; les trois autres notent leurs lignes, et le
 catalogue les publie comme celles d'un drain.
+
+## Ce qui a été fait (19 octobre 2026)
+
+- **Le retour d'une mise de côté** (`undo_snapshot_finish`, branche des transitionnées) publie
+  un `transitioned` par état rendu, de l'état de la transition déclarée à l'état d'avant, par
+  `publier` (au commit sous une transaction). Les lignes retirées puis rendues passaient déjà par
+  `ingest_entities`, qui annonce `ingested`. Témoin :
+  `e2e_synchronisation::l_annulation_d_une_fin_qui_transitionne_s_annonce`.
+- **La marque d'absence** (`mark_absent_since`) n'écrit que la colonne interne `_absent_since`.
+  La transition qui l'accompagne passe par le drain et s'annonce déjà, avec ses états. Il n'y a
+  rien de dû : une colonne `_` n'est pas une donnée de l'entité.
+- **La reprise d'un drain** (`drain_resume`) recevait déjà le journal, mais ne le publiait pas.
+  Plus grave, un drain tombé jetait les notes de ses nœuds terminés, alors que rien ne les défait :
+  le point de reprise les garde, et la reprise les saute.
+  - Le drain, la pose de donnée et l'ingestion publient maintenant ce que leurs nœuds ont écrit,
+    **aussi à l'échec**, par `publier` : retenu sous une transaction, que son rollback jette.
+  - La reprise publie les siens, réussie ou non.
+  - Témoin : `e2e_catalogue_dit_tout::un_drain_tombe_puis_repris_dit_tout_ce_qu_il_a_ecrit`.
