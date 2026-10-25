@@ -14,7 +14,8 @@
 //! ```
 //!
 //! **Sur une copie, jamais sur l'originale** : l'ouverture écrit (rejeu,
-//! estampille). La configuration aussi est copiée : le manifeste y gagne
+//! estampille). Le manifeste est celui de cette branche ; de la config de
+//! l'hôte, il ne reprend que ce qui désigne sa base. Il y gagne
 //! `models.rerank`, le relecteur du démon d'embarquement (`SONDE_RELECTEUR`,
 //! 127.0.0.1:7879 par défaut), et pointe la copie de la base.
 
@@ -78,10 +79,23 @@ fn ce_que_le_relecteur_change_sur_de_vraies_requetes() {
     let base = PathBuf::from(std::env::var("SONDE_BASE").expect("SONDE_BASE : une copie de sa base"));
     let relecteur = std::env::var("SONDE_RELECTEUR").unwrap_or_else(|_| "127.0.0.1:7879".to_string());
 
+    // **Les gabarits de cette branche**, pas ceux de la config de l'hôte (une
+    // copie d'avant : sans relecteur dans le graphe ni port `metadata`). De
+    // l'hôte, seulement ce qui désigne sa base : nom, espace de travail,
+    // embarquement, extension.
     let tmp = tempfile::tempdir().unwrap();
-    copier(&config, tmp.path());
+    let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    copier(&gabarits.join("tools"), &tmp.path().join("templates/tools"));
+    copier(&gabarits.join("backends/code"), &tmp.path().join("templates/backends/code"));
+    let hote: Value = serde_json::from_slice(&std::fs::read(config.join("templates/backends/code/backend.json")).unwrap()).unwrap();
     let manifeste = tmp.path().join("templates/backends/code/backend.json");
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    for cle in ["name", "workspace", "embeddings", "vector_extension"] {
+        if !hote[cle].is_null() {
+            m[cle] = hote[cle].clone();
+        }
+    }
+    m["workspace"]["commands"] = json!("off");
     m["database"] = json!(base.to_string_lossy());
     m["models"]["rerank"] = json!({"provider": "service", "model": "bge-reranker-v2-m3", "address": relecteur});
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();

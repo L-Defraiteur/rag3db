@@ -771,6 +771,13 @@ fn read_threads() -> u64 {
     /// `SearchOptions.rerank`.
     pub fn set_reranker(&mut self, reranker: Arc<dyn crate::reranker::Reranker>) {
         self.reranker = Some(reranker);
+        // Les lectures prennent leurs services dans la vue publiée (lot L2) :
+        // un relecteur posé après l'ouverture n'y entrait qu'à la publication
+        // suivante, et une demande de reclassement disait « aucun reranker
+        // configuré » (vu par le témoin de la pièce 2 de la recherche de l'IDE).
+        if self.read_view.current().is_some() {
+            self.publish_read_view();
+        }
     }
 
     /// Branche un OCR ; les graphes exécutés par le catalogue le voient
