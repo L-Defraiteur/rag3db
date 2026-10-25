@@ -135,11 +135,11 @@ fn un_dossier_rend_ce_qui_est_dessous_par_date_avec_ses_refs_et_son_total() {
     assert_eq!(sujets.len(), 1);
 }
 
-/// Rouge connu tant que la lib `courant` n'a pas le correctif du cœur : le
-/// `through` (un EXISTS paramétré) et `kinds` (un autre paramètre, dehors)
-/// dans un même WHERE ne rendent rien (le total vaut 0 au lieu de 1).
+/// Le `through` (un EXISTS paramétré) et `kinds` (un autre paramètre, dehors)
+/// dans un même WHERE : avant le correctif du cœur (8b98f19f7), ils ne
+/// rendaient rien, le total valait 0 au lieu de 1
+/// (docs/tickets/closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md).
 #[test]
-#[ignore = "rouge connu : docs/tickets/closed/2026-10-19-un-exists-parametre-avec-un-autre-parametre-dehors-ne-rend-rien.md — vert avec la lib du correctif du cœur (8b98f19f7)"]
 fn la_pagination_et_les_filtres_facultatifs() {
     let dir = tempfile::tempdir().unwrap();
     let c = base(dir.path());
