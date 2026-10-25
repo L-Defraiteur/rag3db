@@ -37,7 +37,7 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (38)
+### Ouverts — moteur (37)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
@@ -45,7 +45,6 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
 | [Les lignes d'un COPY forcé validé après un CREATE restent hors du graphe](2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md) | ouvert — mesure du balayage dans la fenêtre au calme du banc, puis qui reconstruit et à quel seuil | lenteur | pas aujourd'hui (CREATE et COPY sous Mutex<Catalog>) ; dès (A) | oui (reconstruction) |
-| [Chaque requête préparée reste en mémoire pour la vie de sa connexion](2026-10-25-chaque-requete-preparee-reste-en-memoire-pour-la-vie-de-sa-connexion.md) | ouvert — détenteur trouvé (`CachedPreparedStatementManager`, jamais vidé ; Kuzu #5846) ; aucun correctif | mémoire sans borne (≈ 1,7 Go/min avec quatre lecteurs) | oui | oui |
 | [La CI de master est rouge depuis le 18 octobre : un `<cassert>` dans geo et le format clang](2026-10-25-la-ci-de-master-est-rouge-depuis-le-18-octobre-cassert-dans-geo-et-format-clang.md) | ouvert — le cassert corrigé sur `ci-cassert-geo` (baf19b9e5, vers master à la fenêtre) ; le formatage attend une fenêtre : `.clang-format-ignore` pour les annexes des docs + un commit de formatage pur par clang-format-18 (la version de la CI n'a pas changé) | aucun run vert du CI Workflow | non (CI) | non |
 | [Un CREATE_VECTOR_INDEX sous écritures retient les autres le temps de son rattrapage](2026-10-19-un-create-vector-index-sous-ecritures-retient-les-autres-le-temps-de-son-rattrapage.md) | ouvert, défaut connu de (δ) ; corrigé par (A), le CREATE concurrent (page 07) | blocage temporaire (115 à 273 s sous vingt écrivains, 2 fils) | oui | oui |
 | [La mémoire d'un index avec ses vecteurs : à mesurer](2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md) | ouvert — le correctif de la mémoire n'est prouvé qu'en plein texte et relations ; passes A et B avec embarquement à jouer | mémoire | oui, après un index qui paie sa dette de vecteurs | oui (l'hôte du démon) |
@@ -131,10 +130,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (168), dans `closed/`
+### Fermés (169), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Chaque requête préparée reste en mémoire pour la vie de sa connexion](closed/2026-10-25-chaque-requete-preparee-reste-en-memoire-pour-la-vie-de-sa-connexion.md) | corrigé (la préparation porte sa requête et la rend en mourant ; le magasin de la connexion disparaît ; témoin réel 30,0 → 7,1 Go) | la mémoire croît sans borne | oui | oui (chaque appel prépare) |
 | [Le cache de colonne du CREATE_VECTOR_INDEX est clé par identifiant de propriété, l'index le cherche par numéro de colonne](closed/2026-10-19-le-cache-de-colonne-du-create-vector-index-est-cle-par-identifiant-de-propriete-l-index-le-cherche-par-numero-de-colonne.md) | corrigé (25 octobre 2026) — une seule clé, le numéro de colonne ; témoin `StableColumnIDs.AVectorIndexIsCreatedOnATableWhereAPropertyWasDropped` | blocage nommé « Miss cached column » | oui | oui |
 | [Un ADD COLUMN sur une relation après le DROP de sa dernière propriété range la colonne locale au mauvais numéro](closed/2026-10-19-un-add-column-sur-une-relation-apres-le-drop-de-sa-derniere-propriete-range-la-colonne-locale-au-mauvais-numero.md) | corrigé (25 octobre 2026, V2-1a) — la table locale range la colonne ajoutée à son numéro ; témoin `StableColumnIDs.AnAddOnARelationAfterDroppingItsLastPropertyWritesTheRightColumn` | valeur dans une autre colonne ou hors du vecteur | oui | oui |
 | [Un groupe vidé par le point de reprise garde la colonne supprimée](closed/2026-10-19-un-groupe-vide-par-le-point-de-reprise-garde-la-colonne-supprimee.md) | corrigé (25 octobre 2026, V2-1a) — un bloc vidé garde une entrée par numéro ; témoin `StableColumnIDs.AGroupEmptiedByTheCheckpointKeepsTheHole` | bloc et types décalés | oui | oui |

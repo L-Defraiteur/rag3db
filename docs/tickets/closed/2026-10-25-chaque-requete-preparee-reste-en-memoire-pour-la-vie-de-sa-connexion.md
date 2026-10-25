@@ -1,6 +1,8 @@
 # Chaque requête préparée reste en mémoire pour la vie de sa connexion
 
-- **État** : ouvert, le 25 octobre 2026 (G, mesuré à luciepc). Détenteur trouvé ; aucun correctif écrit.
+- **État** : corrigé par le commit qui déplace ce ticket (25 octobre 2026, seconde session cœur
+  C++ ; ouvert le même jour par G, mesuré à luciepc ; forme retenue par l'orchestration). Voir « Ce
+  qui a été fait », à la fin.
 - **Gravité** : la mémoire croît sans borne. Un hôte que des agents lisent sans arrêt grossit d'environ
   1,7 Go par minute avec quatre lecteurs, jusqu'à ce que le noyau le tue (40 Go, le plafond de `poste`).
 - **Atteignable en service** : oui. C'est le régime ordinaire d'un hôte de code : des connexions qui
@@ -56,3 +58,42 @@ Retirer l'entrée du cache quand le `PreparedStatement` qui la nomme est détrui
 cacher une requête qu'on n'exécutera qu'une fois. Ou borner le cache. Lire d'abord ce que l'amont
 a fait après #5846 (le lire, ne pas le copier). Le témoin réel doit ensuite rester sous 10 Go avec
 quatre lecteurs.
+
+## Ce qui a été fait
+
+**Le magasin n'était pas un cache.** `statementMap` n'était pas indexé par texte de requête, mais
+par un compteur. Chaque `PreparedStatement` en gardait le nom, et `executeWithParams` y lisait
+`parsedStatement` pour relier à neuf. Une entrée servait donc exactement autant que vivait son
+`PreparedStatement`. Un cache borné (LRU) aurait cassé des préparations encore tenues, ou n'aurait
+rien borné. Le magasin portait aussi deux autres défauts :
+- `addStatement` prenait le verrou, mais `containsStatement` et `getCachedStatement` lisaient la
+  table sans lui ;
+- les noms étaient des compteurs par connexion. Une préparation exécutée sur une autre connexion
+  que la sienne y trouvait l'entrée d'une autre requête, et l'exécutait sans erreur.
+
+**La forme, à la PostgreSQL.** Une préparation vit jusqu'à sa libération, ici la destruction de
+l'objet. `PreparedStatement` porte sa `CachedPreparedStatement` (un `shared_ptr` privé), et
+`CachedPreparedStatementManager` disparaît. Un `PreparedStatement` qui survit à sa connexion, ce
+que permet le type Rust, ne pointe plus vers elle. `test_runner` lit le plan par un accesseur
+inline. L'ABI de `PreparedStatement` change : la bascule de lib rebâtit les hôtes et les liaisons.
+
+**Les témoins** sont dans `test/api/prepared_statement_lifetime_test.cpp`, à luciepc, sur master
+6fe9ffe9b puis avec le correctif :
+
+| témoin | master | correctif |
+|---|---|---|
+| 3 000 préparations distinctes détruites | +27,0 Mo vivants (9 Ko chacune) | ±240 octets |
+| la même requête préparée 3 000 fois | +17,9 Mo (6 Ko chacune) | ±500 octets |
+| une préparation exécutée sur une autre connexion | exécute la requête n° 0 de l'autre | exécute la sienne |
+| des préparations qui survivent à leur connexion, puis à leur base | vert (garde) | vert |
+
+Le correctif est vert deux fois en Release, et une fois sous ASan, sans puis avec la détection des
+fuites : aucune erreur ASan ni LSan.
+
+**Le témoin réel** (`e2e_lectures::mesure_des_instantanes_sur_un_vrai_depot`, quatre lecteurs,
+`RAG3WEAVER_READ_POOL=0`, recette de G) a été joué sur master 527a0356c, qui porte le patch lucivy
+(`nm` : `finish_commit` vaut 1). La lib bâtie à part a été prouvée par `/proc/<pid>/maps`, et le
+maximum de RssAnon + VmSwap relevé toutes les 5 s :
+- sans le correctif : **30,0 Go**, tours de 3,3 / 388,8 / 233,2 s, vert en 700,8 s ;
+- avec : **7,1 Go**, tours de 2,7 / 253,2 / 340,4 s, vert en 619,1 s. C'est le plancher sans
+  lecteurs que mesurait G (7,2 à 7,3 Go).
