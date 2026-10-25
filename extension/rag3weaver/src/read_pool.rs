@@ -413,6 +413,15 @@ mod tests {
         eprintln!("[plafond] COPY validé en {duree:?} pendant l'instantané : {:?}", copie.as_ref().map(|_| ()));
         assert!(copie.is_ok(), "le COPY se valide pendant qu'un lecteur tient son instantané ({duree:?}) : {copie:?}");
         assert!(duree < Duration::from_secs(2), "sans attendre le lecteur : {duree:?}");
+        // Un COPY de trois lignes ne force pas de point de reprise (11 ms sous
+        // 58b46a9bf, avant V2, où le gel est connu) : on le force, comme un gros
+        // COPY le fait à sa validation.
+        let t = Instant::now();
+        let reprise = ecrivain.execute("CHECKPOINT");
+        let duree = t.elapsed();
+        eprintln!("[plafond] CHECKPOINT en {duree:?} pendant l'instantané : {:?}", reprise.as_ref().map(|_| ()));
+        assert!(reprise.is_ok(), "le point de reprise passe pendant qu'un lecteur tient son instantané ({duree:?}) : {reprise:?}");
+        assert!(duree < Duration::from_secs(2), "sans attendre le lecteur : {duree:?}");
         assert_eq!(compte(&c), 1, "le lecteur relit sa génération");
         assert_eq!(p.ecourtes(), 0, "sans que le plafond ait servi");
         drop(c);
