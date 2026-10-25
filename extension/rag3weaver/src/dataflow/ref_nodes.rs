@@ -610,6 +610,24 @@ impl Node for CreateRefTypeNode {
                 rapport.warnings
             ));
         }
+        // **Un genre à fichier propre a son fichier** : ce nœud écrit sa ligne
+        // sans passer par EntityRecordNode, donc le fichier se pose ici, depuis
+        // la ligne relue (dates et révision du serveur comprises), dans la forme
+        // canonique du harnais.
+        let miroir = ctx
+            .service::<std::collections::HashMap<String, Arc<crate::fichiers_entite::Miroir>>>(crate::fichiers_entite::SERVICE)
+            .and_then(|m| m.get(&types_entity).cloned())
+            .filter(|m| !m.est_compose());
+        if let Some(miroir) = miroir {
+            let identite = BTreeMap::from([("name".to_string(), CypherValue::String(nom.clone()))]);
+            let uuid = cat.entity_uuid(&types_entity, &identite).map_err(|e| format!("CreateRefTypeNode: {e}"))?;
+            if let Some(ligne) = cat.get(&types_entity, &uuid).map_err(|e| format!("CreateRefTypeNode: {e}"))? {
+                let ligne = serde_json::to_value(&ligne).map_err(|e| format!("CreateRefTypeNode: {e}"))?;
+                miroir
+                    .ecrire(&uuid, &ligne)
+                    .map_err(|e| format!("CreateRefTypeNode: le genre « {nom} » est écrit, son fichier non : {e}"))?;
+            }
+        }
 
         rendre(ctx, serde_json::json!({
             "executed": true,
