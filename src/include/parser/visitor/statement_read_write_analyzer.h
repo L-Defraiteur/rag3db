@@ -21,7 +21,9 @@ private:
     void visitAlter(const Statement& /*statement*/) override { readOnly = false; }
     void visitCopyFrom(const Statement& /*statement*/) override { readOnly = false; }
     void visitStandaloneCall(const Statement& /*statement*/) override { readOnly = true; }
-    void visitStandaloneCallFunction(const Statement& /*statement*/) override { readOnly = false; }
+    // Une écriture, sauf si la fonction appelée ne touche qu'un objet de la connexion
+    // (TableFunction::connectionScopedOnly : les graphes projetés).
+    void visitStandaloneCallFunction(const Statement& statement) override;
     void visitCreateMacro(const Statement& /*statement*/) override { readOnly = false; }
     void visitExtension(const Statement& /*statement*/) override;
 
