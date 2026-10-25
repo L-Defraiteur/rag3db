@@ -105,9 +105,10 @@ impl From<Column> for ColonneDeclaree {
     }
 }
 
-/// **Une clé d'ordre** : un champ, ou le premier non nul de plusieurs
-/// (`coalesce`), croissant sauf `desc`. En JSON : `{"field": "f"}` ou
-/// `{"coalesce": ["a", "b"]}`, avec `"desc": true` au besoin.
+/// **Une clé d'ordre** : un champ, l'extrême d'un champ des lignes liées
+/// (`max`, `min`), ou le premier non nul de plusieurs (`coalesce`), croissant
+/// sauf `desc`. En JSON : `{"field": "f"}`, `{"max": {…}}`, ou `{"coalesce":
+/// ["a", {"max": {…}}, "b"]}`, avec `"desc": true` au besoin.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderKey {
     #[serde(flatten)]
@@ -120,7 +121,99 @@ pub struct OrderKey {
 #[serde(rename_all = "snake_case")]
 pub enum OrderBy {
     Field(String),
-    Coalesce(Vec<String>),
+    Max(Aggregate),
+    Min(Aggregate),
+    Coalesce(Vec<OrderTerm>),
+}
+
+/// **L'extrême d'un champ des lignes liées** : pour chaque ligne de la
+/// sélection, le plus grand (`max`) ou le plus petit (`min`) `field` des
+/// lignes de `end` que `relation` atteint dans `direction`, gardées par
+/// `filter`. NULL quand aucune ne répond : seul dans une clé, il se range
+/// après les autres (dans les deux sens) ; dans un `coalesce`, le terme suivant
+/// le remplace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Aggregate {
+    pub relation: String,
+    pub direction: Direction,
+    pub end: String,
+    pub field: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<Predicate>,
+}
+
+/// Un terme d'un `coalesce` : un champ de la ligne, ou un extrême de ses
+/// lignes liées.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OrderTerm {
+    Field(String),
+    Max { max: Aggregate },
+    Min { min: Aggregate },
+}
+
+/// Lequel des deux extrêmes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Extremum {
+    Max,
+    Min,
+}
+
+impl Extremum {
+    /// Le nom de la fonction, le même en Cypher et en SQL.
+    pub fn function(self) -> &'static str {
+        match self {
+            Extremum::Max => "max",
+            Extremum::Min => "min",
+        }
+    }
+}
+
+/// Un terme lu par un dialecte : un champ, ou un extrême.
+#[derive(Debug, Clone, Copy)]
+pub enum Term<'a> {
+    Field(&'a str),
+    Extremum(Extremum, &'a Aggregate),
+}
+
+impl OrderTerm {
+    fn term(&self) -> Term<'_> {
+        match self {
+            OrderTerm::Field(f) => Term::Field(f),
+            OrderTerm::Max { max } => Term::Extremum(Extremum::Max, max),
+            OrderTerm::Min { min } => Term::Extremum(Extremum::Min, min),
+        }
+    }
+
+    fn aggregate_mut(&mut self) -> Option<&mut Aggregate> {
+        match self {
+            OrderTerm::Field(_) => None,
+            OrderTerm::Max { max: a } | OrderTerm::Min { min: a } => Some(a),
+        }
+    }
+}
+
+impl OrderBy {
+    /// **Les termes de la clé**, et si elle les prend par `coalesce` : un
+    /// dialecte rend chaque terme, puis `coalesce(…)` quand il y en a plusieurs.
+    pub fn terms(&self) -> (Vec<Term<'_>>, bool) {
+        match self {
+            OrderBy::Field(f) => (vec![Term::Field(f)], false),
+            OrderBy::Max(a) => (vec![Term::Extremum(Extremum::Max, a)], false),
+            OrderBy::Min(a) => (vec![Term::Extremum(Extremum::Min, a)], false),
+            OrderBy::Coalesce(v) => (v.iter().map(OrderTerm::term).collect(), true),
+        }
+    }
+
+    /// Les extrêmes de la clé, pour lier ou déplier leurs filtres.
+    pub fn aggregates_mut(&mut self) -> Vec<&mut Aggregate> {
+        match self {
+            OrderBy::Field(_) => Vec::new(),
+            OrderBy::Max(a) | OrderBy::Min(a) => vec![a],
+            OrderBy::Coalesce(v) => v.iter_mut().filter_map(OrderTerm::aggregate_mut).collect(),
+        }
+    }
 }
 
 impl OrderKey {
@@ -130,10 +223,15 @@ impl OrderKey {
     }
 
     fn names(&self, out: &mut Vec<String>) {
-        match &self.by {
-            OrderBy::Field(f) => out.push(f.clone()),
-            OrderBy::Coalesce(v) if v.is_empty() => out.push("(coalesce vide)".into()),
-            OrderBy::Coalesce(v) => out.extend(v.iter().cloned()),
+        let (termes, coalesce) = self.by.terms();
+        if coalesce && termes.is_empty() {
+            out.push("(coalesce vide)".into());
+        }
+        for t in termes {
+            match t {
+                Term::Field(f) => out.push(f.to_string()),
+                Term::Extremum(_, a) => out.extend([a.relation.clone(), a.end.clone(), a.field.clone()]),
+            }
         }
     }
 }
@@ -436,10 +534,52 @@ impl Select {
         Self { table: table.into(), by_uuids: false, filter: Some(filter), returns, order_by: Vec::new(), limit: None, offset: None }
     }
 
+    /// **Les filtres des lignes liées** : ceux des `collect` et ceux des
+    /// extrêmes de l'ordre, sur la ligne atteinte. Le filtre de la sélection
+    /// n'en est pas.
+    pub fn sub_filters(&self) -> Vec<&Predicate> {
+        let mut v: Vec<&Predicate> = Vec::new();
+        for c in &self.returns {
+            if let Column::Collect(c) = c {
+                v.extend(c.filter.iter());
+            }
+        }
+        for k in &self.order_by {
+            for t in k.by.terms().0 {
+                if let Term::Extremum(_, a) = t {
+                    v.extend(a.filter.iter());
+                }
+            }
+        }
+        v
+    }
+
+    /// Les mêmes, à lier ou déplier en place.
+    pub fn sub_filters_mut(&mut self) -> Vec<&mut Option<Predicate>> {
+        let mut v: Vec<&mut Option<Predicate>> = Vec::new();
+        for c in &mut self.returns {
+            if let Column::Collect(c) = c {
+                v.push(&mut c.filter);
+            }
+        }
+        for k in &mut self.order_by {
+            v.extend(k.by.aggregates_mut().into_iter().map(|a| &mut a.filter));
+        }
+        v
+    }
+
     pub fn validate(&self) -> Result<(), TranslateError> {
         let mut noms = vec![self.table.clone()];
         for k in &self.order_by {
             k.names(&mut noms);
+            for t in k.by.terms().0 {
+                if let Term::Extremum(_, Aggregate { filter: Some(f), .. }) = t {
+                    if let Some(nom) = f.unresolved() {
+                        return Err(TranslateError::Invalid(format!("sélection : une condition « {nom} » n'est pas liée")));
+                    }
+                    f.names(&mut noms);
+                }
+            }
         }
         if let Some(p) = &self.filter {
             if let Some(nom) = p.unresolved() {
