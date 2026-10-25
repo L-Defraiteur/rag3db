@@ -79,7 +79,22 @@ sont pas. **À la demande, donc, pas par défaut** : c'est la recommandation, Lu
 
 ## 4. Pièce 3 : la page affiche ce que l'hôte rend
 
-Par résultat : le score, les scores par signal, l'extrait. En tête : l'état de l'index et la
-fraîcheur. En pied : les avertissements, repli compris. Une case « reclasser ». Témoin : la vue
-recherche de `les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur`, qui indexe sans service
-(le dense y est absent) : la page montre l'avertissement et un score.
+La vue `recherche` de `src/ide/page.js` lit tout depuis la réponse de `search_code`, rien depuis
+son markdown : `appelerEntier` rend la réponse entière (`metadata`, `freshness`), `appeler` garde
+son contrat.
+- En tête, `#recherche-etat` : la ligne « index : » de la méta (sinon « à jour »), la fraîcheur
+  (fichiers en retard, arbre modifié) et ce que la recherche a compté (mots, sens, relus).
+- Par résultat : le score (`.score`), ce que chaque signal en a dit (`.signaux` : étiquette, rang,
+  score brut) et l'extrait (le morceau, sinon la signature), borné à 600 caractères.
+- En pied, `.avertissements` : un signal en repli, un relecteur absent.
+- La case `#reclasser` est portée par l'URL (`&reclasser=1` → `options.rerank`) : la page n'a pas
+  d'état que l'hôte n'ait pas. Le formulaire de l'en-tête repart sans elle : la relecture se
+  décide question par question.
+- La garde de la page (`ide::tests::the_page_only_calls_what_the_code_template_serves`) lit les
+  deux formes d'appel et exige `search_code`.
+- **Témoin** : la vue « la recherche » de `les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur`
+  exige le score, les signaux, la ligne d'état, l'avertissement du repli dense (l'index y est bâti
+  sans service d'embarquement) et la case non cochée ; « la recherche à reclasser » exige la case
+  cochée et « aucun reranker configuré ». Rouge sur master, vert avec la page, sous
+  `RAG3WEAVER_EXIGER_NAVIGATEUR=1`.
+- Relue par everything declarative, qui tient `page.js` (25 octobre 2026).
