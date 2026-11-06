@@ -106,6 +106,29 @@ relit : il est bon marché tant qu'on n'en fait pas un index. Un jour, la vue
 pourra se lire directement dans l'arbre git (chemin → blob) sans checkout,
 pour les tâches qui ne font que lire ; ce n'est pas la première marche.
 
+## Très long terme : un moteur de versionnage par scope
+
+Lucie : « en vision très long terme, ça nous donne un moteur de versionnage
+par scope, ce que git ne saurait pas faire ». Git versionne des blobs et des
+arbres de chemins ; il n'a pas d'identité d'un scope à travers un déplacement
+ou un renommage, et sa fusion est textuelle. Les références à connaître avant
+d'écrire une ligne : **Unison** (chaque définition est versionnée par
+l'empreinte de son contenu, les noms sont des métadonnées, un renommage ne
+change rien au code), **Pijul** et **Darcs** (on versionne des changements qui
+commutent, pas des instantanés), **GumTree**, **difftastic**, **Plastic SCM
+semantic merge** (diff et fusion d'arbres syntaxiques).
+
+Ce que nous aurions que ces outils n'ont pas : le versionnage s'appuie sur le
+même graphe que la recherche, le juge et la mémoire ; il vaut pour tout
+langage que tree-sitter découpe ; et il reste compatible avec git en se
+matérialisant en blobs à la demande (un commit git est une vue figée). La
+difficulté réelle, et la seule : **l'identité d'un scope dont le corps
+change**, puisque son empreinte change avec lui. Il faut une identité au-dessus
+du contenu : le nom qualifié et le parent, et ce que le graphe sait de ses
+usages ; Unison la résout en séparant nom et empreinte, GumTree par la
+similarité des arbres. C'est une recherche, pas une marche : elle vient après
+les cinq marches, quand l'index en versions aura vécu sur nos dépôts.
+
 ## L'ordre
 
 1. La version comme entité : empreinte, morceaux et vecteurs rattachés ; le
