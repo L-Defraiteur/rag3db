@@ -5,6 +5,45 @@ machines » (dépôts énormes, pushs rapides, les PR d'agents multipliées par 
 en huit mois ; les chiffres du billet ne sont pas vérifiés ici) : « on ne
 devrait pas imaginer un service du même style ? »
 
+## La thèse
+
+Relecture extérieure du 6 novembre, reprise parce qu'elle est plus juste que
+la nôtre : la valeur de ce système **augmente à mesure que les agents
+deviennent interchangeables**. La mémoire conserve la compréhension
+structurelle du dépôt, les décisions accumulées sur des mois, l'histoire des
+transformations de chaque symbole, les réussites et les échecs des agents, et
+les relations entre intentions, modifications et résultats ; un modèle neuf
+hérite du contexte opérationnel des précédents, et la valeur accumulée
+appartient à la mémoire, donc à celui qui possède le dépôt, pas à l'agent qui
+l'a produite. Le centre n'est pas l'assistant : c'est **le programme et son
+évolution**. Un humain doit pouvoir s'en servir sans aucune IA.
+
+Ce que cette liste nomme existe déjà, pièce par pièce : la compréhension
+structurelle est l'index en graphe ; les décisions sont les fiches, les
+roadmaps et les identités ; les réussites et les échecs sont les bilans du
+juge ; les relations intentions → modifications → résultats sont le plan de
+l'équipier, les apports `diff` et le verdict sur la même fiche de session.
+La seule ligne qui manque est l'histoire des transformations de chaque
+symbole : c'est le prototype vertical du 9 novembre.
+
+Deux tests en découlent, à tenir à chaque lot :
+- **sans modèle** : tout ce qui n'est pas génération (recherche, graphe,
+  vues, relecture, `find_tasks`, la mémoire) marche sans aucun modèle
+  déclaré, et les témoins le jouent ainsi ; seuls le chat, l'équipier et le
+  juge en demandent un ;
+- **sans repartir de zéro** : une tâche commencée par un agent (Gemini,
+  Claude Code par le pont, un modèle local) est reprise par un autre à partir
+  de la fiche de session, du plan et des bilans, et le juge compare les deux
+  sur la même fiche ; témoin à écrire quand l'équipier et les hooks seront là.
+
+La question qui en sort n'est pas « qui est le plus visionnaire », mais
+« pourquoi un fournisseur de modèles construirait-il volontairement une
+infrastructure qui le rend moins indispensable ? ». C'est une divergence
+d'objectifs, pas de moyens, et c'est elle qui laisse la place à une
+architecture indépendante. Ce qu'on en fait : ne pas chercher à bâtir le
+meilleur outil pour les agents de 2026, mais une représentation du
+développement logiciel qui reste juste quand ces agents seront obsolètes.
+
 ## Pas le même service
 
 Un Git de stockage pour agents est une guerre d'infrastructure : centres de
