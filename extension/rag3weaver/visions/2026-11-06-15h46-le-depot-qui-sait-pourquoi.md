@@ -42,6 +42,25 @@ humains relisent par le graphe et par le verdict, et fusionnent. Le stockage
 reste chez GitHub ou ailleurs. Ce qu'on vend, c'est la confiance dans ce que
 les machines ont écrit, et la vitesse de fusion qu'elle rend.
 
+## Retrouver une PR par ce qu'elle est
+
+Lucie : « un agent veut trouver rapidement quelle PR a été faite par tel
+auteur, parle de tel truc dans sa description, et touche tel scope ». Tout y
+est déjà cité, donc c'est une seule requête sur la mémoire, pas trois
+systèmes : l'auteur est la Ref `agent:<clé>` de la fiche de session ; la
+description est le texte de cette fiche (la demande, le plan), rappelé en
+plein texte et en dense comme toute fiche ; le scope touché est la Ref
+`symbol:<scope>` (ou `path:`) des apports `diff` de la session. La requête :
+les fiches de session citées par `symbol:<scope>` à travers leurs apports,
+dont l'auteur est `agent:<clé>`, classées par le rappel de « tel truc » ; la
+réponse rend la tâche, sa branche, et ses apports `diff` groupés par fichier.
+
+En forme produit : un Plan déclaré, l'outil `find_tasks { author, about,
+touches }`, rendu en Cypher par l'IR comme les autres Plans, les signaux de
+recherche visibles, la vue en paramètre comme toute lecture. Un humain pose
+la même question dans l'IDE, par la vue « mes recherches » ou la fiche d'un
+symbole (« qui l'a touché, quand, pourquoi »).
+
 ## Deux prudences
 
 - **Se prouver sur nous d'abord** : l'équipier et le juge sur nos propres
