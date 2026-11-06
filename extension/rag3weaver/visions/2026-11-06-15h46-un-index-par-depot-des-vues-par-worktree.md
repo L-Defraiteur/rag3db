@@ -25,6 +25,17 @@ L'index suit **le contenu**, pas le chemin, et un worktree est **une vue**.
   fichier non suivi). Ses morceaux, ses scopes, ses symboles, ses vecteurs, ses
   entrées de plein texte pendent de la version. Deux branches qui ont le même
   fichier partagent sa version et ses vecteurs, calculés une fois.
+- **Le grain de la version est le scope, quand c'est possible.** Lucie : « on
+  fait des différences au niveau des scopes et de leurs chunks quand possible,
+  quand ce n'est pas possible le fichier entier ». Une version de fichier est la
+  liste ordonnée de ses versions de scope (fonction, classe, section d'un
+  Markdown…), chacune identifiée par l'empreinte de son contenu, position
+  comprise à part. Éditer une fonction crée une version de scope et une liste
+  neuve ; les autres scopes, leurs morceaux et leurs vecteurs sont partagés, et
+  l'embarqueur ne recalcule que le scope changé. Quand le parseur ne découpe pas
+  (langage inconnu, fichier plat), le fichier entier est le seul scope, et la
+  version est celle du fichier. C'est le même principe que la montre, qui
+  réindexe par fichier aujourd'hui : demain elle réindexe par scope.
 - **Une vue est une table chemin → version.** Le principal est une vue ; chaque
   worktree, chaque branche, chaque tâche est une vue : la liste des chemins
   dont la version diffère du principal, et rien d'autre. Une tâche qui touche
@@ -37,7 +48,8 @@ L'index suit **le contenu**, pas le chemin, et un worktree est **une vue**.
 - **Le drain d'une tâche n'indexe que ce qui change.** La montre d'un worktree
   compare l'empreinte de chaque fichier modifié à celle de la vue principale ;
   une empreinte connue est une version déjà indexée (rien à faire), une
-  empreinte neuve crée une version. L'édition par le chat qui code (edit_file
+  empreinte neuve crée une version ; au grain du scope, seuls les scopes dont
+  l'empreinte change sont recalculés. L'édition par le chat qui code (edit_file
   sur la branche de la tâche) produit une version, une seule.
 - **Les relations suivent les versions.** Une arête de code (DEFINES, MENTIONS,
   CONSUMED_BY…) part d'une version ; la résolution d'un symbole dans une vue se
