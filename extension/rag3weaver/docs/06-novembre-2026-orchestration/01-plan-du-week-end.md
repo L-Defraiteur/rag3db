@@ -37,7 +37,7 @@ docs/procedures/bascule-de-lib.md sur la lib unique bâtie depuis master
 de Lucie (G). Puis le relevé des 18 tables de la base de code (hotfixs) après
 ses jours de montre. Rien de nouveau n'entre avant que ce soit posé.
 
-## 1. Les hooks de Claude Code (samedi) : la mémoire qui parle à la session
+## 1. Les hooks de Claude Code (samedi, en parallèle, session mémoire) : la mémoire qui parle à la session
 
 Le pont (vision du 11 octobre) par les hooks de Claude Code, qui appellent
 l'hôte par le MCP ou par un appel direct. Page de conception courte d'abord
@@ -69,18 +69,27 @@ l'hôte par le MCP ou par un appel direct. Page de conception courte d'abord
   témoins : un faux hôte, les quatre événements, le bloc rendu. Sans hôte, le
   hook se tait et le dit dans un journal ; il ne bloque jamais la session.
 
-## 2. Un index par dépôt, des vues par worktree (dimanche, marches 1 et 2)
+## 2. Le prototype vertical (dimanche) : prouver le partage des versions
 
-- Marche 1 : la version comme entité, au grain du scope (empreinte de contenu,
-  liste ordonnée par fichier), morceaux et vecteurs rattachés ; migration du
-  format du gabarit de code ; témoin : deux fichiers identiques partagent
-  leurs vecteurs. Sessions : recherche (index) + everything declarative
-  (gabarit, tâches), l'arbre principal pour L6.
-- Marche 2 : la vue (chemin → version), le paramètre de vue sur les outils de
-  lecture, la vue par défaut d'un backend ; témoin : la recherche filtrée par
-  vue rend la version de la vue.
-- Les marches 3 à 5 (la tâche sans copie de base, la fermeture, le relevé
-  ancré) suivent la semaine d'après.
+Plutôt que les marches 1 et 2 l'une après l'autre, une tranche verticale
+courte et mesurée, qui vaut preuve ou réfutation :
+
+1. un dépôt, deux branches, **une seule base**, deux vues cohérentes ;
+2. une modification d'un scope dans une branche : les morceaux et les vecteurs
+   des scopes inchangés sont conservés (une seule exécution de l'embarqueur,
+   prouvée par le journal) ;
+3. le hook Claude Code enregistre la modification et son contexte dans la
+   mémoire (un apport `diff` sur le symbole et la session) ;
+4. `find_tasks` retrouve la modification par auteur, sujet et symbole touché ;
+5. la comparaison mesurée avec l'architecture actuelle (copie de base par
+   tâche) : temps d'indexation d'une tâche, stockage, latence de recherche,
+   et les mêmes résultats aux mêmes rangs sur les requêtes de Lucie du 25.
+
+Les quatre difficultés de la vision (identité, dépendances, fusion,
+cohérence des vues avec tombstones et compte de références) sont nommées dans
+la page de conception avec, pour chacune, le témoin qui la couvre ou la
+raison de la reporter. Sessions : recherche + everything declarative + l'arbre
+principal. Si la comparaison ne montre pas le gain, on le dit et on s'arrête là.
 
 ## 3. Les changements en fiches et `find_tasks` (dimanche, si la marche 1 tient)
 

@@ -77,6 +77,33 @@ L'index suit **le contenu**, pas le chemin, et un worktree est **une vue**.
   par dépôt, des vues dedans. La mémoire ouverte du poste ne grossit plus avec
   le nombre de branches.
 
+## Quatre difficultés qu'on nomme avant d'écrire
+
+Relecture extérieure du 6 novembre, reprise parce qu'elle est juste :
+
+- **L'identité d'un scope n'est pas son empreinte.** Trois choses distinctes :
+  l'identité persistante du symbole (nom qualifié, parent, ce que le graphe
+  sait de ses usages), sa version (l'empreinte de son contenu), sa position
+  (fichier, lignes). Deux fonctions identiques partagent une version et ses
+  calculs, pas une identité.
+- **Un scope inchangé peut changer de comportement** parce qu'un type, un
+  import ou un appelé a changé : on réutilise son embarquement, jamais ses
+  analyses d'impact. Le graphe de dépendances dit ce qu'une version neuve
+  invalide chez ses voisins, et ce que le juge doit rejuger.
+- **Pas de conflit de structure n'est pas compatibilité.** La fusion scope par
+  scope dit seulement qu'aucun scope n'a été modifié des deux côtés ; la
+  compatibilité se juge par les tests et le juge sur la vue fusionnée. Le
+  moteur ne fusionne jamais sur la seule absence de conflit.
+- **La cohérence des vues** : une vue se lit dans un instantané immuable ; une
+  suppression dans une vue est une **tombstone**, pas une absence (sinon la vue
+  retombe sur la version du principal) ; le compte de références compte les
+  vues **et les fiches** qui citent une version (un apport `diff` qui la cite
+  la garde) ; le ramasse-miettes ne retire jamais une version encore citée.
+
+Et une nuance qui vaut pour toute la provenance : elle documente ce qui a été
+fait et les raisons déclarées ; elle ne prouve pas que ces raisons sont vraies.
+C'est le juge qui vérifie, et la fiche dit lequel des deux parle.
+
 ## Des diffs au grain du scope
 
 Lucie : « le grain du scope a d'autres avantages que l'IDE pour agents : c'est
