@@ -21,6 +21,10 @@ goulot est la confiance, et c'est là qu'on est déjà.
   l'équipier et ses pas, les propositions, le verdict du juge sur la session
   et sur chaque outil, la tendance par rapport aux sessions précédentes de la
   même tâche. La relecture ne lit pas un diff, elle lit une tâche.
+- **Un changement est lisible comme une fiche** : chaque version de scope qui
+  diffère dans une tâche est un apport `diff` sur la fiche du fichier, du
+  symbole et de la session ; « qu'est-ce qui change dans cette PR » se lit dans
+  la mémoire, groupé par sujet, par un agent comme par une personne.
 - **Le code est un graphe** : impact, usages, appelants, le plan d'un fichier,
   la relecture par le graphe que l'IDE rend ; aucun hébergeur de code ne l'a.
 - **La mémoire des décisions** : fiches de session, roadmaps et phases,

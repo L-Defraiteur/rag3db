@@ -56,6 +56,20 @@ L'index suit **le contenu**, pas le chemin, et un worktree est **une vue**.
   fait sur les versions de la vue. Les deux sens d'une relation sont écrits dans
   la même transaction, et le relevé ancré des deux sens (hotfixs, 25 octobre)
   devient un témoin de l'index.
+- **Un changement est un apport de la mémoire.** Lucie : « lier des diffs sur
+  les fiches mémoire : un agent qui veut savoir ce qui change dans telle PR va
+  voir les diffs appliqués aux fiches ». Quand une vue reçoit une version de
+  scope qui diffère du principal, l'hôte écrit un apport L1 de section `diff`
+  sur la fiche du sujet touché (le fichier par `path:`, le symbole par
+  `symbol:`, et la fiche de session de la tâche), avec la différence lisible
+  (avant → après, au grain du scope), la Ref de la version et celle de la vue
+  (`view:<tâche>`), et pour source le run qui l'a produite. « Ce qui change
+  dans cette PR » est alors une lecture : les apports `diff` dont la source
+  est la tâche, groupés par fiche ; un agent les lit comme toute fiche, sans
+  ouvrir un diff, et le juge y voit ce que le run a touché. À la fusion, les
+  apports restent, cités par la version qui est devenue celle du principal ;
+  au rejet, ils restent aussi, avec la clôture, comme l'histoire d'une
+  tentative.
 - **Une vue se ferme.** Tâche fusionnée ou rejetée : la vue part ; une version
   que plus aucune vue ne cite part avec elle (compte de références), ses
   vecteurs aussi. Une version citée par le principal et la tâche reste.
