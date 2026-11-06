@@ -77,6 +77,28 @@ L'index suit **le contenu**, pas le chemin, et un worktree est **une vue**.
   par dépôt, des vues dedans. La mémoire ouverte du poste ne grossit plus avec
   le nombre de branches.
 
+## Des diffs au grain du scope
+
+Lucie : « le grain du scope a d'autres avantages que l'IDE pour agents : c'est
+aussi un très bon moyen d'avoir des diffs git granulaires ». Deux versions
+d'un fichier se comparent par leurs listes de versions de scope, pas par leurs
+lignes :
+
+- un scope dont l'empreinte est la même à une autre position ou dans un autre
+  fichier est **un déplacement**, pas une suppression et un ajout ;
+- un scope dont le corps a la même empreinte sous un autre nom est **un
+  renommage** ; les usages à mettre à jour se lisent dans le graphe ;
+- un scope dont l'empreinte change est **une modification**, et c'est lui seul
+  qu'on relit ; le diff textuel ne se montre qu'à l'intérieur du scope ;
+- deux tâches qui touchent deux scopes du même fichier **ne sont pas en
+  conflit** : la fusion se fait scope par scope, et le conflit n'existe que sur
+  un même scope ;
+- l'histoire d'un scope (qui l'a touché, quand, dans quelle tâche, pourquoi) se
+  lit par ses versions et leurs apports `diff`, sans blame ligne à ligne.
+
+C'est le diff que le juge, la relecture de l'IDE et `find_tasks` montrent ; git
+garde son diff à lui pour ce qui n'est pas du code découpé.
+
 ## Ce que ça change pour Git
 
 Le worktree git reste ce qu'il est, l'espace où l'agent écrit et où la personne
