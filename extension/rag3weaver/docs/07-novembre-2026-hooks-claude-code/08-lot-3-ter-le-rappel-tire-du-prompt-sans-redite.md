@@ -159,5 +159,16 @@ l'hôte compare.
   entrées, dont `PostToolUse` avec un délai de 5 s. Claude Code fige ses hooks au démarrage :
   hooks-essai ne l'aura qu'à la prochaine relance de Lucie. D'ici là, le différé tombe au prompt
   suivant.
+- **La dépense du juge (3 ter c).** Le juge appelle un modèle facturé, depuis la session de Lucie.
+  Il n'est appelé que si au moins deux fiches neuves sont touchées au plein texte, ou si le
+  rappel dépasse son budget.
+  - `"recall_judge": false` dans `hooks.json` le coupe, au tour suivant. Les candidats venus du
+    tour se taisent alors. Pour un rappel refait, seul le premier au plein texte passe, avec la
+    même politique d'un seul rendu.
+  - `recall_judge_max_per_hour`, 20 par défaut, toutes sessions comprises, est une **politique de
+    dépense déclarée**, pas un seuil mesuré. Au-delà, le juge est sauté, et le journal dit « sans
+    juge (plafond horaire atteint) ».
+  - Chaque appel se journalise : `[fond] juge : modèle …, … ms, entrée … jetons, sortie … jetons`.
+    La facture se relit ainsi dans `hooks.log`.
 - **Le plafond d'items par bloc** reste celui de la requête, trois fiches. `hooks.log` n'a encore
   que cinq rappels, de deux candidats chacun : trop peu pour mesurer mieux.
