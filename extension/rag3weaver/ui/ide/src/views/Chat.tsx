@@ -284,14 +284,20 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       // Le tour fini : les résultats entiers et les heures se relisent dans la
       // session, et se rattachent par l'appel — la bulle garde sa suite.
       const s = await fetchChat(id).catch(() => null);
-      const relu = new Map<string, ToolBlock>();
-      for (const it of s ? fromTurns(s.turns) : []) if (it.kind === "message") for (const p of it.parts) if (p.kind === "tool") relu.set(p.id, p);
+      // **La session fait foi à la fin du tour** : la bulle prend la suite relue
+      // (la dernière bulle d'agent de la session), résultats entiers et heures
+      // compris — le flux n'a servi qu'à montrer le tour pendant qu'il se faisait.
+      // Un jeton manqué en route (vu le 7 novembre sous charge : le premier jeton
+      // du premier tour) ne laisse donc pas une réponse tronquée à l'écran.
+      const relues = s ? fromTurns(s.turns) : [];
+      const derniere = relues[relues.length - 1];
+      const relue = derniere && derniere.kind === "message" && derniere.role === "assistant" ? derniere.parts : null;
       if (s) setChat(s);
       follow.current = true;
       setItems((cur) =>
         cur.map((i) => {
           if (i.kind !== "message" || !i.live) return i;
-          let parts = i.parts.map((p) => (p.kind === "tool" && relu.has(p.id) ? { ...p, ...relu.get(p.id)!, kind: "tool" as const, truncated: false } : p));
+          let parts = relue ?? i.parts;
           if (!textOf({ ...i, parts }) && r.text) parts = appendText(parts, r.text);
           return {
             ...i,
