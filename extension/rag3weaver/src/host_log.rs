@@ -113,13 +113,134 @@ struct Installed {
 #[cfg(unix)]
 static INSTALLED: std::sync::Mutex<Option<Installed>> = std::sync::Mutex::new(None);
 
+/// Une ligne plus longue est coupée là : le relais ne grossit pas sans borne
+/// sur une sortie sans fin de ligne.
+const MAX_LINE: usize = 64 * 1024;
+
+/// **Le relais ne bloque jamais l'hôte** (c7, 7 novembre 2026). Toutes les
+/// écritures du démon et de la lib passent par le tube ; si ce fil cessait de
+/// le vider, le tube (64 Kio) se remplirait et chaque `eprintln!` du démon,
+/// chaque ligne de la lib, bloquerait : l'hôte se figerait. D'où :
+/// - la sortie d'origine est **non bloquante** (`O_NONBLOCK`) : un journal
+///   systemd lent, un tube plein, un disque plein rendent `EAGAIN` ou une
+///   erreur, jamais une attente ; la ligne est **jetée et comptée**, et la
+///   ligne suivante qui passe dit combien ont été perdues ;
+/// - le fil **ne s'arrête qu'à la fin du tube** (tous les bouts d'écriture
+///   fermés, c'est-à-dire `stop_timestamps`) : une erreur de lecture se
+///   réessaie, aucune ne le fait sortir ; rien dans la boucle ne panique
+///   (pas d'`unwrap`, pas d'indice), et une panique quand même serait
+///   rattrapée et la boucle reprendrait ;
+/// - une ligne est bornée à [`MAX_LINE`] : pas de mémoire sans borne.
+/// Le seul appel bloquant du fil est la lecture du tube, qui attend des
+/// lignes, jamais la sortie.
+#[cfg(unix)]
+fn spawn_relay(read_fd: libc::c_int, out_fd: libc::c_int) -> std::io::Result<std::thread::JoinHandle<()>> {
+    // SAFETY : `out_fd` appartient au relais. O_NONBLOCK se pose sur la
+    // description, partagée avec le fd 2 d'origine (un terminal, si l'hôte
+    // tourne à la main) : ses drapeaux d'avant sont rendus en sortant.
+    let flags = unsafe { libc::fcntl(out_fd, libc::F_GETFL) };
+    unsafe {
+        libc::fcntl(out_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+    }
+    std::thread::Builder::new().name("journal-heure".into()).spawn(move || {
+        let mut relay = Relay { out_fd, lost: 0, torn: false };
+        let mut pending: Vec<u8> = Vec::with_capacity(4096);
+        let mut buf = [0u8; 8192];
+        loop {
+            // SAFETY : `read_fd` appartient au relais ; `buf` vit ici.
+            let n = unsafe { libc::read(read_fd, buf.as_mut_ptr().cast(), buf.len()) };
+            if n == 0 {
+                break; // la fin du tube : plus aucun écrivain
+            }
+            if n < 0 {
+                // EINTR ou autre : jamais une raison de cesser de vider le tube.
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                continue;
+            }
+            let chunk = buf.get(..n as usize).unwrap_or_default();
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                for &b in chunk {
+                    if b == b'\n' || pending.len() >= MAX_LINE {
+                        relay.emit(&pending);
+                        pending.clear();
+                        if b == b'\n' {
+                            continue;
+                        }
+                    }
+                    pending.push(b);
+                }
+            }));
+        }
+        if !pending.is_empty() {
+            relay.emit(&pending);
+        }
+        // SAFETY : les deux fd sont au relais, fermés une fois ; les drapeaux
+        // de la sortie d'origine lui sont rendus.
+        unsafe {
+            if flags >= 0 {
+                libc::fcntl(out_fd, libc::F_SETFL, flags);
+            }
+            libc::close(read_fd);
+            libc::close(out_fd);
+        }
+    })
+}
+
+/// La sortie du relais : une ligne horodatée par écriture, jamais d'attente.
+#[cfg(unix)]
+struct Relay {
+    out_fd: libc::c_int,
+    /// Les lignes jetées depuis la dernière qui a passé.
+    lost: u64,
+    /// La dernière écriture s'est arrêtée au milieu d'une ligne.
+    torn: bool,
+}
+
+#[cfg(unix)]
+impl Relay {
+    fn emit(&mut self, line: &[u8]) {
+        let mut l = Vec::with_capacity(line.len() + 96);
+        if self.torn {
+            l.push(b'\n');
+        }
+        let ts = now_iso();
+        if self.lost > 0 {
+            l.extend_from_slice(format!("{ts} [journal] {} ligne(s) perdue(s) : la sortie du journal ne prenait plus\n", self.lost).as_bytes());
+        }
+        l.extend_from_slice(ts.as_bytes());
+        l.push(b' ');
+        l.extend_from_slice(line);
+        l.push(b'\n');
+        let mut done = 0usize;
+        while done < l.len() {
+            let rest = l.get(done..).unwrap_or_default();
+            // SAFETY : écriture d'un tampon que nous possédons sur notre fd.
+            let w = unsafe { libc::write(self.out_fd, rest.as_ptr().cast(), rest.len()) };
+            if w > 0 {
+                done += w as usize;
+                continue;
+            }
+            if w < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            // EAGAIN, ENOSPC, EBADF… : la ligne est jetée, l'hôte n'attend pas.
+            break;
+        }
+        if done == l.len() {
+            self.lost = 0;
+            self.torn = false;
+        } else {
+            self.lost += 1;
+            self.torn = done > 0;
+        }
+    }
+}
+
 /// Marque d'heure en tête de chaque ligne écrite sur les fd 1 et 2 de ce
 /// processus, à poser au démarrage de l'hôte (avant toute ligne). Une seconde
 /// pose ne fait rien. Hors Unix, rien : les lignes partent sans heure.
 #[cfg(unix)]
 pub fn install_timestamps() -> Result<(), String> {
-    use std::io::{BufRead, Write};
-    use std::os::fd::FromRawFd;
     let mut slot = INSTALLED.lock().unwrap_or_else(|p| p.into_inner());
     if slot.is_some() {
         return Ok(());
@@ -139,24 +260,13 @@ pub fn install_timestamps() -> Result<(), String> {
         libc::fcntl(stderr, libc::F_SETFD, libc::FD_CLOEXEC);
         libc::fcntl(fds[0], libc::F_SETFD, libc::FD_CLOEXEC);
         let (read_end, write_end) = (fds[0], fds[1]);
-        let reader = std::thread::Builder::new()
-            .name("journal-heure".into())
-            .spawn(move || {
-                // SAFETY : `read_end` et la copie `out` sont à ce fil seul.
-                let tube = std::io::BufReader::new(std::fs::File::from_raw_fd(read_end));
-                let out_fd = libc::dup(stderr);
-                let mut out = std::fs::File::from_raw_fd(out_fd);
-                for ligne in tube.split(b'\n') {
-                    let Ok(ligne) = ligne else { break };
-                    let mut l = Vec::with_capacity(ligne.len() + 32);
-                    l.extend_from_slice(now_iso().as_bytes());
-                    l.push(b' ');
-                    l.extend_from_slice(&ligne);
-                    l.push(b'\n');
-                    let _ = out.write_all(&l);
-                }
-            })
-            .map_err(|e| format!("fil du journal : {e}"))?;
+        // La copie de la sortie d'origine que le relais écrit, non bloquante.
+        let out_fd = libc::dup(stderr);
+        if out_fd < 0 {
+            return Err(format!("dup de la sortie : {}", std::io::Error::last_os_error()));
+        }
+        libc::fcntl(out_fd, libc::F_SETFD, libc::FD_CLOEXEC);
+        let reader = spawn_relay(read_end, out_fd).map_err(|e| format!("fil du journal : {e}"))?;
         if libc::dup2(write_end, 1) < 0 || libc::dup2(write_end, 2) < 0 {
             return Err(format!("dup2 des sorties : {}", std::io::Error::last_os_error()));
         }
@@ -194,7 +304,16 @@ pub fn stop_timestamps() {
         libc::close(i.stdout);
         libc::close(i.stderr);
     }
-    let _ = i.reader.join();
+    // Un enfant lancé par l'hôte (une commande) peut tenir encore le tube par
+    // ses fd 1 et 2 : le relais ne verrait jamais la fin. L'arrêt n'attend
+    // donc que deux secondes que le tube se vide.
+    let debut = std::time::Instant::now();
+    while !i.reader.is_finished() && debut.elapsed() < std::time::Duration::from_secs(2) {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    if i.reader.is_finished() {
+        let _ = i.reader.join();
+    }
 }
 
 #[cfg(not(unix))]
@@ -231,5 +350,90 @@ mod tests {
         // Un autre fil ne voit pas l'appelant de celui-ci.
         let _a = enter_call("mcp (pid 12)", "s-1", "b1");
         assert_eq!(std::thread::spawn(caller_suffix).join().unwrap(), "");
+    }
+
+    /// Une sortie d'origine qui ne prend plus (un tube que personne ne lit) :
+    /// l'écrivain du démon ne bloque pas, le relais jette et compte ; la
+    /// sortie rouverte, la ligne suivante dit combien ont été perdues.
+    #[cfg(unix)]
+    #[test]
+    fn une_sortie_pleine_ne_fige_pas_l_ecrivain() {
+        use std::io::{Read, Write};
+        use std::os::fd::FromRawFd;
+        let mut entree = [0 as libc::c_int; 2];
+        let mut sortie = [0 as libc::c_int; 2];
+        // SAFETY : deux tubes à ce test.
+        unsafe {
+            assert_eq!(libc::pipe(entree.as_mut_ptr()), 0);
+            assert_eq!(libc::pipe(sortie.as_mut_ptr()), 0);
+        }
+        let relais = spawn_relay(entree[0], sortie[1]).unwrap();
+        // SAFETY : le bout d'écriture du tube d'entrée est au test.
+        let mut w = unsafe { std::fs::File::from_raw_fd(entree[1]) };
+        // 4 Mio de lignes, soixante fois la capacité d'un tube, pendant que
+        // personne ne lit la sortie : l'écrivain ne doit jamais attendre.
+        let (fini, attente) = std::sync::mpsc::channel();
+        let ecrivain = std::thread::spawn(move || {
+            let ligne = format!("{}\n", "x".repeat(1023));
+            for _ in 0..4096 {
+                w.write_all(ligne.as_bytes()).unwrap();
+            }
+            fini.send(()).unwrap();
+            w
+        });
+        assert!(
+            attente.recv_timeout(std::time::Duration::from_secs(20)).is_ok(),
+            "l'écrivain est bloqué : le relais attend la sortie au lieu de jeter"
+        );
+        let mut w = ecrivain.join().unwrap();
+        // La sortie se vide (quelqu'un la relit enfin) ; la ligne suivante passe
+        // et dit combien ont été jetées.
+        // SAFETY : le bout de lecture de la sortie est au test.
+        let mut r = unsafe { std::fs::File::from_raw_fd(sortie[0]) };
+        let lecteur = std::thread::spawn(move || {
+            let mut lu = String::new();
+            let _ = r.read_to_string(&mut lu);
+            lu
+        });
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        w.write_all(b"apres\n").unwrap();
+        drop(w); // la fin du tube : le relais s'arrête
+        relais.join().unwrap();
+        let lu = lecteur.join().unwrap();
+        assert!(lu.len() < 4096 * 1024, "la sortie a tout reçu ({} octets) : elle ne débordait pas", lu.len());
+        let perte = lu.lines().find(|l| l.contains("[journal] ")).unwrap_or_else(|| panic!("les pertes ne se disent pas : {}", lu.lines().last().unwrap_or_default()));
+        assert!(perte.contains("ligne(s) perdue(s)"), "{perte}");
+        assert!(lu.lines().last().unwrap_or_default().ends_with(" apres"), "la ligne d'après passe : {:?}", lu.lines().last());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn une_ligne_sans_fin_est_coupee_a_sa_borne() {
+        use std::io::{Read, Write};
+        use std::os::fd::FromRawFd;
+        let mut entree = [0 as libc::c_int; 2];
+        let mut sortie = [0 as libc::c_int; 2];
+        // SAFETY : deux tubes à ce test.
+        unsafe {
+            assert_eq!(libc::pipe(entree.as_mut_ptr()), 0);
+            assert_eq!(libc::pipe(sortie.as_mut_ptr()), 0);
+        }
+        let relais = spawn_relay(entree[0], sortie[1]).unwrap();
+        let lecteur = std::thread::spawn(move || {
+            let mut lu = String::new();
+            // SAFETY : le bout de lecture de la sortie est à ce fil.
+            let _ = unsafe { std::fs::File::from_raw_fd(sortie[0]) }.read_to_string(&mut lu);
+            lu
+        });
+        {
+            // SAFETY : le bout d'écriture du tube d'entrée est à ce test.
+            let mut w = unsafe { std::fs::File::from_raw_fd(entree[1]) };
+            w.write_all(&vec![b'y'; MAX_LINE + 10]).unwrap();
+        }
+        relais.join().unwrap();
+        let lu = lecteur.join().unwrap();
+        let lignes: Vec<&str> = lu.lines().collect();
+        assert_eq!(lignes.len(), 2, "{} lignes", lignes.len());
+        assert!(lignes.iter().all(|l| l.len() <= MAX_LINE + 40 && l.as_bytes().get(10) == Some(&b'T')));
     }
 }
