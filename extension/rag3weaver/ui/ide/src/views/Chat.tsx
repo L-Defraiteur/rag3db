@@ -94,7 +94,7 @@ const tokens = (n: number | null | undefined) => (n == null ? "?" : n >= 1000 ? 
 /// Une ligne de la barre des runs à rôle : l'archiviste, la compaction…
 type RoleRun = { run: string; role: string; what: string; at?: number; state: "en cours" | "fini" | "en erreur" };
 /// Ce qu'une conversation de la barre montre sous son nom.
-type Recap = { context?: ChatContext; model?: string | null; writes?: MemoryWrite[] };
+type Recap = { context?: ChatContext; model?: string | null; writes?: MemoryWrite[]; writesWhy?: string | null };
 
 /// **La jauge du contexte** : le dernier appel au modèle sur le maximum du modèle
 /// déclaré ; « inconnu » quand l'un manque, jamais une valeur codée en dur.
@@ -119,7 +119,7 @@ function Gauge({ context, model, counters }: { context?: ChatContext; model?: st
 /// **Les fiches écrites pendant la conversation**, repliées sauf pour la
 /// conversation de la page : le nom (que `get_fiche` lit), ce qui a été écrit,
 /// l'heure.
-function Writes({ writes, open }: { writes?: MemoryWrite[]; open: boolean }) {
+function Writes({ writes, why, open }: { writes?: MemoryWrite[]; why?: string | null; open: boolean }) {
   const list = writes ?? [];
   return (
     <details className="fiches-ecrites pl-6 mb-2 text-[11px] text-muted-foreground" open={open || undefined}>
@@ -139,7 +139,7 @@ function Writes({ writes, open }: { writes?: MemoryWrite[]; open: boolean }) {
           ))}
         </ul>
       ) : (
-        <p className="mt-1">aucune pour l'instant</p>
+        <p className="mt-1 pourquoi">{why ?? "aucune pour l'instant"}</p>
       )}
       <p className="mt-1 italic">les écritures de l'agent lui-même arrivent avec M7 de la mémoire longue</p>
     </details>
@@ -179,7 +179,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     Promise.all(
       backendsHere.map((b) =>
         fetchChat(b.id)
-          .then((c) => [b.id, { context: c.context, model: c.model, writes: c.memory_writes }] as const)
+          .then((c) => [b.id, { context: c.context, model: c.model, writes: c.memory_writes, writesWhy: c.memory_writes_why }] as const)
           .catch(() => [b.id, {}] as const),
       ),
     ).then((all) => setRecaps(Object.fromEntries(all)));
@@ -374,7 +374,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                           {displayName(b)}
                         </a>
                         <Gauge context={recaps[b.id]?.context} model={recaps[b.id]?.model} counters={b.id === id ? consumed : undefined} />
-                        {b.kind === "memory" ? null : <Writes writes={recaps[b.id]?.writes} open={b.id === id} />}
+                        {b.kind === "memory" ? null : <Writes writes={recaps[b.id]?.writes} why={recaps[b.id]?.writesWhy} open={b.id === id} />}
                       </div>
                     ))}
                   </div>
