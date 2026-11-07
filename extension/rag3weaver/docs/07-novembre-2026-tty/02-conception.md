@@ -142,3 +142,20 @@ Ensuite, à ordonner avec Lucie : la couche déclarative `view!` sur taffy, le p
 - On reprend la page « Daemon Code Summoning » au plus près. Les trois exemples donnent le ton de tout le reste : des symboles qui tournent ou mutent autour d'un cœur fixe, un libellé de rituel en capitales, une couleur unique avec un halo.
 - Plus tard, **un sélecteur de thèmes**. Un thème rassemble les jeux de glyphes des trois animations, la palette et son halo, les libellés (« INVOCATION DU CODE… ») et le rythme. Pistes de Lucie : fées, forêt, bureau, papillons, Mordor, Dracula. Pour Dracula, on entend le vampire (sang, chauves-souris, crypte), pas la palette de couleurs « Dracula » des éditeurs de code.
 - Conséquence dès le lot tty-3 : une animation lit son thème au lieu d'avoir ses glyphes en dur. « Daemon » est le premier thème, et le seul au départ.
+
+## Mesures
+
+### Lot tty-2 : les octets de la vue inline (7 nov. 2026)
+
+- **Ce qui les produit.** Le test `tui::tests::mesure_des_octets_pour_mille_tokens` du crate `extension/rag3weaver/tty`. Il passe par le vrai backend crossterm de ratatui 0.30.2, sans terminal (taille fixée à 80×24, la zone vivante en bas) ; ses octets sont comptés puis jetés. Il envoie 1 000 tokens « motN », chacun avec son espace, à `dessiner`, qui fait `insert_before` pour les lignes validées puis `draw` pour la zone vivante.
+- **Les chiffres.**
+
+  | Cas | Octets | Par token |
+  |---|---|---|
+  | le texte seul | 6 890 | 6,9 |
+  | une image par token (le pire) | 62 454 | 62,5 |
+  | une image pour dix tokens (30 images/s à 300 tokens/s) | 28 072 | 28,1 |
+
+  Cela fait environ 280 octets par image, dont 69 de texte. À 30 images/s, c'est moins de 9 Ko/s, assez peu pour ssh.
+- **Les bornes du test.** 35 000 octets pour une image tous les dix tokens, et 78 000 pour une image par token : un quart de marge au-dessus du mesuré. Un changement qui les dépasse doit d'abord se justifier.
+- **Ce qui coûte.** Chaque `insert_before` redessine la zone vivante entière. Ce sera la piste si une mesure sous mosh (lot tty-5) le demande.
