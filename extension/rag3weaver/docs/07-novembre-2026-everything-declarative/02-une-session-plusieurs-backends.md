@@ -5,6 +5,29 @@ session doit être limitée à un backend, pourquoi c'est pas l'agent qui les ex
 « après je veux voir ça en mode worktrees : une session prend un lot de worktrees sur plusieurs
 repos ». Pas un lot ce soir ; la réponse, et par où commencer.
 
+## Le vocabulaire : celui de git, jamais « backend » à l'écran
+
+Lucie, 7 novembre 2026 : « les gens qui bossent, eux, parlent pas spécialement en backends ; ils
+parlent en branches, PR, worktrees, repos attachés ». Donc :
+
+- **Ce qu'on voit et ce que l'agent dit** : une session **s'attache à des dépôts** ; dans un dépôt,
+  **un worktree sur une branche** ; une **tâche** vit dans un worktree et finit **en PR ou en
+  fusion** ; la mémoire longue est **« la mémoire »**. « Backend » reste un mot du manifeste et du
+  code — jamais de l'écran, jamais des commandes ni des outils de l'agent.
+- **La barre de gauche de l'IDE** liste les **dépôts attachés**, puis sous chacun ses worktrees et
+  leurs branches (et ses PR ouvertes quand le dépôt a une forge) ; une conversation est rangée sous
+  le dépôt ou le worktree qu'elle tient. Plus de « backends ouverts ».
+- **Le manifeste de session** se dit « dépôts attachés » (`repos`), chacun avec ses worktrees ; le
+  backend d'un dépôt (son index, ses outils) en découle, l'utilisatrice ne le nomme pas.
+- **Les outils de l'agent** prennent un dépôt ou un chemin, jamais un id de backend ; l'hôte
+  résout le backend.
+- **La vue de session** montre ce que cette session a fait, sur quels worktrees (branches,
+  commits, PR), pas sur quels backends.
+- **À appliquer** dans les lots suivants, l'IDE d'abord : la barre du lot du chat (B2 de
+  hooks-essai) dit « dépôts » et liste les dépôts attachés ; le terminal de tty de même.
+
+Dans le reste de cette page, « backend » désigne la pièce du code ; l'écran dira « dépôt ».
+
 ## 1. Pourquoi aujourd'hui un chat = un backend
 
 Rien de profond : c'est l'endroit où chaque pièce a été rangée, une à une.
