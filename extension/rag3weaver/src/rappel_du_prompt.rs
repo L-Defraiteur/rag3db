@@ -66,6 +66,13 @@ fn oter_les_balises(texte: &str) -> String {
     out
 }
 
+/// **Un tour de notification** : une `<task-notification>` que le harnais
+/// injecte, sans parole d'utilisateur (c7 : ne lance pas de rappel).
+pub fn est_une_notification(prompt: &str) -> bool {
+    let sans = oter_les_blocs(&oter_les_blocs(prompt, "task-notification"), "system-reminder");
+    prompt.contains("<task-notification") && oter_les_balises(&sans).trim().is_empty()
+}
+
 /// **Le prompt sans ses enveloppes** : ce qu'un agent a vraiment écrit.
 pub fn nettoyer(prompt: &str) -> String {
     let mut t = oter_les_blocs(prompt, "system-reminder");
@@ -75,6 +82,13 @@ pub fn nettoyer(prompt: &str) -> String {
     let t = oter_les_balises(&t);
     t.lines().filter(|l| !l.trim_start().starts_with("This came from another Claude session")).collect::<Vec<_>>().join("\n")
 }
+
+/// Les mots d'arrêt courts : ce qui tombe parmi les mots de moins de quatre
+/// lettres. Un mot court hors de cette liste reste (`lib`, `fd`, `wal`) : dans
+/// une mémoire de code, il est souvent le sujet (c7, d'après le rejeu de G).
+const ARRET_COURTS: &[&str] = &[
+    "à", "a", "au", "aux", "ce", "ces", "ça", "de", "des", "du", "en", "et", "il", "ils", "je", "la", "le", "les", "leur", "ma", "me", "mes", "moi", "mon", "ne", "ni", "nos", "on", "ou", "où", "par", "pas", "peu", "qu", "que", "qui", "sa", "se", "ses", "si", "son", "sur", "ta", "te", "tes", "toi", "ton", "tu", "un", "une", "vos", "va", "est", "été", "ont", "fait", "dis", "dit", "bon", "oui", "non", "lui", "eux", "car", "là", "ici", "via", "puis", "the", "an", "of", "to", "in", "on", "is", "it", "and", "or", "for", "by", "as", "at", "be", "we", "you", "are", "was", "not", "but", "can", "has", "had", "its", "our", "out", "all", "any", "how", "why", "who", "use", "get", "set", "new", "now", "one", "two", "see", "may", "let", "so", "do", "if", "no", "up", "my", "me",
+];
 
 const COURANTS: &[&str] = &[
     // français
@@ -117,7 +131,8 @@ pub fn requete_de_rappel(prompt: &str, max_mots: usize, vocabulaire: &HashSet<St
     let mut candidats: Vec<Candidat> = Vec::new();
     let mut en_code = false;
     let mut debut_de_phrase = true;
-    for (position, brut) in texte.split_whitespace().enumerate() {
+    let jetons: Vec<&str> = texte.split(|c: char| c.is_whitespace() || matches!(c, '=' | ',' | ';' | '(' | ')' | '[' | ']' | '{' | '}')).filter(|j| !j.is_empty()).collect();
+    for (position, brut) in jetons.into_iter().enumerate() {
         let apres_une_fin = debut_de_phrase;
         debut_de_phrase = brut.ends_with(['.', ':', '!', '?', '→']) || brut == "→";
         // Les accents graves ouvrent et ferment le code, même collés au mot.
@@ -140,21 +155,31 @@ pub fn requete_de_rappel(prompt: &str, max_mots: usize, vocabulaire: &HashSet<St
         let m = m.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
         // Un sigle en capitales (`GPU`, `HNSW`, `MCP`) est un terme, même court.
         let sigle = (2..=6).contains(&m.chars().count()) && m.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()) && m.chars().filter(char::is_ascii_uppercase).count() >= 2;
-        if (!sigle && m.chars().count() < 4) || est_uuid(m) || (!dans_le_code && est_un_id(m)) || !m.chars().any(char::is_alphabetic) {
+        let bas = m.to_lowercase();
+        let connu = vocabulaire.contains(&bas);
+        // Un nombre court est un sujet (`43` le format, `7970` le port) ; un long
+        // est un id ou une date.
+        let nombre = m.chars().all(|c| c.is_ascii_digit());
+        if nombre && !(2..=5).contains(&m.chars().count()) {
             continue;
         }
-        let bas = m.to_lowercase();
-        if COURANTS.contains(&bas.as_str()) || bas.contains('\'') || bas.contains('’') {
+        // Un mot court a la forme du code (chiffre, souligné, capitale) : il reste.
+        let court_code = m.chars().any(|c| c.is_ascii_digit() || c == '_' || c.is_uppercase());
+        let hash = m.chars().count() >= 7 && m.chars().all(|c| c.is_ascii_hexdigit()) && m.chars().any(|c| c.is_ascii_digit());
+        if m.chars().count() < 2 || est_uuid(m) || hash || (!dans_le_code && !nombre && est_un_id(m)) || (!nombre && !m.chars().any(char::is_alphabetic)) {
+            continue;
+        }
+        if !connu && !court_code && (ARRET_COURTS.contains(&bas.as_str()) || COURANTS.contains(&bas.as_str()) || bas.contains('\'') || bas.contains('’')) {
             continue;
         }
         if !vus.insert(bas.clone()) {
             continue;
         }
-        let priorite = if vocabulaire.contains(&bas) {
+        let priorite = if connu {
             5
         } else if dans_le_code {
             4
-        } else if est_identifiant(m) || sigle || m.split('-').filter(|p| p.chars().any(char::is_alphabetic)).count() >= 2 {
+        } else if est_identifiant(m) || sigle || nombre || (court_code && m.chars().count() < 4) || m.split('-').filter(|p| p.chars().any(char::is_alphabetic)).count() >= 2 {
             3
         } else if m.chars().next().is_some_and(char::is_uppercase) && !apres_une_fin {
             2
@@ -212,6 +237,46 @@ pub(crate) mod tests {
         let i = q.iter().position(|m| m == "bm25").unwrap();
         let j = q.iter().position(|m| m == "RAG3WEAVER_GPU_DUTY").unwrap();
         assert!(i < j, "{q:?}");
+    }
+
+    #[test]
+    fn les_mots_courts_et_les_nombres_du_code_restent() {
+        // Le rejeu de G : « lib » et « 43 » étaient tombés.
+        let q = requete_de_rappel("où se pose la lib unique de la bascule 43 ?", 10, &vide());
+        assert_eq!(q, vec!["pose", "lib", "unique", "bascule", "43"], "{q:?}");
+        let q = requete_de_rappel("le WAL casse sous L6 et le fd du port 7970 en V2", 10, &vide());
+        for m in ["WAL", "casse", "L6", "fd", "port", "7970", "V2"] {
+            assert!(q.iter().any(|x| x == m), "« {m} » : {q:?}");
+        }
+        for m in ["le", "et", "du", "en", "sous"] {
+            assert!(!q.iter().any(|x| x == m), "« {m} » est un mot d'arrêt : {q:?}");
+        }
+        // Un nombre long (une date, un id) tombe toujours.
+        assert!(!requete_de_rappel("le run 1794065083 du 20261107", 10, &vide()).iter().any(|m| m.chars().all(|c| c.is_ascii_digit())));
+    }
+
+    #[test]
+    fn une_notification_de_tache_n_est_pas_un_tour_qui_cherche() {
+        assert!(est_une_notification(NOTIFICATION));
+        assert!(est_une_notification(NOTIFICATION_VIDE));
+        assert!(!est_une_notification("relis la fiche <task-notification> du tour"), "une parole autour, ce n'est plus une notification");
+        assert!(!est_une_notification(MESSAGE));
+    }
+
+    #[test]
+    fn un_message_sur_le_regime_gpu_garde_ses_mots_face_au_meta_discours() {
+        // La forme du premier tour réel de c7 (848 caractères) : un en-tête, un hash
+        // entre accents graves, du méta-discours, puis le sujet.
+        let m = "<cross-session-message from=\"uds:/run/user/1000/cc-socks/1.sock\" from-name=\"rag3db-74\">\nc7 → essai : reçu le commit `7b41a1a04`, la requête et le temps du rappel ; la fiche propre est exclue et le seuil a joué, le rendu se tait au tour suivant. Le sujet de demain : le régime GPU des quatre suites de mesure de l'embarquement, RAG3WEAVER_EMBED_CHAR_BUDGET=4096 et RAG3WEAVER_GPU_DUTY=70.\n</cross-session-message>";
+        let mut v = HashSet::new();
+        for w in ["régime", "gpu"] {
+            v.insert(w.to_string());
+        }
+        let q = requete_de_rappel(m, 10, &v);
+        for present in ["régime", "GPU", "RAG3WEAVER_EMBED_CHAR_BUDGET", "RAG3WEAVER_GPU_DUTY"] {
+            assert!(q.iter().any(|x| x == present), "« {present} » : {q:?}");
+        }
+        assert!(!q.iter().any(|x| x == "7b41a1a04"), "un hash n'est pas un sujet, même entre accents graves : {q:?}");
     }
 
     #[test]

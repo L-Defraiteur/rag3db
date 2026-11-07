@@ -85,13 +85,14 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (57)
+### Ouverts — produit (58)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [search_structured : le score d'une ligne n'est pas comparable d'un signal à l'autre](2026-11-07-search-structured-le-score-d-une-ligne-n-est-pas-comparable-d-un-signal-a-l-autre.md) | ouvert — pour recherche ; relevé au 3 ter des hooks (archi) : `chunk.score` rend le dense 0,37 quand le plein texte est au rang 1 à 1,386 ; le hook lit `signals` en attendant | réponse trompeuse (un seuil sur le score d'une ligne seuille au hasard) | oui (tout appelant de `recall_*` qui lit `chunk.score`) | oui (`search_structured.mmd`) |
 | [Une recherche continue sur l'hôte après l'abandon de son client](2026-11-07-une-recherche-continue-sur-l-hote-apres-l-abandon-de-son-client.md) | ouvert — sans porteur ; relevé au 3 ter des hooks (archi) : `bm25` à 32 936 ms après un hook parti à 3 s ; le hook n'envoie plus de prompt entier, la borne du moteur est à recherche | coût (CPU de l'hôte pour une réponse que personne n'attend) | oui (tout client à délai court) | oui (`daemon_host`, `/call`) |
 | [L'index des tickets épingle ses comptes, et chaque lot qui ouvre ou ferme un ticket fait un conflit](2026-11-07-l-index-des-tickets-epingle-ses-comptes-et-fait-un-conflit-a-chaque-lot.md) | ouvert — hotfixs, après (B) ; forme proposée : en-tête validé dans chaque ticket, index généré hors de git | coût (quatre rebases le 7 novembre) | non | oui (scripts/check_tickets.py) |
 | [La lib rag3weaver ne se bâtit pas sans `rag3db-native`](2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md) | ouvert — contourné par le crate à part du terminal ; deux `cfg` à poser, ou la lib déclarée dépendante du moteur (choix de Lucie) | bâti refusé | non | oui |

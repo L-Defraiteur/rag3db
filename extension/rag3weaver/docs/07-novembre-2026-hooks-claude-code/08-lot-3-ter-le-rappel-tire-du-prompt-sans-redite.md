@@ -82,18 +82,49 @@ Lucie : « ne pas lui rebalancer des trucs qu'il a déjà eus ».
   rappelle en une ligne les fiches qui avaient compté, puis le déjà-vu repart de zéro.
 - Un resume garde l'état, et un rejeu ne l'écrit jamais.
 
-## 5. L'échelle et l'exclusion, dites
+## 5. Le plein texte décide, le dense seul n'est pas jugé (3 ter b)
 
-- Le seuil `recall_min_score` (0,50) vaut pour une similarité de 0 à 1. Le meilleur signal peut
-  être le plein texte, dont le score brut dépasse 1 (3,53 dans le témoin, 27,92 sans le service
-  d'embarquement). Sur une échelle brute, **pas de seuil**. Le journal dit « échelle brute (score
-  au-delà de 1), pas de seuil », et le bloc dit « score brut du meilleur signal, sans seuil ».
-  Trier ces candidats-là est le travail du juge du 3 ter (b).
-- La fiche propre est exclue par sa clé. La clé vient de l'identité que le hook trouve : la fiche
-  qui cite le handle `session:<uuid>` (genre `handle`) et porte un apport `identity`. Une Ref non
-  vérifiée suffit, puisque `cited_by` ne regarde pas la vérification. Sans identité trouvée, rien
-  n'est exclu, et le journal dit « identité inconnue, pas d'exclusion ». `whois` (lot 4) est la
-  bonne lecture.
+Trois tours réels de hooks-essai, le 7 novembre, ont montré le défaut du (a). Le hook lisait
+`chunk.score`, le score du morceau affiché, et ignorait `signals`, où chaque signal donne le sien.
+
+| tour | « régime GPU » | ce que le (a) a fait |
+|---|---|---|
+| 18:15:45, hors sujet | dense 0,32 | silence, sous le seuil |
+| 18:16:13, une notification | dense 0,35 ; la fiche propre au plein texte, 1,66 | rendue sans seuil, hors sujet |
+| 18:16:39, en plein sujet | dense 0,37 ; plein texte 1,386, au premier rang | silence : le hook lisait 0,37 |
+
+La règle du (b) :
+- **Les signaux se lisent par ligne** : `bm25`, le plein texte en score brut, et `vector`, le
+  dense de 0 à 1. Sans `signals`, le score du morceau tient lieu.
+- **La fiche propre est ôtée d'abord**, avant tout jugement.
+- **Le plein texte fait le candidat** : les mots extraits du prompt touchent la fiche, son titre
+  ou ses apports.
+- **Le dense seul n'est pas jugé.** Le journal dit « dense seul, non jugé », et la fiche n'est
+  pas rendue. C'est une attente de mesure, pas une doctrine. Le seuil dense de 0,50 du 3 bis n'a
+  jamais été mesuré, et la clé `recall_min_score` reste lue sans effet. Un seuil dense ou un écart
+  relatif se mesurera sur une mémoire peuplée (96, M4), à partir de prompts réels étiquetés « en
+  rapport » ou « sans rapport ».
+- **Au plus un rendu par tour**, le meilleur au plein texte, avec ses deux scores. C'est une
+  politique, pas un seuil : l'agent a sa mémoire au moment d'agir, sans être inondé. Les autres
+  que le plein texte touche vont au juge, en fond.
+- **Le déjà-vu porte sur les candidats**, et tout rendu se marque. Le tour de 18:16:39 disait
+  « déjà rendu : 0 » parce que la fiche, sous le seuil, était écartée avant le déjà-vu.
+- **Un tour de notification ne cherche rien** : une `<task-notification>` sans parole
+  d'utilisateur. Le journal dit « tour de notification, rien à chercher ».
+- **La fiche propre** est trouvée par la fiche qui cite le handle `session:<uuid>` (genre
+  `handle`) et porte un apport `identity`. Une Ref non vérifiée suffit. Sans identité, rien n'est
+  exclu, et le journal dit « identité inconnue, pas d'exclusion ».
+- **La requête**, d'après le premier tour réel de c7 :
+  - le vocabulaire de la mémoire passe d'abord. C'est un cache commun aux sessions,
+    `hooks/vocabulaire.json`, fait des mots des noms de fiches vus dans les réponses, sous le seuil
+    compris ;
+  - ensuite les mots courts et les nombres du code : `lib`, `43`, `WAL`, `L6`, `7970`. Seule une
+    liste d'arrêt tombe ;
+  - un jeton `A=4096` se coupe au `=` ;
+  - un hash entre accents graves tombe comme un hash.
+- La cause amont, un score qui ne se compare pas d'un signal à l'autre, est un ticket pour
+  recherche :
+  `docs/tickets/2026-11-07-search-structured-le-score-d-une-ligne-n-est-pas-comparable-d-un-signal-a-l-autre.md`.
 
 ## 6. Le journal
 
@@ -117,9 +148,8 @@ l'hôte compare.
   Son bilan va au journal : « juge : 2 candidat(s), 1 gardé(s) — pourquoi ». Le modèle est celui
   du régime, Vertex par `GOOGLE_CLOUD_PROJECT`. Sans modèle, ou avec `recall_judge: false`, les
   candidats passent tels quels, et le journal le dit.
-- **Une échelle brute part au juge.** Un score au-delà de 1 ne se trie pas à bon marché. Les
-  candidats neufs ne sont donc pas rendus dans le tour. Ils sont confiés au fils, qui ne refait pas
-  le rappel, puis jugés.
+- **Ce qui part au juge** : les candidats que le plein texte touche, au-delà du premier rendu.
+  Le fils ne refait pas le rappel pour eux, et le juge ne répète jamais une fiche déjà rendue.
 - **Le rendu.** Le résultat tombe au premier `PostToolUse` du tour suivant, en
   `hookSpecificOutput.additionalContext`, sous « Rappel du tour d'avant (requête « … ») ». Ce
   `PostToolUse` n'ouvre pas l'hôte et ne lit qu'un fichier. Le résultat passe sous le déjà-vu et

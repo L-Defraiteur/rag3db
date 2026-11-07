@@ -280,6 +280,6 @@ fn le_rappel_d_un_long_prompt_tient_sous_son_delai_sur_une_vraie_memoire() {
     let avant = host.journal_des_runs().runs_de(&backend);
     let r = repondre(&evenement_du_prompt(vide), &reglage, Ok(&h));
     assert!(durees_du_plein_texte(&host, &backend, &avant).is_empty(), "aucun rappel sur une enveloppe vide : {:?}", r.journal);
-    assert!(r.journal.iter().any(|l| l.contains("rappel : rien à chercher")), "{:?}", r.journal);
+    assert!(r.journal.iter().any(|l| l.contains("rappel : tour de notification, rien à chercher")), "{:?}", r.journal);
     host.close_session(&session);
 }
