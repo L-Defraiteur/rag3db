@@ -1529,7 +1529,7 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
 /// **Une requête longue répond vite et dit ses coupes** (ticket « Le plein texte explose sur une
 /// requête longue », 7 novembre 2026). Un prompt collé de 200 termes distincts : avant, la requête
 /// entière se cherchait en flou et le nœud plein texte y passait des dizaines de secondes (29 s
-/// sur deux fiches, mesuré) ; après, elle perd son flou au-delà de 100 caractères et la recherche
+/// sur deux fiches, mesuré) ; après, elle perd son flou au-delà de 900 caractères (100 sur lucivy 4.3.1) et la recherche
 /// par mots garde 64 termes, en moins que l'attente bornée de la poignée (1,5 s), et la méta dit
 /// les deux coupes. Une requête courte ne dit rien.
 #[cfg(feature = "code")]
@@ -1651,11 +1651,10 @@ fn un_second_ecrivain_est_refuse_en_nommant_le_premier() {
 
 /// **Une ligne collée retrouve son fichier** (7 novembre 2026, relevé par lucivy : un passage exact
 /// d'un document n'est plus trouvé au-delà de 48 octets en strict et 64 en relâché — ticket
-/// lucivy « un passage exact long n'est plus trouvé », branche tickets-2026-11-07). Au-delà de
-/// `MAX_FUZZY_WHOLE_QUERY_CHARS`, la requête entière se cherche en strict : une phrase de
-/// 120 caractères collée dans l'IDE doit ramener son fichier premier, par le signal exact. Rouge
-/// tant que lucivy ne trouve pas un passage de cette longueur ; il dit quand la montée de version
-/// le rend vert.
+/// lucivy « un passage exact long n'est plus trouvé », branche tickets-2026-11-07). Une phrase de
+/// plus de 100 caractères collée dans l'IDE doit ramener son fichier premier, par le signal exact
+/// (la requête entière). Rouge sur lucivy 4.3.1 (le 7 novembre, la borne d'alors l'envoyait en
+/// strict), vert depuis la montée à 4.3.2.
 #[cfg(feature = "code")]
 #[test]
 #[ignore]
