@@ -102,7 +102,12 @@ manifeste de session, = une conversation (une entrée de `chats`) : ses `repos` 
 les worktrees de ses tâches ouvertes ; les sessions MCP de Claude Code n'y entrent qu'avec
 l'identité d'agent à clé stable. `loaded` : le slot du backend est ouvert dans l'hôte (lu sans
 attendre). `rag` se lit dans `index_states` (déjà dans `backends[i].index`) : `indexed` si le texte
-est là, `indexing` avec un pourcentage si un lot est en cours, `absent` sinon. La forme est celle de hooks-essai, qui habille la barre. `chat_sessions[].spaces` : le dépôt de
+est là, `indexing` avec un pourcentage si un lot est en cours, `absent` sinon. La forme est celle de hooks-essai, qui habille la barre. **Une session** est un backend sans
+tâche qui converse (une entrée de `chats`) ou qui est ouvert ; une mémoire ouverte n'est une
+session que si on lui parle, sinon elle reste l'enfant `memory` des sessions qui la déclarent. **Les
+disponibles** sont les backends de code ni ouverts ni tenus. **L'espace d'une tâche** porte le nom
+du dépôt de la tâche (`repo_of(t.depot)`, pas le dossier de son worktree) et `branch` =
+`t.branche` ; `path` est sa racine de code. `chat_sessions[].spaces` : le dépôt de
 la session (sa conversation principale), un élément, ou aucun hors de tout dépôt ou dossier.
 `tasks` : aujourd'hui les tâches de `taches.rs` (`id` = le backend de la tâche, `session` =
 `tache.parent`, `parent_task` toujours null jusqu'aux sous-équipiers) ; leurs `spaces` sont le
