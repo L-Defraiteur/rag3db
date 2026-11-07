@@ -72,6 +72,25 @@ distance 0. **K = 64 termes** : le plus grand palier de la recherche par mots so
 code (495 ms ; 2,7 s à 128), les plus longs d'abord, les moins de trois lettres tombent les
 premiers (faute d'IDF). Les deux coupes se disent dans `meta.warnings`.
 
+## La mesure rejouée sur lucivy 4.3.2 (7 novembre 2026, au soir)
+
+Même sonde, code-principal (copie reflink, 65 946 documents ; charge 9,3 avant, 6,6 après, 24 cœurs) :
+
+| termes | caractères | mots (Parse, le nœud) | un par un d=1 | un par un d=0 | entière d=1 (le nœud) | entière d=0 |
+|---|---|---|---|---|---|---|
+| 1 | 4 | 5 | 87 | 4 | 82 | 5 |
+| 4 | 17 | 50 | 461 | 47 | 7 | 2 |
+| 8 | 44 | 76 | 636 | 79 | 12 | 3 |
+| 16 | 104 | 129 | 1069 | 128 | 21 | 8 |
+| 32 | 235 | 185 | 1501 | 180 | 57 | 15 |
+| 64 | 436 | 343 | 3601 | 348 | 88 | 17 |
+| 128 | 933 | 650 | 7340 | 680 | 464 | 30 |
+| 197 | 1397 | 993 | 11727 | 1045 | 785 | 89 |
+
+lucivy borne le flou long chez lui : sur le même budget de 500 ms, **L passe à 900 caractères**
+(464 ms à 933) et **K = 64 est confirmé** (343 ms ; 650 à 128). La copie de la mémoire longue,
+remesurée après la bascule 43, montrait un index de 0 document : sa ligne n'a pas compté.
+
 ## Le témoin
 
 À écrire : une requête de 200 mots sur un petit corpus, le nœud sous un budget (par exemple
