@@ -555,6 +555,7 @@ mod tests {
             domain: String::new(),
             scope: None,
             target: None,
+            role: None,
         }
     }
 

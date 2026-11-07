@@ -88,6 +88,9 @@ fn assert_well_formed(turns: &[Turn]) {
 /// Ce qu'un run a rendu, sans ce qui dépend de l'horloge.
 fn stable(mut run: AgentRun) -> AgentRun {
     run.usage.ms = 0;
+    if let Some(c) = run.last_call.as_mut() {
+        c.at_ms = 0;
+    }
     run
 }
 

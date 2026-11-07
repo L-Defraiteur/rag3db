@@ -1145,7 +1145,7 @@ mod tests {
     }
 
     fn call(name: &str, args: Value) -> ToolCall {
-        ToolCall { id: "c".into(), name: name.into(), arguments: args.to_string(), provider_extra: None }
+        ToolCall { id: "c".into(), name: name.into(), arguments: args.to_string(), provider_extra: None, at_ms: None }
     }
 
     /// Le plan s'écrit, ses questions partent dans la boîte, `step_done` passe

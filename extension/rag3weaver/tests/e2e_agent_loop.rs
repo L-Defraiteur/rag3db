@@ -595,6 +595,7 @@ fn a_graph_sends_a_message_and_the_agent_reads_it_between_turns() {
         name: "search".into(),
         arguments: serde_json::json!({"target": "Message", "query": "couteau", "relation": "SENT_TO"}).to_string(),
         provider_extra: None,
+        at_ms: None,
     };
     let turn = graph_tools.call(&call, &nodes, services.clone());
     eprintln!("[search + relation] {}", turn.content.chars().take(600).collect::<String>());

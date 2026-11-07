@@ -282,6 +282,11 @@ pub struct ToolAttachment {
     /// 3 octobre 2026 (docs/3-octobre-2026-23h05/01), validée.
     #[serde(default)]
     pub after: Option<AfterToolHook>,
+    /// **Le rôle de l'outil**, champ libre (`archiviste`, …) : relayé dans
+    /// `RunStarted.target.role` et dans `describe()` — la page de l'IDE range
+    /// les runs par rôle, jamais par leur nom.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 /// **Une relation du manifeste** : sa définition au catalogue, à plat, et la
@@ -1785,7 +1790,11 @@ impl PreparedBackend {
             // `policy` : ce que l'outil a le droit de faire (lire, écrire,
             // exécuter, son effet d'écran) — un client choisit dessus, jamais
             // sur une liste de noms (le terminal, docs/07-novembre-2026-tty).
-            json!({"name":name,"description":description,"inputSchema":self.tool_schemas[name],"policy":attachment.policy})
+            let mut outil = json!({"name":name,"description":description,"inputSchema":self.tool_schemas[name],"policy":attachment.policy});
+            if let Some(role) = &attachment.role {
+                outil["role"] = json!(role);
+            }
+            outil
         }).collect();
         if self.manifest.search_graphs {
             tools.extend(search_tool_definitions());
@@ -4593,7 +4602,11 @@ impl Backend {
         services.register("event_bus", Arc::new(bus));
         let run = crate::events::new_run_id("graph");
         if let Some(target) = target {
-            services.register(crate::events::RUN_TARGET_SERVICE, crate::events::RunTarget { run: run.clone(), target });
+            let role = match &target {
+                GraphTarget::Tool(n) => prepared.manifest.tools.get(n).and_then(|a| a.role.clone()),
+                _ => None,
+            };
+            services.register(crate::events::RUN_TARGET_SERVICE, crate::events::RunTarget { run: run.clone(), target, role });
         }
         let output = DataflowRuntime::with_services(100, services).execute_as(&mut graph, &run)?;
         let read = |node: &str, port: &str| -> Result<Value, String> {
