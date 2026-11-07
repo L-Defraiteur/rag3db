@@ -921,6 +921,8 @@ fn la_nature_d_un_backend_vient_de_son_gabarit_sinon_de_son_espace_de_travail() 
     git(&["commit", "-q", "-m", "un"]);
     // La configuration, hors de tout dépôt : le code (sans `kind`) et la mémoire.
     let config = d.path().join("config");
+    std::fs::create_dir_all(config.join("code")).unwrap();
+    std::fs::create_dir_all(config.join("memoire")).unwrap();
     let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends");
     let code = crate::gabarits::jouable::manifeste_jouable(&gabarits.join("code"), &config.join("code")).unwrap();
     let mut m: Value = serde_json::from_slice(&std::fs::read(&code).unwrap()).unwrap();
