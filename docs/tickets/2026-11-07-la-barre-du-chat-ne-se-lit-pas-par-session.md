@@ -16,22 +16,33 @@ qu'on doit quand même naviguer par "agent" ou "session", mais que dans la barre
 hiérarchie de lui les dépôts qui sont chargés ou pas pour lui, et en accès rag ou pas ».
 Depuis 3d09b32c2, la barre range ses conversations sous « Dépôts », « Mémoire » et « Projets ».
 
-## Ce qu'il faut pour le fermer
+## Ce qu'il faut pour le fermer (forme tranchée avec Lucie, c7, 7 novembre 2026 au soir)
 
-La barre s'inverse.
+- **Le premier niveau est la session**, c'est-à-dire l'agent : son nom, son modèle, son usage et ses
+  fiches. Sous chaque session, deux groupes repliables : **Dépôts** (ce sur quoi elle travaille)
+  et **Sous-sessions** (à qui elle délègue).
+- **Un dépôt s'étend vers ses worktrees**, chacun avec sa branche, « chargé / non chargé » et
+  « rag : indexé / en cours / absent ». Le worktree est la feuille : c'est lui qu'on ouvre, et
+  c'est lui qui porte la conversation de tâche.
+- **Une sous-session est une session à part entière**, avec le même motif sous elle et son état :
+  en cours, en attente d'une réponse, finie. Quand elle travaille dans un worktree du dépôt de la
+  mère, ce worktree porte « tenu par <sous-session> » sous Dépôts, et la sous-session montre le
+  même worktree sous elle : une seule donnée, deux regards.
+- **Tout est replié sauf le chemin actif.** Le chat porte en tête un fil d'Ariane :
+  session › dépôt › worktree, ou session › sous-session › worktree.
+- **Autour de l'arbre** :
+  - un filtre « actifs seulement » ;
+  - les dépôts attachés à personne, en bas, sous « disponibles » ;
+  - la mémoire, comme enfant de la session, avec son accès rag.
+- **Un menu déroulant en tête de la barre change de vue** (Lucie : « un dropdown pour la vue par
+  dépôt plutôt que par agent, pour switcher »). La vue « par session », par défaut, est la forme
+  ci-dessus. La vue « par dépôt » est l'arbre inversé : dépôt › worktree › les sessions qui le
+  tiennent. Les données sont les mêmes, et le choix est mémorisé (localStorage).
+- **Le JSON de `/ide/etat`** (`chat_sessions`, `available_repos`, les sous-sessions par parent)
+  s'accorde avec everything declarative.
 
-- **Premier niveau : la session**, c'est-à-dire une conversation ou un agent : son nom, son
-  modèle, sa récap d'usage (la jauge) et ses fiches écrites.
-- **Sous chaque session**, en hiérarchie, les **dépôts** qu'elle a. Chacun montre :
-  - son worktree et sa branche ;
-  - « chargé / non chargé » (le backend ouvert ou fermé) ;
-  - « rag : indexé / en cours / absent » (l'index du dépôt et sa progression).
-- **La mémoire de la session** paraît sous elle, avec son accès rag (oui ou non).
-- **Un dépôt attaché à aucune session** paraît en bas, « disponible ».
-
-Aujourd'hui une session n'a qu'un dépôt (le chat d'un backend) : la hiérarchie a un seul enfant,
-mais la forme est déjà celle de la session multi-dépôts. Le JSON de `/ide/etat` (sessions →
-dépôts) s'accorde avec everything declarative.
-
-Témoin navigateur : une session, et sous elle son dépôt « rag3db · master · chargé · rag indexé »
-et sa mémoire.
+Témoins navigateur :
+- l'arbre par session, avec un dépôt tenu par une sous-session (le badge des deux côtés) ;
+- le menu qui inverse ;
+- le filtre ;
+- le fil d'Ariane.
