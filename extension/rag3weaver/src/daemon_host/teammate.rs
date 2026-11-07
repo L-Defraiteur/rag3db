@@ -177,7 +177,10 @@ static MAILBOX_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// Les genres qui attendent une réponse (sortis par une ligne `reply_to`), et
 /// ceux qui attendent d'être vus (sortis par `seen`).
 const AWAITS_REPLY: [&str; 3] = ["question", "approval", "proposal"];
-const AWAITS_SEEN: [&str; 3] = ["report", "ended", "delivery"];
+/// Ce qui attend d'être vu : un compte rendu, une fin, une livraison, et une
+/// parole adressée d'un agent à un autre (`message`, `answer` qui porte un `to`) —
+/// le pont (archi) : sans eux, un échange Claude ↔ Codex n'apparaissait jamais.
+const AWAITS_SEEN: [&str; 5] = ["report", "ended", "delivery", "message", "answer"];
 
 impl TeammateFiles {
     pub fn new(dir: PathBuf, key: impl Into<String>) -> Self {
@@ -956,7 +959,24 @@ impl DaemonHost {
         }
         let t = self.tache(parent, task).ok_or("la tâche vient de s'ouvrir et n'est plus là")?;
         let files = self.teammate_files(parent, task)?;
-        let line = files.append_with(from, kind, item, text, extra)?;
+        // **Une réponse va à l'auteur de ce qu'elle répond** (le pont, archi) : une
+        // `answer` sans `to` dont le `reply_to` vise la ligne d'un autre agent
+        // (ni l'équipier ni l'hôte) lui est adressée. `mail reply` ne connaît que
+        // l'id ; c'est la boîte qui sait qui l'a écrit.
+        let mut extra = extra.clone();
+        if kind == "answer" && extra["to"].is_null() {
+            if let Some(r) = extra["reply_to"].as_str() {
+                if let Some(auteur) = files.mailbox().iter().find(|l| l["id"] == r).and_then(|l| l["from"].as_str().map(str::to_string)) {
+                    if !matches!(auteur.as_str(), "teammate" | "host") {
+                        if !extra.is_object() {
+                            extra = json!({});
+                        }
+                        extra["to"] = json!(auteur);
+                    }
+                }
+            }
+        }
+        let line = files.append_with(from, kind, item, text, &extra)?;
         // **D'où part la tâche** (c7, premier essai réel, 7 novembre) : ses
         // déclarations et son code sont ceux d'un commit ; une modification non
         // commitée n'y est pas, et sans le dire on la cherche longtemps.
