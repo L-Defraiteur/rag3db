@@ -235,8 +235,8 @@ fn une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne() {
 
 /// **Le manifeste hors dépôt, le code dans un dépôt** (c7, 7 nov. 2026, sur l'hôte
 /// de Lucie) : la forme exacte de sa configuration. Le manifeste vit dans un dossier
-/// de configuration qu'aucun git ne suit, sa `workspace.root` (en lecture seule)
-/// est la racine d'un dépôt. La tâche s'ouvre : son worktree est une branche
+/// de configuration qu'aucun git ne suit, sa `workspace.root` (en lecture seule,
+/// les écritures permises aux tâches) est la racine d'un dépôt. La tâche s'ouvre : son worktree est une branche
 /// `agent/<nom>` de ce dépôt, sa racine de code est dans ce worktree, sa seconde
 /// instance s'ouvre ; la fermeture retire la branche. Avant le correctif, la
 /// création cherchait le dépôt dans le dossier du manifeste et refusait.
@@ -263,6 +263,7 @@ fn une_tache_s_ouvre_quand_seul_le_code_est_dans_un_depot() {
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
     m["workspace"]["root"] = json!(depot.to_string_lossy());
     m["workspace"]["read_only"] = json!(true);
+    m["workspace"]["task_writes"] = json!(true);
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     assert!(git(&config, &["rev-parse", "--show-toplevel"]).is_err(), "le banc : le manifeste ne doit être dans aucun dépôt");
     let host = DaemonHost::new()
@@ -278,7 +279,7 @@ fn une_tache_s_ouvre_quand_seul_le_code_est_dans_un_depot() {
     assert!(tache.arbre.join("src").join("main.rs").is_file(), "le worktree porte le code");
     let w = tache.workspace.as_ref().expect("le workspace de la tâche");
     assert!(w.racine.starts_with(&tache.arbre), "la racine de code est dans le worktree : {:?}", w.racine);
-    assert!(!w.ecrit, "la racine principale est en lecture seule : la tâche non plus n'écrit pas");
+    assert!(w.ecrit, "task_writes : la tâche écrit dans son worktree");
     assert!(tache.manifest.is_file() && tache.manifest.starts_with(d.path().join("taches")), "{:?}", tache.manifest);
     let ht = host.hosted(&tache.manifest).unwrap();
     host.with_backend(&ht, |_| ()).expect("la seconde instance s'ouvre");
