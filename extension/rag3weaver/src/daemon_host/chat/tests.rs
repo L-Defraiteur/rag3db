@@ -823,3 +823,78 @@ fn sans_outil_de_lecture_la_memoire_dit_pourquoi_la_liste_est_vide() {
         std::thread::sleep(Duration::from_millis(50));
     }
 }
+
+/// Le faux modèle rapide : quarante mots d'un trait, sans pause — le premier
+/// jeton part aussitôt le tour commencé.
+fn rapide() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-rapide", 8192, |turns, opts, sink| {
+            let texte = (0..40).map(|n| format!("mot{n}")).collect::<Vec<_>>().join(" ");
+            MockLlm::new(&texte).generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le premier jeton arrive dans la page** (ticket du 7 novembre 2026,
+/// « l'affichage en direct du chat peut manquer le premier jeton du premier
+/// tour ») : huit fois, une page fraîche envoie son premier tour à un modèle
+/// rapide ; pour chaque tour, la page relève les rangs (`seq`) reçus du flux et
+/// ceux qu'elle a posés dans la bulle. Tous les rangs émis doivent être reçus
+/// et posés, le rang 0 compris. Un rang absent des reçus accuse le flux ; reçu
+/// mais pas posé, la page.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_premier_jeton_d_un_tour_arrive_dans_la_page() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_premier_jeton_d_un_tour_arrive_dans_la_page";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(rapide());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(rapide())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifeste }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let page = format!("{racine}/ide/code/{id}/chat");
+    let mut releves = Vec::new();
+    for essai in 0..8 {
+        n.aller(&page, "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+        n.evaluer(&format!("document.querySelector('#message').value = 'dis vite {essai}'; document.querySelector('#send').click()"));
+        n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour rapide");
+        let releve = n.evaluer(
+            "(() => { const run = [...document.querySelectorAll('article.message.assistant')].at(-1)?.dataset.run; \
+             const t = window.__chatTokens ?? { received: {}, applied: {} }; \
+             return { run, recus: t.received[run] ?? [], poses: t.applied[run] ?? [] }; })()",
+        );
+        releves.push(releve);
+    }
+    let complet = |v: &Value| {
+        let mut rangs: Vec<u64> = v.as_array().map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
+        rangs.sort_unstable();
+        !rangs.is_empty() && rangs.iter().enumerate().all(|(i, &r)| r == i as u64)
+    };
+    let manques: Vec<&Value> = releves.iter().filter(|r| !complet(&r["recus"]) || !complet(&r["poses"])).collect();
+    assert!(
+        manques.is_empty(),
+        "des rangs émis manquent ({} tour(s) sur 8) — absent des reçus : le flux ; reçu mais pas posé : la page : {manques:#?}",
+        manques.len()
+    );
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
