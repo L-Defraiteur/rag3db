@@ -28,6 +28,13 @@ parlent en branches, PR, worktrees, repos attachés ». Donc :
   et branches sous chaque dépôt. **La mémoire** est un enfant de la session, avec son accès
   (chargée, et lue ou non par la session). Les dépôts attachés à aucune session sont en bas, en
   **« disponibles »**.
+- **Tranché avec Lucie (7 novembre, par c7)** : une session (un agent) a deux groupes, **Dépôts**
+  (› worktrees : branche, chargé, rag) et **Sous-sessions** (le même motif, récursif, avec leur
+  état) ; un worktree tenu par une sous-session se voit des deux côtés (un badge) ; un fil
+  d'Ariane, un filtre « actifs seulement », les dépôts « disponibles » en bas, la mémoire enfant de
+  la session ; un menu « par session / par dépôt » qui inverse l'arbre (dépôt › worktree › les
+  sessions qui le tiennent). Les sous-sessions sont les **sous-équipiers** de la page 01 (lot 5) ;
+  aujourd'hui, ce sont les équipiers des tâches de la conversation.
 - (Avant le manifeste de session, une session = une conversation : ses dépôts sont celui de sa
   conversation et ses tâches, sa mémoire celle que son manifeste déclare.)
 - **La liste des dépôts sous une session** : les **dépôts attachés**, puis sous chacun ses worktrees et
@@ -57,7 +64,13 @@ les vues qui les lisent.
       "backend": "<id>", "repo": "rag3db", "branch": "agent/doc", "worktree": "<racine>",
       "loaded": true, "rag": { "state": "indexed" | "indexing" | "absent", "percent": 87 }
     }],
-    "memory": { "backend": "<id>" | null, "rag": true }
+    "memory": { "backend": "<id>" | null, "rag": true },
+    "subsessions": [{
+      "id": "teammate:<parent>/<task>", "name": "<task>", "parent": "<id de la session>",
+      "state": "running" | "waiting" | "ended" | "error",
+      "holds": { "backend": "<id du worktree de la tâche>", "repo": "rag3db", "branch": "agent/<task>" },
+      "subsessions": []
+    }]
   }],
   "available_repos": [{ "backend": "<id>", "repo": "lucivy", "branch": "main", "loaded": false, "rag": { "state": "indexed" } }]
 }
@@ -69,7 +82,12 @@ les worktrees de ses tâches ouvertes ; les sessions MCP de Claude Code n'y entr
 l'identité d'agent à clé stable. `loaded` : le slot du backend est ouvert dans l'hôte (lu sans
 attendre). `rag` se lit dans `index_states` (déjà dans `backends[i].index`) : `indexed` si le texte
 est là, `indexing` avec un pourcentage si un lot est en cours, `absent` sinon. La jauge et les
-fiches écrites d'une session se lisent dans `GET /ide/chat`.
+fiches écrites d'une session se lisent dans `GET /ide/chat`. `subsessions` : aujourd'hui, les
+équipiers des tâches de la conversation (une tâche dont la boîte a une `request`), `state` comme
+`GET /ide/teammate/list`, `holds` le worktree de la tâche — le même `backend` que l'entrée de
+`repos` qui le porte, d'où le badge des deux côtés ; la liste imbriquée reste vide jusqu'aux
+sous-équipiers (lot 5 de la page 01, `Tache.parent_task`). La vue « par dépôt » se calcule dans la
+page depuis ces mêmes données.
 
 ## 1. Pourquoi aujourd'hui un chat = un backend
 
