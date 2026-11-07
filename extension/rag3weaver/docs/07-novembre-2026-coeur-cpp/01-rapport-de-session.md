@@ -38,7 +38,34 @@ La piste donnée par c7 pour hotfixs : la même cause peut faire des demi-arête
 sens dans un bloc entièrement annulé, l'autre dans un bloc partagé) ; hotfixs écrit le témoin
 `LateRelTableRewrites.BothDirectionsStayEqualUnderRolledBackCopyDrains`.
 
+## Le soir : quatre lots de plus
+
+| lot | sur master | ce qu'il corrige |
+|---|---|---|
+| ordre-des-verrous | `5f0b79466` (moteur `e526cc4b6`) | l'interblocage entre la compaction des listes CSR (index puis blocs) et un lecteur qui prend sa génération (blocs puis index) : VectorSearchDuringInsertTest figé une fois sur cinq, et C7_RandomMix/Thread_Crash du banc (40/40 après) |
+| instruction-en-echec | `17a094d12` | une instruction en échec ne condamne plus une transaction en lecture seule ; une interruption vaut pour la requête |
+| projection | `e86d2f688` | PROJECT_GRAPH_* sous READ ONLY, et DROP_PROJECTED_GRAPH honore skip_if_not_exists (l'option du produit, ignorée, condamnait la recherche dense sous l'instantané) |
+| retrait des générations | `b3bc6e479` (moteur `7cd11e5fa`) | les générations précédentes se retirent à chaque point de reprise, dans toutes les tables |
+
+La lib unique de la bascule 43 a été bâtie depuis `17a094d12` et posée par G à 19 h 57 ; la
+projection et le retrait feront la lib ordinaire de demain matin.
+
+Leçons du soir :
+- une suite qui dépasse son délai est un figement jusqu'à preuve du contraire : trois suites
+  « lentes » de l'après-midi étaient l'interblocage ; la pile se prend en relançant sous
+  `LD_PRELOAD=ptracer-any.so`, puis `eu-stack -p` ;
+- `cmake --build --target concurrence_test` ne rebâtit pas l'extension vector : deux passes ont
+  rougi sur la réouverture et ExtensionBuildIdTest pour cette seule raison ; toujours le bâti
+  complet avant un banc ;
+- jamais deux passes produit en même temps sur un target cargo : « failed to write fingerprint »
+  n'est pas un rouge du code ;
+- lire la ligne du témoin, pas la fin de la passe : la projection du 26 octobre était annoncée
+  verte avec son témoin rouge ;
+- un vert de hasard au banc se départage seul (SameRowsFirstCopy : 1 vert sur 11) avant de
+  toucher à known_red, et le fichier va à qui a la mesure.
+
 ## À suivre
 
-Le retrait des générations (v22-retrait-2, à rebaser et rejouer sur le correctif), puis la lib
-unique de la bascule 43 par l'arbre principal, bâtie depuis master avec le correctif.
+Le groupe 1 du cœur : la validation à moitié appliquée (2026-10-10) et l'annulation d'un COPY
+sous un tampon plein (2026-10-18), un témoin rouge par ticket, un seul rejeu, un seul push ;
+puis la durabilité (2026-10-04), puis V2-2c et V2-3.
