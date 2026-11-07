@@ -16,8 +16,9 @@ graph LR
     genre["CreateRefTypeNode(name='doc', description='La section d&#39;un source Markdown, provenance d&#39;un apport : doc:<chemin du source>#<titre de la section>.', forme='doc:<chemin du source>#<titre>', confirm=true, types_entity='RefType')"]
     params["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
+    reglages["RhaiNode(script_id=archive_reglages, inputs='candidates,allow_create,instruction,search_options', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
     split["SplitSections(field='contenu')"]
-    decide["ForEachNode(graph='@graphs/archive_decide.mmd', on_error='report', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
+    decide["ForEachNode(graph='@graphs/archive_decide.mmd', on_error='report')"]
     route["Route(key='kind', routes='none|create|fiche')"]
     write["ForEachNode(graph='@graphs/archive_write.mmd', on_error='report')"]
     create["ForEachNode(graph='@graphs/archive_create.mmd', on_error='report')"]
@@ -25,7 +26,8 @@ graph LR
     refs_new["ForEachNode(graph='@graphs/archive_link.mmd', on_error='report')"]
     genre -->|report:value| params
     params -->|result:record| source
-    params -->|result:text| split
+    params -->|result:value| reglages
+    reglages -->|result:text| split
     split -->|element:elements| decide
     decide -->|results:element| route
     route -->|fiche:elements| write
