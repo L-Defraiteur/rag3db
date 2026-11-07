@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — L'équipier se suit depuis un terminal, même à travers ssh.** `rag3weaver-tty --plain`
+  lance une demande à l'agent de code et écrit au fil de l'eau ses tokens, ses outils et sa boîte.
+  Après une coupure, il reprend là où il en était, sans perte ni doublon (`Last-Event-ID`, prouvé
+  par un flux coupé au milieu d'un run). Il tourne là où est l'hôte, ou sur une autre machine par
+  un tunnel. C'est un crate à part, sans le moteur, et chaque outil dit maintenant ce qu'il a le
+  droit de faire (`policy` dans `describe`). cfc5cc8e8.
 - **7 nov. — Chercher sans avoir ouvert un dossier.** La recherche de l'IDE se tape dès
   l'accueil, sur chaque backend, sur tout l'index ; depuis l'arbre, le dossier courant la
   suit comme un filtre (le `scope` de `search_code`), effaçable d'un clic. Avant, la saisie
