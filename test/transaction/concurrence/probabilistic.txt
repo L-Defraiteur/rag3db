@@ -85,3 +85,9 @@ JournaledCopyDeath.DeathInTheMiddleOfACopyLeavesNothingOfIt
 # 25 octobre, ×0,61, un « known red turned green » à tort dans le compare du cœur. Le défaut reste
 # entier : se juger seul, sous `poste mesure`, avec la charge relevée.
 VectorIndexInsertSlope.CostPerBatchSettles
+#
+# Un rang déplacé pendant un CREATE de l'index vectoriel, trouvé mais pas toujours premier à son
+# nouveau vecteur (ticket 2026-11-07-un-rang-deplace-pendant-un-create-n-est-pas-toujours-rattrape-premier) :
+# le 7 novembre, 1 rouge sur 1 au banc complet et 1 sur 5 en famille répétée sous une charge de 15,
+# 0 sur 10 seul. Sort d'ici dans le commit du correctif (lot G6).
+VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen
