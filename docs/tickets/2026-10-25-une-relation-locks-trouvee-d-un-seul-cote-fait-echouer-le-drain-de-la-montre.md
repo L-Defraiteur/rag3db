@@ -144,6 +144,31 @@ témoin du défaut moteur, et rien ne s'échange.
 trous de colonnes d'une table de liens migrée, on ne migre pas encore une base dont une migration a
 peut-être déjà perdu un sens. La lecture se fait le 26 au matin, en premier.
 
+## Les relevés et le témoin, jusqu'au 7 novembre
+
+**La base neuve, en service depuis le 25 octobre à 23 h 55** (lib 04063ee06), relevée par la même
+méthode sur l'instantané à chaud `releve-7-nov` de G (journal rejoué, lecture seule), après
+douze jours de montre et deux arrêts propres des hôtes (26 octobre à 0 h 44, 7 novembre à
+14 h 49) : **0 écart sur les 18 tables de liens**. LOCKS 512 relations, QUERIES 22 023, MENTIONS
+405 391, DEFINES 83 640, CONSUMES 104 259, Scope_CHUNKED_FROM 111 903. Le point zéro du 25 était
+lui aussi à 0 écart. La réécriture par la montre ne pose donc pas le défaut sous 04063ee06.
+
+**Le témoin** (`test/transaction/late_rel_table_rewrites_test.cpp`, branche `csr-listes-temoin`)
+rejoue le régime en cinq cas, chacun suivi du relevé ancré des deux sens, base ouverte puis
+rouverte :
+
+| Cas | Ce qu'il rejoue | 2a29c10c6 (10 oct.) | 94e21b066 (12 oct.) | 58b46a9bf (avant la bascule) | master |
+|---|---|---|---|---|---|
+| 1 | une table de liens née sur 145 000 nœuds déjà au disque, 300 drains (effacer puis MERGE) vers des destinations chargées, lecteur, points de reprise, colonne ajoutée | 0 écart | 0 écart | 0 écart | 0 écart |
+| 2 | deux écrivains dans les mêmes groupes CSR, l'un annulant un drain sur trois | 0 écart | 0 écart | 0 écart | 0 écart |
+| 3 | huit vies de processus tuées par SIGKILL base ouverte, le journal rejoué à chaque vie | | | 0 écart | 0 écart |
+| 4 | des drains par COPY de 250 arêtes annulés après écriture (55 annulations), face à 300 MERGE validés | | | 0 écart | 0 écart |
+| 5 | un COPY de relations refusé faute de tampon (128 Mio), puis le filet du crate et le repli par MERGE | | | en cours | en cours |
+
+Aucun moteur n'a rendu de rouge. La piste du bloc entièrement annulé (lot `bloc-annule` du cœur,
+la lecture sale du 7 novembre) donne une lecture passagère, pas une demi-arête durable : le bloc
+est tronqué à zéro ligne, et aucun point de reprise ne l'écrit.
+
 ## Pour avancer
 
 1. Le relevé de la base neuve de G, par la même méthode : zéro écart, ou le défaut se reproduit

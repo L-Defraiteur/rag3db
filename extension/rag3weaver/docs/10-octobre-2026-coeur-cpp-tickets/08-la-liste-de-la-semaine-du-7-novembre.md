@@ -12,9 +12,9 @@ tableau de bord.
 
 | Étape | État |
 |---|---|
-| (B) témoin des demi-arêtes LOCKS/QUERIES (`csr-listes-temoin`) | vert sur quatre moteurs (2a29c10c6, 94e21b066, 58b46a9bf, master) dans ses deux premiers cas ; cas des arrêts brutaux et des drains par COPY annulés en cours à luciepc |
-| Piste du bloc entièrement annulé (lot `bloc-annule` du cœur, 71dc33ec6) | le témoin des COPY annulés doit rougir sur master et verdir sur ce lot, ou il manque encore un ingrédient |
-| Relevé des 18 tables de la base de code de Lucie | sur l'instantané `avant-43` que G prendra à l'arrêt de la bascule 43 ; point zéro le 25 octobre : 0 écart |
+| (B) témoin des demi-arêtes LOCKS/QUERIES (`csr-listes-temoin`) | **vert partout** : cas 1-2 sur quatre moteurs, cas 3-4 (arrêts brutaux, COPY annulés) sur 58b46a9bf et master ; cas 5 (COPY refusé faute de tampon) en cours |
+| Piste du bloc entièrement annulé (lot `bloc-annule` du cœur, 71dc33ec6) | écartée pour (B) : le cas 4 (55 COPY annulés) reste à 0 écart sur master ; la lecture sale est passagère |
+| Relevé des 18 tables de la base de code de Lucie | **fait le 7 novembre** sur l'instantané à chaud `releve-7-nov` : **0 écart sur les 18 tables** après douze jours de montre (point zéro du 25 : 0 écart) |
 | Mesures calmes de (A) | à rebâtir depuis les patchs de `~/.cache/rag3db-tickets-notes` (les arbres de mesure ont été effacés par le banc le 7 au matin) |
 
 ## La liste
