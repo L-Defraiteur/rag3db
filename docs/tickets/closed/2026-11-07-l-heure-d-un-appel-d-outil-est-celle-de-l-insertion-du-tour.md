@@ -1,6 +1,6 @@
 # L'heure d'un appel d'outil est celle de l'insertion du tour, pas celle de l'appel
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — lot « le chat tient l'ordre ».
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot « le chat tient l'ordre ») : `at_ms` posé par la boucle de l'agent au départ de chaque appel et au retour de son résultat, écrit avec le tour ; témoin `un_tour_a_deux_outils_garde_l_ordre_et_l_heure_de_ses_appels` (par l'hôte), rouge d'abord
 - **Gravité** : réponse fausse (une heure enregistrée qui ne dit pas quand l'outil a été appelé).
 - **Atteignable en service** : oui, tout tour du chat ou d'un équipier qui appelle des outils.
 - **Touche rag3weaver** : oui (la boucle de l'agent, le journal des runs, le rendu du chat).

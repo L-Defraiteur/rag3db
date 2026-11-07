@@ -1,6 +1,6 @@
 # L'usage du modèle et l'archiviste ne sont pas dans la barre du chat, et le chat ne prend pas la hauteur
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — lot « le chat tient l'ordre ».
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot « le chat tient l'ordre ») : sous chaque conversation de la barre, la jauge du contexte (`context {used, max}` de l'état du chat, le dernier appel sur `Llm::context_len`) et ses compteurs ; les runs à rôle (`role` sur un outil ou une réaction) dans « Tâches de fond » ; le chat prend toute la hauteur. Sur un tour arrêté, la jauge reste sur le dernier tour fini (`run_with` ne rend pas le run partiel). Témoins navigateur (jauge égale à l'état de l'hôte, run à rôle, hauteur à 1 440 et 1 080)
 - **Gravité** : gêne (ce qui compte pour suivre un agent n'est pas visible, ou mal placé).
 - **Atteignable en service** : oui (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`, l'état du chat de l'hôte).

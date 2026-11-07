@@ -1,6 +1,6 @@
 # Un outil déplié dans le chat ne montre que « fait »
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — lot « le chat tient l'ordre ».
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot « le chat tient l'ordre ») : `ToolCallFinished` porte `result_excerpt` (4 Kio), puis le résultat entier se relit dans la session à la fin du tour ; l'outil déplié montre son heure, sa durée et son résultat ; témoin navigateur
 - **Gravité** : réponse fausse à l'écran (le résultat d'un outil existe, la page ne le montre pas).
 - **Atteignable en service** : oui, tout tour du chat qui appelle un outil (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`, l'événement `ToolCallFinished`).
