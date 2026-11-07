@@ -404,11 +404,17 @@ void CSRNodeGroup::append(const Transaction* transaction, const std::vector<colu
     row_idx_t numRows) {
     const auto startRow =
         NodeGroup::append(transaction, columnIDs, chunks, startRowInChunks, numRows);
+    // La liste des blocs avant l'index : voir compactDeadRowsNoLock.
+    ChunkedGroups groups;
+    {
+        const auto lock = chunkedGroups.lock();
+        groups = chunkedGroups.getAllGroups(lock);
+    }
     std::unique_lock lck{csrIndexMtx};
     if (!csrIndex) {
         csrIndex = std::make_shared<CSRIndex>();
     }
-    compactDeadRows(transaction, boundOffsetInGroup);
+    compactDeadRows(transaction, boundOffsetInGroup, groups);
     updateCSRIndex(boundOffsetInGroup, startRow, numRows);
 }
 
@@ -440,7 +446,7 @@ void CSRNodeGroup::clearDeadHints() {
 }
 
 bool CSRNodeGroup::compactDeadRowsNoLock(transaction_t oldestActiveStartTS,
-    offset_t boundOffsetInGroup) {
+    offset_t boundOffsetInGroup, const ChunkedGroups& groups) {
     auto& list = csrIndex->indices[boundOffsetInGroup];
     if (list.isEmpty()) {
         return false;
@@ -450,14 +456,20 @@ bool CSRNodeGroup::compactDeadRowsNoLock(transaction_t oldestActiveStartTS,
     alive.reserve(rows.size());
     bool remaining = false;
     {
-        const auto lock = chunkedGroups.lock();
         for (const auto row : rows) {
             if (row == INVALID_ROW_IDX) {
                 continue;
             }
             auto [chunkIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
                 StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-            const auto chunkedGroup = chunkedGroups.getGroup(lock, chunkIdx);
+            if (chunkIdx >= groups.size()) {
+                // Un bloc ajouté par un autre écrivain après la prise de la liste : la ligne
+                // reste, et la note aussi (la compaction se refera).
+                remaining = true;
+                alive.push_back(row);
+                continue;
+            }
+            const auto* chunkedGroup = groups[chunkIdx].get();
             // Supprimée par une validation au plus tard au plus ancien instantané ouvert :
             // personne ne la voit plus vivante.
             if (chunkedGroup->isDeleted(oldestActiveStartTS, Transaction::DUMMY_TRANSACTION_ID,
@@ -483,12 +495,13 @@ bool CSRNodeGroup::compactDeadRowsNoLock(transaction_t oldestActiveStartTS,
     return remaining;
 }
 
-void CSRNodeGroup::compactDeadRows(const Transaction* transaction, offset_t boundOffsetInGroup) {
+void CSRNodeGroup::compactDeadRows(const Transaction* transaction, offset_t boundOffsetInGroup,
+    const ChunkedGroups& groups) {
     const auto oldestActiveStartTS = transaction->getOldestActiveStartTS();
     if (oldestActiveStartTS == 0 || !takeDeadHint(boundOffsetInGroup)) {
         return;
     }
-    if (compactDeadRowsNoLock(oldestActiveStartTS, boundOffsetInGroup)) {
+    if (compactDeadRowsNoLock(oldestActiveStartTS, boundOffsetInGroup, groups)) {
         noteDeadRow(boundOffsetInGroup);
     }
 }
@@ -509,12 +522,18 @@ void CSRNodeGroup::compactHintedLists(const Transaction* transaction) {
     if (hinted.empty()) {
         return;
     }
+    // La liste des blocs avant l'index : voir compactDeadRowsNoLock.
+    ChunkedGroups groups;
+    {
+        const auto lock = chunkedGroups.lock();
+        groups = chunkedGroups.getAllGroups(lock);
+    }
     std::unique_lock lck{csrIndexMtx};
     if (!csrIndex) {
         return;
     }
     for (const auto offset : hinted) {
-        if (compactDeadRowsNoLock(oldestActiveStartTS, offset)) {
+        if (compactDeadRowsNoLock(oldestActiveStartTS, offset, groups)) {
             noteDeadRow(offset);
         }
     }

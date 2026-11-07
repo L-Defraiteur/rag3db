@@ -375,10 +375,15 @@ private:
     // Sous csrIndexMtx exclusif : la liste du nœud sans les lignes dont la suppression est
     // validée au plus tard à `oldestActiveStartTS`. Rend vrai s'il reste des lignes mortes plus
     // récentes (ou d'une transaction non validée), à reprendre à la prochaine occasion.
+    // groups : la liste des blocs prise par l'appelant AVANT csrIndexMtx. Tout le reste du
+    // moteur prend le verrou des blocs puis l'index (point de reprise, takeGenerationFor) ; la
+    // compaction, appelée sous csrIndexMtx exclusif, ne doit donc jamais prendre le verrou des
+    // blocs (interblocage du 7 novembre 2026 avec un lecteur qui prend sa génération).
     bool compactDeadRowsNoLock(common::transaction_t oldestActiveStartTS,
-        common::offset_t boundOffsetInGroup);
+        common::offset_t boundOffsetInGroup, const ChunkedGroups& groups);
     void compactDeadRows(const transaction::Transaction* transaction,
-        common::offset_t boundOffsetInGroup);
+        common::offset_t boundOffsetInGroup,
+        const ChunkedGroups& groups);
     std::mutex deadHintsMtx;
     std::vector<uint8_t> deadHints; // un octet par nœud du groupe, alloué à la première note
     std::vector<common::offset_t> deadHintList;
