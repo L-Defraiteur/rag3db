@@ -2938,6 +2938,12 @@ impl Backend {
         description
     }
     /// La version des déclarations en service.
+    /// La porte des commandes de ce backend, si son workspace en déclare une.
+    #[cfg(feature = "code")]
+    pub fn garde(&self) -> Option<&Arc<crate::commande::Garde>> {
+        self.garde.as_ref()
+    }
+
     pub fn prepared(&self) -> Arc<PreparedBackend> {
         self.prepared
             .read()

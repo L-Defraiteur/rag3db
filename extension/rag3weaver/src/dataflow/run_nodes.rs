@@ -269,7 +269,7 @@ impl Node for RunCommandNode {
         };
 
         if verdict.decision != Decision::Autorise {
-            let mot = if verdict.decision == Decision::Refuse { "refusée" } else { "en attente" };
+            let tete = if verdict.decision == Decision::Refuse { "**Commande refusée.**".to_string() } else { EN_ATTENTE.to_string() };
             let détail: Vec<String> = verdict
                 .parties
                 .iter()
@@ -278,7 +278,7 @@ impl Node for RunCommandNode {
             return rendre(
                 ctx,
                 format!(
-                    "**Commande {mot}.** {}\n\n{}\n\n_Mode `{:?}`. Une commande refusée ne se \
+                    "{tete} {}\n\n{}\n\n_Mode `{:?}`. Une commande refusée ne se \
                      relance pas telle quelle : changez-la, ou demandez à l'utilisateur._",
                     verdict.motif,
                     détail.join("\n"),
@@ -455,6 +455,11 @@ pub fn tuer_en_fond(poignee: &str, grace: std::time::Duration) -> bool {
 pub fn fin_en_fond(poignee: &str) -> Option<Fin> {
     suivie(poignee).and_then(|s| s.en_fond.fin())
 }
+
+/// **Le début du résultat d'une commande mise en attente** : l'équipier le
+/// reconnaît et pose la question dans sa boîte (`approval`). Une seule
+/// définition, lue des deux côtés.
+pub const EN_ATTENTE: &str = "**Commande en attente.**";
 
 fn rendre(ctx: &mut NodeContext, texte: String) -> Result<(), String> {
     ctx.set_output("result", PortValue::new(serde_json::Value::String(texte)));
