@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Chercher sans avoir ouvert un dossier.** La recherche de l'IDE se tape dès
+  l'accueil, sur chaque backend, sur tout l'index ; depuis l'arbre, le dossier courant la
+  suit comme un filtre (le `scope` de `search_code`), effaçable d'un clic. Avant, la saisie
+  n'apparaissait qu'une fois un dossier ouvert, et ce dossier ne filtrait rien. e2d5c9c88.
 - **7 nov. — L'IDE entier est en React.** Après le cadre, le chat, le fichier et la
   recherche du 25 octobre : les tâches de l'agent et leur relecture avec l'équipier, les
   bilans de session par fiche, l'arbre, le symbole rendu section par section, le graphe, le
