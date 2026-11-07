@@ -201,3 +201,31 @@ Aucune ligne « bloc de N caractères » ne suit.
 993 caractères), qui ne m'est jamais parvenu. Un rejeu hors de Claude Code
 n'injecte rien dans la conversation : le juge ne doit pas le compter comme vu
 par l'agent.
+
+## Tour de 15 h 47 — toujours aucun bloc, et une base de deux fiches
+
+**Ce que le bloc a montré :** rien, pour la deuxième fois.
+
+- Le journal du hook : `15:47:12 recall_fiches : /call : l'hôte
+  http://127.0.0.1:7970 ne répond pas : timeout: global`, puis aucune ligne
+  « bloc ».
+- À une minute de la précédente, on ne peut plus parler d'un hôte froid.
+- `/sante` répond en 0,3 ms ; la charge du portable est à 11,4.
+
+**Le rappel fait à la main** par le MCP memoire-longue, sur une phrase du
+message de c7, a répondu en 0,36 s. Le moteur répond vite : c'est le chemin
+`/call` du hook vers 7970 qui dépasse ses 5 s.
+
+**Il a rendu 2 résultats en tout :**
+
+- « régime GPU », ★ 0,0163 ;
+- « hooks-essai », ★ 0,0162.
+
+Le plein texte dit « rien de probant », avec 0,68 contre un seuil de 0,88.
+La base `memory` du hook ne compte que ces deux fiches. Elles revenaient donc
+à chaque tour faute d'autre chose, pas parce qu'elles étaient en rapport.
+
+**Ce que j'en tire (proposé à c7) :**
+
+- cacher les fiches sous un seuil de score plutôt que les dire « en rapport » ;
+- mesurer l'essai sur une base peuplée, sinon le juge mesure une base vide.
