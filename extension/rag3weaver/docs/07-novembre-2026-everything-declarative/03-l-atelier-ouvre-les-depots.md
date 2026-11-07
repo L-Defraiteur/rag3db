@@ -20,8 +20,9 @@ moment ».
   - `open_branch {repo, branch, from?}` : un worktree frère sur cette branche (créée depuis `from`
     si elle n'existe pas) ;
   - `fetch {repo}`, `pull {repo, worktree}` ;
-  - `new_code_project {name, path?, remote?}` : `git init`, un premier commit, le remote s'il est
-    dit ;
+  - `new_code_project {name, path?, git?, remote?}` : un dossier de projet ; `git init` et un
+    premier commit **seulement si on le lui dit** (`git: true`, ou un `remote`) — Lucie : « il doit
+    pouvoir aussi démarrer un truc même sans git du tout » ;
   - `new_rag3weaver_project {name, kind}` : **pas encore** — il rend « seuls les projets de code
     se créent pour l'instant » ; la consigne de l'atelier dit de demander le genre de projet quand
     la demande est ambiguë, avant d'appeler l'un ou l'autre.
@@ -37,6 +38,10 @@ moment ».
   pose son manifeste et l'ouvre comme pour `attach_repo`.
 - **Plusieurs worktrees par dépôt** : une session tient N worktrees, plusieurs dans le même dépôt
   s'il le faut (la page 02 disait « une tâche par dépôt » : corrigé, c'est un lot de worktrees).
+
+**Sans git** : un dossier sans dépôt s'attache aussi (`declare_repo` sur un dossier) ; ses tâches
+sont alors des dossiers à elles (une copie de la racine), et leurs changements se relisent par
+différence de dossiers ; `git_init {repo}` le transforme en dépôt sur demande.
 
 ## 2. Un worktree attaché devient un backend de code, à la volée
 

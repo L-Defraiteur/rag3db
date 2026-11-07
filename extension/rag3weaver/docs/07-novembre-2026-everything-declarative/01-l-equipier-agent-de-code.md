@@ -48,6 +48,12 @@ anglais, le reste en français.
   `step_done` porte `{item, succeeded, done, remaining}`.
 - **Le hook UserPromptSubmit** (`claude_code_hook.rs:727-…`, archi) ne lit ni l'équipier ni sa boîte.
 
+**Une tâche est un espace de travail** (Lucie, 7 novembre : « il doit pouvoir aussi démarrer un
+truc même sans git du tout ») : un worktree sur une branche quand la racine du workspace est un
+dépôt git, un dossier à elle (une copie de la racine) sinon ; ses propositions se relisent par
+différence de dossiers, et `git_init` en fait un dépôt sur demande. Le correctif de la création
+de tâche (la racine prise à `workspace.root`, puis sans git) est porté par hooks-essai.
+
 ## 1. Les outils standards, complets et étanches
 
 **Ce que l'équipier voit, par source de défaillance** :
