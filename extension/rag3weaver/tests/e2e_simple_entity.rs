@@ -2032,3 +2032,63 @@ fn une_ingestion_dit_ce_qu_elle_a_change() {
     assert_eq!(flush.failed, 1, "la transition open -> closed n'est pas déclarée : {flush:?}");
     assert!(changees!(bus).is_empty(), "une ligne refusée n'a rien changé");
 }
+
+/// **Le filtre du signal creux porte sur les bons morceaux** (ticket
+/// 2026-11-07-le-filtre-du-signal-creux-compare-des-offsets-de-parents-a-des-offsets-de-morceaux,
+/// relevé par l'arbre principal). Trois produits, deux morceaux chacun (description, détails), la
+/// requête dans chacun ; un filtre qui n'admet que « Beta ». Avant : le filtre était résolu en
+/// offsets de parents et passé tel quel à la poignée creuse, rangée par offsets de morceaux — le
+/// parent 1 (Beta) admettait le morceau 1 (les détails d'Alpha). Après : le seul signal creux ne rend
+/// que des morceaux de Beta, et les deux.
+#[test]
+#[ignore]
+fn le_filtre_du_signal_creux_porte_sur_les_morceaux_du_parent_admis() {
+    use rag3weaver::filter::{FilterCondition, FilterValue};
+
+    let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    load_extensions(boxed.as_ref());
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), make_empty_config(4));
+    catalog.set_sparse_embedder(Arc::new(rag3weaver::embedder::MockSparseEmbedder::new()));
+    catalog.initialize().unwrap();
+    let mut config = make_product_config();
+    config.signals = SearchSignals::BM25 | SearchSignals::SPARSE;
+    catalog.register_entity("Product", config).unwrap();
+    catalog
+        .ingest_entities(
+            "Product",
+            vec![
+                make_product("Alpha", "kernel scheduler alpha notes", "kernel scheduler alpha details", 1.0),
+                make_product("Beta", "kernel scheduler beta notes", "kernel scheduler beta details", 2.0),
+                make_product("Gamma", "kernel scheduler gamma notes", "kernel scheduler gamma details", 3.0),
+            ],
+        )
+        .unwrap();
+
+    let catalog = Arc::new(Mutex::new(catalog));
+    let response = Catalog::rechercher(
+        &catalog,
+        "Product",
+        "kernel scheduler",
+        SearchOptions {
+            consistency: Consistency::Immediate,
+            signals: Some(SearchSignals::SPARSE),
+            filter_condition: Some(FilterCondition::Field {
+                key: "name".into(),
+                value: FilterValue::Direct(CypherValue::String("Beta".into())),
+            }),
+            limit: 10,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let noms: Vec<String> = response
+        .results
+        .iter()
+        .filter_map(|r| r.data.as_ref().and_then(|d| d.get("name")).and_then(|v| v.as_str()).map(String::from))
+        .collect();
+    let textes: Vec<String> = response.results.iter().filter_map(|r| r.chunk.as_ref().map(|c| c.text.clone())).collect();
+    eprintln!("[filtre du creux] {} résultat(s) : {noms:?} — morceaux {textes:?}", response.results.len());
+    assert!(!noms.is_empty(), "le creux trouve sous le filtre : {:?}", response.meta);
+    assert!(noms.iter().all(|n| n == "Beta"), "le seul signal creux ne rend que Beta : {noms:?} — {textes:?}");
+}

@@ -1720,7 +1720,8 @@ impl Node for SparseSearchNode {
         // n'est jamais perdant — au pire 30 % au-dessus d'une recherche
         // complète, gagnant sous 1 % du corpus (doc 09 §2.3). On le pose
         // sans arrière-pensée.
-        let allowed = allowed_ids_for(ctx, "SparseSearchNode", &target, &options);
+        // La poignée creuse est rangée par morceaux : le filtre aussi.
+        let allowed = allowed_chunk_ids_for(ctx, "SparseSearchNode", &target, &options);
 
         // Try dual embedder first, then sparse embedder
         let dual_emb = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
@@ -2888,6 +2889,29 @@ fn allowed_ids_for(
     target: &SearchTarget,
     options: &crate::search::SearchOptions,
 ) -> Option<Vec<u64>> {
+    allowed_ids_in(ctx, node_type, target, options, None)
+}
+
+/// **Le même filtre, en offsets des morceaux** : pour un index rangé par
+/// morceaux (le creux, la poignée de `chunk_table`). Les offsets des parents
+/// n'y désignent rien de juste (ticket du 7 novembre 2026, relevé par 73).
+fn allowed_chunk_ids_for(
+    ctx: &mut NodeContext,
+    node_type: &str,
+    target: &SearchTarget,
+    options: &crate::search::SearchOptions,
+) -> Option<Vec<u64>> {
+    let chunks = target.chunk_table.clone();
+    allowed_ids_in(ctx, node_type, target, options, Some(&chunks))
+}
+
+fn allowed_ids_in(
+    ctx: &mut NodeContext,
+    node_type: &str,
+    target: &SearchTarget,
+    options: &crate::search::SearchOptions,
+    chunk_table: Option<&str>,
+) -> Option<Vec<u64>> {
     let condition = options.filter_condition.as_ref()?;
     let Some(catalog) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() else {
         ctx.warn(&format!("{node_type}: un filtre est demandé mais le service 'catalog' manque — la recherche n'est pas restreinte"));
@@ -2895,9 +2919,11 @@ fn allowed_ids_for(
     };
     // `parent_table` : la table qui porte les lignes, `MaKB_Index` pour une
     // base de connaissances — voir `ResolveParentNode`.
-    let resolved = match vue_de(ctx) {
-        Some(v) => v.forme().resolve_filter_to_ids(&target.parent_table, condition, target),
-        None => catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target), // L4 : repli sans vue
+    let resolved = match (vue_de(ctx), chunk_table) {
+        (Some(v), None) => v.forme().resolve_filter_to_ids(&target.parent_table, condition, target),
+        (Some(v), Some(chunks)) => v.forme().resolve_filter_to_chunk_ids(&target.parent_table, chunks, condition, target),
+        (None, None) => catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target), // L4 : repli sans vue
+        (None, Some(chunks)) => catalog.lock().unwrap().resolve_filter_to_chunk_ids(&target.parent_table, chunks, condition, target), // L4 : repli sans vue
     };
     match resolved {
         Ok(ids) => ids,
