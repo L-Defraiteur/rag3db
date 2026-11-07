@@ -759,3 +759,115 @@ fn a_step_without_step_done_reports_and_the_request_says_where_the_task_starts()
     // Le superviseur le voit.
     assert!(files.pending_for("c7").iter().any(|l| l["id"] == rapport["id"]), "le report attend c7");
 }
+
+/// **Les commandes par la porte déclarée** (page 07-novembre-2026-everything-declarative/01,
+/// lot 2) : dans une tâche d'un arbre inscrit (`commands: approval`), l'équipier a
+/// `run_command` ; une commande de la liste sûre passe (`ls`), une autre est mise en attente et
+/// sa question part dans la boîte (`approval`, la commande) ; le « oui » du superviseur l'accorde,
+/// et au pas suivant la même commande passe, dans le worktree de la tâche.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_teammate_runs_commands_through_the_declared_gate_and_asks_for_the_rest() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let vus = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let vus = vus.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let vus = vus.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if let Some(r) = results.last() {
+                    vus.lock().unwrap().push(r.clone());
+                }
+                let accorde = last_user(turns).contains("commande accordée") || turns.iter().any(|t| t.content.contains("commande accordée"));
+                let run = |ligne: &str| ("run_command", json!({ "command": ligne }));
+                match (accorde, results.len()) {
+                    (false, 0) => answer(turns, opts, sink, "", calls(&[run("ls")])),
+                    (false, 1) => answer(turns, opts, sink, "", calls(&[run("echo accorde-moi")])),
+                    (false, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": false, "done": "ls joué", "remaining": "echo attend l'accord" }))])),
+                    (true, 0) => answer(turns, opts, sink, "", calls(&[run("echo accorde-moi")])),
+                    (true, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "echo joué après l'accord", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Liste le dépôt, puis dis bonjour par echo.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let attendre = |quoi: &str, ok: &dyn Fn(&[Value]) -> bool| -> Vec<Value> {
+        let borne = Instant::now() + Duration::from_secs(90);
+        loop {
+            let b = files.mailbox();
+            if ok(&b) {
+                return b;
+            }
+            assert!(Instant::now() < borne, "en 90 s : {quoi} — {b:#?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    let boite = attendre("la question de l'accord", &|b| b.iter().any(|l| l["kind"] == "approval"));
+    let question = boite.iter().find(|l| l["kind"] == "approval").unwrap().clone();
+    assert_eq!(question["command"], "echo accorde-moi", "{question}");
+    assert!(files.pending_for("c7").iter().any(|l| l["id"] == question["id"]), "la question attend le superviseur");
+    {
+        let vus = vus.lock().unwrap();
+        assert!(!vus[0].contains("en attente") && !vus[0].contains("refusée"), "ls passe par la liste sûre : {}", vus[0]);
+        assert!(vus[1].contains(crate::dataflow::run_nodes::EN_ATTENTE) && vus[1].contains("dans la boîte du superviseur"), "{}", vus[1]);
+    }
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": question["id"], "approved": true })).expect("le oui");
+    let boite = attendre("la commande jouée après l'accord", &|b| b.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true));
+    assert!(boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().starts_with("commande accordée pour la tâche : echo accorde-moi")), "{boite:#?}");
+    let vus = vus.lock().unwrap();
+    assert!(vus.iter().any(|r| r.contains("accorde-moi") && !r.contains("en attente")), "echo a tourné après l'accord : {vus:#?}");
+}
+
+/// **Une ligne postée pendant le dernier pas ne se perd pas** (8 novembre 2026, la passe du
+/// lot des commandes) : le oui du superviseur arrivait entre le pas et la fin du lancement,
+/// la boucle finissait sans le lire, et la poste ne relançait rien (l'équipier était encore
+/// en route). Ici, pendant son unique pas, le superviseur écrit une consigne ; le pas se
+/// déclare fini ; l'équipier doit faire un second pas qui la lit.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_line_posted_during_the_last_step_is_read_before_the_teammate_ends() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let boite: Arc<Mutex<Option<super::teammate::TeammateFiles>>> = Arc::new(Mutex::new(None));
+    let model: ChatModel = {
+        let boite = boite.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let boite = boite.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let fini = |done: &str| calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": done, "remaining": "" }))]);
+                if last_user(turns).contains("consigne tardive") {
+                    return answer(turns, opts, sink, "", fini("consigne lue"));
+                }
+                if let Some(f) = boite.lock().unwrap().as_ref() {
+                    f.append("c7", "instruction", None, "consigne tardive : relis le README").unwrap();
+                }
+                answer(turns, opts, sink, "", fini("premier pas"))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    // La boîte d'abord (le faux modèle y écrit), puis la request qui lance l'équipier.
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    *boite.lock().unwrap() = Some(host.teammate_files(&h.id, "doc").unwrap());
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Lis le dépôt.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let borne = Instant::now() + Duration::from_secs(90);
+    loop {
+        let b = files.mailbox();
+        if b.iter().any(|l| l["kind"] == "step_done" && l["done"] == "consigne lue") {
+            break;
+        }
+        assert!(Instant::now() < borne, "en 90 s, la consigne écrite pendant le pas n'a pas été lue : {b:#?}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
