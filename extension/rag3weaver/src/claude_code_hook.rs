@@ -31,7 +31,7 @@ use std::time::Duration;
 
 /// Les événements que la commande connaît. Un autre est accepté et journalisé,
 /// jamais une erreur : Claude Code en ajoutera.
-pub const EVENEMENTS: [&str; 5] = ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop"];
+pub const EVENEMENTS: [&str; 6] = ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop", "PostToolUse"];
 
 /// Ce que Claude Code donne à la commande, dans la forme relevée le 7 novembre
 /// 2026 (page 01 §1). Les champs qu'un événement n'a pas restent vides.
@@ -116,10 +116,19 @@ pub struct Reglage {
     /// (`rappel_du_prompt`) : le plein texte flou coûte selon le nombre de
     /// termes (3 ter).
     pub recall_max_words: usize,
+    /// Le juge de pertinence du rappel différé (3 ter b) : un appel structuré
+    /// qui ôte les candidats hors sujet, jamais n'en ajoute.
+    pub recall_judge: bool,
+    /// Lancer le fils détaché du rappel différé. Posé par la commande ; les
+    /// témoins jouent le fils à la main. Jamais lu dans le fichier.
+    pub fond: bool,
     /// Un rejeu hors session : rien ne s'écrit (ni mémoire, ni run, ni marque).
     /// Posé par `--rejouer`, jamais lu dans le fichier.
     pub rejeu: bool,
     pub journal: PathBuf,
+    /// Le fichier d'où ce réglage a été lu (le fils du rappel différé le relit).
+    /// Jamais écrit dans le fichier.
+    pub chemin_du_reglage: Option<PathBuf>,
     /// Le dossier des gabarits de blocs (`<clé>.md`), relu à chaque appel :
     /// corriger un texte y suffit, aucune session ne redémarre.
     pub templates_dir: PathBuf,
@@ -143,6 +152,9 @@ impl Reglage {
             // des runs, 7 novembre) ; 1 s laisse plus de dix fois la marge.
             recall_timeout_ms: 1_000,
             recall_max_words: 10,
+            recall_judge: true,
+            fond: false,
+            chemin_du_reglage: None,
             rejeu: false,
             journal: maison.join(".local/state/rag3weaver/hooks.log"),
             templates_dir: maison.join(".config/rag3weaver/hooks"),
@@ -173,9 +185,10 @@ impl Reglage {
                 "timeout_ms" => r.timeout_ms = val.as_u64().ok_or("hooks.json : `timeout_ms` est un entier")?,
                 "recall_timeout_ms" => r.recall_timeout_ms = val.as_u64().ok_or("hooks.json : `recall_timeout_ms` est un entier")?,
                 "recall_max_words" => r.recall_max_words = val.as_u64().ok_or("hooks.json : `recall_max_words` est un entier")? as usize,
+                "recall_judge" => r.recall_judge = val.as_bool().ok_or("hooks.json : `recall_judge` est un booléen")?,
                 "journal" => r.journal = PathBuf::from(val.as_str().ok_or("hooks.json : `journal` est un chemin")?),
                 "templates_dir" => r.templates_dir = PathBuf::from(val.as_str().ok_or("hooks.json : `templates_dir` est un chemin")?),
-                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, recall_timeout_ms, recall_max_words, journal, templates_dir)")),
+                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, recall_timeout_ms, recall_max_words, recall_judge, journal, templates_dir)")),
             }
         }
         if let Ok(v) = std::env::var("RAG3WEAVER_HOOK_CONTEXT_TOKENS") {
@@ -186,11 +199,13 @@ impl Reglage {
 
     /// Lit le fichier ; absent, les défauts.
     pub fn charger(chemin: &Path) -> Result<Self, String> {
-        match std::fs::read_to_string(chemin) {
+        let mut r = match std::fs::read_to_string(chemin) {
             Ok(t) => Self::lire(&t),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Self::lire("{}"),
             Err(e) => Err(format!("{} : {e}", chemin.display())),
-        }
+        }?;
+        r.chemin_du_reglage = Some(chemin.to_path_buf());
+        Ok(r)
     }
 
     /// Le JSON que le script d'installation pose : les défauts, écrits.
@@ -207,6 +222,7 @@ impl Reglage {
             "timeout_ms": self.timeout_ms,
             "recall_timeout_ms": self.recall_timeout_ms,
             "recall_max_words": self.recall_max_words,
+            "recall_judge": self.recall_judge,
             "journal": self.journal,
             "templates_dir": self.templates_dir,
         })
@@ -464,6 +480,16 @@ pub fn repondre(e: &Evenement, reglage: &Reglage, hote: Result<&dyn Hote, String
     let session = if e.session_id.is_empty() { "?" } else { e.session_id.as_str() };
     if !e.connu() {
         r.journal.push(format!("{} {session} : événement inconnu, ignoré", e.nom));
+        return r;
+    }
+    // `PostToolUse` passe à chaque outil : il ne lit que le rappel différé que
+    // le fils a rangé, sans hôte (3 ter b).
+    if e.nom == "PostToolUse" {
+        let bloc = rappel_du_tour_d_avant(e, reglage, &mut r.journal);
+        if !bloc.trim().is_empty() {
+            r.bloc = borner(&format!("[mémoire]\n{}", bloc.trim_end()), reglage.prompt_block_chars);
+            r.journal.push(format!("PostToolUse {session} : bloc de {} caractères", r.bloc.chars().count()));
+        }
         return r;
     }
     let h = match hote {
@@ -915,6 +941,176 @@ impl EtatDuRappel {
     }
 }
 
+// ─── Le rappel différé et son juge (3 ter b) ─────────────────────────────────
+
+fn chemin_du_fond(reglage: &Reglage, session_id: &str, quoi: &str) -> PathBuf {
+    chemin_de_l_etat(reglage, session_id).with_extension(format!("{quoi}.json"))
+}
+
+/// **Confie le rappel au fils détaché** : la tâche est écrite à côté de l'état
+/// de la session, puis `hook --rappel-differe <tâche>` part, détaché de son
+/// groupe de processus, entrée et sorties fermées. Jamais en rejeu ; coupé hors
+/// de la commande (`reglage.fond`), où les témoins le jouent à la main.
+fn confier_au_fond(e: &Evenement, reglage: &Reglage, requete: &str, candidats: Option<Vec<Value>>, tour: u64, journal: &mut Vec<String>) {
+    if reglage.rejeu || e.session_id.is_empty() {
+        return;
+    }
+    let tache = json!({
+        "session_id": e.session_id,
+        "tour": tour,
+        "requete": requete,
+        "prompt": crate::rappel_du_prompt::nettoyer(e.prompt.as_deref().unwrap_or("")).chars().take(2_000).collect::<String>(),
+        "candidats": candidats,
+        "config": reglage.chemin_du_reglage,
+    });
+    let chemin = chemin_du_fond(reglage, &e.session_id, "tache");
+    if let Err(err) = std::fs::create_dir_all(chemin.parent().unwrap_or(Path::new("."))).and_then(|_| std::fs::write(&chemin, tache.to_string())) {
+        journal.push(format!("fond : la tâche ne s'écrit pas ({err})"));
+        return;
+    }
+    if !reglage.fond {
+        journal.push(format!("fond : tâche écrite ({}), fils coupé hors de la commande", chemin.display()));
+        return;
+    }
+    let lance = std::env::current_exe().map_err(|e| e.to_string()).and_then(|exe| {
+        use std::os::unix::process::CommandExt;
+        std::process::Command::new(exe)
+            .args(["hook", "--rappel-differe"])
+            .arg(&chemin)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .process_group(0)
+            .spawn()
+            .map_err(|e| e.to_string())
+    });
+    match lance {
+        Ok(fils) => journal.push(format!("fond : rappel confié au fils {}", fils.id())),
+        Err(err) => journal.push(format!("fond : le fils ne part pas ({err})")),
+    }
+}
+
+/// **Le verdict du juge** : ce qu'il garde et pourquoi. Il ôte, il n'invente
+/// rien : un nom qu'il rend sans l'avoir reçu est jeté.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Jugement {
+    pub pertinent: bool,
+    pub pourquoi: String,
+    pub gardes: Vec<String>,
+}
+
+const SCHEMA_DU_JUGE: &str = r#"{"type":"object","properties":{"pertinent":{"type":"boolean"},"pourquoi":{"type":"string"},"items_gardes":{"type":"array","items":{"type":"string"}}},"required":["pertinent","pourquoi","items_gardes"],"additionalProperties":false}"#;
+
+/// **Juge les candidats d'un rappel** contre le prompt (nettoyé) : un appel
+/// structuré, température nulle. Lucie : « ne pas le flooder » ; le juge ne
+/// laisse passer que ce qui sert à ce tour-ci.
+pub fn juger(llm: &dyn crate::llm::Llm, prompt: &str, candidats: &[Value]) -> Result<Jugement, String> {
+    use crate::llm::{GenOptions, ResponseFormat, StringSink, Turn};
+    let liste = candidats.iter().map(|c| format!("- « {} » : {}", c["name"].as_str().unwrap_or("?"), premiere_ligne(c["about"].as_str().unwrap_or(""), 200))).collect::<Vec<_>>().join("\n");
+    let systeme = "Tu juges, pour un agent de code, quelles fiches de sa mémoire servent à son tour présent. Tu lis son message et les fiches candidates (nom et résumé). Tu gardes seulement celles qui l'aident à répondre à CE message ; dans le doute, tu ôtes. Tu n'inventes aucun nom : items_gardes ne contient que des noms de la liste, à l'identique. pertinent vaut false si tu n'en gardes aucune. pourquoi tient en une phrase. Réponds en JSON.";
+    let utilisateur = format!("Message de l'agent :\n{}\n\nFiches candidates :\n{liste}", prompt.chars().take(2_000).collect::<String>());
+    let schema: Value = serde_json::from_str(SCHEMA_DU_JUGE).map_err(|e| e.to_string())?;
+    let opts = GenOptions::default().with_response_format(ResponseFormat::strict_schema("juge_du_rappel", schema)).with_temperature(0.0).with_max_tokens(400);
+    let mut sink = StringSink::default();
+    llm.generate(&[Turn::system(systeme), Turn::user(&utilisateur)], &opts, &mut sink).map_err(|e| format!("juge : {e}"))?;
+    let v: Value = serde_json::from_str(sink.text.trim()).map_err(|e| format!("juge : réponse illisible ({e}) : {}", premiere_ligne(&sink.text, 120)))?;
+    let connus: HashSet<&str> = candidats.iter().filter_map(|c| c["name"].as_str()).collect();
+    let gardes: Vec<String> = v["items_gardes"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).filter(|n| connus.contains(n)).map(str::to_string).collect();
+    Ok(Jugement { pertinent: v["pertinent"].as_bool().unwrap_or(false) && !gardes.is_empty(), pourquoi: v["pourquoi"].as_str().unwrap_or("").to_string(), gardes })
+}
+
+/// Le modèle du juge : celui du régime (Vertex, `GOOGLE_CLOUD_PROJECT`), s'il y en a un.
+fn modele_du_juge() -> Option<std::sync::Arc<dyn crate::llm::Llm>> {
+    #[cfg(feature = "openai-llm")]
+    {
+        crate::regime::modele_agentique_nomme("juge du rappel").map(|(llm, _)| std::sync::Arc::new(llm) as std::sync::Arc<dyn crate::llm::Llm>)
+    }
+    #[cfg(not(feature = "openai-llm"))]
+    {
+        None
+    }
+}
+
+/// **Le fils du rappel différé** : lit sa tâche, refait le rappel s'il le faut
+/// (délai long), juge les candidats, range le résultat pour le prochain outil
+/// ou le prochain tour. Toujours une ligne de journal, marquée `[fond]`.
+pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, juge: Option<&dyn crate::llm::Llm>) -> Vec<String> {
+    let mut journal = Vec::new();
+    let Some(t) = std::fs::read_to_string(tache).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else {
+        journal.push(format!("[fond] tâche illisible : {}", tache.display()));
+        return journal;
+    };
+    let _ = std::fs::remove_file(tache);
+    let session = t["session_id"].as_str().unwrap_or("").to_string();
+    let requete = t["requete"].as_str().unwrap_or("").to_string();
+    let debut = std::time::Instant::now();
+    let candidats: Vec<Value> = match t["candidats"].as_array() {
+        Some(c) => c.clone(),
+        None => {
+            let Some(h) = hote else {
+                journal.push(format!("[fond] {session} : pas d'hôte pour refaire le rappel"));
+                return journal;
+            };
+            match h.appeler_borne("recall_fiches", json!({ "query": requete, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), Duration::from_secs(30)) {
+                Ok(v) => v["result"]["result"].as_array().into_iter().flatten().filter_map(|x| x["data"]["name"].as_str().map(|n| json!({ "name": n, "about": x["data"]["about"].as_str().unwrap_or(""), "score": x["chunk"]["score"].as_f64().unwrap_or(0.0) }))).collect(),
+                Err(err) => {
+                    journal.push(format!("[fond] {session} : rappel en {} ms : {err}", debut.elapsed().as_millis()));
+                    return journal;
+                }
+            }
+        }
+    };
+    journal.push(format!("[fond] {session} : rappel « {requete} » en {} ms, {} candidat(s)", debut.elapsed().as_millis(), candidats.len()));
+    let (gardes, verdict) = match (juge, reglage.recall_judge, candidats.is_empty()) {
+        (_, _, true) => (Vec::new(), json!(null)),
+        (Some(llm), true, false) => match juger(llm, t["prompt"].as_str().unwrap_or(""), &candidats) {
+            Ok(j) => {
+                journal.push(format!("[fond] juge : {} candidat(s), {} gardé(s) — {}", candidats.len(), j.gardes.len(), j.pourquoi));
+                let g: Vec<Value> = candidats.iter().filter(|c| c["name"].as_str().is_some_and(|n| j.pertinent && j.gardes.iter().any(|x| x == n))).cloned().collect();
+                (g, json!({ "pertinent": j.pertinent, "pourquoi": j.pourquoi }))
+            }
+            Err(err) => {
+                journal.push(format!("[fond] {err} — rien rendu"));
+                (Vec::new(), json!({ "erreur": err }))
+            }
+        },
+        _ => {
+            journal.push("[fond] sans juge (aucun modèle, ou recall_judge à false) : candidats rendus tels quels".into());
+            (candidats.clone(), json!(null))
+        }
+    };
+    let resultat = json!({ "tour": t["tour"], "requete": requete, "gardes": gardes, "juge": verdict });
+    let _ = std::fs::write(chemin_du_fond(reglage, &session, "differe"), resultat.to_string());
+    journal
+}
+
+/// **Le rappel du tour d'avant**, s'il est rangé : rendu une fois, sous le
+/// déjà-vu de la session, puis effacé.
+fn rappel_du_tour_d_avant(e: &Evenement, reglage: &Reglage, journal: &mut Vec<String>) -> String {
+    let chemin = chemin_du_fond(reglage, &e.session_id, "differe");
+    let Some(v) = std::fs::read_to_string(&chemin).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { return String::new() };
+    if reglage.rejeu {
+        return String::new();
+    }
+    let _ = std::fs::remove_file(&chemin);
+    let mut etat = EtatDuRappel::lire(reglage, &e.session_id);
+    let mut neuves = Vec::new();
+    for g in v["gardes"].as_array().into_iter().flatten() {
+        let (n, a) = (g["name"].as_str().unwrap_or(""), g["about"].as_str().unwrap_or(""));
+        if n.is_empty() || matches!(etat.statut(n, &empreinte_de_fiche(n, a)), Statut::Deja) {
+            continue;
+        }
+        etat.rendre(n, &empreinte_de_fiche(n, a));
+        neuves.push(format!("« {n} »{}", if a.is_empty() { String::new() } else { format!(" ({})", premiere_ligne(a, 80)) }));
+    }
+    journal.push(format!("rappel du tour d'avant : {} rendu(s){}", neuves.len(), v["juge"]["pourquoi"].as_str().map(|p| format!(" — juge : {p}")).unwrap_or_default()));
+    if neuves.is_empty() {
+        return String::new();
+    }
+    etat.ecrire(reglage, &e.session_id);
+    format!("Rappel du tour d'avant (requête « {} ») : {} — `get_fiche` pour lire.\n", v["requete"].as_str().unwrap_or(""), neuves.join(" ; "))
+}
+
 // ─── UserPromptSubmit ────────────────────────────────────────────────────────
 
 fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut Vec<String>) -> String {
@@ -953,6 +1149,9 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
     // Les fiches que le prompt rappelle : une requête de mots-clés tirée du
     // prompt (3 ter), jamais le prompt entier ; rien de ce que la session a
     // déjà reçu.
+    // Le rappel du tour d'avant, s'il est arrivé après son tour et qu'aucun
+    // `PostToolUse` ne l'a rendu.
+    b.push_str(&rappel_du_tour_d_avant(e, reglage, journal));
     let mut etat = EtatDuRappel::lire(reglage, &e.session_id);
     etat.tour += 1;
     let mots = e.prompt.as_deref().map(|p| crate::rappel_du_prompt::requete_de_rappel(p, reglage.recall_max_words, &etat.vocabulaire())).unwrap_or_default();
@@ -1003,6 +1202,10 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 // si tout est connu, silence complet.
                 let mut neuves = Vec::new();
                 let mut deja = 0;
+                // Une échelle brute ne se trie pas à bon marché : les candidats
+                // neufs vont au juge, en fond, et le bloc jugé tombe au premier
+                // outil (3 ter b). Sans juge, ils sont rendus tels quels.
+                let au_juge = !normalisee && reglage.recall_judge;
                 for g in &gardees {
                     match etat.statut(&g.0, &empreinte_de_fiche(&g.0, &g.1)) {
                         Statut::Deja => deja += 1,
@@ -1011,7 +1214,12 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                     }
                 }
                 raisons.push(format!("déjà rendu : {deja}, neuf : {}", neuves.len()));
-                if neuves.is_empty() {
+                if au_juge && !neuves.is_empty() {
+                    let candidats: Vec<Value> = neuves.iter().map(|((n, a, sc), _)| json!({ "name": n, "about": a, "score": sc })).collect();
+                    raisons.push(format!("{} candidat(s) confiés au juge, en fond", candidats.len()));
+                    confier_au_fond(e, reglage, &requete, Some(candidats), etat.tour, journal);
+                    neuves.clear();
+                } else if neuves.is_empty() {
                     raisons.push("silence".into());
                 } else {
                     let echelle = if normalisee { "similarité du meilleur signal, de 0 à 1 — pas le rang fusionné de `recall_fiches`" } else { "score brut du meilleur signal, sans seuil" };
@@ -1028,7 +1236,8 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 let lent = err.contains("timeout") || err.contains("ne répond pas");
                 journal.push(format!("recall_fiches en {} ms : {err}", debut.elapsed().as_millis()));
                 if lent {
-                    b.push_str(&format!("Rappel des fiches : pas de réponse en {} ms — le rappel sera retenté au prochain tour.\n", reglage.recall_timeout_ms));
+                    confier_au_fond(e, reglage, &requete, None, etat.tour, journal);
+                    b.push_str(&format!("Rappel des fiches : pas de réponse en {} ms — il continue en fond, son résultat viendra au prochain outil ou au prochain tour.\n", reglage.recall_timeout_ms));
                 } else {
                     b.push_str(&format!("Rappel des fiches en panne : {} — le rappel sera retenté au prochain tour.\n", premiere_ligne(&err, 160)));
                 }
@@ -1257,7 +1466,8 @@ pub fn journaliser(chemin: &Path, lignes: &[String]) {
 /// autre réglage, `--daemon <adresse>` pour un hôte donné (les témoins).
 pub const USAGE: &str = "usage : rag3weaver-backend hook [<événement>] [--config <hooks.json>] [--daemon <adresse>]\n        \
 rag3weaver-backend hook --rejouer <transcription.jsonl> <événement> [--prompt <texte>] [--source <startup|compact>]\n        \
-rag3weaver-backend hook --poser-les-gabarits\n\n\
+rag3weaver-backend hook --poser-les-gabarits\n        \
+rag3weaver-backend hook --rappel-differe <tâche.json>   (le fils du rappel, lancé par le hook)\n\n\
 Le hook de Claude Code : lit le JSON de l'événement (SessionStart, UserPromptSubmit, PreCompact, \
 PostCompact, Stop) sur son entrée, parle à l'hôte par le backend mémoire du réglage \
 (~/.config/rag3weaver/hooks.json), rend son bloc sur la sortie et sort toujours en 0. Sans hôte, \
@@ -1280,6 +1490,7 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
     let mut source: Option<String> = None;
     let mut poser_gabarits = false;
     let mut evenement_attendu: Option<String> = None;
+    let mut differe: Option<PathBuf> = None;
     let mut i = 0;
     while i < args.len() {
         match (args[i].as_str(), args.get(i + 1)) {
@@ -1288,6 +1499,7 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
             ("--rejouer", Some(v)) => { rejouer = Some((PathBuf::from(v), args.get(i + 2).cloned().unwrap_or_else(|| "SessionStart".into()))); i += 3; }
             ("--prompt", Some(v)) => { prompt = Some(v.clone()); i += 2; }
             ("--source", Some(v)) => { source = Some(v.clone()); i += 2; }
+            ("--rappel-differe", Some(v)) => { differe = Some(PathBuf::from(v)); i += 2; }
             ("--poser-les-gabarits", _) => { poser_gabarits = true; i += 1; }
             // L'événement, en argument stable de settings.json : relu contre l'entrée.
             (a, _) if EVENEMENTS.contains(&a) => { evenement_attendu = Some(a.to_string()); i += 1; }
@@ -1301,6 +1513,29 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
             Reglage::defaut()
         }
     };
+    // **Le fils du rappel différé** : sa tâche dit le réglage à relire ; il refait
+    // le rappel sous un délai long, juge, range, journalise.
+    if let Some(tache) = differe {
+        let lu = std::fs::read_to_string(&tache).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
+        let reglage = lu.as_ref().and_then(|t| t["config"].as_str()).map(PathBuf::from).and_then(|c| Reglage::charger(&c).ok()).unwrap_or(reglage);
+        let besoin_d_hote = lu.as_ref().is_some_and(|t| t["candidats"].is_null());
+        let client = if besoin_d_hote {
+            match &adresse {
+                Some(a) => ClientHote::ouvrir(a, None, &reglage.manifest, &reglage.keys, Duration::from_secs(30)),
+                None => ClientHote::depuis_daemon_json(&reglage.manifest, &reglage.keys, Duration::from_secs(30)),
+            }
+            .ok()
+        } else {
+            None
+        };
+        let juge = modele_du_juge();
+        let journal = rappel_differe(&tache, &reglage, client.as_ref().map(|c| c as &dyn Hote), juge.as_deref());
+        if let Some(c) = &client {
+            c.fermer();
+        }
+        journaliser(&reglage.journal, &journal);
+        return 0;
+    }
     if poser_gabarits {
         return match reglage.poser_les_gabarits() {
             Ok(poses) => {
@@ -1346,12 +1581,23 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
         }
     }
     let delai = reglage.delai(&evenement.nom);
+    // `PostToolUse` : le rappel différé seul, sans hôte, en `additionalContext`
+    // (Claude Code n'y lit pas le texte brut).
+    if evenement.nom == "PostToolUse" {
+        let reponse = repondre(&evenement, &reglage, Err("PostToolUse ne joint pas l'hôte".into()));
+        if !reponse.bloc.is_empty() && !rejeu {
+            let _ = writeln!(sortie, "{}", json!({ "hookSpecificOutput": { "hookEventName": "PostToolUse", "additionalContext": reponse.bloc } }));
+        }
+        journaliser(&reglage.journal, &reponse.journal);
+        return 0;
+    }
     let client = match &adresse {
         Some(a) => ClientHote::ouvrir(a, None, &reglage.manifest, &reglage.keys, delai),
         None => ClientHote::depuis_daemon_json(&reglage.manifest, &reglage.keys, delai),
     };
     let mut reglage = reglage;
     reglage.rejeu = rejeu;
+    reglage.fond = !rejeu;
     let reponse = match &client {
         Ok(c) if rejeu => repondre(&evenement, &reglage, Ok(&HoteEnLecture(c))),
         Ok(c) => repondre(&evenement, &reglage, Ok(c)),
@@ -1444,7 +1690,10 @@ mod tests {
         // Les défauts écrits se relisent à l'identique.
         assert_eq!(Reglage::lire(&Reglage::defaut().json().to_string()).unwrap(), Reglage::defaut());
         // Un fichier absent : les défauts, pas une erreur.
-        assert_eq!(Reglage::charger(Path::new("/nulle/part/hooks.json")).unwrap(), Reglage::defaut());
+        // Il garde le chemin d'où il vient (le fils du rappel différé le relit).
+        let mut attendu = Reglage::defaut();
+        attendu.chemin_du_reglage = Some(PathBuf::from("/nulle/part/hooks.json"));
+        assert_eq!(Reglage::charger(Path::new("/nulle/part/hooks.json")).unwrap(), attendu);
     }
 
     struct FauxHote(Mutex<Vec<String>>);
@@ -1936,9 +2185,12 @@ mod tests {
         h.reponses.insert("recall_fiches", fiche("régime GPU", "Comment on ménage les cartes, et la carte 2.", 0.8));
         let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
         assert!(r.bloc.contains("mise à jour depuis le tour"), "{}", r.bloc);
-        // Une échelle brute : pas de seuil, et c'est dit.
+        // Une échelle brute, juge coupé : pas de seuil, c'est dit, et les candidats
+        // sont rendus tels quels (avec le juge, ils partent en fond : témoin à part).
         h.reponses.insert("recall_fiches", fiche("autre fiche", "un score brut", 27.9));
-        let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
+        let mut sans_juge = reglage.clone();
+        sans_juge.recall_judge = false;
+        let r = repondre(&prompt(&chemin, question), &sans_juge, Ok(&h));
         assert!(r.journal.iter().any(|l| l.contains("échelle brute (score au-delà de 1), pas de seuil")), "{:?}", r.journal);
         assert!(r.bloc.contains("score brut du meilleur signal, sans seuil") && r.bloc.contains("« autre fiche »"), "{}", r.bloc);
         // Une enveloppe sans contenu : aucun rappel.
@@ -1951,6 +2203,83 @@ mod tests {
         sans.reponses.insert("recall_fiches", fiche("96", "moi", 0.9));
         let r = repondre(&prompt(&chemin, "une question sur la fiche propre et son exclusion"), &reglage, Ok(&sans));
         assert!(r.journal.iter().any(|l| l.contains("identité inconnue, pas d'exclusion")), "{:?}", r.journal);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn le_juge_ote_et_n_invente_rien() {
+        let candidats = vec![json!({ "name": "régime GPU", "about": "les cartes du poste" }), json!({ "name": "hooks-essai", "about": "la session d'essai" })];
+        let llm = crate::llm::MockLlm::new(r#"{"pertinent": true, "pourquoi": "le message parle des cartes", "items_gardes": ["régime GPU", "une fiche inventée"]}"#);
+        let j = juger(&llm, "comment ménager les cartes", &candidats).unwrap();
+        assert_eq!(j.gardes, vec!["régime GPU".to_string()], "un nom qu'il n'a pas reçu est jeté");
+        assert!(j.pertinent);
+        let llm = crate::llm::MockLlm::new(r#"{"pertinent": false, "pourquoi": "hors sujet", "items_gardes": []}"#);
+        assert!(!juger(&llm, "x", &candidats).unwrap().pertinent);
+        assert!(juger(&crate::llm::MockLlm::new("pas du json"), "x", &candidats).unwrap_err().contains("réponse illisible"));
+    }
+
+    #[test]
+    fn le_rappel_differe_est_juge_range_puis_rendu_une_fois_au_prochain_outil() {
+        let _env = env();
+        let (chemin, mut reglage) = transcription_d_essai("differe", &[T_USER, T_ASSISTANT_PETIT]);
+        // Le rappel synchrone n'a pas répondu dans son budget : la tâche est écrite pour le fils.
+        struct RappelLent(HoteCanne);
+        impl Hote for RappelLent {
+            fn nom(&self) -> &str { self.0.nom() }
+            fn appeler(&self, outil: &str, a: Value) -> Result<Value, String> { self.0.appeler(outil, a) }
+            fn appeler_borne(&self, outil: &str, a: Value, d: Duration) -> Result<Value, String> {
+                if d < Duration::from_secs(5) { Err(format!("/call {outil} : l'hôte http://x ne répond pas : timeout: global")) } else { self.0.appeler(outil, a) }
+            }
+            fn deposer_run(&self, c: Value) -> Result<Value, String> { self.0.deposer_run(c) }
+        }
+        let mut canne = hote_avec_identite();
+        canne.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
+            { "chunk": { "score": 0.7 }, "data": { "name": "régime GPU", "about": "Comment on ménage les cartes.", "state": "current" } },
+            { "chunk": { "score": 0.6 }, "data": { "name": "sans rapport", "about": "loin", "state": "current" } }
+        ] } }));
+        let h = RappelLent(canne);
+        let r = repondre(&prompt(&chemin, "comment ménager le régime GPU pendant les passes"), &reglage, Ok(&h));
+        assert!(r.bloc.contains("il continue en fond, son résultat viendra au prochain outil ou au prochain tour"), "{}", r.bloc);
+        let tache = chemin_du_fond(&reglage, "s1", "tache");
+        assert!(tache.exists(), "{:?}", r.journal);
+        // Le fils : rappel sous un délai long, juge, rangement.
+        let juge = crate::llm::MockLlm::new(r#"{"pertinent": true, "pourquoi": "le message parle des cartes", "items_gardes": ["régime GPU"]}"#);
+        let j = rappel_differe(&tache, &reglage, Some(&h), Some(&juge));
+        assert!(j.iter().any(|l| l.contains("[fond] juge : 2 candidat(s), 1 gardé(s) — le message parle des cartes")), "{j:?}");
+        assert!(!tache.exists(), "la tâche est consommée");
+        // Le premier outil le rend, une fois, en additionalContext.
+        let outil = Evenement::lire(&json!({ "session_id": "s1", "hook_event_name": "PostToolUse", "tool_name": "Bash" }).to_string()).unwrap();
+        let r = repondre(&outil, &reglage, Err("pas d'hôte".into()));
+        assert!(r.bloc.contains("Rappel du tour d'avant (requête « ") && r.bloc.contains("« régime GPU »") && !r.bloc.contains("sans rapport"), "{}", r.bloc);
+        let r = repondre(&outil, &reglage, Err("pas d'hôte".into()));
+        assert!(r.bloc.is_empty(), "une seule fois : {}", r.bloc);
+        // Et la fiche est désormais connue de la session : un rappel suivant la tait.
+        let etat = EtatDuRappel::lire(&reglage, "s1");
+        assert!(etat.rendus.contains_key("régime GPU"), "{etat:?}");
+        // Des candidats hors sujet : le juge rend le silence, le journal dit pourquoi.
+        reglage.journal = chemin.parent().unwrap().join("hooks2.log");
+        std::fs::write(chemin_du_fond(&reglage, "s2", "tache"), json!({ "session_id": "s2", "tour": 1, "requete": "météo", "prompt": "quel temps fait-il", "candidats": [{ "name": "régime GPU", "about": "les cartes", "score": 3.5 }] }).to_string()).unwrap();
+        let non = crate::llm::MockLlm::new(r#"{"pertinent": false, "pourquoi": "le message ne parle pas de la mémoire", "items_gardes": []}"#);
+        let j = rappel_differe(&chemin_du_fond(&reglage, "s2", "tache"), &reglage, None, Some(&non));
+        assert!(j.iter().any(|l| l.contains("0 gardé(s) — le message ne parle pas de la mémoire")), "{j:?}");
+        let outil2 = Evenement::lire(&json!({ "session_id": "s2", "hook_event_name": "PostToolUse" }).to_string()).unwrap();
+        let r = repondre(&outil2, &reglage, Err("pas d'hôte".into()));
+        assert!(r.bloc.is_empty(), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("rappel du tour d'avant : 0 rendu(s) — juge : le message ne parle pas de la mémoire")), "{:?}", r.journal);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn une_echelle_brute_part_au_juge_au_lieu_d_etre_rendue() {
+        let _env = env();
+        let (chemin, reglage) = transcription_d_essai("brute-juge", &[T_USER, T_ASSISTANT_PETIT]);
+        let mut h = hote_avec_identite();
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 27.9 }, "data": { "name": "autre fiche", "about": "un score brut", "state": "current" } }] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur une autre fiche"), &reglage, Ok(&h));
+        assert!(!r.bloc.contains("« autre fiche »"), "pas rendue en synchrone : {}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("1 candidat(s) confiés au juge, en fond")), "{:?}", r.journal);
+        let t: Value = serde_json::from_str(&std::fs::read_to_string(chemin_du_fond(&reglage, "s1", "tache")).unwrap()).unwrap();
+        assert_eq!(t["candidats"][0]["name"], "autre fiche");
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
     }
 
@@ -1969,7 +2298,7 @@ mod tests {
         let (chemin, reglage) = transcription_d_essai("lent", &[T_USER, T_ASSISTANT_PETIT]);
         let h = RappelLent(hote_avec_identite());
         let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks"), &reglage, Ok(&h));
-        assert!(r.bloc.contains("Rappel des fiches : pas de réponse en 1000 ms — le rappel sera retenté au prochain tour."), "la panne a sa ligne — {}", r.bloc);
+        assert!(r.bloc.contains("Rappel des fiches : pas de réponse en 1000 ms — il continue en fond"), "la panne a sa ligne — {}", r.bloc);
         assert!(!r.bloc.contains("froid") && !r.bloc.contains("réessaie"), "{}", r.bloc);
         assert!(r.journal.iter().any(|l| l.contains("recall_fiches en ") && l.contains("timeout")), "{:?}", r.journal);
         // Et quand rien ne passe le seuil, c'est dit autrement : « rien en rapport ».

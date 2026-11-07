@@ -27,7 +27,7 @@ import json, sys
 d = json.load(open(sys.argv[1])); h = d["hooks"]; c = json.load(open(sys.argv[2]))
 assert d["model"] == "opus", "le reste du fichier est préservé"
 assert c["manifest"] == "/m/backend.json" and c["timeout_ms"] == 20000
-for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop"]:
+for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop", "PostToolUse"]:
     notres = [x for x in h[ev] if x["hooks"][0]["command"].startswith("/opt/r/rag3weaver-backend hook")]
     assert len(notres) == 1, ev
     assert notres[0]["hooks"][0]["command"] == "/opt/r/rag3weaver-backend hook " + ev, "la commande est stable : binaire, hook, événement — " + notres[0]["hooks"][0]["command"]
@@ -75,7 +75,7 @@ grep -q "commande d'avant remplacée" "$T/converge.out" || rouge "--poser ne dit
 python3 -c '
 import json, sys
 h = json.load(open(sys.argv[1]))["hooks"]
-for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop"]:
+for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop", "PostToolUse"]:
     cmds = [x["hooks"][0]["command"] for x in h[ev]]
     assert cmds == ["/opt/r/rag3weaver-backend hook " + ev], (ev, cmds)
 ' "$T/ancien.json" || rouge "l'ancienne forme n'est pas remplacée par la commande stable"
