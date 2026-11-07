@@ -163,7 +163,7 @@ graph LR
 fn un_modele_declare_au_manifeste_sert_les_graphes_du_backend() {
     let outil = |dossier: &Path, m: &mut Value| {
         std::fs::write(dossier.join("graphs/decide_essai.mmd"), DECIDE_ESSAI).unwrap();
-        m["tools"]["decide_essai"] = json!({"graph": "graphs/decide_essai.mmd"});
+        m["tools"]["decide_essai"] = json!({"graph": "graphs/decide_essai.mmd", "policy": {"call_models": true}});
     };
     // Sans modèle déclaré : le graphe le dit, et nomme ce qui manque.
     let dir = tempfile::tempdir().expect("dossier");

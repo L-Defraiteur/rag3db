@@ -5288,7 +5288,7 @@ mod tests {
         let reactif = crate::backend_code::reaction_nodes();
         assert_eq!(
             outil.len(),
-            41,
+            43,
             "la liste des nœuds d'outil a changé ({} entrées) : si c'est voulu, corrigez \
              ce compte dans le même commit — et dites pourquoi dans son message",
             outil.len()
