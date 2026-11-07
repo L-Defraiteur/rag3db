@@ -1,6 +1,6 @@
 # Déplier un outil dans le chat déplace le scroll
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — lot « le chat tient l'ordre ».
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot « le chat tient l'ordre ») : déplier ou replier un outil ne recolle jamais la liste (seul un événement du flux le demande, et seulement collée en bas) ; témoin navigateur (`scrollTop` identique avant et après)
 - **Gravité** : gêne.
 - **Atteignable en service** : oui (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`).
