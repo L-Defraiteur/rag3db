@@ -134,6 +134,13 @@ impl Flux {
 
     /// Publie `evenement` (déjà en JSON) sous `sujet`, pour le backend `backend`.
     pub fn publier(&self, sujet: &str, backend: &str, evenement: Value) {
+        // **L'id se tire sous le verrou des abonnés**, avec l'empilement et
+        // l'envoi (ticket du premier jeton perdu, 7 novembre 2026) : tiré
+        // dehors, deux relais pouvaient envoyer N+1 avant N, et `envoyer`, qui
+        // saute ce qui n'est pas plus neuf que le dernier envoyé, perdait N en
+        // silence. L'ordre des verrous reste celui d'`abonner` : abonnés, puis
+        // tampon.
+        let mut abonnes = self.abonnes.lock().unwrap_or_else(|p| p.into_inner());
         let id = self.prochain.fetch_add(1, Ordering::SeqCst);
         // Un message ordinaire, le genre dans les données : une page n'a pas à
         // écouter chaque genre par son nom pour ne rien perdre.
@@ -150,7 +157,7 @@ impl Flux {
                 t.pop_front();
             }
         }
-        self.abonnes.lock().unwrap_or_else(|p| p.into_inner()).retain_mut(|a| a.envoyer(&entree));
+        abonnes.retain_mut(|a| a.envoyer(&entree));
     }
 
     /// **Abonne une fenêtre** : l'en-tête SSE, puis ce qu'elle a manqué depuis
