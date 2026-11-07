@@ -790,6 +790,11 @@ fn run() -> Result<(), String> {
     if tous.first().map(String::as_str) == Some("ide") {
         return entrer_dans_l_ide();
     }
+    // **`mail`** : la boîte de l'hôte depuis le shell d'un agent (lot 5, le pont).
+    #[cfg(feature = "daemon")]
+    if tous.first().map(String::as_str) == Some("mail") {
+        std::process::exit(rag3weaver::mail::commande(&tous[1..], &mut std::io::stdout()));
+    }
     // **Le hook de Claude Code** : le JSON de l'événement sur l'entrée, le
     // bloc sur la sortie, toujours 0 — une session ne s'arrête jamais sur nous.
     if tous.first().map(String::as_str) == Some("hook") {

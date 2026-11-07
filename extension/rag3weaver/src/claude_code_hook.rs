@@ -123,6 +123,12 @@ pub struct Reglage {
     /// politique de dépense déclarée (le juge appelle un modèle facturé), pas
     /// un seuil mesuré. Au-delà, le juge est sauté et le journal le dit.
     pub recall_judge_max_per_hour: u64,
+    /// Le délai de la lecture de la boîte des agents (`pending`), court : elle
+    /// passe aussi à chaque `PostToolUse` (lot 5, le pont).
+    pub mailbox_timeout_ms: u64,
+    /// L'agent qui appelle : `claude-code` (le défaut) ou `codex` (`--agent
+    /// codex` dans la commande de Codex). Jamais lu dans le fichier.
+    pub agent: String,
     /// Lancer le fils détaché du rappel différé. Posé par la commande ; les
     /// témoins jouent le fils à la main. Jamais lu dans le fichier.
     pub fond: bool,
@@ -158,6 +164,8 @@ impl Reglage {
             recall_max_words: 10,
             recall_judge: true,
             recall_judge_max_per_hour: 20,
+            mailbox_timeout_ms: 1_500,
+            agent: "claude-code".into(),
             fond: false,
             chemin_du_reglage: None,
             rejeu: false,
@@ -194,9 +202,10 @@ impl Reglage {
                 "recall_max_words" => r.recall_max_words = val.as_u64().ok_or("hooks.json : `recall_max_words` est un entier")? as usize,
                 "recall_judge" => r.recall_judge = val.as_bool().ok_or("hooks.json : `recall_judge` est un booléen")?,
                 "recall_judge_max_per_hour" => r.recall_judge_max_per_hour = val.as_u64().ok_or("hooks.json : `recall_judge_max_per_hour` est un entier")?,
+                "mailbox_timeout_ms" => r.mailbox_timeout_ms = val.as_u64().ok_or("hooks.json : `mailbox_timeout_ms` est un entier")?,
                 "journal" => r.journal = PathBuf::from(val.as_str().ok_or("hooks.json : `journal` est un chemin")?),
                 "templates_dir" => r.templates_dir = PathBuf::from(val.as_str().ok_or("hooks.json : `templates_dir` est un chemin")?),
-                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, recall_timeout_ms, recall_max_words, recall_judge, recall_judge_max_per_hour, journal, templates_dir)")),
+                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, recall_timeout_ms, recall_max_words, recall_judge, recall_judge_max_per_hour, mailbox_timeout_ms, journal, templates_dir)")),
             }
         }
         if let Ok(v) = std::env::var("RAG3WEAVER_HOOK_CONTEXT_TOKENS") {
@@ -232,6 +241,7 @@ impl Reglage {
             "recall_max_words": self.recall_max_words,
             "recall_judge": self.recall_judge,
             "recall_judge_max_per_hour": self.recall_judge_max_per_hour,
+            "mailbox_timeout_ms": self.mailbox_timeout_ms,
             "journal": self.journal,
             "templates_dir": self.templates_dir,
         })
@@ -311,6 +321,29 @@ pub trait Hote {
     fn manifest(&self) -> Option<&Path> {
         None
     }
+    /// La boîte des agents de l'hôte (lot 5) ; aucune par défaut.
+    fn boite(&self) -> Option<&dyn crate::mail::Boite> {
+        None
+    }
+}
+
+/// **L'hôte réduit à la boîte**, pour `PostToolUse` : il passe à chaque outil,
+/// il n'ouvre donc pas le backend mémoire (ni `/session`, ni `/open`).
+pub struct HoteBoiteSeule(pub crate::mail::BoiteHttp);
+
+impl Hote for HoteBoiteSeule {
+    fn nom(&self) -> &str {
+        "la boîte"
+    }
+    fn appeler(&self, outil: &str, _arguments: Value) -> Result<Value, String> {
+        Err(format!("{outil} : l'hôte réduit à la boîte n'ouvre pas la mémoire"))
+    }
+    fn deposer_run(&self, _corps: Value) -> Result<Value, String> {
+        Err("l'hôte réduit à la boîte ne dépose pas de run".into())
+    }
+    fn boite(&self) -> Option<&dyn crate::mail::Boite> {
+        Some(&self.0)
+    }
 }
 
 /// **L'hôte d'un rejeu** : il lit, il n'écrit jamais — ni la mémoire, ni le
@@ -343,6 +376,11 @@ impl Hote for HoteEnLecture<'_> {
     fn manifest(&self) -> Option<&Path> {
         self.0.manifest()
     }
+    // La boîte se lit en rejeu (`pending` est une lecture pure) ; `seen` n'est
+    // jamais posté en rejeu (`reglage.rejeu`).
+    fn boite(&self) -> Option<&dyn crate::mail::Boite> {
+        self.0.boite()
+    }
 }
 
 /// **Le client de l'hôte, borné** : `POST /session`, `POST /open`, puis des
@@ -350,6 +388,8 @@ impl Hote for HoteEnLecture<'_> {
 /// Il ne relance jamais l'hôte et ne relit pas le jeton : un hôte qui ne
 /// répond pas est une raison de se taire, pas de s'acharner.
 pub struct ClientHote {
+    /// La boîte des agents, sur la même adresse et le même jeton (lot 5).
+    boite: Option<crate::mail::BoiteHttp>,
     /// La durée de chaque requête, pour le journal (c7 : savoir lequel traîne).
     durees: std::sync::Mutex<Vec<String>>,
     agent: ureq::Agent,
@@ -377,7 +417,7 @@ impl ClientHote {
     pub fn ouvrir(adresse: &str, token: Option<&str>, manifest: &Path, keys: &[String], delai: Duration) -> Result<Self, String> {
         let agent = crate::daemon::agent_with_timeout(delai);
         let base = crate::daemon::base_url(adresse);
-        let mut me = Self { durees: std::sync::Mutex::new(Vec::new()), agent, base, token: token.map(str::to_string), session: String::new(), manifest: manifest.to_path_buf(), nom: String::new() };
+        let mut me = Self { boite: None, durees: std::sync::Mutex::new(Vec::new()), agent, base, token: token.map(str::to_string), session: String::new(), manifest: manifest.to_path_buf(), nom: String::new() };
         let corps = json!({ "client": "claude-code-hook", "keys": keys, "pid": std::process::id() });
         let v = me.poster("/session", corps, false)?;
         me.session = v["session"].as_str().ok_or("l'hôte n'a pas rendu de session")?.to_string();
@@ -403,6 +443,12 @@ impl ClientHote {
         let r = self.poster_brut(agent, route, corps, avec_session);
         self.durees.lock().unwrap_or_else(|p| p.into_inner()).push(format!("{quoi} {} ms{}", debut.elapsed().as_millis(), if r.is_err() { " (échec)" } else { "" }));
         r
+    }
+
+    /// Le même client, avec la boîte des agents sous son propre délai.
+    pub fn avec_boite(mut self, delai: Duration) -> Self {
+        self.boite = Some(crate::mail::BoiteHttp::depuis_base(&self.base, self.token.as_deref(), delai));
+        self
     }
 
     /// Les durées des requêtes, vidées.
@@ -439,6 +485,9 @@ impl ClientHote {
 }
 
 impl Hote for ClientHote {
+    fn boite(&self) -> Option<&dyn crate::mail::Boite> {
+        self.boite.as_ref().map(|b| b as &dyn crate::mail::Boite)
+    }
     fn nom(&self) -> &str {
         &self.nom
     }
@@ -494,7 +543,12 @@ pub fn repondre(e: &Evenement, reglage: &Reglage, hote: Result<&dyn Hote, String
     // `PostToolUse` passe à chaque outil : il ne lit que le rappel différé que
     // le fils a rangé, sans hôte (3 ter b).
     if e.nom == "PostToolUse" {
-        let bloc = rappel_du_tour_d_avant(e, reglage, &mut r.journal);
+        let mut bloc = rappel_du_tour_d_avant(e, reglage, &mut r.journal);
+        // Et la boîte des agents, ce qui est neuf seulement : atteindre une session
+        // occupée sans répéter à chaque outil (lot 5).
+        if let Ok(h) = &hote {
+            bloc.push_str(&boite_du_tour(e, reglage, *h, &[], true, &mut r.journal));
+        }
         if !bloc.trim().is_empty() {
             r.bloc = borner(&format!("[mémoire]\n{}", bloc.trim_end()), reglage.prompt_block_chars);
             r.journal.push(format!("PostToolUse {session} : bloc de {} caractères", r.bloc.chars().count()));
@@ -830,6 +884,48 @@ fn maintenant_ms() -> u64 {
 // ─── SessionStart ────────────────────────────────────────────────────────────
 
 fn bloc_de_session(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut Vec<String>) -> String {
+    let (mut b, cle) = bloc_d_identite(e, reglage, h, journal);
+    if !reglage.rejeu {
+        crate::mail::ecrire_la_fiche_de_session(&e.session_id, e.cwd.as_deref(), cle.as_deref(), journal);
+    }
+    b.push_str(&agents_en_cours(e, reglage, h, cle.as_deref(), journal));
+    b
+}
+
+/// Les équipiers de cette session (`list?supervisor=`) et les fils Codex du
+/// même dossier ; rien si rien.
+fn agents_en_cours(e: &Evenement, reglage: &Reglage, h: &dyn Hote, cle: Option<&str>, journal: &mut Vec<String>) -> String {
+    let mut b = String::new();
+    if let Some(boite) = h.boite() {
+        let mut equipiers = Vec::new();
+        for pour in cles_de_la_session(e, reglage, cle) {
+            match boite.equipiers(&pour) {
+                Ok(v) => equipiers.extend(v),
+                Err(err) => journal.push(format!("list?supervisor={pour} : {err}")),
+            }
+        }
+        if !equipiers.is_empty() {
+            b.push_str(&format!(
+                "Tes équipiers : {}.\n",
+                equipiers.iter().map(|t| format!("{} ({}, {})", t["task"].as_str().unwrap_or("?"), t["state"].as_str().unwrap_or("?"), t["last_kind"].as_str().unwrap_or("—"))).collect::<Vec<_>>().join(", ")
+            ));
+        }
+    }
+    if let Some(cwd) = e.cwd.as_deref() {
+        let fils: Vec<crate::codex_threads::Fil> = crate::codex_threads::fils_du_dossier(&crate::codex_threads::racine(), cwd).into_iter().filter(|f| f.id != e.session_id).take(5).collect();
+        if !fils.is_empty() {
+            b.push_str(&format!(
+                "Fils Codex dans ce dossier : {} — leur écrire : `rag3weaver-backend mail send --from {} --to <clé> --task <parent>/<task> \"<texte>\"`.\n",
+                fils.iter().map(|f| f.cle()).collect::<Vec<_>>().join(", "),
+                cles_de_la_session(e, reglage, cle).first().cloned().unwrap_or_default()
+            ));
+        }
+    }
+    b
+}
+
+/// L'identité de la session : le bloc et la clé stable trouvée.
+fn bloc_d_identite(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut Vec<String>) -> (String, Option<String>) {
     let mut b = String::new();
     let source = e.source.as_deref().unwrap_or("startup");
     let identite = identite_de_la_session(h, &e.session_id, journal);
@@ -856,7 +952,7 @@ fn bloc_de_session(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut
     let Some(id) = identite else {
         b.push_str(&consigne_sans_fiche(reglage, h, &e.session_id));
         b.push('\n');
-        return b;
+        return (b, None);
     };
     // La clé vient de la variable : le handle de cette session s'écrit, une fois.
     if id.par_indice && !e.session_id.is_empty() && source != "compact" {
@@ -880,6 +976,75 @@ fn bloc_de_session(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut
         None => {
             b.push_str(&reglage.gabarit("sans_identity").replace("{rubriques}", RUBRIQUES));
             b.push('\n');
+        }
+    }
+    (b, Some(id.cle))
+}
+
+// ─── La boîte des agents (lot 5) ─────────────────────────────────────────────
+
+/// Les clés sous lesquelles la boîte écrit à cette session : son handle
+/// (`claude-code:<session_id>`, ou la clé du fil chez Codex) et sa clé stable
+/// quand l'agent l'a dite.
+fn cles_de_la_session(e: &Evenement, reglage: &Reglage, stable: Option<&str>) -> Vec<String> {
+    let mut cles = Vec::new();
+    if !e.session_id.is_empty() {
+        if reglage.agent == "codex" {
+            let fil = crate::codex_threads::fils(&crate::codex_threads::racine()).into_iter().find(|f| f.id == e.session_id);
+            cles.push(fil.map(|f| f.cle()).unwrap_or_else(|| format!("codex:{}", e.session_id)));
+        } else {
+            cles.push(format!("claude-code:{}", e.session_id));
+        }
+    }
+    if let Some(s) = stable.filter(|s| !s.is_empty() && !cles.iter().any(|c| c == s)) {
+        cles.push(s.to_string());
+    }
+    cles
+}
+
+/// **Ce que la boîte garde pour cette session**, rendu par le code de `mail`.
+/// Les ids déjà montrés sont dans une marque ; après le bloc, `seen` part pour
+/// ce qui ne demande pas de réponse (jamais en rejeu). `seulement_neufs` (le
+/// `PostToolUse`) tait le « toujours en attente » et la panne.
+fn boite_du_tour(e: &Evenement, reglage: &Reglage, h: &dyn Hote, stables: &[String], seulement_neufs: bool, journal: &mut Vec<String>) -> String {
+    let Some(boite) = h.boite() else { return String::new() };
+    let stable = stables.first().cloned().or_else(|| crate::mail::lire_la_fiche_de_session(&e.session_id).and_then(|f| f.key));
+    let cles = cles_de_la_session(e, reglage, stable.as_deref());
+    let Some(pour) = cles.first().cloned() else { return String::new() };
+    let mut items = Vec::new();
+    let mut pannes = Vec::new();
+    for c in &cles {
+        match boite.pending(c) {
+            Ok(v) => items.extend(v),
+            Err(err) => pannes.push(format!("{c} : {err}")),
+        }
+    }
+    let mut vus_ids = HashSet::new();
+    items.retain(|i| vus_ids.insert(i.id.clone()));
+    let deja: HashSet<String> = lire_la_marque(reglage, &e.session_id, "boite-montres").map(|t| t.lines().map(str::to_string).collect()).unwrap_or_default();
+    let mut b = if seulement_neufs {
+        let neufs: Vec<crate::mail::Item> = items.iter().filter(|i| !deja.contains(&i.id)).cloned().collect();
+        crate::mail::bloc_de_la_boite(&neufs, &HashSet::new(), &pour, 600)
+    } else {
+        crate::mail::bloc_de_la_boite(&items, &deja, &pour, 600)
+    };
+    if !pannes.is_empty() {
+        journal.push(format!("boîte : {}", pannes.join(" ; ")));
+        if !seulement_neufs {
+            b.push_str(&format!("Boîte des agents injoignable ({}) — relis-la par `rag3weaver-backend mail pending --for {pour}`.\n", premiere_ligne(&pannes[0], 120)));
+        }
+    }
+    if !items.is_empty() {
+        journal.push(format!("boîte : {} item(s) pour {}, {} neuf(s)", items.len(), cles.join(" + "), items.iter().filter(|i| !deja.contains(&i.id)).count()));
+        let montres: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
+        poser_la_marque(reglage, &e.session_id, "boite-montres", &montres.join("\n"));
+        let a_voir = crate::mail::a_marquer_vus(&items);
+        if !a_voir.is_empty() && !reglage.rejeu {
+            for c in &cles {
+                if let Err(err) = boite.seen(c, &a_voir) {
+                    journal.push(format!("boîte : seen {c} : {err}"));
+                }
+            }
         }
     }
     b
@@ -1287,6 +1452,10 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
     // Le rappel du tour d'avant, s'il est arrivé après son tour et qu'aucun
     // `PostToolUse` ne l'a rendu.
     b.push_str(&rappel_du_tour_d_avant(e, reglage, journal));
+    // **La boîte des agents** (lot 5) : ce qui attend cette session, par son
+    // handle et par sa clé stable.
+    let stable: Vec<String> = identite.iter().map(|i| i.cle.clone()).collect();
+    b.push_str(&boite_du_tour(e, reglage, h, &stable, false, journal));
     let mut etat = EtatDuRappel::lire(reglage, &e.session_id);
     etat.tour += 1;
     // Un tour sans parole d'utilisateur (une notification de tâche) ne cherche rien.
@@ -1631,6 +1800,7 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
     let mut poser_gabarits = false;
     let mut evenement_attendu: Option<String> = None;
     let mut session: Option<String> = None;
+    let mut agent: Option<String> = None;
     let mut differe: Option<PathBuf> = None;
     let mut i = 0;
     while i < args.len() {
@@ -1641,6 +1811,7 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
             ("--prompt", Some(v)) => { prompt = Some(v.clone()); i += 2; }
             ("--source", Some(v)) => { source = Some(v.clone()); i += 2; }
             ("--session", Some(v)) => { session = Some(v.clone()); i += 2; }
+            ("--agent", Some(v)) => { agent = Some(v.clone()); i += 2; }
             ("--rappel-differe", Some(v)) => { differe = Some(PathBuf::from(v)); i += 2; }
             ("--poser-les-gabarits", _) => { poser_gabarits = true; i += 1; }
             // L'événement, en argument stable de settings.json : relu contre l'entrée.
@@ -1727,8 +1898,21 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
     let delai = reglage.delai(&evenement.nom);
     // `PostToolUse` : le rappel différé seul, sans hôte, en `additionalContext`
     // (Claude Code n'y lit pas le texte brut).
+    let mut reglage = reglage;
+    if let Some(a) = agent {
+        reglage.agent = a;
+    }
+    let boite_delai = Duration::from_millis(reglage.mailbox_timeout_ms);
     if evenement.nom == "PostToolUse" {
-        let reponse = repondre(&evenement, &reglage, Err("PostToolUse ne joint pas l'hôte".into()));
+        // La boîte seule (aucun backend ouvert) ; sans hôte, le rappel différé seul.
+        let boite = match &adresse {
+            Some(a) => Ok(crate::mail::BoiteHttp::ouvrir(a, None, boite_delai)),
+            None => crate::mail::BoiteHttp::depuis_daemon_json(boite_delai),
+        };
+        let reponse = match boite {
+            Ok(b) => repondre(&evenement, &reglage, Ok(&HoteBoiteSeule(b))),
+            Err(e) => repondre(&evenement, &reglage, Err(e)),
+        };
         if !reponse.bloc.is_empty() && !rejeu {
             let _ = writeln!(sortie, "{}", json!({ "hookSpecificOutput": { "hookEventName": "PostToolUse", "additionalContext": reponse.bloc } }));
         }
@@ -1738,8 +1922,8 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
     let client = match &adresse {
         Some(a) => ClientHote::ouvrir(a, None, &reglage.manifest, &reglage.keys, delai),
         None => ClientHote::depuis_daemon_json(&reglage.manifest, &reglage.keys, delai),
-    };
-    let mut reglage = reglage;
+    }
+    .map(|c| c.avec_boite(boite_delai));
     reglage.rejeu = rejeu;
     reglage.fond = !rejeu;
     let reponse = match &client {
@@ -1755,7 +1939,10 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
         }
         c.fermer();
     }
-    if !reponse.bloc.is_empty() {
+    if !reponse.bloc.is_empty() && reglage.agent == "codex" && !rejeu && matches!(evenement.nom.as_str(), "SessionStart" | "UserPromptSubmit") {
+        // Chez Codex, le contexte passe par `hookSpecificOutput.additionalContext`.
+        let _ = writeln!(sortie, "{}", json!({ "hookSpecificOutput": { "hookEventName": evenement.nom, "additionalContext": reponse.bloc } }));
+    } else if !reponse.bloc.is_empty() {
         let _ = sortie.write_all(reponse.bloc.as_bytes());
         if !reponse.bloc.ends_with('\n') {
             let _ = sortie.write_all(b"\n");
