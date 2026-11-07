@@ -179,6 +179,7 @@ pub mod fts_handle;
 pub mod fts_directory;
 pub mod disponibilite;
 pub mod hash;
+pub mod host_log;
 pub mod node_id_cache;
 pub mod derived_kb;
 pub mod ocr;

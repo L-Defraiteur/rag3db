@@ -279,8 +279,10 @@ landlock = { version = "0.4", optional = true }
 # La mémoire vive du poste (`connection::total_memory`) : sysctl sous macOS,
 # GlobalMemoryStatusEx sous Windows (le paquet npm, 10 octobre 2026). L'état
 # d'un processus pour l'hôte du démon (`daemon_lifecycle`, lot C) : kill et
-# proc_pidinfo sous macOS, OpenProcess et GetProcessTimes sous Windows.
-[target.'cfg(target_os = "macos")'.dependencies]
+# proc_pidinfo sous macOS, OpenProcess et GetProcessTimes sous Windows. La
+# marque d'heure du journal de l'hôte (`host_log` : pipe, dup2, localtime_r)
+# sous tout Unix.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 # Le témoin de la page dans un vrai navigateur (`daemon_host/navigateur.rs`) passe
