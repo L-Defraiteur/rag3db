@@ -12,7 +12,6 @@
 // source pour le sens avant, par destination pour le sens arrière) : les deux ensembles de
 // (relation, source, destination) doivent être égaux, base ouverte puis rouverte.
 
-#include <array>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -492,11 +491,11 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderRolledBackCopyDrains) {
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
 }
 
-// Le COPY de relations refusé faute de tampon, et le repli du crate depuis le 5 octobre : la base
+// Le COPY de relations refusé faute de tampon, et le filet du crate depuis le 5 octobre : la base
 // rouverte sous un tampon serré, des drains par COPY dont les lots grossissent jusqu'au refus
-// (« The buffer pool is full »), puis ROLLBACK, fermeture sans point de reprise, réouverture
-// (le journal rejoué), et les mêmes arêtes reposées par MERGE en petits lots. Les chaînes longues
-// des propriétés (comme `usage` et `via` de LOCKS) remplissent le tampon.
+// (« The buffer pool is full », au COPY ou au point de reprise de son COMMIT), puis ROLLBACK,
+// fermeture sans point de reprise, réouverture (le journal rejoué), et le drain suivant. Les
+// chaînes longues des propriétés (comme `usage` et `via` de LOCKS) remplissent le tampon.
 TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) {
     ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
     ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
@@ -522,13 +521,11 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
             ids += (ids.empty() ? "" : ",") + std::to_string(s);
             sources.insert(s);
         }
-        std::vector<std::array<int64_t, 2>> batch;
         for (int e = 0; e < edges; e++) {
             const auto s = first + static_cast<int64_t>(random() % 80);
             const auto dst = random() % 4 == 0 ? static_cast<int64_t>(random() % NUM_SYMBOLS) :
                                                  hot[random() % hot.size()];
             destinations.insert(dst);
-            batch.push_back({s, dst});
             pairs += (pairs.empty() ? "" : ",") + std::string("[") + std::to_string(s) + "," +
                      std::to_string(dst) + "," + std::to_string(round) + "]";
         }
@@ -559,20 +556,8 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
             conn.reset();
             database.reset();
             createDBAndConn();
-            // Le repli : les mêmes arêtes par MERGE, par lots de 200, dans une transaction.
-            ok("BEGIN TRANSACTION;");
-            ok("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;");
-            for (size_t from = 0; from < batch.size(); from += 200) {
-                std::string slice;
-                for (auto i = from; i < std::min(batch.size(), from + 200); i++) {
-                    slice += (slice.empty() ? "" : ",") + std::string("[") +
-                             std::to_string(batch[i][0]) + "," + std::to_string(batch[i][1]) + "]";
-                }
-                ok("UNWIND [" + slice +
-                   "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) MERGE (a)-[r:R]->(b) "
-                   "SET r.line = " + std::to_string(round) + ", r.via = 'repli';");
-            }
-            ok("COMMIT;");
+            // Le crate ne se replie plus sur une base à rouvrir (99e6f0ee0) : le drain échoue avec
+            // sa cause, et le suivant repart sur la base rouverte.
         }
     }
     std::cout << "COPY validés " << copies << ", COPY refusés pour mémoire " << refusals
