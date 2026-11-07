@@ -91,6 +91,18 @@ dans `tours[].tool_calls` et pas d'événements du bus — la pièce côté juge
   `recall_min_score` (réglage, défaut 0,30 ; « régime GPU » sur sa propre requête fait 0,38) ; les
   scores de tout ce qui remonte vont au journal, pour régler le seuil sur l'usage.
 
+## 2 ter. Deux défauts vus par 73 sur la mémoire de Lucie
+
+- **La fiche d'une session ne se trouvait jamais** : le hook cherchait `cited_by "handle:session:<id>"`,
+  mais la Ref d'un handle porte la valeur **nue** `session:<uuid>`, de genre `handle` (vérifié :
+  `cited_by "session:494dbbc6-…"` rend `hooks-essai`, la forme préfixée rend `[]`). Corrigé :
+  `value: "session:<id>", genres: ["handle"], under: false`. Mon faux hôte répondait à tout
+  `cited_by`, d'où un témoin vert à tort ; un témoin sur un vrai gabarit `memory` vient au lot 3 bis.
+- **Le L1 `handle` se réécrivait** : la clé d'un apport est (fiche, source, section), et chaque
+  session écrivait sous `source: "sessions"`. Corrigé : une source par session,
+  `sessions/<uuid>` — le hook et la consigne du gabarit —, l'historique des sessions reste
+  (page 04 du 25 octobre : un L1 ne se réécrit pas).
+
 ## 3. Les retouches de la pose de G
 
 G a posé le binaire de d42787227 à 14 h 49 et prouvé le verbe contre l'hôte vivant (un
