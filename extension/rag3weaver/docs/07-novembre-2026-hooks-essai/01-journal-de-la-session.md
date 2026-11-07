@@ -131,3 +131,32 @@ embarquement) : du bruit.
   sortie 0.
 - Restent `check_features.sh` et la lib entière, après l'atterrissage de la 3b
   et mon rebase ; master au mot de c7.
+
+## Bilan du bloc [mémoire] sur le lot « chercher sans dossier »
+
+Ce que le bloc a montré pendant le lot, tour par tour :
+
+- **Au premier tour :** la consigne d'identité et « régime GPU » en rapport.
+- **Aux tours suivants :** rien, ou bien « hooks-essai » (ma propre fiche)
+  et « régime GPU ».
+- **Jamais :** une fiche sur l'IDE, la recherche, `search_code` ou `scope`,
+  un diff d'une autre session sur les fichiers touchés, un plan en pause, un
+  verdict du juge.
+
+**Ce qui m'a servi :** la consigne d'identité seule, parce qu'elle donnait les
+appels exacts. Rien du bloc n'a servi au code. Le diagnostic est venu de la
+lecture des fichiers, et l'accord sur les fichiers partagés d'un message
+d'everything declarative. Le bloc aurait pu le dire de lui-même : « Tree.tsx
+est né dans la vue 7 d'everything declarative, pas encore sur master ».
+
+**Ce qui aurait servi :** au tour du diagnostic, une fiche sur l'IDE en React
+(page 08, l'ordre des vues, les repères DOM des témoins) ; au tour du témoin,
+la forme des arguments de `search_code` (`options` est exigé). Ce sont deux
+choses que la mémoire de Lucie connaît : la fiche « L'IDE en React, vues 3 à
+7 » existe dans la mémoire de Claude Code, et le hook ne l'a pas trouvée.
+
+**Bruit :** « régime GPU » à chaque tour, sans rapport avec le lot ; ma propre
+fiche à chaque tour, qui ne m'apprend rien.
+
+En cours : `check_features.sh` puis la lib entière sur 35aede9f3, à luciepc
+sous `poste lourd`.
