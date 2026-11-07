@@ -20,12 +20,24 @@ set -u
 E=$1; LIB=${RAG3DB_LIBS_DIR:-$HOME/.cache/rag3db-libs}/$2
 I=~/.local/share/rag3weaver/instantanes/$E
 C=~/.local/share/rag3weaver/instantanes/$E-controle
-SRC=${CHECK_REL_DIRECTIONS_SRC:-$HOME/git_workspaces/rag3db/tools/check_rel_directions/check_rel_directions.cpp}
+# L'outil se prend dans origin/master, jamais dans un arbre de travail qui peut avoir du retard
+# (7 nov. : l'arbre de Lucie portait encore la version à comptes) ; le fetch ne touche que les refs
+# distantes. CHECK_REL_DIRECTIONS_SRC désigne un autre fichier, en le sachant.
+DEPOT=${CHECK_REL_DIRECTIONS_DEPOT:-$HOME/git_workspaces/rag3db}
+SRC=${CHECK_REL_DIRECTIONS_SRC:-}
 [ -d "$I" ] || { echo "REFUS : pas d'instantané $I" >&2; exit 3; }
 [ -f "$LIB/rag3db.hpp" ] && [ -f "$LIB/librag3db.so" ] || { echo "REFUS : $LIB n'a pas rag3db.hpp et librag3db.so" >&2; exit 3; }
 [ -e "$C" ] && { echo "REFUS : $C existe déjà (un contrôle précédent) ; l'effacer en le sachant" >&2; exit 3; }
 OUTIL=$C/check_rel_directions
 mkdir -p "$C"
+if [ -z "$SRC" ]; then
+  git -C "$DEPOT" fetch -q origin master || { echo "ÉCHEC : fetch de $DEPOT" >&2; exit 4; }
+  SRC=$C/check_rel_directions.cpp
+  git -C "$DEPOT" show origin/master:tools/check_rel_directions/check_rel_directions.cpp > "$SRC" || { echo "ÉCHEC : l'outil absent de origin/master" >&2; exit 4; }
+  echo "outil : tools/check_rel_directions de origin/master, commit $(git -C "$DEPOT" log -1 --format=%h origin/master -- tools/check_rel_directions)"
+else
+  echo "outil : $SRC (désigné)"
+fi
 nice -n 15 g++ -std=c++20 -O2 -I "$LIB" "$SRC" -L "$LIB" -lrag3db -Wl,-rpath,"$LIB" -o "$OUTIL" \
   || { echo "ÉCHEC : l'outil ne se bâtit pas contre $LIB" >&2; exit 4; }
 verdict=0

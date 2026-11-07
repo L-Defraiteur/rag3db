@@ -56,16 +56,22 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    hôtes se sont arrêtés proprement.
 8. **Le contrôle des deux sens, sur les instantanés** (`scripts/controle-des-deux-sens.sh
    <étiquette> <id>`, à chaque poste ; demande d'hotfixs, 7 novembre 2026) : `tools/check_rel_directions`,
-   bâti contre la lib neuve du magasin (son `rag3db.hpp`), lit chaque table de relations par ses
-   deux rangements et compare, propriété par propriété. Il ouvre une **seconde** copie reflink de
-   chaque base (`…/instantanes/<étiquette>-controle/`), jamais l'instantané, qui reste le retour.
-   Un écart arrête la bascule (`courant` ne bouge pas) et s'écrit en ticket avec ses tables et
-   leurs comptes : la base se réparera ou se réindexera avant toute lib neuve. Aucun écart ne
-   prouve pas qu'une table est saine. Un contrôle qui ne trouve aucune base à lire est rouge
-   (code 7), jamais « aucun écart » : le script compte les bases contrôlées (hotfixs, 7 novembre). Référence connue : l'instantané `bascule-04063ee06` de
-   `code-rag3db-depot` (25 octobre, avant le rebâti de la base de code) rend LOCKS 413 contre 505
-   et QUERIES 21 804 contre 22 089 — les demi-arêtes de ce jour-là ; celui de `memoire-longue`,
-   aucun écart (essayé le 7 novembre).
+   bâti contre la lib neuve du magasin (son `rag3db.hpp`) depuis **`origin/master`** (jamais un
+   arbre de travail, qui peut avoir du retard ; le script dit le commit de l'outil), lit chaque
+   table de relations par ses deux rangements, nœud par nœud, et désigne les relations qui
+   divergent : d'un seul côté, vues deux fois, aux bouts différents, à une propriété différente,
+   avec dix exemples nommés. Il ouvre une **seconde** copie reflink de chaque base
+   (`…/instantanes/<étiquette>-controle/`), jamais l'instantané, qui reste le retour. Compter
+   **environ 15 minutes par base de code** (la version ancrée, 339cbb5dc ; quelques secondes pour
+   une mémoire). Un écart arrête la bascule (`courant` ne bouge pas) et s'écrit en ticket avec ses
+   tables et leurs relations : la base se réparera ou se réindexera avant toute lib neuve. Aucun
+   écart ne prouve pas qu'une table est saine. Un contrôle qui ne trouve aucune base à lire est
+   rouge (code 7), jamais « aucun écart » : le script compte les bases contrôlées (hotfixs,
+   7 novembre). Référence connue : l'instantané
+   `bascule-04063ee06` de `code-rag3db-depot` (25 octobre, avant le rebâti de la base de code)
+   rend sur LOCKS 206 relations d'un seul côté, 179 vues deux fois, 247 aux bouts différents, et
+   sur QUERIES 286, 286 et 306 — les demi-arêtes de ce jour-là ; celui de `memoire-longue`, aucun
+   écart (outil 339cbb5dc, lib 04063ee06, 14 minutes, le 7 novembre).
 9. **`courant` aux deux postes ensemble** (`scripts/courant-bascule.sh <id> <md5>`) : refuse si une
    passe qui lit `courant` tourne encore (l'unité `ide-fusion` à luciepc le 25 octobre) ou si la md5
    diffère d'un poste à l'autre ; pose ici, puis là-bas, et relit les deux `readlink`.
