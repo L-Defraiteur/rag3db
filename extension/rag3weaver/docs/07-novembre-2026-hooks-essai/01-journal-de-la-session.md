@@ -281,3 +281,24 @@ de Claude Code (`~/.claude/projects/…/memory/`), dans les procédures
 (`docs/procedures/`) ou dans les messages des sessions. Ce qu'il faut ranger
 en premier dans `memory`, c'est le contenu des procédures et de la page 08 de
 l'IDE, plus une fiche par session avec les fichiers qu'elle tient.
+
+## Tour de la levée de la fenêtre du cœur : le bloc revient, avec les scores
+
+**Bloc UserPromptSubmit, mot pour mot :**
+
+> [mémoire]
+> Fiches en rapport : « hooks-essai » (0.60 ; Session Claude Code d'essai des
+> hooks de rag3weaver vers la mémoire longue (work …) ; « régime GPU » (0.43 ;
+> Comment on ménage les cartes du poste.) — `get_fiche` pour lire.
+
+**Ce qui a changé :** après trois tours muets, le bloc arrive de nouveau, et il
+donne le score de chaque fiche. Ces scores ne sont pas ceux du rappel fait à
+la main (★ 0,016) : le hook rend une autre échelle, normalisée ? Le bloc ne
+dit pas laquelle.
+
+**Ce qui n'a pas changé :** la base n'a que deux fiches, elles reviennent
+donc toutes les deux. « Régime GPU » à 0,43 sur un message qui parle de file
+de push reste du bruit, et aucun seuil ne l'a tue.
+
+**Servi ou gêné :** rien qui serve au lot. Le score, lui, est utile : il me
+permet de juger d'un coup d'œil qu'il n'y a rien à lire.
