@@ -99,11 +99,12 @@ fn le_cout_du_plein_texte_selon_le_nombre_de_termes() {
         m["workspace"]["commands"] = json!("off");
     }
     // La mesure ne lit que le plein texte : pas de service creux à joindre.
-    if let Some(modeles) = m["models"].as_object_mut() {
+    // `get_mut`, pas `m["models"]` : l'index mutable de serde_json pose `null` sur une clé absente.
+    if let Some(modeles) = m.get_mut("models").and_then(Value::as_object_mut) {
         modeles.remove("sparse");
     }
     m["database"] = json!(base.to_string_lossy());
-    if let Some(outils) = m["tools"].as_object_mut() {
+    if let Some(outils) = m.get_mut("tools").and_then(Value::as_object_mut) {
         outils.retain(|_, t| t["policy"]["write_files"] != json!(true) && t["policy"]["run_commands"] != json!(true));
     }
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
