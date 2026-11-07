@@ -258,3 +258,47 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 - **File** : archi (b) → 96 → recherche → hooks-essai (journal, chat A) →
   codeparsers → archi pont → whois → ED (étanchéité, reprise après la mort de
   l'hôte, direction visuelle) → hotfixs (B puis index des tickets généré).
+
+## Mise à jour de 20 h 05 — la bascule 43 est faite
+
+- **Bascule 43** (G, hôtes coupés de 19 h 21 à 19 h 57) : lib unique bâtie par
+  l'arbre sur master 17a094d12 (2 min 30), verdict format 43 vert en 4 min,
+  ABI changée contre 04063ee06 (3 symboles retirés, 17 ajoutés, 3 vtables) ;
+  instantanés avant-43 aux deux postes, contrôle des deux sens sans écart sur
+  les 4 bases, `courant` = rag3db-build-17a094d12…, hôtes réveillés, dense
+  filtré par langage et dossier vert sur la base de code de Lucie, témoin de
+  l'IDE vert sur 7970. Toute passe neuve s'épingle sur cet id, MOTEUR_ANCIEN
+  vide. Deux réserves : `models.sparse` posé chez Lucie mais le surlignage
+  creux se replie, le binaire des hôtes étant sans burn-embedder (question à
+  recherche : le service bge-m3 rend-il les positions des jetons ?) ; et
+  l'effacement des anciens instantanés (bascule-04063ee06 1,9 Go,
+  bascule-66994dd43 1,9 Go, locks-25-oct 4,4 Go, avant-43-controle 3,2 Go ici ;
+  3,5 Go × 3 à luciepc) refusé à G par sa permission, non contourné : à la
+  main de Lucie.
+- **Atterris depuis 18 h 40** : hooks-3-ter (b) (20fdc9569, posé 18 h 48 :
+  premier bloc juste dans la session d'essai, déjà-vu et notification justes),
+  lot de 96 (ec9a333e3 : call_models, le pas 1 servait enfin), recherche
+  trois-lots (77d0b0676), index des tickets généré (hotfixs, 345eb5a7c),
+  (B) fermé (094aee5f8), instruction-en-echec (cœur, 17a094d12), G1 des
+  décalages provisoires (hotfixs, c4f8610b9 : un COPY de relations dans la
+  transaction qui a créé ses nœuds reliait les nœuds d'un autre écrivain
+  validé entre-temps ; inatteignable dans l'hôte par construction, une
+  connexion écrivaine par backend ; témoin du second processus chez
+  recherche), l'étanchéité de l'équipier (ED, 75d8d6d1e), pages 02 et 03
+  d'ED (session multi-dépôts, vocabulaire git, l'atelier ouvre les dépôts),
+  tty (vocabulaire, 55402c3e5), rapports de l'arbre (b1f4b2252).
+- **Décisions de Lucie** : juge Flash actif dans sa session d'essai sous
+  surveillance (`recall_judge: false` pour couper) ; le produit parle en
+  dépôts, worktrees, branches, PR, et « projet rag3weaver » pour le
+  déclaratif pur, jamais « backend » à l'écran ; sous chaque conversation sa
+  récap d'usage et ses fiches ; une session tient N worktrees, plusieurs par
+  dépôt ; l'usage pro d'abord (« l'atelier ouvre les dépôts », page 03 d'ED
+  à son accord) ; gabarits de la mémoire : version épinglée + `templates
+  upgrade` (M8 de 96) ; règle « ne pas s'empêcher de progresser ».
+- **File** : archi (c) → hooks-essai (journal, chat Rust, chat page, en un
+  passage) → codeparsers (pointeur) → 96 (run_e2e.sh, pas 3) → arbre (juge
+  Claude Code, whois) → archi (pont : mail, codex_threads, canal, genre
+  message) → ED (reprise après la mort de l'hôte, direction visuelle) ;
+  cœur : projection (rouge de charge inscrit, ticket 10-10) puis retrait →
+  libs ordinaires ; hotfixs : RTree, G3 ; recherche : second-ecrivain, puis
+  « mes recherches » ; G : pose suivante (étanchéité + (c) + chat) chez Lucie.
