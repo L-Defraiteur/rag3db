@@ -8,7 +8,7 @@
 
 use rag3weaver::daemon_host::{DaemonHost, DaemonServer};
 use rag3weaver::llm::{CallbackLlm, Llm, MockLlm};
-use rag3weaver::tty::{client, endpoint::Endpoint, flux, plain};
+use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,6 +19,19 @@ fn git(dir: &Path, args: &[&str]) -> String {
     let o = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().unwrap();
     assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
     String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+fn copier(src: &Path, dst: &Path) {
+    std::fs::create_dir_all(dst).unwrap();
+    for e in std::fs::read_dir(src).unwrap() {
+        let e = e.unwrap();
+        let cible = dst.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copier(&e.path(), &cible);
+        } else {
+            std::fs::copy(e.path(), &cible).unwrap();
+        }
+    }
 }
 
 /// Un petit dépôt git étranger, inscrit par `code-tree add`.
@@ -32,8 +45,7 @@ fn depot_inscrit(d: &Path) -> PathBuf {
     }
     let roots = rag3weaver::code_tree::Roots { config: d.join("config"), data: d.join("data") };
     let gabarit = roots.config.join("code-lourd/templates");
-    std::fs::create_dir_all(gabarit.parent().unwrap()).unwrap();
-    rag3weaver::code_tree::copy(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarit, false).unwrap();
+    copier(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarit);
     let source = roots.manifest("code-lourd");
     let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&source).unwrap()).unwrap();
     m["database"] = json!(roots.data.join("code-lourd.rag3db").display().to_string());
