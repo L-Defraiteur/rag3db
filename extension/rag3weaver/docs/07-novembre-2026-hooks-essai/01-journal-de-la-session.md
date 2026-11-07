@@ -616,3 +616,22 @@ luciepc est vert : 36 passed, 1 ignored.
 **Au premier rappel à 717 k jetons**, le bloc `[mémoire]` a dit de ranger :
 c'est fait par l'identité (fiche `hooks-essai`, L1 `identity`, révision 3)
 et par cette section.
+
+## Les trois lots sur master : 3d09b32c2
+
+**La passe unique**, verte entière : `hooks-essai-trois-lots-2` (50ec9c7de),
+sur 17a094d12 avec `MOTEUR_ANCIEN=1`.
+
+- lib : 1984 passed ;
+- navigateur : 15/15 ;
+- Gemini du chat de tâche : 1/1 ;
+- e2e : lectures 22, demon_hote 12, mcp 11, juge 4, equipier 1.
+
+**Le push.** Le premier essai s'est arrêté sous le verrou : du C++ du moteur
+était arrivé sur master. Mon script était plus strict que la procédure : il
+s'arrêtait sur tout fichier autre qu'un `.md`, alors que seul le code arrivé
+sous `extension/rag3weaver` impose un rejeu. Une fois corrigé, le dernier pas
+seul (environ 30 s sous `poste push`) a poussé et lu les trois contrôles.
+Worktree et target de luciepc effacés.
+
+**Tickets :** 8 fermés, 1 ouvert (le premier jeton perdu en direct).
