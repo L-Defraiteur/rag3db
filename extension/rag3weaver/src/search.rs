@@ -5,7 +5,7 @@
 //! `Catalog::rechercher` path), plus types for search options, results, and
 //! the graph carried by a unified result.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -1880,6 +1880,40 @@ pub const SEUIL_CONFIANCE: f64 = 0.88;
 /// La confiance est recalculée **ici**, en Jaro pur sur le texte rendu, et pas
 /// tirée du score de classement : voir [`SEUIL_CONFIANCE`] pour pourquoi les
 /// deux nombres ne peuvent pas être le même.
+/// **La requête entière garde son flou jusqu'à cette longueur** (en caractères), puis se
+/// cherche à distance 0 (ticket « Le plein texte explose sur une requête longue », 7 novembre
+/// 2026, mesuré par `tests/sonde_requete_longue.rs`) : en flou, 396 ms à 104 caractères et 2,6 s à
+/// 235 sur la base de code, 112 s à 1 397 ; à distance 0, moins de 140 ms partout. Le budget du
+/// nœud est de 500 ms, le tiers de l'attente que la première recherche accorde à sa poignée.
+pub const MAX_FUZZY_WHOLE_QUERY_CHARS: usize = 100;
+
+/// **La recherche par mots garde au plus tant de termes** (même ticket, même mesure) : le plus
+/// grand palier sous le budget sur la base de code (495 ms à 64 termes, 2,7 s à 128).
+pub const MAX_WORD_TERMS: usize = 64;
+
+/// **Les termes gardés pour la recherche par mots**, si la requête en a plus que
+/// [`MAX_WORD_TERMS`] : les plus longs d'abord (la longueur pour la rareté, faute d'IDF à ce
+/// stade), les mots de moins de trois lettres tombant les premiers ; les termes gardés restent
+/// dans leur ordre d'apparition. `None` : la requête passe telle quelle. Rend la requête réduite,
+/// le nombre de termes gardés et le nombre de termes distincts.
+pub fn bound_word_terms(query: &str) -> Option<(String, usize, usize)> {
+    let mut vus = HashSet::new();
+    let termes: Vec<&str> = query.split_whitespace().filter(|t| vus.insert(t.to_lowercase())).collect();
+    if termes.len() <= MAX_WORD_TERMS {
+        return None;
+    }
+    let mut rangs: Vec<usize> = (0..termes.len()).collect();
+    // Stable : à longueur égale, le premier apparu passe devant.
+    rangs.sort_by_key(|&i| {
+        let n = termes[i].chars().count();
+        (n < 3, std::cmp::Reverse(n))
+    });
+    let mut gardes: Vec<usize> = rangs.into_iter().take(MAX_WORD_TERMS).collect();
+    gardes.sort_unstable();
+    let reduite = gardes.iter().map(|&i| termes[i]).collect::<Vec<_>>().join(" ");
+    Some((reduite, MAX_WORD_TERMS, termes.len()))
+}
+
 /// Le début de la phrase de [`marquer_la_confiance`] : un nœud qui fond deux
 /// recherches ne garde que celle de la liste dont il rend le premier.
 pub(crate) const RIEN_DE_PROBANT: &str = "le plein texte n'a rien de probant";
@@ -3437,5 +3471,38 @@ mod tests_surlignages {
         merge_highlights(&mut dst, &h);
         assert_eq!(dst.len(), 2, "l'union garde chaque passage une fois, triés : {dst:?}");
         assert_eq!(dst[0].start, 0);
+    }
+}
+
+/// **La borne des requêtes longues** (ticket du 7 novembre 2026, mesuré).
+#[cfg(test)]
+mod tests_requete_longue {
+    use super::*;
+
+    /// Les requêtes de Lucie du 25 octobre (le tableau de la requête entière) passent telles
+    /// quelles : sous la borne des termes et, sauf aucune, sous celle du flou.
+    #[test]
+    fn les_requetes_du_25_octobre_ne_sont_pas_coupees() {
+        for q in ["rag3weaver", "work in progress", "refreh index states", "refresh index states", "l'indexation", "Vue d'ensemble", "cpu_count"] {
+            assert!(bound_word_terms(q).is_none(), "« {q} » garde ses termes");
+            assert!(q.chars().count() <= MAX_FUZZY_WHOLE_QUERY_CHARS, "« {q} » garde son flou");
+        }
+    }
+
+    #[test]
+    fn une_requete_longue_garde_les_termes_les_plus_longs_dans_leur_ordre() {
+        // 70 termes distincts : 10 mots de deux lettres, puis 60 de longueurs croissantes.
+        let mut termes: Vec<String> = (0..10).map(|i| format!("a{i}")).collect();
+        termes.extend((0..60).map(|i| format!("mot{}", "x".repeat(i))));
+        let q = termes.join(" ");
+        let (reduite, gardes, total) = bound_word_terms(&q).expect("coupée");
+        assert_eq!((gardes, total), (MAX_WORD_TERMS, 70));
+        let gardes: Vec<&str> = reduite.split_whitespace().collect();
+        assert_eq!(gardes.len(), MAX_WORD_TERMS);
+        assert!(termes[10..].iter().all(|t| gardes.contains(&t.as_str())), "les 60 longs sont gardés");
+        assert_eq!(gardes.iter().filter(|t| t.len() == 2).count(), 4, "les mots de deux lettres tombent les premiers");
+        assert_eq!(gardes[0], "a0", "l'ordre d'apparition est gardé : {reduite}");
+        // Les doublons ne comptent qu'une fois, sans la casse.
+        assert!(bound_word_terms(&"Mot mot MOT ".repeat(100)).is_none());
     }
 }
