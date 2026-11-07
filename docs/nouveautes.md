@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
+  verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
+  codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
+  (`vue_portee`, appelée seulement là, avait 0 usage) ; sur code-lourd, 19 appels de plus et
+  aucune locale prise pour un appel. codeparsers 672a0d5.
 - **7 nov. — Chercher sans avoir ouvert un dossier.** La recherche de l'IDE se tape dès
   l'accueil, sur chaque backend, sur tout l'index ; depuis l'arbre, le dossier courant la
   suit comme un filtre (le `scope` de `search_code`), effaçable d'un clic. Avant, la saisie
