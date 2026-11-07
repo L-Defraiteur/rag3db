@@ -45,6 +45,9 @@ fn banc_dans(nom: &str, model: ChatModel, retouche: impl Fn(&mut Value)) -> (tem
         .with_background(Arc::new(crate::dataflow::background::Registry::new()))
         .with_racine_des_taches(d.path().join("taches"))
         .with_chats_root(d.path().join("chats"))
+        // Le journal des runs, actif : les fiches écrites pendant une
+        // conversation se trouvent par ses runs.
+        .with_runs_root(d.path().join("runs"))
         .with_chat_model(model);
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le backend s'ouvre");
@@ -731,4 +734,80 @@ fn la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge() {
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
+}
+
+/// **Les fiches écrites pendant une conversation** (forme accordée avec
+/// everything declarative et 96) : l'état du chat les rend par les Sources de la
+/// mémoire déclarée dont `session` est un run de la conversation, puis les
+/// Apports qui les citent — par `select_sources` et `select_apports`. Une source
+/// d'une autre session n'y paraît pas.
+#[test]
+fn l_etat_du_chat_rend_les_fiches_ecrites_pendant_la_conversation() {
+    let m = tempfile::tempdir().unwrap();
+    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/memory");
+    let memoire = crate::gabarits::jouable::manifeste_jouable(&gabarit, m.path()).unwrap();
+    let memoire_txt = memoire.to_string_lossy().to_string();
+    let (_d, host, manifeste, id) = banc_avec(qui_lit_deux_fois(), move |c| {
+        c["bilans"] = json!({ "memoire": memoire_txt });
+    });
+    let etat = host.chat_state(&id).unwrap();
+    assert_eq!(etat["memory_writes"], json!([]), "sans tour, rien : {etat}");
+
+    let r = host.chat_turn(&id, "regarde le code").unwrap();
+    let run = r["run"].as_str().unwrap().to_string();
+    // Le journal du run porte `chat` : il fait partie de la conversation.
+    let debut = Instant::now();
+    while host.journal.lire(&id, &run).is_none() {
+        assert!(debut.elapsed() < Duration::from_secs(10), "le journal du run n'est pas écrit");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // Ce que le juge écrit après un tour : une source datée par la session (le
+    // run), un apport qui la cite ; et une source d'une autre session.
+    let mem = host.hosted(&memoire).unwrap();
+    let ecrire = |outil: &str, record: Value| {
+        let r = host.with_backend(&mem, |b| b.call(outil, json!({ "record": record }))).unwrap();
+        assert!(r.is_ok(), "{outil} : {r:?}");
+    };
+    ecrire("put_fiche", json!({ "name": "bilan : regarder le code", "about": "le bilan du tour", "state": "current" }));
+    ecrire("put_source", json!({ "chemin": "sources/2026-11-07-ce-run.md", "titre": "bilan", "contenu": "le tour", "origine": "envoi", "session": run }));
+    ecrire("put_apport", json!({ "fiche": "bilan : regarder le code", "source": "sources/2026-11-07-ce-run.md", "section": "bilan", "texte": "bien", "niveau": "L1", "state": "current" }));
+    ecrire("put_source", json!({ "chemin": "sources/2026-11-07-autre.md", "titre": "autre", "contenu": "autre", "origine": "envoi", "session": "un-autre-run" }));
+    ecrire("put_apport", json!({ "fiche": "bilan : regarder le code", "source": "sources/2026-11-07-autre.md", "section": "ailleurs", "texte": "x", "niveau": "L1", "state": "current" }));
+
+    let etat = host.chat_state(&id).unwrap();
+    assert_eq!(etat["memory_writes_why"], Value::Null, "{etat}");
+    let ecrites = etat["memory_writes"].as_array().cloned().unwrap_or_default();
+    assert_eq!(ecrites.len(), 1, "seul l'apport de la conversation : {etat}");
+    let w = &ecrites[0];
+    assert_eq!((w["fiche"].clone(), w["kind"].clone(), w["section"].clone(), w["run"].clone()), (json!("bilan : regarder le code"), json!("apport"), json!("bilan"), json!(run)), "{w}");
+    assert!(w["at_ms"].as_u64().is_some_and(|t| t > 0), "{w}");
+    let _ = manifeste;
+}
+
+/// Une mémoire sans les outils de lecture par filtre (un gabarit plus ancien) :
+/// la liste ne se fait pas, et l'état dit pourquoi au lieu de rendre une liste vide
+/// muette.
+#[test]
+fn sans_outil_de_lecture_la_memoire_dit_pourquoi_la_liste_est_vide() {
+    let m = tempfile::tempdir().unwrap();
+    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/memory");
+    let memoire = crate::gabarits::jouable::manifeste_jouable(&gabarit, m.path()).unwrap();
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&memoire).unwrap()).unwrap();
+    v["tools"].as_object_mut().unwrap().remove("select_sources");
+    std::fs::write(&memoire, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+    let memoire_txt = memoire.to_string_lossy().to_string();
+    let (_d, host, _manifeste, id) = banc_avec(qui_lit_deux_fois(), move |c| {
+        c["bilans"] = json!({ "memoire": memoire_txt });
+    });
+    host.chat_turn(&id, "regarde le code").unwrap();
+    let debut = Instant::now();
+    loop {
+        let etat = host.chat_state(&id).unwrap();
+        if let Some(pourquoi) = etat["memory_writes_why"].as_str() {
+            assert!(pourquoi.contains("select_sources"), "{etat}");
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(10), "l'état ne dit pas pourquoi : {etat}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
