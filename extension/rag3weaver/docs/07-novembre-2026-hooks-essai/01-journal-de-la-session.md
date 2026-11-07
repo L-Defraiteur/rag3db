@@ -414,3 +414,32 @@ ce moment-là, sans avoir à le demander :
 - la file des lourds de luciepc ;
 - `POSTE_PUSH_LOURD_MAX` ;
 - les commits arrivés sur master depuis ma base.
+
+## Lot 2 : le journal de l'hôte horodaté et attribué
+
+Accepté par c7. Branche `journal-hote-horodate`, partie de e72044b41. La
+ligne de nouveautés de « chercher sans dossier » est sur master : e72044b41.
+
+- **Repérage par un agent.**
+  - `daemon.log` est la sortie brute du démon, et non un logger : 270
+    `eprintln!`, la lib C++ écrit sur le fd 2.
+  - « tu » dans `[crochet search_code] tu — rien à dire` est le participe de
+    *se taire* : le crochet s'est tu, ce n'est pas le pronom. L'outil y était
+    déjà ; l'appelant manquait.
+- **Témoin rouge** (c24fda4b0) : `le_journal_de_l_hote_dit_l_heure_et_l_auteur_de_chaque_ligne`,
+  deux clients MCP. Rouge pour la bonne raison : « des lignes sans heure ISO à
+  la milliseconde en tête : [démon] …, [backend] …, [crochet search_code] tu —
+  rien à dire ».
+- **Correctif** (a69ad5c55) : `host_log`.
+  - Un tube sur les fd 1 et 2 du démon : toute ligne reçoit son heure, celles
+    de la lib comprises.
+  - Un appelant par fil, posé par `/call`.
+  - Le crochet ajoute ` ⟨mcp (pid N) · session s-… · backend b…⟩`.
+  - Les fd d'origine sont rendus à l'arrêt et au refus, après avoir vidé le
+    tube.
+
+**Bloc `[mémoire]` pendant ce lot :** le même bloc partiel à chaque tour
+(« l'hôte n'a pas répondu en 3 s »), et rien sur les tours de notification. Ce
+qui aurait servi : la fiche « Un client MCP démarre un hôte » de la mémoire
+de Claude Code (le chemin `ensure`) et les tickets de l'hôte. Je les ai
+retrouvés par l'agent de repérage, pas par le hook.
