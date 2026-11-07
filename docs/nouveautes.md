@@ -7,6 +7,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — La recherche surligne ce que le vecteur a trouvé, filtre juste et ne s'étouffe plus sur un prompt collé.**
+  Un morceau trouvé par le seul dense porte ses passages surlignés par bge-m3, calculés à
+  l'affichage et nulle part ailleurs (0 appel à l'indexation, prouvé par un service qui compte) ;
+  un filtre ne laisse plus passer dans le signal creux les morceaux d'un autre document ; et une
+  requête de 200 mots répond en 80 ms au lieu de 26 s, en disant ce qu'elle a coupé (`c5a40d376`,
+  `aaf475d4b`, `77d0b0676`).
+
 - **7 nov. — Une lecture survit à l'échec d'une de ses instructions.** Dans une transaction en
   lecture seule, une instruction qui échoue (un index absent, un graphe projeté absent) ne fait plus
   refuser les suivantes : les signaux d'une recherche sous instantané ne tombent plus ensemble.
