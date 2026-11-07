@@ -9,12 +9,13 @@
 %% param: search_options json = {"limit": 8} -- Les options de la recherche de candidates.
 %% param: allow_create bool = true -- Sans create, une section sans candidate est none.
 %% param: instruction string = "Tu ranges une section d'un document sous l'une des fiches candidates. Une section va sous une fiche si elle parle de ce que la fiche décrit ; une règle va sous le domaine où elle s'applique. Partager un mot ne suffit pas. Si aucune candidate ne convient, réponds none ; si le sujet est net et qu'aucune fiche ne le porte, réponds create." -- Ce que l'étiquette veut dire, pour le modèle.
+%% param: source json = {} -- Réservé : la Source (le L0) se compose depuis titre, contenu, chemin et origine, et remplace toute valeur donnée ici (EntityRecordNode exige un objet en configuration, que le mermaid ne sait pas écrire en littéral).
 %% result: refs.report
 
 graph LR
     genre["CreateRefTypeNode(name='doc', description='La section d&#39;un source Markdown, provenance d&#39;un apport : doc:<chemin du source>#<titre de la section>.', forme='doc:<chemin du source>#<titre>', confirm=true, types_entity='RefType')"]
     params["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
-    source["EntityRecordNode(entity='Source', action='put', record={})"]
+    source["EntityRecordNode(entity='Source', action='put', record=$source)"]
     split["SplitSections(field='contenu')"]
     decide["ForEachNode(graph='@graphs/archive_decide.mmd', on_error='report', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
     route["Route(key='kind', routes='none|create|fiche')"]
