@@ -636,6 +636,36 @@ impl DaemonHost {
     /// **`call`** : un outil du backend, en parallèle des autres appels de ce
     /// backend (lot L5) ; les écritures, elles, se sérialisent au catalogue.
     pub fn call(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value) -> Value {
+        self.call_with_deadline(session, manifest, name, arguments, None)
+    }
+
+    /// **`call` avec un délai** (`deadline_ms` du corps de `/call`) : passé ce
+    /// délai, l'hôte arrête lui-même le run du graphe (`cancelled_by:
+    /// "deadline"`) et rend « délai dépassé (N ms) », `error_kind: "deadline"` —
+    /// un client parti (le hook de Claude Code, à un ou cinq secondes) ne fait
+    /// plus tourner une recherche que personne n'attend. Sans délai, `call`.
+    pub fn call_with_deadline(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value, deadline_ms: Option<u64>) -> Value {
+        let echeance = deadline_ms.map(|ms| crate::backend::CallDeadline {
+            at: std::time::Instant::now() + std::time::Duration::from_millis(ms),
+            ms,
+            fired: Default::default(),
+        });
+        let frappe = echeance.as_ref().map(|d| d.fired.clone());
+        let mut reponse = crate::backend::with_call_deadline(echeance, || self.call_sans_delai(session, manifest, name, arguments));
+        if let (Some(ms), Some(frappe)) = (deadline_ms, frappe) {
+            if frappe.load(std::sync::atomic::Ordering::SeqCst) {
+                reponse = json!({
+                    "ok": false,
+                    "error": format!("délai dépassé ({ms} ms) : l'hôte a arrêté « {name} » à son échéance (cancelled_by « deadline »)"),
+                    "error_kind": "deadline",
+                    "transient": true,
+                });
+            }
+        }
+        reponse
+    }
+
+    fn call_sans_delai(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value) -> Value {
         let result = self.check_session(session).and_then(|s| {
             let cell = cell_of(&s)?;
             let hosted = self.hosted(manifest)?;
@@ -960,7 +990,7 @@ impl DaemonHost {
                     "/backend/close" => self.close(session, &m),
                     "/describe" => self.describe(session, &m),
                     _ => match v["name"].as_str() {
-                        Some(name) => self.call(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({}))),
+                        Some(name) => self.call_with_deadline(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({})), v["deadline_ms"].as_u64()),
                         None => json!({ "ok": false, "error": "« name » manque : l'outil à appeler" }),
                     },
                 };
