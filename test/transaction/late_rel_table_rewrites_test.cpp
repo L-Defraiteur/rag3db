@@ -513,7 +513,7 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
     std::mt19937_64 random{20261109u};
     std::set<int64_t> sources, destinations(hot.begin(), hot.end());
     const std::string padding(900, 'u');
-    int refusals = 0, copies = 0;
+    int refusals = 0, commitRefusals = 0, copies = 0;
     for (int round = 0; round < 40 && refusals < 3; round++) {
         const auto edges = 500 << (round % 7);
         const auto first = 20000 + static_cast<int64_t>(random() % 3000);
@@ -536,12 +536,22 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
         ok("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;");
         auto copy = conn->query("COPY R FROM (UNWIND [" + pairs + "] AS p RETURN p[1], p[2], p[3], '" +
                                 padding + "' + string(p[3]), 'appel');");
-        if (copy->isSuccess()) {
-            ok("COMMIT;");
-            copies++;
+        // Le refus peut venir du COPY, ou du point de reprise qui porte sa durabilité, au COMMIT :
+        // la base est alors à rouvrir, et rien du COPY ne reste.
+        std::string refusal;
+        if (!copy->isSuccess()) {
+            refusal = copy->getErrorMessage();
         } else {
-            const auto message = copy->getErrorMessage();
-            ASSERT_NE(message.find("buffer pool is full"), std::string::npos) << message;
+            auto commit = conn->query("COMMIT;");
+            if (commit->isSuccess()) {
+                copies++;
+            } else {
+                refusal = commit->getErrorMessage();
+                commitRefusals++;
+            }
+        }
+        if (!refusal.empty()) {
+            ASSERT_NE(refusal.find("buffer pool is full"), std::string::npos) << refusal;
             refusals++;
             // Le filet du crate (99e6f0ee0) : défaire, fermer sans point de reprise, rouvrir.
             conn->query("ROLLBACK;");
@@ -565,7 +575,8 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
             ok("COMMIT;");
         }
     }
-    std::cout << "COPY validés " << copies << ", COPY refusés pour mémoire " << refusals << "\n";
+    std::cout << "COPY validés " << copies << ", COPY refusés pour mémoire " << refusals
+              << " (dont au point de reprise du COMMIT " << commitRefusals << ")\n";
     ASSERT_GT(refusals, 0) << "aucun COPY n'a été refusé : le tampon n'est pas assez serré";
     sources.insert(0);
     destinations.insert(0);
