@@ -387,3 +387,30 @@ tour. »).
 - Pistes proposées à archi : mesurer chaque signal (dense, plein texte) sur
   le chemin `/call`, et rappeler sur un extrait du prompt plutôt que sur le
   prompt entier.
+
+## Le lot sur master : e2d5c9c88
+
+- **Rebasé deux fois** (en -2 puis en -3), parce que master a reçu deux
+  tickets de docs pendant mes préparatifs. Le script du push rebase lui-même
+  sur des `.md` seuls et s'arrête si du code arrive.
+- **La file.** Le premier `poste push --lourd` a rendu « code 75, rien de pris »
+  après 60 s, les quatre places lourdes étant tenues. Remis en file avec
+  `POSTE_PUSH_LOURD_MAX=5400`.
+- **La passe, au vert :**
+  - bundle `--check` ;
+  - `check_features` 5/5 ;
+  - la lib entière sous le jeu large, `anthropic-llm` compris : 1954 passed,
+    0 failed, 38 ignored ;
+  - les 13 témoins navigateur : 13 passed.
+- **Push et contrôles.** Push dans `if grep -qx VERT` ; status propre, aucun
+  rebase en cours, `origin/master` = HEAD e2d5c9c88. Worktree et target de
+  luciepc effacés.
+
+**Le bloc `[mémoire]` pendant le push :** le même bloc partiel à chaque tour
+(« Rappel des fiches : l'hôte n'a pas répondu en 3 s … »). Il est honnête, mais
+il ne m'a rien apporté pendant toute la phase de push. Ce qui m'aurait servi à
+ce moment-là, sans avoir à le demander :
+
+- la file des lourds de luciepc ;
+- `POSTE_PUSH_LOURD_MAX` ;
+- les commits arrivés sur master depuis ma base.
