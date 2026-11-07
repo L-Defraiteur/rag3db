@@ -173,7 +173,10 @@ fn mesures_du_modele_des_vues() {
         return;
     };
     let ecrire = std::env::var("MESURE_VUES_ECRIRE").as_deref() == Ok("1");
-    let c = if ecrire { Rag3dbConnection::new(&chemin) } else { Rag3dbConnection::read_only(&chemin) }.expect("la copie s'ouvre");
+    // En écriture même pour M3 et M4 : `PROJECT_GRAPH_CYPHER` est refusé sur une base ouverte en
+    // lecture seule (« Cannot execute write operations in a read-only database! », 7 nov., la
+    // première passe) — c'est une copie, rien ne s'y écrit hors de M5.
+    let c = Rag3dbConnection::new(&chemin).expect("la copie s'ouvre");
     c.execute(&format!("LOAD EXTENSION {}", rag3weaver::connection::cypher_path_literal(std::path::Path::new(&crate::common::vector_extension()))))
         .expect("l'extension vector");
     let nom = std::path::Path::new(&chemin).file_stem().unwrap().to_string_lossy().into_owned();
@@ -253,7 +256,7 @@ fn mesures_du_modele_des_vues() {
 
     // M5 : des vues qui naissent et meurent.
     if !ecrire {
-        println!("MESURE\t{nom}\tM5\tnon mesuré : copie ouverte en lecture seule (MESURE_VUES_ECRIRE=1)");
+        println!("MESURE\t{nom}\tM5\tnon mesuré : MESURE_VUES_ECRIRE n'est pas posé");
         return;
     }
     let colonnes: Vec<String> = q(&b.c, "CALL TABLE_INFO('Scope_Chunk') RETURN *").rows.iter().filter_map(|l| l.get(1).and_then(|v| v.as_str()).map(str::to_string)).collect();
