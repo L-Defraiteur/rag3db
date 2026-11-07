@@ -1,6 +1,6 @@
 # rag3weaver archi — rapport de session
 
-Mis à jour le 7 novembre 2026 à 14 h 45. Ce fichier se met à jour sur place. La session est
+Mis à jour le 7 novembre 2026 à 15 h 35. Ce fichier se met à jour sur place. La session est
 l'ancienne orchestration des 3-4 octobre (rag3db-9f), puis le chantier E du 8 octobre (Claude
 en agent) ; depuis le 7 novembre, le §1 du plan du week-end : les hooks de Claude Code.
 
@@ -10,7 +10,8 @@ en agent) ; depuis le 7 novembre, le §1 du plan du week-end : les hooks de Clau
 |---|---|---|
 | anthropic-llm-2 : le client de l'API Messages d'Anthropic derrière `Llm`, `connect_llm` rend `Arc<dyn Llm>` pour tous les protocoles, feature `anthropic-llm` au jeu large | 90df16ace | check_features 5/5, lib 1 904, e2e_lectures 20, navigateur 12 |
 | hooks lot 1 : la commande mince `rag3weaver-backend hook`, réglage, journal, silence sans hôte, script d'installation sur demande (page 02) | 2d3ecad1e | 5/5, lib 1 912, script, navigateur 12 |
-| hooks lot 2 : SessionStart et UserPromptSubmit en lecture, adaptateur de transcription, cibles du script (dossier courant, --settings, --global, --worktree) (page 03) | f9985b6bc, **prêt**, attend le mot de c7 | 5/5, lib 1 928, script, navigateur 12 |
+| hooks lot 2 : SessionStart et UserPromptSubmit en lecture, adaptateur de transcription, cibles du script (dossier courant, --settings, --global, --worktree) (page 03) | d42787227 | 5/5, lib 1 928, script, navigateur 12 |
+| hooks lot 3 : PostCompact (L0 + L1 compaction), Stop (run claude_code_turn, route /journal/run, file des bilans), PreCompact (consignes), handle sous RAG3WEAVER_AGENT_KEY, rappel de l'identity ; gabarits déclarés sous templates/hooks relus à chaque appel, commande stable, --rejouer, --help, versions au journal ; les trois défauts du premier usage et les deux de 73 (page 04) | 8f60895b8 (rejoué sur le master d'INCLUDES) | 5/5, lib 1 946, script, navigateur 12 |
 
 Docs seules sur master : la page 01 de conception des hooks (81b9b9176) ; la règle « le worktree
 est jetable » dans `docs/procedures/push-d-un-lot.md` (7f8a3fb75).
@@ -26,17 +27,20 @@ est jetable » dans `docs/procedures/push-d-un-lot.md` (7f8a3fb75).
 
 ## 3. En cours et suite
 
-- Lot 2 : push au mot de c7 (`~/.cache/rag3weaver-build/wt-hooks2-push.sh`, qui efface worktree,
-  branche et target après les contrôles).
-- Lot 3 : PostCompact → L1 `compaction` ; Stop → `POST /journal/run` (route à ouvrir dans
-  l'hôte, à 73) ; le handle écrit sous `RAG3WEAVER_AGENT_KEY` quand la fiche existe ; le second
-  rappel de l'`identity`.
-- Lot 4 : PreCompact → consignes du résumé ; `ranger` quand M9 arrive.
+- Lot 3 bis : la table `serveurs` dans le run du Stop (depuis `~/.claude.json`), pour que le juge
+  de 73 rejoue nos outils ; un témoin sur un vrai gabarit `memory` dans l'hôte de test (mon faux
+  hôte répond à tout `cited_by` : c'est ce qui a caché le défaut de la valeur du handle) ; `whois`
+  à la place de `cited_by` au SessionStart quand la branche de 73 sera sur master.
+- Lot 4 : `ranger` / `archive` (pas 3 de 96) pour PostCompact ; la seconde moitié de l'exigence
+  de Lucie (redéclaration des gabarits par propositions, vue de l'IDE) est en suite dans la page 04.
+- Premier usage réel : la session `hooks-essai` de Lucie (bloc rendu, fiche écrite, 14 h 55) ; les
+  trois défauts qu'elle a montrés et les deux de 73 sont dans le lot 3. Elle doit relancer une
+  fois pour prendre la commande stable ; après, plus jamais.
 - Jamais joué : la passe d'agent Gemini / Claude (page 03 du 10 octobre) — attend le mot de Lucie.
 
 ## 4. Ce qui attend Lucie
 
-- L'essai des hooks sur un vrai worktree (page 03 §1), après le push du lot 2.
+- La CI de master est rouge depuis 13 h 58 UTC (lue par le push) : à regarder, ce n'est pas un rouge local.
 - Le repli serveur d'Anthropic en produit (hors comparaison) ; le modèle de la seconde passe.
 
 ## 5. Comment reprendre
