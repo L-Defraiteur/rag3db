@@ -115,7 +115,23 @@ static INSTALLED: std::sync::Mutex<Option<Installed>> = std::sync::Mutex::new(No
 
 /// Ce qu'une ligne attend au plus une sortie qui ne prend pas (un pic) avant
 /// d'être jetée : l'hôte est ralenti d'autant au pire, jamais figé.
-const WRITE_PATIENCE: std::time::Duration = std::time::Duration::from_millis(200);
+///
+/// **D'où vient 50 ms** (mesuré le 7 novembre 2026, 18 h, par
+/// `scripts/mesure_patience_du_journal.py` : écriture non bloquante et `poll`
+/// POLLOUT, comme le relais) : le temps que met la sortie à reprendre après
+/// `EAGAIN`, en rafales de 1 000 lignes de 1 Kio et de 10 lignes de 64 Kio,
+/// trois passes chacune, sur les deux postes en charge (portable : 11,6 ;
+/// luciepc : 15,5).
+/// - Vers le socket de flux de journald (le stderr d'un service systemd) :
+///   2 à 13 `EAGAIN` par rafale, attente médiane 0,37 à 0,65 ms, **pire
+///   1,14 ms** sur les 36 rafales.
+/// - Vers un fichier en ajout (`StandardError=append:`, le cas de l'unité de
+///   l'hôte) : aucun `EAGAIN` (un fichier ordinaire ne bloque pas), écriture
+///   au pire 0,03 ms.
+/// 50 ms laisse environ 44 fois le pire mesuré : un journald qui cale plus
+/// longtemps (mémoire sous pression, fsync) est une panne, et la perte s'y
+/// dit. La première version disait 200 ms sans mesure.
+const WRITE_PATIENCE: std::time::Duration = std::time::Duration::from_millis(50);
 
 /// Une ligne plus longue est coupée là : le relais ne grossit pas sans borne
 /// sur une sortie sans fin de ligne.
