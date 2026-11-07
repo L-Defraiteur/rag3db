@@ -86,13 +86,15 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (43)
+### Ouverts — produit (45)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une définition C++ se lie à la déclaration de son en-tête, pas à son nom de fichier](2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md) | ouvert — la forme exacte (« declaration », 299 justes sur 300) entre sur master avec INCLUDES ; restent ses limites : le conteneur par le dernier segment, les surcharges, les déclarations derrière une macro | réponse fausse | oui | oui (code.rs) |
+| [La lecture des déclarants coûte autant que le choix des cibles, pour un lot C/C++](2026-10-26-la-lecture-des-declarants-coute-autant-que-le-choix-des-cibles.md) | ouvert — mesuré sous charge (lignes 4 075 → 2 233 par la borne, temps inchangé), à profiler à une fenêtre calme | lenteur | oui | oui (code.rs) |
 | [Des tests de la lib rougissent sous charge](2026-11-07-des-tests-de-la-lib-rougissent-sous-charge.md) | ouvert — pour everything declarative, dans le lot du témoin du chat après les vues ; le journal au-delà du plafond en fond, la base principale jamais écrite par la tâche, le témoin du chat, celui des vues : rouges dans la lib entière ou le lot navigateur, verts seuls ; règle du jour : rejoué seul une fois, nommé, pas de known_red | faux rouge (durée ou borne dépassée sous charge) | non | oui (`commande.rs`, `taches/tests.rs`, `chat/tests.rs`, `navigateur.rs`) |
 | [Le témoin du chat dans la page rougit à la première exécution après un bâti](2026-11-07-le-temoin-du-chat-dans-la-page-rougit-a-la-premiere-execution-apres-un-bati.md) | ouvert — pour everything declarative, petit lot après les vues ; 2 rouges sur 7 avec la vue 5, 0 sur 5 sur master seul, toujours la première exécution après un bâti ; d'ici là une passe où lui seul rougit se compte en le nommant et le rejoue seul | faux rouge (témoin), peut-être un tour effacé de l'écran par une relecture tardive | la page peut-être, le témoin non | oui (`chat/tests.rs`, `navigateur.rs`, `Chat.tsx`) |
 | [Un apport accepte une source qui n'est pas le chemin d'une Source](2026-11-07-un-apport-accepte-une-source-qui-n-est-pas-le-chemin-d-une-source.md) | ouvert — pour la session mémoire (96), dans M4 | réponse fausse (une provenance qui ne pointe sur rien) | oui (la mémoire de Lucie, par MCP) | oui (gabarit memory, `put_apport`) |

@@ -1,8 +1,7 @@
 # Une définition C++ se lie à la déclaration de son en-tête, pas à son nom de fichier
 
-- **État** : en cours — la forme exacte est écrite sur `codeparsers/includes` (5a368e2f5,
-  `visibility = "declaration"`), sa mesure sur code-lourd tourne ; il se ferme avec elle, ou garde
-  ses limites ci-dessous comme défauts connus.
+- **État** : ouvert — la forme exacte (`visibility = "declaration"`) entre sur master avec le lot
+  INCLUDES ; il reste ouvert pour ses limites, ci-dessous.
 - **Gravité** : réponse fausse (une arête vers le mauvais homonyme, ou une abstention à tort).
 - **Atteignable en service** : oui, dès que la visibilité par les #include est sur master.
 - **Touche rag3weaver** : oui (`src/code.rs`, la résolution) et codeparsers (les déclarations).
