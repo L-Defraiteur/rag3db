@@ -28,7 +28,33 @@ export function displayName(b: Backend): string {
   if (b.kind === "code" && b.repo) return b.branch ? `${b.repo} · ${b.branch}` : b.repo;
   return shortName(b.manifest).split("/").pop() || shortName(b.manifest);
 }
-export type HostState = { backends: Backend[]; sessions?: unknown[] };
+// **La barre du chat** (modèle tranché par c7 avec Lucie, forme accordée avec
+// everything declarative, page 02) : des listes à plat. Une session (un backend
+// principal) tient son espace ; ses tâches (`session`) tiennent un à n espaces
+// (un worktree par dépôt touché), une proposition par espace ; une sous-tâche
+// dit sa tâche mère (`parent_task`).
+export type Rag = { state: "indexed" | "indexing" | "absent"; percent?: number | null };
+export type Space = {
+  backend: string;
+  repo?: string | null;
+  branch?: string | null;
+  path?: string | null;
+  loaded: boolean;
+  rag: Rag;
+  proposal?: { state: "open" | "merged" | "rejected" } | null;
+};
+export type RunState = "running" | "waiting" | "ended" | "error";
+export type ChatSession = {
+  id: string;
+  name?: string | null;
+  model?: string | null;
+  state?: RunState | null;
+  awaits_answer?: boolean;
+  memory: { backend: string | null; rag: boolean };
+  spaces: Space[];
+};
+export type SessionTask = { id: string; session: string; parent_task?: string | null; name: string; state?: RunState | null; awaits_answer?: boolean; spaces: Space[] };
+export type HostState = { backends: Backend[]; sessions?: unknown[]; chat_sessions?: ChatSession[]; tasks?: SessionTask[]; available_repos?: Space[] };
 
 export async function fetchState(): Promise<HostState> {
   const r = await fetch("/ide/etat");

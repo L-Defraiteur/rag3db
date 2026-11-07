@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, GitBranch } from "lucide-react";
+import { Square, SendHorizontal, MessageSquare, FileDiff, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
 import { highlightBlock, inlineCodeHtml, withInlineCode } from "@/lib/code";
 import { ToolResultView } from "@/lib/toolview";
+import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
 import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
@@ -367,28 +368,6 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
 
   if (!backend) return <p className="text-destructive">conversation inconnue : {id}</p>;
   const task = backend.tache;
-  // **La barre parle en dépôts, worktrees et branches** (Lucie, 7 novembre 2026) :
-  // « Dépôts » range chaque dépôt avec sa branche, puis les worktrees de ses
-  // tâches (leur branche `agent/<nom>`) ; « Mémoire » ; « Projets » pour un projet
-  // déclaratif sans dépôt. Une tâche se range sous le dépôt de son parent.
-  type Group = { label: string; main?: Backend; items: Backend[] };
-  const byId = new Map(backendsHere.map((b) => [b.id, b]));
-  const repoOf = (b: Backend) => (b.tache ? byId.get(b.tache.parent)?.repo ?? b.repo : b.repo) ?? displayName(b);
-  const depots = new Map<string, Group>();
-  for (const b of backendsHere.filter((b) => (b.kind ?? "code") === "code" || b.tache)) {
-    const label = repoOf(b);
-    const g = depots.get(label) ?? { label, items: [] };
-    if (!b.tache && !g.main) g.main = b;
-    g.items.push(b);
-    depots.set(label, g);
-  }
-  for (const g of depots.values()) g.items.sort((a, b) => (a === g.main ? -1 : b === g.main ? 1 : displayName(a).localeCompare(displayName(b))));
-  const solo = (kind: string): Group[] => backendsHere.filter((b) => b.kind === kind && !b.tache).map((b) => ({ label: displayName(b), main: b, items: [b] }));
-  const sections = [
-    { title: "Dépôts", groups: [...depots.values()] },
-    { title: "Mémoire", groups: solo("memory") },
-    { title: "Projets", groups: solo("project") },
-  ];
   const roles = [...new Set(roleRuns.map((r) => r.role))].sort((a, b) => (a === "archiviste" ? -1 : b === "archiviste" ? 1 : a.localeCompare(b)));
   return (
     <div className="chat grid md:grid-cols-[300px_1fr] flex-1 min-h-0">
@@ -396,34 +375,30 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         <div className="brand font-semibold tracking-tight text-lg">
           rag3weaver <span className="block text-[11px] tracking-widest text-muted-foreground uppercase">atelier local</span>
         </div>
-        <nav id="sessions" className="flex flex-col">
-          {sections.map(({ title, groups }) =>
-            groups.length ? (
-              <section key={title} className="mt-4" data-section={title}>
-                <h2 className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">{title}</h2>
-                {groups.map((g) => (
-                  <div key={g.label} className="depot" data-depot={g.label}>
-                    {g.main ? null : <div className="text-sm font-medium px-2 truncate">{g.label}</div>}
-                    {g.items.map((b) => (
-                      <div key={b.id} className={`conversation ${g.main && b.id === g.main.id ? "" : "pl-3"}`} data-backend={b.id} data-kind={b.kind ?? ""}>
-                        <a
-                          href={`/ide/code/${b.id}/chat`}
-                          className={`block text-sm truncate rounded px-2 py-1 hover:bg-sidebar-accent ${b.id === id ? "bg-sidebar-accent active" : ""}`}
-                          data-backend={b.id}
-                          title={b.kind_source === "fallback" ? "nature inconnue : le manifeste ne déclare pas `kind` (son gabarit est plus ancien) ; rangé d'après son espace de travail" : undefined}
-                        >
-                          {b.tache ? <GitBranch className="inline size-3.5 mr-1" aria-hidden /> : <MessageSquare className="inline size-3.5 mr-1" aria-hidden />}
-                          {displayName(b)}
-                        </a>
-                        <Gauge context={recaps[b.id]?.context} model={recaps[b.id]?.model} counters={b.id === id ? consumed : undefined} />
-                        {b.kind === "memory" ? null : <Writes writes={recaps[b.id]?.writes} why={recaps[b.id]?.writesWhy} open={b.id === id} />}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </section>
-            ) : null,
-          )}
+        <nav id="sessions" className="flex flex-col mt-4">
+          <ChatSidebar
+            state={state}
+            id={id}
+            conversation={(se) => {
+              const b = state.backends.find((x) => x.id === se.id);
+              const space = se.spaces[0];
+              return (
+                <div className="conversation" data-backend={se.id} data-kind={b?.kind ?? ""}>
+                  <a
+                    href={`/ide/code/${se.id}/chat`}
+                    className={`block text-sm truncate rounded px-2 py-1 hover:bg-sidebar-accent ${se.id === id ? "bg-sidebar-accent active" : ""}`}
+                    data-backend={se.id}
+                    title={b?.kind_source === "fallback" ? "nature inconnue : le manifeste ne déclare pas `kind` (son gabarit est plus ancien) ; rangé d'après son espace de travail" : undefined}
+                  >
+                    <MessageSquare className="inline size-3.5 mr-1" aria-hidden />
+                    {[se.name ?? (b ? displayName(b) : se.id), space?.branch].filter(Boolean).join(" · ")}
+                  </a>
+                  <Gauge context={recaps[se.id]?.context} model={recaps[se.id]?.model} counters={se.id === id ? consumed : undefined} />
+                  {b?.kind === "memory" ? null : <Writes writes={recaps[se.id]?.writes} why={recaps[se.id]?.writesWhy} open={se.id === id} />}
+                </div>
+              );
+            }}
+          />
         </nav>
         {roles.length ? (
           <section id="runs-a-role" className="mt-3">
@@ -451,6 +426,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         </p>
       </aside>
       <main className="flex flex-col min-h-0 min-w-0">
+        <div className="px-6 pt-2">
+          <Breadcrumb state={state} id={id} />
+        </div>
         <header className="flex items-center justify-between gap-3 px-6 py-3 border-b">
           <div className="min-w-0">
             <h1 id="name" className="text-base font-semibold truncate">

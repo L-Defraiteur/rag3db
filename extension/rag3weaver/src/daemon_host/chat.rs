@@ -207,6 +207,11 @@ impl DaemonHost {
         self
     }
 
+    /// Les conversations tenues, et si un tour y court (la barre du chat).
+    pub(super) fn chats_busy(&self) -> Vec<(String, bool)> {
+        self.chats.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|(k, e)| (k.clone(), e.busy.is_some())).collect()
+    }
+
     /// **Ce que la page montre d'un chat** : allumé ou non (et pourquoi), le
     /// run en cours, le fil de la session (sans le message système), et les
     /// sessions orphelines.
