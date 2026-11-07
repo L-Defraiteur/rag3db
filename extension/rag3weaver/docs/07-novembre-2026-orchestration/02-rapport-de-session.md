@@ -173,3 +173,46 @@ archi (pont : mail, codex_threads, canal, hooks pending/seen ; puis 3 ter (b))
 (journal de l'hôte horodaté) → ED (étanchéité, désambiguïsation des noms).
 Cœur : verrous ~18 h, puis instruction-en-echec (ed59ee988), retrait,
 projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
+
+## Mise à jour de 18 h 10
+
+- **Atterris depuis 17 h 50** : la boîte adressée (ED, b9b47ee12), tty-1 (client
+  SSE du terminal + `policy` dans describe, cfc5cc8e8, nouveautés 69aa15eef),
+  ordre-des-verrous (cœur, e526cc4b6 / 5f0b79466, ticket fermé 9c613605b),
+  sept tickets du chat de Lucie (a4012758c, 6265b989d, 18f7cdbfb, 016878e37),
+  ticket de l'index des tickets (hotfixs, 2cc565591), tickets de la requête
+  longue mesurée (e7b1c8395) et de la garde de match (2721843b5), procédure
+  « un contrôle qui ne juge rien est ROUGE » (b99b67de0).
+- **Décisions de l'orchestration** : la lib unique se bâtit sur master après
+  les verrous et instruction-en-echec-2 (87cdd7fae, en passe), sans attendre le
+  retrait ni la projection, qui suivront en libs ordinaires au format 43 ;
+  arbre étapes 1 à 5, G étapes 6 à 11 (contrôle des deux sens compris, une
+  seule main pendant l'arrêt des hôtes) ; bascule ce soir si la lib est là
+  avant 22 h, sinon demain matin. Recherche pousse ses trois lots verts en un
+  seul passage (recherche-trois-lots). L'index des tickets passe à une forme
+  générée (en-tête obligatoire, index non suivi, `--lot <base>` dans la passe),
+  lot de hotfixs après (B). Un target cargo par lot, jamais deux passes dessus.
+- **Retours de Lucie sur l'IDE posé à 17 h 22** (chat) : ordre d'arrivée des
+  parties (mots diffusés, appel, mots, réponse finale à la fin), heure prise à
+  l'appel, pas de flicker de scroll (flux et dépliage), le résultat d'un outil
+  déplié, écran large (barres aux bords, chat fluide, aide sur une ligne),
+  usage du modèle en barre latérale avec jauge sur le contexte configuré,
+  tâches de l'archiviste dans la barre, chat pleine hauteur ; et la direction
+  visuelle : un terminal d'avant-garde, l'animation « Daemon Code Summoning »
+  de tty quand le modèle réfléchit, mêmes tokens IDE/terminal, page de
+  direction soumise à Lucie avant les composants. Lot « le chat tient
+  l'ordre » après l'étanchéité ; la direction visuelle ensuite.
+- **Hooks** : hooks-3-ter (a) prêt (c9d5e388b → rebase sur cfc5cc8e8, passe en
+  cours), pose par G pour la session d'essai dès le hash ; (b) écrit, témoins
+  en cours. Le journal de l'hôte horodaté de hooks-essai (634c16b56 : tube non
+  bloquant, patience 50 ms mesurée, pire 1,14 ms) attend son tour.
+- **96** : le pas 1 (662dda2cc) n'a jamais servi (modèle posé sur le catalogue
+  que les graphes d'outil ne lisent pas), vu par son témoin au premier rejeu
+  grâce au correctif de run_e2e.sh ; lot-96-pas1-politique (call_models,
+  Route/SplitSections dans la base, correctif du service), verdict ~18 h 30.
+- **Codeparsers** : garde de match corrigée (672a0d5, deux endroits), sonde
+  sur code-lourd en cours, lot du pointeur ensuite.
+- **File** : archi 3 ter (a) → tty-2-3 → 96 → recherche (trois lots) → archi
+  pont (mail, codex_threads, canal, hooks pending/seen) → whois → codeparsers
+  (pointeur) → hooks-essai (journal) → ED (chat, direction visuelle) → archi
+  3 ter (b) → hotfixs (index des tickets).
