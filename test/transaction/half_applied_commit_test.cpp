@@ -38,6 +38,11 @@ public:
     std::unique_ptr<InsertState> initInsertState(ClientContext*, visible_func) override {
         return std::make_unique<InsertState>();
     }
+    std::unique_ptr<DeleteState> initDeleteState(const rag3db::transaction::Transaction*,
+        MemoryManager*, visible_func) override {
+        return std::make_unique<DeleteState>();
+    }
+    void delete_(rag3db::transaction::Transaction*, const ValueVector&, DeleteState&) override {}
     bool needCommitInsert() const override { return true; }
     void commitInsert(rag3db::transaction::Transaction*, const ValueVector&,
         const std::vector<ValueVector*>&, InsertState&) override {
