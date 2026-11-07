@@ -348,6 +348,17 @@ fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
+/// **Une ligne est-elle pour l'équipier ?** Sans `to`, ou adressée à
+/// `teammate:<parent>/<task>` de cette tâche. Une ligne d'un agent à un autre
+/// (`claude-code:…` → `codex:…`) rangée dans la boîte ne le concerne pas : elle
+/// ne le lance pas et il ne la lit pas à sa frontière.
+pub fn addressed_to_teammate(line: &Value, key: &str) -> bool {
+    match line["to"].as_str() {
+        None => true,
+        Some(to) => to == format!("teammate:{key}"),
+    }
+}
+
 /// Le sujet du bus de la boîte d'une tâche.
 pub fn mailbox_topic(task: &str) -> String {
     format!("mailbox.{task}")
@@ -930,8 +941,8 @@ impl DaemonHost {
     /// frontière. Rend la ligne, et si un équipier a été lancé.
     /// `extra` porte `to`, `reply_to`, `approved` quand ils sont donnés.
     pub fn post_to_teammate(self: &Arc<Self>, parent: &str, task: &str, from: &str, kind: &str, item: Option<&str>, text: &str, extra: &Value) -> Result<Value, String> {
-        if !matches!(kind, "request" | "instruction" | "answer" | "stop") {
-            return Err(format!("genre inconnu : {kind} (request, instruction, answer, stop)"));
+        if !matches!(kind, "request" | "instruction" | "answer" | "message" | "stop") {
+            return Err(format!("genre inconnu : {kind} (request, instruction, answer, message, stop)"));
         }
         if text.trim().is_empty() && kind != "stop" {
             return Err("le texte est vide".into());
@@ -965,8 +976,23 @@ impl DaemonHost {
                 let _ = self.stop_run(&t.id, &run, from);
             }
         }
-        let started = kind != "stop" && self.start_teammate(parent, task);
-        let mut r = json!({ "line": line, "started": started });
+        // **Seule une ligne adressée à l'équipier le lance** (archi, 7 novembre
+        // 2026) : une parole d'un agent à un autre rangée dans cette boîte, ou une
+        // réponse à une ligne qui n'est pas de lui, est rangée et relayée, sans
+        // lancer personne (ni dépenser un appel au modèle).
+        let pour_lui = kind == "request"
+            || (kind != "stop"
+                && addressed_to_teammate(&line, &files.key)
+                && match line["reply_to"].as_str() {
+                    None => true,
+                    Some(r) => files.mailbox().iter().find(|l| l["id"] == r).is_none_or(|l| matches!(l["from"].as_str(), Some("teammate" | "host"))),
+                });
+        let mut r = if pour_lui {
+            let started = self.start_teammate(parent, task);
+            json!({ "line": line, "started": started })
+        } else {
+            json!({ "line": line, "started": false, "why": if kind == "stop" { Value::Null } else { json!("not_addressed") } })
+        };
         if let Some(d) = depart {
             r["task"] = d;
         }
@@ -1046,7 +1072,12 @@ impl DaemonHost {
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         for number in 1..=MAX_STEPS {
             let lines = files.mailbox();
-            let news: Vec<Value> = lines.iter().skip(read).filter(|l| l["from"] != "teammate" && l["from"] != "host").cloned().collect();
+            let news: Vec<Value> = lines
+                .iter()
+                .skip(read)
+                .filter(|l| l["from"] != "teammate" && l["from"] != "host" && addressed_to_teammate(l, &files.key))
+                .cloned()
+                .collect();
             // Le curseur d'avant ce pas : un pas qui n'aboutit pas rend ses nouvelles
             // au suivant (sans elles, l'équipier attendrait une boîte déjà lue).
             let avant = read;
