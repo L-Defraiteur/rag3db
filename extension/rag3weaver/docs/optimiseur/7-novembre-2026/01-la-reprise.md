@@ -70,6 +70,7 @@ rouge sur master, 27 OK ici.
 |---|---|---|---|
 | 15 h 05 | luciepc | 2 | pose du lot (sept passes ensemble, la lib entière de codeparsers à 235 s au lieu de 40) |
 | 15 h 05 | ici | 1 | pose du lot |
+| 21 h 40 (c7) | luciepc | **6** | Lucie : « quand personne n'a besoin de bancs, on peut abuser de luciepc, dans une mesure relative ». Charge 10-12 sur 24 cœurs avec 2 lourds. Retour à 4 si la charge dépasse ~20 ou si une mesure est annoncée ; la mesure ne se prend qu'au mot « fenêtre » de c7 |
 | 15 h 35 m 06 s | luciepc | **4** | c7 : à deux places, luciepc tournait à un tiers (charge 3,4 sur 24 cœurs). Si « pas indexé en 60 s » revient dans l'heure, on redescend à 3 |
 
 ## Gemini 4 Argon sous lr-hub-472010 (vers 16 h 15)
