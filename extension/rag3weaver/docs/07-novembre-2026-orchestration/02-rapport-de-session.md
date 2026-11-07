@@ -337,3 +337,40 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   d'identifiants n'est pas vert ; une passe figée pendant le réveil des hôtes
   venait de tests qui attendaient un service réel sans délai (ticket d'hygiène) ;
   un test du banc sorti vert par hasard reste un rouge connu.
+
+## Mise à jour de 21 h 45
+
+- **Posé chez Lucie à 21 h 21** : 3d09b32c2 (le chat refait, l'étanchéité, le (c)
+  des hooks, le journal de l'hôte horodaté) sur la lib 17a094d12 ; page du chat
+  rendue, outils dépliables avec arguments et résultat. Réserve : la barre dit
+  « PROJETS » pour ses deux backends : la détection lisait le dépôt du manifeste,
+  or son manifeste vit dans sa configuration et pointe le dépôt par
+  `workspace.root` ; correctif dans le lot suivant de hooks-essai, et la nature
+  d'un backend se déclare désormais par son gabarit (`kind`), la détection
+  git n'étant qu'un repli. `bilans.memoire` absent de son manifeste de code :
+  ni juge ni fiches écrites sur son chat (question posée à Lucie).
+- **Atterris** : le retrait des générations (cœur, b3bc6e479 ; projection
+  e86d2f688 ; lib de demain matin avec c4f8610b9, ABI changée), tty-3
+  (f66e72d31 : Daemon Code Summoning en cellules, --depot/--tache), les
+  nouveautés du chat (178b5dbbe), docs du cœur (dcaea137f).
+- **Trouvé et corrigé par hooks-essai, en passe** : le « premier jeton perdu »
+  était un défaut du flux de l'IDE (`Flux::publier` tirait l'id hors du verrou
+  des abonnés, `Abonne::envoyer` sautait tout id ≤ au dernier : deux relais qui
+  se croisent perdaient un événement en silence, jetons et lignes de boîte) ;
+  témoin à 4 fils × 2 000 (7 577/8 000 avant), correctif 4c0237a3a accordé par
+  ED et tty. Dans le même lot : la détection dépôt/branche par `workspace.root`,
+  et deux tests d'agent_ports instables sur master par l'at_ms (trouvés par
+  embarquement, rouges 1/3).
+- **Service creux** : les positions des jetons rendues par /embed_sparse
+  (`spans: true`), unité bge-m3 redéployée à 21 h 18 (15 s, parité du dense),
+  témoin par le service vert ; lot embarquement cbdf40287 prêt, pousse après le
+  correctif d'agent_ports ; les granite tournent sur l'ancien binaire en mémoire
+  jusqu'à un redémarrage annoncé avec parité.
+- **File** : ED (reprise, en passe) → hooks-essai (premier-jeton + kind + at_ms)
+  → codeparsers → 96 (run_e2e.sh) → arbre (juge + graphe cité, débloque
+  l'archive) → 96 (pas 3) → embarquement → recherche (second-ecrivain,
+  HighlightNode par les spans, montée lucivy 4.3.2) → archi (pont). lucivy :
+  PR #21, tag au mot de Lucie (confirmation demandée). Décisions en attente de
+  Lucie : confirmation lucivy, thème partagé daemon.json, page 03, instantanés
+  et branches distantes (effacements refusés aux sessions par permission),
+  `bilans.memoire` sur son manifeste de code.
