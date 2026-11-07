@@ -65,6 +65,11 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroIndexFirstCopy
 # sur verrous-a4 jouée seule sur luciepc, charge 5 (10 octobre, 22 h 40). Non attribué : rien
 # n'établit qu'A4′ y soit pour quelque chose. Même ticket.
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstCopy
+# Le même vecteur non nul, lignes avant l'index, par COPY (SameRowsFirstCopy) : rouge d'ordinaire
+# (1 222 lignes jointes sur 1 402), sorti vert une fois au banc complet du cœur sur v22-retrait-6
+# (0ef8fa86a, 7 novembre, 21 h), puis rouge dix fois sur dix rejoué seul sur deux bâtis. La part
+# jointe dépend du tirage des niveaux du graphe. Même ticket.
+Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy
 #
 # La fuite des pages d'un COPY tué au milieu (ticket de la durabilité,
 # 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure). Elle dépend du moment des morts, et
