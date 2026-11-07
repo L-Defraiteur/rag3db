@@ -766,8 +766,15 @@ impl DaemonHost {
                 // hors dépôt, qui indexe un dépôt — la forme de celui de Lucie,
                 // vue à la pose du 7 novembre), sinon le dossier de son manifeste.
                 let espace = espace_du_manifeste(&h.manifest);
-                let lieu = espace.clone().or_else(|| h.manifest.parent().map(Path::to_path_buf));
-                let repo = lieu.as_deref().and_then(repo_of);
+                // Le dépôt git de l'espace de travail, sinon celui du manifeste
+                // (une tâche, un banc), sinon le nom du dossier de l'espace.
+                let dossier_du_manifeste = h.manifest.parent().map(Path::to_path_buf);
+                let repo = espace
+                    .as_deref()
+                    .and_then(repo_of)
+                    .or_else(|| dossier_du_manifeste.as_deref().and_then(repo_of))
+                    .or_else(|| espace.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()));
+                let branche = espace.as_deref().and_then(branch_of).or_else(|| dossier_du_manifeste.as_deref().and_then(branch_of));
                 // La nature : celle que le manifeste déclare (son gabarit), sinon
                 // le repli de l'hôte d'après ce qu'il voit.
                 let declare = h
@@ -795,7 +802,7 @@ impl DaemonHost {
                     // mémoire déclarée, `code` pour un dépôt git, `project` pour un
                     // projet rag3weaver déclaratif sans dépôt (le deck builder).
                     "repo": repo,
-                    "branch": lieu.as_deref().and_then(branch_of),
+                    "branch": branche,
                     "kind": declare.map(crate::backend::BackendKind::as_str).unwrap_or(repli),
                     // D'où vient `kind` : le manifeste (son gabarit) ou le repli de
                     // l'hôte, que la page dit (« nature inconnue »).
@@ -1304,9 +1311,7 @@ fn repo_of(lieu: &Path) -> Option<String> {
         return r.clone();
     }
     let r = git_dans(lieu, &["rev-parse", "--show-toplevel"])
-        .and_then(|t| Path::new(&t).file_name().map(|n| n.to_string_lossy().into_owned()))
-        // Hors d'un dépôt git, un espace de travail se nomme par son dossier.
-        .or_else(|| lieu.file_name().map(|n| n.to_string_lossy().into_owned()));
+        .and_then(|t| Path::new(&t).file_name().map(|n| n.to_string_lossy().into_owned()));
     vus.lock().unwrap_or_else(|p| p.into_inner()).insert(lieu.to_path_buf(), r.clone());
     r
 }
