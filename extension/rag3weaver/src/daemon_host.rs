@@ -208,6 +208,9 @@ pub mod teammate;
 /// d'outil, le repli sur les fichiers du worktree quand il manque.
 mod teammate_tools;
 
+/// La livraison des lignes de boîte adressées à `codex:<nom>`, par `codex queue`.
+pub mod livraison_codex;
+
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -1154,6 +1157,8 @@ impl DaemonServer {
         for l in host.reprendre_les_equipiers() {
             eprintln!("[équipier] {l}");
         }
+        // Les lignes de boîte pour Codex, livrées par `codex queue` (page 07 § 4).
+        host.servir_les_livraisons_codex();
         // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
         // session de client mort ne se fermerait qu'à la lecture de l'état.
         let releve = {
