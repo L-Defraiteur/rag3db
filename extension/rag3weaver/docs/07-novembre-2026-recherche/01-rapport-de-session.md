@@ -59,3 +59,18 @@ runs a gagné `deposer` et `POST /journal/run` par le lot 3 des hooks). Le lot �
 exploré un dossier » est à la session d'essai de Lucie. Dimanche : la page de conception du
 prototype vertical avec everything declarative et l'arbre, depuis la section des cinquième et
 sixième difficultés de la vision du 6 novembre (le témoin cruel dans le prototype).
+
+## Le soir : trois lots en un passage, et le ménage qui suit
+
+Trois lots verts réunis sur `recherche-trois-lots` (une passe, un push à mon tour) : le creux servi
+par l'hôte (`models.sparse` lu par `HighlightNode`, 0 appel à l'indexation), le filtre du signal
+creux juste (les offsets des morceaux des parents admis), la requête longue bornée (L = 100
+caractères de flou, K = 64 termes, tirés de la mesure portée au ticket). Une mesure a d'abord été
+mise sous `poste mesure` à luciepc et a gelé la file des lourds : retirée sur le mot de c7,
+rejouée sous `poste lourd`, la charge notée.
+
+Effacé ce soir, en le disant (règle de Lucie relayée par c7) : ici, les worktrees
+rag3db-creux-hote, rag3db-filtre-creux et rag3db-borne (≈ 1,3 Gio) et la copie de mesure de la
+mémoire longue (33 Mio) ; à luciepc, les mêmes worktrees (≈ 1,3 Gio), `target-97` (6,8 Gio) et les
+copies de mesure de code-principal et de la mémoire longue (1,6 Gio et 33 Mio) — df de luciepc
+584 → 587 Gio. Les branches distantes restent pour la décision de Lucie.
