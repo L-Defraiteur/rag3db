@@ -37,6 +37,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   lecture seule, une instruction qui échoue (un index absent, un graphe projeté absent) ne fait plus
   refuser les suivantes : les signaux d'une recherche sous instantané ne tombent plus ensemble.
   Une interruption arrête aussi toute la requête, CREATE réécrit compris ; `17a094d12`.
+- **7 nov. — Le Daemon Code Summoning dans le terminal.** Quand l'agent réfléchit, des runes
+  tournent autour de ⛧ (« INVOCATION DU CODE… ») ; quand un outil lit, un symbole alchimique se
+  transmute ; quand il écrit ou exécute, le Glitch tire « COMPILING CURSE » et ses frères. C'est
+  la page de Lucie (ragforge, déc. 2025) refaite en cellules, l'animation choisie selon ce que
+  l'outil a le droit de faire. Elle tient sous ssh : 60 à 158 octets par image, au plus 1,6 Ko/s,
+  et se dégrade en 256 couleurs, en 16, sans couleur et en ASCII. La vue dit le dépôt, la branche
+  et la tâche, et ne montre que son worktree. f66e72d31.
 - **7 nov. — Le terminal de l'agent de code a sa vue.** `rag3weaver-tty`, sans option, ouvre une
   vue inline en ratatui et crossterm, la même sous Windows, macOS et Linux. Le texte de l'agent
   coule dans l'historique du terminal (défilement, copie, tmux), et seules trois lignes se

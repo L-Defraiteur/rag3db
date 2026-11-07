@@ -25,7 +25,8 @@
 |---|---|---|
 | **tty-1**, le client `--plain` et `policy` dans `describe` | `cfc5cc8e8` | entière, à luciepc, sur la lib 04063ee06 : e2e_tty 2/2, e2e_lectures 19/19, e2e_code 27/27, e2e_mcp_stdio 4/4, e2e_demon_hote 12/12, check_features 5/5, lib 1955/0, navigateur 13/13 |
 | **tty-2**, la vue inline | `1fc1e24bd` | courte (le crate et e2e_tty) : crate 9/9 avec la vue et 4/4 sans, e2e_tty 2/2 |
-| les lignes de nouveautés | `69aa15eef`, `0a3e5752e` | docs seules |
+| **tty-3**, le Daemon Code Summoning, `--depot`/`--tache`, le filtre par worktree | `f66e72d31` | courte, sur la lib 17a094d12 avec `MOTEUR_ANCIEN=1` : crate 21/21 avec la vue et 6/6 sans, e2e_tty 2/2 |
+| les lignes de nouveautés | `69aa15eef`, `0a3e5752e`, et celle de tty-3 | docs seules |
 | la page d'origine du Daemon Code Summoning et le thème commun | `78f0efeb6`, `422f47d52` | docs seules |
 
 Deux rouges en route, chacun compris avant d'être corrigé :
@@ -36,10 +37,8 @@ Effacé après les lots : les worktrees `rag3db-tty` (ici et à luciepc), les br
 
 ## Ce qui attend
 
-- Le filtre par tâche : `GET /ide/teammate` rend `result.backend` depuis `b9b47ee12`, et le terminal doit filtrer les trames sur ce manifeste. Aujourd'hui, il montre tout le flux de l'hôte.
 - L'accord de Lucie sur le thème commun (page 06), avant de poser `templates/themes/daemon.json`.
 - La suite des lots, dans l'ordre :
   - tty-2 : la vue inline en ratatui avec crossterm ;
-  - tty-3 : le Daemon Code Summoning, le thème « daemon » d'abord ;
   - tty-4 : les états et la boîte ;
   - tty-5 : la mesure sous ssh, tmux et mosh, plus un passage sous Windows et un sous macOS.
