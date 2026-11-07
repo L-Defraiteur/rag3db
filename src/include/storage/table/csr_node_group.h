@@ -375,10 +375,22 @@ private:
     // Sous csrIndexMtx exclusif : la liste du nœud sans les lignes dont la suppression est
     // validée au plus tard à `oldestActiveStartTS`. Rend vrai s'il reste des lignes mortes plus
     // récentes (ou d'une transaction non validée), à reprendre à la prochaine occasion.
-    // groups : la liste des blocs prise par l'appelant AVANT csrIndexMtx. Tout le reste du
-    // moteur prend le verrou des blocs puis l'index (point de reprise, takeGenerationFor) ; la
-    // compaction, appelée sous csrIndexMtx exclusif, ne doit donc jamais prendre le verrou des
-    // blocs (interblocage du 7 novembre 2026 avec un lecteur qui prend sa génération).
+    // L'ordre des deux verrous du groupe : le verrou des blocs (chunkedGroups.lock()) PUIS
+    // l'index (csrIndexMtx), jamais l'inverse ; le point de reprise, finalizeCheckpoint et
+    // takeGenerationFor le suivent. La compaction est appelée sous csrIndexMtx exclusif : elle
+    // ne prend donc pas le verrou des blocs, elle lit `groups`, la liste prise par l'appelant
+    // avant csrIndexMtx (l'inverse a figé un lecteur HNSW contre une validation, ticket du
+    // 7 novembre 2026). C'est sûr sans le verrou des blocs :
+    // - ce verrou garde la liste, pas les blocs ; `groups` les tient en propriété partagée, et
+    //   isDeleted lit les versions d'un bloc sous son propre versionInfoMtx ;
+    // - une annulation (rollbackInsert) retire ses lignes de l'index sous csrIndexMtx exclusif,
+    //   donc pas pendant la compaction ; un bloc qu'elle a tronqué garde ses versions
+    //   (b7447937d) et un bloc de queue qu'elle a retiré reste tenu par `groups` ;
+    // - un append concurrent qui ouvre un bloc après la prise de la liste : ses lignes n'ont pas
+    //   de bloc dans `groups`, elles restent vivantes et la note reste (compaction plus tard) ;
+    // - un lecteur sur une génération précédente lit son propre index (copie), que la
+    //   compaction ne touche pas ; un lecteur du présent copie ses listes sous le verrou
+    //   partagé de l'index, donc jamais une liste à moitié réécrite.
     bool compactDeadRowsNoLock(common::transaction_t oldestActiveStartTS,
         common::offset_t boundOffsetInGroup, const ChunkedGroups& groups);
     void compactDeadRows(const transaction::Transaction* transaction,
