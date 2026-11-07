@@ -1475,6 +1475,15 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
     assert_eq!(appels.load(Ordering::SeqCst), 0, "la réindexation n'appelle jamais le creux");
 
     let cellule = backend.catalog.lock().unwrap().scope().clone();
+    // La réindexation a travaillé : le texte neuf se trouve (un zéro ne prouve rien d'un travail
+    // qui n'a pas eu lieu).
+    let neuf = backend
+        .call_in(&cellule, "search_code", json!({"query": "k = 60", "options": {"signals": ["bm25"], "limit": 5}, "mode": "indexed"}))
+        .expect("search_code");
+    assert!(
+        neuf["result"].as_array().into_iter().flatten().any(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("k = 60"))),
+        "la réindexation a porté le texte neuf de fusion.rs : {neuf}"
+    );
     let chercher = |options: Value| {
         backend
             .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": options, "mode": "indexed"}))
