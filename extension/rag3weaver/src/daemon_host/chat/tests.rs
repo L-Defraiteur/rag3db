@@ -1019,3 +1019,57 @@ fn le_code_du_chat_se_lit_comme_du_code() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **Le retour d'un outil se lit, et le brut reste exact** (ticket du 7 novembre
+/// 2026, « les retours d'outils du chat n'ont pas de mise en page humaine ») : le
+/// retour de read_file déplié montre ses lignes numérotées et colorées ; le
+/// bouton « brut » rend le texte exact que le modèle a reçu (celui de la
+/// session) ; les champs autour du résultat restent lisibles (« autres champs »).
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_retour_d_un_outil_se_lit_et_le_brut_reste_exact() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_retour_d_un_outil_se_lit_et_le_brut_reste_exact";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(qui_lit_deux_fois());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_lit_deux_fois())
+    });
+    let racine = format!("http://{adresse}");
+    let post = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent().post(format!("{racine}{chemin}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("document.querySelector('#message').value = 'regarde le code'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    let etat: Value = {
+        let mut r = crate::daemon::agent().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str::<Value>(&r.body_mut().read_to_string().unwrap()).unwrap()["result"].clone()
+    };
+    let recu = etat["turns"].as_array().unwrap().iter().find(|t| t["role"] == "tool" && t["tool_name"] == "read_file").and_then(|t| t["content"].as_str()).unwrap_or_default().to_string();
+    assert!(!recu.is_empty(), "le retour de read_file dans la session : {etat}");
+    let d = "document.querySelector('details.outil[data-outil=\"read_file\"]')";
+    n.evaluer(&format!("{d}.open = true"));
+    let rendu = n.evaluer(&format!(
+        "(() => {{ const r = {d}.querySelector('.rendu-humain'); return {{ numero: r?.querySelector('pre.lignes-numerotees .numero')?.textContent ?? null, code: r?.textContent.includes('fn main') ?? false, autres: !!{d}.querySelector('.autres-champs') }}; }})()"
+    ));
+    assert_eq!(rendu["numero"], "1", "les lignes numérotées : {rendu}");
+    assert_eq!(rendu["code"], true, "le code du fichier : {rendu}");
+    assert_eq!(rendu["autres"], true, "les champs autour du résultat : {rendu}");
+    n.evaluer(&format!("{d}.querySelector('button.brut').click()"));
+    n.attendre(&format!("{d}.querySelector('.texte-brut')"), "le brut");
+    assert_eq!(n.evaluer(&format!("{d}.querySelector('.texte-brut').textContent")), json!(recu), "le brut n'est pas le texte exact reçu par le modèle");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
