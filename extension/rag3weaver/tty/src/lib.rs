@@ -15,5 +15,7 @@ pub mod endpoint;
 pub mod flux;
 pub mod plain;
 pub mod sse;
+#[cfg(feature = "vue")]
 pub mod tui;
+#[cfg(feature = "vue")]
 pub mod vue;
