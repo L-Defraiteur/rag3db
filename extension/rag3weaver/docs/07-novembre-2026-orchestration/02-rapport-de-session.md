@@ -397,3 +397,27 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   l'annulation sous tampon plein. **Recherche** : creux-par-les-spans écrit
   (un appel pour la requête et les morceaux, repli dit), push après
   embarquement. **tty** : tty-3 sur master (f66e72d31).
+
+## Mise à jour de 22 h 30
+
+- **Atterri** : premier-jeton (hooks-essai, 23757c7d6, 11 commits) : le flux de
+  l'IDE ne perd plus de trame quand deux relais se croisent, la nature d'un
+  backend vient du `kind` de son gabarit (repli dit par `kind_source`, dépôt et
+  branche par l'espace de travail), agent_ports compare sans horloge. G le pose
+  chez Lucie (dernière pose du soir). Groupe 1 du cœur clos : deux tickets fermés
+  comme non reproduits avec témoins en garde (5b35a5a70, 15f16bcdc). Banc :
+  build-asan effacé, page du jour (3532676f5). G : 18 Gio de targets effacés,
+  liste des targets de luciepc par session dans sa page (l'arbre : 32 Gio
+  d'octobre à effacer).
+- **Mots de Lucie** : « rien ne me gêne, on focus boulot ce week-end, tout pour
+  avancer vite, en surveillant les disques » ; « on limite luciepc seulement
+  quand quelqu'un veut le silence pour un bench » → lourds-max de luciepc 4 → 6,
+  la mesure exclusive au mot de c7 ; ligne disque à chaque pose (portable 352
+  Gio libres, luciepc 580) ; géo : « ça viendra, pour le moment osef », graine
+  notée (le temps comme géométrie 1D, les canevas, la géographie vraie, la ville
+  du code en marketing) ; lucivy : une seule publication quand tout est fini,
+  tag sur main.
+- **Verts, en attente de leur tour** : reprise d'ED (à toi sur 23757c7d6),
+  codeparsers, 96 (run_e2e.sh), arbre (juge + graphe cité ; lib de demain bâtie
+  ce soir), embarquement (spans, à rebaser), recherche (second-ecrivain,
+  creux-par-les-spans : 139 ms contre 429 avec le tokenizer local), archi (pont).
