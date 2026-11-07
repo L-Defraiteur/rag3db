@@ -262,20 +262,29 @@ impl DaemonHost {
         let Some(memoire) = self.memoire_declaree(hosted)? else {
             return Err("ce dépôt ne déclare pas de mémoire (bilans.memoire)".into());
         };
-        // Les runs de la conversation : ceux du journal qui portent `chat`, les
-        // cent derniers.
+        // **La page ne fait pas ouvrir la mémoire** (relecture d'everything
+        // declarative) : elle n'est lue que si l'hôte la tient déjà ouverte ; sinon,
+        // la liste dit pourquoi au lieu d'ouvrir une base entière pour un rendu.
+        let ouverte = std::fs::canonicalize(&memoire)
+            .ok()
+            .and_then(|m| self.hosted_existing(&m))
+            .filter(|h| h.backend.try_read().is_ok_and(|s| s.is_some()));
+        let Some(memoire) = ouverte else {
+            return Err("la mémoire n'est pas ouverte dans l'hôte : la liste viendra quand elle le sera".into());
+        };
+        // Les runs de la conversation : ceux du journal qui portent `chat`, parmi
+        // les vingt derniers runs du dépôt (un fichier relu chacun, à chaque rendu).
         let runs: Vec<String> = self
             .journal
             .runs_de(backend_id)
             .into_iter()
             .rev()
-            .take(100)
+            .take(20)
             .filter(|r| self.journal.lire(backend_id, r).is_some_and(|v| v["chat"] == backend_id))
             .collect();
         if runs.is_empty() {
             return Ok((Vec::new(), None));
         }
-        let memoire = self.hosted(&memoire)?;
         let declare = self.with_backend(&memoire, |b| {
             let t = &b.prepared().manifest.tools;
             t.contains_key("select_sources") && t.contains_key("select_apports")

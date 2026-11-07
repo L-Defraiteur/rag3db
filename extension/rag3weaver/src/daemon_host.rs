@@ -1304,10 +1304,29 @@ fn repo_of(manifest: &Path) -> Option<String> {
     r
 }
 
-/// La branche que tient le dépôt d'un manifeste (relue à chaque état : elle
-/// change). `None` hors d'un dépôt git ou en tête détachée.
+/// La branche que tient le dépôt d'un manifeste, relue à chaque état (elle
+/// change) **sans processus** (relecture d'everything declarative : `/ide/etat`
+/// ne fait jamais la queue) : le fichier `HEAD` du dépôt, en suivant le `.git`
+/// fichier d'un worktree vers son `gitdir`. `None` hors d'un dépôt git ou en tête
+/// détachée.
 fn branch_of(manifest: &Path) -> Option<String> {
-    git_dans(manifest, &["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| b != "HEAD")
+    let mut dossier = manifest.parent()?;
+    let git = loop {
+        let g = dossier.join(".git");
+        if g.exists() {
+            break g;
+        }
+        dossier = dossier.parent()?;
+    };
+    let git_dir = if git.is_file() {
+        let lien = std::fs::read_to_string(&git).ok()?;
+        let cible = PathBuf::from(lien.trim().strip_prefix("gitdir:")?.trim());
+        if cible.is_absolute() { cible } else { dossier.join(cible) }
+    } else {
+        git
+    };
+    let tete = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    tete.trim().strip_prefix("ref: refs/heads/").map(str::to_string)
 }
 
 fn git_dans(manifest: &Path, args: &[&str]) -> Option<String> {
