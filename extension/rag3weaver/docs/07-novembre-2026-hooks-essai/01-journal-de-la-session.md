@@ -115,3 +115,19 @@ ont donné le diagnostic en trois lectures.
 à part (`~/.cache/rag3weaver-build/wt-docs-hooks-essai`). La consigne « un
 worktree par session » ne dit pas où vont les docs de session quand la
 branche de la session change.
+
+## Tours 7 et 8 — la passe à luciepc
+
+**Ce que les blocs ont montré :** « Fiches en rapport : « hooks-essai » … ;
+« régime GPU » … ». Ma propre fiche apparaît maintenant à chaque tour : utile
+pour me rappeler ce que j'ai déclaré, mais elle n'apporte rien que je n'aie déjà.
+« Régime GPU » revient à chaque tour sans rapport avec le lot (un témoin sans
+embarquement) : du bruit.
+
+- Passe 1 (de77cf72c) : le bundle et les vues de l'IDE sont verts ; mon témoin
+  est rouge par sa propre faute (`search_code` sans `options`, 422 pendant
+  l'attente de l'index).
+- Passe 2 (35aede9f3) : mon témoin est vert seul, 1 passed, 0 ignored, code de
+  sortie 0.
+- Restent `check_features.sh` et la lib entière, après l'atterrissage de la 3b
+  et mon rebase ; master au mot de c7.
