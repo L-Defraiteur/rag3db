@@ -173,6 +173,16 @@ public:
     void merge(transaction::Transaction* transaction,
         std::unique_ptr<ChunkedNodeGroup> chunkedGroup);
 
+    // Un COPY borné en octets vide ses lignes par lots. Quand ce groupe de nœuds n'a qu'un bloc, sa
+    // tête ON_DISK créée par le même COPY (le choix en revient à l'appelant), les lignes vidées
+    // s'ajoutent à ses segments par copie-échange : un bloc neuf qui partage les segments de la
+    // tête et ceux vidés, puis l'échange sous le verrou des blocs et inMemAppendMtx. La tête n'est
+    // jamais modifiée en place : un balayage qui la tient lit ses segments sans verrou de bloc.
+    bool canExtendFlushedHead(const transaction::Transaction* transaction,
+        const std::vector<common::column_id_t>& columnIDs) const;
+    void extendFlushedHead(const transaction::Transaction* transaction,
+        std::unique_ptr<ChunkedNodeGroup> flushed);
+
     virtual void initializeScanState(const transaction::Transaction* transaction,
         TableScanState& state) const;
     void initializeScanState(const transaction::Transaction* transaction,
