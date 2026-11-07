@@ -184,11 +184,13 @@ bool NodeGroup::canExtendFlushedHead(const Transaction* transaction,
 void NodeGroup::extendFlushedHead(const Transaction* transaction,
     std::unique_ptr<ChunkedNodeGroup> flushed) {
     KU_ASSERT(flushed->getResidencyState() == ResidencyState::ON_DISK);
-    ChunkedNodeGroup* head = nullptr;
+    // La tête tenue jusqu'à l'échange : un point de reprise qui écrit pendant une écriture (V2-2c)
+    // pourrait l'échanger lui aussi, et un pointeur nu viserait alors un bloc mort.
+    std::shared_ptr<ChunkedNodeGroup> head;
     {
         const auto lock = chunkedGroups.lock();
         KU_ASSERT(chunkedGroups.getNumGroups(lock) == 1);
-        head = chunkedGroups.getGroup(lock, 0);
+        head = chunkedGroups.getGroupShared(lock, 0);
     }
     KU_ASSERT(flushed->getNumColumns() == head->getNumColumns());
     // Hors verrou : le bloc neuf partage les segments de la tête (des shared_ptr) et y ajoute ceux
@@ -215,7 +217,7 @@ void NodeGroup::extendFlushedHead(const Transaction* transaction,
     // tête meurt avec son dernier lecteur ; ses segments, partagés avec la neuve, restent.
     const auto lock = chunkedGroups.lock();
     std::unique_lock appendLck{inMemAppendMtx};
-    KU_ASSERT(chunkedGroups.getNumGroups(lock) == 1 && chunkedGroups.getGroup(lock, 0) == head);
+    KU_ASSERT(chunkedGroups.getNumGroups(lock) == 1 && chunkedGroups.getGroup(lock, 0) == head.get());
     chunkedGroups.replaceGroup(lock, 0, std::move(newHead));
     numRows += numAdded;
 }
