@@ -14,7 +14,7 @@
 //! L'hôte sur une autre machine : `--daemon-cmd "ssh luciepc cat .local/share/rag3weaver/daemon.json"`
 //! et `--adresse 127.0.0.1:17970` derrière un `ssh -L 17970:127.0.0.1:7970 luciepc`.
 
-use rag3weaver::tty::{client, endpoint::Endpoint, flux, plain};
+use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain};
 use serde_json::{json, Value};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

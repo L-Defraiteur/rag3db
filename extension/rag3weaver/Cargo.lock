@@ -6809,6 +6809,7 @@ dependencies = [
  "postgres-types",
  "rag3db",
  "rag3weaver-ir",
+ "rag3weaver-tty",
  "rayon",
  "regex",
  "reqwest",
@@ -6850,6 +6851,15 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rag3weaver-tty"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ureq 3.4.0",
 ]
 
 [[package]]
