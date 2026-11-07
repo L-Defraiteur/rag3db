@@ -10,6 +10,11 @@ use std::time::{Duration, Instant};
 /// base à côté), en mode `approbation` (le défaut), et un hôte dont les
 /// sessions et les tâches vivent dans le dossier du témoin.
 fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
+    banc_avec(model, |_| {})
+}
+
+/// Le même banc, le manifeste retouché avant son commit (un rôle d'outil…).
+fn banc_avec(model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
     let d = tempfile::tempdir().unwrap();
     let depot = d.path().join("depot");
     let arbre = d.path().join("code");
@@ -20,6 +25,7 @@ fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
     let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &depot).unwrap();
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
     m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    retouche(&mut m);
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     for args in [
         &["init", "-q"][..],
@@ -388,4 +394,119 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
+}
+
+/// Un faux modèle qui parle, appelle `list_files`, parle, appelle
+/// `read_file`, puis répond : « mots, outil, mots, outil, réponse ».
+fn qui_lit_deux_fois() -> ChatModel {
+    let appels = Arc::new(AtomicUsize::new(0));
+    Arc::new(move |_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+        let appels = appels.clone();
+        Ok(Arc::new(CallbackLlm::new("faux-lecteur", 8192, move |turns, opts, sink| {
+            let modele = match appels.fetch_add(1, Ordering::SeqCst) {
+                0 => MockLlm::new("je liste").with_tool_calls(vec![("list_files", "{}")]),
+                1 => MockLlm::new("je lis").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]),
+                _ => MockLlm::new("Fini."),
+            };
+            modele.generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le chat tient l'ordre et l'heure de ses appels** (tickets du 7 novembre
+/// 2026 : « l'heure d'un appel d'outil est celle de l'insertion du tour »,
+/// « un outil déplié ne montre que fait », « l'usage du modèle … jauge du
+/// contexte »). Un tour « mots, outil, mots, outil, réponse » par le chemin de
+/// l'hôte : le fil relu garde cette suite ; chaque appel porte l'heure où il est
+/// parti et chaque résultat l'heure où il est revenu, dans l'ordre des faits et
+/// dans la fenêtre du tour ; `ToolCallFinished` porte un extrait du résultat ;
+/// l'état du chat rend la jauge (le dernier appel au modèle, le contexte du
+/// modèle déclaré).
+#[test]
+fn un_tour_a_deux_outils_garde_l_ordre_et_l_heure_de_ses_appels() {
+    let (_d, host, manifeste, id) = banc(qui_lit_deux_fois());
+    let h = host.hosted(&manifeste).unwrap();
+    let mut agent = host.with_backend(&h, |b| b.bus_de_publication().subscribe(crate::events::topic::AGENT)).unwrap();
+    let avant = crate::events::maintenant_ms();
+    let r = host.chat_turn(&id, "regarde le code").unwrap();
+    let apres = crate::events::maintenant_ms();
+    assert_eq!(r["text"], "Fini.", "{r}");
+
+    let etat = host.chat_state(&id).unwrap();
+    let tours = etat["turns"].as_array().unwrap().clone();
+    let forme: Vec<String> = tours
+        .iter()
+        .map(|t| match t["role"].as_str().unwrap_or("") {
+            "assistant" => format!(
+                "assistant:{}:{}",
+                t["content"].as_str().unwrap_or(""),
+                t["tool_calls"].as_array().map(|c| c.iter().filter_map(|c| c["name"].as_str()).collect::<Vec<_>>().join("+")).unwrap_or_default()
+            ),
+            "tool" => format!("tool:{}", t["tool_name"].as_str().unwrap_or("")),
+            autre => autre.to_string(),
+        })
+        .collect();
+    assert_eq!(
+        forme,
+        ["user", "assistant:je liste:list_files", "tool:list_files", "assistant:je lis:read_file", "tool:read_file", "assistant:Fini.:"],
+        "{etat}"
+    );
+
+    // Les heures : début de chaque appel, fin de chaque résultat, dans l'ordre.
+    let heure = |v: &Value, quoi: &str| v["at_ms"].as_u64().unwrap_or_else(|| panic!("{quoi} n'a pas d'heure : {v}"));
+    let a1 = heure(&tours[1]["tool_calls"][0], "l'appel de list_files");
+    let f1 = heure(&tours[2], "le résultat de list_files");
+    let a2 = heure(&tours[3]["tool_calls"][0], "l'appel de read_file");
+    let f2 = heure(&tours[4], "le résultat de read_file");
+    assert!(avant <= a1 && a1 <= f1 && f1 <= a2 && a2 <= f2 && f2 <= apres, "heures hors d'ordre : {avant} {a1} {f1} {a2} {f2} {apres}");
+    assert!(tours[0].get("at_ms").is_none() && tours[5].get("at_ms").is_none(), "seuls les appels et les résultats sont datés : {etat}");
+
+    // L'extrait du résultat dans ToolCallFinished, pour le flux.
+    let a = vider(&mut agent);
+    let fini = |outil: &str| {
+        a.iter()
+            .find(|e| e["kind"] == "ToolCallFinished" && e["tool"] == outil)
+            .cloned()
+            .unwrap_or_else(|| panic!("pas de ToolCallFinished pour {outil} : {a:?}"))
+    };
+    let lu = fini("read_file");
+    assert!(lu["result_excerpt"].as_str().is_some_and(|x| x.contains("fn main")), "l'extrait de read_file : {lu}");
+    assert!(lu.get("truncated").is_none(), "un petit résultat n'est pas coupé : {lu}");
+    assert!(fini("list_files")["result_excerpt"].as_str().is_some_and(|x| x.contains("main.rs")), "{a:?}");
+
+    // La jauge : le dernier appel au modèle, le contexte du modèle déclaré.
+    let c = &etat["context"];
+    assert_eq!(c["max"], 8192, "{etat}");
+    assert_eq!(c["source"], "run", "{etat}");
+    assert!(c["used"].as_u64().is_some_and(|n| n > 0), "{etat}");
+    assert!(c["at"].as_u64().is_some_and(|t| avant <= t && t <= apres), "{etat}");
+}
+
+/// **Un outil déclare son rôle** (`role` à son attachement, forme de 96 et
+/// d'everything declarative) : `describe()` le rend à côté de `policy`, et le
+/// run du graphe de l'outil l'annonce dans `RunStarted.target.role` — la page
+/// range les runs par rôle sans lire leurs noms. Un outil sans rôle n'en porte
+/// pas.
+#[test]
+fn le_role_d_un_outil_se_lit_dans_describe_et_dans_son_run() {
+    let (_d, host, manifeste, id) = banc_avec(qui_lit_deux_fois(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    let h = host.hosted(&manifeste).unwrap();
+    let outils = host.with_backend(&h, |b| b.describe()).unwrap()["tools"].as_array().cloned().unwrap_or_default();
+    let de = |nom: &str| outils.iter().find(|t| t["name"] == nom).cloned().unwrap_or_else(|| panic!("pas d'outil {nom}"));
+    assert_eq!(de("list_files")["role"], "archiviste", "{:?}", de("list_files"));
+    assert!(de("read_file").get("role").is_none(), "{:?}", de("read_file"));
+
+    let mut graphes = host.with_backend(&h, |b| b.bus_de_publication().subscribe(crate::events::topic::DATAFLOW)).unwrap();
+    host.chat_turn(&id, "regarde le code").unwrap();
+    let d = vider(&mut graphes);
+    let debut = |outil: &str| {
+        d.iter()
+            .find(|e| e["kind"] == "RunStarted" && e["run_kind"] == "graph" && e["target"]["tool"] == outil)
+            .cloned()
+            .unwrap_or_else(|| panic!("pas de RunStarted du graphe de {outil} : {d:?}"))
+    };
+    assert_eq!(debut("list_files")["target"]["role"], "archiviste", "{d:?}");
+    assert!(debut("read_file")["target"].get("role").is_none(), "{d:?}");
 }
