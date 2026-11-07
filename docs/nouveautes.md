@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Deux écrivains à la fois ne mêlent plus leurs nœuds sous un COPY de relations.**
+  Une transaction qui créait des nœuds puis les reliait par un COPY pouvait, si une autre validait
+  des nœuds dans la même table entre-temps, relier en silence les nœuds de l'autre (1000 → 1001 lu
+  2000 → 2001) ; le COPY verse désormais les nœuds de la transaction dans leur table avant de
+  résoudre la moindre clé, comme un COPY de nœuds le faisait déjà (`c4f8610b9`).
 - **7 nov. — La recherche surligne ce que le vecteur a trouvé, filtre juste et ne s'étouffe plus sur un prompt collé.**
   Un morceau trouvé par le seul dense porte ses passages surlignés par bge-m3, calculés à
   l'affichage et nulle part ailleurs (0 appel à l'indexation, prouvé par un service qui compte) ;
