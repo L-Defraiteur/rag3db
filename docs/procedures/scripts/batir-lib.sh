@@ -39,7 +39,7 @@ if [ ! -f $B/CMakeCache.txt ]; then
     -DENABLE_WERROR=OFF -DENABLE_LTO=OFF > $D/configurer.log 2>&1 \
     || { journal "ARRÊT : cmake en échec ($D/configurer.log)"; exit 4; }
 fi
-timeout 1h $L lourd cmake --build $B -j 8 > $D/batir.log 2>&1
+$L lourd timeout 1h cmake --build $B -j 8 > $D/batir.log 2>&1
 rc=$?
 journal "bâti rc=$rc"
 [ $rc = 0 ] || exit 4
