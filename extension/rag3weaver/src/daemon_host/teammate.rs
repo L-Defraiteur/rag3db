@@ -794,34 +794,6 @@ impl DaemonHost {
         Ok(files)
     }
 
-    /// **L'état de l'équipier de chaque tâche**, par l'id du backend de la tâche
-    /// : la logique de [`Self::teammate_list`] (`running`, `ended`, `error`,
-    /// `waiting`), et si une question ou une approbation de l'équipier attend
-    /// encore la réponse de son superviseur. Pour la barre du chat
-    /// (`chat_sessions` de l'état de l'hôte).
-    pub(super) fn teammate_states(&self) -> std::collections::HashMap<String, (&'static str, bool)> {
-        self.every_teammate()
-            .into_iter()
-            .map(|(t, f)| {
-                let lignes = f.mailbox();
-                let fin = lignes.iter().rev().find(|l| l["kind"] == "ended");
-                let vivant = self.teammate_running(&t.parent, &t.nom);
-                let state = if vivant && self.run_du_chat_en_cours(&t.id).is_some() {
-                    "running"
-                } else if let (Some(fin), false) = (fin, vivant) {
-                    if fin["text"].as_str().unwrap_or_default().starts_with("erreur") { "error" } else { "ended" }
-                } else {
-                    "waiting"
-                };
-                let attend = f
-                    .supervisor()
-                    .map(|s| f.pending_for(&s).iter().any(|l| matches!(l["kind"].as_str(), Some("question" | "approval"))))
-                    .unwrap_or(false);
-                (t.id.clone(), (state, attend))
-            })
-            .collect()
-    }
-
     /// Toutes les tâches de l'hôte, avec les fichiers de leur équipier.
     fn every_teammate(&self) -> Vec<(super::taches::Tache, TeammateFiles)> {
         let taches: Vec<super::taches::Tache> = self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
