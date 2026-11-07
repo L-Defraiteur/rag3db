@@ -1389,22 +1389,45 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
             "bge-m3"
         }
     }
-    struct CreuxQuiCompte(Arc<AtomicUsize>);
+    // Le premier compte : tout appel au creux ; le second : ceux qui demandent les spans (le
+    // chemin de l'hôte, qui n'a pas de tokenizer à lui).
+    struct CreuxQuiCompte(Arc<AtomicUsize>, Arc<AtomicUsize>);
     impl rag3weaver::SparseEmbedder for CreuxQuiCompte {
         fn embed_sparse(&self, textes: &[String]) -> Result<Vec<rag3weaver::sparse_index::SparseVector>, rag3weaver::EmbedError> {
             self.0.fetch_add(1, Ordering::SeqCst);
             Ok(textes.iter().map(|_| rag3weaver::sparse_index::SparseVector { indices: vec![5], values: vec![0.5] }).collect())
         }
+        fn embed_sparse_spans(
+            &self,
+            textes: &[String],
+        ) -> Result<Vec<(rag3weaver::sparse_index::SparseVector, Vec<rag3weaver::sparse_index::SparseSpan>)>, rag3weaver::EmbedError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            self.1.fetch_add(1, Ordering::SeqCst);
+            Ok(textes
+                .iter()
+                .map(|t| {
+                    let spans = t
+                        .split_whitespace()
+                        .map(|mot| {
+                            let start = mot.as_ptr() as usize - t.as_ptr() as usize;
+                            rag3weaver::sparse_index::SparseSpan { start, end: start + mot.len(), weight: 0.5 }
+                        })
+                        .collect();
+                    (rag3weaver::sparse_index::SparseVector { indices: vec![5], values: vec![0.5] }, spans)
+                })
+                .collect())
+        }
     }
 
     let appels = Arc::new(AtomicUsize::new(0));
+    let appels_spans = Arc::new(AtomicUsize::new(0));
     let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let adresse = ecoute.local_addr().unwrap().to_string();
     {
-        let appels = appels.clone();
+        let (appels, appels_spans) = (appels.clone(), appels_spans.clone());
         std::thread::spawn(move || {
             let _ = rag3weaver::daemon::EmbedDaemon::new(Arc::new(BgeFactice))
-                .avec_sparse(Arc::new(CreuxQuiCompte(appels)))
+                .avec_sparse(Arc::new(CreuxQuiCompte(appels, appels_spans)))
                 .servir_lie(ecoute);
         });
     }
@@ -1495,6 +1518,12 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
     let r = chercher(json!({"signals": ["vector"], "limit": 5, "highlights": "sparse"}));
     eprintln!("[creux à la demande] après une recherche qui surligne : {} appel(s)", appels.load(Ordering::SeqCst));
     assert_eq!(appels.load(Ordering::SeqCst), 1, "le surlignage appelle le creux une fois, pour toute la page : {r}");
+    eprintln!("[creux à la demande] dont par les spans du service : {}", appels_spans.load(Ordering::SeqCst));
+    assert_eq!(
+        appels_spans.load(Ordering::SeqCst),
+        1,
+        "le surlignage de l'hôte lit les spans du service, sans tokenizer à lui : {r}"
+    );
 }
 
 /// **Une requête longue répond vite et dit ses coupes** (ticket « Le plein texte explose sur une
