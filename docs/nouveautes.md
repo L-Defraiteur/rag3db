@@ -7,6 +7,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Le flux de l'IDE ne perd plus un événement quand deux relais se croisent.** Un id
+  tiré hors du verrou laissait un relais envoyer N+1 avant N, et N se perdait en silence : un
+  jeton manquant en direct dans le chat (1 à 3 tours sur 8 sous un modèle rapide), une ligne de
+  boîte de l'équipier. L'id se tire désormais sous le verrou des abonnés ; un témoin à quatre fils
+  (8 000 publications, 7 577 reçues avant) le garde. Et la barre range chaque backend par la
+  nature que son gabarit déclare (`kind`), son dépôt et sa branche lus dans son espace de
+  travail. 23757c7d6.
 - **7 nov. — Le chat tient l'ordre d'arrivée.** Une réponse de l'agent se lit comme elle
   s'est faite : mots, appel d'outil, mots, appel, réponse finale, pendant le tour comme après un
   rechargement ; chaque outil déplié dit son heure, sa durée et son résultat entier ; la liste
