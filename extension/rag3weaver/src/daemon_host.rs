@@ -670,6 +670,37 @@ impl DaemonHost {
         }
     }
 
+    /// **Dépose un run venu de dehors** dans le journal des runs : `backend`
+    /// est le nom du client (`claude-code`), `run` son identifiant, `genre`
+    /// dit ce que c'est (`claude_code_turn`) ; le reste est gardé tel quel.
+    pub fn deposer_un_run_externe(&self, v: &Value) -> Result<Value, String> {
+        let nom_sur = |s: &str, quoi: &str| -> Result<String, String> {
+            if !s.is_empty() && !s.starts_with('.') && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+                Ok(s.to_string())
+            } else {
+                Err(format!("« {quoi} » : un nom en [A-Za-z0-9._-] attendu, pas « {s} »"))
+            }
+        };
+        let run = nom_sur(v["run"].as_str().unwrap_or(""), "run")?;
+        let genre = v["genre"].as_str().filter(|g| !g.is_empty()).ok_or("« genre » manque (claude_code_turn)")?.to_string();
+        // **Le run porte pour backend celui que le hook désigne** (c7, 7 novembre) :
+        // un manifeste ouvert chez l'hôte, et le run entre dans la file des
+        // bilans comme un tour du chat, si ce backend déclare `bilans`. Sans
+        // manifeste, un nom nu : le run est gardé, personne ne le juge.
+        let (backend, hosted) = match v["manifest"].as_str().map(PathBuf::from) {
+            Some(m) => {
+                let h = self.hosted_existing(&m).ok_or_else(|| format!("le backend {} n'est pas ouvert chez l'hôte : POST /open d'abord", m.display()))?;
+                (h.id.clone(), Some(h))
+            }
+            None => (nom_sur(v["backend"].as_str().unwrap_or(""), "backend")?, None),
+        };
+        let fichier = self.journal.deposer(&backend, &run, v.clone())?;
+        if let Some(h) = &hosted {
+            self.demander_un_bilan(h, &run);
+        }
+        Ok(json!({ "ok": true, "backend": backend, "run": run, "genre": genre, "fichier": fichier, "juge": hosted.is_some() }))
+    }
+
     /// **Épingle un run** d'un backend hébergé (page 06) : son journal ne tombera
     /// jamais, ni par le poids ni par l'âge. Un run sans journal est un refus.
     pub fn epingler_un_run(&self, backend_id: &str, run: &str, raison: &str) -> Result<Value, String> {
@@ -867,6 +898,18 @@ impl DaemonHost {
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
             ("DELETE", "/session") => (200, json!({ "closed": session.is_some_and(|s| self.close_session(s)) })),
+            // **Un run venu de dehors** (lot 3 des hooks de Claude Code) : un tour
+            // d'un agent qui n'est pas le nôtre, journalisé pour que le juge le
+            // lise comme un tour du chat. Sous session et jeton, comme un appel.
+            ("POST", "/journal/run") => {
+                if let Err(e) = self.check_session(session) {
+                    return (401, json!({ "ok": false, "unknownSession": true, "error": e }));
+                }
+                match corps().and_then(|v| self.deposer_un_run_externe(&v)) {
+                    Ok(r) => (200, r),
+                    Err(e) => (422, json!({ "ok": false, "error": e })),
+                }
+            }
             ("POST", "/open" | "/backend/open" | "/backend/close" | "/describe" | "/call") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
@@ -1272,6 +1315,32 @@ mod tests {
     /// **Le jeton local** (marche 4) : `GET /sante` répond sans lui — un client
     /// sonde avant de le connaître — ; tout le reste le demande, refusé en 403
     /// et nommé (401 voudrait dire « session inconnue », que le client rejoue).
+    #[test]
+    fn un_run_venu_de_dehors_passe_par_la_route_du_journal_sous_session() {
+        let d = std::env::temp_dir().join(format!("hote-journal-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let host = DaemonHost::new().with_runs_root(d.join("runs"));
+        let corps = json!({ "backend": "claude-code", "run": "s1-p2", "genre": "claude_code_turn", "tours": [] }).to_string();
+        let (statut, r) = host.handle("POST", "/journal/run", None, corps.as_bytes());
+        assert_eq!(statut, 401, "{r}");
+        assert_eq!(r["unknownSession"], true);
+        let (_, s) = host.handle("POST", "/session", None, br#"{"client":"claude-code-hook"}"#);
+        let session = s["session"].as_str().unwrap().to_string();
+        let (statut, r) = host.handle("POST", "/journal/run", Some(&session), corps.as_bytes());
+        assert_eq!(statut, 200, "{r}");
+        assert_eq!((r["backend"].as_str(), r["run"].as_str(), r["genre"].as_str()), (Some("claude-code"), Some("s1-p2"), Some("claude_code_turn")));
+        let lu = host.journal_des_runs().lire("claude-code", "s1-p2").unwrap();
+        assert_eq!(lu["genre"], "claude_code_turn");
+        let (statut, r) = host.handle("POST", "/journal/run", Some(&session), br#"{"manifest":"/nulle/part/backend.json","run":"r","genre":"g"}"#);
+        assert_eq!(statut, 422, "{r}");
+        assert!(r["error"].as_str().unwrap().contains("n'est pas ouvert"), "{r}");
+        for mauvais in [r#"{"backend":"../x","run":"r","genre":"g"}"#, r#"{"backend":"b","run":"","genre":"g"}"#, r#"{"backend":"b","run":"r"}"#] {
+            let (statut, r) = host.handle("POST", "/journal/run", Some(&session), mauvais.as_bytes());
+            assert_eq!(statut, 422, "{mauvais} : {r}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn sans_le_jeton_seule_la_sante_repond() {
         let (adresse, fil) = hote_garde("le-bon");
