@@ -180,6 +180,8 @@ mod e2e_mesure_ingestion_code;
 mod e2e_mesure_joignabilite;
 #[path = "../e2e_mesure_sync_source.rs"]
 mod e2e_mesure_sync_source;
+#[path = "../e2e_mesure_vues.rs"]
+mod e2e_mesure_vues;
 #[path = "../e2e_native.rs"]
 mod e2e_native;
 #[path = "../e2e_nom_reserve.rs"]
