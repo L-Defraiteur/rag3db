@@ -49,6 +49,21 @@ rouge sur master, 27 OK ici.
 | 15 h 05 | ici | 1 | pose du lot |
 | 15 h 35 m 06 s | luciepc | **4** | c7 : à deux places, luciepc tournait à un tiers (charge 3,4 sur 24 cœurs). Si « pas indexé en 60 s » revient dans l'heure, on redescend à 3 |
 
+## Gemini 4 Argon sous lr-hub-472010 (vers 16 h 15)
+
+Sans aucun appel de génération : le catalogue `publishers/google/models` de Vertex (jeton du compte de
+service de `.vault`) liste `gemini-4-argon` en GA en global et en us-central1, et pas en europe-west1. Le
+seul Gemini 4 de la liste est plus récent que gemini-3.8-flash. Un `countTokens` (gratuit) donne :
+
+- **global : 200**, 7 jetons. Le projet l'atteint.
+- **us-central1 : 404**, « not found or your project does not have access to it ». Le catalogue le liste,
+  mais le projet ne l'a pas dans cette région.
+
+Nom à déclarer : `google/gemini-4-argon` (interface OpenAI de Vertex), région **global**. C'est le défaut du
+code quand un manifeste ne pose pas `location`, et les manifestes de Lucie n'en posent pas. Le manifeste
+d'essai de l'équipier déclarera sa région à part. Le tarif et les crédits du programme startup ne se lisent
+pas par l'API : c'est la console de facturation de Lucie.
+
 ## À suivre
 
 - lucivy-publiee-1 : rebase, lib entière, push sous if VERT à mon tour (après les vues d'everything
