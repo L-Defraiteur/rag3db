@@ -2084,8 +2084,10 @@ impl PreparedBackend {
             Some(source) => Some(crate::decider::connect_decider(source)?.0),
             None => None,
         };
+        let llm = cat.llm();
         let backend = Backend {
             decider,
+            llm,
             avertissement_sans_service,
             embarqueur_a_retenter,
             prepared: std::sync::RwLock::new(Arc::new(self)),
@@ -2655,6 +2657,12 @@ pub struct Backend {
     /// Le modèle de décision déclaré (`models.decide`), donné aux nœuds sous
     /// la clé `crate::decider::DECIDER_SERVICE`.
     decider: Option<Arc<dyn crate::decider::Decider>>,
+    /// Le modèle de langage déclaré (`models.llm`), joint à l'ouverture et donné
+    /// aux nœuds sous `crate::dataflow::LLM_SERVICE`. Tenu ici comme le decider :
+    /// le catalogue le porte aussi, mais les graphes d'outil montent leurs services
+    /// sans son mutex (lot L2), et le pas 1 de M4 le posait sur le catalogue
+    /// seulement — aucun graphe d'outil ne le voyait (7 novembre 2026).
+    llm: Option<Arc<dyn crate::llm::Llm>>,
     /// Le backend déclare du vecteur et a démarré sans service : la phrase
     /// dite à l'ouverture, redite dans `describe` et `index_state`.
     avertissement_sans_service: Option<String>,
@@ -3939,6 +3947,9 @@ impl Backend {
         services.register(crate::embedding_choice::DECLARED_MODEL_SERVICE, prepared.embed_source().model.clone());
         if let Some(decider) = &self.decider {
             services.register(crate::decider::DECIDER_SERVICE, decider.clone());
+        }
+        if let Some(llm) = &self.llm {
+            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
         }
         // La surface de code déclarée : la source et la porte du manifeste,
         // montées comme sur le chemin agent — sans elles, les nœuds de code
@@ -5398,6 +5409,7 @@ mod tests {
         }
         let backend = Backend {
             decider: None,
+            llm: None,
             avertissement_sans_service: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
@@ -5619,6 +5631,7 @@ mod tests {
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
         Backend {
             decider: None,
+            llm: None,
             avertissement_sans_service: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),

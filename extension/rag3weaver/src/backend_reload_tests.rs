@@ -56,6 +56,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         avertissement_sans_service: None,
         embarqueur_a_retenter: None,
         decider: None,
+        llm: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
         version: std::sync::atomic::AtomicU64::new(0),
         catalog: Arc::new(Mutex::new(catalog)),
