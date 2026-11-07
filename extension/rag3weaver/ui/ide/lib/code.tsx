@@ -37,6 +37,18 @@ const echapper = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").r
 /// Un bloc de code en HTML coloré : la langue déclarée si on la connaît, sinon le
 /// texte tel quel (échappé), jamais une langue devinée.
 export function highlightBlock(code: string, lang?: string): string {
+  // Les lignes numérotées de read_file (« 00012| code ») : le numéro à part, le
+  // code coloré d'après l'extension du fichier quand le bloc ne dit pas sa langue.
+  const lignes = code.split("\n");
+  if (lignes.length && lignes.filter((l) => l).every((l) => /^\d{5}\| /.test(l))) {
+    const langue = (lang ?? "").trim().toLowerCase();
+    const colore = (t: string) => (langue && hljs.getLanguage(langue) ? hljs.highlight(t, { language: langue, ignoreIllegals: true }).value : echapper(t));
+    const corps = lignes
+      .filter((l) => l)
+      .map((l) => `<span class="ligne"><span class="numero">${Number(l.slice(0, 5))}</span>${colore(l.slice(7))}</span>`)
+      .join("\n");
+    return `<pre class="lignes-numerotees"><code class="hljs${langue ? ` language-${echapper(langue)}` : ""}">${corps}</code></pre>`;
+  }
   const langue = (lang ?? "").trim().toLowerCase();
   if (langue && hljs.getLanguage(langue)) {
     const html = hljs.highlight(code, { language: langue, ignoreIllegals: true }).value;
