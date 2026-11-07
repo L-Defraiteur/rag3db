@@ -67,7 +67,8 @@ eu qu'une boîte d'outils.
 - **Un seul fil, une seule boîte** pour la session ; les sous-équipiers (lot 5 de la page 01)
   peuvent alors porter chacun un sous-ensemble des worktrees.
 - **Les worktrees en lot** : « une session prend un lot de worktrees sur plusieurs repos » =
-  la session ouvre une tâche par dépôt (une branche, un worktree, une vue de l'index par dépôt
+  la session ouvre autant de worktrees qu'il lui en faut, plusieurs dans un même dépôt s'il le
+  faut (Lucie : « pas obligé un worktree par repo » ; page 03), chacun (une branche, un worktree, une vue de l'index par dépôt
   quand les vues de la vision du 6 novembre seront là), et les fusions restent par dépôt, à un
   humain.
 
