@@ -938,7 +938,7 @@ impl DaemonHost {
             let memoire = memoire.and_then(|m| backends.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(m.as_path())));
             sessions.push(json!({
                 "id": id,
-                "name": if b["repo"].is_null() { json!(id) } else { b["repo"].clone() },
+                "name": session_name(b),
                 "model": modele,
                 "state": if occupe { json!("running") } else { Value::Null },
                 "awaits_answer": false,
@@ -1479,6 +1479,12 @@ mod teammate_tests;
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_qui_code;
 
+/// **Le nom d'une session dans la barre** : son dépôt ; à défaut son id
+/// (avant le correctif du 8 novembre 2026).
+fn session_name(b: &Value) -> Value {
+    if b["repo"].is_null() { b["id"].clone() } else { b["repo"].clone() }
+}
+
 /// **Le dépôt git d'un manifeste** : le nom du dossier de son `--show-toplevel`,
 /// gardé une fois lu (un dépôt ne change pas de nom sous l'hôte). `None` hors
 /// d'un dépôt git.
@@ -1566,6 +1572,17 @@ mod tests {
         assert!(arbre.join(".git").is_file(), "un worktree a un .git fichier");
         assert_eq!(branch_of(&arbre.join("sous")).as_deref(), Some("agent/salut"));
         assert_eq!(branch_of(&d.path().join("ailleurs")), None);
+    }
+
+    /// **Une session se nomme comme la page la nommait** (G, pose du 8 novembre
+    /// 0 h 04 : la mémoire de Lucie paraissait sous son id brut) : son dépôt ;
+    /// une mémoire, « la mémoire » ; sinon le dossier de son manifeste.
+    #[test]
+    fn une_session_se_nomme_par_son_depot_sa_nature_ou_son_dossier() {
+        let b = |repo: Value, kind: &str| json!({ "id": "c6dd17bae70f", "repo": repo, "kind": kind, "manifest": "/home/x/.config/rag3weaver/memoire-longue/backend.json" });
+        assert_eq!(session_name(&b(json!("rag3db"), "code")), json!("rag3db"));
+        assert_eq!(session_name(&b(Value::Null, "memory")), json!("la mémoire"));
+        assert_eq!(session_name(&b(Value::Null, "project")), json!("memoire-longue"));
     }
 
     /// **Un hôte de test a son propre registre de runs en fond**, jamais
