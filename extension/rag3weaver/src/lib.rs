@@ -320,7 +320,7 @@ pub use node_id_cache::{InternalNodeId, NodeIdCache};
 pub use records::{EntityRecord, RelationRecord, UpdateRecord, DeleteRecord, PendingWork, RefOrUuid, FlushResult, DrainStats};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
-pub use sparse_index::SparseVector;
+pub use sparse_index::{SparseSpan, SparseVector};
 pub use uuid::{chunk_uuid, hashsafe_uuid};
 pub use catalog::{Catalog, CatalogError, ReindexStats};
 pub use records::{DeleteResult, UpdateResult, UpdateStatus};
