@@ -18,7 +18,10 @@
 //!   dimension, **et si je suis factice**.
 //! - `POST /embed` `{"texts":[…]}` → `{"vectors":[[…]]}`.
 //! - `POST /embed_dual` → `{"dense":[[…]],"sparse":[{"indices":[…],"values":[…]}]}`.
-//! - `POST /embed_sparse` → `{"sparse":[{"indices":[…],"values":[…]}]}`.
+//! - `POST /embed_sparse` → `{"sparse":[{"indices":[…],"values":[…]}]}` ; avec
+//!   `"spans": true`, en plus `"spans":[[[début, fin, poids], …], …]` par texte
+//!   (plages d'octets, poids avant la fusion ; l'espace de tête d'un mot peut
+//!   être dans sa plage).
 //!
 //! # Le factice doit traverser
 //!
@@ -466,7 +469,9 @@ fn sparse_json(v: &SparseVector) -> serde_json::Value {
 }
 
 /// Les positions d'un texte sur le fil : `[[début, fin, poids], …]`, plages
-/// d'octets du texte reçu.
+/// d'octets du texte reçu. **Une plage peut commencer par l'espace qui
+/// précède le mot** (le Metaspace de BGE-M3 range l'espace dans le jeton
+/// suivant : « ␣chat ») ; un surligneur retire l'espace de tête.
 fn spans_json(spans: &[SparseSpan]) -> serde_json::Value {
     serde_json::json!(spans.iter().map(|s| serde_json::json!([s.start, s.end, s.weight])).collect::<Vec<_>>())
 }
