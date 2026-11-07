@@ -102,6 +102,7 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
     let backend = Backend {
         read_view: catalog.read_view_cell(),
         avertissement_sans_service: None,
+        avertissement_du_creux: None,
         embarqueur_a_retenter: None,
         reactions: Mutex::new(None),
         cell_reactions: Mutex::new(std::collections::HashMap::new()),
