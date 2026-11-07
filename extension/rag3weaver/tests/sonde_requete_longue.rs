@@ -67,13 +67,9 @@ fn le_cout_du_plein_texte_selon_le_nombre_de_termes() {
     let tmp = tempfile::tempdir().unwrap();
     let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
     copier(&gabarits.join("tools"), &tmp.path().join("templates/tools"));
-    copier(&gabarits.join("backends").join(&gabarit), &tmp.path().join("templates/backends").join(&gabarit));
-    for dossier in ["schemas", "graphs", "plans", "scripts"] {
-        let d = gabarits.join("backends").join(&gabarit).join(dossier);
-        if d.is_dir() {
-            copier(&d, &tmp.path().join("templates/backends").join(&gabarit).join(dossier));
-        }
-    }
+    // Tous les gabarits de backend : l'un emprunte les graphes d'un autre (memory lit
+    // `../notebook/graphs/`).
+    copier(&gabarits.join("backends"), &tmp.path().join("templates/backends"));
     // Le manifeste de l'hôte : nommé (`SONDE_MANIFESTE`, la mémoire longue range le sien sous
     // `backends/memory/`), sinon cherché sous `templates/backends/<gabarit>/`.
     let fichier_hote = match std::env::var("SONDE_MANIFESTE") {
