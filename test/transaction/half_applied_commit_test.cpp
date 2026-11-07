@@ -77,8 +77,13 @@ protected:
     }
     void addThrowingIndex() {
         auto* context = getClientContext(*conn);
-        auto* entry = rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(
-            &rag3db::transaction::DUMMY_TRANSACTION, "Item");
+        // Une lecture du dernier état validé : la transaction fictive (startTS 0) ne voit pas la
+        // table créée par le SetUp.
+        using rag3db::transaction::Transaction;
+        const Transaction latest(rag3db::transaction::TransactionType::READ_ONLY,
+            Transaction::START_TRANSACTION_ID + 1000, Transaction::LATEST_COMMITTED_TS);
+        auto* entry =
+            rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(&latest, "Item");
         auto& table = getStorageManager(*database)->getTable(entry->getTableID())->cast<NodeTable>();
         table.addIndex(std::make_unique<ThrowingIndex>(IndexInfo{"throwing_index", "THROWING",
             entry->getTableID(), {1}, {PhysicalTypeID::INT64}, false /* primary */,
