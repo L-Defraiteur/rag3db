@@ -64,8 +64,22 @@ Leçons du soir :
 - un vert de hasard au banc se départage seul (SameRowsFirstCopy : 1 vert sur 11) avant de
   toucher à known_red, et le fichier va à qui a la mesure.
 
+## Le groupe 1 : deux tickets non reproduits
+
+Les deux tickets de la validation et de l'annulation ont reçu le témoin qu'ils demandaient, et ne
+se reproduisent plus sur master ; ils se ferment avec leur témoin en garde, sans changer le moteur.
+
+| ticket | témoin | sur master |
+|---|---|---|
+| 2026-10-10 validation à moitié appliquée | `HalfAppliedCommit` : un index d'essai lève à l'étape 3 de `NodeTable::commit`, après l'ajout des lignes ; deux cas, dont une suppression validée, une mise à jour, 2 100 lignes et une réouverture | `5b35a5a70` |
+| 2026-10-18 annulation d'un COPY sous un tampon plein | `CopyRollbackUnderAFullBuffer` (banc) : B valide 151 250 lignes dans une autre table jusqu'aux refus, le ROLLBACK du COPY de A passe, la base reste ouverte | `15f16bcdc` |
+
+Leçons : un témoin vert se lit par son plan avant de clore un ticket (la première forme du
+second ne remplissait pas le tampon, le COPY de A tenant la table de B) ; une doublure d'index se
+retire avant le point de reprise de la fermeture, qui la sérialiserait.
+
 ## À suivre
 
-Le groupe 1 du cœur : la validation à moitié appliquée (2026-10-10) et l'annulation d'un COPY
-sous un tampon plein (2026-10-18), un témoin rouge par ticket, un seul rejeu, un seul push ;
-puis la durabilité (2026-10-04), puis V2-2c et V2-3.
+La durabilité sur faute d'entrée-sortie ou coupure (2026-10-04), témoin de la coupure d'abord par
+injection de faute dans `FileInfo::writeFile` et le fsync ; puis V2-2c (format 44) et V2-3. La
+lib ordinaire de G, demain matin, porte la projection et le retrait.

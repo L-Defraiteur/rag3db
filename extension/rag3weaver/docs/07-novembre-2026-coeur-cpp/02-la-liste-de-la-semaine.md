@@ -16,7 +16,8 @@ de reprise) ; ce qui se touche se répartit entre nous. Cette page tient la list
 | 0 | la projection sous READ ONLY, et DROP_PROJECTED_GRAPH qui honore skip_if_not_exists | sur master en `e86d2f688` |
 | 0 | le retrait des générations à chaque point de reprise | sur master en `b3bc6e479` (moteur `7cd11e5fa`) |
 | 0 | la lib unique de la bascule 43 (par l'arbre principal) | décision de c7 : bâtie depuis `17a094d12`, la projection et le retrait suivent en libs ordinaires |
-| 1 | 2026-10-10 validation à moitié appliquée sur échec après l'ajout des lignes | prochain lot, avec le 2026-10-18 de l'annulation sous tampon plein |
+| 1 | 2026-10-10 validation à moitié appliquée sur échec après l'ajout des lignes | non reproduit, fermé avec son témoin HalfAppliedCommit (`5b35a5a70`) |
+| 1 | 2026-10-18 l'annulation d'un COPY sous un tampon plein peut encore allouer | non reproduit, fermé avec son témoin CopyRollbackUnderAFullBuffer au banc (`15f16bcdc`) |
 | 2 | 2026-10-18 l'annulation d'un COPY sous un tampon plein peut encore allouer | à faire |
 | 3 | 2026-10-18 les lignes d'un COPY forcé validé après un CREATE restent hors du graphe | à faire |
 | 4 | 2026-10-04 durabilité sur faute d'entrée-sortie ou coupure (le témoin de la coupure d'abord, injection de faute) | à faire |
