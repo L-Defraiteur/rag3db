@@ -23,6 +23,13 @@
 # mesure. Le script tient la place lui-même et la rend à sa fin, orphelins ou
 # pas (voir « La priorité au travail exclusif », plus bas).
 #   poste --qui    qui tient la place, qui attend (mesure ou lourd), depuis quand
+#
+# Le nombre de lourds (7 novembre 2026, luciepc surchargé : sept passes tenaient
+# la place partagée à la fois, la lib entière de codeparsers a pris 235 s au
+# lieu de 40, et des témoins ont rougi sur « pas indexé en 60 s ») : au plus N
+# lourds tiennent la place en même temps ; les suivants attendent dans l'ordre
+# d'arrivée. N se lit à chaque tour dans le fichier `lourds-max` du dossier des
+# verrous (une ligne, un nombre ; 2 s'il manque), POSTE_LOURDS_MAX l'emporte.
 D="$HOME/.cache/rag3weaver-build"
 # POSTE_LOCK_DIR : un autre dossier pour les verrous du poste (porte, poste) — pour
 # les témoins, qui ne doivent jamais prendre les verrous réels.
@@ -117,6 +124,8 @@ if [ "${1:-}" = "push" ] && [ "${2:-}" != "--qui" ] && [ -z "${POSTE_DANS_LOURD:
   fi
   attente="${POSTE_PUSH_LOURD_MAX:-60}"
   commande_tapee="$*"
+  # (7 novembre 2026) La place se prend par `poste lourd` lui-même, avec son délai
+  # d'attente : un push lourd compte parmi les N lourds et attend dans la même file.
   occupe() {
     # Le tenant d'un verrou est un `flock` : on nomme la commande au bout de sa chaîne.
     tenants=""
@@ -144,15 +153,7 @@ if [ "${1:-}" = "push" ] && [ "${2:-}" != "--qui" ] && [ -z "${POSTE_DANS_LOURD:
     esac
     exit 75
   }
-  flock -w "$attente" -x "$V/porte.lock" true || occupe
-  set -- push "$nom" -- "$@"
-  if command -v systemd-run >/dev/null 2>&1 && systemd-run --user --scope -q -- true 2>/dev/null; then
-    set -- systemd-run --user --scope -q -p MemoryMax="${POSTE_MEM_MAX:-40G}" -p MemorySwapMax="${POSTE_SWAP_MAX:-4G}" -- env POSTE_DANS_LOURD=1 nice -n 15 ionice -c 3 "$0" "$@"
-  else
-    echo "poste: systemd-run indisponible, le push lourd tourne SANS plafond de mémoire" >&2
-    set -- env POSTE_DANS_LOURD=1 nice -n 15 ionice -c 3 "$0" "$@"
-  fi
-  flock -o -s -E 75 -w "$attente" "$V/poste.lock" "$@"
+  POSTE_LOURD_ATTENTE_MAX="$attente" "$0" lourd env POSTE_DANS_LOURD=1 "$0" push "$nom" -- "$@"
   rc=$?
   [ "$rc" -eq 75 ] && occupe
   exit "$rc"
@@ -285,6 +286,38 @@ usage() {
 }
 mode="${1:-}"; [ $# -gt 0 ] && shift
 F="$V/fiches"
+# La file des lourds : un billet `<instant en ns>-<pid>` par lourd qui attend ; l'ordre
+# des noms est l'ordre d'arrivée. Un billet dont le processus est mort est retiré.
+T="$V/file"
+places() {
+  _n="${POSTE_LOURDS_MAX:-$(cat "$V/lourds-max" 2>/dev/null)}"
+  case "$_n" in ''|*[!0-9]*) _n=2 ;; esac
+  [ "$_n" -ge 1 ] || _n=1
+  echo "$_n"
+}
+lourds_tenus() {
+  _k=0
+  for _f in "$F"/*; do
+    [ -f "$_f" ] || continue
+    case "$(cat "$_f" 2>/dev/null)" in "tient lourd"*) kill -0 "${_f##*/}" 2>/dev/null && _k=$((_k + 1)) ;; esac
+  done
+  echo "$_k"
+}
+# file_des_lourds [billet] : les pids en attente dans l'ordre ; avec un billet, son rang (0 = premier).
+file_des_lourds() {
+  _r=0
+  for _t in $(ls "$T" 2>/dev/null | sort); do
+    kill -0 "${_t#*-}" 2>/dev/null || { rm -f "$T/$_t"; continue; }
+    if [ -n "${1:-}" ]; then
+      [ "$T/$_t" = "$1" ] && { echo "$_r"; return 0; }
+    else
+      echo "${_t#*-}"
+    fi
+    _r=$((_r + 1))
+  done
+  [ -n "${1:-}" ] && echo "$_r"
+  return 0
+}
 
 # ── poste --qui : qui tient la place, qui attend, depuis quand ─────────────
 # Chaque `poste mesure|lourd` tient une fiche (« attend » puis « tient ») tant
@@ -296,6 +329,8 @@ if [ "$mode" = "--qui" ]; then
     if kill -0 "${f##*/}" 2>/dev/null; then cat "$f"; vu=1; else rm -f "$f"; fi
   done
   [ "$vu" = 0 ] && echo "poste : libre (aucune mesure, aucun lourd)"
+  file=$(file_des_lourds | tr '\n' ' ')
+  echo "lourds : $(lourds_tenus)/$(places) places tenues${file:+, en file dans l'ordre : pid $file}"
   [ -s "$PUSH_FICHE" ] && echo "push : tenu — $(cat "$PUSH_FICHE")"
   exit 0
 fi
@@ -375,9 +410,30 @@ case "$mode" in
     "$@" 8>&- 9>&-
     rc=$? ;;
   lourd)
-    exec 8>>"$V/porte.lock"; prendre -x 8; flock -u 8; exec 8>&-
-    exec 9>>"$V/poste.lock"; prendre -s 9
-    dire tient
+    # La porte, puis une des N places, dans l'ordre d'arrivée. Chaque essai se fait
+    # porte tenue : une mesure qui attend la tient, et aucun lourd n'entre derrière
+    # elle ; deux lourds ne comptent jamais les places en même temps. Le billet part
+    # et la fiche dit « tient » avant que la porte soit rendue.
+    # POSTE_LOURD_ATTENTE_MAX (secondes, pour `push --lourd`) : au-delà, code 75, rien de pris.
+    mkdir -p "$T"
+    billet="$T/$(date +%s%N)-$$"; : > "$billet"
+    trap 'rm -f "$fiche" "$billet"' EXIT
+    exec 9>>"$V/poste.lock"
+    debut=$(date +%s)
+    while :; do
+      exec 8>>"$V/porte.lock"
+      if [ -n "${POSTE_LOURD_ATTENTE_MAX:-}" ]; then prendre -w "$POSTE_LOURD_ATTENTE_MAX" -x 8; else prendre -x 8; fi
+      max=$(places); tenus=$(lourds_tenus); rang=$(file_des_lourds "$billet")
+      if [ "$tenus" -lt "$max" ] && [ "$rang" -lt $((max - tenus)) ] && flock -n -s 9; then
+        rm -f "$billet"; dire tient
+        flock -u 8; exec 8>&-
+        break
+      fi
+      flock -u 8; exec 8>&-
+      if [ -n "${POSTE_LOURD_ATTENTE_MAX:-}" ] && [ $(( $(date +%s) - debut )) -ge "$POSTE_LOURD_ATTENTE_MAX" ]; then exit 75; fi
+      sleep 1 & attente=$!; wait "$attente"; attente=""
+    done
+    unset POSTE_LOURD_ATTENTE_MAX
     nice -n 15 ionice -c 3 "$@" 9>&-
     rc=$? ;;
 esac
