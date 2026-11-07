@@ -129,6 +129,10 @@ pub enum Event {
         /// `None` : un graphe sans nom déclaré (un sous-graphe, une recherche
         /// composée, un crochet), ou une boucle d'agent.
         target: Option<GraphTarget>,
+        /// **Le rôle déclaré de l'outil** dont c'est le graphe (`role` de son
+        /// attachement au manifeste : `archiviste`, …) — la page range les runs
+        /// par rôle sans lire leurs noms. Rendu dans `target.role`.
+        role: Option<String>,
     },
     /// **Ce qu'un appel a consommé** — le compteur
     /// ([`crate::meter`], [doc 08](../docs/27-aout-2026-13h01/08-le-compteur.md)).
@@ -227,6 +231,13 @@ pub enum Event {
         error_kind: Option<String>,
         ms: u64,
         bytes: usize,
+        /// **Un extrait du résultat** (ou du message d'erreur), borné à
+        /// [`RESULT_EXCERPT_MAX`] octets et coupé à une frontière de caractère,
+        /// pour le flux (la page, le terminal) ; le résultat entier se relit
+        /// par la session. Absent quand l'outil ne rend rien.
+        result_excerpt: Option<String>,
+        /// L'extrait a été coupé.
+        truncated: bool,
     },
     /// Un nœud d'un graphe exécuté par le runtime — ce qui se passe *sous*
     /// un outil.
@@ -629,9 +640,15 @@ impl Event {
     pub fn to_json(&self) -> serde_json::Value {
         use serde_json::json;
         match self {
-            Self::RunStarted { run, parent, kind, name, domain, scope, target } => json!({
+            Self::RunStarted { run, parent, kind, name, domain, scope, target, role } => json!({
                 "kind": "RunStarted", "run": run, "parent": parent, "run_kind": kind, "name": name,
-                "domain": domain, "target": target.as_ref().map(GraphTarget::to_json),
+                "domain": domain, "target": target.as_ref().map(|t| {
+                    let mut v = t.to_json();
+                    if let (Some(r), Some(o)) = (role, v.as_object_mut()) {
+                        o.insert("role".into(), json!(r));
+                    }
+                    v
+                }),
                 "org": scope.as_ref().map(|s| s.org.clone()),
                 "project": scope.as_ref().map(|s| s.project.clone()),
             }),
@@ -694,10 +711,19 @@ impl Event {
             Self::ToolCallStarted { run, agent, call_id, tool, arguments } => json!({
                 "kind": "ToolCallStarted", "run": run, "agent": agent, "call_id": call_id, "tool": tool, "arguments": arguments,
             }),
-            Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes } => json!({
-                "kind": "ToolCallFinished", "run": run, "agent": agent, "call_id": call_id, "tool": tool,
-                "ok": ok, "error_kind": error_kind, "ms": ms, "bytes": bytes,
-            }),
+            Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes, result_excerpt, truncated } => {
+                let mut v = json!({
+                    "kind": "ToolCallFinished", "run": run, "agent": agent, "call_id": call_id, "tool": tool,
+                    "ok": ok, "error_kind": error_kind, "ms": ms, "bytes": bytes,
+                });
+                if let Some(e) = result_excerpt {
+                    v["result_excerpt"] = json!(e);
+                    if *truncated {
+                        v["truncated"] = json!(true);
+                    }
+                }
+                v
+            }
             Self::NodeRun { run, node, node_type, ms, error } => json!({
                 "kind": "NodeRun", "run": run, "node": node, "node_type": node_type, "ms": ms, "ok": error.is_none(), "error": error,
             }),
@@ -800,6 +826,29 @@ impl GraphTarget {
 pub struct RunTarget {
     pub run: String,
     pub target: GraphTarget,
+    /// Le rôle déclaré de l'outil (`ToolAttachment.role`), relayé dans
+    /// `RunStarted`.
+    pub role: Option<String>,
+}
+
+/// La borne d'un extrait de résultat dans `ToolCallFinished` : 4 Kio.
+pub const RESULT_EXCERPT_MAX: usize = 4096;
+
+/// **L'extrait d'un résultat** : le texte entier s'il tient dans
+/// [`RESULT_EXCERPT_MAX`] octets, sinon son début coupé à une frontière de
+/// caractère, et `true`. `None` pour un texte vide (l'outil n'a rien rendu).
+pub fn result_excerpt(text: &str) -> (Option<String>, bool) {
+    if text.is_empty() {
+        return (None, false);
+    }
+    if text.len() <= RESULT_EXCERPT_MAX {
+        return (Some(text.to_string()), false);
+    }
+    let mut end = RESULT_EXCERPT_MAX;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    (Some(text[..end].to_string()), true)
 }
 
 /// La clé du service [`RunTarget`].
@@ -1109,7 +1158,7 @@ mod tests {
         let mut all = bus.subscribe(topic::AGENT);
         let mut mine = bus.subscribe(&run_topic("r1"));
         let mut other = bus.subscribe(&run_topic("r2"));
-        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), domain: String::new(), scope: None, target: None });
+        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), domain: String::new(), scope: None, target: None, role: None });
         assert!(matches!(all.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));
