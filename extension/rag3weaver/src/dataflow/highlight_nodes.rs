@@ -4,24 +4,25 @@
 //!
 //! Un morceau trouvé par le seul vecteur n'a pas de spans : rien ne dit à la
 //! page quoi montrer. `HighlightNode`, après la pagination (seule la page
-//! visible paie), demande à bge-m3 les poids lexicaux creux de la requête et de
-//! ces morceaux, en un appel borné, et surligne dans chaque morceau les tokens
-//! qui portent le plus du produit requête × morceau. Le service ne rend que des
-//! ids de vocabulaire : leurs places se retrouvent en retokenisant le texte
-//! chez nous, avec le même `tokenizer.json`. Sans service, sans tokenizer ou
-//! sans réponse dans le délai, ce sont les mots de la requête qui sont
-//! surlignés, et la méta le dit.
+//! visible paie), demande à bge-m3 le poids de chaque position de la requête et
+//! de ces morceaux, en un appel borné (`/embed_sparse` avec `spans`, le service
+//! tokenise), et surligne dans chaque morceau les positions qui portent le plus
+//! du produit requête × morceau. L'hôte n'a ni tokenizer ni modèle (7 novembre
+//! 2026 : la feature burn-embedder ne lui sert plus pour ça). Sans service, avec
+//! un service d'avant l'option `spans` ou sans réponse dans le délai, ce sont
+//! les mots de la requête qui sont surlignés, et la méta le dit.
 //!
 //! Actif seulement sur demande (`options.highlights = "sparse"`) : la page de
 //! l'IDE le demande, un agent qui ne voit pas le surlignage ne le paie pas.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::embedder::SparseEmbedder;
 use crate::search::{chunk_highlights, Highlight};
 use crate::search_strategy::UnifiedResult;
-use crate::sparse_index::SparseVector;
+use crate::sparse_index::SparseSpan;
 
 use super::node::{Node, NodeContext};
 use super::port::{take_or_clone, PortDef, PortValue, QueryPayload};
@@ -78,132 +79,96 @@ pub fn query_word_highlights(query: &str, text: &str) -> Vec<Highlight> {
     chunk_highlights(text, 0, text.len(), &spans, HIGHLIGHT_QUERY_WORDS)
 }
 
-/// **Les tokens qui portent le creux, placés dans le texte.** `tokens` : l'id
-/// de vocabulaire et les bornes en octets de chaque token du texte (le
-/// tokenizer de bge-m3) ; `requete` et `morceau` : les vecteurs creux rendus
-/// par le service. La part d'un id est le produit de ses deux poids ; les
-/// tokens dont la part atteint [`PART_MINIMALE`] de la plus forte sont
-/// surlignés, rognés de leurs blancs et étendus à leur mot entier.
-pub fn sparse_highlights(
-    text: &str,
-    tokens: &[(u32, (usize, usize))],
-    requete: &SparseVector,
-    morceau: &SparseVector,
-) -> Vec<Highlight> {
-    let poids = |v: &SparseVector, id: u32| -> f32 {
-        v.indices.iter().position(|&i| i == id).map(|p| v.values[p]).unwrap_or(0.0)
-    };
-    let parts: Vec<(u32, f32)> = requete
-        .indices
+/// **Le texte d'une position, sans son espace de tête** : le Metaspace de bge-m3 range
+/// l'espace dans le jeton qui suit, si bien que le service rend « ␣chat » sur `[2, 7]` pour
+/// « Le chat ». Rend les bornes du mot nu et sa clé (en minuscules), ou `None` pour une
+/// position vide ou hors des frontières de caractère.
+fn position_nue(text: &str, start: usize, end: usize) -> Option<(usize, usize, String)> {
+    let brut = text.get(start..end)?;
+    let tete = brut.len() - brut.trim_start().len();
+    let net = brut.trim();
+    (!net.is_empty()).then(|| (start + tete, start + tete + net.len(), net.to_lowercase()))
+}
+
+/// **Le poids de chaque jeton de la requête**, par son texte nu : la requête passe par le même
+/// service que les morceaux, donc la même découpe ; un jeton répété garde son plus fort poids.
+pub fn query_token_weights(query: &str, spans: &[SparseSpan]) -> HashMap<String, f32> {
+    let mut poids: HashMap<String, f32> = HashMap::new();
+    for s in spans {
+        if let Some((_, _, cle)) = position_nue(query, s.start, s.end) {
+            let p = poids.entry(cle).or_insert(0.0);
+            *p = p.max(s.weight);
+        }
+    }
+    poids
+}
+
+/// **Les positions d'un morceau qui portent le creux, placées dans son texte.** `spans` : les
+/// positions du morceau rendues par le service (`[début, fin)` en octets du texte envoyé, le
+/// poids de la position) ; `requete` : le poids des jetons de la requête, par leur texte nu. La
+/// part d'une position est le produit de son poids et de celui du même jeton dans la requête ;
+/// celles dont la part atteint [`PART_MINIMALE`] de la plus forte sont surlignées, sans leur
+/// espace de tête et étendues à leur mot entier (« Catalog » est trois positions : C, ata, log).
+pub fn sparse_highlights(text: &str, spans: &[SparseSpan], requete: &HashMap<String, f32>) -> Vec<Highlight> {
+    let parts: Vec<(usize, usize, f32)> = spans
         .iter()
-        .zip(&requete.values)
-        .map(|(&id, &q)| (id, q * poids(morceau, id)))
-        .filter(|&(_, p)| p > 0.0)
+        .filter_map(|s| {
+            let (a, b, cle) = position_nue(text, s.start, s.end)?;
+            let q = *requete.get(&cle)?;
+            let p = q * s.weight;
+            (p > 0.0).then_some((a, b, p))
+        })
         .collect();
-    let Some(plus_forte) = parts.iter().map(|&(_, p)| p).reduce(f32::max) else {
+    let Some(plus_forte) = parts.iter().map(|&(_, _, p)| p).reduce(f32::max) else {
         return Vec::new();
     };
-    let retenus: Vec<u32> = parts
-        .iter()
-        .filter(|&&(_, p)| p >= PART_MINIMALE * plus_forte)
-        .map(|&(id, _)| id)
-        .collect();
-    let mut spans: Vec<(usize, usize, &str)> = Vec::new();
-    for &(id, (d, f)) in tokens {
-        if !retenus.contains(&id) {
+    let mut passages: Vec<(usize, usize, &str)> = Vec::new();
+    for &(mut a, mut b, p) in &parts {
+        if p < PART_MINIMALE * plus_forte {
             continue;
         }
-        let Some(brut) = text.get(d..f) else { continue };
-        let tete = brut.len() - brut.trim_start().len();
-        let net = brut.trim();
-        if net.is_empty() {
-            continue;
-        }
-        // Un sous-mot (« pro » dans « réciproque ») s'étend à son mot : la
-        // page montre des mots, pas des morceaux de vocabulaire.
-        let (mut a, mut b) = (d + tete, d + tete + net.len());
         while let Some(c) = text[..a].chars().next_back().filter(|c| c.is_alphanumeric()) {
             a -= c.len_utf8();
         }
         while let Some(c) = text[b..].chars().next().filter(|c| c.is_alphanumeric()) {
             b += c.len_utf8();
         }
-        spans.push((a, b, &text[a..b]));
+        passages.push((a, b, &text[a..b]));
     }
-    chunk_highlights(text, 0, text.len(), &spans, HIGHLIGHT_SPARSE)
+    chunk_highlights(text, 0, text.len(), &passages, HIGHLIGHT_SPARSE)
 }
 
-/// Le tokenizer de bge-m3, chargé une fois (`RAG3WEAVER_BGE_M3_TOKENIZER`,
-/// sinon `~/.cache/rag3weaver/bge-m3/tokenizer.json`).
-#[cfg(feature = "burn-embedder")]
-fn tokenizer() -> Result<&'static tokenizers::Tokenizer, String> {
-    static T: std::sync::OnceLock<Result<tokenizers::Tokenizer, String>> = std::sync::OnceLock::new();
-    T.get_or_init(|| {
-        let chemin = crate::model_source::local_artifact("bge-m3", "RAG3WEAVER_BGE_M3", "TOKENIZER", "tokenizer.json")?;
-        tokenizers::Tokenizer::from_file(&chemin).map_err(|e| format!("tokenizer.json de bge-m3 illisible ({}) : {e}", chemin.display()))
-    })
-    .as_ref()
-    .map_err(Clone::clone)
-}
-
-/// Sans le tokenizer compilé, le creux ne se place pas : le repli, et sa raison.
-#[cfg(not(feature = "burn-embedder"))]
-fn surligner_par_le_creux(
-    _embarqueur: Option<Arc<dyn SparseEmbedder>>,
-    _requete: &str,
-    _creux_de_la_requete: Option<&SparseVector>,
-    _textes: &[String],
-) -> Result<Vec<Vec<Highlight>>, String> {
-    Err("le surlignage creux n'est pas compilé ici (feature burn-embedder)".to_string())
-}
-
-/// **Le creux de la requête et des morceaux, en un appel borné.** Rend, pour
-/// chaque texte, ses passages ; ou la raison du repli.
-#[cfg(feature = "burn-embedder")]
+/// **Le creux de la requête et des morceaux, en un appel borné, par les spans du service**
+/// (7 novembre 2026, forme retenue par c7) : le service tokenise et rend le poids de chaque
+/// position ; l'hôte n'a ni tokenizer ni modèle. Rend, pour chaque texte, ses passages ; ou la
+/// raison du repli (aucun service creux, un service d'avant l'option `spans`, pas de réponse dans
+/// le délai).
 fn surligner_par_le_creux(
     embarqueur: Option<Arc<dyn SparseEmbedder>>,
     requete: &str,
-    creux_de_la_requete: Option<&SparseVector>,
     textes: &[String],
 ) -> Result<Vec<Vec<Highlight>>, String> {
-    {
-        let embarqueur = embarqueur.ok_or("aucun embarqueur creux configuré")?;
-        let tok = tokenizer()?;
-        // La requête est déjà embarquée en creux quand le signal creux sert ;
-        // sinon elle part avec les morceaux, dans le même appel.
-        let mut envoi: Vec<String> = Vec::with_capacity(textes.len() + 1);
-        if creux_de_la_requete.is_none() {
-            envoi.push(requete.to_string());
-        }
-        envoi.extend(textes.iter().cloned());
-        let attendu = envoi.len();
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = tx.send(embarqueur.embed_sparse(&envoi));
-        });
-        let mut rendus = match rx.recv_timeout(DELAI_DU_CREUX) {
-            Ok(Ok(v)) if v.len() == attendu => v,
-            Ok(Ok(v)) => return Err(format!("le service a rendu {} vecteurs creux pour {attendu} textes", v.len())),
-            Ok(Err(e)) => return Err(format!("le service creux a échoué : {e}")),
-            Err(_) => return Err(format!("le service creux n'a pas répondu en {} ms", DELAI_DU_CREUX.as_millis())),
-        };
-        let requete_creuse = match creux_de_la_requete {
-            Some(q) => q.clone(),
-            None => rendus.remove(0),
-        };
-        Ok(textes
-            .iter()
-            .zip(&rendus)
-            .map(|(texte, morceau)| match tok.encode(texte.as_str(), false) {
-                Ok(enc) => {
-                    let tokens: Vec<(u32, (usize, usize))> =
-                        enc.get_ids().iter().copied().zip(enc.get_offsets().iter().copied()).collect();
-                    sparse_highlights(texte, &tokens, &requete_creuse, morceau)
-                }
-                Err(_) => Vec::new(),
-            })
-            .collect())
-    }
+    let embarqueur = embarqueur.ok_or("aucun embarqueur creux configuré")?;
+    let mut envoi: Vec<String> = Vec::with_capacity(textes.len() + 1);
+    envoi.push(requete.to_string());
+    envoi.extend(textes.iter().cloned());
+    let attendu = envoi.len();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(embarqueur.embed_sparse_spans(&envoi));
+    });
+    let rendus = match rx.recv_timeout(DELAI_DU_CREUX) {
+        Ok(Ok(v)) if v.len() == attendu => v,
+        Ok(Ok(v)) => return Err(format!("le service a rendu {} réponses creuses pour {attendu} textes", v.len())),
+        Ok(Err(e)) => return Err(format!("le service creux ne rend pas les positions ({e})")),
+        Err(_) => return Err(format!("le service creux n'a pas répondu en {} ms", DELAI_DU_CREUX.as_millis())),
+    };
+    let requete_poids = query_token_weights(requete, &rendus[0].1);
+    Ok(textes
+        .iter()
+        .zip(&rendus[1..])
+        .map(|(texte, (_, spans))| sparse_highlights(texte, spans, &requete_poids))
+        .collect())
 }
 
 /// **Le nœud du surlignage à l'affichage** : voir le module.
@@ -258,7 +223,7 @@ impl Node for HighlightNode {
                         .map(|&i| results[i].chunk.as_ref().map(|c| c.text.clone()).unwrap_or_default())
                         .collect();
                     let embarqueur = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder").cloned();
-                    let passages = surligner_par_le_creux(embarqueur, &qp.query, qp.sparse.as_ref(), &textes)
+                    let passages = surligner_par_le_creux(embarqueur, &qp.query, &textes)
                         .unwrap_or_else(|raison| {
                             avertissements.push(format!(
                                 "surlignage creux indisponible ({raison}) : les mots de la requête sont surlignés à sa place"
@@ -327,32 +292,48 @@ mod tests {
         assert!(h.iter().all(|x| x.source == HIGHLIGHT_QUERY_WORDS));
     }
 
+    fn spans(texte: &str, plages: &[(usize, usize, f32)]) -> Vec<SparseSpan> {
+        plages
+            .iter()
+            .map(|&(start, end, weight)| {
+                assert!(texte.get(start..end).is_some(), "{start}..{end} dans {texte:?}");
+                SparseSpan { start, end, weight }
+            })
+            .collect()
+    }
+
     #[test]
-    fn le_creux_surligne_les_tokens_qui_portent_le_produit() {
-        // « fusion des rangs » : trois tokens, le premier en deux morceaux
-        // contigus (« fu », « sion ») ; « des » pèse peu dans la requête.
+    fn le_creux_surligne_les_positions_qui_portent_le_produit() {
+        // La découpe du service : « ␣fu » commence sur l'espace qui le précède, « fusion » est en
+        // deux positions ; « des » pèse peu dans la requête.
+        let requete = "fusion des rangs";
+        let q = query_token_weights(requete, &spans(requete, &[(0, 2, 0.3), (2, 6, 0.3), (6, 10, 0.01), (10, 16, 0.25)]));
         let texte = "la fusion des rangs";
-        let tokens = vec![(1, (0, 2)), (10, (2, 5)), (11, (5, 9)), (12, (9, 13)), (13, (13, 19))];
-        let requete = SparseVector { indices: vec![10, 11, 12, 13], values: vec![0.3, 0.3, 0.01, 0.25] };
-        let morceau = SparseVector { indices: vec![1, 10, 11, 12, 13], values: vec![0.2, 0.2, 0.2, 0.2, 0.2] };
-        let h = sparse_highlights(texte, &tokens, &requete, &morceau);
+        let d = spans(texte, &[(0, 2, 0.2), (2, 5, 0.2), (5, 9, 0.2), (9, 13, 0.2), (13, 19, 0.2)]);
+        let h = sparse_highlights(texte, &d, &q);
         let vus: Vec<String> = h.iter().map(|x| en_utf16(texte, x)).collect();
-        assert_eq!(vus, vec!["fusion", "rangs"], "les morceaux contigus se fondent, le blanc de tête part, « des » reste : {vus:?}");
-        // Un sous-mot seul s'étend à son mot.
-        let texte = "le rang réciproque";
-        let tokens = vec![(20, (3, 7)), (21, (7, 12)), (22, (12, 15)), (23, (15, 19))];
-        let requete = SparseVector { indices: vec![22], values: vec![0.4] };
-        let morceau = SparseVector { indices: vec![22], values: vec![0.3] };
-        let h = sparse_highlights(texte, &tokens, &requete, &morceau);
-        assert_eq!(h.iter().map(|x| en_utf16(texte, x)).collect::<Vec<_>>(), vec!["réciproque"]);
+        assert_eq!(vus, vec!["fusion", "rangs"], "les positions d'un mot se fondent, l'espace de tête part, « des » reste : {vus:?}");
         assert!(h.iter().all(|x| x.source == HIGHLIGHT_SPARSE));
+        // Une position seule s'étend à son mot (« ipr » dans « réciproque »).
+        let requete = "réciproque";
+        let q = query_token_weights(requete, &spans(requete, &[(0, 4, 0.0), (4, 7, 0.4), (7, 11, 0.0)]));
+        let texte = "le rang réciproque";
+        let d = spans(texte, &[(0, 2, 0.1), (2, 7, 0.1), (7, 12, 0.0), (12, 15, 0.3), (15, 19, 0.0)]);
+        let h = sparse_highlights(texte, &d, &q);
+        assert_eq!(h.iter().map(|x| en_utf16(texte, x)).collect::<Vec<_>>(), vec!["réciproque"]);
+    }
+
+    #[test]
+    fn sans_jeton_partage_le_creux_ne_surligne_rien() {
+        let q = query_token_weights("abc", &spans("abc", &[(0, 3, 0.5)]));
+        assert!(sparse_highlights("xyz", &spans("xyz", &[(0, 3, 0.5)]), &q).is_empty());
     }
 
     /// **La sonde du vrai chemin** : le service creux (`RAG3WEAVER_SONDE_CREUX`, une adresse),
-    /// le tokenizer de bge-m3 de ce poste et le placement. À jouer nommément
+    /// ses spans et le placement, sans tokenizer chez nous. À jouer nommément
     /// (`-- --ignored sonde_le_creux_reel --nocapture`) ; sans l'adresse, elle échoue au lieu de
     /// se sauter.
-    #[cfg(all(feature = "burn-embedder", feature = "daemon"))]
+    #[cfg(feature = "daemon")]
     #[test]
     #[ignore]
     fn sonde_le_creux_reel() {
@@ -366,7 +347,7 @@ mod tests {
             "pub fn ouvrir_la_base(chemin: &Path) -> Result<Base, Erreur> {".to_string(),
         ];
         let t = std::time::Instant::now();
-        let rendus = surligner_par_le_creux(Some(embarqueur), requete, None, &textes).expect("le creux répond");
+        let rendus = surligner_par_le_creux(Some(embarqueur), requete, &textes).expect("le creux répond");
         eprintln!("[sonde creux] {} ms pour {} textes", t.elapsed().as_millis(), textes.len());
         for (texte, h) in textes.iter().zip(&rendus) {
             let vus: Vec<String> = h.iter().map(|x| format!("{}:{}", x.source, en_utf16(texte, x))).collect();
@@ -379,10 +360,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn sans_id_partage_le_creux_ne_surligne_rien() {
-        let requete = SparseVector { indices: vec![5], values: vec![0.5] };
-        let morceau = SparseVector { indices: vec![6], values: vec![0.5] };
-        assert!(sparse_highlights("abc", &[(6, (0, 3))], &requete, &morceau).is_empty());
-    }
 }

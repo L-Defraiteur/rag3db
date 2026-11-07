@@ -30,7 +30,9 @@
 %% **Le surlignage à l'affichage, à la demande** (26 octobre 2026) :
 %% `HighlightNode`, après la pagination, lit `options.highlights` ; « sparse »
 %% surligne les morceaux de la page que lucivy n'a pas surlignés (le creux de
-%% bge-m3, borné à 1 s, sinon les mots de la requête, et la méta le dit). La
+%% bge-m3, borné à 1 s, sinon les mots de la requête, et la méta le dit) ; il
+%% demande un service creux qui rend les positions (`/embed_sparse` avec
+%% `spans`) : l'hôte ne tokenise pas lui-même. La
 %% page de l'IDE le demande ; un agent qui n'affiche pas ne le paie pas. La
 %% déclaration `models.sparse` n'embarque qu'au surlignage, 0 appel à
 %% l'indexation (témoin e2e_lectures::le_creux_ne_s_embarque_qu_au_surlignage).
