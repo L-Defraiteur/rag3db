@@ -799,7 +799,10 @@ fn run() -> Result<(), String> {
         let mut entree = String::new();
         #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
         {
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut entree);
+            // `--help` répond sans lire l'entrée ni joindre l'hôte.
+            if !tous[1..].iter().any(|a| a == "--help" || a == "-h") {
+                let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut entree);
+            }
             let code = rag3weaver::claude_code_hook::commande(&tous[1..], &entree, &mut std::io::stdout());
             std::process::exit(code);
         }

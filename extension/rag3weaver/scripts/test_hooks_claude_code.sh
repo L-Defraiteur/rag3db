@@ -30,7 +30,7 @@ assert c["manifest"] == "/m/backend.json" and c["timeout_ms"] == 20000
 for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop"]:
     notres = [x for x in h[ev] if x["hooks"][0]["command"].startswith("/opt/r/rag3weaver-backend hook")]
     assert len(notres) == 1, ev
-    assert notres[0]["hooks"][0]["command"] == "/opt/r/rag3weaver-backend hook --config " + sys.argv[2]
+    assert notres[0]["hooks"][0]["command"] == "/opt/r/rag3weaver-backend hook " + ev, "la commande est stable : binaire, hook, événement — " + notres[0]["hooks"][0]["command"]
 assert h["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
 assert "matcher" not in h["UserPromptSubmit"][0] and "matcher" not in h["Stop"][-1]
 assert h["UserPromptSubmit"][0]["hooks"][0]["timeout"] == 10
