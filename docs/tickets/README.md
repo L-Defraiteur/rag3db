@@ -93,6 +93,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [La lib rag3weaver ne se bâtit pas sans `rag3db-native`](2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md) | ouvert — contourné par le crate à part du terminal ; deux `cfg` à poser, ou la lib déclarée dépendante du moteur (choix de Lucie) | bâti refusé | non | oui |
 | [Une définition C++ se lie à la déclaration de son en-tête, pas à son nom de fichier](2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md) | ouvert — la forme exacte (« declaration », 299 justes sur 300) entre sur master avec INCLUDES ; restent ses limites : le conteneur par le dernier segment, les surcharges, les déclarations derrière une macro | réponse fausse | oui | oui (code.rs) |
 | [La lecture des déclarants coûte autant que le choix des cibles, pour un lot C/C++](2026-10-26-la-lecture-des-declarants-coute-autant-que-le-choix-des-cibles.md) | ouvert — mesuré sous charge (lignes 4 075 → 2 233 par la borne, temps inchangé), à profiler à une fenêtre calme | lenteur | oui | oui (code.rs) |
 | [Un appel dans une garde de `match` Rust n'est pas relevé](2026-11-07-un-appel-dans-une-garde-de-match-rust-n-est-pas-releve.md) | ouvert — pris par codeparsers, cause trouvée (`collect_pattern_bindings` prend la garde pour un motif) | réponse fausse (0 usage pour une fonction appelée) | oui, tout dépôt Rust | par codeparsers |
