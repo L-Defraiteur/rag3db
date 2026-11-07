@@ -103,12 +103,31 @@ durée. Une dernière donne l'issue : « exclu : « x » (fiche propre) ; sous l
 (`commit 23d8d3c5a`, suivi de `+` si l'arbre était sale), en plus de l'empreinte par mtime que
 l'hôte compare.
 
-## 7. Le 3 ter (b), juste derrière
+## 7. Le 3 ter (b) : le rappel fini en fond, et son juge
 
-- Le budget dépassé lance un fils détaché, `hook --rappel-differe`, qui finit le rappel.
-- Le juge Decide `{pertinent, pourquoi, items_gardes}` ôte et n'invente rien. Son bilan va au
-  journal : « juge : 3 candidats, 1 gardé, pourquoi ».
-- Le résultat tombe au premier `PostToolUse` sous « rappel du tour d'avant », ou au prompt
-  suivant tant que les settings n'ont pas `PostToolUse`. Claude Code fige ses hooks au démarrage,
-  et `--poser` l'ajoutera pour la prochaine relance de Lucie.
-- Le plafond d'items par bloc sera mesuré sur `hooks.log`.
+- **Le fils détaché.** Le budget d'une seconde dépassé, le hook écrit une tâche à côté de l'état
+  de la session, `<session_id>.tache.json`. La tâche porte la requête, le prompt nettoyé, le tour
+  et le chemin du réglage. Le hook lance alors `hook --rappel-differe <tâche>`, détaché de son
+  groupe de processus, entrée et sorties fermées. Le fils refait le rappel sous 30 s et juge les
+  candidats. Il range le résultat dans `<session_id>.differe.json` et journalise sous `[fond]`.
+  Jamais en rejeu.
+- **Le juge** (`juger`) fait un appel structuré à température nulle, sous un schéma strict
+  `{pertinent, pourquoi, items_gardes}`. Il garde seulement ce qui sert au message de ce tour, et
+  dans le doute il ôte. Un nom qu'il rend sans l'avoir reçu est jeté : il ôte, il n'invente rien.
+  Son bilan va au journal : « juge : 2 candidat(s), 1 gardé(s) — pourquoi ». Le modèle est celui
+  du régime, Vertex par `GOOGLE_CLOUD_PROJECT`. Sans modèle, ou avec `recall_judge: false`, les
+  candidats passent tels quels, et le journal le dit.
+- **Une échelle brute part au juge.** Un score au-delà de 1 ne se trie pas à bon marché. Les
+  candidats neufs ne sont donc pas rendus dans le tour. Ils sont confiés au fils, qui ne refait pas
+  le rappel, puis jugés.
+- **Le rendu.** Le résultat tombe au premier `PostToolUse` du tour suivant, en
+  `hookSpecificOutput.additionalContext`, sous « Rappel du tour d'avant (requête « … ») ». Ce
+  `PostToolUse` n'ouvre pas l'hôte et ne lit qu'un fichier. Le résultat passe sous le déjà-vu et
+  n'est rendu qu'une fois. Faute de `PostToolUse`, il tombe en tête du prompt suivant. Des
+  candidats hors sujet donnent le silence, avec la raison du juge au journal.
+- **PostToolUse dans les settings.** `scripts/hooks_claude_code.sh --poser` pose maintenant six
+  entrées, dont `PostToolUse` avec un délai de 5 s. Claude Code fige ses hooks au démarrage :
+  hooks-essai ne l'aura qu'à la prochaine relance de Lucie. D'ici là, le différé tombe au prompt
+  suivant.
+- **Le plafond d'items par bloc** reste celui de la requête, trois fiches. `hooks.log` n'a encore
+  que cinq rappels, de deux candidats chacun : trop peu pour mesurer mieux.
