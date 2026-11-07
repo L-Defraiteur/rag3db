@@ -22,3 +22,7 @@ path = "src/main.rs"
 ureq = { version = "3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# La vue (lot tty-2) : ratatui et son backend crossterm, le même sous Windows,
+# macOS et Linux. `unicode-width` mesure la largeur d'un caractère en colonnes.
+ratatui = "0.30"
+unicode-width = "0.2"
