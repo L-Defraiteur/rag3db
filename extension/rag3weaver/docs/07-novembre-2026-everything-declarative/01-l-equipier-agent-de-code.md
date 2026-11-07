@@ -172,12 +172,19 @@ projet Vertex), les deux bilans comparés par le juge.
 5. Les sous-équipiers.
 6. La mémoire non bloquante (peut se fondre dans 1).
 
-## Questions
+## Réponses de c7 (7 novembre 2026)
 
-1. **Les scripts du dépôt** : une liste `workspace.scripts` au manifeste (chemins exécutés en argv,
-   comptés comme écriture sauf mention), ou les ajouter à la liste de lecture en dur ? Je propose
-   le manifeste (généricité des schémas).
-2. **La fusion d'un enfant** : le parent décide seul (`merge_child`), ou l'humain relit comme une
-   tâche ? Je propose le parent seul, la relecture humaine restant sur la tâche racine.
-3. **Le bilan du juge** : toujours pour une tâche d'équipier, ou seulement si `bilans` est déclaré ?
-   Je propose toujours (c'est l'instrument de la comparaison des modèles).
+1. **Les commandes autorisées se déclarent au manifeste**, jamais en dur dans le code :
+   `workspace.commands` (la porte) existe ; `workspace.scripts` nomme chaque script par son nom
+   et sa commande exacte (`{"name": "check_features", "command": ["bash",
+   "scripts/check_features.sh"]}`), exécutée en argv, comptée comme écriture sauf mention.
+   C'est générique, et c'est ce que Lucie veut pouvoir redéclarer.
+2. **La fusion d'une sous-tâche dans la tâche parente est décidée par le parent seul**, son
+   superviseur, avec le bilan du juge de l'enfant sous les yeux (`merge_child` le lui rend avant
+   d'agir), et le parent le dit dans son plan (l'élément porte la décision et sa raison). La
+   fusion du parent dans master reste à un humain.
+3. **Le bilan du juge est toujours demandé pour une tâche d'équipier**, désactivable par le
+   manifeste seulement (`teammate.judge: false`), jamais par l'agent.
+
+Six lots, codés après les vues 5, 6, 7 et 3b, dans l'ordre de la page ; le lot 1 (étanchéité)
+d'abord ; chacun sa passe et son push au mot de c7.
