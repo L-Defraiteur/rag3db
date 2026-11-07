@@ -1196,4 +1196,61 @@ fn la_barre_se_lit_par_session_tache_et_espace() {
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
+
+/// **Un appel à délai s'arrête à son délai** (ticket du 7 novembre 2026, « une
+/// recherche continue sur l'hôte après l'abandon de son client ») : un `/call`
+/// porte `deadline_ms` ; passé ce délai, l'hôte arrête lui-même le run du
+/// graphe par le chemin d'arrêt de tout run (`cancelled_by: "deadline"`), et
+/// l'appel rend « délai dépassé (N ms) » au lieu de tourner jusqu'au bout pour
+/// un client parti. Un outil lent (`wait_output` sur un journal où rien ne
+/// viendra, une minute d'attente) sert de graphe lent. Sans `deadline_ms`,
+/// rien ne change (le même outil, un délai d'outil court, rend son résultat).
+#[test]
+fn un_appel_a_delai_s_arrete_a_son_delai() {
+    let (_d, host, manifeste, id) = banc(qui_lit_deux_fois());
+    let session = host.open_session("claude-code", None, Vec::new(), None);
+    let h = host.hosted(&manifeste).unwrap();
+    let mut dataflow = host.with_backend(&h, |b| b.bus_de_publication().subscribe(crate::events::topic::DATAFLOW)).unwrap();
+    let journal = crate::dataflow::run_nodes::dossier_journaux().join(format!("temoin-delai-{}.log", std::process::id()));
+    let corps = |delai: Option<u64>, timeout_s: u64| {
+        let mut v = json!({ "manifest": manifeste, "name": "wait_output", "arguments": { "journal": journal.to_string_lossy(), "pattern": "jamais", "timeout_s": timeout_s } });
+        if let Some(ms) = delai {
+            v["deadline_ms"] = json!(ms);
+        }
+        serde_json::to_vec(&v).unwrap()
+    };
+
+    let debut = Instant::now();
+    let (statut, r) = host.handle("POST", "/call", Some(&session), &corps(Some(800), 60));
+    let duree = debut.elapsed();
+    assert!(duree < Duration::from_secs(10), "l'appel à 800 ms de délai a tourné {duree:?} : l'hôte n'applique pas le délai ({r})");
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(r["error_kind"], "deadline", "{r}");
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("délai dépassé (800 ms)")), "{r}");
+    assert_eq!(statut, 422, "{r}");
+    // Le run du graphe a fini, arrêté au nom du délai.
+    let fin = Instant::now() + Duration::from_secs(10);
+    let mut vus = Vec::new();
+    loop {
+        match dataflow.try_recv() {
+            Ok(e) => {
+                let v = e.to_json();
+                if v["kind"] == "RunFinished" && v["cancelled_by"] == "deadline" {
+                    break;
+                }
+                vus.push(v);
+            }
+            Err(_) => {
+                assert!(Instant::now() < fin, "aucun RunFinished arrêté par le délai : {vus:?}");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+    }
+
+    // Sans délai d'appel, rien ne change : l'outil rend son résultat (son propre
+    // délai, une seconde, passé).
+    let (_, r) = host.handle("POST", "/call", Some(&session), &corps(None, 1));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r.get("error_kind").is_none(), "{r}");
+    let _ = id;
 }
