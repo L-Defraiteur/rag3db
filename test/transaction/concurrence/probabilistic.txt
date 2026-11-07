@@ -91,3 +91,11 @@ VectorIndexInsertSlope.CostPerBatchSettles
 # le 7 novembre, 1 rouge sur 1 au banc complet et 1 sur 5 en famille répétée sous une charge de 15,
 # 0 sur 10 seul. Sort d'ici dans le commit du correctif (lot G6).
 VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen
+#
+# Une base rouverte après une mort en pleine suppression n'a pas chargé l'extension vector dont un
+# index dépend (« VIOLATION vector-extension-loaded ») : le défaut du ticket
+# 2026-10-10-ouverture-sans-une-extension-dont-une-table-depend, qui sort rarement sous charge. Le
+# 7 novembre, 1 manche sur 6 au banc complet (lot projection-lecture-seule-6, charge du banc), 0 sur
+# 36 seul sur le même bâti, vert au banc du lot du retrait. Sort d'ici dans le commit du correctif
+# (lot G3 de hotfixs, les extensions à l'ouverture et au rejeu).
+SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact
