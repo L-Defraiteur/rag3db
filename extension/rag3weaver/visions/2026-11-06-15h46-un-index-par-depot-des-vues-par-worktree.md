@@ -156,6 +156,33 @@ usages ; Unison la résout en séparant nom et empreinte, GumTree par la
 similarité des arbres. C'est une recherche, pas une marche : elle vient après
 les cinq marches, quand l'index en versions aura vécu sur nos dépôts.
 
+## Un worktree est jetable, donc distribuable
+
+Lucie, 7 novembre : « vision très loin : des mini-VM par worktree qui
+répartissent toutes seules la charge de travail quand beaucoup d'agents
+travaillent en même temps ; une façon de toujours supprimer les worktrees quand
+une PR est mergée ; un harnais pour forcer les agents à supprimer l'ancien et
+refaire neuf si nécessaire. »
+
+Tout de suite, **le harnais** (ce matin : 46 worktrees à luciepc dont 32 déjà
+fusionnés, 338 Gio de targets) :
+- une tâche fusionnée ou rejetée efface son worktree, sa vue et son target dans
+  le même geste, par l'hôte, pas par la bonne volonté de l'agent ;
+- une session qui pousse un lot efface son worktree et son target dans le
+  script de push, après les trois contrôles ;
+- un contrôle en début de passe refuse un worktree dont la base a plus de N
+  commits de retard sur master, ou dont la branche est déjà atterrie : on
+  efface et on refait neuf, jamais de rebase héroïque ;
+- un relevé périodique de l'hôte liste les worktrees et targets orphelins des
+  deux postes et les propose à l'effacement.
+
+À l'horizon, **la mini-machine par vue** : une vue devient un conteneur ou une
+micro-VM éphémère qui porte le worktree, son target et son équipier ; un
+ordonnanceur la place là où il y a de la place (le portable, luciepc, un pod)
+selon la charge, et la détruit à la fusion. L'hôte du dépôt et son index
+restent uniques et partagés ; seul le travail se distribue. `poste lourd` et
+`poste mesure` sont la version à la main de cet ordonnanceur.
+
 ## L'ordre
 
 1. La version comme entité : empreinte, morceaux et vecteurs rattachés ; le
