@@ -3,7 +3,7 @@ import { Square, SendHorizontal, MessageSquare, FileDiff, Scale } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { fetchChat, onFlux, sendChat, shortName, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type FluxEvent, type HostState, type TurnResult } from "@/lib/host";
+import { fetchChat, onFlux, sendChat, shortName, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
 // la colonne des conversations, l'en-tête nom / modèle / état, le fil, la saisie
@@ -94,7 +94,7 @@ const tokens = (n: number | null | undefined) => (n == null ? "?" : n >= 1000 ? 
 /// Une ligne de la barre des runs à rôle : l'archiviste, la compaction…
 type RoleRun = { run: string; role: string; what: string; at?: number; state: "en cours" | "fini" | "en erreur" };
 /// Ce qu'une conversation de la barre montre sous son nom.
-type Recap = { context?: ChatContext; model?: string | null };
+type Recap = { context?: ChatContext; model?: string | null; writes?: MemoryWrite[] };
 
 /// **La jauge du contexte** : le dernier appel au modèle sur le maximum du modèle
 /// déclaré ; « inconnu » quand l'un manque, jamais une valeur codée en dur.
@@ -113,6 +113,36 @@ function Gauge({ context, model, counters }: { context?: ChatContext; model?: st
       </div>
       {counters ? <div id="chat-conso" className="break-words">{counters}</div> : null}
     </div>
+  );
+}
+
+/// **Les fiches écrites pendant la conversation**, repliées sauf pour la
+/// conversation de la page : le nom (que `get_fiche` lit), ce qui a été écrit,
+/// l'heure.
+function Writes({ writes, open }: { writes?: MemoryWrite[]; open: boolean }) {
+  const list = writes ?? [];
+  return (
+    <details className="fiches-ecrites pl-6 mb-2 text-[11px] text-muted-foreground" open={open || undefined}>
+      <summary className="cursor-pointer">fiches écrites ({list.length})</summary>
+      {list.length ? (
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {list.map((w, k) => (
+            <li key={k} className="fiche-ecrite flex justify-between gap-2" data-fiche={w.fiche} data-run={w.run}>
+              <span className="truncate font-mono" title={`get_fiche « ${w.fiche} »`}>
+                {w.fiche}
+              </span>
+              <span className="shrink-0">
+                {w.kind === "apport" ? (w.section ? w.section : "apport") : "fiche"}
+                {w.at_ms ? ` · ${new Date(w.at_ms).toLocaleTimeString()}` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1">aucune pour l'instant</p>
+      )}
+      <p className="mt-1 italic">les écritures de l'agent lui-même arrivent avec M7 de la mémoire longue</p>
+    </details>
   );
 }
 
@@ -140,16 +170,16 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const stuck = useRef(true);
   const follow = useRef(false);
 
-  const backendsHere: Backend[] = backend
-    ? state.backends.filter((b) => b.id === id || (backend.tache ? b.id === backend.tache.parent || b.tache?.parent === backend.tache.parent : b.tache?.parent === id))
-    : [];
+  // **Toutes les conversations de l'hôte** (Lucie, 7 novembre 2026) : chaque
+  // backend ouvert, et celui de la page même s'il ne l'est pas encore.
+  const backendsHere: Backend[] = state.backends.filter((b) => b.open || b.id === id);
 
   // La jauge de chaque conversation de la barre : son propre état du chat.
   const reloadRecaps = () =>
     Promise.all(
       backendsHere.map((b) =>
         fetchChat(b.id)
-          .then((c) => [b.id, { context: c.context, model: c.model }] as const)
+          .then((c) => [b.id, { context: c.context, model: c.model, writes: c.memory_writes }] as const)
           .catch(() => [b.id, {}] as const),
       ),
     ).then((all) => setRecaps(Object.fromEntries(all)));
@@ -316,6 +346,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                 {b.tache ? `tâche ${b.tache.nom}` : shortName(b.manifest)}
               </a>
               <Gauge context={recaps[b.id]?.context} model={recaps[b.id]?.model} counters={b.id === id ? consumed : undefined} />
+              <Writes writes={recaps[b.id]?.writes} open={b.id === id} />
             </div>
           ))}
         </nav>
