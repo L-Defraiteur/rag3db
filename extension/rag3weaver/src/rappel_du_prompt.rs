@@ -88,11 +88,15 @@ pub fn nettoyer(prompt: &str) -> String {
 /// une mémoire de code, il est souvent le sujet (c7, d'après le rejeu de G).
 const ARRET_COURTS: &[&str] = &[
     "à", "a", "au", "aux", "ce", "ces", "ça", "de", "des", "du", "en", "et", "il", "ils", "je", "la", "le", "les", "leur", "ma", "me", "mes", "moi", "mon", "ne", "ni", "nos", "on", "ou", "où", "par", "pas", "peu", "qu", "que", "qui", "sa", "se", "ses", "si", "son", "sur", "ta", "te", "tes", "toi", "ton", "tu", "un", "une", "vos", "va", "est", "été", "ont", "fait", "dis", "dit", "bon", "oui", "non", "lui", "eux", "car", "là", "ici", "via", "puis", "the", "an", "of", "to", "in", "on", "is", "it", "and", "or", "for", "by", "as", "at", "be", "we", "you", "are", "was", "not", "but", "can", "has", "had", "its", "our", "out", "all", "any", "how", "why", "who", "use", "get", "set", "new", "now", "one", "two", "see", "may", "let", "so", "do", "if", "no", "up", "my", "me",
+    // les pronoms et les mots d'adresse d'un en-tête de message (c7, tour de 18:48:42)
+    "moi", "nous", "vous", "elle", "lui", "leur", "ceux", "cela", "ceci", "voilà", "voici",
 ];
 
 const COURANTS: &[&str] = &[
     // français
     "alors", "après", "aussi", "autre", "autres", "avant", "avec", "avoir", "bien", "c'est", "cela", "celle", "celui", "cette", "ceux", "chaque", "comme", "comment", "dans", "depuis", "donc", "dont", "elle", "elles", "encore", "entre", "être", "fait", "faire", "faut", "leur", "leurs", "mais", "même", "mêmes", "moins", "nous", "parce", "pas", "peut", "plus", "pour", "pourquoi", "quand", "quel", "quelle", "quels", "quoi", "rien", "sans", "selon", "sera", "seront", "sinon", "sont", "sous", "soit", "suis", "tout", "toute", "toutes", "tous", "très", "vers", "voici", "votre", "vous", "était", "étaient", "cette", "ceci", "dire", "dis", "moi", "toi", "lui", "aux", "des", "les", "une", "est", "qui", "que", "ont", "ton", "tes", "ses", "son", "sur", "par", "deux", "trois", "fois", "tour", "dit", "dits", "dite", "reste", "juste", "rien", "lieu", "chose", "choses", "ensuite", "puis", "ici", "là", "oui", "non", "aussi", "déjà", "bon", "bonne",
+    // les verbes de consigne d'un message entre sessions
+    "rends-moi", "dis-moi", "donne-moi", "montre-moi", "rappelle-moi", "envoie-moi", "regarde", "relis", "vérifie", "lance", "pousse", "reçu", "merci", "rends", "donne", "envoie", "réponds", "réponse",
     // anglais
     "about", "after", "also", "because", "been", "before", "being", "could", "does", "from", "have", "here", "into", "just", "like", "more", "most", "only", "other", "over", "should", "some", "such", "than", "that", "their", "them", "then", "there", "these", "they", "this", "those", "through", "very", "want", "were", "what", "when", "where", "which", "while", "will", "with", "would", "your", "yours", "please", "thanks",
 ];
@@ -161,6 +165,12 @@ pub fn requete_de_rappel(prompt: &str, max_mots: usize, vocabulaire: &HashSet<St
         // est un id ou une date.
         let nombre = m.chars().all(|c| c.is_ascii_digit());
         if nombre && !(2..=5).contains(&m.chars().count()) {
+            continue;
+        }
+        // Un nombre seul de deux chiffres (« 18 » de « 18 h 48 ») ne compte que
+        // si la mémoire le connaît (« 43 » par le titre d'une fiche) ; de trois à
+        // cinq chiffres (un port, un format long), il reste.
+        if nombre && m.chars().count() == 2 && !connu {
             continue;
         }
         // Un mot court a la forme du code (chiffre, souligné, capitale) : il reste.
@@ -245,7 +255,13 @@ pub(crate) mod tests {
     fn les_mots_courts_et_les_nombres_du_code_restent() {
         // Le rejeu de G : « lib » et « 43 » étaient tombés.
         let q = requete_de_rappel("où se pose la lib unique de la bascule 43 ?", 10, &vide());
-        assert_eq!(q, vec!["pose", "lib", "unique", "bascule", "43"], "{q:?}");
+        assert_eq!(q, vec!["pose", "lib", "unique", "bascule"], "un nombre de deux chiffres inconnu de la mémoire tombe : {q:?}");
+        let mut connus = HashSet::new();
+        connus.insert("43".to_string());
+        let q = requete_de_rappel("où se pose la lib unique de la bascule 43 ?", 10, &connus);
+        assert_eq!(q, vec!["pose", "lib", "unique", "bascule", "43"], "« 43 », titre d'une fiche, reste : {q:?}");
+        let q = requete_de_rappel("c7 → archi : rends-moi hooks.log de 18 h 48, merci", 10, &vide());
+        assert!(!q.iter().any(|x| x == "18" || x == "48" || x == "rends-moi" || x == "merci"), "{q:?}");
         let q = requete_de_rappel("le WAL casse sous L6 et le fd du port 7970 en V2", 10, &vide());
         for m in ["WAL", "casse", "L6", "fd", "port", "7970", "V2"] {
             assert!(q.iter().any(|x| x == m), "« {m} » : {q:?}");
@@ -295,6 +311,6 @@ pub(crate) mod tests {
     #[test]
     fn les_ids_les_chemins_et_les_mots_courants_tombent() {
         let q = requete_de_rappel("regarde /home/x/depot/src/claude_code_hook.rs et le commit 120695b37 pour la fonction fiches_citant, puis --rejouer avec 0a1b2c3d-1111-2222-3333-444455556666", 10, &vide());
-        assert_eq!(q, vec!["regarde", "claude_code_hook.rs", "commit", "fonction", "fiches_citant"], "{q:?}");
+        assert_eq!(q, vec!["claude_code_hook.rs", "commit", "fonction", "fiches_citant"], "{q:?}");
     }
 }
