@@ -119,7 +119,8 @@ impl Demon {
         std::fs::read_to_string(self.dir.join("daemon.log"))
             .unwrap_or_default()
             .lines()
-            .filter(|l| l.starts_with("[démon] rag3weaver-daemon"))
+            // L'heure en tête de chaque ligne (ticket « ni heure ni auteur ») : on la passe.
+            .filter(|l| sans_heure(l).unwrap_or(l).starts_with("[démon] rag3weaver-daemon"))
             .count()
     }
 
@@ -603,4 +604,70 @@ fn un_client_ne_lance_pas_d_hote_sur_une_base_tenue_par_un_ecrivain_autonome() {
     let lue = rag3weaver::marque_d_ecrivain::lire(&base).expect("l'hôte marque la base qu'il ouvre");
     assert_eq!(lue.role, rag3weaver::marque_d_ecrivain::ROLE_HOTE, "{lue:?}");
     c.fermer();
+}
+
+/// La marque d'heure en tête d'une ligne du journal de l'hôte :
+/// `AAAA-MM-JJTHH:MM:SS.mmm` (puis le décalage), et le reste de la ligne.
+fn sans_heure(ligne: &str) -> Option<&str> {
+    let b = ligne.as_bytes();
+    let forme = b.len() > 24
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b[10] == b'T'
+        && b[13] == b':'
+        && b[16] == b':'
+        && b[19] == b'.'
+        && b[..4].iter().chain(&b[20..23]).all(u8::is_ascii_digit);
+    if !forme {
+        return None;
+    }
+    ligne.split_once(' ').map(|(_, reste)| reste)
+}
+
+/// **(11) Le journal de l'hôte dit l'heure et l'auteur de chaque ligne**
+/// (ticket du 11 octobre 2026, « Le journal de l'hôte du démon n'a ni heure
+/// ni auteur ») : deux clients MCP appellent `search_code` sur le même hôte ;
+/// chaque ligne de `daemon.log` commence par l'heure ISO à la milliseconde,
+/// et chaque ligne du crochet de `search_code` nomme le client, la session et
+/// le backend de l'appel qui l'a fait naître — une rafale s'attribue.
+#[test]
+#[ignore = "e2e : deux clients MCP appellent search_code, le journal de l'hôte les distingue"]
+fn le_journal_de_l_hote_dit_l_heure_et_l_auteur_de_chaque_ligne() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifeste = code(tmp.path());
+    let demon = Demon::new(tmp.path());
+
+    let mut a = Client::lancer(&manifeste, &demon, LIBRE);
+    assert!(a.initialiser().get("result").is_some());
+    let mut b = Client::lancer(&manifeste, &demon, LIBRE);
+    assert!(b.initialiser().get("result").is_some());
+    let (pa, pb) = (a.enfant.id(), b.enfant.id());
+    for (c, q) in [(&mut a, "bonjour"), (&mut b, "main")] {
+        let (erreur, texte) = c.appeler("search_code", json!({"query": q, "options": {}}));
+        assert!(!erreur, "{texte}");
+    }
+    let etat = demon.etat();
+    let backend = etat["backends"][0]["id"].as_str().unwrap_or_else(|| panic!("un backend : {etat}")).to_string();
+    a.fermer();
+    b.fermer();
+
+    let journal = std::fs::read_to_string(demon.dir.join("daemon.log")).unwrap_or_default();
+    let lignes: Vec<&str> = journal.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert!(!lignes.is_empty(), "le journal de l'hôte est vide");
+    let sans: Vec<&str> = lignes.iter().copied().filter(|l| sans_heure(l).is_none()).take(5).collect();
+    assert!(sans.is_empty(), "des lignes sans heure ISO à la milliseconde en tête : {sans:#?}");
+
+    let crochet: Vec<&str> = lignes.iter().filter_map(|l| sans_heure(l)).filter(|l| l.starts_with("[crochet search_code]")).collect();
+    assert!(crochet.len() >= 2, "deux appels, au moins deux lignes du crochet : {journal}");
+    for (pid, qui) in [(pa, "a"), (pb, "b")] {
+        let siennes: Vec<&&str> = crochet.iter().filter(|l| l.contains(&format!("mcp (pid {pid})"))).collect();
+        assert!(!siennes.is_empty(), "aucune ligne du crochet n'attribue l'appel du client {qui} (mcp (pid {pid})) : {crochet:#?}");
+        for l in siennes {
+            assert!(l.contains("session ") && l.contains(&format!("backend {backend}")), "la ligne nomme la session et le backend : {l}");
+        }
+    }
+    assert!(
+        crochet.iter().all(|l| l.contains("mcp (pid ")),
+        "chaque ligne du crochet nomme son client : {crochet:#?}"
+    );
 }
