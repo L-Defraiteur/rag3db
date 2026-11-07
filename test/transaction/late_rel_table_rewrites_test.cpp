@@ -21,6 +21,10 @@
 #include <thread>
 #include <vector>
 
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 
@@ -272,6 +276,86 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderConcurrentAndRolledBack
     database.reset();
     createDBAndConn();
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
+// Le même régime à travers des arrêts brutaux : huit vies de processus, chacune ouvre la base,
+// draine (effacer puis MERGE vers des destinations chargées, points de reprise automatiques au
+// seuil de 1 Mio), puis meurt base ouverte (SIGKILL), après une validation ou au milieu d'une
+// transaction. La vie suivante rejoue le journal. Puis le relevé des deux sens.
+TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAcrossKilledProcesses) {
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(NUM_SCOPES - 1) + ") AS i CREATE (:Scope {id: i});");
+    ok("UNWIND range(0, " + std::to_string(NUM_SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64);");
+    conn.reset();
+    database.reset();
+
+    // Les destinations connues du parent : cinq très chargées, deux cents ordinaires.
+    std::vector<int64_t> targets{3344, 3389, 9179, 13803, 17616};
+    for (int64_t i = 0; i < 200; i++) {
+        targets.push_back(30000 + i * 211);
+    }
+    constexpr int LIVES = 8;
+    for (int life = 0; life < LIVES; life++) {
+        const auto child = fork();
+        ASSERT_GE(child, 0);
+        if (child == 0) {
+            auto config = *systemConfig;
+            config.checkpointThreshold = 1 << 20;
+            Database db(databasePath, config);
+            Connection connection(&db);
+            std::mt19937_64 random{20261107u + life};
+            const auto dieAt = 100 + static_cast<int>(random() % 50);
+            const auto midTransaction = life % 2 == 1;
+            for (int round = 0;; round++) {
+                const auto first = 20000 + static_cast<int64_t>(random() % 4000);
+                const auto count = 1 + static_cast<int64_t>(random() % 6);
+                std::string ids, pairs;
+                for (auto s = first; s < first + count; s++) {
+                    ids += (ids.empty() ? "" : ",") + std::to_string(s);
+                    for (int e = 0; e < 4; e++) {
+                        const auto dst = random() % 4 == 0 ? targets[5 + random() % 200] :
+                                                             targets[random() % 5];
+                        pairs += (pairs.empty() ? "" : ",") + std::string("[") +
+                                 std::to_string(s) + "," + std::to_string(dst) + "," +
+                                 std::to_string(round) + "]";
+                    }
+                }
+                connection.query("BEGIN TRANSACTION;");
+                connection.query("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;");
+                if (round == dieAt && midTransaction) {
+                    kill(getpid(), SIGKILL);
+                }
+                connection.query("UNWIND [" + pairs +
+                                 "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) "
+                                 "MERGE (a)-[r:R]->(b) SET r.line = p[3];");
+                connection.query("COMMIT;");
+                if (round == dieAt) {
+                    kill(getpid(), SIGKILL);
+                }
+            }
+        }
+        int status = 0;
+        ASSERT_EQ(waitpid(child, &status, 0), child);
+        ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+            << "la vie " << life << " n'est pas morte par SIGKILL (statut " << status << ")";
+    }
+
+    createDBAndConn();
+    std::set<int64_t> sources, destinations(targets.begin(), targets.end());
+    for (int64_t s = 20000; s < 24006; s++) {
+        sources.insert(s);
+    }
+    sources.insert(0);
+    destinations.insert(0);
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte après les arrêts brutaux";
+    ok("CHECKPOINT;");
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "après un point de reprise et une réouverture";
 }
 
 } // namespace
