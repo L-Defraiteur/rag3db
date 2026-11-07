@@ -1325,8 +1325,8 @@ fn les_morceaux_du_seul_dense_se_surlignent_a_l_affichage() {
 /// manifeste comme le fait l'hôte, avec le service bge-m3 de la passe (`RAG3WEAVER_EMBED_SERVICE`) :
 /// par `call_in`, le morceau trouvé par le seul dense porte des passages `source: "sparse"`, et la
 /// réponse ne dit aucun repli. Sans service bge-m3 joignable, ce témoin rougit : il n'a rien à juger.
-/// Il exige `burn-embedder` : le tokenizer qui place le creux dans le texte n'existe que sous elle.
-#[cfg(all(feature = "code", feature = "burn-embedder"))]
+/// Le service doit rendre les positions (`spans`) : c'est lui qui tokenise, pas l'hôte.
+#[cfg(feature = "code")]
 #[test]
 #[ignore]
 fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
@@ -1366,8 +1366,8 @@ fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
 /// tests du processus). L'indexation entière, puis une recherche sans surlignage : zéro appel ; une
 /// recherche qui demande le surlignage : un appel. Une réindexation après une modification : toujours
 /// zéro (la veille passe par le même nœud d'embarquement, gardé par le signal creux de l'entité).
-/// Il exige `burn-embedder` : sans le tokenizer, le surlignage se replie avant tout appel.
-#[cfg(all(feature = "code", feature = "daemon", feature = "burn-embedder"))]
+/// Le surlignage passe par les spans du service : l'hôte n'a pas de tokenizer à lui.
+#[cfg(all(feature = "code", feature = "daemon"))]
 #[test]
 #[ignore]
 fn le_creux_ne_s_embarque_qu_au_surlignage() {
