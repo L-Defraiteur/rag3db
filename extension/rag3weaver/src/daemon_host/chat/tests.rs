@@ -44,7 +44,7 @@ fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
 /// Un faux modèle qui propose `notes.md` au premier appel, puis répond.
 fn qui_propose() -> ChatModel {
     let appels = Arc::new(AtomicUsize::new(0));
-    Arc::new(move |_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let appels = appels.clone();
         let proposition = json!({
             "files": [{ "path": "notes.md", "content": "# Une note de l'agent\n" }],
@@ -67,7 +67,7 @@ fn qui_propose() -> ChatModel {
 /// 120 s le fait échouer en le disant, pour qu'un arrêt perdu ne fige pas la
 /// passe.
 fn lent() -> ChatModel {
-    Arc::new(|_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-lent", 8192, |_turns, _opts, sink| {
             let borne = Instant::now() + Duration::from_secs(120);
             while Instant::now() < borne {
@@ -235,7 +235,7 @@ fn le_message_systeme_dit_le_verbe_du_mode() {
 /// jusqu'à ce qu'on l'arrête (une barrière) ; sinon il propose `notes.md`.
 #[cfg(unix)]
 fn selon_le_message() -> ChatModel {
-    Arc::new(|_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| {
             let dernier = turns.last().map(|t| (t.role.clone(), t.content.clone())).unwrap_or_default();
             if dernier.0 == "tool" {

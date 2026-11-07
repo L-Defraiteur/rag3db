@@ -29,6 +29,38 @@ fn default_vector_extension() -> PathBuf {
     PathBuf::from(DEFAULT_VECTOR_EXTENSION)
 }
 
+/// **La clé `teammate` d'un manifeste** : la politique de l'équipier d'une tâche
+/// (page 07-novembre-2026-everything-declarative/01, § 1). Absente : les défauts.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TeammatePolicy {
+    /// Les pas qui n'aboutissent pas d'affilée (le tour entier en erreur) avant
+    /// que l'équipier s'arrête en `ended "erreur : …"`. Sous ce nombre, l'échec
+    /// s'écrit dans la boîte et le pas suivant repart de la frontière.
+    #[serde(default = "TeammatePolicy::trois")]
+    pub max_failed_steps: u32,
+    /// Au-delà de ces secondes, un appel d'outil qui attend encore (un index qui
+    /// tient l'écriture) le dit dans la boîte, et continue d'attendre : rien
+    /// n'est abandonné, rien ne part en double.
+    #[serde(default = "TeammatePolicy::vingt")]
+    pub tool_wait_notice_s: u64,
+}
+
+impl TeammatePolicy {
+    fn trois() -> u32 {
+        3
+    }
+    fn vingt() -> u64 {
+        20
+    }
+}
+
+impl Default for TeammatePolicy {
+    fn default() -> Self {
+        TeammatePolicy { max_failed_steps: Self::trois(), tool_wait_notice_s: Self::vingt() }
+    }
+}
+
 /// La clé `bilans` d'un manifeste : la mémoire où le juge range ses fiches.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -125,6 +157,9 @@ pub struct BackendManifest {
     /// runs de ce backend ne sont pas jugés.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bilans: Option<BilansDeclares>,
+    /// **La politique de l'équipier** d'une tâche ouverte sur ce backend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub teammate: Option<TeammatePolicy>,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,

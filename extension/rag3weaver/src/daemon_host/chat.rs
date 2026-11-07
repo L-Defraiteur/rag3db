@@ -28,7 +28,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Ce qui donne le modèle d'un backend : celui de son manifeste, sinon le
 /// défaut de Vertex. Les témoins le remplacent par un faux modèle.
-pub type ChatModel = Arc<dyn Fn(&Backend) -> Result<Arc<dyn crate::llm::Llm>, String> + Send + Sync>;
+/// Il prend le manifeste préparé, pas le backend ouvert : un équipier dont la base
+/// ne s'ouvre pas garde son modèle (`models.llm`), lu sans elle
+/// (page 07-novembre-2026-everything-declarative/01, § 1).
+pub type ChatModel = Arc<dyn Fn(&crate::backend::PreparedBackend) -> Result<Arc<dyn crate::llm::Llm>, String> + Send + Sync>;
 
 /// La session d'un backend, et si un tour est en cours.
 pub(super) struct ChatEntry {
@@ -57,10 +60,10 @@ pub(super) fn default_chats_root() -> PathBuf {
 /// (`regime::modele_agentique_nomme`, `GOOGLE_CLOUD_PROJECT` et les
 /// identifiants Vertex de `GOOGLE_APPLICATION_CREDENTIALS`).
 pub(super) fn default_chat_model() -> ChatModel {
-    Arc::new(|backend: &Backend| -> Result<Arc<dyn crate::llm::Llm>, String> {
+    Arc::new(|prepared: &crate::backend::PreparedBackend| -> Result<Arc<dyn crate::llm::Llm>, String> {
         #[cfg(feature = "openai-llm")]
         {
-            if let Some(source) = backend.prepared().manifest.models.get(&crate::model_source::Capability::Llm) {
+            if let Some(source) = prepared.manifest.models.get(&crate::model_source::Capability::Llm) {
                 return crate::model_source::connect_llm(source).map(|(llm, _)| llm);
             }
             crate::regime::modele_agentique_nomme("ide-chat")
@@ -73,7 +76,7 @@ pub(super) fn default_chat_model() -> ChatModel {
         }
         #[cfg(not(feature = "openai-llm"))]
         {
-            let _ = backend;
+            let _ = prepared;
             Err("cet hôte est bâti sans la feature `openai-llm` : le chat est éteint".to_string())
         }
     })
@@ -205,7 +208,7 @@ impl DaemonHost {
     /// sessions orphelines.
     pub fn chat_state(&self, backend_id: &str) -> Result<Value, String> {
         let hosted = self.hote_par_id(backend_id)?;
-        let modele = self.with_backend(&hosted, |b| (self.chat_model)(b).map(|llm| llm.name().to_string()))?;
+        let modele = self.with_backend(&hosted, |b| (self.chat_model)(&b.prepared()).map(|llm| llm.name().to_string()))?;
         let chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
         let (fil, en_cours) = match chats.get(backend_id) {
             Some(e) => (serde_json::to_value(&e.session).map_err(|e| e.to_string())?["turns"].clone(), e.busy.clone()),
@@ -264,13 +267,28 @@ impl DaemonHost {
             // toujours arrêtable. Inscrit après, un arrêt arrivé entre les deux
             // était refusé (« aucun run en vol ») pour un tour qui allait
             // partir — trouvé par la seconde passe du 25 octobre 2026.
-            let en_vol = self.with_backend(&hosted, |b| b.runs_in_flight_registry().register_stop(&run_id, arreter))?;
+            // Le pas d'un équipier part même si le backend ne s'ouvre pas : son
+            // arrêt passe alors par le drapeau du tour seul (le stop de la boîte).
+            let en_vol = match self.with_backend(&hosted, |b| b.runs_in_flight_registry().register_stop(&run_id, arreter)) {
+                Ok(v) => Some(v),
+                Err(_) if step.is_some() => None,
+                Err(e) => return Err(e),
+            };
             e.busy = Some(run_id.clone());
             (std::mem::take(&mut e.session), en_vol)
         };
-        let resultat = self
-            .with_backend(&hosted, |b| self.run_chat_turn(b, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, step))
-            .and_then(|r| r);
+        let resultat = match step {
+            None => self
+                .with_backend(&hosted, |b| {
+                    let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
+                    let dans_une_tache = b.prepared().surcharges().workspace.is_some();
+                    let outils = OutilsDuChat::de(b, &declares, dans_une_tache);
+                    let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &outils, ecrivent: &outils.ecrivent, repli: None };
+                    self.run_chat_turn(tour, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, None)
+                })
+                .and_then(|r| r),
+            Some(s) => self.run_teammate_turn(&hosted, backend_id, &run_id, &mut session, message, annule, arrete_par, s),
+        };
         // Un tour fini : son bilan, si le backend déclare `bilans` (page 04).
         if resultat.is_ok() {
             self.demander_un_bilan(&hosted, &run_id);
@@ -287,9 +305,9 @@ impl DaemonHost {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn run_chat_turn(
+    pub(super) fn run_chat_turn(
         &self,
-        b: &Backend,
+        tour: Tour<'_>,
         backend_id: &str,
         manifest: &Path,
         run_id: &str,
@@ -299,10 +317,9 @@ impl DaemonHost {
         arrete_par: Arc<Mutex<Option<String>>>,
         step: Option<&super::teammate::Step>,
     ) -> Result<Value, String> {
-        let llm = (self.chat_model)(b).map_err(|why| format!("le chat est éteint : {why}"))?;
-        // Une tâche : le backend porte sa surcharge de workspace (son worktree).
-        let dans_une_tache = b.prepared().surcharges().workspace.is_some();
-        let mut prompt = system_prompt(b.mode_declarations(), dans_une_tache);
+        let llm = (self.chat_model)(&tour.prepared).map_err(|why| format!("le chat est éteint : {why}"))?;
+        let dans_une_tache = tour.dans_une_tache;
+        let mut prompt = system_prompt(tour.mode, dans_une_tache);
         if let Some(s) = step {
             prompt.push_str("\n\n");
             prompt.push_str(s.system_prompt());
@@ -321,11 +338,12 @@ impl DaemonHost {
             "state_dir": state_dir,
         }))
         .map_err(|e| e.to_string())?;
-        let bus = b.bus_de_publication();
+        let bus = tour.bus.clone();
         // Les jetons du tour, sur `tokens` : le flux de l'IDE les relaie.
         let events: EventHandler = {
             let (bus, run, rang) = (bus.clone(), run_id.to_string(), Arc::new(AtomicU64::new(0)));
             Arc::new(move |ev: Value| {
+                let Some(bus) = &bus else { return };
                 if ev["event"] == "token" {
                     if let Some(text) = ev["text"].as_str() {
                         bus.emit(crate::events::Event::Token {
@@ -339,12 +357,10 @@ impl DaemonHost {
                 }
             })
         };
-        let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
-        let outils = OutilsDuChat::de(b, &declares, dans_une_tache);
-        let du_pas = step.map(|s| super::teammate::StepTools { inner: &outils, step: s });
+        let du_pas = step.map(|s| super::teammate::StepTools { inner: tour.boite, step: s });
         let boite: &(dyn crate::agent::ToolBox + Sync) = match &du_pas {
             Some(p) => p,
-            None => &outils,
+            None => tour.boite,
         };
         let avant = session.turns.len();
         let fait = session.run_with(
@@ -355,7 +371,7 @@ impl DaemonHost {
             events,
             annule,
             ChatRunOptions {
-                bus: Some(bus),
+                bus,
                 run_id: Some(run_id.to_string()),
                 meter: Some(self.chat_meter.clone()),
                 stopped_by: Some(arrete_par.clone()),
@@ -371,7 +387,7 @@ impl DaemonHost {
         let arrete = arrete_par.lock().unwrap_or_else(|p| p.into_inner()).clone();
         let du_tour = session.turns.get(avant..).unwrap_or_default();
         let propositions = propositions_du_tour(du_tour);
-        let fichiers = fichiers_ecrits_du_tour(du_tour, &outils.ecrivent);
+        let fichiers = fichiers_ecrits_du_tour(du_tour, tour.ecrivent);
         let tache = if dans_une_tache { self.tache_de(manifest) } else { Value::Null };
         // Le journal du run : les tours de ce tour, tels que le modèle les a
         // reçus, la tâche, ce qu'il a écrit et proposé.
@@ -385,6 +401,15 @@ impl DaemonHost {
             if let Some(s) = step {
                 ajouts.insert("demande".into(), json!(s.request));
                 ajouts.insert("pas".into(), json!(s.number));
+                // Par où l'équipier s'est réveillé (bus, fichier de boîte), et
+                // les replis de ce pas sur les fichiers.
+                if let Some(r) = &s.woke_by {
+                    ajouts.insert("reveil".into(), json!(r));
+                }
+            }
+            let repli = tour.repli();
+            if !repli.is_empty() {
+                ajouts.insert("repli".into(), json!(repli));
             }
             self.journal.ajouter(backend_id, run_id, ajouts);
         }
@@ -397,6 +422,27 @@ impl DaemonHost {
             Err(_) if arrete.is_some() => Ok(reponse("")),
             Err(e) => Err(e),
         }
+    }
+}
+
+/// **Ce qu'un tour prend du backend** : le manifeste préparé, le mode des
+/// déclarations, son bus s'il est ouvert, la boîte d'outils. Le chat le construit
+/// sous le backend ouvert ; le pas d'un équipier, hors de lui (il prend le backend
+/// à chaque appel d'outil, `super::teammate_tools::Etanche`).
+pub(super) struct Tour<'a> {
+    pub prepared: Arc<crate::backend::PreparedBackend>,
+    pub mode: ModeDeclarations,
+    pub dans_une_tache: bool,
+    pub bus: Option<crate::events::EventBus>,
+    pub boite: &'a (dyn crate::agent::ToolBox + Sync),
+    pub ecrivent: &'a HashSet<String>,
+    /// Les replis du tour, que la boîte étanche note (aucun pour le chat).
+    pub repli: Option<&'a Mutex<Vec<String>>>,
+}
+
+impl Tour<'_> {
+    fn repli(&self) -> Vec<String> {
+        self.repli.map(|r| r.lock().unwrap_or_else(|p| p.into_inner()).clone()).unwrap_or_default()
     }
 }
 

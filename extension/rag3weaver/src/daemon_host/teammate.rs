@@ -370,6 +370,8 @@ pub struct Step {
     closed: Mutex<Vec<Plan>>,
     /// L'agent a-t-il tranché sur le plan actif (continue, pause, close) ?
     decided: Mutex<Option<String>>,
+    /// Par où l'équipier s'est réveillé avant ce pas (`bus`, `fichier`), pour le journal.
+    pub woke_by: Option<String>,
 }
 
 impl Step {
@@ -384,6 +386,7 @@ impl Step {
             done: Mutex::new(None),
             closed: Mutex::new(Vec::new()),
             decided: Mutex::new(None),
+            woke_by: None,
         }
     }
     pub fn system_prompt(&self) -> &'static str {
@@ -947,10 +950,15 @@ impl DaemonHost {
 
     fn teammate_loop(&self, parent: &str, task: &str, files: &TeammateFiles) -> Result<Outcome, String> {
         let t = self.tache(parent, task).ok_or_else(|| format!("pas de tâche « {task} » sur {parent}"))?;
-        let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication())?;
+        // **Le bus, s'il y en a un** : un backend qui ne s'ouvre pas n'en a pas,
+        // et l'équipier se réveille alors par la relecture du fichier de boîte.
+        let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication()).ok();
         // L'abonnement au sujet de la boîte, pris avant de lire : une ligne
         // arrivée entre la lecture et l'attente réveille quand même.
-        let mut wake = bus.subscribe(&mailbox_topic(task));
+        let mut wake = bus.as_ref().map(|b| b.subscribe(&mailbox_topic(task)));
+        let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
+        let mut failed = 0u32;
+        let mut woke_by: Option<String> = None;
         let mut outcome = Outcome::default();
         let mut read = files.read_cursor();
         let mut stalled = 0usize;
@@ -960,6 +968,9 @@ impl DaemonHost {
         for number in 1..=MAX_STEPS {
             let lines = files.mailbox();
             let news: Vec<Value> = lines.iter().skip(read).filter(|l| l["from"] != "teammate" && l["from"] != "host").cloned().collect();
+            // Le curseur d'avant ce pas : un pas qui n'aboutit pas rend ses nouvelles
+            // au suivant (sans elles, l'équipier attendrait une boîte déjà lue).
+            let avant = read;
             read = lines.len();
             files.write_cursor(read);
             if news.iter().any(|l| l["kind"] == "stop") {
@@ -976,18 +987,59 @@ impl DaemonHost {
             let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 1);
             let last = active.is_some() && !alone && !waiting && news.is_empty();
             if !work {
-                // Rien à faire sans le superviseur : on attend la boîte, puis on relit.
-                match wake.recv_blocking() {
-                    Ok(_) | Err(async_broadcast::RecvError::Overflowed(_)) => continue,
-                    Err(async_broadcast::RecvError::Closed) => {
-                        outcome.ended = "la tâche s'est fermée pendant l'attente".into();
-                        return Ok(outcome);
+                // Rien à faire sans le superviseur : on attend la boîte, par le
+                // bus quand il y en a un, et toujours par le fichier (toutes les
+                // 2 s) : un backend fermé ne publie plus. Le journal du pas
+                // suivant dit par où l'équipier s'est réveillé.
+                let depuis = files.mailbox().len();
+                let mut tour = 0u32;
+                woke_by = loop {
+                    if let Some(rx) = wake.as_mut() {
+                        match rx.try_recv() {
+                            Ok(_) | Err(async_broadcast::TryRecvError::Overflowed(_)) => break Some("bus".to_string()),
+                            Err(async_broadcast::TryRecvError::Closed) => wake = None,
+                            Err(async_broadcast::TryRecvError::Empty) => {}
+                        }
                     }
-                }
+                    tour += 1;
+                    if tour % 10 == 0 {
+                        if self.tache(parent, task).is_none() {
+                            outcome.ended = "la tâche s'est fermée pendant l'attente".into();
+                            return Ok(outcome);
+                        }
+                        if files.mailbox().len() > depuis {
+                            break Some("fichier".to_string());
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                };
+                continue;
             }
             let message = frontier_message(number, &news, &plans, last);
-            let step = Step::new(files.clone(), task, &request, Some(bus.clone()), number);
-            let r = self.chat_turn_with(&t.id, &message, Some(&step))?;
+            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
+            step.woke_by = woke_by.take();
+            // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
+            // dans la boîte et le pas suivant repart de la frontière ; seuls
+            // `teammate.max_failed_steps` échecs d'affilée l'arrêtent.
+            let r = match self.chat_turn_with(&t.id, &message, Some(&step)) {
+                Ok(r) => {
+                    failed = 0;
+                    r
+                }
+                Err(e) => {
+                    failed += 1;
+                    let line = files.append("host", "report", None, &format!("le pas {number} n'a pas abouti : {e}"))?;
+                    publish(bus.as_ref(), task, &line);
+                    if failed >= policy.max_failed_steps {
+                        outcome.ended = format!("erreur : {e} ({failed} pas d'affilée n'ont pas abouti, teammate.max_failed_steps = {})", policy.max_failed_steps);
+                        return Ok(outcome);
+                    }
+                    read = avant;
+                    files.write_cursor(read);
+                    std::thread::sleep(std::time::Duration::from_secs(2 * u64::from(failed)));
+                    continue;
+                }
+            };
             let declared = step.declared();
             let run = r["run"].as_str().unwrap_or_default().to_string();
             {
@@ -1004,8 +1056,11 @@ impl DaemonHost {
                     closed.steps.push(run.clone());
                 }
                 files.keep_closed(&closed)?;
+                // La mémoire en dernier : un rangement manqué se dit, il ne
+                // bloque ni le pas ni le plan.
                 if let Err(e) = self.file_closed_plan(&t, task, &request, &closed) {
                     eprintln!("[équipier] {task} : le plan {} clos ne se range pas : {e}", closed.number);
+                    let _ = files.append("host", "memory_failed", None, &format!("le plan {} clos ne se range pas en mémoire : {e}", closed.number));
                 }
             }
             outcome.steps.push(json!({ "step": number, "run": run, "step_done": declared, "tool_calls": step.tool_calls(), "decision": step.decision() }));
@@ -1031,7 +1086,7 @@ impl DaemonHost {
             if stalled >= MAX_STALLED {
                 let why = format!("{MAX_STALLED} pas de suite sans élément réussi : je m'arrête, le plan dit où j'en suis");
                 let line = files.append("host", "report", None, &why)?;
-                publish(Some(&bus), task, &line);
+                publish(bus.as_ref(), task, &line);
                 outcome.ended = why;
                 return Ok(outcome);
             }

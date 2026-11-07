@@ -42,7 +42,7 @@ struct Vu {
 /// Un faux modèle qui sert le chat (lire `main.rs`, puis répondre) et le juge
 /// (ses quatre outils dans l'ordre, puis le verdict dans la forme fixe).
 fn faux(vu: Arc<Mutex<Vu>>) -> rag3weaver::daemon_host::chat::ChatModel {
-    Arc::new(move |_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let vu = vu.clone();
         Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, move |turns, opts, sink| {
             let systeme = turns.first().map(|t| t.content.clone()).unwrap_or_default();
@@ -309,7 +309,7 @@ fn le_juge_se_declenche_seul_a_la_fin_d_un_tour() {
 /// rendre le nombre de lignes, il rend le contenu, et l'agent répond comme s'il
 /// n'avait vu qu'un compte.
 fn chat_qui_croit() -> rag3weaver::daemon_host::chat::ChatModel {
-    Arc::new(|_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-chat", 8192, |turns, opts, sink| {
             if turns.last().is_some_and(|t| t.role == "tool") {
                 return MockLlm::new("main.rs a une seule ligne ; read_file n'en donne que le compte, je n'ai donc pas vu ce qu'il fait.").generate(turns, opts, sink);
@@ -371,7 +371,7 @@ fn le_juge_sur_gemini_nomme_un_retour_ambigu_et_compare_la_seconde_session() {
 /// Un faux chat qui se sert de l'outil de banc : il doit nommer un fichier pour
 /// chercher dans tout le projet, appelle deux fois, et répond.
 fn chat_qui_cherche() -> rag3weaver::daemon_host::chat::ChatModel {
-    Arc::new(|_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-chat", 8192, |turns, opts, sink| {
             let resultats = turns.iter().filter(|t| t.role == "tool").count();
             match resultats {
