@@ -22,9 +22,10 @@ const readView = (): View => {
 
 const ragText = (r: Rag) => (r.state === "indexed" ? "rag indexé" : r.state === "indexing" ? `rag en cours${r.percent != null ? ` ${r.percent} %` : ""}` : "rag absent");
 const stateText: Record<RunState, string> = { running: "en cours", waiting: "en attente", ended: "finie", error: "en erreur" };
-const live = (s?: RunState | null) => s === "running" || s === "waiting";
-const taskActive = (t: SessionTask) => live(t.state) || !!t.awaits_answer;
-const sessionActive = (s: ChatSession, tasks: SessionTask[]) => live(s.state) || tasks.some((t) => t.session === s.id && taskActive(t));
+// Actif : ce qui tourne, ou attend une réponse ; « en attente » seul (un équipier
+// au repos, ou jamais lancé) ne l'est pas.
+const taskActive = (t: SessionTask) => t.state === "running" || !!t.awaits_answer;
+const sessionActive = (s: ChatSession, tasks: SessionTask[]) => s.state === "running" || !!s.awaits_answer || tasks.some((t) => t.session === s.id && taskActive(t));
 const chatLink = (backend: string) => `/ide/code/${backend}/chat`;
 
 /// Ce qui tient la page : la session, et la tâche si la page en est une.
