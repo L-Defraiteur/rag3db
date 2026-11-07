@@ -125,6 +125,9 @@ pub struct AnthropicLlm {
     /// `thinking.block_binding.prefix_mismatch_behavior: "drop_block"` + son
     /// en-tête bêta.
     thinking_binding_drop: bool,
+    /// L'effort déclaré du modèle (`models.llm.reasoning`), envoyé quand
+    /// l'appel ne fixe pas le sien.
+    reasoning_default: Option<ReasoningEffort>,
     retry: RetryPolicy,
     clock: Arc<dyn Clock>,
     jitter_state: std::sync::atomic::AtomicU64,
@@ -166,6 +169,7 @@ impl AnthropicLlm {
             display: ThinkingDisplay::Summarized,
             default_fallbacks: false,
             thinking_binding_drop: false,
+            reasoning_default: None,
             retry: RetryPolicy::default(),
             clock: Arc::new(SystemClock),
             jitter_state: std::sync::atomic::AtomicU64::new(
@@ -199,6 +203,13 @@ impl AnthropicLlm {
 
     pub fn with_context_len(mut self, n: usize) -> Self {
         self.context_len = n;
+        self
+    }
+
+    /// L'effort par défaut de ce modèle (`output_config.effort`), quand
+    /// l'appel ne fixe pas le sien. Comme [`crate::openai_llm::OpenAiLlm::with_reasoning_default`].
+    pub fn with_reasoning_default(mut self, effort: ReasoningEffort) -> Self {
+        self.reasoning_default = Some(effort);
         self
     }
 
@@ -300,7 +311,7 @@ impl AnthropicLlm {
             body.insert("thinking".into(), Value::Object(thinking));
         }
         let mut output = Map::new();
-        if let Some(effort) = opts.reasoning {
+        if let Some(effort) = opts.reasoning.or(self.reasoning_default) {
             output.insert("effort".into(), json!(effort_str(effort)));
         }
         if let Some(format) = &opts.response_format {
@@ -1297,6 +1308,14 @@ mod tests {
         assert_eq!(body["output_config"]["format"], json!({"type":"json_schema","schema":{"type":"object"}}));
         let opts = GenOptions::default().with_response_format(ResponseFormat::JsonObject);
         assert!(llm().request_body(&hello(), &opts).get("output_config").is_none());
+    }
+
+    #[test]
+    fn the_declared_effort_is_sent_unless_the_call_fixes_its_own() {
+        let l = llm().with_reasoning_default(ReasoningEffort::Low);
+        assert_eq!(l.request_body(&hello(), &GenOptions::default())["output_config"]["effort"], "low");
+        let appel = GenOptions::default().with_reasoning(ReasoningEffort::High);
+        assert_eq!(l.request_body(&hello(), &appel)["output_config"]["effort"], "high", "l'appel l'emporte");
     }
 
     #[test]

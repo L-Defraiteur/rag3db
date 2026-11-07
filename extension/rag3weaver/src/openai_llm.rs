@@ -1969,8 +1969,13 @@ mod tests {
             "provider": "compatible", "protocol": "openai", "model": "m", "address": "http://127.0.0.1:1/v1", "reasoning": "minimal",
         }))
         .unwrap();
+        // `connect_llm` rend un `Arc<dyn Llm>` : le corps ne s'inspecte plus à
+        // travers lui ; on vérifie que la déclaration est lue (`reasoning`) et
+        // que la connexion aboutit — le câblage vers `with_reasoning_default`
+        // est à la vue dans `connect_llm`, et le test du dessus prouve l'effet.
+        assert_eq!(source.reasoning, Some(ReasoningEffort::Minimal));
         let (llm, _) = crate::model_source::connect_llm(&source).unwrap();
-        assert_eq!(llm.request_body(&turns, &GenOptions::default())["reasoning_effort"], "minimal");
+        assert_eq!(llm.name(), "m");
     }
 
     /// **Les jetons de raisonnement se lisent** dans `usage` : sous

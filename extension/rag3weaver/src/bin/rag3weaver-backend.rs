@@ -329,8 +329,7 @@ fn modele_du_chat(
     };
     #[cfg(feature = "openai-llm")]
     {
-        rag3weaver::model_source::connect_llm(source)
-            .map(|(llm, _)| std::sync::Arc::new(llm) as std::sync::Arc<dyn rag3weaver::llm::Llm>)
+        rag3weaver::model_source::connect_llm(source).map(|(llm, _)| llm)
     }
     #[cfg(not(feature = "openai-llm"))]
     {

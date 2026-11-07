@@ -22,7 +22,7 @@ JEUX=(
   # Celui de run_e2e.sh, la batterie.
   "rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres"
   # Le même, avec les suites qui appellent un vrai modèle.
-  "rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm"
+  "rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm"
   # Sans embarqueur local : le jeu du paquet npm (G) et des postes sans carte.
   "rag3db-native,code,daemon,openai-llm"
   # Le minimum natif du backend de code.

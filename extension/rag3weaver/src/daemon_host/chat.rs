@@ -61,7 +61,7 @@ pub(super) fn default_chat_model() -> ChatModel {
         #[cfg(feature = "openai-llm")]
         {
             if let Some(source) = backend.prepared().manifest.models.get(&crate::model_source::Capability::Llm) {
-                return crate::model_source::connect_llm(source).map(|(llm, _)| Arc::new(llm) as Arc<dyn crate::llm::Llm>);
+                return crate::model_source::connect_llm(source).map(|(llm, _)| llm);
             }
             crate::regime::modele_agentique_nomme("ide-chat")
                 .map(|(llm, _)| Arc::new(llm) as Arc<dyn crate::llm::Llm>)

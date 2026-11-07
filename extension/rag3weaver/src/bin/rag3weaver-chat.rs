@@ -370,8 +370,8 @@ fn run() -> Result<(), String> {
         config.allowed_tools = None;
     }
     fs::create_dir_all(config.state_dir.join("sessions")).map_err(|e| e.to_string())?;
-    let llm: Box<dyn Llm> = if demo {
-        Box::new(MockLlm::new("Mode démonstration : les deux interfaces partagent cet agent. Configurez un modèle pour rechercher et créer des exports."))
+    let llm: std::sync::Arc<dyn Llm> = if demo {
+        std::sync::Arc::new(MockLlm::new("Mode démonstration : les deux interfaces partagent cet agent. Configurez un modèle pour rechercher et créer des exports."))
     } else {
         config.connect_llm()?.0
     };
