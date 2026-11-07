@@ -43,23 +43,10 @@ protected:
     std::unique_ptr<Connection> other;
 };
 
-// A crée dix nœuds dans sa transaction et les relie par un COPY ; B valide cinq nœuds de la même
-// table entre les deux ; A valide. Chaque relation, relue par les clés de ses deux bouts, doit
-// relier deux nœuds de A.
-TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsAfterAnotherWriterCommits) {
-    ok("CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
-    ok("CREATE REL TABLE R(FROM N TO N, k INT64);");
-    ok("UNWIND range(0, 9) AS i CREATE (:N {id: i});");
-
-    ok("BEGIN TRANSACTION;");
-    ok("UNWIND range(1000, 1009) AS i CREATE (:N {id: i});");
-    // B valide ses nœuds pendant que ceux de A sont encore locaux.
-    ok(*other, "UNWIND range(2000, 2004) AS i CREATE (:N {id: i});");
-    // Les relations de A : chaque nœud de A vers le suivant, par un COPY.
-    ok("COPY R FROM (UNWIND range(1000, 1008) AS i RETURN i, i + 1, i);");
-    ok("COMMIT;");
-
-    auto result = conn->query("MATCH (a:N)-[r:R]->(b:N) RETURN a.id, b.id, r.k ORDER BY r.k;");
+// Chaque relation du COPY, relue par les clés de ses deux bouts, relie deux nœuds de A ; les nœuds
+// de B n'en ont aucune.
+static void expectRelsBetweenTheirOwnNodes(Connection& conn) {
+    auto result = conn.query("MATCH (a:N)-[r:R]->(b:N) RETURN a.id, b.id, r.k ORDER BY r.k;");
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
     int rows = 0;
     while (result->hasNext()) {
@@ -72,19 +59,46 @@ TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsAfterAnotherW
         rows++;
     }
     EXPECT_EQ(rows, 9);
-    // Le sens arrière, depuis chaque destination.
     for (int64_t k = 1000; k < 1009; k++) {
-        auto back = conn->query("MATCH (a:N)-[r:R]->(b:N {id: " + std::to_string(k + 1) +
-                                "}) RETURN a.id;");
+        auto back = conn.query("MATCH (a:N)-[r:R]->(b:N {id: " + std::to_string(k + 1) +
+                               "}) RETURN a.id;");
         ASSERT_TRUE(back->isSuccess()) << back->getErrorMessage();
         ASSERT_TRUE(back->hasNext()) << "le nœud " << k + 1 << " n'a pas sa relation entrante";
         EXPECT_EQ(back->getNext()->getValue(0)->getValue<int64_t>(), k);
     }
-    // Les nœuds de B n'ont aucune relation.
-    auto stray = conn->query("MATCH (a:N)-[r:R]-(b:N) WHERE a.id >= 2000 RETURN count(*);");
+    auto stray = conn.query("MATCH (a:N)-[r:R]-(b:N) WHERE a.id >= 2000 RETURN count(*);");
     ASSERT_TRUE(stray->isSuccess()) << stray->getErrorMessage();
     EXPECT_EQ(stray->getNext()->getValue(0)->getValue<int64_t>(), 0)
         << "des relations du COPY désignent les nœuds de l'autre écrivain";
+}
+
+// A crée dix nœuds dans sa transaction ; B valide cinq nœuds de la même table ; A les relie par un
+// COPY et valide.
+TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsAfterAnotherWriterCommits) {
+    ok("CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
+    ok("CREATE REL TABLE R(FROM N TO N, k INT64);");
+    ok("UNWIND range(0, 9) AS i CREATE (:N {id: i});");
+
+    ok("BEGIN TRANSACTION;");
+    ok("UNWIND range(1000, 1009) AS i CREATE (:N {id: i});");
+    ok(*other, "UNWIND range(2000, 2004) AS i CREATE (:N {id: i});");
+    ok("COPY R FROM (UNWIND range(1000, 1008) AS i RETURN i, i + 1, i);");
+    ok("COMMIT;");
+    expectRelsBetweenTheirOwnNodes(*conn);
+}
+
+// Le même défaut dans l'autre ordre : B valide après le COPY de A, avant la validation de A.
+TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsWhenAnotherWriterCommitsAfterIt) {
+    ok("CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
+    ok("CREATE REL TABLE R(FROM N TO N, k INT64);");
+    ok("UNWIND range(0, 9) AS i CREATE (:N {id: i});");
+
+    ok("BEGIN TRANSACTION;");
+    ok("UNWIND range(1000, 1009) AS i CREATE (:N {id: i});");
+    ok("COPY R FROM (UNWIND range(1000, 1008) AS i RETURN i, i + 1, i);");
+    ok(*other, "UNWIND range(2000, 2004) AS i CREATE (:N {id: i});");
+    ok("COMMIT;");
+    expectRelsBetweenTheirOwnNodes(*conn);
 }
 
 } // namespace

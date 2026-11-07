@@ -1,12 +1,29 @@
 # Un COPY de relations vers des nœuds locaux garde leurs décalages provisoires
 
-- **État** : ouvert — sans effet avec un seul écrivain ; témoin attendu de la marche A3′ (écritures parallèles)
-- **Gravité** : réponse fausse (relations attachées aux nœuds d'une autre transaction) — en mode multi-écrivains seulement
-- **Atteignable en service** : non (le mode multi-écrivains est éteint hors du banc)
-- **Touche rag3weaver** : non aujourd'hui ; oui quand les écritures parallèles seront allumées (un lot de nœuds par `MERGE` puis des relations par `COPY` dans la même transaction est sa forme courante)
+- **État** : corrigé (7 novembre 2026, seconde session cœur C++, lot G1) : un COPY de relations verse
+  d'abord dans leurs tables les nœuds locaux de ses bouts (`IndexLookup::initGlobalStateInternal` →
+  `LocalStorage::flushNodeTable`), comme un COPY de nœuds, avant toute résolution de clé. Témoins :
+  `ProvisionalOffsets.*` au banc (`test/transaction/concurrence/provisional_offsets_test.cpp`), rouges
+  avant, verts après, dans les deux ordres.
+- **Gravité** : réponse fausse en silence : les relations d'un COPY relient les nœuds d'une autre
+  transaction.
+- **Atteignable en service** : oui, depuis que le mode multi-écrivains est le défaut (11 octobre 2026) :
+  deux transactions écrivaines sur la même table de nœuds, la seconde validée entre la première
+  écriture de la première dans cette table et sa validation, et la première pose par COPY des
+  relations vers ses propres nœuds.
+- **Touche rag3weaver** : oui, par la forme de ses drains (des nœuds par `MERGE`, puis au-delà de 200 arêtes des relations par `COPY`, dans la même transaction), si un second écrivain valide sur la même table pendant ce temps ; par le code, l'hôte écrit une base par une seule connexion sous `Mutex<Catalog>`, à confirmer par le produit
 - **Ouvert le** : 5 octobre 2026, session cœur C++ (lecture, en préparant le versement des lignes locales avant un `COPY`)
 - **Pour** : cœur C++ (marche A3′)
 - **Famille** : moteur
+
+## Le témoin rouge (7 novembre 2026)
+
+`ProvisionalOffsets.ACopyOfRelsToLocalNodesKeepsItsEndpointsAfterAnotherWriterCommits` : A crée dix
+nœuds (1000 à 1009) dans sa transaction, B valide cinq nœuds (2000 à 2004) de la même table, A relie
+ses nœuds par un COPY (1000 → 1001, …, 1008 → 1009) et valide. Sur master a91f066ea et suivants,
+**la relation 1000 → 1001 se lit 2000 → 2001** : les relations du COPY désignent les nœuds de B. Le
+second témoin, `…WhenAnotherWriterCommitsAfterIt`, joue l'autre ordre (B valide après le COPY, avant
+la validation de A), par le même défaut.
 
 ## Ce que c'est
 

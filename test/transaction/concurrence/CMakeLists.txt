@@ -12,7 +12,8 @@ add_executable(concurrence_test concurrency_bench_test.cpp integrity_checker.cpp
     upstream_fixes_test.cpp lock_cost_test.cpp masked_scan_test.cpp vector_index_rebuild_test.cpp string_rewrite_test.cpp string_scan_filtered_test.cpp vector_index_cost_test.cpp checkpoint_after_updates_test.cpp vector_index_retention_test.cpp
     failed_begin_test.cpp twenty_writers_scenario_test.cpp full_buffer_rollback_test.cpp index_creation_threads_test.cpp
     hnsw_writers_test.cpp vector_index_i2_test.cpp checkpoint_no_stall_test.cpp
-    commit_after_failed_checkpoint_test.cpp late_rel_table_rewrites_test.cpp)
+    commit_after_failed_checkpoint_test.cpp late_rel_table_rewrites_test.cpp
+    provisional_offsets_test.cpp)
 target_link_libraries(concurrence_test PRIVATE test_helper test_runner graph_test)
 # La mesure du coût du mode multi-écrivains (lock_cost_test.cpp) imprime l'identifiant de bâti
 # du moteur mesuré (common/build_id.h, écrit dans le dossier de bâti).

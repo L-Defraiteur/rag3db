@@ -143,8 +143,9 @@ void LocalStorage::flushNodeTable(table_id_t tableID) {
     // Comme au commit : les relations locales créées vers ces nœuds les désignent par leurs
     // décalages provisoires. Avec un seul écrivain ce sont déjà les définitifs ; si un autre
     // écrivain a validé des nœuds dans la table depuis, ils ont changé, et les relations
-    // suivent. Ce remappage en cours de transaction n'est pas prouvé sous concurrence (témoin
-    // attendu de la marche A3′).
+    // suivent. Appelé avant un COPY de nœuds dans la table, et avant un COPY de relations vers
+    // elle (IndexLookup::initGlobalStateInternal) ; prouvé sous un second écrivain par
+    // ProvisionalOffsets.* (banc).
     std::unordered_map<table_id_t, row_idx_t> numLocalRelsBeforeFlush;
     for (auto& [relTableID, localRelTable] : tables) {
         if (localRelTable->getTableType() == TableType::REL) {
