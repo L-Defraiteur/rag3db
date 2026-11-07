@@ -74,3 +74,17 @@ rag3db-creux-hote, rag3db-filtre-creux et rag3db-borne (≈ 1,3 Gio) et la copie
 mémoire longue (33 Mio) ; à luciepc, les mêmes worktrees (≈ 1,3 Gio), `target-97` (6,8 Gio) et les
 copies de mesure de code-principal et de la mémoire longue (1,6 Gio et 33 Mio) — df de luciepc
 584 → 587 Gio. Les branches distantes restent pour la décision de Lucie.
+
+## La requête entière longue dépend d'un correctif de lucivy
+
+lucivy a relevé ce soir qu'un passage exact d'un document n'est plus trouvé au-delà de 48 octets
+en strict et de 64 en relâché, à un comme à quatre shards (ticket lucivy « un passage exact long
+n'est plus trouvé », branche `tickets-2026-11-07`, sonde `probe_exact_passage_lengths`). La borne
+de la requête longue (77d0b0676) envoie la requête entière en strict au-delà de 100 caractères :
+elle tombe exactement là où lucivy ne trouve plus rien. Le témoin le montre chez nous, par le
+chemin de l'hôte — `e2e_lectures::une_ligne_collee_de_120_caracteres_retrouve_son_fichier`
+(branche `passage-exact-long`, d75b73466) : une ligne de 115 caractères collée telle quelle ramène
+`src/sources.md` premier par le vecteur et les mots, sans `bm25_exact`, au lieu de son fichier. Il
+est rouge tant que lucivy ne corrige pas, et c'est lui qui jugera la montée de version. La borne du
+coût reste juste (le coût du flou est corrigé à part dans lucivy, 9356b58, pas encore publié) ; ce
+qui manque est la trouvaille d'un passage long, pas la vitesse.
