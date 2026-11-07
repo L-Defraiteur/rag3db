@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 
-use crate::sparse_index::SparseVector;
+use crate::sparse_index::{SparseSpan, SparseVector};
 
 /// Errors that can occur during embedding.
 #[derive(Debug, Error)]
@@ -389,6 +389,19 @@ pub trait SparseEmbedder: Send + Sync {
     /// Embed a batch of texts into sparse vectors.
     fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError>;
 
+    /// **Le creux et le poids de chaque position**, par texte : le vecteur
+    /// d'[`Self::embed_sparse`], plus une [`SparseSpan`] par jeton du texte
+    /// (plage d'octets, poids avant la fusion au maximum), sans les jetons
+    /// spéciaux. De quoi surligner en creux chez un client qui n'a pas le
+    /// modèle. Un embarqueur qui ne sait pas rendre les positions le dit.
+    fn embed_sparse_spans(&self, texts: &[String]) -> Result<Vec<(SparseVector, Vec<SparseSpan>)>, EmbedError> {
+        let _ = texts;
+        Err(EmbedError::ProviderError(format!(
+            "l'embarqueur creux {} ne rend pas le poids des positions",
+            std::any::type_name::<Self>()
+        )))
+    }
+
     /// **Le modèle vit-il ailleurs ?**
     ///
     /// Sert à une règle et une seule : **celui qui touche la carte souffle**
@@ -445,6 +458,27 @@ impl SparseEmbedder for MockSparseEmbedder {
                 pairs.sort_by_key(|(idx, _)| *idx);
                 let (indices, values): (Vec<u32>, Vec<f32>) = pairs.into_iter().unzip();
                 SparseVector::new(indices, values)
+            })
+            .collect())
+    }
+
+    /// Une position par mot (sa plage d'octets), de poids `1/nombre de mots` :
+    /// les positions d'un mot répété se somment dans le vecteur, comme plus haut.
+    fn embed_sparse_spans(&self, texts: &[String]) -> Result<Vec<(SparseVector, Vec<SparseSpan>)>, EmbedError> {
+        let creux = self.embed_sparse(texts)?;
+        Ok(texts
+            .iter()
+            .zip(creux)
+            .map(|(text, v)| {
+                let n = text.split_whitespace().count().max(1) as f32;
+                let spans = text
+                    .split_whitespace()
+                    .map(|mot| {
+                        let start = mot.as_ptr() as usize - text.as_ptr() as usize;
+                        SparseSpan { start, end: start + mot.len(), weight: 1.0 / n }
+                    })
+                    .collect();
+                (v, spans)
             })
             .collect())
     }

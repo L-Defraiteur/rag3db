@@ -236,6 +236,8 @@ mod e2e_search;
 mod e2e_search_queue;
 #[path = "../e2e_seed_du_manifeste.rs"]
 mod e2e_seed_du_manifeste;
+#[path = "../e2e_service_spans.rs"]
+mod e2e_service_spans;
 #[path = "../e2e_simple_entity.rs"]
 mod e2e_simple_entity;
 #[path = "../e2e_sparse_dump.rs"]
