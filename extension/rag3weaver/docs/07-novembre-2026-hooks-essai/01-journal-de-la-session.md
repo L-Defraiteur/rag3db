@@ -715,3 +715,35 @@ ligne de nouveautés. Le lot « chat lisible » vient ensuite.
 
 **La référence** pour la coloration : la page 07 de tty
 (`docs/07-novembre-2026-tty/07-le-code-colore-du-hub.md`).
+
+## À reprendre ici (22 h 40 environ) : la branche chat-lisible
+
+Base ca1368779. Les commits, chacun précédé de son témoin rouge :
+
+| commit | contenu |
+|---|---|
+| f1aff928c, 48abbd62d | le code se lit comme du code : `lib/code.tsx` (highlight.js, le code en ligne, les chemins en lien), la largeur des bulles libérée, le thème `hljs-*` et `hl-*` dans `app.css` |
+| 1bfcb9741, a03de7d7f | le retour d'un outil se lit : `lib/toolview.tsx` (le Markdown habillé, les lignes numérotées de read_file, les autres champs, le bouton brut, la coupure dite) |
+
+**Reste à faire dans le lot :**
+
+- **La barre par session.** Forme accordée avec everything declarative :
+  - `/ide/etat` gagne `chat_sessions: [{id, name, model, repos: [{backend, repo, branch, worktree, loaded, rag: {state, percent?}}], memory: {backend|null, rag: bool}}]`
+    et `available_repos` ;
+  - la jauge et les fiches restent lues dans `GET /ide/chat` ;
+  - une session = une entrée de `chats`, avec son dépôt et les worktrees de
+    ses tâches ;
+  - `rag.state` se lit dans `index_states`.
+  - Le ticket est sur master (c4f584e56).
+- **Les tests à jouer à luciepc** : le rouge et le vert de `le_code_du_chat…`
+  (lancés) et de `le_retour_d_un_outil…`.
+- **Deux défauts côté modèle, à mettre en ticket** :
+  - le chat envoie au modèle la réponse JSON entière de read_file, grep et
+    list (champs delivery, validation, run) ;
+  - la section « Liens » de search_code n'arrive pas au modèle
+    (`response.after` n'est pas lu par `BackendTools`).
+
+**La file pour master** : `appel-a-delai` (350eaabe7) d'abord, au « à toi » de
+c7, puis `chat-lisible`. Coloration B ensuite, à trois avec codeparsers
+(`POST /ide/highlight` et `/highlight`, des spans avec octets et UTF-16, les
+classes `hl-*`) et tty.
