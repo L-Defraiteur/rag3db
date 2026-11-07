@@ -2017,6 +2017,10 @@ impl PreparedBackend {
             (Some(source), _) => match crate::model_source::connect_sparse(source) {
                 Ok((clients, _)) => {
                     cat.set_sparse_embedder(clients.sparse);
+                    // Le dual, quand le creux et le dense sont un même modèle : une
+                    // requête dense passe alors par une seule passe avant dont la
+                    // tête creuse ne coûte presque rien ; l'ingestion ne s'en sert
+                    // que sous le signal creux de l'entité (`EmbedNode`).
                     if let Some(dual) = clients.dual.filter(|_| source.model == self.embed.model) {
                         cat.set_dual_embedder(dual);
                     }

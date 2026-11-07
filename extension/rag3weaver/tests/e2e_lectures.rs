@@ -1325,7 +1325,8 @@ fn les_morceaux_du_seul_dense_se_surlignent_a_l_affichage() {
 /// manifeste comme le fait l'hôte, avec le service bge-m3 de la passe (`RAG3WEAVER_EMBED_SERVICE`) :
 /// par `call_in`, le morceau trouvé par le seul dense porte des passages `source: "sparse"`, et la
 /// réponse ne dit aucun repli. Sans service bge-m3 joignable, ce témoin rougit : il n'a rien à juger.
-#[cfg(feature = "code")]
+/// Il exige `burn-embedder` : le tokenizer qui place le creux dans le texte n'existe que sous elle.
+#[cfg(all(feature = "code", feature = "burn-embedder"))]
 #[test]
 #[ignore]
 fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
@@ -1363,8 +1364,10 @@ fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
 /// service est ici un vrai serveur d'embarquement du dépôt, dont l'embarqueur creux compte ses
 /// appels (adresse explicite dans le manifeste : une variable d'environnement toucherait les autres
 /// tests du processus). L'indexation entière, puis une recherche sans surlignage : zéro appel ; une
-/// recherche qui demande le surlignage : un appel.
-#[cfg(all(feature = "code", feature = "daemon"))]
+/// recherche qui demande le surlignage : un appel. Une réindexation après une modification : toujours
+/// zéro (la veille passe par le même nœud d'embarquement, gardé par le signal creux de l'entité).
+/// Il exige `burn-embedder` : sans le tokenizer, le surlignage se replie avant tout appel.
+#[cfg(all(feature = "code", feature = "daemon", feature = "burn-embedder"))]
 #[test]
 #[ignore]
 fn le_creux_ne_s_embarque_qu_au_surlignage() {
@@ -1445,6 +1448,31 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
     }
     eprintln!("[creux à la demande] après l'indexation : {} appel(s)", appels.load(Ordering::SeqCst));
     assert_eq!(appels.load(Ordering::SeqCst), 0, "l'indexation n'appelle jamais le creux");
+
+    // La réindexation d'un fichier modifié : le même nœud d'embarquement, toujours sans creux.
+    let attendre_l_index = |lance: String| {
+        let journal = lance
+            .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+            .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+            .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+            .to_string();
+        let debut = Instant::now();
+        loop {
+            let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+            if lu.contains("indexation terminée") {
+                break;
+            }
+            assert!(!lu.contains("indexation échouée"), "{lu}");
+            assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    // Le dépôt indexé est la copie sous la racine du workspace (`manifeste_code_sur`).
+    let racine = std::path::PathBuf::from(v["workspace"]["root"].as_str().expect("la racine du workspace"));
+    std::fs::write(racine.join("src/fusion.rs"), "/// La fusion des rangs réciproques, k = 60.\npub fn fusion_des_rangs() -> u32 {\n    60\n}\n").unwrap();
+    attendre_l_index(backend.call("index", json!({"confirm": true})).expect("réindex lancé").to_string());
+    eprintln!("[creux à la demande] après une réindexation : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "la réindexation n'appelle jamais le creux");
 
     let cellule = backend.catalog.lock().unwrap().scope().clone();
     let chercher = |options: Value| {
