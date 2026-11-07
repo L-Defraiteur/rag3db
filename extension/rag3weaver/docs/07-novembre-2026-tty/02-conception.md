@@ -136,3 +136,9 @@ Ensuite, à ordonner avec Lucie : la couche déclarative `view!` sur taffy, le p
    - **Le terminal tourne là où est l'hôte**, et ssh ne porte que l'affichage. C'est le premier visé.
    - **Le terminal tourne à côté de l'hôte**, sur une autre machine, et parle à l'hôte distant par un tunnel (`ssh -L`, ou une commande qui lit le `daemon.json` distant, comme le client MCP `code-rag3db-luciepc`).
    Le lot tty-1 sépare donc l'adresse et le jeton (lus d'un fichier local ou d'une commande) du reste, et le lot tty-5 mesure aussi le client à distance.
+
+## Le design : la page HTML d'abord, puis des thèmes (Lucie, 7 nov. 2026)
+
+- On reprend la page « Daemon Code Summoning » au plus près. Les trois exemples donnent le ton de tout le reste : des symboles qui tournent ou mutent autour d'un cœur fixe, un libellé de rituel en capitales, une couleur unique avec un halo.
+- Plus tard, **un sélecteur de thèmes**. Un thème rassemble les jeux de glyphes des trois animations, la palette et son halo, les libellés (« INVOCATION DU CODE… ») et le rythme. Pistes de Lucie : fées, forêt, bureau, papillons, Mordor, Dracula. Pour Dracula, on entend le vampire (sang, chauves-souris, crypte), pas la palette de couleurs « Dracula » des éditeurs de code.
+- Conséquence dès le lot tty-3 : une animation lit son thème au lieu d'avoir ses glyphes en dur. « Daemon » est le premier thème, et le seul au départ.
