@@ -2,6 +2,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=RAG3DB_SHARED");
     compiled_against();
     builtin_templates();
+    git_du_bati();
     // Native extensions resolve core C++ symbols from the executable when rag3db
     // is statically linked. Link arguments of dependency build scripts are not
     // propagated to this crate's executables (see tools/rust_api/build.rs).
@@ -34,6 +35,24 @@ fn compiled_against() {
         .and_then(|rest| rest.split('"').next());
     if let Some(id) = id {
         println!("cargo:rustc-env=RAG3DB_COMPILED_AGAINST={id}");
+    }
+}
+
+/// **Le commit du bâti** (`RAG3WEAVER_GIT_HASH`), pour le journal des hooks :
+/// hooks-essai a guetté un hash qu'aucune ligne ne portait (le binaire n'y était
+/// dit que par son mtime). Rebâti quand HEAD bouge ; un arbre sale le dit (`+`).
+/// Sans git, rien.
+fn git_du_bati() {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git").args(args).current_dir(env!("CARGO_MANIFEST_DIR")).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    };
+    if let Some(dossier) = git(&["rev-parse", "--absolute-git-dir"]) {
+        println!("cargo:rerun-if-changed={dossier}/HEAD");
+        println!("cargo:rerun-if-changed={dossier}/logs/HEAD");
+    }
+    if let Some(h) = git(&["rev-parse", "--short=9", "HEAD"]) {
+        let sale = git(&["status", "--porcelain", "--untracked-files=no", "--", "."]).is_some_and(|s| !s.is_empty());
+        println!("cargo:rustc-env=RAG3WEAVER_GIT_HASH={h}{}", if sale { "+" } else { "" });
     }
 }
 

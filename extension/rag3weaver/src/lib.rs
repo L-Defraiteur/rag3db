@@ -221,6 +221,8 @@ pub mod daemon_client;
 pub mod claude_code_hook;
 // L'adaptateur de la transcription `.jsonl` de Claude Code : petit, tolérant.
 pub mod claude_code_transcript;
+// La requête du rappel des hooks, tirée du prompt sans modèle (3 ter).
+pub mod rappel_du_prompt;
 /// `code-tree` : un arbre de code indexé par instantané, qui suit ses éditions.
 pub mod code_tree;
 /// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le

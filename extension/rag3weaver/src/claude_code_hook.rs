@@ -24,6 +24,7 @@
 //! (lots 3 et 4) viennent dans [`repondre`], événement par événement.
 
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -111,6 +112,10 @@ pub struct Reglage {
     /// du tour : un rappel lent (embarquement du prompt à froid) n'emporte pas
     /// le reste du bloc (c7, 7 novembre).
     pub recall_timeout_ms: u64,
+    /// Le nombre de mots-clés de la requête du rappel, tirés du prompt
+    /// (`rappel_du_prompt`) : le plein texte flou coûte selon le nombre de
+    /// termes (3 ter).
+    pub recall_max_words: usize,
     /// Un rejeu hors session : rien ne s'écrit (ni mémoire, ni run, ni marque).
     /// Posé par `--rejouer`, jamais lu dans le fichier.
     pub rejeu: bool,
@@ -133,7 +138,11 @@ impl Reglage {
             session_block_chars: 3_000,
             prompt_timeout_ms: 5_000,
             timeout_ms: 20_000,
-            recall_timeout_ms: 3_000,
+            // Le budget du rappel synchrone (3 ter) : à requête courte, le
+            // rappel complet prend 13 à 70 ms sur l'hôte en service (journal
+            // des runs, 7 novembre) ; 1 s laisse plus de dix fois la marge.
+            recall_timeout_ms: 1_000,
+            recall_max_words: 10,
             rejeu: false,
             journal: maison.join(".local/state/rag3weaver/hooks.log"),
             templates_dir: maison.join(".config/rag3weaver/hooks"),
@@ -163,9 +172,10 @@ impl Reglage {
                 "prompt_timeout_ms" => r.prompt_timeout_ms = val.as_u64().ok_or("hooks.json : `prompt_timeout_ms` est un entier")?,
                 "timeout_ms" => r.timeout_ms = val.as_u64().ok_or("hooks.json : `timeout_ms` est un entier")?,
                 "recall_timeout_ms" => r.recall_timeout_ms = val.as_u64().ok_or("hooks.json : `recall_timeout_ms` est un entier")?,
+                "recall_max_words" => r.recall_max_words = val.as_u64().ok_or("hooks.json : `recall_max_words` est un entier")? as usize,
                 "journal" => r.journal = PathBuf::from(val.as_str().ok_or("hooks.json : `journal` est un chemin")?),
                 "templates_dir" => r.templates_dir = PathBuf::from(val.as_str().ok_or("hooks.json : `templates_dir` est un chemin")?),
-                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, recall_timeout_ms, journal, templates_dir)")),
+                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, recall_timeout_ms, recall_max_words, journal, templates_dir)")),
             }
         }
         if let Ok(v) = std::env::var("RAG3WEAVER_HOOK_CONTEXT_TOKENS") {
@@ -196,6 +206,7 @@ impl Reglage {
             "prompt_timeout_ms": self.prompt_timeout_ms,
             "timeout_ms": self.timeout_ms,
             "recall_timeout_ms": self.recall_timeout_ms,
+            "recall_max_words": self.recall_max_words,
             "journal": self.journal,
             "templates_dir": self.templates_dir,
         })
@@ -468,7 +479,7 @@ pub fn repondre(e: &Evenement, reglage: &Reglage, hote: Result<&dyn Hote, String
         "UserPromptSubmit" => format!("prompt de {} caractères", e.prompt.as_deref().map(|p| p.chars().count()).unwrap_or(0)),
         _ => String::new(),
     };
-    r.journal.push(format!("{} {session} : hôte joint, backend « {} »{}{} [{} ; {}]", e.nom, h.nom(), if detail.is_empty() { "" } else { ", " }, detail, crate::daemon::mon_empreinte(), reglage.version_des_gabarits()));
+    r.journal.push(format!("{} {session} : hôte joint, backend « {} »{}{} [{} ; commit {} ; {}]", e.nom, h.nom(), if detail.is_empty() { "" } else { ", " }, detail, crate::daemon::mon_empreinte(), option_env!("RAG3WEAVER_GIT_HASH").unwrap_or("?"), reglage.version_des_gabarits()));
     let (bloc, borne, prefixe) = match e.nom.as_str() {
         "SessionStart" => (bloc_de_session(e, reglage, h, &mut r.journal), reglage.session_block_chars, true),
         "UserPromptSubmit" => (bloc_de_prompt(e, reglage, h, &mut r.journal), reglage.prompt_block_chars, true),
@@ -790,6 +801,17 @@ fn bloc_de_session(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut
     if source == "compact" {
         b.push_str(&reglage.gabarit("session_compactee").replace("{rubriques}", RUBRIQUES));
         b.push_str("\n\n");
+        // Le contexte de l'agent est vidé : ce qu'il avait reçu est perdu pour
+        // lui. Une ligne le lui rappelle, puis le déjà-vu repart de zéro.
+        let mut etat = EtatDuRappel::lire(reglage, &e.session_id);
+        if !etat.rendus.is_empty() {
+            let mut noms: Vec<(&String, &(u64, String))> = etat.rendus.iter().collect();
+            noms.sort_by_key(|(_, (tour, _))| *tour);
+            b.push_str(&format!("Fiches rappelées avant la compaction : {} — `get_fiche` pour relire.\n\n", noms.iter().map(|(n, _)| format!("« {n} »")).collect::<Vec<_>>().join(", ")));
+            journal.push(format!("compaction : {} fiche(s) rappelées, le déjà-vu repart de zéro", noms.len()));
+        }
+        etat.rendus.clear();
+        etat.ecrire(reglage, &e.session_id);
         if lire_la_marque(reglage, &e.session_id, "compaction-l0-seul").is_some() {
             b.push_str(&reglage.gabarit("compaction_l0_seul"));
             b.push_str("\n\n");
@@ -828,6 +850,71 @@ fn bloc_de_session(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut
     b
 }
 
+// ─── Le déjà-vu du rappel (3 ter) ────────────────────────────────────────────
+
+/// **Ce que la session a déjà reçu du rappel** (Lucie : « ne pas lui rebalancer
+/// des trucs qu'il a déjà eus ») : par fiche, le tour où elle a été rendue et
+/// l'empreinte de son contenu. Un fichier par session,
+/// `<dossier du journal>/hooks/<session_id>.json` ; un resume le garde, une
+/// compaction le vide, un rejeu ne l'écrit jamais.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct EtatDuRappel {
+    pub tour: u64,
+    pub rendus: std::collections::BTreeMap<String, (u64, String)>,
+}
+
+enum Statut {
+    Neuve,
+    Deja,
+    Changee(u64),
+}
+
+fn chemin_de_l_etat(reglage: &Reglage, session_id: &str) -> PathBuf {
+    reglage.journal.parent().map(|d| d.join("hooks")).unwrap_or_else(|| PathBuf::from("hooks")).join(format!("{session_id}.json"))
+}
+
+/// L'empreinte d'une fiche telle que le rappel la montre (nom et résumé) : une
+/// fiche dont le résumé change revient, « mise à jour ».
+fn empreinte_de_fiche(nom: &str, about: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (nom, about).hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
+impl EtatDuRappel {
+    pub fn lire(reglage: &Reglage, session_id: &str) -> Self {
+        let Ok(t) = std::fs::read_to_string(chemin_de_l_etat(reglage, session_id)) else { return Self::default() };
+        let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
+        let rendus = v["rendus"].as_object().map(|o| o.iter().map(|(n, x)| (n.clone(), (x["tour"].as_u64().unwrap_or(0), x["empreinte"].as_str().unwrap_or("").to_string()))).collect()).unwrap_or_default();
+        Self { tour: v["tour"].as_u64().unwrap_or(0), rendus }
+    }
+    fn ecrire(&self, reglage: &Reglage, session_id: &str) {
+        if reglage.rejeu || session_id.is_empty() {
+            return;
+        }
+        let chemin = chemin_de_l_etat(reglage, session_id);
+        let rendus: serde_json::Map<String, Value> = self.rendus.iter().map(|(n, (t, e))| (n.clone(), json!({ "tour": t, "empreinte": e }))).collect();
+        let _ = std::fs::create_dir_all(chemin.parent().unwrap_or(Path::new(".")));
+        let _ = std::fs::write(chemin, json!({ "tour": self.tour, "rendus": rendus }).to_string());
+    }
+    fn statut(&self, nom: &str, empreinte: &str) -> Statut {
+        match self.rendus.get(nom) {
+            None => Statut::Neuve,
+            Some((_, e)) if e == empreinte => Statut::Deja,
+            Some((tour, _)) => Statut::Changee(*tour),
+        }
+    }
+    fn rendre(&mut self, nom: &str, empreinte: &str) {
+        self.rendus.insert(nom.to_string(), (self.tour, empreinte.to_string()));
+    }
+    /// Les noms de fiches déjà rencontrés, en mots minuscules : le vocabulaire
+    /// bon marché de la mémoire, priorité haute dans la requête.
+    fn vocabulaire(&self) -> HashSet<String> {
+        self.rendus.keys().flat_map(|n| n.split_whitespace().map(str::to_lowercase).collect::<Vec<_>>()).collect()
+    }
+}
+
 // ─── UserPromptSubmit ────────────────────────────────────────────────────────
 
 fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut Vec<String>) -> String {
@@ -863,11 +950,21 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
         }
     }
 
-    // Les fiches que le prompt rappelle.
-    if let Some(prompt) = e.prompt.as_deref().filter(|p| p.chars().count() >= 8) {
+    // Les fiches que le prompt rappelle : une requête de mots-clés tirée du
+    // prompt (3 ter), jamais le prompt entier ; rien de ce que la session a
+    // déjà reçu.
+    let mut etat = EtatDuRappel::lire(reglage, &e.session_id);
+    etat.tour += 1;
+    let mots = e.prompt.as_deref().map(|p| crate::rappel_du_prompt::requete_de_rappel(p, reglage.recall_max_words, &etat.vocabulaire())).unwrap_or_default();
+    if let Some(p) = e.prompt.as_deref().filter(|_| mots.is_empty()) {
+        journal.push(format!("rappel : rien à chercher (prompt de {} caractères, aucun mot-clé après nettoyage)", p.chars().count()));
+    }
+    if !mots.is_empty() {
+        let requete = mots.join(" ");
+        journal.push(format!("rappel : requête « {requete} » ({} mots, tirée d'un prompt de {} caractères)", mots.len(), e.prompt.as_deref().map(|p| p.chars().count()).unwrap_or(0)));
         let debut = std::time::Instant::now();
         let delai = Duration::from_millis(reglage.recall_timeout_ms);
-        match h.appeler_borne("recall_fiches", json!({ "query": prompt, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), delai) {
+        match h.appeler_borne("recall_fiches", json!({ "query": requete, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), delai) {
             Ok(v) => {
                 journal.push(format!("rappel en {} ms", debut.elapsed().as_millis()));
                 // Le score du meilleur signal (`chunk.score`), pas le rang fusionné :
@@ -882,25 +979,64 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                     journal.push(format!("rappel : {}", scores.iter().map(|(n, _, sc)| format!("« {n} » {sc:.2}")).collect::<Vec<_>>().join(", ")));
                 }
                 // Sa propre fiche d'identité n'est pas un résultat : c'est elle.
+                // Sans identité trouvée, rien n'est exclu, et le journal le dit.
                 let soi = identite.as_ref().map(|i| i.cle.as_str()).unwrap_or("");
-                let gardees: Vec<&(String, String, f64)> = scores.iter().filter(|(n, _, sc)| *sc >= reglage.recall_min_score && n != soi).collect();
-                if !gardees.is_empty() {
-                    b.push_str("Fiches en rapport (similarité du meilleur signal, de 0 à 1 — pas le rang fusionné de `recall_fiches`) : ");
-                    b.push_str(&gardees.iter().map(|(n, a, sc)| format!("« {n} » ({sc:.2}{})", if a.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(a, 80)) })).collect::<Vec<_>>().join(" ; "));
-                    b.push_str(" — `get_fiche` pour lire.\n");
+                let mut raisons: Vec<String> = Vec::new();
+                if soi.is_empty() {
+                    raisons.push("identité inconnue, pas d'exclusion".into());
+                } else if scores.iter().any(|(n, _, _)| n == soi) {
+                    raisons.push(format!("exclu : « {soi} » (fiche propre)"));
                 }
+                // L'échelle : le seuil vaut pour une similarité de 0 à 1. Un score
+                // au-delà (un signal brut, sans le service d'embarquement) n'est
+                // pas sur cette échelle : pas de seuil, et on le dit.
+                let normalisee = scores.iter().all(|(_, _, sc)| (0.0..=1.0).contains(sc));
+                if !normalisee {
+                    raisons.push("échelle brute (score au-delà de 1), pas de seuil".into());
+                }
+                let sous_le_seuil: Vec<String> = if normalisee { scores.iter().filter(|(n, _, sc)| n != soi && *sc < reglage.recall_min_score).map(|(n, _, sc)| format!("« {n} » {sc:.2}")).collect() } else { Vec::new() };
+                if !sous_le_seuil.is_empty() {
+                    raisons.push(format!("sous le seuil {:.2} : {}", reglage.recall_min_score, sous_le_seuil.join(", ")));
+                }
+                let gardees: Vec<&(String, String, f64)> = scores.iter().filter(|(n, _, sc)| n != soi && (!normalisee || *sc >= reglage.recall_min_score)).collect();
+                // Le déjà-vu : ce que la session a reçu, inchangé, ne revient pas ;
+                // si tout est connu, silence complet.
+                let mut neuves = Vec::new();
+                let mut deja = 0;
+                for g in &gardees {
+                    match etat.statut(&g.0, &empreinte_de_fiche(&g.0, &g.1)) {
+                        Statut::Deja => deja += 1,
+                        Statut::Neuve => neuves.push((*g, None)),
+                        Statut::Changee(tour) => neuves.push((*g, Some(tour))),
+                    }
+                }
+                raisons.push(format!("déjà rendu : {deja}, neuf : {}", neuves.len()));
+                if neuves.is_empty() {
+                    raisons.push("silence".into());
+                } else {
+                    let echelle = if normalisee { "similarité du meilleur signal, de 0 à 1 — pas le rang fusionné de `recall_fiches`" } else { "score brut du meilleur signal, sans seuil" };
+                    b.push_str(&format!("Fiches en rapport ({echelle}) : "));
+                    b.push_str(&neuves.iter().map(|((n, a, sc), maj)| format!("« {n} » ({sc:.2}{}{})", if a.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(a, 80)) }, maj.map(|t| format!(" ; mise à jour depuis le tour {t}")).unwrap_or_default())).collect::<Vec<_>>().join(" ; "));
+                    b.push_str(" — `get_fiche` pour lire.\n");
+                    for ((n, a, _), _) in &neuves {
+                        etat.rendre(n, &empreinte_de_fiche(n, a));
+                    }
+                }
+                journal.push(format!("rappel : {}", raisons.join(" ; ")));
             }
             Err(err) => {
                 let lent = err.contains("timeout") || err.contains("ne répond pas");
                 journal.push(format!("recall_fiches en {} ms : {err}", debut.elapsed().as_millis()));
                 if lent {
-                    b.push_str(&format!("Rappel des fiches : l'hôte n'a pas répondu en {} s (à froid, l'embarquement du prompt peut être lent) — réessaie au prochain tour.\n", (reglage.recall_timeout_ms + 999) / 1000));
+                    b.push_str(&format!("Rappel des fiches : pas de réponse en {} ms — le rappel sera retenté au prochain tour.\n", reglage.recall_timeout_ms));
                 } else {
-                    b.push_str(&format!("Rappel des fiches en panne : {} — réessaie au prochain tour.\n", premiere_ligne(&err, 160)));
+                    b.push_str(&format!("Rappel des fiches en panne : {} — le rappel sera retenté au prochain tour.\n", premiere_ligne(&err, 160)));
                 }
             }
         }
     }
+
+    etat.ecrire(reglage, &e.session_id);
 
     // Les fichiers touchés par la session, changés depuis par quelqu'un d'autre.
     if let (Some(t), Some(id)) = (&transcription, &identite) {
@@ -1773,6 +1909,52 @@ mod tests {
     }
 
     #[test]
+    fn le_rappel_envoie_des_mots_cles_et_ne_rend_pas_deux_fois_ce_que_la_session_a_recu() {
+        let _env = env();
+        let (chemin, reglage) = transcription_d_essai("deja-vu", &[T_USER, T_ASSISTANT_PETIT]);
+        let fiche = |nom: &str, about: &str, score: f64| json!({ "ok": true, "result": { "result": [{ "chunk": { "score": score }, "data": { "name": nom, "about": about, "state": "current" } }] } });
+        let mut h = hote_avec_identite();
+        h.reponses.insert("recall_fiches", fiche("régime GPU", "Comment on ménage les cartes.", 0.8));
+        let question = "<cross-session-message from=\"uds:/run/user/1000/cc-socks/1.sock\" from-name=\"c7\">\ncomment ménager le régime GPU pendant les passes, avec RAG3WEAVER_GPU_DUTY ?\n</cross-session-message>";
+        let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
+        assert!(r.bloc.contains("« régime GPU » (0.80"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("déjà rendu : 0, neuf : 1")), "{:?}", r.journal);
+        let envoyee = h.appels.lock().unwrap().iter().rev().find(|(n, _)| n == "recall_fiches").map(|(_, a)| a["query"].as_str().unwrap_or("").to_string()).unwrap();
+        assert!(!envoyee.contains("cc-socks") && !envoyee.contains("from-name") && envoyee.contains("RAG3WEAVER_GPU_DUTY") && envoyee.split_whitespace().count() <= 10, "des mots-clés, pas le prompt : « {envoyee} »");
+        assert!(r.journal.iter().any(|l| l.starts_with("rappel : requête « ") && l.contains(&envoyee)), "le journal dit la requête mot à mot : {:?}", r.journal);
+        // Le même rappel au tour suivant : rien, pas même une ligne.
+        let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
+        assert!(!r.bloc.contains("régime GPU") && !r.bloc.contains("Fiches en rapport"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("déjà rendu : 1, neuf : 0 ; silence")), "{:?}", r.journal);
+        // La compaction vide le contexte de l'agent : une ligne, puis la fiche ressort.
+        let compact = Evenement::lire(&SESSION_START.replace("25b7ff4b-dabf-42ef-8580-86661c846fb9", "s1")).unwrap();
+        let r = repondre(&compact, &reglage, Ok(&h));
+        assert!(r.bloc.contains("Fiches rappelées avant la compaction : « régime GPU »"), "{}", r.bloc);
+        let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
+        assert!(r.bloc.contains("« régime GPU »"), "après la compaction, elle ressort : {}", r.bloc);
+        // Son résumé change : elle revient, « mise à jour ».
+        h.reponses.insert("recall_fiches", fiche("régime GPU", "Comment on ménage les cartes, et la carte 2.", 0.8));
+        let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
+        assert!(r.bloc.contains("mise à jour depuis le tour"), "{}", r.bloc);
+        // Une échelle brute : pas de seuil, et c'est dit.
+        h.reponses.insert("recall_fiches", fiche("autre fiche", "un score brut", 27.9));
+        let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
+        assert!(r.journal.iter().any(|l| l.contains("échelle brute (score au-delà de 1), pas de seuil")), "{:?}", r.journal);
+        assert!(r.bloc.contains("score brut du meilleur signal, sans seuil") && r.bloc.contains("« autre fiche »"), "{}", r.bloc);
+        // Une enveloppe sans contenu : aucun rappel.
+        let avant = h.noms().iter().filter(|n| *n == "recall_fiches").count();
+        let r = repondre(&prompt(&chemin, "<task-notification>\n<task-id>b1x2y3z4</task-id>\n<status>completed</status>\n</task-notification>"), &reglage, Ok(&h));
+        assert_eq!(h.noms().iter().filter(|n| *n == "recall_fiches").count(), avant, "{:?}", r.journal);
+        assert!(r.journal.iter().any(|l| l.contains("rappel : rien à chercher")), "{:?}", r.journal);
+        // Sans identité : rien n'est exclu, et le journal le dit.
+        let mut sans = HoteCanne::new(vec![]);
+        sans.reponses.insert("recall_fiches", fiche("96", "moi", 0.9));
+        let r = repondre(&prompt(&chemin, "une question sur la fiche propre et son exclusion"), &reglage, Ok(&sans));
+        assert!(r.journal.iter().any(|l| l.contains("identité inconnue, pas d'exclusion")), "{:?}", r.journal);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
     fn un_rappel_lent_n_emporte_pas_le_bloc() {
         let _env = env();
         struct RappelLent(HoteCanne);
@@ -1787,7 +1969,8 @@ mod tests {
         let (chemin, reglage) = transcription_d_essai("lent", &[T_USER, T_ASSISTANT_PETIT]);
         let h = RappelLent(hote_avec_identite());
         let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks"), &reglage, Ok(&h));
-        assert!(r.bloc.contains("Rappel des fiches : l'hôte n'a pas répondu en 3 s"), "la panne a sa ligne — {}", r.bloc);
+        assert!(r.bloc.contains("Rappel des fiches : pas de réponse en 1000 ms — le rappel sera retenté au prochain tour."), "la panne a sa ligne — {}", r.bloc);
+        assert!(!r.bloc.contains("froid") && !r.bloc.contains("réessaie"), "{}", r.bloc);
         assert!(r.journal.iter().any(|l| l.contains("recall_fiches en ") && l.contains("timeout")), "{:?}", r.journal);
         // Et quand rien ne passe le seuil, c'est dit autrement : « rien en rapport ».
         let mut h2 = hote_avec_identite();
