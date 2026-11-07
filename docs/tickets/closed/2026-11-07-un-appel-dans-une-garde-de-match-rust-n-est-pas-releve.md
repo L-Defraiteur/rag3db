@@ -64,7 +64,8 @@ rust-analyzer, juge strict, sur les 19 :
 - 5 fausses, toutes « nom » : une méthode d'un type de la bibliothèque standard lue dans une garde
   (`reste.is_zero()`, `results.split_off(…)`) ou une variante d'enum (`CypherValue::Float`), reliée par
   le seul nom à un homonyme de lucivy — la faiblesse connue de la marque « nom », que le relevé rend
-  visible, pas un défaut de ce correctif ;
+  visible, pas un défaut de ce correctif : le ticket
+  [la marque « nom » relie un appel de méthode standard à un homonyme](../2026-11-07-la-marque-nom-relie-un-appel-de-methode-standard-a-un-homonyme.md) les porte ;
 - 3 muettes (deux dans le code de lucivy, une ligne de mention fausse).
 
 Aucune locale de motif n'est devenue une référence ; aucune arête n'a été ôtée.
