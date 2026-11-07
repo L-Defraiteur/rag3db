@@ -27,17 +27,23 @@ Les quatre langues demandées (Rust, C++, TypeScript, Python) sont couvertes, à
 
 ## Ce qui manque
 
+**L'ancien module est remplacé.** codeparsers portait déjà un `syntax_highlighting`
+(`SyntaxHighlightingParser`, portage de février 2026). Il classait les nœuds à la main, par des
+listes de mots-clés et de types de nœud, pour TypeScript et Python seulement, et rien ne l'appelait,
+ni dans codeparsers ni dans rag3weaver. Garder deux colorations, c'était deux classements à tenir en
+phase : la fonction unique `highlight` le remplace sous le même nom de module (c7 : un type de plus ne
+se justifie pas, les fondre si).
+
 1. **La requête de JavaScript**, pour TypeScript : ajouter la dépendance `tree-sitter-javascript`
    (la même famille de versions que tree-sitter-typescript 0.23) pour sa seule constante, ou
    embarquer son `highlights.scm` ; la dépendance est plus simple à suivre.
 2. **La concaténation** : C++ = C puis C++ ; TypeScript = JavaScript puis TypeScript (l'ordre de
    l'éditeur de référence, `inherits`).
-3. **Le moteur de coloration.** `tree-sitter-highlight` (le crate officiel) n'est pas encore une
-   dépendance, et sa version doit suivre celle de tree-sitter (0.27 chez nous) ; si elle n'existe
-   pas, une fonction à nous suffit, sans injections ni locales au premier pas :
-   un `Query` par langue (compilé une fois), un `QueryCursor` sur l'arbre, les captures triées par
-   position, et pour un recouvrement, **la première capture d'un motif plus ancien l'emporte** (la
-   règle de tree-sitter-highlight : les motifs du début du fichier sont les plus précis).
+3. **Le moteur de coloration.** `tree-sitter-highlight` 0.27.1, le crate officiel, suit notre
+   tree-sitter 0.27 : c'est lui qu'on prend, pas une fonction à nous (le chemin établi, c7, 7
+   novembre au soir). Une configuration par langue, compilée une fois ; sa règle de recouvrement
+   est celle de l'éditeur de référence (les motifs du début de la requête l'emportent). Pas
+   d'injections ni de locales au premier pas.
 4. **Les sortes.** Les noms de capture des requêtes (`@function.method`, `@type.builtin`,
    `@string.special`…) se ramènent à une liste fermée par leur premier segment :
    `keyword`, `type`, `function`, `string`, `comment`, `number`, `constant`, `variable`, `property`,
@@ -46,8 +52,10 @@ Les quatre langues demandées (Rust, C++, TypeScript, Python) sont couvertes, à
 
 ## La forme
 
-- **codeparsers** : `highlight(texte, langue) -> Vec<(usize, usize, Sorte)>`, les décalages en
-  **octets** du texte UTF-8 ; une langue sans requête rend `None` (le repli de la page, dit).
+- **codeparsers** : `syntax_highlighting::highlight(texte, langue) -> Option<Vec<Span>>`, un `Span` étant
+  `{debut, fin, sorte}` en **octets** du texte UTF-8, triés, disjoints, les contigus d'une même sorte
+  fondus ; une langue inconnue rend `None` (le repli de la page, dit). Les alias courants (`rs`,
+  `c++`, `ts`, `py`, `sh`…) se ramènent au nom de la langue.
 - **rag3weaver** : l'hôte l'expose par une **route** `POST /highlight {text, language}` (décidé par
   c7 : c'est l'écran qui colore, pas l'agent ; un outil viendra si un graphe en a besoin). Il rend
   **les deux décalages**, `[[debut, fin, sorte, debut_utf16, fin_utf16], …]` : les octets UTF-8 pour
