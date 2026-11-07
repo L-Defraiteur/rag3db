@@ -1,13 +1,34 @@
 %% tool: archive_decide
 %% description: Une section (l'élément) : les fiches candidates par la recherche, puis la décision fermée du modèle (une candidate, none, create), rendue comme l'élément des écritures (kind, fiche, records, liens, provenance). Appelé une fois par section par le ForEachNode de archive.
 %% param: element json! -- La section : {title, level, text, anchor, index, chemin, titre, origine}, et les réglages de la décision qu'elle porte : candidates, allow_create, instruction, search_options (un graphe cité ne reçoit pas d'autre paramètre, ticket du 7 nov. 2026).
+%% (La recherche des candidates est celle de search_structured.mmd, écrite en ligne : un graphe cité dans un graphe cité fait voir ses $x à la garde du premier, ticket du 7 nov.)
 %% result: decided.result
 
 graph LR
-    recall["GraphNode(graph='@builtin:tools/search_structured.mmd', target='Fiche', query=$element.text, options=$element.search_options)"]
+    source["SearchSourceNode(target_name='Fiche', query=$element.text, options=$element.search_options)"]
+    bm25["BM25SearchNode"]
+    vector["VectorSearchNode"]
+    sparse["SparseSearchNode"]
+    fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4')"]
+    paginate["PaginateNode"]
+    resolve["ResolveParentNode"]
     prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create', section=$element, candidates=$element.candidates, allow_create=$element.allow_create)"]
     decide["Decide(via='llm', labels_from='candidates', labels='none|create', field='prompt', as='verdict', instruction='$element.instruction')"]
     decided["RhaiNode(script_id=archive_decided, inputs='allow_create', allow_create=$element.allow_create)"]
-    recall -->|result:value| prepare
+    source -->|query| bm25
+    source -->|query| vector
+    source -->|query| sparse
+    source -->|query| fuse
+    source -->|query| paginate
+    source -->|query| resolve
+    bm25 -->|results:bm25| fuse
+    bm25 -->|status| fuse
+    vector -->|results:vector| fuse
+    vector -->|status| fuse
+    sparse -->|results:sparse| fuse
+    sparse -->|status| fuse
+    fuse -->|results| paginate
+    paginate -->|results| resolve
+    resolve -->|results:value| prepare
     prepare -->|result:element| decide
     decide -->|element:value| decided
