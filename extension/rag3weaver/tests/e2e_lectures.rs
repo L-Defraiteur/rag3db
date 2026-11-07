@@ -1496,3 +1496,51 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
     eprintln!("[creux à la demande] après une recherche qui surligne : {} appel(s)", appels.load(Ordering::SeqCst));
     assert_eq!(appels.load(Ordering::SeqCst), 1, "le surlignage appelle le creux une fois, pour toute la page : {r}");
 }
+
+/// **Une requête longue répond vite et dit ses coupes** (ticket « Le plein texte explose sur une
+/// requête longue », 7 novembre 2026). Un prompt collé de 200 termes distincts : avant, la requête
+/// entière se cherchait en flou et le nœud plein texte y passait des dizaines de secondes (29 s
+/// sur deux fiches, mesuré) ; après, elle perd son flou au-delà de 100 caractères et la recherche
+/// par mots garde 64 termes, en moins que l'attente bornée de la poignée (1,5 s), et la méta dit
+/// les deux coupes. Une requête courte ne dit rien.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn une_requete_longue_repond_vite_et_dit_ses_coupes() {
+    use serde_json::json;
+    use std::time::Instant;
+
+    let prose = include_str!("../docs/06-novembre-2026-orchestration/01-plan-du-week-end.md");
+    let mut vus = std::collections::HashSet::new();
+    let termes: Vec<String> = prose
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|m| m.chars().count() >= 3)
+        .map(str::to_lowercase)
+        .filter(|m| vus.insert(m.clone()))
+        .take(200)
+        .collect();
+    assert_eq!(termes.len(), 200);
+    let longue = termes.join(" ");
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), "requete-longue");
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let t = Instant::now();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": longue, "options": {"limit": 10}, "mode": "indexed"}))
+        .expect("search_code");
+    let ms = t.elapsed().as_millis();
+    eprintln!("[requête longue] 200 termes, {} caractères : {ms} ms", longue.chars().count());
+    let avert = r["metadata"]["render.meta"]["warnings"].to_string();
+    assert!(ms < 1500, "une requête longue répond sous l'attente bornée de la poignée : {ms} ms");
+    assert!(avert.contains("la requête entière") && avert.contains("sans flou"), "la coupe du flou se dit : {avert}");
+    assert!(avert.contains("termes sur 200 gardés"), "la coupe des termes se dit : {avert}");
+
+    let courte = backend
+        .call_in(&cellule, "search_code", json!({"query": "alpha beta", "options": {"limit": 10}, "mode": "indexed"}))
+        .expect("search_code");
+    assert!(
+        !courte["metadata"]["render.meta"]["warnings"].to_string().contains("requête longue"),
+        "une requête courte ne dit rien : {courte}"
+    );
+}

@@ -85,7 +85,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (57)
+### Ouverts — produit (56)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -147,13 +147,13 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [`new` est un mot vide de la liste commune : en Rust, aucun appel `T::new()` n'est relevé](2026-10-11-new-est-un-mot-vide-en-rust.md) | ouvert | réponse fausse | oui, tout dépôt Rust | oui (par codeparsers) |
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
-| [Le plein texte explose sur une requête longue](2026-11-07-le-plein-texte-explose-sur-une-requete-longue.md) | ouvert — mesuré par rag3weaver archi (197 mots : 33 s) ; la borne attend la décision de c7 | blocage | oui | oui |
 | [Une requête floue de lucivy coûte en proportion de ses termes, sans borne](2026-11-07-une-requete-floue-de-lucivy-coute-en-proportion-de-ses-termes.md) | ouvert — pour la session lucivy ; le produit borne en attendant | blocage | oui | non |
 
-### Fermés (184), dans `closed/`
+### Fermés (185), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Le plein texte explose sur une requête longue](closed/2026-11-07-le-plein-texte-explose-sur-une-requete-longue.md) | corrigé par le lot recherche-trois-lots (7 novembre 2026, recherche) : la requête entière sans flou au-delà de 100 caractères, la recherche par mots bornée à 64 termes, les deux coupes dites ; bornes tirées de la mesure ci-dessous ; témoin e2e_lectures::une_requete_longue_repond_vite_et_dit_ses_coupes (26 242 ms sur master, 82 ms après). L'arrêt d'un nœud après l'abandon du client reste à l'hôte ; le pendant lucivy reste ouvert | blocage | oui | oui |
 | [Le filtre du signal creux compare des offsets de parents à des offsets de morceaux](closed/2026-11-07-le-filtre-du-signal-creux-compare-des-offsets-de-parents-a-des-offsets-de-morceaux.md) | corrigé par le lot recherche-trois-lots (7 novembre 2026, recherche) : filter_resolve_chunk_offsets dans les deux dialectes, le creux filtré par les offsets des morceaux des parents admis ; témoin e2e_simple_entity::le_filtre_du_signal_creux_porte_sur_les_morceaux_du_parent_admis | réponse fausse | oui, pour un backend à signal sparse (pas le code) | oui |
 | [Une validation et un lecteur HNSW se figent l'un l'autre sur les deux verrous d'un groupe CSR](closed/2026-11-07-une-validation-et-un-lecteur-hnsw-se-figent-sur-les-verrous-du-csr.md) | corrigé `e526cc4b6` (7 novembre 2026, cœur c++) : un seul ordre, blocs puis index ; la compaction lit sa liste des blocs prise avant l'index ; témoin 30/30 sans figement | blocage | oui | par le moteur |
 | [Retirer le patch lucivy à la publication](closed/2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | corrigé — lucivy 4.3.1 publiée (25 oct. 2026), prise à sa version | dette de construction | non | oui (Cargo.toml, Cargo.lock) |

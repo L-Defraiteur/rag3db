@@ -1,8 +1,6 @@
 # Le plein texte explose sur une requête longue
 
-- **État** : ouvert, le 7 novembre 2026. Mesuré par rag3weaver archi sur l'hôte en service (journal
-  des runs, graphe `search_structured`, mémoire de la session d'essai des hooks, deux fiches) ;
-  pour la session recherche, la borne attend la décision de c7.
+- **État** : corrigé par le lot recherche-trois-lots (7 novembre 2026, recherche) : la requête entière sans flou au-delà de 100 caractères, la recherche par mots bornée à 64 termes, les deux coupes dites ; bornes tirées de la mesure ci-dessous ; témoin e2e_lectures::une_requete_longue_repond_vite_et_dit_ses_coupes (26 242 ms sur master, 82 ms après). L'arrêt d'un nœud après l'abandon du client reste à l'hôte ; le pendant lucivy reste ouvert
 - **Gravité** : blocage. Un appel tient le nœud plein texte des dizaines de secondes, et le nœud
   tourne jusqu'au bout après l'abandon du client.
 - **Atteignable en service** : oui, par tout appelant qui envoie une longue requête (un prompt
