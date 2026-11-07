@@ -504,7 +504,7 @@ pub fn commande_avec(args: &[String], sortie: &mut dyn std::io::Write, ouvrir: &
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
 
