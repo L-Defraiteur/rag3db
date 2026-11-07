@@ -1,7 +1,6 @@
 # Une ligne collée de plus de 100 caractères ne retrouve pas son fichier par le signal exact
 
-- **État** : ouvert, le 7 novembre 2026 ; pour la session recherche, à fermer avec la montée de
-  lucivy qui corrige les passages exacts longs (4.3.2 attendue).
+- **État** : corrigé par la montée de lucivy à 4.3.2 (lot montee-lucivy-4-3-2, 7 novembre 2026, recherche) : le passage exact long se retrouve ; le témoin d75b73466 est vert (src/reconciliation.md premier, par bm25_exact) et entre sur master avec la montée
 - **Famille** : produit
 - **Gravité** : réponse fausse. Une phrase collée dans l'IDE ou passée à `search_code` ramène un
   autre fichier premier, sans le dire.
