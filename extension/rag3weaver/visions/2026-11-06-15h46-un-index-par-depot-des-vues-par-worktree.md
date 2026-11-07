@@ -194,6 +194,19 @@ inconnu. La question que ça rendrait possible, pour le juge d'un lot : « quell
 propriétés comportementales ont changé alors que leur implémentation directe
 n'a pas bougé ».
 
+Plus loin encore, le rêve d'origine de RagForge, pour qu'il ait une place et
+pas plus : une base de code comme représentation sémantique compressible et
+régénérable. Un **curseur de compression** dont les niveaux sont des politiques
+de transformation, pas des pourcentages d'erreur : syntaxe seule, algorithmes
+internes à contrats égaux, structures internes, contrats secondaires avec tests
+de migration, architecture redéfinie. Un **refactoring bidirectionnel** : monter
+dans l'abstraction, transformer la représentation, redescendre en code, et
+laisser le juge comparer l'ancienne et la nouvelle implémentation sur les
+propriétés qui devaient survivre. Et la **provenance conservée** de bout en
+bout, qui distingue une réimplémentation originale d'une transformation de code
+protégé : on la garde pour ne jamais avoir à le plaider. Rien de tout cela
+avant que l'index en versions et les résumés aient vécu.
+
 ## Très long terme : un moteur de versionnage par scope
 
 Lucie : « en vision très long terme, ça nous donne un moteur de versionnage
