@@ -228,9 +228,13 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
     // l'IDE.
     w.insert("read_only".into(), Value::Bool(false));
     w.insert("task_writes".into(), Value::Bool(true));
-    w.insert("commands".into(), Value::String("off".into()));
-    if let Some(outils) = m.get_mut("tools").and_then(Value::as_object_mut) {
-        outils.remove("run_command");
+    // Les commandes : la porte du gabarit (`approval` dans le livré : la liste
+    // sûre passe, le reste se demande dans la boîte), et `run_command` gardé.
+    // Hors d'une tâche le chat ne lance aucune commande ; dans une tâche, elles
+    // passent par cette porte, dans le worktree (c7, premier essai réel de
+    // l'équipier, 7 novembre 2026 : sans elles, aucune tâche de code réelle).
+    if !w.contains_key("commands") {
+        w.insert("commands".into(), Value::String("approval".into()));
     }
     // Le manifeste de l'arbre neuf : au même chemin sous `templates/` que celui
     // de `from` (son nom compris, `rag3db.json` ou `backend.json`), qui remplace la
@@ -465,9 +469,11 @@ mod tests {
         assert_eq!(m["workspace"]["root"], std::fs::canonicalize(&arbre).unwrap().display().to_string());
         assert_eq!(m["workspace"]["read_only"], false);
         // L'agent édite dans une tâche, jamais l'arbre principal ; l'humain
-        // édite le principal dans l'IDE ; aucune commande.
+        // édite le principal dans l'IDE ; les commandes passent par la porte
+        // du gabarit, dans une tâche seulement.
         assert_eq!(m["workspace"]["task_writes"], true);
-        assert!(m["tools"].get("edit_file").is_some() && m["tools"].get("run_command").is_none());
+        assert!(m["tools"].get("edit_file").is_some() && m["tools"].get("run_command").is_some(), "{}", m["tools"]);
+        assert_eq!(m["workspace"]["commands"], "approval");
         // Les déclarations dans un dépôt, à la racine de l'arbre inscrit.
         let racine = roots.config.join(&a.name);
         let log = std::process::Command::new("git").arg("-C").arg(&racine).args(["log", "--format=%s"]).output().unwrap();

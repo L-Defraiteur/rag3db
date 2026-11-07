@@ -579,8 +579,12 @@ impl<'a> OutilsDuChat<'a> {
         let prepared = b.prepared();
         let mut ecrivent = HashSet::new();
         let mut retires = HashMap::new();
+        // Dans une tâche, les commandes passent par la porte déclarée du workspace
+        // (lot 2 de la page 07-novembre-2026-everything-declarative/01) ; hors
+        // d'une tâche, ou sans porte, le chat n'en lance pas.
+        let porte = dans_une_tache && prepared.manifest.workspace.as_ref().is_some_and(|w| w.commands != crate::backend_code::CommandGate::Off);
         for (nom, outil) in &prepared.manifest.tools {
-            if outil.policy.run_commands {
+            if outil.policy.run_commands && !porte {
                 retires.insert(nom.clone(), format!("« {nom} » lance des commandes, et le chat n'en lance pas : il lit et édite le code"));
             } else if outil.policy.write_files {
                 ecrivent.insert(nom.clone());
