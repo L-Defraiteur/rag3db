@@ -44,6 +44,10 @@ pub struct Tache {
     /// Son workspace, si le backend en déclare un.
     #[serde(default)]
     pub workspace: Option<WorkspaceDeTache>,
+    /// Les déclarations du backend ne sont dans aucun dépôt : la tâche en a
+    /// une copie dans son dossier (`declarations/`), non versionnée.
+    #[serde(default)]
+    pub declarations_hors_depot: bool,
 }
 
 /// **Le workspace d'une tâche** (marche 3) : la racine du principal est
@@ -118,8 +122,16 @@ impl Tache {
 /// **Les déclarations d'un backend hors dépôt, copiées pour sa tâche** : le
 /// dossier du manifeste, récursivement, sans ses bases (la tâche a sa copie de
 /// base par `copier_la_base_sous_la_porte`) ni ses dossiers cachés ; un lien
-/// symbolique est suivi.
-fn copier_les_declarations(source: &Path, cible: &Path) -> Result<(), String> {
+/// symbolique est suivi, à profondeur bornée (un lien vers un ancêtre
+/// bouclerait).
+fn copier_les_declarations(source: &Path, cible: &Path, profondeur: usize) -> Result<(), String> {
+    const PROFONDEUR_MAX: usize = 32;
+    if profondeur > PROFONDEUR_MAX {
+        return Err(format!(
+            "{} : plus de {PROFONDEUR_MAX} dossiers imbriqués (un lien symbolique vers un ancêtre ?)",
+            source.display()
+        ));
+    }
     std::fs::create_dir_all(cible).map_err(|e| format!("{} : {e}", cible.display()))?;
     for entree in std::fs::read_dir(source).map_err(|e| format!("{} : {e}", source.display()))? {
         let entree = entree.map_err(|e| format!("{} : {e}", source.display()))?;
@@ -130,7 +142,7 @@ fn copier_les_declarations(source: &Path, cible: &Path) -> Result<(), String> {
         }
         let (de, vers) = (entree.path(), cible.join(&nom));
         if std::fs::metadata(&de).map_err(|e| format!("{} : {e}", de.display()))?.is_dir() {
-            copier_les_declarations(&de, &vers)?;
+            copier_les_declarations(&de, &vers, profondeur + 1)?;
         } else {
             std::fs::copy(&de, &vers).map_err(|e| format!("{} → {} : {e}", de.display(), vers.display()))?;
         }
@@ -319,6 +331,7 @@ impl DaemonHost {
             sans_reactions: false,
             declarations: Some(crate::propositions::ModeDeclarations::Auto),
             workspace: t.workspace.as_ref().map(|w| (w.racine.clone(), w.ecrit)),
+            declarations_hors_depot: t.declarations_hors_depot,
         })
     }
 
@@ -389,8 +402,23 @@ impl DaemonHost {
                 })?,
         );
         let depot = depot.canonicalize().unwrap_or(depot);
+        // Hors dépôt, la racine des déclarations copiées : le premier ancêtre
+        // `templates` du manifeste (ses chemins relatifs en sortent :
+        // `../../tools/x.mmd` ; c'est ce que `code-tree add` copie), à défaut
+        // son dossier.
+        let racine_des_declarations = hote
+            .manifest
+            .ancestors()
+            .skip(1)
+            .find(|a| a.file_name().is_some_and(|n| n == "templates"))
+            .or(hote.manifest.parent())
+            .unwrap_or(&directory)
+            .to_path_buf();
         let relatif = if declarations_hors_depot {
-            PathBuf::from(hote.manifest.file_name().ok_or("le manifeste n'a pas de nom de fichier")?)
+            hote.manifest
+                .strip_prefix(&racine_des_declarations)
+                .map_err(|_| format!("le manifeste {} n'est pas sous {}", hote.manifest.display(), racine_des_declarations.display()))?
+                .to_path_buf()
         } else {
             hote.manifest
                 .strip_prefix(&depot)
@@ -462,7 +490,7 @@ impl DaemonHost {
             .map_err(|e| defaire("la copie de la base", e))?;
         let manifest = if declarations_hors_depot {
             let declarations = dossier.join("declarations");
-            copier_les_declarations(&directory, &declarations).map_err(|e| defaire("la copie des déclarations", e))?;
+            copier_les_declarations(&racine_des_declarations, &declarations, 0).map_err(|e| defaire("la copie des déclarations", e))?;
             declarations.join(&relatif)
         } else {
             arbre.join(&relatif)
@@ -482,6 +510,7 @@ impl DaemonHost {
             copie,
             ouverte_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0),
             workspace,
+            declarations_hors_depot,
         };
         // Inscrite avant l'ouverture : `open_slot` y lit ses surcharges.
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.clone(), tache.clone());
@@ -572,6 +601,11 @@ impl DaemonHost {
             "composants": composants,
             "temoins": { "chargement": temoin.is_none(), "refus": temoin },
             "base_a_bouge": base_a_bouge,
+            "declarations": if tache.declarations_hors_depot {
+                json!({"versionnees": false, "note": "déclarations hors dépôt : non versionnées, non fusionnées"})
+            } else {
+                json!({"versionnees": true})
+            },
         }))
     }
 

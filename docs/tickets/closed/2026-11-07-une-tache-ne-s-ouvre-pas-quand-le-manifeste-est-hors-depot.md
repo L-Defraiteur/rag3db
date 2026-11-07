@@ -22,12 +22,18 @@ même défaut que celui corrigé pour `kind`, `repo` et `branch` dans `/ide/etat
 Le dépôt de la tâche est celui des déclarations, ou à défaut celui de `workspace.root`. Dans le
 second cas, le worktree est une branche `agent/<nom>` du dépôt du code, et la racine de la tâche
 est dans ce worktree. Les déclarations, qu'aucun git ne versionne, sont copiées dans le dossier
-de la tâche (`declarations/`), sans les bases ni les dossiers cachés. La base et la racine de code
+de la tâche (`declarations/`), sans les bases ni les dossiers cachés. La copie part du premier
+ancêtre `templates` du manifeste, ou à défaut de son dossier : un manifeste de `code-tree add`
+cite `../../tools/…`, qui sortent de son dossier (relecture d'everything declarative). Dans
+une telle tâche, `declare` refuse nommément (« déclarations hors dépôt : non versionnées, non
+fusionnées »), et la relecture le dit (`declarations.versionnees: false`). La base et la racine de code
 de la tâche restent données par ses surcharges. Le cas d'un manifeste dans un dépôt et d'un code
 dans un autre (le second worktree `code`) n'a pas changé.
 
 Témoin : `daemon_host::taches::tests::une_tache_s_ouvre_quand_seul_le_code_est_dans_un_depot`,
-rouge sur b1efe6406 (le refus de l'hôte de Lucie, mot pour mot), vert avec le correctif.
+rouge sur b1efe6406 (le refus de l'hôte de Lucie, mot pour mot), vert avec le correctif ; et
+`une_tache_hors_depot_garde_les_chemins_relatifs_de_ses_gabarits`, rouge sur 7ba7bd9aa
+(`declarations/../../tools/callees.mmd` introuvable), vert avec la copie de `templates/`.
 
 La suite, une tâche sans aucun git, a son propre ticket :
 `2026-11-07-une-tache-ne-s-ouvre-pas-sans-git`.
