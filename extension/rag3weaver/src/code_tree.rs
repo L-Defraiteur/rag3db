@@ -44,11 +44,13 @@ impl Roots {
     }
 
     /// **Le manifeste de `--from`** : un chemin de manifeste s'il en est un ;
-    /// sinon le nom d'un arbre, dont le manifeste est le seul `.json` de
-    /// `templates/backends/code/` qui déclare `database` et `tools` (celui de
-    /// Lucie s'appelle `rag3db.json`), `backend.json` en dernier. L'erreur dit
+    /// sinon le nom d'un arbre, parmi les `.json` de `templates/backends/code/`
+    /// qui déclarent `database` et `tools` (celui de Lucie s'appelle
+    /// `rag3db.json` ; le gabarit livré porte aussi `snapshot.json`) : celui dont
+    /// le `name` est ce nom, sinon le seul, sinon `backend.json`. L'erreur dit
     /// ce qui a été essayé (ticket « code-tree add --from suppose un manifeste
-    /// nommé backend.json »).
+    /// nommé backend.json ») ; avec un hôte, [`add_with_host`] prend d'abord le
+    /// manifeste que l'hôte a enregistré.
     pub fn source_manifest(&self, from: &str) -> Result<PathBuf, String> {
         let chemin = PathBuf::from(from);
         if chemin.extension().is_some_and(|e| e == "json") && chemin.is_file() {
@@ -68,6 +70,12 @@ impl Roots {
                     .is_some_and(|m| m.get("database").is_some() && m.get("tools").is_some())
             })
             .collect();
+        let nomme = |p: &PathBuf| {
+            std::fs::read_to_string(p).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).is_some_and(|m| m["name"] == from)
+        };
+        if let Some(p) = manifestes.iter().find(|p| nomme(p)) {
+            return Ok(p.clone());
+        }
         match manifestes.as_slice() {
             [un] => Ok(un.clone()),
             [] => Err(format!(
@@ -352,8 +360,20 @@ fn is_open(state: &Value, manifest: &Path) -> bool {
 /// l'arbre neuf est enregistré.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub fn add_with_host(roots: &Roots, tree: &Path, from: &str, name: Option<&str>, address: &str) -> Result<(Added, FromAroundCopy), String> {
-    let source = roots.source_manifest(from)?;
-    let autour = match host_state(address) {
+    let etat = host_state(address);
+    // Par nom, le manifeste que l'hôte a enregistré sous le dossier de cet arbre
+    // fait foi : il ne se devine pas.
+    let dossier = std::fs::canonicalize(roots.config.join(from)).ok();
+    let enregistre = etat.as_ref().and_then(|e| {
+        e["backends"].as_array().into_iter().flatten().filter_map(|b| b["manifest"].as_str().map(PathBuf::from)).find(|m| dossier.as_ref().is_some_and(|d| m.starts_with(d)))
+    });
+    let source = match &enregistre {
+        Some(m) => m.clone(),
+        None => roots.source_manifest(from)?,
+    };
+    let from_resolu = source.display().to_string();
+    let from = if enregistre.is_some() { from_resolu.as_str() } else { from };
+    let autour = match etat {
         None => FromAroundCopy::NoHost,
         Some(etat) if is_open(&etat, &source) => {
             unregister(address, &source).map_err(|e| format!("--from {from} : l'hôte ne le ferme pas avant la copie : {e} — réessayez après l'index"))?;
