@@ -68,4 +68,19 @@ TEST_F(ProjectedGraphReadOnly, ProjectingAndQueryingAGraphIsAllowedInAReadOnlyTr
     EXPECT_EQ(row("MATCH (t:T) RETURN count(*);"), "50\n");
 }
 
+// Le chemin du produit (rag3db_search_backend.rs) : un DROP_PROJECTED_GRAPH(..., skip_if_not_exists
+// := true) sur un graphe absent ne fait rien. L'option était ignorée sans un mot : le DROP échouait
+// (« Projected graph g does not exists. ») et, sous READ ONLY, condamnait la transaction entière.
+TEST_F(ProjectedGraphReadOnly, DroppingAnAbsentGraphWithSkipIfNotExistsDoesNothing) {
+    EXPECT_EQ(row("CALL DROP_PROJECTED_GRAPH('absent', skip_if_not_exists := true);"),
+        "AUCUNE LIGNE")
+        << "[check: skip-if-not-exists-is-honoured]";
+    const auto withoutOption = row("CALL DROP_PROJECTED_GRAPH('absent');");
+    EXPECT_TRUE(withoutOption.find("does not exist") != std::string::npos)
+        << "[check: an-absent-graph-is-still-an-error-without-the-option] " << withoutOption;
+    const auto unknown = row("CALL DROP_PROJECTED_GRAPH('absent', skip_if_absent := true);");
+    EXPECT_TRUE(unknown.find("Unrecognized optional parameter") != std::string::npos)
+        << "[check: an-unknown-option-is-refused] " << unknown;
+}
+
 } // namespace
