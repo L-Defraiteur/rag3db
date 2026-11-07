@@ -171,3 +171,33 @@ sous `poste lourd`.
   rebase sur master.
 - Le bloc `[mémoire]` est resté le même à chaque tour (« hooks-essai »,
   « régime GPU ») et n'a rien apporté à la passe.
+
+## Tour de 15 h 46 — le binaire du lot 3 des hooks, et aucun bloc
+
+c7 annonçait un binaire posé à 15 h 42 : le bloc devait me retrouver par mon
+handle et donner le score des fiches rappelées.
+
+**Ce que le bloc a montré :** rien. Aucun `[mémoire]` n'a été injecté sur ce
+tour. Le journal du hook (`~/.local/state/rag3weaver/hooks.log`) :
+
+> 2026-11-07 15:46:02 UserPromptSubmit 494dbbc6-… : hôte joint, backend
+> « memory », prompt de 638 caractères [rag3weaver-backend@1794062140 ;
+> gabarits 1794062534]
+> 2026-11-07 15:46:02 recall_fiches : /call : l'hôte http://127.0.0.1:7970 ne
+> répond pas : timeout: global
+
+Aucune ligne « bloc de N caractères » ne suit.
+
+**Ce que j'en tire :**
+
+- Le hook a tenu sa promesse de ne jamais bloquer la session.
+- Mais il s'est tu entièrement : même ce qui ne dépend pas du rappel (le
+  handle, ma fiche) n'est pas passé.
+- Vu de l'agent, un silence ne se distingue pas de « rien en rapport ».
+- Proposé à c7 : un bloc partiel, qui dit « rappel des fiches : hôte trop lent
+  (5 s) ».
+
+**Vu aussi :** un « [rejeu] SessionStart » de ma session à 15:43:28 (bloc de
+993 caractères), qui ne m'est jamais parvenu. Un rejeu hors de Claude Code
+n'injecte rien dans la conversation : le juge ne doit pas le compter comme vu
+par l'agent.
