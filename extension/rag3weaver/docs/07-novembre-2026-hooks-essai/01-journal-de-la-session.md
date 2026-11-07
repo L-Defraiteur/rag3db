@@ -455,3 +455,27 @@ retrouvés par l'agent de repérage, pas par le hook.
 
 Prêt, annoncé à c7. Au push, rebase en -2 et rejeu entier : du code est
 arrivé sur master depuis la base (`daemon_host/teammate.rs`).
+
+**La question de c7 : le tube peut-il figer l'hôte ?** Oui, sur a69ad5c55,
+de deux façons :
+
+- `write_all` bloquant vers une sortie lente ;
+- le fil qui sortait de sa boucle sur une erreur de lecture.
+
+**Deux corrections successives.**
+
+- **dfb6b2346.** La sortie passe en non bloquant : une ligne qui ne passe
+  pas est jetée et comptée. Le fil ne s'arrête qu'à la fin du tube, la ligne
+  est bornée à 64 Kio, les drapeaux de la sortie sont rendus, et l'arrêt
+  attend le tube 2 s au plus.
+  - Le témoin de la ligne sans fin a rougi, et à raison : une sortie
+    strictement non bloquante jette une ligne au moindre retard de son
+    lecteur.
+- **32c69e1e1.** Sur `EAGAIN`, la ligne attend au plus 200 ms que la sortie
+  reprenne, puis elle est jetée. Après une perte, les lignes suivantes
+  n'attendent plus.
+
+**Vert :** `host_log` 4/4, rejoué cinq fois, 5/5 ; `e2e_mcp_cycle_de_vie`
+11/11.
+
+Le bloc `[mémoire]` est resté partiel à chaque tour.
