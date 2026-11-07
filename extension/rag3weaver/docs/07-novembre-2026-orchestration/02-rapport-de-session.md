@@ -454,3 +454,35 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   dossier de session sur master (825ba6bf1). **Cœur** : groupe 1 clos (deux tickets
   non reproduits avec témoins). **Hotfixs** : RTree reclassé chantier géo, passe à
   G2. **luciepc** : 6 places lourdes ; targets 201 → 150 Gio ; disques sains.
+
+## Mise à jour de 22 h 50
+
+- **lucivy 4.3.2 publiée** (PR #21, tag au mot direct de Lucie, crates.io/npm/PyPI) :
+  passage exact long, flou long, apostrophes, clés inconnues nommées ; montée de
+  rag3weaver en lot chez recherche (montee-lucivy-4-3-2 : trois crates, doublement
+  de l'apostrophe retiré, L et K par la mesure, témoin de la ligne collée).
+- **Essais de l'équipier par c7** (Lucie : « fais des essais seule, demain je
+  regarderai les sessions d'exemple ») : `bilans.memoire` posé dans son manifeste
+  de code (G, 22 h 10, relecture sans coupure, juge des bilans armé, surveillé) ;
+  la première tâche refusée par l'hôte : « le backend n'est pas dans un dépôt git »
+  (la création d'une tâche cherchait le dépôt dans le dossier du manifeste, pas
+  dans workspace.root) → ticket et correctif tache-hors-depot (hooks-essai, en
+  passe ; la relecture d'ED y a trouvé un second défaut, les déclarations hors
+  dossier d'un manifeste code-tree) ; pose par G avec `task_writes: true` et
+  l'outil `edit_file` dans son manifeste (sans eux l'équipier ne peut pas écrire).
+  Trois consignes prêtes (journaux d'annulation dans /tmp, racine disparue, bases
+  laissées dans /tmp par les tests). Méthode de Lucie : « regarde les retours de
+  ses outils et si les params sont cohérents avec ce qu'il voulait, s'il est
+  bloqué, et itère ».
+- **Décisions de Lucie** : des outils intégrés de l'hôte pour attacher dépôts et
+  worktrees (jamais la ligne de commande : pas de hook sinon), repli déclaratif ;
+  une tâche doit s'ouvrir même sans git (espace = worktree si dépôt, dossier
+  sinon, `git_init` sur demande) ; le modèle : une tâche = l'intention, 1..n
+  espaces (un worktree par dépôt touché), plan unique dont chaque pas dit son
+  espace, une proposition par espace, sous-tâches déléguées ; écran : session ›
+  tâches › espaces ; « une session tient potentiellement plusieurs worktrees ».
+- **ED** : suites manquantes de la reprise jouées, toutes vertes ; garde du script
+  (pas de push sans verdict complet) ; ticket du plafond du juge des bilans
+  (89c6b9adc) en cours de code. **Arbre** : lib de demain finie (7cd11e5fa…),
+  passe du juge + graphe cité en troisième tour. **Codeparsers** : pointeur en
+  passe avec un drapeau qui attend tache-hors-depot.
