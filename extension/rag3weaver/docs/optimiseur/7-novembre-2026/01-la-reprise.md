@@ -112,6 +112,45 @@ Deux réserves :
 - **Les anciens instantanés** (bascule-04063ee06, bascule-66994dd43, locks-25-oct, et les copies
   avant-43-controle) : l'effacement est refusé par ma permission. Rien n'est effacé ; c'est à Lucie.
 
+## Les disques (relevé de 21 h 35)
+
+Lucie (par c7) : « tout pour avancer vite, en surveillant bien les disques de temps en temps ». Seuils
+d'alerte : luciepc sous 300 Gio libres, le portable sous 200 Gio.
+
+| poste | libre | rag3weaver-build | instantanés |
+|---|---|---|---|
+| portable | 352 Gio (63 % pris) | 49 Gio | 15 Gio |
+| luciepc | 585 Gio (85 % pris) | ~196 Gio | 14 Gio (avant-43, avant-43-controle, deux bascule-*) |
+
+### Les targets de luciepc (`~/.cache/rag3weaver-build`)
+
+La règle : un target par lot, effacé à la fin du lot. Chaque session efface les siens ; je n'efface que les
+miens. Les tailles sont en Gio, la date est celle de la dernière écriture, et la session est déduite du nom.
+
+| target | Gio | dernière écriture | session | remarque |
+|---|---|---|---|---|
+| target-codeparsers-clic | 24 | 7 nov. 18 h 28 | codeparsers | |
+| target-coeur-c | 20 | 7 nov. 21 h 16 | cœur C++ | en cours |
+| target-A-plan | 18 | 7 nov. 19 h 10 | arbre principal | |
+| target-96-fiches4 | 13 | 7 nov. 21 h 19 | mémoire (96) | en cours |
+| target-spans | 12 | 7 nov. 21 h 28 | embarquement | en cours |
+| target-G | 11 | 7 nov. 21 h 11 | G (moi) | hote-lucie et hote-lucie-tests, servent aux poses |
+| target-A-l4 | 10 | 19 oct. 02 h 12 | arbre principal | **vieux de 19 jours** |
+| target-A-l5 | 9 | 19 oct. 02 h 54 | arbre principal | **vieux de 19 jours** |
+| target-I-apres | 9 | 7 nov. 21 h 33 | everything declarative | en cours |
+| target-hooks-essai | 7 | 7 nov. 21 h 33 | hooks-essai | en cours |
+| target-A-l6 | 7 | 19 oct. 08 h 40 | arbre principal | **vieux de 19 jours** |
+| target-97c | 7 | 7 nov. 20 h 18 | recherche | |
+| target-A-l4b | 6 | 18 oct. 17 h 52 | arbre principal | **vieux de 20 jours** |
+| target-97e | 6 | 7 nov. 21 h 33 | recherche | en cours |
+| target-97d | 5 | 7 nov. 20 h 36 | recherche | |
+| build-asan | 4 | 25 oct. 14 h 26 | banc (asan-commit.sh) | vieux de 13 jours |
+| build-vingt | 1 | 7 nov. 20 h 18 | banc (scénario des vingt) | |
+
+Effacé par moi à 21 h 35 : `target-G/controle` (14 Gio ; la passe de lucivy-publiee est sur master) et
+`target-G-hote` (4 Gio, du 12 oct.). Les quatre `target-A-l*` d'octobre (32 Gio) et `build-asan` sont les
+premiers candidats, pour leurs sessions.
+
 ## À suivre
 
 - lucivy-publiee-1 : rebase, lib entière, push sous if VERT à mon tour (après les vues d'everything
