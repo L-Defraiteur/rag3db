@@ -160,3 +160,14 @@ fiche à chaque tour, qui ne m'apprend rien.
 
 En cours : `check_features.sh` puis la lib entière sur 35aede9f3, à luciepc
 sous `poste lourd`.
+
+## La passe complète sur la base (35aede9f3)
+
+- `check_features.sh` : 5/5 verts.
+- La lib entière : 1865 passed, 0 failed, 37 ignored, en 26,5 s. Elle est
+  jouée sans `anthropic-llm`, une feature que la base 37c42b720 ne connaît pas
+  encore. Le premier essai s'est arrêté net sur « does not contain this
+  feature », avant toute compilation. Le jeu complet se rejouera après le
+  rebase sur master.
+- Le bloc `[mémoire]` est resté le même à chaque tour (« hooks-essai »,
+  « régime GPU ») et n'a rien apporté à la passe.
