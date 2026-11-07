@@ -1599,7 +1599,7 @@ fn un_second_ecrivain_est_refuse_en_nommant_le_premier() {
         .expect("lancer le second écrivain");
     let _ = writeln!(second.stdin.take().unwrap(), "{}", serde_json::json!({"op": "call", "name": "index", "arguments": {"confirm": true}}));
     let sortie = second.wait_with_output().expect("le second écrivain finit");
-    let erreur = String::from_utf8_lossy(&sortie.stderr).to_string() + &String::from_utf8_lossy(&sortie.stdout);
+    let erreur = format!("{}{}", String::from_utf8_lossy(&sortie.stderr), String::from_utf8_lossy(&sortie.stdout));
     eprintln!("[second écrivain] code {:?} : {}", sortie.status.code(), erreur.trim().lines().last().unwrap_or(""));
     assert!(!sortie.status.success(), "le second écrivain ne doit pas ouvrir la base : {erreur}");
     assert!(
