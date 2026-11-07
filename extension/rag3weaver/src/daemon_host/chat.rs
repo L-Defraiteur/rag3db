@@ -232,15 +232,84 @@ impl DaemonHost {
             "at": dernier.map(|c| c.at_ms),
         });
         let fil: Vec<Value> = fil.as_array().cloned().unwrap_or_default().into_iter().filter(|t| t["role"] != "system").collect();
+        drop(chats);
+        let (ecrites, pourquoi) = match self.memory_writes(&hosted, backend_id) {
+            Ok(v) => (v, None),
+            Err(e) => (Vec::new(), Some(e)),
+        };
         Ok(json!({
             "on": modele.is_ok(),
             "model": modele.as_ref().ok(),
             "context": contexte,
+            "memory_writes": ecrites,
+            "memory_writes_why": pourquoi,
             "why": modele.as_ref().err(),
             "run": en_cours,
             "turns": fil,
             "orphans": self.orphan_chats.lock().unwrap_or_else(|p| p.into_inner()).clone(),
         }))
+    }
+
+    /// **Les fiches écrites pendant une conversation** (forme accordée avec
+    /// everything declarative et 96) : les Sources de la mémoire déclarée
+    /// (`bilans.memoire`) dont `session` est un run de la conversation (le juge
+    /// les date), puis les Apports qui citent ces sources — par les outils de
+    /// lecture de la mémoire (`select_sources`, `select_apports`), jamais en
+    /// lisant son catalogue par-dessous. Les écritures de l'agent lui-même
+    /// n'ont pas encore de `session` (M7 de la mémoire longue). `Err` dit
+    /// pourquoi la liste ne peut pas se faire.
+    fn memory_writes(&self, hosted: &Arc<super::Hosted>, backend_id: &str) -> Result<Vec<Value>, String> {
+        let Some(memoire) = self.memoire_declaree(hosted)? else {
+            return Err("ce dépôt ne déclare pas de mémoire (bilans.memoire)".into());
+        };
+        // Les runs de la conversation : ceux du journal qui portent `chat`, les
+        // cent derniers.
+        let runs: Vec<String> = self
+            .journal
+            .runs_de(backend_id)
+            .into_iter()
+            .rev()
+            .take(100)
+            .filter(|r| self.journal.lire(backend_id, r).is_some_and(|v| v["chat"] == backend_id))
+            .collect();
+        if runs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let memoire = self.hosted(&memoire)?;
+        let declare = self.with_backend(&memoire, |b| {
+            let t = &b.prepared().manifest.tools;
+            t.contains_key("select_sources") && t.contains_key("select_apports")
+        })?;
+        if !declare {
+            return Err("la mémoire ne déclare pas select_sources / select_apports (son gabarit est plus ancien) : la liste viendra quand elle sera à jour".into());
+        }
+        let appeler = |outil: &str, args: Value| -> Result<Value, String> { self.with_backend(&memoire, |b| b.call(outil, args)).and_then(|r| r) };
+        let lignes = |r: &Value| -> Vec<Value> {
+            let a = match &r["result"] {
+                Value::Array(a) => a.clone(),
+                Value::Object(o) => o.get("results").and_then(Value::as_array).cloned().unwrap_or_default(),
+                _ => Vec::new(),
+            };
+            a.into_iter().map(|l| if l["data"].is_object() { l["data"].clone() } else { l }).collect()
+        };
+        let sources = lignes(&appeler("select_sources", json!({ "filter": { "field": { "key": "session", "value": runs } }, "limit": 500 }))?);
+        let run_de: HashMap<String, String> = sources
+            .iter()
+            .filter_map(|s| Some((s["chemin"].as_str()?.to_string(), s["session"].as_str()?.to_string())))
+            .collect();
+        if run_de.is_empty() {
+            return Ok(Vec::new());
+        }
+        let chemins: Vec<&String> = run_de.keys().collect();
+        let mut ecrites: Vec<Value> = lignes(&appeler("select_apports", json!({ "filter": { "field": { "key": "source", "value": chemins } }, "limit": 500 }))?)
+            .into_iter()
+            .filter_map(|a| {
+                let run = run_de.get(a["source"].as_str()?)?;
+                Some(json!({ "fiche": a["fiche"], "kind": "apport", "section": a["section"], "at_ms": a["created_at"], "run": run }))
+            })
+            .collect();
+        ecrites.sort_by_key(|w| std::cmp::Reverse(w["at_ms"].as_u64().unwrap_or(0)));
+        Ok(ecrites)
     }
 
     /// Le run du tour de chat en cours sur un backend, s'il y en a un.

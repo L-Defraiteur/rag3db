@@ -108,6 +108,9 @@ export type ChatState = {
   model: string | null;
   context?: ChatContext;
   memory_writes?: MemoryWrite[];
+  // Pourquoi la liste des fiches écrites ne peut pas se faire (pas de mémoire
+  // déclarée, une mémoire sans outil de lecture par filtre…) ; null sinon.
+  memory_writes_why?: string | null;
   why: string | null;
   run: string | null;
   turns: ChatTurn[];
