@@ -336,9 +336,31 @@ fn scan_vars(v: &Value, out: &mut BTreeSet<String>) {
 pub fn substitute_definition(def: &GraphDefinition, args: &Map<String, Value>) -> GraphDefinition {
     let mut out = def.clone();
     for node in &mut out.nodes {
-        node.config = substitute_value(&node.config, args);
+        node.config = substitute_config(&node.config, args);
     }
     out
+}
+
+/// **Un graphe cité est à lui** (96, 7 novembre 2026) : la configuration `graph`
+/// d'un `GraphNode` ou d'un `ForEachNode`, une fois lue au chargement, est
+/// l'objet `{cite, mermaid, sous}` — le texte d'un autre outil, avec ses propres
+/// `$paramètres`. Les arguments du parent ne s'y substituent jamais : sinon un
+/// paramètre de même nom des deux côtés (`candidates`) disparaît du texte cité
+/// avant que sa garde de bijection le cherche, et le graphe cité perd son
+/// propre défaut. Seules les autres clés du nœud reçoivent les arguments ; le
+/// graphe cité substitue les siens à son instanciation.
+fn substitute_config(config: &Value, args: &Map<String, Value>) -> Value {
+    match config {
+        Value::Object(o) => Value::Object(
+            o.iter()
+                .map(|(k, x)| {
+                    let cite = k == "graph" && x.get("mermaid").is_some_and(Value::is_string);
+                    (k.clone(), if cite { x.clone() } else { substitute_value(x, args) })
+                })
+                .collect(),
+        ),
+        autre => substitute_value(autre, args),
+    }
 }
 
 /// **Un chemin pointé** dans un argument objet (`$element.text`, 25 octobre
