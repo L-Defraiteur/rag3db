@@ -13,7 +13,9 @@ Un seul fichier JSON par thème, lu par les deux :
 - par le terminal (le crate `extension/rag3weaver/tty`, par `include_str!`) ;
 - par l'IDE (embarqué avec ses gabarits, ou importé par le bundle).
 
-Son chemin est à convenir, par exemple `extension/rag3weaver/templates/themes/daemon.json`.
+**Convenu avec everything declarative (7 nov.) :** le fichier vit à `extension/rag3weaver/templates/themes/daemon.json`, et c'est la session tty qui le pose, **après l'accord de Lucie**. L'IDE le lit au bâti du bundle (esbuild l'importe, `build.mjs` l'inscrit au manifeste du bundle pour le témoin sha256) et en dérive ses tokens shadcn : `--background`, `--foreground`, `--primary`, `--muted`, `--radius` à 0 et la police. Deux contraintes de forme :
+- les couleurs sont en hex seulement, et le terminal fait ses replis 256 et 16 couleurs de son côté ;
+- chaque animation porte en données ses images (ou ce qui les engendre : glyphes, gabarits, rotation ou tirage), sa cadence et son gabarit, jamais en code. L'IDE les rejoue en CSS et React, à 10 images/s au plus, sous `prefers-reduced-motion`.
 
 ```json
 {
@@ -22,9 +24,7 @@ Son chemin est à convenir, par exemple `extension/rag3weaver/templates/themes/d
     "fond": "#050505",
     "texte": "#ff3333",
     "halo": ["#ff0000", "#8b0000"],
-    "sourdine": "#666666",
-    "ansi256": { "texte": 196, "halo": 88, "sourdine": 242 },
-    "ansi16": { "texte": "rouge vif", "halo": "rouge", "sourdine": "gris" }
+    "sourdine": "#666666"
   },
   "police": "'Courier New', Courier, monospace",
   "animations": {
@@ -66,6 +66,6 @@ Son chemin est à convenir, par exemple `extension/rag3weaver/templates/themes/d
 | **La cadence est bornée** | Jamais plus de 10 images/s pour une animation (100 ms au plus vite, la cadence du Glitch). Le terminal dessine en plus l'écran au plus 30 fois par seconde. |
 | **Le hasard est reproductible** | Le Glitch tire ses glyphes d'un générateur à graine (un xorshift), fixée dans les tests ; c'est ainsi qu'on en prend un instantané. |
 | **Le halo** | Le navigateur le dessine tel quel, par `text-shadow: 0 0 5px #ff0000, 0 0 10px #8b0000`. Le terminal l'imite : `⛧` en gras dans la couleur `texte`, les runes en dégradé de `halo[1]` vers `texte` selon leur place dans le cercle. |
-| **Les dégradés** | Terminal : couleur vraie, puis 256 couleurs, puis 16, puis `NO_COLOR` (gras et normal). IDE : `prefers-reduced-motion` fige l'animation sur sa première image. |
+| **Les dégradés** | Terminal : couleur vraie, puis 256 couleurs (196, 88, 242), puis 16 (rouge vif, rouge, gris), puis `NO_COLOR` (gras et normal), tous calculés par le terminal à partir des hex. IDE : `prefers-reduced-motion` fige l'animation sur sa première image. |
 | **Les glyphes** | Le terminal mesure sa largeur au démarrage et prend les `replis` quand un glyphe ne fait pas une colonne, ou le jeu `ascii` sur demande. L'IDE peut se fier à sa police, mais garde les `replis` pour une police qui n'a pas le plan astral (`🜂 🜄`). |
 | **Les thèmes à venir** | fées, forêt, bureau, papillons, Mordor, Dracula au sens vampire (Lucie). Chacun est un autre fichier de même forme : mêmes clés, autres glyphes, autres couleurs, autres libellés. |
