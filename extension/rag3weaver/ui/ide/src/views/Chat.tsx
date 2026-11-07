@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
+import { highlightBlock, inlineCodeHtml, withInlineCode } from "@/lib/code";
 import DOMPurify from "dompurify";
 import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
@@ -16,7 +17,23 @@ import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type C
 // l'assainit — le texte vient d'un modèle, un `<script>` ou un gestionnaire
 // d'événement y sont neutralisés. Le message de la personne reste du texte.
 marked.setOptions({ gfm: true, breaks: true });
-function renderMarkdown(text: string): string {
+// Le dépôt de la conversation rendue : le code en ligne d'une réponse y cherche ses
+// chemins (posé par `renderMarkdown`, un rendu à la fois).
+let renderBackend = "";
+marked.use({
+  renderer: {
+    code({ text, lang }) {
+      return highlightBlock(text, lang);
+    },
+    codespan({ text }) {
+      // `text` arrive échappé par marked : on le rend brut au module, qui échappe.
+      const brut = text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+      return inlineCodeHtml(brut, renderBackend);
+    },
+  },
+});
+function renderMarkdown(text: string, backendId = ""): string {
+  renderBackend = backendId;
   // Rogné : marked finit par un retour à la ligne, qui ferait un nœud texte de plus
   // dans `.body` (un témoin compare son texte à l'égal).
   return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { USE_PROFILES: { html: true } }).trim();
@@ -479,16 +496,16 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                 <div className={`role text-xs font-semibold mb-1.5 ${it.role === "user" ? "text-blue-400" : it.role === "error" ? "text-destructive" : "text-primary"}`}>
                   {it.role === "user" ? "Vous" : it.role === "error" ? "Erreur" : "Agent"}
                 </div>
-                {it.live && !it.parts.length ? <div className="body whitespace-pre-wrap break-words max-w-[100ch]" /> : null}
+                {it.live && !it.parts.length ? <div className="body whitespace-pre-wrap break-words" /> : null}
                 {it.parts.map((p, n) =>
                   p.kind === "text" ? (
                     it.role === "assistant" && !it.live ? (
-                      <div key={n} className="body markdown break-words max-w-[100ch]" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.text) }} />
+                      <div key={n} className="body markdown break-words" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.text, id) }} />
                     ) : (
-                      <div key={n} className="body whitespace-pre-wrap break-words max-w-[100ch]">{p.text}</div>
+                      <div key={n} className="body whitespace-pre-wrap break-words">{withInlineCode(p.text, id)}</div>
                     )
                   ) : (
-                    <details key={p.id} className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground max-w-[100ch]" data-outil={p.name} data-appel={p.id} data-ok={p.ok === undefined ? undefined : String(p.ok)}>
+                    <details key={p.id} className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground" data-outil={p.name} data-appel={p.id} data-ok={p.ok === undefined ? undefined : String(p.ok)}>
                       <summary className="cursor-pointer text-foreground/80">
                         {p.name}
                         {p.result === undefined ? "…" : p.ok === false ? " : refusé" : ""}

@@ -112,6 +112,32 @@ mark.surligne[data-source="query_words"] { background: transparent; text-decorat
 .markdown a { text-decoration: underline; }
 .markdown blockquote { border-left: 3px solid var(--border); padding-left: 0.8em; color: var(--muted-foreground); }
 .markdown table { border-collapse: collapse; } .markdown th, .markdown td { border: 1px solid var(--border); padding: 0.2em 0.5em; }
+/* **Le code dans le chat** (lib/code.tsx) : le code en ligne hors Markdown (le
+   message de la personne, la réponse en flux) habillé comme dans une réponse ; un
+   chemin cité mène à sa vue. */
+.body code { font-family: ui-monospace, monospace; font-size: 0.9em; background: color-mix(in oklch, var(--muted) 80%, transparent); padding: 0.1em 0.3em; border-radius: 4px; }
+a.code-ref { text-decoration: underline; text-decoration-style: dotted; }
+/* La coloration (A : highlight.js ; B : les sortes des grammaires de codeparsers,
+   mêmes classes `hl-*`), en clair puis en sombre, d'après le thème de l'IDE. */
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hl-keyword { color: #a626a4; }
+.hljs-type, .hljs-title.class_, .hl-type { color: #c18401; }
+.hljs-title.function_, .hljs-function .hljs-title, .hl-function { color: #4078f2; }
+.hljs-string, .hljs-regexp, .hl-string { color: #50a14f; }
+.hljs-comment, .hljs-quote, .hl-comment { color: #a0a1a7; font-style: italic; }
+.hljs-number, .hljs-literal, .hl-number, .hl-constant { color: #986801; }
+.hljs-variable, .hljs-params, .hl-variable { color: #e45649; }
+.hljs-attr, .hljs-property, .hl-property, .hl-attribute { color: #0184bc; }
+.hljs-meta, .hljs-symbol, .hl-label, .hl-module { color: #0997b3; }
+.hljs-operator, .hljs-punctuation, .hl-operator, .hl-punctuation { color: inherit; }
+.dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-built_in, .dark .hl-keyword { color: #c678dd; }
+.dark .hljs-type, .dark .hljs-title.class_, .dark .hl-type { color: #e5c07b; }
+.dark .hljs-title.function_, .dark .hljs-function .hljs-title, .dark .hl-function { color: #61afef; }
+.dark .hljs-string, .dark .hljs-regexp, .dark .hl-string { color: #98c379; }
+.dark .hljs-comment, .dark .hljs-quote, .dark .hl-comment { color: #7f848e; }
+.dark .hljs-number, .dark .hljs-literal, .dark .hl-number, .dark .hl-constant { color: #d19a66; }
+.dark .hljs-variable, .dark .hljs-params, .dark .hl-variable { color: #e06c75; }
+.dark .hljs-attr, .dark .hljs-property, .dark .hl-property, .dark .hl-attribute { color: #56b6c2; }
+.dark .hljs-meta, .dark .hljs-symbol, .dark .hl-label, .dark .hl-module { color: #56b6c2; }
 
 /* Les graphes (le DAG vivant, le diff d'une proposition, le papillon). */
 .graphe-svg g.etape.passe rect { fill: color-mix(in oklch, var(--primary) 20%, var(--card)); }
