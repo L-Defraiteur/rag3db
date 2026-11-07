@@ -53,6 +53,11 @@ borne côté moteur est à recherche (`docs/tickets/2026-11-07-le-plein-texte-ex
 | 40 mots extraits | 246 à 275 ms |
 | les 16 premiers mots du contenu, sans tri | 587 à 673 ms |
 
+Les prompts des témoins sont **synthétiques**, de la même forme que les quatre du tableau : une
+notification de tâche, et des messages de session à session avec ids, chemins et uuid. Les vrais
+sont des messages de sessions réelles. Ils restent hors du dépôt, et le classifieur de
+permissions a refusé à juste titre de les copier en données de test.
+
 Jusqu'à 16 mots, le coût reste dans le bruit. Dix mots laissent de la marge, et les mots longs
 non triés coûtent plus que les mots triés.
 
