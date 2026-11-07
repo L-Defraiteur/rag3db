@@ -73,4 +73,46 @@ TEST_F(RefusedCopySameSession, TheTableIsWholeAfterACopyRefusedForMemory) {
     EXPECT_EQ(scalar("MATCH (t:T {id: 5050}) RETURN count(*);"), 1);
 }
 
+// La même chose pour un COPY de relations refusé : les relations d'avant restent, aucune du COPY
+// n'est visible, et un petit COPY de relations passe ensuite.
+TEST_F(RefusedCopySameSession, TheRelTableIsWholeAfterARelCopyRefusedForMemory) {
+    ok("CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
+    ok("CREATE REL TABLE R(FROM N TO N, s STRING);");
+    ok("UNWIND range(0, 1999) AS i CREATE (:N {id: i});");
+    ok("COPY R FROM (UNWIND range(0, 99) AS i RETURN i, i + 1, 'avant');");
+    ok("CHECKPOINT;");
+    auto copy = conn->query("COPY R FROM (UNWIND range(0, 299999) AS i RETURN i % 2000, (i * 7) % 2000, "
+                            "repeat('r', 1000) + string(i));");
+    ASSERT_FALSE(copy->isSuccess()) << "le COPY devait être refusé : le tampon n'est pas assez serré";
+    ASSERT_NE(copy->getErrorMessage().find("buffer pool is full"), std::string::npos)
+        << copy->getErrorMessage();
+    EXPECT_EQ(scalar("MATCH ()-[r:R]->() RETURN count(*);"), 100) << "le compte des relations a bougé";
+    EXPECT_EQ(scalar("MATCH (b:N)<-[r:R]-(a:N) RETURN count(*);"), 100);
+    ok("COPY R FROM (UNWIND range(100, 149) AS i RETURN i, i + 1, 'petit');");
+    ok("CHECKPOINT;");
+    EXPECT_EQ(scalar("MATCH ()-[r:R]->() RETURN count(*);"), 150);
+}
+
+// Un COPY refusé dans une transaction explicite : la transaction est condamnée, son ROLLBACK passe,
+// et la session écrit ensuite juste.
+TEST_F(RefusedCopySameSession, AnExplicitTransactionRollsBackACopyRefusedForMemory) {
+    ok("CREATE NODE TABLE T(id INT64, s STRING, PRIMARY KEY(id));");
+    ok("UNWIND range(0, 999) AS i CREATE (:T {id: i, s: 'avant'});");
+    ok("CHECKPOINT;");
+    ok("BEGIN TRANSACTION;");
+    ok("CREATE (:T {id: -5, s: 'dans la transaction'});");
+    auto copy = conn->query(
+        "COPY T FROM (UNWIND range(100000, 399999) AS i RETURN i, repeat('x', 1000) + string(i));");
+    ASSERT_FALSE(copy->isSuccess());
+    ASSERT_NE(copy->getErrorMessage().find("buffer pool is full"), std::string::npos)
+        << copy->getErrorMessage();
+    ok("ROLLBACK;");
+    EXPECT_EQ(scalar("MATCH (t:T) RETURN count(*);"), 1000);
+    EXPECT_EQ(scalar("MATCH (t:T {id: -5}) RETURN count(*);"), 0) << "la ligne de la transaction annulée reste";
+    ok("CREATE (:T {id: -5, s: 'après'});");
+    EXPECT_EQ(scalar("MATCH (t:T {id: -5}) RETURN count(*);"), 1);
+    ok("CHECKPOINT;");
+    EXPECT_EQ(scalar("MATCH (t:T) RETURN count(DISTINCT t.id);"), 1001);
+}
+
 } // namespace
