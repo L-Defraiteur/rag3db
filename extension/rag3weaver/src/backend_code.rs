@@ -263,6 +263,11 @@ pub struct ToolPolicy {
 /// et le rendu. (La liste vivait en dur dans `backend.rs` — elle porte
 /// notamment les nœuds d'instantané et de lot que les outils `begin_` /
 /// `ingest_` / `finish_` / `abort_` / `undo_snapshot` traversent.)
+/// **Les nœuds qui lisent le creux** (`models.sparse`) sans signal creux de la
+/// recherche : un outil qui en contient un fait vivre la déclaration, et se
+/// replie si le service manque (7 novembre 2026).
+pub const SPARSE_READER_NODES: &[&str] = &["HighlightNode"];
+
 const BASE_NODES: &[&str] = &[
     "RhaiNode",
     // **Aiguiller et découper, sans rien toucher** (M4, 7 novembre 2026) : `Route`

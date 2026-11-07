@@ -795,6 +795,10 @@ pub struct PreparedBackend {
     /// Les miroirs en fichiers, par entité qui déclare `files`.
     miroirs: HashMap<String, Arc<crate::fichiers_entite::Miroir>>,
     tools: BTreeMap<String, GraphTool>,
+    /// **Les outils qui lisent le creux** (`HighlightNode`, sous-graphes compris) :
+    /// `models.sparse` leur est servi comme au signal creux de la recherche, et
+    /// les compte pour la règle de la déclaration morte (7 novembre 2026).
+    lecteurs_du_creux: Vec<String>,
     /// Le registre des nœuds, en `Arc` : le chemin des outils le prête le
     /// temps d'un appel, le réacteur des réactions le garde le temps de son
     /// service.
@@ -1493,6 +1497,19 @@ impl PreparedBackend {
             tool_schemas.insert(name.clone(), input);
             tools.insert(name.clone(), tool);
         }
+        // Les outils qui lisent le creux, sous-graphes compris.
+        let lecteurs_du_creux: Vec<String> = tools
+            .iter()
+            .filter(|(name, tool)| {
+                tool.template()
+                    .nodes
+                    .iter()
+                    .map(|n| n.node_type.as_str())
+                    .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(String::as_str))
+                    .any(|t| crate::backend_code::SPARSE_READER_NODES.contains(&t))
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
         // La politique de chaque outil se vérifie au chargement : un graphe
         // qui déborde sa politique, ou une politique sans le workspace
         // qu'elle exige, se refuse en disant quoi faire.
@@ -1629,6 +1646,7 @@ impl PreparedBackend {
             .map(|v| crate::builtin_templates::drift_avec(&directory, &v, lecteur))
             .unwrap_or_default();
         Ok(Self {
+            lecteurs_du_creux,
             template_drift,
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             surcharges: Surcharges::default(),
@@ -1978,29 +1996,51 @@ impl PreparedBackend {
                 .as_ref()
                 .is_some_and(|w| w.index_signals.values().flatten().any(|s| s == "sparse"));
         // Le sens inverse : un modèle creux que rien ne lit est une
-        // déclaration morte — la famille « écrire ce que rien ne lira ».
+        // déclaration morte — la famille « écrire ce que rien ne lira ». Un
+        // outil qui contient un lecteur du creux (le surlignage à l'affichage)
+        // le lit aussi (7 novembre 2026).
         if self.manifest.models.contains_key(&crate::model_source::Capability::Sparse)
             && !veut_le_creux
+            && self.lecteurs_du_creux.is_empty()
         {
             return Err(
-                "models.sparse est déclaré mais aucun signal sparse ne le lit — montez-le \
-                 sur une entité (signals) ou sur le schéma nommé (workspace.index_signals)"
+                "models.sparse est déclaré mais rien ne le lit — montez un signal sparse \
+                 sur une entité (signals) ou sur le schéma nommé (workspace.index_signals), \
+                 ou un outil qui le lit (HighlightNode)"
                     .into(),
             );
         }
+        let mut avertissement_du_creux: Option<String> = None;
         match (self.manifest.models.get(&crate::model_source::Capability::Sparse), veut_le_creux) {
             (None, true) if !sans_service => {
                 return Err("ce backend déclare un signal sparse : `models.sparse` est requis \
                             (par exemple {\"provider\": \"service\", \"model\": \"bge-m3\"})"
                     .into());
             }
-            (Some(source), _) => {
-                let (clients, _) = crate::model_source::connect_sparse(source)?;
-                cat.set_sparse_embedder(clients.sparse);
-                if let Some(dual) = clients.dual.filter(|_| source.model == self.embed.model) {
-                    cat.set_dual_embedder(dual);
+            (Some(source), _) => match crate::model_source::connect_sparse(source) {
+                Ok((clients, _)) => {
+                    cat.set_sparse_embedder(clients.sparse);
+                    // Le dual, quand le creux et le dense sont un même modèle : une
+                    // requête dense passe alors par une seule passe avant dont la
+                    // tête creuse ne coûte presque rien ; l'ingestion ne s'en sert
+                    // que sous le signal creux de l'entité (`EmbedNode`).
+                    if let Some(dual) = clients.dual.filter(|_| source.model == self.embed.model) {
+                        cat.set_dual_embedder(dual);
+                    }
                 }
-            }
+                // Le signal creux de la recherche l'exige : l'ouverture échoue.
+                Err(e) if veut_le_creux => return Err(e),
+                // Seuls des outils le lisent : ils se replient (le surlignage
+                // sur les mots de la requête), et l'ouverture le dit.
+                Err(e) => {
+                    let texte = format!(
+                        "le creux déclaré (models.sparse) n'est pas joint : {} se replie ({e})",
+                        self.lecteurs_du_creux.join(", ")
+                    );
+                    eprintln!("[backend] {texte}");
+                    avertissement_du_creux = Some(texte);
+                }
+            },
             (None, _) => {}
         }
         // Le chemin cité pour Cypher (barres obliques inverses et apostrophes
@@ -2092,6 +2132,7 @@ impl PreparedBackend {
             decider,
             llm,
             avertissement_sans_service,
+            avertissement_du_creux,
             embarqueur_a_retenter,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -2669,6 +2710,9 @@ pub struct Backend {
     /// Le backend déclare du vecteur et a démarré sans service : la phrase
     /// dite à l'ouverture, redite dans `describe` et `index_state`.
     avertissement_sans_service: Option<String>,
+    /// Le creux déclaré pour des outils seuls, pas joint à l'ouverture : ils
+    /// se replient, et la phrase le redit comme l'avertissement d'au-dessus.
+    avertissement_du_creux: Option<String>,
     /// **Le service était déclaré mais pas joint à l'ouverture** : il se
     /// retente (au plus une fois par intervalle), et l'avertissement dit le
     /// dernier essai. Ticket du 11 octobre 2026, « un service injoignable à
@@ -2697,20 +2741,22 @@ impl Backend {
     /// tout ce qui est déclaré est servi.
     pub fn avertissements(&self) -> Vec<String> {
         let Some(retente) = &self.embarqueur_a_retenter else {
-            return self.avertissement_sans_service.iter().cloned().collect();
+            return self.avertissement_sans_service.iter().chain(&self.avertissement_du_creux).cloned().collect();
         };
         // L'état dit ce qui est vrai maintenant : chaque lecture des
         // avertissements retente (au plus une fois par intervalle).
         self.embarqueur_revenu();
         let r = retente.lock().unwrap_or_else(|p| p.into_inner());
-        vec![if r.revenu {
+        let mut dits = vec![if r.revenu {
             format!(
                 "{} — le service répond de nouveau : le backend se rouvre au prochain appel pour le reprendre",
                 PreparedBackend::AVERTISSEMENT_SANS_SERVICE
             )
         } else {
             format!("{} — {}", PreparedBackend::AVERTISSEMENT_SANS_SERVICE, r.raison)
-        }]
+        }];
+        dits.extend(self.avertissement_du_creux.iter().cloned());
+        dits
     }
     /// **Le service d'embarquement manquant à l'ouverture répond-il
     /// maintenant ?** Faux si rien n'est à retenter. Sinon, au plus une fois
@@ -5414,6 +5460,7 @@ mod tests {
             decider: None,
             llm: None,
             avertissement_sans_service: None,
+            avertissement_du_creux: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -5636,6 +5683,7 @@ mod tests {
             decider: None,
             llm: None,
             avertissement_sans_service: None,
+            avertissement_du_creux: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),

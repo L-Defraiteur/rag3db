@@ -1317,3 +1317,182 @@ fn les_morceaux_du_seul_dense_se_surlignent_a_l_affichage() {
         "sans l'option, rien n'est surligné : {sans}"
     );
 }
+
+/// **Le creux se surligne par le chemin de l'hôte** (7 novembre 2026, décision de c7 : option 1).
+/// Le témoin précédent ne voyait que le repli : l'ouverture d'un backend ne servait `models.sparse`
+/// qu'aux signaux creux de la recherche, et le gabarit de code n'en déclarait pas — sur les hôtes,
+/// `HighlightNode` n'avait jamais de service. Ici le gabarit de code livré, ouvert depuis son
+/// manifeste comme le fait l'hôte, avec le service bge-m3 de la passe (`RAG3WEAVER_EMBED_SERVICE`) :
+/// par `call_in`, le morceau trouvé par le seul dense porte des passages `source: "sparse"`, et la
+/// réponse ne dit aucun repli. Sans service bge-m3 joignable, ce témoin rougit : il n'a rien à juger.
+/// Il exige `burn-embedder` : le tokenizer qui place le creux dans le texte n'existe que sous elle.
+#[cfg(all(feature = "code", feature = "burn-embedder"))]
+#[test]
+#[ignore]
+fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
+    use serde_json::json;
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "creux-par-l-hote", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": {"signals": ["vector"], "limit": 5, "highlights": "sparse"}, "mode": "indexed"}))
+        .expect("search_code");
+    let resultats = r["result"].as_array().cloned().unwrap_or_default();
+    let morceau = resultats
+        .iter()
+        .find(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("fusion")))
+        .unwrap_or_else(|| panic!("le dense rend le morceau de fusion.rs : {r}"));
+    let avertissements = r["metadata"]["render.meta"]["warnings"].to_string();
+    assert!(
+        !avertissements.contains("surlignage creux indisponible"),
+        "le service creux du manifeste sert le surlignage, sans repli : {avertissements} — avertissements du backend : {:?}",
+        backend.avertissements()
+    );
+    let surlignes = morceau["chunk"]["highlights"].as_array().cloned().unwrap_or_default();
+    assert!(
+        !surlignes.is_empty() && surlignes.iter().all(|h| h["source"] == "sparse"),
+        "les passages viennent du creux de bge-m3 : {morceau}"
+    );
+}
+
+/// **Le creux ne s'embarque qu'au surlignage** (Lucie, 7 novembre 2026 : « faut pas que ça embed
+/// tout h24, juste le moment du surlignage »). Le gabarit de code déclare `models.sparse` ; son
+/// service est ici un vrai serveur d'embarquement du dépôt, dont l'embarqueur creux compte ses
+/// appels (adresse explicite dans le manifeste : une variable d'environnement toucherait les autres
+/// tests du processus). L'indexation entière, puis une recherche sans surlignage : zéro appel ; une
+/// recherche qui demande le surlignage : un appel. Une réindexation après une modification : toujours
+/// zéro (la veille passe par le même nœud d'embarquement, gardé par le signal creux de l'entité).
+/// Il exige `burn-embedder` : sans le tokenizer, le surlignage se replie avant tout appel.
+#[cfg(all(feature = "code", feature = "daemon", feature = "burn-embedder"))]
+#[test]
+#[ignore]
+fn le_creux_ne_s_embarque_qu_au_surlignage() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::{json, Value};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    struct BgeFactice;
+    impl rag3weaver::Embedder for BgeFactice {
+        fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::EmbedError> {
+            Ok(textes.iter().map(|_| vec![1.0f32; 8]).collect())
+        }
+        fn dim(&self) -> usize {
+            8
+        }
+        fn name(&self) -> &str {
+            "bge-m3"
+        }
+    }
+    struct CreuxQuiCompte(Arc<AtomicUsize>);
+    impl rag3weaver::SparseEmbedder for CreuxQuiCompte {
+        fn embed_sparse(&self, textes: &[String]) -> Result<Vec<rag3weaver::sparse_index::SparseVector>, rag3weaver::EmbedError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(textes.iter().map(|_| rag3weaver::sparse_index::SparseVector { indices: vec![5], values: vec![0.5] }).collect())
+        }
+    }
+
+    let appels = Arc::new(AtomicUsize::new(0));
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let adresse = ecoute.local_addr().unwrap().to_string();
+    {
+        let appels = appels.clone();
+        std::thread::spawn(move || {
+            let _ = rag3weaver::daemon::EmbedDaemon::new(Arc::new(BgeFactice))
+                .avec_sparse(Arc::new(CreuxQuiCompte(appels)))
+                .servir_lie(ecoute);
+        });
+    }
+    let debut = Instant::now();
+    while rag3weaver::daemon::DaemonEmbedder::joindre(&adresse).is_err() {
+        assert!(debut.elapsed() < Duration::from_secs(10), "le service factice ne répond pas");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code_sur(tmp.path(), "creux-a-la-demande", Some(depot.path()));
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    assert_eq!(v["models"]["sparse"]["model"], "bge-m3", "le gabarit de code déclare le creux : {}", v["models"]);
+    v["models"]["sparse"]["address"] = json!(adresse);
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared
+        .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
+        .expect("l'ouverture");
+    assert!(backend.avertissements().is_empty(), "le service creux est joint : {:?}", backend.avertissements());
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        if lu.contains("indexation terminée") {
+            break;
+        }
+        assert!(!lu.contains("indexation échouée"), "{lu}");
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    eprintln!("[creux à la demande] après l'indexation : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "l'indexation n'appelle jamais le creux");
+
+    // La réindexation d'un fichier modifié : le même nœud d'embarquement, toujours sans creux.
+    let attendre_l_index = |lance: String| {
+        let journal = lance
+            .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+            .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+            .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+            .to_string();
+        let debut = Instant::now();
+        loop {
+            let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+            if lu.contains("indexation terminée") {
+                break;
+            }
+            assert!(!lu.contains("indexation échouée"), "{lu}");
+            assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    // Le dépôt indexé est la copie sous la racine du workspace (`manifeste_code_sur`).
+    let racine = std::path::PathBuf::from(v["workspace"]["root"].as_str().expect("la racine du workspace"));
+    std::fs::write(racine.join("src/fusion.rs"), "/// La fusion des rangs réciproques, k = 60.\npub fn fusion_des_rangs() -> u32 {\n    60\n}\n").unwrap();
+    attendre_l_index(backend.call("index", json!({"confirm": true})).expect("réindex lancé").to_string());
+    eprintln!("[creux à la demande] après une réindexation : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "la réindexation n'appelle jamais le creux");
+
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    // La réindexation a travaillé : le texte neuf se trouve (un zéro ne prouve rien d'un travail
+    // qui n'a pas eu lieu).
+    let neuf = backend
+        .call_in(&cellule, "search_code", json!({"query": "k = 60", "options": {"signals": ["bm25"], "limit": 5}, "mode": "indexed"}))
+        .expect("search_code");
+    assert!(
+        neuf["result"].as_array().into_iter().flatten().any(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("k = 60"))),
+        "la réindexation a porté le texte neuf de fusion.rs : {neuf}"
+    );
+    let chercher = |options: Value| {
+        backend
+            .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": options, "mode": "indexed"}))
+            .expect("search_code")
+    };
+    chercher(json!({"limit": 5}));
+    eprintln!("[creux à la demande] après une recherche sans surlignage : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "une recherche sans surlignage n'appelle pas le creux");
+    let r = chercher(json!({"signals": ["vector"], "limit": 5, "highlights": "sparse"}));
+    eprintln!("[creux à la demande] après une recherche qui surligne : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 1, "le surlignage appelle le creux une fois, pour toute la page : {r}");
+}
