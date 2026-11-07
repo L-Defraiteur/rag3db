@@ -408,7 +408,7 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
 /// `read_file`, puis répond : « mots, outil, mots, outil, réponse ».
 fn qui_lit_deux_fois() -> ChatModel {
     let appels = Arc::new(AtomicUsize::new(0));
-    Arc::new(move |_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let appels = appels.clone();
         Ok(Arc::new(CallbackLlm::new("faux-lecteur", 8192, move |turns, opts, sink| {
             let modele = match appels.fetch_add(1, Ordering::SeqCst) {
@@ -523,7 +523,7 @@ fn le_role_d_un_outil_se_lit_dans_describe_et_dans_son_run() {
 /// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
 /// flux de soixante événements), puis finit.
 fn page_du_chat() -> ChatModel {
-    Arc::new(|_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-page", 8192, |turns, opts, sink| {
             let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
             let question = turns.get(depuis).map(|t| t.content.clone()).unwrap_or_default();
