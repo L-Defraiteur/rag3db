@@ -834,6 +834,40 @@ impl DaemonHost {
         Ok(json!({ "for": who, "seen": neufs }))
     }
 
+    /// **La reprise après un arrêt de l'hôte** (page
+    /// 07-novembre-2026-everything-declarative/01, § 1) : au démarrage, chaque tâche
+    /// relue dont la dernière demande n'a ni fin (`ended`) ni arrêt (`stop`) avait un
+    /// équipier au travail ou en attente quand l'hôte s'est arrêté. Sa boîte le dit (le
+    /// pas en cours, s'il y en avait un, n'a pas fini : il n'a pas de `step_done`), et
+    /// l'équipier repart à sa frontière, avec son plan et son curseur de boîte gardés
+    /// sur le disque. `teammate.resume_after_restart: false` le laisse en attente.
+    /// Rend une ligne par équipier.
+    pub fn reprendre_les_equipiers(self: &Arc<Self>) -> Vec<String> {
+        let mut lignes = Vec::new();
+        for (t, files) in self.every_teammate() {
+            let boite = files.mailbox();
+            let Some(demande) = boite.iter().rposition(|l| l["kind"] == "request") else { continue };
+            if boite[demande..].iter().any(|l| l["kind"] == "ended" || l["kind"] == "stop") {
+                continue;
+            }
+            let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
+            if !policy.resume_after_restart {
+                let _ = files.append("host", "report", None, "l'hôte a redémarré pendant le travail de l'équipier ; teammate.resume_after_restart est faux : il attend une nouvelle demande");
+                lignes.push(format!("équipier {}/{} laissé en attente (resume_after_restart = false)", t.parent, t.nom));
+                continue;
+            }
+            let _ = files.append(
+                "host",
+                "report",
+                None,
+                "l'hôte s'est arrêté pendant le travail de l'équipier (un pas en cours n'a pas fini) ; reprise à la frontière",
+            );
+            let started = self.start_teammate(&t.parent, &t.nom);
+            lignes.push(format!("équipier {}/{} {}", t.parent, t.nom, if started { "repris" } else { "déjà en route" }));
+        }
+        lignes
+    }
+
     /// **Les équipiers d'un superviseur** (`GET /ide/teammate/list?supervisor=`) :
     /// running (un pas est en vol : un tour du chat de la tâche), waiting (pas de
     /// pas en vol et pas de fin : l'équipier attend sa boîte, ou entre deux pas),

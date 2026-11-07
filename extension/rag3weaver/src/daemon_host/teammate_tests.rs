@@ -653,3 +653,70 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
     assert!(lus.len() >= 2 && lus[0].contains("pub fn bonjour") && lus[1].contains("Petit dépôt"), "les deux lectures, par le backend (rouvert pour la seconde) : {lus:#?}");
     assert!(!lus.iter().any(|l| l.starts_with("index indisponible")), "un backend qui se rouvre n'a pas de repli : {lus:#?}");
 }
+
+/// **L'équipier reprend après un arrêt de l'hôte** (page
+/// 07-novembre-2026-everything-declarative/01, § 1). Un premier hôte ouvre la tâche ; sa boîte
+/// a une demande et une question de l'équipier, sans fin — l'hôte s'est arrêté pendant le
+/// travail. Un second hôte, servi sur les mêmes dossiers, relit les tâches : la boîte dit la
+/// reprise, l'équipier repart à sa frontière et finit. Une tâche dont la demande a déjà sa fin
+/// ne repart pas.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_teammate_resumes_after_the_host_restarts() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let pas = Arc::new(Mutex::new(0usize));
+    let model = {
+        let pas = pas.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let pas = pas.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                *pas.lock().unwrap() += 1;
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "repris et fini", "remaining": "" }))]))
+            })))
+        }) as ChatModel
+    };
+    // Le premier hôte : deux tâches, l'une interrompue, l'autre déjà finie.
+    let (taches, chats) = (d.path().join("taches"), d.path().join("chats"));
+    let id = {
+        let host = hote(d.path(), model.clone());
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+        for nom in ["coupee", "finie"] {
+            host.ouvrir_une_tache(&h.id, nom).expect("la tâche s'ouvre");
+            let files = host.teammate_files(&h.id, nom).unwrap();
+            files.append("supervisor", "request", None, "Écris une ligne dans le README.").unwrap();
+            files.append("teammate", "step_done", None, "fait : la moitié").unwrap();
+            if nom == "finie" {
+                files.append("host", "ended", None, "fait sans plan").unwrap();
+            }
+        }
+        h.id.clone()
+    };
+    // Le second hôte, sur les mêmes dossiers : il relit les tâches et sert.
+    let (adresse, _fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(model).avec_les_taches_relues()
+    });
+    let lire = |task: &str| -> Value {
+        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/teammate?backend={id}&task={task}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let borne = Instant::now() + Duration::from_secs(60);
+    let boite = loop {
+        let b = lire("coupee")["result"]["mailbox"].as_array().cloned().unwrap_or_default();
+        if b.iter().any(|l| l["kind"] == "ended") {
+            break b;
+        }
+        assert!(Instant::now() < borne, "en 60 s, l'équipier interrompu n'a pas repris et fini : {b:#?}");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let reprise = boite.iter().position(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().contains("reprise à la frontière")).expect("la reprise dite");
+    let fin = boite.iter().position(|l| l["kind"] == "ended").unwrap();
+    assert!(reprise < fin, "la reprise avant la fin : {boite:#?}");
+    assert!(boite.iter().any(|l| l["kind"] == "step_done" && l["done"] == "repris et fini"), "{boite:#?}");
+    // La tâche finie ne repart pas.
+    let finie = lire("finie")["result"]["mailbox"].as_array().cloned().unwrap_or_default();
+    assert!(!finie.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("reprise")), "une tâche finie ne reprend pas : {finie:#?}");
+    assert_eq!(*pas.lock().unwrap(), 1, "un seul pas, celui de la reprise");
+}
