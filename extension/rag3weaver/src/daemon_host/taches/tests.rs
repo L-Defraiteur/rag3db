@@ -232,3 +232,58 @@ fn une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne() {
     assert!(etats.contains(&("survit".into(), "fusionnee".into())) && etats.contains(&("perdue".into(), "orpheline".into())), "{etats:?}");
     arreter(&racine, fil);
 }
+
+/// **Le manifeste hors dépôt, le code dans un dépôt** (c7, 7 nov. 2026, sur l'hôte
+/// de Lucie) : la forme exacte de sa configuration. Le manifeste vit dans un dossier
+/// de configuration qu'aucun git ne suit, sa `workspace.root` (en lecture seule)
+/// est la racine d'un dépôt. La tâche s'ouvre : son worktree est une branche
+/// `agent/<nom>` de ce dépôt, sa racine de code est dans ce worktree, sa seconde
+/// instance s'ouvre ; la fermeture retire la branche. Avant le correctif, la
+/// création cherchait le dépôt dans le dossier du manifeste et refusait.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn une_tache_s_ouvre_quand_seul_le_code_est_dans_un_depot() {
+    let d = tempfile::tempdir().unwrap();
+    let config = d.path().join("config").join("backends").join("code");
+    let depot = d.path().join("depot");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::create_dir_all(depot.join("src")).unwrap();
+    std::fs::write(depot.join("src").join("main.rs"), "fn main() {\n    depart();\n}\n\nfn depart() {}\n").unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["config", "user.name", "Personne Test"],
+        &["config", "user.email", "personne@example.org"],
+        &["add", "src"],
+        &["commit", "-q", "-m", "le code"],
+    ] {
+        git(&depot, args).unwrap();
+    }
+    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &config).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(depot.to_string_lossy());
+    m["workspace"]["read_only"] = json!(true);
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    assert!(git(&config, &["rev-parse", "--show-toplevel"]).is_err(), "le banc : le manifeste ne doit être dans aucun dépôt");
+    let host = DaemonHost::new()
+        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+        .with_racine_des_taches(d.path().join("taches"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le backend principal s'ouvre");
+
+    let tache = host.ouvrir_une_tache(&h.id, "premiere").expect("la tâche s'ouvre");
+    let depot = depot.canonicalize().unwrap();
+    assert_eq!(tache.depot, depot, "le dépôt de la tâche est celui du code");
+    assert_eq!(git(&tache.arbre, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap(), "agent/premiere");
+    assert!(tache.arbre.join("src").join("main.rs").is_file(), "le worktree porte le code");
+    let w = tache.workspace.as_ref().expect("le workspace de la tâche");
+    assert!(w.racine.starts_with(&tache.arbre), "la racine de code est dans le worktree : {:?}", w.racine);
+    assert!(!w.ecrit, "la racine principale est en lecture seule : la tâche non plus n'écrit pas");
+    assert!(tache.manifest.is_file() && tache.manifest.starts_with(d.path().join("taches")), "{:?}", tache.manifest);
+    let ht = host.hosted(&tache.manifest).unwrap();
+    host.with_backend(&ht, |_| ()).expect("la seconde instance s'ouvre");
+
+    host.fermer_une_tache(&h.id, "premiere").expect("la tâche se ferme");
+    assert!(git(&depot, &["rev-parse", "--verify", "-q", "refs/heads/agent/premiere"]).is_err(), "la branche est retirée");
+    assert!(!tache.arbre.exists());
+}
