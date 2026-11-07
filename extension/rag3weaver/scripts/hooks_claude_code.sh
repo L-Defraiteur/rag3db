@@ -2,7 +2,7 @@
 # **Les hooks de Claude Code de la mémoire longue** (page docs/07-novembre-2026-hooks-claude-code/01).
 #
 # Pose le réglage (~/.config/rag3weaver/hooks.json) et, SUR DEMANDE EXPLICITE (`--poser`), les
-# cinq entrées de hooks (SessionStart, UserPromptSubmit, PreCompact, PostCompact, Stop), chacune
+# six entrées de hooks (SessionStart, UserPromptSubmit, PreCompact, PostCompact, Stop, PostToolUse), chacune
 # lançant `<binaire> hook`, dans UNE cible — trois niveaux, du plus étroit au plus large :
 #
 #   (défaut)              le `.claude/settings.local.json` du dossier courant : une seule session,
@@ -116,6 +116,8 @@ entrees = {
   "PreCompact":       ("manual|auto", 25),
   "PostCompact":      ("manual|auto", 25),
   "Stop":             (None, 25),
+  # Le rappel différé (3 ter b) : lu à chaque outil, sans hôte ; délai court.
+  "PostToolUse":      (None, 5),
 }
 def est_a_nous(h):
     return any(x.get("type") == "command" and str(x.get("command", "")).startswith(commande) for x in h.get("hooks", []))
