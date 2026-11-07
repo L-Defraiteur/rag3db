@@ -1,6 +1,10 @@
 # Un lecteur voit les lignes d'un COPY de relations annulé par un autre écrivain
 
-- **État** : ouvert (7 novembre 2026), en cours (cœur c++).
+- **État** : corrigé `b7447937d` (7 novembre 2026, lot bloc-annule du cœur c++, sur master en `42b85dc62`) : un bloc
+  entièrement annulé garde son information de version, lignes marquées annulées (`NO_INSERTED`), plus
+  de `versionInfo.reset()` ; témoin déterministe au grain du bloc
+  `RollbackUnderReaders.AFullyRolledBackBlockShowsNoRowToAnyReader`, le probabiliste 60 rejeux sur
+  60 verts sur le lot (4 sur 60 rouges sur master). Ouvert le même jour.
 - **Gravité** : réponse fausse (lecture sale : des lignes jamais validées comptées par un lecteur).
 - **Atteignable en service** : oui — un hôte qui lit pendant qu'un autre client fait un COPY de
   relations puis l'annule (ou le voit refusé).
@@ -28,19 +32,23 @@ du COPY, jamais validées, comptées comme visibles.
 Première vue la nuit du 26 octobre (passe du retrait : 327 verts, ce rouge), lue le 7 novembre.
 Ce rouge est **celui de master**, pas celui d'un lot qui se pose dessus.
 
-## Les suspects
+## La cause
 
 La cause est entre 04063ee06 et f8c0c8df0 : V2-1b pièce 1 (6b63e4922), **V2-1b pièce 2
 (f92b21d56, « un balayage tient ses blocs »)**, V2-1c (98cb797ff, 3724accba), V2-2a+2b
-(ae4432960), ou (A) (f42d90d13). Bissection en cours à luciepc (chaque commit bâti et joué
-40 fois). Lecture : `ChunkedNodeGroup::rollbackInsert(startRow = 0)` fait `versionInfo.reset()` et
+(ae4432960), ou (A) (f42d90d13). Bissection à luciepc (chaque commit bâti et joué 40 fois) : 6b63e4922 (pièce 1) 0/40,
+**f92b21d56 (pièce 2) 2/40**, 3724accba 1/40. La cause : `ChunkedNodeGroup::rollbackInsert(startRow = 0)` fait `versionInfo.reset()` et
 `mayHaveVersionInfo = false` — un bloc entièrement annulé n'a plus d'information de version, donc
 toutes ses lignes passent pour validées ; un lecteur qui tient encore ce bloc (le balayage tient
 sa liste depuis V2-1b pièce 2) et les index de lignes de l'index CSR pris avant l'annulation les
 compte. 2 048 = un bloc plein, 914 = le bloc en cours de remplissage au moment du ROLLBACK.
 
-## Pour le fermer
+## Le correctif
 
-La cause lue et prouvée par la bissection ; le correctif (un bloc annulé ne doit jamais redevenir
-« tout visible » tant qu'un lecteur peut le tenir) ; le témoin rendu déterministe s'il peut
-l'être (forcer l'entrelacement plutôt que 40 rejeux) ; 0 rouge sur 60 rejeux après.
+`ChunkedNodeGroup::rollbackInsert` : toute annulation, complète ou partielle, marque ses lignes
+annulées (`VersionInfo::rollbackInsert`, état `NO_INSERTED`) puis tronque ; l'information de
+version n'est plus jamais effacée. Au grain du bloc, donc nœuds et relations dans les deux sens.
+Le témoin déterministe rejoue la course telle qu'elle est : le compte de lignes lu avant
+l'annulation complète d'un bloc de 914 lignes, le balayage (`ChunkedNodeGroup::scan`) après :
+rien n'est sélectionné, ni pour le lecteur ni pour l'écrivain annulé (`isInserted` est gardé par
+le compte de lignes, `scan` ne l'est pas : c'est exactement la fenêtre).

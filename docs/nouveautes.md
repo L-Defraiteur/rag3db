@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Un lecteur ne voit plus jamais les lignes d'une écriture annulée.** Un bloc
+  entièrement annulé perdait ses versions, ce qui voulait dire « tout validé » pour un lecteur
+  qui le tenait encore : 10 + 2 048 relations d'un COPY annulé comptées, 4 fois sur 60. Les
+  lignes annulées sont désormais marquées telles, au grain du bloc, nœuds et relations ; `42b85dc62`.
 - **7 nov. — Un appel C++ ne voit que ce qu'il inclut.** La résolution suit les #include
   et la déclaration d'en-tête : 299 arêtes justes sur 300 au juge clangd, et une mention
   qui s'abstient se dit au lieu de passer pour devinée. 9fd37ab1c.
