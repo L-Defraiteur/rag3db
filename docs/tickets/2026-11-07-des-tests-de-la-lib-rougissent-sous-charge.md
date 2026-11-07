@@ -22,6 +22,7 @@ bornée, et la charge dépasse la borne.
 | `commande::tests::en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit` | la lib entière (1 rouge sur 2 passes) | `fin.octets_stdout` entre 300 000 et 330 000 (`commande.rs:1512`) : la troncature perd « au plus quelques Ko », plus sous charge | 2/2 verts master 2d3ecad1e, 2/2 verts lot |
 | `daemon_host::taches::tests::la_base_principale_n_est_jamais_ecrite_par_la_tache` | la lib entière (1 rouge sur 2 passes) | « la tâche n'a pas indexé en 60 s » (`taches/tests.rs:92`) : une durée | 2/2 verts master, 2/2 verts lot |
 | `daemon_host::chat::tests::le_chat_se_mene_et_s_arrete_dans_la_page` | l'étape navigateur, à la première exécution après un bâti | voir [son ticket](2026-11-07-le-temoin-du-chat-dans-la-page-rougit-a-la-premiere-execution-apres-un-bati.md) | 5/7 lot, 5/5 master |
+| `le_chat_se_mene_et_s_arrete_dans_la_page`, le tour lent | la lib entière (25 octobre) | voir [le ticket du 25 octobre](2026-10-25-le-temoin-du-chat-rougit-encore-sur-le-tour-lent.md), même famille | — |
 | le témoin des vues de l'IDE | le lot des témoins navigateur | voir [son ticket](2026-10-25-le-temoin-des-vues-de-l-ide-rougit-sous-le-lot.md) ; le harnais attend l'appel en vol depuis bb0f4d9c0 | 2/2 seul |
 
 ## La règle du jour (c7, 7 novembre 2026)
