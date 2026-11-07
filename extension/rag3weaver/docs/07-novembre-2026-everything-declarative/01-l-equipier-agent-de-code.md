@@ -144,9 +144,10 @@ pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
   structurés `succeeded`, `done`, `remaining` (et `tool_issues` au lot 3), `text` restant la
   phrase lisible ; `approval` (lot 2) porte `command` (argv) ; `answer` porte `reply_to` (et
   `approved` pour une approbation). Le flux relaie un sujet `mailbox` : enveloppe habituelle
-  `{"sujet": "mailbox", "backend": "<manifeste parent>", "evenement": {"kind": "MailboxLine",
+  `{"sujet": "mailbox", "backend": "<manifeste de la tâche>", "evenement": {"kind": "MailboxLine",
   "parent", "task", "line": {…la ligne telle qu'écrite…}}}` — la ligne en objet, jamais en
-  texte. L'`Event::Message` actuel reste pour les abonnés du bus.
+  texte. L'`Event::Message` actuel reste pour les abonnés du bus. `GET /ide/teammate` rend aussi
+  `backend`, le manifeste de la tâche (celui des trames du flux), pour filtrer le flux par tâche.
 
 **Témoins** : un équipier qui pose une question à `claude-code:s1` ; `pending?for=claude-code:s1`
 la rend, une autre clé ne la voit pas ; la réponse postée sous `claude-code:s1` est lue à la

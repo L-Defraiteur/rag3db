@@ -669,7 +669,11 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             // ses plans clos, et s'il tourne.
             let (backend, task) = (param("backend").unwrap_or_default(), param("task").unwrap_or_default());
             let v = match host.teammate_files(&backend, &task) {
-                Ok(f) => json!({ "ok": true, "result": { "mailbox": f.mailbox(), "plans": f.read_plans(), "closed": f.closed(), "running": host.teammate_running(&backend, &task) } }),
+                // `backend` : le manifeste de la tâche, celui des trames de `/ide/flux`.
+                Ok(f) => json!({ "ok": true, "result": {
+                    "backend": host.tache(&backend, &task).map(|t| t.manifest.display().to_string()),
+                    "mailbox": f.mailbox(), "plans": f.read_plans(), "closed": f.closed(), "running": host.teammate_running(&backend, &task),
+                } }),
                 Err(e) => json!({ "ok": false, "error": e }),
             };
             let _ = request.respond(json_(200, &v));

@@ -423,7 +423,9 @@ fn the_addressed_mailbox_by_the_host_routes() {
     assert_eq!(etat["state"], "ended", "{etat}");
 
     // La boîte entière : un id par ligne, le step_done avec ses champs.
-    let boite = get(&format!("/ide/teammate?backend={id}&task=doc"))["result"]["mailbox"].as_array().cloned().unwrap();
+    let equipier = get(&format!("/ide/teammate?backend={id}&task=doc"))["result"].clone();
+    let manifeste_de_la_tache = equipier["backend"].as_str().expect("le manifeste de la tâche").to_string();
+    let boite = equipier["mailbox"].as_array().cloned().unwrap();
     let ids: Vec<String> = boite.iter().map(|l| l["id"].as_str().unwrap().to_string()).collect();
     assert_eq!(ids, (0..boite.len()).map(|n| format!("{id}/doc:{n}")).collect::<Vec<_>>(), "un id par rang : {boite:?}");
     let pas = boite.iter().find(|l| l["kind"] == "step_done").expect("un step_done");
@@ -445,7 +447,7 @@ fn the_addressed_mailbox_by_the_host_routes() {
         String::from_utf8_lossy(&lu).into_owned()
     };
     let relayees: Vec<Value> = flux.lines().filter_map(|l| l.strip_prefix("data: ")).filter_map(|l| serde_json::from_str(l).ok()).collect();
-    assert!(relayees.iter().all(|e: &Value| e["sujet"] == "mailbox" && e["evenement"]["kind"] == "MailboxLine"), "{relayees:?}");
+    assert!(relayees.iter().all(|e: &Value| e["sujet"] == "mailbox" && e["evenement"]["kind"] == "MailboxLine" && e["backend"] == manifeste_de_la_tache.as_str()), "{relayees:?}");
     let relayes: Vec<&str> = relayees.iter().filter_map(|e| e["evenement"]["line"]["id"].as_str()).collect();
     for i in [qid.as_str(), fid.as_str()] {
         assert!(relayes.contains(&i), "{i} sur le flux : {relayes:?}");

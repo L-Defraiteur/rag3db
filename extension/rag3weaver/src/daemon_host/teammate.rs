@@ -780,7 +780,9 @@ impl DaemonHost {
         let mut files = TeammateFiles::new(dir, format!("{parent}/{task}"));
         // Chaque ligne écrite part aussi au flux de l'IDE (sujet `mailbox`), en
         // objet : l'IDE, le terminal et le hook la voient sans sonder la boîte.
-        let (flux, backend, p, t) = (Arc::downgrade(self.ide_flux()), t.parent_manifest.display().to_string(), parent.to_string(), task.to_string());
+        // Le `backend` de la trame est le manifeste de la tâche (son worktree), comme
+        // pour ses autres événements : un client filtre le flux d'une tâche par lui seul.
+        let (flux, backend, p, t) = (Arc::downgrade(self.ide_flux()), t.manifest.display().to_string(), parent.to_string(), task.to_string());
         files.relay = Some(MailboxRelay(Arc::new(move |line: &Value| {
             if let Some(flux) = flux.upgrade() {
                 flux.publier("mailbox", &backend, json!({ "kind": "MailboxLine", "parent": p, "task": t, "line": line }));
