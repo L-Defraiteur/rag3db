@@ -67,9 +67,21 @@ Les rouges de l'après-midi, tous vus avant master sauf le premier :
 
 À 23 h, sur le mot de c7 et après le « relancé » de G : memoire-longue fermée par l'hôte sans l'arrêter, instantané `migration-fiche-25-oct`, manifeste au gabarit livré (fichiers sous `/home/lucied/memoire-longue/`), réouverture, la Source, la Fiche « régime GPU » et son apport L1 écrits et relus. Les deux lignes d'origine sont identiques champ à champ avant et après ; rien n'est effacé. La page 05 dit tout, dont trois choses à savoir : `cited_by` prend la valeur sans préfixe de genre, un client MCP ne voit pas les outils nouveaux avant son redémarrage, et le genre « fichier » du 19 octobre n'a pas de fichier.
 
+## La nuit du 25 au 26 : M4 commencé
+
+- **Pas 1 sur master, 662dda2cc** : `models.llm` d'un manifeste se joint à l'ouverture du backend et sert ses graphes (`Decide via='llm'`, `LlmNode`) ; témoin dans e2e_memoire_modele sur le faux serveur SSE de `tests/common/fake_sse.rs`. La reprise sur 429 et 503 existait déjà dans le client.
+- **Pas 2, SplitSections** (lot-96-m4-4 puis -5) : vert le 26 sur f5762fce3, jamais poussé (la session s'est arrêtée) ; rebasé le 7 novembre sur le master du jour, en rejeu.
+- **Pas 3, l'outil `archive`** (lot-96-m4-archive-2 puis -3) : écrit sur le nœud « pour chaque » et les graphes cités de l'arbre principal (1bd1be619) — quatre graphes cités (décider, écrire, créer, lier) enchaînés par des ForEachNode, six scripts Rhai, et une généricité dans RhaiNode (un port `value` qui s'ajoute aux champs donnés par clé) ; compile, e2e_archiviste jamais joué.
+- **Pas 4** : la relecture de l'ancien modèle jouée sur l'instantané (page 06 §5) ; sur la vraie base, rien à écrire.
+- **Les deux rouges du premier rejeu** n'étaient pas dans le lot : une constante hors feature (dead_code) et les paquets React absents de luciepc (`RAG3WEAVER_PAQUETS_REACT`, procédure de push mise à jour depuis).
+
+## Le 7 novembre : la reprise
+
+Inventaire des worktrees et targets des deux postes, ménage (wt-docs-96, relecture-96 ; rag3db-p1-96, p1sans-96, seed96, fiches4, target-96-m1, target-96-seed sur luciepc : ~21 Gio) ; le pas 2 rebasé et rejoué, le pas 3 rebasé dessus.
+
 ## Ce qui attend
 
-1. **M4, l'archiviste** : le design est à la page 06 (l'outil `archive`, le découpage par sections, la décision fermée de la tentative 4 avec `create`, le modèle déclaré au backend, la relecture de l'ancien modèle) ; le code suit dans l'ordre de son §7.
+1. **M4** : le pas 2 à pousser à mon tour ; le pas 3 à essayer (e2e_archiviste sur faux modèle), puis la tentative 5 sur Gemini avant son tour ; une ligne de nouveautés quand `archive` range une vraie note.
 2. **Les roadmaps et les visions en mémoire** : le design est à la page 03 ; **l'identité des agents et la fusion entre mémoires**, à la page 04. Les deux attendent le mot de Lucie.
 3. **La forme des fiches de bilan du juge** d'everything declarative : relue, réponses dans sa page §5 (branche juge-1).
 4. **En fin de session**, effacer les worktrees et les targets :

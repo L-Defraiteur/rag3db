@@ -97,3 +97,14 @@ Ce qu'une session qui reprend doit savoir, et que le code ne dit pas.
 - **L'avant** (25 oct.) :
   - la Memory 1fb42f63 sur le rapport cyclique de 70 % : fact, inferred, person, current, revision 1, created_at 1791682063181 ;
   - le Subject « régime GPU ».
+
+## M4, ce que la nuit du 25 au 26 a appris
+
+- **Un graphe cité par élément** (`ForEachNode(graph='@graphs/x.mmd', on_error='report', …)`, 1bd1be619) substitue `$element` et `$element.<champ>` dans la définition du graphe cité à chaque élément, jamais dans une clé `script` ; un RhaiNode lit l'élément par son port `value`. Un nœud d'écriture derrière un flux ne voit qu'un pli : c'est ForEachNode qui écrit par élément.
+- **Les nœuds d'écriture n'ont pas de port d'entrée** (AddRefNode, RelationBatchNode) : on ne les ordonne pas par une arête ; on les gate par leur rapport, lu par un RhaiNode qui échoue si le rapport dit un refus, et l'appel du sous-graphe échoue avec lui.
+- **RhaiNode** : avec des champs par clé (`inputs`), un port `value` s'ajoute sous `value` au lieu de remplacer ; des `Results` arrivent en JSON (lot-96-m4-archive).
+- **Route** : une clé absente ou hors routes va sur `other` ; sans lecteur, l'élément est compté « sans lecteur », pas une erreur.
+- **Un témoin de `models.llm`** se joue sur `tests/common/fake_sse.rs` (`FakeServer::start_sequence(vec![Reply::Sse{frames}])`), jamais sur un port fermé.
+- **`cargo check` local avec les features des tours** passe en trois minutes sur target-96 ; la lib entière, non (mémoire du portable).
+- **Une constante sous `#[cfg(feature)]`** doit l'être comme le test qui la lit : check_features joue trois jeux sans `openai-llm`.
+
