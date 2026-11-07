@@ -694,15 +694,45 @@ pub struct StepTools<'a> {
     pub step: &'a Step,
 }
 
+impl StepTools<'_> {
+    /// **Une commande mise en attente devient une question dans la boîte**
+    /// (page 07-novembre-2026-everything-declarative/01, § 1, lot 2) : le
+    /// résultat de `run_command` qui commence par la marque de l'attente pose
+    /// une ligne `approval` (la commande, telle que l'agent l'a écrite) ; le
+    /// pas continue sans elle, et un « oui » (`answer`, `approved: true`, en
+    /// réponse à cette ligne) l'accorde pour la suite de la tâche.
+    #[cfg(feature = "code")]
+    fn after(&self, call: &ToolCall, mut turn: Turn) -> Turn {
+        if turn.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
+            let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+            if let Some(ligne) = args["command"].as_str() {
+                let texte = format!("commande en attente d'accord : {ligne}");
+                if let Ok(line) = self.step.files.append_with("teammate", "approval", None, &texte, &json!({ "command": ligne })) {
+                    publish(self.step.bus.as_ref(), &self.step.task, &line);
+                    turn.content.push_str(&format!(
+                        "\n\n_La demande est dans la boîte du superviseur (ligne {}) : continue sans cette commande ; sa réponse arrivera à une frontière, et un accord la laissera passer telle quelle._",
+                        line["id"].as_str().unwrap_or_default()
+                    ));
+                }
+            }
+        }
+        turn
+    }
+    #[cfg(not(feature = "code"))]
+    fn after(&self, _call: &ToolCall, turn: Turn) -> Turn {
+        turn
+    }
+}
+
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.inner.call(call))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call(call)))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.inner.call_in(call, run))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call_in(call, run)))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.inner.call_with(call, run, inv))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call_with(call, run, inv)))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
@@ -741,7 +771,8 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool) -> S
         m.push_str("\nBoîte aux lettres, depuis le pas précédent :\n");
         for l in news {
             let item = l["item"].as_str().map(|i| format!(" (élément {i})")).unwrap_or_default();
-            m.push_str(&format!("- {} de {}{item} : {}\n", l["kind"].as_str().unwrap_or("?"), l["from"].as_str().unwrap_or("?"), l["text"].as_str().unwrap_or("")));
+            let accord = l["granted"].as_str().map(|g| format!(" — {g}")).unwrap_or_default();
+            m.push_str(&format!("- {} de {}{item} : {}{accord}\n", l["kind"].as_str().unwrap_or("?"), l["from"].as_str().unwrap_or("?"), l["text"].as_str().unwrap_or("")));
         }
     }
     let active = plans.active();
@@ -945,7 +976,39 @@ impl DaemonHost {
         }
         let t = self.tache(parent, task).ok_or("la tâche vient de s'ouvrir et n'est plus là")?;
         let files = self.teammate_files(parent, task)?;
-        let line = files.append_with(from, kind, item, text, extra)?;
+        // **Un oui à une commande en attente l'accorde** pour la suite de la
+        // tâche (lot 2 de la page 01) : la ligne visée est une `approval` de
+        // l'équipier, la commande passe par la porte du backend de la tâche,
+        // dans son worktree. L'accord se pose **avant** que le oui s'écrive, et
+        // le oui le porte (`granted`) : l'équipier, qui ne lit pas les lignes de
+        // l'hôte, l'apprend dans la ligne qui le réveille ; la boîte le redit au
+        // superviseur.
+        let mut extra = extra.clone();
+        if let Some(o) = extra.as_object_mut() {
+            o.remove("granted"); // l'hôte seul l'écrit
+        }
+        #[allow(unused_mut)]
+        let mut accord: Option<String> = None;
+        #[cfg(feature = "code")]
+        if kind == "answer" && extra["approved"] == true {
+            let visee = extra["reply_to"].as_str().and_then(|r| files.mailbox().into_iter().find(|l| l["id"] == r));
+            if let Some(ligne) = visee.as_ref().filter(|l| l["kind"] == "approval").and_then(|l| l["command"].as_str().map(str::to_string)) {
+                let domaine = t.workspace.as_ref().map(|w| w.racine.clone());
+                let accorde = self.with_backend_id(&t.id, |b| match b.garde() {
+                    Some(g) => g.accorder_ligne(&ligne, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
+                    None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
+                });
+                let note = match accorde {
+                    Ok(Ok(cs)) => format!("commande accordée pour la tâche : {}", cs.join(" ; ")),
+                    Ok(Err(e)) | Err(e) => format!("l'accord n'a pas pu se poser : {e}"),
+                };
+                if let Some(o) = extra.as_object_mut() {
+                    o.insert("granted".into(), Value::String(note.clone()));
+                }
+                accord = Some(note);
+            }
+        }
+        let line = files.append_with(from, kind, item, text, &extra)?;
         // **D'où part la tâche** (c7, premier essai réel, 7 novembre) : ses
         // déclarations et son code sont ceux d'un commit ; une modification non
         // commitée n'y est pas, et sans le dire on la cherche longtemps.
@@ -958,6 +1021,9 @@ impl DaemonHost {
             let _ = files.append("host", "report", None, &note);
             json!({ "branche": t.branche, "depart": t.depart })
         });
+        if let Some(note) = &accord {
+            let _ = files.append("host", "report", None, note);
+        }
         let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication()).ok();
         publish(bus.as_ref(), task, &line);
         if kind == "stop" {

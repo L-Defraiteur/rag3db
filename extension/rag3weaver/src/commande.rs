@@ -413,6 +413,13 @@ impl Autorisations {
         }
     }
 
+    /// **Accorder une commande exacte** (sa forme lisible) : un oui du
+    /// superviseur dans la boîte d'un équipier, ou un script déclaré au
+    /// manifeste (`workspace.scripts`).
+    pub fn accorder_commande(&self, lisible: String) {
+        self.commandes.lock().unwrap().insert(lisible);
+    }
+
     /// Une portée acquise couvre-t-elle ce cas ?
     pub fn couvre(&self, c: &Commande) -> bool {
         self.familles.lock().unwrap().contains(&c.famille())
@@ -488,6 +495,21 @@ impl Garde {
 
     pub fn acquis(&self) -> &Autorisations {
         &self.acquis
+    }
+
+    /// **Accorder une ligne** : chacune de ses commandes, telle quelle, est
+    /// retenue (`CetteCommande`) ; la ligne se découpe comme `juger_ligne` la
+    /// découpe. Rend les commandes accordées, ou le refus de la ligne (un
+    /// shell, une forme qui ne se lit pas : rien n'est accordé). Sous `code`,
+    /// comme `juger_ligne` (le découpage est celui de codeparsers).
+    #[cfg(feature = "code")]
+    pub fn accorder_ligne(&self, ligne: &str, ctx: &Contexte) -> Result<Vec<String>, String> {
+        let v = self.juger_ligne(ligne, ctx).map_err(|r| r.to_string())?;
+        let accordees: Vec<String> = v.parties.iter().map(|(c, _)| c.lisible()).collect();
+        for c in &accordees {
+            self.acquis.accorder_commande(c.clone());
+        }
+        Ok(accordees)
     }
 
     /// **Le verdict, et lui seul.** Rien ne s'exécute ici : décider et faire
