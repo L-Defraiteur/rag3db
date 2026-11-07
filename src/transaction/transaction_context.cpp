@@ -116,6 +116,16 @@ void TransactionContext::rollbackAfterStatementFailure() {
         rollback();
         return;
     }
+    if (activeTransaction->isReadOnly()) {
+        // Une transaction en lecture seule n'a rien écrit dans la base, quel que soit le moment de
+        // l'échec (analyse, liaison, exécution) : il n'y a rien à défaire, et la condamner faisait
+        // tomber les lectures saines qui la partagent (les signaux de search_code sous
+        // l'instantané L6, ticket du 25 octobre 2026). L'erreur reste celle de l'instruction ; on
+        // ne nettoie que son état de requête, la transaction et son instantané continuent.
+        clientContext.getDatabase()->getTransactionManager()->failAfterStatement(clientContext,
+            activeTransaction);
+        return;
+    }
     // Marche T0 : la transaction reste ouverte et garde ses verrous jusqu'au ROLLBACK (ou au
     // COMMIT, qui annule et le dit) ; ses effets sont annulés tout de suite.
     // Échoué même si l'annulation lève : le bloc ne sert plus rien jusqu'au ROLLBACK.
