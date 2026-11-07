@@ -936,7 +936,8 @@ impl DaemonHost {
         if text.trim().is_empty() && kind != "stop" {
             return Err("le texte est vide".into());
         }
-        if self.tache(parent, task).is_none() {
+        let ouverte = self.tache(parent, task).is_none();
+        if ouverte {
             if kind != "request" {
                 return Err(format!("pas de tâche « {task} » sur {parent} : une request l'ouvre"));
             }
@@ -945,6 +946,18 @@ impl DaemonHost {
         let t = self.tache(parent, task).ok_or("la tâche vient de s'ouvrir et n'est plus là")?;
         let files = self.teammate_files(parent, task)?;
         let line = files.append_with(from, kind, item, text, extra)?;
+        // **D'où part la tâche** (c7, premier essai réel, 7 novembre) : ses
+        // déclarations et son code sont ceux d'un commit ; une modification non
+        // commitée n'y est pas, et sans le dire on la cherche longtemps.
+        let depart = ouverte.then(|| {
+            let court: String = t.depart.chars().take(9).collect();
+            let note = format!(
+                "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)",
+                t.branche
+            );
+            let _ = files.append("host", "report", None, &note);
+            json!({ "branche": t.branche, "depart": t.depart })
+        });
         let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication()).ok();
         publish(bus.as_ref(), task, &line);
         if kind == "stop" {
@@ -953,7 +966,11 @@ impl DaemonHost {
             }
         }
         let started = kind != "stop" && self.start_teammate(parent, task);
-        Ok(json!({ "line": line, "started": started }))
+        let mut r = json!({ "line": line, "started": started });
+        if let Some(d) = depart {
+            r["task"] = d;
+        }
+        Ok(r)
     }
 
     /// Lance la boucle de l'équipier d'une tâche, sur son fil, s'il n'y en a
@@ -1104,6 +1121,21 @@ impl DaemonHost {
             };
             let declared = step.declared();
             let run = r["run"].as_str().unwrap_or_default().to_string();
+            // **Un pas ne finit jamais en silence** (c7, premier essai réel) : sans
+            // `step_done`, la réponse finale du modèle va dans la boîte en `report`,
+            // pour que le superviseur la voie (pending) au lieu d'un équipier qui
+            // attend sans rien avoir dit.
+            if declared.is_none() && r["stopped_by"].is_null() {
+                let texte = r["text"].as_str().unwrap_or_default().trim();
+                let dit = if texte.is_empty() {
+                    format!("le pas {number} s'est terminé sans step_done ni réponse")
+                } else {
+                    format!("le pas {number} s'est terminé sans step_done ; sa réponse : {texte}")
+                };
+                if let Ok(line) = files.append("teammate", "report", None, &dit) {
+                    publish(bus.as_ref(), task, &line);
+                }
+            }
             {
                 let mut plans = files.read_plans();
                 if let Some(p) = plans.active_mut() {
