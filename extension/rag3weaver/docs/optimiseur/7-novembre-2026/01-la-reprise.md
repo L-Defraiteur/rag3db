@@ -87,6 +87,31 @@ code quand un manifeste ne pose pas `location`, et les manifestes de Lucie n'en 
 d'essai de l'équipier déclarera sa région à part. Le tarif et les crédits du programme startup ne se lisent
 pas par l'API : c'est la console de facturation de Lucie.
 
+## La bascule 43 (19 h 21 – 19 h 57)
+
+Lib unique de l'arbre principal : `rag3db-build-17a094d12…`. Sa librag3db.so a la md5 16d68492…, la même aux
+deux postes. Le verdict de l'étape 4 est vert (e2e_code 27, e2e_lectures 22, VERDICT_FORMAT=43). L'ABI
+change par rapport à 04063ee06 : 3 symboles retirés, 17 ajoutés, et trois vtables (ListChunkData,
+ColumnChunkData, InternalIDChunkData). Les hôtes sont donc rebâtis contre la lib neuve.
+
+1. **Hôtes** : binaire dcda4247 (cf14a7771, qui porte le creux de la recherche), essai vert aux deux postes.
+   L'accueil de l'IDE se rend sur 7991 contre la lib neuve.
+2. **Arrêt à 19 h 21**, les binaires posés (les anciens sont en .avant-43), l'env et le filet sur 17a094d12.
+3. **Instantanés avant-43**, rc 0, sans .wal : memoire-longue (30 Mo) et code-rag3db-depot (1,48 Go, plus
+   un .fts de 1,86 Go) ici ; code-principal et code-lourd à luciepc.
+4. **Contrôle des deux sens** (outil ancré 339cbb5dc, tiré d'origin/master) : **aucun écart sur les 4
+   bases**, 2 bases contrôlées par poste.
+5. **`courant` = 17a094d12** aux deux postes ; services et tunnels joignables ; **réveil à 19 h 57**.
+6. Les 4 bases se rouvrent au format 43 sans refus. Une recherche dense bornée à Rust et à
+   `extension/rag3weaver/src/` répond, recall_fiches aussi. Le témoin l_ide_d_un_vrai_hote est vert.
+
+Deux réserves :
+- **models.sparse** : la ligne est posée dans le backend.json de code de Lucie, à son mot (sauvegarde
+  `.avant-sparse-7-nov`). Mais le surlignage creux se replie sur les mots : le binaire des hôtes est bâti
+  sans la feature `burn-embedder`. C'est à décider : environ 88 Mo sans burn, environ 240 Mo avec.
+- **Les anciens instantanés** (bascule-04063ee06, bascule-66994dd43, locks-25-oct, et les copies
+  avant-43-controle) : l'effacement est refusé par ma permission. Rien n'est effacé ; c'est à Lucie.
+
 ## À suivre
 
 - lucivy-publiee-1 : rebase, lib entière, push sous if VERT à mon tour (après les vues d'everything
