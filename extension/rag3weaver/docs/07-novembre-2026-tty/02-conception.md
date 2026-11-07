@@ -127,3 +127,12 @@ Ensuite, à ordonner avec Lucie : la couche déclarative `view!` sur taffy, le p
 1. Est-ce que la base ratatui et notre couche déclarative te vont, plutôt que de partir sur iocraft, ou d'aller vers OpenTUI hors de Rust ?
 2. Un terminal Windows natif un jour, ou Unix seulement ? Avec crossterm, ce n'est qu'un drapeau ; avec termion, non.
 3. Le TUI tourne-t-il sur la machine de l'hôte (ssh ne porte que le terminal), ou veux-tu aussi un client distant qui parle à l'hôte par un tunnel ?
+
+## Ce que Lucie a tranché (7 nov. 2026, soir)
+
+1. **La base :** ratatui avec notre couche déclarative.
+2. **Les systèmes :** Windows, macOS et Linux, natifs (« notre truc tourne partout »). Le backend est donc **crossterm**, celui par défaut de ratatui ; termion est écarté. Il reste à prouver sous Windows ce que termion aurait laissé de côté : le mode brut, le redimensionnement et les séquences VT de la console Windows 10+. Le lot tty-5 ajoute pour cela un passage sur Windows et un sur macOS.
+3. **Où tourne le terminal :** les deux cas, l'hôte n'est pas forcément sur la même machine.
+   - **Le terminal tourne là où est l'hôte**, et ssh ne porte que l'affichage. C'est le premier visé.
+   - **Le terminal tourne à côté de l'hôte**, sur une autre machine, et parle à l'hôte distant par un tunnel (`ssh -L`, ou une commande qui lit le `daemon.json` distant, comme le client MCP `code-rag3db-luciepc`).
+   Le lot tty-1 sépare donc l'adresse et le jeton (lus d'un fichier local ou d'une commande) du reste, et le lot tty-5 mesure aussi le client à distance.
