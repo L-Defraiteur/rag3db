@@ -97,7 +97,7 @@ protected:
             rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(&latest, "Item");
         auto& table = getStorageManager(*database)->getTable(entry->getTableID())->cast<NodeTable>();
         table.addIndex(std::make_unique<ThrowingIndex>(IndexInfo{"throwing_index", "THROWING",
-            entry->getTableID(), {1}, {PhysicalTypeID::INT64}, false /* primary */,
+            entry->getTableID(), {0} /* la clé, que rien ne met à jour */, {PhysicalTypeID::INT64}, false /* primary */,
             false /* builtin */}));
     }
 };
