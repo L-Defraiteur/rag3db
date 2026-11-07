@@ -91,3 +91,11 @@ VectorIndexInsertSlope.CostPerBatchSettles
 # le 7 novembre, 1 rouge sur 1 au banc complet et 1 sur 5 en famille répétée sous une charge de 15,
 # 0 sur 10 seul. Sort d'ici dans le commit du correctif (lot G6).
 VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen
+#
+# C7 à travers un arrêt brutal (ticket 2026-11-07-une-validation-et-un-lecteur-hnsw-se-figent-sur-
+# les-verrous-du-csr, cœur C++) : le 7 novembre, 2 rouges sur 10 seul à luciepc (charge 3), 1 au banc
+# complet. Les deux fois : « GUARD EXPIRED: the engine blocked a writer past the case's guard », la
+# garde arrête le processus (code 3 au lieu de SIGKILL), puis « same-answers » à la réouverture. Un
+# figement, la forme de l'inversion d'ordre des verrous CSR ; sort d'ici dans le commit qui la corrige
+# s'il y passe 10 fois sur 10.
+Launchers/ConcurrencyBench.C7_RandomMix/Thread_Crash
