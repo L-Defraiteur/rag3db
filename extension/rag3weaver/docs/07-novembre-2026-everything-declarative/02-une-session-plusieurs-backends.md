@@ -14,6 +14,11 @@ parlent en branches, PR, worktrees, repos attachés ». Donc :
   **un worktree sur une branche** ; une **tâche** vit dans un worktree et finit **en PR ou en
   fusion** ; la mémoire longue est **« la mémoire »**. « Backend » reste un mot du manifeste et du
   code — jamais de l'écran, jamais des commandes ni des outils de l'agent.
+- **Deux mots selon la nature** (Lucie : « il faut séparer les deux notions ») : un **dépôt** pour
+  le code (worktrees, branches, PR) et un **projet rag3weaver** pour le déclaratif pur, sans dépôt
+  git (le constructeur de decks, un carnet…), plus **la mémoire**. « Backend » couvre les trois
+  dans le manifeste et le code ; l'hôte les distingue par `kind: code | memory | project` dans
+  `/ide/etat` (posé par hooks-essai au lot B2a), et l'écran nomme chacun par son mot.
 - **La barre de gauche de l'IDE** liste les **dépôts attachés**, puis sous chacun ses worktrees et
   leurs branches (et ses PR ouvertes quand le dépôt a une forge) ; une conversation est rangée sous
   le dépôt ou le worktree qu'elle tient. Plus de « backends ouverts ».
