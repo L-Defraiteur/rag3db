@@ -12,7 +12,9 @@
 # par `cp -a --reflink=always` (même btrfs, immédiat) dans …/instantanes/<étiquette>-controle/,
 # et c'est cette copie que l'outil ouvre, en lecture seule. L'outil se bâtit contre la lib du
 # magasin (son `rag3db.hpp` et sa `librag3db.so`), pas contre un arbre de bâti.
-# Code de sortie : 0 aucun écart, 1 un écart dans au moins une base, 2+ le contrôle n'a pas tourné.
+# Code de sortie : 0 aucun écart, 1 un écart dans au moins une base, 2+ le contrôle n'a pas tourné
+# (7 : aucune base contrôlée — un contrôle qui ne trouve rien à juger est rouge, jamais vert par
+# défaut ; hotfixs, 7 novembre).
 set -u
 [ $# = 2 ] || { echo "usage : $0 <étiquette> <id de la lib>" >&2; exit 2; }
 E=$1; LIB=${RAG3DB_LIBS_DIR:-$HOME/.cache/rag3db-libs}/$2
@@ -27,6 +29,7 @@ mkdir -p "$C"
 nice -n 15 g++ -std=c++20 -O2 -I "$LIB" "$SRC" -L "$LIB" -lrag3db -Wl,-rpath,"$LIB" -o "$OUTIL" \
   || { echo "ÉCHEC : l'outil ne se bâtit pas contre $LIB" >&2; exit 4; }
 verdict=0
+controlees=0
 for sous in "$I"/*/; do
   nom=$(basename "$sous")
   base="$sous$nom.rag3db"
@@ -35,8 +38,14 @@ for sous in "$I"/*/; do
   cp -a --reflink=always "$sous"/. "$C/$nom/" || { echo "ÉCHEC : copie reflink de $sous" >&2; exit 5; }
   "$OUTIL" "$C/$nom/$nom.rag3db" > "$C/$nom.log" 2>&1
   rc=$?
+  controlees=$((controlees + 1))
   echo "$nom : rc=$rc — $(tail -1 "$C/$nom.log" | cut -c1-160)"
   case $rc in 0) ;; 1) verdict=1 ;; *) [ $verdict = 0 ] && verdict=6 ;; esac
 done
+if [ $controlees = 0 ]; then
+  echo "verdict : ROUGE — aucune base contrôlée dans $I (attendu : <nom>/<nom>.rag3db)"
+  exit 7
+fi
+echo "bases contrôlées : $controlees"
 echo "verdict : $([ $verdict = 0 ] && echo 'aucun écart' || ([ $verdict = 1 ] && echo 'ÉCART — la bascule s’arrête, ticket' || echo 'le contrôle n’a pas tourné partout'))"
 exit $verdict

@@ -61,7 +61,8 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    chaque base (`…/instantanes/<étiquette>-controle/`), jamais l'instantané, qui reste le retour.
    Un écart arrête la bascule (`courant` ne bouge pas) et s'écrit en ticket avec ses tables et
    leurs comptes : la base se réparera ou se réindexera avant toute lib neuve. Aucun écart ne
-   prouve pas qu'une table est saine. Référence connue : l'instantané `bascule-04063ee06` de
+   prouve pas qu'une table est saine. Un contrôle qui ne trouve aucune base à lire est rouge
+   (code 7), jamais « aucun écart » : le script compte les bases contrôlées (hotfixs, 7 novembre). Référence connue : l'instantané `bascule-04063ee06` de
    `code-rag3db-depot` (25 octobre, avant le rebâti de la base de code) rend LOCKS 413 contre 505
    et QUERIES 21 804 contre 22 089 — les demi-arêtes de ce jour-là ; celui de `memoire-longue`,
    aucun écart (essayé le 7 novembre).
