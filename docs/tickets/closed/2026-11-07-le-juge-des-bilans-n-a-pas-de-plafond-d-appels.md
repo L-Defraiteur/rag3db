@@ -1,6 +1,6 @@
 # Le juge des bilans n'a pas de plafond d'appels
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — lot court après la reprise.
+- **État** : corrigé (7 novembre 2026) par le lot « bilans.max_per_hour » (everything declarative) : au plus N runs jugés par heure glissante et par backend, 20 par défaut, le saut dit au journal, sur la sortie d'erreur et dans la boîte d'un équipier.
 - **Famille** : produit
 - **Gravité** : dépense non bornée (chaque tour fini d'une conversation qui déclare `bilans` coûte au moins un appel au modèle du juge, sans limite).
 - **Atteignable en service** : oui, dès qu'un manifeste déclare `bilans.memoire` (Lucie l'allume sur son chat le 7 novembre au soir).
