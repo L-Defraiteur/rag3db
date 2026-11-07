@@ -339,7 +339,8 @@ public:
 
     std::pair<common::offset_t, common::offset_t> appendToLastNodeGroup(
         transaction::Transaction* transaction, const std::vector<common::column_id_t>& columnIDs,
-        InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator);
+        InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator,
+        std::optional<common::offset_t> partialFlushFrom = std::nullopt);
 
     void commit(main::ClientContext* context, catalog::TableCatalogEntry* tableEntry,
         LocalTable* localTable) override;
