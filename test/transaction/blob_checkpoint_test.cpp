@@ -234,11 +234,15 @@ TEST_F(BlobCopyCheckpointTest, ARolledBackCopyBeyondAQuarterOfTheBufferPoolLeave
         return;
     }
     ASSERT_TRUE(conn->query("ROLLBACK;")->isSuccess());
-    auto count = conn->query("MATCH (b:Blobs) RETURN count(*);");
-    ASSERT_TRUE(count->isSuccess()) << count->getErrorMessage();
-    EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 0) << "des lignes du COPY annulé restent";
-    auto checkpoint = conn->query("CHECKPOINT;");
-    ASSERT_TRUE(checkpoint->isSuccess()) << checkpoint->getErrorMessage();
+    {
+        // Les résultats meurent ici, avant que expectBlobs ne rouvre la base qu'ils tiennent.
+        auto count = conn->query("MATCH (b:Blobs) RETURN count(*);");
+        ASSERT_TRUE(count->isSuccess()) << count->getErrorMessage();
+        EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 0)
+            << "des lignes du COPY annulé restent";
+        auto checkpoint = conn->query("CHECKPOINT;");
+        ASSERT_TRUE(checkpoint->isSuccess()) << checkpoint->getErrorMessage();
+    }
     copyBlobs(0, numRows, blobSize);
     if (HasFatalFailure()) {
         return;
