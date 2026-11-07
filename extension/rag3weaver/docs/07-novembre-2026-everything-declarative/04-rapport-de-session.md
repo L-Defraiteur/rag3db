@@ -11,6 +11,8 @@
 | la boîte adressée | b9b47ee12 | id stable par ligne, `to`, `reply_to`, le relais MailboxLine sur /ide/flux, pending / seen / list |
 | l'étanchéité de l'équipier | 75d8d6d1e | le backend pris à chaque appel d'outil, le repli sur les fichiers, `ChatModel` sur le manifeste préparé, la clé `teammate`, un pas raté qui n'arrête plus |
 | la reprise après un arrêt de l'hôte | 4ae8c93a8 | l'équipier interrompu reprend à sa frontière au redémarrage, `teammate.resume_after_restart` |
+| le plafond du juge | ff2725f90 | `bilans.max_per_hour` (20), le saut dit au journal et dans la boîte |
+| `code-tree add --from` | 0683cc474 | par nom ou par chemin, quel que soit le nom du manifeste (`rag3db.json`) |
 
 Pages : 01 (l'équipier, agent de code fonctionnel), 02 (une session, plusieurs backends ; le
 vocabulaire git ; le modèle session › tâches › espaces ; la forme de la barre), 03 (l'atelier ouvre
@@ -18,10 +20,11 @@ les dépôts). Tickets ouverts par moi : le témoin du chat dans la page, les te
 garde de `match` Rust (pris par codeparsers), les sept défauts du chat (portés et fermés par le lot
 de hooks-essai), le plafond du juge.
 
-## En file
+## Demain matin (8 novembre)
 
-- **Le plafond du juge** : `juge-plafond-2`, a20a9ebdd — `bilans.max_per_hour`, au mot de c7 après
-  codeparsers (Lucie allume `bilans.memoire` ce soir).
+- Les figements de la lib entière sous charge et le rouge intermittent du réacteur
+  (`a_batch_collapses_a_burst_into_one_run`, 1/8) : le réacteur est mon module (ticket de
+  codeparsers) ; témoin sous charge d'abord, puis la cause.
 
 ## Relu pour d'autres
 
@@ -31,7 +34,7 @@ Le lot du chat de hooks-essai (A, B, la page, premier-jeton : la course de `Flux
 
 ## Ce qui reste, dans l'ordre
 
-1. Le plafond du juge (en file).
+1. Les figements sous charge du réacteur (demain matin).
 2. La première marche de la page 03 : les outils intégrés `attach_repo` / `open_branch` /
    `declare_repo`, un appel qui crée le worktree, le manifeste, l'index, l'événement sur le flux.
 3. Le lot d'IDE des noms à plusieurs définitions (choisir avant de dessiner).
