@@ -1214,12 +1214,18 @@ else
   fi
   # **Le compte des suites** : jouées contre demandées. Une suite qui n'a pas
   # rendu de résultat (compilation, abandon) fait un total qui n'en est pas un.
-  ATTENDUES=0
-  for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do [ "${CARGO_ARGS[$i]}" = "--test" ] && ATTENDUES=$((ATTENDUES + 1)); done
-  JOUEES=$(grep -cE 'Running tests/e2e_[A-Za-z0-9_]+\.rs' "$E2E_LOG" || true)
-  echo "Suites jouées : ${JOUEES:-0} sur $ATTENDUES demandées."
-  if [ "${JOUEES:-0}" -lt "$ATTENDUES" ]; then
-    echo "✗ $((ATTENDUES - ${JOUEES:-0})) suite(s) demandée(s) n'ont rendu aucun résultat"
+  # Chaque suite demandée doit avoir sa ligne `Running tests/<nom>.rs` ; les filets du
+  # binaire (`e2e_filets`) ne se comptent pas.
+  ATTENDUES=0; JOUEES=0; MANQUANTES=()
+  for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
+    [ "${CARGO_ARGS[$i]}" = "--test" ] || continue
+    nom="${CARGO_ARGS[$((i + 1))]}"
+    ATTENDUES=$((ATTENDUES + 1))
+    if grep -qF "Running tests/$nom.rs" "$E2E_LOG"; then JOUEES=$((JOUEES + 1)); else MANQUANTES+=("$nom"); fi
+  done
+  echo "Suites jouées : $JOUEES sur $ATTENDUES demandées."
+  if [ ${#MANQUANTES[@]} -gt 0 ]; then
+    echo "✗ ${#MANQUANTES[@]} suite(s) demandée(s) n'ont rendu aucun résultat : ${MANQUANTES[*]}"
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
   fi
   if [ ${#ECARTEES_MODELE[@]} -gt 0 ]; then
