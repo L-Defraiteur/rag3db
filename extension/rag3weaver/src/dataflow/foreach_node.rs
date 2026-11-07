@@ -763,6 +763,40 @@ mod tests {
         assert!(e.contains("graphs/script.mmd") && e.contains("script"), "{e}");
     }
 
+    /// **Les paramètres du parent n'entrent pas dans le graphe cité** (96, 7 novembre
+    /// 2026, archive) : un parent qui déclare `candidates` et le donne à un
+    /// `ForEachNode` dont le graphe cité déclare et emploie aussi `candidates`. À
+    /// l'instanciation du parent, le texte cité garde son `$candidates` ; le nœud se
+    /// construit (la garde de bijection du graphe cité le trouve) et reçoit la valeur
+    /// par sa configuration.
+    #[test]
+    fn les_parametres_du_parent_ne_se_substituent_pas_dans_le_graphe_cite() {
+        let reg = registre();
+        const DECIDE: &str = "%% tool: decide\n%% description: d\n%% param: element json! -- x\n%% param: candidates int = 5 -- combien\n%% result: note.text\n\ngraph LR\n    note[\"NoterNode(valeur='$element.title sur $candidates', echoue=$element.echoue)\"]\n";
+        let mut parent = GraphTool::from_mermaid(
+            "%% tool: archive\n%% description: d\n%% param: candidates int = 5 -- combien\n%% result: chaque.report\n\ngraph LR\n    chaque[\"ForEachNode(graph='@graphs/decide.mmd', candidates=$candidates)\"]\n",
+        )
+        .unwrap();
+        let lire = |chemin: &str| -> Result<String, String> {
+            match chemin {
+                "graphs/decide.mmd" => Ok(DECIDE.to_string()),
+                autre => Err(format!("fichier introuvable : {autre}")),
+            }
+        };
+        resoudre_les_sous_graphes(&mut parent, &lire, &reg).unwrap();
+        let def = parent.instantiate(&json!({"candidates": 3})).unwrap();
+        let config = def.nodes.iter().find(|n| n.name == "chaque").unwrap().config.clone();
+        assert_eq!(config["candidates"], json!(3), "le nœud reçoit la valeur du parent : {config}");
+        assert!(
+            config["graph"]["mermaid"].as_str().is_some_and(|t| t.contains("sur $candidates")),
+            "le texte cité garde son $candidates : {config}"
+        );
+        let sous = RegistreDesSousGraphes::default();
+        sous.poser(&reg);
+        let n = ForEachNodeFactory { registre: sous }.create("chaque", &config);
+        assert!(n.is_ok(), "le nœud se construit : {:?}", n.err());
+    }
+
     /// **Un manifeste qui cite un sous-graphe absent ou faux se refuse à son
     /// chargement**, en nommant l'outil et le fichier (`PreparedBackend::load`,
     /// avant toute base).
