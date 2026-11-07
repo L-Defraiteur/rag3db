@@ -819,7 +819,7 @@ fn la_recherche_se_tape_depuis_l_accueil_et_le_dossier_n_est_qu_un_filtre() {
     assert_eq!(index["ok"], true, "{index}");
     let debut = Instant::now();
     loop {
-        let r = appeler("search_code", json!({ "query": "arrivee" }));
+        let r = appeler("search_code", json!({ "query": "arrivee", "options": { "limit": 30 } }));
         let texte = r.to_string();
         if r["ok"] == true && texte.contains("src/arrivee.rs") && texte.contains("outils/relais.rs") {
             break;
