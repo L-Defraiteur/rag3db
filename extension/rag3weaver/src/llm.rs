@@ -81,6 +81,11 @@ pub struct ToolCall {
     /// `None` sur le chemin local (`MockLlm`, burn) : il n'y a rien à rejouer,
     /// et **rien de superflu ne doit être sérialisé**.
     pub provider_extra: Option<serde_json::Value>,
+    /// **L'heure où l'appel est parti** (ms epoch), posée par la boucle de
+    /// l'agent au moment de l'appel — pas à l'insertion du tour. Absente des
+    /// tours d'avant, et de ce qui n'a pas encore été appelé.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at_ms: Option<u64>,
 }
 
 impl ToolCall {
@@ -94,6 +99,7 @@ impl ToolCall {
             name: name.into(),
             arguments: arguments.into(),
             provider_extra: None,
+            at_ms: None,
         }
     }
 
@@ -363,6 +369,10 @@ pub struct Turn {
     /// Pour un tour `tool` : le nom de l'outil. Facultatif chez OpenAI, mais
     /// certains fournisseurs le lisent, et il rend un historique lisible.
     pub tool_name: Option<String>,
+    /// Pour un tour `tool` : **l'heure où le résultat est revenu** (ms epoch),
+    /// posée par la boucle de l'agent. Absente des tours d'avant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at_ms: Option<u64>,
 }
 
 impl Turn {
@@ -1829,7 +1839,7 @@ pub fn recover_tool_calls(text: &str) -> (String, Vec<ToolCall>, Vec<String>) {
             return;
         }
         let id = ToolCall::local_id("recovered", calls.len(), &name, &arguments);
-        calls.push(ToolCall { id, name, arguments, provider_extra: None });
+        calls.push(ToolCall { id, name, arguments, provider_extra: None, at_ms: None });
         spans.push(span);
     };
 

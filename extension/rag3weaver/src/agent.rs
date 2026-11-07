@@ -653,7 +653,20 @@ pub struct AgentRun {
     pub messages: usize,
     /// Cumul de tous les appels : jetons, durée, **et réessais**.
     pub usage: Usage,
+    /// **Le dernier appel au modèle** : ses jetons d'entrée (cache compris,
+    /// `prompt_tokens`) et son heure (ms epoch) — ce que remplit le contexte au
+    /// prochain appel, que la jauge du chat montre. `None` sans appel.
+    pub last_call: Option<LastCall>,
     pub stop: StopReason,
+}
+
+/// Le dernier appel au modèle d'un run ([`AgentRun::last_call`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LastCall {
+    /// Les jetons d'entrée de l'appel, cache compris.
+    pub prompt_tokens: usize,
+    /// L'heure de l'appel mesuré (ms epoch), prise à son retour.
+    pub at_ms: u64,
 }
 
 impl AgentRun {
@@ -1412,6 +1425,7 @@ impl<'a> Agent<'a> {
             domain: self.domain.clone(),
             scope: self.events.as_ref().map(|b| b.scope().clone()),
             target: None,
+            role: None,
         });
         let outcome = self.run_inner(turns, sink, &run_id);
         // Le tour fini rend son nom : une fin adressée à ce nom attend le
@@ -1524,6 +1538,7 @@ impl<'a> Agent<'a> {
             closed_orphans: 0,
             messages: 0,
             usage: Usage::default(),
+            last_call: None,
             stop: StopReason::MaxIterations,
         };
         // La dernière erreur observée, `(outil, contenu)`. Remise à zéro par
@@ -1731,6 +1746,7 @@ impl<'a> Agent<'a> {
 
             run.text = text.clone();
             accumulate(&mut run.usage, &usage);
+            run.last_call = Some(LastCall { prompt_tokens: usage.prompt_tokens, at_ms: crate::events::maintenant_ms() });
             last_finish = finish.clone();
             let model = self.llm.name().to_string();
             self.emit(crate::events::CatalogEvent::LlmCall {
@@ -1853,6 +1869,8 @@ impl<'a> Agent<'a> {
             // L'ordre est le contrat du protocole : un tour d'assistant qui
             // annonce N appels, puis N tours `tool`, sans rien entre eux.
             turns.push(Turn::assistant_with_calls(text, finish.tool_calls.clone()));
+            // Le tour qui annonce les appels : chacun y reçoit l'heure où il part.
+            let announced = turns.len() - 1;
 
             // Interrompu **pendant** l'annonce : les appels existent, ils
             // n'ont pas tourné. On ne les exécute pas — l'utilisateur a dit
@@ -1867,7 +1885,13 @@ impl<'a> Agent<'a> {
             // porte des arguments en JSON invalide : on l'exécute quand même,
             // l'outillage en fait une erreur lisible, et le modèle reprend.
             let mut repeated: Option<(String, String)> = None;
-            for call in &finish.tool_calls {
+            for (k, call) in finish.tool_calls.iter().enumerate() {
+                // L'heure de l'appel, prise **à l'appel** (ticket « l'heure d'un
+                // appel d'outil est celle de l'insertion du tour ») : écrite dans le
+                // tour d'annonce, en mémoire, avant tout résultat.
+                if let Some(c) = turns.get_mut(announced).and_then(|t| t.tool_calls.get_mut(k)) {
+                    c.at_ms = Some(crate::events::maintenant_ms());
+                }
                 self.emit(crate::events::CatalogEvent::ToolCallStarted {
                     run: run_id.to_string(),
                     agent: self.name.clone(),
@@ -1998,6 +2022,8 @@ impl<'a> Agent<'a> {
                 }
                 if self.events.is_some() {
                     let error_kind = error_kind(&result.content);
+                    // L'extrait borné du résultat (ou du refus), pour le flux.
+                    let (result_excerpt, truncated) = crate::events::result_excerpt(&result.content);
                     self.emit(crate::events::CatalogEvent::ToolCallFinished {
                         run: run_id.to_string(),
                         agent: self.name.clone(),
@@ -2007,6 +2033,8 @@ impl<'a> Agent<'a> {
                         error_kind,
                         ms: started.elapsed().as_millis() as u64,
                         bytes: result.content.len(),
+                        result_excerpt,
+                        truncated,
                     });
                 }
                 match error_detail(&result.content) {
@@ -2023,6 +2051,9 @@ impl<'a> Agent<'a> {
                     }
                     None => last_error = None,
                 }
+                // L'heure où le résultat est revenu, prise ici, pas à l'insertion.
+                let mut result = result;
+                result.at_ms = Some(crate::events::maintenant_ms());
                 turns.push(result);
             }
 

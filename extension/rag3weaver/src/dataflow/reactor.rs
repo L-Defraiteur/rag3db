@@ -395,7 +395,7 @@ fn run_tool(
             let mut layer = ServiceRegistry::layered(services);
             layer.register(
                 crate::events::RUN_TARGET_SERVICE,
-                crate::events::RunTarget { run: run.clone(), target: target.clone() },
+                crate::events::RunTarget { run: run.clone(), target: target.clone(), role: None },
             );
             Arc::new(layer)
         }
