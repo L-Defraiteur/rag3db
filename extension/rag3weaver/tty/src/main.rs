@@ -1,7 +1,8 @@
-//! **rag3weaver-tty** : le terminal de l'agent de code (lot tty-1 : `--plain`).
+//! **rag3weaver-tty** : le terminal de l'agent de code. Par défaut la vue inline
+//! (lot tty-2) ; `--plain` écrit le texte brut, sans terminal riche (lot tty-1).
 //!
 //! ```text
-//! rag3weaver-tty --plain --backend <id du parent> --task <nom> [--demande "<texte>"]
+//! rag3weaver-tty [--plain] --backend <id du parent> --task <nom> [--demande "<texte>"]
 //!                [--daemon-json <chemin> | --daemon-cmd "<commande>"] [--adresse hôte:port]
 //!                [--depuis <id>]
 //! ```
@@ -14,7 +15,7 @@
 //! L'hôte sur une autre machine : `--daemon-cmd "ssh luciepc cat .local/share/rag3weaver/daemon.json"`
 //! et `--adresse 127.0.0.1:17970` derrière un `ssh -L 17970:127.0.0.1:7970 luciepc`.
 
-use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain};
+use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain, tui};
 use serde_json::{json, Value};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -29,16 +30,16 @@ struct Options {
     daemon_cmd: Option<String>,
     adresse: Option<String>,
     depuis: Option<u64>,
+    plain: bool,
 }
 
 fn options() -> Result<Options, String> {
     let mut args = std::env::args().skip(1);
-    let mut o = Options { backend: String::new(), task: String::new(), demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None };
-    let mut plain = false;
+    let mut o = Options { backend: String::new(), task: String::new(), demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
-            "--plain" => plain = true,
+            "--plain" => o.plain = true,
             "--backend" => o.backend = valeur()?,
             "--task" => o.task = valeur()?,
             "--demande" => o.demande = Some(valeur()?),
@@ -50,16 +51,13 @@ fn options() -> Result<Options, String> {
             autre => return Err(format!("option inconnue : {autre}")),
         }
     }
-    if !plain {
-        return Err("seul --plain existe pour l'instant (lot tty-1)".into());
-    }
     if o.backend.is_empty() || o.task.is_empty() {
         return Err("--backend et --task sont exigés".into());
     }
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty --plain --backend <id> --task <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>]";
+const AIDE: &str = "rag3weaver-tty [--plain] --backend <id> --task <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>]";
 
 fn main() {
     let o = match options() {
@@ -88,6 +86,9 @@ fn lancer(o: Options) -> Result<(), String> {
         Some(a) => ep.a_l_adresse(a),
         None => ep,
     };
+    if !o.plain {
+        return tui::lancer(ep, tui::Tache { backend: o.backend, task: o.task }, o.demande, o.depuis);
+    }
     let agent = client::agent();
     let sortie = Arc::new(Mutex::new(std::io::stdout()));
     let ecrire = {
