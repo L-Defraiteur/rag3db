@@ -51,25 +51,25 @@ les vues qui les lisent.
 
 ```json
 {
-  "sessions": [{
-    "id": "<conversation>", "agent": { "name": "chat:<id>", "model": "gemini-3.8-flash" },
-    "context": { "used": 47687, "max": 1048576, "source": "run", "at": 1794078848478 },
-    "memory_writes": 3,
+  "chat_sessions": [{
+    "id": "<backend id du chat>", "name": "<nom affiché>", "model": "gemini-3.8-flash",
     "repos": [{
-      "repo": "rag3db", "branch": "agent/doc", "worktree": "<chemin>", "kind": "code",
-      "backend": "<id>", "loaded": true,
-      "rag": { "state": "indexed" | "indexing" | "absent", "progress": { "done": 812, "total": 1200 } }
+      "backend": "<id>", "repo": "rag3db", "branch": "agent/doc", "worktree": "<racine>",
+      "loaded": true, "rag": { "state": "indexed" | "indexing" | "absent", "percent": 87 }
     }],
-    "memory": { "backend": "<id>", "loaded": true, "read_by_session": false }
+    "memory": { "backend": "<id>" | null, "rag": true }
   }],
-  "available": [{ "repo": "lucivy", "branch": "main", "backend": "<id>", "loaded": false, "rag": { "state": "indexed" } }]
+  "available_repos": [{ "backend": "<id>", "repo": "lucivy", "branch": "main", "loaded": false, "rag": { "state": "indexed" } }]
 }
 ```
 
-`loaded` : le slot du backend est ouvert dans l'hôte (lu sans attendre, comme le reste de l'état).
-`rag.state` : `indexing` quand une indexation tourne (le suivi d'embarquement du catalogue),
-`absent` sans base ou sans index, sinon `indexed`. `read_by_session` deviendra vrai le jour où la
-session lit la mémoire (le premier pas de la page 02, § 3).
+`chat_sessions` et non `sessions` (le mot désigne déjà les clients de l'hôte). Une session, avant le
+manifeste de session, = une conversation (une entrée de `chats`) : ses `repos` sont son dépôt et
+les worktrees de ses tâches ouvertes ; les sessions MCP de Claude Code n'y entrent qu'avec
+l'identité d'agent à clé stable. `loaded` : le slot du backend est ouvert dans l'hôte (lu sans
+attendre). `rag` se lit dans `index_states` (déjà dans `backends[i].index`) : `indexed` si le texte
+est là, `indexing` avec un pourcentage si un lot est en cours, `absent` sinon. La jauge et les
+fiches écrites d'une session se lisent dans `GET /ide/chat`.
 
 ## 1. Pourquoi aujourd'hui un chat = un backend
 
