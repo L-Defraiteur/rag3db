@@ -79,6 +79,10 @@ struct NodeBatchInsertSharedState final : BatchInsertSharedState {
     // force-sous-un-petit-tampon). Un groupe peut tripler au pic de sa croissance (le dictionnaire
     // alloue le neuf avant de rendre l'ancien) : la limite du tampon / (3 · (fils + 1)).
     uint64_t byteBudget = UINT64_MAX;
+    // Ce que tient un groupe vide du même schéma : il préalloue ses 2^17 lignes pour chaque colonne
+    // de taille fixe. Le budget porte sur ce qui croît au-delà (les chaînes, les blobs) ; sans ce
+    // socle, un groupe neuf « dépassait » déjà le budget et tout COPY se vidait par lots.
+    uint64_t byteBaseline = 0;
 
     // Les statistiques des lignes de ce COPY, réunies ici par ses fils (sous mtx) : elles ne
     // rejoignent la table qu'à la validation de la transaction (LocalStorage).
@@ -139,7 +143,9 @@ public:
         storage::PageAllocator& pageAllocator, bool partialFlush = false) const;
 
 private:
-    // Les octets que tient le groupe en mémoire dépassent-ils le budget du COPY ?
+    // Les octets que tient un groupe en mémoire, et s'ils dépassent le budget du COPY au-delà du
+    // socle d'un groupe vide.
+    static uint64_t estimatedBytes(const storage::InMemChunkedNodeGroup& nodeGroup);
     bool overByteBudget(const storage::InMemChunkedNodeGroup& nodeGroup) const;
     void evaluateExpressions(uint64_t numTuples) const;
     void appendIncompleteNodeGroup(transaction::Transaction* transaction,

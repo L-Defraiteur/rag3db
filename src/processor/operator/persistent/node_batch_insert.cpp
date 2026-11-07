@@ -111,6 +111,12 @@ void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
     nodeSharedState->byteBudget =
         MemoryManager::Get(*context->clientContext)->getBufferManager()->getMemoryLimit() /
         (3 * (numThreads + 1));
+    {
+        const auto nodeInfo = info->ptrCast<NodeBatchInsertInfo>();
+        const InMemChunkedNodeGroup empty{*MemoryManager::Get(*context->clientContext),
+            nodeInfo->columnTypes, info->compressionEnabled, StorageConfig::NODE_GROUP_SIZE, 0};
+        nodeSharedState->byteBaseline = estimatedBytes(empty);
+    }
     nodeSharedState->initPKIndex(context);
 }
 
@@ -241,13 +247,19 @@ void NodeBatchInsert::clearToIndex(MemoryManager* mm,
         oldNodeGroup->getNumRows() - startIndexInGroup);
 }
 
-bool NodeBatchInsert::overByteBudget(const InMemChunkedNodeGroup& nodeGroup) const {
-    const auto nodeSharedState = ku_dynamic_cast<NodeBatchInsertSharedState*>(sharedState.get());
+uint64_t NodeBatchInsert::estimatedBytes(const InMemChunkedNodeGroup& nodeGroup) {
     uint64_t bytes = 0;
     for (auto i = 0u; i < nodeGroup.getNumColumns(); i++) {
         bytes += nodeGroup.getColumnChunk(i).getEstimatedMemoryUsage();
     }
-    return bytes > nodeSharedState->byteBudget;
+    return bytes;
+}
+
+bool NodeBatchInsert::overByteBudget(const InMemChunkedNodeGroup& nodeGroup) const {
+    const auto nodeSharedState = ku_dynamic_cast<NodeBatchInsertSharedState*>(sharedState.get());
+    const auto bytes = estimatedBytes(nodeGroup);
+    return bytes > nodeSharedState->byteBaseline &&
+           bytes - nodeSharedState->byteBaseline > nodeSharedState->byteBudget;
 }
 
 void NodeBatchInsert::writeAndResetNodeGroup(transaction::Transaction* transaction,
