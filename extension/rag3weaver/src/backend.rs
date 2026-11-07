@@ -3673,7 +3673,7 @@ impl Backend {
                 .and_then(|c| c.index_state_for(entite).ok())
                 .is_some_and(|s| s.vectors == crate::catalog::Level::Ready);
             if !prets {
-                eprintln!("[crochet {tool_name}] tu — les vecteurs de {entite} ne sont pas prêts");
+                eprintln!("[crochet {tool_name}] tu — les vecteurs de {entite} ne sont pas prêts{}", crate::host_log::caller_suffix());
                 return;
             }
         }
@@ -3750,7 +3750,7 @@ impl Backend {
             Ok(hresp) => {
                 let texte = hresp["result"].as_str().unwrap_or_default().trim().to_string();
                 if texte.is_empty() {
-                    eprintln!("[crochet {tool_name}] tu — rien à dire");
+                    eprintln!("[crochet {tool_name}] tu — rien à dire{}", crate::host_log::caller_suffix());
                     return;
                 }
                 // Un état de la porte read_catalog n'est pas un contenu :
@@ -3762,7 +3762,7 @@ impl Backend {
                     || texte.starts_with(crate::dataflow::catalog_read::BUSY)
                     || texte.starts_with(crate::dataflow::catalog_read::NEVER_INDEXED)
                 {
-                    eprintln!("[crochet {tool_name}] tu — un état, pas un contenu");
+                    eprintln!("[crochet {tool_name}] tu — un état, pas un contenu{}", crate::host_log::caller_suffix());
                     return;
                 }
                 let lignes: Vec<&str> = texte.lines().collect();
@@ -3776,7 +3776,7 @@ impl Backend {
                     // Tronqué, et avoué — jamais une troncature muette.
                     section.push_str(&format!("\n_… et {coupees} lignes de plus._"));
                 }
-                eprintln!("[crochet {tool_name}] déclenché — {} lignes", hook.max_lines.min(texte.lines().count()));
+                eprintln!("[crochet {tool_name}] déclenché — {} lignes{}", hook.max_lines.min(texte.lines().count()), crate::host_log::caller_suffix());
                 match response.get_mut("result") {
                     // Le rendu markdown gagne sa section à la suite.
                     Some(Value::String(r)) => {
@@ -3789,7 +3789,7 @@ impl Backend {
                 }
             }
             Err(e) => {
-                eprintln!("[crochet {tool_name}] en erreur (l'outil répond quand même) : {e}");
+                eprintln!("[crochet {tool_name}] en erreur (l'outil répond quand même) : {e}{}", crate::host_log::caller_suffix());
             }
         }
     }
