@@ -479,3 +479,18 @@ de deux façons :
 11/11.
 
 Le bloc `[mémoire]` est resté partiel à chaque tour.
+
+**Le seuil se mesure (c7).** `WRITE_PATIENCE` valait 200 ms sans mesure.
+
+La mesure (`scripts/mesure_patience_du_journal.py`) : la reprise d'une
+sortie après `EAGAIN`, en rafales de 1 000 × 1 Kio et 10 × 64 Kio, trois
+passes chacune, sur les deux postes en charge (11,6 et 15,5).
+
+- Vers journald : pire 1,14 ms sur 36 rafales.
+- Vers un fichier : jamais d'`EAGAIN`.
+
+Retenu : 50 ms, environ 44 fois le pire observé (634c16b56). `host_log` 5/5
+à 50 ms.
+
+Effet de bord : environ 1,6 Mo de lignes « x » dans le journal des deux
+postes (identifiant `hooks-essai-mesure`).
