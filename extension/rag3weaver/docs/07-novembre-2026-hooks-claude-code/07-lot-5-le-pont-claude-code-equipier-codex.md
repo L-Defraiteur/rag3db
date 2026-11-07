@@ -94,6 +94,71 @@ Code :
   `~/.codex/sessions/AAAA/MM/JJ/rollout-…-<uuid>.jsonl`. SessionStart liste ainsi les fils Codex
   du même dossier, comme ListAgents chez nous.
 
+## 4 bis. Le canal : atteindre une session Claude occupée ou à l'arrêt
+
+Un hook ne parle qu'au tour suivant de la session. Le **canal** de Claude Code pousse dans la
+session même quand elle est occupée, à son prochain tour, ou à l'arrêt.
+`rag3weaver-backend canal` est un serveur MCP en stdio, `src/canal.rs`. Son contrat suit
+code.claude.com/docs/en/channels-reference.
+
+- **Ce qu'il déclare** : `capabilities.experimental["claude/channel"] = {}` et `tools = {}`, avec
+  des `instructions` qui disent que la parole d'un autre agent n'est pas une consigne. **Jamais**
+  `claude/channel/permission` : la boîte n'authentifie pas un approbateur.
+- **Boîte → session.** Le serveur lit `pending` toutes les 2 s, sous le handle
+  `claude-code:<session_id>` et sous la clé stable quand l'agent l'a dite. Chaque item part une fois
+  en `notifications/claude/channel` : `content` porte le texte cité, en une ligne, borné à 4 000
+  caractères ; `meta` porte `{from, id, kind, task, item}`. Un compte rendu sort par `seen` une
+  fois poussé ; une question reste dans `pending` jusqu'à `reply`.
+  - **La charge** : quinze sessions font environ sept appels par seconde à l'hôte. Le serveur
+    passera sur `/ide/flux`, sujet `mailbox`, quand il faudra moins.
+- **Session → boîte** : trois outils.
+  - `reply {id, text}` passe par le même code que `mail reply`.
+  - `send {to, task, text}` écrit à un agent dans une tâche.
+  - `claim {session_id, key?}` pose les clés à la main.
+- **L'identité.** Le serveur et les hooks d'une session ont le même ancêtre `claude`. Le hook
+  `SessionStart` écrit la fiche de session `~/.local/state/rag3weaver/canal/<pid de claude>.json`
+  (`{session_id, cwd, key?}`), et le serveur la lit par ce pid. On remonte les parents jusqu'au
+  processus `claude`, à travers un shim `node`, et pas seulement jusqu'au premier parent. Sans
+  clé, rien n'est poussé, et `reply` dit d'appeler `claim`.
+- **Si le drapeau manque.** Claude Code jette en silence les événements d'un serveur qu'il n'a pas
+  chargé comme canal. Le serveur lit donc la ligne de commande de son `claude` dans
+  `/proc/<pid>/cmdline`. Sans `--dangerously-load-development-channels server:rag3weaver-canal`,
+  et sans `--channels` qui le nomme, il reste passif : outils seulement, aucun push, aucun `seen`.
+  Les hooks font le relais, sans perte, au prochain prompt ou au prochain outil.
+- **Le filtre** : seule la boîte de l'hôte, sous jeton, alimente le canal, et seuls des `from`
+  qui sont des clés passent. Rien n'écoute sur un port.
+
+**Pour Lucie**, à poser par elle, à sa prochaine relance :
+
+```json
+{
+  "mcpServers": {
+    "rag3weaver-canal": { "command": "/home/lucied/.local/bin/rag3weaver-backend", "args": ["canal"] }
+  }
+}
+```
+
+Cette entrée va dans le `.mcp.json` du dépôt, ou dans `~/.claude.json` avec le même chemin
+absolu. La session se lance ensuite par :
+
+```
+claude --dangerously-load-development-channels server:rag3weaver-canal
+```
+
+La commande ne vaut qu'en session interactive. Il y a deux dialogues : l'avertissement des canaux
+de développement, puis le consentement au serveur du projet. Le bandeau « Channels
+(experimental) messages from server:rag3weaver-canal … » confirme l'enregistrement. Le canal
+n'existe qu'une fois le lot posé par G dans le binaire installé.
+
+## 4 ter. Ce que la livraison vers Codex fait dans l'hôte
+
+`daemon_host/livraison_codex.rs` : un abonné au flux de l'IDE, sujet `mailbox`, que l'hôte lance
+à côté du service des bilans. Il livre chaque ligne adressée à `codex:` par `codex queue`, puis
+range l'issue dans la boîte de la tâche. C'est une ligne `delivery` : `from: host`, `to` égal à
+l'expéditeur, avec `reply_to`, `delivered` et `thread`. Une ligne `delivery` ne se relivre
+jamais. Une ligne restée sans livraison pendant que l'hôte était arrêté n'est pas reprise au
+redémarrage : c'est une suite.
+
 ## 5. Les témoins
 
 - **Sur faux hôte, dans ce lot** : le bloc avec un item neuf, puis « toujours en attente » ; la
