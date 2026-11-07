@@ -830,7 +830,8 @@ impl DaemonHost {
     }
 
     /// **Les équipiers d'un superviseur** (`GET /ide/teammate/list?supervisor=`) :
-    /// running (une boucle tourne), waiting (rien ne tourne, aucune fin),
+    /// running (un pas est en vol : un tour du chat de la tâche), waiting (pas de
+    /// pas en vol et pas de fin : l'équipier attend sa boîte, ou entre deux pas),
     /// ended, error (la fin dit l'erreur).
     pub fn teammate_list(&self, supervisor: &str) -> Value {
         let teammates: Vec<Value> = self
@@ -841,9 +842,10 @@ impl DaemonHost {
                 let lignes = f.mailbox();
                 let derniere = lignes.last().cloned().unwrap_or(Value::Null);
                 let fin = lignes.iter().rev().find(|l| l["kind"] == "ended");
-                let state = if self.teammate_running(&t.parent, &t.nom) {
+                let vivant = self.teammate_running(&t.parent, &t.nom);
+                let state = if vivant && self.run_du_chat_en_cours(&t.id).is_some() {
                     "running"
-                } else if let Some(fin) = fin {
+                } else if let (Some(fin), false) = (fin, vivant) {
                     if fin["text"].as_str().unwrap_or_default().starts_with("erreur") { "error" } else { "ended" }
                 } else {
                     "waiting"
