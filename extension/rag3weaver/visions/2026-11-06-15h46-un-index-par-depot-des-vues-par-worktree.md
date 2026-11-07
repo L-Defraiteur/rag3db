@@ -185,7 +185,14 @@ les vues qui ont la même révision, recalculé seulement pour les scopes chang�
 que l'archiviste fait déjà pour une fiche. Des résumés imbriqués (paramètres,
 retours, effets) sont une signature sémantique par scope : la matière d'un
 transpileur, et celle d'un juge qui compare ce qu'un changement dit et ce qu'il
-fait. Après les cinq marches.
+fait. Après les cinq marches. Deux règles qui vont de soi, écrites pour ne pas
+les oublier : un résumé qui affirme quelque chose sur le comportement a pour
+entrées les types résolus et les dépendances, pas seulement le texte du scope
+(même règle que pour un vecteur) ; et chaque champ d'un résumé dit s'il est
+inféré, vérifié statiquement ou inconnu, un modèle ne remplit jamais un
+inconnu. La question que ça rendrait possible, pour le juge d'un lot : « quelles
+propriétés comportementales ont changé alors que leur implémentation directe
+n'a pas bougé ».
 
 ## Très long terme : un moteur de versionnage par scope
 
