@@ -19,11 +19,25 @@
    - La passe complète tourne à luciepc (`~/.cache/rag3weaver-build/tty-lot1/resume.log`).
 4. **Le ticket** de la lib qui ne se bâtit pas sans `rag3db-native` (docs/tickets, 7 nov.).
 
+## Sur master (7 nov. 2026, soir)
+
+| Quoi | Hash | Passe |
+|---|---|---|
+| **tty-1**, le client `--plain` et `policy` dans `describe` | `cfc5cc8e8` | entière, à luciepc, sur la lib 04063ee06 : e2e_tty 2/2, e2e_lectures 19/19, e2e_code 27/27, e2e_mcp_stdio 4/4, e2e_demon_hote 12/12, check_features 5/5, lib 1955/0, navigateur 13/13 |
+| **tty-2**, la vue inline | `1fc1e24bd` | courte (le crate et e2e_tty) : crate 9/9 avec la vue et 4/4 sans, e2e_tty 2/2 |
+| les lignes de nouveautés | `69aa15eef`, `0a3e5752e` | docs seules |
+| la page d'origine du Daemon Code Summoning et le thème commun | `78f0efeb6`, `422f47d52` | docs seules |
+
+Deux rouges en route, chacun compris avant d'être corrigé :
+- **La base trop vieille.** La première passe avait tourné sur une base dépassée par du Rust de master. On a rejoué au lieu de pousser.
+- **L'index des tickets.** Après le rebase, la table « produit » annonçait 47 tickets et en comptait 48. On a corrigé en docs seules, puis repris `check_features`, la lib et les témoins navigateur.
+
+Effacé après les lots : les worktrees `rag3db-tty` (ici et à luciepc), les branches locales `tty-*`, et les targets `target-tty`, **6,2 Go ici et 11 Go à luciepc**. Les branches distantes restent. Les journaux de passe restent dans `~/.cache/rag3weaver-build/tty-*` à luciepc.
+
 ## Ce qui attend
 
-- La passe de luciepc, puis le push du lot tty-1 sur master, puis le hash à c7.
-- everything declarative, à son lot 1 : la boîte relayée sur `/ide/flux` (`MailboxLine`). Le client la prend déjà et cesse alors de relire la boîte.
-- À lui demander : le `backend` (manifeste) de la tâche dans `GET /ide/teammate`, pour filtrer le flux par tâche. Aujourd'hui `--plain` montre tout le flux de l'hôte.
+- Le filtre par tâche : `GET /ide/teammate` rend `result.backend` depuis `b9b47ee12`, et le terminal doit filtrer les trames sur ce manifeste. Aujourd'hui, il montre tout le flux de l'hôte.
+- L'accord de Lucie sur le thème commun (page 06), avant de poser `templates/themes/daemon.json`.
 - La suite des lots, dans l'ordre :
   - tty-2 : la vue inline en ratatui avec crossterm ;
   - tty-3 : le Daemon Code Summoning, le thème « daemon » d'abord ;
