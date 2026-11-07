@@ -10,7 +10,7 @@ add_executable(concurrence_test concurrency_bench_test.cpp integrity_checker.cpp
     lock_bench_test.cpp single_writer_crash_test.cpp vector_index_update_test.cpp
     uncommitted_relations_test.cpp read_only_reader_test.cpp
     upstream_fixes_test.cpp lock_cost_test.cpp masked_scan_test.cpp vector_index_rebuild_test.cpp string_rewrite_test.cpp string_scan_filtered_test.cpp vector_index_cost_test.cpp checkpoint_after_updates_test.cpp vector_index_retention_test.cpp
-    failed_begin_test.cpp twenty_writers_scenario_test.cpp full_buffer_rollback_test.cpp index_creation_threads_test.cpp
+    failed_begin_test.cpp twenty_writers_scenario_test.cpp full_buffer_rollback_test.cpp copy_rollback_full_buffer_test.cpp index_creation_threads_test.cpp
     hnsw_writers_test.cpp vector_index_i2_test.cpp checkpoint_no_stall_test.cpp
     commit_after_failed_checkpoint_test.cpp late_rel_table_rewrites_test.cpp
     provisional_offsets_test.cpp)
