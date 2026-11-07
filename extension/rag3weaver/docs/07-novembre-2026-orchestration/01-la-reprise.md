@@ -78,3 +78,18 @@ Laya IA (classifieur ModernBERT multilingue, Apache 2.0, CPU) et SemIf/OpenJev
 (la probabilité des options lue dans les logits d'un LM, MIT) : écrire le
 `decider` par logits contre tout serveur local qui rend les logprobs ; mesure
 commune sur les décisions de l'archiviste contre Gemini. Après le week-end.
+
+## La semaine du moteur (décidée l'après-midi)
+
+Lucie : le moteur continue en parallèle du chantier des vues par scope. Dette
+au 7 novembre : 84 tickets ouverts pour 178 fermés, une quarantaine du moteur
+en trois familles (la correction, une quinzaine ; le coût, une quinzaine ; les
+lots dessinés V2-2c, V2-3, plafond L6). Règle : la famille correction d'abord,
+un ticket par jour, témoin rouge d'abord, pas une ligne de perf avant zéro ; le
+banc des vingt clients et ses treize rouges connus comme tableau de bord ; une
+page d'état par session. Listes : au cœur les transactions (validation à moitié
+appliquée, annulation sous tampon plein, COPY forcé hors du graphe, durabilité
+sur faute d'E/S, takeover, échecs de rejeu non lus, puis V2-2c et V2-3) ; à
+hotfixs les index et le CSR ((B), relevé des 18 tables, mesures de (A), FTS
+hors du point de reprise, rétention des index, rtree, COPY de relations sans
+remappage, doublon, MATCH par clé, CALL de réparation).
