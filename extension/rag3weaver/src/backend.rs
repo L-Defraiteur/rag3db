@@ -1782,7 +1782,10 @@ impl PreparedBackend {
                     }
                 }
             }
-            json!({"name":name,"description":description,"inputSchema":self.tool_schemas[name]})
+            // `policy` : ce que l'outil a le droit de faire (lire, écrire,
+            // exécuter, son effet d'écran) — un client choisit dessus, jamais
+            // sur une liste de noms (le terminal, docs/07-novembre-2026-tty).
+            json!({"name":name,"description":description,"inputSchema":self.tool_schemas[name],"policy":attachment.policy})
         }).collect();
         if self.manifest.search_graphs {
             tools.extend(search_tool_definitions());

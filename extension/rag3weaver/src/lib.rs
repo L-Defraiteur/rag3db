@@ -215,6 +215,10 @@ pub mod ide;
 /// Le client mince de cet hôte : un serveur MCP qui ne possède rien.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod daemon_client;
+// Le client du terminal : sous `tty` seul (le binaire, sans le moteur), et sous
+// `daemon` qui porte déjà `ureq` (les témoins du jeu large le jouent).
+#[cfg(any(feature = "tty", feature = "daemon"))]
+pub mod tty;
 // La commande mince des hooks de Claude Code : lit l'événement, parle à
 // l'hôte, se tait sans lui (docs/07-novembre-2026-hooks-claude-code/01).
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
