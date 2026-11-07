@@ -438,6 +438,8 @@ mod tests {
         let manifest = roots.manifest("code-lourd");
         let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
         m["database"] = Value::String(base.display().to_string());
+        // Comme un arbre que `add` a posé : son `name` est son nom.
+        m["name"] = Value::String("code-lourd".into());
         std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
         std::fs::write(&base, b"base").unwrap();
         std::fs::write(PathBuf::from(format!("{}.wal", base.display())), b"journal").unwrap();
