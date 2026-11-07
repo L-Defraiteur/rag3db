@@ -141,6 +141,7 @@ function Writes({ writes, why, open }: { writes?: MemoryWrite[]; why?: string | 
       ) : (
         <p className="mt-1 pourquoi">{why ?? "aucune pour l'instant"}</p>
       )}
+      {list.length && why ? <p className="mt-1 pourquoi">{why}</p> : null}
       <p className="mt-1 italic">les écritures de l'agent lui-même arrivent avec M7 de la mémoire longue</p>
     </details>
   );
