@@ -494,3 +494,24 @@ Retenu : 50 ms, environ 44 fois le pire observé (634c16b56). `host_log` 5/5
 
 Effet de bord : environ 1,6 Mo de lignes « x » dans le journal des deux
 postes (identifiant `hooks-essai-mesure`).
+
+## Hooks 3 ter (a), premier tour (18 h 15, commit 7b41a1a04)
+
+Le message de c7 portait sur le régime GPU des passes, pour donner au rappel
+quelque chose à dire.
+
+- **Requête extraite :** « commit 7b41a1a04 requête temps exclu seuil rendu
+  mémoire suivant sujet » (10 mots tirés de 848 caractères). Elle ne garde
+  aucun mot du sujet (`RAG3WEAVER_EMBED_CHAR_BUDGET`, `GPU_DUTY`, passes,
+  embarquement) : seulement les mots de consigne de c7 sur le hook.
+- **Rappel :** 93 ms. Ma fiche est exclue ; « régime GPU » est à 0.32, sous
+  le seuil de 0.50. Silence.
+- **Bloc :** aucun.
+
+**Ce qui marche :** le budget, l'exclusion de ma fiche et le seuil, tout cela
+dit dans le journal.
+
+**Ce qui manque :** l'extraction prend les mots de méta au lieu des termes
+rares. Résultat, un silence sur un message qui était exactement le sujet
+d'une fiche. Proposé à c7 : pondérer par la rareté (IDF sur les fiches,
+identifiants en majuscules).
