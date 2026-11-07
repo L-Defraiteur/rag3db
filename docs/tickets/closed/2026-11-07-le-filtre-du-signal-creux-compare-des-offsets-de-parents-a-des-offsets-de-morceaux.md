@@ -1,7 +1,6 @@
 # Le filtre du signal creux compare des offsets de parents à des offsets de morceaux
 
-- **État** : ouvert, le 7 novembre 2026. Relevé par l'arbre principal (73) en lisant master
-  9dc626c70, confirmé par la lecture du code par la session recherche ; pas encore joué.
+- **État** : corrigé par le lot recherche-trois-lots (7 novembre 2026, recherche) : filter_resolve_chunk_offsets dans les deux dialectes, le creux filtré par les offsets des morceaux des parents admis ; témoin e2e_simple_entity::le_filtre_du_signal_creux_porte_sur_les_morceaux_du_parent_admis
 - **Gravité** : réponse fausse. Une recherche filtrée (scope, language, `filter_condition`) admet
   sur le signal creux des morceaux hors du filtre et en écarte de bons.
 - **Atteignable en service** : oui, pour un backend dont une entité porte le signal `sparse` ; pas
