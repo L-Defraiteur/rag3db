@@ -130,6 +130,24 @@ pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
     consigne. SessionStart liste les équipiers par `list`. La Ref `task:<nom>` sur la fiche de
     session est en plus, pour la mémoire ; le routage reste `to` / `from`.
 
+**La ligne de boîte et son relais sur le flux** (pour l'IDE, le terminal de tty, le hook) :
+
+- **Aujourd'hui** (`teammate.rs:221-232`, `append`) : `{"at", "from", "kind", "text", "item"?}`.
+  L'équipier écrit `question` (item = l'id de l'élément du plan, `:400`), `step_done` (item si
+  donné ; text « fait : … » ou « raté : … — reste : … », `:440-441`), `report` (`:465`),
+  `proposal` (item si donné, `:472`) ; l'hôte écrit `ended` (`:743`) et `report` (`:839`) ; le
+  superviseur `request` | `instruction` | `answer` | `stop`. Publiée sur le bus en
+  `Event::Message` dont `content` est la ligne **en texte** (`:603-616`), sur `mailbox.<task>`,
+  que `/ide/flux` ne relaie pas (`ide.rs:65`, `SUJETS`).
+- **Après le lot 1** (figé ici, ajouté sans rien retirer) : chaque ligne gagne `id`
+  (`"<parent>/<task>:<n>"`) et `to` (facultatif) ; `step_done` porte en plus ses champs
+  structurés `succeeded`, `done`, `remaining` (et `tool_issues` au lot 3), `text` restant la
+  phrase lisible ; `approval` (lot 2) porte `command` (argv) ; `answer` porte `reply_to` (et
+  `approved` pour une approbation). Le flux relaie un sujet `mailbox` : enveloppe habituelle
+  `{"sujet": "mailbox", "backend": "<manifeste parent>", "evenement": {"kind": "MailboxLine",
+  "parent", "task", "line": {…la ligne telle qu'écrite…}}}` — la ligne en objet, jamais en
+  texte. L'`Event::Message` actuel reste pour les abonnés du bus.
+
 **Témoins** : un équipier qui pose une question à `claude-code:s1` ; `pending?for=claude-code:s1`
 la rend, une autre clé ne la voit pas ; la réponse postée sous `claude-code:s1` est lue à la
 frontière du pas suivant ; le bloc du hook (faux hôte, côté archi) la montre.
