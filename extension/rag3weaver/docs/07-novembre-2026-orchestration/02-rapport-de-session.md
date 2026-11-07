@@ -519,3 +519,26 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   embarquement (spans) → recherche (second-ecrivain, spans, montée 4.3.2) → archi
   (pont) → hooks-essai (appel-a-delai) ; hooks-essai : la barre, le chat (largeur,
   retours d'outils, code A), la tâche sans git ; codeparsers : coloration B.
+
+## Mise à jour de 23 h 45
+
+- **Atterris** : pointeur codeparsers 672a0d5 (f3a115887 : la garde de match compte
+  comme usage, ticket « marque nom » ouvert), plafond du juge des bilans
+  (ff2725f90, `bilans.max_per_hour` 20), `code-tree add --from` par nom réel
+  ou chemin (0683cc474), chat-et-delai de hooks-essai (682655352 : largeur des
+  bulles, code en ligne et coloration A, retours d'outils mis en page avec
+  « brut », barre session › tâches › espaces avec la vue par dépôt, règle d'état
+  unique de l'équipier, `/call` à `deadline_ms` par stop_run), plafond de target
+  32 Go mesuré (G, d845744a2), ticket unique des figements de la lib
+  (a6beebc60 + af035a99f), page de la coloration (codeparsers, 73d4bfdf6 :
+  tree-sitter-highlight officiel, ancien module remplacé).
+- **Pose du soir** : G pose 682655352 chez Lucie (coupure d'une minute), puis c7
+  lance les essais de l'équipier sur ~/git_workspaces/rag3db-essais-c7 inscrit
+  par `code-tree add --from code-rag3db` (edit_file ajouté au manifeste neuf) ;
+  Lucie garde la main sur task_writes/edit_file de son propre manifeste.
+- **Reste de la nuit** : 96 (run_e2e.sh, puis le pas 3 après l'arbre) → arbre
+  (juge + graphe cité, vert par tickets) → embarquement (spans) → recherche
+  (second-ecrivain, spans, montée lucivy 4.3.2 : L = 900, K = 64) → archi (pont,
+  canal). Demain : banc 7 h 30 (mesure), G 8 h 30 (lib 7cd11e5fa… + granite),
+  le réacteur sous charge à ED, la coloration B (codeparsers + hooks-essai +
+  tty), la tâche sans git, les liens de symbole, M8 des gabarits de mémoire.
