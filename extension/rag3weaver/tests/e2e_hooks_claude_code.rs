@@ -13,7 +13,7 @@
 //!
 //! Sur le vrai gabarit `memory` (ses signaux : `RAG3WEAVER_EMBED_SERVICE`).
 #![cfg(all(feature = "rag3db-native", feature = "daemon"))]
-use rag3weaver::claude_code_hook::{repondre, Evenement, Hote, Reglage};
+use rag3weaver::claude_code_hook::{chemin_du_fond, rappel_differe, repondre, Evenement, Hote, Reglage};
 use rag3weaver::daemon_host::DaemonHost;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -230,9 +230,24 @@ fn le_rappel_d_un_long_prompt_tient_sous_son_delai_sur_une_vraie_memoire() {
     assert!(!r.journal.iter().any(|l| l.contains("froid")), "« à froid » était faux : {:?}", r.journal);
     // Un prompt qui parle du régime GPU : la fiche remonte (aucune identité ici, rien n'est exclu).
     let gpu = "<cross-session-message from=\"uds:/run/user/1000/cc-socks/116973.sock\" from-name=\"rag3db-74\" from-mode=\"prompting\">\nc7 → archi : avant la passe qui embarque, rappelle-moi comment on ménage les cartes du poste : le régime GPU, RAG3WEAVER_GPU_DUTY et le budget de caractères.\n</cross-session-message>";
+    let sid = "494dbbc6-aaaa-bbbb-cccc-000000000002";
+    // Ce que la session reçoit : le bloc du tour, et, si les candidats sont partis au
+    // juge (échelle brute), ce que le prochain outil rend après le fils. Le juge est
+    // un faux modèle qui garde « régime GPU » : on témoigne du chemin, pas du jugement.
+    let recu = |r: &rag3weaver::claude_code_hook::Reponse| -> String {
+        if !r.journal.iter().any(|l| l.contains("confiés au juge, en fond")) {
+            return r.bloc.clone();
+        }
+        let juge = rag3weaver::llm::MockLlm::new(r#"{"pertinent": true, "pourquoi": "le message parle des cartes du poste", "items_gardes": ["régime GPU"]}"#);
+        let fond = rappel_differe(&chemin_du_fond(&reglage, sid, "tache"), &reglage, None, Some(&juge));
+        eprintln!("MESURE fond : {fond:?}");
+        let outil = repondre(&evenement(json!({ "session_id": sid, "hook_event_name": "PostToolUse", "tool_name": "Bash" })), &reglage, Err("pas d'hôte".into()));
+        format!("{}{}", r.bloc, outil.bloc)
+    };
     let r = repondre(&evenement_du_prompt(gpu), &reglage, Ok(&h));
     eprintln!("MESURE prompt GPU : {:?}", r.journal);
-    assert!(r.bloc.contains("« régime GPU »"), "{}\n{:?}", r.bloc, r.journal);
+    let b = recu(&r);
+    assert!(b.contains("« régime GPU »"), "{b}\n{:?}", r.journal);
     // Le même prompt au tour suivant : la session l'a déjà reçue, silence.
     let r2 = repondre(&evenement_du_prompt(gpu), &reglage, Ok(&h));
     assert!(!r2.bloc.contains("Fiches en rapport"), "{}", r2.bloc);
@@ -241,7 +256,8 @@ fn le_rappel_d_un_long_prompt_tient_sous_son_delai_sur_une_vraie_memoire() {
     let compact = repondre(&evenement(json!({ "session_id": "494dbbc6-aaaa-bbbb-cccc-000000000002", "hook_event_name": "SessionStart", "source": "compact" })), &reglage, Ok(&h));
     assert!(compact.bloc.contains("Fiches rappelées avant la compaction : ") && compact.bloc.contains("« régime GPU »"), "{}", compact.bloc);
     let r3 = repondre(&evenement_du_prompt(gpu), &reglage, Ok(&h));
-    assert!(r3.bloc.contains("« régime GPU »"), "{}", r3.bloc);
+    let b3 = recu(&r3);
+    assert!(b3.contains("« régime GPU »"), "après la compaction, elle ressort : {b3}");
     // La courbe du plein texte selon le nombre de mots de la requête : d'où vient N.
     for n in [4usize, 8, 10, 12, 16, 24, 40] {
         let mots = rag3weaver::rappel_du_prompt::requete_de_rappel(&prompt, n, &Default::default());

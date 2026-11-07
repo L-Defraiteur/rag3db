@@ -943,7 +943,9 @@ impl EtatDuRappel {
 
 // ─── Le rappel différé et son juge (3 ter b) ─────────────────────────────────
 
-fn chemin_du_fond(reglage: &Reglage, session_id: &str, quoi: &str) -> PathBuf {
+/// Les fichiers du rappel différé d'une session : `tache` (pour le fils),
+/// `differe` (pour le prochain outil).
+pub fn chemin_du_fond(reglage: &Reglage, session_id: &str, quoi: &str) -> PathBuf {
     chemin_de_l_etat(reglage, session_id).with_extension(format!("{quoi}.json"))
 }
 
