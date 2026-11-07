@@ -11,8 +11,8 @@
 //
 // Le cas se joue dans un processus fils (un abandon y est un rouge nommé) :
 // - rollback-of-a-copy-under-a-full-buffer-succeeds : l'un des deux ROLLBACK de A passe ;
-// - database-stays-open-after-the-copy-rollback : un BEGIN de A passe ensuite, et la table compte
-//   les seules lignes de B ;
+// - database-stays-open-after-the-copy-rollback : un BEGIN de A passe ensuite, et Doc est vide (B
+//   écrit dans une autre table, que le COPY de A ne tient pas) ;
 // - closing-a-connection-does-not-abort : le fils sort sans signal.
 
 #ifndef __SINGLE_THREADED__
@@ -91,7 +91,7 @@ protected:
             const auto vector = vectorText();
             auto insert = [&](rag3db::main::Connection& connection, int64_t from, int64_t count) {
                 return connection
-                    .query(stringFormat("UNWIND range({}, {}) AS i CREATE (:Doc {id: i, titre: "
+                    .query(stringFormat("UNWIND range({}, {}) AS i CREATE (:Other {id: i, titre: "
                                         "'titre', vec: [{}]});",
                         from, from + count - 1, vector))
                     ->isSuccess();
@@ -103,6 +103,9 @@ protected:
                 concurrency::applyBenchSettings(a);
                 say(a, "A",
                     "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
+                // B écrit dans une autre table : le COPY de A tient Doc jusqu'à sa fin.
+                say(a, "A",
+                    "CREATE NODE TABLE Other(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
                 say(a, "A", "BEGIN TRANSACTION;");
                 if (!say(a, "A", "COPY Doc FROM '" + copyFile + "' (header=false);")) {
                     steps << "PLAN a-copy-refused" << std::endl;
@@ -128,8 +131,8 @@ protected:
                 auto counted = a.query("MATCH (d:Doc) RETURN count(*);");
                 if (counted->isSuccess() && counted->hasNext()) {
                     const auto rows = counted->getNext()->getValue(0)->getValue<int64_t>();
-                    steps << "COUNT " << (rows == bRows ? "only-b" : "wrong") << " " << rows
-                          << " for " << bRows << std::endl;
+                    steps << "COUNT " << (rows == 0 ? "empty" : "wrong") << " " << rows
+                          << " rows left by the rolled-back COPY" << std::endl;
                 } else {
                     steps << "COUNT refused" << std::endl;
                 }
@@ -156,6 +159,8 @@ TEST_F(CopyRollbackUnderAFullBuffer, RollsBackAndKeepsTheDatabaseOpen) {
     const auto [steps, status] = play(5'000);
     ASSERT_EQ(steps.find("PLAN a-copy-refused"), std::string::npos)
         << "[check: plan] A's COPY did not fit in the buffer: nothing is witnessed";
+    ASSERT_EQ(steps.find("B 0 rows"), std::string::npos)
+        << "[check: plan] B committed nothing: the buffer was never full";
     ASSERT_NE(steps.find("ROLLBACK "), std::string::npos)
         << "[check: plan] the child died before its ROLLBACK, status " << status;
     EXPECT_NE(steps.find("ROLLBACK passed"), std::string::npos)
@@ -163,9 +168,8 @@ TEST_F(CopyRollbackUnderAFullBuffer, RollsBackAndKeepsTheDatabaseOpen) {
     EXPECT_NE(steps.find("BEGIN passed"), std::string::npos)
         << "[check: database-stays-open-after-the-copy-rollback] a BEGIN after the ROLLBACK was "
            "refused";
-    EXPECT_NE(steps.find("COUNT only-b"), std::string::npos)
-        << "[check: database-stays-open-after-the-copy-rollback] the table does not count B's "
-           "rows alone";
+    EXPECT_NE(steps.find("COUNT empty"), std::string::npos)
+        << "[check: database-stays-open-after-the-copy-rollback] the rolled-back COPY left rows";
     EXPECT_FALSE(WIFSIGNALED(status))
         << "[check: closing-a-connection-does-not-abort] the child died of signal "
         << WTERMSIG(status);
