@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Un appel C++ ne voit que ce qu'il inclut.** La résolution suit les #include
+  et la déclaration d'en-tête : 299 arêtes justes sur 300 au juge clangd, et une mention
+  qui s'abstient se dit au lieu de passer pour devinée. 9fd37ab1c.
 - **7 nov. — La mémoire parle à Claude Code.** Des hooks posés dans une seule session
   d'essai, par un script qui crée son worktree : à l'ouverture, qui tu es et ce que tu
   tenais ; à chaque tour, les fiches en rapport, ce que d'autres ont changé dans les
