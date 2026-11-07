@@ -1,0 +1,183 @@
+# L'équipier, agent de code fonctionnel
+
+Page de conception, 7 novembre 2026, everything declarative ; à c7 avant le code. Le mot de Lucie,
+par c7 : « le faire se comporter comme un vrai agent de code, qui peut communiquer avec Claude Code,
+se lancer des sous-sessions et communiquer avec elles et inversement, faire du code, et lui
+demander à chaque fois s'il a eu des problèmes avec ses outils standards avant de s'intéresser à
+sa partie mémoire ». Et la condition absolue du même jour : « si défaillance du moteur
+d'ingestion, elle ne plante jamais et se comporte comme un Claude Code normal ».
+
+L'équipier existe (lot équipier-1, page `docs/25-octobre-2026-everything-declarative/07-l-equipier.md`) :
+une boucle de pas, chacun un tour de chat dans une tâche (worktree + copie de base), un mini-plan,
+une boîte aux lettres avec un superviseur, le juge sur chaque pas. Cette page dit ce qui lui manque
+pour être un agent de code qu'on fait travailler pour de vrai, dans l'ordre de c7. Identifiants en
+anglais, le reste en français.
+
+## Ce qui est là (relevé sur master du 7 novembre)
+
+- **Les outils d'un pas** : ceux du manifeste (`BackendTools`, `backend_tools.rs:12-58`, les
+  graphes `templates/tools/*.mmd`), enveloppés par `DeclarationTools` puis `OutilsDuChat`
+  (`chat.rs:419-440`), plus ceux du pas (`StepTools`, `teammate.rs:574-600` : `edit_plan`,
+  `step_done`, `suggest`, `report`), douze appels par pas (`gate`, `teammate.rs:488-495`).
+- **Ce qui dépend du moteur** : tout passe par `Backend::call` sous le verrou de lecture du slot
+  (`with_backend`, `daemon_host.rs:402`), pour tout le tour. `read_file`, `grep_files`,
+  `list_files` lisent le disque (`FileSource`, le worktree de la tâche par `surcharges_de`) mais
+  s'annotent par le catalogue ; `edit_file` écrit puis réindexe par le catalogue
+  (`edit_file_shared_with_hash`) ; `search_code`, `outline`, `usages`, `impact` interrogent l'index.
+- **Ce qui casse aujourd'hui** : une erreur d'outil est déjà rendue au modèle (`{"error": e}`,
+  `backend_tools.rs:51-57`) et le pas continue. Mais un backend qui ne s'ouvre pas, ou qui se ferme
+  pendant l'appel (`NOT_HOSTED … fermé pendant cet appel`, `daemon_host.rs:436`), fait rendre `Err`
+  à `chat_turn_with` ; `teammate_loop` le propage (`teammate.rs:784`) et **tout le lancement de
+  l'équipier s'arrête** (`ended "erreur : …"`, `teammate.rs:736-751`). Une fermeture demandée
+  pendant un pas attend la fin du tour (le verrou est tenu).
+- **Les commandes** : la porte est déclarée (`workspace.commands` : `off`, `standard`,
+  `approval`, `auto`, `backend_code.rs:40-43` ; le gabarit `code` dit `approval`), l'outil existe
+  (`run_command` → `RunCommandNode`, sortie entière en journaux `.out/.err`, suivie par
+  `wait_output`), le bac à sable aussi (Landlock, `workspace.sandbox`), sans shell (`sh -c` ne
+  passe jamais la liste, `commande.rs:11-20`), et `cargo check`, `cargo test` sont dans la liste
+  de lecture (`LECTURE_SEULE`, `commande.rs:116`). **Mais le chat et l'équipier ne l'ont pas** :
+  `OutilsDuChat` retire tout outil `policy.run_commands` (`chat.rs:424-425`).
+- **La boîte** : `<tâche>/mailbox.jsonl`, une ligne `{at, from, kind, text, item?}`, publiée sur
+  `mailbox.<task>` ; `GET /ide/teammate`, `POST /ide/teammate/mailbox` (`ide.rs:664-…`). Le
+  superviseur n'a pas d'identité : `from: "supervisor"`.
+- **Les tâches** : `ouvrir_une_tache(parent, nom)` part du HEAD du dépôt du manifeste parent ; ni
+  `Tache` ni l'équipier ne connaissent de tâche parente.
+- **Le juge** : `bilan_des_outils` existe (`juge.rs:291`, schéma
+  `templates/agents/juge/bilan_des_outils.schema.json` : par outil, appels, échecs, inutiles, part
+  utilisée, défauts bloquant / gênant / mineur), seulement si le manifeste déclare `bilans`.
+  `step_done` porte `{item, succeeded, done, remaining}`.
+- **Le hook UserPromptSubmit** (`claude_code_hook.rs:727-…`, archi) ne lit ni l'équipier ni sa boîte.
+
+## 1. Les outils standards, complets et étanches
+
+**Ce que l'équipier voit, par source de défaillance** :
+
+| défaillance | aujourd'hui | après |
+|---|---|---|
+| le backend ne s'ouvre pas (base abîmée, lib refusée, format) | le lancement meurt | le pas tourne en **mode fichiers** : les outils de fichiers sur le worktree de la tâche, les outils d'index « indisponible : <cause d'ouverture> » |
+| le backend est fermé pendant un pas (`/backend/close`, hôte qui recharge) | `Err`, le lancement meurt | l'appel en cours rend son erreur ; les appels suivants du même pas passent en mode fichiers |
+| l'index est en retard ou sous un verrou d'écriture long (un `index` en cours) | l'appel attend derrière | au-delà d'un délai annoncé (`RAG3WEAVER_TEAMMATE_INDEX_WAIT_S`, 20 s par défaut), le repli sur les fichiers, qui le dit |
+| un graphe d'outil échoue (nœud en erreur) | `{"error": …}` au modèle, le pas continue | pareil, et le juge le compte en repli d'outil |
+| l'hôte meurt | le pas meurt avec lui, la tâche reste « en cours » | le pas interrompu est journalisé comme tel ; à la reprise de l'hôte, l'équipier dont le plan est vivant et sans `ended` reprend à la frontière suivante |
+
+**Le mode fichiers** (`FileTools`, à côté de `BackendTools`, dans `teammate.rs` ou un module à
+lui) : `read_file`, `list_files`, `grep_files`, `edit_file` implémentés directement sur le
+worktree de la tâche, chemins confinés à ce worktree (comme `FileSource`), **la même forme de
+résultat** que leur graphe, avec un champ `fallback: "index indisponible : repli sur les fichiers
+(<cause>)"`. `edit_file` y garde l'empreinte attendue (`expected_hash`, calculée sur le disque) et
+laisse l'index en dette : la montre réindexe le fichier quand le backend revient. `search_code` y
+devient un grep des mots de la requête, rendu dans la forme de `search_code` (`result[]`, un
+signal `grep_repli`, la ligne de `warnings` qui le dit). `outline`, `usages`, `impact` rendent
+`{"ok": false, "unavailable": "<cause>"}`. Le pas ne tient plus le verrou du slot pour tout le
+tour : chaque appel d'outil le prend pour lui (une fermeture passe entre deux appels).
+
+**Les commandes, par la porte déclarée** : dans une tâche, l'équipier reçoit `run_command` et
+`wait_output` quand `workspace.commands` n'est pas `off`, sous la même `Garde`, avec le bac à sable
+confiné au worktree de la tâche (et son target). Les commandes de lecture (`cargo check`,
+`cargo test`, `git diff`…) passent sous `standard` ; sous `approval`, une commande hors liste part
+en question dans la boîte (`kind: "approval"`, la commande en argv) et le pas continue sans elle ;
+la réponse arrive à la frontière. Sortie entière journalisée dans le dossier de la tâche. Pas de
+shell libre. Les scripts du dépôt (`scripts/*.sh`) : déclarés au manifeste par leur chemin
+(`workspace.scripts: ["scripts/check_features.sh"]`), exécutés en argv, jamais par `sh -c` —
+**question 1**.
+
+**Témoins (faux modèle, `tests/common/fake_sse.rs`)** : un pas qui lit, édite et cherche pendant
+que le backend est fermé par `/backend/close` au milieu (le pas finit, chaque retour après la
+fermeture porte `fallback`, l'édition est sur le disque, le plan intact) ; un backend qui ne
+s'ouvre pas dès le départ (le pas tourne en mode fichiers) ; un `index` qui tient le verrou (le
+repli après le délai, dit) ; `cargo check` lancé, sa sortie dans le journal ; une commande hors
+liste sous `approval` (la question dans la boîte, le pas continue) ; l'hôte arrêté au milieu d'un
+pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
+
+## 2. Parler avec Claude Code, dans les deux sens
+
+- **L'adresse** : une ligne de boîte gagne `to` (facultatif) et `from` porte une clé stable :
+  `claude-code:<session_id>` pour une session Claude Code (la clé que le hook connaît),
+  `teammate:<parent>/<task>` pour un équipier, `supervisor` pour l'IDE. La `request` qui lance
+  l'équipier fixe son superviseur : ses questions vont par défaut à l'auteur de la demande.
+- **De l'équipier vers Claude Code** : une question, un `report`, un `ended` adressés à
+  `claude-code:<id>` restent « en attente » tant qu'ils n'ont pas de réponse. Une route de l'hôte
+  les rend : `GET /ide/teammate/pending?for=claude-code:<id>` → `[{task, item?, kind, text, at}]`.
+  Le hook UserPromptSubmit (archi) les montre en tête de son bloc : « l'équipier <task> te
+  demande : … — réponds par `rag3weaver-backend hook reply <task> "<texte>"` ».
+- **De Claude Code vers l'équipier** : `POST /ide/teammate/mailbox` avec `from:
+  claude-code:<id>` (la commande `hook reply` d'archi le fait), lu à la frontière suivante comme
+  aujourd'hui ; une `request` venue de Claude Code ouvre la tâche et lance l'équipier.
+- **À accorder avec archi avant le code** : la route `pending`, la forme du bloc, la commande
+  `reply`, et qui lit la clé de session (le hook la reçoit dans son entrée).
+
+**Témoins** : un équipier qui pose une question à `claude-code:s1` ; `pending?for=claude-code:s1`
+la rend, une autre clé ne la voit pas ; la réponse postée sous `claude-code:s1` est lue à la
+frontière du pas suivant ; le bloc du hook (faux hôte, côté archi) la montre.
+
+## 3. Les sous-équipiers
+
+- **L'ouverture** : un outil du pas, `spawn_teammate {item, request}`, ouvre une sous-tâche sur un
+  élément du plan : sa branche `agent/<parent>--<enfant>` part du HEAD de la branche du parent,
+  après un commit des éditions du parent (`wip(équipier): avant <enfant>`), son worktree, sa copie
+  de base (demain sa vue), sa boîte, son journal. `Tache` gagne `parent_task: Option<String>`.
+- **Les bornes** : profondeur 2 (un enfant n'ouvre pas de petit-enfant au-delà), 3 enfants vivants
+  par équipier, 6 équipiers vivants par hôte ; au-delà, l'outil rend son refus comme résultat.
+- **La parole** : le superviseur de l'enfant est le parent (`teammate:<parent>`). Les questions,
+  `step_done` et `ended` de l'enfant se recopient dans la boîte du parent (`kind: "child"`, avec
+  le nom de l'enfant) et se lisent à la frontière du parent ; le parent répond par
+  `tell_teammate {child, text}` ; il voit les pas de l'enfant par la même recopie, et par
+  `GET /ide/teammate` pour l'humain.
+- **La fin** : l'enfant clos rend sa branche ; le parent la fond dans la sienne par
+  `merge_child {child}` (même chemin que `fusionner_une_tache`, cible la branche du parent), ou la
+  rejette — **question 2**. Effacer le worktree de l'enfant à la fusion suit la règle des tâches
+  jetables (lot « tâche jetable »).
+
+**Témoins** : un parent qui ouvre un enfant sur un élément ; l'enfant pose une question, le parent
+la voit à sa frontière et répond, l'enfant lit la réponse ; les pas de l'enfant recopiés ; la
+borne de profondeur et de nombre refusée en résultat ; la fusion de l'enfant dans la branche du
+parent.
+
+## 4. Les problèmes d'outils, dits par l'agent à chaque pas
+
+- `step_done` gagne `tool_issues`, **requis** (une liste, vide si rien) : `[{tool, kind, detail}]`,
+  `kind` ∈ `ambiguous_result` | `missing_parameter` | `too_slow` | `wrong_result` | `refused` |
+  `fallback` | `other`. La consigne du pas dit qu'on le remplit avant de parler du reste.
+- Le journal du pas le porte ; la boîte aussi (dans la ligne `step_done`).
+- Le juge, dans `bilan_des_outils`, rend en plus `concordance[]` : par outil, ce que l'agent a dit,
+  ce que le juge a vu, accord ou désaccord ; un repli (point 1) est compté en défaut d'outil, jamais
+  en faute de l'agent. Pour une tâche d'équipier, le bilan se demande toujours (sans attendre
+  `bilans` au manifeste) — **question 3**.
+
+**Témoins** : un `step_done` sans `tool_issues` est refusé en résultat (le pas le redit) ; le
+journal et la boîte le portent ; le bilan du juge (faux modèle du juge) rend la concordance.
+
+## 5. La mémoire en dernier
+
+Rien de la mémoire ne bloque un pas : le rangement du plan clos (`file_closed_plan`), la fiche du
+juge, les rappels. Une erreur de mémoire s'écrit dans la boîte (`kind: "memory_failed"`, la cause)
+et dans le journal, le pas et le plan continuent. La frontière d'un pas ne fait aucun rappel de
+mémoire tant que les points 1 à 4 ne sont pas sur master.
+
+**Témoin** : la mémoire longue absente (hôte de mémoire injoignable) pendant un plan entier : le
+plan finit, la boîte porte un `memory_failed` par rangement manqué.
+
+## Puis : une vraie tâche sur Gemini
+
+Une fois 1 à 5 sur master : un lot réel du dépôt donné à l'équipier sur Gemini 3.8 Flash, jugé ;
+puis la même tâche sur un second modèle (« Gemini Argon » selon Lucie, à vérifier par G sous le
+projet Vertex), les deux bilans comparés par le juge.
+
+## Les lots
+
+1. Étanchéité et mode fichiers (point 1 sans les commandes), avec le verrou par appel.
+2. Les commandes par la porte déclarée.
+3. `tool_issues` et la concordance du juge (petit, utile dès la vraie tâche).
+4. Claude Code ↔ équipier (avec archi).
+5. Les sous-équipiers.
+6. La mémoire non bloquante (peut se fondre dans 1).
+
+## Questions
+
+1. **Les scripts du dépôt** : une liste `workspace.scripts` au manifeste (chemins exécutés en argv,
+   comptés comme écriture sauf mention), ou les ajouter à la liste de lecture en dur ? Je propose
+   le manifeste (généricité des schémas).
+2. **La fusion d'un enfant** : le parent décide seul (`merge_child`), ou l'humain relit comme une
+   tâche ? Je propose le parent seul, la relecture humaine restant sur la tâche racine.
+3. **Le bilan du juge** : toujours pour une tâche d'équipier, ou seulement si `bilans` est déclaré ?
+   Je propose toujours (c'est l'instrument de la comparaison des modèles).
