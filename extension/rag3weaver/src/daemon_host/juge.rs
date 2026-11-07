@@ -432,8 +432,14 @@ impl DaemonHost {
         let Some(reception) = self.bilans.reception.lock().unwrap_or_else(|p| p.into_inner()).take() else { return };
         let hote = Arc::downgrade(self);
         let _ = std::thread::Builder::new().name("juge".into()).spawn(move || {
+            let mut plafonds = PlafondDuJuge::default();
             for (backend, run) in reception {
                 let Some(h) = hote.upgrade() else { break };
+                let plafond = h.with_backend_id(&backend, |b| b.prepared().manifest.bilans.as_ref().map(|d| d.max_per_hour)).ok().flatten().unwrap_or(20);
+                if !plafonds.admettre(&backend, plafond, std::time::Instant::now()) {
+                    h.dire_le_saut_du_juge(&backend, &run, plafond);
+                    continue;
+                }
                 let fin = std::time::Instant::now() + std::time::Duration::from_secs(30);
                 while !h
                     .journal
@@ -451,6 +457,23 @@ impl DaemonHost {
                 }
             }
         });
+    }
+
+    /// **Un run que le plafond laisse sans jugement** : le saut se dit au journal du
+    /// run (`bilan`), sur la sortie d'erreur, et dans la boîte quand le run est celui
+    /// d'une tâche d'équipier — jamais en silence.
+    fn dire_le_saut_du_juge(&self, backend: &str, run: &str, plafond: u32) {
+        let pourquoi = format!("sauté : plafond de {plafond} jugements par heure atteint (bilans.max_per_hour)");
+        eprintln!("[juge] {backend} {run} : {pourquoi}");
+        let mut ajouts = serde_json::Map::new();
+        ajouts.insert("bilan".into(), json!(pourquoi));
+        self.journal.ajouter(backend, run, ajouts);
+        let tache = self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().find(|t| t.id == backend).cloned();
+        if let Some(t) = tache {
+            if let Ok(files) = self.teammate_files(&t.parent, &t.nom) {
+                let _ = files.append("host", "report", None, &format!("le run {run} n'est pas jugé : {pourquoi}"));
+            }
+        }
     }
 
     /// La fiche (créée si besoin, `via: juge`), le L0 (le journal, au chemin),
@@ -701,8 +724,47 @@ fn rendre_les_defauts(o: &Value, run: &str, backend: &str) -> String {
     texte
 }
 
+/// **Le plafond du juge** (`bilans.max_per_hour`) : les heures des derniers
+/// jugements, par backend, comptées sur une heure glissante.
+#[derive(Default)]
+pub(super) struct PlafondDuJuge {
+    juges: std::collections::HashMap<String, std::collections::VecDeque<std::time::Instant>>,
+}
+
+impl PlafondDuJuge {
+    /// Ce run peut-il être jugé maintenant ? S'il l'est, il compte.
+    pub(super) fn admettre(&mut self, backend: &str, plafond: u32, maintenant: std::time::Instant) -> bool {
+        let recents = self.juges.entry(backend.to_string()).or_default();
+        while recents.front().is_some_and(|t| maintenant.duration_since(*t) >= std::time::Duration::from_secs(3600)) {
+            recents.pop_front();
+        }
+        if recents.len() >= plafond as usize {
+            return false;
+        }
+        recents.push_back(maintenant);
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    /// **Le plafond du juge** (ticket « le juge des bilans n'a pas de plafond d'appels ») :
+    /// à `max_per_hour: 2`, trois runs dans l'heure → deux jugés, le troisième non ; une heure
+    /// plus tard, le compte est revenu ; un autre backend a son propre compte.
+    #[test]
+    fn the_judge_is_capped_per_backend_on_a_sliding_hour() {
+        let t0 = std::time::Instant::now();
+        let mut p = super::PlafondDuJuge::default();
+        assert!(p.admettre("chat", 2, t0));
+        assert!(p.admettre("chat", 2, t0 + std::time::Duration::from_secs(60)));
+        assert!(!p.admettre("chat", 2, t0 + std::time::Duration::from_secs(120)), "le troisième dans l'heure est sauté");
+        assert!(p.admettre("autre", 2, t0 + std::time::Duration::from_secs(120)), "un autre backend a son compte");
+        assert!(p.admettre("chat", 2, t0 + std::time::Duration::from_secs(3600)), "une heure après le premier, une place revient");
+        assert!(!p.admettre("chat", 2, t0 + std::time::Duration::from_secs(3601)), "le deuxième compte encore");
+        assert!(!p.admettre("chat", 0, t0), "un plafond nul ne juge rien");
+    }
+
     use super::*;
 
     /// Le nom d'une fiche de bilan : une seule fonction (96).
