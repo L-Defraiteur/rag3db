@@ -121,7 +121,7 @@ fn l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges() {
     // La demande du superviseur : elle ouvre la tâche et lance l'équipier.
     let debut = Instant::now();
     let demande = "Écris la documentation de ce petit dépôt Rust : un README.md qui dit ce que fait la bibliothèque (lis src/), ses deux modules et un exemple d'usage de `somme`. Reste court et exact : ne décris que ce que le code fait.";
-    let r = host.post_to_teammate(&id, "doc", "c7", "request", None, demande).expect("la demande ouvre la tâche et lance l'équipier");
+    let r = host.post_to_teammate(&id, "doc", "c7", "request", None, demande, &serde_json::Value::Null).expect("la demande ouvre la tâche et lance l'équipier");
     assert_eq!(r["started"], true, "{r}");
     let t = host.tache(&id, "doc").expect("la tâche est ouverte");
     let fin = Instant::now() + Duration::from_secs(900);
