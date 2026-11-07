@@ -29,7 +29,23 @@ heures. Une fois sur huit, sans figer, un test du réacteur rougit.
    `ide::tests::the_relay_does_not_wait_for_the_graph_runtime`, et rouge
    `backend::tests::stopping_cuts_a_long_reaction_and_the_restart_resumes_it`. Pile refusée
    (eu-stack sans ptrace). Rejoué à 20 h 42 sur 1b7fb111e sous 17a094d12 : vert en 38 s.
-2. **l'arbre principal, même soirée** : relayé par c7, liste presque la même ; pas de pile.
+2. **l'arbre principal, portable (pas luciepc), 21 h 26 → 21 h 33** : la passe du lot juge + graphe
+   cité, tête d5f617bbf sur base dcaea137f, lib **17a094d12** avec `MOTEUR_ANCIEN=1` (sources
+   7cd11e5fa), jeu large `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm`,
+   target rebâti à neuf juste avant, seule sous `poste lourd` (une place) ; à côté, une copie `scp`
+   de lib depuis luciepc (21 h 33). Rouges : `backend::tests::a_failed_batch_is_undone_without_poisoning_the_catalog`
+   et `backend::tests::stopping_cuts_a_long_reaction_and_the_restart_resumes_it` ; « running for over
+   60 seconds » : `daemon_host::taches::tests::la_base_principale_n_est_jamais_ecrite_par_la_tache`,
+   `daemon_host::taches::tests::une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne`,
+   `daemon_host::tests::deux_fenetres_l_une_enregistre_l_autre_voit_le_changement`,
+   `dataflow::reactor::tests::a_frozen_reaction_does_not_hold_a_bounded_stop`,
+   `dataflow::runtime::tests::un_niveau_mixte_sequentialise_et_ca_se_voit`,
+   `ide::tests::the_relay_does_not_wait_for_the_graph_runtime`. Puis le journal s'arrête à 21 h 33 m 53 s,
+   **sans ligne `test result` ni panique**, sept minutes après le départ de l'étape. Le journal du
+   noyau de 21 h 30 à 21 h 36 : ni manque de mémoire, ni signal du noyau, ni vidage du binaire
+   (`journalctl -k`, `coredumpctl` ; seul vidage, `plasma-discover`, sans lien). Charge non relevée.
+   Rejoués seuls, les deux rouges sont verts sous 17a094d12 comme sous 7cd11e5fa ; la lib entière
+   rejouée seule au même code et sous la même lib : 1 988 verts, 26 s. Pas de pile.
 3. **codeparsers, luciepc, vers 21 h 50** : la passe du lot garde-pointeur-3 (dae922e9f), lib
    **17a094d12** avec `MOTEUR_ANCIEN=1`, à côté d'autres lourds. Binaire tué après 62 min, 6,5 Gio de
    RSS, journal immobile depuis 21 h 51. Arrêtés, les huit : les cinq d'archi plus
