@@ -188,7 +188,7 @@ fn un_modele_declare_au_manifeste_sert_les_graphes_du_backend() {
         m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
     });
     let r = appel(&b, "decide_essai", json!({"element": {"text": "bonjour"}}));
-    assert_eq!(r["verdict"], json!("oui"), "l'élément ressort étiqueté par le modèle déclaré : {r}");
+    assert_eq!(r["result"]["verdict"], json!("oui"), "l'élément ressort étiqueté par le modèle déclaré : {r}");
     let requete = serveur.request.recv_timeout(std::time::Duration::from_secs(5)).expect("le faux modèle a reçu la requête");
     assert!(requete.contains("bonjour") && requete.contains("faux"), "la requête porte le texte et le modèle déclaré : {requete}");
 }
