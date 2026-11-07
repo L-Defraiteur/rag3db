@@ -811,14 +811,111 @@ impl DaemonHost {
             })
             .collect();
         let sessions: Vec<Session> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        let (chat_sessions, available_repos) = self.chat_sessions(&hotes, &backends);
         json!({
             "service": SERVICE,
             "pid": std::process::id(),
             "backends": backends,
+            "chat_sessions": chat_sessions,
+            "available_repos": available_repos,
             "sessions": sessions,
             "closed_dead_sessions": self.closed_dead.load(std::sync::atomic::Ordering::SeqCst),
             "background": self.background_state(),
         })
+    }
+
+    /// **La barre du chat, par session** (ticket « la barre du chat ne se lit pas
+    /// par session », forme accordée avec everything declarative, page 02) : une
+    /// liste à plat de sessions, chacune avec son `parent`. Une session est une
+    /// conversation (une entrée de `chats`) ; ses sous-sessions sont les tâches de
+    /// son backend (leur `parent` est l'id de la conversation mère), avec l'état
+    /// de leur équipier et `awaits_answer`. Sous chaque session, son dépôt et ses
+    /// worktrees (le principal, puis ceux des tâches, `held_by` la tâche), chacun
+    /// chargé ou non, son rag (`indexed`, `indexing` avec `percent`, `absent`) ;
+    /// sa mémoire déclarée (`bilans.memoire`). Les dépôts de code que personne ne
+    /// tient vont dans `available_repos`. Lu sans ouvrir ni attendre de backend.
+    fn chat_sessions(&self, hotes: &[Arc<Hosted>], backends: &[Value]) -> (Value, Value) {
+        let par_id: HashMap<&str, &Value> = backends.iter().filter_map(|b| Some((b["id"].as_str()?, b))).collect();
+        let rag = |b: &Value| -> Value {
+            let index = &b["index"];
+            let entites: Vec<&Value> = index.as_object().map(|o| o.values().filter(|v| v.is_object()).collect()).unwrap_or_default();
+            let en_cours: Option<f64> = entites
+                .iter()
+                .filter_map(|e| e["text_percent"].as_f64().or_else(|| e["vectors_percent"].as_f64()).filter(|p| *p > 0.0 && *p < 100.0))
+                .reduce(f64::min);
+            if index["busy"] == true || en_cours.is_some() {
+                json!({ "state": "indexing", "percent": en_cours.map(|p| p.round()) })
+            } else if entites.iter().any(|e| e["text"].as_str().is_some_and(|t| t != "never")) {
+                json!({ "state": "indexed" })
+            } else {
+                json!({ "state": "absent" })
+            }
+        };
+        let arbre = |b: &Value, held_by: Option<&str>| -> Value {
+            json!({
+                "backend": b["id"],
+                "branch": b["branch"],
+                "worktree": espace_du_manifeste(Path::new(b["manifest"].as_str().unwrap_or_default())),
+                "loaded": b["open"] == true,
+                "rag": rag(b),
+                "held_by": held_by,
+            })
+        };
+        let etats = self.teammate_states();
+        let chats: Vec<String> = self.chats.lock().unwrap_or_else(|p| p.into_inner()).keys().cloned().collect();
+        let mut tenus: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut sorties = Vec::new();
+        // Les conversations, et les tâches de leur backend comme sous-sessions.
+        let mut ids: Vec<String> = chats.clone();
+        for c in &chats {
+            for t in self.taches_de(c) {
+                if !ids.contains(&t.id) {
+                    ids.push(t.id.clone());
+                }
+            }
+        }
+        for id in &ids {
+            let Some(b) = par_id.get(id.as_str()) else { continue };
+            let tache = &b["tache"];
+            let parent = tache["parent"].as_str().map(str::to_string);
+            // La session tient son dépôt : le principal (ou, pour une tâche, son
+            // worktree), et les worktrees des tâches de son backend.
+            let mut worktrees = vec![arbre(b, parent.as_ref().map(|_| id.as_str()))];
+            tenus.insert(id.clone());
+            for t in self.taches_de(id) {
+                if let Some(tb) = par_id.get(t.id.as_str()) {
+                    worktrees.push(arbre(tb, Some(&t.id)));
+                    tenus.insert(t.id.clone());
+                }
+            }
+            let memoire = hotes.iter().find(|h| h.id == *id).and_then(|h| {
+                let slot = h.backend.try_read().ok()?;
+                let p = slot.as_ref()?.prepared();
+                let d = p.manifest.bilans.as_ref()?;
+                let m = if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) };
+                Some(m.canonicalize().unwrap_or(m))
+            });
+            let memoire = memoire.and_then(|m| backends.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(m.as_path())).cloned());
+            let (state, attend) = etats.get(id).copied().map(|(s, a)| (Some(s), a)).unwrap_or((None, false));
+            sorties.push(json!({
+                "id": id,
+                "name": if tache.is_null() { b["repo"].clone() } else { tache["nom"].clone() },
+                "parent": parent,
+                "state": state,
+                "awaits_answer": attend,
+                "repos": [{ "backend": b["id"], "repo": b["repo"], "branch": b["branch"], "worktrees": worktrees }],
+                "memory": match &memoire {
+                    Some(m) => json!({ "backend": m["id"], "rag": m["open"] == true && rag(m)["state"] == "indexed" }),
+                    None => json!({ "backend": null, "rag": false }),
+                },
+            }));
+        }
+        let disponibles: Vec<Value> = backends
+            .iter()
+            .filter(|b| b["kind"] == "code" && b["tache"].is_null() && !b["id"].as_str().is_some_and(|i| tenus.contains(i)))
+            .map(|b| json!({ "backend": b["id"], "repo": b["repo"], "branch": b["branch"], "loaded": b["open"] == true, "rag": rag(b) }))
+            .collect();
+        (Value::Array(sorties), Value::Array(disponibles))
     }
 
     /// **Les runs vivants en fond**, du plus ancien au plus récent : le `--qui`
