@@ -72,3 +72,46 @@ diff). Diagnostic, lu dans le code :
 
 Question posée à c7 : baser le lot sur `ide-react-vue3b` (proposé) ou sur
 master.
+
+## Tours 3 à 6 — les réponses de c7, la forme de 96, le code
+
+**Ce que les blocs ont montré :** rien de neuf (ni fiche en rapport, ni diff,
+ni verdict). Le contexte utile est venu des messages de c7 et
+d'everything declarative, pas du hook.
+
+**Mémoire :**
+
+- 96 a créé les genres `agent`, `alias`, `handle` et `same_as` ;
+  `citer_source` genre `handle` rejoué sur le L1 `handle` : exécuté, « genre
+  sans harnais : citée, non vérifiée ».
+- La forme demandée par 96 : `author: "hooks-essai"` et `via: "claude-code"`.
+  Le L1 `identity` est réécrit en sept lignes, une rubrique chacune (révision
+  2, `expected_revision: 1`). **Écart à dire :** le schéma décrit un L1 comme
+  une archive qui « ne change plus une fois posé », et la révision a pourtant
+  été acceptée. Faut-il réécrire, ou poser un L1 neuf et consolider ? Le hook
+  ne le dit pas.
+
+**Le lot :** basé sur `ide-react-vue3b-2` (37c42b720), branche
+`chercher-sans-dossier`. Fichiers partagés avec everything declarative : ses
+lots suivants ne touchent ni Home, ni Tree, ni Search ; aucun de ses témoins
+ne lit `#chercher`.
+
+- `aed52e422` : `SearchBox` sur l'accueil, l'arbre et la recherche ; le
+  paramètre `dossier` part dans `scope` de `search_code` ; la pastille
+  `#chercher-dossier` s'efface d'un clic ; bundle rebâti, `--check` vert,
+  `tsc` vert.
+- `de77cf72c` : le témoin navigateur
+  `la_recherche_se_tape_depuis_l_accueil_et_le_dossier_n_est_qu_un_filtre`.
+  Le même mot dans `src/` et dans `outils/`. Depuis l'accueil, la requête
+  tapée rend les deux fichiers ; depuis l'arbre de `src/`, un seul ; après le
+  clic sur la pastille, la même question rend de nouveau les deux.
+
+**Ce qui a aidé :** les repères DOM écrits en tête de chaque vue
+(`Search.tsx`, `Home.tsx`) et les commentaires « pourquoi » de l'ancienne page
+ont donné le diagnostic en trois lectures.
+
+**Ce qui a gêné :** le journal vit sur `hooks-essai` et le lot sur
+`chercher-sans-dossier` dans le même worktree. Il a fallu un worktree de docs
+à part (`~/.cache/rag3weaver-build/wt-docs-hooks-essai`). La consigne « un
+worktree par session » ne dit pas où vont les docs de session quand la
+branche de la session change.
