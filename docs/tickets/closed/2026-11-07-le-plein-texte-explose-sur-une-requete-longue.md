@@ -88,8 +88,10 @@ Même sonde, code-principal (copie reflink, 65 946 documents ; charge 9,3 avant,
 | 197 | 1397 | 993 | 11727 | 1045 | 785 | 89 |
 
 lucivy borne le flou long chez lui : sur le même budget de 500 ms, **L passe à 900 caractères**
-(464 ms à 933) et **K = 64 est confirmé** (343 ms ; 650 à 128). La copie de la mémoire longue,
-remesurée après la bascule 43, montrait un index de 0 document : sa ligne n'a pas compté.
+(464 ms à 933) et **K = 64 est confirmé** (343 ms ; 650 à 128). La mémoire longue n'a pas été
+remesurée : sa copie, prise pendant que l'hôte la tenait, montrait un index de 0 document (la base
+en service en a 2, vérifié par G) — une copie fausse, pas une mesure (la règle de copie est dans la
+page de la session recherche du 7 novembre).
 
 ## Le témoin
 
