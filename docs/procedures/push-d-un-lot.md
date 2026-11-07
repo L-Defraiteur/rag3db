@@ -52,6 +52,13 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   exigé, `RAG3WEAVER_EXIGER_GEMINI=1`, identifiants par le chemin de `.vault`, jamais leur contenu)
   si le juge ou l'équipier.
 - Un témoin qui se saute n'est pas vert : `SAUTÉ` compte comme un rouge dans la passe.
+- **Les e2e d'une passe se jouent sous le jeu large de features**
+  (`rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm`) ; une
+  suite **non jouée faute de feature est ROUGE** et nomme la suite, et le verdict dit « N suites
+  jouées sur N attendues » (96 et c7, 7 novembre 2026 : `run_e2e.sh` sautait les suites sous
+  `openai-llm` en prévenant seulement, et un témoin du pas 1 de M4 est arrivé sur master sans
+  avoir jamais été joué). Lire « running N tests » de chaque suite du changement avant de dire
+  vert.
 
 ## Le push (sous `poste push`, dans le worktree de push)
 
