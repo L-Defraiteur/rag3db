@@ -83,10 +83,16 @@ export type ChatTurn = {
 // La jauge du contexte : `used`, les jetons d'entrée (cache compris) du dernier
 // appel au modèle ; `max`, le contexte du modèle déclaré (null : inconnu).
 export type ChatContext = { used: number | null; max: number | null; source: string; at: number | null };
+// Une fiche de la mémoire déclarée écrite pendant cette conversation : par une
+// Source dont `session` est un run de la conversation (le juge), ou un apport qui
+// la cite. Les écritures de l'agent lui-même attendent M7 (la session posée par
+// l'hôte).
+export type MemoryWrite = { fiche: string; kind: "fiche" | "apport"; section?: string; at_ms?: number; run: string };
 export type ChatState = {
   on: boolean;
   model: string | null;
   context?: ChatContext;
+  memory_writes?: MemoryWrite[];
   why: string | null;
   run: string | null;
   turns: ChatTurn[];

@@ -737,11 +737,22 @@ impl DaemonHost {
     /// et ses sessions. C'est ce que l'outil « état du démon » dira.
     pub fn state(&self) -> Value {
         self.reap_dead_sessions();
-        let backends: Vec<Value> = self
-            .backends
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .values()
+        let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        // **La mémoire déclarée** par les backends ouverts (`bilans.memoire`) :
+        // la page la nomme « la mémoire », pas un dépôt. Lue sans attendre, comme
+        // le reste de l'état.
+        let memoires: std::collections::HashSet<PathBuf> = hotes
+            .iter()
+            .filter_map(|h| {
+                let slot = h.backend.try_read().ok()?;
+                let p = slot.as_ref()?.prepared();
+                let d = p.manifest.bilans.as_ref()?;
+                let m = if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) };
+                Some(m.canonicalize().unwrap_or(m))
+            })
+            .collect();
+        let backends: Vec<Value> = hotes
+            .iter()
             .map(|h| {
                 // **Sans attendre** : une ouverture ou une fermeture tient le
                 // slot en écriture, et l'état de l'hôte ne fait jamais la queue
@@ -763,6 +774,7 @@ impl DaemonHost {
                     },
                     Err(_) => (json!(true), json!({ "busy": true, "why": "une ouverture ou une fermeture tient ce backend" }), Value::Null),
                 };
+                let repo = repo_of(&h.manifest);
                 json!({
                     "id": h.id,
                     "manifest": h.manifest,
@@ -774,6 +786,21 @@ impl DaemonHost {
                     "manifest_changed": self.manifest_changed(h),
                     "refused": *h.refused.lock().unwrap_or_else(|p| p.into_inner()),
                     "tache": self.tache_de(&h.manifest),
+                    // Ce que les gens nomment (Lucie, 7 novembre 2026 : « les gens qui
+                    // bossent parlent en branches, PR, worktrees, repos attachés ») :
+                    // le dépôt git qui contient le manifeste, et sa branche.
+                    // `kind` (Lucie : « séparer les deux notions ») : `memory` pour la
+                    // mémoire déclarée, `code` pour un dépôt git, `project` pour un
+                    // projet rag3weaver déclaratif sans dépôt (le deck builder).
+                    "repo": repo,
+                    "branch": branch_of(&h.manifest),
+                    "kind": if memoires.contains(&h.manifest.canonicalize().unwrap_or_else(|_| h.manifest.clone())) {
+                        "memory"
+                    } else if repo.is_some() {
+                        "code"
+                    } else {
+                        "project"
+                    },
                 })
             })
             .collect();
@@ -1267,6 +1294,33 @@ mod teammate_tests;
 /// Le chat qui code dans une tâche (page 03 du 25 octobre 2026).
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_qui_code;
+
+/// **Le dépôt git d'un manifeste** : le nom du dossier de son `--show-toplevel`,
+/// gardé une fois lu (un dépôt ne change pas de nom sous l'hôte). `None` hors
+/// d'un dépôt git.
+fn repo_of(manifest: &Path) -> Option<String> {
+    static VUS: std::sync::OnceLock<Mutex<HashMap<PathBuf, Option<String>>>> = std::sync::OnceLock::new();
+    let vus = VUS.get_or_init(Default::default);
+    if let Some(r) = vus.lock().unwrap_or_else(|p| p.into_inner()).get(manifest) {
+        return r.clone();
+    }
+    let r = git_dans(manifest, &["rev-parse", "--show-toplevel"])
+        .and_then(|t| Path::new(&t).file_name().map(|n| n.to_string_lossy().into_owned()));
+    vus.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.to_path_buf(), r.clone());
+    r
+}
+
+/// La branche que tient le dépôt d'un manifeste (relue à chaque état : elle
+/// change). `None` hors d'un dépôt git ou en tête détachée.
+fn branch_of(manifest: &Path) -> Option<String> {
+    git_dans(manifest, &["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| b != "HEAD")
+}
+
+fn git_dans(manifest: &Path, args: &[&str]) -> Option<String> {
+    let dossier = manifest.parent()?;
+    let out = std::process::Command::new("git").arg("-C").arg(dossier).args(args).stderr(std::process::Stdio::null()).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|t| !t.is_empty())
+}
 
 #[cfg(test)]
 mod tests {
