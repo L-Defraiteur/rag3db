@@ -86,7 +86,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (44)
+### Ouverts — produit (45)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -137,6 +137,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 | [Le filtre du signal creux compare des offsets de parents à des offsets de morceaux](2026-11-07-le-filtre-du-signal-creux-compare-des-offsets-de-parents-a-des-offsets-de-morceaux.md) | ouvert — relevé par 73, confirmé à la lecture, pas encore joué ; pour la recherche | réponse fausse | oui, pour un backend à signal sparse (pas le code) | oui |
+| [Le plein texte explose sur une requête longue](2026-11-07-le-plein-texte-explose-sur-une-requete-longue.md) | ouvert — mesuré par rag3weaver archi (197 mots : 33 s) ; la borne attend la décision de c7 | blocage | oui | oui |
 
 ### Fermés (182), dans `closed/`
 
