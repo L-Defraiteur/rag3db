@@ -72,6 +72,12 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
   Un `[ ! -d … ] && echo …` n'est pas un garde ; pendant un rebase arrêté, HEAD est la tête de
   master, le contrôle d'ancêtre passe, et `git rev-parse HEAD` rend un hash qui n'est pas le lot.
+- **Master se relit juste avant le push**, pas seulement au départ de la passe (96, deux courses
+  perdues le 7 novembre 2026) : si master a bougé **sans Rust** sous `extension/rag3weaver`, le
+  tour repose le lot dessus (rebase) et pousse ; s'il a bougé **avec du Rust**, il repose et
+  rejoue court (`check_features`, la lib entière, les e2e du changement), puis relit encore. **Trois
+  fois au plus**, puis il demande une fenêtre à c7. C'est la seule façon d'atterrir sans fenêtre
+  quand les pushes se suivent à l'heure.
 - **Le push de master dans `if grep -qx VERT`**, jamais enchaîné après la passe par `;` ou `&&`.
 - **Les trois contrôles lus avant de dire « poussé »** : `git status --short` propre, aucun
   rebase en cours (`rebase-merge`, `rebase-apply`), et `git log -1 origin/master` après un `fetch`
