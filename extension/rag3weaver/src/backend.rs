@@ -827,6 +827,10 @@ pub struct Surcharges {
     /// La racine du workspace (absolue) et si la tâche y écrit : jamais la
     /// racine de l'arbre principal quand celle-ci est dans un dépôt git.
     pub workspace: Option<(PathBuf, bool)>,
+    /// Les déclarations sont une copie qu'aucun dépôt ne suit (une tâche dont
+    /// seul le code est dans un dépôt) : `declare` refuse, rien ne serait
+    /// versionné ni fusionné.
+    pub declarations_hors_depot: bool,
 }
 
 /// Une base copiée sous la porte des écrivains
