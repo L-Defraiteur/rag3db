@@ -231,6 +231,10 @@ pub mod mail;
 // `codex queue` (même page).
 #[cfg(feature = "daemon")]
 pub mod codex_threads;
+// Le canal : un serveur MCP en stdio que Claude Code charge comme canal, pour
+// pousser la boîte dans une session occupée ou à l'arrêt (page 07 § 4).
+#[cfg(feature = "daemon")]
+pub mod canal;
 /// `code-tree` : un arbre de code indexé par instantané, qui suit ses éditions.
 pub mod code_tree;
 /// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le
