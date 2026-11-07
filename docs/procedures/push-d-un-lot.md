@@ -21,7 +21,7 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   Quand la lib est plus vieille que le C++ de master, les e2e portent `RAG3WEAVER_MOTEUR_ANCIEN=1`.
 - **`scripts/check_features.sh`** (cargo check --tests sous les jeux de features), puis **la lib
   entière** sous le jeu le plus large :
-  `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm` (`RAG3WEAVER_PG` posé).
+  `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm` (`RAG3WEAVER_PG` posé).
 - **L'étape navigateur** à part, après la lib : `FEATURES=… scripts/temoins_navigateur.sh`
   (`RAG3WEAVER_EXIGER_NAVIGATEUR=1`). Depuis l'IDE en React (25 octobre 2026), elle **exige les
   paquets React** de l'aperçu à chaud : une fois par poste, `scripts/paquets_react.sh <dossier>`

@@ -1,7 +1,7 @@
 # Claude en agent — rapport de session
 
 Chantier E du plan de reprise (`../8-octobre-2026-16h29/orchestration/01`).
-Mis à jour le 10 octobre 2026 à 12 h 00. Ce fichier se met à jour sur place.
+Mis à jour le 7 novembre 2026 à 14 h 10. Ce fichier se met à jour sur place.
 
 ## 1. Le rôle
 
@@ -63,21 +63,43 @@ Worktree `/home/lucied/git_workspaces/rag3db-anthropic`, branche
 - Les séquences d'arrêt sont détectées chez nous (`first_stop` /
   `holdback`), comme pour OpenAI, et ne sont pas envoyées.
 
-## 4. En cours — état au redémarrage du poste (10 octobre, 12 h)
+## 4. L'atterrissage du 7 novembre 2026
 
-**Le dernier commit de code n'est pas compilé.** Il porte les trois
-corrections de la passe 2 dans `anthropic_llm.rs` (deux tests ajoutés, 26),
-le branchement du harnais (`model_source.rs`, `chat.rs`, le binaire du chat)
-et le protocole de la comparaison. La compilation a attendu le verrou du
-poste derrière les mesures en file, puis le poste a été mis en pause pour un
-redémarrage avant qu'elle n'entre. Le commit précédent (`5b65f30ca`, 24
-tests) est, lui, compilé et vert.
+La branche est restée un mois sans compiler son dernier commit (le poste mis en
+pause le 10 octobre). Le 7 novembre, règle de Lucie : « tout ce qui est sans
+bloquant réel doit être mergé ». Worktree neuf
+`~/.cache/rag3weaver-build/wt-anthropic`, branche `anthropic-llm-2` (rebase
+propre sur master `f5ed39b0b`), target `~/.cache/rag3weaver-build/anthropic`.
 
-Au retour, dans l'ordre : `poste lourd cargo test --lib --features
-anthropic-llm anthropic_llm model_source` ; `poste lourd cargo build --bin
-rag3weaver-chat --features anthropic-llm` ; `poste lourd cargo check --lib
---bins --features openai-llm` (le `cfg(not)` du protocole anthropic) ; puis
-le backend de la passe (§6) et la passe (`passe.sh claude-1`).
+Ce que le rebase a demandé, et ce qui a été choisi :
+
+- **`connect_llm` rend `Arc<dyn Llm>` pour tous les protocoles** (plus un
+  `Box` ; master avait gagné trois appelants qui font `Arc::new` sur le type
+  concret : `backend.rs`, le binaire du backend, `daemon_host/chat.rs` — ils
+  prennent l'`Arc` tel quel). Un seul type pour le catalogue, l'hôte et le
+  chat ; rien qui nomme anthropic chez les appelants.
+- **Le défaut de raisonnement déclaré** (`models.llm.reasoning`, arrivé sur
+  master le 25 octobre) est honoré par le client Anthropic comme par OpenAI :
+  `with_reasoning_default`, l'appel l'emporte ; un test de plus (27).
+- **Le test d'`openai_llm` qui inspectait le corps à travers `connect_llm`**
+  ne peut plus (le type est abstrait) : il vérifie que la déclaration est lue
+  et que la connexion aboutit ; l'effet est prouvé par le test du dessus.
+- La feature `anthropic-llm` entre dans le jeu large de
+  `scripts/check_features.sh` et de `docs/procedures/push-d-un-lot.md`.
+
+La passe (`~/.cache/rag3weaver-build/wt-anthropic-passe.sh`, sous `poste
+lourd`, lib épinglée `04063ee06`, `RAG3WEAVER_MOTEUR_ANCIEN=1`, aucun appel
+réel à l'API) : `check_features` vert sur les cinq jeux ; lib entière sous le
+jeu large : **1 904 tests, 0 échec** ; `e2e_lectures` (une ligne de l'hôte
+touchée) : 20 tests, 0 échec ; l'étape navigateur ensuite. Un faux rouge du
+script au passage — `grep -i FAILED` attrapait « 0 failed » — corrigé : un
+vert est l'absence de rouge, jugée sur « N failed » non nul et `SAUTÉ`.
+
+**Ce qui n'est pas fait** : la passe d'agent Gemini / Claude (page 03) n'a
+jamais été jouée ; elle attend le mot de Lucie pour la clé, et le jeu de
+tâches est inchangé. Le chantier suivant de cette session est le §1 du plan du
+week-end (les hooks de Claude Code,
+`../07-novembre-2026-hooks-claude-code/01`).
 
 ## 5. Ce qui attend Lucie
 

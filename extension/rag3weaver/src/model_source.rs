@@ -545,12 +545,14 @@ pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::oc
 ///   d'adresse (ou une, pour un mandataire) ; la clé vient de la variable
 ///   nommée par `api_key_env`, `ANTHROPIC_API_KEY` par défaut.
 ///
-/// Rend un `Box<dyn Llm>` : deux clients, un seul type pour l'appelant.
+/// Rend un `Arc<dyn Llm>` : deux clients, un seul type pour tous les
+/// appelants (catalogue, hôte, chat), qui le partagent tel quel.
 ///
 /// Ni `local` ni `service` : un modèle de langage sur ce poste est un
 /// llama-server, donc `compatible` à une adresse locale.
 #[cfg(feature = "openai-llm")]
-pub fn connect_llm(source: &ModelSource) -> Result<(Box<dyn crate::llm::Llm>, Origin), String> {
+pub fn connect_llm(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::llm::Llm>, Origin), String> {
+    use std::sync::Arc;
     use crate::openai_llm::{secret_from_env, Auth, OpenAiLlm};
     let what = format!("models.llm ({})", source.model);
     if source.model.trim().is_empty() {
@@ -581,7 +583,10 @@ pub fn connect_llm(source: &ModelSource) -> Result<(Box<dyn crate::llm::Llm>, Or
             if let Some(n) = source.context_tokens {
                 llm = llm.with_context_len(n);
             }
-            return Ok((Box::new(llm), Origin::Compatible("anthropic".into())));
+            if let Some(effort) = source.reasoning {
+                llm = llm.with_reasoning_default(effort);
+            }
+            return Ok((Arc::new(llm) as Arc<dyn crate::llm::Llm>, Origin::Compatible("anthropic".into())));
         }
         #[cfg(not(feature = "anthropic-llm"))]
         return Err(format!("{what} : le protocole anthropic demande la feature `anthropic-llm`"));
@@ -596,7 +601,7 @@ pub fn connect_llm(source: &ModelSource) -> Result<(Box<dyn crate::llm::Llm>, Or
         let location = source.params.get("location").cloned().unwrap_or_else(|| "global".to_string());
         let token = crate::gcp_auth::TokenSource::from_env().and_then(|s| s.token()).map_err(|e| format!("{what} : jeton Vertex : {e}"))?;
         let llm = with_context(OpenAiLlm::vertex(&project, &location, token, &source.model));
-        return Ok((Box::new(llm), Origin::Compatible(format!("vertex:{project}/{location}"))));
+        return Ok((Arc::new(llm) as Arc<dyn crate::llm::Llm>, Origin::Compatible(format!("vertex:{project}/{location}"))));
     }
     let compatible = |address: &str, s: &ModelSource| -> Result<OpenAiLlm, String> {
         match s.protocol.as_deref().unwrap_or("openai") {
@@ -615,7 +620,7 @@ pub fn connect_llm(source: &ModelSource) -> Result<(Box<dyn crate::llm::Llm>, Or
     };
     let builders: Builders<OpenAiLlm> = Builders { local: None, service: None, compatible: Some(&compatible) };
     let (llm, origin) = resolve(Capability::Llm, source, &builders, &process_env)?;
-    Ok((Box::new(with_context(llm)), origin))
+    Ok((Arc::new(with_context(llm)) as Arc<dyn crate::llm::Llm>, origin))
 }
 
 /// Un artefact de modèle local : `<PRÉFIXE>_<SUFFIXE>` dans l'environnement,

@@ -1962,7 +1962,7 @@ impl PreparedBackend {
         // decider ni llm servi » alors que le manifeste le déclarait (M4).
         #[cfg(feature = "openai-llm")]
         if let Some(source) = self.manifest.models.get(&crate::model_source::Capability::Llm) {
-            cat.set_llm(Arc::new(crate::model_source::connect_llm(source)?.0));
+            cat.set_llm(crate::model_source::connect_llm(source)?.0);
         }
         #[cfg(not(feature = "openai-llm"))]
         if self.manifest.models.contains_key(&crate::model_source::Capability::Llm) {
