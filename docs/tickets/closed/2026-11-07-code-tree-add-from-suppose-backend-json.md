@@ -1,6 +1,6 @@
 # `code-tree add --from` suppose un manifeste nommé backend.json
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — correctif court.
+- **État** : corrigé (7 novembre 2026) par le lot « code-tree add --from par nom ou par chemin » (everything declarative) : le manifeste enregistré par l'hôte, sinon celui dont le name est ce nom, sinon le seul, sinon backend.json ; l'arbre neuf garde le nom du manifeste de from.
 - **Famille** : produit
 - **Gravité** : blocage (on ne peut pas inscrire un worktree frère depuis la configuration réelle de Lucie).
 - **Atteignable en service** : oui, sur toute configuration dont le manifeste ne s'appelle pas `backend.json` (celui de Lucie s'appelle `rag3db.json` depuis le 11 octobre).
