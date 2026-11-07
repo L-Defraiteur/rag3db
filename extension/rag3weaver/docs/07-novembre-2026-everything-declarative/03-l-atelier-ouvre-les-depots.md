@@ -26,6 +26,15 @@ moment ».
     se créent pour l'instant » ; la consigne de l'atelier dit de demander le genre de projet quand
     la demande est ambiguë, avant d'appeler l'un ou l'autre.
   - `list_repos` : les dépôts attachés, leurs worktrees, leurs branches, l'état de leur index.
+- **Des outils intégrés, jamais des commandes de l'agent** (Lucie : « il faut des builtins pour
+  charger des dépôts / worktrees, car s'il le fait en ligne de commande on n'aura pas de hook ; ou
+  bien il peut déclarer aussi un truc manuellement le cas échéant ») : `attach_repo`,
+  `open_branch`, `fetch`, `pull`, `new_code_project` sont **exécutés par l'hôte** (déclarés au
+  manifeste d'atelier, livrés comme gabarits), donc vus par le flux, la boîte, le juge et les
+  hooks ; l'agent ne lance jamais `git clone` ou `git worktree add` lui-même par `run_command`.
+- **Le repli déclaratif** : `declare_repo {path, branch?}` — l'utilisatrice (dans l'IDE) ou l'agent
+  déclare un dépôt déjà présent sur le disque, sans que l'hôte clone quoi que ce soit ; l'hôte
+  pose son manifeste et l'ouvre comme pour `attach_repo`.
 - **Plusieurs worktrees par dépôt** : une session tient N worktrees, plusieurs dans le même dépôt
   s'il le faut (la page 02 disait « une tâche par dépôt » : corrigé, c'est un lot de worktrees).
 
@@ -75,6 +84,9 @@ chaque worktree.
 
 ## Les lots
 
+0. **La première marche concrète** (c7, d'après Lucie) : un chat (ou l'équipier) qui a les outils
+   intégrés `attach_repo` / `open_branch` (et `declare_repo`), dont l'appel crée le worktree, pose
+   le manifeste, ouvre le backend et lance l'index, avec l'événement sur le flux.
 1. Le manifeste d'atelier et ses outils de dépôts (`attach_repo`, `open_branch`, `list_repos`,
    `fetch`, `pull`), l'instanciation et l'ouverture à la volée, la barre « Dépôts » (avec
    hooks-essai pour la barre).
