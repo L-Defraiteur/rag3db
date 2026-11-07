@@ -3,6 +3,7 @@ import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, GitBranch } fro
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
 import { highlightBlock, inlineCodeHtml, withInlineCode } from "@/lib/code";
+import { ToolResultView } from "@/lib/toolview";
 import DOMPurify from "dompurify";
 import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
@@ -514,10 +515,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                       <div className="text-xs mt-2">
                         <div className="arguments font-mono whitespace-pre-wrap break-words">{p.args}</div>
                         {p.result !== undefined ? (
-                          <pre className="resultat whitespace-pre-wrap break-words max-h-[420px] overflow-auto mt-2 border-t pt-2">
-                            {p.result || "(aucun résultat)"}
-                            {p.truncated ? "\n… (extrait ; le résultat entier se relit à la fin du tour)" : ""}
-                          </pre>
+                          <>
+                            <ToolResultView text={p.result} render={(md) => renderMarkdown(md, id)} />
+                            {p.truncated ? <p className="text-[11px]">… (extrait ; le résultat entier se relit à la fin du tour)</p> : null}
+                          </>
                         ) : null}
                       </div>
                     </details>
