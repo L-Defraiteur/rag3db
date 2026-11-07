@@ -642,6 +642,8 @@ impl DaemonHost {
             let (client, appel) = (s.client.clone(), arguments.clone());
             // L'IDE appelle au nom de l'humain : `task_writes` ne vise que l'agent.
             let humain = self.ide_session.get().is_some_and(|ide| *ide == s.id);
+            // L'auteur des lignes du journal que cet appel fait naître (le crochet).
+            let _appelant = crate::host_log::enter_call(&client, &s.id, &hosted.id);
             self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
