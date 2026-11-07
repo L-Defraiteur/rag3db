@@ -1,10 +1,12 @@
 #include "main/client_context.h"
 
+
 #include <cstdio>
 
 #include "binder/binder.h"
 #include "common/exception/checkpoint.h"
 #include "common/exception/connection.h"
+#include "common/exception/interrupt.h"
 #include "common/exception/runtime.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/random_engine.h"
@@ -346,6 +348,8 @@ std::unique_ptr<QueryResult> ClientContext::executeWithParams(PreparedStatement*
         prepareNoLock(cachedStatement->parsedStatement, false /*shouldCommitNewTransaction*/,
             preparedStatement->parameterMap);
     useInternalCatalogEntry_ = false;
+    // Une requête préparée est une requête : son drapeau d'interruption part de zéro.
+    resetActiveQuery();
     return executeNoLock(newPreparedStatement.get(), newCachedStatement.get(), queryID);
 }
 
@@ -362,6 +366,8 @@ std::unique_ptr<QueryResult> ClientContext::queryNoLock(std::string_view query,
         std::vector<std::shared_ptr<void>>& tokens;
         ~ReleaseQueryScopedTokens() { tokens.clear(); }
     } releaseTokens{queryScopedTokens};
+    // Une fois par requête, avant sa première instruction (voir executeNoLock).
+    resetActiveQuery();
     auto parsedStatements = std::vector<std::shared_ptr<Statement>>();
     try {
         parsedStatements = parseQuery(query);
@@ -517,7 +523,10 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
         return QueryResult::getQueryResultWithError(preparedStatement->errMsg);
     }
     useInternalCatalogEntry_ = cachedStatement->useInternalCatalogEntry;
-    this->resetActiveQuery();
+    // Le drapeau d'interruption n'est plus remis à zéro ici, à chaque instruction : une requête
+    // réécrite en plusieurs instructions (CREATE_VECTOR_INDEX…) perdait une interruption tombée
+    // entre deux d'entre elles, ou pendant une instruction sans opérateur (une attente, un BEGIN).
+    // Il l'est une fois par requête, par queryNoLock et executeWithParams.
     this->startTimer();
     auto executingTimer = TimeMetric(true /* enable */);
     executingTimer.start();
@@ -541,6 +550,11 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
         // A statement prepared before the failure must be refused like any other.
         if (!isTransactionStatement) {
             transactionContext->throwIfManualTransactionFailed();
+        }
+        // Une interruption posée pendant une instruction précédente de la même requête l'arrête
+        // avant d'aller plus loin. Un ROLLBACK ou un COMMIT passent toujours : ils ferment.
+        if (activeQuery.interrupted && !isTransactionStatement) {
+            throw InterruptException{};
         }
         TransactionHelper::runFuncInTransaction(
             *transactionContext,

@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "common/exception/checkpoint.h"
+#include "common/exception/interrupt.h"
 #include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
 #include "common/string_format.h"
@@ -336,11 +337,23 @@ void TransactionManager::waitForWriteTransactionsStartedBefore(
     if (!olderWritersLeft()) {
         yieldWorkerWhileWaiting(blocking, &clientContext);
     }
-    if (!transactionsChanged.wait_for(publicLock,
-            std::chrono::microseconds(checkpointWaitTimeoutInMicros), olderWritersLeft)) {
-        throw TransactionManagerException(common::stringFormat(
-            "{}: one of them is still open. Close it and create the index again.",
-            TIMEOUT_WAITING_FOR_OLDER_WRITERS));
+    // Par tranches : une interruption de la requête (Connection::interrupt, qui ne réveille
+    // personne) arrête l'attente au plus une tranche plus tard.
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::microseconds(checkpointWaitTimeoutInMicros);
+    while (!olderWritersLeft()) {
+        if (clientContext.interrupted()) {
+            throw common::InterruptException{};
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            throw TransactionManagerException(common::stringFormat(
+                "{}: one of them is still open. Close it and create the index again.",
+                TIMEOUT_WAITING_FOR_OLDER_WRITERS));
+        }
+        transactionsChanged.wait_for(publicLock,
+            std::min<std::chrono::steady_clock::duration>(deadline - now,
+                std::chrono::milliseconds(50)));
     }
 }
 
