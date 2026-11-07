@@ -4500,8 +4500,7 @@ impl Backend {
         };
         let p2 = PreparedBackend::load(&prepared.manifest_path)?.avec_surcharges(surcharges);
         let base = p2.path(&p2.manifest.database);
-        let conn = crate::Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
-        let mut b2 = p2.open(Box::new(conn), None)?;
+        let mut b2 = p2.open(base_de_verification(&base)?, None)?;
         let reconstruction = b2.rebuild_from_files();
         let mut entites = serde_json::Map::new();
         let mut relations = serde_json::Map::new();
@@ -7500,4 +7499,19 @@ pub(crate) fn resolve_vector_extension(
          ou `vector_extension` sur le chemin du fichier",
         liste.join(" ; ")
     ))
+}
+
+/// La base jetable d'une vérification à blanc ([`Backend::verify_files`]) :
+/// une base rag3db, donc seulement sous `rag3db-native`. Sans elle, la
+/// vérification le dit au lieu de ne pas se compiler (le binaire du service
+/// d'embarquement se bâtit sans le moteur).
+fn base_de_verification(base: &Path) -> Result<Box<dyn DbConnection>, String> {
+    #[cfg(feature = "rag3db-native")]
+    {
+        Ok(Box::new(crate::Rag3dbConnection::new(base).map_err(|e| e.to_string())?))
+    }
+    #[cfg(not(feature = "rag3db-native"))]
+    {
+        Err(format!("vérifier les fichiers demande la feature rag3db-native ({})", base.display()))
+    }
 }
