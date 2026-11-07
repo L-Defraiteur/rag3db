@@ -719,10 +719,10 @@ fn la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge() {
     );
     // Les deux dépôts, nommés par leur dossier et leur branche.
     n.attendre(
-        "(() => { const s = document.querySelector('[data-section=\"Dépôts\"]'); if (!s) return false; \
+        "(() => { const s = document.querySelector('[data-section=\"Sessions\"]'); if (!s) return false; \
          const noms = [...s.querySelectorAll('.conversation a')].map(a => a.textContent.trim()); \
          return noms.some(t => t.startsWith('atelier · ')) && noms.some(t => t.startsWith('outils · ')); })()",
-        "deux dépôts sous « Dépôts », avec leur branche",
+        "deux dépôts sous « Sessions », avec leur branche",
     );
     // Un tour dans le premier : sa jauge se remplit, pas celle de l'autre.
     n.evaluer("document.querySelector('#message').value = 'deux outils'; document.querySelector('#send').click()");
@@ -1069,6 +1069,130 @@ fn le_retour_d_un_outil_se_lit_et_le_brut_reste_exact() {
     assert_eq!(n.evaluer(&format!("{d}.querySelector('.texte-brut').textContent")), json!(recu), "le brut n'est pas le texte exact reçu par le modèle");
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+
+/// **L'état de l'hôte range sessions, tâches et espaces** (modèle tranché par c7
+/// avec Lucie, forme accordée avec everything declarative) : le backend ouvert
+/// est une session, avec son dépôt pour espace ; la tâche ouverte dessus est dans
+/// `tasks`, `session` le backend, son espace une branche `agent/<nom>` du même
+/// dépôt, sa proposition ouverte ; un backend connu et fermé est « disponible » ;
+/// ni la session ni la tâche ne le sont.
+#[test]
+fn l_etat_de_l_hote_range_sessions_taches_et_espaces() {
+    let (d, host, _manifeste, id) = banc_dans("atelier", page_du_chat(), |_| {});
+    let (d2, h2, m2, id2) = banc_dans("outils", page_du_chat(), |_| {});
+    drop(h2);
+    host.hosted(&m2).unwrap();
+    let tache = host.ouvrir_une_tache(&id, "relecture").expect("la tâche s'ouvre");
+    let etat = host.state();
+    let sessions = etat["chat_sessions"].as_array().cloned().unwrap_or_default();
+    let session = sessions.iter().find(|s| s["id"] == json!(id)).unwrap_or_else(|| panic!("la session du backend ouvert : {}", etat["chat_sessions"]));
+    assert_eq!(session["spaces"][0]["repo"], "atelier", "{session}");
+    assert_eq!(session["spaces"][0]["proposal"], Value::Null, "{session}");
+    assert!(!sessions.iter().any(|s| s["id"] == json!(tache.id)), "une tâche n'est pas une session : {sessions:?}");
+    let tasks = etat["tasks"].as_array().cloned().unwrap_or_default();
+    let t = tasks.iter().find(|t| t["id"] == json!(tache.id)).unwrap_or_else(|| panic!("la tâche : {}", etat["tasks"]));
+    assert_eq!((&t["session"], &t["name"], &t["parent_task"]), (&json!(id), &json!("relecture"), &Value::Null), "{t}");
+    assert_eq!(t["spaces"][0]["repo"], "atelier", "le dépôt de la tâche, pas le dossier de son worktree : {t}");
+    assert_eq!(t["spaces"][0]["branch"], "agent/relecture", "{t}");
+    assert_eq!(t["spaces"][0]["proposal"]["state"], "open", "{t}");
+    let disponibles = etat["available_repos"].as_array().cloned().unwrap_or_default();
+    assert!(disponibles.iter().any(|r| r["backend"] == json!(id2) && r["repo"] == "outils" && r["loaded"] == false), "le backend fermé est disponible : {disponibles:?}");
+    assert!(!disponibles.iter().any(|r| r["backend"] == json!(id) || r["backend"] == json!(tache.id)), "{disponibles:?}");
+    host.fermer_une_tache(&id, "relecture").unwrap();
+    drop((d, d2));
+}
+
+/// **La barre se lit par session, tâche et espace** (ticket « la barre du chat ne
+/// se lit pas par session », forme tranchée avec Lucie) : la session de la page est
+/// dépliée, sa tâche repliée ; dépliée, la tâche montre son espace (dépôt ·
+/// `agent/<nom>`) et qui le tient ; le menu « par dépôt » inverse l'arbre (le
+/// dépôt, ses espaces, la session et la tâche qui les tiennent) et se souvient
+/// du choix au rechargement ; « actifs seulement » retire ce qui ne tourne pas
+/// (la page reste) ; sur la page de la tâche, le fil d'Ariane dit session ›
+/// tâche › dépôt · branche.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_barre_se_lit_par_session_tache_et_espace() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_barre_se_lit_par_session_tache_et_espace";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d1, h1, m1, id1) = banc_dans("atelier", page_du_chat(), |_| {});
+    let (d2, h2, m2, _id2) = banc_dans("outils", page_du_chat(), |_| {});
+    drop((h1, h2));
+    let (chats, taches) = (d1.path().join("chats"), d1.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let ide = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}{chemin}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    for m in [&m1, &m2] {
+        let v = ide("/ide/describe", json!({ "manifest": m }));
+        assert_eq!(v["ok"], true, "{v}");
+    }
+    let o = ide("/ide/taches", json!({ "backend": id1, "nom": "relecture" }));
+    let t = o["result"]["id"].as_str().map(str::to_string).or_else(|| o["result"]["tache"]["id"].as_str().map(str::to_string)).unwrap_or_else(|| panic!("la tâche s'ouvre : {o}"));
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.evaluer("try { localStorage.removeItem('rag3weaver.ide.barre.vue') } catch {}");
+    n.aller(&format!("{racine}/ide/code/{id1}/chat"), &format!("!!document.querySelector('#arbre-sessions .session[data-session=\"{id1}\"]')"));
+    let lu = n.evaluer(&format!(
+        "(() => {{ const s = document.querySelector('.session[data-session=\"{id1}\"]'); const t = s?.querySelector('.tache[data-task=\"{t}\"]'); \
+          const autre = [...document.querySelectorAll('.session')].find(x => x.dataset.session !== '{id1}'); \
+          return {{ session: s?.dataset.open ?? null, tache: t?.dataset.open ?? null, autre: autre?.dataset.open ?? null }}; }})()"
+    ));
+    assert_eq!(lu, json!({ "session": "true", "tache": "false", "autre": "false" }), "la page dépliée, le reste replié : {lu}");
+    n.evaluer(&format!("document.querySelector('.tache[data-task=\"{t}\"] > button.repli').click()"));
+    n.attendre(&format!("!!document.querySelector('.tache[data-task=\"{t}\"] .espace[data-backend=\"{t}\"]')"), "la tâche dépliée");
+    let espace = n.evaluer(&format!("document.querySelector('.tache[data-task=\"{t}\"] .espace[data-backend=\"{t}\"]').textContent"));
+    let espace = espace.as_str().unwrap_or_default().to_string();
+    assert!(espace.contains("atelier · agent/relecture"), "l'espace de la tâche : {espace}");
+    assert!(espace.contains("tenu par relecture (atelier)"), "qui tient l'espace, côté session : {espace}");
+
+    // Le menu : par dépôt, l'arbre s'inverse ; le choix se garde.
+    n.evaluer("(() => { const s = document.querySelector('#vue-barre'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, 'repo'); s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+    n.attendre("!!document.querySelector('#arbre-depots')", "la vue par dépôt");
+    let depot = n.evaluer(&format!(
+        "(() => {{ const d = document.querySelector('#arbre-depots .depot[data-depot=\"atelier\"]'); \
+          return [...(d?.querySelectorAll('.espace') ?? [])].map(e => [e.dataset.backend, e.querySelector('.tenu-par')?.textContent ?? null]); }})()"
+    ));
+    assert_eq!(depot, json!([[id1, "tenu par atelier"], [t, "tenu par relecture (atelier)"]]), "le dépôt, ses espaces et qui les tient : {depot}");
+    n.aller(&format!("{racine}/ide/code/{id1}/chat"), "!!document.querySelector('#barre')");
+    assert_eq!(n.evaluer("document.querySelector('#barre').dataset.view"), json!("repo"), "le choix de vue s'est perdu au rechargement");
+    n.evaluer("(() => { const s = document.querySelector('#vue-barre'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, 'session'); s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+    n.attendre("!!document.querySelector('#arbre-sessions')", "retour à la vue par session");
+
+    // Actifs seulement : rien ne tourne, la session de la page reste.
+    n.evaluer("document.querySelector('#actifs-seulement').click()");
+    n.attendre(&format!("!document.querySelector('.tache[data-task=\"{t}\"]')"), "la tâche inactive retirée");
+    let restent = n.evaluer("[...document.querySelectorAll('#arbre-sessions .session')].map(s => s.dataset.session)");
+    assert_eq!(restent, json!([id1]), "seule la session de la page reste : {restent}");
+
+    // Le fil d'Ariane, sur la page de la tâche.
+    n.aller(&format!("{racine}/ide/code/{t}/chat"), "!!document.querySelector('#fil-chat')");
+    let fil_ariane = n.evaluer("document.querySelector('#fil-chat').textContent");
+    assert_eq!(fil_ariane, json!("atelier › relecture › atelier · agent/relecture"), "{fil_ariane}");
+    let texte = n.evaluer("document.querySelector('#barre').innerText.toLowerCase()");
+    assert!(!texte.as_str().unwrap_or("").contains("backend"), "« backend » paraît dans la barre : {texte}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d2);
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
