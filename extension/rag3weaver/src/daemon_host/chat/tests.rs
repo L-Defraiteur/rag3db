@@ -950,3 +950,72 @@ fn la_nature_d_un_backend_vient_de_son_gabarit_sinon_de_son_espace_de_travail() 
     let me = de(&memoire);
     assert_eq!((me["kind"].clone(), me["kind_source"].clone()), (json!("memory"), json!("manifest")), "{me}");
 }
+
+/// Le faux modèle qui répond avec du code : du code en ligne, un chemin cité, un
+/// bloc rust.
+fn qui_montre_du_code() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-code", 8192, |turns, opts, sink| {
+            MockLlm::new("Voir `src/lib.rs:2` et l'outil `search_code`.\n\n```rust\nfn main() {\n    let x = 1;\n}\n```\n").generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le code dans le chat se lit comme du code** (tickets du 7 novembre 2026,
+/// retours de Lucie : « le texte limité en largeur », « `code.truc` pris en
+/// compte », la coloration) : à 2 560 px, le texte d'une bulle occupe la
+/// colonne ; le code en ligne d'une réponse et celui du message de la personne
+/// sont du code, un chemin cité mène au fichier à sa ligne, un nom d'outil reste
+/// du code sans lien ; un bloc rust est coloré (la coloration A).
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_code_du_chat_se_lit_comme_du_code() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_code_du_chat_se_lit_comme_du_code";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(qui_montre_du_code());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_montre_du_code())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifeste }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 2560, "height": 1440, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("document.querySelector('#message').value = 'regarde `src/lib.rs:2`'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    let lu = n.evaluer(&format!(
+        "(() => {{ const a = [...document.querySelectorAll('article.message.assistant')].at(-1); const u = [...document.querySelectorAll('article.message.user')].at(-1); \
+          const lien = (el) => el?.querySelector('a.code-ref[href$=\"/fichier/src/lib.rs#L2\"] code')?.textContent ?? null; \
+          return {{ \
+            liens: [lien(a), lien(u)], \
+            outil: [...(a?.querySelectorAll('code') ?? [])].some(c => c.textContent === 'search_code' && !c.closest('a')), \
+            rust: !!a?.querySelector('pre code.hljs.language-rust span.hljs-keyword'), \
+            largeur: a?.querySelector('.body')?.getBoundingClientRect().width ?? 0, \
+            colonne: document.querySelector('#messages').getBoundingClientRect().width, \
+          }}; }})()"
+    ));
+    assert_eq!(lu["liens"], json!(["src/lib.rs:2", "src/lib.rs:2"]), "le chemin cité, en code et en lien, dans la réponse et dans le message : {lu}");
+    assert_eq!(lu["outil"], true, "le nom d'outil en code, sans lien : {lu}");
+    assert_eq!(lu["rust"], true, "le bloc rust coloré : {lu}");
+    let (largeur, colonne) = (lu["largeur"].as_f64().unwrap_or(0.0), lu["colonne"].as_f64().unwrap_or(1.0));
+    assert!(largeur >= colonne - 120.0, "le texte de la bulle n'occupe pas la colonne ({largeur} sur {colonne}) : {lu}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
