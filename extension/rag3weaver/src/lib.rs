@@ -223,6 +223,14 @@ pub mod claude_code_hook;
 pub mod claude_code_transcript;
 // La requête du rappel des hooks, tirée du prompt sans modèle (3 ter).
 pub mod rappel_du_prompt;
+// La boîte de l'hôte vue d'un agent : `mail send|reply|pending|seen` et la
+// lecture du hook (docs/07-novembre-2026-hooks-claude-code/07).
+#[cfg(feature = "daemon")]
+pub mod mail;
+// Les fils Codex : découverte en lecture seule, nom → UUID, livraison par
+// `codex queue` (même page).
+#[cfg(feature = "daemon")]
+pub mod codex_threads;
 /// `code-tree` : un arbre de code indexé par instantané, qui suit ses éditions.
 pub mod code_tree;
 /// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le
