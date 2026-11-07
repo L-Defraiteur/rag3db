@@ -846,6 +846,40 @@ mod tests {
         json!({ "kind": "FileChanged", "path": path })
     }
 
+    /// **Des relais qui publient ensemble ne perdent rien** (ticket du 7 novembre
+    /// 2026, « l'affichage en direct du chat peut manquer le premier jeton »).
+    /// Quatre fils publient chacun sur son sujet, en boucle, en même temps : la
+    /// fenêtre doit recevoir chaque id une fois exactement, dans l'ordre, sans
+    /// trou, et le tampon doit les garder dans le même ordre (le rejeu par
+    /// `Last-Event-ID` le suit). Avant, un id tiré hors du verrou laissait un
+    /// fil envoyer N+1 avant N, et `envoyer` sautait N en silence.
+    #[test]
+    fn relays_publishing_together_lose_nothing_and_keep_the_order() {
+        let flux = Flux::new();
+        let fenetre = Capture::default();
+        flux.abonner(Box::new(fenetre.clone()), None, None);
+        const PAR_FIL: u64 = 2_000;
+        std::thread::scope(|s| {
+            for sujet in ["tokens", "agent", "dataflow", "catalog"] {
+                let flux = &flux;
+                s.spawn(move || {
+                    for n in 0..PAR_FIL {
+                        flux.publier(sujet, "b", json!({ "kind": "Token", "seq": n }));
+                    }
+                });
+            }
+        });
+        let ids = fenetre.ids();
+        let attendus: Vec<u64> = (1..=4 * PAR_FIL).collect();
+        if ids != attendus {
+            let manquants: Vec<u64> = attendus.iter().copied().filter(|i| !ids.contains(i)).take(10).collect();
+            let desordre = ids.windows(2).filter(|w| w[0] >= w[1]).count();
+            panic!("{} reçus sur {} ; manquants (10 premiers) : {manquants:?} ; hors d'ordre : {desordre}", ids.len(), attendus.len());
+        }
+        let tampon: Vec<u64> = flux.tampon.lock().unwrap().iter().map(|e| e.id).collect();
+        assert!(tampon.windows(2).all(|w| w[0] < w[1]), "le tampon n'est pas dans l'ordre des ids");
+    }
+
     /// **Deux fenêtres reçoivent le même événement sous le même id** ; une
     /// fenêtre neuve commence à maintenant ; une fenêtre qui revient avec le
     /// dernier id reçu (`Last-Event-ID`) reçoit ce qu'elle a manqué, une fois.
