@@ -374,3 +374,26 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   Lucie : confirmation lucivy, thème partagé daemon.json, page 03, instantanés
   et branches distantes (effacements refusés aux sessions par permission),
   `bilans.memoire` sur son manifeste de code.
+
+## Mise à jour de 21 h 55
+
+- **Ordre de la file changé** : hooks-essai (premier-jeton, 7b135dc53) pousse
+  devant la reprise d'ED : son lot corrige le flux de l'IDE, l'instabilité
+  d'agent_ports (at_ms, rouge 1/3 sur master, trouvée par embarquement) et la
+  nature des backends. Forme tranchée : `kind` (code | memory | project) déclaré
+  par le gabarit et lu dans le manifeste, repli par l'espace de travail ou le
+  dépôt (`kind_source: fallback`, infobulle), dépôt et branche par
+  `workspace.root` puis le dossier du manifeste ; plus de reconnaissance par
+  `bilans.memoire`, qui n'allume que le juge et les fiches (mot de Lucie
+  demandé). Chez Lucie après la pose : code sous « Dépôts » (rag3db · master),
+  mémoire sous « Projets » jusqu'à M8.
+- **Demain matin** : lib ordinaire bâtie ce soir par l'arbre (c4f8610b9,
+  e86d2f688, b3bc6e479 ; check_rel_directions sous la lib neuve sur des copies
+  des instantanés avant-43 ; rebâtie à 8 h si un commit moteur arrive la
+  nuit) ; fenêtre G à 8 h 30 : hôtes rebâtis, arrêt, granite redémarrés par
+  embarquement avec parité, services, courant, réveil ; pas d'instantané.
+- **Cœur** : ticket de la validation à moitié appliquée fermé comme non
+  reproduit (5b35a5a70), témoin HalfAppliedCommit en garde ; passe à
+  l'annulation sous tampon plein. **Recherche** : creux-par-les-spans écrit
+  (un appel pour la requête et les morceaux, repli dit), push après
+  embarquement. **tty** : tty-3 sur master (f66e72d31).
