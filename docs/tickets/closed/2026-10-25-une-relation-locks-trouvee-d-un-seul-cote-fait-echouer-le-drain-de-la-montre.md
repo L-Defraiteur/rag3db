@@ -1,9 +1,12 @@
 # Une relation LOCKS trouvée d'un seul côté fait échouer le drain de la montre
 
-- **État** : ouvert, le 25 octobre 2026. Signalé par G, à la demande de l'orchestration ; confié
-  à la seconde session cœur C++ (hotfixs). **Forme réelle relevée le 25 à 22 h 55** (section « Le
-  relevé complet ») : des longueurs ou des débuts de liste CSR faux dans deux tables de liens, LOCKS
-  et QUERIES, antérieurs à la bascule. Cause non trouvée, aucun correctif moteur écrit.
+- **État** : **fermé le 7 novembre 2026** (seconde session cœur C++, hotfixs). Le défaut a été écrit
+  par une lib d'avant le 25 octobre, dans deux tables de liens nées tard (LOCKS le 10 octobre,
+  QUERIES le 12). Il n'est reproduit par aucun des cinq cas du témoin, sur quatre moteurs
+  (2a29c10c6, 94e21b066, 58b46a9bf, master), ni par douze jours de montre sur la base rebâtie
+  le 25 octobre (0 écart sur les 18 tables, relevé du 7 novembre). Cause non trouvée. Garde-fous :
+  le témoin à cinq cas, dans le banc (`test/transaction/concurrence/late_rel_table_rewrites_test.cpp`,
+  cas longs), et le relevé ancré (`tools/check_rel_directions`), à jouer à chaque bascule de lib.
 - **Gravité** : lectures fausses et écriture refusée. Les deux tables rendent des lignes qui
   n'existent pas (relation 0 vers le nœud 0), en perdent d'autres d'un côté, et en rattachent à un
   mauvais nœud selon le sens lu. La garde de `RelTableData::update` ne voit que les demi-arêtes

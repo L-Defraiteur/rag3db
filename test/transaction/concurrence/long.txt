@@ -49,3 +49,13 @@ TwentyWriters.KilledDuringTheCheckpoint
 # VectorIndexUpdate.ChangesCommittedDuringACreateAreSeen, rouge environ une fois sur douze avant le
 # correctif.
 VectorIndexUpdate.RowsMovedTogetherDuringACreateStayReachable
+
+# Les deux sens d'une table de liens sous les drains de la montre (late_rel_table_rewrites_test.cpp,
+# ticket closed/2026-10-25-une-relation-locks-trouvee-d-un-seul-cote-fait-echouer-le-drain-de-la-montre) :
+# 75 s, 65 s, 340 s, 230 s et 25 s à luciepc le 7 novembre ; ensemble, environ 12 minutes. À jouer à
+# chaque bascule de lib, avec tools/check_rel_directions sur la base en service.
+LateRelTableRewrites.BothDirectionsStayEqualUnderDrains
+LateRelTableRewrites.BothDirectionsStayEqualUnderConcurrentAndRolledBackDrains
+LateRelTableRewrites.BothDirectionsStayEqualAcrossKilledProcesses
+LateRelTableRewrites.BothDirectionsStayEqualUnderRolledBackCopyDrains
+LateRelTableRewrites.BothDirectionsStayEqualAfterACopyRefusedForMemory

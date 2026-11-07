@@ -12,7 +12,7 @@ tableau de bord.
 
 | Étape | État |
 |---|---|
-| (B) témoin des demi-arêtes LOCKS/QUERIES (`csr-listes-temoin`) | **vert partout** : cas 1-2 sur quatre moteurs, cas 3-4 (arrêts brutaux, COPY annulés) sur 58b46a9bf et master ; cas 5 (COPY refusé faute de tampon) en cours |
+| (B) témoin des demi-arêtes LOCKS/QUERIES (`csr-listes-temoin`) | **fermé** : les cinq cas verts sur 58b46a9bf et master (cas 1-2 aussi sur 2a29c10c6 et 94e21b066) ; le témoin entre au banc (cas longs) avec `tools/check_rel_directions` ; ticket dans `closed/` |
 | Piste du bloc entièrement annulé (lot `bloc-annule` du cœur, 71dc33ec6) | écartée pour (B) : le cas 4 (55 COPY annulés) reste à 0 écart sur master ; la lecture sale est passagère |
 | Relevé des 18 tables de la base de code de Lucie | **fait le 7 novembre** sur l'instantané à chaud `releve-7-nov` : **0 écart sur les 18 tables** après douze jours de montre (point zéro du 25 : 0 écart) |
 | Mesures calmes de (A) | à rebâtir depuis les patchs de `~/.cache/rag3db-tickets-notes` (les arbres de mesure ont été effacés par le banc le 7 au matin) |
