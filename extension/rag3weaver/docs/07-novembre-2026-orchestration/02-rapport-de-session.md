@@ -486,3 +486,36 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   (89c6b9adc) en cours de code. **Arbre** : lib de demain finie (7cd11e5fa…),
   passe du juge + graphe cité en troisième tour. **Codeparsers** : pointeur en
   passe avec un drapeau qui attend tache-hors-depot.
+
+## Mise à jour de 23 h 10 — fin de soirée
+
+- **Essais de l'équipier** : non lancés ce soir. La création de tâche est corrigée
+  et posée (76ecc990e, 23 h 01), mais l'écriture de `task_writes` et `edit_file`
+  dans le manifeste de Lucie a été refusée à G par sa permission (« Security
+  Weaken »), non contournée : geste d'une ligne à sa main (fichier prêt dans le
+  scratchpad de G). La voie de secours (`code-tree add --from code-rag3db` sur un
+  worktree frère) échoue : code_tree.rs cherche `backend.json` et son manifeste
+  s'appelle `rag3db.json` (ticket à ED). Worktree d'essai prêt :
+  ~/git_workspaces/rag3db-essais-c7. Trois consignes prêtes. Reprise demain matin.
+- **Figements de la lib entière** : trois cas ce soir (archi sous l'ancienne lib au
+  portable à charge 1,2 ; l'arbre, binaire mort à 7 min ; codeparsers, 62 min, 8
+  tests arrêtés), mêmes familles (taches, daemon_host, reactor, runtime, relais) :
+  ni la lib 43 ni la charge ; master nu passe en 28 s ; codeparsers répète la passe
+  avec un guetteur qui prend les piles (eu-stack sous ptracer) au premier figement ;
+  ticket unique ; piste : un test qui attend un service réel sans délai.
+- **Atterris** : tache-hors-depot (76ecc990e), reprise (4ae8c93a8, suites jouées
+  après coup, vertes), G2a de hotfixs (9ec767dd4 : COPY refusé non reproduit) ;
+  G2b (blobs) bloqué par un SIGSEGV du COPY de blobs annulé, enquête. Lib de
+  demain finie (7cd11e5fa…), fenêtre G 8 h 30 avec les granite ; `bilans.memoire`
+  posé chez Lucie (juge armé, surveillé, plafond en file) ; lucivy 4.3.2 publiée,
+  montée verte chez recherche (L = 900, K = 64 remesurés) ; fausse alerte du
+  plein texte de la mémoire (copie prise sous un écrivain : règle de copie).
+- **Décisions de Lucie** : une tâche = une intention à 1..n espaces ; barre
+  session › tâches › espaces + vue par dépôt ; outils intégrés pour les dépôts ;
+  tâche sans git ; géo plus tard ; « ne pas s'empêcher de progresser » ; luciepc
+  à 6 places ; une seule publication lucivy.
+- **File restante** : codeparsers (pointeur) → ED (plafond du juge) → 96
+  (run_e2e.sh) → arbre (juge + graphe cité, vert par tickets) → 96 (pas 3) →
+  embarquement (spans) → recherche (second-ecrivain, spans, montée 4.3.2) → archi
+  (pont) → hooks-essai (appel-a-delai) ; hooks-essai : la barre, le chat (largeur,
+  retours d'outils, code A), la tâche sans git ; codeparsers : coloration B.
