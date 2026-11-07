@@ -1,0 +1,73 @@
+// Les apports alias, handle et identity des fiches qui répondent (le Plan
+// whois, les plus récents d'abord) vers la réponse de whois (page 04 §8,
+// pièce 3) :
+// - agent : la clé, le nom de la fiche d'identité ; si plusieurs fiches
+//   répondent (un alias porté par deux agents), celle dont l'apport est le
+//   plus récent, et `said` nomme les autres ;
+// - alias, aliases : le dernier alias, puis tous avec leur date ;
+// - handles : les handles cités par les apports handle, avec leur date ;
+// - identite, identity_at : le texte du dernier apport identity ;
+// - tache, autres : les Refs de genre `fiche` de ce dernier apport, dans
+//   l'ordre de la ligne `doing:` ; une fiche que la ligne ne nomme pas vient
+//   en dernier. La première est la tâche en cours.
+let rows = input;
+let vide = #{agent: (), identite: (), alias: (), aliases: [], handles: [], tache: (),
+             autres: [], identity_at: (), said: ()};
+if rows.len() == 0 {
+    vide.said = "aucune fiche d'identité ne répond : ni apport alias, handle ou identity qui cite la valeur demandée, ni fiche de ce nom qui en porte";
+    return vide;
+}
+let noms = [];
+for r in rows {
+    for f in r.fiches {
+        if !noms.contains(f.name) { noms.push(f.name); }
+    }
+}
+let agent = noms[0];
+let out = vide;
+out.agent = agent;
+let dits = [];
+if noms.len() > 1 {
+    dits.push("plusieurs fiches répondent, la plus récente est rendue ; aussi : " + noms.extract(1).reduce(|s, n| if s == "" { n } else { s + ", " + n }, ""));
+}
+let identity = ();
+for r in rows {
+    let de_l_agent = false;
+    for f in r.fiches { if f.name == agent { de_l_agent = true; } }
+    if !de_l_agent { continue; }
+    if r.section == "alias" {
+        for x in r.refs { if x.genre == "alias" { out.aliases.push(#{nom: x.valeur, at: r.created_at}); } }
+    } else if r.section == "handle" {
+        for x in r.refs { if x.genre == "handle" { out.handles.push(#{valeur: x.valeur, at: r.created_at}); } }
+    } else if r.section == "identity" && identity == () {
+        identity = r;
+    }
+}
+if out.aliases.len() > 0 { out.alias = out.aliases[0].nom; }
+if identity == () {
+    dits.push("aucun apport identity");
+} else {
+    out.identite = identity.texte;
+    out.identity_at = identity.created_at;
+    let doing = "";
+    for l in identity.texte.split("\n") {
+        let t = l.trim();
+        if t.starts_with("doing:") { doing = t; }
+    }
+    let rangees = [];
+    for x in identity.refs {
+        if x.genre == "fiche" {
+            let i = doing.index_of(x.valeur);
+            rangees.push(#{nom: x.valeur, pos: if i < 0 { 1000000 } else { i }});
+        }
+    }
+    rangees.sort(|a, b| a.pos - b.pos);
+    if rangees.len() > 0 {
+        out.tache = rangees[0].nom;
+        for x in rangees.extract(1) { out.autres.push(x.nom); }
+    } else {
+        dits.push("l'apport identity ne cite aucune fiche");
+    }
+}
+if dits.len() > 0 { out.said = dits.reduce(|s, d| if s == "" { d } else { s + " ; " + d }, ""); }
+out
