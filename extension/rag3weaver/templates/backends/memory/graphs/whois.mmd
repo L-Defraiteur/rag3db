@@ -1,5 +1,5 @@
 %% tool: whois
-%% description: Qui est un agent (page 04 de la mémoire longue) : par sa clé, un de ses handles (session:<uuid>, uds:<socket>, task:<nom>) ou un de ses alias — un seul des trois. Rend la clé (agent), le dernier alias et tous avec leur date (aliases), les handles datés, le texte du dernier apport identity (identite, identity_at), la tâche en cours (tache : la première fiche de sa ligne doing:) et les autres fiches tenues ; `said` dit ce qui manque ou ce qui est ambigu.
+%% description: Qui est un agent (page 04 de la mémoire longue) : par sa clé, un de ses handles (session:<uuid>, uds:<socket>, task:<nom>) ou un de ses alias — un seul des trois. Rend la clé (agent), le dernier alias et tous avec leur date (aliases), les handles datés, le texte du dernier apport identity (identite, identity_at), la tâche en cours (tache : la première fiche de sa ligne doing:) et les autres fiches tenues ; `said` dit ce qui manque ou ce qui est ambigu. Les 200 apports alias, handle et identity les plus récents sont lus : un historique plus long perd ses plus anciens.
 %% param: agent string = "" -- La clé de l'agent : le nom de sa fiche d'identité.
 %% param: handle string = "" -- Un handle, valeur nue de la Ref de genre handle (ex. 'session:25b7ff4b-…').
 %% param: alias string = "" -- Un nom affiché, valeur de la Ref de genre alias.
