@@ -1196,6 +1196,7 @@ fn la_barre_se_lit_par_session_tache_et_espace() {
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
+}
 
 /// **Un appel à délai s'arrête à son délai** (ticket du 7 novembre 2026, « une
 /// recherche continue sur l'hôte après l'abandon de son client ») : un `/call`
