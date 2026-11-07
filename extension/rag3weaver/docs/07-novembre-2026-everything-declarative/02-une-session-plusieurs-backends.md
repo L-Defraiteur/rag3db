@@ -81,18 +81,20 @@ les vues qui les lisent.
 ```json
 {
   "chat_sessions": [{
-    "id": "<backend du chat>", "name": "<nom affiché>", "model": "gemini-3.8-flash",
-    "parent": null, "state": "active" | "waiting" | "done" | "error", "awaits_answer": false,
-    "repos": [{
-      "backend": "<id>", "repo": "rag3db", "branch": "master",
-      "worktrees": [{ "backend": "<id>", "branch": "agent/doc", "worktree": "<racine>", "loaded": true,
-                      "rag": { "state": "indexed" | "indexing" | "absent", "percent": 87 },
-                      "held_by": "<id de session>" | null }]
-    }],
-    "memory": { "backend": "<id>" | null, "rag": true }
+    "id": "<backend de la conversation principale>", "name": "…", "model": "gemini-3.8-flash",
+    "state": "running" | "waiting" | "ended" | "error" | null, "awaits_answer": false,
+    "memory": { "backend": "<id>" | null, "rag": true },
+    "spaces": [Space]
   }],
-  "available_repos": [{ "backend": "<id>", "repo": "lucivy", "branch": "main", "loaded": false, "rag": { "state": "indexed" } }]
+  "tasks": [{
+    "id": "<backend de la tâche>", "session": "<id de la session>", "parent_task": null,
+    "name": "<nom>", "state": "running", "awaits_answer": false, "spaces": [Space]
+  }],
+  "available_repos": [Space]
 }
+Space = { "backend": "<id>", "repo": "rag3db" | null, "branch": "agent/doc" | null, "path": "<racine>",
+          "loaded": true, "rag": { "state": "indexed" | "indexing" | "absent", "percent": 87 },
+          "proposal": { "state": "open" | "merged" | "rejected" } | null }
 ```
 
 `chat_sessions` et non `sessions` (le mot désigne déjà les clients de l'hôte). Une session, avant le
@@ -100,14 +102,17 @@ manifeste de session, = une conversation (une entrée de `chats`) : ses `repos` 
 les worktrees de ses tâches ouvertes ; les sessions MCP de Claude Code n'y entrent qu'avec
 l'identité d'agent à clé stable. `loaded` : le slot du backend est ouvert dans l'hôte (lu sans
 attendre). `rag` se lit dans `index_states` (déjà dans `backends[i].index`) : `indexed` si le texte
-est là, `indexing` avec un pourcentage si un lot est en cours, `absent` sinon. La jauge et les
-fiches écrites d'une session se lisent dans `GET /ide/chat`. **Les sous-sessions sont à plat** :
-la page reconstruit l'arbre par `parent` (les sous-sessions d'une session sont les `chat_sessions`
-dont `parent` vaut son id) — aujourd'hui les tâches d'un backend, `parent` = `tache.parent` ; le
-lien entre équipiers viendra avec les sous-équipiers (lot 5 de la page 01), même forme. `state`
-suit `teammate_list` (`active` = un pas en vol), `awaits_answer` dit une question ou une
-approbation sans réponse ; `held_by` = la tâche qui tient ce worktree, tant qu'elle est ouverte —
-d'où le « tenu par » des deux côtés. La vue « par dépôt » se calcule dans la page.
+est là, `indexing` avec un pourcentage si un lot est en cours, `absent` sinon. La forme est celle de hooks-essai, qui habille la barre. `chat_sessions[].spaces` : le dépôt de
+la session (sa conversation principale), un élément, ou aucun hors de tout dépôt ou dossier.
+`tasks` : aujourd'hui les tâches de `taches.rs` (`id` = le backend de la tâche, `session` =
+`tache.parent`, `parent_task` toujours null jusqu'aux sous-équipiers) ; leurs `spaces` sont le
+worktree de la tâche, plus le worktree `code` quand le code est dans un autre dépôt ; `state` et
+`awaits_answer` viennent de l'équipier de la tâche. `proposal` est null pour l'espace d'une session,
+`open` pour une tâche ouverte. `available_repos` : les backends de nature code qui ne sont ni une
+tâche ni le dépôt d'une session. La page groupe les tâches par `session`, les sous-tâches par
+`parent_task`, et la vue « par dépôt » regroupe tous les `spaces` par `repo` en disant qui tient
+chacun (la session, ou la tâche › sa session). La jauge et les fiches écrites se lisent dans
+`GET /ide/chat`.
 
 ## 1. Pourquoi aujourd'hui un chat = un backend
 
