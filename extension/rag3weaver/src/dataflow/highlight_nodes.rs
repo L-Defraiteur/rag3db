@@ -323,6 +323,33 @@ mod tests {
         assert_eq!(h.iter().map(|x| en_utf16(texte, x)).collect::<Vec<_>>(), vec!["réciproque"]);
     }
 
+    /// **Par le factice d'embarquement** (`MockSparseEmbedder`, un span par mot, poids 1/n) :
+    /// l'appel entier, la requête et les morceaux d'un coup, sans modèle ni tokenizer.
+    #[test]
+    fn le_creux_passe_par_les_spans_du_factice() {
+        let embarqueur: Arc<dyn SparseEmbedder> = Arc::new(crate::embedder::MockSparseEmbedder::new());
+        let textes = vec!["la fusion des rangs".to_string(), "rien à voir ici".to_string()];
+        let rendus = surligner_par_le_creux(Some(embarqueur), "fusion rangs", &textes).expect("le factice rend ses spans");
+        let vus: Vec<String> = rendus[0].iter().map(|x| en_utf16(&textes[0], x)).collect();
+        assert_eq!(vus, vec!["fusion", "rangs"], "{vus:?}");
+        assert!(rendus[0].iter().all(|x| x.source == HIGHLIGHT_SPARSE));
+        assert!(rendus[1].is_empty(), "un morceau sans jeton de la requête ne surligne rien : {:?}", rendus[1]);
+    }
+
+    /// Un embarqueur creux qui ne rend pas les positions (un service d'avant l'option) : la raison
+    /// du repli, pas un surlignage inventé.
+    #[test]
+    fn sans_positions_le_creux_dit_pourquoi_il_se_replie() {
+        struct SansSpans;
+        impl SparseEmbedder for SansSpans {
+            fn embed_sparse(&self, textes: &[String]) -> Result<Vec<crate::sparse_index::SparseVector>, crate::embedder::EmbedError> {
+                Ok(textes.iter().map(|_| crate::sparse_index::SparseVector { indices: vec![1], values: vec![1.0] }).collect())
+            }
+        }
+        let e = surligner_par_le_creux(Some(Arc::new(SansSpans)), "fusion", &["la fusion".to_string()]).unwrap_err();
+        assert!(e.contains("ne rend pas les positions"), "{e}");
+    }
+
     #[test]
     fn sans_jeton_partage_le_creux_ne_surligne_rien() {
         let q = query_token_weights("abc", &spans("abc", &[(0, 3, 0.5)]));
