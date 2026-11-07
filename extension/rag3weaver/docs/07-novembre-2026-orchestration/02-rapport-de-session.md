@@ -542,3 +542,36 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   canal). Demain : banc 7 h 30 (mesure), G 8 h 30 (lib 7cd11e5fa… + granite),
   le réacteur sous charge à ED, la coloration B (codeparsers + hooks-essai +
   tty), la tâche sans git, les liens de symbole, M8 des gabarits de mémoire.
+
+## 00 h 45, le 8 — la file de la nuit avance, les essais de l'équipier butent sur Vertex
+
+- **Atterris depuis 23 h 45** : arbre, le juge d'un tour de Claude Code et le graphe cité
+  (994a58e39..76f19526b, cinq commits ; la substitution n'entre plus dans le graphe cité,
+  2fe3c114f ferme le ticket de 96 ; rejeu court : lib entière sans EMBED_SERVICE 1998 passés,
+  e2e_juge 5/5 avec les deux juges Gemini) ; hooks-essai, barre-noms (830e82256, cfbe928a4 :
+  une session se nomme par son dépôt, « la mémoire » pour une mémoire ; première passe VERT puis
+  arrêt du push devant du code arrivé, fusion et rejeu complet, worktree et target effacés) ;
+  embarquement, les spans du creux (59f02b636, 9231f07dc, 1b629d749 ; lib entière 1895/0,
+  e2e_service_spans vert avec les services ; les branches spans-creux à -5 restent, listées).
+- **En cours** : ED pousse equipier-jamais-muet-2 (9914ab946) sur 1b629d749, rejeu complet ;
+  puis recherche enchaîne ses trois lots (second-ecrivain → creux-par-les-spans-2 a0f31f8e1 →
+  montee-lucivy-4-3-2) sans me redemander entre deux ; puis archi (hooks-pont-7, le canal).
+- **ED prend le lot 2 de la page 01 avant le réacteur** (les commandes par la porte déclarée,
+  branche commandes-declarees 97e5a68cf) : sans `run_command`, l'équipier ne joue aucun test,
+  donc aucune vraie tâche de code pour les essais de Lucie demain. Le réacteur sous charge
+  attend ; **arbre tient la bissection du figement** à luciepc depuis 0 h 29 (cadre : lib
+  17a094d12 + MOTEUR_ANCIEN=1, jeu large AVEC les services 7878-7880, un figement = 10 min sans
+  ligne, pile par eu-stack sur son pid ; phases : les trois tests de la mémoire seuls ×10, la lib
+  entière ×4, sans les trois ×4, puis chacun seul ×3 ; journal à
+  `~/.cache/rag3weaver-notes-A/bissection/journal` ; arrêt net à 7 h 15 ; ticket à jour à la fin,
+  pas de correctif sans mon mot).
+- **Essais de l'équipier** : page `docs/08-novembre-2026-orchestration/01-essais-de-l-equipier.md`.
+  L'essai 1 muet (pas d'outil d'écriture, pas de `step_done`) a donné le lot d'ED ; l'essai 2 a
+  fait son plan puis est mort du fournisseur : 503 attendu 600 s sans reprise, puis deux 429
+  RESOURCE_EXHAUSTED, trois vies de `max_failed_steps` brûlées sans un pas. Les 429 ne viennent
+  pas de la passe d'ED (pas encore à ses suites Gemini) ni des crochets de Lucie (aucun 429 dans
+  hooks.log) ; Vertex global, gemini-3.8-flash. Je relance après le verdict d'ED, pour ne pas
+  tirer sur le quota pendant e2e_juge et e2e_equipier. Pour ED, après le lot 2 : un 429/503 ne
+  consomme pas une vie, la reprise tient la fenêtre d'un quota par minute.
+- **L'hôte de Lucie ne prend un lot qu'à une pose de G** : jamais-muet et le lot 2 n'y seront
+  qu'à 8 h 30, sauf pose intermédiaire que je demanderai à G si la nuit le permet.
