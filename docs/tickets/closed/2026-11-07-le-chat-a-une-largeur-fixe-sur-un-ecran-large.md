@@ -1,6 +1,6 @@
 # Le chat a une largeur fixe sur un écran large, et son pied écrase l'aide
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — lot « le chat tient l'ordre ».
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot « le chat tient l'ordre ») : le chat sort du cadre borné (route du chat seule), barres aux bords, colonne fluide, largeur de lecture sur les bulles, l'aide sur sa ligne ; témoin navigateur à 2 560 px
 - **Gravité** : gêne (l'espace perdu, l'aide illisible).
 - **Atteignable en service** : oui, tout écran plus large que le cadre (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/main.tsx`, `ui/ide/src/views/Chat.tsx`).

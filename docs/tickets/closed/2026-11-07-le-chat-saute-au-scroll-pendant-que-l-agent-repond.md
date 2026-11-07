@@ -1,6 +1,6 @@
 # Le chat saute au scroll pendant que l'agent répond
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — lot « le chat tient l'ordre ».
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot « le chat tient l'ordre ») : la liste ne suit le flux que collée en bas, sans animation ; remontée, elle ne bouge plus ; témoin navigateur (soixante événements de flux, `scrollTop` immobile)
 - **Gravité** : gêne (une page qui tremble et vole la lecture).
 - **Atteignable en service** : oui, tout tour du chat en flux (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`).

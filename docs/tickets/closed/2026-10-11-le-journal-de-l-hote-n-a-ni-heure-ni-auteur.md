@@ -1,6 +1,6 @@
 # Le journal de l'hôte du démon n'a ni heure ni auteur
 
-- **état** : ouvert (11 octobre 2026, en cherchant qui appelait `search_code` en rafale)
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot journal-hote-horodate) : `host_log` pose un tube sur les fd 1 et 2 du démon (la lib du moteur comprise), chaque ligne prend l'heure locale ISO à la milliseconde, la route `/call` pose l'appelant du fil et le crochet le nomme (` ⟨mcp (pid N) · session … · backend …⟩`) ; le relais ne fige jamais l'hôte (sortie non bloquante, 50 ms de patience mesurée, lignes jetées comptées et dites) ; témoin `e2e_mcp_cycle_de_vie::le_journal_de_l_hote_dit_l_heure_et_l_auteur_de_chaque_ligne` (deux clients MCP), rouge d'abord
 - **gravité** : diagnostic impossible (une rafale ne s'attribue pas)
 - **atteignable en service** : oui, toujours
 - **touche rag3weaver** : oui (et seulement)
