@@ -492,7 +492,8 @@ fn a_teammate_works_on_the_files_when_its_backend_does_not_open() {
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
     let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
     // La base de la tâche : fermée, puis remplacée par un fichier qui n'en est pas une.
-    let ferme = host.close(None, &t.manifest);
+    let (_, session) = host.handle("POST", "/session", None, br#"{"client":"le témoin"}"#);
+    let ferme = host.close(session["session"].as_str(), &t.manifest);
     assert_eq!(ferme["result"]["closed"], true, "{ferme}");
     let base = &t.copie.base;
     if base.is_dir() {
@@ -555,13 +556,19 @@ fn a_failed_step_does_not_end_the_teammate_until_the_declared_count() {
         host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
         let files = host.teammate_files(&h.id, "doc").unwrap();
         files.append("supervisor", "request", None, "Une petite chose.").unwrap();
-        let outcome = host.run_teammate(&h.id, "doc").expect("l'équipier rend sa fin, il ne plante pas");
+        // Une fin en erreur se rend comme telle (et s'écrit `ended` dans la boîte) :
+        // l'équipier s'arrête en le disant, il ne plante pas.
+        let ended = match host.run_teammate(&h.id, "doc") {
+            Ok(o) => o.ended,
+            Err(e) => e,
+        };
         let rates = files.mailbox().iter().filter(|l| l["kind"] == "report" && l["text"].as_str().unwrap_or_default().contains("n'a pas abouti")).count();
+        assert!(files.mailbox().iter().any(|l| l["kind"] == "ended" && l["text"] == ended.as_str()), "la fin est dans la boîte : {ended}");
         if toujours {
-            assert!(outcome.ended.starts_with("erreur : ") && outcome.ended.contains("max_failed_steps = 3"), "{}", outcome.ended);
+            assert!(ended.starts_with("erreur : ") && ended.contains("max_failed_steps = 3"), "{ended}");
             assert_eq!(rates, 3, "trois échecs dits");
         } else {
-            assert_eq!(outcome.ended, "fait sans plan", "{outcome:?}");
+            assert_eq!(ended, "fait sans plan");
             assert_eq!(rates, 1, "l'échec du premier pas est dit");
         }
     }
@@ -600,9 +607,12 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
                             serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap()
                         };
                         let tache = lire(format!("/ide/teammate?backend={id}&task=doc"))["result"]["backend"].as_str().unwrap().to_string();
+                        let mut s = crate::daemon::agent().post(format!("{r}/session")).header("Authorization", "Bearer j").header("content-type", "application/json").send(json!({ "client": "le témoin" }).to_string()).unwrap();
+                        let session: Value = serde_json::from_str(&s.body_mut().read_to_string().unwrap()).unwrap();
                         let mut x = crate::daemon::agent()
                             .post(format!("{r}/backend/close"))
                             .header("Authorization", "Bearer j")
+                            .header("X-Rag3weaver-Session", session["session"].as_str().unwrap_or_default())
                             .header("content-type", "application/json")
                             .send(json!({ "manifest": tache }).to_string())
                             .unwrap();
