@@ -51,7 +51,8 @@ if identity == () {
     out.identity_at = identity.created_at;
     let doing = "";
     for l in identity.texte.split("\n") {
-        let t = l.trim();
+        let t = l;
+        t.trim();  // trim() change la chaîne en place et rend ()
         if t.starts_with("doing:") { doing = t; }
     }
     let rangees = [];
