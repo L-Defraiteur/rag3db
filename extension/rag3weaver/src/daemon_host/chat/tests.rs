@@ -510,3 +510,157 @@ fn le_role_d_un_outil_se_lit_dans_describe_et_dans_son_run() {
     assert_eq!(debut("list_files")["target"]["role"], "archiviste", "{d:?}");
     assert!(debut("read_file")["target"].get("role").is_none(), "{d:?}");
 }
+
+/// Le faux modèle de la page du chat : « deux outils » fait « mots, outil, mots,
+/// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
+/// flux de soixante événements), puis finit.
+fn page_du_chat() -> ChatModel {
+    Arc::new(|_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-page", 8192, |turns, opts, sink| {
+            let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+            let question = turns.get(depuis).map(|t| t.content.clone()).unwrap_or_default();
+            let outils = turns[depuis..].iter().filter(|t| t.role == "tool").count();
+            if question.contains("long") {
+                for n in 0..60 {
+                    if sink.on_token(&format!("ligne {n}\n")) == Flow::Stop {
+                        sink.on_finish(&Finish::cancelled());
+                        return Ok((Finish::cancelled(), Usage::default()));
+                    }
+                    std::thread::sleep(Duration::from_millis(40));
+                }
+                return MockLlm::new("").generate(turns, opts, sink);
+            }
+            match outils {
+                0 => MockLlm::new("je liste").with_tool_calls(vec![("list_files", "{}")]),
+                1 => MockLlm::new("je lis").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]),
+                _ => MockLlm::new("Fini."),
+            }
+            .generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **La page du chat tient l'ordre, le défilement et la place** (les sept tickets
+/// du 7 novembre 2026, lot « le chat tient l'ordre », et les mots de Lucie sur sa
+/// barre). Dans un vrai navigateur, à 2 560 × 1 440 :
+/// - un tour « mots, outil, mots, outil, réponse » se lit dans cet ordre dans sa
+///   bulle, pendant le tour comme après un rechargement ;
+/// - l'outil déplié montre son heure, sa durée et son résultat ;
+/// - la conversation porte sa jauge (le dernier appel, le contexte du modèle
+///   déclaré, comme l'état du chat de l'hôte) ; un outil à rôle se range dans la
+///   barre des tâches de fond ;
+/// - la colonne du chat occupe l'écran, l'aide tient sur une ligne, le chat
+///   prend la hauteur de la fenêtre moins l'en-tête (1 440 et 1 080) ;
+/// - remontée, la liste ne bouge pas pendant un flux de soixante événements ;
+///   collée en bas, elle suit ; déplier un outil ne déplace pas la page.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_page_du_chat_tient_l_ordre_le_defilement_et_la_place() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_page_du_chat_tient_l_ordre_le_defilement_et_la_place";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc_avec(page_du_chat(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let post = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}{chemin}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let etat_du_chat = || -> Value {
+        let mut r = crate::daemon::agent().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str::<Value>(&r.body_mut().read_to_string().unwrap()).unwrap()["result"].clone()
+    };
+    assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
+
+    let mut n = Navigateur::lancer(&binaire);
+    let fenetre = |n: &mut Navigateur, w: u32, h: u32| {
+        n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": w, "height": h, "deviceScaleFactor": 1, "mobile": false }));
+    };
+    fenetre(&mut n, 2560, 1440);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let page = format!("{racine}/ide/code/{id}/chat");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&page, prete);
+    let envoyer = |n: &mut Navigateur, texte: &str| {
+        n.evaluer(&format!("document.querySelector('#message').value = {}; document.querySelector('#send').click()", json!(texte)));
+    };
+    // La suite des parties de la dernière bulle d'agent.
+    let suite = "[...[...document.querySelectorAll('article.message.assistant')].at(-1).children].filter(c => c.matches('.body, details.outil')).map(c => c.matches('.body') ? 'texte:' + c.textContent.trim() : 'outil:' + c.dataset.outil).join('|')";
+    let attendue = "texte:je liste|outil:list_files|texte:je lis|outil:read_file|texte:Fini.";
+
+    // 1. L'ordre, pendant le tour et après.
+    envoyer(&mut n, "deux outils");
+    n.attendre(&format!("document.querySelector('#status')?.textContent === 'fini' && {suite} === {}", json!(attendue)), "la bulle dans l'ordre d'arrivée");
+    // 2. L'outil déplié : son heure, sa durée, son résultat entier.
+    let lu = n.evaluer("(() => { const d = document.querySelector('details.outil[data-outil=\"read_file\"]'); return { resultat: d?.querySelector('.resultat')?.textContent ?? '', heure: d?.querySelector('.heure')?.textContent ?? '' }; })()");
+    assert!(lu["resultat"].as_str().unwrap_or("").contains("fn main"), "le résultat déplié : {lu}");
+    assert!(lu["heure"].as_str().unwrap_or("").contains(" ms"), "l'heure et la durée : {lu}");
+    // 3. La jauge de la conversation, la barre des tâches de fond.
+    let contexte = etat_du_chat()["context"].clone();
+    let jauge = n.evaluer(&format!("(() => {{ const u = document.querySelector('.conversation[data-backend=\"{id}\"] .usage'); return {{ used: u?.dataset.used, max: u?.dataset.max }}; }})()"));
+    assert_eq!(jauge["max"], "8192", "{jauge} ; l'hôte : {contexte}");
+    assert_eq!(jauge["used"], contexte["used"].to_string(), "{jauge} ; l'hôte : {contexte}");
+    n.attendre("document.querySelector('#runs-a-role [data-role=\"archiviste\"] .run-a-role')?.dataset.state === 'fini'", "le run à rôle dans la barre");
+    // 4. La place : la colonne occupe l'écran, l'aide tient sur une ligne, la hauteur.
+    let place = n.evaluer(
+        "(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); \
+         return { colonne: r('#messages').width, aide: r('#aide').height, aideL: r('#aide').width, saisie: r('#message').width, \
+                  chat: r('.chat').height, fenetre: innerHeight, entete: r('#entete').height }; })()",
+    );
+    let f = |k: &str| place[k].as_f64().unwrap_or(0.0);
+    assert!(f("colonne") >= 2560.0 - 300.0 - 40.0, "la colonne du chat n'occupe pas l'écran : {place}");
+    assert!(f("aide") <= 20.0 && f("aideL") >= 200.0 && f("saisie") >= 200.0, "le pied : {place}");
+    assert!((f("chat") - (f("fenetre") - f("entete"))).abs() <= 2.0, "la hauteur à 1 440 : {place}");
+    fenetre(&mut n, 1920, 1080);
+    n.attendre("Math.abs(document.querySelector('.chat').getBoundingClientRect().height - (innerHeight - document.querySelector('#entete').getBoundingClientRect().height)) <= 2 && innerHeight === 1080", "la hauteur à 1 080");
+    // 5. Le rechargement rend la même suite.
+    n.aller(&page, prete);
+    n.attendre(&format!("{suite} === {}", json!(attendue)), "la même suite après un rechargement");
+
+    // 6. Remontée, la liste ne bouge pas pendant le flux.
+    let liste = "document.querySelector('#messages')";
+    envoyer(&mut n, "parle long");
+    n.attendre(&format!("{liste}.scrollHeight > {liste}.clientHeight + 300"), "le fil déborde");
+    n.evaluer(&format!("{liste}.scrollTop = 0; {liste}.dispatchEvent(new Event('scroll'))"));
+    let mut vus = Vec::new();
+    while n.evaluer("document.querySelector('#status')?.textContent").as_str() != Some("fini") {
+        vus.push(n.evaluer(&format!("{liste}.scrollTop")).as_f64().unwrap_or(-1.0));
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(vus.len() < 2000, "le tour long ne finit pas");
+    }
+    assert!(vus.iter().all(|&y| y == 0.0), "remontée, la liste a bougé pendant le flux : {vus:?}");
+    // 7. Collée en bas, elle suit.
+    n.evaluer(&format!("{liste}.scrollTop = {liste}.scrollHeight; {liste}.dispatchEvent(new Event('scroll'))"));
+    envoyer(&mut n, "encore long");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le second tour long");
+    n.attendre(&format!("{liste}.scrollHeight - {liste}.scrollTop - {liste}.clientHeight < 40"), "collée en bas, la liste suit");
+    // 8. Déplier un outil visible ne déplace pas la page.
+    n.evaluer(&format!(
+        "(() => {{ const d = document.querySelector('details.outil[data-outil=\"read_file\"]'); const m = {liste}; \
+         m.scrollTop = d.offsetTop - m.offsetTop - 100; m.dispatchEvent(new Event('scroll')); }})()"
+    ));
+    let avant = n.evaluer(&format!("{liste}.scrollTop"));
+    n.evaluer("document.querySelector('details.outil[data-outil=\"read_file\"] summary').click()");
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(n.evaluer(&format!("{liste}.scrollTop")), avant, "déplier un outil a déplacé la page");
+    assert!(n.evaluer("document.querySelector('details.outil[data-outil=\"read_file\"]').open").as_bool().unwrap_or(false));
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
