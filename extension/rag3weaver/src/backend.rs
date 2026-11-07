@@ -72,6 +72,13 @@ pub struct BilansDeclares {
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
     pub version: u32,
+    /// **La nature du backend**, déclarée par le gabarit qu'il instancie (c7,
+    /// 7 novembre 2026) : `code` (un dépôt : worktree, branche), `memory` (la
+    /// mémoire), `project` (un projet rag3weaver déclaratif). C'est ainsi que
+    /// la page le range (« Dépôts », « Mémoire », « Projets ») ; absent, l'hôte
+    /// replie sur ce qu'il voit (un espace de travail, un dépôt git) et le dit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<BackendKind>,
     /// Script sources and hook resources are chosen by the host, never tool callers.
     #[serde(default)]
     pub scripts: BTreeMap<String, PathBuf>,
@@ -322,6 +329,25 @@ pub struct ToolAttachment {
     /// les runs par rôle, jamais par leur nom.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+}
+
+/// La nature d'un backend ([`BackendManifest::kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackendKind {
+    Code,
+    Memory,
+    Project,
+}
+
+impl BackendKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Code => "code",
+            Self::Memory => "memory",
+            Self::Project => "project",
+        }
+    }
 }
 
 /// **Une relation du manifeste** : sa définition au catalogue, à plat, et la

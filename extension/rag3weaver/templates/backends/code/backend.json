@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "kind": "code",
   "name": "code-poste",
   "database": "data/code-poste.rag3db",
   "embeddings": {
