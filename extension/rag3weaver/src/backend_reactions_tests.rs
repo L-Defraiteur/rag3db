@@ -113,6 +113,7 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         runs_in_flight: crate::dataflow::RunsInFlight::new(),
         ecarts_des_fichiers: Mutex::new(None),
         decider: None,
+        llm: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
         version: std::sync::atomic::AtomicU64::new(0),
         catalog: Arc::new(Mutex::new(catalog)),
