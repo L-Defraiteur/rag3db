@@ -8,5 +8,5 @@ graph LR
     check["RhaiNode(script_id=archive_linked, inputs='element', element=$element)"]
     cite["AddRefNode(genre='doc', valeur=$element.doc_value, fiche=$element.apport_key, refs_entity='Ref', types_entity='RefType', from_entity='Apport', relation='APPORT_CITE')"]
     out["RhaiNode(script_id=archive_summary, inputs='element', element=$element)"]
-    link -->|report| check
-    cite -->|report| out
+    link -->|report:value| check
+    cite -->|report:value| out

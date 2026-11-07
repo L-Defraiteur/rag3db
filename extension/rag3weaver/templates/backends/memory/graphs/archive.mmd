@@ -22,12 +22,12 @@ graph LR
     create["ForEachNode(graph='@graphs/archive_create.mmd', on_error='report')"]
     refs["ForEachNode(graph='@graphs/archive_link.mmd', on_error='report')"]
     refs_new["ForEachNode(graph='@graphs/archive_link.mmd', on_error='report')"]
-    genre -->|report| params
-    params -->|result| source
-    params -->|result| split
-    split -->|element| decide
-    decide -->|results| route
-    route -->|fiche| write
-    route -->|create| create
-    write -->|results| refs
-    create -->|results| refs_new
+    genre -->|report:value| params
+    params -->|result:record| source
+    params -->|result:text| split
+    split -->|element:elements| decide
+    decide -->|results:element| route
+    route -->|fiche:elements| write
+    route -->|create:elements| create
+    write -->|results:elements| refs
+    create -->|results:elements| refs_new

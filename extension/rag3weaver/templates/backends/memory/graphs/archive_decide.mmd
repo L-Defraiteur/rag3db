@@ -12,6 +12,6 @@ graph LR
     prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create', section=$element, candidates=$candidates, allow_create=$allow_create)"]
     decide["Decide(via='llm', labels_from='candidates', labels='none|create', field='prompt', as='verdict', instruction=$instruction)"]
     decided["RhaiNode(script_id=archive_decided, inputs='allow_create', allow_create=$allow_create)"]
-    recall -->|result| prepare
-    prepare -->|result| decide
-    decide -->|element| decided
+    recall -->|result:value| prepare
+    prepare -->|result:element| decide
+    decide -->|element:value| decided
