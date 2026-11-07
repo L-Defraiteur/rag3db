@@ -1339,6 +1339,30 @@ fn git_dans(manifest: &Path, args: &[&str]) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// **La branche d'un dépôt se lit sans processus** : dans un dépôt, la
+    /// branche de son `HEAD` ; dans un worktree, celle du `HEAD` de son `gitdir`
+    /// (le `.git` y est un fichier) ; le dépôt garde son nom de dossier.
+    #[test]
+    fn la_branche_d_un_depot_et_d_un_worktree_se_lit_dans_head() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("atelier");
+        std::fs::create_dir_all(depot.join("sous")).unwrap();
+        let git = |dir: &Path, args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success(), "git {args:?}");
+        git(&depot, &["init", "-q", "-b", "principale"]);
+        git(&depot, &["config", "user.name", "Personne Test"]);
+        git(&depot, &["config", "user.email", "personne@example.org"]);
+        std::fs::write(depot.join("sous/backend.json"), "{}").unwrap();
+        git(&depot, &["add", "."]);
+        git(&depot, &["commit", "-q", "-m", "un"]);
+        assert_eq!(branch_of(&depot.join("sous/backend.json")).as_deref(), Some("principale"));
+        assert_eq!(repo_of(&depot.join("sous/backend.json")).as_deref(), Some("atelier"));
+        let arbre = d.path().join("arbre-de-tache");
+        git(&depot, &["worktree", "add", "-q", "-b", "agent/salut", arbre.to_str().unwrap()]);
+        assert!(arbre.join(".git").is_file(), "un worktree a un .git fichier");
+        assert_eq!(branch_of(&arbre.join("sous/backend.json")).as_deref(), Some("agent/salut"));
+        assert_eq!(branch_of(&d.path().join("ailleurs/backend.json")), None);
+    }
+
     /// **Un hôte de test a son propre registre de runs en fond**, jamais
     /// celui du processus : les tests de la lib tournent en parallèle, et un
     /// hôte sur le registre global voyait les runs vivants des autres (l'hôte
