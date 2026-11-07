@@ -15,8 +15,13 @@ fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
 
 /// Le même banc, le manifeste retouché avant son commit (un rôle d'outil…).
 fn banc_avec(model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
+    banc_dans("depot", model, retouche)
+}
+
+/// Le banc dans un dépôt nommé : la page nomme un dépôt par son dossier.
+fn banc_dans(nom: &str, model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
     let d = tempfile::tempdir().unwrap();
-    let depot = d.path().join("depot");
+    let depot = d.path().join(nom);
     let arbre = d.path().join("code");
     std::fs::create_dir_all(&depot).unwrap();
     std::fs::create_dir_all(&arbre).unwrap();
@@ -660,6 +665,69 @@ fn la_page_du_chat_tient_l_ordre_le_defilement_et_la_place() {
 
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **La barre parle en dépôts** (Lucie, 7 novembre 2026 : « les gens qui
+/// bossent parlent en branches, PR, worktrees, repos attachés ») : deux dépôts
+/// attachés à l'hôte paraissent sous « Dépôts », chacun nommé par son dossier et
+/// sa branche, chacun avec sa jauge ; un tour dans l'un remplit sa jauge et pas
+/// celle de l'autre ; le mot « backend » ne paraît nulle part à l'écran du chat.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d1, h1, m1, id1) = banc_dans("atelier", page_du_chat(), |_| {});
+    let (d2, h2, m2, id2) = banc_dans("outils", page_du_chat(), |_| {});
+    drop((h1, h2));
+    let (chats, taches) = (d1.path().join("chats"), d1.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    for m in [&m1, &m2] {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}/ide/describe"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": m }).to_string())
+            .unwrap();
+        let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(v["ok"], true, "{v}");
+    }
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/code/{id1}/chat"),
+        "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+    // Les deux dépôts, nommés par leur dossier et leur branche.
+    n.attendre(
+        "(() => { const s = document.querySelector('[data-section=\"Dépôts\"]'); if (!s) return false; \
+         const noms = [...s.querySelectorAll('.conversation a')].map(a => a.textContent.trim()); \
+         return noms.some(t => t.startsWith('atelier · ')) && noms.some(t => t.startsWith('outils · ')); })()",
+        "deux dépôts sous « Dépôts », avec leur branche",
+    );
+    // Un tour dans le premier : sa jauge se remplit, pas celle de l'autre.
+    n.evaluer("document.querySelector('#message').value = 'deux outils'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour dans le premier dépôt");
+    let jauge = |n: &mut Navigateur, id: &str| n.evaluer(&format!("document.querySelector('.conversation[data-backend=\"{id}\"] .usage')?.dataset.used ?? null"));
+    n.attendre(&format!("Number(document.querySelector('.conversation[data-backend=\"{id1}\"] .usage')?.dataset.used) > 0"), "la jauge du premier dépôt");
+    assert_eq!(jauge(&mut n, &id2), json!(""), "la jauge de l'autre dépôt a bougé");
+    // Le mot du code ne paraît pas à l'écran.
+    let texte = n.evaluer("document.body.innerText.toLowerCase()");
+    assert!(!texte.as_str().unwrap_or("").contains("backend"), "« backend » paraît à l'écran : {texte}");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d2);
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
