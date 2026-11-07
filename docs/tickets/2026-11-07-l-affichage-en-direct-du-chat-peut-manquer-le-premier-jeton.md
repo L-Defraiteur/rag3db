@@ -34,6 +34,17 @@ Même verte, la page en parties prenait environ 6 s pour ces témoins, contre 2 
   passerait avant `RunStarted` est accepté, puisque la bulle en cours existe déjà (posée par
   `send` avant l'appel).
 
+## Une piste (everything declarative, à prouver)
+
+Le flux relaie chaque sujet du bus par **son propre fil** (`IdeFlux::relayer`, un fil par sujet de
+`SUJETS`), et l'id du flux est donné à la publication : un `Token` (sujet `tokens`) peut passer
+avant le `RunStarted` (sujet `agent`) du même tour. Si la page tient encore un run dans `runRef`
+(celui d'avant, ou celui qu'une relecture a posé), le filtre `ev.run !== runRef.current` jette ce
+jeton ; sous charge, les fils se décalent davantage. Pour le prouver : `Token` porte `seq` (son rang
+dans le tour) ; noter dans la page le premier `seq` reçu par run, un `seq` > 0 en premier le dit.
+Correctifs possibles : ne jamais filtrer un `Token` d'un run inconnu quand aucun tour n'est en vol
+côté page, ou relayer `tokens` et `agent` par un même fil.
+
 ## Ce qu'il faut pour le fermer
 
 Trouver par où le premier jeton se perd : la page (une mise à jour d'état qui l'écrase ?), le
