@@ -141,6 +141,16 @@ fn whois_rend_la_cle_les_handles_les_alias_et_la_tache_de_la_ligne_doing() {
     assert_eq!((r["agent"].clone(), r["tache"].clone()), (json!("t2"), Value::Null), "{r}");
     assert!(r["said"].as_str().is_some_and(|s| s.contains("aucun apport identity")), "{r}");
 
+    // Une fiche dont le nom est dans celui d'une autre : « a » ne se lit pas
+    // dans « tache-a ». La ligne dit « tache-a, a » : tache-a d'abord.
+    for (name, about) in [("t3", "Un troisième."), ("a", "La fiche a.")] {
+        appel(&b, "put_fiche", json!({"record": {"name": name, "about": about, "state": "current"}}));
+    }
+    apport(&b, "t3", "sessions/1", "handle", "session:s3", &[("handle", "session:s3")]);
+    apport(&b, "t3", "sessions/1", "identity", "## identity\nwho: t3\ndoing: tache-a, a", &[("fiche", "a"), ("fiche", "tache-a")]);
+    let r = whois(&b, json!({"agent": "t3"}));
+    assert_eq!((r["tache"].clone(), r["autres"].clone()), (json!("tache-a"), json!(["a"])), "{r}");
+
     // Deux questions, ou aucune : refusé.
     let e = b.call("whois", json!({"agent": "t1", "handle": "session:s1"})).err().expect("deux questions");
     assert!(e.contains("un seul"), "{e}");
