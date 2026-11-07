@@ -441,6 +441,11 @@ fn entrer_dans_l_ide() -> Result<(), String> {
 
 fn servir_le_demon(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]";
+    // L'heure en tête de chaque ligne du journal de l'hôte, la lib du moteur
+    // comprise (ticket « ni heure ni auteur ») : avant toute ligne.
+    if let Err(e) = rag3weaver::host_log::install_timestamps() {
+        eprintln!("[démon] journal sans heure : {e}");
+    }
     // L'hôte se dit hôte dans la marque des bases qu'il ouvre : un client
     // s'attache à lui, il ne le prend pas pour un écrivain autonome.
     rag3weaver::marque_d_ecrivain::declare_role(rag3weaver::marque_d_ecrivain::ROLE_HOTE);
@@ -575,6 +580,7 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     serveur.serve(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new().avec_les_taches_relues().with_chats_reread()), Some(jeton));
     cycle::remove_if_mine(pid);
     eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
+    rag3weaver::host_log::stop_timestamps();
     Ok(())
 }
 
@@ -927,6 +933,9 @@ fn run() -> Result<(), String> {
 fn main() {
     if let Err(e) = run() {
         eprintln!("{e}");
+        // Le refus d'un hôte (un autre répond déjà…) s'écrit dans son journal
+        // avant la sortie : le fil de la marque d'heure finit d'abord.
+        rag3weaver::host_log::stop_timestamps();
         std::process::exit(1);
     }
 }
