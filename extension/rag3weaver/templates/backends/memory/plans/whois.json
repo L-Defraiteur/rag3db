@@ -1,0 +1,36 @@
+{
+  "let": {
+    "fiche_qui_repond": {"any_of": [
+      {"optional": {"equals": {"field": "name", "param": "agent"}}},
+      {"optional": {"through": {"relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport",
+                                "filter": {"all_of": [
+                                  {"equals": {"field": "section", "param": "cite_section"}},
+                                  {"through": {"relation": "APPORT_CITE", "direction": "outgoing", "end": "Ref",
+                                               "filter": {"all_of": [
+                                                 {"equals": {"field": "genre",  "param": "cite_genre"}},
+                                                 {"equals": {"field": "valeur", "param": "cite_valeur"}}
+                                               ]}}}
+                                ]}}}}
+    ]}
+  },
+  "forms": {
+    "apports": {"select": {
+      "table": "Apport",
+      "filter": {"all_of": [
+        {"in": {"field": "section", "param": "sections"}},
+        {"through": {"relation": "A_POUR_APPORT", "direction": "incoming", "end": "Fiche",
+                     "filter": {"let": "fiche_qui_repond"}}}
+      ]},
+      "returns": [
+        "_uuid", "section", "source", "texte", "created_at",
+        {"collect": {"as": "fiches", "relation": "A_POUR_APPORT", "direction": "incoming", "end": "Fiche",
+                     "fields": ["name", "about", "state"]}},
+        {"collect": {"as": "refs", "relation": "APPORT_CITE", "direction": "outgoing", "end": "Ref",
+                     "fields": ["genre", "valeur"]}}
+      ],
+      "order_by": [{"field": "created_at", "desc": true}, {"field": "_uuid"}],
+      "limit": {"param": "limit", "max": 200}
+    }}
+  },
+  "outputs": {"rows": "apports"}
+}
