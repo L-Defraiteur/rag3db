@@ -1,4 +1,5 @@
 #include <atomic>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <thread>
@@ -228,6 +229,8 @@ TEST_F(BlobCopyCheckpointTest, ARolledBackCopyBeyondAQuarterOfTheBufferPoolLeave
     setUpTable(false);
     constexpr uint64_t blobSize = 1ull << 20;
     constexpr uint64_t numRows = 112;
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    const auto sizeBefore = std::filesystem::file_size(databasePath);
     ASSERT_TRUE(conn->query("BEGIN TRANSACTION;")->isSuccess());
     copyBlobs(0, numRows, blobSize);
     if (HasFatalFailure()) {
@@ -247,5 +250,13 @@ TEST_F(BlobCopyCheckpointTest, ARolledBackCopyBeyondAQuarterOfTheBufferPoolLeave
     if (HasFatalFailure()) {
         return;
     }
+    ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
+    // Les pages des segments vidés par le COPY annulé sont reprises : le second COPY les réemploie.
+    // Si elles fuyaient, le fichier porterait deux fois les 112 Mio.
+    const auto sizeAfter = std::filesystem::file_size(databasePath);
+    std::cout << "fichier de données : " << (sizeBefore >> 20) << " Mio avant, " << (sizeAfter >> 20)
+              << " Mio après le COPY annulé puis le COPY validé\n";
+    EXPECT_LT(sizeAfter - sizeBefore, numRows * blobSize * 3 / 2)
+        << "les pages du COPY annulé n'ont pas été reprises";
     expectBlobs(numRows, blobSize);
 }
