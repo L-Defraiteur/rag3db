@@ -797,6 +797,18 @@ fn run() -> Result<(), String> {
         return entrer_dans_l_ide();
     }
     // **`mail`** : la boîte de l'hôte depuis le shell d'un agent (lot 5, le pont).
+    // **`canal`** : le serveur MCP que Claude Code charge comme canal (page 07 § 4).
+    #[cfg(feature = "daemon")]
+    if tous.first().map(String::as_str) == Some("canal") {
+        let boite = match rag3weaver::mail::BoiteHttp::depuis_daemon_json(std::time::Duration::from_secs(5)) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("[rag3weaver-canal] {e}");
+                std::process::exit(1);
+            }
+        };
+        std::process::exit(rag3weaver::canal::servir(Box::new(boite), std::time::Duration::from_secs(2)));
+    }
     #[cfg(feature = "daemon")]
     if tous.first().map(String::as_str) == Some("mail") {
         std::process::exit(rag3weaver::mail::commande(&tous[1..], &mut std::io::stdout()));
