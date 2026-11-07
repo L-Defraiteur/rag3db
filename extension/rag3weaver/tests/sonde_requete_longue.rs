@@ -10,6 +10,7 @@
 //! ```sh
 //! cp -a --reflink=always <base>.rag3db <copie>.rag3db
 //! SONDE_CONFIG=~/.config/rag3weaver/<backend> SONDE_GABARIT=code SONDE_ENTITE=Scope \
+//!   [SONDE_MANIFESTE=<manifeste de l'hôte, s'il n'est pas sous templates/backends/<gabarit>/>] \
 //!   SONDE_BASE=<copie>.rag3db poste mesure scripts/cargo_magasin.sh test \
 //!   --features rag3db-native,code,daemon --test sonde_requete_longue -- --include-ignored --nocapture
 //! ```
@@ -73,12 +74,19 @@ fn le_cout_du_plein_texte_selon_le_nombre_de_termes() {
             copier(&d, &tmp.path().join("templates/backends").join(&gabarit).join(dossier));
         }
     }
-    let dossier_hote = config.join("templates/backends").join(&gabarit);
-    let fichier_hote = ["rag3db.json", "backend.json"]
-        .iter()
-        .map(|n| dossier_hote.join(n))
-        .find(|p| p.is_file())
-        .unwrap_or_else(|| panic!("le manifeste de l'hôte sous {}", dossier_hote.display()));
+    // Le manifeste de l'hôte : nommé (`SONDE_MANIFESTE`, la mémoire longue range le sien sous
+    // `backends/memory/`), sinon cherché sous `templates/backends/<gabarit>/`.
+    let fichier_hote = match std::env::var("SONDE_MANIFESTE") {
+        Ok(chemin) => PathBuf::from(chemin),
+        Err(_) => {
+            let dossier_hote = config.join("templates/backends").join(&gabarit);
+            ["rag3db.json", "backend.json"]
+                .iter()
+                .map(|n| dossier_hote.join(n))
+                .find(|p| p.is_file())
+                .unwrap_or_else(|| panic!("le manifeste de l'hôte sous {}", dossier_hote.display()))
+        }
+    };
     let hote: Value = serde_json::from_slice(&std::fs::read(&fichier_hote).unwrap()).unwrap();
     let manifeste = tmp.path().join("templates/backends").join(&gabarit).join("backend.json");
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
