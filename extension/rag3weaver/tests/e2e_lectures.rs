@@ -1544,3 +1544,78 @@ fn une_requete_longue_repond_vite_et_dit_ses_coupes() {
         "une requête courte ne dit rien : {courte}"
     );
 }
+
+/// **Un second processus qui veut écrire la même base est refusé, et sait par qui** (7 novembre
+/// 2026, à la demande de c7 : un COPY de relations dans la transaction qui a créé ses nœuds relie
+/// ceux d'un autre écrivain validé entre-temps — un défaut grave du moteur que l'hôte n'atteint
+/// pas par construction, sauf à deux processus sur une même base). Par le chemin réel : ce test
+/// tient la base en écriture (le gabarit de code ouvert depuis son manifeste), puis le vrai binaire
+/// `rag3weaver-backend <manifeste>` tente de l'ouvrir pour écrire : il doit sortir en erreur en
+/// nommant l'écrivain en place (son pid, son rôle, depuis quand). Un troisième processus, lecteur
+/// (`Rag3dbConnection::read_only`), doit passer et lire.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn un_second_ecrivain_est_refuse_en_nommant_le_premier() {
+    use rag3weaver::backend::PreparedBackend;
+    use std::io::Write;
+    use std::time::Duration;
+
+    const LECTEUR: &str = "RAG3WEAVER_TEMOIN_LECTEUR_BASE";
+    // Rôle lecteur : ouvrir en lecture seule pendant que l'écrivain tient la base, et lire.
+    if let Ok(base) = std::env::var(LECTEUR) {
+        let conn = Rag3dbConnection::read_only(&base).unwrap_or_else(|e| {
+            eprintln!("[lecteur] refusé : {e}");
+            std::process::exit(3)
+        });
+        use rag3weaver::connection::DbConnection;
+        match conn.execute("MATCH (s:Scope) RETURN count(s)") {
+            Ok(r) => {
+                eprintln!("[lecteur] {} scope(s) lus", r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(-1));
+                std::process::exit(0)
+            }
+            Err(e) => {
+                eprintln!("[lecteur] lecture échouée : {e}");
+                std::process::exit(4)
+            }
+        }
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code(tmp.path(), "second-ecrivain");
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let mut backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
+    backend.call("index", serde_json::json!({"confirm": true})).expect("index lancé");
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Le second écrivain : le binaire, sa forme positionnelle (il ouvre en écriture).
+    let mut second = std::process::Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
+        .arg(&chemin)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("lancer le second écrivain");
+    let _ = writeln!(second.stdin.take().unwrap(), "{}", serde_json::json!({"op": "call", "name": "index", "arguments": {"confirm": true}}));
+    let sortie = second.wait_with_output().expect("le second écrivain finit");
+    let erreur = String::from_utf8_lossy(&sortie.stderr).to_string() + &String::from_utf8_lossy(&sortie.stdout);
+    eprintln!("[second écrivain] code {:?} : {}", sortie.status.code(), erreur.trim().lines().last().unwrap_or(""));
+    assert!(!sortie.status.success(), "le second écrivain ne doit pas ouvrir la base : {erreur}");
+    assert!(
+        erreur.contains(&format!("pid {}", std::process::id())),
+        "le refus nomme l'écrivain en place (pid {}) : {erreur}",
+        std::process::id()
+    );
+
+    // Le lecteur, dans un troisième processus : il passe.
+    let lecteur = std::process::Command::new(std::env::current_exe().expect("current_exe"))
+        .args(["--exact", &crate::common::test_de_cette_suite!("un_second_ecrivain_est_refuse_en_nommant_le_premier"), "--ignored", "--nocapture"])
+        .env(LECTEUR, &base)
+        .output()
+        .expect("lancer le lecteur");
+    let dit = String::from_utf8_lossy(&lecteur.stderr);
+    eprintln!("[lecteur] code {:?} : {}", lecteur.status.code(), dit.lines().filter(|l| l.contains("[lecteur]")).collect::<Vec<_>>().join(" ; "));
+    assert_eq!(lecteur.status.code(), Some(0), "un lecteur passe pendant que l'écrivain tient la base : {dit}");
+    backend.shutdown().expect("l'arrêt");
+}
