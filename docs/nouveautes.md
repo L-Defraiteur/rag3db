@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
+  verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
+  codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
+  (`vue_portee`, appelée seulement là, avait 0 usage) ; sur code-lourd, 19 appels de plus et
+  aucune locale prise pour un appel. codeparsers 672a0d5.
 - **7 nov. — Le terminal de l'agent de code a sa vue.** `rag3weaver-tty`, sans option, ouvre une
   vue inline en ratatui et crossterm, la même sous Windows, macOS et Linux. Le texte de l'agent
   coule dans l'historique du terminal (défilement, copie, tmux), et seules trois lignes se
