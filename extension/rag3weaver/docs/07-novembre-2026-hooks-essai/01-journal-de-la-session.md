@@ -316,3 +316,19 @@ Ce que c7 a tranché (lot 3 bis) :
 - le seuil se règle sur ce journal ;
 - ma propre fiche est exclue du rappel ;
 - l'identité est une ligne de SessionStart, et UserPromptSubmit dit le reste.
+
+## Le binaire du lot 3 bis (posé à 16:24:43)
+
+- **Un guet qui n'a rien vu.** `hooks.log` marque le binaire par son mtime
+  (`@1794065083`), pas par le hash git annoncé (24faff78). Mon guet sur le
+  hash a donc attendu 40 min sans rien voir. Pour relier une ligne de journal
+  à un commit, il faut écrire le hash dans la ligne.
+- **Premier tour de ma session sous le binaire neuf, à 17:05:55.** C'est une
+  notification de tâche, pas un message.
+  - Le journal donne les durées par appel : `/open` 233 ms, `cited_by` 43 ms,
+    `recall_apports` 112 ms, `recall_fiches` 1999 ms.
+  - Le rappel passe : « hooks-essai » 0.59, « régime GPU » 0.40.
+  - Aucun bloc ne m'est parvenu, et aucune ligne « bloc » ne figure au
+    journal.
+- **Ce qui manque encore.** Ma propre fiche n'est pas exclue, et aucun seuil
+  ne tait « régime GPU ». À revoir au prochain vrai message.
