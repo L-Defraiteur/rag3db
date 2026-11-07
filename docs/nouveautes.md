@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — La mémoire parle à Claude Code.** Des hooks posés dans une seule session
+  d'essai, par un script qui crée son worktree : à l'ouverture, qui tu es et ce que tu
+  tenais ; à chaque tour, les fiches en rapport, ce que d'autres ont changé dans les
+  fichiers que tu touches, le dernier verdict du juge ; après une compaction, le défi
+  d'identité ; à 70 % du contexte réel, la suggestion de ranger. Jamais bloquant, muet
+  sans hôte. d42787227.
 - **7 nov. — Claude parle au trait Llm.** L'API Messages d'Anthropic derrière le même
   trait que Gemini et les modèles locaux, en HTTP brut, réflexion adaptative rejouée,
   refus nommé ; un seul point de branchement rend tout modèle au reste du runtime.
