@@ -7,8 +7,8 @@
 let section = input.section;
 let found = input.value;
 if found == () { found = []; }
-let mut names = [];
-let mut presentation = "";
+let names = [];
+let presentation = "";
 for r in found {
     if names.len() >= input.candidates { break; }
     let d = r.data;

@@ -4,13 +4,13 @@
 // $element.<champ> : fiche_record, apport_record, apport_key, links, doc_value.
 let s = input.value;
 let verdict = s.verdict;
-let mut kind = "fiche";
+let kind = "fiche";
 if verdict == "none" { kind = "none"; }
 else if verdict == "create" { kind = if input.allow_create { "create" } else { "none" }; }
 else if !s.candidates.contains(verdict) { throw `archive : « ${verdict} » n'est ni une candidate ni none ni create`; }
 let fiche = if kind == "create" { s.title } else if kind == "fiche" { verdict } else { "" };
 let texte = s.text;
-let mut about = texte;
+let about = texte;
 let point = about.index_of(". ");
 if point > 0 { about = about.sub_string(0, point + 1); }
 if about.len() > 200 { about = about.sub_string(0, 200) + "…"; }
