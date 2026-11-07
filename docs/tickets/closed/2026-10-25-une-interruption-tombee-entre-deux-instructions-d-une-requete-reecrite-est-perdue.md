@@ -1,7 +1,6 @@
 # Une interruption tombée entre deux instructions d'une requête réécrite est perdue
 
-- **État** : ouvert, le 25 octobre 2026 (seconde session cœur C++, trouvé en écrivant les témoins
-  de (A), le CREATE concurrent). Aucun correctif écrit.
+- **État** : corrigé `17a094d12` (7 novembre 2026, cœur c++, lot instruction-en-echec) : le drapeau d'interruption est remis à zéro une fois par requête (queryNoLock, executeWithParams), une instruction le lit en commençant, et l'attente des écrivains plus anciens d'un CREATE le lit par tranches de 50 ms. Témoin `StatementFailure.OneInterruptStopsACreateWaitingForOlderWriters`.
 - **Gravité** : une interruption ignorée. La requête continue jusqu'au bout au lieu de s'arrêter,
   sans erreur ni avertissement.
 - **Atteignable en service** : oui, pour toute fonction qui se réécrit en plusieurs instructions

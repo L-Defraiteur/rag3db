@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Une lecture survit à l'échec d'une de ses instructions.** Dans une transaction en
+  lecture seule, une instruction qui échoue (un index absent, un graphe projeté absent) ne fait plus
+  refuser les suivantes : les signaux d'une recherche sous instantané ne tombent plus ensemble.
+  Une interruption arrête aussi toute la requête, CREATE réécrit compris ; `17a094d12`.
 - **7 nov. — Le terminal de l'agent de code a sa vue.** `rag3weaver-tty`, sans option, ouvre une
   vue inline en ratatui et crossterm, la même sous Windows, macOS et Linux. Le texte de l'agent
   coule dans l'historique du terminal (défilement, copie, tmux), et seules trois lignes se

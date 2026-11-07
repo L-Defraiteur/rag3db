@@ -1,6 +1,6 @@
 # Une instruction qui échoue condamne une transaction en lecture seule
 
-- **État** : ouvert, le 25 octobre 2026 (relevé par la session « recherche », pour le cœur C++).
+- **État** : corrigé `17a094d12` (7 novembre 2026, cœur c++, lot instruction-en-echec) : une transaction en lecture seule n'est plus condamnée par l'échec d'une de ses instructions, à l'analyse, à la liaison ou à l'exécution ; une transaction qui écrit le reste. Témoins `StatementFailure.AFailedStatementDoesNotCondemnAReadOnlyTransaction` et `StatementFailure.AFailedStatementStillCondemnsAWriteTransaction` (`test/transaction/statement_failure_test.cpp`).
 - **Gravité** : blocage d'une lecture entière pour la faute d'une seule de ses instructions.
 - **Atteignable en service** : oui. Chaque appel d'outil de lecture lit dans une transaction
   `READ ONLY` qu'il partage entre toutes ses requêtes (L6, `extension/rag3weaver/src/read_pool.rs`).
@@ -59,6 +59,14 @@ instruction doit répondre. Un second témoin garde la règle pour une transacti
 La forme 1 suffit au besoin connu (les lectures d'outil sous L6). La forme 2 rendrait aussi les
 transactions d'écriture tolérantes à une instruction fautive, ce que personne ne demande
 aujourd'hui.
+
+## Le correctif
+
+La forme 1 élargie : une transaction en lecture seule n'a rien écrit, quel que soit le moment de
+l'échec, et le cas réel (le DROP d'un graphe projeté absent) échoue à l'exécution, pas à la
+liaison. `TransactionContext::rollbackAfterStatementFailure` ne nettoie que l'état de la requête
+(`TransactionManager::failAfterStatement`, qui ne touche pas une transaction READ ONLY) et ne pose
+pas `manualTransactionFailed` ; l'instantané et la transaction continuent.
 
 ## Pour le fermer
 
