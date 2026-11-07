@@ -61,6 +61,12 @@ pub struct WorkspaceConfig {
     /// bac à sable : c'est la condition qui rend ce mode honnête.
     #[serde(default)]
     pub sandbox: SandboxConfig,
+    /// **Les scripts du dépôt déclarés** (page 07-novembre-2026-everything-declarative/01,
+    /// § 1, lot 2) : chacun par son nom et sa commande exacte (argv), accordé d'avance par
+    /// la porte — un agent les lance sans demander, rien d'autre ne change. Jamais en dur
+    /// dans le code : c'est ce que Lucie veut pouvoir redéclarer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scripts: Vec<DeclaredScript>,
     /// Le schéma **nommé** que ce workspace indexe — `"code"` enregistre le
     /// schéma de code du moteur (`register_code_schema`) à l'ouverture ;
     /// absent, rien ne s'enregistre. Un nom plutôt qu'une copie JSON : la
@@ -169,6 +175,15 @@ pub const KNOWN_INDEX_SCHEMAS: &[&str] = &["code"];
 pub enum WorkspaceSource {
     Snapshot,
     WorkingTree,
+}
+
+/// Un script du dépôt déclaré au manifeste (`workspace.scripts`).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeclaredScript {
+    pub name: String,
+    /// La commande exacte, en argv (`["bash", "scripts/check_features.sh"]`).
+    pub command: Vec<String>,
 }
 
 /// Le mode de la porte des commandes, par backend (`commande::Mode`, plus
@@ -612,7 +627,13 @@ mod monte {
             CommandGate::Approval => Mode::Approbation,
             CommandGate::Auto => Mode::Auto,
         };
-        Some(Arc::new(Garde::new(mode)))
+        let garde = Garde::new(mode);
+        for s in &config.scripts {
+            if let Some((programme, args)) = s.command.split_first() {
+                garde.acquis().accorder_commande(crate::commande::Commande::new(programme.clone(), args.iter().cloned()).lisible());
+            }
+        }
+        Some(Arc::new(garde))
     }
 }
 
@@ -653,6 +674,7 @@ mod tests {
             generated: Default::default(),
             locks_via: Vec::new(),
             queries_via: None,
+            scripts: Vec::new(),
         }
     }
 
