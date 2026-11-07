@@ -87,16 +87,21 @@ impl Node for SchemaNode {
             .service::<Arc<Mutex<Catalog>>>("catalog")
             .cloned()
             .ok_or("schema: service 'catalog' absent")?;
-        let vue = {
-            let c = catalog.lock().map_err(|_| "schema: catalogue empoisonné")?;
-            construire(&c, &self.cible)
+        // Par la vue de lecture, sans le mutex (lot L4) ; sinon le catalogue.
+        let (vue, toutes) = match super::generic_search_nodes::vue_de(ctx) {
+            Some(v) => {
+                let f = v.forme();
+                (construire_par(&f, &self.cible), f.search_target_names())
+            }
+            None => {
+                let c = catalog.lock().map_err(|_| "schema: catalogue empoisonné")?; // L4 : repli sans vue
+                (construire(&c, &self.cible), c.search_target_names())
+            }
         };
         // **Un nom inconnu dit ce qui existe.** Comme partout : un refus qui
         // nomme ses voisins se corrige en un tour.
         if !self.cible.is_empty() && vue.targets.is_empty() {
-            let c = catalog.lock().map_err(|_| "schema: catalogue empoisonné")?;
-            let toutes = c.search_target_names().join(", ");
-            return Err(format!("schema: cible '{}' inconnue — il y a {toutes}", self.cible));
+            return Err(format!("schema: cible '{}' inconnue — il y a {}", self.cible, toutes.join(", ")));
         }
         let tpl = super::render_nodes::resolve_template(&self.gabarit)
             .map_err(|e| format!("schema: {e}"))?;
@@ -110,6 +115,11 @@ impl Node for SchemaNode {
 
 /// La vue, depuis le catalogue vivant.
 pub fn construire(catalog: &Catalog, cible: &str) -> SchemaView {
+    construire_par(&catalog.forme(), cible)
+}
+
+/// La vue, depuis une forme (le catalogue ou la vue de lecture).
+pub fn construire_par(catalog: &crate::read_view::Forme<'_>, cible: &str) -> SchemaView {
     let noms = catalog.search_target_names();
     let targets: Vec<CibleVue> = noms
         .iter()

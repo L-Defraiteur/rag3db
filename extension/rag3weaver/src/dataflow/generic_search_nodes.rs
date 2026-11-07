@@ -400,11 +400,21 @@ impl Node for SearchSourceNode {
             return Ok(());
         }
 
-        let target = {
-            let catalog = catalog.lock().unwrap();
-            catalog
-                .resolve_search_target(&self.target_name)
-                .map_err(|e| format!("SearchSourceNode: {e}"))?
+        // **La forme se lit par la vue** (lot L4) : la cible et les champs ne
+        // prennent pas le mutex que tient un écrivain (la réaction de la
+        // montre). Sans vue valable pour la cellule de l'appel, le catalogue.
+        let vue = vue_de(ctx);
+        let target = match &vue {
+            Some(v) => v.forme().resolve_search_target(&self.target_name),
+            None => catalog.lock().unwrap().resolve_search_target(&self.target_name), // L4 : repli sans vue
+        }
+        .map_err(|e| format!("SearchSourceNode: {e}"))?;
+        let champs_de = |cible: &str| -> Option<std::collections::HashSet<String>> {
+            let lire = |c: &crate::config::EntityConfig| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>();
+            match &vue {
+                Some(v) => v.entity_configs().get(cible).map(lire),
+                None => catalog.lock().unwrap().entity_configs().get(cible).map(lire), // L4 : repli sans vue
+            }
         };
 
         // Le domaine de travail, s'il y en a un dans le registre : la vision
@@ -421,10 +431,7 @@ impl Node for SearchSourceNode {
         }
         if options.filter_condition.is_none() {
             if let Some(domain) = ctx.service::<Arc<crate::work_domain::WorkDomain>>(crate::work_domain::WORK_DOMAIN_SERVICE).cloned() {
-                let fields = {
-                    let catalog = catalog.lock().unwrap();
-                    catalog.entity_configs().get(&self.target_name).map(|c| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>())
-                };
+                let fields = champs_de(&self.target_name);
                 let has = |f: &str| fields.as_ref().is_some_and(|s| s.contains(f));
                 let path_field = if has("file_path") { "file_path" } else { "path" };
                 if domain.applies_to(has, path_field) {
@@ -447,10 +454,7 @@ impl Node for SearchSourceNode {
         // **La portée de la question** : composée en `Must` avec ce qui
         // précède (le filtre de l'appelant ou le domaine), jamais à sa place.
         if !options.portee.is_empty() {
-            let fields = {
-                let catalog = catalog.lock().unwrap();
-                catalog.entity_configs().get(&self.target_name).map(|c| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>())
-            };
+            let fields = champs_de(&self.target_name);
             let has = |f: &str| fields.as_ref().is_some_and(|s| s.contains(f));
             let path_field = if has("file_path") { "file_path" } else { "path" };
             if let Some(portee) = options.portee.to_filter(path_field) {
@@ -467,8 +471,48 @@ impl Node for SearchSourceNode {
         // branches, et `Consistency::Strict` n'était construit nulle part.
         // C'est ici le seul endroit qui convienne — après la résolution de la
         // cible, avant que les signaux ne lisent quoi que ce soit.
-        let (reste_en_file, partiel, mut avertissements, embedding, sparse) = {
-            let mut cat = catalog.lock().unwrap();
+        //
+        // **Un écrivain tient le catalogue** (la réaction de la montre) : la
+        // recherche n'attend pas, elle répond sur l'état validé par la vue et
+        // le dit (la règle de L2). La consigne ne s'applique pas (ce qui est en
+        // file n'est pas vidé ici), et la requête s'embarque dans les nœuds de
+        // signal. `Strict` garde l'attente : c'est son contrat.
+        let strict = options.consistency == crate::search::Consistency::Strict || options.attendre_les_autres == Some(true);
+        let garde = match &vue {
+            Some(_) if !strict => match catalog.try_lock() {
+                Ok(g) => Some(g),
+                Err(std::sync::TryLockError::Poisoned(p)) => Some(p.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) => None,
+            },
+            _ => Some(catalog.lock().unwrap()), // L4 : Strict, ou sans vue
+        };
+        let (reste_en_file, partiel, mut avertissements, embedding, sparse) = if let (None, Some(v)) = (&garde, &vue) {
+            let mut w: Vec<String> = Vec::new();
+            if let Some(condition) = options.filter_condition.as_ref() {
+                if let Some(config) = v.entity_configs().get(&target.parent_table) {
+                    crate::json_schema::validate_structured_filter(condition, &config.fields)?;
+                    if config.derived.is_none() {
+                        crate::json_schema::check_field_names(condition, &config.fields)?;
+                    }
+                }
+                v.forme().compile_filter_utilisateur(&target.parent_table, Some(condition)).map_err(|e| e.to_string())?;
+            }
+            if self.query.trim().is_empty() {
+                w.push(
+                    "requête vide : une recherche part d'un texte (un nom, un effet décrit) ; \
+                     pour ne filtrer que par critères, utiliser l'outil de sélection (select_*) \
+                     avec le même filtre"
+                        .into(),
+                );
+            }
+            w.push(format!(
+                "{} La consigne de cohérence ne s'applique pas pendant cette écriture : ce qui est en file n'est pas encore cherchable \
+                 (consistency « strict » pour l'attendre).",
+                crate::dataflow::catalog_read::WRITER_HOLDS
+            ));
+            (0, true, w, None, None)
+        } else {
+            let mut cat = garde.expect("le catalogue est tenu quand la vue ne sert pas");
             if let Some(condition) = options.filter_condition.as_ref() {
                 if let Some(config) = cat.entity_configs().get(&target.parent_table) {
                     crate::json_schema::validate_structured_filter(condition, &config.fields)?;
@@ -725,15 +769,24 @@ impl Node for VectorSearchNode {
         // donc même sans condition utilisateur — sinon une base à plusieurs
         // cellules fuyait entre elles par le chemin composable (trouvé le
         // 18 septembre en migrant e2e_scope sur le lanceur).
+        let vue = vue_de(ctx);
         let (filter_where, filter_params, filter_match) =
             match ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
                 Some(catalog) => {
                     // La cellule de la requête (ses services), pas celle du
-                    // catalogue : marche 1 bis, pas b.
-                    let guard = catalog.lock().unwrap();
-                    let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| guard.scope().clone());
-                    let compiled = guard.compile_filter_for_vector_in(&cell, &target.parent_table, options.filter_condition.as_ref());
-                    drop(guard);
+                    // catalogue : marche 1 bis, pas b. Par la vue sans le
+                    // mutex (lot L4), sinon par le catalogue.
+                    let compiled = match &vue {
+                        Some(v) => {
+                            let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| v.scope().clone());
+                            v.forme().compile_filter_for_vector_in(&cell, &target.parent_table, options.filter_condition.as_ref())
+                        }
+                        None => {
+                            let guard = catalog.lock().unwrap(); // L4 : repli sans vue
+                            let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| guard.scope().clone());
+                            guard.compile_filter_for_vector_in(&cell, &target.parent_table, options.filter_condition.as_ref())
+                        }
+                    };
                     match compiled {
                         Ok(c) => c,
                         Err(e) => {
@@ -807,9 +860,11 @@ impl Node for VectorSearchNode {
                             let vivant = ctx
                                 .service::<Arc<Mutex<Catalog>>>("catalog")
                                 .cloned()
-                                .map(|c| {
-                                    let cat = c.lock().unwrap();
-                                    cat.vector_storage(&target.chunk_table)
+                                .and_then(|c| {
+                                    // Par la vue, le catalogue vivant ne s'attend pas : tenu, le
+                                    // modèle est indisponible pour cette requête.
+                                    let cat = if vue.is_some() { c.try_lock().ok()? } else { c.lock().unwrap() }; // L4 : repli sans vue
+                                    Some(cat.vector_storage(&target.chunk_table))
                                 });
                             match vivant {
                                 Some(Ok(st)) => (st.index, st.column),
@@ -921,8 +976,16 @@ impl Node for VectorSearchNode {
         // L'appelant ne peut pas distinguer, et c'est le chemin que les agents
         // empruntent. Le compte n'est fait que dans ce cas-là.
         if nombre == 0 {
-            if let Some(cat) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
-                if let Ok(c) = cat.lock() {
+            if let Some(v) = vue_de(ctx) {
+                let marqueur = marqueur_dense_de(ctx, &target.chunk_table);
+                v.forme().expliquer_le_silence_d_un_signal(
+                    &target.chunk_table,
+                    &marqueur,
+                    crate::search::SearchSignals::VECTOR,
+                    &mut node_warnings,
+                );
+            } else if let Some(cat) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
+                if let Ok(c) = cat.lock() { // L4 : repli sans vue
                     c.expliquer_le_silence_d_un_signal(
                         &target.chunk_table,
                         crate::search::SearchSignals::VECTOR,
@@ -1100,8 +1163,11 @@ impl Node for BM25SearchNode {
             .service::<std::collections::HashMap<String, std::sync::Arc<lucivy_core::sharded_handle::ShardedHandle>>>("fts_handles")
             .and_then(|h| h.get(&target.parent_table).cloned())
             .or_else(|| {
+                // Le catalogue vivant, sans attendre un écrivain quand la vue
+                // sert (lot L4) : tenu, la poignée manque et la branche le dit.
+                let par_la_vue = vue_de(ctx).is_some();
                 ctx.service::<Arc<Mutex<Catalog>>>("catalog")
-                    .and_then(|c| c.lock().ok())
+                    .and_then(|c| if par_la_vue { c.try_lock().ok() } else { c.lock().ok() }) // L4 : repli sans vue
                     .and_then(|c| c.fts_handle(&target.parent_table))
             });
 
@@ -1571,8 +1637,16 @@ impl Node for SparseSearchNode {
         // dans ce cas-là. `Catalog::search` le faisait pour les deux signaux ;
         // ce chemin ne le faisait que pour le vecteur.
         if nombre == 0 {
-            if let Some(cat) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
-                if let Ok(c) = cat.lock() {
+            if let Some(v) = vue_de(ctx) {
+                let marqueur = marqueur_dense_de(ctx, &target.chunk_table);
+                v.forme().expliquer_le_silence_d_un_signal(
+                    &target.chunk_table,
+                    &marqueur,
+                    crate::search::SearchSignals::SPARSE,
+                    &mut node_warnings,
+                );
+            } else if let Some(cat) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() {
+                if let Ok(c) = cat.lock() { // L4 : repli sans vue
                     c.expliquer_le_silence_d_un_signal(
                         &target.chunk_table,
                         crate::search::SearchSignals::SPARSE,
@@ -2385,15 +2459,17 @@ impl Node for ResolveParentNode {
                     par_source.entry(src.to_string()).or_insert_with(|| sig.clone());
                 }
             }
-            let catalog = ctx
-                .service::<Arc<Mutex<Catalog>>>("catalog")
-                .cloned()
-                .ok_or("ResolveParentNode: result_mode=source_resolved needs the 'catalog' service")?;
-            catalog
-                .lock()
-                .unwrap()
-                .resolve_to_source_entities(&mut search_results)
-                .map_err(|e| format!("ResolveParentNode: source resolution failed: {e}"))?;
+            match vue_de(ctx) {
+                Some(v) => v.forme().resolve_to_source_entities(&mut search_results),
+                None => ctx
+                    .service::<Arc<Mutex<Catalog>>>("catalog")
+                    .cloned()
+                    .ok_or("ResolveParentNode: result_mode=source_resolved needs the 'catalog' service")?
+                    .lock() // L4 : repli sans vue
+                    .unwrap()
+                    .resolve_to_source_entities(&mut search_results),
+            }
+            .map_err(|e| format!("ResolveParentNode: source resolution failed: {e}"))?;
             search_results
                 .iter()
                 .map(|r| par_source.get(&r.uuid).cloned().flatten())
@@ -2466,9 +2542,40 @@ fn extract_query_and_target(
 /// servi, sinon celui de rag3db sur la connexion du graphe (le montage
 /// minimal des tests). Les requêtes de recherche vivent sous lui, jamais
 /// en Cypher direct dans un nœud.
+/// **Le marqueur dense du modèle courant**, d'après les services de l'appel
+/// (les modèles enregistrés et le modèle courant, figés avec la vue) ; à
+/// défaut, celui d'avant.
+fn marqueur_dense_de(ctx: &NodeContext, chunk_table: &str) -> String {
+    let modeles = ctx.service::<Vec<crate::embedding_storage::EmbeddingModelEntry>>("embedding_models");
+    let slug = ctx.service::<String>("embedding_slug");
+    match (modeles, slug) {
+        (Some(m), Some(s)) => crate::read_view::vector_storage_from(chunk_table, s, m).map(|st| st.marker).unwrap_or_else(|_| "_embed_hash".to_string()),
+        _ => "_embed_hash".to_string(),
+    }
+}
+
+/// **La vue de lecture de l'appel** (lot L4), si elle vaut pour sa cellule :
+/// la forme s'y lit sans le mutex du catalogue. Une autre cellule que celle
+/// de la vue lit par le catalogue.
+pub(crate) fn vue_de(ctx: &NodeContext) -> Option<Arc<crate::read_view::ReadView>> {
+    let vue = ctx.service::<Arc<crate::read_view::ReadViewCell>>(crate::read_view::READ_VIEW_SERVICE)?.current()?;
+    match ctx.service::<crate::scope::Scope>("scope") {
+        Some(cellule) if *cellule != *vue.scope() => None,
+        _ => Some(vue),
+    }
+}
+
 fn moteur_de_recherche(ctx: &NodeContext, conn: &Arc<dyn crate::connection::DbConnection>) -> Arc<dyn crate::search_backend::SearchBackend> {
+    // Par la vue : son moteur extérieur s'il y en a un, sinon celui du
+    // catalogue sur la connexion de l'appel (celle de lecture), sans le mutex.
+    if let Some(v) = vue_de(ctx) {
+        return v
+            .search_backend_externe
+            .clone()
+            .unwrap_or_else(|| Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(conn.clone())));
+    }
     ctx.service::<Arc<Mutex<Catalog>>>("catalog")
-        .and_then(|c| c.lock().ok().and_then(|c| c.search_backend()))
+        .and_then(|c| c.lock().ok().and_then(|c| c.search_backend())) // L4 : repli sans vue
         .unwrap_or_else(|| Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(conn.clone())))
 }
 
@@ -2485,7 +2592,10 @@ fn allowed_ids_for(
     };
     // `parent_table` : la table qui porte les lignes, `MaKB_Index` pour une
     // base de connaissances — voir `ResolveParentNode`.
-    let resolved = catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target);
+    let resolved = match vue_de(ctx) {
+        Some(v) => v.forme().resolve_filter_to_ids(&target.parent_table, condition, target),
+        None => catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target), // L4 : repli sans vue
+    };
     match resolved {
         Ok(ids) => ids,
         Err(e) => {
@@ -2516,10 +2626,10 @@ fn filtre_utilisateur_for(
         ));
         return None;
     };
-    let compile = catalog
-        .lock()
-        .unwrap()
-        .compile_filter_utilisateur(&target.parent_table, Some(condition));
+    let compile = match vue_de(ctx) {
+        Some(v) => v.forme().compile_filter_utilisateur(&target.parent_table, Some(condition)),
+        None => catalog.lock().unwrap().compile_filter_utilisateur(&target.parent_table, Some(condition)), // L4 : repli sans vue
+    };
     match compile {
         Ok((Some(w), params, Some(j))) => Some((j, w, params)),
         Ok(_) => None,

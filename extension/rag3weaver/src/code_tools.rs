@@ -443,7 +443,7 @@ fn erreur_du_catalogue(e: crate::catalog::CatalogError) -> String {
 }
 
 /// Les scopes d'un fichier, par ligne croissante. Vide sans catalogue.
-fn scopes_of(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<Vec<ScopeRef>, String> {
+fn scopes_of(catalog: Option<&dyn crate::read_view::ReadCatalog>, source: &str, path: &str) -> Result<Vec<ScopeRef>, String> {
     let Some(catalog) = catalog else { return Ok(vec![]) };
     let rows = catalog
         .find_by_field(SCOPE, "file_path", CypherValue::String(path.to_string()), &["name", "scope_type", "start_line", "end_line", "source", "_uuid"])
@@ -476,7 +476,7 @@ fn narrowest<'a>(scopes: &'a [ScopeRef], line: usize) -> Option<&'a ScopeRef> {
 }
 
 /// `File.content_hash` tel qu'indexé, si le fichier est connu du catalogue.
-fn indexed_hash(catalog: Option<&Catalog>, source: &str, path: &str) -> Result<Option<String>, String> {
+fn indexed_hash(catalog: Option<&dyn crate::read_view::ReadCatalog>, source: &str, path: &str) -> Result<Option<String>, String> {
     let Some(catalog) = catalog else { return Ok(None) };
     let uuid = catalog
         .entity_uuid(FILE, &BTreeMap::from([
@@ -650,7 +650,7 @@ fn scopes_on_the_fly(path: &str, content: &str) -> Vec<ScopeRef> {
 /// `limit` lignes, et annote depuis le catalogue s'il y en a un.
 pub fn read_file(
     source: &dyn FileSource,
-    catalog: Option<&Catalog>,
+    catalog: Option<&dyn crate::read_view::ReadCatalog>,
     path: &str,
     offset: usize,
     limit: usize,
@@ -663,7 +663,7 @@ pub fn read_file(
 /// par une analyse à la volée. Aucune écriture : lire n'est pas indexer.
 pub fn read_file_with(
     source: &dyn FileSource,
-    catalog: Option<&Catalog>,
+    catalog: Option<&dyn crate::read_view::ReadCatalog>,
     access: &RootPolicy,
     path: &str,
     offset: usize,
@@ -717,7 +717,7 @@ pub fn read_file_with(
 #[allow(clippy::too_many_arguments)]
 fn read_window(
     source: &dyn FileSource,
-    catalog: Option<&Catalog>,
+    catalog: Option<&dyn crate::read_view::ReadCatalog>,
     path: &str,
     offset: usize,
     limit: usize,
@@ -930,7 +930,7 @@ fn clip(s: &str, max: usize) -> String {
 /// (`total_found`), au plus `max_results` sont **rendus**.
 pub fn grep_files(
     source: &dyn FileSource,
-    catalog: Option<&Catalog>,
+    catalog: Option<&dyn crate::read_view::ReadCatalog>,
     pattern: &str,
     opts: &GrepOptions,
 ) -> Result<GrepResult, String> {
@@ -1035,7 +1035,7 @@ pub fn grep_files(
 /// config, pas par la liste en dur du gabarit code : une relation déclarée par un
 /// manifeste passe (changé le 11 octobre 2026, avec l'arbre principal ; la porte
 /// d'avant n'admettait que `code::RELATIONS`).
-pub fn admit_relation(catalog: &Catalog, relation: &str) -> Result<(), String> {
+pub fn admit_relation(catalog: &dyn crate::read_view::ReadCatalog, relation: &str) -> Result<(), String> {
     if !rag3weaver_ir::is_valid_identifier(relation) {
         return Err(format!("relation '{relation}' : ce n'est pas un identifiant"));
     }
@@ -1052,7 +1052,7 @@ pub fn admit_relation(catalog: &Catalog, relation: &str) -> Result<(), String> {
 /// `DEFINES` arrive sur `Symbol`, qui n'a ni genre ni lignes. Le départ reste
 /// libre : l'uuid suffit. Sans table d'arrivée, PostgreSQL refusait le saut
 /// (ticket 2026-10-11-le-voisinage-de-grep-refuse-par-postgresql).
-pub fn neighbor_hop(catalog: &Catalog, relation: &str, limit: usize) -> Result<rag3weaver_ir::Hop, String> {
+pub fn neighbor_hop(catalog: &dyn crate::read_view::ReadCatalog, relation: &str, limit: usize) -> Result<rag3weaver_ir::Hop, String> {
     let arrivee = crate::dataflow::usage_nodes::rel_info(catalog, relation)?.to;
     let declares = |f: &str| f == "_uuid" || catalog.entity_config(&arrivee).is_some_and(|c| c.fields.contains_key(f));
     let mut saut = rag3weaver_ir::Hop::untyped(relation, rag3weaver_ir::Direction::Outgoing);
@@ -1071,7 +1071,7 @@ pub fn neighbor_hop(catalog: &Catalog, relation: &str, limit: usize) -> Result<r
 /// identité — analysé à la volée, donc hors index — n'a pas de voisins et
 /// n'est pas interrogé.
 fn voisins_des_scopes(
-    catalog: Option<&Catalog>,
+    catalog: Option<&dyn crate::read_view::ReadCatalog>,
     matches: &[GrepMatch],
     relation: &str,
     limit: usize,
@@ -1098,7 +1098,7 @@ fn voisins_des_scopes(
         // Un saut depuis ce seul scope, de table quelconque, borné : la
         // première colonne est son uuid, les champs du voisin viennent après.
         let rows = catalog
-            .execute_raw_with_params(&cypher, &[crate::dataflow::graph_walk::uuid_param(&[uuid])])
+            .execute_read_with_params(&cypher, &[crate::dataflow::graph_walk::uuid_param(&[uuid])])
             .map_err(|e| e.to_string())?;
         let to: Vec<(String, String, String)> = rows
             .rows
@@ -1181,7 +1181,7 @@ impl ListResult {
 /// fichier est lu pour compter ses lignes et comparer son hash à l'index.
 pub fn list_files(
     source: &dyn FileSource,
-    catalog: Option<&Catalog>,
+    catalog: Option<&dyn crate::read_view::ReadCatalog>,
     path_prefix: Option<&str>,
     limit: usize,
     with_state: bool,

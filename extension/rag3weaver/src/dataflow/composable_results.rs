@@ -173,13 +173,23 @@ impl Node for SetNode {
                 rows
             }
             "SelectRecordsNode" => {
-                let cat = ctx
-                    .service::<Arc<Mutex<Catalog>>>("catalog")
-                    .ok_or("catalog missing")?
-                    .lock()
-                    .map_err(|e| e.to_string())?;
+                // Par la vue de lecture, sans le mutex (lot L4) ; sinon le
+                // catalogue. Les deux lisent par la connexion de lecture.
+                let vue = super::generic_search_nodes::vue_de(ctx);
+                let garde;
+                let cat: &dyn crate::read_view::ReadCatalog = match &vue {
+                    Some(v) => &**v,
+                    None => {
+                        garde = ctx
+                            .service::<Arc<Mutex<Catalog>>>("catalog")
+                            .ok_or("catalog missing")?
+                            .lock() // L4 : repli sans vue
+                            .map_err(|e| e.to_string())?;
+                        &garde
+                    }
+                };
                 let entity = self.config["entity"].as_str().unwrap();
-                let config = cat.entity_configs().get(entity).ok_or("unknown entity")?;
+                let config = cat.entity_config(entity).ok_or("unknown entity")?;
                 let condition: FilterCondition =
                     serde_json::from_value(self.config["filter"].clone())
                         .map_err(|e| e.to_string())?;
@@ -218,7 +228,7 @@ impl Node for SetNode {
                 selection.order_by.push("_uuid".into());
                 selection.limit = limite.map(|n| n as usize + 1);
                 let q = dialect.select(&selection).map_err(|e| e.to_string())?;
-                let mut rows = cat.execute_raw_with_params(&q, &parsed.params).map_err(|e| e.to_string())?;
+                let mut rows = cat.execute_read_with_params(&q, &parsed.params).map_err(|e| e.to_string())?;
                 let mut warnings = Vec::new();
                 if let Some(n) = limite.filter(|n| rows.rows.len() as u64 > *n) {
                     rows.rows.truncate(n as usize);
@@ -229,7 +239,7 @@ impl Node for SetNode {
                     let total = dialect
                         .count(&compte)
                         .ok()
-                        .and_then(|q| cat.execute_raw_with_params(&q, &parsed.params).ok())
+                        .and_then(|q| cat.execute_read_with_params(&q, &parsed.params).ok())
                         .and_then(|r| r.rows.first().and_then(|row| row.first()).and_then(|v| v.as_i64()));
                     let sur = total.map(|t| format!("sur {t}")).unwrap_or_else(|| "sur davantage".into());
                     warnings.push(format!(

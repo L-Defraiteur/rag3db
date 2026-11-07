@@ -57,13 +57,13 @@ fn catalog_key(catalog: &Arc<Mutex<Catalog>>) -> usize {
 /// Des lecteurs attendent-ils ce catalogue ?
 pub fn readers_waiting(catalog: &Arc<Mutex<Catalog>>) -> bool {
     READERS_WAITING
-        .lock()
+        .lock() // L4 : pas le catalogue (les lecteurs en attente)
         .map(|m| m.get(&catalog_key(catalog)).copied().unwrap_or(0) > 0)
         .unwrap_or(false)
 }
 
 fn count_reader(key: usize, delta: isize) {
-    if let Ok(mut m) = READERS_WAITING.lock() {
+    if let Ok(mut m) = READERS_WAITING.lock() { // L4 : pas le catalogue (les lecteurs en attente)
         let n = m.entry(key).or_insert(0);
         *n = (*n as isize + delta).max(0) as usize;
         if *n == 0 {

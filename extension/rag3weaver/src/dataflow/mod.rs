@@ -27,6 +27,8 @@ mod flux_tests;
 mod jetons_tests;
 #[cfg(test)]
 mod annulation_tests;
+#[cfg(test)]
+mod lecture_sans_mutex_tests;
 pub mod port;
 pub mod resultat;
 pub mod record;

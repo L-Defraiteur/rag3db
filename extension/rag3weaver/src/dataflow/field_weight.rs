@@ -157,11 +157,11 @@ impl FieldWeightNode {
         if let (Some(qp), Some(catalog)) =
             (qp, ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned())
         {
-            let known_fields = {
-                let cat = catalog.lock().unwrap();
-                cat.entity_configs()
-                    .get(&qp.target_name)
-                    .map(|c| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>())
+            // Par la vue de lecture, sans le mutex (lot L4) ; sinon le catalogue.
+            let lire = |c: &crate::config::EntityConfig| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>();
+            let known_fields = match super::generic_search_nodes::vue_de(ctx) {
+                Some(v) => v.entity_configs().get(&qp.target_name).map(lire),
+                None => catalog.lock().unwrap().entity_configs().get(&qp.target_name).map(lire), // L4 : repli sans vue
             };
             if let Some(known_fields) = known_fields {
                 effective.retain(|fw| {
