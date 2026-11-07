@@ -661,3 +661,30 @@ comparait des `at_ms`. Corrigé par `without_clock`, rejoué 10 fois sur 10.
 
 **La passe** : lib 1986, navigateur 16/16, e2e_lectures 22, e2e_tty 2.
 Le dernier pas seul sous le verrou.
+
+## À reprendre ici (21 h 50 environ) : le lot deadline_ms
+
+**Sur master**, dans ma session :
+
+- e2d5c9c88 (chercher sans dossier) ;
+- 3d09b32c2 (le journal de l'hôte, le chat Rust, la page du chat) ;
+- 23757c7d6 (premier-jeton : le flux, la nature des backends, agent_ports) ;
+- les nouveautés de chacun.
+
+**Le lot en cours**, accepté par c7 : le ticket `2026-11-07-une-recherche-continue-sur-l-hote-apres-l-abandon-de-son-client.md`.
+
+1. **Témoin rouge par l'hôte** : `/call` avec `deadline_ms` sur un graphe lent ; le
+   `RunFinished` arrive longtemps après le délai.
+2. **Correctif** : l'hôte applique le délai par `stop_run`
+   (`cancelled_by: "deadline"`), la réponse dit « délai dépassé (N ms) »,
+   `Connection::interrupt` coupe le nœud qui tient une requête. Sans
+   `deadline_ms`, rien ne change.
+3. **Le client est chez archi** (prévenu) : le hook passe son budget en
+   `deadline_ms`.
+
+**Les scripts de luciepc** : `~/.cache/rag3weaver-build/{passe-lot,lib-un,nav-un}-hooks-essai.sh`,
+épinglés sur 17a094d12, `MOTEUR_ANCIEN=1`. Le dernier pas seul sous
+`poste push`.
+
+**Les hooks depuis 3 ter (b)** : un seul bloc juste, des silences raisonnés, aucun
+appel du juge (la mémoire n'a que deux fiches).
