@@ -28,7 +28,22 @@ export function displayName(b: Backend): string {
   if (b.kind === "code" && b.repo) return b.branch ? `${b.repo} · ${b.branch}` : b.repo;
   return shortName(b.manifest).split("/").pop() || shortName(b.manifest);
 }
-export type HostState = { backends: Backend[]; sessions?: unknown[] };
+// **La barre par session** (forme accordée avec everything declarative, page 02) : des
+// sessions à plat, chacune avec son `parent` (ses sous-sessions sont celles dont
+// `parent` est son id), son dépôt et ses worktrees, sa mémoire.
+export type Rag = { state: "indexed" | "indexing" | "absent"; percent?: number | null };
+export type Worktree = { backend: string; branch?: string | null; worktree?: string | null; loaded: boolean; rag: Rag; held_by?: string | null };
+export type ChatSession = {
+  id: string;
+  name?: string | null;
+  parent?: string | null;
+  state?: "running" | "waiting" | "ended" | "error" | null;
+  awaits_answer?: boolean;
+  repos: { backend: string; repo?: string | null; branch?: string | null; worktrees: Worktree[] }[];
+  memory: { backend: string | null; rag: boolean };
+};
+export type AvailableRepo = { backend: string; repo?: string | null; branch?: string | null; loaded: boolean; rag: Rag };
+export type HostState = { backends: Backend[]; sessions?: unknown[]; chat_sessions?: ChatSession[]; available_repos?: AvailableRepo[] };
 
 export async function fetchState(): Promise<HostState> {
   const r = await fetch("/ide/etat");
