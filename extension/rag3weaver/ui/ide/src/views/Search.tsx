@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search as SearchIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { SearchBox, normalizeDir, searchLink } from "@/components/SearchBox";
 import { callFull, shortName, unwrap, type HostState } from "@/lib/host";
 import { fileLink, symbolLink } from "@/views/File";
 
@@ -70,6 +69,8 @@ export function Search({ id, state }: { id: string; state: HostState }) {
   const q = params.get("q") ?? "";
   // La relecture se décide question par question : le formulaire repart sans `reclasser`.
   const rerank = params.get("reclasser") === "1";
+  // Le dossier, facultatif : il borne la recherche par `scope` ; absent, tout l'index.
+  const dir = normalizeDir(params.get("dossier"));
   const [response, setResponse] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,14 +83,16 @@ export function Search({ id, state }: { id: string; state: HostState }) {
     // dit alors par un avertissement.
     const options: Record<string, unknown> = { limit: 30, highlights: "sparse" };
     if (rerank) options.rerank = { candidates: 20 };
-    callFull(backend.manifest, "search_code", { query: q, options })
+    const args: Record<string, unknown> = { query: q, options };
+    if (dir) args.scope = dir;
+    callFull(backend.manifest, "search_code", args)
       .then((r) => {
         const { value, status } = unwrap(r.result);
         setResponse({ ...r, result: value });
         setStatus(status ?? null);
       })
       .catch((e: Error) => setError(e.message));
-  }, [backend?.manifest, q, rerank]);
+  }, [backend?.manifest, q, rerank, dir]);
 
   if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
   const hits: Hit[] = Array.isArray(response?.result) ? (response!.result as Hit[]) : [];
@@ -115,20 +118,7 @@ export function Search({ id, state }: { id: string; state: HostState }) {
       <p id="fil" className="text-xs text-muted-foreground mb-3">
         <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{shortName(backend.manifest)}</a> · recherche
       </p>
-      <form
-        id="chercher"
-        className="flex gap-2 mb-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const v = new FormData(e.currentTarget).get("q");
-          if (v) location.href = `/ide/code/${id}/recherche?q=${encodeURIComponent(String(v))}`;
-        }}
-      >
-        <input name="q" type="search" defaultValue={q} placeholder="chercher dans le code" aria-label="chercher dans le code" className="flex-1 rounded-md border bg-input/30 px-3 py-1.5 text-sm" />
-        <Button type="submit" size="sm" variant="outline">
-          <SearchIcon className="size-3.5" /> Chercher
-        </Button>
-      </form>
+      <SearchBox id={id} q={q} dir={dir} onClearDir={() => { if (q) location.href = searchLink(id, q); }} />
       <h1 className="text-xl font-semibold mb-2">« {q} »</h1>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       {status ? <p className="note etat text-xs text-muted-foreground">{status}</p> : null}
