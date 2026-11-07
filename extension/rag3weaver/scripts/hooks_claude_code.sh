@@ -86,7 +86,7 @@ if [ "$retirer" = 0 ]; then
 import json, sys
 m, home = sys.argv[1], sys.argv[2]
 print(json.dumps({
-  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7, "recall_min_score": 0.30, "templates_dir": home + "/.config/rag3weaver/hooks",
+  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7, "recall_min_score": 0.50, "templates_dir": home + "/.config/rag3weaver/hooks",
   "prompt_block_chars": 1500, "session_block_chars": 3000,
   "prompt_timeout_ms": 5000, "timeout_ms": 20000,
   "journal": home + "/.local/state/rag3weaver/hooks.log",
@@ -138,6 +138,9 @@ if not hooks: del d["hooks"]
 apres = json.dumps(d, sort_keys=True)
 if apres == avant:
     print("rien à changer dans %s" % settings); sys.exit(0)
+anciennes = sorted({x.get("command") for ev in entrees for h in json.loads(avant).get("hooks", {}).get(ev, []) if est_a_nous(h) for x in h.get("hooks", []) if not str(x.get("command", "")).endswith(" " + ev)})
+if anciennes and not retirer:
+    print("commande d'avant remplacée par la commande stable « %s <Événement> » : %s" % (commande, ", ".join(anciennes)))
 if poser:
     garde = settings + ".avant-hooks"
     if os.path.exists(settings) and not os.path.exists(garde):
