@@ -231,7 +231,7 @@ impl DaemonHost {
         let fil: Vec<Value> = fil.as_array().cloned().unwrap_or_default().into_iter().filter(|t| t["role"] != "system").collect();
         drop(chats);
         let (ecrites, pourquoi) = match self.memory_writes(&hosted, backend_id) {
-            Ok(v) => (v, None),
+            Ok((v, borne)) => (v, borne),
             Err(e) => (Vec::new(), Some(e)),
         };
         Ok(json!({
@@ -254,8 +254,11 @@ impl DaemonHost {
     /// lecture de la mémoire (`select_sources`, `select_apports`), jamais en
     /// lisant son catalogue par-dessous. Les écritures de l'agent lui-même
     /// n'ont pas encore de `session` (M7 de la mémoire longue). `Err` dit
-    /// pourquoi la liste ne peut pas se faire.
-    fn memory_writes(&self, hosted: &Arc<super::Hosted>, backend_id: &str) -> Result<Vec<Value>, String> {
+    /// pourquoi la liste ne peut pas se faire ; le second membre dit qu'elle
+    /// est coupée à sa borne (une lecture plafonnée à `MEMORY_WRITES_MAX` lignes,
+    /// garde de 96 : avec un filtre, `select_*` rend tout).
+    fn memory_writes(&self, hosted: &Arc<super::Hosted>, backend_id: &str) -> Result<(Vec<Value>, Option<String>), String> {
+        const MEMORY_WRITES_MAX: usize = 500;
         let Some(memoire) = self.memoire_declaree(hosted)? else {
             return Err("ce dépôt ne déclare pas de mémoire (bilans.memoire)".into());
         };
@@ -270,7 +273,7 @@ impl DaemonHost {
             .filter(|r| self.journal.lire(backend_id, r).is_some_and(|v| v["chat"] == backend_id))
             .collect();
         if runs.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), None));
         }
         let memoire = self.hosted(&memoire)?;
         let declare = self.with_backend(&memoire, |b| {
@@ -289,16 +292,19 @@ impl DaemonHost {
             };
             a.into_iter().map(|l| if l["data"].is_object() { l["data"].clone() } else { l }).collect()
         };
-        let sources = lignes(&appeler("select_sources", json!({ "filter": { "field": { "key": "session", "value": runs } }, "limit": 500 }))?);
+        let sources = lignes(&appeler("select_sources", json!({ "filter": { "field": { "key": "session", "value": runs } }, "limit": MEMORY_WRITES_MAX }))?);
         let run_de: HashMap<String, String> = sources
             .iter()
             .filter_map(|s| Some((s["chemin"].as_str()?.to_string(), s["session"].as_str()?.to_string())))
             .collect();
         if run_de.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), None));
         }
         let chemins: Vec<&String> = run_de.keys().collect();
-        let mut ecrites: Vec<Value> = lignes(&appeler("select_apports", json!({ "filter": { "field": { "key": "source", "value": chemins } }, "limit": 500 }))?)
+        let apports = lignes(&appeler("select_apports", json!({ "filter": { "field": { "key": "source", "value": chemins } }, "limit": MEMORY_WRITES_MAX }))?);
+        let borne = (sources.len() >= MEMORY_WRITES_MAX || apports.len() >= MEMORY_WRITES_MAX)
+            .then(|| format!("liste coupée à {MEMORY_WRITES_MAX} lignes lues : la conversation en a écrit davantage"));
+        let mut ecrites: Vec<Value> = apports
             .into_iter()
             .filter_map(|a| {
                 let run = run_de.get(a["source"].as_str()?)?;
@@ -306,7 +312,7 @@ impl DaemonHost {
             })
             .collect();
         ecrites.sort_by_key(|w| std::cmp::Reverse(w["at_ms"].as_u64().unwrap_or(0)));
-        Ok(ecrites)
+        Ok((ecrites, borne))
     }
 
     /// Le run du tour de chat en cours sur un backend, s'il y en a un.
