@@ -37,14 +37,13 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (40)
+### Ouverts — moteur (39)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Une relation LOCKS trouvée d'un seul côté fait échouer le drain de la montre](2026-10-25-une-relation-locks-trouvee-d-un-seul-cote-fait-echouer-le-drain-de-la-montre.md) | ouvert — pour hotfixs avec le cœur ; forme réelle : longueurs ou débuts de liste CSR faux dans LOCKS et QUERIES (729 et 876 écarts), antérieurs à la bascule ; base neuve de G à relever | lectures fausses, écriture refusée | oui (hôte de Lucie, base du dépôt de code) | oui (drain de la montre) |
 | [Une interruption tombée entre deux instructions d'une requête réécrite est perdue](2026-10-25-une-interruption-tombee-entre-deux-instructions-d-une-requete-reecrite-est-perdue.md) | ouvert — pour le cœur C++ ; l'interruption vaudrait pour la requête, pas pour l'instruction | interruption ignorée | oui (CREATE/DROP d'index réécrits, surtout pendant une attente) | oui (arrêt d'un run pendant un CREATE) |
 | [Une instruction qui échoue condamne une transaction en lecture seule](2026-10-25-une-instruction-qui-echoue-condamne-une-transaction-en-lecture-seule.md) | ouvert — pour le cœur C++ (deux formes à trancher) | blocage d'une lecture entière | oui (toute lecture d'outil sous L6) | oui |
 | [Les lignes d'un COPY forcé validé après un CREATE restent hors du graphe](2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md) | ouvert — mesure du balayage dans la fenêtre au calme du banc, puis qui reconstruit et à quel seuil | lenteur | pas aujourd'hui (CREATE et COPY sous Mutex<Catalog>) ; dès (A) | oui (reconstruction) |
@@ -139,10 +138,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Un appel d'outil attend derrière un index sans le dire](2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md) | ouvert — pour le proto et l'arbre principal | blocage | oui, dès qu'un index court sur le backend interrogé | oui (verrou, service d'embarquement, réponses des outils) |
 | [Un fichier Rust s'analyse 2,6 fois plus lentement à la ligne qu'un fichier C++](2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md) | ouvert — codeparsers, après ses lots en cours | lenteur | oui, à chaque édition d'un gros fichier Rust | oui (par codeparsers) |
 
-### Fermés (179), dans `closed/`
+### Fermés (180), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une relation LOCKS trouvée d'un seul côté fait échouer le drain de la montre](closed/2026-10-25-une-relation-locks-trouvee-d-un-seul-cote-fait-echouer-le-drain-de-la-montre.md) | fermé (7 novembre 2026, hotfixs) — écrit par une lib d'avant le 25 octobre dans deux tables nées tard ; non reproduit sur quatre moteurs ni par douze jours de montre ; base rebâtie le 25 ; garde-fous : le témoin à cinq cas (banc, cas longs) et `tools/check_rel_directions` | réponse fausse, écriture refusée | non depuis le rebâti | oui (drain de la montre) |
 | [Un lecteur voit les lignes d'un COPY de relations annulé par un autre écrivain](closed/2026-11-07-un-lecteur-voit-les-lignes-d-un-copy-de-relations-annule.md) | corrigé `b7447937d` (7 novembre 2026, cœur c++) : un bloc entièrement annulé garde ses versions, lignes marquées annulées, plus de versionInfo.reset() ; témoin déterministe au grain du bloc, le probabiliste 60/60 | réponse fausse | oui | par le moteur |
 | [Un pli impossible d'un flux rend un Trigger en silence](closed/2026-10-25-un-pli-impossible-d-un-flux-rend-un-trigger-en-silence.md) | corrigé (25 octobre 2026, lot pli et ForEachNode) — refusé au bâti (`Complete ← Finite` d'un type qui ne se fond pas) et à l'exécution (`node::plier`), en nommant le nœud et le port | réponse fausse en silence | non (aucun gabarit livré ne le branchait) | oui (`dataflow::concurrent`) |
 | [La vue vivante de l'IDE gelée par un graphe long](closed/2026-10-25-la-vue-vivante-de-l-ide-gelee-par-un-graphe-long.md) | corrigé (chaque relais du flux de l'IDE a son fil, hors du runtime des graphes ; sonde 3/3 rouge avant) | la vue vivante se fige | oui | oui (`Flux::relayer`) |
