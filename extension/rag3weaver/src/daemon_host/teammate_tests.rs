@@ -484,7 +484,7 @@ fn a_teammate_works_on_the_files_when_its_backend_does_not_open() {
                     3 => answer(turns, opts, sink, "", calls(&[("usages", json!({ "name": "bonjour" }))])),
                     _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "lu, écrit, cherché sans index", "remaining": "" }))])),
                 }
-            }))) as Result<Arc<dyn Llm>, String>
+            })))
         }) as ChatModel
     };
     let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
@@ -546,7 +546,7 @@ fn a_failed_step_does_not_end_the_teammate_until_the_declared_count() {
                         return Err(crate::llm::LlmError::Model("le fournisseur ne répond pas".into()));
                     }
                     answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait après la panne", "remaining": "" }))]))
-                }))) as Result<Arc<dyn Llm>, String>
+                })))
             }) as ChatModel
         };
         let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
@@ -611,7 +611,7 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
                     }
                     _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "deux lectures", "remaining": "" }))])),
                 }
-            }))) as Result<Arc<dyn Llm>, String>
+            })))
         }) as ChatModel
     };
     let (taches, chats) = (d.path().join("taches"), d.path().join("chats"));
