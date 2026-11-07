@@ -2,6 +2,7 @@ import { FolderTree, GitBranch, MessageSquare, Scale, Workflow, Zap, FileDiff } 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { shortName, type Backend, type HostState } from "@/lib/host";
+import { SearchBox } from "@/components/SearchBox";
 
 // **L'accueil** : les backends de l'hôte, chacun avec ses vues et ses tâches.
 // Les repères que les témoins navigateur lisent restent ceux de l'ancienne page :
@@ -35,6 +36,9 @@ export function Home({ state }: { state: HostState }) {
                 <p className="text-xs text-muted-foreground break-all">{b.manifest}</p>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <div className="basis-full">
+                  <SearchBox id={b.id} domId={principals.length === 1 ? "chercher" : `chercher-${b.id}`} />
+                </div>
                 <Link href={`/ide/code/${b.id}/dag/`} icon={<Workflow className="size-4" />} label="graphes" />
                 <Link href={`/ide/code/${b.id}/reactions/`} icon={<Zap className="size-4" />} label="réactions" />
                 <Link href={`/ide/code/${b.id}/propositions/`} icon={<FileDiff className="size-4" />} label="propositions" />

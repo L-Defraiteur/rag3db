@@ -3,6 +3,7 @@ import { Folder, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { call, shortName, type HostState } from "@/lib/host";
 import { fileLink } from "@/views/File";
+import { SearchBox } from "@/components/SearchBox";
 
 // **L'arbre d'un backend** (page 08, vue 7) : les dossiers puis les fichiers sous
 // un préfixe, chacun avec ses lignes, « modifié depuis l'index » ou « non indexé ».
@@ -36,6 +37,7 @@ export function Tree({ id, dir, state }: { id: string; dir: string; state: HostS
         <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{shortName(backend.manifest)}</a>
         {parts.map((p, i) => <span key={i}>{" / "}<a href={`/ide/code/${id}/arbre/${enc(parts.slice(0, i + 1).join("/"))}/`} className="hover:underline">{p}</a></span>)}
       </p>
+      <SearchBox key={prefix} id={id} dir={prefix} />
       <h1 className="text-xl font-semibold mb-2 font-mono">{prefix || "/"}</h1>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       {r ? (
