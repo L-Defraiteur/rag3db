@@ -115,6 +115,29 @@ impl Tache {
     }
 }
 
+/// **Les déclarations d'un backend hors dépôt, copiées pour sa tâche** : le
+/// dossier du manifeste, récursivement, sans ses bases (la tâche a sa copie de
+/// base par `copier_la_base_sous_la_porte`) ni ses dossiers cachés ; un lien
+/// symbolique est suivi.
+fn copier_les_declarations(source: &Path, cible: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(cible).map_err(|e| format!("{} : {e}", cible.display()))?;
+    for entree in std::fs::read_dir(source).map_err(|e| format!("{} : {e}", source.display()))? {
+        let entree = entree.map_err(|e| format!("{} : {e}", source.display()))?;
+        let nom = entree.file_name();
+        let n = nom.to_string_lossy();
+        if n.starts_with('.') || n.ends_with(".rag3db") || n.ends_with(".wal") {
+            continue;
+        }
+        let (de, vers) = (entree.path(), cible.join(&nom));
+        if std::fs::metadata(&de).map_err(|e| format!("{} : {e}", de.display()))?.is_dir() {
+            copier_les_declarations(&de, &vers)?;
+        } else {
+            std::fs::copy(&de, &vers).map_err(|e| format!("{} → {} : {e}", de.display(), vers.display()))?;
+        }
+    }
+    Ok(())
+}
+
 /// Un fichier qu'une tâche change : son genre (`declarations`, `code`,
 /// `depot`), son chemin dans ce genre, avant et après.
 struct Changement {
@@ -345,18 +368,35 @@ impl DaemonHost {
             });
             (p.directory.clone(), espace)
         })?;
-        let depot = PathBuf::from(git(&directory, &["rev-parse", "--show-toplevel"]).map_err(|e| {
-            format!(
-                "le backend n'est pas dans un dépôt git ({e}) : une tâche est une branche. `git init` à la racine de ses \
-                 déclarations, puis un commit (code-tree add le fait pour un arbre inscrit)"
-            )
-        })?);
+        // Le dépôt de la tâche : celui des déclarations ; à défaut, celui de
+        // `workspace.root` (c7, 7 nov. 2026 : le manifeste de Lucie vit dans un
+        // dossier de configuration hors git, son code dans un dépôt). Dans ce
+        // second cas, les déclarations ne sont pas versionnées : la tâche en
+        // reçoit une copie dans son dossier.
+        let depot_des_declarations = git(&directory, &["rev-parse", "--show-toplevel"]);
+        let declarations_hors_depot = depot_des_declarations.is_err();
+        let depot = PathBuf::from(
+            depot_des_declarations
+                .or_else(|e| match &espace {
+                    Some((racine, _)) => git(racine, &["rev-parse", "--show-toplevel"]).map_err(|e2| format!("{e} ; workspace.root {} : {e2}", racine.display())),
+                    None => Err(e),
+                })
+                .map_err(|e| {
+                    format!(
+                        "ni le backend ni sa workspace.root ne sont dans un dépôt git ({e}) : une tâche est une branche. `git init` \
+                         à la racine de ses déclarations ou de son code, puis un commit (code-tree add le fait pour un arbre inscrit)"
+                    )
+                })?,
+        );
         let depot = depot.canonicalize().unwrap_or(depot);
-        let relatif = hote
-            .manifest
-            .strip_prefix(&depot)
-            .map_err(|_| format!("le manifeste {} n'est pas dans le dépôt {}", hote.manifest.display(), depot.display()))?
-            .to_path_buf();
+        let relatif = if declarations_hors_depot {
+            PathBuf::from(hote.manifest.file_name().ok_or("le manifeste n'a pas de nom de fichier")?)
+        } else {
+            hote.manifest
+                .strip_prefix(&depot)
+                .map_err(|_| format!("le manifeste {} n'est pas dans le dépôt {}", hote.manifest.display(), depot.display()))?
+                .to_path_buf()
+        };
         let dossier = self.racine_des_taches.join(parent).join(nom);
         if dossier.exists() {
             return Err(format!("{} existe déjà : une tâche de ce nom n'a pas été fermée", dossier.display()));
@@ -420,7 +460,13 @@ impl DaemonHost {
             .with_backend(&hote, |b| b.copier_la_base_sous_la_porte(&dossier.join("base")))
             .and_then(|r| r)
             .map_err(|e| defaire("la copie de la base", e))?;
-        let manifest = arbre.join(&relatif);
+        let manifest = if declarations_hors_depot {
+            let declarations = dossier.join("declarations");
+            copier_les_declarations(&directory, &declarations).map_err(|e| defaire("la copie des déclarations", e))?;
+            declarations.join(&relatif)
+        } else {
+            arbre.join(&relatif)
+        };
         let manifest = manifest.canonicalize().map_err(|e| defaire("le manifeste du worktree", e.to_string()))?;
         let id = blake3::hash(manifest.to_string_lossy().as_bytes()).to_hex()[..12].to_string();
         let tache = Tache {
