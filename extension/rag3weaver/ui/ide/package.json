@@ -12,6 +12,7 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "dompurify": "3.4.17",
+    "highlight.js": "11.11.1",
     "lucide-react": "1.61.0",
     "marked": "18.1.1",
     "radix-ui": "1.4.3",
