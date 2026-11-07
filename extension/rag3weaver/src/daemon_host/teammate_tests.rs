@@ -52,7 +52,7 @@ struct Seen {
 /// force `step_done` ; les trois éléments se font en trois pas ; le dernier pas
 /// rend compte et clôt le plan.
 fn three_items(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel {
-    Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let (seen, mailbox) = (seen.clone(), mailbox.clone());
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 16384, move |turns, opts, sink| {
             let step = step_of(turns);
@@ -205,7 +205,7 @@ fn the_teammate_works_a_three_item_plan_step_by_step() {
 /// demande longue ouvre un plan ; une demande nouvelle pendant ce plan le met en
 /// pause ; la frontière suivante rappelle le plan en pause.
 fn small_then_long(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel {
-    Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let (seen, mailbox) = (seen.clone(), mailbox.clone());
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 16384, move |turns, opts, sink| {
             let step = step_of(turns);
@@ -293,7 +293,7 @@ fn a_stop_in_the_mailbox_cuts_the_running_step() {
     let (started_tx, started_rx) = std::sync::mpsc::channel::<()>();
     let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
     let go_rx = Arc::new(Mutex::new(go_rx));
-    let model: ChatModel = Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let (started_tx, go_rx) = (started_tx.clone(), go_rx.clone());
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
             if tool_results(turns).is_empty() {
@@ -340,7 +340,7 @@ fn the_addressed_mailbox_by_the_host_routes() {
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let frontieres = Arc::new(Mutex::new(Vec::<String>::new()));
     let vues = frontieres.clone();
-    let model: ChatModel = Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let vues = vues.clone();
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
             let results = tool_results(turns);
@@ -455,4 +455,189 @@ fn the_addressed_mailbox_by_the_host_routes() {
         assert!(relayes.contains(&i), "{i} sur le flux : {relayes:?}");
     }
     eprintln!("boîte adressée : {} lignes, {} relayées sur le flux", boite.len(), relayes.len());
+}
+
+/// **Un backend qui ne s'ouvre plus : le pas se fait sur les fichiers** (page
+/// 07-novembre-2026-everything-declarative/01, § 1). La base de la tâche est fermée puis
+/// abîmée avant le lancement : l'équipier part quand même (son modèle vient du manifeste
+/// préparé, sa boîte se lit sans bus), lit, édite et cherche sur le worktree en le disant
+/// en tête de chaque retour, rend « indisponible » pour un outil d'index, et finit son pas.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_teammate_works_on_the_files_when_its_backend_does_not_open() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let vus = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model = {
+        let vus = vus.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let vus = vus.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if let Some(r) = results.last() {
+                    vus.lock().unwrap().push(r.clone());
+                }
+                match results.len() {
+                    0 => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs" }))])),
+                    1 => answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "README.md", "content": "# Écrit sans index\n" }))])),
+                    2 => answer(turns, opts, sink, "", calls(&[("search_code", json!({ "query": "bonjour" }))])),
+                    3 => answer(turns, opts, sink, "", calls(&[("usages", json!({ "name": "bonjour" }))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "lu, écrit, cherché sans index", "remaining": "" }))])),
+                }
+            }))) as Result<Arc<dyn Llm>, String>
+        }) as ChatModel
+    };
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    // La base de la tâche : fermée, puis remplacée par un fichier qui n'en est pas une.
+    let ferme = host.close(None, &t.manifest);
+    assert_eq!(ferme["result"]["closed"], true, "{ferme}");
+    let base = &t.copie.base;
+    if base.is_dir() {
+        std::fs::remove_dir_all(base).unwrap();
+    }
+    std::fs::write(base, vec![0xFFu8; 8192]).unwrap();
+    let _ = std::fs::remove_file(base.with_extension("wal"));
+    assert!(host.with_backend_id(&t.id, |_| ()).is_err(), "la base abîmée ne doit plus s'ouvrir");
+
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Lis src/lib.rs, écris un README, cherche « bonjour ».").unwrap();
+    let outcome = host.run_teammate(&h.id, "doc").expect("l'équipier tourne sans son backend");
+    assert_eq!(outcome.ended, "fait sans plan", "{outcome:?}");
+
+    let vus = vus.lock().unwrap().clone();
+    assert_eq!(vus.len(), 4, "{vus:#?}");
+    for (i, quoi) in ["la lecture", "l'édition", "la recherche"].iter().enumerate() {
+        assert!(vus[i].starts_with("index indisponible : repli sur les fichiers"), "{quoi} dit son repli : {}", vus[i]);
+    }
+    assert!(vus[0].contains("\"bonjour\""), "la lecture rend le fichier : {}", vus[0]);
+    assert!(vus[2].contains("signal : grep_repli") && vus[2].contains("src/lib.rs"), "{}", vus[2]);
+    assert!(vus[3].contains("\"unavailable\""), "un outil d'index dit qu'il est indisponible : {}", vus[3]);
+    assert_eq!(std::fs::read_to_string(t.arbre.join("README.md")).unwrap(), "# Écrit sans index\n", "l'édition est sur le disque du worktree");
+    let boite = files.mailbox();
+    assert!(boite.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true), "{boite:?}");
+    eprintln!("sans backend : {} replis, le pas fini", vus.len() - 1);
+}
+
+/// **Un pas qui n'aboutit pas ne termine pas l'équipier** : le modèle tombe en panne au
+/// premier pas, la boîte le dit, le pas suivant repart de la frontière et finit ; un modèle
+/// toujours en panne arrête l'équipier au bout de `teammate.max_failed_steps` (3) échecs
+/// d'affilée, en le disant.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_failed_step_does_not_end_the_teammate_until_the_declared_count() {
+    for toujours in [false, true] {
+        let d = tempfile::tempdir().unwrap();
+        let (_depot, manifeste) = depot_inscrit(d.path(), true);
+        let appels = Arc::new(Mutex::new(0usize));
+        let model = {
+            let appels = appels.clone();
+            Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+                let appels = appels.clone();
+                Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                    let n = {
+                        let mut a = appels.lock().unwrap();
+                        *a += 1;
+                        *a
+                    };
+                    if toujours || n == 1 {
+                        return Err(crate::llm::LlmError::Model("le fournisseur ne répond pas".into()));
+                    }
+                    answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait après la panne", "remaining": "" }))]))
+                }))) as Result<Arc<dyn Llm>, String>
+            }) as ChatModel
+        };
+        let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+        host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+        let files = host.teammate_files(&h.id, "doc").unwrap();
+        files.append("supervisor", "request", None, "Une petite chose.").unwrap();
+        let outcome = host.run_teammate(&h.id, "doc").expect("l'équipier rend sa fin, il ne plante pas");
+        let rates = files.mailbox().iter().filter(|l| l["kind"] == "report" && l["text"].as_str().unwrap_or_default().contains("n'a pas abouti")).count();
+        if toujours {
+            assert!(outcome.ended.starts_with("erreur : ") && outcome.ended.contains("max_failed_steps = 3"), "{}", outcome.ended);
+            assert_eq!(rates, 3, "trois échecs dits");
+        } else {
+            assert_eq!(outcome.ended, "fait sans plan", "{outcome:?}");
+            assert_eq!(rates, 1, "l'échec du premier pas est dit");
+        }
+    }
+}
+
+/// **Une fermeture passe entre deux appels d'outil** : le pas ne tient plus le backend
+/// pour tout son tour. Pendant le pas, le backend de la tâche est fermé par la route
+/// `POST /backend/close` (sans attendre la fin du tour), et l'appel suivant le rouvre.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_backend_closes_between_two_tool_calls_of_a_step() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let id = crate::daemon_host::DaemonHost::new().hosted(&manifeste).unwrap().id.clone();
+    let racine = Arc::new(Mutex::new(String::new()));
+    let ferme = Arc::new(Mutex::new(Value::Null));
+    let lus = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model = {
+        let (racine, ferme, lus, id) = (racine.clone(), ferme.clone(), lus.clone(), id.clone());
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (racine, ferme, lus, id) = (racine.clone(), ferme.clone(), lus.clone(), id.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if let Some(r) = results.last() {
+                    lus.lock().unwrap().push(r.clone());
+                }
+                match results.len() {
+                    0 => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs" }))])),
+                    1 => {
+                        // Le tour est en vol : le manifeste de la tâche se lit par la route
+                        // de l'équipier, et son backend se ferme.
+                        let r = racine.lock().unwrap().clone();
+                        let lire = |route: String| -> Value {
+                            let mut x = crate::daemon::agent().get(format!("{r}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+                            serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap()
+                        };
+                        let tache = lire(format!("/ide/teammate?backend={id}&task=doc"))["result"]["backend"].as_str().unwrap().to_string();
+                        let mut x = crate::daemon::agent()
+                            .post(format!("{r}/backend/close"))
+                            .header("Authorization", "Bearer j")
+                            .header("content-type", "application/json")
+                            .send(json!({ "manifest": tache }).to_string())
+                            .unwrap();
+                        *ferme.lock().unwrap() = serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap();
+                        answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "README.md" }))]))
+                    }
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "deux lectures", "remaining": "" }))])),
+                }
+            }))) as Result<Arc<dyn Llm>, String>
+        }) as ChatModel
+    };
+    let (taches, chats) = (d.path().join("taches"), d.path().join("chats"));
+    let (adresse, _fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(model));
+    *racine.lock().unwrap() = format!("http://{adresse}");
+    let r = racine.lock().unwrap().clone();
+    let post = |route: &str, corps: Value| -> Value {
+        let mut x = crate::daemon::agent().post(format!("{r}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
+        serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
+    let v = post("/ide/teammate/mailbox", json!({ "backend": id, "task": "doc", "from": "supervisor", "kind": "request", "text": "Lis deux fichiers." }));
+    assert_eq!(v["ok"], true, "{v}");
+    let borne = Instant::now() + Duration::from_secs(60);
+    loop {
+        let mut x = crate::daemon::agent().get(format!("{r}/ide/teammate/list?supervisor=supervisor")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let l: Value = serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap();
+        if l["result"]["teammates"][0]["state"] == "ended" {
+            break;
+        }
+        assert!(Instant::now() < borne, "en 60 s, l'équipier n'a pas fini : {l}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let ferme = ferme.lock().unwrap().clone();
+    assert_eq!(ferme["result"]["closed"], true, "la fermeture est passée pendant le tour : {ferme}");
+    let lus = lus.lock().unwrap().clone();
+    assert!(lus[0].contains("\"bonjour\"") && lus[1].contains("Petit dépôt"), "les deux lectures, par le backend (rouvert pour la seconde) : {lus:#?}");
+    assert!(!lus.iter().any(|l| l.starts_with("index indisponible")), "un backend qui se rouvre n'a pas de repli : {lus:#?}");
 }

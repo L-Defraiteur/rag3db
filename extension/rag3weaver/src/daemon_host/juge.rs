@@ -220,7 +220,7 @@ impl DaemonHost {
         }
         let cible = self.hote_par_id(backend_id)?;
         let memoire_manifeste = self.memoire_declaree(&cible)?;
-        let modele = self.with_backend(&cible, |b| (self.juge_model)(b))?;
+        let modele = self.with_backend(&cible, |b| (self.juge_model)(&b.prepared()))?;
         // Le manifeste jugé, par son nom de fichier dans son dossier : ce que
         // ses tickets proposent de changer.
         let propre = cible.manifest.file_name().map(|f| f.to_string_lossy().to_string());

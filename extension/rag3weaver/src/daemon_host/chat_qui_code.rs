@@ -79,7 +79,7 @@ fn empreinte(depot: &Path) -> (BTreeMap<PathBuf, Vec<u8>>, String) {
 /// Un faux modèle qui demande `edit_file` (bonjour → salut) puis répond, et
 /// note les outils qu'on lui propose à chaque appel.
 fn qui_edite(vus: Arc<Mutex<Vec<Vec<String>>>>) -> ChatModel {
-    Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let vus = vus.clone();
         Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, move |turns, opts, sink| {
             vus.lock().unwrap().push(opts.tools.iter().map(|t| t.name.clone()).collect());
@@ -411,7 +411,7 @@ fn le_rendu_journalise_d_un_appel_est_entier() {
 
 /// Un faux modèle qui répond en Markdown, avec un `<script>` glissé dans la réponse.
 fn qui_repond_en_markdown() -> ChatModel {
-    Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-markdown", 8192, move |turns, opts, sink| {
             MockLlm::new("**Trois choses** à lire :\n\n- la première\n- la seconde\n\n```rust\nfn salut() {}\n```\n\n<script>window.__pwned = 1</script> fin.").generate(turns, opts, sink)
         })))
