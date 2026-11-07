@@ -21,7 +21,10 @@
 //! | `POST /ide/taches[/fusionner\|/rejeter]` | ouvrir `{backend, nom}`, fusionner `{backend, nom, message}`, rejeter `{backend, nom, why}` |
 //! | `GET /ide/bilans?backend=<id>` | les bilans du backend : ses fiches (via juge), leurs apports dans l'ordre et leurs notes |
 //! | `GET /ide/teammate?backend=<id>&task=<nom>` | l'équipier d'une tâche : sa boîte, ses plans vivants et clos, s'il tourne |
-//! | `POST /ide/teammate/mailbox` | écrire à l'équipier `{backend, task, kind, item?, text}` : une `request` ouvre la tâche et le lance, un `stop` arrête le pas |
+//! | `POST /ide/teammate/mailbox` | écrire à l'équipier `{backend, task, kind, item?, text, from?, to?, reply_to?, approved?}` : une `request` ouvre la tâche et le lance, un `stop` arrête le pas |
+//! | `GET /ide/teammate/pending?for=<clé>` | ce qui attend la clé dans toutes les boîtes, en lecture pure : `{for, items: [{id, task, parent, kind, item?, text, at}]}` |
+//! | `POST /ide/teammate/seen` | `{for, ids}` : un compte rendu, une fin, une livraison sortent de `pending` pour la clé |
+//! | `GET /ide/teammate/list?supervisor=<clé>` | les équipiers de ce superviseur : `{supervisor, teammates: [{task, parent, state, last_kind, at}]}` |
 //! | `POST /ide/runs/epingler` | épingler un run `{backend, run, raison}` : son journal ne tombe jamais (ni poids ni âge) |
 //! | `POST /ide/bilans` | juger un run `{backend, run}` : le juge relit son journal et range sa fiche dans la mémoire déclarée (`bilans`) |
 //! | `POST /ide/runs/arreter` | arrêter un run en vol `{backend, run}`, au nom de l'IDE (C4) |
@@ -666,7 +669,11 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             // ses plans clos, et s'il tourne.
             let (backend, task) = (param("backend").unwrap_or_default(), param("task").unwrap_or_default());
             let v = match host.teammate_files(&backend, &task) {
-                Ok(f) => json!({ "ok": true, "result": { "mailbox": f.mailbox(), "plans": f.read_plans(), "closed": f.closed(), "running": host.teammate_running(&backend, &task) } }),
+                // `backend` : le manifeste de la tâche, celui des trames de `/ide/flux`.
+                Ok(f) => json!({ "ok": true, "result": {
+                    "backend": host.tache(&backend, &task).map(|t| t.manifest.display().to_string()),
+                    "mailbox": f.mailbox(), "plans": f.read_plans(), "closed": f.closed(), "running": host.teammate_running(&backend, &task),
+                } }),
                 Err(e) => json!({ "ok": false, "error": e }),
             };
             let _ = request.respond(json_(200, &v));
@@ -685,10 +692,41 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     c["kind"].as_str().unwrap_or_default(),
                     c["item"].as_str(),
                     c["text"].as_str().unwrap_or_default(),
+                    // L'adresse et la réponse (page 07-novembre-2026-everything-declarative/01, § 2).
+                    &json!({ "to": c["to"], "reply_to": c["reply_to"], "approved": c["approved"] }),
                 ) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
                 },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("GET", "/ide/teammate/pending") => {
+            // **Ce qui attend une clé** (`claude-code:<id>`, `codex:<nom>`,
+            // `teammate:<parent>/<task>`, `supervisor`…, sans liste fermée) :
+            // lecture pure, un rejeu ou une sonde ne consomment rien.
+            let who = param("for").unwrap_or_default();
+            let v = if who.is_empty() { json!({ "ok": false, "error": "for manque : la clé du destinataire" }) } else { json!({ "ok": true, "result": host.teammate_pending(&who) }) };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("GET", "/ide/teammate/list") => {
+            let who = param("supervisor").unwrap_or_default();
+            let v = if who.is_empty() { json!({ "ok": false, "error": "supervisor manque : la clé du superviseur" }) } else { json!({ "ok": true, "result": host.teammate_list(&who) }) };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/teammate/seen") => {
+            // **Vu** : `{for, ids}` ; la sortie d'un compte rendu ou d'une fin
+            // est un acte, jamais l'effet d'une lecture.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => {
+                    let ids: Vec<String> = c["ids"].as_array().into_iter().flatten().filter_map(|i| i.as_str().map(str::to_string)).collect();
+                    match host.teammate_seen(c["for"].as_str().unwrap_or_default(), &ids) {
+                        Ok(v) => json!({ "ok": true, "result": v }),
+                        Err(e) => json!({ "ok": false, "error": e }),
+                    }
+                }
             };
             let _ = request.respond(json_(200, &v));
         }
