@@ -915,7 +915,10 @@
           "node": "refs_new",
           "port": "report"
         }
-      ]
+      ],
+      "policy": {
+        "call_models": true
+      }
     }
   },
   "reactions": {
