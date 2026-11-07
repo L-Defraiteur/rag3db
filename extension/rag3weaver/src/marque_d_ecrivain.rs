@@ -125,6 +125,26 @@ pub fn ecrivain_autonome_vivant(base: &Path) -> Option<Marque> {
     vivant.then_some(m)
 }
 
+/// **Qui tient cette base, d'après sa marque** : la phrase ajoutée au refus
+/// d'une ouverture en écriture quand un autre processus tient le verrou. `None`
+/// sans marque lisible, ou quand la marque est celle de ce processus.
+pub fn qui_tient(base: &Path) -> Option<String> {
+    let m = lire(base)?;
+    if m.pid == std::process::id() {
+        return None;
+    }
+    let depuis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+        .saturating_sub(m.depuis_ms)
+        / 1000;
+    Some(format!(
+        "la base est tenue par un écrivain {} (pid {}, depuis {} s : {}) ; un second écrivain n'y entre pas — passer par l'hôte, ou attendre qu'il finisse",
+        m.role, m.pid, depuis, m.outil
+    ))
+}
+
 /// La phrase d'un refus, la même pour le client et l'hôte.
 pub fn refus(base: &Path, m: &Marque) -> String {
     let depuis = std::time::SystemTime::now()
