@@ -40,7 +40,7 @@ use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
 use crate::bge_m3_onnx::Model as BgeM3Graph;
 use crate::embedder::{DualEmbedder, EmbedError, Embedder, SparseEmbedder};
-use crate::sparse_index::SparseVector;
+use crate::sparse_index::{SparseSpan, SparseVector};
 
 /// XLM-RoBERTa special token ids, excluded from the sparse vector.
 /// Kept in sync with [`crate::bge_m3_embedder`].
@@ -180,11 +180,11 @@ impl BurnBgeM3Embedder {
         Self::from_bytes(&bytes, tokenizer_path, device)
     }
 
-    /// Tokenize + forward. Returns `(token_embeddings, sentence_embedding, ids per row)`.
+    /// Tokenize + forward. Returns `(token_embeddings, sentence_embedding, jetons par ligne)`.
     fn forward_pass(
         &self,
         texts: &[String],
-    ) -> Result<(Tensor<3>, Tensor<2>, Vec<Vec<u32>>), EmbedError> {
+    ) -> Result<(Tensor<3>, Tensor<2>, Vec<Jetons>), EmbedError> {
         let tokenizer = self
             .tokenizer
             .lock()
@@ -201,7 +201,14 @@ impl BurnBgeM3Embedder {
             .map(|e| e.get_ids().len())
             .ok_or_else(|| EmbedError::ProviderError("empty batch".into()))?;
 
-        let ids_per_row: Vec<Vec<u32>> = encodings.iter().map(|e| e.get_ids().to_vec()).collect();
+        let ids_per_row: Vec<Jetons> = encodings
+            .iter()
+            .map(|e| Jetons {
+                ids: e.get_ids().to_vec(),
+                offsets: e.get_offsets().to_vec(),
+                speciaux: e.get_special_tokens_mask().to_vec(),
+            })
+            .collect();
 
         let ids: Vec<i32> = encodings
             .iter()
@@ -239,12 +246,13 @@ impl BurnBgeM3Embedder {
     }
 
     /// `W_lex(hidden) → ReLU → scatter by token id (max)`, mirroring
-    /// [`crate::bge_m3_embedder`]'s `extract_sparse`.
+    /// [`crate::bge_m3_embedder`]'s `extract_sparse` ; avec, par ligne, le
+    /// poids de chaque position avant la fusion ([`fondre`]).
     fn extract_sparse(
         &self,
         token_embeddings: Tensor<3>,
-        ids_per_row: &[Vec<u32>],
-    ) -> Result<Vec<SparseVector>, EmbedError> {
+        rows: &[Jetons],
+    ) -> Result<Vec<(SparseVector, Vec<SparseSpan>)>, EmbedError> {
         let scores = relu(
             self.sparse_head
                 .linear
@@ -257,35 +265,58 @@ impl BurnBgeM3Embedder {
         let flat: Vec<f32> = data
             .try_to_vec()
             .map_err(|e| EmbedError::ProviderError(format!("sparse to_vec: {e:?}")))?;
-
-        let mut out = Vec::with_capacity(ids_per_row.len());
-        for (i, ids) in ids_per_row.iter().enumerate() {
-            let mut per_token: HashMap<u32, f32> = HashMap::new();
-            for (pos, &token_id) in ids.iter().enumerate() {
-                if matches!(
-                    token_id,
-                    CLS_TOKEN_ID | PAD_TOKEN_ID | EOS_TOKEN_ID | UNK_TOKEN_ID
-                ) || pos >= seq
-                {
-                    continue;
-                }
-                let w = flat[i * seq + pos];
-                if w > 0.0 {
-                    let e = per_token.entry(token_id).or_insert(0.0);
-                    if w > *e {
-                        *e = w;
-                    }
-                }
-            }
-            let mut entries: Vec<(u32, f32)> = per_token.into_iter().collect();
-            entries.sort_by_key(|(id, _)| *id);
-            out.push(SparseVector::new(
-                entries.iter().map(|(id, _)| *id).collect(),
-                entries.iter().map(|(_, w)| *w).collect(),
-            ));
-        }
-        Ok(out)
+        Ok(rows
+            .iter()
+            .enumerate()
+            .map(|(i, jetons)| fondre(jetons, &flat[i * seq..(i + 1) * seq]))
+            .collect())
     }
+}
+
+/// Ce que le tokenizer dit d'une ligne : l'id de chaque position, sa plage
+/// d'octets dans le texte reçu, et si c'est un jeton spécial.
+struct Jetons {
+    ids: Vec<u32>,
+    offsets: Vec<(usize, usize)>,
+    speciaux: Vec<u32>,
+}
+
+/// **Le vecteur creux d'une ligne et le poids de ses positions.** Une position
+/// compte si elle n'est ni spéciale (CLS, PAD, EOS, UNK, ou marquée par le
+/// tokenizer) ni vide de texte ; le vecteur garde, par id, le poids maximal
+/// strictement positif ; les positions gardent chacune le leur, nul compris,
+/// pour couvrir chaque mot. `poids` est la ligne des scores, une valeur par
+/// position.
+fn fondre(jetons: &Jetons, poids: &[f32]) -> (SparseVector, Vec<SparseSpan>) {
+    let mut per_token: HashMap<u32, f32> = HashMap::new();
+    let mut spans = Vec::new();
+    for (pos, &token_id) in jetons.ids.iter().enumerate() {
+        let special = jetons.speciaux.get(pos).copied().unwrap_or(0) == 1;
+        if special
+            || matches!(token_id, CLS_TOKEN_ID | PAD_TOKEN_ID | EOS_TOKEN_ID | UNK_TOKEN_ID)
+            || pos >= poids.len()
+        {
+            continue;
+        }
+        let w = poids[pos];
+        if let Some(&(start, end)) = jetons.offsets.get(pos) {
+            if end > start {
+                spans.push(SparseSpan { start, end, weight: w });
+            }
+        }
+        if w > 0.0 {
+            let e = per_token.entry(token_id).or_insert(0.0);
+            if w > *e {
+                *e = w;
+            }
+        }
+    }
+    let mut entries: Vec<(u32, f32)> = per_token.into_iter().collect();
+    entries.sort_by_key(|(id, _)| *id);
+    (
+        SparseVector::new(entries.iter().map(|(id, _)| *id).collect(), entries.iter().map(|(_, w)| *w).collect()),
+        spans,
+    )
 }
 
 impl Embedder for BurnBgeM3Embedder {
@@ -320,8 +351,16 @@ impl SparseEmbedder for BurnBgeM3Embedder {
         if texts.is_empty() {
             return Ok(vec![]);
         }
-        let (tokens, _, ids) = self.forward_pass(texts)?;
-        self.extract_sparse(tokens, &ids)
+        let (tokens, _, rows) = self.forward_pass(texts)?;
+        Ok(self.extract_sparse(tokens, &rows)?.into_iter().map(|(v, _)| v).collect())
+    }
+
+    fn embed_sparse_spans(&self, texts: &[String]) -> Result<Vec<(SparseVector, Vec<SparseSpan>)>, EmbedError> {
+        if texts.is_empty() {
+            return Ok(vec![]);
+        }
+        let (tokens, _, rows) = self.forward_pass(texts)?;
+        self.extract_sparse(tokens, &rows)
     }
 }
 
@@ -334,9 +373,9 @@ impl DualEmbedder for BurnBgeM3Embedder {
         if texts.is_empty() {
             return Ok((vec![], vec![]));
         }
-        let (tokens, sentence, ids) = self.forward_pass(texts)?;
+        let (tokens, sentence, rows) = self.forward_pass(texts)?;
         let dense = Self::extract_dense(sentence)?;
-        let sparse = self.extract_sparse(tokens, &ids)?;
+        let sparse = self.extract_sparse(tokens, &rows)?.into_iter().map(|(v, _)| v).collect();
         Ok((dense, sparse))
     }
 
@@ -348,6 +387,26 @@ impl DualEmbedder for BurnBgeM3Embedder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Les positions d'une ligne et leur fusion** : les jetons spéciaux et
+    /// le rembourrage n'ont pas de position ; chaque autre jeton garde son
+    /// poids, nul compris ; le vecteur prend, par id, le maximum positif.
+    #[test]
+    fn fondre_rend_le_creux_et_le_poids_de_chaque_position() {
+        // « un chat, un chien » : <s> un chat , un chien </s> <pad>
+        let jetons = Jetons {
+            ids: vec![CLS_TOKEN_ID, 10, 20, 30, 10, 40, EOS_TOKEN_ID, PAD_TOKEN_ID],
+            offsets: vec![(0, 0), (0, 2), (3, 7), (7, 8), (9, 11), (12, 17), (0, 0), (0, 0)],
+            speciaux: vec![1, 0, 0, 0, 0, 0, 1, 1],
+        };
+        let poids = [9.0, 0.2, 0.7, 0.0, 0.5, 0.6, 9.0, 9.0];
+        let (v, spans) = fondre(&jetons, &poids);
+        assert_eq!(v, SparseVector::new(vec![10, 20, 40], vec![0.5, 0.7, 0.6]), "max par id, la virgule nulle écartée");
+        let plages: Vec<(usize, usize, f32)> = spans.iter().map(|s| (s.start, s.end, s.weight)).collect();
+        assert_eq!(plages, vec![(0, 2, 0.2), (3, 7, 0.7), (7, 8, 0.0), (9, 11, 0.5), (12, 17, 0.6)]);
+        // Chaque valeur du vecteur est le poids d'une de ses positions.
+        assert!(v.values.iter().all(|x| spans.iter().any(|s| s.weight == *x)));
+    }
 
     #[test]
     fn sparse_head_weights_are_bundled_and_well_formed() {
