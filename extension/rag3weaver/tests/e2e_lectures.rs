@@ -1544,3 +1544,42 @@ fn une_requete_longue_repond_vite_et_dit_ses_coupes() {
         "une requête courte ne dit rien : {courte}"
     );
 }
+
+/// **Une ligne collée retrouve son fichier** (7 novembre 2026, relevé par lucivy : un passage exact
+/// d'un document n'est plus trouvé au-delà de 48 octets en strict et 64 en relâché — ticket
+/// lucivy « un passage exact long n'est plus trouvé », branche tickets-2026-11-07). Au-delà de
+/// `MAX_FUZZY_WHOLE_QUERY_CHARS`, la requête entière se cherche en strict : une phrase de
+/// 120 caractères collée dans l'IDE doit ramener son fichier premier, par le signal exact. Rouge
+/// tant que lucivy ne trouve pas un passage de cette longueur ; il dit quand la montée de version
+/// le rend vert.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn une_ligne_collee_de_120_caracteres_retrouve_son_fichier() {
+    use serde_json::json;
+
+    let ligne = "La réconciliation des sources rend chaque scope à sa version, puis relie les dépendances que l'index avait perdues.";
+    assert!(ligne.chars().count() > 100 && ligne.chars().count() <= 120, "{}", ligne.chars().count());
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("reconciliation.md"), format!("# Réconciliation\n\n{ligne}\n\nLe reste de la page parle d'autre chose.\n")).unwrap();
+    std::fs::write(depot.path().join("sources.md"), "# Sources\n\nLes sources se lisent une à une, et chaque scope garde sa version.\n").unwrap();
+    std::fs::write(depot.path().join("index.rs"), "pub fn relier_les_dependances() -> u32 {\n    7\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "ligne-collee", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": ligne, "options": {"limit": 5}, "mode": "indexed"}))
+        .expect("search_code");
+    let premier = &r["result"][0];
+    eprintln!(
+        "[ligne collée] {} caractères : premier {} ({:?})",
+        ligne.chars().count(),
+        premier["data"]["file_path"],
+        premier["signals"].as_array().map(|s| s.iter().filter_map(|x| x["label"].as_str()).collect::<Vec<_>>())
+    );
+    assert_eq!(premier["data"]["file_path"].as_str(), Some("src/reconciliation.md"), "la ligne collée ramène son fichier premier : {r}");
+    assert!(
+        premier["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "bm25_exact")),
+        "par le signal exact (la requête entière) : {premier}"
+    );
+}
