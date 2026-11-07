@@ -6,7 +6,22 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 ## Avant la passe
 
 - **Un worktree par lot**, jamais l'arbre de Lucie (`~/git_workspaces/rag3db`) : on n'y commite
-  pas, on n'y bascule pas, on n'y laisse rien.
+  pas, on n'y bascule pas, on n'y laisse rien. **Un seul target par session** (Lucie, 7 novembre
+  2026) : le même dossier sous `~/.cache/rag3weaver-build/` d'un lot au suivant, effacé avec le
+  lot ; pas un target par essai.
+- **Un worktree est jetable** (vision du 6 novembre, « Un worktree est jetable, donc
+  distribuable » ; Lucie, 7 novembre : 46 worktrees à luciepc ce matin, 32 déjà fusionnés). Un
+  contrôle **en début de passe** refuse un worktree dont la branche est déjà atterrie
+  (`git cherry origin/master HEAD` sans ligne `+`) ou dont la base a plus de **200** commits de
+  retard sur master (`git rev-list --count HEAD..origin/master`, seuil à régler) : on l'efface et
+  on en refait un neuf depuis master, on ne le rattrape pas.
+
+  ```bash
+  git fetch -q origin master
+  [ -n "$(git cherry origin/master HEAD | grep '^+')" ] || { echo "ARRÊT : rien à pousser, branche déjà atterrie — effacer ce worktree"; exit 1; }
+  r=$(git rev-list --count HEAD..origin/master)
+  [ "$r" -le "${RETARD_MAX:-200}" ] || { echo "ARRÊT : $r commits de retard sur master — effacer ce worktree et repartir de master"; exit 1; }
+  ```
 - **Identité gmail** (`user.email = luciedefraiteur@gmail.com`), vérifiée avant chaque commit ; pas
   de ligne d'attribution dans les messages.
 - **Chaque commit poussé sur sa branche dans la minute** (`origin/<nom-du-lot>`), rien ne reste en
@@ -68,7 +83,18 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 ## Après
 
-- Les worktrees et les targets du lot s'effacent une fois le lot sur master (ceux de luciepc à la
-  fin de la session).
+- **Le script de push efface lui-même le worktree, sa branche locale et le target du lot, juste
+  après les trois contrôles** — dans le même script, pas « plus tard » (Lucie, 7 novembre 2026) :
+
+  ```bash
+  depot=$(git rev-parse --path-format=absolute --git-common-dir); depot=${depot%/.git}
+  branche=$(git rev-parse --abbrev-ref HEAD)
+  cd "$depot" && git worktree remove --force "$W" && git branch -D "$branche"
+  rm -rf "$TARGET"
+  echo "EFFACÉ : worktree $W, branche $branche, target $TARGET"
+  ```
+
+  La branche distante reste (rien ne s'efface sur origin sans Lucie). Les worktrees de luciepc
+  suivent la même règle à la fin de chaque lot, plus seulement à la fin de la session.
 - Les rapports de session (`01-rapport`, `02-knowledge-dump` du jour) se tiennent à jour après
   chaque lot ; un défaut connu non corrigé devient un ticket dans `docs/tickets/`.
