@@ -1,7 +1,6 @@
 # L'affichage en direct du chat peut manquer le premier jeton du premier tour, sous charge
 
-- **État** : ouvert (7 novembre 2026), relevé par hooks-essai dans le lot « le chat tient
-  l'ordre » ; la relecture de fin de tour fait foi (6d3504d56), la cause n'est pas trouvée.
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot premier-jeton) : la cause était dans le flux de l'IDE, pas dans la page — `Flux::publier` tirait l'id hors du verrou des abonnés, et `Abonne::envoyer` sautait une trame quand deux relais se croisaient (N+1 envoyé avant N) ; l'id se tire désormais sous le verrou, avec l'empilement et l'envoi. Témoins : `ide::tests::relays_publishing_together_lose_nothing_and_keep_the_order` (rouge : 7 577 reçus sur 8 000) et `le_premier_jeton_d_un_tour_arrive_dans_la_page` (rouge 3 fois sur 3, un jeton absent dès la réception, aucun EventsMissed), verts 3 fois sur 3 ; la relecture de fin de tour reste la source de vérité
 - **Famille** : produit
 - **Gravité** : réponse fausse passagère à l'écran (une réponse en cours qui commence tronquée,
   corrigée à la fin du tour).
@@ -34,7 +33,11 @@ Même verte, la page en parties prenait environ 6 s pour ces témoins, contre 2 
   passerait avant `RunStarted` est accepté, puisque la bulle en cours existe déjà (posée par
   `send` avant l'appel).
 
-## Une piste (everything declarative, à prouver)
+## La cause (prouvée)
+
+Le rang manquant manque **dès la réception** dans la page (relevé avant tout filtre) : ce n'est pas la page. Aucun `EventsMissed` : ce n'est pas un débordement du bus. C'est `Flux::publier` (ci-dessus, dans l'État). Ce n'était pas toujours le premier jeton : 12, 8, 6, 0 dans les rouges.
+
+## La piste d'avant (everything declarative)
 
 Le flux relaie chaque sujet du bus par **son propre fil** (`IdeFlux::relayer`, un fil par sujet de
 `SUJETS`), et l'id du flux est donné à la publication : un `Token` (sujet `tokens`) peut passer
