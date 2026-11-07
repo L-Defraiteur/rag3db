@@ -5506,6 +5506,18 @@ fn read_threads() -> u64 {
         self.forme().resolve_filter_to_ids(entity, condition, target)
     }
 
+    /// Les offsets des morceaux des lignes que le filtre admet (voir
+    /// [`crate::read_view::Forme::resolve_filter_to_chunk_ids`]).
+    pub fn resolve_filter_to_chunk_ids(
+        &self,
+        entity: &str,
+        chunk_table: &str,
+        condition: &FilterCondition,
+        target: &crate::search::SearchTarget,
+    ) -> Result<Option<Vec<u64>>, CatalogError> {
+        self.forme().resolve_filter_to_chunk_ids(entity, chunk_table, condition, target)
+    }
+
     /// Le court-circuit de l'inchangé
     /// ([doc 17](../../docs/25-aout-2026-18h58/17-relations-a-travers-les-lots.md) §6).
     ///
