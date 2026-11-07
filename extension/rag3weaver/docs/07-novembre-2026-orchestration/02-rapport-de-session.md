@@ -216,3 +216,45 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   pont (mail, codex_threads, canal, hooks pending/seen) → whois → codeparsers
   (pointeur) → hooks-essai (journal) → ED (chat, direction visuelle) → archi
   3 ter (b) → hotfixs (index des tickets).
+
+## Mise à jour de 18 h 40
+
+- **Posé chez Lucie à 18 h 15** : hooks-3-ter (a) (7b41a1a04, binaire 963efa20).
+  Trois tours réels de hooks-essai : rappel 93-334 ms ; mais l'extraction
+  « plus longs d'abord » a pris le méta-discours, une notification de tâche a
+  rendu une fiche hors sujet sans seuil, et la bonne requête n'a rendu que
+  0,37. Cause lue au journal des runs par archi : le hook lisait `chunk.score`
+  (le morceau dense) et ignorait `signals`, où bm25 avait touché « régime GPU »
+  à 1,39. Le (b) (ae0d2d3d9, vert, en push) lit les signaux par ligne, le
+  plein texte fait le candidat, le dense seul est « non jugé » jusqu'à mesure
+  sur une mémoire peuplée, un rendu par tour, déjà-vu après filtre, tours de
+  notification sans rappel, vocabulaire de la mémoire d'abord, mots courts du
+  code gardés, ticket pour recherche (score comparable entre signaux).
+- **Le lot du chat passe à hooks-essai** (formes et relecture par everything
+  declarative, qui garde l'étanchéité) : lot A Rust prêt (chat-ordre-rust,
+  660daaec2 : at_ms à l'appel/fin, résultat dans ToolCallFinished,
+  context_len, `role` d'outil relayé dans RunStarted), lot B React ensuite
+  (parties dans l'ordre d'arrivée, scroll, résultat déplié, colonne fluide,
+  pleine hauteur ; sous chaque conversation : récap d'usage et fiches écrites
+  pendant la conversation, route `GET /ide/chat/fiches?backend=` par les
+  Sources à `session`). 96 posera `session` sur les Sources sans session
+  (après M4). Direction visuelle (terminal d'avant-garde, thème « Daemon Code
+  Summoning » de tty, mêmes tokens IDE/terminal) : page d'ED après le chat,
+  accord de Lucie avant les composants ; tty lui demande l'accord du thème.
+- **Décisions** : lib unique dès verrous + instruction-en-echec-2 (87cdd7fae,
+  passe) ; arbre 1-5, G 6-11 ; bascule ce soir avant 22 h sinon demain ;
+  Lucie : oui à l'effacement des instantanés bascule-04063ee06 et
+  bascule-66994dd43 après réveil vert ; règle « tant que vous ne vous empêchez
+  pas de progresser » transmise à toutes les sessions (pas de poste mesure
+  pendant la file, un target par lot, place proportionnée).
+- **Atterris** : tty-2 (1fc1e24bd, vue inline), nouveautés tty (69aa15eef,
+  0a3e5752e), rapport tty (d7c1b6d5c). **Prêts** : recherche-trois-lots
+  (9c0b785f3, vert), codeparsers/garde-pointeur (56293d739 : 19 arêtes de plus,
+  0 de moins, ticket « marque nom » ouvert), hooks-essai journal-hote-horodate
+  (634c16b56 : tube non bloquant, patience 50 ms mesurée, pire 1,14 ms),
+  96 lot-96-pas1-politique-2 (le pas 1 n'avait jamais servi ; verdict ~18 h 40),
+  hotfixs (B) csr-listes-temoin-3 (banc en cours, second rouge de charge
+  C7_RandomMix/Thread_Crash inscrit à probabilistic.txt, ticket du cœur).
+- **File** : archi (b) → 96 → recherche → hooks-essai (journal, chat A) →
+  codeparsers → archi pont → whois → ED (étanchéité, reprise après la mort de
+  l'hôte, direction visuelle) → hotfixs (B puis index des tickets généré).
