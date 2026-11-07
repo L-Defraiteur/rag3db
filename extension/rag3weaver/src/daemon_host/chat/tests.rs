@@ -805,6 +805,12 @@ fn sans_outil_de_lecture_la_memoire_dit_pourquoi_la_liste_est_vide() {
     let (_d, host, _manifeste, id) = banc_avec(qui_lit_deux_fois(), move |c| {
         c["bilans"] = json!({ "memoire": memoire_txt });
     });
+    // Tant que la mémoire n'est pas ouverte dans l'hôte, la page ne la fait pas
+    // ouvrir : elle le dit.
+    let etat = host.chat_state(&id).unwrap();
+    assert!(etat["memory_writes_why"].as_str().is_some_and(|w| w.contains("pas ouverte")), "{etat}");
+    let mem = host.hosted(&memoire).unwrap();
+    host.with_backend(&mem, |_| ()).expect("la mémoire s'ouvre");
     host.chat_turn(&id, "regarde le code").unwrap();
     let debut = Instant::now();
     loop {
