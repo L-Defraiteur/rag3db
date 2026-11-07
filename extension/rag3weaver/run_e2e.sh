@@ -12,7 +12,7 @@
 #   ./run_e2e.sh --build-only             # just build, don't run tests
 #   ./run_e2e.sh --no-cuda phase0         # accepté, sans effet (burn/wgpu, pas de CUDA)
 #   ./run_e2e.sh --summary                # show only the per-suite summary at the end
-#   ./run_e2e.sh --features openai-llm    # add features to the default set
+#   ./run_e2e.sh --features navigateur    # add features to the default set
 
 set -euo pipefail
 
@@ -398,7 +398,18 @@ cd "$WEAVER"
 # binaire e2e pèse des centaines de Mo). Ses dépendances sont du Rust pur ;
 # seule la suite `e2e_postgres` dépend du conteneur, et elle est écartée sans
 # lui (ci-dessous).
-FEATURES="rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
+# **Le jeu de la procédure, par défaut** (7 novembre 2026) : `openai-llm` et
+# `anthropic-llm` y entrent. Sans elles, un test sous `#[cfg(feature =
+# "openai-llm")]` dans une suite par ailleurs jouée disparaissait du compte sans
+# rien dire : « 3 passed » sur une suite de quatre (le témoin de `models.llm`,
+# 662dda2cc, n'a jamais été joué par les passes qui l'ont poussé). Les suites qui
+# appellent un vrai modèle restent écartées par leur **nom** (plus bas), plus par
+# une feature. `RAG3WEAVER_E2E_FEATURES` remplace le jeu entier, en le disant.
+FEATURES_PAR_DEFAUT="rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm"
+FEATURES="${RAG3WEAVER_E2E_FEATURES:-$FEATURES_PAR_DEFAUT}${EXTRA_FEATURES:+,$EXTRA_FEATURES}"
+if [ -n "${RAG3WEAVER_E2E_FEATURES:-}" ]; then
+  echo "▸ ⚠ jeu de features remplacé par RAG3WEAVER_E2E_FEATURES : $FEATURES (celui de la procédure : $FEATURES_PAR_DEFAUT)"
+fi
 
 # ── PostgreSQL : dans la passe, ou absent **en le disant** ──────────────────
 #
@@ -451,22 +462,19 @@ fi
 
 # ── Les suites qui appellent un vrai modèle ────────────────────────────────
 #
-# Cinq fichiers portent `#![cfg(all(..., feature = "openai-llm", ...))]` : sans
-# cette feature, ils sont **compilés hors du lot** et rendent « ok. 0 passed »,
-# ce qui s'aligne dans le résumé exactement comme un succès. Le tableau final
-# les nomme désormais ; on l'annonce aussi **au lancement**, comme PostgreSQL,
-# parce que c'est là qu'on décide quoi lancer.
-#
-# L'exclusion est délibérée : ces suites dépensent le quota Vertex à chaque
-# passe. `--features openai-llm` les fait entrer.
-case ",$FEATURES," in
-  *,openai-llm,*) ;;
-  *)
-    echo "▸ ⚠ 5 suites NON JOUÉES (feature openai-llm absente, exclusion délibérée —"
-    echo "    elles appellent un vrai modèle) : e2e_avis_du_modele, e2e_cloud_code_agent,"
-    echo "    e2e_cloud_schema_probe, e2e_conversation_a_plusieurs, e2e_lecture_mermaid"
-    ;;
-esac
+# Elles dépensent le quota Vertex à chaque passe : une passe complète les écarte
+# **par leur nom**, l'annonce au départ et le rappelle au résumé. Nommées par
+# `--test`, ou avec `RAG3WEAVER_SUITES_A_MODELE=1`, elles jouent. Avant le
+# 7 novembre 2026, c'est l'absence de la feature `openai-llm` qui les écartait,
+# et elle écartait du même coup, sans le dire, tout test sous cette feature
+# dans les autres suites.
+SUITES_A_MODELE=(e2e_avis_du_modele e2e_cloud_code_agent e2e_cloud_schema_probe e2e_conversation_a_plusieurs e2e_lecture_mermaid e2e_banc_vertex_embedding)
+ECARTEES_MODELE=()
+est_une_suite_a_modele() {
+  local s
+  for s in "${SUITES_A_MODELE[@]}"; do [ "$s" = "$1" ] && return 0; done
+  return 1
+}
 
 # ── Les suites dont l'objet est la carte d'ici ─────────────────────────────
 #
@@ -551,8 +559,16 @@ else
       ECARTEES_BANCS+=("$nom")
       continue
     fi
+    if [ "${RAG3WEAVER_SUITES_A_MODELE:-}" != 1 ] && est_une_suite_a_modele "$nom"; then
+      ECARTEES_MODELE+=("$nom")
+      continue
+    fi
     CARGO_ARGS+=(--test "$nom")
   done
+  if [ ${#ECARTEES_MODELE[@]} -gt 0 ]; then
+    echo "▸ ⚠ ${#ECARTEES_MODELE[@]} suites NON JOUÉES (elles appellent un vrai modèle ; --test <nom> ou RAG3WEAVER_SUITES_A_MODELE=1 pour les jouer) :"
+    echo "    ${ECARTEES_MODELE[*]}"
+  fi
   if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
     echo "▸ ⚠ ${#ECARTEES_CARTE_LOCALE[@]} suites NON JOUÉES (carte locale, RAG3WEAVER_SANS_CARTE_LOCALE=0 pour les jouer) :"
     echo "    ${ECARTEES_CARTE_LOCALE[*]}"
@@ -560,6 +576,37 @@ else
   for nom in "${ECARTEES_BANCS[@]}"; do
     echo "▸ ⚠ $nom NON JOUÉE (banc à services : posez $(services_du_banc "$nom") pour la jouer)"
   done
+fi
+
+# ── Une suite ne se joue pas à moitié ──────────────────────────────────────
+#
+# Chaque suite demandée est lue avant tout bâti : une feature qu'elle exige
+# (`#![cfg(...)]` du fichier, ou `#[cfg(...)]` d'un test) et que le jeu n'a pas
+# la rendrait muette en tout ou en partie, avec un total vert. C'est **rouge**,
+# en nommant la suite et la feature. On ne lit que les `cfg` positifs : un
+# `not(...)` ou un `any(...)` ne se juge pas ici.
+ABSENTES=()
+for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
+  [ "${CARGO_ARGS[$i]}" = "--test" ] || continue
+  nom="${CARGO_ARGS[$((i + 1))]}"
+  fichier="$WEAVER/tests/$nom.rs"
+  [ -f "$fichier" ] || continue
+  for x in $(grep -E '^[[:space:]]*#!?\[cfg\(' "$fichier" | grep -v -e 'not(' -e 'any(' | grep -oP 'feature = "\K[A-Za-z0-9_-]+' | sort -u); do
+    case ",$FEATURES," in
+      *",$x,"*) ;;
+      *) ABSENTES+=("$nom ($x)") ;;
+    esac
+  done
+done
+if [ ${#ABSENTES[@]} -gt 0 ]; then
+  echo "✗ ${#ABSENTES[@]} suite(s) ne joueraient pas tous leurs tests : une feature qu'elles exigent manque au jeu ($FEATURES)"
+  for a in "${ABSENTES[@]}"; do echo "    · $a"; done
+  echo "  Ajoutez-la (--features <nom>), ou ne demandez pas la suite."
+  exit 1
+fi
+if [ "${RAG3WEAVER_E2E_VERIFIER_SEULEMENT:-}" = 1 ]; then
+  echo "▸ features : chaque suite demandée a les siennes ($FEATURES) — rien n'est bâti ni joué"
+  exit 0
 fi
 
 # Une suite en échec n'arrête pas les autres : sans ça, cargo s'arrête au
@@ -1115,6 +1162,9 @@ if [ "$SUMMARY" = true ]; then
   for nom in "${ECARTEES_BANCS[@]}"; do
     say "  %-30s ÉCARTÉE — banc à services (%s)\n" "$nom" "$(services_du_banc "$nom")"
   done
+  for nom in "${ECARTEES_MODELE[@]}"; do
+    say "  %-30s ÉCARTÉE — appelle un vrai modèle\n" "$nom"
+  done
 
   say "───────────────────────────────────────────────\n"
   if [ "$TOTAL_FAILED" -eq 0 ]; then
@@ -1166,6 +1216,19 @@ else
   echo ""
   if ! suites_vides "$E2E_LOG"; then
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+  fi
+  # **Le compte des suites** : jouées contre demandées. Une suite qui n'a pas
+  # rendu de résultat (compilation, abandon) fait un total qui n'en est pas un.
+  ATTENDUES=0
+  for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do [ "${CARGO_ARGS[$i]}" = "--test" ] && ATTENDUES=$((ATTENDUES + 1)); done
+  JOUEES=$(grep -cE 'Running tests/e2e_[A-Za-z0-9_]+\.rs' "$E2E_LOG" || true)
+  echo "Suites jouées : ${JOUEES:-0} sur $ATTENDUES demandées."
+  if [ "${JOUEES:-0}" -lt "$ATTENDUES" ]; then
+    echo "✗ $((ATTENDUES - ${JOUEES:-0})) suite(s) demandée(s) n'ont rendu aucun résultat"
+    [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+  fi
+  if [ ${#ECARTEES_MODELE[@]} -gt 0 ]; then
+    echo "Passe complète hors suites à modèle : ${ECARTEES_MODELE[*]} écartée(s)."
   fi
   if ! moteur_inchange; then
     EXIT_CODE=1
