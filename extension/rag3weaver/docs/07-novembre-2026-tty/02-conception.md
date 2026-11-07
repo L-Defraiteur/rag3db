@@ -170,3 +170,18 @@ Dans la passe de push du lot tty-1 à luciepc (lib 04063ee06, commit 1c9a9350a),
 | la suite du changement | 52,88 s |
 
 Ce n'est pas un rouge. Le temps passe dans l'attente que l'équipier finisse (la boucle sur `GET /ide/teammate`), sans doute sous la charge du poste. Le lot suivant mesure cette attente à part ; si les 50 s reviennent, on ouvre un ticket.
+
+## Vocabulaire (Lucie, 7 nov. 2026, par c7)
+
+« Les gens qui bossent parlent en branches, PR, worktrees, repos attachés », pas en backends. C'est la règle de tout ce que le terminal montre ou demande, et c'est la même dans l'IDE :
+
+| On dit | Ce que c'est en dessous |
+|---|---|
+| **la session s'attache à des dépôts** | les backends hébergés |
+| **un dépôt a un worktree sur une branche** | le manifeste d'un arbre et son dossier |
+| **une tâche vit dans un worktree** et finit **en PR ou en fusion** | la tâche de l'équipier, son worktree, sa relecture |
+| **la mémoire** | la mémoire longue |
+
+- « backend » reste dans le JSON et le manifeste, **jamais dans un libellé**.
+- **Les commandes, dès tty-3.** On désigne par le dépôt : son chemin, ou son nom tel que `code-tree` l'inscrit. L'id se résout par `GET /ide/etat` et ne s'écrit jamais à la main. `--backend <id>`, le seul nom du lot tty-1, devient `--depot <chemin|nom>`, et `--task` devient `--tache`. L'ancien nom reste lu, en le signalant, le temps d'un lot.
+- **Les en-têtes, dès tty-3.** La vue nomme le dépôt, la branche et la tâche (`rag3db · tty-3 · tâche parle`), jamais l'id d'un backend.
