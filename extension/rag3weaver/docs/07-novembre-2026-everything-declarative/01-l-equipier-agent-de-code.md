@@ -110,15 +110,19 @@ pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
     `{"for": "claude-code:<id>", "items": [{"id", "task", "parent", "kind", "item"?, "text", "at"}]}`,
     `kind` ∈ `question` | `approval` | `proposal` | `report` | `ended`. Un item reste en attente tant
     qu'aucune ligne de la boîte ne porte `reply_to: <son id>` ; `report` et `ended` n'attendent pas
-    de réponse et sortent après avoir été rendus une fois (le curseur `pending.read.<clé>` dans le
-    dossier de la tâche).
+    de réponse et sortent quand ils sont **vus** : `pending` est une lecture pure (un rejeu du hook,
+    une sonde ou un second client ne consomment rien), et la sortie est un acte,
+    `POST /ide/teammate/seen {"for": "claude-code:<id>", "ids": [...]}`, que le hook poste après
+    avoir rendu son bloc, jamais en rejeu (les vus dans `pending.seen.<clé>`, dans le dossier de la
+    tâche).
   - `GET /ide/teammate/list?supervisor=claude-code:<id>` →
     `{"supervisor": "claude-code:<id>", "teammates": [{"task", "parent", "state", "last_kind", "at"}]}`,
     `state` ∈ `running` | `waiting` (attend la boîte) | `ended` | `error`.
   - La réponse : `POST /ide/teammate/mailbox` avec `{"parent", "task", "from": "claude-code:<id>",
     "kind": "answer", "text", "reply_to": "<id de l'item>"}` ; la commande d'archi est
-    `rag3weaver-backend hook reply --from claude-code:<id> <task> "<texte>"` (sans `--from`, elle
-    refuse), et le bloc l'écrit en entier avec la clé, puisque l'outil Bash de Claude ne la reçoit
+    `rag3weaver-backend hook reply --from claude-code:<id> --to <id de l'item> "<texte>"` : elle vise
+    l'item, tire `parent` et `task` de son id (coupé au dernier `/` avant le `:`), et refuse sans
+    `--from` ou sans `--to`, et le bloc l'écrit en entier avec la clé, puisque l'outil Bash de Claude ne la reçoit
     pas.
   - Côté hook (archi) : un item montré en entier au premier tour, puis « toujours en attente :
     <task> » ; un délai court, et en panne la ligne « boîte des équipiers injoignable », jamais un
