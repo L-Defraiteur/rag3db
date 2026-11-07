@@ -1851,13 +1851,16 @@ pub const SEUIL_CONFIANCE: f64 = 0.88;
 /// deux nombres ne peuvent pas être le même.
 /// **La requête entière garde son flou jusqu'à cette longueur** (en caractères), puis se
 /// cherche à distance 0 (ticket « Le plein texte explose sur une requête longue », 7 novembre
-/// 2026, mesuré par `tests/sonde_requete_longue.rs`) : en flou, 396 ms à 104 caractères et 2,6 s à
-/// 235 sur la base de code, 112 s à 1 397 ; à distance 0, moins de 140 ms partout. Le budget du
-/// nœud est de 500 ms, le tiers de l'attente que la première recherche accorde à sa poignée.
-pub const MAX_FUZZY_WHOLE_QUERY_CHARS: usize = 100;
+/// 2026, mesuré par `tests/sonde_requete_longue.rs`). Sur lucivy 4.3.2 (le flou long borné chez
+/// lui), sur la base de code : 21 ms à 104 caractères, 88 ms à 436, 464 ms à 933, 785 ms à 1 397 ;
+/// à distance 0, moins de 90 ms partout. Le budget du nœud est de 500 ms, le tiers de l'attente
+/// que la première recherche accorde à sa poignée. (Sur 4.3.1, la borne était à 100 : 2,6 s à
+/// 235 caractères.)
+pub const MAX_FUZZY_WHOLE_QUERY_CHARS: usize = 900;
 
 /// **La recherche par mots garde au plus tant de termes** (même ticket, même mesure) : le plus
-/// grand palier sous le budget sur la base de code (495 ms à 64 termes, 2,7 s à 128).
+/// grand palier sous le budget sur la base de code — 343 ms à 64 termes et 650 ms à 128 sur
+/// lucivy 4.3.2 (495 ms et 2,7 s sur 4.3.1).
 pub const MAX_WORD_TERMS: usize = 64;
 
 /// **Les termes gardés pour la recherche par mots**, si la requête en a plus que
