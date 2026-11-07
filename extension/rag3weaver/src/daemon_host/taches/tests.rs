@@ -288,3 +288,68 @@ fn une_tache_s_ouvre_quand_seul_le_code_est_dans_un_depot() {
     assert!(git(&depot, &["rev-parse", "--verify", "-q", "refs/heads/agent/premiere"]).is_err(), "la branche est retirée");
     assert!(!tache.arbre.exists());
 }
+
+/// **Les chemins relatifs du manifeste sortent de son dossier** (relecture
+/// d'everything declarative) : un manifeste de `code-tree add` vit à
+/// `templates/backends/code/backend.json` et cite `../../tools/…`. Hors dépôt, la
+/// tâche reçoit tout `templates/` : sa seconde instance se prépare, l'outil cité
+/// hors du dossier est là. Et `declare` y refuse, nommément : ces déclarations ne
+/// sont ni versionnées ni fusionnées.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn une_tache_hors_depot_garde_les_chemins_relatifs_de_ses_gabarits() {
+    fn copier(de: &Path, vers: &Path) {
+        std::fs::create_dir_all(vers).unwrap();
+        for e in std::fs::read_dir(de).unwrap().flatten() {
+            if e.path().is_dir() {
+                copier(&e.path(), &vers.join(e.file_name()));
+            } else {
+                std::fs::copy(e.path(), vers.join(e.file_name())).unwrap();
+            }
+        }
+    }
+    let d = tempfile::tempdir().unwrap();
+    let templates = d.path().join("config").join("code-banc").join("templates");
+    copier(&Path::new(env!("CARGO_MANIFEST_DIR")).join("templates"), &templates);
+    let depot = d.path().join("depot");
+    std::fs::create_dir_all(depot.join("src")).unwrap();
+    std::fs::write(depot.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["config", "user.name", "Personne Test"],
+        &["config", "user.email", "personne@example.org"],
+        &["add", "src"],
+        &["commit", "-q", "-m", "le code"],
+    ] {
+        git(&depot, args).unwrap();
+    }
+    let manifeste = templates.join("backends").join("code").join("backend.json");
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    assert!(m["tools"]["search_code"]["graph"].as_str().unwrap().starts_with("../../tools/"), "le banc : un chemin qui sort du dossier");
+    m["database"] = json!(d.path().join("code.rag3db").to_string_lossy());
+    m["workspace"]["root"] = json!(depot.to_string_lossy());
+    m["workspace"]["read_only"] = json!(true);
+    m["workspace"]["task_writes"] = json!(true);
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let host = DaemonHost::new()
+        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+        .with_racine_des_taches(d.path().join("taches"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le backend principal s'ouvre");
+
+    let tache = host.ouvrir_une_tache(&h.id, "gabarits").expect("la tâche s'ouvre");
+    assert!(tache.manifest.ends_with("templates/backends/code/backend.json") || tache.manifest.ends_with("declarations/backends/code/backend.json"), "{:?}", tache.manifest);
+    let ht = host.hosted(&tache.manifest).unwrap();
+    let outils = host
+        .with_backend(&ht, |b| b.prepared().manifest.tools.keys().cloned().collect::<Vec<_>>())
+        .expect("la seconde instance se prépare");
+    assert!(outils.iter().any(|o| o == "search_code"), "{outils:?}");
+    let refus = host
+        .with_backend(&ht, |b| b.declare("notes.md", "une note\n", "essai").map(|_| ()))
+        .unwrap()
+        .expect_err("declare refuse hors dépôt");
+    assert!(refus.contains("hors dépôt"), "{refus}");
+    let relue = host.relecture(&h.id, "gabarits").unwrap();
+    assert_eq!(relue["declarations"]["versionnees"], json!(false), "{}", relue["declarations"]);
+    host.fermer_une_tache(&h.id, "gabarits").unwrap();
+}
