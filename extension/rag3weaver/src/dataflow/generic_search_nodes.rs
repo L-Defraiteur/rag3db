@@ -1462,12 +1462,12 @@ impl Node for BM25SearchNode {
         let distance = self.fuzzy_distance.unwrap_or(options.fuzzy_distance);
         let result_mode = self.result_mode.unwrap_or(options.result_mode);
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
-        let cherche = |mode: BM25Mode, distance: u8, diag: Option<&mut crate::search::SearchDiagnostics>, avert: &mut Vec<String>| {
+        let cherche = |requete: &str, mode: BM25Mode, distance: u8, diag: Option<&mut crate::search::SearchDiagnostics>, avert: &mut Vec<String>| {
             search_bm25_chunked(
                 &*conn,
                 dialect.as_ref(),
                 &target,
-                &query_str,
+                requete,
                 fields,
                 mode,
                 distance,
@@ -1495,15 +1495,36 @@ impl Node for BM25SearchNode {
         // `<signal>_exact`, pour qu'une fusion la déclare dominante.
         let (results, exacts) = if matches!(mode, BM25Mode::Auto) {
             let plusieurs_mots = query_str.split_whitespace().take(2).count() > 1;
+            // **Une requête longue est bornée** (ticket du 7 novembre 2026, mesuré) : la
+            // requête entière perd son flou au-delà de `MAX_FUZZY_WHOLE_QUERY_CHARS`, la
+            // recherche par mots garde au plus `MAX_WORD_TERMS` termes ; les deux coupes se
+            // disent dans la méta.
+            let longueur = query_str.chars().count();
+            let distance_entiere = if longueur <= crate::search::MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 };
+            if distance_entiere == 0 {
+                node_warnings.push(format!(
+                    "requête longue : la requête entière ({longueur} caractères) se cherche sans flou au-delà de {}",
+                    crate::search::MAX_FUZZY_WHOLE_QUERY_CHARS
+                ));
+            }
+            let requete_mots = match crate::search::bound_word_terms(&query_str) {
+                Some((reduite, gardes, total)) => {
+                    node_warnings.push(format!(
+                        "requête longue : {gardes} termes sur {total} gardés pour la recherche par mots (les plus longs)"
+                    ));
+                    reduite
+                }
+                None => query_str.clone(),
+            };
             let (exact, mots) = std::thread::scope(|s| {
                 let fil = plusieurs_mots.then(|| {
                     s.spawn(|| {
                         let mut avert = Vec::new();
-                        let r = cherche(BM25Mode::Parse, distance, None, &mut avert);
+                        let r = cherche(&requete_mots, BM25Mode::Parse, distance, None, &mut avert);
                         (r, avert)
                     })
                 });
-                let exact = cherche(BM25Mode::Contains, 1, diag_bm25.as_mut(), &mut node_warnings);
+                let exact = cherche(&query_str, BM25Mode::Contains, distance_entiere, diag_bm25.as_mut(), &mut node_warnings);
                 (exact, fil.map(|f| f.join().unwrap_or_else(|_| (Ok(Vec::new()), vec!["la recherche par mots a paniqué".to_string()]))))
             });
             match exact {
@@ -1535,7 +1556,7 @@ impl Node for BM25SearchNode {
                 Err(e) => (Err(e), None),
             }
         } else {
-            (cherche(mode, distance, diag_bm25.as_mut(), &mut node_warnings), None)
+            (cherche(&query_str, mode, distance, diag_bm25.as_mut(), &mut node_warnings), None)
         };
         let results = match results {
             Ok(r) => r,
