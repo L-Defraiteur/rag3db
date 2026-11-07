@@ -515,3 +515,26 @@ dit dans le journal.
 rares. Résultat, un silence sur un message qui était exactement le sujet
 d'une fiche. Proposé à c7 : pondérer par la rareté (IDF sur les fiches,
 identifiants en majuscules).
+
+**Deuxième tour sous 3 ter (a) (18 h 16, une notification de tâche).**
+
+**Le bloc reçu, mot pour mot :**
+
+> [mémoire]
+> Fiches en rapport (score brut du meilleur signal, sans seuil) : « régime
+> GPU » (0.35 ; Comment on ménage les cartes du poste.) — `get_fiche` pour
+> lire.
+
+**Le journal :**
+
+- requête « Background command Wait real turn under hook binary completed
+  exit », rappel en 334 ms ;
+- « hooks-essai » 1.66, « régime GPU » 0.35 ;
+- « exclu : « hooks-essai » ; échelle brute (score au-delà de 1), pas de seuil ;
+  neuf : 1 ».
+
+**Le défaut :** l'échelle se juge avec la fiche exclue. Ma fiche, à 1.66, fait
+basculer le hook en « pas de seuil », et une fiche hors sujet passe à 0.35,
+alors qu'à 0.32 elle était tue au tour d'avant. Proposé : juger l'échelle
+après l'exclusion, garder un seuil relatif en échelle brute, et ne pas
+rappeler sur un tour de notification.
