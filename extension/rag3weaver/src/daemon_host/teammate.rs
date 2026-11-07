@@ -808,7 +808,7 @@ impl DaemonHost {
             .into_iter()
             .flat_map(|(t, f)| {
                 f.pending_for(who).into_iter().map(move |l| {
-                    let mut item = json!({ "id": l["id"], "task": t.nom, "parent": t.parent, "kind": l["kind"], "text": l["text"], "at": l["at"] });
+                    let mut item = json!({ "id": l["id"], "task": t.nom, "parent": t.parent, "from": l["from"], "kind": l["kind"], "text": l["text"], "at": l["at"] });
                     for k in ["item", "command", "delivered"] {
                         if !l[k].is_null() {
                             item[k] = l[k].clone();

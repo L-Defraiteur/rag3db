@@ -115,7 +115,7 @@ pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
   - Chaque ligne de boîte a un **identifiant stable** : `id = "<parent>/<task>:<n>"`, `n` le rang
     de la ligne dans `mailbox.jsonl` (la boîte ne fait qu'ajouter, le rang ne bouge jamais).
   - `GET /ide/teammate/pending?for=claude-code:<id>` →
-    `{"for": "claude-code:<id>", "items": [{"id", "task", "parent", "kind", "item"?, "text", "at"}]}`,
+    `{"for": "claude-code:<id>", "items": [{"id", "task", "parent", "from", "kind", "item"?, "text", "at"}]}`,
     `kind` ∈ `question` | `approval` | `proposal` | `report` | `ended`. Un item reste en attente tant
     qu'aucune ligne de la boîte ne porte `reply_to: <son id>` ; `report` et `ended` n'attendent pas
     de réponse et sortent quand ils sont **vus** : `pending` est une lecture pure (un rejeu du hook,

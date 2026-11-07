@@ -396,7 +396,7 @@ fn the_addressed_mailbox_by_the_host_routes() {
     // La question attend s1, et elle seule ; deux lectures ne la consomment pas.
     let pending = |who: &str| get(&format!("/ide/teammate/pending?for={who}"))["result"]["items"].as_array().cloned().unwrap_or_default();
     let question = attendre("la question de l'équipier dans pending", &|| pending("claude-code:s1").into_iter().find(|i| i["kind"] == "question"));
-    assert_eq!((question["task"].clone(), question["parent"].clone(), question["item"].clone()), (json!("doc"), json!(id), json!("titre")), "{question}");
+    assert_eq!((question["task"].clone(), question["parent"].clone(), question["item"].clone(), question["from"].clone()), (json!("doc"), json!(id), json!("titre"), json!("teammate")), "{question}");
     let qid = question["id"].as_str().unwrap().to_string();
     assert!(qid.starts_with(&format!("{id}/doc:")), "{qid}");
     assert!(pending("claude-code:s2").is_empty(), "une autre clé ne voit rien");
