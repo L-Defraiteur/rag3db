@@ -164,7 +164,9 @@ pub fn requete_de_rappel(prompt: &str, max_mots: usize, vocabulaire: &HashSet<St
             continue;
         }
         // Un mot court a la forme du code (chiffre, souligné, capitale) : il reste.
-        let court_code = m.chars().any(|c| c.is_ascii_digit() || c == '_' || c.is_uppercase());
+        // Une majuscule initiale seule n'est pas du code (« Le », « On ») : il faut
+        // un chiffre, un souligné, ou deux capitales (un sigle, un camelCase).
+        let court_code = m.chars().any(|c| c.is_ascii_digit() || c == '_') || m.chars().filter(|c| c.is_uppercase()).count() >= 2 || m.chars().skip(1).any(char::is_uppercase);
         let hash = m.chars().count() >= 7 && m.chars().all(|c| c.is_ascii_hexdigit()) && m.chars().any(|c| c.is_ascii_digit());
         if m.chars().count() < 2 || est_uuid(m) || hash || (!dans_le_code && !nombre && est_un_id(m)) || (!nombre && !m.chars().any(char::is_alphabetic)) {
             continue;
@@ -248,6 +250,9 @@ pub(crate) mod tests {
         for m in ["WAL", "casse", "L6", "fd", "port", "7970", "V2"] {
             assert!(q.iter().any(|x| x == m), "« {m} » : {q:?}");
         }
+        let q2 = requete_de_rappel("Le régime GPU et Lucie. On relit.", 10, &vide());
+        assert!(!q2.iter().any(|x| x == "Le" || x == "On"), "une majuscule de début de phrase ne fait pas un mot du code : {q2:?}");
+        assert!(q2.iter().any(|x| x == "GPU"), "{q2:?}");
         for m in ["le", "et", "du", "en", "sous"] {
             assert!(!q.iter().any(|x| x == m), "« {m} » est un mot d'arrêt : {q:?}");
         }
