@@ -254,8 +254,14 @@ fusionnés, 338 Gio de targets) :
 micro-VM éphémère qui porte le worktree, son target et son équipier ; un
 ordonnanceur la place là où il y a de la place (le portable, luciepc, un pod)
 selon la charge, et la détruit à la fusion. L'hôte du dépôt et son index
-restent uniques et partagés ; seul le travail se distribue. `poste lourd` et
-`poste mesure` sont la version à la main de cet ordonnanceur.
+restent uniques et partagés ; seul le travail se distribue. Lucie, 7 novembre :
+« des mini-VM qui dispatchent des pourcentages pour que chacun ait les mêmes,
+et distribué sur plusieurs machines » : la part est un pourcentage égal des
+ressources par mini-machine, pas une place entière, et l'ordonnanceur répartit
+ces parts sur toutes les machines disponibles selon leur place libre. `poste
+lourd` à N places et `poste mesure` sont la version à la main, et grossière, de
+cet ordonnanceur (7 novembre : deux places saturaient luciepc à un tiers,
+quatre le tiennent à une charge de 19 sur 24 cœurs).
 
 ## L'ordre
 
