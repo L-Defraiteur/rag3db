@@ -159,3 +159,14 @@ Ensuite, à ordonner avec Lucie : la couche déclarative `view!` sur taffy, le p
   Cela fait environ 280 octets par image, dont 69 de texte. À 30 images/s, c'est moins de 9 Ko/s, assez peu pour ssh.
 - **Les bornes du test.** 35 000 octets pour une image tous les dix tokens, et 78 000 pour une image par token : un quart de marge au-dessus du mesuré. Un changement qui les dépasse doit d'abord se justifier.
 - **Ce qui coûte.** Chaque `insert_before` redessine la zone vivante entière. Ce sera la piste si une mesure sous mosh (lot tty-5) le demande.
+
+### La durée d'e2e_tty varie (7 nov. 2026, à suivre)
+
+Dans la passe de push du lot tty-1 à luciepc (lib 04063ee06, commit 1c9a9350a), la même suite `e2e_tty` a tourné deux fois. Les comptes sont identiques : 42 trames avant la coupure, 264 après la reprise, 306 dans la relecture, 300 tokens, fin « fait sans plan ».
+
+| Passage | Durée |
+|---|---|
+| le témoin, en tête de passe | 4,04 s |
+| la suite du changement | 52,88 s |
+
+Ce n'est pas un rouge. Le temps passe dans l'attente que l'équipier finisse (la boucle sur `GET /ide/teammate`), sans doute sous la charge du poste. Le lot suivant mesure cette attente à part ; si les 50 s reviennent, on ouvre un ticket.
