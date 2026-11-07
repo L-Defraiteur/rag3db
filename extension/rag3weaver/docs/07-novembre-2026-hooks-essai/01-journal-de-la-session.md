@@ -635,3 +635,29 @@ seul (environ 30 s sous `poste push`) a poussé et lu les trois contrôles.
 Worktree et target de luciepc effacés.
 
 **Tickets :** 8 fermés, 1 ouvert (le premier jeton perdu en direct).
+
+## Lot premier-jeton sur master : 23757c7d6 (nouveautés 95ff12238)
+
+**La preuve.** Le témoin navigateur relève les rangs reçus et posés : le rang
+manquant manquait dès la réception, sans `EventsMissed`. La cause n'était ni
+la page ni le bus, mais `Flux::publier` : un id tiré hors du verrou, et
+`envoyer` qui saute tout id inférieur ou égal au dernier envoyé.
+
+**Le correctif** : l'id se tire sous le verrou des abonnés, accordé avec
+everything declarative et tty avant d'écrire. Le témoin à quatre fils était
+rouge à 7 577 reçus sur 8 000.
+
+**Ce que la pose de G chez Lucie a montré.** Son code et sa mémoire étaient
+sous « Projets ». Le manifeste de code de Lucie vit dans sa configuration,
+hors dépôt. Correction : le `kind` déclaré par le gabarit d'abord, sinon un
+repli dit (`kind_source`) ; le dépôt et la branche lus dans l'espace de
+travail, sinon dans le dossier du manifeste. Le témoin reproduit la forme
+exacte de sa configuration. Le premier rouge était mal monté (le dossier
+manquait) ; le vrai rouge a été pris sur la branche de preuve
+`preuve-nature-rouge`.
+
+**Un rouge de master à moi** (relevé par embarquement) : `agent_ports`
+comparait des `at_ms`. Corrigé par `without_clock`, rejoué 10 fois sur 10.
+
+**La passe** : lib 1986, navigateur 16/16, e2e_lectures 22, e2e_tty 2.
+Le dernier pas seul sous le verrou.
