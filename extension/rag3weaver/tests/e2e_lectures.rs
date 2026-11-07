@@ -1443,6 +1443,7 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
         assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
         std::thread::sleep(Duration::from_millis(100));
     }
+    eprintln!("[creux à la demande] après l'indexation : {} appel(s)", appels.load(Ordering::SeqCst));
     assert_eq!(appels.load(Ordering::SeqCst), 0, "l'indexation n'appelle jamais le creux");
 
     let cellule = backend.catalog.lock().unwrap().scope().clone();
@@ -1452,7 +1453,9 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
             .expect("search_code")
     };
     chercher(json!({"limit": 5}));
+    eprintln!("[creux à la demande] après une recherche sans surlignage : {} appel(s)", appels.load(Ordering::SeqCst));
     assert_eq!(appels.load(Ordering::SeqCst), 0, "une recherche sans surlignage n'appelle pas le creux");
     let r = chercher(json!({"signals": ["vector"], "limit": 5, "highlights": "sparse"}));
+    eprintln!("[creux à la demande] après une recherche qui surligne : {} appel(s)", appels.load(Ordering::SeqCst));
     assert_eq!(appels.load(Ordering::SeqCst), 1, "le surlignage appelle le creux une fois, pour toute la page : {r}");
 }
