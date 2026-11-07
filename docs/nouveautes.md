@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Le terminal de l'agent de code a sa vue.** `rag3weaver-tty`, sans option, ouvre une
+  vue inline en ratatui et crossterm, la même sous Windows, macOS et Linux. Le texte de l'agent
+  coule dans l'historique du terminal (défilement, copie, tmux), et seules trois lignes se
+  redessinent en bas : la ligne en cours, l'état (réfléchit, agit, attend), la saisie. Entrée parle
+  à l'équipier, Échap l'arrête. L'écran se redessine au plus 30 fois par seconde : 28 octets par
+  token mesurés, bornés à 35, pour une connexion ssh. 1fc1e24bd.
 - **7 nov. — L'équipier se suit depuis un terminal, même à travers ssh.** `rag3weaver-tty --plain`
   lance une demande à l'agent de code et écrit au fil de l'eau ses tokens, ses outils et sa boîte.
   Après une coupure, il reprend là où il en était, sans perte ni doublon (`Last-Event-ID`, prouvé
