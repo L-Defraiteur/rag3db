@@ -811,14 +811,157 @@ impl DaemonHost {
             })
             .collect();
         let sessions: Vec<Session> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        let (chat_sessions, tasks, available_repos) = self.chat_sessions(&hotes, &backends);
         json!({
             "service": SERVICE,
             "pid": std::process::id(),
             "backends": backends,
+            "chat_sessions": chat_sessions,
+            "tasks": tasks,
+            "available_repos": available_repos,
             "sessions": sessions,
             "closed_dead_sessions": self.closed_dead.load(std::sync::atomic::Ordering::SeqCst),
             "background": self.background_state(),
         })
+    }
+
+    /// **La barre du chat** (ticket « la barre du chat ne se lit pas par
+    /// session », modèle tranché par c7 avec Lucie, forme accordée avec everything
+    /// declarative, page 02) : trois listes à plat.
+    /// - `chat_sessions` : les backends principaux qui ont une conversation ou
+    ///   sont ouverts (une mémoire seulement si on lui parle), leur modèle, leur mémoire déclarée
+    ///   (`bilans.memoire`) et leur espace (le dépôt de la session) ;
+    /// - `tasks` : les tâches (`session` = le backend qui les a ouvertes,
+    ///   `parent_task` null tant qu'aucune tâche n'en délègue), l'état de leur
+    ///   équipier et `awaits_answer`, leurs espaces (le worktree, et le second
+    ///   worktree `code` quand le code est dans un autre dépôt) ;
+    /// - `available_repos` : les backends de code ni ouverts, ni tenus par une
+    ///   session ou une tâche.
+    /// Un espace dit son dépôt, sa branche, sa racine, s'il est chargé, son rag
+    /// (`indexed`, `indexing` avec `percent`, `absent`) et, pour une tâche, sa
+    /// proposition. Lu sans ouvrir ni attendre de backend.
+    fn chat_sessions(&self, hotes: &[Arc<Hosted>], backends: &[Value]) -> (Value, Value, Value) {
+        let par_id: HashMap<&str, &Value> = backends.iter().filter_map(|b| Some((b["id"].as_str()?, b))).collect();
+        let rag = |b: &Value| -> Value {
+            let index = &b["index"];
+            let entites: Vec<&Value> = index.as_object().map(|o| o.values().filter(|v| v.is_object()).collect()).unwrap_or_default();
+            let en_cours: Option<f64> = entites
+                .iter()
+                .filter_map(|e| e["text_percent"].as_f64().or_else(|| e["vectors_percent"].as_f64()).filter(|p| *p > 0.0 && *p < 100.0))
+                .reduce(f64::min);
+            if index["busy"] == true || en_cours.is_some() {
+                json!({ "state": "indexing", "percent": en_cours.map(|p| p.round()) })
+            } else if entites.iter().any(|e| e["text"].as_str().is_some_and(|t| t != "never")) {
+                json!({ "state": "indexed" })
+            } else {
+                json!({ "state": "absent" })
+            }
+        };
+        let racine = |b: &Value| -> Value {
+            let manifest = Path::new(b["manifest"].as_str().unwrap_or_default());
+            json!(espace_du_manifeste(manifest).or_else(|| manifest.parent().map(Path::to_path_buf)))
+        };
+        let espace = |b: &Value, proposal: Option<&str>| -> Value {
+            json!({
+                "backend": b["id"],
+                "repo": b["repo"],
+                "branch": b["branch"],
+                "path": racine(b),
+                "loaded": b["open"] == true,
+                "rag": rag(b),
+                "proposal": proposal.map(|s| json!({ "state": s })),
+            })
+        };
+        // Ce qu'un backend ouvert déclare, sans attendre son verrou.
+        let declare = |id: &str| -> (Value, Option<PathBuf>) {
+            hotes
+                .iter()
+                .find(|h| h.id == id)
+                .and_then(|h| {
+                    let slot = h.backend.try_read().ok()?;
+                    let p = slot.as_ref()?.prepared();
+                    let modele = p.manifest.models.get(&crate::model_source::Capability::Llm).map(|m| json!(m.model)).unwrap_or(Value::Null);
+                    let memoire = p.manifest.bilans.as_ref().map(|d| {
+                        let m = if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) };
+                        m.canonicalize().unwrap_or(m)
+                    });
+                    Some((modele, memoire))
+                })
+                .unwrap_or((Value::Null, None))
+        };
+        let etats = self.teammate_states();
+        let taches: Vec<taches::Tache> = self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        let mut tenus: std::collections::HashSet<String> = taches.iter().map(|t| t.id.clone()).collect();
+        // Une session : un backend principal qui a une conversation, ou qui est
+        // ouvert (une mémoire ouverte n'en est une que si on lui parle : elle est
+        // l'enfant des sessions qui la déclarent).
+        let occupes: HashMap<String, bool> = self.chats_busy().into_iter().collect();
+        let mut sessions = Vec::new();
+        for b in backends {
+            let Some(id) = b["id"].as_str().map(str::to_string) else { continue };
+            let parle = occupes.contains_key(&id);
+            if tenus.contains(&id) || !b["tache"].is_null() || !(parle || (b["open"] == true && b["kind"] != "memory")) {
+                continue;
+            }
+            let occupe = occupes.get(&id).copied().unwrap_or(false);
+            let (modele, memoire) = declare(&id);
+            let memoire = memoire.and_then(|m| backends.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(m.as_path())));
+            sessions.push(json!({
+                "id": id,
+                "name": if b["repo"].is_null() { json!(id) } else { b["repo"].clone() },
+                "model": modele,
+                "state": if occupe { json!("running") } else { Value::Null },
+                "awaits_answer": false,
+                "memory": match memoire {
+                    Some(m) => json!({ "backend": m["id"], "rag": m["open"] == true && rag(m)["state"] == "indexed" }),
+                    None => json!({ "backend": null, "rag": false }),
+                },
+                "spaces": [espace(b, None)],
+            }));
+            tenus.insert(id);
+        }
+        let mut tasks = Vec::new();
+        for t in &taches {
+            let Some(b) = par_id.get(t.id.as_str()) else { continue };
+            // Le dépôt de la tâche par son dépôt (pas par le dossier du worktree),
+            // sa branche, sa racine.
+            let mut premier = espace(b, Some("open"));
+            premier["repo"] = json!(repo_of(&t.depot));
+            premier["branch"] = json!(t.branche);
+            premier["path"] = json!(t.workspace.as_ref().filter(|w| w.code.is_none()).map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone()));
+            let mut spaces = vec![premier];
+            if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()) {
+                spaces.push(json!({
+                    "backend": t.id,
+                    "repo": repo_of(&c.depot),
+                    "branch": t.branche,
+                    "path": c.arbre,
+                    "loaded": b["open"] == true,
+                    "rag": rag(b),
+                    "proposal": { "state": "open" },
+                }));
+            }
+            let (state, attend) = etats.get(&t.id).copied().map(|(s, a)| (Some(s), a)).unwrap_or((None, false));
+            tasks.push(json!({
+                "id": t.id,
+                "session": t.parent,
+                "parent_task": null,
+                "name": t.nom,
+                "state": state,
+                "awaits_answer": attend,
+                "spaces": spaces,
+            }));
+        }
+        let disponibles: Vec<Value> = backends
+            .iter()
+            .filter(|b| b["kind"] == "code" && b["tache"].is_null() && !b["id"].as_str().is_some_and(|i| tenus.contains(i)))
+            .map(|b| {
+                let mut e = espace(b, None);
+                e.as_object_mut().map(|o| o.remove("proposal"));
+                e
+            })
+            .collect();
+        (Value::Array(sessions), Value::Array(tasks), Value::Array(disponibles))
     }
 
     /// **Les runs vivants en fond**, du plus ancien au plus récent : le `--qui`
