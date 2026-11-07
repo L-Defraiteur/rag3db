@@ -64,6 +64,12 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 ## Le push (sous `poste push`, dans le worktree de push)
 
+- **Le verrou `poste push` ne couvre que le dernier pas** : fetch, rebase, push et les trois contrôles,
+  une trentaine de secondes. La passe, et tout rejeu qu'un rebase imposerait, se jouent **hors verrou**,
+  avant de le prendre. Si le rebase sous le verrou apporte du code, le script **s'arrête et rend le verrou**
+  au lieu de rejouer dessous : on rejoue dehors, puis on reprend le verrou pour pousser. Un verrou tenu au-delà
+  de 1 200 s se lit dans `poste --qui` ; on prévient la session, on ne touche jamais à son pid
+  (7 novembre 2026 : une passe complète jouée sous le verrou a tenu 44 minutes, deux lots verts derrière).
 - **Le rebase sur master au moment du push**, puis **le diff du rebase lu** :
   `git diff origin/master...HEAD --stat` (trois points), et ce que master a reçu depuis la base :
   si du code est arrivé sous `extension/rag3weaver` (hors `.md`, hors `src/` et `test/` du moteur,
