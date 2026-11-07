@@ -898,3 +898,53 @@ fn le_premier_jeton_d_un_tour_arrive_dans_la_page() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **La nature d'un backend, sur la forme réelle d'une configuration** (la pose
+/// du 7 novembre 2026 chez Lucie : son code et sa mémoire paraissaient sous
+/// « Projets »). Un manifeste de code rangé dans un dossier de configuration,
+/// hors de tout dépôt, sans `kind` (une copie d'avant le champ), dont
+/// `workspace.root` est un dépôt : l'état le dit `code`, par repli, avec le nom
+/// et la branche du dépôt de son espace de travail. Une mémoire instanciée du
+/// gabarit, sans `bilans` déclaré nulle part : `memory`, par son manifeste.
+#[test]
+fn la_nature_d_un_backend_vient_de_son_gabarit_sinon_de_son_espace_de_travail() {
+    let d = tempfile::tempdir().unwrap();
+    // Le dépôt indexé, sur sa branche.
+    let depot = d.path().join("atelier");
+    std::fs::create_dir_all(&depot).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(&depot).args(args).status().unwrap().success(), "git {args:?}");
+    git(&["init", "-q", "-b", "principale"]);
+    git(&["config", "user.name", "Personne Test"]);
+    git(&["config", "user.email", "personne@example.org"]);
+    std::fs::write(depot.join("main.rs"), "fn main() {}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "un"]);
+    // La configuration, hors de tout dépôt : le code (sans `kind`) et la mémoire.
+    let config = d.path().join("config");
+    let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends");
+    let code = crate::gabarits::jouable::manifeste_jouable(&gabarits.join("code"), &config.join("code")).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&code).unwrap()).unwrap();
+    m.as_object_mut().unwrap().remove("kind");
+    m["workspace"]["root"] = json!(depot.to_string_lossy());
+    std::fs::write(&code, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let memoire = crate::gabarits::jouable::manifeste_jouable(&gabarits.join("memory"), &config.join("memoire")).unwrap();
+
+    let host = DaemonHost::new().with_chats_root(d.path().join("chats")).with_chat_model(qui_lit_deux_fois());
+    for m in [&code, &memoire] {
+        let h = host.hosted(m).unwrap();
+        host.with_backend(&h, |_| ()).expect("le backend s'ouvre");
+    }
+    let etat = host.state();
+    let de = |m: &Path| {
+        let m = m.canonicalize().unwrap();
+        etat["backends"].as_array().unwrap().iter().find(|b| b["manifest"] == json!(m)).cloned().unwrap_or_else(|| panic!("pas de {} : {etat}", m.display()))
+    };
+    let c = de(&code);
+    assert_eq!(
+        (c["kind"].clone(), c["kind_source"].clone(), c["repo"].clone(), c["branch"].clone()),
+        (json!("code"), json!("fallback"), json!("atelier"), json!("principale")),
+        "{c}"
+    );
+    let me = de(&memoire);
+    assert_eq!((me["kind"].clone(), me["kind_source"].clone()), (json!("memory"), json!("manifest")), "{me}");
+}
