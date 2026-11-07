@@ -1357,3 +1357,102 @@ fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
         "les passages viennent du creux de bge-m3 : {morceau}"
     );
 }
+
+/// **Le creux ne s'embarque qu'au surlignage** (Lucie, 7 novembre 2026 : « faut pas que ça embed
+/// tout h24, juste le moment du surlignage »). Le gabarit de code déclare `models.sparse` ; son
+/// service est ici un vrai serveur d'embarquement du dépôt, dont l'embarqueur creux compte ses
+/// appels (adresse explicite dans le manifeste : une variable d'environnement toucherait les autres
+/// tests du processus). L'indexation entière, puis une recherche sans surlignage : zéro appel ; une
+/// recherche qui demande le surlignage : un appel.
+#[cfg(all(feature = "code", feature = "daemon"))]
+#[test]
+#[ignore]
+fn le_creux_ne_s_embarque_qu_au_surlignage() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::{json, Value};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    struct BgeFactice;
+    impl rag3weaver::Embedder for BgeFactice {
+        fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::EmbedError> {
+            Ok(textes.iter().map(|_| vec![1.0f32; 8]).collect())
+        }
+        fn dim(&self) -> usize {
+            8
+        }
+        fn name(&self) -> &str {
+            "bge-m3"
+        }
+    }
+    struct CreuxQuiCompte(Arc<AtomicUsize>);
+    impl rag3weaver::SparseEmbedder for CreuxQuiCompte {
+        fn embed_sparse(&self, textes: &[String]) -> Result<Vec<rag3weaver::sparse_index::SparseVector>, rag3weaver::EmbedError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(textes.iter().map(|_| rag3weaver::sparse_index::SparseVector { indices: vec![5], values: vec![0.5] }).collect())
+        }
+    }
+
+    let appels = Arc::new(AtomicUsize::new(0));
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let adresse = ecoute.local_addr().unwrap().to_string();
+    {
+        let appels = appels.clone();
+        std::thread::spawn(move || {
+            let _ = rag3weaver::daemon::EmbedDaemon::new(Arc::new(BgeFactice))
+                .avec_sparse(Arc::new(CreuxQuiCompte(appels)))
+                .servir_lie(ecoute);
+        });
+    }
+    let debut = Instant::now();
+    while rag3weaver::daemon::DaemonEmbedder::joindre(&adresse).is_err() {
+        assert!(debut.elapsed() < Duration::from_secs(10), "le service factice ne répond pas");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code_sur(tmp.path(), "creux-a-la-demande", Some(depot.path()));
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    assert_eq!(v["models"]["sparse"]["model"], "bge-m3", "le gabarit de code déclare le creux : {}", v["models"]);
+    v["models"]["sparse"]["address"] = json!(adresse);
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared
+        .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
+        .expect("l'ouverture");
+    assert!(backend.avertissements().is_empty(), "le service creux est joint : {:?}", backend.avertissements());
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        if lu.contains("indexation terminée") {
+            break;
+        }
+        assert!(!lu.contains("indexation échouée"), "{lu}");
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "l'indexation n'appelle jamais le creux");
+
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let chercher = |options: Value| {
+        backend
+            .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": options, "mode": "indexed"}))
+            .expect("search_code")
+    };
+    chercher(json!({"limit": 5}));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "une recherche sans surlignage n'appelle pas le creux");
+    let r = chercher(json!({"signals": ["vector"], "limit": 5, "highlights": "sparse"}));
+    assert_eq!(appels.load(Ordering::SeqCst), 1, "le surlignage appelle le creux une fois, pour toute la page : {r}");
+}
