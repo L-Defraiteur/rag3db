@@ -477,6 +477,58 @@ fn un_run_d_outil_puis_un_run_de_reaction_s_annoncent_par_leur_nom() {
     assert_eq!(backend.stop_reactions(), Vec::<String>::new());
 }
 
+/// **Un rôle se dit aussi par une réaction** (relecture d'everything
+/// declarative, 7 novembre 2026) : l'archive et la compaction tournent souvent
+/// par une réaction ; une réaction qui déclare `role` l'annonce dans
+/// `RunStarted.target.role`, comme l'appel d'un outil à rôle — et un outil ou
+/// une réaction sans rôle n'en porte pas.
+#[test]
+fn une_reaction_a_role_l_annonce_dans_son_run() {
+    let (dir, backend) = reactif();
+    ecrire(
+        dir.path(),
+        "dis.mmd",
+        "%% tool: dis\n%% description: dit oui\n%% param: value json! -- n'importe quoi\n%% result: vu.result\ngraph LR\n    vu[\"RhaiNode(script_id=vu, value=$value)\"]\n",
+    );
+    ecrire(
+        dir.path(),
+        "backend.json",
+        &MANIFESTE
+            .replace(r#""tools": {},"#, r#""tools": { "dis": { "graph": "dis.mmd", "role": "archiviste" } },"#)
+            .replace(r#""description": "le témoin du montage""#, r#""description": "le témoin du montage", "role": "compaction""#),
+    );
+    backend.reload().expect("le rechargement");
+    let mut flux = bus_de(&backend).subscribe(crate::events::topic::DATAFLOW);
+    let mut des_reactions = bus_de(&backend).subscribe(crate::events::topic::REACTIONS);
+    let annonce = |rx: &mut async_broadcast::Receiver<Event>, cle: &str, nom: &str| -> Value {
+        let fin = std::time::Instant::now() + Duration::from_secs(10);
+        let mut vus = Vec::new();
+        while std::time::Instant::now() < fin {
+            match rx.try_recv() {
+                Ok(e @ Event::RunStarted { .. }) => {
+                    let v = e.to_json();
+                    if v["target"][cle] == nom {
+                        return v;
+                    }
+                    vus.push(v);
+                }
+                Ok(_) => {}
+                Err(_) => std::thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        panic!("aucun RunStarted de {cle} {nom} en 10 s ; vus : {vus:?}")
+    };
+
+    backend.call("dis", json!({ "value": { "n": 1 } })).expect("l'appel de l'outil");
+    assert_eq!(annonce(&mut flux, "tool", "dis")["target"], json!({ "tool": "dis", "role": "archiviste" }));
+
+    assert_eq!(backend.mount_reactions().expect("le montage"), vec!["sonde".to_string()]);
+    bus_de(&backend).emit(Event::entites_changees("N'importe", vec!["u-1".into()], "ingested"));
+    assert!(backend.wait_reaction_runs(1, Duration::from_secs(10)), "la réaction n'est pas partie");
+    assert_eq!(annonce(&mut des_reactions, "reaction", "sonde")["target"], json!({ "reaction": "sonde", "role": "compaction" }));
+    assert_eq!(backend.stop_reactions(), Vec::<String>::new());
+}
+
 /// **Écouter les runs des réactions est refusé au chargement** : une réaction
 /// qui écouterait `reactions` se relancerait sur ses propres runs. Le refus
 /// dit pourquoi, et ce qu'il faut écouter à la place.
