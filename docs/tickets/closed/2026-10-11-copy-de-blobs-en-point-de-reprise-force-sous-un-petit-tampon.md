@@ -1,16 +1,20 @@
 # Le COPY de blobs en point de reprise forcé fait échouer la validation sous un petit tampon
 
-- **État** : ouvert — **forme retenue, non engagée ; filet produit en place ; reprise après la
-  condition 3** (orchestration, 11 octobre 2026). La forme est dans
-  `extension/rag3weaver/docs/10-octobre-2026-coeur-cpp-tickets/04-le-copy-de-blobs-borne-en-octets.md`.
-  Le témoin rouge (`BlobCopyCheckpointTest`) attend sur la branche `copy-de-blobs`, hors de master.
-  Le filet côté produit (arbre principal) borne en octets les COPY de blobs du paquet.
+- **État** : corrigé (8 novembre 2026, seconde session cœur C++, lot G2) : un COPY de nœuds se borne
+  en octets (`NodeBatchInsertSharedState::byteBudget`, la limite du tampon / 3·(fils + 1)) ; un groupe
+  en mémoire qui dépasse son budget va au disque sans attendre d'être plein, et un groupe local trop
+  gros n'est plus recopié dans le groupe partagé ; le vidage partiel ouvre la tête d'un groupe de
+  nœuds vide ou s'ajoute, par copie-échange, à la tête ON_DISK née du même COPY
+  (`NodeGroup::extendFlushedHead`, forme validée par le cœur : un bloc neuf qui partage les segments,
+  échangé sous le verrou des blocs puis `inMemAppendMtx`, jamais en place) ; le COPY journalisé écrit
+  au journal par tranches bornées en octets, le seuil lu entre deux tranches. Témoins :
+  `BlobCopyCheckpointTest.*` (forcé, journalisé, sous un lecteur en boucle, annulé avec la reprise de
+  ses pages), rouges avant, verts après.
 - **Gravité** : blocage (la validation du paquet échoue, la base est à rouvrir)
 - **Atteignable en service** : oui. C'est le stockage en blobs du plein texte de rag3weaver : il
   n'est plus le défaut d'une base neuve, mais toutes les bases d'avant la bascule du 10 octobre y
   sont.
 - **Touche rag3weaver** : oui (la poussée des blobs du plein texte, par paquet)
-- **Famille** : moteur
 
 > **Recentré (11 octobre, midi).** Ce qui est établi : **un gros COPY de blobs échoue à
 > l'assemblage du groupe en mémoire**, pendant le COPY et avant tout point de reprise (pile au
@@ -135,3 +139,13 @@ les recettes à côté (`jouer-blobs-*.sh`).
 de ~3 000 fichiers échoue à la validation d'un paquet. Le mode fichiers passe. La forme moteur, un
 COPY borné en octets à l'assemblage, est reportée après la condition 3. Rien n'est changé dans le
 produit : la ligne est dans la page des défauts.
+
+## Les filets, à la fermeture
+
+Le moteur porte désormais un gros COPY de blobs sous un petit tampon. Les deux filets du produit
+(`estimate.rs`, `TEXT_BYTES_PER_BUFFER_GIB` et `Estimate::buffer_refusal` ; la poussée des
+`_index_blobs` par `UNWIND … MERGE` en lots bornés) **restent** jusqu'à ce que le produit les
+recalcule sur le moteur qui porte ce correctif : c'est à lui de dire s'ils se relâchent ou partent.
+Limite écrite : un très gros COPY de blobs dans un groupe de nœuds déjà commencé par un point de
+reprise antérieur passe encore par la mémoire (le cas (iii) de la page 04).
+
