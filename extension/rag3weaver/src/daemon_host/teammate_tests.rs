@@ -492,7 +492,7 @@ fn a_teammate_works_on_the_files_when_its_backend_does_not_open() {
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
     let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
     // La base de la tâche : fermée, puis remplacée par un fichier qui n'en est pas une.
-    let (_, session) = host.handle("POST", "/session", None, br#"{"client":"le témoin"}"#);
+    let (_, session) = host.handle("POST", "/session", None, br#"{"client":"le-temoin"}"#);
     let ferme = host.close(session["session"].as_str(), &t.manifest);
     assert_eq!(ferme["result"]["closed"], true, "{ferme}");
     let base = &t.copie.base;
