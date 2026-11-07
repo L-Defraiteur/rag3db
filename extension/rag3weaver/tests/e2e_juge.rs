@@ -422,3 +422,132 @@ fn le_juge_des_outils_sur_gemini_nomme_les_defauts_de_schema_et_de_retour() {
         assert!(nomme(genre), "le juge n'a pas nommé {genre} avec son call_id et sa forme : {outil}");
     }
 }
+
+/// Le faux juge d'un tour de Claude Code : lire le run, rejouer le premier appel de
+/// l'hôte (`appels_de_l_hote`), relire les bilans, puis les deux rapports.
+fn faux_juge_d_un_tour_de_claude_code(vu: Arc<Mutex<Vu>>) -> rag3weaver::daemon_host::chat::ChatModel {
+    Arc::new(move |_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        let vu = vu.clone();
+        Ok(Arc::new(CallbackLlm::new("faux-juge", 8192, move |turns, opts, sink| {
+            let outils_vus: Vec<&rag3weaver::llm::Turn> = turns.iter().filter(|t| t.role == "tool").collect();
+            if let Some(rag3weaver::llm::ResponseFormat::JsonSchema { name, .. }) = &opts.response_format {
+                if name == "bilan_des_outils" {
+                    vu.lock().unwrap().declarations.push(outils_vus[0].content.clone());
+                    let outils = json!({ "outils": [{ "outil": "read_file", "appels": 1, "echecs": 0, "inutiles": 0, "part_utilisee": 1.0,
+                        "defauts": { "bloquant": [], "genant": [], "mineur": [] } }] });
+                    return MockLlm::new(outils.to_string().as_str()).generate(turns, opts, sink);
+                }
+                let verdict = json!({
+                    "resume": "Le tour a lu main.rs par l'hôte et l'a résumé.",
+                    "note": 7, "confiance": "haute", "objectif": "atteint",
+                    "faits": [{ "texte": "mcp__code-rag3db__read_file a rendu main.rs", "nature": "dit" }],
+                    "renvois_bloquants": [], "frictions": [], "attentes": [],
+                    "comparaison": { "verdict": "premier", "sur": "aucun bilan précédent" },
+                });
+                return MockLlm::new(verdict.to_string().as_str()).generate(turns, opts, sink);
+            }
+            let appel = |nom: &str, args: Value| MockLlm::new("").with_tool_calls(vec![(nom, args.to_string().as_str())]);
+            match outils_vus.len() {
+                0 => appel("lire_le_run", json!({})).generate(turns, opts, sink),
+                1 => {
+                    let lu: Value = serde_json::from_str(&outils_vus[0].content).unwrap_or(Value::Null);
+                    vu.lock().unwrap().declarations.push(outils_vus[0].content.clone());
+                    let id = lu["appels_de_l_hote"][0]["call_id"].as_str().unwrap_or("absent").to_string();
+                    appel("rejouer_un_outil", json!({ "call_id": id })).generate(turns, opts, sink)
+                }
+                2 => {
+                    vu.lock().unwrap().rejoue.push(outils_vus[1].content.clone());
+                    appel("bilans_precedents", json!({})).generate(turns, opts, sink)
+                }
+                _ => MockLlm::new("J'ai assez.").generate(turns, opts, sink),
+            }
+        })))
+    })
+}
+
+/// **Un tour de Claude Code se juge** (lot juge-claude-code, 7 novembre 2026) : le journal
+/// que le hook écrit (`genre: claude_code_turn`, ses `tours` aux `tool_calls`, sa table
+/// `serveurs`) est lu par le juge. Il rejoue l'appel de l'hôte par le serveur nommé,
+/// laisse les outils propres de Claude Code (`Bash`), ne compte pas de coût, et range le
+/// bilan sur la tâche que `whois {handle: session}` rend : la première fiche de la ligne
+/// `doing:` du dernier apport identity. Un handle qu'aucune fiche ne cite est refusé en
+/// le disant.
+#[test]
+#[ignore]
+fn un_tour_de_claude_code_se_juge_sur_la_tache_que_whois_rend() {
+    let d = tempfile::tempdir().unwrap();
+    let vu = Arc::new(Mutex::new(Vu::default()));
+    let juge = faux_juge_d_un_tour_de_claude_code(vu.clone());
+    let (host, memoire, id) = banc_avec(d.path(), faux(Arc::new(Mutex::new(Vu::default()))), Some(juge), None, false);
+    let code = d.path().join("templates/backends/code/backend.json");
+    let appeler_memoire = |outil: &str, args: Value| -> Value {
+        let s = host.open_session("le témoin", None, Vec::new(), None);
+        let r = host.call(Some(&s), &memoire, outil, args.clone());
+        assert_ne!(r["ok"], false, "{outil} {args} : {r}");
+        r
+    };
+
+    // L'identité de l'agent : sa fiche, son handle, son apport identity (page 04 §6).
+    for (genre, description) in [("handle", "une adresse du harnais"), ("fiche", "une fiche par son nom")] {
+        appeler_memoire("create_ref_type", json!({ "name": genre, "description": description, "confirm": true }));
+    }
+    appeler_memoire("put_fiche", json!({ "record": { "name": "t-essai", "about": "Une session d'essai.", "state": "current" } }));
+    let apport = |section: &str, texte: &str, cites: &[(&str, &str)]| {
+        let cle = json!({ "fiche": "t-essai", "source": "sessions/s-1", "section": section });
+        let mut record = cle.clone();
+        record["texte"] = json!(texte);
+        record["niveau"] = json!("L1");
+        record["state"] = json!("current");
+        appeler_memoire("put_apport", json!({ "record": record }));
+        appeler_memoire("relier_apport", json!({ "links": [{ "from": { "name": "t-essai" }, "to": cle }] }));
+        for (genre, valeur) in cites {
+            appeler_memoire("citer_source", json!({ "genre": genre, "valeur": valeur, "fiche": cle }));
+        }
+    };
+    apport("handle", "session:s-1", &[("handle", "session:s-1")]);
+    apport("identity", "## identity\nwho: t-essai\ndoing: lire main.rs, puis autre chose", &[("fiche", "autre chose"), ("fiche", "lire main.rs")]);
+
+    // Le journal du tour, tel que le hook l'écrit, rangé dans le journal des runs de l'hôte.
+    let run = "cc-essai-1";
+    let ecrire_le_journal = |run: &str, session: &str| {
+        let journal = json!({
+            "genre": "claude_code_turn", "session": session, "agent": "t-essai",
+            "cwd": d.path().join("code").display().to_string(),
+            "tours": [
+                { "role": "user", "content": "Lis main.rs et dis-moi ce qu'il fait." },
+                { "role": "assistant", "tool_calls": [
+                    { "id": "tu-1", "name": "mcp__code-rag3db__read_file", "input": { "path": "main.rs" } },
+                    { "id": "tu-2", "name": "Bash", "input": { "command": "ls" } },
+                ] },
+                { "role": "tool", "tool_use_id": "tu-1", "is_error": false, "content": "00001| fn main() {}" },
+                { "role": "tool", "tool_use_id": "tu-2", "is_error": false, "content": "main.rs" },
+            ],
+            "dernier_message": "C'est un main vide.",
+            "fin": { "kind": "RunFinished", "externe": true },
+            "evenements": [],
+            "serveurs": { "code-rag3db": code.display().to_string(), "memoire-longue": memoire.display().to_string() },
+        });
+        let dossier = d.path().join("runs").join(&id);
+        std::fs::create_dir_all(&dossier).unwrap();
+        std::fs::write(dossier.join(format!("{run}.json")), serde_json::to_vec(&journal).unwrap()).unwrap();
+    };
+    ecrire_le_journal(run, "session:s-1");
+
+    let b = host.juger(&id, run).unwrap_or_else(|e| panic!("le juge : {e}"));
+    eprintln!("bilan : {b}");
+    assert_eq!(b["fiche"], "lire main.rs", "la tâche de la ligne doing:, rendue par whois : {b}");
+    {
+        let v = vu.lock().unwrap();
+        let lu: Value = serde_json::from_str(v.declarations.first().expect("lire_le_run vu")).unwrap();
+        let appels = lu["appels_de_l_hote"].as_array().expect("appels_de_l_hote");
+        assert_eq!(appels.len(), 1, "le seul appel de l'hôte, pas Bash : {lu}");
+        assert_eq!((appels[0]["serveur"].as_str(), appels[0]["outil"].as_str()), (Some("code-rag3db"), Some("read_file")), "{lu}");
+        assert!(lu["declarations"].to_string().contains("read_file"), "la déclaration de read_file, par le backend du serveur : {lu}");
+        assert!(v.rejoue.first().is_some_and(|r| r.contains("fn main()")), "le juge a rejoué read_file par le serveur nommé : {:?}", v.rejoue);
+    }
+
+    // Un handle qu'aucune fiche ne cite : refusé en le disant.
+    ecrire_le_journal("cc-essai-2", "session:inconnue");
+    let e = host.juger(&id, "cc-essai-2").err().expect("un handle inconnu se refuse");
+    assert!(e.contains("session:inconnue") && e.contains("aucune fiche d'identité"), "{e}");
+}

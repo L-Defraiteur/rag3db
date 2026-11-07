@@ -1,8 +1,6 @@
 # Un graphe cité qui déclare des paramètres est refusé au chargement
 
-- **État** : ouvert, le 7 novembre 2026. Trouvé par la première exécution complète de l'outil
-  `archive` (M4, session mémoire) ; question posée à l'arbre principal, qui tient ForEachNode et le
-  GraphNode cité (1bd1be619).
+- **État** : corrigé par le commit « fix(dataflow): les paramètres du parent ne se substituent plus dans le graphe cité » (lot juge-claude-code de l'arbre principal, 7 novembre 2026) : `substitute_definition` laisse intacte la valeur résolue de `graph` d'un GraphNode ou d'un ForEachNode ; témoin `dataflow::foreach_node::tests::les_parametres_du_parent_ne_se_substituent_pas_dans_le_graphe_cite`, rouge d'abord. Trouvé par la première exécution complète de `archive` (M4, session mémoire).
 - **Gravité** : blocage. Un graphe cité ne peut recevoir que son élément : ses autres paramètres
   font refuser le manifeste entier.
 - **Atteignable en service** : oui, dès qu'un gabarit cite un graphe à paramètres.
@@ -61,3 +59,9 @@ avec des paramètres (archive appelle `search_structured.mmd` avec `target`, `qu
 La garde de bijection juge le graphe cité avant toute substitution (ou ne compte pas comme absents
 les paramètres que le parent fournit) ; témoin : la recette ci-dessus se charge et rend `p` dans
 chaque appel.
+
+## La cause et le correctif
+
+Le défaut n'était pas dans le chargeur : `resoudre_les_sous_graphes` lit le graphe cité tel quel et range son texte dans la configuration du nœud (`graph = {cite, mermaid, sous}`). C'est à l'appel que `substitute_definition` (`src/dataflow/graph_tool.rs`) passait les arguments du parent sur toute la configuration, ce texte compris : un `$p` du graphe cité, de même nom qu'un paramètre du parent, y était remplacé avant que `ForEachNode` ne bâtisse le graphe cité et que sa garde de bijection le cherche. Le témoin de ForEachNode ne l'avait pas vu, son graphe cité n'employant que `$element`. Le correctif (`substitute_config`) laisse la clé `graph` intacte quand sa valeur est le graphe cité résolu ; le graphe cité substitue ses propres paramètres à son instanciation.
+
+**La seconde face** (96, le même soir) : la garde de bijection lisait elle aussi la valeur résolue de `graph` — un graphe cité qui cite lui-même un graphe à paramètres (`GraphNode(graph='@builtin:tools/search_structured.mmd', query=$element.text, options=$element.search_options)`) était refusé (« le graphe utilise $options, qui n'est pas un paramètre déclaré ») : `template_vars` y trouvait les `$target`, `$query`, `$options` du graphe imbriqué. Corrigé par le commit « fix(dataflow): la garde de bijection ne lit plus les paramètres d'un graphe cité » du même lot (une seule règle, `est_un_graphe_cite`, pour la substitution et pour la garde) ; témoin `dataflow::foreach_node::tests::la_garde_de_bijection_ne_lit_pas_les_parametres_d_un_graphe_cite`, rouge d'abord (il trouvait `autre`, `element`, `q`).
