@@ -721,11 +721,11 @@ fn code_tree(args: &[String]) -> Result<(), String> {
         }
         "remove" => {
             // Un nom de backend, ou le chemin de l'arbre.
-            let nom = if roots.manifest(&cible).exists() { cible.clone() } else { name_of_tree(Path::new(&cible))? };
+            let nom = if roots.source_manifest(&cible).is_ok() { cible.clone() } else { name_of_tree(Path::new(&cible))? };
             // Fermer d'abord (le manifeste doit exister pour être canonisé),
             // déplacer ensuite.
             if !sans_hote {
-                unregister(&adresse(), &roots.manifest(&nom))?;
+                unregister(&adresse(), &roots.source_manifest(&nom).unwrap_or_else(|_| roots.manifest(&nom)))?;
                 println!("{nom} : fermé par l'hôte {}", adresse());
             }
             let r = remove_files(&roots, &nom)?;

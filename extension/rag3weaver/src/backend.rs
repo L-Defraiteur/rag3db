@@ -74,6 +74,18 @@ impl Default for TeammatePolicy {
 #[serde(deny_unknown_fields)]
 pub struct BilansDeclares {
     pub memoire: PathBuf,
+    /// **Le plafond du juge** : au plus ce nombre de runs jugés par heure glissante
+    /// pour ce backend (chaque jugement coûte au moins un appel au modèle du juge) ;
+    /// au-delà, le run n'est pas jugé et le saut est dit. Défaut : 20, comme le
+    /// juge du hook de Claude Code (`recall_judge_max_per_hour`).
+    #[serde(default = "BilansDeclares::vingt")]
+    pub max_per_hour: u32,
+}
+
+impl BilansDeclares {
+    fn vingt() -> u32 {
+        20
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
