@@ -75,6 +75,17 @@ protected:
         }
         return result->hasNext() ? result->getNext()->toString() : "AUCUNE LIGNE";
     }
+    NodeTable& itemTable() {
+        auto* context = getClientContext(*conn);
+        using rag3db::transaction::Transaction;
+        const Transaction latest(rag3db::transaction::TransactionType::READ_ONLY,
+            Transaction::START_TRANSACTION_ID + 1000, Transaction::LATEST_COMMITTED_TS);
+        auto* entry =
+            rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(&latest, "Item");
+        return getStorageManager(*database)->getTable(entry->getTableID())->cast<NodeTable>();
+    }
+    // L'index d'essai n'a pas de stockage : il part avant le point de reprise de la fermeture.
+    void dropThrowingIndex() { itemTable().dropIndex("throwing_index"); }
     void addThrowingIndex() {
         auto* context = getClientContext(*conn);
         // Une lecture du dernier état validé : la transaction fictive (startTS 0) ne voit pas la
@@ -119,6 +130,7 @@ TEST_F(HalfAppliedCommit, AFailureAfterTheRowsAreAppendedLeavesTheTableAsItWas) 
         << "[check: failed-commit-keys-are-free]";
     EXPECT_EQ(row("MATCH (i:Item) RETURN sum(i.id);"), std::to_string(45 - 5 + 102 + 100) + "\n")
         << "[check: rows-and-offsets-agree]";
+    dropThrowingIndex();
 }
 
 } // namespace
