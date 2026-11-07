@@ -738,19 +738,6 @@ impl DaemonHost {
     pub fn state(&self) -> Value {
         self.reap_dead_sessions();
         let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
-        // **La mémoire déclarée** par les backends ouverts (`bilans.memoire`) :
-        // la page la nomme « la mémoire », pas un dépôt. Lue sans attendre, comme
-        // le reste de l'état.
-        let memoires: std::collections::HashSet<PathBuf> = hotes
-            .iter()
-            .filter_map(|h| {
-                let slot = h.backend.try_read().ok()?;
-                let p = slot.as_ref()?.prepared();
-                let d = p.manifest.bilans.as_ref()?;
-                let m = if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) };
-                Some(m.canonicalize().unwrap_or(m))
-            })
-            .collect();
         let backends: Vec<Value> = hotes
             .iter()
             .map(|h| {
@@ -774,7 +761,27 @@ impl DaemonHost {
                     },
                     Err(_) => (json!(true), json!({ "busy": true, "why": "une ouverture ou une fermeture tient ce backend" }), Value::Null),
                 };
-                let repo = repo_of(&h.manifest);
+                // **Le lieu que tient le backend** : la racine de son espace de
+                // travail quand il en déclare une (un manifeste de configuration,
+                // hors dépôt, qui indexe un dépôt — la forme de celui de Lucie,
+                // vue à la pose du 7 novembre), sinon le dossier de son manifeste.
+                let espace = h
+                    .backend
+                    .try_read()
+                    .ok()
+                    .and_then(|s| s.as_ref().and_then(|b| b.prepared().workspace.as_ref().map(|(r, _)| r.clone())))
+                    .or_else(|| espace_du_manifeste(&h.manifest));
+                let lieu = espace.clone().or_else(|| h.manifest.parent().map(Path::to_path_buf));
+                let repo = lieu.as_deref().and_then(repo_of);
+                // La nature : celle que le manifeste déclare (son gabarit), sinon
+                // le repli de l'hôte d'après ce qu'il voit.
+                let declare = h
+                    .backend
+                    .try_read()
+                    .ok()
+                    .and_then(|s| s.as_ref().map(|b| b.prepared().manifest.kind))
+                    .unwrap_or_else(|| kind_du_manifeste(&h.manifest));
+                let repli = if espace.is_some() || repo.is_some() { "code" } else { "project" };
                 json!({
                     "id": h.id,
                     "manifest": h.manifest,
@@ -793,14 +800,11 @@ impl DaemonHost {
                     // mémoire déclarée, `code` pour un dépôt git, `project` pour un
                     // projet rag3weaver déclaratif sans dépôt (le deck builder).
                     "repo": repo,
-                    "branch": branch_of(&h.manifest),
-                    "kind": if memoires.contains(&h.manifest.canonicalize().unwrap_or_else(|_| h.manifest.clone())) {
-                        "memory"
-                    } else if repo.is_some() {
-                        "code"
-                    } else {
-                        "project"
-                    },
+                    "branch": lieu.as_deref().and_then(branch_of),
+                    "kind": declare.map(crate::backend::BackendKind::as_str).unwrap_or(repli),
+                    // D'où vient `kind` : le manifeste (son gabarit) ou le repli de
+                    // l'hôte, que la page dit (« nature inconnue »).
+                    "kind_source": if declare.is_some() { "manifest" } else { "fallback" },
                 })
             })
             .collect();
@@ -1298,16 +1302,34 @@ mod chat_qui_code;
 /// **Le dépôt git d'un manifeste** : le nom du dossier de son `--show-toplevel`,
 /// gardé une fois lu (un dépôt ne change pas de nom sous l'hôte). `None` hors
 /// d'un dépôt git.
-fn repo_of(manifest: &Path) -> Option<String> {
+fn repo_of(lieu: &Path) -> Option<String> {
     static VUS: std::sync::OnceLock<Mutex<HashMap<PathBuf, Option<String>>>> = std::sync::OnceLock::new();
     let vus = VUS.get_or_init(Default::default);
-    if let Some(r) = vus.lock().unwrap_or_else(|p| p.into_inner()).get(manifest) {
+    if let Some(r) = vus.lock().unwrap_or_else(|p| p.into_inner()).get(lieu) {
         return r.clone();
     }
-    let r = git_dans(manifest, &["rev-parse", "--show-toplevel"])
-        .and_then(|t| Path::new(&t).file_name().map(|n| n.to_string_lossy().into_owned()));
-    vus.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.to_path_buf(), r.clone());
+    let r = git_dans(lieu, &["rev-parse", "--show-toplevel"])
+        .and_then(|t| Path::new(&t).file_name().map(|n| n.to_string_lossy().into_owned()))
+        // Hors d'un dépôt git, un espace de travail se nomme par son dossier.
+        .or_else(|| lieu.file_name().map(|n| n.to_string_lossy().into_owned()));
+    vus.lock().unwrap_or_else(|p| p.into_inner()).insert(lieu.to_path_buf(), r.clone());
     r
+}
+
+/// La nature qu'un manifeste déclare (`kind`), lue dans le fichier pour un
+/// backend pas encore ouvert.
+fn kind_du_manifeste(manifest: &Path) -> Option<crate::backend::BackendKind> {
+    let m: Value = serde_json::from_slice(&std::fs::read(manifest).ok()?).ok()?;
+    serde_json::from_value(m.get("kind")?.clone()).ok()
+}
+
+/// La racine de l'espace de travail qu'un manifeste déclare (`workspace.root`),
+/// résolue depuis son dossier — lue dans le fichier, pour un backend pas encore
+/// ouvert.
+fn espace_du_manifeste(manifest: &Path) -> Option<PathBuf> {
+    let m: Value = serde_json::from_slice(&std::fs::read(manifest).ok()?).ok()?;
+    let racine = PathBuf::from(m["workspace"]["root"].as_str()?);
+    Some(if racine.is_absolute() { racine } else { manifest.parent()?.join(racine) })
 }
 
 /// La branche que tient le dépôt d'un manifeste, relue à chaque état (elle
@@ -1315,8 +1337,8 @@ fn repo_of(manifest: &Path) -> Option<String> {
 /// ne fait jamais la queue) : le fichier `HEAD` du dépôt, en suivant le `.git`
 /// fichier d'un worktree vers son `gitdir`. `None` hors d'un dépôt git ou en tête
 /// détachée.
-fn branch_of(manifest: &Path) -> Option<String> {
-    let mut dossier = manifest.parent()?;
+fn branch_of(lieu: &Path) -> Option<String> {
+    let mut dossier = lieu;
     let git = loop {
         let g = dossier.join(".git");
         if g.exists() {
@@ -1335,8 +1357,7 @@ fn branch_of(manifest: &Path) -> Option<String> {
     tete.trim().strip_prefix("ref: refs/heads/").map(str::to_string)
 }
 
-fn git_dans(manifest: &Path, args: &[&str]) -> Option<String> {
-    let dossier = manifest.parent()?;
+fn git_dans(dossier: &Path, args: &[&str]) -> Option<String> {
     let out = std::process::Command::new("git").arg("-C").arg(dossier).args(args).stderr(std::process::Stdio::null()).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|t| !t.is_empty())
 }
@@ -1360,13 +1381,13 @@ mod tests {
         std::fs::write(depot.join("sous/backend.json"), "{}").unwrap();
         git(&depot, &["add", "."]);
         git(&depot, &["commit", "-q", "-m", "un"]);
-        assert_eq!(branch_of(&depot.join("sous/backend.json")).as_deref(), Some("principale"));
-        assert_eq!(repo_of(&depot.join("sous/backend.json")).as_deref(), Some("atelier"));
+        assert_eq!(branch_of(&depot.join("sous")).as_deref(), Some("principale"));
+        assert_eq!(repo_of(&depot.join("sous")).as_deref(), Some("atelier"));
         let arbre = d.path().join("arbre-de-tache");
         git(&depot, &["worktree", "add", "-q", "-b", "agent/salut", arbre.to_str().unwrap()]);
         assert!(arbre.join(".git").is_file(), "un worktree a un .git fichier");
-        assert_eq!(branch_of(&arbre.join("sous/backend.json")).as_deref(), Some("agent/salut"));
-        assert_eq!(branch_of(&d.path().join("ailleurs/backend.json")), None);
+        assert_eq!(branch_of(&arbre.join("sous")).as_deref(), Some("agent/salut"));
+        assert_eq!(branch_of(&d.path().join("ailleurs")), None);
     }
 
     /// **Un hôte de test a son propre registre de runs en fond**, jamais

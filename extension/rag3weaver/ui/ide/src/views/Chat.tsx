@@ -388,7 +388,12 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                     {g.main ? null : <div className="text-sm font-medium px-2 truncate">{g.label}</div>}
                     {g.items.map((b) => (
                       <div key={b.id} className={`conversation ${g.main && b.id === g.main.id ? "" : "pl-3"}`} data-backend={b.id} data-kind={b.kind ?? ""}>
-                        <a href={`/ide/code/${b.id}/chat`} className={`block text-sm truncate rounded px-2 py-1 hover:bg-sidebar-accent ${b.id === id ? "bg-sidebar-accent active" : ""}`} data-backend={b.id}>
+                        <a
+                          href={`/ide/code/${b.id}/chat`}
+                          className={`block text-sm truncate rounded px-2 py-1 hover:bg-sidebar-accent ${b.id === id ? "bg-sidebar-accent active" : ""}`}
+                          data-backend={b.id}
+                          title={b.kind_source === "fallback" ? "nature inconnue : le manifeste ne déclare pas `kind` (son gabarit est plus ancien) ; rangé d'après son espace de travail" : undefined}
+                        >
                           {b.tache ? <GitBranch className="inline size-3.5 mr-1" aria-hidden /> : <MessageSquare className="inline size-3.5 mr-1" aria-hidden />}
                           {displayName(b)}
                         </a>
