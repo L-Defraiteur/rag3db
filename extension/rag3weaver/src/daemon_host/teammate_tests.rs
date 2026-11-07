@@ -516,7 +516,9 @@ fn a_teammate_works_on_the_files_when_its_backend_does_not_open() {
     assert!(vus[0].contains("\"bonjour\""), "la lecture rend le fichier : {}", vus[0]);
     assert!(vus[2].contains("signal : grep_repli") && vus[2].contains("src/lib.rs"), "{}", vus[2]);
     assert!(vus[3].contains("\"unavailable\""), "un outil d'index dit qu'il est indisponible : {}", vus[3]);
-    assert_eq!(std::fs::read_to_string(t.arbre.join("README.md")).unwrap(), "# Écrit sans index\n", "l'édition est sur le disque du worktree");
+    // Le worktree du code de la tâche (sa racine de workspace), là où le repli écrit.
+    let racine = t.workspace.as_ref().map(|w| w.racine.clone()).expect("la tâche a un workspace");
+    assert_eq!(std::fs::read_to_string(racine.join("README.md")).unwrap(), "# Écrit sans index\n", "l'édition est sur le disque du worktree");
     let boite = files.mailbox();
     assert!(boite.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true), "{boite:?}");
     eprintln!("sans backend : {} replis, le pas fini", vus.len() - 1);
@@ -648,6 +650,6 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
     let ferme = ferme.lock().unwrap().clone();
     assert_eq!(ferme["result"]["closed"], true, "la fermeture est passée pendant le tour : {ferme}");
     let lus = lus.lock().unwrap().clone();
-    assert!(lus[0].contains("\"bonjour\"") && lus[1].contains("Petit dépôt"), "les deux lectures, par le backend (rouvert pour la seconde) : {lus:#?}");
+    assert!(lus.len() >= 2 && lus[0].contains("pub fn bonjour") && lus[1].contains("Petit dépôt"), "les deux lectures, par le backend (rouvert pour la seconde) : {lus:#?}");
     assert!(!lus.iter().any(|l| l.starts_with("index indisponible")), "un backend qui se rouvre n'a pas de repli : {lus:#?}");
 }
