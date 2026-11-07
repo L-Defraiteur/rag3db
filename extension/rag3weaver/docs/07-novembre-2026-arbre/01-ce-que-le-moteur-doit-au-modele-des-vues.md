@@ -148,7 +148,7 @@ offsets résolus sur la table **parent** (`Scope`), alors que sa poignée lucivy
 table des **morceaux** (`src/dataflow/generic_search_nodes.rs` l. 1717-1723, 1781-1783 ;
 `src/record_nodes.rs` l. 2232-2240). Si les deux espaces d'offsets diffèrent, le sparse filtré
 rend aujourd'hui de mauvaises lignes. Je ne l'ai pas joué : ticket
-`docs/tickets/2026-11-07-le-sparse-filtre-resout-ses-offsets-sur-le-parent-et-cherche-dans-les-morceaux.md`.
+`docs/tickets/2026-11-07-le-filtre-du-signal-creux-compare-des-offsets-de-parents-a-des-offsets-de-morceaux.md`.
 
 ## 4. Ce que je mesurerais d'abord, sur la base de code de Lucie
 
