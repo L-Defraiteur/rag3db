@@ -1,6 +1,9 @@
 # Une erreur pendant la validation, après l'ajout des lignes aux groupes, laisse la transaction à moitié validée
 
-- **État** : ouvert (relevé par le banc le 10 octobre 2026, à la relecture d'A3′).
+- **État** : non reproduit le 7 novembre 2026 (cœur c++) : le défaut général, une erreur à l'étape 3 de
+  `NodeTable::commit` après l'ajout des lignes aux groupes, ne laisse plus de transaction à moitié
+  validée sur master. Le témoin `test/transaction/half_applied_commit_test.cpp` fait lever l'étape 3
+  par un index d'essai et le vérifie (deux cas verts sur master `dcaea137f`) ; il reste en garde.
 - **Gravité** : réponse fausse, puis plantage (un groupe de nœuds introuvable à la suppression
   suivante, SIGSEGV dans `NodeGroup::delete_`).
 - **Atteignable en service** : en principe oui — toute erreur levée entre l'étape 1 et la fin de
@@ -59,6 +62,27 @@ vérifier que la transaction suivante valide et que le vérificateur d'intégrit
 
 Deux visibilités d'unicité (le chemin vu) ; plus généralement, l'ordre des étapes de
 `NodeTable::commit` : ce qui peut échouer vient après ce qui touche aux groupes. **[lu]**
+
+## Le 7 novembre 2026 : non reproduit
+
+Le témoin général que demandait ce ticket existe : `HalfAppliedCommit` pose sur la table un index
+d'essai (`ThrowingIndex`) dont l'insertion à la validation lève, donc à l'étape 3, après l'ajout
+des lignes aux groupes (étape 1) et le drapeau des suppressions (étape 2). Deux cas, verts sur
+master :
+
+- `AFailureAfterTheRowsAreAppendedLeavesTheTableAsItWas` : deux lignes créées, la validation
+  échoue ; le compte reste 10, aucune ligne ne reste, la validation et la suppression suivantes
+  trouvent leurs lignes, les clés de la transaction échouée sont libres, la somme des clés
+  concorde ;
+- `AFailureAfterDeletesAndUpdatesLeavesTheTableAsItWasAcrossAReopen` : la transaction supprime
+  une ligne validée, en met une à jour, crée puis supprime une ligne locale et crée 2 100 lignes
+  (plusieurs blocs) ; après l'échec, tout est comme avant, et encore après un point de reprise et
+  une réouverture.
+
+L'annulation défait aujourd'hui ce que l'étape 1 a ajouté : les lots de l'annulation l'ont
+refermé (le curseur de réservation qui recule, la troncature des colonnes d'un bloc annulé, et le
+7 novembre le bloc entièrement annulé qui garde ses versions, `b7447937d`). Le chemin vu le
+10 octobre (deux visibilités d'unicité) était fermé depuis A3′.
 
 ## Pour le fermer
 
