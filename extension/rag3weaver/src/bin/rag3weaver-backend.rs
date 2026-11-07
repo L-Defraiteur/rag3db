@@ -799,8 +799,11 @@ fn run() -> Result<(), String> {
         let mut entree = String::new();
         #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
         {
-            // `--help` répond sans lire l'entrée ni joindre l'hôte.
-            if !tous[1..].iter().any(|a| a == "--help" || a == "-h") {
+            // L'entrée n'est lue que pour un vrai événement : `--help`, `--rejouer`
+            // et `--poser-les-gabarits` n'en ont pas besoin, et une entrée qui est
+            // un terminal ne se lit pas (elle attendrait sans rien dire — G, 7 novembre).
+            let sans_entree = tous[1..].iter().any(|a| matches!(a.as_str(), "--help" | "-h" | "--rejouer" | "--poser-les-gabarits"));
+            if !sans_entree && !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
                 let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut entree);
             }
             let code = rag3weaver::claude_code_hook::commande(&tous[1..], &entree, &mut std::io::stdout());

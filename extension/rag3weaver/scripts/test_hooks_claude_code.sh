@@ -68,6 +68,18 @@ grep -q "cd $T/wts/rag3db-essai && claude" "$T/wt.out" || rouge "la commande à 
 RAG3WEAVER_WORKTREES="$T/wts" RAG3WEAVER_DEPOT="$T/depot" "$sh" --binaire /opt/r/rag3weaver-backend --config "$C" --worktree essai --poser > "$T/wt2.out"
 grep -q 'worktree déjà là' "$T/wt2.out" && grep -q 'rien à changer' "$T/wt2.out" || rouge "une seconde pose du worktree n'est pas idempotente"
 
+# Converger : une cible qui porte l'ancienne forme (`hook --config …`) prend la commande stable.
+printf '{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/opt/r/rag3weaver-backend hook --config %s", "timeout": 25}]}], "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": "/opt/r/rag3weaver-backend hook --config %s", "timeout": 25}]}]}}\n' "$C" "$C" > "$T/ancien.json"
+"$sh" --binaire /opt/r/rag3weaver-backend --settings "$T/ancien.json" --config "$C" --poser > "$T/converge.out"
+grep -q "commande d'avant remplacée" "$T/converge.out" || rouge "--poser ne dit pas qu'il remplace l'ancienne forme"
+python3 -c '
+import json, sys
+h = json.load(open(sys.argv[1]))["hooks"]
+for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop"]:
+    cmds = [x["hooks"][0]["command"] for x in h[ev]]
+    assert cmds == ["/opt/r/rag3weaver-backend hook " + ev], (ev, cmds)
+' "$T/ancien.json" || rouge "l'ancienne forme n'est pas remplacée par la commande stable"
+
 # --global s'exclut.
 if "$sh" --global --settings "$S" --montrer > /dev/null 2>&1; then rouge "--global et --settings devraient s'exclure"; fi
 echo "VERT : hooks_claude_code.sh — montrer sans toucher, poser, idempotent, retirer, dossier courant, worktree, exclusions"

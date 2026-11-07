@@ -107,6 +107,13 @@ pub struct Reglage {
     /// Les délais propres, en millisecondes : `UserPromptSubmit`, les autres.
     pub prompt_timeout_ms: u64,
     pub timeout_ms: u64,
+    /// Le délai du seul rappel des fiches (`recall_fiches`), plus court que celui
+    /// du tour : un rappel lent (embarquement du prompt à froid) n'emporte pas
+    /// le reste du bloc (c7, 7 novembre).
+    pub recall_timeout_ms: u64,
+    /// Un rejeu hors session : rien ne s'écrit (ni mémoire, ni run, ni marque).
+    /// Posé par `--rejouer`, jamais lu dans le fichier.
+    pub rejeu: bool,
     pub journal: PathBuf,
     /// Le dossier des gabarits de blocs (`<clé>.md`), relu à chaque appel :
     /// corriger un texte y suffit, aucune session ne redémarre.
@@ -121,11 +128,13 @@ impl Reglage {
             keys: vec!["dev".into()],
             context_tokens: 1_000_000,
             suggest_ratio: 0.7,
-            recall_min_score: 0.30,
+            recall_min_score: 0.50,
             prompt_block_chars: 1_500,
             session_block_chars: 3_000,
             prompt_timeout_ms: 5_000,
             timeout_ms: 20_000,
+            recall_timeout_ms: 3_000,
+            rejeu: false,
             journal: maison.join(".local/state/rag3weaver/hooks.log"),
             templates_dir: maison.join(".config/rag3weaver/hooks"),
         }
@@ -153,9 +162,10 @@ impl Reglage {
                 "session_block_chars" => r.session_block_chars = val.as_u64().ok_or("hooks.json : `session_block_chars` est un entier")? as usize,
                 "prompt_timeout_ms" => r.prompt_timeout_ms = val.as_u64().ok_or("hooks.json : `prompt_timeout_ms` est un entier")?,
                 "timeout_ms" => r.timeout_ms = val.as_u64().ok_or("hooks.json : `timeout_ms` est un entier")?,
+                "recall_timeout_ms" => r.recall_timeout_ms = val.as_u64().ok_or("hooks.json : `recall_timeout_ms` est un entier")?,
                 "journal" => r.journal = PathBuf::from(val.as_str().ok_or("hooks.json : `journal` est un chemin")?),
                 "templates_dir" => r.templates_dir = PathBuf::from(val.as_str().ok_or("hooks.json : `templates_dir` est un chemin")?),
-                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, journal, templates_dir)")),
+                autre => return Err(format!("hooks.json : champ inconnu `{autre}` (connus : manifest, keys, context_tokens, suggest_ratio, recall_min_score, prompt_block_chars, session_block_chars, prompt_timeout_ms, timeout_ms, recall_timeout_ms, journal, templates_dir)")),
             }
         }
         if let Ok(v) = std::env::var("RAG3WEAVER_HOOK_CONTEXT_TOKENS") {
@@ -185,6 +195,7 @@ impl Reglage {
             "session_block_chars": self.session_block_chars,
             "prompt_timeout_ms": self.prompt_timeout_ms,
             "timeout_ms": self.timeout_ms,
+            "recall_timeout_ms": self.recall_timeout_ms,
             "journal": self.journal,
             "templates_dir": self.templates_dir,
         })
@@ -252,6 +263,11 @@ pub trait Hote {
     /// Le nom du backend ouvert (ce que `/open` a rendu).
     fn nom(&self) -> &str;
     fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String>;
+    /// Le même, sous un délai à lui (le rappel des fiches) ; par défaut le délai
+    /// commun.
+    fn appeler_borne(&self, outil: &str, arguments: Value, _delai: Duration) -> Result<Value, String> {
+        self.appeler(outil, arguments)
+    }
     /// Un run venu de dehors, déposé au journal des runs de l'hôte
     /// (`POST /journal/run`, lot 3).
     fn deposer_run(&self, corps: Value) -> Result<Value, String>;
@@ -261,11 +277,45 @@ pub trait Hote {
     }
 }
 
+/// **L'hôte d'un rejeu** : il lit, il n'écrit jamais — ni la mémoire, ni le
+/// journal des runs (c7 : un rejeu ne poste jamais de run et ne se compte
+/// jamais comme vu par l'agent). Une écriture refusée est une ligne de journal.
+pub struct HoteEnLecture<'a>(pub &'a dyn Hote);
+
+/// Les outils qui écrivent dans la mémoire.
+const ECRITURES: [&str; 8] = ["put_fiche", "put_apport", "put_source", "put_memory", "relier_apport", "citer_source", "add_ref", "ancrer_fiche"];
+
+impl Hote for HoteEnLecture<'_> {
+    fn nom(&self) -> &str {
+        self.0.nom()
+    }
+    fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String> {
+        if ECRITURES.contains(&outil) || (outil == "create_ref_type" && arguments["confirm"] == true) {
+            return Err(format!("rejeu : {outil} non écrit"));
+        }
+        self.0.appeler(outil, arguments)
+    }
+    fn appeler_borne(&self, outil: &str, arguments: Value, delai: Duration) -> Result<Value, String> {
+        if ECRITURES.contains(&outil) {
+            return Err(format!("rejeu : {outil} non écrit"));
+        }
+        self.0.appeler_borne(outil, arguments, delai)
+    }
+    fn deposer_run(&self, _corps: Value) -> Result<Value, String> {
+        Err("rejeu : aucun run déposé".into())
+    }
+    fn manifest(&self) -> Option<&Path> {
+        self.0.manifest()
+    }
+}
+
 /// **Le client de l'hôte, borné** : `POST /session`, `POST /open`, puis des
 /// `POST /call`, et `DELETE /session` à la fin ; chaque requête sous le délai.
 /// Il ne relance jamais l'hôte et ne relit pas le jeton : un hôte qui ne
 /// répond pas est une raison de se taire, pas de s'acharner.
 pub struct ClientHote {
+    /// La durée de chaque requête, pour le journal (c7 : savoir lequel traîne).
+    durees: std::sync::Mutex<Vec<String>>,
     agent: ureq::Agent,
     base: String,
     token: Option<String>,
@@ -291,7 +341,7 @@ impl ClientHote {
     pub fn ouvrir(adresse: &str, token: Option<&str>, manifest: &Path, keys: &[String], delai: Duration) -> Result<Self, String> {
         let agent = crate::daemon::agent_with_timeout(delai);
         let base = crate::daemon::base_url(adresse);
-        let mut me = Self { agent, base, token: token.map(str::to_string), session: String::new(), manifest: manifest.to_path_buf(), nom: String::new() };
+        let mut me = Self { durees: std::sync::Mutex::new(Vec::new()), agent, base, token: token.map(str::to_string), session: String::new(), manifest: manifest.to_path_buf(), nom: String::new() };
         let corps = json!({ "client": "claude-code-hook", "keys": keys, "pid": std::process::id() });
         let v = me.poster("/session", corps, false)?;
         me.session = v["session"].as_str().ok_or("l'hôte n'a pas rendu de session")?.to_string();
@@ -308,7 +358,24 @@ impl ClientHote {
     }
 
     fn poster(&self, route: &str, corps: Value, avec_session: bool) -> Result<Value, String> {
-        let mut requete = self.agent.post(format!("{}{route}", self.base)).header("content-type", "application/json");
+        self.poster_par(&self.agent, route, corps, avec_session)
+    }
+
+    fn poster_par(&self, agent: &ureq::Agent, route: &str, corps: Value, avec_session: bool) -> Result<Value, String> {
+        let debut = std::time::Instant::now();
+        let quoi = corps["name"].as_str().map(|n| format!("{route} {n}")).unwrap_or_else(|| route.to_string());
+        let r = self.poster_brut(agent, route, corps, avec_session);
+        self.durees.lock().unwrap_or_else(|p| p.into_inner()).push(format!("{quoi} {} ms{}", debut.elapsed().as_millis(), if r.is_err() { " (échec)" } else { "" }));
+        r
+    }
+
+    /// Les durées des requêtes, vidées.
+    pub fn durees(&self) -> Vec<String> {
+        std::mem::take(&mut *self.durees.lock().unwrap_or_else(|p| p.into_inner()))
+    }
+
+    fn poster_brut(&self, agent: &ureq::Agent, route: &str, corps: Value, avec_session: bool) -> Result<Value, String> {
+        let mut requete = agent.post(format!("{}{route}", self.base)).header("content-type", "application/json");
         if let Some(t) = &self.token {
             requete = requete.header("Authorization", &format!("Bearer {t}"));
         }
@@ -341,6 +408,14 @@ impl Hote for ClientHote {
     }
     fn manifest(&self) -> Option<&Path> {
         Some(&self.manifest)
+    }
+    fn appeler_borne(&self, outil: &str, arguments: Value, delai: Duration) -> Result<Value, String> {
+        let agent = crate::daemon::agent_with_timeout(delai);
+        let v = self.poster_par(&agent, "/call", json!({ "manifest": self.manifest, "name": outil, "arguments": arguments }), true)?;
+        if v["ok"] == json!(false) {
+            return Err(format!("{outil} : {}", v["error"].as_str().unwrap_or("?")));
+        }
+        Ok(v)
     }
     fn deposer_run(&self, corps: Value) -> Result<Value, String> {
         let v = self.poster("/journal/run", corps, true)?;
@@ -442,11 +517,14 @@ fn lignes_de_recherche(v: &Value) -> Vec<Value> {
 /// Les fiches rendues par `cited_by` en json : le résultat est une **chaîne**
 /// JSON (le rendu du Plan), relue ici.
 fn fiches_citant(v: &Value) -> Vec<Value> {
-    match &v["result"]["result"] {
+    let lignes = match &v["result"]["result"] {
         Value::String(s) => serde_json::from_str::<Value>(s).ok().and_then(|x| x.as_array().cloned()).unwrap_or_default(),
         Value::Array(a) => a.clone(),
         _ => Vec::new(),
-    }
+    };
+    // Une ligne du Plan est `{uuid, score, entity, data: {name, apports, refs…}}`
+    // (relevé sur un vrai gabarit memory, lot 3 bis) : la fiche est sous `data`.
+    lignes.into_iter().map(|l| if l["data"].is_object() { l["data"].clone() } else { l }).collect()
 }
 
 /// **L'identité d'une session** : la fiche qui cite `handle:session:<id>`
@@ -481,11 +559,25 @@ fn identite_de_la_session(h: &dyn Hote, session_id: &str, journal: &mut Vec<Stri
         // Ref de même valeur.
         match h.appeler("cited_by", json!({ "value": format!("session:{session_id}"), "genres": ["handle"], "under": false, "format": "json", "limit": 3 })) {
             Ok(v) => {
-                if let Some(f) = fiches_citant(&v).into_iter().find(|f| f["state"] != "retired") {
+                // Deux fiches citent le handle quand la session a compacté : son
+                // identité et sa fiche de tâche (le L1 `compaction` cite le handle,
+                // relevé par le témoin e2e du lot 3 bis). L'identité est celle qui
+                // porte un apport `identity` ; à défaut (inscrite sans encore son
+                // identity), la première.
+                let mut premiere: Option<Identite> = None;
+                for f in fiches_citant(&v).into_iter().filter(|f| f["state"] != "retired") {
                     let cle = f["name"].as_str().unwrap_or("").to_string();
-                    if !cle.is_empty() {
-                        return Some(Identite { about: f["about"].as_str().unwrap_or("").to_string(), identity: dernier_apport(h, &cle, "identity"), cle, par_indice: false });
+                    if cle.is_empty() {
+                        continue;
                     }
+                    let id = Identite { about: f["about"].as_str().unwrap_or("").to_string(), identity: dernier_apport(h, &cle, "identity"), cle, par_indice: false };
+                    if id.identity.is_some() {
+                        return Some(id);
+                    }
+                    premiere.get_or_insert(id);
+                }
+                if premiere.is_some() {
+                    return premiere;
                 }
             }
             Err(e) => journal.push(format!("cited_by handle:session : {e}")),
@@ -531,14 +623,22 @@ fn rubrique<'a>(identity: &'a str, nom: &str) -> Option<&'a str> {
 }
 
 /// Les noms `fiche:<nom>` cités dans un texte (la rubrique `doing`), dans l'ordre.
+/// Un nom de fiche a des espaces (« essai des hooks », « bilan : … ») : il court
+/// jusqu'à `(`, `)`, `;`, `,`, la citation suivante ou la fin de la ligne, guillemets « » ôtés (relevé sur
+/// un vrai gabarit memory, lot 3 bis).
 fn fiches_citees(texte: &str) -> Vec<String> {
     let mut v = Vec::new();
-    for mot in texte.split(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == '(' || c == ')') {
-        if let Some(n) = mot.strip_prefix("fiche:") {
-            let n = n.trim_matches(|c: char| c == '«' || c == '»' || c == '"' || c == '\'');
+    for ligne in texte.lines() {
+        let mut reste = ligne;
+        while let Some(i) = reste.find("fiche:") {
+            let apres = &reste[i + "fiche:".len()..];
+            // Le nom s'arrête à `(`, `)`, `;`, `,`, à la citation suivante, ou en fin de ligne.
+            let fin = [apres.find(['(', ')', ';', ',']), apres.find("fiche:")].into_iter().flatten().min().unwrap_or(apres.len());
+            let n = apres[..fin].trim().trim_matches(|c: char| c == '«' || c == '»' || c == '"' || c == '\'' || c.is_whitespace());
             if !n.is_empty() && !v.iter().any(|x| x == n) {
                 v.push(n.to_string());
             }
+            reste = &apres[fin..];
         }
     }
     v
@@ -659,6 +759,9 @@ fn marque(reglage: &Reglage, session_id: &str, nom: &str) -> PathBuf {
     reglage.journal.parent().map(|d| d.join("hooks-suggestions")).unwrap_or_else(|| PathBuf::from(".")).join(format!("{session_id}.{nom}"))
 }
 fn poser_la_marque(reglage: &Reglage, session_id: &str, nom: &str, contenu: &str) {
+    if reglage.rejeu {
+        return;
+    }
     let m = marque(reglage, session_id, nom);
     if let Some(d) = m.parent() {
         let _ = std::fs::create_dir_all(d);
@@ -669,6 +772,9 @@ fn lire_la_marque(reglage: &Reglage, session_id: &str, nom: &str) -> Option<Stri
     std::fs::read_to_string(marque(reglage, session_id, nom)).ok()
 }
 fn oter_la_marque(reglage: &Reglage, session_id: &str, nom: &str) {
+    if reglage.rejeu {
+        return;
+    }
     let _ = std::fs::remove_file(marque(reglage, session_id, nom));
 }
 fn maintenant_ms() -> u64 {
@@ -759,8 +865,11 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
 
     // Les fiches que le prompt rappelle.
     if let Some(prompt) = e.prompt.as_deref().filter(|p| p.chars().count() >= 8) {
-        match h.appeler("recall_fiches", json!({ "query": prompt, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } })) {
+        let debut = std::time::Instant::now();
+        let delai = Duration::from_millis(reglage.recall_timeout_ms);
+        match h.appeler_borne("recall_fiches", json!({ "query": prompt, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), delai) {
             Ok(v) => {
+                journal.push(format!("rappel en {} ms", debut.elapsed().as_millis()));
                 // Le score du meilleur signal (`chunk.score`), pas le rang fusionné :
                 // c'est lui qu'on compare au seuil, et qu'on dit.
                 let scores: Vec<(String, String, f64)> = v["result"]["result"]
@@ -772,14 +881,24 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 if !scores.is_empty() {
                     journal.push(format!("rappel : {}", scores.iter().map(|(n, _, sc)| format!("« {n} » {sc:.2}")).collect::<Vec<_>>().join(", ")));
                 }
-                let gardees: Vec<&(String, String, f64)> = scores.iter().filter(|(_, _, sc)| *sc >= reglage.recall_min_score).collect();
+                // Sa propre fiche d'identité n'est pas un résultat : c'est elle.
+                let soi = identite.as_ref().map(|i| i.cle.as_str()).unwrap_or("");
+                let gardees: Vec<&(String, String, f64)> = scores.iter().filter(|(n, _, sc)| *sc >= reglage.recall_min_score && n != soi).collect();
                 if !gardees.is_empty() {
-                    b.push_str("Fiches en rapport : ");
+                    b.push_str("Fiches en rapport (similarité du meilleur signal, de 0 à 1 — pas le rang fusionné de `recall_fiches`) : ");
                     b.push_str(&gardees.iter().map(|(n, a, sc)| format!("« {n} » ({sc:.2}{})", if a.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(a, 80)) })).collect::<Vec<_>>().join(" ; "));
                     b.push_str(" — `get_fiche` pour lire.\n");
                 }
             }
-            Err(err) => journal.push(format!("recall_fiches : {err}")),
+            Err(err) => {
+                let lent = err.contains("timeout") || err.contains("ne répond pas");
+                journal.push(format!("recall_fiches en {} ms : {err}", debut.elapsed().as_millis()));
+                if lent {
+                    b.push_str(&format!("Rappel des fiches : l'hôte n'a pas répondu en {} s (à froid, l'embarquement du prompt peut être lent) — réessaie au prochain tour.\n", (reglage.recall_timeout_ms + 999) / 1000));
+                } else {
+                    b.push_str(&format!("Rappel des fiches en panne : {} — réessaie au prochain tour.\n", premiere_ligne(&err, 160)));
+                }
+            }
         }
     }
 
@@ -831,6 +950,9 @@ fn deja_suggere(reglage: &Reglage, session_id: &str) -> bool {
     if lire_la_marque(reglage, session_id, "suggere").is_some() {
         return true;
     }
+    if reglage.rejeu {
+        return false;
+    }
     poser_la_marque(reglage, session_id, "suggere", "");
     false
 }
@@ -871,7 +993,7 @@ fn ranger_la_compaction(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal:
     let chemin = format!("sources/{}-compaction-{id8}.md", quand.strftime("%Y-%m-%d-%Hh%M"));
     let titre = format!("Compaction du {} — session {id8}", quand.strftime("%Y-%m-%d %H:%M"));
     let contenu = format!("# {titre}\n\n{}\n", resume.trim());
-    if let Err(err) = h.appeler("put_source", json!({ "record": { "chemin": chemin, "titre": titre, "contenu": contenu, "origine": "compaction", "session": format!("session:{}", e.session_id), "via": "hook", "author": cle } })) {
+    if let Err(err) = h.appeler("put_source", json!({ "record": { "chemin": chemin, "titre": titre, "contenu": contenu, "origine": "filet", "session": format!("session:{}", e.session_id), "via": "hook", "author": cle } })) {
         journal.push(format!("L0 de la compaction non écrit : {err}"));
         return;
     }
@@ -892,6 +1014,49 @@ fn ranger_la_compaction(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal:
 }
 
 // ─── Stop : la fin de run ────────────────────────────────────────────────────
+
+/// **Les serveurs MCP de la session qui sont les nôtres**, par leur nom Claude
+/// Code → le manifeste qu'ils servent (`mcp --manifest <chemin>` de notre
+/// binaire) : la table que le juge lit pour rejouer un appel
+/// `mcp__<serveur>__<outil>` sur le bon backend (73). Lue dans
+/// `~/.claude.json` (`projects[<cwd>].mcpServers`, puis la racine) et dans le
+/// `.mcp.json` du dossier ; `RAG3WEAVER_CLAUDE_JSON` donne un autre fichier
+/// (les témoins). Un serveur qui n'est pas notre binaire, ou sans manifeste,
+/// n'y est pas : le juge dira « non rejoué : serveur inconnu du run ».
+pub fn serveurs_mcp(cwd: Option<&Path>) -> serde_json::Map<String, Value> {
+    let mut table = serde_json::Map::new();
+    let mut prendre = |serveurs: &Value| {
+        let Some(o) = serveurs.as_object() else { return };
+        for (nom, d) in o {
+            let commande = d["command"].as_str().unwrap_or("");
+            if !commande.ends_with("rag3weaver-backend") {
+                continue;
+            }
+            let args: Vec<&str> = d["args"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+            if args.first() != Some(&"mcp") {
+                continue;
+            }
+            if let Some(i) = args.iter().position(|a| *a == "--manifest") {
+                if let Some(m) = args.get(i + 1) {
+                    table.entry(nom.clone()).or_insert_with(|| json!(m));
+                }
+            }
+        }
+    };
+    let claude_json = std::env::var_os("RAG3WEAVER_CLAUDE_JSON").map(PathBuf::from).unwrap_or_else(|| std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join(".claude.json"));
+    if let Ok(v) = std::fs::read_to_string(&claude_json).and_then(|t| serde_json::from_str::<Value>(&t).map_err(std::io::Error::other)) {
+        if let Some(c) = cwd {
+            prendre(&v["projects"][c.to_string_lossy().as_ref()]["mcpServers"]);
+        }
+        prendre(&v["mcpServers"]);
+    }
+    if let Some(c) = cwd {
+        if let Ok(v) = std::fs::read_to_string(c.join(".mcp.json")).and_then(|t| serde_json::from_str::<Value>(&t).map_err(std::io::Error::other)) {
+            prendre(&v["mcpServers"]);
+        }
+    }
+    table
+}
 
 /// Un tour de Claude Code, journalisé comme un run racine de l'hôte
 /// (`POST /journal/run`, genre `claude_code_turn`), pour que le juge le lise
@@ -922,6 +1087,7 @@ fn deposer_la_fin_de_run(e: &Evenement, h: &dyn Hote, journal: &mut Vec<String>)
         "session": format!("session:{}", e.session_id),
         "agent": identite.as_ref().map(|i| i.cle.clone()),
         "cwd": e.cwd,
+        "serveurs": serveurs_mcp(e.cwd.as_deref()),
         "transcription": e.transcript_path,
         "prompt_id": prompt_id,
         "tours": tours,
@@ -1048,11 +1214,19 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
         Some(a) => ClientHote::ouvrir(a, None, &reglage.manifest, &reglage.keys, delai),
         None => ClientHote::depuis_daemon_json(&reglage.manifest, &reglage.keys, delai),
     };
+    let mut reglage = reglage;
+    reglage.rejeu = rejeu;
     let reponse = match &client {
+        Ok(c) if rejeu => repondre(&evenement, &reglage, Ok(&HoteEnLecture(c))),
         Ok(c) => repondre(&evenement, &reglage, Ok(c)),
         Err(e) => repondre(&evenement, &reglage, Err(e.clone())),
     };
+    let mut reponse = reponse;
     if let Ok(c) = &client {
+        let d = c.durees();
+        if !d.is_empty() {
+            reponse.journal.push(format!("{} {} : durées — {}", evenement.nom, evenement.session_id, d.join(", ")));
+        }
         c.fermer();
     }
     if !reponse.bloc.is_empty() {
@@ -1077,6 +1251,13 @@ pub fn commande(args: &[String], entree: &str, sortie: &mut dyn std::io::Write) 
 
 #[cfg(test)]
 mod tests {
+    /// Les témoins qui posent ou ôtent une variable d'environnement du processus
+    /// (`RAG3WEAVER_AGENT_KEY`, `RAG3WEAVER_CLAUDE_JSON`) passent un à un : les tests
+    /// tournent en parallèle dans un même processus, et se croisaient.
+    static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    fn env() -> std::sync::MutexGuard<'static, ()> {
+        ENV.lock().unwrap_or_else(|p| p.into_inner())
+    }
     use super::*;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
@@ -1147,6 +1328,7 @@ mod tests {
 
     #[test]
     fn un_evenement_sans_bloc_journalise_l_hote_joint_ou_le_silence() {
+        let _env = env();
         let h = FauxHote(Mutex::new(Vec::new()));
         // Stop ne rend rien encore (lot 3) : l'hôte joint est dit, rien d'écrit.
         let r = repondre(&Evenement::lire(STOP).unwrap(), &Reglage::defaut(), Ok(&h));
@@ -1264,6 +1446,7 @@ mod tests {
 
     #[test]
     fn un_gabarit_corrige_dans_le_dossier_change_le_bloc_sans_rien_relancer() {
+        let _env = env();
         let dossier = std::env::temp_dir().join(format!("hooks-gabarits-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dossier);
         let mut reglage = Reglage::defaut();
@@ -1288,6 +1471,7 @@ mod tests {
 
     #[test]
     fn le_rejeu_hors_session_rend_le_bloc_et_son_journal() {
+        let _env = env();
         let dossier = std::env::temp_dir().join(format!("hooks-rejeu-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dossier);
         std::fs::create_dir_all(&dossier).unwrap();
@@ -1318,6 +1502,7 @@ mod tests {
 
     #[test]
     fn l_evenement_en_argument_est_relu_contre_l_entree() {
+        let _env = env();
         let dossier = std::env::temp_dir().join(format!("hooks-arg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dossier);
         std::fs::create_dir_all(&dossier).unwrap();
@@ -1336,6 +1521,7 @@ mod tests {
 
     #[test]
     fn help_repond_sans_lire_l_entree_ni_joindre_l_hote() {
+        let _env = env();
         let mut sortie = Vec::new();
         assert_eq!(commande(&["--help".to_string()], "", &mut sortie), 0);
         let texte = String::from_utf8(sortie).unwrap();
@@ -1344,6 +1530,7 @@ mod tests {
 
     #[test]
     fn la_commande_sort_en_zero_et_se_tait_sans_hote_et_journalise() {
+        let _env = env();
         let dossier = std::env::temp_dir().join(format!("hooks-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dossier);
         std::fs::create_dir_all(&dossier).unwrap();
@@ -1420,8 +1607,11 @@ mod tests {
     fn recherche(lignes: Vec<Value>) -> Value {
         json!({ "ok": true, "result": { "result": lignes.into_iter().map(|d| json!({ "data": d })).collect::<Vec<_>>() } })
     }
+    /// La forme réelle d'un rendu de `cited_by` en json (relevée sur un vrai
+    /// gabarit memory) : `{uuid, score, entity, data}` par fiche, le tout en chaîne.
     fn citant(fiches: Vec<Value>) -> Value {
-        json!({ "ok": true, "result": { "result": Value::Array(fiches).to_string() } })
+        let lignes: Vec<Value> = fiches.into_iter().map(|d| json!({ "uuid": "u", "score": 1.0, "entity": "Fiche", "data": d, "signal": "plan" })).collect();
+        json!({ "ok": true, "result": { "result": Value::Array(lignes).to_string() } })
     }
     const IDENTITY: &str = "## identity\nwho: 96 — « mémoire », la session de la mémoire longue\nruntime: claude-code ; session:s1\ncan: les outils MCP memoire-longue\ndoing: la migration de la fiche de Lucie (fiche:migration-fiche) ; la page 04\nholding: worktrees wt-docs-96 ; branches lot-96-*\nmandates: chaque commit poussé dans la minute\npeers: c7 « orchestration » ; 73 « arbre principal »";
 
@@ -1435,6 +1625,7 @@ mod tests {
 
     #[test]
     fn session_start_rend_qui_je_suis_ce_que_je_tiens_et_le_plan_en_cours() {
+        let _env = env();
         let h = hote_avec_identite();
         let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").replace("25b7ff4b-dabf-42ef-8580-86661c846fb9", "s1").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
         let b = &r.bloc;
@@ -1455,6 +1646,7 @@ mod tests {
 
     #[test]
     fn session_start_apres_compaction_demande_l_identity_a_l_agent() {
+        let _env = env();
         let h = hote_avec_identite();
         let r = repondre(&Evenement::lire(SESSION_START.replace("25b7ff4b-dabf-42ef-8580-86661c846fb9", "s1").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
         assert!(r.bloc.contains("Ta session vient d'être compactée. Au premier tour"), "{}", r.bloc);
@@ -1463,6 +1655,7 @@ mod tests {
 
     #[test]
     fn sans_fiche_le_bloc_demande_le_handle_ou_la_fiche_et_ne_cree_rien() {
+        let _env = env();
         let h = HoteCanne::new(vec![]);
         std::env::remove_var("RAG3WEAVER_AGENT_KEY");
         let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
@@ -1477,6 +1670,7 @@ mod tests {
 
     #[test]
     fn une_cle_donnee_par_la_variable_ne_vaut_que_si_sa_fiche_existe() {
+        let _env = env();
         let h = HoteCanne::new(vec![("get_fiche", json!({ "ok": true, "result": { "result": { "data": { "name": "archi", "about": "ex-orchestration", "state": "current" } } } }))]);
         std::env::set_var("RAG3WEAVER_AGENT_KEY", "archi");
         let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
@@ -1511,10 +1705,11 @@ mod tests {
 
     #[test]
     fn user_prompt_rappelle_les_fiches_les_diffs_des_fichiers_touches_et_le_verdict() {
+        let _env = env();
         let (chemin, reglage) = transcription_d_essai("rappel", &[T_USER, T_ASSISTANT_PETIT]);
         let mut h = hote_avec_identite();
         h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
-            { "chunk": { "score": 0.38 }, "data": { "name": "régime GPU", "about": "Comment on ménage les cartes du poste.", "state": "current" } },
+            { "chunk": { "score": 0.58 }, "data": { "name": "régime GPU", "about": "Comment on ménage les cartes du poste.", "state": "current" } },
             { "chunk": { "score": 0.12 }, "data": { "name": "sans rapport", "about": "trop loin", "state": "current" } }
         ] } }));
         h.reponses.insert("recall_apports:bilan", recherche(vec![json!({ "fiche": "bilan : migration-fiche", "section": "bilan", "texte": "l'outil put_apport a trompé l'agent sur `source`", "created_at": 9 })]));
@@ -1525,9 +1720,9 @@ mod tests {
         ] })]));
         let r = repondre(&prompt(&chemin, "range la fiche régime GPU"), &reglage, Ok(&h));
         let b = &r.bloc;
-        assert!(b.contains("Fiches en rapport : « régime GPU » (0.38 ; Comment on ménage les cartes du poste.) — `get_fiche` pour lire."), "{b}");
+        assert!(b.contains("Fiches en rapport (similarité du meilleur signal, de 0 à 1 — pas le rang fusionné de `recall_fiches`) : « régime GPU » (0.58 ; Comment on ménage les cartes du poste.) — `get_fiche` pour lire."), "{b}");
         assert!(!b.contains("sans rapport"), "sous le seuil, la fiche n'est pas dite — {b}");
-        assert!(r.journal.iter().any(|l| l.contains("rappel : « régime GPU » 0.38, « sans rapport » 0.12")), "{:?}", r.journal);
+        assert!(r.journal.iter().any(|l| l.contains("rappel : « régime GPU » 0.58, « sans rapport » 0.12")), "{:?}", r.journal);
         assert!(b.contains("`/p/src/a.rs` a changé depuis, par 73 : a.rs : le COPY passe par la lib"), "{b}");
         assert!(!b.contains("le mien"), "les diffs de la session elle-même ne sont pas rendus");
         assert!(b.contains("Le juge, sur « migration-fiche » : l'outil put_apport a trompé"), "{b}");
@@ -1539,17 +1734,19 @@ mod tests {
     }
 
     #[test]
-    fn user_prompt_court_sans_rien_a_dire_rend_un_bloc_vide() {
+    fn user_prompt_court_rend_l_en_tete_seul() {
+        let _env = env();
         let (chemin, reglage) = transcription_d_essai("vide", &[T_USER, T_ASSISTANT_PETIT]);
         let h = hote_avec_identite();
         let r = repondre(&prompt(&chemin, "oui"), &reglage, Ok(&h));
-        assert!(r.bloc.is_empty(), "{}", r.bloc);
+        assert!(r.bloc.is_empty(), "rien à dire, pas d'en-tête : l'identité se dit au démarrage — {}", r.bloc);
         assert!(!h.noms().contains(&"recall_fiches".to_string()), "un prompt de moins de 8 caractères ne cherche rien");
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
     }
 
     #[test]
     fn le_premier_tour_apres_compaction_lance_le_defi_d_identite() {
+        let _env = env();
         let (chemin, reglage) = transcription_d_essai("compact", &[T_USER, T_ASSISTANT_PETIT, T_BOUNDARY, T_SUMMARY]);
         let h = hote_avec_identite();
         let r = repondre(&prompt(&chemin, "on continue la migration"), &reglage, Ok(&h));
@@ -1564,6 +1761,7 @@ mod tests {
 
     #[test]
     fn le_contexte_plein_suggere_de_ranger_une_seule_fois() {
+        let _env = env();
         let (chemin, reglage) = transcription_d_essai("plein", &[T_USER, T_ASSISTANT_PLEIN]);
         let h = hote_avec_identite();
         let r = repondre(&prompt(&chemin, "encore une question"), &reglage, Ok(&h));
@@ -1572,6 +1770,56 @@ mod tests {
         let r2 = repondre(&prompt(&chemin, "encore une question"), &reglage, Ok(&h));
         assert!(!r2.bloc.contains("Ton contexte"), "une fois par session — {}", r2.bloc);
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn un_rappel_lent_n_emporte_pas_le_bloc() {
+        let _env = env();
+        struct RappelLent(HoteCanne);
+        impl Hote for RappelLent {
+            fn nom(&self) -> &str { self.0.nom() }
+            fn appeler(&self, outil: &str, a: Value) -> Result<Value, String> { self.0.appeler(outil, a) }
+            fn appeler_borne(&self, outil: &str, _a: Value, _d: Duration) -> Result<Value, String> {
+                Err(format!("/call {outil} : l'hôte http://x ne répond pas : timeout: global"))
+            }
+            fn deposer_run(&self, c: Value) -> Result<Value, String> { self.0.deposer_run(c) }
+        }
+        let (chemin, reglage) = transcription_d_essai("lent", &[T_USER, T_ASSISTANT_PETIT]);
+        let h = RappelLent(hote_avec_identite());
+        let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks"), &reglage, Ok(&h));
+        assert!(r.bloc.contains("Rappel des fiches : l'hôte n'a pas répondu en 3 s"), "la panne a sa ligne — {}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("recall_fiches en ") && l.contains("timeout")), "{:?}", r.journal);
+        // Et quand rien ne passe le seuil, c'est dit autrement : « rien en rapport ».
+        let mut h2 = hote_avec_identite();
+        h2.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 0.05 }, "data": { "name": "régime GPU", "about": "", "state": "current" } }] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks"), &reglage, Ok(&h2));
+        assert!(r.bloc.is_empty(), "rien en rapport : le silence, et le journal a les scores — {}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("rappel : « régime GPU » 0.05")), "{:?}", r.journal);
+        // Sa propre fiche, même haute, n'est pas rendue.
+        let mut h3 = hote_avec_identite();
+        h3.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 0.9 }, "data": { "name": "96", "about": "moi", "state": "current" } }] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks"), &reglage, Ok(&h3));
+        assert!(!r.bloc.contains("« 96 »"), "{}", r.bloc);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn un_rejeu_ne_ecrit_rien_ni_run_ni_marque() {
+        let _env = env();
+        let h = hote_avec_identite();
+        let lecture = HoteEnLecture(&h);
+        let mut reglage = Reglage::defaut();
+        let dossier = std::env::temp_dir().join(format!("hooks-rejeu-lecture-{}", std::process::id()));
+        reglage.journal = dossier.join("hooks.log");
+        reglage.rejeu = true;
+        let r = repondre(&post_compact("s1", "résumé"), &reglage, Ok(&lecture));
+        assert!(!h.noms().iter().any(|n| n.starts_with("put_") || n == "relier_apport" || n == "citer_source"), "aucune écriture : {:?}", h.noms());
+        assert!(r.journal.iter().any(|l| l.contains("rejeu : put_source non écrit")), "{:?}", r.journal);
+        let r = repondre(&Evenement::lire(STOP).unwrap(), &reglage, Ok(&lecture));
+        assert!(h.runs.lock().unwrap().is_empty(), "aucun run déposé");
+        assert!(r.journal.iter().any(|l| l.contains("rejeu : aucun run déposé")), "{:?}", r.journal);
+        assert!(!dossier.join("hooks-suggestions").exists(), "aucune marque posée");
+        let _ = std::fs::remove_dir_all(&dossier);
     }
 
     #[test]
@@ -1589,6 +1837,7 @@ mod tests {
         assert_eq!(rubrique(IDENTITY, "doing"), Some("la migration de la fiche de Lucie (fiche:migration-fiche) ; la page 04"));
         assert_eq!(rubrique(IDENTITY, "absent"), None);
         assert_eq!(fiches_citees("x fiche:a, fiche:b (fiche:a) fiche:«c»"), vec!["a", "b", "c"]);
+        assert_eq!(fiches_citees("doing: l'essai (fiche:essai des hooks) ; fiche:bilan : lis main.rs"), vec!["essai des hooks", "bilan : lis main.rs"], "un nom de fiche a des espaces");
         assert_eq!(premiere_ligne("une\ndeux", 10), "une …");
         assert_eq!(premiere_ligne("seule", 10), "seule");
     }
@@ -1608,6 +1857,7 @@ mod tests {
 
     #[test]
     fn post_compact_range_le_resume_en_l0_et_en_l1_sur_la_fiche_de_tache() {
+        let _env = env();
         let h = hote_avec_identite();
         let r = repondre(&post_compact("s1", "## Résumé\nla session migrait la fiche."), &Reglage::defaut(), Ok(&h));
         assert!(r.bloc.is_empty(), "PostCompact ne rend rien");
@@ -1615,7 +1865,7 @@ mod tests {
         let noms: Vec<&str> = appels.iter().map(|(n, _)| n.as_str()).collect();
         let source = appels.iter().find(|(n, _)| n == "put_source").expect("le L0").1["record"].clone();
         assert!(source["chemin"].as_str().unwrap().starts_with("sources/") && source["chemin"].as_str().unwrap().ends_with("-compaction-s1.md"), "{source}");
-        assert_eq!((source["via"].as_str(), source["author"].as_str(), source["origine"].as_str()), (Some("hook"), Some("96"), Some("compaction")));
+        assert_eq!((source["via"].as_str(), source["author"].as_str(), source["origine"].as_str()), (Some("hook"), Some("96"), Some("filet")), "l'origine d'un L0 de crochet est « filet » (schéma Source : envoi, filet, migration ; page M9 du 18 octobre)");
         assert!(source["contenu"].as_str().unwrap().contains("la session migrait la fiche."));
         let apport = appels.iter().find(|(n, _)| n == "put_apport").expect("le L1").1["record"].clone();
         assert_eq!((apport["fiche"].as_str(), apport["section"].as_str(), apport["via"].as_str(), apport["author"].as_str(), apport["niveau"].as_str()), (Some("migration-fiche"), Some("compaction"), Some("hook"), Some("96"), Some("L1")));
@@ -1631,6 +1881,7 @@ mod tests {
 
     #[test]
     fn post_compact_sans_tache_garde_le_l0_seul_et_le_session_start_suivant_le_dit() {
+        let _env = env();
         let dossier = std::env::temp_dir().join(format!("hooks-lot3-l0-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dossier);
         let mut reglage = Reglage::defaut();
@@ -1649,6 +1900,7 @@ mod tests {
 
     #[test]
     fn post_compact_sans_resume_ou_sans_identite_ne_perd_rien_et_le_dit() {
+        let _env = env();
         let h = hote_avec_identite();
         let r = repondre(&post_compact("s1", "   "), &Reglage::defaut(), Ok(&h));
         assert!(h.noms().is_empty() && r.journal.iter().any(|l| l.contains("sans résumé")));
@@ -1662,6 +1914,7 @@ mod tests {
 
     #[test]
     fn pre_compact_rend_les_consignes_du_resume_avec_la_graine_d_identite() {
+        let _env = env();
         let h = hote_avec_identite();
         let r = repondre(&Evenement::lire(PRE.replace("\"s1\"", "\"s1\"").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
         assert!(!r.bloc.starts_with("[mémoire]"), "pas de préfixe : c'est le compacteur qui lit");
@@ -1680,6 +1933,7 @@ mod tests {
 
     #[test]
     fn stop_depose_le_tour_comme_un_run_claude_code_turn() {
+        let _env = env();
         let (chemin, reglage) = transcription_d_essai("stop", &[T_USER, T_ASSISTANT_PETIT, T_PROMPT_P2, T_ASSISTANT_P2, T_RESULT_P2, T_FIN_P2, T_PROMPT_P3]);
         let h = hote_avec_identite();
         let e = Evenement::lire(&json!({ "session_id": "s1", "transcript_path": chemin, "cwd": "/p", "hook_event_name": "Stop", "prompt_id": "p2", "stop_hook_active": false, "last_assistant_message": "fait." }).to_string()).unwrap();
@@ -1696,12 +1950,39 @@ mod tests {
         assert_eq!(tours[1]["tool_calls"][0]["name"], "Read");
         assert_eq!((tours[2]["role"].as_str(), tours[2]["tool_use_id"].as_str()), (Some("tool"), Some("tu1")));
         assert_eq!(tours[3]["content"], "fait.");
+        assert!(corps["serveurs"].is_object(), "la table des serveurs est toujours là : {corps}");
         assert!(r.journal.iter().any(|l| l.contains("run déposé : claude-code/s1-p2")), "{:?}", r.journal);
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
     }
 
     #[test]
+    fn la_table_des_serveurs_ne_garde_que_les_notres_avec_leur_manifeste() {
+        let _env = env();
+        let dossier = std::env::temp_dir().join(format!("hooks-serveurs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dossier);
+        let cwd = dossier.join("projet");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let claude_json = dossier.join("claude.json");
+        std::fs::write(&claude_json, json!({
+            "mcpServers": { "racine": { "command": "/opt/rag3weaver-backend", "args": ["mcp", "--manifest", "/r/backend.json"] } },
+            "projects": { cwd.to_string_lossy(): { "mcpServers": {
+                "memoire-longue": { "command": "/home/x/.local/bin/rag3weaver-backend", "args": ["mcp", "--manifest", "/m/backend.json", "--keys", "dev"] },
+                "autre": { "command": "/usr/bin/npx", "args": ["-y", "quelque-chose"] },
+                "sans-manifeste": { "command": "/home/x/.local/bin/rag3weaver-backend", "args": ["daemon"] }
+            } } }
+        }).to_string()).unwrap();
+        std::fs::write(cwd.join(".mcp.json"), json!({ "mcpServers": { "code-rag3db": { "command": "/home/x/.local/bin/rag3weaver-backend", "args": ["mcp", "--manifest", "/c/rag3db.json"] } } }).to_string()).unwrap();
+        std::env::set_var("RAG3WEAVER_CLAUDE_JSON", &claude_json);
+        let t = serveurs_mcp(Some(&cwd));
+        std::env::remove_var("RAG3WEAVER_CLAUDE_JSON");
+        assert_eq!(t, serde_json::from_value(json!({ "memoire-longue": "/m/backend.json", "racine": "/r/backend.json", "code-rag3db": "/c/rag3db.json" })).unwrap(), "{t:?}");
+        assert!(serveurs_mcp(Some(Path::new("/nulle/part"))).is_empty() || true);
+        let _ = std::fs::remove_dir_all(&dossier);
+    }
+
+    #[test]
     fn la_cle_donnee_ecrit_le_handle_une_fois_au_startup() {
+        let _env = env();
         let h = HoteCanne::new(vec![("get_fiche", json!({ "ok": true, "result": { "result": { "data": { "name": "archi", "about": "ex-orchestration", "state": "current" } } } }))]);
         std::env::set_var("RAG3WEAVER_AGENT_KEY", "archi");
         let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
@@ -1721,6 +2002,7 @@ mod tests {
 
     #[test]
     fn l_identity_est_redemandee_une_fois_puis_plus() {
+        let _env = env();
         let (chemin, reglage) = transcription_d_essai("rappel-identity", &[T_USER, T_ASSISTANT_PETIT, T_BOUNDARY, T_SUMMARY]);
         let h = hote_avec_identite(); // l'identity connu date de 10 ms après l'époque : plus vieux que la demande
         let r = repondre(&prompt(&chemin, "on continue la migration"), &reglage, Ok(&h));

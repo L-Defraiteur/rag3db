@@ -134,6 +134,8 @@ mod e2e_graphe_et_paquets;
 mod e2e_highlight_long_text;
 #[path = "../e2e_hnsw_scale.rs"]
 mod e2e_hnsw_scale;
+#[path = "../e2e_hooks_claude_code.rs"]
+mod e2e_hooks_claude_code;
 #[path = "../e2e_idempotent_registration.rs"]
 mod e2e_idempotent_registration;
 #[path = "../e2e_impact.rs"]
