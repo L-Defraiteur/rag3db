@@ -593,17 +593,20 @@ void ChunkedNodeGroup::commitInsert(row_idx_t startRow, row_idx_t numRowsToCommi
 
 void ChunkedNodeGroup::rollbackInsert(row_idx_t startRow, row_idx_t numRows_, transaction_t) {
     std::unique_lock lck{versionInfoMtx};
-    if (startRow == 0) {
-        truncate(0);
-        versionInfo.reset();
-        mayHaveVersionInfo.store(false, std::memory_order_release);
-        return;
-    }
     if (startRow >= numRows) {
         // Nothing to rollback.
         return;
     }
-    versionInfo->rollbackInsert(startRow, numRows_);
+    // Un bloc entièrement annulé (startRow == 0) garde son information de version, ses lignes
+    // marquées annulées, au lieu de la perdre (versionInfo.reset()) : « pas d'information de
+    // version » veut dire « toutes les lignes validées », et un lecteur qui tient ce bloc avec le
+    // compte de lignes lu avant l'annulation (le balayage tient ses blocs depuis V2-1b, pièce 2)
+    // voyait alors toutes les lignes du COPY annulé (ticket du 7 novembre 2026 : 10 + 914,
+    // 10 + 2 048 relations). Marquées annulées, elles sont invisibles à tous, quel que soit le
+    // compte lu ; le prochain append dans ce bloc pose ses propres versions.
+    if (versionInfo) {
+        versionInfo->rollbackInsert(startRow, numRows_);
+    }
     // Les colonnes aussi reviennent à startRow lignes. Ne ramener que le compte du bloc laissait
     // les lignes annulées dans ses colonnes : le point de reprise suivant les recopiait dans un
     // bloc dimensionné pour les seules lignes valides, et écrivait au-delà (corruption de tas
