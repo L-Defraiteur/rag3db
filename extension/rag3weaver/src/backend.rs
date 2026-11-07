@@ -2713,6 +2713,37 @@ impl PreparedBackend {
     }
 }
 
+/// **Le délai d'un appel** (ticket du 7 novembre 2026, « une recherche continue
+/// sur l'hôte après l'abandon de son client ») : posé par l'hôte le temps d'un
+/// `/call` qui porte `deadline_ms`, dans ce fil. Chaque graphe que l'appel
+/// exécute arme une minuterie qui l'arrête à l'échéance par le registre des
+/// runs en vol, au nom de `deadline` ; `fired` dit à l'hôte que l'échéance a
+/// frappé.
+#[derive(Clone)]
+pub struct CallDeadline {
+    pub at: std::time::Instant,
+    pub ms: u64,
+    pub fired: Arc<std::sync::atomic::AtomicBool>,
+}
+
+thread_local! {
+    static DEADLINE_OF_CALL: std::cell::RefCell<Option<CallDeadline>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Exécute `f` avec le délai `d` posé pour les graphes de ce fil, puis le
+/// remet.
+pub fn with_call_deadline<T>(d: Option<CallDeadline>, f: impl FnOnce() -> T) -> T {
+    struct Remettre(Option<CallDeadline>);
+    impl Drop for Remettre {
+        fn drop(&mut self) {
+            DEADLINE_OF_CALL.with(|c| *c.borrow_mut() = self.0.take());
+        }
+    }
+    let avant = DEADLINE_OF_CALL.with(|c| c.replace(d));
+    let _remettre = Remettre(avant);
+    f()
+}
+
 thread_local! {
     /// La cellule de l'appel en cours dans ce fil (`Backend::call_in`).
     static CELL_OF_CALL: std::cell::RefCell<Option<crate::scope::Scope>> = const { std::cell::RefCell::new(None) };
@@ -4753,6 +4784,20 @@ impl Backend {
             };
             services.register(crate::events::RUN_TARGET_SERVICE, crate::events::RunTarget { run: run.clone(), target, role });
         }
+        // L'échéance de l'appel, s'il en porte une : une minuterie qui arrête ce
+        // run par le registre des runs en vol, et se tait si le run finit avant.
+        let _minuterie = DEADLINE_OF_CALL.with(|c| c.borrow().clone()).map(|d| {
+            let (fini, attente) = std::sync::mpsc::channel::<()>();
+            let (registre, run) = (self.runs_in_flight.clone(), run.clone());
+            std::thread::spawn(move || {
+                let reste = d.at.saturating_duration_since(std::time::Instant::now());
+                if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = attente.recv_timeout(reste) {
+                    d.fired.store(true, std::sync::atomic::Ordering::SeqCst);
+                    let _ = registre.stop(&run, "deadline");
+                }
+            });
+            fini
+        });
         let output = DataflowRuntime::with_services(100, services).execute_as(&mut graph, &run)?;
         let read = |node: &str, port: &str| -> Result<Value, String> {
             let value = output
