@@ -720,3 +720,42 @@ fn a_teammate_resumes_after_the_host_restarts() {
     assert!(!finie.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("reprise")), "une tâche finie ne reprend pas : {finie:#?}");
     assert_eq!(*pas.lock().unwrap(), 1, "un seul pas, celui de la reprise");
 }
+
+/// **L'équipier ne finit jamais en silence** (premier essai réel de c7, 7 novembre) : la
+/// `request` qui ouvre la tâche dit d'où elle part (branche, commit) dans la boîte et dans sa
+/// réponse ; un pas qui se termine sans `step_done` écrit sa réponse finale en `report`.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_step_without_step_done_reports_and_the_request_says_where_the_task_starts() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            answer(turns, opts, sink, "Je n'ai pas d'outil d'écriture : je m'arrête là.", Vec::new())
+        })))
+    });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let r = host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Corrige le ticket.", &Value::Null).expect("la request");
+    let depart = r["task"]["depart"].as_str().expect("la réponse dit le commit de départ").to_string();
+    assert_eq!(depart.len(), 40, "{r}");
+    assert_eq!(r["task"]["branche"], "agent/doc", "{r}");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let borne = Instant::now() + Duration::from_secs(60);
+    let boite = loop {
+        let b = files.mailbox();
+        if b.iter().any(|l| l["kind"] == "report" && l["from"] == "teammate") {
+            break b;
+        }
+        assert!(Instant::now() < borne, "en 60 s, aucun report de l'équipier : {b:#?}");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    let ouverte = boite.iter().find(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().starts_with("tâche ouverte")).expect("la boîte dit d'où part la tâche");
+    assert!(ouverte["text"].as_str().unwrap().contains(&depart[..9]), "{ouverte}");
+    let rapport = boite.iter().find(|l| l["kind"] == "report" && l["from"] == "teammate").unwrap();
+    assert!(rapport["text"].as_str().unwrap().contains("sans step_done") && rapport["text"].as_str().unwrap().contains("Je n'ai pas d'outil d'écriture"), "{rapport}");
+    // Le superviseur le voit.
+    assert!(files.pending_for("c7").iter().any(|l| l["id"] == rapport["id"]), "le report attend c7");
+}
