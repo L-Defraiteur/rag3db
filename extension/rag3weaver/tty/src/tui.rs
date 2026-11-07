@@ -5,7 +5,8 @@
 //! et seulement quand quelque chose a changé : un token qui arrive entre deux
 //! images attend la suivante, les tokens d'une même image partent ensemble.
 
-use crate::client;
+use crate::anim::Capacites;
+use crate::client::{self, Depot};
 use crate::endpoint::Endpoint;
 use crate::flux;
 use crate::vue::{Action, Touche, Validee, Vue, HAUTEUR};
@@ -14,7 +15,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use ratatui::{TerminalOptions, Viewport};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// L'intervalle minimal entre deux images (30 par seconde).
@@ -24,12 +25,33 @@ enum Msg {
     Trame(Value),
     Boite(Value),
     Note(String),
+    Politiques(Value),
+    Entete(String),
 }
 
-/// La tâche suivie.
+/// La tâche suivie : son dépôt, et son nom.
+#[derive(Clone)]
 pub struct Tache {
-    pub backend: String,
+    pub depot: Depot,
     pub task: String,
+}
+
+/// **Ce qu'on apprend d'une tâche** : le manifeste de son worktree (le filtre du
+/// flux : une trame d'un autre worktree ne la regarde pas), son en-tête, et ce
+/// que chacun de ses outils a le droit de faire.
+fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<Option<String>>, tx: &mpsc::Sender<Msg>) {
+    let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task));
+    let worktree = client::lire(agent, ep, &chemin).ok().and_then(|v| v["backend"].as_str().map(str::to_string));
+    if let Some(m) = &worktree {
+        *filtre.lock().unwrap_or_else(|p| p.into_inner()) = Some(m.clone());
+    }
+    let manifeste = worktree.unwrap_or_else(|| tache.depot.manifest.clone());
+    if let Ok(etat) = client::lire_brut(agent, ep, "/ide/etat") {
+        let _ = tx.send(Msg::Entete(client::entete(&etat, &manifeste, &tache.task)));
+    }
+    if let Ok(d) = client::poster_brut(agent, ep, "/ide/describe", &json!({ "manifest": manifeste })) {
+        let _ = tx.send(Msg::Politiques(d));
+    }
 }
 
 pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>) -> Result<(), String> {
@@ -37,18 +59,24 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     let (tx, rx) = mpsc::channel::<Msg>();
     let arret = Arc::new(AtomicBool::new(false));
     let boite_au_flux = Arc::new(AtomicBool::new(false));
+    let filtre: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    connaitre(&agent, &ep, &tache, &filtre, &tx);
 
     // Le flux, sur son fil ; la demande part une fois l'abonnement pris.
     let flux_fil = {
-        let (ep, tx, arret, boite_au_flux, agent) = (ep.clone(), tx.clone(), arret.clone(), boite_au_flux.clone(), agent.clone());
-        let (backend, task) = (tache.backend.clone(), tache.task.clone());
+        let (ep, tx, arret, boite_au_flux, agent, filtre) = (ep.clone(), tx.clone(), arret.clone(), boite_au_flux.clone(), agent.clone(), filtre.clone());
+        let tache = tache.clone();
         let mut demande = demande.clone();
         std::thread::spawn(move || {
             let tx2 = tx.clone();
             let mut ouvert = || {
                 if let Some(texte) = demande.take() {
-                    if let Err(e) = client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": backend, "task": task, "kind": "request", "text": texte })) {
-                        let _ = tx2.send(Msg::Note(format!("la demande est refusée : {e}")));
+                    match client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": "request", "text": texte })) {
+                        // La demande ouvre la tâche : son worktree existe désormais.
+                        Ok(_) => connaitre(&agent, &ep, &tache, &filtre, &tx2),
+                        Err(e) => {
+                            let _ = tx2.send(Msg::Note(format!("la demande est refusée : {e}")));
+                        }
                     }
                 }
             };
@@ -59,6 +87,11 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
                 if t.event == "lacune" {
                     let _ = tx.send(Msg::Note("lacune : le tampon de l'hôte a perdu des événements".into()));
                 } else if let Ok(v) = serde_json::from_str::<Value>(&t.data) {
+                    if let Some(f) = filtre.lock().unwrap_or_else(|p| p.into_inner()).as_deref() {
+                        if v["backend"].as_str() != Some(f) {
+                            return flux::Suite::Continuer;
+                        }
+                    }
                     if v["evenement"]["kind"] == "MailboxLine" {
                         boite_au_flux.store(true, Ordering::SeqCst);
                     }
@@ -74,7 +107,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     // La boîte, relue tant que le flux ne la relaie pas.
     {
         let (ep, tx, arret, boite_au_flux, agent) = (ep.clone(), tx.clone(), arret.clone(), boite_au_flux.clone(), agent.clone());
-        let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.backend), client::encoder(&tache.task));
+        let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task));
         std::thread::spawn(move || {
             let mut lues = 0usize;
             while !arret.load(Ordering::SeqCst) {
@@ -95,6 +128,8 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     let mut terminal = ratatui::init_with_options(TerminalOptions { viewport: Viewport::Inline(HAUTEUR) });
     let largeur = terminal.size().map(|s| s.width).unwrap_or(80);
     let mut vue = Vue::new(largeur, demande.is_some());
+    vue.capacites = Capacites::du_terminal();
+    vue.graine = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
     let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache);
     arret.store(true, Ordering::SeqCst);
     // La zone vivante reste à l'écran telle quelle ; le curseur passe dessous.
@@ -108,6 +143,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
 fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> Result<(), String> {
     let mut sale = true;
     let mut derniere = Instant::now() - IMAGE;
+    let mut image_vue = u64::MAX;
     loop {
         // Tout ce qui est arrivé, d'un coup.
         while let Ok(m) = rx.try_recv() {
@@ -115,15 +151,28 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 Msg::Trame(v) => vue.trame(&v),
                 Msg::Boite(l) => vue.ligne_de_boite(&l),
                 Msg::Note(n) => vue.note(&n),
+                Msg::Politiques(d) => vue.politiques(&d),
+                Msg::Entete(e) => vue.entete = e,
             }
             sale = true;
+        }
+        // Une animation change d'image à sa cadence (10 images/s au plus vite).
+        if vue.quelle().is_some() {
+            let n = vue.image(Instant::now());
+            if n != image_vue {
+                image_vue = n;
+                sale = true;
+            }
         }
         if sale && derniere.elapsed() >= IMAGE {
             dessiner(terminal, vue)?;
             sale = false;
             derniere = Instant::now();
         }
-        let attente = if sale { IMAGE.saturating_sub(derniere.elapsed()) } else { IMAGE };
+        let mut attente = if sale { IMAGE.saturating_sub(derniere.elapsed()) } else { IMAGE };
+        if let Some(p) = vue.prochaine_image(Instant::now()) {
+            attente = attente.min(p);
+        }
         if event::poll(attente).map_err(|e| e.to_string())? {
             let action = match event::read().map_err(|e| e.to_string())? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => {
@@ -150,12 +199,12 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             match action {
                 Some(Action::Quitter) => return Ok(()),
                 Some(Action::Envoyer(texte, kind)) => {
-                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.backend, "task": tache.task, "kind": kind, "text": texte })) {
+                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte })) {
                         vue.note(&format!("refusé : {e}"));
                     }
                 }
                 Some(Action::Arreter) => {
-                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.backend, "task": tache.task, "kind": "stop", "text": "" })) {
+                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": "stop", "text": "" })) {
                         vue.note(&format!("l'arrêt est refusé : {e}"));
                     } else {
                         vue.note("arrêt demandé");
@@ -265,10 +314,50 @@ mod tests {
         compte.load(Ordering::SeqCst)
     }
 
+    /// Les octets émis pour `n` images d'une animation, la vue en `etat`.
+    fn octets_d_animation(evenement: Value, images: u64) -> usize {
+        let compte = Arc::new(AtomicUsize::new(0));
+        let backend = Compte { inner: CrosstermBackend::new(Compteur(compte.clone())), taille: Size::new(80, 24) };
+        let mut t = Terminal::with_options(backend, TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let mut vue = Vue::new(80, true);
+        vue.politiques(&json!({ "tools": [{ "name": "edit_file", "policy": { "write_files": true } }] }));
+        vue.entete = "rag3db · tty-3 · tâche parle".into();
+        vue.trame(&evenement);
+        dessiner(&mut t, &mut vue).unwrap();
+        let debut = std::time::Instant::now();
+        compte.store(0, Ordering::SeqCst);
+        let ms = vue.quelle().unwrap().de(&vue.theme).ms;
+        for n in 1..=images {
+            let a = debut + std::time::Duration::from_millis(n * ms);
+            t.draw(|f| vue.dessiner_a(f, f.area(), a)).unwrap();
+        }
+        compte.load(Ordering::SeqCst)
+    }
+
+    /// **La mesure du lot tty-3** : ce que coûte une image du Daemon Code
+    /// Summoning, l'écran sans autre changement (seule la ligne d'état bouge).
+    /// Mesuré le 7 nov. 2026, couleur vraie, 80 colonnes, l'en-tête affiché :
+    /// Cercle 82 o par image, Transmutation 60, Glitch 158. À leurs cadences,
+    /// cela fait au plus 1,6 Ko/s (le Glitch, 10 images/s). Les bornes laissent un
+    /// quart de marge.
+    #[test]
+    fn mesure_des_octets_par_image_d_animation() {
+        let cercle = octets_d_animation(json!({ "evenement": { "kind": "LlmCall" } }), 100);
+        let glitch = octets_d_animation(json!({ "evenement": { "kind": "ToolCallStarted", "tool": "edit_file" } }), 100);
+        let lit = octets_d_animation(json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file" } }), 100);
+        eprintln!("MESURE tty-3 : 100 images — Cercle {cercle} o ({:.1} o/image), Transmutation {lit} o ({:.1}), Glitch {glitch} o ({:.1})", cercle as f64 / 100.0, lit as f64 / 100.0, glitch as f64 / 100.0);
+        assert!(cercle > 0 && glitch > 0 && lit > 0);
+        assert!(cercle <= 10_500, "Cercle : {cercle} o pour 100 images (mesuré 8 200)");
+        assert!(lit <= 7_500, "Transmutation : {lit} o pour 100 images (mesuré 6 000)");
+        assert!(glitch <= 20_000, "Glitch : {glitch} o pour 100 images (mesuré 15 812)");
+    }
+
     /// **La mesure du lot tty-2** : ce que coûte un flux de 1 000 tokens à
     /// l'écran, une image par token (le pire) et une image pour dix (30 images/s
     /// à 300 tokens/s). Mesuré le 7 nov. 2026 : texte 6 890 o, une image par
-    /// token 62 454 o (62,5 o/token), une pour dix 28 072 o (28,1 o/token), soit
+    /// token 62 454 o (62,5 o/token), une pour dix 28 072 o (28,1 o/token) au lot
+    /// tty-2 ; 63 174 et 28 792 au lot tty-3, où la ligne d'état prend la couleur
+    /// vraie du thème au lieu du rouge de base (une séquence RGB par image), soit
     /// environ 280 o par image dont 69 de texte. Les bornes laissent un quart de
     /// marge sur ces chiffres : un changement qui les passe se justifie d'abord.
     #[test]

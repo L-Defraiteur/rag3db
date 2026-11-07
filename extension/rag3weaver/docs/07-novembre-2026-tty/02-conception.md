@@ -185,3 +185,27 @@ Ce n'est pas un rouge. Le temps passe dans l'attente que l'équipier finisse (la
 - « backend » reste dans le JSON et le manifeste, **jamais dans un libellé**.
 - **Les commandes, dès tty-3.** On désigne par le dépôt : son chemin, ou son nom tel que `code-tree` l'inscrit. L'id se résout par `GET /ide/etat` et ne s'écrit jamais à la main. `--backend <id>`, le seul nom du lot tty-1, devient `--depot <chemin|nom>`, et `--task` devient `--tache`. L'ancien nom reste lu, en le signalant, le temps d'un lot.
 - **Les en-têtes, dès tty-3.** La vue nomme le dépôt, la branche et la tâche (`rag3db · tty-3 · tâche parle`), jamais l'id d'un backend.
+
+### Lot tty-3 : les octets du Daemon Code Summoning (7 nov. 2026)
+
+- **Ce qui les produit.** Le test `tui::tests::mesure_des_octets_par_image_d_animation`, avec le même backend compteur que tty-2 : 80×24, couleur vraie, l'en-tête « rag3db · tty-3 · tâche parle » affiché. On dessine 100 images de chaque animation, et rien d'autre ne change à l'écran.
+- **Les chiffres.**
+
+  | Animation | Octets par image | À sa cadence | Borne pour 100 images |
+  |---|---|---|---|
+  | Cercle (réfléchit, 150 ms) | 82 | 550 o/s | 10 500 |
+  | Transmutation (outil qui lit, 200 ms) | 60 | 300 o/s | 7 500 |
+  | Glitch (outil qui écrit ou exécute, 100 ms) | 158 | 1,6 Ko/s | 20 000 |
+
+  Les bornes laissent un quart de marge au-dessus du mesuré.
+- **La mesure de tty-2, rejouée.** Elle passe de 28 072 à 28 792 octets pour une image tous les dix tokens, et de 62 454 à 63 174 pour une image par token. La ligne d'état prend maintenant la couleur vraie du thème au lieu du rouge de base, soit une séquence RGB par image. Les bornes de tty-2 (35 000 et 78 000) ne bougent pas.
+- **Ce que fait le lot.**
+  - Les trois animations sont des fonctions pures du thème, du numéro d'image, de la graine et des capacités du terminal.
+  - Le Cercle et la Transmutation reproduisent exactement la page d'origine, ce que les tests vérifient.
+  - Le Glitch tire ses glyphes d'un xorshift : avec la même graine, on obtient les mêmes images.
+  - Les couleurs se dégradent selon le terminal : couleur vraie, puis 256 couleurs (le plus proche dans le cube ou la rampe de gris), puis 16 couleurs (le plus proche des seize de xterm), puis `NO_COLOR`, où le cœur reste en gras.
+  - Les glyphes du plan astral sont remplacés par défaut (`🜂` → `△`). `RAG3WEAVER_TTY_GLYPHES=tous` les garde, `=ascii` donne une ligne en ASCII pur.
+  - L'animation suit la `policy` de chaque outil, lue par `describe`.
+  - La vue n'écoute que les trames du worktree de la tâche (`result.backend`).
+  - `--depot` et `--tache` remplacent `--backend` et `--task`, qui restent lus un lot avec un avertissement.
+  - L'en-tête « dépôt · branche · tâche » se cale à droite de la ligne d'état quand il tient dans la largeur.

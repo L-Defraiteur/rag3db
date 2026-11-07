@@ -5,12 +5,16 @@
 //! saisie. L'historique reste celui du terminal : le défilement, la copie, tmux
 //! et mosh continuent de marcher, et seul le bas de l'écran se redessine.
 
+use crate::anim::{self, Capacites, Glyphes, Niveau, Quelle};
+use crate::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use unicode_width::UnicodeWidthChar;
 
 /// La hauteur de la zone vivante.
@@ -91,6 +95,17 @@ pub struct Vue {
     pub etat: Etat,
     saisie: String,
     demande_posee: bool,
+    pub theme: Theme,
+    pub capacites: Capacites,
+    /// La graine du Glitch (fixée dans les tests).
+    pub graine: u64,
+    /// Ce que chaque outil a le droit de faire : il lit, ou il écrit ou exécute
+    /// (la `policy` de `describe`). Un outil inconnu lit.
+    politiques: HashMap<String, Quelle>,
+    /// Depuis quand l'animation en cours tourne.
+    depuis: Instant,
+    /// « dépôt · branche · tâche », jamais l'id d'un backend.
+    pub entete: String,
 }
 
 /// La largeur d'un texte en colonnes.
@@ -100,7 +115,61 @@ pub fn colonnes(s: &str) -> usize {
 
 impl Vue {
     pub fn new(largeur: u16, demande_posee: bool) -> Self {
-        Self { largeur: largeur.max(8), en_cours: String::new(), validees: Vec::new(), etat: Etat::Attend, saisie: String::new(), demande_posee }
+        Self {
+            largeur: largeur.max(8),
+            en_cours: String::new(),
+            validees: Vec::new(),
+            etat: Etat::Attend,
+            saisie: String::new(),
+            demande_posee,
+            theme: Theme::daemon(),
+            capacites: Capacites { couleurs: Niveau::Vraie, glyphes: Glyphes::Surs },
+            graine: 0x5eed,
+            politiques: HashMap::new(),
+            depuis: Instant::now(),
+            entete: String::new(),
+        }
+    }
+
+    /// Change d'état ; l'animation repart de sa première image quand elle change.
+    fn changer(&mut self, e: Etat) {
+        let avant = self.quelle();
+        self.etat = e;
+        if self.quelle() != avant {
+            self.depuis = Instant::now();
+        }
+    }
+
+    /// Les politiques des outils, depuis la réponse de `describe` (`{tools: [{name, policy}]}`).
+    pub fn politiques(&mut self, describe: &Value) {
+        let outils = describe["tools"].as_array().or_else(|| describe["result"]["tools"].as_array()).cloned().unwrap_or_default();
+        for o in outils {
+            let (Some(nom), p) = (o["name"].as_str(), &o["policy"]) else { continue };
+            let ecrit = p["write_files"] == true || p["run_commands"] == true;
+            self.politiques.insert(nom.to_string(), if ecrit { Quelle::Ecrit } else { Quelle::Lit });
+        }
+    }
+
+    /// L'animation de l'état, s'il en a une.
+    pub fn quelle(&self) -> Option<Quelle> {
+        match &self.etat {
+            Etat::Reflechit => Some(Quelle::Reflechit),
+            Etat::Agit(o) => Some(*self.politiques.get(o).unwrap_or(&Quelle::Lit)),
+            _ => None,
+        }
+    }
+
+    /// Le numéro de l'image à `maintenant`.
+    pub fn image(&self, maintenant: Instant) -> u64 {
+        let ms = self.quelle().map(|q| q.de(&self.theme).ms).unwrap_or(1).max(1);
+        (maintenant.saturating_duration_since(self.depuis).as_millis() as u64) / ms
+    }
+
+    /// Le temps jusqu'à l'image suivante, s'il y a une animation.
+    pub fn prochaine_image(&self, maintenant: Instant) -> Option<Duration> {
+        let ms = self.quelle()?.de(&self.theme).ms.max(1);
+        let ecoule = maintenant.saturating_duration_since(self.depuis).as_millis() as u64;
+        Some(Duration::from_millis(ms - ecoule % ms))
     }
 
     pub fn redimensionner(&mut self, largeur: u16) {
@@ -170,9 +239,9 @@ impl Vue {
     pub fn trame(&mut self, enveloppe: &Value) {
         let e = &enveloppe["evenement"];
         match e["kind"].as_str().unwrap_or_default() {
-            "LlmCall" => self.etat = Etat::Reflechit,
+            "LlmCall" => self.changer(Etat::Reflechit),
             "Token" => {
-                self.etat = Etat::Ecrit;
+                self.changer(Etat::Ecrit);
                 if let Some(t) = e["text"].as_str() {
                     self.texte(t);
                 }
@@ -181,17 +250,17 @@ impl Vue {
                 self.clore();
                 let outil = e["tool"].as_str().unwrap_or("?").to_string();
                 self.valider(Genre::Outil, format!("» {outil}"));
-                self.etat = Etat::Agit(outil);
+                self.changer(Etat::Agit(outil));
             }
             "ToolCallFinished" => {
                 let dit = if e["ok"] == true { format!("  fait ({} ms)", e["ms"].as_u64().unwrap_or(0)) } else { format!("  refusé ({})", e["error_kind"].as_str().unwrap_or("erreur")) };
                 self.valider(Genre::Outil, dit);
-                self.etat = Etat::Reflechit;
+                self.changer(Etat::Reflechit);
             }
             "RunFinished" => {
                 self.clore();
                 if !matches!(self.etat, Etat::Fini(_)) {
-                    self.etat = Etat::Attend;
+                    self.changer(Etat::Attend);
                 }
             }
             "MailboxLine" => self.ligne_de_boite(&e["line"]),
@@ -209,7 +278,7 @@ impl Vue {
             self.valider(Genre::Boite, if i == 0 { format!("{tete}{ligne}") } else { format!("  {ligne}") });
         }
         if l["kind"] == "ended" {
-            self.etat = Etat::Fini(texte.to_string());
+            self.changer(Etat::Fini(texte.to_string()));
         }
     }
 
@@ -253,25 +322,61 @@ impl Vue {
         if self.demande_posee { "instruction" } else { "request" }
     }
 
-    /// Le texte de la ligne d'état.
-    pub fn ligne_d_etat(&self) -> String {
-        match &self.etat {
-            Etat::Attend => "⛧ attend".into(),
-            Etat::Reflechit => "⛧ réfléchit…".into(),
-            Etat::Ecrit => "⛧ écrit".into(),
-            Etat::Agit(o) => format!("⛧ agit : {o}"),
-            Etat::Fini(pourquoi) => format!("⛧ fini : {pourquoi}"),
+    /// Le cœur du thème, tel que le terminal sait le montrer.
+    fn coeur(&self) -> String {
+        match self.capacites.glyphes {
+            Glyphes::Ascii => self.theme.ascii.coeur.clone(),
+            _ => self.theme.animations.reflechit.coeur.clone(),
         }
     }
 
-    /// Dessine la zone vivante dans `zone` (trois lignes).
+    /// Le texte de la ligne d'état, sans son animation.
+    pub fn ligne_d_etat(&self) -> String {
+        let c = self.coeur();
+        match &self.etat {
+            Etat::Attend => format!("{c} attend"),
+            Etat::Reflechit => format!("{c} réfléchit…"),
+            Etat::Ecrit => format!("{c} écrit"),
+            Etat::Agit(o) => format!("{c} agit : {o}"),
+            Etat::Fini(pourquoi) => format!("{c} fini : {pourquoi}"),
+        }
+    }
+
+    /// La ligne d'état à `maintenant` : l'animation quand l'état en a une, puis
+    /// l'en-tête en sourdine à droite s'il tient.
+    pub fn ligne_vivante(&self, largeur: usize, maintenant: Instant) -> Line<'static> {
+        let mut ligne = match self.quelle() {
+            Some(q) => {
+                let suite = if let Etat::Agit(o) = &self.etat { o.clone() } else { String::new() };
+                anim::ligne(&self.theme, q, self.image(maintenant), self.graine, self.capacites, &suite)
+            }
+            None => {
+                let rouge = anim::couleur(&self.theme.couleurs.texte, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default().add_modifier(Modifier::BOLD);
+                Line::from(Span::styled(self.ligne_d_etat(), rouge))
+            }
+        };
+        let occupe: usize = ligne.spans.iter().map(|s| colonnes(&s.content)).sum();
+        let entete = colonnes(&self.entete);
+        if !self.entete.is_empty() && occupe + 2 + entete <= largeur {
+            let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+            ligne.spans.push(Span::raw(" ".repeat(largeur - occupe - entete)));
+            ligne.spans.push(Span::styled(self.entete.clone(), sourdine));
+        }
+        ligne
+    }
+
+    /// Dessine la zone vivante dans `zone` (trois lignes), à l'heure qu'il est.
     pub fn dessiner(&self, f: &mut Frame, zone: Rect) {
+        self.dessiner_a(f, zone, Instant::now())
+    }
+
+    /// Dessine la zone vivante telle qu'elle est à `maintenant`.
+    pub fn dessiner_a(&self, f: &mut Frame, zone: Rect, maintenant: Instant) {
         let largeur = zone.width as usize;
         // La fin de la ligne en cours, si elle déborde (elle ne déborde pas : `couper`).
         let en_cours = queue(&self.en_cours, largeur);
         let saisie = queue(&format!("› {}", self.saisie), largeur.saturating_sub(1));
-        let rouge = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
-        let lignes = vec![Line::from(en_cours), Line::from(Span::styled(self.ligne_d_etat(), rouge)), Line::from(saisie.clone())];
+        let lignes = vec![Line::from(en_cours), self.ligne_vivante(largeur, maintenant), Line::from(saisie.clone())];
         f.render_widget(Paragraph::new(lignes), zone);
         let x = zone.x + (colonnes(&saisie) as u16).min(zone.width.saturating_sub(1));
         f.set_cursor_position((x, zone.y + 2));
@@ -335,6 +440,45 @@ mod tests {
     }
 
     #[test]
+    fn the_animation_follows_the_state_and_the_tool_policy() {
+        let mut v = Vue::new(120, true);
+        v.politiques(&json!({ "tools": [
+            { "name": "read_file", "policy": { "read_files": true } },
+            { "name": "edit_file", "policy": { "write_files": true } },
+            { "name": "run_command", "policy": { "run_commands": true } }
+        ] }));
+        let t0 = Instant::now();
+        let ligne = |v: &Vue, ms: u64| v.ligne_vivante(120, v.depuis + Duration::from_millis(ms)).spans.iter().map(|s| s.content.to_string()).collect::<String>();
+        assert_eq!(v.quelle(), None);
+        assert!(ligne(&v, 0).starts_with("⛧ attend"));
+        v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
+        assert_eq!(v.quelle(), Some(Quelle::Reflechit));
+        assert!(ligne(&v, 0).starts_with("⟪ ᚛ᚨᛒ ⛧ ᚜⸸‡ ⟫ INVOCATION DU CODE..."));
+        assert!(ligne(&v, 150).starts_with("⟪ ᚨᛒᛟ ⛧ ⸸‡᚛ ⟫"), "une image toutes les 150 ms");
+        assert_eq!(v.prochaine_image(v.depuis + Duration::from_millis(40)), Some(Duration::from_millis(110)));
+        for (outil, attendu) in [("read_file", Quelle::Lit), ("edit_file", Quelle::Ecrit), ("run_command", Quelle::Ecrit), ("inconnu", Quelle::Lit)] {
+            v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": outil } }));
+            assert_eq!(v.quelle(), Some(attendu), "{outil}");
+            assert!(ligne(&v, 0).ends_with(outil) || ligne(&v, 0).contains(&format!(" {outil}")), "le nom de l'outil suit l'animation : {}", ligne(&v, 0));
+        }
+        v.trame(&json!({ "evenement": { "kind": "Token", "text": "x" } }));
+        assert_eq!(v.quelle(), None, "les tokens coulent : pas d'animation");
+        assert_eq!(v.prochaine_image(t0), None);
+    }
+
+    #[test]
+    fn the_header_says_repo_branch_and_task_on_the_right_when_it_fits() {
+        let mut v = Vue::new(60, true);
+        v.entete = "rag3db · tty-3 · tâche parle".into();
+        let texte = |v: &Vue, l: usize| v.ligne_vivante(l, v.depuis).spans.iter().map(|s| s.content.to_string()).collect::<String>();
+        let large = texte(&v, 60);
+        assert!(large.starts_with("⛧ attend") && large.ends_with("rag3db · tty-3 · tâche parle"), "{large}");
+        assert_eq!(colonnes(&large), 60);
+        assert_eq!(texte(&v, 20), "⛧ attend", "trop étroit : l'en-tête se tait");
+        assert!(!large.contains("backend"));
+    }
+
+    #[test]
     fn keys_type_send_stop_and_quit() {
         let mut v = Vue::new(80, false);
         for c in "fais ça".chars() {
@@ -376,7 +520,9 @@ mod tests {
             }
             let ecran = rendu(l, h, &mut v);
             let non_vides: Vec<&String> = ecran.iter().filter(|s| !s.is_empty()).collect();
-            assert_eq!(non_vides, vec!["Première ligne.", "En cours", "⛧ réfléchit…", "› ok"], "{l}×{h} : {ecran:#?}");
+            assert_eq!(non_vides.len(), 4, "{l}×{h} : {ecran:#?}");
+            assert_eq!((non_vides[0].as_str(), non_vides[1].as_str(), non_vides[3].as_str()), ("Première ligne.", "En cours", "› ok"), "{l}×{h} : {ecran:#?}");
+            assert!(non_vides[2].contains("INVOCATION DU CODE"), "le modèle réfléchit : le Cercle — {l}×{h} : {ecran:#?}");
         }
     }
 }
