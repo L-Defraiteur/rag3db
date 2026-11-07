@@ -8,7 +8,7 @@ un commentaire.
 
 ## sans_fiche
 
-Aucune fiche d'identité ne cite cette session. Si tu as une clé (ton nom court, celui que les autres sessions emploient), écris ton L1 `handle` : `put_apport` {fiche: <clé>, source: "sessions", section: "handle", texte: "session:{id}", niveau: "L1", via: "claude-code", author: <clé>} puis `relier_apport` {links: [{from: {name: <clé>}, to: {fiche: <clé>, source: "sessions", section: "handle"}}]} et `citer_source` {genre: "handle", valeur: "session:{id}", fiche: {fiche: <clé>, source: "sessions", section: "handle"}}{genre}. Si tu es nouvelle, crée d'abord ta fiche d'identité : `put_fiche` {name: <clé>, about: <une ligne>, state: "current", author: <clé>}. Passe toujours `author` = ta clé (M7 n'est pas là pour le faire). Rien n'est créé à ta place.
+Aucune fiche d'identité ne cite cette session. Si tu as une clé (ton nom court, celui que les autres sessions emploient), écris ton L1 `handle` : `put_apport` {fiche: <clé>, source: "sessions/{id}", section: "handle", texte: "session:{id}", niveau: "L1", via: "claude-code", author: <clé>} puis `relier_apport` {links: [{from: {name: <clé>}, to: {fiche: <clé>, source: "sessions/{id}", section: "handle"}}]} et `citer_source` {genre: "handle", valeur: "session:{id}", fiche: {fiche: <clé>, source: "sessions/{id}", section: "handle"}}{genre} — une source par session, pour que le L1 ne se réécrive pas. Si tu es nouvelle, crée d'abord ta fiche d'identité : `put_fiche` {name: <clé>, about: <une ligne>, state: "current", author: <clé>}. Passe toujours `author` = ta clé (M7 n'est pas là pour le faire). Rien n'est créé à ta place.
 
 ## session_compactee
 

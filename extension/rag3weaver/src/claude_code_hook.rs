@@ -475,7 +475,11 @@ impl Identite {
 
 fn identite_de_la_session(h: &dyn Hote, session_id: &str, journal: &mut Vec<String>) -> Option<Identite> {
     if !session_id.is_empty() {
-        match h.appeler("cited_by", json!({ "value": format!("handle:session:{session_id}"), "under": false, "format": "json", "limit": 3 })) {
+        // La Ref d'un handle porte la valeur nue `session:<uuid>`, de genre
+        // `handle` (73, vérifié sur la mémoire de Lucie le 7 novembre : la forme
+        // préfixée ne rend rien). Le genre borne, pour ne pas prendre une autre
+        // Ref de même valeur.
+        match h.appeler("cited_by", json!({ "value": format!("session:{session_id}"), "genres": ["handle"], "under": false, "format": "json", "limit": 3 })) {
             Ok(v) => {
                 if let Some(f) = fiches_citant(&v).into_iter().find(|f| f["state"] != "retired") {
                     let cle = f["name"].as_str().unwrap_or("").to_string();
@@ -637,9 +641,12 @@ fn citer(h: &dyn Hote, fiche: &str, source: &str, section: &str, genre: &str, va
 /// (96 : un par session, jamais réécrit, seulement si la fiche existe).
 fn ecrire_le_handle(h: &dyn Hote, id: &Identite, session_id: &str, journal: &mut Vec<String>) {
     let valeur = format!("session:{session_id}");
-    match ecrire_un_apport(h, &id.cle, "sessions", "handle", &valeur, &id.cle) {
+    // Une source par session : la clé d'un apport est (fiche, source, section),
+    // et un L1 ne se réécrit pas (page 04 du 25 octobre).
+    let source = format!("sessions/{session_id}");
+    match ecrire_un_apport(h, &id.cle, &source, "handle", &valeur, &id.cle) {
         Ok(()) => {
-            citer(h, &id.cle, "sessions", "handle", "handle", &valeur, journal);
+            citer(h, &id.cle, &source, "handle", "handle", &valeur, journal);
             journal.push(format!("L1 handle écrit sur « {} » : {valeur}", id.cle));
         }
         Err(e) => journal.push(format!("L1 handle non écrit : {e}")),
@@ -1305,7 +1312,7 @@ mod tests {
         assert!(std::fs::read_to_string(dossier.join("hooks.log")).unwrap().contains("[rejeu] SessionStart abc-123"));
         let r = recues.lock().unwrap();
         assert_eq!(r[2].1, "/call");
-        assert!(r[2].3.contains("handle:session:abc-123"));
+        assert!(r[2].3.contains("\"value\":\"session:abc-123\"") && r[2].3.contains("\"genres\":[\"handle\"]"), "{}", r[2].3);
         let _ = std::fs::remove_dir_all(&dossier);
     }
 
@@ -1440,7 +1447,8 @@ mod tests {
         assert!(!b.contains("compactée"), "pas de consigne de compaction au startup");
         let noms = h.noms();
         assert_eq!(noms[0], "cited_by");
-        assert_eq!(h.appels.lock().unwrap()[0].1["value"], "handle:session:s1");
+        let premier = h.appels.lock().unwrap()[0].1.clone();
+        assert_eq!((premier["value"].as_str(), premier["genres"][0].as_str(), premier["under"].as_bool()), (Some("session:s1"), Some("handle"), Some(false)), "la valeur nue, le genre handle");
         assert!(noms.contains(&"recall_apports".to_string()));
         assert!(r.journal.iter().any(|l| l.contains("bloc de")), "{:?}", r.journal);
     }
@@ -1701,6 +1709,7 @@ mod tests {
         let appels = h.appels.lock().unwrap();
         let handle = appels.iter().find(|(n, a)| n == "put_apport" && a["record"]["section"] == "handle").expect("le L1 handle").1["record"].clone();
         assert_eq!((handle["fiche"].as_str(), handle["texte"].as_str(), handle["via"].as_str(), handle["author"].as_str()), (Some("archi"), Some("session:25b7ff4b-dabf-42ef-8580-86661c846fb9"), Some("hook"), Some("archi")));
+        assert_eq!(handle["source"], "sessions/25b7ff4b-dabf-42ef-8580-86661c846fb9", "une source par session : le L1 ne se réécrit pas");
         assert!(appels.iter().any(|(n, a)| n == "citer_source" && a["genre"] == "handle" && a["valeur"] == "session:25b7ff4b-dabf-42ef-8580-86661c846fb9"));
         drop(appels);
         std::env::remove_var("RAG3WEAVER_AGENT_KEY");
