@@ -229,3 +229,55 @@ La base `memory` du hook ne compte que ces deux fiches. Elles revenaient donc
 
 - cacher les fiches sous un seuil de score plutôt que les dire « en rapport » ;
 - mesurer l'essai sur une base peuplée, sinon le juge mesure une base vide.
+
+## Ce que j'aurais voulu que la mémoire me rappelle (à ranger en premier)
+
+Tour de 15 h 48 : toujours aucun bloc (`recall_fiches … timeout: global`).
+c7 explique que 5 s est le budget total du hook pour des appels en série ; le
+lot 3 bis les met en parallèle. La base `memory` ne compte que deux fiches
+jusqu'au pas 3 de l'archiviste.
+
+La liste ci-dessous suit l'ordre des moments du lot. Pour chaque point : ce que
+j'ai dû trouver seule (en lisant, en demandant ou en me trompant), et que la
+mémoire aurait pu me dire.
+
+1. **À l'arrivée (SessionStart).**
+   - Qui orchestre (c7 = rag3db-74), sur quelle base et avec quelle lib
+     épinglée (04063ee06 et son identifiant complet du magasin), et où passer
+     le lourd (luciepc, `poste lourd`, deux places à la fois).
+   - Où écrire : le journal de la session, et un worktree de docs à part
+     quand la branche du lot n'est pas celle de la session.
+   - La forme de mes propres apports (`author` = ma clé, `via` =
+     `claude-code`, identity en sept lignes) : je ne l'ai apprise qu'au
+     troisième message de c7.
+2. **Au diagnostic (« la recherche exige un dossier »).**
+   - La page 08 de l'IDE en React : l'ordre des vues, ce qui est atterri et ce
+     qui ne l'est pas (vues 5, 6, 7, 3b sur des branches au 7 nov.), les
+     repères DOM des témoins.
+   - Le fait qu'everything declarative tient `Tree.tsx`, `main.tsx`,
+     `File.tsx` et `Editor.tsx`, et qu'il faut se baser sur
+     `ide-react-vue3b-2`.
+   - Que `search_code` prend `scope` (préfixes séparés par `|`).
+3. **À l'écriture du témoin.**
+   - La forme d'appel de `search_code` par `/ide/call` : `options` est exigé
+     (422 sans lui). C'est le seul rouge du lot.
+   - Le gabarit d'un témoin navigateur (`hote_garde`, `manifeste_jouable`,
+     `Navigateur::attendre`), la marque `navigateur` et
+     `RAG3WEAVER_EXIGER_NAVIGATEUR=1`.
+4. **À la passe.**
+   - Les features de la lib entière dépendent de la base :
+     `anthropic-llm` n'existe pas avant master. Le premier essai s'est arrêté
+     net.
+   - Les valeurs de luciepc : `RAG3WEAVER_PG` (port 5433), les services
+     d'embarquement 7878-7880, `RAG3WEAVER_PAQUETS_REACT`.
+5. **Au push (à venir).**
+   - `rebase --onto master 37c42b720`.
+   - Les fichiers bâtis `templates/ide/app/*` : se rebâtissent, jamais à la
+     main.
+   - La fenêtre de push du cœur, et le mot de c7.
+
+Presque tout cela existe déjà, mais ailleurs : dans les fiches de la mémoire
+de Claude Code (`~/.claude/projects/…/memory/`), dans les procédures
+(`docs/procedures/`) ou dans les messages des sessions. Ce qu'il faut ranger
+en premier dans `memory`, c'est le contenu des procédures et de la page 08 de
+l'IDE, plus une fiche par session avec les fichiers qu'elle tient.
