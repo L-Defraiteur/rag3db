@@ -305,7 +305,7 @@ codegen-units = 1
 
 [dev-dependencies]
 # Le client du terminal (son crate à part, sans le moteur) : le témoin e2e_tty.
-rag3weaver-tty = { path = "tty" }
+rag3weaver-tty = { path = "tty", default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 async-openai = { version = "0.32", features = ["embedding"] }
