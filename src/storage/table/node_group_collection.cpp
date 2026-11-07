@@ -107,7 +107,8 @@ void NodeGroupCollection::append(const Transaction* transaction,
 
 std::pair<offset_t, offset_t> NodeGroupCollection::appendToLastNodeGroupAndFlushWhenFull(
     Transaction* transaction, const std::vector<column_id_t>& columnIDs,
-    InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator) {
+    InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator,
+    std::optional<offset_t> partialFlushFrom) {
     NodeGroup* lastNodeGroup = nullptr;
     offset_t startOffset = 0;
     offset_t numToAppend = 0;
@@ -134,8 +135,40 @@ std::pair<offset_t, offset_t> NodeGroupCollection::appendToLastNodeGroupAndFlush
         // If the node group is empty now and the chunked group is full, we can directly flush it.
         directFlushWhenAppend =
             numToAppend == numRowsLeftInLastNodeGroup && lastNodeGroup->getNumRows() == 0;
+        // Le vidage partiel d'un COPY borné en octets (ticket 2026-10-11-copy-de-blobs-en-point-de-
+        // reprise-force-sous-un-petit-tampon) : des lignes qui ne remplissent pas le groupe de nœuds
+        // vont au disque tout de suite, au lieu d'attendre en mémoire le point de reprise. Deux cas
+        // seulement, qui gardent « tous les groupes pleins sauf le dernier » et un seul bloc
+        // persistant par groupe : le groupe de nœuds est vide (la tête), ou sa tête ON_DISK est née
+        // de ce COPY (copie-échange). Le lot entier, et toutes les colonnes. Sinon, en mémoire.
+        enum class PartialFlush { NONE, INTO_EMPTY, ONTO_HEAD };
+        auto partialFlush = PartialFlush::NONE;
+        if (!directFlushWhenAppend && partialFlushFrom.has_value() &&
+            numToAppend == chunkedGroup.getNumRows()) {
+            if (lastNodeGroup->getNumRows() == 0 && lastNodeGroup->getNumChunkedGroups() == 0 &&
+                columnIDs.size() == types.size()) {
+                partialFlush = PartialFlush::INTO_EMPTY;
+            } else if (lastNodeGroup->getNodeGroupIdx() * StorageConfig::NODE_GROUP_SIZE >=
+                           *partialFlushFrom &&
+                       lastNodeGroup->canExtendFlushedHead(transaction, columnIDs)) {
+                partialFlush = PartialFlush::ONTO_HEAD;
+            }
+        }
         pushInsertInfo(transaction, lastNodeGroup, numToAppend);
         numTotalRows += numToAppend;
+        if (partialFlush != PartialFlush::NONE) {
+            // Sous le verrou de la collection : sans lui, un autre fil du COPY réserverait la suite
+            // avant que ces lignes soient dans le groupe, et son startRow d'annulation serait faux.
+            auto flushedGroup = chunkedGroup.flush(transaction, pageAllocator);
+            if (partialFlush == PartialFlush::INTO_EMPTY) {
+                lastNodeGroup->merge(transaction,
+                    std::make_unique<ChunkedNodeGroup>(mm, *flushedGroup,
+                        lastNodeGroup->getDataTypes(), columnIDs));
+            } else {
+                lastNodeGroup->extendFlushedHead(transaction, std::move(flushedGroup));
+            }
+            return {startOffset, numToAppend};
+        }
         if (!directFlushWhenAppend) {
             // TODO(Guodong): Further optimize on this. Should directly figure out startRowIdx to
             // start appending into the node group and pass in as param.

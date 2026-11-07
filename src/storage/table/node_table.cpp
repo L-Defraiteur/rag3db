@@ -903,10 +903,10 @@ void NodeTable::rollbackAddColumn(main::ClientContext* context) {
 
 std::pair<offset_t, offset_t> NodeTable::appendToLastNodeGroup(Transaction* transaction,
     const std::vector<column_id_t>& columnIDs, InMemChunkedNodeGroup& chunkedGroup,
-    PageAllocator& pageAllocator) {
+    PageAllocator& pageAllocator, std::optional<offset_t> partialFlushFrom) {
     hasChanges = true;
     return nodeGroups->appendToLastNodeGroupAndFlushWhenFull(transaction, columnIDs, chunkedGroup,
-        pageAllocator);
+        pageAllocator, partialFlushFrom);
 }
 
 DataChunk NodeTable::constructDataChunkForColumns(const std::vector<column_id_t>& columnIDs) const {
