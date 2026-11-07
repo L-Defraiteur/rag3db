@@ -804,15 +804,7 @@ impl DaemonHost {
             .into_iter()
             .map(|(t, f)| {
                 let lignes = f.mailbox();
-                let fin = lignes.iter().rev().find(|l| l["kind"] == "ended");
-                let vivant = self.teammate_running(&t.parent, &t.nom);
-                let state = if vivant && self.run_du_chat_en_cours(&t.id).is_some() {
-                    "running"
-                } else if let (Some(fin), false) = (fin, vivant) {
-                    if fin["text"].as_str().unwrap_or_default().starts_with("erreur") { "error" } else { "ended" }
-                } else {
-                    "waiting"
-                };
+                let state = self.teammate_state(&t, &lignes);
                 let attend = f
                     .supervisor()
                     .map(|s| f.pending_for(&s).iter().any(|l| matches!(l["kind"].as_str(), Some("question" | "approval"))))
@@ -820,6 +812,22 @@ impl DaemonHost {
                 (t.id.clone(), (state, attend))
             })
             .collect()
+    }
+
+    /// **L'état d'un équipier**, la seule règle que lisent `teammate_list` et
+    /// `teammate_states` (relecture d'everything declarative) : `running` s'il vit
+    /// et qu'un tour court dans le chat de sa tâche ; `ended` ou `error` (le texte
+    /// de sa ligne de fin) s'il s'est arrêté ; `waiting` sinon.
+    fn teammate_state(&self, t: &super::taches::Tache, lignes: &[Value]) -> &'static str {
+        let fin = lignes.iter().rev().find(|l| l["kind"] == "ended");
+        let vivant = self.teammate_running(&t.parent, &t.nom);
+        if vivant && self.run_du_chat_en_cours(&t.id).is_some() {
+            "running"
+        } else if let (Some(fin), false) = (fin, vivant) {
+            if fin["text"].as_str().unwrap_or_default().starts_with("erreur") { "error" } else { "ended" }
+        } else {
+            "waiting"
+        }
     }
 
     /// Toutes les tâches de l'hôte, avec les fichiers de leur équipier.
@@ -908,15 +916,7 @@ impl DaemonHost {
             .map(|(t, f)| {
                 let lignes = f.mailbox();
                 let derniere = lignes.last().cloned().unwrap_or(Value::Null);
-                let fin = lignes.iter().rev().find(|l| l["kind"] == "ended");
-                let vivant = self.teammate_running(&t.parent, &t.nom);
-                let state = if vivant && self.run_du_chat_en_cours(&t.id).is_some() {
-                    "running"
-                } else if let (Some(fin), false) = (fin, vivant) {
-                    if fin["text"].as_str().unwrap_or_default().starts_with("erreur") { "error" } else { "ended" }
-                } else {
-                    "waiting"
-                };
+                let state = self.teammate_state(&t, &lignes);
                 json!({ "task": t.nom, "parent": t.parent, "state": state, "last_kind": derniere["kind"], "at": derniere["at"] })
             })
             .collect();
