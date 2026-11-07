@@ -358,4 +358,137 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAcrossKilledProcesses) {
     EXPECT_EQ(gaps(sources, destinations), 0u) << "après un point de reprise et une réouverture";
 }
 
+// Les drains qui partent par COPY (au-delà de 200 arêtes par relation, le seuil du crate) et
+// sont annulés après avoir écrit : une instruction suivante échoue et fait rouler la transaction,
+// comme les drains de Lucie condamnés par la recherche dense le 25 octobre. Un COPY pose ses
+// lignes dans les blocs partagés ; son annulation (CSRNodeGroup::rollbackInsert) les retire en
+// tronquant au rang où elles commencent. Un second écrivain valide pendant ce temps des drains
+// par MERGE vers les mêmes destinations, un lecteur tient des instantanés, des points de reprise
+// passent.
+TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderRolledBackCopyDrains) {
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(NUM_SCOPES - 1) + ") AS i CREATE (:Scope {id: i});");
+    ok("UNWIND range(0, " + std::to_string(NUM_SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64);");
+
+    const std::vector<int64_t> hot{3344, 3389, 9179, 13803, 17616};
+    std::mutex touchedMutex;
+    std::set<int64_t> sources, destinations;
+    std::atomic<bool> stop{false};
+    std::atomic<int> copied{0}, copyRolledBack{0}, copyRefused{0}, merged{0}, mergeRefused{0};
+    std::thread reader([&] {
+        Connection connection(database.get());
+        while (!stop.load()) {
+            connection.query("BEGIN TRANSACTION READ ONLY;");
+            connection.query("MATCH (b:Symbol)<-[r:R]-(a:Scope) RETURN count(*);");
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            connection.query("MATCH (a:Scope)-[r:R]->(b:Symbol) RETURN count(*);");
+            connection.query("COMMIT;");
+        }
+    });
+    // Un drain : effacer les arêtes des sources du fichier, puis les reposer (par COPY ou MERGE).
+    auto drain = [&](std::mt19937_64& random, int64_t band, int edges, int round) {
+        const auto first = band + static_cast<int64_t>(random() % 3000);
+        std::string ids, pairs;
+        for (auto s = first; s < first + 60; s++) {
+            ids += (ids.empty() ? "" : ",") + std::to_string(s);
+            std::lock_guard lock{touchedMutex};
+            sources.insert(s);
+        }
+        for (int e = 0; e < edges; e++) {
+            const auto s = first + static_cast<int64_t>(random() % 60);
+            const auto dst = random() % 4 == 0 ? static_cast<int64_t>(random() % NUM_SYMBOLS) :
+                                                 hot[random() % hot.size()];
+            pairs += (pairs.empty() ? "" : ",") + std::string("[") + std::to_string(s) + "," +
+                     std::to_string(dst) + "," + std::to_string(round) + "]";
+            std::lock_guard lock{touchedMutex};
+            destinations.insert(dst);
+        }
+        return std::make_pair(ids, pairs);
+    };
+    std::thread copier([&] {
+        Connection connection(database.get());
+        std::mt19937_64 random{20261107u};
+        for (int round = 0; round < 150; round++) {
+            const auto [ids, pairs] = drain(random, 20000, 250, round);
+            const auto fails = random() % 3 == 0;
+            if (!connection.query("BEGIN TRANSACTION;")->isSuccess()) {
+                copyRefused++;
+                continue;
+            }
+            const auto written =
+                connection.query("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;")
+                    ->isSuccess() &&
+                connection.query("COPY R FROM (UNWIND [" + pairs +
+                                 "] AS p RETURN p[1], p[2], p[3]);")
+                    ->isSuccess();
+            if (!written) {
+                copyRefused++;
+                connection.query("ROLLBACK;");
+                continue;
+            }
+            if (fails) {
+                // L'instruction suivante échoue à l'exécution : la transaction roule.
+                connection.query("RETURN CAST('pas un nombre' AS INT64);");
+                connection.query("ROLLBACK;");
+                copyRolledBack++;
+            } else if (connection.query("COMMIT;")->isSuccess()) {
+                copied++;
+            } else {
+                copyRefused++;
+            }
+        }
+    });
+    std::thread merger([&] {
+        Connection connection(database.get());
+        std::mt19937_64 random{20261108u};
+        for (int round = 0; round < 300; round++) {
+            const auto [ids, pairs] = drain(random, 26000, 40, round);
+            if (!connection.query("BEGIN TRANSACTION;")->isSuccess()) {
+                mergeRefused++;
+                continue;
+            }
+            const auto written =
+                connection.query("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;")
+                    ->isSuccess() &&
+                connection.query("UNWIND [" + pairs +
+                                 "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) "
+                                 "MERGE (a)-[r:R]->(b) SET r.line = p[3];")
+                    ->isSuccess();
+            if (written && connection.query("COMMIT;")->isSuccess()) {
+                merged++;
+            } else {
+                mergeRefused++;
+                connection.query("ROLLBACK;");
+            }
+            if (round % 30 == 29) {
+                connection.query("CHECKPOINT;");
+            }
+        }
+    });
+    copier.join();
+    merger.join();
+    stop = true;
+    reader.join();
+    std::cout << "COPY validés " << copied << ", COPY annulés " << copyRolledBack
+              << ", COPY refusés " << copyRefused << " ; MERGE validés " << merged
+              << ", MERGE refusés " << mergeRefused << "\n";
+    for (auto dst : hot) {
+        destinations.insert(dst);
+    }
+    sources.insert(0);
+    destinations.insert(0);
+
+    EXPECT_GT(copyRolledBack.load(), 10);
+    EXPECT_GT(merged.load(), 100);
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base ouverte";
+    ok("CHECKPOINT;");
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
 } // namespace
