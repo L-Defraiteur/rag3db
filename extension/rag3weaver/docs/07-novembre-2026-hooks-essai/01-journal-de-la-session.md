@@ -586,3 +586,33 @@ rappeler sur un tour de notification.
 - Aucune ligne « [fond] juge » en une heure de guet.
 - Rien du bloc n'a servi au code de ce lot. Le repérage est venu de deux
   agents, l'accord de messages d'everything declarative et de 96.
+
+## Le passage unique (à reprendre ici après une compaction)
+
+**Où j'en suis.** La branche `hooks-essai-trois-lots` (cdadc8577) porte
+trois lots, montés sur 75d8d6d1e (l'étanchéité d'everything declarative) :
+
+- le journal de l'hôte (`journal-hote-horodate`) ;
+- le chat côté Rust (`chat-ordre-rust`) ;
+- la page du chat (`chat-ordre-page`).
+
+Elle porte aussi les huit tickets fermés (dans `closed/`, avec leur État) et
+le ticket ouvert du premier jeton. `check_tickets.py` est vert. Le contrôle à
+luciepc est vert : 36 passed, 1 ignored.
+
+**La suite :**
+
+1. Attendre le hash d'archi (c), relayé par c7.
+2. Rebaser la branche dessus (`git rebase --onto <hash> 75d8d6d1e`), avec un
+   nom neuf si elle est déjà poussée (`-2`).
+3. Lancer à luciepc
+   `~/.cache/rag3weaver-build/passe-trois-hooks-essai.sh <tête> <master> <id complet de la lib> <0|1>`.
+   La lib est 04063ee06 avec `MOTEUR_ANCIEN=1`, ou, après le « basculé »
+   de G, 17a094d12 sans lui, avec le target rebâti.
+4. Le script pousse sous VERT, lit les trois contrôles, puis efface le
+   worktree et le target de luciepc.
+5. Donner le hash à c7, à everything declarative et à 96.
+
+**Au premier rappel à 717 k jetons**, le bloc `[mémoire]` a dit de ranger :
+c'est fait par l'identité (fiche `hooks-essai`, L1 `identity`, révision 3)
+et par cette section.
