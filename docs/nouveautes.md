@@ -5,6 +5,14 @@ L'inverse d'une feuille de route : ce qui est **atteint**, en une ligne par gran
 master, prouvée, et qu'on peut la montrer. Les titres sont faits pour accrocher,
 le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
+## Novembre 2026
+
+- **7 nov. — Claude parle au trait Llm.** L'API Messages d'Anthropic derrière le même
+  trait que Gemini et les modèles locaux, en HTTP brut, réflexion adaptative rejouée,
+  refus nommé ; un seul point de branchement rend tout modèle au reste du runtime.
+  L'équipier et le juge peuvent désormais tourner sur Claude comme sur Gemini.
+  90df16ace.
+
 ## Octobre 2026
 
 - **26 oct. — La recherche surligne ce qu'elle a trouvé.** Les positions rendues par
