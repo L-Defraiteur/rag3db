@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "kind": "memory",
   "name": "memory",
   "database": "data/memory.rag3db",
   "files_root": "fichiers",
