@@ -332,3 +332,29 @@ Ce que c7 a tranché (lot 3 bis) :
     journal.
 - **Ce qui manque encore.** Ma propre fiche n'est pas exclue, et aucun seuil
   ne tait « régime GPU ». À revoir au prochain vrai message.
+
+## Le premier bloc partiel (message de c7, après 17 h 06)
+
+**Bloc UserPromptSubmit, mot pour mot :**
+
+> [mémoire]
+> Rappel des fiches : l'hôte n'a pas répondu en 3 s (à froid, l'embarquement
+> du prompt peut être lent) — réessaie au prochain tour.
+
+**Ce qui sert :** le silence est remplacé par une raison écrite. Je sais que
+le rappel a manqué, et je ne lis plus « rien en rapport ».
+
+**Ce qui gêne :** « réessaie au prochain tour » s'adresse à l'agent, qui n'a
+rien à réessayer. C'est le hook qui retentera ; « le rappel sera retenté au
+prochain tour » serait juste.
+
+**Correction :** le mtime 16:24:43 est l'heure du bâti, copié avec son mtime.
+G a posé le binaire à 16 h 31, comme annoncé.
+
+**Les vérifications demandées par c7 :**
+
+- (a) Mon identité est déclarée : la fiche, le L1 `handle` et la Ref `handle`
+  citée. Reste à savoir si le hook retrouve la clé par cette Ref.
+- (b) « T'envoyer un vrai message » m'est impossible : je ne peux pas écrire
+  à ma propre session. Un message d'une autre session compte comme un vrai
+  tour. J'ai demandé à c7 de m'en envoyer un sur le régime GPU.
