@@ -1,10 +1,16 @@
 # Un COPY refusé pour mémoire laisse la table faussée en mémoire, et le repli y écrivait
 
-- **État** : ouvert côté moteur (cœur C++, correctif en cours). Côté rag3weaver, un filet est posé (`99e6f0ee0`), **à garder** tant qu'une preuve ne dit pas qu'il est inutile.
+- **État** : non reproduit sur master, fermé le 7 novembre 2026 (seconde session cœur C++, lot G2). Le
+  témoin `RefusedCopySameSession.*` (`test/transaction/refused_copy_same_session_test.cpp`) refuse un
+  COPY faute de tampon (300 Mo sous 64 Mio), puis regarde la même session sans réouverture : compte,
+  clé d'une ligne créée ensuite, doublon refusé, clé du COPY libre, petit COPY, point de reprise ; un
+  COPY de relations refusé ; un COPY refusé dans une transaction explicite puis ROLLBACK. Les trois
+  sont verts sur master. Le filet du produit (réouverture sans point de reprise sur
+  `BUFFER_POOL_FULL`, 99e6f0ee0) peut être revu par le produit : le moteur ne laisse plus la table
+  faussée.
 - **Gravité** : réponse fausse (doublons de clé, lignes introuvables par leur clé) ; plantage possible au point de reprise de fermeture.
 - **Atteignable en service** : oui, sur le chemin par défaut (hors transaction par paquet), dès que le tampon du moteur ne tient pas un COPY.
 - **Touche rag3weaver** : oui.
-- **Famille** : moteur
 
 ## Ce que c'est
 
