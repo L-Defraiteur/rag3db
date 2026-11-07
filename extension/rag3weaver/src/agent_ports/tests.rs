@@ -94,6 +94,21 @@ fn stable(mut run: AgentRun) -> AgentRun {
     run
 }
 
+/// L'historique sans ce qui dépend de l'horloge : l'heure d'un appel
+/// (`ToolCall::at_ms`) et celle d'un résultat (`Turn::at_ms`), posées par la
+/// boucle au moment des faits — deux exécutions comparées peuvent différer d'une
+/// milliseconde (rouge 1 fois sur 3 sur master c022a2180, relevé par
+/// embarquement).
+fn without_clock(mut turns: Vec<Turn>) -> Vec<Turn> {
+    for t in &mut turns {
+        t.at_ms = None;
+        for c in &mut t.tool_calls {
+            c.at_ms = None;
+        }
+    }
+    turns
+}
+
 /// Un scénario complet : un message de pair déjà dans la boîte, un tour
 /// d'outil, une réponse. Rend l'historique, le texte du puits et le run.
 fn scenario(ports: Option<&dyn AgentPorts>) -> (Vec<Turn>, String, AgentRun) {
@@ -110,7 +125,7 @@ fn scenario(ports: Option<&dyn AgentPorts>) -> (Vec<Turn>, String, AgentRun) {
     let mut turns = start();
     let mut sink = StringSink::default();
     let run = agent.run(&mut turns, &mut sink).unwrap();
-    (turns, sink.text, stable(run))
+    (without_clock(turns), sink.text, stable(run))
 }
 
 // ── 1. La parité ───────────────────────────────────────────────────────
@@ -165,7 +180,7 @@ fn a_failing_port_passes_the_element_and_says_so() {
     let mut turns = start();
     let mut sink = StringSink::default();
     let run = stable(agent.run(&mut turns, &mut sink).unwrap());
-    assert_eq!((turns, sink.text, run), reference);
+    assert_eq!((without_clock(turns), sink.text, run), reference);
 
     let mut said = 0;
     while let Ok(event) = warnings.try_recv() {
