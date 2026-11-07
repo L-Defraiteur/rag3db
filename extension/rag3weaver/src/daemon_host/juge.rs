@@ -34,6 +34,74 @@ impl Default for FileDesBilans {
 /// Ce qu'un outil du juge rend au plus au modèle.
 const BORNE: usize = 24 * 1024;
 
+/// Le genre d'un run déposé par le hook `Stop` de Claude Code (`POST /journal/run`).
+pub const TOUR_DE_CLAUDE_CODE: &str = "claude_code_turn";
+
+/// Un tour de Claude Code : ses appels sont dans `tours[].tool_calls`, pas dans
+/// des événements du bus.
+fn est_un_tour_de_claude_code(journal: &Value) -> bool {
+    journal["genre"] == TOUR_DE_CLAUDE_CODE
+}
+
+/// **Un appel d'outil d'un run**, quel que soit son genre : un `ToolCallStarted`
+/// du bus (le chat, l'équipier), ou un `tool_calls` d'un tour de Claude Code.
+#[derive(Debug, Clone, PartialEq)]
+struct Appel {
+    id: String,
+    /// Le nom de l'outil du backend (`search_code`), sans le préfixe MCP.
+    outil: String,
+    /// Le serveur MCP de Claude Code (`code-rag3db`) ; `None` pour un appel du bus.
+    serveur: Option<String>,
+    arguments: Value,
+    /// Ce que l'agent a reçu, quand le run le garde (le hook le borne à 2 000 caractères).
+    recu: Option<Value>,
+    /// Un outil de notre hôte : un appel du bus, ou un `mcp__<serveur>__<outil>`.
+    /// Les outils propres de Claude Code (Bash, Read, Edit…) n'en sont pas.
+    de_l_hote: bool,
+}
+
+/// `mcp__<serveur>__<outil>` → (serveur, outil) ; le serveur est la clé de
+/// `mcpServers` de Claude Code, la même que dans la table `serveurs` du run.
+fn nom_mcp(nom: &str) -> Option<(&str, &str)> {
+    nom.strip_prefix("mcp__")?.split_once("__")
+}
+
+/// **Les appels d'outil du run**, dans l'ordre.
+fn appels_du_run(journal: &Value) -> Vec<Appel> {
+    if !est_un_tour_de_claude_code(journal) {
+        return journal["evenements"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|e| e["kind"] == "ToolCallStarted")
+            .map(|e| Appel {
+                id: e["call_id"].as_str().unwrap_or_default().to_string(),
+                outil: e["tool"].as_str().unwrap_or_default().to_string(),
+                serveur: None,
+                arguments: serde_json::from_str(e["arguments"].as_str().unwrap_or("{}")).unwrap_or(json!({})),
+                recu: None,
+                de_l_hote: true,
+            })
+            .collect();
+    }
+    let tours = journal["tours"].as_array().cloned().unwrap_or_default();
+    let recu = |id: &str| tours.iter().find(|t| t["role"] == "tool" && t["tool_use_id"] == id).map(|t| json!({ "content": t["content"], "is_error": t["is_error"] }));
+    tours
+        .iter()
+        .filter(|t| t["role"] == "assistant")
+        .flat_map(|t| t["tool_calls"].as_array().cloned().unwrap_or_default())
+        .map(|c| {
+            let nom = c["name"].as_str().unwrap_or_default();
+            let id = c["id"].as_str().unwrap_or_default().to_string();
+            let (serveur, outil, de_l_hote) = match nom_mcp(nom) {
+                Some((s, o)) => (Some(s.to_string()), o.to_string(), true),
+                None => (None, nom.to_string(), false),
+            };
+            Appel { recu: recu(&id), id, outil, serveur, arguments: c["input"].clone(), de_l_hote }
+        })
+        .collect()
+}
+
 fn borner(texte: String) -> String {
     if texte.len() <= BORNE {
         return texte;
@@ -75,6 +143,21 @@ struct OutilsDuJuge<'a> {
 }
 
 impl OutilsDuJuge<'_> {
+    /// **Le backend d'un appel** : celui du run pour un appel du bus ; pour un
+    /// tour de Claude Code, celui que sert son serveur MCP, par la table
+    /// `serveurs` du run (`{serveur: manifeste}`) ; un serveur absent de la
+    /// table ne se rejoue pas, et c'est dit.
+    fn backend_de(&self, appel: &Appel) -> Result<Arc<Hosted>, String> {
+        if !appel.de_l_hote {
+            return Err(format!("« {} » est un outil propre de Claude Code : le juge ne le rejoue pas", appel.outil));
+        }
+        let Some(serveur) = &appel.serveur else { return Ok(self.cible.clone()) };
+        match self.journal["serveurs"][serveur].as_str() {
+            Some(manifeste) => self.host.hosted(std::path::Path::new(manifeste)),
+            None => Err(format!("« {} » : non rejoué, serveur « {serveur} » inconnu du run (absent de sa table serveurs)", appel.outil)),
+        }
+    }
+
     fn lire_le_run(&self, args: &Value) -> Result<Value, String> {
         let outil = args["outil"].as_str().filter(|s| !s.is_empty());
         let evenements: Vec<&Value> = self.journal["evenements"]
@@ -88,14 +171,25 @@ impl OutilsDuJuge<'_> {
         // (page 05) : leur description et leur schéma de paramètres, pris dans
         // les `tool_defs` du backend — sans elles, le juge devinerait un nom
         // trompeur ou un paramètre qui devrait être optionnel.
-        let appeles: std::collections::BTreeSet<&str> = evenements.iter().filter_map(|e| e["tool"].as_str()).collect();
-        let declarations: serde_json::Map<String, Value> = self
-            .host
-            .with_backend(&self.cible, |b| crate::backend_tools::BackendTools { backend: b }.tool_defs())
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|d| appeles.contains(d.name.as_str()))
-            .map(|d| (d.name, json!({ "description": d.description, "parametres": d.parameters })))
+        let appels: Vec<Appel> = appels_du_run(self.journal).into_iter().filter(|a| outil.is_none_or(|o| a.outil == o)).collect();
+        let mut declarations = serde_json::Map::new();
+        for a in appels.iter().filter(|a| a.de_l_hote) {
+            if declarations.contains_key(&a.outil) {
+                continue;
+            }
+            let Ok(backend) = self.backend_de(a) else { continue };
+            let defs = self.host.with_backend(&backend, |b| crate::backend_tools::BackendTools { backend: b }.tool_defs()).unwrap_or_default();
+            if let Some(d) = defs.into_iter().find(|d| d.name == a.outil) {
+                declarations.insert(d.name, json!({ "description": d.description, "parametres": d.parameters }));
+            }
+        }
+        // Un tour de Claude Code n'a pas d'événements du bus : ses appels de
+        // l'hôte se lisent ici, avec ce que Claude a reçu (borné à 2 000
+        // caractères par le hook) ; ses outils propres restent dans les tours.
+        let appels_de_l_hote: Vec<Value> = appels
+            .iter()
+            .filter(|a| a.de_l_hote && est_un_tour_de_claude_code(self.journal))
+            .map(|a| json!({ "call_id": a.id, "serveur": a.serveur, "outil": a.outil, "arguments": a.arguments, "recu": a.recu }))
             .collect();
         Ok(json!({
             "declarations": declarations,
@@ -103,6 +197,7 @@ impl OutilsDuJuge<'_> {
             "debut": self.journal["debut"],
             "fin": self.journal["fin"],
             "evenements": evenements,
+            "appels_de_l_hote": appels_de_l_hote,
             "tours": self.journal["tours"],
             "appel": self.journal["appel"],
             "tache": self.journal["tache"],
@@ -115,16 +210,16 @@ impl OutilsDuJuge<'_> {
     /// outil qui ne fait que lire.
     fn rejouer_un_outil(&self, args: &Value) -> Result<Value, String> {
         let id = args["call_id"].as_str().ok_or("call_id manque")?;
-        let appel = self.journal["evenements"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|e| e["kind"] == "ToolCallStarted" && e["call_id"] == id)
-            .ok_or_else(|| format!("aucun appel {id} dans ce run"))?;
-        let outil = appel["tool"].as_str().unwrap_or_default().to_string();
-        let arguments: Value = serde_json::from_str(appel["arguments"].as_str().unwrap_or("{}")).unwrap_or(json!({}));
+        let appel = appels_du_run(self.journal).into_iter().find(|a| a.id == id).ok_or_else(|| format!("aucun appel {id} dans ce run"))?;
+        let backend = self.backend_de(&appel)?;
+        let outil = appel.outil.clone();
+        let arguments = appel.arguments.clone();
+        // Ce que l'agent a reçu, à côté du rejeu ; borné par le hook pour un
+        // tour de Claude Code — une différence de longueur n'est pas un défaut.
+        let recu = appel.recu.clone();
+        let borne = est_un_tour_de_claude_code(self.journal).then_some("le contenu reçu est borné à 2 000 caractères par le hook");
         self.host
-            .with_backend(&self.cible, |b| {
+            .with_backend(&backend, |b| {
                 let prepared = b.prepared();
                 match prepared.manifest.tools.get(&outil) {
                     Some(t) if t.policy.write_files || t.policy.run_commands => {
@@ -132,7 +227,7 @@ impl OutilsDuJuge<'_> {
                     }
                     // Un outil des déclarations (propose, declare…) n'est pas au manifeste.
                     None => Err(format!("« {outil} » n'est pas un outil du backend : le juge ne le rejoue pas")),
-                    Some(_) => b.call(&outil, arguments.clone()).map(|r| json!({ "outil": outil, "arguments": arguments, "rendu": r["result"] })),
+                    Some(_) => b.call(&outil, arguments.clone()).map(|r| json!({ "outil": outil, "arguments": arguments, "rendu": r["result"], "recu": recu, "borne": borne })),
                 }
             })
             .and_then(|r| r)
@@ -244,7 +339,15 @@ impl DaemonHost {
             .map(str::to_string))
             .or_else(|| journal["appel"]["outil"].as_str().map(|o| format!("outil {o}")))
             .unwrap_or_else(|| format!("run {run}"));
-        let fiche = nom_de_tache(&intitule);
+        let memoire_pour_la_fiche = memoire.clone();
+        let (fiche, dit_de_la_fiche) = if est_un_tour_de_claude_code(&journal) {
+            fiche_d_un_tour_de_claude_code(self, &memoire_pour_la_fiche, &journal)?
+        } else {
+            (nom_de_tache(&intitule), None)
+        };
+        if let Some(d) = &dit_de_la_fiche {
+            eprintln!("[juge] {run} : {d}");
+        }
 
         // L'enquête : la boucle de l'agent juge, sur ses outils.
         let (mut config, schema_session, schema_outils) = gabarit()?;
@@ -300,6 +403,12 @@ impl DaemonHost {
 
         let cout = cout_du_run(&journal);
         let texte = rendre_le_bilan(&verdict, &cout, run, juge_ms);
+        // Ce que la fiche choisie doit dire au lecteur (tâche non nommée,
+        // autres fiches citées), en tête du bilan.
+        let texte = match &dit_de_la_fiche {
+            Some(d) => format!("> {d}\n\n{texte}"),
+            None => texte,
+        };
         // **La fiche d'un outil suit le code qu'il exécute** (96) : un graphe livré
         // a une fiche commune, « outil : <nom> » ; un graphe propre au manifeste,
         // « outil : <backend> / <nom> ». Le chemin du graphe sert aussi d'ancre.
@@ -508,12 +617,10 @@ impl DaemonHost {
         citer(fiche, "bilan");
         // Une ancre par outil appelé : `cited_by(value: "outil:<nom>")` rend ses bilans.
         let _ = appeler("create_ref_type", json!({ "genre": "outil" }));
-        let mut outils: Vec<String> = journal["evenements"]
-            .as_array()
+        let mut outils: Vec<String> = appels_du_run(journal)
             .into_iter()
-            .flatten()
-            .filter(|e| e["kind"] == "ToolCallStarted")
-            .filter_map(|e| e["tool"].as_str().map(str::to_string))
+            .filter(|a| a.de_l_hote)
+            .map(|a| a.outil)
             .chain(journal["appel"]["outil"].as_str().map(str::to_string))
             .collect();
         outils.sort();
@@ -593,8 +700,29 @@ impl DaemonHost {
     }
 }
 
+/// **La fiche d'un tour de Claude Code** : la tâche courante de la session, par
+/// `whois { handle }` de la mémoire (page 04 §6 : la fiche d'identité, son
+/// dernier apport `identity`, la première fiche de sa ligne `doing`). Sans tâche
+/// nommée, la fiche d'identité, et c'est dit (« aucune tâche nommée : nomme-la ») ;
+/// sans fiche d'identité, le refus le dit. Rend aussi ce qui doit l'être dans le
+/// bilan (les autres fiches citées, nommées sans y ranger le bilan).
+fn fiche_d_un_tour_de_claude_code(host: &DaemonHost, memoire: &Arc<Hosted>, journal: &Value) -> Result<(String, Option<String>), String> {
+    let handle = journal["session"].as_str().ok_or("le tour de Claude Code ne dit pas sa session (`session`)")?;
+    let qui = host.with_backend(memoire, |b| b.call("whois", json!({ "handle": handle }))).and_then(|r| r)?;
+    let qui = &qui["result"];
+    let autres = qui["autres"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")).filter(|s| !s.is_empty());
+    match (qui["tache"].as_str(), qui["identite"].as_str()) {
+        (Some(tache), _) => Ok((tache.to_string(), autres.map(|a| format!("autres fiches de la tâche, non rangées : {a}")))),
+        (None, Some(identite)) => Ok((identite.to_string(), Some(format!("aucune tâche nommée : nomme-la ({})", qui["said"].as_str().unwrap_or("aucun apport identity"))))),
+        (None, None) => Err(format!("{handle} : {}", qui["said"].as_str().unwrap_or("aucune fiche d'identité ne cite ce handle"))),
+    }
+}
+
 /// Le coût du run, par slug et par unité, lu dans ses `LlmCall` et `Consumed`.
 fn cout_du_run(journal: &Value) -> Value {
+    if est_un_tour_de_claude_code(journal) {
+        return json!({ "non_mesure": "tour de Claude Code : ses appels au modèle ne passent pas par l'hôte" });
+    }
     let mut cout: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
     for e in journal["evenements"].as_array().into_iter().flatten() {
         if e["kind"] == "LlmCall" {
@@ -721,5 +849,54 @@ mod tests {
         assert!(config.system_prompt.contains("rejouer_un_outil"));
         assert_eq!(schema["additionalProperties"], false);
         assert!(schema["required"].as_array().unwrap().iter().any(|r| r == "comparaison"));
+    }
+
+    /// **Les appels d'un tour de Claude Code** (lot 3 de rag3weaver archi) : ils
+    /// viennent de `tours[].tool_calls`, avec ce que Claude a reçu ; un
+    /// `mcp__<serveur>__<outil>` est un outil de l'hôte, un `Bash` n'en est pas.
+    #[test]
+    fn un_tour_de_claude_code_rend_ses_appels_de_l_hote_et_laisse_les_siens() {
+        let tour = json!({
+            "genre": TOUR_DE_CLAUDE_CODE,
+            "session": "session:7d2e",
+            "serveurs": { "code-rag3db": "/m/code.json" },
+            "tours": [
+                { "role": "user", "content": "trouve le juge" },
+                { "role": "assistant", "tool_calls": [
+                    { "id": "t1", "name": "mcp__code-rag3db__search_code", "input": { "query": "juge" } },
+                    { "id": "t2", "name": "Bash", "input": { "command": "ls" } }
+                ] },
+                { "role": "tool", "tool_use_id": "t1", "is_error": false, "content": "juge.rs" },
+                { "role": "tool", "tool_use_id": "t2", "is_error": false, "content": "src" }
+            ],
+            "evenements": []
+        });
+        let appels = appels_du_run(&tour);
+        assert_eq!(appels.len(), 2);
+        assert_eq!(appels[0].outil, "search_code");
+        assert_eq!(appels[0].serveur.as_deref(), Some("code-rag3db"));
+        assert!(appels[0].de_l_hote);
+        assert_eq!(appels[0].arguments, json!({ "query": "juge" }));
+        assert_eq!(appels[0].recu, Some(json!({ "content": "juge.rs", "is_error": false })));
+        assert_eq!((appels[1].outil.as_str(), appels[1].de_l_hote, appels[1].serveur.clone()), ("Bash", false, None), "un outil propre de Claude Code");
+        assert_eq!(cout_du_run(&tour)["non_mesure"].as_str().map(|s| s.contains("Claude Code")), Some(true), "le coût n'est pas un zéro");
+    }
+
+    /// Un run du bus garde sa lecture : ses `ToolCallStarted`, sans serveur.
+    #[test]
+    fn un_run_du_bus_rend_ses_appels_comme_avant() {
+        let run = json!({ "evenements": [
+            { "kind": "Token", "text": "x" },
+            { "kind": "ToolCallStarted", "call_id": "c1", "tool": "read_file", "arguments": "{\"path\":\"a.rs\"}" }
+        ] });
+        let appels = appels_du_run(&run);
+        assert_eq!(appels, vec![Appel { id: "c1".into(), outil: "read_file".into(), serveur: None, arguments: json!({ "path": "a.rs" }), recu: None, de_l_hote: true }]);
+        assert!(cout_du_run(&run).get("non_mesure").is_none());
+    }
+
+    #[test]
+    fn un_nom_mcp_se_lit_par_son_serveur_et_son_outil() {
+        assert_eq!(nom_mcp("mcp__memoire-longue__recall_fiches"), Some(("memoire-longue", "recall_fiches")));
+        assert_eq!(nom_mcp("Read"), None);
     }
 }
