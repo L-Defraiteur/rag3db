@@ -113,6 +113,10 @@ struct Installed {
 #[cfg(unix)]
 static INSTALLED: std::sync::Mutex<Option<Installed>> = std::sync::Mutex::new(None);
 
+/// Ce qu'une ligne attend au plus une sortie qui ne prend pas (un pic) avant
+/// d'être jetée : l'hôte est ralenti d'autant au pire, jamais figé.
+const WRITE_PATIENCE: std::time::Duration = std::time::Duration::from_millis(200);
+
 /// Une ligne plus longue est coupée là : le relais ne grossit pas sans borne
 /// sur une sortie sans fin de ligne.
 const MAX_LINE: usize = 64 * 1024;
@@ -123,8 +127,11 @@ const MAX_LINE: usize = 64 * 1024;
 /// chaque ligne de la lib, bloquerait : l'hôte se figerait. D'où :
 /// - la sortie d'origine est **non bloquante** (`O_NONBLOCK`) : un journal
 ///   systemd lent, un tube plein, un disque plein rendent `EAGAIN` ou une
-///   erreur, jamais une attente ; la ligne est **jetée et comptée**, et la
-///   ligne suivante qui passe dit combien ont été perdues ;
+///   erreur, jamais une attente sans fin. Sur `EAGAIN`, la ligne attend que la
+///   sortie reprenne au plus [`WRITE_PATIENCE`] (un pic de journald ne perd
+///   rien) ; au-delà, ou sur une autre erreur, elle est **jetée et comptée**,
+///   les suivantes n'attendent plus jusqu'à ce qu'une écriture passe, et la
+///   ligne qui passe dit combien ont été perdues ;
 /// - le fil **ne s'arrête qu'à la fin du tube** (tous les bouts d'écriture
 ///   fermés, c'est-à-dire `stop_timestamps`) : une erreur de lecture se
 ///   réessaie, aucune ne le fait sortir ; rien dans la boucle ne panique
@@ -212,6 +219,7 @@ impl Relay {
         l.extend_from_slice(line);
         l.push(b'\n');
         let mut done = 0usize;
+        let debut = std::time::Instant::now();
         while done < l.len() {
             let rest = l.get(done..).unwrap_or_default();
             // SAFETY : écriture d'un tampon que nous possédons sur notre fd.
@@ -220,10 +228,25 @@ impl Relay {
                 done += w as usize;
                 continue;
             }
-            if w < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+            let err = std::io::Error::last_os_error();
+            if w < 0 && err.kind() == std::io::ErrorKind::Interrupted {
                 continue;
             }
-            // EAGAIN, ENOSPC, EBADF… : la ligne est jetée, l'hôte n'attend pas.
+            // La sortie ne prend pas pour l'instant (EAGAIN) : on lui laisse un
+            // court délai pour reprendre, borné par ligne ; une sortie qui a
+            // déjà perdu une ligne n'en reçoit plus, jusqu'à ce qu'une écriture
+            // passe. ENOSPC, EBADF… : jetée tout de suite.
+            if w < 0 && err.kind() == std::io::ErrorKind::WouldBlock && self.lost == 0 {
+                let reste = WRITE_PATIENCE.saturating_sub(debut.elapsed());
+                if !reste.is_zero() {
+                    let mut pfd = libc::pollfd { fd: self.out_fd, events: libc::POLLOUT, revents: 0 };
+                    // SAFETY : un pollfd à nous, sur notre fd.
+                    let pret = unsafe { libc::poll(&mut pfd, 1, reste.as_millis().max(1) as libc::c_int) };
+                    if pret > 0 {
+                        continue;
+                    }
+                }
+            }
             break;
         }
         if done == l.len() {
