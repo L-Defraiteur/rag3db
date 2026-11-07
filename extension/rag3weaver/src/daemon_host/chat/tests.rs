@@ -617,10 +617,16 @@ fn la_page_du_chat_tient_l_ordre_le_defilement_et_la_place() {
     assert!(lu["resultat"].as_str().unwrap_or("").contains("fn main"), "le résultat déplié : {lu}");
     assert!(lu["heure"].as_str().unwrap_or("").contains(" ms"), "l'heure et la durée : {lu}");
     // 3. La jauge de la conversation, la barre des tâches de fond.
+    // La page relit les jauges à la fin du tour, sans attendre : on attend la
+    // valeur de l'hôte, pas un instant.
     let contexte = etat_du_chat()["context"].clone();
-    let jauge = n.evaluer(&format!("(() => {{ const u = document.querySelector('.conversation[data-backend=\"{id}\"] .usage'); return {{ used: u?.dataset.used, max: u?.dataset.max }}; }})()"));
-    assert_eq!(jauge["max"], "8192", "{jauge} ; l'hôte : {contexte}");
-    assert_eq!(jauge["used"], contexte["used"].to_string(), "{jauge} ; l'hôte : {contexte}");
+    n.attendre(
+        &format!(
+            "(() => {{ const u = document.querySelector('.conversation[data-backend=\"{id}\"] .usage'); return u?.dataset.max === '8192' && u?.dataset.used === {}; }})()",
+            json!(contexte["used"].to_string())
+        ),
+        &format!("la jauge de la conversation égale à l'état de l'hôte {contexte}"),
+    );
     n.attendre("document.querySelector('#runs-a-role [data-role=\"archiviste\"] .run-a-role')?.dataset.state === 'fini'", "le run à rôle dans la barre");
     // 4. La place : la colonne occupe l'écran, l'aide tient sur une ligne, la hauteur.
     let place = n.evaluer(
