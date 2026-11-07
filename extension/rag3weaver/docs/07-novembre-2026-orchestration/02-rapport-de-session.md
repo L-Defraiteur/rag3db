@@ -302,3 +302,38 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   cœur : projection (rouge de charge inscrit, ticket 10-10) puis retrait →
   libs ordinaires ; hotfixs : RTree, G3 ; recherche : second-ecrivain, puis
   « mes recherches » ; G : pose suivante (étanchéité + (c) + chat) chez Lucie.
+
+## Mise à jour de 21 h 10
+
+- **Atterris depuis la bascule** : hooks-3-ter (c) (archi, bd1a65dec), les témoins
+  V2 du banc (072c467d7), la projection en lecture seule (cœur, e86d2f688,
+  moteur cee5c2d41), et les **trois lots de hooks-essai** (3d09b32c2, 27
+  commits, huit tickets fermés : le journal de l'hôte horodaté et attribué, le
+  chat Rust (heure à l'appel et à la fin, résultat dans ToolCallFinished,
+  context_len, `role` d'outil et de réaction), la page du chat (parties dans
+  l'ordre d'arrivée, scroll, résultat déplié, colonne fluide, pleine hauteur,
+  barre « Dépôts / Mémoire / Projets » avec récap d'usage et fiches écrites sous
+  chaque conversation, plus un mot « backend » à l'écran) ; passe entière verte
+  avec les trois suites Gemini). G pose chez Lucie.
+- **Prêts dans la file** : reprise après la mort de l'hôte (ED, equipier-reprise-3,
+  rouge joué 109 s), pointeur codeparsers (garde-pointeur-2), run_e2e.sh et pas 3
+  (96, le pas 3 en essai complet : trois défauts de forme des gabarits corrigés),
+  juge Claude Code (arbre, 62e98288c), spans du creux (embarquement, 90b86d1c9 :
+  le service rend les positions des jetons ; défaut de bâti du binaire du service
+  trouvé et corrigé), second-ecrivain (recherche, 93c68f817 : le second processus
+  écrivain est refusé par le moteur, le message nomme l'écrivain en place),
+  le pont (archi, 781c3232b : mail, fils Codex, canal, règle de la boîte).
+  Retrait du cœur vers 21 h 25. Lib ordinaire demain matin (c4f8610b9 +
+  projection + retrait) ; d'ici là passes sur 17a094d12 + MOTEUR_ANCIEN=1 dit.
+- **lucivy 4.3.2** (session lucivy, PR #21) : passage exact long retrouvé (raté dès
+  44 octets), flou long 15,8 s → 96 ms (préscan O(n²) du planificateur des
+  briques), apostrophe typographique, clés inconnues nommées ; format d'index
+  inchangé ; un seul tag v4.3.2 sur main quand la CI est verte, au mot de Lucie
+  (donné dans sa session, confirmation demandée ici). Puis rag3weaver monte à
+  4.3.2 (recherche ; témoin de la ligne collée de 120 caractères, rouge aujourd'hui,
+  ticket produit).
+- **Leçons de la soirée** : le verrou `poste push` ne couvre que le dernier pas
+  (c60cd7e9c ; archi l'a tenu 44 min avec une passe dessous) ; un saut faute
+  d'identifiants n'est pas vert ; une passe figée pendant le réveil des hôtes
+  venait de tests qui attendaient un service réel sans délai (ticket d'hygiène) ;
+  un test du banc sorti vert par hasard reste un rouge connu.
