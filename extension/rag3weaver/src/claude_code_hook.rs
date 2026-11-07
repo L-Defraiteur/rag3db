@@ -156,7 +156,9 @@ impl Reglage {
             fond: false,
             chemin_du_reglage: None,
             rejeu: false,
-            journal: maison.join(".local/state/rag3weaver/hooks.log"),
+            // Sous les témoins, jamais le vrai dossier d'état : un témoin qui part
+            // des défauts y avait écrit l'état d'une session `s1` (7 novembre).
+            journal: if cfg!(test) { std::env::temp_dir().join(format!("rag3weaver-hook-temoins-{}", std::process::id())).join("hooks.log") } else { maison.join(".local/state/rag3weaver/hooks.log") },
             templates_dir: maison.join(".config/rag3weaver/hooks"),
         }
     }
@@ -941,6 +943,93 @@ impl EtatDuRappel {
     }
 }
 
+/// **Un candidat du rappel**, avec ses signaux : le plein texte (`bm25`, score
+/// brut, au-delà de 1 le plus souvent) et le dense (`vector`, de 0 à 1). Lus dans
+/// `signals` de la ligne : `chunk.score` est celui du morceau affiché, qui peut
+/// venir du dense quand le plein texte a touché ailleurs (relevé de 18:16:39 :
+/// bm25 1,386 au rang 1, morceau affiché dense à 0,374).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Candidat {
+    pub nom: String,
+    pub about: String,
+    pub plein: Option<f64>,
+    pub dense: Option<f64>,
+}
+
+impl Candidat {
+    fn dit(&self) -> String {
+        format!("« {} » {}", self.nom, self.scores())
+    }
+    fn scores(&self) -> String {
+        match (self.plein, self.dense) {
+            (Some(p), Some(d)) => format!("plein texte {p:.2}, dense {d:.2}"),
+            (Some(p), None) => format!("plein texte {p:.2}"),
+            (None, Some(d)) => format!("dense {d:.2}"),
+            (None, None) => "sans score".into(),
+        }
+    }
+    fn json(&self) -> Value {
+        json!({ "name": self.nom, "about": self.about, "plein": self.plein, "dense": self.dense })
+    }
+}
+
+/// Les candidats d'une réponse de `recall_fiches`. Sans `signals` (une forme
+/// plus ancienne), le score du morceau tient lieu : au-delà de 1 il est brut,
+/// donc plein texte ; de 0 à 1, dense.
+pub fn candidats_du_rappel(v: &Value) -> Vec<Candidat> {
+    v["result"]["result"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|x| {
+            let nom = x["data"]["name"].as_str()?.to_string();
+            let signal = |l: &str| x["signals"].as_array().and_then(|a| a.iter().find(|s| s["label"] == l)).and_then(|s| s["score"].as_f64());
+            let (plein, dense) = if x["signals"].is_array() {
+                (signal("bm25"), signal("vector"))
+            } else {
+                match x["chunk"]["score"].as_f64() {
+                    Some(sc) if sc > 1.0 => (Some(sc), None),
+                    Some(sc) => (None, Some(sc)),
+                    None => (None, None),
+                }
+            };
+            Some(Candidat { nom, about: x["data"]["about"].as_str().unwrap_or("").to_string(), plein, dense })
+        })
+        .collect()
+}
+
+/// **Le vocabulaire de la mémoire**, commun aux sessions : les mots des noms de
+/// fiches vus dans les réponses du rappel (sous le seuil compris), au plus 2 000.
+/// Il donne la priorité, dans la requête, aux mots du prompt que la mémoire
+/// connaît (c7 : « régime », « GPU », « embarquement »).
+pub struct Vocabulaire;
+
+impl Vocabulaire {
+    fn chemin(reglage: &Reglage) -> PathBuf {
+        reglage.journal.parent().map(|d| d.join("hooks")).unwrap_or_else(|| PathBuf::from("hooks")).join("vocabulaire.json")
+    }
+    pub fn lire(reglage: &Reglage) -> HashSet<String> {
+        std::fs::read_to_string(Self::chemin(reglage)).ok().and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok()).unwrap_or_default().into_iter().collect()
+    }
+    fn ajouter<'a>(reglage: &Reglage, noms: impl Iterator<Item = &'a str>) {
+        let mut v = Self::lire(reglage);
+        let avant = v.len();
+        for n in noms {
+            for m in n.split(|c: char| c.is_whitespace() || c == ':' || c == ',').map(str::to_lowercase).filter(|m| m.chars().count() >= 2) {
+                v.insert(m);
+            }
+        }
+        if v.len() == avant || v.len() > 2_000 {
+            return;
+        }
+        let mut l: Vec<String> = v.into_iter().collect();
+        l.sort();
+        let chemin = Self::chemin(reglage);
+        let _ = std::fs::create_dir_all(chemin.parent().unwrap_or(Path::new(".")));
+        let _ = std::fs::write(chemin, serde_json::to_string(&l).unwrap_or_default());
+    }
+}
+
 // ─── Le rappel différé et son juge (3 ter b) ─────────────────────────────────
 
 /// Les fichiers du rappel différé d'une session : `tache` (pour le fils),
@@ -1054,7 +1143,8 @@ pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, 
                 return journal;
             };
             match h.appeler_borne("recall_fiches", json!({ "query": requete, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), Duration::from_secs(30)) {
-                Ok(v) => v["result"]["result"].as_array().into_iter().flatten().filter_map(|x| x["data"]["name"].as_str().map(|n| json!({ "name": n, "about": x["data"]["about"].as_str().unwrap_or(""), "score": x["chunk"]["score"].as_f64().unwrap_or(0.0) }))).collect(),
+                // Le fils refait le rappel : il ne juge que ce que le plein texte touche.
+                Ok(v) => candidats_du_rappel(&v).into_iter().filter(|c| c.plein.is_some()).map(|c| c.json()).collect(),
                 Err(err) => {
                     journal.push(format!("[fond] {session} : rappel en {} ms : {err}", debut.elapsed().as_millis()));
                     return journal;
@@ -1156,8 +1246,15 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
     b.push_str(&rappel_du_tour_d_avant(e, reglage, journal));
     let mut etat = EtatDuRappel::lire(reglage, &e.session_id);
     etat.tour += 1;
-    let mots = e.prompt.as_deref().map(|p| crate::rappel_du_prompt::requete_de_rappel(p, reglage.recall_max_words, &etat.vocabulaire())).unwrap_or_default();
-    if let Some(p) = e.prompt.as_deref().filter(|_| mots.is_empty()) {
+    // Un tour sans parole d'utilisateur (une notification de tâche) ne cherche rien.
+    let notification = e.prompt.as_deref().is_some_and(crate::rappel_du_prompt::est_une_notification);
+    if notification {
+        journal.push("rappel : tour de notification, rien à chercher".into());
+    }
+    let mut vocabulaire = etat.vocabulaire();
+    vocabulaire.extend(Vocabulaire::lire(reglage));
+    let mots = e.prompt.as_deref().filter(|_| !notification).map(|p| crate::rappel_du_prompt::requete_de_rappel(p, reglage.recall_max_words, &vocabulaire)).unwrap_or_default();
+    if let Some(p) = e.prompt.as_deref().filter(|_| mots.is_empty() && !notification) {
         journal.push(format!("rappel : rien à chercher (prompt de {} caractères, aucun mot-clé après nettoyage)", p.chars().count()));
     }
     if !mots.is_empty() {
@@ -1168,68 +1265,66 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
         match h.appeler_borne("recall_fiches", json!({ "query": requete, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), delai) {
             Ok(v) => {
                 journal.push(format!("rappel en {} ms", debut.elapsed().as_millis()));
-                // Le score du meilleur signal (`chunk.score`), pas le rang fusionné :
-                // c'est lui qu'on compare au seuil, et qu'on dit.
-                let scores: Vec<(String, String, f64)> = v["result"]["result"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|x| x["data"]["name"].as_str().map(|n| (n.to_string(), x["data"]["about"].as_str().unwrap_or("").to_string(), x["chunk"]["score"].as_f64().unwrap_or(0.0))))
-                    .collect();
-                if !scores.is_empty() {
-                    journal.push(format!("rappel : {}", scores.iter().map(|(n, _, sc)| format!("« {n} » {sc:.2}")).collect::<Vec<_>>().join(", ")));
+                let candidats = candidats_du_rappel(&v);
+                if !candidats.is_empty() {
+                    journal.push(format!("rappel : {}", candidats.iter().map(Candidat::dit).collect::<Vec<_>>().join(", ")));
                 }
-                // Sa propre fiche d'identité n'est pas un résultat : c'est elle.
-                // Sans identité trouvée, rien n'est exclu, et le journal le dit.
+                // Le vocabulaire de la mémoire : les noms vus, sous le seuil compris.
+                if !reglage.rejeu {
+                    Vocabulaire::ajouter(reglage, candidats.iter().map(|c| c.nom.as_str()));
+                }
+                // Sa propre fiche d'identité n'est pas un résultat : c'est elle,
+                // ôtée avant tout jugement.
                 let soi = identite.as_ref().map(|i| i.cle.as_str()).unwrap_or("");
                 let mut raisons: Vec<String> = Vec::new();
                 if soi.is_empty() {
                     raisons.push("identité inconnue, pas d'exclusion".into());
-                } else if scores.iter().any(|(n, _, _)| n == soi) {
+                } else if candidats.iter().any(|c| c.nom == soi) {
                     raisons.push(format!("exclu : « {soi} » (fiche propre)"));
                 }
-                // L'échelle : le seuil vaut pour une similarité de 0 à 1. Un score
-                // au-delà (un signal brut, sans le service d'embarquement) n'est
-                // pas sur cette échelle : pas de seuil, et on le dit.
-                let normalisee = scores.iter().all(|(_, _, sc)| (0.0..=1.0).contains(sc));
-                if !normalisee {
-                    raisons.push("échelle brute (score au-delà de 1), pas de seuil".into());
+                // **Le plein texte décide** (c7, d'après trois tours réels où le dense
+                // donnait 0,32, 0,35 et 0,37 au même titre, hors sujet comme en plein
+                // sujet) : une fiche que les mots extraits touchent est candidate ; une
+                // fiche que seul le dense trouve n'est pas jugée tant qu'un écart ou un
+                // seuil dense n'a pas été mesuré sur une mémoire peuplée.
+                let restants: Vec<&Candidat> = candidats.iter().filter(|c| c.nom != soi).collect();
+                let mut touches: Vec<&Candidat> = restants.iter().copied().filter(|c| c.plein.is_some()).collect();
+                touches.sort_by(|a, b| b.plein.partial_cmp(&a.plein).unwrap_or(std::cmp::Ordering::Equal));
+                let dense_seul: Vec<String> = restants.iter().filter(|c| c.plein.is_none()).map(|c| format!("« {} » {:.2}", c.nom, c.dense.unwrap_or(0.0))).collect();
+                if !dense_seul.is_empty() {
+                    raisons.push(format!("dense seul, non jugé : {}", dense_seul.join(", ")));
                 }
-                let sous_le_seuil: Vec<String> = if normalisee { scores.iter().filter(|(n, _, sc)| n != soi && *sc < reglage.recall_min_score).map(|(n, _, sc)| format!("« {n} » {sc:.2}")).collect() } else { Vec::new() };
-                if !sous_le_seuil.is_empty() {
-                    raisons.push(format!("sous le seuil {:.2} : {}", reglage.recall_min_score, sous_le_seuil.join(", ")));
-                }
-                let gardees: Vec<&(String, String, f64)> = scores.iter().filter(|(n, _, sc)| n != soi && (!normalisee || *sc >= reglage.recall_min_score)).collect();
-                // Le déjà-vu : ce que la session a reçu, inchangé, ne revient pas ;
-                // si tout est connu, silence complet.
-                let mut neuves = Vec::new();
+                // Le déjà-vu : ce que la session a reçu, inchangé, ne revient pas.
                 let mut deja = 0;
-                // Une échelle brute ne se trie pas à bon marché : les candidats
-                // neufs vont au juge, en fond, et le bloc jugé tombe au premier
-                // outil (3 ter b). Sans juge, ils sont rendus tels quels.
-                let au_juge = !normalisee && reglage.recall_judge;
-                for g in &gardees {
-                    match etat.statut(&g.0, &empreinte_de_fiche(&g.0, &g.1)) {
+                let mut neuves: Vec<(&Candidat, Option<u64>)> = Vec::new();
+                for c in touches {
+                    match etat.statut(&c.nom, &empreinte_de_fiche(&c.nom, &c.about)) {
                         Statut::Deja => deja += 1,
-                        Statut::Neuve => neuves.push((*g, None)),
-                        Statut::Changee(tour) => neuves.push((*g, Some(tour))),
+                        Statut::Neuve => neuves.push((c, None)),
+                        Statut::Changee(tour) => neuves.push((c, Some(tour))),
                     }
                 }
                 raisons.push(format!("déjà rendu : {deja}, neuf : {}", neuves.len()));
-                if au_juge && !neuves.is_empty() {
-                    let candidats: Vec<Value> = neuves.iter().map(|((n, a, sc), _)| json!({ "name": n, "about": a, "score": sc })).collect();
-                    raisons.push(format!("{} candidat(s) confiés au juge, en fond", candidats.len()));
-                    confier_au_fond(e, reglage, &requete, Some(candidats), etat.tour, journal);
-                    neuves.clear();
-                } else if neuves.is_empty() {
+                // Au plus UN rendu dans le tour (c7, forme 3 : une politique, pas un
+                // seuil) ; les autres que le plein texte touche vont au juge.
+                let reste = if neuves.len() > 1 { neuves.split_off(1) } else { Vec::new() };
+                if !reste.is_empty() {
+                    if reglage.recall_judge {
+                        raisons.push(format!("{} rendu, {} au juge", neuves.len(), reste.len()));
+                        let pour_le_juge: Vec<Value> = reste.iter().map(|(c, _)| c.json()).collect();
+                        confier_au_fond(e, reglage, &requete, Some(pour_le_juge), etat.tour, journal);
+                    } else {
+                        raisons.push(format!("{} rendu, {} tus (juge coupé)", neuves.len(), reste.len()));
+                    }
+                }
+                if neuves.is_empty() {
                     raisons.push("silence".into());
                 } else {
-                    let echelle = if normalisee { "similarité du meilleur signal, de 0 à 1 — pas le rang fusionné de `recall_fiches`" } else { "score brut du meilleur signal, sans seuil" };
-                    b.push_str(&format!("Fiches en rapport ({echelle}) : "));
-                    b.push_str(&neuves.iter().map(|((n, a, sc), maj)| format!("« {n} » ({sc:.2}{}{})", if a.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(a, 80)) }, maj.map(|t| format!(" ; mise à jour depuis le tour {t}")).unwrap_or_default())).collect::<Vec<_>>().join(" ; "));
+                    b.push_str("Fiche en rapport (touchée au plein texte par les mots du prompt) : ");
+                    b.push_str(&neuves.iter().map(|(c, maj)| format!("« {} » ({}{}{})", c.nom, c.scores(), if c.about.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(&c.about, 80)) }, maj.map(|t| format!(" ; mise à jour depuis le tour {t}")).unwrap_or_default())).collect::<Vec<_>>().join(" ; "));
                     b.push_str(" — `get_fiche` pour lire.\n");
-                    for ((n, a, _), _) in &neuves {
-                        etat.rendre(n, &empreinte_de_fiche(n, a));
+                    for (c, _) in &neuves {
+                        etat.rendre(&c.nom, &empreinte_de_fiche(&c.nom, &c.about));
                     }
                 }
                 journal.push(format!("rappel : {}", raisons.join(" ; ")));
@@ -2096,8 +2191,8 @@ mod tests {
         let (chemin, reglage) = transcription_d_essai("rappel", &[T_USER, T_ASSISTANT_PETIT]);
         let mut h = hote_avec_identite();
         h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
-            { "chunk": { "score": 0.58 }, "data": { "name": "régime GPU", "about": "Comment on ménage les cartes du poste.", "state": "current" } },
-            { "chunk": { "score": 0.12 }, "data": { "name": "sans rapport", "about": "trop loin", "state": "current" } }
+            { "chunk": { "score": 0.58 }, "signals": [{ "label": "vector", "score": 0.58 }, { "label": "bm25", "score": 2.1 }], "data": { "name": "régime GPU", "about": "Comment on ménage les cartes du poste.", "state": "current" } },
+            { "chunk": { "score": 0.12 }, "signals": [{ "label": "vector", "score": 0.12 }], "data": { "name": "sans rapport", "about": "trop loin", "state": "current" } }
         ] } }));
         h.reponses.insert("recall_apports:bilan", recherche(vec![json!({ "fiche": "bilan : migration-fiche", "section": "bilan", "texte": "l'outil put_apport a trompé l'agent sur `source`", "created_at": 9 })]));
         // `cited_by` répond pareil pour le handle et pour le fichier : la fiche 96 porte un apport diff d'un autre.
@@ -2107,9 +2202,10 @@ mod tests {
         ] })]));
         let r = repondre(&prompt(&chemin, "range la fiche régime GPU"), &reglage, Ok(&h));
         let b = &r.bloc;
-        assert!(b.contains("Fiches en rapport (similarité du meilleur signal, de 0 à 1 — pas le rang fusionné de `recall_fiches`) : « régime GPU » (0.58 ; Comment on ménage les cartes du poste.) — `get_fiche` pour lire."), "{b}");
+        assert!(b.contains("Fiche en rapport (touchée au plein texte par les mots du prompt) : « régime GPU » (plein texte 2.10, dense 0.58 ; Comment on ménage les cartes du poste.) — `get_fiche` pour lire."), "{b}");
         assert!(!b.contains("sans rapport"), "sous le seuil, la fiche n'est pas dite — {b}");
-        assert!(r.journal.iter().any(|l| l.contains("rappel : « régime GPU » 0.58, « sans rapport » 0.12")), "{:?}", r.journal);
+        assert!(r.journal.iter().any(|l| l.contains("rappel : « régime GPU » plein texte 2.10, dense 0.58, « sans rapport » dense 0.12")), "{:?}", r.journal);
+        assert!(r.journal.iter().any(|l| l.contains("dense seul, non jugé : « sans rapport » 0.12")), "{:?}", r.journal);
         assert!(b.contains("`/p/src/a.rs` a changé depuis, par 73 : a.rs : le COPY passe par la lib"), "{b}");
         assert!(!b.contains("le mien"), "les diffs de la session elle-même ne sont pas rendus");
         assert!(b.contains("Le juge, sur « migration-fiche » : l'outil put_apport a trompé"), "{b}");
@@ -2163,12 +2259,13 @@ mod tests {
     fn le_rappel_envoie_des_mots_cles_et_ne_rend_pas_deux_fois_ce_que_la_session_a_recu() {
         let _env = env();
         let (chemin, reglage) = transcription_d_essai("deja-vu", &[T_USER, T_ASSISTANT_PETIT]);
-        let fiche = |nom: &str, about: &str, score: f64| json!({ "ok": true, "result": { "result": [{ "chunk": { "score": score }, "data": { "name": nom, "about": about, "state": "current" } }] } });
+        // La forme réelle : `signals` par ligne, le plein texte (bm25) et le dense.
+        let fiche = |nom: &str, about: &str, plein: f64| json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 0.4 }, "signals": [{ "label": "vector", "score": 0.4 }, { "label": "bm25", "score": plein }], "data": { "name": nom, "about": about, "state": "current" } }] } });
         let mut h = hote_avec_identite();
         h.reponses.insert("recall_fiches", fiche("régime GPU", "Comment on ménage les cartes.", 0.8));
         let question = "<cross-session-message from=\"uds:/run/user/1000/cc-socks/1.sock\" from-name=\"c7\">\ncomment ménager le régime GPU pendant les passes, avec RAG3WEAVER_GPU_DUTY ?\n</cross-session-message>";
         let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
-        assert!(r.bloc.contains("« régime GPU » (0.80"), "{}", r.bloc);
+        assert!(r.bloc.contains("« régime GPU » (plein texte 0.80, dense 0.40"), "{}", r.bloc);
         assert!(r.journal.iter().any(|l| l.contains("déjà rendu : 0, neuf : 1")), "{:?}", r.journal);
         let envoyee = h.appels.lock().unwrap().iter().rev().find(|(n, _)| n == "recall_fiches").map(|(_, a)| a["query"].as_str().unwrap_or("").to_string()).unwrap();
         assert!(!envoyee.contains("cc-socks") && !envoyee.contains("from-name") && envoyee.contains("RAG3WEAVER_GPU_DUTY") && envoyee.split_whitespace().count() <= 10, "des mots-clés, pas le prompt : « {envoyee} »");
@@ -2187,19 +2284,17 @@ mod tests {
         h.reponses.insert("recall_fiches", fiche("régime GPU", "Comment on ménage les cartes, et la carte 2.", 0.8));
         let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
         assert!(r.bloc.contains("mise à jour depuis le tour"), "{}", r.bloc);
-        // Une échelle brute, juge coupé : pas de seuil, c'est dit, et les candidats
-        // sont rendus tels quels (avec le juge, ils partent en fond : témoin à part).
-        h.reponses.insert("recall_fiches", fiche("autre fiche", "un score brut", 27.9));
-        let mut sans_juge = reglage.clone();
-        sans_juge.recall_judge = false;
-        let r = repondre(&prompt(&chemin, question), &sans_juge, Ok(&h));
-        assert!(r.journal.iter().any(|l| l.contains("échelle brute (score au-delà de 1), pas de seuil")), "{:?}", r.journal);
-        assert!(r.bloc.contains("score brut du meilleur signal, sans seuil") && r.bloc.contains("« autre fiche »"), "{}", r.bloc);
+        // Une fiche que seul le dense trouve, même haut : non jugée, non rendue, et dit
+        // (le dense donnait 0,32 à 0,37 au même titre, hors sujet comme en plein sujet).
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 0.9 }, "signals": [{ "label": "vector", "score": 0.9 }], "data": { "name": "autre fiche", "about": "dense seul", "state": "current" } }] } }));
+        let r = repondre(&prompt(&chemin, question), &reglage, Ok(&h));
+        assert!(r.journal.iter().any(|l| l.contains("dense seul, non jugé : « autre fiche » 0.90")), "{:?}", r.journal);
+        assert!(!r.bloc.contains("« autre fiche »"), "{}", r.bloc);
         // Une enveloppe sans contenu : aucun rappel.
         let avant = h.noms().iter().filter(|n| *n == "recall_fiches").count();
         let r = repondre(&prompt(&chemin, "<task-notification>\n<task-id>b1x2y3z4</task-id>\n<status>completed</status>\n</task-notification>"), &reglage, Ok(&h));
         assert_eq!(h.noms().iter().filter(|n| *n == "recall_fiches").count(), avant, "{:?}", r.journal);
-        assert!(r.journal.iter().any(|l| l.contains("rappel : rien à chercher")), "{:?}", r.journal);
+        assert!(r.journal.iter().any(|l| l.contains("rappel : tour de notification, rien à chercher")), "{:?}", r.journal);
         // Sans identité : rien n'est exclu, et le journal le dit.
         let mut sans = HoteCanne::new(vec![]);
         sans.reponses.insert("recall_fiches", fiche("96", "moi", 0.9));
@@ -2236,8 +2331,8 @@ mod tests {
         }
         let mut canne = hote_avec_identite();
         canne.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
-            { "chunk": { "score": 0.7 }, "data": { "name": "régime GPU", "about": "Comment on ménage les cartes.", "state": "current" } },
-            { "chunk": { "score": 0.6 }, "data": { "name": "sans rapport", "about": "loin", "state": "current" } }
+            { "chunk": { "score": 0.7 }, "signals": [{ "label": "vector", "score": 0.7 }, { "label": "bm25", "score": 2.5 }], "data": { "name": "régime GPU", "about": "Comment on ménage les cartes.", "state": "current" } },
+            { "chunk": { "score": 0.6 }, "signals": [{ "label": "bm25", "score": 1.2 }], "data": { "name": "sans rapport", "about": "loin", "state": "current" } }
         ] } }));
         let h = RappelLent(canne);
         let r = repondre(&prompt(&chemin, "comment ménager le régime GPU pendant les passes"), &reglage, Ok(&h));
@@ -2272,16 +2367,28 @@ mod tests {
     }
 
     #[test]
-    fn une_echelle_brute_part_au_juge_au_lieu_d_etre_rendue() {
+    fn un_seul_rendu_par_tour_les_autres_vont_au_juge() {
         let _env = env();
         let (chemin, reglage) = transcription_d_essai("brute-juge", &[T_USER, T_ASSISTANT_PETIT]);
         let mut h = hote_avec_identite();
-        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 27.9 }, "data": { "name": "autre fiche", "about": "un score brut", "state": "current" } }] } }));
+        // La forme de 18:16:13 : la fiche propre touchée au plein texte (1,66), une
+        // autre au dense seul (0,35) — puis deux fiches que le plein texte touche.
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
+            { "chunk": { "score": 1.66 }, "signals": [{ "label": "vector", "score": 0.45 }, { "label": "bm25", "score": 1.66 }], "data": { "name": "96", "about": "moi", "state": "current" } },
+            { "chunk": { "score": 0.35 }, "signals": [{ "label": "vector", "score": 0.35 }], "data": { "name": "régime GPU", "about": "les cartes", "state": "current" } }
+        ] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks et leur binaire"), &reglage, Ok(&h));
+        assert!(!r.bloc.contains("Fiche en rapport"), "la fiche propre exclue, le dense seul non jugé : silence — {}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("exclu : « 96 » (fiche propre) ; dense seul, non jugé : « régime GPU » 0.35 ; déjà rendu : 0, neuf : 0 ; silence")), "{:?}", r.journal);
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
+            { "chunk": { "score": 0.4 }, "signals": [{ "label": "vector", "score": 0.4 }, { "label": "bm25", "score": 1.2 }], "data": { "name": "seconde", "about": "b", "state": "current" } },
+            { "chunk": { "score": 3.5 }, "signals": [{ "label": "bm25", "score": 3.5 }], "data": { "name": "première", "about": "a", "state": "current" } }
+        ] } }));
         let r = repondre(&prompt(&chemin, "une question assez longue sur une autre fiche"), &reglage, Ok(&h));
-        assert!(!r.bloc.contains("« autre fiche »"), "pas rendue en synchrone : {}", r.bloc);
-        assert!(r.journal.iter().any(|l| l.contains("1 candidat(s) confiés au juge, en fond")), "{:?}", r.journal);
+        assert!(r.bloc.contains("« première » (plein texte 3.50") && !r.bloc.contains("« seconde »"), "le meilleur au plein texte, seul : {}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("1 rendu, 1 au juge")), "{:?}", r.journal);
         let t: Value = serde_json::from_str(&std::fs::read_to_string(chemin_du_fond(&reglage, "s1", "tache")).unwrap()).unwrap();
-        assert_eq!(t["candidats"][0]["name"], "autre fiche");
+        assert_eq!(t["candidats"][0]["name"], "seconde");
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
     }
 
@@ -2308,7 +2415,7 @@ mod tests {
         h2.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 0.05 }, "data": { "name": "régime GPU", "about": "", "state": "current" } }] } }));
         let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks"), &reglage, Ok(&h2));
         assert!(r.bloc.is_empty(), "rien en rapport : le silence, et le journal a les scores — {}", r.bloc);
-        assert!(r.journal.iter().any(|l| l.contains("rappel : « régime GPU » 0.05")), "{:?}", r.journal);
+        assert!(r.journal.iter().any(|l| l.contains("rappel : « régime GPU » dense 0.05")), "{:?}", r.journal);
         // Sa propre fiche, même haute, n'est pas rendue.
         let mut h3 = hote_avec_identite();
         h3.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [{ "chunk": { "score": 0.9 }, "data": { "name": "96", "about": "moi", "state": "current" } }] } }));
