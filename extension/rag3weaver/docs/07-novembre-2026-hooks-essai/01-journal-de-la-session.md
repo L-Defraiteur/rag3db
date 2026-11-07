@@ -358,3 +358,32 @@ G a posé le binaire à 16 h 31, comme annoncé.
 - (b) « T'envoyer un vrai message » m'est impossible : je ne peux pas écrire
   à ma propre session. Un message d'une autre session compte comme un vrai
   tour. J'ai demandé à c7 de m'en envoyer un sur le régime GPU.
+
+## Le test « régime GPU » (message de c7, 17:07:49)
+
+c7 a écrit un message sur le régime GPU des passes, pour voir si le rappel
+trouvait la fiche « régime GPU ».
+
+**Bloc, mot pour mot :** le même bloc partiel qu'au tour d'avant (« Rappel des
+fiches : l'hôte n'a pas répondu en 3 s (à froid, …) — réessaie au prochain
+tour. »).
+
+**hooks.log :**
+
+- `recall_fiches en 3021 ms : … timeout: global` ;
+- `bloc de 139 caractères` ;
+- les durées : `/open 42 ms`, `cited_by 15 ms`, `recall_apports 54 ms`,
+  `recall_fiches 3021 ms (échec)`.
+
+**Ce que j'en tire :**
+
+- Le test ne dit rien de la pertinence : le rappel n'a pas abouti.
+- « À froid » est faux : c'est le deuxième échec de suite, et le backend est
+  ouvert en 42 ms.
+- recall_fiches tourne autour du budget de 3 s (1999 ms à 17:05, puis plus de
+  3000 ms deux fois). Il réussit ou échoue selon la charge du portable.
+- Le même rappel par le MCP memoire-longue a pris 0,36 s sur la même base : le
+  chemin du hook est 5 à 8 fois plus lent.
+- Pistes proposées à archi : mesurer chaque signal (dense, plein texte) sur
+  le chemin `/call`, et rappeler sur un extrait du prompt plutôt que sur le
+  prompt entier.
