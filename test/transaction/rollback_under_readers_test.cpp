@@ -292,8 +292,9 @@ TEST_F(RollbackUnderReaders, AFullyRolledBackBlockShowsNoRowToAnyReader) {
     auto* memoryManager = getMemoryManager(*database);
     std::vector<LogicalType> types;
     types.push_back(LogicalType::INT64());
-    InMemChunkedNodeGroup block(*memoryManager, types, false /* compression */,
-        StorageConfig::CHUNKED_NODE_GROUP_CAPACITY, 0 /* startRowIdx */);
+    ChunkedNodeGroup block(*memoryManager, types, false /* compression */,
+        StorageConfig::CHUNKED_NODE_GROUP_CAPACITY, 0 /* startRowIdx */,
+        ResidencyState::IN_MEMORY);
     constexpr uint64_t rows = 914;
     auto state = std::make_shared<DataChunkState>(StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
     state->getSelVectorUnsafe().setSelSize(rows);
@@ -306,7 +307,8 @@ TEST_F(RollbackUnderReaders, AFullyRolledBackBlockShowsNoRowToAnyReader) {
         7 /* startTS */);
     const Transaction reader(TransactionType::READ_ONLY, Transaction::START_TRANSACTION_ID + 2,
         7 /* startTS */);
-    ASSERT_EQ(block.append(&writer, {&values}, 0, rows), rows);
+    const std::vector<ValueVector*> columns{&values};
+    ASSERT_EQ(block.append(&writer, columns, 0, rows), rows);
     ASSERT_EQ(block.getNumRows(), rows);
     // Avant l'annulation : les lignes de l'écrivain sont à lui seul.
     EXPECT_TRUE(block.isInserted(&writer, rows - 1));
