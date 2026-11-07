@@ -147,7 +147,7 @@ const DECIDE_ESSAI: &str = "%% tool: decide_essai
 graph LR
     source[\"RhaiNode(script='input', value=$element)\"]
     decide[\"Decide(via='llm', labels='oui|non', field='text', as='verdict')\"]
-    source -->|result| decide
+    source -->|result:element| decide
 ";
 
 /// **`models.llm` est joint à l'ouverture et sert les graphes du backend** (M4).
