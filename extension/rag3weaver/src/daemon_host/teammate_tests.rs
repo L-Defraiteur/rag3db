@@ -308,10 +308,10 @@ fn a_stop_in_the_mailbox_cuts_the_running_step() {
     let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
-    let r = host.post_to_teammate(&h.id, "doc", "supervisor", "request", None, "Lis tout le dépôt et résume-le.").expect("la request ouvre la tâche et lance l'équipier");
+    let r = host.post_to_teammate(&h.id, "doc", "supervisor", "request", None, "Lis tout le dépôt et résume-le.", &Value::Null).expect("la request ouvre la tâche et lance l'équipier");
     assert_eq!(r["started"], true, "{r}");
     started_rx.recv_timeout(std::time::Duration::from_secs(20)).expect("le pas démarre");
-    let r = host.post_to_teammate(&h.id, "doc", "c7", "stop", None, "").expect("le stop");
+    let r = host.post_to_teammate(&h.id, "doc", "c7", "stop", None, "", &Value::Null).expect("le stop");
     assert_eq!(r["started"], false, "{r}");
     let _ = go_tx.send(());
     let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
@@ -324,4 +324,135 @@ fn a_stop_in_the_mailbox_cuts_the_running_step() {
     let ended = boite.iter().find(|l| l["kind"] == "ended").expect("la fin dans la boîte");
     assert!(ended["text"].as_str().unwrap().starts_with("arrêté par"), "{ended}");
     assert!(!boite.iter().any(|l| l["kind"] == "step_done"), "aucun pas n'a fini de lui-même : {boite:?}");
+}
+
+/// **La boîte adressée, par le chemin de l'hôte** (page 07-novembre-2026-everything-declarative/01,
+/// § 2) : une `request` postée sous `claude-code:s1` ouvre la tâche ; la question de l'équipier
+/// attend `claude-code:s1` dans `pending` (et pas une autre clé), deux lectures n'y changent rien ;
+/// la réponse par `reply_to` la sort et l'équipier la lit à sa frontière ; la fin attend d'être
+/// vue, `seen` la sort ; `list` dit l'état ; chaque ligne porte son `id` et passe sur le flux en
+/// `MailboxLine`.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_addressed_mailbox_by_the_host_routes() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let frontieres = Arc::new(Mutex::new(Vec::<String>::new()));
+    let vues = frontieres.clone();
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+        let vues = vues.clone();
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            let results = tool_results(turns);
+            if results.is_empty() {
+                vues.lock().unwrap().push(last_user(turns));
+            }
+            match (step_of(turns), results.len()) {
+                (1, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "plan": {
+                    "request": "Le titre du README", "proposal": "Demander le titre, puis l'écrire",
+                    "items": [{ "id": "titre", "text": "Poser le titre", "status": "blocked", "alone": false, "question": "Quel titre pour le README ?" }] } }))])),
+                (1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "question posée", "remaining": "le titre" }))])),
+                // Le pas d'après la réponse (son numéro compte aussi l'attente : la
+                // boucle a tourné une fois à vide avant de se réveiller).
+                (_, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "le titre est donné", "concepts": ["documentation"] } }))])),
+                _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "plan clos", "remaining": "" }))])),
+            }
+        })))
+    });
+    let id = crate::daemon_host::DaemonHost::new().hosted(&manifeste).unwrap().id.clone();
+    let (taches, chats) = (d.path().join("taches"), d.path().join("chats"));
+    let (adresse, _fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(model));
+    let racine = format!("http://{adresse}");
+    let get = |route: &str| -> Value {
+        let mut r = crate::daemon::agent().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let post = |route: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}{route}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let decrit = post("/ide/describe", json!({ "manifest": manifeste }));
+    assert_eq!(decrit["ok"], true, "{decrit}");
+    let attendre = |quoi: &str, ok: &dyn Fn() -> Option<Value>| -> Value {
+        let borne = Instant::now() + Duration::from_secs(60);
+        loop {
+            if let Some(v) = ok() {
+                return v;
+            }
+            assert!(Instant::now() < borne, "en 60 s : {quoi}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+
+    let r = post("/ide/teammate/mailbox", json!({ "backend": id, "task": "doc", "from": "claude-code:s1", "kind": "request", "text": "Écris le titre du README." }));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"]["line"]["id"], format!("{id}/doc:0"), "la première ligne a le rang 0 : {r}");
+
+    // La question attend s1, et elle seule ; deux lectures ne la consomment pas.
+    let pending = |who: &str| get(&format!("/ide/teammate/pending?for={who}"))["result"]["items"].as_array().cloned().unwrap_or_default();
+    let question = attendre("la question de l'équipier dans pending", &|| pending("claude-code:s1").into_iter().find(|i| i["kind"] == "question"));
+    assert_eq!((question["task"].clone(), question["parent"].clone(), question["item"].clone()), (json!("doc"), json!(id), json!("titre")), "{question}");
+    let qid = question["id"].as_str().unwrap().to_string();
+    assert!(qid.starts_with(&format!("{id}/doc:")), "{qid}");
+    assert!(pending("claude-code:s2").is_empty(), "une autre clé ne voit rien");
+    assert!(pending("claude-code:s1").iter().any(|i| i["id"] == qid.as_str()), "une seconde lecture la rend encore");
+    let liste = attendre("l'équipier qui attend la boîte", &|| {
+        let l = get("/ide/teammate/list?supervisor=claude-code:s1")["result"]["teammates"].as_array().cloned().unwrap_or_default();
+        l.into_iter().find(|t| t["task"] == "doc" && t["state"] == "waiting")
+    });
+    assert_eq!(liste["parent"], json!(id), "{liste}");
+
+    // La réponse vise la question ; elle sort de pending, l'équipier la lit.
+    let r = post("/ide/teammate/mailbox", json!({ "backend": id, "task": "doc", "from": "claude-code:s1", "kind": "answer", "reply_to": qid, "text": "Le titre : « Petit dépôt »" }));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"]["line"]["reply_to"], json!(qid), "{r}");
+    let fin = attendre("la fin de l'équipier dans pending", &|| pending("claude-code:s1").into_iter().find(|i| i["kind"] == "ended"));
+    assert!(!pending("claude-code:s1").iter().any(|i| i["id"] == qid.as_str()), "la question répondue est sortie");
+    assert!(frontieres.lock().unwrap().iter().any(|f| f.contains("Petit dépôt")), "la réponse lue à la frontière : {:?}", frontieres.lock().unwrap());
+
+    // La fin sort par seen, pas par une lecture.
+    let fid = fin["id"].as_str().unwrap().to_string();
+    assert!(pending("claude-code:s1").iter().any(|i| i["id"] == fid.as_str()), "relue, la fin est encore là");
+    let r = post("/ide/teammate/seen", json!({ "for": "claude-code:s1", "ids": [fid] }));
+    assert_eq!(r["result"]["seen"], 1, "{r}");
+    assert!(!pending("claude-code:s1").iter().any(|i| i["kind"] == "ended"), "vue, la fin est sortie");
+    let etat = get("/ide/teammate/list?supervisor=claude-code:s1")["result"]["teammates"][0].clone();
+    assert_eq!(etat["state"], "ended", "{etat}");
+
+    // La boîte entière : un id par ligne, le step_done avec ses champs.
+    let equipier = get(&format!("/ide/teammate?backend={id}&task=doc"))["result"].clone();
+    let manifeste_de_la_tache = equipier["backend"].as_str().expect("le manifeste de la tâche").to_string();
+    let boite = equipier["mailbox"].as_array().cloned().unwrap();
+    let ids: Vec<String> = boite.iter().map(|l| l["id"].as_str().unwrap().to_string()).collect();
+    assert_eq!(ids, (0..boite.len()).map(|n| format!("{id}/doc:{n}")).collect::<Vec<_>>(), "un id par rang : {boite:?}");
+    let pas = boite.iter().find(|l| l["kind"] == "step_done").expect("un step_done");
+    assert_eq!((pas["succeeded"].clone(), pas["done"].clone()), (json!(true), json!("question posée")), "{pas}");
+
+    // Le flux : chaque ligne y est passée en MailboxLine, la ligne en objet.
+    let flux = {
+        use std::io::{Read, Write};
+        let mut s = std::net::TcpStream::connect(&adresse).unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        s.write_all(b"GET /ide/flux?sujets=mailbox&depuis=0 HTTP/1.1\r\nHost: x\r\nCookie: rag3weaver_ide=j\r\n\r\n").unwrap();
+        let (mut lu, mut tampon) = (Vec::new(), [0u8; 8192]);
+        while !String::from_utf8_lossy(&lu).contains(&format!("\"id\":\"{fid}\"")) {
+            match s.read(&mut tampon) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => lu.extend_from_slice(&tampon[..n]),
+            }
+        }
+        String::from_utf8_lossy(&lu).into_owned()
+    };
+    let relayees: Vec<Value> = flux.lines().filter_map(|l| l.strip_prefix("data: ")).filter_map(|l| serde_json::from_str(l).ok()).collect();
+    assert!(relayees.iter().all(|e: &Value| e["sujet"] == "mailbox" && e["evenement"]["kind"] == "MailboxLine" && e["backend"] == manifeste_de_la_tache.as_str()), "{relayees:?}");
+    let relayes: Vec<&str> = relayees.iter().filter_map(|e| e["evenement"]["line"]["id"].as_str()).collect();
+    for i in [qid.as_str(), fid.as_str()] {
+        assert!(relayes.contains(&i), "{i} sur le flux : {relayes:?}");
+    }
+    eprintln!("boîte adressée : {} lignes, {} relayées sur le flux", boite.len(), relayes.len());
 }
