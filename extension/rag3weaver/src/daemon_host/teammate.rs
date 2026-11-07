@@ -968,6 +968,9 @@ impl DaemonHost {
         for number in 1..=MAX_STEPS {
             let lines = files.mailbox();
             let news: Vec<Value> = lines.iter().skip(read).filter(|l| l["from"] != "teammate" && l["from"] != "host").cloned().collect();
+            // Le curseur d'avant ce pas : un pas qui n'aboutit pas rend ses nouvelles
+            // au suivant (sans elles, l'équipier attendrait une boîte déjà lue).
+            let avant = read;
             read = lines.len();
             files.write_cursor(read);
             if news.iter().any(|l| l["kind"] == "stop") {
@@ -1031,6 +1034,8 @@ impl DaemonHost {
                         outcome.ended = format!("erreur : {e} ({failed} pas d'affilée n'ont pas abouti, teammate.max_failed_steps = {})", policy.max_failed_steps);
                         return Ok(outcome);
                     }
+                    read = avant;
+                    files.write_cursor(read);
                     std::thread::sleep(std::time::Duration::from_secs(2 * u64::from(failed)));
                     continue;
                 }
