@@ -1,7 +1,7 @@
 # Le texte des bulles du chat garde une largeur de lecture fixe sur un écran large
 
-- **État** : ouvert (7 novembre 2026), retour de Lucie sur la pose de 21 h 51 ; pour hooks-essai,
-  après le lot appel-a-delai.
+- **État** : corrigé (7 novembre 2026, branche chat-lisible, 48abbd62d) : `max-w-[100ch]`
+  retiré, le texte occupe la colonne.
 - **Famille** : produit
 - **Gravité** : gêne (l'espace perdu, le texte compacté).
 - **Atteignable en service** : oui, sur tout écran plus large que la colonne de lecture.
@@ -17,3 +17,6 @@ largeur de lecture fixe (`max-w-[100ch]`, sur `.body` et `details.outil`).
 
 Le texte d'une bulle prend la colonne : plus de largeur de lecture fixe, ou une largeur relative à
 l'écran. Témoin navigateur à 2 560 px : le texte d'une bulle occupe la colonne du chat.
+
+Témoin : `le_code_du_chat_se_lit_comme_du_code` (la largeur de la bulle à 2 560 px), rouge sur
+f1aff928c (915 px sur 2 260), vert sur 48abbd62d.

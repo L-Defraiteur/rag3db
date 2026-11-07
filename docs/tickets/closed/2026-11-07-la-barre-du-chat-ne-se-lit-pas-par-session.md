@@ -1,8 +1,7 @@
 # La barre du chat ne se lit pas par session : les dépôts devraient être sous l'agent
 
-- **État** : ouvert (7 novembre 2026), retour de Lucie sur la pose de 21 h 51 ; pour hooks-essai,
-  dans le lot de la barre, avant la coloration B ; la forme du JSON à accorder avec everything
-  declarative (page 02, sa direction).
+- **État** : corrigé (7 novembre 2026, branche chat-lisible, hooks-essai), sous le modèle
+  affiné le soir même par c7 avec Lucie : session › tâches › espaces.
 - **Famille** : produit
 - **Gravité** : gêne (la barre se comprend mal : on navigue par dépôt alors qu'on travaille par
   agent).
@@ -46,3 +45,31 @@ Témoins navigateur :
 - le menu qui inverse ;
 - le filtre ;
 - le fil d'Ariane.
+
+## Le correctif
+
+Le modèle s'est précisé pendant le lot (c7 avec Lucie, page 02 d'everything declarative) : une
+**tâche** est ce que la session délègue, et elle tient un à n **espaces** (un worktree par dépôt
+touché). Les sous-sessions se rangent sous la tâche qui les a déléguées (`parent_task`, toujours
+null aujourd'hui).
+
+- `/ide/etat` rend trois listes à plat :
+  - `chat_sessions` : le backend ouvert ou qui converse, son modèle, sa mémoire et son espace ;
+  - `tasks` : `session`, `name`, l'état de l'équipier, `awaits_answer`, et ses espaces (dépôt ·
+    `agent/<nom>`, proposition) ;
+  - `available_repos` : les backends de code ni ouverts ni tenus.
+- La barre (`ui/ide/src/views/ChatSidebar.tsx`) :
+  - la session et sa conversation (avec la jauge et les fiches), son dépôt, ses tâches et leurs
+    espaces, sa mémoire ;
+  - le chemin de la page déplié, le reste replié ;
+  - « tenu par » sur chaque espace, dans les deux vues ;
+  - le menu « par session » / « par dépôt », mémorisé ;
+  - « actifs seulement » : ce qui tourne ou attend une réponse ;
+  - « Disponibles » en bas ;
+  - le fil d'Ariane session › tâche › dépôt · branche.
+
+Témoins :
+- `l_etat_de_l_hote_range_sessions_taches_et_espaces` et
+  `la_barre_se_lit_par_session_tache_et_espace` : rouges sur 746b9c242, verts sur 5ac96009e ;
+- `la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge` : passé à la section « Sessions »,
+  rouge puis vert sur les mêmes commits.
