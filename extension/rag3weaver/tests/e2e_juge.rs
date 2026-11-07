@@ -426,7 +426,7 @@ fn le_juge_des_outils_sur_gemini_nomme_les_defauts_de_schema_et_de_retour() {
 /// Le faux juge d'un tour de Claude Code : lire le run, rejouer le premier appel de
 /// l'hôte (`appels_de_l_hote`), relire les bilans, puis les deux rapports.
 fn faux_juge_d_un_tour_de_claude_code(vu: Arc<Mutex<Vu>>) -> rag3weaver::daemon_host::chat::ChatModel {
-    Arc::new(move |_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let vu = vu.clone();
         Ok(Arc::new(CallbackLlm::new("faux-juge", 8192, move |turns, opts, sink| {
             let outils_vus: Vec<&rag3weaver::llm::Turn> = turns.iter().filter(|t| t.role == "tool").collect();
