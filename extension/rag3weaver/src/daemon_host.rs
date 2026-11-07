@@ -204,6 +204,10 @@ pub mod juge;
 /// superviseur par une boîte aux lettres.
 pub mod teammate;
 
+/// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel
+/// d'outil, le repli sur les fichiers du worktree quand il manque.
+mod teammate_tools;
+
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);

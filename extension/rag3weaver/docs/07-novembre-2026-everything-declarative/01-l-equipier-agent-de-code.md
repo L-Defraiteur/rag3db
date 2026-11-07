@@ -56,12 +56,20 @@ anglais, le reste en français.
 |---|---|---|
 | le backend ne s'ouvre pas (base abîmée, lib refusée, format) | le lancement meurt | le pas tourne en **mode fichiers** : les outils de fichiers sur le worktree de la tâche, les outils d'index « indisponible : <cause d'ouverture> » |
 | le backend est fermé pendant un pas (`/backend/close`, hôte qui recharge) | `Err`, le lancement meurt | l'appel en cours rend son erreur ; les appels suivants du même pas passent en mode fichiers |
-| l'index est en retard ou sous un verrou d'écriture long (un `index` en cours) | l'appel attend derrière | au-delà d'un délai annoncé (`RAG3WEAVER_TEAMMATE_INDEX_WAIT_S`, 20 s par défaut), le repli sur les fichiers, qui le dit |
+| l'index est en retard ou sous un verrou d'écriture long (un `index` en cours) | l'appel attend derrière, sans le dire | l'appel attend toujours (rien n'est abandonné, rien ne part en double), et au-delà de `teammate.tool_wait_notice_s` (20 s par défaut) la boîte le dit : « « outil » attend depuis N s… » |
 | un graphe d'outil échoue (nœud en erreur) | `{"error": …}` au modèle, le pas continue | pareil, et le juge le compte en repli d'outil |
-| l'hôte meurt | le pas meurt avec lui, la tâche reste « en cours » | le pas interrompu est journalisé comme tel ; à la reprise de l'hôte, l'équipier dont le plan est vivant et sans `ended` reprend à la frontière suivante |
+| le tour entier échoue (le modèle ne répond pas…) | le lancement meurt | l'échec va dans la boîte (`report` « le pas N n'a pas abouti : … »), le pas suivant repart de la frontière avec les mêmes nouvelles ; `teammate.max_failed_steps` (3 par défaut) échecs d'affilée arrêtent l'équipier en `ended "erreur : …"` |
+| l'hôte meurt | le pas meurt avec lui, la tâche reste « en cours » | lot suivant : le pas interrompu est journalisé comme tel ; à la reprise de l'hôte, l'équipier dont le plan est vivant et sans `ended` reprend à la frontière suivante |
 
-**Le mode fichiers** (`FileTools`, à côté de `BackendTools`, dans `teammate.rs` ou un module à
-lui) : `read_file`, `list_files`, `grep_files`, `edit_file` implémentés directement sur le
+**La politique, au manifeste** (clé `teammate`, `TeammatePolicy` dans `src/backend.rs`) :
+`max_failed_steps` et `tool_wait_notice_s`. **Le modèle** d'un équipier dont la base ne s'ouvre
+pas vient du manifeste préparé : `ChatModel` prend un `&PreparedBackend` (`PreparedBackend::load`,
+sans la base), plus un `&Backend`. **Le réveil** : l'équipier qui attend sa boîte la relit toutes
+les 2 s même sans bus (un backend fermé ne publie plus), et le journal du pas suivant dit par où il
+s'est réveillé (`reveil` : `bus` ou `fichier`) ; les replis d'un pas y sont aussi (`repli`).
+
+**Le mode fichiers** (`FileTools`, dans `src/daemon_host/teammate_tools.rs`, avec la boîte
+étanche `Etanche`) : `read_file`, `list_files`, `grep_files`, `edit_file` implémentés directement sur le
 worktree de la tâche, chemins confinés à ce worktree (comme `FileSource`), **la même forme de
 résultat** que leur graphe, avec un champ `fallback: "index indisponible : repli sur les fichiers
 (<cause>)"`. `edit_file` y garde l'empreinte attendue (`expected_hash`, calculée sur le disque) et
@@ -107,7 +115,7 @@ pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
   - Chaque ligne de boîte a un **identifiant stable** : `id = "<parent>/<task>:<n>"`, `n` le rang
     de la ligne dans `mailbox.jsonl` (la boîte ne fait qu'ajouter, le rang ne bouge jamais).
   - `GET /ide/teammate/pending?for=claude-code:<id>` →
-    `{"for": "claude-code:<id>", "items": [{"id", "task", "parent", "kind", "item"?, "text", "at"}]}`,
+    `{"for": "claude-code:<id>", "items": [{"id", "task", "parent", "from", "kind", "item"?, "text", "at"}]}`,
     `kind` ∈ `question` | `approval` | `proposal` | `report` | `ended`. Un item reste en attente tant
     qu'aucune ligne de la boîte ne porte `reply_to: <son id>` ; `report` et `ended` n'attendent pas
     de réponse et sortent quand ils sont **vus** : `pending` est une lecture pure (un rejeu du hook,

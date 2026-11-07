@@ -74,7 +74,7 @@ const MOTS: usize = 300;
 /// **Le faux équipier** : un pas qui parle (MOTS mots, un token chacun) et
 /// déclare `step_done`, puis « Fait. » après le résultat de l'outil.
 fn faux_equipier() -> rag3weaver::daemon_host::chat::ChatModel {
-    Arc::new(|_b: &rag3weaver::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 1 << 20, |turns, opts, sink| {
             if turns.last().is_some_and(|t| t.role == "tool") {
                 return MockLlm::new("Fait.").generate(turns, opts, sink);
