@@ -9,7 +9,22 @@ export type Backend = {
   tache: Task | null;
   template_drift?: string[];
   sessions?: number;
+  // Ce que les gens nomment : le dépôt git qui contient le manifeste, sa branche,
+  // et ce qu'est le backend — `code` (un dépôt), `memory` (la mémoire), `project`
+  // (un projet rag3weaver déclaratif sans dépôt). « backend » ne paraît pas à l'écran.
+  repo?: string | null;
+  branch?: string | null;
+  kind?: "code" | "memory" | "project";
 };
+
+/// Le nom qu'une personne donne à ce que tient un backend : la branche d'une tâche,
+/// « la mémoire », le dépôt (et sa branche), ou le nom d'un projet déclaratif.
+export function displayName(b: Backend): string {
+  if (b.tache) return b.tache.branche;
+  if (b.kind === "memory") return "la mémoire";
+  if (b.kind === "code" && b.repo) return b.branch ? `${b.repo} · ${b.branch}` : b.repo;
+  return shortName(b.manifest).split("/").pop() || shortName(b.manifest);
+}
 export type HostState = { backends: Backend[]; sessions?: unknown[] };
 
 export async function fetchState(): Promise<HostState> {
