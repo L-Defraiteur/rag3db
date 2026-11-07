@@ -33,6 +33,8 @@
 #include "main/connection.h"
 #include "main/database.h"
 #include "storage/table/chunked_node_group.h"
+#include "storage/table/node_group.h"
+#include "storage/table/table.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;
@@ -281,22 +283,30 @@ TEST_F(RollbackUnderReaders, AReaderSurvivesTheRollbackOfAnotherWriter) {
     EXPECT_EQ(steps.find("refus"), std::string::npos) << steps;
 }
 
-// Le défaut du ticket du 7 novembre 2026 au grain du bloc, sans course : un bloc dont toutes les
-// lignes sont annulées perdait son information de version (versionInfo.reset()), et « pas
-// d'information de version » veut dire « toutes les lignes validées ». Un lecteur qui tenait le
-// bloc et le compte de lignes lu avant l'annulation (le balayage tient ses blocs depuis V2-1b,
-// pièce 2) comptait alors toutes les lignes du COPY annulé : 10 + 914, 10 + 2 048 relations dans
-// AReaderSurvivesTheRollbackOfAnotherWriter, 4 rejeux sur 60. Ici le lecteur demande ligne par
-// ligne, avec l'ancien compte : aucune ne doit être visible, ni à lui ni à l'écrivain annulé.
+// Le défaut du ticket du 7 novembre 2026 au grain du bloc, sans course. Un bloc dont toutes les
+// lignes sont annulées perdait son information de version (versionInfo.reset()), et un balayage
+// sans information de version sélectionne toutes les lignes qu'on lui demande. Or le lecteur
+// demande le compte qu'il a lu avant l'annulation : scanCommittedInMemSequential lit rowsInChunk
+// sous inMemAppendMtx partagé, puis appelle scan ; l'annulation (sous versionInfoMtx seul) passe
+// entre les deux. Il comptait alors toutes les lignes du COPY annulé : 10 + 914, 10 + 2 048 dans
+// AReaderSurvivesTheRollbackOfAnotherWriter, 4 rejeux sur 60. Ici, le compte d'avant est rejoué
+// après l'annulation, sans course : aucune ligne ne doit être sélectionnée, ni pour un lecteur,
+// ni pour l'écrivain annulé. Avant V2-1b pièce 2, le lecteur reprenait le bloc dans la liste
+// vivante à chaque pas et la fenêtre était infime ; depuis qu'il tient ses blocs, elle s'ouvre à
+// chaque COPY annulé.
 TEST_F(RollbackUnderReaders, AFullyRolledBackBlockShowsNoRowToAnyReader) {
+#if defined(RAG3DB_RUNTIME_CHECKS) || !defined(NDEBUG)
+    GTEST_SKIP() << "le compte d'avant l'annulation déclenche l'assertion de scan sous les "
+                    "contrôles d'exécution ; ce témoin rejoue la course telle qu'elle est en Release";
+#endif
     auto* memoryManager = getMemoryManager(*database);
     std::vector<LogicalType> types;
     types.push_back(LogicalType::INT64());
-    ChunkedNodeGroup block(*memoryManager, types, false /* compression */,
-        StorageConfig::CHUNKED_NODE_GROUP_CAPACITY, 0 /* startRowIdx */,
-        ResidencyState::IN_MEMORY);
+    constexpr auto capacity = StorageConfig::CHUNKED_NODE_GROUP_CAPACITY;
+    ChunkedNodeGroup block(*memoryManager, types, false /* compression */, capacity,
+        0 /* startRowIdx */, ResidencyState::IN_MEMORY);
     constexpr uint64_t rows = 914;
-    auto state = std::make_shared<DataChunkState>(StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+    auto state = std::make_shared<DataChunkState>(capacity);
     state->getSelVectorUnsafe().setSelSize(rows);
     ValueVector values(LogicalType::INT64(), memoryManager);
     values.setState(state);
@@ -314,17 +324,29 @@ TEST_F(RollbackUnderReaders, AFullyRolledBackBlockShowsNoRowToAnyReader) {
     EXPECT_TRUE(block.isInserted(&writer, rows - 1));
     EXPECT_FALSE(block.isInserted(&reader, rows - 1));
 
+    // Le balayage ne lit que les numéros de ligne : rien n'est lu dans les colonnes tronquées.
+    auto outState = std::make_shared<DataChunkState>(capacity);
+    ValueVector out(LogicalType::INT64(), memoryManager);
+    out.setState(outState);
+    TableScanState scanState(nullptr, {&out}, outState);
+    scanState.columnIDs = {ROW_IDX_COLUMN_ID};
+    const NodeGroupScanState nodeGroupScanState(1);
+    auto selectedRows = [&](const Transaction& transaction) {
+        outState->getSelVectorUnsafe().setToUnfiltered(rows);
+        block.scan(&transaction, scanState, nodeGroupScanState, 0, rows);
+        return outState->getSelVector().getSelSize();
+    };
+    EXPECT_EQ(selectedRows(writer), rows) << "l'écrivain voit ses lignes avant l'annulation";
+    EXPECT_EQ(selectedRows(reader), 0u) << "le lecteur ne voit pas les lignes non validées";
+
     block.rollbackInsert(0, rows, INVALID_TRANSACTION);
 
     EXPECT_EQ(block.getNumRows(), 0u);
-    for (const uint64_t row : {uint64_t{0}, uint64_t{1}, uint64_t{500}, rows - 1}) {
-        EXPECT_FALSE(block.isInserted(&reader, row))
-            << "[check: rolled-back-block-hides-its-rows] ligne " << row
-            << " visible au lecteur après l'annulation complète du bloc";
-        EXPECT_FALSE(block.isInserted(&writer, row))
-            << "[check: rolled-back-block-hides-its-rows] ligne " << row
-            << " encore visible à l'écrivain annulé";
-    }
+    EXPECT_EQ(selectedRows(reader), 0u)
+        << "[check: rolled-back-block-hides-its-rows] le lecteur, avec le compte de lignes lu "
+           "avant l'annulation complète du bloc, en sélectionne encore";
+    EXPECT_EQ(selectedRows(writer), 0u)
+        << "[check: rolled-back-block-hides-its-rows] l'écrivain annulé revoit ses lignes";
 }
 
 } // namespace
