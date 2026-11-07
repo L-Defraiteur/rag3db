@@ -86,7 +86,7 @@ ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 | [Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée](2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md) | ouvert — proposition (refuser l'ouverture) ; voir aussi « les échecs de chargement d'extension au rejeu » | index à rebâtir, sans que l'ouverture le dise | oui | oui (index vectoriel) |
 | [L'index plein texte en fichiers n'est pas tenu par le point de reprise du moteur](2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md) | ouvert — décision de Lucie : comme Neo4j pour l'instant, pas sur la stèle | réponse incomplète après un arrêt brutal, dite par l'état d'index | oui (défaut fichiers) | oui (état d'index, gardes, banc d'arrêt brutal) |
 
-### Ouverts — produit (54)
+### Ouverts — produit (55)
 
 Le correctif vit dans le produit : `extension/rag3weaver`, codeparsers, lucivy, les outils.
 Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal, avec codeparsers).
@@ -97,6 +97,7 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [La lib rag3weaver ne se bâtit pas sans `rag3db-native`](2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md) | ouvert — contourné par le crate à part du terminal ; deux `cfg` à poser, ou la lib déclarée dépendante du moteur (choix de Lucie) | bâti refusé | non | oui |
 | [Une définition C++ se lie à la déclaration de son en-tête, pas à son nom de fichier](2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md) | ouvert — la forme exacte (« declaration », 299 justes sur 300) entre sur master avec INCLUDES ; restent ses limites : le conteneur par le dernier segment, les surcharges, les déclarations derrière une macro | réponse fausse | oui | oui (code.rs) |
 | [La lecture des déclarants coûte autant que le choix des cibles, pour un lot C/C++](2026-10-26-la-lecture-des-declarants-coute-autant-que-le-choix-des-cibles.md) | ouvert — mesuré sous charge (lignes 4 075 → 2 233 par la borne, temps inchangé), à profiler à une fenêtre calme | lenteur | oui | oui (code.rs) |
+| [Le chat a une largeur fixe sur un écran large, et son pied écrase l'aide](2026-11-07-le-chat-a-une-largeur-fixe-sur-un-ecran-large.md) | ouvert — lot « le chat tient l'ordre » | gêne | oui | oui (`main.tsx`, `Chat.tsx`) |
 | [Un outil déplié dans le chat ne montre que « fait »](2026-11-07-un-outil-deplie-dans-le-chat-ne-montre-que-fait.md) | ouvert — lot « le chat tient l'ordre » | réponse fausse à l'écran | oui | oui (`Chat.tsx`, `ToolCallFinished`) |
 | [Déplier un outil dans le chat déplace le scroll](2026-11-07-deplier-un-outil-dans-le-chat-deplace-le-scroll.md) | ouvert — même lot | gêne | oui | oui (`Chat.tsx`) |
 | [Les outils changent de place dans le chat quand la réponse arrive](2026-11-07-les-outils-changent-de-place-dans-le-chat-quand-la-reponse-arrive.md) | ouvert — lot « le chat tient l'ordre » (everything declarative) | réponse fausse à l'écran | oui | oui (`Chat.tsx`) |
