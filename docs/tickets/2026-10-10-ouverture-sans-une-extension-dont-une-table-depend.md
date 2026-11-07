@@ -10,6 +10,7 @@
 - **Ouvert le** : 10 octobre 2026, seconde session cœur C++, sur relevé de rag3db-96 et de
   l'orchestration
 - **Pour** : cœur C++
+- **Famille** : moteur
 
 ## Ce que c'est
 

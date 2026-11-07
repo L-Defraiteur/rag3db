@@ -9,6 +9,7 @@
   `21a1d67c5`).
 - **Touche rag3weaver** : oui (l'état d'index « mots : en cours / à rebâtir », les gardes
   de réouverture, le banc d'arrêt brutal).
+- **Famille** : moteur
 
 ## Ce que c'est
 

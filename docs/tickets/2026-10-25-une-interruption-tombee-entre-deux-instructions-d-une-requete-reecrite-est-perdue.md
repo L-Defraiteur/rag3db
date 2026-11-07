@@ -11,6 +11,7 @@
 - **Touche rag3weaver** : oui, s'il interrompt une connexion pendant un CREATE (arrêt d'un run,
   arrêt de l'hôte).
 - **Pour** : le cœur C++.
+- **Famille** : moteur
 
 ## Ce qu'on voit
 

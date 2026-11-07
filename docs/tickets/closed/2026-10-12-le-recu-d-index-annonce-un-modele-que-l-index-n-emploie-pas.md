@@ -1,6 +1,6 @@
 # Le reçu d'un index annonce un modèle que l'index n'emploie pas
 
-- **État** : ouvert (12 octobre 2026, codeparsers)
+- **État** : corrigé (voir le ticket) (l'en-tête disait encore : ouvert (12 octobre 2026, codeparsers))
 - **Gravité** : réponse fausse. Le reçu de l'outil `index` (et l'estimation) nomme un modèle et sa
   raison, alors que les vecteurs se calculent avec un autre. Rien n'est perdu ; c'est ce que lit
   l'humain ou l'agent pour savoir quel modèle sert sa base qui est faux, et la durée prévue avec

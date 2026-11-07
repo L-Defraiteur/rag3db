@@ -4,6 +4,7 @@
 - **gravité** : blocage (vecteurs figés un quart d'heure), mémoire (+0,5 Go par minute)
 - **atteignable en service** : oui — un checkout, ou une lib partagée remplacée, pendant un index entier
 - **touche rag3weaver** : oui
+- **Famille** : produit
 
 ## Ce que c'est
 

@@ -7,6 +7,7 @@
   le voient pas. Rien n'est perdu au stockage : le scope garde son `file_path`.
 - **Atteignable en service** : oui, à chaque index.
 - **Touche rag3weaver** : oui (l'ingestion du code ; peut-être l'analyse de codeparsers).
+- **Famille** : produit
 
 ## Ce que c'est
 

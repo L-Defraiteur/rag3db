@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : oui en cas d'incident (disque plein, coupure)
 - **Ouvert le** : 4 octobre 2026, revue des amonts
 - **Pour** : cœur C++ (journal, reprise)
+- **Famille** : moteur
 
 ## Ce que c'est
 

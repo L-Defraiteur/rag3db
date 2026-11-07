@@ -8,6 +8,7 @@
   document.
 - **Atteignable en service** : oui, sur la mémoire de Lucie, par les outils MCP.
 - **Touche rag3weaver** : oui, le gabarit memory (`schemas/apport.json`, `put_apport`).
+- **Famille** : produit
 
 ## Ce qu'on voit
 

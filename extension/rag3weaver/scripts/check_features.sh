@@ -44,11 +44,15 @@ fi
 [ -n "${CHECK_FEATURES_LOGS:-}" ] && mkdir -p "$CHECK_FEATURES_LOGS"
 echec=0
 rouges=()
-# L'index des tickets, recompté sur les fichiers : ses en-têtes ne se
-# corrigent plus à la main.
+# Les tickets : chaque en-tête complet, et son état d'accord avec son dossier
+# (l'index se génère, il ne se compte plus à la main) ; puis le témoin du contrôle.
 if ! python3 "$ICI/scripts/check_tickets.py" "$ICI/../.."; then
   echec=1
   rouges+=("tickets")
+fi
+if ! python3 "$ICI/scripts/test_check_tickets.py" > /dev/null 2>&1; then
+  echec=1
+  rouges+=("test_check_tickets")
 fi
 for jeu in "${JEUX[@]}"; do
   sortie=/dev/null

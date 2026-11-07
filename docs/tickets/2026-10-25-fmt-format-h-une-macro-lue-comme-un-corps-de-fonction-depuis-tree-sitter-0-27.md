@@ -5,6 +5,7 @@
 - **Gravité** : réponse fausse (parents et noms de scopes faux dans un fichier tiers).
 - **Atteignable en service** : oui, sur toute base qui indexe `third_party/spdlog`.
 - **Touche rag3weaver** : oui, par codeparsers (l'extraction des scopes C++).
+- **Famille** : produit
 
 ## Ce que c'est
 

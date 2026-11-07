@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : le mode où le plein texte vit dans la base (voir plus bas) ; il s'en garde en demandant le point de reprise forcé pour ses paquets
 - **Ouvert le** : 5 octobre 2026, session cœur C++
 - **Pour** : cœur C++
+- **Famille** : moteur
 
 ## Ce que c'est
 

@@ -4,6 +4,7 @@
 - **Gravité** : gêne (ce qui compte pour suivre un agent n'est pas visible, ou mal placé).
 - **Atteignable en service** : oui (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`, l'état du chat de l'hôte).
+- **Famille** : produit
 
 ## Ce que c'est
 

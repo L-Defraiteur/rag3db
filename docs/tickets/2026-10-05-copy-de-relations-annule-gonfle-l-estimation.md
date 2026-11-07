@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : au plus des plans plus lents après des paquets défaits
 - **Ouvert le** : 5 octobre 2026, session cœur C++ (par lecture, en rangeant les statistiques du `COPY` de nœuds dans sa transaction)
 - **Pour** : cœur C++
+- **Famille** : moteur
 
 ## Ce que c'est
 

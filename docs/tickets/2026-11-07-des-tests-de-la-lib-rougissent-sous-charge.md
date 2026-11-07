@@ -7,6 +7,7 @@
 - **Atteignable en service** : non (les témoins) ; ce qu'ils couvrent reste vert seul.
 - **Touche rag3weaver** : oui (`src/commande.rs`, `src/daemon_host/taches/tests.rs`,
   `src/daemon_host/chat/tests.rs`, `src/daemon_host/navigateur.rs`).
+- **Famille** : produit
 
 ## Ce que c'est
 

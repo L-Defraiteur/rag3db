@@ -4,6 +4,7 @@
 - **Gravité** : blocage (un agent reste suspendu des minutes, sans réponse ni délai, jusqu'à ce qu'on l'interrompe)
 - **Atteignable en service** : oui, dès qu'un index (ou une réindexation de la montre) court sur le backend qu'un agent interroge
 - **Touche rag3weaver** : oui (verrou du catalogue, service d'embarquement, réponses des outils)
+- **Famille** : produit
 
 ## Ce que c'est
 

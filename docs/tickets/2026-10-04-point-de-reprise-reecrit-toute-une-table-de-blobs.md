@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : oui — sa table `_index_blobs` (les segments du plein texte rangés en base) ; contourné de son côté en ne poussant les blobs qu'une fois, à la fin du premier index
 - **Ouvert le** : 4 octobre 2026, session cœur C++
 - **Pour** : cœur C++ (stockage, colonnes de chaînes)
+- **Famille** : moteur
 
 ## Ce que c'est
 

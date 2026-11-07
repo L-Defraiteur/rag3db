@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (une heure enregistrée qui ne dit pas quand l'outil a été appelé).
 - **Atteignable en service** : oui, tout tour du chat ou d'un équipier qui appelle des outils.
 - **Touche rag3weaver** : oui (la boucle de l'agent, le journal des runs, le rendu du chat).
+- **Famille** : produit
 
 ## Ce que c'est
 

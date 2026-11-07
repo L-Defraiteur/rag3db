@@ -13,6 +13,7 @@
 - **Touche rag3weaver** : oui (et seulement) : le gabarit `memory` et le harnais des genres.
 - **Ouvert le** : 18 octobre 2026, session mémoire longue, à la demande de l'orchestration.
 - **Pour** : mémoire longue et proto, après le mot de Lucie sur le pont.
+- **Famille** : produit
 
 ## Ce qu'on voit (lecture du code, master 17350184e)
 

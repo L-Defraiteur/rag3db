@@ -4,6 +4,7 @@
 - **gravité** : réponse fausse (une date de transition et une révision manquent)
 - **atteignable en service** : oui, dès qu'une réaction transitionne (gabarit `memory`, `review_anchored`)
 - **touche rag3weaver** : oui (et seulement)
+- **Famille** : produit
 
 ## Ce que c'est
 

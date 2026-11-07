@@ -4,6 +4,7 @@
 - **Gravité** : gêne (une page qui tremble et vole la lecture).
 - **Atteignable en service** : oui, tout tour du chat en flux (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`).
+- **Famille** : produit
 
 ## Ce que c'est
 

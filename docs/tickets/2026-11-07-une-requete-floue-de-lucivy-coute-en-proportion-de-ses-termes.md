@@ -9,6 +9,7 @@
   requête `parse` sans syntaxe (un OU de `contains` flous par mot et par champ) ou un `contains`
   relâché d'un long texte.
 - **Touche rag3weaver** : non (le correctif vit dans lucivy ; rag3weaver le contourne).
+- **Famille** : produit
 
 ## Ce que c'est
 

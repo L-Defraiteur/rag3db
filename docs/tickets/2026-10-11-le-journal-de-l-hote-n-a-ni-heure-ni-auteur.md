@@ -4,6 +4,7 @@
 - **gravité** : diagnostic impossible (une rafale ne s'attribue pas)
 - **atteignable en service** : oui, toujours
 - **touche rag3weaver** : oui (et seulement)
+- **Famille** : produit
 
 ## Ce que c'est
 

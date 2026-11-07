@@ -10,6 +10,7 @@
   n'est plus le défaut d'une base neuve, mais toutes les bases d'avant la bascule du 10 octobre y
   sont.
 - **Touche rag3weaver** : oui (la poussée des blobs du plein texte, par paquet)
+- **Famille** : moteur
 
 > **Recentré (11 octobre, midi).** Ce qui est établi : **un gros COPY de blobs échoue à
 > l'assemblage du groupe en mémoire**, pendant le COPY et avant tout point de reprise (pile au

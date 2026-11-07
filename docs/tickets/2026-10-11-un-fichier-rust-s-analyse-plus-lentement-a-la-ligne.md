@@ -4,6 +4,7 @@
 - **Gravité** : lenteur (une réindexation à chaud d'un gros fichier Rust coûte près d'une seconde d'analyse à elle seule)
 - **Atteignable en service** : oui, à chaque édition d'un gros fichier Rust vue par la montre
 - **Touche rag3weaver** : oui, par codeparsers (analyse d'un fichier Rust)
+- **Famille** : produit
 
 ## Ce que c'est
 

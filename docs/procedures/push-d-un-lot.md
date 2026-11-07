@@ -52,6 +52,7 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   exigé, `RAG3WEAVER_EXIGER_GEMINI=1`, identifiants par le chemin de `.vault`, jamais leur contenu)
   si le juge ou l'équipier.
 - Un témoin qui se saute n'est pas vert : `SAUTÉ` compte comme un rouge dans la passe.
+- **Les tickets du lot se relisent** avant le push : `python3 extension/rag3weaver/scripts/check_tickets.py --lot origin/master` imprime ceux que le lot ouvre, ferme ou change d'état (l'index ne se compte plus à la main depuis le 7 novembre 2026 ; il se génère par `--index`).
 - **Un contrôle qui ne trouve rien à juger est ROUGE**, jamais vert par défaut : un filtre ctest qui ne trouve aucun test (« No tests were found », code 0) a fait dire VERTE une passe dont la comparaison du banc n'avait pas tourné (hotfixs, 7 novembre 2026). Le verdict se lit sur la sortie qui juge (« bench matches », « running N tests »), pas sur un code de sortie seul.
 - **Les e2e d'une passe se jouent sous le jeu large de features**
   (`rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm`) ; une

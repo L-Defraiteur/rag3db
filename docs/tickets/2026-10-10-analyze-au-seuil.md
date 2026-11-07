@@ -9,6 +9,7 @@
 - **Touche rag3weaver** : au plus des plans moins bons (il n'appelle pas `analyze`)
 - **Ouvert le** : 10 octobre 2026, seconde session cœur C++
 - **Pour** : cœur C++
+- **Famille** : moteur
 
 ## Ce que c'est
 

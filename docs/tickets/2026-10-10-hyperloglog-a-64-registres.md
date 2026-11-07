@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : non
 - **Ouvert le** : 10 octobre 2026, seconde session cœur C++
 - **Pour** : cœur C++
+- **Famille** : moteur
 
 ## Ce que c'est
 

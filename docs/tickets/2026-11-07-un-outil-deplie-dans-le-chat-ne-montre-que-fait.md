@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse à l'écran (le résultat d'un outil existe, la page ne le montre pas).
 - **Atteignable en service** : oui, tout tour du chat qui appelle un outil (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`, l'événement `ToolCallFinished`).
+- **Famille** : produit
 
 ## Ce que c'est
 

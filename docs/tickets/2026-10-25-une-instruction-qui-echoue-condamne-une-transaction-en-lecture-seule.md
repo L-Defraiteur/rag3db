@@ -5,6 +5,7 @@
 - **Atteignable en service** : oui. Chaque appel d'outil de lecture lit dans une transaction
   `READ ONLY` qu'il partage entre toutes ses requêtes (L6, `extension/rag3weaver/src/read_pool.rs`).
 - **Touche rag3weaver** : oui (toute lecture d'outil sous instantané).
+- **Famille** : moteur
 
 ## Ce que c'est
 

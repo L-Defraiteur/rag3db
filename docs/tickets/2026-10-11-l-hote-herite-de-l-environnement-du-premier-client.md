@@ -4,6 +4,7 @@
 - **gravité** : réponse fausse ou blocage selon le backend (un service d'embarquement qui manque)
 - **atteignable en service** : oui, dès qu'un hôte sert des backends qui demandent des services différents
 - **touche rag3weaver** : oui (et seulement)
+- **Famille** : produit
 
 ## Ce que c'est
 

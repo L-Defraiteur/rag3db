@@ -12,6 +12,7 @@
 - **Atteignable en service** : oui, dès qu'une recherche spatiale croise un DROP ou un re-CREATE
   de son index.
 - **Touche rag3weaver** : oui, s'il emploie l'index spatial. Le constructeur de decks, peut-être.
+- **Famille** : moteur
 
 ## Ce que c'est
 

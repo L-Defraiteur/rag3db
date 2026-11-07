@@ -5,6 +5,7 @@
 - **Gravité** : test fragile. Un rouge qui ne dit rien du produit, et qui pousse à contorsionner le code.
 - **Atteignable en service** : non (c'est le témoin).
 - **Touche rag3weaver** : oui (`tests/e2e_impact.rs`, `tests/e2e_usages.rs`).
+- **Famille** : produit
 
 ## Ce que c'est
 

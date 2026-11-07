@@ -7,6 +7,7 @@
 - **Atteignable en service** : oui, pour un backend dont une entité porte le signal `sparse` ; pas
   pour le backend de code, qui ne cherche pas en creux.
 - **Touche rag3weaver** : oui (`SparseSearchNode`, `search_sparse_via_backend`).
+- **Famille** : produit
 
 ## Ce que c'est
 

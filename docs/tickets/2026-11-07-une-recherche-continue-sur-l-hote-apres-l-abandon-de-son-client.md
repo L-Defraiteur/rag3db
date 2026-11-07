@@ -5,6 +5,7 @@
 - **Atteignable en service** : oui. Un client à délai court, le hook UserPromptSubmit à 1 à 3 s,
   sur une requête lente, le plein texte flou d'un long texte.
 - **Touche rag3weaver** : l'hôte (`daemon_host`, le service de `/call`) et l'exécution d'un graphe.
+- **Famille** : produit
 
 ## Ce que c'est
 

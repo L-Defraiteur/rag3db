@@ -9,6 +9,7 @@
 - **Atteignable en service** : oui en principe, par un COPY annulé (ou refusé) sous un tampon plein
   de pages validées non reportées.
 - **Touche rag3weaver** : oui, par ses COPY.
+- **Famille** : moteur
 
 ## Ce que c'est
 

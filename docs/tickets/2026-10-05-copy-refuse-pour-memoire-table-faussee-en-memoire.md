@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (doublons de clé, lignes introuvables par leur clé) ; plantage possible au point de reprise de fermeture.
 - **Atteignable en service** : oui, sur le chemin par défaut (hors transaction par paquet), dès que le tampon du moteur ne tient pas un COPY.
 - **Touche rag3weaver** : oui.
+- **Famille** : moteur
 
 ## Ce que c'est
 

@@ -4,6 +4,7 @@
 - **Gravité** : gêne.
 - **Atteignable en service** : oui (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`).
+- **Famille** : produit
 
 ## Ce que c'est
 
