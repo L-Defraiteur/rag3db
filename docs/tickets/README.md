@@ -37,14 +37,13 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (41)
+### Ouverts — moteur (40)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
-| [Une validation et un lecteur HNSW se figent l'un l'autre sur les deux verrous d'un groupe CSR](2026-11-07-une-validation-et-un-lecteur-hnsw-se-figent-sur-les-verrous-du-csr.md) | ouvert — en cours, cœur c++ ; inversion d'ordre index→blocs (compaction c44af8031) contre blocs→index (V2-2 ae4432960) ; VectorSearchDuringInsertTest figé une fois sur cinq | blocage | oui | par le moteur |
 | [Une relation LOCKS trouvée d'un seul côté fait échouer le drain de la montre](2026-10-25-une-relation-locks-trouvee-d-un-seul-cote-fait-echouer-le-drain-de-la-montre.md) | ouvert — pour hotfixs avec le cœur ; forme réelle : longueurs ou débuts de liste CSR faux dans LOCKS et QUERIES (729 et 876 écarts), antérieurs à la bascule ; base neuve de G à relever | lectures fausses, écriture refusée | oui (hôte de Lucie, base du dépôt de code) | oui (drain de la montre) |
 | [Une interruption tombée entre deux instructions d'une requête réécrite est perdue](2026-10-25-une-interruption-tombee-entre-deux-instructions-d-une-requete-reecrite-est-perdue.md) | ouvert — pour le cœur C++ ; l'interruption vaudrait pour la requête, pas pour l'instruction | interruption ignorée | oui (CREATE/DROP d'index réécrits, surtout pendant une attente) | oui (arrêt d'un run pendant un CREATE) |
 | [Une instruction qui échoue condamne une transaction en lecture seule](2026-10-25-une-instruction-qui-echoue-condamne-une-transaction-en-lecture-seule.md) | ouvert — pour le cœur C++ (deux formes à trancher) | blocage d'une lecture entière | oui (toute lecture d'outil sous L6) | oui |
@@ -150,10 +149,11 @@ Ses « perte ou réponse fausse » vont à la stèle du produit (arbre principal
 | [Le plein texte explose sur une requête longue](2026-11-07-le-plein-texte-explose-sur-une-requete-longue.md) | ouvert — mesuré par rag3weaver archi (197 mots : 33 s) ; la borne attend la décision de c7 | blocage | oui | oui |
 | [Une requête floue de lucivy coûte en proportion de ses termes, sans borne](2026-11-07-une-requete-floue-de-lucivy-coute-en-proportion-de-ses-termes.md) | ouvert — pour la session lucivy ; le produit borne en attendant | blocage | oui | non |
 
-### Fermés (182), dans `closed/`
+### Fermés (183), dans `closed/`
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Une validation et un lecteur HNSW se figent l'un l'autre sur les deux verrous d'un groupe CSR](closed/2026-11-07-une-validation-et-un-lecteur-hnsw-se-figent-sur-les-verrous-du-csr.md) | corrigé `e526cc4b6` (7 novembre 2026, cœur c++) : un seul ordre, blocs puis index ; la compaction lit sa liste des blocs prise avant l'index ; témoin 30/30 sans figement | blocage | oui | par le moteur |
 | [Retirer le patch lucivy à la publication](closed/2026-10-25-retirer-le-patch-lucivy-a-la-publication.md) | corrigé — lucivy 4.3.1 publiée (25 oct. 2026), prise à sa version | dette de construction | non | oui (Cargo.toml, Cargo.lock) |
 | [Un shard de lucivy sans écrivain perd les écritures en silence](closed/2026-10-19-un-shard-de-lucivy-sans-ecrivain-perd-les-ecritures-en-silence.md) | corrigé — lucivy 4.3.1 publiée (25 oct. 2026), prise à sa version | perte silencieuse | pas aujourd'hui (rag3weaver garde ses écrivains) ; dès qu'un appelant en lâche un | oui (appelant) |
 | [Le plein texte lucivy se fige dans son commit pendant une réindexation lue](closed/2026-10-19-le-plein-texte-lucivy-se-fige-dans-son-commit-pendant-une-reindexation-lue.md) | corrigé — lucivy 4.3.1 publiée (25 oct. 2026), prise à sa version | blocage (la montre ne réindexe plus, sans erreur) | oui | oui (correctif dans lucivy) |

@@ -1,6 +1,10 @@
 # Une validation et un lecteur HNSW se figent l'un l'autre sur les deux verrous d'un groupe CSR
 
-- **État** : ouvert (7 novembre 2026), en cours (cœur c++, lot ordre-des-verrous).
+- **État** : corrigé `e526cc4b6` (7 novembre 2026, lot ordre-des-verrous du cœur c++, sur master en
+  `5f0b79466`) : la compaction lit une liste des blocs prise avant l'index et ne prend plus le
+  verrou des blocs sous lui ; l'ordre des deux verrous et l'argument de sûreté sont écrits au-dessus
+  de `compactDeadRowsNoLock`. Le témoin rejoué 30 fois sans un figement (16,5 s au plus), la suite
+  transaction en 6 min 46 s.
 - **Gravité** : blocage (le processus entier se fige : la validation tient le gestionnaire de
   transactions, plus rien ne commence).
 - **Atteignable en service** : oui — une recherche vectorielle pendant qu'un écrivain valide des
@@ -37,7 +41,8 @@ Forme déterministe, non écrite : deux fils et une barrière entre la prise du 
 la demande du second (un point d'injection dans `compactDeadRowsNoLock` et dans
 `takeGenerationFor`), ce que le moteur n'a pas aujourd'hui.
 
-## Pour le fermer
+## Le correctif
 
-Un ordre unique, blocs puis index, nommé au-dessus de la compaction ; le témoin rejoué sous délai
-sans un figement ; les suites et le banc.
+Les deux chemins de la compaction (`append`, `compactHintedLists`) prennent la liste des blocs sous
+le verrou des blocs, le rendent, puis prennent `csrIndexMtx` ; `compactDeadRowsNoLock` lit cette
+liste. Une ligne d'un bloc ouvert après la prise de la liste reste vivante et garde sa note.

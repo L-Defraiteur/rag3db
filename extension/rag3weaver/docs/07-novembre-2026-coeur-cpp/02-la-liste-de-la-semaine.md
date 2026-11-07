@@ -11,6 +11,7 @@ de reprise) ; ce qui se touche se répartit entre nous. Cette page tient la list
 | ordre | ticket | état |
 |---|---|---|
 | 0 | 2026-11-07 un lecteur voit les lignes d'un COPY annulé (le bloc annulé) | corrigé `b7447937d`, sur master en `42b85dc62` |
+| 0 | 2026-11-07 une validation et un lecteur HNSW se figent sur les verrous du CSR | corrigé `e526cc4b6`, sur master en `5f0b79466` |
 | 0 | la projection sous READ ONLY (projection-lecture-seule-3) | en cours : rejeu de la suite transaction, push |
 | 0 | le retrait des générations (v22-retrait-2) | à rebaser sur le correctif et rejouer |
 | 0 | la lib unique de la bascule 43 (par l'arbre principal) | attend le retrait |
