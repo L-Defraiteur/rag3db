@@ -1,0 +1,22 @@
+# Déplier un outil dans le chat déplace le scroll
+
+- **État** : ouvert (7 novembre 2026), pour everything declarative — lot « le chat tient l'ordre ».
+- **Gravité** : gêne.
+- **Atteignable en service** : oui (IDE posé à 17 h 22).
+- **Touche rag3weaver** : oui (`ui/ide/src/views/Chat.tsx`).
+
+## Ce que c'est
+
+Lucie : « le scroll ne doit pas buguer quand j'expand un outil ».
+
+## La cause (lue dans le code)
+
+Déplier un `<details>` change la hauteur du fil ; l'effet de la vue qui recolle en bas
+(`scrollTop = scrollHeight` sur chaque changement) et le `scroll-smooth` de la section déplacent
+la page sous l'élément qu'on vient d'ouvrir.
+
+## Ce qu'il faut pour le fermer
+
+Déplier ou replier un outil ne déplace pas la page : l'élément déplié reste sous le pointeur
+(ancrage sur lui, et aucun recollage en bas qui ne vienne pas d'un nouvel événement du flux).
+Témoin navigateur : `scrollTop` identique avant et après l'expansion quand l'élément est visible.
