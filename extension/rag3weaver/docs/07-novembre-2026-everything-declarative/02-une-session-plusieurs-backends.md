@@ -51,6 +51,28 @@ parlent en branches, PR, worktrees, repos attachés ». Donc :
 
 Dans le reste de cette page, « backend » désigne la pièce du code ; l'écran dira « dépôt ».
 
+## Le modèle : session › tâches › espaces
+
+Tranché avec Lucie le 7 novembre (son exemple : un ticket Monday qui touche le serveur, la webapp
+et le bridge) ; « gardons en tête qu'une session tient potentiellement plusieurs worktrees ».
+
+- **Une tâche est l'intention** : la consigne, le plan (un seul), la boîte, le bilan, le juge.
+  Elle tient **un à n espaces de travail** : un worktree par dépôt touché, ou un dossier sans git.
+  Chaque pas du plan dit l'espace où il travaille.
+- **Une proposition par espace** (une PR par dépôt, ou une fusion) ; la tâche finit quand toutes
+  ses propositions sont fusionnées (ou rejetées).
+- **Zéro à n sous-tâches**, déléguées à des sous-sessions (les sous-équipiers de la page 01),
+  chacune avec son espace et son bilan, fondues par la tâche mère.
+- **Une session** tient zéro à n tâches. Rien ne se code « un espace par tâche » ni « une tâche par
+  session ».
+- **L'écran** : session › tâches › espaces ; les sous-sessions sous la tâche qui délègue ; la vue
+  « par dépôt » : pour chaque worktree, la tâche (et sa session) qui le tient.
+- **L'atelier** : « travaille sur ce ticket » ouvre une tâche, et l'agent y attache les dépôts qu'il
+  lui faut par les outils intégrés de la page 03.
+- **Aujourd'hui** une tâche du code (`taches.rs`) est un seul espace (un worktree, plus un second
+  `code` quand le code est dans un autre dépôt) : c'est le cas particulier « une tâche, un
+  espace », que le modèle garde.
+
 ## La forme de `/ide/etat` pour cette barre
 
 Accordée avec hooks-essai, qui habille la barre ; les champs d'aujourd'hui (`backends`) restent pour
