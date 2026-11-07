@@ -111,3 +111,65 @@ l'équipier agent de code ; recherche : la vue « mes recherches » ; 96 : le
 rangement de la mémoire de Lucie (procédures, page 08, fiches de session,
 visions, nouveautés, les fiches de la mémoire Claude Code) sur une copie puis
 sur la sienne à son mot.
+
+## La soirée du 7 (écrit vers 17 h 50, après une compaction)
+
+**Atterris sur master dans l'ordre** : lot 3 bis des hooks (archi, 120695b37) ;
+vues 6 (08d10babf), 7 (7897d2c96), 3b (a4ffea748) et la ligne de nouveautés
+(23d8d3c5a) ; lucivy 4.3.1 publiée sans patch (G, 37904f103) ; chercher sans
+dossier (hooks-essai, e2d5c9c88, nouveautés e72044b41) ; docs : ticket du
+figement (16bcd78bc), bascule-de-lib avec le contrôle des deux sens (9dc626c70),
+essai Argon (6d6ceba21), rapport de recherche (9d38951fa), tickets du plein
+texte long (13d0b18b9, 68e3bf4e6), filtre du signal creux (2d7f11067).
+
+**Deux poses chez Lucie par G** : 16 h 31 (3 bis, binaire 24faff78) et 17 h 22
+(37904f103, binaire 10878f01 : l'IDE React entier ; `rag3weaver-backend ide`
+pour entrer). Lib épinglée 04063ee06 des deux côtés, pas de bascule 43.
+
+**Un bloquant neuf au moteur** : VectorSearchDuringInsertTest se fige à la
+cinquième passe (inversion d'ordre de verrous entre la compaction CSR de
+c44af8031, index puis blocs, et takeGenerationFor de V2-2, blocs puis index).
+Lot ordre-des-verrous-2 (b16377ea0) du cœur, 30/30 rejeux sans figement, push
+vers 18 h ; le retrait, la projection, la lib unique et la bascule 43 attendent
+derrière. Leçon : une suite « lente » se joue sous délai, un délai dépassé est
+un figement.
+
+**Décisions de Lucie** : des tickets groupés par famille pour le cœur et
+hotfixs (plus un par jour) ; la session « tty » (interface terminal de l'agent
+de code : ratatui + couche déclarative, crossterm, deux modes d'emplacement,
+seul le design « Daemon Code Summoning » repris de ragforge a25f3ecf9) ; un pont
+entre ses sessions Codex et les sessions Claude (Codex CLI 0.167 installé ;
+Claude → Codex prouvé par `codex queue --thread <uuid>`, réponse écrite à
+16:53:36 ; Codex → Claude par les **canaux** de Claude Code, serveur MCP
+`rag3weaver-backend canal`, flag `--dangerously-load-development-channels
+server:rag3weaver-canal` à sa prochaine relance, pas ce soir) ; models.sparse
+autorisé dans son backend.json à condition que le creux ne s'embarque qu'au
+surlignage (prouvé : 0/0/0/1, veille comprise) ; le rappel des hooks est une
+pré-recherche à UserPromptSubmit sur des mots-clés techniques extraits sans
+modèle, budget 1 s mesuré, repli détaché, déjà-vu par session (silence complet
+si tout est connu), juge de pertinence qui ôte ; elle veut être appelée quand
+il y a quelque chose à regarder.
+
+**Le rappel lent, mesuré** : plein texte flou lucivy seul (1,9 s à 33 s selon la
+taille du prompt sur deux fiches), embarquement et dense < 140 ms ; requête
+extraite de dix mots → bm25 51–58 ms (lot hooks-3-ter (a), 096db952b, en
+passe). Deux tickets : le nœud qui survit à son client ; la requête floue dont
+le coût croît avec les termes (recherche, borne mesurée ; lucivy aussi).
+
+**Codex à l'essai** : relecture lecture seule du diff du creux (223 622 jetons
+dont 175 872 en cache, ~10 min) : un vrai défaut (garde de features du témoin
+sans burn-embedder), un point jugé (dual sans signal : voulu, commenté), une
+étape de témoin ajoutée (réindexation à 0) ; tout intégré par recherche.
+
+**luciepc** : plafond 4 lourds ; la mesure exclusive de l'arbre bloquait la
+file (retirée, M3–M5 à une fenêtre creuse) ; chaque session un target.
+
+**La file au moment d'écrire** : boîte adressée (ED, dc5bb3a78 fondu, en passe)
+→ tty-1-3 (43cc6a99f/3a9ed3307) → hooks-3-ter (a) puis pose par G → 96
+(politique call_model accordée avec ED, puis run_e2e.sh, puis pas 3) → recherche
+(creux-par-l-hote-2, filtre du creux, borne mesurée, « mes recherches ») →
+archi (pont : mail, codex_threads, canal, hooks pending/seen ; puis 3 ter (b))
+→ whois (73, 40da57af8) → codeparsers (garde de match, pointeur) → hooks-essai
+(journal de l'hôte horodaté) → ED (étanchéité, désambiguïsation des noms).
+Cœur : verrous ~18 h, puis instruction-en-echec (ed59ee988), retrait,
+projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
