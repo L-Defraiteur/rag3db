@@ -42,9 +42,11 @@ et ce qui nous manque.
 4. **Les locales et les paramètres ne sont pas des scopes.** Un serveur de langage les résout ;
    nous les écartons (`LocalScope`). Un « aller à la définition » sur une variable locale ne
    trouverait rien : il faudrait lire le fichier, pas le graphe.
-5. **La précision elle-même.** L'oracle clangd (`scripts/oracle_clangd.py`) mesure nos CONSUMES
-   C++ : sur 300 tirées au hasard, 75 % sont justes, 8 % fausses et 12 % muettes. Elles sont
-   fausses à 17 % quand elles sont résolues par le seul nom. Un serveur de langage promet 100 %.
+5. **La précision elle-même.** L'oracle (`scripts/oracle_lsp.py`, juge strict, page 11) mesure
+   nos CONSUMES C++ : sur 300 tirées au hasard, 218 sont justes (73 %), 14 fausses, 12 visent
+   l'homonyme d'une locale (des fausses aussi) et 34 sont muettes. La marque « nom » est la moins
+   sûre (31 justes sur 48). Un serveur de langage promet 100 %. *(Les premiers chiffres de cette
+   page, 75 % justes et 8 % fausses, venaient d'un juge faux : voir la page 11.)*
    Nos outils doivent donc dire la marque de chaque réponse (`resolution`, déjà rendue par
    `usages`), et non se présenter comme un compilateur.
 
@@ -57,6 +59,9 @@ exécuté dans un seul instantané. Les outils 1 (plan du fichier), « référen
 encore sous `templates/` : le plan du fichier serait le premier, et le plus petit.
 
 ## L'ordre proposé, si l'on y va
+
+*Où on en est (7 novembre 2026) : `outline` est sur master (89b5d5dbd, puis en json pour l'IDE) ;
+`implementations` et `definition_at` attendent.*
 
 1. **`outline`** (le plan d'un fichier) en Plan déclaré : rien à changer au graphe, et il sert
    déjà à un agent qui lit un fichier.
