@@ -89,6 +89,7 @@ impl DaemonHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mail::Boite;
 
     /// La boîte de l'hôte, jointe en direct (le même trait que le client HTTP).
     struct BoiteDirecte(Arc<DaemonHost>);
