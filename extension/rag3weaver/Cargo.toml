@@ -261,6 +261,9 @@ vulkan = ["burn/vulkan"]
 # et de « savoir démarrer un serveur » — ce dont la boucle étrange aura besoin
 # pour qu'un agent monte un backend (doc 08).
 daemon = ["dep:tiny_http", "dep:ureq", "dep:base64", "dep:getrandom"]
+# Le terminal de l'agent de code (docs/07-novembre-2026-tty) : un client de
+# l'hôte, sans le moteur — il tourne là où est l'hôte ou à côté de lui.
+tty = ["dep:ureq"]
 # LLM distant derrière un endpoint compatible OpenAI : OpenAI, Vertex AI
 # (.../endpoints/openapi), Gemini AI Studio (/v1beta/openai), Mistral,
 # llama.cpp --server, vLLM, Ollama, OpenRouter. Un seul client les couvre.
@@ -549,6 +552,11 @@ path = "src/bin/rag3weaver-backend.rs"
 # `code` depuis le 3 octobre 2026 : les nœuds de la surface agent de code
 # existent dans le binaire — la politique par outil les tient.
 required-features = ["daemon", "rag3db-native", "code"]
+
+[[bin]]
+name = "rag3weaver-tty"
+path = "src/bin/rag3weaver-tty.rs"
+required-features = ["tty"]
 
 [[bin]]
 name = "rag3weaver-chat"

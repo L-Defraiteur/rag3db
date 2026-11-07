@@ -252,6 +252,8 @@ mod e2e_tampon_plein;
 mod e2e_tests_par_requetes;
 #[path = "../e2e_titre_indexe.rs"]
 mod e2e_titre_indexe;
+#[path = "../e2e_tty.rs"]
+mod e2e_tty;
 #[path = "../e2e_tx_ligne_a_ligne.rs"]
 mod e2e_tx_ligne_a_ligne;
 #[path = "../e2e_tx_merge_puis_copy.rs"]
