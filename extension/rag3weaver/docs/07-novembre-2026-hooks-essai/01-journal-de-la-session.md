@@ -443,3 +443,15 @@ ligne de nouveautés de « chercher sans dossier » est sur master : e72044b41.
 qui aurait servi : la fiche « Un client MCP démarre un hôte » de la mémoire
 de Claude Code (le chemin `ensure`) et les tickets de l'hôte. Je les ai
 retrouvés par l'agent de repérage, pas par le hook.
+
+**Lot 2 vert à luciepc (a69ad5c55) :**
+
+- `check_features` 5/5 ;
+- la lib entière : 1956 passed, 0 failed, 38 ignored, dont les 2 tests
+  unitaires de `host_log` ;
+- `e2e_lectures` : 19 passed ;
+- `e2e_demon_hote` : 12 passed ;
+- `e2e_mcp_cycle_de_vie` : 11 passed, avec le témoin.
+
+Prêt, annoncé à c7. Au push, rebase en -2 et rejeu entier : du code est
+arrivé sur master depuis la base (`daemon_host/teammate.rs`).
