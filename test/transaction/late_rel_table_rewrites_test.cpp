@@ -12,6 +12,7 @@
 // source pour le sens avant, par destination pour le sens arrière) : les deux ensembles de
 // (relation, source, destination) doivent être égaux, base ouverte puis rouverte.
 
+#include <array>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -489,6 +490,93 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderRolledBackCopyDrains) {
     database.reset();
     createDBAndConn();
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
+// Le COPY de relations refusé faute de tampon, et le repli du crate depuis le 5 octobre : la base
+// rouverte sous un tampon serré, des drains par COPY dont les lots grossissent jusqu'au refus
+// (« The buffer pool is full »), puis ROLLBACK, fermeture sans point de reprise, réouverture
+// (le journal rejoué), et les mêmes arêtes reposées par MERGE en petits lots. Les chaînes longues
+// des propriétés (comme `usage` et `via` de LOCKS) remplissent le tampon.
+TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) {
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(NUM_SCOPES - 1) + ") AS i CREATE (:Scope {id: i});");
+    ok("UNWIND range(0, " + std::to_string(NUM_SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64, usage STRING, via STRING);");
+    conn.reset();
+    database.reset();
+    systemConfig->bufferPoolSize = 128ull * 1024 * 1024;
+    createDBAndConn();
+
+    const std::vector<int64_t> hot{3344, 3389, 9179, 13803, 17616};
+    std::mt19937_64 random{20261109u};
+    std::set<int64_t> sources, destinations(hot.begin(), hot.end());
+    const std::string padding(900, 'u');
+    int refusals = 0, copies = 0;
+    for (int round = 0; round < 40 && refusals < 3; round++) {
+        const auto edges = 500 << (round % 7);
+        const auto first = 20000 + static_cast<int64_t>(random() % 3000);
+        std::string ids, pairs;
+        for (auto s = first; s < first + 80; s++) {
+            ids += (ids.empty() ? "" : ",") + std::to_string(s);
+            sources.insert(s);
+        }
+        std::vector<std::array<int64_t, 2>> batch;
+        for (int e = 0; e < edges; e++) {
+            const auto s = first + static_cast<int64_t>(random() % 80);
+            const auto dst = random() % 4 == 0 ? static_cast<int64_t>(random() % NUM_SYMBOLS) :
+                                                 hot[random() % hot.size()];
+            destinations.insert(dst);
+            batch.push_back({s, dst});
+            pairs += (pairs.empty() ? "" : ",") + std::string("[") + std::to_string(s) + "," +
+                     std::to_string(dst) + "," + std::to_string(round) + "]";
+        }
+        ok("BEGIN TRANSACTION;");
+        ok("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;");
+        auto copy = conn->query("COPY R FROM (UNWIND [" + pairs + "] AS p RETURN p[1], p[2], p[3], '" +
+                                padding + "' + string(p[3]), 'appel');");
+        if (copy->isSuccess()) {
+            ok("COMMIT;");
+            copies++;
+        } else {
+            const auto message = copy->getErrorMessage();
+            ASSERT_NE(message.find("buffer pool is full"), std::string::npos) << message;
+            refusals++;
+            // Le filet du crate (99e6f0ee0) : défaire, fermer sans point de reprise, rouvrir.
+            conn->query("ROLLBACK;");
+            conn->query("CALL force_checkpoint_on_close=false;");
+            conn.reset();
+            database.reset();
+            createDBAndConn();
+            // Le repli : les mêmes arêtes par MERGE, par lots de 200, dans une transaction.
+            ok("BEGIN TRANSACTION;");
+            ok("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;");
+            for (size_t from = 0; from < batch.size(); from += 200) {
+                std::string slice;
+                for (auto i = from; i < std::min(batch.size(), from + 200); i++) {
+                    slice += (slice.empty() ? "" : ",") + std::string("[") +
+                             std::to_string(batch[i][0]) + "," + std::to_string(batch[i][1]) + "]";
+                }
+                ok("UNWIND [" + slice +
+                   "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) MERGE (a)-[r:R]->(b) "
+                   "SET r.line = " + std::to_string(round) + ", r.via = 'repli';");
+            }
+            ok("COMMIT;");
+        }
+    }
+    std::cout << "COPY validés " << copies << ", COPY refusés pour mémoire " << refusals << "\n";
+    ASSERT_GT(refusals, 0) << "aucun COPY n'a été refusé : le tampon n'est pas assez serré";
+    sources.insert(0);
+    destinations.insert(0);
+
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base ouverte";
+    ok("CHECKPOINT;");
+    conn.reset();
+    database.reset();
+    systemConfig->bufferPoolSize = 2ull * 1024 * 1024 * 1024;
+    createDBAndConn();
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte, tampon large";
 }
 
 } // namespace
