@@ -133,4 +133,51 @@ TEST_F(HalfAppliedCommit, AFailureAfterTheRowsAreAppendedLeavesTheTableAsItWas) 
     dropThrowingIndex();
 }
 
+// La même faute, avec tout ce qu'une transaction peut avoir fait avant l'étape 3 : supprimer une
+// ligne validée (étape 2, le drapeau de suppression posé dans les groupes partagés), créer puis
+// supprimer une ligne locale, mettre à jour une ligne validée ; puis un point de reprise et une
+// réouverture, pour que l'état sur disque soit celui d'avant aussi.
+TEST_F(HalfAppliedCommit, AFailureAfterDeletesAndUpdatesLeavesTheTableAsItWasAcrossAReopen) {
+    if (inMemMode) {
+        GTEST_SKIP() << "on-disk database needed";
+    }
+    addThrowingIndex();
+    throwAtCommit = true;
+    ok("BEGIN TRANSACTION;");
+    ok("MATCH (i:Item {id: 3}) DELETE i;");
+    ok("MATCH (i:Item {id: 4}) SET i.v = 400;");
+    ok("CREATE (:Item {id: 200, v: 1});");
+    ok("MATCH (i:Item {id: 200}) DELETE i;");
+    ok("UNWIND range(300, 2399) AS k CREATE (:Item {id: k, v: k});");
+    const auto commit = row("COMMIT;");
+    EXPECT_NE(commit.find("injected failure"), std::string::npos)
+        << "[check: setup] the commit did not fail at step 3 : " << commit;
+    conn->query("ROLLBACK;");
+    throwAtCommit = false;
+    auto expectBefore = [&](const std::string& when) {
+        EXPECT_EQ(row("MATCH (i:Item) RETURN count(*);"), "10\n")
+            << "[check: failed-commit-leaves-the-count] " << when;
+        EXPECT_EQ(row("MATCH (i:Item {id: 3}) RETURN i.v;"), "3\n")
+            << "[check: failed-commit-undoes-its-delete] " << when;
+        EXPECT_EQ(row("MATCH (i:Item {id: 4}) RETURN i.v;"), "4\n")
+            << "[check: failed-commit-undoes-its-update] " << when;
+        EXPECT_EQ(row("MATCH (i:Item) WHERE i.id >= 200 RETURN count(*);"), "0\n")
+            << "[check: failed-commit-leaves-no-row] " << when;
+    };
+    expectBefore("après l'échec");
+    ok("CREATE (:Item {id: 50, v: 50});");
+    ok("MATCH (i:Item {id: 6}) DELETE i;");
+    dropThrowingIndex();
+    ok("CHECKPOINT;");
+    createDBAndConn();
+    EXPECT_EQ(row("MATCH (i:Item) RETURN count(*);"), "10\n")
+        << "[check: reopened-count]";
+    EXPECT_EQ(row("MATCH (i:Item) RETURN sum(i.id);"), std::to_string(45 - 6 + 50) + "\n")
+        << "[check: reopened-rows-and-offsets-agree]";
+    EXPECT_EQ(row("MATCH (i:Item {id: 4}) RETURN i.v;"), "4\n") << "[check: reopened-update]";
+    ok("CREATE (:Item {id: 300, v: 1});");
+    EXPECT_EQ(row("MATCH (i:Item {id: 300}) RETURN i.v;"), "1\n")
+        << "[check: reopened-failed-keys-are-free]";
+}
+
 } // namespace
