@@ -2,37 +2,76 @@
 # **Les hooks de Claude Code de la mémoire longue** (page docs/07-novembre-2026-hooks-claude-code/01).
 #
 # Pose le réglage (~/.config/rag3weaver/hooks.json) et, SUR DEMANDE EXPLICITE (`--poser`), les
-# cinq entrées de hooks dans ~/.claude/settings.json : SessionStart, UserPromptSubmit, PreCompact,
-# PostCompact, Stop, chacune lançant `<binaire> hook`. Sans `--poser`, le script montre ce qu'il
-# poserait et ne touche à rien : settings.json est à Lucie.
+# cinq entrées de hooks (SessionStart, UserPromptSubmit, PreCompact, PostCompact, Stop), chacune
+# lançant `<binaire> hook`, dans UNE cible — trois niveaux, du plus étroit au plus large :
 #
-#   scripts/hooks_claude_code.sh [--binaire <chemin>] [--settings <chemin>] [--config <chemin>]
-#                                 [--manifest <backend.json>] [--poser] [--retirer] [--montrer]
+#   (défaut)              le `.claude/settings.local.json` du dossier courant : une seule session,
+#                         celle qu'on lance dans ce dossier ;
+#   --settings <fichier>  un fichier à soi, à passer à `claude --settings <fichier>` ;
+#   --global              le `~/.claude/settings.json` de Lucie — jamais sans son mot.
 #
+#   --worktree <nom>      l'essai sur du vrai travail : `git worktree add ~/git_workspaces/rag3db-<nom>
+#                         -b <nom>` depuis master, le sous-module à jour, les hooks dans son
+#                         `.claude/settings.local.json`, et la commande à lancer imprimée.
+#
+#   scripts/hooks_claude_code.sh [--binaire <chemin>] [--config <chemin>] [--manifest <backend.json>]
+#                                 [--settings <fichier> | --global | --worktree <nom>]
+#                                 [--poser] [--retirer] [--montrer]
+#
+# - Sans `--poser`, le script montre ce qu'il poserait et ne touche à rien.
 # - Idempotent : relancé, il ne change rien et le dit. Les entrées sont reconnues à leur commande
-#   (`<binaire> hook`) ; les autres hooks de settings.json ne sont pas touchés.
+#   (`<binaire> hook`) ; les autres hooks du fichier ne sont pas touchés.
 # - `--retirer` enlève les siennes et rien d'autre ; le réglage reste.
 # - Les délais par entrée : ceux du réglage (5 s / 20 s) plus cinq secondes, en secondes entières.
-# - Le fichier d'avant est gardé à côté (`settings.json.avant-hooks`) à la première pose.
+# - Le fichier d'avant est gardé à côté (`<fichier>.avant-hooks`) à la première pose.
 set -euo pipefail
 
 binaire="$HOME/.local/bin/rag3weaver-backend"
-settings="$HOME/.claude/settings.json"
+settings=""
 config="$HOME/.config/rag3weaver/hooks.json"
 manifest="$HOME/.config/rag3weaver/memoire-longue/backends/memory/backend.json"
-poser=0; retirer=0; montrer=0
+worktree=""
+global=0; poser=0; retirer=0; montrer=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --binaire) binaire="$2"; shift 2 ;;
     --settings) settings="$2"; shift 2 ;;
+    --global) global=1; shift ;;
+    --worktree) worktree="$2"; shift 2 ;;
     --config) config="$2"; shift 2 ;;
     --manifest) manifest="$2"; shift 2 ;;
     --poser) poser=1; shift ;;
     --retirer) retirer=1; shift ;;
     --montrer) montrer=1; shift ;;
-    *) echo "option inconnue : $1" >&2; sed -n 2,16p "$0" >&2; exit 2 ;;
+    *) echo "option inconnue : $1" >&2; sed -n 2,27p "$0" >&2; exit 2 ;;
   esac
 done
+if [ "$global" = 1 ] && [ -n "$settings$worktree" ]; then echo "--global s'exclut avec --settings et --worktree" >&2; exit 2; fi
+if [ -n "$settings" ] && [ -n "$worktree" ]; then echo "--settings et --worktree s'excluent" >&2; exit 2; fi
+
+# La cible.
+if [ "$global" = 1 ]; then
+  settings="$HOME/.claude/settings.json"; niveau="global (le settings.json de Lucie)"
+elif [ -n "$worktree" ]; then
+  dossier="${RAG3WEAVER_WORKTREES:-$HOME/git_workspaces}/rag3db-$worktree"
+  depot="${RAG3WEAVER_DEPOT:-$HOME/git_workspaces/rag3db}"
+  if [ "$poser" = 1 ] && [ "$retirer" = 0 ]; then
+    if [ -d "$dossier" ]; then
+      echo "worktree déjà là : $dossier (inchangé)"
+    else
+      git -C "$depot" fetch -q origin master
+      git -C "$depot" worktree add -q "$dossier" -b "$worktree" origin/master
+      git -C "$dossier" submodule update -q --init extension/rag3weaver/codeparsers 2>/dev/null || true
+      echo "worktree créé : $dossier (branche $worktree, depuis origin/master)"
+    fi
+  fi
+  settings="$dossier/.claude/settings.local.json"; niveau="le worktree $dossier"
+elif [ -n "$settings" ]; then
+  niveau="le fichier $settings (à passer à : claude --settings $settings)"
+else
+  settings="$PWD/.claude/settings.local.json"; niveau="le dossier courant ($PWD)"
+fi
+echo "cible : $niveau"
 
 commande="$binaire hook --config $config"
 
@@ -60,10 +99,10 @@ EOF
   fi
 fi
 
-# Les entrées, fusionnées dans settings.json par python (le JSON de settings est à préserver tel quel).
-python3 - "$settings" "$commande" "$poser" "$retirer" "$montrer" <<'EOF'
+# Les entrées, fusionnées dans la cible par python (le JSON du fichier est à préserver tel quel).
+python3 - "$settings" "$commande" "$poser" "$retirer" <<'EOF'
 import json, os, sys, shutil
-settings, commande, poser, retirer, montrer = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4] == "1", sys.argv[5] == "1"
+settings, commande, poser, retirer = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4] == "1"
 entrees = {
   "SessionStart":     ("startup|resume|clear|compact", 25),
   "UserPromptSubmit": (None, 10),
@@ -91,11 +130,11 @@ for ev, (matcher, delai) in entrees.items():
 if not hooks: del d["hooks"]
 apres = json.dumps(d, sort_keys=True)
 if apres == avant:
-    print("settings.json : rien à changer (%s)" % settings); sys.exit(0)
+    print("rien à changer dans %s" % settings); sys.exit(0)
 if poser:
     garde = settings + ".avant-hooks"
     if os.path.exists(settings) and not os.path.exists(garde):
-        shutil.copy2(settings, garde); print("l'ancien settings.json gardé : " + garde)
+        shutil.copy2(settings, garde); print("l'ancien fichier gardé : " + garde)
     os.makedirs(os.path.dirname(settings) or ".", exist_ok=True)
     tmp = settings + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -103,6 +142,13 @@ if poser:
     os.replace(tmp, settings)
     print(("hooks retirés de " if retirer else "cinq hooks posés dans ") + settings)
 else:
-    print("settings.json changerait ainsi (relancer avec --poser pour le faire) :")
+    print("le fichier changerait ainsi (relancer avec --poser pour le faire) :")
     print(json.dumps(d.get("hooks", {}), indent=2, ensure_ascii=False))
 EOF
+
+if [ -n "$worktree" ] && [ "$poser" = 1 ] && [ "$retirer" = 0 ]; then
+  echo
+  echo "l'essai : cd $dossier && claude"
+  echo "  (le bloc [mémoire] apparaît au premier tour ; le journal : ~/.local/state/rag3weaver/hooks.log)"
+  echo "retirer : $0 --worktree $worktree --retirer --poser"
+fi

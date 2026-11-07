@@ -219,6 +219,8 @@ pub mod daemon_client;
 // l'hôte, se tait sans lui (docs/07-novembre-2026-hooks-claude-code/01).
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod claude_code_hook;
+// L'adaptateur de la transcription `.jsonl` de Claude Code : petit, tolérant.
+pub mod claude_code_transcript;
 /// `code-tree` : un arbre de code indexé par instantané, qui suit ses éditions.
 pub mod code_tree;
 /// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le

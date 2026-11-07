@@ -30,11 +30,14 @@ injecté dans une session : ce lot prouve la mécanique, les blocs viennent au l
 - **Le journal** (`~/.local/state/rag3weaver/hooks.log`) : une ligne datée par événement —
   « hôte joint, backend « … », source compact » ou « silence — <raison> ».
 - **`scripts/hooks_claude_code.sh`** : pose le réglage et, **sur `--poser` seulement**, les
-  cinq entrées dans `~/.claude/settings.json` (`matcher` sur `SessionStart` et `PreCompact` /
-  `PostCompact`, `timeout` = délai propre + 5 s) ; sans `--poser`, il montre et ne touche à
-  rien. Idempotent (relancé : « rien à changer ») ; `--retirer` enlève les siennes et rien
-  d'autre ; l'ancien fichier gardé en `settings.json.avant-hooks` à la première pose.
-  **Rien n'est posé chez Lucie** : c'est son fichier, au mot de c7 et au sien.
+  cinq entrées de hooks (`matcher` sur `SessionStart` et `PreCompact` / `PostCompact`,
+  `timeout` = délai propre + 5 s) dans **une cible** — par défaut le `.claude/settings.local.json`
+  du dossier courant (une seule session), `--settings <fichier>` pour un fichier à passer à
+  `claude --settings`, `--global` pour le `~/.claude/settings.json` de Lucie, jamais sans son mot ;
+  `--worktree <nom>` ouvre un vrai worktree de rag3db et y pose les hooks (page 03 §1). Sans
+  `--poser`, il montre et ne touche à rien. Idempotent (relancé : « rien à changer ») ;
+  `--retirer` enlève les siennes et rien d'autre ; l'ancien fichier gardé en `<fichier>.avant-hooks`
+  à la première pose. **Rien n'est posé chez Lucie** par ce lot.
 
 ## Les témoins
 
