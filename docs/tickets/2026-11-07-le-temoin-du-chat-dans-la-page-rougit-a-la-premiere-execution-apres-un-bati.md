@@ -27,6 +27,12 @@ la première exécution après un bâti.
 | master cb5e103fb + vue 5 (be865293a) | 7 | 2 | la passe entière (étape navigateur, 11/12), puis la première exécution isolée après le bâti |
 | master cb5e103fb seul | 5 | 0 | isolé, dont une première exécution après bâti |
 
+Ici même (le portable, lib 04063ee06 épinglée, 7 novembre 2026 à 15 h 55, session 73) : master
+554f3055e + whois (gabarit memory seul, aucun code du chat ni de la page), la passe entière rougit
+à l'étape navigateur (11/12) sur **un autre pas**, celui du tour lent (« Arrêter » et ses jetons
+jamais vus en 120 s, le pas du ticket du 25 octobre `2026-10-25-le-temoin-du-chat-rougit-encore-sur-le-tour-lent`),
+à la première exécution après le bâti ; rejoué seul aussitôt : vert en 1,34 s.
+
 La vue 5 ne touche ni le chat ni le flux (des routes dans `main.tsx`, « taches » dans
 `VUES_PORTEES`) et le bundle commité est celui du code (`build.mjs --check` vert) : ce rouge n'est
 pas une cause de la vue 5, il est celui du témoin — et sans doute aussi celui de master, qui ne
