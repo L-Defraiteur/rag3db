@@ -678,7 +678,9 @@
     }
   },
   "scripts": {
-    "cited_by_params": "scripts/cited_by_params.rhai"
+    "cited_by_params": "scripts/cited_by_params.rhai",
+    "whois_params": "scripts/whois_params.rhai",
+    "whois": "scripts/whois.rhai"
   },
   "tools": {
     "put_memory": {
@@ -889,6 +891,9 @@
           "port": "total"
         }
       ]
+    },
+    "whois": {
+      "graph": "graphs/whois.mmd"
     }
   },
   "reactions": {
