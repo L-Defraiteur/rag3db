@@ -409,6 +409,12 @@ pub struct ReactionAttachment {
     /// appelable — mais elle se lit au journal et au reçu d'ouverture.
     #[serde(default)]
     pub description: Option<String>,
+    /// **Le rôle de la réaction**, comme celui d'un outil (`archiviste`, …) :
+    /// ses runs le disent dans `RunStarted.target.role` — l'archive et la
+    /// compaction tournent souvent par une réaction, et la barre du chat les
+    /// range par rôle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 /// Les nœuds qu'une réaction peut traverser, et le refus qui dit quoi faire.
@@ -3121,16 +3127,13 @@ impl Backend {
         let policy = NodeTypePolicy::only(crate::backend_code::reaction_nodes());
         let mut mounted = Vec::new();
         for (name, graphe) in prepared.reaction_graphs() {
-            let bindings = prepared
-                .manifest
-                .reactions
-                .get(name)
-                .map(|a| a.bindings.clone())
-                .unwrap_or_default();
+            let attachement = prepared.manifest.reactions.get(name);
+            let bindings = attachement.map(|a| a.bindings.clone()).unwrap_or_default();
             reactor = reactor
                 .watch_bound(graphe.clone(), Value::Object(bindings), policy.clone())
                 .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?
-                .named(GraphTarget::Reaction(name.clone()));
+                .named(GraphTarget::Reaction(name.clone()))
+                .with_role(attachement.and_then(|a| a.role.clone()));
             mounted.push(name.clone());
         }
         Ok((reactor.spawn(), mounted))
