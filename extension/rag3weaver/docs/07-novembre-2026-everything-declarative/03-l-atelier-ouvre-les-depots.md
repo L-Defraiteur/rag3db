@@ -38,6 +38,9 @@ moment ».
 - **L'indexation est asynchrone** : le premier index part en fond, sa progression s'affiche sous le
   dépôt dans la barre « Dépôts » (la ligne d'état de l'index, déjà rendue par la recherche) ;
   l'étanchéité (page 01, lot 1) fait travailler l'agent sur les fichiers pendant ce temps.
+- **Ce que la barre montre** : attacher un dépôt fait apparaître **un enfant sous la session**,
+  « chargé », son rag « en cours » avec sa progression, puis « indexé » ; détacher le renvoie en
+  « disponibles » (page 02, § vocabulaire et la forme de `/ide/etat`).
 - **Où vit la conversation** : sous le dépôt ou le worktree qu'elle tient ; une conversation
   d'atelier qui ouvre un worktree s'y rattache (elle garde son fil).
 - Un worktree d'un dépôt déjà indexé peut naître d'un **instantané** de la base du dépôt (le

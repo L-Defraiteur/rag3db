@@ -19,7 +19,18 @@ parlent en branches, PR, worktrees, repos attachés ». Donc :
   git (le constructeur de decks, un carnet…), plus **la mémoire**. « Backend » couvre les trois
   dans le manifeste et le code ; l'hôte les distingue par `kind: code | memory | project` dans
   `/ide/etat` (posé par hooks-essai au lot B2a), et l'écran nomme chacun par son mot.
-- **La barre de gauche de l'IDE** liste les **dépôts attachés**, puis sous chacun ses worktrees et
+- **La barre de gauche : la session d'abord, ses dépôts dessous** (Lucie : « on doit quand même
+  naviguer par "agent" ou "session", mais dans la barre on doit voir en hiérarchie de lui les dépôts
+  qui sont chargés ou pas pour lui, et en accès rag ou pas »). Premier niveau : **la session**
+  (un agent : son nom, son modèle, sa jauge de contexte, ses fiches écrites). Sous elle, **ses
+  dépôts attachés**, chacun avec deux états : **chargé / non chargé** (son backend ouvert dans
+  l'hôte ou non) et **rag : indexé / en cours / absent** (l'index de son worktree) ; ses worktrees
+  et branches sous chaque dépôt. **La mémoire** est un enfant de la session, avec son accès
+  (chargée, et lue ou non par la session). Les dépôts attachés à aucune session sont en bas, en
+  **« disponibles »**.
+- (Avant le manifeste de session, une session = une conversation : ses dépôts sont celui de sa
+  conversation et ses tâches, sa mémoire celle que son manifeste déclare.)
+- **La liste des dépôts sous une session** : les **dépôts attachés**, puis sous chacun ses worktrees et
   leurs branches (et ses PR ouvertes quand le dépôt a une forge) ; une conversation est rangée sous
   le dépôt ou le worktree qu'elle tient. Plus de « backends ouverts ».
 - **Le manifeste de session** se dit « dépôts attachés » (`repos`), chacun avec ses worktrees ; le
@@ -32,6 +43,33 @@ parlent en branches, PR, worktrees, repos attachés ». Donc :
   hooks-essai) dit « dépôts » et liste les dépôts attachés ; le terminal de tty de même.
 
 Dans le reste de cette page, « backend » désigne la pièce du code ; l'écran dira « dépôt ».
+
+## La forme de `/ide/etat` pour cette barre
+
+Accordée avec hooks-essai, qui habille la barre ; les champs d'aujourd'hui (`backends`) restent pour
+les vues qui les lisent.
+
+```json
+{
+  "sessions": [{
+    "id": "<conversation>", "agent": { "name": "chat:<id>", "model": "gemini-3.8-flash" },
+    "context": { "used": 47687, "max": 1048576, "source": "run", "at": 1794078848478 },
+    "memory_writes": 3,
+    "repos": [{
+      "repo": "rag3db", "branch": "agent/doc", "worktree": "<chemin>", "kind": "code",
+      "backend": "<id>", "loaded": true,
+      "rag": { "state": "indexed" | "indexing" | "absent", "progress": { "done": 812, "total": 1200 } }
+    }],
+    "memory": { "backend": "<id>", "loaded": true, "read_by_session": false }
+  }],
+  "available": [{ "repo": "lucivy", "branch": "main", "backend": "<id>", "loaded": false, "rag": { "state": "indexed" } }]
+}
+```
+
+`loaded` : le slot du backend est ouvert dans l'hôte (lu sans attendre, comme le reste de l'état).
+`rag.state` : `indexing` quand une indexation tourne (le suivi d'embarquement du catalogue),
+`absent` sans base ou sans index, sinon `indexed`. `read_by_session` deviendra vrai le jour où la
+session lit la mémoire (le premier pas de la page 02, § 3).
 
 ## 1. Pourquoi aujourd'hui un chat = un backend
 
