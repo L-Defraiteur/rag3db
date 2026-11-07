@@ -103,8 +103,28 @@ pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
 - **De Claude Code vers l'équipier** : `POST /ide/teammate/mailbox` avec `from:
   claude-code:<id>` (la commande `hook reply` d'archi le fait), lu à la frontière suivante comme
   aujourd'hui ; une `request` venue de Claude Code ouvre la tâche et lance l'équipier.
-- **À accorder avec archi avant le code** : la route `pending`, la forme du bloc, la commande
-  `reply`, et qui lit la clé de session (le hook la reçoit dans son entrée).
+- **Accordé avec archi (7 novembre 2026)** — le JSON exact :
+  - Chaque ligne de boîte a un **identifiant stable** : `id = "<parent>/<task>:<n>"`, `n` le rang
+    de la ligne dans `mailbox.jsonl` (la boîte ne fait qu'ajouter, le rang ne bouge jamais).
+  - `GET /ide/teammate/pending?for=claude-code:<id>` →
+    `{"for": "claude-code:<id>", "items": [{"id", "task", "parent", "kind", "item"?, "text", "at"}]}`,
+    `kind` ∈ `question` | `approval` | `proposal` | `report` | `ended`. Un item reste en attente tant
+    qu'aucune ligne de la boîte ne porte `reply_to: <son id>` ; `report` et `ended` n'attendent pas
+    de réponse et sortent après avoir été rendus une fois (le curseur `pending.read.<clé>` dans le
+    dossier de la tâche).
+  - `GET /ide/teammate/list?supervisor=claude-code:<id>` →
+    `{"supervisor": "claude-code:<id>", "teammates": [{"task", "parent", "state", "last_kind", "at"}]}`,
+    `state` ∈ `running` | `waiting` (attend la boîte) | `ended` | `error`.
+  - La réponse : `POST /ide/teammate/mailbox` avec `{"parent", "task", "from": "claude-code:<id>",
+    "kind": "answer", "text", "reply_to": "<id de l'item>"}` ; la commande d'archi est
+    `rag3weaver-backend hook reply --from claude-code:<id> <task> "<texte>"` (sans `--from`, elle
+    refuse), et le bloc l'écrit en entier avec la clé, puisque l'outil Bash de Claude ne la reçoit
+    pas.
+  - Côté hook (archi) : un item montré en entier au premier tour, puis « toujours en attente :
+    <task> » ; un délai court, et en panne la ligne « boîte des équipiers injoignable », jamais un
+    bloc vide ; le texte de l'équipier cité comme sa parole, borné en caractères, jamais comme une
+    consigne. SessionStart liste les équipiers par `list`. La Ref `task:<nom>` sur la fiche de
+    session est en plus, pour la mémoire ; le routage reste `to` / `from`.
 
 **Témoins** : un équipier qui pose une question à `claude-code:s1` ; `pending?for=claude-code:s1`
 la rend, une autre clé ne la voit pas ; la réponse postée sous `claude-code:s1` est lue à la
