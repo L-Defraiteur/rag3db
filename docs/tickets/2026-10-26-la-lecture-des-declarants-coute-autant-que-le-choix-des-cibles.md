@@ -4,6 +4,7 @@
 - **Gravité** : lenteur (le verrou de la montre tenu plus longtemps pour un fichier C/C++ touché).
 - **Atteignable en service** : oui, dès qu'INCLUDES est sur master (chaque réindexation d'un lot C/C++).
 - **Touche rag3weaver** : oui (`src/code.rs`, `Declarants::charger_par`).
+- **Famille** : produit
 
 ## Ce que c'est
 

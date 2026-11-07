@@ -4,6 +4,7 @@
 - **Gravité** : coût (une instruction de quelques milliers de lignes épuise le tampon ou dure des minutes)
 - **Atteignable en service** : en principe oui, par toute écriture `UNWIND … MATCH (a {clé: x}), (b {clé: y}) CREATE (a)-[]->(b)` ; rag3weaver n'écrit pas ses relations ainsi (à vérifier par codeparsers)
 - **Touche rag3weaver** : non connu
+- **Famille** : moteur
 
 ## Ce que c'est
 

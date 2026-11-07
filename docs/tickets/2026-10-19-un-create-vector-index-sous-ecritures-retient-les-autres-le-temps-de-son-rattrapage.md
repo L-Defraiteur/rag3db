@@ -11,6 +11,7 @@
 - **Atteignable en service** : oui, dès qu'un index vectoriel se bâtit sous des écritures
   soutenues. C'est le cas du produit, qui reconstruit ses index pendant que la montre écrit.
 - **Touche rag3weaver** : oui.
+- **Famille** : moteur
 
 ## Ce que c'est
 

@@ -8,6 +8,7 @@
 - **Ouvert le** : 18 octobre 2026, everything declarative, en départageant le ticket fermé
   `closed/2026-10-18-la-reprise-apres-arret-rougit-sous-charge.md`
 - **Pour** : à attribuer
+- **Famille** : produit
 
 ## Ce qu'on voit
 

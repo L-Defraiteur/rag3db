@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (une arête devinée se montre comme une arête sûre)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (rendez-vous `code.rs`, `usages`, `impact`, liens)
+- **Famille** : produit
 
 ## Ce que c'est
 

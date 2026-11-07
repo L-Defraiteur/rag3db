@@ -4,6 +4,7 @@
 - **Gravité** : friction et coût (l'index prend tout le dépôt : temps, tampon, bruit dans les réponses)
 - **Atteignable en service** : oui, pour tout dépôt dont on ne veut qu'une partie
 - **Touche rag3weaver** : oui (`workspace` du manifeste, source de fichiers)
+- **Famille** : produit
 
 ## Ce que c'est
 

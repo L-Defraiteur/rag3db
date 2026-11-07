@@ -1,6 +1,6 @@
 # La montre réintègre ce que l'index entier écarte
 
-- **État** : ouvert (12 octobre 2026, codeparsers ; relevé par la session mémoire)
+- **État** : corrigé (une porte unique, `code::admission`) (l'en-tête disait encore : ouvert (12 octobre 2026, codeparsers ; relevé par la session mémoire))
 - **Gravité** : réponse fausse et travail perdu. Du code généré entre dans l'index que l'index
   entier en avait écarté ; des fichiers de données et des binaires sont relus, comptés
   « réindexés », et le redeviennent à chaque montage

@@ -7,6 +7,7 @@
 - **Gravité** : blocage (la reprise refuse tant qu'on ne dit pas `takeover`).
 - **Atteignable en service** : oui, après tout arrêt brutal d'une synchronisation.
 - **Touche rag3weaver** : oui (`code_sync::sync_source`, sessions de snapshot).
+- **Famille** : produit
 
 ## Ce que c'est
 

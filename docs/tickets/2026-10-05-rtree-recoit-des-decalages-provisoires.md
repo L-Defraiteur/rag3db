@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : non (il ne se sert pas de l'extension geo)
 - **Ouvert le** : 5 octobre 2026, session cœur C++ (carte des détenteurs de décalages provisoires)
 - **Pour** : cœur C++, quand l'extension geo servira
+- **Famille** : moteur
 
 ## Ce que c'est
 

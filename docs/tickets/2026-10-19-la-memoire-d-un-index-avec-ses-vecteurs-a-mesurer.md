@@ -7,6 +7,7 @@
 - **Atteignable en service** : oui, après tout index qui paie sa dette de vecteurs (le rattrapage du
   12 octobre, qui avait laissé 10 Go dans l'échange, en était un).
 - **Touche rag3weaver** : oui (l'hôte du démon).
+- **Famille** : moteur
 
 ## Ce qui manque
 

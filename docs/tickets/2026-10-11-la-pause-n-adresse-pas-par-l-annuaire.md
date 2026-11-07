@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (le pair n'est pas prévenu)
 - **Atteignable en service** : oui, dès qu'un agent nommé autrement que son run se met en pause envers un pair
 - **Touche rag3weaver** : oui (`src/agent.rs`, `handle_pause`)
+- **Famille** : produit
 
 ## Ce que c'est
 

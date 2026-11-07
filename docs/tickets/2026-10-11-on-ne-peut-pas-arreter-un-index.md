@@ -4,6 +4,7 @@
 - **Gravité** : blocage (un index qui dérape ne s'arrête qu'en arrêtant l'hôte entier, et avec lui les autres backends, dont la mémoire longue)
 - **Atteignable en service** : oui, dès qu'un index est lancé par l'outil `index` sur un hôte partagé
 - **Touche rag3weaver** : oui (gabarit `code`, `daemon_host.rs`, `dataflow/index_nodes.rs`)
+- **Famille** : produit
 
 ## Ce que c'est
 

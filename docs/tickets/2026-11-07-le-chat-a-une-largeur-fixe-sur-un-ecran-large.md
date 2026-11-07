@@ -4,6 +4,7 @@
 - **Gravité** : gêne (l'espace perdu, l'aide illisible).
 - **Atteignable en service** : oui, tout écran plus large que le cadre (IDE posé à 17 h 22).
 - **Touche rag3weaver** : oui (`ui/ide/src/main.tsx`, `ui/ide/src/views/Chat.tsx`).
+- **Famille** : produit
 
 ## Ce que c'est
 

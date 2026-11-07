@@ -4,6 +4,7 @@
 - **gravité** : perte d'information ; croissance sans borne d'un vecteur en mémoire
 - **atteignable en service** : oui, dès qu'un manifeste déclare une réaction qui écrit
 - **touche rag3weaver** : oui, et seulement rag3weaver
+- **Famille** : produit
 
 ## Ce que c'est
 

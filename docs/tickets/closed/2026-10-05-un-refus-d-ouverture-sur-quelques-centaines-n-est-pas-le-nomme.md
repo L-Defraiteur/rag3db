@@ -3,6 +3,9 @@
 - **État** : corrigé `f5de0a3f0` — doublon, voir le ticket
   [lecteur affamé par les points de reprise](2026-10-04-lecteur-affame-par-les-points-de-reprise.md),
   section « Deux messages pour le même croisement » (f2fdc8bab).
+- **Gravité** : réponse fausse
+- **Atteignable en service** : oui
+- **Touche rag3weaver** : oui (Rag3dbConnection::read_only)
 
 Le refus non nommé était « Couldn't replay shadow pages under read-only
 mode » : le même croisement d'un point de reprise, sous un second message du

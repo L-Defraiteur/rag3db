@@ -9,6 +9,7 @@
   le soit.
 - **Touche rag3weaver** : oui (`src/daemon_host/navigateur.rs`, l'IDE React de 81fdc2f40).
 - **Pour** : everything declarative (l'IDE React).
+- **Famille** : produit
 
 ## Ce qu'on voit
 

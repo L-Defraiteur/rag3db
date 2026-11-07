@@ -9,6 +9,7 @@
 - **Touche rag3weaver** : non (mais ses annexes de docs sont lues par le contrôle, voir 2).
 - **Ouvert le** : 25 octobre 2026, session cœur C++, à la demande de l'orchestration.
 - **Pour** : cœur C++.
+- **Famille** : moteur
 
 ## 1. « sanity checks » : `scripts/check-no-std-assert.sh extension`
 

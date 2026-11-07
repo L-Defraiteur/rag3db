@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (des appels manquent : `usages` d'un constructeur `new` rend trop peu)
 - **Atteignable en service** : oui, sur tout dépôt Rust (et C++ pour `new` comme nom de fonction)
 - **Touche rag3weaver** : oui, par codeparsers (les références des scopes)
+- **Famille** : produit
 
 ## Ce que c'est
 

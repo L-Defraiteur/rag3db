@@ -9,6 +9,7 @@
 - **Ouvert le** : 12 octobre 2026, session du banc (le témoin de la pente d'insertion, lecture du
   cœur C++)
 - **Pour** : hotfixs (l'extension vector)
+- **Famille** : moteur
 
 ## Ce que c'est
 

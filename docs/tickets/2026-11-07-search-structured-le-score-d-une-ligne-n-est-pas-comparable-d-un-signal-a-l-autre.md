@@ -5,6 +5,7 @@
 - **Atteignable en service** : oui. Tout appelant de `recall_fiches` ou `recall_apports` qui lit
   `chunk.score`, comme le hook UserPromptSubmit jusqu'au 3 ter (b).
 - **Touche rag3weaver** : oui, `templates/tools/search_structured.mmd` et le rendu de ses lignes.
+- **Famille** : produit
 
 ## Ce que c'est
 

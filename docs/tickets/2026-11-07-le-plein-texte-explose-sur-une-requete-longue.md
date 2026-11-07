@@ -8,6 +8,7 @@
 - **Atteignable en service** : oui, par tout appelant qui envoie une longue requête (un prompt
   entier, ce que faisait le hook).
 - **Touche rag3weaver** : oui (`BM25SearchNode`, `build_bm25_query`, `src/search.rs`).
+- **Famille** : produit
 
 ## Ce qu'on voit
 

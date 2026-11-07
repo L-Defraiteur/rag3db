@@ -7,6 +7,7 @@
 - **Atteignable en service** : oui (un worktree effacé après un lot, le manifeste qui le nommait
   encore chargé par le démon).
 - **Touche rag3weaver** : oui (démon, outils MCP du code).
+- **Famille** : produit
 
 ## Ce que c'est
 

@@ -7,6 +7,7 @@
 - **Touche rag3weaver** : non (il n'écrit jamais `IGNORE_ERRORS`)
 - **Ouvert le** : 10 octobre 2026, seconde session cœur C++
 - **Pour** : cœur C++
+- **Famille** : moteur
 
 ## Ce que c'est
 

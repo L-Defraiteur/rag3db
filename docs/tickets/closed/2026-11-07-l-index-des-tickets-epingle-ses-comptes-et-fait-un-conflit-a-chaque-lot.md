@@ -1,6 +1,12 @@
 # L'index des tickets épingle ses comptes, et chaque lot qui ouvre ou ferme un ticket fait un conflit
 
-- **État** : ouvert, le 7 novembre 2026, à la demande de l'orchestration (hotfixs). Aucun correctif écrit.
+- **État** : corrigé dans ce lot (7 novembre 2026, hotfixs) : la garde est dans l'en-tête de chaque
+  ticket (`check_tickets.py`), l'index se génère par `--index` dans `docs/tickets/INDEX.md`, ignoré
+  par git, et `--lot <base>` donne la relecture d'un lot. Témoin :
+  `extension/rag3weaver/scripts/test_check_tickets.py` (deux lots qui ouvrent chacun un ticket se
+  rebasent sans conflit). Migration : 103 en-têtes complétés depuis leur ligne d'index, dont trois
+  fermés dont l'État disait encore « ouvert » ; comptes générés à parité (40 moteur, 58 produit,
+  184 fermés).
 - **Gravité** : coût mesuré, pas de réponse fausse : le 7 novembre au soir, quatre lots sur cinq (hotfixs,
   G, tty, archi) se sont arrêtés sur un conflit de `docs/tickets/README.md`, chacun suivi d'un rebase et
   d'un rejeu.

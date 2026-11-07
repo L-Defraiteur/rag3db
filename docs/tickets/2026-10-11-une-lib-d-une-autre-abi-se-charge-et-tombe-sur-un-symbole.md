@@ -4,6 +4,7 @@
 - **Gravité** : blocage (un hôte installé ne démarre plus, avec un message qui ne dit pas pourquoi)
 - **Atteignable en service** : oui, à chaque rebâti de la lib partagée qui change une signature exportée, pour tout binaire lié à la lib d'avant
 - **Touche rag3weaver** : oui (les binaires installés : `rag3weaver-backend`, les hôtes)
+- **Famille** : moteur
 
 ## Ce que c'est
 

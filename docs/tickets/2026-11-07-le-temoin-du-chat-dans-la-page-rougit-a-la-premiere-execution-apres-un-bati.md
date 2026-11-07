@@ -9,6 +9,7 @@
   témoin, non.
 - **Touche rag3weaver** : oui (`src/daemon_host/chat/tests.rs`, `src/daemon_host/navigateur.rs`,
   `ui/ide/src/views/Chat.tsx`).
+- **Famille** : produit
 
 ## Ce que c'est
 

@@ -5,6 +5,7 @@
 - **Gravité** : réponse fausse (une arête vers le mauvais homonyme, ou une abstention à tort).
 - **Atteignable en service** : oui, dès que la visibilité par les #include est sur master.
 - **Touche rag3weaver** : oui (`src/code.rs`, la résolution) et codeparsers (les déclarations).
+- **Famille** : produit
 
 ## Ce que c'est
 

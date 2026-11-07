@@ -12,6 +12,7 @@
   autre client. Le même état existe aussi, en petit, pour des lignes de queue à vecteur NULL.
 - **Touche rag3weaver** : oui. C'est lui qui bâtit et reconstruit les index
   (`ajuster_l_index_pour_le_retard`, `rebuild_vector_index`).
+- **Famille** : moteur
 
 ## Ce que c'est
 

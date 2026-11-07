@@ -4,6 +4,7 @@
 - **Gravité :** bâti refusé (aucune réponse fausse).
 - **Atteignable en service :** non. Tout bâti réel pose `rag3db-native`.
 - **Touche rag3weaver :** oui.
+- **Famille** : produit
 
 ## Ce que c'est
 

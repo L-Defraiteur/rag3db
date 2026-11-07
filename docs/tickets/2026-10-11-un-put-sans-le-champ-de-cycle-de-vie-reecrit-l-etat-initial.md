@@ -6,6 +6,7 @@
   d'état **facultatif**. Les trois gabarits livrés le rendent requis, donc aucun
   d'eux n'est touché aujourd'hui.
 - **touche rag3weaver** : oui, et seulement rag3weaver
+- **Famille** : produit
 
 ## Ce que c'est
 

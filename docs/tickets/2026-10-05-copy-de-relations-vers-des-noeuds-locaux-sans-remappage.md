@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : non aujourd'hui ; oui quand les écritures parallèles seront allumées (un lot de nœuds par `MERGE` puis des relations par `COPY` dans la même transaction est sa forme courante)
 - **Ouvert le** : 5 octobre 2026, session cœur C++ (lecture, en préparant le versement des lignes locales avant un `COPY`)
 - **Pour** : cœur C++ (marche A3′)
+- **Famille** : moteur
 
 ## Ce que c'est
 

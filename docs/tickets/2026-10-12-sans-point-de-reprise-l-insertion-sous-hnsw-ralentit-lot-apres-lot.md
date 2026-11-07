@@ -25,6 +25,7 @@
 - **Ouvert le** : 12 octobre 2026, session du banc (après le lot de l'insertion du cœur C++,
   3cca0ae1e)
 - **Pour** : le cœur C++ (la compaction de la liste d'un nœud au commit)
+- **Famille** : moteur
 
 ## Ce que c'est
 

@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (une arête « nom » vers une méthode homonyme)
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : oui (usages : « par le nom » ; Liens et impact les taisent)
+- **Famille** : produit
 
 ## Ce que c'est
 

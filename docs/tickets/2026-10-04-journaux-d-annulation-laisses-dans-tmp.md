@@ -4,6 +4,7 @@
 - **Gravité** : perte (de mémoire vive : une fuite qui grossit à chaque indexation)
 - **Atteignable en service** : oui — toute ingestion en mode de points de reprise `Full` (le défaut)
 - **Touche rag3weaver** : oui (c'est son code)
+- **Famille** : produit
 
 ## Ce que c'est
 

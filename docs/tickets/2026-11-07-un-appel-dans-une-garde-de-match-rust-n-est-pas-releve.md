@@ -5,6 +5,7 @@
 - **Atteignable en service** : oui, tout dépôt Rust qui appelle une fonction dans une garde
   `match … { motif if appel(…) => … }`.
 - **Touche rag3weaver** : par codeparsers (le relevé des références Rust).
+- **Famille** : produit
 
 ## Ce que c'est
 
