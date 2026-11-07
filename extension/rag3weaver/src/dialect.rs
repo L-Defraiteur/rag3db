@@ -3938,9 +3938,9 @@ mod tests {
     #[test]
     fn le_filtre_des_morceaux_rend_les_offsets_des_morceaux_des_parents_admis() {
         let cypher = Rag3dbDialect.filter_resolve_chunk_offsets("Product", "Product_Chunk", "n", &[], "n.name = $f0", None);
-        assert!(cypher.contains("MATCH (n:Product) WHERE n.name = $f0"), "{cypher}");
+        assert!(cypher.contains("MATCH (n:`Product`) WHERE n.name = $f0"), "{cypher}");
         assert!(cypher.contains("WITH DISTINCT n._uuid AS _parent"), "{cypher}");
-        assert!(cypher.contains("MATCH (_morceau:Product_Chunk) WHERE _morceau._parent_uuid = _parent"), "{cypher}");
+        assert!(cypher.contains("MATCH (_morceau:`Product_Chunk`) WHERE _morceau._parent_uuid = _parent"), "{cypher}");
         assert!(cypher.ends_with("RETURN OFFSET(id(_morceau))"), "{cypher}");
         let sql = PostgresDialect.filter_resolve_chunk_offsets("Product", "Product_Chunk", "n", &[], "n.name = $1", None);
         assert!(sql.starts_with("SELECT _morceau._row_id FROM"), "{sql}");
