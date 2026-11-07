@@ -69,14 +69,29 @@ export function dispatchFlux(e: FluxEvent) {
   for (const l of listeners) l(e);
 }
 
+// Un tour de la session. `at_ms` : sur un appel, l'heure où il est parti ; sur un
+// tour `tool`, l'heure où le résultat est revenu (la durée est l'écart) ; absent
+// des tours d'avant.
 export type ChatTurn = {
   role: "user" | "assistant" | "tool" | "system";
   content?: string;
-  tool_calls?: { id: string; name: string; arguments: string }[];
+  tool_calls?: { id: string; name: string; arguments: string; at_ms?: number }[];
   tool_call_id?: string;
   tool_name?: string;
+  at_ms?: number;
 };
-export type ChatState = { on: boolean; model: string | null; why: string | null; run: string | null; turns: ChatTurn[]; orphans: { pourquoi: string }[] };
+// La jauge du contexte : `used`, les jetons d'entrée (cache compris) du dernier
+// appel au modèle ; `max`, le contexte du modèle déclaré (null : inconnu).
+export type ChatContext = { used: number | null; max: number | null; source: string; at: number | null };
+export type ChatState = {
+  on: boolean;
+  model: string | null;
+  context?: ChatContext;
+  why: string | null;
+  run: string | null;
+  turns: ChatTurn[];
+  orphans: { pourquoi: string }[];
+};
 
 export async function fetchChat(backend: string): Promise<ChatState> {
   const r = await (await fetch(`/ide/chat?${new URLSearchParams({ backend })}`)).json();
