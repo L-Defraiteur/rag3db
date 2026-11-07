@@ -7,6 +7,20 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Le chat tient l'ordre d'arrivée.** Une réponse de l'agent se lit comme elle
+  s'est faite : mots, appel d'outil, mots, appel, réponse finale, pendant le tour comme après un
+  rechargement ; chaque outil déplié dit son heure, sa durée et son résultat entier ; la liste
+  ne saute plus pendant le flux, ni quand on déplie un outil ; le chat prend tout l'écran.
+  3d09b32c2.
+- **7 nov. — La barre parle en dépôts.** « Dépôts », « Mémoire », « Projets » : chaque dépôt
+  attaché nommé par son dossier et sa branche, les worktrees de ses tâches par la leur ; sous
+  chaque conversation, la jauge du contexte (le dernier appel sur le contexte du modèle déclaré),
+  ses compteurs et les fiches écrites pendant la conversation ; les runs à rôle (l'archiviste…)
+  dans les tâches de fond. Le mot « backend » ne paraît plus à l'écran du chat. 3d09b32c2.
+- **7 nov. — Le journal de l'hôte dit l'heure et l'auteur.** Chaque ligne de `daemon.log`,
+  celles du moteur comprises, commence par l'heure ISO à la milliseconde, et une ligne née d'un
+  appel nomme son client, sa session et son dépôt : une rafale s'attribue. Le relais ne fige
+  jamais l'hôte (sortie non bloquante, patience mesurée, lignes perdues comptées). 3d09b32c2.
 - **7 nov. — Deux écrivains à la fois ne mêlent plus leurs nœuds sous un COPY de relations.**
   Une transaction qui créait des nœuds puis les reliait par un COPY pouvait, si une autre validait
   des nœuds dans la même table entre-temps, relier en silence les nœuds de l'autre (1000 → 1001 lu
