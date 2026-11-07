@@ -765,12 +765,7 @@ impl DaemonHost {
                 // travail quand il en déclare une (un manifeste de configuration,
                 // hors dépôt, qui indexe un dépôt — la forme de celui de Lucie,
                 // vue à la pose du 7 novembre), sinon le dossier de son manifeste.
-                let espace = h
-                    .backend
-                    .try_read()
-                    .ok()
-                    .and_then(|s| s.as_ref().and_then(|b| b.prepared().workspace.as_ref().map(|(r, _)| r.clone())))
-                    .or_else(|| espace_du_manifeste(&h.manifest));
+                let espace = espace_du_manifeste(&h.manifest);
                 let lieu = espace.clone().or_else(|| h.manifest.parent().map(Path::to_path_buf));
                 let repo = lieu.as_deref().and_then(repo_of);
                 // La nature : celle que le manifeste déclare (son gabarit), sinon
