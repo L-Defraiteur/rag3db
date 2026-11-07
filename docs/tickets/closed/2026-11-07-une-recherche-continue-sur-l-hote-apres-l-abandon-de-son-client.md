@@ -1,6 +1,6 @@
 # Une recherche continue sur l'hôte après l'abandon de son client
 
-- **État** : ouvert (7 novembre 2026), sans porteur. Relevé par rag3weaver archi au 3 ter des hooks.
+- **État** : corrigé (7 novembre 2026, hooks-essai, lot appel-a-delai) : `/call` accepte `deadline_ms` ; passé ce délai, l'hôte arrête lui-même le run du graphe par le registre des runs en vol (`cancelled_by: "deadline"`) et rend « délai dépassé (N ms) », `error_kind: "deadline"`, 422 ; le client du hook (archi, lot d) y passe son budget. Témoin `un_appel_a_delai_s_arrete_a_son_delai` : rouge (60 s, « Pas encore »), vert. L'arrêt se fait entre deux nœuds ; interrompre une requête du moteur en cours est un ticket à part (une connexion par run)
 - **Gravité** : coût. L'hôte brûle du CPU pour une réponse que personne n'attend plus.
 - **Atteignable en service** : oui. Un client à délai court, le hook UserPromptSubmit à 1 à 3 s,
   sur une requête lente, le plein texte flou d'un long texte.
