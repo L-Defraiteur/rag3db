@@ -37,6 +37,11 @@ Effacé après les lots : les worktrees `rag3db-tty` (ici et à luciepc), les br
 
 ## Ce qui attend
 
+- **La coloration du code** (décision de c7, le 7 nov. au soir, sur la piste de la page 07).
+  - L'hôte colore par les grammaires tree-sitter de codeparsers et sert des **spans typés** (une route ou un outil `highlight`), les mêmes pour l'IDE et pour le terminal.
+  - Codeparsers écrit d'abord une page courte (les requêtes de coloration par langue), puis le code ; highlight.js reste le repli immédiat du chat de l'IDE.
+  - Le terminal colore ces spans dans la palette du thème « daemon », par un lot à lui (tty-4 ou tty-5) une fois que les spans existent.
+
 - L'accord de Lucie sur le thème commun (page 06), avant de poser `templates/themes/daemon.json`.
 - La suite des lots, dans l'ordre :
   - tty-2 : la vue inline en ratatui avec crossterm ;
