@@ -33,5 +33,29 @@ grep -q "3 filtres positionnels (e2e_un e2e_deux e2e_trois) : un seul est permis
 cas $? "le refus nomme les trois et donne la forme --test"
 [ ! -e "$T/cargo-appele" ]
 cas $? "rien n'est bâti ni joué : cargo n'est pas appelé"
-[ $echec = 0 ] || { echo "--- sortie"; tail -15 "$T/sortie"; }
+# Une suite qui exige une feature absente du jeu : rouge, nommée, avant tout cargo
+# (RAG3WEAVER_VERROU_TENU : la garde ne bâtit rien, elle n'attend pas le verrou d'une passe en cours —
+# sans lui, le témoin tombait sur son délai derrière un lourd du poste, le 7 nov.)
+# (7 novembre 2026 : un test sous openai-llm sortait du compte sans un mot).
+rm -f "$T/cargo-appele"
+RAG3WEAVER_VERROU_TENU=1 RAG3WEAVER_E2E_FEATURES=rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres \
+  PATH="$T/bin:$PATH" CARGO_TARGET_DIR="$T/target" RAG3WEAVER_MOTEUR_ANCIEN=1 timeout 120 bash "$SCRIPT" --test e2e_memoire_modele \
+  > "$T/sortie-features" 2>&1
+code=$?
+[ "$code" = 1 ]
+cas $? "une suite sous une feature absente : code 1 (rendu $code)"
+grep -q "e2e_memoire_modele (openai-llm)" "$T/sortie-features" && grep -q "ne joueraient pas tous leurs tests" "$T/sortie-features"
+cas $? "le refus nomme la suite et la feature"
+[ ! -e "$T/cargo-appele" ]
+cas $? "rien n'est bâti ni joué : cargo n'est pas appelé"
+# Le jeu de la procédure, par défaut : la même suite passe la garde.
+RAG3WEAVER_VERROU_TENU=1 RAG3WEAVER_E2E_VERIFIER_SEULEMENT=1 \
+  PATH="$T/bin:$PATH" CARGO_TARGET_DIR="$T/target" RAG3WEAVER_MOTEUR_ANCIEN=1 timeout 120 bash "$SCRIPT" --test e2e_memoire_modele \
+  > "$T/sortie-defaut" 2>&1
+code=$?
+[ "$code" = 0 ] && grep -q "chaque suite demandée a les siennes" "$T/sortie-defaut" && grep -q "openai-llm,anthropic-llm" "$T/sortie-defaut"
+cas $? "le jeu par défaut porte openai-llm et anthropic-llm, et la suite passe la garde (rendu $code)"
+[ ! -e "$T/cargo-appele" ]
+cas $? "la garde seule n'appelle pas cargo"
+[ $echec = 0 ] || { echo "--- sortie"; tail -15 "$T/sortie"; tail -15 "$T/sortie-features" 2>/dev/null; tail -15 "$T/sortie-defaut" 2>/dev/null; }
 exit $echec
