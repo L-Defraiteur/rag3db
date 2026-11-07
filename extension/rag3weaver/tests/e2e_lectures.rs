@@ -1317,3 +1317,43 @@ fn les_morceaux_du_seul_dense_se_surlignent_a_l_affichage() {
         "sans l'option, rien n'est surligné : {sans}"
     );
 }
+
+/// **Le creux se surligne par le chemin de l'hôte** (7 novembre 2026, décision de c7 : option 1).
+/// Le témoin précédent ne voyait que le repli : l'ouverture d'un backend ne servait `models.sparse`
+/// qu'aux signaux creux de la recherche, et le gabarit de code n'en déclarait pas — sur les hôtes,
+/// `HighlightNode` n'avait jamais de service. Ici le gabarit de code livré, ouvert depuis son
+/// manifeste comme le fait l'hôte, avec le service bge-m3 de la passe (`RAG3WEAVER_EMBED_SERVICE`) :
+/// par `call_in`, le morceau trouvé par le seul dense porte des passages `source: "sparse"`, et la
+/// réponse ne dit aucun repli. Sans service bge-m3 joignable, ce témoin rougit : il n'a rien à juger.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
+    use serde_json::json;
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "creux-par-l-hote", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": {"signals": ["vector"], "limit": 5, "highlights": "sparse"}, "mode": "indexed"}))
+        .expect("search_code");
+    let resultats = r["result"].as_array().cloned().unwrap_or_default();
+    let morceau = resultats
+        .iter()
+        .find(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("fusion")))
+        .unwrap_or_else(|| panic!("le dense rend le morceau de fusion.rs : {r}"));
+    let avertissements = r["metadata"]["render.meta"]["warnings"].to_string();
+    assert!(
+        !avertissements.contains("surlignage creux indisponible"),
+        "le service creux du manifeste sert le surlignage, sans repli : {avertissements} — avertissements du backend : {:?}",
+        backend.avertissements()
+    );
+    let surlignes = morceau["chunk"]["highlights"].as_array().cloned().unwrap_or_default();
+    assert!(
+        !surlignes.is_empty() && surlignes.iter().all(|h| h["source"] == "sparse"),
+        "les passages viennent du creux de bge-m3 : {morceau}"
+    );
+}
