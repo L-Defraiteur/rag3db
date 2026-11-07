@@ -37,13 +37,14 @@ viennent ici, avec leur témoin. Les « bugs connus » du journal (§6) y migrer
 
 ## Index
 
-### Ouverts — moteur (40)
+### Ouverts — moteur (41)
 
 Le correctif vit dans le moteur : `src/`, ses extensions C++ (`extension/vector`, `extension/geo`)
 ou son harnais de test. C'est la table sur laquelle se juge la stèle du moteur.
 
 | ticket | état | gravité | atteignable en service | touche rag3weaver |
 |---|---|---|---|---|
+| [Un rang déplacé pendant un CREATE de l'index vectoriel n'est pas toujours rendu premier à son nouveau vecteur](2026-11-07-un-rang-deplace-pendant-un-create-n-est-pas-toujours-rattrape-premier.md) | ouvert — hotfixs, en tête de G6 ; 1 rouge sur 3 passes sous charge, 0 sur 10 seul ; inscrit à probabilistic.txt | réponse fausse à la marge | oui (CREATE sous écritures) | oui (recherche dense) |
 | [Une validation et un lecteur HNSW se figent l'un l'autre sur les deux verrous d'un groupe CSR](2026-11-07-une-validation-et-un-lecteur-hnsw-se-figent-sur-les-verrous-du-csr.md) | ouvert — en cours, cœur c++ ; inversion d'ordre index→blocs (compaction c44af8031) contre blocs→index (V2-2 ae4432960) ; VectorSearchDuringInsertTest figé une fois sur cinq | blocage | oui | par le moteur |
 | [Une interruption tombée entre deux instructions d'une requête réécrite est perdue](2026-10-25-une-interruption-tombee-entre-deux-instructions-d-une-requete-reecrite-est-perdue.md) | ouvert — pour le cœur C++ ; l'interruption vaudrait pour la requête, pas pour l'instruction | interruption ignorée | oui (CREATE/DROP d'index réécrits, surtout pendant une attente) | oui (arrêt d'un run pendant un CREATE) |
 | [Une instruction qui échoue condamne une transaction en lecture seule](2026-10-25-une-instruction-qui-echoue-condamne-une-transaction-en-lecture-seule.md) | ouvert — pour le cœur C++ (deux formes à trancher) | blocage d'une lecture entière | oui (toute lecture d'outil sous L6) | oui |
