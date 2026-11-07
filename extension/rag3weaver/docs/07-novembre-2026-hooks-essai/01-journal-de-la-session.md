@@ -302,3 +302,17 @@ de push reste du bruit, et aucun seuil ne l'a tue.
 
 **Servi ou gêné :** rien qui serve au lot. Le score, lui, est utile : il me
 permet de juger d'un coup d'œil qu'il n'y a rien à lire.
+
+## Tour de 15 h 51 — de nouveau aucun bloc
+
+`15:51:43 recall_fiches : /call : … timeout: global`, et aucun bloc. Sur cinq
+tours depuis le binaire du lot 3, le bloc n'est arrivé qu'une fois. Le lot 3
+bis (appels en parallèle, bloc toujours rendu) est la pièce qui compte pour
+l'agent.
+
+Ce que c7 a tranché (lot 3 bis) :
+
+- le bloc nomme l'échelle de son score : le score brut du meilleur signal ;
+- le seuil se règle sur ce journal ;
+- ma propre fiche est exclue du rappel ;
+- l'identité est une ligne de SessionStart, et UserPromptSubmit dit le reste.
