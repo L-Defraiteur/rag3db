@@ -9,6 +9,10 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   pas, on n'y bascule pas, on n'y laisse rien. **Un seul target par session** (Lucie, 7 novembre
   2026) : le même dossier sous `~/.cache/rag3weaver-build/` d'un lot au suivant, effacé avec le
   lot ; pas un target par essai.
+  **Son plafond est de 32 Go** (`run_e2e.sh`, `RAG3WEAVER_TARGET_MAX_GO`, 7 novembre 2026) : une
+  passe complète sous le jeu large (check_features, la lib entière, l'étape navigateur, les e2e)
+  pèse 19 à 26 Go, une rlib et un binaire de tests par jeu de features. Un target sous 32 Go
+  n'est pas une accumulation : il ne s'efface pas en cours de lot.
 - **Un worktree est jetable** (vision du 6 novembre, « Un worktree est jetable, donc
   distribuable » ; Lucie, 7 novembre : 46 worktrees à luciepc ce matin, 32 déjà fusionnés). Un
   contrôle **en début de passe** refuse un worktree dont la branche est déjà atterrie

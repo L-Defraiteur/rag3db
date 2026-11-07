@@ -887,16 +887,21 @@ mkdir -p "$E2E_DISQUE_PARENT"
 # **Le target a un plafond.** Au-delà, la passe refuse de partir en le
 # disant : un target qui grossit sans fin est ce qui a rempli le disque le
 # 10 octobre (307 Go). Un bâti propre pèse 5,5 Go (mesuré le 11 octobre,
-# tests/e2e/poids-reference.txt) : 20 Go laissent deux jeux de features et
-# les autres tests, et au-delà c'est de l'accumulation. Proposé, à trancher
-# par Lucie ; `RAG3WEAVER_TARGET_MAX_GO` le change.
+# tests/e2e/poids-reference.txt). **32 Go depuis le 7 novembre 2026** : une
+# passe complète sous le jeu large (check_features et ses cinq jeux, la lib
+# entière, l'étape navigateur, les e2e) pèse 19 à 26 Go à luciepc, sans
+# accumulation — une rlib de rag3weaver (~0,5 Go) et un binaire de tests
+# (~0,43 Go) par jeu de features, ~8,5 Go d'exécutables dans deps. Les 20 Go
+# du 11 octobre dataient d'avant anthropic-llm, burn, postgres et navigateur :
+# ils ont arrêté trois passes juste avant leurs e2e ce soir-là (23, 21 et
+# 26 Go), rejouées de zéro. `RAG3WEAVER_TARGET_MAX_GO` le change.
 TARGET_DE_LA_PASSE="${CARGO_TARGET_DIR:-$WEAVER/target}"
-PLAFOND_TARGET_GO="${RAG3WEAVER_TARGET_MAX_GO:-20}"
+PLAFOND_TARGET_GO="${RAG3WEAVER_TARGET_MAX_GO:-32}"
 if [ -d "$TARGET_DE_LA_PASSE" ]; then
   POIDS_TARGET_GO=$(du -xs --block-size=1G "$TARGET_DE_LA_PASSE" 2>/dev/null | cut -f1)
   if [ "${POIDS_TARGET_GO:-0}" -gt "$PLAFOND_TARGET_GO" ]; then
     echo "✗ le target $TARGET_DE_LA_PASSE pèse ${POIDS_TARGET_GO} Go, au-delà du plafond de ${PLAFOND_TARGET_GO} Go"
-    echo "  (RAG3WEAVER_TARGET_MAX_GO). Pour repartir d'un target propre (5,5 Go au rebâti) :"
+    echo "  (RAG3WEAVER_TARGET_MAX_GO ; une passe complète sous le jeu large pèse 19 à 26 Go). Pour repartir d'un target propre (5,5 Go au rebâti) :"
     echo "    rm -rf $TARGET_DE_LA_PASSE"
     exit 2
   fi
