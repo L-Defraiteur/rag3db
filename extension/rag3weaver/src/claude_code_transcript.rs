@@ -138,6 +138,74 @@ fn texte_du_message(c: &Value) -> Option<String> {
     }
 }
 
+/// **Les tours d'un prompt** (`promptId`), pour la fin de run du `Stop` : le
+/// prompt, les réponses de l'assistant (texte, appels d'outils) et les
+/// résultats d'outils, dans l'ordre. Une ligne `assistant` sans `promptId` est
+/// rattachée au dernier prompt vu. Les résultats sont bornés à 2 000 caractères.
+pub fn tours_du_prompt(chemin: &Path, prompt_id: &str) -> Result<Vec<Value>, String> {
+    let f = std::fs::File::open(chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+    Ok(tours_depuis_lignes(std::io::BufReader::new(f).lines().map_while(Result::ok), prompt_id))
+}
+
+pub fn tours_depuis_lignes<I: IntoIterator<Item = String>>(lignes: I, prompt_id: &str) -> Vec<Value> {
+    let mut tours = Vec::new();
+    let mut courant: Option<String> = None;
+    let borne = |t: &str| -> String { if t.chars().count() > 2_000 { format!("{}… [{} caractères]", t.chars().take(2_000).collect::<String>(), t.chars().count()) } else { t.to_string() } };
+    for ligne in lignes {
+        let Ok(v) = serde_json::from_str::<Value>(&ligne) else { continue };
+        if let Some(p) = v["promptId"].as_str() {
+            courant = Some(p.to_string());
+        }
+        if courant.as_deref() != Some(prompt_id) {
+            continue;
+        }
+        match v["type"].as_str() {
+            Some("user") => match &v["message"]["content"] {
+                Value::String(texte) => tours.push(serde_json::json!({ "role": "user", "content": borne(texte) })),
+                Value::Array(blocs) => {
+                    for b in blocs {
+                        if b["type"] == "tool_result" {
+                            let contenu = texte_du_message(&b["content"]).unwrap_or_default();
+                            tours.push(serde_json::json!({ "role": "tool", "tool_use_id": b["tool_use_id"], "is_error": b["is_error"].as_bool().unwrap_or(false), "content": borne(&contenu) }));
+                        } else if b["type"] == "text" {
+                            if let Some(t) = b["text"].as_str() {
+                                tours.push(serde_json::json!({ "role": "user", "content": borne(t) }));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Some("assistant") => {
+                let blocs = v["message"]["content"].as_array().cloned().unwrap_or_default();
+                let texte: Vec<&str> = blocs.iter().filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect();
+                let appels: Vec<Value> = blocs.iter().filter(|b| b["type"] == "tool_use").map(|b| serde_json::json!({ "id": b["id"], "name": b["name"], "input": b["input"] })).collect();
+                if !texte.is_empty() || !appels.is_empty() {
+                    tours.push(serde_json::json!({ "role": "assistant", "content": borne(&texte.join("\n")), "tool_calls": appels }));
+                }
+            }
+            _ => {}
+        }
+    }
+    tours
+}
+
+/// **Le dernier prompt** d'une transcription (la dernière ligne `user` dont le
+/// contenu est un texte), pour rejouer `UserPromptSubmit` hors session.
+pub fn dernier_prompt(chemin: &Path) -> Option<String> {
+    let f = std::fs::File::open(chemin).ok()?;
+    let mut dernier = None;
+    for ligne in std::io::BufReader::new(f).lines().map_while(Result::ok) {
+        let Ok(v) = serde_json::from_str::<Value>(&ligne) else { continue };
+        if v["type"] == "user" && v["isCompactSummary"] != true {
+            if let Some(t) = v["message"]["content"].as_str() {
+                dernier = Some(t.to_string());
+            }
+        }
+    }
+    dernier
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,5 +275,25 @@ mod tests {
         assert!(t.premier_tour_apres_compaction && t.octets > 0 && t.lignes == 4);
         assert!(Transcription::lire(&dossier.join("absent.jsonl")).unwrap_err().contains("absent.jsonl"));
         let _ = std::fs::remove_dir_all(&dossier);
+    }
+
+    #[test]
+    fn les_tours_d_un_prompt_se_relevent_dans_l_ordre() {
+        let lignes = [
+            USER, ASSISTANT_1,
+            r#"{"type":"user","promptId":"p2","message":{"role":"user","content":"range la fiche"}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"je regarde"},{"type":"tool_use","name":"Read","id":"tu1","input":{"file_path":"/p/a.rs"}}]}}"#,
+            r#"{"type":"user","promptId":"p2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"fn a() {}","is_error":false}]}}"#,
+            r#"{"type":"assistant","promptId":"p2","message":{"role":"assistant","content":[{"type":"text","text":"fait."}]}}"#,
+            r#"{"type":"user","promptId":"p3","message":{"role":"user","content":"autre"}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"pas p2"}]}}"#,
+        ];
+        let t = tours_depuis_lignes(lignes.iter().map(|s| s.to_string()), "p2");
+        let roles: Vec<&str> = t.iter().map(|x| x["role"].as_str().unwrap()).collect();
+        assert_eq!(roles, ["user", "assistant", "tool", "assistant"]);
+        assert_eq!(t[1]["tool_calls"][0]["input"]["file_path"], "/p/a.rs");
+        assert_eq!((t[2]["tool_use_id"].as_str(), t[2]["content"].as_str()), (Some("tu1"), Some("fn a() {}")));
+        assert_eq!(t[3]["content"], "fait.");
+        assert!(tours_depuis_lignes(lignes.iter().map(|s| s.to_string()), "p9").is_empty());
     }
 }

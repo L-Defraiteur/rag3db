@@ -73,7 +73,9 @@ else
 fi
 echo "cible : $niveau"
 
-commande="$binaire hook --config $config"
+# La commande posée dans settings est stable et ne change jamais : le binaire, `hook`, l'événement.
+# Tout le reste (hooks.json, les gabarits, le binaire lui-même) se relit à chaque appel.
+commande="$binaire hook"
 
 # Le réglage : les défauts, le manifeste donné ; jamais réécrit s'il existe.
 if [ "$retirer" = 0 ]; then
@@ -84,7 +86,7 @@ if [ "$retirer" = 0 ]; then
 import json, sys
 m, home = sys.argv[1], sys.argv[2]
 print(json.dumps({
-  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7,
+  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7, "recall_min_score": 0.30, "templates_dir": home + "/.config/rag3weaver/hooks",
   "prompt_block_chars": 1500, "session_block_chars": 3000,
   "prompt_timeout_ms": 5000, "timeout_ms": 20000,
   "journal": home + "/.local/state/rag3weaver/hooks.log",
@@ -99,6 +101,11 @@ EOF
   fi
 fi
 
+# Les gabarits de blocs, posés par le binaire s'il est là (jamais écrasés) : c'est là qu'on corrige à la volée.
+if [ "$retirer" = 0 ] && [ "$poser" = 1 ] && [ -x "$binaire" ]; then
+  "$binaire" hook --poser-les-gabarits --config "$config" || echo "gabarits : non posés ($binaire hook --poser-les-gabarits a échoué)"
+fi
+
 # Les entrées, fusionnées dans la cible par python (le JSON du fichier est à préserver tel quel).
 python3 - "$settings" "$commande" "$poser" "$retirer" <<'EOF'
 import json, os, sys, shutil
@@ -111,7 +118,7 @@ entrees = {
   "Stop":             (None, 25),
 }
 def est_a_nous(h):
-    return any(x.get("type") == "command" and str(x.get("command", "")).startswith(commande.split(" --config")[0]) for x in h.get("hooks", []))
+    return any(x.get("type") == "command" and str(x.get("command", "")).startswith(commande) for x in h.get("hooks", []))
 try:
     with open(settings, encoding="utf-8") as f:
         d = json.load(f)
@@ -122,7 +129,7 @@ avant = json.dumps(d, sort_keys=True)
 for ev, (matcher, delai) in entrees.items():
     liste = [h for h in hooks.get(ev, []) if not est_a_nous(h)]
     if not retirer:
-        entree = {"hooks": [{"type": "command", "command": commande, "timeout": delai}]}
+        entree = {"hooks": [{"type": "command", "command": commande + " " + ev, "timeout": delai}]}
         if matcher: entree["matcher"] = matcher
         liste.append(entree)
     if liste: hooks[ev] = liste
@@ -150,5 +157,7 @@ if [ -n "$worktree" ] && [ "$poser" = 1 ] && [ "$retirer" = 0 ]; then
   echo
   echo "l'essai : cd $dossier && claude"
   echo "  (le bloc [mémoire] apparaît au premier tour ; le journal : ~/.local/state/rag3weaver/hooks.log)"
+  echo "corriger à la volée : les gabarits dans $(dirname "$config")/hooks/<Événement>.md (une section ## par bloc), relus à chaque appel ;"
+  echo "  vérifier hors session : $binaire hook --rejouer <transcription.jsonl> SessionStart"
   echo "retirer : $0 --worktree $worktree --retirer --poser"
 fi

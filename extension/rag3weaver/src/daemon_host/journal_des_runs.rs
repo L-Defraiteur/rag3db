@@ -343,6 +343,36 @@ impl JournalDesRuns {
         r.ajouts.extend(ajouts);
     }
 
+    /// **Dépose un run écrit par un autre** (un tour de Claude Code, lot 3 des
+    /// hooks, 7 novembre 2026) : le JSON tel qu'il vient, `run`, `backend`,
+    /// `debut`, `fin` et `evenements` posés s'ils manquent, écrit compressé sous
+    /// `runs_root/<backend>/<run>.json.zst`, compté et élagué comme les autres.
+    /// Un run du même nom est réécrit : le dernier mot est le bon. Inactif : un
+    /// refus dit.
+    pub fn deposer(&self, backend: &str, run: &str, mut v: Value) -> Result<PathBuf, String> {
+        if !self.actif {
+            return Err("le journal des runs ne suit rien ici (aucune racine)".into());
+        }
+        let o = v.as_object_mut().ok_or("un objet attendu")?;
+        o.insert("run".into(), json!(run));
+        o.insert("backend".into(), json!(backend));
+        let maintenant = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        o.entry("debut").or_insert(json!(maintenant));
+        o.entry("fin").or_insert(json!({ "kind": "RunFinished", "at": maintenant, "externe": true }));
+        o.entry("evenements").or_insert(json!([]));
+        let dossier = self.racine.join(backend);
+        let fichier = dossier.join(format!("{run}.{EXTENSION}"));
+        std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        let octets = ecrire_le_fichier(&fichier, &v).map_err(|e| format!("{} : {e}", fichier.display()))?;
+        let mut garde = self.inventaire.lock().unwrap_or_else(|p| p.into_inner());
+        let inv = garde.get_or_insert_with(|| Inventaire::relever(&self.racine));
+        inv.noter(fichier.clone(), SystemTime::now(), octets, Some(v.get("epingle").is_some()));
+        self.elaguer(inv);
+        drop(garde);
+        self.etat.lock().unwrap_or_else(|p| p.into_inner()).ecrits.insert(run.to_string(), fichier.clone());
+        Ok(fichier)
+    }
+
     /// **Épingle un run** : il ne tombera jamais, ni par le poids ni par l'âge.
     /// Écrit ou pas encore : l'épingle suit le run jusqu'à son fichier.
     pub fn epingler(&self, backend: &str, run: &str, raison: &str) {
@@ -695,5 +725,25 @@ mod tests {
         assert!(v["evenements_tronques"].as_u64().is_some_and(|n| n > 0), "le fichier dit ce qui est tombé : {}", v["evenements_tronques"]);
         assert!(v.to_string().len() < 8192 * 2, "borné");
         assert_eq!(v["fin"]["kind"], "RunFinished", "la fin est gardée");
+    }
+
+    #[test]
+    fn un_run_venu_de_dehors_se_depose_se_relit_et_se_compte() {
+        let d = std::env::temp_dir().join(format!("runs-externes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let j = JournalDesRuns::avec_bornes(d.join("runs"), 1 << 30, 90, 1 << 20);
+        let f = j.deposer("claude-code", "s1-p2", json!({ "genre": "claude_code_turn", "tours": [{ "role": "user", "content": "salut" }] })).unwrap();
+        assert!(f.to_string_lossy().ends_with("claude-code/s1-p2.json.zst"), "{}", f.display());
+        let v = j.lire("claude-code", "s1-p2").unwrap();
+        assert_eq!((v["run"].as_str(), v["backend"].as_str(), v["genre"].as_str()), (Some("s1-p2"), Some("claude-code"), Some("claude_code_turn")));
+        assert_eq!(v["fin"]["kind"], "RunFinished");
+        assert!(v["debut"].as_u64().is_some() && v["evenements"].as_array().is_some());
+        assert_eq!(j.runs_de("claude-code"), vec!["s1-p2"]);
+        assert!(j.octets() > 0);
+        // Réécrit : le dernier mot.
+        j.deposer("claude-code", "s1-p2", json!({ "genre": "claude_code_turn", "tours": [] })).unwrap();
+        assert_eq!(j.lire("claude-code", "s1-p2").unwrap()["tours"].as_array().unwrap().len(), 0);
+        assert!(j.deposer("claude-code", "x", json!("pas un objet")).is_err());
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
