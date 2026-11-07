@@ -797,6 +797,23 @@ mod tests {
         assert!(n.is_ok(), "le nœud se construit : {:?}", n.err());
     }
 
+    /// **La garde de bijection ne lit pas les paramètres d'un graphe cité** (96,
+    /// 7 novembre 2026, la seconde face) : un graphe cité qui cite lui-même un
+    /// graphe à paramètres (`GraphNode(graph='@graphs/cherche.mmd', q=$element.title)`,
+    /// où `cherche` emploie `$q` et `$autre`) ne compte que ses propres `$x` —
+    /// `element` — et ses paramètres déclarés lui suffisent.
+    #[test]
+    fn la_garde_de_bijection_ne_lit_pas_les_parametres_d_un_graphe_cite() {
+        const CHERCHE: &str = "%% tool: cherche\n%% description: d\n%% param: q string! -- x\n%% param: autre string = \"\" -- y\n%% result: note.text\n\ngraph LR\n    note[\"NoterNode(valeur='$q $autre')\"]\n";
+        let mut decide = GraphTool::from_mermaid(
+            "%% tool: decide\n%% description: d\n%% param: element json! -- x\n%% result: cherche.result\n\ngraph LR\n    cherche[\"GraphNode(graph='@graphs/cherche.mmd', q=$element.title)\"]\n",
+        )
+        .unwrap();
+        decide.remplacer_config("cherche", "graph", json!({"cite": "@graphs/cherche.mmd", "mermaid": CHERCHE, "sous": {}}));
+        let vus = super::super::graph_tool::template_vars(decide.template());
+        assert_eq!(vus.into_iter().collect::<Vec<_>>(), ["element"], "seuls les $x du graphe lui-même");
+    }
+
     /// **Un manifeste qui cite un sous-graphe absent ou faux se refuse à son
     /// chargement**, en nommant l'outil et le fichier (`PreparedBackend::load`,
     /// avant toute base).
