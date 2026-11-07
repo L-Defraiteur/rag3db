@@ -283,7 +283,7 @@ fn read_and_grep_as_graph_tools() {
     let services = Arc::new(rag3weaver::agent::mount_agent_services_on(&catalog, snapshot.clone()).unwrap());
 
     let call = |name: &str, args: serde_json::Value| -> String {
-        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None };
+        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None, at_ms: None };
         tools.call(&tc, &nodes, services.clone()).content.clone()
     };
     let grep = call("grep", serde_json::json!({"pattern": "pub fn merge_port_values", "extension": "rs"}));
@@ -1804,7 +1804,7 @@ fn les_methodes_d_un_meme_impl_sont_rendues_sous_sa_signature() {
     let (nodes, tools) = builtin_graph_tools().unwrap();
     let services = Arc::new(rag3weaver::agent::mount_agent_services_on(&catalog, snapshot.clone()).unwrap());
     let call = |name: &str, args: serde_json::Value| -> String {
-        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None };
+        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None, at_ms: None };
         tools.call(&tc, &nodes, services.clone()).content.clone()
     };
     let md = call("search", serde_json::json!({ "target": "Scope", "query": "downcast take new PortValue", "limit": 8 }));

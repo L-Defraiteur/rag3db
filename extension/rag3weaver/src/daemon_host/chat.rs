@@ -38,6 +38,10 @@ pub(super) struct ChatEntry {
     manifest: PathBuf,
     session: ChatSession,
     busy: Option<String>,
+    /// Le dernier appel au modèle du dernier tour : la jauge du contexte. En
+    /// mémoire seulement — après un redémarrage de l'hôte, inconnu jusqu'au
+    /// prochain tour.
+    last_call: Option<crate::agent::LastCall>,
 }
 
 /// Ce qui se garde sur le disque : le manifeste (pour la relecture) et la session.
@@ -179,7 +183,7 @@ impl DaemonHost {
                         self.chats
                             .lock()
                             .unwrap_or_else(|p| p.into_inner())
-                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None });
+                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None, last_call: None });
                     }
                     Err(e) => {
                         lignes.push(format!("session de chat de {id} orpheline : {e}"));
@@ -208,16 +212,30 @@ impl DaemonHost {
     /// sessions orphelines.
     pub fn chat_state(&self, backend_id: &str) -> Result<Value, String> {
         let hosted = self.hote_par_id(backend_id)?;
-        let modele = self.with_backend(&hosted, |b| (self.chat_model)(&b.prepared()).map(|llm| llm.name().to_string()))?;
+        let llm = self.with_backend(&hosted, |b| (self.chat_model)(&b.prepared()).map(|llm| (llm.name().to_string(), llm.context_len())))?;
+        let modele = llm.as_ref().map(|(nom, _)| nom.clone()).map_err(Clone::clone);
         let chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
-        let (fil, en_cours) = match chats.get(backend_id) {
-            Some(e) => (serde_json::to_value(&e.session).map_err(|e| e.to_string())?["turns"].clone(), e.busy.clone()),
-            None => (json!([]), None),
+        let (fil, en_cours, dernier) = match chats.get(backend_id) {
+            Some(e) => (serde_json::to_value(&e.session).map_err(|e| e.to_string())?["turns"].clone(), e.busy.clone(), e.last_call),
+            None => (json!([]), None, None),
         };
+        // **La jauge du contexte** (forme accordée avec archi et everything
+        // declarative) : `used`, les jetons d'entrée (cache compris) du DERNIER
+        // appel au modèle, pas le cumul ; `max`, le contexte du modèle déclaré
+        // (`Llm::context_len`, `models.llm.context_tokens`), null s'il est
+        // inconnu ; `at`, l'heure de l'appel mesuré. Pas de ratio : la page le
+        // calcule.
+        let contexte = json!({
+            "used": dernier.map(|c| c.prompt_tokens),
+            "max": llm.as_ref().ok().map(|(_, n)| *n).filter(|n| *n > 0),
+            "source": "run",
+            "at": dernier.map(|c| c.at_ms),
+        });
         let fil: Vec<Value> = fil.as_array().cloned().unwrap_or_default().into_iter().filter(|t| t["role"] != "system").collect();
         Ok(json!({
             "on": modele.is_ok(),
             "model": modele.as_ref().ok(),
+            "context": contexte,
             "why": modele.as_ref().err(),
             "run": en_cours,
             "turns": fil,
@@ -259,6 +277,7 @@ impl DaemonHost {
                 manifest: hosted.manifest.clone(),
                 session: ChatSession::default(),
                 busy: None,
+                last_call: None,
             });
             if let Some(run) = &e.busy {
                 return Err(format!("un tour est déjà en cours sur ce backend (run {run}) : attendez sa fin, ou arrêtez-le"));
@@ -417,7 +436,12 @@ impl DaemonHost {
             json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers })
         };
         match fait {
-            Ok(run) => Ok(reponse(&run.text)),
+            Ok(run) => {
+                if let Some(e) = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get_mut(backend_id) {
+                    e.last_call = run.last_call;
+                }
+                Ok(reponse(&run.text))
+            }
             // Un tour arrêté n'est pas une panne : il dit qui l'a arrêté.
             Err(_) if arrete.is_some() => Ok(reponse("")),
             Err(e) => Err(e),
