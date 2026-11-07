@@ -2537,6 +2537,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
     }
 
+    /// Un faux hôte qui a une boîte (lot 5) : la mémoire de `HoteCanne`, la boîte
+    /// de `mail::tests::FausseBoite`.
+    struct AvecBoite(HoteCanne, Arc<crate::mail::tests::FausseBoite>);
+    impl Hote for AvecBoite {
+        fn nom(&self) -> &str { self.0.nom() }
+        fn appeler(&self, outil: &str, a: Value) -> Result<Value, String> { self.0.appeler(outil, a) }
+        fn deposer_run(&self, c: Value) -> Result<Value, String> { self.0.deposer_run(c) }
+        fn boite(&self) -> Option<&dyn crate::mail::Boite> { Some(&*self.1) }
+    }
+
+    #[test]
+    fn la_boite_se_montre_en_tete_du_tour_puis_en_une_ligne_et_les_comptes_rendus_sortent_par_seen() {
+        let _env = env();
+        let (chemin, mut reglage) = transcription_d_essai("boite", &[T_USER]);
+        let boite = Arc::new(crate::mail::tests::FausseBoite { items: vec![crate::mail::tests::item("b1/doc:3", "question", Some("codex:rag3weaver1"), "Je mets le README à la racine ?"), crate::mail::tests::item("b1/doc:4", "report", None, "fait")], ..Default::default() });
+        let h = AvecBoite(hote_avec_identite(), boite.clone());
+        let r = repondre(&prompt(&chemin, "une question assez longue sur les hooks"), &reglage, Ok(&h));
+        assert!(r.bloc.contains("codex:rag3weaver1 (doc) te demande : « Je mets le README à la racine ? » — réponds : `rag3weaver-backend mail reply --from claude-code:s1 --to b1/doc:3 \"<ta réponse>\"`"), "{}", r.bloc);
+        assert!(r.bloc.contains("rend compte : « fait »"), "{}", r.bloc);
+        // Le compte rendu sort par seen, sous chaque clé de la session (handle et clé stable).
+        let vus = boite.vus.lock().unwrap().clone();
+        assert!(vus.iter().any(|(c, ids)| c == "claude-code:s1" && ids == &vec!["b1/doc:4".to_string()]) && vus.iter().any(|(c, _)| c == "96"), "{vus:?}");
+        // Au tour suivant : la question en une ligne, rien d'autre.
+        let r = repondre(&prompt(&chemin, "une autre question assez longue"), &reglage, Ok(&h));
+        assert!(r.bloc.contains("Toujours en attente de ta réponse : codex:rag3weaver1 (question, `b1/doc:3`).") && !r.bloc.contains("Je mets le README"), "{}", r.bloc);
+        // PostToolUse ne montre que le neuf : rien ici.
+        let outil = Evenement::lire(&json!({ "session_id": "s1", "hook_event_name": "PostToolUse" }).to_string()).unwrap();
+        assert!(repondre(&outil, &reglage, Ok(&h)).bloc.is_empty());
+        // Un rejeu ne poste jamais seen.
+        let avant = boite.vus.lock().unwrap().len();
+        reglage.rejeu = true;
+        let _ = repondre(&prompt(&chemin, "une question assez longue sur le rejeu"), &reglage, Ok(&h));
+        assert_eq!(boite.vus.lock().unwrap().len(), avant, "aucun seen en rejeu");
+        // La boîte en panne : une ligne qui le dit, jamais un silence.
+        reglage.rejeu = false;
+        let panne = AvecBoite(hote_avec_identite(), Arc::new(crate::mail::tests::FausseBoite { en_panne: true, ..Default::default() }));
+        let r = repondre(&prompt(&chemin, "une question assez longue encore"), &reglage, Ok(&panne));
+        assert!(r.bloc.contains("Boîte des agents injoignable") && r.bloc.contains("mail pending --for claude-code:s1"), "{}", r.bloc);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
     #[test]
     fn le_juge_se_journalise_se_plafonne_et_se_coupe() {
         let _env = env();
