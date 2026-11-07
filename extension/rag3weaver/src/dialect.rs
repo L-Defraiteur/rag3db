@@ -1242,6 +1242,21 @@ pub trait SchemaDialect: Send + Sync {
         where_clause: &str,
         join_from: Option<(&str, &str, &str)>,
     ) -> String;
+
+    /// **Les offsets des morceaux des lignes admises par un filtre** : la
+    /// même sélection que [`Self::filter_resolve_offsets`] sur `table`, puis les
+    /// lignes de `chunk_table` dont `_parent_uuid` est l'une d'elles. Un index
+    /// rangé par morceaux (le creux) se filtre par ces offsets-là, jamais par
+    /// ceux des parents (ticket du 7 novembre 2026).
+    fn filter_resolve_chunk_offsets(
+        &self,
+        table: &str,
+        chunk_table: &str,
+        alias: &str,
+        join_clauses: &[String],
+        where_clause: &str,
+        join_from: Option<(&str, &str, &str)>,
+    ) -> String;
 }
 
 // ─── Rag3db Dialect ──────────────────────────────────────────────────────────
@@ -2531,6 +2546,31 @@ impl SchemaDialect for Rag3dbDialect {
                 )
             }
         }
+    }
+
+    fn filter_resolve_chunk_offsets(
+        &self,
+        table: &str,
+        chunk_table: &str,
+        alias: &str,
+        join_clauses: &[String],
+        where_clause: &str,
+        join_from: Option<(&str, &str, &str)>,
+    ) -> String {
+        let offset_expr = self.node_offset_expr("_morceau");
+        let (table, chunk_table) = (self.quote(table), self.quote(chunk_table));
+        let joins = if join_clauses.is_empty() { String::new() } else { format!(" {}", join_clauses.join(" ")) };
+        let parents = match join_from {
+            Some((from_alias, from_table, rel)) => {
+                let (from_table, rel) = (self.quote(from_table), self.quote(rel));
+                format!("MATCH ({from_alias}:{from_table})-[:{rel}]->({alias}:{table}){joins}")
+            }
+            None => format!("MATCH ({alias}:{table}){joins}"),
+        };
+        format!(
+            "{parents} WHERE {where_clause} WITH DISTINCT {alias}._uuid AS _parent \
+             MATCH (_morceau:{chunk_table}) WHERE _morceau._parent_uuid = _parent RETURN {offset_expr}"
+        )
     }
 }
 
@@ -3860,11 +3900,53 @@ impl SchemaDialect for PostgresDialect {
             }
         }
     }
+
+    fn filter_resolve_chunk_offsets(
+        &self,
+        table: &str,
+        chunk_table: &str,
+        alias: &str,
+        join_clauses: &[String],
+        where_clause: &str,
+        join_from: Option<(&str, &str, &str)>,
+    ) -> String {
+        let offset_expr = self.node_offset_expr("_morceau");
+        let (table, chunk_table) = (self.quote(table), self.quote(chunk_table));
+        let joins = if join_clauses.is_empty() { String::new() } else { format!(" {}", join_clauses.join(" ")) };
+        let parents = match join_from {
+            Some((from_alias, from_table, rel)) => {
+                let rel_table = self.quote(&self.internal_table(rel));
+                let from_table = self.quote(from_table);
+                format!(
+                    "SELECT {alias}._uuid FROM {from_table} AS {from_alias} \
+                     JOIN {rel_table} AS _r ON _r.from_uuid = {from_alias}._uuid \
+                     JOIN {table} AS {alias} ON {alias}._uuid = _r.to_uuid{joins} WHERE {where_clause}"
+                )
+            }
+            None => format!("SELECT {alias}._uuid FROM {table} AS {alias}{joins} WHERE {where_clause}"),
+        };
+        format!("SELECT {offset_expr} FROM {chunk_table} AS _morceau WHERE _morceau._parent_uuid IN ({parents})")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Le filtre d'un index rangé par morceaux** (ticket du 7 novembre 2026) : la requête
+    /// sélectionne les parents admis, puis rend les offsets de **leurs morceaux**, jamais les leurs.
+    #[test]
+    fn le_filtre_des_morceaux_rend_les_offsets_des_morceaux_des_parents_admis() {
+        let cypher = Rag3dbDialect.filter_resolve_chunk_offsets("Product", "Product_Chunk", "n", &[], "n.name = $f0", None);
+        assert!(cypher.contains("MATCH (n:`Product`) WHERE n.name = $f0"), "{cypher}");
+        assert!(cypher.contains("WITH DISTINCT n._uuid AS _parent"), "{cypher}");
+        assert!(cypher.contains("MATCH (_morceau:`Product_Chunk`) WHERE _morceau._parent_uuid = _parent"), "{cypher}");
+        assert!(cypher.ends_with("RETURN OFFSET(id(_morceau))"), "{cypher}");
+        let sql = PostgresDialect.filter_resolve_chunk_offsets("Product", "Product_Chunk", "n", &[], "n.name = $1", None);
+        assert!(sql.starts_with("SELECT _morceau._row_id FROM"), "{sql}");
+        assert!(sql.contains("WHERE _morceau._parent_uuid IN (SELECT n._uuid FROM"), "{sql}");
+        assert!(sql.contains("WHERE n.name = $1)"), "{sql}");
+    }
 
     /// **Les deux COPY citent leur chemin** par `cypher_path_literal` (lot B2,
     /// suggestion de F) : un CSV temporaire Windows (`C:\Users\…`) ou un
