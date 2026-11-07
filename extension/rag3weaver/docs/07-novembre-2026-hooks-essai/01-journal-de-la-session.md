@@ -688,3 +688,30 @@ Le dernier pas seul sous le verrou.
 
 **Les hooks depuis 3 ter (b)** : un seul bloc juste, des silences raisonnés, aucun
 appel du juge (la mémoire n'a que deux fiches).
+
+## À reprendre ici (22 h 15 environ) : le chat lisible
+
+**Tickets** sur master (14f4e7274) : la largeur des bulles, le code coloré et
+relié, la mise en page humaine des retours d'outils. **Décision de c7** : B avec
+A en repli, dans cet ordre.
+
+1. **La largeur et la mise en page humaine des outils.**
+   - La largeur : `.body` et `details.outil` n'ont plus de largeur fixe.
+   - La mise en page par outil : search_code, read_file, grep_files,
+     list_files. Le bouton « brut » montre le texte exact ; le rendu ne retire
+     ni ne résume rien, et un champ manquant se dit.
+2. **Le code en ligne et la coloration A.**
+   - Le code en ligne (accents graves) est rendu en code partout, messages de
+     la personne et flux compris, et lié quand c'est un chemin
+     (`src/x.rs:12`).
+   - A : highlight.js core dans le bundle, avec les langues du dépôt et un
+     thème clair et sombre.
+3. **La coloration B**, en lot à trois avec codeparsers et tty : l'hôte rend des
+   spans tree-sitter, et `code.truc` se résout par l'index.
+
+**Ordre de la file** : `appel-a-delai` (350eaabe7) part d'abord, au « à toi » de
+c7, avec `SUITES="e2e_lectures e2e_demon_hote e2e_mcp_cycle_de_vie"`, puis sa
+ligne de nouveautés. Le lot « chat lisible » vient ensuite.
+
+**La référence** pour la coloration : la page 07 de tty
+(`docs/07-novembre-2026-tty/07-le-code-colore-du-hub.md`).
