@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
+  verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
+  codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
+  (`vue_portee`, appelée seulement là, avait 0 usage) ; sur code-lourd, 19 appels de plus et
+  aucune locale prise pour un appel. codeparsers 672a0d5.
 - **7 nov. — Le flux de l'IDE ne perd plus un événement quand deux relais se croisent.** Un id
   tiré hors du verrou laissait un relais envoyer N+1 avant N, et N se perdait en silence : un
   jeton manquant en direct dans le chat (1 à 3 tours sur 8 sous un modèle rapide), une ligne de
