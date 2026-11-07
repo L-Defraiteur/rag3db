@@ -556,3 +556,33 @@ rappeler sur un tour de notification.
   un seuil fixe ne peut pas y arriver.
 - Le déjà-vu ne retient pas un rendu passé par le chemin « sans seuil ».
 - Le seuil dépend de la fiche exclue.
+
+## Lot « le chat tient l'ordre » (A, Rust ; B, la page)
+
+- **A** (chat-ordre-rust, 3746f13fb), rouge d'abord, puis vert : `at_ms` sur
+  chaque appel et chaque résultat, `result_excerpt` dans `ToolCallFinished`,
+  `context` dans l'état du chat, `role` sur les outils et les réactions (le
+  trou des réactions vu par everything declarative). Passe entière verte
+  (1962 passed, 13/13 au navigateur).
+- **B** (chat-ordre-page, 743907807) :
+  - B1, la page en parties ; B2a, la barre en dépôts (« Dépôts », « Mémoire »,
+    « Projets » ; plus de « backend » à l'écran) ; B2b, les fiches écrites
+    par la mémoire (`select_sources`, `select_apports`, accordés avec 96).
+  - Une régression de ma page, trouvée en rejouant : le premier jeton du
+    premier tour se perdait parfois sous charge, une passe sur deux contre
+    0 sur 3 pour l'ancienne page. Correction : la session fait foi à la fin du
+    tour. La cause reste à trouver.
+  - Vert 3 fois sur 3 : 18 passed par passe.
+
+**Les hooks pendant ce lot :**
+
+- Sous 3 ter (b), à 18 h 48, le premier bloc juste de la session : « régime
+  GPU », plein texte 0.93, quand le message parlait du régime GPU. Au tour
+  suivant, déjà rendu : silence. Les tours de notification sont muets.
+- Il reste du bruit dans la requête extraite (« Le », « c7 », « 18 »,
+  « rends-moi »).
+- Le dense seul aurait préféré ma propre fiche (0.55) à la bonne (0.36) :
+  c'est le plein texte qui tranche.
+- Aucune ligne « [fond] juge » en une heure de guet.
+- Rien du bloc n'a servi au code de ce lot. Le repérage est venu de deux
+  agents, l'accord de messages d'everything declarative et de 96.
