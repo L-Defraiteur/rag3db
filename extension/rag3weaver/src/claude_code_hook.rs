@@ -280,27 +280,291 @@ pub struct Reponse {
     pub journal: Vec<String>,
 }
 
-/// **Répond à un événement**, l'hôte joint ou non. C'est ici que les lots
-/// suivants écrivent les blocs ; ce lot ne rend rien et journalise ce qu'il a
-/// vu — l'événement, la session, l'hôte joint ou la raison du silence.
-pub fn repondre(e: &Evenement, _reglage: &Reglage, hote: Result<&dyn Hote, String>) -> Reponse {
+/// **Répond à un événement**, l'hôte joint ou non. Lot 2 : les deux blocs de
+/// lecture, `SessionStart` et `UserPromptSubmit` ; les autres événements
+/// journalisent et ne rendent rien encore (lots 3 et 4). Le bloc est vide
+/// quand il n'y a rien à dire, borné sinon.
+pub fn repondre(e: &Evenement, reglage: &Reglage, hote: Result<&dyn Hote, String>) -> Reponse {
     let mut r = Reponse::default();
     let session = if e.session_id.is_empty() { "?" } else { e.session_id.as_str() };
     if !e.connu() {
         r.journal.push(format!("{} {session} : événement inconnu, ignoré", e.nom));
         return r;
     }
+    let h = match hote {
+        Ok(h) => h,
+        Err(raison) => {
+            r.journal.push(format!("{} {session} : silence — {raison}", e.nom));
+            return r;
+        }
+    };
     let detail = match e.nom.as_str() {
         "SessionStart" => format!("source {}", e.source.as_deref().unwrap_or("?")),
         "PreCompact" | "PostCompact" => format!("trigger {}", e.trigger.as_deref().unwrap_or("?")),
         "UserPromptSubmit" => format!("prompt de {} caractères", e.prompt.as_deref().map(|p| p.chars().count()).unwrap_or(0)),
         _ => String::new(),
     };
-    match hote {
-        Ok(h) => r.journal.push(format!("{} {session} : hôte joint, backend « {} »{}{}", e.nom, h.nom(), if detail.is_empty() { "" } else { ", " }, detail)),
-        Err(raison) => r.journal.push(format!("{} {session} : silence — {raison}", e.nom)),
+    r.journal.push(format!("{} {session} : hôte joint, backend « {} »{}{}", e.nom, h.nom(), if detail.is_empty() { "" } else { ", " }, detail));
+    let (bloc, borne) = match e.nom.as_str() {
+        "SessionStart" => (bloc_de_session(e, reglage, h, &mut r.journal), reglage.session_block_chars),
+        "UserPromptSubmit" => (bloc_de_prompt(e, reglage, h, &mut r.journal), reglage.prompt_block_chars),
+        _ => (String::new(), 0),
+    };
+    if !bloc.trim().is_empty() {
+        r.bloc = borner(&format!("[mémoire]\n{}", bloc.trim_end()), borne);
+        r.journal.push(format!("{} {session} : bloc de {} caractères", e.nom, r.bloc.chars().count()));
     }
     r
+}
+
+/// Coupe à `max` caractères, sur une frontière de caractère, et le dit.
+fn borner(texte: &str, max: usize) -> String {
+    if max == 0 || texte.chars().count() <= max {
+        return texte.to_string();
+    }
+    let garde = max.saturating_sub(12);
+    let mut coupe: String = texte.chars().take(garde).collect();
+    coupe.push_str("\n[… borné]");
+    coupe
+}
+
+// ─── Ce qu'on lit dans la mémoire ────────────────────────────────────────────
+
+/// Les lignes `data` d'un résultat de recherche (`recall_*`), ou vide.
+fn lignes_de_recherche(v: &Value) -> Vec<Value> {
+    v["result"]["result"]
+        .as_array()
+        .map(|a| a.iter().map(|x| x["data"].clone()).filter(|d| d.is_object()).collect())
+        .unwrap_or_default()
+}
+
+/// Les fiches rendues par `cited_by` en json : le résultat est une **chaîne**
+/// JSON (le rendu du Plan), relue ici.
+fn fiches_citant(v: &Value) -> Vec<Value> {
+    match &v["result"]["result"] {
+        Value::String(s) => serde_json::from_str::<Value>(s).ok().and_then(|x| x.as_array().cloned()).unwrap_or_default(),
+        Value::Array(a) => a.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// **L'identité d'une session** : la fiche qui cite `handle:session:<id>`
+/// (page 04 du 25 octobre, §4). À défaut, l'indice facultatif
+/// `RAG3WEAVER_AGENT_KEY`, qui ne vaut que si la fiche de cette clé existe :
+/// une variable ne crée pas une identité.
+#[derive(Debug, Clone, Default, PartialEq)]
+struct Identite {
+    cle: String,
+    about: String,
+    /// Le dernier apport `identity`, s'il y en a un.
+    identity: Option<String>,
+    /// La clé vient de la variable, pas d'un handle cité.
+    par_indice: bool,
+}
+
+fn identite_de_la_session(h: &dyn Hote, session_id: &str, journal: &mut Vec<String>) -> Option<Identite> {
+    if !session_id.is_empty() {
+        match h.appeler("cited_by", json!({ "value": format!("handle:session:{session_id}"), "under": false, "format": "json", "limit": 3 })) {
+            Ok(v) => {
+                if let Some(f) = fiches_citant(&v).into_iter().find(|f| f["state"] != "retired") {
+                    let cle = f["name"].as_str().unwrap_or("").to_string();
+                    if !cle.is_empty() {
+                        return Some(Identite { about: f["about"].as_str().unwrap_or("").to_string(), identity: dernier_apport(h, &cle, "identity"), cle, par_indice: false });
+                    }
+                }
+            }
+            Err(e) => journal.push(format!("cited_by handle:session : {e}")),
+        }
+    }
+    let cle = std::env::var("RAG3WEAVER_AGENT_KEY").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())?;
+    match h.appeler("get_fiche", json!({ "record": { "name": cle } })) {
+        Ok(v) if v["result"]["result"]["data"].is_object() => {
+            let d = &v["result"]["result"]["data"];
+            Some(Identite { about: d["about"].as_str().unwrap_or("").to_string(), identity: dernier_apport(h, &cle, "identity"), cle, par_indice: true })
+        }
+        Ok(_) => {
+            journal.push(format!("RAG3WEAVER_AGENT_KEY={cle} : aucune fiche de cette clé, indice ignoré"));
+            None
+        }
+        Err(e) => {
+            journal.push(format!("get_fiche {cle} : {e}"));
+            None
+        }
+    }
+}
+
+/// Le texte du dernier apport d'une section sur une fiche.
+fn dernier_apport(h: &dyn Hote, fiche: &str, section: &str) -> Option<String> {
+    let v = h
+        .appeler(
+            "recall_apports",
+            json!({ "query": section, "options": { "limit": 5, "filter_condition": { "must": [
+                { "field": { "key": "fiche", "value": fiche } },
+                { "field": { "key": "section", "value": section } }
+            ] } } }),
+        )
+        .ok()?;
+    lignes_de_recherche(&v)
+        .into_iter()
+        .max_by_key(|d| d["created_at"].as_u64().unwrap_or(0))
+        .and_then(|d| d["texte"].as_str().map(str::to_string))
+}
+
+/// La rubrique `clé:` d'un apport `identity` (six rubriques, page 04 §6).
+fn rubrique<'a>(identity: &'a str, nom: &str) -> Option<&'a str> {
+    identity.lines().map(str::trim).find_map(|l| l.strip_prefix(nom).and_then(|r| r.strip_prefix(':'))).map(str::trim).filter(|s| !s.is_empty())
+}
+
+/// Les noms `fiche:<nom>` cités dans un texte (la rubrique `doing`), dans l'ordre.
+fn fiches_citees(texte: &str) -> Vec<String> {
+    let mut v = Vec::new();
+    for mot in texte.split(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == '(' || c == ')') {
+        if let Some(n) = mot.strip_prefix("fiche:") {
+            let n = n.trim_matches(|c: char| c == '«' || c == '»' || c == '"' || c == '\'');
+            if !n.is_empty() && !v.iter().any(|x| x == n) {
+                v.push(n.to_string());
+            }
+        }
+    }
+    v
+}
+
+/// Le texte de la demande d'identité : la fiche d'abord, le L1 `handle` ensuite.
+const SANS_FICHE: &str = "Aucune fiche d'identité ne cite cette session. Si tu as une clé (ton nom court, celui que les autres sessions emploient), écris ton L1 `handle` : `put_apport` {fiche: <clé>, source: \"sessions\", section: \"handle\", texte: \"session:<id>\", niveau: \"L1\", via: \"agent\"} puis `relier_apport` et `citer_source` genre `handle` valeur `session:<id>`. Si tu es nouvelle, crée d'abord ta fiche d'identité : `put_fiche` {name: <clé>, about: <une ligne>, state: \"current\"}. Rien n'est créé à ta place.";
+
+// ─── SessionStart ────────────────────────────────────────────────────────────
+
+fn bloc_de_session(e: &Evenement, _reglage: &Reglage, h: &dyn Hote, journal: &mut Vec<String>) -> String {
+    let mut b = String::new();
+    let source = e.source.as_deref().unwrap_or("startup");
+    let identite = identite_de_la_session(h, &e.session_id, journal);
+    if source == "compact" {
+        b.push_str("Ta session vient d'être compactée. Au premier tour, avant toute autre chose, écris ton apport `identity` (who, runtime, can, doing, holding, mandates, peers) sur ta fiche d'identité par `put_apport` : c'est à toi de dire qui tu es, pas au harnais.\n\n");
+    }
+    let Some(id) = identite else {
+        b.push_str(SANS_FICHE.replace("<id>", &e.session_id).as_str());
+        b.push('\n');
+        return b;
+    };
+    b.push_str(&format!("Tu es **{}**{} — {}\n", id.cle, if id.par_indice { " (clé donnée par RAG3WEAVER_AGENT_KEY ; ton L1 `handle` pour cette session n'est pas écrit)" } else { "" }, id.about));
+    match &id.identity {
+        Some(identity) => {
+            for (nom, titre) in [("doing", "En cours"), ("holding", "Tu tiens"), ("mandates", "Mandats"), ("peers", "Pairs")] {
+                if let Some(v) = rubrique(identity, nom) {
+                    b.push_str(&format!("- {titre} : {v}\n"));
+                }
+            }
+            // La tâche courante : la première fiche citée par `doing` ; son dernier plan.
+            if let Some(tache) = rubrique(identity, "doing").map(fiches_citees).and_then(|v| v.into_iter().next()) {
+                match dernier_apport(h, &tache, "plan") {
+                    Some(plan) => b.push_str(&format!("- Plan en cours (fiche « {tache} ») : {}\n", premiere_ligne(&plan, 400))),
+                    None => b.push_str(&format!("- Tâche courante : fiche « {tache} », sans plan écrit\n")),
+                }
+            }
+        }
+        None => b.push_str("- Aucun apport `identity` sur ta fiche : écris-en un (who, runtime, can, doing, holding, mandates, peers).\n"),
+    }
+    b
+}
+
+fn premiere_ligne(texte: &str, max: usize) -> String {
+    let t = texte.trim();
+    let une = t.lines().next().unwrap_or("").trim();
+    let coupe: String = une.chars().take(max).collect();
+    if coupe.len() < une.len() || t.lines().count() > 1 { format!("{coupe} …") } else { coupe }
+}
+
+// ─── UserPromptSubmit ────────────────────────────────────────────────────────
+
+fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut Vec<String>) -> String {
+    let mut b = String::new();
+    let transcription = e.transcript_path.as_deref().and_then(|p| crate::claude_code_transcript::Transcription::lire(p).map_err(|err| journal.push(format!("transcription : {err}"))).ok());
+    let identite = identite_de_la_session(h, &e.session_id, journal);
+
+    // Le premier tour après une compaction : le défi d'identité (Lucie, 25 octobre).
+    if transcription.as_ref().is_some_and(|t| t.premier_tour_apres_compaction) {
+        let deja = identite.as_ref().and_then(|i| i.identity.as_ref()).is_some_and(|txt| transcription.as_ref().and_then(|t| t.dernier_resume.as_ref()).is_some_and(|r| txt.len() > 20 && r.contains(&txt[..20.min(txt.len())])));
+        if !deja {
+            b.push_str("Ta session a été compactée. Avant toute autre chose, écris ton apport `identity` (who, runtime, can, doing, holding, mandates, peers) sur ta fiche d'identité par `put_apport`");
+            match &identite {
+                Some(id) => b.push_str(&format!(" (fiche « {} »)", id.cle)),
+                None => b.push_str(" — et si aucune fiche ne cite cette session, ton L1 `handle` d'abord"),
+            }
+            b.push_str(".\n");
+            if let Some(id) = identite.as_ref().and_then(|i| i.identity.as_ref()) {
+                b.push_str(&format!("Ton dernier `identity` : {}\n", premiere_ligne(id, 300)));
+            }
+        }
+    }
+
+    // Les fiches que le prompt rappelle.
+    if let Some(prompt) = e.prompt.as_deref().filter(|p| p.chars().count() >= 8) {
+        match h.appeler("recall_fiches", json!({ "query": prompt, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } })) {
+            Ok(v) => {
+                let lignes = lignes_de_recherche(&v);
+                if !lignes.is_empty() {
+                    b.push_str("Fiches en rapport : ");
+                    b.push_str(&lignes.iter().filter_map(|d| d["name"].as_str().map(|n| format!("« {n} »{}", d["about"].as_str().map(|a| format!(" ({})", premiere_ligne(a, 80))).unwrap_or_default()))).collect::<Vec<_>>().join(" ; "));
+                    b.push_str(" — `get_fiche` pour lire.\n");
+                }
+            }
+            Err(err) => journal.push(format!("recall_fiches : {err}")),
+        }
+    }
+
+    // Les fichiers touchés par la session, changés depuis par quelqu'un d'autre.
+    if let (Some(t), Some(id)) = (&transcription, &identite) {
+        let mut vus = 0;
+        for f in t.fichiers_touches.iter().rev().take(5) {
+            let Ok(v) = h.appeler("cited_by", json!({ "value": format!("path:{f}"), "under": true, "format": "json", "limit": 3, "since": depuis_48h() })) else { continue };
+            for fiche in fiches_citant(&v) {
+                for a in fiche["apports"].as_array().into_iter().flatten() {
+                    if a["section"] == "diff" && a["author"].as_str().is_some_and(|x| x != id.cle) && vus < 2 {
+                        b.push_str(&format!("`{f}` a changé depuis, par {} : {}\n", a["author"].as_str().unwrap_or("?"), premiere_ligne(a["texte"].as_str().unwrap_or(""), 160)));
+                        vus += 1;
+                    }
+                }
+            }
+        }
+        // Le dernier verdict du juge sur la tâche courante.
+        if let Some(tache) = id.identity.as_deref().and_then(|i| rubrique(i, "doing")).map(fiches_citees).and_then(|v| v.into_iter().next()) {
+            if let Some(bilan) = dernier_apport(h, &format!("bilan : {tache}"), "bilan") {
+                b.push_str(&format!("Le juge, sur « {tache} » : {}\n", premiere_ligne(&bilan, 200)));
+            }
+        }
+    }
+
+    // Le remplissage du contexte, une suggestion une fois.
+    if let Some(t) = &transcription {
+        let (contexte, comment) = t.contexte_estime();
+        let seuil = (reglage.context_tokens as f64 * reglage.suggest_ratio) as u64;
+        if contexte >= seuil && !deja_suggere(reglage, &e.session_id) {
+            b.push_str(&format!("Ton contexte est à ~{} k jetons sur {} k ({comment}) : range maintenant ce qui doit l'être — un apport, un plan clos — plutôt que d'attendre la compaction.\n", contexte / 1000, reglage.context_tokens / 1000));
+            journal.push(format!("suggestion de ranger : {contexte} jetons ({comment})"));
+        }
+    }
+    b
+}
+
+/// Millisecondes UTC d'il y a 48 heures.
+fn depuis_48h() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0).saturating_sub(48 * 3600 * 1000)
+}
+
+/// La suggestion de ranger se fait **une fois** par session : une marque à
+/// côté du journal.
+fn deja_suggere(reglage: &Reglage, session_id: &str) -> bool {
+    if session_id.is_empty() {
+        return false;
+    }
+    let dossier = reglage.journal.parent().map(|d| d.join("hooks-suggestions")).unwrap_or_else(|| PathBuf::from("."));
+    let marque = dossier.join(session_id);
+    if marque.exists() {
+        return true;
+    }
+    let _ = std::fs::create_dir_all(&dossier);
+    let _ = std::fs::write(&marque, b"");
+    false
 }
 
 /// Une ligne datée au journal ; un journal qu'on ne peut pas écrire ne fait
@@ -435,12 +699,13 @@ mod tests {
     }
 
     #[test]
-    fn ce_lot_ne_rend_rien_et_journalise_l_hote_joint_ou_le_silence() {
+    fn un_evenement_sans_bloc_journalise_l_hote_joint_ou_le_silence() {
         let h = FauxHote(Mutex::new(Vec::new()));
-        let r = repondre(&Evenement::lire(SESSION_START).unwrap(), &Reglage::defaut(), Ok(&h));
-        assert!(r.bloc.is_empty(), "rien d'injecté dans ce lot");
-        assert_eq!(r.journal, vec!["SessionStart 25b7ff4b-dabf-42ef-8580-86661c846fb9 : hôte joint, backend « memoire-longue », source compact".to_string()]);
-        assert!(h.0.lock().unwrap().is_empty(), "aucun outil appelé dans ce lot");
+        // Stop ne rend rien encore (lot 3) : l'hôte joint est dit, rien d'écrit.
+        let r = repondre(&Evenement::lire(STOP).unwrap(), &Reglage::defaut(), Ok(&h));
+        assert!(r.bloc.is_empty(), "rien d'injecté au Stop");
+        assert_eq!(r.journal, vec!["Stop s1 : hôte joint, backend « memoire-longue »".to_string()]);
+        assert!(h.0.lock().unwrap().is_empty(), "aucun outil appelé");
         let r = repondre(&Evenement::lire(PROMPT).unwrap(), &Reglage::defaut(), Err("aucun hôte connu (daemon.json absent) : la commande ne le lance pas".into()));
         assert!(r.bloc.is_empty());
         assert_eq!(r.journal[0], "UserPromptSubmit s1 : silence — aucun hôte connu (daemon.json absent) : la commande ne le lance pas");
@@ -571,9 +836,209 @@ mod tests {
             (200, json!({ "closed": true }).to_string()),
         ]);
         let args = vec!["--config".to_string(), config.display().to_string(), "--daemon".to_string(), adresse];
-        assert_eq!(commande(&args, SESSION_START, &mut sortie), 0);
-        assert!(sortie.is_empty());
-        assert!(std::fs::read_to_string(&journal).unwrap().contains("SessionStart 25b7ff4b-dabf-42ef-8580-86661c846fb9 : hôte joint, backend « memoire-longue », source compact"));
+        assert_eq!(commande(&args, STOP, &mut sortie), 0);
+        assert!(sortie.is_empty(), "Stop ne rend rien encore");
+        assert!(std::fs::read_to_string(&journal).unwrap().contains("Stop s1 : hôte joint, backend « memoire-longue »"));
         let _ = std::fs::remove_dir_all(&dossier);
+    }
+
+    // ─── Lot 2 : les blocs de lecture ─────────────────────────────────────
+
+    /// Un hôte qui répond par outil, et garde les appels.
+    struct HoteCanne {
+        reponses: std::collections::HashMap<&'static str, Value>,
+        appels: Mutex<Vec<(String, Value)>>,
+    }
+    impl HoteCanne {
+        fn new(paires: Vec<(&'static str, Value)>) -> Self {
+            Self { reponses: paires.into_iter().collect(), appels: Mutex::new(Vec::new()) }
+        }
+        fn noms(&self) -> Vec<String> {
+            self.appels.lock().unwrap().iter().map(|(n, _)| n.clone()).collect()
+        }
+    }
+    impl Hote for HoteCanne {
+        fn nom(&self) -> &str {
+            "memoire-longue"
+        }
+        fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String> {
+            self.appels.lock().unwrap().push((outil.to_string(), arguments.clone()));
+            // `recall_apports` répond selon la section demandée.
+            if outil == "recall_apports" {
+                let section = arguments["options"]["filter_condition"]["must"][1]["field"]["value"].as_str().unwrap_or("");
+                let cle: &'static str = match section { "identity" => "recall_apports:identity", "plan" => "recall_apports:plan", "bilan" => "recall_apports:bilan", _ => "recall_apports" };
+                return Ok(self.reponses.get(cle).cloned().unwrap_or_else(recherche_vide));
+            }
+            Ok(self.reponses.get(outil).cloned().unwrap_or_else(recherche_vide))
+        }
+    }
+    fn recherche_vide() -> Value {
+        json!({ "ok": true, "result": { "result": [] } })
+    }
+    fn recherche(lignes: Vec<Value>) -> Value {
+        json!({ "ok": true, "result": { "result": lignes.into_iter().map(|d| json!({ "data": d })).collect::<Vec<_>>() } })
+    }
+    fn citant(fiches: Vec<Value>) -> Value {
+        json!({ "ok": true, "result": { "result": Value::Array(fiches).to_string() } })
+    }
+    const IDENTITY: &str = "## identity\nwho: 96 — « mémoire », la session de la mémoire longue\nruntime: claude-code ; session:s1\ncan: les outils MCP memoire-longue\ndoing: la migration de la fiche de Lucie (fiche:migration-fiche) ; la page 04\nholding: worktrees wt-docs-96 ; branches lot-96-*\nmandates: chaque commit poussé dans la minute\npeers: c7 « orchestration » ; 73 « arbre principal »";
+
+    fn hote_avec_identite() -> HoteCanne {
+        HoteCanne::new(vec![
+            ("cited_by", citant(vec![json!({ "name": "96", "about": "la session de la mémoire longue", "state": "current", "refs": [{ "genre": "handle", "valeur": "session:s1" }], "apports": [] })])),
+            ("recall_apports:identity", recherche(vec![json!({ "fiche": "96", "section": "identity", "texte": IDENTITY, "created_at": 10 }), json!({ "fiche": "96", "section": "identity", "texte": "## identity\nwho: vieux", "created_at": 5 })])),
+            ("recall_apports:plan", recherche(vec![json!({ "fiche": "migration-fiche", "section": "plan", "texte": "1. relire la fiche\n2. migrer les apports", "created_at": 7 })])),
+        ])
+    }
+
+    #[test]
+    fn session_start_rend_qui_je_suis_ce_que_je_tiens_et_le_plan_en_cours() {
+        let h = hote_avec_identite();
+        let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").replace("25b7ff4b-dabf-42ef-8580-86661c846fb9", "s1").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
+        let b = &r.bloc;
+        assert!(b.starts_with("[mémoire]\n"), "{b}");
+        assert!(b.contains("Tu es **96** — la session de la mémoire longue"), "{b}");
+        assert!(b.contains("- En cours : la migration de la fiche de Lucie"), "{b}");
+        assert!(b.contains("- Tu tiens : worktrees wt-docs-96"), "{b}");
+        assert!(b.contains("- Pairs : c7"), "{b}");
+        assert!(b.contains("Plan en cours (fiche « migration-fiche ») : 1. relire la fiche …"), "{b}");
+        assert!(!b.contains("compactée"), "pas de consigne de compaction au startup");
+        let noms = h.noms();
+        assert_eq!(noms[0], "cited_by");
+        assert_eq!(h.appels.lock().unwrap()[0].1["value"], "handle:session:s1");
+        assert!(noms.contains(&"recall_apports".to_string()));
+        assert!(r.journal.iter().any(|l| l.contains("bloc de")), "{:?}", r.journal);
+    }
+
+    #[test]
+    fn session_start_apres_compaction_demande_l_identity_a_l_agent() {
+        let h = hote_avec_identite();
+        let r = repondre(&Evenement::lire(SESSION_START.replace("25b7ff4b-dabf-42ef-8580-86661c846fb9", "s1").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
+        assert!(r.bloc.contains("Ta session vient d'être compactée. Au premier tour"), "{}", r.bloc);
+        assert!(r.bloc.contains("Tu es **96**"), "la fiche est rendue même après compaction");
+    }
+
+    #[test]
+    fn sans_fiche_le_bloc_demande_le_handle_ou_la_fiche_et_ne_cree_rien() {
+        let h = HoteCanne::new(vec![]);
+        std::env::remove_var("RAG3WEAVER_AGENT_KEY");
+        let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
+        assert!(r.bloc.contains("Aucune fiche d'identité ne cite cette session"), "{}", r.bloc);
+        assert!(r.bloc.contains("session:25b7ff4b-dabf-42ef-8580-86661c846fb9"), "l'id est donné à l'agent");
+        assert!(r.bloc.contains("Rien n'est créé à ta place"));
+        assert_eq!(h.noms(), vec!["cited_by"], "une lecture, aucune écriture");
+    }
+
+    #[test]
+    fn une_cle_donnee_par_la_variable_ne_vaut_que_si_sa_fiche_existe() {
+        let h = HoteCanne::new(vec![("get_fiche", json!({ "ok": true, "result": { "result": { "data": { "name": "archi", "about": "ex-orchestration", "state": "current" } } } }))]);
+        std::env::set_var("RAG3WEAVER_AGENT_KEY", "archi");
+        let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
+        assert!(r.bloc.contains("Tu es **archi** (clé donnée par RAG3WEAVER_AGENT_KEY"), "{}", r.bloc);
+        assert!(r.bloc.contains("Aucun apport `identity`"), "{}", r.bloc);
+        let h2 = HoteCanne::new(vec![("get_fiche", json!({ "ok": true, "result": { "result": { "data": null } } }))]);
+        let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").as_str()).unwrap(), &Reglage::defaut(), Ok(&h2));
+        assert!(r.bloc.contains("Aucune fiche d'identité"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("aucune fiche de cette clé, indice ignoré")), "{:?}", r.journal);
+        std::env::remove_var("RAG3WEAVER_AGENT_KEY");
+    }
+
+    fn transcription_d_essai(nom: &str, lignes: &[&str]) -> (PathBuf, Reglage) {
+        let dossier = std::env::temp_dir().join(format!("hooks-lot2-{}-{nom}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dossier);
+        std::fs::create_dir_all(&dossier).unwrap();
+        let chemin = dossier.join("t.jsonl");
+        std::fs::write(&chemin, lignes.join("\n") + "\n").unwrap();
+        let mut reglage = Reglage::defaut();
+        reglage.journal = dossier.join("hooks.log");
+        (chemin, reglage)
+    }
+    const T_USER: &str = r#"{"type":"user","promptId":"p1","message":{"role":"user","content":"salut"}}"#;
+    const T_ASSISTANT_PETIT: &str = r#"{"type":"assistant","message":{"role":"assistant","usage":{"input_tokens":2,"cache_creation_input_tokens":100,"cache_read_input_tokens":30000,"output_tokens":5},"content":[{"type":"tool_use","name":"Edit","id":"t1","input":{"file_path":"/p/src/a.rs","old_string":"x","new_string":"y"}}]}}"#;
+    const T_ASSISTANT_PLEIN: &str = r#"{"type":"assistant","message":{"role":"assistant","usage":{"input_tokens":2,"cache_creation_input_tokens":100,"cache_read_input_tokens":800000,"output_tokens":5},"content":[{"type":"text","text":"ok"}]}}"#;
+    const T_BOUNDARY: &str = r#"{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}}"#;
+    const T_SUMMARY: &str = r#"{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"This session is being continued… Summary: la session migrait la fiche."},"promptId":"p9"}"#;
+
+    fn prompt(chemin: &Path, texte: &str) -> Evenement {
+        Evenement::lire(&json!({ "session_id": "s1", "transcript_path": chemin, "cwd": "/p", "hook_event_name": "UserPromptSubmit", "prompt": texte, "prompt_id": "p2" }).to_string()).unwrap()
+    }
+
+    #[test]
+    fn user_prompt_rappelle_les_fiches_les_diffs_des_fichiers_touches_et_le_verdict() {
+        let (chemin, reglage) = transcription_d_essai("rappel", &[T_USER, T_ASSISTANT_PETIT]);
+        let mut h = hote_avec_identite();
+        h.reponses.insert("recall_fiches", recherche(vec![json!({ "name": "régime GPU", "about": "Comment on ménage les cartes du poste.", "state": "current" })]));
+        h.reponses.insert("recall_apports:bilan", recherche(vec![json!({ "fiche": "bilan : migration-fiche", "section": "bilan", "texte": "l'outil put_apport a trompé l'agent sur `source`", "created_at": 9 })]));
+        // `cited_by` répond pareil pour le handle et pour le fichier : la fiche 96 porte un apport diff d'un autre.
+        h.reponses.insert("cited_by", citant(vec![json!({ "name": "96", "about": "la session de la mémoire longue", "state": "current", "refs": [], "apports": [
+            { "section": "diff", "author": "73", "texte": "a.rs : le COPY passe par la lib", "created_at": 11 },
+            { "section": "diff", "author": "96", "texte": "le mien, à ne pas rendre", "created_at": 12 }
+        ] })]));
+        let r = repondre(&prompt(&chemin, "range la fiche régime GPU"), &reglage, Ok(&h));
+        let b = &r.bloc;
+        assert!(b.contains("Fiches en rapport : « régime GPU » (Comment on ménage les cartes du poste.) — `get_fiche` pour lire."), "{b}");
+        assert!(b.contains("`/p/src/a.rs` a changé depuis, par 73 : a.rs : le COPY passe par la lib"), "{b}");
+        assert!(!b.contains("le mien"), "les diffs de la session elle-même ne sont pas rendus");
+        assert!(b.contains("Le juge, sur « migration-fiche » : l'outil put_apport a trompé"), "{b}");
+        assert!(!b.contains("compactée") && !b.contains("Ton contexte"), "{b}");
+        let appels = h.appels.lock().unwrap();
+        let path = appels.iter().find(|(n, a)| n == "cited_by" && a["value"] == "path:/p/src/a.rs").expect("cited_by path:");
+        assert!(path.1["since"].as_u64().unwrap() > 0);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn user_prompt_court_sans_rien_a_dire_rend_un_bloc_vide() {
+        let (chemin, reglage) = transcription_d_essai("vide", &[T_USER, T_ASSISTANT_PETIT]);
+        let h = hote_avec_identite();
+        let r = repondre(&prompt(&chemin, "oui"), &reglage, Ok(&h));
+        assert!(r.bloc.is_empty(), "{}", r.bloc);
+        assert!(!h.noms().contains(&"recall_fiches".to_string()), "un prompt de moins de 8 caractères ne cherche rien");
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn le_premier_tour_apres_compaction_lance_le_defi_d_identite() {
+        let (chemin, reglage) = transcription_d_essai("compact", &[T_USER, T_ASSISTANT_PETIT, T_BOUNDARY, T_SUMMARY]);
+        let h = hote_avec_identite();
+        let r = repondre(&prompt(&chemin, "on continue la migration"), &reglage, Ok(&h));
+        assert!(r.bloc.contains("Ta session a été compactée. Avant toute autre chose, écris ton apport `identity`"), "{}", r.bloc);
+        assert!(r.bloc.contains("(fiche « 96 »)") && r.bloc.contains("Ton dernier `identity` : ## identity …"), "{}", r.bloc);
+        let (chemin2, reglage2) = transcription_d_essai("apres", &[T_USER, T_ASSISTANT_PETIT, T_BOUNDARY, T_SUMMARY, T_ASSISTANT_PETIT]);
+        let r = repondre(&prompt(&chemin2, "on continue la migration"), &reglage2, Ok(&h));
+        assert!(!r.bloc.contains("compactée"), "un tour est passé : plus de défi — {}", r.bloc);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+        let _ = std::fs::remove_dir_all(chemin2.parent().unwrap());
+    }
+
+    #[test]
+    fn le_contexte_plein_suggere_de_ranger_une_seule_fois() {
+        let (chemin, reglage) = transcription_d_essai("plein", &[T_USER, T_ASSISTANT_PLEIN]);
+        let h = hote_avec_identite();
+        let r = repondre(&prompt(&chemin, "encore une question"), &reglage, Ok(&h));
+        assert!(r.bloc.contains("Ton contexte est à ~800 k jetons sur 1000 k (usage du dernier tour) : range maintenant"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("suggestion de ranger")));
+        let r2 = repondre(&prompt(&chemin, "encore une question"), &reglage, Ok(&h));
+        assert!(!r2.bloc.contains("Ton contexte"), "une fois par session — {}", r2.bloc);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn le_bloc_est_borne_et_le_dit() {
+        let long = "x".repeat(5000);
+        let b = borner(&long, 100);
+        assert_eq!(b.chars().count(), 100 - 12 + "\n[… borné]".chars().count());
+        assert!(b.ends_with("[… borné]"));
+        assert_eq!(borner("court", 100), "court");
+        assert_eq!(borner("sans borne", 0), "sans borne");
+    }
+
+    #[test]
+    fn les_rubriques_et_les_fiches_citees_se_lisent() {
+        assert_eq!(rubrique(IDENTITY, "doing"), Some("la migration de la fiche de Lucie (fiche:migration-fiche) ; la page 04"));
+        assert_eq!(rubrique(IDENTITY, "absent"), None);
+        assert_eq!(fiches_citees("x fiche:a, fiche:b (fiche:a) fiche:«c»"), vec!["a", "b", "c"]);
+        assert_eq!(premiere_ligne("une\ndeux", 10), "une …");
+        assert_eq!(premiere_ligne("seule", 10), "seule");
     }
 }
