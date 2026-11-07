@@ -20,14 +20,28 @@ moment ».
   - `open_branch {repo, branch, from?}` : un worktree frère sur cette branche (créée depuis `from`
     si elle n'existe pas) ;
   - `fetch {repo}`, `pull {repo, worktree}` ;
-  - `new_code_project {name, path?, remote?}` : `git init`, un premier commit, le remote s'il est
-    dit ;
+  - `new_code_project {name, path?, git?, remote?}` : un dossier de projet ; `git init` et un
+    premier commit **seulement si on le lui dit** (`git: true`, ou un `remote`) — Lucie : « il doit
+    pouvoir aussi démarrer un truc même sans git du tout » ;
   - `new_rag3weaver_project {name, kind}` : **pas encore** — il rend « seuls les projets de code
     se créent pour l'instant » ; la consigne de l'atelier dit de demander le genre de projet quand
     la demande est ambiguë, avant d'appeler l'un ou l'autre.
   - `list_repos` : les dépôts attachés, leurs worktrees, leurs branches, l'état de leur index.
+- **Des outils intégrés, jamais des commandes de l'agent** (Lucie : « il faut des builtins pour
+  charger des dépôts / worktrees, car s'il le fait en ligne de commande on n'aura pas de hook ; ou
+  bien il peut déclarer aussi un truc manuellement le cas échéant ») : `attach_repo`,
+  `open_branch`, `fetch`, `pull`, `new_code_project` sont **exécutés par l'hôte** (déclarés au
+  manifeste d'atelier, livrés comme gabarits), donc vus par le flux, la boîte, le juge et les
+  hooks ; l'agent ne lance jamais `git clone` ou `git worktree add` lui-même par `run_command`.
+- **Le repli déclaratif** : `declare_repo {path, branch?}` — l'utilisatrice (dans l'IDE) ou l'agent
+  déclare un dépôt déjà présent sur le disque, sans que l'hôte clone quoi que ce soit ; l'hôte
+  pose son manifeste et l'ouvre comme pour `attach_repo`.
 - **Plusieurs worktrees par dépôt** : une session tient N worktrees, plusieurs dans le même dépôt
   s'il le faut (la page 02 disait « une tâche par dépôt » : corrigé, c'est un lot de worktrees).
+
+**Sans git** : un dossier sans dépôt s'attache aussi (`declare_repo` sur un dossier) ; ses tâches
+sont alors des dossiers à elles (une copie de la racine), et leurs changements se relisent par
+différence de dossiers ; `git_init {repo}` le transforme en dépôt sur demande.
 
 ## 2. Un worktree attaché devient un backend de code, à la volée
 
@@ -38,6 +52,9 @@ moment ».
 - **L'indexation est asynchrone** : le premier index part en fond, sa progression s'affiche sous le
   dépôt dans la barre « Dépôts » (la ligne d'état de l'index, déjà rendue par la recherche) ;
   l'étanchéité (page 01, lot 1) fait travailler l'agent sur les fichiers pendant ce temps.
+- **Ce que la barre montre** : attacher un dépôt fait apparaître **un enfant sous la session**,
+  « chargé », son rag « en cours » avec sa progression, puis « indexé » ; détacher le renvoie en
+  « disponibles » (page 02, § vocabulaire et la forme de `/ide/etat`).
 - **Où vit la conversation** : sous le dépôt ou le worktree qu'elle tient ; une conversation
   d'atelier qui ouvre un worktree s'y rattache (elle garde son fil).
 - Un worktree d'un dépôt déjà indexé peut naître d'un **instantané** de la base du dépôt (le
@@ -72,6 +89,9 @@ chaque worktree.
 
 ## Les lots
 
+0. **La première marche concrète** (c7, d'après Lucie) : un chat (ou l'équipier) qui a les outils
+   intégrés `attach_repo` / `open_branch` (et `declare_repo`), dont l'appel crée le worktree, pose
+   le manifeste, ouvre le backend et lance l'index, avec l'événement sur le flux.
 1. Le manifeste d'atelier et ses outils de dépôts (`attach_repo`, `open_branch`, `list_repos`,
    `fetch`, `pull`), l'instanciation et l'ouverture à la volée, la barre « Dépôts » (avec
    hooks-essai pour la barre).

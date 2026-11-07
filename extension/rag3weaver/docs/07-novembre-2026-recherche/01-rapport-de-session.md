@@ -88,3 +88,19 @@ chemin de l'hôte — `e2e_lectures::une_ligne_collee_de_120_caracteres_retrouve
 est rouge tant que lucivy ne corrige pas, et c'est lui qui jugera la montée de version. La borne du
 coût reste juste (le coût du flou est corrigé à part dans lucivy, 9356b58, pas encore publié) ; ce
 qui manque est la trouvaille d'un passage long, pas la vitesse.
+
+## Copier une base pour la mesurer : base et plein texte ensemble, à l'arrêt
+
+La seconde mesure de la mémoire longue (sur lucivy 4.3.2) a vu un index plein texte de 0 document,
+alors que la base en service en a 2 (vérifié par G : « cartes poste », « hooks essai »). Le 0 venait
+de la copie : `memoire-longue.rag3db`, son `.wal` et son dossier `.fts` copiés par reflink **pendant
+que l'hôte tenait la base** (sa marque `.ecrivain` posée, le WAL écrit quelques minutes avant). La
+base et le plein texte ont pu être pris à deux générations différentes ; un dossier `.fts` dont la
+génération n'est pas celle de la base est reconnu « à rebâtir » à l'ouverture, et la copie l'a vu
+vide. La première copie, à 17 h 17, était tombée juste par chance.
+
+**La règle** : une base se copie pour mesure avec tout ce qui la compose — `.rag3db`, `.wal`,
+`.extensions` et le dossier `.fts` — **en un même instant sans écrivain** : l'hôte arrêté pour ce
+backend, ou un instantané pris par l'hôte (G) ; jamais pièce par pièce sous un écrivain vivant. Avant
+de mesurer, lire le nombre de documents de la cible dans la sortie de la sonde et le comparer à la
+base en service : un index vide ou plus petit veut dire que la copie est fausse, pas la mesure.

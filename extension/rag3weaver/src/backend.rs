@@ -44,6 +44,11 @@ pub struct TeammatePolicy {
     /// n'est abandonné, rien ne part en double.
     #[serde(default = "TeammatePolicy::vingt")]
     pub tool_wait_notice_s: u64,
+    /// Après un arrêt de l'hôte, l'équipier dont la demande n'a pas de fin
+    /// reprend à sa frontière au redémarrage (le défaut) ; `false` le laisse en
+    /// attente, sa boîte dit pourquoi.
+    #[serde(default = "TeammatePolicy::oui")]
+    pub resume_after_restart: bool,
 }
 
 impl TeammatePolicy {
@@ -53,11 +58,14 @@ impl TeammatePolicy {
     fn vingt() -> u64 {
         20
     }
+    fn oui() -> bool {
+        true
+    }
 }
 
 impl Default for TeammatePolicy {
     fn default() -> Self {
-        TeammatePolicy { max_failed_steps: Self::trois(), tool_wait_notice_s: Self::vingt() }
+        TeammatePolicy { max_failed_steps: Self::trois(), tool_wait_notice_s: Self::vingt(), resume_after_restart: Self::oui() }
     }
 }
 
@@ -819,6 +827,10 @@ pub struct Surcharges {
     /// La racine du workspace (absolue) et si la tâche y écrit : jamais la
     /// racine de l'arbre principal quand celle-ci est dans un dépôt git.
     pub workspace: Option<(PathBuf, bool)>,
+    /// Les déclarations sont une copie qu'aucun dépôt ne suit (une tâche dont
+    /// seul le code est dans un dépôt) : `declare` refuse, rien ne serait
+    /// versionné ni fusionné.
+    pub declarations_hors_depot: bool,
 }
 
 /// Une base copiée sous la porte des écrivains

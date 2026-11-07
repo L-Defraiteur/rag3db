@@ -48,6 +48,13 @@ anglais, le reste en français.
   `step_done` porte `{item, succeeded, done, remaining}`.
 - **Le hook UserPromptSubmit** (`claude_code_hook.rs:727-…`, archi) ne lit ni l'équipier ni sa boîte.
 
+**Une tâche tient un à n espaces de travail** (page 02, § modèle : l'intention, un plan, une
+boîte, un bilan ; un worktree par dépôt touché ; une proposition par espace). **Chaque espace** (Lucie, 7 novembre : « il doit pouvoir aussi démarrer un
+truc même sans git du tout ») est un worktree sur une branche quand la racine du workspace est un
+dépôt git, un dossier à elle (une copie de la racine) sinon ; ses propositions se relisent par
+différence de dossiers, et `git_init` en fait un dépôt sur demande. Le correctif de la création
+de tâche (la racine prise à `workspace.root`, puis sans git) est porté par hooks-essai.
+
 ## 1. Les outils standards, complets et étanches
 
 **Ce que l'équipier voit, par source de défaillance** :
@@ -59,7 +66,7 @@ anglais, le reste en français.
 | l'index est en retard ou sous un verrou d'écriture long (un `index` en cours) | l'appel attend derrière, sans le dire | l'appel attend toujours (rien n'est abandonné, rien ne part en double), et au-delà de `teammate.tool_wait_notice_s` (20 s par défaut) la boîte le dit : « « outil » attend depuis N s… » |
 | un graphe d'outil échoue (nœud en erreur) | `{"error": …}` au modèle, le pas continue | pareil, et le juge le compte en repli d'outil |
 | le tour entier échoue (le modèle ne répond pas…) | le lancement meurt | l'échec va dans la boîte (`report` « le pas N n'a pas abouti : … »), le pas suivant repart de la frontière avec les mêmes nouvelles ; `teammate.max_failed_steps` (3 par défaut) échecs d'affilée arrêtent l'équipier en `ended "erreur : …"` |
-| l'hôte meurt | le pas meurt avec lui, la tâche reste « en cours » | lot suivant : le pas interrompu est journalisé comme tel ; à la reprise de l'hôte, l'équipier dont le plan est vivant et sans `ended` reprend à la frontière suivante |
+| l'hôte meurt | le pas meurt avec lui, la tâche reste « en cours » | au redémarrage, chaque tâche relue dont la dernière demande n'a ni `ended` ni `stop` : la boîte dit l'arrêt (le pas en cours n'a pas fini) et l'équipier reprend à sa frontière, son plan et son curseur gardés ; `teammate.resume_after_restart: false` le laisse en attente en le disant |
 
 **La politique, au manifeste** (clé `teammate`, `TeammatePolicy` dans `src/backend.rs`) :
 `max_failed_steps` et `tool_wait_notice_s`. **Le modèle** d'un équipier dont la base ne s'ouvre
@@ -88,6 +95,11 @@ la réponse arrive à la frontière. Sortie entière journalisée dans le dossie
 shell libre. Les scripts du dépôt (`scripts/*.sh`) : déclarés au manifeste par leur chemin
 (`workspace.scripts: ["scripts/check_features.sh"]`), exécutés en argv, jamais par `sh -c` —
 **question 1**.
+
+**La reprise après un arrêt de l'hôte** (lot du 7 novembre au soir) : témoin
+`teammate_tests::a_teammate_resumes_after_the_host_restarts`, rouge d'abord sur master 207d334f9
+avec le seul témoin (« en 60 s, l'équipier interrompu n'a pas repris et fini », 109 s avec le
+bâti), vert avec la reprise.
 
 **Témoins (faux modèle, `tests/common/fake_sse.rs`)** : un pas qui lit, édite et cherche pendant
 que le backend est fermé par `/backend/close` au milieu (le pas finit, chaque retour après la

@@ -117,6 +117,14 @@ impl Backend {
     }
 
     pub fn declare_set(&self, files: &[(String, String)], reason: &str) -> Result<Declared, String> {
+        // Une tâche dont les déclarations ne sont dans aucun dépôt (relecture
+        // d'everything declarative) : un refus nommé, plutôt qu'un `git init`
+        // dans la copie ou un commit dans le dépôt du code.
+        if self.prepared().surcharges().declarations_hors_depot {
+            return Err("déclarations hors dépôt : cette tâche a une copie des déclarations qu'aucun git ne suit (non \
+                        versionnées, non fusionnées) ; déclarez sur le backend principal"
+                .into());
+        }
         let _one = DECLARING.lock().unwrap_or_else(|e| e.into_inner());
         if reason.trim().is_empty() {
             return Err("une déclaration dit pourquoi : la raison est vide".into());

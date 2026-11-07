@@ -1292,6 +1292,11 @@ impl DaemonServer {
         let stopper = self.stopper();
         // Les bilans de session des backends qui les déclarent (page 04).
         host.servir_les_bilans();
+        // Les équipiers que l'arrêt de l'hôte a interrompus reprennent (page
+        // 07-novembre-2026-everything-declarative/01, § 1).
+        for l in host.reprendre_les_equipiers() {
+            eprintln!("[équipier] {l}");
+        }
         // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
         // session de client mort ne se fermerait qu'à la lecture de l'état.
         let releve = {

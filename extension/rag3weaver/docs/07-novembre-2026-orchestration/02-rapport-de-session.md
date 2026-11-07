@@ -421,3 +421,68 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   codeparsers, 96 (run_e2e.sh), arbre (juge + graphe cité ; lib de demain bâtie
   ce soir), embarquement (spans, à rebaser), recherche (second-ecrivain,
   creux-par-les-spans : 139 ms contre 429 avec le tokenizer local), archi (pont).
+
+## Mise à jour de 22 h 35
+
+- **Lib de demain : « fini » à 22 h 08** (arbre) : rag3db-build-7cd11e5fa… (c4f8610b9,
+  e86d2f688, b3bc6e479), verdict format 43 vert, ABI : vtables Table/RelTable/
+  NodeTable, contrôle des deux sens sous la lib neuve sur copies d'avant-43 :
+  aucun écart sur les quatre bases ; rebâtie à 8 h seulement si un commit moteur
+  arrive la nuit ; fenêtre G 8 h 30 sans instantané, granite redémarrés avec parité.
+- **Reprise d'ED sur master (4ae8c93a8)**, mais poussée en raccourci : les suites
+  chat, lectures, tty, juge, équipier n'avaient pas de verdict sur la tête
+  poussée ; elles tournent maintenant sur master, correctif en avant si rouge,
+  et son script refuse désormais une suite sans verdict. Le juge des bilans n'a
+  aucun plafond : ticket 89c6b9adc, politique `bilans.max_per_hour` (20 par
+  défaut) à coder dès les suites rendues.
+- **Retours de Lucie sur la pose de 21 h 51** (tickets 14f4e7274) : largeur fixe du
+  texte des bulles, code entre accents graves et blocs à colorer et lier, mise
+  en page humaine des retours d'outils (texte intégral gardé, bouton « brut »,
+  rien retiré ni résumé). Coloration : B (spans typés par les grammaires
+  tree-sitter de codeparsers, route POST /highlight, octets + UTF-16) avec A
+  (highlight.js) en repli ; page de codeparsers acceptée ; relevé LR_CodeRag par
+  tty (ca1368779). **La barre tranchée** : session › {Dépôts › worktrees (branche,
+  chargé, rag), Sous-sessions (récursif)} ; badge des deux côtés ; fil
+  d'Ariane ; filtre ; menu « par session / par dépôt ».
+- **Essai à deux** : Lucie peut créer une tâche sur son dépôt dans l'IDE ; c7 écrit
+  dans sa boîte (POST /ide/teammate/mailbox, from c7) ; `bilans.memoire` prêt chez
+  G (ligne absolue vers sa mémoire, sauvegarde .avant-bilans-7-nov, relecture du
+  manifeste par POST /backend/open sans couper la session), à poser à son oui ;
+  sans plafond du juge des bilans tant que 89c6b9adc n'est pas codé.
+- **hooks-essai** : appel-a-delai prêt (350eaabe7 : `deadline_ms` appliqué par
+  stop_run, `cancelled_by: "deadline"` ; ticket « une connexion par run » à part),
+  dossier de session sur master (825ba6bf1). **Cœur** : groupe 1 clos (deux tickets
+  non reproduits avec témoins). **Hotfixs** : RTree reclassé chantier géo, passe à
+  G2. **luciepc** : 6 places lourdes ; targets 201 → 150 Gio ; disques sains.
+
+## Mise à jour de 22 h 50
+
+- **lucivy 4.3.2 publiée** (PR #21, tag au mot direct de Lucie, crates.io/npm/PyPI) :
+  passage exact long, flou long, apostrophes, clés inconnues nommées ; montée de
+  rag3weaver en lot chez recherche (montee-lucivy-4-3-2 : trois crates, doublement
+  de l'apostrophe retiré, L et K par la mesure, témoin de la ligne collée).
+- **Essais de l'équipier par c7** (Lucie : « fais des essais seule, demain je
+  regarderai les sessions d'exemple ») : `bilans.memoire` posé dans son manifeste
+  de code (G, 22 h 10, relecture sans coupure, juge des bilans armé, surveillé) ;
+  la première tâche refusée par l'hôte : « le backend n'est pas dans un dépôt git »
+  (la création d'une tâche cherchait le dépôt dans le dossier du manifeste, pas
+  dans workspace.root) → ticket et correctif tache-hors-depot (hooks-essai, en
+  passe ; la relecture d'ED y a trouvé un second défaut, les déclarations hors
+  dossier d'un manifeste code-tree) ; pose par G avec `task_writes: true` et
+  l'outil `edit_file` dans son manifeste (sans eux l'équipier ne peut pas écrire).
+  Trois consignes prêtes (journaux d'annulation dans /tmp, racine disparue, bases
+  laissées dans /tmp par les tests). Méthode de Lucie : « regarde les retours de
+  ses outils et si les params sont cohérents avec ce qu'il voulait, s'il est
+  bloqué, et itère ».
+- **Décisions de Lucie** : des outils intégrés de l'hôte pour attacher dépôts et
+  worktrees (jamais la ligne de commande : pas de hook sinon), repli déclaratif ;
+  une tâche doit s'ouvrir même sans git (espace = worktree si dépôt, dossier
+  sinon, `git_init` sur demande) ; le modèle : une tâche = l'intention, 1..n
+  espaces (un worktree par dépôt touché), plan unique dont chaque pas dit son
+  espace, une proposition par espace, sous-tâches déléguées ; écran : session ›
+  tâches › espaces ; « une session tient potentiellement plusieurs worktrees ».
+- **ED** : suites manquantes de la reprise jouées, toutes vertes ; garde du script
+  (pas de push sans verdict complet) ; ticket du plafond du juge des bilans
+  (89c6b9adc) en cours de code. **Arbre** : lib de demain finie (7cd11e5fa…),
+  passe du juge + graphe cité en troisième tour. **Codeparsers** : pointeur en
+  passe avec un drapeau qui attend tache-hors-depot.
