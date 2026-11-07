@@ -538,3 +538,21 @@ basculer le hook en « pas de seuil », et une fiche hors sujet passe à 0.35,
 alors qu'à 0.32 elle était tue au tour d'avant. Proposé : juger l'échelle
 après l'exclusion, garder un seuil relatif en échelle brute, et ne pas
 rappeler sur un tour de notification.
+
+**Troisième tour sous 3 ter (a) (18 h 16 min 39 s, le message de c7 sur le régime GPU).**
+
+- **Requête :** « Régime GPU embarque exceptions llama-server Lucie GTT portable
+  rends-moi hooks.log ». Elle est juste, cette fois.
+- **Rappel :** 215 ms ; « régime GPU » 0.37, sous le seuil de 0.50 ; silence.
+- **Déjà-vu :** « déjà rendu : 0 », alors que le tour d'avant l'avait rendue.
+- **Bloc :** aucun. Le message est arrivé au milieu d'un de mes tours, en
+  rappel système : le hook a tourné, mais rien ne pouvait m'être injecté par
+  là.
+
+**Ce que disent les trois tours :**
+
+- La fiche fait 0.32, 0.35 et 0.37, que le message soit dans son sujet ou
+  hors sujet. Cette échelle ne sépare pas « en rapport » de « hors sujet », et
+  un seuil fixe ne peut pas y arriver.
+- Le déjà-vu ne retient pas un rendu passé par le chemin « sans seuil ».
+- Le seuil dépend de la fiche exclue.
