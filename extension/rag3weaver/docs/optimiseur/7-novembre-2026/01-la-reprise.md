@@ -29,6 +29,29 @@ consignes viennent de c7 (rag3db-74).
   993 caractères. Sans `< /dev/null`, `--rejouer` attend stdin depuis un terminal ; c'est corrigé par le
   lot 3 bis d'archi. Le `.claude/settings.local.json` de la session d'essai, c'est Lucie qui le repose.
 
+- **16 h 31**, 120695b37 (hooks, lot 3 bis), binaire 24faff78. Le premier tour de hooks-essai porte le
+  nouveau binaire : 17 h 05 m 55 s, `rag3weaver-backend@1794065083`, recall_fiches en 1 999 ms.
+- **17 h 22**, 37904f103 : l'IDE React entier (vues 5, 6, 7 et 3b) et lucivy 4.3.1 publiée, binaire
+  10878f01. Le témoin l_ide_d_un_vrai_hote est vert (63 s). Le parcours d'everything declarative est joué
+  par CDP sur 7970 : arbre, fichier avec sa marge, symbole, graphe, DAG, réactions, propositions, tâches,
+  bilans, édition ouverte puis fermée sans rien taper, ancienne page ; la console est sans erreur. Lucie
+  entre par `rag3weaver-backend ide`.
+- **La garde lucivy de l'essai** (essai-hote-nouveau.sh) : depuis 37904f103, elle exige `lucivy-core-4.3.1`
+  du registre et aucune révision git dans le binaire. Elle rougissait parce qu'elle cherchait encore a925d94.
+
+## lucivy 4.3.1 publiée sur master (37904f103)
+
+Rebasée deux fois. L'index des tickets était à reprendre sur celui de master : les trois tickets lucivy
+passent en fermés. Elle est poussée sous les noms lucivy-publiee-2 puis lucivy-publiee-3. La passe entière
+de luciepc tourne sur la tête exacte, lib 04063ee06 épinglée et MOTEUR_ANCIEN=1 :
+- check_features 0 ;
+- lib entière 1954 passed ;
+- navigateur 12 ;
+- e2e_lectures 2 + 19.
+
+La première passe de la journée avait rougi sur la garde du target (controle bâti par un autre arbre) ; elle
+a été rejouée après RAG3WEAVER_TARGET_REPRENDRE=1.
+
 ## Le relevé des tables de liens
 
 À 14 h 55, un instantané à chaud releve-7-nov (base 1,37 Go, .wal 5,2 Mo, .fts 1,1 Go ; taille et date
