@@ -877,7 +877,7 @@ fn le_premier_jeton_d_un_tour_arrive_dans_la_page() {
         let releve = n.evaluer(
             "(() => { const run = [...document.querySelectorAll('article.message.assistant')].at(-1)?.dataset.run; \
              const t = window.__chatTokens ?? { received: {}, applied: {} }; \
-             return { run, recus: t.received[run] ?? [], poses: t.applied[run] ?? [] }; })()",
+             return { run, recus: t.received[run] ?? [], poses: t.applied[run] ?? [], debordements: t.missed ?? [] }; })()",
         );
         releves.push(releve);
     }

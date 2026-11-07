@@ -32,7 +32,7 @@ type ToolBlock = { id: string; name: string; args: string; result?: string; ok?:
 type Part = { kind: "text"; text: string } | ({ kind: "tool" } & ToolBlock);
 type Message = { kind: "message"; role: "user" | "assistant" | "error"; parts: Part[]; run?: string; live?: boolean; propositions: TurnResult["propositions"]; task?: { tache: NonNullable<TurnResult["tache"]>; fichiers: string[] } };
 type Item = Message | { kind: "info"; text: string };
-type TokenLog = { received: Record<string, number[]>; applied: Record<string, number[]> };
+type TokenLog = { received: Record<string, number[]>; applied: Record<string, number[]>; missed: { sujet: string; count: number }[] };
 
 const textOf = (m: Message) => m.parts.filter((p) => p.kind === "text").map((p) => (p as { text: string }).text).join("");
 const message = (role: Message["role"], text: string, extra: Partial<Message> = {}): Message => ({ kind: "message", role, parts: text ? [{ kind: "text", text }] : [], propositions: [], ...extra });
@@ -219,10 +219,12 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     // run, les rangs reçus du flux avant tout filtre, puis ceux que la page a
     // posés dans la bulle. Un rang 0 absent des reçus accuse le flux ; reçu mais
     // absent des posés, la page. Lu par les témoins, jamais par la page.
-    const tokenLog = ((window as unknown as { __chatTokens?: TokenLog }).__chatTokens ??= { received: {}, applied: {} });
+    const tokenLog = ((window as unknown as { __chatTokens?: TokenLog }).__chatTokens ??= { received: {}, applied: {}, missed: [] });
     return onFlux((d: FluxEvent) => {
       const ev = d.evenement ?? {};
       if (ev.kind === "Token" && typeof ev.seq === "number") (tokenLog.received[String(ev.run)] ??= []).push(ev.seq);
+      // Le relais de l'hôte dit les événements qu'un débordement du bus lui a fait perdre.
+      if (ev.kind === "EventsMissed") tokenLog.missed.push({ sujet: d.sujet, count: Number(ev.count ?? 0) });
       // Le flux rouvert (page à peine chargée, flux coupé puis repris) : l'état
       // du chat se relit, avant tout filtre — ce signal n'a pas de backend.
       if (d.sujet === "flux" && ev.kind === "ouvert") {
