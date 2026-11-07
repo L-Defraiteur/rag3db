@@ -790,6 +790,20 @@ fn run() -> Result<(), String> {
     if tous.first().map(String::as_str) == Some("ide") {
         return entrer_dans_l_ide();
     }
+    // **Le hook de Claude Code** : le JSON de l'événement sur l'entrée, le
+    // bloc sur la sortie, toujours 0 — une session ne s'arrête jamais sur nous.
+    if tous.first().map(String::as_str) == Some("hook") {
+        #[cfg(not(all(feature = "daemon", feature = "rag3db-native")))]
+        return Err("ce binaire est bâti sans les features `daemon` et `rag3db-native` : le hook ne peut pas joindre l'hôte".into());
+        #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+        let mut entree = String::new();
+        #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+        {
+            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut entree);
+            let code = rag3weaver::claude_code_hook::commande(&tous[1..], &entree, &mut std::io::stdout());
+            std::process::exit(code);
+        }
+    }
     if tous.first().map(String::as_str) == Some("templates") {
         return gabarits_livres(&tous[1..]);
     }
