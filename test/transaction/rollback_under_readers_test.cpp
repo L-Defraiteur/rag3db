@@ -26,12 +26,20 @@
 #include <string>
 #include <thread>
 
+#include "common/constants.h"
+#include "common/data_chunk/data_chunk_state.h"
+#include "common/vector/value_vector.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
+#include "storage/table/chunked_node_group.h"
+#include "transaction/transaction.h"
 
+using namespace rag3db::common;
 using namespace rag3db::main;
+using namespace rag3db::storage;
 using namespace rag3db::testing;
+using namespace rag3db::transaction;
 
 namespace {
 
@@ -271,6 +279,50 @@ TEST_F(RollbackUnderReaders, AReaderSurvivesTheRollbackOfAnotherWriter) {
     EXPECT_NE(steps.find("WRONG 0"), std::string::npos)
         << "[check: reader-sees-only-committed-rows] " << steps;
     EXPECT_EQ(steps.find("refus"), std::string::npos) << steps;
+}
+
+// Le défaut du ticket du 7 novembre 2026 au grain du bloc, sans course : un bloc dont toutes les
+// lignes sont annulées perdait son information de version (versionInfo.reset()), et « pas
+// d'information de version » veut dire « toutes les lignes validées ». Un lecteur qui tenait le
+// bloc et le compte de lignes lu avant l'annulation (le balayage tient ses blocs depuis V2-1b,
+// pièce 2) comptait alors toutes les lignes du COPY annulé : 10 + 914, 10 + 2 048 relations dans
+// AReaderSurvivesTheRollbackOfAnotherWriter, 4 rejeux sur 60. Ici le lecteur demande ligne par
+// ligne, avec l'ancien compte : aucune ne doit être visible, ni à lui ni à l'écrivain annulé.
+TEST_F(RollbackUnderReaders, AFullyRolledBackBlockShowsNoRowToAnyReader) {
+    auto* memoryManager = getMemoryManager(*database);
+    std::vector<LogicalType> types;
+    types.push_back(LogicalType::INT64());
+    InMemChunkedNodeGroup block(*memoryManager, types, false /* compression */,
+        StorageConfig::CHUNKED_NODE_GROUP_CAPACITY, 0 /* startRowIdx */);
+    constexpr uint64_t rows = 914;
+    auto state = std::make_shared<DataChunkState>(StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+    state->getSelVectorUnsafe().setSelSize(rows);
+    ValueVector values(LogicalType::INT64(), memoryManager);
+    values.setState(state);
+    for (uint64_t i = 0; i < rows; i++) {
+        values.setValue<int64_t>(i, static_cast<int64_t>(i));
+    }
+    const Transaction writer(TransactionType::WRITE, Transaction::START_TRANSACTION_ID + 1,
+        7 /* startTS */);
+    const Transaction reader(TransactionType::READ_ONLY, Transaction::START_TRANSACTION_ID + 2,
+        7 /* startTS */);
+    ASSERT_EQ(block.append(&writer, {&values}, 0, rows), rows);
+    ASSERT_EQ(block.getNumRows(), rows);
+    // Avant l'annulation : les lignes de l'écrivain sont à lui seul.
+    EXPECT_TRUE(block.isInserted(&writer, rows - 1));
+    EXPECT_FALSE(block.isInserted(&reader, rows - 1));
+
+    block.rollbackInsert(0, rows, INVALID_TRANSACTION);
+
+    EXPECT_EQ(block.getNumRows(), 0u);
+    for (const uint64_t row : {uint64_t{0}, uint64_t{1}, uint64_t{500}, rows - 1}) {
+        EXPECT_FALSE(block.isInserted(&reader, row))
+            << "[check: rolled-back-block-hides-its-rows] ligne " << row
+            << " visible au lecteur après l'annulation complète du bloc";
+        EXPECT_FALSE(block.isInserted(&writer, row))
+            << "[check: rolled-back-block-hides-its-rows] ligne " << row
+            << " encore visible à l'écrivain annulé";
+    }
 }
 
 } // namespace
