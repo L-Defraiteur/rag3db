@@ -149,3 +149,65 @@ de scopes, RagForge). Plan du week-end : docs/06-novembre-2026-orchestration/01.
    rangement de la mémoire (96), la semaine « moteur ennuyeux » (cœur, hotfixs).
 4. Le prototype vertical des vues par scope (recherche, everything declarative,
    arbre) quand la file est vide.
+
+## Complément du soir (22 h 40), ce qui a changé depuis l'après-midi
+
+- **Moteur** : `courant` = rag3db-build-17a094d12… (format 43) depuis 19 h 57
+  aux deux postes, instantanés avant-43 en retour ; master porte en plus
+  c4f8610b9 (COPY de relations), e86d2f688 (projection en lecture seule) et
+  b3bc6e479 (retrait des générations) : lib ordinaire bâtie le soir par
+  l'arbre, fenêtre G à 8 h 30 le 8 nov. avec le redémarrage des granite.
+  Passes : 17a094d12 + MOTEUR_ANCIEN=1 jusqu'à cette lib, puis la nouvelle,
+  MOTEUR_ANCIEN vide. Figement des verrous CSR corrigé (e526cc4b6) ;
+  instruction en échec (17a094d12) ; décalages provisoires d'un COPY de
+  relations (c4f8610b9, inatteignable dans l'hôte : une connexion écrivaine par
+  backend ; second processus refusé par le moteur, témoin de recherche) ;
+  tickets LOCKS fermé (094aee5f8), validation à moitié appliquée et annulation
+  sous tampon plein fermés non reproduits avec témoins en garde.
+- **Hooks Claude Code** : lots 3 bis, 3 ter (a) (requête extraite, budget 1 s,
+  déjà-vu, journal), (b) (signaux lus par ligne, le plein texte fait le
+  candidat, dense seul non jugé, un rendu par tour, juge Flash différé sous
+  `recall_judge`), (c) (plafond horaire, jetons du juge au journal, requête
+  nettoyée) posés chez Lucie ; `--rejouer --session` ; premier bloc juste à
+  18 h 48 ; le juge n'a fait aucun appel. Cause du rappel muet : `chunk.score`
+  lu au lieu de `signals`. Clé `recall_judge: false` pour couper le juge.
+- **IDE / chat** (hooks-essai) : parties dans l'ordre d'arrivée, heure à l'appel,
+  résultat déplié, scroll, colonne fluide, pleine hauteur, barre « Dépôts /
+  Mémoire / Projets » (kind par gabarit, repli par l'espace de travail), récap
+  d'usage et fiches écrites par conversation, journal de l'hôte horodaté et
+  attribué, flux de l'IDE qui ne perd plus de trame (`Flux::publier`),
+  agent_ports sans horloge, `/call` à délai (`deadline_ms`, en file).
+- **Équipier** : boîte adressée (id, to, reply_to, MailboxLine sur /ide/flux,
+  pending/seen/list), étanchéité (base fermée → mode fichiers, pas raté →
+  reprise, `teammate.max_failed_steps`), reprise après la mort de l'hôte (en
+  file), `role` d'outil et de réaction, `call_models` en politique, le pas 1
+  qui servait enfin (ec9a333e3), index des tickets généré (en-tête par ticket,
+  `check_tickets.py --index/--lot`).
+- **Pont et canal** (archi, en file, hooks-pont-7) : `mail send|reply|pending|
+  seen`, fils Codex (`codex queue --thread <uuid>`, index ~/.codex/
+  session_index.jsonl), `rag3weaver-backend canal` (serveur MCP `claude/channel`,
+  flag `--dangerously-load-development-channels server:rag3weaver-canal`, pas
+  ce soir), règle de la boîte (seule une ligne adressée lance l'équipier).
+  Codex 0.167 installé chez Lucie ; essai Claude → Codex réussi à 16 h 53.
+- **Terminal** (tty) : tty-1 (client SSE avec reprise), tty-2 (vue inline
+  ratatui), tty-3 (Daemon Code Summoning en cellules, --depot/--tache) sur
+  master ; thème local au crate en attendant le mot de Lucie.
+- **Recherche** : creux servi à tout lecteur, filtre du creux juste, requête
+  longue bornée (L = 100, K = 64, mesurés), second-ecrivain, surlignage par les
+  spans du service (139 ms contre 429), `models.sparse` posé chez Lucie (hôte
+  sans burn → spans) ; lucivy 4.3.2 (PR #21 : passage exact long, flou long
+  15,8 s → 96 ms, apostrophe, clés nommées) au mot de Lucie, un seul tag.
+- **Règles neuves** : le verrou `poste push` ne couvre que le dernier pas ; une
+  suite non jouée ou sautée est rouge ; un contrôle qui ne juge rien est rouge ;
+  luciepc à 6 places lourdes, la mesure exclusive au mot de c7 ; « ne pas
+  s'empêcher de progresser » ; vocabulaire git à l'écran (dépôts, worktrees,
+  branches, PR ; projet rag3weaver pour le déclaratif pur) ; `kind` par
+  gabarit ; ligne disque à chaque pose (portable 352 Gio, luciepc 580).
+- **Visions ajoutées** : session multi-dépôts (page 02 d'ED), « l'atelier ouvre
+  les dépôts » (page 03, accord de Lucie attendu), gabarits de mémoire épinglés
+  avec `templates upgrade` (M8), géo plus tard (temps 1D, canevas, géographie,
+  ville du code).
+- **En attente de Lucie** : confirmation lucivy 4.3.2 ; thème partagé
+  daemon.json ; page 03 ; effacement des instantanés et branches distantes
+  (refusés aux sessions par permission) ; `bilans.memoire` sur son manifeste
+  de code ; facturation Vertex le 8.
