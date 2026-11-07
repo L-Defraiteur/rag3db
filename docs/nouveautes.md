@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **7 nov. — L'IDE entier est en React.** Après le cadre, le chat, le fichier et la
+  recherche du 25 octobre : les tâches de l'agent et leur relecture avec l'équipier, les
+  bilans de session par fiche, l'arbre, le symbole rendu section par section, le graphe, le
+  DAG vivant, les réactions, les propositions, et l'édition dans la page (CodeMirror du
+  magasin embarqué, Ctrl-S sur l'empreinte lue, le conflit montré par sa différence).
+  L'ancienne page n'a plus de vue à elle. 43d7489ee, 08d10babf, 7897d2c96, a4ffea748.
 - **7 nov. — Un lecteur ne voit plus jamais les lignes d'une écriture annulée.** Un bloc
   entièrement annulé perdait ses versions, ce qui voulait dire « tout validé » pour un lecteur
   qui le tenait encore : 10 + 2 048 relations d'un COPY annulé comptées, 4 fois sur 60. Les
