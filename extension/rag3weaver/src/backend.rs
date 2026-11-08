@@ -4011,8 +4011,19 @@ impl Backend {
                 }
             }
         }
-        // Un paramètre du gabarit absent des arguments garde son défaut ;
-        // un requis manquant échoue ici — compté, jamais bloquant.
+        // **Un requis que l'appel ne porte pas tait le crochet** (8 novembre
+        // 2026, essai 3 de c7 : « argument requis manquant : 'old' » quand le
+        // modèle écrivait un fichier entier par edit_file). L'appel a pris une
+        // autre forme de l'outil, que le crochet ne sait pas lire : rien à dire.
+        if let Some(p) = graph.params().iter().find(|p| p.required && !hargs.contains_key(p.name.as_ref())) {
+            eprintln!(
+                "[crochet {tool_name}] tu — l'appel ne porte pas « {} », que le crochet exige (une autre forme de l'outil){}",
+                p.name,
+                crate::host_log::caller_suffix()
+            );
+            return;
+        }
+        // Un paramètre du gabarit absent des arguments garde son défaut.
         let outcome = graph
             .instantiate(&Value::Object(hargs))
             .map_err(|e| e.to_string())
@@ -7317,8 +7328,8 @@ mod tests {
         let rendu = serde_json::to_string(&r).unwrap();
         assert!(rendu.contains("À voir aussi"), "la section du crochet manque : {rendu}");
 
-        // (b) Un gabarit qui exige un paramètre jamais fourni : l'outil
-        // répond entier, sans section — l'erreur se journalise et se tait.
+        // (b) Un gabarit qui exige un paramètre que l'appel ne porte pas :
+        // l'outil répond entier, sans section — le crochet se tait et le dit.
         let exigeant = "%% tool: apres_essai\n%% description: essai\n%% param: inconnu string! -- jamais fourni\n%% result: schema.result\n\ngraph LR\n    schema[\"SchemaNode(target=$inconnu)\"]\n";
         let (_d, prepared) = montage(json!({"graph": "apres_essai.mmd"}), exigeant);
         let conn = crate::Rag3dbConnection::in_memory().unwrap();

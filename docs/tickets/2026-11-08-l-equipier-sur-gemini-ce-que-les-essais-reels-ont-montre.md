@@ -62,6 +62,12 @@ sable ignoré en silence serait un bac à sable qui ne dit pas ce qu'il fait. D�
 **Le gabarit code borne cargo** : `CARGO_BUILD_JOBS=8` dans `sandbox.env`, la règle de Lucie
 (huit au plus, deux cœurs libres) ; `code-tree add` le recopie avec le reste du workspace.
 
+**Le crochet d'après edit_file** (points 8 et 9). Un gabarit nommé introuvable dans le dossier
+des gabarits se lit dans le gabarit livré du même nom, que le binaire embarque : un hôte lancé
+hors du crate trouve `motif-ailleurs` (témoin `a_named_template_falls_back_to_the_shipped_one`).
+Un crochet dont l'appel ne porte pas un paramètre requis (edit_file qui écrit le contenu entier,
+sans `old`) se tait et le dit au journal, au lieu d'une erreur.
+
 ## Ce qui reste
 
 1. **Attendre le superviseur tue la tâche** (corrigé, voir plus haut) (essai 4, racine-disparue). L'équipier a demandé à
@@ -113,14 +119,14 @@ sable ignoré en silence serait un bac à sable qui ne dit pas ce qu'il fait. D�
 7. **La reprise d'une tâche finie ne se dit pas** (essai 4). Une `request` sur une tâche
    `ended` l'a relancée à 02:35:23, ce qui est voulu. La réponse du POST et la boîte doivent
    dire « tâche reprise ».
-8. **Le crochet d'après edit_file ne trouve pas son gabarit** (essai 3, 01:25:58) : «
+8. **Le crochet d'après edit_file ne trouve pas son gabarit** (corrigé, voir plus haut) (essai 3, 01:25:58) : «
    RenderResultsNode: gabarit 'motif-ailleurs' : ni un nom fourni (default, compact), ni du
    Jinja ». Un nom de gabarit se lit dans `templates/render/<nom>.md.jinja` relatif au
    répertoire courant du processus, ou à `RAG3WEAVER_RENDER_TEMPLATES`
    (`src/dataflow/render_nodes.rs`), pas relatif au manifeste. Un hôte lancé ailleurs que dans
    `extension/rag3weaver` ne le trouve pas. Deux formes : résoudre depuis le dossier du
    manifeste ou du crate, ou fournir `motif-ailleurs` comme `compact`.
-9. **« argument requis manquant : 'old' »** (essai 3, 01:33:54), le modèle ayant appelé
+9. **« argument requis manquant : 'old' »** (corrigé, voir plus haut) (essai 3, 01:33:54), le modèle ayant appelé
    edit_file sans `old`. Vérifier que le résultat d'edit_file le dit au modèle.
 
 ## Pour le fermer
