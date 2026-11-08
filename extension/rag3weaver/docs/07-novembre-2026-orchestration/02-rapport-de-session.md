@@ -954,7 +954,7 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 6. **La file en cours** : archi (hooks 3 ter e), 96 (M4 pas 3), ED (429/503), hotfixs (A, puis B,
    puis G3/G5, puis le 3e lot de l'équipier), la coloration B (hooks-essai, codeparsers, tty).
 
-## 10 h 05 — la file du matin a tourné, le lot coupure du cœur est sur master
+## 09 h 52 — la file du matin a tourné, le lot coupure du cœur est sur master
 
 - **Atterris** : hooks-essai, memoire-nommee (7f1a40e2f : la nature avant le dépôt) ; recherche,
   dense-filtre-sous-l6 (0e528854a : la recherche filtrée revient sous l'instantané de son appel ;
@@ -986,7 +986,7 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   portera a312f823e, le rejeu de hotfixs et vecteur-du-noeud-copie ; la pose attend aussi la cause
   du SIGSEGV.
 
-## 10 h 25 — Lucie est réveillée : ses premières décisions
+## 10 h 03 — Lucie est réveillée : ses premières décisions
 
 - **G3 : oui**, « rouvre toujours les extensions notées, absolument » → hotfixs mène G3 (1)+(2) au
   push après A, dans le même rebâti si possible ; le refus avec option reste une suite non tranchée.
@@ -995,7 +995,7 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   daemon.json tout de suite ; Lucie réagit au rendu. Règle à garder : un rendu ou un design se
   branche et se montre, on ne demande pas d'accord avant.
 
-## 11 h 00 — la cause du SIGSEGV, l'atelier lancé, un chantier de Lucie pour le banc
+## 10 h 15 — la cause du SIGSEGV, l'atelier lancé, un chantier de Lucie pour le banc
 
 - **Le SIGSEGV de l'hôte a sa cause, cœur et hotfixs d'accord** : le heap-use-after-free de
   `OnDiskHNSWIndex::shrinkForNode` à la finalisation de l'index par un COPY (le vecteur du nœud pris
@@ -1032,7 +1032,7 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 - **La file** : recherche (best-signal, à toi) → ED (crochets) → hotfixs A → hooks-essai
   (coloration B, verte) → 96 → tty (thème) → G3 → cœur (vecteur-du-noeud-copie) → rebâti.
 
-## 11 h 35 — six lots de plus, A sur master, le banc bloqué par une permission
+## 10 h 33 — six lots de plus, A sur master, le banc bloqué par une permission
 
 - **Atterris** : recherche, best-signal (d540813d5 : `chunk.signal`, le morceau par la contribution
   RRF, `bestSignal` par ligne ; le ticket reste ouvert pour le seuil, à mesurer) ; ED, les crochets
@@ -1064,7 +1064,7 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   recherche ») ; ED, l'atelier (atelier-attach df3be297b : `attach_worktree`, `list_worktrees`,
   WorktreeNode, RepoAttached ; passe complète ensuite).
 
-## 12 h 30 — Lucie au clavier : le modèle de décision prend forme, le banc débloqué
+## 10 h 58 — Lucie au clavier : le modèle de décision prend forme, le banc débloqué
 
 - **A confirmé** par une mesure honnête : la passe rag3weaver entière sur la tête de master (A +
   coupure) liée à un moteur bâti dans rag3db-dbg (lib et extension à côté, md5 relevés) :
@@ -1099,7 +1099,7 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 - **L'atelier** (ED) : premier pas écrit (atelier-attach df3be297b : gabarit livré `atelier`,
   `attach_worktree {path}` et `list_worktrees`, WorktreeNode, RepoAttached), modules puis passe.
 
-## 13 h 00 — les README remis à jour, la file de l'après-midi
+## 11 h 18 — les README remis à jour, la file de la mi-journée
 
 - **Atterris** : recherche, mes-recherches (932197e79 avec la relecture d'ED, et la course du
   journal des runs corrigée) et sa ligne de nouveautés (ad07c8b16) ; ED, le ticket du témoin du
@@ -1126,3 +1126,11 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 - **Le rebâti** suit le hash du cœur : l'arbre bâtit la lib (a312f823e + A + HNSW, + G3 s'il est
   là), G pose luciepc d'abord sous une réindexation forcée de code-lourd (une heure, deux sens
   relevés), puis le portable avec check-manifests et un instantané reflink avant.
+
+## 11 h 42 — une correction d'heures
+
+Les titres des six sections précédentes (de « 09 h 52 » à « 11 h 18 ») portaient des heures en avance
+d'une heure à une heure et demie (« 10 h 05 » à « 13 h 00 ») : j'estimais l'heure au lieu de la lire.
+Ils sont remis sur l'heure réelle du commit de chaque section. Les heures citées **dans le texte** de ces
+sections pour les mots de Lucie et les événements du matin sont approximatives et peuvent être en
+avance d'autant ; les hashs, eux, sont exacts.
