@@ -688,3 +688,109 @@ Le dernier pas seul sous le verrou.
 
 **Les hooks depuis 3 ter (b)** : un seul bloc juste, des silences raisonnés, aucun
 appel du juge (la mémoire n'a que deux fiches).
+
+## À reprendre ici (22 h 15 environ) : le chat lisible
+
+**Tickets** sur master (14f4e7274) : la largeur des bulles, le code coloré et
+relié, la mise en page humaine des retours d'outils. **Décision de c7** : B avec
+A en repli, dans cet ordre.
+
+1. **La largeur et la mise en page humaine des outils.**
+   - La largeur : `.body` et `details.outil` n'ont plus de largeur fixe.
+   - La mise en page par outil : search_code, read_file, grep_files,
+     list_files. Le bouton « brut » montre le texte exact ; le rendu ne retire
+     ni ne résume rien, et un champ manquant se dit.
+2. **Le code en ligne et la coloration A.**
+   - Le code en ligne (accents graves) est rendu en code partout, messages de
+     la personne et flux compris, et lié quand c'est un chemin
+     (`src/x.rs:12`).
+   - A : highlight.js core dans le bundle, avec les langues du dépôt et un
+     thème clair et sombre.
+3. **La coloration B**, en lot à trois avec codeparsers et tty : l'hôte rend des
+   spans tree-sitter, et `code.truc` se résout par l'index.
+
+**Ordre de la file** : `appel-a-delai` (350eaabe7) part d'abord, au « à toi » de
+c7, avec `SUITES="e2e_lectures e2e_demon_hote e2e_mcp_cycle_de_vie"`, puis sa
+ligne de nouveautés. Le lot « chat lisible » vient ensuite.
+
+**La référence** pour la coloration : la page 07 de tty
+(`docs/07-novembre-2026-tty/07-le-code-colore-du-hub.md`).
+
+## À reprendre ici (22 h 40 environ) : la branche chat-lisible
+
+Base ca1368779. Les commits, chacun précédé de son témoin rouge :
+
+| commit | contenu |
+|---|---|
+| f1aff928c, 48abbd62d | le code se lit comme du code : `lib/code.tsx` (highlight.js, le code en ligne, les chemins en lien), la largeur des bulles libérée, le thème `hljs-*` et `hl-*` dans `app.css` |
+| 1bfcb9741, a03de7d7f | le retour d'un outil se lit : `lib/toolview.tsx` (le Markdown habillé, les lignes numérotées de read_file, les autres champs, le bouton brut, la coupure dite) |
+
+**Reste à faire dans le lot :**
+
+- **La barre par session.** Forme accordée avec everything declarative :
+  - `/ide/etat` gagne `chat_sessions: [{id, name, model, repos: [{backend, repo, branch, worktree, loaded, rag: {state, percent?}}], memory: {backend|null, rag: bool}}]`
+    et `available_repos` ;
+  - la jauge et les fiches restent lues dans `GET /ide/chat` ;
+  - une session = une entrée de `chats`, avec son dépôt et les worktrees de
+    ses tâches ;
+  - `rag.state` se lit dans `index_states`.
+  - Le ticket est sur master (c4f584e56).
+- **Les tests à jouer à luciepc** : le rouge et le vert de `le_code_du_chat…`
+  (lancés) et de `le_retour_d_un_outil…`.
+- **Deux défauts côté modèle, à mettre en ticket** :
+  - le chat envoie au modèle la réponse JSON entière de read_file, grep et
+    list (champs delivery, validation, run) ;
+  - la section « Liens » de search_code n'arrive pas au modèle
+    (`response.after` n'est pas lu par `BackendTools`).
+
+**La file pour master** : `appel-a-delai` (350eaabe7) d'abord, au « à toi » de
+c7, puis `chat-lisible`. Coloration B ensuite, à trois avec codeparsers
+(`POST /ide/highlight` et `/highlight`, des spans avec octets et UTF-16, les
+classes `hl-*`) et tty.
+
+## Soirée du 7 novembre : la tâche hors dépôt, puis le lot du chat sur master
+
+**La tâche hors dépôt** (master 76ecc990e). c7 l'a relevé en lançant la première
+tâche de l'équipier chez Lucie : la création cherchait le dépôt git dans le
+dossier du manifeste (`~/.config/…`, hors git). Le correctif :
+- Le dépôt de la tâche est celui des déclarations, ou à défaut celui de
+  `workspace.root`.
+- Hors dépôt, la tâche reçoit tout `templates/` (relecture d'ED : les chemins
+  `../../tools/` sortent du dossier du manifeste).
+- `declare` y refuse nommément, et la copie a une profondeur bornée.
+
+Deux témoins, rouges puis verts. La passe a été VERT, et G l'a posé à 23 h 01.
+Pour que l'équipier écrive, il reste à Lucie de poser `task_writes` et
+`edit_file` dans son manifeste : la permission de G l'a refusé, et je n'y touche
+pas. Le ticket de la tâche sans git est ouvert.
+
+**La barre session › tâches › espaces** (modèle de c7 avec Lucie, forme d'ED).
+- `/ide/etat` rend `chat_sessions`, `tasks` et `available_repos`.
+- Une session est un backend sans tâche qui converse ou qui est ouvert. Une
+  mémoire n'en est une que si on lui parle.
+- L'espace d'une tâche porte le nom de son dépôt, pas celui du dossier du
+  worktree.
+- « Actifs seulement » garde ce qui tourne ou attend une réponse.
+
+Les témoins de l'hôte et du navigateur ont été rouges sur 746b9c242 et verts sur
+5ac96009e. Avant le rouge, le brouillon jamais compilé a été retiré dans un
+commit, puis il est revenu avec la mise en œuvre.
+
+**Le passage commun chat-et-delai** (master 682655352). Il réunit chat-lisible et
+les trois commits repris un par un d'appel-a-delai.
+- Une accolade perdue à la résolution du conflit a rendu check_features rouge.
+  Corrigée, la passe a été VERT partout.
+- Le rejeu court sur 0683cc474 (le pointeur de codeparsers et le plafond d'ED) a
+  sorti l'intermittent Gemini du juge (ticket 47684ec95). Joué une fois seul sur
+  la tête, il est vert ; il est compté par le ticket, au mot de c7.
+- Les trois contrôles sont lus. L'arbre poussé ne diffère de la tête testée que
+  par un rapport d'ED.
+
+**Leçons** :
+- Après une résolution de conflit, comparer chaque moitié du fichier à son
+  original avant de lancer une passe.
+- Un témoin jugé par Gemini qui rougit seul se rejoue une fois sur la tête,
+  avant d'accuser qui que ce soit.
+
+**Demain** : la coloration B (avec codeparsers et tty), les liens de symbole, la
+tâche sans git.

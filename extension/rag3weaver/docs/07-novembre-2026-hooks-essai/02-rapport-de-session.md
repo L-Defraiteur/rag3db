@@ -62,3 +62,21 @@ fil complet, tour par tour, est dans `01-journal-de-la-session.md`.
 - **Le verrou de push ne couvre que le dernier pas.** Mon premier script
   bloquait sur tout code arrivé ; la procédure ne demande de rejouer que pour
   du code sous `extension/rag3weaver`.
+
+## Nuit du 8 novembre : la même fiche rappelée deux fois
+
+Aux deux messages de G sur la coupure de l'hôte (03 h 37 et 03 h 45), le hook a rendu un bilan
+du juge sans rapport, et il semblait le même. Ce n'en était pas un, mais deux :
+- Deux fiches distinctes, deux bilans de deux runs de la même consigne. Chacune est nommée par le
+  prompt entier de son run (2 264 et 1 811 caractères), avec les mêmes 600 premiers caractères.
+- Le déjà-vu les a notées sous leurs deux noms (tours 106 et 107).
+- Il a pourtant compté la première comme neuve au tour 107, parce que son empreinte avait changé
+  entre-temps. L'hôte a été relancé à 03 h 43 sur eb154bf5f. La cause n'est pas départagée : un
+  résumé réécrit, ou `DefaultHasher` qui ne serait pas stable d'un binaire à l'autre.
+
+Le ticket `2026-11-08-les-bilans-du-juge-remontent-au-rappel-sur-des-mots-courants` propose
+deux voies :
+- écarter les bilans du rappel en tête de tour ;
+- ou ne les faire porter que par le juge différé.
+
+Dans les deux cas : un nom court pour un bilan, et une empreinte stable (blake3).
