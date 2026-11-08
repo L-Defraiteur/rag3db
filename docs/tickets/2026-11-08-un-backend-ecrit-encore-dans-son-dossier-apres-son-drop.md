@@ -28,8 +28,8 @@ lot). Les suites passent ; seul le dossier reste.
 Départager ce qui écrit après le Drop du backend : la base encore tenue par un fil (le moteur
 recrée son `.readers` à l'ouverture d'une lecture), l'écriture différée d'un run du journal (une
 grâce de 250 ms), le plein texte qui finit son lot. Puis faire attendre ses fils à l'arrêt d'un
-backend. **C'est le même défaut** que celui relevé par hotfixs en relisant la branche de
-l'équipier `agent/tests-bases-dans-tmp` (« un `drop(base)` efface la base sous un démon encore
-vivant », docs/08-novembre-2026-orchestration/01-essais-de-l-equipier.md) : un seul correctif pour
-les deux, chez hotfixs, qui complète cette branche. Les trois suites sortent alors de la liste des
-résidus, dans le commit du correctif, prouvé par plusieurs passes propres.
+backend. **Une cause à part** (hotfixs, 8 novembre 2026) : ses bases-fichiers de la branche de
+l'équipier `agent/tests-bases-dans-tmp` sont une autre cause ; le seul cas qui y ressemblait (un
+`drop(base)` sous un démon encore vivant, dans `un_lecteur_choisit_son_chemin_et_le_dit`) y est
+déjà retiré. Ce ticket porte celle-ci ; son correctif est à part. Les trois suites sortent de la
+liste des résidus dans le commit qui la corrige, prouvé par plusieurs passes propres.
