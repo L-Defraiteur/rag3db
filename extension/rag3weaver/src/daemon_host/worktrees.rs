@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 
 use super::DaemonHost;
-use crate::dataflow::worktree_nodes::WorktreeHost;
+use crate::dataflow::worktree_nodes::{WorktreeAnswer, WorktreeHost};
 
 /// L'hôte des worktrees que l'hôte pose sur chaque backend qu'il ouvre.
 pub struct HoteDesWorktrees {
@@ -476,6 +476,15 @@ pub(super) fn a_l_ouverture(hote: &DaemonHost, hosted: &super::Hosted, b: &crate
     }
 }
 
+/// **La carte de l'avancement d'un dépôt dont l'index tourne**, que la page rend sous le
+/// tour et nourrit des `IndexProgress` du flux (Lucie, 8 novembre 2026, 16 h 30 : « par
+/// SSE, pas par polling »). Lu sans ouvrir le dépôt : un dépôt fermé n'avance pas.
+fn carte_si_avance(hote: &super::DaemonHost, manifeste: &Path) -> Option<Value> {
+    let h = hote.hosted_existing(manifeste)?;
+    let avance = h.backend.try_read().ok().is_some_and(|g| g.as_ref().is_some_and(|b| crate::dataflow::index_nodes::indexings_running(&b.catalog) > 0));
+    avance.then(|| json!({ "kind": "index_progress", "sujets": ["repos"], "repo": h.id, "manifest": h.manifest }))
+}
+
 /// Le backend de `h` est-il ouvert dans l'hôte (ou en train de l'être) ?
 fn ouvert(h: &super::Hosted) -> bool {
     h.backend.try_read().map(|g| g.is_some()).unwrap_or(true)
@@ -531,7 +540,7 @@ impl super::DaemonHost {
 }
 
 impl WorktreeHost for HoteDesWorktrees {
-    fn attach(&self, path: &Path) -> Result<String, String> {
+    fn attach(&self, path: &Path) -> Result<WorktreeAnswer, String> {
         let worktree = path
             .canonicalize()
             .map_err(|e| format!("le worktree {} n'existe pas ({e}) : donnez le chemin d'un dossier sur ce poste", path.display()))?;
@@ -571,7 +580,8 @@ impl WorktreeHost for HoteDesWorktrees {
             (Some(d), None) => format!("dépôt {d}, tête détachée"),
             (None, _) => "hors d'un dépôt git".to_string(),
         };
-        Ok(match index {
+        let ui: Vec<Value> = carte_si_avance(&hote, &manifeste).into_iter().collect();
+        let text = match index {
             Some(i) if deja => format!("Le worktree {} est déjà attaché ({ou}) ; il était fermé, il est rouvert, et {i}. list_worktrees dit où il en est.", worktree.display()),
             Some(i) => format!("Worktree attaché : {} ({ou}) ; {i}. list_worktrees dit où il en est.", worktree.display()),
             None => format!(
@@ -579,10 +589,11 @@ impl WorktreeHost for HoteDesWorktrees {
                 worktree.display(),
                 etat_de_l_index(&hote.state(), &manifeste)
             ),
-        })
+        };
+        Ok(WorktreeAnswer { text, ui })
     }
 
-    fn open_branch(&self, path: &Path, branch: &str, from: Option<&str>) -> Result<String, String> {
+    fn open_branch(&self, path: &Path, branch: &str, from: Option<&str>) -> Result<WorktreeAnswer, String> {
         let lieu = path
             .canonicalize()
             .map_err(|e| format!("{} n'existe pas ({e}) : donnez un worktree ou un dépôt de ce poste", path.display()))?;
@@ -619,18 +630,61 @@ impl WorktreeHost for HoteDesWorktrees {
                 (frere.clone(), Some(format!("git -C {} {}", principal.display(), args.join(" "))))
             }
         };
-        let attache = self.attach(&worktree)?;
-        Ok(match commande {
+        let WorktreeAnswer { text: attache, ui } = self.attach(&worktree)?;
+        let text = match commande {
             Some(c) => format!("Branche {branch} ouverte dans le worktree {} (commande : `{c}`). {attache}", worktree.display()),
             None => format!("La branche {branch} est déjà ouverte dans le worktree {} : aucune commande git. {attache}", worktree.display()),
-        })
+        };
+        Ok(WorktreeAnswer { text, ui })
     }
 
-    fn list(&self) -> Result<String, String> {
+    fn progress(&self, repo: Option<&str>) -> Result<WorktreeAnswer, String> {
+        let hote = self.hote()?;
+        let mut lignes = Vec::new();
+        let mut ui = Vec::new();
+        let etat = hote.state();
+        for m in hote.racines_de_code()?.registered_manifests() {
+            let m = m.canonicalize().unwrap_or(m);
+            let racine = super::espace_du_manifeste(&m);
+            let (depot, branche) = racine.as_deref().map(|r| (super::repo_of(r), super::branch_of(r))).unwrap_or((None, None));
+            let carte = carte_si_avance(&hote, &m);
+            let vise = match repo {
+                // Un dépôt nommé : son nom, sa branche, « dépôt · branche » ou un bout du chemin.
+                Some(r) => {
+                    let r = r.trim();
+                    depot.as_deref() == Some(r)
+                        || branche.as_deref() == Some(r)
+                        || depot.as_deref().zip(branche.as_deref()).is_some_and(|(d, b)| format!("{d} · {b}") == r)
+                        || racine.as_deref().is_some_and(|p| p.to_string_lossy().contains(r))
+                }
+                None => carte.is_some(),
+            };
+            if !vise {
+                continue;
+            }
+            lignes.push(format!(
+                "- {} — dépôt {}, branche {} ; index : {}",
+                racine.as_deref().map(|r| r.display().to_string()).unwrap_or_else(|| "?".into()),
+                depot.as_deref().unwrap_or("hors git"),
+                branche.as_deref().unwrap_or("détachée"),
+                etat_de_l_index(&etat, &m)
+            ));
+            ui.extend(carte);
+        }
+        let text = match (repo, lignes.is_empty()) {
+            (Some(r), true) => return Err(format!("aucun worktree attaché ne répond à « {r} » : list_worktrees les dit")),
+            (None, true) => "Aucun index n'avance en ce moment.".to_string(),
+            (_, false) if ui.is_empty() => lignes.join("\n"),
+            (_, false) => format!("{}\nLa carte sous ce message suit l'avancement en direct.", lignes.join("\n")),
+        };
+        Ok(WorktreeAnswer { text, ui })
+    }
+
+    fn list(&self) -> Result<WorktreeAnswer, String> {
         let hote = self.hote()?;
         let manifestes = hote.racines_de_code()?.registered_manifests();
         if manifestes.is_empty() {
-            return Ok("Aucun worktree attaché : attach_worktree en attache un.".into());
+            return Ok(WorktreeAnswer::from("Aucun worktree attaché : attach_worktree en attache un.".to_string()));
         }
         // Un worktree fermé dont le premier index n'a pas fini se rouvre et le relance :
         // « pas ouvert » ne se dit plus d'un index qui devrait tourner.
@@ -640,6 +694,7 @@ impl WorktreeHost for HoteDesWorktrees {
         }
         let etat = hote.state();
         let mut lignes = vec![format!("{} worktree(s) attaché(s) :", manifestes.len())];
+        let ui: Vec<Value> = manifestes.iter().filter_map(|m| carte_si_avance(&hote, m)).collect();
         for m in manifestes {
             let racine = super::espace_du_manifeste(&m);
             let (depot, branche) = racine.as_deref().map(|r| (super::repo_of(r), super::branch_of(r))).unwrap_or((None, None));
@@ -651,7 +706,7 @@ impl WorktreeHost for HoteDesWorktrees {
                 etat_de_l_index(&etat, &m)
             ));
         }
-        Ok(lignes.join("\n"))
+        Ok(WorktreeAnswer { text: lignes.join("\n"), ui })
     }
 }
 
@@ -1663,6 +1718,67 @@ mod tests {
         let dit = super::etat_de_l_index(&etat, &manifeste);
         assert!(dit.starts_with("plein texte prêt"), "{dit} ; l'état : {etats:#}");
         assert!(!dit.contains("en cours"), "{dit}");
+    }
+
+
+    /// **La carte de l'avancement passe à la page, jamais au modèle** (Lucie, 8 novembre
+    /// 2026, 16 h 30 et 16 h 31). Dans le chat de l'atelier, le modèle attache un worktree
+    /// dont l'index part : le tour `tool` de la session porte `ui` (`index_progress`, l'id
+    /// du dépôt), `ToolCallFinished` aussi sur le flux, et aucun tour que voit le modèle
+    /// ne dit « index_progress ». `show_progress` rend la même carte à la demande.
+    #[test]
+    fn a_progress_card_reaches_the_page_and_never_the_model() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("rag3db-essai");
+        std::fs::create_dir_all(depot.join("src")).unwrap();
+        for i in 0..200 {
+            std::fs::write(depot.join(format!("src/f{i}.rs")), format!("pub fn f{i}() -> u32 {{ {i} }}\n")).unwrap();
+        }
+        for args in [&["init", "-q", "-b", "essai"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"], &["add", "-A"], &["commit", "-q", "-m", "le dépôt"]] {
+            git(&depot, args);
+        }
+        let racine = d.path().join("poste");
+        std::fs::create_dir_all(&racine).unwrap();
+        let (atelier, racines) = atelier_pose(d.path(), &racine);
+        let vus = Arc::new(Mutex::new(String::new()));
+        let chemin = depot.display().to_string();
+        let model: ChatModel = {
+            let vus = vus.clone();
+            Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+                let (vus, chemin) = (vus.clone(), chemin.clone());
+                Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                    for t in turns {
+                        vus.lock().unwrap().push_str(&t.content);
+                    }
+                    let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                    match turns[depuis..].iter().filter(|t| t.role == "tool").count() {
+                        0 => MockLlm::new("").with_tool_calls(vec![("attach_worktree".to_string(), json!({ "path": chemin }).to_string())]).generate(turns, opts, sink),
+                        1 => MockLlm::new("").with_tool_calls(vec![("show_progress".to_string(), json!({ "repo": "rag3db-essai" }).to_string())]).generate(turns, opts, sink),
+                        _ => MockLlm::new("C'est parti.").generate(turns, opts, sink),
+                    }
+                })))
+            })
+        };
+        let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines).with_runs_root(d.path().join("runs")));
+        host.se_connaitre();
+        let flux = Arc::new(Mutex::new(Vec::new()));
+        host.ide_flux().abonner(Box::new(Capte(flux.clone())), None, None);
+        let h = host.hosted(&atelier).unwrap();
+        host.chat_turn(&h.id, &format!("Ouvre le worktree {}", depot.display())).expect("le tour");
+
+        let etat = host.chat_state(&h.id).unwrap();
+        let outils: Vec<&Value> = etat["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "tool").collect();
+        assert_eq!(outils.len(), 2, "{etat:#}");
+        let manifeste = PathBuf::from(format!("{}/code-rag3db-essai/templates/backends/code/backend.json", d.path().join("config").display())).canonicalize().unwrap();
+        let id_du_depot = host.hosted_existing(&manifeste).expect("le dépôt attaché est hébergé").id.clone();
+        for t in &outils {
+            let carte = &t["ui"][0];
+            assert_eq!(carte["kind"], "index_progress", "{t:#}");
+            assert_eq!(carte["repo"], id_du_depot, "{t:#}");
+        }
+        assert!(!vus.lock().unwrap().contains("index_progress"), "le modèle a vu la carte");
+        let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+        assert!(capte.lines().any(|l| l.contains("ToolCallFinished") && l.contains("index_progress")), "ToolCallFinished porte la carte sur le flux");
     }
 
 }
