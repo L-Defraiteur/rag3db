@@ -894,6 +894,32 @@ pub enum Quota {
     None,
 }
 
+/// **La règle de reprise après un refus du fournisseur** (Lucie, 8 novembre 2026 :
+/// « après les quotas il faut mettre une minute puis un retour exponentiel ») :
+/// une minute, puis le double à chaque refus d'affilée, au plus dix minutes. Le
+/// client du modèle la suit, et l'équipier aussi entre ses pas.
+pub const REPRISE_BASE: std::time::Duration = std::time::Duration::from_secs(60);
+/// Le plafond d'une attente de la règle de reprise.
+pub const REPRISE_PLAFOND: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// L'attente avant la `n`-ième reprise (1 = la première) : `base` doublée
+/// `n - 1` fois, au plus `plafond`.
+pub fn attente_de_reprise(base: std::time::Duration, n: u32, plafond: std::time::Duration) -> std::time::Duration {
+    base.saturating_mul(1u32 << n.saturating_sub(1).min(16)).min(plafond)
+}
+
+/// Une durée dite comme on la lit : « 45 s », « 7 min 30 s ».
+pub fn duree_lisible(ms: u64) -> String {
+    let s = ms / 1000;
+    if s < 60 {
+        format!("{:.1} s", ms as f64 / 1000.0)
+    } else if s % 60 == 0 {
+        format!("{} min", s / 60)
+    } else {
+        format!("{} min {} s", s / 60, s % 60)
+    }
+}
+
 impl LlmError {
     /// Le fournisseur n'a pas répondu (quota ou panne) : pas un défaut du
     /// code qui l'appelle.
@@ -920,7 +946,7 @@ impl fmt::Display for LlmError {
             }
             LlmError::Unavailable { status, quota, retries, waited_ms, message } => {
                 let statut = status.map(|s| format!("HTTP {s}")).unwrap_or_else(|| "connexion".to_string());
-                let duree = format!("{:.1} s", *waited_ms as f64 / 1000.0);
+                let duree = duree_lisible(*waited_ms);
                 match quota {
                     Quota::Exhausted => write!(
                         f,
