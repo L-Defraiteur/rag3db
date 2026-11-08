@@ -142,13 +142,14 @@ pub(super) mod tests {
         let (id, _) = id_de(&adresse, &manifeste);
 
         // Une écriture de fond (vecteurs en dette, relations) peut tenir le catalogue juste
-        // après l'index : le rendu le dit et promet les liens au rendu suivant. La page
+        // après l'index, ou le laisser noté partiel : le rendu le dit et promet les liens au
+        // rendu suivant, ou à la fin de l'index. La page
         // relit ; le témoin aussi, 10 s au plus (passe du 8 novembre 2026, une fois sur
         // deux seul sur luciepc).
         let debut = Instant::now();
         let r = loop {
             let r = poster(&adresse, "/ide/symboles", json!({ "backend": id, "names": ["un", "double", "inconnu_xyz"] }));
-            if !r["result"]["why"].as_str().is_some_and(|w| w.contains("catalogue est tenu")) || debut.elapsed() > Duration::from_secs(10) {
+            if !r["result"]["why"].as_str().is_some_and(|w| (w.contains("catalogue est tenu") || w.contains("index partiel"))) || debut.elapsed() > Duration::from_secs(10) {
                 break r;
             }
             std::thread::sleep(Duration::from_millis(200));
@@ -196,8 +197,13 @@ pub(super) mod tests {
         let h = host.hosted(std::path::Path::new(&manifeste)).unwrap();
         host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
         let debut = Instant::now();
-        while host.symboles_cites(&h.id, &["un".to_string()]).unwrap()["symbols"]["un"].is_null() {
-            assert!(debut.elapsed() < Duration::from_secs(60), "un n'est pas indexé en 60 s");
+        loop {
+            let r = host.symboles_cites(&h.id, &["un".to_string()]).unwrap();
+            if !r["symbols"]["un"].is_null() {
+                break;
+            }
+            // Ce que le rendu disait en dernier : un catalogue tenu, un index partiel, rien.
+            assert!(debut.elapsed() < Duration::from_secs(60), "un n'est pas indexé en 60 s ; le dernier rendu : {r}");
             std::thread::sleep(Duration::from_millis(200));
         }
         let catalogue = host.with_backend(&h, |b| b.catalog.clone()).unwrap();
@@ -229,11 +235,12 @@ pub(super) mod tests {
         // Le journal écrit un run à sa fin : on laisse passer ce qui courait.
         std::thread::sleep(Duration::from_millis(500));
         let avant: std::collections::BTreeSet<String> = host.journal.runs_de(&h.id).into_iter().collect();
-        // Le catalogue tenu par une écriture de fond : relire, comme la page (10 s au plus).
+        // Le catalogue tenu par une écriture de fond, ou l'index noté partiel : relire, comme
+        // la page (10 s au plus).
         let debut = Instant::now();
         let r = loop {
             let r = host.symboles_cites(&h.id, &["un".to_string(), "double".to_string(), "inconnu_xyz".to_string()]).unwrap();
-            if !r["why"].as_str().is_some_and(|w| w.contains("catalogue est tenu")) || debut.elapsed() > Duration::from_secs(10) {
+            if !r["why"].as_str().is_some_and(|w| (w.contains("catalogue est tenu") || w.contains("index partiel"))) || debut.elapsed() > Duration::from_secs(10) {
                 break r;
             }
             std::thread::sleep(Duration::from_millis(200));
