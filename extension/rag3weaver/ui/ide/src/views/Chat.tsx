@@ -199,8 +199,11 @@ function Invocation({ actif }: { actif: boolean }) {
   }, [montre, anim]);
   if (!montre || !anim) return null;
   return (
-    <div id="invocation" data-anim="reflechit" aria-hidden className="px-6 py-1 text-sm">
-      {imageDe(anim, n)}
+    <div className="px-6 py-1 text-sm">
+      <span id="invocation" data-anim="reflechit" aria-hidden>
+        {imageDe(anim, n)}
+      </span>
+      <span className="sr-only">le modèle réfléchit</span>
     </div>
   );
 }
@@ -373,10 +376,13 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         return;
       }
       if (ev.run !== undefined && runRef.current && ev.run !== runRef.current) return;
-      if (ev.kind === "Token") setPense(false);
-      else if (ev.kind === "ToolCallStarted") setPense(false);
-      else if (ev.kind === "ToolCallFinished") setPense(true);
-      else if (ev.kind === "RunFinished" && ev.run === runRef.current) setPense(false);
+      // L'invocation ne suit que le run du tour (relecture d'everything declarative) : le
+      // bus du dépôt porte aussi le juge, l'archiviste et les réactions, et le filtre
+      // ci-dessus laisse passer leurs trames tant que le RunStarted du chat n'est pas lu.
+      if (runRef.current && ev.run === runRef.current) {
+        if (ev.kind === "Token" || ev.kind === "ToolCallStarted" || ev.kind === "RunFinished") setPense(false);
+        else if (ev.kind === "ToolCallFinished") setPense(true);
+      }
       if (ev.kind === "Token") {
         if (typeof ev.seq === "number") (tokenLog.applied[String(ev.run)] ??= []).push(ev.seq);
         live((m) => ({ ...m, parts: appendText(m.parts, String(ev.text ?? "")) }));
