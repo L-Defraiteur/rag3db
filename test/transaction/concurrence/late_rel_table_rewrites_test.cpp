@@ -268,6 +268,45 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualWhenFilesAreReindexedWithThe
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
 }
 
+// Une liste qui grossit fortement dans un groupe CSR au disque, au milieu de listes qui ne bougent
+// pas (8 novembre 2026, lu sur la base abîmée par un index complet) : la liste arrière de RecordBase
+// (5354), que l'index n'avait pas touchée, pointait après le point de reprise sur les rangées d'une
+// autre destination (3223), avec une case vide au début. Une région feuille fait 1 024 nœuds ;
+// une liste qui déborde fait monter la réécriture jusqu'à une région qui couvre des nœuds intacts.
+TEST_F(LateRelTableRewrites, AListThatGrowsLeavesItsUntouchedNeighboursInPlace) {
+    constexpr int64_t SCOPES = 6000, SYMBOLS = 8192;
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(SCOPES - 1) + ") AS i CREATE (:Scope {id: i});");
+    ok("UNWIND range(0, " + std::to_string(SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64);");
+    // Une arête vers chaque destination, et quelques-unes vers 5354 : des listes courtes, au disque.
+    ok("COPY R FROM (UNWIND range(0, " + std::to_string(SYMBOLS - 1) + ") AS i RETURN i % " +
+       std::to_string(SCOPES) + " AS f, i AS t, i AS line);");
+    ok("COPY R FROM (UNWIND range(0, 4) AS i RETURN 5000 + i AS f, 5354 AS t, -i AS line);");
+    ok("CHECKPOINT;");
+    // Trois tours : la liste de 3223 grossit de 1 500 arêtes par un COPY, puis un point de reprise.
+    for (int round = 0; round < 3; round++) {
+        ok("COPY R FROM (UNWIND range(0, 1499) AS i RETURN (i * 7 + " + std::to_string(round) +
+           ") % " + std::to_string(SCOPES) + " AS f, 3223 AS t, 100000 * " +
+           std::to_string(round + 1) + " + i AS line);");
+        ok("CHECKPOINT;");
+    }
+    std::set<int64_t> sources, destinations;
+    for (int64_t s = 0; s < SCOPES; s++) {
+        sources.insert(s);
+    }
+    for (int64_t d = 0; d < SYMBOLS; d++) {
+        destinations.insert(d);
+    }
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base ouverte";
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
 TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderDrains) {
     ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
     ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
