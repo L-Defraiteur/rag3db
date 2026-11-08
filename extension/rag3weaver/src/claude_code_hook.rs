@@ -1090,10 +1090,21 @@ fn chemin_de_l_etat(reglage: &Reglage, session_id: &str) -> PathBuf {
 /// L'empreinte d'une fiche telle que le rappel la montre (nom et résumé) : une
 /// fiche dont le résumé change revient, « mise à jour ».
 fn empreinte_de_fiche(nom: &str, about: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (nom, about).hash(&mut h);
-    format!("{:016x}", h.finish())
+    // blake3, stable d'un binaire à l'autre (3 ter e) : `DefaultHasher` ne l'est
+    // pas d'une version de Rust à l'autre, et la relance de l'hôte rendait
+    // « neuve » une fiche déjà vue (ticket des bilans du juge, 8 novembre).
+    let mut h = blake3::Hasher::new();
+    h.update(nom.as_bytes());
+    h.update(&[0]);
+    h.update(about.as_bytes());
+    h.finalize().to_hex()[..32].to_string()
+}
+
+/// Une empreinte d'avant le 3 ter e (`DefaultHasher`, 16 chiffres hexadécimaux) :
+/// on ne peut pas la recalculer ; la fiche se lit déjà vue, et l'empreinte se
+/// réécrit au nouveau format au prochain rendu.
+fn empreinte_d_avant(e: &str) -> bool {
+    e.len() == 16 && e.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 impl EtatDuRappel {
@@ -1115,7 +1126,7 @@ impl EtatDuRappel {
     fn statut(&self, nom: &str, empreinte: &str) -> Statut {
         match self.rendus.get(nom) {
             None => Statut::Neuve,
-            Some((_, e)) if e == empreinte => Statut::Deja,
+            Some((_, e)) if e == empreinte || empreinte_d_avant(e) => Statut::Deja,
             Some((tour, _)) => Statut::Changee(*tour),
         }
     }
@@ -1144,7 +1155,7 @@ pub struct Candidat {
 
 impl Candidat {
     fn dit(&self) -> String {
-        format!("« {} » {}", self.nom, self.scores())
+        format!("« {} » {}", premiere_ligne(&self.nom, 120), self.scores())
     }
     fn scores(&self) -> String {
         match (self.plein, self.dense) {
@@ -1194,25 +1205,38 @@ impl Vocabulaire {
     fn chemin(reglage: &Reglage) -> PathBuf {
         reglage.journal.parent().map(|d| d.join("hooks")).unwrap_or_else(|| PathBuf::from("hooks")).join("vocabulaire.json")
     }
+    /// Le vocabulaire, nettoyé : un mot d'arrêt ou un mot court sans forme de
+    /// code, entré avant le 3 ter e, en sort à la première lecture (le fichier
+    /// est réécrit, sauf en rejeu).
     pub fn lire(reglage: &Reglage) -> HashSet<String> {
-        std::fs::read_to_string(Self::chemin(reglage)).ok().and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok()).unwrap_or_default().into_iter().collect()
+        let brut: Vec<String> = std::fs::read_to_string(Self::chemin(reglage)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let propre: HashSet<String> = brut.iter().filter(|m| crate::rappel_du_prompt::utile_au_vocabulaire(m)).cloned().collect();
+        if propre.len() != brut.len() && !reglage.rejeu {
+            Self::ecrire(reglage, &propre);
+        }
+        propre
     }
+    fn ecrire(reglage: &Reglage, v: &HashSet<String>) {
+        let mut l: Vec<&String> = v.iter().collect();
+        l.sort();
+        let chemin = Self::chemin(reglage);
+        let _ = std::fs::create_dir_all(chemin.parent().unwrap_or(Path::new(".")));
+        let _ = std::fs::write(chemin, serde_json::to_string(&l).unwrap_or_default());
+    }
+    /// Les noms de fiches que le juge génère (`bilan : …`, `outil : …`) sont des
+    /// phrases, pas un savoir : ils n'alimentent pas le vocabulaire.
     fn ajouter<'a>(reglage: &Reglage, noms: impl Iterator<Item = &'a str>) {
         let mut v = Self::lire(reglage);
         let avant = v.len();
-        for n in noms {
-            for m in n.split(|c: char| c.is_whitespace() || c == ':' || c == ',').map(str::to_lowercase).filter(|m| m.chars().count() >= 2) {
+        for n in noms.filter(|n| !n.starts_with("bilan :") && !n.starts_with("outil :")) {
+            for m in n.split(|c: char| c.is_whitespace() || c == ':' || c == ',').filter(|m| crate::rappel_du_prompt::utile_au_vocabulaire(m)).map(str::to_lowercase) {
                 v.insert(m);
             }
         }
         if v.len() == avant || v.len() > 2_000 {
             return;
         }
-        let mut l: Vec<String> = v.into_iter().collect();
-        l.sort();
-        let chemin = Self::chemin(reglage);
-        let _ = std::fs::create_dir_all(chemin.parent().unwrap_or(Path::new(".")));
-        let _ = std::fs::write(chemin, serde_json::to_string(&l).unwrap_or_default());
+        Self::ecrire(reglage, &v);
     }
 }
 
@@ -1547,7 +1571,9 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                     raisons.push("silence".into());
                 } else {
                     b.push_str("Fiche en rapport (touchée au plein texte par les mots du prompt) : ");
-                    b.push_str(&neuves.iter().map(|(c, maj)| format!("« {} » ({}{}{})", c.nom, c.scores(), if c.about.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(&c.about, 80)) }, maj.map(|t| format!(" ; mise à jour depuis le tour {t}")).unwrap_or_default())).collect::<Vec<_>>().join(" ; "));
+                    // Le nom rendu borné à 200 caractères : celui d'une fiche de bilan
+                    // est le prompt entier de son run (plus de 2 000 caractères).
+                    b.push_str(&neuves.iter().map(|(c, maj)| format!("« {} » ({}{}{})", premiere_ligne(&c.nom, 200), c.scores(), if c.about.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(&c.about, 80)) }, maj.map(|t| format!(" ; mise à jour depuis le tour {t}")).unwrap_or_default())).collect::<Vec<_>>().join(" ; "));
                     b.push_str(" — `get_fiche` pour lire.\n");
                     for (c, _) in &neuves {
                         etat.rendre(&c.nom, &empreinte_de_fiche(&c.nom, &c.about));
@@ -2636,6 +2662,48 @@ mod tests {
         let j = rappel_differe(&tache(&reglage, "p3"), &reglage, None, Some(&juge));
         assert!(j.iter().any(|l| l.contains("[fond] sans juge (recall_judge à false) : 0 rendu, 2 tus")), "{j:?}");
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn les_bilans_du_juge_n_alimentent_pas_le_vocabulaire_et_le_cache_se_nettoie() {
+        let _env = env();
+        let (chemin, reglage) = transcription_d_essai("vocabulaire", &[T_USER]);
+        // Un cache d'avant le 3 ter e, pollué par les mots d'un nom de bilan.
+        let cache = chemin.parent().unwrap().join("hooks/vocabulaire.json");
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, json!(["avec", "donc", "mais", "régime", "sur", "gpu"]).to_string()).unwrap();
+        let lu = Vocabulaire::lire(&reglage);
+        assert!(lu.contains("régime") && !lu.contains("sur") && !lu.contains("avec") && !lu.contains("mais"), "{lu:?}");
+        let relu: Vec<String> = serde_json::from_str(&std::fs::read_to_string(&cache).unwrap()).unwrap();
+        assert!(!relu.iter().any(|m| m == "sur"), "le fichier est réécrit propre à la première lecture : {relu:?}");
+        // Un rappel qui rend une fiche de bilan au nom-phrase : rien de ce nom n'entre.
+        let bilan = format!("bilan : tâche réelle, bornée, dans ce worktree du dépôt rag3db, avec un ticket sur les journaux {}", "et la suite du prompt ".repeat(120));
+        let mut h = hote_avec_identite();
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
+            { "chunk": { "score": 0.4 }, "signals": [{ "label": "vector", "score": 0.4 }, { "label": "bm25", "score": 9.0 }], "data": { "name": bilan, "about": "compte rendu", "state": "current" } },
+            { "chunk": { "score": 0.4 }, "signals": [{ "label": "bm25", "score": 2.0 }], "data": { "name": "lucivy embarquement", "about": "x", "state": "current" } }
+        ] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur le worktree et rag3db"), &reglage, Ok(&h));
+        let v = Vocabulaire::lire(&reglage);
+        assert!(!v.contains("tâche") && !v.contains("worktree") && !v.contains("bornée"), "un nom de bilan n'alimente pas le vocabulaire : {v:?}");
+        assert!(v.contains("lucivy") && v.contains("embarquement"), "{v:?}");
+        // Le nom rendu est borné à 200 caractères, et le journal à 120.
+        let rendu = r.bloc.lines().find(|l| l.contains("bilan :")).unwrap_or_default().to_string();
+        assert!(rendu.chars().count() < 400, "{} caractères : {rendu}", rendu.chars().count());
+        assert!(r.journal.iter().all(|l| l.chars().count() < 700), "{:?}", r.journal);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn une_empreinte_d_avant_se_lit_deja_vue_et_la_nouvelle_est_stable() {
+        let mut etat = EtatDuRappel::default();
+        etat.rendus.insert("régime GPU".into(), (3, "67582156d5c0d06a".into()));
+        assert!(matches!(etat.statut("régime GPU", &empreinte_de_fiche("régime GPU", "les cartes")), Statut::Deja), "une empreinte DefaultHasher d'avant n'est pas « neuve »");
+        // blake3 : la même entrée, la même empreinte, à chaque binaire.
+        assert_eq!(empreinte_de_fiche("régime GPU", "les cartes"), empreinte_de_fiche("régime GPU", "les cartes"));
+        assert_ne!(empreinte_de_fiche("régime GPU", "les cartes"), empreinte_de_fiche("régime GPU", "les cartes, et la carte 2"));
+        assert_eq!(empreinte_de_fiche("a", "b").len(), 32);
+        assert_ne!(empreinte_de_fiche("ab", ""), empreinte_de_fiche("a", "b"), "le séparateur distingue nom et résumé");
     }
 
     #[test]
