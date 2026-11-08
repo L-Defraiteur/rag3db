@@ -307,6 +307,72 @@ fn le_graphe_de_clic_s_allume_a_chaque_clic_dans_l_apercu() {
     fil.join().unwrap();
 }
 
+/// **Un graphe de clic vidé par l'écriture en place fait attendre l'aperçu** (rouge
+/// de codeparsers sous charge 32, 8 novembre 2026 : un 422 sur `…/Compteur/modules.js`
+/// pendant le rechargement à chaud). Le graphe réécrit comme le fait `std::fs::write`
+/// ou un éditeur qui écrit en place, au pire : le fichier vide d'abord, jusqu'à ce que
+/// la page l'ait vu, puis le texte. La page attend sur le module vide, puis applique le
+/// graphe neuf, l'état gardé ; la console n'a rien dit (pas de 422).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn un_graphe_de_clic_vide_fait_attendre_l_apercu_sans_erreur() {
+    const TEMOIN: &str = "un_graphe_de_clic_vide_fait_attendre_l_apercu_sans_erreur";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Some(paquets) = paquets_ou_saut(TEMOIN) else {
+        return;
+    };
+    let Banc { _d, composants, racine, id, fil } = monter(
+        &paquets,
+        &[
+            ("compteur.tsx", VUE_DU_COMPTEUR),
+            ("compteur.clic.mmd", GRAPHE_DU_COMPTEUR),
+            (
+                "compteur.component.json",
+                r#"{ "name": "Compteur", "source": "compteur.tsx", "clic": "compteur.clic.mmd", "libs": { "react": "19.2.0" } }"#,
+            ),
+        ],
+    );
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/apercu/{id}/Compteur"),
+        "document.querySelector('#compteur')?.textContent === 'Compte : 0 (0)' && document.querySelectorAll('#clic g.etape').length === 4",
+    );
+    n.evaluer("document.querySelector('#compteur').click()");
+    n.attendre("document.querySelector('#compteur')?.textContent === 'Compte : 1 (2)'", "le clic compté par le graphe");
+
+    // L'ordre forcé : le graphe vide, vu par la page, puis le texte.
+    std::fs::write(composants.join("compteur.clic.mmd"), "").unwrap();
+    n.attendre(
+        "window.__apercu.attente?.startsWith('comp:Compteur est vide') || document.querySelectorAll('pre.erreur').length > 0",
+        "la page voit le graphe vide",
+    );
+    let pendant = n.evaluer("({ attente: window.__apercu.attente, erreurs: [...document.querySelectorAll('pre.erreur')].map(p => p.textContent) })");
+    assert!(pendant["attente"].as_str().is_some_and(|a| a.starts_with("comp:Compteur est vide")), "la page attend sur le graphe vide : {pendant} ; console : {:#?}", n.erreurs);
+    std::fs::write(composants.join("compteur.clic.mmd"), GRAPHE_DU_COMPTEUR.replace("n + 1", "n + 10")).unwrap();
+    n.attendre("window.__apercu.mises_a_jour >= 1 && window.__apercu.attente === null", "le graphe neuf appliqué à chaud");
+    n.evaluer("document.querySelector('#compteur').click()");
+    n.attendre("document.querySelector('#compteur')?.textContent === 'Compte : 11 (22)'", "l'état gardé, le graphe neuf");
+    let apres = n.evaluer("({ recharge: window.__apercu.recharge, erreurs: document.querySelectorAll('pre.erreur').length })");
+    assert_eq!(apres, json!({ "recharge": null, "erreurs": 0 }), "{apres}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+
+    // Au premier chargement, un graphe vide n'est pas un instant d'écriture : la page
+    // dit qu'il n'y a rien à rendre (relecture d'everything declarative).
+    std::fs::write(composants.join("compteur.clic.mmd"), "").unwrap();
+    n.aller(&format!("{racine}/ide/apercu/{id}/Compteur"), "document.querySelectorAll('pre.erreur').length > 0");
+    let dit = n.evaluer("[...document.querySelectorAll('pre.erreur')].map(p => p.textContent).join(' ; ')");
+    assert!(dit.as_str().unwrap_or_default().contains("graphe de clic vide"), "{dit}");
+
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **Une proposition se voit, se joue, puis s'applique dans l'IDE** (page 08,
 /// de bout en bout). Le graphe de clic du compteur est proposé autrement
 /// (`n + 5`), comme un agent le proposerait par l'hôte : la proposition paraît

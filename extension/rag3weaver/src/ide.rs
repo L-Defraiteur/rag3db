@@ -250,7 +250,9 @@ const APERCU: &str = include_str!("ide/apercu.html");
 
 /// `/ide/apercu/<backend>/<Composant>` : la page ; `…/modules.js` : ses
 /// modules, enveloppés, puis l'entrée et le démarrage pour le registre.
-fn apercu(host: &DaemonHost, path: &str, proposition: Option<u64>) -> (u16, &'static str, String) {
+/// `relecture` : la page relit ses modules (rechargement à chaud, `?v=`), et non son
+/// premier chargement.
+fn apercu(host: &DaemonHost, path: &str, proposition: Option<u64>, relecture: bool) -> (u16, &'static str, String) {
     let reste = path.trim_start_matches("/ide/apercu/");
     let morceaux: Vec<&str> = reste.split('/').collect();
     match morceaux.as_slice() {
@@ -283,6 +285,13 @@ fn apercu(host: &DaemonHost, path: &str, proposition: Option<u64>) -> (u16, &'st
                         prepared.components_on_disk_avec(&r)?.module_graph_avec(&prepared.directory, &nom, crate::components::Mode::Development, &r)?
                     }
                 };
+                // Un graphe de clic blanc se relit (l'instant d'une écriture en place,
+                // la page attend la suite) ; au premier chargement, il n'y a rien à
+                // rendre : le dire (relecture d'everything declarative).
+                let clic_blanc = prepared.components_on_disk()?.components.get(&nom).and_then(|c| c.clic.clone()).filter(|_| graphe.modules.get(&format!("comp:{nom}")).is_some_and(|m| m.empty_source));
+                if let (Some(clic), false) = (clic_blanc, relecture) {
+                    return Err(format!("comp:{nom} : graphe de clic vide (components/{clic}) : rien à rendre tant qu'il n'est pas écrit"));
+                }
                 Ok::<_, String>(modules_js(&graphe))
             });
             match rendu.and_then(|r| r) {
@@ -536,7 +545,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let _ = request.respond(reponse(statut, if statut == 200 { "text/javascript; charset=utf-8" } else { "text/plain; charset=utf-8" }, corps));
         }
         ("GET", p) if p.starts_with("/ide/apercu/") => {
-            let (statut, type_, corps) = apercu(host, p, param("proposition").and_then(|v| v.parse().ok()));
+            let (statut, type_, corps) = apercu(host, p, param("proposition").and_then(|v| v.parse().ok()), param("v").is_some());
             let _ = request.respond(reponse(statut, type_, corps));
         }
         // Les réactions d'un backend et l'état de ses montres ((b)) : ce que la
@@ -1140,13 +1149,13 @@ mod tests {
     #[test]
     fn the_preview_routes_answer() {
         let host = DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()));
-        let (s, t, c) = apercu(&host, "/ide/apercu/abc/Fiche", None);
+        let (s, t, c) = apercu(&host, "/ide/apercu/abc/Fiche", None, false);
         assert_eq!(s, 200);
         assert!(t.starts_with("text/html") && c.contains("/ide/registre.js") && c.contains("modules.js"), "{c}");
-        let (s, _, c) = apercu(&host, "/ide/apercu/abc/Fiche/modules.js", None);
+        let (s, _, c) = apercu(&host, "/ide/apercu/abc/Fiche/modules.js", None, false);
         assert_eq!(s, 422, "{c}");
         assert!(c.contains("abc"), "{c}");
-        assert_eq!(apercu(&host, "/ide/apercu/abc", None).0, 404);
+        assert_eq!(apercu(&host, "/ide/apercu/abc", None, false).0, 404);
     }
 
     /// **Les modules de l'éditeur se rendent**, depuis le magasin embarqué : le

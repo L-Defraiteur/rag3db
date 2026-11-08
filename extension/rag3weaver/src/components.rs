@@ -481,12 +481,16 @@ fn read_component(chemin: &Path, dir: &Path, libs: &Libs, ecran: &EcranDuBackend
             return Err(format!("{montre} : le graphe de clic « {clic} » doit être un <nom>.clic.mmd de components/"));
         }
         let texte = lecteur.lire_texte(&dir.join(p)).map_err(|e| format!("{montre} : le graphe de clic « {clic} » : {e}"))?;
+        // Un graphe blanc est l'instant d'une écriture en place (le fichier tronqué,
+        // pas encore écrit) : il ne se vérifie pas ici ; l'aperçu attend sa version
+        // suivante, et refuse de le rendre au premier chargement (`ide::apercu`).
+        let blanc = texte.trim().is_empty();
         let ctx = crate::dataflow::clic::ContexteClic {
             effets: f.effets.clone(),
             outils: ecran.outils.clone(),
             etat_hote: ecran.etat_hote.clone(),
         };
-        if let Err(refus) = crate::dataflow::clic::valider_graphe_de_clic(&texte, &ctx) {
+        if let Err(refus) = if blanc { Ok(()) } else { crate::dataflow::clic::valider_graphe_de_clic(&texte, &ctx).map(|_| ()) } {
             let dits: Vec<String> = refus
                 .iter()
                 .map(|r| match r.ligne {
