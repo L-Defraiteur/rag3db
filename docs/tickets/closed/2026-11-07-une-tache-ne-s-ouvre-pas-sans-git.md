@@ -45,11 +45,21 @@ proposition arrive.
   sont nommés, rien n'est recopié). Sinon, les fichiers changés sont recopiés et les effacés
   effacés, puis la copie est effacée.
 - **Le rejet** efface la copie, sans toucher la racine.
+- **Les exclusions** (relecture d'everything declarative) : `workspace.exclude` liste des noms
+  de dossiers, pris à toute profondeur, avec `target`, `node_modules` et `.venv` par défaut. Ces
+  dossiers ne se copient pas, ne se comparent pas et ne se fusionnent pas. La copie se fait
+  fichier par fichier (`std::fs::copy`, qui partage les blocs quand le disque le sait), et
+  l'empreinte se hache en flux.
+- **La fusion sans fichier tronqué** : chaque fichier passe par un voisin `.<nom>.rag3weaver-tmp`,
+  puis il est renommé. Un échec au milieu dit ce qui est déjà recopié. Ce que la fusion ne fait
+  pas : les liens symboliques de la copie ne sont ni comparés ni recopiés, un dossier vidé reste
+  dans la racine, et la date de modification n'est pas gardée.
 - **`workspace.git_init: true`**, déclaré au manifeste : à l'ouverture d'une tâche, une racine
   sans git devient un dépôt (`git init` et un premier commit, sous l'identité git de
   l'utilisatrice). La tâche est alors une branche `agent/<nom>`. Jamais d'office.
 
-Témoins (par l'hôte, `daemon_host::taches::tests`), rouges sur efc4e2b38, verts sur 1a8a5c5b3 :
+Témoins (par l'hôte, `daemon_host::taches::tests`), rouges sur efc4e2b38, verts sur 1a8a5c5b3 ;
+les exclusions, rouges sur c31f74765, vertes sur 571464a5e :
 - `une_tache_s_ouvre_sans_git_et_se_fusionne_par_copie` : l'équipier écrit par `edit_file`, la
   relecture rend les trois changements, la fusion les recopie, aucun dépôt n'est créé ;
 - `sans_git_un_rejet_laisse_la_racine_et_un_conflit_refuse_la_fusion` ;
