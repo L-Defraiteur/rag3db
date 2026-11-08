@@ -7,6 +7,16 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Ce que j'ai cherché se retrouve, avec ce que j'ai ouvert.** La vue « mes recherches »
+  de l'IDE rend les recherches faites dans un dépôt, les miennes et celles des agents sous leur nom,
+  la plus récente d'abord. Pour chacune, elle montre ses premiers résultats et ceux que j'ai cliqués,
+  avec de quoi la relancer : tout est lu dans le journal des runs, où le clic se range aussi. Au
+  passage, le journal ne perd plus un ajout fait pendant l'écriture d'un run, et un clic ne rajeunit
+  pas un vieux run (`932197e79`).
+- **8 nov. — Le score d'une ligne dit d'où il vient.** Une ligne fusionnée nomme le signal qui l'a
+  placée (`bestSignal`) et l'échelle du score de son morceau (`chunk.signal`). Le morceau montré est
+  celui du signal qui pèse le plus dans son rang, et non plus celui du plus grand score brut : un
+  bm25 à 1,6 au troisième rang ne l'emporte plus sur un dense à 0,4 au premier (`d540813d5`).
 - **8 nov. — Le code du chat a les couleurs du dépôt.** L'hôte colore un bloc par les grammaires
   tree-sitter qui indexent déjà le code (Rust, C++, TypeScript, Python, et six autres), pour
   l'IDE et le terminal à la fois. highlight.js ne sert plus que de repli (`POST /highlight`,
