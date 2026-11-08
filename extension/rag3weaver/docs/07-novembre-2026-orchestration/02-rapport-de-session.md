@@ -770,3 +770,156 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   `~/.config/rag3weaver/code-essais-c7`, les cinq tâches sous `~/.local/share/rag3weaver/taches/e4d8635ecfe7/`
   et la base `code-essais-c7.rag3db` ; à luciepc `wt-c7-essais` et `target-c7-essais` (je les efface
   moi-même ce matin) ; les branches `agent/*` sur origin restent.
+
+## 08 h 40 — la fenêtre du banc, la bascule de G, la file du matin
+
+- **Banc, 7 h 26 → 7 h 32** sous `poste mesure` à mon mot « fenêtre » : les lignes hors du graphe
+  d'un index vectoriel coûtent 0,75 à 1 µs par ligne et par recherche (120 000 vecteurs de
+  dimension 768, k = 10 : 13,4 ms à 0 ligne hors graphe, 23 ms à 10 000, 88,5 ms à 100 000 ; binaire
+  statique de master, aucune lib du magasin à épingler). Ticket du 18 oct. et page du banc
+  (28b479b7e, 1e7084927). **Recherche en a tiré le seuil** (365ec8f02) : « la recherche ne doit
+  pas doubler », reconstruire au repos de la montre quand N × 1 µs ≥ t₀ (N* ≈ 13 400 lignes à 768
+  pour t₀ = 13,4 ms ; la reconstruction de 143 s ne se rembourse qu'en 10 700 recherches, c'est donc
+  la latence qui déclenche). **hotfixs a ouvert le ticket moteur** (5d04e9794) : `rows_outside_graph`
+  dans SHOW_INDEXES ou un CALL en lecture, sous l'instantané de l'appelant, après G3 et G5 ; le lot
+  produit (le déclencheur et son témoin à N* ± 1) sera à recherche. Le banc a effacé rag3db-vingt et
+  build-vingt à luciepc (contrôles faits) et se repose.
+- **G a basculé à 8 h 31** : lib rag3db-build-dadbf0041 (md5 253c898f) et binaire b64748ef
+  (1e7084927) aux deux postes, coupure de 1 min 16 s, granite-278m et -107m redéployés par
+  embarquement avec un écart nul, courant = dadbf0041, les quatre bases rouvertes, l'IDE vert ; la
+  recherche dense bornée surligne `source: "sparse"` chez Lucie. Disques : portable 357 Gio libres
+  (build 38 Gio), luciepc 608 Gio (build 115 Gio). Les instantanés bascule-*, locks-25-oct,
+  avant-43-controle et migration-fiche-25-oct ont été effacés **par moi hier soir au mot de Lucie**
+  (G l'a vu ce matin) ; avant-43 reste le seul retour. Depuis le basculé : MOTEUR_ANCIEN vide, la
+  lib neuve épinglée par son identifiant complet dans toute passe.
+- **La file du matin** : ED pousse le fil par pas + l'arrêt retenu par un équipier (7d38dc243, à
+  toi à 8 h 35) → G pose le binaire seul aux deux hôtes dix minutes après son hash → **9 h, ma
+  fenêtre** pour la mesure G5 de hotfixs (CHECKPOINT après un DELETE de 11 % sur une copie reflink
+  de code-lourd à luciepc, deux libs prouvées par md5, trois prises chacune) → hotfixs, le
+  troisième lot de l'équipier (dix témoins sous la garde, ticket « en cours ») → recherche, le
+  retrait du contournement du dense filtré sous l'instantané → archi, le (e) des hooks (le
+  vocabulaire n'apprend plus les mots d'arrêt ni les noms de fiches de bilan, résumé rendu borné
+  à 200 caractères ; vu au premier tour de hooks-essai sur le binaire posé, 180 ms, un bloc rendu)
+  → hotfixs, G3 (au mot de Lucie) puis G5 sur le moteur du worktree prouvé par md5.
+- Un écart vu par G : la barre de hooks-essai dit « memory » et non « la mémoire » (cfbe928a4) ;
+  G le lui dit.
+
+## 09 h 05 — la pose d'ED, un SIGSEGV de l'hôte du portable, la fenêtre de hotfixs qui attend
+
+- **G a posé à 8 h 45** le binaire d'ED aux deux hôtes (1b9796d9f : fil par pas, arrêt
+  d'inactivité retenu par un équipier, la demande en cours ; binaire fe994691, lib dadbf0041), IDE
+  vert, code-lourd fermé puis rouvert pour les six copies reflink de hotfixs (« copié » 8 h 47).
+  ED a poussé son rapport de la nuit (424b9ebb4).
+- **L'hôte du portable a fait un SIGSEGV à 8 h 50 m 11 s** (SEGV_MAPERR, fil demon-5) sous ce
+  binaire et la lib dadbf0041 : rip = librag3db.so + 0xd12c73 =
+  `rag3db::storage::BufferManager::optimisticRead`. Au même instant : la montre réindexait
+  code-rag3db-depot et mon arbre d'essais remis sur master (backend.rs, 4,7 s de verrou), deux fils
+  lucivy fusionnaient des segments, l'équipier de l'essai 6 lisait. systemd l'a relancé par la
+  socket à 8 h 50 m 57 s ; la tâche a repris à sa frontière. Le core (32 Gio une fois extrait,
+  tronqué, seule l'adresse du fil fautif lisible) est gardé à
+  `~/.cache/rag3weaver-build/core-c7/core.39731`. L'hôte de luciepc n'a pas planté (G) ; aucun
+  autre plantage de la nuit sur aucun binaire. **Le cœur a le ticket** (moteur : un lecteur
+  optimiste et une page évincée ou réécrite pendant une indexation) ; rien ne départage encore la
+  lib dadbf0041 (G2b, projection, retrait) d'une course ancienne qu'une charge révèle ; G garde les
+  binaires d'avant pour rejouer la charge sur un hôte d'essai si le cœur le veut. Pas de retour de
+  courant, pas de pose sans mon mot.
+- **Le cœur** : le groupe durabilité mord — avec une faute d'E/S injectée (disque plein pendant la
+  synchronisation du journal), une validation échouée **laissait sa clé prise** dans l'index de clé
+  primaire (publication avant l'écriture du journal) ; correctif sur la branche coupure : journal
+  écrit et synchronisé avant la publication, taille rendue sur faute, plus rien ne se valide après
+  un journal irréparable ; six témoins de coupure verts, transaction 350/350. Push en lot groupé à
+  une heure qu'il me dira ; il remettra MOTEUR_ANCIEN=1 aux passes jusqu'au rebâti.
+- **La fenêtre de hotfixs attend** depuis 8 h 47 : un `transaction_test` de rag3db-colonnes (le
+  cœur) tient la place de lourd à luciepc depuis 8 h 46 ; personne ne force. Derrière : hotfixs
+  (troisième lot de l'équipier), hooks-essai (memoire-nommee : la nature avant le dépôt),
+  recherche (dense filtré sous l'instantané, témoin rouge écrit), archi (3 ter (e), VERT au
+  portable ; trois rejeux d'un test seul hors `poste lourd`, dits et promis non reproduits), 96 (M4
+  pas 3, rejeu à refaire sous dadbf0041).
+- **Essai 6** lancé à 8 h 48 sur l'hôte posé (ticket de hotfixs : l'undo_json qui pointe un fichier
+  effacé ; cargo par la porte, `sandbox` posé dans mon arbre avec `CARGO_BUILD_JOBS=8` — à ajouter
+  au gabarit, dit à ED) : la mesure « après » du fil par pas. Première ligne de l'équipier : une
+  question de commit à vide, puis le plan en six items, puis la relance de l'hôte ; il lit.
+
+## 09 h 15 — second plantage, repli de l'hôte, la base de code de Lucie à rendre
+
+- **Second SIGSEGV de l'hôte du portable à 9 h 05 m 49 s** (pid 102525, core de 65 Mo tronqué),
+  toujours sous dadbf0041 : deux plantages en quinze minutes, aucun en dix heures sous 17a094d12.
+  **G a appliqué la règle convenue et reposé l'hôte d'avant à 9 h 06 m 25 s** (binaire eb154bf5f,
+  lib 17a094d12 ; `courant` reste dadbf0041 pour les passes). Le cœur a lu les registres du premier
+  core : la boucle de `ConcurrentVector::operator[]` dans `optimisticRead` suit un numéro de page
+  de 330 Gio — un lecteur qui porte un numéro faux, lu dans un segment libéré ; ticket 60e78e6e5.
+- **La base de code de Lucie (code-rag3db-depot) refuse de se rouvrir sous 17a094d12** : son .wal
+  de 5,8 Mo, écrit à 9 h 03 par l'hôte dadbf0041, porte l'update d'une relation CONSUMED_BY
+  (187668, nœud 10769) « not found in the forward direction… it would have reached one direction
+  only ». Famille G2b / deux sens. Décision prise à sa place (elle dort ; sa règle du 7 : « tant
+  qu'on n'est pas stable, mes données de test je m'en fiche ») : (a) une copie reflink ouverte
+  sous dadbf0041 sur un hôte d'essai pour voir si la lib neuve rejoue ; (b) **l'original — base,
+  .wal, .ecrivain — mis de côté tel quel** dans
+  `~/.local/share/rag3weaver/preuves/2026-11-08-code-rag3db-depot-wal-dadbf0041/`, la pièce du
+  défaut pour le cœur et hotfixs ; (c) **retour par avant-43** (l'état du 7 nov. 19 h 21) et la
+  montre qui rattrape les fichiers changés depuis — search_code revient. memoire-longue se rouvre,
+  elle ne bouge pas. G exécute et donne l'heure.
+- **hotfixs** : mesure G5 rendue à 9 h 08 (analyze au seuil ≈ 390 ms une fois, au point de reprise
+  qui passe le seuil, sur 116 000 lignes à FLOAT[768] : 838 → 1 232 ms, md5 des deux libs au
+  ticket) ; **le témoin du mélange G2b** est écrit (g2b-melange-hnsw f37d4e9ef : COPY de 30 000
+  vecteurs FLOAT[768] sous 256 Mio et 4 fils, plusieurs vidages ONTO_HEAD sous un lecteur), en
+  route à luciepc ; sa lecture : la copie-échange ONTO_HEAD tourne désormais sous des lecteurs, ce
+  qui n'arrivait pas avant G2b. Priorité absolue devant son troisième lot de l'équipier. Le cœur
+  pousse coupure vers 9 h 55 et passe ensuite à l'ASAN sur V2 et la compaction CSR ; les deux
+  correctifs iront dans un même rebâti de la lib, dans l'heure qui suivra, avec G.
+- **La file reprend à luciepc** (six places) : hooks-essai pousse memoire-nommee ; recherche,
+  archi et 96 jouent leurs passes sous dadbf0041 et poussent à mon mot dans cet ordre.
+- **Essai 6 arrêté net** par les deux plantages : la tâche a repris deux fois à sa frontière, puis
+  le backend de mon arbre n'a plus pu s'ouvrir sous l'ancien binaire (« unknown field `env` » : le
+  bloc `sandbox.env` du bac à sable n'existe que dans le binaire reposé par-dessus) ; retiré de
+  mon arbre, à remettre à la prochaine pose. La mesure « après » du fil par pas attend une pose
+  stable.
+
+## 09 h 20 — la base de code de Lucie est rendue, la pièce du défaut mise de côté
+
+- **G a fait les trois gestes** : (a) une copie reflink ouverte sous dadbf0041 sur un hôte d'essai
+  (7991) **refuse le même .wal** : « Relationship 187668 of table CONSUMED_BY was not found in the
+  forward direction… it would have reached one direction only » — les deux libs refusent, donc
+  **c'est l'écriture sous dadbf0041 qui a posé une relation dans un seul sens**, pas le rejeu qui la
+  casse ; (b) l'original (base de 1,84 Go du 8 h 45, .wal de 5,8 Mo du 9 h 03, .ecrivain du pid
+  planté, .fts, .extensions, .readers, .checkpoints) est mis de côté tel quel à 9 h 09 m 56 s dans
+  `~/.local/share/rag3weaver/preuves/2026-11-08-code-rag3db-depot-wal-dadbf0041/` ; hotfixs a sa
+  copie dans `~/.cache/rag3db-locks/depot-9h05/`, G la sienne dans
+  `~/.cache/rag3weaver-build/essai-wal/` pour l'ASAN du cœur ; (c) **code-rag3db-depot est revenue à
+  avant-43** (l'état du 7 nov. 19 h 21, 1,48 Go, sans .wal), réveil à 9 h 10 m 09 s sur l'hôte
+  17a094d12, la montre rattrape 328 fichiers (171 à 9 h 13), l'IDE est vert (18,5 s), search_code
+  répond par balayage le temps du rattrapage puis par l'index. memoire-longue n'a pas bougé.
+- **Pour Lucie** : sa base de code est vivante ; ce qui a été indexé entre le 7 au soir et ce matin
+  se refait par la montre ; la pièce du défaut est au chemin ci-dessus. Le cœur départage au commit
+  (63a2d07f8 « COPY journalisé par tranches » et c4f8610b9 « nœuds locaux d'abord » en tête, puis
+  G2b et le retrait pour les SIGSEGV) en rejouant ce .wal réel ; hotfixs a le témoin du mélange.
+  Aucune pose d'hôte avant le correctif du moteur et son rebâti.
+
+## 09 h 30 — deux défauts du moteur nommés par le témoin de hotfixs
+
+- **A, le refus du .wal est antérieur à G1 et à G2b** : le témoin `RelCopyThenUpdateReplay` rougit
+  dans ses deux cas, même sans nœud local. Un COPY de relations journalisé puis une mise à jour de
+  ses relations dans la même transaction ne se rejoue pas : au rejeu, la TABLE_INSERTION insère dans
+  le stockage **local** de la transaction de reprise, puis REL_UPDATE cherche le décalage définitif
+  dans les listes et la garde du sens unique refuse. dadbf0041 n'a fait que rendre la suite
+  fréquente dans une réindexation. La base de 8 h 45 était saine ; c'est le rejeu d'un journal
+  correct qui échouait. **Correctif** (hotfixs, tout de suite) : au rejeu, une correspondance du
+  décalage journalisé vers le décalage local, par table, le temps de la transaction rejouée ;
+  REL_UPDATE et REL_DELETION traduisent et prennent le chemin local, comme en service. Témoin réel :
+  le .wal de la preuve rejoué sur une copie sous la lib corrigée.
+- **B, plus grave : des réponses fausses sous un second écrivain avec G1** :
+  `TwoFlushesInOneTransaction` rejoue sans refus mais deux relations désignent les nœuds de l'autre
+  écrivain (3000→3001 pour 1000→1001). G1 verse les nœuds locaux en milieu de transaction, ils
+  prennent leurs décalages définitifs là, un second écrivain valide derrière ; au rejeu, les
+  transactions repassent dans l'ordre des commits et les relations de A, journalisées avec les
+  décalages de service, désignent les nœuds de B. Un COPY de nœuds en est protégé parce qu'il tient
+  l'index de sa table jusqu'à la validation ; le versement de G1 ne le tenait pas. **Décision** : le
+  verrou de versement (flushNodeTable tient sur la table de nœuds le verrou d'un COPY de nœuds
+  jusqu'à la fin de la transaction, le second écrivain attend ou est refusé nommément par le délai),
+  pas le retrait de G1 (il rouvrirait le ticket du 5 octobre). Reste à mesurer si la mémoire en
+  service était juste et seul le rejeu faux. En service l'hôte n'a qu'un écrivain par base : B y est
+  peu probable, mais les bases ouvertes de 8 h 31 à 9 h 05 (code-principal, code-lourd,
+  memoire-longue) se relèvent par ancre sur des copies au lieu de le croire.
+- **Les SIGSEGV restent à part** (ASAN du cœur sur V2 et la compaction CSR ; témoin HNSW de hotfixs
+  à refaire sous 512 Mio). G5 a ses chiffres au ticket (13b8a6d57). Aucune pose avant le correctif
+  A (et B s'il tient dans l'heure) et le rebâti de la lib.
