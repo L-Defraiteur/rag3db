@@ -26,6 +26,7 @@ bornée, et la charge dépasse la borne.
 | `backend::tests::stopping_cuts_a_long_reaction_and_the_restart_resumes_it` | la même passe | l'arrêt d'une réaction longue (voir les tickets fermés du 11 et du 19 octobre) | vert seul sous les deux libs |
 | `daemon_host::chat::tests::le_chat_se_mene_et_s_arrete_dans_la_page` | l'étape navigateur, à la première exécution après un bâti | voir [son ticket](2026-11-07-le-temoin-du-chat-dans-la-page-rougit-a-la-premiere-execution-apres-un-bati.md) | 5/7 lot, 5/5 master |
 | `le_chat_se_mene_et_s_arrete_dans_la_page`, le tour lent | la lib entière (25 octobre) | voir [le ticket du 25 octobre](2026-10-25-le-temoin-du-chat-rougit-encore-sur-le-tour-lent.md), même famille | — |
+| `dataflow::reactor::tests::each_runs_per_ring_and_debounce_waits_for_quiet` | la lib entière, le portable, 8 nov. 9 h 50 (lib dadbf0041, base 0768770d7) | « réveillé 29.979054ms après le dernier envoi » (`reactor.rs:636`) : une durée ; forme attendue, une horloge injectée, comme la sonde de débit (fermée le 8 novembre) ; pour everything declarative | vert dans la lib entière juste avant |
 | le témoin des vues de l'IDE | le lot des témoins navigateur | voir [son ticket](2026-10-25-le-temoin-des-vues-de-l-ide-rougit-sous-le-lot.md) ; le harnais attend l'appel en vol depuis bb0f4d9c0 | 2/2 seul |
 
 ## La règle du jour (c7, 7 novembre 2026)
