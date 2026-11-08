@@ -1063,3 +1063,38 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   fondu dans le run, vue React, règle générique « un outil dont le graphe porte un nœud de
   recherche ») ; ED, l'atelier (atelier-attach df3be297b : `attach_worktree`, `list_worktrees`,
   WorktreeNode, RepoAttached ; passe complète ensuite).
+
+## 12 h 30 — Lucie au clavier : le modèle de décision prend forme, le banc débloqué
+
+- **A confirmé** par une mesure honnête : la passe rag3weaver entière sur la tête de master (A +
+  coupure) liée à un moteur bâti dans rag3db-dbg (lib et extension à côté, md5 relevés) :
+  check_features 5/5, lib 2045, e2e_lectures 24/24, e2e_tx 3+1+18+3. Le montage mixte (lib de A,
+  en-têtes de dadbf0041) avait rendu 20 refus de build id et a été jeté. Le cœur rejoue
+  proportionnellement sur sa tête rebasée (A a touché wal_replayer en C++) : transaction entière,
+  e2e vector, produit court ; push vers la demi-heure. **G3** en passe complète sur
+  g3-extensions-a-l-ouverture-3 (ddd35d857, A dessous ; deux conflits résolus : nouveautes.md et
+  probabilistic.txt), verdict complet avant push.
+- **Atterris** : tty, la coloration du code dans le terminal (3696a71cb, par le vrai port de
+  POST /highlight) ; archi, le (f) (d4c1d1b12 : `recall_min_score` retiré, la clé acceptée sans
+  effet). En push : recherche, mes-recherches (route paginée sur les runs, le clic fondu dans le run,
+  la vue, et une course du journal des runs corrigée au passage). Prêts : archi (g) (le juge du
+  rappel : plafond 2 048 et coupe dite ; la session qu'il sert dans la consigne, la fiche propre
+  ôtée — c7bd53250) ; 96 (M4 pas 3, un port terminal pour le rapport, rejeu).
+- **Le modèle de décision (banc)** : première mesure sur master (1ab3398b3, a63182975) — « ce jeu ne
+  classe aucun modèle » : 1 328 paires réelles, 19 fiches, aucune utile à la main ; Gemini garde 66
+  fois sur 67 la fiche d'identité de la session parce que sa consigne ne lui dit pas quelle session
+  il sert ; bge-m3 au hasard (AUC 0,53) ; 202 appels, 466 000 jetons. **Lucie tranche** : fabriquer
+  ou construire de vraies fiches, la permission d'installer « sans souci », et **l'entrée du modèle
+  est le contexte de l'agent** (« on lui donne tout le chat et les outils, et on lui dit : ce bout
+  de mémoire est-il pertinent avec le contexte de l'agent »). Le banc construit ~80 à 100 positifs
+  depuis les transcriptions (la fiche qui aurait aidé, provenance vérifiée, sans recopier les mots
+  du prompt), 2 négatifs durs + 2 au hasard par cas, contexte borné à 2 k / 6 k / 16 k jetons,
+  Gemini par cas comme référence (≈ 520 appels, 4,8 M de jetons, accordé) ; mesures : accord,
+  AUC, seuil qui garde 95 puis 100 % des utiles, latence CPU puis card0, mémoire. **Installations
+  faites de ma main sur l'autorisation explicite de Lucie** (12 h 25) : venv transformers 5.22 +
+  laya 0.4.29 à luciepc, poids laya 647 Mo, Qwen 0,5B 954 Mo, SmolLM2 4,7 Go (formats en trop à
+  élaguer).
+- **Lucie** : « après les quotas, une minute puis un retour exponentiel » → la règle du client
+  `models.llm` lui-même (chat, juge, archiviste, hooks), lot court chez ED derrière l'atelier.
+- **L'atelier** (ED) : premier pas écrit (atelier-attach df3be297b : gabarit livré `atelier`,
+  `attach_worktree {path}` et `list_worktrees`, WorktreeNode, RepoAttached), modules puis passe.
