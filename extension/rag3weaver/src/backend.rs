@@ -6042,7 +6042,12 @@ mod tests {
     /// politique et le chemin des fichiers, pas la persistance.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn backend_de_code(dir: &Path, prepared: PreparedBackend) -> Backend {
-        use crate::embedder::HashEmbedder;
+        backend_de_code_avec(dir, prepared, Box::new(crate::embedder::HashEmbedder::new(8)))
+    }
+
+    /// [`backend_de_code`], l'embarqueur donné (un compteur, pour un témoin).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn backend_de_code_avec(dir: &Path, prepared: PreparedBackend, embarqueur: Box<dyn crate::embedder::Embedder>) -> Backend {
         // Une VRAIE base en mémoire : depuis que `edit` réindexe par la
         // synchronisation déclarée, la session fine s'écrit puis se RELIT en
         // base — une connexion factice qui rend des résultats vides la
@@ -6053,7 +6058,7 @@ mod tests {
         .unwrap();
         let mut catalog = Catalog::new(
             Box::new(conn),
-            Box::new(HashEmbedder::new(8)),
+            embarqueur,
             CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
         );
         catalog.initialize().unwrap();
@@ -6555,6 +6560,57 @@ mod tests {
         assert_eq!(etat["busy"], true, "le catalogue tenu ne rend pas busy : {etat}");
         assert!(etat["watches"]["code"].is_object(), "le reçu occupé perd les montres : {etat}");
         assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// Un embarqueur qui note chaque texte qu'on lui donne, puis rend ceux d'un `HashEmbedder`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    struct Compteur(crate::embedder::HashEmbedder, std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    impl crate::embedder::Embedder for Compteur {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            self.1.lock().unwrap().extend(texts.iter().cloned());
+            self.0.embed(texts)
+        }
+        fn dim(&self) -> usize {
+            self.0.dim()
+        }
+        fn is_mock(&self) -> bool {
+            self.0.is_mock()
+        }
+        fn name(&self) -> &str {
+            self.0.name()
+        }
+    }
+
+    /// **Un scope seulement déplacé ne se réembarque pas** (la conception des vues, 8 novembre
+    /// 2026 : sur dix branches, 72 % des scopes des fichiers changés ont le même contenu à
+    /// d'autres lignes). Une fonction neuve insérée au-dessus d'une fonction inchangée : la
+    /// réindexation du fichier ne doit rendre à l'embarqueur aucun des textes que cette fonction
+    /// avait déjà fait embarquer. Comparé texte pour texte : un morceau dont le texte change (le
+    /// module, la neuve) s'embarque, c'est juste.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_scope_that_only_moves_is_not_embedded_again() {
+        let vus = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|_| {});
+        drop(p);
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code_avec(dir.path(), prepared, Box::new(Compteur(crate::embedder::HashEmbedder::new(8), vus.clone())));
+        let source = backend.file_source.clone().unwrap();
+        let deplacee = "pub fn deplacee() {\n    let marque_de_la_deplacee = 41;\n    let _ = marque_de_la_deplacee + 1;\n}\n";
+        let mut cat = backend.catalog.lock().unwrap();
+        std::fs::write(dir.path().join("sources/deplace.rs"), deplacee).unwrap();
+        crate::code_tools::reingest_file(&mut cat, source.as_ref(), "deplace.rs", deplacee).unwrap();
+        let avant: Vec<String> = std::mem::take(&mut *vus.lock().unwrap()).into_iter().filter(|t| t.contains("marque_de_la_deplacee")).collect();
+        assert!(!avant.is_empty(), "la fonction n'a jamais été embarquée : le témoin ne mesure rien");
+        let apres_texte = format!("pub fn neuve() {{\n    let marque_de_la_neuve = 7;\n}}\n\n{deplacee}");
+        std::fs::write(dir.path().join("sources/deplace.rs"), &apres_texte).unwrap();
+        crate::code_tools::reingest_file(&mut cat, source.as_ref(), "deplace.rs", &apres_texte).unwrap();
+        let apres = std::mem::take(&mut *vus.lock().unwrap());
+        assert!(apres.iter().any(|t| t.contains("marque_de_la_neuve")), "la fonction neuve n'est pas embarquée : {apres:?}");
+        let reembarques: Vec<&String> = apres.iter().filter(|t| avant.contains(t)).collect();
+        assert!(reembarques.is_empty(), "la fonction seulement déplacée a été réembarquée, {} texte(s) sur {} : {reembarques:?}", reembarques.len(), avant.len());
     }
 
     /// **La ligne [montre] dit l'embarquement sans la variable du profil** :
