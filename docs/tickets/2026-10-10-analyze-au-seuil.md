@@ -55,3 +55,29 @@ table d'un million de lignes à vecteurs coûterait de l'ordre de 240 ms par bal
 non mesuré).
 
 Voir aussi `2026-10-10-hyperloglog-a-64-registres.md` (la précision des distincts).
+
+## Le lot du 8 novembre 2026 (`g5-statistiques`, session hotfixs)
+
+- **Le compte.** `NodeTable` compte les lignes validées supprimées, modifiées (un `SET` par ligne et
+  par colonne) ou écartées par `IGNORE_ERRORS` depuis le dernier analyze. Elles passent toutes par
+  `NodeTable::delete_` ou `update`, et seule la part persistante compte.
+- **Le seuil.** Au-delà de 50 + 10 % des lignes de la table, son point de reprise rebâtit ses
+  statistiques sur les lignes vivantes, avant de les écrire. Le balayage,
+  `NodeTable::rebuildStatsFromLiveRows`, est partagé avec `CALL analyze` et tourne sous
+  `DUMMY_CHECKPOINT_TRANSACTION`, puisqu'aucun écrivain ne tourne.
+- **Les témoins** (`test/transaction/table_analyze_test.cpp`) :
+  - `TheCheckpointAnalyzesATablePastTheThreshold` : rouge avant, avec 1 931 noms estimés pour 1 000 ;
+  - `UnderTheThresholdTheCheckpointDoesNotAnalyze` : 10 lignes supprimées sur 2 000, et les
+    distincts ne bougent pas.
+- **La mesure, à faire avant le push** (fenêtre de c7, vers 9 h, sous `poste mesure`). Sur une copie
+  reflink de code-rag3db : un `DELETE` validé de 11 % de la plus grosse table à vecteurs, puis un
+  `CHECKPOINT` chronométré, avec et sans le lot. La copie est remise à neuf entre les deux, et
+  chaque mesure se fait trois fois. Les chiffres viendront ici.
+
+## Limite connue
+
+Le compte vit en mémoire : une réouverture le remet à zéro. Une table qui a beaucoup changé puis
+a été rouverte n'est rebâtie qu'après de nouveaux changements au-delà du seuil, ou par un
+`CALL analyze`. La forme d'après : écrire le compte au point de reprise, avec les statistiques de
+la table. Cela change leur format sur disque, donc à la bascule 44, avec les 1 024 registres de
+l'HyperLogLog (`2026-10-10-hyperloglog-a-64-registres.md`).
