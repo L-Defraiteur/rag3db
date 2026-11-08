@@ -163,9 +163,16 @@ const CADENCE_DE_L_AVANCEMENT: Duration = Duration::from_secs(1);
 /// Les fichiers et les symboles de l'index d'un backend (`fts_counts` de
 /// `Backend::index_states`), relus une fois si une écriture tient le catalogue ;
 /// `None` plutôt que des zéros.
-fn comptes_de_l_index(hote: &DaemonHost, hosted: &Arc<super::Hosted>) -> (Option<u64>, Option<u64>) {
+fn comptes_de_l_index(_hote: &DaemonHost, hosted: &Arc<super::Hosted>) -> (Option<u64>, Option<u64>) {
     for essai in 0..2 {
-        let etat = hote.with_backend(hosted, |b| b.index_states()).ok().and_then(|r| r.ok()).unwrap_or(Value::Null);
+        // **Sans jamais rouvrir le dépôt** : un dépôt fermé depuis la fin de l'index (une
+        // fermeture, un hôte qui lâche) ne se rouvre pas pour un compte — la réouverture
+        // tenait le slot pendant que la reprise le croyait ouvert (passe de la pile de
+        // l'atelier, 8 novembre 2026). Fermé : pas de comptes.
+        let etat = match hosted.backend.try_read() {
+            Ok(g) => g.as_ref().and_then(|b| b.index_states().ok()).unwrap_or(Value::Null),
+            Err(_) => Value::Null,
+        };
         if etat["busy"] == true && essai == 0 {
             std::thread::sleep(Duration::from_millis(500));
             continue;
@@ -1463,8 +1470,16 @@ mod tests {
         couper();
         let liste = outil("list_worktrees", json!({}));
         assert!(liste.contains("worktree(s) attaché(s)") && !liste.contains("pas ouvert"), "{liste}");
-        let neuf = journal_de();
-        assert!(!neuf.is_empty() && neuf != coupe.display().to_string(), "un journal neuf : {neuf} ; list_worktrees : {liste}");
+        // Le journal neuf : l'ouverture le pose en relançant l'index.
+        let debut = std::time::Instant::now();
+        let neuf = loop {
+            let j = journal_de();
+            if !j.is_empty() && j != coupe.display().to_string() {
+                break j;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(60), "pas de journal neuf en 60 s : {j} ; list_worktrees : {liste}");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
         attendre(&neuf);
 
         // 2. Au démarrage de l'hôte, la reprise.
