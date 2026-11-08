@@ -918,24 +918,6 @@
     },
     "archive": {
       "graph": "graphs/archive.mmd",
-      "metadata": [
-        {
-          "node": "write",
-          "port": "report"
-        },
-        {
-          "node": "create",
-          "port": "report"
-        },
-        {
-          "node": "refs",
-          "port": "report"
-        },
-        {
-          "node": "refs_new",
-          "port": "report"
-        }
-      ],
       "policy": {
         "call_models": true
       }

@@ -100,9 +100,6 @@ fn un_document_entre_et_ses_sections_sont_rangees_une_par_fiche_none_ou_create()
     // Le résultat est le rapport des décisions : trois sections, aucune en erreur.
     assert_eq!(r["result"]["errors"], json!([]), "{r}");
     assert_eq!((r["result"]["elements"].as_u64(), r["result"]["ok"].as_u64()), (Some(3), Some(3)), "trois sections décidées : {r}");
-    // Les étages d'écriture : une section liée sur la fiche existante, une sur la fiche proposée.
-    assert_eq!((r["metadata"]["refs.report"]["elements"].as_u64(), r["metadata"]["refs.report"]["errors"].as_array().map(|e| e.len())), (Some(1), Some(0)), "{r}");
-    assert_eq!((r["metadata"]["refs_new.report"]["elements"].as_u64(), r["metadata"]["refs_new.report"]["errors"].as_array().map(|e| e.len())), (Some(1), Some(0)), "{r}");
     assert_eq!(serveur.connections.load(std::sync::atomic::Ordering::SeqCst), 3, "une décision par section");
 
     // Le L0, tel quel, à son chemin par défaut.
@@ -150,7 +147,8 @@ fn sans_modele_declare_le_document_est_garde_et_chaque_section_est_dite_en_erreu
     let erreurs = decide["errors"].as_array().expect("errors");
     assert_eq!(erreurs.len(), 3, "{r}");
     assert!(erreurs.iter().all(|e| e["error"].as_str().unwrap_or("").contains("llm")), "{erreurs:?}");
-    assert!(r["metadata"]["refs.report"].is_null() || r["metadata"]["refs.report"]["elements"] == json!(0), "rien n'est rangé : {r}");
+    let rien = appel(&b, "recall_apports", json!({"query": "journal compositeur pluie", "options": {"limit": 5, "consistency": "strict"}}));
+    assert_eq!(rien["result"].as_array().map(|a| a.len()), Some(0), "rien n'est rangé : {rien}");
     let source = dir.path().join("templates/backends/memory/fichiers").join(CHEMIN);
     assert!(source.exists(), "le L0 est gardé : {}", source.display());
 }
