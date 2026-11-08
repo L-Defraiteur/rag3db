@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Les fichiers d'annulation du dataflow ne s'accumulent plus dans `/tmp`.** À la fin d'un
+  graphe, tous les fichiers `*.undo.json` de plus de 64 Ko sont supprimés avec le reste, au lieu d'être
+  gardés par défaut (seules les migrations `migration-…` conservent leur annulation pour un retour
+  arrière ultérieur) : la fuite de mémoire vive en `/tmp` est étanchée.
 - **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
   verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
   codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
