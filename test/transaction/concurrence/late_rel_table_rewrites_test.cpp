@@ -161,6 +161,61 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderAFullReindex) {
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
 }
 
+// Deux versements d'une même table de nœuds dans une transaction, à un seul écrivain (relecture du
+// cœur, 8 novembre 2026) : deux tables de liens Scope→Scope, un COPY vers la première (qui verse
+// les Scope locaux), d'autres Scope locaux et des relations locales vers eux, un COPY vers la
+// seconde (qui verse encore). Les deux sens de chaque table doivent être égaux, sans mort ni rejeu.
+TEST_F(LateRelTableRewrites, TwoFlushesOfOneNodeTableKeepBothDirectionsEqual) {
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, 1999) AS i CREATE (:Scope {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE A(FROM Scope TO Scope, line INT64);");
+    ok("CREATE REL TABLE B(FROM Scope TO Scope, line INT64);");
+    ok("BEGIN TRANSACTION;");
+    ok("UNWIND range(2000, 2009) AS i CREATE (:Scope {id: i});");
+    ok("COPY A FROM (UNWIND range(0, 2999) AS i RETURN (i * 7) % 2010 AS f, (i % 4) * 400 AS t, i AS line);");
+    ok("UNWIND range(2010, 2019) AS i CREATE (:Scope {id: i});");
+    ok("MATCH (x:Scope {id: 2015}), (y:Scope {id: 3}) CREATE (x)-[:B {line: -1}]->(y);");
+    ok("MATCH (x:Scope {id: 4}), (y:Scope {id: 2016}) CREATE (x)-[:B {line: -2}]->(y);");
+    ok("COPY B FROM (UNWIND range(0, 2999) AS i RETURN (i * 11) % 2020 AS f, (i % 3) * 600 + 2010 % (i + 1) AS t, i AS line);");
+    ok("MATCH ()-[r:A]->() WHERE r.line % 13 = 0 SET r.line = r.line + 100000;");
+    ok("COMMIT;");
+    ok("CHECKPOINT;");
+    auto edgesOf = [&](const std::string& table, bool forward) {
+        Edges edges;
+        for (int64_t node = 0; node < 2020; node++) {
+            const auto query = "MATCH (a:Scope)-[r:" + table + "]->(b:Scope) WHERE " +
+                               (forward ? "a" : "b") + ".id = " + std::to_string(node) +
+                               " RETURN offset(id(r)), a.id, b.id;";
+            auto result = conn->query(query);
+            EXPECT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
+            while (result->isSuccess() && result->hasNext()) {
+                auto row = result->getNext();
+                edges.emplace(row->getValue(0)->getValue<int64_t>(),
+                    std::make_pair(row->getValue(1)->getValue<int64_t>(),
+                        row->getValue(2)->getValue<int64_t>()));
+            }
+        }
+        return edges;
+    };
+    for (const std::string table : {"A", "B"}) {
+        SCOPED_TRACE(table);
+        const auto fwd = edgesOf(table, true);
+        const auto bwd = edgesOf(table, false);
+        EXPECT_EQ(fwd.size(), bwd.size()) << "[check: directions-agree] " << table;
+        uint64_t gaps = 0;
+        for (auto& [rel, ends] : fwd) {
+            if (bwd.count(rel) != 1 || fwd.count(rel) != 1 || bwd.find(rel)->second != ends) {
+                if (++gaps <= 10) {
+                    ADD_FAILURE() << "[check: directions-agree] " << table << " relation " << rel
+                                  << " " << ends.first << " -> " << ends.second;
+                }
+            }
+        }
+        EXPECT_EQ(gaps, 0u) << table;
+    }
+}
+
 TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderDrains) {
     ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
     ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
