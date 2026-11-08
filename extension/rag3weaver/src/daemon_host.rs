@@ -1513,14 +1513,15 @@ mod teammate_tests;
 mod chat_qui_code;
 
 /// **Le nom d'une session dans la barre**, la règle que la page suivait
-/// (`displayName`) : son dépôt ; une mémoire, « la mémoire » ; sinon le dossier
-/// de son manifeste ; l'id en dernier recours.
+/// (`displayName`) : une mémoire, « la mémoire » (d'abord : son `repo` retombe
+/// sur le dossier de son manifeste) ; son dépôt ; sinon le dossier de son
+/// manifeste ; l'id en dernier recours.
 fn session_name(b: &Value) -> Value {
-    if !b["repo"].is_null() {
-        return b["repo"].clone();
-    }
     if b["kind"] == "memory" {
         return json!("la mémoire");
+    }
+    if !b["repo"].is_null() {
+        return b["repo"].clone();
     }
     let dossier = b["manifest"].as_str().and_then(|m| Path::new(m).parent()?.file_name().map(|n| n.to_string_lossy().into_owned()));
     dossier.map(Value::String).unwrap_or_else(|| b["id"].clone())
