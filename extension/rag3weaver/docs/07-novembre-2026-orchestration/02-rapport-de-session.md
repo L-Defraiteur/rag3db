@@ -575,3 +575,45 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   consomme pas une vie, la reprise tient la fenêtre d'un quota par minute.
 - **L'hôte de Lucie ne prend un lot qu'à une pose de G** : jamais-muet et le lot 2 n'y seront
   qu'à 8 h 30, sauf pose intermédiaire que je demanderai à G si la nuit le permet.
+
+## 02 h 05 — recherche atterrie, le premier lot écrit par l'équipier en passe, deux décisions de conception
+
+- **Atterris** : ED, lot express du compte des suites de `run_e2e.sh` (91543d7f0 : `--test e2e <suite>`
+  rougissait toute passe depuis 5eb6fb277, « Suites jouées : 0 sur 1 ») puis equipier-jamais-muet
+  (aff3611fb, passe complète : lib 2003, navigateur 19, chat 15, e2e_lectures 22, e2e_tty 2,
+  e2e_juge 5/5, e2e_equipier 1/1) ; hotfixs, **G2b** (dadbf0041, C++ du moteur : COPY de nœuds
+  borné en octets, journal par tranches, BlobCopyCheckpointTest, 13 suites, RollbackUnderReaders
+  ×20 ; G2 est fini) et check_tickets --lot qui lit un ticket fermé réécrit comme « fermé »
+  (306907718) ; recherche, ses trois lots (second-ecrivain 80ca3d561, creux-par-les-spans-2
+  a4a8535e1, montée lucivy 4.3.2 ccec05572 ; le dernier poussé sans rejeu après l'arrivée de
+  306907718 et du C++ seuls, dit tel quel). **La lib de demain se rebâtit à 8 h sur dadbf0041**
+  (G) ; hotfixs ne pousse plus de C++ avant le « basculé ».
+- **En cours** : archi, hooks-pont-9 sur ccec05572 (deux conflits de teammate.rs fusionnés,
+  passe complète hors verrou) ; puis **hotfixs pousse le lot de l'équipier**
+  (agent/journaux-annulation-tmp-3-3 = bddbdc0f6, relu sans faute : seule une fin réussie efface,
+  seul le retour arrière d'une migration relit une annulation, `lire_texte(...).ok()` lit un
+  `@file:` effacé sans planter ; passe à luciepc ; un push parti dans la commande d'un rebase en
+  conflit a posé la tête d'origine sur -2, d'où -3, sans force) ; ED, lot 2 des commandes par la
+  porte (9ceec57f1 : première passe rouge d'un **SIGSEGV à la sortie du binaire e2e après
+  e2e_equipier vert**, rejoué seul vert, nommé, ticket s'il revient ; passe relancée).
+- **Le figement des passes est tenu** (arbre) : au portable, master c1bdbb183 vert 3/3, d845744a2
+  figé 3/3 ; la sonde des tunnels n'a jamais été muette ; la pile désigne l'hôte de test (un ureq
+  sans délai dans une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne), pas le service.
+  Bissection des 23 commits entre les deux pour nommer le correctif ; ticket à la fin.
+- **Décision G3 (hotfixs, avis du cœur)** : la base rouverte juste après un point de reprise
+  (journal vide) ne chargeait pas l'extension vector notée à côté (1/6 au banc sous charge). Je
+  tranche la voie du moteur : **toute ouverture relit les extensions notées** (PostgreSQL charge
+  au démarrage, pas au rejeu) ; un échec **ne refuse pas l'ouverture** (la garde 1 et ses témoins
+  tiennent : index « en retard », rebâti), il s'écrit au journal du moteur et se lit par une
+  colonne `extension_error` de SHOW_INDEXES. Témoin déterministe écrit (4ec960e99). C++ après le
+  basculé ; **mot de Lucie avant le push**, puisque le comportement visible change ; le refus
+  avec option reste une proposition de ticket pour elle.
+- **Essais de l'équipier** : l'essai 3 a abouti (page 08/01) : témoin rouge puis vert joué par
+  moi à luciepc, correctif au plus étroit après mon recadrage, commit b46bddcac. Constats pour
+  le ticket des essais d'ED : pas de `run_command` (lot 2) ; les 429 Vertex ne frappent que
+  l'équipier (même sur un pas au fil court : l'hypothèse du fil entier faiblit, ED mesure) ; deux
+  crochets d'après-outil d'`edit_file` en erreur (gabarit `motif-ailleurs` relatif au répertoire
+  courant, appel sans `old`) ; le **juge note chaque pas comme la tâche entière** (2/10 au pas
+  « lire ») et dit faux sur les outils déclarés ; l'équipier a dit « constate l'échec » sans
+  jouer, et a clos le plan malgré « attends ma confirmation ». Essai 4 (racine-disparue) en
+  cours : il a posé ses trois questions d'exécution avant d'avoir écrit une ligne, recadré.

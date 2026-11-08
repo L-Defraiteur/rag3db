@@ -93,4 +93,80 @@ moins la fenêtre d'un quota par minute, avec un recul croissant, au lieu de ren
 essais. Les crochets de Lucie (`hooks.log`) ne voient aucun 429 ce soir ; la passe d'ED
 (e2e_juge, e2e_equipier à luciepc, même projet) a démarré vers 00:33.
 
+## Essai 3 — `journaux-annulation-tmp-3` (lancé 01 h 02), le premier qui travaille
+
+Même consigne, même arbre, après le lot express d'ED sur run_e2e.sh (le quota respirait).
+
+**Ce qu'il a fait, pas à pas** (sa boîte, `step_done` à chaque pas) :
+1. *Lire le ticket et le code* (01:02 → 01:15, un 429 en route) : analyse juste et précise —
+   `poser_l_undo` (l. 194-202) déverse en fichier au-delà de 64 Ko, `nettoyer_apres_fin`
+   (l. 216-237) efface tout pour `ingest-`/`drain-` mais garde exprès les `*.undo.json` des autres
+   exécutions ; « seules les migrations (`migration-…`) relisent leur annulation après la fin,
+   par `MigrationRunner::rollback` ». Il note lui-même que `run_command` n'est pas dans ses
+   outils. J'ai vérifié sa thèse dans le code : le seul relecteur d'`undo_context` après la fin
+   est le retour arrière des migrations (catalog.rs ~10820, `MigrationError`). Elle tient.
+2. *Écrire le témoin rouge* (01:17) : `fin_de_graphe_supprime_les_fichiers_undo_meme_sup_64ko`
+   dans `checkpoint_store.rs` — un undo de 70 Ko posé pour `sync-source-fichiers`, `flush`,
+   un `.undo.json` compté, `nettoyer_apres_fin`, zéro attendu. **Mais il écrit « constate
+   l'échec » sans l'avoir joué** : il n'a pas de commande. Première faute à relever.
+3. *Corriger* (01:19) : `est_ephemere` → `annulation_doit_survivre` (`migration-` seul), et
+   `nettoyer_apres_fin` efface le dossier entier pour tout le reste. **Puis il déborde** :
+   `supprimer_dossier` sur `Spiller`, retouche de `CypherCheckpointStore::delete`, puis
+   `PostgresCheckpointStore::delete` et `migrations.rs` — « au plus étroit » oublié.
+
+**Ce que j'ai dit** (01:21, une `request` dans sa boîte, lue au pas suivant) : (1) au plus
+étroit, retire `supprimer_dossier` et les `delete()`, propose-les en une ligne du ticket si tu y
+tiens ; (2) ne dis jamais rouge ou vert sans l'avoir vu tourner ; écris la commande exacte que
+tu aurais lancée, je la joue et je te rends la sortie ; (3) pas de commit avant la sortie verte.
+
+**Ce qu'il a fait de mon retour** (01:39, `step_done`) : « Recadrage appliqué au plus étroit » —
+`supprimer_dossier` retiré, les `delete()` et `migrations.rs` rendus ; le diff retombe à un
+fichier, 61 lignes ajoutées, 16 retirées. Le ticket est déjà déplacé dans `docs/tickets/closed/`
+avec l'en-tête à champs (État corrigé, Gravité perte, Atteignable en service oui, Famille produit).
+
+**Le test, joué par moi à sa place** (luciepc, `cargo test --lib`, jeu de features de la
+procédure, lib épinglée 17a094d12, un target à moi) :
+- première version : **ne compile pas** (`String + &String`, E0277) — rendu tel quel dans sa
+  boîte ; il a réécrit la ligne en `format!` ;
+- code 5eb6fb277 + le seul témoin : **ROUGE** (`left: 1, right: 0`, « les fichiers *.undo.json
+  de plus de 64 Ko ne doivent pas subsister après la fin du graphe ») ;
+- avec son correctif : **VERT** (1 passed), et le module `dataflow::checkpoint_store` 9/9.
+
+**Ce qui bute encore, côté produit** : pas de `run_command` dans une tâche (lot 2 d'ED, en
+passe) ; les 429 Vertex qui ne frappent que l'équipier (ses journaux de pas font 87 à 130 Ko :
+hypothèse d'un quota de jetons par minute en entrée, le fil entier renvoyé à chaque tour — ED
+mesure la taille des requêtes avant de toucher au fil) ; deux crochets d'après-outil
+d'`edit_file` en erreur (gabarit `motif-ailleurs` cherché relatif au répertoire courant du
+processus, pas au manifeste — ED propose deux formes au prochain lot ; et un appel sans `old`).
+
+**Comment il a fini** (01:45) : il a corrigé la ligne, retiré le débordement, écrit le ticket fermé
+(en-tête à champs, cause, correction, les trois sorties de test telles quelles, une « piste delete() »
+pour plus tard), une ligne de nouveautés (datée 7 nov. : j'ai mis le 8), proposé un message de commit
+en français — puis **il a clos le plan** (« Tâche terminée », `ended : plus rien à faire ») alors
+que ma réponse disait « ne déclare pas la tâche accomplie avant ma confirmation du commit ». J'ai
+passé le commit à sa place (il n'a pas git) : `git rm` de l'ancien ticket, commit b46bddcac sur
+`agent/journaux-annulation-tmp-3`, branche poussée. **hotfixs** l'a relu (pas de faute : seule une
+fin réussie efface ; seul le retour arrière d'une migration relit ; `lire_texte(...).ok()` d'un
+`@file:` effacé ne plante pas), l'a rebasé (agent/journaux-annulation-tmp-3-3 = bddbdc0f6) et joue
+la passe de la procédure à luciepc ; il pousse après archi. **Le juge** a noté le run du pas 1
+(« lire ») 2/10, « objectif non, aucune action corrective » : il juge un pas comme la tâche
+entière, et déduit faux sur les outils déclarés — constat pour ED.
+
+## Essai 4 — `racine-disparue` (lancé 01 h 46)
+
+Ticket du 11 octobre : un backend de code dont `workspace.root` a disparu se dit encore ouvert et
+ses outils rendent une erreur brute. Consigne amendée : pas de `run_command`, « écris la commande
+exacte dans ta boîte, je la joue », « ne dis jamais rouge ou vert sans la sortie », « attends ma
+confirmation avant de déclarer la tâche finie », outils listés, au plus étroit.
+
+- 01:47, **trois questions d'un coup avant d'avoir écrit une ligne** : « Peux-tu exécuter ce test
+  témoin cargo test ? », « … les tests cargo test pour valider ? », « … les commandes git mv et
+  valider le commit ? » — posées sur les items 2, 4 et 5 du plan, à vide. Réponse : oui aux trois,
+  une à la fois, la commande exacte, quand le fichier existe ; continue ton pas 1 et dis où
+  l'ouverture et daemon_status lisent la racine.
+- 01:48, un 429 Vertex dès le pas 1 (fil court : l'hypothèse « le fil entier renvoyé » faiblit).
+- 01:58, `step_done` du pas 1 : « daemon_host.rs (state, espace_du_manifeste) », reste « compléter
+  l'analyse (list_files, backend.rs, code_tools.rs), écrire le témoin rouge et demander son
+  exécution ».
+
 *(suite au fil de la nuit)*
