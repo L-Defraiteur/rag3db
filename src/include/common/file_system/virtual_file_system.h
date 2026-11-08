@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -27,6 +28,15 @@ public:
     ~VirtualFileSystem() override;
 
     void registerFileSystem(std::unique_ptr<FileSystem> fileSystem);
+
+    // Pour les tests seulement : la fabrique du système de fichiers par défaut (le local), lue à la
+    // construction de chaque VirtualFileSystem, donc avant que la Database ouvre ses fichiers et
+    // rejoue son journal. Un témoin de coupure y pose un système de fichiers qui garde en mémoire ce
+    // qui n'est pas synchronisé. Sans effet hors des tests (aucune fabrique posée) ; nullptr la
+    // retire. Sur le modèle de WALReplayer::setRecoveryHookForTesting.
+    using default_file_system_factory_t =
+        std::function<std::unique_ptr<FileSystem>(const std::string& homeDir)>;
+    static void setDefaultFileSystemFactoryForTesting(default_file_system_factory_t factory);
 
     std::unique_ptr<FileInfo> openFile(const std::string& path, FileOpenFlags flags,
         main::ClientContext* context = nullptr) override;

@@ -13,8 +13,21 @@ namespace common {
 
 VirtualFileSystem::VirtualFileSystem() : VirtualFileSystem{""} {}
 
+namespace {
+VirtualFileSystem::default_file_system_factory_t& defaultFileSystemFactory() {
+    static VirtualFileSystem::default_file_system_factory_t factory;
+    return factory;
+}
+} // namespace
+
+void VirtualFileSystem::setDefaultFileSystemFactoryForTesting(
+    default_file_system_factory_t factory) {
+    defaultFileSystemFactory() = std::move(factory);
+}
+
 VirtualFileSystem::VirtualFileSystem(std::string homeDir) {
-    defaultFS = std::make_unique<LocalFileSystem>(homeDir);
+    const auto& factory = defaultFileSystemFactory();
+    defaultFS = factory ? factory(homeDir) : std::make_unique<LocalFileSystem>(homeDir);
     compressedFileSystem.emplace(FileCompressionType::GZIP, std::make_unique<GZipFileSystem>());
 }
 
