@@ -1623,6 +1623,9 @@ mod tests {
         let b = |repo: Value, kind: &str| json!({ "id": "c6dd17bae70f", "repo": repo, "kind": kind, "manifest": "/home/x/.config/rag3weaver/memoire-longue/backend.json" });
         assert_eq!(session_name(&b(json!("rag3db"), "code")), json!("rag3db"));
         assert_eq!(session_name(&b(Value::Null, "memory")), json!("la mémoire"));
+        // G, pose de 8 h 31 : le `repo` d'une mémoire retombe sur le dossier de son
+        // manifeste (« memory ») ; la nature passe avant.
+        assert_eq!(session_name(&b(json!("memory"), "memory")), json!("la mémoire"));
         assert_eq!(session_name(&b(Value::Null, "project")), json!("memoire-longue"));
     }
 
