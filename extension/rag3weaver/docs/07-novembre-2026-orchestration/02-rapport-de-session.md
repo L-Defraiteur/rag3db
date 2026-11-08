@@ -1236,3 +1236,28 @@ avance d'autant ; les hashs, eux, sont exacts.
   nommé en ticket, le script d'affichage réparé, rejeu à 13 h 10) ; 96, M4 pas 3 ; archi, le lien
   vers un symbole ; recherche, le cache hors de /tmp ; codeparsers, les locales JavaScript ; banc,
   les positifs et la référence Gemini.
+
+## 13 h 54 — ÉCART : la pose du portable est annulée
+
+- **Le contrôle des deux sens** (outil 339cbb5dc, sous cbc06c3e1) sur les copies de code-lourd et
+  code-principal prises à 13 h 03, hôte arrêté, **après les deux `index confirm` complets de G sous
+  cbc06c3e1**, rend « BASE ATTEINTE » : code-lourd INHERITS_FROM 650 avant / 658 arrière (1 d'un
+  seul côté, 11 vues deux fois, 13 aux bouts différents), QUERIES (5 / 6 / 9), LOCKS 544 / 546 ;
+  code-principal QUERIES (7 / 8), IMPLEMENTS 331 / 334 avec `line` et `resolution` à deux valeurs,
+  LOCKS 425 / 436. Les grosses tables (MENTIONS, CONSUMES/CONSUMED_BY, DEFINES, CHUNKED_FROM) sont
+  égales. Les copies d'avant les index (hotfixs, 12 h 06 m 30 s) faisaient **0 écart sur 36 tables**,
+  comme les copies d'avant-43 sous cbc06c3e1 (arbre). **Un index complet, qui réécrit toutes les
+  lignes (DELETE puis COPY de relations), laisse des relations dans un seul sens ou aux bouts
+  différents dans les tables jeunes** : la famille LOCKS/QUERIES du 25 octobre. Pas de .wal sur ces
+  copies : ce n'est pas le rejeu, c'est l'écriture en service posée par un point de reprise.
+- **G n'a rien avancé** : pas de pose au portable, `courant` = dadbf0041 aux deux postes, le portable
+  sur eb154bf5f + 17a094d12. Les bases en service de luciepc portent ces écarts (bases d'essai) et
+  reviendront sur les copies de 12 h 06 après le départage. Logs à luciepc :
+  ~/.local/share/rag3weaver/instantanes/preuve-cbc06c3e1-controle/.
+- **Le départage** (G, hôte d'essai 7991, sous poste lourd) : le même `index confirm` sur une copie
+  saine de code-lourd sous 17a094d12, dadbf0041, puis cbc06c3e1, chacun suivi du contrôle. Rouge
+  sous cbc06c3e1 seul → un de A, a312f823e, b142b6a71, cbc06c3e1, et hotfixs bissecte ; rouge sous
+  les deux ou les trois → plus ancien, la famille LOCKS que B ne couvre pas. **Règle jusqu'au
+  verdict : aucune indexation complète sous cbc06c3e1.** La base de Lucie (avant-43, 17a094d12)
+  n'est pas touchée ; ses deux sens se contrôlent sur une copie, une minute d'arrêt annoncée.
+- Le banc « rouge d'abord » du SIGSEGV passe après ; B continue sa passe.
