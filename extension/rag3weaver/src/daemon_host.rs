@@ -574,6 +574,12 @@ impl DaemonHost {
             self.ide.relayer(&hosted.manifest.display().to_string(), &bus);
             // Et suivi par le journal des runs, sous l'id du backend.
             self.journal.suivre(&hosted.id, &bus);
+            // Un premier index coupé, ou des vecteurs dus quand le manifeste déclare le
+            // rattrapage : l'index repart en fond (c7, 8 novembre 2026, 16 h 09 et 16 h 30).
+            #[cfg(feature = "code")]
+            if let Some(b) = slot.as_ref() {
+                worktrees::a_l_ouverture(hosted, b);
+            }
             *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
             hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }

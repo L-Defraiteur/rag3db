@@ -405,6 +405,50 @@ fn premier_index_a_finir(manifeste: &Path) -> bool {
     !fini
 }
 
+/// **Lance l'index d'un backend ouvert** et pose le témoin de son journal ; rend le
+/// journal. Un index qui tourne déjà n'en lance pas un second.
+fn lancer_sur(b: &crate::backend::Backend, manifeste: &Path) -> Result<Option<PathBuf>, String> {
+    if crate::dataflow::index_nodes::indexings_running(&b.catalog) > 0 {
+        return Ok(None);
+    }
+    let v = b.call("index", json!({ "confirm": true }))?;
+    let journal = v["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).map(|j| PathBuf::from(j.trim()));
+    if let Some(j) = &journal {
+        let _ = std::fs::write(marque_du_premier_index(manifeste), j.display().to_string());
+    }
+    Ok(journal)
+}
+
+/// **À l'ouverture d'un backend par l'hôte** : son index repart en fond quand son
+/// premier index a été coupé (le témoin `.premier-index`), ou quand le manifeste déclare
+/// `embeddings.catch_up_on_open` et que des morceaux sont encore sans vecteur — la
+/// réouverture reconstruit l'index HNSW mais ne solde aucune dette (c7, 8 novembre 2026 :
+/// wt-react5 resté à 15 % de vecteurs 18 minutes après sa réouverture). Une base qui ne
+/// déclare ni l'un ni l'autre n'est jamais indexée par là.
+pub(super) fn a_l_ouverture(hosted: &super::Hosted, b: &crate::backend::Backend) {
+    if !b.prepared().manifest.tools.contains_key("index") {
+        return;
+    }
+    let coupe = premier_index_a_finir(&hosted.manifest);
+    let dette = if coupe || !b.prepared().manifest.embeddings.as_ref().is_some_and(|e| e.catch_up_on_open) {
+        0
+    } else {
+        b.catalog.lock().unwrap_or_else(|p| p.into_inner()).index_progress().map(|p| p.dense_missing() + p.sparse_missing()).unwrap_or(0)
+    };
+    if !coupe && dette == 0 {
+        return;
+    }
+    let pourquoi = if coupe { "son premier index avait été coupé".to_string() } else { format!("{dette} morceaux encore sans vecteur") };
+    match lancer_sur(b, &hosted.manifest) {
+        Ok(j) => eprintln!(
+            "[hôte] {} : {pourquoi} — l'index repart en fond{}",
+            hosted.manifest.display(),
+            j.map(|j| format!(" (journal : {})", j.display())).unwrap_or_default()
+        ),
+        Err(e) => eprintln!("[hôte] {} : {pourquoi}, mais l'index n'a pas pu repartir : {e}", hosted.manifest.display()),
+    }
+}
+
 /// Le backend de `h` est-il ouvert dans l'hôte (ou en train de l'être) ?
 fn ouvert(h: &super::Hosted) -> bool {
     h.backend.try_read().map(|g| g.is_some()).unwrap_or(true)
@@ -413,20 +457,16 @@ fn ouvert(h: &super::Hosted) -> bool {
 /// **Lance l'index d'un worktree** et pose le témoin de son journal ; dit en mots ce
 /// qui est parti.
 fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path) -> String {
-    match hote.with_backend(h, |b| b.call("index", json!({ "confirm": true }))) {
-        Ok(Ok(v)) => {
-            let texte = v["result"].as_str().unwrap_or_default();
-            if let Some(journal) = texte.lines().find_map(|l| l.strip_prefix("journal : ")) {
-                let _ = std::fs::write(marque_du_premier_index(manifeste), journal.trim());
-            }
-            "son index est lancé en fond".to_string()
-        }
+    // Un index déjà reparti à l'ouverture (`a_l_ouverture`) se dit de même.
+    match hote.with_backend(h, |b| lancer_sur(b, manifeste)) {
+        Ok(Ok(_)) => "son index est lancé en fond".to_string(),
         Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
     }
 }
 
-/// **Rouvre un worktree fermé dont le premier index n'a pas fini, et le relance.** Rend
-/// ce qui est parti, ou `None` s'il n'y avait rien à reprendre.
+/// **Rouvre un worktree fermé dont le premier index n'a pas fini** : l'ouverture le
+/// relance (`a_l_ouverture`). Rend ce qui est parti, ou `None` s'il n'y avait rien à
+/// reprendre.
 fn reprendre_si_fini_pas(hote: &super::DaemonHost, manifeste: &Path) -> Option<String> {
     if !premier_index_a_finir(manifeste) {
         return None;
@@ -1410,6 +1450,102 @@ mod tests {
         // Un index fini : plus rien à reprendre, le témoin s'ôte.
         assert!(host.reprendre_les_premiers_index().is_empty());
         assert!(!marque.exists(), "le témoin d'un index fini s'ôte");
+    }
+
+
+    /// Un faux service d'embarquement qui sert granite-278m (768) : des vecteurs
+    /// unitaires, pour que la dette se solde sans modèle.
+    struct Granite;
+    impl crate::embedder::Embedder for Granite {
+        fn name(&self) -> &str {
+            "granite-278m"
+        }
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            Ok(texts.iter().map(|_| { let mut v = vec![0.0_f32; 768]; v[0] = 1.0; v }).collect())
+        }
+        fn dim(&self) -> usize {
+            768
+        }
+    }
+
+    fn service_granite() -> String {
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let _ = crate::daemon::EmbedDaemon::new(Arc::new(Granite)).servir_lie(ecoute);
+        });
+        let debut = std::time::Instant::now();
+        while crate::daemon::DaemonEmbedder::joindre(&adresse).is_err() {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(10), "le service factice ne répond pas");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        adresse
+    }
+
+    /// **Des vecteurs dus se soldent à la réouverture quand le manifeste le déclare**
+    /// (c7, 8 novembre 2026 : wt-react5, rouvert après la coupure de 16 h 08, restait à 15 %
+    /// de vecteurs ; la forme (b), `embeddings.catch_up_on_open`). Un index sans service
+    /// d'embarquement laisse tous ses vecteurs dus ; fermé, puis rouvert avec le service
+    /// et sans le réglage : rien ne part. Rouvert avec le réglage : l'index repart et la
+    /// dette dense tombe à zéro.
+    #[test]
+    fn owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it() {
+        let d = tempfile::tempdir().unwrap();
+        let (manifeste, _) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+        let manifeste = PathBuf::from(manifeste);
+        let ecrire = |f: &dyn Fn(&mut Value)| {
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+            f(&mut m);
+            std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        };
+        // 1. Un index sans service : le plein texte, et tous les vecteurs dus.
+        ecrire(&|m| {
+            m["embeddings"]["catch_up_on_open"] = json!(false);
+            m["embeddings"].as_object_mut().unwrap().remove("address");
+        });
+        let host = Arc::new(crate::daemon_host::tests::hote_isole());
+        let h = host.hosted(&manifeste).unwrap();
+        let fini = |j: &str| std::fs::read_to_string(j).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.starts_with(crate::dataflow::index_nodes::DONE_LINE) || l.starts_with(crate::dataflow::index_nodes::FAILED_PREFIX))).unwrap_or(false);
+        let attendre_l_index = || {
+            let debut = std::time::Instant::now();
+            while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+                assert!(debut.elapsed() < std::time::Duration::from_secs(60), "l'index n'a pas fini en 60 s");
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        };
+        let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+        let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
+        let debut = std::time::Instant::now();
+        while !fini(&journal) {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(60), "l'index n'a pas fini en 60 s");
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        attendre_l_index();
+        let dus = || host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
+        assert!(dus() > 0, "sans service, des vecteurs restent dus");
+        let fermer = || {
+            let s = host.open_session("le témoin", None, Vec::new(), None);
+            assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
+        };
+        fermer();
+
+        // 2. Rouvert avec le service, sans le réglage : rien ne part.
+        let adresse = service_granite();
+        ecrire(&|m| m["embeddings"]["address"] = json!(adresse));
+        assert_eq!(host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap(), 0, "sans le réglage, aucun index ne part à l'ouverture");
+        let avant = dus();
+        assert!(avant > 0);
+        fermer();
+
+        // 3. Rouvert avec le réglage : l'index repart et solde.
+        ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(true));
+        let debut = std::time::Instant::now();
+        host.with_backend(&h, |_| ()).unwrap();
+        while dus() > 0 {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(60), "la dette n'est pas soldée en 60 s : {} dus", dus());
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        attendre_l_index();
     }
 
 }

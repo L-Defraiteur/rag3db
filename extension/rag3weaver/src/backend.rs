@@ -252,6 +252,13 @@ pub struct EmbeddingService {
     /// Le délai d'un appel, en secondes (voir `ModelSource::timeout_secs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_secs: Option<u64>,
+    /// **Le rattrapage à l'ouverture** (c7, 8 novembre 2026, la forme (b)) : un backend
+    /// ouvert par l'hôte avec des morceaux encore sans vecteur relance son index, qui
+    /// solde la dette en fond, arrêtable comme tout index. Déclaré par le gabarit livré
+    /// du code, donc hérité par les worktrees attachés ; faux par défaut, et une base
+    /// qui ne le déclare pas ne bouge jamais d'elle-même.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub catch_up_on_open: bool,
 }
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
