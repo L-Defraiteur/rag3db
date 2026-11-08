@@ -241,3 +241,20 @@ d'installation ne l'écrit plus. Recherche a ajouté `bestSignal: {label, score,
 fusionnée (d540813d5), le signal qui pèse le plus dans son rang. Un seuil, s'il en faut un, se
 mesurera sur ce champ, à partir de prompts réels étiquetés « en rapport » ou « sans rapport », quand
 la mémoire sera peuplée.
+
+## 11. Le 3 ter (g) : le juge, son plafond et la session qu'il sert
+
+Deux relevés du banc (`docs/08-novembre-2026-banc/01`) :
+- **Le juge coupait sa réponse.** Gemini 3.8 Flash compte sa réflexion dans `max_tokens`. Sous un
+  plafond de 400, il passait 350 à 384 jetons à réfléchir, et coupait sa réponse sur 8 appels sur
+  27 ; le banc en compte 37 sur 146. À 4 000, tout finissait sur « stop ». Le plafond passe à
+  **2 048**, celui de Decide. Une coupe se dit désormais pour ce qu'elle est : « réponse coupée
+  après N jetons (raison length, plafond 2048, dont N de réflexion) », et non plus « réponse
+  illisible ». Ticket du banc, d596c829c.
+- **Le juge jugeait utile ce qui désigne le destinataire.** Sur 1 328 paires réelles, 66 des 67
+  « utiles » de Gemini étaient la fiche d'identité de la session, avec la raison « la fiche
+  identifie la session destinataire ». La consigne ne disait pas au juge quelle session il sert.
+  Elle porte maintenant la clé de la session, et la règle « une fiche qui désigne cette session
+  elle-même n'est pas une aide ». La tâche du fils porte cette clé, et le fils ôte aussi la fiche
+  propre avant de juger. Rien ne fuyait jusqu'ici, puisque le hook écarte déjà la fiche propre en
+  tête de tour ; la règle compte si le juge est rallumé.
