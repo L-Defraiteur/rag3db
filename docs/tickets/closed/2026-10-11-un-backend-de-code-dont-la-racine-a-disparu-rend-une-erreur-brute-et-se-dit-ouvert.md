@@ -1,6 +1,6 @@
 # Un backend de code dont la racine a disparu rend une erreur brute et se dit ouvert
 
-- **État** : corrigé (8 novembre 2026, essai 4 de l'équipier Gemini sous supervision c7) — `daemon_status` porte « racine absente : <chemin> » quand `workspace.root` n'existe plus sur le disque, et chaque outil dont la politique touche la racine (`read_files`, `write_files`, `run_commands`) rend nommément « la racine du dépôt a disparu (<chemin>) ».
+- **État** : corrigé (8 novembre 2026, essai 4 de l'équipier Gemini sous supervision c7) — `daemon_status` porte « racine absente : <chemin> » quand `workspace.root` n'existe plus sur le disque, et chaque outil dont la politique touche la racine (`read_files`, `write_files`, `run_commands`) rend nommément « la racine du dépôt a disparu (<chemin>) : rouvrez le backend sur une racine qui existe ».
 - **Gravité** : réponse fausse / confort — l'agent reçoit une erreur d'entrée-sortie brute ou un
   refus « catalogue occupé », sans savoir que l'arbre interrogé n'existe plus.
 - **Atteignable en service** : oui (un worktree effacé après un lot, le manifeste qui le nommait
@@ -64,8 +64,12 @@ test result: ok. 1 passed; 0 failed
 
 - `index` et `estimate` lisent la racine aussi : leur politique le déclare maintenant
   (`read_files: true` dans `templates/backends/code/backend.json` et `snapshot.json`), et la garde
-  de `call_tool_on` les couvre par cette déclaration, pas par leur nom. Avant, un `index` sur une
-  racine disparue tentait son balayage. Le témoin le vérifie (son assertion 3). La politique
+  de `call_tool_on` les couvre par cette déclaration, pas par leur nom. `IndexNode` avait déjà sa
+  propre garde depuis 94354595c (« IndexNode: racine du workspace absente : … ; rouvrez le backend
+  sur une racine qui existe ») : le lot unifie le message et dit la politique, il ne ferme pas un
+  trou. Le message commun dit quoi faire, comme celui d'`IndexNode` : « la racine du dépôt a
+  disparu (<chemin>) : rouvrez le backend sur une racine qui existe ». Le témoin le vérifie (son
+  assertion 3, rouge sur les gabarits de 0944492f9 par le message d'`IndexNode`). La politique
   `read_files` ne fait qu'élargir les nœuds permis et exiger une clé `workspace`, que les deux
   gabarits portent ; les copies locales du gabarit se diront « dérivées » jusqu'à leur mise à jour.
 

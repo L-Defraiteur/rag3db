@@ -1998,7 +1998,8 @@ mod tests {
 
     /// **Un backend de code dont la racine a disparu** (ticket du 11 octobre 2026) :
     /// `daemon_status` le dit « racine absente : <chemin> », et chaque outil qui touche
-    /// la racine rend l'erreur nommée « la racine du dépôt a disparu (<chemin>) ».
+    /// la racine rend l'erreur nommée « la racine du dépôt a disparu (<chemin>) : rouvrez le
+    /// backend sur une racine qui existe ».
     #[test]
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn un_backend_de_code_dont_la_racine_a_disparu_est_signale_dans_daemon_status_et_ses_outils() {
@@ -2035,22 +2036,22 @@ mod tests {
             sources.display()
         );
 
-        // 2. chaque outil qui touche la racine rend « la racine du dépôt a disparu (<chemin>) »
+        // 2. chaque outil qui touche la racine rend « la racine du dépôt a disparu (<chemin>) : … »
         let r = hote.call(Some(&s), &manifest_path, "list_files", json!({}));
         assert_eq!(r["ok"], json!(false), "l'outil doit échouer quand la racine a disparu : {r}");
         let err = r["error"].as_str().unwrap_or_default();
         assert_eq!(
             err,
-            format!("la racine du dépôt a disparu ({})", sources.display())
+            format!("la racine du dépôt a disparu ({}) : rouvrez le backend sur une racine qui existe", sources.display())
         );
 
-        // 3. `index` lit la racine aussi (sa politique le déclare) : l'erreur nommée, pas un
-        // balayage qui verrait zéro fichier et retirerait tout de l'index.
+        // 3. `index` lit la racine aussi (sa politique le déclare) : le même message que les
+        // autres outils (IndexNode avait déjà le sien, depuis 94354595c).
         let r = hote.call(Some(&s), &manifest_path, "index", json!({}));
         assert_eq!(r["ok"], json!(false), "index doit échouer quand la racine a disparu : {r}");
         assert_eq!(
             r["error"].as_str().unwrap_or_default(),
-            format!("la racine du dépôt a disparu ({})", sources.display())
+            format!("la racine du dépôt a disparu ({}) : rouvrez le backend sur une racine qui existe", sources.display())
         );
 
         hote.shutdown();
