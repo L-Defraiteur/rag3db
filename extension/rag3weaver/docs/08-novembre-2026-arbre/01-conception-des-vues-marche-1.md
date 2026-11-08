@@ -5,6 +5,16 @@
 recherches soient filtrables sur tel worktree / branche / PR, ça en est où ? ». Rien n'était commencé
 depuis la vision (`visions/2026-11-06-15h46-un-index-par-depot-des-vues-par-worktree.md`) et la
 lecture côté moteur (`docs/07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md`).
+> **« En gros c'est juste un filtre : voir en tant que worktree, voir en tant que branche, voir en
+> tant que pyramide tel fichier ou scope. »** (Lucie, 8 novembre, 20 h 45)
+
+**La thèse** : une vue est **un filtre sur un seul index**, par trois lunettes — **le worktree** (ce qui
+est sous la main : la couche de sa branche, et par-dessus ce que le worktree n'a pas encore commité),
+**la branche** (ce que la branche porte, même sans worktree ouvert), **la pyramide** d'un fichier ou
+d'un scope (d'où vient chaque morceau). Rien n'est copié, rien n'est réindexé ; le paramètre `view`
+des outils prend l'une des trois formes (`view: {worktree: <chemin>}`, `view: {branch: <nom>}`,
+`view: {branch: <nom>, provenance: true}`).
+
 Cette page est la conception ; **pas de code avant sa relecture par everything declarative et
 recherche**. Lu sur master 4f54e473a.
 
@@ -87,8 +97,11 @@ fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui rée
 
 ## 2. La vue : une table chemin → version, contre la base de la tâche
 
-- **`View`** : son nom (`view:<tâche>`, `view:main`), **sa base** (le commit d'ouverture de la tâche,
-  `depart` de `ouvrir_une_tache`), sa branche. **`ViewEntry`** : (vue, chemin) → version de fichier,
+- **`View`** : **nommée par sa branche** (`view:main`, `view:agent/<tâche>`), pas par un dossier ;
+  **sa base** (le commit d'ouverture, `depart` de `ouvrir_une_tache`) et **sa parente** (§ 2 bis). La
+  vue existe par la branche : **attacher un worktree, c'est monter la vue de sa branche** ; ce que le
+  worktree n'a pas encore commité est une couche de travail par-dessus, qui part au commit (elle
+  descend dans la couche de la branche) ou à l'effacement du worktree. **`ViewEntry`** : (vue, chemin) → version de fichier,
   ou **tombstone** (le chemin est supprimé dans la vue — sinon la vue retomberait sur la version du
   principal).
 - **Définie contre la base, pas contre master** (la mesure du 7 novembre, tranchée par everything
