@@ -961,6 +961,72 @@ fn qui_montre_du_code() -> ChatModel {
     })
 }
 
+/// Le faux modèle qui répond par deux blocs : du rust (les grammaires de l'hôte le
+/// colorent) et du yaml (highlight.js le connaît, les grammaires non : le repli).
+fn qui_montre_deux_langues() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-deux-langues", 8192, |turns, opts, sink| {
+            MockLlm::new("Deux blocs.\n\n```rust\n// é\nfn main() {\n    let s = \"x\";\n}\n```\n\n```yaml\nclef: valeur\n```\n").generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le code du chat est coloré par les grammaires de l'hôte** (coloration B,
+/// page 12 de codeparsers) : un bloc rust est recoloré par `POST /ide/highlight`
+/// (classes `hl-*`, `data-hl="hote"`) et son texte ne change pas d'un caractère ; un
+/// bloc yaml, que les grammaires ne connaissent pas, reste sur highlight.js
+/// (`data-hl="repli"`, classes `hljs-*`).
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_code_du_chat_est_colore_par_les_grammaires_de_l_hote() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_code_du_chat_est_colore_par_les_grammaires_de_l_hote";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(qui_montre_deux_langues());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_montre_deux_langues())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifeste }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("document.querySelector('#message').value = 'montre'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    n.attendre(
+        "!![...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('pre code.language-rust[data-hl=\"hote\"]')",
+        "le bloc rust recoloré par l'hôte",
+    );
+    let lu = n.evaluer(
+        "(() => { const a = [...document.querySelectorAll('article.message.assistant')].at(-1); \
+          const rs = a.querySelector('pre code.language-rust'); const ya = a.querySelector('pre code.language-yaml'); \
+          return { mot: [...rs.querySelectorAll('span.hl-keyword')].map(s => s.textContent), \
+            commentaire: rs.querySelector('span.hl-comment')?.textContent ?? null, chaine: rs.querySelector('span.hl-string')?.textContent ?? null, \
+            texte: rs.textContent, yaml: ya?.dataset.hl ?? null, yamlHljs: !!ya?.querySelector('[class^=\"hljs-\"]') }; })()",
+    );
+    assert!(lu["mot"].as_array().is_some_and(|m| m.contains(&json!("fn")) && m.contains(&json!("let"))), "les mots-clés : {lu}");
+    assert_eq!(lu["commentaire"], "// é", "{lu}");
+    assert_eq!(lu["chaine"], "\"x\"", "{lu}");
+    assert_eq!(lu["texte"], "// é\nfn main() {\n    let s = \"x\";\n}", "le texte du bloc est intact : {lu}");
+    assert_eq!((&lu["yaml"], &lu["yamlHljs"]), (&json!("repli"), &json!(true)), "le yaml reste sur highlight.js : {lu}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **Le code dans le chat se lit comme du code** (tickets du 7 novembre 2026,
 /// retours de Lucie : « le texte limité en largeur », « `code.truc` pris en
 /// compte », la coloration) : à 2 560 px, le texte d'une bulle occupe la
@@ -1003,7 +1069,7 @@ fn le_code_du_chat_se_lit_comme_du_code() {
           return {{ \
             liens: [lien(a), lien(u)], \
             outil: [...(a?.querySelectorAll('code') ?? [])].some(c => c.textContent === 'search_code' && !c.closest('a')), \
-            rust: !!a?.querySelector('pre code.hljs.language-rust span.hljs-keyword'), \
+            rust: !!a?.querySelector('pre code.language-rust span.hljs-keyword, pre code.language-rust span.hl-keyword'), \
             largeur: a?.querySelector('.body')?.getBoundingClientRect().width ?? 0, \
             colonne: document.querySelector('#messages').getBoundingClientRect().width, \
           }}; }})()"
