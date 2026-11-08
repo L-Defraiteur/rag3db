@@ -1166,3 +1166,34 @@ avance d'autant ; les hashs, eux, sont exacts.
   le banc attend qu'elle lève le refus d'exécuter dans sa fenêtre).
 - **Une faute à moi** : six titres du rapport en avance d'une heure et demie, remis sur l'heure des
   commits ; règle en mémoire (lire l'heure avant de l'écrire).
+
+## 12 h 15 — la lib corrigée est posée à luciepc, l'heure de preuve tourne
+
+- **La lib** : rag3db-build-cbc06c3e1… (tête f7df88003 : coupure, le rejeu des COPY, le HNSW), bâtie
+  par l'arbre, verdict vert sans MOTEUR_ANCIEN, deux sens sans écart sur quatre copies d'avant-43,
+  ABI compatible contre dadbf0041 (0 retiré, 2 ajoutés ; librag3db.so change aussi, par ajouts
+  seuls), copiée aux deux postes ; **les passes l'épinglent sans MOTEUR_ANCIEN** dès maintenant,
+  `courant` y passera avec la pose du portable. Le binaire : 9208a2b6 sur abf7020e0 (atelier,
+  barre du chat, hooks e/f/g, borne de la recherche).
+- **Pose à luciepc à 12 h 06**, mais le réveil a refusé : **granite-278m (7878) en
+  `failed (start-limit-hit)` depuis 10 h 47 m 54 s** (code 1 après 7 s, huit départs) ; 7879 et
+  7880 répondaient. Embarquement l'a relancé en un départ contrôlé à 12 h 07 m 30 s (768 dimensions,
+  écart nul sur le vecteur témoin). La cause de 10 h 47 n'est plus lisible (le journal --user avait
+  tourné, pas de dmesg sans sudo) : ticket f66ad4449 sans cause inventée, et des **journaux
+  persistants par unité** (StandardOutput en append dans ~/.cache/rag3weaver-unites-embarquement/)
+  pour la prochaine fois. Hôte de luciepc réveillé à 12 h 07 m 56 s ; hotfixs a ses copies de
+  code-lourd et code-principal (coupure-12h06) ; l'`index confirm` de code-lourd a pris sa place
+  de lourd à 12 h 09 — **l'heure de preuve court jusque vers 13 h 10** (guet : SIGSEGV, NRestarts).
+  Puis les deux sens sur une copie, puis le portable avec check-manifests et un instantané.
+- **Sur master depuis midi** : recherche, mes-recherches-suite ; lucivy, la règle du README dans la
+  procédure (25effedad) ; embarquement, le ticket de 7878 ; ED, l'atelier (8258fe56b) et le témoin
+  du juge (abf7020e0) ; archi, la barre du chat (2daf2e332, c76339105).
+- **En cours** : hotfixs, G3 rejoué (attentes des .test mises au comportement tranché) ; 96, le
+  rejeu du pas 3 sous cbc06c3e1 ; hooks-essai, **la tâche sans git** (verte sur branche : copie,
+  relecture par diff de dossier, fusion par recopie, `git_init` sur déclaration ; ED relit, puis
+  la passe avec les e2e_tx) ; recherche, le cache de Catalog hors de /tmp et le témoin de suite ;
+  archi, « Dépôts » sur RepoAttached ; ED, la reprise exponentielle dans le client models.llm ;
+  banc, la construction des positifs et la référence Gemini (les petits modèles attendent le geste
+  de Lucie dans sa fenêtre) ; lucivy, libre.
+- **Pour Lucie** : la démonstration de l'atelier (cinq pas) et les deux lignes de tty pour le
+  terminal sont prêtes pour la pose du portable ; la page des 732 branches attend ses deux mots.

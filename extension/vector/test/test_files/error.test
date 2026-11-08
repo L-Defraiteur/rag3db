@@ -140,7 +140,7 @@ Binder exception: Blind search upper selectivity threshold is set to 0.800000, b
 ---- ok
 -STATEMENT CALL SHOW_INDEXES() RETURN *
 ---- 1
-embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);|READY
+embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);|READY|
 -STATEMENT DROP TABLE embeddings;
 ---- error
 Binder exception: Cannot delete node table embeddings because it is referenced by index e_hnsw_index.
@@ -157,7 +157,7 @@ Binder exception: Cannot delete node table embeddings because it is referenced b
 ---- ok
 -STATEMENT CALL SHOW_INDEXES() RETURN *
 ---- 1
-embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);|READY
+embeddings|e_hnsw_index|HNSW|[vec]|True|CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', mu := 30, ml := 60, pu := 0.050000, metric := 'l2', alpha := 1.100000, efc := 200);|READY|
 -STATEMENT ALTER TABLE embeddings DROP vec;
 ---- error
 Binder exception: Cannot drop property vec in table embeddings because it is used in one or more indexes. Please remove the associated indexes before attempting to drop this property.
@@ -196,20 +196,15 @@ Catalog exception: function DROP_VECTOR_INDEX is not defined. This function exis
 ---- ok
 -RELOADDB
 -STATEMENT MATCH (a:embeddings) SET a.vec = [0,1,2,3,4,5,6,7];
----- error
-Binder exception: Cannot set property vec in table embeddings because it is used in one or more indexes which is unloaded.
+---- ok
 -STATEMENT CREATE (:embeddings {id:0, vec:[0,1,2,3,4,5,6,7]});
----- error
-Binder exception: Trying to insert into an index on table embeddings but its extension is not loaded.
+---- ok
 -STATEMENT MERGE (:embeddings {id:0, vec:[0,1,2,3,4,5,6,7]});
----- error
-Binder exception: Trying to insert into an index on table embeddings but its extension is not loaded.
+---- ok
 -STATEMENT COPY embeddings FROM (RETURN 3, [1,2,3,4,5,6,7,8]);
----- error
-Binder exception: Trying to insert into an index on table embeddings but its extension is not loaded.
+---- ok
 -STATEMENT MATCH (a:embeddings) DELETE a;
----- error
-Binder exception: Trying to delete from an index on table embeddings but its extension is not loaded.
+---- ok
 -STATEMENT ALTER TABLE embeddings DROP vec;
 ---- error
 Binder exception: Cannot drop property vec in table embeddings because it is used in one or more indexes. Please remove the associated indexes before attempting to drop this property.

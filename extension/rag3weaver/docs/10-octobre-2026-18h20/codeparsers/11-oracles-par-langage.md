@@ -95,13 +95,41 @@ Ce qu'on en lit :
    ouverte, clangd rend la définition là où il ne rendait que la déclaration : son index dynamique
    ne connaît que les fichiers ouverts.
 
-## Rust, Python, TypeScript : à rejuger
+## Rust, Python, TypeScript : rejugés le 8 novembre
 
-Les premiers chiffres de ces trois langages sont **retirés**. L'oracle ne déclarait pas
-`window.workDoneProgress` : aucun serveur ne lui envoyait de `$/progress`, et son attente de
-l'indexation (rust-analyzer, pyright, typescript-language-server) ne voyait rien venir ; chaque
-« indexation finie en 30 s » était un calme pris pour une fin. Ils se rejoueront avec l'oracle
-corrigé (la capacité déclarée, un fichier ouvert avant d'attendre, une indexation annoncée exigée).
+Les chiffres du 25 octobre étaient retirés : l'oracle ne déclarait pas `window.workDoneProgress`, et
+son attente de l'indexation prenait un calme pour une fin. Le 7 novembre, la capacité est déclarée,
+mais la correction (un fichier ouvert avant d'attendre, une indexation annoncée exigée) ne valait que
+pour clangd. Elle vaut maintenant pour tout serveur : le premier fichier est ouvert avant d'attendre,
+`ORACLE_EXIGER=1` refuse de juger sans `$/progress`, et la ligne d'attente dit « progrès annoncé ».
+
+Mêmes arêtes, même graine, même arbre (a72acfeef), juge strict :
+
+| langage | serveur | progrès annoncé | juste | faux | décl | muet | 25 octobre (juste/faux) |
+|---|---|---|---|---|---|---|---|
+| Rust | rust-analyzer | oui, fini en 32 s | 252 | 20 | 1 | 27 | 253 / 19 |
+| Python | pyright | non | 269 | 10 | 9 | 12 | 270 / 9 |
+| TypeScript, JavaScript | typescript-language-server (TypeScript 5.9) | non | 243 | 39 | 6 | 12 | 271 / 11 |
+
+- **L'indexation ne change rien.** rust-analyzer annonce la sienne et les verdicts sont ceux du 25
+  octobre à une arête près. pyright et typescript-language-server n'annoncent rien (une heure d'attente
+  chacun sous `ORACLE_EXIGER=1`, refusée) : ils calculent une définition à la demande, sur le
+  programme chargé à l'ouverture du fichier. Ils se jugent sans `ORACLE_EXIGER`.
+- **Ce qui change vient du juge strict**, sur les mêmes arêtes. Rust : une mention de `ColumnType`
+  (`src/dialect.rs:32`, `List(Box<ColumnType>)`) visait le bloc `impl ColumnType`, pas l'`enum` ; le
+  juge strict la dit fausse, à raison. Python : un `parse_args` relié par le nom à un homonyme du
+  dépôt, quand c'est celui d'`argparse` (la famille du ticket « la marque nom relie un appel de
+  méthode standard à un homonyme »).
+- **TypeScript : 39 faux, deux familles.**
+  - **17 liaisons d'import** : notre arête vise `const path = require("path")` dans le fichier même,
+    le serveur rend `@types/node`. Notre cible est la définition que l'index connaît (le module est
+    hors de l'index) : ce n'est pas un homonyme faux, mais le juge strict ne le sait pas. À
+    départager par un verdict à part (« liaison d'import ») plutôt que de les compter justes.
+  - **21 homonymes locaux du même fichier** : `const ctx`, `const res`, `const json` déclarés dans
+    plusieurs fonctions de `lucivy-worker.js` ; la marque « fichier » relie la mention au premier
+    homonyme du fichier, pas à celui de sa fonction. Ce sont de vrais faux : la résolution « fichier »
+    ne tient pas compte de la portée d'une locale en JavaScript.
+  - 1 autre (`var entries` contre `lib.dom`).
 
 ## Deux trouvailles en chemin
 
@@ -115,7 +143,7 @@ corrigé (la capacité déclarée, un fichier ouvert avant d'attendre, une index
 ## Rejouer
 
 ```
-ORACLE_STRICT=1 [ORACLE_ARBRE_CC=<arbre du compile_commands>] [ORACLE_BG_INDEX=1 ORACLE_PLAFOND=5400] \
+ORACLE_STRICT=1 [ORACLE_EXIGER=1] [ORACLE_ARBRE_CC=<arbre du compile_commands>] [ORACLE_BG_INDEX=1 ORACLE_PLAFOND=5400] \
   oracle_lsp.py <langage> <arêtes> <scopes> <racine jugée> <racine du projet> 300 <verdicts.tsv> [compile_commands]
 ```
 

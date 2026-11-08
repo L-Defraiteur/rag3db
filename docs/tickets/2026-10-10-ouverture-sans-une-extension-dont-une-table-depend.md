@@ -1,7 +1,10 @@
 # Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée
 
-- **État** : ouvert — proposition de l'orchestration (10 octobre 2026), rien de codé ; Lucie peut
-  renverser
+- **État** : ouvert — la proposition du refus avec option reste à trancher (orchestration, 8
+  novembre 2026). Le lot G3 de hotfixs (8 novembre, accord de Lucie, transmis par c7 à 10 h 25 : « rouvre toujours les extensions notées,
+  absolument ») a fait le reste : toute ouverture charge les extensions notées, journal vide ou non,
+  et un échec se dit au journal du moteur et dans la colonne `extension_error` de SHOW_INDEXES.
+  Proposition de l'orchestration du 10 octobre 2026
 - **Gravité** : perte d'un index (une donnée dérivée, à rebâtir), sans que l'ouverture le dise
 - **Atteignable en service** : oui, si le fichier d'une extension manque ou ne se charge pas au
   moment d'un rejeu
@@ -64,3 +67,21 @@ dépend (« VIOLATION vector-extension-loaded: index doc_index on Doc: the vecto
 loaded, the index cannot be checked »). Mesure : 1 manche sur 6 au banc complet sous charge (lot
 projection-lecture-seule-6), 0 sur 36 seul sur le même bâti, vert au banc du lot du retrait. Le
 cas est inscrit à `probabilistic.txt` en citant ce ticket ; il en sort dans le commit du correctif.
+
+## Le lot G3 (8 novembre 2026)
+
+- **Toute ouverture charge les extensions notées** à côté de la base, journal vide ou non
+  (`WALReplayer::replay`, sur les quatre chemins : sans journal, journal vide, enregistrement de
+  point de reprise, rejeu). Une mort juste après un point de reprise laissait sinon l'index attendre
+  son extension selon l'instant de la mort : c'est le cas du banc
+  `SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact`, retiré de
+  `probabilistic.txt` par ce lot.
+- **Un échec ne refuse pas la base.** Il s'écrit au journal du moteur (nom, chemin, cause) et se lit
+  par `extension_error` dans SHOW_INDEXES : c'est le ticket fermé
+  `closed/2026-10-10-echecs-de-chargement-au-rejeu-que-personne-ne-lit.md`.
+- **Les témoins** (`test/transaction/vector_index_crash_reopen_test.cpp`) :
+  - `ADeathRightAfterACheckpointStillLoadsTheNotedExtension` : rouge avant, 51 au lieu de 50 ;
+  - `AMissingNotedExtensionIsSaidBySHOWINDEXES`.
+  `AWriteWithoutTheExtensionIsRefusedByName` a changé de prémisse, pas d'attente : une base sans
+  son extension est maintenant une base dont la liste manque.
+- **Reste la proposition** du refus d'ouvrir avec une option, ci-dessus. Elle n'est pas tranchée.

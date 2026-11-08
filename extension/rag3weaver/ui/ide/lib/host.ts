@@ -87,7 +87,8 @@ export type FluxStatus = "ouvert" | "coupé, reprise…" | "fermé";
 /// Le flux de l'hôte : un `EventSource` pour toute la page. `Last-Event-ID` est
 /// renvoyé par le navigateur à la reconnexion ; l'hôte rejoue ce qu'il garde.
 export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStatus) => void): () => void {
-  const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens");
+  // `repos` : un worktree attaché par l'atelier (`RepoAttached`), que la barre montre.
+  const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos");
   source.onopen = () => onStatus("ouvert");
   source.onerror = () => onStatus("coupé, reprise…");
   source.onmessage = (e) => {

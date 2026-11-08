@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { dispatchFlux, fetchState, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
+import { dispatchFlux, fetchState, onFlux, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
 import { Search } from "@/views/Search";
@@ -32,6 +32,11 @@ function App() {
 
   useEffect(() => applyTheme(theme), [theme]);
   const reloadState = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
+  // Un worktree attaché par l'atelier (`RepoAttached`) : l'état se relit, la barre
+  // le montre sous « Dépôts » sans recharger la page.
+  useEffect(() => onFlux((e) => {
+    if (e.evenement?.kind === "RepoAttached") reloadState();
+  }), []);
   useEffect(() => {
     reloadState();
     return openFlux(dispatchFlux, (s: FluxStatus) => {
