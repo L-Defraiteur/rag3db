@@ -352,8 +352,8 @@ fn the_addressed_mailbox_by_the_host_routes() {
                     "request": "Le titre du README", "proposal": "Demander le titre, puis l'écrire",
                     "items": [{ "id": "titre", "text": "Poser le titre", "status": "blocked", "alone": false, "question": "Quel titre pour le README ?" }] } }))])),
                 (1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "question posée", "remaining": "le titre" }))])),
-                // Le pas d'après la réponse (son numéro compte aussi l'attente : la
-                // boucle a tourné une fois à vide avant de se réveiller).
+                // Le pas d'après la réponse (le pas 2 : l'attente ne consomme pas de
+                // numéro, elle ne fait que suspendre l'équipier).
                 (_, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "le titre est donné", "concepts": ["documentation"] } }))])),
                 _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "plan clos", "remaining": "" }))])),
             }
@@ -809,7 +809,11 @@ fn a_teammate_runs_commands_through_the_declared_gate_and_asks_for_the_rest() {
             std::thread::sleep(Duration::from_millis(50));
         }
     };
-    let boite = attendre("la question de l'accord", &|b| b.iter().any(|l| l["kind"] == "approval"));
+    // Le pas fini sur la question : l'équipier est suspendu, la boîte le dit (le pas a
+    // rendu tous ses résultats au modèle avant cette ligne).
+    let boite = attendre("la question de l'accord et l'attente", &|b| {
+        b.iter().any(|l| l["kind"] == "approval") && b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur depuis")))
+    });
     let question = boite.iter().find(|l| l["kind"] == "approval").unwrap().clone();
     assert_eq!(question["command"], "echo accorde-moi", "{question}");
     assert!(files.pending_for("c7").iter().any(|l| l["id"] == question["id"]), "la question attend le superviseur");
@@ -870,4 +874,74 @@ fn a_line_posted_during_the_last_step_is_read_before_the_teammate_ends() {
         assert!(Instant::now() < borne, "en 90 s, la consigne écrite pendant le pas n'a pas été lue : {b:#?}");
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// **Attendre le superviseur ne tue pas la tâche** (8 novembre 2026, essai 4 de c7, la
+/// tâche racine-disparue) : l'équipier posait une question, puis marquait chaque pas
+/// d'attente « raté : en attente de la sortie de cargo test par le superviseur » ; au
+/// troisième, l'hôte arrêtait la tâche, et chaque pas d'attente rappelait le modèle. Une
+/// question sans réponse suspend l'équipier : aucun appel au modèle, la boîte le dit une
+/// fois (« en attente du superviseur depuis HH:MM »), le pas ne compte ni réussi ni raté ;
+/// la réponse le réveille et le pas suivant la lit.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn waiting_for_the_supervisor_suspends_the_teammate_without_failing_the_task() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let pas = Arc::new(Mutex::new(0usize));
+    let model: ChatModel = {
+        let pas = pas.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let pas = pas.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    *pas.lock().unwrap() += 1;
+                }
+                let repondu = last_user(turns).contains("la sortie : 3 passed");
+                match (step_of(turns), results.len(), repondu) {
+                    (1, 0, _) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "plan": {
+                        "request": "Le témoin de la racine disparue", "proposal": "Écrire le témoin, le faire jouer, corriger",
+                        "items": [
+                            { "id": "jouer", "text": "Faire jouer le témoin par le superviseur", "status": "blocked", "alone": false, "question": "Peux-tu jouer cargo test sur le témoin et me rendre la sortie ?" },
+                            { "id": "corriger", "text": "Corriger le code", "status": "todo", "alone": true }
+                        ] } }))])),
+                    (_, 0, true) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "le témoin passe", "concepts": ["témoin"] } }))])),
+                    (_, _, true) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "corriger", "succeeded": true, "done": "corrigé après la sortie", "remaining": "" }))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "jouer", "succeeded": false, "done": "raté : en attente de la sortie de cargo test par le superviseur", "remaining": "la sortie" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Écris le témoin de la racine disparue.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let attendre = |quoi: &str, ok: &dyn Fn(&[Value]) -> bool| -> Vec<Value> {
+        let borne = Instant::now() + Duration::from_secs(90);
+        loop {
+            let b = files.mailbox();
+            if ok(&b) {
+                return b;
+            }
+            assert!(Instant::now() < borne, "en 90 s : {quoi} — {b:#?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    let boite = attendre("l'attente dite dans la boîte", &|b| b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur depuis"))));
+    let question = boite.iter().find(|l| l["kind"] == "question" && l["from"] == "teammate").expect("la question").clone();
+    // Trois secondes d'attente : ni nouveau pas, ni arrêt.
+    std::thread::sleep(Duration::from_secs(3));
+    let boite = files.mailbox();
+    assert_eq!(*pas.lock().unwrap(), 1, "aucun appel au modèle pendant l'attente : {boite:#?}");
+    assert!(!boite.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("pas de suite sans élément réussi")), "attendre n'arrête pas la tâche : {boite:#?}");
+    assert!(!boite.iter().any(|l| l["kind"] == "ended"), "{boite:#?}");
+    assert_eq!(boite.iter().filter(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().starts_with("en attente du superviseur")).count(), 1, "l'attente se dit une fois : {boite:#?}");
+    // La réponse réveille l'équipier ; le pas suivant la lit et finit.
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "la sortie : 3 passed", &json!({ "reply_to": question["id"] })).expect("la réponse");
+    let boite = attendre("le pas qui lit la réponse", &|b| b.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true));
+    assert!(boite.iter().any(|l| l["kind"] == "ended" || l["kind"] == "step_done"), "{boite:#?}");
+    assert_eq!(*pas.lock().unwrap(), 2, "un seul pas après la réponse : {boite:#?}");
 }
