@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { marked } from "marked";
 import { forgetSymbols, highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
 import { ToolResultView } from "@/lib/toolview";
+import { UiDuTour } from "@/components/UiDuTour";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
 import { daemonTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
-import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
+import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
 // la colonne des conversations, l'en-tête nom / modèle / état, le fil, la saisie
@@ -45,7 +46,7 @@ function renderMarkdown(text: string, backendId = ""): string {
 // Un appel d'outil dans une bulle : son départ (`at`) et son retour (`end`) en ms
 // epoch, quand on les sait ; `result` est l'extrait du flux (`truncated`) puis le
 // résultat entier relu dans la session à la fin du tour.
-type ToolBlock = { id: string; name: string; args: string; result?: string; ok?: boolean; truncated?: boolean; at?: number; end?: number };
+type ToolBlock = { id: string; name: string; args: string; result?: string; ok?: boolean; truncated?: boolean; at?: number; end?: number; ui?: UiComposant[] };
 // **Une bulle d'agent = ses parties dans l'ordre d'arrivée** (ticket « les outils
 // changent de place quand la réponse arrive ») : mots, appel, mots, appel… la
 // réponse à la fin ; le flux et la relecture rendent la même suite.
@@ -79,6 +80,7 @@ function fromTurns(turns: ChatTurn[]): Item[] {
       if (b) {
         b.result = t.content ?? "";
         b.end = t.at_ms;
+        if (t.ui?.length) b.ui = t.ui;
       }
       continue;
     }
@@ -419,7 +421,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           ...m,
           parts: m.parts.map((p) =>
             p.kind === "tool" && p.id === String(ev.call_id)
-              ? { ...p, ok, result: excerpt ?? (ok ? "" : `refusé (${ev.error_kind ?? "erreur"})`), truncated: ev.truncated === true, end: p.at !== undefined && typeof ev.ms === "number" ? p.at + ev.ms : d.at_ms }
+              ? { ...p, ok, result: excerpt ?? (ok ? "" : `refusé (${ev.error_kind ?? "erreur"})`), truncated: ev.truncated === true, end: p.at !== undefined && typeof ev.ms === "number" ? p.at + ev.ms : d.at_ms, ui: Array.isArray(ev.ui) ? (ev.ui as UiComposant[]) : p.ui }
               : p,
           ),
         }));
@@ -642,7 +644,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                       <div key={n} className="body whitespace-pre-wrap break-words">{withInlineCode(p.text, id)}</div>
                     )
                   ) : (
-                    <details key={p.id} className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground" data-outil={p.name} data-appel={p.id} data-ok={p.ok === undefined ? undefined : String(p.ok)}>
+                    <div key={p.id}>
+                    <details className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground" data-outil={p.name} data-appel={p.id} data-ok={p.ok === undefined ? undefined : String(p.ok)}>
                       <summary className="cursor-pointer text-foreground/80">
                         {p.name}
                         {p.result === undefined ? "…" : p.ok === false ? " : refusé" : ""}
@@ -658,6 +661,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                         ) : null}
                       </div>
                     </details>
+                    <UiDuTour ui={p.ui} />
+                    </div>
                   ),
                 )}
                 {it.propositions.map((p) => (

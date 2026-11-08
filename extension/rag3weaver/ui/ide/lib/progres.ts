@@ -10,6 +10,9 @@ import { onFlux } from "@/lib/host";
 export type Avancement = { phase: string; fait: number; total: number; pourcent: number; debit: number | null; unite: string; recu: number };
 
 const parManifeste = new Map<string, Avancement>();
+/// La fin du dernier index de chaque dépôt, dite en mots (`RepoIndexed`).
+export type FinDIndex = { ok: boolean; texte: string };
+const finis = new Map<string, FinDIndex>();
 const abonnes = new Set<() => void>();
 let fluxOuvert = true;
 const prevenir = () => abonnes.forEach((f) => f());
@@ -20,6 +23,7 @@ onFlux((d) => {
     fluxOuvert = e.kind === "ouvert";
     prevenir();
   } else if (e.kind === "IndexProgress") {
+    finis.delete(d.backend);
     parManifeste.set(d.backend, {
       phase: String(e.phase ?? ""),
       fait: Number(e.fait ?? 0),
@@ -32,6 +36,11 @@ onFlux((d) => {
     prevenir();
   } else if (e.kind === "RepoIndexed") {
     parManifeste.delete(d.backend);
+    const comptes = [typeof e.fichiers === "number" ? `${e.fichiers} fichiers` : null, typeof e.symboles === "number" ? `${e.symboles} symboles` : null].filter(Boolean).join(", ");
+    finis.set(d.backend, {
+      ok: e.ok === true,
+      texte: e.ok === true ? `terminé${comptes ? " : " + comptes : ""}${e.reste ? ` — vecteurs en dette : ${e.reste}` : ""}` : `en échec : ${String(e.erreur ?? "raison inconnue")}`,
+    });
     prevenir();
   }
 });
@@ -54,6 +63,19 @@ export function useAvancement(manifeste?: string): { a: Avancement | null; fige:
   const a = manifeste ? (parManifeste.get(manifeste) ?? null) : null;
   const depuis = a ? Date.now() - a.recu : 0;
   return { a, fige: a && depuis >= figeMs() ? Math.floor(depuis / 60_000) : null, fluxOuvert };
+}
+
+/// La fin du dernier index d'un dépôt, s'il en a fini un depuis l'ouverture de la page.
+export function useFinDIndex(manifeste?: string): FinDIndex | null {
+  const [, rendre] = useState(0);
+  useEffect(() => {
+    const f = () => rendre((n) => n + 1);
+    abonnes.add(f);
+    return () => {
+      abonnes.delete(f);
+    };
+  }, []);
+  return manifeste ? (finis.get(manifeste) ?? null) : null;
 }
 
 /// L'avancement en mots : « vecteurs 60 % (600/1000 morceaux) · 410 morceaux/s ».
