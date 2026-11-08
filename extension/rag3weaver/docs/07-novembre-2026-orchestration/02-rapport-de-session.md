@@ -1098,3 +1098,31 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   `models.llm` lui-même (chat, juge, archiviste, hooks), lot court chez ED derrière l'atelier.
 - **L'atelier** (ED) : premier pas écrit (atelier-attach df3be297b : gabarit livré `atelier`,
   `attach_worktree {path}` et `list_worktrees`, WorktreeNode, RepoAttached), modules puis passe.
+
+## 13 h 00 — les README remis à jour, la file de l'après-midi
+
+- **Atterris** : recherche, mes-recherches (932197e79 avec la relecture d'ED, et la course du
+  journal des runs corrigée) et sa ligne de nouveautés (ad07c8b16) ; ED, le ticket du témoin du
+  juge des outils (9d748de62 : il exige un genre que Gemini ne tient pas — la correction admet les
+  deux genres pourvu que la preuve cite `required`, lot court après l'atelier) ; archi, le (g)
+  (9daa2a450 : le juge du rappel sait quelle session il sert, plafond 2 048 et coupe dite ; trois
+  passes pour deux courses) ; **lucivy, les deux README** (58b762a35 racine, 7f9a03515 rag3weaver,
+  +167 −48, depuis les nouveautés, chaque hash dans le commit ; l'archiviste « en cours », le pont
+  Codex « testé contre un substitut », rien sur G3 ni le HNSW) et deux corrections de nouveautés
+  (72f17733a). **Lucie, 12 h 50** : « on met à jour le readme de temps en temps ? » → règle : un lot
+  dont la ligne de nouveautés change ce que l'utilisateur voit met le README à jour ; rattrapage
+  hebdomadaire sinon.
+- **La CI de master est rouge depuis le 18 octobre** (ticket du 25 oct., `<cassert>` dans geo et
+  le format clang) et son correctif baf19b9e5 n'a jamais atterri : à hotfixs avec G3.
+- **En cours** : recherche, mes-recherches-suite (en push) ; cœur, vecteur-du-noeud-copie (rejeu
+  sur la tête rebasée, A touchait wal_replayer) ; hotfixs, G3 (passe complète avec A dessous) ;
+  96, M4 pas 3 ; ED, l'atelier (passe complète) puis les quotas du client LLM et le témoin du juge ;
+  archi, la barre latérale du chat (usage en jetons par tour et cumulé, tâches de l'archiviste,
+  récapitulatif et fiches sous chaque conversation, « Dépôts » sur RepoAttached) ; banc, la
+  construction des positifs (8 sur 130 à 12 h 40) puis la référence Gemini et bge-m3 — les petits
+  modèles attendent que sa propre permission d'exécuter soit levée par Lucie dans sa fenêtre (il a
+  dit, à raison, qu'il ne pouvait pas vérifier d'ici l'autorisation donnée à moi) ; lucivy, la
+  liste des 633 branches distantes pour Lucie.
+- **Le rebâti** suit le hash du cœur : l'arbre bâtit la lib (a312f823e + A + HNSW, + G3 s'il est
+  là), G pose luciepc d'abord sous une réindexation forcée de code-lourd (une heure, deux sens
+  relevés), puis le portable avec check-manifests et un instantané reflink avant.
