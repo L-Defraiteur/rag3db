@@ -242,10 +242,13 @@ impl DaemonHost {
             Ok((v, borne)) => (v, borne),
             Err(e) => (Vec::new(), Some(e)),
         };
+        let (usage, taches_a_role) = self.usage_et_taches_a_role(backend_id);
         Ok(json!({
             "on": modele.is_ok(),
             "model": modele.as_ref().ok(),
             "context": contexte,
+            "usage": usage,
+            "role_runs": taches_a_role,
             "memory_writes": ecrites,
             "memory_writes_why": pourquoi,
             "why": modele.as_ref().err(),
@@ -253,6 +256,77 @@ impl DaemonHost {
             "turns": fil,
             "orphans": self.orphan_chats.lock().unwrap_or_else(|p| p.into_inner()).clone(),
         }))
+    }
+
+    /// **L'usage du modèle et les tâches à rôle, lus au journal des runs** (la barre
+    /// latérale, liste de Lucie, 8 novembre 2026). L'usage : celui du dernier tour
+    /// (`tour`, son run dans `tour_run`) et celui de la conversation (`session`, la
+    /// somme de ses tours, `tours` leur nombre), par unité du compteur
+    /// (`input_tokens`, `cached_input_tokens`, `output_tokens`,
+    /// `reasoning_tokens`), lus dans les `Consumed` des runs du chat (`chat` = ce
+    /// dépôt) ; au journal, il survit à un redémarrage de l'hôte, et la session est
+    /// celle que le journal garde. Les tâches à rôle : les douze derniers runs de
+    /// graphe dont le `RunStarted` porte un `target.role`, finis (le journal ne
+    /// garde que les runs finis ; la page ajoute ceux en cours par le flux).
+    /// Les noms trient avant toute lecture : `agent-…` pour le chat, `graph-…`
+    /// pour les outils et les réactions.
+    fn usage_et_taches_a_role(&self, backend_id: &str) -> (Value, Vec<Value>) {
+        const RUNS_DU_CHAT: usize = 200;
+        const GRAPHES_LUS: usize = 40;
+        const TACHES: usize = 12;
+        let runs = self.journal.runs_de(backend_id);
+        let unites = |v: &Value| -> serde_json::Map<String, Value> {
+            let mut m = serde_json::Map::new();
+            for e in v["evenements"].as_array().into_iter().flatten().filter(|e| e["kind"] == "Consumed") {
+                for u in e["units"].as_array().into_iter().flatten() {
+                    if let (Some(nom), Some(n)) = (u["unit"].as_str(), u["amount"].as_u64()) {
+                        let avant = m.get(nom).and_then(Value::as_u64).unwrap_or(0);
+                        m.insert(nom.to_string(), json!(avant + n));
+                    }
+                }
+            }
+            m
+        };
+        let mut session = serde_json::Map::new();
+        let (mut tour, mut tour_run, mut tours) = (Value::Null, Value::Null, 0u64);
+        for r in runs.iter().rev().filter(|r| r.starts_with("agent-")).take(RUNS_DU_CHAT) {
+            let Some(v) = self.journal.lire(backend_id, r) else { continue };
+            if v["chat"] != backend_id {
+                continue;
+            }
+            let u = unites(&v);
+            if tour.is_null() {
+                tour = Value::Object(u.clone());
+                tour_run = json!(r);
+            }
+            for (nom, n) in u {
+                let avant = session.get(&nom).and_then(Value::as_u64).unwrap_or(0);
+                session.insert(nom, json!(avant + n.as_u64().unwrap_or(0)));
+            }
+            tours += 1;
+        }
+        // L'heure d'un run : son nom porte l'instant de son départ, en
+        // millisecondes et en hexadécimal (`graph-<ms>-<n>`).
+        let heure = |r: &str| r.split('-').nth(1).and_then(|h| u64::from_str_radix(h, 16).ok());
+        let mut taches = Vec::new();
+        for r in runs.iter().rev().filter(|r| r.starts_with("graph-")).take(GRAPHES_LUS) {
+            if taches.len() >= TACHES {
+                break;
+            }
+            let Some(v) = self.journal.lire(backend_id, r) else { continue };
+            let debut = v["evenements"].as_array().and_then(|e| e.iter().find(|e| e["kind"] == "RunStarted")).cloned().unwrap_or(Value::Null);
+            let Some(role) = debut["target"]["role"].as_str() else { continue };
+            let fini = v["fin"]["ok"].as_bool().or_else(|| v["evenements"].as_array().and_then(|e| e.iter().rev().find(|e| e["kind"] == "RunFinished")).and_then(|e| e["ok"].as_bool()));
+            taches.push(json!({
+                "role": role,
+                "run": r,
+                "tool": debut["target"]["tool"],
+                "reaction": debut["target"]["reaction"],
+                "state": match fini { Some(true) => "fini", Some(false) => "échec", None => "fini" },
+                "at_ms": heure(r),
+            }));
+        }
+        (json!({ "tour": tour, "tour_run": tour_run, "session": session, "tours": tours }), taches)
     }
 
     /// **Les fiches écrites pendant une conversation** (forme accordée avec

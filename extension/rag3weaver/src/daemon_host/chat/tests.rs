@@ -519,6 +519,44 @@ fn le_role_d_un_outil_se_lit_dans_describe_et_dans_son_run() {
     assert!(debut("read_file")["target"].get("role").is_none(), "{d:?}");
 }
 
+/// **L'usage du modèle et les tâches de l'archiviste, par l'état du chat** (liste
+/// de Lucie, 8 novembre 2026, la barre latérale) : l'état rend l'usage du dernier
+/// tour et celui de la session, par unité, lus au journal des runs du chat ; la
+/// session est la somme de ses tours ; il rend aussi les runs à rôle finis, lus
+/// au même journal, pour qu'un rechargement de la page les retrouve.
+#[test]
+fn l_etat_du_chat_rend_l_usage_du_tour_et_de_la_session_et_les_taches_a_role() {
+    let (_d, host, _m, id) = banc_avec(qui_lit_deux_fois(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    let attendre_le_journal = |run: &str| {
+        let debut = Instant::now();
+        while host.journal.lire(&id, run).is_none() {
+            assert!(debut.elapsed() < Duration::from_secs(10), "le journal du run {run} n'est pas écrit");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let r1 = host.chat_turn(&id, "regarde le code").unwrap();
+    attendre_le_journal(r1["run"].as_str().unwrap());
+    let e1 = host.chat_state(&id).unwrap();
+    let u = |e: &Value, quand: &str, unite: &str| e["usage"][quand][unite].as_u64().unwrap_or(0);
+    assert!(u(&e1, "tour", "input_tokens") > 0, "le tour a un usage d'entrée : {}", e1["usage"]);
+    assert_eq!(e1["usage"]["tour"], e1["usage"]["session"], "un seul tour : la session est ce tour");
+    assert_eq!(e1["usage"]["tour_run"], r1["run"], "{}", e1["usage"]);
+    let r2 = host.chat_turn(&id, "et encore").unwrap();
+    attendre_le_journal(r2["run"].as_str().unwrap());
+    let e2 = host.chat_state(&id).unwrap();
+    for unite in ["input_tokens", "output_tokens"] {
+        assert_eq!(u(&e2, "session", unite), u(&e1, "tour", unite) + u(&e2, "tour", unite), "la session est la somme de ses tours ({unite}) : {}", e2["usage"]);
+    }
+    assert_eq!(e2["usage"]["tours"], 2, "{}", e2["usage"]);
+    // Les tâches à rôle finies, lues au journal : l'archiviste a listé les fichiers.
+    let roles = e2["role_runs"].as_array().cloned().unwrap_or_default();
+    let archiviste = roles.iter().find(|r| r["role"] == "archiviste").unwrap_or_else(|| panic!("pas de run de l'archiviste : {roles:?}"));
+    assert_eq!((archiviste["tool"].as_str(), archiviste["state"].as_str()), (Some("list_files"), Some("fini")), "{archiviste}");
+    assert!(archiviste["at_ms"].as_u64().is_some_and(|t| t > 0), "{archiviste}");
+}
+
 /// Le faux modèle de la page du chat : « deux outils » fait « mots, outil, mots,
 /// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
 /// flux de soixante événements), puis finit.
@@ -737,6 +775,71 @@ fn la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge() {
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
     drop(d2);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **La barre dit l'usage, le récapitulatif et l'archiviste** (liste de Lucie, 8
+/// novembre 2026) : après un tour, la barre montre sous la conversation les jetons
+/// du tour et de la session, égaux à l'état de l'hôte ; un récapitulatif dit les
+/// tours, les jetons et les fiches, et son bouton déplie les fiches écrites ; une
+/// tâche de l'archiviste finie reste dans « Tâches de fond » après un
+/// rechargement de la page.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, h, m, id) = banc_dans("atelier", page_du_chat(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    drop(h);
+    // Un journal des runs à lui : sous les témoins, celui par défaut est éteint,
+    // et l'usage comme les tâches à rôle se lisent au journal.
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let page = format!("{racine}/ide/code/{id}/chat");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&page, prete);
+    n.evaluer("document.querySelector('#message').value = 'deux outils'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    // L'usage sous la conversation, égal à l'état de l'hôte.
+    let conv = format!(".conversation[data-backend=\"{id}\"]");
+    n.attendre(&format!("Number(document.querySelector('{conv} .usage-jetons')?.dataset.sessionInput) > 0"), "les jetons de la session dans la barre");
+    let (statut, etat) = crate::daemon_host::tests::demander("GET", &format!("{racine}/ide/chat?backend={id}"), Some("j"));
+    assert_eq!(statut, 200, "{etat}");
+    let attendu = etat["result"]["usage"]["session"]["input_tokens"].as_u64().or_else(|| etat["usage"]["session"]["input_tokens"].as_u64()).unwrap_or(0);
+    let lu = n.evaluer(&format!("Number(document.querySelector('{conv} .usage-jetons').dataset.sessionInput)"));
+    assert_eq!(lu.as_u64(), Some(attendu), "la barre dit l'usage de l'hôte : {etat}");
+    // Le récapitulatif : son bouton déplie les fiches écrites.
+    n.attendre(&format!("!!document.querySelector('{conv} .recap button')"), "le récapitulatif et son bouton");
+    assert_eq!(n.evaluer(&format!("document.querySelector('{conv} .recap').dataset.ouvert")), json!("non"));
+    n.evaluer(&format!("document.querySelector('{conv} .recap button').click()"));
+    n.attendre(&format!("document.querySelector('{conv} .recap').dataset.ouvert === 'oui' && !!document.querySelector('{conv} .recap .fiches-ecrites')"), "le bouton déplie les fiches");
+    // L'archiviste, après un rechargement : lu à l'état, pas seulement au flux.
+    n.aller(&page, prete);
+    n.attendre("[...document.querySelectorAll('#runs-a-role [data-role=\"archiviste\"] .run-a-role')].some(e => e.dataset.state === 'fini')", "la tâche de l'archiviste après un rechargement");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
