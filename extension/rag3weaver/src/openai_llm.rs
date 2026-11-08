@@ -510,15 +510,21 @@ pub struct RetryPolicy {
     pub jitter: f64,
 }
 
+/// **La règle de Lucie** (8 novembre 2026 : « après les quotas il faut mettre une
+/// minute puis un retour exponentiel ») : un quota ou un service indisponible
+/// attend `crate::llm::REPRISE_BASE` (une minute), doublée à chaque refus,
+/// jusqu'à `REPRISE_PLAFOND` (dix minutes) ; cinq reprises au plus, trente
+/// minutes au plus en tout. La nuit du 8 novembre, quatre tentatives en cinq
+/// minutes rendaient « 429 après 2 reprises en 185 s » au juge comme au chat.
 impl Default for RetryPolicy {
     fn default() -> Self {
         Self {
-            max_attempts: 4,
-            max_total: Duration::from_secs(300),
-            base_429: Duration::from_secs(60),
+            max_attempts: 6,
+            max_total: Duration::from_secs(1800),
+            base_429: crate::llm::REPRISE_BASE,
             base_5xx: Duration::from_secs(1),
             factor: 2.0,
-            max_backoff: Duration::from_secs(120),
+            max_backoff: crate::llm::REPRISE_PLAFOND,
             jitter: 0.2,
         }
     }
@@ -575,10 +581,54 @@ fn classify(status: u16, body: &str) -> Verdict {
     match status {
         429 if is_permanent_quota(body) => Verdict::Fatal,
         // 408 (timeout) et 409 (conflit) sont réessayés par les SDK d'OpenAI
-        // comme par celui de Google.
-        408 | 409 | 429 => Verdict::Retry(RetryBase::Throttled),
+        // comme par celui de Google. **503 et un statut de quota ou
+        // d'indisponibilité dans le corps** (`RESOURCE_EXHAUSTED`,
+        // `UNAVAILABLE`, la forme de Google) attendent comme un quota : la règle
+        // de Lucie vaut pour « les quotas », et Vertex rend son quota par minute
+        // tantôt en 429, tantôt en 503 UNAVAILABLE.
+        408 | 409 | 429 | 503 => Verdict::Retry(RetryBase::Throttled),
+        s if (500..600).contains(&s) && statut_de_refus(body).is_some() => Verdict::Retry(RetryBase::Throttled),
         s if (500..600).contains(&s) => Verdict::Retry(RetryBase::Transient),
         _ => Verdict::Fatal,
+    }
+}
+
+/// Le statut d'un refus du fournisseur écrit dans un corps ou une erreur de flux
+/// (la forme de Google : `{"code": 429, "status": "RESOURCE_EXHAUSTED"}`) : `429`
+/// pour un quota, `503` pour un service indisponible, `None` sinon.
+fn statut_de_refus(texte: &str) -> Option<u16> {
+    let compact: String = texte.chars().filter(|c| !c.is_whitespace()).collect();
+    if compact.contains("RESOURCE_EXHAUSTED") || compact.contains("\"code\":429") {
+        Some(429)
+    } else if compact.contains("\"UNAVAILABLE\"") || compact.contains("\"code\":503") {
+        Some(503)
+    } else {
+        None
+    }
+}
+
+/// Un puits qui dit si quelque chose lui a été poussé : un refus du fournisseur
+/// arrivé dans le flux **avant** le moindre fragment se rejoue sans rien
+/// dupliquer (les appels d'outils ne passent pas par le puits).
+struct PuitsCompte<'a> {
+    inner: &'a mut dyn TokenSink,
+    pousse: bool,
+}
+
+impl TokenSink for PuitsCompte<'_> {
+    fn on_token(&mut self, delta: &str) -> Flow {
+        self.pousse = true;
+        self.inner.on_token(delta)
+    }
+    fn on_reasoning(&mut self, delta: &str) -> Flow {
+        self.pousse = true;
+        self.inner.on_reasoning(delta)
+    }
+    fn on_finish(&mut self, reason: &Finish) {
+        self.inner.on_finish(reason)
+    }
+    fn on_retry(&mut self, event: &crate::llm::RetryEvent<'_>) -> Flow {
+        self.inner.on_retry(event)
     }
 }
 
@@ -1108,19 +1158,34 @@ impl Llm for OpenAiLlm {
                     // poussé » demanderait à `read_sse` de le rapporter jusque
                     // dans son type d'erreur, pour un gain marginal.
                     let mut reader = BufReader::new(resp.body_mut().as_reader());
-                    let (finish, mut usage) = read_sse(&mut reader, opts, sink)?;
+                    // **Un refus dans le flux, avant tout fragment, se rejoue**
+                    // (8 novembre 2026 : Vertex rendait son 429 après le 200,
+                    // « stream error: {"code":429,…,"status":"RESOURCE_EXHAUSTED"} »,
+                    // et le juge comme le chat tombaient sans reprise) : rien
+                    // n'a été poussé au puits, rien ne se duplique.
+                    let mut compte = PuitsCompte { inner: &mut *sink, pousse: false };
+                    let lu = read_sse(&mut reader, opts, &mut compte);
+                    let pousse = compte.pousse;
                     // Fermer la socket : `ureq` ne rend une connexion au pool
                     // que si son corps a été lu jusqu'au bout.
                     drop(reader);
-
-                    usage.ms = self
-                        .clock
-                        .now()
-                        .saturating_duration_since(started)
-                        .as_millis() as u64;
-                    usage.retries = retries;
-                    sink.on_finish(&finish);
-                    return Ok((finish, usage));
+                    match lu {
+                        Ok((finish, mut usage)) => {
+                            usage.ms = self
+                                .clock
+                                .now()
+                                .saturating_duration_since(started)
+                                .as_millis() as u64;
+                            usage.retries = retries;
+                            sink.on_finish(&finish);
+                            return Ok((finish, usage));
+                        }
+                        Err(LlmError::Model(m)) if !pousse && statut_de_refus(&m).is_some() => {
+                            let code = statut_de_refus(&m);
+                            (LlmError::Model(m), Verdict::Retry(RetryBase::Throttled), None, code)
+                        }
+                        Err(e) => return Err(e),
+                    }
                 }
                 Ok(mut resp) => {
                     let status = resp.status().as_u16();

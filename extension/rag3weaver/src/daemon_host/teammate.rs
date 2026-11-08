@@ -387,7 +387,8 @@ pub(crate) fn refus_du_fournisseur(e: &str) -> Option<bool> {
 /// L'attente avant de rejouer un pas refusé : `base` secondes, doublées à chaque
 /// refus d'affilée, au plus dix fois `base`.
 pub(crate) fn attente_du_fournisseur(base: u64, refus: u32) -> u64 {
-    base.saturating_mul(1u64 << refus.saturating_sub(1).min(16)).min(base.saturating_mul(10))
+    // La règle du client du modèle (`crate::llm::attente_de_reprise`), une seule.
+    crate::llm::attente_de_reprise(std::time::Duration::from_secs(base), refus, std::time::Duration::from_secs(base.saturating_mul(10))).as_secs()
 }
 
 /// **La question ouverte de l'équipier** (8 novembre 2026, essai 4 de c7 : trois pas
