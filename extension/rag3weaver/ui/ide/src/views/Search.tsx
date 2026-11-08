@@ -106,6 +106,23 @@ export function Search({ id, state }: { id: string; state: HostState }) {
   const highlightsOf = (h: Hit) => h.chunk?.highlights ?? h.highlights;
   const hasHighlights = hits.some((h) => highlightsOf(h)?.length);
 
+  // **Le clic sur un résultat** (vue « mes recherches ») : rangé dans le run de
+  // cette recherche, envoyé sans retarder la navigation (`keepalive`). Un refus de
+  // l'hôte se dit dans la console : la page est déjà partie.
+  const run = typeof response?.run === "string" ? response.run : null;
+  const noteClick = (uuid: string | undefined, rang: number) => {
+    if (!run || !uuid) return;
+    fetch("/ide/recherches/clic", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backend: id, run, uuid, rang }),
+    })
+      .then((x) => x.json())
+      .then((x) => { if (!x.ok) console.warn(`clic non rangé : ${x.error}`); })
+      .catch((e: Error) => console.warn(`clic non rangé : ${e.message}`));
+  };
+
   const toggleRerank = (checked: boolean) => {
     const p = new URLSearchParams(location.search);
     if (checked) p.set("reclasser", "1");
@@ -137,8 +154,8 @@ export function Search({ id, state }: { id: string; state: HostState }) {
               return (
                 <div key={x.uuid ?? k} className="resultat rounded-lg border bg-card px-3 py-2">
                   <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                    <a href={fileLink(id, d.file_path ?? "", d.start_line)} className="font-mono hover:underline">{d.file_path ?? "?"}:{d.start_line ?? ""}</a>
-                    {d.name ? <a href={symbolLink(id, d.name)} className="hover:underline">{d.name}</a> : null}
+                    <a href={fileLink(id, d.file_path ?? "", d.start_line)} onClick={() => noteClick(x.uuid, k + 1)} onAuxClick={() => noteClick(x.uuid, k + 1)} className="font-mono hover:underline">{d.file_path ?? "?"}:{d.start_line ?? ""}</a>
+                    {d.name ? <a href={symbolLink(id, d.name)} onClick={() => noteClick(x.uuid, k + 1)} onAuxClick={() => noteClick(x.uuid, k + 1)} className="hover:underline">{d.name}</a> : null}
                     <span className="meta note text-xs text-muted-foreground">{d.scope_type ?? x.entity ?? ""} · {x.signal ?? ""}</span>
                     <span className="score text-xs" title="le score de l'ordre rendu">★ {Number(x.score ?? 0).toFixed(3)}</span>
                   </div>

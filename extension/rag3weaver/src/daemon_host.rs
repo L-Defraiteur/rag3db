@@ -694,7 +694,7 @@ impl DaemonHost {
                 (None, true) => b.call_humain(name, arguments),
             })
             .and_then(|r| r)
-            .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, name, &appel, r))
+            .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, humain, name, &appel, r))
         });
         op_response(result)
     }
@@ -707,10 +707,11 @@ impl DaemonHost {
     /// octobre 2026 : deux recherches journalisées à 4 et 12 rendus sur 30 par
     /// une borne de 64 Kio qui vivait ici). C'est ce que le juge regarde quand
     /// l'agent n'est pas notre chat.
-    fn journaliser_l_appel(&self, backend: &str, client: &str, outil: &str, arguments: &Value, reponse: &Value) {
+    /// `humain` : l'appel vient de l'IDE, au nom de la personne (« ma recherche »).
+    fn journaliser_l_appel(&self, backend: &str, client: &str, humain: bool, outil: &str, arguments: &Value, reponse: &Value) {
         let Some(run) = reponse["run"].as_str() else { return };
         let mut ajouts = serde_json::Map::new();
-        ajouts.insert("appel".into(), json!({ "client": client, "outil": outil, "arguments": arguments, "rendu": reponse["result"].clone() }));
+        ajouts.insert("appel".into(), json!({ "client": client, "humain": humain, "outil": outil, "arguments": arguments, "rendu": reponse["result"].clone() }));
         self.journal.ajouter(backend, run, ajouts);
         if journal_des_runs::declare_un_outil(outil, arguments) && reponse["ok"] != false {
             self.journal.epingler(backend, run, &format!("déclaration d'un outil ({outil}, par {client})"));
@@ -746,6 +747,101 @@ impl DaemonHost {
             self.demander_un_bilan(h, &run);
         }
         Ok(json!({ "ok": true, "backend": backend, "run": run, "genre": genre, "fichier": fichier, "juge": hosted.is_some() }))
+    }
+
+    /// **Les recherches d'un backend** (vue « mes recherches », 8 novembre 2026,
+    /// décision de Lucie du 11 octobre) : les appels journalisés de ses outils de
+    /// recherche (`SEARCH_NODES`), de l'IDE comme des agents, du plus récent au
+    /// plus ancien. `qui` : `ide`, `agents`, ou tout (vide ou `tout`). La lecture
+    /// remonte le journal et s'arrête à `limite` lignes : 90 jours de runs ne se
+    /// lisent pas en entier ; `suite` est le run d'où repartir (`avant`). Chaque
+    /// ligne : le run, son âge (`at`, en ms), qui (`client`, `humain`), l'outil,
+    /// la requête et le dossier, la durée, le nombre de résultats, les dix
+    /// premiers et ceux qu'on a cliqués (`chemin`, `ligne`, `nom`, `bestSignal`),
+    /// et les clics. Les recherches finies seulement : un run en vol n'a pas
+    /// encore de journal.
+    pub fn recent_searches(&self, backend_id: &str, qui: &str, limite: usize, avant: Option<&str>) -> Result<Value, String> {
+        let outils = self.with_backend_id(backend_id, |b| b.prepared().search_tools().to_vec())?;
+        let qui = match qui {
+            "" | "tout" => None,
+            "ide" => Some(true),
+            "agents" => Some(false),
+            autre => return Err(format!("« qui » : ide, agents ou tout, pas « {autre} »")),
+        };
+        let limite = limite.clamp(1, 200);
+        let mut runs = self.journal.runs_de(backend_id);
+        runs.reverse();
+        let depart = match avant {
+            Some(a) => runs.iter().position(|r| r == a).map(|p| p + 1).ok_or_else(|| format!("le run {a} n'est pas dans le journal de {backend_id}"))?,
+            None => 0,
+        };
+        let mut lignes: Vec<Value> = Vec::new();
+        let mut suite = None;
+        for run in &runs[depart..] {
+            let Some(v) = self.journal.lire(backend_id, run) else { continue };
+            let appel = &v["appel"];
+            let Some(outil) = appel["outil"].as_str() else { continue };
+            if !outils.iter().any(|t| t == outil) {
+                continue;
+            }
+            let client = appel["client"].as_str().unwrap_or_default();
+            let humain = appel["humain"].as_bool().unwrap_or(client == "ide");
+            if qui.is_some_and(|h| h != humain) {
+                continue;
+            }
+            if lignes.len() == limite {
+                suite = lignes.last().map(|l| l["run"].clone());
+                break;
+            }
+            let rendu = lignes_du_rendu(&appel["rendu"]);
+            let clics = v["clics"].as_array().cloned().unwrap_or_default();
+            let clique = |r: &Value| clics.iter().any(|c| c["uuid"] == r["uuid"]);
+            let resultats: Vec<Value> = rendu
+                .iter()
+                .enumerate()
+                .filter(|(k, r)| *k < 10 || clique(*r))
+                .map(|(k, r)| json!({ "rang": k + 1, "uuid": r["uuid"], "chemin": r["data"]["file_path"], "ligne": r["data"]["start_line"], "nom": r["data"]["name"], "bestSignal": r["bestSignal"] }))
+                .collect();
+            let at = self
+                .journal
+                .fichier(backend_id, run)
+                .and_then(|f| std::fs::metadata(f).ok())
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64);
+            lignes.push(json!({
+                "run": run, "at": at, "client": client, "humain": humain, "outil": outil,
+                "query": appel["arguments"]["query"], "scope": appel["arguments"]["scope"],
+                "ms": v["fin"]["ms"], "ok": v["fin"]["ok"], "nombre": rendu.len(),
+                "resultats": resultats, "clics": clics,
+            }));
+        }
+        Ok(json!({ "recherches": lignes, "suite": suite }))
+    }
+
+    /// **Un clic sur un résultat d'une recherche** (vue « mes recherches ») : rangé
+    /// dans le journal du run de la recherche, sous `clics: [{uuid, rang, at}]`.
+    /// Refusé en disant pourquoi, jamais avalé : un run sans journal, un run qui
+    /// n'est pas une recherche du backend, un résultat qu'elle n'a pas rendu.
+    pub fn record_click(&self, backend_id: &str, run: &str, uuid: &str, rang: Option<u64>) -> Result<Value, String> {
+        let outils = self.with_backend_id(backend_id, |b| b.prepared().search_tools().to_vec())?;
+        if uuid.is_empty() {
+            return Err("« uuid » manque : le résultat cliqué".into());
+        }
+        let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or_default();
+        let element = json!({ "uuid": uuid, "rang": rang, "at": at });
+        let n = self.journal.append_to_list(backend_id, run, "clics", element, |o| {
+            let appel = o.get("appel").ok_or_else(|| format!("le run {run} n'est pas une recherche : aucun appel d'outil n'y est journalisé"))?;
+            let outil = appel["outil"].as_str().unwrap_or_default();
+            if !outils.iter().any(|t| t == outil) {
+                return Err(format!("le run {run} n'est pas une recherche : « {outil} » n'est pas un outil de recherche de {backend_id}"));
+            }
+            if !lignes_du_rendu(&appel["rendu"]).iter().any(|r| r["uuid"] == uuid) {
+                return Err(format!("le résultat {uuid} n'est pas dans ce que la recherche {run} a rendu"));
+            }
+            Ok(())
+        })?;
+        Ok(json!({ "run": run, "clics": n }))
     }
 
     /// **Épingle un run** d'un backend hébergé (page 06) : son journal ne tombera
@@ -1500,6 +1596,17 @@ fn json_response(status: u16, value: &Value) -> tiny_http::Response<std::io::Cur
     tiny_http::Response::from_string(value.to_string())
         .with_status_code(status)
         .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).expect("en-tête littéral"))
+}
+
+/// Les lignes du rendu d'une recherche journalisé : la liste elle-même, ou sous
+/// `result` / `results` (l'enveloppe d'une lecture du catalogue, `{status,
+/// result}`).
+fn lignes_du_rendu(rendu: &Value) -> &[Value] {
+    match rendu {
+        Value::Array(a) => a,
+        Value::Object(o) => o.get("result").or_else(|| o.get("results")).and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[]),
+        _ => &[],
+    }
 }
 
 /// Le témoin de la page rendue dans un vrai navigateur.

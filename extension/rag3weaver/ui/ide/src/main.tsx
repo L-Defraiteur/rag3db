@@ -7,6 +7,7 @@ import { dispatchFlux, fetchState, openFlux, route, type FluxStatus, type HostSt
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
 import { Search } from "@/views/Search";
+import { Recherches } from "@/views/Recherches";
 import { Tasks } from "@/views/Tasks";
 import { TaskReview } from "@/views/TaskReview";
 import { Bilans } from "@/views/Bilans";
@@ -97,6 +98,7 @@ function View({ state, reload }: { state: HostState; reload: () => Promise<unkno
   if (r.view === "chat" && r.id) return <Chat id={r.id} state={state} />;
   if (r.view === "fichier" && r.id) return <File id={r.id} path={r.rest ?? ""} state={state} />;
   if (r.view === "recherche" && r.id) return <Search id={r.id} state={state} />;
+  if (r.view === "recherches" && r.id) return <Recherches id={r.id} state={state} />;
   if (r.view === "bilans" && r.id) return <Bilans id={r.id} state={state} />;
   if (r.view === "arbre" && r.id) return <Tree id={r.id} dir={r.rest ?? ""} state={state} />;
   if (r.view === "symbole" && r.id) return <Symbol id={r.id} name={r.rest ?? ""} state={state} />;
