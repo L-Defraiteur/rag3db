@@ -676,3 +676,34 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 - **Essai 5 de l'équipier lancé à 3 h 44** sur l'hôte reposé (`tests-bases-dans-tmp`, avec
   `run_command` par la porte `approval` : les commandes hors liste sûre me sont soumises) ; la
   réponse du POST porte désormais `task: {branche, depart}`.
+
+## 04 h 15 — le délai partout sur master, la règle « sans service » levée
+
+- **Atterris** : archi, 3 ter (d) (624aaadc9, `deadline_ms` à 95 % du délai du client sur chaque
+  /call du hook) ; hooks-essai, deux tickets du rappel (4181b96b4 : les bilans du juge remontent sur
+  des mots courants ; une fiche déjà vue redevient neuve après la relance de l'hôte — `DefaultHasher`
+  ou résumé réécrit, blake3 comme forme) ; **arbre, un délai partout** (d63c16649..d8aeffea7 :
+  relecteur et OCR au délai de l'embarqueur, `stop_within` compté hors du runtime tokio à deux fils,
+  e2e_arret_borne seule dans son processus ; la preuve : la lib entière sous un faux service muet
+  finit en 28 s au lieu de figer ; la procédure dit maintenant « la lib entière se joue avec ou sans
+  RAG3WEAVER_EMBED_SERVICE », le ticket du figement est fermé, deux tickets ouverts : la valeur
+  mesurée du délai, le client ureq sans délai du test de l'hôte ; un ticket pour une course du
+  témoin des commandes d'ED, que son lot de l'attente corrige déjà). Arbre efface ses worktrees et
+  s'arrête ; wt-lib-arbre reste pour le rebâti de 8 h.
+- **La file** : hotfixs pousse racine-disparue (22342c504, forme (b) : le message commun dit quoi
+  faire, `read_files` sur `index` et `estimate`, le ticket fermé corrigé — IndexNode avait déjà sa
+  garde) ; puis ED, l'état d'attente (equipier-attente-2, ecb5945ba : une question ou une approval
+  sans réponse suspend l'équipier, aucun appel au modèle, ni réussi ni raté ni compté ; **la mesure
+  du quota** : 5 275 jetons au pas 1, 122 242 au pas 10, 950 000 en trois minutes au pas 5 — le
+  fil entier renvoyé à chaque tour) ; puis le bac à sable (equipier-bac-a-sable 49a5ca610 :
+  `sandbox.extra_read` de la chaîne Rust, `sandbox.env` avec {task_dir} et {repo_target}, target
+  partagé par dépôt sous verrou, 32 Go, `taches purge`, TMPDIR hors de /tmp, /dev/null
+  inscriptible) ; puis le fil par pas, puis la reprise sur 429.
+- **Essai 5** (`tests-bases-dans-tmp`, hôte reposé) : `run_command` par la porte marche (`id`,
+  `cargo --version` accordés par `answer {approved:true}`), mais **cargo ne lit pas ~/.rustup dans
+  le bac à sable** (Landlock : /usr, /lib, /etc et le workspace seuls) — d'où le lot du bac à sable.
+  L'équipier a d'abord écrit son témoin dans `src/` (code produit, non monté), recadré vers
+  `tests/common` ; il a ensuite posé un vrai témoin sur `deux_processus_partagent_la_base_par_le_demon`,
+  **ROUGE sur le défaut réel** joué par moi : « la suite a laissé 3 fichier(s) dans /tmp » (la base,
+  .wal, .ecrivain). Vingt lignes « en attente » en dix minutes entre-temps : l'attente d'ED n'est
+  pas encore dans l'hôte.
