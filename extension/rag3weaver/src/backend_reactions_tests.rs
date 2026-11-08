@@ -114,6 +114,8 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         runs_in_flight: crate::dataflow::RunsInFlight::new(),
         ecarts_des_fichiers: Mutex::new(None),
         decider: None,
+        #[cfg(feature = "code")]
+        worktree_host: std::sync::Mutex::new(None),
         llm: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
         version: std::sync::atomic::AtomicU64::new(0),
