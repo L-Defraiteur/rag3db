@@ -41,6 +41,8 @@ const MAX_STEPS: usize = 40;
 /// Les pas de suite sans `step_done` réussi avant que l'équipier s'arrête et le
 /// dise : il tourne en rond.
 const MAX_STALLED: usize = 3;
+/// Les derniers `step_done` rappelés à chaque pas (les plus anciens se lisent au plan).
+const MAX_FAITS_RAPPELES: usize = 20;
 
 /// Ce que l'équipier lit en plus du message système du chat dans une tâche.
 const SYSTEM_PROMPT: &str = "\
@@ -813,8 +815,28 @@ fn publish(bus: Option<&crate::events::EventBus>, task: &str, line: &Value) {
 /// **Ce que la frontière d'un pas dit à l'agent** : la boîte depuis le pas
 /// précédent, le plan actif, les plans en pause (une ligne chacun, toujours),
 /// et ce qu'on attend de ce pas.
-fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool) -> String {
+/// **Le message d'un pas, et lui seul** (8 novembre 2026, la mesure du quota : l'entrée
+/// montait de 5 275 jetons au pas 1 à 122 242 au pas 10, le fil entier renvoyé à chaque
+/// pas). Un pas repart d'une session neuve : ce message porte la demande d'origine, ce que
+/// les pas faits ont déclaré (`step_done`), la boîte depuis le pas précédent et les plans.
+fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, request: &str, faits: &[Value]) -> String {
     let mut m = format!("[Pas {step}]\n");
+    if !request.is_empty() && !news.iter().any(|l| l["kind"] == "request" && l["text"] == request) {
+        m.push_str(&format!("\nLa demande d'origine : {request}\n"));
+    }
+    if !faits.is_empty() {
+        m.push_str("\nTes pas faits, tels que tes step_done les ont dits (tu ne vois plus leurs appels d'outils : relis un fichier s'il te le faut) :\n");
+        let debut = faits.len().saturating_sub(MAX_FAITS_RAPPELES);
+        if debut > 0 {
+            m.push_str(&format!("- … {debut} pas plus anciens, voir le plan\n"));
+        }
+        for f in &faits[debut..] {
+            let issue = if f["succeeded"] == true { "réussi" } else { "raté" };
+            let item = f["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" (élément {i})")).unwrap_or_default();
+            let reste = f["remaining"].as_str().filter(|r| !r.is_empty()).map(|r| format!(" — reste : {r}")).unwrap_or_default();
+            m.push_str(&format!("- {issue}{item} : {}{reste}\n", f["done"].as_str().unwrap_or("")));
+        }
+    }
     if !news.is_empty() {
         m.push_str("\nBoîte aux lettres, depuis le pas précédent :\n");
         for l in news {
@@ -1276,7 +1298,8 @@ impl DaemonHost {
             }
             number += 1;
             let debut_du_pas = read;
-            let message = frontier_message(number, &news, &plans, last);
+            let faits: Vec<Value> = files.mailbox().into_iter().filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").collect();
+            let message = frontier_message(number, &news, &plans, last, &request, &faits);
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
@@ -1532,10 +1555,10 @@ mod tests {
         assert_eq!(s.decision().as_deref(), Some("pause"));
         let plans = s.files.read_plans();
         assert_eq!((plans.active().unwrap().number, plans.paused()[0].number), (2, 1));
-        let m = frontier_message(3, &[], &plans, false);
+        let m = frontier_message(3, &[], &plans, false, "", &[]);
         assert!(m.contains("plans en pause") && m.contains("la doc") && m.contains("le superviseur demande autre chose"), "{m}");
         s.ours(&call(EDIT_PLAN, json!({ "close": { "outcome": "accomplished", "reason": "centré" } }))).unwrap();
-        let m = frontier_message(4, &[], &s.files.read_plans(), false);
+        let m = frontier_message(4, &[], &s.files.read_plans(), false, "", &[]);
         assert!(m.contains("reprends un plan en pause"), "{m}");
         s.ours(&call(EDIT_PLAN, json!({ "resume": 1 }))).unwrap();
         let plans = s.files.read_plans();
@@ -1546,10 +1569,10 @@ mod tests {
     /// demande une décision.
     #[test]
     fn the_frontier_says_what_the_step_expects() {
-        let m = frontier_message(1, &[json!({ "kind": "request", "from": "c7", "text": "Bonjour" })], &Plans::default(), false);
+        let m = frontier_message(1, &[json!({ "kind": "request", "from": "c7", "text": "Bonjour" })], &Plans::default(), false, "", &[]);
         assert!(m.contains("Bonjour") && m.contains("Réponds ou agis"), "{m}");
         let plans = Plans { plans: vec![Plan { number: 1, request: "r".into(), proposal: "p".into(), items: vec![], state: PlanState::Active, reason: None, steps: vec![], concepts: vec![] }] };
-        let m = frontier_message(2, &[json!({ "kind": "request", "from": "c7", "text": "autre chose" })], &plans, false);
+        let m = frontier_message(2, &[json!({ "kind": "request", "from": "c7", "text": "autre chose" })], &plans, false, "", &[]);
         assert!(m.contains("décide d'abord"), "{m}");
     }
 
