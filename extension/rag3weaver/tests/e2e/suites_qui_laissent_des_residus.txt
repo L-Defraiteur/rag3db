@@ -5,13 +5,19 @@
 # une suite d'ici qui finit propre est ROUGE aussi (une passe entière, sans filtre de tests) :
 # elle sort de la liste dans le commit qui la rend propre, et le ticket le dit. La liste
 # maigrit, elle ne grossit pas : une suite neuve naît propre.
-# Une ligne : le nom de la suite (tests/<nom>.rs), seul.
+# Une ligne `<suite>` (tests/<nom>.rs), seule : elle laisse des résidus à chaque passe ; propre,
+# elle est rouge. Une ligne `<suite> <chemin du ticket>` : un rouge connu du témoin, un résidu
+# intermittent dont la cause est en ticket ; il se dit « résidu connu : … » et propre reste
+# propre. Elle ne sort que dans le commit qui corrige sa cause, prouvé par plusieurs passes propres.
 # Au départ (8 novembre 2026, passe entière de master 29fd5522a, une fois le cache d'index sorti
 # du TMPDIR) : des bases de test entières, une base d'accès, des dossiers .tmp* de tempfile.
 e2e_code
-e2e_juge
-e2e_lectures
 e2e_prise_atomique
 e2e_rag3daemon
 e2e_repli_de_branche
 e2e_rouvrir
+# Intermittents (8 novembre 2026, trois passes par suite) : des TempDir dont l'effacement bute, un
+# fil du backend écrivant encore après son Drop.
+e2e_cited_by docs/tickets/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md
+e2e_juge docs/tickets/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md
+e2e_lectures docs/tickets/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md
