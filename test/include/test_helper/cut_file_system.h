@@ -16,10 +16,16 @@
 // jamais synchronisé » demandera une couche sur ces opérations et une synchronisation de
 // répertoire.
 //
+// Une faute d'entrée-sortie s'injecte par failSyncOf : la synchronisation d'un chemin choisi lève,
+// comme sur un disque plein ; ce qui n'était pas synchronisé reste dans la couche, perdu à la
+// coupure.
+//
 // Posé par VirtualFileSystem::setDefaultFileSystemFactoryForTesting dans le fils, avant
 // d'ouvrir la base.
 
 #include <algorithm>
+#include <atomic>
+#include <functional>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -28,6 +34,7 @@
 #include <string>
 #include <vector>
 
+#include "common/exception/io.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/local_file_system.h"
@@ -91,8 +98,18 @@ public:
     }
     bool canHandleFile(const std::string_view) const override { return true; }
 
+    // La faute injectée : la synchronisation d'un chemin pour lequel la fonction rend vrai lève.
+    static std::function<bool(const std::string& path)>& failSyncOf() {
+        static std::function<bool(const std::string& path)> predicate;
+        return predicate;
+    }
+
     void syncFile(const common::FileInfo& fileInfo) const override {
         auto& info = const_cast<common::FileInfo&>(fileInfo).cast<CutFileInfo>();
+        if (const auto& fail = failSyncOf(); fail && fail(info.path)) {
+            throw common::IOException("injected: no space left on device while syncing " +
+                                      info.path);
+        }
         auto& layer = layerOf(info.path);
         std::lock_guard lck{layer.mtx};
         for (const auto& op : layer.ops) {

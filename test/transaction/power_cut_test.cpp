@@ -12,6 +12,10 @@
 //   coupure (le journal est synchronisé avant que la validation soit publiée).
 // - PowerCut.ACutAfterTheCheckpointMarkLosesNothing : coupure juste après la marque CHECKPOINT
 //   du journal, avant la recopie des pages fantômes (RAG3DB_TEST_DIE_AT=checkpoint-logged).
+// - PowerCut.AJournalThatCannotBeSyncedPublishesNothing : la synchronisation du journal lève
+//   pendant une validation (un disque plein) ; la validation échoue, et rien d'elle n'est visible,
+//   ni dans le processus qui continue, ni après la coupure. Le ticket : la validation était
+//   publiée en mémoire (undoBuffer->commit) avant l'écriture du journal.
 // - PowerCut.ACutDuringRecoveryAfterTheShadowPagesLosesNothing et
 //   PowerCut.ACutDuringRecoveryAfterTheJournalIsRemovedLosesNothing : une première mort laisse un
 //   point de reprise à rejouer ; la reprise est coupée à ses deux points nommés.
@@ -151,6 +155,56 @@ TEST_F(PowerCut, ACutAfterTheCheckpointMarkLosesNothing) {
         << "[check: a-cut-after-the-checkpoint-mark-loses-nothing]";
     EXPECT_EQ(judge("MATCH (t:T {id: 1234}) RETURN t.s;"), "ligne 1234\n")
         << "[check: a-cut-after-the-checkpoint-mark-loses-nothing]";
+}
+
+TEST_F(PowerCut, AJournalThatCannotBeSyncedPublishesNothing) {
+    const auto stepsPath = databasePath + ".steps";
+    std::filesystem::remove(stepsPath);
+    const auto status = inAChild(true, [&] {
+        std::ofstream steps(stepsPath);
+        Database database(databasePath, *systemConfig);
+        Connection connection(&database);
+        if (!fill(connection)) {
+            _exit(11);
+        }
+        auto count = [&](const std::string& q) {
+            auto result = connection.query(q);
+            return result->isSuccess() && result->hasNext() ? result->getNext()->toString() :
+                                                              std::string("refus");
+        };
+        // Le disque est plein : le journal ne se synchronise plus.
+        CutFileSystem::failSyncOf() = [](const std::string& path) {
+            return path.ends_with(".wal");
+        };
+        auto refused = connection.query("CREATE (:T {id: 5000, s: 'perdue'});");
+        steps << "COMMIT " << (refused->isSuccess() ? "accepted" : "refused") << std::endl;
+        CutFileSystem::failSyncOf() = nullptr;
+        steps << "AFTER " << count("MATCH (t:T) RETURN count(*);");
+        steps << "LOST " << count("MATCH (t:T {id: 5000}) RETURN count(*);");
+        // La clé est libre : la même ligne se valide maintenant.
+        auto again = connection.query("CREATE (:T {id: 5000, s: 'gardée'});");
+        steps << "AGAIN " << (again->isSuccess() ? "accepted" : "refused") << std::endl;
+        steps.flush();
+        _exit(CUT);
+    });
+    std::string steps;
+    std::ifstream in(stepsPath);
+    for (std::string line; std::getline(in, line);) {
+        steps += line + "\n";
+    }
+    ASSERT_EQ(status, CUT) << "[check: setup] the child did not reach the cut\n" << steps;
+    ASSERT_NE(steps.find("COMMIT refused"), std::string::npos)
+        << "[check: setup] the failed sync did not fail the commit\n" << steps;
+    EXPECT_NE(steps.find("AFTER 2000\n"), std::string::npos)
+        << "[check: a-commit-whose-journal-failed-is-not-visible]\n" << steps;
+    EXPECT_NE(steps.find("LOST 0\n"), std::string::npos)
+        << "[check: a-commit-whose-journal-failed-is-not-visible]\n" << steps;
+    EXPECT_NE(steps.find("AGAIN accepted"), std::string::npos)
+        << "[check: the-key-of-the-failed-commit-is-free]\n" << steps;
+    EXPECT_EQ(judge("MATCH (t:T) RETURN count(*), sum(t.id);"), "2001|2004000\n")
+        << "[check: after-the-cut-only-the-synced-commit-is-there]";
+    EXPECT_EQ(judge("MATCH (t:T {id: 5000}) RETURN t.s;"), "gardée\n")
+        << "[check: after-the-cut-only-the-synced-commit-is-there]";
 }
 
 class PowerCutDuringRecovery : public PowerCut {
