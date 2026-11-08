@@ -258,6 +258,16 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             verifyNoCheckpointCrossed();
         }
     };
+    // Les extensions notées à côté de la base se chargent à toute ouverture, journal vide ou non,
+    // après la lecture du point de reprise : une ouverture qui ne les chargeait qu'avant un rejeu
+    // laissait, après une mort juste à la fin d'un point de reprise, un index attendre son
+    // extension selon l'instant de la mort (le cas du banc SingleWriterCrash.
+    // DeathDuringDeletesAndVectorSearchKeepsTheIndexExact). Comme PostgreSQL charge ses
+    // bibliothèques au démarrage, pas au rejeu.
+    const auto loadNotedExtensions = [&]() {
+        extension::ExtensionManager::Get(clientContext)
+            ->loadExtensionsNotedBesideTheDatabase(&clientContext);
+    };
     // First, check if the WAL file exists. If it does not, we can safely remove the shadow file.
     if (!vfs->fileOrPathExists(walPath, &clientContext)) {
         removeFileIfExists(shadowFilePath);
@@ -270,6 +280,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             throw;
         }
         verifyNoCheckpointCrossed();
+        loadNotedExtensions();
         return;
     }
     // If the WAL file exists, we need to replay it.
@@ -294,6 +305,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             throw;
         }
         verifyNoCheckpointCrossed();
+        loadNotedExtensions();
         return;
     }
     // A previous unclean exit may have left non-durable contents in the WAL, so before we start
@@ -328,6 +340,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             writerLock.release();
             // Re-read checkpointed data from disk again as now the shadow file is applied.
             checkpointer.readCheckpoint();
+            loadNotedExtensions();
         } else {
             // There is no checkpoint record, so we should remove the shadow file if it exists.
             removeFileIfExists(shadowFilePath);
@@ -340,8 +353,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             // Il y a un journal à rejouer : il lui faut les extensions dont viennent les
             // index des tables où il écrit, et il ne les porte plus si un point de reprise
             // est passé depuis leur chargement.
-            extension::ExtensionManager::Get(clientContext)
-                ->loadExtensionsNotedBesideTheDatabase(&clientContext);
+            loadNotedExtensions();
             runReadOnlyOpenHook(ReadOnlyOpenPhase::DATA_FILE_READ);
             // Resume by replaying the WAL file from the beginning until the last COMMIT record.
             Deserializer deserializer = initDeserializer(*fileInfo, clientContext, enableChecksums);
