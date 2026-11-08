@@ -994,3 +994,40 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 - **Le thème (tty) : « je vois pas pourquoi attendre mon accord avant de brancher »** → tty branche
   daemon.json tout de suite ; Lucie réagit au rendu. Règle à garder : un rendu ou un design se
   branche et se montre, on ne demande pas d'accord avant.
+
+## 11 h 00 — la cause du SIGSEGV, l'atelier lancé, un chantier de Lucie pour le banc
+
+- **Le SIGSEGV de l'hôte a sa cause, cœur et hotfixs d'accord** : le heap-use-after-free de
+  `OnDiskHNSWIndex::shrinkForNode` à la finalisation de l'index par un COPY (le vecteur du nœud pris
+  par pointeur dans le tampon que la lecture des voisins réalloue). Le témoin du mélange de hotfixs
+  rougit sous ASAN sans le correctif du cœur, vert avec (1/1, 0 rapport, 23 min). **Ce n'est pas
+  G2b**, qui reste en service tel quel ; la réindexation y passait parce qu'elle fait des COPY sur une
+  table indexée HNSW. Réserve écrite au ticket : la lecture ne produit pas à coup sûr le numéro de
+  page de 330 Gio — la preuve sera l'hôte sous la même charge. **Le rebâti** portera a312f823e
+  (coupure), A (le rejeu), G3 et vecteur-du-noeud-copie ; G posera **d'abord luciepc** avec une
+  réindexation forcée de code-lourd, une heure sans plantage, puis le portable.
+- **A** : passe complète rouge d'un seul témoin de temps du banc (`AutoCheckpointIsNotPostponed…`,
+  charge 15,8 à luciepc, vert 5/5 seul) → ligne probabilistic avec ses comptes + ticket « un témoin
+  de temps du banc rougit sous charge », pas de relâchement ; rejeu court sur l'arbre rebasé, push à
+  mon mot. **G3** : Lucie a dit oui (10 h 25, transmis), branche fe8a9dd02 prête pour sa passe.
+- **Lucie, au réveil** : G3 oui ; Codex plus tard ; le thème se branche sans accord (tty) ;
+  **l'atelier : « oui absolument, je pensais que vous auriez déjà commencé »** → ED en fait son
+  chantier principal après son lot des crochets (vert, en attente de push) ; premier pas : un
+  gabarit livré `atelier` avec `declare_repo` et `list_repos`, un nœud intégré qui refait
+  `code-tree add` et publie `RepoAttached`, témoin en quatre exigences par le chemin de l'hôte,
+  vocabulaire de Lucie (dépôt, worktree, branche, index), aucun git lancé à ce pas ; démonstration
+  dans l'IDE : « ouvre le worktree … » et le dépôt paraît dans la barre.
+- **Un chantier de Lucie** (10 h 50) : « un bon petit modèle de décision, ça coûterait beaucoup
+  moins cher — doit-on charger ce contexte au préchargement de mémoire ? » → au banc, en mesure :
+  bge-m3 (/rerank, déjà en service), ModernBERT « Laya », Qwen2.5-0.5B et SmolLM2-360M en oui/non
+  par les logits, contre Gemini Flash et une relecture à la main de 60 paires ; jeu : les 125
+  rappels de hooks.log (le juge différé existe mais est éteint chez Lucie, `recall_judge: false`)
+  plus 100 prompts d'autres sessions ; mesures : accord, courbe du seuil (« un filtre ôte »),
+  latence CPU/GPU, mémoire ; page `docs/08-novembre-2026-banc/01-modele-de-decision.md`, aucun code
+  produit avant lecture ; gardes : Vertex cadencé, CPU d'abord, GPU seulement sur une carte sans
+  service (le 25 oct., sept resets).
+- **Son manifeste** : fichier neuf prêt dans mon dossier de travail (`rag3db-taches-8-nov.json` :
+  task_writes, edit_file, run_command, porte approval, chaîne Rust en lecture ; `sandbox.env` à la
+  prochaine pose), geste donné.
+- **La file** : recherche (best-signal, à toi) → ED (crochets) → hotfixs A → hooks-essai
+  (coloration B, verte) → 96 → tty (thème) → G3 → cœur (vecteur-du-noeud-copie) → rebâti.
