@@ -401,6 +401,7 @@ fn queue(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::rgb;
     use ratatui::backend::TestBackend;
     use ratatui::{Terminal, TerminalOptions, Viewport};
     use serde_json::json;
@@ -464,6 +465,27 @@ mod tests {
         v.trame(&json!({ "evenement": { "kind": "Token", "text": "x" } }));
         assert_eq!(v.quelle(), None, "les tokens coulent : pas d'animation");
         assert_eq!(v.prochaine_image(t0), None);
+    }
+
+    /// **Les couleurs du thème s'appliquent aux cellules** quand l'agent
+    /// réfléchit : le cœur dans la couleur `texte` en gras, les runes dans le
+    /// halo sombre, le libellé dans `texte` ; et rien de rouge de base.
+    #[test]
+    fn the_theme_colours_reach_the_cells_while_the_model_thinks() {
+        let mut v = Vue::new(80, true);
+        v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
+        let mut t = Terminal::with_options(TestBackend::new(80, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let instant = v.depuis;
+        t.draw(|f| v.dessiner_a(f, f.area(), instant)).unwrap();
+        let buf = t.backend().buffer().clone();
+        let ligne = (0..buf.area.height).find(|y| (0..buf.area.width).any(|x| buf[(x, *y)].symbol() == "⛧")).expect("la ligne du Cercle");
+        let cellule = |s: &str| (0..buf.area.width).map(|x| &buf[(x, ligne)]).find(|c| c.symbol() == s).unwrap_or_else(|| panic!("pas de {s}")).clone();
+        let (texte, halo) = (rgb(&v.theme.couleurs.texte).unwrap(), rgb(v.theme.couleurs.halo.last().unwrap()).unwrap());
+        assert_eq!(cellule("⛧").fg, Color::Rgb(texte.0, texte.1, texte.2), "le cœur");
+        assert!(cellule("⛧").modifier.contains(Modifier::BOLD));
+        assert_eq!(cellule("ᚨ").fg, Color::Rgb(halo.0, halo.1, halo.2), "une rune du cercle");
+        assert_eq!(cellule("I").fg, Color::Rgb(texte.0, texte.1, texte.2), "le libellé INVOCATION");
+        assert!((0..buf.area.width).all(|x| buf[(x, ligne)].fg != Color::Red), "plus de rouge de base sur la ligne du thème");
     }
 
     #[test]
