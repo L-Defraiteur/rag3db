@@ -1583,11 +1583,31 @@ mod tests {
         }
     }
 
+    /// Un faux service granite-278m qui refuse chaque texte : les vecteurs restent dus,
+    /// quel que soit `RAG3WEAVER_EMBED_SERVICE` dans l'environnement de la passe (archi, 8
+    /// novembre 2026 : sous les tunnels de la règle GPU, l'index embarquait tout).
+    struct GraniteMuet;
+    impl crate::embedder::Embedder for GraniteMuet {
+        fn name(&self) -> &str {
+            "granite-278m"
+        }
+        fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            Err(crate::embedder::EmbedError::ProviderError("le service du témoin refuse tout".into()))
+        }
+        fn dim(&self) -> usize {
+            768
+        }
+    }
+
     fn service_granite() -> String {
+        servir(Arc::new(Granite))
+    }
+
+    fn servir(modele: Arc<dyn crate::embedder::Embedder>) -> String {
         let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let adresse = ecoute.local_addr().unwrap().to_string();
         std::thread::spawn(move || {
-            let _ = crate::daemon::EmbedDaemon::new(Arc::new(Granite)).servir_lie(ecoute);
+            let _ = crate::daemon::EmbedDaemon::new(modele).servir_lie(ecoute);
         });
         let debut = std::time::Instant::now();
         while crate::daemon::DaemonEmbedder::joindre(&adresse).is_err() {
@@ -1617,10 +1637,12 @@ mod tests {
             f(&mut m);
             std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         };
-        // 1. Un index sans service : le plein texte, et tous les vecteurs dus.
+        // 1. Un index dont le service refuse tout : le plein texte, et tous les vecteurs dus.
+        // Le service est déclaré au manifeste : l'environnement de la passe n'y change rien.
+        let muet = servir(Arc::new(GraniteMuet));
         ecrire(&|m| {
             m["embeddings"]["catch_up_on_open"] = json!(false);
-            m["embeddings"].as_object_mut().unwrap().remove("address");
+            m["embeddings"]["address"] = json!(muet);
         });
         let host = Arc::new(crate::daemon_host::tests::hote_isole());
         let h = host.hosted(&manifeste).unwrap();
