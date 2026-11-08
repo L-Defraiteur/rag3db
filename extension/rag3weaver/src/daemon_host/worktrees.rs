@@ -374,6 +374,82 @@ fn dossier_de_branche(branche: &str) -> String {
     }).collect()
 }
 
+/// **Le témoin du premier index d'un worktree attaché** : à côté de son manifeste, le
+/// chemin du journal de l'index lancé par l'attache. Ôté quand le journal finit par
+/// [`DONE_LINE`](crate::dataflow::index_nodes::DONE_LINE) ; tant qu'il reste, un hôte
+/// qui ouvre le worktree fermé relance l'index (c7, 8 novembre 2026, 16 h 09 : un
+/// worktree attaché à 16 h 04, l'hôte reposé à 16 h 08, l'index n'avait plus repris).
+fn marque_du_premier_index(manifeste: &Path) -> PathBuf {
+    let mut p = manifeste.as_os_str().to_owned();
+    p.push(".premier-index");
+    PathBuf::from(p)
+}
+
+/// Le premier index d'un worktree reste-t-il à finir ? Ôte le témoin d'un index fini.
+fn premier_index_a_finir(manifeste: &Path) -> bool {
+    let marque = marque_du_premier_index(manifeste);
+    let Ok(journal) = std::fs::read_to_string(&marque) else { return false };
+    let fini = std::fs::read_to_string(journal.trim())
+        .ok()
+        .and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.starts_with(crate::dataflow::index_nodes::DONE_LINE)))
+        .unwrap_or(false);
+    if fini {
+        let _ = std::fs::remove_file(&marque);
+    }
+    !fini
+}
+
+/// Le backend de `h` est-il ouvert dans l'hôte (ou en train de l'être) ?
+fn ouvert(h: &super::Hosted) -> bool {
+    h.backend.try_read().map(|g| g.is_some()).unwrap_or(true)
+}
+
+/// **Lance l'index d'un worktree** et pose le témoin de son journal ; dit en mots ce
+/// qui est parti.
+fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path) -> String {
+    match hote.with_backend(h, |b| b.call("index", json!({ "confirm": true }))) {
+        Ok(Ok(v)) => {
+            let texte = v["result"].as_str().unwrap_or_default();
+            if let Some(journal) = texte.lines().find_map(|l| l.strip_prefix("journal : ")) {
+                let _ = std::fs::write(marque_du_premier_index(manifeste), journal.trim());
+            }
+            "son index est lancé en fond".to_string()
+        }
+        Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
+    }
+}
+
+/// **Rouvre un worktree fermé dont le premier index n'a pas fini, et le relance.** Rend
+/// ce qui est parti, ou `None` s'il n'y avait rien à reprendre.
+fn reprendre_si_fini_pas(hote: &super::DaemonHost, manifeste: &Path) -> Option<String> {
+    if !premier_index_a_finir(manifeste) {
+        return None;
+    }
+    let h = hote.hosted(manifeste).ok()?;
+    if ouvert(&h) {
+        return None;
+    }
+    Some(lancer_l_index(hote, &h, manifeste))
+}
+
+impl super::DaemonHost {
+    /// **Au démarrage de l'hôte, les premiers index des worktrees attachés reprennent**
+    /// (c7, 8 novembre 2026, 16 h 09). Seuls les worktrees dont le témoin dit un index pas
+    /// fini sont ouverts : un dépôt inscrit sans témoin (la base principale de Lucie)
+    /// n'est jamais ouvert ni indexé par là.
+    pub fn reprendre_les_premiers_index(self: &Arc<Self>) -> Vec<String> {
+        let Ok(racines) = self.racines_de_code() else { return Vec::new() };
+        racines
+            .registered_manifests()
+            .into_iter()
+            .filter_map(|m| {
+                let m = m.canonicalize().unwrap_or(m);
+                reprendre_si_fini_pas(self, &m).map(|dit| format!("{} : {dit}", m.display()))
+            })
+            .collect()
+    }
+}
+
 impl WorktreeHost for HoteDesWorktrees {
     fn attach(&self, path: &Path) -> Result<String, String> {
         let worktree = path
@@ -397,25 +473,14 @@ impl WorktreeHost for HoteDesWorktrees {
         // Comparé à `/etat` par son chemin canonique, comme l'hôte le tient.
         let manifeste = manifeste.canonicalize().unwrap_or(manifeste);
         let h = hote.hosted(&manifeste)?;
+        let etait_ferme = !ouvert(&h);
         hote.with_backend(&h, |_| ())?;
         let depot = super::repo_of(&worktree);
         let branche = super::branch_of(&worktree);
-        // Le premier index part en fond ; un worktree déjà attaché garde le sien.
-        let index = if deja {
-            None
-        } else {
-            Some(match hote.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))) {
-                Ok(Ok(recu)) => {
-                    // La fin se dira sur le flux (`RepoIndexed`) : la page la montre.
-                    if let Some(journal) = journal_du_recu(&recu) {
-                        let quoi = json!({ "worktree": worktree, "depot": depot, "branche": branche });
-                        suivre_le_premier_index(Arc::downgrade(&hote), h.clone(), journal, quoi, BORNES_DU_SUIVI);
-                    }
-                    "son index est lancé en fond ; sa fin se dira sur le flux de l'IDE".to_string()
-                }
-                Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
-            })
-        };
+        // Le premier index part en fond. Un worktree déjà attaché mais fermé (un hôte
+        // redémarré depuis) se rouvre et relance le sien, qui reprend ce qui manque ; un
+        // worktree ouvert garde le sien (c7, 8 novembre 2026, 16 h 09).
+        let index = if deja && !etait_ferme { None } else { Some(lancer_l_index(&hote, &h, &manifeste)) };
         hote.ide_flux().publier(
             "repos",
             &manifeste.display().to_string(),
@@ -427,6 +492,7 @@ impl WorktreeHost for HoteDesWorktrees {
             (None, _) => "hors d'un dépôt git".to_string(),
         };
         Ok(match index {
+            Some(i) if deja => format!("Le worktree {} est déjà attaché ({ou}) ; il était fermé, il est rouvert, et {i}. list_worktrees dit où il en est.", worktree.display()),
             Some(i) => format!("Worktree attaché : {} ({ou}) ; {i}. list_worktrees dit où il en est.", worktree.display()),
             None => format!(
                 "Le worktree {} est déjà attaché ({ou}) : il est ouvert ; son index : {}.",
@@ -486,10 +552,15 @@ impl WorktreeHost for HoteDesWorktrees {
         if manifestes.is_empty() {
             return Ok("Aucun worktree attaché : attach_worktree en attache un.".into());
         }
+        // Un worktree fermé dont le premier index n'a pas fini se rouvre et le relance :
+        // « pas ouvert » ne se dit plus d'un index qui devrait tourner.
+        let manifestes: Vec<PathBuf> = manifestes.into_iter().map(|m| m.canonicalize().unwrap_or(m)).collect();
+        for m in &manifestes {
+            let _ = reprendre_si_fini_pas(&hote, m);
+        }
         let etat = hote.state();
         let mut lignes = vec![format!("{} worktree(s) attaché(s) :", manifestes.len())];
         for m in manifestes {
-            let m = m.canonicalize().unwrap_or(m);
             let racine = super::espace_du_manifeste(&m);
             let (depot, branche) = racine.as_deref().map(|r| (super::repo_of(r), super::branch_of(r))).unwrap_or((None, None));
             lignes.push(format!(
@@ -1254,6 +1325,78 @@ mod tests {
         assert_eq!(m["workspace"]["root"], json!(racine.display().to_string()), "le réglage de la pose reste");
         let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
         assert!(capte.contains("TemplateRefreshed") && capte.contains("open_branch"), "{capte}");
+    }
+
+
+    /// **Un worktree attaché dont le premier index a été coupé le reprend** (c7, 8
+    /// novembre 2026, 16 h 09 : attaché à 16 h 04, l'hôte reposé à 16 h 08, list_worktrees
+    /// disait « pas ouvert » et rien ne reprenait). L'attache pose le témoin du journal ;
+    /// l'index coupé (dernière ligne « indexation arrêtée »), le worktree fermé :
+    /// list_worktrees le rouvre et relance l'index, qui finit ; au démarrage de l'hôte, la
+    /// reprise fait de même ; attach_worktree sur le worktree fermé le rouvre et relance.
+    #[test]
+    fn a_worktree_whose_first_index_was_cut_resumes_it() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("rag3db-essai");
+        std::fs::create_dir_all(depot.join("src")).unwrap();
+        std::fs::write(depot.join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n").unwrap();
+        for args in [&["init", "-q", "-b", "essai"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"], &["add", "-A"], &["commit", "-q", "-m", "le dépôt"]] {
+            git(&depot, args);
+        }
+        let racine = d.path().join("poste");
+        std::fs::create_dir_all(&racine).unwrap();
+        let (atelier, racines) = atelier_pose(d.path(), &racine);
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("rien"))) });
+        let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines.clone()).with_runs_root(d.path().join("runs")));
+        host.se_connaitre();
+        let h = host.hosted(&atelier).unwrap();
+        let outil = |nom: &str, args: Value| -> String {
+            host.with_backend(&h, |b| b.call(nom, args)).unwrap().map(|r| r["result"].as_str().unwrap_or_default().to_string()).unwrap_or_else(|e| e)
+        };
+        outil("attach_worktree", json!({ "path": depot }));
+        let manifeste = racines.manifest("code-rag3db-essai").canonicalize().unwrap();
+        let marque = PathBuf::from(format!("{}.premier-index", manifeste.display()));
+        let journal_de = || std::fs::read_to_string(&marque).map(|j| j.trim().to_string()).unwrap_or_default();
+        assert!(marque.is_file(), "l'attache pose le témoin du journal de son index");
+        let fini = |journal: &str| std::fs::read_to_string(journal).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.starts_with(crate::dataflow::index_nodes::DONE_LINE))).unwrap_or(false);
+        let attendre = |journal: &str| {
+            let debut = std::time::Instant::now();
+            while !fini(journal) {
+                assert!(debut.elapsed() < std::time::Duration::from_secs(60), "l'index n'a pas fini en 60 s : {journal}");
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        };
+        attendre(&journal_de());
+        // L'index coupé, le worktree fermé : ce qu'un hôte reposé laisse.
+        let coupe = d.path().join("coupe.out");
+        let couper = || {
+            std::fs::write(&coupe, format!("indexation lancée\n{} : l'hôte s'arrête\n", crate::dataflow::index_nodes::STOPPED_PREFIX)).unwrap();
+            std::fs::write(&marque, coupe.display().to_string()).unwrap();
+            assert_eq!(host.close(None, &manifeste)["ok"], true);
+        };
+
+        // 1. list_worktrees le rouvre et relance l'index.
+        couper();
+        let liste = outil("list_worktrees", json!({}));
+        assert!(!liste.contains("pas ouvert"), "{liste}");
+        let neuf = journal_de();
+        assert!(!neuf.is_empty() && neuf != coupe.display().to_string(), "un journal neuf : {neuf}");
+        attendre(&neuf);
+
+        // 2. Au démarrage de l'hôte, la reprise.
+        couper();
+        let repris = host.reprendre_les_premiers_index();
+        assert_eq!(repris.len(), 1, "{repris:?}");
+        attendre(&journal_de());
+
+        // 3. attach_worktree sur le worktree fermé le rouvre et relance.
+        couper();
+        let dit = outil("attach_worktree", json!({ "path": depot }));
+        assert!(dit.contains("il est rouvert") && dit.contains("son index est lancé en fond"), "{dit}");
+        attendre(&journal_de());
+        // Un index fini : plus rien à reprendre, le témoin s'ôte.
+        assert!(host.reprendre_les_premiers_index().is_empty());
+        assert!(!marque.exists(), "le témoin d'un index fini s'ôte");
     }
 
 }
