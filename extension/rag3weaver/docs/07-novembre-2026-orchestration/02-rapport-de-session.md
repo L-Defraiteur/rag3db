@@ -1442,3 +1442,60 @@ avance d'autant ; les hashs, eux, sont exacts.
 - **Règle apprise** : un index de mesure ou de trace tourne sur **son propre** service
   d'embarquement (même modèle, port neuf, VRAM lue), jamais sur le 7878 partagé — il n'y a pas
   de fenêtre dans une file de pushes.
+
+## 17 h 25 — le disque de luciepc, le mécanisme du SIGSEGV, le chemin du MERGE
+
+- **Lucie : « il m'a pas l'air surmené, luciepc »**, et elle avait raison. La charge moyenne (25 à
+  33) comptait des processus bloqués sur le disque : PSI cpu 0,5 %, mémoire 0 %, **E/S 22 à 30 %** ;
+  le NVMe (Crucial T710) occupé à 98 % pour 9 Mio/s, parce qu'il passait **4 743 ms sur 5 s en
+  commandes TRIM** (37 ms chacune) : btrfs monté `discard=async` par défaut du noyau (absent de
+  fstab), 5,2 Gio en 151 840 petits extents à rendre après les effacements de targets et de bases
+  de la journée. C'était la famille des « pas indexé en 60 s » et des passes trois fois plus
+  longues (lib entière d'ED 1 623 s contre 189 s), pas la charge. **Lucie a remonté `/` en
+  `nodiscard` et activé `fstrim.timer` à 17 h 10** (TRIM 0 ms ensuite ; `nodiscard` à ajouter à la
+  ligne 9 de fstab pour le redémarrage). Mais le SSD reste lent après : 98 % d'occupation pour
+  50 Mio/s, **31,5 ms par flush**, 3 à 4 ms par opération, 49 °C, PCIe 5 x4 : travail interne
+  après la journée de discards, se détend avec le temps. Une veille (occupé < 40 %, flush < 8 ms,
+  PSI io < 6) dit aux sessions quand rejouer ; d'ici là un rouge de durée à luciepc se nomme
+  « attente disque », et les seuils des témoins ne se relâchent pas (ED a remis 60 et 120 s).
+- **Le mécanisme du SIGSEGV du matin, sans course** (cœur, sur ma base creuse) : l'en-tête déclare
+  455 380 pages, le fichier en compte 83 108 352 ; deux segments vivants de Scope_Chunk
+  `embedding__granite_278m_data` à 83 108 096 et 83 108 192 et une entrée libre à côté. À
+  l'ouverture, `Checkpointer::returnOwnerlessPages` (0aed3c4b5, 10 octobre) rend libre tout
+  l'intervalle de l'étendue à la fin du fichier **sans vérifier qu'aucun segment vivant ne s'y
+  trouve** ; après CHECKPOINT des pages vivantes sont dans l'espace libre ; `mergePageRanges` puis
+  `handleLastPageRange` tronquent `numPages` sous les segments ; le lecteur suivant suit un maillon
+  nul du `ConcurrentVector` : les deux cores de 8 h 50 et 9 h 05, au même bloc. Le use-after-free de
+  `shrinkForNode` n'était pas la cause. Inconnu : le premier événement qui a posé des pages à 82 M
+  au-delà (00 h 08 → 8 h 50, sous 17a094d12 ou dadbf0041). Correctifs rouges d'abord, dans l'ordre :
+  (3) sonde fsm_info × storage_info (page libre et tenue), (1) returnOwnerlessPages ne rend que ce
+  que rien ne tient, (2) erreur au lieu de plantage au-delà de numPages (branche `etendue-gardes`).
+  Relevé : 22 bases lisibles à luciepc, aucune creuse ; ici toutes saines sauf la mienne, fermée à
+  17 h 14 (son point de reprise de fermeture a mis les pages vivantes dans l'entrée libre) et mise
+  de côté entière avec la copie de 16 h 52 dans `~/.cache/rag3db-moteur-notes/essais-c7/` ; pas de
+  rebâtie par index complet (chemin des deux sens), une base neuve à la prochaine ouverture.
+- **Les deux sens : la trace d'hotfixs réfute le débordement CSR** (aucune garde n'a sauté sur 3 176
+  instructions, mêmes écarts au chiffre près, sur 7882 et non 7878 : j'avais accusé à tort). Les
+  tables abîmées s'écrivent toutes par `UNWIND $items … MERGE (a)-[r]->(b) SET r.line`, par lots
+  validés un à un et relus ; les saines par COPY ; aucun effacement sauf le DETACH DELETE final de
+  103 Scope (INHERITS_FROM est Scope→Scope). Témoin de ce chemin en cours (da1f9b1b6) ; le cœur
+  lit le MERGE sur une table déjà au disque et la sonde de cohérence sert aussi là (une liste
+  arrière sur les mauvaises rangées peut venir d'une réécriture de pages).
+- **La pile de l'atelier d'ED, dix commits** (a538a1575 → edee38062) : commandes hors tâche par la
+  porte, `chat_instructions`, gabarits vivants (`.livre`, `TemplateRefreshed`), reprise du premier
+  index, `embeddings.catch_up_on_open` (forme (b), tranchée : déclaré dans le gabarit livré, hérité
+  par les worktrees, la base de Lucie ne bouge pas ; un rattrapage de fond s'arrête au paquet
+  suivant sur /backend/close au lieu de refuser), la phrase de l'index (« en cours » seulement si
+  une indexation vit ; une note `running` périmée du 25 octobre se lit prête quand les comptes sont
+  complets), seuils à 60 et 120 s. Archi : quatre lots verts en file (aperçu, accueil en dépôts,
+  fin d'index `RepoIndexed`, avancement `IndexProgress` par le flux, 1/s au plus, « figé depuis »,
+  « flux coupé », zéro polling) ; la carte sous le tour attend `Turn.ui` d'ED (Lucie : « que ça
+  glisse une UI dans le chat », « par SSE, pas par polling »).
+- **Recherche** : le Surveillant `l_embarquement_du_retard_appelle_le_service_hors_du_verrou` est
+  rouge 5/10 sur master seul (ticket, à elle après son lot) ; les `.tmp` intermittents sont des
+  TempDir qu'un fil de fond du backend écrit encore après son Drop (ticket, à elle, à partir du
+  `stop_indexings_of` d'ED) ; le témoin des résidus prend deux listes, `toujours` et `parfois`
+  (known_red avec ticket, résidu dit en clair, sortie par le commit qui corrige).
+- **La file** : le seul rouge qui bloque codeparsers (3 verts, 1 rouge ligne 147) et 96 est le
+  témoin de 36aced578 ; **ED pousse d'abord un mini-lot avec son seul correctif** (f7248fbae) au
+  « disque détendu », puis codeparsers, 96, archi ×4, juge-par-pas-3, recherche.
