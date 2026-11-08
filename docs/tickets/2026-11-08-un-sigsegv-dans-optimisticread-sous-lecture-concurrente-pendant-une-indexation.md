@@ -56,6 +56,29 @@ Le refus du rejeu du .wal de code-rag3db-depot est un défaut distinct (le rejeu
 d'une relation insérée plus tôt dans la même transaction, chez hotfixs) : rejoué sous un shell
 ASAN de dadbf0041, il ne montre aucune erreur mémoire.
 
+## L'ASAN du 8 novembre (cœur c++, à luciepc, build ASAN de dadbf0041)
+
+- **Propres, aucun rapport** : les cas V2 (CheckpointUnderReaders, CheckpointNewSegment,
+  CheckpointOpenReader, RollbackUnderReaders ×3), VectorSearchDuringInsertTest,
+  ReadersDuringDeleteTest, HalfAppliedCommit ; au banc C7_RandomMix et les cinq
+  LateRelTableRewrites (la compaction CSR).
+- **Un débordement dans le CREATE_VECTOR_INDEX concurrent** (TwentyWriters.DdlEveryFifteenSeconds :
+  l'insertion HNSW lit une ligne au-delà de la colonne mise en cache par `_CACHE_COLUMN`) : un
+  défaut à part, ticket de hotfixs.
+- **Un heap-use-after-free dans `OnDiskHNSWIndex::shrinkForNode`**, trouvé par le témoin du mélange
+  de hotfixs (`VectorCopyUnderASmallPoolTest.TheIndexReadsItsVectorsWhileTheHeadIsExchanged`,
+  `test/transaction/blob_checkpoint_test.cpp`) : à la finalisation de l'index par un COPY sur une
+  table indexée, le vecteur du nœud est pris par pointeur dans le vecteur de données de l'état de
+  lecture, puis `getEmbeddings` des voisins, sur le même état, réalloue ce vecteur
+  (`ListAuxiliaryBuffer::resize`) : `metricFunc` lit 3 072 octets d'un tampon libéré. C'est le
+  chemin de la montre (réindexation, COPY dans une table d'embarquements indexée). Correctif : la
+  branche `vecteur-du-noeud-copie` (le vecteur du nœud copié avant les voisins) ; le témoin passe
+  sous ASAN avec lui, sans aucun rapport.
+
+**Ce qui n'est pas prouvé** : que cette lecture d'un tampon libéré produise le numéro de page de
+330 Gio des deux cores. En Release elle lit des flottants périmés et n'écrit rien. La preuve sera
+l'hôte qui tient la même charge sans plantage après le rebâti ; le ticket reste ouvert jusque-là.
+
 ## Témoin
 
 Aucun encore. La voie : rejouer sous ASAN les cas qui lisent pendant qu'un point de reprise et des

@@ -1,6 +1,6 @@
 # La sonde de débit d'embarquement rougit dans la lib entière
 
-- **État** : ouvert (8 novembre 2026), sans porteur. Relevé par rag3weaver archi au 3 ter (e) des hooks.
+- **État** : corrigé (8 novembre 2026) par rag3weaver archi, sur demande de c7 : la sonde reçoit son horloge (`probe_rate_avec`), et le témoin avance une horloge partagée au lieu de dormir. Le débit est exact (100 000 puis 50 000 car./s), quel que soit l'ordonnanceur. Le rouge n'a pas pu être forcé à la demande : 48 copies parallèles, quatre boucles occupées sur un cœur, `SCHED_IDLE`, deux libs entières, tout passait. Il est attesté par les deux passes de 8 h 46 et 9 h 43.
 - **Famille** : produit
 - **Gravité** : faux rouge (témoin de durée), qui arrête une passe.
 - **Atteignable en service** : non, c'est le témoin seul qui est en cause.

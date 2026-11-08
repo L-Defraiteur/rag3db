@@ -2220,12 +2220,24 @@ impl Node for FuseResultsNode {
         // la recherche de l'IDE).
         let mut evidence: HashMap<String, Vec<crate::dataflow::resultat::SignalScore>> = HashMap::new();
         let mut lists = Vec::new();
+        // Le poids et le rôle de chaque étiquette, pour dire qui a porté une
+        // ligne (`best_signal`).
+        let mut poids_des_signaux: Vec<(String, SignalConfig)> = Vec::new();
         for (label, rows) in groups {
             let mut cfg = self.signal_config(&label, &base, source);
+            poids_des_signaux.push((label.clone(), cfg));
             let mut seen = HashSet::new();
             let mut scored = Vec::new();
             // top_k bounds occurrences before either deduplication or evidence collection.
-            for r in rows.into_iter().take(cfg.top_k.unwrap_or(usize::MAX)) {
+            for mut r in rows.into_iter().take(cfg.top_k.unwrap_or(usize::MAX)) {
+                // `chunk.signal` : l'échelle de `chunk.score`. Une fusion en
+                // amont l'a peut-être déjà dite ; c'est la sienne qui vaut.
+                if let Some(c) = r.chunk.as_mut() {
+                    c.signal.get_or_insert_with(|| label.clone());
+                }
+                for c in r.chunks.iter_mut().flatten() {
+                    c.signal.get_or_insert_with(|| label.clone());
+                }
                 let id = identity(&r);
                 originals.entry(id.clone()).or_default().push((label.clone(), r.clone()));
                 if seen.insert(id.clone()) {
@@ -2247,10 +2259,30 @@ impl Node for FuseResultsNode {
             lists.iter().map(|(l, c)| (l.as_slice(), *c)).collect();
         let mut scores = fuse_signals(&borrowed, strategy, rrf_k);
         scores.sort_by(|a,b| b.score.total_cmp(&a.score).then(a.uuid.cmp(&b.uuid)));
+        // **Qui a porté la ligne** : la contribution de chaque signal à son
+        // rang, poids / (k + rang), comme le RRF la compte. Les signaux en
+        // rôle `boost` modulent sans faire le rang ; ils ne comptent que si
+        // aucun signal ne fusionne (la fusion les traite alors comme tels).
+        let fusionnent = poids_des_signaux.iter().any(|(_, c)| c.role == SignalRole::Fuse);
+        let porteur = |dits: &[crate::dataflow::resultat::SignalScore]| {
+            let mut meilleur: Option<(&crate::dataflow::resultat::SignalScore, f64)> = None;
+            for s in dits {
+                let Some((_, cfg)) = poids_des_signaux.iter().find(|(l, _)| *l == s.label) else { continue };
+                if fusionnent && cfg.role != SignalRole::Fuse {
+                    continue;
+                }
+                let part = cfg.weight / (rrf_k + s.rank as f64);
+                if meilleur.is_none_or(|(_, m)| part > m) {
+                    meilleur = Some((s, part));
+                }
+            }
+            meilleur.map(|(s, _)| s.clone())
+        };
         let mut fused = Vec::new();
         for sr in scores {
             let occurrences = originals.remove(&sr.uuid).unwrap_or_default();
             let dits = evidence.remove(&sr.uuid).unwrap_or_default();
+            let best = porteur(&dits);
             if self.duplicates == DuplicatePolicy::Keep {
                 // Keep the original evidence and branch label on each occurrence.
                 // The score remains the object's fused score, not a raw branch score.
@@ -2258,6 +2290,7 @@ impl Node for FuseResultsNode {
                     r.score = sr.score;
                     r.signal = Some(label);
                     r.signals = dits.clone();
+                    r.best_signal = best.clone();
                     fused.push(r);
                 }
                 continue;
@@ -2266,6 +2299,7 @@ impl Node for FuseResultsNode {
             let mut u = first.clone();
             u.score = sr.score;
             u.signals = dits;
+            u.best_signal = best;
             u.chunk = sr.chunk;
             u.chunks = sr.chunks;
             let mut labels = Vec::new();
@@ -2500,8 +2534,8 @@ impl Node for RerankNode {
             if results.iter().any(|r| r.data.is_none()) && !target.enrich_fields.is_empty() {
                 let conn = ctx.service::<ConnService>("conn").map(|c| c.0.clone());
                 let backend = conn.as_ref().map(|c| moteur_de_recherche(ctx, c));
-                let signaux: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> =
-                    results.iter().map(|r| (r.signal.clone(), r.signals.clone())).collect();
+                let signaux: Vec<crate::dataflow::resultat::Provenance> =
+                    results.iter().map(crate::dataflow::resultat::Provenance::of).collect();
                 let mut plats: Vec<SearchResult> =
                     results.iter().cloned().map(SearchResult::from).collect();
                 let issue = match backend {
@@ -2515,12 +2549,7 @@ impl Node for RerankNode {
                         results = plats
                             .into_iter()
                             .zip(signaux)
-                            .map(|(r, (sig, dits))| {
-                                let mut u = UnifiedResult::from(r);
-                                u.signal = sig;
-                                u.signals = dits;
-                                u
-                            })
+                            .map(|(r, provenance)| provenance.restore(r))
                             .collect();
                     }
                     Err(e) => node_warnings.push(format!(
@@ -2571,11 +2600,15 @@ impl Node for RerankNode {
                     .map(|(rang, i)| {
                         let mut r = results[i].clone();
                         r.score = scores[i] as f64;
-                        r.signals.push(crate::dataflow::resultat::SignalScore {
+                        // Le relecteur fait le rang de la tête : c'est lui qui
+                        // porte la ligne désormais.
+                        let dit = crate::dataflow::resultat::SignalScore {
                             label: label.clone(),
                             score: scores[i] as f64,
                             rank: rang + 1,
-                        });
+                        };
+                        r.best_signal = Some(dit.clone());
+                        r.signals.push(dit);
                         r
                     })
                     .collect();
@@ -2748,8 +2781,8 @@ impl Node for ResolveParentNode {
         // Enrich with data fields via UUID-based lookup. L'étiquette de signal
         // ne survit pas au passage par `SearchResult` : on la garde à part.
         // Et ce que chaque signal en a dit (`signals`, pièce 1 de la recherche de l'IDE).
-        let signals: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> =
-            results.iter().map(|r| (r.signal.clone(), r.signals.clone())).collect();
+        let signals: Vec<crate::dataflow::resultat::Provenance> =
+            results.iter().map(crate::dataflow::resultat::Provenance::of).collect();
         let mut search_results: Vec<SearchResult> =
             results.into_iter().map(SearchResult::from).collect();
 
@@ -2774,10 +2807,10 @@ impl Node for ResolveParentNode {
         // déduplication du monolithe : deux lignes d'index du même document
         // ne rendent qu'un document. La provenance suit par la source : c'est
         // le signal du meilleur original qui reste.
-        let signals: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> = if qp.options.result_mode == ResultMode::SourceResolved
+        let signals: Vec<crate::dataflow::resultat::Provenance> = if qp.options.result_mode == ResultMode::SourceResolved
             && target.has_source_refs
         {
-            let mut par_source: HashMap<String, (Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> = HashMap::new();
+            let mut par_source: HashMap<String, crate::dataflow::resultat::Provenance> = HashMap::new();
             for (r, sig) in search_results.iter().zip(signals.iter()) {
                 if let Some(src) = r.data.as_ref().and_then(|d| d.get("_source_uuid")).and_then(|v| v.as_str()) {
                     par_source.entry(src.to_string()).or_insert_with(|| sig.clone());
@@ -2805,12 +2838,7 @@ impl Node for ResolveParentNode {
         let enriched: Vec<UnifiedResult> = search_results
             .into_iter()
             .zip(signals)
-            .map(|(r, (signal, dits))| {
-                let mut u = UnifiedResult::from(r);
-                u.signal = signal;
-                u.signals = dits;
-                u
-            })
+            .map(|(r, provenance)| provenance.restore(r))
             .collect();
 
         ctx.set_output("results", PortValue::new(enriched));
@@ -3230,6 +3258,7 @@ mod tests {
             other_children: None,
             graph: None,
             signals: Vec::new(),
+            best_signal: None,
         }
     }
 
@@ -3331,6 +3360,72 @@ mod tests {
         assert_eq!(dits("a"), vec![("bm25".to_string(), 0.6, 2), ("vector".to_string(), 0.9, 1)]);
         assert_eq!(dits("b"), vec![("bm25".to_string(), 0.8, 1)]);
         assert_eq!(dits("c"), vec![("vector".to_string(), 0.5, 2)]);
+    }
+
+    /// **Le morceau d'une ligne se choisit par le rang, pas par l'échelle du
+    /// score** (8 novembre 2026, ticket « le score d'une ligne n'est pas
+    /// comparable d'un signal à l'autre ») : `x` est troisième chez bm25 avec
+    /// un morceau à 1,6 (score brut, sans borne) et premier chez vector avec un
+    /// autre morceau à 0,4 (similarité). Le dense pèse plus dans le rang de `x`
+    /// (1/61 contre 1/63) : son morceau est gardé, `chunk.signal` dit l'échelle
+    /// de `chunk.score`, `bestSignal` dit le signal qui a porté la ligne. Et le
+    /// choix du morceau ne promeut rien : l'ordre reste celui des rangs.
+    #[test]
+    fn le_morceau_d_une_ligne_suit_le_rang_pas_l_echelle_du_score() {
+        fn morceau(uuid: &str, score: f64) -> crate::search::ChunkInfo {
+            serde_json::from_value(serde_json::json!({
+                "uuid": uuid, "text": uuid, "index": 0, "score": score,
+                "startLine": 1, "endLine": 1, "startChar": 0, "endChar": 1,
+            }))
+            .unwrap()
+        }
+        let avec = |uuid: &str, score: f64, c: Option<crate::search::ChunkInfo>| {
+            let mut r = make_unified_result(uuid, score);
+            r.chunk = c;
+            r
+        };
+        let mut ctx = NodeContext::new();
+        ctx.set_input(
+            "bm25",
+            PortValue::new(vec![
+                avec("y", 2.4, None),
+                avec("z", 2.0, None),
+                avec("x", 1.6, Some(morceau("x-bm25", 1.6))),
+            ]),
+        );
+        ctx.set_input(
+            "vector",
+            PortValue::new(vec![avec("x", 0.4, Some(morceau("x-vector", 0.4))), avec("y", 0.38, None)]),
+        );
+        FuseResultsNode::new("fuse").execute(&mut ctx).unwrap();
+        let results = results_of(&mut ctx);
+        let ordre: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
+        // Les rangs seuls : y (bm25 1, vector 2) devant x (bm25 3, vector 1),
+        // devant z (bm25 2) — aux poids du moteur.
+        let attendu = {
+            let (base, source) = FuseResultsNode::base_de_fusion(None);
+            let w = |l: &str| FuseResultsNode::new("fuse").signal_config(l, &base, source).weight;
+            let rrf = |rang: f64| 1.0 / (base.rrf_k + rang);
+            let mut v = vec![
+                ("y", w("bm25") * rrf(1.0) + w("vector") * rrf(2.0)),
+                ("x", w("bm25") * rrf(3.0) + w("vector") * rrf(1.0)),
+                ("z", w("bm25") * rrf(2.0)),
+            ];
+            v.sort_by(|a, b| b.1.total_cmp(&a.1));
+            v.into_iter().map(|(u, _)| u).collect::<Vec<_>>()
+        };
+        assert_eq!(ordre, attendu, "le choix du morceau ne change pas l'ordre des rangs");
+        let x = serde_json::to_value(results.iter().find(|r| r.uuid == "x").unwrap()).unwrap();
+        assert_eq!(x["chunk"]["uuid"], "x-vector", "le morceau du signal qui pèse le plus dans le rang : {x}");
+        assert_eq!(x["chunk"]["score"], 0.4);
+        assert_eq!(x["chunk"]["signal"], "vector", "chunk.signal dit l'échelle de chunk.score : {x}");
+        assert_eq!(
+            x["bestSignal"],
+            serde_json::json!({"label": "vector", "score": 0.4, "rank": 1}),
+            "bestSignal : le signal qui a porté la ligne, {x}"
+        );
+        let z = serde_json::to_value(results.iter().find(|r| r.uuid == "z").unwrap()).unwrap();
+        assert_eq!(z["bestSignal"], serde_json::json!({"label": "bm25", "score": 2.0, "rank": 2}));
     }
 
     /// **Une étiquette dominante passe devant** (25 octobre 2026) : `c` et `d`,
@@ -3675,6 +3770,7 @@ mod tests {
             start_char: 0,
             end_char: 0,
             highlights: Vec::new(),
+            signal: None,
         });
         r
     }

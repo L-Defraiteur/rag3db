@@ -38,6 +38,36 @@ les step_done des pas faits, la boîte et les plans. Témoin :
 `each_step_starts_from_a_fresh_thread_with_the_request_and_the_steps_done`. La mesure après,
 sur un essai réel, reste à prendre.
 
+**Un refus du fournisseur n'est plus un pas raté** (point 3, sa seconde moitié). Un quota
+dépassé (429) ou un service en panne (5xx, la connexion) fait attendre `teammate.quota_wait_s`
+(60 s), doublé à chaque refus d'affilée jusqu'à dix fois, puis rejoue le même pas, ses
+nouvelles rendues ; la boîte dit chaque attente, un `stop` la coupe, et
+`teammate.max_unavailable_steps` (10) refus d'affilée arrêtent en le disant. Un quota épuisé
+(par jour, de dépense) arrête tout de suite. Témoin :
+`a_provider_refusal_waits_a_window_and_does_not_fail_the_step` (trois 429, autant que
+`max_failed_steps`, et l'équipier finit).
+
+**Un hôte rendu à un binaire d'avant refusait les arbres du gabarit neuf** (8 novembre, 9 h :
+G a reposé le binaire eb154bf5f après deux SIGSEGV de la lib dadbf0041, et l'arbre d'essais de
+c7 ne s'ouvrait plus, « unknown field `env` »). `deny_unknown_fields` reste : un champ de bac à
+sable ignoré en silence serait un bac à sable qui ne dit pas ce qu'il fait. Désormais :
+
+- le refus d'un champ inconnu nomme le commit du binaire qui lit, et la raison probable (un
+  manifeste écrit pour un binaire plus récent) ;
+- **la règle pour un repli d'hôte** : avant de rendre un hôte à un binaire d'avant, jouer
+  `rag3weaver-backend check-manifests` avec ce binaire-là ; il lit les manifestes des arbres
+  inscrits sans ouvrir de base, dit lesquels ne s'ouvriront pas, et rend le code 1 s'il y en a.
+  Elle ne vaut que pour les binaires qui portent la commande, à partir de ce lot.
+
+**Le gabarit code borne cargo** : `CARGO_BUILD_JOBS=8` dans `sandbox.env`, la règle de Lucie
+(huit au plus, deux cœurs libres) ; `code-tree add` le recopie avec le reste du workspace.
+
+**Le crochet d'après edit_file** (points 8 et 9). Un gabarit nommé introuvable dans le dossier
+des gabarits se lit dans le gabarit livré du même nom, que le binaire embarque : un hôte lancé
+hors du crate trouve `motif-ailleurs` (témoin `a_named_template_falls_back_to_the_shipped_one`).
+Un crochet dont l'appel ne porte pas un paramètre requis (edit_file qui écrit le contenu entier,
+sans `old`) se tait et le dit au journal, au lieu d'une erreur.
+
 ## Ce qui reste
 
 1. **Attendre le superviseur tue la tâche** (corrigé, voir plus haut) (essai 4, racine-disparue). L'équipier a demandé à
@@ -89,14 +119,14 @@ sur un essai réel, reste à prendre.
 7. **La reprise d'une tâche finie ne se dit pas** (essai 4). Une `request` sur une tâche
    `ended` l'a relancée à 02:35:23, ce qui est voulu. La réponse du POST et la boîte doivent
    dire « tâche reprise ».
-8. **Le crochet d'après edit_file ne trouve pas son gabarit** (essai 3, 01:25:58) : «
+8. **Le crochet d'après edit_file ne trouve pas son gabarit** (corrigé, voir plus haut) (essai 3, 01:25:58) : «
    RenderResultsNode: gabarit 'motif-ailleurs' : ni un nom fourni (default, compact), ni du
    Jinja ». Un nom de gabarit se lit dans `templates/render/<nom>.md.jinja` relatif au
    répertoire courant du processus, ou à `RAG3WEAVER_RENDER_TEMPLATES`
    (`src/dataflow/render_nodes.rs`), pas relatif au manifeste. Un hôte lancé ailleurs que dans
    `extension/rag3weaver` ne le trouve pas. Deux formes : résoudre depuis le dossier du
    manifeste ou du crate, ou fournir `motif-ailleurs` comme `compact`.
-9. **« argument requis manquant : 'old' »** (essai 3, 01:33:54), le modèle ayant appelé
+9. **« argument requis manquant : 'old' »** (corrigé, voir plus haut) (essai 3, 01:33:54), le modèle ayant appelé
    edit_file sans `old`. Vérifier que le résultat d'edit_file le dit au modèle.
 
 ## Pour le fermer

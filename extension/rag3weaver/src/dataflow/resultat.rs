@@ -57,6 +57,42 @@ pub struct UnifiedResult {
     /// (docs/12-octobre-2026-recherche/06).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub signals: Vec<SignalScore>,
+    /// **Le signal qui a porté la ligne** (8 novembre 2026, ticket du score
+    /// non comparable) : parmi `signals`, celui qui pèse le plus dans le rang
+    /// fusionné, poids / (k + rang). `score` (le rang fusionné), `chunk.score`
+    /// (l'échelle de `chunk.signal`) et les scores bruts de `signals` ne se
+    /// comparent pas entre eux ; celui-ci dit d'où vient la place de la ligne.
+    /// Rempli par `FuseResultsNode`, remplacé par `RerankNode` quand il
+    /// réordonne ; absent hors fusion. Ce n'est pas un score absolu : un seuil
+    /// se mesure, sur des prompts étiquetés.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub best_signal: Option<SignalScore>,
+}
+
+/// **Ce que la fusion a dit d'une ligne** : son étiquette, ce que chaque
+/// signal en a dit, et celui qui l'a portée. `SearchResult` ne le porte pas :
+/// un nœud qui fait l'aller-retour par lui (l'enrichissement) le met de côté
+/// et le rend.
+#[derive(Debug, Clone, Default)]
+pub struct Provenance {
+    pub signal: Option<String>,
+    pub signals: Vec<SignalScore>,
+    pub best_signal: Option<SignalScore>,
+}
+
+impl Provenance {
+    pub fn of(u: &UnifiedResult) -> Self {
+        Self { signal: u.signal.clone(), signals: u.signals.clone(), best_signal: u.best_signal.clone() }
+    }
+
+    /// La ligne `r` rendue avec cette provenance.
+    pub fn restore(self, r: SearchResult) -> UnifiedResult {
+        let mut u = UnifiedResult::from(r);
+        u.signal = self.signal;
+        u.signals = self.signals;
+        u.best_signal = self.best_signal;
+        u
+    }
 }
 
 /// Le score brut d'un signal pour un résultat, et son rang (1 = premier) dans
@@ -83,6 +119,7 @@ impl From<SearchResult> for UnifiedResult {
             graph: None,
             signal: None,
             signals: Vec::new(),
+            best_signal: None,
         }
     }
 }
@@ -173,6 +210,7 @@ mod tests {
             other_children: Some(vec![]),
             graph: None,
             signals: Vec::new(),
+            best_signal: None,
         };
         let sr: SearchResult = ur.into();
         assert_eq!(sr.uuid, "u1");
@@ -204,6 +242,7 @@ mod tests {
             other_children: None,
             graph: None,
             signals: Vec::new(),
+            best_signal: None,
         };
         let (entity, uuid) = source_info(&ur).unwrap();
         assert_eq!(entity, "Directory");
@@ -225,6 +264,7 @@ mod tests {
             other_children: None,
             graph: None,
             signals: Vec::new(),
+            best_signal: None,
         };
         let (entity, uuid) = source_info(&ur).unwrap();
         assert_eq!(entity, "Directory");
@@ -247,6 +287,7 @@ mod tests {
             other_children: None,
             graph: None,
             signals: Vec::new(),
+            best_signal: None,
         };
         assert_eq!(source_info(&ur), Some(("SomeKB".to_string(), "x".to_string())));
     }

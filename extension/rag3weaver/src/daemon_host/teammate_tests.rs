@@ -1069,3 +1069,63 @@ fn each_step_starts_from_a_fresh_thread_with_the_request_and_the_steps_done() {
     assert!(message.contains("La demande en cours : Relis le dépôt et conclus."), "{message}");
     assert!(message.contains("trois lectures de src/lib.rs") && message.contains("reste : conclure"), "le pas 1 rappelé : {message}");
 }
+
+/// **Un 429 n'est pas un pas raté** (8 novembre 2026, essai 3 : « le pas 6 n'a pas abouti :
+/// quota dépassé après 2 reprises en 186 s », et trois refus d'affilée arrêtaient l'équipier
+/// par `max_failed_steps`). Le fournisseur refuse trois fois de suite (autant que
+/// `max_failed_steps`) : l'équipier attend une fenêtre à chaque refus, le dit dans la boîte,
+/// rejoue le même pas, et finit quand le fournisseur revient.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_provider_refusal_waits_a_window_and_does_not_fail_the_step() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    // La fenêtre du témoin : 1 s (le défaut est 60), dans les déclarations commitées.
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "quota_wait_s": 1 });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "une fenêtre courte"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+    let appels = Arc::new(Mutex::new(0usize));
+    let model: ChatModel = {
+        let appels = appels.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let appels = appels.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let n = {
+                    let mut a = appels.lock().unwrap();
+                    *a += 1;
+                    *a
+                };
+                if n <= 3 {
+                    return Err(crate::llm::LlmError::Unavailable { status: Some(429), quota: crate::llm::Quota::Throttled, retries: 2, waited_ms: 10, message: "RESOURCE_EXHAUSTED".into() });
+                }
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait après les refus", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Fais le travail.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let borne = Instant::now() + Duration::from_secs(90);
+    let boite = loop {
+        let b = files.mailbox();
+        if b.iter().any(|l| l["kind"] == "ended") {
+            break b;
+        }
+        assert!(Instant::now() < borne, "en 90 s, pas de fin : {b:#?}");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let fin = boite.iter().find(|l| l["kind"] == "ended").unwrap();
+    assert!(!fin["text"].as_str().unwrap_or_default().starts_with("erreur"), "trois 429 n'arrêtent pas l'équipier : {boite:#?}");
+    assert!(boite.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true), "{boite:#?}");
+    let attentes: Vec<&str> = boite.iter().filter_map(|l| l["text"].as_str()).filter(|t| t.contains("attend le fournisseur")).collect();
+    assert_eq!(attentes.len(), 3, "chaque refus dit son attente : {boite:#?}");
+    assert!(attentes[0].starts_with("le pas 1 attend le fournisseur (1 refus") && attentes[2].contains("reprise dans 4 s"), "{attentes:#?}");
+    assert!(!boite.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("n'a pas abouti")), "un refus n'est pas un pas raté : {boite:#?}");
+}
