@@ -55,6 +55,7 @@ constexpr int OPENED = 30;        // mode « ouvrir seulement »
 constexpr int WRITE_REFUSED = 40; // mode « écrire sans l'extension » : refus nommé, rien d'écrit
 constexpr int EXTENSION_LOADED = 50;     // mode « l'extension est-elle là ? » : oui, sans LOAD
 constexpr int EXTENSION_NOT_LOADED = 51; // … non : l'index attend son extension
+constexpr int EXTENSION_NOT_LOADED_AND_SAID = 53; // … non, et extension_error dit pourquoi
 
 // Le corps du processus neuf : ouvrir la base, charger l'extension, compter, chercher. Si
 // l'index se dit en retard sur sa table, vérifier qu'il refuse aussi d'être recréé par-dessus,
@@ -86,15 +87,22 @@ int probe(const std::string& path, const std::string& extension) {
     }
     if (std::getenv(PROBE_EXTENSION_LOADED) != nullptr) {
         // Sans LOAD EXTENSION : l'ouverture seule a-t-elle chargé l'extension dont l'index dépend ?
-        auto shown = connection.query("CALL SHOW_INDEXES() RETURN extension_loaded;");
+        auto shown =
+            connection.query("CALL SHOW_INDEXES() RETURN extension_loaded, extension_error;");
         if (!shown->isSuccess() || !shown->hasNext()) {
             fprintf(stderr, "[probe] show_indexes: %s\n",
                 shown->isSuccess() ? "no index" : shown->getErrorMessage().c_str());
             return 52;
         }
-        const auto loaded = shown->getNext()->getValue(0)->getValue<bool>();
-        fprintf(stderr, "[probe] extension_loaded=%s\n", loaded ? "true" : "false");
-        return loaded ? EXTENSION_LOADED : EXTENSION_NOT_LOADED;
+        const auto row = shown->getNext();
+        const auto loaded = row->getValue(0)->getValue<bool>();
+        const auto error = row->getValue(1)->getValue<std::string>();
+        fprintf(stderr, "[probe] extension_loaded=%s extension_error=%s\n",
+            loaded ? "true" : "false", error.c_str());
+        if (loaded) {
+            return error.empty() ? EXTENSION_LOADED : 54;
+        }
+        return error.empty() ? EXTENSION_NOT_LOADED : EXTENSION_NOT_LOADED_AND_SAID;
     }
     if (std::getenv(PROBE_WRITE_WITHOUT_EXTENSION) != nullptr) {
         // Hors rejeu, une écriture dans une table dont un index n'est pas chargé est refusée
@@ -439,6 +447,19 @@ TEST_F(VectorIndexCrashReopenTest, ADeathRightAfterACheckpointStillLoadsTheNoted
     ASSERT_FALSE(journalIsThere()) << "le point de reprise devait laisser le journal vide";
     ASSERT_TRUE(theListOfExtensionsIsThere());
     EXPECT_EQ(openInAFreshProcess(500, vectorOf(7), 7, false, false, true), EXTENSION_LOADED);
+}
+
+// La même mort, mais le fichier noté de l'extension a disparu : l'ouverture ne refuse pas la base,
+// l'index se dit sans son extension, et SHOW_INDEXES dit pourquoi (extension_error : le nom, le
+// chemin, la cause), pour que l'appelant le dise au lieu de rebâtir en silence.
+TEST_F(VectorIndexCrashReopenTest, AMissingNotedExtensionIsSaidBySHOWINDEXES) {
+    sessionsLoadACopyOfTheExtension();
+    session({createTable, fill, createIndex, "CHECKPOINT;"}, true);
+    ASSERT_FALSE(journalIsThere()) << "le point de reprise devait laisser le journal vide";
+    ASSERT_TRUE(theListOfExtensionsIsThere());
+    theCopyOfTheExtensionDisappears();
+    EXPECT_EQ(openInAFreshProcess(500, vectorOf(7), 7, false, false, true),
+        EXTENSION_NOT_LOADED_AND_SAID);
 }
 
 // L'état « en retard » tient à deux réouvertures par des processus qui meurent sans fermer,
