@@ -86,7 +86,7 @@ if [ "$retirer" = 0 ]; then
 import json, sys
 m, home = sys.argv[1], sys.argv[2]
 print(json.dumps({
-  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7, "recall_min_score": 0.50, "templates_dir": home + "/.config/rag3weaver/hooks",
+  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7, "templates_dir": home + "/.config/rag3weaver/hooks",
   "prompt_block_chars": 1500, "session_block_chars": 3000,
   "prompt_timeout_ms": 5000, "timeout_ms": 20000,
   "journal": home + "/.local/state/rag3weaver/hooks.log",

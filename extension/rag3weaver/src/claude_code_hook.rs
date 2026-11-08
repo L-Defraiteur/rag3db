@@ -98,10 +98,6 @@ pub struct Reglage {
     pub context_tokens: u64,
     /// La part du plafond où l'on suggère de ranger, une fois.
     pub suggest_ratio: f64,
-    /// Le score minimal d'une fiche rappelée par le prompt (`chunk.score` du
-    /// meilleur signal) ; en dessous, la fiche n'est pas dite. Les scores sont
-    /// journalisés pour régler ce seuil sur l'usage.
-    pub recall_min_score: f64,
     /// Les bornes des blocs, en caractères.
     pub prompt_block_chars: usize,
     pub session_block_chars: usize,
@@ -152,7 +148,6 @@ impl Reglage {
             keys: vec!["dev".into()],
             context_tokens: 1_000_000,
             suggest_ratio: 0.7,
-            recall_min_score: 0.50,
             prompt_block_chars: 1_500,
             session_block_chars: 3_000,
             prompt_timeout_ms: 5_000,
@@ -193,7 +188,13 @@ impl Reglage {
                 "keys" => r.keys = val.as_array().ok_or("hooks.json : `keys` est une liste")?.iter().filter_map(Value::as_str).map(str::to_string).collect(),
                 "context_tokens" => r.context_tokens = val.as_u64().ok_or("hooks.json : `context_tokens` est un entier")?,
                 "suggest_ratio" => r.suggest_ratio = val.as_f64().ok_or("hooks.json : `suggest_ratio` est un nombre")?,
-                "recall_min_score" => r.recall_min_score = val.as_f64().ok_or("hooks.json : `recall_min_score` est un nombre")?,
+                // Retiré (3 ter f) : le hook ne seuille plus le dense, que trois tours
+                // réels ont montré incapable de séparer « en rapport » de « sans
+                // rapport » ; le plein texte fait le candidat. Un seuil se mesurera
+                // sur des prompts étiquetés, sur `bestSignal` (recherche, d540813d5).
+                // La clé reste acceptée, sans effet, pour qu'un hooks.json d'avant
+                // reste valide.
+                "recall_min_score" => {}
                 "prompt_block_chars" => r.prompt_block_chars = val.as_u64().ok_or("hooks.json : `prompt_block_chars` est un entier")? as usize,
                 "session_block_chars" => r.session_block_chars = val.as_u64().ok_or("hooks.json : `session_block_chars` est un entier")? as usize,
                 "prompt_timeout_ms" => r.prompt_timeout_ms = val.as_u64().ok_or("hooks.json : `prompt_timeout_ms` est un entier")?,
@@ -232,7 +233,6 @@ impl Reglage {
             "keys": self.keys,
             "context_tokens": self.context_tokens,
             "suggest_ratio": self.suggest_ratio,
-            "recall_min_score": self.recall_min_score,
             "prompt_block_chars": self.prompt_block_chars,
             "session_block_chars": self.session_block_chars,
             "prompt_timeout_ms": self.prompt_timeout_ms,
@@ -2068,6 +2068,9 @@ mod tests {
         assert_eq!((r.context_tokens, r.prompt_timeout_ms, r.keys.as_slice()), (200_000, 1_000, &["admin".to_string()][..]));
         assert_eq!(r.delai("UserPromptSubmit"), Duration::from_millis(1_000));
         assert_eq!(r.delai("Stop"), Duration::from_millis(20_000));
+        // Un hooks.json d'avant le 3 ter f porte encore `recall_min_score` : il reste
+        // valide, la clé est sans effet.
+        assert_eq!(Reglage::lire(r#"{"recall_min_score": 0.5}"#).unwrap(), Reglage::defaut());
         let e = Reglage::lire(r#"{"contexte": 1}"#).unwrap_err();
         assert!(e.contains("contexte") && e.contains("context_tokens"), "{e}");
         // Les défauts écrits se relisent à l'identique.
