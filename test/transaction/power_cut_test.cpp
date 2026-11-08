@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 
 #include "common/file_system/virtual_file_system.h"
@@ -173,8 +174,10 @@ TEST_F(PowerCut, AJournalThatCannotBeSyncedPublishesNothing) {
                                                               std::string("refus");
         };
         // Le disque est plein : le journal ne se synchronise plus.
-        CutFileSystem::failSyncOf() = [](const std::string& path) {
-            return path.ends_with(".wal");
+        // Une seule fois : la troncature qui rend au journal sa taille d'avant se synchronise.
+        auto failures = std::make_shared<int>(1);
+        CutFileSystem::failSyncOf() = [failures](const std::string& path) {
+            return path.ends_with(".wal") && (*failures)-- > 0;
         };
         auto refused = connection.query("CREATE (:T {id: 5000, s: 'perdue'});");
         steps << "COMMIT " << (refused->isSuccess() ? "accepted" : "refused") << " « "
