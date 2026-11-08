@@ -1585,3 +1585,65 @@ fn un_symbole_cite_par_le_modele_mene_a_sa_definition() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **L'accueil parle en dépôts** (Lucie, 8 novembre 2026, sur le portable posé : l'accueil disait
+/// encore « Backends », « backends/code », le chemin du manifeste sous chaque nom). Le titre est
+/// « Dépôts » ; chaque carte est nommée par son dépôt et sa branche, comme la barre du chat ; le
+/// chemin du manifeste n'est qu'en infobulle ; une tâche se dit par son worktree (sa branche
+/// `agent/<nom>`) ; « backend » ne paraît pas à l'écran.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn l_accueil_parle_en_depots_et_en_worktrees() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "l_accueil_parle_en_depots_et_en_worktrees";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d1, h1, m1, id1) = banc_dans("atelier", page_du_chat(), |_| {});
+    let (d2, h2, m2, id2) = banc_dans("outils", page_du_chat(), |_| {});
+    drop((h1, h2));
+    let (chats, taches) = (d1.path().join("chats"), d1.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let ide = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}{chemin}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    for m in [&m1, &m2] {
+        let v = ide("/ide/describe", json!({ "manifest": m }));
+        assert_eq!(v["ok"], true, "{v}");
+    }
+    let o = ide("/ide/taches", json!({ "backend": id1, "nom": "relecture" }));
+    assert!(o["ok"] == true, "la tâche s'ouvre : {o}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Dépôts'");
+    let nom = |n: &mut Navigateur, id: &str| n.evaluer(&format!("document.querySelector('#vue .depot[data-backend=\"{id}\"] .nom')?.textContent ?? null"));
+    assert_eq!(nom(&mut n, &id1), json!("atelier · master"), "la carte nommée par son dépôt et sa branche");
+    assert_eq!(nom(&mut n, &id2), json!("outils · master"));
+    let infobulle = n.evaluer(&format!("document.querySelector('#vue .depot[data-backend=\"{id1}\"] .nom')?.title ?? null"));
+    assert_eq!(infobulle, json!(m1.to_string_lossy()), "le chemin du manifeste en infobulle");
+    let texte = n.evaluer("document.querySelector('#vue').innerText");
+    let texte = texte.as_str().unwrap_or_default().to_string();
+    assert!(!texte.contains(&*m1.to_string_lossy()), "le chemin du manifeste ne s'affiche plus en clair : {texte}");
+    assert!(!texte.to_lowercase().contains("backend"), "« backend » paraît à l'accueil : {texte}");
+    let worktree = n.evaluer(&format!("document.querySelector('#vue .depot[data-backend=\"{id1}\"] .worktree')?.textContent ?? null"));
+    assert!(worktree.as_str().is_some_and(|w| w.contains("agent/relecture")), "la tâche dite par son worktree : {worktree}");
+    // Le lien vers l'arbre reste, celui que les autres témoins suivent.
+    assert_eq!(n.evaluer(&format!("!!document.querySelector('#vue a[href=\"/ide/code/{id1}/arbre/\"]')")), json!(true));
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d2);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
