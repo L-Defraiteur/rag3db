@@ -1798,6 +1798,7 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
     const bool hasPending =
         insertState.pendingVector != nullptr && insertState.pendingOffset != common::INVALID_OFFSET;
     EmbeddingHandle ownVector = EmbeddingHandle::createNullHandle();
+    std::vector<uint8_t> ownVectorCopy;
     const void* vectorPtr = nullptr;
     if (hasPending && offset == insertState.pendingOffset) {
         vectorPtr = insertState.pendingVector->getPtr();
@@ -1807,7 +1808,16 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
         if (ownVector.isNull()) {
             return; // nothing readable to shrink against; keep the rels as they are
         }
-        vectorPtr = ownVector.getPtr();
+        // Une copie : le vecteur du nœud vit dans le vecteur de données de embeddingScanState, que
+        // la lecture des voisins plus bas (getEmbeddings, le même état) réalloue dès qu'ils n'y
+        // tiennent plus. Le pointeur gardé désignait alors un tampon libéré (heap-use-after-free
+        // sous ASAN, ticket du SIGSEGV de l'hôte du 8 novembre 2026).
+        const auto numBytes = embeddings.getDimension() *
+                              common::PhysicalTypeUtils::getFixedTypeSize(
+                                  typeInfo.getChildType().getPhysicalType());
+        const auto* source = static_cast<const uint8_t*>(ownVector.getPtr());
+        ownVectorCopy.assign(source, source + numBytes);
+        vectorPtr = ownVectorCopy.data();
     }
     const auto& searchState = insertState.searchState;
     const auto& graph = isUpperLayer ? searchState.upperGraph : searchState.lowerGraph;
