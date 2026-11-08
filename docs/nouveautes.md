@@ -93,7 +93,7 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   Une interruption arrête aussi toute la requête, CREATE réécrit compris ; `17a094d12`.
 - **8 nov. — Le code se colore dans le terminal, avec les couleurs de l'IDE.** Un bloc de code
   de l'agent est colorié par l'hôte (`POST /highlight`, les grammaires tree-sitter de codeparsers)
-  et peint dans la palette du thème « daemon », désormais commun au terminal et à l'IDE
+  et peint dans la palette du thème « daemon », lu par le terminal (l'IDE ne le lit pas encore)
   (`templates/themes/daemon.json`). Le bloc se tient entier jusqu'à sa clôture, se replie à la
   largeur sans perdre un caractère, et reste lisible sans couleur quand la langue est inconnue.
   f2e6e2521, 3696a71cb.
@@ -226,7 +226,7 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   journal et dans l'état. 4d1a4a0ee.
 - **25 oct. — La recherche tient sans ses vecteurs.** Pendant un rattrapage,
   `search_code` répond par les mots et dit pourquoi le dense manque, au lieu de
-  tomber en entier. d6abc051f.
+  tomber en entier. c46561dd0, 1f9c07c7b.
 - **25 oct. — Ce que la mémoire sait d'un fichier.** `cited_by` rend les fiches qui
   citent un chemin, un dossier, un symbole ou un source, avec leurs ancres et les
   apports qui le citent, lues par un Plan déclaré, sans Cypher. 665a4a97c.
