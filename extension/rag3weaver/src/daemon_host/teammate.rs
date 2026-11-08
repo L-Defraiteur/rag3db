@@ -1520,7 +1520,10 @@ impl DaemonHost {
         let Some(memoire_manifeste) = self.memoire_declaree(&cible)? else { return Ok(None) };
         let memoire = self.hosted(&memoire_manifeste)?;
         let appeler = |outil: &str, args: Value| -> Result<Value, String> { self.with_backend(&memoire, |b| b.call(outil, args)).and_then(|r| r) };
-        let fiche = super::juge::nom_de_tache(if request.trim().is_empty() { &plan.request } else { request });
+        // La fiche de la tâche, sous son nom court : celle où le juge range les bilans
+        // de ses pas (`juge::nom_de_fiche_de_tache`).
+        let _ = request;
+        let fiche = super::juge::nom_de_fiche_de_tache(task);
         {
             let nom = json!({ "name": fiche }).to_string();
             let nom = &nom[1..nom.len() - 1];
