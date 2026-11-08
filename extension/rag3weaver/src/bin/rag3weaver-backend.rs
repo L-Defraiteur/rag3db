@@ -678,6 +678,50 @@ fn servir_http(args: &[String]) -> Result<(), String> {
 
 /// **`code-tree`** : poser ou retirer un arbre de code indexé (voir
 /// `rag3weaver::code_tree`).
+/// **`rag3weaver-backend check-manifests [<manifeste>…]`** (8 novembre 2026, la règle
+/// d'un repli d'hôte) : lit chaque manifeste par ce binaire, sans ouvrir de base, et dit
+/// ceux qu'il refuserait. Sans argument, les manifestes des arbres inscrits
+/// (`<config>/*/templates/backends/code/*.json` qui déclarent `database` et `tools`).
+/// Code 1 si l'un est refusé : avant de rendre un hôte à un binaire d'avant, le jouer
+/// avec ce binaire-là dit quels arbres ne s'ouvriront plus.
+fn check_manifests(args: &[String]) -> Result<(), String> {
+    let mut chemins: Vec<std::path::PathBuf> = args.iter().map(std::path::PathBuf::from).collect();
+    if chemins.is_empty() {
+        let roots = rag3weaver::code_tree::Roots::of_user()?;
+        for arbre in std::fs::read_dir(&roots.config).map_err(|e| format!("{} : {e}", roots.config.display()))?.flatten() {
+            let dossier = arbre.path().join("templates/backends/code");
+            let Ok(it) = std::fs::read_dir(&dossier) else { continue };
+            for f in it.flatten() {
+                let p = f.path();
+                if p.extension().is_some_and(|e| e == "json")
+                    && std::fs::read_to_string(&p)
+                        .ok()
+                        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+                        .is_some_and(|v| v.get("database").is_some() && v.get("tools").is_some())
+                {
+                    chemins.push(p);
+                }
+            }
+        }
+        chemins.sort();
+    }
+    let mut refuses = 0;
+    for p in &chemins {
+        match rag3weaver::backend::PreparedBackend::load(p) {
+            Ok(_) => println!("ok       {}", p.display()),
+            Err(e) => {
+                refuses += 1;
+                println!("REFUSÉ   {} : {e}", p.display());
+            }
+        }
+    }
+    println!("{} manifeste(s) lu(s) par le commit {}, {refuses} refusé(s)", chemins.len(), option_env!("RAG3WEAVER_GIT_HASH").unwrap_or("?"));
+    if refuses > 0 {
+        return Err(format!("{refuses} manifeste(s) ne s'ouvriraient pas avec ce binaire"));
+    }
+    Ok(())
+}
+
 /// `rag3weaver-backend taches purge [<dépôt>]` : vide les targets partagés des
 /// tâches (`taches-<dépôt>` sous RAG3WEAVER_TARGETS_DIR, défaut
 /// ~/.cache/rag3weaver-build), chacun sous son verrou.
@@ -864,6 +908,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("taches") {
         return taches_cli(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("check-manifests") {
+        return check_manifests(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args

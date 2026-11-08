@@ -370,6 +370,26 @@ pub fn addressed_to_teammate(line: &Value, key: &str) -> bool {
 /// posté pendant le dernier pas ne se perd pas (le lot des commandes l'a vu,
 /// 8 novembre 2026 : le oui arrivait entre le pas et la fin, et ne relançait
 /// rien, l'équipier étant encore en route).
+/// **Un refus du fournisseur du modèle**, lu dans l'erreur du tour : `Some(true)`
+/// pour un quota épuisé (il ne revient pas en attendant), `Some(false)` pour un
+/// quota dépassé ou un service en panne (il revient), `None` pour un autre échec.
+/// La forme vient de `LlmError::Unavailable` (`src/llm.rs`).
+pub(crate) fn refus_du_fournisseur(e: &str) -> Option<bool> {
+    if e.contains("llm indisponible : quota épuisé") {
+        Some(true)
+    } else if e.contains("llm indisponible : quota dépassé") || e.contains("llm indisponible : service en panne") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// L'attente avant de rejouer un pas refusé : `base` secondes, doublées à chaque
+/// refus d'affilée, au plus dix fois `base`.
+pub(crate) fn attente_du_fournisseur(base: u64, refus: u32) -> u64 {
+    base.saturating_mul(1u64 << refus.saturating_sub(1).min(16)).min(base.saturating_mul(10))
+}
+
 /// **La question ouverte de l'équipier** (8 novembre 2026, essai 4 de c7 : trois pas
 /// d'attente marqués « raté » arrêtaient la tâche, et chacun rappelait le modèle) : sa
 /// dernière `question` ou `approval` sans réponse (`reply_to`) et sans ligne qui lui soit
@@ -1227,6 +1247,8 @@ impl DaemonHost {
         let mut wake = bus.as_ref().map(|b| b.subscribe(&mailbox_topic(task)));
         let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
         let mut failed = 0u32;
+        // Les refus du fournisseur d'affilée (429, panne) : ni pas raté ni pas compté.
+        let mut unavailable = 0u32;
         let mut woke_by: Option<String> = None;
         let mut outcome = Outcome::default();
         let mut read = files.read_cursor();
@@ -1314,7 +1336,49 @@ impl DaemonHost {
             let r = match self.chat_turn_with(&t.id, &message, Some(&step)) {
                 Ok(r) => {
                     failed = 0;
+                    unavailable = 0;
                     r
+                }
+                Err(e) if refus_du_fournisseur(&e).is_some() => {
+                    // **Le fournisseur n'a pas répondu** : le même pas rejoue
+                    // après une fenêtre, ses nouvelles rendues ; un quota épuisé
+                    // ne revient pas en attendant, il arrête en le disant.
+                    read = avant;
+                    files.write_cursor(read);
+                    number -= 1;
+                    unavailable += 1;
+                    let epuise = refus_du_fournisseur(&e) == Some(true);
+                    if epuise || unavailable > policy.max_unavailable_steps {
+                        let why = if epuise {
+                            format!("erreur : {e} (un quota épuisé ne revient pas en attendant : l'équipier s'arrête)")
+                        } else {
+                            format!("erreur : {e} ({} refus du fournisseur d'affilée, teammate.max_unavailable_steps = {})", unavailable, policy.max_unavailable_steps)
+                        };
+                        outcome.ended = why;
+                        return Ok(outcome);
+                    }
+                    let attente = attente_du_fournisseur(policy.quota_wait_s, unavailable);
+                    let line = files.append(
+                        "host",
+                        "report",
+                        None,
+                        &format!("le pas {} attend le fournisseur ({unavailable} refus sur {} permis) : {e} ; reprise dans {attente} s", number + 1, policy.max_unavailable_steps),
+                    )?;
+                    publish(bus.as_ref(), task, &line);
+                    // L'attente se coupe sur un `stop` de la boîte, ou si la tâche se ferme.
+                    let fin = std::time::Instant::now() + std::time::Duration::from_secs(attente);
+                    while std::time::Instant::now() < fin {
+                        if files.mailbox().iter().skip(read).any(|l| l["kind"] == "stop" && l["from"] != "teammate" && l["from"] != "host") {
+                            outcome.ended = "arrêté par la boîte".into();
+                            return Ok(outcome);
+                        }
+                        if self.tache(parent, task).is_none() {
+                            outcome.ended = "la tâche s'est fermée pendant l'attente".into();
+                            return Ok(outcome);
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(500).min(fin.saturating_duration_since(std::time::Instant::now())));
+                    }
+                    continue;
                 }
                 Err(e) => {
                     failed += 1;
@@ -1524,6 +1588,15 @@ mod tests {
 
     /// Le plan s'écrit, ses questions partent dans la boîte, `step_done` passe
     /// l'élément à done ; le plan se clôt et un autre s'ouvre.
+    #[test]
+    fn a_provider_refusal_is_read_from_the_turn_error_and_the_wait_doubles() {
+        assert_eq!(super::refus_du_fournisseur("le chat : llm indisponible : quota dépassé (HTTP 429) après 2 reprise(s) en 186.0 s — RESOURCE_EXHAUSTED"), Some(false));
+        assert_eq!(super::refus_du_fournisseur("llm indisponible : service en panne (HTTP 503) après 3 reprise(s) en 9.0 s — x"), Some(false));
+        assert_eq!(super::refus_du_fournisseur("llm indisponible : quota épuisé (HTTP 429), il ne revient pas en attendant — x"), Some(true));
+        assert_eq!(super::refus_du_fournisseur("llm model error: boum"), None);
+        assert_eq!((1..=6).map(|n| super::attente_du_fournisseur(60, n)).collect::<Vec<_>>(), vec![60, 120, 240, 480, 600, 600]);
+    }
+
     #[test]
     fn the_plan_is_free_and_its_questions_go_to_the_mailbox() {
         let d = tempfile::tempdir().unwrap();
