@@ -141,7 +141,18 @@ pub(super) mod tests {
         indexer_et_attendre(&adresse, &manifeste, "double", 2);
         let (id, _) = id_de(&adresse, &manifeste);
 
-        let r = poster(&adresse, "/ide/symboles", json!({ "backend": id, "names": ["un", "double", "inconnu_xyz"] }));
+        // Une écriture de fond (vecteurs en dette, relations) peut tenir le catalogue juste
+        // après l'index : le rendu le dit et promet les liens au rendu suivant. La page
+        // relit ; le témoin aussi, 10 s au plus (passe du 8 novembre 2026, une fois sur
+        // deux seul sur luciepc).
+        let debut = Instant::now();
+        let r = loop {
+            let r = poster(&adresse, "/ide/symboles", json!({ "backend": id, "names": ["un", "double", "inconnu_xyz"] }));
+            if !r["result"]["why"].as_str().is_some_and(|w| w.contains("catalogue est tenu")) || debut.elapsed() > Duration::from_secs(10) {
+                break r;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        };
         assert_eq!(r["ok"], true, "{r}");
         let s = &r["result"]["symbols"];
         assert_eq!(s["un"], json!({ "definitions": 1, "path": "src/lib.rs", "line": 1 }), "{r}");
@@ -218,7 +229,15 @@ pub(super) mod tests {
         // Le journal écrit un run à sa fin : on laisse passer ce qui courait.
         std::thread::sleep(Duration::from_millis(500));
         let avant: std::collections::BTreeSet<String> = host.journal.runs_de(&h.id).into_iter().collect();
-        let r = host.symboles_cites(&h.id, &["un".to_string(), "double".to_string(), "inconnu_xyz".to_string()]).unwrap();
+        // Le catalogue tenu par une écriture de fond : relire, comme la page (10 s au plus).
+        let debut = Instant::now();
+        let r = loop {
+            let r = host.symboles_cites(&h.id, &["un".to_string(), "double".to_string(), "inconnu_xyz".to_string()]).unwrap();
+            if !r["why"].as_str().is_some_and(|w| w.contains("catalogue est tenu")) || debut.elapsed() > Duration::from_secs(10) {
+                break r;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        };
         assert_eq!(r["symbols"]["un"]["definitions"], 1, "{r}");
         std::thread::sleep(Duration::from_millis(500));
         let neufs: Vec<String> = host.journal.runs_de(&h.id).into_iter().filter(|x| !avant.contains(x)).collect();
