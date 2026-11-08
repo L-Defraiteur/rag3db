@@ -1015,3 +1015,54 @@ fn a_task_plays_cargo_test_through_the_gate() {
     assert!(cible.join("debug").is_dir(), "le bâti dans {}", cible.display());
     let _ = std::fs::remove_dir_all(&cible);
 }
+
+/// **Un pas repart d'une session neuve** (8 novembre 2026, le quota de l'essai 3 : chaque
+/// pas renvoyait tout le fil, de 5 275 jetons d'entrée au pas 1 à 122 242 au pas 10). Le pas
+/// 1 lit trois fois le dépôt puis déclare son pas ; le premier appel du pas 2 ne reçoit que
+/// le système et son message, qui porte la demande d'origine et ce que le pas 1 a déclaré.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn each_step_starts_from_a_fresh_thread_with_the_request_and_the_steps_done() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let premiers = Arc::new(Mutex::new(Vec::<(usize, usize, String)>::new()));
+    let model: ChatModel = {
+        let premiers = premiers.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let premiers = premiers.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                let pas = step_of(turns);
+                if results.is_empty() {
+                    premiers.lock().unwrap().push((pas, turns.len(), last_user(turns)));
+                }
+                let lire = ("read_file", json!({ "path": "src/lib.rs" }));
+                match (pas, results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "plan": {
+                        "request": "Relire puis conclure", "proposal": "Deux éléments",
+                        "items": [{ "id": "lire", "text": "Lire le dépôt", "status": "todo", "alone": true }, { "id": "conclure", "text": "Conclure", "status": "todo", "alone": true }] } }))])),
+                    (1, 1..=3) => answer(turns, opts, sink, "", calls(&[lire])),
+                    (1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "lire", "succeeded": true, "done": "trois lectures de src/lib.rs", "remaining": "conclure" }))])),
+                    (_, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "lu et conclu", "concepts": ["lecture"] } }))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "conclure", "succeeded": true, "done": "conclu", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Relis le dépôt et conclus.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let borne = Instant::now() + Duration::from_secs(90);
+    while !files.mailbox().iter().any(|l| l["kind"] == "ended") {
+        assert!(Instant::now() < borne, "en 90 s, pas de fin : {:#?}", files.mailbox());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let premiers = premiers.lock().unwrap();
+    let (_, n, message) = premiers.iter().find(|(p, _, _)| *p == 2).cloned().unwrap_or_else(|| panic!("aucun pas 2 : {premiers:#?}"));
+    assert_eq!(n, 2, "le pas 2 part du système et de son message seuls : {premiers:#?}");
+    assert!(message.contains("La demande d'origine : Relis le dépôt et conclus."), "{message}");
+    assert!(message.contains("trois lectures de src/lib.rs") && message.contains("reste : conclure"), "le pas 1 rappelé : {message}");
+}
