@@ -1222,4 +1222,38 @@ mod tests {
         let systeme = systeme.lock().unwrap().clone();
         assert!(systeme.contains("run_command") && systeme.contains("list_worktrees") && systeme.contains("faites-le dans votre terminal"), "la consigne de l'atelier : {systeme}");
     }
+
+    /// **L'atelier posé par un binaire d'avant a les outils du binaire qui l'ouvre** (Lucie,
+    /// 8 novembre 2026, 16 h 12 : « faut que ce soit dynamique »). Posé sans open_branch,
+    /// resté tel quel : l'hôte qui l'ouvre le remet au gabarit livré avant de le lire, le
+    /// backend déclare open_branch, et `TemplateRefreshed` passe sur le flux.
+    #[test]
+    fn a_workshop_posed_before_gets_the_tools_of_the_binary_that_opens_it() {
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path().join("poste");
+        std::fs::create_dir_all(&racine).unwrap();
+        let (atelier, racines) = atelier_pose(d.path(), &racine);
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&atelier).unwrap()).unwrap();
+        m["tools"].as_object_mut().unwrap().remove("open_branch");
+        std::fs::write(&atelier, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        crate::builtin_templates::record(&atelier, "backends/atelier/backend.json").unwrap();
+        let livre = atelier.with_extension("json.livre");
+        let mut l: Value = serde_json::from_str(&std::fs::read_to_string(&livre).unwrap()).unwrap();
+        l["content"]["tools"].as_object_mut().unwrap().remove("open_branch");
+        std::fs::write(&livre, l.to_string()).unwrap();
+
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("rien"))) });
+        let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines).with_runs_root(d.path().join("runs")));
+        host.se_connaitre();
+        let flux = Arc::new(Mutex::new(Vec::new()));
+        host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
+        let h = host.hosted(&atelier).unwrap();
+        let outils: Vec<String> = host.with_backend(&h, |b| b.prepared().manifest.tools.keys().cloned().collect()).unwrap();
+        assert!(outils.iter().any(|o| o == "open_branch"), "{outils:?}");
+        let m: Value = serde_json::from_slice(&std::fs::read(&atelier).unwrap()).unwrap();
+        assert_eq!(m["workspace"]["root"], json!(racine.display().to_string()), "le réglage de la pose reste");
+        let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+        assert!(capte.contains("TemplateRefreshed") && capte.contains("open_branch"), "{capte}");
+    }
+
 }
