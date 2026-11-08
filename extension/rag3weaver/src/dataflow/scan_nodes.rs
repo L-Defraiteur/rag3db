@@ -209,6 +209,7 @@ impl Node for ScanFilesNode {
                         start_char: 0,
                         end_char: 0,
                         highlights: Vec::new(),
+                        signal: None,
                     }),
                     chunks: None,
                     relation: None,
@@ -217,6 +218,7 @@ impl Node for ScanFilesNode {
                     graph: None,
                     signal: Some("scan".to_string()),
                     signals: Vec::new(),
+                    best_signal: None,
                 }
             })
             .collect();

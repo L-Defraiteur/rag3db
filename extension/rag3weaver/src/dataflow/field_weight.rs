@@ -235,6 +235,7 @@ mod tests {
             graph: None,
             signal: None,
             signals: Vec::new(),
+            best_signal: None,
         };
         if let Some(k) = kind {
             let mut data = BTreeMap::new();
