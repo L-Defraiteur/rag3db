@@ -48,7 +48,78 @@ pub struct Rag3dbConnection {
 /// **`RAG3WEAVER_TRACE_CYPHER=1`** : chaque instruction sur la sortie
 /// d'erreur avant de partir au moteur, bornée, et ses paramètres par nom et
 /// taille. Pour donner au cœur C++ les dernières requêtes avant un plantage.
+/// Étude du 8 novembre 2026 (ne pas atterrir) : un littéral Cypher pour une valeur de paramètre.
+fn litteral_cypher(v: &CypherValue) -> String {
+    match v {
+        CypherValue::Null => "NULL".into(),
+        CypherValue::Bool(b) => if *b { "true".into() } else { "false".into() },
+        CypherValue::Int(n) => n.to_string(),
+        CypherValue::Float(f) => {
+            if f.is_finite() { format!("{f:?}") } else { "NULL".into() }
+        }
+        CypherValue::String(s) => format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n").replace('\r', "\\r")),
+        CypherValue::List(l) => format!("[{}]", l.iter().map(litteral_cypher).collect::<Vec<_>>().join(", ")),
+        CypherValue::Map(m) => format!(
+            "{{{}}}",
+            m.iter().map(|(k, v)| format!("`{}`: {}", k.replace('`', "``"), litteral_cypher(v))).collect::<Vec<_>>().join(", ")
+        ),
+        CypherValue::Blob(_) => "NULL".into(),
+        CypherValue::Typed { value, .. } => litteral_cypher(value),
+    }
+}
+
+/// Étude du 8 novembre 2026 (ne pas atterrir) : `RAG3WEAVER_TRACE_CYPHER_FICHIER=<chemin>` écrit
+/// chaque instruction, ses paramètres remplacés par leurs littéraux, une par ligne, et copie à côté
+/// le fichier d'un COPY … FROM '<chemin>' avant qu'il ne soit effacé.
+fn trace_cypher_fichier(cypher: &str, params: &[QueryParam]) {
+    static FICHIER: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    let Some(fichier) = FICHIER.get_or_init(|| {
+        std::env::var_os("RAG3WEAVER_TRACE_CYPHER_FICHIER").and_then(|p| {
+            std::fs::OpenOptions::new().create(true).append(true).open(p).ok().map(std::sync::Mutex::new)
+        })
+    }) else {
+        return;
+    };
+    let mut texte: String = cypher.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut noms: Vec<&QueryParam> = params.iter().collect();
+    noms.sort_by_key(|p| std::cmp::Reverse(p.name.len()));
+    for p in noms {
+        let motif = format!("${}", p.name);
+        let lit = litteral_cypher(&p.value);
+        let mut sortie = String::with_capacity(texte.len());
+        let mut reste = texte.as_str();
+        while let Some(i) = reste.find(&motif) {
+            let apres = &reste[i + motif.len()..];
+            let fin_de_nom = apres.chars().next().is_none_or(|c| !(c.is_alphanumeric() || c == '_'));
+            sortie.push_str(&reste[..i]);
+            if fin_de_nom { sortie.push_str(&lit); } else { sortie.push_str(&motif); }
+            reste = apres;
+        }
+        sortie.push_str(reste);
+        texte = sortie;
+    }
+    if let Some(debut) = texte.find(" FROM '") {
+        if texte.trim_start().to_uppercase().starts_with("COPY") {
+            let chemin = &texte[debut + 7..];
+            if let Some(fin) = chemin.find('\'') {
+                let source = std::path::PathBuf::from(&chemin[..fin]);
+                if let (Some(nom), Some(dossier)) = (source.file_name(), std::env::var_os("RAG3WEAVER_TRACE_CYPHER_FICHIER").map(std::path::PathBuf::from).and_then(|p| p.parent().map(|d| d.to_path_buf()))) {
+                    let cible = dossier.join("copies").join(nom);
+                    let _ = std::fs::create_dir_all(dossier.join("copies"));
+                    let _ = std::fs::copy(&source, &cible);
+                    texte = texte.replace(&chemin[..fin], &cible.to_string_lossy());
+                }
+            }
+        }
+    }
+    use std::io::Write;
+    if let Ok(mut f) = fichier.lock() {
+        let _ = writeln!(f, "{texte}");
+    }
+}
+
 fn trace_cypher(cypher: &str, params: &[QueryParam]) {
+    trace_cypher_fichier(cypher, params);
     static ACTIVE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if !*ACTIVE.get_or_init(|| std::env::var_os("RAG3WEAVER_TRACE_CYPHER").is_some()) {
         return;
