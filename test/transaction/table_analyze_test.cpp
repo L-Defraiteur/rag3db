@@ -7,6 +7,7 @@
 #include <string>
 
 #include "catalog/catalog.h"
+#include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -191,8 +192,11 @@ protected:
         auto* context = conn->getClientContext();
         auto* transaction = transaction::Transaction::Get(*context);
         const auto* entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, "Link");
+        // Le catalogue nomme le groupe de la relation ; le stockage tient sa table unique.
+        const auto relTableID =
+            entry->constCast<catalog::RelGroupCatalogEntry>().getSingleRelEntryInfo().oid;
         const auto estimate = static_cast<int64_t>(storage::StorageManager::Get(*context)
-                                                       ->getTable(entry->getTableID())
+                                                       ->getTable(relTableID)
                                                        ->cast<storage::RelTable>()
                                                        .getEstimatedNumRels(transaction));
         EXPECT_TRUE(conn->query("COMMIT;")->isSuccess());
