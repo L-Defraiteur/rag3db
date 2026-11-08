@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 #include "common/build_id.h"
 #include "common/exception/runtime.h"
@@ -149,6 +150,12 @@ void ExtensionManager::loadExtensionForRecovery(const std::string& name, const s
         loadExtension(path, context);
     } catch (const std::exception& e) {
         recoveryLoadFailures.push_back(RecoveryLoadFailure{name, path, e.what()});
+        // Au journal du moteur, comme les autres messages de reprise (wal_replayer.cpp) : la
+        // base s'ouvre, l'index que l'extension tient se dit en retard, et l'échec se lit aussi
+        // par SHOW_INDEXES (extension_error).
+        std::cerr << common::stringFormat(
+            "rag3db: extension {}could not be loaded at open from {}: {}\n",
+            name.empty() ? std::string() : name + " ", path, e.what());
     }
 }
 
