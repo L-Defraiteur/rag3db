@@ -1516,20 +1516,16 @@ mod tests {
         }
     }
 
-    /// Un faux service granite-278m qui répond à la sonde d'`index` (ses deux appels :
-    /// un texte, puis l'échantillon) et refuse ensuite chaque texte : les vecteurs restent
-    /// dus, quel que soit `RAG3WEAVER_EMBED_SERVICE` dans l'environnement de la passe (archi,
-    /// 8 novembre 2026 : sous les tunnels de la règle GPU, l'index embarquait tout ; un
-    /// service qui refuse aussi la sonde fait refuser l'index).
-    struct GraniteMuet(std::sync::atomic::AtomicUsize);
+    /// Un faux service granite-278m qui refuse chaque texte : les vecteurs restent dus,
+    /// quel que soit `RAG3WEAVER_EMBED_SERVICE` dans l'environnement de la passe (archi, 8
+    /// novembre 2026 : sous les tunnels de la règle GPU, l'index embarquait tout). La sonde
+    /// d'`index`, qui refuserait de partir, est évitée par un débit noté d'avance.
+    struct GraniteMuet;
     impl crate::embedder::Embedder for GraniteMuet {
         fn name(&self) -> &str {
             "granite-278m"
         }
-        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
-            if self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 2 {
-                return Ok(texts.iter().map(|_| { let mut v = vec![0.0_f32; 768]; v[0] = 1.0; v }).collect());
-            }
+        fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
             Err(crate::embedder::EmbedError::ProviderError("le service du témoin refuse tout".into()))
         }
         fn dim(&self) -> usize {
@@ -1577,7 +1573,7 @@ mod tests {
         };
         // 1. Un index dont le service refuse tout : le plein texte, et tous les vecteurs dus.
         // Le service est déclaré au manifeste : l'environnement de la passe n'y change rien.
-        let muet = servir(Arc::new(GraniteMuet(Default::default())));
+        let muet = servir(Arc::new(GraniteMuet));
         ecrire(&|m| {
             m["embeddings"]["catch_up_on_open"] = json!(false);
             m["embeddings"]["address"] = json!(muet);
@@ -1592,6 +1588,8 @@ mod tests {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
         };
+        // Un débit connu : `index` ne sonde pas le service muet (la sonde refuserait de partir).
+        host.with_backend(&h, |b| b.catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate::from_sample(100_000, std::time::Duration::from_secs(1)).unwrap()).unwrap()).unwrap();
         let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
         let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
         let debut = std::time::Instant::now();
