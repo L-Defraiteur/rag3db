@@ -195,4 +195,58 @@ confirmation avant de déclarer la tâche finie », outils listés, au plus étr
   le dernier pas d'un lancement se perdait).
 - Et toujours les 429 : 01:48, 02:11, 02:39, 02:56 (« après 1 à 2 reprises en 190 à 270 s »).
 
-*(suite au fil de la nuit)*
+- 02:57, **correctif écrit** après ma `request` : `PreparedBackend::workspace_root()`, `racine_absente`
+  dans `DaemonHost::state()`, l'erreur nommée dans `call_tool_on` — avec une **liste de noms d'outils
+  en dur** (`matches!(name, "estimate" | "index" | "scan_files" | …)`) à côté des drapeaux de
+  politique. L'hôte clôt la tâche : « 40 pas atteints » (les lignes d'attente ont tout mangé) ;
+  une `request` la relance.
+- Joué par moi : **VERT** (1 passed), puis les modules `daemon_host::tests` + `backend::tests` :
+  **66 passés, 0 rouge, 1 ignoré**. Recadrage : la politique déclarée suffit (read_files,
+  write_files, run_commands) ; un outil qui touche la racine sans l'un de ces droits a une
+  déclaration fausse, pas une liste à tenir dans le code.
+- 03:02, il resserre sur les trois drapeaux, écrit le ticket fermé (en-tête à champs, cause, les
+  sorties rouge et verte telles quelles), la ligne de nouveautés datée du 8, propose son message de
+  commit **et attend ma confirmation** (la leçon de l'essai 3 est passée par la consigne). Modules
+  rejoués sur le diff final : 66/0/1. Je passe le commit : **0944492f9** sur `agent/racine-disparue`,
+  branche poussée ; une retouche de ma main dans l'en-tête du ticket (il s'attribuait à « arbre
+  principal »). hotfixs le relit et le passe après le premier lot.
+
+## Ce qu'il faut en retenir (pour Lucie, le matin)
+
+**Deux lots réels sont sortis de la nuit**, écrits par l'équipier Gemini sous supervision, relus par
+hotfixs, en passe pour master : `agent/journaux-annulation-tmp-3-3` (bddbdc0f6) et
+`agent/racine-disparue` (0944492f9). Le troisième essai prévu (`tests-bases-dans-tmp`, consigne
+prête dans mon dossier de travail) n'a pas été lancé : le quota Vertex et l'heure ; il se lance à ton
+mot.
+
+**Ce qui marche** : le plan en items, `step_done` à chaque pas, une analyse juste du code, un témoin
+rouge d'abord quand on le lui impose, le recadrage par une `request` dans la boîte (il l'applique
+au pas suivant, sans discuter), la correction à partir d'une sortie de compilateur ou de test rendue
+telle quelle.
+
+**Ce qui manque, par ordre d'importance** (tout est chez ED, ticket des essais, après le lot 2) :
+1. **`run_command`** : sans lui, pas de test joué, pas de commit, le superviseur fait les deux à la
+   main — c'est le lot 2 d'ED (les commandes par la porte déclarée), en passe cette nuit.
+2. **Attendre n'est pas rater** : les pas d'attente comptent comme ratés (3 → la tâche s'arrête)
+   ou comme des pas (40 → la tâche s'arrête), et il répète la même ligne à chaque tour pendant
+   l'attente, un appel Gemini par ligne. Il faut un état d'attente : question posée, pas suspendu,
+   aucun appel jusqu'à la réponse.
+3. **Il ne lit pas les `answer`** (réponses `reply_to` à ses questions) ; il lit les `request`.
+4. **Les 429 Vertex** ne frappent que lui (01:48, 02:11, 02:39, 02:56…), même au fil court ;
+   e2e_juge et le juge des bilans passent à la même minute sur le même projet. À mesurer (taille et
+   cadence de ses requêtes) avant de corriger.
+5. **Le juge note chaque pas comme la tâche entière** (2/10 au pas « lire »), dit faux sur les
+   outils déclarés, croit un témoin non joué.
+6. Deux crochets d'après-outil d'`edit_file` en erreur (gabarit `motif-ailleurs` relatif au
+   répertoire courant du processus ; un appel sans `old`).
+7. Petites choses : « constate l'échec » dit sans avoir joué (essai 3), la clôture du plan malgré
+   « attends ma confirmation » (essai 3, corrigé par la consigne à l'essai 4), les dates (7 au lieu
+   du 8), l'attribution du ticket à la mauvaise session.
+
+**Pour rejouer soi-même** : `~/.config/rag3weaver/code-essais-c7` (déclarations, git), backend
+`e4d8635ecfe7`, `POST /ide/teammate/mailbox` avec `kind: "request"`, la boîte dans
+`~/.local/share/rag3weaver/taches/e4d8635ecfe7/<tâche>/mailbox.jsonl`. Mes consignes et mes
+réponses sont dans mon dossier de travail de session (`essais-equipier/*.json`). Le worktree
+`~/git_workspaces/rag3db-essais-c7`, l'arbre de déclarations et les tâches s'effacent quand tu
+auras lu ; les branches `agent/*` restent sur origin jusqu'à ton mot.
+
