@@ -149,7 +149,7 @@ pub(super) mod tests {
         let debut = Instant::now();
         let r = loop {
             let r = poster(&adresse, "/ide/symboles", json!({ "backend": id, "names": ["un", "double", "inconnu_xyz"] }));
-            if !r["result"]["why"].as_str().is_some_and(|w| (w.contains("catalogue est tenu") || w.contains("index partiel"))) || debut.elapsed() > Duration::from_secs(10) {
+            if !r["result"]["why"].as_str().is_some_and(|w| w.contains("catalogue est tenu") || w.contains("index partiel")) || debut.elapsed() > Duration::from_secs(10) {
                 break r;
             }
             std::thread::sleep(Duration::from_millis(200));
@@ -240,7 +240,7 @@ pub(super) mod tests {
         let debut = Instant::now();
         let r = loop {
             let r = host.symboles_cites(&h.id, &["un".to_string(), "double".to_string(), "inconnu_xyz".to_string()]).unwrap();
-            if !r["why"].as_str().is_some_and(|w| (w.contains("catalogue est tenu") || w.contains("index partiel"))) || debut.elapsed() > Duration::from_secs(10) {
+            if !r["why"].as_str().is_some_and(|w| w.contains("catalogue est tenu") || w.contains("index partiel")) || debut.elapsed() > Duration::from_secs(10) {
                 break r;
             }
             std::thread::sleep(Duration::from_millis(200));
