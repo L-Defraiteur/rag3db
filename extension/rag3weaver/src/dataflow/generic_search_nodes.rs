@@ -2220,12 +2220,24 @@ impl Node for FuseResultsNode {
         // la recherche de l'IDE).
         let mut evidence: HashMap<String, Vec<crate::dataflow::resultat::SignalScore>> = HashMap::new();
         let mut lists = Vec::new();
+        // Le poids et le rôle de chaque étiquette, pour dire qui a porté une
+        // ligne (`best_signal`).
+        let mut poids_des_signaux: Vec<(String, SignalConfig)> = Vec::new();
         for (label, rows) in groups {
             let mut cfg = self.signal_config(&label, &base, source);
+            poids_des_signaux.push((label.clone(), cfg));
             let mut seen = HashSet::new();
             let mut scored = Vec::new();
             // top_k bounds occurrences before either deduplication or evidence collection.
-            for r in rows.into_iter().take(cfg.top_k.unwrap_or(usize::MAX)) {
+            for mut r in rows.into_iter().take(cfg.top_k.unwrap_or(usize::MAX)) {
+                // `chunk.signal` : l'échelle de `chunk.score`. Une fusion en
+                // amont l'a peut-être déjà dite ; c'est la sienne qui vaut.
+                if let Some(c) = r.chunk.as_mut() {
+                    c.signal.get_or_insert_with(|| label.clone());
+                }
+                for c in r.chunks.iter_mut().flatten() {
+                    c.signal.get_or_insert_with(|| label.clone());
+                }
                 let id = identity(&r);
                 originals.entry(id.clone()).or_default().push((label.clone(), r.clone()));
                 if seen.insert(id.clone()) {
@@ -2247,10 +2259,30 @@ impl Node for FuseResultsNode {
             lists.iter().map(|(l, c)| (l.as_slice(), *c)).collect();
         let mut scores = fuse_signals(&borrowed, strategy, rrf_k);
         scores.sort_by(|a,b| b.score.total_cmp(&a.score).then(a.uuid.cmp(&b.uuid)));
+        // **Qui a porté la ligne** : la contribution de chaque signal à son
+        // rang, poids / (k + rang), comme le RRF la compte. Les signaux en
+        // rôle `boost` modulent sans faire le rang ; ils ne comptent que si
+        // aucun signal ne fusionne (la fusion les traite alors comme tels).
+        let fusionnent = poids_des_signaux.iter().any(|(_, c)| c.role == SignalRole::Fuse);
+        let porteur = |dits: &[crate::dataflow::resultat::SignalScore]| {
+            let mut meilleur: Option<(&crate::dataflow::resultat::SignalScore, f64)> = None;
+            for s in dits {
+                let Some((_, cfg)) = poids_des_signaux.iter().find(|(l, _)| *l == s.label) else { continue };
+                if fusionnent && cfg.role != SignalRole::Fuse {
+                    continue;
+                }
+                let part = cfg.weight / (rrf_k + s.rank as f64);
+                if meilleur.is_none_or(|(_, m)| part > m) {
+                    meilleur = Some((s, part));
+                }
+            }
+            meilleur.map(|(s, _)| s.clone())
+        };
         let mut fused = Vec::new();
         for sr in scores {
             let occurrences = originals.remove(&sr.uuid).unwrap_or_default();
             let dits = evidence.remove(&sr.uuid).unwrap_or_default();
+            let best = porteur(&dits);
             if self.duplicates == DuplicatePolicy::Keep {
                 // Keep the original evidence and branch label on each occurrence.
                 // The score remains the object's fused score, not a raw branch score.
@@ -2258,6 +2290,7 @@ impl Node for FuseResultsNode {
                     r.score = sr.score;
                     r.signal = Some(label);
                     r.signals = dits.clone();
+                    r.best_signal = best.clone();
                     fused.push(r);
                 }
                 continue;
@@ -2266,6 +2299,7 @@ impl Node for FuseResultsNode {
             let mut u = first.clone();
             u.score = sr.score;
             u.signals = dits;
+            u.best_signal = best;
             u.chunk = sr.chunk;
             u.chunks = sr.chunks;
             let mut labels = Vec::new();
@@ -2500,8 +2534,8 @@ impl Node for RerankNode {
             if results.iter().any(|r| r.data.is_none()) && !target.enrich_fields.is_empty() {
                 let conn = ctx.service::<ConnService>("conn").map(|c| c.0.clone());
                 let backend = conn.as_ref().map(|c| moteur_de_recherche(ctx, c));
-                let signaux: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> =
-                    results.iter().map(|r| (r.signal.clone(), r.signals.clone())).collect();
+                let signaux: Vec<crate::dataflow::resultat::Provenance> =
+                    results.iter().map(crate::dataflow::resultat::Provenance::of).collect();
                 let mut plats: Vec<SearchResult> =
                     results.iter().cloned().map(SearchResult::from).collect();
                 let issue = match backend {
@@ -2515,12 +2549,7 @@ impl Node for RerankNode {
                         results = plats
                             .into_iter()
                             .zip(signaux)
-                            .map(|(r, (sig, dits))| {
-                                let mut u = UnifiedResult::from(r);
-                                u.signal = sig;
-                                u.signals = dits;
-                                u
-                            })
+                            .map(|(r, provenance)| provenance.restore(r))
                             .collect();
                     }
                     Err(e) => node_warnings.push(format!(
@@ -2571,11 +2600,15 @@ impl Node for RerankNode {
                     .map(|(rang, i)| {
                         let mut r = results[i].clone();
                         r.score = scores[i] as f64;
-                        r.signals.push(crate::dataflow::resultat::SignalScore {
+                        // Le relecteur fait le rang de la tête : c'est lui qui
+                        // porte la ligne désormais.
+                        let dit = crate::dataflow::resultat::SignalScore {
                             label: label.clone(),
                             score: scores[i] as f64,
                             rank: rang + 1,
-                        });
+                        };
+                        r.best_signal = Some(dit.clone());
+                        r.signals.push(dit);
                         r
                     })
                     .collect();
@@ -2748,8 +2781,8 @@ impl Node for ResolveParentNode {
         // Enrich with data fields via UUID-based lookup. L'étiquette de signal
         // ne survit pas au passage par `SearchResult` : on la garde à part.
         // Et ce que chaque signal en a dit (`signals`, pièce 1 de la recherche de l'IDE).
-        let signals: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> =
-            results.iter().map(|r| (r.signal.clone(), r.signals.clone())).collect();
+        let signals: Vec<crate::dataflow::resultat::Provenance> =
+            results.iter().map(crate::dataflow::resultat::Provenance::of).collect();
         let mut search_results: Vec<SearchResult> =
             results.into_iter().map(SearchResult::from).collect();
 
@@ -2774,10 +2807,10 @@ impl Node for ResolveParentNode {
         // déduplication du monolithe : deux lignes d'index du même document
         // ne rendent qu'un document. La provenance suit par la source : c'est
         // le signal du meilleur original qui reste.
-        let signals: Vec<(Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> = if qp.options.result_mode == ResultMode::SourceResolved
+        let signals: Vec<crate::dataflow::resultat::Provenance> = if qp.options.result_mode == ResultMode::SourceResolved
             && target.has_source_refs
         {
-            let mut par_source: HashMap<String, (Option<String>, Vec<crate::dataflow::resultat::SignalScore>)> = HashMap::new();
+            let mut par_source: HashMap<String, crate::dataflow::resultat::Provenance> = HashMap::new();
             for (r, sig) in search_results.iter().zip(signals.iter()) {
                 if let Some(src) = r.data.as_ref().and_then(|d| d.get("_source_uuid")).and_then(|v| v.as_str()) {
                     par_source.entry(src.to_string()).or_insert_with(|| sig.clone());
@@ -2805,12 +2838,7 @@ impl Node for ResolveParentNode {
         let enriched: Vec<UnifiedResult> = search_results
             .into_iter()
             .zip(signals)
-            .map(|(r, (signal, dits))| {
-                let mut u = UnifiedResult::from(r);
-                u.signal = signal;
-                u.signals = dits;
-                u
-            })
+            .map(|(r, provenance)| provenance.restore(r))
             .collect();
 
         ctx.set_output("results", PortValue::new(enriched));
@@ -3230,6 +3258,7 @@ mod tests {
             other_children: None,
             graph: None,
             signals: Vec::new(),
+            best_signal: None,
         }
     }
 
@@ -3741,6 +3770,7 @@ mod tests {
             start_char: 0,
             end_char: 0,
             highlights: Vec::new(),
+            signal: None,
         });
         r
     }

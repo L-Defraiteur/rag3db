@@ -654,6 +654,7 @@ impl Node for CohesionNode {
                 graph: None,
                 signal: Some(self.label.clone()),
                 signals: Vec::new(),
+                best_signal: None,
             });
         }
         ctx.metric("coherent", sortie.len() as f64);

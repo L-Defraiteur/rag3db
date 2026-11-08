@@ -573,6 +573,12 @@ pub struct ChunkInfo {
     /// chaîne JavaScript) : la page le rend tel quel. Absent : rien.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub highlights: Vec<Highlight>,
+    /// **Le signal dont vient `score`** (8 novembre 2026, ticket du score
+    /// non comparable) : `score` est sur l'échelle de ce signal (un bm25 brut
+    /// sans borne, une similarité de 0 à 1…) et ne se compare qu'à un score du
+    /// même signal. Posé par `FuseResultsNode` ; absent hors fusion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal: Option<String>,
 }
 
 /// **Un passage à surligner** dans le texte d'un morceau (25 octobre 2026,
@@ -667,6 +673,9 @@ pub struct AttributedChunk {
     /// Comme [`ChunkInfo::highlights`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub highlights: Vec<Highlight>,
+    /// Comme [`ChunkInfo::signal`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal: Option<String>,
 }
 
 /// Per-result BM25 diagnostic: what happened when matching highlights to chunks.
@@ -1400,6 +1409,7 @@ pub fn resolve_vector_chunks_with_dialect(
                     source_uuid: meta.source_uuid.clone(),
                     source_field: meta.source_field.clone(),
                     highlights: Vec::new(),
+                    signal: None,
                 });
             }
         }
@@ -1433,6 +1443,7 @@ pub fn resolve_vector_chunks_with_dialect(
                 start_char: meta.start_char,
                 end_char: meta.end_char,
                 highlights: Vec::new(),
+                signal: None,
             };
             let entry = parent_best.entry(meta.parent_uuid.clone());
             match entry {
@@ -2089,6 +2100,7 @@ pub fn search_texte_natif(
                 start_char: entier(&d, "_start_char"),
                 end_char: entier(&d, "_end_char"),
                 highlights: Vec::new(),
+                signal: None,
             },
             score,
         ));
@@ -2310,6 +2322,7 @@ fn finish_bm25_chunked(
                         source_uuid: c.source_uuid.clone(),
                         source_field: c.parent_field.clone(),
                         highlights: lucivy_highlights_of(c, &textes),
+                        signal: None,
                     })
                     .collect();
                 results.push(SearchResult {
@@ -2346,6 +2359,7 @@ fn finish_bm25_chunked(
                             start_char: c.start_char,
                             end_char: c.end_char,
                             highlights: lucivy_highlights_of(c, &textes),
+                            signal: None,
                         }),
                         chunks: None,
                     });
@@ -2426,29 +2440,45 @@ pub fn fuse_signals(
         return non_empty[0].0.to_vec();
     }
 
-    // Build chunk + data + detailed chunks lookups from all inputs
-    let mut chunk_map: HashMap<String, ChunkInfo> = HashMap::new();
+    // **Le morceau d'une ligne** (8 novembre 2026, ticket du score non
+    // comparable) : celui du signal qui pèse le plus dans son rang, poids /
+    // (k + rang), une contribution qui se compare d'un signal à l'autre quand
+    // leurs scores bruts ne se comparent pas (un bm25 sans borne contre une
+    // similarité de 0 à 1). Au-delà de son top_k, un signal ne contribue pas :
+    // son morceau ne sert qu'à défaut d'un autre. Le choix du morceau ne touche
+    // ni le score ni l'ordre.
+    let contribution = |cfg: &SignalConfig, rank: usize| -> f64 {
+        if cfg.top_k.is_some_and(|k| rank >= k) {
+            0.0
+        } else {
+            cfg.weight / (rrf_k + rank as f64 + 1.0)
+        }
+    };
+    let mut chunk_map: HashMap<String, (ChunkInfo, f64)> = HashMap::new();
     let mut data_map: HashMap<String, BTreeMap<String, CypherValue>> = HashMap::new();
-    let mut chunks_map: HashMap<String, Vec<AttributedChunk>> = HashMap::new();
-    for (list, _) in signals {
-        for r in list.iter() {
+    let mut chunks_map: HashMap<String, Vec<(AttributedChunk, f64)>> = HashMap::new();
+    for (list, cfg) in signals {
+        for (rank, r) in list.iter().enumerate() {
+            let part = contribution(cfg, rank);
             if let Some(ref chunk) = r.chunk {
                 let entry = chunk_map.entry(r.uuid.clone());
                 match entry {
                     std::collections::hash_map::Entry::Vacant(e) => {
-                        e.insert(chunk.clone());
+                        e.insert((chunk.clone(), part));
                     }
                     std::collections::hash_map::Entry::Occupied(mut e) => {
                         // Le même morceau vu par deux signaux : les surlignages
                         // de l'un ne se perdent pas quand l'autre l'emporte.
-                        let meme = e.get().uuid == chunk.uuid;
-                        let perdant = if chunk.score > e.get().score {
-                            std::mem::replace(e.get_mut(), chunk.clone()).highlights
+                        let (garde, part_gardee) = e.get_mut();
+                        let meme = garde.uuid == chunk.uuid;
+                        let perdant = if part > *part_gardee {
+                            *part_gardee = part;
+                            std::mem::replace(garde, chunk.clone()).highlights
                         } else {
                             chunk.highlights.clone()
                         };
                         if meme {
-                            merge_highlights(&mut e.get_mut().highlights, &perdant);
+                            merge_highlights(&mut garde.highlights, &perdant);
                         }
                     }
                 }
@@ -2456,16 +2486,17 @@ pub fn fuse_signals(
             if let Some(ref chunks) = r.chunks {
                 let merged = chunks_map.entry(r.uuid.clone()).or_default();
                 for ac in chunks {
-                    // Deduplicate by chunk UUID, keep best score
-                    if let Some(existing) = merged.iter_mut().find(|c| c.uuid == ac.uuid) {
-                        let perdant = if ac.score > existing.score {
+                    // Un morceau par uuid : celui du signal qui pèse le plus.
+                    if let Some((existing, part_gardee)) = merged.iter_mut().find(|(c, _)| c.uuid == ac.uuid) {
+                        let perdant = if part > *part_gardee {
+                            *part_gardee = part;
                             std::mem::replace(existing, ac.clone()).highlights
                         } else {
                             ac.highlights.clone()
                         };
                         merge_highlights(&mut existing.highlights, &perdant);
                     } else {
-                        merged.push(ac.clone());
+                        merged.push((ac.clone(), part));
                     }
                 }
             }
@@ -2570,14 +2601,14 @@ pub fn fuse_signals(
     // Re-attach chunk info, detailed chunks, and data from inputs
     for r in &mut fused {
         if r.chunk.is_none() {
-            if let Some(chunk) = chunk_map.remove(&r.uuid) {
+            if let Some((chunk, _)) = chunk_map.remove(&r.uuid) {
                 r.chunk = Some(chunk);
             }
         }
         if r.chunks.is_none() {
             if let Some(chunks) = chunks_map.remove(&r.uuid) {
                 if !chunks.is_empty() {
-                    r.chunks = Some(chunks);
+                    r.chunks = Some(chunks.into_iter().map(|(c, _)| c).collect());
                 }
             }
         }
