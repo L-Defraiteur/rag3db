@@ -923,3 +923,11 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
 - **Les SIGSEGV restent à part** (ASAN du cœur sur V2 et la compaction CSR ; témoin HNSW de hotfixs
   à refaire sous 512 Mio). G5 a ses chiffres au ticket (13b8a6d57). Aucune pose avant le correctif
   A (et B s'il tient dans l'heure) et le rebâti de la lib.
+- **Correction (9 h 40, G et le cœur)** : ma phrase de 9 h 20 « c'est l'écriture sous dadbf0041 qui
+  a posé une relation dans un seul sens » est **fausse**. Le cœur a lu le .wal : la relation 187668
+  est insérée dans les deux tables jumelles (25 et 27) puis mise à jour ; le journal est cohérent.
+  C'est le rejeu qui ne sait pas mettre à jour une relation insérée par un COPY plus tôt dans la
+  même transaction — le défaut A, antérieur à dadbf0041. Que les deux libs refusent le même .wal le
+  montrait déjà ; nous en avions tiré la mauvaise conclusion. Le correctif du rejeu est sur
+  g2b-melange-hnsw (426153052), prouvé sur une copie de la preuve à luciepc. Deux correctifs avant
+  tout retour sur dadbf0041 ou une lib suivante : le rejeu (A) et le SIGSEGV (cœur, ASAN).
