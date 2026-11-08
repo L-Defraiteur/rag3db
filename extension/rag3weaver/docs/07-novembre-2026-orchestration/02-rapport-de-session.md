@@ -1371,3 +1371,74 @@ avance d'autant ; les hashs, eux, sont exacts.
   (d59812592) — la liste de Lucie d'hier soir sur l'IDE est faite en une journée. Codeparsers : un
   troisième rouge sous charge au navigateur (un module de l'aperçu à chaud servi en 422 juste après
   le vidage du magasin, vert seul 2/2) : une course possible, à archi avec la relecture d'ED.
+
+## 16 h 40 — le portable est posé deux fois, Lucie essaie l'atelier, ce que son essai révèle
+
+- **Le défaut des deux sens est plus ancien que les V2** : hotfixs retrouve la demi-arête LOCKS sous
+  58b46a9bf (25 octobre) ; le chemin désigné est le point de reprise CSR qui réécrit une base
+  pleine (`populateRegionCSROffsets` écrase le bord droit d'une région sous un `KU_ASSERT`, la garde
+  de densité ne lit pas les longueurs qu'il range — hypothèse, dans le ticket avant la preuve). Le
+  run 2b (dadbf0041) rend les mêmes chiffres que 1b. Le run sous 04063ee06 est désarmé (base de
+  départ différente, 40 min de 7878) ; hotfixs mène, le cœur l'aide ; sa trace d'`index confirm`
+  tourne depuis 16 h 21 sur un hôte d'essai 7992 avec **un service d'embarquement à lui (7882)** —
+  j'avais cru qu'elle saturait 7878 et je me suis trompé, dit à hotfixs. memoire-longue est saine
+  (0 écart sur 18 tables, copie prise à l'arrêt). Trois témoins de forme verts chez hotfixs : la
+  forme ne suffit pas, la trace du vrai régime est nécessaire ; accord d'avance pour un binaire à
+  trace JSON si la forme ne suffit pas.
+- **Deux poses du portable** : 15 h 41 (ff6e88ddf, G coupe quatre minutes avant l'heure annoncée
+  parce qu'il s'était fié à une heure non lue : dit tel quel) puis **16 h 08** (e59e59834, parce que
+  `open_branch` 9fd49b38d n'était pas dans le premier binaire ; coupure de 7 s). `courant` →
+  cbc06c3e1 aux deux postes, tunnels vérifiés, 0 core. Le 7878 de luciepc est rendu aux pushes à
+  16 h 08.
+- **L'essai de l'atelier par Lucie** (16 h 00 → 16 h 35), et ce qu'il a révélé, chaque point avec
+  son lot et son témoin rouge d'abord :
+  1. le modèle dit « je ne peux pas exécuter de commande shell, faites-le dans votre terminal » :
+     `open_branch` manquait au binaire (repose) **et** au manifeste de l'atelier, copié du gabarit
+     livré de l'ancien binaire et jamais remis à jour (« atelier déjà posé »). Lucie : « il faut
+     1 - qu'il ait commande shell, 2 - des outils spécialisés tenus par notre framework » et « que
+     ce soit dynamique, qu'on n'ait pas besoin de tout recharger manuellement à chacune de nos
+     avancées ». → ED, pile `gabarits-vivants` : commandes de l'atelier hors tâche par sa porte
+     (approbation), `chat_instructions`, **gabarits vivants** (`<manifeste>.livre`, remplacé à
+     l'ouverture par l'hôte s'il est resté tel qu'écrit, `TemplateRefreshed` sur le flux) ; geste
+     manuel fait une fois pour Lucie (templates déplacé, `atelier` rejoué, `open_branch` déclaré) ;
+  2. `list_worktrees` dit « plein texte 4/7, vecteurs 3/7 » pour la base principale de Lucie, qui
+     croit qu'un index tourne dessus : `fts_counts`, `reads`, `watches` comptés comme des entités,
+     `not_declared` compté comme un manque ; et « 0/4 » pendant un index au lieu de « en cours » →
+     ED a538a1575 et 878c874da ;
+  3. le `workspace` vide du gabarit est listé comme un worktree attaché → ED ;
+  4. **l'index d'un worktree attaché ne reprend pas après un redémarrage de l'hôte** : wt-react5
+     attaché à 16 h 04, hôte reposé à 16 h 08, « index pas ouvert » et rien ne le rouvre ; rouvert
+     à la main (POST /backend/open) l'index HNSW est reconstruit mais **le rattrapage des vecteurs
+     ne repart pas** (15 % depuis 16 h 12 : ED lit que rien ne solde la dette à l'ouverture, seul
+     l'outil `index` le fait). Tranché **(b)** : `embeddings.catch_up_on_open` déclaré dans le
+     gabarit livré du code, hérité par les worktrees ; la base de Lucie, posée sans lui, ne bouge
+     pas ; un rattrapage de fond s'arrête au paquet suivant sur /backend/close au lieu de refuser
+     (ED 744d568eb, 67247bfbb, c7d0a7b35). wt-react5 relancé à la main par `index confirm` à
+     16 h 34 (base jetable) ;
+  5. l'accueil de l'IDE dit encore « Backends » et des chemins de manifeste → archi
+     `ide-accueil-depots` (f5c8a6868, passe verte, en file) ;
+  6. Lucie : « il devrait avoir notif quand indexation finie », « une barre de progression qui
+     glisse dans le chat quand je charge un worktree, ou un handle pour l'agent », « par SSE, pas
+     par polling, voire rendre générique quand on a besoin d'un SSE » → archi + ED : `RepoIndexed`
+     à la dernière ligne du journal d'index, `IndexProgress` sur le flux (1/s au plus par backend),
+     un champ `ui` sur les résultats d'outils (`{kind, repo, sujets}`) rendu par la page sous le
+     tour et branché sur le flux déjà ouvert, `show_progress` comme handle ; zéro polling, règle
+     pour toute progression à venir.
+- **Mesures** : un worktree de rag3db s'indexe en **13 min** par le tunnel vers 7878 (essai-atelier :
+  111 024 Scope_Chunk en 10 min 20 s, ~160 morceaux/s) ; pendant ce temps la carte des services
+  de luciepc est à 26–51 % et le service à 12 % d'un cœur : **sous-utilisée, pas bloquée**, les
+  clients envoient un lot et attendent (Lucie : « j'entends pas fort travailler les GPU de
+  luciepc »). Pas de service sur le portable (Lucie : « le portable devient lourd dingue »). La
+  vraie réponse est la marche 1 des vues par worktree (6 novembre) : un worktree de rag3db
+  réembarque ce que la base principale a déjà.
+- **La file** : 96 (M4 pas 3) et codeparsers (locales JS) ont chacun un seul rouge, le témoin
+  `un_symbole_cite_se_resout_par_l_index_sans_ouvrir_de_depot` de 36aced578 sous charge (« catalogue
+  tenu par une écriture ») ; ED porte le correctif (relire tant que `why` le dit, 10 s) dans
+  juge-par-pas-3 ; 96 attend que les index du portable finissent pour rejouer seul ; codeparsers
+  rejoue court et pousse ; archi ensuite avec deux lots ; puis ED, recherche (un `.tmp` de 4 Ko
+  intermittent, cherche la source). Quota Vertex épuisé 24 min vers 15 h 40 : pas le banc (fini
+  à 14 h 51, en série), nos passes à Gemini jouées en même temps. Le banc passe ses reprises au
+  doublement.
+- **Règle apprise** : un index de mesure ou de trace tourne sur **son propre** service
+  d'embarquement (même modèle, port neuf, VRAM lue), jamais sur le 7878 partagé — il n'y a pas
+  de fenêtre dans une file de pushes.
