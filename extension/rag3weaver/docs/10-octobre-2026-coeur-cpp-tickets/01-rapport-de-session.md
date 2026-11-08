@@ -707,3 +707,32 @@ Ce qui m'a manqué :
 - aucun ticket ni entrée du journal pour le plantage HNSW sur des vecteurs identiques ;
 - le lot (c) est donné comme « la voie (a) », que le ticket dit faite (`1177f5794`) : le reste
   n'est pas nommé.
+
+## La nuit du 7 au 8 novembre — G1, G2, deux lots de l'équipier, G3 écrit
+
+Sur master : G1 (`c4f8610b9`, les décalages provisoires d'un COPY de relations), G2a
+(`9ec767dd4`), G2b (`dadbf0041`, le COPY de blobs borné en octets), et le premier lot de
+l'équipier Gemini (`b860ea2dd`, les fichiers d'annulation dans `/tmp`), relu et passé par moi.
+
+G3 (une ouverture relit toujours les extensions notées, décision de c7 : (1) toujours charger,
+(2) un échec ne refuse pas la base, il se dit au journal du moteur et dans la colonne
+`extension_error` de SHOW_INDEXES) est sur la branche `g3-extensions-a-l-ouverture`
+(`906955d9b`, `cc1bbf0e3`) : témoin rouge d'abord (51 au lieu de 50), 22 témoins ciblés verts. Le
+témoin `AWriteWithoutTheExtensionIsRefusedByName` a changé de prémisse, pas d'attente (la liste
+retirée avant la réouverture) : c'est la règle pour les autres cas de la liste qui supposaient
+« une base sans extension s'ouvre sans elle ». La passe complète attend le « basculé » de G, le
+push le mot de Lucie.
+
+Le second lot de l'équipier (`agent/racine-disparue`) est complété de ma main (`b51a10994` :
+`index` et `estimate` déclarent `read_files`) et attend son tour.
+
+**Une heure perdue sur un guet.** Le script du premier lot s'est arrêté à 2 h 11 sur un conflit
+de rebase dans `docs/nouveautes.md` ; mon guet attendait aussi la fin d'une autre tâche (G3, dont
+le journal n'était pas celui que je lisais) et ne l'a vu qu'à 3 h 22. La leçon : un guet attend
+une seule fin, et lit le journal que le script écrit vraiment. Le script résout maintenant seul un
+conflit limité à `docs/nouveautes.md` (les deux lignes gardées) et s'arrête sur tout autre.
+
+**Un rouge du banc, pas du lot.** `le_creux_se_surligne_par_le_chemin_de_l_hote` (e2e_lectures,
+arrivé avec `59f02b636`) exige un service bge-m3 qui rend les positions : une passe qui retire
+`RAG3WEAVER_EMBED_SERVICE` le voit rouge. Les e2e se jouent sous `127.0.0.1:7879` à luciepc, la
+lib reste sans service.
