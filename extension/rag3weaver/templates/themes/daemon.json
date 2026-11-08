@@ -3,7 +3,10 @@
   "couleurs": {
     "fond": "#050505",
     "texte": "#ff3333",
-    "halo": ["#ff0000", "#8b0000"],
+    "halo": [
+      "#ff0000",
+      "#8b0000"
+    ],
     "sourdine": "#666666"
   },
   "police": "'Courier New', Courier, monospace",
@@ -11,21 +14,51 @@
     "reflechit": {
       "forme": "cercle",
       "ms": 150,
-      "glyphes": ["᚛", "ᚨ", "ᛒ", "ᛟ", "᚜", "⸸", "‡"],
+      "glyphes": [
+        "᚛",
+        "ᚨ",
+        "ᛒ",
+        "ᛟ",
+        "᚜",
+        "⸸",
+        "‡"
+      ],
       "coeur": "⛧",
-      "gabarits": ["⟪ {gauche} {coeur} {droite} ⟫ INVOCATION DU CODE..."]
+      "gabarits": [
+        "⟪ {gauche} {coeur} {droite} ⟫ INVOCATION DU CODE..."
+      ]
     },
     "lit": {
       "forme": "transmutation",
       "ms": 200,
-      "glyphes": ["⍟", "🜂", "☿", "☉", "♄", "🜄", "∮"],
+      "glyphes": [
+        "⍟",
+        "🜂",
+        "☿",
+        "☉",
+        "♄",
+        "🜄",
+        "∮"
+      ],
       "coeur": "⸸",
-      "gabarits": ["⁅ {coeur} ⁆—[ {s} ]—⁅ {coeur} ⁆ ANALYSE EN COURS..."]
+      "gabarits": [
+        "⁅ {coeur} ⁆—[ {s} ]—⁅ {coeur} ⁆ ANALYSE EN COURS..."
+      ]
     },
     "ecrit": {
       "forme": "glitch",
       "ms": 100,
-      "glyphes": ["∇", "∫", "∃", "∀", "∴", "∵", "⊕", "⊗", "⌇"],
+      "glyphes": [
+        "∇",
+        "∫",
+        "∃",
+        "∀",
+        "∴",
+        "∵",
+        "⊕",
+        "⊗",
+        "⌇"
+      ],
       "coeur": "⛧",
       "gabarits": [
         "[{a} {coeur} {b}] ...COMPILING CURSE...",
@@ -34,10 +67,48 @@
       ]
     }
   },
-  "replis": { "🜂": "△", "🜄": "▽" },
+  "replis": {
+    "🜂": "△",
+    "🜄": "▽"
+  },
   "ascii": {
     "coeur": "*",
-    "glyphes": ["|", "/", "-", "\\"],
-    "cadre": { "⟪": "<<", "⟫": ">>", "⁅": "[", "⁆": "]", "—": "-", "⸢": "[", "⸣": "]", "❬": "<", "❭": ">", "⸸": "+" }
+    "glyphes": [
+      "|",
+      "/",
+      "-",
+      "\\"
+    ],
+    "cadre": {
+      "⟪": "<<",
+      "⟫": ">>",
+      "⁅": "[",
+      "⁆": "]",
+      "—": "-",
+      "⸢": "[",
+      "⸣": "]",
+      "❬": "<",
+      "❭": ">",
+      "⸸": "+"
+    }
+  },
+  "code": {
+    "keyword": "#ff3333",
+    "type": "#ff7a45",
+    "function": "#ffb347",
+    "string": "#c9a66b",
+    "comment": "#6b5a5a",
+    "number": "#ff9e64",
+    "constant": "#ff9e64",
+    "variable": "#e8d5d5",
+    "property": "#d9a0a0",
+    "operator": "#ff5555",
+    "punctuation": "#8a7a7a",
+    "attribute": "#b45a5a",
+    "label": "#b45a5a",
+    "module": "#b45a5a",
+    "other": "#d8c8c8",
+    "en_ligne": "#ff9e64",
+    "cadre": "#666666"
   }
 }
