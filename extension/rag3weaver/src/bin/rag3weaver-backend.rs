@@ -687,23 +687,7 @@ fn servir_http(args: &[String]) -> Result<(), String> {
 fn check_manifests(args: &[String]) -> Result<(), String> {
     let mut chemins: Vec<std::path::PathBuf> = args.iter().map(std::path::PathBuf::from).collect();
     if chemins.is_empty() {
-        let roots = rag3weaver::code_tree::Roots::of_user()?;
-        for arbre in std::fs::read_dir(&roots.config).map_err(|e| format!("{} : {e}", roots.config.display()))?.flatten() {
-            let dossier = arbre.path().join("templates/backends/code");
-            let Ok(it) = std::fs::read_dir(&dossier) else { continue };
-            for f in it.flatten() {
-                let p = f.path();
-                if p.extension().is_some_and(|e| e == "json")
-                    && std::fs::read_to_string(&p)
-                        .ok()
-                        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-                        .is_some_and(|v| v.get("database").is_some() && v.get("tools").is_some())
-                {
-                    chemins.push(p);
-                }
-            }
-        }
-        chemins.sort();
+        chemins = rag3weaver::code_tree::Roots::of_user()?.registered_manifests();
     }
     let mut refuses = 0;
     for p in &chemins {
