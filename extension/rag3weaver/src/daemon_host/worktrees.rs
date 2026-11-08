@@ -980,7 +980,7 @@ mod tests {
         }
         let etat = json!({ "backends": [{ "manifest": manifeste, "open": true, "index": etats }] });
         let dit = super::etat_de_l_index(&etat, &manifeste);
-        assert!(dit.starts_with("plein texte prêt"), "{dit}");
+        assert!(dit.starts_with("plein texte prêt"), "{dit} ; l'état : {etats:#}");
         assert!(!dit.contains("en cours"), "{dit}");
     }
 
