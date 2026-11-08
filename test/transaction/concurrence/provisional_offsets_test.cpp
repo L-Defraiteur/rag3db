@@ -232,8 +232,10 @@ TEST_P(RelCopyThenUpdateReplay, TheReplayFindsTheCopiedRelToUpdate) {
             if (withLocalNodes) {
                 run("UNWIND range(1000, 1004) AS i CREATE (:N {id: i});");
             }
-            run(std::string("COPY R FROM (UNWIND [0] AS i RETURN 1, 2, 2") +
-                (withLocalNodes ? " UNION ALL RETURN 1000, 1001, 3" : "") + ");");
+            run(std::string("COPY R FROM (UNWIND [0] AS i RETURN 1 AS f, 2 AS t, 2 AS k") +
+                (withLocalNodes ? " UNION ALL UNWIND [0] AS i RETURN 1000 AS f, 1001 AS t, 3 AS k" :
+                                  "") +
+                ");");
             run("MATCH (:N {id: 1})-[r:R]->(:N {id: 2}) SET r.k = 20;");
             run("COMMIT;");
             const auto wal = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
