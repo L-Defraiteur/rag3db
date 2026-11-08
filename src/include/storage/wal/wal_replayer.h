@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <string>
+#include <unordered_map>
 
 #include "storage/readers_lock.h"
 #include "storage/wal/wal_record.h"
@@ -90,6 +91,15 @@ private:
 
     void replayNodeTableInsertRecord(const WALRecord& walRecord) const;
     void replayRelTableInsertRecord(const WALRecord& walRecord) const;
+    // Une relation insérée au journal (TABLE_INSERTION) se rejoue dans le stockage local de la
+    // transaction de reprise, à un décalage local ; en service, un COPY de relations l'avait
+    // écrite dans les listes à son décalage définitif, celui que portent la mise à jour et la
+    // suppression de la même transaction. La correspondance, par table, du décalage journalisé
+    // au décalage local, le temps d'une transaction rejouée.
+    void translateReplayedRelID(common::table_id_t tableID, common::ValueVector& relIDVector) const;
+    mutable std::unordered_map<common::table_id_t,
+        std::unordered_map<common::offset_t, common::offset_t>>
+        replayedRelOffsets;
 
     void replayLoadExtensionRecord(const WALRecord& walRecord) const;
 

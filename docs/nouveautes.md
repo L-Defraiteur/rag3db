@@ -11,6 +11,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   tree-sitter qui indexent déjà le code (Rust, C++, TypeScript, Python, et six autres), pour
   l'IDE et le terminal à la fois. highlight.js ne sert plus que de repli (`POST /highlight`,
   coloration-b).
+- **8 nov. — Une base dont le journal recopie puis met à jour une relation se rouvre.** Une
+  transaction qui supprime une arête, la recrée par un COPY de relations, puis la met à jour, ne se
+  rejouait plus après une mort : « not found in the forward direction », et la base de code de
+  Lucie ne s'ouvrait plus. Le rejeu retrouve maintenant la relation du COPY par son décalage
+  définitif. Le journal réel de cette base se rejoue, avec 106 612 relations dans chaque sens et
+  aucun écart.
 - **8 nov. — Une phrase collée retrouve son fichier, et le surlignage ne demande plus rien à l'hôte.**
   Avec lucivy 4.3.2, une ligne de plus de 100 caractères copiée d'un fichier le ramène premier par
   le signal exact, et une requête entière garde son flou jusqu'à 900 caractères (mesuré : 464 ms à
