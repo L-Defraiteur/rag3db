@@ -1581,12 +1581,13 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::run_nodes::RunCommandNodeFactory));
         registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
         registry.register(Box::new(super::run_nodes::TailNodeFactory));
+        registry.register(Box::new(super::worktree_nodes::WorktreeNodeFactory));
     }
 }
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 15 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 16 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
