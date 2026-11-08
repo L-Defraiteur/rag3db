@@ -1323,3 +1323,29 @@ avance d'autant ; les hashs, eux, sont exacts.
   relatif. **Archi** : le symbole cité en lien est prêt (`POST /ide/symboles` par `usages`, l'appel
   discret qui ne journalise pas un rendu). **96** en push. Tous les pushes attendent le dernier pas
   seul sous poste push ; les passes rendent leur place lourde au vert.
+
+## 15 h 14 — le rouge de master innocente la lib : c'était la file de 7878
+
+- **Le départage d'ED** sur `la_base_principale_n_est_jamais_ecrite_par_la_tache`, test seul sur
+  master e8a91105f : cbc06c3e1 pendant l'index de G sur 7878 → 2 rouges sur 3 ; cbc06c3e1 dans la
+  fenêtre libre (15 h 08 – 15 h 12) → 0 sur 5 ; dadbf0041 → 0 sur 5 ; 17a094d12 → 8 sur 8 (lib trop
+  ancienne pour le Rust de master, ne dit rien). **La lib n'y est pour rien : l'index de la tâche
+  attend l'embarquement de son fichier derrière les gros lots du départage**, et le délai de 60 s
+  tombe. Une sonde /embed courte restait à 0,2 s : un texte court ne voit pas la file des gros lots ;
+  la mesure juste est l'âge du lot en attente. L'interdit sur le Rust de l'index est levé ; ED
+  fera un lot court pour que l'index et le témoin nomment leur attente (« attend le service 7878
+  depuis N s, N morceaux en file »). hooks-essai a confirmé dans la fenêtre : e2e_lectures 24/24 en
+  18,5 s, le test des tâches en 10 s.
+- **luciepc saturé** : charge 33 à 36 sur 24 cœurs à 6 lourds (le réembarquement du départage, la
+  mesure des résidus, le banc à 8 fils, une lib entière) ; les témoins de temps rougissaient partout,
+  une passe de 20 min en prenait 45. **lourds-max ramené de 6 à 4** à 15 h 20 ; on remonte quand la
+  file est courte. Le run 1b du départage (17a094d12) : index fini à 15 h 07 après 41 min (137 943
+  morceaux réembarqués), contrôle en cours ; les runs 2b et 3b prendront ~40 min d'index chacun —
+  verdicts vers 17 h ; G annonce la fin de chaque phase d'index pour que les e2e des autres se
+  glissent entre.
+- **Atterri** : hooks-essai, **la tâche sans git** (d987d2143, par fusion en avance rapide de
+  l'arbre exactement joué : une racine hors dépôt se travaille dans une copie, relecture par diff de
+  dossier, fusion par recopie, `git_init` sur déclaration ; l'intermittent de l'équipier nommé en
+  ticket, le script d'affichage réparé). **En push** : archi (le symbole cité en lien) ; **en file** :
+  96 (M4 pas 3, rejeu seul dans la fenêtre), codeparsers (les locales JavaScript : deux témoins de
+  temps verts seuls, suites en cours), ED (le juge par pas), recherche (le cache hors de /tmp).
