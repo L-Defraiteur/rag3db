@@ -361,6 +361,15 @@ pub fn agent_with_timeout(delai: std::time::Duration) -> ureq::Agent {
     ureq::Agent::new_with_config(ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(delai)).build())
 }
 
+/// **Le nom d'un démon qui ne rend pas** (le ticket des figements de la lib entière, 8 novembre
+/// 2026) : « service d'embarquement <adresse> muet après N s », la même phrase pour l'embarqueur,
+/// le relecteur et l'OCR, pour qu'un rouge dise quel service et quel délai.
+pub fn muet_apres(adresse: &str, delai: std::time::Duration) -> String {
+    let s = delai.as_secs_f64();
+    let n = if s.fract() == 0.0 { format!("{}", s as u64) } else { format!("{s:.1}").replace('.', ",") };
+    format!("service d'embarquement {adresse} muet après {n} s")
+}
+
 /// `http://<adresse>`, quelle que soit la forme donnée.
 pub fn base_url(adresse: &str) -> String {
     format!("http://{}", adresse.trim_start_matches("http://"))
@@ -373,10 +382,11 @@ pub fn identite_de<T: DeserializeOwned>(
     attendu: &str,
 ) -> Result<T, DaemonError> {
     let base = base_url(adresse);
-    let mut reponse = agent
-        .get(format!("{base}{SANTE}"))
-        .call()
-        .map_err(|e| DaemonError::Injoignable { adresse: adresse.to_string(), cause: e.to_string() })?;
+    // Un délai dépassé se dit pour ce qu'il est : le démon a pris la connexion et ne rend pas.
+    let mut reponse = agent.get(format!("{base}{SANTE}")).call().map_err(|e| match e {
+        ureq::Error::Timeout(_) => DaemonError::SansReponse { adresse: adresse.to_string(), cause: e.to_string() },
+        e => DaemonError::Injoignable { adresse: adresse.to_string(), cause: e.to_string() },
+    })?;
     let corps = reponse
         .body_mut()
         .read_to_string()
