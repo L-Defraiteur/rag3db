@@ -1,6 +1,6 @@
 # Un SIGSEGV dans optimisticRead sous lecture concurrente pendant une indexation
 
-- **État** : ouvert (8 novembre 2026), en cours (cœur c++) : la cause n'est pas prouvée ; ce qui
+- **État** : ouvert (8 novembre 2026), en cours (cœur c++) : un mécanisme est prouvé (l'étendue, plus bas), le premier événement non ; ce qui
   suit est lu sur le core et le désassemblage.
 - **Famille** : moteur
 - **Gravité** : plantage (l'hôte de Lucie, relancé par systemd 46 s plus tard).
@@ -95,6 +95,71 @@ qu'il aura fallu pour faire planter dadbf0041. S'il ne fait pas planter dadbf004
 course demande autre chose que ce que nous savons reproduire, et la preuve reste l'usage en service
 sous surveillance. Le portable de Lucie passe sur la lib corrigée en parallèle (décision de c7 :
 le mécanisme est prouvé par le témoin ASAN, le repli est automatique).
+
+## L'étendue de code-essais-c7 (8 novembre, 16 h 50 à 17 h 30, cœur c++)
+
+c7 a trouvé un fichier creux : `code-essais-c7.rag3db` mesure 318 Gio apparents pour 1,8 Gio réels.
+Les lectures ci-dessous portent sur une copie reflink de 16 h 52, en lecture seule, et sur une
+copie jetable.
+
+| Ce qui est lu | Valeur |
+|---|---|
+| Étendue de l'en-tête (numDataPages, écrit par cbc06c3e1) | 455 380 pages |
+| Pages du fichier | 83 108 352 |
+| Données écrites (SEEK_DATA) | de 0 à 455 380, puis 256 pages à partir de 83 108 096 |
+| Segments au-delà de l'étendue | deux, `Scope_Chunk` `embedding__granite_278m_data`, 96 pages chacun, à 83 108 096 et 83 108 192 |
+| Entrée libre au-delà de l'étendue | 83 108 288, sur 64 pages |
+
+Les segments sont dans les métadonnées du point de reprise, pas dans le journal : la base relue sans
+son `.wal` les montre aussi. Aucun truncate du moteur n'allonge le fichier de données. Le trou vient
+d'écritures posées au-delà de numPages.
+
+**Le mécanisme, reproduit sur la copie jetable**
+- À l'ouverture en écriture, `Checkpointer::returnOwnerlessPages` (lot du 10 octobre, 0aed3c4b5)
+  rend libre tout ce qui va de l'étendue à la fin du fichier, soit 455 380 sur 82 652 972 pages.
+  Cette plage couvre les 192 pages des deux segments vivants.
+- Le point de reprise suivant écrit une liste libre qui contient ces pages vivantes. Une allocation
+  future les réécrira.
+- `FreeSpaceManager::handleLastPageRange` baissait numPages, et avec lui les états de page, au début
+  de la dernière plage libre qui touche la fin du fichier. Quand cette plage couvre des segments
+  vivants, numPages passe sous eux et l'étendue écrite aussi. C'est l'état de la copie de 16 h 52.
+  Le lecteur suivant de ces segments sort de la chaîne des blocs de `ConcurrentVector` : un
+  `nextIndex` nul, la signature des deux cores, toujours au même bloc.
+- La base d'origine, fermée par c7 à 17 h 14 après une ouverture en écriture, déclare 83 108 352 pages
+  et porte les 192 pages vivantes dans une entrée libre. c7 l'a mise de côté entière dans
+  `~/.cache/rag3db-moteur-notes/essais-c7/etat-ferme-17h14/`.
+
+**Ce qui n'est pas expliqué** : le premier événement, entre 0 h 08 et 8 h 50, sous 17a094d12 ou
+dadbf0041, qui a posé une entrée libre ou des pages vers 83 millions dans une base de 455 000 pages.
+Le cycle ouverture puis point de reprise entretient l'écart et le déplace, mais ne le crée pas. Le
+bloc des cores, 80 724, vise la page 82 661 836, dans une autre base (code-rag3db-depot, 448 430
+pages, saine) : le numéro faux y était en mémoire.
+
+**Relevé des bases, 17 h 20** : toutes les bases de plus de 100 Mio de ce poste sont saines, sauf
+code-essais-c7. À luciepc, les 22 bases lisibles sur 34 sont saines : aucune n'est creuse, aucune
+n'a de fichier plus long que son étendue. La sonde croisée de hotfixs (fsm_info × storage_info)
+donne zéro page à la fois libre et tenue sur la copie de 12 h 06 et sur la base de son index tracé.
+
+**Le lot `etendue-gardes`** : témoins `2411e3089`, correctif `8a1f0bd44` et `aab77eaf7`.
+
+Sur master, le témoin ASegmentBeyondTheExtentIsNotGivenBack est rouge. Il rend libres 18 pages tenues
+du dernier segment, relit des lignes fausses après une réallocation, puis meurt de SIGSEGV.
+- numPages ne baisse plus : la dernière plage libre reste une entrée.
+- returnOwnerlessPages ne rend que ce qui suit la fin de ce qui est tenu. Le relevé passe par
+  `reclaimStorage` de chaque table vers un allocateur qui ne fait que noter, puis ajoute le
+  catalogue, les métadonnées et la liste libre.
+- Le PageManager refuse une plage à libérer ou à servir qui dépasse le fichier.
+- `pin` et `optimisticRead` lèvent une erreur pour une page au-delà de numPages.
+- `writePagesToFile` refuse d'écrire au-delà de numPages.
+
+Témoins dans `test/transaction/data_file_extent_test.cpp` :
+- ASegmentBeyondTheExtentIsNotGivenBack ;
+- ARangeBeyondTheFileIsNotFreed ;
+- AWriteBeyondTheFileIsRefused ;
+- APageBeyondTheFileIsAnErrorNotACrash.
+
+Les sondes en lecture seule (`croise.cpp`, `entete.py`) sont dans
+`~/.cache/rag3db-moteur-notes/essais-c7/`.
 
 ## Témoin
 
