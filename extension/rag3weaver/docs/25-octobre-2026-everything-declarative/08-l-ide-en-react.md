@@ -314,3 +314,37 @@ La décision de Lucie du 11 octobre : « une vue « mes recherches » avec les c
   d'agent par `/call`, la route, les refus, la vue et son filtre), et
   `a_list_of_a_run_grows_by_appends_without_losing_any` (le journal : en cours, écrit, vingt
   ajouts concurrents, l'âge gardé, les refus).
+
+## Ce qui est fait (la barre du chat : l'usage, le récapitulatif, l'archiviste, 8 novembre 2026, session archi)
+
+La liste de Lucie relayée par c7 : l'usage du modèle du tour et de la session, une jauge du
+contexte, les tâches de l'archiviste dites succinctement, sous chaque conversation un récapitulatif
+qui déplie les fiches écrites, le chat sur toute la hauteur. La jauge et la hauteur étaient faites
+(hooks-essai, everything declarative) ; ce lot fait le reste (`b129247a9`, `2daf2e332`).
+
+- **`GET /ide/chat` rend `usage` et `role_runs`**, lus au journal des runs, donc après un
+  redémarrage de l'hôte comme avant. `usage` : `tour` (les unités du compteur du dernier run du
+  chat, `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`), `tour_run`,
+  `session` (leur somme sur les runs `agent-…` dont `chat` est ce dépôt, 200 au plus, `lus_max`),
+  `tours`. `role_runs` : les douze derniers runs `graph-…` dont le `RunStarted` porte un
+  `target.role`, avec `tool` ou `reaction`, `state` (`fini`, `échec`, `inconnu` quand aucune fin ne
+  se lit) et `at_ms` (lu dans le nom du run).
+- **Un run lu une fois** : l'hôte garde le résumé de chaque run lu par (dépôt, run)
+  (`DaemonHost::resumes_des_runs`, vidé au-delà de 8 192). Le journal ne garde que des runs finis,
+  et les ajouts tardifs (clics, épingles, bilans) ne touchent ni les `Consumed` ni le `RunStarted`.
+- **La page** : sous la jauge, `.usage-jetons` (« tour : … entrée · … sortie », « récents (N
+  tours) : … » ; « récents », car une conversation n'a ni début ni remise à zéro enregistrés) ;
+  puis `.recap[data-ouvert]`, un bouton qui déplie les fiches écrites, déplié d'emblée pour la
+  conversation ouverte. Les tâches à rôle lues à l'état se fusionnent à celles du flux dans
+  `#runs-a-role` : un rechargement retrouve l'archiviste. Après un envoi, toute la barre se relit
+  une fois, puis la seule conversation du tour, jusqu'à y voir son run (dix fois, 300 ms) ; si elle
+  abandonne, un `console.warn` nomme le run.
+- **Relu par everything declarative** : le coût des relectures (d'où le résumé retenu et la
+  relecture d'une seule conversation), le récapitulatif courant déplié, « récents » plutôt que
+  « session », l'état inconnu, la boucle qui le dit.
+- **Témoins** : `l_etat_du_chat_rend_l_usage_du_tour_et_de_la_session_et_les_taches_a_role` (par
+  le chemin de l'hôte), `la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste` (navigateur : les
+  jetons de la page égaux à ceux de `/ide/chat`, replier puis déplier, l'archiviste « fini » après un
+  rechargement ; l'hôte du témoin a son journal, `with_runs_root`, celui par défaut est éteint sous
+  les témoins), `une_tache_a_role_sans_fin_lisible_se_dit_inconnue`.
+- **Laissé** : rafraîchir « Dépôts » sur `RepoAttached`, qui n'est pas encore sur master.
