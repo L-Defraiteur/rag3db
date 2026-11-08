@@ -1,0 +1,11 @@
+%% tool: attach_worktree
+%% description: Attache un worktree déjà sur ce poste : l'atelier l'inscrit, l'ouvre et lance son index en fond. Donnez son chemin, par exemple ~/git_workspaces/rag3db-quelque-chose. Rien n'est cloné, aucune commande git n'est lancée.
+%% param: path string! -- Le chemin du worktree (`~/` s'étend).
+%% result: worktree.result
+%%
+%% C'est l'hôte qui attache, pas l'agent par une commande : le flux (sujet
+%% `repos`), la boîte et les hooks voient le geste. Un worktree déjà attaché est
+%% rouvert, son index dit où il en est.
+
+graph LR
+    worktree["WorktreeNode(action='attach', path=$path)"]

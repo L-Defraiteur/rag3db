@@ -38,6 +38,29 @@ impl Roots {
         Ok(Self { config, data })
     }
 
+    /// **Les manifestes des arbres inscrits** : les `.json` de
+    /// `<config>/*/templates/backends/code/` qui déclarent `database` et `tools`, triés.
+    pub fn registered_manifests(&self) -> Vec<PathBuf> {
+        let mut chemins = Vec::new();
+        let Ok(arbres) = std::fs::read_dir(&self.config) else { return chemins };
+        for arbre in arbres.flatten() {
+            let Ok(it) = std::fs::read_dir(arbre.path().join("templates/backends/code")) else { continue };
+            for f in it.flatten() {
+                let p = f.path();
+                if p.extension().is_some_and(|e| e == "json")
+                    && std::fs::read_to_string(&p)
+                        .ok()
+                        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                        .is_some_and(|v| v.get("database").is_some() && v.get("tools").is_some())
+                {
+                    chemins.push(p);
+                }
+            }
+        }
+        chemins.sort();
+        chemins
+    }
+
     /// Le manifeste du backend `nom`.
     pub fn manifest(&self, nom: &str) -> PathBuf {
         self.config.join(nom).join("templates/backends/code/backend.json")
