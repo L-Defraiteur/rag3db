@@ -1,0 +1,180 @@
+# Une session, plusieurs backends
+
+7 novembre 2026, everything declarative. La question de Lucie : « je comprends pas pourquoi une
+session doit être limitée à un backend, pourquoi c'est pas l'agent qui les explore ? », et avant :
+« après je veux voir ça en mode worktrees : une session prend un lot de worktrees sur plusieurs
+repos ». Pas un lot ce soir ; la réponse, et par où commencer.
+
+## Le vocabulaire : celui de git, jamais « backend » à l'écran
+
+Lucie, 7 novembre 2026 : « les gens qui bossent, eux, parlent pas spécialement en backends ; ils
+parlent en branches, PR, worktrees, repos attachés ». Donc :
+
+- **Ce qu'on voit et ce que l'agent dit** : une session **s'attache à des dépôts** ; dans un dépôt,
+  **un worktree sur une branche** ; une **tâche** vit dans un worktree et finit **en PR ou en
+  fusion** ; la mémoire longue est **« la mémoire »**. « Backend » reste un mot du manifeste et du
+  code — jamais de l'écran, jamais des commandes ni des outils de l'agent.
+- **Deux mots selon la nature** (Lucie : « il faut séparer les deux notions ») : un **dépôt** pour
+  le code (worktrees, branches, PR) et un **projet rag3weaver** pour le déclaratif pur, sans dépôt
+  git (le constructeur de decks, un carnet…), plus **la mémoire**. « Backend » couvre les trois
+  dans le manifeste et le code ; l'hôte les distingue par `kind: code | memory | project` dans
+  `/ide/etat` (posé par hooks-essai au lot B2a), et l'écran nomme chacun par son mot.
+- **La barre de gauche : la session d'abord, ses dépôts dessous** (Lucie : « on doit quand même
+  naviguer par "agent" ou "session", mais dans la barre on doit voir en hiérarchie de lui les dépôts
+  qui sont chargés ou pas pour lui, et en accès rag ou pas »). Premier niveau : **la session**
+  (un agent : son nom, son modèle, sa jauge de contexte, ses fiches écrites). Sous elle, **ses
+  dépôts attachés**, chacun avec deux états : **chargé / non chargé** (son backend ouvert dans
+  l'hôte ou non) et **rag : indexé / en cours / absent** (l'index de son worktree) ; ses worktrees
+  et branches sous chaque dépôt. **La mémoire** est un enfant de la session, avec son accès
+  (chargée, et lue ou non par la session). Les dépôts attachés à aucune session sont en bas, en
+  **« disponibles »**.
+- **Tranché avec Lucie (7 novembre, par c7)** : une session (un agent) a deux groupes, **Dépôts**
+  (› worktrees : branche, chargé, rag) et **Sous-sessions** (le même motif, récursif, avec leur
+  état) ; un worktree tenu par une sous-session se voit des deux côtés (un badge) ; un fil
+  d'Ariane, un filtre « actifs seulement », les dépôts « disponibles » en bas, la mémoire enfant de
+  la session ; un menu « par session / par dépôt » qui inverse l'arbre (dépôt › worktree › les
+  sessions qui le tiennent). Les sous-sessions sont les **sous-équipiers** de la page 01 (lot 5) ;
+  aujourd'hui, ce sont les équipiers des tâches de la conversation.
+- (Avant le manifeste de session, une session = une conversation : ses dépôts sont celui de sa
+  conversation et ses tâches, sa mémoire celle que son manifeste déclare.)
+- **La liste des dépôts sous une session** : les **dépôts attachés**, puis sous chacun ses worktrees et
+  leurs branches (et ses PR ouvertes quand le dépôt a une forge) ; une conversation est rangée sous
+  le dépôt ou le worktree qu'elle tient. Plus de « backends ouverts ».
+- **Le manifeste de session** se dit « dépôts attachés » (`repos`), chacun avec ses worktrees ; le
+  backend d'un dépôt (son index, ses outils) en découle, l'utilisatrice ne le nomme pas.
+- **Les outils de l'agent** prennent un dépôt ou un chemin, jamais un id de backend ; l'hôte
+  résout le backend.
+- **La vue de session** montre ce que cette session a fait, sur quels worktrees (branches,
+  commits, PR), pas sur quels backends.
+- **À appliquer** dans les lots suivants, l'IDE d'abord : la barre du lot du chat (B2 de
+  hooks-essai) dit « dépôts » et liste les dépôts attachés ; le terminal de tty de même.
+
+Dans le reste de cette page, « backend » désigne la pièce du code ; l'écran dira « dépôt ».
+
+## Le modèle : session › tâches › espaces
+
+Tranché avec Lucie le 7 novembre (son exemple : un ticket Monday qui touche le serveur, la webapp
+et le bridge) ; « gardons en tête qu'une session tient potentiellement plusieurs worktrees ».
+
+- **Une tâche est l'intention** : la consigne, le plan (un seul), la boîte, le bilan, le juge.
+  Elle tient **un à n espaces de travail** : un worktree par dépôt touché, ou un dossier sans git.
+  Chaque pas du plan dit l'espace où il travaille.
+- **Une proposition par espace** (une PR par dépôt, ou une fusion) ; la tâche finit quand toutes
+  ses propositions sont fusionnées (ou rejetées).
+- **Zéro à n sous-tâches**, déléguées à des sous-sessions (les sous-équipiers de la page 01),
+  chacune avec son espace et son bilan, fondues par la tâche mère.
+- **Une session** tient zéro à n tâches. Rien ne se code « un espace par tâche » ni « une tâche par
+  session ».
+- **L'écran** : session › tâches › espaces ; les sous-sessions sous la tâche qui délègue ; la vue
+  « par dépôt » : pour chaque worktree, la tâche (et sa session) qui le tient.
+- **L'atelier** : « travaille sur ce ticket » ouvre une tâche, et l'agent y attache les dépôts qu'il
+  lui faut par les outils intégrés de la page 03.
+- **Aujourd'hui** une tâche du code (`taches.rs`) est un seul espace (un worktree, plus un second
+  `code` quand le code est dans un autre dépôt) : c'est le cas particulier « une tâche, un
+  espace », que le modèle garde.
+
+## La forme de `/ide/etat` pour cette barre
+
+Accordée avec hooks-essai, qui habille la barre ; les champs d'aujourd'hui (`backends`) restent pour
+les vues qui les lisent.
+
+```json
+{
+  "chat_sessions": [{
+    "id": "<backend de la conversation principale>", "name": "…", "model": "gemini-3.8-flash",
+    "state": "running" | "waiting" | "ended" | "error" | null, "awaits_answer": false,
+    "memory": { "backend": "<id>" | null, "rag": true },
+    "spaces": [Space]
+  }],
+  "tasks": [{
+    "id": "<backend de la tâche>", "session": "<id de la session>", "parent_task": null,
+    "name": "<nom>", "state": "running", "awaits_answer": false, "spaces": [Space]
+  }],
+  "available_repos": [Space]
+}
+Space = { "backend": "<id>", "repo": "rag3db" | null, "branch": "agent/doc" | null, "path": "<racine>",
+          "loaded": true, "rag": { "state": "indexed" | "indexing" | "absent", "percent": 87 },
+          "proposal": { "state": "open" | "merged" | "rejected" } | null }
+```
+
+`chat_sessions` et non `sessions` (le mot désigne déjà les clients de l'hôte). Une session, avant le
+manifeste de session, = une conversation (une entrée de `chats`) : ses `repos` sont son dépôt et
+les worktrees de ses tâches ouvertes ; les sessions MCP de Claude Code n'y entrent qu'avec
+l'identité d'agent à clé stable. `loaded` : le slot du backend est ouvert dans l'hôte (lu sans
+attendre). `rag` se lit dans `index_states` (déjà dans `backends[i].index`) : `indexed` si le texte
+est là, `indexing` avec un pourcentage si un lot est en cours, `absent` sinon. La forme est celle de hooks-essai, qui habille la barre. **Une session** est un backend sans
+tâche qui converse (une entrée de `chats`) ou qui est ouvert ; une mémoire ouverte n'est une
+session que si on lui parle, sinon elle reste l'enfant `memory` des sessions qui la déclarent. **Les
+disponibles** sont les backends de code ni ouverts ni tenus. **L'espace d'une tâche** porte le nom
+du dépôt de la tâche (`repo_of(t.depot)`, pas le dossier de son worktree) et `branch` =
+`t.branche` ; `path` est sa racine de code. `chat_sessions[].spaces` : le dépôt de
+la session (sa conversation principale), un élément, ou aucun hors de tout dépôt ou dossier.
+`tasks` : aujourd'hui les tâches de `taches.rs` (`id` = le backend de la tâche, `session` =
+`tache.parent`, `parent_task` toujours null jusqu'aux sous-équipiers) ; leurs `spaces` sont le
+worktree de la tâche, plus le worktree `code` quand le code est dans un autre dépôt ; `state` et
+`awaits_answer` viennent de l'équipier de la tâche. `proposal` est null pour l'espace d'une session,
+`open` pour une tâche ouverte. `available_repos` : les backends de nature code qui ne sont ni une
+tâche ni le dépôt d'une session. La page groupe les tâches par `session`, les sous-tâches par
+`parent_task`, et la vue « par dépôt » regroupe tous les `spaces` par `repo` en disant qui tient
+chacun (la session, ou la tâche › sa session). La jauge et les fiches écrites se lisent dans
+`GET /ide/chat`.
+
+## 1. Pourquoi aujourd'hui un chat = un backend
+
+Rien de profond : c'est l'endroit où chaque pièce a été rangée, une à une.
+
+- **La session est rangée par backend** : l'hôte tient `chats: id du backend → session`, le fil se
+  garde sous `<racine des chats>/<id>`, la route est `/ide/code/<id>/chat`.
+- **Les outils sont ceux d'un manifeste** : un tour construit sa boîte depuis `b.prepared()`
+  (`OutilsDuChat::de`, `DeclarationTools`, `BackendTools`) — les outils attachés à *ce* backend,
+  appelés par `Backend::call` sur *sa* base.
+- **Le modèle et la politique se lisent dans ce manifeste** : `models.llm`, `declarations`,
+  `teammate`, `bilans`, la porte des commandes du workspace.
+- **Une tâche est un worktree du dépôt qui porte ce manifeste** (`ouvrir_une_tache(parent, nom)`),
+  avec la copie de sa base ; la boîte de l'équipier est celle de cette tâche.
+- **La mémoire est un autre backend**, atteint par côté : le juge y écrit (`bilans.memoire`), et
+  chez Claude Code le hook parle au backend « memory » à part. Le chat lui-même ne la lit pas.
+
+Claude Code fait déjà l'autre forme : ses serveurs MCP (`code-rag3db`, `memoire-longue`) sont des
+backends distincts, et c'est l'agent qui choisit lequel appeler. Notre chat n'a simplement jamais
+eu qu'une boîte d'outils.
+
+## 2. Ce que serait une session à plusieurs backends
+
+- **Un manifeste de session** (déclaratif, comme le reste) : ses backends (`{alias, manifest}` :
+  le code de plusieurs dépôts, la mémoire longue…), ses worktrees (un par dépôt, s'il travaille
+  dans une tâche), son modèle, sa politique d'équipier. Une session devient une entité à elle, avec
+  son id, sa route `/ide/session/<id>`, son fil et sa boîte.
+- **Une seule boîte d'outils, union des backends** : les outils d'un backend secondaire préfixés
+  par son alias (`memoire.recall_fiches`, `lucivy.search_code`) ; les outils de fichiers résolus
+  par le chemin (le worktree qui le contient), si bien que `read_file` reste un seul outil.
+  L'étanchéité du lot 1 vaut par backend : un backend qui manque rend ses outils indisponibles, les
+  autres continuent.
+- **Un seul fil, une seule boîte** pour la session ; les sous-équipiers (lot 5 de la page 01)
+  peuvent alors porter chacun un sous-ensemble des worktrees.
+- **Les worktrees en lot** : « une session prend un lot de worktrees sur plusieurs repos » =
+  la session ouvre autant de worktrees qu'il lui en faut, plusieurs dans un même dépôt s'il le
+  faut (Lucie : « pas obligé un worktree par repo » ; page 03), chacun (une branche, un worktree, une vue de l'index par dépôt
+  quand les vues de la vision du 6 novembre seront là), et les fusions restent par dépôt, à un
+  humain.
+
+## 3. Ce que ça coûte, ce que ça casse, par où commencer
+
+- **Le journal des runs et le juge** sont rangés par backend (`juger(backend_id, run)`, le
+  journal par backend) : il faut un journal par session, chaque appel d'outil portant le backend
+  qu'il a touché ; le juge lit le run de la session.
+- **L'IDE ouvre un backend** : la vue du chat, la barre, les runs par rôle se lisent par backend ;
+  la vue de session les agrège (le flux porte déjà le `backend` de chaque trame).
+- **La relecture d'une tâche** devient une relecture par dépôt dans la même page.
+- **Le prompt grossit** (deux backends ≈ trente outils) : les préfixes et les descriptions doivent
+  rester sobres ; c'est ce que Gemini et Claude tiennent déjà chez Claude Code.
+- **Rien ne casse si on garde l'ancienne forme comme cas particulier** : une session à un seul
+  backend est exactement le chat d'aujourd'hui.
+
+**Par où commencer** (ce que fait déjà Claude Code) : un chat qui a **le backend de code et la
+mémoire longue à la fois**. Le manifeste de code déclare déjà sa mémoire (`bilans.memoire`) ; la
+boîte du tour y ajoute les outils de lecture de la mémoire, préfixés (`memoire.recall_fiches`,
+`memoire.get_fiche`), appelés sur ce backend-là, l'étanchéité comprise. Un lot court, qui ne
+change ni la route ni le journal, et qui prouve l'union des boîtes et les préfixes avant le
+manifeste de session. Puis le manifeste de session et le journal par session, puis les worktrees
+en lot.

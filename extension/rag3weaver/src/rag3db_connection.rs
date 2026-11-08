@@ -352,7 +352,16 @@ impl Rag3dbConnection {
                         return Self::connect(db, reopen);
                     }
                     Err(e) if e.to_string().contains(ALREADY_OPEN_FOR_WRITING) && !reste.is_zero() => {}
-                    Err(e) => return Err(DbError::ConnectionError(e.to_string())),
+                    // Le verrou de fichier tenu par un autre processus : la marque dit
+                    // qui (7 novembre 2026 — un second écrivain lancé à la main recevait
+                    // le refus du moteur sans savoir qui tient la base).
+                    Err(e) => {
+                        let mut texte = e.to_string();
+                        if let Some(qui) = crate::marque_d_ecrivain::qui_tient(path) {
+                            texte.push_str(&format!(" — {qui}"));
+                        }
+                        return Err(DbError::ConnectionError(texte));
+                    }
                 }
             } else if reste.is_zero() {
                 return Err(DbError::ConnectionError(format!(

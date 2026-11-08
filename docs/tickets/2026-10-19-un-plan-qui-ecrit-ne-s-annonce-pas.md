@@ -8,6 +8,7 @@
   que lire, par `run_read_plan`.
 - **Touche rag3weaver** : oui, seulement.
 - **Ouvert le** : 19 octobre 2026.
+- **Famille** : produit
 
 ## Ce que c'est
 

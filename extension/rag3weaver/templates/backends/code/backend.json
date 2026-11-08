@@ -1,10 +1,17 @@
 {
   "version": 1,
+  "kind": "code",
   "name": "code-poste",
   "database": "data/code-poste.rag3db",
   "embeddings": {
     "model": "granite-278m",
     "dimensions": 768
+  },
+  "models": {
+    "sparse": {
+      "provider": "service",
+      "model": "bge-m3"
+    }
   },
   "vector_extension": "vector",
   "graph_tool": true,

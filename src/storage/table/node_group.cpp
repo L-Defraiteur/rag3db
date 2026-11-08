@@ -18,6 +18,7 @@
 #include "storage/table/csr_node_group.h"
 #include "storage/table/lazy_segment_scanner.h"
 #include "storage/table/node_table.h"
+#include "storage/table/version_info.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;
@@ -157,6 +158,70 @@ void NodeGroup::merge(Transaction*, std::unique_ptr<ChunkedNodeGroup> chunkedGro
     chunkedGroups.appendGroup(lock, std::move(chunkedGroup));
 }
 
+bool NodeGroup::canExtendFlushedHead(const Transaction* transaction,
+    const std::vector<column_id_t>& columnIDs) const {
+    // Toutes les colonnes de la table, dans l'ordre : sans trou de colonne à reporter.
+    if (columnIDs.size() != dataTypes.size()) {
+        return false;
+    }
+    for (auto i = 0u; i < columnIDs.size(); i++) {
+        if (columnIDs[i] != i) {
+            return false;
+        }
+    }
+    const auto lock = chunkedGroups.lock();
+    if (chunkedGroups.getNumGroups(lock) != 1) {
+        return false;
+    }
+    const auto* head = chunkedGroups.getGroup(lock, 0);
+    // Une tête sur le disque, qui porte toutes les lignes du groupe, sans suppression : sa version
+    // neuve (toutes ses lignes insérées par la transaction) ne perd rien.
+    return head->getResidencyState() == ResidencyState::ON_DISK &&
+           head->getNumRows() == numRows.load() && head->getNumColumns() == dataTypes.size() &&
+           !head->hasDeletions(transaction);
+}
+
+void NodeGroup::extendFlushedHead(const Transaction* transaction,
+    std::unique_ptr<ChunkedNodeGroup> flushed) {
+    KU_ASSERT(flushed->getResidencyState() == ResidencyState::ON_DISK);
+    // La tête tenue jusqu'à l'échange : un point de reprise qui écrit pendant une écriture (V2-2c)
+    // pourrait l'échanger lui aussi, et un pointeur nu viserait alors un bloc mort.
+    std::shared_ptr<ChunkedNodeGroup> head;
+    {
+        const auto lock = chunkedGroups.lock();
+        KU_ASSERT(chunkedGroups.getNumGroups(lock) == 1);
+        head = chunkedGroups.getGroupShared(lock, 0);
+    }
+    KU_ASSERT(flushed->getNumColumns() == head->getNumColumns());
+    // Hors verrou : le bloc neuf partage les segments de la tête (des shared_ptr) et y ajoute ceux
+    // qui viennent d'être vidés. Seul ce COPY écrit dans ce groupe de nœuds (il tient le verrou de
+    // la collection et l'index de sa table), et aucun point de reprise ne court sous une écriture :
+    // la tête ne change pas pendant ce temps.
+    std::vector<std::unique_ptr<ColumnChunk>> chunks;
+    chunks.reserve(head->getNumColumns());
+    for (auto i = 0u; i < head->getNumColumns(); i++) {
+        auto segments = head->getColumnChunk(i).getSharedSegments();
+        auto added = flushed->getColumnChunk(i).getSharedSegments();
+        segments.insert(segments.end(), added.begin(), added.end());
+        chunks.push_back(std::make_unique<ColumnChunk>(
+            head->getColumnChunk(i).isCompressionEnabled(), std::move(segments)));
+    }
+    auto newHead = std::make_unique<ChunkedNodeGroup>(std::move(chunks), head->getStartRowIdx());
+    KU_ASSERT(newHead->getNumRows() == head->getNumRows() + flushed->getNumRows());
+    // La tête est née de ce COPY : toutes ses lignes sont à la transaction.
+    auto versionInfo = std::make_unique<VersionInfo>();
+    versionInfo->append(transaction->getID(), 0, newHead->getNumRows());
+    newHead->setVersionInfo(std::move(versionInfo));
+    const auto numAdded = flushed->getNumRows();
+    // L'échange, dans l'ordre de tout le reste : le verrou des blocs, puis inMemAppendMtx. L'ancienne
+    // tête meurt avec son dernier lecteur ; ses segments, partagés avec la neuve, restent.
+    const auto lock = chunkedGroups.lock();
+    std::unique_lock appendLck{inMemAppendMtx};
+    KU_ASSERT(chunkedGroups.getNumGroups(lock) == 1 && chunkedGroups.getGroup(lock, 0) == head.get());
+    chunkedGroups.replaceGroup(lock, 0, std::move(newHead));
+    numRows += numAdded;
+}
+
 void NodeGroup::initializeScanState(const Transaction* transaction, TableScanState& state) const {
     const auto lock = chunkedGroups.lock();
     initializeScanState(transaction, lock, state);
@@ -195,6 +260,13 @@ const ChunkedGroups& NodeGroup::groupsFor(const UniqLock& lock, transaction_t st
         }
     }
     return chunkedGroups.getAllGroups(lock);
+}
+
+void NodeGroup::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    const auto lock = chunkedGroups.lock();
+    std::erase_if(previousGenerations, [oldestReaderTS](const PreviousGeneration& generation) {
+        return generation.checkpointTS <= oldestReaderTS;
+    });
 }
 
 void NodeGroup::retireAndKeepGeneration(const UniqLock&, ChunkedGroups oldGroups,

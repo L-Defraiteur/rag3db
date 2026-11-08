@@ -7,6 +7,7 @@
   grand groupe d'un corpus réel mesuré est de 49 copies, et il est retrouvé.
 - **Touche rag3weaver** : non. L'arbre principal n'écrit plus de vecteur nul (10 octobre), et ce
   sont les vecteurs nuls du MockEmbedder qui avaient fait plusieurs centaines de copies en août.
+- **Famille** : moteur
 
 ## Ce que c'est
 
@@ -52,9 +53,9 @@ d'une liste sont donc tous des copies : la borne en garde la moitié du degré, 
 qui n'a ici rien à remplir : elles font les mêmes choix. L'écart viendrait alors du tirage des
 niveaux du graphe, qui varie d'une passe à l'autre ; il est à confirmer par des répétitions.
 
-Rouges connus : les six cas toujours rouges sont dans `known_red.txt`, le cas instable
-(ZeroIndexFirstCopy, rouge une fois sur trois au plus près ; vert sur la mesure de l'élagage
-retenu) dans `probabilistic.txt`. Les deux cas « une à une, index avant » sont dans
+Rouges connus : les cinq cas toujours rouges sont dans `known_red.txt`, les cas instables dans
+`probabilistic.txt` : ZeroIndexFirstCopy (rouge une fois sur trois au plus près ; vert sur la mesure
+de l'élagage retenu), SameIndexFirstCopy, et SameRowsFirstCopy (vert une fois sur onze, le 7 novembre). Les deux cas « une à une, index avant » sont dans
 `long.txt`.
 
 **Un second instable, le 10 octobre au soir** : `SameIndexFirstCopy` (le même vecteur non nul,

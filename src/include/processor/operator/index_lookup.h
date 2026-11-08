@@ -67,6 +67,8 @@ public:
         : PhysicalOperator{type_, std::move(child), id, std::move(printInfo)},
           infos{std::move(infos)}, warningDataVectorPos{std::move(warningDataVectorPos)} {}
 
+    void initGlobalStateInternal(ExecutionContext* context) override;
+
     void initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) override;
 
     bool getNextTuplesInternal(ExecutionContext* context) final;

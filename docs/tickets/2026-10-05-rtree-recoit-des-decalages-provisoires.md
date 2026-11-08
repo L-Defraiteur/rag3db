@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : non (il ne se sert pas de l'extension geo)
 - **Ouvert le** : 5 octobre 2026, session cœur C++ (carte des détenteurs de décalages provisoires)
 - **Pour** : cœur C++, quand l'extension geo servira
+- **Famille** : moteur
 
 ## Ce que c'est
 
@@ -56,3 +57,14 @@ tant qu'il ne se crée pas.
 3. Puis la piste de ce ticket (`BEGIN`, insertion, `ROLLBACK`, recherche), rouge ou dissipée ; si
    rouge, le RTree par `commitInsert` et le crochet d'annulation.
 Les fonctions scalaires de geo à paramètres `LIST` passent par un autre chemin : non essayées.
+
+## Relu le 7 novembre 2026 (seconde session cœur C++, lot G1) : geo est inachevée
+
+Au-delà du paramètre `LIST` sans `inferInputTypes` (ci-dessus), `QUERY_SPATIAL_INDEX` lie une liste
+de colonnes **vide** (`extension/geo/src/function/query_spatial_index.cpp`, `binder::expression_vector
+columns;` passée telle quelle à `QuerySpatialBindData`) : même l'index créé, la recherche ne rendrait
+aucune colonne lisible. Rendre geo utilisable est un chantier de produit (les types des paramètres,
+une sortie `node`/`distance` comme `QUERY_VECTOR_INDEX`, puis le RTree par `commitInsert` avec son
+crochet d'annulation, et ce ticket). Il sort donc du lot G1, dont le COPY de relations vers des nœuds
+locaux est corrigé (`c4f8610b9`), et attend qu'on décide de servir geo.
+

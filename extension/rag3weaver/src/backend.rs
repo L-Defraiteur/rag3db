@@ -29,17 +29,76 @@ fn default_vector_extension() -> PathBuf {
     PathBuf::from(DEFAULT_VECTOR_EXTENSION)
 }
 
+/// **La clé `teammate` d'un manifeste** : la politique de l'équipier d'une tâche
+/// (page 07-novembre-2026-everything-declarative/01, § 1). Absente : les défauts.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TeammatePolicy {
+    /// Les pas qui n'aboutissent pas d'affilée (le tour entier en erreur) avant
+    /// que l'équipier s'arrête en `ended "erreur : …"`. Sous ce nombre, l'échec
+    /// s'écrit dans la boîte et le pas suivant repart de la frontière.
+    #[serde(default = "TeammatePolicy::trois")]
+    pub max_failed_steps: u32,
+    /// Au-delà de ces secondes, un appel d'outil qui attend encore (un index qui
+    /// tient l'écriture) le dit dans la boîte, et continue d'attendre : rien
+    /// n'est abandonné, rien ne part en double.
+    #[serde(default = "TeammatePolicy::vingt")]
+    pub tool_wait_notice_s: u64,
+    /// Après un arrêt de l'hôte, l'équipier dont la demande n'a pas de fin
+    /// reprend à sa frontière au redémarrage (le défaut) ; `false` le laisse en
+    /// attente, sa boîte dit pourquoi.
+    #[serde(default = "TeammatePolicy::oui")]
+    pub resume_after_restart: bool,
+}
+
+impl TeammatePolicy {
+    fn trois() -> u32 {
+        3
+    }
+    fn vingt() -> u64 {
+        20
+    }
+    fn oui() -> bool {
+        true
+    }
+}
+
+impl Default for TeammatePolicy {
+    fn default() -> Self {
+        TeammatePolicy { max_failed_steps: Self::trois(), tool_wait_notice_s: Self::vingt(), resume_after_restart: Self::oui() }
+    }
+}
+
 /// La clé `bilans` d'un manifeste : la mémoire où le juge range ses fiches.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BilansDeclares {
     pub memoire: PathBuf,
+    /// **Le plafond du juge** : au plus ce nombre de runs jugés par heure glissante
+    /// pour ce backend (chaque jugement coûte au moins un appel au modèle du juge) ;
+    /// au-delà, le run n'est pas jugé et le saut est dit. Défaut : 20, comme le
+    /// juge du hook de Claude Code (`recall_judge_max_per_hour`).
+    #[serde(default = "BilansDeclares::vingt")]
+    pub max_per_hour: u32,
+}
+
+impl BilansDeclares {
+    fn vingt() -> u32 {
+        20
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
     pub version: u32,
+    /// **La nature du backend**, déclarée par le gabarit qu'il instancie (c7,
+    /// 7 novembre 2026) : `code` (un dépôt : worktree, branche), `memory` (la
+    /// mémoire), `project` (un projet rag3weaver déclaratif). C'est ainsi que
+    /// la page le range (« Dépôts », « Mémoire », « Projets ») ; absent, l'hôte
+    /// replie sur ce qu'il voit (un espace de travail, un dépôt git) et le dit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<BackendKind>,
     /// Script sources and hook resources are chosen by the host, never tool callers.
     #[serde(default)]
     pub scripts: BTreeMap<String, PathBuf>,
@@ -125,6 +184,9 @@ pub struct BackendManifest {
     /// runs de ce backend ne sont pas jugés.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bilans: Option<BilansDeclares>,
+    /// **La politique de l'équipier** d'une tâche ouverte sur ce backend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub teammate: Option<TeammatePolicy>,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
@@ -282,6 +344,30 @@ pub struct ToolAttachment {
     /// 3 octobre 2026 (docs/3-octobre-2026-23h05/01), validée.
     #[serde(default)]
     pub after: Option<AfterToolHook>,
+    /// **Le rôle de l'outil**, champ libre (`archiviste`, …) : relayé dans
+    /// `RunStarted.target.role` et dans `describe()` — la page de l'IDE range
+    /// les runs par rôle, jamais par leur nom.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+}
+
+/// La nature d'un backend ([`BackendManifest::kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackendKind {
+    Code,
+    Memory,
+    Project,
+}
+
+impl BackendKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Code => "code",
+            Self::Memory => "memory",
+            Self::Project => "project",
+        }
+    }
 }
 
 /// **Une relation du manifeste** : sa définition au catalogue, à plat, et la
@@ -369,6 +455,12 @@ pub struct ReactionAttachment {
     /// appelable — mais elle se lit au journal et au reçu d'ouverture.
     #[serde(default)]
     pub description: Option<String>,
+    /// **Le rôle de la réaction**, comme celui d'un outil (`archiviste`, …) :
+    /// ses runs le disent dans `RunStarted.target.role` — l'archive et la
+    /// compaction tournent souvent par une réaction, et la barre du chat les
+    /// range par rôle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 /// Les nœuds qu'une réaction peut traverser, et le refus qui dit quoi faire.
@@ -747,6 +839,10 @@ pub struct Surcharges {
     /// La racine du workspace (absolue) et si la tâche y écrit : jamais la
     /// racine de l'arbre principal quand celle-ci est dans un dépôt git.
     pub workspace: Option<(PathBuf, bool)>,
+    /// Les déclarations sont une copie qu'aucun dépôt ne suit (une tâche dont
+    /// seul le code est dans un dépôt) : `declare` refuse, rien ne serait
+    /// versionné ni fusionné.
+    pub declarations_hors_depot: bool,
 }
 
 /// Une base copiée sous la porte des écrivains
@@ -795,6 +891,10 @@ pub struct PreparedBackend {
     /// Les miroirs en fichiers, par entité qui déclare `files`.
     miroirs: HashMap<String, Arc<crate::fichiers_entite::Miroir>>,
     tools: BTreeMap<String, GraphTool>,
+    /// **Les outils qui lisent le creux** (`HighlightNode`, sous-graphes compris) :
+    /// `models.sparse` leur est servi comme au signal creux de la recherche, et
+    /// les compte pour la règle de la déclaration morte (7 novembre 2026).
+    lecteurs_du_creux: Vec<String>,
     /// Le registre des nœuds, en `Arc` : le chemin des outils le prête le
     /// temps d'un appel, le réacteur des réactions le garde le temps de son
     /// service.
@@ -1493,6 +1593,19 @@ impl PreparedBackend {
             tool_schemas.insert(name.clone(), input);
             tools.insert(name.clone(), tool);
         }
+        // Les outils qui lisent le creux, sous-graphes compris.
+        let lecteurs_du_creux: Vec<String> = tools
+            .iter()
+            .filter(|(name, tool)| {
+                tool.template()
+                    .nodes
+                    .iter()
+                    .map(|n| n.node_type.as_str())
+                    .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(String::as_str))
+                    .any(|t| crate::backend_code::SPARSE_READER_NODES.contains(&t))
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
         // La politique de chaque outil se vérifie au chargement : un graphe
         // qui déborde sa politique, ou une politique sans le workspace
         // qu'elle exige, se refuse en disant quoi faire.
@@ -1629,6 +1742,7 @@ impl PreparedBackend {
             .map(|v| crate::builtin_templates::drift_avec(&directory, &v, lecteur))
             .unwrap_or_default();
         Ok(Self {
+            lecteurs_du_creux,
             template_drift,
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             surcharges: Surcharges::default(),
@@ -1782,7 +1896,14 @@ impl PreparedBackend {
                     }
                 }
             }
-            json!({"name":name,"description":description,"inputSchema":self.tool_schemas[name]})
+            // `policy` : ce que l'outil a le droit de faire (lire, écrire,
+            // exécuter, son effet d'écran) — un client choisit dessus, jamais
+            // sur une liste de noms (le terminal, docs/07-novembre-2026-tty).
+            let mut outil = json!({"name":name,"description":description,"inputSchema":self.tool_schemas[name],"policy":attachment.policy});
+            if let Some(role) = &attachment.role {
+                outil["role"] = json!(role);
+            }
+            outil
         }).collect();
         if self.manifest.search_graphs {
             tools.extend(search_tool_definitions());
@@ -1975,29 +2096,51 @@ impl PreparedBackend {
                 .as_ref()
                 .is_some_and(|w| w.index_signals.values().flatten().any(|s| s == "sparse"));
         // Le sens inverse : un modèle creux que rien ne lit est une
-        // déclaration morte — la famille « écrire ce que rien ne lira ».
+        // déclaration morte — la famille « écrire ce que rien ne lira ». Un
+        // outil qui contient un lecteur du creux (le surlignage à l'affichage)
+        // le lit aussi (7 novembre 2026).
         if self.manifest.models.contains_key(&crate::model_source::Capability::Sparse)
             && !veut_le_creux
+            && self.lecteurs_du_creux.is_empty()
         {
             return Err(
-                "models.sparse est déclaré mais aucun signal sparse ne le lit — montez-le \
-                 sur une entité (signals) ou sur le schéma nommé (workspace.index_signals)"
+                "models.sparse est déclaré mais rien ne le lit — montez un signal sparse \
+                 sur une entité (signals) ou sur le schéma nommé (workspace.index_signals), \
+                 ou un outil qui le lit (HighlightNode)"
                     .into(),
             );
         }
+        let mut avertissement_du_creux: Option<String> = None;
         match (self.manifest.models.get(&crate::model_source::Capability::Sparse), veut_le_creux) {
             (None, true) if !sans_service => {
                 return Err("ce backend déclare un signal sparse : `models.sparse` est requis \
                             (par exemple {\"provider\": \"service\", \"model\": \"bge-m3\"})"
                     .into());
             }
-            (Some(source), _) => {
-                let (clients, _) = crate::model_source::connect_sparse(source)?;
-                cat.set_sparse_embedder(clients.sparse);
-                if let Some(dual) = clients.dual.filter(|_| source.model == self.embed.model) {
-                    cat.set_dual_embedder(dual);
+            (Some(source), _) => match crate::model_source::connect_sparse(source) {
+                Ok((clients, _)) => {
+                    cat.set_sparse_embedder(clients.sparse);
+                    // Le dual, quand le creux et le dense sont un même modèle : une
+                    // requête dense passe alors par une seule passe avant dont la
+                    // tête creuse ne coûte presque rien ; l'ingestion ne s'en sert
+                    // que sous le signal creux de l'entité (`EmbedNode`).
+                    if let Some(dual) = clients.dual.filter(|_| source.model == self.embed.model) {
+                        cat.set_dual_embedder(dual);
+                    }
                 }
-            }
+                // Le signal creux de la recherche l'exige : l'ouverture échoue.
+                Err(e) if veut_le_creux => return Err(e),
+                // Seuls des outils le lisent : ils se replient (le surlignage
+                // sur les mots de la requête), et l'ouverture le dit.
+                Err(e) => {
+                    let texte = format!(
+                        "le creux déclaré (models.sparse) n'est pas joint : {} se replie ({e})",
+                        self.lecteurs_du_creux.join(", ")
+                    );
+                    eprintln!("[backend] {texte}");
+                    avertissement_du_creux = Some(texte);
+                }
+            },
             (None, _) => {}
         }
         // Le chemin cité pour Cypher (barres obliques inverses et apostrophes
@@ -2084,9 +2227,12 @@ impl PreparedBackend {
             Some(source) => Some(crate::decider::connect_decider(source)?.0),
             None => None,
         };
+        let llm = cat.llm();
         let backend = Backend {
             decider,
+            llm,
             avertissement_sans_service,
+            avertissement_du_creux,
             embarqueur_a_retenter,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -2318,6 +2464,7 @@ const SEARCH_NODES: &[&str] = &[
     "LabelResultsNode",
     "FuseResultsNode",
     "RerankNode",
+    "HighlightNode",
     "PaginateNode",
     "ResolveParentNode",
     "RenderResultsNode",
@@ -2566,6 +2713,37 @@ impl PreparedBackend {
     }
 }
 
+/// **Le délai d'un appel** (ticket du 7 novembre 2026, « une recherche continue
+/// sur l'hôte après l'abandon de son client ») : posé par l'hôte le temps d'un
+/// `/call` qui porte `deadline_ms`, dans ce fil. Chaque graphe que l'appel
+/// exécute arme une minuterie qui l'arrête à l'échéance par le registre des
+/// runs en vol, au nom de `deadline` ; `fired` dit à l'hôte que l'échéance a
+/// frappé.
+#[derive(Clone)]
+pub struct CallDeadline {
+    pub at: std::time::Instant,
+    pub ms: u64,
+    pub fired: Arc<std::sync::atomic::AtomicBool>,
+}
+
+thread_local! {
+    static DEADLINE_OF_CALL: std::cell::RefCell<Option<CallDeadline>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Exécute `f` avec le délai `d` posé pour les graphes de ce fil, puis le
+/// remet.
+pub fn with_call_deadline<T>(d: Option<CallDeadline>, f: impl FnOnce() -> T) -> T {
+    struct Remettre(Option<CallDeadline>);
+    impl Drop for Remettre {
+        fn drop(&mut self) {
+            DEADLINE_OF_CALL.with(|c| *c.borrow_mut() = self.0.take());
+        }
+    }
+    let avant = DEADLINE_OF_CALL.with(|c| c.replace(d));
+    let _remettre = Remettre(avant);
+    f()
+}
+
 thread_local! {
     /// La cellule de l'appel en cours dans ce fil (`Backend::call_in`).
     static CELL_OF_CALL: std::cell::RefCell<Option<crate::scope::Scope>> = const { std::cell::RefCell::new(None) };
@@ -2654,9 +2832,18 @@ pub struct Backend {
     /// Le modèle de décision déclaré (`models.decide`), donné aux nœuds sous
     /// la clé `crate::decider::DECIDER_SERVICE`.
     decider: Option<Arc<dyn crate::decider::Decider>>,
+    /// Le modèle de langage déclaré (`models.llm`), joint à l'ouverture et donné
+    /// aux nœuds sous `crate::dataflow::LLM_SERVICE`. Tenu ici comme le decider :
+    /// le catalogue le porte aussi, mais les graphes d'outil montent leurs services
+    /// sans son mutex (lot L2), et le pas 1 de M4 le posait sur le catalogue
+    /// seulement — aucun graphe d'outil ne le voyait (7 novembre 2026).
+    llm: Option<Arc<dyn crate::llm::Llm>>,
     /// Le backend déclare du vecteur et a démarré sans service : la phrase
     /// dite à l'ouverture, redite dans `describe` et `index_state`.
     avertissement_sans_service: Option<String>,
+    /// Le creux déclaré pour des outils seuls, pas joint à l'ouverture : ils
+    /// se replient, et la phrase le redit comme l'avertissement d'au-dessus.
+    avertissement_du_creux: Option<String>,
     /// **Le service était déclaré mais pas joint à l'ouverture** : il se
     /// retente (au plus une fois par intervalle), et l'avertissement dit le
     /// dernier essai. Ticket du 11 octobre 2026, « un service injoignable à
@@ -2685,20 +2872,22 @@ impl Backend {
     /// tout ce qui est déclaré est servi.
     pub fn avertissements(&self) -> Vec<String> {
         let Some(retente) = &self.embarqueur_a_retenter else {
-            return self.avertissement_sans_service.iter().cloned().collect();
+            return self.avertissement_sans_service.iter().chain(&self.avertissement_du_creux).cloned().collect();
         };
         // L'état dit ce qui est vrai maintenant : chaque lecture des
         // avertissements retente (au plus une fois par intervalle).
         self.embarqueur_revenu();
         let r = retente.lock().unwrap_or_else(|p| p.into_inner());
-        vec![if r.revenu {
+        let mut dits = vec![if r.revenu {
             format!(
                 "{} — le service répond de nouveau : le backend se rouvre au prochain appel pour le reprendre",
                 PreparedBackend::AVERTISSEMENT_SANS_SERVICE
             )
         } else {
             format!("{} — {}", PreparedBackend::AVERTISSEMENT_SANS_SERVICE, r.raison)
-        }]
+        }];
+        dits.extend(self.avertissement_du_creux.iter().cloned());
+        dits
     }
     /// **Le service d'embarquement manquant à l'ouverture répond-il
     /// maintenant ?** Faux si rien n'est à retenter. Sinon, au plus une fois
@@ -2749,6 +2938,12 @@ impl Backend {
         description
     }
     /// La version des déclarations en service.
+    /// La porte des commandes de ce backend, si son workspace en déclare une.
+    #[cfg(feature = "code")]
+    pub fn garde(&self) -> Option<&Arc<crate::commande::Garde>> {
+        self.garde.as_ref()
+    }
+
     pub fn prepared(&self) -> Arc<PreparedBackend> {
         self.prepared
             .read()
@@ -3019,16 +3214,13 @@ impl Backend {
         let policy = NodeTypePolicy::only(crate::backend_code::reaction_nodes());
         let mut mounted = Vec::new();
         for (name, graphe) in prepared.reaction_graphs() {
-            let bindings = prepared
-                .manifest
-                .reactions
-                .get(name)
-                .map(|a| a.bindings.clone())
-                .unwrap_or_default();
+            let attachement = prepared.manifest.reactions.get(name);
+            let bindings = attachement.map(|a| a.bindings.clone()).unwrap_or_default();
             reactor = reactor
                 .watch_bound(graphe.clone(), Value::Object(bindings), policy.clone())
                 .map_err(|e| format!("la réaction « {name} » ne se monte pas : {e}"))?
-                .named(GraphTarget::Reaction(name.clone()));
+                .named(GraphTarget::Reaction(name.clone()))
+                .with_role(attachement.and_then(|a| a.role.clone()));
             mounted.push(name.clone());
         }
         Ok((reactor.spawn(), mounted))
@@ -3672,7 +3864,7 @@ impl Backend {
                 .and_then(|c| c.index_state_for(entite).ok())
                 .is_some_and(|s| s.vectors == crate::catalog::Level::Ready);
             if !prets {
-                eprintln!("[crochet {tool_name}] tu — les vecteurs de {entite} ne sont pas prêts");
+                eprintln!("[crochet {tool_name}] tu — les vecteurs de {entite} ne sont pas prêts{}", crate::host_log::caller_suffix());
                 return;
             }
         }
@@ -3749,7 +3941,7 @@ impl Backend {
             Ok(hresp) => {
                 let texte = hresp["result"].as_str().unwrap_or_default().trim().to_string();
                 if texte.is_empty() {
-                    eprintln!("[crochet {tool_name}] tu — rien à dire");
+                    eprintln!("[crochet {tool_name}] tu — rien à dire{}", crate::host_log::caller_suffix());
                     return;
                 }
                 // Un état de la porte read_catalog n'est pas un contenu :
@@ -3761,7 +3953,7 @@ impl Backend {
                     || texte.starts_with(crate::dataflow::catalog_read::BUSY)
                     || texte.starts_with(crate::dataflow::catalog_read::NEVER_INDEXED)
                 {
-                    eprintln!("[crochet {tool_name}] tu — un état, pas un contenu");
+                    eprintln!("[crochet {tool_name}] tu — un état, pas un contenu{}", crate::host_log::caller_suffix());
                     return;
                 }
                 let lignes: Vec<&str> = texte.lines().collect();
@@ -3775,7 +3967,7 @@ impl Backend {
                     // Tronqué, et avoué — jamais une troncature muette.
                     section.push_str(&format!("\n_… et {coupees} lignes de plus._"));
                 }
-                eprintln!("[crochet {tool_name}] déclenché — {} lignes", hook.max_lines.min(texte.lines().count()));
+                eprintln!("[crochet {tool_name}] déclenché — {} lignes{}", hook.max_lines.min(texte.lines().count()), crate::host_log::caller_suffix());
                 match response.get_mut("result") {
                     // Le rendu markdown gagne sa section à la suite.
                     Some(Value::String(r)) => {
@@ -3788,7 +3980,7 @@ impl Backend {
                 }
             }
             Err(e) => {
-                eprintln!("[crochet {tool_name}] en erreur (l'outil répond quand même) : {e}");
+                eprintln!("[crochet {tool_name}] en erreur (l'outil répond quand même) : {e}{}", crate::host_log::caller_suffix());
             }
         }
     }
@@ -3938,6 +4130,9 @@ impl Backend {
         services.register(crate::embedding_choice::DECLARED_MODEL_SERVICE, prepared.embed_source().model.clone());
         if let Some(decider) = &self.decider {
             services.register(crate::decider::DECIDER_SERVICE, decider.clone());
+        }
+        if let Some(llm) = &self.llm {
+            services.register(crate::dataflow::LLM_SERVICE, llm.clone());
         }
         // La surface de code déclarée : la source et la porte du manifeste,
         // montées comme sur le chemin agent — sans elles, les nœuds de code
@@ -4404,8 +4599,7 @@ impl Backend {
         };
         let p2 = PreparedBackend::load(&prepared.manifest_path)?.avec_surcharges(surcharges);
         let base = p2.path(&p2.manifest.database);
-        let conn = crate::Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
-        let mut b2 = p2.open(Box::new(conn), None)?;
+        let mut b2 = p2.open(base_de_verification(&base)?, None)?;
         let reconstruction = b2.rebuild_from_files();
         let mut entites = serde_json::Map::new();
         let mut relations = serde_json::Map::new();
@@ -4589,8 +4783,26 @@ impl Backend {
         services.register("event_bus", Arc::new(bus));
         let run = crate::events::new_run_id("graph");
         if let Some(target) = target {
-            services.register(crate::events::RUN_TARGET_SERVICE, crate::events::RunTarget { run: run.clone(), target });
+            let role = match &target {
+                GraphTarget::Tool(n) => prepared.manifest.tools.get(n).and_then(|a| a.role.clone()),
+                _ => None,
+            };
+            services.register(crate::events::RUN_TARGET_SERVICE, crate::events::RunTarget { run: run.clone(), target, role });
         }
+        // L'échéance de l'appel, s'il en porte une : une minuterie qui arrête ce
+        // run par le registre des runs en vol, et se tait si le run finit avant.
+        let _minuterie = DEADLINE_OF_CALL.with(|c| c.borrow().clone()).map(|d| {
+            let (fini, attente) = std::sync::mpsc::channel::<()>();
+            let (registre, run) = (self.runs_in_flight.clone(), run.clone());
+            std::thread::spawn(move || {
+                let reste = d.at.saturating_duration_since(std::time::Instant::now());
+                if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = attente.recv_timeout(reste) {
+                    d.fired.store(true, std::sync::atomic::Ordering::SeqCst);
+                    let _ = registre.stop(&run, "deadline");
+                }
+            });
+            fini
+        });
         let output = DataflowRuntime::with_services(100, services).execute_as(&mut graph, &run)?;
         let read = |node: &str, port: &str| -> Result<Value, String> {
             let value = output
@@ -5284,7 +5496,7 @@ mod tests {
         let reactif = crate::backend_code::reaction_nodes();
         assert_eq!(
             outil.len(),
-            40,
+            43,
             "la liste des nœuds d'outil a changé ({} entrées) : si c'est voulu, corrigez \
              ce compte dans le même commit — et dites pourquoi dans son message",
             outil.len()
@@ -5397,7 +5609,9 @@ mod tests {
         }
         let backend = Backend {
             decider: None,
+            llm: None,
             avertissement_sans_service: None,
+            avertissement_du_creux: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -5618,7 +5832,9 @@ mod tests {
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
         Backend {
             decider: None,
+            llm: None,
             avertissement_sans_service: None,
+            avertissement_du_creux: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -7400,4 +7616,19 @@ pub(crate) fn resolve_vector_extension(
          ou `vector_extension` sur le chemin du fichier",
         liste.join(" ; ")
     ))
+}
+
+/// La base jetable d'une vérification à blanc ([`Backend::verify_files`]) :
+/// une base rag3db, donc seulement sous `rag3db-native`. Sans elle, la
+/// vérification le dit au lieu de ne pas se compiler (le binaire du service
+/// d'embarquement se bâtit sans le moteur).
+fn base_de_verification(base: &Path) -> Result<Box<dyn DbConnection>, String> {
+    #[cfg(feature = "rag3db-native")]
+    {
+        Ok(Box::new(crate::Rag3dbConnection::new(base).map_err(|e| e.to_string())?))
+    }
+    #[cfg(not(feature = "rag3db-native"))]
+    {
+        Err(format!("vérifier les fichiers demande la feature rag3db-native ({})", base.display()))
+    }
 }

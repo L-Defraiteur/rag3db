@@ -1,7 +1,13 @@
 # L'identité des agents en mémoire — un design
 
 Demandé par Lucie le 25 octobre 2026 au soir, cadré par c7, tranché ici ; complément de la
-page 03. Rien n'est codé : la page attend son mot.
+page 03. **Mis en service le 7 novembre 2026 à 14 h 55** : les quatre genres (`agent`, `alias`,
+`handle`, `same_as`) créés dans la mémoire de Lucie par `create_ref_type`, descriptions seules, à
+la demande de c7 pour la session d'essai des hooks (clé `hooks-essai`), qui a écrit la première
+fiche d'identité et son L1 `handle`. Ce que l'essai a relevé : `via` et `author` se passent dans
+le `record` (author = la clé nue, via = qui tient la plume : `hook`, `juge`, `archiviste`) tant que
+M7 n'est pas là ; et `put_apport` accepte une `source` qui n'est pas un chemin de Source (ticket
+du 7 novembre, pour M4).
 
 Le problème vécu : les sessions se renomment (G s'affiche « optimiseur », hotfixs « cœur
 C++ / hotfixs / tickets », moi « mémoire » après « rag3db-96 »), la référence du harnais change

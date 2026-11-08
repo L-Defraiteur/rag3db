@@ -4,6 +4,7 @@
 - **Gravité** : test instable.
 - **Atteignable en service** : non (le test).
 - **Touche rag3weaver** : oui (`src/daemon_host/chat.rs`, `src/ide/page.html`).
+- **Famille** : produit
 
 ## Ce que c'est
 

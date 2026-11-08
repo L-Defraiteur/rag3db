@@ -7,6 +7,15 @@ import { dispatchFlux, fetchState, openFlux, route, type FluxStatus, type HostSt
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
 import { Search } from "@/views/Search";
+import { Tasks } from "@/views/Tasks";
+import { TaskReview } from "@/views/TaskReview";
+import { Bilans } from "@/views/Bilans";
+import { Tree } from "@/views/Tree";
+import { Symbol } from "@/views/Symbol";
+import { GraphView } from "@/views/Graph";
+import { Dag } from "@/views/Dag";
+import { Reactions } from "@/views/Reactions";
+import { Propositions } from "@/views/Propositions";
 import { applyTheme, effectiveTheme, storedTheme, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
 
@@ -21,13 +30,13 @@ function App() {
   const [theme, setTheme] = useState<Theme>(storedTheme());
 
   useEffect(() => applyTheme(theme), [theme]);
+  const reloadState = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
   useEffect(() => {
-    const reload = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
-    reload();
+    reloadState();
     return openFlux(dispatchFlux, (s: FluxStatus) => {
       setFlux(s);
       if (s === "ouvert") {
-        reload();
+        reloadState();
         // Les vues relisent leur état à chaque ouverture du flux (le chat : un
         // tour parti avant, à rattacher).
         dispatchFlux({ sujet: "flux", backend: "*", evenement: { kind: "ouvert" } });
@@ -36,8 +45,12 @@ function App() {
   }, []);
 
   const dark = effectiveTheme(theme) === "dark";
+  const fullWindow = route().view === "chat";
   return (
-    <div className="min-h-dvh flex flex-col bg-background text-foreground">
+    // Le chat prend toute la fenêtre : ses barres aux bords, un seul défilement
+    // (sa liste) ; les autres vues gardent leur largeur de lecture et la page
+    // défile (ticket « le chat a une largeur fixe sur un écran large »).
+    <div className={`${fullWindow ? "h-dvh overflow-hidden" : "min-h-dvh"} flex flex-col bg-background text-foreground`}>
       <header className="flex items-center gap-3 px-4 py-2 border-b" id="entete">
         <a href="/ide/" className="font-semibold tracking-tight">
           rag3weaver
@@ -59,13 +72,13 @@ function App() {
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
       </header>
-      <main id="vue" className="flex-1 px-4 py-6 max-w-5xl w-full mx-auto">
+      <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
         {error ? (
           <p className="text-destructive" role="alert">
             {error}
           </p>
         ) : state ? (
-          <View state={state} />
+          <View state={state} reload={reloadState} />
         ) : (
           <p className="text-muted-foreground">
             <Badge variant="outline">…</Badge> l'état de l'hôte se lit
@@ -78,11 +91,19 @@ function App() {
 
 // La vue que l'URL nomme ; une vue non portée n'arrive pas ici : l'hôte la sert
 // depuis l'ancienne page.
-function View({ state }: { state: HostState }) {
+function View({ state, reload }: { state: HostState; reload: () => Promise<unknown> }) {
   const r = route();
+  if (r.view === "taches" && r.id) return r.rest ? <TaskReview id={r.id} name={r.rest} state={state} /> : <Tasks id={r.id} state={state} onChanged={reload} />;
   if (r.view === "chat" && r.id) return <Chat id={r.id} state={state} />;
   if (r.view === "fichier" && r.id) return <File id={r.id} path={r.rest ?? ""} state={state} />;
   if (r.view === "recherche" && r.id) return <Search id={r.id} state={state} />;
+  if (r.view === "bilans" && r.id) return <Bilans id={r.id} state={state} />;
+  if (r.view === "arbre" && r.id) return <Tree id={r.id} dir={r.rest ?? ""} state={state} />;
+  if (r.view === "symbole" && r.id) return <Symbol id={r.id} name={r.rest ?? ""} state={state} />;
+  if (r.view === "graphe" && r.id) return <GraphView id={r.id} name={r.rest ?? ""} state={state} />;
+  if (r.view === "dag" && r.id) return <Dag id={r.id} rest={r.rest ?? ""} state={state} />;
+  if (r.view === "reactions" && r.id) return <Reactions id={r.id} state={state} />;
+  if (r.view === "propositions" && r.id) return <Propositions id={r.id} rest={r.rest ?? ""} state={state} />;
   return <Home state={state} />;
 }
 

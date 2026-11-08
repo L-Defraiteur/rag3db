@@ -79,7 +79,7 @@ fn empreinte(depot: &Path) -> (BTreeMap<PathBuf, Vec<u8>>, String) {
 /// Un faux modèle qui demande `edit_file` (bonjour → salut) puis répond, et
 /// note les outils qu'on lui propose à chaque appel.
 fn qui_edite(vus: Arc<Mutex<Vec<Vec<String>>>>) -> ChatModel {
-    Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let vus = vus.clone();
         Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, move |turns, opts, sink| {
             vus.lock().unwrap().push(opts.tools.iter().map(|t| t.name.clone()).collect());
@@ -101,7 +101,7 @@ pub(super) fn hote(d: &Path, model: ChatModel) -> DaemonHost {
 }
 
 /// **Le chat d'une tâche édite sur sa branche ; le principal ne bouge pas.**
-/// Le tour propose `edit_file` (pas `run_command`) ; il écrit `src/lib.rs`
+/// Le tour propose `edit_file` (et `run_command`, par la porte) ; il écrit `src/lib.rs`
 /// dans le worktree de la tâche ; sa réponse le dit (`fichiers`, `tache`) ; le
 /// dépôt de l'utilisateur garde chaque octet de chaque fichier, et son `HEAD`.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
@@ -124,7 +124,9 @@ fn le_chat_d_une_tache_edite_sa_branche_et_laisse_le_principal_intact() {
     assert!(ecrit.contains("\"salut\"") && !ecrit.contains("\"bonjour\""), "le worktree de la tâche : {ecrit}");
     let propose = vus.lock().unwrap().first().cloned().unwrap_or_default();
     assert!(propose.iter().any(|n| n == "edit_file"), "edit_file est proposé dans une tâche : {propose:?}");
-    assert!(!propose.iter().any(|n| n == "run_command"), "aucune commande dans le chat : {propose:?}");
+    // Le workspace déclare une porte (`commands: approval`) : dans une tâche, run_command
+    // passe par elle (lot 2 de la page 07-novembre-2026-everything-declarative/01).
+    assert!(propose.iter().any(|n| n == "run_command"), "dans une tâche à porte, run_command est proposé : {propose:?}");
 
     // **Le journal du run** (page 04) : ses événements, l'appel edit_file avec ses
     // arguments, les tours tels que le modèle les a reçus, la tâche, le fichier.
@@ -411,7 +413,7 @@ fn le_rendu_journalise_d_un_appel_est_entier() {
 
 /// Un faux modèle qui répond en Markdown, avec un `<script>` glissé dans la réponse.
 fn qui_repond_en_markdown() -> ChatModel {
-    Arc::new(move |_b: &crate::backend::Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-markdown", 8192, move |turns, opts, sink| {
             MockLlm::new("**Trois choses** à lire :\n\n- la première\n- la seconde\n\n```rust\nfn salut() {}\n```\n\n<script>window.__pwned = 1</script> fin.").generate(turns, opts, sink)
         })))

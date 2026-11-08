@@ -2,7 +2,7 @@
 # **Les hooks de Claude Code de la mémoire longue** (page docs/07-novembre-2026-hooks-claude-code/01).
 #
 # Pose le réglage (~/.config/rag3weaver/hooks.json) et, SUR DEMANDE EXPLICITE (`--poser`), les
-# cinq entrées de hooks (SessionStart, UserPromptSubmit, PreCompact, PostCompact, Stop), chacune
+# six entrées de hooks (SessionStart, UserPromptSubmit, PreCompact, PostCompact, Stop, PostToolUse), chacune
 # lançant `<binaire> hook`, dans UNE cible — trois niveaux, du plus étroit au plus large :
 #
 #   (défaut)              le `.claude/settings.local.json` du dossier courant : une seule session,
@@ -73,7 +73,9 @@ else
 fi
 echo "cible : $niveau"
 
-commande="$binaire hook --config $config"
+# La commande posée dans settings est stable et ne change jamais : le binaire, `hook`, l'événement.
+# Tout le reste (hooks.json, les gabarits, le binaire lui-même) se relit à chaque appel.
+commande="$binaire hook"
 
 # Le réglage : les défauts, le manifeste donné ; jamais réécrit s'il existe.
 if [ "$retirer" = 0 ]; then
@@ -84,7 +86,7 @@ if [ "$retirer" = 0 ]; then
 import json, sys
 m, home = sys.argv[1], sys.argv[2]
 print(json.dumps({
-  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7,
+  "manifest": m, "keys": ["dev"], "context_tokens": 1000000, "suggest_ratio": 0.7, "recall_min_score": 0.50, "templates_dir": home + "/.config/rag3weaver/hooks",
   "prompt_block_chars": 1500, "session_block_chars": 3000,
   "prompt_timeout_ms": 5000, "timeout_ms": 20000,
   "journal": home + "/.local/state/rag3weaver/hooks.log",
@@ -99,6 +101,11 @@ EOF
   fi
 fi
 
+# Les gabarits de blocs, posés par le binaire s'il est là (jamais écrasés) : c'est là qu'on corrige à la volée.
+if [ "$retirer" = 0 ] && [ "$poser" = 1 ] && [ -x "$binaire" ]; then
+  "$binaire" hook --poser-les-gabarits --config "$config" || echo "gabarits : non posés ($binaire hook --poser-les-gabarits a échoué)"
+fi
+
 # Les entrées, fusionnées dans la cible par python (le JSON du fichier est à préserver tel quel).
 python3 - "$settings" "$commande" "$poser" "$retirer" <<'EOF'
 import json, os, sys, shutil
@@ -109,9 +116,11 @@ entrees = {
   "PreCompact":       ("manual|auto", 25),
   "PostCompact":      ("manual|auto", 25),
   "Stop":             (None, 25),
+  # Le rappel différé (3 ter b) : lu à chaque outil, sans hôte ; délai court.
+  "PostToolUse":      (None, 5),
 }
 def est_a_nous(h):
-    return any(x.get("type") == "command" and str(x.get("command", "")).startswith(commande.split(" --config")[0]) for x in h.get("hooks", []))
+    return any(x.get("type") == "command" and str(x.get("command", "")).startswith(commande) for x in h.get("hooks", []))
 try:
     with open(settings, encoding="utf-8") as f:
         d = json.load(f)
@@ -122,7 +131,7 @@ avant = json.dumps(d, sort_keys=True)
 for ev, (matcher, delai) in entrees.items():
     liste = [h for h in hooks.get(ev, []) if not est_a_nous(h)]
     if not retirer:
-        entree = {"hooks": [{"type": "command", "command": commande, "timeout": delai}]}
+        entree = {"hooks": [{"type": "command", "command": commande + " " + ev, "timeout": delai}]}
         if matcher: entree["matcher"] = matcher
         liste.append(entree)
     if liste: hooks[ev] = liste
@@ -131,6 +140,9 @@ if not hooks: del d["hooks"]
 apres = json.dumps(d, sort_keys=True)
 if apres == avant:
     print("rien à changer dans %s" % settings); sys.exit(0)
+anciennes = sorted({x.get("command") for ev in entrees for h in json.loads(avant).get("hooks", {}).get(ev, []) if est_a_nous(h) for x in h.get("hooks", []) if not str(x.get("command", "")).endswith(" " + ev)})
+if anciennes and not retirer:
+    print("commande d'avant remplacée par la commande stable « %s <Événement> » : %s" % (commande, ", ".join(anciennes)))
 if poser:
     garde = settings + ".avant-hooks"
     if os.path.exists(settings) and not os.path.exists(garde):
@@ -150,5 +162,7 @@ if [ -n "$worktree" ] && [ "$poser" = 1 ] && [ "$retirer" = 0 ]; then
   echo
   echo "l'essai : cd $dossier && claude"
   echo "  (le bloc [mémoire] apparaît au premier tour ; le journal : ~/.local/state/rag3weaver/hooks.log)"
+  echo "corriger à la volée : les gabarits dans $(dirname "$config")/hooks/<Événement>.md (une section ## par bloc), relus à chaque appel ;"
+  echo "  vérifier hors session : $binaire hook --rejouer <transcription.jsonl> SessionStart"
   echo "retirer : $0 --worktree $worktree --retirer --poser"
 fi

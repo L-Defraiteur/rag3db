@@ -1223,6 +1223,11 @@ impl DataflowRuntime {
                 .get::<crate::events::RunTarget>(crate::events::RUN_TARGET_SERVICE)
                 .filter(|t| t.run == run_id)
                 .map(|t| t.target.clone()),
+            role: self
+                .services
+                .get::<crate::events::RunTarget>(crate::events::RUN_TARGET_SERVICE)
+                .filter(|t| t.run == run_id)
+                .and_then(|t| t.role.clone()),
             scope: self
                 .services
                 .get::<crate::scope::Scope>("scope")

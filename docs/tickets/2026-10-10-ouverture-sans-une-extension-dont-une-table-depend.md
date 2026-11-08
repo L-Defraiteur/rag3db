@@ -10,6 +10,7 @@
 - **Ouvert le** : 10 octobre 2026, seconde session cœur C++, sur relevé de rag3db-96 et de
   l'orchestration
 - **Pour** : cœur C++
+- **Famille** : moteur
 
 ## Ce que c'est
 
@@ -53,3 +54,13 @@ nom, et l'option l'ouvre. La famille `ExtensionIndexRecovery` du banc a déjà d
 
 `2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati.md` (une extension chargée au rejeu
 sans contrôle de bâti).
+
+## Vu au banc le 7 novembre 2026
+
+`SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact`
+(`test/transaction/concurrence/single_writer_crash_test.cpp`) : une de ses six manches, tuée
+après 633 ms avec 2 000 documents, rouvre la base sans l'extension vector dont l'index `doc_index`
+dépend (« VIOLATION vector-extension-loaded: index doc_index on Doc: the vector extension is not
+loaded, the index cannot be checked »). Mesure : 1 manche sur 6 au banc complet sous charge (lot
+projection-lecture-seule-6), 0 sur 36 seul sur le même bâti, vert au banc du lot du retrait. Le
+cas est inscrit à `probabilistic.txt` en citant ce ticket ; il en sort dans le commit du correctif.

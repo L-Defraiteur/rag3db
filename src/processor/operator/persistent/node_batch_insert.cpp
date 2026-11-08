@@ -9,6 +9,7 @@
 #include "processor/operator/persistent/index_builder.h"
 #include "processor/result/factorized_table_util.h"
 #include "processor/warning_context.h"
+#include "storage/buffer_manager/buffer_manager.h"
 #include "storage/buffer_manager/memory_manager.h"
 #include "storage/local_storage/local_storage.h"
 #include "storage/storage_manager.h"
@@ -106,6 +107,16 @@ void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
     }
     nodeSharedState->numRowsBeforeCopy =
         nodeTable->cast<NodeTable>().getNumTotalRows(nullptr /* sans les lignes locales */);
+    const auto numThreads = std::max<uint64_t>(context->clientContext->getMaxNumThreadForExec(), 1);
+    nodeSharedState->byteBudget =
+        MemoryManager::Get(*context->clientContext)->getBufferManager()->getMemoryLimit() /
+        (3 * (numThreads + 1));
+    {
+        const auto nodeInfo = info->ptrCast<NodeBatchInsertInfo>();
+        const InMemChunkedNodeGroup empty{*MemoryManager::Get(*context->clientContext),
+            nodeInfo->columnTypes, info->compressionEnabled, StorageConfig::NODE_GROUP_SIZE, 0};
+        nodeSharedState->byteBaseline = estimatedBytes(empty);
+    }
     nodeSharedState->initPKIndex(context);
 }
 
@@ -205,6 +216,10 @@ void NodeBatchInsert::copyToNodeGroup(transaction::Transaction* transaction,
         if (nodeLocalState->chunkedGroup->isFull()) {
             writeAndResetNodeGroup(transaction, nodeLocalState->chunkedGroup,
                 nodeLocalState->localIndexBuilder, mm, *nodeLocalState->optimisticAllocator);
+        } else if (overByteBudget(*nodeLocalState->chunkedGroup)) {
+            writeAndResetNodeGroup(transaction, nodeLocalState->chunkedGroup,
+                nodeLocalState->localIndexBuilder, mm, *nodeLocalState->optimisticAllocator,
+                true /* partialFlush */);
         }
     }
     const auto nodeInfo = info->ptrCast<NodeBatchInsertInfo>();
@@ -232,19 +247,34 @@ void NodeBatchInsert::clearToIndex(MemoryManager* mm,
         oldNodeGroup->getNumRows() - startIndexInGroup);
 }
 
-void NodeBatchInsert::writeAndResetNodeGroup(transaction::Transaction* transaction,
-    std::unique_ptr<InMemChunkedNodeGroup>& nodeGroup, std::optional<IndexBuilder>& indexBuilder,
-    MemoryManager* mm, PageAllocator& pageAllocator) const {
-    const auto nodeLocalState = localState->ptrCast<NodeBatchInsertLocalState>();
-    KU_ASSERT(nodeLocalState->errorHandler.has_value());
-    writeAndResetNodeGroup(transaction, nodeGroup, indexBuilder, mm,
-        nodeLocalState->errorHandler.value(), pageAllocator);
+uint64_t NodeBatchInsert::estimatedBytes(const InMemChunkedNodeGroup& nodeGroup) {
+    uint64_t bytes = 0;
+    for (auto i = 0u; i < nodeGroup.getNumColumns(); i++) {
+        bytes += nodeGroup.getColumnChunk(i).getEstimatedMemoryUsage();
+    }
+    return bytes;
+}
+
+bool NodeBatchInsert::overByteBudget(const InMemChunkedNodeGroup& nodeGroup) const {
+    const auto nodeSharedState = ku_dynamic_cast<NodeBatchInsertSharedState*>(sharedState.get());
+    const auto bytes = estimatedBytes(nodeGroup);
+    return bytes > nodeSharedState->byteBaseline &&
+           bytes - nodeSharedState->byteBaseline > nodeSharedState->byteBudget;
 }
 
 void NodeBatchInsert::writeAndResetNodeGroup(transaction::Transaction* transaction,
     std::unique_ptr<InMemChunkedNodeGroup>& nodeGroup, std::optional<IndexBuilder>& indexBuilder,
-    MemoryManager* mm, NodeBatchInsertErrorHandler& errorHandler,
-    PageAllocator& pageAllocator) const {
+    MemoryManager* mm, PageAllocator& pageAllocator, bool partialFlush) const {
+    const auto nodeLocalState = localState->ptrCast<NodeBatchInsertLocalState>();
+    KU_ASSERT(nodeLocalState->errorHandler.has_value());
+    writeAndResetNodeGroup(transaction, nodeGroup, indexBuilder, mm,
+        nodeLocalState->errorHandler.value(), pageAllocator, partialFlush);
+}
+
+void NodeBatchInsert::writeAndResetNodeGroup(transaction::Transaction* transaction,
+    std::unique_ptr<InMemChunkedNodeGroup>& nodeGroup, std::optional<IndexBuilder>& indexBuilder,
+    MemoryManager* mm, NodeBatchInsertErrorHandler& errorHandler, PageAllocator& pageAllocator,
+    bool partialFlush) const {
     const auto nodeSharedState = ku_dynamic_cast<NodeBatchInsertSharedState*>(sharedState.get());
     const auto nodeTable = ku_dynamic_cast<NodeTable*>(sharedState->table);
 
@@ -260,7 +290,9 @@ void NodeBatchInsert::writeAndResetNodeGroup(transaction::Transaction* transacti
         FinallyWrapper sliceRestorer{
             [&]() { nodeGroup->merge(sliceToWriteToDisk, info->outputDataColumns); }};
         std::tie(nodeOffset, numRowsWritten) = nodeTable->appendToLastNodeGroup(transaction,
-            info->insertColumnIDs, sliceToWriteToDisk, pageAllocator);
+            info->insertColumnIDs, sliceToWriteToDisk, pageAllocator,
+            partialFlush ? std::optional<offset_t>{nodeSharedState->numRowsBeforeCopy} :
+                           std::nullopt);
     }
 
     if (indexBuilder) {
@@ -281,9 +313,19 @@ void NodeBatchInsert::writeAndResetNodeGroup(transaction::Transaction* transacti
 void NodeBatchInsert::appendIncompleteNodeGroup(transaction::Transaction* transaction,
     std::unique_ptr<InMemChunkedNodeGroup> localNodeGroup,
     std::optional<IndexBuilder>& indexBuilder, MemoryManager* mm) const {
-    std::unique_lock xLck{sharedState->mtx};
     const auto nodeLocalState = ku_dynamic_cast<NodeBatchInsertLocalState*>(localState.get());
     const auto nodeSharedState = ku_dynamic_cast<NodeBatchInsertSharedState*>(sharedState.get());
+    // Un groupe local qui dépasse déjà le budget va au disque lui-même : le recopier dans le
+    // groupe partagé faisait coexister les deux copies, et c'est cette copie qui manquait de
+    // tampon (pile du 11 octobre : appendIncompleteNodeGroup → DictionaryChunk::appendString).
+    if (overByteBudget(*localNodeGroup)) {
+        while (localNodeGroup->getNumRows() > 0) {
+            writeAndResetNodeGroup(transaction, localNodeGroup, indexBuilder, mm,
+                *nodeLocalState->optimisticAllocator, true /* partialFlush */);
+        }
+        return;
+    }
+    std::unique_lock xLck{sharedState->mtx};
     if (!nodeSharedState->sharedNodeGroup) {
         nodeSharedState->sharedNodeGroup = std::move(localNodeGroup);
         return;
@@ -297,6 +339,11 @@ void NodeBatchInsert::appendIncompleteNodeGroup(transaction::Transaction* transa
         numNodesAppended += nodeSharedState->sharedNodeGroup->append(*localNodeGroup,
             numNodesAppended /* offsetInNodeGroup */,
             localNodeGroup->getNumRows() - numNodesAppended);
+        if (!nodeSharedState->sharedNodeGroup->isFull() &&
+            overByteBudget(*nodeSharedState->sharedNodeGroup)) {
+            writeAndResetNodeGroup(transaction, nodeSharedState->sharedNodeGroup, indexBuilder, mm,
+                *nodeLocalState->optimisticAllocator, true /* partialFlush */);
+        }
     }
     KU_ASSERT(numNodesAppended == localNodeGroup->getNumRows());
 }
@@ -312,7 +359,7 @@ void NodeBatchInsert::finalize(ExecutionContext* context) {
         while (nodeSharedState->sharedNodeGroup->getNumRows() > 0) {
             writeAndResetNodeGroup(transaction, nodeSharedState->sharedNodeGroup,
                 nodeSharedState->globalIndexBuilder, MemoryManager::Get(*clientContext),
-                errorHandler, pageAllocator);
+                errorHandler, pageAllocator, overByteBudget(*nodeSharedState->sharedNodeGroup));
         }
     }
     if (nodeSharedState->globalIndexBuilder) {

@@ -1,5 +1,10 @@
 # Un client relance l'hôte sur une base en cours d'écriture autonome
 
+- **État** : corrigé (voir le ticket)
+- **Gravité** : deux écrivains sur une base
+- **Atteignable en service** : oui, pendant toute réindexation autonome
+- **Touche rag3weaver** : oui (`daemon_lifecycle.rs`, `daemon_host.rs`)
+
 *Ouvert le 12 octobre 2026 par l'arbre principal, à la demande de l'orchestration. Le
 correctif vit dans le produit : `daemon_lifecycle.rs` (`ensure`), l'hôte (`daemon_host.rs`).*
 

@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : oui — l'embarquement en fond écrit ses vecteurs par des `SET`, qui passent déjà par le journal : ces douze octets sont payés tous les jours
 - **Ouvert le** : 4 octobre 2026, session cœur C++
 - **Pour** : cœur C++ (journal)
+- **Famille** : moteur
 
 ## Ce que c'est
 

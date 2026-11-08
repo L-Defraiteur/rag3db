@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (les outils répondent sur un autre code que celui que l'agent édite, sans le dire)
 - **Atteignable en service** : oui, dès qu'un agent travaille dans un worktree ou sur une branche autre que celle indexée
 - **Touche rag3weaver** : oui (hôte, manifeste du gabarit `code`, montre)
+- **Famille** : produit
 
 ## Ce que c'est
 

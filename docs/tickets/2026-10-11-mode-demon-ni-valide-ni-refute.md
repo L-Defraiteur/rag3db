@@ -4,6 +4,7 @@
 - **Gravité** : inconnue, et c'est le sujet. Deux des trois questions peuvent être un défaut du produit, une est sûrement un défaut de mon témoin
 - **Atteignable en service** : seulement par `rag3weaver-backend mcp --manifest <m> --demon <adresse>`, qui n'est utilisé par personne aujourd'hui
 - **Touche rag3weaver** : oui — c'est la forme prévue pour une mémoire partagée entre sessions
+- **Famille** : produit
 
 ## Ce que c'est
 

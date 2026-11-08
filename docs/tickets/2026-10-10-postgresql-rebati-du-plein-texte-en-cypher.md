@@ -5,6 +5,7 @@
 - **Atteignable en service** : seulement avec un montage PostgreSQL et lucivy
   comme moteur de texte (`MoteurTexte::Lucivy`, ou `Auto` sans plein texte natif)
 - **Touche rag3weaver** : oui (`dialect.rs`, `catalog.rs`)
+- **Famille** : produit
 
 ## Ce que c'est
 

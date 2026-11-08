@@ -7,6 +7,101 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Une phrase collée retrouve son fichier, et le surlignage ne demande plus rien à l'hôte.**
+  Avec lucivy 4.3.2, une ligne de plus de 100 caractères copiée d'un fichier le ramène premier par
+  le signal exact, et une requête entière garde son flou jusqu'à 900 caractères (mesuré : 464 ms à
+  933) ; le surlignage des morceaux du seul vecteur lit les positions que le service bge-m3 rend,
+  sans tokenizer ni modèle dans l'hôte (139 ms pour trois textes) ; et un second processus qui veut
+  écrire une base déjà tenue est refusé en nommant l'écrivain en place (`80ca3d561`, `617de00da`,
+  `0a8ff53d9`, `217dd10a1`).
+- **8 nov. — Les fichiers d'annulation du dataflow ne s'accumulent plus dans `/tmp`.** À la fin d'un
+  graphe, tous les fichiers `*.undo.json` de plus de 64 Ko sont supprimés avec le reste, au lieu d'être
+  gardés par défaut (seules les migrations `migration-…` conservent leur annulation pour un retour
+  arrière ultérieur) : la fuite de mémoire vive en `/tmp` est étanchée (`b860ea2dd`).
+- **8 nov. — Un gros COPY de blobs tient dans un petit tampon.**
+  Un seul COPY de 112 blobs d'1 Mio échouait sous 256 Mio de tampon (« buffer pool is full ») ; un
+  COPY se borne désormais en octets, vide ses lignes au disque par lots sans attendre un groupe
+  plein, les ajoute à la tête née du même COPY par copie-échange (jamais sous les pieds d'un lecteur),
+  et écrit son journal par tranches : le COPY passe, forcé comme journalisé, annulé sans laisser une
+  page (`dadbf0041`).
+- **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
+  verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
+  codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
+  (`vue_portee`, appelée seulement là, avait 0 usage) ; sur code-lourd, 19 appels de plus et
+  aucune locale prise pour un appel. codeparsers 672a0d5.
+- **7 nov. — Le flux de l'IDE ne perd plus un événement quand deux relais se croisent.** Un id
+  tiré hors du verrou laissait un relais envoyer N+1 avant N, et N se perdait en silence : un
+  jeton manquant en direct dans le chat (1 à 3 tours sur 8 sous un modèle rapide), une ligne de
+  boîte de l'équipier. L'id se tire désormais sous le verrou des abonnés ; un témoin à quatre fils
+  (8 000 publications, 7 577 reçues avant) le garde. Et la barre range chaque backend par la
+  nature que son gabarit déclare (`kind`), son dépôt et sa branche lus dans son espace de
+  travail. 23757c7d6.
+- **7 nov. — Le chat tient l'ordre d'arrivée.** Une réponse de l'agent se lit comme elle
+  s'est faite : mots, appel d'outil, mots, appel, réponse finale, pendant le tour comme après un
+  rechargement ; chaque outil déplié dit son heure, sa durée et son résultat entier ; la liste
+  ne saute plus pendant le flux, ni quand on déplie un outil ; le chat prend tout l'écran.
+  3d09b32c2.
+- **7 nov. — La barre parle en dépôts.** « Dépôts », « Mémoire », « Projets » : chaque dépôt
+  attaché nommé par son dossier et sa branche, les worktrees de ses tâches par la leur ; sous
+  chaque conversation, la jauge du contexte (le dernier appel sur le contexte du modèle déclaré),
+  ses compteurs et les fiches écrites pendant la conversation ; les runs à rôle (l'archiviste…)
+  dans les tâches de fond. Le mot « backend » ne paraît plus à l'écran du chat. 3d09b32c2.
+- **7 nov. — Le journal de l'hôte dit l'heure et l'auteur.** Chaque ligne de `daemon.log`,
+  celles du moteur comprises, commence par l'heure ISO à la milliseconde, et une ligne née d'un
+  appel nomme son client, sa session et son dépôt : une rafale s'attribue. Le relais ne fige
+  jamais l'hôte (sortie non bloquante, patience mesurée, lignes perdues comptées). 3d09b32c2.
+- **7 nov. — Deux écrivains à la fois ne mêlent plus leurs nœuds sous un COPY de relations.**
+  Une transaction qui créait des nœuds puis les reliait par un COPY pouvait, si une autre validait
+  des nœuds dans la même table entre-temps, relier en silence les nœuds de l'autre (1000 → 1001 lu
+  2000 → 2001) ; le COPY verse désormais les nœuds de la transaction dans leur table avant de
+  résoudre la moindre clé, comme un COPY de nœuds le faisait déjà (`c4f8610b9`).
+- **7 nov. — La recherche surligne ce que le vecteur a trouvé, filtre juste et ne s'étouffe plus sur un prompt collé.**
+  Un morceau trouvé par le seul dense porte ses passages surlignés par bge-m3, calculés à
+  l'affichage et nulle part ailleurs (0 appel à l'indexation, prouvé par un service qui compte) ;
+  un filtre ne laisse plus passer dans le signal creux les morceaux d'un autre document ; et une
+  requête de 200 mots répond en 80 ms au lieu de 26 s, en disant ce qu'elle a coupé (`c5a40d376`,
+  `aaf475d4b`, `77d0b0676`).
+
+- **7 nov. — Une lecture survit à l'échec d'une de ses instructions.** Dans une transaction en
+  lecture seule, une instruction qui échoue (un index absent, un graphe projeté absent) ne fait plus
+  refuser les suivantes : les signaux d'une recherche sous instantané ne tombent plus ensemble.
+  Une interruption arrête aussi toute la requête, CREATE réécrit compris ; `17a094d12`.
+- **7 nov. — Le Daemon Code Summoning dans le terminal.** Quand l'agent réfléchit, des runes
+  tournent autour de ⛧ (« INVOCATION DU CODE… ») ; quand un outil lit, un symbole alchimique se
+  transmute ; quand il écrit ou exécute, le Glitch tire « COMPILING CURSE » et ses frères. C'est
+  la page de Lucie (ragforge, déc. 2025) refaite en cellules, l'animation choisie selon ce que
+  l'outil a le droit de faire. Elle tient sous ssh : 60 à 158 octets par image, au plus 1,6 Ko/s,
+  et se dégrade en 256 couleurs, en 16, sans couleur et en ASCII. La vue dit le dépôt, la branche
+  et la tâche, et ne montre que son worktree. f66e72d31.
+- **7 nov. — Le terminal de l'agent de code a sa vue.** `rag3weaver-tty`, sans option, ouvre une
+  vue inline en ratatui et crossterm, la même sous Windows, macOS et Linux. Le texte de l'agent
+  coule dans l'historique du terminal (défilement, copie, tmux), et seules trois lignes se
+  redessinent en bas : la ligne en cours, l'état (réfléchit, agit, attend), la saisie. Entrée parle
+  à l'équipier, Échap l'arrête. L'écran se redessine au plus 30 fois par seconde : 28 octets par
+  token mesurés, bornés à 35, pour une connexion ssh. 1fc1e24bd.
+- **7 nov. — L'équipier se suit depuis un terminal, même à travers ssh.** `rag3weaver-tty --plain`
+  lance une demande à l'agent de code et écrit au fil de l'eau ses tokens, ses outils et sa boîte.
+  Après une coupure, il reprend là où il en était, sans perte ni doublon (`Last-Event-ID`, prouvé
+  par un flux coupé au milieu d'un run). Il tourne là où est l'hôte, ou sur une autre machine par
+  un tunnel. C'est un crate à part, sans le moteur, et chaque outil dit maintenant ce qu'il a le
+  droit de faire (`policy` dans `describe`). cfc5cc8e8.
+- **7 nov. — Chercher sans avoir ouvert un dossier.** La recherche de l'IDE se tape dès
+  l'accueil, sur chaque backend, sur tout l'index ; depuis l'arbre, le dossier courant la
+  suit comme un filtre (le `scope` de `search_code`), effaçable d'un clic. Avant, la saisie
+  n'apparaissait qu'une fois un dossier ouvert, et ce dossier ne filtrait rien. e2d5c9c88.
+- **7 nov. — L'IDE entier est en React.** Après le cadre, le chat, le fichier et la
+  recherche du 25 octobre : les tâches de l'agent et leur relecture avec l'équipier, les
+  bilans de session par fiche, l'arbre, le symbole rendu section par section, le graphe, le
+  DAG vivant, les réactions, les propositions, et l'édition dans la page (CodeMirror du
+  magasin embarqué, Ctrl-S sur l'empreinte lue, le conflit montré par sa différence).
+  L'ancienne page n'a plus de vue à elle. 43d7489ee, 08d10babf, 7897d2c96, a4ffea748.
+- **7 nov. — Un lecteur ne voit plus jamais les lignes d'une écriture annulée.** Un bloc
+  entièrement annulé perdait ses versions, ce qui voulait dire « tout validé » pour un lecteur
+  qui le tenait encore : 10 + 2 048 relations d'un COPY annulé comptées, 4 fois sur 60. Les
+  lignes annulées sont désormais marquées telles, au grain du bloc, nœuds et relations ; `42b85dc62`.
+- **7 nov. — Un appel C++ ne voit que ce qu'il inclut.** La résolution suit les #include
+  et la déclaration d'en-tête : 299 arêtes justes sur 300 au juge clangd, et une mention
+  qui s'abstient se dit au lieu de passer pour devinée. 9fd37ab1c.
 - **7 nov. — La mémoire parle à Claude Code.** Des hooks posés dans une seule session
   d'essai, par un script qui crée son worktree : à l'ouverture, qui tu es et ce que tu
   tenais ; à chaque tour, les fiches en rapport, ce que d'autres ont changé dans les

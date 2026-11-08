@@ -104,6 +104,46 @@ Et une nuance qui vaut pour toute la provenance : elle documente ce qui a été
 fait et les raisons déclarées ; elle ne prouve pas que ces raisons sont vraies.
 C'est le juge qui vérifie, et la fiche dit lequel des deux parle.
 
+## La cinquième et la sixième difficulté (relecture extérieure du 7 novembre)
+
+**La cohérence temporelle entre les couches.** Le MVCC protège la cohérence
+du stockage, pas celle d'un assemblage produit par des pipelines asynchrones :
+le scope en v2, une relation calculée sur v1, un vecteur de v1 encore en route,
+une fiche de v2 — chaque donnée valide, l'assemblage faux, et le graphe répond
+avec confiance. Nos morceaux existants : l'instantané L6 épingle un état de la
+base par appel ; la fraîcheur de l'index dit `writing:true` ; un vecteur en
+retard est une « dette », pas une absence. La règle à poser :
+- tout **artefact dérivé** (relation, vecteur, apport, diagnostic) porte
+  l'empreinte des entrées qui l'ont produit, le producteur et sa version, et un
+  état : `current`, `stale`, `pending`, `failed` ; une empreinte de contenu
+  n'est pas une preuve de validité des analyses dérivées (un scope identique
+  dont un include a changé a une résolution différente) ;
+- une requête **épingle une génération** et ne mélange pas les suivantes ; la
+  génération se publie par ensemble de dépendances, jamais par une barrière
+  globale (un scope prêt n'attend pas un vecteur lent sans rapport) ;
+- un résultat partiel est **explicite** : `pending` ne vaut jamais « pas de
+  similarité » ;
+- la **publication est conditionnelle** à la génération attendue et
+  idempotente : un worker en retard ne ressuscite jamais un artefact effacé ;
+  le ramasse-miettes compte aussi les générations encore épinglées et les
+  travaux en vol.
+- le **témoin cruel**, dans le prototype : pendant qu'un agent modifie un scope
+  et ses dépendances, les délais de l'indexeur, de l'embarqueur et de
+  l'archiviste varient artificiellement sous requêtes concurrentes ; aucune
+  réponse ne mélange deux générations incompatibles.
+
+**L'identité comme hypothèse.** Un déplacement, un renommage, une réécriture
+peuvent préserver une identité, mais c'est une correspondance à établir : une
+relation `successor_of`, éventuellement ambiguë et datée, plutôt qu'une
+identité artificiellement certaine.
+
+**La configuration de bâti.** Deux analyses fraîches du même commit peuvent se
+contredire sans qu'aucune soit fausse : flags, macros, features Cargo, cibles.
+La résolution sémantique est `ScopeRevision × BuildConfiguration` ; INCLUDES
+(la visibilité par la fermeture des #include) en est déjà un cas. Ne pas
+multiplier les scopes par configuration : garder seulement les divergences de
+résolution qui ont un effet.
+
 ## Des diffs au grain du scope
 
 Lucie : « le grain du scope a d'autres avantages que l'IDE pour agents : c'est
@@ -132,6 +172,40 @@ Le worktree git reste ce qu'il est, l'espace où l'agent écrit et où la person
 relit : il est bon marché tant qu'on n'en fait pas un index. Un jour, la vue
 pourra se lire directement dans l'arbre git (chemin → blob) sans checkout,
 pour les tâches qui ne font que lire ; ce n'est pas la première marche.
+
+## Graine : des résumés de scopes, et plus loin un transpileur
+
+Lucie, 7 novembre : « un mécanisme de résumés de scopes, avec un titre
+indépendant de celui du scope ; et un jour un transpileur universel qui se
+baserait sur des résumés imbriqués de scopes, de paramètres et de retours ;
+pas tout de suite, très lourd en jetons ». Un résumé est un artefact dérivé
+comme les autres : calculé une fois par révision de scope, partagé par toutes
+les vues qui ont la même révision, recalculé seulement pour les scopes changés
+— c'est le grain du scope qui le rend abordable. Le titre indépendant est ce
+que l'archiviste fait déjà pour une fiche. Des résumés imbriqués (paramètres,
+retours, effets) sont une signature sémantique par scope : la matière d'un
+transpileur, et celle d'un juge qui compare ce qu'un changement dit et ce qu'il
+fait. Après les cinq marches. Deux règles qui vont de soi, écrites pour ne pas
+les oublier : un résumé qui affirme quelque chose sur le comportement a pour
+entrées les types résolus et les dépendances, pas seulement le texte du scope
+(même règle que pour un vecteur) ; et chaque champ d'un résumé dit s'il est
+inféré, vérifié statiquement ou inconnu, un modèle ne remplit jamais un
+inconnu. La question que ça rendrait possible, pour le juge d'un lot : « quelles
+propriétés comportementales ont changé alors que leur implémentation directe
+n'a pas bougé ».
+
+Plus loin encore, le rêve d'origine de RagForge, pour qu'il ait une place et
+pas plus : une base de code comme représentation sémantique compressible et
+régénérable. Un **curseur de compression** dont les niveaux sont des politiques
+de transformation, pas des pourcentages d'erreur : syntaxe seule, algorithmes
+internes à contrats égaux, structures internes, contrats secondaires avec tests
+de migration, architecture redéfinie. Un **refactoring bidirectionnel** : monter
+dans l'abstraction, transformer la représentation, redescendre en code, et
+laisser le juge comparer l'ancienne et la nouvelle implémentation sur les
+propriétés qui devaient survivre. Et la **provenance conservée** de bout en
+bout, qui distingue une réimplémentation originale d'une transformation de code
+protégé : on la garde pour ne jamais avoir à le plaider. Rien de tout cela
+avant que l'index en versions et les résumés aient vécu.
 
 ## Très long terme : un moteur de versionnage par scope
 
@@ -180,8 +254,14 @@ fusionnés, 338 Gio de targets) :
 micro-VM éphémère qui porte le worktree, son target et son équipier ; un
 ordonnanceur la place là où il y a de la place (le portable, luciepc, un pod)
 selon la charge, et la détruit à la fusion. L'hôte du dépôt et son index
-restent uniques et partagés ; seul le travail se distribue. `poste lourd` et
-`poste mesure` sont la version à la main de cet ordonnanceur.
+restent uniques et partagés ; seul le travail se distribue. Lucie, 7 novembre :
+« des mini-VM qui dispatchent des pourcentages pour que chacun ait les mêmes,
+et distribué sur plusieurs machines » : la part est un pourcentage égal des
+ressources par mini-machine, pas une place entière, et l'ordonnanceur répartit
+ces parts sur toutes les machines disponibles selon leur place libre. `poste
+lourd` à N places et `poste mesure` sont la version à la main, et grossière, de
+cet ordonnanceur (7 novembre : deux places saturaient luciepc à un tiers,
+quatre le tiennent à une charge de 19 sur 24 cœurs).
 
 ## L'ordre
 

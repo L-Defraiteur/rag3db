@@ -5,6 +5,7 @@
 - **Atteignable en service** : en principe oui, après des mises à jour ou des insertions massives. Vu seulement sur une variante d'essai ; jamais sur master, en 13 essais de `TenThousandRowsInBatchesOf512`.
 - **Touche rag3weaver** : non vu
 - **Ouvert le** : 11 octobre 2026, session du banc (page 04 du banc, §10.1)
+- **Famille** : moteur
 
 ## Ce que c'est
 

@@ -3,7 +3,8 @@
 Le déroulé d'une bascule de `librag3db.so`, des deux postes à la fois (ce poste et luciepc), tel
 qu'il a tourné deux fois le 25 octobre 2026 : vers 04063ee06 (formats 41 et 42, requêtes
 préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scripts sont à côté, dans
-`scripts/`, copiés tels qu'ils ont tourné ; leurs chemins sont ceux des deux postes.
+`scripts/`, copiés tels qu'ils ont tourné puis tenus à jour (7 novembre : la borne dans le lourd,
+`e2e_lectures` au verdict, le contrôle des deux sens) ; leurs chemins sont ceux des deux postes.
 
 ## Pourquoi un déroulé
 
@@ -21,7 +22,9 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
 
 1. **Bâtir hors de `courant`** (`scripts/batir-lib.sh <commit>`, à luciepc, sous `poste lourd`,
    `-j 8`). Worktree à soi, détaché ; jamais l'arbre de Lucie. La publication est toujours
-   `--sans-courant`.
+   `--sans-courant`. La borne de durée se met **dans** le lourd (`poste lourd timeout 1h cmake …`),
+   jamais devant : depuis le 7 novembre les lourds font la file, et un `timeout` posé devant
+   compterait l'attente.
 2. **Lire le nom que le magasin a donné.** Le magasin nomme une lib par **son dernier commit
    moteur** (`src`, `extension/vector`), pas par la tête demandée : bâtie sur 66994dd43, la lib du
    21 h s'appelait `rag3db-build-3724accba…`. Le script l'écrit dans `lib58/id` ; toute attente,
@@ -31,26 +34,52 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    `shared_ptr` de `PreparedStatement` du 25 octobre) ; c'est le cœur qui le déclare
    (`ABI_CHANGEE=1`). Annoncer : symboles retirés, ajoutés, vtables changées, et ce qui doit se
    rebâtir.
-4. **Le verdict, sous la lib explicite** (`scripts/verdict-e2e-code.sh`) : `e2e_code` vert, sous
-   `RAG3DB_LIB=<id>`, les sources du crate prises sur master ; la ligne « moteur lié » de la passe
-   doit nommer la lib. Seules des bases temporaires de test s'ouvrent.
+4. **Le verdict, sous la lib explicite** (`scripts/verdict-e2e-code.sh`) : `e2e_code` et
+   `e2e_lectures` verts, sous `RAG3DB_LIB=<id>`, les sources du crate prises sur master, sans
+   `RAG3WEAVER_MOTEUR_ANCIEN` ; la ligne « moteur lié » de chaque passe doit nommer la lib. Seules
+   des bases temporaires de test s'ouvrent. Dans `e2e_lectures`, trois témoins se lisent par leur
+   nom : `la_branche_dense_filtree_par_langage_repond_dans_l_instantane_de_l_appel` et
+   `une_recherche_dense_bornee_a_un_chemin_tient_sous_l_instantane` (la branche dense filtrée
+   sous l'instantané de lecture, cassée une fois par L6), et
+   `la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel`, qui sous une lib d'avant
+   le format 43 se rend en disant « non jugé » : sous la lib d'une bascule 43, ce « non jugé » est
+   un rouge — le témoin doit se juger (`VERDICT_FORMAT=43` le fait compter ainsi par le script).
 5. **Copier la lib à l'autre poste**, md5 vérifiée, sans poser `courant`.
-6. **Les hôtes, par G** : rebâtis contre la lib explicite, essayés, puis arrêtés avec leurs sockets
-   (une socket éveille un hôte au premier appel MCP).
+6. **Les hôtes, par G** : rebâtis contre la lib explicite, essayés — dont l'essai de l'IDE sur la
+   lib neuve, avant le « posé » —, puis arrêtés avec leurs sockets (une socket éveille un hôte au
+   premier appel MCP).
 7. **Les instantanés** (`scripts/instantanes-bascule.sh <étiquette>`), au « posé » de G : les quatre
    bases partagées (ici `memoire-longue` et `code-rag3db-depot`, à luciepc `code-principal` et
    `code-lourd`). Le script refuse sans rien copier si un processus tient un fichier d'une base,
    copie par `cp --reflink=always` (les deux `/home` sont en btrfs : immédiat, sans place), vérifie
    les tailles octet pour octet et écrit `RETOUR.sh` à côté. Un `.wal` absent des copies dit que les
    hôtes se sont arrêtés proprement.
-8. **`courant` aux deux postes ensemble** (`scripts/courant-bascule.sh <id> <md5>`) : refuse si une
+8. **Le contrôle des deux sens, sur les instantanés** (`scripts/controle-des-deux-sens.sh
+   <étiquette> <id>`, à chaque poste ; demande d'hotfixs, 7 novembre 2026) : `tools/check_rel_directions`,
+   bâti contre la lib neuve du magasin (son `rag3db.hpp`) depuis **`origin/master`** (jamais un
+   arbre de travail, qui peut avoir du retard ; le script dit le commit de l'outil), lit chaque
+   table de relations par ses deux rangements, nœud par nœud, et désigne les relations qui
+   divergent : d'un seul côté, vues deux fois, aux bouts différents, à une propriété différente,
+   avec dix exemples nommés. Il ouvre une **seconde** copie reflink de chaque base
+   (`…/instantanes/<étiquette>-controle/`), jamais l'instantané, qui reste le retour. Compter
+   **environ 15 minutes par base de code** (la version ancrée, 339cbb5dc ; quelques secondes pour
+   une mémoire). Un écart arrête la bascule (`courant` ne bouge pas) et s'écrit en ticket avec ses
+   tables et leurs relations : la base se réparera ou se réindexera avant toute lib neuve. Aucun
+   écart ne prouve pas qu'une table est saine. Un contrôle qui ne trouve aucune base à lire est
+   rouge (code 7), jamais « aucun écart » : le script compte les bases contrôlées (hotfixs,
+   7 novembre). Référence connue : l'instantané
+   `bascule-04063ee06` de `code-rag3db-depot` (25 octobre, avant le rebâti de la base de code)
+   rend sur LOCKS 206 relations d'un seul côté, 179 vues deux fois, 247 aux bouts différents, et
+   sur QUERIES 286, 286 et 306 — les demi-arêtes de ce jour-là ; celui de `memoire-longue`, aucun
+   écart (outil 339cbb5dc, lib 04063ee06, 14 minutes, le 7 novembre).
+9. **`courant` aux deux postes ensemble** (`scripts/courant-bascule.sh <id> <md5>`) : refuse si une
    passe qui lit `courant` tourne encore (l'unité `ide-fusion` à luciepc le 25 octobre) ou si la md5
    diffère d'un poste à l'autre ; pose ici, puis là-bas, et relit les deux `readlink`.
-9. **Les tunnels d'embarquement avant le réveil** : l'hôte de ce poste embarque par
+10. **Les tunnels d'embarquement avant le réveil** : l'hôte de ce poste embarque par
    `127.0.0.1:7979-7981`, des tunnels vers luciepc. Un hôte réveillé sans eux pose 0 vecteur et se
    replie en silence (le ticket du service injoignable à l'ouverture, revécu à 15 h 44 le
    25 octobre). Les reposer avant que G réveille.
-10. **Le réveil, par G**, et la vérification par `daemon_status` : le `build` nomme la lib neuve, et
+11. **Le réveil, par G**, et la vérification par `daemon_status` : le `build` nomme la lib neuve, et
     chaque backend rouvre sa base sans refus (`refused: null`). La première ouverture de chaque base
     sous la lib neuve est le vrai essai de son format.
 

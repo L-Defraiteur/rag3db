@@ -4,6 +4,7 @@
 - **Gravité** : réponse fausse (une mémoire existe en base et ne revient jamais)
 - **Atteignable en service** : oui, dès que le gabarit `memory` sert
 - **Touche rag3weaver** : oui (le crochet de rappel, et le protocole d'outil)
+- **Famille** : produit
 
 ## Ce que c'est
 

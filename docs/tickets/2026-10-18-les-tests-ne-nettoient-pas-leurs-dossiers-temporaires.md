@@ -6,6 +6,7 @@
 - **Atteignable en service** : non (tests seulement), à une exception près : `Catalog` écrit son
   cache par défaut dans `/tmp/rag3weaver_cache`, en service aussi.
 - **Touche rag3weaver** : oui (ses e2e, ses tests et `Catalog`).
+- **Famille** : produit
 
 ## Ce que c'est
 

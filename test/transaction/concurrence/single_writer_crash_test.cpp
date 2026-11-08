@@ -1187,8 +1187,15 @@ TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
     mustRun("CALL checkpoint_threshold=1;");
     mustRun("CALL auto_checkpoint=true;");
     rag3db::main::Connection other(database.get());
-    other.query("BEGIN TRANSACTION;");
-    other.query("CREATE (:P {id: 777777});");
+    // Un écrivain resté ouvert, une écriture non validée. Les deux doivent réussir : un BEGIN
+    // refusé ferait valider le CREATE sur-le-champ, et le témoin passerait sans écrivain ouvert.
+    auto begin = other.query("BEGIN TRANSACTION;");
+    EXPECT_TRUE(begin->isSuccess()) << "[check: open-writer-begins] " << begin->getErrorMessage();
+    begin.reset();
+    auto openWrite = other.query("CREATE (:P {id: 777777});");
+    EXPECT_TRUE(openWrite->isSuccess())
+        << "[check: open-writer-writes] " << openWrite->getErrorMessage();
+    openWrite.reset();
     auto write = conn->query("CREATE (:P {id: 999999});");
     EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
                                     << write->getErrorMessage();

@@ -763,6 +763,57 @@ mod tests {
         assert!(e.contains("graphs/script.mmd") && e.contains("script"), "{e}");
     }
 
+    /// **Les paramètres du parent n'entrent pas dans le graphe cité** (96, 7 novembre
+    /// 2026, archive) : un parent qui déclare `candidates` et le donne à un
+    /// `ForEachNode` dont le graphe cité déclare et emploie aussi `candidates`. À
+    /// l'instanciation du parent, le texte cité garde son `$candidates` ; le nœud se
+    /// construit (la garde de bijection du graphe cité le trouve) et reçoit la valeur
+    /// par sa configuration.
+    #[test]
+    fn les_parametres_du_parent_ne_se_substituent_pas_dans_le_graphe_cite() {
+        let reg = registre();
+        const DECIDE: &str = "%% tool: decide\n%% description: d\n%% param: element json! -- x\n%% param: candidates int = 5 -- combien\n%% result: note.text\n\ngraph LR\n    note[\"NoterNode(valeur='$element.title sur $candidates', echoue=$element.echoue)\"]\n";
+        let mut parent = GraphTool::from_mermaid(
+            "%% tool: archive\n%% description: d\n%% param: candidates int = 5 -- combien\n%% result: chaque.report\n\ngraph LR\n    chaque[\"ForEachNode(graph='@graphs/decide.mmd', candidates=$candidates)\"]\n",
+        )
+        .unwrap();
+        let lire = |chemin: &str| -> Result<String, String> {
+            match chemin {
+                "graphs/decide.mmd" => Ok(DECIDE.to_string()),
+                autre => Err(format!("fichier introuvable : {autre}")),
+            }
+        };
+        resoudre_les_sous_graphes(&mut parent, &lire, &reg).unwrap();
+        let def = parent.instantiate(&json!({"candidates": 3})).unwrap();
+        let config = def.nodes.iter().find(|n| n.name == "chaque").unwrap().config.clone();
+        assert_eq!(config["candidates"], json!(3), "le nœud reçoit la valeur du parent : {config}");
+        assert!(
+            config["graph"]["mermaid"].as_str().is_some_and(|t| t.contains("sur $candidates")),
+            "le texte cité garde son $candidates : {config}"
+        );
+        let sous = RegistreDesSousGraphes::default();
+        sous.poser(&reg);
+        let n = ForEachNodeFactory { registre: sous }.create("chaque", &config);
+        assert!(n.is_ok(), "le nœud se construit : {:?}", n.err());
+    }
+
+    /// **La garde de bijection ne lit pas les paramètres d'un graphe cité** (96,
+    /// 7 novembre 2026, la seconde face) : un graphe cité qui cite lui-même un
+    /// graphe à paramètres (`GraphNode(graph='@graphs/cherche.mmd', q=$element.title)`,
+    /// où `cherche` emploie `$q` et `$autre`) ne compte que ses propres `$x` —
+    /// `element` — et ses paramètres déclarés lui suffisent.
+    #[test]
+    fn la_garde_de_bijection_ne_lit_pas_les_parametres_d_un_graphe_cite() {
+        const CHERCHE: &str = "%% tool: cherche\n%% description: d\n%% param: q string! -- x\n%% param: autre string = \"\" -- y\n%% result: note.text\n\ngraph LR\n    note[\"NoterNode(valeur='$q $autre')\"]\n";
+        let mut decide = GraphTool::from_mermaid(
+            "%% tool: decide\n%% description: d\n%% param: element json! -- x\n%% result: cherche.result\n\ngraph LR\n    cherche[\"GraphNode(graph='@graphs/cherche.mmd', q=$element.title)\"]\n",
+        )
+        .unwrap();
+        decide.remplacer_config("cherche", "graph", json!({"cite": "@graphs/cherche.mmd", "mermaid": CHERCHE, "sous": {}}));
+        let vus = super::super::graph_tool::template_vars(decide.template());
+        assert_eq!(vus.into_iter().collect::<Vec<_>>(), ["element"], "seuls les $x du graphe lui-même");
+    }
+
     /// **Un manifeste qui cite un sous-graphe absent ou faux se refuse à son
     /// chargement**, en nommant l'outil et le fichier (`PreparedBackend::load`,
     /// avant toute base).

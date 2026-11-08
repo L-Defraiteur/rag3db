@@ -107,15 +107,15 @@ hf-hub = { version = "0.4", optional = true }
 # d'une 4.0 convertit l'index pour de bon : une 3.0.x ne le rouvrira plus. Un
 # index existant garde en revanche la version que dit son `meta.json` — il ne
 # gagne le dictionnaire qu'en étant rebâti.
-lucivy-core = "4.3.0"
+lucivy-core = "4.3.2"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.3.0", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.3.2", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
-# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.0 (même
-# source que 4.0.1, seules ses dépendances lucistore et luciole passent en 4.3.0).
-sparse-vector = "4.3.0"
+# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.2, publiée
+# par Lucie le 7 novembre 2026 (passage exact long, flou long, les deux apostrophes).
+sparse-vector = "4.3.2"
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
@@ -279,8 +279,10 @@ landlock = { version = "0.4", optional = true }
 # La mémoire vive du poste (`connection::total_memory`) : sysctl sous macOS,
 # GlobalMemoryStatusEx sous Windows (le paquet npm, 10 octobre 2026). L'état
 # d'un processus pour l'hôte du démon (`daemon_lifecycle`, lot C) : kill et
-# proc_pidinfo sous macOS, OpenProcess et GetProcessTimes sous Windows.
-[target.'cfg(target_os = "macos")'.dependencies]
+# proc_pidinfo sous macOS, OpenProcess et GetProcessTimes sous Windows. La
+# marque d'heure du journal de l'hôte (`host_log` : pipe, dup2, localtime_r)
+# sous tout Unix.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 # Le témoin de la page dans un vrai navigateur (`daemon_host/navigateur.rs`) passe
@@ -304,6 +306,8 @@ lto = "fat"
 codegen-units = 1
 
 [dev-dependencies]
+# Le client du terminal (son crate à part, sans le moteur) : le témoin e2e_tty.
+rag3weaver-tty = { path = "tty", default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 async-openai = { version = "0.32", features = ["embedding"] }
@@ -518,30 +522,6 @@ cubek-random = { git = "https://github.com/L-Defraiteur/cubek", rev = "7ba8affd"
 cubek-reduce = { git = "https://github.com/L-Defraiteur/cubek", rev = "7ba8affd" }
 cubek-std = { git = "https://github.com/L-Defraiteur/cubek", rev = "7ba8affd" }
 cubek-tile = { git = "https://github.com/L-Defraiteur/cubek", rev = "7ba8affd" }
-# **lucivy, temporaire, jusqu'à la publication par Lucie** (25 octobre 2026).
-# Ticket : docs/tickets/2026-10-25-retirer-le-patch-lucivy-a-la-publication.md.
-# La branche `4.3.1` de son dépôt, épinglée à a925d94 (sa 4.3.1, pas encore
-# publiée), porte les correctifs de lucivy-core 4.3.0 que rag3db a trouvés : une
-# recherche sous commits concurrents ne panique plus (l'IDF borné) et ne peut
-# plus tuer l'acteur d'un shard (catch_unwind), cause des gels et des pertes de
-# documents par blocs ; un seul commit en vol par shard, ses messages différés
-# rejoués sur place et dans l'ordre (Drain compris) ; une écriture vers un shard
-# sans écrivain devient une erreur au lieu d'un Ok. Avant le 25 octobre : bb07627.
-# Les quatorze crates du dépôt présents dans le lock, ensemble, comme pour burn.
-ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-lucivy-bitpacker = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-lucivy-columnar = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-lucivy-common = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-lucivy-query-grammar = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-lucivy-sstable = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-lucivy-stacker = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-lucivy-tokenizer-api = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-ld-ownedbytes = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-lucivy-fst = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
-sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "a925d94" }
 
 [[bin]]
 name = "rag3weaver-backend"
@@ -584,6 +564,9 @@ path = "tests/sonde_tests_par_requetes.rs"
 [[test]]
 name = "sonde_requete_entiere"
 path = "tests/sonde_requete_entiere.rs"
+[[test]]
+name = "sonde_requete_longue"
+path = "tests/sonde_requete_longue.rs"
 [[test]]
 name = "sonde_reclassement"
 path = "tests/sonde_reclassement.rs"

@@ -7,6 +7,7 @@
 - **Atteignable en service** : oui, mais seulement depuis l'un des deux postes
 - **Touche rag3weaver** : oui (le démon `rag3weaver-embeddings` et ses
   clients ; les `llama-server` de décision et de langage aussi)
+- **Famille** : produit
 
 ## Ce que c'est
 

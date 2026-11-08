@@ -1462,12 +1462,12 @@ impl Node for BM25SearchNode {
         let distance = self.fuzzy_distance.unwrap_or(options.fuzzy_distance);
         let result_mode = self.result_mode.unwrap_or(options.result_mode);
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
-        let cherche = |mode: BM25Mode, distance: u8, diag: Option<&mut crate::search::SearchDiagnostics>, avert: &mut Vec<String>| {
+        let cherche = |requete: &str, mode: BM25Mode, distance: u8, diag: Option<&mut crate::search::SearchDiagnostics>, avert: &mut Vec<String>| {
             search_bm25_chunked(
                 &*conn,
                 dialect.as_ref(),
                 &target,
-                &query_str,
+                requete,
                 fields,
                 mode,
                 distance,
@@ -1495,15 +1495,36 @@ impl Node for BM25SearchNode {
         // `<signal>_exact`, pour qu'une fusion la déclare dominante.
         let (results, exacts) = if matches!(mode, BM25Mode::Auto) {
             let plusieurs_mots = query_str.split_whitespace().take(2).count() > 1;
+            // **Une requête longue est bornée** (ticket du 7 novembre 2026, mesuré) : la
+            // requête entière perd son flou au-delà de `MAX_FUZZY_WHOLE_QUERY_CHARS`, la
+            // recherche par mots garde au plus `MAX_WORD_TERMS` termes ; les deux coupes se
+            // disent dans la méta.
+            let longueur = query_str.chars().count();
+            let distance_entiere = if longueur <= crate::search::MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 };
+            if distance_entiere == 0 {
+                node_warnings.push(format!(
+                    "requête longue : la requête entière ({longueur} caractères) se cherche sans flou au-delà de {}",
+                    crate::search::MAX_FUZZY_WHOLE_QUERY_CHARS
+                ));
+            }
+            let requete_mots = match crate::search::bound_word_terms(&query_str) {
+                Some((reduite, gardes, total)) => {
+                    node_warnings.push(format!(
+                        "requête longue : {gardes} termes sur {total} gardés pour la recherche par mots (les plus longs)"
+                    ));
+                    reduite
+                }
+                None => query_str.clone(),
+            };
             let (exact, mots) = std::thread::scope(|s| {
                 let fil = plusieurs_mots.then(|| {
                     s.spawn(|| {
                         let mut avert = Vec::new();
-                        let r = cherche(BM25Mode::Parse, distance, None, &mut avert);
+                        let r = cherche(&requete_mots, BM25Mode::Parse, distance, None, &mut avert);
                         (r, avert)
                     })
                 });
-                let exact = cherche(BM25Mode::Contains, 1, diag_bm25.as_mut(), &mut node_warnings);
+                let exact = cherche(&query_str, BM25Mode::Contains, distance_entiere, diag_bm25.as_mut(), &mut node_warnings);
                 (exact, fil.map(|f| f.join().unwrap_or_else(|_| (Ok(Vec::new()), vec!["la recherche par mots a paniqué".to_string()]))))
             });
             match exact {
@@ -1535,7 +1556,7 @@ impl Node for BM25SearchNode {
                 Err(e) => (Err(e), None),
             }
         } else {
-            (cherche(mode, distance, diag_bm25.as_mut(), &mut node_warnings), None)
+            (cherche(&query_str, mode, distance, diag_bm25.as_mut(), &mut node_warnings), None)
         };
         let results = match results {
             Ok(r) => r,
@@ -1720,7 +1741,8 @@ impl Node for SparseSearchNode {
         // n'est jamais perdant — au pire 30 % au-dessus d'une recherche
         // complète, gagnant sous 1 % du corpus (doc 09 §2.3). On le pose
         // sans arrière-pensée.
-        let allowed = allowed_ids_for(ctx, "SparseSearchNode", &target, &options);
+        // La poignée creuse est rangée par morceaux : le filtre aussi.
+        let allowed = allowed_chunk_ids_for(ctx, "SparseSearchNode", &target, &options);
 
         // Try dual embedder first, then sparse embedder
         let dual_emb = ctx.service::<Arc<dyn DualEmbedder>>("dual_embedder").cloned();
@@ -2888,6 +2910,29 @@ fn allowed_ids_for(
     target: &SearchTarget,
     options: &crate::search::SearchOptions,
 ) -> Option<Vec<u64>> {
+    allowed_ids_in(ctx, node_type, target, options, None)
+}
+
+/// **Le même filtre, en offsets des morceaux** : pour un index rangé par
+/// morceaux (le creux, la poignée de `chunk_table`). Les offsets des parents
+/// n'y désignent rien de juste (ticket du 7 novembre 2026, relevé par 73).
+fn allowed_chunk_ids_for(
+    ctx: &mut NodeContext,
+    node_type: &str,
+    target: &SearchTarget,
+    options: &crate::search::SearchOptions,
+) -> Option<Vec<u64>> {
+    let chunks = target.chunk_table.clone();
+    allowed_ids_in(ctx, node_type, target, options, Some(&chunks))
+}
+
+fn allowed_ids_in(
+    ctx: &mut NodeContext,
+    node_type: &str,
+    target: &SearchTarget,
+    options: &crate::search::SearchOptions,
+    chunk_table: Option<&str>,
+) -> Option<Vec<u64>> {
     let condition = options.filter_condition.as_ref()?;
     let Some(catalog) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() else {
         ctx.warn(&format!("{node_type}: un filtre est demandé mais le service 'catalog' manque — la recherche n'est pas restreinte"));
@@ -2895,9 +2940,11 @@ fn allowed_ids_for(
     };
     // `parent_table` : la table qui porte les lignes, `MaKB_Index` pour une
     // base de connaissances — voir `ResolveParentNode`.
-    let resolved = match vue_de(ctx) {
-        Some(v) => v.forme().resolve_filter_to_ids(&target.parent_table, condition, target),
-        None => catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target), // L4 : repli sans vue
+    let resolved = match (vue_de(ctx), chunk_table) {
+        (Some(v), None) => v.forme().resolve_filter_to_ids(&target.parent_table, condition, target),
+        (Some(v), Some(chunks)) => v.forme().resolve_filter_to_chunk_ids(&target.parent_table, chunks, condition, target),
+        (None, None) => catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target), // L4 : repli sans vue
+        (None, Some(chunks)) => catalog.lock().unwrap().resolve_filter_to_chunk_ids(&target.parent_table, chunks, condition, target), // L4 : repli sans vue
     };
     match resolved {
         Ok(ids) => ids,

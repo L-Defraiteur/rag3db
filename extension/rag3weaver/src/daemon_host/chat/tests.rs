@@ -10,8 +10,18 @@ use std::time::{Duration, Instant};
 /// base à côté), en mode `approbation` (le défaut), et un hôte dont les
 /// sessions et les tâches vivent dans le dossier du témoin.
 fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
+    banc_avec(model, |_| {})
+}
+
+/// Le même banc, le manifeste retouché avant son commit (un rôle d'outil…).
+fn banc_avec(model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
+    banc_dans("depot", model, retouche)
+}
+
+/// Le banc dans un dépôt nommé : la page nomme un dépôt par son dossier.
+fn banc_dans(nom: &str, model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
     let d = tempfile::tempdir().unwrap();
-    let depot = d.path().join("depot");
+    let depot = d.path().join(nom);
     let arbre = d.path().join("code");
     std::fs::create_dir_all(&depot).unwrap();
     std::fs::create_dir_all(&arbre).unwrap();
@@ -20,6 +30,7 @@ fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
     let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &depot).unwrap();
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
     m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    retouche(&mut m);
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     for args in [
         &["init", "-q"][..],
@@ -34,6 +45,9 @@ fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
         .with_background(Arc::new(crate::dataflow::background::Registry::new()))
         .with_racine_des_taches(d.path().join("taches"))
         .with_chats_root(d.path().join("chats"))
+        // Le journal des runs, actif : les fiches écrites pendant une
+        // conversation se trouvent par ses runs.
+        .with_runs_root(d.path().join("runs"))
         .with_chat_model(model);
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le backend s'ouvre");
@@ -44,7 +58,7 @@ fn banc(model: ChatModel) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
 /// Un faux modèle qui propose `notes.md` au premier appel, puis répond.
 fn qui_propose() -> ChatModel {
     let appels = Arc::new(AtomicUsize::new(0));
-    Arc::new(move |_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let appels = appels.clone();
         let proposition = json!({
             "files": [{ "path": "notes.md", "content": "# Une note de l'agent\n" }],
@@ -67,7 +81,7 @@ fn qui_propose() -> ChatModel {
 /// 120 s le fait échouer en le disant, pour qu'un arrêt perdu ne fige pas la
 /// passe.
 fn lent() -> ChatModel {
-    Arc::new(|_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-lent", 8192, |_turns, _opts, sink| {
             let borne = Instant::now() + Duration::from_secs(120);
             while Instant::now() < borne {
@@ -235,7 +249,7 @@ fn le_message_systeme_dit_le_verbe_du_mode() {
 /// jusqu'à ce qu'on l'arrête (une barrière) ; sinon il propose `notes.md`.
 #[cfg(unix)]
 fn selon_le_message() -> ChatModel {
-    Arc::new(|_b: &Backend| -> Result<Arc<dyn Llm>, String> {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| {
             let dernier = turns.last().map(|t| (t.role.clone(), t.content.clone())).unwrap_or_default();
             if dernier.0 == "tool" {
@@ -388,4 +402,856 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
+}
+
+/// Un faux modèle qui parle, appelle `list_files`, parle, appelle
+/// `read_file`, puis répond : « mots, outil, mots, outil, réponse ».
+fn qui_lit_deux_fois() -> ChatModel {
+    let appels = Arc::new(AtomicUsize::new(0));
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        let appels = appels.clone();
+        Ok(Arc::new(CallbackLlm::new("faux-lecteur", 8192, move |turns, opts, sink| {
+            let modele = match appels.fetch_add(1, Ordering::SeqCst) {
+                0 => MockLlm::new("je liste").with_tool_calls(vec![("list_files", "{}")]),
+                1 => MockLlm::new("je lis").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]),
+                _ => MockLlm::new("Fini."),
+            };
+            modele.generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le chat tient l'ordre et l'heure de ses appels** (tickets du 7 novembre
+/// 2026 : « l'heure d'un appel d'outil est celle de l'insertion du tour »,
+/// « un outil déplié ne montre que fait », « l'usage du modèle … jauge du
+/// contexte »). Un tour « mots, outil, mots, outil, réponse » par le chemin de
+/// l'hôte : le fil relu garde cette suite ; chaque appel porte l'heure où il est
+/// parti et chaque résultat l'heure où il est revenu, dans l'ordre des faits et
+/// dans la fenêtre du tour ; `ToolCallFinished` porte un extrait du résultat ;
+/// l'état du chat rend la jauge (le dernier appel au modèle, le contexte du
+/// modèle déclaré).
+#[test]
+fn un_tour_a_deux_outils_garde_l_ordre_et_l_heure_de_ses_appels() {
+    let (_d, host, manifeste, id) = banc(qui_lit_deux_fois());
+    let h = host.hosted(&manifeste).unwrap();
+    let mut agent = host.with_backend(&h, |b| b.bus_de_publication().subscribe(crate::events::topic::AGENT)).unwrap();
+    let avant = crate::events::maintenant_ms();
+    let r = host.chat_turn(&id, "regarde le code").unwrap();
+    let apres = crate::events::maintenant_ms();
+    assert_eq!(r["text"], "Fini.", "{r}");
+
+    let etat = host.chat_state(&id).unwrap();
+    let tours = etat["turns"].as_array().unwrap().clone();
+    let forme: Vec<String> = tours
+        .iter()
+        .map(|t| match t["role"].as_str().unwrap_or("") {
+            "assistant" => format!(
+                "assistant:{}:{}",
+                t["content"].as_str().unwrap_or(""),
+                t["tool_calls"].as_array().map(|c| c.iter().filter_map(|c| c["name"].as_str()).collect::<Vec<_>>().join("+")).unwrap_or_default()
+            ),
+            "tool" => format!("tool:{}", t["tool_name"].as_str().unwrap_or("")),
+            autre => autre.to_string(),
+        })
+        .collect();
+    assert_eq!(
+        forme,
+        ["user", "assistant:je liste:list_files", "tool:list_files", "assistant:je lis:read_file", "tool:read_file", "assistant:Fini.:"],
+        "{etat}"
+    );
+
+    // Les heures : début de chaque appel, fin de chaque résultat, dans l'ordre.
+    let heure = |v: &Value, quoi: &str| v["at_ms"].as_u64().unwrap_or_else(|| panic!("{quoi} n'a pas d'heure : {v}"));
+    let a1 = heure(&tours[1]["tool_calls"][0], "l'appel de list_files");
+    let f1 = heure(&tours[2], "le résultat de list_files");
+    let a2 = heure(&tours[3]["tool_calls"][0], "l'appel de read_file");
+    let f2 = heure(&tours[4], "le résultat de read_file");
+    assert!(avant <= a1 && a1 <= f1 && f1 <= a2 && a2 <= f2 && f2 <= apres, "heures hors d'ordre : {avant} {a1} {f1} {a2} {f2} {apres}");
+    assert!(tours[0].get("at_ms").is_none() && tours[5].get("at_ms").is_none(), "seuls les appels et les résultats sont datés : {etat}");
+
+    // L'extrait du résultat dans ToolCallFinished, pour le flux.
+    let a = vider(&mut agent);
+    let fini = |outil: &str| {
+        a.iter()
+            .find(|e| e["kind"] == "ToolCallFinished" && e["tool"] == outil)
+            .cloned()
+            .unwrap_or_else(|| panic!("pas de ToolCallFinished pour {outil} : {a:?}"))
+    };
+    let lu = fini("read_file");
+    assert!(lu["result_excerpt"].as_str().is_some_and(|x| x.contains("fn main")), "l'extrait de read_file : {lu}");
+    assert!(lu.get("truncated").is_none(), "un petit résultat n'est pas coupé : {lu}");
+    assert!(fini("list_files")["result_excerpt"].as_str().is_some_and(|x| x.contains("main.rs")), "{a:?}");
+
+    // La jauge : le dernier appel au modèle, le contexte du modèle déclaré.
+    let c = &etat["context"];
+    assert_eq!(c["max"], 8192, "{etat}");
+    assert_eq!(c["source"], "run", "{etat}");
+    assert!(c["used"].as_u64().is_some_and(|n| n > 0), "{etat}");
+    assert!(c["at"].as_u64().is_some_and(|t| avant <= t && t <= apres), "{etat}");
+}
+
+/// **Un outil déclare son rôle** (`role` à son attachement, forme de 96 et
+/// d'everything declarative) : `describe()` le rend à côté de `policy`, et le
+/// run du graphe de l'outil l'annonce dans `RunStarted.target.role` — la page
+/// range les runs par rôle sans lire leurs noms. Un outil sans rôle n'en porte
+/// pas.
+#[test]
+fn le_role_d_un_outil_se_lit_dans_describe_et_dans_son_run() {
+    let (_d, host, manifeste, id) = banc_avec(qui_lit_deux_fois(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    let h = host.hosted(&manifeste).unwrap();
+    let outils = host.with_backend(&h, |b| b.describe()).unwrap()["tools"].as_array().cloned().unwrap_or_default();
+    let de = |nom: &str| outils.iter().find(|t| t["name"] == nom).cloned().unwrap_or_else(|| panic!("pas d'outil {nom}"));
+    assert_eq!(de("list_files")["role"], "archiviste", "{:?}", de("list_files"));
+    assert!(de("read_file").get("role").is_none(), "{:?}", de("read_file"));
+
+    let mut graphes = host.with_backend(&h, |b| b.bus_de_publication().subscribe(crate::events::topic::DATAFLOW)).unwrap();
+    host.chat_turn(&id, "regarde le code").unwrap();
+    let d = vider(&mut graphes);
+    let debut = |outil: &str| {
+        d.iter()
+            .find(|e| e["kind"] == "RunStarted" && e["run_kind"] == "graph" && e["target"]["tool"] == outil)
+            .cloned()
+            .unwrap_or_else(|| panic!("pas de RunStarted du graphe de {outil} : {d:?}"))
+    };
+    assert_eq!(debut("list_files")["target"]["role"], "archiviste", "{d:?}");
+    assert!(debut("read_file")["target"].get("role").is_none(), "{d:?}");
+}
+
+/// Le faux modèle de la page du chat : « deux outils » fait « mots, outil, mots,
+/// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
+/// flux de soixante événements), puis finit.
+fn page_du_chat() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-page", 8192, |turns, opts, sink| {
+            let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+            let question = turns.get(depuis).map(|t| t.content.clone()).unwrap_or_default();
+            let outils = turns[depuis..].iter().filter(|t| t.role == "tool").count();
+            if question.contains("long") {
+                for n in 0..60 {
+                    if sink.on_token(&format!("ligne {n}\n")) == Flow::Stop {
+                        sink.on_finish(&Finish::cancelled());
+                        return Ok((Finish::cancelled(), Usage::default()));
+                    }
+                    std::thread::sleep(Duration::from_millis(40));
+                }
+                return MockLlm::new("").generate(turns, opts, sink);
+            }
+            match outils {
+                0 => MockLlm::new("je liste").with_tool_calls(vec![("list_files", "{}")]),
+                1 => MockLlm::new("je lis").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]),
+                _ => MockLlm::new("Fini."),
+            }
+            .generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **La page du chat tient l'ordre, le défilement et la place** (les sept tickets
+/// du 7 novembre 2026, lot « le chat tient l'ordre », et les mots de Lucie sur sa
+/// barre). Dans un vrai navigateur, à 2 560 × 1 440 :
+/// - un tour « mots, outil, mots, outil, réponse » se lit dans cet ordre dans sa
+///   bulle, pendant le tour comme après un rechargement ;
+/// - l'outil déplié montre son heure, sa durée et son résultat ;
+/// - la conversation porte sa jauge (le dernier appel, le contexte du modèle
+///   déclaré, comme l'état du chat de l'hôte) ; un outil à rôle se range dans la
+///   barre des tâches de fond ;
+/// - la colonne du chat occupe l'écran, l'aide tient sur une ligne, le chat
+///   prend la hauteur de la fenêtre moins l'en-tête (1 440 et 1 080) ;
+/// - remontée, la liste ne bouge pas pendant un flux de soixante événements ;
+///   collée en bas, elle suit ; déplier un outil ne déplace pas la page.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_page_du_chat_tient_l_ordre_le_defilement_et_la_place() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_page_du_chat_tient_l_ordre_le_defilement_et_la_place";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc_avec(page_du_chat(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let post = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}{chemin}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let etat_du_chat = || -> Value {
+        let mut r = crate::daemon::agent().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str::<Value>(&r.body_mut().read_to_string().unwrap()).unwrap()["result"].clone()
+    };
+    assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
+
+    let mut n = Navigateur::lancer(&binaire);
+    let fenetre = |n: &mut Navigateur, w: u32, h: u32| {
+        n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": w, "height": h, "deviceScaleFactor": 1, "mobile": false }));
+    };
+    fenetre(&mut n, 2560, 1440);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let page = format!("{racine}/ide/code/{id}/chat");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&page, prete);
+    let envoyer = |n: &mut Navigateur, texte: &str| {
+        n.evaluer(&format!("document.querySelector('#message').value = {}; document.querySelector('#send').click()", json!(texte)));
+    };
+    // La suite des parties de la dernière bulle d'agent.
+    let suite = "[...[...document.querySelectorAll('article.message.assistant')].at(-1).children].filter(c => c.matches('.body, details.outil')).map(c => c.matches('.body') ? 'texte:' + c.textContent.trim() : 'outil:' + c.dataset.outil).join('|')";
+    let attendue = "texte:je liste|outil:list_files|texte:je lis|outil:read_file|texte:Fini.";
+
+    // 1. L'ordre, pendant le tour et après.
+    envoyer(&mut n, "deux outils");
+    n.attendre(&format!("document.querySelector('#status')?.textContent === 'fini' && {suite} === {}", json!(attendue)), "la bulle dans l'ordre d'arrivée");
+    // 2. L'outil déplié : son heure, sa durée, son résultat entier.
+    let lu = n.evaluer("(() => { const d = document.querySelector('details.outil[data-outil=\"read_file\"]'); return { resultat: d?.querySelector('.resultat')?.textContent ?? '', heure: d?.querySelector('.heure')?.textContent ?? '' }; })()");
+    assert!(lu["resultat"].as_str().unwrap_or("").contains("fn main"), "le résultat déplié : {lu}");
+    assert!(lu["heure"].as_str().unwrap_or("").contains(" ms"), "l'heure et la durée : {lu}");
+    // 3. La jauge de la conversation, la barre des tâches de fond.
+    // La page relit les jauges à la fin du tour, sans attendre : on attend la
+    // valeur de l'hôte, pas un instant.
+    let contexte = etat_du_chat()["context"].clone();
+    n.attendre(
+        &format!(
+            "(() => {{ const u = document.querySelector('.conversation[data-backend=\"{id}\"] .usage'); return u?.dataset.max === '8192' && u?.dataset.used === {}; }})()",
+            json!(contexte["used"].to_string())
+        ),
+        &format!("la jauge de la conversation égale à l'état de l'hôte {contexte}"),
+    );
+    n.attendre("document.querySelector('#runs-a-role [data-role=\"archiviste\"] .run-a-role')?.dataset.state === 'fini'", "le run à rôle dans la barre");
+    // 4. La place : la colonne occupe l'écran, l'aide tient sur une ligne, la hauteur.
+    let place = n.evaluer(
+        "(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); \
+         return { colonne: r('#messages').width, aide: r('#aide').height, aideL: r('#aide').width, saisie: r('#message').width, \
+                  chat: r('.chat').height, fenetre: innerHeight, entete: r('#entete').height }; })()",
+    );
+    let f = |k: &str| place[k].as_f64().unwrap_or(0.0);
+    assert!(f("colonne") >= 2560.0 - 300.0 - 40.0, "la colonne du chat n'occupe pas l'écran : {place}");
+    assert!(f("aide") <= 20.0 && f("aideL") >= 200.0 && f("saisie") >= 200.0, "le pied : {place}");
+    assert!((f("chat") - (f("fenetre") - f("entete"))).abs() <= 2.0, "la hauteur à 1 440 : {place}");
+    fenetre(&mut n, 1920, 1080);
+    n.attendre("Math.abs(document.querySelector('.chat').getBoundingClientRect().height - (innerHeight - document.querySelector('#entete').getBoundingClientRect().height)) <= 2 && innerHeight === 1080", "la hauteur à 1 080");
+    // 5. Le rechargement rend la même suite.
+    n.aller(&page, prete);
+    n.attendre(&format!("{suite} === {}", json!(attendue)), "la même suite après un rechargement");
+
+    // 6. Remontée, la liste ne bouge pas pendant le flux.
+    let liste = "document.querySelector('#messages')";
+    envoyer(&mut n, "parle long");
+    n.attendre(&format!("{liste}.scrollHeight > {liste}.clientHeight + 300"), "le fil déborde");
+    n.evaluer(&format!("{liste}.scrollTop = 0; {liste}.dispatchEvent(new Event('scroll'))"));
+    let mut vus = Vec::new();
+    while n.evaluer("document.querySelector('#status')?.textContent").as_str() != Some("fini") {
+        vus.push(n.evaluer(&format!("{liste}.scrollTop")).as_f64().unwrap_or(-1.0));
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(vus.len() < 2000, "le tour long ne finit pas");
+    }
+    assert!(vus.iter().all(|&y| y == 0.0), "remontée, la liste a bougé pendant le flux : {vus:?}");
+    // 7. Collée en bas, elle suit.
+    n.evaluer(&format!("{liste}.scrollTop = {liste}.scrollHeight; {liste}.dispatchEvent(new Event('scroll'))"));
+    envoyer(&mut n, "encore long");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le second tour long");
+    n.attendre(&format!("{liste}.scrollHeight - {liste}.scrollTop - {liste}.clientHeight < 40"), "collée en bas, la liste suit");
+    // 8. Déplier un outil visible ne déplace pas la page.
+    n.evaluer(&format!(
+        "(() => {{ const d = document.querySelector('details.outil[data-outil=\"read_file\"]'); const m = {liste}; \
+         m.scrollTop = d.offsetTop - m.offsetTop - 100; m.dispatchEvent(new Event('scroll')); }})()"
+    ));
+    let avant = n.evaluer(&format!("{liste}.scrollTop"));
+    n.evaluer("document.querySelector('details.outil[data-outil=\"read_file\"] summary').click()");
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(n.evaluer(&format!("{liste}.scrollTop")), avant, "déplier un outil a déplacé la page");
+    assert!(n.evaluer("document.querySelector('details.outil[data-outil=\"read_file\"]').open").as_bool().unwrap_or(false));
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **La barre parle en dépôts** (Lucie, 7 novembre 2026 : « les gens qui
+/// bossent parlent en branches, PR, worktrees, repos attachés ») : deux dépôts
+/// attachés à l'hôte paraissent sous « Dépôts », chacun nommé par son dossier et
+/// sa branche, chacun avec sa jauge ; un tour dans l'un remplit sa jauge et pas
+/// celle de l'autre ; le mot « backend » ne paraît nulle part à l'écran du chat.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d1, h1, m1, id1) = banc_dans("atelier", page_du_chat(), |_| {});
+    let (d2, h2, m2, id2) = banc_dans("outils", page_du_chat(), |_| {});
+    drop((h1, h2));
+    let (chats, taches) = (d1.path().join("chats"), d1.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    for m in [&m1, &m2] {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}/ide/describe"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": m }).to_string())
+            .unwrap();
+        let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(v["ok"], true, "{v}");
+    }
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/code/{id1}/chat"),
+        "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+    // Les deux dépôts, nommés par leur dossier et leur branche.
+    n.attendre(
+        "(() => { const s = document.querySelector('[data-section=\"Sessions\"]'); if (!s) return false; \
+         const noms = [...s.querySelectorAll('.conversation a')].map(a => a.textContent.trim()); \
+         return noms.some(t => t.startsWith('atelier · ')) && noms.some(t => t.startsWith('outils · ')); })()",
+        "deux dépôts sous « Sessions », avec leur branche",
+    );
+    // Un tour dans le premier : sa jauge se remplit, pas celle de l'autre.
+    n.evaluer("document.querySelector('#message').value = 'deux outils'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour dans le premier dépôt");
+    let jauge = |n: &mut Navigateur, id: &str| n.evaluer(&format!("document.querySelector('.conversation[data-backend=\"{id}\"] .usage')?.dataset.used ?? null"));
+    n.attendre(&format!("Number(document.querySelector('.conversation[data-backend=\"{id1}\"] .usage')?.dataset.used) > 0"), "la jauge du premier dépôt");
+    assert_eq!(jauge(&mut n, &id2), json!(""), "la jauge de l'autre dépôt a bougé");
+    // Le mot du code ne paraît pas à l'écran.
+    let texte = n.evaluer("document.body.innerText.toLowerCase()");
+    assert!(!texte.as_str().unwrap_or("").contains("backend"), "« backend » paraît à l'écran : {texte}");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d2);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **Les fiches écrites pendant une conversation** (forme accordée avec
+/// everything declarative et 96) : l'état du chat les rend par les Sources de la
+/// mémoire déclarée dont `session` est un run de la conversation, puis les
+/// Apports qui les citent — par `select_sources` et `select_apports`. Une source
+/// d'une autre session n'y paraît pas.
+#[test]
+fn l_etat_du_chat_rend_les_fiches_ecrites_pendant_la_conversation() {
+    let m = tempfile::tempdir().unwrap();
+    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/memory");
+    let memoire = crate::gabarits::jouable::manifeste_jouable(&gabarit, m.path()).unwrap();
+    let memoire_txt = memoire.to_string_lossy().to_string();
+    let (_d, host, manifeste, id) = banc_avec(qui_lit_deux_fois(), move |c| {
+        c["bilans"] = json!({ "memoire": memoire_txt });
+    });
+    let etat = host.chat_state(&id).unwrap();
+    assert_eq!(etat["memory_writes"], json!([]), "sans tour, rien : {etat}");
+
+    let r = host.chat_turn(&id, "regarde le code").unwrap();
+    let run = r["run"].as_str().unwrap().to_string();
+    // Le journal du run porte `chat` : il fait partie de la conversation.
+    let debut = Instant::now();
+    while host.journal.lire(&id, &run).is_none() {
+        assert!(debut.elapsed() < Duration::from_secs(10), "le journal du run n'est pas écrit");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // Ce que le juge écrit après un tour : une source datée par la session (le
+    // run), un apport qui la cite ; et une source d'une autre session.
+    let mem = host.hosted(&memoire).unwrap();
+    let ecrire = |outil: &str, record: Value| {
+        let r = host.with_backend(&mem, |b| b.call(outil, json!({ "record": record }))).unwrap();
+        assert!(r.is_ok(), "{outil} : {r:?}");
+    };
+    ecrire("put_fiche", json!({ "name": "bilan : regarder le code", "about": "le bilan du tour", "state": "current" }));
+    ecrire("put_source", json!({ "chemin": "sources/2026-11-07-ce-run.md", "titre": "bilan", "contenu": "le tour", "origine": "envoi", "session": run }));
+    ecrire("put_apport", json!({ "fiche": "bilan : regarder le code", "source": "sources/2026-11-07-ce-run.md", "section": "bilan", "texte": "bien", "niveau": "L1", "state": "current" }));
+    ecrire("put_source", json!({ "chemin": "sources/2026-11-07-autre.md", "titre": "autre", "contenu": "autre", "origine": "envoi", "session": "un-autre-run" }));
+    ecrire("put_apport", json!({ "fiche": "bilan : regarder le code", "source": "sources/2026-11-07-autre.md", "section": "ailleurs", "texte": "x", "niveau": "L1", "state": "current" }));
+
+    let etat = host.chat_state(&id).unwrap();
+    assert_eq!(etat["memory_writes_why"], Value::Null, "{etat}");
+    let ecrites = etat["memory_writes"].as_array().cloned().unwrap_or_default();
+    assert_eq!(ecrites.len(), 1, "seul l'apport de la conversation : {etat}");
+    let w = &ecrites[0];
+    assert_eq!((w["fiche"].clone(), w["kind"].clone(), w["section"].clone(), w["run"].clone()), (json!("bilan : regarder le code"), json!("apport"), json!("bilan"), json!(run)), "{w}");
+    assert!(w["at_ms"].as_u64().is_some_and(|t| t > 0), "{w}");
+    let _ = manifeste;
+}
+
+/// Une mémoire sans les outils de lecture par filtre (un gabarit plus ancien) :
+/// la liste ne se fait pas, et l'état dit pourquoi au lieu de rendre une liste vide
+/// muette.
+#[test]
+fn sans_outil_de_lecture_la_memoire_dit_pourquoi_la_liste_est_vide() {
+    let m = tempfile::tempdir().unwrap();
+    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/memory");
+    let memoire = crate::gabarits::jouable::manifeste_jouable(&gabarit, m.path()).unwrap();
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&memoire).unwrap()).unwrap();
+    v["tools"].as_object_mut().unwrap().remove("select_sources");
+    std::fs::write(&memoire, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+    let memoire_txt = memoire.to_string_lossy().to_string();
+    let (_d, host, _manifeste, id) = banc_avec(qui_lit_deux_fois(), move |c| {
+        c["bilans"] = json!({ "memoire": memoire_txt });
+    });
+    // Tant que la mémoire n'est pas ouverte dans l'hôte, la page ne la fait pas
+    // ouvrir : elle le dit.
+    let etat = host.chat_state(&id).unwrap();
+    assert!(etat["memory_writes_why"].as_str().is_some_and(|w| w.contains("pas ouverte")), "{etat}");
+    let mem = host.hosted(&memoire).unwrap();
+    host.with_backend(&mem, |_| ()).expect("la mémoire s'ouvre");
+    host.chat_turn(&id, "regarde le code").unwrap();
+    let debut = Instant::now();
+    loop {
+        let etat = host.chat_state(&id).unwrap();
+        if let Some(pourquoi) = etat["memory_writes_why"].as_str() {
+            assert!(pourquoi.contains("select_sources"), "{etat}");
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(10), "l'état ne dit pas pourquoi : {etat}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Le faux modèle rapide : quarante mots d'un trait, sans pause — le premier
+/// jeton part aussitôt le tour commencé.
+fn rapide() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-rapide", 8192, |turns, opts, sink| {
+            let texte = (0..40).map(|n| format!("mot{n}")).collect::<Vec<_>>().join(" ");
+            MockLlm::new(&texte).generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le premier jeton arrive dans la page** (ticket du 7 novembre 2026,
+/// « l'affichage en direct du chat peut manquer le premier jeton du premier
+/// tour ») : huit fois, une page fraîche envoie son premier tour à un modèle
+/// rapide ; pour chaque tour, la page relève les rangs (`seq`) reçus du flux et
+/// ceux qu'elle a posés dans la bulle. Tous les rangs émis doivent être reçus
+/// et posés, le rang 0 compris. Un rang absent des reçus accuse le flux ; reçu
+/// mais pas posé, la page.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_premier_jeton_d_un_tour_arrive_dans_la_page() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_premier_jeton_d_un_tour_arrive_dans_la_page";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(rapide());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(rapide())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifeste }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let page = format!("{racine}/ide/code/{id}/chat");
+    let mut releves = Vec::new();
+    for essai in 0..8 {
+        n.aller(&page, "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+        n.evaluer(&format!("document.querySelector('#message').value = 'dis vite {essai}'; document.querySelector('#send').click()"));
+        n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour rapide");
+        let releve = n.evaluer(
+            "(() => { const run = [...document.querySelectorAll('article.message.assistant')].at(-1)?.dataset.run; \
+             const t = window.__chatTokens ?? { received: {}, applied: {} }; \
+             return { run, recus: t.received[run] ?? [], poses: t.applied[run] ?? [], debordements: t.missed ?? [] }; })()",
+        );
+        releves.push(releve);
+    }
+    let complet = |v: &Value| {
+        let mut rangs: Vec<u64> = v.as_array().map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
+        rangs.sort_unstable();
+        !rangs.is_empty() && rangs.iter().enumerate().all(|(i, &r)| r == i as u64)
+    };
+    let manques: Vec<&Value> = releves.iter().filter(|r| !complet(&r["recus"]) || !complet(&r["poses"])).collect();
+    assert!(
+        manques.is_empty(),
+        "des rangs émis manquent ({} tour(s) sur 8) — absent des reçus : le flux ; reçu mais pas posé : la page : {manques:#?}",
+        manques.len()
+    );
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **La nature d'un backend, sur la forme réelle d'une configuration** (la pose
+/// du 7 novembre 2026 chez Lucie : son code et sa mémoire paraissaient sous
+/// « Projets »). Un manifeste de code rangé dans un dossier de configuration,
+/// hors de tout dépôt, sans `kind` (une copie d'avant le champ), dont
+/// `workspace.root` est un dépôt : l'état le dit `code`, par repli, avec le nom
+/// et la branche du dépôt de son espace de travail. Une mémoire instanciée du
+/// gabarit, sans `bilans` déclaré nulle part : `memory`, par son manifeste.
+#[test]
+fn la_nature_d_un_backend_vient_de_son_gabarit_sinon_de_son_espace_de_travail() {
+    let d = tempfile::tempdir().unwrap();
+    // Le dépôt indexé, sur sa branche.
+    let depot = d.path().join("atelier");
+    std::fs::create_dir_all(&depot).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(&depot).args(args).status().unwrap().success(), "git {args:?}");
+    git(&["init", "-q", "-b", "principale"]);
+    git(&["config", "user.name", "Personne Test"]);
+    git(&["config", "user.email", "personne@example.org"]);
+    std::fs::write(depot.join("main.rs"), "fn main() {}\n").unwrap();
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "un"]);
+    // La configuration, hors de tout dépôt : le code (sans `kind`) et la mémoire.
+    let config = d.path().join("config");
+    std::fs::create_dir_all(config.join("code")).unwrap();
+    std::fs::create_dir_all(config.join("memoire")).unwrap();
+    let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends");
+    let code = crate::gabarits::jouable::manifeste_jouable(&gabarits.join("code"), &config.join("code")).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&code).unwrap()).unwrap();
+    m.as_object_mut().unwrap().remove("kind");
+    m["workspace"]["root"] = json!(depot.to_string_lossy());
+    std::fs::write(&code, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let memoire = crate::gabarits::jouable::manifeste_jouable(&gabarits.join("memory"), &config.join("memoire")).unwrap();
+
+    let host = DaemonHost::new().with_chats_root(d.path().join("chats")).with_chat_model(qui_lit_deux_fois());
+    for m in [&code, &memoire] {
+        let h = host.hosted(m).unwrap();
+        host.with_backend(&h, |_| ()).expect("le backend s'ouvre");
+    }
+    let etat = host.state();
+    let de = |m: &Path| {
+        let m = m.canonicalize().unwrap();
+        etat["backends"].as_array().unwrap().iter().find(|b| b["manifest"] == json!(m)).cloned().unwrap_or_else(|| panic!("pas de {} : {etat}", m.display()))
+    };
+    let c = de(&code);
+    assert_eq!(
+        (c["kind"].clone(), c["kind_source"].clone(), c["repo"].clone(), c["branch"].clone()),
+        (json!("code"), json!("fallback"), json!("atelier"), json!("principale")),
+        "{c}"
+    );
+    let me = de(&memoire);
+    assert_eq!((me["kind"].clone(), me["kind_source"].clone()), (json!("memory"), json!("manifest")), "{me}");
+}
+
+/// Le faux modèle qui répond avec du code : du code en ligne, un chemin cité, un
+/// bloc rust.
+fn qui_montre_du_code() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-code", 8192, |turns, opts, sink| {
+            MockLlm::new("Voir `src/lib.rs:2` et l'outil `search_code`.\n\n```rust\nfn main() {\n    let x = 1;\n}\n```\n").generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le code dans le chat se lit comme du code** (tickets du 7 novembre 2026,
+/// retours de Lucie : « le texte limité en largeur », « `code.truc` pris en
+/// compte », la coloration) : à 2 560 px, le texte d'une bulle occupe la
+/// colonne ; le code en ligne d'une réponse et celui du message de la personne
+/// sont du code, un chemin cité mène au fichier à sa ligne, un nom d'outil reste
+/// du code sans lien ; un bloc rust est coloré (la coloration A).
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_code_du_chat_se_lit_comme_du_code() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_code_du_chat_se_lit_comme_du_code";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(qui_montre_du_code());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_montre_du_code())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifeste }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 2560, "height": 1440, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("document.querySelector('#message').value = 'regarde `src/lib.rs:2`'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    let lu = n.evaluer(&format!(
+        "(() => {{ const a = [...document.querySelectorAll('article.message.assistant')].at(-1); const u = [...document.querySelectorAll('article.message.user')].at(-1); \
+          const lien = (el) => el?.querySelector('a.code-ref[href$=\"/fichier/src/lib.rs#L2\"] code')?.textContent ?? null; \
+          return {{ \
+            liens: [lien(a), lien(u)], \
+            outil: [...(a?.querySelectorAll('code') ?? [])].some(c => c.textContent === 'search_code' && !c.closest('a')), \
+            rust: !!a?.querySelector('pre code.hljs.language-rust span.hljs-keyword'), \
+            largeur: a?.querySelector('.body')?.getBoundingClientRect().width ?? 0, \
+            colonne: document.querySelector('#messages').getBoundingClientRect().width, \
+          }}; }})()"
+    ));
+    assert_eq!(lu["liens"], json!(["src/lib.rs:2", "src/lib.rs:2"]), "le chemin cité, en code et en lien, dans la réponse et dans le message : {lu}");
+    assert_eq!(lu["outil"], true, "le nom d'outil en code, sans lien : {lu}");
+    assert_eq!(lu["rust"], true, "le bloc rust coloré : {lu}");
+    let (largeur, colonne) = (lu["largeur"].as_f64().unwrap_or(0.0), lu["colonne"].as_f64().unwrap_or(1.0));
+    assert!(largeur >= colonne - 120.0, "le texte de la bulle n'occupe pas la colonne ({largeur} sur {colonne}) : {lu}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **Le retour d'un outil se lit, et le brut reste exact** (ticket du 7 novembre
+/// 2026, « les retours d'outils du chat n'ont pas de mise en page humaine ») : le
+/// retour de read_file déplié montre ses lignes numérotées et colorées ; le
+/// bouton « brut » rend le texte exact que le modèle a reçu (celui de la
+/// session) ; les champs autour du résultat restent lisibles (« autres champs »).
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_retour_d_un_outil_se_lit_et_le_brut_reste_exact() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_retour_d_un_outil_se_lit_et_le_brut_reste_exact";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(qui_lit_deux_fois());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_lit_deux_fois())
+    });
+    let racine = format!("http://{adresse}");
+    let post = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent().post(format!("{racine}{chemin}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("document.querySelector('#message').value = 'regarde le code'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    let etat: Value = {
+        let mut r = crate::daemon::agent().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str::<Value>(&r.body_mut().read_to_string().unwrap()).unwrap()["result"].clone()
+    };
+    let recu = etat["turns"].as_array().unwrap().iter().find(|t| t["role"] == "tool" && t["tool_name"] == "read_file").and_then(|t| t["content"].as_str()).unwrap_or_default().to_string();
+    assert!(!recu.is_empty(), "le retour de read_file dans la session : {etat}");
+    let d = "document.querySelector('details.outil[data-outil=\"read_file\"]')";
+    n.evaluer(&format!("{d}.open = true"));
+    let rendu = n.evaluer(&format!(
+        "(() => {{ const r = {d}.querySelector('.rendu-humain'); return {{ numero: r?.querySelector('pre.lignes-numerotees .numero')?.textContent ?? null, code: r?.textContent.includes('fn main') ?? false, autres: !!{d}.querySelector('.autres-champs') }}; }})()"
+    ));
+    assert_eq!(rendu["numero"], "1", "les lignes numérotées : {rendu}");
+    assert_eq!(rendu["code"], true, "le code du fichier : {rendu}");
+    assert_eq!(rendu["autres"], true, "les champs autour du résultat : {rendu}");
+    n.evaluer(&format!("{d}.querySelector('button.brut').click()"));
+    n.attendre(&format!("{d}.querySelector('.texte-brut')"), "le brut");
+    assert_eq!(n.evaluer(&format!("{d}.querySelector('.texte-brut').textContent")), json!(recu), "le brut n'est pas le texte exact reçu par le modèle");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+
+/// **L'état de l'hôte range sessions, tâches et espaces** (modèle tranché par c7
+/// avec Lucie, forme accordée avec everything declarative) : le backend ouvert
+/// est une session, avec son dépôt pour espace ; la tâche ouverte dessus est dans
+/// `tasks`, `session` le backend, son espace une branche `agent/<nom>` du même
+/// dépôt, sa proposition ouverte ; un backend connu et fermé est « disponible » ;
+/// ni la session ni la tâche ne le sont.
+#[test]
+fn l_etat_de_l_hote_range_sessions_taches_et_espaces() {
+    let (d, host, _manifeste, id) = banc_dans("atelier", page_du_chat(), |_| {});
+    let (d2, h2, m2, id2) = banc_dans("outils", page_du_chat(), |_| {});
+    drop(h2);
+    host.hosted(&m2).unwrap();
+    let tache = host.ouvrir_une_tache(&id, "relecture").expect("la tâche s'ouvre");
+    let etat = host.state();
+    let sessions = etat["chat_sessions"].as_array().cloned().unwrap_or_default();
+    let session = sessions.iter().find(|s| s["id"] == json!(id)).unwrap_or_else(|| panic!("la session du backend ouvert : {}", etat["chat_sessions"]));
+    assert_eq!(session["spaces"][0]["repo"], "atelier", "{session}");
+    assert_eq!(session["spaces"][0]["proposal"], Value::Null, "{session}");
+    assert!(!sessions.iter().any(|s| s["id"] == json!(tache.id)), "une tâche n'est pas une session : {sessions:?}");
+    let tasks = etat["tasks"].as_array().cloned().unwrap_or_default();
+    let t = tasks.iter().find(|t| t["id"] == json!(tache.id)).unwrap_or_else(|| panic!("la tâche : {}", etat["tasks"]));
+    assert_eq!((&t["session"], &t["name"], &t["parent_task"]), (&json!(id), &json!("relecture"), &Value::Null), "{t}");
+    assert_eq!(t["spaces"][0]["repo"], "atelier", "le dépôt de la tâche, pas le dossier de son worktree : {t}");
+    assert_eq!(t["spaces"][0]["branch"], "agent/relecture", "{t}");
+    assert_eq!(t["spaces"][0]["proposal"]["state"], "open", "{t}");
+    let disponibles = etat["available_repos"].as_array().cloned().unwrap_or_default();
+    assert!(disponibles.iter().any(|r| r["backend"] == json!(id2) && r["repo"] == "outils" && r["loaded"] == false), "le backend fermé est disponible : {disponibles:?}");
+    assert!(!disponibles.iter().any(|r| r["backend"] == json!(id) || r["backend"] == json!(tache.id)), "{disponibles:?}");
+    host.fermer_une_tache(&id, "relecture").unwrap();
+    drop((d, d2));
+}
+
+/// **La barre se lit par session, tâche et espace** (ticket « la barre du chat ne
+/// se lit pas par session », forme tranchée avec Lucie) : la session de la page est
+/// dépliée, sa tâche repliée ; dépliée, la tâche montre son espace (dépôt ·
+/// `agent/<nom>`) et qui le tient ; le menu « par dépôt » inverse l'arbre (le
+/// dépôt, ses espaces, la session et la tâche qui les tiennent) et se souvient
+/// du choix au rechargement ; « actifs seulement » retire ce qui ne tourne pas
+/// (la page reste) ; sur la page de la tâche, le fil d'Ariane dit session ›
+/// tâche › dépôt · branche.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_barre_se_lit_par_session_tache_et_espace() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_barre_se_lit_par_session_tache_et_espace";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d1, h1, m1, id1) = banc_dans("atelier", page_du_chat(), |_| {});
+    let (d2, h2, m2, _id2) = banc_dans("outils", page_du_chat(), |_| {});
+    drop((h1, h2));
+    let (chats, taches) = (d1.path().join("chats"), d1.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let ide = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}{chemin}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    for m in [&m1, &m2] {
+        let v = ide("/ide/describe", json!({ "manifest": m }));
+        assert_eq!(v["ok"], true, "{v}");
+    }
+    let o = ide("/ide/taches", json!({ "backend": id1, "nom": "relecture" }));
+    let t = o["result"]["id"].as_str().map(str::to_string).or_else(|| o["result"]["tache"]["id"].as_str().map(str::to_string)).unwrap_or_else(|| panic!("la tâche s'ouvre : {o}"));
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.evaluer("try { localStorage.removeItem('rag3weaver.ide.barre.vue') } catch {}");
+    n.aller(&format!("{racine}/ide/code/{id1}/chat"), &format!("!!document.querySelector('#arbre-sessions .session[data-session=\"{id1}\"]')"));
+    let lu = n.evaluer(&format!(
+        "(() => {{ const s = document.querySelector('.session[data-session=\"{id1}\"]'); const t = s?.querySelector('.tache[data-task=\"{t}\"]'); \
+          const autre = [...document.querySelectorAll('.session')].find(x => x.dataset.session !== '{id1}'); \
+          return {{ session: s?.dataset.open ?? null, tache: t?.dataset.open ?? null, autre: autre?.dataset.open ?? null }}; }})()"
+    ));
+    assert_eq!(lu, json!({ "session": "true", "tache": "false", "autre": "false" }), "la page dépliée, le reste replié : {lu}");
+    n.evaluer(&format!("document.querySelector('.tache[data-task=\"{t}\"] > button.repli').click()"));
+    n.attendre(&format!("!!document.querySelector('.tache[data-task=\"{t}\"] .espace[data-backend=\"{t}\"]')"), "la tâche dépliée");
+    let espace = n.evaluer(&format!("document.querySelector('.tache[data-task=\"{t}\"] .espace[data-backend=\"{t}\"]').textContent"));
+    let espace = espace.as_str().unwrap_or_default().to_string();
+    assert!(espace.contains("atelier · agent/relecture"), "l'espace de la tâche : {espace}");
+    assert!(espace.contains("tenu par relecture (atelier)"), "qui tient l'espace, côté session : {espace}");
+
+    // Le menu : par dépôt, l'arbre s'inverse ; le choix se garde.
+    n.evaluer("(() => { const s = document.querySelector('#vue-barre'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, 'repo'); s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+    n.attendre("!!document.querySelector('#arbre-depots')", "la vue par dépôt");
+    let depot = n.evaluer(&format!(
+        "(() => {{ const d = document.querySelector('#arbre-depots .depot[data-depot=\"atelier\"]'); \
+          return [...(d?.querySelectorAll('.espace') ?? [])].map(e => [e.dataset.backend, e.querySelector('.tenu-par')?.textContent ?? null]); }})()"
+    ));
+    assert_eq!(depot, json!([[id1, "tenu par atelier"], [t, "tenu par relecture (atelier)"]]), "le dépôt, ses espaces et qui les tient : {depot}");
+    n.aller(&format!("{racine}/ide/code/{id1}/chat"), "!!document.querySelector('#barre')");
+    assert_eq!(n.evaluer("document.querySelector('#barre').dataset.view"), json!("repo"), "le choix de vue s'est perdu au rechargement");
+    n.evaluer("(() => { const s = document.querySelector('#vue-barre'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, 'session'); s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+    n.attendre("!!document.querySelector('#arbre-sessions')", "retour à la vue par session");
+
+    // Actifs seulement : rien ne tourne, la session de la page reste.
+    n.evaluer("document.querySelector('#actifs-seulement').click()");
+    n.attendre(&format!("!document.querySelector('.tache[data-task=\"{t}\"]')"), "la tâche inactive retirée");
+    let restent = n.evaluer("[...document.querySelectorAll('#arbre-sessions .session')].map(s => s.dataset.session)");
+    assert_eq!(restent, json!([id1]), "seule la session de la page reste : {restent}");
+
+    // Le fil d'Ariane, sur la page de la tâche.
+    n.aller(&format!("{racine}/ide/code/{t}/chat"), "!!document.querySelector('#fil-chat')");
+    let fil_ariane = n.evaluer("document.querySelector('#fil-chat').textContent");
+    assert_eq!(fil_ariane, json!("atelier › relecture › atelier · agent/relecture"), "{fil_ariane}");
+    let texte = n.evaluer("document.querySelector('#barre').innerText.toLowerCase()");
+    assert!(!texte.as_str().unwrap_or("").contains("backend"), "« backend » paraît dans la barre : {texte}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d2);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **Un appel à délai s'arrête à son délai** (ticket du 7 novembre 2026, « une
+/// recherche continue sur l'hôte après l'abandon de son client ») : un `/call`
+/// porte `deadline_ms` ; passé ce délai, l'hôte arrête lui-même le run du
+/// graphe par le chemin d'arrêt de tout run (`cancelled_by: "deadline"`), et
+/// l'appel rend « délai dépassé (N ms) » au lieu de tourner jusqu'au bout pour
+/// un client parti. Un outil lent (`wait_output` sur un journal où rien ne
+/// viendra, une minute d'attente) sert de graphe lent. Sans `deadline_ms`,
+/// rien ne change (le même outil, un délai d'outil court, rend son résultat).
+#[test]
+fn un_appel_a_delai_s_arrete_a_son_delai() {
+    let (_d, host, manifeste, id) = banc(qui_lit_deux_fois());
+    let session = host.open_session("claude-code", None, Vec::new(), None);
+    let h = host.hosted(&manifeste).unwrap();
+    let mut dataflow = host.with_backend(&h, |b| b.bus_de_publication().subscribe(crate::events::topic::DATAFLOW)).unwrap();
+    let journal = crate::dataflow::run_nodes::dossier_journaux().join(format!("temoin-delai-{}.log", std::process::id()));
+    let corps = |delai: Option<u64>, timeout_s: u64| {
+        let mut v = json!({ "manifest": manifeste, "name": "wait_output", "arguments": { "journal": journal.to_string_lossy(), "pattern": "jamais", "timeout_s": timeout_s } });
+        if let Some(ms) = delai {
+            v["deadline_ms"] = json!(ms);
+        }
+        serde_json::to_vec(&v).unwrap()
+    };
+
+    let debut = Instant::now();
+    let (statut, r) = host.handle("POST", "/call", Some(&session), &corps(Some(800), 60));
+    let duree = debut.elapsed();
+    assert!(duree < Duration::from_secs(10), "l'appel à 800 ms de délai a tourné {duree:?} : l'hôte n'applique pas le délai ({r})");
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(r["error_kind"], "deadline", "{r}");
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("délai dépassé (800 ms)")), "{r}");
+    assert_eq!(statut, 422, "{r}");
+    // Le run du graphe a fini, arrêté au nom du délai.
+    let fin = Instant::now() + Duration::from_secs(10);
+    let mut vus = Vec::new();
+    loop {
+        match dataflow.try_recv() {
+            Ok(e) => {
+                let v = e.to_json();
+                if v["kind"] == "RunFinished" && v["cancelled_by"] == "deadline" {
+                    break;
+                }
+                vus.push(v);
+            }
+            Err(_) => {
+                assert!(Instant::now() < fin, "aucun RunFinished arrêté par le délai : {vus:?}");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+    }
+
+    // Sans délai d'appel, rien ne change : l'outil rend son résultat (son propre
+    // délai, une seconde, passé).
+    let (_, r) = host.handle("POST", "/call", Some(&session), &corps(None, 1));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r.get("error_kind").is_none(), "{r}");
+    let _ = id;
 }

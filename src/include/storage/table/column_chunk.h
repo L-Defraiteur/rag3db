@@ -295,6 +295,9 @@ public:
     // We should either provide a way for ColumnChunk to provide its own details about the
     // storage structure, or maybe change the type of data to allow us to directly return a
     // std::span<const ColumnChunkData> to get read-only info about the segments efficiently
+    // Les segments eux-mêmes, partagés : un bloc neuf bâti sur ce bloc (la copie-échange du COPY
+    // borné en octets, NodeGroup::extendFlushedHead) les reprend sans les recopier.
+    std::vector<std::shared_ptr<ColumnChunkData>> getSharedSegments() const { return data; }
     std::vector<const ColumnChunkData*> getSegments() const {
         std::vector<const ColumnChunkData*> segments;
         for (const auto& segment : data) {

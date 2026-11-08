@@ -204,6 +204,13 @@ pub mod juge;
 /// superviseur par une boîte aux lettres.
 pub mod teammate;
 
+/// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel
+/// d'outil, le repli sur les fichiers du worktree quand il manque.
+mod teammate_tools;
+
+/// La livraison des lignes de boîte adressées à `codex:<nom>`, par `codex queue`.
+pub mod livraison_codex;
+
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -632,12 +639,44 @@ impl DaemonHost {
     /// **`call`** : un outil du backend, en parallèle des autres appels de ce
     /// backend (lot L5) ; les écritures, elles, se sérialisent au catalogue.
     pub fn call(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value) -> Value {
+        self.call_with_deadline(session, manifest, name, arguments, None)
+    }
+
+    /// **`call` avec un délai** (`deadline_ms` du corps de `/call`) : passé ce
+    /// délai, l'hôte arrête lui-même le run du graphe (`cancelled_by:
+    /// "deadline"`) et rend « délai dépassé (N ms) », `error_kind: "deadline"` —
+    /// un client parti (le hook de Claude Code, à un ou cinq secondes) ne fait
+    /// plus tourner une recherche que personne n'attend. Sans délai, `call`.
+    pub fn call_with_deadline(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value, deadline_ms: Option<u64>) -> Value {
+        let echeance = deadline_ms.map(|ms| crate::backend::CallDeadline {
+            at: std::time::Instant::now() + std::time::Duration::from_millis(ms),
+            ms,
+            fired: Default::default(),
+        });
+        let frappe = echeance.as_ref().map(|d| d.fired.clone());
+        let mut reponse = crate::backend::with_call_deadline(echeance, || self.call_sans_delai(session, manifest, name, arguments));
+        if let (Some(ms), Some(frappe)) = (deadline_ms, frappe) {
+            if frappe.load(std::sync::atomic::Ordering::SeqCst) {
+                reponse = json!({
+                    "ok": false,
+                    "error": format!("délai dépassé ({ms} ms) : l'hôte a arrêté « {name} » à son échéance (cancelled_by « deadline »)"),
+                    "error_kind": "deadline",
+                    "transient": true,
+                });
+            }
+        }
+        reponse
+    }
+
+    fn call_sans_delai(&self, session: Option<&str>, manifest: &Path, name: &str, arguments: Value) -> Value {
         let result = self.check_session(session).and_then(|s| {
             let cell = cell_of(&s)?;
             let hosted = self.hosted(manifest)?;
             let (client, appel) = (s.client.clone(), arguments.clone());
             // L'IDE appelle au nom de l'humain : `task_writes` ne vise que l'agent.
             let humain = self.ide_session.get().is_some_and(|ide| *ide == s.id);
+            // L'auteur des lignes du journal que cet appel fait naître (le crochet).
+            let _appelant = crate::host_log::enter_call(&client, &s.id, &hosted.id);
             self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
@@ -670,6 +709,37 @@ impl DaemonHost {
         }
     }
 
+    /// **Dépose un run venu de dehors** dans le journal des runs : `backend`
+    /// est le nom du client (`claude-code`), `run` son identifiant, `genre`
+    /// dit ce que c'est (`claude_code_turn`) ; le reste est gardé tel quel.
+    pub fn deposer_un_run_externe(&self, v: &Value) -> Result<Value, String> {
+        let nom_sur = |s: &str, quoi: &str| -> Result<String, String> {
+            if !s.is_empty() && !s.starts_with('.') && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+                Ok(s.to_string())
+            } else {
+                Err(format!("« {quoi} » : un nom en [A-Za-z0-9._-] attendu, pas « {s} »"))
+            }
+        };
+        let run = nom_sur(v["run"].as_str().unwrap_or(""), "run")?;
+        let genre = v["genre"].as_str().filter(|g| !g.is_empty()).ok_or("« genre » manque (claude_code_turn)")?.to_string();
+        // **Le run porte pour backend celui que le hook désigne** (c7, 7 novembre) :
+        // un manifeste ouvert chez l'hôte, et le run entre dans la file des
+        // bilans comme un tour du chat, si ce backend déclare `bilans`. Sans
+        // manifeste, un nom nu : le run est gardé, personne ne le juge.
+        let (backend, hosted) = match v["manifest"].as_str().map(PathBuf::from) {
+            Some(m) => {
+                let h = self.hosted_existing(&m).ok_or_else(|| format!("le backend {} n'est pas ouvert chez l'hôte : POST /open d'abord", m.display()))?;
+                (h.id.clone(), Some(h))
+            }
+            None => (nom_sur(v["backend"].as_str().unwrap_or(""), "backend")?, None),
+        };
+        let fichier = self.journal.deposer(&backend, &run, v.clone())?;
+        if let Some(h) = &hosted {
+            self.demander_un_bilan(h, &run);
+        }
+        Ok(json!({ "ok": true, "backend": backend, "run": run, "genre": genre, "fichier": fichier, "juge": hosted.is_some() }))
+    }
+
     /// **Épingle un run** d'un backend hébergé (page 06) : son journal ne tombera
     /// jamais, ni par le poids ni par l'âge. Un run sans journal est un refus.
     pub fn epingler_un_run(&self, backend_id: &str, run: &str, raison: &str) -> Result<Value, String> {
@@ -700,11 +770,9 @@ impl DaemonHost {
     /// et ses sessions. C'est ce que l'outil « état du démon » dira.
     pub fn state(&self) -> Value {
         self.reap_dead_sessions();
-        let backends: Vec<Value> = self
-            .backends
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .values()
+        let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        let backends: Vec<Value> = hotes
+            .iter()
             .map(|h| {
                 // **Sans attendre** : une ouverture ou une fermeture tient le
                 // slot en écriture, et l'état de l'hôte ne fait jamais la queue
@@ -726,6 +794,29 @@ impl DaemonHost {
                     },
                     Err(_) => (json!(true), json!({ "busy": true, "why": "une ouverture ou une fermeture tient ce backend" }), Value::Null),
                 };
+                // **Le lieu que tient le backend** : la racine de son espace de
+                // travail quand il en déclare une (un manifeste de configuration,
+                // hors dépôt, qui indexe un dépôt — la forme de celui de Lucie,
+                // vue à la pose du 7 novembre), sinon le dossier de son manifeste.
+                let espace = espace_du_manifeste(&h.manifest);
+                // Le dépôt git de l'espace de travail, sinon celui du manifeste
+                // (une tâche, un banc), sinon le nom du dossier de l'espace.
+                let dossier_du_manifeste = h.manifest.parent().map(Path::to_path_buf);
+                let repo = espace
+                    .as_deref()
+                    .and_then(repo_of)
+                    .or_else(|| dossier_du_manifeste.as_deref().and_then(repo_of))
+                    .or_else(|| espace.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()));
+                let branche = espace.as_deref().and_then(branch_of).or_else(|| dossier_du_manifeste.as_deref().and_then(branch_of));
+                // La nature : celle que le manifeste déclare (son gabarit), sinon
+                // le repli de l'hôte d'après ce qu'il voit.
+                let declare = h
+                    .backend
+                    .try_read()
+                    .ok()
+                    .and_then(|s| s.as_ref().map(|b| b.prepared().manifest.kind))
+                    .unwrap_or_else(|| kind_du_manifeste(&h.manifest));
+                let repli = if espace.is_some() || repo.is_some() { "code" } else { "project" };
                 json!({
                     "id": h.id,
                     "manifest": h.manifest,
@@ -737,18 +828,173 @@ impl DaemonHost {
                     "manifest_changed": self.manifest_changed(h),
                     "refused": *h.refused.lock().unwrap_or_else(|p| p.into_inner()),
                     "tache": self.tache_de(&h.manifest),
+                    // Ce que les gens nomment (Lucie, 7 novembre 2026 : « les gens qui
+                    // bossent parlent en branches, PR, worktrees, repos attachés ») :
+                    // le dépôt git qui contient le manifeste, et sa branche.
+                    // `kind` (Lucie : « séparer les deux notions ») : `memory` pour la
+                    // mémoire déclarée, `code` pour un dépôt git, `project` pour un
+                    // projet rag3weaver déclaratif sans dépôt (le deck builder).
+                    "repo": repo,
+                    "branch": branche,
+                    "kind": declare.map(crate::backend::BackendKind::as_str).unwrap_or(repli),
+                    // D'où vient `kind` : le manifeste (son gabarit) ou le repli de
+                    // l'hôte, que la page dit (« nature inconnue »).
+                    "kind_source": if declare.is_some() { "manifest" } else { "fallback" },
                 })
             })
             .collect();
         let sessions: Vec<Session> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        let (chat_sessions, tasks, available_repos) = self.chat_sessions(&hotes, &backends);
         json!({
             "service": SERVICE,
             "pid": std::process::id(),
             "backends": backends,
+            "chat_sessions": chat_sessions,
+            "tasks": tasks,
+            "available_repos": available_repos,
             "sessions": sessions,
             "closed_dead_sessions": self.closed_dead.load(std::sync::atomic::Ordering::SeqCst),
             "background": self.background_state(),
         })
+    }
+
+    /// **La barre du chat** (ticket « la barre du chat ne se lit pas par
+    /// session », modèle tranché par c7 avec Lucie, forme accordée avec everything
+    /// declarative, page 02) : trois listes à plat.
+    /// - `chat_sessions` : les backends principaux qui ont une conversation ou
+    ///   sont ouverts (une mémoire seulement si on lui parle), leur modèle, leur mémoire déclarée
+    ///   (`bilans.memoire`) et leur espace (le dépôt de la session) ;
+    /// - `tasks` : les tâches (`session` = le backend qui les a ouvertes,
+    ///   `parent_task` null tant qu'aucune tâche n'en délègue), l'état de leur
+    ///   équipier et `awaits_answer`, leurs espaces (le worktree, et le second
+    ///   worktree `code` quand le code est dans un autre dépôt) ;
+    /// - `available_repos` : les backends de code ni ouverts, ni tenus par une
+    ///   session ou une tâche.
+    /// Un espace dit son dépôt, sa branche, sa racine, s'il est chargé, son rag
+    /// (`indexed`, `indexing` avec `percent`, `absent`) et, pour une tâche, sa
+    /// proposition. Lu sans ouvrir ni attendre de backend.
+    fn chat_sessions(&self, hotes: &[Arc<Hosted>], backends: &[Value]) -> (Value, Value, Value) {
+        let par_id: HashMap<&str, &Value> = backends.iter().filter_map(|b| Some((b["id"].as_str()?, b))).collect();
+        let rag = |b: &Value| -> Value {
+            let index = &b["index"];
+            let entites: Vec<&Value> = index.as_object().map(|o| o.values().filter(|v| v.is_object()).collect()).unwrap_or_default();
+            let en_cours: Option<f64> = entites
+                .iter()
+                .filter_map(|e| e["text_percent"].as_f64().or_else(|| e["vectors_percent"].as_f64()).filter(|p| *p > 0.0 && *p < 100.0))
+                .reduce(f64::min);
+            if index["busy"] == true || en_cours.is_some() {
+                json!({ "state": "indexing", "percent": en_cours.map(|p| p.round()) })
+            } else if entites.iter().any(|e| e["text"].as_str().is_some_and(|t| t != "never")) {
+                json!({ "state": "indexed" })
+            } else {
+                json!({ "state": "absent" })
+            }
+        };
+        let racine = |b: &Value| -> Value {
+            let manifest = Path::new(b["manifest"].as_str().unwrap_or_default());
+            json!(espace_du_manifeste(manifest).or_else(|| manifest.parent().map(Path::to_path_buf)))
+        };
+        let espace = |b: &Value, proposal: Option<&str>| -> Value {
+            json!({
+                "backend": b["id"],
+                "repo": b["repo"],
+                "branch": b["branch"],
+                "path": racine(b),
+                "loaded": b["open"] == true,
+                "rag": rag(b),
+                "proposal": proposal.map(|s| json!({ "state": s })),
+            })
+        };
+        // Ce qu'un backend ouvert déclare, sans attendre son verrou.
+        let declare = |id: &str| -> (Value, Option<PathBuf>) {
+            hotes
+                .iter()
+                .find(|h| h.id == id)
+                .and_then(|h| {
+                    let slot = h.backend.try_read().ok()?;
+                    let p = slot.as_ref()?.prepared();
+                    let modele = p.manifest.models.get(&crate::model_source::Capability::Llm).map(|m| json!(m.model)).unwrap_or(Value::Null);
+                    let memoire = p.manifest.bilans.as_ref().map(|d| {
+                        let m = if d.memoire.is_absolute() { d.memoire.clone() } else { p.directory.join(&d.memoire) };
+                        m.canonicalize().unwrap_or(m)
+                    });
+                    Some((modele, memoire))
+                })
+                .unwrap_or((Value::Null, None))
+        };
+        let etats = self.teammate_states();
+        let taches: Vec<taches::Tache> = self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        let mut tenus: std::collections::HashSet<String> = taches.iter().map(|t| t.id.clone()).collect();
+        // Une session : un backend principal qui a une conversation, ou qui est
+        // ouvert (une mémoire ouverte n'en est une que si on lui parle : elle est
+        // l'enfant des sessions qui la déclarent).
+        let occupes: HashMap<String, bool> = self.chats_busy().into_iter().collect();
+        let mut sessions = Vec::new();
+        for b in backends {
+            let Some(id) = b["id"].as_str().map(str::to_string) else { continue };
+            let parle = occupes.contains_key(&id);
+            if tenus.contains(&id) || !b["tache"].is_null() || !(parle || (b["open"] == true && b["kind"] != "memory")) {
+                continue;
+            }
+            let occupe = occupes.get(&id).copied().unwrap_or(false);
+            let (modele, memoire) = declare(&id);
+            let memoire = memoire.and_then(|m| backends.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(m.as_path())));
+            sessions.push(json!({
+                "id": id,
+                "name": session_name(b),
+                "model": modele,
+                "state": if occupe { json!("running") } else { Value::Null },
+                "awaits_answer": false,
+                "memory": match memoire {
+                    Some(m) => json!({ "backend": m["id"], "rag": m["open"] == true && rag(m)["state"] == "indexed" }),
+                    None => json!({ "backend": null, "rag": false }),
+                },
+                "spaces": [espace(b, None)],
+            }));
+            tenus.insert(id);
+        }
+        let mut tasks = Vec::new();
+        for t in &taches {
+            let Some(b) = par_id.get(t.id.as_str()) else { continue };
+            // Le dépôt de la tâche par son dépôt (pas par le dossier du worktree),
+            // sa branche, sa racine.
+            let mut premier = espace(b, Some("open"));
+            premier["repo"] = json!(repo_of(&t.depot));
+            premier["branch"] = json!(t.branche);
+            premier["path"] = json!(t.workspace.as_ref().filter(|w| w.code.is_none()).map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone()));
+            let mut spaces = vec![premier];
+            if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()) {
+                spaces.push(json!({
+                    "backend": t.id,
+                    "repo": repo_of(&c.depot),
+                    "branch": t.branche,
+                    "path": c.arbre,
+                    "loaded": b["open"] == true,
+                    "rag": rag(b),
+                    "proposal": { "state": "open" },
+                }));
+            }
+            let (state, attend) = etats.get(&t.id).copied().map(|(s, a)| (Some(s), a)).unwrap_or((None, false));
+            tasks.push(json!({
+                "id": t.id,
+                "session": t.parent,
+                "parent_task": null,
+                "name": t.nom,
+                "state": state,
+                "awaits_answer": attend,
+                "spaces": spaces,
+            }));
+        }
+        let disponibles: Vec<Value> = backends
+            .iter()
+            .filter(|b| b["kind"] == "code" && b["tache"].is_null() && !b["id"].as_str().is_some_and(|i| tenus.contains(i)))
+            .map(|b| {
+                let mut e = espace(b, None);
+                e.as_object_mut().map(|o| o.remove("proposal"));
+                e
+            })
+            .collect();
+        (Value::Array(sessions), Value::Array(tasks), Value::Array(disponibles))
     }
 
     /// **Les runs vivants en fond**, du plus ancien au plus récent : le `--qui`
@@ -867,6 +1113,18 @@ impl DaemonHost {
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
             ("DELETE", "/session") => (200, json!({ "closed": session.is_some_and(|s| self.close_session(s)) })),
+            // **Un run venu de dehors** (lot 3 des hooks de Claude Code) : un tour
+            // d'un agent qui n'est pas le nôtre, journalisé pour que le juge le
+            // lise comme un tour du chat. Sous session et jeton, comme un appel.
+            ("POST", "/journal/run") => {
+                if let Err(e) = self.check_session(session) {
+                    return (401, json!({ "ok": false, "unknownSession": true, "error": e }));
+                }
+                match corps().and_then(|v| self.deposer_un_run_externe(&v)) {
+                    Ok(r) => (200, r),
+                    Err(e) => (422, json!({ "ok": false, "error": e })),
+                }
+            }
             ("POST", "/open" | "/backend/open" | "/backend/close" | "/describe" | "/call") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
@@ -878,7 +1136,7 @@ impl DaemonHost {
                     "/backend/close" => self.close(session, &m),
                     "/describe" => self.describe(session, &m),
                     _ => match v["name"].as_str() {
-                        Some(name) => self.call(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({}))),
+                        Some(name) => self.call_with_deadline(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({})), v["deadline_ms"].as_u64()),
                         None => json!({ "ok": false, "error": "« name » manque : l'outil à appeler" }),
                     },
                 };
@@ -1067,6 +1325,13 @@ impl DaemonServer {
         let stopper = self.stopper();
         // Les bilans de session des backends qui les déclarent (page 04).
         host.servir_les_bilans();
+        // Les équipiers que l'arrêt de l'hôte a interrompus reprennent (page
+        // 07-novembre-2026-everything-declarative/01, § 1).
+        for l in host.reprendre_les_equipiers() {
+            eprintln!("[équipier] {l}");
+        }
+        // Les lignes de boîte pour Codex, livrées par `codex queue` (page 07 § 4).
+        host.servir_les_livraisons_codex();
         // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
         // session de client mort ne se fermerait qu'à la lecture de l'état.
         let releve = {
@@ -1219,9 +1484,119 @@ mod teammate_tests;
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_qui_code;
 
+/// **Le nom d'une session dans la barre**, la règle que la page suivait
+/// (`displayName`) : son dépôt ; une mémoire, « la mémoire » ; sinon le dossier
+/// de son manifeste ; l'id en dernier recours.
+fn session_name(b: &Value) -> Value {
+    if !b["repo"].is_null() {
+        return b["repo"].clone();
+    }
+    if b["kind"] == "memory" {
+        return json!("la mémoire");
+    }
+    let dossier = b["manifest"].as_str().and_then(|m| Path::new(m).parent()?.file_name().map(|n| n.to_string_lossy().into_owned()));
+    dossier.map(Value::String).unwrap_or_else(|| b["id"].clone())
+}
+
+/// **Le dépôt git d'un manifeste** : le nom du dossier de son `--show-toplevel`,
+/// gardé une fois lu (un dépôt ne change pas de nom sous l'hôte). `None` hors
+/// d'un dépôt git.
+fn repo_of(lieu: &Path) -> Option<String> {
+    static VUS: std::sync::OnceLock<Mutex<HashMap<PathBuf, Option<String>>>> = std::sync::OnceLock::new();
+    let vus = VUS.get_or_init(Default::default);
+    if let Some(r) = vus.lock().unwrap_or_else(|p| p.into_inner()).get(lieu) {
+        return r.clone();
+    }
+    let r = git_dans(lieu, &["rev-parse", "--show-toplevel"])
+        .and_then(|t| Path::new(&t).file_name().map(|n| n.to_string_lossy().into_owned()));
+    vus.lock().unwrap_or_else(|p| p.into_inner()).insert(lieu.to_path_buf(), r.clone());
+    r
+}
+
+/// La nature qu'un manifeste déclare (`kind`), lue dans le fichier pour un
+/// backend pas encore ouvert.
+fn kind_du_manifeste(manifest: &Path) -> Option<crate::backend::BackendKind> {
+    let m: Value = serde_json::from_slice(&std::fs::read(manifest).ok()?).ok()?;
+    serde_json::from_value(m.get("kind")?.clone()).ok()
+}
+
+/// La racine de l'espace de travail qu'un manifeste déclare (`workspace.root`),
+/// résolue depuis son dossier — lue dans le fichier, pour un backend pas encore
+/// ouvert.
+fn espace_du_manifeste(manifest: &Path) -> Option<PathBuf> {
+    let m: Value = serde_json::from_slice(&std::fs::read(manifest).ok()?).ok()?;
+    let racine = PathBuf::from(m["workspace"]["root"].as_str()?);
+    Some(if racine.is_absolute() { racine } else { manifest.parent()?.join(racine) })
+}
+
+/// La branche que tient le dépôt d'un manifeste, relue à chaque état (elle
+/// change) **sans processus** (relecture d'everything declarative : `/ide/etat`
+/// ne fait jamais la queue) : le fichier `HEAD` du dépôt, en suivant le `.git`
+/// fichier d'un worktree vers son `gitdir`. `None` hors d'un dépôt git ou en tête
+/// détachée.
+fn branch_of(lieu: &Path) -> Option<String> {
+    let mut dossier = lieu;
+    let git = loop {
+        let g = dossier.join(".git");
+        if g.exists() {
+            break g;
+        }
+        dossier = dossier.parent()?;
+    };
+    let git_dir = if git.is_file() {
+        let lien = std::fs::read_to_string(&git).ok()?;
+        let cible = PathBuf::from(lien.trim().strip_prefix("gitdir:")?.trim());
+        if cible.is_absolute() { cible } else { dossier.join(cible) }
+    } else {
+        git
+    };
+    let tete = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    tete.trim().strip_prefix("ref: refs/heads/").map(str::to_string)
+}
+
+fn git_dans(dossier: &Path, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git").arg("-C").arg(dossier).args(args).stderr(std::process::Stdio::null()).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|t| !t.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **La branche d'un dépôt se lit sans processus** : dans un dépôt, la
+    /// branche de son `HEAD` ; dans un worktree, celle du `HEAD` de son `gitdir`
+    /// (le `.git` y est un fichier) ; le dépôt garde son nom de dossier.
+    #[test]
+    fn la_branche_d_un_depot_et_d_un_worktree_se_lit_dans_head() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("atelier");
+        std::fs::create_dir_all(depot.join("sous")).unwrap();
+        let git = |dir: &Path, args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success(), "git {args:?}");
+        git(&depot, &["init", "-q", "-b", "principale"]);
+        git(&depot, &["config", "user.name", "Personne Test"]);
+        git(&depot, &["config", "user.email", "personne@example.org"]);
+        std::fs::write(depot.join("sous/backend.json"), "{}").unwrap();
+        git(&depot, &["add", "."]);
+        git(&depot, &["commit", "-q", "-m", "un"]);
+        assert_eq!(branch_of(&depot.join("sous")).as_deref(), Some("principale"));
+        assert_eq!(repo_of(&depot.join("sous")).as_deref(), Some("atelier"));
+        let arbre = d.path().join("arbre-de-tache");
+        git(&depot, &["worktree", "add", "-q", "-b", "agent/salut", arbre.to_str().unwrap()]);
+        assert!(arbre.join(".git").is_file(), "un worktree a un .git fichier");
+        assert_eq!(branch_of(&arbre.join("sous")).as_deref(), Some("agent/salut"));
+        assert_eq!(branch_of(&d.path().join("ailleurs")), None);
+    }
+
+    /// **Une session se nomme comme la page la nommait** (G, pose du 8 novembre
+    /// 0 h 04 : la mémoire de Lucie paraissait sous son id brut) : son dépôt ;
+    /// une mémoire, « la mémoire » ; sinon le dossier de son manifeste.
+    #[test]
+    fn une_session_se_nomme_par_son_depot_sa_nature_ou_son_dossier() {
+        let b = |repo: Value, kind: &str| json!({ "id": "c6dd17bae70f", "repo": repo, "kind": kind, "manifest": "/home/x/.config/rag3weaver/memoire-longue/backend.json" });
+        assert_eq!(session_name(&b(json!("rag3db"), "code")), json!("rag3db"));
+        assert_eq!(session_name(&b(Value::Null, "memory")), json!("la mémoire"));
+        assert_eq!(session_name(&b(Value::Null, "project")), json!("memoire-longue"));
+    }
 
     /// **Un hôte de test a son propre registre de runs en fond**, jamais
     /// celui du processus : les tests de la lib tournent en parallèle, et un
@@ -1272,6 +1647,32 @@ mod tests {
     /// **Le jeton local** (marche 4) : `GET /sante` répond sans lui — un client
     /// sonde avant de le connaître — ; tout le reste le demande, refusé en 403
     /// et nommé (401 voudrait dire « session inconnue », que le client rejoue).
+    #[test]
+    fn un_run_venu_de_dehors_passe_par_la_route_du_journal_sous_session() {
+        let d = std::env::temp_dir().join(format!("hote-journal-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let host = DaemonHost::new().with_runs_root(d.join("runs"));
+        let corps = json!({ "backend": "claude-code", "run": "s1-p2", "genre": "claude_code_turn", "tours": [] }).to_string();
+        let (statut, r) = host.handle("POST", "/journal/run", None, corps.as_bytes());
+        assert_eq!(statut, 401, "{r}");
+        assert_eq!(r["unknownSession"], true);
+        let (_, s) = host.handle("POST", "/session", None, br#"{"client":"claude-code-hook"}"#);
+        let session = s["session"].as_str().unwrap().to_string();
+        let (statut, r) = host.handle("POST", "/journal/run", Some(&session), corps.as_bytes());
+        assert_eq!(statut, 200, "{r}");
+        assert_eq!((r["backend"].as_str(), r["run"].as_str(), r["genre"].as_str()), (Some("claude-code"), Some("s1-p2"), Some("claude_code_turn")));
+        let lu = host.journal_des_runs().lire("claude-code", "s1-p2").unwrap();
+        assert_eq!(lu["genre"], "claude_code_turn");
+        let (statut, r) = host.handle("POST", "/journal/run", Some(&session), br#"{"manifest":"/nulle/part/backend.json","run":"r","genre":"g"}"#);
+        assert_eq!(statut, 422, "{r}");
+        assert!(r["error"].as_str().unwrap().contains("n'est pas ouvert"), "{r}");
+        for mauvais in [r#"{"backend":"../x","run":"r","genre":"g"}"#, r#"{"backend":"b","run":"","genre":"g"}"#, r#"{"backend":"b","run":"r"}"#] {
+            let (statut, r) = host.handle("POST", "/journal/run", Some(&session), mauvais.as_bytes());
+            assert_eq!(statut, 422, "{mauvais} : {r}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn sans_le_jeton_seule_la_sante_repond() {
         let (adresse, fil) = hote_garde("le-bon");

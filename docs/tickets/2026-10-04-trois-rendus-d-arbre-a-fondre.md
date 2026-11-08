@@ -4,6 +4,7 @@
 - **Gravité** : aucune pour l'agent aujourd'hui (même forme partout) ; dette
 - **Atteignable en service** : non (pas de défaut visible)
 - **Touche rag3weaver** : oui (rendu des résultats et des outils)
+- **Famille** : produit
 
 ## Ce que c'est
 

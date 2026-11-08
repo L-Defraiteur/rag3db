@@ -8,6 +8,7 @@
 - **Ouvert le** : 12 octobre 2026, session everything declarative, pendant le lot de la porte
   unique de l'index
 - **Pour** : everything declarative
+- **Famille** : produit
 
 ## Ce qui est vu
 

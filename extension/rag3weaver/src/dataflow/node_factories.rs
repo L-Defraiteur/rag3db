@@ -1320,6 +1320,31 @@ impl NodeFactory for FuseResultsNodeFactory {
     }
 }
 
+/// Factory for HighlightNode (sans config : l'option vient de la requête).
+pub struct HighlightNodeFactory;
+
+impl NodeFactory for HighlightNodeFactory {
+    // L6 : ne fait que lire (le service creux est hors de la base).
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
+    fn create(&self, name: &str, _config: &serde_json::Value) -> Result<Box<dyn super::node::Node>, String> {
+        Ok(Box::new(super::highlight_nodes::HighlightNode::new(name)))
+    }
+    fn node_type(&self) -> &'static str {
+        "HighlightNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        NodeSchema {
+            node_type: "HighlightNode".into(),
+            description: "Surligne les morceaux de la page que lucivy n'a pas surlignés (le creux de bge-m3, sinon les mots de la requête), sur demande (`options.highlights = \"sparse\"`)".into(),
+            inputs: vec![PortDef::value("results", PortType::Results, true), query_in()],
+            outputs: vec![results_out(), meta_out()],
+            config_params: Vec::new(),
+        }
+    }
+}
+
 /// Factory for RerankNode (config: candidates, service, signal).
 pub struct RerankNodeFactory;
 
@@ -1523,6 +1548,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(SparseSearchNodeFactory));
     registry.register(Box::new(FuseResultsNodeFactory));
     registry.register(Box::new(RerankNodeFactory));
+    registry.register(Box::new(HighlightNodeFactory));
     registry.register(Box::new(ResolveParentNodeFactory));
     registry.register(Box::new(PaginateNodeFactory));
     registry.register(Box::new(MarquerDecoupeNodeFactory));
@@ -1547,6 +1573,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Décider et aiguiller (les agents qui se parlent, lot 2).
     registry.register(Box::new(super::decide_nodes::DecideNodeFactory));
     registry.register(Box::new(super::decide_nodes::RouteNodeFactory));
+    // Les sections d'un Markdown, pour l'archiviste (M4).
+    registry.register(Box::new(super::split_sections::SplitSectionsNodeFactory));
     registry.register(Box::new(super::token_nodes::TokenEventsFactory));
     registry.register(Box::new(super::token_nodes::SpotFactory));
     // Code
@@ -1573,7 +1601,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 54 + if cfg!(feature = "code") { 15 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 15 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@
 - **Gravité** : friction (chaque montage en lecture seule coûte deux refus et une copie modifiée du gabarit)
 - **Atteignable en service** : oui, pour tout dépôt qu'un agent doit lire sans le modifier
 - **Touche rag3weaver** : oui (gabarit `code`, validation du manifeste)
+- **Famille** : produit
 
 ## Ce que c'est
 

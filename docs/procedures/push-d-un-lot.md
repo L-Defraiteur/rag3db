@@ -9,6 +9,10 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   pas, on n'y bascule pas, on n'y laisse rien. **Un seul target par session** (Lucie, 7 novembre
   2026) : le même dossier sous `~/.cache/rag3weaver-build/` d'un lot au suivant, effacé avec le
   lot ; pas un target par essai.
+  **Son plafond est de 32 Go** (`run_e2e.sh`, `RAG3WEAVER_TARGET_MAX_GO`, 7 novembre 2026) : une
+  passe complète sous le jeu large (check_features, la lib entière, l'étape navigateur, les e2e)
+  pèse 19 à 26 Go, une rlib et un binaire de tests par jeu de features. Un target sous 32 Go
+  n'est pas une accumulation : il ne s'efface pas en cours de lot.
 - **Un worktree est jetable** (vision du 6 novembre, « Un worktree est jetable, donc
   distribuable » ; Lucie, 7 novembre : 46 worktrees à luciepc ce matin, 32 déjà fusionnés). Un
   contrôle **en début de passe** refuse un worktree dont la branche est déjà atterrie
@@ -52,9 +56,24 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   exigé, `RAG3WEAVER_EXIGER_GEMINI=1`, identifiants par le chemin de `.vault`, jamais leur contenu)
   si le juge ou l'équipier.
 - Un témoin qui se saute n'est pas vert : `SAUTÉ` compte comme un rouge dans la passe.
+- **Les tickets du lot se relisent** avant le push : `python3 extension/rag3weaver/scripts/check_tickets.py --lot origin/master` imprime ceux que le lot ouvre, ferme ou change d'état (l'index ne se compte plus à la main depuis le 7 novembre 2026 ; il se génère par `--index`).
+- **Un contrôle qui ne trouve rien à juger est ROUGE**, jamais vert par défaut : un filtre ctest qui ne trouve aucun test (« No tests were found », code 0) a fait dire VERTE une passe dont la comparaison du banc n'avait pas tourné (hotfixs, 7 novembre 2026). Le verdict se lit sur la sortie qui juge (« bench matches », « running N tests »), pas sur un code de sortie seul.
+- **Les e2e d'une passe se jouent sous le jeu large de features**
+  (`rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm`) ; une
+  suite **non jouée faute de feature est ROUGE** et nomme la suite, et le verdict dit « N suites
+  jouées sur N attendues » (96 et c7, 7 novembre 2026 : `run_e2e.sh` sautait les suites sous
+  `openai-llm` en prévenant seulement, et un témoin du pas 1 de M4 est arrivé sur master sans
+  avoir jamais été joué). Lire « running N tests » de chaque suite du changement avant de dire
+  vert.
 
 ## Le push (sous `poste push`, dans le worktree de push)
 
+- **Le verrou `poste push` ne couvre que le dernier pas** : fetch, rebase, push et les trois contrôles,
+  une trentaine de secondes. La passe, et tout rejeu qu'un rebase imposerait, se jouent **hors verrou**,
+  avant de le prendre. Si le rebase sous le verrou apporte du code, le script **s'arrête et rend le verrou**
+  au lieu de rejouer dessous : on rejoue dehors, puis on reprend le verrou pour pousser. Un verrou tenu au-delà
+  de 1 200 s se lit dans `poste --qui` ; on prévient la session, on ne touche jamais à son pid
+  (7 novembre 2026 : une passe complète jouée sous le verrou a tenu 44 minutes, deux lots verts derrière).
 - **Le rebase sur master au moment du push**, puis **le diff du rebase lu** :
   `git diff origin/master...HEAD --stat` (trois points), et ce que master a reçu depuis la base :
   si du code est arrivé sous `extension/rag3weaver` (hors `.md`, hors `src/` et `test/` du moteur,
@@ -72,6 +91,12 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
   Un `[ ! -d … ] && echo …` n'est pas un garde ; pendant un rebase arrêté, HEAD est la tête de
   master, le contrôle d'ancêtre passe, et `git rev-parse HEAD` rend un hash qui n'est pas le lot.
+- **Master se relit juste avant le push**, pas seulement au départ de la passe (96, deux courses
+  perdues le 7 novembre 2026) : si master a bougé **sans Rust** sous `extension/rag3weaver`, le
+  tour repose le lot dessus (rebase) et pousse ; s'il a bougé **avec du Rust**, il repose et
+  rejoue court (`check_features`, la lib entière, les e2e du changement), puis relit encore. **Trois
+  fois au plus**, puis il demande une fenêtre à c7. C'est la seule façon d'atterrir sans fenêtre
+  quand les pushes se suivent à l'heure.
 - **Le push de master dans `if grep -qx VERT`**, jamais enchaîné après la passe par `;` ou `&&`.
 - **Les trois contrôles lus avant de dire « poussé »** : `git status --short` propre, aucun
   rebase en cours (`rebase-merge`, `rebase-apply`), et `git log -1 origin/master` après un `fetch`

@@ -6,6 +6,7 @@
 - **Touche rag3weaver** : non, par lecture : ses noms de tables et de colonnes (Scope_Chunk, embedding__<modèle>, _embed_hash__…) n'ont jamais d'accent grave
 - **Ouvert le** : 4 octobre 2026, revue des amonts
 - **Pour** : analyseur — à attribuer
+- **Famille** : moteur
 
 ## Ce que c'est
 

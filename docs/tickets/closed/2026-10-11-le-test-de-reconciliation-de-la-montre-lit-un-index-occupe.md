@@ -1,6 +1,6 @@
 # Le test de réconciliation de la montre lit l'état d'un index occupé, et échoue une fois sur cinq
 
-- **État** : ouvert (11 octobre 2026, relevé par l'optimiseur en rejouant son lot sur master)
+- **État** : corrigé (e5c53d2e2 ; témoin déterministe) (l'en-tête disait encore : ouvert (11 octobre 2026, relevé par l'optimiseur en rejouant son lot sur master))
 - **Gravité** : test instable (un rouge sans défaut du produit)
 - **Atteignable en service** : non pour le test ; en service, `index_state` d'un index occupé ne
   rend pas les montres, ce que le test suppose

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "storage/stats/table_stats.h"
 #include "storage/table/group_collection.h"
 #include "storage/table/node_group.h"
@@ -29,9 +31,13 @@ public:
     // appended.
     // The returned values are the startOffset and numValuesAppended.
     // NOTE: This is specially coded to only be used by NodeBatchInsert for now.
+    // partialFlushFrom : un COPY borné en octets demande que ces lignes aillent au disque même si
+    // elles ne remplissent pas le groupe de nœuds ; les groupes de nœuds qui commencent à ce
+    // décalage ou après sont nés de ce COPY (voir NodeGroup::extendFlushedHead).
     std::pair<common::offset_t, common::offset_t> appendToLastNodeGroupAndFlushWhenFull(
         transaction::Transaction* transaction, const std::vector<common::column_id_t>& columnIDs,
-        InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator);
+        InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator,
+        std::optional<common::offset_t> partialFlushFrom = std::nullopt);
 
     common::row_idx_t getNumTotalRows() const;
     // Les lignes validées et non supprimées de toute la collection, sans relire les colonnes.
@@ -99,6 +105,7 @@ public:
 
     void checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointState& state);
     void reclaimStorage(PageAllocator& pageAllocator) const;
+    void retireGenerationsBefore(common::transaction_t oldestReaderTS);
 
     TableStats getStats() const {
         auto lock = nodeGroups.lock();

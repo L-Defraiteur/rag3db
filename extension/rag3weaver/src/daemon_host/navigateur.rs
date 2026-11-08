@@ -520,6 +520,13 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
             "document.querySelector('#reclasser')?.checked && document.querySelector('#vue .avertissements')?.textContent.includes('aucun reranker configuré')",
         ),
         (
+            // La vue des bilans (page 08, vue 6) sur un backend qui ne déclare pas
+            // `bilans` : elle le dit, sans alerte ni erreur.
+            "les bilans",
+            format!("{racine}/ide/code/{id}/bilans"),
+            "document.querySelector('#root #vue #bilans-absents')",
+        ),
+        (
             "la liste des graphes",
             format!("{racine}/ide/code/{id}/dag/"),
             "[...document.querySelectorAll('#vue li a')].some(a => a.textContent === 'usages')",
@@ -555,9 +562,9 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
 
     // L'édition (B1, page 05 §4), dans CodeMirror : Modifier, tout sélectionner et
     // taper au clavier, Ctrl-S ; le disque porte le texte tapé.
-    // L'édition reste sur l'ancienne page jusqu'à ce qu'elle soit portée (page 08,
-    // vue 3) : « Modifier » de la vue neuve y mène ; le témoin y va tout droit.
-    n.aller(&format!("{racine}/ide/ancienne/code/{id}/fichier/main.rs"), "document.querySelector('#L1')");
+    // L'édition est portée (page 08, vue 3b) : « Modifier » de la vue neuve ouvre
+    // CodeMirror dans la même page.
+    n.aller(&format!("{racine}/ide/code/{id}/fichier/main.rs"), "document.querySelector('#L1')");
     n.evaluer("[...document.querySelectorAll('button')].find(b => b.textContent === 'Modifier').click()");
     n.attendre("document.querySelector('.edition .cm-content')?.innerText.includes('fn depart()')", "l'éditeur CodeMirror");
     let avis = |texte: &str| format!("document.querySelector('.barre .note')?.textContent === {}", json!(texte));
@@ -760,6 +767,112 @@ fn la_marge_d_un_fichier_se_rend_sans_l_outil_outline() {
     );
     let alertes = n.evaluer("[...document.querySelectorAll('.alerte')].map(e => e.textContent)");
     assert_eq!(alertes, json!([]), "la marge sans outline montre une alerte");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **Chercher sans dossier** (Lucie, 7 novembre 2026 : « impossible de chercher sans
+/// d'abord explorer explicitement un dossier ») : depuis l'accueil, backend ouvert et
+/// aucun dossier exploré, une requête tapée rend des résultats de tout l'index ; depuis
+/// l'arbre d'un dossier, la saisie porte ce dossier en filtre (`scope` de `search_code`),
+/// les résultats s'y bornent, et un clic sur la pastille l'efface : la même question
+/// revient sur tout l'index.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn la_recherche_se_tape_depuis_l_accueil_et_le_dossier_n_est_qu_un_filtre() {
+    let Some(binaire) = navigateur_ou_saut("la_recherche_se_tape_depuis_l_accueil_et_le_dossier_n_est_qu_un_filtre") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(arbre.join("src")).unwrap();
+    std::fs::create_dir_all(arbre.join("outils")).unwrap();
+    // Le même mot dans deux dossiers : le filtre se voit au nombre de fichiers rendus.
+    std::fs::write(arbre.join("src/arrivee.rs"), "pub fn arrivee() {\n    let _ = 1;\n}\n").unwrap();
+    std::fs::write(arbre.join("outils/relais.rs"), "pub fn relais() {\n    arrivee();\n}\n").unwrap();
+    let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let manifeste = manifeste.to_string_lossy().to_string();
+
+    let (adresse, fil) = super::tests::hote_garde("j");
+    let appeler = |nom: &str, args: Value| -> Value {
+        let mut r = crate::daemon::agent()
+            .post(format!("http://{adresse}/ide/call"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste, "name": nom, "arguments": args }).to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    // Le premier appel ouvre le backend et lance l'index ; on attend que la recherche
+    // trouve le mot dans les deux fichiers.
+    let index = appeler("index", json!({ "confirm": true }));
+    assert_eq!(index["ok"], true, "{index}");
+    let debut = Instant::now();
+    loop {
+        let r = appeler("search_code", json!({ "query": "arrivee", "options": { "limit": 30 } }));
+        let texte = r.to_string();
+        if r["ok"] == true && texte.contains("src/arrivee.rs") && texte.contains("outils/relais.rs") {
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(60), "arrivee n'est pas trouvé dans les deux fichiers en 60 s : {r}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let etat: Value = {
+        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let id = etat["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifeste.as_str()))
+        .unwrap_or_else(|| panic!("le backend n'est pas dans l'état : {etat}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let mut n = Navigateur::lancer(&binaire);
+    let racine = format!("http://{adresse}");
+    // Les fichiers des résultats rendus, et le dossier du filtre (vide sans filtre).
+    let fichiers = "[...new Set([...document.querySelectorAll('#vue .resultat a.font-mono')].map(a => a.textContent.split(':')[0]))].sort().join(',')";
+    let pastille = "document.querySelector('#chercher-dossier')?.dataset.dossier ?? ''";
+    let taper = |n: &mut Navigateur, q: &str| {
+        n.evaluer("document.querySelector('#chercher input[name=q]').focus()");
+        n.commande("Input.insertText", json!({ "text": q }));
+        n.evaluer("document.querySelector('#chercher').requestSubmit()");
+    };
+
+    // L'accueil : la saisie est là, sans dossier, avant tout arbre exploré.
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
+    n.attendre("document.querySelector('#chercher input[name=q]') && !document.querySelector('#chercher-dossier')", "la saisie de l'accueil");
+    taper(&mut n, "arrivee");
+    n.attendre(&format!("location.pathname.endsWith('/recherche') && document.querySelector('#recherche-etat') && {fichiers} === 'outils/relais.rs,src/arrivee.rs'"), "les résultats de tout l'index depuis l'accueil");
+    assert_eq!(n.evaluer(pastille), json!(""), "la recherche de l'accueil porte un dossier");
+    assert_eq!(n.evaluer("new URLSearchParams(location.search).get('dossier')"), Value::Null);
+
+    // L'arbre d'un dossier : la saisie le porte en filtre, et les résultats s'y bornent.
+    n.aller(&format!("{racine}/ide/code/{id}/arbre/src/"), "document.querySelector('#chercher-dossier')");
+    assert_eq!(n.evaluer(pastille), json!("src/"));
+    taper(&mut n, "arrivee");
+    n.attendre(&format!("location.pathname.endsWith('/recherche') && document.querySelector('#recherche-etat') && {fichiers} === 'src/arrivee.rs'"), "les résultats bornés à src/");
+    assert_eq!(n.evaluer(pastille), json!("src/"), "la vue recherche ne montre pas le filtre");
+
+    // Un clic sur la pastille : la même question, sur tout l'index.
+    n.evaluer("window.__temoin_ancien = true; document.querySelector('#chercher-dossier button').click()");
+    n.attendre(&format!("!window.__temoin_ancien && document.querySelector('#recherche-etat') && {fichiers} === 'outils/relais.rs,src/arrivee.rs'"), "les résultats de tout l'index après l'effacement du filtre");
+    assert_eq!(n.evaluer(pastille), json!(""));
+    assert_eq!(n.evaluer("new URLSearchParams(location.search).get('q')"), json!("arrivee"));
+
+    let alertes = n.evaluer("[...document.querySelectorAll('.alerte')].map(e => e.textContent)");
+    assert_eq!(alertes, json!([]), "la recherche montre une alerte");
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
 
     drop(n);

@@ -60,6 +60,7 @@ pub mod run_nodes;
 pub mod schema_nodes;
 pub mod filter_results_node;
 pub mod generic_search_nodes;
+pub mod highlight_nodes;
 pub mod reactor;
 pub mod runs_in_flight;
 pub mod render_nodes;
@@ -67,6 +68,7 @@ pub mod trace_nodes;
 pub mod migration_nodes;
 pub mod llm_nodes;
 pub mod decide_nodes;
+pub mod split_sections;
 pub mod token_nodes;
 /// Le drapeau d'arrêt servi aux réactions (`Arc<AtomicBool>`), levé par
 /// `Backend::stop_reactions` : une réaction longue s'arrête entre deux unités.
@@ -144,6 +146,7 @@ pub use code_nodes::{
 pub use index_nodes::{EstimateNode, EstimateNodeFactory, IndexNode, IndexNodeFactory};
 pub use llm_nodes::{LlmNode, LlmNodeFactory, LLM_SERVICE, NODE_REGISTRY_SERVICE};
 pub use decide_nodes::{DecideNode, DecideNodeFactory, RouteNode, RouteNodeFactory};
+pub use split_sections::{split_sections, Section, SplitSectionsNode, SplitSectionsNodeFactory};
 pub use checkpoint::{
     CheckpointPortValue, port_value_to_checkpoint, port_value_from_checkpoint,
     GraphDefinition, NodeDef, EdgeDef,

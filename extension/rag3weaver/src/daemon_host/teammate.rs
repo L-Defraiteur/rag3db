@@ -150,12 +150,42 @@ impl Plans {
 }
 
 /// **Le dossier d'un équipier** : les plans, les plans clos, la boîte.
+/// `key` (`<parent>/<task>`) préfixe l'identifiant de chaque ligne de la boîte ;
+/// `relay`, quand l'hôte le pose, relaie chaque ligne écrite au flux de l'IDE.
 #[derive(Debug, Clone)]
 pub struct TeammateFiles {
     pub dir: PathBuf,
+    pub key: String,
+    pub relay: Option<MailboxRelay>,
 }
 
+/// **Le relais d'une boîte** vers le flux de l'IDE (sujet `mailbox`) : appelé
+/// avec chaque ligne écrite (page 07-novembre-2026-everything-declarative/01, § 2).
+#[derive(Clone)]
+pub struct MailboxRelay(pub Arc<dyn Fn(&Value) + Send + Sync>);
+
+impl std::fmt::Debug for MailboxRelay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("MailboxRelay")
+    }
+}
+
+/// Une écriture de boîte à la fois dans le processus : le rang de la ligne
+/// (son identifiant) se lit et s'écrit sans qu'une autre s'intercale.
+static MAILBOX_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Les genres qui attendent une réponse (sortis par une ligne `reply_to`), et
+/// ceux qui attendent d'être vus (sortis par `seen`).
+const AWAITS_REPLY: [&str; 3] = ["question", "approval", "proposal"];
+/// Ce qui attend d'être vu : un compte rendu, une fin, une livraison, et une
+/// parole adressée d'un agent à un autre (`message`, `answer` qui porte un `to`) —
+/// le pont (archi) : sans eux, un échange Claude ↔ Codex n'apparaissait jamais.
+const AWAITS_SEEN: [&str; 5] = ["report", "ended", "delivery", "message", "answer"];
+
 impl TeammateFiles {
+    pub fn new(dir: PathBuf, key: impl Into<String>) -> Self {
+        TeammateFiles { dir, key: key.into(), relay: None }
+    }
     pub fn plan_path(&self) -> PathBuf {
         self.dir.join("plan.json")
     }
@@ -209,30 +239,141 @@ impl TeammateFiles {
     pub fn write_cursor(&self, n: usize) {
         let _ = std::fs::write(self.dir.join("mailbox.read"), n.to_string());
     }
-    /// Les lignes de la boîte, toutes.
+    /// Les lignes de la boîte, toutes, chacune avec son `id` : une ligne écrite
+    /// avant les identifiants (ou par un autre écrivain) reçoit celui de son rang.
     pub fn mailbox(&self) -> Vec<Value> {
         std::fs::read_to_string(self.mailbox_path())
             .unwrap_or_default()
             .lines()
-            .filter_map(|l| serde_json::from_str(l).ok())
+            .enumerate()
+            .filter_map(|(n, l)| {
+                let mut v: Value = serde_json::from_str(l).ok()?;
+                if v.get("id").is_none() && v.is_object() {
+                    v["id"] = json!(format!("{}:{n}", self.key));
+                }
+                Some(v)
+            })
             .collect()
     }
     /// Ajoute une ligne à la boîte ; rend la ligne écrite.
     pub fn append(&self, from: &str, kind: &str, item: Option<&str>, text: &str) -> Result<Value, String> {
+        self.append_with(from, kind, item, text, &Value::Null)
+    }
+    /// Ajoute une ligne avec des champs de plus (`to`, `reply_to`, `approved`,
+    /// les champs d'un `step_done`…), sans jamais remplacer les siens. Son `id`
+    /// est `<parent>/<task>:<n>`, `n` son rang dans le fichier : la boîte ne fait
+    /// qu'ajouter, le rang ne bouge pas.
+    pub fn append_with(&self, from: &str, kind: &str, item: Option<&str>, text: &str, extra: &Value) -> Result<Value, String> {
         use std::io::Write;
-        let mut line = json!({ "at": now_ms(), "from": from, "kind": kind, "text": text });
+        let _seul = MAILBOX_WRITE.lock().unwrap_or_else(|p| p.into_inner());
+        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        let rang = std::fs::read_to_string(self.mailbox_path()).map(|t| t.lines().count()).unwrap_or(0);
+        let mut line = json!({ "id": format!("{}:{rang}", self.key), "at": now_ms(), "from": from, "kind": kind, "text": text });
         if let Some(i) = item {
             line["item"] = json!(i);
         }
-        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        if let Some(extra) = extra.as_object() {
+            for (k, v) in extra {
+                if line.get(k).is_none() && !v.is_null() {
+                    line[k] = v.clone();
+                }
+            }
+        }
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(self.mailbox_path()).map_err(|e| e.to_string())?;
         writeln!(f, "{line}").map_err(|e| e.to_string())?;
+        drop(_seul);
+        if let Some(r) = &self.relay {
+            (r.0)(&line);
+        }
         Ok(line)
+    }
+    /// Le superviseur : l'auteur de la première `request` de la boîte.
+    pub fn supervisor(&self) -> Option<String> {
+        self.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["from"].as_str()).map(str::to_string)
+    }
+    fn seen_path(&self) -> PathBuf {
+        self.dir.join("pending.seen.json")
+    }
+    /// Ce que `who` a déjà vu (`POST /ide/teammate/seen`).
+    pub fn seen_by(&self, who: &str) -> std::collections::BTreeSet<String> {
+        let tous: Value = std::fs::read(self.seen_path()).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or(Value::Null);
+        tous[who].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect()
+    }
+    /// Marque des lignes vues par `who` ; rend combien étaient neuves.
+    pub fn mark_seen(&self, who: &str, ids: &[String]) -> Result<usize, String> {
+        let _seul = MAILBOX_WRITE.lock().unwrap_or_else(|p| p.into_inner());
+        let mut tous: Value = std::fs::read(self.seen_path()).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or_else(|| json!({}));
+        let mut vus: std::collections::BTreeSet<String> = tous[who].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect();
+        let avant = vus.len();
+        vus.extend(ids.iter().filter(|i| i.starts_with(&format!("{}:", self.key))).cloned());
+        let neufs = vus.len() - avant;
+        tous[who] = json!(vus);
+        std::fs::write(self.seen_path(), serde_json::to_vec_pretty(&tous).unwrap_or_default()).map_err(|e| e.to_string())?;
+        Ok(neufs)
+    }
+    /// **Ce qui attend `who`** dans cette boîte : les lignes qui lui sont
+    /// adressées (`to`), ou, sans `to`, celles de l'équipier et de l'hôte quand
+    /// `who` est le superviseur. Une question, une approbation, une proposition
+    /// attendent jusqu'à une ligne qui porte `reply_to` (ou, pour une ligne
+    /// d'avant les identifiants, un `answer` sur le même `item`) ; un compte
+    /// rendu, une fin, une livraison ratée attendent d'être vus. Lecture pure.
+    pub fn pending_for(&self, who: &str) -> Vec<Value> {
+        let lignes = self.mailbox();
+        let superviseur = self.supervisor();
+        let vus = self.seen_by(who);
+        lignes
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| match l["to"].as_str() {
+                Some(to) => to == who,
+                None => matches!(l["from"].as_str(), Some("teammate" | "host")) && superviseur.as_deref() == Some(who),
+            })
+            .filter(|(_, l)| l["from"].as_str() != Some(who))
+            .filter(|(n, l)| {
+                let kind = l["kind"].as_str().unwrap_or_default();
+                let id = l["id"].as_str().unwrap_or_default();
+                if AWAITS_REPLY.contains(&kind) {
+                    !lignes[n + 1..].iter().any(|r| {
+                        r["reply_to"].as_str() == Some(id) || (r["kind"] == "answer" && !l["item"].is_null() && r["item"] == l["item"] && r["from"] != "teammate")
+                    })
+                } else if AWAITS_SEEN.contains(&kind) {
+                    !vus.contains(id) && !(kind == "delivery" && l["delivered"] == true)
+                } else {
+                    false
+                }
+            })
+            .map(|(_, l)| l.clone())
+            .collect()
     }
 }
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+/// **Une ligne est-elle pour l'équipier ?** Sans `to`, ou adressée à
+/// `teammate:<parent>/<task>` de cette tâche. Une ligne d'un agent à un autre
+/// (`claude-code:…` → `codex:…`) rangée dans la boîte ne le concerne pas : elle
+/// ne le lance pas et il ne la lit pas à sa frontière.
+pub fn addressed_to_teammate(line: &Value, key: &str) -> bool {
+    match line["to"].as_str() {
+        None => true,
+        Some(to) => to == format!("teammate:{key}"),
+    }
+}
+
+/// **Une nouvelle que l'équipier n'a pas lue** : une ligne après son curseur,
+/// d'un autre que lui et l'hôte, qui lui est adressée — un `stop` seul ne compte
+/// pas (il n'y a rien à arrêter). La fin d'un lancement la regarde : un oui
+/// posté pendant le dernier pas ne se perd pas (le lot des commandes l'a vu,
+/// 8 novembre 2026 : le oui arrivait entre le pas et la fin, et ne relançait
+/// rien, l'équipier étant encore en route).
+pub(crate) fn unread_news(files: &TeammateFiles) -> bool {
+    files
+        .mailbox()
+        .iter()
+        .skip(files.read_cursor())
+        .any(|l| l["from"] != "teammate" && l["from"] != "host" && l["kind"] != "stop" && addressed_to_teammate(l, &files.key))
 }
 
 /// Le sujet du bus de la boîte d'une tâche.
@@ -257,6 +398,8 @@ pub struct Step {
     closed: Mutex<Vec<Plan>>,
     /// L'agent a-t-il tranché sur le plan actif (continue, pause, close) ?
     decided: Mutex<Option<String>>,
+    /// Par où l'équipier s'est réveillé avant ce pas (`bus`, `fichier`), pour le journal.
+    pub woke_by: Option<String>,
 }
 
 impl Step {
@@ -271,6 +414,7 @@ impl Step {
             done: Mutex::new(None),
             closed: Mutex::new(Vec::new()),
             decided: Mutex::new(None),
+            woke_by: None,
         }
     }
     pub fn system_prompt(&self) -> &'static str {
@@ -438,7 +582,9 @@ impl Step {
             }
         }
         let text = if succeeded { format!("fait : {done}") } else { format!("raté : {done} — reste : {remaining}") };
-        self.post("step_done", (!item.is_empty()).then_some(item), &text)?;
+        let champs = json!({ "succeeded": succeeded, "done": done, "remaining": remaining });
+        let line = self.files.append_with("teammate", "step_done", (!item.is_empty()).then_some(item), &text, &champs)?;
+        publish(self.bus.as_ref(), &self.task, &line);
         *self.done.lock().unwrap_or_else(|p| p.into_inner()) = Some(json!({ "item": item, "succeeded": succeeded, "done": done, "remaining": remaining }));
         Ok(json!({ "ok": true, "step": self.number, "item": item, "succeeded": succeeded }))
     }
@@ -576,15 +722,45 @@ pub struct StepTools<'a> {
     pub step: &'a Step,
 }
 
+impl StepTools<'_> {
+    /// **Une commande mise en attente devient une question dans la boîte**
+    /// (page 07-novembre-2026-everything-declarative/01, § 1, lot 2) : le
+    /// résultat de `run_command` qui commence par la marque de l'attente pose
+    /// une ligne `approval` (la commande, telle que l'agent l'a écrite) ; le
+    /// pas continue sans elle, et un « oui » (`answer`, `approved: true`, en
+    /// réponse à cette ligne) l'accorde pour la suite de la tâche.
+    #[cfg(feature = "code")]
+    fn after(&self, call: &ToolCall, mut turn: Turn) -> Turn {
+        if turn.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
+            let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+            if let Some(ligne) = args["command"].as_str() {
+                let texte = format!("commande en attente d'accord : {ligne}");
+                if let Ok(line) = self.step.files.append_with("teammate", "approval", None, &texte, &json!({ "command": ligne })) {
+                    publish(self.step.bus.as_ref(), &self.step.task, &line);
+                    turn.content.push_str(&format!(
+                        "\n\n_La demande est dans la boîte du superviseur (ligne {}) : continue sans cette commande ; sa réponse arrivera à une frontière, et un accord la laissera passer telle quelle._",
+                        line["id"].as_str().unwrap_or_default()
+                    ));
+                }
+            }
+        }
+        turn
+    }
+    #[cfg(not(feature = "code"))]
+    fn after(&self, _call: &ToolCall, turn: Turn) -> Turn {
+        turn
+    }
+}
+
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.inner.call(call))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call(call)))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.inner.call_in(call, run))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call_in(call, run)))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.inner.call_with(call, run, inv))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call_with(call, run, inv)))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
@@ -623,7 +799,8 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool) -> S
         m.push_str("\nBoîte aux lettres, depuis le pas précédent :\n");
         for l in news {
             let item = l["item"].as_str().map(|i| format!(" (élément {i})")).unwrap_or_default();
-            m.push_str(&format!("- {} de {}{item} : {}\n", l["kind"].as_str().unwrap_or("?"), l["from"].as_str().unwrap_or("?"), l["text"].as_str().unwrap_or("")));
+            let accord = l["granted"].as_str().map(|g| format!(" — {g}")).unwrap_or_default();
+            m.push_str(&format!("- {} de {}{item} : {}{accord}\n", l["kind"].as_str().unwrap_or("?"), l["from"].as_str().unwrap_or("?"), l["text"].as_str().unwrap_or("")));
         }
     }
     let active = plans.active();
@@ -662,7 +839,147 @@ impl DaemonHost {
     pub fn teammate_files(&self, parent: &str, task: &str) -> Result<TeammateFiles, String> {
         let t = self.tache(parent, task).ok_or_else(|| format!("pas de tâche « {task} » ouverte sur {parent}"))?;
         let dir = t.arbre.parent().map(Path::to_path_buf).ok_or("la tâche n'a pas de dossier")?;
-        Ok(TeammateFiles { dir })
+        let mut files = TeammateFiles::new(dir, format!("{parent}/{task}"));
+        // Chaque ligne écrite part aussi au flux de l'IDE (sujet `mailbox`), en
+        // objet : l'IDE, le terminal et le hook la voient sans sonder la boîte.
+        // Le `backend` de la trame est le manifeste de la tâche (son worktree), comme
+        // pour ses autres événements : un client filtre le flux d'une tâche par lui seul.
+        let (flux, backend, p, t) = (Arc::downgrade(self.ide_flux()), t.manifest.display().to_string(), parent.to_string(), task.to_string());
+        files.relay = Some(MailboxRelay(Arc::new(move |line: &Value| {
+            if let Some(flux) = flux.upgrade() {
+                flux.publier("mailbox", &backend, json!({ "kind": "MailboxLine", "parent": p, "task": t, "line": line }));
+            }
+        })));
+        Ok(files)
+    }
+
+    /// **L'état de l'équipier de chaque tâche**, par l'id du backend de la tâche
+    /// : la logique de [`Self::teammate_list`] (`running`, `ended`, `error`,
+    /// `waiting`), et si une question ou une approbation de l'équipier attend
+    /// encore la réponse de son superviseur. Pour la barre du chat
+    /// (`chat_sessions` de l'état de l'hôte).
+    pub(super) fn teammate_states(&self) -> std::collections::HashMap<String, (&'static str, bool)> {
+        self.every_teammate()
+            .into_iter()
+            .map(|(t, f)| {
+                let lignes = f.mailbox();
+                let state = self.teammate_state(&t, &lignes);
+                let attend = f
+                    .supervisor()
+                    .map(|s| f.pending_for(&s).iter().any(|l| matches!(l["kind"].as_str(), Some("question" | "approval"))))
+                    .unwrap_or(false);
+                (t.id.clone(), (state, attend))
+            })
+            .collect()
+    }
+
+    /// **L'état d'un équipier**, la seule règle que lisent `teammate_list` et
+    /// `teammate_states` (relecture d'everything declarative) : `running` s'il vit
+    /// et qu'un tour court dans le chat de sa tâche ; `ended` ou `error` (le texte
+    /// de sa ligne de fin) s'il s'est arrêté ; `waiting` sinon.
+    fn teammate_state(&self, t: &super::taches::Tache, lignes: &[Value]) -> &'static str {
+        let fin = lignes.iter().rev().find(|l| l["kind"] == "ended");
+        let vivant = self.teammate_running(&t.parent, &t.nom);
+        if vivant && self.run_du_chat_en_cours(&t.id).is_some() {
+            "running"
+        } else if let (Some(fin), false) = (fin, vivant) {
+            if fin["text"].as_str().unwrap_or_default().starts_with("erreur") { "error" } else { "ended" }
+        } else {
+            "waiting"
+        }
+    }
+
+    /// Toutes les tâches de l'hôte, avec les fichiers de leur équipier.
+    fn every_teammate(&self) -> Vec<(super::taches::Tache, TeammateFiles)> {
+        let taches: Vec<super::taches::Tache> = self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        taches.into_iter().filter_map(|t| self.teammate_files(&t.parent, &t.nom).ok().map(|f| (t, f))).collect()
+    }
+
+    /// **Ce qui attend `who`** dans toutes les boîtes (`GET /ide/teammate/pending?for=`) :
+    /// lecture pure, rien n'y est consommé (page 07-novembre-2026-everything-declarative/01, § 2).
+    pub fn teammate_pending(&self, who: &str) -> Value {
+        let items: Vec<Value> = self
+            .every_teammate()
+            .into_iter()
+            .flat_map(|(t, f)| {
+                f.pending_for(who).into_iter().map(move |l| {
+                    let mut item = json!({ "id": l["id"], "task": t.nom, "parent": t.parent, "from": l["from"], "kind": l["kind"], "text": l["text"], "at": l["at"] });
+                    for k in ["item", "command", "delivered"] {
+                        if !l[k].is_null() {
+                            item[k] = l[k].clone();
+                        }
+                    }
+                    item
+                })
+            })
+            .collect();
+        json!({ "for": who, "items": items })
+    }
+
+    /// **Marquer vu** (`POST /ide/teammate/seen`) : un compte rendu, une fin, une
+    /// livraison sortent de `pending` pour `who`. Rend combien étaient neufs.
+    pub fn teammate_seen(&self, who: &str, ids: &[String]) -> Result<Value, String> {
+        if who.is_empty() {
+            return Err("for manque : la clé de qui a vu (claude-code:<id>, codex:<nom>…)".into());
+        }
+        let mut neufs = 0;
+        for (_, f) in self.every_teammate() {
+            neufs += f.mark_seen(who, ids)?;
+        }
+        Ok(json!({ "for": who, "seen": neufs }))
+    }
+
+    /// **La reprise après un arrêt de l'hôte** (page
+    /// 07-novembre-2026-everything-declarative/01, § 1) : au démarrage, chaque tâche
+    /// relue dont la dernière demande n'a ni fin (`ended`) ni arrêt (`stop`) avait un
+    /// équipier au travail ou en attente quand l'hôte s'est arrêté. Sa boîte le dit (le
+    /// pas en cours, s'il y en avait un, n'a pas fini : il n'a pas de `step_done`), et
+    /// l'équipier repart à sa frontière, avec son plan et son curseur de boîte gardés
+    /// sur le disque. `teammate.resume_after_restart: false` le laisse en attente.
+    /// Rend une ligne par équipier.
+    pub fn reprendre_les_equipiers(self: &Arc<Self>) -> Vec<String> {
+        let mut lignes = Vec::new();
+        for (t, files) in self.every_teammate() {
+            let boite = files.mailbox();
+            let Some(demande) = boite.iter().rposition(|l| l["kind"] == "request") else { continue };
+            if boite[demande..].iter().any(|l| l["kind"] == "ended" || l["kind"] == "stop") {
+                continue;
+            }
+            let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
+            if !policy.resume_after_restart {
+                let _ = files.append("host", "report", None, "l'hôte a redémarré pendant le travail de l'équipier ; teammate.resume_after_restart est faux : il attend une nouvelle demande");
+                lignes.push(format!("équipier {}/{} laissé en attente (resume_after_restart = false)", t.parent, t.nom));
+                continue;
+            }
+            let _ = files.append(
+                "host",
+                "report",
+                None,
+                "l'hôte s'est arrêté pendant le travail de l'équipier (un pas en cours n'a pas fini) ; reprise à la frontière",
+            );
+            let started = self.start_teammate(&t.parent, &t.nom);
+            lignes.push(format!("équipier {}/{} {}", t.parent, t.nom, if started { "repris" } else { "déjà en route" }));
+        }
+        lignes
+    }
+
+    /// **Les équipiers d'un superviseur** (`GET /ide/teammate/list?supervisor=`) :
+    /// running (un pas est en vol : un tour du chat de la tâche), waiting (pas de
+    /// pas en vol et pas de fin : l'équipier attend sa boîte, ou entre deux pas),
+    /// ended, error (la fin dit l'erreur).
+    pub fn teammate_list(&self, supervisor: &str) -> Value {
+        let teammates: Vec<Value> = self
+            .every_teammate()
+            .into_iter()
+            .filter(|(_, f)| f.supervisor().as_deref() == Some(supervisor))
+            .map(|(t, f)| {
+                let lignes = f.mailbox();
+                let derniere = lignes.last().cloned().unwrap_or(Value::Null);
+                let state = self.teammate_state(&t, &lignes);
+                json!({ "task": t.nom, "parent": t.parent, "state": state, "last_kind": derniere["kind"], "at": derniere["at"] })
+            })
+            .collect();
+        json!({ "supervisor": supervisor, "teammates": teammates })
     }
 
     /// **Écrire à l'équipier d'une tâche** (`POST /ide/teammate/mailbox`) : la
@@ -670,14 +987,16 @@ impl DaemonHost {
     /// l'ouvre. Un `stop` arrête tout de suite le pas en cours. L'équipier qui
     /// attend se réveille par le bus ; celui qui travaille lira la ligne à la
     /// frontière. Rend la ligne, et si un équipier a été lancé.
-    pub fn post_to_teammate(self: &Arc<Self>, parent: &str, task: &str, from: &str, kind: &str, item: Option<&str>, text: &str) -> Result<Value, String> {
-        if !matches!(kind, "request" | "instruction" | "answer" | "stop") {
-            return Err(format!("genre inconnu : {kind} (request, instruction, answer, stop)"));
+    /// `extra` porte `to`, `reply_to`, `approved` quand ils sont donnés.
+    pub fn post_to_teammate(self: &Arc<Self>, parent: &str, task: &str, from: &str, kind: &str, item: Option<&str>, text: &str, extra: &Value) -> Result<Value, String> {
+        if !matches!(kind, "request" | "instruction" | "answer" | "message" | "stop") {
+            return Err(format!("genre inconnu : {kind} (request, instruction, answer, message, stop)"));
         }
         if text.trim().is_empty() && kind != "stop" {
             return Err("le texte est vide".into());
         }
-        if self.tache(parent, task).is_none() {
+        let ouverte = self.tache(parent, task).is_none();
+        if ouverte {
             if kind != "request" {
                 return Err(format!("pas de tâche « {task} » sur {parent} : une request l'ouvre"));
             }
@@ -685,7 +1004,70 @@ impl DaemonHost {
         }
         let t = self.tache(parent, task).ok_or("la tâche vient de s'ouvrir et n'est plus là")?;
         let files = self.teammate_files(parent, task)?;
-        let line = files.append(from, kind, item, text)?;
+        // **Une réponse va à l'auteur de ce qu'elle répond** (le pont, archi) : une
+        // `answer` sans `to` dont le `reply_to` vise la ligne d'un autre agent
+        // (ni l'équipier ni l'hôte) lui est adressée. `mail reply` ne connaît que
+        // l'id ; c'est la boîte qui sait qui l'a écrit.
+        let mut extra = extra.clone();
+        if kind == "answer" && extra["to"].is_null() {
+            if let Some(r) = extra["reply_to"].as_str() {
+                if let Some(auteur) = files.mailbox().iter().find(|l| l["id"] == r).and_then(|l| l["from"].as_str().map(str::to_string)) {
+                    if !matches!(auteur.as_str(), "teammate" | "host") {
+                        if !extra.is_object() {
+                            extra = json!({});
+                        }
+                        extra["to"] = json!(auteur);
+                    }
+                }
+            }
+        }
+        // **Un oui à une commande en attente l'accorde** pour la suite de la
+        // tâche (lot 2 de la page 01) : la ligne visée est une `approval` de
+        // l'équipier, la commande passe par la porte du backend de la tâche,
+        // dans son worktree. L'accord se pose **avant** que le oui s'écrive, et
+        // le oui le porte (`granted`) : l'équipier, qui ne lit pas les lignes de
+        // l'hôte, l'apprend dans la ligne qui le réveille ; la boîte le redit au
+        // superviseur.
+        if let Some(o) = extra.as_object_mut() {
+            o.remove("granted"); // l'hôte seul l'écrit
+        }
+        #[allow(unused_mut)]
+        let mut accord: Option<String> = None;
+        #[cfg(feature = "code")]
+        if kind == "answer" && extra["approved"] == true {
+            let visee = extra["reply_to"].as_str().and_then(|r| files.mailbox().into_iter().find(|l| l["id"] == r));
+            if let Some(ligne) = visee.as_ref().filter(|l| l["kind"] == "approval").and_then(|l| l["command"].as_str().map(str::to_string)) {
+                let domaine = t.workspace.as_ref().map(|w| w.racine.clone());
+                let accorde = self.with_backend_id(&t.id, |b| match b.garde() {
+                    Some(g) => g.accorder_ligne(&ligne, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
+                    None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
+                });
+                let note = match accorde {
+                    Ok(Ok(cs)) => format!("commande accordée pour la tâche : {}", cs.join(" ; ")),
+                    Ok(Err(e)) | Err(e) => format!("l'accord n'a pas pu se poser : {e}"),
+                };
+                if let Some(o) = extra.as_object_mut() {
+                    o.insert("granted".into(), Value::String(note.clone()));
+                }
+                accord = Some(note);
+            }
+        }
+        let line = files.append_with(from, kind, item, text, &extra)?;
+        // **D'où part la tâche** (c7, premier essai réel, 7 novembre) : ses
+        // déclarations et son code sont ceux d'un commit ; une modification non
+        // commitée n'y est pas, et sans le dire on la cherche longtemps.
+        let depart = ouverte.then(|| {
+            let court: String = t.depart.chars().take(9).collect();
+            let note = format!(
+                "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)",
+                t.branche
+            );
+            let _ = files.append("host", "report", None, &note);
+            json!({ "branche": t.branche, "depart": t.depart })
+        });
+        if let Some(note) = &accord {
+            let _ = files.append("host", "report", None, note);
+        }
         let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication()).ok();
         publish(bus.as_ref(), task, &line);
         if kind == "stop" {
@@ -693,8 +1075,27 @@ impl DaemonHost {
                 let _ = self.stop_run(&t.id, &run, from);
             }
         }
-        let started = kind != "stop" && self.start_teammate(parent, task);
-        Ok(json!({ "line": line, "started": started }))
+        // **Seule une ligne adressée à l'équipier le lance** (archi, 7 novembre
+        // 2026) : une parole d'un agent à un autre rangée dans cette boîte, ou une
+        // réponse à une ligne qui n'est pas de lui, est rangée et relayée, sans
+        // lancer personne (ni dépenser un appel au modèle).
+        let pour_lui = kind == "request"
+            || (kind != "stop"
+                && addressed_to_teammate(&line, &files.key)
+                && match line["reply_to"].as_str() {
+                    None => true,
+                    Some(r) => files.mailbox().iter().find(|l| l["id"] == r).is_none_or(|l| matches!(l["from"].as_str(), Some("teammate" | "host"))),
+                });
+        let mut r = if pour_lui {
+            let started = self.start_teammate(parent, task);
+            json!({ "line": line, "started": started })
+        } else {
+            json!({ "line": line, "started": false, "why": if kind == "stop" { Value::Null } else { json!("not_addressed") } })
+        };
+        if let Some(d) = depart {
+            r["task"] = d;
+        }
+        Ok(r)
     }
 
     /// Lance la boucle de l'équipier d'une tâche, sur son fil, s'il n'y en a
@@ -710,11 +1111,28 @@ impl DaemonHost {
         let (host, parent, task, cle) = (Arc::downgrade(self), parent.to_string(), task.to_string(), key.clone());
         let lance = std::thread::Builder::new().name(format!("teammate-{task}")).spawn(move || {
             if let Some(h) = host.upgrade() {
-                match h.run_teammate(&parent, &task) {
-                    Ok(o) => eprintln!("[équipier] {parent}/{task} : {} pas, {}", o.steps.len(), o.ended),
-                    Err(e) => eprintln!("[équipier] {parent}/{task} : {e}"),
-                }
+                let fini = match h.run_teammate(&parent, &task) {
+                    Ok(o) => {
+                        eprintln!("[équipier] {parent}/{task} : {} pas, {}", o.steps.len(), o.ended);
+                        // Une fin « plus rien à faire » seulement : un arrêt (la
+                        // boîte, des pas ratés, la borne des pas) ne se relance pas.
+                        o.ended == "fait sans plan" || o.ended.starts_with("plus rien à faire")
+                    }
+                    Err(e) => {
+                        eprintln!("[équipier] {parent}/{task} : {e}");
+                        false
+                    }
+                };
                 h.teammates.lock().unwrap_or_else(|p| p.into_inner()).remove(&cle);
+                // Une ligne postée pendant que ce lancement finissait n'a rien
+                // relancé (il tenait encore la clé) : on la relance ici. La ligne
+                // s'écrit avant que la poste tente le lancement, et la clé part
+                // avant cette relecture : l'une des deux la voit toujours. Après
+                // une fin « plus rien à faire » seulement : une erreur ou un arrêt
+                // gardent leurs nouvelles non lues, et relancer sur eux bouclerait.
+                if fini && h.tache(&parent, &task).is_some() && h.teammate_files(&parent, &task).is_ok_and(|f| unread_news(&f)) {
+                    h.start_teammate(&parent, &task);
+                }
             }
         });
         if lance.is_err() {
@@ -744,7 +1162,12 @@ impl DaemonHost {
         if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {
             publish(Some(&bus), task, &line);
         }
-        files.write_cursor(files.mailbox().len());
+        // **Le curseur reste où la boucle l'a laissé** : le marquer au bout de
+        // la boîte effaçait une ligne arrivée pendant le dernier pas (le oui du
+        // lot des commandes, 8 novembre 2026), que la relance de start_teammate
+        // doit voir. Les lignes de l'équipier et de l'hôte ne sont jamais des
+        // nouvelles ; celles qu'un pas raté a rendues se relisent au lancement
+        // suivant.
         if outcome.ended.starts_with("erreur : ") {
             return Err(outcome.ended);
         }
@@ -753,10 +1176,15 @@ impl DaemonHost {
 
     fn teammate_loop(&self, parent: &str, task: &str, files: &TeammateFiles) -> Result<Outcome, String> {
         let t = self.tache(parent, task).ok_or_else(|| format!("pas de tâche « {task} » sur {parent}"))?;
-        let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication())?;
+        // **Le bus, s'il y en a un** : un backend qui ne s'ouvre pas n'en a pas,
+        // et l'équipier se réveille alors par la relecture du fichier de boîte.
+        let bus = self.with_backend_id(&t.id, |b| b.bus_de_publication()).ok();
         // L'abonnement au sujet de la boîte, pris avant de lire : une ligne
         // arrivée entre la lecture et l'attente réveille quand même.
-        let mut wake = bus.subscribe(&mailbox_topic(task));
+        let mut wake = bus.as_ref().map(|b| b.subscribe(&mailbox_topic(task)));
+        let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
+        let mut failed = 0u32;
+        let mut woke_by: Option<String> = None;
         let mut outcome = Outcome::default();
         let mut read = files.read_cursor();
         let mut stalled = 0usize;
@@ -765,7 +1193,15 @@ impl DaemonHost {
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         for number in 1..=MAX_STEPS {
             let lines = files.mailbox();
-            let news: Vec<Value> = lines.iter().skip(read).filter(|l| l["from"] != "teammate" && l["from"] != "host").cloned().collect();
+            let news: Vec<Value> = lines
+                .iter()
+                .skip(read)
+                .filter(|l| l["from"] != "teammate" && l["from"] != "host" && addressed_to_teammate(l, &files.key))
+                .cloned()
+                .collect();
+            // Le curseur d'avant ce pas : un pas qui n'aboutit pas rend ses nouvelles
+            // au suivant (sans elles, l'équipier attendrait une boîte déjà lue).
+            let avant = read;
             read = lines.len();
             files.write_cursor(read);
             if news.iter().any(|l| l["kind"] == "stop") {
@@ -782,20 +1218,76 @@ impl DaemonHost {
             let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 1);
             let last = active.is_some() && !alone && !waiting && news.is_empty();
             if !work {
-                // Rien à faire sans le superviseur : on attend la boîte, puis on relit.
-                match wake.recv_blocking() {
-                    Ok(_) | Err(async_broadcast::RecvError::Overflowed(_)) => continue,
-                    Err(async_broadcast::RecvError::Closed) => {
-                        outcome.ended = "la tâche s'est fermée pendant l'attente".into();
-                        return Ok(outcome);
+                // Rien à faire sans le superviseur : on attend la boîte, par le
+                // bus quand il y en a un, et toujours par le fichier (toutes les
+                // 2 s) : un backend fermé ne publie plus. Le journal du pas
+                // suivant dit par où l'équipier s'est réveillé.
+                let depuis = files.mailbox().len();
+                let mut tour = 0u32;
+                woke_by = loop {
+                    if let Some(rx) = wake.as_mut() {
+                        match rx.try_recv() {
+                            Ok(_) | Err(async_broadcast::TryRecvError::Overflowed(_)) => break Some("bus".to_string()),
+                            Err(async_broadcast::TryRecvError::Closed) => wake = None,
+                            Err(async_broadcast::TryRecvError::Empty) => {}
+                        }
                     }
-                }
+                    tour += 1;
+                    if tour % 10 == 0 {
+                        if self.tache(parent, task).is_none() {
+                            outcome.ended = "la tâche s'est fermée pendant l'attente".into();
+                            return Ok(outcome);
+                        }
+                        if files.mailbox().len() > depuis {
+                            break Some("fichier".to_string());
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                };
+                continue;
             }
             let message = frontier_message(number, &news, &plans, last);
-            let step = Step::new(files.clone(), task, &request, Some(bus.clone()), number);
-            let r = self.chat_turn_with(&t.id, &message, Some(&step))?;
+            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
+            step.woke_by = woke_by.take();
+            // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
+            // dans la boîte et le pas suivant repart de la frontière ; seuls
+            // `teammate.max_failed_steps` échecs d'affilée l'arrêtent.
+            let r = match self.chat_turn_with(&t.id, &message, Some(&step)) {
+                Ok(r) => {
+                    failed = 0;
+                    r
+                }
+                Err(e) => {
+                    failed += 1;
+                    let line = files.append("host", "report", None, &format!("le pas {number} n'a pas abouti : {e}"))?;
+                    publish(bus.as_ref(), task, &line);
+                    if failed >= policy.max_failed_steps {
+                        outcome.ended = format!("erreur : {e} ({failed} pas d'affilée n'ont pas abouti, teammate.max_failed_steps = {})", policy.max_failed_steps);
+                        return Ok(outcome);
+                    }
+                    read = avant;
+                    files.write_cursor(read);
+                    std::thread::sleep(std::time::Duration::from_secs(2 * u64::from(failed)));
+                    continue;
+                }
+            };
             let declared = step.declared();
             let run = r["run"].as_str().unwrap_or_default().to_string();
+            // **Un pas ne finit jamais en silence** (c7, premier essai réel) : sans
+            // `step_done`, la réponse finale du modèle va dans la boîte en `report`,
+            // pour que le superviseur la voie (pending) au lieu d'un équipier qui
+            // attend sans rien avoir dit.
+            if declared.is_none() && r["stopped_by"].is_null() {
+                let texte = r["text"].as_str().unwrap_or_default().trim();
+                let dit = if texte.is_empty() {
+                    format!("le pas {number} s'est terminé sans step_done ni réponse")
+                } else {
+                    format!("le pas {number} s'est terminé sans step_done ; sa réponse : {texte}")
+                };
+                if let Ok(line) = files.append("teammate", "report", None, &dit) {
+                    publish(bus.as_ref(), task, &line);
+                }
+            }
             {
                 let mut plans = files.read_plans();
                 if let Some(p) = plans.active_mut() {
@@ -810,8 +1302,11 @@ impl DaemonHost {
                     closed.steps.push(run.clone());
                 }
                 files.keep_closed(&closed)?;
+                // La mémoire en dernier : un rangement manqué se dit, il ne
+                // bloque ni le pas ni le plan.
                 if let Err(e) = self.file_closed_plan(&t, task, &request, &closed) {
                     eprintln!("[équipier] {task} : le plan {} clos ne se range pas : {e}", closed.number);
+                    let _ = files.append("host", "memory_failed", None, &format!("le plan {} clos ne se range pas en mémoire : {e}", closed.number));
                 }
             }
             outcome.steps.push(json!({ "step": number, "run": run, "step_done": declared, "tool_calls": step.tool_calls(), "decision": step.decision() }));
@@ -825,7 +1320,7 @@ impl DaemonHost {
             // reprend un plan en pause ou le clôt aussi (Lucie).
             let after = files.read_plans();
             plan_seen |= !step.closed_plans().is_empty();
-            if after.active().is_none() && after.paused().is_empty() && declared.is_some() {
+            if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !unread_news(&files) {
                 outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
                 return Ok(outcome);
             }
@@ -837,7 +1332,7 @@ impl DaemonHost {
             if stalled >= MAX_STALLED {
                 let why = format!("{MAX_STALLED} pas de suite sans élément réussi : je m'arrête, le plan dit où j'en suis");
                 let line = files.append("host", "report", None, &why)?;
-                publish(Some(&bus), task, &line);
+                publish(bus.as_ref(), task, &line);
                 outcome.ended = why;
                 return Ok(outcome);
             }
@@ -947,11 +1442,11 @@ mod tests {
     use super::*;
 
     fn step(d: &Path) -> Step {
-        Step::new(TeammateFiles { dir: d.to_path_buf() }, "t", "la demande", None, 1)
+        Step::new(TeammateFiles::new(d.to_path_buf(), "p/t"), "t", "la demande", None, 1)
     }
 
     fn call(name: &str, args: Value) -> ToolCall {
-        ToolCall { id: "c".into(), name: name.into(), arguments: args.to_string(), provider_extra: None }
+        ToolCall { id: "c".into(), name: name.into(), arguments: args.to_string(), provider_extra: None, at_ms: None }
     }
 
     /// Le plan s'écrit, ses questions partent dans la boîte, `step_done` passe

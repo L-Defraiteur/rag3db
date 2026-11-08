@@ -5,6 +5,7 @@
 - **Atteignable en service** : oui, sur une erreur interne du moteur (mémoire, état faussé)
   que rien ne reconnaît comme « à rouvrir ».
 - **Touche rag3weaver** : oui.
+- **Famille** : produit
 
 ## Ce que c'est
 

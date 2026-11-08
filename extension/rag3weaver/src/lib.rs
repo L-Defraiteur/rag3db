@@ -179,6 +179,7 @@ pub mod fts_handle;
 pub mod fts_directory;
 pub mod disponibilite;
 pub mod hash;
+pub mod host_log;
 pub mod node_id_cache;
 pub mod derived_kb;
 pub mod ocr;
@@ -221,6 +222,20 @@ pub mod daemon_client;
 pub mod claude_code_hook;
 // L'adaptateur de la transcription `.jsonl` de Claude Code : petit, tolérant.
 pub mod claude_code_transcript;
+// La requête du rappel des hooks, tirée du prompt sans modèle (3 ter).
+pub mod rappel_du_prompt;
+// La boîte de l'hôte vue d'un agent : `mail send|reply|pending|seen` et la
+// lecture du hook (docs/07-novembre-2026-hooks-claude-code/07).
+#[cfg(feature = "daemon")]
+pub mod mail;
+// Les fils Codex : découverte en lecture seule, nom → UUID, livraison par
+// `codex queue` (même page).
+#[cfg(feature = "daemon")]
+pub mod codex_threads;
+// Le canal : un serveur MCP en stdio que Claude Code charge comme canal, pour
+// pousser la boîte dans une session occupée ou à l'arrêt (page 07 § 4).
+#[cfg(feature = "daemon")]
+pub mod canal;
 /// `code-tree` : un arbre de code indexé par instantané, qui suit ses éditions.
 pub mod code_tree;
 /// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le
@@ -318,7 +333,7 @@ pub use node_id_cache::{InternalNodeId, NodeIdCache};
 pub use records::{EntityRecord, RelationRecord, UpdateRecord, DeleteRecord, PendingWork, RefOrUuid, FlushResult, DrainStats};
 pub use refs::{EntityRef, EntityRefResolver, RefError, RelResolved, RelationRef, RelationRefResolver};
 pub use schema::{generate_full_schema, FullSchema};
-pub use sparse_index::SparseVector;
+pub use sparse_index::{SparseSpan, SparseVector};
 pub use uuid::{chunk_uuid, hashsafe_uuid};
 pub use catalog::{Catalog, CatalogError, ReindexStats};
 pub use records::{DeleteResult, UpdateResult, UpdateStatus};

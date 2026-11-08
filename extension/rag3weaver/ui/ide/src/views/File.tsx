@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { call, route, shortName, type HostState } from "@/lib/host";
+import { call, onFlux, route, shortName, type FluxEvent, type HostState } from "@/lib/host";
+import { Editor } from "@/views/Editor";
 
 // **La vue d'un fichier et sa marge** (page 08, vue 3) : le texte numéroté, chaque
 // identifiant menant à son symbole, et « Dans ce fichier » — le plan d'outline
 // (chaque scope sous celui qui le contient, vers sa ligne et son symbole, avec sa
 // provenance), ou, quand le manifeste n'expose pas `outline`, les scopes que
-// `read_file` rend, en disant pourquoi (#plan-repli). L'édition reste sur
-// l'ancienne page jusqu'à ce qu'elle soit portée : « Modifier » y mène.
+// `read_file` rend, en disant pourquoi (#plan-repli). « Modifier » ouvre l'édition
+// (vue 3b, `Editor`) dans la même page ; un fichier qui change sur le disque
+// pendant la lecture se relit.
 
 // Les mots qui ne sont pas des symboles du dépôt (quelques langages courants).
 const WORDS = new Set(
@@ -88,10 +90,24 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
   const [read, setRead] = useState<Read | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [generation, setGeneration] = useState(0);
   const offset = Number(new URLSearchParams(location.search).get("depuis") ?? 1) || 1;
 
+  // En lecture, le fichier qui change sur le disque se relit (un peu après).
   useEffect(() => {
-    if (!backend) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const off = onFlux((d: FluxEvent) => {
+      const ev = d.evenement ?? {};
+      if (editing || !backend || d.backend !== backend.manifest || ev.kind !== "FileChanged" || ev.path !== path) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => setGeneration((g) => g + 1), 300);
+    });
+    return () => { off(); clearTimeout(timer); };
+  }, [backend?.manifest, path, editing]);
+
+  useEffect(() => {
+    if (!backend || editing) return;
     setRead(null);
     setPlan(null);
     Promise.all([
@@ -105,7 +121,7 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
         setPlan(p);
       })
       .catch((e: Error) => setError(e.message));
-  }, [backend?.manifest, path, offset]);
+  }, [backend?.manifest, path, offset, editing, generation]);
 
   // La ligne visée par l'ancre (#L12), centrée, à l'arrivée et au changement d'ancre.
   useEffect(() => {
@@ -132,6 +148,7 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
   }, [read]);
 
   if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (editing) return <Editor manifest={backend.manifest} path={path} onClose={() => setEditing(false)} />;
   const parts = path.split("/").filter(Boolean);
   return (
     <>
@@ -153,10 +170,8 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
       {read ? (
         <>
           <p className="barre flex items-center gap-3 mb-2">
-            <Button asChild variant="outline" size="sm">
-              <a href={`/ide/ancienne/code/${id}/fichier/${path.split("/").map(encodeURIComponent).join("/")}`} data-modifier>
-                <Pencil className="size-3.5" /> Modifier
-              </a>
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)} data-modifier>
+              <Pencil className="size-3.5" />Modifier
             </Button>
             <span className="note text-xs text-muted-foreground">
               {read.total_lines} lignes

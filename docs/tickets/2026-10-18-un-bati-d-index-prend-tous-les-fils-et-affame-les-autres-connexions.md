@@ -10,6 +10,7 @@
 - **Ouvert le** : 18 octobre 2026, banc de concurrence, à la demande de l'orchestration, d'après
   l'hypothèse de hotfixs.
 - **Pour** : cœur C++, ou hotfixs, au choix de l'orchestration.
+- **Famille** : moteur
 
 ## Ce qu'on voit
 

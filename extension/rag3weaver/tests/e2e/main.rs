@@ -134,6 +134,8 @@ mod e2e_graphe_et_paquets;
 mod e2e_highlight_long_text;
 #[path = "../e2e_hnsw_scale.rs"]
 mod e2e_hnsw_scale;
+#[path = "../e2e_hooks_claude_code.rs"]
+mod e2e_hooks_claude_code;
 #[path = "../e2e_idempotent_registration.rs"]
 mod e2e_idempotent_registration;
 #[path = "../e2e_impact.rs"]
@@ -234,6 +236,8 @@ mod e2e_search;
 mod e2e_search_queue;
 #[path = "../e2e_seed_du_manifeste.rs"]
 mod e2e_seed_du_manifeste;
+#[path = "../e2e_service_spans.rs"]
+mod e2e_service_spans;
 #[path = "../e2e_simple_entity.rs"]
 mod e2e_simple_entity;
 #[path = "../e2e_sparse_dump.rs"]
@@ -250,6 +254,8 @@ mod e2e_tampon_plein;
 mod e2e_tests_par_requetes;
 #[path = "../e2e_titre_indexe.rs"]
 mod e2e_titre_indexe;
+#[path = "../e2e_tty.rs"]
+mod e2e_tty;
 #[path = "../e2e_tx_ligne_a_ligne.rs"]
 mod e2e_tx_ligne_a_ligne;
 #[path = "../e2e_tx_merge_puis_copy.rs"]
@@ -268,6 +274,8 @@ mod e2e_usages;
 mod e2e_verrous;
 #[path = "../e2e_verrous_du_chemin.rs"]
 mod e2e_verrous_du_chemin;
+#[path = "../e2e_whois.rs"]
+mod e2e_whois;
 #[path = "../e2e_working_tree.rs"]
 mod e2e_working_tree;
 

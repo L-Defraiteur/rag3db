@@ -336,6 +336,29 @@ impl Forme<'_> {
         condition: &FilterCondition,
         target: &crate::search::SearchTarget,
     ) -> Result<Option<Vec<u64>>, CatalogError> {
+        self.resoudre_le_filtre(entity, None, condition, target)
+    }
+
+    /// Les offsets des **morceaux** des lignes de `entity` que le filtre admet
+    /// (voir `SchemaDialect::filter_resolve_chunk_offsets`) : pour un index
+    /// rangé par morceaux, le creux.
+    pub fn resolve_filter_to_chunk_ids(
+        &self,
+        entity: &str,
+        chunk_table: &str,
+        condition: &FilterCondition,
+        target: &crate::search::SearchTarget,
+    ) -> Result<Option<Vec<u64>>, CatalogError> {
+        self.resoudre_le_filtre(entity, Some(chunk_table), condition, target)
+    }
+
+    fn resoudre_le_filtre(
+        &self,
+        entity: &str,
+        chunk_table: Option<&str>,
+        condition: &FilterCondition,
+        target: &crate::search::SearchTarget,
+    ) -> Result<Option<Vec<u64>>, CatalogError> {
         let (filter_entity, filter_alias, join_from): (&str, &str, Option<(&str, &str, &str)>) =
             if let Some((ref title_entity, ref in_rel)) = target.filter_indirection {
                 (title_entity.as_str(), "t", Some(("t", title_entity.as_str(), in_rel.as_str())))
@@ -353,13 +376,23 @@ impl Forme<'_> {
         }
 
         let resolve_alias = if join_from.is_some() { "idx" } else { "n" };
-        let query = self.dialect.filter_resolve_offsets(
-            entity,
-            resolve_alias,
-            &parsed.match_clauses,
-            &parsed.combine_where(),
-            join_from,
-        );
+        let query = match chunk_table {
+            None => self.dialect.filter_resolve_offsets(
+                entity,
+                resolve_alias,
+                &parsed.match_clauses,
+                &parsed.combine_where(),
+                join_from,
+            ),
+            Some(chunks) => self.dialect.filter_resolve_chunk_offsets(
+                entity,
+                chunks,
+                resolve_alias,
+                &parsed.match_clauses,
+                &parsed.combine_where(),
+                join_from,
+            ),
+        };
         let result = if parsed.params.is_empty() {
             self.conn.execute(&query).map_err(|e| CatalogError::DbError(e.to_string()))?
         } else {

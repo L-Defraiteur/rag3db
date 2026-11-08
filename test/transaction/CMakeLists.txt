@@ -3,7 +3,7 @@ add_rag3db_test(current_time_test current_time_test.cpp)
 # Also tested for coverage in connection_test.cpp
 # but full testing requires some private APIs
 add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_test.cpp key_mask_join_test.cpp
-        read_only_open_test.cpp failed_transaction_test.cpp local_offset_remap_test.cpp
+        read_only_open_test.cpp failed_transaction_test.cpp half_applied_commit_test.cpp statement_failure_test.cpp local_offset_remap_test.cpp
         readers_during_delete_test.cpp vector_search_during_insert_test.cpp
         vector_index_wal_replay_test.cpp vector_index_crash_reopen_test.cpp uncommitted_rels_scan_test.cpp
         vector_index_after_failed_copy_test.cpp checkpoint_after_failed_copy_test.cpp
@@ -19,6 +19,7 @@ add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_te
         copy_after_drop_vector_index_test.cpp copy_rollback_persistent_rels_test.cpp
         copy_null_strings_test.cpp
         storage_format_version_test.cpp stable_column_ids_test.cpp
-        checkpoint_new_segment_test.cpp checkpoint_under_readers_test.cpp checkpoint_open_reader_test.cpp)
+        checkpoint_new_segment_test.cpp checkpoint_under_readers_test.cpp checkpoint_open_reader_test.cpp projected_graph_read_only_test.cpp
+        refused_copy_same_session_test.cpp)
 
 add_subdirectory(concurrence)

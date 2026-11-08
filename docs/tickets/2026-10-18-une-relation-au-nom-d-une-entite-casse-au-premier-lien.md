@@ -8,6 +8,7 @@
 - **Touche rag3weaver** : oui (le contrôle du manifeste), et le moteur pour son message.
 - **Ouvert le** : 18 octobre 2026, session mémoire longue, à la demande de l'orchestration.
 - **Pour** : arbre principal (le contrôle au chargement) ; le cœur pour le message du moteur.
+- **Famille** : produit
 
 ## Ce qu'on voit
 

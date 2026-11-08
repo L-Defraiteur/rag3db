@@ -1257,3 +1257,432 @@ fn chaque_resultat_dit_quoi_surligner() {
     }
     assert!(vus.iter().any(|p| p.contains("ensemble")), "le passage de la phrase est surligné : {vus:?}");
 }
+
+/// **Les morceaux que lucivy n'a pas surlignés le sont à l'affichage** (26 octobre 2026, décision
+/// de Lucie : « calculé à l'affichage sur les chunks trouvés uniquement par dense »). Une recherche
+/// par le seul vecteur rend des morceaux sans spans ; avec `highlights: "sparse"`, chacun porte des
+/// passages qui sont des mots de la requête : le creux de bge-m3 quand un service creux répond,
+/// sinon les mots de la requête, et la méta dit le repli. Sans l'option, rien : un agent qui
+/// n'affiche pas ne paie pas.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn les_morceaux_du_seul_dense_se_surlignent_a_l_affichage() {
+    use serde_json::{json, Value};
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "surlignage-creux", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let chercher = |options: Value| {
+        backend
+            .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": options, "mode": "indexed"}))
+            .expect("search_code")
+    };
+
+    let r = chercher(json!({"signals": ["vector"], "limit": 5, "highlights": "sparse"}));
+    let resultats = r["result"].as_array().cloned().unwrap_or_default();
+    let morceau = resultats
+        .iter()
+        .find(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("fusion")))
+        .unwrap_or_else(|| panic!("le dense rend le morceau de fusion.rs : {r}"));
+    let texte = morceau["chunk"]["text"].as_str().unwrap();
+    let surlignes = morceau["chunk"]["highlights"].as_array().cloned().unwrap_or_default();
+    assert!(!surlignes.is_empty(), "un morceau du seul dense porte ses surlignages : {morceau}");
+    let unites: Vec<u16> = texte.encode_utf16().collect();
+    let termes = ["fusion", "des", "rangs"];
+    for h in &surlignes {
+        let (a, b) = (h["start"].as_u64().unwrap() as usize, h["end"].as_u64().unwrap() as usize);
+        let passage = String::from_utf16(&unites[a..b]).unwrap().to_lowercase();
+        assert!(
+            termes.iter().any(|t| passage.contains(t) || t.contains(passage.as_str())),
+            "« {passage} » vient de la requête : {morceau}"
+        );
+        assert!(h["source"] == "sparse" || h["source"] == "query_words", "{h}");
+        assert_ne!(h["source"], "lucivy", "le plein texte n'a pas cherché : {h}");
+    }
+    let avertissements = r["metadata"]["render.meta"]["warnings"].to_string();
+    if surlignes.iter().any(|h| h["source"] == "query_words") {
+        assert!(
+            avertissements.contains("surlignage creux indisponible") || resultats.iter().any(|x| x["chunk"]["highlights"].as_array().is_some_and(|v| v.iter().any(|h| h["source"] == "sparse"))),
+            "un repli sur les mots de la requête se dit : {avertissements}"
+        );
+    }
+
+    let sans = chercher(json!({"signals": ["vector"], "limit": 5}));
+    assert!(
+        sans["result"].as_array().into_iter().flatten().all(|x| x["chunk"]["highlights"].is_null()),
+        "sans l'option, rien n'est surligné : {sans}"
+    );
+}
+
+/// **Le creux se surligne par le chemin de l'hôte** (7 novembre 2026, décision de c7 : option 1).
+/// Le témoin précédent ne voyait que le repli : l'ouverture d'un backend ne servait `models.sparse`
+/// qu'aux signaux creux de la recherche, et le gabarit de code n'en déclarait pas — sur les hôtes,
+/// `HighlightNode` n'avait jamais de service. Ici le gabarit de code livré, ouvert depuis son
+/// manifeste comme le fait l'hôte, avec le service bge-m3 de la passe (`RAG3WEAVER_EMBED_SERVICE`) :
+/// par `call_in`, le morceau trouvé par le seul dense porte des passages `source: "sparse"`, et la
+/// réponse ne dit aucun repli. Sans service bge-m3 joignable, ce témoin rougit : il n'a rien à juger.
+/// Le service doit rendre les positions (`spans`) : c'est lui qui tokenise, pas l'hôte.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn le_creux_se_surligne_par_le_chemin_de_l_hote() {
+    use serde_json::json;
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "creux-par-l-hote", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": {"signals": ["vector"], "limit": 5, "highlights": "sparse"}, "mode": "indexed"}))
+        .expect("search_code");
+    let resultats = r["result"].as_array().cloned().unwrap_or_default();
+    let morceau = resultats
+        .iter()
+        .find(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("fusion")))
+        .unwrap_or_else(|| panic!("le dense rend le morceau de fusion.rs : {r}"));
+    let avertissements = r["metadata"]["render.meta"]["warnings"].to_string();
+    assert!(
+        !avertissements.contains("surlignage creux indisponible"),
+        "le service creux du manifeste sert le surlignage, sans repli : {avertissements} — avertissements du backend : {:?}",
+        backend.avertissements()
+    );
+    let surlignes = morceau["chunk"]["highlights"].as_array().cloned().unwrap_or_default();
+    assert!(
+        !surlignes.is_empty() && surlignes.iter().all(|h| h["source"] == "sparse"),
+        "les passages viennent du creux de bge-m3 : {morceau}"
+    );
+}
+
+/// **Le creux ne s'embarque qu'au surlignage** (Lucie, 7 novembre 2026 : « faut pas que ça embed
+/// tout h24, juste le moment du surlignage »). Le gabarit de code déclare `models.sparse` ; son
+/// service est ici un vrai serveur d'embarquement du dépôt, dont l'embarqueur creux compte ses
+/// appels (adresse explicite dans le manifeste : une variable d'environnement toucherait les autres
+/// tests du processus). L'indexation entière, puis une recherche sans surlignage : zéro appel ; une
+/// recherche qui demande le surlignage : un appel. Une réindexation après une modification : toujours
+/// zéro (la veille passe par le même nœud d'embarquement, gardé par le signal creux de l'entité).
+/// Le surlignage passe par les spans du service : l'hôte n'a pas de tokenizer à lui.
+#[cfg(all(feature = "code", feature = "daemon"))]
+#[test]
+#[ignore]
+fn le_creux_ne_s_embarque_qu_au_surlignage() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::{json, Value};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    struct BgeFactice;
+    impl rag3weaver::Embedder for BgeFactice {
+        fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, rag3weaver::EmbedError> {
+            Ok(textes.iter().map(|_| vec![1.0f32; 8]).collect())
+        }
+        fn dim(&self) -> usize {
+            8
+        }
+        fn name(&self) -> &str {
+            "bge-m3"
+        }
+    }
+    // Le premier compte : tout appel au creux ; le second : ceux qui demandent les spans (le
+    // chemin de l'hôte, qui n'a pas de tokenizer à lui).
+    struct CreuxQuiCompte(Arc<AtomicUsize>, Arc<AtomicUsize>);
+    impl rag3weaver::SparseEmbedder for CreuxQuiCompte {
+        fn embed_sparse(&self, textes: &[String]) -> Result<Vec<rag3weaver::sparse_index::SparseVector>, rag3weaver::EmbedError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(textes.iter().map(|_| rag3weaver::sparse_index::SparseVector { indices: vec![5], values: vec![0.5] }).collect())
+        }
+        fn embed_sparse_spans(
+            &self,
+            textes: &[String],
+        ) -> Result<Vec<(rag3weaver::sparse_index::SparseVector, Vec<rag3weaver::sparse_index::SparseSpan>)>, rag3weaver::EmbedError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            self.1.fetch_add(1, Ordering::SeqCst);
+            Ok(textes
+                .iter()
+                .map(|t| {
+                    let spans = t
+                        .split_whitespace()
+                        .map(|mot| {
+                            let start = mot.as_ptr() as usize - t.as_ptr() as usize;
+                            rag3weaver::sparse_index::SparseSpan { start, end: start + mot.len(), weight: 0.5 }
+                        })
+                        .collect();
+                    (rag3weaver::sparse_index::SparseVector { indices: vec![5], values: vec![0.5] }, spans)
+                })
+                .collect())
+        }
+    }
+
+    let appels = Arc::new(AtomicUsize::new(0));
+    let appels_spans = Arc::new(AtomicUsize::new(0));
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let adresse = ecoute.local_addr().unwrap().to_string();
+    {
+        let (appels, appels_spans) = (appels.clone(), appels_spans.clone());
+        std::thread::spawn(move || {
+            let _ = rag3weaver::daemon::EmbedDaemon::new(Arc::new(BgeFactice))
+                .avec_sparse(Arc::new(CreuxQuiCompte(appels, appels_spans)))
+                .servir_lie(ecoute);
+        });
+    }
+    let debut = Instant::now();
+    while rag3weaver::daemon::DaemonEmbedder::joindre(&adresse).is_err() {
+        assert!(debut.elapsed() < Duration::from_secs(10), "le service factice ne répond pas");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("fusion.rs"), "/// La fusion des rangs réciproques.\npub fn fusion_des_rangs() -> u32 {\n    61\n}\n").unwrap();
+    std::fs::write(depot.path().join("autre.rs"), "pub fn autre() -> u32 {\n    2\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code_sur(tmp.path(), "creux-a-la-demande", Some(depot.path()));
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    assert_eq!(v["models"]["sparse"]["model"], "bge-m3", "le gabarit de code déclare le creux : {}", v["models"]);
+    v["models"]["sparse"]["address"] = json!(adresse);
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared
+        .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
+        .expect("l'ouverture");
+    assert!(backend.avertissements().is_empty(), "le service creux est joint : {:?}", backend.avertissements());
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
+    let journal = lance
+        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+        .to_string();
+    let debut = Instant::now();
+    loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        if lu.contains("indexation terminée") {
+            break;
+        }
+        assert!(!lu.contains("indexation échouée"), "{lu}");
+        assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    eprintln!("[creux à la demande] après l'indexation : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "l'indexation n'appelle jamais le creux");
+
+    // La réindexation d'un fichier modifié : le même nœud d'embarquement, toujours sans creux.
+    let attendre_l_index = |lance: String| {
+        let journal = lance
+            .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+            .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
+            .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
+            .to_string();
+        let debut = Instant::now();
+        loop {
+            let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+            if lu.contains("indexation terminée") {
+                break;
+            }
+            assert!(!lu.contains("indexation échouée"), "{lu}");
+            assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini : {lu}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    // Le dépôt indexé est la copie sous la racine du workspace (`manifeste_code_sur`).
+    let racine = std::path::PathBuf::from(v["workspace"]["root"].as_str().expect("la racine du workspace"));
+    std::fs::write(racine.join("src/fusion.rs"), "/// La fusion des rangs réciproques, k = 60.\npub fn fusion_des_rangs() -> u32 {\n    60\n}\n").unwrap();
+    attendre_l_index(backend.call("index", json!({"confirm": true})).expect("réindex lancé").to_string());
+    eprintln!("[creux à la demande] après une réindexation : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "la réindexation n'appelle jamais le creux");
+
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    // La réindexation a travaillé : le texte neuf se trouve (un zéro ne prouve rien d'un travail
+    // qui n'a pas eu lieu).
+    let neuf = backend
+        .call_in(&cellule, "search_code", json!({"query": "k = 60", "options": {"signals": ["bm25"], "limit": 5}, "mode": "indexed"}))
+        .expect("search_code");
+    assert!(
+        neuf["result"].as_array().into_iter().flatten().any(|x| x["chunk"]["text"].as_str().is_some_and(|t| t.contains("k = 60"))),
+        "la réindexation a porté le texte neuf de fusion.rs : {neuf}"
+    );
+    let chercher = |options: Value| {
+        backend
+            .call_in(&cellule, "search_code", json!({"query": "fusion des rangs", "options": options, "mode": "indexed"}))
+            .expect("search_code")
+    };
+    chercher(json!({"limit": 5}));
+    eprintln!("[creux à la demande] après une recherche sans surlignage : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 0, "une recherche sans surlignage n'appelle pas le creux");
+    let r = chercher(json!({"signals": ["vector"], "limit": 5, "highlights": "sparse"}));
+    eprintln!("[creux à la demande] après une recherche qui surligne : {} appel(s)", appels.load(Ordering::SeqCst));
+    assert_eq!(appels.load(Ordering::SeqCst), 1, "le surlignage appelle le creux une fois, pour toute la page : {r}");
+    eprintln!("[creux à la demande] dont par les spans du service : {}", appels_spans.load(Ordering::SeqCst));
+    assert_eq!(
+        appels_spans.load(Ordering::SeqCst),
+        1,
+        "le surlignage de l'hôte lit les spans du service, sans tokenizer à lui : {r}"
+    );
+}
+
+/// **Une requête longue répond vite et dit ses coupes** (ticket « Le plein texte explose sur une
+/// requête longue », 7 novembre 2026). Un prompt collé de 200 termes distincts : avant, la requête
+/// entière se cherchait en flou et le nœud plein texte y passait des dizaines de secondes (29 s
+/// sur deux fiches, mesuré) ; après, elle perd son flou au-delà de 900 caractères (100 sur lucivy 4.3.1) et la recherche
+/// par mots garde 64 termes, en moins que l'attente bornée de la poignée (1,5 s), et la méta dit
+/// les deux coupes. Une requête courte ne dit rien.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn une_requete_longue_repond_vite_et_dit_ses_coupes() {
+    use serde_json::json;
+    use std::time::Instant;
+
+    let prose = include_str!("../docs/06-novembre-2026-orchestration/01-plan-du-week-end.md");
+    let mut vus = std::collections::HashSet::new();
+    let termes: Vec<String> = prose
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|m| m.chars().count() >= 3)
+        .map(str::to_lowercase)
+        .filter(|m| vus.insert(m.clone()))
+        .take(200)
+        .collect();
+    assert_eq!(termes.len(), 200);
+    let longue = termes.join(" ");
+
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs(tmp.path(), "requete-longue");
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let t = Instant::now();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": longue, "options": {"limit": 10}, "mode": "indexed"}))
+        .expect("search_code");
+    let ms = t.elapsed().as_millis();
+    eprintln!("[requête longue] 200 termes, {} caractères : {ms} ms", longue.chars().count());
+    let avert = r["metadata"]["render.meta"]["warnings"].to_string();
+    assert!(ms < 1500, "une requête longue répond sous l'attente bornée de la poignée : {ms} ms");
+    assert!(avert.contains("la requête entière") && avert.contains("sans flou"), "la coupe du flou se dit : {avert}");
+    assert!(avert.contains("termes sur 200 gardés"), "la coupe des termes se dit : {avert}");
+
+    let courte = backend
+        .call_in(&cellule, "search_code", json!({"query": "alpha beta", "options": {"limit": 10}, "mode": "indexed"}))
+        .expect("search_code");
+    assert!(
+        !courte["metadata"]["render.meta"]["warnings"].to_string().contains("requête longue"),
+        "une requête courte ne dit rien : {courte}"
+    );
+}
+
+/// **Un second processus qui veut écrire la même base est refusé, et sait par qui** (7 novembre
+/// 2026, à la demande de c7 : un COPY de relations dans la transaction qui a créé ses nœuds relie
+/// ceux d'un autre écrivain validé entre-temps — un défaut grave du moteur que l'hôte n'atteint
+/// pas par construction, sauf à deux processus sur une même base). Par le chemin réel : ce test
+/// tient la base en écriture (le gabarit de code ouvert depuis son manifeste), puis le vrai binaire
+/// `rag3weaver-backend <manifeste>` tente de l'ouvrir pour écrire : il doit sortir en erreur en
+/// nommant l'écrivain en place (son pid, son rôle, depuis quand). Un troisième processus, lecteur
+/// (`Rag3dbConnection::read_only`), doit passer et lire.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn un_second_ecrivain_est_refuse_en_nommant_le_premier() {
+    use rag3weaver::backend::PreparedBackend;
+    use std::io::Write;
+    use std::time::Duration;
+
+    const LECTEUR: &str = "RAG3WEAVER_TEMOIN_LECTEUR_BASE";
+    // Rôle lecteur : ouvrir en lecture seule pendant que l'écrivain tient la base, et lire.
+    if let Ok(base) = std::env::var(LECTEUR) {
+        let conn = Rag3dbConnection::read_only(&base).unwrap_or_else(|e| {
+            eprintln!("[lecteur] refusé : {e}");
+            std::process::exit(3)
+        });
+        use rag3weaver::connection::DbConnection;
+        match conn.execute("MATCH (s:Scope) RETURN count(s)") {
+            Ok(r) => {
+                eprintln!("[lecteur] {} scope(s) lus", r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(-1));
+                std::process::exit(0)
+            }
+            Err(e) => {
+                eprintln!("[lecteur] lecture échouée : {e}");
+                std::process::exit(4)
+            }
+        }
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code(tmp.path(), "second-ecrivain");
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let mut backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
+    backend.call("index", serde_json::json!({"confirm": true})).expect("index lancé");
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Le second écrivain : le binaire, sa forme positionnelle (il ouvre en écriture).
+    let mut second = std::process::Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
+        .arg(&chemin)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("lancer le second écrivain");
+    let _ = writeln!(second.stdin.take().unwrap(), "{}", serde_json::json!({"op": "call", "name": "index", "arguments": {"confirm": true}}));
+    let sortie = second.wait_with_output().expect("le second écrivain finit");
+    let erreur = format!("{}{}", String::from_utf8_lossy(&sortie.stderr), String::from_utf8_lossy(&sortie.stdout));
+    eprintln!("[second écrivain] code {:?} : {}", sortie.status.code(), erreur.trim().lines().last().unwrap_or(""));
+    assert!(!sortie.status.success(), "le second écrivain ne doit pas ouvrir la base : {erreur}");
+    assert!(
+        erreur.contains(&format!("pid {}", std::process::id())),
+        "le refus nomme l'écrivain en place (pid {}) : {erreur}",
+        std::process::id()
+    );
+
+    // Le lecteur, dans un troisième processus : il passe.
+    let lecteur = std::process::Command::new(std::env::current_exe().expect("current_exe"))
+        .args(["--exact", &crate::common::test_de_cette_suite!("un_second_ecrivain_est_refuse_en_nommant_le_premier"), "--ignored", "--nocapture"])
+        .env(LECTEUR, &base)
+        .output()
+        .expect("lancer le lecteur");
+    let dit = String::from_utf8_lossy(&lecteur.stderr);
+    eprintln!("[lecteur] code {:?} : {}", lecteur.status.code(), dit.lines().filter(|l| l.contains("[lecteur]")).collect::<Vec<_>>().join(" ; "));
+    assert_eq!(lecteur.status.code(), Some(0), "un lecteur passe pendant que l'écrivain tient la base : {dit}");
+    backend.shutdown().expect("l'arrêt");
+}
+
+/// **Une ligne collée retrouve son fichier** (7 novembre 2026, relevé par lucivy : un passage exact
+/// d'un document n'est plus trouvé au-delà de 48 octets en strict et 64 en relâché — ticket
+/// lucivy « un passage exact long n'est plus trouvé », branche tickets-2026-11-07). Une phrase de
+/// plus de 100 caractères collée dans l'IDE doit ramener son fichier premier, par le signal exact
+/// (la requête entière). Rouge sur lucivy 4.3.1 (le 7 novembre, la borne d'alors l'envoyait en
+/// strict), vert depuis la montée à 4.3.2.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn une_ligne_collee_de_120_caracteres_retrouve_son_fichier() {
+    use serde_json::json;
+
+    let ligne = "La réconciliation des sources rend chaque scope à sa version, puis relie les dépendances que l'index avait perdues.";
+    assert!(ligne.chars().count() > 100 && ligne.chars().count() <= 120, "{}", ligne.chars().count());
+    let depot = tempfile::tempdir().unwrap();
+    std::fs::write(depot.path().join("reconciliation.md"), format!("# Réconciliation\n\n{ligne}\n\nLe reste de la page parle d'autre chose.\n")).unwrap();
+    std::fs::write(depot.path().join("sources.md"), "# Sources\n\nLes sources se lisent une à une, et chaque scope garde sa version.\n").unwrap();
+    std::fs::write(depot.path().join("index.rs"), "pub fn relier_les_dependances() -> u32 {\n    7\n}\n").unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let backend = code_indexe_avec_vecteurs_sur(tmp.path(), "ligne-collee", Some(depot.path()));
+    let cellule = backend.catalog.lock().unwrap().scope().clone();
+    let r = backend
+        .call_in(&cellule, "search_code", json!({"query": ligne, "options": {"limit": 5}, "mode": "indexed"}))
+        .expect("search_code");
+    let premier = &r["result"][0];
+    eprintln!(
+        "[ligne collée] {} caractères : premier {} ({:?})",
+        ligne.chars().count(),
+        premier["data"]["file_path"],
+        premier["signals"].as_array().map(|s| s.iter().filter_map(|x| x["label"].as_str()).collect::<Vec<_>>())
+    );
+    assert_eq!(premier["data"]["file_path"].as_str(), Some("src/reconciliation.md"), "la ligne collée ramène son fichier premier : {r}");
+    assert!(
+        premier["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "bm25_exact")),
+        "par le signal exact (la requête entière) : {premier}"
+    );
+}

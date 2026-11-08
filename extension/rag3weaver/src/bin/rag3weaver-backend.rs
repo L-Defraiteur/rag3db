@@ -441,6 +441,11 @@ fn entrer_dans_l_ide() -> Result<(), String> {
 
 fn servir_le_demon(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend daemon [--address 127.0.0.1:7970] [--threads 8]";
+    // L'heure en tête de chaque ligne du journal de l'hôte, la lib du moteur
+    // comprise (ticket « ni heure ni auteur ») : avant toute ligne.
+    if let Err(e) = rag3weaver::host_log::install_timestamps() {
+        eprintln!("[démon] journal sans heure : {e}");
+    }
     // L'hôte se dit hôte dans la marque des bases qu'il ouvre : un client
     // s'attache à lui, il ne le prend pas pour un écrivain autonome.
     rag3weaver::marque_d_ecrivain::declare_role(rag3weaver::marque_d_ecrivain::ROLE_HOTE);
@@ -575,6 +580,7 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     serveur.serve(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new().avec_les_taches_relues().with_chats_reread()), Some(jeton));
     cycle::remove_if_mine(pid);
     eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
+    rag3weaver::host_log::stop_timestamps();
     Ok(())
 }
 
@@ -715,11 +721,11 @@ fn code_tree(args: &[String]) -> Result<(), String> {
         }
         "remove" => {
             // Un nom de backend, ou le chemin de l'arbre.
-            let nom = if roots.manifest(&cible).exists() { cible.clone() } else { name_of_tree(Path::new(&cible))? };
+            let nom = if roots.source_manifest(&cible).is_ok() { cible.clone() } else { name_of_tree(Path::new(&cible))? };
             // Fermer d'abord (le manifeste doit exister pour être canonisé),
             // déplacer ensuite.
             if !sans_hote {
-                unregister(&adresse(), &roots.manifest(&nom))?;
+                unregister(&adresse(), &roots.source_manifest(&nom).unwrap_or_else(|_| roots.manifest(&nom)))?;
                 println!("{nom} : fermé par l'hôte {}", adresse());
             }
             let r = remove_files(&roots, &nom)?;
@@ -790,6 +796,23 @@ fn run() -> Result<(), String> {
     if tous.first().map(String::as_str) == Some("ide") {
         return entrer_dans_l_ide();
     }
+    // **`mail`** : la boîte de l'hôte depuis le shell d'un agent (lot 5, le pont).
+    // **`canal`** : le serveur MCP que Claude Code charge comme canal (page 07 § 4).
+    #[cfg(feature = "daemon")]
+    if tous.first().map(String::as_str) == Some("canal") {
+        let boite = match rag3weaver::mail::BoiteHttp::depuis_daemon_json(std::time::Duration::from_secs(5)) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("[rag3weaver-canal] {e}");
+                std::process::exit(1);
+            }
+        };
+        std::process::exit(rag3weaver::canal::servir(Box::new(boite), std::time::Duration::from_secs(2)));
+    }
+    #[cfg(feature = "daemon")]
+    if tous.first().map(String::as_str) == Some("mail") {
+        std::process::exit(rag3weaver::mail::commande(&tous[1..], &mut std::io::stdout()));
+    }
     // **Le hook de Claude Code** : le JSON de l'événement sur l'entrée, le
     // bloc sur la sortie, toujours 0 — une session ne s'arrête jamais sur nous.
     if tous.first().map(String::as_str) == Some("hook") {
@@ -799,7 +822,13 @@ fn run() -> Result<(), String> {
         let mut entree = String::new();
         #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
         {
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut entree);
+            // L'entrée n'est lue que pour un vrai événement : `--help`, `--rejouer`
+            // et `--poser-les-gabarits` n'en ont pas besoin, et une entrée qui est
+            // un terminal ne se lit pas (elle attendrait sans rien dire — G, 7 novembre).
+            let sans_entree = tous[1..].iter().any(|a| matches!(a.as_str(), "--help" | "-h" | "--rejouer" | "--poser-les-gabarits" | "--rappel-differe"));
+            if !sans_entree && !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut entree);
+            }
             let code = rag3weaver::claude_code_hook::commande(&tous[1..], &entree, &mut std::io::stdout());
             std::process::exit(code);
         }
@@ -921,6 +950,9 @@ fn run() -> Result<(), String> {
 fn main() {
     if let Err(e) = run() {
         eprintln!("{e}");
+        // Le refus d'un hôte (un autre répond déjà…) s'écrit dans son journal
+        // avant la sortie : le fil de la marque d'heure finit d'abord.
+        rag3weaver::host_log::stop_timestamps();
         std::process::exit(1);
     }
 }

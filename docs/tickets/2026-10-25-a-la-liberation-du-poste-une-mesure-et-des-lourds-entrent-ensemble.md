@@ -11,6 +11,7 @@
 - **Atteignable en service** : oui, à luciepc, dès que plusieurs sessions attendent le poste
   ensemble. C'est l'usage ordinaire du soir.
 - **Touche rag3weaver** : oui (`extension/rag3weaver/scripts/poste`, la porte).
+- **Famille** : produit
 
 ## Ce que c'est
 

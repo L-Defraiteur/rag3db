@@ -29,6 +29,19 @@ impl SparseVector {
     }
 }
 
+/// **Le poids d'une position du texte**, avant que le vecteur creux ne fonde
+/// les positions d'un même jeton au maximum : de quoi surligner en creux sans
+/// charger le modèle. `start..end` est une plage d'octets du texte reçu ; les
+/// jetons spéciaux n'en ont pas. Elle peut commencer par l'espace qui précède
+/// le mot (BGE-M3 range l'espace dans le jeton suivant) : à retirer avant de
+/// surligner.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SparseSpan {
+    pub start: usize,
+    pub end: usize,
+    pub weight: f32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

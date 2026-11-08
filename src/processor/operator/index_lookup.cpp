@@ -8,6 +8,7 @@
 #include "common/vector/value_vector.h"
 #include "processor/warning_context.h"
 #include "storage/index/hash_index.h"
+#include "storage/local_storage/local_storage.h"
 #include "storage/table/node_table.h"
 
 using namespace rag3db::common;
@@ -130,6 +131,23 @@ bool IndexLookup::getNextTuplesInternal(ExecutionContext* context) {
     }
     localState->errorHandler->flushStoredErrors();
     return true;
+}
+
+void IndexLookup::initGlobalStateInternal(ExecutionContext* context) {
+    // Les nœuds que la transaction a créés par le chemin ordinaire vivent dans son stockage local,
+    // à des décalages provisoires. Résolus par leur clé, ils donneraient ces décalages au COPY de
+    // relations, qui les écrit tels quels : si un autre écrivain valide des nœuds dans la même
+    // table avant la validation de celle-ci, les nœuds atterrissent plus loin et les relations du
+    // COPY désignent ceux de l'autre (ticket 2026-10-05-copy-de-relations-vers-des-noeuds-locaux-
+    // sans-remappage). Ils sont donc versés dans leur table avant la première résolution, comme
+    // avant un COPY de nœuds : ils y prennent leurs décalages définitifs, et les relations locales
+    // qui les désignent sont remappées. Une fois par opérateur, avant tout fil.
+    const auto transaction = transaction::Transaction::Get(*context->clientContext);
+    if (const auto localStorage = transaction->getLocalStorage()) {
+        for (auto& info : infos) {
+            localStorage->flushNodeTable(info.nodeTable->getTableID());
+        }
+    }
 }
 
 void IndexLookup::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {

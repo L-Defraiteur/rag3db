@@ -111,7 +111,6 @@ Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstLineByLine s
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/ZeroRowsFirstCopy same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameIndexFirstLineByLine same-vector-all-reachable
 Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstLineByLine same-vector-all-reachable
-Cases/SameVectorForEveryRow.NeitherCrashesNorLosesRows/SameRowsFirstCopy same-vector-all-reachable
 #
 #
 # Un bâti d'index prend tous les fils de travail (ticket
@@ -142,6 +141,15 @@ VectorIndexI2.OverlappingDeletesNeitherBlockNorConflict overlapping-deletes-do-n
 CheckpointNoStall.BeginDuringACheckpointDoesNotWait begin-during-a-checkpoint-does-not-wait
 CheckpointNoStall.CommittedPagesAreWrittenOutWhenTheBufferIsFull committed-pages-are-written-out-when-the-buffer-is-full
 CheckpointNoStall.CrashAfterWrittenOutPagesReplaysExactly crash-after-written-out-pages-replays-exactly
+#
+# Les témoins de l'écrivain sous V2-2c, le journal scellé (page 19 du cœur C++,
+# coeur-cpp/19-v2-2-le-point-de-reprise-lit-un-instantane-les-autres-continuent.md) : un écrivain
+# qui valide pendant un CHECKPOINT, ou pendant que le point de reprise écrit ses pages, n'attend pas,
+# et sa ligne survit à un arrêt brutal ou à la mort du point de reprise. Joués rouges le 7 novembre
+# sur luciepc (master 207d334f9) : l'écrivain attend encore la fin de l'écriture ; seul le contrôle
+# de l'attente rougit, la ligne survit. V2-2c (format 44) les sort de cette liste. Pour le cœur C++.
+CheckpointNoStall.WriterCommittedDuringACheckpointSurvivesACrash writer-commits-during-a-checkpoint
+CheckpointNoStall.WriterCommittedWhileTheCheckpointWritesSurvivesItsDeath writer-commits-while-the-checkpoint-writes
 #
 # Le témoin d'acceptation de (A), le CREATE concurrent (page 07 de coeur-cpp-tickets) : sous
 # quarante écrivains, une instruction attend 9 à 11 s pendant un CREATE de 13 à 15 s (borne 5 s).

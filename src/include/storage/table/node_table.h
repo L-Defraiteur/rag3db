@@ -339,7 +339,8 @@ public:
 
     std::pair<common::offset_t, common::offset_t> appendToLastNodeGroup(
         transaction::Transaction* transaction, const std::vector<common::column_id_t>& columnIDs,
-        InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator);
+        InMemChunkedNodeGroup& chunkedGroup, PageAllocator& pageAllocator,
+        std::optional<common::offset_t> partialFlushFrom = std::nullopt);
 
     void commit(main::ClientContext* context, catalog::TableCatalogEntry* tableEntry,
         LocalTable* localTable) override;
@@ -347,6 +348,7 @@ public:
         PageAllocator& pageAllocator) override;
     void rollbackCheckpoint() override;
     void reclaimStorage(PageAllocator& pageAllocator) const override;
+    void retireGenerationsBefore(common::transaction_t oldestReaderTS) override;
 
     void rollbackPKIndexInsert(main::ClientContext* context, common::row_idx_t startRow,
         common::row_idx_t numRows_, common::node_group_idx_t nodeGroupIdx_);

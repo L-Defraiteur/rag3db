@@ -6,6 +6,7 @@
 - **Atteignable en service** : non (bâti du moteur seulement).
 - **Touche rag3weaver** : non, sauf qu'un bâti de la lib commune ou de l'extension vector après un
   `clean` tombe de la même façon.
+- **Famille** : moteur
 
 ## Ce que c'est
 

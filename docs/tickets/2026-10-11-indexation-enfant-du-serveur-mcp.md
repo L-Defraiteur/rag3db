@@ -8,6 +8,7 @@
 - **Gravité** : travail long perdu sans rien dire — et la base reste à moitié indexée
 - **Atteignable en service** : oui, **dès le premier usage** : c'est le premier geste d'une nouvelle installation
 - **Touche rag3weaver** : oui — l'outil `index` du gabarit `code`, et tout travail long lancé en fond par un outil
+- **Famille** : produit
 
 ## Ce que c'est
 

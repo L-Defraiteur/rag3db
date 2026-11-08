@@ -301,9 +301,22 @@ fn value_matches(t: &ConfigParamType, v: &Value) -> bool {
 pub fn template_vars(def: &GraphDefinition) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for node in &def.nodes {
-        scan_vars(&node.config, &mut out);
+        // Un graphe cité résolu porte ses propres `$paramètres` : ce ne sont pas
+        // ceux de ce graphe (96, 7 novembre 2026), la garde de bijection ne les lit pas.
+        match &node.config {
+            Value::Object(o) => o.iter().filter(|(k, x)| !est_un_graphe_cite(k, x)).for_each(|(_, x)| scan_vars(x, &mut out)),
+            autre => scan_vars(autre, &mut out),
+        }
     }
     out
+}
+
+/// La valeur résolue de `graph` d'un `GraphNode` ou d'un `ForEachNode` : l'objet
+/// `{cite, mermaid, sous}` que le chargeur range à la place de la citation. Ni la
+/// substitution des arguments ni la garde de bijection n'y descendent : c'est un
+/// autre outil, avec ses propres paramètres.
+fn est_un_graphe_cite(cle: &str, valeur: &Value) -> bool {
+    cle == "graph" && valeur.get("mermaid").is_some_and(Value::is_string)
 }
 
 fn scan_vars(v: &Value, out: &mut BTreeSet<String>) {
@@ -336,9 +349,30 @@ fn scan_vars(v: &Value, out: &mut BTreeSet<String>) {
 pub fn substitute_definition(def: &GraphDefinition, args: &Map<String, Value>) -> GraphDefinition {
     let mut out = def.clone();
     for node in &mut out.nodes {
-        node.config = substitute_value(&node.config, args);
+        node.config = substitute_config(&node.config, args);
     }
     out
+}
+
+/// **Un graphe cité est à lui** (96, 7 novembre 2026) : la configuration `graph`
+/// d'un `GraphNode` ou d'un `ForEachNode`, une fois lue au chargement, est
+/// l'objet `{cite, mermaid, sous}` — le texte d'un autre outil, avec ses propres
+/// `$paramètres`. Les arguments du parent ne s'y substituent jamais : sinon un
+/// paramètre de même nom des deux côtés (`candidates`) disparaît du texte cité
+/// avant que sa garde de bijection le cherche, et le graphe cité perd son
+/// propre défaut. Seules les autres clés du nœud reçoivent les arguments ; le
+/// graphe cité substitue les siens à son instanciation.
+fn substitute_config(config: &Value, args: &Map<String, Value>) -> Value {
+    match config {
+        Value::Object(o) => Value::Object(
+            o.iter()
+                .map(|(k, x)| {
+                    (k.clone(), if est_un_graphe_cite(k, x) { x.clone() } else { substitute_value(x, args) })
+                })
+                .collect(),
+        ),
+        autre => substitute_value(autre, args),
+    }
 }
 
 /// **Un chemin pointé** dans un argument objet (`$element.text`, 25 octobre

@@ -179,4 +179,51 @@ cas $? "un poste annulé ne lance jamais sa commande, même si son flock meurt"
 [ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ]
 cas $? "à la fin, aucune fiche ne reste"
 
+# ── 7. Au plus N lourds à la fois, les suivants dans l'ordre d'arrivée ────────
+# (7 novembre 2026, luciepc : sept passes tenaient la place partagée ensemble,
+# et des témoins rougissaient sur « pas indexé en 60 s ».)
+: > "$J"
+echo 2 > "$POSTE_LOCK_DIR/lourds-max"
+travail lourd L1 2 &
+sleep 0.3
+travail lourd L2 4 &
+sleep 0.3
+travail lourd L3 1 &
+sleep 1
+qui=$("$POSTE" --qui 2>&1)
+wait
+echo "$qui" | sed 's/^/       /'
+dL2=$(instant L2 début); fL1=$(instant L1 fin); dL3=$(instant L3 début)
+echo "       (ms) fin L1 $fL1 · début L2 $dL2 · début L3 $dL3"
+[ -n "$dL2" ] && [ "$dL2" -lt "$fL1" ]
+cas $? "deux places : le deuxième lourd passe pendant que le premier tourne"
+[ -n "$dL3" ] && [ "$dL3" -ge "$fL1" ] && [ "$dL3" -lt "$(instant L2 fin)" ]
+cas $? "le troisième attend le premier qui finit, et prend sa place sans attendre le deuxième"
+echo "$qui" | grep -q "lourds : 2/2 places tenues, en file dans l'ordre : pid [0-9]"
+cas $? "poste --qui dit les places tenues et la file"
+
+: > "$J"
+echo 1 > "$POSTE_LOCK_DIR/lourds-max"
+travail lourd L1 2 &
+sleep 0.3
+travail lourd L2 1 &
+sleep 0.3
+travail lourd L3 1 &
+wait
+[ "$(instant L2 début)" -ge "$(instant L1 fin)" ] && [ "$(instant L3 début)" -ge "$(instant L2 fin)" ]
+cas $? "une place : les lourds passent un par un, dans l'ordre d'arrivée"
+
+: > "$J"
+echo 1 > "$POSTE_LOCK_DIR/lourds-max"
+travail lourd L1 3 &
+sleep 0.5
+POSTE_PUSH_LOURD_MAX=1 "$POSTE" push P --lourd -- bash -c 'note P début' > /dev/null 2>&1
+rc=$?
+wait
+[ "$rc" = 75 ] && [ -z "$(instant P début)" ]
+cas $? "un push lourd compte parmi les places : places prises, il rend 75 sans rien lancer (code $rc)"
+rm -f "$POSTE_LOCK_DIR/lourds-max"
+[ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ] && [ -z "$(ls -A "$POSTE_LOCK_DIR/file" 2>/dev/null)" ]
+cas $? "à la fin, aucune fiche ni aucun billet ne reste"
+
 exit $echec

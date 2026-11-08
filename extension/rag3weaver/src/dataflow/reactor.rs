@@ -106,6 +106,9 @@ struct Watch {
     /// Le nom déclaré de ce graphe (la réaction du manifeste), que chacun de
     /// ses runs dit dans son `RunStarted`.
     label: Option<crate::events::GraphTarget>,
+    /// Le rôle déclaré de la réaction (`ReactionAttachment.role`), que ses
+    /// runs disent dans `RunStarted.target.role`.
+    role: Option<String>,
     /// Les récepteurs de sonnette, un par sujet — ouverts au `watch`.
     doorbells: Vec<(String, Receiver<Event>)>,
     /// Sonnette en attente : depuis quand, et dernier coup.
@@ -177,6 +180,7 @@ impl Reactor {
             doorbells,
             pending: None,
             label: None,
+            role: None,
             buffered: Vec::new(),
         });
         Ok(self)
@@ -211,6 +215,15 @@ impl Reactor {
         self
     }
 
+    /// **Donne un rôle à la dernière montre** (`archiviste`, …) : ses runs le
+    /// disent dans `RunStarted.target.role`, comme l'appel d'un outil à rôle.
+    pub fn with_role(mut self, role: Option<String>) -> Self {
+        if let Some(w) = self.watches.last_mut() {
+            w.role = role;
+        }
+        self
+    }
+
     /// (en JSON) arrivés depuis le dernier appel. C'est le réacteur d'agent :
     /// une fermeture qui relance `Agent::run` par message.
     pub fn on<S: Into<String>, I: IntoIterator<Item = S>>(
@@ -232,6 +245,7 @@ impl Reactor {
             doorbells,
             pending: None,
             label: None,
+            role: None,
             buffered: Vec::new(),
         });
         self
@@ -259,7 +273,7 @@ impl Reactor {
             let events = std::mem::take(&mut w.buffered);
             let outcome: Result<(), String> = match &w.target {
                 Target::Graph(tool) => {
-                    run_tool(tool, &self.nodes, self.services.clone(), &w.arguments, &w.nodes_policy, w.label.as_ref())
+                    run_tool(tool, &self.nodes, self.services.clone(), &w.arguments, &w.nodes_policy, w.label.as_ref(), w.role.clone())
                 }
                 Target::Callback(f) => {
                     f(events);
@@ -386,6 +400,7 @@ fn run_tool(
     arguments: &serde_json::Value,
     nodes_policy: &NodeTypePolicy,
     label: Option<&crate::events::GraphTarget>,
+    role: Option<String>,
 ) -> Result<(), String> {
     let def = tool.instantiate(arguments).map_err(|e| e.to_string())?;
     // Un run nommé : son id choisi ici, et le nom posé pour ce run seul.
@@ -395,7 +410,7 @@ fn run_tool(
             let mut layer = ServiceRegistry::layered(services);
             layer.register(
                 crate::events::RUN_TARGET_SERVICE,
-                crate::events::RunTarget { run: run.clone(), target: target.clone() },
+                crate::events::RunTarget { run: run.clone(), target: target.clone(), role },
             );
             Arc::new(layer)
         }

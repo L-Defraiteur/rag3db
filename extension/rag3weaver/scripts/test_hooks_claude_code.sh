@@ -27,10 +27,10 @@ import json, sys
 d = json.load(open(sys.argv[1])); h = d["hooks"]; c = json.load(open(sys.argv[2]))
 assert d["model"] == "opus", "le reste du fichier est préservé"
 assert c["manifest"] == "/m/backend.json" and c["timeout_ms"] == 20000
-for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop"]:
+for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop", "PostToolUse"]:
     notres = [x for x in h[ev] if x["hooks"][0]["command"].startswith("/opt/r/rag3weaver-backend hook")]
     assert len(notres) == 1, ev
-    assert notres[0]["hooks"][0]["command"] == "/opt/r/rag3weaver-backend hook --config " + sys.argv[2]
+    assert notres[0]["hooks"][0]["command"] == "/opt/r/rag3weaver-backend hook " + ev, "la commande est stable : binaire, hook, événement — " + notres[0]["hooks"][0]["command"]
 assert h["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
 assert "matcher" not in h["UserPromptSubmit"][0] and "matcher" not in h["Stop"][-1]
 assert h["UserPromptSubmit"][0]["hooks"][0]["timeout"] == 10
@@ -67,6 +67,18 @@ RAG3WEAVER_WORKTREES="$T/wts" RAG3WEAVER_DEPOT="$T/depot" "$sh" --binaire /opt/r
 grep -q "cd $T/wts/rag3db-essai && claude" "$T/wt.out" || rouge "la commande à lancer n'est pas imprimée"
 RAG3WEAVER_WORKTREES="$T/wts" RAG3WEAVER_DEPOT="$T/depot" "$sh" --binaire /opt/r/rag3weaver-backend --config "$C" --worktree essai --poser > "$T/wt2.out"
 grep -q 'worktree déjà là' "$T/wt2.out" && grep -q 'rien à changer' "$T/wt2.out" || rouge "une seconde pose du worktree n'est pas idempotente"
+
+# Converger : une cible qui porte l'ancienne forme (`hook --config …`) prend la commande stable.
+printf '{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/opt/r/rag3weaver-backend hook --config %s", "timeout": 25}]}], "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": "/opt/r/rag3weaver-backend hook --config %s", "timeout": 25}]}]}}\n' "$C" "$C" > "$T/ancien.json"
+"$sh" --binaire /opt/r/rag3weaver-backend --settings "$T/ancien.json" --config "$C" --poser > "$T/converge.out"
+grep -q "commande d'avant remplacée" "$T/converge.out" || rouge "--poser ne dit pas qu'il remplace l'ancienne forme"
+python3 -c '
+import json, sys
+h = json.load(open(sys.argv[1]))["hooks"]
+for ev in ["SessionStart", "UserPromptSubmit", "PreCompact", "PostCompact", "Stop", "PostToolUse"]:
+    cmds = [x["hooks"][0]["command"] for x in h[ev]]
+    assert cmds == ["/opt/r/rag3weaver-backend hook " + ev], (ev, cmds)
+' "$T/ancien.json" || rouge "l'ancienne forme n'est pas remplacée par la commande stable"
 
 # --global s'exclut.
 if "$sh" --global --settings "$S" --montrer > /dev/null 2>&1; then rouge "--global et --settings devraient s'exclure"; fi

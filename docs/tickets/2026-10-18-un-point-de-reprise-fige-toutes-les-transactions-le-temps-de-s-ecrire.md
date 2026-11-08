@@ -16,6 +16,7 @@
 - **Ouvert le** : 18 octobre 2026, session cœur C++, sur demande de l'orchestration, d'après la
   mesure du banc.
 - **Pour** : cœur C++.
+- **Famille** : moteur
 
 ## Ce qu'on voit (banc, `DdlEveryMinute`, luciepc, 6ff805fcb sur master 248bf03cc, 2 Gio,
 `RAG3DB_PROFILE_CHECKPOINT=1`, vert)

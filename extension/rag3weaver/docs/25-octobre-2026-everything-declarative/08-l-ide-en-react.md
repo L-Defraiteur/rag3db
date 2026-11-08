@@ -152,11 +152,22 @@ Quand la dernière vue est portée, `page.js` et `page.html` partent, et `/ide/a
   `data-ligne`, le nom vers `#L<n>`, la flèche vers le symbole, `#plan-borne`, `#plan-provenance`)
   ; sans `outline` au manifeste, les scopes de `read_file` et `#plan-repli` qui dit pourquoi — le
   même repli que le lot IDE (400813249), porté.
-- **L'édition reste sur l'ancienne page** jusqu'à ce qu'elle soit portée (vue 3b, CodeMirror par
-  le magasin embarqué) : le bouton « Modifier » (`a[data-modifier]`) mène à
-  `/ide/ancienne/code/<id>/fichier/<chemin>`, et les deux témoins qui éditent (`les vues de
-  l'IDE`, `le dépôt d'à côté`) y vont tout droit pour cette partie.
-- `VUES_PORTEES` : `chat`, `fichier`.
+- **L'édition** (vue 3b, après la vue 7) : `src/views/Editor.tsx`, ouvert par le bouton « Modifier »
+  (`button[data-modifier]`) dans la même page. CodeMirror vient du magasin embarqué dans l'hôte
+  (`/ide/registre.js` puis `/ide/editeur/modules.js`, chargés à la première édition, jamais d'un CDN)
+  ; s'il ne se charge pas, une zone de texte le remplace et la console dit pourquoi. La barre
+  (`.barre` : Enregistrer, Fermer l'édition, `span.note`), Ctrl-S et Cmd-S enregistrent par
+  `edit_file` sur l'empreinte lue (`expected_hash`) ; « fichier changé depuis la lecture » montre
+  la différence disque → tampon (`.diff .moins|.plus`, par `lib/diff.ts`) et deux boutons :
+  « Reprendre la version du disque », « Garder ma version (écrase la leur) » — le tampon n'est
+  jamais remplacé sans ce choix. Un `FileChanged` du flux sur le chemin édité : notre propre
+  enregistrement (même empreinte) passe ; un tampon modifié garde son texte et la note le dit
+  (« changé sur le disque… ») ; un tampon intact se relit. En lecture, le fichier qui change se
+  relit aussi (300 ms après l'événement). Un fichier hors du worktree se lit, ne se modifie pas
+  (`.alerte`). Les deux témoins qui éditent (`les vues de l'IDE`, `le dépôt d'à côté`) reviennent
+  sur `/ide/code/<id>/fichier/<chemin>` ; les repères sont ceux de l'ancienne page (`.edition
+  .cm-content`, `.barre .note`, les textes des boutons).
+- `VUES_PORTEES` : `chat`, `fichier` (dès la vue 3 ; l'édition compte dans `fichier`).
 
 ## Ce qui est fait (vue 4 : la recherche)
 
@@ -191,3 +202,71 @@ Markdown se rend à la fin du tour. Le bundle passe de 259 à 338 Kio. Témoin n
 (`chat_qui_code::le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise`) : gras, liste
 et bloc de code rendus dans `.body.markdown` ; un `<script>` glissé dans la réponse n'est ni dans
 le DOM ni exécuté, le texte autour reste.
+
+## Ce qui est fait (vue 5 : les tâches et la relecture)
+
+- `src/views/Tasks.tsx` : la liste des tâches ouvertes (`#taches tr[data-nom]` : branche, copie de
+  base, ses vues, ses propositions, son chat), les fermées (`#taches-fermees li[data-nom][data-etat]`),
+  l'ouverture (`#tache-nom`, `#ouvrir-tache`, `#tache-note`) qui relit l'état de l'hôte.
+- `src/views/TaskReview.tsx` : la branche et son départ, « la base a bougé », les témoins de la
+  branche (`#temoins`), fusionner et rejeter (`#message`, `#fusionner`, `#pourquoi`, `#rejeter`,
+  `#tache-note`, puis la liste), la différence ligne à ligne de chaque fichier
+  (`section.fichier-de-tache[data-genre][data-path] .diff .plus|.moins`, `lib/diff.ts` : la plus
+  longue sous-suite commune, comme avant), les graphes changés **en texte** —
+  `section.graphe-propose[data-cible]` avec ses nœuds en `li.ajoute|change|retire[data-nom]` ; le
+  dessin SVG vient avec la vue 7, et le témoin de la relecture lit la liste dans le même commit —,
+  et **l'équipier** de la tâche (`section.equipier[data-running]` : plans actif, en pause, clos ;
+  la boîte ; écrire une demande, une consigne, une réponse, l'arrêt), porté de l'ancienne page.
+- `VUES_PORTEES` : `chat`, `fichier`, `recherche`, `taches`.
+- Au passage : la vue 4 demande `highlights: "sparse"` à `search_code` (c7 d'après Lucie : le
+  surlignage des morceaux trouvés par le seul dense se calcule à l'affichage, sur demande), et le
+  témoin de l'aperçu dit comment préparer les paquets React quand ils manquent.
+
+## Ce qui est fait (vue 6 : les bilans)
+
+- `src/views/Bilans.tsx` : les fiches de session (`section.fiche-de-bilan[data-fiche]`, la tendance
+  des notes et le verdict de comparaison en `.tendance`, chaque apport en `details.apport-de-bilan`
+  avec son texte tel que le juge l'a écrit), puis les fiches d'outils (`section.fiche-d-outil` :
+  `.tendance-par-genre li[data-genre]` run après run, `.autres` par libellé, les défauts du dernier
+  run par `.gravite[data-gravite]` avec l'appel, la preuve et la forme proposée) ; un backend qui ne
+  déclare pas `bilans` le dit (`#bilans-absents`).
+- Témoin : la vue sur un backend sans `bilans`, dans les vues de l'IDE ; les fiches pleines sont
+  éprouvées par e2e_juge sur le JSON de `/ide/bilans`, pas en navigateur (il faudrait la mémoire et
+  son service d'embarquement).
+- `VUES_PORTEES` : `chat`, `fichier`, `recherche`, `taches`, `bilans`. Reste la vue 7 (le graphe,
+  le DAG vivant, l'aperçu, les réactions, les propositions, l'arbre, le symbole), puis l'édition.
+
+## Règle du bundle : les champs ne sont pas contrôlés par React
+
+Un témoin navigateur pose une valeur par le DOM (`input.value = …`) puis clique ; une saisie
+automatique du navigateur fait pareil. Un champ contrôlé par React (`value` + `onChange`) ne voit
+pas cette valeur : son état reste vide, et le clic envoie du vide — le chat, puis l'ouverture
+d'une tâche, ont rougi ainsi. **Règle** : les champs de l'IDE sont non contrôlés, lus par une
+référence au moment de l'action (`useRef`, `defaultValue`), jamais par un état React. Un témoin qui
+pose une valeur par le DOM doit la voir partir.
+
+## Ce qui est fait (vue 7 : l'arbre, le symbole, le graphe, le DAG vivant, les réactions, les propositions)
+
+- `Tree.tsx` : les dossiers puis les fichiers sous un préfixe (`#vue li a` dans cet ordre), lignes,
+  « modifié depuis l'index », « non indexé ».
+- `Symbol.tsx` : **chaque section se rend dès que sa réponse arrive** — définitions et usages par
+  genre (`usages`), ce qui en dépend (`impact`), ce qu'il appelle (`callees`), « en cours… » pour les
+  autres (c7 : sous charge, le `Promise.all` de l'ancienne page laissait « Chargement… »).
+- `Graph.tsx` : le voisinage en papillon (`svg g.noeud`, `g.noeud.centre`), impact à gauche,
+  appelés à droite, trois niveaux, les rattachements par le nom en pointillé.
+- `lib/graph.tsx` : le dessin partagé par couches (`g.etape[data-nom]`, `text.duree`), et la section
+  du diff d'un graphe (`section.graphe-propose[data-cible] g.etape.ajoute|change|retire`), reprise
+  par la relecture d'une tâche (le témoin relit le nœud changé dans le SVG) et les propositions.
+- `Dag.tsx` : la liste des graphes d'outils (`/ide/describe`), le DAG d'un outil, d'une réaction ou
+  d'un composant, allumé par le flux (`RunStarted` sur sa cible, `NodeRun` → `passe|echec` et la
+  durée, `RunFinished`), `#dag-etat`, `#arreter-run` et `#arret-note` (C4).
+- `Reactions.tsx` : les réactions déclarées, les montres, `#montre-vue`, les runs récents
+  (`#runs-recents tr[data-reaction][data-run]`, `td.fin`, `button.arreter`, les écritures cumulées
+  par entité et changement ou par relation dans `td.ecrit ul.ecritures li`).
+- `Propositions.tsx` : la liste relue au sujet `declarations` (`#propositions tr[data-id][data-etat]`),
+  le détail (`.proposition[data-etat]`, `#proposition-etat`, `#appliquer`, `#pourquoi`, `#rejeter`,
+  `#proposition-note`, l'aperçu `.apercu-propose`, le diff de chaque graphe, la différence de chaque
+  fichier).
+- `VUES_PORTEES` : toutes les vues de l'ancienne page ; l'édition d'un fichier (vue 3b) suit dans
+  son propre lot, et avec elle l'ancienne page n'a plus de vue à elle. Le bundle pèse 388 Kio
+  (393 Kio avec l'édition).

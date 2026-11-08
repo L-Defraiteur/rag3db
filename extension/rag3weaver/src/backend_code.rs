@@ -61,6 +61,12 @@ pub struct WorkspaceConfig {
     /// bac à sable : c'est la condition qui rend ce mode honnête.
     #[serde(default)]
     pub sandbox: SandboxConfig,
+    /// **Les scripts du dépôt déclarés** (page 07-novembre-2026-everything-declarative/01,
+    /// § 1, lot 2) : chacun par son nom et sa commande exacte (argv), accordé d'avance par
+    /// la porte — un agent les lance sans demander, rien d'autre ne change. Jamais en dur
+    /// dans le code : c'est ce que Lucie veut pouvoir redéclarer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scripts: Vec<DeclaredScript>,
     /// Le schéma **nommé** que ce workspace indexe — `"code"` enregistre le
     /// schéma de code du moteur (`register_code_schema`) à l'ouverture ;
     /// absent, rien ne s'enregistre. Un nom plutôt qu'une copie JSON : la
@@ -171,6 +177,15 @@ pub enum WorkspaceSource {
     WorkingTree,
 }
 
+/// Un script du dépôt déclaré au manifeste (`workspace.scripts`).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeclaredScript {
+    pub name: String,
+    /// La commande exacte, en argv (`["bash", "scripts/check_features.sh"]`).
+    pub command: Vec<String>,
+}
+
 /// Le mode de la porte des commandes, par backend (`commande::Mode`, plus
 /// `off` qui ne monte rien).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -243,6 +258,13 @@ pub struct ToolPolicy {
     /// déclarée par `workspace.commands`.
     #[serde(default)]
     pub run_commands: bool,
+    /// **Appeler un modèle de langage** (`Decide`), celui que le manifeste déclare
+    /// (`models.llm`, joint à l'ouverture). L'appel envoie un texte à un fournisseur
+    /// et dépense un quota : il se déclare outil par outil, comme les fichiers et les
+    /// commandes (M4, l'archiviste, 7 novembre 2026). `LlmNode` n'y est pas : avec
+    /// `with_tools`, il appellerait des outils.
+    #[serde(default)]
+    pub call_models: bool,
     /// **Appelable d'un écran** (un `Effet` d'un graphe de clic, par `/ide/call`) : `"lecture"`
     /// ou `"ecriture"` (alors derrière un `Confirmer`). Sans lui, aucun écran ne l'appelle —
     /// tranché par l'orchestration le 18 octobre 2026, à relire par Lucie : les droits d'écran
@@ -256,8 +278,18 @@ pub struct ToolPolicy {
 /// et le rendu. (La liste vivait en dur dans `backend.rs` — elle porte
 /// notamment les nœuds d'instantané et de lot que les outils `begin_` /
 /// `ingest_` / `finish_` / `abort_` / `undo_snapshot` traversent.)
+/// **Les nœuds qui lisent le creux** (`models.sparse`) sans signal creux de la
+/// recherche : un outil qui en contient un fait vivre la déclaration, et se
+/// replie si le service manque (7 novembre 2026).
+pub const SPARSE_READER_NODES: &[&str] = &["HighlightNode"];
+
 const BASE_NODES: &[&str] = &[
     "RhaiNode",
+    // **Aiguiller et découper, sans rien toucher** (M4, 7 novembre 2026) : `Route`
+    // pose un élément sur le port de sa clé, `SplitSections` rend les sections d'un
+    // texte reçu. Ni fichier, ni réseau, ni écriture : purs comme `RhaiNode`.
+    "Route",
+    "SplitSections",
     // Un Plan déclaré : il ne fait que lire.
     "PlanNode",
     // Un sous-graphe cité, appelé une fois ou par élément : ses propres types de
@@ -284,6 +316,8 @@ const BASE_NODES: &[&str] = &[
     // Le filtre de résultats : un seuil, une exclusion — rien n'est relu.
     "FilterResultsNode",
     "RerankNode",
+    // Le surlignage à l'affichage : il lit la page, le service creux est hors de la base.
+    "HighlightNode",
     "PaginateNode",
     "ResolveParentNode",
     "RenderResultsNode",
@@ -330,6 +364,7 @@ const BASE_NODES: &[&str] = &[
 const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode"];
 const WRITE_NODES: &[&str] = &["EditFileNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
+const MODEL_NODES: &[&str] = &["Decide"];
 
 /// **Les deux nœuds réservés aux graphes réactifs.** Un outil est appelé par
 /// l'agent, une réaction par un événement, et ces deux nœuds n'ont de sens
@@ -422,6 +457,9 @@ pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
     if policy.run_commands {
         nodes.extend_from_slice(RUN_NODES);
     }
+    if policy.call_models {
+        nodes.extend_from_slice(MODEL_NODES);
+    }
     nodes
 }
 
@@ -434,6 +472,8 @@ pub fn capacite_pour(node_type: &str) -> Option<&'static str> {
         Some("write_files")
     } else if RUN_NODES.contains(&node_type) {
         Some("run_commands")
+    } else if MODEL_NODES.contains(&node_type) {
+        Some("call_models")
     } else {
         None
     }
@@ -587,7 +627,13 @@ mod monte {
             CommandGate::Approval => Mode::Approbation,
             CommandGate::Auto => Mode::Auto,
         };
-        Some(Arc::new(Garde::new(mode)))
+        let garde = Garde::new(mode);
+        for s in &config.scripts {
+            if let Some((programme, args)) = s.command.split_first() {
+                garde.acquis().accorder_commande(crate::commande::Commande::new(programme.clone(), args.iter().cloned()).lisible());
+            }
+        }
+        Some(Arc::new(garde))
     }
 }
 
@@ -598,6 +644,21 @@ pub use monte::{build_garde, build_source};
 
 #[cfg(all(test, feature = "code"))]
 mod tests {
+
+    /// **Decide se déclare** (M4, 7 novembre 2026) : sans `call_models`, un outil qui
+    /// contient `Decide` est refusé au chargement, et le refus dit la ligne à ajouter ;
+    /// avec, il passe. `Route` et `SplitSections` passent sans rien déclarer.
+    #[test]
+    fn decide_demande_call_models_et_le_refus_dit_la_ligne() {
+        let types = || vec!["RhaiNode".to_string(), "SplitSections".to_string(), "Decide".to_string(), "Route".to_string()];
+        let e = validate_tool_policy("archive", types(), &ToolPolicy::default(), None).expect_err("Decide sans call_models");
+        assert!(e.contains("Decide") && e.contains("\"policy\": {\"call_models\": true}"), "{e}");
+        let avec = ToolPolicy { call_models: true, ..ToolPolicy::default() };
+        validate_tool_policy("archive", types(), &avec, None).expect("Decide avec call_models");
+        assert!(!allowed_nodes(&avec).contains(&"LlmNode"), "LlmNode reste hors de toute politique");
+        validate_tool_policy("t", vec!["Route".to_string(), "SplitSections".to_string()], &ToolPolicy::default(), None)
+            .expect("Route et SplitSections sont de la base");
+    }
     use super::*;
 
     fn config(source: WorkspaceSource, read_only: bool) -> WorkspaceConfig {
@@ -613,6 +674,7 @@ mod tests {
             generated: Default::default(),
             locks_via: Vec::new(),
             queries_via: None,
+            scripts: Vec::new(),
         }
     }
 
@@ -688,7 +750,7 @@ mod tests {
     /// soit la politique déclarée.
     #[test]
     fn un_crochet_n_ecrit_pas_ne_bloque_pas_ne_lance_pas() {
-        let tout = ToolPolicy { read_files: true, write_files: true, run_commands: true, ecran: None };
+        let tout = ToolPolicy { read_files: true, write_files: true, run_commands: true, call_models: true, ecran: None };
         let nodes = hook_nodes(&tout);
         for interdit in ["EntityRecordNode", "SnapshotFinishNode", "IndexNode", "WaitOutputNode", "RunCommandNode", "EditFileNode"] {
             assert!(!nodes.contains(&interdit), "{interdit} permis dans un crochet");
@@ -727,6 +789,7 @@ mod tests {
                 read_files: true,
                 write_files: true,
                 run_commands: run,
+                call_models: false,
                 ecran: None,
             };
             assert!(

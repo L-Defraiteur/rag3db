@@ -1,0 +1,35 @@
+# Le terminal de l'agent de code (extension/rag3weaver/docs/07-novembre-2026-tty).
+# Un client de l'hôte rag3weaver, sans le moteur : il se bâtit et tourne sous
+# Windows, macOS et Linux, là où est l'hôte ou à côté de lui par un tunnel.
+[package]
+name = "rag3weaver-tty"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+name = "rag3weaver_tty"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rag3weaver-tty"
+path = "src/main.rs"
+required-features = ["vue"]
+
+[dependencies]
+# HTTP en clair vers 127.0.0.1 (ou l'extrémité d'un tunnel) : ni TLS ni JSON
+# d'ureq, le corps passe par serde_json.
+ureq = { version = "3", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# La vue (lot tty-2) : ratatui et son backend crossterm, le même sous Windows,
+# macOS et Linux. `unicode-width` mesure la largeur d'un caractère en colonnes.
+ratatui = { version = "0.30", optional = true }
+unicode-width = { version = "0.2", optional = true }
+
+[features]
+# La vue inline. Sans elle, le crate n'est que le client du flux et `--plain` :
+# c'est ce que rag3weaver prend pour ses témoins, sans ratatui dans son bâti.
+default = ["vue"]
+vue = ["dep:ratatui", "dep:unicode-width"]

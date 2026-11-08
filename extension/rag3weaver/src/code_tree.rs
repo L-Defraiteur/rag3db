@@ -42,6 +42,57 @@ impl Roots {
     pub fn manifest(&self, nom: &str) -> PathBuf {
         self.config.join(nom).join("templates/backends/code/backend.json")
     }
+
+    /// **Le manifeste de `--from`** : un chemin de manifeste s'il en est un ;
+    /// sinon le nom d'un arbre, parmi les `.json` de `templates/backends/code/`
+    /// qui déclarent `database` et `tools` (celui de Lucie s'appelle
+    /// `rag3db.json` ; le gabarit livré porte aussi `snapshot.json`) : celui dont
+    /// le `name` est ce nom, sinon le seul, sinon `backend.json`. L'erreur dit
+    /// ce qui a été essayé (ticket « code-tree add --from suppose un manifeste
+    /// nommé backend.json ») ; avec un hôte, [`add_with_host`] prend d'abord le
+    /// manifeste que l'hôte a enregistré.
+    pub fn source_manifest(&self, from: &str) -> Result<PathBuf, String> {
+        let chemin = PathBuf::from(from);
+        if chemin.extension().is_some_and(|e| e == "json") && chemin.is_file() {
+            return std::fs::canonicalize(&chemin).map_err(|e| format!("--from {from} : {e}"));
+        }
+        let dossier = self.config.join(from).join("templates/backends/code");
+        let manifestes: Vec<PathBuf> = std::fs::read_dir(&dossier)
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "json"))
+            .filter(|p| {
+                std::fs::read_to_string(p)
+                    .ok()
+                    .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                    .is_some_and(|m| m.get("database").is_some() && m.get("tools").is_some())
+            })
+            .collect();
+        let nomme = |p: &PathBuf| {
+            std::fs::read_to_string(p).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).is_some_and(|m| m["name"] == from)
+        };
+        if let Some(p) = manifestes.iter().find(|p| nomme(p)) {
+            return Ok(p.clone());
+        }
+        match manifestes.as_slice() {
+            [un] => Ok(un.clone()),
+            [] => Err(format!(
+                "--from {from} : ni un chemin de manifeste, ni un arbre dont {} contienne un manifeste (un .json qui déclare database et tools)",
+                dossier.display()
+            )),
+            plusieurs => {
+                let defaut = dossier.join("backend.json");
+                if plusieurs.contains(&defaut) {
+                    Ok(defaut)
+                } else {
+                    let noms: Vec<String> = plusieurs.iter().filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).collect();
+                    Err(format!("--from {from} : plusieurs manifestes dans {} ({}) : donnez le chemin de l'un d'eux", dossier.display(), noms.join(", ")))
+                }
+            }
+        }
+    }
 }
 
 /// Ce que `add` a posé.
@@ -145,7 +196,7 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
         Some(n) => n.to_string(),
         None => name_of_tree(&tree)?,
     };
-    let source = roots.manifest(from);
+    let source = roots.source_manifest(from)?;
     let texte = std::fs::read_to_string(&source).map_err(|e| format!("--from {from} : manifeste {} illisible : {e}", source.display()))?;
     let mut m: Value = serde_json::from_str(&texte).map_err(|e| format!("--from {from} : manifeste illisible : {e}"))?;
     let base_de_depart = m["database"].as_str().map(PathBuf::from).ok_or_else(|| format!("--from {from} : le manifeste n'a pas de `database`"))?;
@@ -161,7 +212,9 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
     }
 
     // Le gabarit : tout `templates/` de `from` (outils, graphes, rendus).
-    let gabarit = source.ancestors().nth(3).ok_or("le manifeste de --from n'est pas sous templates/backends/code/")?;
+    // Le premier ancêtre nommé `templates` (le manifeste peut porter un autre
+    // nom que backend.json, ou venir d'un chemin donné).
+    let gabarit = source.ancestors().find(|a| a.file_name().is_some_and(|n| n == "templates")).ok_or("le manifeste de --from n'est pas sous un dossier templates/")?;
     std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
     copy(gabarit, &dossier.join("templates"), false)?;
 
@@ -175,11 +228,19 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
     // l'IDE.
     w.insert("read_only".into(), Value::Bool(false));
     w.insert("task_writes".into(), Value::Bool(true));
-    w.insert("commands".into(), Value::String("off".into()));
-    if let Some(outils) = m.get_mut("tools").and_then(Value::as_object_mut) {
-        outils.remove("run_command");
+    // Les commandes : la porte du gabarit (`approval` dans le livré : la liste
+    // sûre passe, le reste se demande dans la boîte), et `run_command` gardé.
+    // Hors d'une tâche le chat ne lance aucune commande ; dans une tâche, elles
+    // passent par cette porte, dans le worktree (c7, premier essai réel de
+    // l'équipier, 7 novembre 2026 : sans elles, aucune tâche de code réelle).
+    if !w.contains_key("commands") {
+        w.insert("commands".into(), Value::String("approval".into()));
     }
-    let manifest = roots.manifest(&name);
+    // Le manifeste de l'arbre neuf : au même chemin sous `templates/` que celui
+    // de `from` (son nom compris, `rag3db.json` ou `backend.json`), qui remplace la
+    // copie du manifeste de `from` venue avec le gabarit.
+    let sous_templates = source.strip_prefix(gabarit).map_err(|_| format!("--from {from} : le manifeste n'est pas sous {}", gabarit.display()))?;
+    let manifest = dossier.join("templates").join(sous_templates);
     // Les gabarits identiques au livré se désignent par leur nom (`builtin:`) et
     // suivent donc chaque bâti ; seuls ceux que `from` a modifiés restent des
     // copies (`crate::builtin_templates::link`).
@@ -216,7 +277,7 @@ pub struct Removed {
 /// effacé. Le backend doit être fermé avant ([`unregister`]).
 pub fn remove_files(roots: &Roots, name: &str) -> Result<Removed, String> {
     let dossier = roots.config.join(name);
-    let manifest = roots.manifest(name);
+    let manifest = roots.source_manifest(name).unwrap_or_else(|_| roots.manifest(name));
     let database = std::fs::read_to_string(&manifest)
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
@@ -303,8 +364,20 @@ fn is_open(state: &Value, manifest: &Path) -> bool {
 /// l'arbre neuf est enregistré.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub fn add_with_host(roots: &Roots, tree: &Path, from: &str, name: Option<&str>, address: &str) -> Result<(Added, FromAroundCopy), String> {
-    let source = roots.manifest(from);
-    let autour = match host_state(address) {
+    let etat = host_state(address);
+    // Par nom, le manifeste que l'hôte a enregistré sous le dossier de cet arbre
+    // fait foi : il ne se devine pas.
+    let dossier = std::fs::canonicalize(roots.config.join(from)).ok();
+    let enregistre = etat.as_ref().and_then(|e| {
+        e["backends"].as_array().into_iter().flatten().filter_map(|b| b["manifest"].as_str().map(PathBuf::from)).find(|m| dossier.as_ref().is_some_and(|d| m.starts_with(d)))
+    });
+    let source = match &enregistre {
+        Some(m) => m.clone(),
+        None => roots.source_manifest(from)?,
+    };
+    let from_resolu = source.display().to_string();
+    let from = if enregistre.is_some() { from_resolu.as_str() } else { from };
+    let autour = match etat {
         None => FromAroundCopy::NoHost,
         Some(etat) if is_open(&etat, &source) => {
             unregister(address, &source).map_err(|e| format!("--from {from} : l'hôte ne le ferme pas avant la copie : {e} — réessayez après l'index"))?;
@@ -369,6 +442,8 @@ mod tests {
         let manifest = roots.manifest("code-lourd");
         let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
         m["database"] = Value::String(base.display().to_string());
+        // Comme un arbre que `add` a posé : son `name` est son nom.
+        m["name"] = Value::String("code-lourd".into());
         std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
         std::fs::write(&base, b"base").unwrap();
         std::fs::write(PathBuf::from(format!("{}.wal", base.display())), b"journal").unwrap();
@@ -394,9 +469,11 @@ mod tests {
         assert_eq!(m["workspace"]["root"], std::fs::canonicalize(&arbre).unwrap().display().to_string());
         assert_eq!(m["workspace"]["read_only"], false);
         // L'agent édite dans une tâche, jamais l'arbre principal ; l'humain
-        // édite le principal dans l'IDE ; aucune commande.
+        // édite le principal dans l'IDE ; les commandes passent par la porte
+        // du gabarit, dans une tâche seulement.
         assert_eq!(m["workspace"]["task_writes"], true);
-        assert!(m["tools"].get("edit_file").is_some() && m["tools"].get("run_command").is_none());
+        assert!(m["tools"].get("edit_file").is_some() && m["tools"].get("run_command").is_some(), "{}", m["tools"]);
+        assert_eq!(m["workspace"]["commands"], "approval");
         // Les déclarations dans un dépôt, à la racine de l'arbre inscrit.
         let racine = roots.config.join(&a.name);
         let log = std::process::Command::new("git").arg("-C").arg(&racine).args(["log", "--format=%s"]).output().unwrap();
@@ -414,6 +491,32 @@ mod tests {
         // Une seconde fois : refusé en le nommant, rien d'écrasé.
         let e = add_files(&roots, &arbre, "code-lourd", None).unwrap_err();
         assert!(e.contains("existe déjà") && e.contains("code-tree remove"), "{e}");
+    }
+
+    /// **`--from` d'un arbre dont le manifeste ne s'appelle pas backend.json** (ticket du 7
+    /// novembre : celui de Lucie s'appelle `rag3db.json`) : par son nom comme par son chemin,
+    /// l'arbre neuf s'inscrit, avec son manifeste au même nom.
+    #[test]
+    fn from_accepts_a_manifest_not_named_backend_json() {
+        let (roots, arbre) = poste("from-rag3db-json");
+        let ancien = roots.manifest("code-lourd");
+        let renomme = ancien.with_file_name("rag3db.json");
+        std::fs::rename(&ancien, &renomme).unwrap();
+        let a = add_files(&roots, &arbre, "code-lourd", Some("code-par-nom")).expect("--from par le nom de l'arbre");
+        assert!(a.manifest.ends_with("templates/backends/code/rag3db.json"), "{}", a.manifest.display());
+        assert!(!a.manifest.with_file_name("backend.json").exists(), "aucun second manifeste");
+        let m: Value = serde_json::from_str(&std::fs::read_to_string(&a.manifest).unwrap()).unwrap();
+        assert_eq!(m["name"], "code-par-nom");
+        assert_eq!(roots.source_manifest("code-par-nom").unwrap(), a.manifest, "l'arbre neuf se retrouve par son nom");
+        let arbre2 = arbre.with_file_name("rag3db-pk-2");
+        std::fs::create_dir_all(&arbre2).unwrap();
+        for args in [&["init", "-q"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"]] {
+            git(&arbre2, args).unwrap();
+        }
+        let b = add_files(&roots, &arbre2, &renomme.display().to_string(), Some("code-par-chemin")).expect("--from par le chemin du manifeste");
+        assert!(b.manifest.ends_with("rag3db.json"), "{}", b.manifest.display());
+        let e = add_files(&roots, &arbre2, "code-absent", Some("x")).unwrap_err();
+        assert!(e.contains("code-absent") && e.contains("database et tools"), "{e}");
     }
 
     #[test]

@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "kind": "memory",
   "name": "memory",
   "database": "data/memory.rag3db",
   "files_root": "fichiers",
@@ -678,7 +679,9 @@
     }
   },
   "scripts": {
-    "cited_by_params": "scripts/cited_by_params.rhai"
+    "cited_by_params": "scripts/cited_by_params.rhai",
+    "whois_params": "scripts/whois_params.rhai",
+    "whois": "scripts/whois.rhai"
   },
   "tools": {
     "put_memory": {
@@ -881,6 +884,20 @@
         }
       ]
     },
+    "select_sources": {
+      "graph": "../../tools/select_structured.mmd",
+      "description": "Inventaire des Sources par filtre (session, chemin, origine…), sans classement. Plafonné : 20 lignes sans filtre ni limit ; avec un filtre, toutes, ou `limit`. Exemple : les sources d'une conversation, {\"field\":{\"key\":\"session\",\"value\":[\"run-1\",\"run-2\"]}}.",
+      "bindings": {
+        "entity": "Source"
+      }
+    },
+    "select_apports": {
+      "graph": "../../tools/select_structured.mmd",
+      "description": "Inventaire des Apports par filtre (source, fiche, section…), sans classement. Plafonné : 20 lignes sans filtre ni limit ; avec un filtre, tous, ou `limit`. Exemple : les apports qui citent des sources, {\"field\":{\"key\":\"source\",\"value\":[\"sources/…md\"]}}.",
+      "bindings": {
+        "entity": "Apport"
+      }
+    },
     "cited_by": {
       "graph": "graphs/cited_by.mmd",
       "metadata": [
@@ -889,6 +906,9 @@
           "port": "total"
         }
       ]
+    },
+    "whois": {
+      "graph": "graphs/whois.mmd"
     }
   },
   "reactions": {

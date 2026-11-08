@@ -18,7 +18,10 @@
 //!   dimension, **et si je suis factice**.
 //! - `POST /embed` `{"texts":[…]}` → `{"vectors":[[…]]}`.
 //! - `POST /embed_dual` → `{"dense":[[…]],"sparse":[{"indices":[…],"values":[…]}]}`.
-//! - `POST /embed_sparse` → `{"sparse":[{"indices":[…],"values":[…]}]}`.
+//! - `POST /embed_sparse` → `{"sparse":[{"indices":[…],"values":[…]}]}` ; avec
+//!   `"spans": true`, en plus `"spans":[[[début, fin, poids], …], …]` par texte
+//!   (plages d'octets, poids avant la fusion ; l'espace de tête d'un mot peut
+//!   être dans sa plage).
 //!
 //! # Le factice doit traverser
 //!
@@ -38,7 +41,7 @@ use crate::embedder::{
     SparseEmbedder,
 };
 use crate::serveur::{Fin, Serveur};
-use crate::sparse_index::SparseVector;
+use crate::sparse_index::{SparseSpan, SparseVector};
 
 /// Le nom que ce démon se donne.
 pub const SERVICE: &str = "rag3weaver-embeddings";
@@ -304,6 +307,10 @@ impl EmbedDaemon {
 #[derive(Deserialize)]
 struct Textes {
     texts: Vec<String>,
+    /// `/embed_sparse` seulement : rendre aussi, par texte, le poids de chaque
+    /// position (`spans`). Absent ou faux : la réponse d'avant, inchangée.
+    #[serde(default)]
+    spans: bool,
 }
 
 #[derive(Deserialize)]
@@ -378,6 +385,17 @@ impl Service for EmbedDaemon {
             ("POST", "/embed_sparse") => match (&self.sparse, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux seul")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
+                (Some(sp), Ok(t)) if t.spans => match self.par_lots(&t.texts, |lot| sp.embed_sparse_spans(lot)) {
+                    Ok(lignes) => (
+                        200,
+                        serde_json::json!({
+                            "sparse": lignes.iter().map(|(v, _)| sparse_json(v)).collect::<Vec<_>>(),
+                            "spans": lignes.iter().map(|(_, s)| spans_json(s)).collect::<Vec<_>>(),
+                        })
+                        .to_string(),
+                    ),
+                    Err(e) => (500, erreur(&e.to_string())),
+                },
                 (Some(sp), Ok(t)) => match self.par_lots(&t.texts, |lot| sp.embed_sparse(lot)) {
                     Ok(creux) => (
                         200,
@@ -448,6 +466,14 @@ impl Service for EmbedDaemon {
 
 fn sparse_json(v: &SparseVector) -> serde_json::Value {
     serde_json::json!({ "indices": v.indices, "values": v.values })
+}
+
+/// Les positions d'un texte sur le fil : `[[début, fin, poids], …]`, plages
+/// d'octets du texte reçu. **Une plage peut commencer par l'espace qui
+/// précède le mot** (le Metaspace de BGE-M3 range l'espace dans le jeton
+/// suivant : « ␣chat ») ; un surligneur retire l'espace de tête.
+fn spans_json(spans: &[SparseSpan]) -> serde_json::Value {
+    serde_json::json!(spans.iter().map(|s| serde_json::json!([s.start, s.end, s.weight])).collect::<Vec<_>>())
 }
 
 // ─── Le client ───────────────────────────────────────────────────────────────
@@ -632,8 +658,11 @@ impl DaemonEmbedder {
     }
 
     fn envoyer(&self, route: &str, textes: &[String]) -> Result<serde_json::Value, EmbedError> {
-        let corps = serde_json::json!({ "texts": textes }).to_string();
-        let texte = poster(&self.agent, &self.base, route, corps).map_err(|e| match e {
+        self.envoyer_corps(route, serde_json::json!({ "texts": textes }))
+    }
+
+    fn envoyer_corps(&self, route: &str, corps: serde_json::Value) -> Result<serde_json::Value, EmbedError> {
+        let texte = poster(&self.agent, &self.base, route, corps.to_string()).map_err(|e| match e {
             DaemonError::SansReponse { .. } => EmbedError::Timeout,
             e => EmbedError::ProviderError(e.to_string()),
         })?;
@@ -789,6 +818,29 @@ impl SparseEmbedder for DaemonEmbedder {
     fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
         creux_de(&self.envoyer("/embed_sparse", texts)?)
     }
+
+    /// `/embed_sparse` avec `"spans": true`. Un service d'avant l'option rend
+    /// le creux sans `spans` : c'est dit, pas inventé.
+    fn embed_sparse_spans(&self, texts: &[String]) -> Result<Vec<(SparseVector, Vec<SparseSpan>)>, EmbedError> {
+        let corps = serde_json::json!({ "texts": texts, "spans": true });
+        let v = self.envoyer_corps("/embed_sparse", corps)?;
+        let creux = creux_de(&v)?;
+        let spans = v["spans"].as_array().ok_or_else(|| {
+            EmbedError::ProviderError(format!("le service {} ne rend pas le poids des positions (champ 'spans' absent)", self.base))
+        })?;
+        if spans.len() != creux.len() {
+            return Err(EmbedError::ProviderError(format!("{} listes de positions pour {} textes", spans.len(), creux.len())));
+        }
+        creux
+            .into_iter()
+            .zip(spans)
+            .map(|(c, s)| {
+                let triplets: Vec<(usize, usize, f32)> = serde_json::from_value(s.clone())
+                    .map_err(|e| EmbedError::ProviderError(format!("'spans' : {e}")))?;
+                Ok((c, triplets.into_iter().map(|(start, end, weight)| SparseSpan { start, end, weight }).collect()))
+            })
+            .collect()
+    }
 }
 
 impl DualEmbedder for DaemonEmbedder {
@@ -936,6 +988,36 @@ mod tests {
         assert!(!c.sait_dual(), "le creux seul n'implique pas le dual");
         let creux = c.embed_sparse(&["abcd".to_string()]).expect("sparse");
         assert_eq!(creux, vec![SparseVector::new(vec![4], vec![0.5])]);
+    }
+
+    /// **Le poids des positions traverse le fil, sur option** : sans
+    /// `"spans": true`, la réponse d'avant, sans champ `spans` ; avec, une
+    /// plage d'octets et un poids par mot, et le même creux.
+    #[test]
+    fn le_poids_des_positions_traverse_le_fil_sur_option() {
+        let mock = Arc::new(crate::embedder::MockSparseEmbedder);
+        let adresse = demon(EmbedDaemon::new(Arc::new(Regle(3))).avec_sparse(mock));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let textes = vec!["un chat un chien".to_string()];
+        let sans = c.envoyer("/embed_sparse", &textes).expect("sans option");
+        assert!(sans.get("spans").is_none(), "sans option, pas de champ spans : {sans}");
+        let lignes = c.embed_sparse_spans(&textes).expect("avec option");
+        assert_eq!(lignes.len(), 1);
+        let (creux, spans) = &lignes[0];
+        assert_eq!(creux, &c.embed_sparse(&textes).expect("creux")[0], "le même creux, avec ou sans positions");
+        let plages: Vec<&str> = spans.iter().map(|s| &textes[0][s.start..s.end]).collect();
+        assert_eq!(plages, vec!["un", "chat", "un", "chien"]);
+        assert!(spans.iter().all(|s| s.weight == 0.25));
+    }
+
+    /// Un embarqueur creux qui ne sait pas rendre les positions le dit, en 500.
+    #[test]
+    fn demander_les_positions_a_qui_ne_les_rend_pas_se_dit() {
+        let regle = Arc::new(Regle(3));
+        let adresse = demon(EmbedDaemon::new(regle.clone()).avec_sparse(regle));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let e = c.embed_sparse_spans(&["abc".to_string()]).expect_err("pas de positions");
+        assert!(format!("{e}").contains("poids des positions"), "erreur : {e}");
     }
 
     #[test]

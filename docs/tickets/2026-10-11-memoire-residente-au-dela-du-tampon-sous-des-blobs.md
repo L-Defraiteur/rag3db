@@ -11,6 +11,7 @@
   du plein texte de rag3weaver, l'index creux)
 - **Touche rag3weaver** : oui. Le tampon du moteur sert de plafond quand on dimensionne un poste
   ou un service ; ce plafond n'est pas tenu.
+- **Famille** : moteur
 
 ## Ce que c'est
 

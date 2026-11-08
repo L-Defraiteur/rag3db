@@ -9,8 +9,52 @@ export type Backend = {
   tache: Task | null;
   template_drift?: string[];
   sessions?: number;
+  // Ce que les gens nomment : le dépôt git qui contient le manifeste, sa branche,
+  // et ce qu'est le backend — `code` (un dépôt), `memory` (la mémoire), `project`
+  // (un projet rag3weaver déclaratif sans dépôt). « backend » ne paraît pas à l'écran.
+  repo?: string | null;
+  branch?: string | null;
+  kind?: "code" | "memory" | "project";
+  // `manifest` : la nature que le gabarit déclare ; `fallback` : l'hôte l'a devinée
+  // (un espace de travail, un dépôt), le manifeste ne la dit pas.
+  kind_source?: "manifest" | "fallback";
 };
-export type HostState = { backends: Backend[]; sessions?: unknown[] };
+
+/// Le nom qu'une personne donne à ce que tient un backend : la branche d'une tâche,
+/// « la mémoire », le dépôt (et sa branche), ou le nom d'un projet déclaratif.
+export function displayName(b: Backend): string {
+  if (b.tache) return b.tache.branche;
+  if (b.kind === "memory") return "la mémoire";
+  if (b.kind === "code" && b.repo) return b.branch ? `${b.repo} · ${b.branch}` : b.repo;
+  return shortName(b.manifest).split("/").pop() || shortName(b.manifest);
+}
+// **La barre du chat** (modèle tranché par c7 avec Lucie, forme accordée avec
+// everything declarative, page 02) : des listes à plat. Une session (un backend
+// principal) tient son espace ; ses tâches (`session`) tiennent un à n espaces
+// (un worktree par dépôt touché), une proposition par espace ; une sous-tâche
+// dit sa tâche mère (`parent_task`).
+export type Rag = { state: "indexed" | "indexing" | "absent"; percent?: number | null };
+export type Space = {
+  backend: string;
+  repo?: string | null;
+  branch?: string | null;
+  path?: string | null;
+  loaded: boolean;
+  rag: Rag;
+  proposal?: { state: "open" | "merged" | "rejected" } | null;
+};
+export type RunState = "running" | "waiting" | "ended" | "error";
+export type ChatSession = {
+  id: string;
+  name?: string | null;
+  model?: string | null;
+  state?: RunState | null;
+  awaits_answer?: boolean;
+  memory: { backend: string | null; rag: boolean };
+  spaces: Space[];
+};
+export type SessionTask = { id: string; session: string; parent_task?: string | null; name: string; state?: RunState | null; awaits_answer?: boolean; spaces: Space[] };
+export type HostState = { backends: Backend[]; sessions?: unknown[]; chat_sessions?: ChatSession[]; tasks?: SessionTask[]; available_repos?: Space[] };
 
 export async function fetchState(): Promise<HostState> {
   const r = await fetch("/ide/etat");
@@ -25,7 +69,11 @@ export async function call(manifest: string, name: string, args: unknown): Promi
     body: JSON.stringify({ manifest, name, arguments: args }),
   })).json();
   if (!r.ok) throw new Error(r.error ?? "appel refusé");
-  return r.result?.result ?? r.result;
+  // La sortie de l'outil, un cran sous la réponse du graphe ({ result, metadata, … }),
+  // et sous l'enveloppe { status, result } d'une lecture du catalogue quand il y en a
+  // une (usages, impact, callees… : `status` dit l'état de l'index) — comme
+  // l'ancienne page le faisait ; un `result` nul est l'erreur que `status` dit.
+  return unwrap(r.result?.result ?? r.result).value;
 }
 
 /// Le nom court d'un backend : les deux derniers dossiers de son manifeste.
@@ -65,14 +113,38 @@ export function dispatchFlux(e: FluxEvent) {
   for (const l of listeners) l(e);
 }
 
+// Un tour de la session. `at_ms` : sur un appel, l'heure où il est parti ; sur un
+// tour `tool`, l'heure où le résultat est revenu (la durée est l'écart) ; absent
+// des tours d'avant.
 export type ChatTurn = {
   role: "user" | "assistant" | "tool" | "system";
   content?: string;
-  tool_calls?: { id: string; name: string; arguments: string }[];
+  tool_calls?: { id: string; name: string; arguments: string; at_ms?: number }[];
   tool_call_id?: string;
   tool_name?: string;
+  at_ms?: number;
 };
-export type ChatState = { on: boolean; model: string | null; why: string | null; run: string | null; turns: ChatTurn[]; orphans: { pourquoi: string }[] };
+// La jauge du contexte : `used`, les jetons d'entrée (cache compris) du dernier
+// appel au modèle ; `max`, le contexte du modèle déclaré (null : inconnu).
+export type ChatContext = { used: number | null; max: number | null; source: string; at: number | null };
+// Une fiche de la mémoire déclarée écrite pendant cette conversation : par une
+// Source dont `session` est un run de la conversation (le juge), ou un apport qui
+// la cite. Les écritures de l'agent lui-même attendent M7 (la session posée par
+// l'hôte).
+export type MemoryWrite = { fiche: string; kind: "fiche" | "apport"; section?: string; at_ms?: number; run: string };
+export type ChatState = {
+  on: boolean;
+  model: string | null;
+  context?: ChatContext;
+  memory_writes?: MemoryWrite[];
+  // Pourquoi la liste des fiches écrites ne peut pas se faire (pas de mémoire
+  // déclarée, une mémoire sans outil de lecture par filtre…) ; null sinon.
+  memory_writes_why?: string | null;
+  why: string | null;
+  run: string | null;
+  turns: ChatTurn[];
+  orphans: { pourquoi: string }[];
+};
 
 export async function fetchChat(backend: string): Promise<ChatState> {
   const r = await (await fetch(`/ide/chat?${new URLSearchParams({ backend })}`)).json();

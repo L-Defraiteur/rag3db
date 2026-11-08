@@ -903,10 +903,10 @@ void NodeTable::rollbackAddColumn(main::ClientContext* context) {
 
 std::pair<offset_t, offset_t> NodeTable::appendToLastNodeGroup(Transaction* transaction,
     const std::vector<column_id_t>& columnIDs, InMemChunkedNodeGroup& chunkedGroup,
-    PageAllocator& pageAllocator) {
+    PageAllocator& pageAllocator, std::optional<offset_t> partialFlushFrom) {
     hasChanges = true;
     return nodeGroups->appendToLastNodeGroupAndFlushWhenFull(transaction, columnIDs, chunkedGroup,
-        pageAllocator);
+        pageAllocator, partialFlushFrom);
 }
 
 DataChunk NodeTable::constructDataChunkForColumns(const std::vector<column_id_t>& columnIDs) const {
@@ -1129,6 +1129,10 @@ void NodeTable::rollbackCheckpoint() {
 void NodeTable::reclaimStorage(PageAllocator& pageAllocator) const {
     nodeGroups->reclaimStorage(pageAllocator);
     getPKIndex()->reclaimStorage(pageAllocator);
+}
+
+void NodeTable::retireGenerationsBefore(transaction_t oldestReaderTS) {
+    nodeGroups->retireGenerationsBefore(oldestReaderTS);
 }
 
 TableStats NodeTable::getStats(const Transaction* transaction) const {
@@ -1355,6 +1359,7 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
 
     auto& wal = transaction->getLocalWAL();
     row_idx_t numLogged = 0;
+    size_t sliceRows = 1;
     const auto firstGroup = StorageUtils::getNodeGroupIdx(startOffset);
     const auto lastGroup = StorageUtils::getNodeGroupIdx(endOffset - 1);
     for (auto nodeGroupIdx = firstGroup;
@@ -1391,19 +1396,34 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
             if (kept.empty()) {
                 continue;
             }
+            // Au journal par tranches bornées en octets, le seuil lu entre deux tranches : un bloc
+            // entier d'un coup pouvait y pousser bien plus que le seuil avant la première lecture
+            // (112 blobs d'1 Mio, 112 Mio pour un seuil de 32 Mio, sous un tampon qui ne peut pas
+            // évincer le journal ; ticket 2026-10-11-copy-de-blobs-en-point-de-reprise-force-sous-
+            // un-petit-tampon). La tranche suit le coût d'une ligne : une ligne d'abord, puis assez
+            // de lignes pour un huitième du seuil environ.
+            const auto sliceBudget = std::max<uint64_t>(transaction->copyJournalThreshold() / 8, 1);
             auto buffer = selVector.getMutableBuffer();
-            for (size_t i = 0; i < kept.size(); i++) {
-                buffer[i] = kept[i];
-            }
-            selVector.setToFiltered(kept.size());
-            wal.logTableInsertion(tableID, TableType::NODE, kept.size(), vectors);
-            numLogged += kept.size();
-            if (transaction->journalExceedsCopyThreshold()) {
-                // Le journal de la transaction, qui vit en mémoire jusqu'à sa validation,
-                // dépasse le seuil : elle se replie sur le point de reprise forcé. Rien de ce
-                // qui était au journal n'y reste, rien de plus n'y va.
-                transaction->fallBackToForcedCheckpoint();
-                return;
+            size_t from = 0;
+            while (from < kept.size()) {
+                const auto slice = std::min(sliceRows, kept.size() - from);
+                for (size_t i = 0; i < slice; i++) {
+                    buffer[i] = kept[from + i];
+                }
+                selVector.setToFiltered(slice);
+                const auto sizeBefore = wal.getSize();
+                wal.logTableInsertion(tableID, TableType::NODE, slice, vectors);
+                numLogged += slice;
+                from += slice;
+                if (transaction->journalExceedsCopyThreshold()) {
+                    // Le journal de la transaction, qui vit en mémoire jusqu'à sa validation,
+                    // dépasse le seuil : elle se replie sur le point de reprise forcé. Rien de ce
+                    // qui était au journal n'y reste, rien de plus n'y va.
+                    transaction->fallBackToForcedCheckpoint();
+                    return;
+                }
+                const auto bytesPerRow = std::max<uint64_t>((wal.getSize() - sizeBefore) / slice, 1);
+                sliceRows = std::clamp<size_t>(sliceBudget / bytesPerRow, 1, DEFAULT_VECTOR_CAPACITY);
             }
         }
     }

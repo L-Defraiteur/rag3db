@@ -724,7 +724,7 @@ fn un_agent_monte_comme_en_production_trouve_pose_et_adopte() {
     let services = Arc::new(mount_agent_services_on(&catalog, source).unwrap());
     let (nodes, tools) = builtin_graph_tools().unwrap();
     let call = |name: &str, args: serde_json::Value| -> String {
-        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None };
+        let tc = ToolCall { id: "c1".into(), name: name.into(), arguments: args.to_string(), provider_extra: None, at_ms: None };
         tools.call(&tc, &nodes, services.clone()).content.clone()
     };
 

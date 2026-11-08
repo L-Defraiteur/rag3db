@@ -5,7 +5,7 @@
 //! `Catalog::rechercher` path), plus types for search options, results, and
 //! the graph carried by a unified result.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -484,6 +484,11 @@ pub struct SearchOptions {
     /// candidats fusionnés. `None` (ou un poids nul) : rien ne change.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cohesion: Option<CohesionOptions>,
+    /// **Le surlignage à l'affichage** (`"sparse"`) : les morceaux de la page
+    /// que lucivy n'a pas surlignés le sont par le creux de bge-m3, ou par les
+    /// mots de la requête (`HighlightNode`). `None` : rien de plus.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlights: Option<String>,
 }
 
 /// La cohésion des candidats fusionnés : pour chacun, la somme de 1/sauts
@@ -532,6 +537,7 @@ impl Default for SearchOptions {
             scopes: Vec::new(),
             rerank: None,
             cohesion: None,
+            highlights: None,
         }
     }
 }
@@ -1520,25 +1526,9 @@ pub fn build_bm25_query(
                 })
             }
         }
-        BM25Mode::Contains => {
-            // **Les deux apostrophes** (25 octobre 2026, note de la session
-            // lucivy) : lucivy compte « ’ » comme du contenu et « ' » comme un
-            // séparateur. Un texte français écrit avec l'une ne se trouve pas
-            // par l'autre, même à distance 1 ; la requête part sous ses deux
-            // formes.
-            let formes = formes_de_l_apostrophe(query);
-            if formes.len() == 1 {
-                build_contains_clauses(query, fields, distance, false, false)
-            } else {
-                serde_json::json!({
-                    "type": "boolean",
-                    "should": formes
-                        .iter()
-                        .map(|f| build_contains_clauses(f, fields, distance, false, false))
-                        .collect::<Vec<_>>(),
-                })
-            }
-        }
+        // Les deux apostrophes (« ' » et « ’ ») se confondent dans lucivy depuis 4.3.2 : la
+        // requête part sous sa seule forme (le doublement du 25 octobre 2026 est retiré).
+        BM25Mode::Contains => build_contains_clauses(query, fields, distance, false, false),
         BM25Mode::Regex => build_contains_clauses(query, fields, distance, true, false),
         // distance is forced to 0: lucivy treats any distance > 0 as relaxed,
         // which would silently defeat strict_separators.
@@ -1546,21 +1536,6 @@ pub fn build_bm25_query(
     };
 
     obj.to_string()
-}
-
-/// La requête sous ses formes d'apostrophe : elle-même s'il n'y en a pas,
-/// sinon la forme droite (« ' ») et la forme typographique (« ’ »).
-pub fn formes_de_l_apostrophe(query: &str) -> Vec<String> {
-    if !query.contains('\'') && !query.contains('’') {
-        return vec![query.to_string()];
-    }
-    let droite = query.replace('’', "'");
-    let typographique = query.replace('\'', "’");
-    if droite == typographique {
-        vec![droite]
-    } else {
-        vec![droite, typographique]
-    }
 }
 
 /// Build contains clause(s) for one value across fields.
@@ -1874,6 +1849,43 @@ pub const SEUIL_CONFIANCE: f64 = 0.88;
 /// La confiance est recalculée **ici**, en Jaro pur sur le texte rendu, et pas
 /// tirée du score de classement : voir [`SEUIL_CONFIANCE`] pour pourquoi les
 /// deux nombres ne peuvent pas être le même.
+/// **La requête entière garde son flou jusqu'à cette longueur** (en caractères), puis se
+/// cherche à distance 0 (ticket « Le plein texte explose sur une requête longue », 7 novembre
+/// 2026, mesuré par `tests/sonde_requete_longue.rs`). Sur lucivy 4.3.2 (le flou long borné chez
+/// lui), sur la base de code : 21 ms à 104 caractères, 88 ms à 436, 464 ms à 933, 785 ms à 1 397 ;
+/// à distance 0, moins de 90 ms partout. Le budget du nœud est de 500 ms, le tiers de l'attente
+/// que la première recherche accorde à sa poignée. (Sur 4.3.1, la borne était à 100 : 2,6 s à
+/// 235 caractères.)
+pub const MAX_FUZZY_WHOLE_QUERY_CHARS: usize = 900;
+
+/// **La recherche par mots garde au plus tant de termes** (même ticket, même mesure) : le plus
+/// grand palier sous le budget sur la base de code — 343 ms à 64 termes et 650 ms à 128 sur
+/// lucivy 4.3.2 (495 ms et 2,7 s sur 4.3.1).
+pub const MAX_WORD_TERMS: usize = 64;
+
+/// **Les termes gardés pour la recherche par mots**, si la requête en a plus que
+/// [`MAX_WORD_TERMS`] : les plus longs d'abord (la longueur pour la rareté, faute d'IDF à ce
+/// stade), les mots de moins de trois lettres tombant les premiers ; les termes gardés restent
+/// dans leur ordre d'apparition. `None` : la requête passe telle quelle. Rend la requête réduite,
+/// le nombre de termes gardés et le nombre de termes distincts.
+pub fn bound_word_terms(query: &str) -> Option<(String, usize, usize)> {
+    let mut vus = HashSet::new();
+    let termes: Vec<&str> = query.split_whitespace().filter(|t| vus.insert(t.to_lowercase())).collect();
+    if termes.len() <= MAX_WORD_TERMS {
+        return None;
+    }
+    let mut rangs: Vec<usize> = (0..termes.len()).collect();
+    // Stable : à longueur égale, le premier apparu passe devant.
+    rangs.sort_by_key(|&i| {
+        let n = termes[i].chars().count();
+        (n < 3, std::cmp::Reverse(n))
+    });
+    let mut gardes: Vec<usize> = rangs.into_iter().take(MAX_WORD_TERMS).collect();
+    gardes.sort_unstable();
+    let reduite = gardes.iter().map(|&i| termes[i]).collect::<Vec<_>>().join(" ");
+    Some((reduite, MAX_WORD_TERMS, termes.len()))
+}
+
 /// Le début de la phrase de [`marquer_la_confiance`] : un nœud qui fond deux
 /// recherches ne garde que celle de la liste dont il rend le premier.
 pub(crate) const RIEN_DE_PROBANT: &str = "le plein texte n'a rien de probant";
@@ -3431,5 +3443,38 @@ mod tests_surlignages {
         merge_highlights(&mut dst, &h);
         assert_eq!(dst.len(), 2, "l'union garde chaque passage une fois, triés : {dst:?}");
         assert_eq!(dst[0].start, 0);
+    }
+}
+
+/// **La borne des requêtes longues** (ticket du 7 novembre 2026, mesuré).
+#[cfg(test)]
+mod tests_requete_longue {
+    use super::*;
+
+    /// Les requêtes de Lucie du 25 octobre (le tableau de la requête entière) passent telles
+    /// quelles : sous la borne des termes et, sauf aucune, sous celle du flou.
+    #[test]
+    fn les_requetes_du_25_octobre_ne_sont_pas_coupees() {
+        for q in ["rag3weaver", "work in progress", "refreh index states", "refresh index states", "l'indexation", "Vue d'ensemble", "cpu_count"] {
+            assert!(bound_word_terms(q).is_none(), "« {q} » garde ses termes");
+            assert!(q.chars().count() <= MAX_FUZZY_WHOLE_QUERY_CHARS, "« {q} » garde son flou");
+        }
+    }
+
+    #[test]
+    fn une_requete_longue_garde_les_termes_les_plus_longs_dans_leur_ordre() {
+        // 70 termes distincts : 10 mots de deux lettres, puis 60 de longueurs croissantes.
+        let mut termes: Vec<String> = (0..10).map(|i| format!("a{i}")).collect();
+        termes.extend((0..60).map(|i| format!("mot{}", "x".repeat(i))));
+        let q = termes.join(" ");
+        let (reduite, gardes, total) = bound_word_terms(&q).expect("coupée");
+        assert_eq!((gardes, total), (MAX_WORD_TERMS, 70));
+        let gardes: Vec<&str> = reduite.split_whitespace().collect();
+        assert_eq!(gardes.len(), MAX_WORD_TERMS);
+        assert!(termes[10..].iter().all(|t| gardes.contains(&t.as_str())), "les 60 longs sont gardés");
+        assert_eq!(gardes.iter().filter(|t| t.len() == 2).count(), 4, "les mots de deux lettres tombent les premiers");
+        assert_eq!(gardes[0], "a0", "l'ordre d'apparition est gardé : {reduite}");
+        // Les doublons ne comptent qu'une fois, sans la casse.
+        assert!(bound_word_terms(&"Mot mot MOT ".repeat(100)).is_none());
     }
 }
