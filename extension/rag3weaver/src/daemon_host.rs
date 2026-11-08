@@ -2422,6 +2422,65 @@ mod tests {
         assert!(!chemin.exists(), "un fil a recréé le dossier du backend après son Drop : {}", chemin.display());
     }
 
+    /// **Une mémoire qu'on laisse tomber, réactions comprises, ne laisse rien
+    /// derrière elle** (8 novembre 2026, le cas d'e2e_cited_by : son processus
+    /// mourait en SIGSEGV à la sortie, après la fermeture tardive du plein texte
+    /// d'Apport) : le backend memory, peuplé de fiches et d'apports qui réveillent
+    /// ses réactions, lâché sans `shutdown()`. Juste après le Drop, plus personne
+    /// ne tient son catalogue ; son dossier s'efface sans erreur et reste absent.
+    #[test]
+    fn une_memoire_qu_on_laisse_tomber_avec_ses_reactions_ne_laisse_rien() {
+        fn copier(src: &std::path::Path, dst: &std::path::Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for e in std::fs::read_dir(src).unwrap() {
+                let e = e.unwrap();
+                let cible = dst.join(e.file_name());
+                if e.file_type().unwrap().is_dir() {
+                    copier(&e.path(), &cible);
+                } else {
+                    std::fs::copy(e.path(), &cible).unwrap();
+                }
+            }
+        }
+        let d = tempfile::tempdir().unwrap();
+        copier(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates"), &d.path().join("templates"));
+        let manifeste = d.path().join("templates/backends/memory/backend.json");
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["vector_extension"] = json!(crate::backend::vector_extension_of_this_process().unwrap().display().to_string());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let prepared = PreparedBackend::load(&manifeste).expect("le gabarit memory charge");
+        let b = prepared
+            .open(
+                Box::new(crate::rag3db_connection::Rag3dbConnection::new(&d.path().join("memoire.rag3db")).expect("la base")),
+                Some(Box::new(crate::embedder::HashEmbedder::new(1024))),
+            )
+            .expect("l'ouverture");
+        let appel = |outil: &str, args: Value| b.call(outil, args.clone()).unwrap_or_else(|e| panic!("{outil} {args} : {e}"));
+        appel("put_fiche", json!({"record": {"name": "la reprise", "about": "La fiche la reprise.", "state": "current"}}));
+        for section in ["Reprise", "Autre"] {
+            let cle = json!({"fiche": "la reprise", "source": "sources/essai.md", "section": section});
+            let mut record = cle.clone();
+            record["texte"] = json!(format!("Ce que la section {section} dit de la reprise."));
+            record["niveau"] = json!("L1");
+            record["state"] = json!("current");
+            appel("put_apport", json!({"record": record}));
+            appel("relier_apport", json!({"links": [{"from": {"name": "la reprise"}, "to": cle}]}));
+        }
+        let _ = appel("recall_apports", json!({"query": "reprise", "options": {"limit": 5}}));
+
+        let faible = Arc::downgrade(&b.catalog);
+        drop(b);
+        assert!(
+            faible.upgrade().is_none(),
+            "après le Drop d'une mémoire, quelqu'un tient encore son catalogue ({} détenteur(s)) : une réaction, un fil de fond",
+            faible.strong_count()
+        );
+        let chemin = d.path().to_path_buf();
+        d.close().expect("le dossier de la mémoire s'efface sans erreur");
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        assert!(!chemin.exists(), "un fil a recréé le dossier de la mémoire après son Drop : {}", chemin.display());
+    }
+
     /// **Un backend de code dont la racine a disparu** (ticket du 11 octobre 2026) :
     /// `daemon_status` le dit « racine absente : <chemin> », et chaque outil qui touche
     /// la racine rend l'erreur nommée « la racine du dépôt a disparu (<chemin>) : rouvrez le
