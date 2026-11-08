@@ -81,6 +81,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   lecture seule, une instruction qui échoue (un index absent, un graphe projeté absent) ne fait plus
   refuser les suivantes : les signaux d'une recherche sous instantané ne tombent plus ensemble.
   Une interruption arrête aussi toute la requête, CREATE réécrit compris ; `17a094d12`.
+- **8 nov. — Le code se colore dans le terminal, avec les couleurs de l'IDE.** Un bloc de code
+  de l'agent est colorié par l'hôte (`POST /highlight`, les grammaires tree-sitter de codeparsers)
+  et peint dans la palette du thème « daemon », désormais commun au terminal et à l'IDE
+  (`templates/themes/daemon.json`). Le bloc se tient entier jusqu'à sa clôture, se replie à la
+  largeur sans perdre un caractère, et reste lisible sans couleur quand la langue est inconnue.
+  f2e6e2521, 3696a71cb.
 - **7 nov. — Le Daemon Code Summoning dans le terminal.** Quand l'agent réfléchit, des runes
   tournent autour de ⛧ (« INVOCATION DU CODE… ») ; quand un outil lit, un symbole alchimique se
   transmute ; quand il écrit ou exécute, le Glitch tire « COMPILING CURSE » et ses frères. C'est
