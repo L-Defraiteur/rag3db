@@ -51,3 +51,45 @@ Le lot du chat de hooks-essai (A, B, la page, premier-jeton : la course de `Flux
 - Un fichier de témoin laissé indexé dans mon worktree de luciepc par le « rouge d'abord » : mes
   scripts remettent l'index et la copie depuis HEAD.
 - Un commit par chemins qui oubliait un fichier neuf (deux fois) : `git add` d'abord, `status` lu après.
+
+## La nuit du 8 novembre (de 1 h à 7 h)
+
+Poussé sur master, dans l'ordre de c7, chaque lot après une passe complète VERT puis un rejeu
+court sur le master du moment, sous `poste push`, avec les trois contrôles :
+
+| lot | hash | ce qu'il fait |
+|---|---|---|
+| compte des suites de run_e2e.sh | 91543d7f0 | `--test e2e` est le binaire, le filtre désigne la suite ; « 1 sur 1 » pour une suite jouée |
+| équipier jamais muet | aff3611fb | un pas sans step_done écrit sa réponse ; la request dit d'où part la tâche |
+| commandes par la porte déclarée | ad496c462 | run_command dans une tâche à porte, l'approval dans la boîte, le oui l'accorde ; la course de la boîte (un oui posté pendant le dernier pas se perdait) |
+| ticket des essais réels | eb154bf5f | les constats de c7 aux essais 3 à 5 |
+| état d'attente | b0301a0e3 | une question sans réponse suspend l'équipier, sans appel au modèle, ni réussi ni raté ni dans les 40 |
+| bac à sable de cargo | 927ae9680 | la chaîne Rust en lecture, `sandbox.env` avec `{task_dir}` et `{repo_target}`, un target partagé par dépôt sous verrou et plafond, /dev/null ouvert, `taches purge` |
+
+Prêt, VERT, et en attente de la fenêtre de 7 h 30 : le fil par pas (un pas repart d'une session
+neuve avec la demande en cours et ses step_done) et l'arrêt d'inactivité retenu par un équipier en
+route (branche `equipier-fil-par-pas-2`).
+
+La mesure qui a décidé du fil par pas, prise sur les journaux des runs de l'essai 3 : l'entrée du
+premier appel d'un pas montait de 5 275 jetons au pas 1 à 122 242 au pas 10, et le pas 5 en
+envoyait environ 950 000 en trois minutes. La mesure d'après se prendra sur un essai de c7 une
+fois le lot dans l'hôte de Lucie.
+
+Rouges de la nuit, chacun nommé et départagé :
+
+- un SIGSEGV à la sortie du binaire e2e après e2e_equipier vert (une fois, vert seul) ;
+- e2e_juge où Gemini range le `fichier` obligatoire en description_trompeuse plutôt qu'en
+  parametre_devrait_etre_optionnel (deux fois sur cinq sur la tête du lot, vert deux fois sur
+  master seul et trois fois sur la tête : variance du classement) ;
+- deux trous de la même course dans la boîte de l'équipier, vus par la passe du lot des
+  commandes sous la charge de la lib entière, corrigés dans le lot avec un témoin rouge sans eux.
+
+## Ce qui reste, après la fenêtre
+
+1. La reprise sur 429/503 : hors de max_failed_steps, une fenêtre de quota avant de reprendre.
+2. Le libellé du crochet, et le gabarit `motif-ailleurs` introuvable hors du crate (ticket des
+   essais, point 8).
+3. Le juge qui note chaque pas comme la tâche entière, la consigne qui ne retient pas la
+   clôture, la reprise à dire (ticket des essais, points 4, 5 et 7).
+4. Puis la liste d'avant : réacteur sous charge, page 03, noms à plusieurs définitions, tâche
+   jetable, témoins sous charge.
