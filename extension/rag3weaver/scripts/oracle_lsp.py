@@ -298,19 +298,23 @@ def main():
     s = Serveur(commande, projet, options)
     if indexe:
         fond = langage == "cpp" and os.environ.get("ORACLE_BG_INDEX") == "1"
-        if fond:
-            # clangd ne lit compile_commands et ne lance son index d'arrière-plan qu'au premier
-            # fichier ouvert : on en ouvre un avant d'attendre.
-            premier = os.path.join(racine, echantillon[0]["de"]) if echantillon else ""
-            if premier and os.path.exists(premier):
-                s.ouvrir(premier, langue_de(langues, premier))
-        attente = s.attendre_le_repos(plafond=int(os.environ.get("ORACLE_PLAFOND", "1800")), exiger=fond)
-        print(f"{langage} : indexation " + (f"finie en {attente:.0f} s" if attente is not None else "pas finie au plafond"), flush=True)
-        # Un index d'arrière-plan à moitié fait recrée le neutre qu'il départage : on refuse de juger.
-        # Une indexation jamais annoncée ne prouve pas qu'elle est finie : en arrière-plan, on l'exige.
-        if os.environ.get("ORACLE_BG_INDEX") == "1" and (attente is None or not s.progres_vu):
+        # ORACLE_EXIGER=1 : une indexation annoncée par `$/progress` est exigée de tout serveur, pas
+        # seulement de l'index d'arrière-plan de clangd (8 novembre 2026 : rust-analyzer, pyright et
+        # typescript-language-server étaient tenus prêts sur 30 s de calme).
+        exiger = fond or os.environ.get("ORACLE_EXIGER") == "1"
+        # Un serveur ne charge souvent son projet qu'au premier fichier ouvert (clangd lit alors
+        # compile_commands) : on en ouvre un avant d'attendre, quel que soit le langage.
+        premier = os.path.join(racine, echantillon[0]["de"]) if echantillon else ""
+        if premier and os.path.exists(premier):
+            s.ouvrir(premier, langue_de(langues, premier))
+        attente = s.attendre_le_repos(plafond=int(os.environ.get("ORACLE_PLAFOND", "1800")), exiger=exiger)
+        print(f"{langage} : indexation " + (f"finie en {attente:.0f} s" if attente is not None else "pas finie au plafond")
+              + f", progrès annoncé : {'oui' if s.progres_vu else 'non'}", flush=True)
+        # Un index à moitié fait recrée le neutre qu'il départage : on refuse de juger.
+        # Une indexation jamais annoncée ne prouve pas qu'elle est finie : quand on l'exige, on s'arrête.
+        if exiger and (attente is None or not s.progres_vu):
             s.p.terminate()
-            raise SystemExit("ROUGE : l'indexation d'arrière-plan n'a pas fini au plafond ; aucun verdict sur un index partiel")
+            raise SystemExit("ROUGE : l'indexation n'a pas fini au plafond ou n'a jamais été annoncée ; aucun verdict sur un index partiel")
     verdicts = Counter()
     par_marque = defaultdict(Counter)
     t0 = time.time()
