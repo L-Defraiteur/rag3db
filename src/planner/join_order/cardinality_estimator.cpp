@@ -209,8 +209,10 @@ uint64_t CardinalityEstimator::getNumRels(const Transaction* transaction,
     const std::vector<table_id_t>& tableIDs) const {
     cardinality_t numRels = 0u;
     for (auto tableID : tableIDs) {
-        numRels +=
-            storage::StorageManager::Get(*context)->getTable(tableID)->getNumTotalRows(transaction);
+        numRels += storage::StorageManager::Get(*context)
+                       ->getTable(tableID)
+                       ->cast<storage::RelTable>()
+                       .getEstimatedNumRels(transaction);
     }
     return atLeastOne(numRels);
 }

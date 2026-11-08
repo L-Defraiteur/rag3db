@@ -643,6 +643,10 @@ bool RelTable::checkpoint(main::ClientContext* context, TableCatalogEntry* table
     return ret;
 }
 
+row_idx_t RelTable::getEstimatedNumRels(const Transaction* transaction) {
+    return getNumTotalRows(transaction);
+}
+
 row_idx_t RelTable::getNumTotalRows(const Transaction* transaction) {
     auto numLocalRows = 0u;
     if (auto localTable = transaction->getLocalStorage()->getLocalTable(tableID)) {

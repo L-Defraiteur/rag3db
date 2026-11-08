@@ -6,9 +6,14 @@
 #include <functional>
 #include <string>
 
+#include "catalog/catalog.h"
+#include "catalog/catalog_entry/table_catalog_entry.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
+#include "storage/storage_manager.h"
+#include "storage/table/rel_table.h"
+#include "transaction/transaction.h"
 
 namespace rag3db {
 namespace testing {
@@ -151,6 +156,90 @@ TEST_F(TableAnalyzeTest, TheCheckpointRecalibratesTheCardinalityOnLiveRows) {
     database.reset();
     createDBAndConn();
     EXPECT_EQ(single("CALL STATS_INFO('Doc') RETURN cardinality;"), 1000);
+}
+
+// L'estimation du nombre de relations que lit le planificateur (ticket
+// 2026-10-05-copy-de-relations-annule-gonfle-l-estimation) : nextRelOffset, l'allocateur des
+// identités, qu'aucune annulation ni aucun DELETE ne recule, comptait toutes les relations jamais
+// créées. Le point de reprise la recale sur les relations vivantes, et la réouverture la garde.
+class RelEstimateTest : public TableAnalyzeTest {
+protected:
+    void SetUp() override {
+        TableAnalyzeTest::SetUp();
+        if (IsSkipped()) {
+            return;
+        }
+        copyRows(0, 100, [](int64_t id) { return "doc " + std::to_string(id); });
+        ok("CREATE REL TABLE Link(FROM Doc TO Doc);");
+    }
+
+    // count relations de i % 100 vers (7 i) % 100.
+    void copyLinks(int64_t count) {
+        {
+            std::ofstream csv(csvPath);
+            for (auto i = 0; i < count; i++) {
+                csv << i % 100 << "," << (7 * i) % 100 << "\n";
+            }
+        }
+        ok("COPY Link FROM '" + csvPath + "';");
+    }
+
+    // L'estimation que lit le planificateur, dans une transaction de lecture.
+    int64_t estimatedLinks() {
+        auto begin = conn->query("BEGIN TRANSACTION READ ONLY;");
+        EXPECT_TRUE(begin->isSuccess()) << begin->getErrorMessage();
+        auto* context = conn->getClientContext();
+        auto* transaction = transaction::Transaction::Get(*context);
+        const auto* entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, "Link");
+        const auto estimate = static_cast<int64_t>(storage::StorageManager::Get(*context)
+                                                       ->getTable(entry->getTableID())
+                                                       ->cast<storage::RelTable>()
+                                                       .getEstimatedNumRels(transaction));
+        EXPECT_TRUE(conn->query("COMMIT;")->isSuccess());
+        return estimate;
+    }
+
+    void expectTheEstimateIsTheCount(const std::string& when) {
+        SCOPED_TRACE(when);
+        EXPECT_EQ(estimatedLinks(), single("MATCH ()-[l:Link]->() RETURN count(l);"));
+    }
+
+    void reopen() {
+        conn.reset();
+        database.reset();
+        createDBAndConn();
+    }
+};
+
+TEST_F(RelEstimateTest, ARolledBackCopyIsNotCountedAfterTheCheckpoint) {
+    copyLinks(300);
+    ok("BEGIN TRANSACTION;");
+    copyLinks(500);
+    ok("ROLLBACK;");
+    ok("CHECKPOINT;");
+    expectTheEstimateIsTheCount("après le point de reprise");
+    reopen();
+    expectTheEstimateIsTheCount("après la réouverture");
+}
+
+TEST_F(RelEstimateTest, DeletedRelsAreNotCountedAfterTheCheckpoint) {
+    copyLinks(500);
+    ok("MATCH (a:Doc)-[l:Link]->(b:Doc) WHERE a.id < 40 DELETE l;");
+    ok("CHECKPOINT;");
+    expectTheEstimateIsTheCount("après le point de reprise");
+    reopen();
+    expectTheEstimateIsTheCount("après la réouverture");
+}
+
+// Entre deux points de reprise, les relations validées comptent tout de suite, et celles de la
+// transaction en cours aussi : l'estimation ne sous-compte jamais une table qui grandit.
+TEST_F(RelEstimateTest, CommittedRelsCountBeforeTheCheckpoint) {
+    copyLinks(300);
+    ok("CHECKPOINT;");
+    copyLinks(200);
+    expectTheEstimateIsTheCount("après un second COPY, sans point de reprise");
+    reopen();
+    expectTheEstimateIsTheCount("après la réouverture");
 }
 
 } // namespace testing

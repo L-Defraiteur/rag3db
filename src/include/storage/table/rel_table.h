@@ -218,6 +218,10 @@ public:
     void retireGenerationsBefore(common::transaction_t oldestReaderTS) override;
 
     common::row_idx_t getNumTotalRows(const transaction::Transaction* transaction) override;
+    // L'estimation du nombre de relations que lit le planificateur (CardinalityEstimator::
+    // getNumRels). getNumTotalRows n'en est pas une : nextRelOffset est l'allocateur des
+    // identités des relations, qu'aucune annulation ni aucun DELETE ne recule.
+    common::row_idx_t getEstimatedNumRels(const transaction::Transaction* transaction);
 
     RelTableData* getDirectedTableData(common::RelDataDirection direction) const;
 
