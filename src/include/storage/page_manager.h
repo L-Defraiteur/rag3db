@@ -41,6 +41,7 @@ public:
     void rollbackCheckpoint() { freeSpaceManager->rollbackCheckpoint(); }
 
     common::row_idx_t getNumFreeEntries() const { return freeSpaceManager->getNumEntries(); }
+    common::page_idx_t getEndOfFreePages() const { return freeSpaceManager->getEndOfFreePages(); }
     std::vector<PageRange> getFreeEntries(common::row_idx_t startOffset,
         common::row_idx_t endOffset) const {
         return freeSpaceManager->getEntries(startOffset, endOffset);
