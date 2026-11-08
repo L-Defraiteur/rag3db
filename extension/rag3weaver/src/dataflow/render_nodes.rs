@@ -621,12 +621,20 @@ pub fn resolve_template_in(spec: &str, templates_dir: &std::path::Path) -> Resul
         ));
     }
     let chemin = templates_dir.join(format!("{spec}.md.jinja"));
-    std::fs::read_to_string(&chemin)
-        .map(std::borrow::Cow::Owned)
-        .map_err(|e| format!(
-            "gabarit '{spec}' : ni un nom fourni (default, compact), ni du Jinja, ni {} ({e})",
-            chemin.display()
-        ))
+    // **Le gabarit livré du même nom, sinon** (8 novembre 2026, essai 3 de c7 : le
+    // crochet d'edit_file d'un hôte lancé hors du crate ne trouvait pas
+    // `motif-ailleurs`, « ni un nom fourni, ni du Jinja »). Le dossier des
+    // gabarits se lit d'abord : une copie locale garde la main ; le binaire
+    // embarque `templates/render/` pour tout hôte, d'où qu'il soit lancé.
+    std::fs::read_to_string(&chemin).map(std::borrow::Cow::Owned).or_else(|e| {
+        crate::builtin_templates::get(&format!("render/{spec}.md.jinja"))
+            .and_then(|b| std::str::from_utf8(b).ok())
+            .map(std::borrow::Cow::Borrowed)
+            .ok_or_else(|| format!(
+                "gabarit '{spec}' : ni un nom fourni (default, compact), ni du Jinja, ni {} ({e}), ni un gabarit livré (templates/render/{spec}.md.jinja)",
+                chemin.display()
+            ))
+    })
 }
 
 /// Format a JSON value as a tree without shortening domain values or arrays.
@@ -1304,6 +1312,17 @@ mod tests {
         }
     }
     const IMPL: &str = "impl Compteur {\n    pub fn inc(&mut self) { …\n\n    pub fn total(&self) -> u32 { …\n}";
+
+    /// **Un gabarit nommé se trouve hors du crate** : un dossier de gabarits vide (l'hôte
+    /// lancé ailleurs que dans extension/rag3weaver) rend le gabarit livré du même nom.
+    #[test]
+    fn a_named_template_falls_back_to_the_shipped_one() {
+        let vide = tempfile::tempdir().unwrap();
+        let g = resolve_template_in("motif-ailleurs", vide.path()).expect("le gabarit livré");
+        assert_eq!(g.as_ref(), include_str!("../../templates/render/motif-ailleurs.md.jinja"));
+        let e = resolve_template_in("n-existe-pas", vide.path()).err().expect("refusé");
+        assert!(e.contains("ni un gabarit livré"), "{e}");
+    }
 
     /// Un extrait de code se lit avec les lignes **du fichier** : la
     /// méthode repliée dit son empan, le bas finit l'impl, sans `…`.
