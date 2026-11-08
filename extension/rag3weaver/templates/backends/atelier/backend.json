@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "kind": "project",
+  "name": "atelier",
+  "database": "atelier.rag3db",
+  "embeddings": {
+    "model": "granite-278m",
+    "dimensions": 768
+  },
+  "entities": {},
+  "tools": {
+    "attach_worktree": {
+      "graph": "../../tools/attach_worktree.mmd",
+      "description": "Attacher un worktree déjà sur ce poste : il est inscrit, ouvert, et son index part en fond. Le chemin suffit.",
+      "policy": {
+        "attach_worktrees": true
+      }
+    },
+    "list_worktrees": {
+      "graph": "../../tools/list_worktrees.mmd",
+      "description": "Les worktrees attachés : chemin, dépôt, branche, état de l'index.",
+      "policy": {
+        "attach_worktrees": true
+      }
+    }
+  }
+}

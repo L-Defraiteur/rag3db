@@ -293,6 +293,11 @@ pub struct ToolPolicy {
     /// `with_tools`, il appellerait des outils.
     #[serde(default)]
     pub call_models: bool,
+    /// **Attacher des worktrees par l'hôte** (l'atelier, page 03 du 7 novembre 2026) :
+    /// inscrire un worktree, l'ouvrir et lancer son index. Un geste de l'hôte, pas une
+    /// écriture du workspace : il se déclare outil par outil, comme les commandes.
+    #[serde(default)]
+    pub attach_worktrees: bool,
     /// **Appelable d'un écran** (un `Effet` d'un graphe de clic, par `/ide/call`) : `"lecture"`
     /// ou `"ecriture"` (alors derrière un `Confirmer`). Sans lui, aucun écran ne l'appelle —
     /// tranché par l'orchestration le 18 octobre 2026, à relire par Lucie : les droits d'écran
@@ -399,6 +404,7 @@ const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "Scan
 const WRITE_NODES: &[&str] = &["EditFileNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
 const MODEL_NODES: &[&str] = &["Decide"];
+const WORKTREE_NODES: &[&str] = &["WorktreeNode"];
 
 /// **Les deux nœuds réservés aux graphes réactifs.** Un outil est appelé par
 /// l'agent, une réaction par un événement, et ces deux nœuds n'ont de sens
@@ -440,6 +446,7 @@ pub fn est_un_noeud_reactif(node_type: &str) -> bool {
 /// jamais : un crochet qui lance un processus sur une lecture de fichier
 /// n'a pas de cas d'usage honnête, et c'est écrit ici plutôt que découvert.
 const HOOK_FORBIDDEN: &[&str] = &[
+    "WorktreeNode",
     "EntityRecordNode",
     "EntityBatchNode",
     "RelationBatchNode",
@@ -518,6 +525,9 @@ pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
     if policy.call_models {
         nodes.extend_from_slice(MODEL_NODES);
     }
+    if policy.attach_worktrees {
+        nodes.extend_from_slice(WORKTREE_NODES);
+    }
     nodes
 }
 
@@ -532,6 +542,8 @@ pub fn capacite_pour(node_type: &str) -> Option<&'static str> {
         Some("run_commands")
     } else if MODEL_NODES.contains(&node_type) {
         Some("call_models")
+    } else if WORKTREE_NODES.contains(&node_type) {
+        Some("attach_worktrees")
     } else {
         None
     }
@@ -808,7 +820,7 @@ mod tests {
     /// soit la politique déclarée.
     #[test]
     fn un_crochet_n_ecrit_pas_ne_bloque_pas_ne_lance_pas() {
-        let tout = ToolPolicy { read_files: true, write_files: true, run_commands: true, call_models: true, ecran: None };
+        let tout = ToolPolicy { read_files: true, write_files: true, run_commands: true, call_models: true, attach_worktrees: true, ecran: None };
         let nodes = hook_nodes(&tout);
         for interdit in ["EntityRecordNode", "SnapshotFinishNode", "IndexNode", "WaitOutputNode", "RunCommandNode", "EditFileNode"] {
             assert!(!nodes.contains(&interdit), "{interdit} permis dans un crochet");
@@ -848,6 +860,7 @@ mod tests {
                 write_files: true,
                 run_commands: run,
                 call_models: false,
+                attach_worktrees: false,
                 ecran: None,
             };
             assert!(
