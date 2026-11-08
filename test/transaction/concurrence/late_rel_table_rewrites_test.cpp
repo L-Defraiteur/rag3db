@@ -12,6 +12,7 @@
 // source pour le sens avant, par destination pour le sens arrière) : les deux ensembles de
 // (relation, source, destination) doivent être égaux, base ouverte puis rouverte.
 
+#include <algorithm>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -305,6 +306,83 @@ TEST_F(LateRelTableRewrites, AListThatGrowsLeavesItsUntouchedNeighboursInPlace) 
     database.reset();
     createDBAndConn();
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
+// Le chemin réel d'un `index confirm` sur les petites tables (trace Cypher du 8 novembre 2026,
+// lib d'étude) : elles s'écrivent par `UNWIND $items … MERGE (a)-[r]->(b) SET r.line = …`, en
+// instructions validées une à une, jamais par COPY ; aucune arête n'est effacée, sauf à la fin, par
+// le DETACH DELETE des scopes des fichiers disparus (103 dans la trace). La table Scope→Scope est liée
+// à elle-même, comme INHERITS_FROM : un scope effacé y est source et destination.
+TEST_F(LateRelTableRewrites, MergedRelsKeepBothDirectionsThroughADetachDeleteOfTheirNodes) {
+    constexpr int64_t SCOPES = 6000, SYMBOLS = 3000;
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(SCOPES - 1) + ") AS i CREATE (:Scope {id: i});");
+    ok("UNWIND range(0, " + std::to_string(SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64, via STRING);");
+    ok("CREATE REL TABLE S(FROM Scope TO Scope, line INT64);");
+    // Un passage d'index : par lots de 200 sources, les arêtes lues, puis MERGE … SET, puis relues.
+    auto pass = [&](int round) {
+        for (int64_t first = 0; first < SCOPES; first += 200) {
+            const auto last = std::min(first + 199, SCOPES - 1);
+            const auto range = std::to_string(first) + ", " + std::to_string(last);
+            ok("UNWIND range(" + range + ") AS f MATCH (a:Scope {id: f})-[:R]->(b:Symbol) RETURN a.id, b.id;");
+            ok("UNWIND range(" + range + ") AS f WITH f, CASE WHEN f % 3 = 0 THEN (f * 7 + " +
+               std::to_string(round) + ") % " + std::to_string(SYMBOLS) +
+               " ELSE (f % 4) * 600 END AS t MATCH (a:Scope {id: f}), (b:Symbol {id: t}) MERGE "
+               "(a)-[r:R]->(b) SET r.line = f * 10 + " + std::to_string(round) + ", r.via = 'p" +
+               std::to_string(round) + "';");
+            ok("UNWIND range(" + range + ") AS f WITH f WHERE f % 2 = 0 MATCH (a:Scope {id: f}), "
+               "(b:Scope {id: (f * 13 + " + std::to_string(round) + ") % " + std::to_string(SCOPES) +
+               "}) MERGE (a)-[r:S]->(b) SET r.line = f + " + std::to_string(round) + ";");
+            ok("UNWIND range(" + range + ") AS f MATCH (a:Scope {id: f})-[:R]->(b:Symbol) RETURN a.id, b.id;");
+        }
+    };
+    pass(0);
+    ok("CHECKPOINT;");
+    pass(1);
+    // Les scopes des fichiers disparus, effacés avec leurs arêtes, sources et destinations.
+    ok("UNWIND range(0, 102) AS i MATCH (n:Scope {id: (i * 53) % " + std::to_string(SCOPES) +
+       "}) DETACH DELETE n;");
+    ok("CHECKPOINT;");
+    std::set<int64_t> sources, destinations;
+    for (int64_t s = 0; s < SCOPES; s++) {
+        sources.insert(s);
+    }
+    for (int64_t d = 0; d < SYMBOLS; d++) {
+        destinations.insert(d);
+    }
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "R, base ouverte";
+    // La table Scope→Scope, ses deux sens.
+    Edges fwd, bwd;
+    for (int64_t node = 0; node < SCOPES; node++) {
+        for (const bool forward : {true, false}) {
+            auto result = conn->query(std::string("MATCH (a:Scope)-[r:S]->(b:Scope) WHERE ") +
+                                      (forward ? "a" : "b") + ".id = " + std::to_string(node) +
+                                      " RETURN offset(id(r)), a.id, b.id;");
+            while (result->isSuccess() && result->hasNext()) {
+                auto row = result->getNext();
+                (forward ? fwd : bwd)
+                    .emplace(row->getValue(0)->getValue<int64_t>(),
+                        std::make_pair(row->getValue(1)->getValue<int64_t>(),
+                            row->getValue(2)->getValue<int64_t>()));
+            }
+        }
+    }
+    uint64_t gapsS = 0;
+    for (auto& [rel, ends] : fwd) {
+        if (bwd.count(rel) != 1 || fwd.count(rel) != 1 || bwd.find(rel)->second != ends) {
+            if (++gapsS <= 10) {
+                ADD_FAILURE() << "[check: directions-agree] S relation " << rel << " " << ends.first
+                              << " -> " << ends.second;
+            }
+        }
+    }
+    std::cout << "S : sens avant " << fwd.size() << ", sens arrière " << bwd.size() << ", écarts "
+              << gapsS << "\n";
+    EXPECT_EQ(fwd.size(), bwd.size());
+    EXPECT_EQ(gapsS, 0u) << "S, base ouverte";
 }
 
 TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderDrains) {
