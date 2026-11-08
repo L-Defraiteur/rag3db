@@ -287,7 +287,10 @@ protected:
         if (inMemMode) {
             GTEST_SKIP() << "on-disk database needed";
         }
-        systemConfig->bufferPoolSize = 256ull << 20;
+        // 512 Mio : sous 256, le COPY lui-même bute sur « buffer pool is full » (l'index HNSW de
+        // 30 000 vecteurs de 768 floats n'y tient pas), et le témoin ne juge plus le mélange.
+        // Budget du COPY : 512 Mio / (3 × 5) ≈ 34 Mio, soit trois vidages au moins sur 92 Mio.
+        systemConfig->bufferPoolSize = 512ull << 20;
         systemConfig->maxNumThreads = 4;
         createDBAndConn();
         const auto extension =
