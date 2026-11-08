@@ -43,23 +43,6 @@ pour les trois unités, par une surcharge `~/.config/systemd/user/rag3weaver-emb
 de chaque unité : posée après le départ de 12 h 07, elle ne vaut pour aucune des trois avant leur
 prochain redémarrage.
 
-## Une hypothèse à vérifier, sans conclure : un jeu de seat1
-
-Lucie joue de temps en temps depuis luciepc, sur seat1. Lu le 8 novembre vers 12 h 30 (lecture
-seule, `loginctl seat-status`, `/proc/<pid>/fd`) :
-
-- seat1 possède **card0** (07:00.0) : sa session (gamescope, Xwayland, steam, steamwebhelper)
-  n'ouvre que `renderD130`, le rendu de card0 ;
-- card2 (04:00.0, `renderD129`), celle des trois services, est au seat0 : le bureau (Xwayland
-  avec `/dri/card2`, plasmashell, systemsettings, megasync) y tient un peu de rendu, à côté des
-  trois `rag3weaver-embeddings` ;
-- en Vulkan, l'ordre des deux R9700 met card2 en `GPU0` (les services y sont par `gpu:0`).
-
-Un jeu de seat1 rend donc normalement sur card0 et ne prend pas la mémoire de card2. Il ne la
-prendrait que s'il choisissait lui-même le premier périphérique Vulkan (`GPU0` = card2) au lieu de
-la carte de son seat. À vérifier à la prochaine sortie, par le `journal-<modèle>.log` de l'unité, la
-VRAM de card2 (`mem_info_vram_used`) et les processus qui ouvrent `renderD129` à ce moment-là.
-
 ## Ce qu'il faut pour le fermer
 
 À la prochaine sortie d'une de ces unités, lire son `journal-<modèle>.log` et nommer la cause
