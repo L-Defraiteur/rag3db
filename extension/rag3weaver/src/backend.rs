@@ -2354,6 +2354,7 @@ impl PreparedBackend {
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runs_in_flight: crate::dataflow::RunsInFlight::new(),
             ecarts_des_fichiers: Mutex::new(None),
+            ferme: std::sync::atomic::AtomicBool::new(false),
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
@@ -2980,6 +2981,8 @@ pub struct Backend {
     /// base** (lot M3c) : chaque fichier propre contre sa ligne, dans les deux
     /// sens, et les fichiers composés régénérés. `index_state` le dit.
     ecarts_des_fichiers: Mutex<Option<Value>>,
+    /// Fermé par `shutdown()` : une fois suffit, le Drop n'a alors rien à refaire.
+    ferme: std::sync::atomic::AtomicBool,
 }
 /// Entre deux essais de rejoindre un service d'embarquement manquant.
 pub const INTERVALLE_DE_RETENTE_EMBARQUEUR: std::time::Duration = std::time::Duration::from_secs(30);
@@ -5339,6 +5342,10 @@ impl Backend {
     /// Les erreurs des réactions arrêtées sont **dites** ici : leur réacteur
     /// est parti avec elles, et personne d'autre ne les relira.
     pub fn shutdown(&mut self) -> Result<(), String> {
+        // Une fois suffit : le Drop d'un backend déjà fermé n'a rien à refaire.
+        if self.ferme.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return Ok(());
+        }
         let mut figees = Vec::new();
         for erreur in self.stop_reactions() {
             eprintln!("[réaction] {erreur}");
@@ -5358,23 +5365,38 @@ impl Backend {
                 figees.join(" ; ")
             ));
         }
-        // **Les indexations en cours s'arrêtent au prochain paquet validé**, et
-        // on les attend avant de fermer la base : la relance reprendra là
-        // (marche 0 de la forme C). Le fil d'indexation tient le catalogue
-        // pendant tout son plein texte, d'où l'arrêt avant le verrou.
-        // L'indexation n'existe qu'avec la feature `code`.
-        #[cfg(feature = "code")]
-        {
-            let attendues = crate::dataflow::index_nodes::stop_indexings_of(&self.catalog);
-            if attendues > 0 {
-                eprintln!("[index] {attendues} indexation(s) arrêtée(s) ; relancer index reprend là");
-            }
+        // **Les fils de fond du catalogue s'arrêtent au prochain paquet**, et on
+        // les attend avant de fermer la base : ses indexations (la relance
+        // reprendra là, marche 0 de la forme C) et son rebâti du plein texte (il
+        // reprendra à l'ouverture). Un fil de fond tient le catalogue paquet par
+        // paquet, d'où l'arrêt avant le verrou. Un seul registre pour tous
+        // (`catalog_threads`, 8 novembre 2026).
+        let attendus = crate::catalog_threads::stop_and_join(&self.catalog);
+        if attendus > 0 {
+            eprintln!("[backend] {attendus} fil(s) de fond arrêté(s) au prochain paquet ; relancer index reprend là");
         }
         self.catalog
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .shutdown()
             .map_err(|e| e.to_string())
+    }
+}
+
+/// **Un backend qu'on laisse tomber se ferme comme `shutdown()`** (8 novembre 2026,
+/// ticket « un backend écrit encore dans son dossier après son Drop ») : ses
+/// réactions attendues, ses fils de fond arrêtés au prochain paquet et attendus,
+/// puis son catalogue fermé, vue de lecture comprise. Sans lui, un backend lâché
+/// sans `shutdown()` (les tests, une erreur qui remonte) laissait ses réacteurs et
+/// ses fils tenir le catalogue, qui se fermait plus tard sur un autre fil, quand
+/// son dossier n'était peut-être plus là : des TempDir à moitié effacés, une
+/// fermeture du plein texte en erreur, un SIGSEGV à la sortie. Une réaction figée
+/// se dit ici comme à `shutdown()`, et le catalogue reste alors ouvert.
+impl Drop for Backend {
+    fn drop(&mut self) {
+        if let Err(e) = self.shutdown() {
+            eprintln!("[backend] arrêt au Drop : {e}");
+        }
     }
 }
 
@@ -5858,6 +5880,7 @@ mod tests {
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runs_in_flight: crate::dataflow::RunsInFlight::new(),
             ecarts_des_fichiers: Mutex::new(None),
+            ferme: std::sync::atomic::AtomicBool::new(false),
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -6081,6 +6104,7 @@ mod tests {
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runs_in_flight: crate::dataflow::RunsInFlight::new(),
             ecarts_des_fichiers: Mutex::new(None),
+            ferme: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
