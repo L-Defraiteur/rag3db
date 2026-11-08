@@ -5,6 +5,8 @@ fabriquer de fausses fiches, ou en construire de vraies ». Puis, 12 h 20 : « o
 chat et les outils, et on lui dit : ce bout de mémoire est-il pertinent avec le contexte de
 l'agent ». La question ci-dessous est la sienne, mot pour mot.
 
+> **Suite** : les modèles plus gros (Qwen2.5-1.5B, Qwen3-4B), la fin de conversation, le préfixe partagé, la liste et la recommandation finale sont dans la page 03 (`03-le-juge-local.md`).
+
 **En une phrase : aucun petit modèle ne sait le faire en zéro-coup.** Qwen2.5-0.5B, SmolLM2-360M et
 Laya sont au hasard ; leur score suit le contexte et pas la fiche. Gemini 3.8 Flash retrouve la
 bonne fiche dans 81 à 84 % des cas. Le meilleur candidat local est le dense bge-m3 déjà en service
