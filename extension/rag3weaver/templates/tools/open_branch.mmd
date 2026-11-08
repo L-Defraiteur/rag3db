@@ -1,0 +1,13 @@
+%% tool: open_branch
+%% description: Ouvre une branche dans un worktree frère du dépôt d'un worktree attaché ou d'un dépôt de ce poste, puis l'attache (inscrit, ouvert, index lancé en fond). Une branche qui n'existe pas se crée depuis `from` (ou la tête du dépôt). La commande git lancée est dite dans la réponse.
+%% param: path string! -- Un worktree ou un dépôt de ce poste (`~/` s'étend).
+%% param: branch string! -- La branche à ouvrir.
+%% param: from string = "" -- D'où part une branche neuve : une branche, un commit ; vide, la tête du dépôt.
+%% result: worktree.result
+%%
+%% C'est l'hôte qui lance `git worktree add`, pas l'agent : le flux (sujet
+%% `repos`, RepoAttached) et la boîte voient le geste, et la commande se lit dans
+%% la réponse. Rien ne part vers un amont : ni fetch, ni push.
+
+graph LR
+    worktree["WorktreeNode(action='branch', path=$path, branch=$branch, from=$from)"]

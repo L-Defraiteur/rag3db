@@ -62,6 +62,31 @@ fn etat_de_l_index(etat: &Value, manifeste: &Path) -> String {
     }
 }
 
+/// Une commande git dans `dossier`, sa sortie ; l'erreur dit la commande et ce que
+/// git a écrit.
+fn git(dossier: &Path, args: &[&str]) -> Result<String, String> {
+    let sortie = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dossier)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {} : {e}", args.join(" ")))?;
+    if !sortie.status.success() {
+        return Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&sortie.stderr).trim()));
+    }
+    Ok(String::from_utf8_lossy(&sortie.stdout).trim().to_string())
+}
+
+/// Le nom d'un dossier frère pour une branche : `/` devient `-`, le reste qui n'est
+/// pas sûr dans un nom de dossier devient `_`.
+fn dossier_de_branche(branche: &str) -> String {
+    branche.chars().map(|c| match c {
+        '/' => '-',
+        c if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') => c,
+        _ => '_',
+    }).collect()
+}
+
 impl WorktreeHost for HoteDesWorktrees {
     fn attach(&self, path: &Path) -> Result<String, String> {
         let worktree = path
@@ -114,6 +139,50 @@ impl WorktreeHost for HoteDesWorktrees {
                 worktree.display(),
                 etat_de_l_index(&hote.state(), &manifeste)
             ),
+        })
+    }
+
+    fn open_branch(&self, path: &Path, branch: &str, from: Option<&str>) -> Result<String, String> {
+        let lieu = path
+            .canonicalize()
+            .map_err(|e| format!("{} n'existe pas ({e}) : donnez un worktree ou un dépôt de ce poste", path.display()))?;
+        let depot = PathBuf::from(git(&lieu, &["rev-parse", "--show-toplevel"]).map_err(|_| format!("{} n'est dans aucun dépôt git : open_branch ouvre une branche d'un dépôt", lieu.display()))?);
+        // Le dépôt principal (pas un worktree lié) : ses worktrees frères vivent à côté de lui.
+        let commun = git(&depot, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+        let principal = Path::new(&commun).parent().map(Path::to_path_buf).unwrap_or_else(|| depot.clone());
+        git(&principal, &["check-ref-format", "--branch", branch]).map_err(|_| format!("« {branch} » n'est pas un nom de branche valide"))?;
+        let nom = principal.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "depot".into());
+        let parent = principal.parent().ok_or_else(|| format!("{} n'a pas de dossier parent", principal.display()))?;
+        let frere = parent.join(format!("{nom}-{}", dossier_de_branche(branch)));
+        // La branche déjà ouverte dans un worktree : on l'attache, sans git.
+        let ouverts = git(&principal, &["worktree", "list", "--porcelain"])?;
+        let mut deja: Option<PathBuf> = None;
+        let mut courant: Option<PathBuf> = None;
+        for l in ouverts.lines() {
+            if let Some(p) = l.strip_prefix("worktree ") {
+                courant = Some(PathBuf::from(p));
+            } else if l.strip_prefix("branch ").is_some_and(|b| b == format!("refs/heads/{branch}")) {
+                deja = courant.clone();
+            }
+        }
+        let (worktree, commande) = match deja {
+            Some(w) => (w, None),
+            None => {
+                if frere.exists() {
+                    return Err(format!("{} existe déjà et ne tient pas la branche {branch} : choisissez une autre branche, ou attachez ce dossier", frere.display()));
+                }
+                let existe = git(&principal, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]).is_ok();
+                let frere_txt = frere.display().to_string();
+                let depart = from.unwrap_or("HEAD");
+                let args: Vec<&str> = if existe { vec!["worktree", "add", &frere_txt, branch] } else { vec!["worktree", "add", "-b", branch, &frere_txt, depart] };
+                git(&principal, &args)?;
+                (frere.clone(), Some(format!("git -C {} {}", principal.display(), args.join(" "))))
+            }
+        };
+        let attache = self.attach(&worktree)?;
+        Ok(match commande {
+            Some(c) => format!("Branche {branch} ouverte dans le worktree {} (commande : `{c}`). {attache}", worktree.display()),
+            None => format!("La branche {branch} est déjà ouverte dans le worktree {} : aucune commande git. {attache}", worktree.display()),
         })
     }
 
@@ -322,5 +391,48 @@ mod tests {
         let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
         assert_eq!(statut, 200);
         fil.join().unwrap();
+    }
+
+    /// **L'atelier ouvre une branche dans un worktree frère** (page 03, le pas d'après
+    /// attach_worktree ; c7 : « aucun git caché : la commande git est dite dans la
+    /// réponse »). Une branche neuve naît dans `<dépôt>-<branche>` à côté du dépôt, le
+    /// worktree est attaché, la réponse dit la commande lancée ; rouvrir la même branche
+    /// ne lance aucune commande ; un nom invalide est refusé.
+    #[test]
+    fn the_workshop_opens_a_branch_in_a_sibling_worktree() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("rag3db-essai");
+        std::fs::create_dir_all(depot.join("src")).unwrap();
+        std::fs::write(depot.join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n").unwrap();
+        for args in [&["init", "-q", "-b", "essai"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"], &["add", "-A"], &["commit", "-q", "-m", "le dépôt"]] {
+            git(&depot, args);
+        }
+        let gabarits = d.path().join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let atelier = gabarits.join("backends/atelier/backend.json");
+        let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("rien"))) });
+        let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines.clone()).with_runs_root(d.path().join("runs")));
+        host.se_connaitre();
+        let h = host.hosted(&atelier).unwrap();
+        host.with_backend(&h, |_| ()).expect("l'atelier s'ouvre");
+        let appel = |args: Value| -> Result<String, String> {
+            host.with_backend(&h, |b| b.call("open_branch", args)).unwrap().map(|r| r["result"].as_str().unwrap_or_default().to_string())
+        };
+
+        let dit = appel(json!({ "path": depot, "branch": "lot/neuve" })).expect("la branche s'ouvre");
+        let frere = d.path().join("rag3db-essai-lot-neuve");
+        assert!(frere.is_dir(), "le worktree frère : {dit}");
+        let tete = std::process::Command::new("git").args(["rev-parse", "--abbrev-ref", "HEAD"]).current_dir(&frere).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&tete.stdout).trim(), "lot/neuve");
+        assert!(dit.contains("Branche lot/neuve ouverte dans le worktree") && dit.contains("worktree add -b lot/neuve") && dit.contains("(commande : `git -C "), "la commande est dite : {dit}");
+        assert!(dit.contains("Worktree attaché") && racines.manifest("code-rag3db-essai-lot-neuve").is_file(), "le worktree est attaché : {dit}");
+        assert!(!dit.contains("backend"), "le vocabulaire de l'utilisatrice : {dit}");
+
+        let encore = appel(json!({ "path": depot, "branch": "lot/neuve" })).expect("rouvrir");
+        assert!(encore.contains("déjà ouverte") && encore.contains("aucune commande git"), "{encore}");
+        let refus = appel(json!({ "path": depot, "branch": "a..b" })).expect_err("un nom invalide");
+        assert!(refus.contains("pas un nom de branche valide"), "{refus}");
     }
 }
