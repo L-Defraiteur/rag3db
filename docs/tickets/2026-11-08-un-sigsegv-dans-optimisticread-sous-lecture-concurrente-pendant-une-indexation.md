@@ -163,6 +163,21 @@ identiques à l'origine.
 **Ce qui n'a pas été joué : `transaction_test` entier.** Il passait 10 cas en 30 minutes sous la
 pression disque de luciepc. Il sera rejoué sur disque calme avant tout rebâti de lib qui prend ce
 lot. D'ici là, aucune lib du magasin ne contient le lot.
+
+**`transaction_test` entier, vert à 19 h 18 m 55 s.** Il a tourné à luciepc sous poste lourd, sur le
+binaire de 62af3ae42, dont le code moteur est celui de 9bae60786. Il est parti à 18 h 19 m 45 s,
+avec une pression disque de 0,9 sur dix secondes, et a duré 59 minutes.
+
+| Résultat | Nombre |
+|---|---|
+| Cas annoncés | 359 |
+| Verts | 357 |
+| Rouges | 0 |
+| Sautés | 2 |
+
+Le code de sortie vaut 0. Les deux cas sautés sont des outils qui attendent une variable
+d'environnement : VectorIndexCrashReopenProbe.OpenInAFreshProcess et WalReader.PrintAFile. Une lib
+du magasin peut désormais prendre le lot.
 - numPages ne baisse plus : la dernière plage libre reste une entrée.
 - returnOwnerlessPages ne rend que ce qui suit la fin de ce qui est tenu. Le relevé passe par
   `reclaimStorage` de chaque table vers un allocateur qui ne fait que noter, puis ajoute le
