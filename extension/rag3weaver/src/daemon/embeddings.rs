@@ -35,7 +35,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use super::{agent, base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
+use super::{base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
 use crate::embedder::{
     budget_batches, embed_char_budget, souffler, DualEmbedder, EmbedError, Embedder,
     SparseEmbedder,
@@ -706,11 +706,22 @@ impl Embedder for DaemonEmbedder {
 
 // ─── Le relecteur et l'OCR, par le démon ─────────────────────────────────────
 
+/// Un délai dépassé devient « service d'embarquement <adresse> muet après N s »
+/// ([`super::muet_apres`]) ; toute autre erreur reste ce qu'elle est.
+fn nommer(e: DaemonError, adresse: &str, delai: std::time::Duration) -> DaemonError {
+    match e {
+        DaemonError::SansReponse { .. } => DaemonError::SansReponse { adresse: adresse.to_string(), cause: super::muet_apres(adresse, delai) },
+        e => e,
+    }
+}
+
 /// **Le relecteur d'un démon** (`POST /rerank`). On s'y attache : le démon
 /// doit déjà répondre et déclarer un relecteur dans son identité.
 pub struct DaemonReranker {
     base: String,
+    adresse: String,
     agent: ureq::Agent,
+    delai: std::time::Duration,
     model: String,
 }
 
@@ -718,12 +729,14 @@ impl DaemonReranker {
     pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
         Self::joindre_dans(adresse, default_embed_timeout())
     }
-    /// [`joindre`](Self::joindre), le délai d'un appel donné.
-    pub fn joindre_dans(adresse: &str, _delai: std::time::Duration) -> Result<Self, DaemonError> {
-        let agent = agent();
-        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+    /// [`joindre`](Self::joindre), le délai d'un appel donné : à l'attachement comme à chaque
+    /// `/rerank`, un démon qui ne rend pas se dit muet au bout de ce délai (le même que
+    /// l'embarqueur, [`default_embed_timeout`]) au lieu de tenir son fil sans fin.
+    pub fn joindre_dans(adresse: &str, delai: std::time::Duration) -> Result<Self, DaemonError> {
+        let agent = super::agent_with_timeout(delai);
+        let identite: Identite = identite_de(&agent, adresse, SERVICE).map_err(|e| nommer(e, adresse, delai))?;
         match identite.reranker {
-            Some(model) => Ok(Self { base: base_url(adresse), agent, model }),
+            Some(model) => Ok(Self { base: base_url(adresse), adresse: adresse.to_string(), agent, delai, model }),
             None => Err(DaemonError::Reponse(format!("sert {} sans relecteur", identite.modele))),
         }
     }
@@ -736,7 +749,7 @@ impl DaemonReranker {
 impl crate::reranker::Reranker for DaemonReranker {
     fn rerank(&self, query: &str, passages: &[String]) -> Result<Vec<f32>, EmbedError> {
         let corps = serde_json::json!({ "query": query, "passages": passages }).to_string();
-        let texte = poster(&self.agent, &self.base, "/rerank", corps).map_err(|e| EmbedError::ProviderError(e.to_string()))?;
+        let texte = poster(&self.agent, &self.base, "/rerank", corps).map_err(|e| EmbedError::ProviderError(nommer(e, &self.adresse, self.delai).to_string()))?;
         let v: serde_json::Value = serde_json::from_str(&texte).map_err(|e| EmbedError::ProviderError(e.to_string()))?;
         let scores: Vec<f32> = serde_json::from_value(v["scores"].clone()).map_err(|e| EmbedError::ProviderError(format!("champ 'scores' : {e}")))?;
         if scores.len() != passages.len() {
@@ -752,7 +765,9 @@ impl crate::reranker::Reranker for DaemonReranker {
 /// **L'OCR d'un démon** (`POST /ocr`).
 pub struct DaemonOcr {
     base: String,
+    adresse: String,
     agent: ureq::Agent,
+    delai: std::time::Duration,
     model: String,
 }
 
@@ -760,12 +775,13 @@ impl DaemonOcr {
     pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
         Self::joindre_dans(adresse, default_embed_timeout())
     }
-    /// [`joindre`](Self::joindre), le délai d'un appel donné.
-    pub fn joindre_dans(adresse: &str, _delai: std::time::Duration) -> Result<Self, DaemonError> {
-        let agent = agent();
-        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+    /// [`joindre`](Self::joindre), le délai d'un appel donné, à l'attachement comme à chaque
+    /// `/ocr` (voir [`DaemonReranker::joindre_dans`]).
+    pub fn joindre_dans(adresse: &str, delai: std::time::Duration) -> Result<Self, DaemonError> {
+        let agent = super::agent_with_timeout(delai);
+        let identite: Identite = identite_de(&agent, adresse, SERVICE).map_err(|e| nommer(e, adresse, delai))?;
         match identite.ocr {
-            Some(model) => Ok(Self { base: base_url(adresse), agent, model }),
+            Some(model) => Ok(Self { base: base_url(adresse), adresse: adresse.to_string(), agent, delai, model }),
             None => Err(DaemonError::Reponse(format!("sert {} sans OCR", identite.modele))),
         }
     }
@@ -783,7 +799,7 @@ impl crate::ocr::Ocr for DaemonOcr {
             rgb: base64::engine::general_purpose::STANDARD.encode(&image.rgb),
         })
         .map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
-        let texte = poster(&self.agent, &self.base, "/ocr", corps).map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
+        let texte = poster(&self.agent, &self.base, "/ocr", corps).map_err(|e| crate::ocr::OcrError::Model(nommer(e, &self.adresse, self.delai).to_string()))?;
         let lu: LectureSurLeFil = serde_json::from_str(&texte).map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
         Ok(crate::ocr::OcrOutput {
             width: lu.width,
