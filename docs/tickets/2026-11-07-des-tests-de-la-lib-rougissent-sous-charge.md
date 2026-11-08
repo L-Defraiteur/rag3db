@@ -44,3 +44,41 @@ secondes quand il abandonne ; la borne de perte du journal se mesure sur ce que 
 dans le lot du témoin du chat, après la vue 3b.
 
 **Le binaire de la lib mort sans résumé** (ce poste, 7 nov. 21 h 33, la même passe) : après ces deux rouges, le binaire de tests de la lib s'est arrêté sept minutes après son départ, sans ligne `test result` ni panique au journal ; plusieurs tests étaient « running for over 60 seconds ». La lib entière rejouée seule juste après, au même code et sous la même lib : 1988 verts, 26 s. Non reproduit ; à surveiller : un deuxième cas dirait s'il s'agit d'un arrêt du processus (signal, mémoire) plutôt que d'un faux rouge de durée. Ce que le poste dit de cet instant (le portable, pas luciepc : la passe tournait ici) : le journal du noyau, de 21 h 30 à 21 h 36, ne montre ni arrêt par manque de mémoire, ni signal du noyau, ni vidage mémoire du binaire de tests (`journalctl -k`, `coredumpctl`) ; le seul vidage de la fenêtre est `plasma-discover` (SIGABRT, 21 h 32 m 44 s), sans lien. Sur le poste à ce moment : la passe seule sous `poste lourd` (une place), et la copie par `scp` de la lib 7cd11e5fa depuis luciepc (21 h 33). La charge elle-même n'a pas été relevée : le journal de charge de `run_e2e.sh` ne couvre pas l'étape de la lib. Pour le second cas : relever `uptime` et la mémoire libre au départ et à la fin de l'étape de la lib, et le code de sortie de `cargo test` (un signal se lit dans `$?` au-delà de 128).
+
+## 8 novembre : `la_base_principale_n_est_jamais_ecrite_par_la_tache` rougit seul, sans charge
+
+Sur luciepc, sous la lib cbc06c3e1 avec `RAG3WEAVER_MOTEUR_ANCIEN=1` (la consigne du jour : le C++
+de master, G3 de hotfixs a9067fa2b, est postérieur à la lib), le test joué **seul**
+(`--exact`) :
+
+| tête | essais | rouges |
+|---|---|---|
+| master e8a91105f | 3 | 2 |
+| master 0619c22b6 + le juge par pas | 1 | 1 |
+| master e8a91105f + le juge par pas | 2 | 1 |
+
+Le rouge est le même à chaque fois, « la tâche n'a pas indexé en 60 s », avec
+`freshness: {writing: true}` dans la réponse d'`usages` : l'écriture de l'index de la tâche ne
+se termine pas en une minute, et ce n'est pas la charge (le test tournait seul, le poste à trois
+places lourdes sur six). Ce n'est donc plus une durée trop juste : une indexation de tâche qui
+reste en écriture. À départager : la lib d'avant (17a094d12 sans `MOTEUR_ANCIEN`) sur la même
+tête, puis la lib du rebâti de la nuit.
+
+**Le départage (le même jour, 15 h)** : ce n'est ni la lib ni l'index, c'est le service
+d'embarquement. Joué seul sur master e8a91105f :
+
+| lib | quand | essais | rouges |
+|---|---|---|---|
+| cbc06c3e1 + `MOTEUR_ANCIEN` | pendant que G réembarquait code-lourd sur 7878 (14 h 26 – 15 h 07) | 3 | 2 |
+| cbc06c3e1 + `MOTEUR_ANCIEN` | la fenêtre libre de G (15 h 08 – 15 h 12) | 5 | 0 |
+| dadbf0041 | autour de 15 h 05 | 5 | 0 |
+| 17a094d12 sans `MOTEUR_ANCIEN` | à cheval | 8 | 8 |
+
+L'index de la tâche retient un fichier et attend son embarquement derrière les lots de G (le
+relevé de hooks-essai : « indexation lancée : 1 fichiers, granite-278m », puis rien pendant
+90 s) ; le délai de 60 s du témoin tombe. Un `/embed` d'un texte court, mesuré toutes les 5 s
+pendant les essais, restait sous 0,22 s : la file des gros lots ne se voit pas par un appel
+court. 17a094d12 rougit même service libre : une lib trop ancienne pour le Rust de master, sans
+rapport. **Pour le fermer** : que le témoin nomme son attente (« l'index de la tâche attend le
+service d'embarquement depuis N s ») au lieu de « pas indexé en 60 s », ou qu'il prenne un
+embarqueur factice qui ne fait pas la queue derrière un autre client.
