@@ -125,7 +125,7 @@ fn mes_recherches_rendent_celles_de_l_ide_et_des_agents_avec_les_clics() {
             .header("Authorization", "Bearer j")
             .header(super::SESSION_HEADER, &session_agent)
             .header("content-type", "application/json")
-            .send(json!({ "manifest": manifeste, "name": "search_code", "arguments": { "query": "salut" } }).to_string())
+            .send(json!({ "manifest": manifeste, "name": "search_code", "arguments": { "query": "salut", "options": { "limit": 10 } } }).to_string())
             .unwrap();
         lire(r)
     };
