@@ -3,7 +3,8 @@
 - **État** : ouvert. Écrit le 18 octobre 2026 par la seconde session cœur C++, à la demande de
   l'orchestration ; mis sur master le 25 octobre seulement (il était resté en brouillon), toujours
   vrai après 6fe9ffe9b. Défaut connu, sans perte. La question qu'il pose est pour le produit : qui déclenche la
-  reconstruction de l'index, et quand.
+  reconstruction de l'index, et quand. Le balayage est mesuré (banc, 8 novembre : environ 0,8 µs
+  par ligne à la dimension 768) ; reste le seuil.
 - **Gravité** : lenteur. La réponse est juste, mais chaque recherche balaie ces lignes une à une.
 - **Atteignable en service** : pas aujourd'hui. rag3weaver lance ses CREATE_VECTOR_INDEX
   (`rebuild_vector_index`, `ensure_vector_index`) sous le `Mutex<Catalog>` de sa connexion
