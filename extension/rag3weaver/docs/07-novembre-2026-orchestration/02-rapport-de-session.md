@@ -1236,3 +1236,90 @@ avance d'autant ; les hashs, eux, sont exacts.
   nommé en ticket, le script d'affichage réparé, rejeu à 13 h 10) ; 96, M4 pas 3 ; archi, le lien
   vers un symbole ; recherche, le cache hors de /tmp ; codeparsers, les locales JavaScript ; banc,
   les positifs et la référence Gemini.
+
+## 13 h 54 — ÉCART : la pose du portable est annulée
+
+- **Le contrôle des deux sens** (outil 339cbb5dc, sous cbc06c3e1) sur les copies de code-lourd et
+  code-principal prises à 13 h 03, hôte arrêté, **après les deux `index confirm` complets de G sous
+  cbc06c3e1**, rend « BASE ATTEINTE » : code-lourd INHERITS_FROM 650 avant / 658 arrière (1 d'un
+  seul côté, 11 vues deux fois, 13 aux bouts différents), QUERIES (5 / 6 / 9), LOCKS 544 / 546 ;
+  code-principal QUERIES (7 / 8), IMPLEMENTS 331 / 334 avec `line` et `resolution` à deux valeurs,
+  LOCKS 425 / 436. Les grosses tables (MENTIONS, CONSUMES/CONSUMED_BY, DEFINES, CHUNKED_FROM) sont
+  égales. Les copies d'avant les index (hotfixs, 12 h 06 m 30 s) faisaient **0 écart sur 36 tables**,
+  comme les copies d'avant-43 sous cbc06c3e1 (arbre). **Un index complet, qui réécrit toutes les
+  lignes (DELETE puis COPY de relations), laisse des relations dans un seul sens ou aux bouts
+  différents dans les tables jeunes** : la famille LOCKS/QUERIES du 25 octobre. Pas de .wal sur ces
+  copies : ce n'est pas le rejeu, c'est l'écriture en service posée par un point de reprise.
+- **G n'a rien avancé** : pas de pose au portable, `courant` = dadbf0041 aux deux postes, le portable
+  sur eb154bf5f + 17a094d12. Les bases en service de luciepc portent ces écarts (bases d'essai) et
+  reviendront sur les copies de 12 h 06 après le départage. Logs à luciepc :
+  ~/.local/share/rag3weaver/instantanes/preuve-cbc06c3e1-controle/.
+- **Le départage** (G, hôte d'essai 7991, sous poste lourd) : le même `index confirm` sur une copie
+  saine de code-lourd sous 17a094d12, dadbf0041, puis cbc06c3e1, chacun suivi du contrôle. Rouge
+  sous cbc06c3e1 seul → un de A, a312f823e, b142b6a71, cbc06c3e1, et hotfixs bissecte ; rouge sous
+  les deux ou les trois → plus ancien, la famille LOCKS que B ne couvre pas. **Règle jusqu'au
+  verdict : aucune indexation complète sous cbc06c3e1.** La base de Lucie (avant-43, 17a094d12)
+  n'est pas touchée ; ses deux sens se contrôlent sur une copie, une minute d'arrêt annoncée.
+- Le banc « rouge d'abord » du SIGSEGV passe après ; B continue sa passe.
+
+## 14 h 39 — la base de Lucie saine, le départage relancé, un rouge de master sur l'index d'une tâche
+
+- **La base de code de Lucie est saine** (G, 14 h 15) : contrôle des deux sens sur l'instantané pris à
+  13 h 59 sous 17a094d12 — LOCKS 543/543, QUERIES 22 977/22 977, INHERITS_FROM 639/639, IMPLEMENTS
+  373/373 ; elle n'a pas eu d'index complet, seulement la montre.
+- **Le départage des libs est relancé** (G, 14 h 26) : les deux premiers runs n'avaient rien indexé (le
+  manifeste copié hors de son arbre perdait ses chemins relatifs ; le « 0 écart » du run 1 ne portait
+  que sur la copie saine) — vu et dit par G ; le script copie maintenant tout l'arbre des gabarits,
+  rougit si l'ouverture ou l'index échoue, et n'accepte le contrôle qu'après « indexation terminée ».
+  Runs 1b (17a094d12), 2b (dadbf0041), 3b (cbc06c3e1), même binaire Rust pour les deux derniers,
+  copie saine de 12 h 06 à chaque fois, lecture de charge et de GPU à chaque fin ; verdicts vers
+  15 h 40. Les témoins à un seul écrivain de hotfixs (réindex complet en trois tours ; deux versements
+  d'une table) font 0 écart : il manque le volume, les groupes CSR persistés, un lecteur pendant
+  l'index. Le cœur lit la forme comme des colonnes de nœuds remappées deux fois (G1 à un écrivain) ;
+  si 17a094d12 est sain et dadbf0041 malade, G1 (c4f8610b9) se retire avant tout rebâti.
+- **Un second signal** (ED) : `taches::tests::la_base_principale_n_est_jamais_ecrite_par_la_tache`
+  rougit **seul sur master e8a91105f, 2 fois sur 3**, sous cbc06c3e1 (« la tâche n'a pas indexé en
+  60 s », writing: true), à trois lourds sur six ; hooks-essai a le même rouge dans sa passe. ED le
+  départage par la lib (17a094d12, dadbf0041, cinq fois chacun, le journal du run à 60 s) ; un index
+  de tâche qui ne finit plus et un index complet qui abîme les deux sens, le même jour sous la même
+  lib, se lisent ensemble. Personne ne pousse de Rust qui touche l'index avant le verdict ; les
+  autres lots passent avec ce rouge nommé et chiffré.
+- **Lucie** : « attention je joue un peu aux jeux vidéo depuis luciepc (seat1) » → seat1 rend sur
+  card0 (la carte dite libre), pas sur celle des services ; toute mesure à luciepc porte sa lecture
+  de charge et de GPU à côté du chiffre (lecture-poste.sh de G). « Il ne faut pas qu'on s'imagine
+  des barrières à essayer des modèles » → la règle du 25 octobre redevient ce qu'elle était : lire
+  la VRAM, charger si ça tient, un modèle à la fois, arrêt au premier reset ; jamais « CPU seulement »
+  par prudence. **Elle a levé la permission du banc dans sa fenêtre** (14 h 28) : les petits modèles
+  tournent (Qwen 0,5B 3,9 Gio, SmolLM2 3,1 Gio, Laya 3,0 Gio en CPU ; passe CPU à la borne 2 000,
+  puis GPU pour 6 000 et 16 000) ; le jeu à vrais positifs : 88 positifs à provenance vérifiée,
+  440 paires, 1,7 M de jetons de construction ; bge-m3 AUC 0,61 (ne sert pas) ; la référence Gemini
+  en cours.
+- **Atterris** : ED, open_branch (0619c22b6) ; embarquement, le ticket de 7878 sans l'hypothèse du
+  jeu (e8a91105f). **Prêts** : 96 (en push), archi (le symbole cité en lien : `POST /ide/symboles`
+  par `usages`, l'appel discret qui ne journalise pas un rendu), hooks-essai (la tâche sans git,
+  avec le rouge de master nommé), ED (le juge par pas, idem).
+
+## 14 h 48 — 7878 fait la queue pour tout luciepc pendant le départage
+
+- **Le rouge de master sur l'index d'une tâche s'explique par la file de 7878** (hooks-essai, ED) :
+  l'index d'une tâche écrit « indexation lancée : 1 fichiers, granite-278m » puis attend ; /sante
+  répond en 0,3 ms mais les runs de départage de G réembarquent tout code-lourd (137 000 morceaux)
+  sur 7878 depuis 14 h 26, et le banc chargeait ses modèles : /embed fait la queue, le délai de 60 s
+  de l'arbre le dit (« pas indexé en 60 s ») au lieu de figer comme la nuit. e2e_lectures seule chez
+  hooks-essai : 19 rouges sur 24 avec les mêmes signes, verte 24/24 à 13 h 10 avant les runs. ED
+  départage quand même par la lib avec une sonde /embed toutes les 5 s pendant chaque essai (un
+  rouge avec /embed lent = la file ; avec /embed rapide = l'index). Règle du moment : G dit la fin
+  de la phase d'index de chaque run et « 7878 libre » à la fin ; les e2e des autres se glissent entre.
+- **Le jeu de Lucie** : vérifié sur luciepc, Bloodborne (bb-probe, gamescope, Steam, seat1) ne rend
+  que sur card0 (renderD130, 85 %, 5,6 Go) ; les trois services d'embarquement sur card2
+  (renderD129, 21,5 Go : granite-278m 7,7 Go, bge-m3 8,6 Go, granite-107m 5,1 Go — trois modèles,
+  voulu). Son jeu a été lent à démarrer : la charge CPU du poste (21 à 28), pas la carte. Le script
+  du banc tenait des descripteurs sur les deux cartes (torch ROCm énumère tout à l'init) : passes
+  CPU relancées avec les cartes masquées (44 Kio de contexte, aucun calcul), passes GPU bornées à
+  card2 par HIP_VISIBLE_DEVICES, VRAM de card0 relue avant et après.
+- **Codeparsers** : le correctif des locales JavaScript mesuré sur les mêmes 298 mentions — faux
+  30 → 10, aucun juste perdu, 78 arêtes justes de plus hors échantillon ; lot en passe (pointeur
+  c660893, le verdict « liaison d'import » dans l'oracle, ticket fermé) ; le suivant : le `require`
+  relatif. **Archi** : le symbole cité en lien est prêt (`POST /ide/symboles` par `usages`, l'appel
+  discret qui ne journalise pas un rendu). **96** en push. Tous les pushes attendent le dernier pas
+  seul sous poste push ; les passes rendent leur place lourde au vert.
