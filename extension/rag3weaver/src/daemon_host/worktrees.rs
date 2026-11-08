@@ -1794,4 +1794,56 @@ mod tests {
         assert!(capte.lines().any(|l| l.contains("ToolCallFinished") && l.contains("index_progress")), "ToolCallFinished porte la carte sur le flux");
     }
 
+    /// **Un dépôt fermé pendant son index n'est pas rouvert pour ses comptes** (passe de la
+    /// pile de l'atelier, 8 novembre 2026 : à DONE_LINE, le suiveur lisait les comptes par
+    /// `with_backend`, qui rouvrait un dépôt fermé entre-temps ; la réouverture tenait le
+    /// slot pendant que la reprise le croyait ouvert). Le dépôt fermé avant la fin du journal :
+    /// `RepoIndexed` part fini, sans `fichiers` ni `symboles`, et le dépôt reste fermé.
+    #[test]
+    fn a_repo_closed_during_its_index_is_not_reopened_for_its_counts() {
+        use crate::dataflow::index_nodes::DONE_LINE;
+        use std::io::Write;
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        std::fs::create_dir_all(d.path().join("base")).unwrap();
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &d.path().join("base")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(depot.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let manifeste = manifeste.canonicalize().unwrap();
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
+        let host = Arc::new(hote(d.path(), model));
+        let flux = Arc::new(Mutex::new(Vec::new()));
+        host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |_| ()).expect("le dépôt s'ouvre");
+        let journal = d.path().join("index.log");
+        std::fs::write(&journal, "plein texte : 0 fichiers sur 1 (0 scopes)\n").unwrap();
+        let bornes = super::Bornes { plafond: std::time::Duration::from_secs(60), naissance: std::time::Duration::from_secs(5) };
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal.clone(), json!({ "worktree": depot, "depot": "rag3db-essai", "branche": "essai" }), bornes);
+
+        // Fermé avant la fin du journal.
+        let session = host.open_session("le témoin", None, vec![], None);
+        let ferme = host.close(Some(&session), &manifeste);
+        assert_eq!(ferme["ok"], true, "{ferme}");
+        assert!(h.backend.try_read().is_ok_and(|g| g.is_none()), "le dépôt est fermé");
+        writeln!(std::fs::OpenOptions::new().append(true).open(&journal).unwrap(), "{DONE_LINE}").unwrap();
+
+        let debut = std::time::Instant::now();
+        let fin = loop {
+            if let Some(e) = indexes_captes(&flux).into_iter().next() {
+                break e;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(10), "aucun RepoIndexed en 10 s");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+        assert_eq!(fin["ok"], true, "{fin}");
+        assert!(fin["fichiers"].is_null() && fin["symboles"].is_null(), "un dépôt fermé ne donne pas de comptes (ni des zéros) : {fin}");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(h.backend.try_read().is_ok_and(|g| g.is_none()), "le suiveur a rouvert le dépôt pour ses comptes");
+        let etat = host.state();
+        let ouvert = etat["backends"].as_array().and_then(|bs| bs.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(manifeste.as_path()))).map(|b| b["open"].clone());
+        assert_eq!(ouvert, Some(json!(false)), "le dépôt est encore fermé dans l'état de l'hôte : {etat:#}");
+    }
 }
