@@ -1298,3 +1298,28 @@ avance d'autant ; les hashs, eux, sont exacts.
   jeu (e8a91105f). **Prêts** : 96 (en push), archi (le symbole cité en lien : `POST /ide/symboles`
   par `usages`, l'appel discret qui ne journalise pas un rendu), hooks-essai (la tâche sans git,
   avec le rouge de master nommé), ED (le juge par pas, idem).
+
+## 14 h 48 — 7878 fait la queue pour tout luciepc pendant le départage
+
+- **Le rouge de master sur l'index d'une tâche s'explique par la file de 7878** (hooks-essai, ED) :
+  l'index d'une tâche écrit « indexation lancée : 1 fichiers, granite-278m » puis attend ; /sante
+  répond en 0,3 ms mais les runs de départage de G réembarquent tout code-lourd (137 000 morceaux)
+  sur 7878 depuis 14 h 26, et le banc chargeait ses modèles : /embed fait la queue, le délai de 60 s
+  de l'arbre le dit (« pas indexé en 60 s ») au lieu de figer comme la nuit. e2e_lectures seule chez
+  hooks-essai : 19 rouges sur 24 avec les mêmes signes, verte 24/24 à 13 h 10 avant les runs. ED
+  départage quand même par la lib avec une sonde /embed toutes les 5 s pendant chaque essai (un
+  rouge avec /embed lent = la file ; avec /embed rapide = l'index). Règle du moment : G dit la fin
+  de la phase d'index de chaque run et « 7878 libre » à la fin ; les e2e des autres se glissent entre.
+- **Le jeu de Lucie** : vérifié sur luciepc, Bloodborne (bb-probe, gamescope, Steam, seat1) ne rend
+  que sur card0 (renderD130, 85 %, 5,6 Go) ; les trois services d'embarquement sur card2
+  (renderD129, 21,5 Go : granite-278m 7,7 Go, bge-m3 8,6 Go, granite-107m 5,1 Go — trois modèles,
+  voulu). Son jeu a été lent à démarrer : la charge CPU du poste (21 à 28), pas la carte. Le script
+  du banc tenait des descripteurs sur les deux cartes (torch ROCm énumère tout à l'init) : passes
+  CPU relancées avec les cartes masquées (44 Kio de contexte, aucun calcul), passes GPU bornées à
+  card2 par HIP_VISIBLE_DEVICES, VRAM de card0 relue avant et après.
+- **Codeparsers** : le correctif des locales JavaScript mesuré sur les mêmes 298 mentions — faux
+  30 → 10, aucun juste perdu, 78 arêtes justes de plus hors échantillon ; lot en passe (pointeur
+  c660893, le verdict « liaison d'import » dans l'oracle, ticket fermé) ; le suivant : le `require`
+  relatif. **Archi** : le symbole cité en lien est prêt (`POST /ide/symboles` par `usages`, l'appel
+  discret qui ne journalise pas un rendu). **96** en push. Tous les pushes attendent le dernier pas
+  seul sous poste push ; les passes rendent leur place lourde au vert.
