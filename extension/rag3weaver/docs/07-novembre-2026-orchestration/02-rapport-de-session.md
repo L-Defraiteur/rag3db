@@ -1197,3 +1197,42 @@ avance d'autant ; les hashs, eux, sont exacts.
   de Lucie dans sa fenêtre) ; lucivy, libre.
 - **Pour Lucie** : la démonstration de l'atelier (cinq pas) et les deux lignes de tty pour le
   terminal sont prêtes pour la pose du portable ; la page des 732 branches attend ses deux mots.
+
+## 13 h 11 — G3 sur master, le verdict de luciepc, la pose du portable à 13 h 40
+
+- **Atterris** : hotfixs, **G3** (a9067fa2b : toute ouverture relit ses extensions notées, l'échec se
+  dit par `extension_error` sans refuser ; verdict complet : liste C++ avec le banc, transaction
+  353/353, e2e vector 74 + 63, rag3weaver sur son moteur 2051 ; l'accord de Lucie dans le commit)
+  → **MOTEUR_ANCIEN=1 pour tous** jusqu'au rebâti de la nuit ; le commit de format de A (c6c84af6a) ;
+  ED, **la reprise du client models.llm** (aed8184b4 : une minute puis le double, dix minutes au plus,
+  cinq reprises, 503 et 5xx RESOURCE_EXHAUSTED traités comme un quota, le 429 glissé dans le flux
+  rejoué, l'erreur qui dit sa durée ; chat, juge, archiviste, hooks ; le client Anthropic hors du lot) ;
+  archi, **« Dépôts » sur RepoAttached** (1005c5544) et **le thème daemon dans l'IDE** (44442ea75 : le
+  fichier commun servi par l'hôte, un troisième choix, l'invocation qui tourne pendant que le modèle
+  réfléchit) ; archi, la page « l'IDE, ce qui reste » (b181dbadf : tout fait sauf le lien vers un
+  symbole, qu'il prend) ; codeparsers, les rejugements (904c34fff : l'indexation ne changeait rien,
+  le juge strict oui ; TypeScript 243/39 dont 17 liaisons d'import et 21 locales homonymes →
+  correctif `visible_until_line` vert dans codeparsers, mesure du gain en cours) ; embarquement,
+  le ticket de 7878 (f66ad4449).
+- **Le verdict de luciepc sur cbc06c3e1** (G, 13 h 03) : aucun plantage, mais la charge a été
+  légère (deux COPY indexés de 4 min 30 et 3 min 30, vecteurs réutilisés ; un arrêt d'inactivité
+  normal entre les deux). Le cœur l'a dit : ce n'est pas une preuve ; **le banc « rouge d'abord »**
+  (dadbf0041 sur une base neuve réembarquée avec search_code et read_file en boucle, puis cbc06c3e1
+  deux fois le délai) tourne en parallèle sur un hôte d'essai à luciepc — j'ai choisi la pose
+  maintenant plutôt que trois heures d'attente, le mécanisme étant prouvé par l'ASAN et le repli
+  automatique ; les recherches denses de Lucie ralentiront pendant le réembarquement. Un écart du
+  plein texte (103 documents de plus que de lignes dans Scope, 102 sur code-principal) en ticket.
+- **La pose du portable à 13 h 40** (G) : binaire d982b513 sur ff6e88ddf contre cbc06c3e1,
+  check-manifests ok sur les deux arbres, le contrôle des deux sens sur les copies de luciepc
+  d'abord, puis « arrêté » → instantané avant-cbc06c3e1 de code-rag3db-depot et memoire-longue →
+  copie de memoire-longue par hotfixs pour le relevé → `courant` = cbc06c3e1 aux deux postes →
+  réveil → sandbox.env dans mon arbre → « posé ». Le relevé des deux sens de hotfixs sur
+  code-lourd et code-principal : 0 écart sur 36 tables (la forme A visible, la forme B ne naît qu'au
+  rejeu à deux écrivains).
+- **En cours** : ED, open_branch (à toi) puis le juge par pas, le réacteur ; hotfixs, **B** (le
+  verrou de versement + un oubli trouvé : acquireLocksBeforeExecution ne visitait que le puits de
+  chaque pipeline, IndexLookup n'était jamais appelé ; corrigé, le double versement est vert) puis
+  le troisième lot de l'équipier, G5 ; hooks-essai, la tâche sans git (un intermittent de modèle
+  nommé en ticket, le script d'affichage réparé, rejeu à 13 h 10) ; 96, M4 pas 3 ; archi, le lien
+  vers un symbole ; recherche, le cache hors de /tmp ; codeparsers, les locales JavaScript ; banc,
+  les positifs et la référence Gemini.
