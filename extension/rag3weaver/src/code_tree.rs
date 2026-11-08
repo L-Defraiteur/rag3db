@@ -55,7 +55,11 @@ impl Roots {
                     .is_some_and(|e| e == "json")
                     .then(|| std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()))
                     .flatten();
-                if let Some(v) = v.filter(|v| v.get("database").is_some() && v.get("tools").is_some()) {
+                // Un arbre inscrit a sa racine absolue (`add_files` la pose) ; le gabarit
+                // copié avec un autre backend (l'atelier) garde `workspace` relatif, et n'en
+                // est pas un (vu le 8 novembre 2026 sur le poste de Lucie).
+                let inscrit = |v: &Value| v["workspace"]["root"].as_str().is_some_and(|r| Path::new(r).is_absolute());
+                if let Some(v) = v.filter(|v| v.get("database").is_some() && v.get("tools").is_some() && inscrit(v)) {
                     let du_nom = v["name"].as_str() == arbre.file_name().to_str();
                     candidats.push((p, du_nom));
                 }

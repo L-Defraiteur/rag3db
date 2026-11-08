@@ -716,6 +716,11 @@ fn atelier_cli(args: &[String]) -> Result<(), String> {
         let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).map_err(|e| format!("{} : {e}", manifeste.display()))?).map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&roots.data).map_err(|e| format!("{} : {e}", roots.data.display()))?;
         m["database"] = json!(roots.data.join("atelier.rag3db").display().to_string());
+        // L'espace des commandes de l'atelier est le poste : le dossier de l'utilisateur
+        // (Lucie, 8 novembre 2026, « qu'il ait commande shell »).
+        if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
+            m["workspace"]["root"] = json!(std::path::PathBuf::from(home).display().to_string());
+        }
         std::fs::write(&manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())?).map_err(|e| format!("{} : {e}", manifeste.display()))?;
         println!("atelier posé : {}", manifeste.display());
     } else {

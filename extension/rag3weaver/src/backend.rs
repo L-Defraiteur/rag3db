@@ -194,6 +194,11 @@ pub struct BackendManifest {
     /// Opt in to discovery and ad-hoc read-only Mermaid search tools.
     #[serde(default)]
     pub search_graphs: bool,
+    /// **Ce que le chat de ce backend doit savoir de plus** : ajouté au message système
+    /// du chat (l'atelier : l'ordre de ses outils, jamais « faites-le dans votre
+    /// terminal »).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_instructions: Option<String>,
     /// **L'outil `graph`** : le graphe d'un outil, d'une réaction ou d'un
     /// composant, en JSON (le même que la route `/ide/graphe`). Opt-in, comme
     /// `search_graphs` : il change la liste d'outils que voit l'agent.
