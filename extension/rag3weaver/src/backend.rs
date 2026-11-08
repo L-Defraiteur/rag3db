@@ -5202,8 +5202,11 @@ impl Backend {
             // note d'avant un arrêt ne se recalcule qu'à l'index suivant. Sans indexation
             // vivante ni rebâti en cours (`text_percent`), des comptes complets disent prêt.
             if tournent == 0 {
-                for (entite, c) in &comptes {
-                    let complet = c["rows"].is_u64() && c["documents"] == c["rows"];
+                // Une entité sans compte noté (rien à indexer en plein texte, comme Library
+                // d'un dépôt sans bibliothèque) ne tient pas non plus un « en cours ».
+                for entite in entites.iter().copied() {
+                    let c = comptes.get(entite);
+                    let complet = c.is_none_or(|c| c["rows"].is_u64() && c["documents"] == c["rows"]);
                     if let Some(e) = etats.get_mut(entite) {
                         if complet && e["text"] == "running" && e["text_percent"].is_null() {
                             e["text"] = json!("ready");

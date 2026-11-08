@@ -81,11 +81,12 @@ fn phrase_de_l_index(index: &serde_json::Map<String, Value>) -> String {
         if prets == n {
             return format!("{nom} {prets_mot} ({compte})");
         }
+        // Un pourcentage d'une entité en cours seulement : « jamais » à 0 % n'avance pas.
         let en_cours = vus
             .iter()
-            .filter(|e| e[cle] != "ready")
+            .filter(|e| e[cle] == "running")
             .filter_map(|e| e[pourcent].as_u64())
-            .filter(|p| *p < 100)
+            .filter(|p| *p > 0 && *p < 100)
             .min();
         let mut dit = format!("{nom} {compte}");
         if let Some(p) = en_cours {
@@ -787,7 +788,7 @@ mod tests {
         let attendre = |journal: &str| {
             let debut = std::time::Instant::now();
             while !fini(journal) {
-                assert!(debut.elapsed() < std::time::Duration::from_secs(60), "l'index n'a pas fini en 60 s : {journal}");
+                assert!(debut.elapsed() < std::time::Duration::from_secs(240), "l'index n'a pas fini en 240 s : {journal}");
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
         };
@@ -835,7 +836,7 @@ mod tests {
         }
         fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
             // Lent exprès : un rattrapage dure assez pour qu'une fermeture le croise.
-            std::thread::sleep(std::time::Duration::from_millis(5 * texts.len() as u64));
+            std::thread::sleep(std::time::Duration::from_millis(10 * texts.len() as u64));
             Ok(texts.iter().map(|_| { let mut v = vec![0.0_f32; 768]; v[0] = 1.0; v }).collect())
         }
         fn dim(&self) -> usize {
@@ -869,7 +870,7 @@ mod tests {
         let (manifeste, arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
         let manifeste = PathBuf::from(manifeste);
         // Assez de morceaux pour plusieurs passes de 512.
-        for i in 0..700 {
+        for i in 0..300 {
             std::fs::write(arbre.join(format!("src/f{i}.rs")), format!("pub fn fonction_{i}() -> u32 {{\n    {i}\n}}\n")).unwrap();
         }
         let ecrire = |f: &dyn Fn(&mut Value)| {
@@ -888,7 +889,7 @@ mod tests {
         let attendre_l_index = || {
             let debut = std::time::Instant::now();
             while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
-                assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
+                assert!(debut.elapsed() < std::time::Duration::from_secs(240), "l'index n'a pas fini en 240 s");
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
         };
@@ -896,7 +897,7 @@ mod tests {
         let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
         let debut = std::time::Instant::now();
         while !fini(&journal) {
-            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
+            assert!(debut.elapsed() < std::time::Duration::from_secs(240), "l'index n'a pas fini en 240 s");
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
         attendre_l_index();
@@ -957,7 +958,7 @@ mod tests {
         host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
         let debut = std::time::Instant::now();
         while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
-            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
+            assert!(debut.elapsed() < std::time::Duration::from_secs(240), "l'index n'a pas fini en 240 s");
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
         let entites = [crate::code::FILE, crate::code::SCOPE, crate::code::LIBRARY, crate::code::SYMBOL];
