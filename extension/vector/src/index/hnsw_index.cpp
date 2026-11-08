@@ -1812,9 +1812,12 @@ void OnDiskHNSWIndex::shrinkForNode(Transaction* transaction, common::offset_t o
         // la lecture des voisins plus bas (getEmbeddings, le même état) réalloue dès qu'ils n'y
         // tiennent plus. Le pointeur gardé désignait alors un tampon libéré (heap-use-after-free
         // sous ASAN, ticket du SIGSEGV de l'hôte du 8 novembre 2026).
-        const auto numBytes = embeddings.getDimension() *
-                              common::PhysicalTypeUtils::getFixedTypeSize(
-                                  typeInfo.getChildType().getPhysicalType());
+        // Un index vectoriel ne porte que des FLOAT ou des DOUBLE (HNSWIndexUtils).
+        const auto elementSize =
+            typeInfo.getChildType().getLogicalTypeID() == common::LogicalTypeID::DOUBLE ?
+                sizeof(double) :
+                sizeof(float);
+        const auto numBytes = embeddings.getDimension() * elementSize;
         const auto* source = static_cast<const uint8_t*>(ownVector.getPtr());
         ownVectorCopy.assign(source, source + numBytes);
         vectorPtr = ownVectorCopy.data();
