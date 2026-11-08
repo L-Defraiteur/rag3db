@@ -57,5 +57,31 @@ code=$?
 cas $? "le jeu par défaut porte openai-llm et anthropic-llm, et la suite passe la garde (rendu $code)"
 [ ! -e "$T/cargo-appele" ]
 cas $? "la garde seule n'appelle pas cargo"
-[ $echec = 0 ] || { echo "--- sortie"; tail -15 "$T/sortie"; tail -15 "$T/sortie-features" 2>/dev/null; tail -15 "$T/sortie-defaut" 2>/dev/null; }
+# Le compte des suites (8 novembre 2026) : `--test e2e e2e_lectures` jouait la
+# suite et disait « 0 sur 1 » — il cherchait `tests/e2e.rs`. Le filtre désigne
+# la suite, `--test e2e` est le binaire ; la ligne du script (`Running
+# tests/e2e_lectures.rs (binaire e2e unique, …)`) ou celle de cargo
+# (`Running tests/e2e/main.rs`) la comptent jouée.
+printf '     Running tests/e2e_lectures.rs (binaire e2e unique, filtre e2e_lectures::)\ntest result: ok. 18 passed; 0 failed;\n' > "$T/journal-script"
+printf '     Running tests/e2e/main.rs (target/debug/deps/e2e-0123)\ntest result: ok. 18 passed; 0 failed;\n' > "$T/journal-cargo"
+printf 'rien\n' > "$T/journal-vide"
+compte() { # <journal> <args…>
+  local j="$1"; shift
+  rm -f "$T/cargo-appele"
+  RAG3WEAVER_VERROU_TENU=1 RAG3WEAVER_E2E_COMPTER_JOURNAL="$j" \
+    PATH="$T/bin:$PATH" CARGO_TARGET_DIR="$T/target" RAG3WEAVER_MOTEUR_ANCIEN=1 timeout 120 bash "$SCRIPT" "$@" 2>&1
+}
+compte "$T/journal-script" --test e2e e2e_lectures > "$T/sortie-compte" ; grep -q "Suites jouées : 1 sur 1 demandées." "$T/sortie-compte"
+cas $? "--test e2e e2e_lectures, journal du script : 1 sur 1"
+compte "$T/journal-cargo" --test e2e e2e_lectures > "$T/sortie-compte2" ; grep -q "Suites jouées : 1 sur 1 demandées." "$T/sortie-compte2"
+cas $? "--test e2e e2e_lectures, journal de cargo (tests/e2e/main.rs) : 1 sur 1"
+compte "$T/journal-script" --test e2e_lectures > "$T/sortie-compte3" ; grep -q "Suites jouées : 1 sur 1 demandées." "$T/sortie-compte3"
+cas $? "--test e2e_lectures sans --test e2e : 1 sur 1"
+compte "$T/journal-script" --test e2e_lectures --test e2e_tty > "$T/sortie-compte4" ; grep -q "Suites jouées : 1 sur 2 demandées." "$T/sortie-compte4" && grep -q "manquantes : e2e_tty" "$T/sortie-compte4"
+cas $? "une suite demandée sans sa ligne reste manquante : 1 sur 2, e2e_tty nommée"
+compte "$T/journal-vide" --test e2e e2e_lectures > "$T/sortie-compte5" ; grep -q "Suites jouées : 0 sur 1 demandées." "$T/sortie-compte5" && grep -q "manquantes : e2e_lectures" "$T/sortie-compte5"
+cas $? "--test e2e e2e_lectures sans aucune ligne : 0 sur 1, la suite nommée"
+[ ! -e "$T/cargo-appele" ]
+cas $? "le compte seul n'appelle pas cargo"
+[ $echec = 0 ] || { echo "--- sortie"; tail -15 "$T/sortie"; tail -15 "$T/sortie-features" 2>/dev/null; tail -15 "$T/sortie-defaut" 2>/dev/null; tail -5 "$T"/sortie-compte* 2>/dev/null; }
 exit $echec

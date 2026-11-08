@@ -623,6 +623,54 @@ if [ -n "$TEST_FILTER" ]; then
   CARGO_ARGS+=("$TEST_FILTER")
 fi
 
+# **Les suites demandées, pour les comptes** (8 novembre 2026). `--test e2e`
+# nomme le binaire unique, pas une suite : cargo y écrit `Running
+# tests/e2e/main.rs`, et le compte qui cherchait `tests/e2e.rs` disait « 0 sur
+# 1 » d'une passe jouée. Avec `--test e2e`, c'est le filtre qui désigne la
+# suite (`e2e_lectures`, `e2e_lectures::un_test`) ; sans filtre de suite, le
+# binaire compte pour une. Un `--test <autre>` garde la règle d'avant : sa
+# ligne `Running tests/<autre>.rs`. `SUITES_BINAIRE[i]` est le binaire dont la
+# ligne vaut aussi pour `SUITES_DEMANDEES[i]` (vide sinon).
+SUITES_DEMANDEES=(); SUITES_BINAIRE=()
+for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
+  [ "${CARGO_ARGS[$i]}" = "--" ] && break
+  [ "${CARGO_ARGS[$i]}" = "--test" ] || continue
+  nom="${CARGO_ARGS[$((i + 1))]}"
+  if [ "$nom" = "e2e" ]; then
+    suite="${TEST_FILTER%%::*}"
+    if [[ "$suite" =~ ^e2e_[A-Za-z0-9_]+$ ]]; then
+      SUITES_DEMANDEES+=("$suite")
+    else
+      SUITES_DEMANDEES+=("e2e")
+    fi
+    SUITES_BINAIRE+=("e2e")
+  else
+    SUITES_DEMANDEES+=("$nom"); SUITES_BINAIRE+=("")
+  fi
+done
+compter_les_suites() {
+  ATTENDUES=0; JOUEES=0; MANQUANTES=()
+  local i nom binaire
+  for ((i = 0; i < ${#SUITES_DEMANDEES[@]}; i++)); do
+    nom="${SUITES_DEMANDEES[$i]}"; binaire="${SUITES_BINAIRE[$i]}"
+    ATTENDUES=$((ATTENDUES + 1))
+    if grep -qF "Running tests/$nom.rs" "$1" \
+       || { [ -n "$binaire" ] && grep -qF "Running tests/$binaire/main.rs" "$1"; }; then
+      JOUEES=$((JOUEES + 1))
+    else
+      MANQUANTES+=("$nom")
+    fi
+  done
+  echo "Suites jouées : $JOUEES sur $ATTENDUES demandées."
+}
+# Pour le témoin (scripts/test_run_e2e.sh) : le compte seul, sur un journal
+# donné, sans rien bâtir ni jouer.
+if [ -n "${RAG3WEAVER_E2E_COMPTER_JOURNAL:-}" ]; then
+  compter_les_suites "$RAG3WEAVER_E2E_COMPTER_JOURNAL"
+  [ ${#MANQUANTES[@]} -eq 0 ] || echo "manquantes : ${MANQUANTES[*]}"
+  exit 0
+fi
+
 CARGO_ARGS+=("${EXTRA_ARGS[@]}")
 
 # Espace d'adressage : une base en mémoire réserve 1 TiB (Rag3dbConnection::
@@ -1137,15 +1185,15 @@ if [ "$SUMMARY" = true ]; then
   # Les suites demandées qui n'ont pas rendu de résultat (compilation en
   # échec, abandon) : le total n'est pas un total.
   NOT_RUN=0
-  for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
-    if [ "${CARGO_ARGS[$i]}" = "--test" ]; then
-      expected="${CARGO_ARGS[$((i + 1))]}"
-      found=false
-      for s in "${SUITE_NAMES[@]}"; do [ "$s" = "$expected" ] && found=true && break; done
-      if [ "$found" = false ]; then
-        say "  %-30s NOT RUN\n" "$expected"
-        NOT_RUN=$((NOT_RUN + 1))
-      fi
+  for ((i = 0; i < ${#SUITES_DEMANDEES[@]}; i++)); do
+    expected="${SUITES_DEMANDEES[$i]}"; binaire="${SUITES_BINAIRE[$i]}"
+    found=false
+    for s in "${SUITE_NAMES[@]}"; do
+      { [ "$s" = "$expected" ] || { [ -n "$binaire" ] && [ "$s" = "$binaire" ]; }; } && found=true && break
+    done
+    if [ "$found" = false ]; then
+      say "  %-30s NOT RUN\n" "$expected"
+      NOT_RUN=$((NOT_RUN + 1))
     fi
   done
 
@@ -1219,16 +1267,10 @@ else
   fi
   # **Le compte des suites** : jouées contre demandées. Une suite qui n'a pas
   # rendu de résultat (compilation, abandon) fait un total qui n'en est pas un.
-  # Chaque suite demandée doit avoir sa ligne `Running tests/<nom>.rs` ; les filets du
+  # Chaque suite demandée (SUITES_DEMANDEES) doit avoir sa ligne `Running tests/<nom>.rs`,
+  # ou celle de son binaire (`tests/e2e/main.rs`) ; les filets du
   # binaire (`e2e_filets`) ne se comptent pas.
-  ATTENDUES=0; JOUEES=0; MANQUANTES=()
-  for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
-    [ "${CARGO_ARGS[$i]}" = "--test" ] || continue
-    nom="${CARGO_ARGS[$((i + 1))]}"
-    ATTENDUES=$((ATTENDUES + 1))
-    if grep -qF "Running tests/$nom.rs" "$E2E_LOG"; then JOUEES=$((JOUEES + 1)); else MANQUANTES+=("$nom"); fi
-  done
-  echo "Suites jouées : $JOUEES sur $ATTENDUES demandées."
+  compter_les_suites "$E2E_LOG"
   if [ ${#MANQUANTES[@]} -gt 0 ]; then
     echo "✗ ${#MANQUANTES[@]} suite(s) demandée(s) n'ont rendu aucun résultat : ${MANQUANTES[*]}"
     [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
