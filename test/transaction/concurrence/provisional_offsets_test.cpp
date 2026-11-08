@@ -108,6 +108,118 @@ TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsWhenAnotherWr
     expectRelsBetweenTheirOwnNodes(*conn);
 }
 
+// Deux versements des nœuds locaux dans une même transaction (G1 verse à chaque COPY de
+// relations), sous un second écrivain qui valide des nœuds entre les deux, avec des relations
+// locales créées avant le premier et entre les deux, puis la mise à jour validée de l'une d'elles :
+// la forme de la réindexation de la montre (Scope → Scope par CONSUMED_BY) après laquelle le
+// journal de code-rag3db-depot ne se rejouait plus (8 novembre 2026, ticket
+// 2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation :
+// « Relationship … was not found in the forward direction »). Le processus meurt base ouverte ; la
+// réouverture rejoue le journal, et chaque relation est à ses deux bouts, dans les deux sens.
+TEST_F(ProvisionalOffsets, TwoFlushesInOneTransactionKeepEveryRelOnItsNodesThroughTheJournal) {
+    other.reset();
+    conn.reset();
+    database.reset();
+    const auto child = fork();
+    if (child == 0) {
+        int code = 0;
+        {
+            rag3db::main::Database db(databasePath, *systemConfig);
+            Connection a(&db);
+            Connection b(&db);
+            auto run = [&](Connection& c, const std::string& q) {
+                auto r = c.query(q);
+                if (!r->isSuccess()) {
+                    fprintf(stderr, "[child] %s : %s\n", q.c_str(), r->getErrorMessage().c_str());
+                    code = 10;
+                }
+            };
+            run(a, "CALL auto_checkpoint=false;");
+            run(b, "CALL lock_timeout=300;");
+            run(a, "CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
+            run(a, "CREATE REL TABLE R(FROM N TO N, k INT64);");
+            run(a, "UNWIND range(0, 9) AS i CREATE (:N {id: i});");
+            run(a, "CHECKPOINT;");
+            run(a, "BEGIN TRANSACTION;");
+            run(a, "UNWIND range(1000, 1009) AS i CREATE (:N {id: i});");
+            run(a, "MATCH (x:N {id: 1000}), (y:N {id: 1001}) CREATE (x)-[:R {k: 1}]->(y);");
+            run(b, "UNWIND range(2000, 2004) AS i CREATE (:N {id: i});");
+            run(a, "COPY R FROM (UNWIND [0] AS i RETURN 1, 2, 100);");
+            run(a, "UNWIND range(1100, 1109) AS i CREATE (:N {id: i});");
+            run(a, "MATCH (x:N {id: 1100}), (y:N {id: 1101}) CREATE (x)-[:R {k: 2}]->(y);");
+            run(a, "MATCH (x:N {id: 1000}), (y:N {id: 1105}) CREATE (x)-[:R {k: 3}]->(y);");
+            // Après le premier versement, la table est à A jusqu'à sa validation (comme sous un
+            // COPY de nœuds) : B attend, puis est refusé par le délai. Sans ce verrou, B validait
+            // ses nœuds derrière ceux de A.
+            {
+                auto r = b.query("UNWIND range(3000, 3004) AS i CREATE (:N {id: i});");
+                fprintf(stderr, "[child] B après le premier versement : %s\n",
+                    r->isSuccess() ? "validé" : r->getErrorMessage().c_str());
+                if (r->isSuccess() && code == 0) {
+                    code = 12; // [check: second-writer-waits]
+                }
+            }
+            run(a, "COPY R FROM (UNWIND [0] AS i RETURN 3, 4, 101);");
+            run(a, "COMMIT;");
+            run(a, "MATCH ()-[r:R {k: 3}]->() SET r.k = 30;");
+            run(a, "MATCH ()-[r:R {k: 1}]->() SET r.k = 10;");
+            // Ce que la mémoire voit avant la mort : le rejeu doit rendre la même chose.
+            {
+                auto r =
+                    a.query("MATCH (x:N)-[r:R]->(y:N) RETURN x.id, y.id, r.k ORDER BY x.id, y.id;");
+                std::string seen;
+                while (r->isSuccess() && r->hasNext()) {
+                    seen += r->getNext()->toString() + " ";
+                }
+                fprintf(stderr, "[child] en mémoire : %s\n", seen.c_str());
+            }
+            const auto wal = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+            if (code == 0 &&
+                (!std::filesystem::exists(wal) || std::filesystem::file_size(wal) == 0)) {
+                fprintf(stderr, "[child] le journal est vide : rien à rejouer\n");
+                code = 11;
+            }
+            // Mourir base ouverte : le journal est tout ce qui reste.
+            _exit(code);
+        }
+    }
+    int status = 0;
+    waitpid(child, &status, 0);
+    ASSERT_FALSE(WIFEXITED(status) && WEXITSTATUS(status) == 12)
+        << "[check: second-writer-waits] le second écrivain a validé ses nœuds dans la table après "
+           "le premier versement";
+    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: setup] le processus de la transaction a rendu " << status;
+    createDBAndConn();
+    // Le sens avant : chaque relation depuis sa source.
+    const std::vector<std::vector<int64_t>> expected = {{1, 2, 100}, {3, 4, 101}, {1000, 1001, 10},
+        {1000, 1105, 30}, {1100, 1101, 2}};
+    auto forward =
+        conn->query("MATCH (x:N)-[r:R]->(y:N) RETURN x.id, y.id, r.k ORDER BY x.id, y.id;");
+    ASSERT_TRUE(forward->isSuccess()) << "[check: replay] " << forward->getErrorMessage();
+    std::vector<std::vector<int64_t>> seen;
+    while (forward->hasNext()) {
+        auto row = forward->getNext();
+        seen.push_back({row->getValue(0)->getValue<int64_t>(),
+            row->getValue(1)->getValue<int64_t>(), row->getValue(2)->getValue<int64_t>()});
+    }
+    EXPECT_EQ(seen, expected) << "[check: rels-on-their-nodes]";
+    // Le sens arrière : chaque relation depuis sa destination.
+    for (const auto& rel : expected) {
+        auto back = conn->query("MATCH (y:N {id: " + std::to_string(rel[1]) +
+                                "})<-[r:R]-(x:N) RETURN x.id, r.k ORDER BY x.id;");
+        ASSERT_TRUE(back->isSuccess()) << back->getErrorMessage();
+        bool found = false;
+        while (back->hasNext()) {
+            auto row = back->getNext();
+            found |= row->getValue(0)->getValue<int64_t>() == rel[0] &&
+                     row->getValue(1)->getValue<int64_t>() == rel[2];
+        }
+        EXPECT_TRUE(found) << "[check: directions-agree] la relation " << rel[0] << " -> " << rel[1]
+                           << " manque au sens arrière";
+    }
+}
+
 // Une relation insérée par un COPY de relations journalisé, puis mise à jour dans la même
 // transaction : en service, le COPY l'écrit dans les listes CSR et la mise à jour l'y trouve ; au
 // rejeu, l'insertion journalisée (TABLE_INSERTION au milieu de la transaction) la rejouait dans le
