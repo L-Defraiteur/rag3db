@@ -1635,6 +1635,36 @@ mod tests {
     /// hôte sur le registre global voyait les runs vivants des autres (l'hôte
     /// inactif s'y croyait retenu, faf94cdfc) — et son arrêt les aurait
     /// annulés (`cancel_all`).
+    /// **L'hôte colore par les grammaires** (coloration B, page 12 de codeparsers) :
+    /// `POST /highlight {text, language}` rend les spans de
+    /// `syntax_highlighting::highlight`, chacun aux deux décalages,
+    /// `[debut, fin, sorte, debut_utf16, fin_utf16]` (octets pour le terminal, unités
+    /// UTF-16 pour la page), et la liste fermée des sortes. Un texte qui porte un
+    /// caractère hors ASCII avant le code sépare les deux décalages. Un alias de fence
+    /// (`rs`) se ramène à sa langue ; une langue inconnue rend `spans: null` (le
+    /// repli de la page), sans erreur. Aucun backend n'est ouvert.
+    #[cfg(feature = "code")]
+    #[test]
+    fn l_hote_colore_par_les_grammaires_aux_deux_decalages() {
+        let host = hote_isole();
+        let texte = "// é\nfn main() { let s = \"x\"; }\n";
+        let (statut, v) = host.handle("POST", "/highlight", None, json!({ "text": texte, "language": "rs" }).to_string().as_bytes());
+        assert_eq!(statut, 200, "{v}");
+        assert_eq!(v["language"], "rust", "{v}");
+        let spans = v["spans"].as_array().unwrap_or_else(|| panic!("des spans : {v}"));
+        let fn_ = texte.find("fn").unwrap();
+        let kw = spans.iter().find(|s| s[0] == json!(fn_)).unwrap_or_else(|| panic!("le mot-clé fn à l'octet {fn_} : {v}"));
+        assert_eq!(kw[2], "keyword", "{kw}");
+        // « é » fait deux octets et une unité UTF-16 : le décalage UTF-16 a un de moins.
+        assert_eq!((kw[1].as_u64(), kw[3].as_u64(), kw[4].as_u64()), (Some(fn_ as u64 + 2), Some(fn_ as u64 - 1), Some(fn_ as u64 + 1)), "{kw}");
+        assert!(spans.iter().any(|s| s[2] == "comment"), "le commentaire : {v}");
+        assert!(spans.iter().any(|s| s[2] == "string"), "la chaîne : {v}");
+        assert!(v["kinds"].as_array().is_some_and(|k| k.len() == 15 && k.contains(&json!("other"))), "{v}");
+        let (statut, inconnue) = host.handle("POST", "/highlight", None, json!({ "text": "x", "language": "brainfuck" }).to_string().as_bytes());
+        assert_eq!((statut, &inconnue["spans"], &inconnue["language"]), (200, &Value::Null, &Value::Null), "{inconnue}");
+        assert!(host.state()["backends"].as_array().is_none_or(|b| b.is_empty()), "aucun backend n'a été ouvert");
+    }
+
     fn hote_isole() -> DaemonHost {
         DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()))
     }
