@@ -985,3 +985,12 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   `best_signal`, pas de score absolu inventé) → hooks-essai (coloration B). **Le rebâti de la lib**
   portera a312f823e, le rejeu de hotfixs et vecteur-du-noeud-copie ; la pose attend aussi la cause
   du SIGSEGV.
+
+## 10 h 25 — Lucie est réveillée : ses premières décisions
+
+- **G3 : oui**, « rouvre toujours les extensions notées, absolument » → hotfixs mène G3 (1)+(2) au
+  push après A, dans le même rebâti si possible ; le refus avec option reste une suite non tranchée.
+- **Le pont Codex : plus tard.** Rien à activer pour l'instant.
+- **Le thème (tty) : « je vois pas pourquoi attendre mon accord avant de brancher »** → tty branche
+  daemon.json tout de suite ; Lucie réagit au rendu. Règle à garder : un rendu ou un design se
+  branche et se montre, on ne demande pas d'accord avant.
