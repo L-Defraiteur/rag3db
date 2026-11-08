@@ -5197,6 +5197,21 @@ impl Backend {
                     ));
                 }
             }
+            // **Une note « en cours » périmée** (c7, 8 novembre 2026 : code-essais-c7 disait
+            // `text: running` depuis le 25 octobre, rebâtie depuis, rien ne tournait) : la
+            // note d'avant un arrêt ne se recalcule qu'à l'index suivant. Sans indexation
+            // vivante ni rebâti en cours (`text_percent`), des comptes complets disent prêt.
+            if tournent == 0 {
+                for (entite, c) in &comptes {
+                    let complet = c["rows"].is_u64() && c["documents"] == c["rows"];
+                    if let Some(e) = etats.get_mut(entite) {
+                        if complet && e["text"] == "running" && e["text_percent"].is_null() {
+                            e["text"] = json!("ready");
+                            e["text_stale_note"] = json!("la note « en cours » d'avant un arrêt, sans indexation vivante : prêt d'après les comptes du dernier index");
+                        }
+                    }
+                }
+            }
             etats.insert("fts_counts".into(), Value::Object(comptes));
         }
         // **Un index vectoriel retiré se dit en clair** : la recherche dense
