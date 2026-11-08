@@ -194,4 +194,77 @@ TEST_F(ProvisionalOffsets, TwoFlushesInOneTransactionKeepEveryRelOnItsNodesThrou
     }
 }
 
+// Une relation insérée par un COPY de relations journalisé, puis mise à jour dans la même
+// transaction : en service, le COPY l'écrit dans les listes CSR et la mise à jour l'y trouve ; au
+// rejeu, l'insertion journalisée (TABLE_INSERTION au milieu de la transaction) la rejouait dans le
+// stockage local de la transaction de reprise, et la mise à jour (REL_UPDATE, par son décalage
+// définitif) la cherchait dans les listes : « not found in the forward direction », la base ne se
+// rouvrait plus (code-rag3db-depot, 8 novembre 2026, lu enregistrement par enregistrement par le
+// cœur). L'arête de la même paire est d'abord supprimée, comme dans ce journal.
+class RelCopyThenUpdateReplay : public ProvisionalOffsets, public ::testing::WithParamInterface<bool> {};
+
+TEST_P(RelCopyThenUpdateReplay, TheReplayFindsTheCopiedRelToUpdate) {
+    const bool withLocalNodes = GetParam();
+    other.reset();
+    conn.reset();
+    database.reset();
+    const auto child = fork();
+    if (child == 0) {
+        int code = 0;
+        {
+            rag3db::main::Database db(databasePath, *systemConfig);
+            Connection a(&db);
+            auto run = [&](const std::string& q) {
+                auto r = a.query(q);
+                if (!r->isSuccess()) {
+                    fprintf(stderr, "[child] %s : %s\n", q.c_str(), r->getErrorMessage().c_str());
+                    code = 10;
+                }
+            };
+            run("CALL auto_checkpoint=false;");
+            run("CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
+            run("CREATE REL TABLE R(FROM N TO N, k INT64);");
+            run("UNWIND range(0, 9) AS i CREATE (:N {id: i});");
+            run("MATCH (x:N {id: 1}), (y:N {id: 2}) CREATE (x)-[:R {k: 1}]->(y);");
+            run("CHECKPOINT;");
+            run("BEGIN TRANSACTION;");
+            run("MATCH (:N {id: 1})-[r:R]->(:N {id: 2}) DELETE r;");
+            if (withLocalNodes) {
+                run("UNWIND range(1000, 1004) AS i CREATE (:N {id: i});");
+            }
+            run(std::string("COPY R FROM (UNWIND [0] AS i RETURN 1, 2, 2") +
+                (withLocalNodes ? " UNION ALL RETURN 1000, 1001, 3" : "") + ");");
+            run("MATCH (:N {id: 1})-[r:R]->(:N {id: 2}) SET r.k = 20;");
+            run("COMMIT;");
+            const auto wal = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
+            if (code == 0 && (!std::filesystem::exists(wal) || std::filesystem::file_size(wal) == 0)) {
+                fprintf(stderr, "[child] le journal est vide : rien à rejouer\n");
+                code = 11;
+            }
+            _exit(code);
+        }
+    }
+    int status = 0;
+    waitpid(child, &status, 0);
+    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: setup] le processus de la transaction a rendu " << status;
+    createDBAndConn();
+    auto forward = conn->query("MATCH (x:N {id: 1})-[r:R]->(y:N) RETURN y.id, r.k;");
+    ASSERT_TRUE(forward->isSuccess()) << "[check: replay] " << forward->getErrorMessage();
+    ASSERT_TRUE(forward->hasNext()) << "[check: rels-on-their-nodes] la relation 1 -> 2 manque";
+    auto row = forward->getNext();
+    EXPECT_EQ(row->getValue(0)->getValue<int64_t>(), 2);
+    EXPECT_EQ(row->getValue(1)->getValue<int64_t>(), 20) << "[check: rels-on-their-nodes]";
+    EXPECT_FALSE(forward->hasNext()) << "[check: rels-on-their-nodes] l'arête supprimée est revenue";
+    auto back = conn->query("MATCH (y:N {id: 2})<-[r:R]-(x:N) RETURN x.id, r.k;");
+    ASSERT_TRUE(back->isSuccess()) << back->getErrorMessage();
+    ASSERT_TRUE(back->hasNext()) << "[check: directions-agree] la relation manque au sens arrière";
+    EXPECT_EQ(back->getNext()->getValue(1)->getValue<int64_t>(), 20) << "[check: directions-agree]";
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, RelCopyThenUpdateReplay, ::testing::Values(false, true),
+    [](const ::testing::TestParamInfo<bool>& info) {
+        return info.param ? std::string("WithLocalNodes") : std::string("BetweenCommittedNodes");
+    });
+
 } // namespace
