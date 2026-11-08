@@ -157,3 +157,41 @@ mod tests {
         assert_eq!(entete(&etat(), "/inconnu", "x"), "tâche x");
     }
 }
+
+/// Un span de coloration : octets `[debut, fin)` du texte, et sa sorte.
+pub type Span = (usize, usize, String);
+
+/// **Les spans de coloration d'un bloc**, par `POST /highlight` (les grammaires
+/// tree-sitter de codeparsers, servies par l'hôte). `None` quand la langue n'est
+/// pas connue des grammaires ou que l'hôte ne répond pas : le bloc reste sans
+/// couleur, rien ne se perd.
+pub fn surligner(agent: &ureq::Agent, ep: &Endpoint, texte: &str, langue: &str) -> Option<Vec<Span>> {
+    let v = poster_brut(agent, ep, "/highlight", &serde_json::json!({ "text": texte, "language": langue })).ok()?;
+    spans_de(&v, texte.len())
+}
+
+/// Les spans d'une réponse de `/highlight` (`spans: [[debut, fin, sorte, …], …]`),
+/// gardés seulement s'ils tombent dans le texte.
+pub fn spans_de(v: &Value, longueur: usize) -> Option<Vec<Span>> {
+    let spans = v["spans"].as_array()?;
+    Some(
+        spans
+            .iter()
+            .filter_map(|s| Some((s[0].as_u64()? as usize, s[1].as_u64()? as usize, s[2].as_str()?.to_string())))
+            .filter(|(a, b, _)| a < b && *b <= longueur)
+            .collect(),
+    )
+}
+
+#[cfg(test)]
+mod tests_surligner {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn spans_are_read_and_out_of_range_ones_dropped_and_an_unknown_language_is_none() {
+        let v = json!({ "ok": true, "language": "rust", "spans": [[0, 2, "keyword", 0, 2], [3, 7, "function", 3, 7], [5, 99, "other", 5, 99]] });
+        assert_eq!(spans_de(&v, 12), Some(vec![(0, 2, "keyword".into()), (3, 7, "function".into())]));
+        assert_eq!(spans_de(&json!({ "ok": true, "language": null, "spans": null }), 3), None);
+    }
+}

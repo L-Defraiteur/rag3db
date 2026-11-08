@@ -165,7 +165,8 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             }
         }
         if sale && derniere.elapsed() >= IMAGE {
-            dessiner(terminal, vue)?;
+            let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
+            dessiner(terminal, vue, &colorer)?;
             sale = false;
             derniere = Instant::now();
         }
@@ -216,13 +217,23 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
     }
 }
 
-/// Les lignes validées dans l'historique, puis la zone vivante.
-pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue) -> Result<(), String> {
-    let lignes: Vec<Validee> = vue.prendre_lignes();
-    if !lignes.is_empty() {
+/// Ce qui colore un bloc de code : `(texte, langue) → spans`, ou rien.
+pub type Colorer<'a> = &'a dyn Fn(&str, &str) -> Option<Vec<crate::client::Span>>;
+
+/// Les lignes validées dans l'historique (repliées, les blocs de code colorés
+/// par `colorer`), puis la zone vivante.
+pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer) -> Result<(), String> {
+    let validees: Vec<Validee> = vue.prendre_lignes();
+    if !validees.is_empty() {
+        let largeur = terminal.size().map(|s| s.width).unwrap_or(80) as usize;
+        let mut lignes = Vec::new();
+        for v in &validees {
+            let spans = if v.genre == crate::vue::Genre::Code { colorer(&v.texte, &v.langue) } else { None };
+            lignes.extend(crate::code::lignes(v, &vue.theme, vue.capacites, largeur, spans.as_deref()));
+        }
         terminal
             .insert_before(lignes.len() as u16, |buf| {
-                Paragraph::new(lignes.iter().map(Validee::line).collect::<Vec<_>>()).render(buf.area, buf);
+                Paragraph::new(lignes).render(buf.area, buf);
             })
             .map_err(|e| format!("{e:?}"))?;
     }
@@ -307,10 +318,10 @@ mod tests {
         for i in 0..n {
             vue.trame(&json!({ "evenement": { "kind": "Token", "text": format!(" mot{i}") } }));
             if (i + 1) % par_image == 0 {
-                dessiner(&mut t, &mut vue).unwrap();
+                dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
             }
         }
-        dessiner(&mut t, &mut vue).unwrap();
+        dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
         compte.load(Ordering::SeqCst)
     }
 
@@ -323,7 +334,7 @@ mod tests {
         vue.politiques(&json!({ "tools": [{ "name": "edit_file", "policy": { "write_files": true } }] }));
         vue.entete = "rag3db · tty-3 · tâche parle".into();
         vue.trame(&evenement);
-        dessiner(&mut t, &mut vue).unwrap();
+        dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
         let debut = std::time::Instant::now();
         compte.store(0, Ordering::SeqCst);
         let ms = vue.quelle().unwrap().de(&vue.theme).ms;

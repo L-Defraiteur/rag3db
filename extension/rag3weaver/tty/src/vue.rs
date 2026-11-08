@@ -8,7 +8,7 @@
 use crate::anim::{self, Capacites, Glyphes, Niveau, Quelle};
 use crate::theme::Theme;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -435,6 +435,7 @@ mod tests {
     use super::*;
     use crate::theme::rgb;
     use ratatui::backend::TestBackend;
+    use ratatui::style::Color;
     use ratatui::{Terminal, TerminalOptions, Viewport};
     use serde_json::json;
 
@@ -573,7 +574,8 @@ mod tests {
         let lignes = v.prendre_lignes();
         if !lignes.is_empty() {
             t.insert_before(lignes.len() as u16, |buf| {
-                Paragraph::new(lignes.iter().map(Validee::line).collect::<Vec<_>>()).render(buf.area, buf);
+                let rendu: Vec<Line> = lignes.iter().flat_map(|x| crate::code::lignes(x, &v.theme, v.capacites, largeur as usize, None)).collect();
+                Paragraph::new(rendu).render(buf.area, buf);
             })
             .unwrap();
         }
