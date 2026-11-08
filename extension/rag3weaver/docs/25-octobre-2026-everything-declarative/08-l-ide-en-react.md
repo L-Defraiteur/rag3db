@@ -302,6 +302,13 @@ La décision de Lucie du 11 octobre : « une vue « mes recherches » avec les c
   « relancer » pour `search_code`, les filtres « tout », « les miennes », « les agents », puis
   « plus anciennes ». Repères : `#recherches .recherche[data-client][data-run]`, `.clique`,
   `#filtre-tout`, `#filtre-ide`, `#filtre-agents`, `#aucune-recherche`, `#plus-anciennes`.
+- **Relue par everything declarative** (le jour même) : un clic droit n'est pas un clic (le clic du
+  milieu seul) ; « dépôt » à l'écran ; la réponse d'un filtre changé entre-temps est ignorée. Puis,
+  en lot à part : une page lit au plus 2 000 runs (`RUNS_READ_PER_PAGE`) et rend `suite` sur le
+  dernier lu même sans recherche trouvée, avec `lus` ; une ligne dit `relancable` (son outil est
+  celui que la vue recherche appelle, `SEARCH_VIEW_TOOL`), et la vue ne nomme plus d'outil ; les
+  outils de recherche se lisent sur le manifeste quand le backend est fermé, sans ouvrir sa base
+  (`mes_recherches_se_lisent_sans_ouvrir_la_base_par_pages_bornees`).
 - **Témoins** : `mes_recherches_rendent_celles_de_l_ide_et_des_agents_avec_les_clics`
   (`daemon_host/mes_recherches.rs`, navigateur : une recherche de l'IDE et son clic, une recherche
   d'agent par `/call`, la route, les refus, la vue et son filtre), et
