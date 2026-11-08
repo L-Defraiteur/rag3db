@@ -2460,7 +2460,9 @@ mod tests {
         let b = prepared
             .open(
                 Box::new(crate::rag3db_connection::Rag3dbConnection::new(&d.path().join("memoire.rag3db")).expect("la base")),
-                Some(Box::new(crate::embedder::HashEmbedder::new(1024))),
+                // Sans service : l'embarqueur absent (un factice est refusé à l'ouverture) ; les
+                // réactions tournent, la dette des vecteurs attend.
+                None,
             )
             .expect("l'ouverture");
         let appel = |outil: &str, args: Value| b.call(outil, args.clone()).unwrap_or_else(|e| panic!("{outil} {args} : {e}"));
