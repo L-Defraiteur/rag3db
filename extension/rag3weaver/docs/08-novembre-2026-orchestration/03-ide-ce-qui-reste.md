@@ -37,7 +37,9 @@ rebasée, et ses hashs cités dans les tickets (48abbd62d, a03de7d7f) ne sont pa
 
 ## Ce que prend archi
 
-Le premier « pas fait » visible : **le thème commun dans l'IDE**. L'IDE lit
+Dans l'ordre de la liste, le premier « pas fait » est le lien vers un symbole. Le plus visible est
+le thème : il est partiel sur l'ensemble, mais n'est pas fait du tout dans l'IDE, et il se voit sur
+toutes les pages. archi prend donc **le thème commun dans l'IDE**, sauf si c7 préfère le symbole. L'IDE lit
 `templates/themes/daemon.json` (servi par l'hôte, mêmes tokens que le terminal) et rend
 l'animation « réfléchit » du thème pendant que le modèle réfléchit, dans la page du chat. Lucie a
 dit le 8 novembre qu'un thème se branche et se montre sans accord préalable. Le clair et le sombre
