@@ -1556,6 +1556,18 @@ impl DaemonServer {
         for l in host.reprendre_les_equipiers() {
             eprintln!("[équipier] {l}");
         }
+        // Les premiers index des worktrees attachés que l'arrêt de l'hôte a laissés en
+        // plan reprennent (c7, 8 novembre 2026, 16 h 09), dans un fil : l'hôte répond
+        // pendant que leurs bases s'ouvrent.
+        #[cfg(feature = "code")]
+        {
+            let h = host.clone();
+            let _ = std::thread::Builder::new().name("reprise-premiers-index".into()).spawn(move || {
+                for l in h.reprendre_les_premiers_index() {
+                    eprintln!("[atelier] premier index repris : {l}");
+                }
+            });
+        }
         // Les lignes de boîte pour Codex, livrées par `codex queue` (page 07 § 4).
         host.servir_les_livraisons_codex();
         // **Le relevé des sessions mortes, à un pas régulier** : sans lui, une
