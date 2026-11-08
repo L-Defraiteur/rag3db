@@ -1462,9 +1462,9 @@ mod tests {
         // 1. list_worktrees le rouvre et relance l'index.
         couper();
         let liste = outil("list_worktrees", json!({}));
-        assert!(!liste.contains("pas ouvert"), "{liste}");
+        assert!(liste.contains("worktree(s) attaché(s)") && !liste.contains("pas ouvert"), "{liste}");
         let neuf = journal_de();
-        assert!(!neuf.is_empty() && neuf != coupe.display().to_string(), "un journal neuf : {neuf}");
+        assert!(!neuf.is_empty() && neuf != coupe.display().to_string(), "un journal neuf : {neuf} ; list_worktrees : {liste}");
         attendre(&neuf);
 
         // 2. Au démarrage de l'hôte, la reprise.
