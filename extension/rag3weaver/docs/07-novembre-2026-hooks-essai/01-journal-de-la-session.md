@@ -854,3 +854,18 @@ les suites suivantes ; il est corrigé, et chaque étape dit maintenant sa propr
 **En attente** : « 7878 libre » de G ; puis e2e_lectures et le test des tâches seuls, puis le push
 de tache-sans-git au « à toi » de c7. Les branches distantes diag-sansgit-index et
 diag-master-index attendent le mot de Lucie pour être effacées.
+
+**Le rappel des fiches au-delà de 1 000 ms (8 novembre, 19 h 19 à 19 h 38)** : les rappels sont
+bimodaux, réussis en 124 à 168 ms, ou en délai dépassé d'environ 1 000 ms à partir de 19 h 19.
+- Un `recall_fiches` direct par MCP, à 19 h 23, a pris environ 11,5 s.
+- La charge était basse : PSI io de 0,10 au portable et de 1,06 à luciepc, et les tunnels 7979 à
+  7981 répondaient à `/sante`.
+- À 19 h 19 min 10, la montre du portable a réindexé le rapport d'orchestration, et sa ligne
+  « morceaux embarqués » n'est pas venue avant 19 h 38.
+- La cause, confirmée par c7 : le granite 7878 de luciepc mettait 12 s par texte (le 7882 : 234
+  ms). La requête dense du rappel attendait derrière, et le service est revenu seul vers 19 h 38.
+  Le rappel de 19 h 48 a pris 124 ms.
+
+**Relevé des hooks** : un rappel qui tombe en délai dépassé nomme sa cause quand il la connaît,
+par exemple « embarquement en attente du service », plutôt que « l'hôte ne répond pas ». La
+requête dense attendait le service d'embarquement ; l'hôte, lui, répondait.
