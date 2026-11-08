@@ -418,7 +418,30 @@ fn le_juge_des_outils_sur_gemini_nomme_les_defauts_de_schema_et_de_retour() {
         .clone();
     let defauts: Vec<Value> = ["bloquant", "genant", "mineur"].iter().flat_map(|g| outil["defauts"][*g].as_array().cloned().unwrap_or_default()).collect();
     let nomme = |genre: &str| defauts.iter().any(|d| d["genre"] == genre && d["call_id"].as_str().is_some_and(|c| !c.is_empty()) && d["proposee"].as_str().is_some_and(|p| !p.is_empty()));
-    for genre in ["parametre_devrait_etre_optionnel", "parametre_mal_nomme", "retour_hors_sujet", "retour_incoherent"] {
+    // La forme qui rend `fichier` optionnel : le dire (« fichier » et « optionnel »), ou
+    // proposer une liste `required` d'où il est parti (`"required": ["ligne"]`, le 8 novembre).
+    let rend_fichier_optionnel = |forme: &str| -> bool {
+        let dit = forme.contains("fichier") && (forme.contains("optionnel") || forme.contains("optional"));
+        let liste_sans_lui = forme.find("required").is_some_and(|i| {
+            let reste = &forme[i..];
+            matches!((reste.find('['), reste.find(']')), (Some(a), Some(b)) if a < b && !reste[a..b].contains("fichier"))
+        });
+        dit || liste_sans_lui
+    };
+    // **Le `fichier` obligatoire se défend sous deux genres** (ticket « le témoin du juge des
+    // outils exige un genre que Gemini ne tient pas », 8 novembre 2026) : un paramètre qui
+    // devrait être optionnel, ou une description trompeuse (« dans tout le projet »). Gemini
+    // prend l'un ou l'autre, avec la même preuve et la même correction. Ce qui est exigé : le
+    // défaut vu, sa preuve qui cite `required`, et la forme qui rend `fichier` optionnel.
+    let le_fichier_obligatoire = defauts.iter().any(|d| {
+        let forme = d["proposee"].as_str().unwrap_or_default().to_lowercase();
+        matches!(d["genre"].as_str(), Some("parametre_devrait_etre_optionnel" | "description_trompeuse"))
+            && d["call_id"].as_str().is_some_and(|c| !c.is_empty())
+            && d["preuve"].as_str().is_some_and(|p| p.contains("required"))
+            && rend_fichier_optionnel(&forme)
+    });
+    assert!(le_fichier_obligatoire, "le juge n'a pas nommé le `fichier` obligatoire (parametre_devrait_etre_optionnel ou description_trompeuse), sa preuve `required` et la forme qui le rend optionnel : {outil}");
+    for genre in ["parametre_mal_nomme", "retour_hors_sujet", "retour_incoherent"] {
         assert!(nomme(genre), "le juge n'a pas nommé {genre} avec son call_id et sa forme : {outil}");
     }
 }
