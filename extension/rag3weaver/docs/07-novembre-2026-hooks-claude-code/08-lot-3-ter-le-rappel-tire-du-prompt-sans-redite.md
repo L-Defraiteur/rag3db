@@ -212,11 +212,22 @@ Ce que le (e) prend :
   causes possibles du point 3 du ticket. Une empreinte d'avant, de 16 chiffres, se lit « déjà vue »
   et se réécrit au prochain rendu. La relance de l'hôte ne rend donc rien « neuf » à tort.
 
-Ce que le (e) laisse au ticket, à décider avec hooks-essai :
-- le choix entre **A**, écarter une fiche du juge du rappel en tête de tour, et **B**, la confier
-  au seul juge différé ;
-- **le nom court d'une fiche de bilan**, un titre et l'empreinte de la consigne, du côté du juge.
-  Le bornage du nom rendu, ici, n'en est que le symptôme.
+- **Les fiches du juge ne sont plus rappelées en tête de tour** (A, tranché par hooks-essai). Une
+  fiche de bilan ou d'outil est un compte rendu, pas un savoir. Elle reste lisible par
+  `get_fiche`, et le journal la nomme : « exclu : « … » (bilan du juge) ». On n'a pas pris B, la
+  confier au seul juge différé : sans modèle dans l'environnement du hook, B revenait à la taire
+  sans le dire. Le critère :
+  - `via: juge` quand la ligne du rappel le porte ;
+  - sinon le nom que le juge leur donne, `bilan : …` ou `outil : …`.
+
+  `recall_fiches` ne rend pas `via` aujourd'hui : ce champ n'est pas dans les `returnFields` de
+  `Fiche` du gabarit memory. Son ajout est demandé à 96 ; le manifeste de Lucie est le sien. Le
+  préfixe tient lieu en attendant.
+- **Le second ticket de hooks-essai**, « une fiche déjà vue redevient neuve après la relance de
+  l'hôte », est fermé par l'empreinte blake3.
+
+Ce que le (e) laisse au ticket des bilans : **le nom court d'une fiche de bilan**, un titre et
+l'empreinte de la consigne, côté juge. hooks-essai le prend dans un lot à part.
 
 La passe est épinglée sur la lib dadbf0041, la lib ordinaire du 8 novembre, sans
 `RAG3WEAVER_MOTEUR_ANCIEN`.

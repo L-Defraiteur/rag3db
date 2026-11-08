@@ -1151,6 +1151,9 @@ pub struct Candidat {
     pub about: String,
     pub plein: Option<f64>,
     pub dense: Option<f64>,
+    /// Une fiche que le juge a écrite (un bilan de run, une fiche d'outil) : un
+    /// compte rendu, pas un savoir à rappeler en tête de tour (3 ter e, A).
+    pub du_juge: bool,
 }
 
 impl Candidat {
@@ -1190,7 +1193,10 @@ pub fn candidats_du_rappel(v: &Value) -> Vec<Candidat> {
                     None => (None, None),
                 }
             };
-            Some(Candidat { nom, about: x["data"]["about"].as_str().unwrap_or("").to_string(), plein, dense })
+            // `via: juge` quand la ligne le porte ; sinon le nom que le juge donne
+            // à ses fiches (`recall_fiches` ne rend pas `via` aujourd'hui).
+            let du_juge = x["data"]["via"] == "juge" || nom.starts_with("bilan :") || nom.starts_with("outil :");
+            Some(Candidat { nom, about: x["data"]["about"].as_str().unwrap_or("").to_string(), plein, dense, du_juge })
         })
         .collect()
 }
@@ -1378,7 +1384,7 @@ pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, 
             };
             match h.appeler_borne("recall_fiches", json!({ "query": requete, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), Duration::from_secs(30)) {
                 // Le fils refait le rappel : il ne juge que ce que le plein texte touche.
-                Ok(v) => candidats_du_rappel(&v).into_iter().filter(|c| c.plein.is_some()).map(|c| c.json()).collect(),
+                Ok(v) => candidats_du_rappel(&v).into_iter().filter(|c| c.plein.is_some() && !c.du_juge).map(|c| c.json()).collect(),
                 Err(err) => {
                     journal.push(format!("[fond] {session} : rappel en {} ms : {err}", debut.elapsed().as_millis()));
                     return journal;
@@ -1537,7 +1543,13 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 // sujet) : une fiche que les mots extraits touchent est candidate ; une
                 // fiche que seul le dense trouve n'est pas jugée tant qu'un écart ou un
                 // seuil dense n'a pas été mesuré sur une mémoire peuplée.
-                let restants: Vec<&Candidat> = candidats.iter().filter(|c| c.nom != soi).collect();
+                // Les fiches du juge ne sont pas rappelées en tête de tour (A, tranché
+                // par hooks-essai) : elles restent lisibles par `get_fiche`, et dites.
+                let du_juge: Vec<String> = candidats.iter().filter(|c| c.du_juge && c.nom != soi).map(|c| format!("« {} »", premiere_ligne(&c.nom, 60))).collect();
+                if !du_juge.is_empty() {
+                    raisons.push(format!("exclu : {} (bilan du juge)", du_juge.join(", ")));
+                }
+                let restants: Vec<&Candidat> = candidats.iter().filter(|c| c.nom != soi && !c.du_juge).collect();
                 let mut touches: Vec<&Candidat> = restants.iter().copied().filter(|c| c.plein.is_some()).collect();
                 touches.sort_by(|a, b| b.plein.partial_cmp(&a.plein).unwrap_or(std::cmp::Ordering::Equal));
                 let dense_seul: Vec<String> = restants.iter().filter(|c| c.plein.is_none()).map(|c| format!("« {} » {:.2}", c.nom, c.dense.unwrap_or(0.0))).collect();
@@ -2687,10 +2699,26 @@ mod tests {
         let v = Vocabulaire::lire(&reglage);
         assert!(!v.contains("tâche") && !v.contains("worktree") && !v.contains("bornée"), "un nom de bilan n'alimente pas le vocabulaire : {v:?}");
         assert!(v.contains("lucivy") && v.contains("embarquement"), "{v:?}");
-        // Le nom rendu est borné à 200 caractères, et le journal à 120.
-        let rendu = r.bloc.lines().find(|l| l.contains("bilan :")).unwrap_or_default().to_string();
-        assert!(rendu.chars().count() < 400, "{} caractères : {rendu}", rendu.chars().count());
+        // Le bilan du juge n'est pas rappelé (A) : exclu, et nommé au journal.
+        assert!(!r.bloc.contains("bilan :"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("exclu : « bilan : tâche réelle") && l.contains("(bilan du juge)")), "{:?}", r.journal);
+        assert!(r.bloc.contains("« lucivy embarquement »"), "le reste passe : {}", r.bloc);
         assert!(r.journal.iter().all(|l| l.chars().count() < 700), "{:?}", r.journal);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn une_fiche_ecrite_par_le_juge_n_est_pas_rappelee_meme_sans_son_prefixe() {
+        let _env = env();
+        let (chemin, reglage) = transcription_d_essai("via-juge", &[T_USER]);
+        let mut h = hote_avec_identite();
+        // `via: juge` dans la ligne, sous un nom qui n'a pas le préfixe.
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
+            { "chunk": { "score": 0.4 }, "signals": [{ "label": "bm25", "score": 8.0 }], "data": { "name": "compte rendu du worktree rag3db", "about": "x", "state": "current", "via": "juge" } }
+        ] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur le worktree et rag3db"), &reglage, Ok(&h));
+        assert!(!r.bloc.contains("compte rendu du worktree"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("exclu : « compte rendu du worktree rag3db » (bilan du juge)")), "{:?}", r.journal);
         let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
     }
 
