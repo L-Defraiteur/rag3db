@@ -960,18 +960,32 @@ if [ ${#NON_MONTEES[@]} -gt 0 ]; then
 fi
 
 # **Les suites connues pour laisser des résidus** dans leur TMPDIR : la liste du
-# ticket, une suite par ligne (les lignes # sont des commentaires).
+# ticket (les lignes # sont des commentaires). Une ligne `<suite>` seule : elle en laisse
+# à chaque passe, et propre, elle est rouge. Une ligne `<suite> <chemin du ticket>` : un
+# rouge connu du témoin, un résidu qui va et vient avec une cause en ticket ; il se dit en
+# toutes lettres, propre reste propre.
 LISTE_DES_RESIDUS="$WEAVER/tests/e2e/suites_qui_laissent_des_residus.txt"
 residus_de_la_suite() {
-  local nom="$1" dossier="$E2E_TMP_PARENT/$1" connue=0
-  grep -qx -- "$nom" <(grep -v '^#' "$LISTE_DES_RESIDUS" 2>/dev/null | sed 's/[[:space:]]*$//') && connue=1
+  local nom="$1" dossier="$E2E_TMP_PARENT/$1" connue=0 ticket=""
+  local entree
+  entree=$(grep -v '^#' "$LISTE_DES_RESIDUS" 2>/dev/null | sed 's/[[:space:]]*$//' | awk -v s="$nom" '$1 == s { print; exit }')
+  if [ -n "$entree" ]; then
+    connue=1
+    ticket=$(echo "$entree" | awk '{ $1 = ""; sub(/^ +/, ""); print }')
+  fi
   if [ -n "$(find "$dossier" -mindepth 1 -print -quit 2>/dev/null)" ]; then
     local n
     n=$(find "$dossier" -mindepth 1 -maxdepth 1 | wc -l)
     echo "▸ RÉSIDUS $nom : $n entrée(s) dans son TMPDIR ($(du -sh "$dossier" 2>/dev/null | cut -f1))"
     find "$dossier" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | head -20 | while read -r e; do
       echo "    $(du -sh -- "$dossier/$e" 2>/dev/null | cut -f1)	$e"
+      # Ce qu'un dossier laissé contient : des fichiers vides (un `.readers`) ne pèsent rien.
+      [ -d "$dossier/$e" ] && find "$dossier/$e" -mindepth 1 -maxdepth 3 -printf '      %s o\t%P\n' 2>/dev/null | head -5
     done
+    if [ "$connue" = 1 ] && [ -n "$ticket" ]; then
+      echo "  résidu connu : $nom, $ticket, $(find "$dossier" -mindepth 1 -maxdepth 3 -printf '%P ' 2>/dev/null | cut -c1-300)"
+      return 0
+    fi
     if [ "$connue" = 1 ]; then
       echo "  (connue : $nom est dans tests/e2e/suites_qui_laissent_des_residus.txt)"
       return 0
@@ -979,7 +993,7 @@ residus_de_la_suite() {
     echo "✗ $nom laisse des résidus dans son TMPDIR et n'est pas dans tests/e2e/suites_qui_laissent_des_residus.txt : effacez-les derrière vous"
     return 1
   fi
-  if [ "$connue" = 1 ] && [ -z "$TEST_FILTER" ]; then
+  if [ "$connue" = 1 ] && [ -z "$ticket" ] && [ -z "$TEST_FILTER" ]; then
     echo "✗ $nom finit propre mais reste dans tests/e2e/suites_qui_laissent_des_residus.txt : retirez-la de la liste (et du ticket)"
     return 1
   fi
