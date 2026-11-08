@@ -1372,7 +1372,8 @@ mod tests {
         let couper = || {
             std::fs::write(&coupe, format!("indexation lancée\n{} : l'hôte s'arrête\n", crate::dataflow::index_nodes::STOPPED_PREFIX)).unwrap();
             std::fs::write(&marque, coupe.display().to_string()).unwrap();
-            assert_eq!(host.close(None, &manifeste)["ok"], true);
+            let s = host.open_session("le témoin", None, Vec::new(), None);
+            assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
         };
 
         // 1. list_worktrees le rouvre et relance l'index.
