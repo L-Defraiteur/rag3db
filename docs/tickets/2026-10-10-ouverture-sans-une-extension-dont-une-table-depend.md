@@ -1,7 +1,7 @@
 # Une base s'ouvre sans dire qu'une extension dont une table dépend n'a pas pu être chargée
 
 - **État** : ouvert — la proposition du refus avec option reste à trancher (orchestration, 8
-  novembre 2026). Le lot G3 de hotfixs (8 novembre, Lucie : « rouvre toujours les extensions notées,
+  novembre 2026). Le lot G3 de hotfixs (8 novembre, accord de Lucie, transmis par c7 à 10 h 25 : « rouvre toujours les extensions notées,
   absolument ») a fait le reste : toute ouverture charge les extensions notées, journal vide ou non,
   et un échec se dit au journal du moteur et dans la colonne `extension_error` de SHOW_INDEXES.
   Proposition de l'orchestration du 10 octobre 2026
