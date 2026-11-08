@@ -395,7 +395,16 @@ impl DaemonHost {
                     self.run_chat_turn(tour, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, None)
                 })
                 .and_then(|r| r),
-            Some(s) => self.run_teammate_turn(&hosted, backend_id, &run_id, &mut session, message, annule, arrete_par, s),
+            // **Un pas repart d'une session neuve** : son message porte la demande,
+            // les pas faits et la boîte (`frontier_message`). La session de la
+            // tâche garde chaque pas pour l'affichage ; elle n'est plus renvoyée
+            // au modèle.
+            Some(s) => {
+                let mut neuve = ChatSession::default();
+                let r = self.run_teammate_turn(&hosted, backend_id, &run_id, &mut neuve, message, annule, arrete_par, s);
+                session.turns.extend(neuve.turns.into_iter().filter(|t| t.role != "system"));
+                r
+            }
         };
         // Un tour fini : son bilan, si le backend déclare `bilans` (page 04).
         if resultat.is_ok() {
