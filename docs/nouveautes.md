@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Un gros COPY de blobs tient dans un petit tampon.**
+  Un seul COPY de 112 blobs d'1 Mio échouait sous 256 Mio de tampon (« buffer pool is full ») ; un
+  COPY se borne désormais en octets, vide ses lignes au disque par lots sans attendre un groupe
+  plein, les ajoute à la tête née du même COPY par copie-échange (jamais sous les pieds d'un lecteur),
+  et écrit son journal par tranches : le COPY passe, forcé comme journalisé, annulé sans laisser une
+  page (`dadbf0041`).
 - **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
   verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
   codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
