@@ -1,6 +1,6 @@
 # Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive
 
-- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration) ; le 8 novembre, le cache d'index quitte /tmp et le témoin de suite existe (session recherche), restent les sept suites de la liste.
+- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration) ; le 8 novembre, le cache d'index quitte /tmp et le témoin de suite existe (session recherche), restent cinq suites qui laissent des résidus à chaque passe et trois, intermittentes, en rouge connu du témoin.
 - **Gravité** : confort, mais `/tmp` est un tmpfs sur le poste principal : ce qui y reste occupe
   la RAM, puis l'échange.
 - **Atteignable en service** : non (tests seulement), à une exception près : `Catalog` écrit son
@@ -116,6 +116,14 @@ Aucun pour l'instant. Il faudrait :
   Pendant cette mesure, `e2e_banc_qualite` a paniqué faute de granite-278m sur 127.0.0.1:7878 :
   c'est la panne de ce service à luciepc, de 10 h 47 à 12 h 07, déjà en ticket (f66ad4449, cause
   illisible, journaux persistants posés). Rien à voir avec les résidus, et rien à chercher ici.
+
+  Trois passes par suite ont montré que trois d'entre elles vont et viennent : e2e_cited_by
+  3/3, e2e_juge 3/3, e2e_lectures 0/3. Leur résidu est un TempDir dont l'effacement a buté (un fil du
+  backend écrit encore après son Drop) : ticket
+  `2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md`. Elles sont dans la liste
+  avec ce ticket, en rouge connu du témoin (« résidu connu : … », propre reste propre). Les cinq
+  autres (e2e_code, e2e_prise_atomique, e2e_rag3daemon, e2e_repli_de_branche, e2e_rouvrir) en
+  laissent à chaque passe : propres, elles sont rouges.
 
   La branche de l'équipier `agent/tests-bases-dans-tmp` (relue par hotfixs, qui la complète) vise
   une partie de ces suites : chaque suite qu'elle rend propre sort de la liste dans son commit.
