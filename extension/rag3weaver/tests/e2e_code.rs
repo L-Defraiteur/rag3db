@@ -1856,3 +1856,24 @@ fn an_edge_says_how_it_was_resolved() {
     assert_eq!(marque("CONSUMES", "appelle", "aide"), vec![Some("nom".to_string())], "par le seul nom");
     assert_eq!(marque("CONSUMED_BY", "aide", "appelle"), vec![Some("nom".to_string())], "la réciproque, même marque");
 }
+
+/// **Une liaison de module externe se dit** (8 novembre 2026, c7) : en JavaScript, la mention d'un
+/// nom requis d'un module hors de l'arbre (`require("mtga-reader")`) va à la zone de sa ligne
+/// d'import, marquée « liaison » — sûre, mais pas la définition (codeparsers `external_binding`).
+#[test]
+#[ignore]
+fn an_external_module_binding_is_marked_liaison() {
+    use rag3weaver::code::analyze;
+    use rag3weaver::connection::CypherValue;
+
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    let source = "\"use strict\";\n\nconst reader = require(\"mtga-reader\");\n\nfunction lire() {\n  return reader.read();\n}\n\nmodule.exports = lire;\n";
+    let rapport = cat.ingest_code(&analyze("/projet", vec![("collect.js".to_string(), source.to_string())])).unwrap();
+    assert_eq!(rapport.failed, 0, "{rapport:?}");
+    let r = cat
+        .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = 'lire' AND b.name STARTS WITH 'file_scope' RETURN r.resolution")
+        .unwrap();
+    let marques: Vec<Option<String>> = r.rows.iter().map(|r| match r.first() { Some(CypherValue::String(v)) => Some(v.clone()), _ => None }).collect();
+    assert_eq!(marques, vec![Some("liaison".to_string())], "la mention va à la zone de son require, marquée liaison");
+}
