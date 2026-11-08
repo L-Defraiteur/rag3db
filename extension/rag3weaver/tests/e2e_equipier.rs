@@ -163,7 +163,10 @@ fn l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges() {
         std::thread::sleep(Duration::from_secs(2));
     };
     eprintln!("fiche de session : {} — {} bilans", fiche["fiche"], fiche["apports"].as_array().unwrap().len());
-    assert!(fiche["fiche"].as_str().unwrap().starts_with("bilan : écris la documentation"), "la fiche porte la demande, pas la frontière d'un pas : {}", fiche["fiche"]);
+    // La fiche de la tâche porte son nom court (8 novembre 2026, c7 : la demande entière
+    // faisait des noms de 2 000 caractères), un apport par pas, « pas N · <date> » en tête.
+    assert_eq!(fiche["fiche"], "bilan : doc", "la fiche porte le nom de la tâche : {}", fiche["fiche"]);
+    assert!(fiche["apports"].as_array().unwrap().iter().all(|a| a["texte"].as_str().is_some_and(|t| t.starts_with("**pas "))), "chaque apport dit son pas : {}", fiche["apports"]);
     let notes: Vec<Value> = fiche["apports"].as_array().unwrap().iter().map(|a| a["note"].clone()).collect();
     eprintln!("notes du juge, pas par pas : {notes:?}");
 
