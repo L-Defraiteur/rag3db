@@ -332,6 +332,8 @@ impl DaemonHost {
             declarations: Some(crate::propositions::ModeDeclarations::Auto),
             workspace: t.workspace.as_ref().map(|w| (w.racine.clone(), w.ecrit)),
             declarations_hors_depot: t.declarations_hors_depot,
+            dossier_de_tache: t.arbre.parent().map(Path::to_path_buf),
+            racine_principale: t.workspace.as_ref().map(|w| w.racine_principale.clone()),
         })
     }
 

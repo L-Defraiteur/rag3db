@@ -19,7 +19,15 @@
     "source": "working_tree",
     "root": "workspace",
     "commands": "approval",
-    "index": "code"
+    "index": "code",
+    "sandbox": {
+      "extra_read": ["~/.rustup", "~/.cargo/bin", "~/.cargo/registry", "~/.cargo/git", "~/.cargo/config.toml"],
+      "env": {
+        "CARGO_TARGET_DIR": "{repo_target}",
+        "TMPDIR": "{task_dir}/tmp",
+        "CARGO_NET_OFFLINE": "true"
+      }
+    }
   },
   "entities": {},
   "tools": {
