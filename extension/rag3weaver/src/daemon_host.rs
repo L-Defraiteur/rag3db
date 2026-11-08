@@ -2188,6 +2188,65 @@ mod tests {
         assert!(hote.state()["background"].as_array().is_some_and(|a| a.is_empty()), "plus rien en fond");
     }
 
+    /// **Mes recherches se lisent sans ouvrir la base, par pages bornées** (relecture
+    /// d'everything declarative, 8 novembre 2026) : un backend fermé reste fermé
+    /// quand on lit ses recherches ou qu'on range un clic (ses outils de recherche
+    /// se lisent sur son manifeste) ; une page lit au plus 2 000
+    /// runs, et rend `suite` sur le dernier lu même sans recherche trouvée ; une
+    /// ligne dit si la vue recherche sait la relancer (`relancable`), sans que la
+    /// vue nomme l'outil.
+    #[test]
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn mes_recherches_se_lisent_sans_ouvrir_la_base_par_pages_bornees() {
+        let d = tempfile::tempdir().unwrap();
+        let (base, sources) = (d.path().join("base"), d.path().join("sources"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&sources).unwrap();
+        std::fs::write(sources.join("lib.rs"), "pub fn coucou() {}\n").unwrap();
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        let manifest_path = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(sources.to_string_lossy());
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+
+        let hote = hote_isole().with_runs_root(d.path().join("runs"));
+        let s = hote.open_session("temoin-pages", None, vec![], None);
+        assert_eq!(hote.open(Some(&s), &manifest_path)["ok"], json!(true));
+        assert_eq!(hote.close(Some(&s), &manifest_path)["ok"], json!(true));
+        let etat_du = |hote: &DaemonHost| hote.state()["backends"].as_array().unwrap().iter().find(|b| b["manifest"] == manifest_path.canonicalize().unwrap().to_string_lossy().as_ref()).cloned().unwrap();
+        let avant = etat_du(&hote);
+        let id = avant["id"].as_str().unwrap().to_string();
+        assert_eq!(avant["open"], json!(false), "{avant}");
+
+        // Une recherche, la plus ancienne ; puis 2 005 runs qui n'en sont pas.
+        let journal = hote.journal_des_runs().clone();
+        let t0 = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+        let deposer = |run: &str, outil: &str, age: std::time::SystemTime| {
+            let p = journal
+                .deposer(&id, run, json!({ "genre": "temoin", "appel": { "client": "ide", "humain": true, "outil": outil, "arguments": { "query": "coucou", "options": {} }, "rendu": [{ "uuid": "u1", "data": { "file_path": "lib.rs", "start_line": 1 } }] } }))
+                .unwrap();
+            std::fs::File::options().write(true).open(&p).unwrap().set_modified(age).unwrap();
+        };
+        deposer("la-recherche", "search_code", t0);
+        for i in 0..2005u64 {
+            deposer(&format!("autre-{i:04}"), "list_files", t0 + std::time::Duration::from_millis(1000 + i));
+        }
+
+        let page = hote.recent_searches(&id, "", 50, None).unwrap();
+        assert_eq!(page["recherches"], json!([]), "aucune recherche dans les runs lus : {}", page["recherches"]);
+        let suite = page["suite"].as_str().unwrap_or_else(|| panic!("la page bornée rend sa suite : {page}")).to_string();
+        assert_eq!(page["lus"], json!(2000), "une page lit 2 000 runs au plus : {page}");
+        let suivante = hote.recent_searches(&id, "", 50, Some(&suite)).unwrap();
+        let l = suivante["recherches"].as_array().unwrap();
+        assert_eq!(l.len(), 1, "{suivante}");
+        assert_eq!((&l[0]["run"], &l[0]["relancable"]), (&json!("la-recherche"), &json!(true)), "{suivante}");
+        assert!(suivante["suite"].is_null(), "plus rien après : {suivante}");
+
+        assert_eq!(hote.record_click(&id, "la-recherche", "u1", Some(1)).unwrap()["clics"], json!(1));
+        let apres = etat_du(&hote);
+        assert_eq!((&apres["open"], &apres["opened"]), (&json!(false), &avant["opened"]), "lire ses recherches n'ouvre pas la base : {apres}");
+    }
+
     /// **Un backend de code dont la racine a disparu** (ticket du 11 octobre 2026) :
     /// `daemon_status` le dit « racine absente : <chemin> », et chaque outil qui touche
     /// la racine rend l'erreur nommée « la racine du dépôt a disparu (<chemin>) : rouvrez le
