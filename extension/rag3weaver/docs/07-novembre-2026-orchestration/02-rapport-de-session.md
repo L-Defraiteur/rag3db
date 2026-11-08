@@ -770,3 +770,36 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   `~/.config/rag3weaver/code-essais-c7`, les cinq tâches sous `~/.local/share/rag3weaver/taches/e4d8635ecfe7/`
   et la base `code-essais-c7.rag3db` ; à luciepc `wt-c7-essais` et `target-c7-essais` (je les efface
   moi-même ce matin) ; les branches `agent/*` sur origin restent.
+
+## 08 h 40 — la fenêtre du banc, la bascule de G, la file du matin
+
+- **Banc, 7 h 26 → 7 h 32** sous `poste mesure` à mon mot « fenêtre » : les lignes hors du graphe
+  d'un index vectoriel coûtent 0,75 à 1 µs par ligne et par recherche (120 000 vecteurs de
+  dimension 768, k = 10 : 13,4 ms à 0 ligne hors graphe, 23 ms à 10 000, 88,5 ms à 100 000 ; binaire
+  statique de master, aucune lib du magasin à épingler). Ticket du 18 oct. et page du banc
+  (28b479b7e, 1e7084927). **Recherche en a tiré le seuil** (365ec8f02) : « la recherche ne doit
+  pas doubler », reconstruire au repos de la montre quand N × 1 µs ≥ t₀ (N* ≈ 13 400 lignes à 768
+  pour t₀ = 13,4 ms ; la reconstruction de 143 s ne se rembourse qu'en 10 700 recherches, c'est donc
+  la latence qui déclenche). **hotfixs a ouvert le ticket moteur** (5d04e9794) : `rows_outside_graph`
+  dans SHOW_INDEXES ou un CALL en lecture, sous l'instantané de l'appelant, après G3 et G5 ; le lot
+  produit (le déclencheur et son témoin à N* ± 1) sera à recherche. Le banc a effacé rag3db-vingt et
+  build-vingt à luciepc (contrôles faits) et se repose.
+- **G a basculé à 8 h 31** : lib rag3db-build-dadbf0041 (md5 253c898f) et binaire b64748ef
+  (1e7084927) aux deux postes, coupure de 1 min 16 s, granite-278m et -107m redéployés par
+  embarquement avec un écart nul, courant = dadbf0041, les quatre bases rouvertes, l'IDE vert ; la
+  recherche dense bornée surligne `source: "sparse"` chez Lucie. Disques : portable 357 Gio libres
+  (build 38 Gio), luciepc 608 Gio (build 115 Gio). Les instantanés bascule-*, locks-25-oct,
+  avant-43-controle et migration-fiche-25-oct ont été effacés **par moi hier soir au mot de Lucie**
+  (G l'a vu ce matin) ; avant-43 reste le seul retour. Depuis le basculé : MOTEUR_ANCIEN vide, la
+  lib neuve épinglée par son identifiant complet dans toute passe.
+- **La file du matin** : ED pousse le fil par pas + l'arrêt retenu par un équipier (7d38dc243, à
+  toi à 8 h 35) → G pose le binaire seul aux deux hôtes dix minutes après son hash → **9 h, ma
+  fenêtre** pour la mesure G5 de hotfixs (CHECKPOINT après un DELETE de 11 % sur une copie reflink
+  de code-lourd à luciepc, deux libs prouvées par md5, trois prises chacune) → hotfixs, le
+  troisième lot de l'équipier (dix témoins sous la garde, ticket « en cours ») → recherche, le
+  retrait du contournement du dense filtré sous l'instantané → archi, le (e) des hooks (le
+  vocabulaire n'apprend plus les mots d'arrêt ni les noms de fiches de bilan, résumé rendu borné
+  à 200 caractères ; vu au premier tour de hooks-essai sur le binaire posé, 180 ms, un bloc rendu)
+  → hotfixs, G3 (au mot de Lucie) puis G5 sur le moteur du worktree prouvé par md5.
+- Un écart vu par G : la barre de hooks-essai dit « memory » et non « la mémoire » (cfbe928a4) ;
+  G le lui dit.
