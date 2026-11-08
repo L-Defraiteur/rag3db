@@ -721,7 +721,13 @@ fn atelier_cli(args: &[String]) -> Result<(), String> {
         if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
             m["workspace"]["root"] = json!(std::path::PathBuf::from(home).display().to_string());
         }
-        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())?).map_err(|e| format!("{} : {e}", manifeste.display()))?;
+        // Les copies identiques au livré le désignent par son nom (`builtin:`) : elles
+        // suivent chaque bâti ; le manifeste, noté, suit à chaque ouverture par l'hôte.
+        if let Some(dir) = manifeste.parent() {
+            rag3weaver::builtin_templates::link(dir, &mut m);
+        }
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifeste.display()))?;
+        rag3weaver::builtin_templates::record(&manifeste, "backends/atelier/backend.json")?;
         println!("atelier posé : {}", manifeste.display());
     } else {
         println!("atelier déjà posé : {}", manifeste.display());
