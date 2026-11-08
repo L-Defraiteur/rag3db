@@ -870,6 +870,9 @@ for ligne in open(sys.argv[1]):
     mkdir -p "$E2E_TMP_PARENT/$nom" "$E2E_DISQUE_PARENT/$nom/checkpoints"
     export RAG3WEAVER_E2E_DOSSIER="$E2E_DISQUE_PARENT/$nom"
     export RAG3WEAVER_CHECKPOINT_DIR="$E2E_DISQUE_PARENT/$nom/checkpoints"
+    # Les caches d'index de la suite (catalog::index_cache_dir) : sur le disque, à elle, effacés
+    # avec elle ; ni dans son TMPDIR, ni dans le vrai cache de la personne.
+    export RAG3WEAVER_CACHE_DIR="$E2E_DISQUE_PARENT/$nom/cache"
     # L'heure de départ de chaque suite : un pic du journal de charge
     # (échange, carte) s'attribue à la suite qui tournait.
     echo "     [départ $(date +%H:%M:%S)] $nom"
@@ -920,7 +923,7 @@ for ligne in open(sys.argv[1]):
       rm -rf -- "${E2E_TMP_PARENT:?}/$nom" "${E2E_DISQUE_PARENT:?}/$nom"
     fi
   done
-  unset RAG3WEAVER_E2E_DOSSIER RAG3WEAVER_CHECKPOINT_DIR
+  unset RAG3WEAVER_E2E_DOSSIER RAG3WEAVER_CHECKPOINT_DIR RAG3WEAVER_CACHE_DIR
 
   # 4. Les autres tests nommés (sondes, rendus) : par cargo, comme avant.
   if [ ${#autres[@]} -gt 0 ]; then
