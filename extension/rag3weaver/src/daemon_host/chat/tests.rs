@@ -1526,3 +1526,62 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **Un symbole cité par le modèle mène à sa définition** (ticket « le code dans le chat
+/// n'est ni coloré ni relié au dépôt », dernier point). La réponse cite `un()`, `double`,
+/// `inconnu_xyz` et `Ok` : `un()` devient un lien vers src/lib.rs à sa ligne, `double`
+/// (deux définitions) un lien vers la vue du symbole, `inconnu_xyz` reste du code, et `Ok`
+/// (un mot du langage) n'est même pas demandé à l'hôte.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn un_symbole_cite_par_le_modele_mene_a_sa_definition() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "un_symbole_cite_par_le_modele_mene_a_sa_definition";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let cite: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-cite", 8192, |turns, opts, sink| {
+            MockLlm::new("Voir `un()`, puis `double`, `inconnu_xyz` et `Ok`.").generate(turns, opts, sink)
+        })))
+    });
+    let (d, h, m, id) = banc_dans("atelier", cite.clone(), |_| {});
+    drop(h);
+    let code = d.path().join("code");
+    std::fs::create_dir_all(code.join("src")).unwrap();
+    std::fs::write(code.join("src/lib.rs"), "pub fn un() -> u32 {\n    1\n}\n").unwrap();
+    std::fs::write(code.join("src/a.rs"), "pub fn double() -> u32 {\n    2\n}\n").unwrap();
+    std::fs::write(code.join("src/b.rs"), "pub fn double() -> u32 {\n    4\n}\n").unwrap();
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(cite)
+    });
+    let racine = format!("http://{adresse}");
+    let m = m.to_string_lossy().to_string();
+    crate::daemon_host::symboles_cites::tests::indexer_et_attendre(&adresse, &m, "double", 2);
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    n.evaluer("document.querySelector('#message').value = 'où sont-ils ?'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "la fin du tour");
+    n.attendre(
+        &format!("!!document.querySelector('.markdown a.code-ref.symbole[data-symbol=\"un\"][href$=\"/ide/code/{id}/fichier/src/lib.rs#L1\"]')"),
+        "un() en lien vers sa définition",
+    );
+    n.attendre(&format!("!!document.querySelector('.markdown a.code-ref.symbole[data-symbol=\"double\"][href$=\"/ide/code/{id}/symbole/double\"]')"), "double en lien vers la vue du symbole");
+    assert_eq!(n.evaluer("[...document.querySelectorAll('.markdown a.code-ref')].some(a => a.textContent === 'inconnu_xyz')"), json!(false), "un nom inconnu n'est pas un lien");
+    assert_eq!(n.evaluer("[...document.querySelectorAll('.markdown code')].some(c => c.textContent === 'inconnu_xyz')"), json!(true), "il reste du code");
+    let demandes = n.evaluer("window.__ide?.symbolesDemandes ?? null");
+    let demandes: Vec<String> = serde_json::from_value(demandes.clone()).unwrap_or_else(|_| panic!("la page tient la liste des noms demandés : {demandes}"));
+    assert!(demandes.iter().any(|s| s == "un") && !demandes.iter().any(|s| s == "Ok"), "Ok est un mot du langage, jamais demandé : {demandes:?}");
+    assert_eq!(demandes.iter().filter(|s| *s == "un").count(), 1, "un nom se demande une fois, pas à chaque rendu : {demandes:?}");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}

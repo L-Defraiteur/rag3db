@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
-import { highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
+import { forgetSymbols, highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
 import { ToolResultView } from "@/lib/toolview";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
@@ -369,6 +369,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         setRoleRuns((cur) => cur.map((x) => (x.run === ev.run ? { ...x, state: ev.ok === false ? "en erreur" : "fini" } : x)));
       }
       if (!backend || d.backend !== backend.manifest) return;
+      // Un fichier du dépôt a changé : les symboles cités se redemandent (relecture d'ED).
+      if (d.sujet === "files") forgetSymbols(id);
       if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${id}`) {
         setRun(String(ev.run));
         setBusy(true);

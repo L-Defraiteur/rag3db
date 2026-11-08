@@ -11,7 +11,7 @@ import yaml from "highlight.js/lib/languages/yaml";
 import sql from "highlight.js/lib/languages/sql";
 import xml from "highlight.js/lib/languages/xml";
 import markdown from "highlight.js/lib/languages/markdown";
-import { fileLink } from "@/views/File";
+import { fileLink, symbolLink } from "@/views/File";
 
 // **Le code dans le chat** (tickets du 7 novembre 2026, « le code dans le chat n'est
 // ni coloré ni relié au dépôt ») : la coloration A, dans la page, par highlight.js
@@ -109,11 +109,106 @@ export function pathRef(texte: string): { path: string; line?: number } | null {
   return { path: m[1], line: m[2] ? Number(m[2]) : undefined };
 }
 
-/// Le code en ligne en HTML : un chemin cité devient un lien vers sa vue.
+// **Un symbole cité** (ticket « le code dans le chat n'est ni coloré ni relié au
+// dépôt », dernier point ; forme accordée avec everything declarative) : un code en
+// ligne qui a la forme d'un identifiant (`Backend::run`, `foo.bar`, `un()`) est
+// demandé à l'hôte (`POST /ide/symboles`, en lot par dépôt), qui dit par l'index où il
+// est défini. Une définition : un lien vers le fichier à sa ligne ; plusieurs : vers
+// la vue du symbole ; aucune : le code reste du code. Les mots du langage ne sont pas
+// demandés. Le cache vieillit (cinq minutes ; dix secondes quand l'hôte n'a pas pu
+// lire), et `forgetSymbols` le vide pour un dépôt dont un fichier a changé.
+const IDENTIFIANT = /^[A-Za-z_][A-Za-z0-9_]*(?:(?:::|\.)[A-Za-z_][A-Za-z0-9_]*)*(?:\(\))?$/;
+const MOTS_DU_LANGAGE = new Set(
+  (
+    "Ok Err Some None Self self super crate true false null nil undefined NaN this " +
+    "let mut fn pub impl struct enum trait type const static use mod match if else for while loop return break continue " +
+    "async await move ref where dyn unsafe extern as in is not and or def class import from lambda pass raise try except " +
+    "function var namespace template typename " +
+    "String str Vec Option Result Box Rc Arc u8 u16 u32 u64 u128 usize i8 i16 i32 i64 i128 isize f32 f64 bool char " +
+    "True False"
+  ).split(/\s+/),
+);
+type SymboleResolu = { definitions: number; path?: string; line?: number };
+const symboles = new Map<string, { r: SymboleResolu | null; jusqu_a: number }>();
+const aDemander = new Map<string, Set<string>>();
+// Les noms partis et sans réponse : un rendu de plus ne les redemande pas.
+const enVol = new Set<string>();
+const VIE = 5 * 60_000;
+const VIE_SANS_LECTURE = 10_000;
+// Quand l'hôte n'a pas pu lire (index en cours ou partiel, catalogue tenu) : une
+// nouvelle demande dix secondes plus tard, six fois au plus par dépôt.
+const relances = new Map<string, number>();
+function relancer(backend: string) {
+  const n = relances.get(backend) ?? 0;
+  if (n >= 6) return;
+  relances.set(backend, n + 1);
+  window.setTimeout(prevenir, VIE_SANS_LECTURE + 50);
+}
+function prevenir() {
+  abonnes.forEach((f) => f());
+}
+function demanderLesSymboles() {
+  const lots = [...aDemander.entries()];
+  aDemander.clear();
+  for (const [backend, noms] of lots) {
+    const liste = [...noms];
+    for (const nom of liste) enVol.add(`${backend}\u0000${nom}`);
+    const finir = () => liste.forEach((nom) => enVol.delete(`${backend}\u0000${nom}`));
+    const w = window as unknown as { __ide?: { symbolesDemandes?: string[] } };
+    w.__ide = w.__ide ?? {};
+    (w.__ide.symbolesDemandes ??= []).push(...liste);
+    fetch("/ide/symboles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ backend, names: liste }) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((v: { ok?: boolean; result?: { symbols?: Record<string, SymboleResolu>; why?: string } }) => {
+        const lus = v.result?.symbols ?? {};
+        const lu = v.ok === true && !v.result?.why;
+        const vie = lu ? VIE : VIE_SANS_LECTURE;
+        if (lu) relances.delete(backend);
+        else relancer(backend);
+        for (const nom of liste) symboles.set(`${backend}\u0000${nom}`, { r: lus[nom] ?? null, jusqu_a: Date.now() + vie });
+        finir();
+        if (Object.keys(lus).length) prevenir();
+      })
+      .catch(() => {
+        for (const nom of liste) symboles.set(`${backend}\u0000${nom}`, { r: null, jusqu_a: Date.now() + VIE_SANS_LECTURE });
+        finir();
+      });
+  }
+}
+/// Oublier les symboles d'un dépôt (un fichier y a changé) : le rendu suivant redemande.
+export function forgetSymbols(backendId: string) {
+  for (const k of [...symboles.keys()]) if (k.startsWith(`${backendId}\u0000`)) symboles.delete(k);
+  prevenir();
+}
+/// Le lien d'un symbole cité, s'il est connu ; sinon, la demande partie, `null`.
+export function symbolRef(code: string, backendId: string): { href: string; name: string } | null {
+  const texte = code.trim();
+  if (!backendId || texte.length < 2 || texte.length > 80 || !IDENTIFIANT.test(texte)) return null;
+  const nom = texte.replace(/\(\)$/, "");
+  if (MOTS_DU_LANGAGE.has(nom)) return null;
+  const cle = `${backendId}\u0000${nom}`;
+  const c = symboles.get(cle);
+  if (c && c.jusqu_a > Date.now()) {
+    if (!c.r) return null;
+    const href = c.r.definitions === 1 && c.r.path ? fileLink(backendId, c.r.path, c.r.line) : symbolLink(backendId, nom);
+    return { href, name: nom };
+  }
+  if (enVol.has(cle)) return null;
+  const lot = aDemander.get(backendId) ?? new Set<string>();
+  if (!lot.size && ![...aDemander.values()].some((s) => s.size)) queueMicrotask(demanderLesSymboles);
+  lot.add(nom);
+  aDemander.set(backendId, lot);
+  return null;
+}
+
+/// Le code en ligne en HTML : un chemin cité devient un lien vers sa vue, un symbole
+/// connu, un lien vers sa définition.
 export function inlineCodeHtml(code: string, backendId: string): string {
   const ref = pathRef(code);
   const inner = `<code>${echapper(code)}</code>`;
-  return ref ? `<a class="code-ref" href="${fileLink(backendId, ref.path, ref.line)}" data-path="${echapper(ref.path)}">${inner}</a>` : inner;
+  if (ref) return `<a class="code-ref" href="${fileLink(backendId, ref.path, ref.line)}" data-path="${echapper(ref.path)}">${inner}</a>`;
+  const s = symbolRef(code, backendId);
+  return s ? `<a class="code-ref symbole" href="${s.href}" data-symbol="${echapper(s.name)}">${inner}</a>` : inner;
 }
 
 /// Un texte brut (le message de la personne, la réponse en flux) avec son code en
@@ -125,8 +220,15 @@ export function withInlineCode(texte: string, backendId: string): ReactNode[] {
       const code = m.slice(1, -1);
       const ref = pathRef(code);
       const el = <code key={k}>{code}</code>;
-      return ref ? (
-        <a key={k} className="code-ref" href={fileLink(backendId, ref.path, ref.line)} data-path={ref.path}>
+      if (ref)
+        return (
+          <a key={k} className="code-ref" href={fileLink(backendId, ref.path, ref.line)} data-path={ref.path}>
+            {el}
+          </a>
+        );
+      const s = symbolRef(code, backendId);
+      return s ? (
+        <a key={k} className="code-ref symbole" href={s.href} data-symbol={s.name}>
           {el}
         </a>
       ) : (
