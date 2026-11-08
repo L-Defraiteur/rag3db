@@ -1,4 +1,4 @@
-import { FolderTree, GitBranch, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
+import { FolderTree, GitBranch, History, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { shortName, type Backend, type HostState } from "@/lib/host";
@@ -45,6 +45,7 @@ export function Home({ state }: { state: HostState }) {
                 <Link href={`/ide/code/${b.id}/taches/`} icon={<GitBranch className="size-4" />} label="tâches" />
                 <Link href={`/ide/code/${b.id}/chat`} icon={<MessageSquare className="size-4" />} label="chat" />
                 <Link href={`/ide/code/${b.id}/bilans`} icon={<Scale className="size-4" />} label="bilans" />
+                <Link href={`/ide/code/${b.id}/recherches/`} icon={<History className="size-4" />} label="mes recherches" />
                 {tasksOf(b).map((t) => (
                   <span key={t.id} className="flex items-center gap-1 basis-full pt-1">
                     <Badge variant="outline" className="pastille">

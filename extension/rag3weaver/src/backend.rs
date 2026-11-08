@@ -960,6 +960,9 @@ pub struct PreparedBackend {
     /// `models.sparse` leur est servi comme au signal creux de la recherche, et
     /// les compte pour la règle de la déclaration morte (7 novembre 2026).
     lecteurs_du_creux: Vec<String>,
+    /// **Ses outils de recherche** (`SEARCH_NODES`, sous-graphes compris) : ceux
+    /// dont les appels font la vue « mes recherches ».
+    search_tools: Vec<String>,
     /// Le registre des nœuds, en `Arc` : le chemin des outils le prête le
     /// temps d'un appel, le réacteur des réactions le garde le temps de son
     /// service.
@@ -1658,19 +1661,24 @@ impl PreparedBackend {
             tool_schemas.insert(name.clone(), input);
             tools.insert(name.clone(), tool);
         }
-        // Les outils qui lisent le creux, sous-graphes compris.
-        let lecteurs_du_creux: Vec<String> = tools
-            .iter()
-            .filter(|(name, tool)| {
-                tool.template()
-                    .nodes
-                    .iter()
-                    .map(|n| n.node_type.as_str())
-                    .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(String::as_str))
-                    .any(|t| crate::backend_code::SPARSE_READER_NODES.contains(&t))
-            })
-            .map(|(name, _)| name.clone())
-            .collect();
+        // Les outils qui portent l'un de ces nœuds, sous-graphes compris.
+        let outils_portant = |types: &[&str]| -> Vec<String> {
+            tools
+                .iter()
+                .filter(|(name, tool)| {
+                    tool.template()
+                        .nodes
+                        .iter()
+                        .map(|n| n.node_type.as_str())
+                        .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(String::as_str))
+                        .any(|t| types.contains(&t))
+                })
+                .map(|(name, _)| name.clone())
+                .collect()
+        };
+        // Les outils qui lisent le creux, et ceux qui cherchent.
+        let lecteurs_du_creux = outils_portant(crate::backend_code::SPARSE_READER_NODES);
+        let search_tools = outils_portant(crate::backend_code::SEARCH_NODES);
         // La politique de chaque outil se vérifie au chargement : un graphe
         // qui déborde sa politique, ou une politique sans le workspace
         // qu'elle exige, se refuse en disant quoi faire.
@@ -1808,6 +1816,7 @@ impl PreparedBackend {
             .unwrap_or_default();
         Ok(Self {
             lecteurs_du_creux,
+            search_tools,
             template_drift,
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             surcharges: Surcharges::default(),
@@ -2402,6 +2411,11 @@ impl PreparedBackend {
     /// Le graphe déclaré d'un outil — pour le dessiner (la page vivante).
     pub fn tool_graph(&self, name: &str) -> Option<&GraphTool> {
         self.tools.get(name)
+    }
+
+    /// Les outils de recherche du backend (`SEARCH_NODES`), par nom.
+    pub fn search_tools(&self) -> &[String] {
+        &self.search_tools
     }
 
     /// Une politique de nœuds, plus les nœuds scriptés déclarés.
