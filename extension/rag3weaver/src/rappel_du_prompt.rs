@@ -101,6 +101,20 @@ const COURANTS: &[&str] = &[
     "about", "after", "also", "because", "been", "before", "being", "could", "does", "from", "have", "here", "into", "just", "like", "more", "most", "only", "other", "over", "should", "some", "such", "than", "that", "their", "them", "then", "there", "these", "they", "this", "those", "through", "very", "want", "were", "what", "when", "where", "which", "while", "will", "with", "would", "your", "yours", "please", "thanks",
 ];
 
+/// **Un mot d'arrêt**, en minuscules : la liste courte et la liste des mots courants.
+pub fn mot_d_arret(bas: &str) -> bool {
+    ARRET_COURTS.contains(&bas) || COURANTS.contains(&bas) || bas.contains('\'') || bas.contains('’')
+}
+
+/// **Un mot qui mérite le vocabulaire de la mémoire** : ni un mot d'arrêt, ni un
+/// mot de moins de quatre lettres sans forme de code (lot 3 ter e : les noms
+/// des fiches de bilan, des phrases entières, y faisaient entrer « sur », « avec »).
+pub fn utile_au_vocabulaire(m: &str) -> bool {
+    let bas = m.to_lowercase();
+    let code = m.chars().any(|c| c.is_ascii_digit() || c == '_') || m.chars().filter(|c| c.is_uppercase()).count() >= 2;
+    !mot_d_arret(&bas) && (m.chars().count() >= 4 || code) && m.chars().any(char::is_alphanumeric)
+}
+
 fn est_uuid(m: &str) -> bool {
     m.len() == 36 && m.chars().all(|c| c.is_ascii_hexdigit() || c == '-') && m.matches('-').count() == 4
 }
@@ -181,7 +195,9 @@ pub fn requete_de_rappel(prompt: &str, max_mots: usize, vocabulaire: &HashSet<St
         if m.chars().count() < 2 || est_uuid(m) || hash || (!dans_le_code && !nombre && est_un_id(m)) || (!nombre && !m.chars().any(char::is_alphabetic)) {
             continue;
         }
-        if !connu && !court_code && (ARRET_COURTS.contains(&bas.as_str()) || COURANTS.contains(&bas.as_str()) || bas.contains('\'') || bas.contains('’')) {
+        // La liste d'arrêt vaut même pour un mot que la mémoire connaît : le
+        // vocabulaire ne fait pas d'un « sur » un sujet (3 ter e).
+        if !court_code && mot_d_arret(&bas) {
             continue;
         }
         if !vus.insert(bas.clone()) {
@@ -298,6 +314,21 @@ pub(crate) mod tests {
             assert!(q.iter().any(|x| x == present), "« {present} » : {q:?}");
         }
         assert!(!q.iter().any(|x| x == "7b41a1a04"), "un hash n'est pas un sujet, même entre accents graves : {q:?}");
+    }
+
+    #[test]
+    fn un_mot_d_arret_reste_un_mot_d_arret_meme_connu_de_la_memoire() {
+        let mut v = HashSet::new();
+        for w in ["sur", "avec", "mais", "donc", "régime"] {
+            v.insert(w.to_string());
+        }
+        let q = requete_de_rappel("hooks-essai sur avec rend Mais la mémoire du régime brut a disparu, donc un correctif", 10, &v);
+        for m in ["sur", "avec", "Mais", "donc"] {
+            assert!(!q.iter().any(|x| x == m), "« {m} » : {q:?}");
+        }
+        assert!(q.iter().any(|x| x == "régime"), "{q:?}");
+        assert!(utile_au_vocabulaire("régime") && utile_au_vocabulaire("L6") && utile_au_vocabulaire("bm25"));
+        assert!(!utile_au_vocabulaire("sur") && !utile_au_vocabulaire("avec") && !utile_au_vocabulaire("lib") && !utile_au_vocabulaire("—"));
     }
 
     #[test]

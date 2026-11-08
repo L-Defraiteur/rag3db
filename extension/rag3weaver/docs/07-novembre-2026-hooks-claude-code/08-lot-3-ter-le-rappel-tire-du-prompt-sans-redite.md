@@ -189,3 +189,34 @@ désormais :
 La limite reste celle du ticket de hooks-essai, « un arrêt ne coupe pas une requête du moteur en
 cours ». L'arrêt se lit entre deux nœuds du graphe, et une requête du moteur déjà lancée va à son
 terme. L'extraction des mots-clés du § 2 reste donc la vraie garde contre un plein texte long.
+
+## 9. Le 3 ter (e) : le vocabulaire sans les bilans, une empreinte stable
+
+Le premier tour sur le binaire posé le 8 novembre, chez hooks-essai à 8 h 33, a extrait
+« hooks-essai sur avec rend Mais mémoire brut disparu donc correctif ». Des mots d'arrêt étaient
+passés en tête, parce que le vocabulaire de la mémoire les tenait pour connus. Le cache prenait les
+mots de **tous** les noms de fiches, et le nom d'une fiche de bilan du juge est le prompt entier de
+son run. Ticket de hooks-essai :
+`docs/tickets/2026-11-08-les-bilans-du-juge-remontent-au-rappel-sur-des-mots-courants.md`.
+
+Ce que le (e) prend :
+- **Le vocabulaire n'admet ni un mot d'arrêt, ni un mot de moins de quatre lettres** sans forme de
+  code (`rappel_du_prompt::utile_au_vocabulaire`). Les noms `bilan : …` et `outil : …`, générés
+  par le juge, ne l'alimentent pas.
+- **Un mot connu ne passe plus outre la liste d'arrêt.**
+- **Le cache existant se nettoie à la première lecture** : les mots qui n'y ont pas leur place
+  sortent, et le fichier est réécrit, sauf en rejeu.
+- **Le nom d'une fiche rendue est borné à 200 caractères**, et à 120 dans le journal.
+- **L'empreinte du déjà-vu passe à blake3**, sur 32 chiffres hexadécimaux, stable d'un binaire à
+  l'autre. `DefaultHasher` ne l'est pas d'une version de Rust à l'autre, et c'est l'une des deux
+  causes possibles du point 3 du ticket. Une empreinte d'avant, de 16 chiffres, se lit « déjà vue »
+  et se réécrit au prochain rendu. La relance de l'hôte ne rend donc rien « neuf » à tort.
+
+Ce que le (e) laisse au ticket, à décider avec hooks-essai :
+- le choix entre **A**, écarter une fiche du juge du rappel en tête de tour, et **B**, la confier
+  au seul juge différé ;
+- **le nom court d'une fiche de bilan**, un titre et l'empreinte de la consigne, du côté du juge.
+  Le bornage du nom rendu, ici, n'en est que le symptôme.
+
+La passe est épinglée sur la lib dadbf0041, la lib ordinaire du 8 novembre, sans
+`RAG3WEAVER_MOTEUR_ANCIEN`.
