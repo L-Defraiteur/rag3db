@@ -106,6 +106,61 @@ protected:
 // des drains (effacer les arêtes des sources d'un fichier, puis MERGE vers des destinations dont
 // quelques-unes sont très chargées), un lecteur qui tient des instantanés, un point de reprise de
 // loin en loin, une colonne ajoutée au milieu.
+// La forme d'un `index confirm` complet (8 novembre 2026, « BASE ATTEINTE » sous cbc06c3e1 sur
+// code-lourd et code-principal, après deux réindexations, alors que les mêmes bases étaient à 0 écart
+// juste avant) : une transaction crée des nœuds neufs, efface toutes les arêtes d'une table de liens
+// née tard, les recrée par un COPY (qui verse d'abord les nœuds locaux, G1), puis met à jour une
+// propriété d'une partie des relations copiées (le chemin du rejeu A), et valide ; un point de reprise
+// suit. Trois fois. Les deux sens doivent rester égaux, base ouverte puis rouverte.
+TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderAFullReindex) {
+    constexpr int64_t SCOPES = 3000, SYMBOLS = 3500, EDGES = 12000;
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(SCOPES - 1) + ") AS i CREATE (:Scope {id: i});");
+    ok("UNWIND range(0, " + std::to_string(SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64, resolution STRING);");
+    // Les arêtes d'un tour : depuis toutes les sources (les neuves comprises), vers quelques
+    // destinations très chargées pour deux tiers d'entre elles.
+    auto edges = [&](int round, int64_t scopes, int64_t symbols) {
+        return "COPY R FROM (UNWIND range(0, " + std::to_string(EDGES - 1) +
+               ") AS i RETURN (i * 13 + " + std::to_string(round) + ") % " + std::to_string(scopes) +
+               " AS f, CASE WHEN i % 3 = 0 THEN (i * 31 + " + std::to_string(round) + ") % " +
+               std::to_string(symbols) + " ELSE (i % 5) * 700 END AS t, i AS line, 'r" +
+               std::to_string(round) + "' AS resolution);";
+    };
+    ok(edges(0, SCOPES, SYMBOLS));
+    ok("CHECKPOINT;");
+    int64_t scopes = SCOPES, symbols = SYMBOLS;
+    for (int round = 1; round <= 3; round++) {
+        ok("BEGIN TRANSACTION;");
+        ok("UNWIND range(" + std::to_string(scopes) + ", " + std::to_string(scopes + 9) +
+           ") AS i CREATE (:Scope {id: i});");
+        ok("UNWIND range(" + std::to_string(symbols) + ", " + std::to_string(symbols + 4) +
+           ") AS i CREATE (:Symbol {id: i});");
+        scopes += 10;
+        symbols += 5;
+        ok("MATCH ()-[r:R]->() DELETE r;");
+        ok(edges(round, scopes, symbols));
+        ok("MATCH ()-[r:R]->() WHERE r.line % 17 = 0 SET r.line = r.line + 1000000, "
+           "r.resolution = 'mise à jour';");
+        ok("COMMIT;");
+        ok("CHECKPOINT;");
+    }
+    std::set<int64_t> sources, destinations;
+    for (int64_t s = 0; s < scopes; s++) {
+        sources.insert(s);
+    }
+    for (int64_t d = 0; d < symbols; d++) {
+        destinations.insert(d);
+    }
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base ouverte";
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
 TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderDrains) {
     ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
     ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
