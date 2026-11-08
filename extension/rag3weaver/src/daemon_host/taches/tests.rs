@@ -353,3 +353,131 @@ fn une_tache_hors_depot_garde_les_chemins_relatifs_de_ses_gabarits() {
     assert_eq!(relue["declarations"]["versionnees"], json!(false), "{}", relue["declarations"]);
     host.fermer_une_tache(&h.id, "gabarits").unwrap();
 }
+
+/// Un backend du gabarit `code` dont ni le manifeste ni la racine ne sont dans un
+/// dépôt git : le manifeste dans un dossier de configuration, la racine (en
+/// lecture seule, les écritures permises aux tâches) avec deux fichiers.
+/// `retouche` ajuste le workspace (l'option `git_init`).
+fn banc_sans_git(retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, PathBuf, String) {
+    let d = tempfile::tempdir().unwrap();
+    let config = d.path().join("config").join("code");
+    let racine = d.path().join("racine");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::create_dir_all(racine.join("src")).unwrap();
+    std::fs::write(racine.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(racine.join("notes.md"), "à garder\n").unwrap();
+    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &config).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(racine.to_string_lossy());
+    m["workspace"]["read_only"] = json!(true);
+    m["workspace"]["task_writes"] = json!(true);
+    retouche(&mut m);
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    assert!(git(&config, &["rev-parse", "--show-toplevel"]).is_err() && git(&racine, &["rev-parse", "--show-toplevel"]).is_err(), "le banc : aucun dépôt git");
+    let host = DaemonHost::new()
+        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+        .with_racine_des_taches(d.path().join("taches"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le backend principal s'ouvre");
+    let id = h.id.clone();
+    (d, host, manifeste, racine.canonicalize().unwrap(), id)
+}
+
+/// Un outil d'une tâche, par `/call`, sous une session : ce que l'équipier fait.
+fn outil(host: &DaemonHost, session: &str, manifeste: &Path, nom: &str, args: Value) -> Value {
+    host.handle("POST", "/call", Some(session), json!({ "manifest": manifeste, "name": nom, "arguments": args }).to_string().as_bytes()).1
+}
+
+/// **Une tâche s'ouvre sans git, et se fusionne par copie** (Lucie, 7 novembre
+/// 2026 : « il doit pouvoir aussi démarrer un truc même sans git du tout » ; page
+/// 03 d'everything declarative, § 1 « Sans git ») : ni le manifeste ni la racine
+/// ne sont dans un dépôt. La tâche s'ouvre ; son espace est un dossier à elle (une
+/// copie de la racine, sous le dossier des tâches), sans dépôt ni branche, et
+/// l'état de l'hôte le dit (`repo` et `branch` à null). L'équipier y écrit par
+/// `edit_file` : la racine ne bouge pas. La relecture rend les changements par
+/// différence de dossiers (modifié, neuf, effacé), avec la phrase de la boîte ; la
+/// fusion les recopie dans la racine et efface la copie.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn une_tache_s_ouvre_sans_git_et_se_fusionne_par_copie() {
+    let (d, host, _manifeste, racine, id) = banc_sans_git(|_| {});
+    let tache = host.ouvrir_une_tache(&id, "sans-git").expect("la tâche s'ouvre sans git");
+    let w = tache.workspace.clone().expect("l'espace de la tâche");
+    assert!(w.racine.starts_with(d.path().join("taches")), "l'espace est un dossier à elle : {:?}", w.racine);
+    assert!(w.ecrit, "task_writes : la tâche écrit dans son espace");
+    assert_eq!(std::fs::read_to_string(w.racine.join("src").join("main.rs")).unwrap(), "fn main() {}\n", "l'espace est une copie de la racine");
+    let etat = host.state();
+    let t = etat["tasks"].as_array().and_then(|a| a.iter().find(|t| t["id"] == json!(tache.id)).cloned()).unwrap_or_else(|| panic!("la tâche dans l'état : {}", etat["tasks"]));
+    assert_eq!((&t["spaces"][0]["repo"], &t["spaces"][0]["branch"]), (&Value::Null, &Value::Null), "sans dépôt ni branche : {t}");
+
+    let session = host.open_session("claude-code", None, Vec::new(), None);
+    let e = outil(&host, &session, &tache.manifest, "edit_file", json!({ "path": "src/main.rs", "content": "fn main() { println!(\"tâche\"); }\n" }));
+    assert_eq!(e["ok"], true, "l'équipier écrit dans son espace : {e}");
+    let e = outil(&host, &session, &tache.manifest, "edit_file", json!({ "path": "src/neuf.rs", "content": "pub fn neuf() {}\n" }));
+    assert_eq!(e["ok"], true, "{e}");
+    std::fs::remove_file(w.racine.join("notes.md")).unwrap();
+    assert_eq!(std::fs::read_to_string(racine.join("src").join("main.rs")).unwrap(), "fn main() {}\n", "la racine ne bouge pas avant la fusion");
+
+    let relue = host.relecture(&id, "sans-git").expect("la relecture sans git");
+    let fichiers = relue["fichiers"].as_array().cloned().unwrap_or_default();
+    let par = |p: &str| fichiers.iter().find(|f| f["path"] == p).cloned().unwrap_or_else(|| panic!("{p} dans la relecture : {fichiers:?}"));
+    assert_eq!((&par("src/main.rs")["avant"], &par("src/main.rs")["apres"]), (&json!("fn main() {}\n"), &json!("fn main() { println!(\"tâche\"); }\n")));
+    assert_eq!(par("src/neuf.rs")["avant"], Value::Null);
+    assert_eq!(par("notes.md")["apres"], Value::Null, "l'effacé");
+    assert_eq!(fichiers.len(), 3, "rien d'autre : {fichiers:?}");
+    assert_eq!(relue["espace"]["git"], false, "{}", relue["espace"]);
+    assert_eq!(relue["espace"]["note"], "sans git : les changements se relisent par le diff du dossier", "{}", relue["espace"]);
+
+    let fin = host.fusionner_une_tache(&id, "sans-git", "la tâche sans git").expect("la fusion par copie");
+    assert_eq!(fin["etat"], "fusionnee", "{fin}");
+    assert_eq!(std::fs::read_to_string(racine.join("src").join("main.rs")).unwrap(), "fn main() { println!(\"tâche\"); }\n");
+    assert!(racine.join("src").join("neuf.rs").is_file() && !racine.join("notes.md").exists(), "le neuf recopié, l'effacé effacé");
+    assert!(!w.racine.exists() && host.tache(&id, "sans-git").is_none(), "la copie est effacée, la tâche fermée");
+    assert!(git(&racine, &["rev-parse", "--show-toplevel"]).is_err(), "aucun dépôt créé d'office");
+}
+
+/// **Sans git, un rejet laisse la racine, et une fusion sur une racine qui a
+/// bougé est refusée** : la tâche rejetée efface sa copie sans toucher la racine ;
+/// une seconde tâche qui change un fichier que la racine a changé depuis
+/// l'ouverture ne se fusionne pas, rien n'est recopié, et le refus nomme le
+/// fichier.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn sans_git_un_rejet_laisse_la_racine_et_un_conflit_refuse_la_fusion() {
+    let (_d, host, _manifeste, racine, id) = banc_sans_git(|_| {});
+    let session = host.open_session("claude-code", None, Vec::new(), None);
+    let t = host.ouvrir_une_tache(&id, "rejetee").unwrap();
+    assert_eq!(outil(&host, &session, &t.manifest, "edit_file", json!({ "path": "notes.md", "content": "réécrit\n" }))["ok"], true);
+    host.rejeter_une_tache(&id, "rejetee", "pas voulu").unwrap();
+    assert_eq!(std::fs::read_to_string(racine.join("notes.md")).unwrap(), "à garder\n", "la racine intacte");
+    assert!(!t.workspace.as_ref().unwrap().racine.exists(), "la copie effacée");
+
+    let t = host.ouvrir_une_tache(&id, "en-conflit").unwrap();
+    assert_eq!(outil(&host, &session, &t.manifest, "edit_file", json!({ "path": "src/main.rs", "content": "fn main() { tache(); }\n" }))["ok"], true);
+    assert_eq!(outil(&host, &session, &t.manifest, "edit_file", json!({ "path": "notes.md", "content": "aussi\n" }))["ok"], true);
+    std::fs::write(racine.join("src").join("main.rs"), "fn main() { ailleurs(); }\n").unwrap();
+    assert_eq!(host.relecture(&id, "en-conflit").unwrap()["base_a_bouge"], true);
+    let refus = host.fusionner_une_tache(&id, "en-conflit", "x").expect_err("la racine a bougé");
+    assert!(refus.contains("src/main.rs"), "{refus}");
+    assert_eq!(std::fs::read_to_string(racine.join("src").join("main.rs")).unwrap(), "fn main() { ailleurs(); }\n", "rien n'est recopié");
+    assert_eq!(std::fs::read_to_string(racine.join("notes.md")).unwrap(), "à garder\n", "rien n'est recopié, même ce qui ne conflictuait pas");
+    assert!(host.tache(&id, "en-conflit").is_some(), "la tâche reste ouverte");
+    host.rejeter_une_tache(&id, "en-conflit", "fin du témoin").unwrap();
+}
+
+/// **`git_init` déclaré fait de la racine un dépôt, jamais d'office** : avec
+/// `workspace.git_init: true`, l'ouverture d'une tâche sur une racine sans git y
+/// crée un dépôt et un premier commit, puis la tâche est une branche
+/// `agent/<nom>` de ce dépôt (le cas ordinaire). Sans l'option, le témoin
+/// d'au-dessus ne crée aucun dépôt.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn git_init_declare_fait_de_la_racine_un_depot() {
+    let (_d, host, _manifeste, racine, id) = banc_sans_git(|m| m["workspace"]["git_init"] = json!(true));
+    let t = host.ouvrir_une_tache(&id, "en-depot").expect("la tâche s'ouvre");
+    assert_eq!(git(&racine, &["rev-parse", "--show-toplevel"]).map(PathBuf::from).map(|p| p.canonicalize().unwrap()).ok(), Some(racine.clone()), "la racine est un dépôt");
+    assert!(git(&racine, &["log", "--oneline", "-1"]).is_ok_and(|l| !l.is_empty()), "un premier commit");
+    assert_eq!(git(&t.arbre, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap(), "agent/en-depot");
+    host.fermer_une_tache(&id, "en-depot").unwrap();
+}
