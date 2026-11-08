@@ -1694,7 +1694,7 @@ avance d'autant ; les hashs, eux, sont exacts.
   met pas à courir ne gagne pas une course ». Priorité de demain inchangée : les vues par worktree,
   page de l'arbre principal (10b8affce) à lire le matin.
 
-## 22 h 40 — fin de soirée : la file passe, l'atelier tranché, la lib de la nuit
+## 22 h 27 — fin de soirée : la file passe, l'atelier tranché, la lib de la nuit (titre corrigé : écrit « 22 h 40 » sans lire l'heure, deuxième fois ce soir)
 
 - **Atterris** : le mini-lot d'ED (0da9fdda4 : le témoin du rattrapage coupe son index entre deux passes
   de vecteurs par `stop_indexings_of`, comme l'arrêt de l'hôte ; un faux service déclaré au manifeste,
