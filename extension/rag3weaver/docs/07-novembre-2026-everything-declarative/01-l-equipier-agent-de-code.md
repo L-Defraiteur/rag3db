@@ -117,7 +117,7 @@ pas puis relancé (le pas interrompu journalisé, la reprise à la frontière).
   l'équipier fixe son superviseur : ses questions vont par défaut à l'auteur de la demande.
 - **De l'équipier vers Claude Code** : une question, un `report`, un `ended` adressés à
   `claude-code:<id>` restent « en attente » tant qu'ils n'ont pas de réponse. Une route de l'hôte
-  les rend : `GET /ide/teammate/pending?for=claude-code:<id>` → `[{task, item?, kind, text, at}]`.
+  les rend : `GET /ide/teammate/pending?for=claude-code:<id>` (le JSON accordé avec archi, plus bas).
   Le hook UserPromptSubmit (archi) les montre en tête de son bloc : « l'équipier <task> te
   demande : … — réponds par `rag3weaver-backend hook reply <task> "<texte>"` ».
 - **De Claude Code vers l'équipier** : `POST /ide/teammate/mailbox` avec `from:
