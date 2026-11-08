@@ -1328,6 +1328,12 @@ pub struct Jugement {
     pub sortie: usize,
 }
 
+/// Le plafond de sortie du juge : 2 048, comme Decide. Un modèle qui réfléchit
+/// compte sa réflexion dans `max_tokens` : sous 400, Gemini 3.8 Flash en
+/// passait 350 à 384 à réfléchir et coupait sa réponse, sur 8 appels sur 27
+/// (ticket du banc, d596c829c) ; à 4 000, tout finissait sur « stop ».
+const PLAFOND_DU_JUGE: usize = 2_048;
+
 const SCHEMA_DU_JUGE: &str = r#"{"type":"object","properties":{"pertinent":{"type":"boolean"},"pourquoi":{"type":"string"},"items_gardes":{"type":"array","items":{"type":"string"}}},"required":["pertinent","pourquoi","items_gardes"],"additionalProperties":false}"#;
 
 /// **Juge les candidats d'un rappel** contre le prompt (nettoyé) : un appel
@@ -1339,11 +1345,19 @@ pub fn juger(llm: &dyn crate::llm::Llm, prompt: &str, candidats: &[Value]) -> Re
     let systeme = "Tu juges, pour un agent de code, quelles fiches de sa mémoire servent à son tour présent. Tu lis son message et les fiches candidates (nom et résumé). Tu gardes seulement celles qui l'aident à répondre à CE message ; dans le doute, tu ôtes. Tu n'inventes aucun nom : items_gardes ne contient que des noms de la liste, à l'identique. pertinent vaut false si tu n'en gardes aucune. pourquoi tient en une phrase. Réponds en JSON.";
     let utilisateur = format!("Message de l'agent :\n{}\n\nFiches candidates :\n{liste}", prompt.chars().take(2_000).collect::<String>());
     let schema: Value = serde_json::from_str(SCHEMA_DU_JUGE).map_err(|e| e.to_string())?;
-    let opts = GenOptions::default().with_response_format(ResponseFormat::strict_schema("juge_du_rappel", schema)).with_temperature(0.0).with_max_tokens(400);
+    let opts = GenOptions::default().with_response_format(ResponseFormat::strict_schema("juge_du_rappel", schema)).with_temperature(0.0).with_max_tokens(PLAFOND_DU_JUGE);
     let mut sink = StringSink::default();
     let debut = std::time::Instant::now();
-    let (_, usage) = llm.generate(&[Turn::system(systeme), Turn::user(&utilisateur)], &opts, &mut sink).map_err(|e| format!("juge : {e}"))?;
+    let (fin, usage) = llm.generate(&[Turn::system(systeme), Turn::user(&utilisateur)], &opts, &mut sink).map_err(|e| format!("juge : {e}"))?;
     let ms = if usage.ms > 0 { usage.ms } else { debut.elapsed().as_millis() as u64 };
+    // Une réponse coupée se dit comme telle, pas « illisible » : on saura que
+    // c'est le plafond, et combien le modèle a réfléchi.
+    if fin.reason == crate::llm::FinishReason::MaxTokens {
+        return Err(format!(
+            "juge : réponse coupée après {} jetons (raison length, plafond {PLAFOND_DU_JUGE}, dont {} de réflexion)",
+            usage.completion_tokens, usage.reasoning_tokens
+        ));
+    }
     let v: Value = serde_json::from_str(sink.text.trim()).map_err(|e| format!("juge : réponse illisible ({e}) : {}", premiere_ligne(&sink.text, 120)))?;
     let connus: HashSet<&str> = candidats.iter().filter_map(|c| c["name"].as_str()).collect();
     let gardes: Vec<String> = v["items_gardes"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).filter(|n| connus.contains(n)).map(str::to_string).collect();
@@ -2735,6 +2749,21 @@ mod tests {
         assert_ne!(empreinte_de_fiche("régime GPU", "les cartes"), empreinte_de_fiche("régime GPU", "les cartes, et la carte 2"));
         assert_eq!(empreinte_de_fiche("a", "b").len(), 32);
         assert_ne!(empreinte_de_fiche("ab", ""), empreinte_de_fiche("a", "b"), "le séparateur distingue nom et résumé");
+    }
+
+    #[test]
+    fn une_reponse_coupee_du_juge_se_dit_coupee_et_le_plafond_est_celui_de_decide() {
+        // Un faux modèle qui rend finish_reason length, comme Gemini 3.8 Flash sous 400.
+        let vu = Arc::new(Mutex::new(0usize));
+        let v2 = vu.clone();
+        let coupe = crate::llm::CallbackLlm::new("faux-flash", 4096, move |_turns, opts, sink| {
+            *v2.lock().unwrap() = opts.max_tokens;
+            sink.on_token(r#"{"pertinent": tr"#);
+            Ok((crate::llm::Finish::new(crate::llm::FinishReason::MaxTokens, Vec::new()), crate::llm::Usage { prompt_tokens: 900, completion_tokens: 400, reasoning_tokens: 384, ..Default::default() }))
+        });
+        let e = juger(&coupe, "les cartes", &[json!({ "name": "régime GPU", "about": "x" })]).unwrap_err();
+        assert!(e.contains("réponse coupée après 400 jetons (raison length") && e.contains("dont 384 de réflexion") && !e.contains("illisible"), "{e}");
+        assert_eq!(*vu.lock().unwrap(), 2_048, "le plafond du juge est celui de Decide");
     }
 
     #[test]
