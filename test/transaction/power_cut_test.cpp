@@ -177,13 +177,19 @@ TEST_F(PowerCut, AJournalThatCannotBeSyncedPublishesNothing) {
             return path.ends_with(".wal");
         };
         auto refused = connection.query("CREATE (:T {id: 5000, s: 'perdue'});");
-        steps << "COMMIT " << (refused->isSuccess() ? "accepted" : "refused") << std::endl;
+        steps << "COMMIT " << (refused->isSuccess() ? "accepted" : "refused") << " « "
+              << (refused->isSuccess() ? "" : refused->getErrorMessage().substr(0, 200)) << " »"
+              << std::endl;
         CutFileSystem::failSyncOf() = nullptr;
         steps << "AFTER " << count("MATCH (t:T) RETURN count(*);");
         steps << "LOST " << count("MATCH (t:T {id: 5000}) RETURN count(*);");
         // La clé est libre : la même ligne se valide maintenant.
         auto again = connection.query("CREATE (:T {id: 5000, s: 'gardée'});");
-        steps << "AGAIN " << (again->isSuccess() ? "accepted" : "refused") << std::endl;
+        steps << "AGAIN " << (again->isSuccess() ? "accepted" : "refused") << " « "
+              << (again->isSuccess() ? "" : again->getErrorMessage().substr(0, 200)) << " »"
+              << std::endl;
+        auto read = connection.query("MATCH (t:T) RETURN count(*);");
+        steps << "READ " << (read->isSuccess() ? "accepted" : "refused « " + read->getErrorMessage().substr(0, 200) + " »") << std::endl;
         steps.flush();
         _exit(CUT);
     });
