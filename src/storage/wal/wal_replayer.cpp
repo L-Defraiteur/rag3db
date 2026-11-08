@@ -458,10 +458,12 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo, bool throw
 void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
     switch (walRecord.type) {
     case WALRecordType::BEGIN_TRANSACTION_RECORD: {
+        replayedRelOffsets.clear();
         TransactionContext::Get(clientContext)->beginRecoveryTransaction();
     } break;
     case WALRecordType::COMMIT_RECORD: {
         TransactionContext::Get(clientContext)->commit();
+        replayedRelOffsets.clear();
     } break;
     case WALRecordType::CREATE_CATALOG_ENTRY_RECORD: {
         replayCreateCatalogEntryRecord(walRecord);
@@ -722,10 +724,36 @@ void WALReplayer::replayRelTableInsertRecord(const WALRecord& walRecord) const {
         *insertionRecord.ownedVectors[LOCAL_NBR_NODE_ID_COLUMN_ID], propertyVectors);
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
+    auto& relIDVector = *insertionRecord.ownedVectors[LOCAL_REL_ID_COLUMN_ID];
     for (auto i = 0u; i < numRels; i++) {
         anchorState->getSelVectorUnsafe()[0] = i;
+        // Le décalage que le journal donne à la relation, avant que l'insertion locale ne le
+        // remplace par le sien.
+        const auto loggedOffset =
+            relIDVector.isNull(i) ? INVALID_OFFSET : relIDVector.getValue<internalID_t>(i).offset;
         table.initInsertState(&clientContext, *insertState);
         table.insert(transaction::Transaction::Get(clientContext), *insertState);
+        if (loggedOffset != INVALID_OFFSET &&
+            loggedOffset < StorageConstants::MAX_NUM_ROWS_IN_TABLE) {
+            replayedRelOffsets[tableID][loggedOffset] =
+                relIDVector.getValue<internalID_t>(i).offset;
+        }
+    }
+}
+
+void WALReplayer::translateReplayedRelID(table_id_t tableID, ValueVector& relIDVector) const {
+    const auto table = replayedRelOffsets.find(tableID);
+    if (table == replayedRelOffsets.end()) {
+        return;
+    }
+    const auto pos = relIDVector.state->getSelVector()[0];
+    if (relIDVector.isNull(pos)) {
+        return;
+    }
+    const auto relID = relIDVector.getValue<internalID_t>(pos);
+    const auto local = table->second.find(relID.offset);
+    if (local != table->second.end()) {
+        relIDVector.setValue<internalID_t>(pos, internalID_t{local->second, relID.tableID});
     }
 }
 
@@ -779,6 +807,7 @@ void WALReplayer::replayRelDeletionRecord(const WALRecord& walRecord) const {
     const auto deleteState =
         std::make_unique<RelTableDeleteState>(*deletionRecord.ownedSrcNodeIDVector,
             *deletionRecord.ownedDstNodeIDVector, *deletionRecord.ownedRelIDVector);
+    translateReplayedRelID(tableID, *deletionRecord.ownedRelIDVector);
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
     table.delete_(transaction::Transaction::Get(clientContext), *deleteState);
@@ -824,6 +853,7 @@ void WALReplayer::replayRelUpdateRecord(const WALRecord& walRecord) const {
         *updateRecord.ownedRelIDVector, *updateRecord.ownedPropertyVector);
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
+    translateReplayedRelID(tableID, *updateRecord.ownedRelIDVector);
     table.update(transaction::Transaction::Get(clientContext), *updateState);
 }
 
