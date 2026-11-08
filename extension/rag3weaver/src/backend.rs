@@ -2847,6 +2847,25 @@ thread_local! {
     /// de `task_writes` se lit à l'entrée de l'appel, avant que le graphe ne
     /// parte sur d'autres fils.
     static APPEL_HUMAIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// L'appel en cours est un **appel discret** ([`Backend::call_discret`]) : son run
+    /// se publie sur un bus à lui, que ni le journal des runs ni le flux de l'IDE ne
+    /// suivent (une lecture faite pour un rendu, pas un geste à garder).
+    static APPEL_DISCRET: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Pose le drapeau de l'appel discret et le remet à sa valeur d'avant.
+struct AppelDiscret(bool);
+
+impl AppelDiscret {
+    fn poser() -> Self {
+        AppelDiscret(APPEL_DISCRET.with(|d| d.replace(true)))
+    }
+}
+
+impl Drop for AppelDiscret {
+    fn drop(&mut self) {
+        APPEL_DISCRET.with(|d| d.set(self.0));
+    }
 }
 
 /// Pose le drapeau de l'appel humain et le remet à sa valeur d'avant.
@@ -3746,6 +3765,15 @@ impl Backend {
     pub fn call_humain(&self, name: &str, args: Value) -> Result<Value, String> {
         let _humain = AppelHumain::poser();
         self.call(name, args)
+    }
+
+    /// **Un appel discret** (8 novembre 2026, relecture d'everything declarative) : une
+    /// lecture faite pour un rendu de la page (un symbole cité dans le chat), au nom
+    /// de l'humain, dont le run ne se publie pas sur le bus du dépôt — rien au journal
+    /// des runs, rien dans la barre ni dans le flux.
+    pub fn call_discret(&self, name: &str, args: Value) -> Result<Value, String> {
+        let _discret = AppelDiscret::poser();
+        self.call_humain(name, args)
     }
 
     /// Le refus d'un outil d'écriture appelé par l'agent sur le principal
@@ -4897,16 +4925,21 @@ impl Backend {
         // Le bus vient de la vue, qui en porte un clone (le même `Arc`) : un
         // appel ne prend pas le mutex du catalogue pour publier, et une lecture
         // n'attend pas l'écrivain qui le tient (L4). Le mutex seulement sans vue.
-        let bus = match self.read_view.current() {
-            Some(vue) => match services.get::<crate::scope::Scope>("scope") {
-                Some(cell) => vue.event_bus.in_scope(cell),
-                None => vue.event_bus.in_scope(&vue.scope),
-            },
-            None => {
-                let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
-                match services.get::<crate::scope::Scope>("scope") {
-                    Some(cell) => cat.event_bus_in(cell),
-                    None => cat.event_bus(),
+        // Un appel discret publie sur un bus à lui, que personne ne suit.
+        let bus = if APPEL_DISCRET.with(|d| d.get()) {
+            crate::events::EventBus::new(64)
+        } else {
+            match self.read_view.current() {
+                Some(vue) => match services.get::<crate::scope::Scope>("scope") {
+                    Some(cell) => vue.event_bus.in_scope(cell),
+                    None => vue.event_bus.in_scope(&vue.scope),
+                },
+                None => {
+                    let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+                    match services.get::<crate::scope::Scope>("scope") {
+                        Some(cell) => cat.event_bus_in(cell),
+                        None => cat.event_bus(),
+                    }
                 }
             }
         };

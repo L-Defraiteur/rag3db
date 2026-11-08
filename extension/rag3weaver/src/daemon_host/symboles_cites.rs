@@ -17,7 +17,7 @@ impl super::DaemonHost {
     /// sans définition est absent. Ne fait jamais ouvrir le dépôt, ne fait jamais
     /// attendre une indexation (relecture d'everything declarative) : un dépôt fermé,
     /// un index partiel ou un catalogue tenu rendent `{symbols: {}, why}`. Le rendu
-    /// passe par `Backend::call`, pas par `/call` : aucun run au journal.
+    /// passe par `Backend::call_discret`, pas par `/call` : aucun run au journal.
     pub fn symboles_cites(&self, backend_id: &str, noms: &[String]) -> Result<Value, String> {
         let hosted = self.hote_par_id(backend_id)?;
         let sans = |why: &str| Ok(json!({ "symbols": {}, "why": why }));
@@ -37,11 +37,22 @@ impl super::DaemonHost {
             Err(_) => return sans("le catalogue est tenu par une écriture : les liens viendront au rendu suivant"),
         }
         let mut symboles = serde_json::Map::new();
+        let mut premiere_erreur: Option<String> = None;
         for nom in noms.iter().take(NOMS_MAX) {
             if symboles.contains_key(nom) || nom.is_empty() {
                 continue;
             }
-            let Ok(v) = b.call("usages", json!({ "name": nom, "limit": 1, "format": "json" })) else { continue };
+            // Un appel discret : son run ne va ni au journal ni dans la barre.
+            let v = match b.call_discret("usages", json!({ "name": nom, "limit": 1, "format": "json" })) {
+                Ok(v) => v,
+                // Une erreur du dépôt (l'outil absent, un index illisible) et non du nom :
+                // la dire plutôt que taire tous les noms (relecture d'everything declarative).
+                Err(e) if symboles.is_empty() && premiere_erreur.is_none() => {
+                    premiere_erreur = Some(e);
+                    continue;
+                }
+                Err(_) => continue,
+            };
             // Un index partiel (`catalog_read::partial_status` : index ou relations en
             // cours, « résultat partiel ») peut ne compter qu'une partie des définitions :
             // aucun lien sur un compte faux. Le `status` de fraîcheur (« indexé à
@@ -57,7 +68,10 @@ impl super::DaemonHost {
             let Some(premiere) = definitions.first() else { continue };
             symboles.insert(nom.clone(), json!({ "definitions": definitions.len(), "path": premiere["path"], "line": premiere["line"] }));
         }
-        Ok(json!({ "symbols": symboles }))
+        Ok(match premiere_erreur {
+            Some(e) if symboles.is_empty() => json!({ "symbols": symboles, "why": format!("usages : {e}") }),
+            _ => json!({ "symbols": symboles }),
+        })
     }
 }
 
@@ -183,5 +197,35 @@ pub(super) mod tests {
         assert_eq!(r["symbols"], json!({}), "{r}");
         assert!(r["why"].as_str().unwrap_or_default().contains("catalogue"), "{r}");
         drop(tenu);
+    }
+
+    /// **Un rendu n'écrit aucun run au journal** (relecture d'everything declarative :
+    /// `Backend::call` publie RunStarted et RunFinished sur le bus du dépôt, que le
+    /// journal suit) : résoudre trois noms ne laisse aucun run neuf dans le journal du
+    /// dépôt, donc rien dans la barre ni dans ses compteurs.
+    #[test]
+    fn un_rendu_n_ecrit_aucun_run_au_journal() {
+        let d = tempfile::tempdir().unwrap();
+        let (manifeste, _) = petit_depot(&d.path().join("depot"));
+        let host = std::sync::Arc::new(crate::daemon_host::tests::hote_isole().with_runs_root(d.path().join("runs")));
+        let h = host.hosted(std::path::Path::new(&manifeste)).unwrap();
+        host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+        let debut = Instant::now();
+        while host.symboles_cites(&h.id, &["double".to_string()]).unwrap()["symbols"]["double"]["definitions"] != 2 {
+            assert!(debut.elapsed() < Duration::from_secs(60), "double n'est pas indexé en 60 s");
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        // Le journal écrit un run à sa fin : on laisse passer ce qui courait.
+        std::thread::sleep(Duration::from_millis(500));
+        let avant: std::collections::BTreeSet<String> = host.journal.runs_de(&h.id).into_iter().collect();
+        let r = host.symboles_cites(&h.id, &["un".to_string(), "double".to_string(), "inconnu_xyz".to_string()]).unwrap();
+        assert_eq!(r["symbols"]["un"]["definitions"], 1, "{r}");
+        std::thread::sleep(Duration::from_millis(500));
+        let neufs: Vec<String> = host.journal.runs_de(&h.id).into_iter().filter(|x| !avant.contains(x)).collect();
+        let usages: Vec<&String> = neufs
+            .iter()
+            .filter(|x| host.journal.lire(&h.id, x).is_some_and(|v| v.to_string().contains("\"usages\"")))
+            .collect();
+        assert!(usages.is_empty(), "le rendu a écrit {} run(s) usages au journal : {usages:?}", usages.len());
     }
 }
