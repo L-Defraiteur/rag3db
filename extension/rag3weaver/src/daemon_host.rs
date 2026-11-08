@@ -563,15 +563,31 @@ impl DaemonHost {
     /// de `/etat`) : ouvert au besoin, prêté le temps de `f`. L'IDE nomme ses
     /// backends ainsi dans ses URL.
     pub fn with_backend_id<T>(&self, id: &str, f: impl FnOnce(&Backend) -> T) -> Result<T, String> {
-        let hosted = self
-            .backends
+        let hosted = self.hosted_by_id(id)?;
+        self.with_backend(&hosted, f)
+    }
+
+    /// Le backend hébergé de cet id, sans l'ouvrir.
+    fn hosted_by_id(&self, id: &str) -> Result<Arc<Hosted>, String> {
+        self.backends
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .values()
             .find(|h| h.id == id)
             .cloned()
-            .ok_or_else(|| format!("l'hôte ne connaît pas le backend {id}"))?;
-        self.with_backend(&hosted, f)
+            .ok_or_else(|| format!("l'hôte ne connaît pas le backend {id}"))
+    }
+
+    /// **Les outils de recherche d'un backend, sans ouvrir sa base** (relecture
+    /// d'everything declarative, 8 novembre 2026) : lus sur le backend s'il est
+    /// ouvert, sinon sur son manifeste préparé — une vue de lecture (« mes
+    /// recherches ») n'ouvre pas une base pour savoir quels outils cherchent.
+    fn search_tools_of(&self, id: &str) -> Result<Vec<String>, String> {
+        let hosted = self.hosted_by_id(id)?;
+        if let Some(b) = hosted.backend.read().unwrap_or_else(|p| p.into_inner()).as_ref() {
+            return Ok(b.prepared().search_tools().to_vec());
+        }
+        PreparedBackend::load(&hosted.manifest).map(|p| p.search_tools().to_vec())
     }
 
     fn hosted_existing(&self, manifest: &Path) -> Option<Arc<Hosted>> {
@@ -761,7 +777,7 @@ impl DaemonHost {
     /// et les clics. Les recherches finies seulement : un run en vol n'a pas
     /// encore de journal.
     pub fn recent_searches(&self, backend_id: &str, qui: &str, limite: usize, avant: Option<&str>) -> Result<Value, String> {
-        let outils = self.with_backend_id(backend_id, |b| b.prepared().search_tools().to_vec())?;
+        let outils = self.search_tools_of(backend_id)?;
         let qui = match qui {
             "" | "tout" => None,
             "ide" => Some(true),
@@ -777,7 +793,18 @@ impl DaemonHost {
         };
         let mut lignes: Vec<Value> = Vec::new();
         let mut suite = None;
+        // Le dernier run lu : `suite` y repart, que la page soit pleine ou que
+        // la borne des runs lus soit atteinte avant (des recherches rares parmi
+        // beaucoup de runs ne décompressent pas tout le journal d'un coup).
+        let mut dernier_lu: Option<&String> = None;
+        let mut lus = 0;
         for run in &runs[depart..] {
+            if lus == RUNS_READ_PER_PAGE {
+                suite = dernier_lu.map(|r| json!(r));
+                break;
+            }
+            lus += 1;
+            let lu = std::mem::replace(&mut dernier_lu, Some(run));
             let Some(v) = self.journal.lire(backend_id, run) else { continue };
             let appel = &v["appel"];
             let Some(outil) = appel["outil"].as_str() else { continue };
@@ -790,7 +817,8 @@ impl DaemonHost {
                 continue;
             }
             if lignes.len() == limite {
-                suite = lignes.last().map(|l| l["run"].clone());
+                // Ce run sera le premier de la page suivante.
+                suite = lu.map(|r| json!(r));
                 break;
             }
             let rendu = lignes_du_rendu(&appel["rendu"]);
@@ -814,9 +842,11 @@ impl DaemonHost {
                 "query": appel["arguments"]["query"], "scope": appel["arguments"]["scope"],
                 "ms": v["fin"]["ms"], "ok": v["fin"]["ok"], "nombre": rendu.len(),
                 "resultats": resultats, "clics": clics,
+                // La vue recherche sait-elle la rejouer ? Elle appelle un seul outil.
+                "relancable": outil == crate::ide::SEARCH_VIEW_TOOL && appel["arguments"]["query"].is_string(),
             }));
         }
-        Ok(json!({ "recherches": lignes, "suite": suite }))
+        Ok(json!({ "recherches": lignes, "suite": suite, "lus": lus }))
     }
 
     /// **Un clic sur un résultat d'une recherche** (vue « mes recherches ») : rangé
@@ -824,7 +854,7 @@ impl DaemonHost {
     /// Refusé en disant pourquoi, jamais avalé : un run sans journal, un run qui
     /// n'est pas une recherche du backend, un résultat qu'elle n'a pas rendu.
     pub fn record_click(&self, backend_id: &str, run: &str, uuid: &str, rang: Option<u64>) -> Result<Value, String> {
-        let outils = self.with_backend_id(backend_id, |b| b.prepared().search_tools().to_vec())?;
+        let outils = self.search_tools_of(backend_id)?;
         if uuid.is_empty() {
             return Err("« uuid » manque : le résultat cliqué".into());
         }
@@ -1597,6 +1627,11 @@ fn json_response(status: u16, value: &Value) -> tiny_http::Response<std::io::Cur
         .with_status_code(status)
         .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).expect("en-tête littéral"))
 }
+
+/// **Les runs lus au plus par une page de « mes recherches »** : au-delà, la page
+/// rend ce qu'elle a et `suite` sur le dernier lu (relecture d'everything
+/// declarative, 8 novembre 2026).
+const RUNS_READ_PER_PAGE: usize = 2000;
 
 /// Les lignes du rendu d'une recherche journalisé : la liste elle-même, ou sous
 /// `result` / `results` (l'enveloppe d'une lecture du catalogue, `{status,
