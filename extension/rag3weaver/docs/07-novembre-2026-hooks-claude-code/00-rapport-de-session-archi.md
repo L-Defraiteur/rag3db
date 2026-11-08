@@ -1,10 +1,34 @@
 # rag3weaver archi — rapport de session
 
-Mis à jour le 7 novembre 2026 à 15 h 35. Ce fichier se met à jour sur place. La session est
+Mis à jour le 8 novembre 2026 à 15 h 50. Ce fichier se met à jour sur place. La session est
 l'ancienne orchestration des 3-4 octobre (rag3db-9f), puis le chantier E du 8 octobre (Claude
-en agent) ; depuis le 7 novembre, le §1 du plan du week-end : les hooks de Claude Code.
+en agent) ; depuis le 7 novembre, les hooks de Claude Code, puis, le 8, l'IDE (la liste de Lucie
+du 7 au soir).
 
-## 1. Fait aujourd'hui
+## 0. Le 8 novembre
+
+| lot | master | passe |
+|---|---|---|
+| hooks 3 ter (d) à (g) : l'échéance du client (`deadline_ms`), le vocabulaire et les fiches du juge, `recall_min_score` retiré, le plafond et la clé du juge du rappel (page 08) | 624aaadc9, dc0d24f25, 6fa692df5, d4c1d1b12, 52021b977, 9daa2a450 | lib entière, e2e_hooks, navigateur |
+| la sonde de débit à horloge injectée | 96ad1e764 | lib |
+| la barre du chat : l'usage du tour et des tours récents, le récapitulatif qui déplie les fiches, l'archiviste après un rechargement (page 08 de l'IDE) | b129247a9, 2daf2e332 | 5/5, lib 2 050, navigateur 22 |
+| « Dépôts » se rafraîchit à `RepoAttached` | 1005c5544 | 5/5, lib 2 051, navigateur 23 |
+| le thème daemon dans l'IDE (le fichier commun du terminal, l'invocation « réfléchit ») | 7dac6418b, 44442ea75 | 5/5, lib 2 051, navigateur 24 |
+| le symbole cité en lien (`POST /ide/symboles`, `Backend::call_discret`) | 6c17c5766, 36aced578 | 5/5, lib 2 058, navigateur 25, e2e_lectures 24 |
+| en file (cinquième, après le « 7878 libre » de G) : un graphe de clic vide fait attendre l'aperçu au lieu de répondre 422 (le rouge de codeparsers sous charge 32) | branche apercu-clic-vide, 1a4a0f979 | 5/5, lib 2 059, navigateur 26 |
+
+Docs : page 03 du 8 novembre (`08-novembre-2026-orchestration/03-ide-ce-qui-reste.md`) — la
+liste de Lucie relue demande par demande ; elle est faite. Tickets : le code dans le chat fermé ;
+le graphe de clic vide fermé avec son lot ; une ligne au ticket des tests sous charge (le creux
+d'e2e_lectures à 14 h 37, le tunnel 7979 de luciepc à 2,1 s).
+
+Ce que la journée a appris (aussi en mémoire) : un `pgrep -f` avec le motif dans sa propre ligne
+tue son shell ; arrêter une passe, c'est le script et ses descendants, par leurs pids ; un
+`indexings_running` compte les vecteurs en fond, ce n'est pas « l'index n'est pas prêt » ; un
+`status` d'`usages` peut être la fraîcheur, seul « résultat partiel » dit un index partiel ;
+`Backend::call` publie sur le bus du dépôt, que le journal suit.
+
+## 1. Le 7 novembre
 
 | lot | branche → master | passe |
 |---|---|---|
@@ -27,16 +51,12 @@ est jetable » dans `docs/procedures/push-d-un-lot.md` (7f8a3fb75).
 
 ## 3. En cours et suite
 
-- Lot 3 bis : la table `serveurs` dans le run du Stop (depuis `~/.claude.json`), pour que le juge
-  de 73 rejoue nos outils ; un témoin sur un vrai gabarit `memory` dans l'hôte de test (mon faux
-  hôte répond à tout `cited_by` : c'est ce qui a caché le défaut de la valeur du handle) ; `whois`
-  à la place de `cited_by` au SessionStart quand la branche de 73 sera sur master.
-- Lot 4 : `ranger` / `archive` (pas 3 de 96) pour PostCompact ; la seconde moitié de l'exigence
-  de Lucie (redéclaration des gabarits par propositions, vue de l'IDE) est en suite dans la page 04.
-- Premier usage réel : la session `hooks-essai` de Lucie (bloc rendu, fiche écrite, 14 h 55) ; les
-  trois défauts qu'elle a montrés et les deux de 73 sont dans le lot 3. Elle doit relancer une
-  fois pour prendre la commande stable ; après, plus jamais.
-- Jamais joué : la passe d'agent Gemini / Claude (page 03 du 10 octobre) — attend le mot de Lucie.
+- apercu-clic-vide en file chez c7 ; au « à toi » : rebase, rejeu court si du Rust est arrivé (sous
+  cbc06c3e1 + `RAG3WEAVER_MOTEUR_ANCIEN=1` jusqu'au rebâti de la nuit), push sous `poste push`.
+- Les thèmes suivants (fées, forêt… chez tty) : une route `/ide/theme/<nom>.json` et un menu, quand
+  le premier fichier arrive ; tty n'ôte ni ne renomme aucun champ de `daemon.json`.
+- Les lots 3 bis à 3 ter des hooks sont sur master ; le reste du chantier des hooks est dans la
+  mémoire `hooks-claude-code-chantier` et la page 08.
 
 ## 4. Ce qui attend Lucie
 
@@ -45,6 +65,7 @@ est jetable » dans `docs/procedures/push-d-un-lot.md` (7f8a3fb75).
 
 ## 5. Comment reprendre
 
-Mémoire `hooks-claude-code-chantier` ; pages 01-03 du dossier ; worktree `wt-hooks2`, target
-`hooks2`, docs par `wt-docs-archi` (détaché de master, push `HEAD:master` sans passe) ; scripts
-sous `~/.cache/rag3weaver-build/wt-hooks2-{passe,push}.sh`, `controle-du-worktree.sh`.
+Mémoires `hooks-claude-code-chantier`, `orchestrer-les-sessions-rag3db` ; page 03 du 8 novembre ;
+un worktree par lot sous `~/.cache/rag3weaver-build/wt-<lot>`, sa passe `wt-<lot>-passe.sh`
+(ETAPE=module | navigateur | complete) et son push `wt-<lot>-push.sh` (sort à 3 si du code est
+arrivé) ; docs par `wt-docs-archi` (détaché de master, push `HEAD:master` sans passe).
