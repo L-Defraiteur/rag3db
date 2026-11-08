@@ -843,6 +843,30 @@ pub struct Surcharges {
     /// seul le code est dans un dépôt) : `declare` refuse, rien ne serait
     /// versionné ni fusionné.
     pub declarations_hors_depot: bool,
+    /// Le dossier de la tâche (`{task_dir}` du bac à sable), s'il en est une.
+    pub dossier_de_tache: Option<PathBuf>,
+    /// La racine du code dans l'arbre principal : son nom nomme le target
+    /// partagé du dépôt (`{repo_target}`), le même pour toutes ses tâches.
+    pub racine_principale: Option<PathBuf>,
+}
+
+/// **Les jetons du bac à sable d'un backend** : `{task_dir}`, le dossier de la
+/// tâche (hors tâche : `<cache>/rag3weaver/sans-tache/<nom du backend>`) ;
+/// `{repo_target}`, le target partagé du dépôt, nommé par la racine principale
+/// du code (hors tâche, la racine du workspace).
+#[cfg(feature = "code")]
+fn jetons_du_bac(prepared: &PreparedBackend, racine: &Path) -> crate::backend_code::JetonsDuBac {
+    let s = &prepared.surcharges;
+    let task_dir = s.dossier_de_tache.clone().unwrap_or_else(|| {
+        let cache = std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+            .unwrap_or_else(std::env::temp_dir);
+        cache.join("rag3weaver").join("sans-tache").join(&prepared.manifest.name)
+    });
+    let principale = s.racine_principale.clone().unwrap_or_else(|| racine.to_path_buf());
+    let nom = principale.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| prepared.manifest.name.clone());
+    crate::backend_code::JetonsDuBac { task_dir, repo_target: crate::commande::cible_du_depot(&nom) }
 }
 
 /// Une base copiée sous la porte des écrivains
@@ -4159,7 +4183,8 @@ impl Backend {
                     } else {
                         prepared.directory.join(&w.root)
                     };
-                    if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine) {
+                    let jetons = jetons_du_bac(prepared, &racine);
+                    if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine, &jetons) {
                         services.register(
                             crate::dataflow::run_nodes::BAC_A_SABLE_SERVICE,
                             std::sync::Arc::new(bac),

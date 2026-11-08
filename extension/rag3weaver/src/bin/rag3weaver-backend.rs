@@ -678,6 +678,26 @@ fn servir_http(args: &[String]) -> Result<(), String> {
 
 /// **`code-tree`** : poser ou retirer un arbre de code indexé (voir
 /// `rag3weaver::code_tree`).
+/// `rag3weaver-backend taches purge [<dépôt>]` : vide les targets partagés des
+/// tâches (`taches-<dépôt>` sous RAG3WEAVER_TARGETS_DIR, défaut
+/// ~/.cache/rag3weaver-build), chacun sous son verrou.
+fn taches_cli(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend taches purge [<dépôt>]";
+    match args.split_first() {
+        Some((action, reste)) if action == "purge" && reste.len() <= 1 => {
+            let lignes = rag3weaver::commande::purger_les_cibles(reste.first().map(String::as_str));
+            if lignes.is_empty() {
+                println!("aucun target partagé sous {}", rag3weaver::commande::dossier_des_cibles().display());
+            }
+            for l in lignes {
+                println!("{l}");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
 fn code_tree(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend code-tree add <arbre> [--from code-lourd] [--as <nom>] [--daemon <adresse>] [--sans-hote]\n       \
                          rag3weaver-backend code-tree remove <nom | arbre> [--daemon <adresse>] [--sans-hote]";
@@ -841,6 +861,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("files") {
         return fichiers_cli(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("taches") {
+        return taches_cli(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args

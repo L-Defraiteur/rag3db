@@ -730,19 +730,45 @@ pub struct BacASable {
     /// Le réseau TCP. Faux par défaut : un agent qui télécharge passe par
     /// une clé déclarée, pas par un oubli.
     pub reseau: bool,
+    /// L'environnement posé sur la commande, en plus de celui de l'hôte
+    /// (`sandbox.env`, jetons déjà étendus) : `CARGO_TARGET_DIR`, `TMPDIR`…
+    pub env: Vec<(String, String)>,
+    /// Le target partagé d'un dépôt (`{repo_target}`) : la commande le tient
+    /// sous un verrou de fichier, et refuse au-delà du plafond de taille.
+    pub cible_partagee: Option<std::path::PathBuf>,
+    /// Combien attendre le verrou du target partagé avant de le dire (60 s).
+    pub attente_verrou: std::time::Duration,
 }
 
 impl BacASable {
     /// La politique par défaut autour d'un domaine de travail.
     pub fn autour(domaine: impl Into<std::path::PathBuf>) -> Self {
         Self {
-            ecritures: vec![domaine.into()],
+            // **/dev/null en écriture** (8 novembre 2026) : cargo lance rustc
+            // l'entrée sur /dev/null, et sans elle « could not execute process
+            // rustc (never executed) : Permission denied ». Un fichier : le
+            // ruleset n'y donne que les droits de fichier.
+            ecritures: vec![domaine.into(), std::path::PathBuf::from("/dev/null")],
             lectures: ["/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc"]
                 .into_iter()
                 .map(std::path::PathBuf::from)
                 .collect(),
             reseau: false,
+            env: Vec::new(),
+            cible_partagee: None,
+            attente_verrou: std::time::Duration::from_secs(60),
         }
+    }
+    pub fn avec_env(mut self, cle: impl Into<String>, valeur: impl Into<String>) -> Self {
+        self.env.push((cle.into(), valeur.into()));
+        self
+    }
+    /// Le target partagé : écrit, verrouillé pendant chaque commande, plafonné.
+    pub fn avec_cible_partagee(mut self, cible: impl Into<std::path::PathBuf>) -> Self {
+        let c = cible.into();
+        self.ecritures.push(c.clone());
+        self.cible_partagee = Some(c);
+        self
     }
     pub fn lire_en_plus(mut self, p: impl Into<std::path::PathBuf>) -> Self {
         self.lectures.push(p.into());
@@ -1087,6 +1113,128 @@ struct Lance {
     err: std::thread::JoinHandle<(Vec<u8>, usize, u64)>,
     chemin_out: Option<std::path::PathBuf>,
     chemin_err: Option<std::path::PathBuf>,
+    /// Le verrou du target partagé, tenu jusqu'à la fin de la commande.
+    verrou: Option<std::fs::File>,
+}
+
+/// **Le dossier des targets partagés** : `RAG3WEAVER_TARGETS_DIR`, sinon
+/// `~/.cache/rag3weaver-build` (celui des procédures de build).
+pub fn dossier_des_cibles() -> std::path::PathBuf {
+    if let Some(d) = std::env::var_os("RAG3WEAVER_TARGETS_DIR") {
+        return std::path::PathBuf::from(d);
+    }
+    // Les témoins de la lib n'écrivent pas dans le cache de l'utilisateur.
+    #[cfg(test)]
+    return std::env::temp_dir().join(format!("rag3weaver-cibles-de-test-{}", std::process::id()));
+    #[cfg(not(test))]
+    {
+        let maison = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        maison.join(".cache").join("rag3weaver-build")
+    }
+}
+
+/// Le target partagé des tâches d'un dépôt : `<dossier des cibles>/taches-<nom>`.
+pub fn cible_du_depot(nom: &str) -> std::path::PathBuf {
+    let propre: String = nom.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') { c } else { '_' }).collect();
+    dossier_des_cibles().join(format!("taches-{propre}"))
+}
+
+fn verrou_de(cible: &std::path::Path) -> std::path::PathBuf {
+    std::path::PathBuf::from(format!("{}.verrou", cible.display()))
+}
+
+/// Prendre le verrou d'un target partagé, en attendant au plus `attente` : au-delà,
+/// le dire plutôt que bloquer sans mot.
+fn prendre_le_verrou(cible: &std::path::Path, attente: std::time::Duration) -> Result<std::fs::File, String> {
+    let chemin = verrou_de(cible);
+    if let Some(d) = chemin.parent() {
+        std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+    }
+    let f = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+    let debut = std::time::Instant::now();
+    loop {
+        match f.try_lock() {
+            Ok(()) => return Ok(f),
+            Err(std::fs::TryLockError::WouldBlock) => {}
+            Err(std::fs::TryLockError::Error(e)) => return Err(format!("{} : {e}", chemin.display())),
+        }
+        if debut.elapsed() >= attente {
+            return Err(format!(
+                "le target partagé {} est tenu par une autre commande depuis {} s ; la commande n'est pas lancée, réessaie quand l'autre aura fini",
+                cible.display(),
+                attente.as_secs()
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+}
+
+fn taille_du_dossier(d: &std::path::Path) -> u64 {
+    let mut total = 0u64;
+    let mut pile = vec![d.to_path_buf()];
+    while let Some(p) = pile.pop() {
+        let Ok(entrees) = std::fs::read_dir(&p) else { continue };
+        for e in entrees.flatten() {
+            match e.file_type() {
+                Ok(t) if t.is_dir() => pile.push(e.path()),
+                Ok(t) if t.is_file() => total += e.metadata().map(|m| m.len()).unwrap_or(0),
+                _ => {}
+            }
+        }
+    }
+    total
+}
+
+/// **Tenir le target partagé** : son verrou, puis son plafond
+/// (`RAG3WEAVER_TARGET_MAX_GO`, 32 par défaut — celui des procédures).
+fn tenir_la_cible(cible: &std::path::Path, attente: std::time::Duration) -> Result<std::fs::File, String> {
+    std::fs::create_dir_all(cible).map_err(|e| format!("{} : {e}", cible.display()))?;
+    let verrou = prendre_le_verrou(cible, attente)?;
+    let plafond = std::env::var("RAG3WEAVER_TARGET_MAX_GO").ok().and_then(|v| v.trim().parse::<u64>().ok()).unwrap_or(32);
+    let taille = taille_du_dossier(cible);
+    if taille > plafond << 30 {
+        return Err(format!(
+            "le target partagé {} pèse {} Go, plus que le plafond de {plafond} Go (RAG3WEAVER_TARGET_MAX_GO) ; la commande n'est pas lancée : `rag3weaver-backend taches purge` le vide",
+            cible.display(),
+            taille >> 30
+        ));
+    }
+    Ok(verrou)
+}
+
+/// **Vider les targets partagés** (`rag3weaver-backend taches purge [<dépôt>]`) :
+/// chacun sous son verrou, pour ne rien retirer sous une commande en cours. Rend
+/// une ligne par target vidé ou laissé.
+pub fn purger_les_cibles(depot: Option<&str>) -> Vec<String> {
+    let dossier = dossier_des_cibles();
+    let mut cibles: Vec<std::path::PathBuf> = match depot {
+        Some(n) => vec![cible_du_depot(n)],
+        None => std::fs::read_dir(&dossier)
+            .map(|it| {
+                it.flatten()
+                    .filter(|e| e.file_name().to_string_lossy().starts_with("taches-") && e.file_type().is_ok_and(|t| t.is_dir()))
+                    .map(|e| e.path())
+                    .collect()
+            })
+            .unwrap_or_default(),
+    };
+    cibles.sort();
+    let mut lignes = Vec::new();
+    for c in cibles {
+        if !c.is_dir() {
+            lignes.push(format!("{} : absent", c.display()));
+            continue;
+        }
+        let go = taille_du_dossier(&c) as f64 / (1u64 << 30) as f64;
+        match prendre_le_verrou(&c, std::time::Duration::from_secs(60)) {
+            Ok(_verrou) => match std::fs::remove_dir_all(&c) {
+                Ok(()) => lignes.push(format!("{} : vidé ({go:.1} Go)", c.display())),
+                Err(e) => lignes.push(format!("{} : non vidé ({e})", c.display())),
+            },
+            Err(e) => lignes.push(format!("{} : laissé ({e})", c.display())),
+        }
+    }
+    lignes
 }
 
 /// **Lancer par argv, dans son propre groupe de processus, flux lus par deux
@@ -1107,6 +1255,10 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // L'environnement déclaré (`sandbox.env`), par-dessus celui de l'hôte.
+    if let Some(bac) = &atelier.bac_a_sable {
+        commande.envs(bac.env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    }
     // Son propre groupe : la tuer, c'est tuer aussi ce qu'elle a lancé.
     #[cfg(unix)]
     {
@@ -1177,6 +1329,11 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
         }
     }
 
+    // Le target partagé : son verrou, tenu jusqu'à la fin de la commande.
+    let verrou = match atelier.bac_a_sable.as_ref().and_then(|b| b.cible_partagee.as_deref().map(|c| (c, b.attente_verrou))) {
+        Some((c, attente)) => Some(tenir_la_cible(c, attente).map_err(ExecErreur::Atelier)?),
+        None => None,
+    };
     let mut enfant = commande
         .spawn()
         .map_err(|e| ExecErreur::Lancement(format!("{} : {e}", a.0.programme)))?;
@@ -1219,7 +1376,7 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
     let (pour_out, pour_err) = if direct { (None, None) } else { (chemin_out.clone(), chemin_err.clone()) };
     let out = lire(enfant.stdout.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie, pour_out);
     let err = lire(enfant.stderr.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie, pour_err);
-    Ok(Lance { enfant, out, err, chemin_out, chemin_err })
+    Ok(Lance { enfant, out, err, chemin_out, chemin_err, verrou })
 }
 
 /// **L'aperçu dit ce qu'il ne montre pas.** Une sortie coupée en silence
@@ -1243,7 +1400,7 @@ fn apercu(v: Vec<u8>, total: usize, perdus: u64, journal: &Option<std::path::Pat
 /// **Exécuter par argv, jamais par un shell**, et attendre la fin.
 pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
     let debut = std::time::Instant::now();
-    let Lance { mut enfant, out, err, chemin_out, chemin_err } = lancer(&a, atelier, false)?;
+    let Lance { mut enfant, out, err, chemin_out, chemin_err, verrou: _verrou } = lancer(&a, atelier, false)?;
 
     let mut expiree = false;
     let code = loop {
@@ -1329,7 +1486,7 @@ pub fn lancer_en_fond(
     let debut = std::time::Instant::now();
     // L'aperçu d'une commande en fond garde la fin, pas le début : on lit la
     // fin dans le journal quand elle meurt.
-    let Lance { mut enfant, out, err, chemin_out, chemin_err } = lancer(&a, atelier, true)?;
+    let Lance { mut enfant, out, err, chemin_out, chemin_err, verrou } = lancer(&a, atelier, true)?;
     let pid = enfant.id();
     let fin = std::sync::Arc::new(std::sync::Mutex::new(None));
     let tuee = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -1337,6 +1494,8 @@ pub fn lancer_en_fond(
     let (j_out, j_err) = (chemin_out.clone(), chemin_err.clone());
     let plafond = atelier.plafond_journal;
     std::thread::spawn(move || {
+        // Le verrou du target partagé vit avec ce fil, qui attend la fin.
+        let _verrou = verrou;
         let (mut perdus_out, mut perdus_err) = (0u64, 0u64);
         let (mut entete_out, mut entete_err) = (0u64, 0u64);
         let tenir = |p: &Option<std::path::PathBuf>, perdus: &mut u64, entete: &mut u64| {
@@ -1897,6 +2056,78 @@ mod tests {
     /// des échecs de la commande (EACCES), plus des verdicts de la garde.
     /// C'est ce qui rend honnête le mode `auto` : les contournements des
     /// passes d'agent deviennent des échecs du noyau.
+    /// **cargo joue ses tests dans le bac à sable** (8 novembre 2026, essai 5 de c7 :
+    /// « could not read settings file: ~/.rustup/settings.toml: Permission denied ») : la
+    /// chaîne Rust en lecture, /dev/null, un TMPDIR et un target partagé en écriture, le
+    /// réseau fermé. Un crate jouet compile, lie et rend « test result: ok. 1 passed » ;
+    /// une écriture hors du domaine, du dossier de la tâche et du target reste refusée.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    #[test]
+    fn cargo_plays_its_tests_inside_the_sandbox() {
+        let Some(maison) = std::env::var_os("HOME").map(std::path::PathBuf::from) else { return };
+        if !maison.join(".rustup").is_dir() {
+            eprintln!("pas de ~/.rustup sur ce poste : test sauté, dit franchement");
+            return;
+        }
+        let (domaine, tache, cible, dehors) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        std::fs::create_dir_all(domaine.path().join("src")).unwrap();
+        std::fs::write(domaine.path().join("Cargo.toml"), "[package]\nname = \"jouet\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+        std::fs::write(domaine.path().join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n#[cfg(test)]\nmod tests { #[test] fn un_test() { assert_eq!(super::un(), 1); } }\n").unwrap();
+        std::fs::create_dir_all(tache.path().join("tmp")).unwrap();
+        let mut bac = BacASable::autour(domaine.path())
+            .ecrire_en_plus(tache.path())
+            .avec_env("CARGO_TARGET_DIR", cible.path().to_string_lossy())
+            .avec_env("TMPDIR", tache.path().join("tmp").to_string_lossy())
+            .avec_env("CARGO_NET_OFFLINE", "true")
+            .avec_cible_partagee(cible.path());
+        for p in [".rustup", ".cargo/bin", ".cargo/registry", ".cargo/git", ".cargo/config.toml"] {
+            bac = bac.lire_en_plus(maison.join(p));
+        }
+        if bac.ruleset().is_err() {
+            eprintln!("Landlock indisponible sur ce noyau : test sauté, dit franchement");
+            return;
+        }
+        let atelier = Atelier::dans(domaine.path()).avec_delai(std::time::Duration::from_secs(600)).avec_bac_a_sable(bac);
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let laissez = g.autoriser(&Commande::new("cargo", ["test", "--lib", "--", "un_test"]), &accorde).unwrap();
+        let s = executer(laissez, &atelier).expect("cargo tourne");
+        assert!(s.a_reussi() && s.stdout.contains("test result: ok. 1 passed"), "{s:?}");
+        assert!(cible.path().join("debug").is_dir(), "le target partagé a reçu le bâti");
+        // L'écriture : dans le target et le dossier de la tâche oui, dehors non.
+        for (vers, permis) in [(cible.path().join("x"), true), (tache.path().join("x"), true), (dehors.path().join("x"), false)] {
+            let laissez = g.autoriser(&Commande::new("/bin/cp", ["Cargo.toml", vers.to_str().unwrap()]), &accorde).unwrap();
+            let s = executer(laissez, &atelier).expect("cp tourne");
+            assert_eq!((s.a_reussi(), vers.exists()), (permis, permis), "{}: {s:?}", vers.display());
+        }
+    }
+
+    /// **Le target partagé tenu par une autre commande se dit** : la commande attend son
+    /// verrou au plus `attente_verrou`, puis rend une erreur qui le nomme, sans s'être lancée.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    #[test]
+    fn a_held_shared_target_is_said_instead_of_blocking() {
+        let (domaine, cible) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let mut bac = BacASable::autour(domaine.path()).avec_cible_partagee(cible.path());
+        if bac.ruleset().is_err() {
+            eprintln!("Landlock indisponible sur ce noyau : test sauté, dit franchement");
+            return;
+        }
+        bac.attente_verrou = std::time::Duration::from_secs(1);
+        let _tenu = prendre_le_verrou(cible.path(), std::time::Duration::from_secs(1)).expect("le verrou");
+        let atelier = Atelier::dans(domaine.path()).avec_bac_a_sable(bac);
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let laissez = g.autoriser(&Commande::new("/bin/touch", ["lance"]), &accorde).unwrap();
+        let debut = std::time::Instant::now();
+        let e = executer(laissez, &atelier).expect_err("le verrou est tenu");
+        assert!(e.to_string().contains("est tenu par une autre commande"), "{e}");
+        assert!(debut.elapsed() >= std::time::Duration::from_secs(1) && !domaine.path().join("lance").exists(), "attendu, puis rien lancé");
+        drop(_tenu);
+        let laissez = g.autoriser(&Commande::new("/bin/touch", ["lance"]), &accorde).unwrap();
+        assert!(executer(laissez, &atelier).expect("libre, elle tourne").a_reussi());
+    }
+
     #[cfg(all(feature = "code", target_os = "linux"))]
     #[test]
     fn le_bac_a_sable_borne_ce_que_la_commande_voit() {

@@ -945,3 +945,78 @@ fn waiting_for_the_supervisor_suspends_the_teammate_without_failing_the_task() {
     assert!(boite.iter().any(|l| l["kind"] == "ended" || l["kind"] == "step_done"), "{boite:#?}");
     assert_eq!(*pas.lock().unwrap(), 2, "un seul pas après la réponse : {boite:#?}");
 }
+
+/// **Une tâche joue cargo test par la porte** (8 novembre 2026, essai 5 de c7 : la porte
+/// marchait, mais cargo ne lisait pas ~/.rustup dans le bac à sable). Le petit dépôt devient
+/// un crate ; l'équipier demande `cargo test --lib -- un_test`, le superviseur l'accorde, et
+/// le pas suivant lit « test result: ok. 1 passed » — la chaîne Rust en lecture, le target
+/// partagé du dépôt (`{repo_target}`) et le TMPDIR de la tâche (`{task_dir}/tmp`), déclarés
+/// par le gabarit code.
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn a_task_plays_cargo_test_through_the_gate() {
+    use std::time::{Duration, Instant};
+    if !std::env::var_os("HOME").map(std::path::PathBuf::from).is_some_and(|h| h.join(".rustup").is_dir()) {
+        eprintln!("pas de ~/.rustup sur ce poste : test sauté, dit franchement");
+        return;
+    }
+    if crate::commande::BacASable::autour("/").ruleset().is_err() {
+        eprintln!("Landlock indisponible sur ce noyau : test sauté, dit franchement");
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
+    std::fs::write(depot.join("Cargo.toml"), "[package]\nname = \"petit-depot\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(depot.join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n#[cfg(test)]\nmod tests { #[test] fn un_test() { assert_eq!(super::un(), 1); } }\n").unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "un crate"]] {
+        let ok = std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success();
+        assert!(ok, "git {args:?}");
+    }
+    let vus = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let vus = vus.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let vus = vus.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if let Some(r) = results.last() {
+                    vus.lock().unwrap().push(r.clone());
+                }
+                let accorde = turns.iter().any(|t| t.content.contains("commande accordée"));
+                let cargo = ("run_command", json!({ "command": "cargo test --lib -- un_test" }));
+                match (accorde, results.len()) {
+                    (_, 0) => answer(turns, opts, sink, "", calls(&[cargo])),
+                    (false, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": false, "done": "cargo test demandé", "remaining": "l'accord" }))])),
+                    (true, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "cargo test joué", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Joue le test un_test.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let attendre = |quoi: &str, ok: &dyn Fn(&[Value]) -> bool| -> Vec<Value> {
+        let borne = Instant::now() + Duration::from_secs(300);
+        loop {
+            let b = files.mailbox();
+            if ok(&b) {
+                return b;
+            }
+            assert!(Instant::now() < borne, "en 300 s : {quoi} — {b:#?}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    let boite = attendre("la demande d'accord de cargo", &|b| b.iter().any(|l| l["kind"] == "approval") && b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur"))));
+    let question = boite.iter().find(|l| l["kind"] == "approval").unwrap().clone();
+    assert_eq!(question["command"], "cargo test --lib -- un_test", "{question}");
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": question["id"], "approved": true })).expect("le oui");
+    attendre("cargo joué après l'accord", &|b| b.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true));
+    let vus = vus.lock().unwrap();
+    assert!(vus.iter().any(|r| r.contains("test result: ok. 1 passed")), "cargo test a tourné dans la tâche : {vus:#?}");
+    // Le target partagé du dépôt a reçu le bâti ; on le rend.
+    let cible = crate::commande::cible_du_depot("petit-depot");
+    assert!(cible.join("debug").is_dir(), "le bâti dans {}", cible.display());
+    let _ = std::fs::remove_dir_all(&cible);
+}
