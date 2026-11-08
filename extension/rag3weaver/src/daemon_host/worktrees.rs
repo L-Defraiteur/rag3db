@@ -67,6 +67,10 @@ const QUEUE_DU_JOURNAL: usize = 4096;
 struct LectureDuJournal {
     offset: u64,
     queue: Vec<u8>,
+    /// La ligne commencée, pas encore finie par son retour.
+    entamee: Vec<u8>,
+    /// Les lignes complètes lues à la dernière lecture.
+    neuves: Vec<String>,
 }
 
 impl LectureDuJournal {
@@ -89,6 +93,12 @@ impl LectureDuJournal {
             let _ = f.read_to_end(&mut ajout);
         }
         self.offset += ajout.len() as u64;
+        // Les lignes complètes de l'ajout (la dernière, sans retour, attend la suite).
+        let mut lignes = std::mem::take(&mut self.entamee);
+        lignes.extend_from_slice(&ajout);
+        let fin_complete = lignes.iter().rposition(|b| *b == b'\n').map(|i| i + 1).unwrap_or(0);
+        self.entamee = lignes[fin_complete..].to_vec();
+        self.neuves = String::from_utf8_lossy(&lignes[..fin_complete]).lines().map(str::to_string).collect();
         let mut cousu = std::mem::take(&mut self.queue);
         cousu.extend_from_slice(&ajout);
         let texte_pret = !ajout.is_empty() && String::from_utf8_lossy(&cousu).contains("plein texte prêt");
@@ -107,6 +117,46 @@ impl LectureDuJournal {
         Some((texte_pret, fin))
     }
 }
+
+/// **L'avancement d'un index, lu dans une ligne de son journal** (Lucie, 8 novembre 2026 à
+/// 16 h 30 : une barre qui avance, son pourcentage ; « par SSE, pas par polling ») : la
+/// phase, et ce qui est fait sur le total. Les lignes de `index_nodes` et de
+/// `catalog::progress` : « plein texte : N fichiers sur M (…) », « … · vecteurs N sur C
+/// (P %, modèle) … », « … · vecteurs prêts (C morceaux, modèle) ».
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Avancement {
+    pub phase: &'static str,
+    pub fait: u64,
+    pub total: u64,
+}
+
+pub(super) fn avancement_de_la_ligne(ligne: &str) -> Option<Avancement> {
+    let nombre = |s: &str| s.trim().split(|c: char| !c.is_ascii_digit()).next().and_then(|n| n.parse::<u64>().ok());
+    if let Some(i) = ligne.find("vecteurs prêts (") {
+        let c = nombre(&ligne[i + "vecteurs prêts (".len()..])?;
+        return Some(Avancement { phase: "vecteurs", fait: c, total: c });
+    }
+    if let Some(i) = ligne.find("vecteurs ") {
+        let reste = &ligne[i + "vecteurs ".len()..];
+        if let Some((fait, apres)) = reste.split_once(" sur ") {
+            if let (Some(fait), Some(total)) = (nombre(fait), nombre(apres)) {
+                return Some(Avancement { phase: "vecteurs", fait, total });
+            }
+        }
+    }
+    if let Some(reste) = ligne.strip_prefix("plein texte : ") {
+        if let Some((fait, apres)) = reste.split_once(" fichiers sur ") {
+            if let (Some(fait), Some(total)) = (nombre(fait), nombre(apres)) {
+                return Some(Avancement { phase: "plein texte", fait, total });
+            }
+        }
+    }
+    None
+}
+
+/// La cadence des avancements publiés : au plus un par seconde et par dépôt, plus un à
+/// chaque changement de phase.
+const CADENCE_DE_L_AVANCEMENT: Duration = Duration::from_secs(1);
 
 /// Les fichiers et les symboles de l'index d'un backend (`fts_counts` de
 /// `Backend::index_states`), relus une fois si une écriture tient le catalogue ;
@@ -137,6 +187,11 @@ pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super:
         // la recherche par mots répond dès ce moment.
         let mut texte_ms: Option<u64> = None;
         let mut lecture = LectureDuJournal::default();
+        // Le dernier avancement publié, l'instant et ce qui était fait : le débit se mesure
+        // entre deux publications.
+        let mut publie: Option<(Avancement, Instant)> = None;
+        let mut dernier: Option<Avancement> = None;
+        let cle = hosted.manifest.display().to_string();
         let (ok, ligne) = loop {
             match lecture.lire(&journal) {
                 None if debut.elapsed() > bornes.naissance => {
@@ -146,6 +201,41 @@ pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super:
                 Some((texte_pret, fin)) => {
                     if texte_pret && texte_ms.is_none() {
                         texte_ms = Some(debut.elapsed().as_millis() as u64);
+                    }
+                    for l in &lecture.neuves {
+                        if let Some(a) = avancement_de_la_ligne(l) {
+                            dernier = Some(a);
+                        }
+                    }
+                    if let Some(a) = dernier.clone() {
+                        let change_de_phase = publie.as_ref().is_none_or(|(p, _)| p.phase != a.phase);
+                        let a_bouge = publie.as_ref().is_none_or(|(p, _)| p != &a);
+                        let a_temps = publie.as_ref().is_none_or(|(_, t)| t.elapsed() >= CADENCE_DE_L_AVANCEMENT);
+                        if a_bouge && (change_de_phase || a_temps) {
+                            if let Some(h) = hote.upgrade() {
+                                let debit = publie.as_ref().filter(|(p, _)| p.phase == a.phase && a.fait >= p.fait).map(|(p, t)| {
+                                    let s = t.elapsed().as_secs_f64().max(0.001);
+                                    (((a.fait - p.fait) as f64 / s) * 10.0).round() / 10.0
+                                });
+                                let mut e = json!({
+                                    "kind": "IndexProgress",
+                                    "phase": a.phase,
+                                    "fait": a.fait,
+                                    "total": a.total,
+                                    "pourcent": if a.total > 0 { (a.fait * 100 / a.total).min(100) } else { 0 },
+                                    "debit": debit,
+                                    "unite": if a.phase == "vecteurs" { "morceaux" } else { "fichiers" },
+                                    "at_ms": crate::events::maintenant_ms(),
+                                });
+                                if let (Some(o), Some(q)) = (e.as_object_mut(), quoi.as_object()) {
+                                    for (k, v) in q {
+                                        o.insert(k.clone(), v.clone());
+                                    }
+                                }
+                                h.ide_flux().publier("repos", &cle, e);
+                            }
+                            publie = Some((a, Instant::now()));
+                        }
                     }
                     if let Some(fin) = fin {
                         break fin;
@@ -839,5 +929,156 @@ mod tests {
         std::fs::write(&journal, format!("{DONE_LINE}\n")).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(600));
         assert!(!indexes_captes(&flux2).iter().any(|e| e["branche"] == "parti"), "un hôte parti ne publie rien");
+    }
+
+    /// **L'avancement se lit dans les lignes du journal**, aux formes que `index_nodes` et
+    /// `catalog::progress` écrivent.
+    #[test]
+    fn the_progress_of_an_index_reads_from_its_journal_lines() {
+        use super::{avancement_de_la_ligne, Avancement};
+        assert_eq!(avancement_de_la_ligne("plein texte : 12 fichiers sur 40 (88 scopes) · 3 liens en file"), Some(Avancement { phase: "plein texte", fait: 12, total: 40 }));
+        assert_eq!(
+            avancement_de_la_ligne("plein texte prêt · vecteurs 8200 sur 20100 (40 %, granite-278m) · reste environ 3 min"),
+            Some(Avancement { phase: "vecteurs", fait: 8200, total: 20100 })
+        );
+        assert_eq!(avancement_de_la_ligne("plein texte prêt · vecteurs prêts (20100 morceaux, granite-278m)"), Some(Avancement { phase: "vecteurs", fait: 20100, total: 20100 }));
+        assert_eq!(avancement_de_la_ligne("indexation lancée : 40 fichiers, granite-278m"), None);
+        assert_eq!(avancement_de_la_ligne("plein texte prêt : 40 fichiers, 88 scopes, 12 relations posées"), None);
+    }
+
+    /// **L'avancement d'un index passe sur le flux, sans polling** (Lucie, 8 novembre 2026 à
+    /// 16 h 30 et 16 h 31) : le suiveur publie `IndexProgress` à mesure que le journal
+    /// avance — un changement de phase tout de suite, sinon au plus un par seconde —, avec
+    /// le pourcentage et le débit, puis `RepoIndexed` à la fin.
+    #[test]
+    fn the_progress_of_an_index_is_published_on_the_flux_as_its_journal_grows() {
+        use crate::dataflow::index_nodes::DONE_LINE;
+        use std::io::Write;
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        std::fs::create_dir_all(d.path().join("base")).unwrap();
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &d.path().join("base")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(depot.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
+        let host = Arc::new(hote(d.path(), model));
+        let flux = Arc::new(Mutex::new(Vec::new()));
+        host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
+        let h = host.hosted(&manifeste).unwrap();
+        let journal = d.path().join("index.log");
+        std::fs::write(&journal, "indexation lancée : 4 fichiers, granite-278m\n").unwrap();
+        let bornes = super::Bornes { plafond: std::time::Duration::from_secs(60), naissance: std::time::Duration::from_secs(5) };
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal.clone(), json!({ "worktree": "/w", "depot": "rag3db-essai", "branche": "essai" }), bornes);
+        let ecrire = |l: &str| {
+            let mut f = std::fs::OpenOptions::new().append(true).open(&journal).unwrap();
+            writeln!(f, "{l}").unwrap();
+        };
+        let pause = |ms: u64| std::thread::sleep(std::time::Duration::from_millis(ms));
+        // Le plein texte : dix lignes en 300 ms — la cadence n'en publie pas dix.
+        for i in 1..=10 {
+            ecrire(&format!("plein texte : {i} fichiers sur 10 (0 scopes)"));
+            pause(30);
+        }
+        pause(1300);
+        // Les vecteurs : un changement de phase, publié tout de suite, puis l'avance.
+        ecrire("plein texte prêt · vecteurs 100 sur 1000 (10 %, granite-278m)");
+        pause(1200);
+        ecrire("plein texte prêt · vecteurs 600 sur 1000 (60 %, granite-278m) · reste environ 30 s");
+        pause(1200);
+        ecrire(DONE_LINE);
+        let evenements = || -> Vec<Value> {
+            let texte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+            texte.lines().filter_map(|l| l.strip_prefix("data: ").or_else(|| l.strip_prefix("data:"))).filter_map(|l| serde_json::from_str::<Value>(l.trim()).ok()).map(|v| v.get("evenement").cloned().unwrap_or(v)).collect()
+        };
+        let debut = std::time::Instant::now();
+        while !evenements().iter().any(|e| e["kind"] == "RepoIndexed") {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(10), "pas de RepoIndexed : {:#?}", evenements());
+            pause(100);
+        }
+        let tout = evenements();
+        let progres: Vec<&Value> = tout.iter().filter(|e| e["kind"] == "IndexProgress").collect();
+        let texte: Vec<&&Value> = progres.iter().filter(|e| e["phase"] == "plein texte").collect();
+        let vecteurs: Vec<&&Value> = progres.iter().filter(|e| e["phase"] == "vecteurs").collect();
+        assert!(!texte.is_empty() && texte.len() <= 3, "la cadence borne le plein texte (dix lignes en 300 ms) : {texte:#?}");
+        assert_eq!(texte.last().unwrap()["fait"], 10, "le dernier état du plein texte est publié : {texte:#?}");
+        assert_eq!(vecteurs.len(), 2, "le changement de phase, puis l'avance : {vecteurs:#?}");
+        assert_eq!((vecteurs[0]["fait"].clone(), vecteurs[0]["total"].clone(), vecteurs[0]["pourcent"].clone()), (json!(100), json!(1000), json!(10)));
+        assert_eq!(vecteurs[1]["pourcent"], 60);
+        assert!(vecteurs[1]["debit"].as_f64().is_some_and(|d| d > 100.0 && d < 1000.0), "500 morceaux en ~1,2 s : {}", vecteurs[1]);
+        assert!(vecteurs[0]["debit"].is_null(), "pas de débit sur un changement de phase : {}", vecteurs[0]);
+        assert_eq!((vecteurs[1]["depot"].clone(), vecteurs[1]["unite"].clone()), (json!("rag3db-essai"), json!("morceaux")));
+        let i_fin = tout.iter().position(|e| e["kind"] == "RepoIndexed").unwrap();
+        assert!(tout.iter().rposition(|e| e["kind"] == "IndexProgress").unwrap() < i_fin, "RepoIndexed vient après les avancements");
+    }
+
+    /// **L'avancement de l'index se lit dans la barre, par le flux** (Lucie, 8 novembre 2026
+    /// à 16 h 30 et 16 h 31) : la ligne du dépôt dit la phase, le pourcentage et le débit à
+    /// mesure que le journal avance, « figé depuis » quand rien ne bouge, et s'efface à la
+    /// fin — la page jamais rechargée, aucune relecture de l'hôte.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn l_avancement_de_l_index_se_lit_dans_la_barre_par_le_flux() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        use crate::dataflow::index_nodes::DONE_LINE;
+        use std::io::Write;
+        const TEMOIN: &str = "l_avancement_de_l_index_se_lit_dans_la_barre_par_le_flux";
+        let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        std::fs::create_dir_all(d.path().join("base")).unwrap();
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &d.path().join("base")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(depot.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("ok"))) });
+        let host = Arc::new(crate::daemon_host::tests::hote_isole().with_chats_root(d.path().join("chats")).with_racine_des_taches(d.path().join("taches")).with_chat_model(model));
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let racine = format!("http://{}", ecoute.local_addr().unwrap());
+        let serveur = tiny_http::Server::from_listener(ecoute, None).unwrap();
+        let servi = host.clone();
+        let fil = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(serveur, 2).serve(servi, Some("j".to_string())));
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}/ide/describe"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste }).to_string())
+            .unwrap();
+        let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(v["ok"], true, "{v}");
+        let h = host.hosted(&manifeste.canonicalize().unwrap()).unwrap();
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        n.aller(&format!("{racine}/ide/code/{}/chat", h.id), "!!document.querySelector('#barre') && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+        n.evaluer("window.__ideFigeMs = 1500");
+        let journal = d.path().join("index.log");
+        std::fs::write(&journal, "indexation lancée : 1 fichiers, granite-278m\n").unwrap();
+        let bornes = super::Bornes { plafond: std::time::Duration::from_secs(60), naissance: std::time::Duration::from_secs(5) };
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal.clone(), json!({ "worktree": depot, "depot": "rag3db-essai", "branche": "essai" }), bornes);
+        let ecrire = |l: &str| {
+            let mut f = std::fs::OpenOptions::new().append(true).open(&journal).unwrap();
+            writeln!(f, "{l}").unwrap();
+        };
+        ecrire("plein texte prêt · vecteurs 100 sur 1000 (10 %, granite-278m)");
+        n.attendre("document.querySelector('.avancement')?.dataset.pourcent === '10'", "l'avancement à 10 % dans la barre");
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        ecrire("plein texte prêt · vecteurs 600 sur 1000 (60 %, granite-278m) · reste environ 30 s");
+        n.attendre("document.querySelector('.avancement')?.dataset.pourcent === '60' && document.querySelector('.avancement').textContent.includes('morceaux/s')", "60 % et le débit");
+        let texte = n.evaluer("document.querySelector('.avancement').textContent");
+        assert!(texte.as_str().is_some_and(|t| t.contains("vecteurs 60 % (600/1000 morceaux)")), "{texte}");
+        n.attendre("document.querySelector('.avancement')?.textContent.includes('figé depuis')", "« figé depuis » quand rien ne bouge");
+        ecrire(DONE_LINE);
+        n.attendre("!document.querySelector('.avancement')", "l'avancement s'efface à la fin de l'index");
+
+        assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
     }
 }

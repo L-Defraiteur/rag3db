@@ -42,6 +42,8 @@ function App() {
     reloadState();
     return openFlux(dispatchFlux, (s: FluxStatus) => {
       setFlux(s);
+      // La coupure se dit aussi aux vues (l'avancement des index : « flux coupé »).
+      if (s !== "ouvert") dispatchFlux({ sujet: "flux", backend: "*", evenement: { kind: "coupe" } });
       if (s === "ouvert") {
         reloadState();
         // Les vues relisent leur état à chaque ouverture du flux (le chat : un
