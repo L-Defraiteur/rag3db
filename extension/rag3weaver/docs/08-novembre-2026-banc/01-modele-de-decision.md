@@ -44,7 +44,7 @@ un appel par cas, l'un après l'autre (1,5 s entre deux, une attente de 60 s sur
 | appels | 202, pour 166 cas (36 relances après une réponse coupée, § 5.1) |
 | jetons | 466 067 d'entrée, 10 207 de sortie, dont 48 173 de réflexion |
 | latence par cas (8 fiches) | p50 4,0 s, p95 11,7 s |
-| quota | un 429 sur 202 appels |
+| quota | au moins deux 429 sur 202 appels (le journal de la première passe est perdu) |
 
 Gemini garde 67 paires sur 1 328 (5 %) : **66 fois la fiche « hooks-essai », une fois
 « régime GPU »**. Sa raison est presque toujours la même : « la fiche identifie la session
