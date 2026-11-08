@@ -1736,3 +1736,30 @@ avance d'autant ; les hashs, eux, sont exacts.
   garder 1 à 2 → le modèle de l'agent, ≈ 1,2 s.
 - **Demain matin, pour Lucie** : la page des vues (10b8affce) ; les deux cas de l'installeur de
   l'atelier ; le lot `ui` d'ED (la carte sous le tour) ; les tickets du jour.
+
+## 23 h 41 — la lib de la nuit est posée à luciepc
+
+- **Lib 9bae60786** (`rag3db-build-9bae60786b05ec1463c60d2630a4de4444bc2cfd-Release-…`, md5 88084c87) : bâti
+  incrémental à 22 h 30 (34 s), 3 symboles ajoutés, 0 retiré, aucune vtable changée, aucune ABI changée
+  (cœur) ; passe e2e verte (e2e_code 27/27, e2e_lectures 24/24, lib lue dans les journaux), après une
+  attente sur la carte des services tenue par une suite orpheline de la passe entière de recherche
+  (`e2e_sparse_dump`, parent tué par son `timeout`, arrêtée à 22 h 50 m 46 s) ; **deux sens sur
+  copies de code-lourd et code-principal : aucune différence** avec la référence sous cbc06c3e1 (l'écart
+  de midi, inchangé). **Posée à luciepc à 23 h 40** (binaire af5da8e9 = f16628f8b contre 9bae60786,
+  réveil vert, les deux bases ouvertes, témoin search_code ok, instantané avant-9bae60786 et RETOUR.sh) ;
+  **`courant` = 9bae60786 aux deux postes à 23 h 41** ; l'hôte du portable reste sur cbc06c3e1 par son
+  env jusqu'à la pose de 9 h 30 (binaire rebâti à la tête de master vers 9 h). **Les passes épinglent
+  désormais 9bae60786, sans MOTEUR_ANCIEN** ; cbc06c3e1 reste au magasin pour le retour.
+- **La file** : le lot `ui` d'ED est atterri (a81f947d4) ; archi pousse archi-pile-2 (le témoin du dépôt
+  fermé, et un vrai correctif des symboles cités trouvé en cherchant le rouge de 96 : à un FileChanged la
+  page redemandait avant la réindexation et gardait l'ancienne ligne cinq minutes, elle redemande aussi à
+  la fin de la réaction ; la page relève chaque lot avec son `why`) et **retient la carte** dont le témoin
+  rougit une fois sur trois (un index arrêté « entre deux passes de vecteurs », cause à lire avec ED,
+  journal gardé cette fois) ; 96 (pas 3 de M4) pousse derrière archi ; puis « file passée » à hotfixs
+  (trace à paramètres littéraux) et codeparsers (mesure du `require`), et recherche rejoue sa passe
+  entière (94 suites parties sans rouge, `e2e_sparse_dump` à rejouer) puis pousse residus-de-suite.
+- **Leçons de la soirée, dans la mémoire** : un `timeout` tue un processus, pas son arbre (passe dans sa
+  propre portée, `pgrep` après tout arrêt) ; une passe e2e entière ou tout e2e qui embarque en creux est
+  un lourd GPU qui ne tourne pas pendant une file ; lire `/proc/<pid>/fdinfo` et `ss -tnp` quand la
+  carte reste occupée alors que les lourds sont rendus ; deux titres de section écrits sans lire l'heure,
+  corrigés : `date` avant chaque titre.
