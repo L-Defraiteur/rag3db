@@ -70,13 +70,26 @@ void QueryProcessor::decomposePlanIntoTask(PhysicalOperator* op, Task* task,
     }
 }
 
+// Les opérateurs d'un pipeline, de son puits jusqu'aux puits des tâches filles, qui ont leurs
+// propres pipelines (decomposePlanIntoTask).
+static void acquirePipelineLocks(PhysicalOperator* op, ExecutionContext* context) {
+    op->acquireLocksBeforeExecution(context);
+    for (auto i = 0u; i < op->getNumChildren(); i++) {
+        if (!op->getChild(i)->isSink()) {
+            acquirePipelineLocks(op->getChild(i), context);
+        }
+    }
+}
+
 // Les verrous de tout le plan, pris sur le fil du client avant qu'une tâche ne soit
-// ordonnancée (PhysicalOperator::acquireLocksBeforeExecution).
+// ordonnancée (PhysicalOperator::acquireLocksBeforeExecution). Tout opérateur du pipeline, pas
+// seulement son puits : IndexLookup, au milieu d'un COPY de relations, y prend le verrou du
+// versement des nœuds locaux (8 novembre 2026).
 void QueryProcessor::acquireLocksBeforeExecution(Task* task, ExecutionContext* context) {
     for (auto& child : task->children) {
         acquireLocksBeforeExecution(child.get(), context);
     }
-    ku_dynamic_cast<ProcessorTask*>(task)->sink->acquireLocksBeforeExecution(context);
+    acquirePipelineLocks(ku_dynamic_cast<ProcessorTask*>(task)->sink, context);
 }
 
 // Les fils d'une tâche proportionnés à la cardinalité estimée par le planificateur (page
