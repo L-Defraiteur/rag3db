@@ -653,3 +653,26 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   une liste de noms d'outils en dur (la politique déclarée suffit). Constats produit dans la page
   08/01 : l'attente du superviseur compte comme pas raté et tue la tâche, les `answer` ne sont pas
   lues, la répétition en attente, le plafond de 40 pas atteint par les lignes d'attente.
+
+## 03 h 50 — le lot 2 et le premier lot de l'équipier sur master, l'hôte de Lucie reposé
+
+- **Atterris** : ED, les commandes par la porte déclarée (ad496c462 : dans une tâche dont le workspace
+  a une porte, `run_command` passe par elle ; deux courses de la boîte corrigées en route — un oui
+  posté pendant le dernier pas se perdait, puis la fin d'un lancement marquait toute la boîte lue ;
+  passe complète VERT : lib 2026, e2e_juge 5/5, e2e_equipier 1/1) et le ticket des essais réels
+  (eb154bf5f, `docs/tickets/2026-11-08-l-equipier-sur-gemini-ce-que-les-essais-reels-ont-montre.md`,
+  l'état d'attente en premier lot) ; **hotfixs, le premier lot écrit par l'équipier** (b860ea2dd,
+  `nettoyer_apres_fin` ; passe : check_features 5/5, lib 2027, e2e_lectures 24/24 sous 7879,
+  e2e_tx 3+1+18+3). Son script résout seul un conflit limité à nouveautes.md, s'arrête sur tout
+  autre ; une heure perdue sur un guet qui attendait G3 (dit tel quel).
+- **G a posé le binaire seul au portable à 3 h 43** (tête eb154bf5f contre 17a094d12, binaire
+  200773e7, essai vert sur 7991) : l'hôte de Lucie porte jamais-muet et les commandes par la
+  porte ; luciepc garde celui de 0 h 04 ; les lots d'après vont à 8 h 30.
+- **La file** : archi (3 ter d) à toi à 3 h 44 → arbre (délai partout, 67fadca5a) → hotfixs
+  (racine-disparue + b51a10994 : `read_files` sur `index` et `estimate` dans les deux gabarits,
+  3e assertion, le 3e symptôme renvoyé aux tickets existants, un ticket neuf pour le 4e) → ED
+  (l'état d'attente, puis 429/503 hors de max_failed_steps). G3 : prémisse d'un test de la garde 1
+  ajustée (la liste retirée avant la réouverture), passe complète après le basculé, mot de Lucie.
+- **Essai 5 de l'équipier lancé à 3 h 44** sur l'hôte reposé (`tests-bases-dans-tmp`, avec
+  `run_command` par la porte `approval` : les commandes hors liste sûre me sont soumises) ; la
+  réponse du POST porte désormais `task: {branche, depart}`.
