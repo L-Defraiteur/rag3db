@@ -311,6 +311,12 @@ pub struct ToolPolicy {
 /// replie si le service manque (7 novembre 2026).
 pub const SPARSE_READER_NODES: &[&str] = &["HighlightNode"];
 
+/// **Les nœuds qui font d'un outil une recherche** (vue « mes recherches », 8
+/// novembre 2026) : un outil dont le graphe, sous-graphes compris, en porte un
+/// est une recherche ; son appel journalisé entre dans la vue, et un clic sur
+/// l'un de ses résultats s'y range. Aucun nom d'outil en dur.
+pub const SEARCH_NODES: &[&str] = &["SearchSourceNode"];
+
 const BASE_NODES: &[&str] = &[
     "RhaiNode",
     // **Aiguiller et découper, sans rien toucher** (M4, 7 novembre 2026) : `Route`

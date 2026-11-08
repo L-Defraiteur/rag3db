@@ -25,6 +25,8 @@
 //! | `GET /ide/teammate/pending?for=<clé>` | ce qui attend la clé dans toutes les boîtes, en lecture pure : `{for, items: [{id, task, parent, kind, item?, text, at}]}` |
 //! | `POST /ide/teammate/seen` | `{for, ids}` : un compte rendu, une fin, une livraison sortent de `pending` pour la clé |
 //! | `GET /ide/teammate/list?supervisor=<clé>` | les équipiers de ce superviseur : `{supervisor, teammates: [{task, parent, state, last_kind, at}]}` |
+//! | `GET /ide/recherches?backend=<id>&qui=&limite=&avant=` | mes recherches : les appels journalisés des outils de recherche (IDE et agents), du plus récent, avec leurs clics |
+//! | `POST /ide/recherches/clic` | un clic `{backend, run, uuid, rang}` sur un résultat d'une recherche : rangé dans son run, ou refusé en disant pourquoi |
 //! | `POST /ide/runs/epingler` | épingler un run `{backend, run, raison}` : son journal ne tombe jamais (ni poids ni âge) |
 //! | `POST /ide/bilans` | juger un run `{backend, run}` : le juge relit son journal et range sa fiche dans la mémoire déclarée (`bilans`) |
 //! | `POST /ide/runs/arreter` | arrêter un run en vol `{backend, run}`, au nom de l'IDE (C4) |
@@ -414,7 +416,7 @@ fn jeton_du_cookie(request: &tiny_http::Request) -> Option<String> {
 
 /// **Les vues portées sur la page nouvelle** (page 08) : `/ide/code/<id>/<vue>…`
 /// pour ces vues est servi par le bundle ; les autres, par l'ancienne page.
-const VUES_PORTEES: &[&str] = &["chat", "fichier", "recherche", "taches", "bilans", "arbre", "symbole", "graphe", "dag", "reactions", "propositions"];
+const VUES_PORTEES: &[&str] = &["chat", "fichier", "recherche", "recherches", "taches", "bilans", "arbre", "symbole", "graphe", "dag", "reactions", "propositions"];
 
 fn vue_portee(path: &str) -> bool {
     let Some(reste) = path.strip_prefix("/ide/code/") else { return false };
@@ -644,6 +646,28 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
                 Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
                 Ok(c) => match host.chat_turn(c["backend"].as_str().unwrap_or_default(), c["message"].as_str().unwrap_or_default()) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("GET", "/ide/recherches") => {
+            // **Mes recherches** (8 novembre 2026) : lues dans le journal des runs.
+            let limite = param("limite").and_then(|l| l.parse().ok()).unwrap_or(50);
+            let v = match host.recent_searches(&param("backend").unwrap_or_default(), &param("qui").unwrap_or_default(), limite, param("avant").as_deref()) {
+                Ok(v) => json!({ "ok": true, "result": v }),
+                Err(e) => json!({ "ok": false, "error": e }),
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/recherches/clic") => {
+            // **Un clic sur un résultat**, envoyé par la vue recherche sans retarder
+            // la navigation (`keepalive`). Un refus est une réponse.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match host.record_click(c["backend"].as_str().unwrap_or_default(), c["run"].as_str().unwrap_or_default(), c["uuid"].as_str().unwrap_or_default(), c["rang"].as_u64()) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
                 },

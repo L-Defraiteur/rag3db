@@ -270,3 +270,40 @@ pose une valeur par le DOM doit la voir partir.
 - `VUES_PORTEES` : toutes les vues de l'ancienne page ; l'édition d'un fichier (vue 3b) suit dans
   son propre lot, et avec elle l'ancienne page n'a plus de vue à elle. Le bundle pèse 388 Kio
   (393 Kio avec l'édition).
+
+## Ce qui est fait (vue 8 : mes recherches, 8 novembre 2026, session recherche)
+
+La décision de Lucie du 11 octobre : « une vue « mes recherches » avec les clics » (« j'aimerais
+éviter qu'on n'ait pas de logs de ce que j'ai cherché »).
+
+- **La source** : le journal des runs, qui garde déjà chaque appel d'outil en entier (`appel
+  {client, humain, outil, arguments, rendu}`). Est une recherche l'appel d'un outil dont le graphe,
+  sous-graphes compris, porte un nœud de `SEARCH_NODES` (`SearchSourceNode`) : `search_code`,
+  `recall_fiches`, `search_structured`…, aucun nom en dur. `humain` marque un appel de l'IDE au
+  nom de la personne. Un appel d'avant ce lot n'a pas `humain`, et le client `ide` en tient lieu.
+- **`GET /ide/recherches?backend=&qui=&limite=&avant=`** : la plus récente d'abord, `qui` ∈ `ide`,
+  `agents`, `tout`. La lecture remonte le journal et s'arrête à `limite` lignes (50, 200 au plus) ;
+  `suite` dit d'où repartir. Une ligne porte le run, `at` (l'âge du fichier, en ms), `client`,
+  `humain`, l'outil, la requête, le dossier, la durée, le nombre de résultats, les dix premiers et
+  ceux cliqués au-delà (`rang`, `uuid`, `chemin`, `ligne`, `nom`, `bestSignal`), et `clics`.
+- **`POST /ide/recherches/clic {backend, run, uuid, rang}`** : la vue recherche l'envoie sur un clic
+  (ou un clic du milieu) sur le chemin ou le nom d'un résultat, en `keepalive` pour ne pas retarder
+  la navigation. L'hôte le range dans le run de la recherche, sous `clics: [{uuid, rang, at}]`
+  (`JournalDesRuns::append_to_list`). Il refuse en le disant un run sans journal, un run qui n'est
+  pas une recherche du backend, ou un résultat que la recherche n'a pas rendu ; la page met le
+  refus dans la console.
+- **Le journal, une écriture à la fois** : l'écriture d'un run et chaque relecture-réécriture
+  (ajout tardif, clic) passent sous un même verrou. Deux clics rapides ne s'effacent pas, et un
+  ajout fait pendant l'écriture du run ne se perd plus (il écrivait ses seuls ajouts, puis se faisait
+  écraser). Une réécriture garde l'âge du fichier : un clic ne fait pas remonter une vieille
+  recherche, ni ne la sauve de la borne d'âge.
+- **La vue** (`Recherches.tsx`, `VUES_PORTEES`, lien « mes recherches » sur l'accueil) : « ma
+  recherche » ou le nom de l'agent, la requête, l'outil, l'heure, les résultats avec « cliqué »,
+  « relancer » pour `search_code`, les filtres « tout », « les miennes », « les agents », puis
+  « plus anciennes ». Repères : `#recherches .recherche[data-client][data-run]`, `.clique`,
+  `#filtre-tout`, `#filtre-ide`, `#filtre-agents`, `#aucune-recherche`, `#plus-anciennes`.
+- **Témoins** : `mes_recherches_rendent_celles_de_l_ide_et_des_agents_avec_les_clics`
+  (`daemon_host/mes_recherches.rs`, navigateur : une recherche de l'IDE et son clic, une recherche
+  d'agent par `/call`, la route, les refus, la vue et son filtre), et
+  `a_list_of_a_run_grows_by_appends_without_losing_any` (le journal : en cours, écrit, vingt
+  ajouts concurrents, l'âge gardé, les refus).
