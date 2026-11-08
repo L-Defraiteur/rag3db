@@ -159,7 +159,11 @@ fn recopier_par_un_voisin(de: &Path, vers: &Path, copier: &dyn Fn(&Path, &Path) 
     let d = vers.parent().ok_or("un chemin sans dossier")?;
     std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
     let tmp = d.join(format!(".{}.rag3weaver-tmp", vers.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
-    copier(de, &tmp).map_err(|e| format!("{} → {} : {e}", de.display(), tmp.display()))?;
+    // Une copie coupée au milieu (disque plein, erreur d'E/S) ne laisse pas son voisin.
+    copier(de, &tmp).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{} → {} : {e}", de.display(), tmp.display())
+    })?;
     std::fs::rename(&tmp, vers).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
         format!("{} → {} : {e}", tmp.display(), vers.display())

@@ -51,7 +51,9 @@ proposition arrive.
   fichier par fichier (`std::fs::copy`, qui partage les blocs quand le disque le sait), et
   l'empreinte se hache en flux.
 - **La fusion sans fichier tronqué** : chaque fichier passe par un voisin `.<nom>.rag3weaver-tmp`,
-  puis il est renommé. Un échec au milieu dit ce qui est déjà recopié. Ce que la fusion ne fait
+  puis il est renommé. Un échec au milieu dit ce qui est déjà recopié. Une copie coupée en cours
+  de route retire son voisin (8 novembre, témoin `une_copie_qui_echoue_ne_laisse_pas_son_temporaire`,
+  rouge sur 4636cdd73 avec le voisin resté, vert avec le correctif). Ce que la fusion ne fait
   pas : les liens symboliques de la copie ne sont ni comparés ni recopiés, un dossier vidé reste
   dans la racine, et la date de modification n'est pas gardée.
 - **`workspace.git_init: true`**, déclaré au manifeste : à l'ouverture d'une tâche, une racine
