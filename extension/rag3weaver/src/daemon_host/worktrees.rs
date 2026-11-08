@@ -1516,23 +1516,6 @@ mod tests {
         }
     }
 
-    /// Un faux service granite-278m qui refuse chaque texte : les vecteurs restent dus,
-    /// quel que soit `RAG3WEAVER_EMBED_SERVICE` dans l'environnement de la passe (archi, 8
-    /// novembre 2026 : sous les tunnels de la règle GPU, l'index embarquait tout). La sonde
-    /// d'`index`, qui refuserait de partir, est évitée par un débit noté d'avance.
-    struct GraniteMuet;
-    impl crate::embedder::Embedder for GraniteMuet {
-        fn name(&self) -> &str {
-            "granite-278m"
-        }
-        fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
-            Err(crate::embedder::EmbedError::ProviderError("le service du témoin refuse tout".into()))
-        }
-        fn dim(&self) -> usize {
-            768
-        }
-    }
-
     fn service_granite() -> String {
         servir(Arc::new(Granite))
     }
@@ -1571,16 +1554,17 @@ mod tests {
             f(&mut m);
             std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         };
-        // 1. Un index dont le service refuse tout : le plein texte, et tous les vecteurs dus.
-        // Le service est déclaré au manifeste : l'environnement de la passe n'y change rien.
-        let muet = servir(Arc::new(GraniteMuet));
+        // 1. Un index coupé entre deux passes de vecteurs, comme par l'arrêt de l'hôte : le
+        // plein texte, et des vecteurs dus (wt-react5, 8 novembre 2026). Le service lent est
+        // déclaré au manifeste : l'environnement de la passe n'y change rien (archi), et
+        // aucun morceau n'est refusé.
+        let adresse = service_granite();
         ecrire(&|m| {
             m["embeddings"]["catch_up_on_open"] = json!(false);
-            m["embeddings"]["address"] = json!(muet);
+            m["embeddings"]["address"] = json!(adresse);
         });
         let host = Arc::new(crate::daemon_host::tests::hote_isole());
         let h = host.hosted(&manifeste).unwrap();
-        let fini = |j: &str| std::fs::read_to_string(j).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.starts_with(crate::dataflow::index_nodes::DONE_LINE) || l.starts_with(crate::dataflow::index_nodes::FAILED_PREFIX))).unwrap_or(false);
         let attendre_l_index = || {
             let debut = std::time::Instant::now();
             while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
@@ -1588,27 +1572,27 @@ mod tests {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
         };
-        // Un débit connu : `index` ne sonde pas le service muet (la sonde refuserait de partir).
-        host.with_backend(&h, |b| b.catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate::from_sample(100_000, std::time::Duration::from_secs(1)).unwrap()).unwrap()).unwrap();
         let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
         let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
         let debut = std::time::Instant::now();
-        while !fini(&journal) {
-            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
-            std::thread::sleep(std::time::Duration::from_millis(200));
+        while !std::fs::read_to_string(&journal).is_ok_and(|t| t.contains("plein texte prêt")) {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "le plein texte n'est pas prêt en 120 s : {journal}");
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        // L'arrêt de l'hôte : au paquet suivant, la dette laissée.
+        let catalogue = host.with_backend(&h, |b| b.catalog.clone()).unwrap();
+        crate::dataflow::index_nodes::stop_indexings_of(&catalogue);
+        drop(catalogue);
         attendre_l_index();
         let dus = || host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
-        assert!(dus() > 0, "sans service, des vecteurs restent dus");
+        assert!(dus() > 0, "l'index coupé laisse des vecteurs dus");
         let fermer = || {
             let s = host.open_session("le témoin", None, Vec::new(), None);
             assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
         };
         fermer();
 
-        // 2. Rouvert avec le service, sans le réglage : rien ne part.
-        let adresse = service_granite();
-        ecrire(&|m| m["embeddings"]["address"] = json!(adresse));
+        // 2. Rouvert, sans le réglage : rien ne part.
         assert_eq!(host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap(), 0, "sans le réglage, aucun index ne part à l'ouverture");
         let avant = dus();
         assert!(avant > 0);
