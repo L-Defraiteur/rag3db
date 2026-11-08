@@ -13,7 +13,7 @@ Un seul fichier JSON par thème, lu par les deux :
 - par le terminal (le crate `extension/rag3weaver/tty`, par `include_str!`) ;
 - par l'IDE (embarqué avec ses gabarits, ou importé par le bundle).
 
-**Convenu avec everything declarative (7 nov.) :** le fichier vit à `extension/rag3weaver/templates/themes/daemon.json`, et c'est la session tty qui le pose, **après l'accord de Lucie**. L'IDE le lit au bâti du bundle (esbuild l'importe, `build.mjs` l'inscrit au manifeste du bundle pour le témoin sha256) et en dérive ses tokens shadcn : `--background`, `--foreground`, `--primary`, `--muted`, `--radius` à 0 et la police. Deux contraintes de forme :
+**Convenu avec everything declarative (7 nov.) :** le fichier vit à `extension/rag3weaver/templates/themes/daemon.json`, et c'est la session tty qui le pose. **Posé le 8 nov. 2026**, sur le mot de Lucie (« le thème, je vois pas pourquoi attendre mon accord avant de brancher ») : le terminal l'embarque par `include_str!` (`tty/src/theme.rs`, `SOURCE`), et le témoin `the_embedded_theme_is_the_shared_templates_file` vérifie que c'est bien ce fichier, octet pour octet. L'IDE le lit au bâti du bundle (esbuild l'importe, `build.mjs` l'inscrit au manifeste du bundle pour le témoin sha256) et en dérive ses tokens shadcn : `--background`, `--foreground`, `--primary`, `--muted`, `--radius` à 0 et la police. Deux contraintes de forme :
 - les couleurs sont en hex seulement, et le terminal fait ses replis 256 et 16 couleurs de son côté ;
 - chaque animation porte en données ses images (ou ce qui les engendre : glyphes, gabarits, rotation ou tirage), sa cadence et son gabarit, jamais en code. L'IDE les rejoue en CSS et React, à 10 images/s au plus, sous `prefers-reduced-motion`.
 
