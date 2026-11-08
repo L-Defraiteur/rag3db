@@ -13108,6 +13108,11 @@ impl Drop for Catalog {
                 p.updates.len(), p.deletes.len(),
             );
         }
+        // **La vue de lecture d'abord**, comme `shutdown()` : ses services tiennent
+        // des clones des poignées du plein texte, qui sinon restent « encore
+        // partagées » et se ferment plus tard, quand le dossier n'est peut-être
+        // plus là (ticket du fil de fond après le Drop, 8 novembre 2026).
+        self.read_view.clear();
         if !self.fts_handles.is_empty() || !self.parked_fts.is_empty() {
             let (_, failed) = self.close_fts_handles();
             for f in failed {
@@ -13150,7 +13155,10 @@ pub const FTS_REBUILD_BATCH: usize = 2_000;
 
 /// **Rebâtir le plein texte en fichiers en fond**, un lot à la fois, le
 /// catalogue rendu entre deux lots. Un seul fil par processus ; sans rien à
-/// rebâtir (ou en lecture seule), ne lance rien.
+/// rebâtir (ou en lecture seule), ne lance rien. Le fil est inscrit au registre
+/// des fils du catalogue ([`crate::catalog_threads`]) : un catalogue qui se
+/// ferme l'arrête au lot suivant et l'attend ; le reste du rebâti reprend à la
+/// prochaine ouverture (8 novembre 2026).
 pub fn spawn_fts_rebuild(catalog: std::sync::Arc<std::sync::Mutex<Catalog>>) {
     use std::sync::atomic::{AtomicBool, Ordering};
     static EN_COURS: AtomicBool = AtomicBool::new(false);
@@ -13158,9 +13166,16 @@ pub fn spawn_fts_rebuild(catalog: std::sync::Arc<std::sync::Mutex<Catalog>>) {
     if !pending || EN_COURS.swap(true, Ordering::SeqCst) {
         return;
     }
-    std::thread::spawn(move || {
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let (le_sien, son_arret) = (catalog.clone(), stop.clone());
+    let handle = std::thread::spawn(move || {
+        let catalog = le_sien;
         let t = std::time::Instant::now();
         loop {
+            if son_arret.load(Ordering::SeqCst) {
+                eprintln!("[rag3weaver] rebâti du plein texte en fond arrêté avec son catalogue ; il reprendra à la prochaine ouverture");
+                break;
+            }
             let reste = match catalog.lock() {
                 Ok(mut c) if !c.in_transaction => c.rebuild_fts_step(FTS_REBUILD_BATCH),
                 Ok(_) => Ok(true),
@@ -13183,6 +13198,7 @@ pub fn spawn_fts_rebuild(catalog: std::sync::Arc<std::sync::Mutex<Catalog>>) {
         }
         EN_COURS.store(false, Ordering::SeqCst);
     });
+    crate::catalog_threads::register(&catalog, stop, crate::catalog_threads::ThreadKind::FtsRebuild, handle);
 }
 
 /// L'état d'une première indexation (`Catalog::begin_fresh_ingest`).
