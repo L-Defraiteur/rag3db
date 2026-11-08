@@ -366,6 +366,12 @@ fn banc_sans_git(retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHos
     std::fs::create_dir_all(racine.join("src")).unwrap();
     std::fs::write(racine.join("src").join("main.rs"), "fn main() {}\n").unwrap();
     std::fs::write(racine.join("notes.md"), "à garder\n").unwrap();
+    // Ce que la copie ne prend pas (les exclusions par défaut) : un build, des
+    // dépendances, à n'importe quelle profondeur.
+    std::fs::create_dir_all(racine.join("target").join("debug")).unwrap();
+    std::fs::write(racine.join("target").join("debug").join("lourd.o"), vec![0u8; 4096]).unwrap();
+    std::fs::create_dir_all(racine.join("web").join("node_modules")).unwrap();
+    std::fs::write(racine.join("web").join("node_modules").join("dep.js"), "x\n").unwrap();
     let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
     let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &config).unwrap();
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
@@ -407,6 +413,7 @@ fn une_tache_s_ouvre_sans_git_et_se_fusionne_par_copie() {
     assert!(w.racine.starts_with(d.path().join("taches")), "l'espace est un dossier à elle : {:?}", w.racine);
     assert!(w.ecrit, "task_writes : la tâche écrit dans son espace");
     assert_eq!(std::fs::read_to_string(w.racine.join("src").join("main.rs")).unwrap(), "fn main() {}\n", "l'espace est une copie de la racine");
+    assert!(!w.racine.join("target").exists() && !w.racine.join("web").join("node_modules").exists(), "target et node_modules ne se copient pas (ED)");
     let etat = host.state();
     let t = etat["tasks"].as_array().and_then(|a| a.iter().find(|t| t["id"] == json!(tache.id)).cloned()).unwrap_or_else(|| panic!("la tâche dans l'état : {}", etat["tasks"]));
     assert_eq!((&t["spaces"][0]["repo"], &t["spaces"][0]["branch"]), (&Value::Null, &Value::Null), "sans dépôt ni branche : {t}");
@@ -435,6 +442,7 @@ fn une_tache_s_ouvre_sans_git_et_se_fusionne_par_copie() {
     assert!(racine.join("src").join("neuf.rs").is_file() && !racine.join("notes.md").exists(), "le neuf recopié, l'effacé effacé");
     assert!(!w.racine.exists() && host.tache(&id, "sans-git").is_none(), "la copie est effacée, la tâche fermée");
     assert!(git(&racine, &["rev-parse", "--show-toplevel"]).is_err(), "aucun dépôt créé d'office");
+    assert!(racine.join("target").join("debug").join("lourd.o").is_file() && racine.join("web").join("node_modules").join("dep.js").is_file(), "la fusion ne touche pas aux exclus de la racine");
 }
 
 /// **Sans git, un rejet laisse la racine, et une fusion sur une racine qui a
