@@ -1763,3 +1763,28 @@ avance d'autant ; les hashs, eux, sont exacts.
   un lourd GPU qui ne tourne pas pendant une file ; lire `/proc/<pid>/fdinfo` et `ss -tnp` quand la
   carte reste occupée alors que les lourds sont rendus ; deux titres de section écrits sans lire l'heure,
   corrigés : `date` avant chaque titre.
+
+## 00 h 53 (9 novembre) — la file de la soirée est passée
+
+- **Atterris dans la nuit** : archi 53fac1ea9 (le témoin du dépôt fermé pendant son index ; les symboles
+  cités redemandés aussi à la fin de la réaction qui réindexe : le rouge de 96 était un vrai défaut, la
+  page lisait l'ancienne ligne et la gardait cinq minutes) ; ED 8be79cbbf (un index qu'un outil attend
+  tient la porte, même relancé par l'ouverture : trou réel de la pile, témoin rouge d'abord, cause
+  probable du rouge 1 sur 3 de la carte, verte 3/3 dessus ensuite) ; 96 ff7a18fe2 (pas 3 de M4,
+  l'archiviste : un Markdown entre, ses sections sont rangées une par une, rejeu complet vert sous
+  9bae60786) ; archi 623e97249 (la carte de l'avancement sous l'appel d'un outil, registre
+  `kind → composant`, relue au rechargement par le rag que la page tient, sans polling). Toutes les
+  passes depuis 23 h 40 sous **9bae60786 sans MOTEUR_ANCIEN**.
+- **En cours pour la nuit** : la trace à paramètres littéraux d'hotfixs sur les deux sens
+  (hotfixs-trace-9bae, parti 00 h 51, hôte 7992, service 7882, puis contrôle et rejeu réduit jusqu'au
+  témoin rouge) ; la mesure du `require` de codeparsers (A et B sous 9bae60786, carte des services
+  pour elle) ; puis « carte libre » à recherche (sa passe entière rejouée, residus-de-suite, puis le
+  Drop du backend, arret-du-backend-3 57f9ed822 prêt). 96 : la tentative 5 de l'équipier sur Gemini
+  demain après la pose du portable.
+- **Le matin** : G rebâtit le binaire à la tête de master vers 9 h et pose le portable à **9 h 30**
+  (annonce, « arrêté » à hotfixs pour memoire-longue, instantané, réveil, témoin de l'IDE,
+  sandbox.env, « posé ») ; Lucie lit la page des vues (10b8affce) ; ED relit la page des vues puis
+  écrit la page de l'atelier (édition par tranche et par scope, trois modes gardés, le périmètre et
+  `~/rw-code`, Landlock en deux modes déclarés, le journal des approbations, les deux cas de
+  l'installeur, le ticket des morceaux refusés) ; recherche relit la part plein texte ; le banc a sa
+  recommandation (page 03) ; les tickets du jour sont à jour.
