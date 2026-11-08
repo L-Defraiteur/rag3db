@@ -1,6 +1,6 @@
 # Le témoin du juge des outils exige un genre que Gemini ne tient pas
 
-- **État** : ouvert (8 novembre 2026), porteur everything declarative.
+- **État** : corrigé (8 novembre 2026, everything declarative) : le témoin accepte les deux genres qui décrivent le défaut, pourvu que la preuve cite `required` et que la forme proposée rende `fichier` optionnel.
 - **Famille** : produit
 - **Gravité** : une passe complète rougit par hasard. Trois rouges le 8 novembre, chacun sur une tête qui le passait à côté. Ils coûtent un rejeu seul et une passe complète de plus, près de 30 minutes à chaque fois.
 - **Atteignable en service** : non. Le juge fonctionne. C'est le témoin qui demande une forme que le modèle ne rend pas toujours.
@@ -35,3 +35,11 @@ pourvu que la preuve cite `required` et que la forme proposée rende `fichier` o
 mesure, que le juge voit le défaut et propose la bonne correction, reste exigé. Une variante,
 plus juste encore : demander au juge un genre principal et des genres voisins, et accepter le
 défaut s'il figure parmi eux.
+
+## La correction
+
+`tests/e2e_juge.rs` : le défaut du `fichier` obligatoire est admis sous
+`parametre_devrait_etre_optionnel` ou `description_trompeuse`, avec son `call_id`, une preuve
+qui cite `required` et une forme qui rend `fichier` optionnel. Les trois autres genres restent
+exigés tels quels. c7 l'a dit : c'était l'attente qui était trop étroite, pas Gemini qui avait
+tort.
