@@ -231,3 +231,13 @@ l'empreinte de la consigne, côté juge. hooks-essai le prend dans un lot à par
 
 La passe est épinglée sur la lib dadbf0041, la lib ordinaire du 8 novembre, sans
 `RAG3WEAVER_MOTEUR_ANCIEN`.
+
+## 10. Le 3 ter (f) : `recall_min_score` retiré
+
+Depuis le (b), la logique du rappel ne lit plus `recall_min_score`. Le plein texte fait le
+candidat, et le dense seul n'est pas jugé. Le champ est donc retiré du réglage. La clé reste
+acceptée dans `hooks.json`, sans effet, pour qu'un fichier d'avant reste valide, et le script
+d'installation ne l'écrit plus. Recherche a ajouté `bestSignal: {label, score, rank}` à chaque ligne
+fusionnée (d540813d5), le signal qui pèse le plus dans son rang. Un seuil, s'il en faut un, se
+mesurera sur ce champ, à partir de prompts réels étiquetés « en rapport » ou « sans rapport », quand
+la mémoire sera peuplée.
