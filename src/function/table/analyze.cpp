@@ -55,43 +55,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         storage::StorageManager::Get(context)->getTable(tableID)->cast<storage::NodeTable>();
     const auto transaction = transaction::Transaction::Get(context);
     const auto memoryManager = storage::MemoryManager::Get(context);
-
-    std::vector<column_id_t> columnIDs;
-    std::vector<LogicalType> columnTypes;
-    DataChunk dataChunk{static_cast<uint32_t>(table.getNumColumns() + 1),
-        std::make_shared<DataChunkState>()};
-    dataChunk.insert(0, std::make_shared<ValueVector>(LogicalType::INTERNAL_ID(), memoryManager));
-    std::vector<ValueVector*> outputVectors;
-    for (column_id_t columnID = 0; columnID < table.getNumColumns(); columnID++) {
-        if (!table.hasColumn(columnID)) {
-            // Un trou (colonne supprimée) garde son numéro : une statistique vide à sa place.
-            columnTypes.push_back(LogicalType::ANY());
-            continue;
-        }
-        const auto& dataType = table.getColumn(columnID).getDataType();
-        columnIDs.push_back(columnID);
-        columnTypes.push_back(dataType.copy());
-        dataChunk.insert(columnID + 1, std::make_shared<ValueVector>(dataType.copy(),
-                                           memoryManager));
-        outputVectors.push_back(&dataChunk.getValueVectorMutable(columnID + 1));
-    }
-
-    storage::TableStats stats{columnTypes};
-    storage::NodeTableScanState scanState{&dataChunk.getValueVectorMutable(0), outputVectors,
-        dataChunk.state};
-    scanState.source = storage::TableScanSource::COMMITTED;
-    scanState.setToTable(transaction, &table, columnIDs, {});
-    for (node_group_idx_t nodeGroupIdx = 0; nodeGroupIdx < table.getNumCommittedNodeGroups();
-         nodeGroupIdx++) {
-        scanState.nodeGroupIdx = nodeGroupIdx;
-        table.initScanState(transaction, scanState);
-        // La sélection du balayage écarte les lignes supprimées : la cardinalité est le nombre
-        // de lignes vivantes, et chaque compte de distincts ne voit qu'elles.
-        while (table.scan(transaction, scanState)) {
-            stats.update(columnIDs, outputVectors);
-        }
-    }
-    table.replaceStats(std::move(stats));
+    table.replaceStats(table.rebuildStatsFromLiveRows(transaction, memoryManager));
     return 0;
 }
 

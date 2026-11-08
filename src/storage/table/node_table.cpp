@@ -10,6 +10,7 @@
 #include "catalog/catalog_entry/index_catalog_entry.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/cast.h"
+#include "common/data_chunk/data_chunk.h"
 #include "common/data_chunk/data_chunk_state.h"
 #include "common/exception/duplicated_primary_key.h"
 #include "common/exception/message.h"
@@ -783,6 +784,7 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
         nodeGroups->getNodeGroup(nodeGroupIdx)
             ->update(transaction, rowIdxInGroup, nodeUpdateState.columnID,
                 nodeUpdateState.propertyVector);
+        rowsChangedSinceAnalyze++;
     }
     // A node of this transaction is logged at commit with its final values: no record here, its
     // offset is provisional.
@@ -862,6 +864,9 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
         const auto rowIdxInGroup =
             nodeOffset - StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx);
         isDeleted = nodeGroups->getNodeGroup(nodeGroupIdx)->delete_(transaction, rowIdxInGroup);
+        if (isDeleted) {
+            rowsChangedSinceAnalyze++;
+        }
         if (transaction->shouldAppendToUndoBuffer()) {
             transaction->pushDeleteInfo(nodeGroupIdx, rowIdxInGroup, 1, &versionRecordHandler);
         }
@@ -1086,9 +1091,63 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
         for (auto& index : indexes) {
             index.checkpoint(context, pageAllocator);
         }
+        // Une table passée au seuil d'analyze (needsAnalyze) : ses statistiques se rebâtissent
+        // ici, sur les lignes que ce point de reprise vient d'écrire, avant d'être écrites avec
+        // la table. Aucun écrivain ne tourne : le balayage lit le dernier état validé.
+        if (needsAnalyze()) {
+            nodeGroups->replaceStats(
+                rebuildStatsFromLiveRows(&transaction::DUMMY_CHECKPOINT_TRANSACTION, memoryManager));
+            rowsChangedSinceAnalyze = 0;
+        }
         hasChanges = false;
     }
     return ret;
+}
+
+bool NodeTable::needsAnalyze() const {
+    const auto changed = rowsChangedSinceAnalyze.load();
+    return changed > ANALYZE_THRESHOLD_ROWS &&
+           static_cast<double>(changed - ANALYZE_THRESHOLD_ROWS) >
+               ANALYZE_SCALE_FACTOR * static_cast<double>(nodeGroups->getCardinality());
+}
+
+TableStats NodeTable::rebuildStatsFromLiveRows(Transaction* transaction,
+    MemoryManager* memoryManager) {
+    std::vector<column_id_t> columnIDs;
+    std::vector<LogicalType> columnTypes;
+    DataChunk dataChunk{static_cast<uint32_t>(getNumColumns() + 1),
+        std::make_shared<DataChunkState>()};
+    dataChunk.insert(0, std::make_shared<ValueVector>(LogicalType::INTERNAL_ID(), memoryManager));
+    std::vector<ValueVector*> outputVectors;
+    for (column_id_t columnID = 0; columnID < getNumColumns(); columnID++) {
+        if (!hasColumn(columnID)) {
+            // Un trou (colonne supprimée) garde son numéro : une statistique vide à sa place.
+            columnTypes.push_back(LogicalType::ANY());
+            continue;
+        }
+        const auto& dataType = getColumn(columnID).getDataType();
+        columnIDs.push_back(columnID);
+        columnTypes.push_back(dataType.copy());
+        dataChunk.insert(columnID + 1,
+            std::make_shared<ValueVector>(dataType.copy(), memoryManager));
+        outputVectors.push_back(&dataChunk.getValueVectorMutable(columnID + 1));
+    }
+    TableStats stats{columnTypes};
+    NodeTableScanState scanState{&dataChunk.getValueVectorMutable(0), outputVectors,
+        dataChunk.state};
+    scanState.source = TableScanSource::COMMITTED;
+    scanState.setToTable(transaction, this, columnIDs, {});
+    for (node_group_idx_t nodeGroupIdx = 0; nodeGroupIdx < getNumCommittedNodeGroups();
+         nodeGroupIdx++) {
+        scanState.nodeGroupIdx = nodeGroupIdx;
+        initScanState(transaction, scanState);
+        // La sélection du balayage écarte les lignes supprimées : la cardinalité est le nombre
+        // de lignes vivantes, et chaque compte de distincts ne voit qu'elles.
+        while (scan(transaction, scanState)) {
+            stats.update(columnIDs, outputVectors);
+        }
+    }
+    return stats;
 }
 
 void NodeTable::rollbackPKIndexInsert(main::ClientContext* context, row_idx_t startRow,

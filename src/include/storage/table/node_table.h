@@ -381,8 +381,19 @@ public:
     // la table, et le point de reprise suivant les écrit.
     void replaceStats(TableStats stats) {
         nodeGroups->replaceStats(std::move(stats));
+        rowsChangedSinceAnalyze = 0;
         setHasChanges();
     }
+    // Les statistiques des lignes validées et vivantes, en un balayage (CALL analyze, et le point
+    // de reprise d'une table passée au seuil).
+    TableStats rebuildStatsFromLiveRows(transaction::Transaction* transaction,
+        MemoryManager* memoryManager);
+    // Le seuil de l'analyze au point de reprise, celui de l'autovacuum de PostgreSQL
+    // (autovacuum_analyze_threshold + autovacuum_analyze_scale_factor × lignes) : 50 lignes
+    // supprimées, modifiées ou écartées, plus 10 % de la table.
+    static constexpr common::row_idx_t ANALYZE_THRESHOLD_ROWS = 50;
+    static constexpr double ANALYZE_SCALE_FACTOR = 0.1;
+    bool needsAnalyze() const;
 
     void serialize(common::Serializer& serializer) const override;
     void deserialize(main::ClientContext* context, StorageManager* storageManager,
@@ -435,6 +446,11 @@ private:
         const transaction::Transaction* transaction) const;
     uint64_t nextHolderID = 1;
     NodeTableVersionRecordHandler versionRecordHandler;
+    // Les lignes validées supprimées, modifiées (un SET par ligne et par colonne) ou écartées par
+    // un COPY sous IGNORE_ERRORS depuis le dernier analyze : elles laissent les comptes de
+    // distincts gonflés, que seul un balayage recule (ticket 2026-10-10-analyze-au-seuil). En
+    // mémoire seulement : une réouverture repart de zéro, au prix d'un analyze plus tardif.
+    std::atomic<common::row_idx_t> rowsChangedSinceAnalyze{0};
 };
 
 } // namespace storage
