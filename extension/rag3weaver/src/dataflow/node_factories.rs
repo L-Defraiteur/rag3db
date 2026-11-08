@@ -1609,23 +1609,24 @@ pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 15 } else
 mod tests {
     use super::*;
 
-    /// **Une recherche filtrée ne lit pas sous l'instantané** (25 octobre 2026) :
-    /// son filtre passe la branche dense par une projection de graphe, que le
-    /// moteur refuse sous READ ONLY. Sans filtre, l'instantané reste.
+    /// **Une recherche filtrée lit sous l'instantané** (8 novembre 2026). Du 25 octobre au
+    /// 8 novembre, un filtre (scope, language, filter_condition) la sortait de l'instantané : sa
+    /// branche dense passe par une projection de graphe, que le moteur refusait sous READ ONLY
+    /// (et dont le DROP initial, sans `skip_if_not_exists` honoré, condamnait la transaction). La
+    /// lib dadbf0041 permet la projection sous READ ONLY : toute recherche, filtrée ou non, lit
+    /// dans l'instantané de son appel.
     #[test]
-    fn une_recherche_filtree_ne_lit_pas_sous_l_instantane() {
+    fn une_recherche_filtree_lit_sous_l_instantane() {
         let f = SearchSourceNodeFactory;
-        let sans = serde_json::json!({"scope": "", "language": "", "options": {"limit": 10}});
-        assert!(f.snapshot_safe(&sans), "sans filtre, sous l'instantané");
-        let gabarit = serde_json::json!({"scope": "$scope", "language": "$language", "options": "$options"});
-        assert!(f.snapshot_safe(&gabarit), "le gabarit avant l'appel lit sous l'instantané");
-        for filtree in [
+        for config in [
+            serde_json::json!({"scope": "", "language": "", "options": {"limit": 10}}),
+            serde_json::json!({"scope": "$scope", "language": "$language", "options": "$options"}),
             serde_json::json!({"scope": "src/"}),
             serde_json::json!({"language": "rust"}),
             serde_json::json!({"options": {"filter_condition": {"field": "file_path", "op": "starts_with", "value": "src/"}}}),
             serde_json::json!({"options": "{\"filter_condition\": {\"field\": \"x\"}}"}),
         ] {
-            assert!(!f.snapshot_safe(&filtree), "filtrée, hors de l'instantané : {filtree}");
+            assert!(f.snapshot_safe(&config), "sous l'instantané : {config}");
         }
     }
 
