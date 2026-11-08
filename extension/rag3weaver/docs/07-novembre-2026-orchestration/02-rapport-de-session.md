@@ -1571,3 +1571,52 @@ avance d'autant ; les hashs, eux, sont exacts.
   qui garde 100 % des utiles ; Qwen2.5-1.5B par logits sur card2 ; Laya spécialisé plus tard.
 - **luciepc** : plafond des lourds remis à 6 à 18 h 48 (la charge du jour était du disque) ; 1,3 Tio
   libres (65 %) ; la CI de master s'annule à chaque push (concurrence) : lot court chez hooks-essai.
+
+## 20 h 30 — la soirée : la file, la session de jeu, la priorité de demain
+
+- **Atterris** : le juge par pas d'ED (4f54e473a : un pas d'équipier se juge sur son but, sous le nom
+  court de sa tâche, une fiche par tâche, un apport par pas) ; hooks-essai 2d6e58d1a → **la CI
+  rag3weaver de master est redevenue verte** (run fini « success » à 18 h 35 UTC ; la concurrence
+  n'annule pas les runs de master, elle remplace celui qui attend : procédure, « le verdict d'un
+  commit se lit sur le run qui l'a joué ou sur le premier plus récent qui a fini »). Le cœur :
+  `transaction_test` entier vert sur 9bae60786 (357/357, 2 outils sautés, 59 min) → **une lib peut
+  prendre le lot** ; aucune ABI changée depuis cbc06c3e1 (ajouts et code interne, colonne
+  `extension_error` en dernier, format 43).
+- **La lib de la nuit** (G, oui donné) : tête de master figée à 22 h 30 (fenêtre demandée à 22 h 15),
+  bâti -j8, passe de G avec RAG3DB_LIB explicite et hôte d'essai 7991, contrôle des deux sens sur
+  copies sans index complet contre l'écart connu, pose à luciepc dans la nuit, **portable à 9 h 30**
+  sauf mot de Lucie, cbc06c3e1 gardé pour le retour. Avant : repose du portable binaire seul dès
+  que la pile de l'atelier d'ED est sur master (un seul arrêt).
+- **En file** : la pile de l'atelier d'ED (16 commits ; deux rouges de durée nommés « attente disque
+  luciepc », rejoués à la première accalmie ; un vrai défaut corrigé en chemin : le suiveur
+  RepoIndexed rouvrait un dépôt fermé par `with_backend`, la reprise ne relançait rien →
+  `try_read`), 96 (e2e_cited_by verte seule, rejeu court puis push), hooks-essai
+  (fusion-sans-temporaire), recherche (residus-de-suite, puis le **Drop du backend** : `impl Drop for
+  Backend` = shutdown idempotent, un seul registre d'arrêt étendu au rebâti FTS et à spawn_index,
+  `Drop for Catalog` vide la vue ; témoin déterministe par un Weak ; lucivy corrige `close()` qui
+  sortait sur l'erreur sans arrêter ses pools, PR #23, et PR #22 corpus-absent : fusion sur le mot
+  de Lucie dans la session lucivy), codeparsers (`require` : B symétrique, repli vers la zone de
+  fichier avec l'étiquette « liaison de module externe », réexportations vers la classe, un défaut
+  de `module_designe_fichier` corrigé ; `import_binding` en lot à part après mesure).
+- **luciepc** : le granite 7878 a été dégradé de 19 h 19 à ~19 h 38 (12 s par texte, le 7882
+  identique à 234 ms ; la montre du portable et les rappels des hooks de Lucie attendaient derrière)
+  et est revenu seul ; un redémarrage m'a été refusé par mon mode, dit à Lucie, pas fait par une
+  autre session. Le disque est de nouveau lent à 20 h 13 (120 ms par écriture 4 Kio + fsync, flush
+  30 ms, 99 % pour 4 Mio/s, TRIM 0, SMART sain) sans cause lue ; Lucie a arrêté ma lecture de la
+  gestion d'énergie du NVMe. Plafond des lourds à 6.
+- **La session de jeu de Lucie** (seat1) : « ça démarre au ralenti, Steam ne se lance pas » → lu dans
+  ses scripts et journaux : `seat1-idle-watchdog` tuait la session 8 à 45 s après chaque démarrage
+  (« manette inactive depuis 106 min + GPU inactif », l'inactivité comptée depuis la partie
+  d'avant, le GPU à 0 % pendant que Plasma démarre ; même motif les jours d'avant, 2527 min le
+  4 nov.). Corrigé à son mot : délai de grâce de 5 min après le démarrage de l'unité, inactivité
+  manette bornée à l'âge de la session (copie `.avant-grace-8nov`), chien de garde relancé 20 h 02 ;
+  journal de session de 756 Mio vidé. Session suivante : Plasma 5 s, gamescope 1 s, Steam 5 s, puis
+  Steam vérifie tous ses fichiers (51 s, conséquence des arrêts brutaux) et charge 58 jeux (69 s).
+- **Priorité de demain, Lucie 20 h 20 : les vues par worktree** (vision du 6 nov.) : « super
+  important, pour qu'on puisse sainement s'en servir et avoir le graphe de code par worktree ».
+  Pas commencé jusqu'ici. L'arbre principal écrit ce soir la page de conception de la marche 1 ;
+  Lucie la lit le matin ; ED (gabarit, code.rs, version comme entité, index réduit aux scopes
+  neufs) et recherche (filtre de vue lucivy, dense filtré, drain FTS) prennent leur marche après
+  leurs lots en cours. Pour les collègues de Lucie, un texte court de présentation a été écrit
+  (ce que c'est, où on en est, pourquoi le découpage n'a rien d'arbitraire : c'est celui du
+  langage, et les liens sont lus dans le code, pas devinés).
