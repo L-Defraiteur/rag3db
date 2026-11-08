@@ -73,6 +73,17 @@ est gardé en `.avant-e59e5983`. Pas d'instantané neuf : même lib, mêmes base
 
 7878 est libre depuis 16 h 08 : le départage est fini.
 
+## Le lot du cœur contre le SIGSEGV de l'hôte (9bae60786, soir)
+
+`returnOwnerlessPages` sous des segments vivants (branche etendue-gardes), C++ seul, atterri sur master
+9bae60786. Sa passe a joué les témoins de l'étendue et les suites voisines, mais pas `transaction_test` en
+entier : 10 cas en 30 min sous le disque malade. Le cœur le rejoue ce soir sur un disque calme.
+**Aucun rebâti de lib qui prend ce lot avant le mot de c7** ; cbc06c3e1 reste `courant` aux deux postes.
+Le mécanisme est dans le ticket bad49386f. Une base creuse (`du --apparent-size` bien plus grand que `du`)
+ne s'ouvre pas en écriture avant que la lib du lot soit posée.
+
+Le disque de luciepc est rendu depuis 18 h 03 (nodiscard et fstrim), et Lucie a libéré environ 1 Tio.
+
 ## À suivre
 
 - La prochaine pose bâtit 36aced578 ou plus récent (lot d'archi : un nom cité entre accents graves dans
