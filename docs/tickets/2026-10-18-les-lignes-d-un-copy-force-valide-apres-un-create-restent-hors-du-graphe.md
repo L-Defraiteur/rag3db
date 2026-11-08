@@ -84,6 +84,35 @@ remet ces lignes dans le graphe, et quand :
 - rag3weaver, quand son état d'index voit un retard, par sa reconstruction ;
 - ou les deux, avec le seuil tiré de la mesure ci-dessus.
 
+## Le seuil, proposé par la session recherche (8 novembre 2026)
+
+**Le critère : la recherche ne doit pas doubler.** Le produit reconstruit l'index quand le surcoût
+estimé des lignes hors du graphe égale la recherche d'un index à jour :
+`N_hors_graphe × c ≥ t₀`, soit `N* = t₀ / c`. Avec la mesure ci-dessus, `t₀` = 13,4 ms (médiane
+des deux passes à N = 0) et `c` = 1 µs (le haut de la fourchette 0,75–1 µs, prudent) : **N* ≈
+13 400 lignes** pour 120 000 vecteurs de dimension 768. La table le confirme sans le chiffre
+rond : à 10 000 lignes la recherche coûte déjà 1,7 fois `t₀` (23 ms), à 100 000 six fois et demie.
+Pourquoi la latence et pas la somme des coûts : la reconstruction de 120 000 vecteurs prend
+143 s (le CREATE de la mesure), qu'un surcoût de 13,4 ms par recherche ne rembourse qu'en
+environ 10 700 recherches — sur l'usage de Lucie, des jours ; c'est donc la réactivité d'une
+recherche, pas le temps total, qui doit déclencher, et la reconstruction se fait en fond.
+
+**Qui : rag3weaver**, qui bâtit et reconstruit déjà ses index (`ajuster_l_index_pour_le_retard`,
+`rebuild_vector_index`), au repos de sa montre (jamais au milieu d'une écriture de l'utilisateur),
+et la réponse de la recherche le dit tant que la part hors du graphe dépasse le seuil (« l'index
+vectoriel a N lignes hors de son graphe, la recherche dense coûte ~× ; reconstruction prévue au
+repos »). Le moteur n'a pas à choisir de lui-même au point de reprise : le produit sait quand il
+est au repos.
+
+**Ce qu'il faut du moteur** : le nombre de lignes hors du graphe d'un index, lisible par le
+produit sans écrire (une colonne de `SHOW_INDEXES`, ou un `CALL` en lecture), et `t₀` se mesure
+alors par le produit sur ses propres recherches denses quand ce nombre est nul (le journal des
+runs a la durée de la branche dense) ; à défaut de mesure locale, `N* = 13 000` à la dimension
+768, et en proportion de `t₀` pour d'autres tailles d'index.
+
+**Le témoin du produit** : un index à N* + 1 lignes hors du graphe déclenche la reconstruction au
+repos, et après elle la recherche retombe sous 1,1 × `t₀` ; à N* − 1, rien ne se passe.
+
 ## Pour le fermer
 
 1. La mesure.
