@@ -892,6 +892,13 @@ for ligne in open(sys.argv[1]):
     fi
     statut=$?
     [ "$statut" -ne 0 ] && code=101
+    # **Une suite rend son TMPDIR vide** (ticket « les tests ne nettoient pas leurs
+    # dossiers temporaires », 8 novembre 2026) : /tmp est de la mémoire vive, et ce
+    # qu'une suite y laisse hors de run_e2e.sh y reste. Ce qu'elle laisse ici se dit,
+    # chemin et taille ; hors de la liste des suites connues pour en laisser, la suite
+    # est rouge. Une suite de la liste qui finit propre (passe entière, sans filtre)
+    # est rouge aussi : elle sort de la liste dans le commit qui la rend propre.
+    residus_de_la_suite "$nom" || code=101
     # **Une suite rouge garde son dossier disque** (relecture du banc, 11
     # octobre 2026) : un rouge d'arrêt brutal tombe une fois sur vingt ou
     # trente, et sa base est ce qu'on vient chercher — `GARDER=1` demanderait
@@ -948,6 +955,33 @@ if [ ${#NON_MONTEES[@]} -gt 0 ]; then
   echo "  rejouer : python3 tests/e2e/generer.py"
   exit 2
 fi
+
+# **Les suites connues pour laisser des résidus** dans leur TMPDIR : la liste du
+# ticket, une suite par ligne (les lignes # sont des commentaires).
+LISTE_DES_RESIDUS="$WEAVER/tests/e2e/suites_qui_laissent_des_residus.txt"
+residus_de_la_suite() {
+  local nom="$1" dossier="$E2E_TMP_PARENT/$1" connue=0
+  grep -qx -- "$nom" <(grep -v '^#' "$LISTE_DES_RESIDUS" 2>/dev/null | sed 's/[[:space:]]*$//') && connue=1
+  if [ -n "$(find "$dossier" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+    local n
+    n=$(find "$dossier" -mindepth 1 -maxdepth 1 | wc -l)
+    echo "▸ RÉSIDUS $nom : $n entrée(s) dans son TMPDIR ($(du -sh "$dossier" 2>/dev/null | cut -f1))"
+    find "$dossier" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | head -20 | while read -r e; do
+      echo "    $(du -sh -- "$dossier/$e" 2>/dev/null | cut -f1)	$e"
+    done
+    if [ "$connue" = 1 ]; then
+      echo "  (connue : $nom est dans tests/e2e/suites_qui_laissent_des_residus.txt)"
+      return 0
+    fi
+    echo "✗ $nom laisse des résidus dans son TMPDIR et n'est pas dans tests/e2e/suites_qui_laissent_des_residus.txt : effacez-les derrière vous"
+    return 1
+  fi
+  if [ "$connue" = 1 ] && [ -z "$TEST_FILTER" ]; then
+    echo "✗ $nom finit propre mais reste dans tests/e2e/suites_qui_laissent_des_residus.txt : retirez-la de la liste (et du ticket)"
+    return 1
+  fi
+  return 0
+}
 
 # **Le parent des dossiers de la passe**, et les restes des passes mortes :
 # un parent dont le processus n'existe plus est effacé au départ (une passe
