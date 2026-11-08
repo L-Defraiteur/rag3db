@@ -211,3 +211,41 @@ de scopes, RagForge). Plan du week-end : docs/06-novembre-2026-orchestration/01.
   daemon.json ; page 03 ; effacement des instantanés et branches distantes
   (refusés aux sessions par permission) ; `bilans.memoire` sur son manifeste
   de code ; facturation Vertex le 8.
+
+## Complément de la nuit du 7 au 8 (05 h 30)
+
+Ce qu'on sait maintenant et qu'on ne savait pas hier soir.
+
+- **Le figement des passes n'était ni un commit ni un test** : un client sans délai (relecteur
+  /rerank, OCR /ocr) devant un service d'embarquement en file, sur un runtime tokio du crate à deux
+  fils de travail où les réactions s'exécutent sans `block_in_place` — deux réactions qui attendent
+  tiennent les deux fils, et `stop_within` comptait son délai par un minuteur de ce même runtime,
+  donc ne sonnait plus. Reproduit à volonté par un faux service qui accepte et ne répond jamais.
+  Depuis d8aeffea7 : le délai de l'embarqueur (`RAG3WEAVER_EMBED_TIMEOUT_SECS`, 60 s, valeur à
+  mesurer) vaut pour les trois clients, `stop_within` compte hors du runtime, et la lib entière se
+  joue avec ou sans service. Le cas réel de la nuit : la charge de luciepc entre 0 h 45 et 1 h 46.
+- **Le quota Vertex de l'équipier** : le fil entier renvoyé à chaque tour (5 275 jetons au pas 1,
+  122 242 au pas 10, 950 000 en trois minutes au pas 5), plus les lignes d'attente en boucle, un
+  appel par ligne. e2e_juge et le juge des bilans passaient à la même minute sur le même projet.
+  Correctifs : l'état d'attente (b0301a0e3), le fil par pas (9fef96de9, en attente de la fenêtre).
+- **Le bac à sable des commandes d'une tâche** est Landlock : /usr, /lib, /lib64, /bin, /sbin, /etc
+  en lecture, la racine du workspace en écriture, réseau fermé. Déclaratif : `workspace.sandbox`
+  (`extra_read`, `extra_write`, `network`, et depuis 927ae9680 `env` avec `{task_dir}` et
+  `{repo_target}`). Pour cargo : la chaîne Rust en lecture, `CARGO_TARGET_DIR={repo_target}` (un
+  target par dépôt sous verrou, 32 Go, `taches purge`), `TMPDIR={task_dir}/tmp`, `/dev/null`
+  inscriptible, `CARGO_NET_OFFLINE`. Un arbre inscrit avant 927ae9680 garde son manifeste : rejouer
+  `code-tree add` ou copier le bloc.
+- **Une tâche de l'équipier** : `request` ouvre (la réponse porte `task: {branche, depart}`) et
+  relance une tâche `ended` ; `stop` arrête ; `answer {approved}` répond à une `approval` ; les
+  déclarations sont celles du HEAD du dépôt d'arbre ; l'hôte s'arrêtait d'inactivité malgré une
+  tâche en cours (767dcb036 corrige, en attente). La boîte est le seul canal : tout ce qui n'y est
+  pas est perdu.
+- **Le juge des bilans** note chaque pas comme la tâche entière (2/10 au pas « lire ») ; ses fiches
+  « bilan » remontent au rappel des hooks sur des mots courants (ticket) ; l'empreinte du déjà-vu
+  peut changer d'un binaire à l'autre (`DefaultHasher`, ticket, blake3 proposé).
+- **L'hôte de Lucie ne prend un lot qu'à une pose de G** (binaire installé) : rien ne se recharge
+  tout seul ; une pose du binaire seul au portable prend une minute (3 h 43 cette nuit).
+- **Tout cargo hors `run_e2e.sh`** passe par `. scripts/lib_du_magasin.sh && exporter_la_lib`,
+  sinon le binaire lie une autre lib que `RAG3DB_LIB` (vécu : moteur 7cd11e5fa, extension 17a094d12).
+- **Un lot écrit par l'équipier se relit comme un lot de n'importe qui** : les verts du superviseur
+  ne voient pas un `drop` qui efface une base sous un démon vivant (hotfixs l'a vu).
