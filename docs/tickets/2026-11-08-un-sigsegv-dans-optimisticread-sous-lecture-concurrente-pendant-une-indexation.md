@@ -41,6 +41,21 @@ réécrite sous lui. Les candidats, depuis les lots V2 et ceux de la semaine :
 - les listes CSR et leur compaction (`compactDeadRowsNoLock`, la liste des blocs prise avant
   l'index), lues par la recherche vectorielle (`OnDiskGraph::scanFwd`).
 
+## Le second plantage (9 h 05 m 49 s, pid 102525)
+
+Même lib, même instruction (`…12c70`, la même boucle `nextIndex`), et les registres :
+`rdx = 0`, `rax = 2`, **`rcx = 0x13b54` (80 724), le même numéro de bloc**, `rsi = 0x124` (292).
+Deux plantages à quinze minutes d'écart demandent donc le **même** bloc d'états de page, à des
+décalages voisins : la page fausse n'est pas un octet de hasard dans une mémoire écrasée, c'est
+une valeur calculée ou lue, reproductible. Aucun plantage en dix heures sous 17a094d12 : le défaut
+est entré entre 17a094d12 et dadbf0041 (les huit commits moteur du 7 novembre ; les deux têtes
+pour la lecture d'une page sont la copie-échange du COPY borné en octets et le retrait des
+générations).
+
+Le refus du rejeu du .wal de code-rag3db-depot est un défaut distinct (le rejeu d'une mise à jour
+d'une relation insérée plus tôt dans la même transaction, chez hotfixs) : rejoué sous un shell
+ASAN de dadbf0041, il ne montre aucune erreur mémoire.
+
 ## Témoin
 
 Aucun encore. La voie : rejouer sous ASAN les cas qui lisent pendant qu'un point de reprise et des
