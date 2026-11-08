@@ -49,7 +49,19 @@ rien perdre ; les autres sont de vieux brouillons dont master porte la version r
 10 octobre (9a2818df9) ; la branche n'en est que le premier jet, d'avant la relecture.
 `archive/banc-elagage-hnsw` en est une copie, redondante.
 
-## Reste
+## La mesure des lignes hors du graphe (8 novembre, 7 h 26 à 7 h 32)
 
-La mesure des lignes hors du graphe (`VectorIndexMeasure.MeasureSearchOverRowsOutsideTheGraph`,
-`hg-mesure.sh` à luciepc), à la fenêtre calme que l'orchestration donnera.
+`VectorIndexMeasure.MeasureSearchOverRowsOutsideTheGraph`, sous `poste mesure` à luciepc. Fenêtre
+de l'orchestration ; rien d'autre ne tournait, charge 0,06 puis 1,95. Binaire de master 072c467d7,
+lié statiquement, sans lib du magasin. 120 000 vecteurs de dimension 768, 50 recherches à k = 10
+pour chaque N :
+
+| N lignes hors du graphe | passe 1 : médiane / p95 | passe 2 : médiane / p95 | surcoût sur N = 0 |
+|---|---|---|---|
+| 0 | 13,5 / 14,0 ms | 13,3 / 14,6 ms | — |
+| 1 000 | 14,2 / 14,6 ms | 14,2 / 15,1 ms | + 0,8 ms |
+| 10 000 | 22,7 / 23,2 ms | 23,6 / 28,3 ms | + 9,8 ms |
+| 100 000 | 88,7 / 90,1 ms | 88,4 / 91,0 ms | + 75,2 ms |
+
+Environ 0,75 à 1 µs par ligne hors du graphe. Les chiffres sont au ticket
+`2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md`.

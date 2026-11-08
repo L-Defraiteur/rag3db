@@ -56,6 +56,24 @@ d'où un SIGSEGV dans le témoin, pas dans le moteur. Corrigé sur banc-hors-gra
 un tampon de 4 Gio, un BEGIN refusé dit par les assistants, et l'arrêt sur une préparation
 manquée. La mesure se rejoue à la prochaine fenêtre calme.
 
+**La mesure, le 8 novembre (banc, luciepc, `poste mesure`, charge 0,06 puis 1,95, rien d'autre en
+cours).** `VectorIndexMeasure.MeasureSearchOverRowsOutsideTheGraph`, deux passes, binaire de master
+072c467d7. 120 000 vecteurs de dimension 768, l2, CREATE en 143 s ; 50 recherches à k = 10 pour
+chaque N :
+
+| N lignes hors du graphe | passe 1 : médiane / p95 | passe 2 : médiane / p95 | surcoût sur N = 0 |
+|---|---|---|---|
+| 0 | 13,5 / 14,0 ms | 13,3 / 14,6 ms | — |
+| 1 000 | 14,2 / 14,6 ms | 14,2 / 15,1 ms | + 0,8 ms |
+| 10 000 | 22,7 / 23,2 ms | 23,6 / 28,3 ms | + 9,8 ms |
+| 100 000 | 88,7 / 90,1 ms | 88,4 / 91,0 ms | + 75,2 ms |
+
+Le surcoût croît en ligne droite avec N : environ 0,75 à 1 µs par ligne hors du graphe à la
+dimension 768, soit un getEmbedding et une distance par ligne. Une part hors du graphe de
+10 000 lignes coûte 10 ms par recherche, et de 100 000 lignes, 75 ms : la recherche coûte alors
+six fois et demie celle d'un index à jour. Ce chiffre doit fixer le seuil de la reconstruction ;
+le seuil lui-même reste à décider (« La question pour le produit » ci-dessous).
+
 ## La question pour le produit
 
 La règle « un index ne se pense pas » demande que personne n'ait à y penser. Il faut donc dire qui
