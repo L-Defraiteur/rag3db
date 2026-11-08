@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Le code du chat a les couleurs du dépôt.** L'hôte colore un bloc par les grammaires
+  tree-sitter qui indexent déjà le code (Rust, C++, TypeScript, Python, et six autres), pour
+  l'IDE et le terminal à la fois. highlight.js ne sert plus que de repli (`POST /highlight`,
+  coloration-b).
 - **8 nov. — Une phrase collée retrouve son fichier, et le surlignage ne demande plus rien à l'hôte.**
   Avec lucivy 4.3.2, une ligne de plus de 100 caractères copiée d'un fichier le ramène premier par
   le signal exact, et une requête entière garde son flou jusqu'à 900 caractères (mesuré : 464 ms à
