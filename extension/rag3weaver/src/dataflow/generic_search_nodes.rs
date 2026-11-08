@@ -1488,7 +1488,8 @@ impl Node for BM25SearchNode {
         // requêtes faites en parallèle, les résultats exacts passent devant
         // les unionnés »). Sous le mode par défaut, lucivy reçoit la requête
         // **entière**, comme la démo WASM : un `contains` relâché à distance
-        // 1, ses deux apostrophes ; et, pour plusieurs mots, la recherche par
+        // 1 (lucivy 4.3.2 unifie lui-même les deux apostrophes : plus rien à
+        // doubler ici) ; et, pour plusieurs mots, la recherche par
         // mots (`Parse`, l'IDF : les questions du 29 août). Les résultats de la
         // première passent devant ; ceux de la seconde suivent sans doublon.
         // La première sort aussi sur le port `exact`, sous l'étiquette

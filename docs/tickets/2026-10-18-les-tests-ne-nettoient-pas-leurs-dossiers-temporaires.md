@@ -1,6 +1,6 @@
 # Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive
 
-- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration).
+- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration) ; le 8 novembre, le cache d'index quitte /tmp et le témoin de suite existe (session recherche), restent les sept suites de la liste.
 - **Gravité** : confort, mais `/tmp` est un tmpfs sur le poste principal : ce qui y reste occupe
   la RAM, puis l'échange.
 - **Atteignable en service** : non (tests seulement), à une exception près : `Catalog` écrit son
@@ -86,3 +86,32 @@ Aucun pour l'instant. Il faudrait :
 4. Une fois rien de vivant dessus (vérifié par `/proc/*/cwd`, `fd` et `maps`, jamais par nom),
    effacer les restes listés plus haut. L'effacement revient à qui Lucie ou l'orchestration
    désigne. Ceux de `e2e_rag3daemon` et `e2e_code` ont été effacés le 18 octobre.
+
+## Le 8 novembre 2026 (session recherche, lot residus-de-suite)
+
+- **Le cache d'index de `Catalog` quitte /tmp, en service comme en test** : `catalog::index_cache_dir`
+  rend `RAG3WEAVER_CACHE_DIR` s'il est donné, sinon `<cache XDG>/rag3weaver/cache` ; `temp_dir()`
+  seulement sans dossier de cache. À l'ouverture d'un catalogue, une fois par processus et par
+  dossier, les dossiers `<pid>` des processus morts y sont effacés (`sweep_dead_index_caches`,
+  par `daemon_lifecycle::pid_state` : un pid à l'état illisible reste). Sous run_e2e.sh, chaque
+  suite a le sien, sur le disque, effacé avec elle. Le 8 novembre à midi, `/tmp/rag3weaver_cache`
+  du poste principal tenait 96 dossiers de pid, 119 Mo.
+- **Le témoin de suite** : run_e2e.sh regarde le TMPDIR neuf de chaque suite avant de l'effacer et
+  dit ce qu'elle y laisse ; hors de `tests/e2e/suites_qui_laissent_des_residus.txt`, la suite est
+  rouge ; une suite de la liste qui finit propre (passe entière) est rouge aussi. La liste maigrit
+  à chaque lot qui rend une suite propre, et ce ticket le dit.
+- **La mesure de départ** (passe entière de master avec le témoin, liste vide, luciepc) : 70 suites
+  laissaient des résidus, dont 64 le seul `rag3weaver_cache`. Restent, une fois le cache sorti :
+
+  | suite | ce qu'elle laisse |
+  |---|---|
+  | e2e_code | `rag3weaver-bulk-<pid>` et ses `.extensions`, `.fts`, `.readers` (29 Mo) |
+  | e2e_juge | deux dossiers `.tmp*` de tempfile |
+  | e2e_lectures | un dossier `.tmp*` de tempfile (44 Ko) |
+  | e2e_prise_atomique | 36 entrées : `rag3weaver-catalogue-lecteur-*`, `-insistant-*`, `-lecteurs-*`, `-marque-*`, `-modeles-*` (65 Mo) |
+  | e2e_rag3daemon | `rag3weaver-acces-<pid>-<n>` et ses `.ecrivain`, `.readers`, `.wal` |
+  | e2e_repli_de_branche | `rag3weaver-repli-hybride-<pid>` et ses fichiers (24 Mo) |
+  | e2e_rouvrir | `rag3weaver-rouvrir-<pid>` et ses fichiers (8 Mo) |
+
+  La branche de l'équipier `agent/tests-bases-dans-tmp` (relue par hotfixs, qui la complète) vise
+  une partie de ces suites : chaque suite qu'elle rend propre sort de la liste dans son commit.

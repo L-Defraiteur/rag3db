@@ -586,6 +586,70 @@ pub struct EmbeddingChoiceRecord {
     pub at: u64,
 }
 
+/// **Le dossier des caches d'index** (8 novembre 2026, ticket « les tests ne
+/// nettoient pas leurs dossiers temporaires ») : les blobs des index creux et
+/// plein texte, matérialisés depuis la base pour être mappés en mémoire, et
+/// reconstruits depuis elle. `RAG3WEAVER_CACHE_DIR` s'il est donné, sinon
+/// `<cache XDG>/rag3weaver/cache` ; `temp_dir()` seulement sans dossier de
+/// cache (ni HOME ni XDG). Plus `/tmp` par défaut : sur ces postes, c'est de la
+/// mémoire vive, et ce qu'un processus tué y laisse y reste. Les crates des
+/// index y posent ensuite `<pid>/<index>_<n>`.
+pub fn index_cache_dir() -> PathBuf {
+    if let Some(d) = std::env::var_os("RAG3WEAVER_CACHE_DIR").map(PathBuf::from).filter(|p| p.is_absolute()) {
+        return d;
+    }
+    crate::commande::dossier_de_cache()
+        .map(|c| c.join("rag3weaver").join("cache"))
+        .unwrap_or_else(|| std::env::temp_dir().join("rag3weaver_cache"))
+}
+
+/// **Efface les caches d'index des processus morts** sous `base` : chaque
+/// dossier `<pid>` dont le processus n'existe plus. Ses dossiers, un processus
+/// les efface en fermant ses index ; un kill ou un crash les laisse. Le dossier
+/// de ce processus, celui d'un vivant, et celui d'un pid dont l'état ne se lit
+/// pas restent. Rend combien sont effacés.
+pub fn sweep_dead_index_caches(base: &std::path::Path) -> usize {
+    let Ok(lus) = std::fs::read_dir(base) else { return 0 };
+    let moi = std::process::id();
+    let mut effaces = 0;
+    for e in lus.filter_map(Result::ok) {
+        let Some(pid) = e.file_name().to_str().and_then(|n| n.parse::<u32>().ok()) else { continue };
+        if pid == moi || !e.path().is_dir() || !processus_mort(pid) {
+            continue;
+        }
+        match std::fs::remove_dir_all(e.path()) {
+            Ok(()) => effaces += 1,
+            Err(err) => eprintln!("[catalog] le cache d'index du processus mort {pid} ne s'efface pas ({}) : {err}", e.path().display()),
+        }
+    }
+    effaces
+}
+
+/// Un pid mort, quand l'état se lit (`daemon_lifecycle::pid_state`) ; sans la
+/// feature qui le lit, aucun ne l'est : rien n'est effacé.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+fn processus_mort(pid: u32) -> bool {
+    crate::daemon_lifecycle::pid_state(pid) == Some(false)
+}
+
+#[cfg(not(all(feature = "daemon", feature = "rag3db-native")))]
+fn processus_mort(_pid: u32) -> bool {
+    false
+}
+
+/// Le balayage, une fois par dossier et par processus : un catalogue s'ouvre
+/// souvent (chaque test, chaque backend), le dossier ne se relit qu'une fois.
+fn sweep_dead_index_caches_once(base: &std::path::Path) {
+    static VUS: std::sync::OnceLock<Mutex<HashSet<PathBuf>>> = std::sync::OnceLock::new();
+    let premier = VUS.get_or_init(Default::default).lock().unwrap_or_else(|p| p.into_inner()).insert(base.to_path_buf());
+    if premier {
+        let n = sweep_dead_index_caches(base);
+        if n > 0 {
+            eprintln!("[catalog] {n} cache(s) d'index de processus morts effacé(s) sous {}", base.display());
+        }
+    }
+}
+
 impl Catalog {
     /// La lecture d'une clé de méta, sur une connexion donnée : celle du
 /// catalogue, ou celle de la vue de lecture.
@@ -701,7 +765,11 @@ fn read_threads() -> u64 {
             ),
             marque_posee: false,
             dette_publiee: BTreeMap::new(),
-            cache_base: std::env::temp_dir().join("rag3weaver_cache"),
+            cache_base: {
+                let base = index_cache_dir();
+                sweep_dead_index_caches_once(&base);
+                base
+            },
             sync_conn: None,
             sessions_ouvertes: HashMap::new(),
             dans_une_fin: false,
@@ -901,8 +969,9 @@ fn read_threads() -> u64 {
     }
 
     /// Set the base directory for sparse/FTS mmap caches.
-    /// Defaults to `$TMPDIR/rag3weaver_cache`.
+    /// Defaults to [`index_cache_dir`].
     pub fn set_cache_base(&mut self, path: PathBuf) {
+        sweep_dead_index_caches_once(&path);
         self.cache_base = path;
     }
 
@@ -10923,6 +10992,34 @@ fn json_to_cypher_value(v: &serde_json::Value) -> CypherValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Les caches d'index ne vivent plus dans /tmp, et ceux des morts
+    /// s'effacent** (8 novembre 2026, ticket des dossiers temporaires) : le
+    /// dossier par défaut est hors de `temp_dir()` dès qu'il y a un dossier de
+    /// cache ; sous une base donnée, le dossier `<pid>` d'un processus mort part,
+    /// le sien et ce qui n'est pas un pid restent.
+    #[test]
+    fn index_caches_leave_tmp_and_dead_processes_are_swept() {
+        if std::env::var_os("RAG3WEAVER_CACHE_DIR").is_none() && crate::commande::dossier_de_cache().is_some() {
+            assert!(!index_cache_dir().starts_with(std::env::temp_dir()), "le cache d'index par défaut est dans /tmp : {}", index_cache_dir().display());
+        }
+        let d = tempfile::tempdir().unwrap();
+        let mut fils = std::process::Command::new("true").spawn().unwrap();
+        let mort = fils.id();
+        fils.wait().unwrap();
+        let moi = std::process::id();
+        for nom in [mort.to_string(), moi.to_string(), "pas-un-pid".to_string()] {
+            std::fs::create_dir_all(d.path().join(&nom).join("idx_0")).unwrap();
+        }
+        std::fs::write(d.path().join("4242"), b"un fichier, pas un dossier").unwrap();
+        let effaces = sweep_dead_index_caches(d.path());
+        if cfg!(all(feature = "daemon", feature = "rag3db-native")) {
+            assert_eq!(effaces, 1, "le cache du mort part");
+            assert!(!d.path().join(mort.to_string()).exists());
+        }
+        assert!(d.path().join(moi.to_string()).join("idx_0").exists(), "le sien reste");
+        assert!(d.path().join("pas-un-pid").exists() && d.path().join("4242").exists(), "ce qui n'est pas un dossier de pid reste");
+    }
     use crate::config::*;
     use crate::connection::MockConnection;
     use crate::embedder::MockEmbedder;
