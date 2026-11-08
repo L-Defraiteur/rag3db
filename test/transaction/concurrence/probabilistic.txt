@@ -104,3 +104,11 @@ VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen
 # 36 seul sur le même bâti, vert au banc du lot du retrait. Sort d'ici dans le commit du correctif
 # (lot G3 de hotfixs, les extensions à l'ouverture et au rejeu).
 SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact
+#
+# Un témoin de temps : le point de reprise automatique doit passer sous des écrivains sans trou, dans
+# une borne de temps fixe. Le 8 novembre, 1 rouge sur 1 au banc complet sous une charge de 15,8 à
+# luciepc (lot rejeu-relations-copiees, l'ASAN du cœur et d'autres lourds en même temps), 0 sur 5
+# seul sur le même bâti à une charge de 4,2. Ticket
+# 2026-11-08-un-temoin-de-temps-du-banc-rougit-sous-charge (une horloge injectée, ou une borne qui
+# tient compte de la charge) ; le banc entier rejoué sous charge basse le fermera ou non.
+LockBench.AutoCheckpointIsNotPostponedForeverUnderWritersWithoutAGap
