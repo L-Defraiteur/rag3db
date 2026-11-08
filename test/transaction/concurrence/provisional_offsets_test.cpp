@@ -13,12 +13,12 @@
 // Le mode multi-écrivains, par défaut depuis le 11 octobre, rend l'entrelacement possible : une
 // insertion tient l'index de sa table en partagé, un COPY l'index de sa propre table.
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <filesystem>
 #include <string>
 #include <vector>
-
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -148,9 +148,9 @@ TEST_F(ProvisionalOffsets, TwoFlushesInOneTransactionKeepEveryRelOnItsNodesThrou
             run(a, "UNWIND range(1100, 1109) AS i CREATE (:N {id: i});");
             run(a, "MATCH (x:N {id: 1100}), (y:N {id: 1101}) CREATE (x)-[:R {k: 2}]->(y);");
             run(a, "MATCH (x:N {id: 1000}), (y:N {id: 1105}) CREATE (x)-[:R {k: 3}]->(y);");
-            // Après le premier versement, la table est à A jusqu'à sa validation (comme sous un COPY
-            // de nœuds) : B attend, puis est refusé par le délai. Sans ce verrou, B validait ses
-            // nœuds derrière ceux de A.
+            // Après le premier versement, la table est à A jusqu'à sa validation (comme sous un
+            // COPY de nœuds) : B attend, puis est refusé par le délai. Sans ce verrou, B validait
+            // ses nœuds derrière ceux de A.
             {
                 auto r = b.query("UNWIND range(3000, 3004) AS i CREATE (:N {id: i});");
                 fprintf(stderr, "[child] B après le premier versement : %s\n",
@@ -165,7 +165,8 @@ TEST_F(ProvisionalOffsets, TwoFlushesInOneTransactionKeepEveryRelOnItsNodesThrou
             run(a, "MATCH ()-[r:R {k: 1}]->() SET r.k = 10;");
             // Ce que la mémoire voit avant la mort : le rejeu doit rendre la même chose.
             {
-                auto r = a.query("MATCH (x:N)-[r:R]->(y:N) RETURN x.id, y.id, r.k ORDER BY x.id, y.id;");
+                auto r =
+                    a.query("MATCH (x:N)-[r:R]->(y:N) RETURN x.id, y.id, r.k ORDER BY x.id, y.id;");
                 std::string seen;
                 while (r->isSuccess() && r->hasNext()) {
                     seen += r->getNext()->toString() + " ";
@@ -173,7 +174,8 @@ TEST_F(ProvisionalOffsets, TwoFlushesInOneTransactionKeepEveryRelOnItsNodesThrou
                 fprintf(stderr, "[child] en mémoire : %s\n", seen.c_str());
             }
             const auto wal = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
-            if (code == 0 && (!std::filesystem::exists(wal) || std::filesystem::file_size(wal) == 0)) {
+            if (code == 0 &&
+                (!std::filesystem::exists(wal) || std::filesystem::file_size(wal) == 0)) {
                 fprintf(stderr, "[child] le journal est vide : rien à rejouer\n");
                 code = 11;
             }
@@ -190,15 +192,16 @@ TEST_F(ProvisionalOffsets, TwoFlushesInOneTransactionKeepEveryRelOnItsNodesThrou
         << "[check: setup] le processus de la transaction a rendu " << status;
     createDBAndConn();
     // Le sens avant : chaque relation depuis sa source.
-    const std::vector<std::vector<int64_t>> expected = {
-        {1, 2, 100}, {3, 4, 101}, {1000, 1001, 10}, {1000, 1105, 30}, {1100, 1101, 2}};
-    auto forward = conn->query("MATCH (x:N)-[r:R]->(y:N) RETURN x.id, y.id, r.k ORDER BY x.id, y.id;");
+    const std::vector<std::vector<int64_t>> expected = {{1, 2, 100}, {3, 4, 101}, {1000, 1001, 10},
+        {1000, 1105, 30}, {1100, 1101, 2}};
+    auto forward =
+        conn->query("MATCH (x:N)-[r:R]->(y:N) RETURN x.id, y.id, r.k ORDER BY x.id, y.id;");
     ASSERT_TRUE(forward->isSuccess()) << "[check: replay] " << forward->getErrorMessage();
     std::vector<std::vector<int64_t>> seen;
     while (forward->hasNext()) {
         auto row = forward->getNext();
-        seen.push_back({row->getValue(0)->getValue<int64_t>(), row->getValue(1)->getValue<int64_t>(),
-            row->getValue(2)->getValue<int64_t>()});
+        seen.push_back({row->getValue(0)->getValue<int64_t>(),
+            row->getValue(1)->getValue<int64_t>(), row->getValue(2)->getValue<int64_t>()});
     }
     EXPECT_EQ(seen, expected) << "[check: rels-on-their-nodes]";
     // Le sens arrière : chaque relation depuis sa destination.
@@ -216,6 +219,5 @@ TEST_F(ProvisionalOffsets, TwoFlushesInOneTransactionKeepEveryRelOnItsNodesThrou
                            << " manque au sens arrière";
     }
 }
-
 
 } // namespace
