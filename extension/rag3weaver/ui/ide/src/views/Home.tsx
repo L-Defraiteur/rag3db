@@ -13,7 +13,7 @@ import { SearchBox } from "@/components/SearchBox";
 export function Home({ state }: { state: HostState }) {
   const backends = state.backends ?? [];
   if (!backends.length) {
-    return <p className="text-muted-foreground">L'hôte ne sert encore aucun dépôt : un client (MCP) l'ouvre à son premier appel.</p>;
+    return <p className="text-muted-foreground">L'hôte ne sert encore aucun dépôt : un dépôt paraît ici quand un agent ou l'atelier l'ouvre.</p>;
   }
   const principals = backends.filter((b) => !b.tache);
   const tasksOf = (b: Backend) => backends.filter((t) => t.tache && t.tache.parent === b.id);
