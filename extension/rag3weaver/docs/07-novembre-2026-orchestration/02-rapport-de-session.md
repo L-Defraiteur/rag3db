@@ -1031,3 +1031,35 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   prochaine pose), geste donné.
 - **La file** : recherche (best-signal, à toi) → ED (crochets) → hotfixs A → hooks-essai
   (coloration B, verte) → 96 → tty (thème) → G3 → cœur (vecteur-du-noeud-copie) → rebâti.
+
+## 11 h 35 — six lots de plus, A sur master, le banc bloqué par une permission
+
+- **Atterris** : recherche, best-signal (d540813d5 : `chunk.signal`, le morceau par la contribution
+  RRF, `bestSignal` par ligne ; le ticket reste ouvert pour le seuil, à mesurer) ; ED, les crochets
+  (8249512e6 : un gabarit nommé se lit dans le gabarit livré, un crochet sans argument requis se
+  tait) ; hooks-essai, **la coloration B** (667d5e35a : `POST /highlight` et `/ide/highlight` par les
+  grammaires tree-sitter de codeparsers, 13 langues, le chat en `hl-*` avec highlight.js en repli,
+  le pointeur à 2bfa28b et son Cargo.lock — leçon : un pointeur qui apporte des dépendances commite
+  son Cargo.lock avant la passe) ; hotfixs, **A** (6a71f641d le rejeu d'un COPY de relations suivi
+  d'une mise à jour ; c4e213ca5 la ligne probabiliste du témoin de temps du banc et son ticket) ;
+  tty, **le thème** (f2e6e2521 : daemon.json embarqué dans templates/themes, les couleurs sur les
+  cellules quand le modèle réfléchit ; branché sans attendre, comme Lucie l'a dit).
+- **Une faute à dire** : hotfixs a poussé A avec sa passe rag3weaver sur le moteur du worktree
+  **rouge**, jugée d'environnement (l'extension vector cherchée à côté de la lib sous
+  RAG3DB_LIB=bati, 68 échecs). Un rouge d'environnement reste un rouge tant qu'il n'est pas rejoué
+  vert ; il rejoue à l'instant avec l'extension à côté de la lib ; si ça rougit pour une autre raison,
+  A revient en arrière dans la minute. Le cœur attend ce verdict pour pousser vecteur-du-noeud-copie ;
+  G3 suit avec un verdict complet avant push.
+- **Le banc, modèle de décision** : jeu de 166 cas et 1 328 paires, étiquettes Gemini en cours
+  (cadencées), bge-m3 scoré (p50 183 ms pour 8 paires) ; deux trouvailles : le juge du rappel des
+  hooks **coupe sa réponse sous 400 jetons** (Gemini compte sa réflexion ; ticket d596c829c, à
+  archi), et le relecteur refuse une requête de plus de 512 jetons par choix écrit (pas un défaut ;
+  le 500 au lieu d'un refus typé, noté). **Bloqué** : sa permission refuse `pip install` et le
+  téléchargement des poids depuis huggingface.co à luciepc ; personne ne contourne ; posé à Lucie
+  (une règle dans sa session, ou sa main en ssh). En attendant : une page à deux candidats.
+- **En cours** : archi, le (f) (`recall_min_score` retiré, la clé acceptée sans effet) puis le
+  plafond du juge ; 96, M4 pas 3 (encore rouge : un port de résultat d'outil doit être terminal,
+  corrigé, rejeu) ; recherche, « mes recherches » avec les clics (route paginée sur les runs, clic
+  fondu dans le run, vue React, règle générique « un outil dont le graphe porte un nœud de
+  recherche ») ; ED, l'atelier (atelier-attach df3be297b : `attach_worktree`, `list_worktrees`,
+  WorktreeNode, RepoAttached ; passe complète ensuite).
