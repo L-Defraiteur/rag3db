@@ -1,6 +1,6 @@
 # rag3weaver archi — rapport de session
 
-Mis à jour le 8 novembre 2026 à 18 h 45. Ce fichier se met à jour sur place. La session est
+Mis à jour le 9 novembre 2026 à 1 h 10. Ce fichier se met à jour sur place. La session est
 l'ancienne orchestration des 3-4 octobre (rag3db-9f), puis le chantier E du 8 octobre (Claude
 en agent) ; depuis le 7 novembre, les hooks de Claude Code, puis, le 8, l'IDE (la liste de Lucie
 du 7 au soir).
@@ -19,6 +19,8 @@ du 7 au soir).
 | l'accueil parle en dépôts (« Dépôts », « dépôt · branche », le manifeste en infobulle) | e16cd5c56, 4fd994dd8 | (pile) |
 | la fin du premier index d'un worktree attaché : RepoIndexed, une ligne dans le chat de l'atelier, le rag indexé dans la barre (Lucie, 16 h 08) | 521ade9d8, 8a81ed38a | (pile) |
 | l'avancement de l'index par le flux : IndexProgress, la barre dit le pourcentage, le débit, « figé depuis », « flux coupé » (Lucie, 16 h 30-31) | 6044f5ae2, 9c20d6773 | (pile) |
+| un dépôt fermé pendant son index n'est pas rouvert pour ses comptes (le témoin du correctif d'everything declarative) ; les symboles cités redemandés aussi à la fin de la réaction qui réindexe un fichier changé (le rouge de 96) | a87c313c9, 02a8d1040 (53fac1ea9) | 5/5, lib 2 076, navigateur 29 |
+| la carte de l'avancement sous l'appel d'un outil (un registre `kind → composant` des `ui`, `index_progress`, relue au rechargement) | cb118f871, 623e97249 | lib 9bae60786 : 5/5, lib 2 076, navigateur 30 (+ 3/3 sur le correctif de l'index réclamé) |
 
 Docs : page 03 du 8 novembre (`08-novembre-2026-orchestration/03-ide-ce-qui-reste.md`) — la
 liste de Lucie relue demande par demande ; elle est faite. Tickets : le code dans le chat fermé ;
@@ -54,13 +56,14 @@ est jetable » dans `docs/procedures/push-d-un-lot.md` (7f8a3fb75).
 
 ## 3. En cours et suite
 
-- La carte de l'avancement sous l'appel d'un outil (`ide-carte-ui`, worktree `wt-carte`, commit
-  local 165c3d382) : un registre `kind → composant` pour les `ui` d'un résultat d'outil ; attend
-  `Turn.ui` / `ToolCallFinished.ui` d'everything declarative (branche atelier-ui) sur master,
-  puis son témoin navigateur rouge sur master et vert (attach, `show_progress`, rechargement).
-- La reprise de l'index au redémarrage (everything declarative) appellera `suivre_le_premier_index`
-  par `lancer_sur` avec `BORNES_DU_SUIVI`.
+- Le rouge 1 sur 3 de la carte (un index d'attache « arrêté entre deux passes de vecteurs ») : 3/3
+  verts sur le correctif d'everything declarative (8be79cbbf, l'index réclamé par l'outil) ; son
+  journal n'a pas été gardé. S'il revient, chercher `[démon] … la base doit être rouverte` (le
+  chemin `must_reopen`, plus ancien) et le donner à everything declarative.
+- Le registre `kind → composant` (ui/ide/src/components/UiDuTour.tsx) attend ses composants
+  suivants (un aperçu, un diff).
 - Les thèmes suivants (chez tty) : une route `/ide/theme/<nom>.json` et un menu, au premier fichier.
+- Passes : lib 9bae60786 sans `RAG3WEAVER_MOTEUR_ANCIEN` depuis le 8 novembre à 23 h 41 (c7).
 
 ## 4. Ce qui attend Lucie
 
