@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -144,6 +145,20 @@ TEST_F(UpstreamFixes, RelationsOfAnUntouchedRegionSurviveACheckpoint) {
 // point de reprise d'un groupe qui a des données sur disque indexe ses tableaux de colonnes
 // par l'identifiant de colonne au lieu de la position : SIGSEGV. Après réouverture, tout
 // point de reprise suivant plante encore.
+// Les comptes de valeurs distinctes de STATS_INFO (ticket 2026-10-10-hyperloglog-a-64-registres) :
+// l'HyperLogLog des statistiques a 64 registres, soit une erreur type d'environ 13 % (mesuré le
+// 10 octobre : 12 233 estimés pour 10 000). Avec 1 024 registres (≈ 3 %), 10 % est une marge de
+// trois erreurs types. Rouge connu jusqu'à la bascule de format qui change les registres : leur
+// nombre est sérialisé tel quel.
+TEST_F(UpstreamFixes, DistinctCountsAreWithinTenPercent) {
+    mustRun("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING);");
+    mustRun("UNWIND range(0, 9999) AS i CREATE (:Doc {id: i, name: 'name ' + CAST(i AS STRING)});");
+    const auto estimated = queryInt("CALL STATS_INFO('Doc') RETURN name_distinct_count;");
+    const auto truth = queryInt("MATCH (d:Doc) RETURN count(DISTINCT d.name);");
+    EXPECT_LE(std::llabs(estimated - truth), truth / 10)
+        << "[check: distinct-count-within-ten-percent] " << estimated << " estimés pour " << truth;
+}
+
 TEST_F(UpstreamFixes, CheckpointAfterDroppingANodeColumn) {
     mustRun("CREATE NODE TABLE t(id INT64 PRIMARY KEY, a INT64, b STRING, c INT64);");
     mustRun("CREATE (:t {id: 0, a: 1, b: 'x', c: 10});");

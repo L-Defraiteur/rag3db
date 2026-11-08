@@ -158,3 +158,7 @@ CheckpointNoStall.WriterCommittedWhileTheCheckpointWritesSurvivesItsDeath writer
 # et la famine du bâti (ticket 2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-
 # connexions), que (A) règle toutes les deux. Joué rouge 2/2 sur luciepc le 19 octobre. Pour hotfixs.
 VectorIndexCreateUnderManyWriters.NoWriterWaitsLongDuringTheCreate no-writer-waits-long-during-create
+#
+# L'HyperLogLog à 64 registres (ticket docs/tickets/2026-10-10-hyperloglog-a-64-registres.md) :
+# rouge jusqu'à la bascule de format 44, qui passe à 1 024 registres.
+UpstreamFixes.DistinctCountsAreWithinTenPercent distinct-count-within-ten-percent
