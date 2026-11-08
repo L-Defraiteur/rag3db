@@ -874,3 +874,23 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   bloc `sandbox.env` du bac à sable n'existe que dans le binaire reposé par-dessus) ; retiré de
   mon arbre, à remettre à la prochaine pose. La mesure « après » du fil par pas attend une pose
   stable.
+
+## 09 h 20 — la base de code de Lucie est rendue, la pièce du défaut mise de côté
+
+- **G a fait les trois gestes** : (a) une copie reflink ouverte sous dadbf0041 sur un hôte d'essai
+  (7991) **refuse le même .wal** : « Relationship 187668 of table CONSUMED_BY was not found in the
+  forward direction… it would have reached one direction only » — les deux libs refusent, donc
+  **c'est l'écriture sous dadbf0041 qui a posé une relation dans un seul sens**, pas le rejeu qui la
+  casse ; (b) l'original (base de 1,84 Go du 8 h 45, .wal de 5,8 Mo du 9 h 03, .ecrivain du pid
+  planté, .fts, .extensions, .readers, .checkpoints) est mis de côté tel quel à 9 h 09 m 56 s dans
+  `~/.local/share/rag3weaver/preuves/2026-11-08-code-rag3db-depot-wal-dadbf0041/` ; hotfixs a sa
+  copie dans `~/.cache/rag3db-locks/depot-9h05/`, G la sienne dans
+  `~/.cache/rag3weaver-build/essai-wal/` pour l'ASAN du cœur ; (c) **code-rag3db-depot est revenue à
+  avant-43** (l'état du 7 nov. 19 h 21, 1,48 Go, sans .wal), réveil à 9 h 10 m 09 s sur l'hôte
+  17a094d12, la montre rattrape 328 fichiers (171 à 9 h 13), l'IDE est vert (18,5 s), search_code
+  répond par balayage le temps du rattrapage puis par l'index. memoire-longue n'a pas bougé.
+- **Pour Lucie** : sa base de code est vivante ; ce qui a été indexé entre le 7 au soir et ce matin
+  se refait par la montre ; la pièce du défaut est au chemin ci-dessus. Le cœur départage au commit
+  (63a2d07f8 « COPY journalisé par tranches » et c4f8610b9 « nœuds locaux d'abord » en tête, puis
+  G2b et le retrait pour les SIGSEGV) en rejouant ce .wal réel ; hotfixs a le témoin du mélange.
+  Aucune pose d'hôte avant le correctif du moteur et son rebâti.
