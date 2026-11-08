@@ -4116,6 +4116,12 @@ fn module_d_un_chemin(qualifier: &str, fichier: &str) -> Option<String> {
 /// le chemin du fichier, sans son extension. Lu sur les chemins, rien de
 /// deviné : un module qui ne finit aucun chemin ne désigne rien.
 fn module_designe_fichier(module: &str, fichier: &str) -> bool {
+    // Un import JS/TS écrit avec son extension (`./prepared_statement.js`) : l'extension n'est pas
+    // un segment du module (8 novembre 2026, le ticket du require relatif).
+    let module = [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"]
+        .iter()
+        .find_map(|e| module.strip_suffix(e))
+        .unwrap_or(module);
     let segments: Vec<&str> = module
         .split(|c| c == ':' || c == '.' || c == '/')
         .filter(|s| !s.is_empty() && !matches!(*s, "crate" | "self" | "super" | "@"))
@@ -4686,6 +4692,10 @@ mod tests_resolution {
         assert_eq!(module_d_un_chemin("self::inner", "/p/outer.rs").as_deref(), Some("p/outer/inner"));
         assert!(module_designe_fichier("p/src/dataflow/x", "/p/src/dataflow/x.rs"));
         assert!(!module_designe_fichier("p/src/dataflow/x", "/p/src/x.rs"));
+        // Un import JS/TS écrit avec son extension désigne son fichier.
+        assert!(module_designe_fichier("./prepared_statement.js", "tools/wasm/src_js/prepared_statement.js"));
+        assert!(module_designe_fichier("./query_result", "tools/wasm/src_js/query_result.js"));
+        assert!(!module_designe_fichier("./prepared_statement.js", "tools/wasm/src_js/connection.js"));
         // Au-delà de la racine : rien.
         assert_eq!(module_d_un_chemin("super::super::super::x", "/p/b.rs"), None);
     }
