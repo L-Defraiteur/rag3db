@@ -96,6 +96,10 @@ struct Hosted {
     /// sérialisait tous les appels : un seul bloqué derrière un écrivain (une
     /// recherche pendant la réaction de la montre) les faisait tous attendre.
     backend: std::sync::RwLock<Option<Backend>>,
+    /// **Un index reparti de lui-même à l'ouverture** (`worktrees::a_l_ouverture`) : il ne
+    /// tient pas la porte, une fermeture l'arrête au paquet suivant (c7, 8 novembre 2026).
+    /// Un index lancé par un outil, lui, la tient (`BUSY_INDEXING`).
+    rattrapage: std::sync::atomic::AtomicBool,
     /// Combien de fois ce backend a été ouvert (1 au premier appel).
     opened: std::sync::atomic::AtomicUsize,
     /// Combien de fois il a été fermé par `POST /backend/close`.
@@ -424,6 +428,7 @@ impl DaemonHost {
                     id,
                     manifest: canonical,
                     backend: std::sync::RwLock::new(None),
+                    rattrapage: Default::default(),
                     opened: Default::default(),
                     closed: Default::default(),
                     print: Mutex::new(None),
@@ -596,12 +601,17 @@ impl DaemonHost {
         #[cfg(feature = "code")]
         {
             let n = crate::dataflow::index_nodes::indexings_running(&backend.catalog);
-            if n > 0 {
+            if n > 0 && hosted.rattrapage.load(std::sync::atomic::Ordering::SeqCst) {
+                // Reparti de lui-même : arrêté au paquet suivant ; la dette reste, et la
+                // prochaine ouverture la reprend.
+                crate::dataflow::index_nodes::stop_indexings_of(&backend.catalog);
+            } else if n > 0 {
                 return Err(format!(
                     "{BUSY_INDEXING} ({n} en cours) pour {} : arrêtez-la (outil index, action stop) ou attendez sa fin, puis recommencez",
                     hosted.manifest.display()
                 ));
             }
+            hosted.rattrapage.store(false, std::sync::atomic::Ordering::SeqCst);
         }
         #[cfg(not(feature = "code"))]
         let _ = backend;

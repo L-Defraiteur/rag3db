@@ -440,11 +440,14 @@ pub(super) fn a_l_ouverture(hosted: &super::Hosted, b: &crate::backend::Backend)
     }
     let pourquoi = if coupe { "son premier index avait été coupé".to_string() } else { format!("{dette} morceaux encore sans vecteur") };
     match lancer_sur(b, &hosted.manifest) {
-        Ok(j) => eprintln!(
+        Ok(j) => {
+            hosted.rattrapage.store(j.is_some(), std::sync::atomic::Ordering::SeqCst);
+            eprintln!(
             "[hôte] {} : {pourquoi} — l'index repart en fond{}",
             hosted.manifest.display(),
             j.map(|j| format!(" (journal : {})", j.display())).unwrap_or_default()
-        ),
+            )
+        }
         Err(e) => eprintln!("[hôte] {} : {pourquoi}, mais l'index n'a pas pu repartir : {e}", hosted.manifest.display()),
     }
 }
@@ -459,7 +462,13 @@ fn ouvert(h: &super::Hosted) -> bool {
 fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path) -> String {
     // Un index déjà reparti à l'ouverture (`a_l_ouverture`) se dit de même.
     match hote.with_backend(h, |b| lancer_sur(b, manifeste)) {
-        Ok(Ok(_)) => "son index est lancé en fond".to_string(),
+        Ok(Ok(lance)) => {
+            // Lancé par un outil : il tient la porte.
+            if lance.is_some() {
+                h.rattrapage.store(false, std::sync::atomic::Ordering::SeqCst);
+            }
+            "son index est lancé en fond".to_string()
+        }
         Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
     }
 }
@@ -1461,6 +1470,8 @@ mod tests {
             "granite-278m"
         }
         fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            // Lent exprès : un rattrapage dure assez pour qu'une fermeture le croise.
+            std::thread::sleep(std::time::Duration::from_millis(5 * texts.len() as u64));
             Ok(texts.iter().map(|_| { let mut v = vec![0.0_f32; 768]; v[0] = 1.0; v }).collect())
         }
         fn dim(&self) -> usize {
@@ -1491,8 +1502,12 @@ mod tests {
     #[test]
     fn owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it() {
         let d = tempfile::tempdir().unwrap();
-        let (manifeste, _) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+        let (manifeste, arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
         let manifeste = PathBuf::from(manifeste);
+        // Assez de morceaux pour plusieurs passes de 512.
+        for i in 0..700 {
+            std::fs::write(arbre.join(format!("src/f{i}.rs")), format!("pub fn fonction_{i}() -> u32 {{\n    {i}\n}}\n")).unwrap();
+        }
         let ecrire = |f: &dyn Fn(&mut Value)| {
             let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
             f(&mut m);
@@ -1509,7 +1524,7 @@ mod tests {
         let attendre_l_index = || {
             let debut = std::time::Instant::now();
             while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
-                assert!(debut.elapsed() < std::time::Duration::from_secs(60), "l'index n'a pas fini en 60 s");
+                assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
         };
@@ -1517,7 +1532,7 @@ mod tests {
         let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
         let debut = std::time::Instant::now();
         while !fini(&journal) {
-            assert!(debut.elapsed() < std::time::Duration::from_secs(60), "l'index n'a pas fini en 60 s");
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
         attendre_l_index();
@@ -1537,12 +1552,26 @@ mod tests {
         assert!(avant > 0);
         fermer();
 
-        // 3. Rouvert avec le réglage : l'index repart et solde.
+        // 3. Rouvert avec le réglage : l'index repart de lui-même. Il ne tient pas la
+        // porte : une fermeture l'arrête au paquet suivant, et la dette reste.
+        ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(true));
+        host.with_backend(&h, |_| ()).unwrap();
+        assert!(host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0, "avec le réglage, l'index repart à l'ouverture");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let debut = std::time::Instant::now();
+        fermer();
+        assert!(debut.elapsed() < std::time::Duration::from_secs(30), "la fermeture a attendu {:?}", debut.elapsed());
+        ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(false));
+        let reste = dus();
+        assert!(reste > 0, "la fermeture a coupé le rattrapage : la dette reste");
+        fermer();
+
+        // 4. Rouvert avec le réglage, laissé faire : la dette se solde.
         ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(true));
         let debut = std::time::Instant::now();
         host.with_backend(&h, |_| ()).unwrap();
         while dus() > 0 {
-            assert!(debut.elapsed() < std::time::Duration::from_secs(60), "la dette n'est pas soldée en 60 s : {} dus", dus());
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "la dette n'est pas soldée en 120 s : {} dus", dus());
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
         attendre_l_index();
