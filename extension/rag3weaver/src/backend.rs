@@ -49,6 +49,19 @@ pub struct TeammatePolicy {
     /// attente, sa boîte dit pourquoi.
     #[serde(default = "TeammatePolicy::oui")]
     pub resume_after_restart: bool,
+    /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
+    /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
+    /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
+    /// la connexion) fait attendre ces secondes avant le même pas, doublées à
+    /// chaque refus d'affilée jusqu'à dix fois plus : au moins une fenêtre de
+    /// quota par minute. Défaut : 60.
+    #[serde(default = "TeammatePolicy::soixante")]
+    pub quota_wait_s: u64,
+    /// Les refus du fournisseur d'affilée avant que l'équipier s'arrête en le
+    /// disant (une attente qui ne finit jamais n'est pas un travail). Un quota
+    /// épuisé (par jour, de dépense) arrête tout de suite. Défaut : 10.
+    #[serde(default = "TeammatePolicy::dix")]
+    pub max_unavailable_steps: u32,
 }
 
 impl TeammatePolicy {
@@ -61,11 +74,23 @@ impl TeammatePolicy {
     fn oui() -> bool {
         true
     }
+    fn soixante() -> u64 {
+        60
+    }
+    fn dix() -> u32 {
+        10
+    }
 }
 
 impl Default for TeammatePolicy {
     fn default() -> Self {
-        TeammatePolicy { max_failed_steps: Self::trois(), tool_wait_notice_s: Self::vingt(), resume_after_restart: Self::oui() }
+        TeammatePolicy {
+            max_failed_steps: Self::trois(),
+            tool_wait_notice_s: Self::vingt(),
+            resume_after_restart: Self::oui(),
+            quota_wait_s: Self::soixante(),
+            max_unavailable_steps: Self::dix(),
+        }
     }
 }
 
@@ -850,6 +875,22 @@ pub struct Surcharges {
     pub racine_principale: Option<PathBuf>,
 }
 
+/// **Un champ inconnu dit quel binaire le lit** (8 novembre 2026 : un hôte rendu
+/// à un binaire d'avant refusait l'arbre d'essais de c7, « unknown field `env` »,
+/// écrit par le gabarit d'un binaire plus récent). Le refus garde le champ et la
+/// ligne de serde, et ajoute le commit de ce binaire : un champ inconnu vient
+/// d'ordinaire d'un manifeste écrit pour un binaire plus récent.
+fn champ_inconnu_dit(e: String) -> String {
+    if e.contains("unknown field") {
+        format!(
+            "{e} — ce binaire (commit {}) ne connaît pas ce champ : le manifeste a sans doute été écrit pour un binaire plus récent ; posez celui-là, ou retirez le champ",
+            option_env!("RAG3WEAVER_GIT_HASH").unwrap_or("?")
+        )
+    } else {
+        e
+    }
+}
+
 /// **Les jetons du bac à sable d'un backend** : `{task_dir}`, le dossier de la
 /// tâche (hors tâche : `<cache>/rag3weaver/sans-tache/<nom du backend>`) ;
 /// `{repo_target}`, le target partagé du dépôt, nommé par la racine principale
@@ -1025,9 +1066,9 @@ impl PreparedBackend {
         let manifest: BackendManifest = if brut.windows(crate::builtin_templates::PREFIX.len()).any(|w| w == crate::builtin_templates::PREFIX.as_bytes()) {
             let mut v: serde_json::Value = serde_json::from_slice(&brut).map_err(|e| e.to_string())?;
             crate::builtin_templates::resolve(&mut v)?;
-            serde_json::from_value(v).map_err(|e| e.to_string())?
+            serde_json::from_value(v).map_err(|e| champ_inconnu_dit(e.to_string()))?
         } else {
-            serde_json::from_slice(&brut).map_err(|e| e.to_string())?
+            serde_json::from_slice(&brut).map_err(|e| champ_inconnu_dit(e.to_string()))?
         };
         if manifest.version != 1 {
             return Err("unsupported backend manifest version".into());
@@ -5305,6 +5346,17 @@ mod tests {
     /// **L'extension se cherche d'abord à côté de la lib réellement chargée**
     /// (lot 3e du magasin), puis à côté de `RAG3DB_LIBRARY_DIR`, puis dans
     /// l'arbre ; un même dossier n'est cherché qu'une fois.
+    /// **Un champ inconnu dit quel binaire le lit** : le refus de serde garde le champ, et
+    /// nomme le commit de ce binaire avec la raison probable (un manifeste plus récent).
+    #[test]
+    fn an_unknown_manifest_field_names_this_binary() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("backend.json");
+        std::fs::write(&p, r#"{"version": 1, "name": "x", "database": "x.rag3db", "un_champ_de_demain": true}"#).unwrap();
+        let e = PreparedBackend::load(&p).err().expect("refusé");
+        assert!(e.contains("un_champ_de_demain") && e.contains("ce binaire (commit ") && e.contains("binaire plus récent"), "{e}");
+    }
+
     #[test]
     fn the_vector_extension_is_looked_up_next_to_the_loaded_lib_first() {
         let c = super::vector_extension_candidates(

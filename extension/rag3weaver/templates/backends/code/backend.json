@@ -25,7 +25,8 @@
       "env": {
         "CARGO_TARGET_DIR": "{repo_target}",
         "TMPDIR": "{task_dir}/tmp",
-        "CARGO_NET_OFFLINE": "true"
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_BUILD_JOBS": "8"
       }
     }
   },
