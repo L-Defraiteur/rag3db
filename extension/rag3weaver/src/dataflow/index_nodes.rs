@@ -259,29 +259,20 @@ pub const FAILED_PREFIX: &str = "indexation échouée";
 /// proprement entre deux paquets : relancer `index` reprend là.
 pub const STOPPED_PREFIX: &str = "indexation arrêtée";
 
-/// **Les indexations en cours, par catalogue** : leur catalogue, leur
-/// drapeau d'arrêt et leur fil. Un backend qui se ferme arrête les siennes
-/// au prochain paquet et les attend ([`stop_indexings_of`]) avant de fermer
-/// sa base, sans toucher à celles des autres catalogues du processus (des
-/// tests en parallèle, plusieurs backends sous `serve`, le démon de C).
-struct Indexing {
-    catalog: Arc<Mutex<Catalog>>,
-    stop: Arc<std::sync::atomic::AtomicBool>,
-    /// Le suivi de sa passe d'embarquement, lu sans le verrou du catalogue.
-    watch: Arc<EmbedWatch>,
-    handle: std::thread::JoinHandle<()>,
+/// Les indexations de fond s'inscrivent au registre des fils du catalogue
+/// ([`crate::catalog_threads`]) : un backend qui se ferme arrête les siennes au
+/// prochain paquet et les attend avant de fermer sa base, avec ses autres fils
+/// (le rebâti du plein texte), sans toucher à ceux des autres catalogues du
+/// processus (des tests en parallèle, plusieurs backends sous `serve`, le démon).
+fn est_un_index(k: &crate::catalog_threads::ThreadKind) -> bool {
+    matches!(k, crate::catalog_threads::ThreadKind::Index(_))
 }
-static INDEXINGS: std::sync::LazyLock<Mutex<Vec<Indexing>>> = std::sync::LazyLock::new(Default::default);
 
 /// Combien d'indexations de ce catalogue tournent encore : l'hôte du démon
-/// refuse de fermer un backend qui en a une, en le nommant.
+/// refuse de fermer un backend qui en a une, en le nommant. Un rebâti du plein
+/// texte n'est pas une indexation.
 pub fn indexings_running(catalog: &Arc<Mutex<Catalog>>) -> usize {
-    INDEXINGS
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .iter()
-        .filter(|i| Arc::ptr_eq(&i.catalog, catalog) && !i.handle.is_finished())
-        .count()
+    crate::catalog_threads::running(catalog, est_un_index)
 }
 
 /// **Le suivi de la dernière indexation de ce catalogue** : le lot qu'elle
@@ -289,40 +280,25 @@ pub fn indexings_running(catalog: &Arc<Mutex<Catalog>>) -> usize {
 /// sans le verrou du catalogue, que la passe tient : c'est ce que l'état de
 /// l'index dit pendant une passe.
 pub fn embed_watch_of(catalog: &Arc<Mutex<Catalog>>) -> Option<Arc<EmbedWatch>> {
-    INDEXINGS
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .iter()
-        .rev()
-        .find(|i| Arc::ptr_eq(&i.catalog, catalog))
-        .map(|i| i.watch.clone())
+    match crate::catalog_threads::latest(catalog, est_un_index)? {
+        crate::catalog_threads::ThreadKind::Index(w) => Some(w),
+        _ => None,
+    }
 }
 
-/// **Arrêter les indexations de ce catalogue**, au prochain paquet validé
-/// (ou à la prochaine passe de vecteurs), et attendre leur fil. Rend le
-/// nombre d'indexations attendues. À appeler hors du runtime asynchrone et
-/// sans tenir le verrou du catalogue : l'attente bloque le fil appelant, et
-/// le fil d'indexation tient ce verrou pendant son plein texte.
+/// **Arrêter les fils de fond de ce catalogue** — ses indexations au prochain
+/// paquet validé (ou à la prochaine passe de vecteurs), son rebâti du plein
+/// texte au prochain lot —, et attendre leur fil. Rend combien tournaient
+/// encore. À appeler hors du runtime asynchrone et sans tenir le verrou du
+/// catalogue : l'attente bloque le fil appelant, et le fil d'indexation tient ce
+/// verrou pendant son plein texte.
 pub fn stop_indexings_of(catalog: &Arc<Mutex<Catalog>>) -> usize {
-    let siennes: Vec<Indexing> = {
-        let mut toutes = INDEXINGS.lock().unwrap_or_else(|p| p.into_inner());
-        let (siennes, autres): (Vec<Indexing>, Vec<Indexing>) =
-            std::mem::take(&mut *toutes).into_iter().partition(|i| Arc::ptr_eq(&i.catalog, catalog));
-        *toutes = autres;
-        siennes
-    };
-    let n = siennes.iter().filter(|i| !i.handle.is_finished()).count();
+    let n = crate::catalog_threads::running(catalog, |_| true);
     if n > 0 {
         // Le client qui attend la sortie du serveur saura pourquoi.
-        eprintln!("[index] arrêt de {n} indexation(s) au prochain paquet, attente…");
+        eprintln!("[index] arrêt de {n} fil(s) de fond au prochain paquet, attente…");
     }
-    for i in &siennes {
-        i.stop.store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-    for i in siennes {
-        let _ = i.handle.join();
-    }
-    n
+    crate::catalog_threads::stop_and_join(catalog)
 }
 
 /// Un journal neuf, là où `wait` accepte d'attendre.
@@ -426,9 +402,7 @@ pub fn spawn_stoppable_index(
     let watch = Arc::new(EmbedWatch::default());
     let stop = watch.stop.clone();
     let handle = spawn_index_with_stop(catalog.clone(), source, journal, kept_bytes, generated, watch.clone());
-    let mut indexings = INDEXINGS.lock().unwrap_or_else(|p| p.into_inner());
-    indexings.retain(|i| !i.handle.is_finished());
-    indexings.push(Indexing { catalog, stop, watch, handle });
+    crate::catalog_threads::register(&catalog, stop, crate::catalog_threads::ThreadKind::Index(watch), handle);
 }
 
 fn run_index(
