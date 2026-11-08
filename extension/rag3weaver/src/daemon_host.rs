@@ -1511,6 +1511,9 @@ mod navigateur;
 mod apercu_a_chaud;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sur_un_depot;
+/// Mes recherches, avec les clics (8 novembre 2026).
+#[cfg(all(test, unix, feature = "code"))]
+mod mes_recherches;
 /// L'équipier sur faux modèle (page 07 du 25 octobre 2026).
 #[cfg(all(test, unix, feature = "code"))]
 mod teammate_tests;
