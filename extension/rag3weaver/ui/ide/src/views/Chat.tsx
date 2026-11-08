@@ -1,14 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
 import { forgetSymbols, highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
 import { ToolResultView } from "@/lib/toolview";
-import { UiDuTour } from "@/components/UiDuTour";
+import { RagDesDepots, UiDuTour } from "@/components/UiDuTour";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
 import { daemonTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
-import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
+import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
 // la colonne des conversations, l'en-tête nom / modèle / état, le fil, la saisie
@@ -263,6 +263,9 @@ function Writes({ writes, why, open }: { writes?: MemoryWrite[]; why?: string | 
 
 export function Chat({ id, state }: { id: string; state: HostState }) {
   const backend = state.backends.find((b) => b.id === id);
+  // Le rag de chaque dépôt, tel que l'état de l'hôte le tient (les cartes relues s'en servent).
+  const ragDesDepots = new Map<string, Rag>();
+  for (const s of [...(state.chat_sessions ?? []).flatMap((c) => c.spaces), ...(state.tasks ?? []).flatMap((t) => t.spaces), ...(state.available_repos ?? [])]) ragDesDepots.set(s.backend, s.rag);
   const [chat, setChat] = useState<ChatState | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState("Prêt");
@@ -627,6 +630,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           }}
         >
           {items.length ? null : <p className="empty text-muted-foreground mt-[12vh]">Une question, une recherche, une idée à explorer.</p>}
+          <RagDesDepots.Provider value={ragDesDepots}>
           {items.map((it, k) =>
             it.kind === "info" ? (
               <p key={k} className={`text-xs text-muted-foreground ${it.cls ?? ""}`}>{it.text}</p>
@@ -644,7 +648,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                       <div key={n} className="body whitespace-pre-wrap break-words">{withInlineCode(p.text, id)}</div>
                     )
                   ) : (
-                    <div key={p.id}>
+                    <Fragment key={p.id}>
                     <details className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground" data-outil={p.name} data-appel={p.id} data-ok={p.ok === undefined ? undefined : String(p.ok)}>
                       <summary className="cursor-pointer text-foreground/80">
                         {p.name}
@@ -662,7 +666,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                       </div>
                     </details>
                     <UiDuTour ui={p.ui} />
-                    </div>
+                    </Fragment>
                   ),
                 )}
                 {it.propositions.map((p) => (
@@ -685,6 +689,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
               </article>
             ),
           )}
+          </RagDesDepots.Provider>
         </section>
         <Invocation actif={pense && busy} />
         <form
