@@ -894,3 +894,32 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   (63a2d07f8 « COPY journalisé par tranches » et c4f8610b9 « nœuds locaux d'abord » en tête, puis
   G2b et le retrait pour les SIGSEGV) en rejouant ce .wal réel ; hotfixs a le témoin du mélange.
   Aucune pose d'hôte avant le correctif du moteur et son rebâti.
+
+## 09 h 30 — deux défauts du moteur nommés par le témoin de hotfixs
+
+- **A, le refus du .wal est antérieur à G1 et à G2b** : le témoin `RelCopyThenUpdateReplay` rougit
+  dans ses deux cas, même sans nœud local. Un COPY de relations journalisé puis une mise à jour de
+  ses relations dans la même transaction ne se rejoue pas : au rejeu, la TABLE_INSERTION insère dans
+  le stockage **local** de la transaction de reprise, puis REL_UPDATE cherche le décalage définitif
+  dans les listes et la garde du sens unique refuse. dadbf0041 n'a fait que rendre la suite
+  fréquente dans une réindexation. La base de 8 h 45 était saine ; c'est le rejeu d'un journal
+  correct qui échouait. **Correctif** (hotfixs, tout de suite) : au rejeu, une correspondance du
+  décalage journalisé vers le décalage local, par table, le temps de la transaction rejouée ;
+  REL_UPDATE et REL_DELETION traduisent et prennent le chemin local, comme en service. Témoin réel :
+  le .wal de la preuve rejoué sur une copie sous la lib corrigée.
+- **B, plus grave : des réponses fausses sous un second écrivain avec G1** :
+  `TwoFlushesInOneTransaction` rejoue sans refus mais deux relations désignent les nœuds de l'autre
+  écrivain (3000→3001 pour 1000→1001). G1 verse les nœuds locaux en milieu de transaction, ils
+  prennent leurs décalages définitifs là, un second écrivain valide derrière ; au rejeu, les
+  transactions repassent dans l'ordre des commits et les relations de A, journalisées avec les
+  décalages de service, désignent les nœuds de B. Un COPY de nœuds en est protégé parce qu'il tient
+  l'index de sa table jusqu'à la validation ; le versement de G1 ne le tenait pas. **Décision** : le
+  verrou de versement (flushNodeTable tient sur la table de nœuds le verrou d'un COPY de nœuds
+  jusqu'à la fin de la transaction, le second écrivain attend ou est refusé nommément par le délai),
+  pas le retrait de G1 (il rouvrirait le ticket du 5 octobre). Reste à mesurer si la mémoire en
+  service était juste et seul le rejeu faux. En service l'hôte n'a qu'un écrivain par base : B y est
+  peu probable, mais les bases ouvertes de 8 h 31 à 9 h 05 (code-principal, code-lourd,
+  memoire-longue) se relèvent par ancre sur des copies au lieu de le croire.
+- **Les SIGSEGV restent à part** (ASAN du cœur sur V2 et la compaction CSR ; témoin HNSW de hotfixs
+  à refaire sous 512 Mio). G5 a ses chiffres au ticket (13b8a6d57). Aucune pose avant le correctif
+  A (et B s'il tient dans l'heure) et le rebâti de la lib.
