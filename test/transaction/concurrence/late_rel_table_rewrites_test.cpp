@@ -216,6 +216,58 @@ TEST_F(LateRelTableRewrites, TwoFlushesOfOneNodeTableKeepBothDirectionsEqual) {
     }
 }
 
+// La réindexation d'une base pleine : les scopes d'un fichier sont effacés avec leurs arêtes (DETACH
+// DELETE), puis recréés à de nouveaux décalages, et leurs arêtes recréées par un COPY ; d'autres
+// fichiers suivent, puis un point de reprise. La table de liens est née tard, sur des nœuds déjà au
+// disque, et remplie avant par un COPY posé au disque (groupes CSR persistés, régions à réécrire).
+TEST_F(LateRelTableRewrites, BothDirectionsStayEqualWhenFilesAreReindexedWithTheirNodes) {
+    constexpr int64_t SCOPES = 4000, SYMBOLS = 4000;
+    ok("CREATE NODE TABLE Scope(id INT64, file INT64, PRIMARY KEY(id));");
+    ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
+    ok("UNWIND range(0, " + std::to_string(SCOPES - 1) + ") AS i CREATE (:Scope {id: i, file: i / 20});");
+    ok("UNWIND range(0, " + std::to_string(SYMBOLS - 1) + ") AS i CREATE (:Symbol {id: i});");
+    ok("CHECKPOINT;");
+    ok("CREATE REL TABLE R(FROM Scope TO Symbol, line INT64, resolution STRING);");
+    ok("COPY R FROM (UNWIND range(0, 15999) AS i RETURN (i * 13) % " + std::to_string(SCOPES) +
+       " AS f, CASE WHEN i % 3 = 0 THEN (i * 31) % " + std::to_string(SYMBOLS) +
+       " ELSE (i % 5) * 700 END AS t, i AS line, 'r0' AS resolution);");
+    ok("CHECKPOINT;");
+    std::mt19937_64 random{20261108};
+    int64_t nextId = SCOPES;
+    for (int round = 0; round < 60; round++) {
+        const auto file = static_cast<int64_t>(random() % (SCOPES / 20));
+        ok("BEGIN TRANSACTION;");
+        ok("MATCH (a:Scope) WHERE a.file = " + std::to_string(file) + " DETACH DELETE a;");
+        const auto first = nextId;
+        nextId += 20;
+        ok("UNWIND range(" + std::to_string(first) + ", " + std::to_string(first + 19) +
+           ") AS i CREATE (:Scope {id: i, file: " + std::to_string(file) + "});");
+        ok("COPY R FROM (UNWIND range(0, 79) AS i RETURN " + std::to_string(first) +
+           " + i % 20 AS f, CASE WHEN i % 2 = 0 THEN (i * 37 + " + std::to_string(round) + ") % " +
+           std::to_string(SYMBOLS) + " ELSE (i % 5) * 700 END AS t, i AS line, 'r" +
+           std::to_string(round) + "' AS resolution);");
+        ok("MATCH (a:Scope)-[r:R]->() WHERE a.file = " + std::to_string(file) +
+           " AND r.line % 7 = 0 SET r.line = r.line + 1000;");
+        ok("COMMIT;");
+        if (round % 15 == 14) {
+            ok("CHECKPOINT;");
+        }
+    }
+    ok("CHECKPOINT;");
+    std::set<int64_t> sources, destinations;
+    for (int64_t s = 0; s < nextId; s++) {
+        sources.insert(s);
+    }
+    for (int64_t d = 0; d < SYMBOLS; d++) {
+        destinations.insert(d);
+    }
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base ouverte";
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte";
+}
+
 TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderDrains) {
     ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
     ok("CREATE NODE TABLE Symbol(id INT64, PRIMARY KEY(id));");
