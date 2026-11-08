@@ -7,6 +7,14 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Une phrase collée retrouve son fichier, et le surlignage ne demande plus rien à l'hôte.**
+  Avec lucivy 4.3.2, une ligne de plus de 100 caractères copiée d'un fichier le ramène premier par
+  le signal exact, et une requête entière garde son flou jusqu'à 900 caractères (mesuré : 464 ms à
+  933) ; le surlignage des morceaux du seul vecteur lit les positions que le service bge-m3 rend,
+  sans tokenizer ni modèle dans l'hôte (139 ms pour trois textes) ; et un second processus qui veut
+  écrire une base déjà tenue est refusé en nommant l'écrivain en place (`80ca3d561`, `617de00da`,
+  `0a8ff53d9`, `217dd10a1`).
+
 - **8 nov. — Un gros COPY de blobs tient dans un petit tampon.**
   Un seul COPY de 112 blobs d'1 Mio échouait sous 256 Mio de tampon (« buffer pool is full ») ; un
   COPY se borne désormais en octets, vide ses lignes au disque par lots sans attendre un groupe
