@@ -3731,7 +3731,10 @@ impl Backend {
                     || attachment.policy.write_files
                     || attachment.policy.run_commands;
                 if touche_racine {
-                    return Err(format!("la racine du dépôt a disparu ({})", racine.display()));
+                    return Err(format!(
+                        "la racine du dépôt a disparu ({}) : rouvrez le backend sur une racine qui existe",
+                        racine.display()
+                    ));
                 }
             }
         }
