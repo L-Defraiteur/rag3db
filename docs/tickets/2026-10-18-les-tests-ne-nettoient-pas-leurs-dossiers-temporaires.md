@@ -125,5 +125,8 @@ supervision de c7, fini par la session hotfixs après l'arrêt de l'équipier su
    `le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve`. Le septième,
    `aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait`, écrit sous `$HOME` (pas dans le
    tmpfs, mais il reste aussi).
+   La forme attendue pour les six (c7, 8 novembre) : que `dossier_temporaire(nom)` rende une
+   `BaseTemporaire`, gardée en vie par le test après ce qui tient la base ; un seul endroit à
+   changer.
 4. **Deux journaux à nom fixe** de 130 octets, `/tmp/rag3weaver-e2e-acces` et
    `/tmp/rag3weaver-e2e-rag3daemon` (les journaux du démon des deux témoins d'`e2e_rag3daemon`).
