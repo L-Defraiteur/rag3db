@@ -10,7 +10,7 @@
 %% param: allow_create bool = true -- Sans create, une section sans candidate est none.
 %% param: instruction string = "Tu ranges une section d’un document sous l’une des fiches candidates. Une section va sous une fiche si elle parle de ce que la fiche décrit ; une règle va sous le domaine où elle s’applique. Partager un mot ne suffit pas. Si aucune candidate ne convient, réponds none ; si le sujet est net et qu’aucune fiche ne le porte, réponds create." -- Ce que l'étiquette veut dire, pour le modèle ; sans apostrophe droite (la typographique ’ passe), elle est substituée entre apostrophes dans le graphe cité.
 %% param: source json = {} -- Réservé : la Source (le L0) se compose depuis titre, contenu, chemin et origine, et remplace toute valeur donnée ici (EntityRecordNode exige un objet en configuration, que le mermaid ne sait pas écrire en littéral).
-%% result: decide.report
+%% result: rapport.result
 
 graph LR
     genre["CreateRefTypeNode(name='doc', description='La section d&#39;un source Markdown, provenance d&#39;un apport : doc:<chemin du source>#<titre de la section>.', forme='doc:<chemin du source>#<titre>', confirm=true, types_entity='RefType')"]
@@ -26,6 +26,8 @@ graph LR
     sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
     genre -->|report:value| params
     params -->|result:text| split
+    rapport["RhaiNode(script='input')"]
+    decide -->|report:value| rapport
     decide -->|report:value| sourcer
     sourcer -->|result:record| source
     split -->|element:elements| decide
