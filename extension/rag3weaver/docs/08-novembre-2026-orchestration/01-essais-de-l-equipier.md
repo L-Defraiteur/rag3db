@@ -251,6 +251,18 @@ consigne qui lui dit de jouer ses tests lui-même.
   nouveautés (674b41f8d). Le ticket fermé, il n'a pas pu l'écrire : **hotfixs** le fait dans son
   commit à part, avec la passe, après la fenêtre du matin.
 
+- **La relecture de hotfixs** (5 h 25) trouve ce que mes cinq verts ne voyaient pas : dans
+  `un_lecteur_choisit_son_chemin_et_le_dit`, un `drop(base)` explicite efface la base **sous un démon
+  encore vivant** (le serveur, l'écrivain et le relais tombent après) — avant, le `remove_dir_all`
+  échouait sur la base-fichier, maintenant il réussit et le démon écrit son point de reprise dans un
+  dossier effacé : un vert qui ment ; le témoin de fin ne regarde que son propre dossier (il prouve le
+  `Drop`, pas « la suite ») ; `RAG3WEAVER_GARDER=0` garde aussi ; trois témoins fautifs de plus dans
+  e2e_prise_atomique et un à vérifier dans e2e_rouvrir ; et le point du ticket qui compte pour la
+  mémoire vive du poste, le cache par défaut de `Catalog` dans `/tmp/rag3weaver_cache`, en service
+  aussi, n'est pas touché. hotfixs corrige dans son commit à part, prend les trois de prise_atomique,
+  et **le ticket reste « en cours »**. Leçon : un lot de l'équipier se relit comme un lot de n'importe
+  qui ; les verts du superviseur ne remplacent pas la relecture.
+
 ## Ce qu'il faut en retenir (pour Lucie, le matin)
 
 **Trois lots réels sont sortis de la nuit**, écrits par l'équipier Gemini sous supervision, relus
