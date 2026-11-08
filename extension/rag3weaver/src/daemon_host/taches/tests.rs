@@ -474,7 +474,9 @@ fn sans_git_un_rejet_laisse_la_racine_et_un_conflit_refuse_la_fusion() {
     host.rejeter_une_tache(&id, "en-conflit", "fin du témoin").unwrap();
 }
 
-/// **`git_init` déclaré fait de la racine un dépôt, jamais d'office** : avec
+/// **`git_init` déclaré fait de la racine un dépôt, jamais d'office**, sous
+/// l'identité de rag3weaver (la CI de master rougissait faute d'identité globale,
+/// 8 novembre 2026 ; ce témoin se joue aussi sous `GIT_CONFIG_GLOBAL=/dev/null`) : avec
 /// `workspace.git_init: true`, l'ouverture d'une tâche sur une racine sans git y
 /// crée un dépôt et un premier commit, puis la tâche est une branche
 /// `agent/<nom>` de ce dépôt (le cas ordinaire). Sans l'option, le témoin
@@ -486,6 +488,10 @@ fn git_init_declare_fait_de_la_racine_un_depot() {
     let t = host.ouvrir_une_tache(&id, "en-depot").expect("la tâche s'ouvre");
     assert_eq!(git(&racine, &["rev-parse", "--show-toplevel"]).map(PathBuf::from).map(|p| p.canonicalize().unwrap()).ok(), Some(racine.clone()), "la racine est un dépôt");
     assert!(git(&racine, &["log", "--oneline", "-1"]).is_ok_and(|l| !l.is_empty()), "un premier commit");
+    // Le premier commit porte l'identité de rag3weaver, jamais celle de la config
+    // de la machine (la CI n'en a pas ; le poste portable a une adresse qui ne doit
+    // pas entrer dans les dépôts de Lucie).
+    assert_eq!(git(&racine, &["log", "-1", "--format=%an <%ae>"]).unwrap(), "rag3weaver <rag3weaver@localhost>", "l'auteur du premier commit");
     assert_eq!(git(&t.arbre, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap(), "agent/en-depot");
     host.fermer_une_tache(&id, "en-depot").unwrap();
 }
