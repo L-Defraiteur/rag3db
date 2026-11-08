@@ -25,6 +25,19 @@ le réveille. L'attente se lit dans la boîte, elle survit donc à un redémarra
 témoin est `waiting_for_the_supervisor_suspends_the_teammate_without_failing_the_task`, rouge
 sans le lot.
 
+**L'hôte s'arrêtait pour inactivité sous un équipier au travail** (hôte de Lucie, 8 novembre
+4 h 46 : « inactif depuis 1804 s sans travail en cours », alors que l'équipier de la tâche
+tests-bases-dans-tmp venait d'appeler edit_file et read_file ; systemd l'a relancé par la
+socket, la tâche a repris à la frontière, le pas en cours perdu, puis un 429). Corrigé : un
+équipier en route, au travail ou en attente du superviseur, retient l'arrêt comme un index en
+cours. Témoin : l'équipier suspendu de `waiting_for_the_supervisor_suspends_the_teammate_without_failing_the_task`
+retient `travail_en_cours`.
+
+**Le fil par pas** (point 3) : un pas repart d'une session neuve, avec la demande d'origine,
+les step_done des pas faits, la boîte et les plans. Témoin :
+`each_step_starts_from_a_fresh_thread_with_the_request_and_the_steps_done`. La mesure après,
+sur un essai réel, reste à prendre.
+
 ## Ce qui reste
 
 1. **Attendre le superviseur tue la tâche** (corrigé, voir plus haut) (essai 4, racine-disparue). L'équipier a demandé à
