@@ -120,14 +120,17 @@ fn an_http_error_becomes_a_model_error_without_the_secret() {
 }
 
 #[test]
-fn an_unreachable_endpoint_is_a_model_error() {
+fn an_unreachable_endpoint_is_an_unavailable_provider() {
     // `without_retry` : ce test porte sur le mapping d'erreur, pas sur le
     // réessai. Sans ça il attendrait plusieurs secondes pour rien — le
     // réessai des erreurs de transport est couvert par `openai_llm_retry`.
     let llm = OpenAiLlm::new("http://127.0.0.1:1/v1", "m").without_retry();
     let mut sink = StringSink::default();
+    // Depuis le 18 octobre 2026, une connexion impossible est un refus du
+    // fournisseur (`Unavailable`, sans statut, « service en panne »), pas une
+    // erreur du modèle : le témoin le disait encore, et ne jouait dans aucune passe.
     assert!(matches!(
         llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap_err(),
-        LlmError::Model(_)
+        LlmError::Unavailable { status: None, quota: rag3weaver::llm::Quota::None, .. }
     ));
 }
