@@ -1349,3 +1349,25 @@ avance d'autant ; les hashs, eux, sont exacts.
   ticket, le script d'affichage réparé). **En push** : archi (le symbole cité en lien) ; **en file** :
   96 (M4 pas 3, rejeu seul dans la fenêtre), codeparsers (les locales JavaScript : deux témoins de
   temps verts seuls, suites en cours), ED (le juge par pas), recherche (le cache hors de /tmp).
+
+## 15 h 39 — le run 1b tranche : l'écart des deux sens existe déjà sous 17a094d12
+
+- **Run 1b de G** (17a094d12, binaire 41411ff0, copie saine de 12 h 06, `index confirm` complet de
+  14 h 26 à 15 h 07, arrêt sans .wal) : **ÉCART**, les mêmes chiffres qu'à midi sous cbc06c3e1 —
+  INHERITS_FROM 650 / 658, LOCKS 544 / 546, QUERIES 5 d'un seul côté, 6 vues deux fois, 9 aux bouts
+  différents, IMPLEMENTS égales. Le défaut est **antérieur aux lots du jour** (la famille LOCKS du
+  25 octobre), déterministe ; les runs 2b (dadbf0041, en cours, 7878 occupé jusqu'à ~16 h 18) et 3b
+  (cbc06c3e1) confirmeront sans changer la décision. Instantanés intacts à luciepc pour le moteur :
+  departage-1b-17a et preuve-cbc06c3e1.
+- **Décisions** : **la pose du portable reprend** (cbc06c3e1 n'ajoute pas ce défaut et retire le
+  SIGSEGV HNSW et le rejeu des COPY ; même déroulé qu'à 13 h 40, `courant` → cbc06c3e1 aux deux
+  postes) ; **aucun `index confirm` complet sur les bases de Lucie jusqu'au correctif** — la montre
+  seule ne fait pas naître l'écart (contrôle de 14 h 15 vert sur sa base) ; **le chantier moteur
+  passe devant B chez hotfixs**, ticket gravité perte, la recette reproductible (copie saine, index
+  complet, contrôle 339cbb5dc), la bissection par le chemin (DELETE puis COPY de relations dans une
+  même transaction sur une table déjà au disque, groupes CSR persistés : ce que les témoins à un
+  écrivain n'avaient pas) puis par les commits d'avant 17a094d12 ; le cœur lit avec lui.
+- **Atterris** : archi, le symbole cité en lien (36aced578) et la page 03 sans « pas fait »
+  (d59812592) — la liste de Lucie d'hier soir sur l'IDE est faite en une journée. Codeparsers : un
+  troisième rouge sous charge au navigateur (un module de l'aperçu à chaud servi en 422 juste après
+  le vidage du magasin, vert seul 2/2) : une course possible, à archi avec la relecture d'ED.
