@@ -249,3 +249,60 @@ Ce qu'on sait maintenant et qu'on ne savait pas hier soir.
   sinon le binaire lie une autre lib que `RAG3DB_LIB` (vécu : moteur 7cd11e5fa, extension 17a094d12).
 - **Un lot écrit par l'équipier se relit comme un lot de n'importe qui** : les verts du superviseur
   ne voient pas un `drop` qui efface une base sous un démon vivant (hotfixs l'a vu).
+
+## Complément du 8 novembre au soir (c7)
+
+Ce que la journée a appris, au-delà de ce que les tickets et le rapport portent déjà.
+
+- **Lire la pression avant d'accuser la charge.** La charge moyenne de Linux compte les processus
+  bloqués sur le disque. Le 8 au soir, luciepc à 33 de charge avait 54 % de cœurs libres et un NVMe
+  occupé à 98 % pour 9 Mio/s : `/proc/pressure/{cpu,memory,io}` tranche en une ligne, les champs
+  discard et flush de `/proc/diskstats` disent ce que le disque fait. Un rouge « pas indexé en
+  60 s » se nomme « attente disque » ou « service saturé » quand c'est le cas, et se rejoue quand
+  la pression est retombée, jamais en relâchant le seuil.
+- **btrfs `discard=async` est le défaut du noyau sur SSD**, absent de fstab. Chaque effacement de
+  target ou de base remet des extents en file ; le T710 traite 20 commandes TRIM par seconde à
+  37-52 ms chacune. Remonter `nodiscard` et `fstrim.timer` ; un gros `fstrim` se fait avec
+  `-m 16M` (452 Gio en 58 s) et la nuit. Après, le SSD digère encore une heure (fsync à 100 ms).
+- **Une carte GPU partagée par quatre services d'embarquement n'a pas d'arbitrage.** Un test de
+  charge d'ingestion, une bissection en parallèle, une passe de banc : le plus bavard affame les
+  autres, et le granite passe de 130 ms à 19 s par texte sans que `/sante` le dise. Lire qui tient
+  le moteur par `/proc/<pid>/fdinfo` (drm-engine-gfx/compute, delta sur 5 s) et les clients par
+  `ss -tnp`. Une mesure de modèle ou un index de trace se fait sur son propre service, ou sur
+  l'autre carte, jamais sur la carte des services pendant une file de pushes.
+- **Le SIGSEGV de l'hôte** n'était pas une course : `returnOwnerlessPages` rendait libre tout
+  l'intervalle de la dernière étendue à la fin du fichier, segments vivants compris, après qu'un
+  événement inconnu eut posé deux segments de vecteurs à 82 millions de pages au-delà (base de
+  318 Gio apparents pour 1,8 Gio réels). Une base creuse (`du --apparent-size` ≫ `du`) ne s'ouvre
+  pas en écriture avant le correctif (9bae60786, `transaction_test` entier vert).
+- **Les deux sens** (INHERITS_FROM 650/658, LOCKS 544/546) : plus anciens que les V2, présents sous
+  17a094d12 et dadbf0041, pas un débordement CSR (gardes posées, aucune n'a sauté), les tables
+  abîmées s'écrivent par `UNWIND … MERGE … SET` en lots validés un à un puis `DETACH DELETE` ;
+  quatre témoins de forme verts, la trace à paramètres littéraux est la suite. Aucun `index
+  confirm` complet sur les bases de Lucie d'ici là ; les bases neuves des worktrees sont saines.
+- **Les vues par worktree** (priorité du 9 novembre, Lucie) : « une vue, c'est juste un filtre » :
+  un seul index, trois lunettes (worktree, branche, pyramide d'un fichier ou d'un scope) ; une
+  ancre, des couches posées sur leur parente, un fichier composite par scope, tombstones,
+  provenance à la demande ; la mesure : 72 % des scopes des fichiers changés sont seulement
+  déplacés et pourtant réécrits (redécoupage, morceaux, toutes les arêtes sortantes du fichier),
+  5 % neufs, 6 % modifiés. Page : `docs/08-novembre-2026-arbre/01-conception-des-vues-marche-1.md`.
+- **Le juge local** : Qwen3-4B-Instruct-2507 brut (Apache 2.0), logits oui/non au premier jeton sur
+  « Contexte de l'agent / Bout de mémoire / est-il pertinent ? », premier 0,76 et AUC 0,92 à 2 k,
+  préfixe partagé (le contexte encodé une fois) 2,5 fois moins cher sans changer les scores, la
+  forme liste A-E mauvaise ; un rangeur (garder les 1 à 2 premières de 5), jamais un seuil ;
+  ≈ 1,2 s au préchargement contre 4,4 à 23 s pour Gemini. Les petits modèles en zéro-coup donnent
+  le même score à toutes les fiches d'un cas. Pages du banc 01, 02, 03.
+- **Un témoin de la lib qui dépend d'un service** joue sous les deux régimes (service présent,
+  absent) ou impose le sien par un faux déclaré au manifeste, jamais par l'environnement ; un
+  faux service répond à la sonde (ou le témoin note un débit d'avance) avant de refuser.
+- **Les sessions ne mangent pas leur cuisine sur le code** : 0 appel aux outils de code dans les
+  500 derniers runs de l'hôte, 461 appels de mémoire par les hooks de la session d'essai. Hooks
+  dans toutes les sessions et une ligne de CLAUDE.md : de la main de Lucie.
+- **Un dossier de travail d'une session ne s'efface qu'après sa réponse** (lucivy_bench : des
+  scripts de mesure hors dépôt perdus) ; les outils de mesure s'écrivent dans le dépôt.
+- **Un redémarrage de service refusé au mode d'une session** se surface à Lucie et ne se fait pas
+  faire par une autre session ; souvent le service revient seul (le granite à 19 h 38).
+- **Un chien de garde qui compte l'inactivité depuis avant la naissance de ce qu'il garde** tue à
+  la première scrutation : délai de grâce depuis le démarrage de l'unité, inactivité bornée à son
+  âge (la session de jeu de Lucie, `seat1-idle-watchdog`).
+- **`nohup` sous une session ssh tailscale meurt avec elle** ; `setsid -f` ou `systemd-run`.
