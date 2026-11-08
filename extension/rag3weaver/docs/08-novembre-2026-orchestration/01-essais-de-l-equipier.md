@@ -244,13 +244,23 @@ consigne qui lui dit de jouer ses tests lui-même.
   portait 92 entrées `rag3weaver-*` d'autres passes avant (le ticket en vrai) ; deux de plus après,
   des journaux à nom fixe de 130 octets (`rag3weaver-e2e-acces`, `-e2e-rag3daemon`), dits hors du
   lot.
+- **Comment il a fini** : la relance de 4 h 46 lui a fait refaire des pas déjà faits, puis le quota
+  l'a arrêté net — pas 3 « 429 après 3 reprises en 408 s », pas 4 « 429 après 2 reprises en 210 s ».
+  À 5 h 14 j'ai envoyé `stop`, commité son diff tel quel sur `agent/tests-bases-dans-tmp`
+  (1b4c73228, cinq fichiers ; le fichier vidé de `src/` retiré, un saut de ligne final) et sa ligne de
+  nouveautés (674b41f8d). Le ticket fermé, il n'a pas pu l'écrire : **hotfixs** le fait dans son
+  commit à part, avec la passe, après la fenêtre du matin.
 
 ## Ce qu'il faut en retenir (pour Lucie, le matin)
 
 **Trois lots réels sont sortis de la nuit**, écrits par l'équipier Gemini sous supervision, relus
 par hotfixs : les journaux d'annulation (**sur master, b860ea2dd**), la racine disparue (**sur
 master, 1b9983b59 + 1de9c908c**, complété par hotfixs), et les bases laissées dans /tmp
-(`agent/tests-bases-dans-tmp`, en cours de clôture ; hotfixs le passe au matin).
+(`agent/tests-bases-dans-tmp`, 1b4c73228 + 674b41f8d ; hotfixs ferme le ticket et le passe
+après la fenêtre du matin). Ce qui a changé dans l'hôte pendant la nuit, grâce aux essais : jamais
+muet (3 h 43), les commandes par la porte (3 h 43), et sur master pour la pose de 8 h 30 : l'état
+d'attente, le bac à sable qui laisse tourner cargo, le fil par pas et l'arrêt d'inactivité qui
+compte l'équipier (ces deux derniers poussés après la fenêtre).
 
 **Ce qui marche** : le plan en items, `step_done` à chaque pas, une analyse juste du code, un témoin
 rouge d'abord quand on le lui impose, le recadrage par une `request` dans la boîte (il l'applique

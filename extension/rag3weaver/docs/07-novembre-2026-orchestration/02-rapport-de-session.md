@@ -737,3 +737,36 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   pour garder) dans tests/common, cinq témoins corrigés dans e2e_rag3daemon, e2e_code et
   e2e_prise_atomique, **tous verts** joués par moi à luciepc ; deux journaux à nom fixe
   (`/tmp/rag3weaver-e2e-acces`, `-e2e-rag3daemon`) dits hors du lot. Il écrit le ticket.
+
+## 05 h 20 — fin des essais de la nuit, ce qui attend Lucie
+
+- **Essai 5 clos par `stop`** à 5 h 14 : le code vérifié (cinq verts) commité sur
+  `agent/tests-bases-dans-tmp` (1b4c73228 + 674b41f8d), le ticket fermé à hotfixs avec la passe,
+  après la fenêtre. Trois lots réels sont sortis des essais ; la page 08/01 dit tout, et « ce qu'il
+  faut en retenir » en tête de la section finale.
+- **Le matin** : 7 h 15 arbre arrêté (déjà) ; **7 h 30 banc** sous « fenêtre » (`poste mesure`, la
+  place rendue avant 8 h 15) ; **8 h** arbre rebâtit la lib si un commit moteur est arrivé après
+  dadbf0041 (aucun à 5 h 20) ; **8 h 30 G** : lib rag3db-build-dadbf0041, hôtes rebâtis sur le
+  master du moment, granite, courant, réveil ; puis « à toi » à ED (fil par pas + arrêt
+  d'inactivité, deux lots prêts), puis hotfixs (troisième lot de l'équipier), puis ma fenêtre de
+  9 h pour hotfixs (analyze au seuil, les mesures de A) sous `poste mesure`.
+- **Décisions qui attendent Lucie** (rien n'est poussé sans son mot) :
+  1. **G3** : l'ouverture d'une base relit toujours ses extensions notées (un échec se dit par
+     `extension_error` de SHOW_INDEXES, l'ouverture n'est pas refusée) — comportement visible qui
+     change, témoin et code prêts chez hotfixs (g3-extensions-a-l-ouverture), passe après le basculé.
+  2. **Le pont Codex** (46633adcc) : son `.mcp.json` et la commande de la page 07 § 4 bis pour le
+     canal, `/hooks` dans Codex pour la confiance ; un message adressé à `codex:` met un agent en marche.
+  3. **Son manifeste de code** : `task_writes` + `edit_file` restent à poser de sa main
+     (`cp -p $M $M.avant-taches-7-nov && cp <fichier> $M`, fichier prêt dans mon dossier de travail
+     de la session d'hier) ; et depuis 927ae9680 le bloc `sandbox` du gabarit (`code-tree add` à
+     rejouer, ou copie à la main) pour que cargo tourne dans ses tâches.
+  4. **Thème daemon.json** (tty), **page 03 de l'atelier** (ED), les **633 branches distantes**
+     restantes (listes par session), la **facture Vertex** (31 jugements réels sur la nuit, 429 à
+     répétition sur l'équipier : le fil entier, corrigé par le fil par pas).
+  5. Les essais eux-mêmes : lire la page 08/01, puis « les mettre sur un vrai taff » — un ticket
+     qu'elle choisit, lancé par `POST /ide/teammate/mailbox` sur son propre arbre une fois le
+     manifeste complété, ou sur `code-essais-c7` tel quel.
+- **Ménage à faire à son mot** : `~/git_workspaces/rag3db-essais-c7`, l'arbre
+  `~/.config/rag3weaver/code-essais-c7`, les cinq tâches sous `~/.local/share/rag3weaver/taches/e4d8635ecfe7/`
+  et la base `code-essais-c7.rag3db` ; à luciepc `wt-c7-essais` et `target-c7-essais` (je les efface
+  moi-même ce matin) ; les branches `agent/*` sur origin restent.
