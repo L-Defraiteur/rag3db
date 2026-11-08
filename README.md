@@ -42,17 +42,18 @@ The engine has a written stopping point, **the stele**
 four conditions, and when they hold we tag a version and stop looking at the
 engine except on a defect observed in the product.
 
-| Condition | State (8 October 2026) |
+| Condition | State (8 November 2026) |
 |---|---|
-| no known defect that corrupts or loses data | the defects found by the benches since 3 October are fixed on `master` (COPY rollback and its primary-key index, a key lost by the index when it grows, DROP COLUMN at checkpoint, read-only open with a non-empty journal, estimated statistics); what remains is in the vector index (reachability after bulk updates, the pruning rule) |
-| journaled bulk load — `COPY` no longer forces its own checkpoint | written and tested, **behind a setting** (`CALL force_checkpoint_on_copy=false`); one defect blocks making it the default (pages left without an owner after a crash) |
-| locks | the lock manager exists; the finer levels come after the bulk load |
-| parallel writers | last; the mode is off outside the concurrency bench |
+| locks | done: row and index locks, named in their errors; a write waits for a lock up to `CALL lock_timeout` (30 s by default) |
+| journaled bulk load — `COPY` no longer forces its own checkpoint | done, the default since 10 October 2026 (`CALL force_checkpoint_on_copy=true` brings the forced checkpoint back); a COPY whose journal would exceed `copy_journal_threshold` (an eighth of the buffer pool, 256 MiB at most) still falls back to it |
+| parallel writers | on by default since 11 October 2026: several write transactions at once in one process (`CALL enable_multi_writes=false` for a single writer), and a second process that opens for writing waits up to 5 s for the file lock instead of failing; a checkpoint no longer stops readers, but a writer's `BEGIN` still waits for it (in progress) |
+| no known defect that corrupts or loses data | not met: 37 open engine tickets, among them durability after an I/O fault or a power cut (directory `fsync` still missing), a crash in the vector index under a concurrent read, and an overflow in the concurrent `CREATE_VECTOR_INDEX` |
 
-Every known defect is a file in [`docs/tickets/`](docs/tickets/) (78 at the time of
-writing), with its state, a minimal recipe and its witness test.
-[`docs/journal-des-chantiers.md`](docs/journal-des-chantiers.md) lists what is
-open, unmerged or waiting for a decision. Design notes, session reports and
+Every known defect is a file in [`docs/tickets/`](docs/tickets/) (98 open, 220
+closed, at the time of writing), with its state, a minimal recipe and its
+witness test; [`docs/tickets/README.md`](docs/tickets/README.md) is the
+generated index. What landed, one line per step, is in
+[`docs/nouveautes.md`](docs/nouveautes.md). Design notes, session reports and
 tickets are written in French.
 
 ## What the fork changes
@@ -66,13 +67,39 @@ tickets are written in French.
 - **A spatial extension**: N-dimensional R-tree with KNN, radius, bounding box,
   oriented box and frustum queries, plus 19 scalar geometry functions
   (`CREATE_SPATIAL_INDEX`, `QUERY_SPATIAL_INDEX`, `geo_*`).
-- **Hardened write paths**: all-or-nothing forced transactions, checkpoints that
-  no longer hold a public lock while waiting, a second open for writing refused
-  by name inside the same process, `fsync` after replay, a compact journal form
-  for numeric arrays, and a journal memory bound with a fallback to a forced
-  checkpoint above it.
-- **A concurrency bench** (`test/`, `known_red` list) that plays the forms an
-  agent produces: kill during a bulk load, reopen, replay, compare row by row.
+- **Several writers at once**, by default: row and index locks, a second process
+  that waits for the writer in place instead of failing, and a relationship
+  `COPY` that never links another transaction's nodes.
+- **Readers that never wait for a checkpoint**: a read sees the last committed
+  state while a checkpoint writes; a reader opened before it keeps reading its
+  own generation until the next one. Column ids never move (a dropped column
+  leaves a hole), and rows of a rolled-back write are marked as such, so no
+  reader ever sees them.
+- **A storage format with a number** (43 today), set by hand: the header and the
+  journal name the build that wrote them; a database or a journal from a newer
+  engine is refused with both names; formats 39 to 42 open and are rewritten to
+  43 at the first checkpoint, after which older engines refuse the file.
+- **Hardened write paths**: all-or-nothing forced transactions, the journal
+  written and synced before a commit is published (a commit whose journal cannot
+  be synced publishes nothing), a journaled `COPY` replayed after a crash even
+  when the same transaction then updates what it copied, a large blob `COPY`
+  bounded in bytes so it fits a small buffer pool, a second open for writing
+  refused by name inside the same process, `fsync` after replay, a compact
+  journal form for numeric arrays, and a journal memory bound with a fallback to
+  a forced checkpoint above it.
+- **Reads that hold together**: in a `READ ONLY` transaction a failing statement
+  no longer dooms the ones after it, graph projections run there too, an
+  interruption stops the whole query, and a prepared statement frees what it
+  bound when it dies (four readers of a real repository: 30 GB → 7.1 GB).
+- **`CREATE_VECTOR_INDEX` without freezing writes**: it waits only for the
+  writers already open, then builds while the others write; `SHOW_INDEXES` says
+  whether an index is ready, under construction or incomplete. HNSW pruning uses
+  the classic heuristic since 10 October 2026 (an existing index keeps its graph
+  until it is recreated).
+- **A concurrency bench** (`test/`, `known_red` list: 16 lines, from 59 on
+  10 October) that plays the forms an agent produces: kill during a bulk load,
+  reopen, replay, compare row by row; and a power-cut double of the file system
+  that loses every unsynced write with the process.
 
 Nothing is sent upstream: the fork stays proprietary; upstream is read, not
 copied.
