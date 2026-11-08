@@ -144,6 +144,25 @@ donne zéro page à la fois libre et tenue sur la copie de 12 h 06 et sur la bas
 
 Sur master, le témoin ASegmentBeyondTheExtentIsNotGivenBack est rouge. Il rend libres 18 pages tenues
 du dernier segment, relit des lignes fausses après une réallocation, puis meurt de SIGSEGV.
+
+**Sur master à 9bae60786 (8 novembre, 18 h 20).** Le lot y est arrivé rebasé, sans changement du
+code moteur depuis la version testée, 62af3ae42. Entre les deux, master n'a apporté que du Rust et
+des scripts de rag3weaver, ainsi que le pointeur de codeparsers.
+
+Ce qui a été joué à luciepc, sur 62af3ae42, en ionice idle :
+- les quatre témoins de l'étendue, verts ;
+- 108 cas voisins de transaction_test, verts : pages sans propriétaire, COPY journalisé, points
+  de reprise et V2, coupures, annulations, vecteurs à la réouverture, formats, lecture seule ;
+- les neuf binaires de test/storage, verts ;
+- trois piles imprimées, toutes par les trois témoins de refus, aucune ailleurs.
+
+La copie de 16 h 52 a aussi été jouée sous la lib du lot. L'ouverture ne rend rien de tenu. Après
+un point de reprise, la sonde croisée trouve 0 page libre et tenue. Les 114 855 vecteurs se relisent
+identiques à l'origine.
+
+**Ce qui n'a pas été joué : `transaction_test` entier.** Il passait 10 cas en 30 minutes sous la
+pression disque de luciepc. Il sera rejoué sur disque calme avant tout rebâti de lib qui prend ce
+lot. D'ici là, aucune lib du magasin ne contient le lot.
 - numPages ne baisse plus : la dernière plage libre reste une entrée.
 - returnOwnerlessPages ne rend que ce qui suit la fin de ce qui est tenu. Le relevé passe par
   `reclaimStorage` de chaque table vers un allocateur qui ne fait que noter, puis ajoute le
