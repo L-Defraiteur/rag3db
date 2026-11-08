@@ -113,5 +113,9 @@ Aucun pour l'instant. Il faudrait :
   | e2e_repli_de_branche | `rag3weaver-repli-hybride-<pid>` et ses fichiers (24 Mo) |
   | e2e_rouvrir | `rag3weaver-rouvrir-<pid>` et ses fichiers (8 Mo) |
 
+  Pendant cette mesure, `e2e_banc_qualite` a paniqué faute de granite-278m sur 127.0.0.1:7878 :
+  c'est la panne de ce service à luciepc, de 10 h 47 à 12 h 07, déjà en ticket (f66ad4449, cause
+  illisible, journaux persistants posés). Rien à voir avec les résidus, et rien à chercher ici.
+
   La branche de l'équipier `agent/tests-bases-dans-tmp` (relue par hotfixs, qui la complète) vise
   une partie de ces suites : chaque suite qu'elle rend propre sort de la liste dans son commit.
