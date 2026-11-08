@@ -1693,3 +1693,46 @@ avance d'autant ; les hashs, eux, sont exacts.
   pourquoi le découpage n'a rien d'arbitraire) ; la lecture de Lucie face aux géants : « qui ne se
   met pas à courir ne gagne pas une course ». Priorité de demain inchangée : les vues par worktree,
   page de l'arbre principal (10b8affce) à lire le matin.
+
+## 22 h 40 — fin de soirée : la file passe, l'atelier tranché, la lib de la nuit
+
+- **Atterris** : le mini-lot d'ED (0da9fdda4 : le témoin du rattrapage coupe son index entre deux passes
+  de vecteurs par `stop_indexings_of`, comme l'arrêt de l'hôte ; un faux service déclaré au manifeste,
+  qui l'emporte sur `RAG3WEAVER_EMBED_SERVICE` ; quatre départs avant le vert, chacun pour une raison
+  lue : le faux service refusait la sonde, puis compter ses appels était fragile, puis des morceaux
+  refusés par un service **ne sont jamais repris par le rattrapage**, ticket d6c4ca144, gravité perte,
+  lot demain) ; hooks-essai (f99c3fee1 : une copie coupée au milieu d'une fusion sans git retire son
+  voisin temporaire). En dernier pas : 96 (pas 3 de M4, rejeu court sur f99c3fee1) ; puis archi
+  (atelier-suivi-ferme e884c965c, passe verte), puis « file passée » à hotfixs (trace à paramètres
+  littéraux) et codeparsers (mesure du `require`), recherche (residus-de-suite, e2e entier à la 46e
+  suite sans rouge, puis le Drop du backend : deux témoins rouges sur master, verts sur le correctif).
+- **Le témoin de la lib qui dépend d'un service** : le rouge d'archi, de hooks-essai et de 96 sur
+  `owed_vectors_are_caught_up_on_open…` était un rouge de master sous le régime GPU des passes ; la
+  règle est écrite : un tel témoin joue sous les deux régimes ou impose son service par un faux
+  déclaré au manifeste, jamais par l'environnement.
+- **L'atelier de Lucie** : `rag3weaver-backend atelier` sur un atelier déjà posé ne le remet pas au
+  livré ni ne le note ; reposé à la main (templates déplacés, commande rejouée) : open_branch,
+  list_worktrees, attach_worktree, **run_command** (porte en approbation, racine au home),
+  chat_instructions ; aucun `livre.json` écrit par la pose neuve non plus : deux cas pour ED demain.
+  Essais proposés à Lucie : « Où en sont mes worktrees ? » (phrase juste), « Quelles branches
+  existent ? » (run_command avec accord), « Ouvre une branche essai-atelier-2 » (open_branch,
+  avancement dans la barre, ligne de fin d'index).
+- **Tranché par Lucie sur l'atelier** (22 h 25 → 22 h 35) : l'atelier **reste capable de tout** ;
+  lecture par tranche (`read_file {path, offset, length}`, 200 lignes par défaut, numéros, « lignes a
+  à b sur N », empreinte du fichier) et par scope (`read_scope`) ; écriture en trois modes gardés
+  (`replace_text` avec `old` unique sinon refus avec le compte, `replace_lines` et `insert_lines` qui
+  exigent l'empreinte de la dernière lecture), le diff rendu, le scope réindexé, un run au journal ;
+  le routage vers un worktree attaché (sa vue, sa montre, sa branche) est un **confort**, pas une
+  limite ; le périmètre : dedans (la racine) il fait tout, un nouvel espace se déclare et son dossier
+  se crée seul, dehors il demande à l'utilisateur par la porte ; Lucie sait que c'est une politesse
+  tant qu'il a run_command, et la vraie garde sera un **décideur d'actions** local (« contexte +
+  action : permise ? », oui/non par logits, Qwen3-4B candidat), alimenté par le journal des
+  approbations et refus de la porte. Lot ED après les vues ; la règle « jamais hors d'une tâche »
+  reste pour le chat d'un dépôt de code.
+- **La lib de la nuit** : fenêtre donnée à G, départ du bâti à 22 h 30 sur la tête de master
+  (dernier commit moteur 9bae60786, `transaction_test` entier vert, aucune ABI changée), passe de G,
+  deux sens sur copies, pose à luciepc la nuit, portable à 9 h 30. Le banc a fini (page 03) : la
+  recommandation est le rappel k = 5 → Qwen3-4B en préfixe partagé sur la fin de conversation à 2 k →
+  garder 1 à 2 → le modèle de l'agent, ≈ 1,2 s.
+- **Demain matin, pour Lucie** : la page des vues (10b8affce) ; les deux cas de l'installeur de
+  l'atelier ; le lot `ui` d'ED (la carte sous le tour) ; les tickets du jour.
