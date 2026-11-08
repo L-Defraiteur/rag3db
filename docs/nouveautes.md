@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Un quota ne fait plus tomber le chat : une minute, puis le double.** Le client du
+  modèle suit la règle de Lucie après un refus : une minute, puis le double à chaque refus, au plus
+  dix minutes, cinq reprises au plus. Un 503 attend comme un quota, et le 429 que Vertex rend au
+  milieu du flux se rejoue tant que rien n'a été écrit dans le chat. L'erreur finale dit ses reprises
+  et son temps en minutes. Le chat, le juge des bilans, l'archiviste et l'équipier suivent la même
+  règle ; le client Anthropic garde la sienne. (`llm-reprise-2`)
 - **8 nov. — Ce que j'ai cherché se retrouve, avec ce que j'ai ouvert.** La vue « mes recherches »
   de l'IDE rend les recherches faites dans un dépôt, les miennes et celles des agents sous leur nom,
   la plus récente d'abord. Pour chacune, elle montre ses premiers résultats et ceux que j'ai cliqués,
