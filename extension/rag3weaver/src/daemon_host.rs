@@ -817,6 +817,12 @@ impl DaemonHost {
                     .and_then(|s| s.as_ref().map(|b| b.prepared().manifest.kind))
                     .unwrap_or_else(|| kind_du_manifeste(&h.manifest));
                 let repli = if espace.is_some() || repo.is_some() { "code" } else { "project" };
+                // La racine que sert le backend ouvert (surcharge comprise), sinon celle
+                // du fichier. Le slot tenu en écriture (une ouverture ou une fermeture en
+                // cours) retombe aussi sur le fichier, comme un backend fermé : pendant cet
+                // instant, une surcharge de racine (une vue sur un worktree) n'est pas vue,
+                // d'où un faux « racine absente » possible si le fichier nomme un dossier
+                // effacé ; jamais un faux silence en régime établi.
                 let racine_espace = h
                     .backend
                     .try_read()
@@ -2035,6 +2041,15 @@ mod tests {
         let err = r["error"].as_str().unwrap_or_default();
         assert_eq!(
             err,
+            format!("la racine du dépôt a disparu ({})", sources.display())
+        );
+
+        // 3. `index` lit la racine aussi (sa politique le déclare) : l'erreur nommée, pas un
+        // balayage qui verrait zéro fichier et retirerait tout de l'index.
+        let r = hote.call(Some(&s), &manifest_path, "index", json!({}));
+        assert_eq!(r["ok"], json!(false), "index doit échouer quand la racine a disparu : {r}");
+        assert_eq!(
+            r["error"].as_str().unwrap_or_default(),
             format!("la racine du dépôt a disparu ({})", sources.display())
         );
 
