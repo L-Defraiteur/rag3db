@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — L'équipier travaille aussi sans git.** Une tâche sur un dossier qu'aucun dépôt ne
+  suit s'ouvre dans une copie de ce dossier, se relit par différence et se fusionne par recopie,
+  refusée si le dossier a bougé entre-temps. `git_init` en fait un dépôt, seulement si on le
+  déclare (tache-sans-git).
 - **8 nov. — Ce que j'ai cherché se retrouve, avec ce que j'ai ouvert.** La vue « mes recherches »
   de l'IDE rend les recherches faites dans un dépôt, les miennes et celles des agents sous leur nom,
   la plus récente d'abord. Pour chacune, elle montre ses premiers résultats et ceux que j'ai cliqués,
