@@ -1516,15 +1516,20 @@ mod tests {
         }
     }
 
-    /// Un faux service granite-278m qui refuse chaque texte : les vecteurs restent dus,
-    /// quel que soit `RAG3WEAVER_EMBED_SERVICE` dans l'environnement de la passe (archi, 8
-    /// novembre 2026 : sous les tunnels de la règle GPU, l'index embarquait tout).
-    struct GraniteMuet;
+    /// Un faux service granite-278m qui répond à la sonde d'`index` (ses deux appels :
+    /// un texte, puis l'échantillon) et refuse ensuite chaque texte : les vecteurs restent
+    /// dus, quel que soit `RAG3WEAVER_EMBED_SERVICE` dans l'environnement de la passe (archi,
+    /// 8 novembre 2026 : sous les tunnels de la règle GPU, l'index embarquait tout ; un
+    /// service qui refuse aussi la sonde fait refuser l'index).
+    struct GraniteMuet(std::sync::atomic::AtomicUsize);
     impl crate::embedder::Embedder for GraniteMuet {
         fn name(&self) -> &str {
             "granite-278m"
         }
-        fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            if self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 2 {
+                return Ok(texts.iter().map(|_| { let mut v = vec![0.0_f32; 768]; v[0] = 1.0; v }).collect());
+            }
             Err(crate::embedder::EmbedError::ProviderError("le service du témoin refuse tout".into()))
         }
         fn dim(&self) -> usize {
@@ -1572,7 +1577,7 @@ mod tests {
         };
         // 1. Un index dont le service refuse tout : le plein texte, et tous les vecteurs dus.
         // Le service est déclaré au manifeste : l'environnement de la passe n'y change rien.
-        let muet = servir(Arc::new(GraniteMuet));
+        let muet = servir(Arc::new(GraniteMuet(Default::default())));
         ecrire(&|m| {
             m["embeddings"]["catch_up_on_open"] = json!(false);
             m["embeddings"]["address"] = json!(muet);
