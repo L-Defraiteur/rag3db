@@ -51,7 +51,7 @@ type ToolBlock = { id: string; name: string; args: string; result?: string; ok?:
 // réponse à la fin ; le flux et la relecture rendent la même suite.
 type Part = { kind: "text"; text: string } | ({ kind: "tool" } & ToolBlock);
 type Message = { kind: "message"; role: "user" | "assistant" | "error"; parts: Part[]; run?: string; live?: boolean; propositions: TurnResult["propositions"]; task?: { tache: NonNullable<TurnResult["tache"]>; fichiers: string[] } };
-type Item = Message | { kind: "info"; text: string };
+type Item = Message | { kind: "info"; text: string; cls?: string };
 type TokenLog = { received: Record<string, number[]>; applied: Record<string, number[]>; missed: { sujet: string; count: number }[] };
 
 const textOf = (m: Message) => m.parts.filter((p) => p.kind === "text").map((p) => (p as { text: string }).text).join("");
@@ -353,6 +353,19 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       if (ev.kind === "Token" && typeof ev.seq === "number") (tokenLog.received[String(ev.run)] ??= []).push(ev.seq);
       // Le relais de l'hôte dit les événements qu'un débordement du bus lui a fait perdre.
       if (ev.kind === "EventsMissed") tokenLog.missed.push({ sujet: d.sujet, count: Number(ev.count ?? 0) });
+      // **La fin du premier index d'un dépôt attaché** (Lucie, 8 novembre 2026 : « il devrait
+      // avoir notif quand indexation finie ? ») : une ligne de la page dans le chat de
+      // l'atelier, pas un tour (le modèle ne la voit pas).
+      if (ev.kind === "RepoIndexed" && backend?.kind === "project") {
+        const nom = [ev.depot, ev.branche].filter(Boolean).join(" · ") || String(ev.worktree ?? "");
+        const comptes = [typeof ev.fichiers === "number" ? `${ev.fichiers} fichiers` : null, typeof ev.symboles === "number" ? `${ev.symboles} symboles` : null].filter(Boolean).join(", ");
+        const duree = typeof ev.ms === "number" ? `en ${Math.max(1, Math.round(ev.ms / 1000))} s` : "";
+        const text =
+          ev.ok === true
+            ? `index de ${nom} terminé${[comptes, duree].filter(Boolean).length ? " : " + [comptes, duree].filter(Boolean).join(", ") : ""}${ev.reste ? ` — vecteurs en dette : ${ev.reste}` : ""}`
+            : `index de ${nom} en échec : ${String(ev.erreur ?? "raison inconnue")}`;
+        setItems((cur) => [...cur, { kind: "info", text, cls: ev.ok === true ? "fin-d-index" : "fin-d-index echec" }]);
+      }
       // Le flux rouvert (page à peine chargée, flux coupé puis repris) : l'état
       // du chat se relit, avant tout filtre — ce signal n'a pas de backend.
       if (d.sujet === "flux" && ev.kind === "ouvert") {
@@ -607,7 +620,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           {items.length ? null : <p className="empty text-muted-foreground mt-[12vh]">Une question, une recherche, une idée à explorer.</p>}
           {items.map((it, k) =>
             it.kind === "info" ? (
-              <p key={k} className="text-xs text-muted-foreground">{it.text}</p>
+              <p key={k} className={`text-xs text-muted-foreground ${it.cls ?? ""}`}>{it.text}</p>
             ) : (
               <article key={k} className={`message ${it.role} ${it.live ? "en-cours" : ""} mb-7`} data-role={it.role} data-run={it.run}>
                 <div className={`role text-xs font-semibold mb-1.5 ${it.role === "user" ? "text-blue-400" : it.role === "error" ? "text-destructive" : "text-primary"}`}>

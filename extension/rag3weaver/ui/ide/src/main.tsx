@@ -32,10 +32,11 @@ function App() {
 
   useEffect(() => applyTheme(theme), [theme]);
   const reloadState = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
-  // Un worktree attaché par l'atelier (`RepoAttached`) : l'état se relit, la barre
-  // le montre sous « Dépôts » sans recharger la page.
+  // Un worktree attaché par l'atelier (`RepoAttached`), puis la fin de son premier
+  // index (`RepoIndexed`) : l'état se relit, la barre le montre sous « Dépôts », puis
+  // son rag indexé, sans recharger la page.
   useEffect(() => onFlux((e) => {
-    if (e.evenement?.kind === "RepoAttached") reloadState();
+    if (e.evenement?.kind === "RepoAttached" || e.evenement?.kind === "RepoIndexed") reloadState();
   }), []);
   useEffect(() => {
     reloadState();
