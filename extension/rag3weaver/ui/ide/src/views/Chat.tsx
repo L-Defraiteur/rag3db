@@ -6,6 +6,7 @@ import { highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from 
 import { ToolResultView } from "@/lib/toolview";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
+import { daemonTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
 import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
@@ -165,6 +166,45 @@ function Recapitulatif({ recap, memory, courante }: { recap?: Recap; memory: boo
   );
 }
 
+/// Le thème de la page, suivi sur `<html data-theme>` (les boutons de l'en-tête le changent).
+function useThemeDeLaPage(): string {
+  const [t, setT] = useState(() => document.documentElement.dataset.theme ?? "");
+  useEffect(() => {
+    const o = new MutationObserver(() => setT(document.documentElement.dataset.theme ?? ""));
+    o.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => o.disconnect();
+  }, []);
+  return t;
+}
+
+/// **L'invocation** (le « Daemon Code Summoning » du terminal, Lucie, 7 novembre 2026) :
+/// sous le thème daemon seulement, l'animation « réfléchit » du fichier commun tourne
+/// pendant que le modèle réfléchit (du départ d'un appel au premier jeton ou au premier
+/// outil) ; ailleurs la page reste sobre. Sous `prefers-reduced-motion`, l'image reste fixe.
+function Invocation({ actif }: { actif: boolean }) {
+  const theme = useThemeDeLaPage();
+  const [anim, setAnim] = useState<ThemeAnimation | null>(null);
+  const [n, setN] = useState(0);
+  const montre = actif && theme === "daemon";
+  useEffect(() => {
+    if (!montre || anim) return;
+    daemonTheme()
+      .then((t) => setAnim(t.animations.reflechit ?? null))
+      .catch((e: Error) => console.warn(`[thème] ${e.message}`));
+  }, [montre, anim]);
+  useEffect(() => {
+    if (!montre || !anim || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const h = window.setInterval(() => setN((k) => k + 1), Math.max(anim.ms, 50));
+    return () => window.clearInterval(h);
+  }, [montre, anim]);
+  if (!montre || !anim) return null;
+  return (
+    <div id="invocation" data-anim="reflechit" aria-hidden className="px-6 py-1 text-sm">
+      {imageDe(anim, n)}
+    </div>
+  );
+}
+
 /// **La jauge du contexte** : le dernier appel au modèle sur le maximum du modèle
 /// déclaré ; « inconnu » quand l'un manque, jamais une valeur codée en dur.
 function Gauge({ context, model, counters }: { context?: ChatContext; model?: string | null; counters?: string }) {
@@ -222,6 +262,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState("Prêt");
   const [busy, setBusy] = useState(false);
+  // Le modèle réfléchit : de l'envoi (ou d'un résultat d'outil) au premier jeton ou outil.
+  const [pense, setPense] = useState(false);
   const [run, setRun] = useState<string | null>(null);
   const [consumed, setConsumed] = useState("");
   const [recaps, setRecaps] = useState<Record<string, Recap>>({});
@@ -331,6 +373,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         return;
       }
       if (ev.run !== undefined && runRef.current && ev.run !== runRef.current) return;
+      if (ev.kind === "Token") setPense(false);
+      else if (ev.kind === "ToolCallStarted") setPense(false);
+      else if (ev.kind === "ToolCallFinished") setPense(true);
+      else if (ev.kind === "RunFinished" && ev.run === runRef.current) setPense(false);
       if (ev.kind === "Token") {
         if (typeof ev.seq === "number") (tokenLog.applied[String(ev.run)] ??= []).push(ev.seq);
         live((m) => ({ ...m, parts: appendText(m.parts, String(ev.text ?? "")) }));
@@ -373,6 +419,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     if (!text || busy || !chat?.on) return;
     if (input.current) input.current.value = "";
     setBusy(true);
+    setPense(true);
     setStatus("l'agent travaille…");
     setConsumed("");
     stuck.current = true;
@@ -419,6 +466,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       setStatus("Erreur");
     } finally {
       setBusy(false);
+      setPense(false);
       setRun(null);
       const attendu = finiRun;
       // Toute la barre une fois, puis la seule conversation du tour jusqu'à y
@@ -605,6 +653,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             ),
           )}
         </section>
+        <Invocation actif={pense && busy} />
         <form
           id="composer"
           className="w-full px-6 pb-4 pt-2 border-t"

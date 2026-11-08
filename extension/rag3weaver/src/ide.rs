@@ -77,6 +77,8 @@ const PAGE: &str = include_str!("ide/page.html");
 /// Le code de la page, en fichier (`GET /ide/page.js`) : lisible par un serveur
 /// de langage et par l'index de code, comme le reste du code.
 const PAGE_JS: &str = include_str!("ide/page.js");
+/// Le thème commun à l'IDE et au terminal (`tty/src/theme.rs` embarque le même fichier).
+const THEME_DAEMON: &str = include_str!("../templates/themes/daemon.json");
 
 /// Un chemin de l'IDE ?
 pub fn est_a_lui(path: &str) -> bool {
@@ -508,6 +510,11 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         }
         ("GET", "/ide/app.css") => {
             let _ = request.respond(reponse_octets(200, "text/css; charset=utf-8", bundle("app.css")));
+        }
+        // **Le thème commun** (Lucie, 7 et 8 novembre 2026) : le fichier que le terminal
+        // embarque, servi tel quel ; la page en tire ses couleurs et son animation.
+        ("GET", "/ide/theme/daemon.json") => {
+            let _ = request.respond(reponse(200, "application/json; charset=utf-8", THEME_DAEMON.to_string()));
         }
         ("GET", "/ide") | ("GET", "/ide/") => {
             let _ = request.respond(reponse_octets(200, "text/html; charset=utf-8", bundle("index.html")));
