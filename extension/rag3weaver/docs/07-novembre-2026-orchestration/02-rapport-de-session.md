@@ -1261,3 +1261,40 @@ avance d'autant ; les hashs, eux, sont exacts.
   verdict : aucune indexation complète sous cbc06c3e1.** La base de Lucie (avant-43, 17a094d12)
   n'est pas touchée ; ses deux sens se contrôlent sur une copie, une minute d'arrêt annoncée.
 - Le banc « rouge d'abord » du SIGSEGV passe après ; B continue sa passe.
+
+## 14 h 39 — la base de Lucie saine, le départage relancé, un rouge de master sur l'index d'une tâche
+
+- **La base de code de Lucie est saine** (G, 14 h 15) : contrôle des deux sens sur l'instantané pris à
+  13 h 59 sous 17a094d12 — LOCKS 543/543, QUERIES 22 977/22 977, INHERITS_FROM 639/639, IMPLEMENTS
+  373/373 ; elle n'a pas eu d'index complet, seulement la montre.
+- **Le départage des libs est relancé** (G, 14 h 26) : les deux premiers runs n'avaient rien indexé (le
+  manifeste copié hors de son arbre perdait ses chemins relatifs ; le « 0 écart » du run 1 ne portait
+  que sur la copie saine) — vu et dit par G ; le script copie maintenant tout l'arbre des gabarits,
+  rougit si l'ouverture ou l'index échoue, et n'accepte le contrôle qu'après « indexation terminée ».
+  Runs 1b (17a094d12), 2b (dadbf0041), 3b (cbc06c3e1), même binaire Rust pour les deux derniers,
+  copie saine de 12 h 06 à chaque fois, lecture de charge et de GPU à chaque fin ; verdicts vers
+  15 h 40. Les témoins à un seul écrivain de hotfixs (réindex complet en trois tours ; deux versements
+  d'une table) font 0 écart : il manque le volume, les groupes CSR persistés, un lecteur pendant
+  l'index. Le cœur lit la forme comme des colonnes de nœuds remappées deux fois (G1 à un écrivain) ;
+  si 17a094d12 est sain et dadbf0041 malade, G1 (c4f8610b9) se retire avant tout rebâti.
+- **Un second signal** (ED) : `taches::tests::la_base_principale_n_est_jamais_ecrite_par_la_tache`
+  rougit **seul sur master e8a91105f, 2 fois sur 3**, sous cbc06c3e1 (« la tâche n'a pas indexé en
+  60 s », writing: true), à trois lourds sur six ; hooks-essai a le même rouge dans sa passe. ED le
+  départage par la lib (17a094d12, dadbf0041, cinq fois chacun, le journal du run à 60 s) ; un index
+  de tâche qui ne finit plus et un index complet qui abîme les deux sens, le même jour sous la même
+  lib, se lisent ensemble. Personne ne pousse de Rust qui touche l'index avant le verdict ; les
+  autres lots passent avec ce rouge nommé et chiffré.
+- **Lucie** : « attention je joue un peu aux jeux vidéo depuis luciepc (seat1) » → seat1 rend sur
+  card0 (la carte dite libre), pas sur celle des services ; toute mesure à luciepc porte sa lecture
+  de charge et de GPU à côté du chiffre (lecture-poste.sh de G). « Il ne faut pas qu'on s'imagine
+  des barrières à essayer des modèles » → la règle du 25 octobre redevient ce qu'elle était : lire
+  la VRAM, charger si ça tient, un modèle à la fois, arrêt au premier reset ; jamais « CPU seulement »
+  par prudence. **Elle a levé la permission du banc dans sa fenêtre** (14 h 28) : les petits modèles
+  tournent (Qwen 0,5B 3,9 Gio, SmolLM2 3,1 Gio, Laya 3,0 Gio en CPU ; passe CPU à la borne 2 000,
+  puis GPU pour 6 000 et 16 000) ; le jeu à vrais positifs : 88 positifs à provenance vérifiée,
+  440 paires, 1,7 M de jetons de construction ; bge-m3 AUC 0,61 (ne sert pas) ; la référence Gemini
+  en cours.
+- **Atterris** : ED, open_branch (0619c22b6) ; embarquement, le ticket de 7878 sans l'hypothèse du
+  jeu (e8a91105f). **Prêts** : 96 (en push), archi (le symbole cité en lien : `POST /ide/symboles`
+  par `usages`, l'appel discret qui ne journalise pas un rendu), hooks-essai (la tâche sans git,
+  avec le rouge de master nommé), ED (le juge par pas, idem).
