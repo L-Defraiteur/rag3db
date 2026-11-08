@@ -508,11 +508,13 @@ fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path)
     // Un index déjà reparti à l'ouverture (`a_l_ouverture`) se dit de même.
     let suivi = hote.soi.get().cloned().zip(hote.hosted_existing(manifeste));
     match hote.with_backend(h, |b| lancer_sur(b, manifeste, suivi)) {
-        Ok(Ok(lance)) => {
-            // Lancé par un outil : il tient la porte.
-            if lance.is_some() {
-                h.rattrapage.store(false, std::sync::atomic::Ordering::SeqCst);
-            }
+        Ok(Ok(_)) => {
+            // **Un outil l'attend : il tient la porte**, qu'il l'ait lancé ou trouvé en cours
+            // (relancé à l'ouverture par `a_l_ouverture`, dans ce même appel). Sinon la
+            // réouverture d'un service d'embarquement revenu, ou une fermeture, l'arrêterait
+            // sous l'outil qui l'a demandé (archi, 8 novembre 2026 : « index … en échec :
+            // indexation arrêtée entre deux passes de vecteurs », 1 fois sur 3).
+            h.rattrapage.store(false, std::sync::atomic::Ordering::SeqCst);
             "son index est lancé en fond ; sa fin se dira sur le flux de l'IDE".to_string()
         }
         Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
@@ -1559,6 +1561,10 @@ mod tests {
         couper();
         let dit = outil("attach_worktree", json!({ "path": depot }));
         assert!(dit.contains("il est rouvert") && dit.contains("son index est lancé en fond"), "{dit}");
+        // L'index relancé à l'ouverture, l'outil l'attend : il n'est plus un rattrapage qui
+        // cède à une fermeture.
+        let hote_du_depot = host.hosted_existing(&manifeste).expect("le dépôt est hébergé");
+        assert!(!hote_du_depot.rattrapage.load(std::sync::atomic::Ordering::SeqCst), "l'index qu'attend attach_worktree reste marqué rattrapage");
         attendre(&journal_de());
         // Un index fini : plus rien à reprendre, le témoin s'ôte.
         assert!(host.reprendre_les_premiers_index().is_empty());
