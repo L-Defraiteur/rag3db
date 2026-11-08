@@ -20,6 +20,8 @@ mod common;
 
 #[path = "../e2e_agent_loop.rs"]
 mod e2e_agent_loop;
+#[path = "../e2e_arret_borne.rs"]
+mod e2e_arret_borne;
 #[path = "../e2e_arret_brutal.rs"]
 mod e2e_arret_brutal;
 #[path = "../e2e_arret_propre.rs"]
