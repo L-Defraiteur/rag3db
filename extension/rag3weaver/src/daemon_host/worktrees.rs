@@ -293,23 +293,60 @@ fn etat_de_l_index(etat: &Value, manifeste: &Path) -> String {
         None => "pas ouvert".into(),
         Some(b) if b["open"] != true => "pas ouvert".into(),
         Some(b) => match &b["index"] {
-            Value::Object(entites) if !entites.is_empty() => {
-                // Par entité, l'état du plein texte et des vecteurs (`ready`, `never`, …).
-                let n = entites.len();
-                let prets = |cle: &str| entites.values().filter(|e| e[cle] == "ready").count();
-                let en_cours = entites.values().any(|e| e["text_percent"].is_number() || e["vectors_percent"].as_f64().is_some_and(|p| p > 0.0 && p < 100.0));
-                format!(
-                    "plein texte {}/{n} entités, vecteurs {}/{n}{}",
-                    prets("text"),
-                    prets("vectors"),
-                    if en_cours { ", en cours" } else { "" }
-                )
-            }
+            Value::Object(index) if index.values().any(est_une_entite) => phrase_de_l_index(index),
+            Value::Object(index) if index.get("busy") == Some(&Value::Bool(true)) => "une écriture tient l'index : son état se dira à la prochaine lecture".into(),
             Value::Null | Value::Object(_) => "ouvert, pas encore indexé".into(),
             Value::String(s) => s.clone(),
             autre => autre.to_string(),
         },
     }
+}
+
+/// Une clé de `index` qui est une entité : elle porte `text` et `vectors`. Les autres
+/// (`fts_counts`, `reads`, `watches`, `embedding`, …) disent l'état, pas une entité.
+fn est_une_entite(v: &Value) -> bool {
+    v["text"].is_string() && v["vectors"].is_string()
+}
+
+/// **L'index en mots, sans faux « en cours »** (c7, 8 novembre 2026, vu sur le poste de
+/// Lucie : « plein texte : 4/7, vecteurs : 3/7 » sur un index prêt, lu « indexation en
+/// cours »). On compte les entités seules, et pour les vecteurs les entités qui en
+/// déclarent seulement. « prêt » quand tout l'est ; « en cours, N % » seulement quand un
+/// pourcentage le dit.
+fn phrase_de_l_index(index: &serde_json::Map<String, Value>) -> String {
+    let entites: Vec<&Value> = index.values().filter(|v| est_une_entite(v)).collect();
+    let signal = |cle: &str, pourcent: &str, nom: &str, prets_mot: &str, declares: &str| -> String {
+        let vus: Vec<&&Value> = entites.iter().filter(|e| e[cle] != "not_declared").collect();
+        let n = vus.len();
+        if n == 0 {
+            return format!("sans {nom} déclarés");
+        }
+        let prets = vus.iter().filter(|e| e[cle] == "ready").count();
+        let echecs = vus.iter().filter(|e| e[cle] == "failed").count();
+        let compte = format!("{prets}/{n}{declares}");
+        if prets == n {
+            return format!("{nom} {prets_mot} ({compte})");
+        }
+        let en_cours = vus
+            .iter()
+            .filter(|e| e[cle] != "ready")
+            .filter_map(|e| e[pourcent].as_u64())
+            .filter(|p| *p < 100)
+            .min();
+        let mut dit = format!("{nom} {compte}");
+        if let Some(p) = en_cours {
+            dit.push_str(&format!(", en cours, {p} %"));
+        }
+        if echecs > 0 {
+            dit.push_str(&format!(", {echecs} en échec"));
+        }
+        dit
+    };
+    format!(
+        "{}, {}",
+        signal("text", "text_percent", "plein texte", "prêt", ""),
+        signal("vectors", "vectors_percent", "vecteurs", "prêts", " déclarés")
+    )
 }
 
 /// Une commande git dans `dossier`, sa sortie ; l'erreur dit la commande et ce que
@@ -473,7 +510,7 @@ mod tests {
     use super::super::chat_qui_code::hote;
     use crate::llm::{CallbackLlm, Llm, MockLlm, Turn};
     use serde_json::{json, Value};
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
 
     fn git(dir: &Path, args: &[&str]) {
@@ -1083,5 +1120,106 @@ mod tests {
         let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
         assert_eq!(statut, 200);
         fil.join().unwrap();
+    }
+
+    /// **La phrase de l'index ne compte que les entités, et les vecteurs déclarés** (c7, 8
+    /// novembre 2026, 16 h 12 : sur le poste de Lucie, un index prêt était dit « plein
+    /// texte : 4/7, vecteurs : 3/7 », et le modèle en a fait « indexation en cours »). L'état
+    /// exact de `/etat` : quatre entités prêtes, Symbol sans vecteurs déclarés, trois clés
+    /// d'état qui ne sont pas des entités.
+    #[test]
+    fn the_index_phrase_counts_entities_and_declared_vectors_only() {
+        let pret = |vecteurs: &str| json!({ "text": "ready", "vectors": vecteurs, "relations": "ready", "vectors_percent": if vecteurs == "ready" { 100 } else { 0 }, "updated_ms": 1 });
+        let manifeste = Path::new("/x/backend.json");
+        let etat = |index: Value| json!({ "backends": [{ "manifest": "/x/backend.json", "open": true, "index": index }] });
+        let index = json!({
+            "File": pret("ready"), "Library": pret("ready"), "Scope": pret("ready"), "Symbol": pret("not_declared"),
+            "fts_counts": { "File": 10 }, "reads": { "n": 3 }, "watches": {},
+        });
+        assert_eq!(super::etat_de_l_index(&etat(index), manifeste), "plein texte prêt (4/4), vecteurs prêts (3/3 déclarés)");
+        // En cours seulement quand un pourcentage le dit.
+        let mut scope = pret("running");
+        scope["vectors_percent"] = json!(42);
+        let index = json!({ "File": pret("ready"), "Scope": scope, "Symbol": pret("not_declared") });
+        assert_eq!(super::etat_de_l_index(&etat(index), manifeste), "plein texte prêt (3/3), vecteurs 1/2 déclarés, en cours, 42 %");
+        // Une écriture qui tient le verrou : ni zéro ni « pas indexé ».
+        let dit = super::etat_de_l_index(&etat(json!({ "busy": true, "watches": {} })), manifeste);
+        assert!(dit.contains("une écriture tient l'index"), "{dit}");
+    }
+
+    /// L'atelier posé comme le pose `rag3weaver-backend atelier` : le gabarit livré
+    /// copié sous `<config>/atelier/templates`, la racine de ses commandes donnée.
+    fn atelier_pose(d: &Path, racine: &Path) -> (PathBuf, crate::code_tree::Roots) {
+        let racines = crate::code_tree::Roots { config: d.join("config"), data: d.join("data") };
+        let gabarits = racines.config.join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let atelier = gabarits.join("backends/atelier/backend.json");
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&atelier).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(racine.display().to_string());
+        std::fs::write(&atelier, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        (atelier, racines)
+    }
+
+    /// **Un atelier posé à neuf ne liste aucun worktree** (c7, 8 novembre 2026 : chez
+    /// Lucie, list_worktrees rendait `…/atelier/templates/backends/code/workspace — dépôt
+    /// hors git`, le gabarit de code copié avec l'atelier pris pour un arbre inscrit).
+    #[test]
+    fn a_fresh_workshop_lists_no_worktree() {
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path().join("poste");
+        std::fs::create_dir_all(&racine).unwrap();
+        let (atelier, racines) = atelier_pose(d.path(), &racine);
+        assert!(racines.registered_manifests().is_empty(), "{:?}", racines.registered_manifests());
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("rien"))) });
+        let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines).with_runs_root(d.path().join("runs")));
+        host.se_connaitre();
+        let h = host.hosted(&atelier).unwrap();
+        let liste = host.with_backend(&h, |b| b.call("list_worktrees", json!({}))).unwrap().unwrap();
+        assert_eq!(liste["result"].as_str(), Some("Aucun worktree attaché : attach_worktree en attache un."), "{liste}");
+    }
+
+    /// **Le chat de l'atelier lance une commande hors de toute tâche, par sa porte
+    /// déclarée** (Lucie, 8 novembre 2026, 16 h 02 : « qu'il ait commande shell »). Le
+    /// gabarit livré déclare `commands: "approval"` et `commands_outside_tasks` : `ls` (la
+    /// liste sûre) passe et rend la sortie ; le message système dit l'ordre des outils et
+    /// qu'on ne renvoie jamais au terminal. Un dépôt de code, sans la clé, garde ses
+    /// commandes dans ses tâches (`chat::tests`).
+    #[test]
+    fn the_workshop_chat_runs_a_command_outside_a_task() {
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path().join("poste");
+        std::fs::create_dir_all(&racine).unwrap();
+        std::fs::write(racine.join("temoin-de-la-porte.txt"), "là\n").unwrap();
+        let (atelier, racines) = atelier_pose(d.path(), &racine);
+        let (vus, systeme) = (Arc::new(Mutex::new(Vec::<String>::new())), Arc::new(Mutex::new(String::new())));
+        let model: ChatModel = {
+            let (vus, systeme) = (vus.clone(), systeme.clone());
+            Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+                let (vus, systeme) = (vus.clone(), systeme.clone());
+                Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                    if let Some(t) = turns.first().filter(|t| t.role == "system") {
+                        *systeme.lock().unwrap() = t.content.clone();
+                    }
+                    let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                    match turns[depuis..].iter().filter(|t| t.role == "tool").last() {
+                        None => MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": "ls" }).to_string())]).generate(turns, opts, sink),
+                        Some(r) => {
+                            vus.lock().unwrap().push(r.content.clone());
+                            MockLlm::new("Voilà.").generate(turns, opts, sink)
+                        }
+                    }
+                })))
+            })
+        };
+        let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines).with_runs_root(d.path().join("runs")));
+        host.se_connaitre();
+        let h = host.hosted(&atelier).unwrap();
+        host.chat_turn(&h.id, "Liste ce qu'il y a ici").expect("le tour");
+        let vu = vus.lock().unwrap().first().cloned().unwrap_or_default();
+        assert!(!vu.contains("le chat n'en lance pas"), "la porte de l'atelier est fermée hors tâche : {vu}");
+        assert!(vu.contains("temoin-de-la-porte.txt"), "la sortie de ls : {vu}");
+        let systeme = systeme.lock().unwrap().clone();
+        assert!(systeme.contains("run_command") && systeme.contains("list_worktrees") && systeme.contains("faites-le dans votre terminal"), "la consigne de l'atelier : {systeme}");
     }
 }
