@@ -24,6 +24,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   plein, les ajoute à la tête née du même COPY par copie-échange (jamais sous les pieds d'un lecteur),
   et écrit son journal par tranches : le COPY passe, forcé comme journalisé, annulé sans laisser une
   page (`dadbf0041`).
+- **8 nov. — Un backend dont la racine a disparu le signale nommément.** Quand le dossier racine d'un
+  workspace n'existe plus sur le disque (worktree supprimé), `daemon_status` porte « racine absente : <chemin> »
+  et chaque outil touchant les fichiers rend « la racine du dépôt a disparu (<chemin>) » plutôt qu'une
+  erreur brute d'entrée-sortie.
 - **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
   verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
   codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index

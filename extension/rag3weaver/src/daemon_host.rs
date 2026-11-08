@@ -817,7 +817,17 @@ impl DaemonHost {
                     .and_then(|s| s.as_ref().map(|b| b.prepared().manifest.kind))
                     .unwrap_or_else(|| kind_du_manifeste(&h.manifest));
                 let repli = if espace.is_some() || repo.is_some() { "code" } else { "project" };
-                json!({
+                let racine_espace = h
+                    .backend
+                    .try_read()
+                    .ok()
+                    .and_then(|s| s.as_ref().and_then(|b| b.prepared().workspace_root()))
+                    .or_else(|| espace.clone());
+                let racine_absente = racine_espace
+                    .as_ref()
+                    .filter(|r| !r.is_dir())
+                    .map(|r| format!("racine absente : {}", r.display()));
+                let mut b_json = json!({
                     "id": h.id,
                     "manifest": h.manifest,
                     "open": ouvert,
@@ -840,7 +850,11 @@ impl DaemonHost {
                     // D'où vient `kind` : le manifeste (son gabarit) ou le repli de
                     // l'hôte, que la page dit (« nature inconnue »).
                     "kind_source": if declare.is_some() { "manifest" } else { "fallback" },
-                })
+                });
+                if let Some(absente) = racine_absente {
+                    b_json["racine_absente"] = json!(absente);
+                }
+                b_json
             })
             .collect();
         let sessions: Vec<Session> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
@@ -1974,5 +1988,56 @@ mod tests {
         assert!(erreurs.is_empty(), "{erreurs:?}");
         assert!(!vivant.load(Ordering::SeqCst), "l'arrêt de l'hôte annule le run");
         assert!(hote.state()["background"].as_array().is_some_and(|a| a.is_empty()), "plus rien en fond");
+    }
+
+    /// **Un backend de code dont la racine a disparu** (ticket du 11 octobre 2026) :
+    /// `daemon_status` le dit « racine absente : <chemin> », et chaque outil qui touche
+    /// la racine rend l'erreur nommée « la racine du dépôt a disparu (<chemin>) ».
+    #[test]
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn un_backend_de_code_dont_la_racine_a_disparu_est_signale_dans_daemon_status_et_ses_outils() {
+        let d = tempfile::tempdir().unwrap();
+        let (base, sources) = (d.path().join("base"), d.path().join("sources"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&sources).unwrap();
+        std::fs::write(sources.join("lib.rs"), "pub fn coucou() {}\n").unwrap();
+
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        let manifest_path = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(sources.to_string_lossy());
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+
+        let hote = hote_isole();
+        let s = hote.open_session("temoin-racine", None, vec![], None);
+        let r = hote.open(Some(&s), &manifest_path);
+        assert_eq!(r["ok"], json!(true), "le backend s'ouvre : {r}");
+
+        // Quand la racine est là, list_files fonctionne.
+        let r = hote.call(Some(&s), &manifest_path, "list_files", json!({}));
+        assert_eq!(r["ok"], json!(true), "list_files fonctionne avec racine : {r}");
+
+        // La racine disparaît du disque.
+        std::fs::remove_dir_all(&sources).unwrap();
+
+        // 1. daemon_status porte « racine absente : <chemin> »
+        let etat = hote.state();
+        let etat_str = serde_json::to_string(&etat).unwrap();
+        assert!(
+            etat_str.contains(&format!("racine absente : {}", sources.display())),
+            "daemon_status doit porter « racine absente : {} » : {etat}",
+            sources.display()
+        );
+
+        // 2. chaque outil qui touche la racine rend « la racine du dépôt a disparu (<chemin>) »
+        let r = hote.call(Some(&s), &manifest_path, "list_files", json!({}));
+        assert_eq!(r["ok"], json!(false), "l'outil doit échouer quand la racine a disparu : {r}");
+        let err = r["error"].as_str().unwrap_or_default();
+        assert_eq!(
+            err,
+            format!("la racine du dépôt a disparu ({})", sources.display())
+        );
+
+        hote.shutdown();
     }
 }
