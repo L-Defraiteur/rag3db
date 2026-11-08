@@ -17,7 +17,7 @@ rebasée, et ses hashs cités dans les tickets (48abbd62d, a03de7d7f) ne sont pa
 | Le chat sur toute la hauteur | fait | 34f9fc427 |
 | Sous chaque conversation, le récapitulatif et le bouton qui déplie les fiches écrites ; la conversation active dépliée | fait | e92f71d14 (les fiches), b129247a9, 2daf2e332 (le récapitulatif) |
 | Le code coloré, le code en ligne, un chemin cité en lien | fait | 384f6fac5 (A, highlight.js), 5ec68e9a5 (B, les grammaires de l'hôte) |
-| Un symbole cité (`code.truc`, `Backend::run`) en lien vers sa définition | **pas fait** | ticket `2026-11-07-le-code-dans-le-chat-n-est-pas-colore-ni-lie` (ouvert) ; il faut résoudre le nom par l'index |
+| Un symbole cité (`code.truc`, `Backend::run`) en lien vers sa définition | fait | 36aced578 (`POST /ide/symboles`, résolu par `usages` en appel discret : un lien vers la ligne, ou vers la vue du symbole s'il est défini plusieurs fois) |
 | Les retours d'outils mis en page sans perte, avec le bouton « brut » | fait | 097640ecb |
 | La barre : session › dépôts › worktrees (branche, chargé, rag), et les sous-sessions récursives | fait | 056ed09eb (`chat_sessions`, `tasks` avec `parent_task`, `TaskNode` récursif) ; à l'écran, les sous-sessions s'appellent « Tâches », d'après la décision de 22 h 50 (session › tâches › espaces) |
 | « tenu par », visible des deux côtés | fait | 056ed09eb |
@@ -47,3 +47,5 @@ restent des choix du menu ; le thème daemon en devient un troisième. Le lien v
 vient après, en lot à part.
 
 **Mise à jour, 13 h 05** : le thème est fait dans l'IDE (44442ea75). archi enchaîne sur le lien vers un symbole cité.
+
+**Mise à jour, 15 h 25** : le symbole cité est fait (36aced578). Il ne reste rien de « pas fait » dans la liste.
