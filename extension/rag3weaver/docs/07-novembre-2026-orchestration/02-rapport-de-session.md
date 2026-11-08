@@ -953,3 +953,35 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
    branches, Vertex) — rien n'est poussé sans ton mot pour G3.
 6. **La file en cours** : archi (hooks 3 ter e), 96 (M4 pas 3), ED (429/503), hotfixs (A, puis B,
    puis G3/G5, puis le 3e lot de l'équipier), la coloration B (hooks-essai, codeparsers, tty).
+
+## 10 h 05 — la file du matin a tourné, le lot coupure du cœur est sur master
+
+- **Atterris** : hooks-essai, memoire-nommee (7f1a40e2f : la nature avant le dépôt) ; recherche,
+  dense-filtre-sous-l6 (0e528854a : la recherche filtrée revient sous l'instantané de son appel ;
+  **exige une lib ≥ dadbf0041 à la pose**, G le sait, aucun binaire qui le contient ne sera posé sur
+  17a094d12) ; archi, hooks 3 ter (e) (0768770d7 : vocabulaire sans mots d'arrêt ni noms du juge,
+  empreinte blake3, nom rendu borné à 200, les bilans du juge écartés du rappel ; poussé avec un
+  rouge nommé hors du lot : `la_sonde_mesure_l_embarqueur_attache`, un témoin de durée qui dérive
+  dans la lib entière, vert seul 3/3 deux fois, ticket 279ef8345 — archi le corrige tout de suite
+  par une horloge injectée) ; le cœur, **coupure** (d7636375a, commit moteur a312f823e : le journal
+  écrit et synchronisé avant la publication, taille rendue sur faute, JOURNAL_BROKEN ; quatre courses
+  perdues contre du Rust avant une fenêtre de dix minutes où tout le Rust a été retenu). Depuis
+  a312f823e, **MOTEUR_ANCIEN=1** revient à toute passe rag3weaver épinglée sur dadbf0041, jusqu'au
+  rebâti.
+- **Le cœur, ASAN** : V2, la compaction CSR, VectorSearchDuringInsert, ReadersDuringDelete,
+  HalfAppliedCommit, le banc : propres. Deux défauts réels trouvés : un heap-buffer-overflow dans le
+  CREATE_VECTOR_INDEX concurrent (ticket 9bf152795, chez hotfixs) et un **heap-use-after-free dans
+  l'index HNSW à la fin d'un COPY** (`shrinkForNode` lit le vecteur du nœud dans un tampon que la
+  lecture des voisins réalloue — le chemin de la montre ; correctif étroit f97293306, branche
+  vecteur-du-noeud-copie). Ni l'un ni l'autre n'explique seul le numéro de page de 330 Gio ; le
+  mélange sous ASAN continue avec le correctif.
+- **hotfixs** : A (le rejeu d'un COPY de relations suivi d'une mise à jour) en passe complète depuis
+  9 h 30, verte vers 10 h 20 ; B mesuré (la mémoire en service était juste, seul le rejeu sous un
+  second écrivain fautait), verrou de versement écrit, témoin à jouer.
+- **La file** : 96 (à toi à 10 h 01) → ED (equipier-quota : reprise doublée sur 429/503 hors de
+  max_failed_steps, le champ inconnu nomme le binaire, `check-manifests` pour le repli de G,
+  CARGO_BUILD_JOBS=8 au gabarit) → hotfixs A dès « vert » → la sonde d'archi → recherche (le score
+  comparable d'un signal à l'autre : `chunk.signal`, choix du morceau par la contribution RRF,
+  `best_signal`, pas de score absolu inventé) → hooks-essai (coloration B). **Le rebâti de la lib**
+  portera a312f823e, le rejeu de hotfixs et vecteur-du-noeud-copie ; la pose attend aussi la cause
+  du SIGSEGV.
