@@ -59,3 +59,23 @@ Vert avec le correctif :
 test daemon_host::tests::un_backend_de_code_dont_la_racine_a_disparu_est_signale_dans_daemon_status_et_ses_outils ... ok
 test result: ok. 1 passed; 0 failed
 ```
+
+## La fin du lot (hotfixs, 8 novembre 2026)
+
+- `index` et `estimate` lisent la racine aussi : leur politique le déclare maintenant
+  (`read_files: true` dans `templates/backends/code/backend.json` et `snapshot.json`), et la garde
+  de `call_tool_on` les couvre par cette déclaration, pas par leur nom. Avant, un `index` sur une
+  racine disparue tentait son balayage. Le témoin le vérifie (son assertion 3). La politique
+  `read_files` ne fait qu'élargir les nœuds permis et exiger une clé `workspace`, que les deux
+  gabarits portent ; les copies locales du gabarit se diront « dérivées » jusqu'à leur mise à jour.
+
+## Hors de ce lot
+
+- Le symptôme 3 (« Catalogue occupé » sur `usages`, 17 h 56 et 17 h 58) précède 94354595c
+  (11 octobre, 18 h 24), qui met la montre en pause sur une racine disparue et fait attendre une
+  lecture derrière un catalogue tenu brièvement (ticket fermé
+  `closed/2026-10-11-catalogue-occupe-pour-un-changement-localise.md`) ; le refus résiduel
+  pendant une réaction en chaîne est suivi par le ticket ouvert
+  `2026-10-12-une-lecture-refusee-pendant-une-reaction-une-fois-sur-neuf.md`.
+- Le symptôme 4 (un jeton absent du corpus rend trois morceaux sans rapport à ★0,74) n'est pas
+  traité ici.
