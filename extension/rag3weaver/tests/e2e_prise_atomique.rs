@@ -376,14 +376,8 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
         std::process::exit(0);
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-insistant-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let base = crate::common::BaseTemporaire::dans("insistant");
+    let dossier = base.chemin().to_path_buf();
 
     let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
     ecrivain
@@ -516,14 +510,8 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-marque-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let base = crate::common::BaseTemporaire::dans("marque");
+    let dossier = base.chemin().to_path_buf();
 
     let mut config = CatalogConfig::default();
     config.embedding_dim = 4;
@@ -589,7 +577,6 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
              encore. Test sans objet ici, et il le dit."
         );
         drop(ecrivain);
-        let _ = std::fs::remove_dir_all(&dossier);
         return;
     };
     assert_eq!(au_repos, 0, "au repos, aucun écrivain ne doit être marqué");
@@ -689,14 +676,8 @@ fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-catalogue-lecteur-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let base = crate::common::BaseTemporaire::dans("catalogue-lecteur");
+    let dossier = base.chemin().to_path_buf();
 
     // L'écrivain pose, indexe, et lâche.
     {

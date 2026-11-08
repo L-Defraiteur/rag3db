@@ -1,6 +1,6 @@
 # Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive
 
-- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration).
+- **État** : en cours (8 novembre 2026) — la garde `BaseTemporaire` et dix témoins passés par elle (lot de l'équipier Gemini, fini par la session hotfixs) ; restent le témoin de suite, le cache par défaut de `Catalog` (en service aussi), sept témoins d'`e2e_prise_atomique` et deux journaux à nom fixe (ci-dessous). Ouvert le 18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration.
 - **Gravité** : confort, mais `/tmp` est un tmpfs sur le poste principal : ce qui y reste occupe
   la RAM, puis l'échange.
 - **Atteignable en service** : non (tests seulement), à une exception près : `Catalog` écrit son
@@ -86,3 +86,44 @@ Aucun pour l'instant. Il faudrait :
 4. Une fois rien de vivant dessus (vérifié par `/proc/*/cwd`, `fd` et `maps`, jamais par nom),
    effacer les restes listés plus haut. L'effacement revient à qui Lucie ou l'orchestration
    désigne. Ceux de `e2e_rag3daemon` et `e2e_code` ont été effacés le 18 octobre.
+
+## Le 8 novembre 2026 — la garde, et ce qui reste
+
+**Ce que fait le lot** (`agent/tests-bases-dans-tmp`, essai 5 de l'équipier Gemini sous
+supervision de c7, fini par la session hotfixs après l'arrêt de l'équipier sur son quota) :
+
+- `tests/common/mod.rs` : `BaseTemporaire::dans(famille)`, une base `base.rag3db` dans un dossier à
+  elle sous `temp_dir()`, que son `Drop` efface entier, succès ou panique, sauf avec
+  `RAG3WEAVER_GARDER=1` ; et `compter_residus_temp(préfixe)`.
+- Dix témoins passent par elle : `e2e_rag3daemon` (`deux_processus_partagent_la_base_par_le_demon`,
+  `un_lecteur_choisit_son_chemin_et_le_dit`), `e2e_code`
+  (`a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen`), `e2e_prise_atomique`
+  (`deux_processus_ne_peuvent_pas_ouvrir_la_meme_base`,
+  `plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient`,
+  `un_lecteur_qui_insiste_pendant_qu_on_ecrit`, `la_marque_dingestion_se_voit_depuis_un_autre_processus`,
+  `un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose`) et `e2e_rouvrir`
+  (`apres_un_point_de_reprise_echoue_le_catalogue_refuse_tout_et_se_rouvre`).
+- La base tombe par l'ordre de portée, après ce qui la tient (démon, catalogue, connexion) : un
+  `drop(base)` explicite avant eux l'effaçait sous un démon vivant (relu dans les dix).
+- Le témoin de la garde, à la fin de `deux_processus_partagent_la_base_par_le_demon` : rien ne
+  reste sous le préfixe de ce témoin. Rouge avant (c7, à luciepc) : « 3 fichier(s) » — la base,
+  son `.wal`, son `.ecrivain`. Il prouve le `Drop`, pas une suite entière.
+
+**Ce qui reste :**
+
+1. **Le témoin de suite** : jouer `e2e_rag3daemon`, `e2e_code` et `e2e_prise_atomique` hors de
+   `run_e2e.sh`, avec un `TMPDIR` neuf, et exiger qu'il soit vide à la fin.
+2. **Le cache par défaut de `Catalog`**, `/tmp/rag3weaver_cache` (`src/catalog.rs`, `cache_base`) :
+   en service aussi, et c'est le point qui compte pour la mémoire vive du poste (`/tmp` est un
+   tmpfs).
+3. **Sept témoins d'`e2e_prise_atomique`**, même défaut (`remove_dir_all` sur la base-fichier, qui
+   échoue). Six passent par `dossier_temporaire(nom)` sous `temp_dir()` :
+   `deux_modeles_se_partagent_un_index`, `une_base_v5_ouverte_par_la_v6_ne_bouge_pas`,
+   `le_meme_nom_avec_une_autre_dimension_est_refuse`,
+   `un_modele_absent_refuse_en_nommant_les_disponibles`,
+   `le_choix_du_premier_index_se_note_une_fois_et_se_relit`,
+   `le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve`. Le septième,
+   `aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait`, écrit sous `$HOME` (pas dans le
+   tmpfs, mais il reste aussi).
+4. **Deux journaux à nom fixe** de 130 octets, `/tmp/rag3weaver-e2e-acces` et
+   `/tmp/rag3weaver-e2e-rag3daemon` (les journaux du démon des deux témoins d'`e2e_rag3daemon`).

@@ -180,7 +180,7 @@ fn deux_processus_partagent_la_base_par_le_demon() {
     ));
     assert!(
         restes.is_empty(),
-        "la suite a laissé {} fichier(s)/dossier(s) dans /tmp après sa fin : {:?}",
+        "ce témoin a laissé {} fichier(s)/dossier(s) dans /tmp après sa fin : {:?}",
         restes.len(),
         restes
     );
@@ -290,7 +290,9 @@ fn un_lecteur_choisit_son_chemin_et_le_dit() {
         }
     }
 
-    drop(base);
+    // La base tombe en dernier, par l'ordre de portée : le démon (serveur, ecrivain,
+    // par_relais, déclarés après elle) s'arrête d'abord. Un drop(base) explicite ici
+    // l'effaçait sous un démon vivant.
 }
 
 /// **Après un point de reprise échoué**, le démon répond l'erreur puis

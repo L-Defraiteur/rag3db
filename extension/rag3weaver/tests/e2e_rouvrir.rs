@@ -60,8 +60,8 @@ fn textes(catalog: &Catalog) -> Vec<String> {
 #[test]
 #[ignore]
 fn apres_un_point_de_reprise_echoue_le_catalogue_refuse_tout_et_se_rouvre() {
-    let dossier = std::env::temp_dir().join(format!("rag3weaver-rouvrir-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dossier);
+    let base = crate::common::BaseTemporaire::dans("rouvrir");
+    let dossier = base.chemin().to_path_buf();
     {
         let (mut catalog, hook) = ouvrir(&dossier);
         catalog.ingest_entities("Note", vec![ligne("validée avant la panne")]).unwrap();
@@ -99,7 +99,6 @@ fn apres_un_point_de_reprise_echoue_le_catalogue_refuse_tout_et_se_rouvre() {
     catalog.ingest_entities("Note", vec![ligne("pendant la panne")]).unwrap();
     assert_eq!(textes(&catalog), ["pendant la panne", "validée avant la panne"]);
     drop(catalog);
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **La connexion sœur** (celle du magasin de blobs) partage l'état : la base

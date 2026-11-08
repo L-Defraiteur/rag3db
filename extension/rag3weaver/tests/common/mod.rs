@@ -581,7 +581,7 @@ impl AsRef<std::path::Path> for BaseTemporaire {
 
 impl Drop for BaseTemporaire {
     fn drop(&mut self) {
-        if std::env::var_os("RAG3WEAVER_GARDER").is_none() {
+        if std::env::var("RAG3WEAVER_GARDER").as_deref() != Ok("1") {
             let _ = std::fs::remove_dir_all(&self.dossier);
         }
     }
