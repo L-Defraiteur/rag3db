@@ -136,7 +136,9 @@ pub(super) fn avancement_de_la_ligne(ligne: &str) -> Option<Avancement> {
         let c = nombre(&ligne[i + "vecteurs prêts (".len()..])?;
         return Some(Avancement { phase: "vecteurs", fait: c, total: c });
     }
-    if let Some(i) = ligne.find("vecteurs ") {
+    // Le dernier « vecteurs » de la ligne (relecture d'everything declarative : une ligne
+    // qui en porterait deux, « sans vecteurs … · vecteurs N sur C », se lit par le second).
+    if let Some(i) = ligne.rfind("vecteurs ") {
         let reste = &ligne[i + "vecteurs ".len()..];
         if let Some((fait, apres)) = reste.split_once(" sur ") {
             if let (Some(fait), Some(total)) = (nombre(fait), nombre(apres)) {
@@ -942,6 +944,7 @@ mod tests {
             Some(Avancement { phase: "vecteurs", fait: 8200, total: 20100 })
         );
         assert_eq!(avancement_de_la_ligne("plein texte prêt · vecteurs prêts (20100 morceaux, granite-278m)"), Some(Avancement { phase: "vecteurs", fait: 20100, total: 20100 }));
+        assert_eq!(avancement_de_la_ligne("sans vecteurs (repris) · vecteurs 3 sur 9 (33 %, granite-278m)"), Some(Avancement { phase: "vecteurs", fait: 3, total: 9 }));
         assert_eq!(avancement_de_la_ligne("indexation lancée : 40 fichiers, granite-278m"), None);
         assert_eq!(avancement_de_la_ligne("plein texte prêt : 40 fichiers, 88 scopes, 12 relations posées"), None);
     }
