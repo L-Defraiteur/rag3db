@@ -1,6 +1,6 @@
 # Un COPY de relations annulé laisse gonflée l'estimation du nombre de relations
 
-- **État** : ouvert — confort, hors stèle (orchestration, 5 octobre 2026) ; rien à coder tant qu'un mauvais plan n'est pas observé (orchestration, 10 octobre 2026)
+- **État** : corrigé (lot `g5-statistiques`, 8 novembre 2026, session hotfixs) — la forme retenue du 10 octobre ; ouvert le 5 octobre 2026 comme confort, hors stèle (orchestration)
 - **Gravité** : estimation fausse (plans moins bons), aucune réponse fausse
 - **Atteignable en service** : oui, par tout `COPY` de relations annulé ou refusé, et par tout `DELETE` de relations
 - **Touche rag3weaver** : au plus des plans plus lents après des paquets défaits
@@ -43,3 +43,33 @@ sans relire les colonnes, par la longueur des listes CSR persistées après le p
 vérifier dans `CSRNodeGroup`) —, plus les relations locales ; `getNumRels` la lit à la place de
 `getNumTotalRows`. Témoin rouge d'abord : l'estimation après un `COPY` de relations annulé et après
 un `DELETE`, par un accès de test. Fichiers de stockage de la session cœur C++.
+
+## La correction (8 novembre 2026)
+
+- **Le défaut était plus large que le ticket.** La cardinalité des statistiques d'une table de
+  relations était déjà recalée au point de reprise et à l'ouverture
+  (`NodeGroupCollection::getNumLiveRows`), mais sur `CSRNodeGroup::getNumRows()`, qui ne compte
+  que la part en mémoire : environ zéro après un point de reprise ou une réouverture. Personne ne
+  la lisait encore.
+- **Le recalage lit les longueurs.** Le point de reprise d'un groupe CSR somme les longueurs neuves
+  de ses listes (`numRelsAtCheckpoint`, dans `checkpointInMemAndOnDisk` et
+  `checkpointInMemOnly`), et la collection s'y recale. À l'ouverture, une collection CSR garde
+  l'estimation écrite par son dernier point de reprise : pas de relecture des listes.
+- **Le planificateur lit une estimation à part.** `RelTable::getEstimatedNumRels`, lue par
+  `CardinalityEstimator::getNumRels`, rend cette cardinalité, plus les décalages réservés depuis
+  le dernier point de reprise ou l'ouverture, plus les relations locales. Une relation validée
+  compte tout de suite ; une relation annulée ou supprimée compte jusqu'au point de reprise
+  suivant. `nextRelOffset` reste l'allocateur, et `getNumTotalRows` ne change pas.
+- **Une base d'avant ce lot** porte sur disque une estimation nulle pour des relations allouées.
+  Elle garde l'estimation d'avant, `nextRelOffset`, gonflée mais jamais nulle, jusqu'à son premier
+  point de reprise. C'est aussi le cas d'une table dont tout a été supprimé.
+
+## Les témoins
+
+`test/transaction/table_analyze_test.cpp`, `RelEstimateTest` :
+
+- `ARolledBackCopyIsNotCountedAfterTheCheckpoint` : 300 relations, puis un COPY de 500 annulé, un
+  point de reprise et une réouverture. Rouge avant : 800 pour 300.
+- `DeletedRelsAreNotCountedAfterTheCheckpoint` : 500 relations, 200 supprimées, puis un point de
+  reprise et une réouverture. Rouge avant : 500 pour 300.
+- `CommittedRelsCountBeforeTheCheckpoint` : le garde-fou du sous-compte, vert avant comme après.
