@@ -44,7 +44,8 @@ fn etat_de_l_index(etat: &Value, manifeste: &Path) -> String {
         Some(b) if b["open"] != true => "pas ouvert".into(),
         Some(b) => match &b["index"] {
             Value::Object(index) if index.values().any(est_une_entite) => phrase_de_l_index(index),
-            Value::Object(index) if index.get("busy") == Some(&Value::Bool(true)) => "une écriture tient l'index : son état se dira à la prochaine lecture".into(),
+            Value::Object(index) if index.get("busy") == Some(&Value::Bool(true)) => "indexation en cours : une écriture tient l'index, ses comptes se diront au paquet suivant".into(),
+            Value::Object(index) if index.get("indexings").and_then(Value::as_u64).is_some_and(|n| n > 0) => "indexation en cours, rien de cherchable encore".into(),
             Value::Null | Value::Object(_) => "ouvert, pas encore indexé".into(),
             Value::String(s) => s.clone(),
             autre => autre.to_string(),
@@ -92,11 +93,16 @@ fn phrase_de_l_index(index: &serde_json::Map<String, Value>) -> String {
         }
         dit
     };
-    format!(
+    let dit = format!(
         "{}, {}",
         signal("text", "text_percent", "plein texte", "prêt", ""),
         signal("vectors", "vectors_percent", "vecteurs", "prêts", " déclarés")
-    )
+    );
+    // Une indexation qui tourne se dit, même quand aucun pourcentage ne l'a encore écrit.
+    match index.get("indexings").and_then(Value::as_u64).filter(|n| *n > 0) {
+        Some(_) if !dit.contains("en cours") => format!("{dit} ; indexation en cours"),
+        _ => dit,
+    }
 }
 
 /// Une commande git dans `dossier`, sa sortie ; l'erreur dit la commande et ce que
@@ -573,7 +579,13 @@ mod tests {
         assert_eq!(super::etat_de_l_index(&etat(index), manifeste), "plein texte prêt (3/3), vecteurs 1/2 déclarés, en cours, 42 %");
         // Une écriture qui tient le verrou : ni zéro ni « pas indexé ».
         let dit = super::etat_de_l_index(&etat(json!({ "busy": true, "watches": {} })), manifeste);
-        assert!(dit.contains("une écriture tient l'index"), "{dit}");
+        assert!(dit.starts_with("indexation en cours"), "{dit}");
+        // Le premier index d'un worktree : les entités encore jamais écrites, une
+        // indexation qui tourne (c7, 16 h 30 : « plein texte 0/4, vecteurs 0/4 »).
+        let jamais = json!({ "text": "never", "vectors": "never", "vectors_percent": 0, "updated_ms": 1 });
+        let index = json!({ "File": jamais, "Scope": jamais, "indexings": 1 });
+        assert_eq!(super::etat_de_l_index(&etat(index), manifeste), "plein texte 0/2, vecteurs 0/2 déclarés ; indexation en cours");
+        assert_eq!(super::etat_de_l_index(&etat(json!({ "indexings": 1, "watches": {} })), manifeste), "indexation en cours, rien de cherchable encore");
     }
 
     /// L'atelier posé comme le pose `rag3weaver-backend atelier` : le gabarit livré
