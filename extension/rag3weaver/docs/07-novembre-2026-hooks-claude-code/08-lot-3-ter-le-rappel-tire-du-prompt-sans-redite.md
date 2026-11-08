@@ -172,3 +172,20 @@ l'hôte compare.
     La facture se relit ainsi dans `hooks.log`.
 - **Le plafond d'items par bloc** reste celui de la requête, trois fiches. `hooks.log` n'a encore
   que cinq rappels, de deux candidats chacun : trop peu pour mesurer mieux.
+
+## 8. Le 3 ter (d) : l'hôte reçoit l'échéance du client
+
+hooks-essai a ajouté `deadline_ms` à `POST /call`, dans le lot chat-et-delai (682655352). Passé ce
+délai, l'hôte arrête le run par le chemin d'arrêt commun, avec `cancelled_by: "deadline"`. Il
+répond en 422, avec `error_kind: "deadline"` et `transient: true`. Le client du hook s'en sert
+désormais :
+- chaque `/call` porte `deadline_ms`, à **95 %** du délai que le client tient. Le rappel du tour
+  borné à 1 s envoie 950 ms, les autres appels sous 5 s envoient 4 750 ms, et le fils du rappel
+  différé, sous 30 s, envoie 28 500 ms. La réponse « délai dépassé » arrive ainsi avant que le
+  client ferme ;
+- le client lit le 422 par `error_kind`, pas par son texte. Le journal dit « délai dépassé côté
+  hôte », et le rappel confie alors sa requête au fils, comme pour un délai du client.
+
+La limite reste celle du ticket de hooks-essai, « un arrêt ne coupe pas une requête du moteur en
+cours ». L'arrêt se lit entre deux nœuds du graphe, et une requête du moteur déjà lancée va à son
+terme. L'extraction des mots-clés du § 2 reste donc la vraie garde contre un plein texte long.

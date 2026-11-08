@@ -388,6 +388,9 @@ impl Hote for HoteEnLecture<'_> {
 /// Il ne relance jamais l'hôte et ne relit pas le jeton : un hôte qui ne
 /// répond pas est une raison de se taire, pas de s'acharner.
 pub struct ClientHote {
+    /// Le délai commun des requêtes ; l'hôte en reçoit 95 % en `deadline_ms`
+    /// (lot 3 ter d), pour arrêter son run et répondre avant que le client coupe.
+    delai: Duration,
     /// La boîte des agents, sur la même adresse et le même jeton (lot 5).
     boite: Option<crate::mail::BoiteHttp>,
     /// La durée de chaque requête, pour le journal (c7 : savoir lequel traîne).
@@ -417,7 +420,7 @@ impl ClientHote {
     pub fn ouvrir(adresse: &str, token: Option<&str>, manifest: &Path, keys: &[String], delai: Duration) -> Result<Self, String> {
         let agent = crate::daemon::agent_with_timeout(delai);
         let base = crate::daemon::base_url(adresse);
-        let mut me = Self { boite: None, durees: std::sync::Mutex::new(Vec::new()), agent, base, token: token.map(str::to_string), session: String::new(), manifest: manifest.to_path_buf(), nom: String::new() };
+        let mut me = Self { delai, boite: None, durees: std::sync::Mutex::new(Vec::new()), agent, base, token: token.map(str::to_string), session: String::new(), manifest: manifest.to_path_buf(), nom: String::new() };
         let corps = json!({ "client": "claude-code-hook", "keys": keys, "pid": std::process::id() });
         let v = me.poster("/session", corps, false)?;
         me.session = v["session"].as_str().ok_or("l'hôte n'a pas rendu de session")?.to_string();
@@ -431,6 +434,12 @@ impl ClientHote {
             .map(str::to_string)
             .unwrap_or_else(|| me.manifest.parent().and_then(|d| d.file_name()).map(|d| d.to_string_lossy().to_string()).unwrap_or_else(|| "manifeste sans nom".into()));
         Ok(me)
+    }
+
+    /// L'échéance donnée à l'hôte pour un délai client : 95 % de lui, pour que la
+    /// réponse « délai dépassé » arrive avant que le client ferme.
+    fn echeance(delai: Duration) -> u64 {
+        (delai.as_millis() as u64).saturating_mul(95) / 100
     }
 
     fn poster(&self, route: &str, corps: Value, avec_session: bool) -> Result<Value, String> {
@@ -468,6 +477,11 @@ impl ClientHote {
         let statut = reponse.status().as_u16();
         let texte = reponse.body_mut().read_to_string().map_err(|e| format!("{route} : {e}"))?;
         let v: Value = serde_json::from_str(&texte).unwrap_or_else(|_| json!({ "ok": false, "error": texte }));
+        if statut == 422 && v["error_kind"] == "deadline" {
+            // L'hôte a arrêté le run à son échéance (`cancelled_by: deadline`) :
+            // un dépassement, pas un refus.
+            return Err(format!("{route} : délai dépassé côté hôte — {}", v["error"].as_str().unwrap_or("?")));
+        }
         if statut != 200 {
             return Err(format!("{route} : refus {statut} — {}", v["error"].as_str().unwrap_or(&v.to_string())));
         }
@@ -496,7 +510,7 @@ impl Hote for ClientHote {
     }
     fn appeler_borne(&self, outil: &str, arguments: Value, delai: Duration) -> Result<Value, String> {
         let agent = crate::daemon::agent_with_timeout(delai);
-        let v = self.poster_par(&agent, "/call", json!({ "manifest": self.manifest, "name": outil, "arguments": arguments }), true)?;
+        let v = self.poster_par(&agent, "/call", json!({ "manifest": self.manifest, "name": outil, "arguments": arguments, "deadline_ms": Self::echeance(delai) }), true)?;
         if v["ok"] == json!(false) {
             return Err(format!("{outil} : {}", v["error"].as_str().unwrap_or("?")));
         }
@@ -510,7 +524,7 @@ impl Hote for ClientHote {
         Ok(v)
     }
     fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String> {
-        let v = self.poster("/call", json!({ "manifest": self.manifest, "name": outil, "arguments": arguments }), true)?;
+        let v = self.poster("/call", json!({ "manifest": self.manifest, "name": outil, "arguments": arguments, "deadline_ms": Self::echeance(self.delai) }), true)?;
         if v["ok"] == json!(false) {
             return Err(format!("{outil} : {}", v["error"].as_str().unwrap_or("?")));
         }
@@ -1542,7 +1556,7 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 journal.push(format!("rappel : {}", raisons.join(" ; ")));
             }
             Err(err) => {
-                let lent = err.contains("timeout") || err.contains("ne répond pas");
+                let lent = err.contains("timeout") || err.contains("ne répond pas") || err.contains("délai dépassé côté hôte");
                 journal.push(format!("recall_fiches en {} ms : {err}", debut.elapsed().as_millis()));
                 if lent {
                     confier_au_fond(e, reglage, &requete, None, etat.tour, journal);
@@ -2125,7 +2139,25 @@ mod tests {
         }
         let appel: Value = serde_json::from_str(&r[2].3).unwrap();
         assert_eq!((appel["name"].as_str(), appel["manifest"].as_str()), (Some("get_fiche"), Some("/m/backend.json")));
+        assert_eq!(appel["deadline_ms"], 4_750, "l'hôte reçoit 95 % du délai du client (5 s) : {appel}");
         assert_eq!(r[0].3.contains("\"client\":\"claude-code-hook\""), true);
+    }
+
+    #[test]
+    fn un_delai_depasse_cote_hote_se_lit_et_le_rappel_passe_au_fond() {
+        // L'hôte arrête le run à son échéance et répond 422, `error_kind: deadline`.
+        let (adresse, recues) = hote_en_carton(vec![
+            (200, json!({ "session": "S9" }).to_string()),
+            (200, json!({ "ok": true, "describe": { "name": "memoire-longue" } }).to_string()),
+            (422, json!({ "ok": false, "error": "délai dépassé (950 ms) : l'hôte a arrêté « recall_fiches » à son échéance (cancelled_by « deadline »)", "error_kind": "deadline", "transient": true }).to_string()),
+        ]);
+        let c = ClientHote::ouvrir(&adresse, None, Path::new("/m/backend.json"), &["dev".into()], Duration::from_secs(5)).unwrap();
+        let e = c.appeler_borne("recall_fiches", json!({ "query": "x" }), Duration::from_millis(1_000)).unwrap_err();
+        assert!(e.contains("délai dépassé côté hôte") && e.contains("950 ms"), "{e}");
+        std::thread::sleep(Duration::from_millis(50));
+        let r = recues.lock().unwrap();
+        let appel: Value = serde_json::from_str(&r[2].3).unwrap();
+        assert_eq!(appel["deadline_ms"], 950, "le rappel borné à 1 s donne 950 ms à l'hôte : {appel}");
     }
 
     #[test]
