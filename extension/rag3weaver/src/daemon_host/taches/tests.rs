@@ -495,3 +495,25 @@ fn git_init_declare_fait_de_la_racine_un_depot() {
     assert_eq!(git(&t.arbre, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap(), "agent/en-depot");
     host.fermer_une_tache(&id, "en-depot").unwrap();
 }
+
+/// **Une copie qui échoue au milieu ne laisse pas son temporaire** (relecture
+/// d'everything declarative) : la fusion sans git recopie par un voisin
+/// `.<nom>.rag3weaver-tmp` ; une copie qui a créé ce voisin puis échoue (un disque
+/// plein, une erreur d'E/S, injectée ici) le retire, et la cible n'est pas touchée.
+#[test]
+fn une_copie_qui_echoue_ne_laisse_pas_son_temporaire() {
+    let d = tempfile::tempdir().unwrap();
+    let (de, vers) = (d.path().join("source.rs"), d.path().join("racine").join("cible.rs"));
+    std::fs::write(&de, "neuf\n").unwrap();
+    std::fs::create_dir_all(vers.parent().unwrap()).unwrap();
+    std::fs::write(&vers, "ancien\n").unwrap();
+    let copie_coupee = |_: &Path, tmp: &Path| -> std::io::Result<()> {
+        std::fs::write(tmp, "ne")?;
+        Err(std::io::Error::other("disque plein (injecté)"))
+    };
+    let refus = recopier_par_un_voisin(&de, &vers, &copie_coupee).expect_err("la copie échoue");
+    assert!(refus.contains("disque plein"), "{refus}");
+    let restes: Vec<String> = std::fs::read_dir(vers.parent().unwrap()).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(restes, vec!["cible.rs".to_string()], "le temporaire est retiré");
+    assert_eq!(std::fs::read_to_string(&vers).unwrap(), "ancien\n", "la cible n'est pas touchée");
+}

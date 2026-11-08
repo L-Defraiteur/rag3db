@@ -152,6 +152,20 @@ fn copier_l_espace(de: &Path, vers: &Path, exclus: &[String]) -> Result<(), Stri
     })
 }
 
+/// **Recopier un fichier sans jamais en laisser un tronqué** : la copie va dans un
+/// voisin `.<nom>.rag3weaver-tmp`, puis le voisin est renommé sur la cible. `copier`
+/// fait la copie (`std::fs::copy` en service ; un témoin y injecte un échec).
+fn recopier_par_un_voisin(de: &Path, vers: &Path, copier: &dyn Fn(&Path, &Path) -> std::io::Result<()>) -> Result<(), String> {
+    let d = vers.parent().ok_or("un chemin sans dossier")?;
+    std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+    let tmp = d.join(format!(".{}.rag3weaver-tmp", vers.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+    copier(de, &tmp).map_err(|e| format!("{} → {} : {e}", de.display(), tmp.display()))?;
+    std::fs::rename(&tmp, vers).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{} → {} : {e}", tmp.display(), vers.display())
+    })
+}
+
 /// L'empreinte d'un fichier, hachée en flux (un gros fichier ne monte pas en
 /// mémoire) ; `None` s'il n'existe pas ou ne se lit pas.
 fn empreinte(chemin: &Path) -> Option<String> {
@@ -882,14 +896,7 @@ impl DaemonHost {
                 let (de, vers) = (w.racine.join(chemin), w.racine_principale.join(chemin));
                 let pas = || -> Result<(), String> {
                     if de.is_file() {
-                        let d = vers.parent().ok_or("un chemin sans dossier")?;
-                        std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
-                        let tmp = d.join(format!(".{}.rag3weaver-tmp", vers.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
-                        std::fs::copy(&de, &tmp).map_err(|e| format!("{} → {} : {e}", de.display(), tmp.display()))?;
-                        std::fs::rename(&tmp, &vers).map_err(|e| {
-                            let _ = std::fs::remove_file(&tmp);
-                            format!("{} → {} : {e}", tmp.display(), vers.display())
-                        })
+                        recopier_par_un_voisin(&de, &vers, &|de, tmp| std::fs::copy(de, tmp).map(|_| ()))
                     } else if vers.exists() {
                         std::fs::remove_file(&vers).map_err(|e| format!("{} : {e}", vers.display()))
                     } else {
