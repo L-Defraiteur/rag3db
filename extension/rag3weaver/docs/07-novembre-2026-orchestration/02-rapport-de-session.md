@@ -1658,3 +1658,38 @@ avance d'autant ; les hashs, eux, sont exacts.
   `usages`… dans les 500 derniers runs ; les 4 722 runs du dépôt de Lucie sont la montre). Les
   sessions grep et lisent les fichiers. Deux gestes à la main de Lucie : les hooks dans toutes les
   sessions, une ligne du CLAUDE.md (« search_code et usages d'abord »), et un compte quotidien.
+
+## 21 h 50 — la pile de l'atelier atterrit, le portable reposé
+
+- **ED a poussé la pile de l'atelier, f16628f8b** (17 commits sur 29762b9f2, avance rapide, trois
+  contrôles lus, CI verte) : commandes du chat de l'atelier par sa porte déclarée hors de toute tâche,
+  gabarits vivants (`.livre` hors de l'arbre des déclarations, `TrackedByGit` pour les dépôts de
+  déclarations), reprise du premier index coupé, `embeddings.catch_up_on_open` qui ne tient pas la
+  porte d'une fermeture, la note périmée et l'entité vide qui se lisent prêtes, « indexation en
+  cours » seulement quand une indexation vit, le suiveur RepoIndexed/IndexProgress posé dans
+  `lancer_sur` et ses comptes lus sans rouvrir le dépôt. Le seul rouge de sa passe, e2e_lectures,
+  était l'environnement : bissection sans commit fautif (un commit de docs « mauvais »), la cause
+  étant le bge-m3 7879 tenu à 99 % du moteur par le test de charge d'ingestion de la passe de
+  recherche (3,4 s par texte à 21 h 20, 24 ms à 21 h 36), 24/24 sur 9bae60786 et sur f16628f8b une
+  fois la carte libre ; ticket ouvert puis fermé (cad8944f5) avec deux leçons pour les passes.
+- **G a reposé le portable à 21 h 42** (coupure de 8 s, binaire f16628f8b contre cbc06c3e1, quatre
+  backends rouverts, check-manifests 4/0) ; l'accueil dit « Dépôts » (« rag3db · master »,
+  « rag3db-essai-atelier · essai-atelier »), 407 éléments, aucune erreur de console. Le gabarit
+  vivant ne note pas l'atelier de Lucie, posé avant la pile : `rag3weaver-backend atelier` a été
+  **refusé** au mode de G (ressource partagée), non contourné ; Lucie le joue elle-même une fois, et
+  l'atelier suivra ensuite le binaire. Le plafond des lourds de luciepc est à 4 (remis pour que le
+  bâti de la repose parte ; carte et disque à zéro).
+- **La file** : hooks-essai (fusion-sans-temporaire, ses cinq anciens rouges verts seuls sur la carte
+  libre, rejeu court en cours, dernier pas au bout) puis 96 (pas 3 de M4, rejeu sur f16628f8b), puis
+  « file passée » à hotfixs (trace à paramètres littéraux) et à codeparsers (mesure du `require`).
+  À 22 h 15, G demande sa fenêtre ; la tête de la lib de la nuit se fige à 22 h 30.
+- **Le banc** : Qwen3-4B-Instruct-2507 brut, Apache 2.0 vérifiée, **premier 0,76, AUC 0,92 à 2 k,
+  504 ms par paire** sur card0 (forme courte 0,73, 90 ms ; 2,5 s par cas de 5 fiches contre 4,4 s
+  pour Gemini, 0,45 s en forme courte) ; Qwen3-1.7B 0,50. Les trois mesures de Lucie (fin de
+  conversation, borne 6 k, plusieurs fiches d'un coup : préfixe partagé et liste A-E) tournent sur
+  Qwen 1.5B puis Qwen3-4B. Apache 2.0 : attribution et licence si on redistribue les poids, rien de
+  plus ; Qwen2.5-3B (licence non commerciale) refusé.
+- **Lucie et ses collègues** : deux textes de présentation écrits (ce que c'est, où on en est ;
+  pourquoi le découpage n'a rien d'arbitraire) ; la lecture de Lucie face aux géants : « qui ne se
+  met pas à courir ne gagne pas une course ». Priorité de demain inchangée : les vues par worktree,
+  page de l'arbre principal (10b8affce) à lire le matin.

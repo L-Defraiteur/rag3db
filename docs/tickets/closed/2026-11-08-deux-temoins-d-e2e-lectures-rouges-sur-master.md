@@ -1,12 +1,13 @@
 # Deux témoins d'e2e_lectures rouges sur master depuis le soir du 8 novembre
 
-- **État** : ouvert (8 novembre 2026, 21 h 20, à la demande de l'orchestration) ; bissection en cours
-  chez everything declarative
+- **État** : fermé — rouge d'environnement, aucun commit fautif (8 novembre 2026, 21 h 40,
+  everything declarative ; lecture de l'orchestration) : la saturation du service creux de luciepc
+  par les passes concurrentes
 - **Famille** : produit
 - **Gravité** : test rouge sur master — il bloque toute passe qui joue e2e_lectures, ou apprend à
   passer outre
-- **Atteignable en service** : à dire par la bissection (une base « déjà ouverte en écriture dans
-  ce processus » à sa première ouverture serait un refus de service)
+- **Atteignable en service** : non par un commit ; un service creux saturé ralentit le surlignage
+  pour tout le monde, et le surlignage le dit déjà (« surlignage creux indisponible »)
 - **Touche rag3weaver** : oui
 
 ## Ce que c'est
@@ -38,8 +39,30 @@ du premier index), 6044f5ae2 et 9c20d6773 (l'avancement sur le flux), 4f54e473a 
 « 3 références à l'instance précédente tenues après 10 s » fait penser à un fil qui garde un `Arc`
 du backend ou du catalogue après sa fermeture.
 
-## La suite
+## Ce que la bissection a dit
 
-La bissection d'e2e_lectures seul entre 9bae60786 et 4f54e473a nomme le commit ; son auteur le
-corrige, témoin rouge d'abord. D'ici là, les passes nomment ces deux témoins en rouges connus
-avec le chemin de ce ticket.
+`git bisect run` d'e2e_lectures seul entre 9bae60786 (bon, 24/24 à 18 h 44) et 4f54e473a, à
+luciepc : 4fd994dd8, 2313398cc et feffea716 (un commit de docs seules, juste après 9bae60786) sont
+tous mauvais, et seul `le_creux_se_surligne_par_le_chemin_de_l_hote` y rougit. Un commit de docs ne
+casse pas un témoin : le rouge suit l'état du service, pas le code. Le témoin du mutex est vert à
+chaque pas : son rouge du rejeu d'avant était la concurrence de deux e2e sur la même machine.
+
+## La cause
+
+Le service bge-m3 de luciepc (7879, le creux et le dense de ces témoins) était tenu à 99 % du
+moteur de card2 depuis 21 h par le test de charge d'ingestion de la passe de recherche
+(`e2e_charge_ingestion`, deux connexions, un flot continu) ; s'y ajoutaient la passe de la pile de
+l'atelier et sa bissection, qui jouaient e2e_lectures en parallèle. Mesures de l'orchestration :
+3,4 s par texte à 21 h 20, 24 ms à 21 h 36, le test de charge fini.
+
+## La preuve
+
+Carte libre, à 21 h 37 : e2e_lectures seul sur **9bae60786**, 24/24 en 16 s ; sur **f16628f8b**
+(la pile de l'atelier sur master), 24/24 en 16 s.
+
+## Ce qui reste
+
+Rien à corriger dans le code. Deux leçons pour les passes : ne pas jouer en parallèle deux suites
+qui chargent le même service d'embarquement (une passe et sa bissection, ou un test de charge), et
+lire l'état des services (`fdinfo` de la carte, le temps par texte) avant de nommer un rouge de
+master.

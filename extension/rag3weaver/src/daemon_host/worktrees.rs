@@ -1517,10 +1517,14 @@ mod tests {
     }
 
     fn service_granite() -> String {
+        servir(Arc::new(Granite))
+    }
+
+    fn servir(modele: Arc<dyn crate::embedder::Embedder>) -> String {
         let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let adresse = ecoute.local_addr().unwrap().to_string();
         std::thread::spawn(move || {
-            let _ = crate::daemon::EmbedDaemon::new(Arc::new(Granite)).servir_lie(ecoute);
+            let _ = crate::daemon::EmbedDaemon::new(modele).servir_lie(ecoute);
         });
         let debut = std::time::Instant::now();
         while crate::daemon::DaemonEmbedder::joindre(&adresse).is_err() {
@@ -1550,14 +1554,17 @@ mod tests {
             f(&mut m);
             std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         };
-        // 1. Un index sans service : le plein texte, et tous les vecteurs dus.
+        // 1. Un index coupé entre deux passes de vecteurs, comme par l'arrêt de l'hôte : le
+        // plein texte, et des vecteurs dus (wt-react5, 8 novembre 2026). Le service lent est
+        // déclaré au manifeste : l'environnement de la passe n'y change rien (archi), et
+        // aucun morceau n'est refusé.
+        let adresse = service_granite();
         ecrire(&|m| {
             m["embeddings"]["catch_up_on_open"] = json!(false);
-            m["embeddings"].as_object_mut().unwrap().remove("address");
+            m["embeddings"]["address"] = json!(adresse);
         });
         let host = Arc::new(crate::daemon_host::tests::hote_isole());
         let h = host.hosted(&manifeste).unwrap();
-        let fini = |j: &str| std::fs::read_to_string(j).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.starts_with(crate::dataflow::index_nodes::DONE_LINE) || l.starts_with(crate::dataflow::index_nodes::FAILED_PREFIX))).unwrap_or(false);
         let attendre_l_index = || {
             let debut = std::time::Instant::now();
             while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
@@ -1568,22 +1575,24 @@ mod tests {
         let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
         let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
         let debut = std::time::Instant::now();
-        while !fini(&journal) {
-            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
-            std::thread::sleep(std::time::Duration::from_millis(200));
+        while !std::fs::read_to_string(&journal).is_ok_and(|t| t.contains("plein texte prêt")) {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "le plein texte n'est pas prêt en 120 s : {journal}");
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        // L'arrêt de l'hôte : au paquet suivant, la dette laissée.
+        let catalogue = host.with_backend(&h, |b| b.catalog.clone()).unwrap();
+        crate::dataflow::index_nodes::stop_indexings_of(&catalogue);
+        drop(catalogue);
         attendre_l_index();
         let dus = || host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
-        assert!(dus() > 0, "sans service, des vecteurs restent dus");
+        assert!(dus() > 0, "l'index coupé laisse des vecteurs dus");
         let fermer = || {
             let s = host.open_session("le témoin", None, Vec::new(), None);
             assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
         };
         fermer();
 
-        // 2. Rouvert avec le service, sans le réglage : rien ne part.
-        let adresse = service_granite();
-        ecrire(&|m| m["embeddings"]["address"] = json!(adresse));
+        // 2. Rouvert, sans le réglage : rien ne part.
         assert_eq!(host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap(), 0, "sans le réglage, aucun index ne part à l'ouverture");
         let avant = dus();
         assert!(avant > 0);
