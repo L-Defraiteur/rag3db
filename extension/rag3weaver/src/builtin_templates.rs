@@ -250,10 +250,23 @@ struct Livre {
     written: String,
 }
 
-fn livre_of(manifest: &Path) -> PathBuf {
-    let mut p = manifest.as_os_str().to_owned();
-    p.push(".livre");
-    PathBuf::from(p)
+/// **L'état qu'rag3weaver tient pour un manifeste, hors de l'arbre de ses déclarations**
+/// (la passe de la pile de l'atelier, 8 novembre 2026 : un `backend.json.premier-index`
+/// posé à côté du manifeste était, pour une tâche, une déclaration inconnue, et sa
+/// fusion refusée). `RAG3WEAVER_STATE_DIR`, sinon `$XDG_STATE_HOME`, sinon
+/// `~/.local/state`, sous `rag3weaver/manifestes/<empreinte du chemin canonique>`.
+pub fn state_dir_of(manifest: &Path) -> PathBuf {
+    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let base = var("RAG3WEAVER_STATE_DIR")
+        .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("rag3weaver")))
+        .or_else(|| var("HOME").map(|h| h.join(".local/state/rag3weaver")))
+        .unwrap_or_else(|| std::env::temp_dir().join("rag3weaver-state"));
+    let canon = manifest.canonicalize().unwrap_or_else(|_| manifest.to_path_buf());
+    base.join("manifestes").join(&blake3::hash(canon.to_string_lossy().as_bytes()).to_hex()[..16])
+}
+
+pub(crate) fn livre_of(manifest: &Path) -> PathBuf {
+    state_dir_of(manifest).join("livre.json")
 }
 
 /// **Note qu'un manifeste vient du gabarit livré `builtin`**, juste après qu'il est écrit.
@@ -262,6 +275,9 @@ pub fn record(manifest: &Path, builtin: &str) -> Result<(), String> {
     let ecrit = std::fs::read(manifest).map_err(|e| format!("{} : {e}", manifest.display()))?;
     let livre = Livre { builtin: builtin.to_string(), content, written: blake3::hash(&ecrit).to_hex().to_string() };
     let p = livre_of(manifest);
+    if let Some(d) = p.parent() {
+        std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+    }
     std::fs::write(&p, serde_json::to_string_pretty(&livre).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", p.display()))
 }
 
@@ -274,6 +290,9 @@ pub enum Refresh {
     UpToDate,
     /// Modifié à la main depuis la pose : gardé.
     EditedByHand,
+    /// Suivi par un dépôt git (le dépôt des déclarations d'un arbre inscrit) : le
+    /// remettre au gabarit serait une écriture hors de toute revue ; gardé, et dit.
+    TrackedByGit,
     /// Remplacé par le gabarit du binaire : les outils venus et partis.
     Refreshed { added: Vec<String>, removed: Vec<String> },
 }
@@ -332,6 +351,13 @@ pub fn refresh(manifest: &Path) -> Result<Refresh, String> {
     let ecrit = std::fs::read(manifest).map_err(|e| format!("{} : {e}", manifest.display()))?;
     if blake3::hash(&ecrit).to_hex().as_str() != livre.written {
         return Ok(Refresh::EditedByHand);
+    }
+    // Un manifeste suivi par un dépôt de déclarations ne s'écrit pas en douce.
+    if let (Some(dir), Some(nom)) = (manifest.parent(), manifest.file_name()) {
+        let suivi = std::process::Command::new("git").arg("-C").arg(dir).args(["ls-files", "--error-unmatch"]).arg(nom).output().is_ok_and(|o| o.status.success());
+        if suivi {
+            return Ok(Refresh::TrackedByGit);
+        }
     }
     let Some(neuf) = get(&livre.builtin) else { return Ok(Refresh::UpToDate) };
     let mut neuf: Value = serde_json::from_slice(neuf).map_err(|e| format!("{} : {e}", livre.builtin))?;
