@@ -931,3 +931,25 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   montrait déjà ; nous en avions tiré la mauvaise conclusion. Le correctif du rejeu est sur
   g2b-melange-hnsw (426153052), prouvé sur une copie de la preuve à luciepc. Deux correctifs avant
   tout retour sur dadbf0041 ou une lib suivante : le rejeu (A) et le SIGSEGV (cœur, ASAN).
+
+## 09 h 50 — pour Lucie au réveil : l'essentiel en six lignes
+
+1. **Ta base de code est vivante** (search_code par l'index depuis 9 h 26), revenue à l'état du
+   7 au soir et rattrapée par la montre ; ton hôte tourne sur l'ancien binaire et la lib 17a094d12
+   après deux SIGSEGV sous la lib neuve (8 h 50, 9 h 05). La pièce du défaut est dans
+   `~/.local/share/rag3weaver/preuves/2026-11-08-code-rag3db-depot-wal-dadbf0041/`.
+2. **Deux défauts du moteur trouvés et un corrigé** : le rejeu d'un COPY de relations suivi d'une
+   mise à jour (antérieur à tout ce week-end ; correctif hotfixs, le .wal réel rejoue sans écart,
+   passe en cours) ; le SIGSEGV dans `optimisticRead` (cœur + hotfixs, témoin du mélange G2b en
+   cours) ; plus G1 sous un second écrivain au rejeu (verrou de versement, hotfixs) et un débordement
+   dans le CREATE_VECTOR_INDEX concurrent (ASAN du cœur). Aucune pose d'hôte avant le rejeu + le
+   SIGSEGV corrigés et la lib rebâtie.
+3. **La nuit a atterri** : ~25 lots (section par section plus haut) dont trois écrits par l'équipier
+   Gemini sous ma supervision — lis `docs/08-novembre-2026-orchestration/01-essais-de-l-equipier.md`
+   et sa section « Ce qu'il faut en retenir ».
+4. **Le cœur a trouvé un vrai défaut de durabilité** (clé prise par une validation au journal non
+   synchronisé) : lot coupure poussé vers 9 h 55.
+5. **Décisions qui t'attendent** : § 05 h 20 (G3, le pont Codex, ton manifeste, thème, page 03,
+   branches, Vertex) — rien n'est poussé sans ton mot pour G3.
+6. **La file en cours** : archi (hooks 3 ter e), 96 (M4 pas 3), ED (429/503), hotfixs (A, puis B,
+   puis G3/G5, puis le 3e lot de l'équipier), la coloration B (hooks-essai, codeparsers, tty).
