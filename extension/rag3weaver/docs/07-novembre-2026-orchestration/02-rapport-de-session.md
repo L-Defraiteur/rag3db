@@ -617,3 +617,39 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   « lire ») et dit faux sur les outils déclarés ; l'équipier a dit « constate l'échec » sans
   jouer, et a clos le plan malgré « attends ma confirmation ». Essai 4 (racine-disparue) en
   cours : il a posé ses trois questions d'exécution avant d'avoir écrit une ligne, recadré.
+
+## 03 h 00 — archi atterri, le figement expliqué, l'essai 4 au vert
+
+- **Atterri** : archi, hooks-pont-9 (46633adcc : `mail send|reply|pending|seen`, fils Codex et
+  livraison par `codex queue`, boîte dans le hook, canal, règle de la boîte, témoin par le chemin
+  de l'hôte ; passe VERT hors verrou, 40 s sous poste push). **Pour Lucie** : rien ne change tant
+  qu'elle ne fait rien ; le canal demande son `.mcp.json` et la commande de la page 07 § 4 bis, les
+  hooks Codex sa confiance par `/hooks` dans Codex ; G le souligne : un message adressé à `codex:`
+  met un autre agent en marche.
+- **La file** : hotfixs pousse le lot de l'équipier (agent/journaux-annulation-tmp-3-3, passe à
+  luciepc sous les services 7879 pour le témoin du creux, lib sans service) ; puis ED, lot 2 des
+  commandes par la porte (commandes-declarees-5, 45654ed69 : une course corrigée en route — un oui
+  posté pendant le dernier pas d'un lancement se perdait ; un rouge d'e2e_juge départagé comme
+  variance de classement de Gemini, vert 2/2 sur master et 3/3 sur la tête) ; puis archi, 3 ter (d)
+  (le client du hook passe `deadline_ms` à 95 % de son délai, hooks-3-ter-d) ; puis arbre, le lot
+  du délai.
+- **Le figement est expliqué** (arbre) : aucun commit correcteur, le figement suivait l'heure
+  (0 h 45 → 1 h 46, la charge de luciepc sur les services bge-m3 derrière les tunnels) ; reproduit
+  à volonté avec un faux service muet (127.0.0.1:7999) : même figure, 1 226 fils en futex_wait, les
+  tests bloqués dans `Backend::stop_reactions` → `stop_within` → `rt::bloquer`. L'embarqueur a un
+  délai de 60 s (`RAG3WEAVER_EMBED_TIMEOUT_SECS`), le relecteur (/rerank) et l'OCR (/ocr) n'en ont
+  aucun. Lot d'arbre : un délai commun aux trois clients (défaut 60 s gardé, mesure du p99 sous
+  charge demain dans la fenêtre de G), erreur nommée « service <adresse> muet après N s », témoin
+  par le faux service muet, et un témoin que `stop_within` revient dans sa borne ; ticket réécrit
+  d'abord ; passe et push à mon « à toi ». La règle « lib entière sans EMBED_SERVICE » tient
+  jusqu'à son atterrissage.
+- **La lib de demain** (G) : rag3db-build-dadbf0041 (tête 7bf887a01, md5 253c898f…) publiée aux
+  deux postes, verdict vert (e2e_code 27/27, e2e_lectures 23/23, format 43), ABI changée (vtables
+  Table, RelTable, NodeTable), contrôle des deux sens sans écart ; fenêtre 8 h 30 tenue ; courant
+  reste 17a094d12. G pose le binaire seul au portable au hash du lot 2 d'ED.
+- **Essai 4 de l'équipier (racine-disparue) au vert** : témoin rouge sur la bonne assertion après
+  trois sorties rendues, correctif (`racine_absente` dans `state()`, erreur nommée dans
+  `call_tool_on`), 1 passed, et les modules daemon_host + backend 66 passés, 0 rouge. Recadré sur
+  une liste de noms d'outils en dur (la politique déclarée suffit). Constats produit dans la page
+  08/01 : l'attente du superviseur compte comme pas raté et tue la tâche, les `answer` ne sont pas
+  lues, la répétition en attente, le plafond de 40 pas atteint par les lignes d'attente.

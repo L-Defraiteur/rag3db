@@ -169,4 +169,30 @@ confirmation avant de déclarer la tâche finie », outils listés, au plus étr
   l'analyse (list_files, backend.rs, code_tools.rs), écrire le témoin rouge et demander son
   exécution ».
 
+- 02:09 → 02:22, **trois `step_done` d'« analyse » de suite** sur l'item 1 puis 2, aucun fichier
+  touché depuis 35 min ; recadrage : « l'analyse est finie, écris le témoin, ne relis plus ».
+- 02:28, le témoin est écrit (`un_backend_de_code_dont_la_racine_a_disparu_est_signale_dans_daemon_status_et_ses_outils`,
+  dans `daemon_host.rs` : ouvre un backend sur un dossier, `list_files` vert, efface le dossier,
+  attend « racine absente : <chemin> » dans `state()` et l'erreur nommée de `list_files`). Puis
+  **quatre fois la même demande en une minute** (report, question, step_done, report) : chaque
+  tour est un appel Gemini.
+- **Je joue sa commande à luciepc, trois fois, et chaque sortie le fait avancer d'un cran** :
+  1. « missing field `entities` » : son manifeste minimal n'était pas un manifeste ; il ajoute
+     `entities: {}` ;
+  2. « `models.embed` est requis » : il abandonne le manifeste à la main et prend
+     `manifeste_jouable(templates/backends/code)` comme le test modèle `deux_fenetres_…` ;
+  3. (deux fois à moi : mon harnais ne passait pas par `exporter_la_lib`, moteur dépareillé —
+     corrigé) puis **ROUGE sur la bonne assertion** : « daemon_status doit porter « racine
+     absente : … » », le backend ouvert, `list_files` vert avant.
+- **L'hôte a arrêté la tâche à 02:34** : en attendant ma sortie, il a marqué ses pas d'attente
+  `succeeded: false` (« raté : en attente de la sortie de cargo test ») ; au troisième, « 3 pas de
+  suite sans élément réussi : je m'arrête ». Une `request` l'a relancée (02:35). Constat pour ED :
+  attendre le superviseur n'est pas un pas raté, il faut un état d'attente sans appel au modèle.
+- **Il ne lit pas mes `answer`** (réponses `reply_to` à ses `question`) : à 02:31 il est passé au
+  correctif sans ma sortie ; à 02:47 il a écrit quinze fois « en attente de la sortie » pendant que
+  la sortie était dans sa boîte en `answer` ; il réagit à la ligne suivante en `request`. Constat
+  pour ED, à départager avec la course qu'il vient de corriger dans le lot 2 (un oui posté pendant
+  le dernier pas d'un lancement se perdait).
+- Et toujours les 429 : 01:48, 02:11, 02:39, 02:56 (« après 1 à 2 reprises en 190 à 270 s »).
+
 *(suite au fil de la nuit)*
