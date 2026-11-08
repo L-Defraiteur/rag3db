@@ -39,10 +39,10 @@ l'identité de la machine. Mais aucun refus d'identité (« Author identity unkn
 le commit ») n'est dans le journal de la passe : ce n'est pas prouvé. La cause reste à
 départager, avec celle de la première forme.
 
-**Le soupçon est réfuté** (le même soir, au mot de c7) : rejoué sous
-`GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1` sur master 2d6e58d1a, le test est vert, avec
-aucun refus d'identité au journal. La config vide n'est pas la cause : le `declare` du juge n'y
-est pour rien.
+**Non prouvé** (le même soir, au mot de c7) : 1 tirage vert sous `GIT_CONFIG_GLOBAL=/dev/null
+GIT_CONFIG_NOSYSTEM=1` sur master 2d6e58d1a, 0 refus d'identité au journal. Sur un intermittent, un
+vert ne réfute pas : il dit seulement que le défaut n'est pas déterministe sous config vide. Le
+rouge de 18 h 5x reste sans cause, et la cause reste ouverte pour les deux formes.
 
 ## Ce qu'il faut pour le fermer
 
