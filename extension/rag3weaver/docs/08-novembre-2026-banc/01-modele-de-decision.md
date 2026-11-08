@@ -6,6 +6,8 @@ plusieurs trucs, genre doit-on charger ce contexte ou est-il sans rapport pour l
 préchargement de mémoire ». Elle est confiée au banc par l'orchestration, en mesure d'abord, sans
 aucun code produit.
 
+> **Suite** : le jeu à vrais positifs, la question de Lucie sur le contexte de l'agent et les trois petits modèles sont dans la page 02 (`02-le-jeu-a-vrais-positifs.md`).
+
 **En une phrase : ce jeu ne permet de classer aucun modèle.** Sur les 1 328 paires (prompt, fiche)
 tirées de l'usage réel, la relecture à la main n'en trouve aucune où la fiche aide vraiment. Les
 « utiles » de Gemini sont, à une près, la fiche d'identité de la session elle-même, que le hook

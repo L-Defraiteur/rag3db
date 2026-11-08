@@ -96,6 +96,10 @@ struct Hosted {
     /// sérialisait tous les appels : un seul bloqué derrière un écrivain (une
     /// recherche pendant la réaction de la montre) les faisait tous attendre.
     backend: std::sync::RwLock<Option<Backend>>,
+    /// **Un index reparti de lui-même à l'ouverture** (`worktrees::a_l_ouverture`) : il ne
+    /// tient pas la porte, une fermeture l'arrête au paquet suivant (c7, 8 novembre 2026).
+    /// Un index lancé par un outil, lui, la tient (`BUSY_INDEXING`).
+    rattrapage: std::sync::atomic::AtomicBool,
     /// Combien de fois ce backend a été ouvert (1 au premier appel).
     opened: std::sync::atomic::AtomicUsize,
     /// Combien de fois il a été fermé par `POST /backend/close`.
@@ -424,6 +428,7 @@ impl DaemonHost {
                     id,
                     manifest: canonical,
                     backend: std::sync::RwLock::new(None),
+                    rattrapage: Default::default(),
                     opened: Default::default(),
                     closed: Default::default(),
                     print: Mutex::new(None),
@@ -527,6 +532,22 @@ impl DaemonHost {
     /// l'empreinte du manifeste lu.
     fn open_slot(&self, hosted: &Hosted, slot: &mut Option<Backend>) -> Result<(), String> {
         if slot.is_none() {
+            // **Le gabarit livré suit le binaire** (Lucie, 8 novembre 2026, 16 h 12) : un
+            // manifeste posé d'après un gabarit livré et resté tel quel prend celui de ce
+            // binaire avant d'être lu ; un manifeste modifié à la main est gardé. Une
+            // remise à jour impossible n'empêche pas d'ouvrir : elle se dit.
+            match crate::builtin_templates::refresh(&hosted.manifest) {
+                Ok(crate::builtin_templates::Refresh::Refreshed { added, removed }) => {
+                    eprintln!("[hôte] {} : remis au gabarit livré (outils venus : {added:?}, partis : {removed:?})", hosted.manifest.display());
+                    self.ide.publier(
+                        "repos",
+                        &hosted.manifest.display().to_string(),
+                        json!({ "kind": "TemplateRefreshed", "manifest": hosted.manifest, "added": added, "removed": removed }),
+                    );
+                }
+                Err(e) => eprintln!("[hôte] {} : la remise au gabarit livré a échoué ({e}) ; le manifeste est lu tel quel", hosted.manifest.display()),
+                Ok(_) => {}
+            }
             let print = manifest_print(&hosted.manifest)?;
             let prepared = PreparedBackend::load(&hosted.manifest)?;
             // **Une tâche** : sa base copiée et son mode, par-dessus le manifeste.
@@ -558,6 +579,12 @@ impl DaemonHost {
             self.ide.relayer(&hosted.manifest.display().to_string(), &bus);
             // Et suivi par le journal des runs, sous l'id du backend.
             self.journal.suivre(&hosted.id, &bus);
+            // Un premier index coupé, ou des vecteurs dus quand le manifeste déclare le
+            // rattrapage : l'index repart en fond (c7, 8 novembre 2026, 16 h 09 et 16 h 30).
+            #[cfg(feature = "code")]
+            if let Some(b) = slot.as_ref() {
+                worktrees::a_l_ouverture(self, hosted, b);
+            }
             *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
             hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
@@ -574,12 +601,17 @@ impl DaemonHost {
         #[cfg(feature = "code")]
         {
             let n = crate::dataflow::index_nodes::indexings_running(&backend.catalog);
-            if n > 0 {
+            if n > 0 && hosted.rattrapage.load(std::sync::atomic::Ordering::SeqCst) {
+                // Reparti de lui-même : arrêté au paquet suivant ; la dette reste, et la
+                // prochaine ouverture la reprend.
+                crate::dataflow::index_nodes::stop_indexings_of(&backend.catalog);
+            } else if n > 0 {
                 return Err(format!(
                     "{BUSY_INDEXING} ({n} en cours) pour {} : arrêtez-la (outil index, action stop) ou attendez sa fin, puis recommencez",
                     hosted.manifest.display()
                 ));
             }
+            hosted.rattrapage.store(false, std::sync::atomic::Ordering::SeqCst);
         }
         #[cfg(not(feature = "code"))]
         let _ = backend;
@@ -1539,6 +1571,18 @@ impl DaemonServer {
         // 07-novembre-2026-everything-declarative/01, § 1).
         for l in host.reprendre_les_equipiers() {
             eprintln!("[équipier] {l}");
+        }
+        // Les premiers index des worktrees attachés que l'arrêt de l'hôte a laissés en
+        // plan reprennent (c7, 8 novembre 2026, 16 h 09), dans un fil : l'hôte répond
+        // pendant que leurs bases s'ouvrent.
+        #[cfg(feature = "code")]
+        {
+            let h = host.clone();
+            let _ = std::thread::Builder::new().name("reprise-premiers-index".into()).spawn(move || {
+                for l in h.reprendre_les_premiers_index() {
+                    eprintln!("[atelier] premier index repris : {l}");
+                }
+            });
         }
         // Les lignes de boîte pour Codex, livrées par `codex queue` (page 07 § 4).
         host.servir_les_livraisons_codex();

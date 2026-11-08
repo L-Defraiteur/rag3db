@@ -5,7 +5,8 @@
   "database": "data/code-poste.rag3db",
   "embeddings": {
     "model": "granite-278m",
-    "dimensions": 768
+    "dimensions": 768,
+    "catch_up_on_open": true
   },
   "models": {
     "sparse": {

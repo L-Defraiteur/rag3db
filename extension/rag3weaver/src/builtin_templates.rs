@@ -232,6 +232,193 @@ pub fn link(directory: &Path, manifest: &mut Value) -> (Vec<(String, String)>, V
     (reliees, gardees)
 }
 
+/// **Un manifeste posé d'après un gabarit livré suit les bâtis** (Lucie, 8 novembre 2026,
+/// 16 h 12 : « faut que ce soit dynamique hein, […] qu'on n'ait pas besoin de tout
+/// recharger manuellement à chacune de nos avancées »). À côté du manifeste écrit,
+/// `<manifeste>.livre` garde de quel gabarit il vient, son contenu d'alors et l'empreinte
+/// du fichier tel qu'écrit. À chaque ouverture par l'hôte ([`refresh`]), un manifeste
+/// resté tel qu'écrit prend le gabarit du binaire qui l'ouvre, avec ce que la pose y
+/// avait réglé (sa base, sa racine, son nom…). Un manifeste modifié à la main est gardé,
+/// et le dit.
+#[derive(Debug, Clone, serde::Deserialize, Serialize)]
+struct Livre {
+    /// Le nom du gabarit livré (`backends/atelier/backend.json`).
+    builtin: String,
+    /// Son contenu au moment de la pose.
+    content: Value,
+    /// L'empreinte (blake3) du manifeste tel qu'écrit par la pose.
+    written: String,
+}
+
+/// **L'état qu'rag3weaver tient pour un manifeste, hors de l'arbre de ses déclarations**
+/// (la passe de la pile de l'atelier, 8 novembre 2026 : un `backend.json.premier-index`
+/// posé à côté du manifeste était, pour une tâche, une déclaration inconnue, et sa
+/// fusion refusée). `RAG3WEAVER_STATE_DIR`, sinon `$XDG_STATE_HOME`, sinon
+/// `~/.local/state`, sous `rag3weaver/manifestes/<empreinte du chemin canonique>`.
+pub fn state_dir_of(manifest: &Path) -> PathBuf {
+    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let base = var("RAG3WEAVER_STATE_DIR")
+        .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("rag3weaver")))
+        .or_else(|| var("HOME").map(|h| h.join(".local/state/rag3weaver")))
+        .unwrap_or_else(|| std::env::temp_dir().join("rag3weaver-state"));
+    let canon = manifest.canonicalize().unwrap_or_else(|_| manifest.to_path_buf());
+    base.join("manifestes").join(&blake3::hash(canon.to_string_lossy().as_bytes()).to_hex()[..16])
+}
+
+pub(crate) fn livre_of(manifest: &Path) -> PathBuf {
+    state_dir_of(manifest).join("livre.json")
+}
+
+/// **Note qu'un manifeste vient du gabarit livré `builtin`**, juste après qu'il est écrit.
+pub fn record(manifest: &Path, builtin: &str) -> Result<(), String> {
+    let content: Value = serde_json::from_slice(get(builtin).ok_or_else(|| format!("aucun gabarit livré « {builtin} »"))?).map_err(|e| format!("{builtin} : {e}"))?;
+    let ecrit = std::fs::read(manifest).map_err(|e| format!("{} : {e}", manifest.display()))?;
+    let livre = Livre { builtin: builtin.to_string(), content, written: blake3::hash(&ecrit).to_hex().to_string() };
+    let p = livre_of(manifest);
+    if let Some(d) = p.parent() {
+        std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+    }
+    std::fs::write(&p, serde_json::to_string_pretty(&livre).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", p.display()))
+}
+
+/// Ce que [`refresh`] a fait d'un manifeste.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refresh {
+    /// Pas posé d'après un gabarit livré (ou posé avant le 8 novembre 2026) : rien.
+    NotRecorded,
+    /// Le gabarit livré n'a pas changé.
+    UpToDate,
+    /// Modifié à la main depuis la pose : gardé.
+    EditedByHand,
+    /// Suivi par un dépôt git (le dépôt des déclarations d'un arbre inscrit) : le
+    /// remettre au gabarit serait une écriture hors de toute revue ; gardé, et dit.
+    TrackedByGit,
+    /// Remplacé par le gabarit du binaire : les outils venus et partis.
+    Refreshed { added: Vec<String>, removed: Vec<String> },
+}
+
+/// Les feuilles d'une valeur JSON, par chemin de clés ; un tableau est une feuille.
+fn leaves<'a>(v: &'a Value, chemin: &mut Vec<String>, out: &mut Vec<(Vec<String>, &'a Value)>) {
+    match v {
+        Value::Object(o) if !o.is_empty() => {
+            for (k, x) in o {
+                chemin.push(k.clone());
+                leaves(x, chemin, out);
+                chemin.pop();
+            }
+        }
+        _ => out.push((chemin.clone(), v)),
+    }
+}
+
+fn at<'a>(v: &'a Value, chemin: &[String]) -> Option<&'a Value> {
+    chemin.iter().try_fold(v, |v, k| v.as_object()?.get(k))
+}
+
+fn set(v: &mut Value, chemin: &[String], x: Value) {
+    let Some((dernier, tete)) = chemin.split_last() else { return };
+    let mut cur = v;
+    for k in tete {
+        if !cur.get(k).is_some_and(Value::is_object) {
+            cur[k.as_str()] = Value::Object(Default::default());
+        }
+        cur = cur.get_mut(k).expect("posé juste au-dessus");
+    }
+    cur[dernier.as_str()] = x;
+}
+
+fn remove(v: &mut Value, chemin: &[String]) {
+    let Some((dernier, tete)) = chemin.split_last() else { return };
+    let cur = tete.iter().try_fold(v, |v, k| v.as_object_mut()?.get_mut(k));
+    if let Some(o) = cur.and_then(Value::as_object_mut) {
+        o.remove(dernier);
+    }
+}
+
+fn tools(v: &Value) -> std::collections::BTreeSet<String> {
+    v["tools"].as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default()
+}
+
+/// **Remet un manifeste au gabarit du binaire**, s'il est resté tel que la pose l'a
+/// écrit : le gabarit neuf, plus ce que la pose avait changé au gabarit d'alors (chaque
+/// feuille différente, chaque clé ôtée). Un chemin de gabarit du neuf qu'aucune copie
+/// locale ne porte désigne le livré (`builtin:`), et les copies identiques au livré
+/// aussi ([`link`]) : elles suivent alors chaque bâti.
+pub fn refresh(manifest: &Path) -> Result<Refresh, String> {
+    let p = livre_of(manifest);
+    let Ok(texte) = std::fs::read_to_string(&p) else { return Ok(Refresh::NotRecorded) };
+    let livre: Livre = serde_json::from_str(&texte).map_err(|e| format!("{} : {e}", p.display()))?;
+    let ecrit = std::fs::read(manifest).map_err(|e| format!("{} : {e}", manifest.display()))?;
+    if blake3::hash(&ecrit).to_hex().as_str() != livre.written {
+        return Ok(Refresh::EditedByHand);
+    }
+    // Un manifeste suivi par un dépôt de déclarations ne s'écrit pas en douce.
+    if let (Some(dir), Some(nom)) = (manifest.parent(), manifest.file_name()) {
+        let suivi = std::process::Command::new("git").arg("-C").arg(dir).args(["ls-files", "--error-unmatch"]).arg(nom).output().is_ok_and(|o| o.status.success());
+        if suivi {
+            return Ok(Refresh::TrackedByGit);
+        }
+    }
+    let Some(neuf) = get(&livre.builtin) else { return Ok(Refresh::UpToDate) };
+    let mut neuf: Value = serde_json::from_slice(neuf).map_err(|e| format!("{} : {e}", livre.builtin))?;
+    if neuf == livre.content {
+        return Ok(Refresh::UpToDate);
+    }
+    let courant: Value = serde_json::from_slice(&ecrit).map_err(|e| format!("{} : {e}", manifest.display()))?;
+    let neuf_livre = neuf.clone();
+    // Ce que la pose a réglé : posé ou changé, puis ôté.
+    let mut feuilles = Vec::new();
+    leaves(&courant, &mut Vec::new(), &mut feuilles);
+    for (chemin, x) in feuilles {
+        if at(&livre.content, &chemin) != Some(x) {
+            set(&mut neuf, &chemin, x.clone());
+        }
+    }
+    let mut d_alors = Vec::new();
+    leaves(&livre.content, &mut Vec::new(), &mut d_alors);
+    for (chemin, _) in d_alors {
+        if at(&courant, &chemin).is_none() && !chemin.is_empty() {
+            remove(&mut neuf, &chemin);
+        }
+    }
+    // Les chemins de gabarit sans copie locale : le livré, par son nom.
+    let dossier = manifest.parent().unwrap_or(Path::new("."));
+    let base = Path::new(&livre.builtin).parent().unwrap_or(Path::new(""));
+    fn relier(v: &mut Value, dossier: &Path, base: &Path) {
+        match v {
+            Value::String(s) if !s.starts_with(PREFIX) && EXTENSIONS.iter().any(|x| s.ends_with(x)) && !dossier.join(&*s).is_file() => {
+                // `../../tools/run.mmd` depuis `backends/atelier/` : `tools/run.mmd`.
+                let mut parts: Vec<String> = base.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+                for c in Path::new(&*s).components() {
+                    match c {
+                        std::path::Component::ParentDir => {
+                            parts.pop();
+                        }
+                        std::path::Component::Normal(n) => parts.push(n.to_string_lossy().into_owned()),
+                        _ => {}
+                    }
+                }
+                let nom = parts.join("/");
+                if get(&nom).is_some() {
+                    *s = format!("{PREFIX}{nom}");
+                }
+            }
+            Value::Array(a) => a.iter_mut().for_each(|x| relier(x, dossier, base)),
+            Value::Object(o) => o.values_mut().for_each(|x| relier(x, dossier, base)),
+            _ => {}
+        }
+    }
+    relier(&mut neuf, dossier, base);
+    link(dossier, &mut neuf);
+    let (avant, apres) = (tools(&courant), tools(&neuf));
+    let texte = serde_json::to_string_pretty(&neuf).map_err(|e| e.to_string())? + "\n";
+    std::fs::write(manifest, &texte).map_err(|e| format!("{} : {e}", manifest.display()))?;
+    let livre = Livre { builtin: livre.builtin, content: neuf_livre, written: blake3::hash(texte.as_bytes()).to_hex().to_string() };
+    std::fs::write(&p, serde_json::to_string_pretty(&livre).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", p.display()))?;
+    Ok(Refresh::Refreshed { added: apres.difference(&avant).cloned().collect(), removed: avant.difference(&apres).cloned().collect() })
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,5 +515,56 @@ mod tests {
         assert_eq!(m["tools"]["list_files"]["graph"], "builtin:tools/list.mmd");
         assert_eq!(m["tools"]["read_file"]["graph"], "../../tools/read.mmd", "la copie modifiée reste");
         assert_eq!(m["tools"]["sien"]["graph"], "a-elle.mmd", "ce qui n'est pas un gabarit livré ne bouge pas");
+    }
+
+    /// Un atelier posé par un binaire d'avant : le gabarit d'alors sans `open_branch` ni
+    /// `run_command`, la base réglée par la pose, noté. Rend le manifeste.
+    fn atelier_d_avant(d: &Path) -> PathBuf {
+        let manifeste = d.join("backends/atelier/backend.json");
+        std::fs::create_dir_all(manifeste.parent().unwrap()).unwrap();
+        let mut alors: Value = serde_json::from_slice(get("backends/atelier/backend.json").unwrap()).unwrap();
+        for outil in ["open_branch", "run_command"] {
+            alors["tools"].as_object_mut().unwrap().remove(outil);
+        }
+        let mut pose = alors.clone();
+        pose["database"] = json!("/donnees/atelier.rag3db");
+        pose["workspace"]["root"] = json!("/home/quelqu-une");
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&pose).unwrap() + "\n").unwrap();
+        record(&manifeste, "backends/atelier/backend.json").unwrap();
+        let mut livre: Value = serde_json::from_str(&std::fs::read_to_string(livre_of(&manifeste)).unwrap()).unwrap();
+        livre["content"] = alors;
+        std::fs::write(livre_of(&manifeste), livre.to_string()).unwrap();
+        manifeste
+    }
+
+    /// **Un manifeste resté tel que posé prend le gabarit du binaire** (Lucie, 8 novembre
+    /// 2026, 16 h 12 : l'atelier posé sous ff6e88ddf n'avait pas open_branch sous
+    /// e59e59834). Les outils neufs viennent, désignés par le livré ; la base et la racine
+    /// réglées par la pose restent ; une seconde fois, rien ne change.
+    #[test]
+    fn a_manifest_left_as_posed_takes_the_builtin_of_the_binary() {
+        let d = tempfile::tempdir().unwrap();
+        let manifeste = atelier_d_avant(d.path());
+        let r = refresh(&manifeste).unwrap();
+        assert_eq!(r, Refresh::Refreshed { added: vec!["open_branch".into(), "run_command".into()], removed: vec![] });
+        let m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        assert_eq!(m["database"], "/donnees/atelier.rag3db");
+        assert_eq!(m["workspace"]["root"], "/home/quelqu-une");
+        assert_eq!(m["tools"]["open_branch"]["graph"], "builtin:tools/open_branch.mmd", "sans copie locale, le livré : {m:#}");
+        assert_eq!(refresh(&manifeste).unwrap(), Refresh::UpToDate);
+    }
+
+    /// **Un manifeste modifié à la main est gardé** : la remise à jour le dit et n'écrit rien.
+    #[test]
+    fn a_manifest_edited_by_hand_is_kept() {
+        let d = tempfile::tempdir().unwrap();
+        let manifeste = atelier_d_avant(d.path());
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["tools"]["list_worktrees"]["description"] = json!("la mienne");
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        let avant = std::fs::read(&manifeste).unwrap();
+        assert_eq!(refresh(&manifeste).unwrap(), Refresh::EditedByHand);
+        assert_eq!(std::fs::read(&manifeste).unwrap(), avant, "rien n'est écrit");
+        assert_eq!(refresh(&d.path().join("ailleurs.json")).unwrap(), Refresh::NotRecorded);
     }
 }

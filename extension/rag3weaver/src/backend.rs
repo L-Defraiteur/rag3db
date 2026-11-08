@@ -194,6 +194,11 @@ pub struct BackendManifest {
     /// Opt in to discovery and ad-hoc read-only Mermaid search tools.
     #[serde(default)]
     pub search_graphs: bool,
+    /// **Ce que le chat de ce backend doit savoir de plus** : ajouté au message système
+    /// du chat (l'atelier : l'ordre de ses outils, jamais « faites-le dans votre
+    /// terminal »).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_instructions: Option<String>,
     /// **L'outil `graph`** : le graphe d'un outil, d'une réaction ou d'un
     /// composant, en JSON (le même que la route `/ide/graphe`). Opt-in, comme
     /// `search_graphs` : il change la liste d'outils que voit l'agent.
@@ -247,6 +252,13 @@ pub struct EmbeddingService {
     /// Le délai d'un appel, en secondes (voir `ModelSource::timeout_secs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_secs: Option<u64>,
+    /// **Le rattrapage à l'ouverture** (c7, 8 novembre 2026, la forme (b)) : un backend
+    /// ouvert par l'hôte avec des morceaux encore sans vecteur relance son index, qui
+    /// solde la dette en fond, arrêtable comme tout index. Déclaré par le gabarit livré
+    /// du code, donc hérité par les worktrees attachés ; faux par défaut, et une base
+    /// qui ne le déclare pas ne bouge jamais d'elle-même.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub catch_up_on_open: bool,
 }
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -5153,6 +5165,13 @@ impl Backend {
         if let Some(r) = reprise {
             etats.insert("resume".to_string(), r);
         }
+        // **Une indexation tourne** (c7, 8 novembre 2026 : pendant le premier index d'un
+        // worktree, l'état des entités restait vide, et list_worktrees disait « 0/4 ») :
+        // le compte, que la phrase de l'atelier dit « en cours ».
+        let tournent = crate::dataflow::index_nodes::indexings_running(&self.catalog);
+        if tournent > 0 {
+            etats.insert("indexings".to_string(), json!(tournent));
+        }
         if !montres.is_empty() {
             etats.insert("watches".to_string(), Value::Object(montres));
         }
@@ -5176,6 +5195,30 @@ impl Backend {
                         "plein texte de « {entite} » au dernier index : {} documents pour {} lignes — des écritures ont été perdues",
                         c["documents"], c["rows"]
                     ));
+                }
+            }
+            // **Une note « en cours » périmée** (c7, 8 novembre 2026 : code-essais-c7 disait
+            // `text: running` depuis le 25 octobre, rebâtie depuis, rien ne tournait) : la
+            // note d'avant un arrêt ne se recalcule qu'à l'index suivant. Sans indexation
+            // vivante ni rebâti en cours (`text_percent`), des comptes complets disent prêt.
+            if tournent == 0 {
+                // Une entité sans compte noté (rien à indexer en plein texte, comme Library
+                // d'un dépôt sans bibliothèque) ne tient pas non plus un « en cours ».
+                for entite in entites.iter().copied() {
+                    let c = comptes.get(entite);
+                    let complet = c.is_none_or(|c| c["rows"].is_u64() && c["documents"] == c["rows"]);
+                    // Une entité vide au dernier index (0 ligne, comme Library d'un dépôt sans
+                    // bibliothèque) : rien n'y manque, « jamais » n'y est pas un retard.
+                    let vide = c.is_some_and(|c| c["rows"] == 0);
+                    if let Some(e) = etats.get_mut(entite) {
+                        if complet && e["text"] == "running" && e["text_percent"].is_null() {
+                            e["text"] = json!("ready");
+                            e["text_stale_note"] = json!("la note « en cours » d'avant un arrêt, sans indexation vivante : prêt d'après les comptes du dernier index");
+                        } else if vide && e["text"] == "never" {
+                            e["text"] = json!("ready");
+                            e["text_stale_note"] = json!("aucune ligne au dernier index : rien à indexer");
+                        }
+                    }
                 }
             }
             etats.insert("fts_counts".into(), Value::Object(comptes));

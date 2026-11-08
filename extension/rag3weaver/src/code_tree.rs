@@ -55,7 +55,11 @@ impl Roots {
                     .is_some_and(|e| e == "json")
                     .then(|| std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()))
                     .flatten();
-                if let Some(v) = v.filter(|v| v.get("database").is_some() && v.get("tools").is_some()) {
+                // Un arbre inscrit a sa racine absolue (`add_files` la pose) ; le gabarit
+                // copié avec un autre backend (l'atelier) garde `workspace` relatif, et n'en
+                // est pas un (vu le 8 novembre 2026 sur le poste de Lucie).
+                let inscrit = |v: &Value| v["workspace"]["root"].as_str().is_some_and(|r| Path::new(r).is_absolute());
+                if let Some(v) = v.filter(|v| v.get("database").is_some() && v.get("tools").is_some() && inscrit(v)) {
                     let du_nom = v["name"].as_str() == arbre.file_name().to_str();
                     candidats.push((p, du_nom));
                 }
@@ -282,6 +286,10 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
         crate::builtin_templates::link(dir, &mut m);
     }
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifest.display()))?;
+    // Posé d'après un gabarit livré : il suivra les bâtis (`builtin_templates::refresh`).
+    if let Some(nom) = source.canonicalize().ok().and_then(|s| crate::builtin_templates::builtin_name_of(&s)) {
+        crate::builtin_templates::record(&manifest, nom)?;
+    }
     depot_des_declarations(&dossier, &identite, &tree, &name)?;
 
     // La base : un instantané de celle de `from`, fichier par fichier.

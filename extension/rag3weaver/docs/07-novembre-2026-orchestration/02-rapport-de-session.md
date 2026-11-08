@@ -1571,3 +1571,90 @@ avance d'autant ; les hashs, eux, sont exacts.
   qui garde 100 % des utiles ; Qwen2.5-1.5B par logits sur card2 ; Laya spécialisé plus tard.
 - **luciepc** : plafond des lourds remis à 6 à 18 h 48 (la charge du jour était du disque) ; 1,3 Tio
   libres (65 %) ; la CI de master s'annule à chaque push (concurrence) : lot court chez hooks-essai.
+
+## 20 h 30 — la soirée : la file, la session de jeu, la priorité de demain
+
+- **Atterris** : le juge par pas d'ED (4f54e473a : un pas d'équipier se juge sur son but, sous le nom
+  court de sa tâche, une fiche par tâche, un apport par pas) ; hooks-essai 2d6e58d1a → **la CI
+  rag3weaver de master est redevenue verte** (run fini « success » à 18 h 35 UTC ; la concurrence
+  n'annule pas les runs de master, elle remplace celui qui attend : procédure, « le verdict d'un
+  commit se lit sur le run qui l'a joué ou sur le premier plus récent qui a fini »). Le cœur :
+  `transaction_test` entier vert sur 9bae60786 (357/357, 2 outils sautés, 59 min) → **une lib peut
+  prendre le lot** ; aucune ABI changée depuis cbc06c3e1 (ajouts et code interne, colonne
+  `extension_error` en dernier, format 43).
+- **La lib de la nuit** (G, oui donné) : tête de master figée à 22 h 30 (fenêtre demandée à 22 h 15),
+  bâti -j8, passe de G avec RAG3DB_LIB explicite et hôte d'essai 7991, contrôle des deux sens sur
+  copies sans index complet contre l'écart connu, pose à luciepc dans la nuit, **portable à 9 h 30**
+  sauf mot de Lucie, cbc06c3e1 gardé pour le retour. Avant : repose du portable binaire seul dès
+  que la pile de l'atelier d'ED est sur master (un seul arrêt).
+- **En file** : la pile de l'atelier d'ED (16 commits ; deux rouges de durée nommés « attente disque
+  luciepc », rejoués à la première accalmie ; un vrai défaut corrigé en chemin : le suiveur
+  RepoIndexed rouvrait un dépôt fermé par `with_backend`, la reprise ne relançait rien →
+  `try_read`), 96 (e2e_cited_by verte seule, rejeu court puis push), hooks-essai
+  (fusion-sans-temporaire), recherche (residus-de-suite, puis le **Drop du backend** : `impl Drop for
+  Backend` = shutdown idempotent, un seul registre d'arrêt étendu au rebâti FTS et à spawn_index,
+  `Drop for Catalog` vide la vue ; témoin déterministe par un Weak ; lucivy corrige `close()` qui
+  sortait sur l'erreur sans arrêter ses pools, PR #23, et PR #22 corpus-absent : fusion sur le mot
+  de Lucie dans la session lucivy), codeparsers (`require` : B symétrique, repli vers la zone de
+  fichier avec l'étiquette « liaison de module externe », réexportations vers la classe, un défaut
+  de `module_designe_fichier` corrigé ; `import_binding` en lot à part après mesure).
+- **luciepc** : le granite 7878 a été dégradé de 19 h 19 à ~19 h 38 (12 s par texte, le 7882
+  identique à 234 ms ; la montre du portable et les rappels des hooks de Lucie attendaient derrière)
+  et est revenu seul ; un redémarrage m'a été refusé par mon mode, dit à Lucie, pas fait par une
+  autre session. Le disque est de nouveau lent à 20 h 13 (120 ms par écriture 4 Kio + fsync, flush
+  30 ms, 99 % pour 4 Mio/s, TRIM 0, SMART sain) sans cause lue ; Lucie a arrêté ma lecture de la
+  gestion d'énergie du NVMe. Plafond des lourds à 6.
+- **La session de jeu de Lucie** (seat1) : « ça démarre au ralenti, Steam ne se lance pas » → lu dans
+  ses scripts et journaux : `seat1-idle-watchdog` tuait la session 8 à 45 s après chaque démarrage
+  (« manette inactive depuis 106 min + GPU inactif », l'inactivité comptée depuis la partie
+  d'avant, le GPU à 0 % pendant que Plasma démarre ; même motif les jours d'avant, 2527 min le
+  4 nov.). Corrigé à son mot : délai de grâce de 5 min après le démarrage de l'unité, inactivité
+  manette bornée à l'âge de la session (copie `.avant-grace-8nov`), chien de garde relancé 20 h 02 ;
+  journal de session de 756 Mio vidé. Session suivante : Plasma 5 s, gamescope 1 s, Steam 5 s, puis
+  Steam vérifie tous ses fichiers (51 s, conséquence des arrêts brutaux) et charge 58 jeux (69 s).
+- **Priorité de demain, Lucie 20 h 20 : les vues par worktree** (vision du 6 nov.) : « super
+  important, pour qu'on puisse sainement s'en servir et avoir le graphe de code par worktree ».
+  Pas commencé jusqu'ici. L'arbre principal écrit ce soir la page de conception de la marche 1 ;
+  Lucie la lit le matin ; ED (gabarit, code.rs, version comme entité, index réduit aux scopes
+  neufs) et recherche (filtre de vue lucivy, dense filtré, drain FTS) prennent leur marche après
+  leurs lots en cours. Pour les collègues de Lucie, un texte court de présentation a été écrit
+  (ce que c'est, où on en est, pourquoi le découpage n'a rien d'arbitraire : c'est celui du
+  langage, et les liens sont lus dans le code, pas devinés).
+
+## 21 h 20 — la carte des services, la conception des vues, le juge local (titre corrigé : écrit « 21 h 35 » sans lire l'heure)
+
+- **Qui saturait la carte des services de luciepc** (card2) après l'arrêt du banc : **bge-m3 7879**, à
+  100 % du moteur avec 26 connexions (19 de l'e2e_lectures de la passe d'ED, 2 de recherche, 5 du
+  portable) ; le granite 7878 à 0 % du moteur et 5 à 12 s par texte. Quatre services sur une carte
+  sans arbitrage : un e2e qui embarque en creux bloque tous les index des autres. Lecture par
+  `/proc/<pid>/fdinfo` (delta drm-engine sur 5 s) et `ss -tnp`. Plafond des lourds ramené à 3 ; la
+  mesure de codeparsers (deux index complets) suspendue jusqu'à « file passée ». Sujet produit pour
+  demain : l'arbitrage entre services d'embarquement (une file équitable, ou une carte par rôle).
+- **La page des vues** (arbre principal, 10b8affce, pour la lecture de Lucie demain matin) :
+  « une vue, c'est juste un filtre » (Lucie) sur un seul index, trois lunettes (worktree, branche,
+  pyramide d'un fichier ou d'un scope), `view` en trois formes ; la pyramide de Lucie (ancre →
+  couche parente → couche, fichier composite par scope, tombstones, fusion d'une couche comme
+  opération de l'index) ; la provenance à la demande (transparente par défaut, `provenance: true`,
+  l'IDE la montre toujours) ; la couche de travail du worktree au-dessus de sa branche. **Mesure** :
+  sur 5 776 scopes des fichiers changés de dix branches, 5 % neufs, 6 % modifiés, **72 % seulement
+  déplacés** et pourtant **réécrits** à chaque réindexation (redécoupage, morceaux, toutes les arêtes
+  sortantes du fichier) : le chemin des deux sens ; l'inférence « réembarqués » a été testée et
+  retirée (témoin vert gardé). Piles : 2 branches sur 10 naissent d'une autre que master.
+- **Le juge local** (banc, page 02) : **Qwen3-4B-Instruct-2507 brut, Apache 2.0 vérifiée : premier
+  0,76, AUC 0,92 à 2 k, 504 ms par paire sur card0** (forme courte 0,73, 90 ms), Qwen2.5-1.5B 0,65,
+  Qwen3-1.7B 0,50, les petits en zéro-coup 0,02 à 0,23 (même score pour toutes les fiches d'un cas).
+  Gemini 0,81 à 0,84 à 4,4 s par cas. Un rangeur (garder les k premières), pas un seuil. La question
+  posée : « Contexte de l'agent : … Bout de mémoire : … Ce bout de mémoire est-il pertinent avec le
+  contexte de l'agent ? Réponds par oui ou par non », score = P(oui)/P(non) au premier jeton. Rien
+  n'est entraîné. Trois mesures de Lucie en cours : la forme « fin de conversation » (deux derniers
+  tours + outils), la borne 6 k, plusieurs fiches d'un coup (préfixe partagé, liste A-E). Non à
+  Qwen2.5-3B (licence non commerciale).
+- **La session de jeu de Lucie** : relancée après la correction du chien de garde ; Plasma 5 s,
+  gamescope 1 s, Steam 5 s, puis Steam a vérifié tous ses fichiers (51 s, suite des arrêts brutaux)
+  et chargé 58 jeux (69 s) ; la prochaine fois sans la vérification.
+- **Les sessions mangent-elles leur cuisine ?** Mesuré sur le journal de l'hôte du portable : la
+  mémoire longue oui (461 appels `recall_fiches`/`cited_by`/`recall_apports` par les hooks de la
+  session d'essai, 633 événements de hooks) ; les outils de code **non** (0 appel `search_code`,
+  `usages`… dans les 500 derniers runs ; les 4 722 runs du dépôt de Lucie sont la montre). Les
+  sessions grep et lisent les fichiers. Deux gestes à la main de Lucie : les hooks dans toutes les
+  sessions, une ligne du CLAUDE.md (« search_code et usages d'abord »), et un compte quotidien.
