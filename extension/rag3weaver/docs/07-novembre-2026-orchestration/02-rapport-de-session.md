@@ -1621,7 +1621,7 @@ avance d'autant ; les hashs, eux, sont exacts.
   (ce que c'est, où on en est, pourquoi le découpage n'a rien d'arbitraire : c'est celui du
   langage, et les liens sont lus dans le code, pas devinés).
 
-## 21 h 35 — la carte des services, la conception des vues, le juge local
+## 21 h 20 — la carte des services, la conception des vues, le juge local (titre corrigé : écrit « 21 h 35 » sans lire l'heure)
 
 - **Qui saturait la carte des services de luciepc** (card2) après l'arrêt du banc : **bge-m3 7879**, à
   100 % du moteur avec 26 connexions (19 de l'e2e_lectures de la passe d'ED, 2 de recherche, 5 du
