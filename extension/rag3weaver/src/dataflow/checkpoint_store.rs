@@ -79,14 +79,19 @@ impl Spiller {
         Self { dossier, jeton, fil: Mutex::new(None) }
     }
 
-    /// **Une exécution éphémère** : une ingestion ou un drain du catalogue.
-    /// Une fois FINIE, rien ne relit son annulation — seul le retour arrière
-    /// d'une migration le fait, et ses exécutions s'appellent `migration-…`.
-    /// Une exécution échouée, elle, se reprend (`Catalog::drain_resume`, y
-    /// compris dans un processus neuf après un arrêt) : ses fichiers restent
-    /// jusqu'à sa fin.
-    fn est_ephemere(execution_id: &str) -> bool {
-        execution_id.starts_with("ingest-") || execution_id.starts_with("drain-")
+    /// L'annulation doit-elle survivre à la fin du graphe ?
+    ///
+    /// Seul le retour arrière d'une migration appliquée doit survivre au
+    /// processus : un opérateur peut invoquer `MigrationRunner::rollback`
+    /// ultérieurement, et ces exécutions sont nommées `migration-…`.
+    ///
+    /// Pour tout autre graphe (synchronisation, ingestion, drain, etc.), une
+    /// fois terminé (succès ou annulation terminée), ses journaux d'annulation
+    /// `*.undo.json` sont supprimés avec le reste, quelle que soit leur taille.
+    /// Les conserver consommait la mémoire vive de `/tmp` à perte
+    /// (ticket 2026-10-04-journaux-d-annulation-laisses-dans-tmp).
+    fn annulation_doit_survivre(execution_id: &str) -> bool {
+        execution_id.starts_with("migration-")
     }
 
     fn dossier_de(&self, execution_id: &str) -> PathBuf {
@@ -209,16 +214,13 @@ impl Spiller {
         }
     }
 
-    /// **Une exécution finie ne garde que ses contextes d'undo.** Entrées et
-    /// sorties ne servent qu'à une reprise, et on ne reprend pas ce qui est
-    /// fini ; la base a oublié ses `output_ports`, les fichiers suivent. Sans
-    /// ça, une soirée de tests laissait 1,3 Go sous /tmp (6 septembre 2026).
+    /// À la fin d'un graphe, supprimer entrées, sorties et journaux
+    /// d'annulation `*.undo.json`. Seules les migrations (`migration-…`)
+    /// conservent leurs fichiers d'annulation sur disque, car elles seules
+    /// peuvent être annulées ultérieurement par un processus neuf.
     pub fn nettoyer_apres_fin(&self, execution_id: &str) {
         let dossier = self.dossier_de(execution_id);
-        // Une exécution éphémère part entière, annulation comprise : rien ne
-        // la relira (voir `est_ephemere`). Les journaux d'annulation de plus
-        // de 64 Ko restaient sinon à vie (ticket « journaux d'annulation »).
-        if Self::est_ephemere(execution_id) {
+        if !Self::annulation_doit_survivre(execution_id) {
             let _ = std::fs::remove_dir_all(&dossier);
             return;
         }
@@ -1552,5 +1554,48 @@ mod tests {
 
         let loaded = store.load_execution("exec-6").unwrap();
         assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn fin_de_graphe_supprime_les_fichiers_undo_meme_sup_64ko() {
+        let tmp = std::env::temp_dir().join(format!("test-cp-undo-{}", timestamp_ms()));
+        let spiller = Spiller::new(tmp.clone());
+        let exec_id = "sync-source-fichiers";
+
+        // Un contexte d'annulation > 64 Ko est déversé en fichier *.undo.json
+        let gros_undo = format!("{{\"couples\":\"{}\"}}", "x".repeat(70 * 1024));
+        let chemin_ref = spiller.poser_l_undo(exec_id, "links", gros_undo).unwrap();
+        assert!(chemin_ref.starts_with("@file:"));
+        spiller.flush().unwrap();
+
+        // Le fichier .undo.json existe bien dans le dossier de l'exécution
+        let dossier = spiller.dossier_de(exec_id);
+        assert!(dossier.exists());
+        let nb_undo_avant = std::fs::read_dir(&dossier)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".undo.json"))
+            .count();
+        assert_eq!(nb_undo_avant, 1);
+
+        // Quand le graphe finit, nettoyer_apres_fin doit supprimer le fichier .undo.json
+        spiller.nettoyer_apres_fin(exec_id);
+
+        let nb_undo_apres = if dossier.exists() {
+            std::fs::read_dir(&dossier)
+                .unwrap()
+                .flatten()
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".undo.json"))
+                .count()
+        } else {
+            0
+        };
+
+        assert_eq!(
+            nb_undo_apres, 0,
+            "les fichiers *.undo.json de plus de 64 Ko ne doivent pas subsister après la fin du graphe"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
