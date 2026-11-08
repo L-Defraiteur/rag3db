@@ -54,6 +54,10 @@ pub struct Tache {
     /// dossiers (`WorkspaceDeTache.copie`).
     #[serde(default)]
     pub sans_depot: bool,
+    /// La racine est devenue un dépôt à l'ouverture de cette tâche (`git_init`
+    /// déclaré) : la boîte le dit.
+    #[serde(default)]
+    pub git_init_fait: bool,
 }
 
 /// **Le workspace d'une tâche** (marche 3) : la racine du principal est
@@ -503,19 +507,26 @@ impl DaemonHost {
                 let racine = if w.root.is_absolute() { w.root.clone() } else { p.directory.join(&w.root) };
                 (racine.canonicalize().unwrap_or(racine), !w.read_only || w.task_writes)
             });
-            let git_init = p.manifest.workspace.as_ref().is_some_and(|w| w.git_init);
+            let git_init = p.manifest.workspace.as_ref().filter(|w| w.git_init).map(|w| crate::backend_code::git_identity_or_default(w.git_identity.as_ref()));
             let exclus: Vec<String> = p.manifest.workspace.as_ref().and_then(|w| w.exclude.clone()).unwrap_or_else(|| EXCLUS_PAR_DEFAUT.iter().map(|s| s.to_string()).collect());
             (p.directory.clone(), espace, (git_init, exclus))
         })?;
         let (git_init, exclus) = git_init;
         // **`git_init` déclaré** : une racine qu'aucun git ne suit devient un
         // dépôt, avec un premier commit de ce qu'elle porte ; jamais d'office.
-        if let Some((racine, _)) = espace.as_ref().filter(|_| git_init) {
+        // Le premier commit porte l'identité de rag3weaver (ou celle déclarée),
+        // jamais la config git de la machine.
+        let mut git_init_fait = false;
+        if let (Some((racine, _)), Some(identite)) = (espace.as_ref(), git_init.as_ref()) {
             if git(racine, &["rev-parse", "--show-toplevel"]).is_err() {
                 git(racine, &["init", "-q"]).map_err(|e| format!("git_init : {e}"))?;
                 git(racine, &["add", "-A"]).map_err(|e| format!("git_init : {e}"))?;
-                git(racine, &["commit", "-q", "--allow-empty", "-m", "le dépôt de la racine (git_init déclaré)"])
-                    .map_err(|e| format!("git_init : le premier commit ({e}) ; une identité git (user.name, user.email) est-elle posée ?"))?;
+                let a = identite.git_args();
+                let message = format!("premier commit par {} (git_init déclaré)", identite.name);
+                let mut args: Vec<&str> = a.iter().map(String::as_str).collect();
+                args.extend(["commit", "-q", "--allow-empty", "-m", &message]);
+                git(racine, &args).map_err(|e| format!("git_init : le premier commit ({e})"))?;
+                git_init_fait = true;
             }
         }
         // Le dépôt de la tâche : celui des déclarations ; à défaut, celui de
@@ -666,6 +677,7 @@ impl DaemonHost {
             workspace,
             declarations_hors_depot,
             sans_depot,
+            git_init_fait,
         };
         // Inscrite avant l'ouverture : `open_slot` y lit ses surcharges.
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.clone(), tache.clone());

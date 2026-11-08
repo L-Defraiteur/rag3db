@@ -1126,8 +1126,9 @@ impl DaemonHost {
             let note = match t.workspace.as_ref().filter(|w| w.copie.is_some()) {
                 Some(w) => format!("tâche ouverte : {} (une copie de {})", super::taches::SANS_GIT, w.racine_principale.display()),
                 None => format!(
-                    "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)",
-                    t.branche
+                    "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas){}",
+                    t.branche,
+                    if t.git_init_fait { " ; la racine est devenue un dépôt à l'ouverture (git_init déclaré), premier commit par rag3weaver" } else { "" }
                 ),
             };
             let _ = files.append("host", "report", None, &note);
