@@ -1,7 +1,9 @@
 # La lib entière se fige ou rougit par intermittence (réacteur, runtime, relais, tâches de l'hôte)
 
-- **État** : ouvert (7 novembre 2026) — trois figements dans la soirée, un rouge sur huit répétitions,
-  aucune pile encore ; le réacteur part à everything declarative (c7, 8 novembre au matin).
+- **État** : ouvert, **cause trouvée** (8 novembre 2026, 2 h 45, l'arrière-plan : c7, la bissection
+  de l'arbre principal) — ce n'est pas un commit, c'est **un service d'embarquement qui tient une
+  requête et un délai trop long, ou absent, côté client** ; correctif en cours (le lot du délai, arbre
+  principal). Jusqu'à lui, la règle de c7 : la lib entière se joue **sans** `RAG3WEAVER_EMBED_SERVICE`.
 - **Gravité** : passe bloquée (un push attend une heure un binaire figé) ; aucune réponse fausse connue.
 - **Atteignable en service** : inconnu — les tests touchés sont ceux de l'hôte et du réacteur ; rien
   ne montre encore que le produit fige.
@@ -15,6 +17,46 @@
 openai-llm,anthropic-llm`) passe d'ordinaire en 28 à 66 s. Par intermittence, il ne finit plus :
 une poignée de tests restent « has been running for over 60 seconds » et le binaire tient des
 heures. Une fois sur huit, sans figer, un test du réacteur rougit.
+
+## La cause (8 novembre, la bissection)
+
+Tout au portable, la lib entière sous le jeu large, lib 17a094d12 + `MOTEUR_ANCIEN=1`, un figement =
+aucune ligne de sortie pendant 10 min, binaire vivant (pile prise par `eu-stack` sous
+`LD_PRELOAD=ptracer-any.so`, `ptrace_scope` valant 1) :
+
+| commit | `RAG3WEAVER_EMBED_SERVICE` | heure | résultat |
+|---|---|---|---|
+| c1bdbb183 | les tunnels 7979-7981 | 0 h 41 → 0 h 44 | 3/3 verts, 30 s |
+| d845744a2 | les tunnels | 0 h 45 → 1 h 28 | **3/3 figés** |
+| 6f48da01f | les tunnels | 1 h 30 → 1 h 46 | **figé** |
+| 76f19526b, 682655352, e851d8e9b (+ l'accolade), 4976de23d (+ l'accolade) | les tunnels | 1 h 46 → 2 h 09 | aucun figement (3/3 chacun) |
+| 4976de23d + l'accolade, **sans son seul test neuf** (= le code et les tests de 6f48da01f) | les tunnels | 2 h 22 | 3/3 verts |
+| c1bdbb183 | **un faux service muet** (127.0.0.1:7999 : accepte, ne répond jamais) | 2 h 25 | **figé** |
+| c1bdbb183 | le faux service muet, **`RAG3WEAVER_EMBED_TIMEOUT_SECS=2`** | 2 h 41 | vert, 2 002 tests, 30 s |
+
+- **Pas un commit.** Le même code et les mêmes tests figent à 1 h 30 et passent à 2 h 22 : le figement
+  suit l'heure. La fenêtre de 0 h 45 à 1 h 46 est celle où luciepc portait la passe complète d'ED
+  (0 h 33 → 1 h 26), les lots de recherche et la passe de hotfixs : le bge-m3 de 7878-7880, derrière
+  les tunnels, répondait à `/sante` et laissait `/embed` en file. La même heure a vu les 429 Vertex de
+  l'équipier (lecture de c7).
+- **Pas le tunnel.** Une sonde des trois tunnels toutes les 60 s (`curl -s -m 3 …/sante`) n'a jamais
+  été muette : 15 à 170 ms.
+- **Le mécanisme, à la demande, sans heure ni charge** : un service qui accepte et ne rend pas fait
+  figer master ; le même avec un délai client de 2 s ne fige plus. Le « figement » est une attente
+  **bornée mais longue** : chaque test qui s'attache au service attend le délai entier de son client
+  (60 s par défaut, `default_embed_timeout`), et ces attentes s'enchaînent derrière l'arrêt des
+  réactions au-delà de toute borne de test.
+- **La pile** (les figements de d845744a2 et du service muet : jusqu'à 1 226 fils sur 1 283 en `futex_wait`, charge 0,25 à 1,8) : les tests bloqués
+  attendent dans `Backend::stop_reactions` → `ReactorHandle::stop_within` → `dataflow::rt::bloquer`
+  (un `block_on` tokio) : **l'arrêt « borné » ne revient pas** pendant qu'un client attend le
+  service. Le seul fil dans un client HTTP est celui du test
+  `daemon_host::taches::tests::une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne`, en `ureq`
+  sans délai (`RequestBuilder::send` → `TcpStream::read` → `recv`) vers l'hôte de son test, qui ne
+  répond plus.
+- **Les clients sans délai** : `DaemonReranker` (`/rerank`) et `DaemonOcr` (`/ocr`), servis par
+  bge-m3 (7879), prennent `daemon::agent()` sans délai, à l'attachement (`identite_de`) comme à
+  l'appel (`src/daemon/embeddings.rs`, `joindre`) ; l'embarqueur a le sien (60 s, chiffre rond,
+  « mesure par service à venir »).
 
 ## Les cas
 
@@ -114,20 +156,32 @@ absent » dit en clair.
 
 ## Ce qui est écarté
 
+- **Un commit** (la bissection ci-dessus), **le tunnel** (la sonde), **un test neuf** (4976de23d sans
+  son test).
+- **luciepc nu** (8 nov. 0 h 29 → 0 h 39, services locaux 7878-7880) : 4/4 verts, sans les trois
+  tests de la mémoire 4/4 verts — les services n'y étaient pas en file à cette heure.
+
 - **La lib 43 seule** : le cas 1 est sous 04063ee06.
 - **La charge seule** : le cas 1 est à une charge de 1,24.
 - **Une reproduction à la demande** : neuf passes de la lib entière sur master nu à luciepc (22 h 55
   à 23 h 13), en 28 à 66 s, aucun figement ; puis la passe du lot rebasé (f3a115887), verte en 48 s.
 
-## Les pistes, non prouvées
+## Pour le fermer (c7, 8 novembre)
 
-- Les tests communs aux listes sont ceux qui tiennent des fils, des canaux et des **arrêts bornés** :
-  le réacteur, le runtime, le relais de l'IDE, les tâches de l'hôte. Un test qui dépend du temps sous
-  charge, ou une vraie course dans l'arrêt.
-- Un test qui attend un **vrai service** d'embarquement sans délai à lui (le cas 1 exportait les
-  services réels) : le ticket d'hygiène d'archi,
-  `2026-11-07-un-test-de-la-lib-qui-parle-au-service-d-embarquement-attend-sans-delai.md` (branche
-  `hooks-pont-7`), auquel celui-ci se rattache.
+- **Un délai partout** (le lot de l'arbre principal) : le relecteur et l'OCR prennent le même délai
+  que l'embarqueur, par la même variable (`RAG3WEAVER_EMBED_TIMEOUT_SECS`, défaut **60 s** inchangé :
+  un seuil ne se touche pas sans mesure) ; l'erreur se nomme (« service d'embarquement <adresse> muet
+  après N s ») ; **l'arrêt borné revient dans sa borne** (`Backend::stop_reactions`, `stop_within`)
+  même pendant qu'un client attend. Témoins par le faux service muet : rouge aujourd'hui (attente sans
+  fin sur `/rerank` ou `/ocr`), vert avec le délai (l'erreur nommée en N s) ; et `stop_within` qui
+  revient dans sa borne pendant qu'un client attend.
+- **La valeur** : le p99 d'un `/embed` sous charge à luciepc, mesuré dans la fenêtre de G (8 nov.),
+  remplace ensuite le défaut rond.
+- **Un défaut à part** : un client `ureq` sans délai dans un test qui attend un hôte
+  (`une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne`) change un rouge en figement ; un
+  délai de lecture sur le client des e2e de l'hôte, plus tard.
+- **La règle** « lib entière sans `RAG3WEAVER_EMBED_SERVICE` » tombe quand le lot du délai est sur
+  master et qu'une passe sous un service muet est rouge en N s, pas figée.
 
 ## Pour la suite
 
