@@ -707,3 +707,33 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   **ROUGE sur le défaut réel** joué par moi : « la suite a laissé 3 fichier(s) dans /tmp » (la base,
   .wal, .ecrivain). Vingt lignes « en attente » en dix minutes entre-temps : l'attente d'ED n'est
   pas encore dans l'hôte.
+
+## 05 h 00 — la file de la nuit est vide, trois lots d'ED sur master, l'essai 5 au vert
+
+- **Atterris** : hotfixs, racine-disparue (b0a9ab6e5, 1b9983b59, 1de9c908c ; passe sur d8aeffea7 :
+  check_features 5/5, lib 2030, e2e_lectures 24/24, e2e_tx ; sa garde du dernier pas prenait
+  `extension/rag3weaver/docs` pour du code, corrigée ; docs 4f813c3ee) ; ED, **l'état d'attente**
+  (b0301a0e3 : une question ou une approval sans réponse suspend l'équipier, aucun appel au modèle,
+  ni réussi ni raté ni compté, survit à un redémarrage ; la course de son témoin des commandes
+  corrigée avec) et **le bac à sable** (927ae9680 : `sandbox.extra_read` de la chaîne Rust,
+  `sandbox.env` avec {task_dir} et {repo_target}, target partagé par dépôt sous verrou qui dit son
+  attente à 60 s, 32 Go, `taches purge`, TMPDIR={task_dir}/tmp, CARGO_NET_OFFLINE, /dev/null
+  inscriptible ; témoins : cargo compile, lie et teste sous Landlock, l'écriture dehors refusée,
+  et une tâche joue `cargo test --lib -- un_test` par la porte et lit « test result: ok. 1 passed »).
+  Les arbres déjà inscrits gardent leur manifeste : rejouer `code-tree add` ou copier le bloc
+  `sandbox`.
+- **Rien d'autre ne pousse avant la fenêtre** : ED tient prêts le fil par pas (9fef96de9 : un pas
+  repart de la consigne, du plan, de la boîte depuis le dernier pas et du résumé des step_done) et
+  le correctif de **l'arrêt d'inactivité qui ne comptait pas une tâche d'équipier** (767dcb036 :
+  à 4 h 46 l'hôte de Lucie s'est arrêté « inactif depuis 1804 s sans travail en cours » pendant
+  que l'équipier de l'essai 5 éditait ; systemd l'a relancé par la socket, la tâche a repris à sa
+  frontière, le pas en cours perdu) ; « à toi » après le « basculé » de G.
+- **hotfixs, G5** : HyperLogLog 64 → 1024 registres attend la bascule 44 (témoin en known_red) ;
+  analyze au seuil : témoin, forme du ticket, mesure du coût sur une copie de code-rag3db dans ma
+  fenêtre de 9 h sous `poste mesure` ; copy-de-relations-annulé d'abord. G3 attend le basculé et le
+  mot de Lucie. Arbre a effacé ses worktrees (10 Go rendus), garde wt-lib-arbre pour le rebâti de
+  8 h, et dort.
+- **Essai 5** : témoin ROUGE sur le défaut réel, garde `BaseTemporaire` (Drop, `RAG3WEAVER_GARDER`
+  pour garder) dans tests/common, cinq témoins corrigés dans e2e_rag3daemon, e2e_code et
+  e2e_prise_atomique, **tous verts** joués par moi à luciepc ; deux journaux à nom fixe
+  (`/tmp/rag3weaver-e2e-acces`, `-e2e-rag3daemon`) dits hors du lot. Il écrit le ticket.
