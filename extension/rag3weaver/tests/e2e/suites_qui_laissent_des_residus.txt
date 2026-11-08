@@ -1,0 +1,8 @@
+# Les suites e2e qui laissent des résidus dans leur TMPDIR (ticket
+# docs/tickets/2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md).
+# run_e2e.sh donne à chaque suite un TMPDIR neuf et le regarde à la fin, avant de l'effacer :
+# une suite qui y laisse quelque chose et n'est pas ici est ROUGE, en listant ce qu'elle laisse ;
+# une suite d'ici qui finit propre est ROUGE aussi (une passe entière, sans filtre de tests) :
+# elle sort de la liste dans le commit qui la rend propre, et le ticket le dit. La liste
+# maigrit, elle ne grossit pas : une suite neuve naît propre.
+# Une ligne : le nom de la suite (tests/<nom>.rs), seul.
