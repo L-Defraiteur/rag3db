@@ -85,18 +85,36 @@ pub struct WorkspaceDeTache {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CopieDEspace {
     pub empreintes: std::collections::BTreeMap<String, String>,
-    pub reflink: bool,
     pub octets: u64,
+    /// Les noms de dossiers que la copie ne prend pas, à toute profondeur
+    /// (`workspace.exclude`) : ni copiés, ni comparés, ni fusionnés.
+    #[serde(default)]
+    pub exclus: Vec<String>,
 }
+
+/// Les exclusions d'une copie quand le manifeste n'en déclare pas.
+pub const EXCLUS_PAR_DEFAUT: [&str; 3] = ["target", "node_modules", ".venv"];
 
 /// La phrase que la boîte et la relecture disent d'un espace sans git.
 pub const SANS_GIT: &str = "sans git : les changements se relisent par le diff du dossier";
 
 /// Les fichiers d'un dossier, chemin relatif (séparé par `/`) → empreinte blake3,
 /// et leur taille totale. Les liens symboliques ne sont pas suivis.
-fn empreintes_de(racine: &Path) -> Result<(std::collections::BTreeMap<String, String>, u64), String> {
+fn empreintes_de(racine: &Path, exclus: &[String]) -> Result<(std::collections::BTreeMap<String, String>, u64), String> {
     let mut out = std::collections::BTreeMap::new();
     let mut octets = 0u64;
+    parcourir(racine, exclus, &mut |relatif, chemin| {
+        octets += std::fs::metadata(chemin).map(|m| m.len()).unwrap_or(0);
+        out.insert(relatif.to_string(), empreinte(chemin).ok_or_else(|| format!("{} : illisible", chemin.display()))?);
+        Ok(())
+    })?;
+    Ok((out, octets))
+}
+
+/// Les fichiers ordinaires d'un dossier, hors des dossiers exclus (par leur nom,
+/// à toute profondeur), avec leur chemin relatif séparé par `/`. Les liens
+/// symboliques ne sont pas suivis.
+fn parcourir(racine: &Path, exclus: &[String], f: &mut dyn FnMut(&str, &Path) -> Result<(), String>) -> Result<(), String> {
     let mut pile = vec![racine.to_path_buf()];
     while let Some(d) = pile.pop() {
         for e in std::fs::read_dir(&d).map_err(|e| format!("{} : {e}", d.display()))? {
@@ -104,21 +122,39 @@ fn empreintes_de(racine: &Path) -> Result<(std::collections::BTreeMap<String, St
             let genre = e.file_type().map_err(|e| format!("{} : {e}", e))?;
             let chemin = e.path();
             if genre.is_dir() {
-                pile.push(chemin);
+                if !exclus.iter().any(|x| e.file_name().to_string_lossy() == x.as_str()) {
+                    pile.push(chemin);
+                }
             } else if genre.is_file() {
-                let octets_du_fichier = std::fs::read(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
-                octets += octets_du_fichier.len() as u64;
                 let relatif = chemin.strip_prefix(racine).unwrap_or(&chemin).components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
-                out.insert(relatif, blake3::hash(&octets_du_fichier).to_hex().to_string());
+                f(&relatif, &chemin)?;
             }
         }
     }
-    Ok((out, octets))
+    Ok(())
 }
 
-/// L'empreinte d'un fichier, `None` s'il n'existe pas.
+/// **Copier la racine dans l'espace d'une tâche**, hors des exclus : fichier par
+/// fichier (`std::fs::copy`, qui partage les blocs quand le disque le sait :
+/// `copy_file_range`), les droits gardés.
+fn copier_l_espace(de: &Path, vers: &Path, exclus: &[String]) -> Result<(), String> {
+    std::fs::create_dir_all(vers).map_err(|e| format!("{} : {e}", vers.display()))?;
+    parcourir(de, exclus, &mut |relatif, chemin| {
+        let cible = vers.join(relatif);
+        if let Some(d) = cible.parent() {
+            std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+        }
+        std::fs::copy(chemin, &cible).map(|_| ()).map_err(|e| format!("{} → {} : {e}", chemin.display(), cible.display()))
+    })
+}
+
+/// L'empreinte d'un fichier, hachée en flux (un gros fichier ne monte pas en
+/// mémoire) ; `None` s'il n'existe pas ou ne se lit pas.
 fn empreinte(chemin: &Path) -> Option<String> {
-    std::fs::read(chemin).ok().map(|o| blake3::hash(&o).to_hex().to_string())
+    let f = std::fs::File::open(chemin).ok()?;
+    let mut h = blake3::Hasher::new();
+    h.update_reader(f).ok()?;
+    Some(h.finalize().to_hex().to_string())
 }
 
 impl WorkspaceDeTache {
@@ -126,18 +162,27 @@ impl WorkspaceDeTache {
     /// effacés.
     fn chemins_changes(&self) -> Result<Vec<String>, String> {
         let Some(c) = &self.copie else { return Ok(Vec::new()) };
-        let (maintenant, _) = empreintes_de(&self.racine)?;
+        let (maintenant, _) = empreintes_de(&self.racine, &c.exclus)?;
         let mut tous: std::collections::BTreeSet<&String> = c.empreintes.keys().collect();
         tous.extend(maintenant.keys());
         Ok(tous.into_iter().filter(|p| c.empreintes.get(*p) != maintenant.get(*p)).cloned().collect())
     }
 
     /// Les chemins que la racine principale a changés depuis le départ, parmi
-    /// `chemins` (ceux que la tâche change) ou tous si `chemins` est vide.
+    /// `chemins` (ceux que la tâche change) ; `chemins` vide : tous, y compris
+    /// les fichiers créés dans la racine depuis (hors des exclus).
     fn racine_a_bouge(&self, chemins: &[String]) -> Vec<String> {
         let Some(c) = &self.copie else { return Vec::new() };
         let mut vus: Vec<String> = if chemins.is_empty() { c.empreintes.keys().cloned().collect() } else { chemins.to_vec() };
         vus.retain(|p| empreinte(&self.racine_principale.join(p)).as_ref() != c.empreintes.get(p));
+        if chemins.is_empty() {
+            let _ = parcourir(&self.racine_principale, &c.exclus, &mut |relatif, _| {
+                if !c.empreintes.contains_key(relatif) {
+                    vus.push(relatif.to_string());
+                }
+                Ok(())
+            });
+        }
         vus
     }
 }
@@ -459,8 +504,10 @@ impl DaemonHost {
                 (racine.canonicalize().unwrap_or(racine), !w.read_only || w.task_writes)
             });
             let git_init = p.manifest.workspace.as_ref().is_some_and(|w| w.git_init);
-            (p.directory.clone(), espace, git_init)
+            let exclus: Vec<String> = p.manifest.workspace.as_ref().and_then(|w| w.exclude.clone()).unwrap_or_else(|| EXCLUS_PAR_DEFAUT.iter().map(|s| s.to_string()).collect());
+            (p.directory.clone(), espace, (git_init, exclus))
         })?;
+        let (git_init, exclus) = git_init;
         // **`git_init` déclaré** : une racine qu'aucun git ne suit devient un
         // dépôt, avec un premier commit de ce qu'elle porte ; jamais d'office.
         if let Some((racine, _)) = espace.as_ref().filter(|_| git_init) {
@@ -574,18 +621,18 @@ impl DaemonHost {
                         WorkspaceDeTache { racine: arbre.join(sous), ecrit: permis, racine_principale: racine_principale.clone(), code: None, copie: None }
                     }
                     // **Hors de tout dépôt** : la tâche travaille dans une copie de
-                    // la racine (reflink quand le disque le sait), relue et
+                    // la racine (hors des exclus, blocs partagés quand le disque le sait), relue et
                     // fusionnée par différence de dossiers.
                     _ => {
                         let vers = dossier.join("espace");
-                        let reflink = crate::code_tree::copy(&racine_principale, &vers, true).map_err(|e| defaire("la copie de la racine", e))?;
-                        let (empreintes, octets) = empreintes_de(&vers).map_err(|e| defaire("les empreintes de la copie", e))?;
+                        copier_l_espace(&racine_principale, &vers, &exclus).map_err(|e| defaire("la copie de la racine", e))?;
+                        let (empreintes, octets) = empreintes_de(&vers, &exclus).map_err(|e| defaire("les empreintes de la copie", e))?;
                         WorkspaceDeTache {
                             racine: vers,
                             ecrit: permis,
                             racine_principale,
                             code: None,
-                            copie: Some(CopieDEspace { empreintes, reflink, octets }),
+                            copie: Some(CopieDEspace { empreintes, octets, exclus: exclus.clone() }),
                         }
                     }
                 },
@@ -726,7 +773,7 @@ impl DaemonHost {
             "temoins": { "chargement": temoin.is_none(), "refus": temoin },
             "base_a_bouge": base_a_bouge,
             "espace": match copie {
-                Some(w) => json!({ "git": false, "note": SANS_GIT, "octets": w.copie.as_ref().map(|c| c.octets), "reflink": w.copie.as_ref().map(|c| c.reflink) }),
+                Some(w) => json!({ "git": false, "note": SANS_GIT, "octets": w.copie.as_ref().map(|c| c.octets), "exclus": w.copie.as_ref().map(|c| &c.exclus) }),
                 None => json!({ "git": true }),
             },
             "declarations": if tache.declarations_hors_depot {
@@ -811,19 +858,34 @@ impl DaemonHost {
             git(v.depot, &["merge", "-q", "--ff-only", &tache.branche])?;
             commits.push(git(v.depot, &["rev-parse", "HEAD"])?);
         }
-        // Sans git : les fichiers changés recopiés dans la racine, les effacés
-        // effacés.
+        // **Sans git** : les fichiers changés recopiés dans la racine, chacun
+        // d'abord dans un voisin `.<nom>.rag3weaver-tmp` puis renommé (jamais un
+        // fichier tronqué), les effacés effacés. Un échec au milieu dit ce qui est
+        // déjà recopié. Ce que la fusion ne fait pas : les liens symboliques de la
+        // copie ne sont ni comparés ni recopiés, un dossier vidé reste dans la
+        // racine, la date de modification n'est pas gardée.
         if let Some(w) = &copie {
+            let mut faits: Vec<&str> = Vec::new();
             for chemin in &a_recopier {
                 let (de, vers) = (w.racine.join(chemin), w.racine_principale.join(chemin));
-                if de.is_file() {
-                    if let Some(d) = vers.parent() {
+                let pas = || -> Result<(), String> {
+                    if de.is_file() {
+                        let d = vers.parent().ok_or("un chemin sans dossier")?;
                         std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+                        let tmp = d.join(format!(".{}.rag3weaver-tmp", vers.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+                        std::fs::copy(&de, &tmp).map_err(|e| format!("{} → {} : {e}", de.display(), tmp.display()))?;
+                        std::fs::rename(&tmp, &vers).map_err(|e| {
+                            let _ = std::fs::remove_file(&tmp);
+                            format!("{} → {} : {e}", tmp.display(), vers.display())
+                        })
+                    } else if vers.exists() {
+                        std::fs::remove_file(&vers).map_err(|e| format!("{} : {e}", vers.display()))
+                    } else {
+                        Ok(())
                     }
-                    std::fs::copy(&de, &vers).map_err(|e| format!("{} → {} : {e}", de.display(), vers.display()))?;
-                } else if vers.exists() {
-                    std::fs::remove_file(&vers).map_err(|e| format!("{} : {e}", vers.display()))?;
-                }
+                };
+                pas().map_err(|e| format!("la fusion s'arrête sur {chemin} ({e}) ; déjà recopiés : {}", if faits.is_empty() { "aucun".to_string() } else { faits.join(", ") }))?;
+                faits.push(chemin);
             }
         }
         let fusion = commits.last().cloned().unwrap_or_default();

@@ -44,6 +44,11 @@ pub struct WorkspaceConfig {
     /// tâche travaille dans une copie de la racine.
     #[serde(default)]
     pub git_init: bool,
+    /// **Ce qu'une tâche sans git ne copie pas** : des noms de dossiers, pris à
+    /// toute profondeur. Absent : `target`, `node_modules`, `.venv` (un build ou
+    /// des dépendances, que la tâche n'a pas à relire ni à fusionner).
+    #[serde(default)]
+    pub exclude: Option<Vec<String>>,
     /// La porte des commandes (`run`/`run_bg`) : absente ou `off`, le
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
@@ -745,6 +750,7 @@ mod tests {
             read_only,
             task_writes: false,
             git_init: false,
+            exclude: None,
             commands: CommandGate::Off,
             index_signals: std::collections::BTreeMap::new(),
             sandbox: SandboxConfig::default(),
