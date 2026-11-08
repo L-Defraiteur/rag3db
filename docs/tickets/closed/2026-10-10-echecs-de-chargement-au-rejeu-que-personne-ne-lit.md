@@ -1,6 +1,6 @@
 # Les échecs de chargement d'extension au rejeu, que personne ne lit
 
-- **État** : ouvert
+- **État** : corrigé (lot G3 de hotfixs, 8 novembre 2026) — un échec de chargement à l'ouverture s'écrit au journal du moteur (« rag3db: extension … could not be loaded at open from … ») et se lit dans la colonne `extension_error` de SHOW_INDEXES, pour chaque index dont l'extension n'est pas chargée
 - **Gravité** : réponse fausse possible, et surtout un coût silencieux (index entier à rebâtir)
 - **Atteignable en service** : oui — il suffit qu'un fichier d'extension noté ne soit plus là où il était
 - **Touche rag3weaver** : oui, c'est lui qui paie le rebâti et lui qui pourrait le dire
@@ -81,3 +81,14 @@ rien. Oui, peut-être, pour celle dont une table dépend : l'ouverture réussit
 aujourd'hui en laissant un index à rebâtir, ce qui est un coût qu'on préférerait
 sans doute payer sciemment. Le ticket ne tranche pas ; il demande d'abord qu'on
 le **sache**.
+
+## La correction (8 novembre 2026)
+
+- `ExtensionManager::loadExtensionForRecovery` écrit chaque échec sur la sortie d'erreur du
+  moteur, comme les autres messages de reprise : le nom de l'extension, le chemin et la cause.
+- SHOW_INDEXES a une colonne `extension_error`. Pour un index dont l'extension n'est pas chargée,
+  elle rend ce que l'ouverture n'a pas pu charger ; elle est vide sinon. Le catalogue ne dit pas de
+  quelle extension vient un index absent : tous les échecs de l'ouverture sont rendus.
+- Le témoin : `VectorIndexCrashReopenTest.AMissingNotedExtensionIsSaidBySHOWINDEXES`. Le fichier noté
+  de l'extension disparaît ; la base s'ouvre, `extension_loaded` est faux, `extension_error` n'est
+  pas vide.
