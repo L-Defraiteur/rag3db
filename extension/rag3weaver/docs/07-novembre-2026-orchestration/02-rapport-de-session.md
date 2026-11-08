@@ -1134,3 +1134,35 @@ d'une heure à une heure et demie (« 10 h 05 » à « 13 h 00 ») : j'estimais 
 Ils sont remis sur l'heure réelle du commit de chaque section. Les heures citées **dans le texte** de ces
 sections pour les mots de Lucie et les événements du matin sont approximatives et peuvent être en
 avance d'autant ; les hashs, eux, sont exacts.
+
+## 11 h 58 — l'atelier et la barre du chat sur master, la lib se bâtit
+
+- **Atterris** : recherche, mes-recherches-suite (022ade8e8 : pages de 2 000 runs, `relancable`
+  par l'hôte, outils lus sans ouvrir la base) ; lucivy, les deux README (58b762a35, 7f9a03515) et
+  les corrections de nouveautés (72f17733a), puis **la page des 732 branches distantes**
+  (bce8a72ed, `docs/08-novembre-2026-orchestration/02-branches-distantes.md` : 540 à effacer,
+  21 à garder, 171 à demander dont 94 de l'amont Kuzu — rien d'effacé, Lucie décide) ; le cœur,
+  **vecteur-du-noeud-copie** (f7df88003 : le témoin de hotfixs et le correctif cbc06c3e1 ;
+  transaction 351, e2e vector 74, produit vert) ; archi, **la barre du chat** (2daf2e332 +
+  c76339105 : l'usage en jetons du tour et des tours récents lu au journal des runs, le
+  récapitulatif et les fiches sous chaque conversation, les tâches de l'archiviste qui survivent au
+  rechargement) ; ED, **le premier pas de l'atelier** (8258fe56b : `rag3weaver-backend atelier`,
+  `attach_worktree {path}`, `list_worktrees`, WorktreeNode, RepoAttached) et le témoin du juge à
+  deux genres (abf7020e0, ticket fermé).
+- **Le rebâti** : l'arbre bâtit la lib à luciepc sur f7df88003 (nommée cbc06c3e1 par le magasin),
+  « fini » attendu vers 12 h 15 ; G pose ensuite luciepc une heure sous charge, puis le portable
+  avec un binaire ≥ abf7020e0. **La démonstration de l'atelier** est donnée à Lucie (cinq pas).
+- **G3** : la passe rougissait sur les attentes des anciens .test (la colonne `extension_error`,
+  `-RELOADDB` qui recharge l'extension, les écritures qui passent après RELOAD DB) — attentes
+  mises au comportement tranché, le refus nommé gardé dans le témoin C++ avec MERGE et COPY ;
+  passe rejouée. **La CI** : le `<cassert>` était déjà sur master (25 oct.) ; ses runs sont
+  annulés avant leur premier job par la concurrence des pushes, ni rouge ni verte ; le commit de
+  formatage (clang-format 18 en conteneur, ≈ 300 fichiers) attend la fenêtre de cette nuit ;
+  garde-fou posé : chaque lot reformate ses seules lignes (A 4, G5 3, B 15 corrigés).
+- **Lucie, midi** : « après les quotas, une minute puis exponentiel » → la règle passe dans le
+  client `models.llm` (ED, prochain lot, avec le 429 du flux Vertex classé refus) ; « le README
+  de temps en temps ? » → règle dans la procédure (lucivy) ; le modèle de décision : fabriquer de
+  vrais positifs, l'entrée est le contexte de l'agent, l'installation autorisée (faite de ma main ;
+  le banc attend qu'elle lève le refus d'exécuter dans sa fenêtre).
+- **Une faute à moi** : six titres du rapport en avance d'une heure et demie, remis sur l'heure des
+  commits ; règle en mémoire (lire l'heure avant de l'écrire).
