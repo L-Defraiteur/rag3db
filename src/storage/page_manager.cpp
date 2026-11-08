@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "common/stack_to_stderr.h"
 #include "common/uniq_lock.h"
 #include "storage/file_handle.h"
 #include "storage/storage_manager.h"
@@ -20,6 +21,7 @@ static void reportBeyondTheFile(const char* what, const PageRange& entry,
     fprintf(stderr,
         "page manager: %s refused, pages [%u, +%u) lie beyond the %u pages of the data file\n",
         what, entry.startPageIdx, entry.numPages, fileHandle.getNumPages());
+    common::printStackToStderr(what);
 }
 
 PageRange PageManager::allocatePageRange(common::page_idx_t numPages) {

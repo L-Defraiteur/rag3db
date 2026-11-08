@@ -12,6 +12,7 @@
 #include "common/exception/buffer_manager.h"
 #include "common/file_system/local_file_system.h"
 #include "common/file_system/virtual_file_system.h"
+#include "common/stack_to_stderr.h"
 #include "common/string_format.h"
 #include "common/types/types.h"
 #include "main/db_config.h"
@@ -116,6 +117,7 @@ void BufferManager::verifySizeParams(uint64_t bufferPoolSize, uint64_t maxDBSize
 // désigne une telle page est fausse ; la lecture échoue, la transaction avec elle.
 static void checkPageInFile(const FileHandle& fileHandle, page_idx_t pageIdx) {
     if (pageIdx >= fileHandle.getNumPages()) {
+        printStackToStderr("a read of a page beyond the file");
         throw BufferManagerException(stringFormat(
             "Page {} of {} lies beyond the {} pages of the file: the metadata that names it is "
             "wrong.",
