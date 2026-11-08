@@ -43,23 +43,68 @@ fn gabarit_livre(sous: &Path) -> Result<(PathBuf, PathBuf), String> {
     Ok((templates.join("backends/code/backend.json"), dossier))
 }
 
-/// Le plafond d'un premier index suivi : au-delà, la fin se dit en échec (le journal
-/// n'a pas fini), plutôt que de suivre sans fin.
-pub(super) const PLAFOND_DU_SUIVI: Duration = Duration::from_secs(6 * 3600);
+/// Les bornes d'un premier index suivi : `plafond`, au-delà duquel la fin se dit en
+/// échec (le journal n'a pas fini) plutôt que de suivre sans fin ; `naissance`, le temps
+/// laissé au journal pour paraître (une passe morte avant d'écrire, des journaux
+/// nettoyés : l'échec se dit tout de suite après, pas au plafond).
+#[derive(Clone, Copy)]
+pub(super) struct Bornes {
+    pub plafond: Duration,
+    pub naissance: Duration,
+}
 
-/// La fin d'un journal d'index, si sa dernière ligne la dit (le contrat de
-/// `index_nodes` : `DONE_LINE`, éventuellement « — <reste dû> », ou une ligne
-/// d'échec ou d'arrêt) : `(fini, la ligne)`.
-fn fin_du_journal(journal: &Path) -> Option<(bool, String)> {
-    use crate::dataflow::index_nodes::{DONE_LINE, FAILED_PREFIX, STOPPED_PREFIX};
-    let texte = std::fs::read_to_string(journal).ok()?;
-    let derniere = texte.lines().rev().find(|l| !l.trim().is_empty())?.trim().to_string();
-    if derniere.starts_with(DONE_LINE) {
-        Some((true, derniere))
-    } else if derniere.starts_with(FAILED_PREFIX) || derniere.starts_with(STOPPED_PREFIX) {
-        Some((false, derniere))
-    } else {
-        None
+/// Les bornes du service.
+pub(super) const BORNES_DU_SUIVI: Bornes = Bornes { plafond: Duration::from_secs(6 * 3600), naissance: Duration::from_secs(60) };
+
+/// Ce qu'on garde de la fin du journal pour y lire sa dernière ligne.
+const QUEUE_DU_JOURNAL: usize = 4096;
+
+/// **La lecture d'un journal d'index par sa fin** (relecture d'everything declarative : un
+/// premier index fait des Mo de journal en heures, le relire entier quatre fois par
+/// seconde en ferait des Go) : seul ce qui s'est ajouté depuis la lecture précédente se
+/// lit, et les derniers octets se gardent pour la dernière ligne.
+#[derive(Default)]
+struct LectureDuJournal {
+    offset: u64,
+    queue: Vec<u8>,
+}
+
+impl LectureDuJournal {
+    /// Lit l'ajout : `None` si le journal n'existe pas ; sinon, si l'ajout (cousu à la
+    /// queue d'avant) dit « plein texte prêt », et la fin du journal si sa dernière ligne
+    /// la dit (le contrat de `index_nodes` : `DONE_LINE`, éventuellement « — <reste dû> »,
+    /// ou une ligne d'échec ou d'arrêt) : `(fini, la ligne)`.
+    fn lire(&mut self, journal: &Path) -> Option<(bool, Option<(bool, String)>)> {
+        use crate::dataflow::index_nodes::{DONE_LINE, FAILED_PREFIX, STOPPED_PREFIX};
+        use std::io::{Read, Seek, SeekFrom};
+        let mut f = std::fs::File::open(journal).ok()?;
+        let longueur = f.metadata().map(|m| m.len()).unwrap_or(0);
+        if longueur < self.offset {
+            // Réécrit depuis : tout relire.
+            self.offset = 0;
+            self.queue.clear();
+        }
+        let mut ajout = Vec::new();
+        if f.seek(SeekFrom::Start(self.offset)).is_ok() {
+            let _ = f.read_to_end(&mut ajout);
+        }
+        self.offset += ajout.len() as u64;
+        let mut cousu = std::mem::take(&mut self.queue);
+        cousu.extend_from_slice(&ajout);
+        let texte_pret = !ajout.is_empty() && String::from_utf8_lossy(&cousu).contains("plein texte prêt");
+        let debut = cousu.len().saturating_sub(QUEUE_DU_JOURNAL);
+        self.queue = cousu[debut..].to_vec();
+        let queue = String::from_utf8_lossy(&self.queue);
+        let fin = queue.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.trim().to_string()).and_then(|derniere| {
+            if derniere.starts_with(DONE_LINE) {
+                Some((true, derniere))
+            } else if derniere.starts_with(FAILED_PREFIX) || derniere.starts_with(STOPPED_PREFIX) {
+                Some((false, derniere))
+            } else {
+                None
+            }
+        });
+        Some((texte_pret, fin))
     }
 }
 
@@ -81,24 +126,34 @@ fn comptes_de_l_index(hote: &DaemonHost, hosted: &Arc<super::Hosted>) -> (Option
 
 /// **Suivre le premier index d'un dépôt** jusqu'à la dernière ligne de son journal, puis
 /// publier `RepoIndexed` sur `repos`. Un fil nommé, borné à la vie de l'hôte (le `Weak` :
-/// l'hôte parti, il sort sans rien dire) et à `plafond` (au-delà, un échec dit tel).
-/// `quoi` porte le worktree, le dépôt et la branche, repris dans l'événement.
-pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super::Hosted>, journal: PathBuf, quoi: Value, plafond: Duration) {
+/// l'hôte parti, il sort sans rien dire) et par `bornes` (un journal qui ne paraît pas, un
+/// journal qui ne finit pas : un échec dit tel). `quoi` porte le worktree, le dépôt et la
+/// branche, repris dans l'événement.
+pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super::Hosted>, journal: PathBuf, quoi: Value, bornes: Bornes) {
     let nom = format!("index-suivi:{}", hosted.id);
     let _ = std::thread::Builder::new().name(nom).spawn(move || {
         let debut = Instant::now();
         // Le plein texte prêt, quand le journal le dit (« plein texte prêt · vecteurs … ») :
         // la recherche par mots répond dès ce moment.
         let mut texte_ms: Option<u64> = None;
+        let mut lecture = LectureDuJournal::default();
         let (ok, ligne) = loop {
-            if texte_ms.is_none() && std::fs::read_to_string(&journal).is_ok_and(|t| t.lines().any(|l| l.starts_with("plein texte prêt"))) {
-                texte_ms = Some(debut.elapsed().as_millis() as u64);
+            match lecture.lire(&journal) {
+                None if debut.elapsed() > bornes.naissance => {
+                    break (false, format!("le journal de l'index n'existe pas : {}", journal.display()));
+                }
+                None => {}
+                Some((texte_pret, fin)) => {
+                    if texte_pret && texte_ms.is_none() {
+                        texte_ms = Some(debut.elapsed().as_millis() as u64);
+                    }
+                    if let Some(fin) = fin {
+                        break fin;
+                    }
+                }
             }
-            if let Some(fin) = fin_du_journal(&journal) {
-                break fin;
-            }
-            if debut.elapsed() > plafond {
-                break (false, format!("le journal de l'index n'a pas fini en {} min ({})", plafond.as_secs() / 60, journal.display()));
+            if debut.elapsed() > bornes.plafond {
+                break (false, format!("le journal de l'index n'a pas fini en {} min ({})", bornes.plafond.as_secs() / 60, journal.display()));
             }
             if hote.strong_count() == 0 {
                 return;
@@ -225,9 +280,9 @@ impl WorktreeHost for HoteDesWorktrees {
                     // La fin se dira sur le flux (`RepoIndexed`) : la page la montre.
                     if let Some(journal) = journal_du_recu(&recu) {
                         let quoi = json!({ "worktree": worktree, "depot": depot, "branche": branche });
-                        suivre_le_premier_index(Arc::downgrade(&hote), h.clone(), journal, quoi, PLAFOND_DU_SUIVI);
+                        suivre_le_premier_index(Arc::downgrade(&hote), h.clone(), journal, quoi, BORNES_DU_SUIVI);
                     }
-                    "son index est lancé en fond ; sa fin se dira ici".to_string()
+                    "son index est lancé en fond ; sa fin se dira sur le flux de l'IDE".to_string()
                 }
                 Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
             })
@@ -684,7 +739,7 @@ mod tests {
         host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
         let h = host.hosted(&atelier).unwrap();
         let dit = host.with_backend(&h, |b| b.call("attach_worktree", json!({ "path": depot }))).unwrap().unwrap();
-        assert!(dit["result"].as_str().unwrap_or_default().contains("sa fin se dira ici"), "{dit}");
+        assert!(dit["result"].as_str().unwrap_or_default().contains("sa fin se dira sur le flux de l'IDE"), "{dit}");
 
         let debut = std::time::Instant::now();
         let fin = loop {
@@ -728,24 +783,33 @@ mod tests {
         host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
         let h = host.hosted(&manifeste).unwrap();
         let quoi = |n: &str| json!({ "worktree": format!("/w/{n}"), "depot": "rag3db-essai", "branche": n });
-        let suivre = |n: &str, lignes: &[String], plafond: std::time::Duration| {
+        let bornes = |plafond_ms: u64| super::Bornes { plafond: std::time::Duration::from_millis(plafond_ms), naissance: std::time::Duration::from_millis(400) };
+        let suivre = |n: &str, lignes: &[String], plafond_ms: u64| {
             let journal = d.path().join(format!("{n}.log"));
             std::fs::write(&journal, lignes.join("\n") + "\n").unwrap();
-            super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal, quoi(n), plafond);
+            super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal, quoi(n), bornes(plafond_ms));
         };
-        let long = std::time::Duration::from_secs(60);
+        let long = 60_000;
         suivre("echec", &["plein texte : 1/1 fichiers".into(), format!("{FAILED_PREFIX} : la racine a disparu")], long);
         suivre("arret", &[format!("{STOPPED_PREFIX} : l'hôte s'arrête")], long);
         suivre("reste", &[format!("{DONE_LINE} — 12 morceau(x) sans vecteur, l'embarqueur n'a pas répondu")], long);
-        suivre("plafond", &["plein texte : 0/1 fichiers".into()], std::time::Duration::from_millis(300));
+        suivre("plafond", &["plein texte : 0/1 fichiers".into()], 300);
+        // Un journal qui ne paraît jamais : l'échec se dit après la naissance, pas au plafond.
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), d.path().join("absent.log"), quoi("absent"), bornes(long));
+        // Un gros journal (plus que la queue gardée) : le plein texte prêt au milieu, la fin
+        // tout au bout — lus par l'ajout, sans relire le début.
+        let mut gros: Vec<String> = (0..2000).map(|i| format!("vecteurs {i} sur 2000 (granite-278m)")).collect();
+        gros.insert(10, "plein texte prêt · relations 4/4".into());
+        gros.push(DONE_LINE.into());
+        suivre("gros", &gros, long);
 
         let debut = std::time::Instant::now();
         let vus = loop {
             let vus = indexes_captes(&flux);
-            if vus.len() >= 4 {
+            if vus.len() >= 6 {
                 break vus;
             }
-            assert!(debut.elapsed() < std::time::Duration::from_secs(20), "quatre RepoIndexed attendus : {vus:#?}");
+            assert!(debut.elapsed() < std::time::Duration::from_secs(20), "six RepoIndexed attendus : {vus:#?}");
             std::thread::sleep(std::time::Duration::from_millis(100));
         };
         let de = |n: &str| vus.iter().find(|e| e["branche"] == n).cloned().unwrap_or_else(|| panic!("{n} : {vus:#?}"));
@@ -758,12 +822,16 @@ mod tests {
         assert!(e["reste"].as_str().is_some_and(|r| r.contains("12 morceau(x)")) && e["erreur"].is_null(), "{e}");
         let e = de("plafond");
         assert!(e["ok"] == false && e["erreur"].as_str().is_some_and(|s| s.contains("n'a pas fini")), "{e}");
+        let e = de("absent");
+        assert!(e["ok"] == false && e["erreur"].as_str().is_some_and(|s| s.contains("n'existe pas")), "{e}");
+        let e = de("gros");
+        assert!(e["ok"] == true && e["texte_ms"].is_u64(), "le plein texte prêt lu au milieu d'un gros journal : {e}");
 
         // L'hôte parti, le suiveur sort sans rien publier.
         let journal = d.path().join("parti.log");
         std::fs::write(&journal, "plein texte : 0/1 fichiers\n").unwrap();
         let faible = Arc::downgrade(&host);
-        super::suivre_le_premier_index(faible.clone(), h.clone(), journal.clone(), quoi("parti"), long);
+        super::suivre_le_premier_index(faible.clone(), h.clone(), journal.clone(), quoi("parti"), bornes(long));
         let flux2 = flux.clone();
         drop(host);
         std::thread::sleep(std::time::Duration::from_millis(600));
