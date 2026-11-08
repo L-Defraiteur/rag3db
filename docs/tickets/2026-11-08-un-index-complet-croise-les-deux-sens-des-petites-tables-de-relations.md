@@ -31,6 +31,59 @@ l'offset 0), des séries de relations consécutives rattachées au mauvais nœud
 destination, des relations d'un seul côté. Le témoin (B) du 7 novembre
 (`late_rel_table_rewrites_test.cpp`) ne le couvre pas.
 
+## Ce que montre la base abîmée
+
+Sur INHERITS_FROM, le sens avant depuis les nœuds 5356 à 5359 est **identique** dans la copie saine
+et dans l'instantané d'après l'index : les relations 357 à 360 vont vers RecordBase (5354), avec les
+mêmes identifiants. L'index ne les a pas recréées. Le sens arrière de RecordBase, lui, rend dans
+l'abîmée une ligne vide (0|0), puis 467, 468 et 469, des relations que le sens avant envoie vers 3223,
+puis 564 ; plus aucune de 357 à 361. La liste arrière d'un nœud **que l'index n'a pas touché** pointe
+après le point de reprise sur la portion de rangées d'une autre destination.
+
+Le run 2b de G, sous dadbf0041, rend les mêmes chiffres que 1b sous 17a094d12.
+
+## L'hypothèse (relue avec le cœur, pas encore prouvée)
+
+`InMemChunkedCSRHeader::populateRegionCSROffsets` (`src/storage/table/csr_chunked_node_group.cpp`)
+range les longueurs du nouvel en-tête à la suite, depuis le début gauche d'avant de la région. Puis il
+force la fin du dernier nœud au bord droit d'avant (`oldRightCSROffset`). Le dépassement n'est gardé
+que par un `KU_ASSERT`, absent en Release. La stabilité du bord gauche, dans
+`CSRNodeGroup::checkpointInMemAndOnDisk`, ne l'est aussi que par un `KU_ASSERT`.
+
+Si la somme neuve des longueurs dépasse l'ancienne capacité de la région, les fins des nœuds d'avant
+le dernier passent dans la région suivante, et `checkpointColumnInRegion` y écrit leurs rangées. La
+région suivante n'est pas réécrite et garde ses décalages : ses nœuds intacts lisent les rangées d'un
+autre, et la longueur du dernier nœud débordant ne colle plus à son intervalle.
+
+Ce qui devait l'empêcher, c'est `isWithinDensityBound`. Mais il ne lit pas les longueurs que `populate`
+va ranger : il reconstitue la taille neuve comme la somme des longueurs de l'ancien en-tête plus le
+`sizeChange` des feuilles, compté en deux passes (`collectInMem…` ajoute les insertions vivantes,
+`collectOnDisk…` retire `getNumDeletionsForNodeInPersistentData`). Rien ne vérifie que cette somme
+égale celle du nouvel en-tête. Un écart de compte ouvre le débordement.
+
+**Les deux gardes proposées**, indépendantes de la cause :
+1. calculer la densité sur les longueurs du nouvel en-tête, celles que `populate` va ranger ;
+2. faire échouer le point de reprise par une erreur nommée, en Release, si un débordement reste,
+   au lieu d'écraser le bord droit. Un point de reprise raté se reprend proprement ; une relation
+   corrompue se lit fausse pour toujours.
+
+**La preuve en cours** : une lib d'étude (`etude-debordement-csr-2`, à ne pas atterrir), master plus
+les deux `KU_ASSERT` recopiés sur la sortie d'erreur (`[csr-déborde]`, `[csr-bord-gauche]`), avec un
+`rag3weaver-backend` bâti contre elle. Un `index confirm` tracé (`RAG3WEAVER_TRACE_CYPHER=1`) tourne
+sur une copie de la copie saine, avec son propre service granite-278m sur card2 (port 7882).
+
+## Les témoins à un seul écrivain, tous verts
+
+Branche `reindex-complet-temoin`, `late_rel_table_rewrites_test.cpp` :
+- `BothDirectionsStayEqualUnderAFullReindex` (la forme d'un index confirm) ;
+- `TwoFlushesOfOneNodeTableKeepBothDirectionsEqual` (deux versements d'une même table) ;
+- `BothDirectionsStayEqualWhenFilesAreReindexedWithTheirNodes` (DETACH DELETE, nœuds recréés ailleurs) ;
+- `AListThatGrowsLeavesItsUntouchedNeighboursInPlace` (une liste qui grossit au milieu de voisines
+  intactes).
+
+La garde de densité suit bien une croissance qu'elle voit. Le défaut demande un mélange d'opérations
+que `sizeChange` compte mal.
+
 ## Les pièces (luciepc)
 
 - la copie saine : `~/.cache/rag3db-locks/coupure-12h06/code-lourd` et `code-principal` ;
