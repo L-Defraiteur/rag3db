@@ -1,6 +1,8 @@
 #include "binder/binder.h"
 #include "catalog/catalog.h"
 #include "catalog/catalog_entry/index_catalog_entry.h"
+#include "common/string_format.h"
+#include "extension/extension_manager.h"
 #include "function/table/bind_data.h"
 #include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
@@ -23,14 +25,15 @@ struct IndexInfo {
     bool dependencyLoaded;
     std::string indexDefinition;
     std::string state;
+    std::string extensionError;
 
     IndexInfo(std::string tableName, std::string indexName, std::string indexType,
         std::vector<std::string> properties, bool dependencyLoaded, std::string indexDefinition,
-        std::string state)
+        std::string state, std::string extensionError)
         : tableName{std::move(tableName)}, indexName{std::move(indexName)},
           indexType{std::move(indexType)}, properties{std::move(properties)},
           dependencyLoaded{dependencyLoaded}, indexDefinition{std::move(indexDefinition)},
-          state{std::move(state)} {}
+          state{std::move(state)}, extensionError{std::move(extensionError)} {}
 };
 
 struct ShowIndexesBindData final : TableFuncBindData {
@@ -64,6 +67,7 @@ static offset_t internalTableFunc(const TableFuncMorsel& morsel, const TableFunc
         output.getValueVectorMutable(4).setValue(i, indexInfo.dependencyLoaded);
         output.getValueVectorMutable(5).setValue(i, indexInfo.indexDefinition);
         output.getValueVectorMutable(6).setValue(i, indexInfo.state);
+        output.getValueVectorMutable(7).setValue(i, indexInfo.extensionError);
     }
     return numTuplesToOutput;
 }
@@ -88,6 +92,12 @@ static binder::expression_vector bindColumns(const TableFuncBindInput& input) {
     // sans holder (détachée au rejeu du journal).
     columnNames.emplace_back("state");
     columnTypes.emplace_back(LogicalType::STRING());
+    // Pour un index dont l'extension n'est pas chargée : ce que l'ouverture n'a pas pu charger
+    // (nom, chemin, cause), vide sinon — pour que l'appelant dise l'échec au lieu de rebâtir en
+    // silence. Le catalogue ne dit pas de quelle extension vient un index absent : tous les
+    // échecs de l'ouverture sont rendus.
+    columnNames.emplace_back("extension_error");
+    columnTypes.emplace_back(LogicalType::STRING());
     columnNames = TableFunction::extractYieldVariables(columnNames, input.yieldVariables);
     return input.binder->createVariables(columnNames, columnTypes);
 }
@@ -98,6 +108,13 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
     auto catalog = Catalog::Get(*context);
     auto transaction = transaction::Transaction::Get(*context);
     auto indexEntries = catalog->getIndexEntries(transaction);
+    std::string loadFailures;
+    for (const auto& failure :
+        extension::ExtensionManager::Get(*context)->getRecoveryLoadFailures()) {
+        loadFailures += stringFormat("{}extension {}could not be loaded from {}: {}",
+            loadFailures.empty() ? "" : " ",
+            failure.name.empty() ? std::string() : failure.name + " ", failure.path, failure.error);
+    }
     for (auto indexEntry : indexEntries) {
         auto tableEntry = catalog->getTableCatalogEntry(transaction, indexEntry->getTableID());
         auto tableName = tableEntry->getName();
@@ -127,7 +144,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
         }
         indexesInfo.emplace_back(std::move(tableName), std::move(indexName), std::move(indexType),
             std::move(propertyNames), dependencyLoaded, std::move(indexDefinition),
-            std::move(state));
+            std::move(state), dependencyLoaded ? std::string() : loadFailures);
     }
     return std::make_unique<ShowIndexesBindData>(indexesInfo, bindColumns(*input),
         indexesInfo.size());

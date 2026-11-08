@@ -43,8 +43,9 @@ public:
     // (StorageUtils::getExtensionsFilePath), que le rejeu relit avant de rejouer. Ce fichier
     // ne peut qu'aider : absent, illisible, ou portant un chemin qui ne vaut plus, la reprise
     // continue sans l'extension, et l'index qu'elle n'a pas pu tenir à jour se déclare à
-    // rebâtir (IndexHolder::detach). Rien n'est chargé d'office quand il n'y a pas de journal
-    // à rejouer.
+    // rebâtir (IndexHolder::detach). La liste se relit à toute ouverture, journal vide ou non
+    // (WALReplayer::replay) : une mort juste après un point de reprise laissait sinon l'index
+    // attendre son extension selon l'instant de la mort.
     //
     // Charger une bibliothèque depuis un fichier posé à côté de la base, c'est exécuter du
     // code pour qui peut écrire dans ce dossier. Ce n'est pas nouveau — le journal, posé au
@@ -54,8 +55,8 @@ public:
     // Charge pour le rejeu ; un échec est retenu au lieu d'empêcher d'ouvrir la base.
     void loadExtensionForRecovery(const std::string& name, const std::string& path,
         main::ClientContext* context);
-    // Ce que la reprise n'a pas pu charger, pour l'appelant et pour les messages d'erreur des
-    // index restés en retard.
+    // Ce que la reprise n'a pas pu charger, pour l'appelant, pour les messages d'erreur des
+    // index restés en retard et pour la colonne extension_error de SHOW_INDEXES.
     RAG3DB_API const std::vector<RecoveryLoadFailure>& getRecoveryLoadFailures() const {
         return recoveryLoadFailures;
     }
