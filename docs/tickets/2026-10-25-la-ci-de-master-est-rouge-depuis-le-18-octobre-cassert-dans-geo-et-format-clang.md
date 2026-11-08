@@ -1,8 +1,8 @@
 # La CI de master est rouge depuis le 18 octobre : un `<cassert>` dans geo et le format clang
 
-- **État** : ouvert (relevé par l'orchestration le 25 octobre 2026 ; le premier point a son
-  commit sur la branche `ci-cassert-geo`, baf19b9e5, qui part vers master à la fin de la fenêtre
-  de hotfixs ; le second attend une fenêtre de formatage)
+- **État** : ouvert — point 1 fait (sur master depuis le 25 octobre, 9bf7aca5c), point 2 à la
+  fenêtre de formatage que l'orchestration ouvre la nuit du 8 novembre. Relevé par l'orchestration le
+  25 octobre 2026
 - **Gravité** : aucun run vert du « CI Workflow » dans l'historique récent : les autres jobs ne
   disent plus rien de master tant que ces deux-là rougissent.
 - **Atteignable en service** : non (contrôle de CI).
@@ -55,3 +55,15 @@ Le « CI Workflow » de master vert sur ses deux jobs (sanity checks, code forma
 
 Les deux jobs verts sur master, l'exclusion des docs posée, et la règle du point 3 écrite dans la
 page du cœur sur les passes.
+
+## Le 8 novembre 2026 (session hotfixs)
+
+- **Le point 1 est sur master depuis le 25 octobre** : 9bf7aca5c, le même retrait que baf19b9e5
+  sous un autre hash. `bash scripts/check-no-std-assert.sh extension` rend 0 sur master.
+- **La CI de master ne dit plus rien, ni rouge ni vert** : ses runs récents sont tous annulés avant
+  leur premier job (groupe de concurrence ; master reçoit un push toutes les quelques minutes). Le
+  témoin « deux jobs verts » demandera un run qui finit : un push calme, ou un lancement à la main
+  (`gh workflow run`).
+- **Le point 2 se prépare** : clang-format **18.1.3**, celle de la CI, dans une image docker locale
+  (`rag3db-clang-format-18`, Ubuntu 24.04) au portable. En attendant la fenêtre, chaque lot de la
+  session hotfixs est passé à la 18 sur ses seules lignes, et n'ajoute aucun écart.
