@@ -120,7 +120,9 @@ fn a_429_is_retried_and_then_succeeds() {
 
 #[test]
 fn a_5xx_uses_a_much_shorter_base_than_a_429() {
-    let srv = FakeServer::start_sequence(vec![Reply::status(503), Reply::sse()]);
+    // Un 500 : le 503 (indisponible) attend comme un quota, depuis la règle du
+    // 8 novembre 2026 (`a_503_waits_like_a_quota`).
+    let srv = FakeServer::start_sequence(vec![Reply::status(500), Reply::sse()]);
     let clock = FakeClock::new();
     let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default());
     let mut sink = RetrySink::default();
@@ -197,8 +199,9 @@ fn an_absurd_retry_after_is_still_capped() {
     let mut sink = RetrySink::default();
     llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
     let (_, wait, _) = sink.announces[0];
+    // Le plafond d'une attente est celui de la règle, dix minutes.
     assert!(
-        wait >= Duration::from_secs(120) && wait <= Duration::from_secs(144),
+        wait >= Duration::from_secs(600) && wait <= Duration::from_secs(720),
         "plafonné à max_backoff (plus la gigue additive), eu {wait:?}"
     );
 }
@@ -535,4 +538,64 @@ fn a_sink_that_ignores_retries_still_sees_them_in_usage() {
     let (_, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).unwrap();
     assert_eq!(usage.retries, 2);
     assert!(usage.ms > 0, "les attentes comptent dans la durée totale");
+}
+
+// ─── La règle de Lucie (8 novembre 2026) ────────────────────────────────────
+// « Après les quotas il faut mettre une minute puis un retour exponentiel » :
+// une minute, puis le double, au plus dix minutes ; cinq reprises au plus.
+
+#[test]
+fn the_rule_waits_a_minute_then_doubles_up_to_ten_minutes() {
+    let mut replies: Vec<Reply> = (0..5).map(|_| Reply::status(429)).collect();
+    replies.push(Reply::sse());
+    let srv = FakeServer::start_sequence(replies);
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default());
+    let mut sink = RetrySink::default();
+    let (_, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).expect("cinq refus, puis la réponse");
+    assert_eq!(usage.retries, 5);
+    let attendues = [60u64, 120, 240, 480, 600];
+    assert_eq!(sink.announces.len(), 5, "{:?}", sink.announces);
+    for ((_, wait, _), a) in sink.announces.iter().zip(attendues) {
+        let (bas, haut) = (Duration::from_secs_f64(a as f64 * 0.8), Duration::from_secs_f64(a as f64 * 1.2));
+        assert!(*wait >= bas && *wait <= haut, "{a} s ± 20 %, eu {wait:?}");
+    }
+}
+
+#[test]
+fn a_503_waits_like_a_quota() {
+    let srv = FakeServer::start_sequence(vec![Reply::status(503), Reply::sse()]);
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default());
+    let mut sink = RetrySink::default();
+    llm.generate(&hello(), &GenOptions::default(), &mut sink).expect("le 503 se reprend");
+    let (_, wait, _) = sink.announces[0];
+    assert!(wait >= Duration::from_secs(48) && wait <= Duration::from_secs(72), "une minute, eu {wait:?}");
+}
+
+/// Vertex rend son quota **après** le 200, dans le flux (la nuit du 8 novembre :
+/// « stream error: {"code":429,…,"status":"RESOURCE_EXHAUSTED"} », sans reprise).
+/// Rien n'a été poussé : la requête se rejoue, une minute après.
+#[test]
+fn a_quota_in_the_stream_before_any_token_is_retried() {
+    let srv = FakeServer::start_sequence(vec![Reply::quota_in_stream(), Reply::sse()]);
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default());
+    let mut sink = RetrySink::default();
+    let (_, usage) = llm.generate(&hello(), &GenOptions::default(), &mut sink).expect("le quota du flux se reprend");
+    assert_eq!((sink.text.as_str(), usage.retries, srv.connections.load(Ordering::SeqCst)), ("Bonjour le monde", 1, 2));
+    let (_, wait, _) = sink.announces[0];
+    assert!(wait >= Duration::from_secs(48) && wait <= Duration::from_secs(72), "une minute, eu {wait:?}");
+}
+
+/// Au bout des reprises, l'erreur dit le quota, les reprises faites et le temps,
+/// en minutes.
+#[test]
+fn a_quota_after_the_five_retries_says_them_in_minutes() {
+    let srv = FakeServer::start_sequence((0..6).map(|_| Reply::status(429)).collect());
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default());
+    let e = llm.generate(&hello(), &GenOptions::default(), &mut RetrySink::default()).expect_err("six refus");
+    let dit = e.to_string();
+    assert!(dit.contains("quota dépassé (HTTP 429) après 5 reprise(s) en ") && dit.contains(" min"), "{dit}");
 }

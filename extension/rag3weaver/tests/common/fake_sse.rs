@@ -84,6 +84,17 @@ impl FakeServer {
                         let _ = sock.flush();
                         drop(sock);
                     }
+                    Reply::Raw { lines } => {
+                        let _ = sock.write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\
+                              Connection: close\r\n\r\n",
+                        );
+                        for l in &lines {
+                            let _ = sock.write_all(format!("{l}\n").as_bytes());
+                        }
+                        let _ = sock.flush();
+                        drop(sock);
+                    }
                 }
             }
         });
@@ -220,6 +231,10 @@ pub enum Reply {
     Sse { frames: Vec<String> },
     /// Un flux **coupé en plein milieu**, sans `[DONE]`.
     CutMidStream { frames: Vec<String> },
+    /// Un 200, puis ces lignes **telles quelles** (sans `data:`), puis la
+    /// fermeture : la forme de Vertex quand son quota tombe après l'en-tête,
+    /// `[{"error": {"code": 429, "status": "RESOURCE_EXHAUSTED"}}]`.
+    Raw { lines: Vec<String> },
 }
 
 impl Reply {
@@ -238,6 +253,12 @@ impl Reply {
     }
     pub fn sse() -> Self {
         Reply::Sse { frames: text_frames() }
+    }
+    /// Le quota de Vertex rendu **dans** le flux, après le 200.
+    pub fn quota_in_stream() -> Self {
+        Reply::Raw {
+            lines: vec![r#"[{"error": {"code": 429, "message": "Resource exhausted. Please try again later.", "status": "RESOURCE_EXHAUSTED"}}]"#.into()],
+        }
     }
 }
 
