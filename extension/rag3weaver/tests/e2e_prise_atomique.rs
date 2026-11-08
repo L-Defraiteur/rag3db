@@ -162,14 +162,8 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-prise-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let base = crate::common::BaseTemporaire::dans("prise");
+    let dossier = base.chemin().to_path_buf();
     let _parent = Rag3dbConnection::new(&dossier).expect("le parent ouvre la base");
 
     let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
@@ -182,7 +176,8 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
     let code = sortie.status.code();
 
     println!("▸ l'enfant a rendu {code:?} (3 = refusé, 7 = ouvert)");
-    let _ = std::fs::remove_dir_all(&dossier);
+    drop(_parent);
+    drop(base);
 
     assert_eq!(
         code,
@@ -231,14 +226,8 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-lecteurs-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let base = crate::common::BaseTemporaire::dans("lecteurs");
+    let dossier = base.chemin().to_path_buf();
 
     // Écrire, puis **lâcher** la base : c'est la condition du partage.
     {
@@ -304,7 +293,7 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
     }
     drop(ecrivain);
 
-    let _ = std::fs::remove_dir_all(&dossier);
+    drop(base);
 }
 
 // ═══ Un lecteur qui insiste pendant qu'on écrit ═════════════════════════════

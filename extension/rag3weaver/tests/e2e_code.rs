@@ -744,8 +744,8 @@ fn the_bulk_switch_yields_the_same_graph_and_a_working_vector_index() {
 fn a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen() {
     use std::panic::AssertUnwindSafe;
 
-    let dir = std::env::temp_dir().join(format!("rag3weaver-bulk-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let base = crate::common::BaseTemporaire::dans("bulk");
+    let dir = base.chemin();
 
     let open = |register: bool| {
         let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
@@ -797,7 +797,7 @@ fn a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen() {
     assert!(found.results.len() > 0, "l'index vectoriel doit être rebâti à l'ouverture");
 
     drop(cat);
-    let _ = std::fs::remove_dir_all(&dir);
+    drop(base);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

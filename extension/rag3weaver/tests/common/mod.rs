@@ -511,3 +511,78 @@ pub fn sauter_si_indisponible(suite: &str, e: &rag3weaver::llm::LlmError) -> boo
     println!("{ligne}");
     true
 }
+
+/// **Compte les résidus sous `std::env::temp_dir()`** pour un préfixe donné (18 octobre 2026).
+///
+/// Permet à un témoin de fin de suite de vérifier qu'aucun fichier (.wal, .readers, base)
+/// ni dossier n'est resté après l'exécution.
+#[allow(dead_code)]
+pub fn compter_residus_temp(prefixe: &str) -> Vec<std::path::PathBuf> {
+    let mut restes = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) {
+        for entry in entries.flatten() {
+            let nom = entry.file_name().to_string_lossy().to_string();
+            if nom.starts_with(prefixe) {
+                restes.push(entry.path());
+            }
+        }
+    }
+    restes
+}
+
+/// **Une base de test dans un dossier temporaire à elle**, effacée à la fin (18 octobre 2026).
+///
+/// La base elle-même est un fichier (`base.rag3db`), entouré de ses compagnons
+/// (`.wal`, `.ecrivain`, `.readers`). En les créant dans un dossier dédié sous
+/// `temp_dir()`, le `Drop` efface ce dossier entier (succès ou panique), sauf si
+/// `RAG3WEAVER_GARDER=1` demande de tout garder pour l'examen.
+#[allow(dead_code)]
+pub struct BaseTemporaire {
+    dossier: std::path::PathBuf,
+    chemin: std::path::PathBuf,
+}
+
+impl BaseTemporaire {
+    pub fn dans(famille: &str) -> Self {
+        let dossier = std::env::temp_dir().join(format!(
+            "rag3weaver-{famille}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("horloge")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dossier).expect("créer le dossier de base temporaire");
+        let chemin = dossier.join("base.rag3db");
+        Self { dossier, chemin }
+    }
+
+    pub fn chemin(&self) -> &std::path::Path {
+        &self.chemin
+    }
+
+    pub fn dossier(&self) -> &std::path::Path {
+        &self.dossier
+    }
+}
+
+impl std::ops::Deref for BaseTemporaire {
+    type Target = std::path::Path;
+    fn deref(&self) -> &Self::Target {
+        &self.chemin
+    }
+}
+
+impl AsRef<std::path::Path> for BaseTemporaire {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.chemin
+    }
+}
+
+impl Drop for BaseTemporaire {
+    fn drop(&mut self) {
+        if std::env::var_os("RAG3WEAVER_GARDER").is_none() {
+            let _ = std::fs::remove_dir_all(&self.dossier);
+        }
+    }
+}

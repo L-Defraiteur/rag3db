@@ -72,14 +72,8 @@ fn deux_processus_partagent_la_base_par_le_demon() {
         std::process::exit(0);
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-rag3daemon-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let base = crate::common::BaseTemporaire::dans("rag3daemon");
+    let dossier = &*base;
     let journal = std::env::temp_dir().join("rag3weaver-e2e-rag3daemon");
 
     let serveur = DaemonConnection::serveur(
@@ -178,7 +172,18 @@ fn deux_processus_partagent_la_base_par_le_demon() {
     assert_eq!(reste.rows[0][0], CypherValue::Int(0));
 
     drop(parent); // arrête le démon (Fin::Arreter)
-    let _ = std::fs::remove_dir_all(&dossier);
+    drop(base);
+
+    let restes = crate::common::compter_residus_temp(&format!(
+        "rag3weaver-rag3daemon-{}",
+        std::process::id()
+    ));
+    assert!(
+        restes.is_empty(),
+        "la suite a laissé {} fichier(s)/dossier(s) dans /tmp après sa fin : {:?}",
+        restes.len(),
+        restes
+    );
 }
 
 // ═══ Le choix du lecteur, et ce qu'il en dit ════════════════════════════════
@@ -199,14 +204,8 @@ fn deux_processus_partagent_la_base_par_le_demon() {
 fn un_lecteur_choisit_son_chemin_et_le_dit() {
     use rag3weaver::acces::{ouvrir_lecteur, Acces, Chemin};
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-acces-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let base = crate::common::BaseTemporaire::dans("acces");
+    let dossier = &*base;
     let journal = std::env::temp_dir().join("rag3weaver-e2e-acces");
 
     let serveur = DaemonConnection::serveur(
@@ -291,7 +290,7 @@ fn un_lecteur_choisit_son_chemin_et_le_dit() {
         }
     }
 
-    let _ = std::fs::remove_dir_all(&dossier);
+    drop(base);
 }
 
 /// **Après un point de reprise échoué**, le démon répond l'erreur puis
