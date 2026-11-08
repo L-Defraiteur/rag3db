@@ -2426,6 +2426,52 @@ mod tests {
         assert_eq!((&apres["open"], &apres["opened"]), (&json!(false), &avant["opened"]), "lire ses recherches n'ouvre pas la base : {apres}");
     }
 
+    /// **Un backend qu'on laisse tomber ne laisse rien derrière lui** (8 novembre
+    /// 2026, ticket « un backend écrit encore dans son dossier après son Drop ») :
+    /// un backend de code indexé, puis cherché, lâché sans `shutdown()` comme le
+    /// font les tests. Juste après son Drop, plus personne ne tient son catalogue
+    /// (ni une indexation finie, ni une réaction, ni un rebâti du plein texte) ; son
+    /// dossier s'efface sans erreur et reste absent : aucun fil n'y écrit plus.
+    #[test]
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn un_backend_qu_on_laisse_tomber_ne_laisse_ni_catalogue_tenu_ni_dossier() {
+        let d = tempfile::tempdir().unwrap();
+        let (base, sources) = (d.path().join("base"), d.path().join("sources"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&sources).unwrap();
+        std::fs::write(sources.join("lib.rs"), "pub fn coucou() -> u32 {\n    1\n}\n").unwrap();
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        let manifest_path = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(sources.to_string_lossy());
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+
+        let prepared = PreparedBackend::load(&manifest_path).unwrap();
+        let db = prepared.path(&prepared.manifest.database);
+        let b = prepared.open(Box::new(crate::rag3db_connection::Rag3dbConnection::new(&db).unwrap()), None).unwrap();
+        let r = b.call("index", json!({ "confirm": true }));
+        assert!(r.is_ok(), "l'index part : {r:?}");
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        while crate::dataflow::index_nodes::indexings_running(&b.catalog) > 0 {
+            assert!(std::time::Instant::now() < fin, "l'indexation ne finit pas en 120 s");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let r = b.call("search_code", json!({ "query": "coucou", "options": { "limit": 5 } }));
+        assert!(r.is_ok(), "la recherche répond : {r:?}");
+
+        let faible = Arc::downgrade(&b.catalog);
+        drop(b);
+        assert!(
+            faible.upgrade().is_none(),
+            "après le Drop d'un backend, quelqu'un tient encore son catalogue ({} détenteur(s)) : un fil de fond, une indexation finie, une réaction",
+            faible.strong_count()
+        );
+        let chemin = d.path().to_path_buf();
+        d.close().expect("le dossier du backend s'efface sans erreur");
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        assert!(!chemin.exists(), "un fil a recréé le dossier du backend après son Drop : {}", chemin.display());
+    }
+
     /// **Un backend de code dont la racine a disparu** (ticket du 11 octobre 2026) :
     /// `daemon_status` le dit « racine absente : <chemin> », et chaque outil qui touche
     /// la racine rend l'erreur nommée « la racine du dépôt a disparu (<chemin>) : rouvrez le
