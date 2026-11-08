@@ -368,6 +368,26 @@ pub fn addressed_to_teammate(line: &Value, key: &str) -> bool {
 /// posté pendant le dernier pas ne se perd pas (le lot des commandes l'a vu,
 /// 8 novembre 2026 : le oui arrivait entre le pas et la fin, et ne relançait
 /// rien, l'équipier étant encore en route).
+/// **La question ouverte de l'équipier** (8 novembre 2026, essai 4 de c7 : trois pas
+/// d'attente marqués « raté » arrêtaient la tâche, et chacun rappelait le modèle) : sa
+/// dernière `question` ou `approval` sans réponse (`reply_to`) et sans ligne qui lui soit
+/// adressée après elle (une `request`, une `answer`, une `instruction`). Tant qu'elle est
+/// là, l'équipier attend sans appeler le modèle. Lue dans la boîte, elle survit à un
+/// redémarrage de l'hôte. Rend son rang dans la boîte et la ligne.
+pub(crate) fn open_question(files: &TeammateFiles) -> Option<(usize, Value)> {
+    let lignes = files.mailbox();
+    let mut ouverte: Option<(usize, Value)> = None;
+    for (n, l) in lignes.iter().enumerate() {
+        if l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("question" | "approval")) {
+            let repondue = lignes.iter().any(|r| r["reply_to"] == l["id"]);
+            ouverte = (!repondue).then(|| (n, l.clone()));
+        } else if l["from"] != "teammate" && l["from"] != "host" && l["kind"] != "stop" && addressed_to_teammate(l, &files.key) {
+            ouverte = None;
+        }
+    }
+    ouverte
+}
+
 pub(crate) fn unread_news(files: &TeammateFiles) -> bool {
     files
         .mailbox()
@@ -1191,7 +1211,12 @@ impl DaemonHost {
         // Un plan a-t-il existé pendant ce lancement ? (la fin le dit autrement)
         let mut plan_seen = false;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
-        for number in 1..=MAX_STEPS {
+        // `number` numérote les pas joués ; `counted` ne compte pas ceux qui
+        // finissent en attente du superviseur : MAX_STEPS borne le travail, pas
+        // l'attente.
+        let mut number = 0usize;
+        let mut counted = 0usize;
+        while counted < MAX_STEPS {
             let lines = files.mailbox();
             let news: Vec<Value> = lines
                 .iter()
@@ -1215,9 +1240,12 @@ impl DaemonHost {
             let waiting = active.is_some_and(|p| !p.waiting().is_empty());
             // Un pas de travail : une nouvelle dans la boîte, un élément faisable,
             // ou un plan actif qui ne fait plus qu'attendre rien (à clore).
-            let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 1);
+            let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 0);
             let last = active.is_some() && !alone && !waiting && news.is_empty();
-            if !work {
+            // **En attente du superviseur** : une question ou une commande
+            // demandée, sans réponse ni ligne nouvelle, suspend l'équipier.
+            let suspendu = news.is_empty() && open_question(files).is_some();
+            if !work || suspendu {
                 // Rien à faire sans le superviseur : on attend la boîte, par le
                 // bus quand il y en a un, et toujours par le fichier (toutes les
                 // 2 s) : un backend fermé ne publie plus. Le journal du pas
@@ -1246,6 +1274,8 @@ impl DaemonHost {
                 };
                 continue;
             }
+            number += 1;
+            let debut_du_pas = read;
             let message = frontier_message(number, &news, &plans, last);
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
             step.woke_by = woke_by.take();
@@ -1318,6 +1348,20 @@ impl DaemonHost {
             // vivant (ni actif ni en pause) et un pas déclaré fini. Un plan actif
             // qui n'a plus rien à faire n'est pas la fin : l'agent le clôt, puis
             // reprend un plan en pause ou le clôt aussi (Lucie).
+            // **Un pas qui finit sur une question attend la réponse** : il ne
+            // compte ni réussi, ni raté, ni dans les MAX_STEPS. La boîte le dit
+            // une fois, à l'heure où l'attente commence.
+            if let Some((rang, q)) = open_question(files) {
+                if rang >= debut_du_pas {
+                    let heure = jiff::Zoned::now().strftime("%H:%M").to_string();
+                    let texte = format!("en attente du superviseur depuis {heure} : {} {}", q["kind"].as_str().unwrap_or("question"), q["id"].as_str().unwrap_or(""));
+                    if let Ok(line) = files.append_with("host", "report", None, &texte, &json!({ "awaiting": q["id"] })) {
+                        publish(bus.as_ref(), task, &line);
+                    }
+                }
+                continue;
+            }
+            counted += 1;
             let after = files.read_plans();
             plan_seen |= !step.closed_plans().is_empty();
             if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !unread_news(&files) {
