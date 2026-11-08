@@ -502,10 +502,13 @@ TEST_F(VectorIndexCrashReopenTest, AReplayedDeleteReachesALoadedIndex) {
     EXPECT_EQ(openInAFreshProcess(499, vectorOf(7), -7), INDEX_INTACT);
 }
 
-// Hors de tout rejeu : un processus qui ouvre la base sans charger l'extension et écrit dans
-// la table indexée. Il est refusé en le disant, et rien n'est écrit.
+// Hors de tout rejeu : un processus qui ouvre la base sans l'extension et écrit dans la table
+// indexée. Il est refusé en le disant, et rien n'est écrit. Depuis que toute ouverture charge
+// les extensions notées à côté de la base, une base sans extension est une base dont la liste
+// manque (ou dont le fichier noté a disparu) : le cas la retire.
 TEST_F(VectorIndexCrashReopenTest, AWriteWithoutTheExtensionIsRefusedByName) {
     indexedBaseFromAnEarlierSession();
+    theListOfExtensionsDisappears();
     EXPECT_EQ(openInAFreshProcess(500, vectorOf(0), 0, false, true), WRITE_REFUSED);
 }
 
