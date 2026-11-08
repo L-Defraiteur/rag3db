@@ -159,6 +159,34 @@ TEST_F(TableAnalyzeTest, TheCheckpointRecalibratesTheCardinalityOnLiveRows) {
     EXPECT_EQ(single("CALL STATS_INFO('Doc') RETURN cardinality;"), 1000);
 }
 
+// L'analyze au point de reprise (ticket 2026-10-10-analyze-au-seuil) : une table dont les lignes
+// supprimées, modifiées ou écartées depuis le dernier analyze passent 50 + 10 % de ses lignes (le
+// seuil de l'autovacuum de PostgreSQL) voit ses statistiques rebâties par le point de reprise, et
+// la réouverture les garde. Mesuré avant (10 octobre) : 2 000 noms distincts estimés pour 1 000
+// après un DELETE de la moitié, jusqu'à un CALL analyze.
+TEST_F(TableAnalyzeTest, TheCheckpointAnalyzesATablePastTheThreshold) {
+    copyRows(0, 2000, [](int64_t id) { return "name " + std::to_string(id); });
+    ok("MATCH (d:Doc) WHERE d.id >= 1000 DELETE d;");
+    ok("CHECKPOINT;");
+    expectStatisticsTrue("après le point de reprise");
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    expectStatisticsTrue("après la réouverture");
+}
+
+// Sous le seuil, le point de reprise ne balaye pas la table : les distincts restent ceux qu'il
+// a trouvés (le coût d'un analyze n'est payé que pour une table qui a beaucoup changé).
+TEST_F(TableAnalyzeTest, UnderTheThresholdTheCheckpointDoesNotAnalyze) {
+    copyRows(0, 2000, [](int64_t id) { return "name " + std::to_string(id); });
+    ok("CHECKPOINT;");
+    const auto before = single("CALL STATS_INFO('Doc') RETURN name_distinct_count;");
+    ok("MATCH (d:Doc) WHERE d.id < 10 DELETE d;");
+    ok("CHECKPOINT;");
+    EXPECT_EQ(single("CALL STATS_INFO('Doc') RETURN name_distinct_count;"), before);
+    EXPECT_EQ(single("CALL STATS_INFO('Doc') RETURN cardinality;"), 1990);
+}
+
 // L'estimation du nombre de relations que lit le planificateur (ticket
 // 2026-10-05-copy-de-relations-annule-gonfle-l-estimation) : nextRelOffset, l'allocateur des
 // identités, qu'aucune annulation ni aucun DELETE ne recule, comptait toutes les relations jamais
