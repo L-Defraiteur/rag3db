@@ -817,12 +817,13 @@ fn publish(bus: Option<&crate::events::EventBus>, task: &str, line: &Value) {
 /// et ce qu'on attend de ce pas.
 /// **Le message d'un pas, et lui seul** (8 novembre 2026, la mesure du quota : l'entrée
 /// montait de 5 275 jetons au pas 1 à 122 242 au pas 10, le fil entier renvoyé à chaque
-/// pas). Un pas repart d'une session neuve : ce message porte la demande d'origine, ce que
-/// les pas faits ont déclaré (`step_done`), la boîte depuis le pas précédent et les plans.
+/// pas). Un pas repart d'une session neuve : ce message porte la demande en cours (la
+/// dernière reçue), ce que les pas faits depuis elle ont déclaré (`step_done`), la boîte
+/// depuis le pas précédent et les plans.
 fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, request: &str, faits: &[Value]) -> String {
     let mut m = format!("[Pas {step}]\n");
     if !request.is_empty() && !news.iter().any(|l| l["kind"] == "request" && l["text"] == request) {
-        m.push_str(&format!("\nLa demande d'origine : {request}\n"));
+        m.push_str(&format!("\nLa demande en cours : {request}\n"));
     }
     if !faits.is_empty() {
         m.push_str("\nTes pas faits, tels que tes step_done les ont dits (tu ne vois plus leurs appels d'outils : relis un fichier s'il te le faut) :\n");
@@ -1298,8 +1299,13 @@ impl DaemonHost {
             }
             number += 1;
             let debut_du_pas = read;
-            let faits: Vec<Value> = files.mailbox().into_iter().filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").collect();
-            let message = frontier_message(number, &news, &plans, last, &request, &faits);
+            // La demande en cours : la dernière reçue ; les pas faits : ceux
+            // déclarés depuis elle (une relance sur une demande nouvelle ne
+            // relit pas l'ancienne).
+            let derniere = lines.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host");
+            let consigne = derniere.and_then(|n| lines[n]["text"].as_str()).unwrap_or_default().to_string();
+            let faits: Vec<Value> = lines.iter().skip(derniere.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
+            let message = frontier_message(number, &news, &plans, last, &consigne, &faits);
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va

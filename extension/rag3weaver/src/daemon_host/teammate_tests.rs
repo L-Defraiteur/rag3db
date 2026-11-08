@@ -1022,7 +1022,7 @@ fn a_task_plays_cargo_test_through_the_gate() {
 /// **Un pas repart d'une session neuve** (8 novembre 2026, le quota de l'essai 3 : chaque
 /// pas renvoyait tout le fil, de 5 275 jetons d'entrée au pas 1 à 122 242 au pas 10). Le pas
 /// 1 lit trois fois le dépôt puis déclare son pas ; le premier appel du pas 2 ne reçoit que
-/// le système et son message, qui porte la demande d'origine et ce que le pas 1 a déclaré.
+/// le système et son message, qui porte la demande en cours et ce que le pas 1 a déclaré.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
 fn each_step_starts_from_a_fresh_thread_with_the_request_and_the_steps_done() {
@@ -1066,6 +1066,6 @@ fn each_step_starts_from_a_fresh_thread_with_the_request_and_the_steps_done() {
     let premiers = premiers.lock().unwrap();
     let (_, n, message) = premiers.iter().find(|(p, _, _)| *p == 2).cloned().unwrap_or_else(|| panic!("aucun pas 2 : {premiers:#?}"));
     assert_eq!(n, 2, "le pas 2 part du système et de son message seuls : {premiers:#?}");
-    assert!(message.contains("La demande d'origine : Relis le dépôt et conclus."), "{message}");
+    assert!(message.contains("La demande en cours : Relis le dépôt et conclus."), "{message}");
     assert!(message.contains("trois lectures de src/lib.rs") && message.contains("reste : conclure"), "le pas 1 rappelé : {message}");
 }
