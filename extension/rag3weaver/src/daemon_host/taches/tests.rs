@@ -489,3 +489,35 @@ fn git_init_declare_fait_de_la_racine_un_depot() {
     assert_eq!(git(&t.arbre, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap(), "agent/en-depot");
     host.fermer_une_tache(&id, "en-depot").unwrap();
 }
+
+/// Diagnostic jetable (branche diag-sansgit-index) : ce que l'index de la tâche fait.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn diag_index_de_la_tache_copiee() {
+    let (_d, host, _manifeste, parent) = banc();
+    let tache = host.ouvrir_une_tache(&parent, "relecture").unwrap();
+    let h = host.hosted(&tache.manifest).unwrap();
+    eprintln!("DIAG espace {:?} ecrit {:?}", tache.workspace.as_ref().map(|w| &w.racine), tache.workspace.as_ref().map(|w| w.ecrit));
+    let index = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap();
+    eprintln!("DIAG index -> {}", index.as_ref().map(|v| v.to_string()).unwrap_or_else(|e| e.clone()).chars().take(600).collect::<String>());
+    let debut = Instant::now();
+    while debut.elapsed() < Duration::from_secs(90) {
+        let n = host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap();
+        let etat = host.state();
+        let b = etat["backends"].as_array().and_then(|a| a.iter().find(|b| b["id"] == json!(tache.id)).cloned()).unwrap_or_default();
+        let fichiers: Vec<String> = walk(tache.workspace.as_ref().unwrap().racine.as_path());
+        eprintln!("DIAG t={:>4.1}s indexations={n} index={} fichiers={fichiers:?}", debut.elapsed().as_secs_f64(), b["index"].to_string().chars().take(500).collect::<String>());
+        if n == 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(5));
+    }
+    fn walk(p: &Path) -> Vec<String> {
+        let mut v = Vec::new();
+        for e in std::fs::read_dir(p).into_iter().flatten().flatten() {
+            if e.path().is_dir() { v.extend(walk(&e.path()).into_iter().map(|x| format!("{}/{x}", e.file_name().to_string_lossy()))); v.push(format!("{}/", e.file_name().to_string_lossy())); } else { v.push(e.file_name().to_string_lossy().into_owned()); }
+        }
+        v
+    }
+    host.fermer_une_tache(&parent, "relecture").unwrap();
+}
