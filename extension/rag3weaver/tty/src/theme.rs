@@ -16,6 +16,11 @@ pub struct Theme {
     #[serde(default)]
     pub replis: BTreeMap<String, String>,
     pub ascii: Ascii,
+    /// La couleur de chaque sorte de span de `POST /highlight` (keyword, type,
+    /// string…), plus `en_ligne` (le code entre accents graves) et `cadre`
+    /// (l'en-tête d'un bloc).
+    #[serde(default)]
+    pub code: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -117,5 +122,8 @@ mod tests {
             assert!(!a.glyphes.is_empty() && !a.gabarits.is_empty());
         }
         assert_eq!((t.animations.reflechit.ms, t.animations.lit.ms, t.animations.ecrit.ms), (150, 200, 100), "les cadences de la page d'origine");
+        for sorte in ["keyword", "type", "function", "string", "comment", "number", "constant", "variable", "property", "operator", "punctuation", "attribute", "label", "module", "other", "en_ligne", "cadre"] {
+            assert!(t.code.get(sorte).and_then(|c| rgb(c)).is_some(), "la couleur de code « {sorte} » en hex");
+        }
     }
 }
