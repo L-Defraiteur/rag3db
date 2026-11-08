@@ -125,3 +125,19 @@ Les valeurs de k = 10 sont extrapolées des mesures de k = 5, pas mesurées.
 - **Un blocage sur card2** : une paire de Laya y a tenu la carte 56 minutes, et les services
   d'embarquement voisins ont ralenti (page 02, § 3). Depuis, un chien de garde note « dépassée »
   toute paire qui ne rend rien en 30 s, et arrête le modèle ; aucune ne l'a été sur card0.
+
+## 7. La suite : un décideur d'actions
+
+La piste de Lucie, relayée par l'orchestration le 8 novembre au soir : la même forme pour décider
+d'une action. Le modèle reçoit le contexte de l'agent (borné) et l'action proposée (une commande,
+une écriture, un chemin), et répond par les logits oui/non à « cette action est-elle permise ? ».
+Qwen3-4B est le candidat.
+
+- **Le jeu** : everything declarative journalisera chaque approbation et chaque refus donnés par
+  l'utilisateur dans la porte de l'atelier, avec le contexte, l'action et la décision. On mesurera
+  à quelques centaines de décisions, comme ici : positif premier et AUC. On mesurera surtout le
+  **taux de faux « permis »**, l'erreur qui coûte.
+- **La règle à poser avant de le brancher**, celle de « un filtre ôte, il ne promeut pas » : un
+  décideur local peut demander plus (renvoyer à l'utilisateur ce qui lui paraît douteux), jamais
+  approuver à la place de l'utilisateur ce que la porte lui aurait soumis. Son seuil se règle par
+  le taux de faux permis, pas par l'accord moyen.
