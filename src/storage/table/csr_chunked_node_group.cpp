@@ -1,5 +1,7 @@
 #include "storage/table/csr_chunked_node_group.h"
 
+#include <cstdio>
+
 #include "common/serializer/deserializer.h"
 #include "common/types/types.h"
 #include "storage/buffer_manager/memory_manager.h"
@@ -458,6 +460,16 @@ void InMemChunkedCSRHeader::populateRegionCSROffsets(const CSRRegion& region,
     }
     // We should keep the region stable and the old right CSR offset is the end of the region.
     KU_ASSERT(csrOffsets[rightNodeOffset] <= oldRightCSROffset);
+    // Étude du 8 novembre 2026 : la garde sur la sortie d'erreur, en Release aussi.
+    if (csrOffsets[rightNodeOffset] > oldRightCSROffset) {
+        fprintf(stderr,
+            "[csr-déborde] région niveau %lu, nœuds %lu à %lu : fin neuve %lu > fin d'avant %lu "
+            "(début %lu, %lu relations)\n",
+            (unsigned long)region.level, (unsigned long)leftNodeOffset,
+            (unsigned long)rightNodeOffset, (unsigned long)csrOffsets[rightNodeOffset],
+            (unsigned long)oldRightCSROffset, (unsigned long)leftCSROffset,
+            (unsigned long)numRelsInRegion);
+    }
     csrOffsets[rightNodeOffset] = oldRightCSROffset;
 }
 
