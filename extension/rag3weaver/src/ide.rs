@@ -414,6 +414,11 @@ fn jeton_du_cookie(request: &tiny_http::Request) -> Option<String> {
         .map(|(_, v)| v.to_string())
 }
 
+/// **L'outil que la vue recherche appelle** (`Search.tsx`) : une ligne de « mes
+/// recherches » faite par lui est `relancable` depuis la vue, que la vue ne
+/// nomme pas d'outil.
+pub const SEARCH_VIEW_TOOL: &str = "search_code";
+
 /// **Les vues portées sur la page nouvelle** (page 08) : `/ide/code/<id>/<vue>…`
 /// pour ces vues est servi par le bundle ; les autres, par l'ancienne page.
 const VUES_PORTEES: &[&str] = &["chat", "fichier", "recherche", "recherches", "taches", "bilans", "arbre", "symbole", "graphe", "dag", "reactions", "propositions"];

@@ -28,6 +28,8 @@ type Search = {
   nombre: number;
   resultats: Result[];
   clics: Click[];
+  // La vue recherche sait la rejouer (l'hôte le dit : la vue ne nomme pas d'outil).
+  relancable?: boolean;
 };
 type Who = "tout" | "ide" | "agents";
 const WHO: { key: Who; label: string }[] = [
@@ -51,7 +53,7 @@ function Line({ id, s }: { id: string; s: Search }) {
           {s.ms != null ? ` · ${s.ms} ms` : ""}
           {s.clics.length ? ` · ${s.clics.length} cliqué${s.clics.length > 1 ? "s" : ""}` : ""}
         </span>
-        {s.outil === "search_code" && s.query ? (
+        {s.relancable && s.query ? (
           <a href={searchLink(id, s.query, s.scope ?? null)} className="relancer text-xs inline-flex items-center gap-1 hover:underline">
             <RotateCcw className="size-3" /> relancer
           </a>
@@ -135,7 +137,8 @@ export function Recherches({ id, state }: { id: string; state: HostState }) {
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       <div id="recherches" className="grid gap-2">
         {lines === null && !error ? <p className="note text-muted-foreground">Chargement…</p> : null}
-        {lines?.length === 0 ? <p className="note text-sm text-muted-foreground" id="aucune-recherche">aucune recherche encore</p> : null}
+        {lines?.length === 0 && !next ? <p className="note text-sm text-muted-foreground" id="aucune-recherche">aucune recherche encore</p> : null}
+        {lines?.length === 0 && next ? <p className="note text-sm text-muted-foreground">aucune recherche dans les runs les plus récents : voir les plus anciennes</p> : null}
         {lines?.map((s) => <Line key={s.run} id={id} s={s} />)}
       </div>
       {next ? (
