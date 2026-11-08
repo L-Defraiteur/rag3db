@@ -1,8 +1,8 @@
 # Durabilité sur faute d'entrée-sortie, coupure ou mort au mauvais instant
 
-- **État** : ouvert
+- **État** : ouvert — en cours (cœur c++, 8 novembre 2026) : le crochet de coupure et la faute d'entrée-sortie injectée existent ; deux lignes de la cause corrigées avec témoin, une témoignée ; le reste ci-dessous
 - **Gravité** : perte (pour la plupart)
-- **Atteignable en service** : non au banc sans crochet dans src/
+- **Atteignable en service** : oui (disque plein, coupure) ; au banc par le crochet de coupure depuis le 8 novembre 2026
 - **Touche rag3weaver** : oui en cas d'incident (disque plein, coupure)
 - **Ouvert le** : 4 octobre 2026, revue des amonts
 - **Pour** : cœur C++ (journal, reprise)
@@ -80,6 +80,43 @@ known_red.txt.
 - **Classement : confort pour la stèle** (orchestration, 5 octobre). Personne n'y perd une donnée ni ne lit un résultat faux : c'est de l'espace. Ordre de grandeur : mille morts en plein chargement font de 1 à 3 Go.
 - La page du chargement journalisé (`extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04-le-chargement-en-masse-journalise.md`, §3, « Un point à tenir ») déduisait que ces pages seraient « reprises naturellement », à éprouver par `data-file-bounded`. La sonde réfute cette déduction, sur les deux chemins.
 - Piste de remède, non codée : à la réouverture, les pages au-delà de ce que le dernier point de reprise connaît du fichier sont libres par définition, puisque le journal porte des lignes et non des pages. Il faut les rendre au gestionnaire de pages libres avant que le rejeu n'en prenne, car le rejeu écrit lui-même des pages neuves. Pour la session cœur C++, à l'étape 4 du chargement journalisé : c'est le même terrain.
+
+## Avancement (8 novembre 2026, cœur c++) : le crochet de coupure
+
+**Le crochet** : `VirtualFileSystem::setDefaultFileSystemFactoryForTesting` (src/, sans effet hors
+des tests) pose, avant que la base ouvre ses fichiers et rejoue son journal, la doublure
+`CutFileSystem` (`test/include/test_helper/cut_file_system.h`). Elle garde dans une couche en
+mémoire tout ce qui n'est pas synchronisé ; une coupure se joue dans un processus fils qui meurt
+par `_exit`, la couche meurt avec lui. `failSyncOf` injecte une faute d'entrée-sortie (une
+synchronisation qui lève, comme un disque plein). La sonde du 8 novembre (synchronisations du
+journal et du rejeu retirées, non commitée) fait rougir trois témoins : ils jugent bien le moteur.
+
+**Les témoins** (`test/transaction/power_cut_test.cpp`) : la doublure elle-même ; une validation
+rendue « ok » survit à une coupure ; une coupure juste après la marque CHECKPOINT ; une coupure
+pendant la reprise après les pages fantômes rejouées, puis après la suppression du journal ; une
+synchronisation du journal qui lève pendant une validation.
+
+**Validation publiée avant le journal : corrigé, avec témoin.** Sur master, un disque plein à la
+synchronisation du journal faisait échouer la validation en laissant ses clés dans l'index de clé
+primaire (lignes invisibles, clés prises : la même ligne refusée ensuite comme doublon).
+`Transaction::commit` écrit et synchronise désormais le journal avant `undoBuffer->commit` ; sur
+faute, `WAL::logCommittedWAL` ramène le journal à sa taille d'avant, et un journal irréparable
+refuse toute validation jusqu'à la réouverture (`WAL::JOURNAL_BROKEN`), qui tranche la dernière
+validation par ce que le journal porte alors. Témoin `PowerCut.AJournalThatCannotBeSyncedPublishesNothing`.
+
+**Synchronisation après le rejeu des pages fantômes : témoignée.** Le correctif du 4 octobre a
+maintenant son témoin (`PowerCutDuringRecovery.ACutAfterTheJournalIsRemovedLosesNothing`, rouge
+sous la sonde qui retire la synchronisation).
+
+**Reste ouvert** :
+- le répertoire jamais synchronisé après création ou suppression du journal et du fichier
+  fantôme : la doublure rend ces opérations immédiates ; il faut une couche sur create et remove
+  et une synchronisation de répertoire, puis le témoin ;
+- les pages d'un COPY tué ou d'un point de reprise raté jamais rendues (la fuite non bornée,
+  classée confort) ;
+- le compteur de pages libres sur une plage libérée deux fois, le point de reprise échoué après un
+  DROP, le verrou d'état de page et la file d'éviction, la frontière d'algorithme de graphe, madvise
+  sur des pages de 16 ou 64 Kio : à lire contre l'amont, un par un.
 
 ## Pour le fermer
 
