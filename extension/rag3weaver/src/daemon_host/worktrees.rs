@@ -482,7 +482,19 @@ pub(super) fn a_l_ouverture(hote: &DaemonHost, hosted: &super::Hosted, b: &crate
 fn carte_si_avance(hote: &super::DaemonHost, manifeste: &Path) -> Option<Value> {
     let h = hote.hosted_existing(manifeste)?;
     let avance = h.backend.try_read().ok().is_some_and(|g| g.as_ref().is_some_and(|b| crate::dataflow::index_nodes::indexings_running(&b.catalog) > 0));
-    avance.then(|| json!({ "kind": "index_progress", "sujets": ["repos"], "repo": h.id, "manifest": h.manifest }))
+    if !avance {
+        return None;
+    }
+    // « dépôt · branche », le titre de la carte (archi : sinon elle montre l'id).
+    let racine = super::espace_du_manifeste(manifeste);
+    let titre = racine.as_deref().and_then(|r| {
+        let depot = super::repo_of(r)?;
+        Some(match super::branch_of(r) {
+            Some(b) => format!("{depot} · {b}"),
+            None => depot,
+        })
+    });
+    Some(json!({ "kind": "index_progress", "sujets": ["repos"], "repo": h.id, "manifest": h.manifest, "titre": titre }))
 }
 
 /// Le backend de `h` est-il ouvert dans l'hôte (ou en train de l'être) ?
@@ -1775,6 +1787,7 @@ mod tests {
             let carte = &t["ui"][0];
             assert_eq!(carte["kind"], "index_progress", "{t:#}");
             assert_eq!(carte["repo"], id_du_depot, "{t:#}");
+            assert_eq!(carte["titre"], "rag3db-essai · essai", "{t:#}");
         }
         assert!(!vus.lock().unwrap().contains("index_progress"), "le modèle a vu la carte");
         let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
