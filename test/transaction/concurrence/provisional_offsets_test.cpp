@@ -16,8 +16,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "graph_test/private_graph_test.h"
@@ -94,7 +97,11 @@ TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsAfterAnotherW
     expectRelsBetweenTheirOwnNodes(*conn);
 }
 
-// Le même défaut dans l'autre ordre : B valide après le COPY de A, avant la validation de A.
+// Le même défaut dans l'autre ordre : B écrit après le COPY de A, avant la validation de A.
+// Depuis le verrou de versement (le COPY de relations a versé les nœuds de A dans la table et
+// tient son index jusqu'à la fin de la transaction), B attend la validation de A, puis passe
+// derrière elle : il écrit dans un fil à part, A valide, et les relations de A restent sur ses
+// propres nœuds.
 TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsWhenAnotherWriterCommitsAfterIt) {
     ok("CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
     ok("CREATE REL TABLE R(FROM N TO N, k INT64);");
@@ -103,8 +110,17 @@ TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsWhenAnotherWr
     ok("BEGIN TRANSACTION;");
     ok("UNWIND range(1000, 1009) AS i CREATE (:N {id: i});");
     ok("COPY R FROM (UNWIND range(1000, 1008) AS i RETURN i, i + 1, i);");
-    ok(*other, "UNWIND range(2000, 2004) AS i CREATE (:N {id: i});");
+    std::atomic<bool> otherDone{false};
+    std::thread writer([&] {
+        ok(*other, "UNWIND range(2000, 2004) AS i CREATE (:N {id: i});");
+        otherDone = true;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_FALSE(otherDone.load())
+        << "[check: second-writer-waits] B a écrit dans la table pendant la transaction de A";
     ok("COMMIT;");
+    writer.join();
+    EXPECT_TRUE(otherDone.load());
     expectRelsBetweenTheirOwnNodes(*conn);
 }
 
