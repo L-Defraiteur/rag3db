@@ -180,11 +180,11 @@ void Transaction::commit(storage::WAL* wal) {
         action();
     }
     localStorage->commit();
-    undoBuffer->commit(commitTS);
-    // Les suppressions que cette validation vient de dater, et celles d'avant qu'un lecteur
-    // retenait : les listes CSR des nœuds touchés les oublient si plus aucun instantané ouvert
-    // ne les voit vivantes.
-    undoBuffer->compactDeadRowsAfterCommit(*this);
+    // Le journal est écrit et synchronisé AVANT que la validation soit publiée (undoBuffer->commit
+    // date les versions) : une faute d'entrée-sortie au journal (un disque plein) laisse alors une
+    // transaction non validée, que l'annulation défait entière. Publiée d'abord, la validation
+    // échouée gardait ses clés dans l'index de clé primaire, lignes invisibles et clés prises
+    // (ticket de la durabilité, 4 octobre 2026 ; Vela a96f7a7d9, Ladybug b824045f0).
     if (shouldLogToWAL()) {
         KU_ASSERT(localWAL && wal);
         if (storage::LocalWAL::profiled()) {
@@ -211,6 +211,11 @@ void Transaction::commit(storage::WAL* wal) {
         }
         localWAL->clear();
     }
+    undoBuffer->commit(commitTS);
+    // Les suppressions que cette validation vient de dater, et celles d'avant qu'un lecteur
+    // retenait : les listes CSR des nœuds touchés les oublient si plus aucun instantané ouvert
+    // ne les voit vivantes.
+    undoBuffer->compactDeadRowsAfterCommit(*this);
     if (hasCatalogChanges) {
         Catalog::Get(*clientContext)->incrementVersion();
         hasCatalogChanges = false;

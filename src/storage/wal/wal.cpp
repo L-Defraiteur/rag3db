@@ -2,6 +2,7 @@
 
 #include "storage/storage_version_info.h"
 
+#include "common/exception/runtime.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
@@ -33,9 +34,32 @@ void WAL::logCommittedWAL(LocalWAL& localWAL, main::ClientContext* context) {
         return; // No need to log empty WAL.
     }
     std::unique_lock lck{mtx};
+    if (brokenUntilReopen) {
+        throw RuntimeException(JOURNAL_BROKEN);
+    }
     initWriter(context);
-    localWAL.inMemWriter->flush(*serializer->getWriter());
-    flushAndSyncNoLock();
+    const auto sizeBefore = fileWriter->getFileOffset();
+    try {
+        localWAL.inMemWriter->flush(*serializer->getWriter());
+        flushAndSyncNoLock();
+    } catch (...) {
+        // Le journal revient à sa taille d'avant : les octets de cette validation, écrits sans
+        // être synchronisés, ne doivent jamais être rendus durables par la synchronisation d'une
+        // validation suivante, ni rejoués à la réouverture. Le tampon se jette d'abord (sa
+        // destruction le réécrirait), puis le fichier se tronque et se synchronise ; l'écrivain se
+        // rouvre à la prochaine validation, à la taille du fichier.
+        try {
+            fileWriter->resetOffsets();
+            serializer.reset();
+            fileWriter = nullptr;
+            fileInfo->truncate(sizeBefore);
+            fileInfo->syncFile();
+            fileInfo.reset();
+        } catch (...) {
+            brokenUntilReopen = true;
+        }
+        throw;
+    }
 }
 
 void WAL::logAndFlushCheckpoint(main::ClientContext* context) {
@@ -54,8 +78,9 @@ void WAL::clear() {
 
 void WAL::reset() {
     std::unique_lock lck{mtx};
-    fileInfo.reset();
     serializer.reset();
+    fileWriter = nullptr;
+    fileInfo.reset();
     vfs->removeFileIfExists(walPath);
 }
 
@@ -88,6 +113,7 @@ void WAL::initWriter(main::ClientContext* context) {
 
     std::shared_ptr<Writer> writer = std::make_shared<BufferedFileWriter>(*fileInfo);
     auto& bufferedWriter = writer->cast<BufferedFileWriter>();
+    fileWriter = &bufferedWriter;
     if (enableChecksums) {
         writer = std::make_shared<ChecksumWriter>(std::move(writer), *MemoryManager::Get(*context));
     }
