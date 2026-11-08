@@ -23,12 +23,18 @@ pub trait WorktreeHost: Send + Sync {
     fn attach(&self, path: &std::path::Path) -> Result<String, String>;
     /// Les worktrees attachés : le dépôt, la branche, l'état de l'index.
     fn list(&self) -> Result<String, String>;
+    /// **Ouvrir une branche dans un worktree frère** du dépôt de `path` (créée depuis
+    /// `from`, ou la tête du dépôt, si elle n'existe pas), puis l'attacher. La commande
+    /// git lancée est dite dans la réponse.
+    fn open_branch(&self, path: &std::path::Path, branch: &str, from: Option<&str>) -> Result<String, String>;
 }
 
 pub struct WorktreeNode {
     node_name: String,
     action: String,
     path: String,
+    branch: String,
+    from: String,
 }
 
 impl Node for WorktreeNode {
@@ -39,7 +45,7 @@ impl Node for WorktreeNode {
         "WorktreeNode"
     }
     fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
-        Some(Box::new(serde_json::json!({ "action": self.action, "path": self.path })))
+        Some(Box::new(serde_json::json!({ "action": self.action, "path": self.path, "branch": self.branch, "from": self.from })))
     }
     fn outputs(&self) -> Vec<PortDef> {
         crate::dataflow::node_registry::ports_declares(&WorktreeNodeFactory).1
@@ -58,7 +64,14 @@ impl Node for WorktreeNode {
                 hote.attach(&chemin)?
             }
             "list" => hote.list()?,
-            autre => return Err(format!("WorktreeNode : action inconnue « {autre} » (attach, list)")),
+            "branch" => {
+                if self.path.trim().is_empty() || self.branch.trim().is_empty() {
+                    return Err("open_branch : donnez le worktree ou le dépôt (`path`) et la branche (`branch`)".into());
+                }
+                let from = Some(self.from.trim()).filter(|f| !f.is_empty());
+                hote.open_branch(&crate::backend_code::etendre_tilde(self.path.trim()), self.branch.trim(), from)?
+            }
+            autre => return Err(format!("WorktreeNode : action inconnue « {autre} » (attach, list, branch)")),
         };
         ctx.set_output("result", PortValue::new(serde_json::Value::String(texte)));
         Ok(())
@@ -70,11 +83,11 @@ pub struct WorktreeNodeFactory;
 impl NodeFactory for WorktreeNodeFactory {
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let action = config.get("action").and_then(|v| v.as_str()).ok_or("WorktreeNode : 'action' est obligatoire (attach, list)")?;
-        if !matches!(action, "attach" | "list") {
-            return Err(format!("WorktreeNode : action inconnue « {action} » (attach, list)"));
+        if !matches!(action, "attach" | "list" | "branch") {
+            return Err(format!("WorktreeNode : action inconnue « {action} » (attach, list, branch)"));
         }
-        let path = config.get("path").and_then(|v| v.as_str()).unwrap_or_default();
-        Ok(Box::new(WorktreeNode { node_name: name.to_string(), action: action.to_string(), path: path.to_string() }))
+        let lire = |cle: &str| config.get(cle).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+        Ok(Box::new(WorktreeNode { node_name: name.to_string(), action: action.to_string(), path: lire("path"), branch: lire("branch"), from: lire("from") }))
     }
     fn node_type(&self) -> &'static str {
         "WorktreeNode"
@@ -92,7 +105,7 @@ impl NodeFactory for WorktreeNodeFactory {
                     required: true,
                     default: None,
                     description: "attach : attacher le worktree `path` ; list : les worktrees attachés.".into(),
-                    choices: Some(Choices::Fixed(vec!["attach".into(), "list".into()])),
+                    choices: Some(Choices::Fixed(vec!["attach".into(), "list".into(), "branch".into()])),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -100,7 +113,25 @@ impl NodeFactory for WorktreeNodeFactory {
                     param_type: ConfigParamType::String,
                     required: false,
                     default: Some(serde_json::json!("")),
-                    description: "Le chemin du worktree (`~/` s'étend), pour attach.".into(),
+                    description: "Le chemin du worktree (`~/` s'étend), pour attach et branch.".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "branch".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: "La branche à ouvrir, pour branch.".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "from".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: "D'où part une branche neuve (une branche, un commit) ; vide : la tête du dépôt.".into(),
                     choices: None,
                     json_schema: None,
                 },

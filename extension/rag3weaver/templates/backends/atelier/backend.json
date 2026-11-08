@@ -22,6 +22,13 @@
       "policy": {
         "attach_worktrees": true
       }
+    },
+    "open_branch": {
+      "graph": "../../tools/open_branch.mmd",
+      "description": "Ouvrir une branche dans un worktree frère, puis l'attacher ; la commande git lancée est dite dans la réponse.",
+      "policy": {
+        "attach_worktrees": true
+      }
     }
   }
 }
