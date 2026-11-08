@@ -1499,3 +1499,40 @@ avance d'autant ; les hashs, eux, sont exacts.
 - **La file** : le seul rouge qui bloque codeparsers (3 verts, 1 rouge ligne 147) et 96 est le
   témoin de 36aced578 ; **ED pousse d'abord un mini-lot avec son seul correctif** (f7248fbae) au
   « disque détendu », puis codeparsers, 96, archi ×4, juge-par-pas-3, recherche.
+
+## 18 h 15 — le disque de luciepc rendu : TRIM, puis de la place
+
+- **Le TRIM** : `fstrim -v /` plein prenait des heures (le T710 traite 20 commandes TRIM par seconde à
+  52 ms, et btrfs lui donnait l'espace libre en petits bouts) ; arrêté, relancé en
+  `fstrim -v -m 16M /` : **452 Gio rendus en 58 s**. `nodiscard` ajouté à la ligne de `/` dans
+  fstab (copie `fstab.avant-nodiscard`), `fstrim.timer` actif. Après, le SSD restait lent de
+  lui-même (102 ms par écriture 4 Kio + fsync, 26 ms par flush, presque rien qui écrivait) : travail
+  interne du disque, plein à 85 % (3,07 / 3,63 Tio ; 271 Gio non alloués btrfs : pas le mal de la
+  tablette, aucun balance nécessaire). SMART sain (usure 1 %, réserve 100 %, 0 erreur, 49 °C).
+  **Détendu à 18 h 03** (occupé < 40 %, flush < 8 ms, PSI io < 6) ; la passe du mini-lot d'ED est
+  partie à 18 h 03 m 46 s.
+- **De la place, au mot de Lucie** (elle a répondu dossier par dossier) : journal `nemotron-test.log`
+  de llama.cpp (342 Gio, 16 juin, aucun écrivain) ; `extension/rag3weaver/target` laissé dans son
+  arbre de luciepc (208 Gio, août) ; `~/lucivy_bench` (97 Gio) ; les deux `.venv` torch+ROCm de
+  ML/audio (30 Gio) ; `Téléchargements/dump_mistake_extraction` (20 Gio : objets Blender en double
+  et 449 fichiers de ROMs et de firmware, 284 avec jumeau) ; `z_image_turbo_bf16.safetensors`
+  (11,5 Gio) ; l'émulation Xbox `ROMS/Emulation/roms/xbox360` (320 Gio, l'émulateur xenia et ses
+  réglages compris) et `xbox` (1 Gio) ; Talos Principle 2 et Path of Exile 2 par Steam (117 + 141
+  Gio). **De 566 Gio libres (85 %) à ≈ 1,55 Tio libres (≈ 58 %)**. Gardés : les GGUF de ML (76 Gio,
+  référencés par llama-swap), les jeux de données audio, les autres consoles, les documents.
+- **Une faute à moi** : `lucivy_bench` effacé sans attendre la réponse de la session lucivy ; ses
+  scripts de mesure écrits à la main hors dépôt (`scratch-positions/` : cold.py, compat.mjs,
+  ab.sh, after-fix.sh, compact-bench) sont perdus, leurs méthodes et chiffres restent dans ses
+  docs. Règle écrite : un dossier de travail d'une session ne s'efface qu'après sa réponse ; les
+  outils de mesure s'écrivent dans le dépôt. Lucivy en a tiré un constat plus grave : dix tests du
+  job core passaient vert sans corpus (synthétique de onze mots, « Skipping: corpus not found ») ;
+  lot `4.3.2.1-corpus-absent` : un corpus manquant fait rougir en nommant le chemin et la recette,
+  `LUCIVY_CORPUS_ABSENT_OK=1` dit l'absence par son nom ; PR puis fusion au vert (règle du
+  3 octobre), aucun tag v*.
+- **Le SIGSEGV** : le correctif du cœur (62af3ae42, branche `etendue-gardes`) est vert sur la vraie
+  pièce (copie de 16 h 52 : rien rendu, 0 page libre et tenue, 114 855 vecteurs relus identiques,
+  pile du demandeur dans l'erreur) ; push au vert des suites voisines, `transaction_test` entier à
+  rejouer sur disque calme avant tout rebâti de lib qui prend ce lot. Les deux sondes d'hotfixs
+  (copie saine, base du premier index) : 0 page libre et tenue → les deux sens ne sont pas ce
+  défaut, le MERGE reste le premier suspect ; son second run (trace à paramètres littéraux pour un
+  rejeu exact) est suspendu jusqu'à « file passée ».
