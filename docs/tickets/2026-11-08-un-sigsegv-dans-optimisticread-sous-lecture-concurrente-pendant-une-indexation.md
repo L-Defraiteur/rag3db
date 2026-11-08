@@ -79,6 +79,23 @@ ASAN de dadbf0041, il ne montre aucune erreur mémoire.
 330 Gio des deux cores. En Release elle lit des flottants périmés et n'écrit rien. La preuve sera
 l'hôte qui tient la même charge sans plantage après le rebâti ; le ticket reste ouvert jusque-là.
 
+## Ce que dit la lib corrigée en service (8 novembre, midi)
+
+Le correctif est sur master en `f7df88003` (moteur `cbc06c3e1`), dans la lib rebâtie avec
+`a312f823e` et le rejeu de hotfixs. L'hôte de luciepc tourne dessus depuis 12 h 07 : aucun
+plantage en une heure (NRestarts 0). **Ce n'est pas une preuve** : la réindexation forcée de
+code-lourd n'a duré que 4 min 30 s, 137 741 vecteurs sur 137 943 réutilisés, sans la charge
+concurrente de 8 h 50 (montre, fusions lucivy, équipier). Elle a exercé le chemin du correctif (un
+COPY dans une table indexée, la finalisation de l'index), pas la course.
+
+La preuve est un banc « rouge d'abord » (G, hôte d'essai 7991 à luciepc, base neuve copiée du
+manifeste de code-lourd, réembarquement complet, search_code dense et plein texte et read_file en
+boucle pendant l'index) : sous dadbf0041 d'abord, puis sous cbc06c3e1 au moins le double du temps
+qu'il aura fallu pour faire planter dadbf0041. S'il ne fait pas planter dadbf0041 en une heure, la
+course demande autre chose que ce que nous savons reproduire, et la preuve reste l'usage en service
+sous surveillance. Le portable de Lucie passe sur la lib corrigée en parallèle (décision de c7 :
+le mécanisme est prouvé par le témoin ASAN, le repli est automatique).
+
 ## Témoin
 
 Aucun encore. La voie : rejouer sous ASAN les cas qui lisent pendant qu'un point de reprise et des
