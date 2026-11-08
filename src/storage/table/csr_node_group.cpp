@@ -1,5 +1,7 @@
 #include "storage/table/csr_node_group.h"
 
+#include <cstdio>
+
 #include <algorithm>
 #include <optional>
 
@@ -816,6 +818,13 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const ChunkedGroups& groups,
             // offset changes.
             KU_ASSERT(csrState.oldHeader->getStartCSROffset(region.leftNodeOffset) ==
                       csrState.newHeader->getStartCSROffset(region.leftNodeOffset));
+            if (csrState.oldHeader->getStartCSROffset(region.leftNodeOffset) !=
+                csrState.newHeader->getStartCSROffset(region.leftNodeOffset)) {
+                fprintf(stderr, "[csr-bord-gauche] région niveau %lu, nœud %lu : début %lu devient %lu\n",
+                    (unsigned long)region.level, (unsigned long)region.leftNodeOffset,
+                    (unsigned long)csrState.oldHeader->getStartCSROffset(region.leftNodeOffset),
+                    (unsigned long)csrState.newHeader->getStartCSROffset(region.leftNodeOffset));
+            }
         }
     }
 
