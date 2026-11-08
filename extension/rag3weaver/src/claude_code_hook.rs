@@ -1258,7 +1258,7 @@ pub fn chemin_du_fond(reglage: &Reglage, session_id: &str, quoi: &str) -> PathBu
 /// de la session, puis `hook --rappel-differe <tâche>` part, détaché de son
 /// groupe de processus, entrée et sorties fermées. Jamais en rejeu ; coupé hors
 /// de la commande (`reglage.fond`), où les témoins le jouent à la main.
-fn confier_au_fond(e: &Evenement, reglage: &Reglage, requete: &str, candidats: Option<Vec<Value>>, tour: u64, journal: &mut Vec<String>) {
+fn confier_au_fond(e: &Evenement, reglage: &Reglage, requete: &str, candidats: Option<Vec<Value>>, tour: u64, soi: &str, journal: &mut Vec<String>) {
     if reglage.rejeu || e.session_id.is_empty() {
         return;
     }
@@ -1268,6 +1268,8 @@ fn confier_au_fond(e: &Evenement, reglage: &Reglage, requete: &str, candidats: O
         "requete": requete,
         "prompt": crate::rappel_du_prompt::nettoyer(e.prompt.as_deref().unwrap_or("")).chars().take(2_000).collect::<String>(),
         "candidats": candidats,
+        // La clé de la session que le juge sert (le banc, 8 novembre).
+        "soi": soi,
         "config": reglage.chemin_du_reglage,
     });
     let chemin = chemin_du_fond(reglage, &e.session_id, "tache");
@@ -1339,16 +1341,21 @@ const SCHEMA_DU_JUGE: &str = r#"{"type":"object","properties":{"pertinent":{"typ
 /// **Juge les candidats d'un rappel** contre le prompt (nettoyé) : un appel
 /// structuré, température nulle. Lucie : « ne pas le flooder » ; le juge ne
 /// laisse passer que ce qui sert à ce tour-ci.
-pub fn juger(llm: &dyn crate::llm::Llm, prompt: &str, candidats: &[Value]) -> Result<Jugement, String> {
+/// `soi` : la clé de la session que le juge sert. Sans elle, le juge jugeait
+/// utile ce qui désigne le destinataire : sur 1 328 paires réelles, 66 des 67
+/// « utiles » de Gemini étaient la fiche d'identité de la session, « la fiche
+/// identifie la session destinataire » (banc, page 08-novembre-2026-banc/01 § 5.2).
+pub fn juger(llm: &dyn crate::llm::Llm, prompt: &str, candidats: &[Value], soi: &str) -> Result<Jugement, String> {
     use crate::llm::{GenOptions, ResponseFormat, StringSink, Turn};
     let liste = candidats.iter().map(|c| format!("- « {} » : {}", c["name"].as_str().unwrap_or("?"), premiere_ligne(c["about"].as_str().unwrap_or(""), 200))).collect::<Vec<_>>().join("\n");
-    let systeme = "Tu juges, pour un agent de code, quelles fiches de sa mémoire servent à son tour présent. Tu lis son message et les fiches candidates (nom et résumé). Tu gardes seulement celles qui l'aident à répondre à CE message ; dans le doute, tu ôtes. Tu n'inventes aucun nom : items_gardes ne contient que des noms de la liste, à l'identique. pertinent vaut false si tu n'en gardes aucune. pourquoi tient en une phrase. Réponds en JSON.";
+    let qui = if soi.is_empty() { "dont l'identité n'est pas connue".to_string() } else { format!("« {soi} »") };
+    let systeme = format!("Tu juges, pour un agent de code, quelles fiches de sa mémoire servent à son tour présent. Tu sers la session {qui}. Tu lis son message et les fiches candidates (nom et résumé). Tu gardes seulement celles qui l'aident à répondre à CE message ; dans le doute, tu ôtes. Une fiche qui désigne cette session elle-même (son identité, son nom, son handle) n'est pas une aide : ôte-la, elle sait déjà qui elle est. Tu n'inventes aucun nom : items_gardes ne contient que des noms de la liste, à l'identique. pertinent vaut false si tu n'en gardes aucune. pourquoi tient en une phrase. Réponds en JSON.");
     let utilisateur = format!("Message de l'agent :\n{}\n\nFiches candidates :\n{liste}", prompt.chars().take(2_000).collect::<String>());
     let schema: Value = serde_json::from_str(SCHEMA_DU_JUGE).map_err(|e| e.to_string())?;
     let opts = GenOptions::default().with_response_format(ResponseFormat::strict_schema("juge_du_rappel", schema)).with_temperature(0.0).with_max_tokens(PLAFOND_DU_JUGE);
     let mut sink = StringSink::default();
     let debut = std::time::Instant::now();
-    let (fin, usage) = llm.generate(&[Turn::system(systeme), Turn::user(&utilisateur)], &opts, &mut sink).map_err(|e| format!("juge : {e}"))?;
+    let (fin, usage) = llm.generate(&[Turn::system(&systeme), Turn::user(&utilisateur)], &opts, &mut sink).map_err(|e| format!("juge : {e}"))?;
     let ms = if usage.ms > 0 { usage.ms } else { debut.elapsed().as_millis() as u64 };
     // Une réponse coupée se dit comme telle, pas « illisible » : on saura que
     // c'est le plafond, et combien le modèle a réfléchi.
@@ -1406,6 +1413,9 @@ pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, 
             }
         }
     };
+    // La fiche propre n'est jamais un candidat, ici non plus.
+    let soi = t["soi"].as_str().unwrap_or("").to_string();
+    let candidats: Vec<Value> = candidats.into_iter().filter(|c| soi.is_empty() || c["name"].as_str() != Some(soi.as_str())).collect();
     journal.push(format!("[fond] {session} : rappel « {requete} » en {} ms, {} candidat(s)", debut.elapsed().as_millis(), candidats.len()));
     // Venus du tour, les candidats sont ce qui reste après son seul rendu : sans
     // juge, ils se taisent. Venus d'un rappel refait (le budget dépassé), rien
@@ -1422,7 +1432,7 @@ pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, 
     let (gardes, verdict) = match (juge, reglage.recall_judge, candidats.is_empty()) {
         (_, _, true) => (Vec::new(), json!(null)),
         (Some(_), true, false) if au_plafond => sans_juge(&format!("plafond horaire atteint, {} appels", reglage.recall_judge_max_per_hour), &mut journal),
-        (Some(llm), true, false) => match juger(llm, t["prompt"].as_str().unwrap_or(""), &candidats) {
+        (Some(llm), true, false) => match juger(llm, t["prompt"].as_str().unwrap_or(""), &candidats, t["soi"].as_str().unwrap_or("")) {
             Ok(j) => {
                 journal.push(format!("[fond] juge : modèle {}, {} ms, entrée {} jetons, sortie {} jetons", j.modele, j.ms, j.entree, j.sortie));
                 journal.push(format!("[fond] juge : {} candidat(s), {} gardé(s) — {}", candidats.len(), j.gardes.len(), j.pourquoi));
@@ -1588,7 +1598,7 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                     if reglage.recall_judge {
                         raisons.push(format!("{} rendu, {} au juge", neuves.len(), reste.len()));
                         let pour_le_juge: Vec<Value> = reste.iter().map(|(c, _)| c.json()).collect();
-                        confier_au_fond(e, reglage, &requete, Some(pour_le_juge), etat.tour, journal);
+                        confier_au_fond(e, reglage, &requete, Some(pour_le_juge), etat.tour, soi, journal);
                     } else {
                         raisons.push(format!("{} rendu, {} tus (juge coupé)", neuves.len(), reste.len()));
                     }
@@ -1611,7 +1621,7 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 let lent = err.contains("timeout") || err.contains("ne répond pas") || err.contains("délai dépassé côté hôte");
                 journal.push(format!("recall_fiches en {} ms : {err}", debut.elapsed().as_millis()));
                 if lent {
-                    confier_au_fond(e, reglage, &requete, None, etat.tour, journal);
+                    confier_au_fond(e, reglage, &requete, None, etat.tour, identite.as_ref().map(|i| i.cle.as_str()).unwrap_or(""), journal);
                     b.push_str(&format!("Rappel des fiches : pas de réponse en {} ms — il continue en fond, son résultat viendra au prochain outil ou au prochain tour.\n", reglage.recall_timeout_ms));
                 } else {
                     b.push_str(&format!("Rappel des fiches en panne : {} — le rappel sera retenté au prochain tour.\n", premiere_ligne(&err, 160)));
@@ -2761,7 +2771,7 @@ mod tests {
             sink.on_token(r#"{"pertinent": tr"#);
             Ok((crate::llm::Finish::new(crate::llm::FinishReason::MaxTokens, Vec::new()), crate::llm::Usage { prompt_tokens: 900, completion_tokens: 400, reasoning_tokens: 384, ..Default::default() }))
         });
-        let e = juger(&coupe, "les cartes", &[json!({ "name": "régime GPU", "about": "x" })]).unwrap_err();
+        let e = juger(&coupe, "les cartes", &[json!({ "name": "régime GPU", "about": "x" })], "96").unwrap_err();
         assert!(e.contains("réponse coupée après 400 jetons (raison length") && e.contains("dont 384 de réflexion") && !e.contains("illisible"), "{e}");
         assert_eq!(*vu.lock().unwrap(), 2_048, "le plafond du juge est celui de Decide");
     }
@@ -2770,12 +2780,23 @@ mod tests {
     fn le_juge_ote_et_n_invente_rien() {
         let candidats = vec![json!({ "name": "régime GPU", "about": "les cartes du poste" }), json!({ "name": "hooks-essai", "about": "la session d'essai" })];
         let llm = crate::llm::MockLlm::new(r#"{"pertinent": true, "pourquoi": "le message parle des cartes", "items_gardes": ["régime GPU", "une fiche inventée"]}"#);
-        let j = juger(&llm, "comment ménager les cartes", &candidats).unwrap();
+        let j = juger(&llm, "comment ménager les cartes", &candidats, "hooks-essai").unwrap();
         assert_eq!(j.gardes, vec!["régime GPU".to_string()], "un nom qu'il n'a pas reçu est jeté");
         assert!(j.pertinent);
         let llm = crate::llm::MockLlm::new(r#"{"pertinent": false, "pourquoi": "hors sujet", "items_gardes": []}"#);
-        assert!(!juger(&llm, "x", &candidats).unwrap().pertinent);
-        assert!(juger(&crate::llm::MockLlm::new("pas du json"), "x", &candidats).unwrap_err().contains("réponse illisible"));
+        assert!(!juger(&llm, "x", &candidats, "hooks-essai").unwrap().pertinent);
+        assert!(juger(&crate::llm::MockLlm::new("pas du json"), "x", &candidats, "hooks-essai").unwrap_err().contains("réponse illisible"));
+        // La consigne dit quelle session le juge sert, et qu'une fiche qui la
+        // désigne n'est pas une aide (le banc : 66 « utiles » sur 67 l'étaient).
+        let consigne = Arc::new(Mutex::new(String::new()));
+        let c2 = consigne.clone();
+        let espion = crate::llm::CallbackLlm::new("espion", 4096, move |turns, opts, sink| {
+            *c2.lock().unwrap() = format!("{:?}", turns.first());
+            crate::llm::Llm::generate(&crate::llm::MockLlm::new(r#"{"pertinent": false, "pourquoi": "rien", "items_gardes": []}"#), turns, opts, sink)
+        });
+        let _ = juger(&espion, "x", &candidats, "hooks-essai").unwrap();
+        let c = consigne.lock().unwrap().clone();
+        assert!(c.contains("Tu sers la session « hooks-essai »") && c.contains("désigne cette session elle-même"), "{c}");
     }
 
     #[test]
