@@ -69,10 +69,20 @@ Voir aussi `2026-10-10-hyperloglog-a-64-registres.md` (la précision des distinc
   - `TheCheckpointAnalyzesATablePastTheThreshold` : rouge avant, avec 1 931 noms estimés pour 1 000 ;
   - `UnderTheThresholdTheCheckpointDoesNotAnalyze` : 10 lignes supprimées sur 2 000, et les
     distincts ne bougent pas.
-- **La mesure, à faire avant le push** (fenêtre de c7, vers 9 h, sous `poste mesure`). Sur une copie
-  reflink de code-rag3db : un `DELETE` validé de 11 % de la plus grosse table à vecteurs, puis un
-  `CHECKPOINT` chronométré, avec et sans le lot. La copie est remise à neuf entre les deux, et
-  chaque mesure se fait trois fois. Les chiffres viendront ici.
+- **La mesure** (8 novembre 2026, 8 h 58 à 9 h 08, luciepc, `poste mesure`, fenêtre de c7). Six
+  copies reflink de code-lourd (1,2 Go), prises quand l'hôte l'avait fermée, une par prise. Sur
+  chacune, un `DETACH DELETE` validé de 11 % de sa plus grosse table à index HNSW, `Scope_Chunk`
+  (14 314 lignes sur 130 128, vecteurs FLOAT[768]), puis un `CHECKPOINT` chronométré :
+
+  | lib | md5 de `librag3db.so` | CHECKPOINT (trois prises) | distincts |
+  |---|---|---|---|
+  | sans le lot (build dadbf0041) | `51bddf21913344cd9a2ba69579bc261e` | 838, 841, 849 ms | inchangés |
+  | avec le lot (build 84651120e) | `aa9efd3b08c4b25cde3c96376c4eeb0d` | 1 234, 1 229, 1 233 ms | rebâtis |
+
+  L'analyze coûte ≈ 390 ms une fois, au point de reprise qui passe le seuil, pour 116 000 lignes
+  vivantes à vecteurs. Les deux libs sont bâties par la cible `rag3db_shared` ; une première copie
+  prise par la cible `rag3db` (la statique) donnait deux fois la même `.so`, démasquée par le md5
+  avant tout chiffre.
 
 ## Limite connue
 
