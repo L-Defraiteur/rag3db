@@ -177,7 +177,7 @@ TEST_F(LateRelTableRewrites, TwoFlushesOfOneNodeTableKeepBothDirectionsEqual) {
     ok("UNWIND range(2010, 2019) AS i CREATE (:Scope {id: i});");
     ok("MATCH (x:Scope {id: 2015}), (y:Scope {id: 3}) CREATE (x)-[:B {line: -1}]->(y);");
     ok("MATCH (x:Scope {id: 4}), (y:Scope {id: 2016}) CREATE (x)-[:B {line: -2}]->(y);");
-    ok("COPY B FROM (UNWIND range(0, 2999) AS i RETURN (i * 11) % 2020 AS f, (i % 3) * 600 + 2010 % (i + 1) AS t, i AS line);");
+    ok("COPY B FROM (UNWIND range(0, 2999) AS i RETURN (i * 11) % 2020 AS f, ((i % 3) * 600 + i) % 2020 AS t, i AS line);");
     ok("MATCH ()-[r:A]->() WHERE r.line % 13 = 0 SET r.line = r.line + 100000;");
     ok("COMMIT;");
     ok("CHECKPOINT;");
