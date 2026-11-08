@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Square, SendHorizontal, MessageSquare, FileDiff, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
-import { highlightBlock, inlineCodeHtml, withInlineCode } from "@/lib/code";
+import { highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
 import { ToolResultView } from "@/lib/toolview";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
@@ -176,6 +176,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const [run, setRun] = useState<string | null>(null);
   const [consumed, setConsumed] = useState("");
   const [recaps, setRecaps] = useState<Record<string, Recap>>({});
+  // Une coloration de l'hôte arrivée (coloration B) : les blocs se rendent de nouveau.
+  const [, setColoriage] = useState(0);
+  useEffect(() => onHostHighlight(() => setColoriage((n) => n + 1)), []);
   const [roleRuns, setRoleRuns] = useState<RoleRun[]>([]);
   // La saisie n'est pas contrôlée par React : un témoin (ou une saisie
   // automatique du navigateur) pose la valeur par le DOM, et `send` la lit là.

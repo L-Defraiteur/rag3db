@@ -36,6 +36,44 @@ const echapper = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").r
 
 /// Un bloc de code en HTML coloré : la langue déclarée si on la connaît, sinon le
 /// texte tel quel (échappé), jamais une langue devinée.
+// **La coloration B** (page 12 de codeparsers) : l'hôte colore par les grammaires
+// tree-sitter (`POST /ide/highlight`, spans aux décalages UTF-16 de la page) ; un
+// bloc s'affiche d'abord sous highlight.js (`data-hl="repli"`), puis, la réponse
+// de l'hôte venue et gardée, se rend en classes `hl-*` (`data-hl="hote"`). Une
+// langue que les grammaires ne connaissent pas, ou un hôte qui ne répond pas,
+// laisse le repli.
+type HostSpan = [number, number, string, number, number];
+const coloriage = new Map<string, HostSpan[] | null>();
+const enCours = new Set<string>();
+const abonnes = new Set<() => void>();
+/// Être prévenu quand une coloration de l'hôte arrive (pour rendre de nouveau).
+export function onHostHighlight(f: () => void): () => void {
+  abonnes.add(f);
+  return () => abonnes.delete(f);
+}
+function demanderAHote(cle: string, code: string, langue: string) {
+  if (enCours.has(cle) || coloriage.has(cle)) return;
+  enCours.add(cle);
+  fetch("/ide/highlight", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: code, language: langue }) })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    .then((v: { spans?: HostSpan[] | null }) => {
+      coloriage.set(cle, v.spans ?? null);
+      abonnes.forEach((f) => f());
+    })
+    .catch(() => coloriage.set(cle, null))
+    .finally(() => enCours.delete(cle));
+}
+function rendreSpans(code: string, spans: HostSpan[]): string {
+  let html = "";
+  let i = 0;
+  for (const [, , sorte, a, b] of spans) {
+    if (a < i || b > code.length) continue;
+    html += echapper(code.slice(i, a)) + `<span class="hl-${echapper(sorte)}">${echapper(code.slice(a, b))}</span>`;
+    i = b;
+  }
+  return html + echapper(code.slice(i));
+}
+
 export function highlightBlock(code: string, lang?: string): string {
   // Les lignes numérotées de read_file (« 00012| code ») : le numéro à part, le
   // code coloré d'après l'extension du fichier quand le bloc ne dit pas sa langue.
@@ -50,9 +88,15 @@ export function highlightBlock(code: string, lang?: string): string {
     return `<pre class="lignes-numerotees"><code class="hljs${langue ? ` language-${echapper(langue)}` : ""}">${corps}</code></pre>`;
   }
   const langue = (lang ?? "").trim().toLowerCase();
+  if (langue) {
+    const cle = `${langue}\u0000${code}`;
+    const spans = coloriage.get(cle);
+    if (spans) return `<pre><code class="hl language-${echapper(langue)}" data-hl="hote">${rendreSpans(code, spans)}</code></pre>`;
+    if (spans === undefined) demanderAHote(cle, code, langue);
+  }
   if (langue && hljs.getLanguage(langue)) {
     const html = hljs.highlight(code, { language: langue, ignoreIllegals: true }).value;
-    return `<pre><code class="hljs language-${echapper(langue)}">${html}</code></pre>`;
+    return `<pre><code class="hljs language-${echapper(langue)}" data-hl="repli">${html}</code></pre>`;
   }
   return `<pre><code${langue ? ` class="language-${echapper(langue)}"` : ""}>${echapper(code)}</code></pre>`;
 }

@@ -1140,6 +1140,12 @@ impl DaemonHost {
                 }
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
+            // **La coloration par les grammaires** (coloration B, page 12 de
+            // codeparsers) : l'écran colore, pas l'agent ; aucun backend n'est ouvert.
+            ("POST", "/highlight") => match corps() {
+                Ok(v) => (200, highlight(&v)),
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
             ("DELETE", "/session") => (200, json!({ "closed": session.is_some_and(|s| self.close_session(s)) })),
             // **Un run venu de dehors** (lot 3 des hooks de Claude Code) : un tour
             // d'un agent qui n'est pas le nôtre, journalisé pour que le juge le
@@ -1511,6 +1517,40 @@ mod teammate_tests;
 /// Le chat qui code dans une tâche (page 03 du 25 octobre 2026).
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_qui_code;
+
+/// **Colorer un texte par les grammaires** (`POST /highlight {text, language}`) :
+/// les spans de `codeparsers::syntax_highlighting::highlight`, chacun aux deux
+/// décalages, `[debut, fin, sorte, debut_utf16, fin_utf16]` — les octets UTF-8
+/// pour le terminal, les unités UTF-16 pour la page, comme les surlignages de la
+/// recherche. Une langue que les grammaires ne connaissent pas rend `spans: null`
+/// et `language: null` : la page garde son repli.
+#[cfg(feature = "code")]
+fn highlight(v: &Value) -> Value {
+    use codeparsers::syntax_highlighting as sh;
+    let texte = v["text"].as_str().unwrap_or_default();
+    let demandee = v["language"].as_str().unwrap_or_default();
+    let sortes: Vec<&str> = sh::Sorte::TOUTES.iter().map(|s| s.nom()).collect();
+    let Some(spans) = sh::highlight(texte, demandee) else {
+        return json!({ "ok": true, "language": null, "spans": null, "kinds": sortes, "why": format!("langue non colorée par les grammaires : « {demandee} »") });
+    };
+    // L'unité UTF-16 de chaque frontière d'octet (un span commence et finit sur une
+    // frontière de caractère).
+    let mut utf16 = vec![0usize; texte.len() + 1];
+    let mut u = 0;
+    for (i, c) in texte.char_indices() {
+        utf16[i] = u;
+        u += c.len_utf16();
+    }
+    utf16[texte.len()] = u;
+    let rendus: Vec<Value> = spans.iter().map(|s| json!([s.debut, s.fin, s.sorte.nom(), utf16[s.debut], utf16[s.fin]])).collect();
+    json!({ "ok": true, "language": sh::nom_de_langue(demandee), "spans": rendus, "kinds": sortes })
+}
+
+/// Sans la feature `code`, l'hôte n'a pas de grammaires : la page garde son repli.
+#[cfg(not(feature = "code"))]
+fn highlight(_v: &Value) -> Value {
+    json!({ "ok": true, "language": null, "spans": null, "why": "hôte bâti sans la feature code : pas de grammaires" })
+}
 
 /// **Le nom d'une session dans la barre**, la règle que la page suivait
 /// (`displayName`) : une mémoire, « la mémoire » (d'abord : son `repo` retombe
