@@ -1,11 +1,12 @@
 #include "storage/file_handle.h"
 
-#include "main/client_context.h"
-#include "main/db_config.h"
-
 #include <cmath>
 
+#include "common/exception/runtime.h"
 #include "common/file_system/virtual_file_system.h"
+#include "common/string_format.h"
+#include "main/client_context.h"
+#include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
 
 using namespace rag3db::common;
@@ -170,6 +171,16 @@ void FileHandle::flushPageIfDirtyWithoutLock(page_idx_t pageIdx) {
 }
 
 void FileHandle::writePagesToFile(const uint8_t* buffer, uint64_t size, page_idx_t startPageIdx) {
+    // Écrire au-delà de numPages allongerait le fichier d'un trou sans que ses pages existent pour
+    // le gestionnaire de tampons : la base de code-essais-c7 du 8 novembre (deux segments posés à
+    // la page 83 108 096 d'un fichier de 455 380 pages).
+    const auto endPage =
+        static_cast<uint64_t>(startPageIdx) + (size + getPageSize() - 1) / getPageSize();
+    if (endPage > numPages) {
+        throw common::RuntimeException(
+            common::stringFormat("Writing pages [{}, {}) of {} would go beyond its {} pages.",
+                startPageIdx, endPage, fileInfo ? fileInfo->path : std::string{}, numPages.load()));
+    }
     if (isInMemoryMode()) {
         auto pageSize = getPageSize();
         for (uint64_t i = 0; i < size; i += pageSize) {

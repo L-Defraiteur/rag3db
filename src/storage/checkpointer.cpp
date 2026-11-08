@@ -1,22 +1,24 @@
 #include "storage/checkpointer.h"
 
+#include <algorithm>
 #include <cstdio>
 
-#include "storage/checkpoint_profile.h"
-
 #include "catalog/catalog.h"
-#include "common/test_hooks.h"
+#include "common/assert.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
 #include "common/serializer/deserializer.h"
 #include "common/serializer/in_mem_file_writer.h"
+#include "common/test_hooks.h"
 #include "extension/extension_manager.h"
 #include "main/client_context.h"
 #include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
+#include "storage/checkpoint_profile.h"
 #include "storage/database_header.h"
+#include "storage/page_allocator.h"
 #include "storage/readers_lock.h"
 #include "storage/shadow_utils.h"
 #include "storage/storage_manager.h"
@@ -326,6 +328,22 @@ void Checkpointer::readCheckpoint(main::ClientContext* context, catalog::Catalog
 // persiste libres. Rien n'est tronqué (comme PostgreSQL : rendre, ne pas couper). À l'ouverture en
 // écriture seulement ; après l'application des pages fantômes, qui a lieu avant cette lecture.
 // Mesuré avant : un COPY de 200 000 lignes tué avant sa validation laissait 554 pages.
+namespace {
+// Un allocateur qui ne fait que noter la plus haute page qu'on lui rend.
+class OwnedPagesEnd final : public PageAllocator {
+public:
+    explicit OwnedPagesEnd(FileHandle* fileHandle) : PageAllocator(fileHandle) {}
+    PageRange allocatePageRange(common::page_idx_t) override { KU_UNREACHABLE; }
+    void freePageRange(PageRange range) override {
+        if (range.startPageIdx != common::INVALID_PAGE_IDX && range.numPages > 0) {
+            note(static_cast<uint64_t>(range.startPageIdx) + range.numPages);
+        }
+    }
+    void note(uint64_t pageEnd) { end = std::max(end, pageEnd); }
+    uint64_t end = 0;
+};
+} // namespace
+
 void Checkpointer::returnOwnerlessPages(const DatabaseHeader& header,
     StorageManager* storageManager) {
     if (storageManager->isReadOnly() || header.numDataPages == common::INVALID_PAGE_IDX) {
@@ -333,13 +351,41 @@ void Checkpointer::returnOwnerlessPages(const DatabaseHeader& header,
     }
     auto dataFH = storageManager->getDataFH();
     const auto numPagesInFile = dataFH->getNumPages();
-    if (numPagesInFile <= header.numDataPages) {
+    // Ce qui est tenu peut dépasser l'étendue : une base écrite avant que numPages cesse de
+    // baisser (handleLastPageRange) a pu écrire une étendue sous des segments vivants (la base de
+    // code-essais-c7 du 8 novembre : étendue 455 380, deux segments à la page 83 108 096). Rendre
+    // libre tout ce qui suit l'étendue les aurait mis dans l'espace libre. On ne rend que ce qui
+    // suit la fin de ce qui est tenu : les tables, le catalogue, les métadonnées, l'espace libre.
+    OwnedPagesEnd owned{dataFH};
+    try {
+        storageManager->reportOwnedPages(owned);
+    } catch (const std::exception& e) {
+        // Le relevé lit des pages (la chaîne du débordement) : s'il échoue, on ne sait pas ce qui
+        // est tenu, et rien n'est rendu. Des pages restent perdues ; aucune page vivante n'est
+        // donnée.
+        fprintf(stderr, "database open: owned pages could not be listed (%s); none given back\n",
+            e.what());
+        return;
+    }
+    owned.freePageRange(header.catalogPageRange);
+    owned.freePageRange(header.metadataPageRange);
+    owned.note(dataFH->getPageManager()->getEndOfFreePages());
+    auto firstOwnerlessPage = header.numDataPages;
+    if (owned.end > header.numDataPages) {
+        fprintf(stderr,
+            "database open: pages up to %lu are owned or free, beyond the extent of %u pages the "
+            "last checkpoint wrote; only the pages after them are given back\n",
+            static_cast<unsigned long>(owned.end), header.numDataPages);
+        firstOwnerlessPage =
+            static_cast<common::page_idx_t>(std::min<uint64_t>(owned.end, numPagesInFile));
+    }
+    if (numPagesInFile <= firstOwnerlessPage) {
         // Rien au-delà ; ou le fichier est plus court que l'étendue (une page allouée par le point
         // de reprise et jamais écrite) : rien à rendre.
         return;
     }
     dataFH->getPageManager()->freeImmediatelyRewritablePageRange(dataFH,
-        PageRange{header.numDataPages, numPagesInFile - header.numDataPages});
+        PageRange{firstOwnerlessPage, numPagesInFile - firstOwnerlessPage});
 }
 
 } // namespace storage
