@@ -347,4 +347,10 @@ qui déplie les fiches écrites, le chat sur toute la hauteur. La jauge et la ha
   jetons de la page égaux à ceux de `/ide/chat`, replier puis déplier, l'archiviste « fini » après un
   rechargement ; l'hôte du témoin a son journal, `with_runs_root`, celui par défaut est éteint sous
   les témoins), `une_tache_a_role_sans_fin_lisible_se_dit_inconnue`.
-- **Laissé** : rafraîchir « Dépôts » sur `RepoAttached`, qui n'est pas encore sur master.
+- **« Dépôts » sur `RepoAttached`** (lot à part, `1005c5544`, une fois l'atelier d'everything declarative
+  sur master) : le flux de la page s'abonne aussi au sujet `repos`, et le cadre relit `/ide/etat` à un
+  `RepoAttached` ; le worktree ouvert devient une session de la barre (`chat_sessions`), sous « Dépôts »
+  comme sous « Sessions », sans recharger la page. Témoin navigateur par le chemin de l'utilisatrice :
+  `un_worktree_attache_parait_sous_depots_sans_recharger_la_page` (« Ouvre le worktree … » dans le chat
+  de l'atelier, `attach_worktree`, `rag3db-essai · essai` sous « Dépôts », `window.__pas_rechargee`
+  gardée).
