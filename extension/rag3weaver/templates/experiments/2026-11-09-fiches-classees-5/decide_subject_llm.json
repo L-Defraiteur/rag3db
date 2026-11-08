@@ -1,0 +1,18 @@
+{
+  "_tentative": "fiches-classees-5 (9 novembre 2026) : la forme de la tentative 4, une décision par fiche, avec l'étiquette de création de l'outil archive. Les étiquettes fixes sont celles d'archive (none, create) ; l'instruction est celle de la tentative 4 et la phrase de création d'archive. Le banc compte une création à part : sur une fiche sans sujet, hors du rappel, ou fautive quand le bon sujet était candidat.",
+  "nodes": [
+    {
+      "name": "decide",
+      "node_type": "Decide",
+      "config": {
+        "labels_from": "candidats",
+        "labels": ["none", "create"],
+        "field": "text",
+        "as": "verdict",
+        "via": "llm",
+        "instruction": "Tu ranges une fiche de mémoire sous l'un des sujets candidats. Une fiche va sous un sujet si elle parle de ce que le sujet décrit ; une fiche de règle va sous le domaine où la règle s'applique. Partager un mot ne suffit pas. Si aucun candidat ne convient, réponds none ; si le sujet de la fiche est net et qu'aucun candidat ne le porte, réponds create."
+      }
+    }
+  ],
+  "edges": []
+}
