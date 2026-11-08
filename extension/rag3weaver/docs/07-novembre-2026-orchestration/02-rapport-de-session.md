@@ -1620,3 +1620,41 @@ avance d'autant ; les hashs, eux, sont exacts.
   leurs lots en cours. Pour les collègues de Lucie, un texte court de présentation a été écrit
   (ce que c'est, où on en est, pourquoi le découpage n'a rien d'arbitraire : c'est celui du
   langage, et les liens sont lus dans le code, pas devinés).
+
+## 21 h 35 — la carte des services, la conception des vues, le juge local
+
+- **Qui saturait la carte des services de luciepc** (card2) après l'arrêt du banc : **bge-m3 7879**, à
+  100 % du moteur avec 26 connexions (19 de l'e2e_lectures de la passe d'ED, 2 de recherche, 5 du
+  portable) ; le granite 7878 à 0 % du moteur et 5 à 12 s par texte. Quatre services sur une carte
+  sans arbitrage : un e2e qui embarque en creux bloque tous les index des autres. Lecture par
+  `/proc/<pid>/fdinfo` (delta drm-engine sur 5 s) et `ss -tnp`. Plafond des lourds ramené à 3 ; la
+  mesure de codeparsers (deux index complets) suspendue jusqu'à « file passée ». Sujet produit pour
+  demain : l'arbitrage entre services d'embarquement (une file équitable, ou une carte par rôle).
+- **La page des vues** (arbre principal, 10b8affce, pour la lecture de Lucie demain matin) :
+  « une vue, c'est juste un filtre » (Lucie) sur un seul index, trois lunettes (worktree, branche,
+  pyramide d'un fichier ou d'un scope), `view` en trois formes ; la pyramide de Lucie (ancre →
+  couche parente → couche, fichier composite par scope, tombstones, fusion d'une couche comme
+  opération de l'index) ; la provenance à la demande (transparente par défaut, `provenance: true`,
+  l'IDE la montre toujours) ; la couche de travail du worktree au-dessus de sa branche. **Mesure** :
+  sur 5 776 scopes des fichiers changés de dix branches, 5 % neufs, 6 % modifiés, **72 % seulement
+  déplacés** et pourtant **réécrits** à chaque réindexation (redécoupage, morceaux, toutes les arêtes
+  sortantes du fichier) : le chemin des deux sens ; l'inférence « réembarqués » a été testée et
+  retirée (témoin vert gardé). Piles : 2 branches sur 10 naissent d'une autre que master.
+- **Le juge local** (banc, page 02) : **Qwen3-4B-Instruct-2507 brut, Apache 2.0 vérifiée : premier
+  0,76, AUC 0,92 à 2 k, 504 ms par paire sur card0** (forme courte 0,73, 90 ms), Qwen2.5-1.5B 0,65,
+  Qwen3-1.7B 0,50, les petits en zéro-coup 0,02 à 0,23 (même score pour toutes les fiches d'un cas).
+  Gemini 0,81 à 0,84 à 4,4 s par cas. Un rangeur (garder les k premières), pas un seuil. La question
+  posée : « Contexte de l'agent : … Bout de mémoire : … Ce bout de mémoire est-il pertinent avec le
+  contexte de l'agent ? Réponds par oui ou par non », score = P(oui)/P(non) au premier jeton. Rien
+  n'est entraîné. Trois mesures de Lucie en cours : la forme « fin de conversation » (deux derniers
+  tours + outils), la borne 6 k, plusieurs fiches d'un coup (préfixe partagé, liste A-E). Non à
+  Qwen2.5-3B (licence non commerciale).
+- **La session de jeu de Lucie** : relancée après la correction du chien de garde ; Plasma 5 s,
+  gamescope 1 s, Steam 5 s, puis Steam a vérifié tous ses fichiers (51 s, suite des arrêts brutaux)
+  et chargé 58 jeux (69 s) ; la prochaine fois sans la vérification.
+- **Les sessions mangent-elles leur cuisine ?** Mesuré sur le journal de l'hôte du portable : la
+  mémoire longue oui (461 appels `recall_fiches`/`cited_by`/`recall_apports` par les hooks de la
+  session d'essai, 633 événements de hooks) ; les outils de code **non** (0 appel `search_code`,
+  `usages`… dans les 500 derniers runs ; les 4 722 runs du dépôt de Lucie sont la montre). Les
+  sessions grep et lisent les fichiers. Deux gestes à la main de Lucie : les hooks dans toutes les
+  sessions, une ligne du CLAUDE.md (« search_code et usages d'abord »), et un compte quotidien.
