@@ -6,3 +6,12 @@
 # elle sort de la liste dans le commit qui la rend propre, et le ticket le dit. La liste
 # maigrit, elle ne grossit pas : une suite neuve naît propre.
 # Une ligne : le nom de la suite (tests/<nom>.rs), seul.
+# Au départ (8 novembre 2026, passe entière de master 29fd5522a, une fois le cache d'index sorti
+# du TMPDIR) : des bases de test entières, une base d'accès, des dossiers .tmp* de tempfile.
+e2e_code
+e2e_juge
+e2e_lectures
+e2e_prise_atomique
+e2e_rag3daemon
+e2e_repli_de_branche
+e2e_rouvrir
