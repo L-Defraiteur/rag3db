@@ -373,6 +373,12 @@ pub struct Turn {
     /// posée par la boucle de l'agent. Absente des tours d'avant.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at_ms: Option<u64>,
+    /// Pour un tour `tool` : **ce que la page rend sous le tour** (Lucie, 8 novembre 2026,
+    /// 16 h 30 : une carte de progression), par exemple `[{kind: "index_progress", …}]`.
+    /// Jamais envoyé au modèle : les fournisseurs ne lisent que role, content et les
+    /// appels. Gardé dans la session relue, pour que la carte reparaisse au rechargement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui: Option<serde_json::Value>,
 }
 
 impl Turn {
