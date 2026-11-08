@@ -1,9 +1,12 @@
 # La lib entière se fige ou rougit par intermittence (réacteur, runtime, relais, tâches de l'hôte)
 
-- **État** : ouvert, **cause trouvée** (8 novembre 2026, 2 h 45, l'arrière-plan : c7, la bissection
-  de l'arbre principal) — ce n'est pas un commit, c'est **un service d'embarquement qui tient une
-  requête et un délai trop long, ou absent, côté client** ; correctif en cours (le lot du délai, arbre
-  principal). Jusqu'à lui, la règle de c7 : la lib entière se joue **sans** `RAG3WEAVER_EMBED_SERVICE`.
+- **État** : corrigé par le lot du délai (« fix(délai): un délai partout », arbre principal,
+  8 novembre 2026) : le relecteur et l'OCR d'un démon prennent le délai de l'embarqueur et se disent
+  muets en N s ; l'arrêt borné des réactions compte son délai hors du runtime qu'il borne. Témoins
+  `daemon::embeddings::tests::le_relecteur_et_l_ocr_d_un_demon_muet_rendent_une_erreur_nommee_dans_leur_delai`
+  et `e2e_arret_borne::a_bounded_stop_returns_within_its_bound_while_the_runtime_is_held`, rouges
+  d'abord ; la lib entière sous un service muet, figée avant, verte en 70 s après. Restent, en
+  tickets à part : la valeur mesurée du délai, et le client sans délai du test de l'hôte.
 - **Gravité** : passe bloquée (un push attend une heure un binaire figé) ; aucune réponse fausse connue.
 - **Atteignable en service** : inconnu — les tests touchés sont ceux de l'hôte et du réacteur ; rien
   ne montre encore que le produit fige.
