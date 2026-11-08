@@ -12,6 +12,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   refusée si le dossier a bougé entre-temps. Une racine hors dépôt n'est plus « lue telle quelle,
   jamais écrite » : la tâche écrit dans sa copie si `task_writes` le permet. `git_init` en fait un
   dépôt, seulement si on le déclare (tache-sans-git).
+- **8 nov. — Depuis le chat, l'atelier ouvre un worktree ou une branche.** La conversation de
+  l'atelier (`rag3weaver-backend atelier`) attache un worktree déjà sur le poste par un mot
+  (`attach_worktree`) : il est inscrit, ouvert, son index part en fond, et il paraît sous « Dépôts »
+  sans recharger la page. `open_branch` ouvre une branche dans un worktree frère et l'attache, la
+  commande git lancée dite dans la réponse ; `list_worktrees` dit chemin, dépôt, branche et index.
+  Rien n'est cloné ni poussé. (8258fe56b, `atelier-open-branch-2`)
 - **8 nov. — Un quota ne fait plus tomber le chat : une minute, puis le double.** Le client du
   modèle suit la règle de Lucie après un refus : une minute, puis le double à chaque refus, au plus
   dix minutes, cinq reprises au plus. Un 503 attend comme un quota, et le 429 que Vertex rend au
