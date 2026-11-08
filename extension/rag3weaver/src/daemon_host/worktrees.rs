@@ -410,18 +410,27 @@ fn premier_index_a_finir(manifeste: &Path) -> bool {
 
 /// **Lance l'index d'un backend ouvert** et pose le témoin de son journal ; rend le
 /// journal. Un index qui tourne déjà n'en lance pas un second.
-fn lancer_sur(b: &crate::backend::Backend, manifeste: &Path) -> Result<Option<PathBuf>, String> {
+/// Le suiveur d'archi s'y pose (`suivre_le_premier_index`) : la fin, l'avancement et la
+/// reprise se disent sur le flux, quel que soit le chemin qui a lancé l'index (l'attache,
+/// la reprise, le rattrapage à l'ouverture).
+fn lancer_sur(b: &crate::backend::Backend, manifeste: &Path, suivi: Option<(Weak<DaemonHost>, Arc<super::Hosted>)>) -> Result<Option<PathBuf>, String> {
     if crate::dataflow::index_nodes::indexings_running(&b.catalog) > 0 {
         return Ok(None);
     }
     let v = b.call("index", json!({ "confirm": true }))?;
-    let journal = v["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).map(|j| PathBuf::from(j.trim()));
+    let journal = journal_du_recu(&v);
     if let Some(j) = &journal {
         let marque = marque_du_premier_index(manifeste);
         if let Some(d) = marque.parent() {
             let _ = std::fs::create_dir_all(d);
         }
         let _ = std::fs::write(marque, j.display().to_string());
+        if let Some((hote, hosted)) = suivi {
+            let racine = super::espace_du_manifeste(manifeste);
+            let (depot, branche) = racine.as_deref().map(|r| (super::repo_of(r), super::branch_of(r))).unwrap_or((None, None));
+            let quoi = json!({ "worktree": racine, "depot": depot, "branche": branche });
+            suivre_le_premier_index(hote, hosted, j.clone(), quoi, BORNES_DU_SUIVI);
+        }
     }
     Ok(journal)
 }
@@ -432,7 +441,7 @@ fn lancer_sur(b: &crate::backend::Backend, manifeste: &Path) -> Result<Option<Pa
 /// réouverture reconstruit l'index HNSW mais ne solde aucune dette (c7, 8 novembre 2026 :
 /// wt-react5 resté à 15 % de vecteurs 18 minutes après sa réouverture). Une base qui ne
 /// déclare ni l'un ni l'autre n'est jamais indexée par là.
-pub(super) fn a_l_ouverture(hosted: &super::Hosted, b: &crate::backend::Backend) {
+pub(super) fn a_l_ouverture(hote: &DaemonHost, hosted: &super::Hosted, b: &crate::backend::Backend) {
     if !b.prepared().manifest.tools.contains_key("index") {
         return;
     }
@@ -446,7 +455,8 @@ pub(super) fn a_l_ouverture(hosted: &super::Hosted, b: &crate::backend::Backend)
         return;
     }
     let pourquoi = if coupe { "son premier index avait été coupé".to_string() } else { format!("{dette} morceaux encore sans vecteur") };
-    match lancer_sur(b, &hosted.manifest) {
+    let suivi = hote.soi.get().cloned().zip(hote.hosted_existing(&hosted.manifest));
+    match lancer_sur(b, &hosted.manifest, suivi) {
         Ok(j) => {
             hosted.rattrapage.store(j.is_some(), std::sync::atomic::Ordering::SeqCst);
             eprintln!(
@@ -468,13 +478,14 @@ fn ouvert(h: &super::Hosted) -> bool {
 /// qui est parti.
 fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path) -> String {
     // Un index déjà reparti à l'ouverture (`a_l_ouverture`) se dit de même.
-    match hote.with_backend(h, |b| lancer_sur(b, manifeste)) {
+    let suivi = hote.soi.get().cloned().zip(hote.hosted_existing(manifeste));
+    match hote.with_backend(h, |b| lancer_sur(b, manifeste, suivi)) {
         Ok(Ok(lance)) => {
             // Lancé par un outil : il tient la porte.
             if lance.is_some() {
                 h.rattrapage.store(false, std::sync::atomic::Ordering::SeqCst);
             }
-            "son index est lancé en fond".to_string()
+            "son index est lancé en fond ; sa fin se dira sur le flux de l'IDE".to_string()
         }
         Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
     }
