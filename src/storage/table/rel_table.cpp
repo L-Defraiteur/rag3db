@@ -640,11 +640,24 @@ bool RelTable::checkpoint(main::ClientContext* context, TableCatalogEntry* table
         }
         hasChanges = false;
     }
+    // L'estimation repart d'ici, avec ou sans changement : une réservation d'un COPY annulé
+    // depuis le dernier point de reprise ne compte plus (aucun écrivain ne tourne).
+    nextRelOffsetAtEstimate = nextRelOffset;
+    estimateFromOffsets = false;
     return ret;
 }
 
 row_idx_t RelTable::getEstimatedNumRels(const Transaction* transaction) {
-    return getNumTotalRows(transaction);
+    if (estimateFromOffsets.load()) {
+        return getNumTotalRows(transaction);
+    }
+    auto numLocalRows = 0u;
+    if (auto localTable = transaction->getLocalStorage()->getLocalTable(tableID)) {
+        numLocalRows = localTable->getNumTotalRows();
+    }
+    const offset_t atEstimate = nextRelOffsetAtEstimate.load();
+    const offset_t sinceEstimate = nextRelOffset > atEstimate ? nextRelOffset - atEstimate : 0;
+    return directedRelData.front()->getCardinality() + sinceEstimate + numLocalRows;
 }
 
 row_idx_t RelTable::getNumTotalRows(const Transaction* transaction) {
@@ -670,6 +683,12 @@ void RelTable::deserialize(main::ClientContext*, StorageManager*, Deserializer& 
     for (auto i = 0u; i < directedRelData.size(); i++) {
         directedRelData[i]->deserialize(deSer, *memoryManager);
     }
+    nextRelOffsetAtEstimate = nextRelOffset;
+    // Le point de reprise d'avant ce recalage comptait les seules relations en mémoire (zéro
+    // après lui) : une estimation nulle pour des relations allouées vient d'une telle base, ou
+    // d'une table dont tout a été supprimé ; dans les deux cas, l'estimation d'avant, gonflée
+    // mais jamais nulle, jusqu'au premier point de reprise.
+    estimateFromOffsets = directedRelData.front()->getCardinality() == 0 && nextRelOffset > 0;
 }
 
 } // namespace storage

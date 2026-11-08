@@ -258,6 +258,7 @@ public:
     }
 
     ChunkedNodeGroup* getPersistentChunkedGroup() const { return persistentChunkGroup.get(); }
+    common::row_idx_t getNumRelsAtCheckpoint() const { return numRelsAtCheckpoint.load(); }
     void setPersistentChunkedGroup(std::unique_ptr<ChunkedNodeGroup> chunkedNodeGroup) {
         KU_ASSERT(chunkedNodeGroup->getFormat() == NodeGroupDataFormat::CSR);
         persistentChunkGroup = std::move(chunkedNodeGroup);
@@ -341,6 +342,10 @@ private:
     // En propriété partagée : un balayage en cours le tient (CSRNodeGroupScanState::persistent)
     // quand le point de reprise le remplace.
     std::shared_ptr<ChunkedNodeGroup> persistentChunkGroup;
+    // Les relations que le dernier point de reprise de ce groupe a écrites (la somme des
+    // longueurs de ses listes, sans les supprimées) ; 0 pour un groupe lu du disque et pas encore
+    // repris. Ne sert qu'à l'estimation du planificateur (NodeGroupCollection::getNumLiveRows).
+    std::atomic<common::row_idx_t> numRelsAtCheckpoint{0};
     // The index of the relationships committed in memory is created by the first commit that
     // appends to this group and grows with each one, while scans of other connections read it
     // and copy its lists. Appends take this mutex exclusively, scans share it. The checkpoint

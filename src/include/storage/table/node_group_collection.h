@@ -116,6 +116,12 @@ public:
         KU_UNUSED(lock);
         return stats.copy();
     }
+    // La seule cardinalité, sans copier les statistiques des colonnes (l'estimation des
+    // relations, RelTable::getEstimatedNumRels, la lit à chaque plan).
+    common::row_idx_t getCardinality() const {
+        auto lock = nodeGroups.lock();
+        return stats.getTableCard();
+    }
     // Rend les statistiques et repart de zéro.
     TableStats takeStats() {
         auto lock = nodeGroups.lock();

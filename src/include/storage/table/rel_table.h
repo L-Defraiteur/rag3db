@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "storage/table/rel_table_data.h"
 #include "storage/table/table.h"
@@ -264,6 +266,14 @@ private:
     common::table_id_t toNodeTableID;
     std::mutex relOffsetMtx;
     common::offset_t nextRelOffset;
+    // L'estimation (getEstimatedNumRels) : les relations vivantes au dernier point de reprise
+    // ou à l'ouverture (la cardinalité des statistiques), plus les décalages réservés depuis.
+    // Une relation annulée ou supprimée depuis compte jusqu'au point de reprise suivant ; une
+    // relation validée compte tout de suite.
+    std::atomic<common::offset_t> nextRelOffsetAtEstimate{0};
+    // Une base d'avant le recalage des relations (estimation nulle sur disque, relations
+    // allouées) : l'estimation reste nextRelOffset jusqu'à son premier point de reprise.
+    std::atomic<bool> estimateFromOffsets{false};
     std::vector<std::unique_ptr<RelTableData>> directedRelData;
 };
 

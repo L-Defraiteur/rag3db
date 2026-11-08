@@ -785,6 +785,13 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const ChunkedGroups& groups,
     csrState.newHeader->setNumValues(StorageConfig::NODE_GROUP_SIZE);
     csrState.newHeader->copyFrom(*csrState.oldHeader);
     auto leafRegions = collectLeafRegionsAndCSRLength(groups, csrState);
+    // Les longueurs neuves de tout le groupe, région réécrite ou non : ce que ce point de reprise
+    // laisse de relations, pour l'estimation du planificateur.
+    row_idx_t numRelsAfterCheckpoint = 0;
+    for (offset_t i = 0; i < StorageConfig::NODE_GROUP_SIZE; ++i) {
+        numRelsAfterCheckpoint += csrState.newHeader->getCSRLength(i);
+    }
+    numRelsAtCheckpoint = numRelsAfterCheckpoint;
     KU_ASSERT(std::is_sorted(leafRegions.begin(), leafRegions.end(),
         [](const auto& a, const auto& b) { return a.regionIdx < b.regionIdx; }));
     const auto regionsToCheckpoint = mergeRegionsToCheckpoint(csrState, leafRegions);
@@ -1306,6 +1313,11 @@ void CSRNodeGroup::checkpointInMemOnly(const ChunkedGroups& groups,
     const auto numNodes = csrIndex->getMaxOffsetWithRels() + 1;
     csrState.newHeader->setNumValues(numNodes);
     populateCSRLengthInMemOnly(groups, numNodes, csrState);
+    row_idx_t numRelsAfterCheckpoint = 0;
+    for (offset_t i = 0; i < numNodes; ++i) {
+        numRelsAfterCheckpoint += csrState.newHeader->getCSRLength(i);
+    }
+    numRelsAtCheckpoint = numRelsAfterCheckpoint;
     const auto rightCSROffsetsOfRegions =
         csrState.newHeader->populateStartCSROffsetsFromLength(true /* leaveGap */);
     csrState.newHeader->populateEndCSROffsetFromStartAndLength();

@@ -281,10 +281,11 @@ row_idx_t NodeGroupCollection::getNumLiveRows(const UniqLock& lock) const {
     for (const auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
         // Un groupe CSR (table de relations) garde sa part persistée hors de ses blocs
         // (CSRNodeGroup::persistentChunkGroup) : NodeGroup::getNumLiveRows n'en verrait que la
-        // part en mémoire. Il compte toutes ses lignes, comme avant.
+        // part en mémoire, vide après le point de reprise. Il rend les relations que son point
+        // de reprise vient d'écrire, lues aux longueurs des listes (getNumRelsAtCheckpoint).
         numLiveRows += nodeGroup->getFormat() == NodeGroupDataFormat::REGULAR ?
                            nodeGroup->getNumLiveRows() :
-                           nodeGroup->getNumRows();
+                           nodeGroup->cast<CSRNodeGroup>().getNumRelsAtCheckpoint();
     }
     return numLiveRows;
 }
@@ -370,8 +371,16 @@ void NodeGroupCollection::deserialize(Deserializer& deSer, MemoryManager& memory
     }
     // Et à la lecture : une base écrite avant ce recalage garde sur disque une estimation
     // gonflée. Les informations de version sont persistées avec les groupes : les lignes
-    // supprimées se retirent sans relire les colonnes.
-    stats.setCardinality(getNumLiveRows(lock));
+    // supprimées se retirent sans relire les colonnes. Pas pour des groupes CSR : leurs
+    // relations ne se comptent qu'en relisant les longueurs des listes, et l'estimation écrite
+    // par le point de reprise est déjà celle des relations vivantes (RelTable::deserialize dit
+    // le cas d'une base d'avant ce recalage).
+    const auto& groups = nodeGroups.getAllGroups(lock);
+    if (std::none_of(groups.begin(), groups.end(), [](const auto& nodeGroup) {
+            return nodeGroup->getFormat() == NodeGroupDataFormat::CSR;
+        })) {
+        stats.setCardinality(getNumLiveRows(lock));
+    }
 }
 
 } // namespace storage

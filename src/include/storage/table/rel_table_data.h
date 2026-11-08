@@ -107,6 +107,7 @@ public:
     common::RelMultiplicity getMultiplicity() const { return multiplicity; }
 
     TableStats getStats() const { return nodeGroups->getStats(); }
+    common::row_idx_t getCardinality() const { return nodeGroups->getCardinality(); }
 
     void reclaimStorage(PageAllocator& pageAllocator) const;
     void retireGenerationsBefore(common::transaction_t oldestReaderTS);
