@@ -583,7 +583,7 @@ impl DaemonHost {
             // rattrapage : l'index repart en fond (c7, 8 novembre 2026, 16 h 09 et 16 h 30).
             #[cfg(feature = "code")]
             if let Some(b) = slot.as_ref() {
-                worktrees::a_l_ouverture(hosted, b);
+                worktrees::a_l_ouverture(self, hosted, b);
             }
             *hosted.print.lock().unwrap_or_else(|p| p.into_inner()) = Some(print);
             hosted.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
