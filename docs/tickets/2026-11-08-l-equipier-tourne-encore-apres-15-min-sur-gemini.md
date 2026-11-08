@@ -27,6 +27,18 @@ s'est pas arrêté.
   n'a que `checkpoints/`. La boîte de l'équipier vivait dans le tempdir du test, effacé avec lui :
   on ne sait pas ce qu'il faisait pendant les dix dernières minutes.
 
+## Une seconde forme (8 novembre, après-midi)
+
+Dans la passe de git-init-identite (tête 5e194f390, toute la passe sous `GIT_CONFIG_GLOBAL=/dev/null
+GIT_CONFIG_NOSYSTEM=1`), le même test a rougi autrement : « le juge n'a pas jugé chaque pas en 10
+min : {"declare":true,"fiches":[]} » (`e2e_equipier.rs:162`, 635 s). Rejoué seul avec la config
+git normale, il est vert en 567 s.
+
+La config vide est une cause possible : le juge écrit ses fiches par `declare`, qui commite sous
+l'identité de la machine. Mais aucun refus d'identité (« Author identity unknown », « git a refusé
+le commit ») n'est dans le journal de la passe : ce n'est pas prouvé. La cause reste à
+départager, avec celle de la première forme.
+
 ## Ce qu'il faut pour le fermer
 
 - Que le test garde la boîte et le fil de l'équipier quand il rougit, dans son dossier gardé, pour
