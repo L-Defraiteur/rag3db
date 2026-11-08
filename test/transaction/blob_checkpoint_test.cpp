@@ -6,6 +6,7 @@
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
+#include "test_helper/test_helper.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -259,4 +260,88 @@ TEST_F(BlobCopyCheckpointTest, ARolledBackCopyBeyondAQuarterOfTheBufferPoolLeave
     EXPECT_LT(sizeAfter - sizeBefore, numRows * blobSize * 3 / 2)
         << "les pages du COPY annulé n'ont pas été reprises";
     expectBlobs(numRows, blobSize);
+}
+
+// Un COPY de vecteurs dans une table à index HNSW (ticket
+// docs/tickets/2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md),
+// témoin écrit par hotfixs. À la finalisation de l'index par le COPY, OnDiskHNSWIndex::shrinkForNode
+// prenait le vecteur du nœud par pointeur dans le vecteur de données de l'état de lecture, puis lisait
+// les voisins sur le même état (getEmbeddings → ListAuxiliaryBuffer::resize) : le vecteur de données
+// réalloué, le pointeur désignait un tampon libéré (heap-use-after-free sous ASAN, une lecture de
+// 3 072 octets). ≈ 3 Ko par ligne (FLOAT[768]), comme la réindexation de la montre ; sous un petit
+// tampon et à plusieurs fils, le COPY se vide aussi par son budget en octets (la copie-échange de
+// G2b, hors de cause). Le défaut ne se voit que sous ASAN ; en Release le témoin juge que l'index
+// atteint chaque vecteur et survit à un point de reprise. Environ 7 à 8 minutes en Release.
+class VectorCopyUnderASmallPoolTest : public EmptyDBTest {
+protected:
+    static constexpr uint64_t NUM_ROWS = 30000;
+    static constexpr uint64_t DIMENSION = 768;
+
+    static std::string vectorOf(uint64_t id) {
+        std::string out = "[";
+        for (auto j = 0u; j < DIMENSION; j++) {
+            // La première composante est l'identifiant : aucun vecteur n'en double un autre.
+            out += (j ? "," : "") + std::to_string(j == 0 ? id : (id * 31 + j * 17) % 97);
+        }
+        return out + "]";
+    }
+
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        if (inMemMode) {
+            GTEST_SKIP() << "on-disk database needed";
+        }
+        // 512 Mio : sous 256, le COPY lui-même bute sur « buffer pool is full » (l'index HNSW de
+        // 30 000 vecteurs de 768 floats n'y tient pas), et le témoin ne juge plus le mélange.
+        // Budget du COPY : 512 Mio / (3 × 5) ≈ 34 Mio, soit trois vidages au moins sur 92 Mio.
+        systemConfig->bufferPoolSize = 512ull << 20;
+        systemConfig->maxNumThreads = 4;
+        createDBAndConn();
+        const auto extension =
+            TestHelper::appendRag3dbRootPath("extension/vector/build/libvector.rag3db_extension");
+        if (!std::filesystem::exists(extension)) {
+            GTEST_SKIP() << "the vector extension is not built";
+        }
+        must("LOAD EXTENSION '" + extension + "';");
+        must("CREATE NODE TABLE V(id INT64, v FLOAT[768], PRIMARY KEY (id));");
+        must("CALL CREATE_VECTOR_INDEX('V', 'vi', 'v', metric := 'l2');");
+    }
+
+    void must(const std::string& query) {
+        auto result = conn->query(query);
+        ASSERT_TRUE(result->isSuccess()) << "[check: query] " << query << " : "
+                                         << result->getErrorMessage();
+    }
+
+    int64_t single(const std::string& query) {
+        auto result = conn->query(query);
+        EXPECT_TRUE(result->isSuccess()) << "[check: query] " << query << " : "
+                                         << result->getErrorMessage();
+        return result->isSuccess() && result->hasNext() ?
+                   result->getNext()->getValue(0)->getValue<int64_t>() :
+                   -1;
+    }
+};
+
+TEST_F(VectorCopyUnderASmallPoolTest, TheIndexReadsItsVectorsWhileTheHeadIsExchanged) {
+    const auto csv = databasePath + ".vectors.csv";
+    {
+        std::ofstream out(csv, std::ios::trunc);
+        for (auto id = 0u; id < NUM_ROWS; id++) {
+            out << id << "|" << vectorOf(id) << "\n";
+        }
+    }
+    must("COPY V FROM '" + csv + "' (DELIM='|', HEADER=false);");
+    std::filesystem::remove(csv);
+    EXPECT_EQ(single("MATCH (n:V) RETURN count(*);"), static_cast<int64_t>(NUM_ROWS));
+    // Chaque vecteur est atteint par l'index : le plus proche de lui-même, c'est lui.
+    for (const uint64_t probe : {uint64_t{0}, NUM_ROWS / 2, NUM_ROWS - 1}) {
+        EXPECT_EQ(single("CALL QUERY_VECTOR_INDEX('V', 'vi', " + vectorOf(probe) +
+                         ", 1) RETURN node.id;"),
+            static_cast<int64_t>(probe))
+            << "[check: nearest-is-itself] " << probe;
+    }
+    must("CHECKPOINT;");
+    createDBAndConn();
+    EXPECT_EQ(single("MATCH (n:V) RETURN count(*);"), static_cast<int64_t>(NUM_ROWS));
 }
