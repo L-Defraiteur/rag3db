@@ -2306,6 +2306,8 @@ impl PreparedBackend {
         let llm = cat.llm();
         let backend = Backend {
             decider,
+            #[cfg(feature = "code")]
+            worktree_host: Mutex::new(None),
             llm,
             avertissement_sans_service,
             avertissement_du_creux,
@@ -2908,6 +2910,10 @@ pub struct Backend {
     /// Le modèle de décision déclaré (`models.decide`), donné aux nœuds sous
     /// la clé `crate::decider::DECIDER_SERVICE`.
     decider: Option<Arc<dyn crate::decider::Decider>>,
+    /// **L'hôte des worktrees** (l'atelier) : posé par l'hôte qui ouvre ce backend,
+    /// donné aux nœuds sous `WORKTREE_HOST_SERVICE`. Absent hors d'un hôte.
+    #[cfg(feature = "code")]
+    worktree_host: Mutex<Option<Arc<dyn crate::dataflow::worktree_nodes::WorktreeHost>>>,
     /// Le modèle de langage déclaré (`models.llm`), joint à l'ouverture et donné
     /// aux nœuds sous `crate::dataflow::LLM_SERVICE`. Tenu ici comme le decider :
     /// le catalogue le porte aussi, mais les graphes d'outil montent leurs services
@@ -2998,6 +3004,11 @@ impl Backend {
     }
     /// L'intervalle entre deux essais (défaut
     /// [`INTERVALLE_DE_RETENTE_EMBARQUEUR`]) ; les témoins le raccourcissent.
+    /// L'hôte des worktrees, posé par l'hôte qui ouvre ce backend (l'atelier).
+    #[cfg(feature = "code")]
+    pub fn poser_l_hote_des_worktrees(&self, hote: Arc<dyn crate::dataflow::worktree_nodes::WorktreeHost>) {
+        *self.worktree_host.lock().unwrap_or_else(|p| p.into_inner()) = Some(hote);
+    }
     pub fn set_intervalle_de_retente_embarqueur(&self, intervalle: std::time::Duration) {
         if let Some(retente) = &self.embarqueur_a_retenter {
             retente.lock().unwrap_or_else(|p| p.into_inner()).intervalle = intervalle;
@@ -4233,6 +4244,10 @@ impl Backend {
         }
         if let Some(llm) = &self.llm {
             services.register(crate::dataflow::LLM_SERVICE, llm.clone());
+        }
+        #[cfg(feature = "code")]
+        if let Some(hote) = self.worktree_host.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            services.register(crate::dataflow::worktree_nodes::WORKTREE_HOST_SERVICE, hote);
         }
         // La surface de code déclarée : la source et la porte du manifeste,
         // montées comme sur le chemin agent — sans elles, les nœuds de code
@@ -5721,6 +5736,8 @@ mod tests {
         }
         let backend = Backend {
             decider: None,
+            #[cfg(feature = "code")]
+            worktree_host: Mutex::new(None),
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,
@@ -5944,6 +5961,8 @@ mod tests {
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
         Backend {
             decider: None,
+            #[cfg(feature = "code")]
+            worktree_host: Mutex::new(None),
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,

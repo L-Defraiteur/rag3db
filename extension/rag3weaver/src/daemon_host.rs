@@ -146,6 +146,13 @@ pub const MANIFEST_CHANGED: &str =
 
 /// **L'hôte** : les backends et les sessions d'un démon.
 pub struct DaemonHost {
+    /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
+    /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
+    /// worktrees de l'atelier.
+    soi: std::sync::OnceLock<std::sync::Weak<DaemonHost>>,
+    /// Où l'atelier inscrit les worktrees qu'il attache ; `None` : ceux de
+    /// l'utilisateur (`code_tree::Roots::of_user`).
+    racines_de_code: Option<crate::code_tree::Roots>,
     backends: Mutex<HashMap<PathBuf, Arc<Hosted>>>,
     sessions: Mutex<HashMap<String, Session>>,
     opener: Opener,
@@ -211,6 +218,10 @@ mod teammate_tools;
 /// La livraison des lignes de boîte adressées à `codex:<nom>`, par `codex queue`.
 pub mod livraison_codex;
 
+/// L'atelier : l'hôte attache les worktrees (page 03 du 7 novembre 2026, lot 0).
+#[cfg(feature = "code")]
+pub mod worktrees;
+
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -264,6 +275,8 @@ impl DaemonHost {
     /// crochet de point de reprise échoué).
     pub fn with_opener(opener: Opener) -> Self {
         Self {
+            soi: std::sync::OnceLock::new(),
+            racines_de_code: None,
             backends: Mutex::new(HashMap::new()),
             sessions: Mutex::new(HashMap::new()),
             opener,
@@ -283,6 +296,27 @@ impl DaemonHost {
             bilans: juge::FileDesBilans::default(),
             juge_model: chat::default_chat_model(),
             teammates: Mutex::new(std::collections::HashSet::new()),
+        }
+    }
+
+    /// **L'hôte se connaît** : les backends qu'il ouvre ensuite reçoivent l'hôte des
+    /// worktrees de l'atelier (`attach_worktree`, `list_worktrees`). Le service le pose
+    /// au démarrage ; un témoin l'appelle sur son `Arc`.
+    pub fn se_connaitre(self: &Arc<Self>) {
+        let _ = self.soi.set(Arc::downgrade(self));
+    }
+
+    /// Où l'atelier inscrit ses worktrees (les témoins : sous un dossier temporaire).
+    pub fn with_racines_de_code(mut self, racines: crate::code_tree::Roots) -> Self {
+        self.racines_de_code = Some(racines);
+        self
+    }
+
+    /// Les racines de l'atelier : celles posées, sinon celles de l'utilisateur.
+    pub fn racines_de_code(&self) -> Result<crate::code_tree::Roots, String> {
+        match &self.racines_de_code {
+            Some(r) => Ok(r.clone()),
+            None => crate::code_tree::Roots::of_user(),
         }
     }
 
@@ -503,6 +537,13 @@ impl DaemonHost {
             }
             *hosted.refused.lock().unwrap_or_else(|p| p.into_inner()) = None;
             *slot = Some((self.opener)(prepared)?);
+            // L'hôte des worktrees de l'atelier, s'il se connaît.
+            #[cfg(feature = "code")]
+            if let Some(soi) = self.soi.get() {
+                if let Some(b) = slot.as_ref() {
+                    b.poser_l_hote_des_worktrees(Arc::new(worktrees::HoteDesWorktrees { hote: soi.clone() }));
+                }
+            }
             // Son bus, relayé au flux de l'IDE ; un backend rouvert a un bus
             // neuf, relayé à son tour, et l'ancien relais finit avec l'ancien bus.
             let bus = slot.as_ref().expect("ouvert juste au-dessus").catalog.lock().unwrap_or_else(|p| p.into_inner()).event_bus();
@@ -1352,6 +1393,7 @@ impl DaemonServer {
         use std::sync::atomic::Ordering;
         let stopper = self.stopper();
         // Les bilans de session des backends qui les déclarent (page 04).
+        host.se_connaitre();
         host.servir_les_bilans();
         // Les équipiers que l'arrêt de l'hôte a interrompus reprennent (page
         // 07-novembre-2026-everything-declarative/01, § 1).
