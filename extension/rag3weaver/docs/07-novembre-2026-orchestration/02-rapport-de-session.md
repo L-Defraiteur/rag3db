@@ -1536,3 +1536,38 @@ avance d'autant ; les hashs, eux, sont exacts.
   (copie saine, base du premier index) : 0 page libre et tenue → les deux sens ne sont pas ce
   défaut, le MERGE reste le premier suspect ; son second run (trace à paramètres littéraux pour un
   rejeu exact) est suspendu jusqu'à « file passée ».
+
+## 19 h 20 — la file passe, ce qu'elle a laissé voir
+
+- **Atterris depuis 18 h 15** : le mini-lot d'ED (7276a02fa, les témoins des symboles cités relisent
+  « catalogue tenu » et « index partiel ») ; codeparsers (43dd520b0, pointeur c660893, locales JS
+  par leur portée, oracle « liaison d'import », page 11, mesure 30 → 10) ; le cœur (9bae60786, les
+  gardes de l'étendue : numPages ne baisse plus, returnOwnerlessPages part de la fin de ce qui est
+  tenu, refus au-delà du fichier avec la pile du demandeur ; `transaction_test` entier en cours
+  avant tout rebâti de lib) ; hooks-essai (2d6e58d1a, `git_init` porte une identité propre
+  « rag3weaver <rag3weaver@localhost> » ou `workspace.git_identity`, jamais la config de la
+  machine : la CI rag3weaver de master était rouge depuis 14 h 14 UTC sur « Author identity
+  unknown », pas sur le formatage) ; archi (9c20d6773, pile de quatre lots en un push : aperçu sur
+  graphe vide, accueil en dépôts, RepoIndexed, IndexProgress par le flux avec débit, « figé
+  depuis », « flux coupé »). Suivent : le juge par pas d'ED (vert, « à toi » donné), sa pile de
+  l'atelier (13 commits, passe en cours : l'état `.livre`/`.premier-index` est passé hors de l'arbre
+  des déclarations sous `~/.local/state/rag3weaver` après un rouge réel à l'étape navigateur), 96
+  (rouge sur e2e_cited_by : SIGSEGV à la sortie après 3/3, « fermeture FTS incomplète — Apport
+  encore partagé … save_metas : No such file »), recherche. Puis **une repose du portable par G**,
+  un seul arrêt, pour que Lucie voie l'accueil en dépôts, la progression et l'atelier complet.
+- **Tranché** : un arbre inscrit dont les déclarations sont suivies par git se remet au gabarit
+  livré par **un commit** à l'identité neutre (fichiers propres seulement, sinon refus dit), lot à
+  part chez ED ; l'atelier posé par copie se met à jour directement.
+- **Un défaut qui rougit les passes des autres** : à chaque fermeture d'un backend de code, le plein
+  texte est fermé tard par un fil que le Drop n'attend pas (quatre tables, « encore partagé » puis
+  `save_metas : No such file`), résidus `.tmp` chez recherche, plantage à la sortie chez 96 ;
+  ticket de recherche (a24541f3b), devant son Surveillant ; un agent cartographie les poignées et
+  les fils non joints, forme à venir, à partir de `stop_indexings_of` d'ED.
+- **Le banc du modèle de décision** (440 paires, 88 positifs à provenance vérifiée) : Gemini 3.8
+  Flash retrouve le positif premier dans 81 à 84 % des cas (4,5 s par cas) ; dense bge-m3 0,41
+  (66 ms) ; reranker 0,36 ; Qwen2.5-0.5B, SmolLM2-360M, Laya en zéro-coup 0,17 à 0,23 et **le même
+  score pour toutes les fiches d'un cas** : ils lisent le contexte, pas la fiche, aucun seuil n'a de
+  sens. Suite demandée : passe GPU, page ; le cosinus bge-m3 en filtre qui ôte seulement au seuil
+  qui garde 100 % des utiles ; Qwen2.5-1.5B par logits sur card2 ; Laya spécialisé plus tard.
+- **luciepc** : plafond des lourds remis à 6 à 18 h 48 (la charge du jour était du disque) ; 1,3 Tio
+  libres (65 %) ; la CI de master s'annule à chaque push (concurrence) : lot court chez hooks-essai.
