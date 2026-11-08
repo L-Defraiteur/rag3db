@@ -1,6 +1,6 @@
 # rag3weaver archi — rapport de session
 
-Mis à jour le 8 novembre 2026 à 15 h 50. Ce fichier se met à jour sur place. La session est
+Mis à jour le 8 novembre 2026 à 18 h 45. Ce fichier se met à jour sur place. La session est
 l'ancienne orchestration des 3-4 octobre (rag3db-9f), puis le chantier E du 8 octobre (Claude
 en agent) ; depuis le 7 novembre, les hooks de Claude Code, puis, le 8, l'IDE (la liste de Lucie
 du 7 au soir).
@@ -15,7 +15,10 @@ du 7 au soir).
 | « Dépôts » se rafraîchit à `RepoAttached` | 1005c5544 | 5/5, lib 2 051, navigateur 23 |
 | le thème daemon dans l'IDE (le fichier commun du terminal, l'invocation « réfléchit ») | 7dac6418b, 44442ea75 | 5/5, lib 2 051, navigateur 24 |
 | le symbole cité en lien (`POST /ide/symboles`, `Backend::call_discret`) | 6c17c5766, 36aced578 | 5/5, lib 2 058, navigateur 25, e2e_lectures 24 |
-| en file (cinquième, après le « 7878 libre » de G) : un graphe de clic vide fait attendre l'aperçu au lieu de répondre 422 (le rouge de codeparsers sous charge 32) | branche apercu-clic-vide, 1a4a0f979 | 5/5, lib 2 059, navigateur 26 |
+| un graphe de clic vide fait attendre l'aperçu au lieu de répondre 422 (le rouge de codeparsers sous charge 32) | 3d968fb98 | pile : 5/5, lib 2 063, navigateur 29 |
+| l'accueil parle en dépôts (« Dépôts », « dépôt · branche », le manifeste en infobulle) | e16cd5c56, 4fd994dd8 | (pile) |
+| la fin du premier index d'un worktree attaché : RepoIndexed, une ligne dans le chat de l'atelier, le rag indexé dans la barre (Lucie, 16 h 08) | 521ade9d8, 8a81ed38a | (pile) |
+| l'avancement de l'index par le flux : IndexProgress, la barre dit le pourcentage, le débit, « figé depuis », « flux coupé » (Lucie, 16 h 30-31) | 6044f5ae2, 9c20d6773 | (pile) |
 
 Docs : page 03 du 8 novembre (`08-novembre-2026-orchestration/03-ide-ce-qui-reste.md`) — la
 liste de Lucie relue demande par demande ; elle est faite. Tickets : le code dans le chat fermé ;
@@ -51,12 +54,13 @@ est jetable » dans `docs/procedures/push-d-un-lot.md` (7f8a3fb75).
 
 ## 3. En cours et suite
 
-- apercu-clic-vide en file chez c7 ; au « à toi » : rebase, rejeu court si du Rust est arrivé (sous
-  cbc06c3e1 + `RAG3WEAVER_MOTEUR_ANCIEN=1` jusqu'au rebâti de la nuit), push sous `poste push`.
-- Les thèmes suivants (fées, forêt… chez tty) : une route `/ide/theme/<nom>.json` et un menu, quand
-  le premier fichier arrive ; tty n'ôte ni ne renomme aucun champ de `daemon.json`.
-- Les lots 3 bis à 3 ter des hooks sont sur master ; le reste du chantier des hooks est dans la
-  mémoire `hooks-claude-code-chantier` et la page 08.
+- La carte de l'avancement sous l'appel d'un outil (`ide-carte-ui`, worktree `wt-carte`, commit
+  local 165c3d382) : un registre `kind → composant` pour les `ui` d'un résultat d'outil ; attend
+  `Turn.ui` / `ToolCallFinished.ui` d'everything declarative (branche atelier-ui) sur master,
+  puis son témoin navigateur rouge sur master et vert (attach, `show_progress`, rechargement).
+- La reprise de l'index au redémarrage (everything declarative) appellera `suivre_le_premier_index`
+  par `lancer_sur` avec `BORNES_DU_SUIVI`.
+- Les thèmes suivants (chez tty) : une route `/ide/theme/<nom>.json` et un menu, au premier fichier.
 
 ## 4. Ce qui attend Lucie
 
