@@ -803,3 +803,39 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   → hotfixs, G3 (au mot de Lucie) puis G5 sur le moteur du worktree prouvé par md5.
 - Un écart vu par G : la barre de hooks-essai dit « memory » et non « la mémoire » (cfbe928a4) ;
   G le lui dit.
+
+## 09 h 05 — la pose d'ED, un SIGSEGV de l'hôte du portable, la fenêtre de hotfixs qui attend
+
+- **G a posé à 8 h 45** le binaire d'ED aux deux hôtes (1b9796d9f : fil par pas, arrêt
+  d'inactivité retenu par un équipier, la demande en cours ; binaire fe994691, lib dadbf0041), IDE
+  vert, code-lourd fermé puis rouvert pour les six copies reflink de hotfixs (« copié » 8 h 47).
+  ED a poussé son rapport de la nuit (424b9ebb4).
+- **L'hôte du portable a fait un SIGSEGV à 8 h 50 m 11 s** (SEGV_MAPERR, fil demon-5) sous ce
+  binaire et la lib dadbf0041 : rip = librag3db.so + 0xd12c73 =
+  `rag3db::storage::BufferManager::optimisticRead`. Au même instant : la montre réindexait
+  code-rag3db-depot et mon arbre d'essais remis sur master (backend.rs, 4,7 s de verrou), deux fils
+  lucivy fusionnaient des segments, l'équipier de l'essai 6 lisait. systemd l'a relancé par la
+  socket à 8 h 50 m 57 s ; la tâche a repris à sa frontière. Le core (32 Gio une fois extrait,
+  tronqué, seule l'adresse du fil fautif lisible) est gardé à
+  `~/.cache/rag3weaver-build/core-c7/core.39731`. L'hôte de luciepc n'a pas planté (G) ; aucun
+  autre plantage de la nuit sur aucun binaire. **Le cœur a le ticket** (moteur : un lecteur
+  optimiste et une page évincée ou réécrite pendant une indexation) ; rien ne départage encore la
+  lib dadbf0041 (G2b, projection, retrait) d'une course ancienne qu'une charge révèle ; G garde les
+  binaires d'avant pour rejouer la charge sur un hôte d'essai si le cœur le veut. Pas de retour de
+  courant, pas de pose sans mon mot.
+- **Le cœur** : le groupe durabilité mord — avec une faute d'E/S injectée (disque plein pendant la
+  synchronisation du journal), une validation échouée **laissait sa clé prise** dans l'index de clé
+  primaire (publication avant l'écriture du journal) ; correctif sur la branche coupure : journal
+  écrit et synchronisé avant la publication, taille rendue sur faute, plus rien ne se valide après
+  un journal irréparable ; six témoins de coupure verts, transaction 350/350. Push en lot groupé à
+  une heure qu'il me dira ; il remettra MOTEUR_ANCIEN=1 aux passes jusqu'au rebâti.
+- **La fenêtre de hotfixs attend** depuis 8 h 47 : un `transaction_test` de rag3db-colonnes (le
+  cœur) tient la place de lourd à luciepc depuis 8 h 46 ; personne ne force. Derrière : hotfixs
+  (troisième lot de l'équipier), hooks-essai (memoire-nommee : la nature avant le dépôt),
+  recherche (dense filtré sous l'instantané, témoin rouge écrit), archi (3 ter (e), VERT au
+  portable ; trois rejeux d'un test seul hors `poste lourd`, dits et promis non reproduits), 96 (M4
+  pas 3, rejeu à refaire sous dadbf0041).
+- **Essai 6** lancé à 8 h 48 sur l'hôte posé (ticket de hotfixs : l'undo_json qui pointe un fichier
+  effacé ; cargo par la porte, `sandbox` posé dans mon arbre avec `CARGO_BUILD_JOBS=8` — à ajouter
+  au gabarit, dit à ED) : la mesure « après » du fil par pas. Première ligne de l'équipier : une
+  question de commit à vide, puis le plan en six items, puis la relance de l'hôte ; il lit.
