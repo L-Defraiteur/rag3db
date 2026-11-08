@@ -5003,6 +5003,12 @@ impl Backend {
         if result_port.1 == "results" && output.get(result_port.0, "text").is_some() {
             response["presentation"] = read(result_port.0, "text")?;
         }
+        // **Ce que la page rend sous le tour** : le port `ui` du nœud du résultat, s'il en a
+        // un (l'atelier : la carte de l'avancement d'un index). La boîte à outils de
+        // l'agent l'ôte du texte du modèle (`backend_tools`).
+        if output.get(result_port.0, "ui").is_some() {
+            response["ui"] = read(result_port.0, "ui")?;
+        }
         Ok(response)
     }
     /// **Le journal d'une conversation, écrit au fil de l'eau** (27 septembre

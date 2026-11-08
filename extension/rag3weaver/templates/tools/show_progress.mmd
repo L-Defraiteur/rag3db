@@ -1,0 +1,7 @@
+%% tool: show_progress
+%% description: Montrer l'avancement de l'index d'un dépôt attaché : une carte sous ce message, que la page tient à jour en direct. `repo` : le nom du dépôt, sa branche ou un bout du chemin de son worktree ; vide : tous ceux dont l'index avance.
+%% param: repo string = "" -- Le dépôt (son nom, sa branche, « dépôt · branche » ou un bout du chemin du worktree) ; vide : tous ceux dont l'index avance.
+%% result: worktree.result
+
+graph LR
+    worktree["WorktreeNode(action='progress', path=$repo)"]
