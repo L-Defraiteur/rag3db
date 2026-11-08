@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { History, MousePointerClick, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,12 +90,18 @@ export function Recherches({ id, state }: { id: string; state: HostState }) {
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // La réponse d'un filtre qui n'est plus le courant (changé pendant le chargement)
+  // est ignorée : elle ne s'ajoute pas à la liste du nouveau.
+  const current = useRef(who);
+  current.current = who;
   const load = (before: string | null) => {
+    const asked = who;
     const p = new URLSearchParams({ backend: id, qui: who });
     if (before) p.set("avant", before);
     fetch(`/ide/recherches?${p}`)
       .then((x) => x.json())
       .then((x) => {
+        if (current.current !== asked) return;
         if (!x.ok) return setError(x.error);
         setError(null);
         setLines((old) => (before && old ? [...old, ...x.result.recherches] : x.result.recherches));
@@ -109,15 +115,15 @@ export function Recherches({ id, state }: { id: string; state: HostState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, who]);
 
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href="/ide/" className="hover:underline">backends</a> · {shortName(backend.manifest)} · mes recherches
+        <a href="/ide/" className="hover:underline">dépôts</a> · {shortName(backend.manifest)} · mes recherches
       </p>
       <h1 className="text-xl font-semibold mb-1 inline-flex items-center gap-2"><History className="size-5" /> Mes recherches</h1>
       <p className="note text-sm text-muted-foreground mb-2">
-        Ce qui a été cherché dans ce backend, depuis l'IDE et par les agents, avec les résultats cliqués : le journal des runs le garde.
+        Ce qui a été cherché dans ce dépôt, depuis l'IDE et par les agents, avec les résultats cliqués : le journal des runs le garde.
       </p>
       <div className="flex gap-2 mb-3" role="group" aria-label="qui a cherché">
         {WHO.map((w) => (
