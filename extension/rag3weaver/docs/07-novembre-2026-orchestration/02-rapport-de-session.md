@@ -839,3 +839,38 @@ projection ; arbre : lib unique ; G : bascule 43 ; hotfixs : (B) puis G1…G6.
   effacé ; cargo par la porte, `sandbox` posé dans mon arbre avec `CARGO_BUILD_JOBS=8` — à ajouter
   au gabarit, dit à ED) : la mesure « après » du fil par pas. Première ligne de l'équipier : une
   question de commit à vide, puis le plan en six items, puis la relance de l'hôte ; il lit.
+
+## 09 h 15 — second plantage, repli de l'hôte, la base de code de Lucie à rendre
+
+- **Second SIGSEGV de l'hôte du portable à 9 h 05 m 49 s** (pid 102525, core de 65 Mo tronqué),
+  toujours sous dadbf0041 : deux plantages en quinze minutes, aucun en dix heures sous 17a094d12.
+  **G a appliqué la règle convenue et reposé l'hôte d'avant à 9 h 06 m 25 s** (binaire eb154bf5f,
+  lib 17a094d12 ; `courant` reste dadbf0041 pour les passes). Le cœur a lu les registres du premier
+  core : la boucle de `ConcurrentVector::operator[]` dans `optimisticRead` suit un numéro de page
+  de 330 Gio — un lecteur qui porte un numéro faux, lu dans un segment libéré ; ticket 60e78e6e5.
+- **La base de code de Lucie (code-rag3db-depot) refuse de se rouvrir sous 17a094d12** : son .wal
+  de 5,8 Mo, écrit à 9 h 03 par l'hôte dadbf0041, porte l'update d'une relation CONSUMED_BY
+  (187668, nœud 10769) « not found in the forward direction… it would have reached one direction
+  only ». Famille G2b / deux sens. Décision prise à sa place (elle dort ; sa règle du 7 : « tant
+  qu'on n'est pas stable, mes données de test je m'en fiche ») : (a) une copie reflink ouverte
+  sous dadbf0041 sur un hôte d'essai pour voir si la lib neuve rejoue ; (b) **l'original — base,
+  .wal, .ecrivain — mis de côté tel quel** dans
+  `~/.local/share/rag3weaver/preuves/2026-11-08-code-rag3db-depot-wal-dadbf0041/`, la pièce du
+  défaut pour le cœur et hotfixs ; (c) **retour par avant-43** (l'état du 7 nov. 19 h 21) et la
+  montre qui rattrape les fichiers changés depuis — search_code revient. memoire-longue se rouvre,
+  elle ne bouge pas. G exécute et donne l'heure.
+- **hotfixs** : mesure G5 rendue à 9 h 08 (analyze au seuil ≈ 390 ms une fois, au point de reprise
+  qui passe le seuil, sur 116 000 lignes à FLOAT[768] : 838 → 1 232 ms, md5 des deux libs au
+  ticket) ; **le témoin du mélange G2b** est écrit (g2b-melange-hnsw f37d4e9ef : COPY de 30 000
+  vecteurs FLOAT[768] sous 256 Mio et 4 fils, plusieurs vidages ONTO_HEAD sous un lecteur), en
+  route à luciepc ; sa lecture : la copie-échange ONTO_HEAD tourne désormais sous des lecteurs, ce
+  qui n'arrivait pas avant G2b. Priorité absolue devant son troisième lot de l'équipier. Le cœur
+  pousse coupure vers 9 h 55 et passe ensuite à l'ASAN sur V2 et la compaction CSR ; les deux
+  correctifs iront dans un même rebâti de la lib, dans l'heure qui suivra, avec G.
+- **La file reprend à luciepc** (six places) : hooks-essai pousse memoire-nommee ; recherche,
+  archi et 96 jouent leurs passes sous dadbf0041 et poussent à mon mot dans cet ordre.
+- **Essai 6 arrêté net** par les deux plantages : la tâche a repris deux fois à sa frontière, puis
+  le backend de mon arbre n'a plus pu s'ouvrir sous l'ancien binaire (« unknown field `env` » : le
+  bloc `sandbox.env` du bac à sable n'existe que dans le binaire reposé par-dessus) ; retiré de
+  mon arbre, à remettre à la prochaine pose. La mesure « après » du fil par pas attend une pose
+  stable.
