@@ -1379,6 +1379,7 @@ mod tests {
             graph: None,
             signal: None,
             signals: Vec::new(),
+            best_signal: None,
         };
 
         let through = |lens: PathLens| render_results_through(std::slice::from_ref(&r), 200, false, &lens);
@@ -1444,6 +1445,7 @@ mod tests {
             graph: None,
             signal: None,
             signals: Vec::new(),
+            best_signal: None,
         }
     }
 
@@ -1528,6 +1530,7 @@ mod tests {
             start_char: 0,
             end_char: 0,
             highlights: Vec::new(),
+            signal: None,
         });
         let md = render_results_markdown(&[r], 40);
         let quoted = md.lines().find(|l| l.trim_start().starts_with("> ")).expect("un extrait");
@@ -1719,6 +1722,7 @@ mod tests {
             start_char: 0,
             end_char: 0,
             highlights: Vec::new(),
+            signal: None,
         });
         let md = render_results_markdown(&[r], 300);
         assert_eq!(md.matches(signature).count(), 1, "une seule fois, pas deux :\n{md}");

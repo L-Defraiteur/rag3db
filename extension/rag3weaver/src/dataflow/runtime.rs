@@ -2038,6 +2038,7 @@ mod tests {
             other_children: None,
             graph: None,
             signals: Vec::new(),
+            best_signal: None,
         }
     }
 
