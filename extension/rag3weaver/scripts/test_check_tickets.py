@@ -118,6 +118,23 @@ class CheckTickets(unittest.TestCase):
         self.assertIn("ouvert   2026-11-07-b.md", out)
         self.assertIn("fermé    closed/2026-11-01-un.md", out)
 
+    def test_une_fermeture_qui_reecrit_le_ticket_se_lit_fermee(self):
+        r = self.racine
+        git(r, "init", "-q", "-b", "master")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+        # La fermeture réécrit tout le ticket : git ne voit plus le renommage.
+        os.remove(os.path.join(r, "docs/tickets/2026-11-01-un.md"))
+        chemin = os.path.join(r, "docs/tickets/closed/2026-11-01-un.md")
+        with open(chemin, "w", encoding="utf-8") as f:
+            f.write(ENTETE.format(titre="Un", etat="corrigé `abc`") + "\n".join(["Un texte neuf."] * 40))
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "fermer")
+        rc, out = jouer(r, "--lot", "HEAD~1")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("fermé    closed/2026-11-01-un.md", out)
+        self.assertNotIn("retiré", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -157,6 +157,18 @@ def relire_le_lot(racine, base):
             _, champs = entete(os.path.join(racine, cible))
             if m and premier_mot(m.group(1)) != premier_mot(champs.get("État", "")):
                 vus.append(f"état     {rel} : « {premier_mot(m.group(1))} » → « {premier_mot(champs.get('État', ''))} »")
+    # Un ticket fermé dont le contenu change beaucoup, git ne le voit pas renommé : un retrait à la
+    # racine et un ajout de même nom dans closed/ font une fermeture (l'inverse, une réouverture).
+    retires = {v.split(None, 1)[1] for v in vus if v.startswith("retiré ")}
+    ouverts = {v.split(None, 1)[1] for v in vus if v.startswith("ouvert ")}
+    for rel in sorted(retires):
+        nom = os.path.basename(rel)
+        if not rel.startswith("closed/") and f"closed/{nom}" in ouverts:
+            vus = [v for v in vus if v not in (f"retiré   {rel}", f"ouvert   closed/{nom}")]
+            vus.append(f"fermé    closed/{nom}")
+        elif rel.startswith("closed/") and nom in ouverts:
+            vus = [v for v in vus if v not in (f"retiré   {rel}", f"ouvert   {nom}")]
+            vus.append(f"rouvert  {nom}")
     print(f"▸ les tickets du lot depuis {base} ({len(vus)}), à relire avant le push :")
     for v in vus:
         print(f"    {v}")
