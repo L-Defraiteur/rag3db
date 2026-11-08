@@ -125,6 +125,8 @@ pub mod code_sync;
 #[cfg(feature = "burn-ocr")]
 pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;
+/// Les fils de fond d'un catalogue, un seul registre d'arrêt.
+pub mod catalog_threads;
 /// La vue de lecture : ce qu'une lecture d'outil demande au catalogue, sans son mutex.
 pub mod read_view;
 /// Un instantané par appel d'outil, sur un pool de connexions de lecture (L6).
