@@ -67,6 +67,7 @@ public:
         : PhysicalOperator{type_, std::move(child), id, std::move(printInfo)},
           infos{std::move(infos)}, warningDataVectorPos{std::move(warningDataVectorPos)} {}
 
+    void acquireLocksBeforeExecution(ExecutionContext* context) override;
     void initGlobalStateInternal(ExecutionContext* context) override;
 
     void initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) override;

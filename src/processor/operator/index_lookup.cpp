@@ -10,6 +10,8 @@
 #include "storage/index/hash_index.h"
 #include "storage/local_storage/local_storage.h"
 #include "storage/table/node_table.h"
+#include "transaction/lock_manager.h"
+#include "transaction/transaction.h"
 
 using namespace rag3db::common;
 using namespace rag3db::storage;
@@ -131,6 +133,32 @@ bool IndexLookup::getNextTuplesInternal(ExecutionContext* context) {
     }
     localState->errorHandler->flushStoredErrors();
     return true;
+}
+
+// Le versement qui suit (initGlobalStateInternal) donne aux nœuds locaux leurs décalages
+// définitifs en milieu de transaction. Un autre écrivain qui validerait ensuite des nœuds dans
+// la même table les placerait derrière eux ; le rejeu, qui repasse les transactions dans l'ordre
+// de leurs commits, donnerait à ceux de l'autre les décalages que celle-ci avait en service, et
+// ses relations journalisées désigneraient les nœuds de l'autre (témoin ProvisionalOffsets.
+// TwoFlushesInOneTransaction…, 8 novembre 2026). Le versement tient donc l'index de la table en
+// exclusif jusqu'à la fin de la transaction, comme un COPY de nœuds
+// (NodeBatchInsert::acquireLocksBeforeExecution) : l'autre écrivain attend, ou est refusé par le
+// délai. Pris ici, avant l'exécution, et non sous le mutex de la tâche, où l'attente gelait
+// l'ordonnanceur.
+void IndexLookup::acquireLocksBeforeExecution(ExecutionContext* context) {
+    const auto transaction = transaction::Transaction::Get(*context->clientContext);
+    const auto localStorage = transaction->getLocalStorage();
+    if (!transaction->usesLocks() || !localStorage) {
+        return;
+    }
+    for (auto& info : infos) {
+        const auto tableID = info.nodeTable->getTableID();
+        const auto localTable = localStorage->getLocalTable(tableID);
+        if (localTable && localTable->getNumTotalRows() > 0) {
+            transaction->acquireLock(transaction::LockResource::index(tableID),
+                transaction::LockMode::EXCLUSIVE);
+        }
+    }
 }
 
 void IndexLookup::initGlobalStateInternal(ExecutionContext* context) {
