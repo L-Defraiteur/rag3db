@@ -1441,3 +1441,88 @@ fn une_tache_a_role_sans_fin_lisible_se_dit_inconnue() {
     assert_eq!(finie["state"], "échec");
     assert!(super::tache_a_role("graph-1-2", &json!({ "evenements": [{ "kind": "RunStarted", "target": {} }] })).is_none());
 }
+
+/// **Le thème daemon dans l'IDE** (Lucie, 7 novembre 2026 : l'IDE « comme un terminal
+/// avant-gardiste », le même thème que le terminal ; c7, 8 novembre). Un troisième choix
+/// « daemon » à côté de clair et sombre : la page applique les couleurs du fichier commun
+/// `templates/themes/daemon.json`, servi par l'hôte (`/ide/theme/daemon.json`), le choix tient
+/// au rechargement ; pendant qu'un tour attend le modèle, l'animation « réfléchit » du thème
+/// tourne, et elle disparaît à la fin du tour. Hors du thème daemon, la page reste sobre.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_reflechit() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_reflechit";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    // Un modèle qui réfléchit deux secondes avant de répondre, sans jeton entre-temps.
+    let lent: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-lent", 8192, |turns, opts, sink| {
+            std::thread::sleep(Duration::from_millis(2000));
+            MockLlm::new("Voilà.").generate(turns, opts, sink)
+        })))
+    });
+    let (d, h, m, id) = banc_dans("atelier", lent.clone(), |_| {});
+    drop(h);
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(lent)
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+    // Le thème que l'hôte sert est le fichier commun, octet pour octet.
+    let commun = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/themes/daemon.json")).unwrap();
+    let servi = crate::daemon::agent().get(format!("{racine}/ide/theme/daemon.json")).header("Cookie", "rag3weaver_ide=j").call().unwrap().body_mut().read_to_string().unwrap();
+    assert_eq!(servi, commun, "l'hôte sert templates/themes/daemon.json");
+    let theme: Value = serde_json::from_str(&commun).unwrap();
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    // Le choix « daemon » : la marque sur <html>, les couleurs du fichier commun.
+    n.evaluer("document.querySelector('#theme-daemon').click()");
+    n.attendre("document.documentElement.dataset.theme === 'daemon' && document.documentElement.classList.contains('daemon')", "le thème daemon choisi");
+    let var = |n: &mut Navigateur, v: &str| n.evaluer(&format!("getComputedStyle(document.documentElement).getPropertyValue('{v}').trim()"));
+    n.attendre(&format!("getComputedStyle(document.documentElement).getPropertyValue('--daemon-fond').trim() === '{}'", theme["couleurs"]["fond"].as_str().unwrap()), "les couleurs lues dans le fichier commun");
+    assert_eq!(var(&mut n, "--daemon-texte"), theme["couleurs"]["texte"]);
+    assert_eq!(var(&mut n, "--daemon-code-keyword"), theme["code"]["keyword"]);
+    assert_eq!(n.evaluer("getComputedStyle(document.body).backgroundColor"), json!("rgb(5, 5, 5)"), "le fond de la page est celui du thème");
+    assert_eq!(n.evaluer("getComputedStyle(document.body).color"), json!("rgb(255, 51, 51)"), "le texte de la page est celui du thème");
+    assert_eq!(n.evaluer("localStorage.getItem('ide-theme')"), json!("daemon"));
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    assert_eq!(n.evaluer("document.documentElement.dataset.theme"), json!("daemon"), "le choix tient au rechargement");
+
+    // Un tour : l'invocation tourne pendant que le modèle réfléchit, puis disparaît.
+    assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "pas d'invocation hors d'un tour");
+    n.evaluer("document.querySelector('#message').value = 'réfléchis'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#invocation')?.dataset.anim === 'reflechit' && document.querySelector('#invocation').textContent.includes('INVOCATION DU CODE')", "l'invocation pendant que le modèle réfléchit");
+    let image = n.evaluer("document.querySelector('#invocation').textContent");
+    assert!(image.as_str().unwrap_or_default().contains('⛧'), "le cœur du cercle : {image}");
+    n.attendre(&format!("document.querySelector('#invocation') && document.querySelector('#invocation').textContent !== {image}"), "le cercle tourne");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "la fin du tour");
+    assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "l'invocation disparaît à la fin du tour");
+
+    // Hors du thème daemon (retour au choix du système), la page reste sobre pendant un tour.
+    n.evaluer("document.querySelector('#theme-daemon').click()");
+    n.attendre("document.documentElement.dataset.theme !== 'daemon' && !document.documentElement.classList.contains('daemon')", "le thème daemon quitté");
+    n.evaluer("document.querySelector('#message').value = 'encore'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === \"l'agent travaille…\"", "le second tour part");
+    assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "pas d'invocation hors du thème daemon");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "la fin du second tour");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}

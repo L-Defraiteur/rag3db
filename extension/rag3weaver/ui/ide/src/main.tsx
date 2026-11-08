@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Moon, Sun, Radio } from "lucide-react";
+import { Flame, Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { dispatchFlux, fetchState, onFlux, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
@@ -50,7 +50,8 @@ function App() {
     });
   }, []);
 
-  const dark = effectiveTheme(theme) === "dark";
+  const dark = effectiveTheme(theme) !== "light";
+  const isDaemon = effectiveTheme(theme) === "daemon";
   const fullWindow = route().view === "chat";
   return (
     // Le chat prend toute la fenêtre : ses barres aux bords, un seul défilement
@@ -76,6 +77,18 @@ function App() {
           onClick={() => setTheme(dark ? "light" : "dark")}
         >
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </Button>
+        {/* Le troisième choix : le thème du terminal (templates/themes/daemon.json). */}
+        <Button
+          variant="ghost"
+          size="icon"
+          id="theme-daemon"
+          aria-pressed={isDaemon}
+          aria-label={isDaemon ? "quitter le thème daemon" : "thème daemon"}
+          title={isDaemon ? "quitter le thème daemon" : "thème daemon"}
+          onClick={() => setTheme(isDaemon ? "system" : "daemon")}
+        >
+          <Flame className="size-4" />
         </Button>
       </header>
       <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>

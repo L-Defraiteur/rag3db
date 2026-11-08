@@ -25,7 +25,7 @@ rebasée, et ses hashs cités dans les tickets (48abbd62d, a03de7d7f) ne sont pa
 | Le filtre « actifs seulement » et le menu « par session / par dépôt », dont le choix est gardé | fait | 056ed09eb, 2750a19d3 |
 | Le vocabulaire : dépôt, worktree, branche, jamais « backend » à l'écran | fait | 73c1edd29, c83409c51 (`kind`, dépôt et branche par l'espace de travail), 932197e79 ; les témoins de la barre le vérifient |
 | « Dépôts » et « Disponibles » ; un worktree attaché paraît sans rechargement | fait | 056ed09eb (`available_repos`) ; 1005c5544 (`RepoAttached`) |
-| Le thème : l'IDE comme un terminal avant-gardiste, le même thème que le terminal, « Daemon Code Summoning » pendant que le modèle réfléchit | **partiel** | Le terminal lit `templates/themes/daemon.json` (f2e6e2521, 3696a71cb). L'IDE ne le lit pas encore : rien dans `ui/ide/` ni dans `src/ide.rs` (constaté dans 72f17733a). L'IDE garde son clair et son sombre, sans animation pendant la réflexion. |
+| Le thème : l'IDE comme un terminal avant-gardiste, le même thème que le terminal, « Daemon Code Summoning » pendant que le modèle réfléchit | fait | f2e6e2521, 3696a71cb (le terminal) ; 44442ea75 (l'IDE : `/ide/theme/daemon.json`, le bouton flamme à côté de clair et sombre, l'invocation « réfléchit » dans le chat sous ce thème seulement) |
 
 ## À côté (pas dans la liste de Lucie, mais au même endroit)
 
@@ -45,3 +45,5 @@ l'animation « réfléchit » du thème pendant que le modèle réfléchit, dans
 dit le 8 novembre qu'un thème se branche et se montre sans accord préalable. Le clair et le sombre
 restent des choix du menu ; le thème daemon en devient un troisième. Le lien vers un symbole cité
 vient après, en lot à part.
+
+**Mise à jour, 13 h 05** : le thème est fait dans l'IDE (44442ea75). archi enchaîne sur le lien vers un symbole cité.
