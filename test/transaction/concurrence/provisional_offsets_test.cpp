@@ -13,12 +13,12 @@
 // Le mode multi-écrivains, par défaut depuis le 11 octobre, rend l'entrelacement possible : une
 // insertion tient l'index de sa table en partagé, un COPY l'index de sa propre table.
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <filesystem>
 #include <string>
 #include <vector>
-
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -115,7 +115,8 @@ TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsWhenAnotherWr
 // définitif) la cherchait dans les listes : « not found in the forward direction », la base ne se
 // rouvrait plus (code-rag3db-depot, 8 novembre 2026, lu enregistrement par enregistrement par le
 // cœur). L'arête de la même paire est d'abord supprimée, comme dans ce journal.
-class RelCopyThenUpdateReplay : public ProvisionalOffsets, public ::testing::WithParamInterface<bool> {};
+class RelCopyThenUpdateReplay : public ProvisionalOffsets,
+                                public ::testing::WithParamInterface<bool> {};
 
 TEST_P(RelCopyThenUpdateReplay, TheReplayFindsTheCopiedRelToUpdate) {
     const bool withLocalNodes = GetParam();
@@ -153,7 +154,8 @@ TEST_P(RelCopyThenUpdateReplay, TheReplayFindsTheCopiedRelToUpdate) {
             run("MATCH (:N {id: 1})-[r:R]->(:N {id: 2}) SET r.k = 20;");
             run("COMMIT;");
             const auto wal = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
-            if (code == 0 && (!std::filesystem::exists(wal) || std::filesystem::file_size(wal) == 0)) {
+            if (code == 0 &&
+                (!std::filesystem::exists(wal) || std::filesystem::file_size(wal) == 0)) {
                 fprintf(stderr, "[child] le journal est vide : rien à rejouer\n");
                 code = 11;
             }
@@ -171,7 +173,8 @@ TEST_P(RelCopyThenUpdateReplay, TheReplayFindsTheCopiedRelToUpdate) {
     auto row = forward->getNext();
     EXPECT_EQ(row->getValue(0)->getValue<int64_t>(), 2);
     EXPECT_EQ(row->getValue(1)->getValue<int64_t>(), 20) << "[check: rels-on-their-nodes]";
-    EXPECT_FALSE(forward->hasNext()) << "[check: rels-on-their-nodes] l'arête supprimée est revenue";
+    EXPECT_FALSE(forward->hasNext())
+        << "[check: rels-on-their-nodes] l'arête supprimée est revenue";
     auto back = conn->query("MATCH (y:N {id: 2})<-[r:R]-(x:N) RETURN x.id, r.k;");
     ASSERT_TRUE(back->isSuccess()) << back->getErrorMessage();
     ASSERT_TRUE(back->hasNext()) << "[check: directions-agree] la relation manque au sens arrière";
