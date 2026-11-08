@@ -1,7 +1,5 @@
 #include "storage/table/node_table.h"
 
-#include "storage/storage_version_info.h"
-
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -24,6 +22,7 @@
 #include "storage/local_storage/local_table.h"
 #include "storage/page_manager.h"
 #include "storage/storage_manager.h"
+#include "storage/storage_version_info.h"
 #include "storage/wal/local_wal.h"
 #include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
@@ -1095,8 +1094,8 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
         // ici, sur les lignes que ce point de reprise vient d'écrire, avant d'être écrites avec
         // la table. Aucun écrivain ne tourne : le balayage lit le dernier état validé.
         if (needsAnalyze()) {
-            nodeGroups->replaceStats(
-                rebuildStatsFromLiveRows(&transaction::DUMMY_CHECKPOINT_TRANSACTION, memoryManager));
+            nodeGroups->replaceStats(rebuildStatsFromLiveRows(
+                &transaction::DUMMY_CHECKPOINT_TRANSACTION, memoryManager));
             rowsChangedSinceAnalyze = 0;
         }
         hasChanges = false;

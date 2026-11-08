@@ -219,7 +219,8 @@ protected:
         EXPECT_TRUE(begin->isSuccess()) << begin->getErrorMessage();
         auto* context = conn->getClientContext();
         auto* transaction = transaction::Transaction::Get(*context);
-        const auto* entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, "Link");
+        const auto* entry =
+            catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, "Link");
         // Le catalogue nomme le groupe de la relation ; le stockage tient sa table unique.
         const auto relTableID =
             entry->constCast<catalog::RelGroupCatalogEntry>().getSingleRelEntryInfo().oid;
