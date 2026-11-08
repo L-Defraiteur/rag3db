@@ -17,24 +17,47 @@ lecture. Le témoin est `a_line_posted_during_the_last_step_is_read_before_the_t
 C'est probablement la cause de l'answer non lue de l'essai 4 (point 6 ci-dessous), à vérifier
 dans le journal du run.
 
+**L'attente du superviseur** (points 1 et 2 ci-dessous) est corrigée par le lot de l'état
+d'attente. Une question ou une commande demandée, sans réponse ni ligne nouvelle adressée à
+l'équipier, le suspend : aucun appel au modèle, la boîte dit une fois « en attente du
+superviseur depuis HH:MM », et le pas ne compte ni réussi, ni raté, ni dans les 40. La réponse
+le réveille. L'attente se lit dans la boîte, elle survit donc à un redémarrage de l'hôte. Le
+témoin est `waiting_for_the_supervisor_suspends_the_teammate_without_failing_the_task`, rouge
+sans le lot.
+
 ## Ce qui reste
 
-1. **Attendre le superviseur tue la tâche** (essai 4, racine-disparue). L'équipier a demandé à
+1. **Attendre le superviseur tue la tâche** (corrigé, voir plus haut) (essai 4, racine-disparue). L'équipier a demandé à
    c7 de jouer un témoin, puis a marqué ses pas d'attente `succeeded: false` (« raté : en
    attente de la sortie de cargo test par le superviseur »). Au troisième, l'hôte a arrêté la
    tâche : « 3 pas de suite sans élément réussi : je m'arrête ». Attendre une réponse n'est pas
    un pas raté. Il faut un état d'attente : la question est posée, le pas est suspendu, et le
    modèle n'est pas appelé avant la réponse. Un pas d'attente ne compte ni comme réussi ni comme
    raté.
-2. **Il répète le même message pendant l'attente.** Quatre lignes identiques en une minute
+2. **Il répète le même message pendant l'attente** (corrigé avec le point 1). Quatre lignes identiques en une minute
    (report, question, step_done, report), chacune un appel à Gemini.
 3. **Le quota frappe l'équipier seul** (essai 3). Des 429 RESOURCE_EXHAUSTED entre 01:20 et
    01:26 alors que e2e_juge, e2e_equipier et le juge des bilans passaient sur le même projet. À
    01:37 : « le pas 6 n'a pas abouti : quota dépassé après 2 reprises en 186 s ». Les journaux
    de pas font 87 à 130 Ko. Hypothèse : un quota de jetons d'entrée par minute, et l'équipier
    renvoie tout son fil à chaque pas. Un pas devrait repartir du plan, de la boîte et du résumé
-   des pas faits. **À mesurer d'abord** : la taille des requêtes par pas dans le journal de
-   l'hôte. Avec lui : un 429 ou un 503 ne compte pas dans `max_failed_steps`, et la reprise
+   des pas faits. **Mesuré le 8 novembre** sur les journaux des runs de la tâche
+   (`runs/928c89429e76`, les `prompt_tokens` de chaque appel) : l'hypothèse tient. Chaque pas
+   repart de tout le fil des pas d'avant.
+
+   | pas | heure | appels | entrée du 1er appel | entrée max | entrée cumulée |
+   |---|---|---|---|---|---|
+   | 1 | 01:02:34 | 12 | 5 275 | 24 301 | 179 257 |
+   | 2 | 01:06:17 | 11 | 25 735 | 41 967 | 356 777 |
+   | 3 | 01:12:57 | 12 | 43 197 | 58 079 | 616 223 |
+   | 4 | 01:15:48 | 12 | 62 737 | 73 010 | 815 709 |
+   | 5 | 01:17:00 | 12 | 74 466 | 83 060 | 950 822 |
+   | 6 | 01:19:58 | 11 | 84 192 | 92 188 | 962 379 |
+   | 10 | 01:45:07 | 3 | 122 242 | 122 688 | 367 512 |
+
+   Le pas 5 envoie environ 950 000 jetons d'entrée en trois minutes, et le pas 6 tombe sur les
+   429 avec deux reprises. Un pas qui repartirait du plan, de la boîte et du résumé des pas
+   faits garderait son entrée près de celle du pas 1. Avec lui : un 429 ou un 503 ne compte pas dans `max_failed_steps`, et la reprise
    attend au moins une fenêtre de quota par minute.
 4. **Le juge note chaque pas comme la tâche entière** (essai 3). Le run du pas 1
    (`agent-1a1b876c759-887`, « lire le ticket et le code ») a reçu 2/10, objectif non : « n'a pu
