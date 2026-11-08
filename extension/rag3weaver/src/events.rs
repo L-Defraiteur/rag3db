@@ -239,7 +239,7 @@ pub enum Event {
         /// L'extrait a été coupé.
         truncated: bool,
         /// **Ce que la page rend sous le tour** (`Turn::ui`), que le modèle ne voit pas.
-        ui: Option<Value>,
+        ui: Option<serde_json::Value>,
     },
     /// Un nœud d'un graphe exécuté par le runtime — ce qui se passe *sous*
     /// un outil.
