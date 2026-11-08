@@ -389,10 +389,9 @@ fn dossier_de_branche(branche: &str) -> String {
 /// [`DONE_LINE`](crate::dataflow::index_nodes::DONE_LINE) ; tant qu'il reste, un hôte
 /// qui ouvre le worktree fermé relance l'index (c7, 8 novembre 2026, 16 h 09 : un
 /// worktree attaché à 16 h 04, l'hôte reposé à 16 h 08, l'index n'avait plus repris).
-fn marque_du_premier_index(manifeste: &Path) -> PathBuf {
-    let mut p = manifeste.as_os_str().to_owned();
-    p.push(".premier-index");
-    PathBuf::from(p)
+pub(crate) fn marque_du_premier_index(manifeste: &Path) -> PathBuf {
+    // Hors de l'arbre des déclarations : une tâche y verrait une déclaration inconnue.
+    crate::builtin_templates::state_dir_of(manifeste).join("premier-index")
 }
 
 /// Le premier index d'un worktree reste-t-il à finir ? Ôte le témoin d'un index fini.
@@ -418,7 +417,11 @@ fn lancer_sur(b: &crate::backend::Backend, manifeste: &Path) -> Result<Option<Pa
     let v = b.call("index", json!({ "confirm": true }))?;
     let journal = v["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).map(|j| PathBuf::from(j.trim()));
     if let Some(j) = &journal {
-        let _ = std::fs::write(marque_du_premier_index(manifeste), j.display().to_string());
+        let marque = marque_du_premier_index(manifeste);
+        if let Some(d) = marque.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let _ = std::fs::write(marque, j.display().to_string());
     }
     Ok(journal)
 }
@@ -1376,7 +1379,7 @@ mod tests {
         m["tools"].as_object_mut().unwrap().remove("open_branch");
         std::fs::write(&atelier, serde_json::to_string_pretty(&m).unwrap()).unwrap();
         crate::builtin_templates::record(&atelier, "backends/atelier/backend.json").unwrap();
-        let livre = atelier.with_extension("json.livre");
+        let livre = crate::builtin_templates::livre_of(&atelier);
         let mut l: Value = serde_json::from_str(&std::fs::read_to_string(&livre).unwrap()).unwrap();
         l["content"]["tools"].as_object_mut().unwrap().remove("open_branch");
         std::fs::write(&livre, l.to_string()).unwrap();
@@ -1423,7 +1426,8 @@ mod tests {
         };
         outil("attach_worktree", json!({ "path": depot }));
         let manifeste = racines.manifest("code-rag3db-essai").canonicalize().unwrap();
-        let marque = PathBuf::from(format!("{}.premier-index", manifeste.display()));
+        let marque = super::marque_du_premier_index(&manifeste);
+        assert!(!marque.starts_with(manifeste.parent().unwrap().parent().unwrap().parent().unwrap()), "le témoin vit hors de l'arbre des déclarations : {}", marque.display());
         let journal_de = || std::fs::read_to_string(&marque).map(|j| j.trim().to_string()).unwrap_or_default();
         assert!(marque.is_file(), "l'attache pose le témoin du journal de son index");
         let fini = |journal: &str| std::fs::read_to_string(journal).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.starts_with(crate::dataflow::index_nodes::DONE_LINE))).unwrap_or(false);
