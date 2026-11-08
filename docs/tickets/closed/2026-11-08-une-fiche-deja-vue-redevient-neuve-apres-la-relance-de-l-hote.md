@@ -1,6 +1,6 @@
 # Une fiche déjà vue redevient neuve après la relance de l'hôte
 
-- **État** : ouvert (8 novembre 2026), relevé par hooks-essai, demandé en ticket à part par c7.
+- **État** : corrigé (8 novembre 2026) par le 3 ter (e) des hooks, rag3weaver archi : l'empreinte du déjà-vu passe à blake3, stable d'un binaire à l'autre, et une empreinte d'avant (16 chiffres, `DefaultHasher`) se lit « déjà vue » puis se réécrit. La cause exacte du relevé, un résumé réécrit ou le hachage changé avec le binaire, n'a pas été départagée ; elle est sans objet avec blake3.
 - **Famille** : produit
 - **Gravité** : bruit dans le contexte de l'agent. Si la cause est le hachage, chaque pose de G fait
   rendre de nouveau les fiches déjà vues de toutes les sessions branchées.
