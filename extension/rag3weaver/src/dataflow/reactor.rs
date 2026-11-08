@@ -572,6 +572,51 @@ mod tests {
         assert!(duree < Duration::from_secs(3), "l'arrêt borné a attendu {duree:?}");
     }
 
+    /// **L'arrêt borné revient dans sa borne même quand le runtime est tenu** (le ticket des
+    /// figements de la lib entière, 8 novembre 2026) : deux réactions figées occupent les deux
+    /// fils de travail du runtime du crate — comme deux réactions qui attendent un service
+    /// muet ; l'arrêt borné de l'une rend « réacteur figé » dans sa borne, pas quand le runtime
+    /// se libère. Avant, son délai était un minuteur de ce runtime, qui ne sonnait plus.
+    #[test]
+    fn a_bounded_stop_returns_within_its_bound_while_the_runtime_is_held() {
+        let (_garde, attente) = std::sync::mpsc::channel::<()>();
+        let attente = Arc::new(Mutex::new(attente));
+        let figer = |bus: &EventBus, entree: &Arc<AtomicUsize>| {
+            let (e, a) = (entree.clone(), attente.clone());
+            Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
+                .on("figee", ["messages"], ReactPolicy::Each, move |_| {
+                    e.fetch_add(1, Ordering::SeqCst);
+                    // Jamais servi : `_garde` vit jusqu'à la fin du test. Un seul fil tient
+                    // le verrou ; l'autre attend le verrou, sur son fil de travail aussi.
+                    let _ = a.lock().unwrap().recv();
+                })
+                .spawn()
+        };
+        let (bus_a, bus_b) = (EventBus::new(64), EventBus::new(64));
+        let (entree_a, entree_b) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+        let a = figer(&bus_a, &entree_a);
+        let _b = figer(&bus_b, &entree_b);
+        bus_a.send_message("r", "a", "b", "fige-toi");
+        bus_b.send_message("r", "a", "b", "fige-toi");
+        let debut = Instant::now();
+        while entree_a.load(Ordering::SeqCst) + entree_b.load(Ordering::SeqCst) < 2 {
+            assert!(debut.elapsed() < Duration::from_secs(5), "les deux réactions ne sont jamais entrées");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let t0 = Instant::now();
+            let rendu = a.stop_within(Duration::from_millis(300)).err();
+            let _ = tx.send((rendu, t0.elapsed()));
+        });
+        let (rendu, duree) = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("l'arrêt borné n'est pas revenu en 5 s : son délai attend le runtime qu'il devait borner");
+        let erreur = rendu.expect("un réacteur figé n'est pas rendu");
+        assert!(erreur.contains("réacteur figé"), "{erreur}");
+        assert!(duree < Duration::from_secs(3), "l'arrêt borné a attendu {duree:?}");
+    }
+
     #[test]
     fn a_batch_collapses_a_burst_into_one_run() {
         let bus = EventBus::new(64);
