@@ -794,3 +794,63 @@ les trois commits repris un par un d'appel-a-delai.
 
 **Demain** : la coloration B (avec codeparsers et tty), les liens de symbole, la
 tâche sans git.
+
+## Journée du 8 novembre : les noms, la coloration B, la tâche sans git
+
+**Les noms de la barre.**
+- **barre-noms** (master cfbe928a4) : une session prend le nom de son dépôt, au lieu de son id
+  brut.
+- **memoire-nommee** (master 7f1a40e2f) : la nature passe avant le dépôt. Le `repo` d'une
+  mémoire retombe sur le dossier de son manifeste (« memory »), alors qu'elle doit s'appeler « la
+  mémoire ». Chaque correctif a son témoin, rouge puis vert. Les deux défauts ont été relevés par
+  G à la pose.
+
+**La coloration B** (master 667d5e35a, avec le pointeur de codeparsers 2bfa28b).
+- L'hôte a deux portes : `POST /highlight`, sous le jeton porteur, et `POST /ide/highlight`, sous
+  le cookie.
+- La page s'affiche d'abord sous highlight.js (`data-hl="repli"`), puis en `hl-*` dès que l'hôte
+  répond (`data-hl="hote"`).
+- Le premier push s'est arrêté sur un `Cargo.lock` non commité : le pointeur apportait
+  tree-sitter-highlight et tree-sitter-javascript. Leçon gardée en mémoire : un pointeur qui
+  ajoute des crates commite son verrou avant la passe.
+- tty colore son terminal par la même route (3696a71cb).
+
+**La tâche sans git** (branche tache-sans-git, relue par everything declarative).
+- L'espace est une copie de la racine. Elle exclut `workspace.exclude` (`target`,
+  `node_modules` et `.venv` par défaut), garde ses empreintes blake3 hachées en flux, et se relit
+  par différence de dossiers.
+- La fusion recopie chaque fichier par un voisin temporaire renommé. Elle est refusée si la
+  racine a bougé là où la tâche écrit.
+- `workspace.git_init` déclaré fait de la racine un dépôt, jamais d'office.
+
+La passe a eu un rouge, l'équipier sur Gemini (« tourne encore après 15 min »). Rejoué seul, il
+est vert : c'est un intermittent, nommé au ticket. Le script de passe colorait de rouge toutes
+les suites suivantes ; il est corrigé, et chaque étape dit maintenant sa propre couleur.
+
+**La file de 7878, relevé du 8 novembre après-midi** (luciepc) :
+- 13 h 10 : e2e_lectures VERT 24/24 sur la tête a767585eb.
+- Vers 14 h 26 : les runs de départage de G réembarquent code-lourd sur 7878 (relayé par c7).
+- 14 h 23 : charge 9,5 / 15,2 / 18,9, avec 4 lourds sur 6.
+- Le rejeu court sur ef5acec79 (master 0619c22b6) donne la lib à 1 rouge sur 2 055 :
+  `la_base_principale_n_est_jamais_ecrite_par_la_tache` (« la tâche n'a pas indexé en 60 s,
+  writing: true »). e2e_lectures a 3 rouges sur 24, tous des attentes d'écriture.
+- Rejoué seul sur ma tête, le test des tâches est rouge (« l'indexation de la tâche ne finit
+  pas », 86 s). Une fois sur master, il est vert en 69,9 s. J'en ai tiré trop vite « mon lot » ;
+  c7 l'a ensuite vu rouge 2 fois sur 3 sur master, et j'ai corrigé.
+- Un diagnostic jetable sur ma tête : l'index de la tâche retient 1 fichier (« vecteurs environ
+  0 s »), puis reste busy 90 s avec `resume: {files: 0, indexing: true}`. Son journal s'arrête à
+  « indexation lancée : 1 fichiers, granite-278m », et la montre ne fait que scanner (50 scans, 0
+  hachage). 7878 à 7880 répondent à `/sante` en moins d'une ms : `/sante` répond, mais `/embed`
+  fait la queue.
+- Ensuite, e2e_lectures seule sur ma tête donne 5 verts et 19 rouges, mêmes signes. Elle ne se
+  juge pas tant que 7878 fait la queue.
+
+**Leçons.**
+- Un vert unique sur master ne départage pas un test intermittent : il faut plusieurs tirages
+  avant de dire « mon lot ».
+- Quand c7 remet une variable (`MOTEUR_ANCIEN=1`), la remettre aussi dans les scripts d'aide. Sans
+  elle, un rejeu a été refusé sans jouer un seul test.
+
+**En attente** : « 7878 libre » de G ; puis e2e_lectures et le test des tâches seuls, puis le push
+de tache-sans-git au « à toi » de c7. Les branches distantes diag-sansgit-index et
+diag-master-index attendent le mot de Lucie pour être effacées.
