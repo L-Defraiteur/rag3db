@@ -154,14 +154,21 @@ function demanderLesSymboles() {
     const liste = [...noms];
     for (const nom of liste) enVol.add(`${backend}\u0000${nom}`);
     const finir = () => liste.forEach((nom) => enVol.delete(`${backend}\u0000${nom}`));
-    const w = window as unknown as { __ide?: { symbolesDemandes?: string[] } };
+    // Le relevé que les témoins lisent : les noms demandés, et chaque lot avec la raison de
+    // sa réponse (`why` de l'hôte, ou l'erreur) — une redemande s'explique par lui ou par un
+    // oubli (`symbolesOublis`), jamais par un simple rendu.
+    const w = window as unknown as { __ide?: { symbolesDemandes?: string[]; symbolesLots?: { noms: string[]; why: string | null; en_vol: boolean }[] } };
     w.__ide = w.__ide ?? {};
     (w.__ide.symbolesDemandes ??= []).push(...liste);
+    const releve = { noms: liste, why: null as string | null, en_vol: true };
+    (w.__ide.symbolesLots ??= []).push(releve);
     fetch("/ide/symboles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ backend, names: liste }) })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((v: { ok?: boolean; result?: { symbols?: Record<string, SymboleResolu>; why?: string } }) => {
         const lus = v.result?.symbols ?? {};
         const lu = v.ok === true && !v.result?.why;
+        releve.en_vol = false;
+        releve.why = lu ? null : (v.result?.why ?? (v as { error?: string }).error ?? "réponse sans lecture");
         const vie = lu ? VIE : VIE_SANS_LECTURE;
         if (lu) relances.delete(backend);
         else relancer(backend);
@@ -169,14 +176,20 @@ function demanderLesSymboles() {
         finir();
         if (Object.keys(lus).length) prevenir();
       })
-      .catch(() => {
+      .catch((e: Error) => {
+        releve.en_vol = false;
+        releve.why = `erreur : ${e.message}`;
         for (const nom of liste) symboles.set(`${backend}\u0000${nom}`, { r: null, jusqu_a: Date.now() + VIE_SANS_LECTURE });
         finir();
       });
   }
 }
 /// Oublier les symboles d'un dépôt (un fichier y a changé) : le rendu suivant redemande.
-export function forgetSymbols(backendId: string) {
+/// `cause` (le fichier changé) va au relevé des témoins.
+export function forgetSymbols(backendId: string, cause = "") {
+  const w = window as unknown as { __ide?: { symbolesOublis?: string[] } };
+  w.__ide = w.__ide ?? {};
+  (w.__ide.symbolesOublis ??= []).push(cause);
   for (const k of [...symboles.keys()]) if (k.startsWith(`${backendId}\u0000`)) symboles.delete(k);
   prevenir();
 }

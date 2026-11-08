@@ -265,6 +265,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState("Prêt");
   const [busy, setBusy] = useState(false);
+  // Les runs de réaction du dépôt en cours (la réindexation d'une montre) : à leur fin, les
+  // symboles cités se redemandent sur l'index à jour.
+  const reactionsEnCours = useRef(new Set<string>());
   // Le modèle réfléchit : de l'envoi (ou d'un résultat d'outil) au premier jeton ou outil.
   const [pense, setPense] = useState(false);
   const [run, setRun] = useState<string | null>(null);
@@ -382,8 +385,12 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         setRoleRuns((cur) => cur.map((x) => (x.run === ev.run ? { ...x, state: ev.ok === false ? "en erreur" : "fini" } : x)));
       }
       if (!backend || d.backend !== backend.manifest) return;
-      // Un fichier du dépôt a changé : les symboles cités se redemandent (relecture d'ED).
-      if (d.sujet === "files") forgetSymbols(id);
+      // Un fichier du dépôt a changé : les symboles cités se redemandent (relecture d'ED) ; et
+      // de nouveau à la fin de la réaction qui le réindexe — redemandés au seul changement, ils
+      // liraient l'index d'avant et garderaient l'ancienne ligne cinq minutes.
+      if (d.sujet === "files") forgetSymbols(id, String(ev.path ?? ev.kind ?? "files"));
+      if (ev.kind === "RunStarted" && ev.run_kind === "graph" && target?.reaction) reactionsEnCours.current.add(String(ev.run));
+      else if (ev.kind === "RunFinished" && reactionsEnCours.current.delete(String(ev.run))) forgetSymbols(id, `fin de la réaction ${String(ev.run)}`);
       if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${id}`) {
         setRun(String(ev.run));
         setBusy(true);

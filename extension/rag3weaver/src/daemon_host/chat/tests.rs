@@ -1573,10 +1573,32 @@ fn un_symbole_cite_par_le_modele_mene_a_sa_definition() {
     n.attendre(&format!("!!document.querySelector('.markdown a.code-ref.symbole[data-symbol=\"double\"][href$=\"/ide/code/{id}/symbole/double\"]')"), "double en lien vers la vue du symbole");
     assert_eq!(n.evaluer("[...document.querySelectorAll('.markdown a.code-ref')].some(a => a.textContent === 'inconnu_xyz')"), json!(false), "un nom inconnu n'est pas un lien");
     assert_eq!(n.evaluer("[...document.querySelectorAll('.markdown code')].some(c => c.textContent === 'inconnu_xyz')"), json!(true), "il reste du code");
+    // Un fichier change sous la montre : le cache des symboles se vide, le lien suit la
+    // définition à sa nouvelle ligne (une redemande expliquée, pas un rendu qui redemande).
+    std::fs::write(code.join("src/lib.rs"), "\n\npub fn un() -> u32 {\n    1\n}\n").unwrap();
+    n.attendre("(window.__ide?.symbolesOublis ?? []).length > 0", "l'oubli des symboles quand un fichier change");
+    n.attendre(
+        &format!("!!document.querySelector('.markdown a.code-ref.symbole[data-symbol=\"un\"][href$=\"/ide/code/{id}/fichier/src/lib.rs#L3\"]')"),
+        "le lien suit la définition à sa nouvelle ligne",
+    );
     let demandes = n.evaluer("window.__ide?.symbolesDemandes ?? null");
     let demandes: Vec<String> = serde_json::from_value(demandes.clone()).unwrap_or_else(|_| panic!("la page tient la liste des noms demandés : {demandes}"));
     assert!(demandes.iter().any(|s| s == "un") && !demandes.iter().any(|s| s == "Ok"), "Ok est un mot du langage, jamais demandé : {demandes:?}");
-    assert_eq!(demandes.iter().filter(|s| *s == "un").count(), 1, "un nom se demande une fois, pas à chaque rendu : {demandes:?}");
+    let releve = n.evaluer("({ lots: window.__ide?.symbolesLots ?? null, oublis: window.__ide?.symbolesOublis ?? [] })");
+    // Chaque lot au-delà du premier s'explique : par une réponse sans lecture (`why`, la
+    // relance prévue) ou par un oubli (un fichier changé, la fin de sa réindexation) — jamais
+    // par un simple rendu (rouge de 96 sous charge, 8 novembre 2026 : deux lots entiers) ;
+    // et un lot ne répète aucun nom.
+    let lots: Vec<Value> = releve["lots"].as_array().cloned().unwrap_or_default();
+    let oublis = releve["oublis"].as_array().map(Vec::len).unwrap_or(0);
+    let sans_lecture = lots.iter().filter(|l| !l["why"].is_null()).count();
+    for l in &lots {
+        let noms: Vec<&str> = l["noms"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        let uniques: std::collections::BTreeSet<&str> = noms.iter().copied().collect();
+        assert_eq!(noms.len(), uniques.len(), "un lot répète un nom : {releve}");
+    }
+    let lots_de_un = lots.iter().filter(|l| l["noms"].as_array().is_some_and(|n| n.iter().any(|x| x == "un"))).count();
+    assert!(lots_de_un >= 1 && lots_de_un <= 1 + sans_lecture + oublis, "une redemande sans raison (ni réponse sans lecture, ni oubli) : {demandes:?} ; relevé : {releve}");
 
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
