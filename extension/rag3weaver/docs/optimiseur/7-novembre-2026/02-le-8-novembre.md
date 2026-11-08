@@ -84,9 +84,38 @@ ne s'ouvre pas en écriture avant que la lib du lot soit posée.
 
 Le disque de luciepc est rendu depuis 18 h 03 (nodiscard et fstrim), et Lucie a libéré environ 1 Tio.
 
+## Les reposes du soir au portable
+
+- **21 h 42 : f16628f8b**, la pile de l'atelier d'everything declarative, avec les lots d'archi et de
+  hooks-essai ; binaire 80529a01 contre cbc06c3e1, coupure de 8 s. L'accueil dit « Dépôts ».
+  `rag3weaver-backend atelier` (noter la pose pour que l'atelier suive le binaire) m'a été **refusé** par
+  mon mode. Ce n'est pas contourné : Lucie la joue elle-même, une fois.
+- 7878 est dégradé de 19 h 19 à ~19 h 38 (12 s par texte), puis revenu seul (ticket f66ad4449/e8a91105f).
+  À 22 h 31, card2 est saturée par e2e_sparse_dump de la passe de recherche : 7878 à 6,6 s, 7880 à 13 s,
+  7882 à 9,5 s. La passe de la nuit est partie dès que 7878 est revenu sous 1 s (22 h 52).
+- Un `nohup` lancé dans un ssh tailscale meurt avec lui : mon bâti d'avance de 19 h 14 n'a jamais tourné.
+  On lance par `setsid … & disown`, puis on vérifie par `pgrep`.
+
+## La lib de la nuit : 9bae60786 (22 h 30 – 23 h 41)
+
+- Bâtie à luciepc sur la tête 28816ac41 (dernier commit moteur 9bae60786 : les gardes de l'étendue
+  contre le SIGSEGV, G3), `transaction_test` entier vert d'abord (357/359, ticket 1a5e20576). Pas
+  d'ABI changée (3 symboles ajoutés, 0 retiré, aucune vtable). md5 88084c87, libvector a588f58a.
+- Passe e2e sous `RAG3DB_LIB` explicite : e2e_code 27/27, e2e_lectures 24/24, témoins de la branche
+  dense verts.
+- Binaire de la repose rebâti contre elle (af5da8e9). Hôte d'essai 7991 VERT, check-manifests ok :
+  2/0 à luciepc, 4/0 au portable.
+- Contrôle des deux sens sans index complet : copies de luciepc ouvertes 90 s sous 9bae60786 (montre
+  comprise), TERM, contrôle. Comparé à la référence, le même instantané sous cbc06c3e1 : **comptes
+  identiques** dans les deux bases. C'est l'écart de midi (code-lourd INHERITS_FROM 650/658, LOCKS 544/546,
+  QUERIES ; code-principal IMPLEMENTS 331/334, LOCKS 425/436, QUERIES), et la lib neuve n'y ajoute rien.
+- **Posée à luciepc à 23 h 40** (MainPID 3544737), instantané avant-9bae60786. **`courant` = 9bae60786
+  aux deux postes à 23 h 41.** L'hôte du portable reste sur cbc06c3e1 par son env jusqu'à **9 h 30**.
+  Les passes prennent `RAG3DB_LIB=9bae60786` explicite, et `RAG3WEAVER_MOTEUR_ANCIEN` tombe.
+
 ## À suivre
 
-- La prochaine pose bâtit 36aced578 ou plus récent (lot d'archi : un nom cité entre accents graves dans
-  le chat devient un lien). Le témoin y clique.
+- 9 h 30 : pose du portable sur 9bae60786, binaire à la tête de master rebâti vers 9 h ; annonce,
+  « arrêté » à hotfixs, instantané, réveil, témoin de l'IDE.
 - Les bases code-lourd et code-principal de luciepc reviennent aux copies de 12 h 06 d'hotfixs, sans
   réindexation complète.
