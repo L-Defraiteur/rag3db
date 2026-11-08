@@ -112,7 +112,7 @@ function when(t: ToolBlock): string {
 const tokens = (n: number | null | undefined) => (n == null ? "?" : n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")} k` : String(n));
 
 /// Une ligne de la barre des runs à rôle : l'archiviste, la compaction…
-type RoleRun = { run: string; role: string; what: string; at?: number; state: "en cours" | "fini" | "en erreur" };
+type RoleRun = { run: string; role: string; what: string; at?: number; state: "en cours" | "fini" | "en erreur" | "inconnu" };
 /// Ce qu'une conversation de la barre montre sous son nom.
 type Recap = { context?: ChatContext; model?: string | null; writes?: MemoryWrite[]; writesWhy?: string | null; usage?: ChatUsage };
 
@@ -134,17 +134,20 @@ function Usage({ usage }: { usage?: ChatUsage }) {
       data-session-output={n(s, "output_tokens")}
     >
       <span className="tour">tour : {ligne(t)}</span>
+      {/* « récents » : les tours lus au journal (au plus `lus_max`), la conversation
+          n'ayant ni début ni remise à zéro enregistrés (relecture d'everything declarative). */}
       <span className="session">
-        session ({usage.tours} tour{usage.tours > 1 ? "s" : ""}) : {ligne(s)}
+        récents ({usage.tours} tour{usage.tours > 1 ? "s" : ""}) : {ligne(s)}
       </span>
     </div>
   );
 }
 
 /// **Le récapitulatif d'une conversation** : ses tours, ses jetons, ses fiches
-/// écrites ; le bouton déplie les fiches.
-function Recapitulatif({ recap, memory }: { recap?: Recap; memory: boolean }) {
-  const [ouvert, setOuvert] = useState(false);
+/// écrites ; le bouton déplie les fiches — déplié d'emblée pour la conversation
+/// ouverte, comme l'étaient ses fiches.
+function Recapitulatif({ recap, memory, courante }: { recap?: Recap; memory: boolean; courante: boolean }) {
+  const [ouvert, setOuvert] = useState(courante);
   const fiches = recap?.writes?.length ?? 0;
   const tours = recap?.usage?.tours ?? 0;
   const s = recap?.usage?.session ?? {};
@@ -244,24 +247,23 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // backend ouvert, et celui de la page même s'il ne l'est pas encore.
   const backendsHere: Backend[] = state.backends.filter((b) => b.open || b.id === id);
 
+  /// Le récapitulatif d'une conversation, et ses tâches à rôle fusionnées.
+  const lireRecap = (bid: string) =>
+    fetchChat(bid)
+      .then((c) => {
+        // Les tâches à rôle finies, lues à l'état : un rechargement les retrouve.
+        const lues: RoleRun[] = (c.role_runs ?? []).map((r) => ({ run: r.run, role: r.role, what: r.tool ?? r.reaction ?? "", at: r.at_ms ?? undefined, state: r.state === "échec" ? "en erreur" : r.state === "inconnu" ? "inconnu" : "fini" }));
+        if (lues.length)
+          setRoleRuns((cur) => {
+            const vus = new Set(cur.map((x) => x.run));
+            return [...cur, ...lues.filter((x) => !vus.has(x.run))].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)).slice(0, 12);
+          });
+        return [bid, { context: c.context, model: c.model, writes: c.memory_writes, writesWhy: c.memory_writes_why, usage: c.usage }] as const;
+      })
+      .catch(() => [bid, {} as Recap] as const);
   // La jauge de chaque conversation de la barre : son propre état du chat.
   const reloadRecaps = () =>
-    Promise.all(
-      backendsHere.map((b) =>
-        fetchChat(b.id)
-          .then((c) => {
-            // Les tâches à rôle finies, lues à l'état : un rechargement les retrouve.
-            const lues: RoleRun[] = (c.role_runs ?? []).map((r) => ({ run: r.run, role: r.role, what: r.tool ?? r.reaction ?? "", at: r.at_ms ?? undefined, state: r.state === "échec" ? "en erreur" : "fini" }));
-            if (lues.length)
-              setRoleRuns((cur) => {
-                const vus = new Set(cur.map((x) => x.run));
-                return [...cur, ...lues.filter((x) => !vus.has(x.run))].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)).slice(0, 12);
-              });
-            return [b.id, { context: c.context, model: c.model, writes: c.memory_writes, writesWhy: c.memory_writes_why, usage: c.usage }] as const;
-          })
-          .catch(() => [b.id, {} as Recap] as const),
-      ),
-    ).then((all) => {
+    Promise.all(backendsHere.map((b) => lireRecap(b.id))).then((all) => {
       const m: Record<string, Recap> = Object.fromEntries(all);
       setRecaps(m);
       return m;
@@ -419,12 +421,18 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       setBusy(false);
       setRun(null);
       const attendu = finiRun;
+      // Toute la barre une fois, puis la seule conversation du tour jusqu'à y
+      // voir son run (relecture d'everything declarative : le coût par tour).
       void (async () => {
+        const m = await reloadRecaps();
+        if (!attendu || m[id]?.usage?.tour_run === attendu) return;
         for (let k = 0; k < 10; k++) {
-          const m = await reloadRecaps();
-          if (!attendu || m[id]?.usage?.tour_run === attendu) break;
           await new Promise((ok) => setTimeout(ok, 300));
+          const [, r] = await lireRecap(id);
+          setRecaps((cur) => ({ ...cur, [id]: r }));
+          if (r.usage?.tour_run === attendu) return;
         }
+        console.warn(`[chat] l'usage du run ${attendu} n'est pas venu au journal de l'hôte en 3 s ; la barre garde sa dernière lecture`);
       })();
     }
   };
@@ -468,7 +476,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                   </a>
                   <Gauge context={recaps[se.id]?.context} model={recaps[se.id]?.model} counters={se.id === id ? consumed : undefined} />
                   <Usage usage={recaps[se.id]?.usage} />
-                  <Recapitulatif recap={recaps[se.id]} memory={b?.kind === "memory"} />
+                  <Recapitulatif recap={recaps[se.id]} memory={b?.kind === "memory"} courante={se.id === id} />
                 </div>
               );
             }}

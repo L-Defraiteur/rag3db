@@ -831,7 +831,11 @@ fn la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste() {
     assert_eq!(lu.as_u64(), Some(attendu), "la barre dit l'usage de l'hôte : {etat}");
     // Le récapitulatif : son bouton déplie les fiches écrites.
     n.attendre(&format!("!!document.querySelector('{conv} .recap button')"), "le récapitulatif et son bouton");
-    assert_eq!(n.evaluer(&format!("document.querySelector('{conv} .recap').dataset.ouvert")), json!("non"));
+    // La conversation ouverte part dépliée (ses fiches se voyaient d'emblée) ;
+    // le bouton la replie, puis la redéplie.
+    assert_eq!(n.evaluer(&format!("document.querySelector('{conv} .recap').dataset.ouvert")), json!("oui"));
+    n.evaluer(&format!("document.querySelector('{conv} .recap button').click()"));
+    n.attendre(&format!("document.querySelector('{conv} .recap').dataset.ouvert === 'non' && !document.querySelector('{conv} .recap .fiches-ecrites')"), "le bouton replie les fiches");
     n.evaluer(&format!("document.querySelector('{conv} .recap button').click()"));
     n.attendre(&format!("document.querySelector('{conv} .recap').dataset.ouvert === 'oui' && !!document.querySelector('{conv} .recap .fiches-ecrites')"), "le bouton déplie les fiches");
     // L'archiviste, après un rechargement : lu à l'état, pas seulement au flux.
@@ -1423,4 +1427,17 @@ fn un_appel_a_delai_s_arrete_a_son_delai() {
     assert_eq!(r["ok"], true, "{r}");
     assert!(r.get("error_kind").is_none(), "{r}");
     let _ = id;
+}
+
+/// Une tâche à rôle sans fin lisible se dit « inconnu », pas « fini »
+/// (relecture d'everything declarative) ; sans rôle, ce n'en est pas une.
+#[test]
+fn une_tache_a_role_sans_fin_lisible_se_dit_inconnue() {
+    let debut = json!({ "kind": "RunStarted", "target": { "role": "archiviste", "tool": "list_files" } });
+    let t = super::tache_a_role("graph-19a0b1c2d3e-1", &json!({ "evenements": [debut.clone()] })).expect("une tâche à rôle");
+    assert_eq!(t["state"], "inconnu");
+    assert_eq!(t["at_ms"], json!(u64::from_str_radix("19a0b1c2d3e", 16).unwrap()));
+    let finie = super::tache_a_role("graph-1-1", &json!({ "evenements": [debut, { "kind": "RunFinished", "ok": false }] })).unwrap();
+    assert_eq!(finie["state"], "échec");
+    assert!(super::tache_a_role("graph-1-2", &json!({ "evenements": [{ "kind": "RunStarted", "target": {} }] })).is_none());
 }

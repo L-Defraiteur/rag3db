@@ -275,58 +275,50 @@ impl DaemonHost {
         const GRAPHES_LUS: usize = 40;
         const TACHES: usize = 12;
         let runs = self.journal.runs_de(backend_id);
-        let unites = |v: &Value| -> serde_json::Map<String, Value> {
-            let mut m = serde_json::Map::new();
-            for e in v["evenements"].as_array().into_iter().flatten().filter(|e| e["kind"] == "Consumed") {
-                for u in e["units"].as_array().into_iter().flatten() {
-                    if let (Some(nom), Some(n)) = (u["unit"].as_str(), u["amount"].as_u64()) {
-                        let avant = m.get(nom).and_then(Value::as_u64).unwrap_or(0);
-                        m.insert(nom.to_string(), json!(avant + n));
-                    }
-                }
-            }
-            m
-        };
         let mut session = serde_json::Map::new();
         let (mut tour, mut tour_run, mut tours) = (Value::Null, Value::Null, 0u64);
         for r in runs.iter().rev().filter(|r| r.starts_with("agent-")).take(RUNS_DU_CHAT) {
-            let Some(v) = self.journal.lire(backend_id, r) else { continue };
-            if v["chat"] != backend_id {
-                continue;
-            }
-            let u = unites(&v);
+            let Some(u) = self.resume_du_run(backend_id, r, |v| (v["chat"] == backend_id).then(|| Value::Object(unites_consommees(v)))) else { continue };
             if tour.is_null() {
-                tour = Value::Object(u.clone());
+                tour = u.clone();
                 tour_run = json!(r);
             }
-            for (nom, n) in u {
-                let avant = session.get(&nom).and_then(Value::as_u64).unwrap_or(0);
-                session.insert(nom, json!(avant + n.as_u64().unwrap_or(0)));
+            for (nom, n) in u.as_object().into_iter().flatten() {
+                let avant = session.get(nom).and_then(Value::as_u64).unwrap_or(0);
+                session.insert(nom.clone(), json!(avant + n.as_u64().unwrap_or(0)));
             }
             tours += 1;
         }
-        // L'heure d'un run : son nom porte l'instant de son départ, en
-        // millisecondes et en hexadécimal (`graph-<ms>-<n>`).
-        let heure = |r: &str| r.split('-').nth(1).and_then(|h| u64::from_str_radix(h, 16).ok());
         let mut taches = Vec::new();
         for r in runs.iter().rev().filter(|r| r.starts_with("graph-")).take(GRAPHES_LUS) {
             if taches.len() >= TACHES {
                 break;
             }
-            let Some(v) = self.journal.lire(backend_id, r) else { continue };
-            let debut = v["evenements"].as_array().and_then(|e| e.iter().find(|e| e["kind"] == "RunStarted")).cloned().unwrap_or(Value::Null);
-            let Some(role) = debut["target"]["role"].as_str() else { continue };
-            let fini = v["fin"]["ok"].as_bool().or_else(|| v["evenements"].as_array().and_then(|e| e.iter().rev().find(|e| e["kind"] == "RunFinished")).and_then(|e| e["ok"].as_bool()));
-            taches.push(json!({
-                "role": role,
-                "run": r,
-                "tool": debut["target"]["tool"],
-                "reaction": debut["target"]["reaction"],
-                "state": match fini { Some(true) => "fini", Some(false) => "échec", None => "fini" },
-                "at_ms": heure(r),
-            }));
+            if let Some(t) = self.resume_du_run(backend_id, r, |v| tache_a_role(r, v)) {
+                taches.push(t);
+            }
         }
-        (json!({ "tour": tour, "tour_run": tour_run, "session": session, "tours": tours }), taches)
+        // `lus_max` : la borne des tours lus ; la page dit « récents », la
+        // conversation n'ayant ni début ni remise à zéro enregistrés.
+        (json!({ "tour": tour, "tour_run": tour_run, "session": session, "tours": tours, "lus_max": RUNS_DU_CHAT }), taches)
+    }
+
+    /// Le résumé d'un run du journal, lu une fois : un run fini ne change plus.
+    /// Un run illisible n'est pas retenu (il le sera au rendu suivant).
+    fn resume_du_run(&self, backend_id: &str, run: &str, resumer: impl FnOnce(&Value) -> Option<Value>) -> Option<Value> {
+        const RETENUS_MAX: usize = 8192;
+        let cle = (backend_id.to_string(), run.to_string());
+        if let Some(r) = self.resumes_des_runs.lock().unwrap_or_else(|p| p.into_inner()).get(&cle) {
+            return r.clone();
+        }
+        let v = self.journal.lire(backend_id, run)?;
+        let r = resumer(&v);
+        let mut m = self.resumes_des_runs.lock().unwrap_or_else(|p| p.into_inner());
+        if m.len() >= RETENUS_MAX {
+            m.clear();
+        }
+        m.insert(cle, r.clone());
+        r
     }
 
     /// **Les fiches écrites pendant une conversation** (forme accordée avec
@@ -762,6 +754,39 @@ fn propositions_du_tour(turns: &[crate::llm::Turn]) -> Vec<Value> {
 #[cfg(all(test, feature = "rag3db-native", feature = "code"))]
 fn chat_file(root: &std::path::Path, backend_id: &str) -> PathBuf {
     root.join(format!("{backend_id}.json"))
+}
+
+/// Les jetons d'un run, par unité du compteur, sommés sur ses `Consumed`.
+fn unites_consommees(v: &Value) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    for e in v["evenements"].as_array().into_iter().flatten().filter(|e| e["kind"] == "Consumed") {
+        for u in e["units"].as_array().into_iter().flatten() {
+            if let (Some(nom), Some(n)) = (u["unit"].as_str(), u["amount"].as_u64()) {
+                let avant = m.get(nom).and_then(Value::as_u64).unwrap_or(0);
+                m.insert(nom.to_string(), json!(avant + n));
+            }
+        }
+    }
+    m
+}
+
+/// Une tâche à rôle, si le `RunStarted` du run en porte un : son état est
+/// « fini », « échec », ou « inconnu » quand aucune fin ne se lit.
+fn tache_a_role(run: &str, v: &Value) -> Option<Value> {
+    let debut = v["evenements"].as_array().and_then(|e| e.iter().find(|e| e["kind"] == "RunStarted")).cloned().unwrap_or(Value::Null);
+    let role = debut["target"]["role"].as_str()?;
+    let fini = v["fin"]["ok"].as_bool().or_else(|| v["evenements"].as_array().and_then(|e| e.iter().rev().find(|e| e["kind"] == "RunFinished")).and_then(|e| e["ok"].as_bool()));
+    // L'heure d'un run : son nom porte l'instant de son départ, en
+    // millisecondes et en hexadécimal (`graph-<ms>-<n>`).
+    let heure = run.split('-').nth(1).and_then(|h| u64::from_str_radix(h, 16).ok());
+    Some(json!({
+        "role": role,
+        "run": run,
+        "tool": debut["target"]["tool"],
+        "reaction": debut["target"]["reaction"],
+        "state": match fini { Some(true) => "fini", Some(false) => "échec", None => "inconnu" },
+        "at_ms": heure,
+    }))
 }
 
 #[cfg(all(test, feature = "rag3db-native", feature = "code"))]

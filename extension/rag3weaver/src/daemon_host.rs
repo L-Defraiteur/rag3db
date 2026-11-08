@@ -171,6 +171,10 @@ pub struct DaemonHost {
     chats: Mutex<std::collections::BTreeMap<String, chat::ChatEntry>>,
     /// Les sessions relues dont le manifeste a disparu : dites, jamais rouvertes.
     orphan_chats: Mutex<Vec<Value>>,
+    /// Le résumé de chaque run déjà lu pour la barre du chat (usage d'un tour,
+    /// tâche à rôle), par (dépôt, run) : le journal ne garde que des runs finis,
+    /// qui ne changent plus ; un rendu ne relit que les runs nouveaux.
+    resumes_des_runs: Mutex<HashMap<(String, String), Option<Value>>>,
     /// La racine des sessions de chat (`RAG3WEAVER_CHATS_DIR`).
     chats_root: PathBuf,
     /// Ce qui donne le modèle d'un backend.
@@ -276,6 +280,7 @@ impl DaemonHost {
             taches_fermees: Mutex::new(Vec::new()),
             chats: Mutex::new(std::collections::BTreeMap::new()),
             orphan_chats: Mutex::new(Vec::new()),
+            resumes_des_runs: Mutex::new(HashMap::new()),
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
