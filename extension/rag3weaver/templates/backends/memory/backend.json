@@ -687,8 +687,7 @@
     "archive_decided": "scripts/archive_decided.rhai",
     "archive_pass": "scripts/archive_pass.rhai",
     "archive_linked": "scripts/archive_linked.rhai",
-    "archive_summary": "scripts/archive_summary.rhai",
-    "archive_reglages": "scripts/archive_reglages.rhai"
+    "archive_summary": "scripts/archive_summary.rhai"
   },
   "tools": {
     "put_memory": {
@@ -921,15 +920,15 @@
       "graph": "graphs/archive.mmd",
       "metadata": [
         {
-          "node": "decide",
-          "port": "report"
-        },
-        {
           "node": "write",
           "port": "report"
         },
         {
           "node": "create",
+          "port": "report"
+        },
+        {
+          "node": "refs",
           "port": "report"
         },
         {
