@@ -225,6 +225,14 @@ impl DaemonHost {
         if !vivants.is_empty() {
             return Some(format!("{} run(s) en fond vivant(s)", vivants.len()));
         }
+        // **Un équipier en route retient l'arrêt** (8 novembre 2026, l'hôte de
+        // Lucie à 4 h 46 : arrêté pour inactivité pendant un pas, le pas perdu,
+        // la tâche reprise sur un 429) : qu'il travaille ou qu'il attende le
+        // superviseur, sa boucle vit dans l'hôte.
+        let equipiers: Vec<String> = self.teammates.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect();
+        if !equipiers.is_empty() {
+            return Some(format!("{} équipier(s) en route ({})", equipiers.len(), equipiers.join(", ")));
+        }
         let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
         for h in hosted {
             // `try_write`, pas `try_read` : un appel tient le slot en lecture

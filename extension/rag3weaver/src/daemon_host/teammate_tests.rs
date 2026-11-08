@@ -936,6 +936,9 @@ fn waiting_for_the_supervisor_suspends_the_teammate_without_failing_the_task() {
     std::thread::sleep(Duration::from_secs(3));
     let boite = files.mailbox();
     assert_eq!(*pas.lock().unwrap(), 1, "aucun appel au modèle pendant l'attente : {boite:#?}");
+    // L'équipier suspendu retient l'arrêt d'inactivité de l'hôte (l'hôte de Lucie, 4 h 46).
+    let retenu = host.travail_en_cours();
+    assert!(retenu.as_deref().is_some_and(|c| c.contains("équipier(s) en route")), "{retenu:?}");
     assert!(!boite.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("pas de suite sans élément réussi")), "attendre n'arrête pas la tâche : {boite:#?}");
     assert!(!boite.iter().any(|l| l["kind"] == "ended"), "{boite:#?}");
     assert_eq!(boite.iter().filter(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().starts_with("en attente du superviseur")).count(), 1, "l'attente se dit une fois : {boite:#?}");
