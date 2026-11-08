@@ -1856,6 +1856,17 @@ impl PreparedBackend {
         &self.surcharges
     }
 
+    /// La racine absolue du workspace, si ce backend en déclare un.
+    pub fn workspace_root(&self) -> Option<PathBuf> {
+        self.manifest.workspace.as_ref().map(|w| {
+            if w.root.is_absolute() {
+                w.root.clone()
+            } else {
+                self.directory.join(&w.root)
+            }
+        })
+    }
+
     /// **Recharger le même manifeste par un lecteur**, avec les mêmes
     /// surcharges : ce que font le rechargement (le disque) et la validation
     /// d'une proposition (un recouvrement).
@@ -3714,6 +3725,16 @@ impl Backend {
             .get(name)
             .ok_or_else(|| format!("unexposed tool {name}"))?;
         let attachment = &prepared.manifest.tools[name];
+        if let Some(racine) = prepared.workspace_root() {
+            if !racine.is_dir() {
+                let touche_racine = attachment.policy.read_files
+                    || attachment.policy.write_files
+                    || attachment.policy.run_commands;
+                if touche_racine {
+                    return Err(format!("la racine du dépôt a disparu ({})", racine.display()));
+                }
+            }
+        }
         let mut args = args
             .as_object()
             .ok_or("arguments must be an object")?
