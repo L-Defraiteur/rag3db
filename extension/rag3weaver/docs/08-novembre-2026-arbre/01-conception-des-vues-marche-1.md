@@ -8,6 +8,15 @@ lecture côté moteur (`docs/07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-
 Cette page est la conception ; **pas de code avant sa relecture par everything declarative et
 recherche**. Lu sur master 4f54e473a.
 
+**L'essentiel, mesuré ce soir.** Sur les 5 776 scopes des fichiers de code que dix branches vivantes
+changent : 5 % sont neufs, 6 % modifiés, **72 % seulement déplacés** (même contenu, d'autres lignes),
+16 % inchangés. Une vue apporte **12 à 151 versions de scope** par branche, là où la réindexation par
+fichier reprend **88 à 1 278 scopes** ; les déplacés ne sont **pas** réembarqués aujourd'hui (le
+témoin `a_scope_that_only_moves_is_not_embedded_again` est vert : le marqueur d'embarquement survit),
+mais ils sont **réécrits** — upsert, redécoupage, insertion des morceaux — et une tâche coûte une copie
+de base et une seconde instance du backend. Lucie (20 h 35) : **une pyramide de couches** — une ancre
+par dépôt, chaque vue posée sur sa parente, un fichier composite par scope (§ 2 bis).
+
 ## Ce que l'index fait aujourd'hui, et ce qu'il coûte
 
 - Un **Scope** a pour identité `{source}#{fichier}#{nom qualifié}:{type}` (`stable_scope_keys`,
@@ -53,14 +62,28 @@ fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui rée
   l'empreinte.
 - **Les relations restent sur les occurrences** dans cette marche (la vision : « un scope inchangé
   peut changer de comportement » — on réutilise son embarquement, jamais ses analyses).
-- **Témoin rouge d'abord** : (a) deux fichiers qui portent la même fonction → **un** appel à
-  l'embarqueur pour elle (un embarqueur compteur) ; (b) une ligne insérée au-dessus d'une fonction
-  inchangée, réindexée → **zéro** appel pour elle. (b) est rouge aujourd'hui (le court-circuit
-  compare les lignes) ; **à vérifier d'abord**, une inférence non jouée : l'upsert remettrait aussi
-  `_embed_hash` à vide avant le saut par marqueur d'`EmbedNode`, et réembarquerait même un scope dont
-  seules les lignes ont bougé.
-- **Mesure** : sur une réindexation de 20 fichiers édités, le nombre d'appels à l'embarqueur avant /
-  après (attendu : de « tous les scopes des fichiers » à « les neufs et modifiés »).
+- **Témoin rouge d'abord** : deux fichiers (ou deux vues) qui portent la même fonction → **un** appel
+  à l'embarqueur pour elle. Rouge aujourd'hui : l'uuid d'un morceau dérive de son Scope, donc du
+  fichier — une fonction identique dans un autre fichier, ou dans la base copiée d'une tâche qui ne
+  l'avait pas, se réembarque.
+- **Une inférence retirée** (la première version de cette page) : l'upsert remettrait `_embed_hash` à
+  vide avant le saut par marqueur et réembarquerait les déplacés. **Fausse** : le témoin
+  `backend::tests::a_scope_that_only_moves_is_not_embedded_again` (branche
+  `arbre-principal/deplace-sans-reembarquer`, 021340283) insère une fonction au-dessus d'une
+  inchangée et réindexe le fichier : l'embarqueur ne reçoit que la neuve. Il reste comme garde-fou.
+  Ce que coûtent les déplacés aujourd'hui, c'est l'écriture (upsert, redécoupage, insertion des
+  morceaux, relations), pas l'embarquement.
+- **La clé stable survit-elle au déplacement d'un bloc ?** (question de c7) Oui pour l'identité : elle
+  ne porte ni les lignes ni le contenu, seulement un rang entre homonymes de même parent et de même
+  type, qui ne bouge que si l'ordre de ces homonymes change. **Mais les relations sont réécrites
+  quand même** : la réindexation d'un fichier oublie toutes les arêtes sortantes de ses scopes
+  (`oublier_les_aretes_du_fichier`) et les recrée, quelle que soit la clé. Les 72 % de déplacés
+  restent donc des réécritures de relations — le chemin où les deux sens se croisent (ticket de
+  l'index complet). Le versionnage doit les éviter : une occurrence dont la version et le contexte de
+  résolution n'ont pas changé garde ses arêtes ; seules ses lignes se mettent à jour.
+- **Mesure** : sur une réindexation de 20 fichiers édités, les écritures (lignes upsertées, morceaux
+  réinsérés, arêtes oubliées et recréées) avant / après ; et les appels à l'embarqueur pour une
+  fonction copiée d'un fichier à un autre.
 
 ## 2. La vue : une table chemin → version, contre la base de la tâche
 
@@ -75,6 +98,31 @@ fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui rée
 - **Résoudre un chemin dans une vue** : l'entrée de la vue si elle existe, sinon celle du principal.
 - **Témoin rouge** : une tâche qui modifie une fonction ; `search_code` dans la vue rend la version
   de la vue, `search_code` sans vue rend celle du principal, et ni l'une ni l'autre ne voit les deux.
+
+## 2 bis. La pyramide de couches (Lucie, 8 novembre, 20 h 35)
+
+Lucie : « pour tous les autres scopes tu vois dessous l'index ancre que tu as choisi, master ou main,
+la référence ; sauf quand tu pars déjà d'une autre branche : là tu vois d'abord la branche parente,
+granulairement sur les scopes ; une pyramide de versioning qui se voit et se navigue, et le fichier
+est composite de ça ».
+
+- **Une ancre par dépôt** (master ou main), indexée en entier une fois : c'est la vue `main`.
+- **Une vue est une couche posée sur une vue parente** — l'ancre, ou la vue de la branche d'où la
+  tâche est née — et ne porte que les versions de scope qu'elle change. Elle porte donc **son
+  parent**, pas seulement sa base git.
+- **Un fichier est composite** : par scope, la version de la couche la plus proche qui en a une ;
+  sinon on descend la pile ; un tombstone d'une couche masque les couches du dessous.
+- **La fusion d'une couche dans sa parente** est une opération de l'index : ses versions descendent
+  d'une couche, ses tombstones s'appliquent, la couche disparaît ; les PR empilées sont le cas
+  normal. **Le compte de références compte les couches** (une version citée par une couche vivante
+  reste).
+- **La mesure** : sur les dix branches vivantes, **2 naissent d'une autre branche que master**
+  (`gabarits-vivants` et `atelier-ui`, sur `atelier-commandes`) ; sur les 743 branches distantes non
+  atterries (beaucoup sont des copies rebasées), 668 sont de profondeur 1, 60 de profondeur 2, 10 de
+  3, 3 de 4, 2 de 5. La pile est courte ; une résolution en quelques sauts suffit.
+- **Témoin rouge** : une tâche née d'une branche qui a modifié `f` et qui modifie `g` du même fichier ;
+  dans sa vue, `f` vient de la parente, `g` d'elle, `h` de l'ancre ; un tombstone de `h` dans la
+  parente la masque aussi dans la tâche.
 
 ## 3. Le paramètre de vue sur les outils, et le filtre sous l'instantané L6
 
@@ -96,8 +144,18 @@ fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui rée
   principal comprises. La mesure M3 de la lecture du 7 novembre (le coût du masque par appel selon la
   taille de la table) **conditionne** la marche 2 : petit devant les 200 à 750 ms d'un search_code,
   rien ne manque ; sinon, un masque gardé par vue et par génération — une question pour le cœur.
+- **La résolution de la pile est transparente par défaut** (Lucie, 20 h 40) : read_file rend le
+  composite comme un fichier ordinaire, search_code et usages filtrés par la vue rendent des résultats
+  sans couche ; un agent n'est pas obligé de les voir. **La provenance par scope est à la demande** :
+  un paramètre optionnel `provenance: true` sur outline, read_file et search_code ajoute à chaque
+  scope sa couche d'origine (« de la vue », « de la branche parente », « de l'ancre ») — « ce bout de
+  fichier vient de quelle branche ? ah, toujours de l'ancêtre » —, ou une question au chat qui la
+  résout par le même chemin. **Coût en jetons nul quand on ne la demande pas.** L'IDE, lui, la montre
+  toujours : c'est là que la pyramide se voit et se navigue (chaque scope dit sa couche, on remonte la
+  pile).
 - **Témoin rouge** : outline et usages avec `view` rendent la version de la vue ; read_file avec
-  `view` lit le worktree.
+  `view` lit le worktree ; sans `provenance`, la réponse est identique à celle d'un fichier ordinaire,
+  octet pour octet ; avec, chaque scope porte sa couche.
 
 ## 4. Le premier index d'un worktree : les seules versions neuves
 
@@ -150,9 +208,10 @@ fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui rée
 
 ## L'ordre des lots
 
-1. Le témoin rouge 1(b) et la vérification du marqueur, puis **la version de scope** (§ 1) sur le
-   principal seul, avec la migration (§ 6) : c'est la marche 1 de la vision.
-2. La mesure M3 (le coût du masque) ; puis **la vue** et le paramètre des outils (§ 2, § 3).
+1. **La version de scope** (§ 1) sur l'ancre seule, avec la migration (§ 6) : c'est la marche 1 de la
+   vision ; le garde-fou du scope déplacé (021340283) y entre.
+2. La mesure M3 (le coût du masque) ; puis **la vue en couches** et le paramètre des outils, la
+   provenance à la demande (§ 2, § 2 bis, § 3).
 3. **La tâche sans copie de base** (§ 4, § 5).
 
 Chacun sur une copie des bases de Lucie avant la sienne, et rien vers master sans la passe complète.
