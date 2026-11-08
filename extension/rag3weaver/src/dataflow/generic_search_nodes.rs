@@ -3333,6 +3333,72 @@ mod tests {
         assert_eq!(dits("c"), vec![("vector".to_string(), 0.5, 2)]);
     }
 
+    /// **Le morceau d'une ligne se choisit par le rang, pas par l'échelle du
+    /// score** (8 novembre 2026, ticket « le score d'une ligne n'est pas
+    /// comparable d'un signal à l'autre ») : `x` est troisième chez bm25 avec
+    /// un morceau à 1,6 (score brut, sans borne) et premier chez vector avec un
+    /// autre morceau à 0,4 (similarité). Le dense pèse plus dans le rang de `x`
+    /// (1/61 contre 1/63) : son morceau est gardé, `chunk.signal` dit l'échelle
+    /// de `chunk.score`, `bestSignal` dit le signal qui a porté la ligne. Et le
+    /// choix du morceau ne promeut rien : l'ordre reste celui des rangs.
+    #[test]
+    fn le_morceau_d_une_ligne_suit_le_rang_pas_l_echelle_du_score() {
+        fn morceau(uuid: &str, score: f64) -> crate::search::ChunkInfo {
+            serde_json::from_value(serde_json::json!({
+                "uuid": uuid, "text": uuid, "index": 0, "score": score,
+                "startLine": 1, "endLine": 1, "startChar": 0, "endChar": 1,
+            }))
+            .unwrap()
+        }
+        let avec = |uuid: &str, score: f64, c: Option<crate::search::ChunkInfo>| {
+            let mut r = make_unified_result(uuid, score);
+            r.chunk = c;
+            r
+        };
+        let mut ctx = NodeContext::new();
+        ctx.set_input(
+            "bm25",
+            PortValue::new(vec![
+                avec("y", 2.4, None),
+                avec("z", 2.0, None),
+                avec("x", 1.6, Some(morceau("x-bm25", 1.6))),
+            ]),
+        );
+        ctx.set_input(
+            "vector",
+            PortValue::new(vec![avec("x", 0.4, Some(morceau("x-vector", 0.4))), avec("y", 0.38, None)]),
+        );
+        FuseResultsNode::new("fuse").execute(&mut ctx).unwrap();
+        let results = results_of(&mut ctx);
+        let ordre: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
+        // Les rangs seuls : y (bm25 1, vector 2) devant x (bm25 3, vector 1),
+        // devant z (bm25 2) — aux poids du moteur.
+        let attendu = {
+            let (base, source) = FuseResultsNode::base_de_fusion(None);
+            let w = |l: &str| FuseResultsNode::new("fuse").signal_config(l, &base, source).weight;
+            let rrf = |rang: f64| 1.0 / (base.rrf_k + rang);
+            let mut v = vec![
+                ("y", w("bm25") * rrf(1.0) + w("vector") * rrf(2.0)),
+                ("x", w("bm25") * rrf(3.0) + w("vector") * rrf(1.0)),
+                ("z", w("bm25") * rrf(2.0)),
+            ];
+            v.sort_by(|a, b| b.1.total_cmp(&a.1));
+            v.into_iter().map(|(u, _)| u).collect::<Vec<_>>()
+        };
+        assert_eq!(ordre, attendu, "le choix du morceau ne change pas l'ordre des rangs");
+        let x = serde_json::to_value(results.iter().find(|r| r.uuid == "x").unwrap()).unwrap();
+        assert_eq!(x["chunk"]["uuid"], "x-vector", "le morceau du signal qui pèse le plus dans le rang : {x}");
+        assert_eq!(x["chunk"]["score"], 0.4);
+        assert_eq!(x["chunk"]["signal"], "vector", "chunk.signal dit l'échelle de chunk.score : {x}");
+        assert_eq!(
+            x["bestSignal"],
+            serde_json::json!({"label": "vector", "score": 0.4, "rank": 1}),
+            "bestSignal : le signal qui a porté la ligne, {x}"
+        );
+        let z = serde_json::to_value(results.iter().find(|r| r.uuid == "z").unwrap()).unwrap();
+        assert_eq!(z["bestSignal"], serde_json::json!({"label": "bm25", "score": 2.0, "rank": 2}));
+    }
+
     /// **Une étiquette dominante passe devant** (25 octobre 2026) : `c` et `d`,
     /// trouvés par la seule requête entière, passent devant `b`, que deux
     /// signaux voient, dans leur rang ; puis l'ordre de la fusion.
