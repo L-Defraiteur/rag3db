@@ -1,9 +1,8 @@
 //! **Un thème** (lot tty-3) : couleurs en hex, et chaque animation en données
 //! (sa forme, sa cadence, ses glyphes, son cœur, ses gabarits). Le premier et
 //! seul thème pour l'instant est « daemon », la page « Daemon Code Summoning »
-//! de Lucie (docs/07-novembre-2026-tty/05 et 06). Le fichier vit dans le crate
-//! (`themes/daemon.json`) jusqu'à l'accord de Lucie pour le thème commun avec
-//! l'IDE (`templates/themes/`).
+//! de Lucie (docs/07-novembre-2026-tty/05 et 06). Le fichier est commun à l'IDE
+//! (`templates/themes/daemon.json`, branché le 8 nov. 2026 sur le mot de Lucie).
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -17,6 +16,11 @@ pub struct Theme {
     #[serde(default)]
     pub replis: BTreeMap<String, String>,
     pub ascii: Ascii,
+    /// La couleur de chaque sorte de span de `POST /highlight` (keyword, type,
+    /// string…), plus `en_ligne` (le code entre accents graves) et `cadre`
+    /// (l'en-tête d'un bloc).
+    #[serde(default)]
+    pub code: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,10 +72,15 @@ pub struct Ascii {
     pub cadre: BTreeMap<String, String>,
 }
 
+/// Le fichier du thème « daemon », embarqué.
+/// C'est le fichier commun à l'IDE (`extension/rag3weaver/templates/themes/`) :
+/// le terminal et la page lisent les mêmes couleurs et les mêmes animations.
+pub const SOURCE: &str = include_str!("../../templates/themes/daemon.json");
+
 impl Theme {
     /// Le thème « daemon », embarqué.
     pub fn daemon() -> Theme {
-        serde_json::from_str(include_str!("../themes/daemon.json")).expect("themes/daemon.json se lit (témoin : theme::tests)")
+        serde_json::from_str(SOURCE).expect("le thème daemon se lit (témoin : theme::tests)")
     }
 }
 
@@ -89,6 +98,17 @@ pub fn rgb(hex: &str) -> Option<(u8, u8, u8)> {
 mod tests {
     use super::*;
 
+    /// **Le thème vient du fichier commun à l'IDE** (`templates/themes/`, Lucie le
+    /// 8 nov. 2026 : brancher sans attendre) : ce qui est embarqué est ce fichier,
+    /// octet pour octet.
+    #[test]
+    fn the_embedded_theme_is_the_shared_templates_file() {
+        let commun = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../templates/themes/daemon.json");
+        let octets = std::fs::read_to_string(&commun).unwrap_or_else(|e| panic!("{} : {e}", commun.display()));
+        assert_eq!(SOURCE, octets, "le thème embarqué est templates/themes/daemon.json");
+        assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/daemon.json").exists(), "plus de copie locale au crate");
+    }
+
     #[test]
     fn the_daemon_theme_reads_and_its_colours_are_hex() {
         let t = Theme::daemon();
@@ -102,5 +122,8 @@ mod tests {
             assert!(!a.glyphes.is_empty() && !a.gabarits.is_empty());
         }
         assert_eq!((t.animations.reflechit.ms, t.animations.lit.ms, t.animations.ecrit.ms), (150, 200, 100), "les cadences de la page d'origine");
+        for sorte in ["keyword", "type", "function", "string", "comment", "number", "constant", "variable", "property", "operator", "punctuation", "attribute", "label", "module", "other", "en_ligne", "cadre"] {
+            assert!(t.code.get(sorte).and_then(|c| rgb(c)).is_some(), "la couleur de code « {sorte} » en hex");
+        }
     }
 }

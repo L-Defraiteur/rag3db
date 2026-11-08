@@ -270,3 +270,87 @@ pose une valeur par le DOM doit la voir partir.
 - `VUES_PORTEES` : toutes les vues de l'ancienne page ; l'édition d'un fichier (vue 3b) suit dans
   son propre lot, et avec elle l'ancienne page n'a plus de vue à elle. Le bundle pèse 388 Kio
   (393 Kio avec l'édition).
+
+## Ce qui est fait (vue 8 : mes recherches, 8 novembre 2026, session recherche)
+
+La décision de Lucie du 11 octobre : « une vue « mes recherches » avec les clics » (« j'aimerais
+éviter qu'on n'ait pas de logs de ce que j'ai cherché »).
+
+- **La source** : le journal des runs, qui garde déjà chaque appel d'outil en entier (`appel
+  {client, humain, outil, arguments, rendu}`). Est une recherche l'appel d'un outil dont le graphe,
+  sous-graphes compris, porte un nœud de `SEARCH_NODES` (`SearchSourceNode`) : `search_code`,
+  `recall_fiches`, `search_structured`…, aucun nom en dur. `humain` marque un appel de l'IDE au
+  nom de la personne. Un appel d'avant ce lot n'a pas `humain`, et le client `ide` en tient lieu.
+- **`GET /ide/recherches?backend=&qui=&limite=&avant=`** : la plus récente d'abord, `qui` ∈ `ide`,
+  `agents`, `tout`. La lecture remonte le journal et s'arrête à `limite` lignes (50, 200 au plus) ;
+  `suite` dit d'où repartir. Une ligne porte le run, `at` (l'âge du fichier, en ms), `client`,
+  `humain`, l'outil, la requête, le dossier, la durée, le nombre de résultats, les dix premiers et
+  ceux cliqués au-delà (`rang`, `uuid`, `chemin`, `ligne`, `nom`, `bestSignal`), et `clics`.
+- **`POST /ide/recherches/clic {backend, run, uuid, rang}`** : la vue recherche l'envoie sur un clic
+  (ou un clic du milieu) sur le chemin ou le nom d'un résultat, en `keepalive` pour ne pas retarder
+  la navigation. L'hôte le range dans le run de la recherche, sous `clics: [{uuid, rang, at}]`
+  (`JournalDesRuns::append_to_list`). Il refuse en le disant un run sans journal, un run qui n'est
+  pas une recherche du backend, ou un résultat que la recherche n'a pas rendu ; la page met le
+  refus dans la console.
+- **Le journal, une écriture à la fois** : l'écriture d'un run et chaque relecture-réécriture
+  (ajout tardif, clic) passent sous un même verrou. Deux clics rapides ne s'effacent pas, et un
+  ajout fait pendant l'écriture du run ne se perd plus (il écrivait ses seuls ajouts, puis se faisait
+  écraser). Une réécriture garde l'âge du fichier : un clic ne fait pas remonter une vieille
+  recherche, ni ne la sauve de la borne d'âge.
+- **La vue** (`Recherches.tsx`, `VUES_PORTEES`, lien « mes recherches » sur l'accueil) : « ma
+  recherche » ou le nom de l'agent, la requête, l'outil, l'heure, les résultats avec « cliqué »,
+  « relancer » pour `search_code`, les filtres « tout », « les miennes », « les agents », puis
+  « plus anciennes ». Repères : `#recherches .recherche[data-client][data-run]`, `.clique`,
+  `#filtre-tout`, `#filtre-ide`, `#filtre-agents`, `#aucune-recherche`, `#plus-anciennes`.
+- **Relue par everything declarative** (le jour même) : un clic droit n'est pas un clic (le clic du
+  milieu seul) ; « dépôt » à l'écran ; la réponse d'un filtre changé entre-temps est ignorée. Puis,
+  en lot à part : une page lit au plus 2 000 runs (`RUNS_READ_PER_PAGE`) et rend `suite` sur le
+  dernier lu même sans recherche trouvée, avec `lus` ; une ligne dit `relancable` (son outil est
+  celui que la vue recherche appelle, `SEARCH_VIEW_TOOL`), et la vue ne nomme plus d'outil ; les
+  outils de recherche se lisent sur le manifeste quand le backend est fermé, sans ouvrir sa base
+  (`mes_recherches_se_lisent_sans_ouvrir_la_base_par_pages_bornees`).
+- **Témoins** : `mes_recherches_rendent_celles_de_l_ide_et_des_agents_avec_les_clics`
+  (`daemon_host/mes_recherches.rs`, navigateur : une recherche de l'IDE et son clic, une recherche
+  d'agent par `/call`, la route, les refus, la vue et son filtre), et
+  `a_list_of_a_run_grows_by_appends_without_losing_any` (le journal : en cours, écrit, vingt
+  ajouts concurrents, l'âge gardé, les refus).
+
+## Ce qui est fait (la barre du chat : l'usage, le récapitulatif, l'archiviste, 8 novembre 2026, session archi)
+
+La liste de Lucie relayée par c7 : l'usage du modèle du tour et de la session, une jauge du
+contexte, les tâches de l'archiviste dites succinctement, sous chaque conversation un récapitulatif
+qui déplie les fiches écrites, le chat sur toute la hauteur. La jauge et la hauteur étaient faites
+(hooks-essai, everything declarative) ; ce lot fait le reste (`b129247a9`, `2daf2e332`).
+
+- **`GET /ide/chat` rend `usage` et `role_runs`**, lus au journal des runs, donc après un
+  redémarrage de l'hôte comme avant. `usage` : `tour` (les unités du compteur du dernier run du
+  chat, `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`), `tour_run`,
+  `session` (leur somme sur les runs `agent-…` dont `chat` est ce dépôt, 200 au plus, `lus_max`),
+  `tours`. `role_runs` : les douze derniers runs `graph-…` dont le `RunStarted` porte un
+  `target.role`, avec `tool` ou `reaction`, `state` (`fini`, `échec`, `inconnu` quand aucune fin ne
+  se lit) et `at_ms` (lu dans le nom du run).
+- **Un run lu une fois** : l'hôte garde le résumé de chaque run lu par (dépôt, run)
+  (`DaemonHost::resumes_des_runs`, vidé au-delà de 8 192). Le journal ne garde que des runs finis,
+  et les ajouts tardifs (clics, épingles, bilans) ne touchent ni les `Consumed` ni le `RunStarted`.
+- **La page** : sous la jauge, `.usage-jetons` (« tour : … entrée · … sortie », « récents (N
+  tours) : … » ; « récents », car une conversation n'a ni début ni remise à zéro enregistrés) ;
+  puis `.recap[data-ouvert]`, un bouton qui déplie les fiches écrites, déplié d'emblée pour la
+  conversation ouverte. Les tâches à rôle lues à l'état se fusionnent à celles du flux dans
+  `#runs-a-role` : un rechargement retrouve l'archiviste. Après un envoi, toute la barre se relit
+  une fois, puis la seule conversation du tour, jusqu'à y voir son run (dix fois, 300 ms) ; si elle
+  abandonne, un `console.warn` nomme le run.
+- **Relu par everything declarative** : le coût des relectures (d'où le résumé retenu et la
+  relecture d'une seule conversation), le récapitulatif courant déplié, « récents » plutôt que
+  « session », l'état inconnu, la boucle qui le dit.
+- **Témoins** : `l_etat_du_chat_rend_l_usage_du_tour_et_de_la_session_et_les_taches_a_role` (par
+  le chemin de l'hôte), `la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste` (navigateur : les
+  jetons de la page égaux à ceux de `/ide/chat`, replier puis déplier, l'archiviste « fini » après un
+  rechargement ; l'hôte du témoin a son journal, `with_runs_root`, celui par défaut est éteint sous
+  les témoins), `une_tache_a_role_sans_fin_lisible_se_dit_inconnue`.
+- **« Dépôts » sur `RepoAttached`** (lot à part, `1005c5544`, une fois l'atelier d'everything declarative
+  sur master) : le flux de la page s'abonne aussi au sujet `repos`, et le cadre relit `/ide/etat` à un
+  `RepoAttached` ; le worktree ouvert devient une session de la barre (`chat_sessions`), sous « Dépôts »
+  comme sous « Sessions », sans recharger la page. Témoin navigateur par le chemin de l'utilisatrice :
+  `un_worktree_attache_parait_sous_depots_sans_recharger_la_page` (« Ouvre le worktree … » dans le chat
+  de l'atelier, `attach_worktree`, `rag3db-essai · essai` sous « Dépôts », `window.__pas_rechargee`
+  gardée).

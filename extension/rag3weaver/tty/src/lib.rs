@@ -18,6 +18,8 @@ pub mod sse;
 #[cfg(feature = "vue")]
 pub mod anim;
 #[cfg(feature = "vue")]
+pub mod code;
+#[cfg(feature = "vue")]
 pub mod theme;
 #[cfg(feature = "vue")]
 pub mod tui;

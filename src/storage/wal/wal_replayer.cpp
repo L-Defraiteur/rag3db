@@ -258,6 +258,16 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             verifyNoCheckpointCrossed();
         }
     };
+    // Les extensions notées à côté de la base se chargent à toute ouverture, journal vide ou non,
+    // après la lecture du point de reprise : une ouverture qui ne les chargeait qu'avant un rejeu
+    // laissait, après une mort juste à la fin d'un point de reprise, un index attendre son
+    // extension selon l'instant de la mort (le cas du banc SingleWriterCrash.
+    // DeathDuringDeletesAndVectorSearchKeepsTheIndexExact). Comme PostgreSQL charge ses
+    // bibliothèques au démarrage, pas au rejeu.
+    const auto loadNotedExtensions = [&]() {
+        extension::ExtensionManager::Get(clientContext)
+            ->loadExtensionsNotedBesideTheDatabase(&clientContext);
+    };
     // First, check if the WAL file exists. If it does not, we can safely remove the shadow file.
     if (!vfs->fileOrPathExists(walPath, &clientContext)) {
         removeFileIfExists(shadowFilePath);
@@ -270,6 +280,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             throw;
         }
         verifyNoCheckpointCrossed();
+        loadNotedExtensions();
         return;
     }
     // If the WAL file exists, we need to replay it.
@@ -294,6 +305,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             throw;
         }
         verifyNoCheckpointCrossed();
+        loadNotedExtensions();
         return;
     }
     // A previous unclean exit may have left non-durable contents in the WAL, so before we start
@@ -328,6 +340,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             writerLock.release();
             // Re-read checkpointed data from disk again as now the shadow file is applied.
             checkpointer.readCheckpoint();
+            loadNotedExtensions();
         } else {
             // There is no checkpoint record, so we should remove the shadow file if it exists.
             removeFileIfExists(shadowFilePath);
@@ -340,8 +353,7 @@ void WALReplayer::replay(bool throwOnWalReplayFailure, bool enableChecksums) con
             // Il y a un journal à rejouer : il lui faut les extensions dont viennent les
             // index des tables où il écrit, et il ne les porte plus si un point de reprise
             // est passé depuis leur chargement.
-            extension::ExtensionManager::Get(clientContext)
-                ->loadExtensionsNotedBesideTheDatabase(&clientContext);
+            loadNotedExtensions();
             runReadOnlyOpenHook(ReadOnlyOpenPhase::DATA_FILE_READ);
             // Resume by replaying the WAL file from the beginning until the last COMMIT record.
             Deserializer deserializer = initDeserializer(*fileInfo, clientContext, enableChecksums);
@@ -458,10 +470,12 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo, bool throw
 void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
     switch (walRecord.type) {
     case WALRecordType::BEGIN_TRANSACTION_RECORD: {
+        replayedRelOffsets.clear();
         TransactionContext::Get(clientContext)->beginRecoveryTransaction();
     } break;
     case WALRecordType::COMMIT_RECORD: {
         TransactionContext::Get(clientContext)->commit();
+        replayedRelOffsets.clear();
     } break;
     case WALRecordType::CREATE_CATALOG_ENTRY_RECORD: {
         replayCreateCatalogEntryRecord(walRecord);
@@ -722,10 +736,36 @@ void WALReplayer::replayRelTableInsertRecord(const WALRecord& walRecord) const {
         *insertionRecord.ownedVectors[LOCAL_NBR_NODE_ID_COLUMN_ID], propertyVectors);
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
+    auto& relIDVector = *insertionRecord.ownedVectors[LOCAL_REL_ID_COLUMN_ID];
     for (auto i = 0u; i < numRels; i++) {
         anchorState->getSelVectorUnsafe()[0] = i;
+        // Le décalage que le journal donne à la relation, avant que l'insertion locale ne le
+        // remplace par le sien.
+        const auto loggedOffset =
+            relIDVector.isNull(i) ? INVALID_OFFSET : relIDVector.getValue<internalID_t>(i).offset;
         table.initInsertState(&clientContext, *insertState);
         table.insert(transaction::Transaction::Get(clientContext), *insertState);
+        if (loggedOffset != INVALID_OFFSET &&
+            loggedOffset < StorageConstants::MAX_NUM_ROWS_IN_TABLE) {
+            replayedRelOffsets[tableID][loggedOffset] =
+                relIDVector.getValue<internalID_t>(i).offset;
+        }
+    }
+}
+
+void WALReplayer::translateReplayedRelID(table_id_t tableID, ValueVector& relIDVector) const {
+    const auto table = replayedRelOffsets.find(tableID);
+    if (table == replayedRelOffsets.end()) {
+        return;
+    }
+    const auto pos = relIDVector.state->getSelVector()[0];
+    if (relIDVector.isNull(pos)) {
+        return;
+    }
+    const auto relID = relIDVector.getValue<internalID_t>(pos);
+    const auto local = table->second.find(relID.offset);
+    if (local != table->second.end()) {
+        relIDVector.setValue<internalID_t>(pos, internalID_t{local->second, relID.tableID});
     }
 }
 
@@ -779,6 +819,7 @@ void WALReplayer::replayRelDeletionRecord(const WALRecord& walRecord) const {
     const auto deleteState =
         std::make_unique<RelTableDeleteState>(*deletionRecord.ownedSrcNodeIDVector,
             *deletionRecord.ownedDstNodeIDVector, *deletionRecord.ownedRelIDVector);
+    translateReplayedRelID(tableID, *deletionRecord.ownedRelIDVector);
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
     table.delete_(transaction::Transaction::Get(clientContext), *deleteState);
@@ -824,6 +865,7 @@ void WALReplayer::replayRelUpdateRecord(const WALRecord& walRecord) const {
         *updateRecord.ownedRelIDVector, *updateRecord.ownedPropertyVector);
     KU_ASSERT(transaction::Transaction::Get(clientContext) &&
               transaction::Transaction::Get(clientContext)->isRecovery());
+    translateReplayedRelID(tableID, *updateRecord.ownedRelIDVector);
     table.update(transaction::Transaction::Get(clientContext), *updateState);
 }
 

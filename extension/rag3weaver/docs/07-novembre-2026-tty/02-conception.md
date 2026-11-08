@@ -209,3 +209,25 @@ Ce n'est pas un rouge. Le temps passe dans l'attente que l'équipier finisse (la
   - La vue n'écoute que les trames du worktree de la tâche (`result.backend`).
   - `--depot` et `--tache` remplacent `--backend` et `--task`, qui restent lus un lot avec un avertissement.
   - L'en-tête « dépôt · branche · tâche » se cale à droite de la ligne d'état quand il tient dans la largeur.
+
+## La coloration du code (8 nov. 2026)
+
+- **D'où viennent les couleurs.** L'hôte colore, avec `POST /highlight` (hooks-essai, `667d5e35a`) et les grammaires tree-sitter de codeparsers. Il rend des spans en octets UTF-8, triés et disjoints, parmi 15 sortes. Le terminal lit ces spans par `client::surligner` et les peint dans la palette `code` du thème « daemon » (`templates/themes/daemon.json`, une couleur hex par sorte, plus `en_ligne` et `cadre`).
+- **Le bloc entier.** Un bloc ` ``` ` se tient entier jusqu'à sa clôture, puis se colore d'un coup. Pendant ce temps, sa ligne en cours reste visible dans la zone vivante, sans couleur. Un bloc que le run laisse ouvert se valide à la fin du run ou à l'appel d'outil suivant. Le code ne se coupe pas à la réception ; il se replie à l'affichage, sans perdre un caractère ni une couleur. L'en-tête du bloc est `── <langue>`, et la clôture `──`.
+- **Les replis.** Une langue inconnue des grammaires, un hôte qui ne répond pas ou un jeton refusé : le bloc s'écrit sans couleur. Le code en ligne (entre accents graves) se teinte dans `en_ligne` sans être coloré, et ses accents graves restent, en sourdine.
+- **La palette « daemon » du code**, à revoir par Lucie en la voyant :
+
+  | Sortes | Couleur |
+  |---|---|
+  | keyword, operator | rouges #ff3333 et #ff5555 |
+  | type, function | braise #ff7a45 et #ffb347 |
+  | string | parchemin #c9a66b |
+  | comment | cendre #6b5a5a |
+  | number, constant, en_ligne | orange #ff9e64 |
+  | variable, property, other | ivoires rosés #e8d5d5, #d9a0a0 et #d8c8c8 |
+  | attribute, label, module | sang séché #b45a5a |
+  | punctuation | gris #8a7a7a |
+
+- **Les témoins.**
+  - Dans le crate : `code::tests`, qui couvre les spans par ligne en octets du bloc entier (un accent compris), le repli sans perte et le code en ligne ; `vue::tests::a_fenced_block_is_held_whole…` ; `client::tests_surligner`.
+  - Par le chemin de l'hôte : `e2e_tty::le_code_d_un_bloc_se_colore_par_les_spans_de_l_hote` (un vrai port et son jeton ; `fn` est un keyword, le commentaire après « é » un comment, la chaîne une string ; une langue inconnue ou un faux jeton ne rendent rien).

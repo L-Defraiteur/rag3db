@@ -7,6 +7,43 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Depuis le chat, l'atelier ouvre un worktree ou une branche.** La conversation de
+  l'atelier (`rag3weaver-backend atelier`) attache un worktree déjà sur le poste par un mot
+  (`attach_worktree`) : il est inscrit, ouvert, son index part en fond, et il paraît sous « Dépôts »
+  sans recharger la page. `open_branch` ouvre une branche dans un worktree frère et l'attache, la
+  commande git lancée dite dans la réponse ; `list_worktrees` dit chemin, dépôt, branche et index.
+  Rien n'est cloné ni poussé. (8258fe56b, `atelier-open-branch-2`)
+- **8 nov. — Un quota ne fait plus tomber le chat : une minute, puis le double.** Le client du
+  modèle suit la règle de Lucie après un refus : une minute, puis le double à chaque refus, au plus
+  dix minutes, cinq reprises au plus. Un 503 attend comme un quota, et le 429 que Vertex rend au
+  milieu du flux se rejoue tant que rien n'a été écrit dans le chat. L'erreur finale dit ses reprises
+  et son temps en minutes. Le chat, le juge des bilans, l'archiviste et l'équipier suivent la même
+  règle ; le client Anthropic garde la sienne. (`llm-reprise-2`)
+- **8 nov. — Ce que j'ai cherché se retrouve, avec ce que j'ai ouvert.** La vue « mes recherches »
+  de l'IDE rend les recherches faites dans un dépôt, les miennes et celles des agents sous leur nom,
+  la plus récente d'abord. Pour chacune, elle montre ses premiers résultats et ceux que j'ai cliqués,
+  avec de quoi la relancer : tout est lu dans le journal des runs, où le clic se range aussi. Au
+  passage, le journal ne perd plus un ajout fait pendant l'écriture d'un run, et un clic ne rajeunit
+  pas un vieux run (`932197e79`).
+- **8 nov. — Le score d'une ligne dit d'où il vient.** Une ligne fusionnée nomme le signal qui l'a
+  placée (`bestSignal`) et l'échelle du score de son morceau (`chunk.signal`). Le morceau montré est
+  celui du signal qui pèse le plus dans son rang, et non plus celui du plus grand score brut : un
+  bm25 à 1,6 au troisième rang ne l'emporte plus sur un dense à 0,4 au premier (`d540813d5`).
+- **8 nov. — Le code du chat a les couleurs du dépôt.** L'hôte colore un bloc par les grammaires
+  tree-sitter qui indexent déjà le code (Rust, C++, TypeScript, Python, et six autres), pour
+  l'IDE et le terminal à la fois. highlight.js ne sert plus que de repli (`POST /highlight`,
+  coloration-b).
+- **8 nov. — Une base dont le journal recopie puis met à jour une relation se rouvre.** Une
+  transaction qui supprime une arête, la recrée par un COPY de relations, puis la met à jour, ne se
+  rejouait plus après une mort : « not found in the forward direction », et la base de code de
+  Lucie ne s'ouvrait plus. Le rejeu retrouve maintenant la relation du COPY par son décalage
+  définitif. Le journal réel de cette base se rejoue, avec 106 612 relations dans chaque sens et
+  aucun écart.
+- **8 nov. — Une base rouverte retrouve toujours son index vectoriel.** Toute ouverture charge les
+  extensions notées à côté de la base, même quand le journal est vide : une mort juste après un
+  point de reprise laissait l'index attendre son extension. Une extension qui ne se charge pas ne
+  passe plus inaperçue : la base s'ouvre, et SHOW_INDEXES le dit dans `extension_error`, avec le
+  chemin et la cause.
 - **8 nov. — Une phrase collée retrouve son fichier, et le surlignage ne demande plus rien à l'hôte.**
   Avec lucivy 4.3.2, une ligne de plus de 100 caractères copiée d'un fichier le ramène premier par
   le signal exact, et une requête entière garde son flou jusqu'à 900 caractères (mesuré : 464 ms à
@@ -24,6 +61,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   plein, les ajoute à la tête née du même COPY par copie-échange (jamais sous les pieds d'un lecteur),
   et écrit son journal par tranches : le COPY passe, forcé comme journalisé, annulé sans laisser une
   page (`dadbf0041`).
+- **8 nov. — Un backend dont la racine a disparu le signale nommément.** Quand le dossier racine d'un
+  workspace n'existe plus sur le disque (worktree supprimé), `daemon_status` porte « racine absente : <chemin> »
+  et chaque outil touchant les fichiers, `index` et `estimate` compris, rend « la racine du dépôt a
+  disparu (<chemin>) : rouvrez le backend sur une racine qui existe » plutôt qu'une erreur brute
+  d'entrée-sortie (`b0a9ab6e5`, `1b9983b59`, `1de9c908c`).
 - **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
   verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
   codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
@@ -66,6 +108,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   lecture seule, une instruction qui échoue (un index absent, un graphe projeté absent) ne fait plus
   refuser les suivantes : les signaux d'une recherche sous instantané ne tombent plus ensemble.
   Une interruption arrête aussi toute la requête, CREATE réécrit compris ; `17a094d12`.
+- **8 nov. — Le code se colore dans le terminal, avec les couleurs de l'IDE.** Un bloc de code
+  de l'agent est colorié par l'hôte (`POST /highlight`, les grammaires tree-sitter de codeparsers)
+  et peint dans la palette du thème « daemon », lu par le terminal (l'IDE ne le lit pas encore)
+  (`templates/themes/daemon.json`). Le bloc se tient entier jusqu'à sa clôture, se replie à la
+  largeur sans perdre un caractère, et reste lisible sans couleur quand la langue est inconnue.
+  f2e6e2521, 3696a71cb.
 - **7 nov. — Le Daemon Code Summoning dans le terminal.** Quand l'agent réfléchit, des runes
   tournent autour de ⛧ (« INVOCATION DU CODE… ») ; quand un outil lit, un symbole alchimique se
   transmute ; quand il écrit ou exécute, le Glitch tire « COMPILING CURSE » et ses frères. C'est
@@ -195,7 +243,7 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   journal et dans l'état. 4d1a4a0ee.
 - **25 oct. — La recherche tient sans ses vecteurs.** Pendant un rattrapage,
   `search_code` répond par les mots et dit pourquoi le dense manque, au lieu de
-  tomber en entier. d6abc051f.
+  tomber en entier. c46561dd0, 1f9c07c7b.
 - **25 oct. — Ce que la mémoire sait d'un fichier.** `cited_by` rend les fiches qui
   citent un chemin, un dossier, un symbole ou un source, avec leurs ancres et les
   apports qui le citent, lues par un Plan déclaré, sans Cypher. 665a4a97c.

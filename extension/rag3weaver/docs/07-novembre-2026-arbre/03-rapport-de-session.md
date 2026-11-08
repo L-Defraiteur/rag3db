@@ -54,3 +54,34 @@ vert, copiée aux deux postes, « fini » donné à G à 19 h 12.
 4. Le prototype vertical de dimanche, avec recherche et everything declarative.
 5. En fin de session : effacer wt-juge, target-plan-local ici ; target-A-plan, wt-lib-arbre,
    wt-mesure-vues et les copies de mesure à luciepc (en le disant, la taille rendue ici).
+
+## La nuit du 7 au 8 novembre
+
+| quoi | où | vérifié par |
+|---|---|---|
+| le juge d'un tour de Claude Code et le graphe cité intact (substitution et garde de bijection) | master 994a58e39..76f19526b | passe complète comptée verte par ses tickets (c7) ; rejeu court vert, la lib sans service 1998 |
+| la lib ordinaire au format 43, **dadbf0041** (le COPY de hotfixs, la projection, le retrait) | magasin des deux postes, « fini » à G pour sa fenêtre de 8 h 30 | verdict vert (e2e_code 27/27, e2e_lectures 23/23, les trois témoins), contrôle des deux sens sans écart sur les quatre bases ; ABI : 1 symbole retiré, les vtables de Table, RelTable, NodeTable |
+| **le figement de la lib entière, trouvé et corrigé** | master d63c16649..d8aeffea7 | la bissection, puis le lot du délai (ci-dessous) |
+
+**Le figement.** La bissection au portable a montré que ce n'était pas un commit : le même code
+figeait à 1 h 30 et passait à 2 h 22 ; la fenêtre de 0 h 45 à 1 h 46 était celle où les services de
+luciepc, derrière les tunnels, étaient en file. Un faux service muet (accepte, ne répond jamais) l'a
+reproduit à la demande ; le même avec un délai client de 2 s ne figeait plus. La pile et le code ont
+nommé le mécanisme : le runtime tokio du crate n'a que deux fils, les réactions s'y exécutent, deux
+réactions qui attendent un service les tiennent, et l'arrêt borné des réactions comptait son délai
+sur ce même runtime ; le relecteur et l'OCR, eux, n'avaient aucun délai. Le lot du délai : un délai
+partout (le relecteur et l'OCR prennent celui de l'embarqueur, l'erreur se nomme), l'arrêt borné qui
+compte hors du runtime, deux témoins rouges d'abord (le second en suite e2e, `e2e_arret_borne`, parce
+qu'il tient le runtime partagé et faisait rougir ses voisins dans la lib), la lib entière sous un
+service muet verte en 28 à 70 s au lieu de figer. La règle « lib entière sans `RAG3WEAVER_EMBED_SERVICE` »
+est levée par la procédure.
+
+**Une conclusion retirée** : « le correctif est entre d845744a2 et c1bdbb183 » était faux (l'heure,
+pas le code) ; dit et corrigé auprès de c7 dès la preuve.
+
+**Restent** : la valeur mesurée du délai (ticket, fenêtre de G), le client sans délai d'un test de
+l'hôte (ticket), la course du témoin de la porte de l'équipier (ticket, pour ED), les mesures M3 à M5
+des vues (les copies d'hier sont effacées : de nouvelles copies des instantanés avant-43). Effacés en
+fin de nuit : wt-delai, wt-bissection, target-plan-local ici ; wt-mesure-vues, wt-bissection, les
+copies de mesure, target-A-plan à luciepc (≈ 10 Go rendus au df) ; wt-lib-arbre gardé pour le
+rebâti de 8 h.

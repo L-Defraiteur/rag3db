@@ -146,6 +146,13 @@ pub const MANIFEST_CHANGED: &str =
 
 /// **L'hôte** : les backends et les sessions d'un démon.
 pub struct DaemonHost {
+    /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
+    /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
+    /// worktrees de l'atelier.
+    soi: std::sync::OnceLock<std::sync::Weak<DaemonHost>>,
+    /// Où l'atelier inscrit les worktrees qu'il attache ; `None` : ceux de
+    /// l'utilisateur (`code_tree::Roots::of_user`).
+    racines_de_code: Option<crate::code_tree::Roots>,
     backends: Mutex<HashMap<PathBuf, Arc<Hosted>>>,
     sessions: Mutex<HashMap<String, Session>>,
     opener: Opener,
@@ -171,6 +178,10 @@ pub struct DaemonHost {
     chats: Mutex<std::collections::BTreeMap<String, chat::ChatEntry>>,
     /// Les sessions relues dont le manifeste a disparu : dites, jamais rouvertes.
     orphan_chats: Mutex<Vec<Value>>,
+    /// Le résumé de chaque run déjà lu pour la barre du chat (usage d'un tour,
+    /// tâche à rôle), par (dépôt, run) : le journal ne garde que des runs finis,
+    /// qui ne changent plus ; un rendu ne relit que les runs nouveaux.
+    resumes_des_runs: Mutex<HashMap<(String, String), Option<Value>>>,
     /// La racine des sessions de chat (`RAG3WEAVER_CHATS_DIR`).
     chats_root: PathBuf,
     /// Ce qui donne le modèle d'un backend.
@@ -211,6 +222,10 @@ mod teammate_tools;
 /// La livraison des lignes de boîte adressées à `codex:<nom>`, par `codex queue`.
 pub mod livraison_codex;
 
+/// L'atelier : l'hôte attache les worktrees (page 03 du 7 novembre 2026, lot 0).
+#[cfg(feature = "code")]
+pub mod worktrees;
+
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -224,6 +239,14 @@ impl DaemonHost {
         let vivants = self.background.alive();
         if !vivants.is_empty() {
             return Some(format!("{} run(s) en fond vivant(s)", vivants.len()));
+        }
+        // **Un équipier en route retient l'arrêt** (8 novembre 2026, l'hôte de
+        // Lucie à 4 h 46 : arrêté pour inactivité pendant un pas, le pas perdu,
+        // la tâche reprise sur un 429) : qu'il travaille ou qu'il attende le
+        // superviseur, sa boucle vit dans l'hôte.
+        let equipiers: Vec<String> = self.teammates.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect();
+        if !equipiers.is_empty() {
+            return Some(format!("{} équipier(s) en route ({})", equipiers.len(), equipiers.join(", ")));
         }
         let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
         for h in hosted {
@@ -256,6 +279,8 @@ impl DaemonHost {
     /// crochet de point de reprise échoué).
     pub fn with_opener(opener: Opener) -> Self {
         Self {
+            soi: std::sync::OnceLock::new(),
+            racines_de_code: None,
             backends: Mutex::new(HashMap::new()),
             sessions: Mutex::new(HashMap::new()),
             opener,
@@ -268,6 +293,7 @@ impl DaemonHost {
             taches_fermees: Mutex::new(Vec::new()),
             chats: Mutex::new(std::collections::BTreeMap::new()),
             orphan_chats: Mutex::new(Vec::new()),
+            resumes_des_runs: Mutex::new(HashMap::new()),
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
@@ -275,6 +301,27 @@ impl DaemonHost {
             bilans: juge::FileDesBilans::default(),
             juge_model: chat::default_chat_model(),
             teammates: Mutex::new(std::collections::HashSet::new()),
+        }
+    }
+
+    /// **L'hôte se connaît** : les backends qu'il ouvre ensuite reçoivent l'hôte des
+    /// worktrees de l'atelier (`attach_worktree`, `list_worktrees`). Le service le pose
+    /// au démarrage ; un témoin l'appelle sur son `Arc`.
+    pub fn se_connaitre(self: &Arc<Self>) {
+        let _ = self.soi.set(Arc::downgrade(self));
+    }
+
+    /// Où l'atelier inscrit ses worktrees (les témoins : sous un dossier temporaire).
+    pub fn with_racines_de_code(mut self, racines: crate::code_tree::Roots) -> Self {
+        self.racines_de_code = Some(racines);
+        self
+    }
+
+    /// Les racines de l'atelier : celles posées, sinon celles de l'utilisateur.
+    pub fn racines_de_code(&self) -> Result<crate::code_tree::Roots, String> {
+        match &self.racines_de_code {
+            Some(r) => Ok(r.clone()),
+            None => crate::code_tree::Roots::of_user(),
         }
     }
 
@@ -495,6 +542,13 @@ impl DaemonHost {
             }
             *hosted.refused.lock().unwrap_or_else(|p| p.into_inner()) = None;
             *slot = Some((self.opener)(prepared)?);
+            // L'hôte des worktrees de l'atelier, s'il se connaît.
+            #[cfg(feature = "code")]
+            if let Some(soi) = self.soi.get() {
+                if let Some(b) = slot.as_ref() {
+                    b.poser_l_hote_des_worktrees(Arc::new(worktrees::HoteDesWorktrees { hote: soi.clone() }));
+                }
+            }
             // Son bus, relayé au flux de l'IDE ; un backend rouvert a un bus
             // neuf, relayé à son tour, et l'ancien relais finit avec l'ancien bus.
             let bus = slot.as_ref().expect("ouvert juste au-dessus").catalog.lock().unwrap_or_else(|p| p.into_inner()).event_bus();
@@ -555,15 +609,31 @@ impl DaemonHost {
     /// de `/etat`) : ouvert au besoin, prêté le temps de `f`. L'IDE nomme ses
     /// backends ainsi dans ses URL.
     pub fn with_backend_id<T>(&self, id: &str, f: impl FnOnce(&Backend) -> T) -> Result<T, String> {
-        let hosted = self
-            .backends
+        let hosted = self.hosted_by_id(id)?;
+        self.with_backend(&hosted, f)
+    }
+
+    /// Le backend hébergé de cet id, sans l'ouvrir.
+    fn hosted_by_id(&self, id: &str) -> Result<Arc<Hosted>, String> {
+        self.backends
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .values()
             .find(|h| h.id == id)
             .cloned()
-            .ok_or_else(|| format!("l'hôte ne connaît pas le backend {id}"))?;
-        self.with_backend(&hosted, f)
+            .ok_or_else(|| format!("l'hôte ne connaît pas le backend {id}"))
+    }
+
+    /// **Les outils de recherche d'un backend, sans ouvrir sa base** (relecture
+    /// d'everything declarative, 8 novembre 2026) : lus sur le backend s'il est
+    /// ouvert, sinon sur son manifeste préparé — une vue de lecture (« mes
+    /// recherches ») n'ouvre pas une base pour savoir quels outils cherchent.
+    fn search_tools_of(&self, id: &str) -> Result<Vec<String>, String> {
+        let hosted = self.hosted_by_id(id)?;
+        if let Some(b) = hosted.backend.read().unwrap_or_else(|p| p.into_inner()).as_ref() {
+            return Ok(b.prepared().search_tools().to_vec());
+        }
+        PreparedBackend::load(&hosted.manifest).map(|p| p.search_tools().to_vec())
     }
 
     fn hosted_existing(&self, manifest: &Path) -> Option<Arc<Hosted>> {
@@ -686,7 +756,7 @@ impl DaemonHost {
                 (None, true) => b.call_humain(name, arguments),
             })
             .and_then(|r| r)
-            .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, name, &appel, r))
+            .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, humain, name, &appel, r))
         });
         op_response(result)
     }
@@ -699,10 +769,11 @@ impl DaemonHost {
     /// octobre 2026 : deux recherches journalisées à 4 et 12 rendus sur 30 par
     /// une borne de 64 Kio qui vivait ici). C'est ce que le juge regarde quand
     /// l'agent n'est pas notre chat.
-    fn journaliser_l_appel(&self, backend: &str, client: &str, outil: &str, arguments: &Value, reponse: &Value) {
+    /// `humain` : l'appel vient de l'IDE, au nom de la personne (« ma recherche »).
+    fn journaliser_l_appel(&self, backend: &str, client: &str, humain: bool, outil: &str, arguments: &Value, reponse: &Value) {
         let Some(run) = reponse["run"].as_str() else { return };
         let mut ajouts = serde_json::Map::new();
-        ajouts.insert("appel".into(), json!({ "client": client, "outil": outil, "arguments": arguments, "rendu": reponse["result"].clone() }));
+        ajouts.insert("appel".into(), json!({ "client": client, "humain": humain, "outil": outil, "arguments": arguments, "rendu": reponse["result"].clone() }));
         self.journal.ajouter(backend, run, ajouts);
         if journal_des_runs::declare_un_outil(outil, arguments) && reponse["ok"] != false {
             self.journal.epingler(backend, run, &format!("déclaration d'un outil ({outil}, par {client})"));
@@ -738,6 +809,115 @@ impl DaemonHost {
             self.demander_un_bilan(h, &run);
         }
         Ok(json!({ "ok": true, "backend": backend, "run": run, "genre": genre, "fichier": fichier, "juge": hosted.is_some() }))
+    }
+
+    /// **Les recherches d'un backend** (vue « mes recherches », 8 novembre 2026,
+    /// décision de Lucie du 11 octobre) : les appels journalisés de ses outils de
+    /// recherche (`SEARCH_NODES`), de l'IDE comme des agents, du plus récent au
+    /// plus ancien. `qui` : `ide`, `agents`, ou tout (vide ou `tout`). La lecture
+    /// remonte le journal et s'arrête à `limite` lignes : 90 jours de runs ne se
+    /// lisent pas en entier ; `suite` est le run d'où repartir (`avant`). Chaque
+    /// ligne : le run, son âge (`at`, en ms), qui (`client`, `humain`), l'outil,
+    /// la requête et le dossier, la durée, le nombre de résultats, les dix
+    /// premiers et ceux qu'on a cliqués (`chemin`, `ligne`, `nom`, `bestSignal`),
+    /// et les clics. Les recherches finies seulement : un run en vol n'a pas
+    /// encore de journal.
+    pub fn recent_searches(&self, backend_id: &str, qui: &str, limite: usize, avant: Option<&str>) -> Result<Value, String> {
+        let outils = self.search_tools_of(backend_id)?;
+        let qui = match qui {
+            "" | "tout" => None,
+            "ide" => Some(true),
+            "agents" => Some(false),
+            autre => return Err(format!("« qui » : ide, agents ou tout, pas « {autre} »")),
+        };
+        let limite = limite.clamp(1, 200);
+        let mut runs = self.journal.runs_de(backend_id);
+        runs.reverse();
+        let depart = match avant {
+            Some(a) => runs.iter().position(|r| r == a).map(|p| p + 1).ok_or_else(|| format!("le run {a} n'est pas dans le journal de {backend_id}"))?,
+            None => 0,
+        };
+        let mut lignes: Vec<Value> = Vec::new();
+        let mut suite = None;
+        // Le dernier run lu : `suite` y repart, que la page soit pleine ou que
+        // la borne des runs lus soit atteinte avant (des recherches rares parmi
+        // beaucoup de runs ne décompressent pas tout le journal d'un coup).
+        let mut dernier_lu: Option<&String> = None;
+        let mut lus = 0;
+        for run in &runs[depart..] {
+            if lus == RUNS_READ_PER_PAGE {
+                suite = dernier_lu.map(|r| json!(r));
+                break;
+            }
+            lus += 1;
+            let lu = std::mem::replace(&mut dernier_lu, Some(run));
+            let Some(v) = self.journal.lire(backend_id, run) else { continue };
+            let appel = &v["appel"];
+            let Some(outil) = appel["outil"].as_str() else { continue };
+            if !outils.iter().any(|t| t == outil) {
+                continue;
+            }
+            let client = appel["client"].as_str().unwrap_or_default();
+            let humain = appel["humain"].as_bool().unwrap_or(client == "ide");
+            if qui.is_some_and(|h| h != humain) {
+                continue;
+            }
+            if lignes.len() == limite {
+                // Ce run sera le premier de la page suivante.
+                suite = lu.map(|r| json!(r));
+                break;
+            }
+            let rendu = lignes_du_rendu(&appel["rendu"]);
+            let clics = v["clics"].as_array().cloned().unwrap_or_default();
+            let clique = |r: &Value| clics.iter().any(|c| c["uuid"] == r["uuid"]);
+            let resultats: Vec<Value> = rendu
+                .iter()
+                .enumerate()
+                .filter(|(k, r)| *k < 10 || clique(*r))
+                .map(|(k, r)| json!({ "rang": k + 1, "uuid": r["uuid"], "chemin": r["data"]["file_path"], "ligne": r["data"]["start_line"], "nom": r["data"]["name"], "bestSignal": r["bestSignal"] }))
+                .collect();
+            let at = self
+                .journal
+                .fichier(backend_id, run)
+                .and_then(|f| std::fs::metadata(f).ok())
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64);
+            lignes.push(json!({
+                "run": run, "at": at, "client": client, "humain": humain, "outil": outil,
+                "query": appel["arguments"]["query"], "scope": appel["arguments"]["scope"],
+                "ms": v["fin"]["ms"], "ok": v["fin"]["ok"], "nombre": rendu.len(),
+                "resultats": resultats, "clics": clics,
+                // La vue recherche sait-elle la rejouer ? Elle appelle un seul outil.
+                "relancable": outil == crate::ide::SEARCH_VIEW_TOOL && appel["arguments"]["query"].is_string(),
+            }));
+        }
+        Ok(json!({ "recherches": lignes, "suite": suite, "lus": lus }))
+    }
+
+    /// **Un clic sur un résultat d'une recherche** (vue « mes recherches ») : rangé
+    /// dans le journal du run de la recherche, sous `clics: [{uuid, rang, at}]`.
+    /// Refusé en disant pourquoi, jamais avalé : un run sans journal, un run qui
+    /// n'est pas une recherche du backend, un résultat qu'elle n'a pas rendu.
+    pub fn record_click(&self, backend_id: &str, run: &str, uuid: &str, rang: Option<u64>) -> Result<Value, String> {
+        let outils = self.search_tools_of(backend_id)?;
+        if uuid.is_empty() {
+            return Err("« uuid » manque : le résultat cliqué".into());
+        }
+        let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or_default();
+        let element = json!({ "uuid": uuid, "rang": rang, "at": at });
+        let n = self.journal.append_to_list(backend_id, run, "clics", element, |o| {
+            let appel = o.get("appel").ok_or_else(|| format!("le run {run} n'est pas une recherche : aucun appel d'outil n'y est journalisé"))?;
+            let outil = appel["outil"].as_str().unwrap_or_default();
+            if !outils.iter().any(|t| t == outil) {
+                return Err(format!("le run {run} n'est pas une recherche : « {outil} » n'est pas un outil de recherche de {backend_id}"));
+            }
+            if !lignes_du_rendu(&appel["rendu"]).iter().any(|r| r["uuid"] == uuid) {
+                return Err(format!("le résultat {uuid} n'est pas dans ce que la recherche {run} a rendu"));
+            }
+            Ok(())
+        })?;
+        Ok(json!({ "run": run, "clics": n }))
     }
 
     /// **Épingle un run** d'un backend hébergé (page 06) : son journal ne tombera
@@ -817,7 +997,23 @@ impl DaemonHost {
                     .and_then(|s| s.as_ref().map(|b| b.prepared().manifest.kind))
                     .unwrap_or_else(|| kind_du_manifeste(&h.manifest));
                 let repli = if espace.is_some() || repo.is_some() { "code" } else { "project" };
-                json!({
+                // La racine que sert le backend ouvert (surcharge comprise), sinon celle
+                // du fichier. Le slot tenu en écriture (une ouverture ou une fermeture en
+                // cours) retombe aussi sur le fichier, comme un backend fermé : pendant cet
+                // instant, une surcharge de racine (une vue sur un worktree) n'est pas vue,
+                // d'où un faux « racine absente » possible si le fichier nomme un dossier
+                // effacé ; jamais un faux silence en régime établi.
+                let racine_espace = h
+                    .backend
+                    .try_read()
+                    .ok()
+                    .and_then(|s| s.as_ref().and_then(|b| b.prepared().workspace_root()))
+                    .or_else(|| espace.clone());
+                let racine_absente = racine_espace
+                    .as_ref()
+                    .filter(|r| !r.is_dir())
+                    .map(|r| format!("racine absente : {}", r.display()));
+                let mut b_json = json!({
                     "id": h.id,
                     "manifest": h.manifest,
                     "open": ouvert,
@@ -840,7 +1036,11 @@ impl DaemonHost {
                     // D'où vient `kind` : le manifeste (son gabarit) ou le repli de
                     // l'hôte, que la page dit (« nature inconnue »).
                     "kind_source": if declare.is_some() { "manifest" } else { "fallback" },
-                })
+                });
+                if let Some(absente) = racine_absente {
+                    b_json["racine_absente"] = json!(absente);
+                }
+                b_json
             })
             .collect();
         let sessions: Vec<Session> = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
@@ -1112,6 +1312,12 @@ impl DaemonHost {
                 }
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
+            // **La coloration par les grammaires** (coloration B, page 12 de
+            // codeparsers) : l'écran colore, pas l'agent ; aucun backend n'est ouvert.
+            ("POST", "/highlight") => match corps() {
+                Ok(v) => (200, highlight(&v)),
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
             ("DELETE", "/session") => (200, json!({ "closed": session.is_some_and(|s| self.close_session(s)) })),
             // **Un run venu de dehors** (lot 3 des hooks de Claude Code) : un tour
             // d'un agent qui n'est pas le nôtre, journalisé pour que le juge le
@@ -1324,6 +1530,7 @@ impl DaemonServer {
         use std::sync::atomic::Ordering;
         let stopper = self.stopper();
         // Les bilans de session des backends qui les déclarent (page 04).
+        host.se_connaitre();
         host.servir_les_bilans();
         // Les équipiers que l'arrêt de l'hôte a interrompus reprennent (page
         // 07-novembre-2026-everything-declarative/01, § 1).
@@ -1468,6 +1675,22 @@ fn json_response(status: u16, value: &Value) -> tiny_http::Response<std::io::Cur
         .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).expect("en-tête littéral"))
 }
 
+/// **Les runs lus au plus par une page de « mes recherches »** : au-delà, la page
+/// rend ce qu'elle a et `suite` sur le dernier lu (relecture d'everything
+/// declarative, 8 novembre 2026).
+const RUNS_READ_PER_PAGE: usize = 2000;
+
+/// Les lignes du rendu d'une recherche journalisé : la liste elle-même, ou sous
+/// `result` / `results` (l'enveloppe d'une lecture du catalogue, `{status,
+/// result}`).
+fn lignes_du_rendu(rendu: &Value) -> &[Value] {
+    match rendu {
+        Value::Array(a) => a,
+        Value::Object(o) => o.get("result").or_else(|| o.get("results")).and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[]),
+        _ => &[],
+    }
+}
+
 /// Le témoin de la page rendue dans un vrai navigateur.
 #[cfg(all(test, unix))]
 mod navigateur;
@@ -1477,6 +1700,9 @@ mod navigateur;
 mod apercu_a_chaud;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sur_un_depot;
+/// Mes recherches, avec les clics (8 novembre 2026).
+#[cfg(all(test, unix, feature = "code"))]
+mod mes_recherches;
 /// L'équipier sur faux modèle (page 07 du 25 octobre 2026).
 #[cfg(all(test, unix, feature = "code"))]
 mod teammate_tests;
@@ -1484,15 +1710,50 @@ mod teammate_tests;
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_qui_code;
 
-/// **Le nom d'une session dans la barre**, la règle que la page suivait
-/// (`displayName`) : son dépôt ; une mémoire, « la mémoire » ; sinon le dossier
-/// de son manifeste ; l'id en dernier recours.
-fn session_name(b: &Value) -> Value {
-    if !b["repo"].is_null() {
-        return b["repo"].clone();
+/// **Colorer un texte par les grammaires** (`POST /highlight {text, language}`) :
+/// les spans de `codeparsers::syntax_highlighting::highlight`, chacun aux deux
+/// décalages, `[debut, fin, sorte, debut_utf16, fin_utf16]` — les octets UTF-8
+/// pour le terminal, les unités UTF-16 pour la page, comme les surlignages de la
+/// recherche. Une langue que les grammaires ne connaissent pas rend `spans: null`
+/// et `language: null` : la page garde son repli.
+#[cfg(feature = "code")]
+fn highlight(v: &Value) -> Value {
+    use codeparsers::syntax_highlighting as sh;
+    let texte = v["text"].as_str().unwrap_or_default();
+    let demandee = v["language"].as_str().unwrap_or_default();
+    let sortes: Vec<&str> = sh::Sorte::TOUTES.iter().map(|s| s.nom()).collect();
+    let Some(spans) = sh::highlight(texte, demandee) else {
+        return json!({ "ok": true, "language": null, "spans": null, "kinds": sortes, "why": format!("langue non colorée par les grammaires : « {demandee} »") });
+    };
+    // L'unité UTF-16 de chaque frontière d'octet (un span commence et finit sur une
+    // frontière de caractère).
+    let mut utf16 = vec![0usize; texte.len() + 1];
+    let mut u = 0;
+    for (i, c) in texte.char_indices() {
+        utf16[i] = u;
+        u += c.len_utf16();
     }
+    utf16[texte.len()] = u;
+    let rendus: Vec<Value> = spans.iter().map(|s| json!([s.debut, s.fin, s.sorte.nom(), utf16[s.debut], utf16[s.fin]])).collect();
+    json!({ "ok": true, "language": sh::nom_de_langue(demandee), "spans": rendus, "kinds": sortes })
+}
+
+/// Sans la feature `code`, l'hôte n'a pas de grammaires : la page garde son repli.
+#[cfg(not(feature = "code"))]
+fn highlight(_v: &Value) -> Value {
+    json!({ "ok": true, "language": null, "spans": null, "why": "hôte bâti sans la feature code : pas de grammaires" })
+}
+
+/// **Le nom d'une session dans la barre**, la règle que la page suivait
+/// (`displayName`) : une mémoire, « la mémoire » (d'abord : son `repo` retombe
+/// sur le dossier de son manifeste) ; son dépôt ; sinon le dossier de son
+/// manifeste ; l'id en dernier recours.
+fn session_name(b: &Value) -> Value {
     if b["kind"] == "memory" {
         return json!("la mémoire");
+    }
+    if !b["repo"].is_null() {
+        return b["repo"].clone();
     }
     let dossier = b["manifest"].as_str().and_then(|m| Path::new(m).parent()?.file_name().map(|n| n.to_string_lossy().into_owned()));
     dossier.map(Value::String).unwrap_or_else(|| b["id"].clone())
@@ -1595,6 +1856,9 @@ mod tests {
         let b = |repo: Value, kind: &str| json!({ "id": "c6dd17bae70f", "repo": repo, "kind": kind, "manifest": "/home/x/.config/rag3weaver/memoire-longue/backend.json" });
         assert_eq!(session_name(&b(json!("rag3db"), "code")), json!("rag3db"));
         assert_eq!(session_name(&b(Value::Null, "memory")), json!("la mémoire"));
+        // G, pose de 8 h 31 : le `repo` d'une mémoire retombe sur le dossier de son
+        // manifeste (« memory ») ; la nature passe avant.
+        assert_eq!(session_name(&b(json!("memory"), "memory")), json!("la mémoire"));
         assert_eq!(session_name(&b(Value::Null, "project")), json!("memoire-longue"));
     }
 
@@ -1603,6 +1867,36 @@ mod tests {
     /// hôte sur le registre global voyait les runs vivants des autres (l'hôte
     /// inactif s'y croyait retenu, faf94cdfc) — et son arrêt les aurait
     /// annulés (`cancel_all`).
+    /// **L'hôte colore par les grammaires** (coloration B, page 12 de codeparsers) :
+    /// `POST /highlight {text, language}` rend les spans de
+    /// `syntax_highlighting::highlight`, chacun aux deux décalages,
+    /// `[debut, fin, sorte, debut_utf16, fin_utf16]` (octets pour le terminal, unités
+    /// UTF-16 pour la page), et la liste fermée des sortes. Un texte qui porte un
+    /// caractère hors ASCII avant le code sépare les deux décalages. Un alias de fence
+    /// (`rs`) se ramène à sa langue ; une langue inconnue rend `spans: null` (le
+    /// repli de la page), sans erreur. Aucun backend n'est ouvert.
+    #[cfg(feature = "code")]
+    #[test]
+    fn l_hote_colore_par_les_grammaires_aux_deux_decalages() {
+        let host = hote_isole();
+        let texte = "// é\nfn main() { let s = \"x\"; }\n";
+        let (statut, v) = host.handle("POST", "/highlight", None, json!({ "text": texte, "language": "rs" }).to_string().as_bytes());
+        assert_eq!(statut, 200, "{v}");
+        assert_eq!(v["language"], "rust", "{v}");
+        let spans = v["spans"].as_array().unwrap_or_else(|| panic!("des spans : {v}"));
+        let fn_ = texte.find("fn").unwrap();
+        let kw = spans.iter().find(|s| s[0] == json!(fn_)).unwrap_or_else(|| panic!("le mot-clé fn à l'octet {fn_} : {v}"));
+        assert_eq!(kw[2], "keyword", "{kw}");
+        // « é » fait deux octets et une unité UTF-16 : le décalage UTF-16 a un de moins.
+        assert_eq!((kw[1].as_u64(), kw[3].as_u64(), kw[4].as_u64()), (Some(fn_ as u64 + 2), Some(fn_ as u64 - 1), Some(fn_ as u64 + 1)), "{kw}");
+        assert!(spans.iter().any(|s| s[2] == "comment"), "le commentaire : {v}");
+        assert!(spans.iter().any(|s| s[2] == "string"), "la chaîne : {v}");
+        assert!(v["kinds"].as_array().is_some_and(|k| k.len() == 15 && k.contains(&json!("other"))), "{v}");
+        let (statut, inconnue) = host.handle("POST", "/highlight", None, json!({ "text": "x", "language": "brainfuck" }).to_string().as_bytes());
+        assert_eq!((statut, &inconnue["spans"], &inconnue["language"]), (200, &Value::Null, &Value::Null), "{inconnue}");
+        assert!(host.state()["backends"].as_array().is_none_or(|b| b.is_empty()), "aucun backend n'a été ouvert");
+    }
+
     fn hote_isole() -> DaemonHost {
         DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()))
     }
@@ -1974,5 +2268,125 @@ mod tests {
         assert!(erreurs.is_empty(), "{erreurs:?}");
         assert!(!vivant.load(Ordering::SeqCst), "l'arrêt de l'hôte annule le run");
         assert!(hote.state()["background"].as_array().is_some_and(|a| a.is_empty()), "plus rien en fond");
+    }
+
+    /// **Mes recherches se lisent sans ouvrir la base, par pages bornées** (relecture
+    /// d'everything declarative, 8 novembre 2026) : un backend fermé reste fermé
+    /// quand on lit ses recherches ou qu'on range un clic (ses outils de recherche
+    /// se lisent sur son manifeste) ; une page lit au plus 2 000
+    /// runs, et rend `suite` sur le dernier lu même sans recherche trouvée ; une
+    /// ligne dit si la vue recherche sait la relancer (`relancable`), sans que la
+    /// vue nomme l'outil.
+    #[test]
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn mes_recherches_se_lisent_sans_ouvrir_la_base_par_pages_bornees() {
+        let d = tempfile::tempdir().unwrap();
+        let (base, sources) = (d.path().join("base"), d.path().join("sources"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&sources).unwrap();
+        std::fs::write(sources.join("lib.rs"), "pub fn coucou() {}\n").unwrap();
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        let manifest_path = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(sources.to_string_lossy());
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+
+        let hote = hote_isole().with_runs_root(d.path().join("runs"));
+        let s = hote.open_session("temoin-pages", None, vec![], None);
+        assert_eq!(hote.open(Some(&s), &manifest_path)["ok"], json!(true));
+        assert_eq!(hote.close(Some(&s), &manifest_path)["ok"], json!(true));
+        let etat_du = |hote: &DaemonHost| hote.state()["backends"].as_array().unwrap().iter().find(|b| b["manifest"] == manifest_path.canonicalize().unwrap().to_string_lossy().as_ref()).cloned().unwrap();
+        let avant = etat_du(&hote);
+        let id = avant["id"].as_str().unwrap().to_string();
+        assert_eq!(avant["open"], json!(false), "{avant}");
+
+        // Une recherche, la plus ancienne ; puis 2 005 runs qui n'en sont pas.
+        let journal = hote.journal_des_runs().clone();
+        let t0 = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+        let deposer = |run: &str, outil: &str, age: std::time::SystemTime| {
+            let p = journal
+                .deposer(&id, run, json!({ "genre": "temoin", "appel": { "client": "ide", "humain": true, "outil": outil, "arguments": { "query": "coucou", "options": {} }, "rendu": [{ "uuid": "u1", "data": { "file_path": "lib.rs", "start_line": 1 } }] } }))
+                .unwrap();
+            std::fs::File::options().write(true).open(&p).unwrap().set_modified(age).unwrap();
+        };
+        deposer("la-recherche", "search_code", t0);
+        for i in 0..2005u64 {
+            deposer(&format!("autre-{i:04}"), "list_files", t0 + std::time::Duration::from_millis(1000 + i));
+        }
+
+        let page = hote.recent_searches(&id, "", 50, None).unwrap();
+        assert_eq!(page["recherches"], json!([]), "aucune recherche dans les runs lus : {}", page["recherches"]);
+        let suite = page["suite"].as_str().unwrap_or_else(|| panic!("la page bornée rend sa suite : {page}")).to_string();
+        assert_eq!(page["lus"], json!(2000), "une page lit 2 000 runs au plus : {page}");
+        let suivante = hote.recent_searches(&id, "", 50, Some(&suite)).unwrap();
+        let l = suivante["recherches"].as_array().unwrap();
+        assert_eq!(l.len(), 1, "{suivante}");
+        assert_eq!((&l[0]["run"], &l[0]["relancable"]), (&json!("la-recherche"), &json!(true)), "{suivante}");
+        assert!(suivante["suite"].is_null(), "plus rien après : {suivante}");
+
+        assert_eq!(hote.record_click(&id, "la-recherche", "u1", Some(1)).unwrap()["clics"], json!(1));
+        let apres = etat_du(&hote);
+        assert_eq!((&apres["open"], &apres["opened"]), (&json!(false), &avant["opened"]), "lire ses recherches n'ouvre pas la base : {apres}");
+    }
+
+    /// **Un backend de code dont la racine a disparu** (ticket du 11 octobre 2026) :
+    /// `daemon_status` le dit « racine absente : <chemin> », et chaque outil qui touche
+    /// la racine rend l'erreur nommée « la racine du dépôt a disparu (<chemin>) : rouvrez le
+    /// backend sur une racine qui existe ».
+    #[test]
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn un_backend_de_code_dont_la_racine_a_disparu_est_signale_dans_daemon_status_et_ses_outils() {
+        let d = tempfile::tempdir().unwrap();
+        let (base, sources) = (d.path().join("base"), d.path().join("sources"));
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&sources).unwrap();
+        std::fs::write(sources.join("lib.rs"), "pub fn coucou() {}\n").unwrap();
+
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        let manifest_path = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(sources.to_string_lossy());
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+
+        let hote = hote_isole();
+        let s = hote.open_session("temoin-racine", None, vec![], None);
+        let r = hote.open(Some(&s), &manifest_path);
+        assert_eq!(r["ok"], json!(true), "le backend s'ouvre : {r}");
+
+        // Quand la racine est là, list_files fonctionne.
+        let r = hote.call(Some(&s), &manifest_path, "list_files", json!({}));
+        assert_eq!(r["ok"], json!(true), "list_files fonctionne avec racine : {r}");
+
+        // La racine disparaît du disque.
+        std::fs::remove_dir_all(&sources).unwrap();
+
+        // 1. daemon_status porte « racine absente : <chemin> »
+        let etat = hote.state();
+        let etat_str = serde_json::to_string(&etat).unwrap();
+        assert!(
+            etat_str.contains(&format!("racine absente : {}", sources.display())),
+            "daemon_status doit porter « racine absente : {} » : {etat}",
+            sources.display()
+        );
+
+        // 2. chaque outil qui touche la racine rend « la racine du dépôt a disparu (<chemin>) : … »
+        let r = hote.call(Some(&s), &manifest_path, "list_files", json!({}));
+        assert_eq!(r["ok"], json!(false), "l'outil doit échouer quand la racine a disparu : {r}");
+        let err = r["error"].as_str().unwrap_or_default();
+        assert_eq!(
+            err,
+            format!("la racine du dépôt a disparu ({}) : rouvrez le backend sur une racine qui existe", sources.display())
+        );
+
+        // 3. `index` lit la racine aussi (sa politique le déclare) : le même message que les
+        // autres outils (IndexNode avait déjà le sien, depuis 94354595c).
+        let r = hote.call(Some(&s), &manifest_path, "index", json!({}));
+        assert_eq!(r["ok"], json!(false), "index doit échouer quand la racine a disparu : {r}");
+        assert_eq!(
+            r["error"].as_str().unwrap_or_default(),
+            format!("la racine du dépôt a disparu ({}) : rouvrez le backend sur une racine qui existe", sources.display())
+        );
+
+        hote.shutdown();
     }
 }

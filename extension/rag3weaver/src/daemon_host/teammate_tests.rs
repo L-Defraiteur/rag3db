@@ -352,8 +352,8 @@ fn the_addressed_mailbox_by_the_host_routes() {
                     "request": "Le titre du README", "proposal": "Demander le titre, puis l'écrire",
                     "items": [{ "id": "titre", "text": "Poser le titre", "status": "blocked", "alone": false, "question": "Quel titre pour le README ?" }] } }))])),
                 (1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "question posée", "remaining": "le titre" }))])),
-                // Le pas d'après la réponse (son numéro compte aussi l'attente : la
-                // boucle a tourné une fois à vide avant de se réveiller).
+                // Le pas d'après la réponse (le pas 2 : l'attente ne consomme pas de
+                // numéro, elle ne fait que suspendre l'équipier).
                 (_, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "le titre est donné", "concepts": ["documentation"] } }))])),
                 _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "plan clos", "remaining": "" }))])),
             }
@@ -809,7 +809,11 @@ fn a_teammate_runs_commands_through_the_declared_gate_and_asks_for_the_rest() {
             std::thread::sleep(Duration::from_millis(50));
         }
     };
-    let boite = attendre("la question de l'accord", &|b| b.iter().any(|l| l["kind"] == "approval"));
+    // Le pas fini sur la question : l'équipier est suspendu, la boîte le dit (le pas a
+    // rendu tous ses résultats au modèle avant cette ligne).
+    let boite = attendre("la question de l'accord et l'attente", &|b| {
+        b.iter().any(|l| l["kind"] == "approval") && b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur depuis")))
+    });
     let question = boite.iter().find(|l| l["kind"] == "approval").unwrap().clone();
     assert_eq!(question["command"], "echo accorde-moi", "{question}");
     assert!(files.pending_for("c7").iter().any(|l| l["id"] == question["id"]), "la question attend le superviseur");
@@ -870,4 +874,258 @@ fn a_line_posted_during_the_last_step_is_read_before_the_teammate_ends() {
         assert!(Instant::now() < borne, "en 90 s, la consigne écrite pendant le pas n'a pas été lue : {b:#?}");
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// **Attendre le superviseur ne tue pas la tâche** (8 novembre 2026, essai 4 de c7, la
+/// tâche racine-disparue) : l'équipier posait une question, puis marquait chaque pas
+/// d'attente « raté : en attente de la sortie de cargo test par le superviseur » ; au
+/// troisième, l'hôte arrêtait la tâche, et chaque pas d'attente rappelait le modèle. Une
+/// question sans réponse suspend l'équipier : aucun appel au modèle, la boîte le dit une
+/// fois (« en attente du superviseur depuis HH:MM »), le pas ne compte ni réussi ni raté ;
+/// la réponse le réveille et le pas suivant la lit.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn waiting_for_the_supervisor_suspends_the_teammate_without_failing_the_task() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let pas = Arc::new(Mutex::new(0usize));
+    let model: ChatModel = {
+        let pas = pas.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let pas = pas.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    *pas.lock().unwrap() += 1;
+                }
+                let repondu = last_user(turns).contains("la sortie : 3 passed");
+                match (step_of(turns), results.len(), repondu) {
+                    (1, 0, _) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "plan": {
+                        "request": "Le témoin de la racine disparue", "proposal": "Écrire le témoin, le faire jouer, corriger",
+                        "items": [
+                            { "id": "jouer", "text": "Faire jouer le témoin par le superviseur", "status": "blocked", "alone": false, "question": "Peux-tu jouer cargo test sur le témoin et me rendre la sortie ?" },
+                            { "id": "corriger", "text": "Corriger le code", "status": "todo", "alone": true }
+                        ] } }))])),
+                    (_, 0, true) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "le témoin passe", "concepts": ["témoin"] } }))])),
+                    (_, _, true) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "corriger", "succeeded": true, "done": "corrigé après la sortie", "remaining": "" }))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "jouer", "succeeded": false, "done": "raté : en attente de la sortie de cargo test par le superviseur", "remaining": "la sortie" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Écris le témoin de la racine disparue.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let attendre = |quoi: &str, ok: &dyn Fn(&[Value]) -> bool| -> Vec<Value> {
+        let borne = Instant::now() + Duration::from_secs(90);
+        loop {
+            let b = files.mailbox();
+            if ok(&b) {
+                return b;
+            }
+            assert!(Instant::now() < borne, "en 90 s : {quoi} — {b:#?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    let boite = attendre("l'attente dite dans la boîte", &|b| b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur depuis"))));
+    let question = boite.iter().find(|l| l["kind"] == "question" && l["from"] == "teammate").expect("la question").clone();
+    // Trois secondes d'attente : ni nouveau pas, ni arrêt.
+    std::thread::sleep(Duration::from_secs(3));
+    let boite = files.mailbox();
+    assert_eq!(*pas.lock().unwrap(), 1, "aucun appel au modèle pendant l'attente : {boite:#?}");
+    // L'équipier suspendu retient l'arrêt d'inactivité de l'hôte (l'hôte de Lucie, 4 h 46).
+    let retenu = host.travail_en_cours();
+    assert!(retenu.as_deref().is_some_and(|c| c.contains("équipier(s) en route")), "{retenu:?}");
+    assert!(!boite.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("pas de suite sans élément réussi")), "attendre n'arrête pas la tâche : {boite:#?}");
+    assert!(!boite.iter().any(|l| l["kind"] == "ended"), "{boite:#?}");
+    assert_eq!(boite.iter().filter(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().starts_with("en attente du superviseur")).count(), 1, "l'attente se dit une fois : {boite:#?}");
+    // La réponse réveille l'équipier ; le pas suivant la lit et finit.
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "la sortie : 3 passed", &json!({ "reply_to": question["id"] })).expect("la réponse");
+    let boite = attendre("le pas qui lit la réponse", &|b| b.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true));
+    assert!(boite.iter().any(|l| l["kind"] == "ended" || l["kind"] == "step_done"), "{boite:#?}");
+    assert_eq!(*pas.lock().unwrap(), 2, "un seul pas après la réponse : {boite:#?}");
+}
+
+/// **Une tâche joue cargo test par la porte** (8 novembre 2026, essai 5 de c7 : la porte
+/// marchait, mais cargo ne lisait pas ~/.rustup dans le bac à sable). Le petit dépôt devient
+/// un crate ; l'équipier joue `cargo test --lib -- un_test` par `run_command` (la porte le
+/// laisse passer sans accord : un test ne modifie que le target) et lit « test result: ok. 1
+/// passed » — la chaîne Rust en lecture, le target partagé du dépôt (`{repo_target}`) et le
+/// TMPDIR de la tâche (`{task_dir}/tmp`), déclarés par le gabarit code.
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn a_task_plays_cargo_test_through_the_gate() {
+    use std::time::{Duration, Instant};
+    if !std::env::var_os("HOME").map(std::path::PathBuf::from).is_some_and(|h| h.join(".rustup").is_dir()) {
+        eprintln!("pas de ~/.rustup sur ce poste : test sauté, dit franchement");
+        return;
+    }
+    if crate::commande::BacASable::autour("/").ruleset().is_err() {
+        eprintln!("Landlock indisponible sur ce noyau : test sauté, dit franchement");
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
+    std::fs::write(depot.join("Cargo.toml"), "[package]\nname = \"petit-depot\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(depot.join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n#[cfg(test)]\nmod tests { #[test] fn un_test() { assert_eq!(super::un(), 1); } }\n").unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "un crate"]] {
+        let ok = std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success();
+        assert!(ok, "git {args:?}");
+    }
+    let vus = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let vus = vus.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let vus = vus.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if let Some(r) = results.last() {
+                    vus.lock().unwrap().push(r.clone());
+                }
+                let cargo = ("run_command", json!({ "command": "cargo test --lib -- un_test" }));
+                match results.len() {
+                    0 => answer(turns, opts, sink, "", calls(&[cargo])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "cargo test joué", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Joue le test un_test.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let attendre = |quoi: &str, ok: &dyn Fn(&[Value]) -> bool| -> Vec<Value> {
+        let borne = Instant::now() + Duration::from_secs(300);
+        loop {
+            let b = files.mailbox();
+            if ok(&b) {
+                return b;
+            }
+            assert!(Instant::now() < borne, "en 300 s : {quoi} — {b:#?} — vu par le modèle : {:#?}", vus.lock().unwrap());
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    let boite = attendre("cargo joué dans la tâche", &|b| b.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true));
+    assert!(!boite.iter().any(|l| l["kind"] == "approval"), "cargo test passe la porte sans accord : {boite:#?}");
+    let vus = vus.lock().unwrap();
+    assert!(vus.iter().any(|r| r.contains("test result: ok. 1 passed")), "cargo test a tourné dans la tâche : {vus:#?}");
+    // Le target partagé du dépôt a reçu le bâti ; on le rend.
+    let cible = crate::commande::cible_du_depot("petit-depot");
+    assert!(cible.join("debug").is_dir(), "le bâti dans {}", cible.display());
+    let _ = std::fs::remove_dir_all(&cible);
+}
+
+/// **Un pas repart d'une session neuve** (8 novembre 2026, le quota de l'essai 3 : chaque
+/// pas renvoyait tout le fil, de 5 275 jetons d'entrée au pas 1 à 122 242 au pas 10). Le pas
+/// 1 lit trois fois le dépôt puis déclare son pas ; le premier appel du pas 2 ne reçoit que
+/// le système et son message, qui porte la demande en cours et ce que le pas 1 a déclaré.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn each_step_starts_from_a_fresh_thread_with_the_request_and_the_steps_done() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let premiers = Arc::new(Mutex::new(Vec::<(usize, usize, String)>::new()));
+    let model: ChatModel = {
+        let premiers = premiers.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let premiers = premiers.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                let pas = step_of(turns);
+                if results.is_empty() {
+                    premiers.lock().unwrap().push((pas, turns.len(), last_user(turns)));
+                }
+                let lire = ("read_file", json!({ "path": "src/lib.rs" }));
+                match (pas, results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "plan": {
+                        "request": "Relire puis conclure", "proposal": "Deux éléments",
+                        "items": [{ "id": "lire", "text": "Lire le dépôt", "status": "todo", "alone": true }, { "id": "conclure", "text": "Conclure", "status": "todo", "alone": true }] } }))])),
+                    (1, 1..=3) => answer(turns, opts, sink, "", calls(&[lire])),
+                    (1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "lire", "succeeded": true, "done": "trois lectures de src/lib.rs", "remaining": "conclure" }))])),
+                    (_, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "lu et conclu", "concepts": ["lecture"] } }))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "conclure", "succeeded": true, "done": "conclu", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Relis le dépôt et conclus.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let borne = Instant::now() + Duration::from_secs(90);
+    while !files.mailbox().iter().any(|l| l["kind"] == "ended") {
+        assert!(Instant::now() < borne, "en 90 s, pas de fin : {:#?}", files.mailbox());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let premiers = premiers.lock().unwrap();
+    let (_, n, message) = premiers.iter().find(|(p, _, _)| *p == 2).cloned().unwrap_or_else(|| panic!("aucun pas 2 : {premiers:#?}"));
+    assert_eq!(n, 2, "le pas 2 part du système et de son message seuls : {premiers:#?}");
+    assert!(message.contains("La demande en cours : Relis le dépôt et conclus."), "{message}");
+    assert!(message.contains("trois lectures de src/lib.rs") && message.contains("reste : conclure"), "le pas 1 rappelé : {message}");
+}
+
+/// **Un 429 n'est pas un pas raté** (8 novembre 2026, essai 3 : « le pas 6 n'a pas abouti :
+/// quota dépassé après 2 reprises en 186 s », et trois refus d'affilée arrêtaient l'équipier
+/// par `max_failed_steps`). Le fournisseur refuse trois fois de suite (autant que
+/// `max_failed_steps`) : l'équipier attend une fenêtre à chaque refus, le dit dans la boîte,
+/// rejoue le même pas, et finit quand le fournisseur revient.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_provider_refusal_waits_a_window_and_does_not_fail_the_step() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    // La fenêtre du témoin : 1 s (le défaut est 60), dans les déclarations commitées.
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "quota_wait_s": 1 });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "une fenêtre courte"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+    let appels = Arc::new(Mutex::new(0usize));
+    let model: ChatModel = {
+        let appels = appels.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let appels = appels.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let n = {
+                    let mut a = appels.lock().unwrap();
+                    *a += 1;
+                    *a
+                };
+                if n <= 3 {
+                    return Err(crate::llm::LlmError::Unavailable { status: Some(429), quota: crate::llm::Quota::Throttled, retries: 2, waited_ms: 10, message: "RESOURCE_EXHAUSTED".into() });
+                }
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait après les refus", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Fais le travail.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let borne = Instant::now() + Duration::from_secs(90);
+    let boite = loop {
+        let b = files.mailbox();
+        if b.iter().any(|l| l["kind"] == "ended") {
+            break b;
+        }
+        assert!(Instant::now() < borne, "en 90 s, pas de fin : {b:#?}");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let fin = boite.iter().find(|l| l["kind"] == "ended").unwrap();
+    assert!(!fin["text"].as_str().unwrap_or_default().starts_with("erreur"), "trois 429 n'arrêtent pas l'équipier : {boite:#?}");
+    assert!(boite.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true), "{boite:#?}");
+    let attentes: Vec<&str> = boite.iter().filter_map(|l| l["text"].as_str()).filter(|t| t.contains("attend le fournisseur")).collect();
+    assert_eq!(attentes.len(), 3, "chaque refus dit son attente : {boite:#?}");
+    assert!(attentes[0].starts_with("le pas 1 attend le fournisseur (1 refus") && attentes[2].contains("reprise dans 4 s"), "{attentes:#?}");
+    assert!(!boite.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("n'a pas abouti")), "un refus n'est pas un pas raté : {boite:#?}");
 }

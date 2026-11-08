@@ -26,6 +26,8 @@
 | **tty-1**, le client `--plain` et `policy` dans `describe` | `cfc5cc8e8` | entière, à luciepc, sur la lib 04063ee06 : e2e_tty 2/2, e2e_lectures 19/19, e2e_code 27/27, e2e_mcp_stdio 4/4, e2e_demon_hote 12/12, check_features 5/5, lib 1955/0, navigateur 13/13 |
 | **tty-2**, la vue inline | `1fc1e24bd` | courte (le crate et e2e_tty) : crate 9/9 avec la vue et 4/4 sans, e2e_tty 2/2 |
 | **tty-3**, le Daemon Code Summoning, `--depot`/`--tache`, le filtre par worktree | `f66e72d31` | courte, sur la lib 17a094d12 avec `MOTEUR_ANCIEN=1` : crate 21/21 avec la vue et 6/6 sans, e2e_tty 2/2 |
+| **le thème commun** `templates/themes/daemon.json`, branché sur le mot de Lucie (8 nov.) | `f2e6e2521` | courte sur dadbf0041 : crate 23/23 et 6/6, e2e_tty 2/2, e2e_catalogue_gabarits 12/12 |
+| **la coloration du code** par `POST /highlight` | `3696a71cb` | courte sur dadbf0041 : crate 28/28 et 7/7, e2e_tty 3/3, e2e_catalogue_gabarits 12/12 |
 | les lignes de nouveautés | `69aa15eef`, `0a3e5752e`, et celle de tty-3 | docs seules |
 | la page d'origine du Daemon Code Summoning et le thème commun | `78f0efeb6`, `422f47d52` | docs seules |
 
@@ -37,12 +39,11 @@ Effacé après les lots : les worktrees `rag3db-tty` (ici et à luciepc), les br
 
 ## Ce qui attend
 
-- **La coloration du code** (décision de c7, le 7 nov. au soir, sur la piste de la page 07).
+- **La coloration du code** : faite (`3696a71cb`). Ce qui suit dit comment elle a été décidée (c7, le 7 nov. au soir, sur la piste de la page 07).
   - L'hôte colore par les grammaires tree-sitter de codeparsers et sert des **spans typés** (une route ou un outil `highlight`), les mêmes pour l'IDE et pour le terminal.
   - Codeparsers écrit d'abord une page courte (les requêtes de coloration par langue), puis le code ; highlight.js reste le repli immédiat du chat de l'IDE.
   - Le terminal colore ces spans dans la palette du thème « daemon », par un lot à lui (tty-4 ou tty-5) une fois que les spans existent.
 
-- L'accord de Lucie sur le thème commun (page 06), avant de poser `templates/themes/daemon.json`.
 - La suite des lots, dans l'ordre :
   - tty-2 : la vue inline en ratatui avec crossterm ;
   - tty-4 : les états et la boîte ;

@@ -56,6 +56,9 @@ pub mod template_nodes;
 /// **Lancer une commande, et attendre qu'un journal dise quelque chose.**
 #[cfg(feature = "code")]
 pub mod run_nodes;
+/// L'atelier : attacher un worktree déjà sur le disque, par l'hôte (page 03 du 7 novembre, lot 0).
+#[cfg(feature = "code")]
+pub mod worktree_nodes;
 /// **La carte du graphe**, en Mermaid, pour qu'un agent cesse d'inventer des relations.
 pub mod schema_nodes;
 pub mod filter_results_node;

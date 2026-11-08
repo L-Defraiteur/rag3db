@@ -35,7 +35,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use super::{agent, base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
+use super::{base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
 use crate::embedder::{
     budget_batches, embed_char_budget, souffler, DualEmbedder, EmbedError, Embedder,
     SparseEmbedder,
@@ -706,20 +706,37 @@ impl Embedder for DaemonEmbedder {
 
 // ─── Le relecteur et l'OCR, par le démon ─────────────────────────────────────
 
+/// Un délai dépassé devient « service d'embarquement <adresse> muet après N s »
+/// ([`super::muet_apres`]) ; toute autre erreur reste ce qu'elle est.
+fn nommer(e: DaemonError, adresse: &str, delai: std::time::Duration) -> DaemonError {
+    match e {
+        DaemonError::SansReponse { .. } => DaemonError::SansReponse { adresse: adresse.to_string(), cause: super::muet_apres(adresse, delai) },
+        e => e,
+    }
+}
+
 /// **Le relecteur d'un démon** (`POST /rerank`). On s'y attache : le démon
 /// doit déjà répondre et déclarer un relecteur dans son identité.
 pub struct DaemonReranker {
     base: String,
+    adresse: String,
     agent: ureq::Agent,
+    delai: std::time::Duration,
     model: String,
 }
 
 impl DaemonReranker {
     pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
-        let agent = agent();
-        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+        Self::joindre_dans(adresse, default_embed_timeout())
+    }
+    /// [`joindre`](Self::joindre), le délai d'un appel donné : à l'attachement comme à chaque
+    /// `/rerank`, un démon qui ne rend pas se dit muet au bout de ce délai (le même que
+    /// l'embarqueur, [`default_embed_timeout`]) au lieu de tenir son fil sans fin.
+    pub fn joindre_dans(adresse: &str, delai: std::time::Duration) -> Result<Self, DaemonError> {
+        let agent = super::agent_with_timeout(delai);
+        let identite: Identite = identite_de(&agent, adresse, SERVICE).map_err(|e| nommer(e, adresse, delai))?;
         match identite.reranker {
-            Some(model) => Ok(Self { base: base_url(adresse), agent, model }),
+            Some(model) => Ok(Self { base: base_url(adresse), adresse: adresse.to_string(), agent, delai, model }),
             None => Err(DaemonError::Reponse(format!("sert {} sans relecteur", identite.modele))),
         }
     }
@@ -732,7 +749,7 @@ impl DaemonReranker {
 impl crate::reranker::Reranker for DaemonReranker {
     fn rerank(&self, query: &str, passages: &[String]) -> Result<Vec<f32>, EmbedError> {
         let corps = serde_json::json!({ "query": query, "passages": passages }).to_string();
-        let texte = poster(&self.agent, &self.base, "/rerank", corps).map_err(|e| EmbedError::ProviderError(e.to_string()))?;
+        let texte = poster(&self.agent, &self.base, "/rerank", corps).map_err(|e| EmbedError::ProviderError(nommer(e, &self.adresse, self.delai).to_string()))?;
         let v: serde_json::Value = serde_json::from_str(&texte).map_err(|e| EmbedError::ProviderError(e.to_string()))?;
         let scores: Vec<f32> = serde_json::from_value(v["scores"].clone()).map_err(|e| EmbedError::ProviderError(format!("champ 'scores' : {e}")))?;
         if scores.len() != passages.len() {
@@ -748,16 +765,23 @@ impl crate::reranker::Reranker for DaemonReranker {
 /// **L'OCR d'un démon** (`POST /ocr`).
 pub struct DaemonOcr {
     base: String,
+    adresse: String,
     agent: ureq::Agent,
+    delai: std::time::Duration,
     model: String,
 }
 
 impl DaemonOcr {
     pub fn joindre(adresse: &str) -> Result<Self, DaemonError> {
-        let agent = agent();
-        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+        Self::joindre_dans(adresse, default_embed_timeout())
+    }
+    /// [`joindre`](Self::joindre), le délai d'un appel donné, à l'attachement comme à chaque
+    /// `/ocr` (voir [`DaemonReranker::joindre_dans`]).
+    pub fn joindre_dans(adresse: &str, delai: std::time::Duration) -> Result<Self, DaemonError> {
+        let agent = super::agent_with_timeout(delai);
+        let identite: Identite = identite_de(&agent, adresse, SERVICE).map_err(|e| nommer(e, adresse, delai))?;
         match identite.ocr {
-            Some(model) => Ok(Self { base: base_url(adresse), agent, model }),
+            Some(model) => Ok(Self { base: base_url(adresse), adresse: adresse.to_string(), agent, delai, model }),
             None => Err(DaemonError::Reponse(format!("sert {} sans OCR", identite.modele))),
         }
     }
@@ -775,7 +799,7 @@ impl crate::ocr::Ocr for DaemonOcr {
             rgb: base64::engine::general_purpose::STANDARD.encode(&image.rgb),
         })
         .map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
-        let texte = poster(&self.agent, &self.base, "/ocr", corps).map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
+        let texte = poster(&self.agent, &self.base, "/ocr", corps).map_err(|e| crate::ocr::OcrError::Model(nommer(e, &self.adresse, self.delai).to_string()))?;
         let lu: LectureSurLeFil = serde_json::from_str(&texte).map_err(|e| crate::ocr::OcrError::Model(e.to_string()))?;
         Ok(crate::ocr::OcrOutput {
             width: lu.width,
@@ -1333,4 +1357,84 @@ mod tests {
             assert_eq!(f.join().expect("fil"), vec![vec![(i + 1) as f32; 4]]);
         }
     }
+
+    /// **Un faux service qui se tait** (le ticket des figements de la lib entière, 8 novembre
+    /// 2026) : `muet_des` se tait dès l'attachement ; sinon il répond à `/sante` (un démon qui
+    /// sert un relecteur et un OCR) et se tait sur toute autre route. Rend son adresse ; les
+    /// connexions restent ouvertes jusqu'à la fin du processus, jamais lues ni fermées.
+    fn service_qui_se_tait(muet_des: bool) -> String {
+        use std::io::{Read, Write};
+        let ecoute = TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let mut gardees = Vec::new();
+            for c in ecoute.incoming().flatten() {
+                let mut c = c;
+                if !muet_des {
+                    let mut tampon = [0u8; 2048];
+                    let n = c.read(&mut tampon).unwrap_or(0);
+                    if String::from_utf8_lossy(&tampon[..n]).starts_with(&format!("GET {}", super::super::SANTE)) {
+                        let corps = serde_json::json!({
+                            "service": SERVICE, "modele": "muet", "dim": 4, "dual": false, "factice": true,
+                            "reranker": "muet-rerank", "ocr": "muet-ocr",
+                        })
+                        .to_string();
+                        let _ = write!(c, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{corps}", corps.len());
+                        continue;
+                    }
+                }
+                gardees.push(c);
+            }
+        });
+        adresse
+    }
+
+    /// Joue `f` sur un fil à part ; rend son résultat, ou `None` s'il n'est pas revenu en `borne`.
+    fn dans<T: Send + 'static>(borne: std::time::Duration, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+        });
+        rx.recv_timeout(borne).ok()
+    }
+
+    /// **Le relecteur et l'OCR d'un démon muet rendent une erreur nommée dans leur délai**, à
+    /// l'attachement comme à l'appel, au lieu d'attendre sans fin (ils n'avaient aucun délai :
+    /// derrière un bge-m3 en file, la lib entière se figeait).
+    #[test]
+    fn le_relecteur_et_l_ocr_d_un_demon_muet_rendent_une_erreur_nommee_dans_leur_delai() {
+        let delai = std::time::Duration::from_millis(500);
+        let borne = std::time::Duration::from_secs(5);
+        let muet = service_qui_se_tait(true);
+        let attendu = format!("service d'embarquement {muet} muet après");
+        let e = dans(borne, { let a = muet.clone(); move || DaemonReranker::joindre_dans(&a, delai).err().map(|e| e.to_string()) })
+            .expect("le relecteur attend sans fin un démon muet à l'attachement")
+            .expect("un démon muet ne s'attache pas");
+        assert!(e.contains(&attendu), "{e}");
+        let e = dans(borne, { let a = muet.clone(); move || DaemonOcr::joindre_dans(&a, delai).err().map(|e| e.to_string()) })
+            .expect("l'OCR attend sans fin un démon muet à l'attachement")
+            .expect("un démon muet ne s'attache pas");
+        assert!(e.contains(&attendu), "{e}");
+
+        let tait = service_qui_se_tait(false);
+        let attendu = format!("service d'embarquement {tait} muet après");
+        let e = dans(borne, { let a = tait.clone(); move || {
+            use crate::reranker::Reranker;
+            let r = DaemonReranker::joindre_dans(&a, delai).expect("le démon répond à /sante");
+            r.rerank("q", &["p".to_string()]).err().map(|e| e.to_string())
+        } })
+        .expect("le relecteur attend sans fin un /rerank muet")
+        .expect("un /rerank muet n'est pas un résultat");
+        assert!(e.contains(&attendu), "{e}");
+        let e = dans(borne, { let a = tait.clone(); move || {
+            use crate::ocr::Ocr;
+            let o = DaemonOcr::joindre_dans(&a, delai).expect("le démon répond à /sante");
+            let image = crate::ocr::OcrImage { width: 1, height: 1, rgb: vec![0, 0, 0] };
+            o.recognize(&image).err().map(|e| e.to_string())
+        } })
+        .expect("l'OCR attend sans fin un /ocr muet")
+        .expect("un /ocr muet n'est pas un résultat");
+        assert!(e.contains(&attendu), "{e}");
+    }
+
 }

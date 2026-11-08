@@ -17,7 +17,14 @@ public:
         common::VirtualFileSystem* vfs);
     ~WAL();
 
+    // Écrit et synchronise les enregistrements d'une validation. Si l'écriture ou la
+    // synchronisation lève, le journal revient à sa taille d'avant (ses enregistrements ne seront
+    // jamais rejoués) et l'exception remonte : la validation est annulée.
     void logCommittedWAL(LocalWAL& localWAL, main::ClientContext* context);
+    static constexpr const char* JOURNAL_BROKEN =
+        "A write to the journal failed and the journal could not be restored: nothing more can be "
+        "committed until the database is reopened, and the outcome of the last commit is what the "
+        "journal holds at reopen";
     void logAndFlushCheckpoint(main::ClientContext* context);
 
     // Clear any buffer in the WAL writer. Also truncate the WAL file to 0 bytes.
@@ -53,6 +60,13 @@ private:
     // these writes can go through the normal writer. We do still need a checksum writer though for
     // writing COMMIT/CHECKPOINT records
     std::unique_ptr<common::Serializer> serializer;
+    // L'écrivain du fichier sous serializer (posé par initWriter) : son tampon se jette après une
+    // écriture ratée, pour que sa destruction ne réécrive rien.
+    common::BufferedFileWriter* fileWriter = nullptr;
+    // Une écriture du journal a échoué et le journal n'a pas pu revenir à sa taille d'avant : plus
+    // rien ne s'y écrit jusqu'à la réouverture, qui tranche la dernière validation par ce que le
+    // journal porte alors.
+    bool brokenUntilReopen = false;
     bool enableChecksums;
 };
 

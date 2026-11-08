@@ -519,6 +519,44 @@ fn le_role_d_un_outil_se_lit_dans_describe_et_dans_son_run() {
     assert!(debut("read_file")["target"].get("role").is_none(), "{d:?}");
 }
 
+/// **L'usage du modèle et les tâches de l'archiviste, par l'état du chat** (liste
+/// de Lucie, 8 novembre 2026, la barre latérale) : l'état rend l'usage du dernier
+/// tour et celui de la session, par unité, lus au journal des runs du chat ; la
+/// session est la somme de ses tours ; il rend aussi les runs à rôle finis, lus
+/// au même journal, pour qu'un rechargement de la page les retrouve.
+#[test]
+fn l_etat_du_chat_rend_l_usage_du_tour_et_de_la_session_et_les_taches_a_role() {
+    let (_d, host, _m, id) = banc_avec(qui_lit_deux_fois(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    let attendre_le_journal = |run: &str| {
+        let debut = Instant::now();
+        while host.journal.lire(&id, run).is_none() {
+            assert!(debut.elapsed() < Duration::from_secs(10), "le journal du run {run} n'est pas écrit");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let r1 = host.chat_turn(&id, "regarde le code").unwrap();
+    attendre_le_journal(r1["run"].as_str().unwrap());
+    let e1 = host.chat_state(&id).unwrap();
+    let u = |e: &Value, quand: &str, unite: &str| e["usage"][quand][unite].as_u64().unwrap_or(0);
+    assert!(u(&e1, "tour", "input_tokens") > 0, "le tour a un usage d'entrée : {}", e1["usage"]);
+    assert_eq!(e1["usage"]["tour"], e1["usage"]["session"], "un seul tour : la session est ce tour");
+    assert_eq!(e1["usage"]["tour_run"], r1["run"], "{}", e1["usage"]);
+    let r2 = host.chat_turn(&id, "et encore").unwrap();
+    attendre_le_journal(r2["run"].as_str().unwrap());
+    let e2 = host.chat_state(&id).unwrap();
+    for unite in ["input_tokens", "output_tokens"] {
+        assert_eq!(u(&e2, "session", unite), u(&e1, "tour", unite) + u(&e2, "tour", unite), "la session est la somme de ses tours ({unite}) : {}", e2["usage"]);
+    }
+    assert_eq!(e2["usage"]["tours"], 2, "{}", e2["usage"]);
+    // Les tâches à rôle finies, lues au journal : l'archiviste a listé les fichiers.
+    let roles = e2["role_runs"].as_array().cloned().unwrap_or_default();
+    let archiviste = roles.iter().find(|r| r["role"] == "archiviste").unwrap_or_else(|| panic!("pas de run de l'archiviste : {roles:?}"));
+    assert_eq!((archiviste["tool"].as_str(), archiviste["state"].as_str()), (Some("list_files"), Some("fini")), "{archiviste}");
+    assert!(archiviste["at_ms"].as_u64().is_some_and(|t| t > 0), "{archiviste}");
+}
+
 /// Le faux modèle de la page du chat : « deux outils » fait « mots, outil, mots,
 /// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
 /// flux de soixante événements), puis finit.
@@ -737,6 +775,75 @@ fn la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge() {
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
     drop(d2);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
+/// **La barre dit l'usage, le récapitulatif et l'archiviste** (liste de Lucie, 8
+/// novembre 2026) : après un tour, la barre montre sous la conversation les jetons
+/// du tour et de la session, égaux à l'état de l'hôte ; un récapitulatif dit les
+/// tours, les jetons et les fiches, et son bouton déplie les fiches écrites ; une
+/// tâche de l'archiviste finie reste dans « Tâches de fond » après un
+/// rechargement de la page.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, h, m, id) = banc_dans("atelier", page_du_chat(), |m| {
+        m["tools"]["list_files"]["role"] = json!("archiviste");
+    });
+    drop(h);
+    // Un journal des runs à lui : sous les témoins, celui par défaut est éteint,
+    // et l'usage comme les tâches à rôle se lisent au journal.
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let page = format!("{racine}/ide/code/{id}/chat");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&page, prete);
+    n.evaluer("document.querySelector('#message').value = 'deux outils'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    // L'usage sous la conversation, égal à l'état de l'hôte.
+    let conv = format!(".conversation[data-backend=\"{id}\"]");
+    n.attendre(&format!("Number(document.querySelector('{conv} .usage-jetons')?.dataset.sessionInput) > 0"), "les jetons de la session dans la barre");
+    let (statut, etat) = crate::daemon_host::tests::demander("GET", &format!("{racine}/ide/chat?backend={id}"), Some("j"));
+    assert_eq!(statut, 200, "{etat}");
+    let attendu = etat["result"]["usage"]["session"]["input_tokens"].as_u64().or_else(|| etat["usage"]["session"]["input_tokens"].as_u64()).unwrap_or(0);
+    let lu = n.evaluer(&format!("Number(document.querySelector('{conv} .usage-jetons').dataset.sessionInput)"));
+    assert_eq!(lu.as_u64(), Some(attendu), "la barre dit l'usage de l'hôte : {etat}");
+    // Le récapitulatif : son bouton déplie les fiches écrites.
+    n.attendre(&format!("!!document.querySelector('{conv} .recap button')"), "le récapitulatif et son bouton");
+    // La conversation ouverte part dépliée (ses fiches se voyaient d'emblée) ;
+    // le bouton la replie, puis la redéplie.
+    assert_eq!(n.evaluer(&format!("document.querySelector('{conv} .recap').dataset.ouvert")), json!("oui"));
+    n.evaluer(&format!("document.querySelector('{conv} .recap button').click()"));
+    n.attendre(&format!("document.querySelector('{conv} .recap').dataset.ouvert === 'non' && !document.querySelector('{conv} .recap .fiches-ecrites')"), "le bouton replie les fiches");
+    n.evaluer(&format!("document.querySelector('{conv} .recap button').click()"));
+    n.attendre(&format!("document.querySelector('{conv} .recap').dataset.ouvert === 'oui' && !!document.querySelector('{conv} .recap .fiches-ecrites')"), "le bouton déplie les fiches");
+    // L'archiviste, après un rechargement : lu à l'état, pas seulement au flux.
+    n.aller(&page, prete);
+    n.attendre("[...document.querySelectorAll('#runs-a-role [data-role=\"archiviste\"] .run-a-role')].some(e => e.dataset.state === 'fini')", "la tâche de l'archiviste après un rechargement");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
@@ -961,6 +1068,72 @@ fn qui_montre_du_code() -> ChatModel {
     })
 }
 
+/// Le faux modèle qui répond par deux blocs : du rust (les grammaires de l'hôte le
+/// colorent) et du yaml (highlight.js le connaît, les grammaires non : le repli).
+fn qui_montre_deux_langues() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-deux-langues", 8192, |turns, opts, sink| {
+            MockLlm::new("Deux blocs.\n\n```rust\n// é\nfn main() {\n    let s = \"x\";\n}\n```\n\n```yaml\nclef: valeur\n```\n").generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **Le code du chat est coloré par les grammaires de l'hôte** (coloration B,
+/// page 12 de codeparsers) : un bloc rust est recoloré par `POST /ide/highlight`
+/// (classes `hl-*`, `data-hl="hote"`) et son texte ne change pas d'un caractère ; un
+/// bloc yaml, que les grammaires ne connaissent pas, reste sur highlight.js
+/// (`data-hl="repli"`, classes `hljs-*`).
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_code_du_chat_est_colore_par_les_grammaires_de_l_hote() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_code_du_chat_est_colore_par_les_grammaires_de_l_hote";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, host, manifeste, id) = banc(qui_montre_deux_langues());
+    drop(host);
+    let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_montre_deux_langues())
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifeste }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("document.querySelector('#message').value = 'montre'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
+    n.attendre(
+        "!![...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('pre code.language-rust[data-hl=\"hote\"]')",
+        "le bloc rust recoloré par l'hôte",
+    );
+    let lu = n.evaluer(
+        "(() => { const a = [...document.querySelectorAll('article.message.assistant')].at(-1); \
+          const rs = a.querySelector('pre code.language-rust'); const ya = a.querySelector('pre code.language-yaml'); \
+          return { mot: [...rs.querySelectorAll('span.hl-keyword')].map(s => s.textContent), \
+            commentaire: rs.querySelector('span.hl-comment')?.textContent ?? null, chaine: rs.querySelector('span.hl-string')?.textContent ?? null, \
+            texte: rs.textContent, yaml: ya?.dataset.hl ?? null, yamlHljs: !!ya?.querySelector('[class^=\"hljs-\"]') }; })()",
+    );
+    assert!(lu["mot"].as_array().is_some_and(|m| m.contains(&json!("fn")) && m.contains(&json!("let"))), "les mots-clés : {lu}");
+    assert_eq!(lu["commentaire"], "// é", "{lu}");
+    assert_eq!(lu["chaine"], "\"x\"", "{lu}");
+    assert_eq!(lu["texte"], "// é\nfn main() {\n    let s = \"x\";\n}", "le texte du bloc est intact : {lu}");
+    assert_eq!((&lu["yaml"], &lu["yamlHljs"]), (&json!("repli"), &json!(true)), "le yaml reste sur highlight.js : {lu}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **Le code dans le chat se lit comme du code** (tickets du 7 novembre 2026,
 /// retours de Lucie : « le texte limité en largeur », « `code.truc` pris en
 /// compte », la coloration) : à 2 560 px, le texte d'une bulle occupe la
@@ -1003,7 +1176,7 @@ fn le_code_du_chat_se_lit_comme_du_code() {
           return {{ \
             liens: [lien(a), lien(u)], \
             outil: [...(a?.querySelectorAll('code') ?? [])].some(c => c.textContent === 'search_code' && !c.closest('a')), \
-            rust: !!a?.querySelector('pre code.hljs.language-rust span.hljs-keyword'), \
+            rust: !!a?.querySelector('pre code.language-rust span.hljs-keyword, pre code.language-rust span.hl-keyword'), \
             largeur: a?.querySelector('.body')?.getBoundingClientRect().width ?? 0, \
             colonne: document.querySelector('#messages').getBoundingClientRect().width, \
           }}; }})()"
@@ -1254,4 +1427,102 @@ fn un_appel_a_delai_s_arrete_a_son_delai() {
     assert_eq!(r["ok"], true, "{r}");
     assert!(r.get("error_kind").is_none(), "{r}");
     let _ = id;
+}
+
+/// Une tâche à rôle sans fin lisible se dit « inconnu », pas « fini »
+/// (relecture d'everything declarative) ; sans rôle, ce n'en est pas une.
+#[test]
+fn une_tache_a_role_sans_fin_lisible_se_dit_inconnue() {
+    let debut = json!({ "kind": "RunStarted", "target": { "role": "archiviste", "tool": "list_files" } });
+    let t = super::tache_a_role("graph-19a0b1c2d3e-1", &json!({ "evenements": [debut.clone()] })).expect("une tâche à rôle");
+    assert_eq!(t["state"], "inconnu");
+    assert_eq!(t["at_ms"], json!(u64::from_str_radix("19a0b1c2d3e", 16).unwrap()));
+    let finie = super::tache_a_role("graph-1-1", &json!({ "evenements": [debut, { "kind": "RunFinished", "ok": false }] })).unwrap();
+    assert_eq!(finie["state"], "échec");
+    assert!(super::tache_a_role("graph-1-2", &json!({ "evenements": [{ "kind": "RunStarted", "target": {} }] })).is_none());
+}
+
+/// **Le thème daemon dans l'IDE** (Lucie, 7 novembre 2026 : l'IDE « comme un terminal
+/// avant-gardiste », le même thème que le terminal ; c7, 8 novembre). Un troisième choix
+/// « daemon » à côté de clair et sombre : la page applique les couleurs du fichier commun
+/// `templates/themes/daemon.json`, servi par l'hôte (`/ide/theme/daemon.json`), le choix tient
+/// au rechargement ; pendant qu'un tour attend le modèle, l'animation « réfléchit » du thème
+/// tourne, et elle disparaît à la fin du tour. Hors du thème daemon, la page reste sobre.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_reflechit() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_reflechit";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    // Un modèle qui réfléchit deux secondes avant de répondre, sans jeton entre-temps.
+    let lent: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-lent", 8192, |turns, opts, sink| {
+            std::thread::sleep(Duration::from_millis(2000));
+            MockLlm::new("Voilà.").generate(turns, opts, sink)
+        })))
+    });
+    let (d, h, m, id) = banc_dans("atelier", lent.clone(), |_| {});
+    drop(h);
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(lent)
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+    // Le thème que l'hôte sert est le fichier commun, octet pour octet.
+    let commun = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/themes/daemon.json")).unwrap();
+    let servi = crate::daemon::agent().get(format!("{racine}/ide/theme/daemon.json")).header("Cookie", "rag3weaver_ide=j").call().unwrap().body_mut().read_to_string().unwrap();
+    assert_eq!(servi, commun, "l'hôte sert templates/themes/daemon.json");
+    let theme: Value = serde_json::from_str(&commun).unwrap();
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    // Le choix « daemon » : la marque sur <html>, les couleurs du fichier commun.
+    n.evaluer("document.querySelector('#theme-daemon').click()");
+    n.attendre("document.documentElement.dataset.theme === 'daemon' && document.documentElement.classList.contains('daemon')", "le thème daemon choisi");
+    let var = |n: &mut Navigateur, v: &str| n.evaluer(&format!("getComputedStyle(document.documentElement).getPropertyValue('{v}').trim()"));
+    n.attendre(&format!("getComputedStyle(document.documentElement).getPropertyValue('--daemon-fond').trim() === '{}'", theme["couleurs"]["fond"].as_str().unwrap()), "les couleurs lues dans le fichier commun");
+    assert_eq!(var(&mut n, "--daemon-texte"), theme["couleurs"]["texte"]);
+    assert_eq!(var(&mut n, "--daemon-code-keyword"), theme["code"]["keyword"]);
+    assert_eq!(n.evaluer("getComputedStyle(document.body).backgroundColor"), json!("rgb(5, 5, 5)"), "le fond de la page est celui du thème");
+    assert_eq!(n.evaluer("getComputedStyle(document.body).color"), json!("rgb(255, 51, 51)"), "le texte de la page est celui du thème");
+    assert_eq!(n.evaluer("localStorage.getItem('ide-theme')"), json!("daemon"));
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    assert_eq!(n.evaluer("document.documentElement.dataset.theme"), json!("daemon"), "le choix tient au rechargement");
+
+    // Un tour : l'invocation tourne pendant que le modèle réfléchit, puis disparaît.
+    assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "pas d'invocation hors d'un tour");
+    n.evaluer("document.querySelector('#message').value = 'réfléchis'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#invocation')?.dataset.anim === 'reflechit' && document.querySelector('#invocation').textContent.includes('INVOCATION DU CODE')", "l'invocation pendant que le modèle réfléchit");
+    let image = n.evaluer("document.querySelector('#invocation').textContent");
+    assert!(image.as_str().unwrap_or_default().contains('⛧'), "le cœur du cercle : {image}");
+    n.attendre(&format!("document.querySelector('#invocation') && document.querySelector('#invocation').textContent !== {image}"), "le cercle tourne");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "la fin du tour");
+    assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "l'invocation disparaît à la fin du tour");
+
+    // Hors du thème daemon (retour au choix du système), la page reste sobre pendant un tour.
+    n.evaluer("document.querySelector('#theme-daemon').click()");
+    n.attendre("document.documentElement.dataset.theme !== 'daemon' && !document.documentElement.classList.contains('daemon')", "le thème daemon quitté");
+    n.evaluer("document.querySelector('#message').value = 'encore'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === \"l'agent travaille…\"", "le second tour part");
+    assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "pas d'invocation hors du thème daemon");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "la fin du second tour");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
 }

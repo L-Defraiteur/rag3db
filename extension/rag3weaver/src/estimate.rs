@@ -292,15 +292,26 @@ impl Rate {
 /// Un premier appel à vide chauffe les noyaux — sans lui la sonde mesurerait
 /// la compilation des pipelines, pas le modèle.
 pub fn probe_rate(embedder: &dyn Embedder, samples: &[String]) -> Result<Option<Rate>, String> {
+    let debut = std::time::Instant::now();
+    probe_rate_avec(embedder, samples, &|| debut.elapsed())
+}
+
+/// **La sonde, sous une horloge donnée** : `maintenant` rend le temps écoulé
+/// depuis un instant fixe. `probe_rate` y passe l'horloge réelle ; un témoin y
+/// passe une horloge que son embarqueur factice avance, sans dormir. Le témoin
+/// d'avant dormait 10 µs par caractère, et son débit dérivait avec
+/// l'ordonnanceur quand la lib entière tournait en parallèle (8 novembre 2026,
+/// ticket de la sonde : 33 240 puis 29 772 car./s pour une borne à 40 000).
+pub fn probe_rate_avec(embedder: &dyn Embedder, samples: &[String], maintenant: &dyn Fn() -> Duration) -> Result<Option<Rate>, String> {
     // Un embarqueur absent n'a pas de débit : ni sonde, ni chiffre noté.
     if samples.is_empty() || embedder.is_absent() {
         return Ok(None);
     }
     embedder.embed(&samples[..1]).map_err(|e| e.to_string())?;
     let chars: usize = samples.iter().map(|s| s.len()).sum();
-    let t = std::time::Instant::now();
+    let t = maintenant();
     embedder.embed(samples).map_err(|e| e.to_string())?;
-    Ok(Rate::from_sample(chars, t.elapsed()))
+    Ok(Rate::from_sample(chars, maintenant().saturating_sub(t)))
 }
 
 /// La carte **de celui qui calcule**, pour l'heuristique du premier index :
@@ -503,15 +514,22 @@ mod tests {
         assert_eq!(Rate::from_sample(10, Duration::ZERO), None);
     }
 
-    /// La sonde, sur un embarqueur factice qui « dure » ce qu'on décide.
+    /// La sonde, sur un embarqueur factice qui « dure » ce qu'on décide : il
+    /// avance une horloge partagée de 10 µs par caractère au lieu de dormir. Le
+    /// débit est donc exact, quel que soit l'ordonnanceur (le témoin d'avant
+    /// dormait, et rougissait sous la lib entière).
     #[test]
     fn la_sonde_mesure_l_embarqueur_attache() {
+        /// Un embarqueur factice qui avance l'horloge partagée de `us` µs par caractère.
         #[derive(Debug)]
-        struct Lent;
+        struct Lent {
+            horloge: std::sync::Arc<std::sync::Mutex<Duration>>,
+            us: u64,
+        }
         impl Embedder for Lent {
             fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
                 let chars: u64 = texts.iter().map(|t| t.len() as u64).sum();
-                std::thread::sleep(Duration::from_micros(10 * chars));
+                *self.horloge.lock().unwrap() += Duration::from_micros(self.us * chars);
                 Ok(texts.iter().map(|_| vec![0.0]).collect())
             }
             fn dim(&self) -> usize {
@@ -521,11 +539,18 @@ mod tests {
                 "lent"
             }
         }
+        let horloge = std::sync::Arc::new(std::sync::Mutex::new(Duration::ZERO));
+        let maintenant = || *horloge.lock().unwrap();
         let samples: Vec<String> = (0..8).map(|_| "x".repeat(500)).collect();
-        let r = probe_rate(&Lent, &samples).unwrap().expect("un débit");
-        // 10 µs par caractère : 100 000 caractères par seconde, à la louche.
-        assert!((40_000.0..110_000.0).contains(&r.chars_per_second), "{r:?}");
-        assert_eq!(probe_rate(&Lent, &[]).unwrap(), None);
+        let lent = Lent { horloge: horloge.clone(), us: 10 };
+        let r = probe_rate_avec(&lent, &samples, &maintenant).unwrap().expect("un débit");
+        // 10 µs par caractère : 100 000 caractères par seconde, exactement. Le
+        // premier appel (la chauffe) n'entre pas dans la mesure.
+        assert!((r.chars_per_second - 100_000.0).abs() < 1e-6, "{r:?}");
+        // Deux fois plus lent : deux fois moins de débit.
+        let r2 = probe_rate_avec(&Lent { horloge: horloge.clone(), us: 20 }, &samples, &maintenant).unwrap().expect("un débit");
+        assert!((r2.chars_per_second - 50_000.0).abs() < 1e-6, "{r2:?}");
+        assert_eq!(probe_rate_avec(&lent, &[], &maintenant).unwrap(), None);
     }
 
     #[cfg(feature = "code")]

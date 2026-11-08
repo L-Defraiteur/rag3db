@@ -43,6 +43,13 @@ moment ».
 sont alors des dossiers à elles (une copie de la racine), et leurs changements se relisent par
 différence de dossiers ; `git_init {repo}` le transforme en dépôt sur demande.
 
+**Changement de comportement** (8 novembre 2026, le lot de hooks-essai, branche
+`tache-sans-git`) : une racine de code hors de tout dépôt n'est plus « lue telle quelle, jamais
+écrite ». La tâche travaille dans sa copie (`<tâche>/espace`), et elle y écrit si `task_writes`
+le permet ; la fusion recopie ses changements dans la racine, après avoir refusé si la racine a
+bougé sur un chemin que la tâche change. `workspace.git_init` déclaré fait d'abord de la racine
+un dépôt, puis la tâche suit le chemin ordinaire.
+
 ## 2. Un worktree attaché devient un backend de code, à la volée
 
 - Pour chaque worktree attaché, l'hôte **instancie le manifeste de code** depuis le gabarit, comme

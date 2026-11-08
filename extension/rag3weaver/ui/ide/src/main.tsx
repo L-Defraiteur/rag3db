@@ -1,12 +1,13 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Moon, Sun, Radio } from "lucide-react";
+import { Flame, Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { dispatchFlux, fetchState, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
+import { dispatchFlux, fetchState, onFlux, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
 import { Search } from "@/views/Search";
+import { Recherches } from "@/views/Recherches";
 import { Tasks } from "@/views/Tasks";
 import { TaskReview } from "@/views/TaskReview";
 import { Bilans } from "@/views/Bilans";
@@ -31,6 +32,11 @@ function App() {
 
   useEffect(() => applyTheme(theme), [theme]);
   const reloadState = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
+  // Un worktree attaché par l'atelier (`RepoAttached`) : l'état se relit, la barre
+  // le montre sous « Dépôts » sans recharger la page.
+  useEffect(() => onFlux((e) => {
+    if (e.evenement?.kind === "RepoAttached") reloadState();
+  }), []);
   useEffect(() => {
     reloadState();
     return openFlux(dispatchFlux, (s: FluxStatus) => {
@@ -44,7 +50,8 @@ function App() {
     });
   }, []);
 
-  const dark = effectiveTheme(theme) === "dark";
+  const dark = effectiveTheme(theme) !== "light";
+  const isDaemon = effectiveTheme(theme) === "daemon";
   const fullWindow = route().view === "chat";
   return (
     // Le chat prend toute la fenêtre : ses barres aux bords, un seul défilement
@@ -70,6 +77,18 @@ function App() {
           onClick={() => setTheme(dark ? "light" : "dark")}
         >
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </Button>
+        {/* Le troisième choix : le thème du terminal (templates/themes/daemon.json). */}
+        <Button
+          variant="ghost"
+          size="icon"
+          id="theme-daemon"
+          aria-pressed={isDaemon}
+          aria-label={isDaemon ? "quitter le thème daemon" : "thème daemon"}
+          title={isDaemon ? "quitter le thème daemon" : "thème daemon"}
+          onClick={() => setTheme(isDaemon ? "system" : "daemon")}
+        >
+          <Flame className="size-4" />
         </Button>
       </header>
       <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
@@ -97,6 +116,7 @@ function View({ state, reload }: { state: HostState; reload: () => Promise<unkno
   if (r.view === "chat" && r.id) return <Chat id={r.id} state={state} />;
   if (r.view === "fichier" && r.id) return <File id={r.id} path={r.rest ?? ""} state={state} />;
   if (r.view === "recherche" && r.id) return <Search id={r.id} state={state} />;
+  if (r.view === "recherches" && r.id) return <Recherches id={r.id} state={state} />;
   if (r.view === "bilans" && r.id) return <Bilans id={r.id} state={state} />;
   if (r.view === "arbre" && r.id) return <Tree id={r.id} dir={r.rest ?? ""} state={state} />;
   if (r.view === "symbole" && r.id) return <Symbol id={r.id} name={r.rest ?? ""} state={state} />;

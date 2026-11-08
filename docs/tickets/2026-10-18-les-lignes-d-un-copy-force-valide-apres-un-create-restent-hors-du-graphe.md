@@ -3,7 +3,8 @@
 - **État** : ouvert. Écrit le 18 octobre 2026 par la seconde session cœur C++, à la demande de
   l'orchestration ; mis sur master le 25 octobre seulement (il était resté en brouillon), toujours
   vrai après 6fe9ffe9b. Défaut connu, sans perte. La question qu'il pose est pour le produit : qui déclenche la
-  reconstruction de l'index, et quand.
+  reconstruction de l'index, et quand. Le balayage est mesuré (banc, 8 novembre : environ 0,8 µs
+  par ligne à la dimension 768) ; reste le seuil.
 - **Gravité** : lenteur. La réponse est juste, mais chaque recherche balaie ces lignes une à une.
 - **Atteignable en service** : pas aujourd'hui. rag3weaver lance ses CREATE_VECTOR_INDEX
   (`rebuild_vector_index`, `ensure_vector_index`) sous le `Mutex<Catalog>` de sa connexion
@@ -56,6 +57,24 @@ d'où un SIGSEGV dans le témoin, pas dans le moteur. Corrigé sur banc-hors-gra
 un tampon de 4 Gio, un BEGIN refusé dit par les assistants, et l'arrêt sur une préparation
 manquée. La mesure se rejoue à la prochaine fenêtre calme.
 
+**La mesure, le 8 novembre (banc, luciepc, `poste mesure`, charge 0,06 puis 1,95, rien d'autre en
+cours).** `VectorIndexMeasure.MeasureSearchOverRowsOutsideTheGraph`, deux passes, binaire de master
+072c467d7. 120 000 vecteurs de dimension 768, l2, CREATE en 143 s ; 50 recherches à k = 10 pour
+chaque N :
+
+| N lignes hors du graphe | passe 1 : médiane / p95 | passe 2 : médiane / p95 | surcoût sur N = 0 |
+|---|---|---|---|
+| 0 | 13,5 / 14,0 ms | 13,3 / 14,6 ms | — |
+| 1 000 | 14,2 / 14,6 ms | 14,2 / 15,1 ms | + 0,8 ms |
+| 10 000 | 22,7 / 23,2 ms | 23,6 / 28,3 ms | + 9,8 ms |
+| 100 000 | 88,7 / 90,1 ms | 88,4 / 91,0 ms | + 75,2 ms |
+
+Le surcoût croît en ligne droite avec N : environ 0,75 à 1 µs par ligne hors du graphe à la
+dimension 768, soit un getEmbedding et une distance par ligne. Une part hors du graphe de
+10 000 lignes coûte 10 ms par recherche, et de 100 000 lignes, 75 ms : la recherche coûte alors
+six fois et demie celle d'un index à jour. Ce chiffre doit fixer le seuil de la reconstruction ;
+le seuil lui-même reste à décider (« La question pour le produit » ci-dessous).
+
 ## La question pour le produit
 
 La règle « un index ne se pense pas » demande que personne n'ait à y penser. Il faut donc dire qui
@@ -64,6 +83,35 @@ remet ces lignes dans le graphe, et quand :
   `OnDiskHNSWIndex::finalize` le fait pour un COPY) ;
 - rag3weaver, quand son état d'index voit un retard, par sa reconstruction ;
 - ou les deux, avec le seuil tiré de la mesure ci-dessus.
+
+## Le seuil, proposé par la session recherche (8 novembre 2026)
+
+**Le critère : la recherche ne doit pas doubler.** Le produit reconstruit l'index quand le surcoût
+estimé des lignes hors du graphe égale la recherche d'un index à jour :
+`N_hors_graphe × c ≥ t₀`, soit `N* = t₀ / c`. Avec la mesure ci-dessus, `t₀` = 13,4 ms (médiane
+des deux passes à N = 0) et `c` = 1 µs (le haut de la fourchette 0,75–1 µs, prudent) : **N* ≈
+13 400 lignes** pour 120 000 vecteurs de dimension 768. La table le confirme sans le chiffre
+rond : à 10 000 lignes la recherche coûte déjà 1,7 fois `t₀` (23 ms), à 100 000 six fois et demie.
+Pourquoi la latence et pas la somme des coûts : la reconstruction de 120 000 vecteurs prend
+143 s (le CREATE de la mesure), qu'un surcoût de 13,4 ms par recherche ne rembourse qu'en
+environ 10 700 recherches — sur l'usage de Lucie, des jours ; c'est donc la réactivité d'une
+recherche, pas le temps total, qui doit déclencher, et la reconstruction se fait en fond.
+
+**Qui : rag3weaver**, qui bâtit et reconstruit déjà ses index (`ajuster_l_index_pour_le_retard`,
+`rebuild_vector_index`), au repos de sa montre (jamais au milieu d'une écriture de l'utilisateur),
+et la réponse de la recherche le dit tant que la part hors du graphe dépasse le seuil (« l'index
+vectoriel a N lignes hors de son graphe, la recherche dense coûte ~× ; reconstruction prévue au
+repos »). Le moteur n'a pas à choisir de lui-même au point de reprise : le produit sait quand il
+est au repos.
+
+**Ce qu'il faut du moteur** : le nombre de lignes hors du graphe d'un index, lisible par le
+produit sans écrire (une colonne de `SHOW_INDEXES`, ou un `CALL` en lecture), et `t₀` se mesure
+alors par le produit sur ses propres recherches denses quand ce nombre est nul (le journal des
+runs a la durée de la branche dense) ; à défaut de mesure locale, `N* = 13 000` à la dimension
+768, et en proportion de `t₀` pour d'autres tailles d'index.
+
+**Le témoin du produit** : un index à N* + 1 lignes hors du graphe déclenche la reconstruction au
+repos, et après elle la recherche retombe sous 1,1 × `t₀` ; à N* − 1, rien ne se passe.
 
 ## Pour le fermer
 

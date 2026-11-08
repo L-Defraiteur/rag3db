@@ -87,7 +87,8 @@ export type FluxStatus = "ouvert" | "coupé, reprise…" | "fermé";
 /// Le flux de l'hôte : un `EventSource` pour toute la page. `Last-Event-ID` est
 /// renvoyé par le navigateur à la reconnexion ; l'hôte rejoue ce qu'il garde.
 export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStatus) => void): () => void {
-  const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens");
+  // `repos` : un worktree attaché par l'atelier (`RepoAttached`), que la barre montre.
+  const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos");
   source.onopen = () => onStatus("ouvert");
   source.onerror = () => onStatus("coupé, reprise…");
   source.onmessage = (e) => {
@@ -132,6 +133,12 @@ export type ChatContext = { used: number | null; max: number | null; source: str
 // la cite. Les écritures de l'agent lui-même attendent M7 (la session posée par
 // l'hôte).
 export type MemoryWrite = { fiche: string; kind: "fiche" | "apport"; section?: string; at_ms?: number; run: string };
+// L'usage du modèle, lu au journal des runs du chat : le dernier tour et la
+// conversation, par unité du compteur (input_tokens, cached_input_tokens,
+// output_tokens, reasoning_tokens).
+export type ChatUsage = { tour: Record<string, number> | null; tour_run: string | null; session: Record<string, number>; tours: number; lus_max?: number };
+// Une tâche à rôle finie, lue au journal (la page ajoute celles en cours par le flux).
+export type RoleRunDone = { role: string; run: string; tool?: string | null; reaction?: string | null; state: "fini" | "échec" | "inconnu"; at_ms?: number | null };
 export type ChatState = {
   on: boolean;
   model: string | null;
@@ -140,6 +147,8 @@ export type ChatState = {
   // Pourquoi la liste des fiches écrites ne peut pas se faire (pas de mémoire
   // déclarée, une mémoire sans outil de lecture par filtre…) ; null sinon.
   memory_writes_why?: string | null;
+  usage?: ChatUsage;
+  role_runs?: RoleRunDone[];
   why: string | null;
   run: string | null;
   turns: ChatTurn[];

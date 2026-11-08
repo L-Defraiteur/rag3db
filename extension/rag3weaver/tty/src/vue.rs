@@ -8,7 +8,7 @@
 use crate::anim::{self, Capacites, Glyphes, Niveau, Quelle};
 use crate::theme::Theme;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -65,25 +65,25 @@ pub enum Genre {
     Outil,
     Boite,
     Note,
+    /// Un bloc de code entier (entre deux clôtures ```), à colorer avant
+    /// l'historique : `texte` est son code, `langue` celle de sa clôture.
+    Code,
 }
 
-/// Une ligne validée, prête pour l'historique.
+/// Une ligne validée (ou un bloc de code entier), prête pour l'historique.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Validee {
     pub genre: Genre,
     pub texte: String,
+    /// La langue d'un bloc de code (`rust`, `ts`…), vide si la clôture n'en dit pas.
+    pub langue: String,
 }
 
-impl Validee {
-    pub fn line(&self) -> Line<'static> {
-        let style = match self.genre {
-            Genre::Texte => Style::default(),
-            Genre::Outil => Style::default().fg(Color::Red),
-            Genre::Boite => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            Genre::Note => Style::default().add_modifier(Modifier::DIM),
-        };
-        Line::from(Span::styled(self.texte.clone(), style))
-    }
+/// Un bloc de code en cours de réception.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Bloc {
+    langue: String,
+    lignes: Vec<String>,
 }
 
 /// Le modèle de la vue.
@@ -106,6 +106,9 @@ pub struct Vue {
     depuis: Instant,
     /// « dépôt · branche · tâche », jamais l'id d'un backend.
     pub entete: String,
+    /// Le bloc de code ouvert (```) : il se valide entier à sa clôture, pour se
+    /// colorer d'un coup ; sa ligne en cours reste visible dans la zone vivante.
+    bloc: Option<Bloc>,
 }
 
 /// La largeur d'un texte en colonnes.
@@ -128,6 +131,7 @@ impl Vue {
             politiques: HashMap::new(),
             depuis: Instant::now(),
             entete: String::new(),
+            bloc: None,
         }
     }
 
@@ -183,19 +187,47 @@ impl Vue {
     }
 
     fn valider(&mut self, genre: Genre, texte: String) {
-        self.validees.push(Validee { genre, texte });
+        self.validees.push(Validee { genre, texte, langue: String::new() });
     }
 
-    /// Clôt la ligne en cours, si elle a quelque chose.
-    fn clore(&mut self) {
-        if !self.en_cours.is_empty() {
-            let t = std::mem::take(&mut self.en_cours);
-            self.valider(Genre::Texte, t);
+    /// Une ligne de texte du modèle : elle ouvre ou ferme un bloc de code, y
+    /// entre, ou part telle quelle.
+    fn valider_texte(&mut self, ligne: String) {
+        let cloture = ligne.trim_start().starts_with("```");
+        match (&mut self.bloc, cloture) {
+            (Some(_), true) => self.fermer_bloc(),
+            (Some(b), false) => b.lignes.push(ligne),
+            (None, true) => {
+                let langue = ligne.trim_start().trim_start_matches('`').trim().to_string();
+                self.bloc = Some(Bloc { langue, lignes: Vec::new() });
+            }
+            (None, false) => self.valider(Genre::Texte, ligne),
         }
     }
 
-    /// Coupe la ligne en cours à la largeur : ce qui déborde part valider.
+    /// Valide le bloc ouvert, fermé ou non.
+    fn fermer_bloc(&mut self) {
+        if let Some(b) = self.bloc.take() {
+            self.validees.push(Validee { genre: Genre::Code, texte: b.lignes.join("\n"), langue: b.langue });
+        }
+    }
+
+    /// Clôt la ligne en cours, si elle a quelque chose ; un bloc resté ouvert
+    /// se valide aussi (un outil, la fin du run le coupent).
+    fn clore(&mut self) {
+        if !self.en_cours.is_empty() {
+            let t = std::mem::take(&mut self.en_cours);
+            self.valider_texte(t);
+        }
+        self.fermer_bloc();
+    }
+
+    /// Coupe la ligne en cours à la largeur : ce qui déborde part valider. Dans
+    /// un bloc de code, on ne coupe pas : le code se replie à l'affichage.
     fn couper(&mut self) {
+        if self.bloc.is_some() {
+            return;
+        }
         let max = self.largeur as usize;
         while colonnes(&self.en_cours) > max {
             let mut l = 0;
@@ -216,7 +248,7 @@ impl Vue {
             };
             let reste = self.en_cours.split_off(coupe);
             let ligne = std::mem::replace(&mut self.en_cours, reste);
-            self.valider(Genre::Texte, ligne.trim_end().to_string());
+            self.valider_texte(ligne.trim_end().to_string());
         }
     }
 
@@ -229,7 +261,7 @@ impl Vue {
         }
         for m in morceaux {
             let t = std::mem::take(&mut self.en_cours);
-            self.valider(Genre::Texte, t);
+            self.valider_texte(t);
             self.en_cours.push_str(m);
             self.couper();
         }
@@ -401,7 +433,9 @@ fn queue(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::rgb;
     use ratatui::backend::TestBackend;
+    use ratatui::style::Color;
     use ratatui::{Terminal, TerminalOptions, Viewport};
     use serde_json::json;
 
@@ -420,6 +454,27 @@ mod tests {
         assert_eq!(v.en_cours, "vingt.");
         v.redimensionner(4);
         assert_eq!(v.prendre_lignes().into_iter().map(|l| l.texte).collect::<Vec<_>>(), Vec::<String>::new(), "« vingt. » fait 6 colonnes, la largeur plancher est 8");
+    }
+
+    #[test]
+    fn a_fenced_block_is_held_whole_until_its_closing_fence_then_validated_with_its_language() {
+        let mut v = Vue::new(20, true);
+        for t in ["Voici :\n```rust\nfn main() {\n", "    println!(\"une ligne bien plus longue que vingt colonnes\");\n", "}\n", "```\nFini."] {
+            v.trame(&tok(t));
+        }
+        let lignes = v.prendre_lignes();
+        assert_eq!(lignes.len(), 2, "{lignes:#?}");
+        assert_eq!((lignes[0].genre, lignes[0].texte.as_str()), (Genre::Texte, "Voici :"));
+        assert_eq!(lignes[1].genre, Genre::Code);
+        assert_eq!(lignes[1].langue, "rust");
+        assert_eq!(lignes[1].texte, "fn main() {\n    println!(\"une ligne bien plus longue que vingt colonnes\");\n}", "le code n'est pas coupé à la largeur");
+        assert_eq!(v.en_cours, "Fini.");
+        // Un bloc que le run laisse ouvert se valide à sa fin.
+        v.trame(&tok("\n```py\nx = 1"));
+        assert!(v.prendre_lignes().iter().all(|l| l.genre != Genre::Code), "ouvert : rien ne part encore");
+        v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        let fin = v.prendre_lignes();
+        assert!(fin.iter().any(|l| l.genre == Genre::Code && l.langue == "py" && l.texte == "x = 1"), "{fin:#?}");
     }
 
     #[test]
@@ -466,6 +521,27 @@ mod tests {
         assert_eq!(v.prochaine_image(t0), None);
     }
 
+    /// **Les couleurs du thème s'appliquent aux cellules** quand l'agent
+    /// réfléchit : le cœur dans la couleur `texte` en gras, les runes dans le
+    /// halo sombre, le libellé dans `texte` ; et rien de rouge de base.
+    #[test]
+    fn the_theme_colours_reach_the_cells_while_the_model_thinks() {
+        let mut v = Vue::new(80, true);
+        v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
+        let mut t = Terminal::with_options(TestBackend::new(80, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let instant = v.depuis;
+        t.draw(|f| v.dessiner_a(f, f.area(), instant)).unwrap();
+        let buf = t.backend().buffer().clone();
+        let ligne = (0..buf.area.height).find(|y| (0..buf.area.width).any(|x| buf[(x, *y)].symbol() == "⛧")).expect("la ligne du Cercle");
+        let cellule = |s: &str| (0..buf.area.width).map(|x| &buf[(x, ligne)]).find(|c| c.symbol() == s).unwrap_or_else(|| panic!("pas de {s}")).clone();
+        let (texte, halo) = (rgb(&v.theme.couleurs.texte).unwrap(), rgb(v.theme.couleurs.halo.last().unwrap()).unwrap());
+        assert_eq!(cellule("⛧").fg, Color::Rgb(texte.0, texte.1, texte.2), "le cœur");
+        assert!(cellule("⛧").modifier.contains(Modifier::BOLD));
+        assert_eq!(cellule("ᚨ").fg, Color::Rgb(halo.0, halo.1, halo.2), "une rune du cercle");
+        assert_eq!(cellule("I").fg, Color::Rgb(texte.0, texte.1, texte.2), "le libellé INVOCATION");
+        assert!((0..buf.area.width).all(|x| buf[(x, ligne)].fg != Color::Red), "plus de rouge de base sur la ligne du thème");
+    }
+
     #[test]
     fn the_header_says_repo_branch_and_task_on_the_right_when_it_fits() {
         let mut v = Vue::new(60, true);
@@ -498,7 +574,8 @@ mod tests {
         let lignes = v.prendre_lignes();
         if !lignes.is_empty() {
             t.insert_before(lignes.len() as u16, |buf| {
-                Paragraph::new(lignes.iter().map(Validee::line).collect::<Vec<_>>()).render(buf.area, buf);
+                let rendu: Vec<Line> = lignes.iter().flat_map(|x| crate::code::lignes(x, &v.theme, v.capacites, largeur as usize, None)).collect();
+                Paragraph::new(rendu).render(buf.area, buf);
             })
             .unwrap();
         }

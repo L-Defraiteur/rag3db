@@ -241,3 +241,33 @@ fn describe_porte_la_politique_de_chaque_outil() {
     assert_eq!(politique("read_file")["read_files"], true, "{}", politique("read_file"));
     assert_eq!(politique("edit_file")["write_files"], true, "{}", politique("edit_file"));
 }
+
+/// **Le code se colore par le chemin de l'hôte** (le lot de coloration du
+/// terminal) : `POST /highlight` sur un vrai port, avec son jeton, rend des spans
+/// que le client du terminal lit ; une langue inconnue des grammaires ne rend
+/// rien, et le bloc reste sans couleur.
+#[test]
+#[ignore]
+fn le_code_d_un_bloc_se_colore_par_les_spans_de_l_hote() {
+    let host = Arc::new(DaemonHost::new());
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = ecoute.local_addr().unwrap().to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    std::thread::spawn(move || DaemonServer::new(server, 2).serve(host, Some("jeton-du-temoin".into())));
+    let ep = Endpoint { address, token: "jeton-du-temoin".into() };
+    let agent = client::agent();
+    let code = "fn main() {\n    // é\n    let x = \"chaîne\";\n}";
+    let spans = client::surligner(&agent, &ep, code, "rust").expect("rust est connu des grammaires");
+    let sorte = |mot: &str| {
+        let a = code.find(mot).unwrap();
+        spans.iter().find(|(d, f, _)| *d <= a && a + mot.len() <= *f).map(|(_, _, s)| s.clone())
+    };
+    eprintln!("MESURE coloration : {} spans pour {} octets", spans.len(), code.len());
+    assert_eq!(sorte("fn").as_deref(), Some("keyword"), "{spans:?}");
+    assert_eq!(sorte("// é").as_deref(), Some("comment"), "un commentaire après un caractère de deux octets : {spans:?}");
+    assert_eq!(sorte("\"chaîne\"").as_deref(), Some("string"), "{spans:?}");
+    assert!(spans.windows(2).all(|w| w[0].1 <= w[1].0), "triés et disjoints");
+    assert_eq!(client::surligner(&agent, &ep, "x", "brainfuck"), None, "une langue inconnue : pas de couleur");
+    let faux = Endpoint { token: "faux".into(), ..ep.clone() };
+    assert_eq!(client::surligner(&agent, &faux, code, "rust"), None, "un faux jeton : rien, sans panique");
+}

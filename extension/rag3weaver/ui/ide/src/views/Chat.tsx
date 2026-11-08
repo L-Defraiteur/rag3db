@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Square, SendHorizontal, MessageSquare, FileDiff, Scale } from "lucide-react";
+import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
-import { highlightBlock, inlineCodeHtml, withInlineCode } from "@/lib/code";
+import { highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
 import { ToolResultView } from "@/lib/toolview";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
-import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
+import { daemonTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
+import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
 // la colonne des conversations, l'en-tête nom / modèle / état, le fil, la saisie
@@ -112,9 +113,100 @@ function when(t: ToolBlock): string {
 const tokens = (n: number | null | undefined) => (n == null ? "?" : n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")} k` : String(n));
 
 /// Une ligne de la barre des runs à rôle : l'archiviste, la compaction…
-type RoleRun = { run: string; role: string; what: string; at?: number; state: "en cours" | "fini" | "en erreur" };
+type RoleRun = { run: string; role: string; what: string; at?: number; state: "en cours" | "fini" | "en erreur" | "inconnu" };
 /// Ce qu'une conversation de la barre montre sous son nom.
-type Recap = { context?: ChatContext; model?: string | null; writes?: MemoryWrite[]; writesWhy?: string | null };
+type Recap = { context?: ChatContext; model?: string | null; writes?: MemoryWrite[]; writesWhy?: string | null; usage?: ChatUsage };
+
+/// **L'usage du modèle** sous la jauge (liste de Lucie, 8 novembre 2026) : les
+/// jetons du dernier tour et de la conversation, lus au journal de l'hôte.
+function Usage({ usage }: { usage?: ChatUsage }) {
+  if (!usage || !usage.tours) return null;
+  const t = usage.tour ?? {};
+  const s = usage.session ?? {};
+  const n = (m: Record<string, number>, k: string) => m[k] ?? 0;
+  const ligne = (m: Record<string, number>) =>
+    `${tokens(n(m, "input_tokens") + n(m, "cached_input_tokens"))} entrée${n(m, "cached_input_tokens") ? ` (${tokens(n(m, "cached_input_tokens"))} cache)` : ""} · ${tokens(n(m, "output_tokens"))} sortie${n(m, "reasoning_tokens") ? ` (${tokens(n(m, "reasoning_tokens"))} réflexion)` : ""}`;
+  return (
+    <div
+      className="usage-jetons pl-6 pr-1 mb-1 text-[11px] text-muted-foreground flex flex-col"
+      data-tour-input={n(t, "input_tokens")}
+      data-tour-output={n(t, "output_tokens")}
+      data-session-input={n(s, "input_tokens")}
+      data-session-output={n(s, "output_tokens")}
+    >
+      <span className="tour">tour : {ligne(t)}</span>
+      {/* « récents » : les tours lus au journal (au plus `lus_max`), la conversation
+          n'ayant ni début ni remise à zéro enregistrés (relecture d'everything declarative). */}
+      <span className="session">
+        récents ({usage.tours} tour{usage.tours > 1 ? "s" : ""}) : {ligne(s)}
+      </span>
+    </div>
+  );
+}
+
+/// **Le récapitulatif d'une conversation** : ses tours, ses jetons, ses fiches
+/// écrites ; le bouton déplie les fiches — déplié d'emblée pour la conversation
+/// ouverte, comme l'étaient ses fiches.
+function Recapitulatif({ recap, memory, courante }: { recap?: Recap; memory: boolean; courante: boolean }) {
+  const [ouvert, setOuvert] = useState(courante);
+  const fiches = recap?.writes?.length ?? 0;
+  const tours = recap?.usage?.tours ?? 0;
+  const s = recap?.usage?.session ?? {};
+  const jetons = (s["input_tokens"] ?? 0) + (s["cached_input_tokens"] ?? 0) + (s["output_tokens"] ?? 0);
+  return (
+    <div className="recap pl-6 pr-1 mb-2 text-[11px] text-muted-foreground" data-ouvert={ouvert ? "oui" : "non"}>
+      <button type="button" className="flex items-center gap-1 hover:text-foreground" onClick={() => setOuvert((o) => !o)} aria-expanded={ouvert}>
+        {ouvert ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        <span>
+          {tours} tour{tours > 1 ? "s" : ""} · {tokens(jetons)} jetons{memory ? "" : ` · ${fiches} fiche${fiches > 1 ? "s" : ""} écrite${fiches > 1 ? "s" : ""}`}
+        </span>
+      </button>
+      {ouvert && !memory ? <Writes writes={recap?.writes} why={recap?.writesWhy} open={true} /> : null}
+    </div>
+  );
+}
+
+/// Le thème de la page, suivi sur `<html data-theme>` (les boutons de l'en-tête le changent).
+function useThemeDeLaPage(): string {
+  const [t, setT] = useState(() => document.documentElement.dataset.theme ?? "");
+  useEffect(() => {
+    const o = new MutationObserver(() => setT(document.documentElement.dataset.theme ?? ""));
+    o.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => o.disconnect();
+  }, []);
+  return t;
+}
+
+/// **L'invocation** (le « Daemon Code Summoning » du terminal, Lucie, 7 novembre 2026) :
+/// sous le thème daemon seulement, l'animation « réfléchit » du fichier commun tourne
+/// pendant que le modèle réfléchit (du départ d'un appel au premier jeton ou au premier
+/// outil) ; ailleurs la page reste sobre. Sous `prefers-reduced-motion`, l'image reste fixe.
+function Invocation({ actif }: { actif: boolean }) {
+  const theme = useThemeDeLaPage();
+  const [anim, setAnim] = useState<ThemeAnimation | null>(null);
+  const [n, setN] = useState(0);
+  const montre = actif && theme === "daemon";
+  useEffect(() => {
+    if (!montre || anim) return;
+    daemonTheme()
+      .then((t) => setAnim(t.animations.reflechit ?? null))
+      .catch((e: Error) => console.warn(`[thème] ${e.message}`));
+  }, [montre, anim]);
+  useEffect(() => {
+    if (!montre || !anim || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const h = window.setInterval(() => setN((k) => k + 1), Math.max(anim.ms, 50));
+    return () => window.clearInterval(h);
+  }, [montre, anim]);
+  if (!montre || !anim) return null;
+  return (
+    <div className="px-6 py-1 text-sm">
+      <span id="invocation" data-anim="reflechit" aria-hidden>
+        {imageDe(anim, n)}
+      </span>
+      <span className="sr-only">le modèle réfléchit</span>
+    </div>
+  );
+}
 
 /// **La jauge du contexte** : le dernier appel au modèle sur le maximum du modèle
 /// déclaré ; « inconnu » quand l'un manque, jamais une valeur codée en dur.
@@ -173,9 +265,14 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState("Prêt");
   const [busy, setBusy] = useState(false);
+  // Le modèle réfléchit : de l'envoi (ou d'un résultat d'outil) au premier jeton ou outil.
+  const [pense, setPense] = useState(false);
   const [run, setRun] = useState<string | null>(null);
   const [consumed, setConsumed] = useState("");
   const [recaps, setRecaps] = useState<Record<string, Recap>>({});
+  // Une coloration de l'hôte arrivée (coloration B) : les blocs se rendent de nouveau.
+  const [, setColoriage] = useState(0);
+  useEffect(() => onHostHighlight(() => setColoriage((n) => n + 1)), []);
   const [roleRuns, setRoleRuns] = useState<RoleRun[]>([]);
   // La saisie n'est pas contrôlée par React : un témoin (ou une saisie
   // automatique du navigateur) pose la valeur par le DOM, et `send` la lit là.
@@ -195,15 +292,27 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // backend ouvert, et celui de la page même s'il ne l'est pas encore.
   const backendsHere: Backend[] = state.backends.filter((b) => b.open || b.id === id);
 
+  /// Le récapitulatif d'une conversation, et ses tâches à rôle fusionnées.
+  const lireRecap = (bid: string) =>
+    fetchChat(bid)
+      .then((c) => {
+        // Les tâches à rôle finies, lues à l'état : un rechargement les retrouve.
+        const lues: RoleRun[] = (c.role_runs ?? []).map((r) => ({ run: r.run, role: r.role, what: r.tool ?? r.reaction ?? "", at: r.at_ms ?? undefined, state: r.state === "échec" ? "en erreur" : r.state === "inconnu" ? "inconnu" : "fini" }));
+        if (lues.length)
+          setRoleRuns((cur) => {
+            const vus = new Set(cur.map((x) => x.run));
+            return [...cur, ...lues.filter((x) => !vus.has(x.run))].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)).slice(0, 12);
+          });
+        return [bid, { context: c.context, model: c.model, writes: c.memory_writes, writesWhy: c.memory_writes_why, usage: c.usage }] as const;
+      })
+      .catch(() => [bid, {} as Recap] as const);
   // La jauge de chaque conversation de la barre : son propre état du chat.
   const reloadRecaps = () =>
-    Promise.all(
-      backendsHere.map((b) =>
-        fetchChat(b.id)
-          .then((c) => [b.id, { context: c.context, model: c.model, writes: c.memory_writes, writesWhy: c.memory_writes_why }] as const)
-          .catch(() => [b.id, {}] as const),
-      ),
-    ).then((all) => setRecaps(Object.fromEntries(all)));
+    Promise.all(backendsHere.map((b) => lireRecap(b.id))).then((all) => {
+      const m: Record<string, Recap> = Object.fromEntries(all);
+      setRecaps(m);
+      return m;
+    });
 
   // L'état du chat, à l'ouverture et à chaque réouverture du flux : un tour parti
   // avant (page rechargée, flux coupé puis repris) a publié son run.
@@ -267,6 +376,13 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         return;
       }
       if (ev.run !== undefined && runRef.current && ev.run !== runRef.current) return;
+      // L'invocation ne suit que le run du tour (relecture d'everything declarative) : le
+      // bus du dépôt porte aussi le juge, l'archiviste et les réactions, et le filtre
+      // ci-dessus laisse passer leurs trames tant que le RunStarted du chat n'est pas lu.
+      if (runRef.current && ev.run === runRef.current) {
+        if (ev.kind === "Token" || ev.kind === "ToolCallStarted" || ev.kind === "RunFinished") setPense(false);
+        else if (ev.kind === "ToolCallFinished") setPense(true);
+      }
       if (ev.kind === "Token") {
         if (typeof ev.seq === "number") (tokenLog.applied[String(ev.run)] ??= []).push(ev.seq);
         live((m) => ({ ...m, parts: appendText(m.parts, String(ev.text ?? "")) }));
@@ -302,10 +418,14 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   }, [items]);
 
   const send = async () => {
+    // Le run du tour : l'usage se lit au journal de l'hôte, écrit juste après
+    // la fin du tour ; la barre se relit jusqu'à l'y voir (dix fois au plus).
+    let finiRun: string | null = null;
     const text = input.current?.value.trim() ?? "";
     if (!text || busy || !chat?.on) return;
     if (input.current) input.current.value = "";
     setBusy(true);
+    setPense(true);
     setStatus("l'agent travaille…");
     setConsumed("");
     stuck.current = true;
@@ -313,6 +433,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     setItems((cur) => [...cur, message("user", text), message("assistant", "", { live: true })]);
     try {
       const r = await sendChat(id, text);
+      finiRun = r.run;
       // Le tour fini : les résultats entiers et les heures se relisent dans la
       // session, et se rattachent par l'appel — la bulle garde sa suite.
       const s = await fetchChat(id).catch(() => null);
@@ -351,8 +472,22 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       setStatus("Erreur");
     } finally {
       setBusy(false);
+      setPense(false);
       setRun(null);
-      reloadRecaps();
+      const attendu = finiRun;
+      // Toute la barre une fois, puis la seule conversation du tour jusqu'à y
+      // voir son run (relecture d'everything declarative : le coût par tour).
+      void (async () => {
+        const m = await reloadRecaps();
+        if (!attendu || m[id]?.usage?.tour_run === attendu) return;
+        for (let k = 0; k < 10; k++) {
+          await new Promise((ok) => setTimeout(ok, 300));
+          const [, r] = await lireRecap(id);
+          setRecaps((cur) => ({ ...cur, [id]: r }));
+          if (r.usage?.tour_run === attendu) return;
+        }
+        console.warn(`[chat] l'usage du run ${attendu} n'est pas venu au journal de l'hôte en 3 s ; la barre garde sa dernière lecture`);
+      })();
     }
   };
 
@@ -394,7 +529,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                     {[se.name ?? (b ? displayName(b) : se.id), space?.branch].filter(Boolean).join(" · ")}
                   </a>
                   <Gauge context={recaps[se.id]?.context} model={recaps[se.id]?.model} counters={se.id === id ? consumed : undefined} />
-                  {b?.kind === "memory" ? null : <Writes writes={recaps[se.id]?.writes} why={recaps[se.id]?.writesWhy} open={se.id === id} />}
+                  <Usage usage={recaps[se.id]?.usage} />
+                  <Recapitulatif recap={recaps[se.id]} memory={b?.kind === "memory"} courante={se.id === id} />
                 </div>
               );
             }}
@@ -523,6 +659,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             ),
           )}
         </section>
+        <Invocation actif={pense && busy} />
         <form
           id="composer"
           className="w-full px-6 pb-4 pt-2 border-t"

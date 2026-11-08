@@ -41,6 +41,8 @@ const MAX_STEPS: usize = 40;
 /// Les pas de suite sans `step_done` réussi avant que l'équipier s'arrête et le
 /// dise : il tourne en rond.
 const MAX_STALLED: usize = 3;
+/// Les derniers `step_done` rappelés à chaque pas (les plus anciens se lisent au plan).
+const MAX_FAITS_RAPPELES: usize = 20;
 
 /// Ce que l'équipier lit en plus du message système du chat dans une tâche.
 const SYSTEM_PROMPT: &str = "\
@@ -368,6 +370,47 @@ pub fn addressed_to_teammate(line: &Value, key: &str) -> bool {
 /// posté pendant le dernier pas ne se perd pas (le lot des commandes l'a vu,
 /// 8 novembre 2026 : le oui arrivait entre le pas et la fin, et ne relançait
 /// rien, l'équipier étant encore en route).
+/// **Un refus du fournisseur du modèle**, lu dans l'erreur du tour : `Some(true)`
+/// pour un quota épuisé (il ne revient pas en attendant), `Some(false)` pour un
+/// quota dépassé ou un service en panne (il revient), `None` pour un autre échec.
+/// La forme vient de `LlmError::Unavailable` (`src/llm.rs`).
+pub(crate) fn refus_du_fournisseur(e: &str) -> Option<bool> {
+    if e.contains("llm indisponible : quota épuisé") {
+        Some(true)
+    } else if e.contains("llm indisponible : quota dépassé") || e.contains("llm indisponible : service en panne") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// L'attente avant de rejouer un pas refusé : `base` secondes, doublées à chaque
+/// refus d'affilée, au plus dix fois `base`.
+pub(crate) fn attente_du_fournisseur(base: u64, refus: u32) -> u64 {
+    // La règle du client du modèle (`crate::llm::attente_de_reprise`), une seule.
+    crate::llm::attente_de_reprise(std::time::Duration::from_secs(base), refus, std::time::Duration::from_secs(base.saturating_mul(10))).as_secs()
+}
+
+/// **La question ouverte de l'équipier** (8 novembre 2026, essai 4 de c7 : trois pas
+/// d'attente marqués « raté » arrêtaient la tâche, et chacun rappelait le modèle) : sa
+/// dernière `question` ou `approval` sans réponse (`reply_to`) et sans ligne qui lui soit
+/// adressée après elle (une `request`, une `answer`, une `instruction`). Tant qu'elle est
+/// là, l'équipier attend sans appeler le modèle. Lue dans la boîte, elle survit à un
+/// redémarrage de l'hôte. Rend son rang dans la boîte et la ligne.
+pub(crate) fn open_question(files: &TeammateFiles) -> Option<(usize, Value)> {
+    let lignes = files.mailbox();
+    let mut ouverte: Option<(usize, Value)> = None;
+    for (n, l) in lignes.iter().enumerate() {
+        if l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("question" | "approval")) {
+            let repondue = lignes.iter().any(|r| r["reply_to"] == l["id"]);
+            ouverte = (!repondue).then(|| (n, l.clone()));
+        } else if l["from"] != "teammate" && l["from"] != "host" && l["kind"] != "stop" && addressed_to_teammate(l, &files.key) {
+            ouverte = None;
+        }
+    }
+    ouverte
+}
+
 pub(crate) fn unread_news(files: &TeammateFiles) -> bool {
     files
         .mailbox()
@@ -793,8 +836,29 @@ fn publish(bus: Option<&crate::events::EventBus>, task: &str, line: &Value) {
 /// **Ce que la frontière d'un pas dit à l'agent** : la boîte depuis le pas
 /// précédent, le plan actif, les plans en pause (une ligne chacun, toujours),
 /// et ce qu'on attend de ce pas.
-fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool) -> String {
+/// **Le message d'un pas, et lui seul** (8 novembre 2026, la mesure du quota : l'entrée
+/// montait de 5 275 jetons au pas 1 à 122 242 au pas 10, le fil entier renvoyé à chaque
+/// pas). Un pas repart d'une session neuve : ce message porte la demande en cours (la
+/// dernière reçue), ce que les pas faits depuis elle ont déclaré (`step_done`), la boîte
+/// depuis le pas précédent et les plans.
+fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, request: &str, faits: &[Value]) -> String {
     let mut m = format!("[Pas {step}]\n");
+    if !request.is_empty() && !news.iter().any(|l| l["kind"] == "request" && l["text"] == request) {
+        m.push_str(&format!("\nLa demande en cours : {request}\n"));
+    }
+    if !faits.is_empty() {
+        m.push_str("\nTes pas faits, tels que tes step_done les ont dits (tu ne vois plus leurs appels d'outils : relis un fichier s'il te le faut) :\n");
+        let debut = faits.len().saturating_sub(MAX_FAITS_RAPPELES);
+        if debut > 0 {
+            m.push_str(&format!("- … {debut} pas plus anciens, voir le plan\n"));
+        }
+        for f in &faits[debut..] {
+            let issue = if f["succeeded"] == true { "réussi" } else { "raté" };
+            let item = f["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" (élément {i})")).unwrap_or_default();
+            let reste = f["remaining"].as_str().filter(|r| !r.is_empty()).map(|r| format!(" — reste : {r}")).unwrap_or_default();
+            m.push_str(&format!("- {issue}{item} : {}{reste}\n", f["done"].as_str().unwrap_or("")));
+        }
+    }
     if !news.is_empty() {
         m.push_str("\nBoîte aux lettres, depuis le pas précédent :\n");
         for l in news {
@@ -1184,6 +1248,8 @@ impl DaemonHost {
         let mut wake = bus.as_ref().map(|b| b.subscribe(&mailbox_topic(task)));
         let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
         let mut failed = 0u32;
+        // Les refus du fournisseur d'affilée (429, panne) : ni pas raté ni pas compté.
+        let mut unavailable = 0u32;
         let mut woke_by: Option<String> = None;
         let mut outcome = Outcome::default();
         let mut read = files.read_cursor();
@@ -1191,7 +1257,12 @@ impl DaemonHost {
         // Un plan a-t-il existé pendant ce lancement ? (la fin le dit autrement)
         let mut plan_seen = false;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
-        for number in 1..=MAX_STEPS {
+        // `number` numérote les pas joués ; `counted` ne compte pas ceux qui
+        // finissent en attente du superviseur : MAX_STEPS borne le travail, pas
+        // l'attente.
+        let mut number = 0usize;
+        let mut counted = 0usize;
+        while counted < MAX_STEPS {
             let lines = files.mailbox();
             let news: Vec<Value> = lines
                 .iter()
@@ -1215,9 +1286,12 @@ impl DaemonHost {
             let waiting = active.is_some_and(|p| !p.waiting().is_empty());
             // Un pas de travail : une nouvelle dans la boîte, un élément faisable,
             // ou un plan actif qui ne fait plus qu'attendre rien (à clore).
-            let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 1);
+            let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 0);
             let last = active.is_some() && !alone && !waiting && news.is_empty();
-            if !work {
+            // **En attente du superviseur** : une question ou une commande
+            // demandée, sans réponse ni ligne nouvelle, suspend l'équipier.
+            let suspendu = news.is_empty() && open_question(files).is_some();
+            if !work || suspendu {
                 // Rien à faire sans le superviseur : on attend la boîte, par le
                 // bus quand il y en a un, et toujours par le fichier (toutes les
                 // 2 s) : un backend fermé ne publie plus. Le journal du pas
@@ -1246,7 +1320,15 @@ impl DaemonHost {
                 };
                 continue;
             }
-            let message = frontier_message(number, &news, &plans, last);
+            number += 1;
+            let debut_du_pas = read;
+            // La demande en cours : la dernière reçue ; les pas faits : ceux
+            // déclarés depuis elle (une relance sur une demande nouvelle ne
+            // relit pas l'ancienne).
+            let derniere = lines.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host");
+            let consigne = derniere.and_then(|n| lines[n]["text"].as_str()).unwrap_or_default().to_string();
+            let faits: Vec<Value> = lines.iter().skip(derniere.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
+            let message = frontier_message(number, &news, &plans, last, &consigne, &faits);
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
@@ -1255,7 +1337,49 @@ impl DaemonHost {
             let r = match self.chat_turn_with(&t.id, &message, Some(&step)) {
                 Ok(r) => {
                     failed = 0;
+                    unavailable = 0;
                     r
+                }
+                Err(e) if refus_du_fournisseur(&e).is_some() => {
+                    // **Le fournisseur n'a pas répondu** : le même pas rejoue
+                    // après une fenêtre, ses nouvelles rendues ; un quota épuisé
+                    // ne revient pas en attendant, il arrête en le disant.
+                    read = avant;
+                    files.write_cursor(read);
+                    number -= 1;
+                    unavailable += 1;
+                    let epuise = refus_du_fournisseur(&e) == Some(true);
+                    if epuise || unavailable > policy.max_unavailable_steps {
+                        let why = if epuise {
+                            format!("erreur : {e} (un quota épuisé ne revient pas en attendant : l'équipier s'arrête)")
+                        } else {
+                            format!("erreur : {e} ({} refus du fournisseur d'affilée, teammate.max_unavailable_steps = {})", unavailable, policy.max_unavailable_steps)
+                        };
+                        outcome.ended = why;
+                        return Ok(outcome);
+                    }
+                    let attente = attente_du_fournisseur(policy.quota_wait_s, unavailable);
+                    let line = files.append(
+                        "host",
+                        "report",
+                        None,
+                        &format!("le pas {} attend le fournisseur ({unavailable} refus sur {} permis) : {e} ; reprise dans {attente} s", number + 1, policy.max_unavailable_steps),
+                    )?;
+                    publish(bus.as_ref(), task, &line);
+                    // L'attente se coupe sur un `stop` de la boîte, ou si la tâche se ferme.
+                    let fin = std::time::Instant::now() + std::time::Duration::from_secs(attente);
+                    while std::time::Instant::now() < fin {
+                        if files.mailbox().iter().skip(read).any(|l| l["kind"] == "stop" && l["from"] != "teammate" && l["from"] != "host") {
+                            outcome.ended = "arrêté par la boîte".into();
+                            return Ok(outcome);
+                        }
+                        if self.tache(parent, task).is_none() {
+                            outcome.ended = "la tâche s'est fermée pendant l'attente".into();
+                            return Ok(outcome);
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(500).min(fin.saturating_duration_since(std::time::Instant::now())));
+                    }
+                    continue;
                 }
                 Err(e) => {
                     failed += 1;
@@ -1318,6 +1442,20 @@ impl DaemonHost {
             // vivant (ni actif ni en pause) et un pas déclaré fini. Un plan actif
             // qui n'a plus rien à faire n'est pas la fin : l'agent le clôt, puis
             // reprend un plan en pause ou le clôt aussi (Lucie).
+            // **Un pas qui finit sur une question attend la réponse** : il ne
+            // compte ni réussi, ni raté, ni dans les MAX_STEPS. La boîte le dit
+            // une fois, à l'heure où l'attente commence.
+            if let Some((rang, q)) = open_question(files) {
+                if rang >= debut_du_pas {
+                    let heure = jiff::Zoned::now().strftime("%H:%M").to_string();
+                    let texte = format!("en attente du superviseur depuis {heure} : {} {}", q["kind"].as_str().unwrap_or("question"), q["id"].as_str().unwrap_or(""));
+                    if let Ok(line) = files.append_with("host", "report", None, &texte, &json!({ "awaiting": q["id"] })) {
+                        publish(bus.as_ref(), task, &line);
+                    }
+                }
+                continue;
+            }
+            counted += 1;
             let after = files.read_plans();
             plan_seen |= !step.closed_plans().is_empty();
             if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !unread_news(&files) {
@@ -1452,6 +1590,15 @@ mod tests {
     /// Le plan s'écrit, ses questions partent dans la boîte, `step_done` passe
     /// l'élément à done ; le plan se clôt et un autre s'ouvre.
     #[test]
+    fn a_provider_refusal_is_read_from_the_turn_error_and_the_wait_doubles() {
+        assert_eq!(super::refus_du_fournisseur("le chat : llm indisponible : quota dépassé (HTTP 429) après 2 reprise(s) en 186.0 s — RESOURCE_EXHAUSTED"), Some(false));
+        assert_eq!(super::refus_du_fournisseur("llm indisponible : service en panne (HTTP 503) après 3 reprise(s) en 9.0 s — x"), Some(false));
+        assert_eq!(super::refus_du_fournisseur("llm indisponible : quota épuisé (HTTP 429), il ne revient pas en attendant — x"), Some(true));
+        assert_eq!(super::refus_du_fournisseur("llm model error: boum"), None);
+        assert_eq!((1..=6).map(|n| super::attente_du_fournisseur(60, n)).collect::<Vec<_>>(), vec![60, 120, 240, 480, 600, 600]);
+    }
+
+    #[test]
     fn the_plan_is_free_and_its_questions_go_to_the_mailbox() {
         let d = tempfile::tempdir().unwrap();
         let s = step(d.path());
@@ -1488,10 +1635,10 @@ mod tests {
         assert_eq!(s.decision().as_deref(), Some("pause"));
         let plans = s.files.read_plans();
         assert_eq!((plans.active().unwrap().number, plans.paused()[0].number), (2, 1));
-        let m = frontier_message(3, &[], &plans, false);
+        let m = frontier_message(3, &[], &plans, false, "", &[]);
         assert!(m.contains("plans en pause") && m.contains("la doc") && m.contains("le superviseur demande autre chose"), "{m}");
         s.ours(&call(EDIT_PLAN, json!({ "close": { "outcome": "accomplished", "reason": "centré" } }))).unwrap();
-        let m = frontier_message(4, &[], &s.files.read_plans(), false);
+        let m = frontier_message(4, &[], &s.files.read_plans(), false, "", &[]);
         assert!(m.contains("reprends un plan en pause"), "{m}");
         s.ours(&call(EDIT_PLAN, json!({ "resume": 1 }))).unwrap();
         let plans = s.files.read_plans();
@@ -1502,10 +1649,10 @@ mod tests {
     /// demande une décision.
     #[test]
     fn the_frontier_says_what_the_step_expects() {
-        let m = frontier_message(1, &[json!({ "kind": "request", "from": "c7", "text": "Bonjour" })], &Plans::default(), false);
+        let m = frontier_message(1, &[json!({ "kind": "request", "from": "c7", "text": "Bonjour" })], &Plans::default(), false, "", &[]);
         assert!(m.contains("Bonjour") && m.contains("Réponds ou agis"), "{m}");
         let plans = Plans { plans: vec![Plan { number: 1, request: "r".into(), proposal: "p".into(), items: vec![], state: PlanState::Active, reason: None, steps: vec![], concepts: vec![] }] };
-        let m = frontier_message(2, &[json!({ "kind": "request", "from": "c7", "text": "autre chose" })], &plans, false);
+        let m = frontier_message(2, &[json!({ "kind": "request", "from": "c7", "text": "autre chose" })], &plans, false, "", &[]);
         assert!(m.contains("décide d'abord"), "{m}");
     }
 

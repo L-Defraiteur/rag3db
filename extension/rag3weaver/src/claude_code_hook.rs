@@ -98,10 +98,6 @@ pub struct Reglage {
     pub context_tokens: u64,
     /// La part du plafond où l'on suggère de ranger, une fois.
     pub suggest_ratio: f64,
-    /// Le score minimal d'une fiche rappelée par le prompt (`chunk.score` du
-    /// meilleur signal) ; en dessous, la fiche n'est pas dite. Les scores sont
-    /// journalisés pour régler ce seuil sur l'usage.
-    pub recall_min_score: f64,
     /// Les bornes des blocs, en caractères.
     pub prompt_block_chars: usize,
     pub session_block_chars: usize,
@@ -152,7 +148,6 @@ impl Reglage {
             keys: vec!["dev".into()],
             context_tokens: 1_000_000,
             suggest_ratio: 0.7,
-            recall_min_score: 0.50,
             prompt_block_chars: 1_500,
             session_block_chars: 3_000,
             prompt_timeout_ms: 5_000,
@@ -193,7 +188,13 @@ impl Reglage {
                 "keys" => r.keys = val.as_array().ok_or("hooks.json : `keys` est une liste")?.iter().filter_map(Value::as_str).map(str::to_string).collect(),
                 "context_tokens" => r.context_tokens = val.as_u64().ok_or("hooks.json : `context_tokens` est un entier")?,
                 "suggest_ratio" => r.suggest_ratio = val.as_f64().ok_or("hooks.json : `suggest_ratio` est un nombre")?,
-                "recall_min_score" => r.recall_min_score = val.as_f64().ok_or("hooks.json : `recall_min_score` est un nombre")?,
+                // Retiré (3 ter f) : le hook ne seuille plus le dense, que trois tours
+                // réels ont montré incapable de séparer « en rapport » de « sans
+                // rapport » ; le plein texte fait le candidat. Un seuil se mesurera
+                // sur des prompts étiquetés, sur `bestSignal` (recherche, d540813d5).
+                // La clé reste acceptée, sans effet, pour qu'un hooks.json d'avant
+                // reste valide.
+                "recall_min_score" => {}
                 "prompt_block_chars" => r.prompt_block_chars = val.as_u64().ok_or("hooks.json : `prompt_block_chars` est un entier")? as usize,
                 "session_block_chars" => r.session_block_chars = val.as_u64().ok_or("hooks.json : `session_block_chars` est un entier")? as usize,
                 "prompt_timeout_ms" => r.prompt_timeout_ms = val.as_u64().ok_or("hooks.json : `prompt_timeout_ms` est un entier")?,
@@ -232,7 +233,6 @@ impl Reglage {
             "keys": self.keys,
             "context_tokens": self.context_tokens,
             "suggest_ratio": self.suggest_ratio,
-            "recall_min_score": self.recall_min_score,
             "prompt_block_chars": self.prompt_block_chars,
             "session_block_chars": self.session_block_chars,
             "prompt_timeout_ms": self.prompt_timeout_ms,
@@ -1090,10 +1090,21 @@ fn chemin_de_l_etat(reglage: &Reglage, session_id: &str) -> PathBuf {
 /// L'empreinte d'une fiche telle que le rappel la montre (nom et résumé) : une
 /// fiche dont le résumé change revient, « mise à jour ».
 fn empreinte_de_fiche(nom: &str, about: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (nom, about).hash(&mut h);
-    format!("{:016x}", h.finish())
+    // blake3, stable d'un binaire à l'autre (3 ter e) : `DefaultHasher` ne l'est
+    // pas d'une version de Rust à l'autre, et la relance de l'hôte rendait
+    // « neuve » une fiche déjà vue (ticket des bilans du juge, 8 novembre).
+    let mut h = blake3::Hasher::new();
+    h.update(nom.as_bytes());
+    h.update(&[0]);
+    h.update(about.as_bytes());
+    h.finalize().to_hex()[..32].to_string()
+}
+
+/// Une empreinte d'avant le 3 ter e (`DefaultHasher`, 16 chiffres hexadécimaux) :
+/// on ne peut pas la recalculer ; la fiche se lit déjà vue, et l'empreinte se
+/// réécrit au nouveau format au prochain rendu.
+fn empreinte_d_avant(e: &str) -> bool {
+    e.len() == 16 && e.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 impl EtatDuRappel {
@@ -1115,7 +1126,7 @@ impl EtatDuRappel {
     fn statut(&self, nom: &str, empreinte: &str) -> Statut {
         match self.rendus.get(nom) {
             None => Statut::Neuve,
-            Some((_, e)) if e == empreinte => Statut::Deja,
+            Some((_, e)) if e == empreinte || empreinte_d_avant(e) => Statut::Deja,
             Some((tour, _)) => Statut::Changee(*tour),
         }
     }
@@ -1140,11 +1151,14 @@ pub struct Candidat {
     pub about: String,
     pub plein: Option<f64>,
     pub dense: Option<f64>,
+    /// Une fiche que le juge a écrite (un bilan de run, une fiche d'outil) : un
+    /// compte rendu, pas un savoir à rappeler en tête de tour (3 ter e, A).
+    pub du_juge: bool,
 }
 
 impl Candidat {
     fn dit(&self) -> String {
-        format!("« {} » {}", self.nom, self.scores())
+        format!("« {} » {}", premiere_ligne(&self.nom, 120), self.scores())
     }
     fn scores(&self) -> String {
         match (self.plein, self.dense) {
@@ -1179,7 +1193,10 @@ pub fn candidats_du_rappel(v: &Value) -> Vec<Candidat> {
                     None => (None, None),
                 }
             };
-            Some(Candidat { nom, about: x["data"]["about"].as_str().unwrap_or("").to_string(), plein, dense })
+            // `via: juge` quand la ligne le porte ; sinon le nom que le juge donne
+            // à ses fiches (`recall_fiches` ne rend pas `via` aujourd'hui).
+            let du_juge = x["data"]["via"] == "juge" || nom.starts_with("bilan :") || nom.starts_with("outil :");
+            Some(Candidat { nom, about: x["data"]["about"].as_str().unwrap_or("").to_string(), plein, dense, du_juge })
         })
         .collect()
 }
@@ -1194,25 +1211,38 @@ impl Vocabulaire {
     fn chemin(reglage: &Reglage) -> PathBuf {
         reglage.journal.parent().map(|d| d.join("hooks")).unwrap_or_else(|| PathBuf::from("hooks")).join("vocabulaire.json")
     }
+    /// Le vocabulaire, nettoyé : un mot d'arrêt ou un mot court sans forme de
+    /// code, entré avant le 3 ter e, en sort à la première lecture (le fichier
+    /// est réécrit, sauf en rejeu).
     pub fn lire(reglage: &Reglage) -> HashSet<String> {
-        std::fs::read_to_string(Self::chemin(reglage)).ok().and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok()).unwrap_or_default().into_iter().collect()
+        let brut: Vec<String> = std::fs::read_to_string(Self::chemin(reglage)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let propre: HashSet<String> = brut.iter().filter(|m| crate::rappel_du_prompt::utile_au_vocabulaire(m)).cloned().collect();
+        if propre.len() != brut.len() && !reglage.rejeu {
+            Self::ecrire(reglage, &propre);
+        }
+        propre
     }
+    fn ecrire(reglage: &Reglage, v: &HashSet<String>) {
+        let mut l: Vec<&String> = v.iter().collect();
+        l.sort();
+        let chemin = Self::chemin(reglage);
+        let _ = std::fs::create_dir_all(chemin.parent().unwrap_or(Path::new(".")));
+        let _ = std::fs::write(chemin, serde_json::to_string(&l).unwrap_or_default());
+    }
+    /// Les noms de fiches que le juge génère (`bilan : …`, `outil : …`) sont des
+    /// phrases, pas un savoir : ils n'alimentent pas le vocabulaire.
     fn ajouter<'a>(reglage: &Reglage, noms: impl Iterator<Item = &'a str>) {
         let mut v = Self::lire(reglage);
         let avant = v.len();
-        for n in noms {
-            for m in n.split(|c: char| c.is_whitespace() || c == ':' || c == ',').map(str::to_lowercase).filter(|m| m.chars().count() >= 2) {
+        for n in noms.filter(|n| !n.starts_with("bilan :") && !n.starts_with("outil :")) {
+            for m in n.split(|c: char| c.is_whitespace() || c == ':' || c == ',').filter(|m| crate::rappel_du_prompt::utile_au_vocabulaire(m)).map(str::to_lowercase) {
                 v.insert(m);
             }
         }
         if v.len() == avant || v.len() > 2_000 {
             return;
         }
-        let mut l: Vec<String> = v.into_iter().collect();
-        l.sort();
-        let chemin = Self::chemin(reglage);
-        let _ = std::fs::create_dir_all(chemin.parent().unwrap_or(Path::new(".")));
-        let _ = std::fs::write(chemin, serde_json::to_string(&l).unwrap_or_default());
+        Self::ecrire(reglage, &v);
     }
 }
 
@@ -1228,7 +1258,7 @@ pub fn chemin_du_fond(reglage: &Reglage, session_id: &str, quoi: &str) -> PathBu
 /// de la session, puis `hook --rappel-differe <tâche>` part, détaché de son
 /// groupe de processus, entrée et sorties fermées. Jamais en rejeu ; coupé hors
 /// de la commande (`reglage.fond`), où les témoins le jouent à la main.
-fn confier_au_fond(e: &Evenement, reglage: &Reglage, requete: &str, candidats: Option<Vec<Value>>, tour: u64, journal: &mut Vec<String>) {
+fn confier_au_fond(e: &Evenement, reglage: &Reglage, requete: &str, candidats: Option<Vec<Value>>, tour: u64, soi: &str, journal: &mut Vec<String>) {
     if reglage.rejeu || e.session_id.is_empty() {
         return;
     }
@@ -1238,6 +1268,8 @@ fn confier_au_fond(e: &Evenement, reglage: &Reglage, requete: &str, candidats: O
         "requete": requete,
         "prompt": crate::rappel_du_prompt::nettoyer(e.prompt.as_deref().unwrap_or("")).chars().take(2_000).collect::<String>(),
         "candidats": candidats,
+        // La clé de la session que le juge sert (le banc, 8 novembre).
+        "soi": soi,
         "config": reglage.chemin_du_reglage,
     });
     let chemin = chemin_du_fond(reglage, &e.session_id, "tache");
@@ -1298,22 +1330,41 @@ pub struct Jugement {
     pub sortie: usize,
 }
 
+/// Le plafond de sortie du juge : 2 048, comme Decide. Un modèle qui réfléchit
+/// compte sa réflexion dans `max_tokens` : sous 400, Gemini 3.8 Flash en
+/// passait 350 à 384 à réfléchir et coupait sa réponse, sur 8 appels sur 27
+/// (ticket du banc, d596c829c) ; à 4 000, tout finissait sur « stop ».
+const PLAFOND_DU_JUGE: usize = 2_048;
+
 const SCHEMA_DU_JUGE: &str = r#"{"type":"object","properties":{"pertinent":{"type":"boolean"},"pourquoi":{"type":"string"},"items_gardes":{"type":"array","items":{"type":"string"}}},"required":["pertinent","pourquoi","items_gardes"],"additionalProperties":false}"#;
 
 /// **Juge les candidats d'un rappel** contre le prompt (nettoyé) : un appel
 /// structuré, température nulle. Lucie : « ne pas le flooder » ; le juge ne
 /// laisse passer que ce qui sert à ce tour-ci.
-pub fn juger(llm: &dyn crate::llm::Llm, prompt: &str, candidats: &[Value]) -> Result<Jugement, String> {
+/// `soi` : la clé de la session que le juge sert. Sans elle, le juge jugeait
+/// utile ce qui désigne le destinataire : sur 1 328 paires réelles, 66 des 67
+/// « utiles » de Gemini étaient la fiche d'identité de la session, « la fiche
+/// identifie la session destinataire » (banc, page 08-novembre-2026-banc/01 § 5.2).
+pub fn juger(llm: &dyn crate::llm::Llm, prompt: &str, candidats: &[Value], soi: &str) -> Result<Jugement, String> {
     use crate::llm::{GenOptions, ResponseFormat, StringSink, Turn};
     let liste = candidats.iter().map(|c| format!("- « {} » : {}", c["name"].as_str().unwrap_or("?"), premiere_ligne(c["about"].as_str().unwrap_or(""), 200))).collect::<Vec<_>>().join("\n");
-    let systeme = "Tu juges, pour un agent de code, quelles fiches de sa mémoire servent à son tour présent. Tu lis son message et les fiches candidates (nom et résumé). Tu gardes seulement celles qui l'aident à répondre à CE message ; dans le doute, tu ôtes. Tu n'inventes aucun nom : items_gardes ne contient que des noms de la liste, à l'identique. pertinent vaut false si tu n'en gardes aucune. pourquoi tient en une phrase. Réponds en JSON.";
+    let qui = if soi.is_empty() { "dont l'identité n'est pas connue".to_string() } else { format!("« {soi} »") };
+    let systeme = format!("Tu juges, pour un agent de code, quelles fiches de sa mémoire servent à son tour présent. Tu sers la session {qui}. Tu lis son message et les fiches candidates (nom et résumé). Tu gardes seulement celles qui l'aident à répondre à CE message ; dans le doute, tu ôtes. Une fiche qui désigne cette session elle-même (son identité, son nom, son handle) n'est pas une aide : ôte-la, elle sait déjà qui elle est. Tu n'inventes aucun nom : items_gardes ne contient que des noms de la liste, à l'identique. pertinent vaut false si tu n'en gardes aucune. pourquoi tient en une phrase. Réponds en JSON.");
     let utilisateur = format!("Message de l'agent :\n{}\n\nFiches candidates :\n{liste}", prompt.chars().take(2_000).collect::<String>());
     let schema: Value = serde_json::from_str(SCHEMA_DU_JUGE).map_err(|e| e.to_string())?;
-    let opts = GenOptions::default().with_response_format(ResponseFormat::strict_schema("juge_du_rappel", schema)).with_temperature(0.0).with_max_tokens(400);
+    let opts = GenOptions::default().with_response_format(ResponseFormat::strict_schema("juge_du_rappel", schema)).with_temperature(0.0).with_max_tokens(PLAFOND_DU_JUGE);
     let mut sink = StringSink::default();
     let debut = std::time::Instant::now();
-    let (_, usage) = llm.generate(&[Turn::system(systeme), Turn::user(&utilisateur)], &opts, &mut sink).map_err(|e| format!("juge : {e}"))?;
+    let (fin, usage) = llm.generate(&[Turn::system(&systeme), Turn::user(&utilisateur)], &opts, &mut sink).map_err(|e| format!("juge : {e}"))?;
     let ms = if usage.ms > 0 { usage.ms } else { debut.elapsed().as_millis() as u64 };
+    // Une réponse coupée se dit comme telle, pas « illisible » : on saura que
+    // c'est le plafond, et combien le modèle a réfléchi.
+    if fin.reason == crate::llm::FinishReason::MaxTokens {
+        return Err(format!(
+            "juge : réponse coupée après {} jetons (raison length, plafond {PLAFOND_DU_JUGE}, dont {} de réflexion)",
+            usage.completion_tokens, usage.reasoning_tokens
+        ));
+    }
     let v: Value = serde_json::from_str(sink.text.trim()).map_err(|e| format!("juge : réponse illisible ({e}) : {}", premiere_ligne(&sink.text, 120)))?;
     let connus: HashSet<&str> = candidats.iter().filter_map(|c| c["name"].as_str()).collect();
     let gardes: Vec<String> = v["items_gardes"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).filter(|n| connus.contains(n)).map(str::to_string).collect();
@@ -1354,7 +1405,7 @@ pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, 
             };
             match h.appeler_borne("recall_fiches", json!({ "query": requete, "options": { "limit": 3, "filter_condition": { "field": { "key": "state", "value": ["current", "to_review"] } } } }), Duration::from_secs(30)) {
                 // Le fils refait le rappel : il ne juge que ce que le plein texte touche.
-                Ok(v) => candidats_du_rappel(&v).into_iter().filter(|c| c.plein.is_some()).map(|c| c.json()).collect(),
+                Ok(v) => candidats_du_rappel(&v).into_iter().filter(|c| c.plein.is_some() && !c.du_juge).map(|c| c.json()).collect(),
                 Err(err) => {
                     journal.push(format!("[fond] {session} : rappel en {} ms : {err}", debut.elapsed().as_millis()));
                     return journal;
@@ -1362,6 +1413,9 @@ pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, 
             }
         }
     };
+    // La fiche propre n'est jamais un candidat, ici non plus.
+    let soi = t["soi"].as_str().unwrap_or("").to_string();
+    let candidats: Vec<Value> = candidats.into_iter().filter(|c| soi.is_empty() || c["name"].as_str() != Some(soi.as_str())).collect();
     journal.push(format!("[fond] {session} : rappel « {requete} » en {} ms, {} candidat(s)", debut.elapsed().as_millis(), candidats.len()));
     // Venus du tour, les candidats sont ce qui reste après son seul rendu : sans
     // juge, ils se taisent. Venus d'un rappel refait (le budget dépassé), rien
@@ -1378,7 +1432,7 @@ pub fn rappel_differe(tache: &Path, reglage: &Reglage, hote: Option<&dyn Hote>, 
     let (gardes, verdict) = match (juge, reglage.recall_judge, candidats.is_empty()) {
         (_, _, true) => (Vec::new(), json!(null)),
         (Some(_), true, false) if au_plafond => sans_juge(&format!("plafond horaire atteint, {} appels", reglage.recall_judge_max_per_hour), &mut journal),
-        (Some(llm), true, false) => match juger(llm, t["prompt"].as_str().unwrap_or(""), &candidats) {
+        (Some(llm), true, false) => match juger(llm, t["prompt"].as_str().unwrap_or(""), &candidats, t["soi"].as_str().unwrap_or("")) {
             Ok(j) => {
                 journal.push(format!("[fond] juge : modèle {}, {} ms, entrée {} jetons, sortie {} jetons", j.modele, j.ms, j.entree, j.sortie));
                 journal.push(format!("[fond] juge : {} candidat(s), {} gardé(s) — {}", candidats.len(), j.gardes.len(), j.pourquoi));
@@ -1513,7 +1567,13 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 // sujet) : une fiche que les mots extraits touchent est candidate ; une
                 // fiche que seul le dense trouve n'est pas jugée tant qu'un écart ou un
                 // seuil dense n'a pas été mesuré sur une mémoire peuplée.
-                let restants: Vec<&Candidat> = candidats.iter().filter(|c| c.nom != soi).collect();
+                // Les fiches du juge ne sont pas rappelées en tête de tour (A, tranché
+                // par hooks-essai) : elles restent lisibles par `get_fiche`, et dites.
+                let du_juge: Vec<String> = candidats.iter().filter(|c| c.du_juge && c.nom != soi).map(|c| format!("« {} »", premiere_ligne(&c.nom, 60))).collect();
+                if !du_juge.is_empty() {
+                    raisons.push(format!("exclu : {} (bilan du juge)", du_juge.join(", ")));
+                }
+                let restants: Vec<&Candidat> = candidats.iter().filter(|c| c.nom != soi && !c.du_juge).collect();
                 let mut touches: Vec<&Candidat> = restants.iter().copied().filter(|c| c.plein.is_some()).collect();
                 touches.sort_by(|a, b| b.plein.partial_cmp(&a.plein).unwrap_or(std::cmp::Ordering::Equal));
                 let dense_seul: Vec<String> = restants.iter().filter(|c| c.plein.is_none()).map(|c| format!("« {} » {:.2}", c.nom, c.dense.unwrap_or(0.0))).collect();
@@ -1538,7 +1598,7 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                     if reglage.recall_judge {
                         raisons.push(format!("{} rendu, {} au juge", neuves.len(), reste.len()));
                         let pour_le_juge: Vec<Value> = reste.iter().map(|(c, _)| c.json()).collect();
-                        confier_au_fond(e, reglage, &requete, Some(pour_le_juge), etat.tour, journal);
+                        confier_au_fond(e, reglage, &requete, Some(pour_le_juge), etat.tour, soi, journal);
                     } else {
                         raisons.push(format!("{} rendu, {} tus (juge coupé)", neuves.len(), reste.len()));
                     }
@@ -1547,7 +1607,9 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                     raisons.push("silence".into());
                 } else {
                     b.push_str("Fiche en rapport (touchée au plein texte par les mots du prompt) : ");
-                    b.push_str(&neuves.iter().map(|(c, maj)| format!("« {} » ({}{}{})", c.nom, c.scores(), if c.about.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(&c.about, 80)) }, maj.map(|t| format!(" ; mise à jour depuis le tour {t}")).unwrap_or_default())).collect::<Vec<_>>().join(" ; "));
+                    // Le nom rendu borné à 200 caractères : celui d'une fiche de bilan
+                    // est le prompt entier de son run (plus de 2 000 caractères).
+                    b.push_str(&neuves.iter().map(|(c, maj)| format!("« {} » ({}{}{})", premiere_ligne(&c.nom, 200), c.scores(), if c.about.is_empty() { String::new() } else { format!(" ; {}", premiere_ligne(&c.about, 80)) }, maj.map(|t| format!(" ; mise à jour depuis le tour {t}")).unwrap_or_default())).collect::<Vec<_>>().join(" ; "));
                     b.push_str(" — `get_fiche` pour lire.\n");
                     for (c, _) in &neuves {
                         etat.rendre(&c.nom, &empreinte_de_fiche(&c.nom, &c.about));
@@ -1559,7 +1621,7 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 let lent = err.contains("timeout") || err.contains("ne répond pas") || err.contains("délai dépassé côté hôte");
                 journal.push(format!("recall_fiches en {} ms : {err}", debut.elapsed().as_millis()));
                 if lent {
-                    confier_au_fond(e, reglage, &requete, None, etat.tour, journal);
+                    confier_au_fond(e, reglage, &requete, None, etat.tour, identite.as_ref().map(|i| i.cle.as_str()).unwrap_or(""), journal);
                     b.push_str(&format!("Rappel des fiches : pas de réponse en {} ms — il continue en fond, son résultat viendra au prochain outil ou au prochain tour.\n", reglage.recall_timeout_ms));
                 } else {
                     b.push_str(&format!("Rappel des fiches en panne : {} — le rappel sera retenté au prochain tour.\n", premiere_ligne(&err, 160)));
@@ -2030,6 +2092,9 @@ mod tests {
         assert_eq!((r.context_tokens, r.prompt_timeout_ms, r.keys.as_slice()), (200_000, 1_000, &["admin".to_string()][..]));
         assert_eq!(r.delai("UserPromptSubmit"), Duration::from_millis(1_000));
         assert_eq!(r.delai("Stop"), Duration::from_millis(20_000));
+        // Un hooks.json d'avant le 3 ter f porte encore `recall_min_score` : il reste
+        // valide, la clé est sans effet.
+        assert_eq!(Reglage::lire(r#"{"recall_min_score": 0.5}"#).unwrap(), Reglage::defaut());
         let e = Reglage::lire(r#"{"contexte": 1}"#).unwrap_err();
         assert!(e.contains("contexte") && e.contains("context_tokens"), "{e}");
         // Les défauts écrits se relisent à l'identique.
@@ -2639,15 +2704,99 @@ mod tests {
     }
 
     #[test]
+    fn les_bilans_du_juge_n_alimentent_pas_le_vocabulaire_et_le_cache_se_nettoie() {
+        let _env = env();
+        let (chemin, reglage) = transcription_d_essai("vocabulaire", &[T_USER]);
+        // Un cache d'avant le 3 ter e, pollué par les mots d'un nom de bilan.
+        let cache = chemin.parent().unwrap().join("hooks/vocabulaire.json");
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, json!(["avec", "donc", "mais", "régime", "sur", "gpu"]).to_string()).unwrap();
+        let lu = Vocabulaire::lire(&reglage);
+        assert!(lu.contains("régime") && !lu.contains("sur") && !lu.contains("avec") && !lu.contains("mais"), "{lu:?}");
+        let relu: Vec<String> = serde_json::from_str(&std::fs::read_to_string(&cache).unwrap()).unwrap();
+        assert!(!relu.iter().any(|m| m == "sur"), "le fichier est réécrit propre à la première lecture : {relu:?}");
+        // Un rappel qui rend une fiche de bilan au nom-phrase : rien de ce nom n'entre.
+        let bilan = format!("bilan : tâche réelle, bornée, dans ce worktree du dépôt rag3db, avec un ticket sur les journaux {}", "et la suite du prompt ".repeat(120));
+        let mut h = hote_avec_identite();
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
+            { "chunk": { "score": 0.4 }, "signals": [{ "label": "vector", "score": 0.4 }, { "label": "bm25", "score": 9.0 }], "data": { "name": bilan, "about": "compte rendu", "state": "current" } },
+            { "chunk": { "score": 0.4 }, "signals": [{ "label": "bm25", "score": 2.0 }], "data": { "name": "lucivy embarquement", "about": "x", "state": "current" } }
+        ] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur le worktree et rag3db"), &reglage, Ok(&h));
+        let v = Vocabulaire::lire(&reglage);
+        assert!(!v.contains("tâche") && !v.contains("worktree") && !v.contains("bornée"), "un nom de bilan n'alimente pas le vocabulaire : {v:?}");
+        assert!(v.contains("lucivy") && v.contains("embarquement"), "{v:?}");
+        // Le bilan du juge n'est pas rappelé (A) : exclu, et nommé au journal.
+        assert!(!r.bloc.contains("bilan :"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("exclu : « bilan : tâche réelle") && l.contains("(bilan du juge)")), "{:?}", r.journal);
+        assert!(r.bloc.contains("« lucivy embarquement »"), "le reste passe : {}", r.bloc);
+        assert!(r.journal.iter().all(|l| l.chars().count() < 700), "{:?}", r.journal);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn une_fiche_ecrite_par_le_juge_n_est_pas_rappelee_meme_sans_son_prefixe() {
+        let _env = env();
+        let (chemin, reglage) = transcription_d_essai("via-juge", &[T_USER]);
+        let mut h = hote_avec_identite();
+        // `via: juge` dans la ligne, sous un nom qui n'a pas le préfixe.
+        h.reponses.insert("recall_fiches", json!({ "ok": true, "result": { "result": [
+            { "chunk": { "score": 0.4 }, "signals": [{ "label": "bm25", "score": 8.0 }], "data": { "name": "compte rendu du worktree rag3db", "about": "x", "state": "current", "via": "juge" } }
+        ] } }));
+        let r = repondre(&prompt(&chemin, "une question assez longue sur le worktree et rag3db"), &reglage, Ok(&h));
+        assert!(!r.bloc.contains("compte rendu du worktree"), "{}", r.bloc);
+        assert!(r.journal.iter().any(|l| l.contains("exclu : « compte rendu du worktree rag3db » (bilan du juge)")), "{:?}", r.journal);
+        let _ = std::fs::remove_dir_all(chemin.parent().unwrap());
+    }
+
+    #[test]
+    fn une_empreinte_d_avant_se_lit_deja_vue_et_la_nouvelle_est_stable() {
+        let mut etat = EtatDuRappel::default();
+        etat.rendus.insert("régime GPU".into(), (3, "67582156d5c0d06a".into()));
+        assert!(matches!(etat.statut("régime GPU", &empreinte_de_fiche("régime GPU", "les cartes")), Statut::Deja), "une empreinte DefaultHasher d'avant n'est pas « neuve »");
+        // blake3 : la même entrée, la même empreinte, à chaque binaire.
+        assert_eq!(empreinte_de_fiche("régime GPU", "les cartes"), empreinte_de_fiche("régime GPU", "les cartes"));
+        assert_ne!(empreinte_de_fiche("régime GPU", "les cartes"), empreinte_de_fiche("régime GPU", "les cartes, et la carte 2"));
+        assert_eq!(empreinte_de_fiche("a", "b").len(), 32);
+        assert_ne!(empreinte_de_fiche("ab", ""), empreinte_de_fiche("a", "b"), "le séparateur distingue nom et résumé");
+    }
+
+    #[test]
+    fn une_reponse_coupee_du_juge_se_dit_coupee_et_le_plafond_est_celui_de_decide() {
+        // Un faux modèle qui rend finish_reason length, comme Gemini 3.8 Flash sous 400.
+        let vu = Arc::new(Mutex::new(0usize));
+        let v2 = vu.clone();
+        let coupe = crate::llm::CallbackLlm::new("faux-flash", 4096, move |_turns, opts, sink| {
+            *v2.lock().unwrap() = opts.max_tokens;
+            sink.on_token(r#"{"pertinent": tr"#);
+            Ok((crate::llm::Finish::new(crate::llm::FinishReason::MaxTokens, Vec::new()), crate::llm::Usage { prompt_tokens: 900, completion_tokens: 400, reasoning_tokens: 384, ..Default::default() }))
+        });
+        let e = juger(&coupe, "les cartes", &[json!({ "name": "régime GPU", "about": "x" })], "96").unwrap_err();
+        assert!(e.contains("réponse coupée après 400 jetons (raison length") && e.contains("dont 384 de réflexion") && !e.contains("illisible"), "{e}");
+        assert_eq!(*vu.lock().unwrap(), 2_048, "le plafond du juge est celui de Decide");
+    }
+
+    #[test]
     fn le_juge_ote_et_n_invente_rien() {
         let candidats = vec![json!({ "name": "régime GPU", "about": "les cartes du poste" }), json!({ "name": "hooks-essai", "about": "la session d'essai" })];
         let llm = crate::llm::MockLlm::new(r#"{"pertinent": true, "pourquoi": "le message parle des cartes", "items_gardes": ["régime GPU", "une fiche inventée"]}"#);
-        let j = juger(&llm, "comment ménager les cartes", &candidats).unwrap();
+        let j = juger(&llm, "comment ménager les cartes", &candidats, "hooks-essai").unwrap();
         assert_eq!(j.gardes, vec!["régime GPU".to_string()], "un nom qu'il n'a pas reçu est jeté");
         assert!(j.pertinent);
         let llm = crate::llm::MockLlm::new(r#"{"pertinent": false, "pourquoi": "hors sujet", "items_gardes": []}"#);
-        assert!(!juger(&llm, "x", &candidats).unwrap().pertinent);
-        assert!(juger(&crate::llm::MockLlm::new("pas du json"), "x", &candidats).unwrap_err().contains("réponse illisible"));
+        assert!(!juger(&llm, "x", &candidats, "hooks-essai").unwrap().pertinent);
+        assert!(juger(&crate::llm::MockLlm::new("pas du json"), "x", &candidats, "hooks-essai").unwrap_err().contains("réponse illisible"));
+        // La consigne dit quelle session le juge sert, et qu'une fiche qui la
+        // désigne n'est pas une aide (le banc : 66 « utiles » sur 67 l'étaient).
+        let consigne = Arc::new(Mutex::new(String::new()));
+        let c2 = consigne.clone();
+        let espion = crate::llm::CallbackLlm::new("espion", 4096, move |turns, opts, sink| {
+            *c2.lock().unwrap() = format!("{:?}", turns.first());
+            crate::llm::Llm::generate(&crate::llm::MockLlm::new(r#"{"pertinent": false, "pourquoi": "rien", "items_gardes": []}"#), turns, opts, sink)
+        });
+        let _ = juger(&espion, "x", &candidats, "hooks-essai").unwrap();
+        let c = consigne.lock().unwrap().clone();
+        assert!(c.contains("Tu sers la session « hooks-essai »") && c.contains("désigne cette session elle-même"), "{c}");
     }
 
     #[test]

@@ -13,6 +13,13 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   passe complète sous le jeu large (check_features, la lib entière, l'étape navigateur, les e2e)
   pèse 19 à 26 Go, une rlib et un binaire de tests par jeu de features. Un target sous 32 Go
   n'est pas une accumulation : il ne s'efface pas en cours de lot.
+- **La lib entière se joue avec ou sans `RAG3WEAVER_EMBED_SERVICE`** (depuis le lot du délai,
+  « fix(délai): un délai partout », 8 novembre 2026) : un service d'embarquement qui ne rend pas
+  fait rougir en N s (« service d'embarquement <adresse> muet après N s »), il ne fige plus. Du 7
+  au 8 novembre, la lib entière se jouait **sans** service (règle de c7) : derrière un bge-m3 en
+  file, le relecteur et l'OCR attendaient sans délai, et l'arrêt borné des réactions comptait son
+  délai sur les deux fils du runtime du crate que ces attentes tenaient — la lib entière se
+  figeait (ticket `docs/tickets/closed/2026-11-07-la-lib-entiere-se-fige-ou-rougit-par-intermittence.md`).
 - **Un worktree est jetable** (vision du 6 novembre, « Un worktree est jetable, donc
   distribuable » ; Lucie, 7 novembre : 46 worktrees à luciepc ce matin, 32 déjà fusionnés). Un
   contrôle **en début de passe** refuse un worktree dont la branche est déjà atterrie
@@ -123,3 +130,8 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   suivent la même règle à la fin de chaque lot, plus seulement à la fin de la session.
 - Les rapports de session (`01-rapport`, `02-knowledge-dump` du jour) se tiennent à jour après
   chaque lot ; un défaut connu non corrigé devient un ticket dans `docs/tickets/`.
+- **Le README suit ce que l'utilisateur voit** (Lucie, 8 novembre 2026) : un lot dont la ligne de
+  `docs/nouveautes.md` change ce que l'utilisateur voit ou fait — un outil, une commande, un
+  réglage, un comportement visible — met aussi à jour le README concerné (`README.md` à la racine,
+  `extension/rag3weaver/README.md`) dans le même lot. Sinon, un rattrapage des README depuis
+  `nouveautes.md` toutes les semaines.

@@ -189,3 +189,72 @@ désormais :
 La limite reste celle du ticket de hooks-essai, « un arrêt ne coupe pas une requête du moteur en
 cours ». L'arrêt se lit entre deux nœuds du graphe, et une requête du moteur déjà lancée va à son
 terme. L'extraction des mots-clés du § 2 reste donc la vraie garde contre un plein texte long.
+
+## 9. Le 3 ter (e) : le vocabulaire sans les bilans, une empreinte stable
+
+Le premier tour sur le binaire posé le 8 novembre, chez hooks-essai à 8 h 33, a extrait
+« hooks-essai sur avec rend Mais mémoire brut disparu donc correctif ». Des mots d'arrêt étaient
+passés en tête, parce que le vocabulaire de la mémoire les tenait pour connus. Le cache prenait les
+mots de **tous** les noms de fiches, et le nom d'une fiche de bilan du juge est le prompt entier de
+son run. Ticket de hooks-essai :
+`docs/tickets/2026-11-08-les-bilans-du-juge-remontent-au-rappel-sur-des-mots-courants.md`.
+
+Ce que le (e) prend :
+- **Le vocabulaire n'admet ni un mot d'arrêt, ni un mot de moins de quatre lettres** sans forme de
+  code (`rappel_du_prompt::utile_au_vocabulaire`). Les noms `bilan : …` et `outil : …`, générés
+  par le juge, ne l'alimentent pas.
+- **Un mot connu ne passe plus outre la liste d'arrêt.**
+- **Le cache existant se nettoie à la première lecture** : les mots qui n'y ont pas leur place
+  sortent, et le fichier est réécrit, sauf en rejeu.
+- **Le nom d'une fiche rendue est borné à 200 caractères**, et à 120 dans le journal.
+- **L'empreinte du déjà-vu passe à blake3**, sur 32 chiffres hexadécimaux, stable d'un binaire à
+  l'autre. `DefaultHasher` ne l'est pas d'une version de Rust à l'autre, et c'est l'une des deux
+  causes possibles du point 3 du ticket. Une empreinte d'avant, de 16 chiffres, se lit « déjà vue »
+  et se réécrit au prochain rendu. La relance de l'hôte ne rend donc rien « neuf » à tort.
+
+- **Les fiches du juge ne sont plus rappelées en tête de tour** (A, tranché par hooks-essai). Une
+  fiche de bilan ou d'outil est un compte rendu, pas un savoir. Elle reste lisible par
+  `get_fiche`, et le journal la nomme : « exclu : « … » (bilan du juge) ». On n'a pas pris B, la
+  confier au seul juge différé : sans modèle dans l'environnement du hook, B revenait à la taire
+  sans le dire. Le critère :
+  - `via: juge` quand la ligne du rappel le porte ;
+  - sinon le nom que le juge leur donne, `bilan : …` ou `outil : …`.
+
+  `recall_fiches` ne rend pas `via` aujourd'hui : ce champ n'est pas dans les `returnFields` de
+  `Fiche` du gabarit memory. Son ajout est demandé à 96 ; le manifeste de Lucie est le sien. Le
+  préfixe tient lieu en attendant.
+- **Le second ticket de hooks-essai**, « une fiche déjà vue redevient neuve après la relance de
+  l'hôte », est fermé par l'empreinte blake3.
+
+Ce que le (e) laisse au ticket des bilans : **le nom court d'une fiche de bilan**, un titre et
+l'empreinte de la consigne, côté juge. hooks-essai le prend dans un lot à part.
+
+La passe est épinglée sur la lib dadbf0041, la lib ordinaire du 8 novembre, sans
+`RAG3WEAVER_MOTEUR_ANCIEN`.
+
+## 10. Le 3 ter (f) : `recall_min_score` retiré
+
+Depuis le (b), la logique du rappel ne lit plus `recall_min_score`. Le plein texte fait le
+candidat, et le dense seul n'est pas jugé. Le champ est donc retiré du réglage. La clé reste
+acceptée dans `hooks.json`, sans effet, pour qu'un fichier d'avant reste valide, et le script
+d'installation ne l'écrit plus. Recherche a ajouté `bestSignal: {label, score, rank}` à chaque ligne
+fusionnée (d540813d5), le signal qui pèse le plus dans son rang. Un seuil, s'il en faut un, se
+mesurera sur ce champ, à partir de prompts réels étiquetés « en rapport » ou « sans rapport », quand
+la mémoire sera peuplée.
+
+## 11. Le 3 ter (g) : le juge, son plafond et la session qu'il sert
+
+Deux relevés du banc (`docs/08-novembre-2026-banc/01`) :
+- **Le juge coupait sa réponse.** Gemini 3.8 Flash compte sa réflexion dans `max_tokens`. Sous un
+  plafond de 400, il passait 350 à 384 jetons à réfléchir, et coupait sa réponse sur 8 appels sur
+  27 ; le banc en compte 37 sur 146. À 4 000, tout finissait sur « stop ». Le plafond passe à
+  **2 048**, celui de Decide. Une coupe se dit désormais pour ce qu'elle est : « réponse coupée
+  après N jetons (raison length, plafond 2048, dont N de réflexion) », et non plus « réponse
+  illisible ». Ticket du banc, d596c829c.
+- **Le juge jugeait utile ce qui désigne le destinataire.** Sur 1 328 paires réelles, 66 des 67
+  « utiles » de Gemini étaient la fiche d'identité de la session, avec la raison « la fiche
+  identifie la session destinataire ». La consigne ne disait pas au juge quelle session il sert.
+  Elle porte maintenant la clé de la session, et la règle « une fiche qui désigne cette session
+  elle-même n'est pas une aide ». La tâche du fils porte cette clé, et le fils ôte aussi la fiche
+  propre avant de juger. Rien ne fuyait jusqu'ici, puisque le hook écarte déjà la fiche propre en
+  tête de tour ; la règle compte si le juge est rallumé.

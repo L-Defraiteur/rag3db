@@ -38,6 +38,40 @@ impl Roots {
         Ok(Self { config, data })
     }
 
+    /// **Les manifestes des arbres inscrits** : les `.json` de
+    /// `<config>/*/templates/backends/code/` qui déclarent `database` et `tools` et
+    /// portent le nom de leur arbre — sinon, dans un arbre où aucun ne le porte, tous
+    /// sauf `snapshot.json`, l'instantané que le gabarit livre à côté —, triés.
+    pub fn registered_manifests(&self) -> Vec<PathBuf> {
+        let mut chemins = Vec::new();
+        let Ok(arbres) = std::fs::read_dir(&self.config) else { return chemins };
+        for arbre in arbres.flatten() {
+            let Ok(it) = std::fs::read_dir(arbre.path().join("templates/backends/code")) else { continue };
+            let mut candidats: Vec<(PathBuf, bool)> = Vec::new();
+            for f in it.flatten() {
+                let p = f.path();
+                let v = p
+                    .extension()
+                    .is_some_and(|e| e == "json")
+                    .then(|| std::fs::read_to_string(&p).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()))
+                    .flatten();
+                if let Some(v) = v.filter(|v| v.get("database").is_some() && v.get("tools").is_some()) {
+                    let du_nom = v["name"].as_str() == arbre.file_name().to_str();
+                    candidats.push((p, du_nom));
+                }
+            }
+            // Le manifeste qui porte le nom de l'arbre ; sinon les autres, sauf
+            // l'instantané que le gabarit livre à côté.
+            if candidats.iter().any(|(_, n)| *n) {
+                chemins.extend(candidats.into_iter().filter(|(_, n)| *n).map(|(p, _)| p));
+            } else {
+                chemins.extend(candidats.into_iter().map(|(p, _)| p).filter(|p| p.file_name().is_none_or(|n| n != "snapshot.json")));
+            }
+        }
+        chemins.sort();
+        chemins
+    }
+
     /// Le manifeste du backend `nom`.
     pub fn manifest(&self, nom: &str) -> PathBuf {
         self.config.join(nom).join("templates/backends/code/backend.json")

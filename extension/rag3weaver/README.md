@@ -6,7 +6,7 @@ the code graph, the processing graphs, the tools, the sessions and the memories
 — all declared, all addressable, all in one process.
 
 It runs on [rag3db](../../README.md) (graph + HNSW, embedded) and on
-[lucivy](https://github.com/L-Defraiteur/lucivy/) (BM25, in-process). Native only.
+[lucivy](https://github.com/L-Defraiteur/lucivy/) 4.3.2 (BM25, in-process). Native only.
 
 ## The idea
 
@@ -28,14 +28,17 @@ is clickable. The long version (French):
 | Layer | What it is | State |
 |---|---|---|
 | ingestion | records → chunks → rows → links → embeddings, by batches, resumable after a crash | delivered, measured on benches |
-| hybrid search | BM25 (lucivy, 5 query modes) + dense HNSW + learned sparse, rank fusion, optional cross-encoder reranking | delivered |
-| dataflow | a DAG runtime with typed ports, 47 built-in nodes, Mermaid templates, execution reports, checkpoints and undo | delivered |
-| code graph | `codeparsers` (submodule, 13 languages): scopes, symbols, usages, impact, links between files; a synchronizer that re-indexes what changed | delivered; `usages`, `impact`, links |
-| the agent's backend | `rag3weaver-backend` and `rag3weaver-chat`: search, read, grep, edit, run, sections after each tool; LLM through an OpenAI-compatible API or a local model | delivered, in daily use on this repository |
+| hybrid search | BM25 (lucivy) + dense HNSW + learned sparse, rank fusion with exact matches first, per-signal scores, highlighted passages, optional cross-encoder reranking | delivered |
+| dataflow | a DAG runtime with typed ports, 56 built-in nodes (71 with `code`), Mermaid templates, sub-graphs called once or per item, execution reports, checkpoints and undo | delivered |
+| code graph | `codeparsers` (submodule, 13 languages): scopes, symbols, usages, impact, links between files, C and C++ calls resolved through their `#include`s; a synchronizer that re-indexes what changed | delivered |
+| the agent's backend | `rag3weaver-backend` and `rag3weaver-chat`: search, read, grep, edit, run, sections after each tool; models through an OpenAI-compatible API, the Anthropic Messages API, or a local server | delivered, in daily use on this repository |
+| the teammate | an agent that works alone on a task branch, step by step, and talks to its supervisor through a mailbox | delivered |
+| Claude Code and Codex | hooks that bring the memory into a Claude Code session, a mailbox and a channel shared by sessions, Codex threads and teammates | delivered; Codex delivery tested against a stand-in, not yet against Codex itself |
+| the IDE and the terminal | a React IDE served by the host; `rag3weaver-tty`, a terminal client that also works over ssh | delivered |
 | embeddings | granite-embedding-278m by default (107m on a first large index or a weak GPU), MiniLM, multilingual MiniLM, BGE-M3 — all on burn/wgpu (Vulkan); an embedding service and a daemon (`rag3daemon`, `rag3weaver-embeddings`) | delivered |
 | multi-tenant | `org` × `project` on every row, one FTS and sparse index per cell | delivered |
-| other backends | `SchemaDialect` trait with a PostgreSQL implementation (`postgres` feature) | partial — the contract a dialect must honour is not written yet |
-| long memory | a `memory` template, references, states | in progress |
+| other backends | `SchemaDialect` trait with a PostgreSQL implementation (`postgres` feature); declared Plans render a read in both dialects | partial — the contract a dialect must honour is not written yet |
+| long memory | the `memory` template: cards as Markdown files, rebuilt from their folder if the database is lost; references, states, `cited_by`, `whois` | delivered; an archivist that sorts and merges cards is in progress |
 | context cards, declared backend and views, talking to a page | | visions — nothing coded |
 
 ## Measured
@@ -110,15 +113,39 @@ let (output, report) = runtime.execute_with_report(&mut graph).await?;
 
 Three signals, combinable as bitflags (`BM25`, `VECTOR`, `SPARSE`), fused by
 reciprocal rank (or weighted), with each signal either feeding candidates or
-boosting them. BM25 has five query modes — `Contains` (substring across tokens,
-fuzzy, relaxed separators), `ContainsSplit`, `Regex`, `Parse` (boolean syntax),
-`Symbol` (exact, separators included: `foo->bar`, `std::sync::Arc<Mutex<T>>`).
-Highlights are aligned to chunks. Engine warnings come back in
-`SearchMeta.warnings` on every search.
+boosting them. BM25 has six query modes — `Auto` (the default), `Contains`
+(substring across tokens, fuzzy, relaxed separators), `ContainsSplit`, `Regex`,
+`Parse` (boolean syntax), `Symbol` (exact, separators included: `foo->bar`,
+`std::sync::Arc<Mutex<T>>`).
+
+With `Auto`, a query goes to lucivy twice, in parallel: whole, as one substring
+at distance 1, and word by word. What the whole query found is ranked ahead of
+everything the fusion ranked, so a sentence copied from a file brings that file
+back first. A long query is bounded and says so in `SearchMeta.warnings`: past
+900 characters the whole query is searched without fuzziness, and the word
+search keeps the 64 longest terms. lucivy treats `'` and `’` as the same
+apostrophe since 4.3.2.
+
+Each result says what each signal made of it — score and rank in that signal's
+own list (`signals`), the signal that weighs most in its fused rank
+(`bestSignal`), and the scale of its chunk's score (`chunk.signal`); the chunk
+shown is the one from that signal. These scores are not comparable with each
+other. Each chunk carries its highlighted passages (`highlights`, in UTF-16
+units of the chunk text): the spans lucivy found, and, with
+`options.highlights = "sparse"`, passages of a chunk found by the dense signal
+alone, from the positions the bge-m3 service weighs (no tokenizer or model in
+the host; the query words instead when the service does not answer). Engine
+warnings come back in `SearchMeta.warnings` on every search; the `search_code`
+tool also returns its metadata as JSON.
 
 When a signal is unavailable or fails, the search falls back on the others and
 says so in its status (`signal is not available` / `signal failed`) — never a
-silent empty result.
+silent empty result. A vector index that is being rebuilt, missing or
+incomplete makes the dense signal step aside, by name, while the words answer.
+At the end of each index run, every full-text index counts its documents
+against the rows and reports a gap. A filtered search reads all its signals
+from the same committed state, and a filter applies to the learned-sparse
+signal too.
 
 Full text is stored either **as files in `<base>.fts/`** (the default for a new
 database on disk: lower memory, faster reopen; the folder is part of the database,
@@ -136,7 +163,8 @@ the neighbour lists a write touches are rewritten); to get the new pruning, recr
 
 With the `code` feature, a repository becomes a graph: files, scopes, symbols,
 `DEFINES`, `CONSUMES`, `REFERENCES`, `MENTIONS` edges, with a `resolution` mark on each
-edge saying how it was found (by path, by name, guessed). The synchronizer
+edge saying how it was found (by path, by name, guessed). A C or C++ call is
+resolved only to what its file includes. The synchronizer
 indexes by batches, marks what it has proven, and on restart redoes only what is
 incomplete. Tools built on it: `usages`, `impact` (what depends on this), links
 rendered as a tree.
@@ -167,7 +195,10 @@ rag3weaver is not a library an agent calls; it is where the agent runs.
   work.
 - **The model is a service**, like the embedder: `LlmNode`, a `decider`
   (a text, a closed list of options, a probability per option), an
-  OpenAI-compatible client or a local server; streaming is in the trait.
+  OpenAI-compatible client, the Anthropic Messages API (`anthropic-llm`,
+  `"protocol": "anthropic"` in `models.llm`) or a local server, all behind the
+  same `Llm` trait; streaming is in the trait, and a model may declare its
+  reasoning budget (`models.llm.reasoning`).
 
 ### Working alone: steps, a judge, a memory
 
@@ -198,21 +229,76 @@ flowchart TD
     P -->|"closed plans"| F
 ```
 
-What is on master: the run journal and the session judge (`4b64a98e5`), the
-tool verdicts (`bdf5929c7`: missing or misnamed parameter, a parameter that
-should be optional, a return that is malformed, inconsistent, verbose, off-topic
-or incomplete, each with its call id and a proposed shape, kept in a fiche per
-tool), the journal bounded by weight and age with pinned runs (`82db9a463`), and
-the chat that codes inside a task on a foreign repository (`ae127d634`). The
-step loop, the mini-plan and the mailbox are the lot in progress
-(`docs/25-octobre-2026-everything-declarative/07-l-equipier.md`). A tool that
-the judge keeps flagging is the signal to change the tool; a declared tool
-born under watch, a sandbox for its trial calls, and the judge addressing its
-author are the seed after that (`visions/00-vision-generale.md`, §7).
+All of it is on master: the step loop, the mini-plan and the mailbox
+(`0ab04909a`), the run journal and the session judge, the tool verdicts (missing
+or misnamed parameter, a parameter that should be optional, a return that is
+malformed, inconsistent, verbose, off-topic or incomplete, each with its call id
+and a proposed shape, kept in a fiche per tool), and the journal bounded by
+weight and age with pinned runs. Since then:
+
+- **Each step starts a fresh thread**, carrying the request, the last 20 step
+  results, the mailbox and the plan — a long task no longer drags its whole
+  history into every call.
+- **A question waits for its answer.** An unanswered question or approval
+  suspends the teammate without calling the model; the mailbox says since when,
+  and the step counts neither as done nor as failed.
+- **Commands go through the gate.** In a task whose workspace declares a command
+  gate, a command the gate holds becomes an approval in the mailbox; the
+  workspace's declared scripts are pre-approved. The Landlock sandbox can run
+  `cargo`, with a target shared per repository and the network closed.
+- **A provider out of quota is waited for**, not counted as a failure: the same
+  step is replayed after a growing delay, and the teammate stops after ten such
+  steps, or at once on an exhausted daily quota. It resumes after a host
+  restart, and a working teammate keeps the host from going idle.
+- **Without its backend, it still reads and edits** the task's files, and says
+  so; it stops after three failed steps in a row.
+
+The supervisor follows it at `/ide/teammate` (`/ide/teammate/mailbox`,
+`/ide/teammate/pending`, `/ide/teammate/seen`, `/ide/teammate/list`), in the IDE
+or in a terminal (below).
 
 The binaries `rag3weaver-backend` and `rag3weaver-chat` are this runtime served
 over HTTP, with sections rendered after each tool so that a person reading over
 the agent's shoulder sees what it did.
+
+## Claude Code and Codex
+
+The memory and the mailbox reach agents that do not run in rag3weaver.
+
+- **Hooks for Claude Code** (`rag3weaver-backend hook`, installed per session by
+  `scripts/hooks_claude_code.sh`, never globally unless asked): at the start of
+  a session, who you are and what you were holding; on each prompt, at most one
+  related memory card, what others changed in the files you touched, the
+  judge's last verdict on your task and the mailbox; after a compaction, the
+  summary kept on the task card and an identity check; at about 70 % of the real
+  context, a suggestion to tidy up. A recall that takes too long finishes in the
+  background and shows at the next tool call, after a judge that can only
+  remove candidates. A hook always exits 0 and is silent without a host. Its
+  texts are templates (`templates/hooks/`).
+- **A shared mailbox** (`rag3weaver-backend mail send|reply|pending|seen`):
+  Claude Code sessions, Codex threads (`codex:<name>`) and teammates write to
+  each other; a reply goes to the author of what it answers.
+- **A channel** (`rag3weaver-backend canal`, an MCP server for Claude Code) that
+  pushes mailbox items into a running session, with `reply`, `send` and `claim`.
+
+## The IDE and the terminal
+
+The host serves an IDE in React (`ui/ide/`, built into `templates/ide/app/` and
+embedded, never loaded from elsewhere): the chat, files with in-page editing,
+search, tasks and their review with the teammate, session verdicts, the tree,
+symbols, the graph, the live DAG of a running tool (with a Stop button),
+reactions and proposals. "My searches" lists the searches made in a repository,
+by you and by agents under their name, with their first results and the ones you
+clicked (`GET /ide/recherches`). Code in the chat is coloured by the same
+tree-sitter grammars that index it (`POST /highlight`).
+
+`rag3weaver-tty` (crate `tty/`) follows a teammate from a terminal: the agent's
+text scrolls into the terminal's own history and three lines are redrawn at the
+bottom; Enter talks to the teammate, Esc stops it. It works over ssh (at most
+30 redraws per second), resumes after a cut without loss or duplicate
+(`Last-Event-ID`), degrades to 256 colours, 16, none and ASCII, and colours code
+with the host's grammars and the theme `templates/themes/daemon.json`.
+`--plain` writes the stream as text.
 
 ## Embeddings and rerankers
 
@@ -249,6 +335,8 @@ No feature is on by default.
 | `code` | the code graph (`codeparsers`, sandboxed file access) |
 | `daemon` | the embedding daemon and service client |
 | `openai-llm` | an OpenAI-compatible LLM client |
+| `anthropic-llm` | the Anthropic Messages API client (implies `openai-llm`) |
+| `navigateur` | the IDE's tests in a headless browser |
 | `ocr`, `burn-ocr` | OCR |
 
 Runtime knobs are `RAG3WEAVER_*` environment variables (about sixty; the ones
@@ -261,7 +349,7 @@ that matter for ingestion are `RAG3WEAVER_EMBED_MODEL`, `RAG3WEAVER_EMBED_SERVIC
 
 ```bash
 cargo test --lib --features "rag3db-native"        # unit tests
-./run_e2e.sh                                        # end-to-end suites (87 files under tests/)
+./run_e2e.sh                                        # end-to-end suites (131 e2e_*.rs files under tests/)
 ./run_e2e.sh --test e2e_code                        # one suite
 ```
 
@@ -280,8 +368,12 @@ src/
 ├── burn_*.rs, candle_*.rs      models
 ├── dialect.rs                  SchemaDialect: rag3db, PostgreSQL
 ├── scope.rs                    org × project
-└── bin/                        rag3weaver-backend, rag3weaver-chat, rag3daemon, rag3weaver-embeddings
-templates/                      Mermaid pipelines
+├── daemon_host/                the host: run journal, judge, chat, tasks, teammate, Codex delivery
+└── bin/                        rag3weaver-backend, rag3weaver-chat, rag3daemon, rag3weaver-embeddings, rag3db-check-lib
+templates/                      Mermaid pipelines, backends, hooks, the IDE bundle, themes
+ui/ide/                         the IDE (React)
+tty/                            rag3weaver-tty
+scripts/                        hooks_claude_code.sh and other tools
 codeparsers/                    submodule
 docs/                           design notes and session reports (French), dated folders
 visions/                        where this is going (French)

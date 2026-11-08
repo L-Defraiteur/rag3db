@@ -678,6 +678,105 @@ fn servir_http(args: &[String]) -> Result<(), String> {
 
 /// **`code-tree`** : poser ou retirer un arbre de code indexé (voir
 /// `rag3weaver::code_tree`).
+/// **`rag3weaver-backend atelier [--daemon <adresse>] [--sans-hote]`** : pose l'atelier
+/// chez l'utilisatrice (`<config>/atelier/templates`, copié du gabarit livré, sa base
+/// sous `<data>/atelier.rag3db`) s'il n'y est pas, puis le fait ouvrir par l'hôte, qui lui
+/// donne ses outils de worktrees. Rend le chemin du manifeste.
+fn atelier_cli(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend atelier [--daemon <adresse>] [--sans-hote]";
+    let (mut hote, mut sans_hote, mut i) = (None, false, 0);
+    while i < args.len() {
+        match args[i].as_str() {
+            "--daemon" => {
+                hote = Some(args.get(i + 1).cloned().ok_or(USAGE)?);
+                i += 2;
+            }
+            "--sans-hote" => {
+                sans_hote = true;
+                i += 1;
+            }
+            _ => return Err(USAGE.into()),
+        }
+    }
+    let roots = rag3weaver::code_tree::Roots::of_user()?;
+    let dossier = roots.config.join("atelier");
+    let manifeste = dossier.join("templates/backends/atelier/backend.json");
+    if !manifeste.is_file() {
+        std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        let gabarits = rag3weaver::builtin_templates::root()?;
+        let statut = std::process::Command::new("cp")
+            .arg("-r")
+            .arg(&gabarits)
+            .arg(dossier.join("templates"))
+            .status()
+            .map_err(|e| format!("cp : {e}"))?;
+        if !statut.success() {
+            return Err(format!("la copie du gabarit livré vers {} a échoué", dossier.display()));
+        }
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).map_err(|e| format!("{} : {e}", manifeste.display()))?).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&roots.data).map_err(|e| format!("{} : {e}", roots.data.display()))?;
+        m["database"] = json!(roots.data.join("atelier.rag3db").display().to_string());
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())?).map_err(|e| format!("{} : {e}", manifeste.display()))?;
+        println!("atelier posé : {}", manifeste.display());
+    } else {
+        println!("atelier déjà posé : {}", manifeste.display());
+    }
+    if !sans_hote {
+        let adresse = hote.unwrap_or_else(|| rag3weaver::daemon_lifecycle::read().map(|f| f.address).unwrap_or_else(|| rag3weaver::daemon_lifecycle::DEFAULT_ADDRESS.to_string()));
+        rag3weaver::code_tree::register(&adresse, &manifeste)?;
+        println!("atelier ouvert par l'hôte {adresse} : sa conversation attache des worktrees (attach_worktree, list_worktrees)");
+    }
+    Ok(())
+}
+
+/// **`rag3weaver-backend check-manifests [<manifeste>…]`** (8 novembre 2026, la règle
+/// d'un repli d'hôte) : lit chaque manifeste par ce binaire, sans ouvrir de base, et dit
+/// ceux qu'il refuserait. Sans argument, les manifestes des arbres inscrits
+/// (`<config>/*/templates/backends/code/*.json` qui déclarent `database` et `tools`).
+/// Code 1 si l'un est refusé : avant de rendre un hôte à un binaire d'avant, le jouer
+/// avec ce binaire-là dit quels arbres ne s'ouvriront plus.
+fn check_manifests(args: &[String]) -> Result<(), String> {
+    let mut chemins: Vec<std::path::PathBuf> = args.iter().map(std::path::PathBuf::from).collect();
+    if chemins.is_empty() {
+        chemins = rag3weaver::code_tree::Roots::of_user()?.registered_manifests();
+    }
+    let mut refuses = 0;
+    for p in &chemins {
+        match rag3weaver::backend::PreparedBackend::load(p) {
+            Ok(_) => println!("ok       {}", p.display()),
+            Err(e) => {
+                refuses += 1;
+                println!("REFUSÉ   {} : {e}", p.display());
+            }
+        }
+    }
+    println!("{} manifeste(s) lu(s) par le commit {}, {refuses} refusé(s)", chemins.len(), option_env!("RAG3WEAVER_GIT_HASH").unwrap_or("?"));
+    if refuses > 0 {
+        return Err(format!("{refuses} manifeste(s) ne s'ouvriraient pas avec ce binaire"));
+    }
+    Ok(())
+}
+
+/// `rag3weaver-backend taches purge [<dépôt>]` : vide les targets partagés des
+/// tâches (`taches-<dépôt>` sous RAG3WEAVER_TARGETS_DIR, défaut
+/// ~/.cache/rag3weaver-build), chacun sous son verrou.
+fn taches_cli(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend taches purge [<dépôt>]";
+    match args.split_first() {
+        Some((action, reste)) if action == "purge" && reste.len() <= 1 => {
+            let lignes = rag3weaver::commande::purger_les_cibles(reste.first().map(String::as_str));
+            if lignes.is_empty() {
+                println!("aucun target partagé sous {}", rag3weaver::commande::dossier_des_cibles().display());
+            }
+            for l in lignes {
+                println!("{l}");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
 fn code_tree(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend code-tree add <arbre> [--from code-lourd] [--as <nom>] [--daemon <adresse>] [--sans-hote]\n       \
                          rag3weaver-backend code-tree remove <nom | arbre> [--daemon <adresse>] [--sans-hote]";
@@ -841,6 +940,15 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("files") {
         return fichiers_cli(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("taches") {
+        return taches_cli(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("atelier") {
+        return atelier_cli(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("check-manifests") {
+        return check_manifests(&tous[1..]);
     }
     let mut args = std::env::args().skip(1);
     let path = args

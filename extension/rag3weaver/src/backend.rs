@@ -49,6 +49,19 @@ pub struct TeammatePolicy {
     /// attente, sa boîte dit pourquoi.
     #[serde(default = "TeammatePolicy::oui")]
     pub resume_after_restart: bool,
+    /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
+    /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
+    /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
+    /// la connexion) fait attendre ces secondes avant le même pas, doublées à
+    /// chaque refus d'affilée jusqu'à dix fois plus : au moins une fenêtre de
+    /// quota par minute. Défaut : 60.
+    #[serde(default = "TeammatePolicy::soixante")]
+    pub quota_wait_s: u64,
+    /// Les refus du fournisseur d'affilée avant que l'équipier s'arrête en le
+    /// disant (une attente qui ne finit jamais n'est pas un travail). Un quota
+    /// épuisé (par jour, de dépense) arrête tout de suite. Défaut : 10.
+    #[serde(default = "TeammatePolicy::dix")]
+    pub max_unavailable_steps: u32,
 }
 
 impl TeammatePolicy {
@@ -61,11 +74,23 @@ impl TeammatePolicy {
     fn oui() -> bool {
         true
     }
+    fn soixante() -> u64 {
+        60
+    }
+    fn dix() -> u32 {
+        10
+    }
 }
 
 impl Default for TeammatePolicy {
     fn default() -> Self {
-        TeammatePolicy { max_failed_steps: Self::trois(), tool_wait_notice_s: Self::vingt(), resume_after_restart: Self::oui() }
+        TeammatePolicy {
+            max_failed_steps: Self::trois(),
+            tool_wait_notice_s: Self::vingt(),
+            resume_after_restart: Self::oui(),
+            quota_wait_s: Self::soixante(),
+            max_unavailable_steps: Self::dix(),
+        }
     }
 }
 
@@ -843,6 +868,46 @@ pub struct Surcharges {
     /// seul le code est dans un dépôt) : `declare` refuse, rien ne serait
     /// versionné ni fusionné.
     pub declarations_hors_depot: bool,
+    /// Le dossier de la tâche (`{task_dir}` du bac à sable), s'il en est une.
+    pub dossier_de_tache: Option<PathBuf>,
+    /// La racine du code dans l'arbre principal : son nom nomme le target
+    /// partagé du dépôt (`{repo_target}`), le même pour toutes ses tâches.
+    pub racine_principale: Option<PathBuf>,
+}
+
+/// **Un champ inconnu dit quel binaire le lit** (8 novembre 2026 : un hôte rendu
+/// à un binaire d'avant refusait l'arbre d'essais de c7, « unknown field `env` »,
+/// écrit par le gabarit d'un binaire plus récent). Le refus garde le champ et la
+/// ligne de serde, et ajoute le commit de ce binaire : un champ inconnu vient
+/// d'ordinaire d'un manifeste écrit pour un binaire plus récent.
+fn champ_inconnu_dit(e: String) -> String {
+    if e.contains("unknown field") {
+        format!(
+            "{e} — ce binaire (commit {}) ne connaît pas ce champ : le manifeste a sans doute été écrit pour un binaire plus récent ; posez celui-là, ou retirez le champ",
+            option_env!("RAG3WEAVER_GIT_HASH").unwrap_or("?")
+        )
+    } else {
+        e
+    }
+}
+
+/// **Les jetons du bac à sable d'un backend** : `{task_dir}`, le dossier de la
+/// tâche (hors tâche : `<cache>/rag3weaver/sans-tache/<nom du backend>`) ;
+/// `{repo_target}`, le target partagé du dépôt, nommé par la racine principale
+/// du code (hors tâche, la racine du workspace).
+#[cfg(feature = "code")]
+fn jetons_du_bac(prepared: &PreparedBackend, racine: &Path) -> crate::backend_code::JetonsDuBac {
+    let s = &prepared.surcharges;
+    let task_dir = s.dossier_de_tache.clone().unwrap_or_else(|| {
+        let cache = std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+            .unwrap_or_else(std::env::temp_dir);
+        cache.join("rag3weaver").join("sans-tache").join(&prepared.manifest.name)
+    });
+    let principale = s.racine_principale.clone().unwrap_or_else(|| racine.to_path_buf());
+    let nom = principale.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| prepared.manifest.name.clone());
+    crate::backend_code::JetonsDuBac { task_dir, repo_target: crate::commande::cible_du_depot(&nom) }
 }
 
 /// Une base copiée sous la porte des écrivains
@@ -895,6 +960,9 @@ pub struct PreparedBackend {
     /// `models.sparse` leur est servi comme au signal creux de la recherche, et
     /// les compte pour la règle de la déclaration morte (7 novembre 2026).
     lecteurs_du_creux: Vec<String>,
+    /// **Ses outils de recherche** (`SEARCH_NODES`, sous-graphes compris) : ceux
+    /// dont les appels font la vue « mes recherches ».
+    search_tools: Vec<String>,
     /// Le registre des nœuds, en `Arc` : le chemin des outils le prête le
     /// temps d'un appel, le réacteur des réactions le garde le temps de son
     /// service.
@@ -1001,9 +1069,9 @@ impl PreparedBackend {
         let manifest: BackendManifest = if brut.windows(crate::builtin_templates::PREFIX.len()).any(|w| w == crate::builtin_templates::PREFIX.as_bytes()) {
             let mut v: serde_json::Value = serde_json::from_slice(&brut).map_err(|e| e.to_string())?;
             crate::builtin_templates::resolve(&mut v)?;
-            serde_json::from_value(v).map_err(|e| e.to_string())?
+            serde_json::from_value(v).map_err(|e| champ_inconnu_dit(e.to_string()))?
         } else {
-            serde_json::from_slice(&brut).map_err(|e| e.to_string())?
+            serde_json::from_slice(&brut).map_err(|e| champ_inconnu_dit(e.to_string()))?
         };
         if manifest.version != 1 {
             return Err("unsupported backend manifest version".into());
@@ -1593,19 +1661,24 @@ impl PreparedBackend {
             tool_schemas.insert(name.clone(), input);
             tools.insert(name.clone(), tool);
         }
-        // Les outils qui lisent le creux, sous-graphes compris.
-        let lecteurs_du_creux: Vec<String> = tools
-            .iter()
-            .filter(|(name, tool)| {
-                tool.template()
-                    .nodes
-                    .iter()
-                    .map(|n| n.node_type.as_str())
-                    .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(String::as_str))
-                    .any(|t| crate::backend_code::SPARSE_READER_NODES.contains(&t))
-            })
-            .map(|(name, _)| name.clone())
-            .collect();
+        // Les outils qui portent l'un de ces nœuds, sous-graphes compris.
+        let outils_portant = |types: &[&str]| -> Vec<String> {
+            tools
+                .iter()
+                .filter(|(name, tool)| {
+                    tool.template()
+                        .nodes
+                        .iter()
+                        .map(|n| n.node_type.as_str())
+                        .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(String::as_str))
+                        .any(|t| types.contains(&t))
+                })
+                .map(|(name, _)| name.clone())
+                .collect()
+        };
+        // Les outils qui lisent le creux, et ceux qui cherchent.
+        let lecteurs_du_creux = outils_portant(crate::backend_code::SPARSE_READER_NODES);
+        let search_tools = outils_portant(crate::backend_code::SEARCH_NODES);
         // La politique de chaque outil se vérifie au chargement : un graphe
         // qui déborde sa politique, ou une politique sans le workspace
         // qu'elle exige, se refuse en disant quoi faire.
@@ -1743,6 +1816,7 @@ impl PreparedBackend {
             .unwrap_or_default();
         Ok(Self {
             lecteurs_du_creux,
+            search_tools,
             template_drift,
             manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
             surcharges: Surcharges::default(),
@@ -1854,6 +1928,17 @@ impl PreparedBackend {
     /// Les surcharges imposées à ce backend.
     pub fn surcharges(&self) -> &Surcharges {
         &self.surcharges
+    }
+
+    /// La racine absolue du workspace, si ce backend en déclare un.
+    pub fn workspace_root(&self) -> Option<PathBuf> {
+        self.manifest.workspace.as_ref().map(|w| {
+            if w.root.is_absolute() {
+                w.root.clone()
+            } else {
+                self.directory.join(&w.root)
+            }
+        })
     }
 
     /// **Recharger le même manifeste par un lecteur**, avec les mêmes
@@ -2230,6 +2315,8 @@ impl PreparedBackend {
         let llm = cat.llm();
         let backend = Backend {
             decider,
+            #[cfg(feature = "code")]
+            worktree_host: Mutex::new(None),
             llm,
             avertissement_sans_service,
             avertissement_du_creux,
@@ -2326,6 +2413,11 @@ impl PreparedBackend {
     /// Le graphe déclaré d'un outil — pour le dessiner (la page vivante).
     pub fn tool_graph(&self, name: &str) -> Option<&GraphTool> {
         self.tools.get(name)
+    }
+
+    /// Les outils de recherche du backend (`SEARCH_NODES`), par nom.
+    pub fn search_tools(&self) -> &[String] {
+        &self.search_tools
     }
 
     /// Une politique de nœuds, plus les nœuds scriptés déclarés.
@@ -2832,6 +2924,10 @@ pub struct Backend {
     /// Le modèle de décision déclaré (`models.decide`), donné aux nœuds sous
     /// la clé `crate::decider::DECIDER_SERVICE`.
     decider: Option<Arc<dyn crate::decider::Decider>>,
+    /// **L'hôte des worktrees** (l'atelier) : posé par l'hôte qui ouvre ce backend,
+    /// donné aux nœuds sous `WORKTREE_HOST_SERVICE`. Absent hors d'un hôte.
+    #[cfg(feature = "code")]
+    worktree_host: Mutex<Option<Arc<dyn crate::dataflow::worktree_nodes::WorktreeHost>>>,
     /// Le modèle de langage déclaré (`models.llm`), joint à l'ouverture et donné
     /// aux nœuds sous `crate::dataflow::LLM_SERVICE`. Tenu ici comme le decider :
     /// le catalogue le porte aussi, mais les graphes d'outil montent leurs services
@@ -2922,6 +3018,11 @@ impl Backend {
     }
     /// L'intervalle entre deux essais (défaut
     /// [`INTERVALLE_DE_RETENTE_EMBARQUEUR`]) ; les témoins le raccourcissent.
+    /// L'hôte des worktrees, posé par l'hôte qui ouvre ce backend (l'atelier).
+    #[cfg(feature = "code")]
+    pub fn poser_l_hote_des_worktrees(&self, hote: Arc<dyn crate::dataflow::worktree_nodes::WorktreeHost>) {
+        *self.worktree_host.lock().unwrap_or_else(|p| p.into_inner()) = Some(hote);
+    }
     pub fn set_intervalle_de_retente_embarqueur(&self, intervalle: std::time::Duration) {
         if let Some(retente) = &self.embarqueur_a_retenter {
             retente.lock().unwrap_or_else(|p| p.into_inner()).intervalle = intervalle;
@@ -3720,6 +3821,19 @@ impl Backend {
             .get(name)
             .ok_or_else(|| format!("unexposed tool {name}"))?;
         let attachment = &prepared.manifest.tools[name];
+        if let Some(racine) = prepared.workspace_root() {
+            if !racine.is_dir() {
+                let touche_racine = attachment.policy.read_files
+                    || attachment.policy.write_files
+                    || attachment.policy.run_commands;
+                if touche_racine {
+                    return Err(format!(
+                        "la racine du dépôt a disparu ({}) : rouvrez le backend sur une racine qui existe",
+                        racine.display()
+                    ));
+                }
+            }
+        }
         let mut args = args
             .as_object()
             .ok_or("arguments must be an object")?
@@ -3922,8 +4036,19 @@ impl Backend {
                 }
             }
         }
-        // Un paramètre du gabarit absent des arguments garde son défaut ;
-        // un requis manquant échoue ici — compté, jamais bloquant.
+        // **Un requis que l'appel ne porte pas tait le crochet** (8 novembre
+        // 2026, essai 3 de c7 : « argument requis manquant : 'old' » quand le
+        // modèle écrivait un fichier entier par edit_file). L'appel a pris une
+        // autre forme de l'outil, que le crochet ne sait pas lire : rien à dire.
+        if let Some(p) = graph.params().iter().find(|p| p.required && !hargs.contains_key(p.name.as_ref())) {
+            eprintln!(
+                "[crochet {tool_name}] tu — l'appel ne porte pas « {} », que le crochet exige (une autre forme de l'outil){}",
+                p.name,
+                crate::host_log::caller_suffix()
+            );
+            return;
+        }
+        // Un paramètre du gabarit absent des arguments garde son défaut.
         let outcome = graph
             .instantiate(&Value::Object(hargs))
             .map_err(|e| e.to_string())
@@ -4134,6 +4259,10 @@ impl Backend {
         if let Some(llm) = &self.llm {
             services.register(crate::dataflow::LLM_SERVICE, llm.clone());
         }
+        #[cfg(feature = "code")]
+        if let Some(hote) = self.worktree_host.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            services.register(crate::dataflow::worktree_nodes::WORKTREE_HOST_SERVICE, hote);
+        }
         // La surface de code déclarée : la source et la porte du manifeste,
         // montées comme sur le chemin agent — sans elles, les nœuds de code
         // refusent d'eux-mêmes.
@@ -4159,7 +4288,8 @@ impl Backend {
                     } else {
                         prepared.directory.join(&w.root)
                     };
-                    if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine) {
+                    let jetons = jetons_du_bac(prepared, &racine);
+                    if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine, &jetons) {
                         services.register(
                             crate::dataflow::run_nodes::BAC_A_SABLE_SERVICE,
                             std::sync::Arc::new(bac),
@@ -5256,6 +5386,17 @@ mod tests {
     /// **L'extension se cherche d'abord à côté de la lib réellement chargée**
     /// (lot 3e du magasin), puis à côté de `RAG3DB_LIBRARY_DIR`, puis dans
     /// l'arbre ; un même dossier n'est cherché qu'une fois.
+    /// **Un champ inconnu dit quel binaire le lit** : le refus de serde garde le champ, et
+    /// nomme le commit de ce binaire avec la raison probable (un manifeste plus récent).
+    #[test]
+    fn an_unknown_manifest_field_names_this_binary() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("backend.json");
+        std::fs::write(&p, r#"{"version": 1, "name": "x", "database": "x.rag3db", "un_champ_de_demain": true}"#).unwrap();
+        let e = PreparedBackend::load(&p).err().expect("refusé");
+        assert!(e.contains("un_champ_de_demain") && e.contains("ce binaire (commit ") && e.contains("binaire plus récent"), "{e}");
+    }
+
     #[test]
     fn the_vector_extension_is_looked_up_next_to_the_loaded_lib_first() {
         let c = super::vector_extension_candidates(
@@ -5609,6 +5750,8 @@ mod tests {
         }
         let backend = Backend {
             decider: None,
+            #[cfg(feature = "code")]
+            worktree_host: Mutex::new(None),
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,
@@ -5832,6 +5975,8 @@ mod tests {
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
         Backend {
             decider: None,
+            #[cfg(feature = "code")]
+            worktree_host: Mutex::new(None),
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,
@@ -7216,8 +7361,8 @@ mod tests {
         let rendu = serde_json::to_string(&r).unwrap();
         assert!(rendu.contains("À voir aussi"), "la section du crochet manque : {rendu}");
 
-        // (b) Un gabarit qui exige un paramètre jamais fourni : l'outil
-        // répond entier, sans section — l'erreur se journalise et se tait.
+        // (b) Un gabarit qui exige un paramètre que l'appel ne porte pas :
+        // l'outil répond entier, sans section — le crochet se tait et le dit.
         let exigeant = "%% tool: apres_essai\n%% description: essai\n%% param: inconnu string! -- jamais fourni\n%% result: schema.result\n\ngraph LR\n    schema[\"SchemaNode(target=$inconnu)\"]\n";
         let (_d, prepared) = montage(json!({"graph": "apres_essai.mmd"}), exigeant);
         let conn = crate::Rag3dbConnection::in_memory().unwrap();

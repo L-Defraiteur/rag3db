@@ -159,6 +159,13 @@ pub struct JournalDesRuns {
     etat: Mutex<Etat>,
     /// Relevé à la première écriture.
     inventaire: Mutex<Option<Inventaire>>,
+    /// **Les écritures d'un fichier de run, une à la fois** (8 novembre 2026) :
+    /// l'écriture d'un run et chaque relecture-réécriture (un ajout tardif, un
+    /// clic). Sans elle, un ajout entre le moment où `ecrire` note le fichier et
+    /// celui où il l'écrit lisait un fichier absent, écrivait ses seuls ajouts,
+    /// puis se faisait écraser ; et deux ajouts rapides s'effaçaient l'un l'autre.
+    /// Prise avant `etat` et `inventaire`, jamais sous eux.
+    ecritures: Mutex<()>,
 }
 
 /// `RAG3WEAVER_RUNS_DIR`, sinon `~/.local/share/rag3weaver/runs`.
@@ -195,6 +202,7 @@ impl JournalDesRuns {
             max_octets,
             etat: Mutex::new(Etat::default()),
             inventaire: Mutex::new(None),
+            ecritures: Mutex::new(()),
         })
     }
 
@@ -343,6 +351,55 @@ impl JournalDesRuns {
         r.ajouts.extend(ajouts);
     }
 
+    /// **Ajoute un élément à une liste du journal d'un run** (les clics d'une
+    /// recherche, 8 novembre 2026), sous `ecritures` : deux ajouts rapides ne
+    /// s'effacent pas, et un ajout pendant l'écriture du run ne se perd pas.
+    /// `garde` lit le run tel qu'on le connaît (ses ajouts s'il est en cours, son
+    /// fichier s'il est écrit) et peut refuser. Rend la longueur de la liste. Un
+    /// run inconnu, ou un journal éteint, est un refus nommé.
+    pub fn append_to_list(
+        &self,
+        backend: &str,
+        run: &str,
+        key: &str,
+        element: Value,
+        garde: impl FnOnce(&Map<String, Value>) -> Result<(), String>,
+    ) -> Result<usize, String> {
+        if !self.actif {
+            return Err("le journal des runs est éteint : rien ne s'y garde".into());
+        }
+        let pousser = |o: &mut Map<String, Value>, element: Value| -> Result<usize, String> {
+            match o.entry(key.to_string()).or_insert_with(|| json!([])) {
+                Value::Array(l) => {
+                    l.push(element);
+                    Ok(l.len())
+                }
+                _ => Err(format!("« {key} » du run {run} n'est pas une liste")),
+            }
+        };
+        let _une_a_la_fois = self.ecritures.lock().unwrap_or_else(|p| p.into_inner());
+        let mut etat = self.etat.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(r) = etat.en_cours.get_mut(run) {
+            if r.backend != backend {
+                return Err(format!("le run {run} n'est pas un run de {backend}"));
+            }
+            garde(&r.ajouts)?;
+            return pousser(&mut r.ajouts, element);
+        }
+        let ecrit = etat.ecrits.get(run).cloned().filter(|f| f.starts_with(self.racine.join(backend)));
+        drop(etat);
+        let fichier = ecrit
+            .or_else(|| self.fichier(backend, run))
+            .ok_or_else(|| format!("le run {run} de {backend} n'a pas de journal (inconnu, effacé, ou le journal ne le suit pas)"))?;
+        let Value::Object(mut o) = lire_le_fichier(&fichier).map_err(|e| format!("le journal du run {run} ne se lit pas : {e}"))? else {
+            return Err(format!("le journal du run {run} n'est pas un objet"));
+        };
+        garde(&o)?;
+        let n = pousser(&mut o, element)?;
+        self.reecrire(&fichier, &Value::Object(o));
+        Ok(n)
+    }
+
     /// **Dépose un run écrit par un autre** (un tour de Claude Code, lot 3 des
     /// hooks, 7 novembre 2026) : le JSON tel qu'il vient, `run`, `backend`,
     /// `debut`, `fin` et `evenements` posés s'ils manquent, écrit compressé sous
@@ -384,21 +441,36 @@ impl JournalDesRuns {
     /// Fond des ajouts dans un journal écrit : relu, réécrit compressé (un
     /// `.json` d'avant devient `.json.zst`), son poids et son épingle tenus.
     fn fondre(&self, fichier: &Path, ajouts: Map<String, Value>) {
+        let _une_a_la_fois = self.ecritures.lock().unwrap_or_else(|p| p.into_inner());
         let mut v = lire_le_fichier(fichier).unwrap_or_else(|_| json!({}));
         if let Value::Object(o) = &mut v {
             o.extend(ajouts);
         }
+        self.reecrire(fichier, &v);
+    }
+
+    /// **Réécrit le fichier d'un run** (sous `ecritures`) : compressé, son âge
+    /// gardé. L'âge d'un journal est celui de sa première écriture (l'inventaire
+    /// le tient ainsi) : un ajout tardif, un clic, ne rajeunit pas un run, ni
+    /// dans la borne de l'âge ni dans l'ordre de `runs_de`.
+    fn reecrire(&self, fichier: &Path, v: &Value) {
+        let age = std::fs::metadata(fichier).and_then(|m| m.modified()).ok();
         let cible = if fichier.extension().is_some_and(|x| x == "zst") { fichier.to_path_buf() } else { fichier.with_extension(EXTENSION) };
-        match ecrire_le_fichier(&cible, &v) {
+        match ecrire_le_fichier(&cible, v) {
             Err(e) => eprintln!("[journal des runs] {} : {e}", cible.display()),
             Ok(octets) => {
+                if let Some(age) = age {
+                    if let Err(e) = std::fs::File::options().write(true).open(&cible).and_then(|f| f.set_modified(age)) {
+                        eprintln!("[journal des runs] {} : son âge ne se garde pas ({e})", cible.display());
+                    }
+                }
                 let mut inv = self.inventaire.lock().unwrap_or_else(|p| p.into_inner());
                 let inv = inv.get_or_insert_with(|| Inventaire::relever(&self.racine));
                 if cible != fichier {
                     let _ = std::fs::remove_file(fichier);
                     inv.oublier(fichier);
                 }
-                inv.noter(cible.clone(), SystemTime::now(), octets, v.get("epingle").map(|_| true));
+                inv.noter(cible.clone(), age.unwrap_or_else(SystemTime::now), octets, v.get("epingle").map(|_| true));
                 if let Some(run) = v["run"].as_str() {
                     self.etat.lock().unwrap_or_else(|p| p.into_inner()).ecrits.insert(run.to_string(), cible);
                 }
@@ -409,6 +481,7 @@ impl JournalDesRuns {
     /// Écrit le journal d'un run racine, borné et compressé, puis fait tomber
     /// les plus vieux au-delà des bornes, en le disant.
     fn ecrire(&self, run: &str) {
+        let _une_a_la_fois = self.ecritures.lock().unwrap_or_else(|p| p.into_inner());
         let mut etat = self.etat.lock().unwrap_or_else(|p| p.into_inner());
         let Some(r) = etat.en_cours.remove(run) else { return };
         etat.racine_de.retain(|_, racine| racine != run);
@@ -696,6 +769,53 @@ mod tests {
         assert!(p.to_string_lossy().ends_with(".json.zst"), "réécrit compressé : {}", p.display());
         let v = j.lire("b1", "vieux-epingle").unwrap();
         assert_eq!((v["note"].clone(), v["epingle"]["raison"].clone()), (json!(1), json!("le témoin")));
+    }
+
+    /// **Une liste d'un run grandit par ajouts, sans en perdre** (les clics d'une
+    /// recherche, 8 novembre 2026) : sur un run en cours, gardée jusqu'à son
+    /// écriture ; sur un run écrit, fondue sans rajeunir le fichier (son âge reste
+    /// celui de sa première écriture) ; vingt ajouts concurrents, tous gardés ; un
+    /// run inconnu, un autre backend et un refus de la garde se disent.
+    #[test]
+    fn a_list_of_a_run_grows_by_appends_without_losing_any() {
+        let d = tempfile::tempdir().unwrap();
+        let j = JournalDesRuns::avec_bornes(d.path().join("runs"), u64::MAX, 90, 1 << 20);
+        let bus = EventBus::new(256);
+        j.suivre("b", &bus);
+        std::thread::sleep(Duration::from_millis(50));
+        bus.emit(debut("r", None, "agent"));
+        let fin_attente = std::time::Instant::now() + Duration::from_secs(10);
+        while !j.etat.lock().unwrap().en_cours.contains_key("r") {
+            assert!(std::time::Instant::now() < fin_attente, "le run r n'est jamais en cours");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let ok = |_: &Map<String, Value>| Ok(());
+        assert_eq!(j.append_to_list("b", "r", "clics", json!(0), ok), Ok(1), "en cours : gardé jusqu'à l'écriture");
+        assert!(j.append_to_list("autre", "r", "clics", json!(0), ok).unwrap_err().contains("pas un run de autre"));
+        bus.emit(fin("r", "agent"));
+        attendre_le_fichier(&j, "b", "r");
+
+        let fichier = j.fichier("b", "r").unwrap();
+        let vieux = std::time::SystemTime::now() - Duration::from_secs(3600);
+        std::fs::File::options().write(true).open(&fichier).unwrap().set_modified(vieux).unwrap();
+        std::thread::scope(|s| {
+            for i in 1..=20 {
+                let j = &j;
+                s.spawn(move || j.append_to_list("b", "r", "clics", json!(i), |_| Ok(())).unwrap());
+            }
+        });
+        let v = j.lire("b", "r").unwrap();
+        let mut vus: Vec<i64> = v["clics"].as_array().unwrap().iter().map(|x| x.as_i64().unwrap()).collect();
+        vus.sort();
+        assert_eq!(vus, (0..=20).collect::<Vec<_>>(), "aucun ajout perdu : {}", v["clics"]);
+        assert_eq!(v["run"], "r", "le reste du journal est là");
+        assert_eq!(std::fs::metadata(&fichier).unwrap().modified().unwrap(), vieux, "un ajout ne rajeunit pas le run");
+
+        let refus = j.append_to_list("b", "r", "clics", json!(99), |_| Err("pas ce clic".into()));
+        assert_eq!(refus, Err("pas ce clic".to_string()));
+        assert_eq!(j.lire("b", "r").unwrap()["clics"].as_array().unwrap().len(), 21, "un refus n'écrit rien");
+        assert!(j.append_to_list("b", "inconnu", "clics", json!(1), ok).unwrap_err().contains("inconnu"));
+        assert!(j.append_to_list("b", "r", "run", json!(1), ok).unwrap_err().contains("pas une liste"));
     }
 
     /// Un appel qui déclare un outil : le graphe d'un outil, ou un manifeste qui en nomme.

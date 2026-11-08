@@ -19,7 +19,16 @@
     "source": "working_tree",
     "root": "workspace",
     "commands": "approval",
-    "index": "code"
+    "index": "code",
+    "sandbox": {
+      "extra_read": ["~/.rustup", "~/.cargo/bin", "~/.cargo/registry", "~/.cargo/git", "~/.cargo/config.toml"],
+      "env": {
+        "CARGO_TARGET_DIR": "{repo_target}",
+        "TMPDIR": "{task_dir}/tmp",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_BUILD_JOBS": "8"
+      }
+    }
   },
   "entities": {},
   "tools": {
@@ -114,11 +123,17 @@
     },
     "estimate": {
       "graph": "../../tools/estimate.mmd",
-      "description": "Estimer ce que l'indexation du workspace coûterait : fichiers retenus et écartés (avec leurs raisons, secrets probables compris), modèle choisi et pourquoi, durée prévue. À prendre avant d'indexer — rien n'est écrit."
+      "description": "Estimer ce que l'indexation du workspace coûterait : fichiers retenus et écartés (avec leurs raisons, secrets probables compris), modèle choisi et pourquoi, durée prévue. À prendre avant d'indexer — rien n'est écrit.",
+      "policy": {
+        "read_files": true
+      }
     },
     "index": {
       "graph": "../../tools/index.mmd",
-      "description": "Indexer le workspace en fond (plein texte d'abord, vecteurs ensuite) et rendre la main : le reçu est un journal à suivre avec wait. Refuse sans confirm=true au-delà du seuil — prenez estimate avant. Pendant le plein texte, le catalogue reste tenu : la recherche répond avec ce qui est déjà prêt."
+      "description": "Indexer le workspace en fond (plein texte d'abord, vecteurs ensuite) et rendre la main : le reçu est un journal à suivre avec wait. Refuse sans confirm=true au-delà du seuil — prenez estimate avant. Pendant le plein texte, le catalogue reste tenu : la recherche répond avec ce qui est déjà prêt.",
+      "policy": {
+        "read_files": true
+      }
     },
     "usages": {
       "graph": "../../tools/usages.mmd",

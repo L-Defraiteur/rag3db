@@ -139,6 +139,56 @@ a.code-ref { text-decoration: underline; text-decoration-style: dotted; }
 .dark .hljs-attr, .dark .hljs-property, .dark .hl-property, .dark .hl-attribute { color: #56b6c2; }
 .dark .hljs-meta, .dark .hljs-symbol, .dark .hl-label, .dark .hl-module { color: #56b6c2; }
 
+/* **Le thème daemon** (Lucie, 7 et 8 novembre 2026) : les couleurs du fichier commun
+   templates/themes/daemon.json, posées en variables --daemon-* par lib/theme.ts ;
+   `html.daemon` passe devant `.dark`, qui reste posé pour les composants. */
+html.daemon {
+  --background: var(--daemon-fond);
+  --foreground: var(--daemon-texte);
+  --card: var(--daemon-fond);
+  --card-foreground: var(--daemon-texte);
+  --popover: var(--daemon-fond);
+  --popover-foreground: var(--daemon-texte);
+  --primary: var(--daemon-texte);
+  --primary-foreground: var(--daemon-fond);
+  --secondary: color-mix(in oklch, var(--daemon-halo-sombre) 25%, var(--daemon-fond));
+  --secondary-foreground: var(--daemon-texte);
+  --muted: color-mix(in oklch, var(--daemon-halo-sombre) 18%, var(--daemon-fond));
+  --muted-foreground: var(--daemon-sourdine);
+  --accent: color-mix(in oklch, var(--daemon-halo-sombre) 30%, var(--daemon-fond));
+  --accent-foreground: var(--daemon-texte);
+  --destructive: var(--daemon-halo-vif);
+  --border: color-mix(in oklch, var(--daemon-halo-sombre) 55%, transparent);
+  --input: color-mix(in oklch, var(--daemon-halo-sombre) 55%, transparent);
+  --ring: var(--daemon-halo-vif);
+  --sidebar: var(--daemon-fond);
+  --sidebar-foreground: var(--daemon-texte);
+  --sidebar-primary: var(--daemon-halo-vif);
+  --sidebar-primary-foreground: var(--daemon-fond);
+  --sidebar-accent: color-mix(in oklch, var(--daemon-halo-sombre) 30%, var(--daemon-fond));
+  --sidebar-accent-foreground: var(--daemon-texte);
+  --sidebar-border: color-mix(in oklch, var(--daemon-halo-sombre) 55%, transparent);
+  --sidebar-ring: var(--daemon-halo-vif);
+}
+html.daemon body { font-family: var(--daemon-police); }
+html.daemon .markdown code, html.daemon .body code { color: var(--daemon-code-en-ligne); }
+html.daemon .hljs-keyword, html.daemon .hljs-selector-tag, html.daemon .hljs-built_in, html.daemon .hl-keyword { color: var(--daemon-code-keyword); }
+html.daemon .hljs-type, html.daemon .hljs-title.class_, html.daemon .hl-type { color: var(--daemon-code-type); }
+html.daemon .hljs-title.function_, html.daemon .hljs-function .hljs-title, html.daemon .hl-function { color: var(--daemon-code-function); }
+html.daemon .hljs-string, html.daemon .hljs-regexp, html.daemon .hl-string { color: var(--daemon-code-string); }
+html.daemon .hljs-comment, html.daemon .hljs-quote, html.daemon .hl-comment { color: var(--daemon-code-comment); }
+html.daemon .hljs-number, html.daemon .hl-number { color: var(--daemon-code-number); }
+html.daemon .hljs-literal, html.daemon .hl-constant { color: var(--daemon-code-constant); }
+html.daemon .hljs-variable, html.daemon .hljs-params, html.daemon .hl-variable { color: var(--daemon-code-variable); }
+html.daemon .hljs-property, html.daemon .hljs-attr, html.daemon .hl-property { color: var(--daemon-code-property); }
+html.daemon .hljs-operator, html.daemon .hl-operator { color: var(--daemon-code-operator); }
+html.daemon .hljs-punctuation, html.daemon .hl-punctuation { color: var(--daemon-code-punctuation); }
+html.daemon .hljs-meta, html.daemon .hl-attribute { color: var(--daemon-code-attribute); }
+html.daemon .hljs-symbol, html.daemon .hl-label { color: var(--daemon-code-label); }
+html.daemon .hljs-section, html.daemon .hl-module { color: var(--daemon-code-module); }
+/* L'invocation : l'animation « réfléchit » du thème, pendant que le modèle réfléchit. */
+#invocation { font-family: var(--daemon-police); color: var(--daemon-texte); text-shadow: 0 0 6px var(--daemon-halo-vif), 0 0 14px var(--daemon-halo-sombre); letter-spacing: 0.05em; }
+
 /* Les graphes (le DAG vivant, le diff d'une proposition, le papillon). */
 .graphe-svg g.etape.passe rect { fill: color-mix(in oklch, var(--primary) 20%, var(--card)); }
 .graphe-svg g.etape.echec rect { stroke: var(--destructive); stroke-width: 2; }

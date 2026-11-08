@@ -667,30 +667,15 @@ impl NodeFactory for EmbedNodeFactory {
 pub struct SearchSourceNodeFactory;
 
 impl NodeFactory for SearchSourceNodeFactory {
-    // L6 : ne fait que lire, **sauf filtre** (25 octobre 2026). Un `scope`, un
-    // `language` ou un `filter_condition` fait passer la branche dense par une
-    // projection de graphe (`PROJECT_GRAPH_CYPHER`), une écriture pour le moteur,
-    // refusée sous la transaction en lecture seule de l'instantané : la recherche
-    // entière tombait. Un appel filtré lit donc hors de l'instantané, comme avant
-    // L6, jusqu'à ce que le moteur permette la projection sous READ ONLY (un objet
-    // de la connexion : le lot du cœur « projection-lecture-seule ») ; il pourra
-    // alors y revenir, en rendant ici `true` sans condition.
-    //
-    // **Le coût, jusque-là** : la décision vaut pour tout l'appel. Une recherche
-    // filtrée perd l'instantané pour tous ses signaux, plein texte compris, alors
-    // que seule la projection du dense en a besoin ; ses signaux lisent chacun
-    // l'état validé du moment, comme avant L6.
-    fn snapshot_safe(&self, config: &serde_json::Value) -> bool {
-        // Une marque non liée (`$scope`, le gabarit avant l'appel) n'est pas un
-        // filtre : le gabarit lit, l'appel instancié décide.
-        let vide = |cle: &str| config.get(cle).and_then(|v| v.as_str()).map_or(true, |s| s.trim().is_empty() || s.starts_with('$'));
-        let options = match config.get("options") {
-            Some(serde_json::Value::String(s)) => serde_json::from_str(s).unwrap_or(serde_json::Value::Null),
-            Some(v) => v.clone(),
-            None => serde_json::Value::Null,
-        };
-        let filtre = options.get("filter_condition").is_some_and(|f| !f.is_null());
-        vide("scope") && vide("language") && !filtre
+    // L6 : ne fait que lire, filtre compris (8 novembre 2026). Du 25 octobre au 8 novembre, un
+    // `scope`, un `language` ou un `filter_condition` sortait l'appel de l'instantané : la branche
+    // dense passe par une projection de graphe (`PROJECT_GRAPH_CYPHER`), que le moteur refusait
+    // sous READ ONLY, et le DROP qui la précède condamnait la transaction faute d'honorer
+    // `skip_if_not_exists`. La lib dadbf0041 (le lot du cœur « projection-lecture-seule » et
+    // l'instruction en échec qui ne condamne plus une transaction en lecture) permet les deux : une
+    // recherche filtrée lit, comme les autres, dans l'instantané de son appel.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
     }
     fn create(
         &self,
@@ -1596,12 +1581,13 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::run_nodes::RunCommandNodeFactory));
         registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
         registry.register(Box::new(super::run_nodes::TailNodeFactory));
+        registry.register(Box::new(super::worktree_nodes::WorktreeNodeFactory));
     }
 }
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 15 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 16 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1609,23 +1595,24 @@ pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 15 } else
 mod tests {
     use super::*;
 
-    /// **Une recherche filtrée ne lit pas sous l'instantané** (25 octobre 2026) :
-    /// son filtre passe la branche dense par une projection de graphe, que le
-    /// moteur refuse sous READ ONLY. Sans filtre, l'instantané reste.
+    /// **Une recherche filtrée lit sous l'instantané** (8 novembre 2026). Du 25 octobre au
+    /// 8 novembre, un filtre (scope, language, filter_condition) la sortait de l'instantané : sa
+    /// branche dense passe par une projection de graphe, que le moteur refusait sous READ ONLY
+    /// (et dont le DROP initial, sans `skip_if_not_exists` honoré, condamnait la transaction). La
+    /// lib dadbf0041 permet la projection sous READ ONLY : toute recherche, filtrée ou non, lit
+    /// dans l'instantané de son appel.
     #[test]
-    fn une_recherche_filtree_ne_lit_pas_sous_l_instantane() {
+    fn une_recherche_filtree_lit_sous_l_instantane() {
         let f = SearchSourceNodeFactory;
-        let sans = serde_json::json!({"scope": "", "language": "", "options": {"limit": 10}});
-        assert!(f.snapshot_safe(&sans), "sans filtre, sous l'instantané");
-        let gabarit = serde_json::json!({"scope": "$scope", "language": "$language", "options": "$options"});
-        assert!(f.snapshot_safe(&gabarit), "le gabarit avant l'appel lit sous l'instantané");
-        for filtree in [
+        for config in [
+            serde_json::json!({"scope": "", "language": "", "options": {"limit": 10}}),
+            serde_json::json!({"scope": "$scope", "language": "$language", "options": "$options"}),
             serde_json::json!({"scope": "src/"}),
             serde_json::json!({"language": "rust"}),
             serde_json::json!({"options": {"filter_condition": {"field": "file_path", "op": "starts_with", "value": "src/"}}}),
             serde_json::json!({"options": "{\"filter_condition\": {\"field\": \"x\"}}"}),
         ] {
-            assert!(!f.snapshot_safe(&filtree), "filtrée, hors de l'instantané : {filtree}");
+            assert!(f.snapshot_safe(&config), "sous l'instantané : {config}");
         }
     }
 
@@ -1872,6 +1859,7 @@ mod tests {
                 "ValidationRuleNode" => serde_json::json!({"script":"#{valid:true}","code":"test", "message":"failed", "value":{}}),
                 "RunCommandNode" => serde_json::json!({ "command": "true" }),
                 "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
+                "WorktreeNode" => serde_json::json!({ "action": "list" }),
                 "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
                 "SpawnNode" => serde_json::json!({ "node_type": "Echo" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),

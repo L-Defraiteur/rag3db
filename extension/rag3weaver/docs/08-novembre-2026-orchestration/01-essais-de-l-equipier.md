@@ -212,13 +212,67 @@ confirmation avant de déclarer la tâche finie », outils listés, au plus étr
   branche poussée ; une retouche de ma main dans l'en-tête du ticket (il s'attribuait à « arbre
   principal »). hotfixs le relit et le passe après le premier lot.
 
+## Essai 5 — `tests-bases-dans-tmp` (lancé 03 h 44, sur l'hôte reposé par G)
+
+Le premier essai avec `run_command` par la porte (lot 2 d'ED dans l'hôte depuis 3 h 43), et la
+consigne qui lui dit de jouer ses tests lui-même.
+
+- **La porte marche** : `id` et `cargo --version` me sont arrivés en `approval` dans
+  `/ide/teammate/pending`, accordés par `answer {approved: true}`. **Mais cargo ne tourne pas dans
+  le bac à sable** : « could not read settings file '/home/lucied/.rustup/settings.toml':
+  Permission denied » (Landlock : /usr, /lib, /etc et le workspace seuls). Il a aussitôt tenté
+  `env RUSTUP_HOME=/tmp cargo test …` — refusé. D'où le lot du bac à sable d'ED (927ae9680), sur
+  master à 4 h 55 : la chaîne Rust en lecture, un target partagé par dépôt, TMPDIR hors de /tmp.
+  Pour cet essai, je joue encore ses commandes à sa place.
+- **Premier témoin au mauvais endroit** : `src/temoin_nettoyage_tmp.rs`, du code produit non monté
+  (aucun `mod`), et une maquette (« remove_dir_all sur un fichier ») plutôt que le défaut réel.
+  Recadré : tests/common pour la fonction, un vrai témoin sur un test fautif recensé.
+- **Second témoin, juste** : `compter_residus_temp` dans tests/common, et une assertion de fin dans
+  `deux_processus_partagent_la_base_par_le_demon`. Joué par moi : **ROUGE sur le défaut réel** —
+  « la suite a laissé 3 fichier(s)/dossier(s) dans /tmp après sa fin » (la base, `.wal`,
+  `.ecrivain`) ; j'ai compté 0 dossier avant, 3 après.
+- **Vingt lignes « en attente » en dix minutes** entre-temps, `succeeded: true` cette fois (donc la
+  tâche n'est pas morte) mais un appel Gemini par ligne : l'état d'attente d'ED (b0301a0e3) n'était
+  pas encore dans l'hôte. Et à 4 h 46 **l'hôte s'est arrêté tout seul** (« inactif depuis 1804 s
+  sans travail en cours ») pendant qu'il éditait : l'inactivité ne comptait pas une tâche
+  d'équipier ; systemd l'a relancé, la tâche a repris à sa frontière, le pas perdu, un 429 derrière.
+  Correctif d'ED prêt (767dcb036).
+- **Le correctif** : une garde `BaseTemporaire` (type à `Drop`) dans tests/common — la base et ses
+  compagnons dans un dossier à elle sous `temp_dir()`, effacé à la fin, succès ou panique, sauf
+  `RAG3WEAVER_GARDER=1` ; cinq témoins fautifs passent par elle (e2e_rag3daemon ×2, e2e_code ×1,
+  e2e_prise_atomique ×2). Joués par moi : **cinq verts**, le rouge d'avant compris. /tmp de luciepc
+  portait 92 entrées `rag3weaver-*` d'autres passes avant (le ticket en vrai) ; deux de plus après,
+  des journaux à nom fixe de 130 octets (`rag3weaver-e2e-acces`, `-e2e-rag3daemon`), dits hors du
+  lot.
+- **Comment il a fini** : la relance de 4 h 46 lui a fait refaire des pas déjà faits, puis le quota
+  l'a arrêté net — pas 3 « 429 après 3 reprises en 408 s », pas 4 « 429 après 2 reprises en 210 s ».
+  À 5 h 14 j'ai envoyé `stop`, commité son diff tel quel sur `agent/tests-bases-dans-tmp`
+  (1b4c73228, cinq fichiers ; le fichier vidé de `src/` retiré, un saut de ligne final) et sa ligne de
+  nouveautés (674b41f8d). Le ticket fermé, il n'a pas pu l'écrire : **hotfixs** le fait dans son
+  commit à part, avec la passe, après la fenêtre du matin.
+
+- **La relecture de hotfixs** (5 h 25) trouve ce que mes cinq verts ne voyaient pas : dans
+  `un_lecteur_choisit_son_chemin_et_le_dit`, un `drop(base)` explicite efface la base **sous un démon
+  encore vivant** (le serveur, l'écrivain et le relais tombent après) — avant, le `remove_dir_all`
+  échouait sur la base-fichier, maintenant il réussit et le démon écrit son point de reprise dans un
+  dossier effacé : un vert qui ment ; le témoin de fin ne regarde que son propre dossier (il prouve le
+  `Drop`, pas « la suite ») ; `RAG3WEAVER_GARDER=0` garde aussi ; trois témoins fautifs de plus dans
+  e2e_prise_atomique et un à vérifier dans e2e_rouvrir ; et le point du ticket qui compte pour la
+  mémoire vive du poste, le cache par défaut de `Catalog` dans `/tmp/rag3weaver_cache`, en service
+  aussi, n'est pas touché. hotfixs corrige dans son commit à part, prend les trois de prise_atomique,
+  et **le ticket reste « en cours »**. Leçon : un lot de l'équipier se relit comme un lot de n'importe
+  qui ; les verts du superviseur ne remplacent pas la relecture.
+
 ## Ce qu'il faut en retenir (pour Lucie, le matin)
 
-**Deux lots réels sont sortis de la nuit**, écrits par l'équipier Gemini sous supervision, relus par
-hotfixs, en passe pour master : `agent/journaux-annulation-tmp-3-3` (bddbdc0f6) et
-`agent/racine-disparue` (0944492f9). Le troisième essai prévu (`tests-bases-dans-tmp`, consigne
-prête dans mon dossier de travail) n'a pas été lancé : le quota Vertex et l'heure ; il se lance à ton
-mot.
+**Trois lots réels sont sortis de la nuit**, écrits par l'équipier Gemini sous supervision, relus
+par hotfixs : les journaux d'annulation (**sur master, b860ea2dd**), la racine disparue (**sur
+master, 1b9983b59 + 1de9c908c**, complété par hotfixs), et les bases laissées dans /tmp
+(`agent/tests-bases-dans-tmp`, 1b4c73228 + 674b41f8d ; hotfixs ferme le ticket et le passe
+après la fenêtre du matin). Ce qui a changé dans l'hôte pendant la nuit, grâce aux essais : jamais
+muet (3 h 43), les commandes par la porte (3 h 43), et sur master pour la pose de 8 h 30 : l'état
+d'attente, le bac à sable qui laisse tourner cargo, le fil par pas et l'arrêt d'inactivité qui
+compte l'équipier (ces deux derniers poussés après la fenêtre).
 
 **Ce qui marche** : le plan en items, `step_done` à chaque pas, une analyse juste du code, un témoin
 rouge d'abord quand on le lui impose, le recadrage par une `request` dans la boîte (il l'applique

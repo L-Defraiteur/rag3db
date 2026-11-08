@@ -478,18 +478,29 @@ impl ReactorHandle {
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }
-        let mut task = self.task.take().expect("already stopped");
+        let task = self.task.take().expect("already stopped");
         let runs = self.runs();
-        let fin = crate::dataflow::rt::bloquer("ReactorHandle::stop_within", async {
-            tokio::time::timeout(delai, &mut task).await
-        })
-        .expect("ReactorHandle::stop_within hors d'un fil bloquable");
+        // **Le délai se compte hors du runtime qu'il borne** (le ticket des figements de la lib
+        // entière, 8 novembre 2026) : un minuteur tokio ne sonne que si un fil de travail du
+        // runtime du crate est libre, et deux réactions qui attendent un service muet les
+        // tiennent tous les deux. La tâche est attendue par une tâche relais, qui rend son
+        // résultat sur un canal ordinaire ; le fil appelant attend ce canal, dans sa borne.
+        let lacher = task.abort_handle();
+        let (tx, rx) = std::sync::mpsc::channel();
+        crate::dataflow::rt::runtime().spawn(async move {
+            let _ = tx.send(task.await);
+        });
+        let attendre = || rx.recv_timeout(delai);
+        let fin = match tokio::runtime::Handle::try_current() {
+            Ok(_) => tokio::task::block_in_place(attendre),
+            Err(_) => attendre(),
+        };
         match fin {
             Ok(rendu) => Ok(rendu.expect("reactor task panicked")),
             Err(_) => {
                 // Lâchée : `abort` marque la tâche, qui ne reprendra pas après son
                 // fil figé ; ni attendue ni rendue.
-                task.abort();
+                lacher.abort();
                 Err(format!(
                     "réacteur figé : pas arrêté en {} s ({runs} exécution(s) faites) — sa tâche est lâchée sans être attendue",
                     delai.as_secs()
