@@ -111,10 +111,15 @@ int probe(const std::string& path, const std::string& extension) {
         // propre refus derrière lui (NodeTable::INDEX_NOT_LOADED_FOR_WRITE), pour un chemin
         // qui ne passerait pas par le lieur.
         const std::string refusal = "loaded"; // « not loaded », « unloaded »
+        // MERGE et COPY aussi : depuis que toute ouverture charge les extensions notées, ce témoin
+        // (liste retirée) est le seul à voir ces refus ; error.test ne le peut plus, il n'a aucun
+        // moyen de retirer la liste avant sa réouverture.
         for (const std::string statement :
             {"CREATE (:Doc {id: 700, vec: [700.0, 2.0, 3.0, 4.0]});",
                 "MATCH (d:Doc {id: 7}) DELETE d;",
-                "MATCH (d:Doc {id: 7}) SET d.vec = [250.5, 2.0, 3.0, 4.0];"}) {
+                "MATCH (d:Doc {id: 7}) SET d.vec = [250.5, 2.0, 3.0, 4.0];",
+                "MERGE (:Doc {id: 701, vec: [701.0, 2.0, 3.0, 4.0]});",
+                "COPY Doc FROM (RETURN 702, [702.0, 2.0, 3.0, 4.0]);"}) {
             auto result = connection.query(statement);
             if (result->isSuccess() ||
                 result->getErrorMessage().find(refusal) == std::string::npos) {
