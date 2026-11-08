@@ -756,6 +756,11 @@ pub struct CodeRelation {
     /// établi, pas où (décision du 11 octobre 2026).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub by_name: bool,
+    /// **Liaison de module externe** (codeparsers `external_binding`, 8 novembre 2026) : un import
+    /// JS/TS qui ne se résout pas (module hors de l'arbre, fichier absent) ; la mention va à la zone
+    /// de sa ligne d'import. Marquée « liaison » : la cible est sûre, mais ce n'est pas la définition.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub external_binding: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1166,6 +1171,7 @@ pub fn analyze_in_project(
                     to_key: name.clone(),
                     sites: Vec::new(),
                     by_name: false,
+            external_binding: false,
                 });
                 if let Some(p) = g.parent {
                     for (rel_nom, de, vers) in [("HAS_PARENT", &key, &cles[p]), ("PARENT_OF", &cles[p], &key)] {
@@ -1177,6 +1183,7 @@ pub fn analyze_in_project(
                             to_key: vers.clone(),
                             sites: Vec::new(),
                             by_name: false,
+            external_binding: false,
                         });
                     }
                 }
@@ -1233,6 +1240,7 @@ pub fn analyze_in_project(
             to_key: name,
             sites: Vec::new(),
             by_name: false,
+            external_binding: false,
         });
     }
 
@@ -1345,6 +1353,7 @@ pub fn analyze_in_project(
             to_key: to.1.clone(),
             sites: r.metadata.as_ref().map(|m| m.sites.clone()).unwrap_or_default(),
             by_name: r.metadata.as_ref().and_then(|m| m.by_name).unwrap_or(false),
+            external_binding: r.metadata.as_ref().and_then(|m| m.external_binding).unwrap_or(false),
         });
     }
     // ── Ce que le lot référence, par nom ────────────────────────────────
@@ -2275,6 +2284,8 @@ impl Catalog {
                     Resolution::Import
                 } else if r.by_name {
                     Resolution::Name
+                } else if r.external_binding {
+                    Resolution::Liaison
                 } else {
                     Resolution::File
                 };
@@ -3385,6 +3396,9 @@ pub(crate) enum Resolution {
     /// le 18 octobre 2026, à relire par Lucie) : elle remplace « une relation manquante vaut
     /// mieux qu'une relation fausse », qui laissait tomber l'arête en silence.
     Ambigu,
+    /// **Liaison de module externe** : l'import ne se résout pas, la mention va à la zone de sa
+    /// ligne d'import (JS/TS, 8 novembre 2026). Sûre, mais ce n'est pas la définition.
+    Liaison,
 }
 
 /// Clé méta : le compte des arêtes ambiguës de la base, recompté en fin
@@ -3432,6 +3446,7 @@ impl Resolution {
             Resolution::Import => "import",
             Resolution::Name => "nom",
             Resolution::Ambigu => "ambigu",
+            Resolution::Liaison => "liaison",
         }
     }
 }
