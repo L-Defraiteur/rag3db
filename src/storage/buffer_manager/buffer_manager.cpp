@@ -12,6 +12,7 @@
 #include "common/exception/buffer_manager.h"
 #include "common/file_system/local_file_system.h"
 #include "common/file_system/virtual_file_system.h"
+#include "common/string_format.h"
 #include "common/types/types.h"
 #include "main/db_config.h"
 #include "storage/buffer_manager/spiller.h"
@@ -110,8 +111,22 @@ void BufferManager::verifySizeParams(uint64_t bufferPoolSize, uint64_t maxDBSize
 // should be flushed to disk if it is evicted.
 // (3) If multiple threads are writing to the page, they should coordinate separately because they
 // both get access to the same piece of memory.
+// Une page au-delà de numPages n'a pas d'état : la chercher sortirait de la chaîne des blocs de
+// ConcurrentVector (un nextIndex nul, le SIGSEGV de l'hôte du 8 novembre). Une métadonnée qui
+// désigne une telle page est fausse ; la lecture échoue, la transaction avec elle.
+static void checkPageInFile(const FileHandle& fileHandle, page_idx_t pageIdx) {
+    if (pageIdx >= fileHandle.getNumPages()) {
+        throw BufferManagerException(stringFormat(
+            "Page {} of {} lies beyond the {} pages of the file: the metadata that names it is "
+            "wrong.",
+            pageIdx, fileHandle.getFileInfo() ? fileHandle.getFileInfo()->path : std::string{},
+            fileHandle.getNumPages()));
+    }
+}
+
 uint8_t* BufferManager::pin(FileHandle& fileHandle, page_idx_t pageIdx,
     PageReadPolicy pageReadPolicy) {
+    checkPageInFile(fileHandle, pageIdx);
     auto pageState = fileHandle.getPageState(pageIdx);
     while (true) {
         auto currStateAndVersion = pageState->getStateAndVersion();
@@ -217,6 +232,7 @@ inline bool try_func(const std::function<void(uint8_t*)>& func, uint8_t* frame,
 
 void BufferManager::optimisticRead(FileHandle& fileHandle, page_idx_t pageIdx,
     const std::function<void(uint8_t*)>& func) {
+    checkPageInFile(fileHandle, pageIdx);
     auto pageState = fileHandle.getPageState(pageIdx);
 #if defined(_WIN32)
     // Change the Structured Exception handling just for the scope of this function

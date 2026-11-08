@@ -1,5 +1,7 @@
 #include "storage/free_space_manager.h"
 
+#include <algorithm>
+
 #include "common/serializer/deserializer.h"
 #include "common/serializer/in_mem_file_writer.h"
 #include "common/serializer/serializer.h"
@@ -234,12 +236,29 @@ void FreeSpaceManager::mergePageRanges(free_list_t newInitialEntries, FileHandle
     handleLastPageRange(prevEntry, fileHandle);
 }
 
-void FreeSpaceManager::handleLastPageRange(PageRange pageRange, FileHandle* fileHandle) {
-    if (pageRange.startPageIdx + pageRange.numPages == fileHandle->getNumPages()) {
-        fileHandle->removePageIdxAndTruncateIfNecessary(pageRange.startPageIdx);
-    } else {
-        addFreePages(pageRange);
+// La dernière plage libre reste une entrée, même quand elle touche la fin du fichier. La retirer
+// en baissant numPages (removePageIdxAndTruncateIfNecessary) ne raccourcissait pas le fichier sur
+// le disque, et l'étendue que le point de reprise écrit (numPages) pouvait alors tomber sous des
+// pages tenues : une entrée libre fausse qui couvre des segments vivants en fin de fichier faisait
+// passer numPages et les états de page sous eux. Le lecteur suivant de ces segments sortait de la
+// chaîne des états de page (le SIGSEGV de l'hôte du 8 novembre), et l'ouverture suivante rendait
+// libres les pages vivantes au-delà de l'étendue (returnOwnerlessPages). numPages ne baisse plus :
+// tout ce qu'un point de reprise désigne est sous l'étendue qu'il écrit.
+void FreeSpaceManager::handleLastPageRange(PageRange pageRange, FileHandle* /*fileHandle*/) {
+    addFreePages(pageRange);
+}
+
+common::page_idx_t FreeSpaceManager::getEndOfFreePages() const {
+    common::page_idx_t end = 0;
+    for (const auto& freeList : freeLists) {
+        for (const auto& entry : freeList) {
+            end = std::max(end, entry.startPageIdx + entry.numPages);
+        }
     }
+    for (const auto& entry : uncheckpointedFreePageRanges) {
+        end = std::max(end, entry.startPageIdx + entry.numPages);
+    }
+    return end;
 }
 
 common::row_idx_t FreeSpaceManager::getNumEntries() const {

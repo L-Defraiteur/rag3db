@@ -39,6 +39,9 @@ public:
     void finalizeCheckpoint(FileHandle* fileHandle);
 
     common::row_idx_t getNumEntries() const;
+    // La fin de la plus haute entrée libre, rendue ou en attente du point de reprise ; 0 sans
+    // entrée.
+    common::page_idx_t getEndOfFreePages() const;
     std::vector<PageRange> getEntries(common::row_idx_t startOffset,
         common::row_idx_t endOffset) const;
 
