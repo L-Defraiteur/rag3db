@@ -46,12 +46,15 @@ constexpr const char* PROBE_VECTOR = "RAG3DB_CRASH_REOPEN_PROBE_VECTOR";
 constexpr const char* PROBE_NEAREST = "RAG3DB_CRASH_REOPEN_PROBE_NEAREST";
 constexpr const char* PROBE_OPEN_ONLY = "RAG3DB_CRASH_REOPEN_PROBE_OPEN_ONLY";
 constexpr const char* PROBE_WRITE_WITHOUT_EXTENSION = "RAG3DB_CRASH_REOPEN_PROBE_WRITE";
+constexpr const char* PROBE_EXTENSION_LOADED = "RAG3DB_CRASH_REOPEN_PROBE_EXTENSION_LOADED";
 
 // Les codes de sortie du processus neuf.
 constexpr int INDEX_INTACT = 0;   // l'index répond, et juste
 constexpr int INDEX_REBUILT = 20; // l'index était « en retard » ; retiré, rebâti, il répond juste
 constexpr int OPENED = 30;        // mode « ouvrir seulement »
 constexpr int WRITE_REFUSED = 40; // mode « écrire sans l'extension » : refus nommé, rien d'écrit
+constexpr int EXTENSION_LOADED = 50;     // mode « l'extension est-elle là ? » : oui, sans LOAD
+constexpr int EXTENSION_NOT_LOADED = 51; // … non : l'index attend son extension
 
 // Le corps du processus neuf : ouvrir la base, charger l'extension, compter, chercher. Si
 // l'index se dit en retard sur sa table, vérifier qu'il refuse aussi d'être recréé par-dessus,
@@ -80,6 +83,18 @@ int probe(const std::string& path, const std::string& extension) {
         fprintf(stderr, "[probe] rows=%ld, expected %ld\n", static_cast<long>(numRows),
             static_cast<long>(expectedRows));
         return 14;
+    }
+    if (std::getenv(PROBE_EXTENSION_LOADED) != nullptr) {
+        // Sans LOAD EXTENSION : l'ouverture seule a-t-elle chargé l'extension dont l'index dépend ?
+        auto shown = connection.query("CALL SHOW_INDEXES() RETURN extension_loaded;");
+        if (!shown->isSuccess() || !shown->hasNext()) {
+            fprintf(stderr, "[probe] show_indexes: %s\n",
+                shown->isSuccess() ? "no index" : shown->getErrorMessage().c_str());
+            return 52;
+        }
+        const auto loaded = shown->getNext()->getValue(0)->getValue<bool>();
+        fprintf(stderr, "[probe] extension_loaded=%s\n", loaded ? "true" : "false");
+        return loaded ? EXTENSION_LOADED : EXTENSION_NOT_LOADED;
     }
     if (std::getenv(PROBE_WRITE_WITHOUT_EXTENSION) != nullptr) {
         // Hors rejeu, une écriture dans une table dont un index n'est pas chargé est refusée
@@ -278,7 +293,8 @@ protected:
 
     // Ouvre la base dans un processus neuf. Rend son code de sortie, ou -signal.
     int openInAFreshProcess(int64_t expectedRows, const std::string& vector,
-        int64_t expectedNearest, bool openOnly = false, bool writeWithoutExtension = false) const {
+        int64_t expectedNearest, bool openOnly = false, bool writeWithoutExtension = false,
+        bool extensionLoadedOnly = false) const {
         const auto child = fork();
         if (child == 0) {
             setenv(PROBE_PATH, databasePath.c_str(), 1);
@@ -291,6 +307,9 @@ protected:
             }
             if (writeWithoutExtension) {
                 setenv(PROBE_WRITE_WITHOUT_EXTENSION, "1", 1);
+            }
+            if (extensionLoadedOnly) {
+                setenv(PROBE_EXTENSION_LOADED, "1", 1);
             }
             execl("/proc/self/exe", "transaction_test",
                 "--gtest_filter=VectorIndexCrashReopenProbe.OpenInAFreshProcess",
@@ -408,6 +427,18 @@ TEST_F(VectorIndexCrashReopenTest, TheExtensionFileNamedByTheJournalIsGone) {
     ASSERT_TRUE(journalIsThere());
     theCopyOfTheExtensionDisappears();
     EXPECT_EQ(openInAFreshProcess(501, vectorOf(600), 600), INDEX_REBUILT);
+}
+
+// Une mort juste après un point de reprise, avant toute écriture : le journal est vide, et la
+// réouverture n'a rien à rejouer. Elle doit pourtant charger l'extension notée à côté de la base,
+// comme après une mort au milieu d'une écriture : une ouverture qui dépendrait de l'instant de la
+// mort ferait attendre son extension à l'index selon le hasard (le cas du banc
+// SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact, 1 fois sur 6 sous charge).
+TEST_F(VectorIndexCrashReopenTest, ADeathRightAfterACheckpointStillLoadsTheNotedExtension) {
+    session({createTable, fill, createIndex, "CHECKPOINT;"}, true);
+    ASSERT_FALSE(journalIsThere()) << "le point de reprise devait laisser le journal vide";
+    ASSERT_TRUE(theListOfExtensionsIsThere());
+    EXPECT_EQ(openInAFreshProcess(500, vectorOf(7), 7, false, false, true), EXTENSION_LOADED);
 }
 
 // L'état « en retard » tient à deux réouvertures par des processus qui meurent sans fermer,
