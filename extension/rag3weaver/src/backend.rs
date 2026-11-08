@@ -5158,6 +5158,13 @@ impl Backend {
         if let Some(r) = reprise {
             etats.insert("resume".to_string(), r);
         }
+        // **Une indexation tourne** (c7, 8 novembre 2026 : pendant le premier index d'un
+        // worktree, l'état des entités restait vide, et list_worktrees disait « 0/4 ») :
+        // le compte, que la phrase de l'atelier dit « en cours ».
+        let tournent = crate::dataflow::index_nodes::indexings_running(&self.catalog);
+        if tournent > 0 {
+            etats.insert("indexings".to_string(), json!(tournent));
+        }
         if !montres.is_empty() {
             etats.insert("watches".to_string(), Value::Object(montres));
         }
