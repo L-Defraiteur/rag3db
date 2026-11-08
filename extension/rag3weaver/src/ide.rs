@@ -783,6 +783,16 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        // La coloration pour la page (coloration B) : la même fonction que
+        // `POST /highlight` sous le jeton porteur, ici sous le cookie de l'IDE.
+        ("POST", "/ide/highlight") => {
+            let mut corps = Vec::new();
+            let (statut, v) = match request.as_reader().read_to_end(&mut corps) {
+                Err(e) => (400, json!({ "ok": false, "error": format!("corps illisible : {e}") })),
+                Ok(_) => host.handle("POST", "/highlight", None, &corps),
+            };
+            let _ = request.respond(json_(statut, &v));
+        }
         ("GET", "/ide/etat") => {
             let (statut, v) = host.handle("GET", "/etat", None, &[]);
             let _ = request.respond(json_(statut, &v));
