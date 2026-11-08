@@ -7,10 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
-- **8 nov. — Les tests hors run_e2e.sh ne laissent plus leurs bases dans /tmp.** Les suites créant
-  une base temporaire le font désormais dans un sous-dossier dédié effacé au Drop (garde `BaseTemporaire`),
-  succès ou panique : la base, son journal `.wal` et ses compagnons ne s'accumulent plus dans la mémoire
-  vive de `/tmp` (ticket `closed/2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md`).
+- **8 nov. — Dix tests ne laissent plus leurs bases dans /tmp.** Une base de test peut vivre dans un
+  dossier à elle effacé au Drop (garde `BaseTemporaire`), succès ou panique, après ce qui la tient :
+  dix témoins d'`e2e_rag3daemon`, `e2e_code`, `e2e_prise_atomique` et `e2e_rouvrir` y passent, et leur
+  base, son `.wal` et ses compagnons ne s'accumulent plus dans la mémoire vive de `/tmp`. Le reste (le
+  cache par défaut de `Catalog`, sept autres témoins) est dit au ticket
+  `2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md`, toujours ouvert.
 - **7 nov. — Un appel dans une garde de `match` compte comme usage.** En Rust, `motif if
   verifie(x) =>` : la garde est du code, et son appel apparaît dans `usages` et `impact`. Avant,
   codeparsers prenait la garde pour une partie du motif et l'appel n'existait pas pour l'index
