@@ -5207,10 +5207,16 @@ impl Backend {
                 for entite in entites.iter().copied() {
                     let c = comptes.get(entite);
                     let complet = c.is_none_or(|c| c["rows"].is_u64() && c["documents"] == c["rows"]);
+                    // Une entité vide au dernier index (0 ligne, comme Library d'un dépôt sans
+                    // bibliothèque) : rien n'y manque, « jamais » n'y est pas un retard.
+                    let vide = c.is_some_and(|c| c["rows"] == 0);
                     if let Some(e) = etats.get_mut(entite) {
                         if complet && e["text"] == "running" && e["text_percent"].is_null() {
                             e["text"] = json!("ready");
                             e["text_stale_note"] = json!("la note « en cours » d'avant un arrêt, sans indexation vivante : prêt d'après les comptes du dernier index");
+                        } else if vide && e["text"] == "never" {
+                            e["text"] = json!("ready");
+                            e["text_stale_note"] = json!("aucune ligne au dernier index : rien à indexer");
                         }
                     }
                 }
