@@ -66,6 +66,9 @@ fn est_une_entite(v: &Value) -> bool {
 /// pourcentage le dit.
 fn phrase_de_l_index(index: &serde_json::Map<String, Value>) -> String {
     let entites: Vec<&Value> = index.values().filter(|v| est_une_entite(v)).collect();
+    // « en cours » seulement quand une indexation vit (c7, 8 novembre 2026 : une note
+    // d'avant un arrêt n'est pas un travail qui avance).
+    let vit = index.get("indexings").and_then(Value::as_u64).is_some_and(|n| n > 0);
     let signal = |cle: &str, pourcent: &str, nom: &str, prets_mot: &str, declares: &str| -> String {
         let vus: Vec<&&Value> = entites.iter().filter(|e| e[cle] != "not_declared").collect();
         let n = vus.len();
@@ -86,7 +89,7 @@ fn phrase_de_l_index(index: &serde_json::Map<String, Value>) -> String {
             .min();
         let mut dit = format!("{nom} {compte}");
         if let Some(p) = en_cours {
-            dit.push_str(&format!(", en cours, {p} %"));
+            dit.push_str(&if vit { format!(", en cours, {p} %") } else { format!(", {p} % faits, rien ne tourne") });
         }
         if echecs > 0 {
             dit.push_str(&format!(", {echecs} en échec"));
@@ -624,8 +627,11 @@ mod tests {
         // En cours seulement quand un pourcentage le dit.
         let mut scope = pret("running");
         scope["vectors_percent"] = json!(42);
-        let index = json!({ "File": pret("ready"), "Scope": scope, "Symbol": pret("not_declared") });
+        let index = json!({ "File": pret("ready"), "Scope": scope.clone(), "Symbol": pret("not_declared"), "indexings": 1 });
         assert_eq!(super::etat_de_l_index(&etat(index), manifeste), "plein texte prêt (3/3), vecteurs 1/2 déclarés, en cours, 42 %");
+        // La même note sans indexation vivante (wt-react5, 16 h 30) : pas « en cours ».
+        let index = json!({ "File": pret("ready"), "Scope": scope, "Symbol": pret("not_declared") });
+        assert_eq!(super::etat_de_l_index(&etat(index), manifeste), "plein texte prêt (3/3), vecteurs 1/2 déclarés, 42 % faits, rien ne tourne");
         // Une écriture qui tient le verrou : ni zéro ni « pas indexé ».
         let dit = super::etat_de_l_index(&etat(json!({ "busy": true, "watches": {} })), manifeste);
         assert!(dit.starts_with("indexation en cours"), "{dit}");
@@ -933,6 +939,48 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
         attendre_l_index();
+    }
+
+
+    /// **Une note « en cours » d'avant un arrêt ne se lit pas comme un index qui tourne**
+    /// (c7, 8 novembre 2026 : code-essais-c7 rendait `text: running` noté le 25 octobre à
+    /// 23 h 21, ses comptes complets, rien ne tournant ; list_worktrees disait « plein texte
+    /// 0/7 »). Un index fini, puis la note du mois dernier posée sur chaque entité : l'état
+    /// dit prêt d'après les comptes, et la phrase « plein texte prêt ».
+    #[test]
+    fn a_stale_running_note_without_a_live_index_reads_ready() {
+        let d = tempfile::tempdir().unwrap();
+        let (manifeste, _) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+        let manifeste = PathBuf::from(manifeste);
+        let host = Arc::new(crate::daemon_host::tests::hote_isole());
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+        let debut = std::time::Instant::now();
+        while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        let entites = [crate::code::FILE, crate::code::SCOPE, crate::code::LIBRARY, crate::code::SYMBOL];
+        host.with_backend(&h, |b| {
+            let cat = b.catalog.lock().unwrap();
+            for e in entites {
+                let mut note = cat.index_state_for(e).unwrap();
+                note.text = crate::catalog::Level::Running;
+                note.text_percent = None;
+                note.updated_ms = 1_792_966_868_365;
+                cat.note_index_state_for(e, note).unwrap();
+            }
+        })
+        .unwrap();
+        let etats = host.with_backend(&h, |b| b.index_states()).unwrap().unwrap();
+        assert!(etats["fts_counts"].is_object(), "les comptes du dernier index : {etats:#}");
+        for e in [crate::code::FILE, crate::code::SCOPE] {
+            assert_eq!(etats[e]["text"], "ready", "{e} : {etats:#}");
+        }
+        let etat = json!({ "backends": [{ "manifest": manifeste, "open": true, "index": etats }] });
+        let dit = super::etat_de_l_index(&etat, &manifeste);
+        assert!(dit.starts_with("plein texte prêt"), "{dit}");
+        assert!(!dit.contains("en cours"), "{dit}");
     }
 
 }
