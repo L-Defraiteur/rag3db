@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — Deux écrivains d'une même table ne croisent plus leurs relations au rejeu.** Une
+  transaction qui verse ses nœuds pour un COPY de relations tient maintenant la table jusqu'à sa
+  validation, comme un COPY de nœuds : un second écrivain attend, au lieu de se glisser derrière elle
+  et de lui prendre ses décalages au rejeu.
 - **8 nov. — Un quota ne fait plus tomber le chat : une minute, puis le double.** Le client du
   modèle suit la règle de Lucie après un refus : une minute, puis le double à chaque refus, au plus
   dix minutes, cinq reprises au plus. Un 503 attend comme un quota, et le 429 que Vertex rend au
