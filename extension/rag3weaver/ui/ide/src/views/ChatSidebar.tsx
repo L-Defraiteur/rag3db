@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { avancementText, useAvancement } from "@/lib/progres";
 import { Bot, Brain, ChevronDown, ChevronRight, FolderGit2, GitBranch, ListTodo } from "lucide-react";
 import type { ChatSession, HostState, Rag, RunState, Space, SessionTask } from "@/lib/host";
 
@@ -27,6 +28,8 @@ const stateText: Record<RunState, string> = { running: "en cours", waiting: "en 
 const taskActive = (t: SessionTask) => t.state === "running" || !!t.awaits_answer;
 const sessionActive = (s: ChatSession, tasks: SessionTask[]) => s.state === "running" || !!s.awaits_answer || tasks.some((t) => t.session === s.id && taskActive(t));
 const chatLink = (backend: string) => `/ide/code/${backend}/chat`;
+// Le manifeste d'un backend par son id : l'avancement des index arrive par manifeste.
+const Manifestes = createContext<Map<string, string>>(new Map());
 
 /// Ce qui tient la page : la session, et la tâche si la page en est une.
 export function pagePath(state: HostState, id: string): { session?: ChatSession; tasks: SessionTask[] } {
@@ -86,6 +89,18 @@ function Fold({ title, head, open, children, className, data }: { title: ReactNo
   );
 }
 
+/// L'avancement de l'index d'un espace, lu sur le flux (`IndexProgress`), s'il en court un.
+function Avance({ backend }: { backend: string }) {
+  const manifeste = useContext(Manifestes).get(backend);
+  const { a, fige, fluxOuvert } = useAvancement(manifeste);
+  if (!a) return null;
+  return (
+    <span className="avancement ml-1" data-pourcent={a.pourcent} data-fige={fige ?? ""} data-flux={fluxOuvert ? "ouvert" : "coupe"}>
+      · {avancementText(a, fige, fluxOuvert)}
+    </span>
+  );
+}
+
 function SpaceLine({ s, id, heldBy }: { s: Space; id: string; heldBy?: string }) {
   return (
     <a
@@ -99,6 +114,7 @@ function SpaceLine({ s, id, heldBy }: { s: Space; id: string; heldBy?: string })
     >
       <GitBranch className="inline size-3 mr-1" aria-hidden />
       {s.repo ?? "sans git"} · {s.branch ?? "—"} · {s.loaded ? "chargé" : "non chargé"} · {ragText(s.rag)}
+      <Avance backend={s.backend} />
       {s.proposal ? <span className="proposition ml-1">· proposition {s.proposal.state === "open" ? "ouverte" : s.proposal.state === "merged" ? "fusionnée" : "rejetée"}</span> : null}
       {heldBy ? <span className="tenu-par ml-1 rounded border px-1 text-[10px]">tenu par {heldBy}</span> : null}
     </a>
@@ -162,6 +178,7 @@ export function ChatSidebar({ state, id, conversation }: { state: HostState; id:
   for (const se of sessions) for (const s of se.spaces) add(s, name(se));
   for (const t of tasks) for (const s of t.spaces) add(s, `${t.name} (${name(sessions.find((x) => x.id === t.session))})`);
   return (
+    <Manifestes.Provider value={new Map((state.backends ?? []).map((b) => [b.id, b.manifest]))}>
     <div id="barre" className="flex flex-col gap-1" data-view={view}>
       <div className="flex items-center gap-2 flex-wrap">
         <select id="vue-barre" aria-label="vue de la barre" value={view} onChange={(e) => choose(e.target.value as View)} className="text-xs rounded border bg-transparent px-1 py-0.5">
@@ -229,5 +246,6 @@ export function ChatSidebar({ state, id, conversation }: { state: HostState; id:
         </section>
       ) : null}
     </div>
+    </Manifestes.Provider>
   );
 }

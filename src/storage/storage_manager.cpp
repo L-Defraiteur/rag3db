@@ -161,6 +161,12 @@ ShadowFile& StorageManager::getShadowFile() const {
     return *shadowFile;
 }
 
+void StorageManager::reportOwnedPages(PageAllocator& tracker) const {
+    for (const auto& [_, table] : tables) {
+        table->reclaimStorage(tracker);
+    }
+}
+
 void StorageManager::reclaimDroppedTables(const Catalog& catalog) {
     std::vector<table_id_t> droppedTables;
     for (const auto& [tableID, table] : tables) {

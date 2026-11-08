@@ -1122,10 +1122,15 @@ impl DaemonHost {
         // commitée n'y est pas, et sans le dire on la cherche longtemps.
         let depart = ouverte.then(|| {
             let court: String = t.depart.chars().take(9).collect();
-            let note = format!(
-                "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)",
-                t.branche
-            );
+            // Sans git (page 03 d'everything declarative, § 1) : la boîte le dit.
+            let note = match t.workspace.as_ref().filter(|w| w.copie.is_some()) {
+                Some(w) => format!("tâche ouverte : {} (une copie de {})", super::taches::SANS_GIT, w.racine_principale.display()),
+                None => format!(
+                    "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas){}",
+                    t.branche,
+                    if t.git_init_fait { " ; la racine est devenue un dépôt à l'ouverture (git_init déclaré), premier commit par rag3weaver" } else { "" }
+                ),
+            };
             let _ = files.append("host", "report", None, &note);
             json!({ "branche": t.branche, "depart": t.depart })
         });
@@ -1520,7 +1525,10 @@ impl DaemonHost {
         let Some(memoire_manifeste) = self.memoire_declaree(&cible)? else { return Ok(None) };
         let memoire = self.hosted(&memoire_manifeste)?;
         let appeler = |outil: &str, args: Value| -> Result<Value, String> { self.with_backend(&memoire, |b| b.call(outil, args)).and_then(|r| r) };
-        let fiche = super::juge::nom_de_tache(if request.trim().is_empty() { &plan.request } else { request });
+        // La fiche de la tâche, sous son nom court : celle où le juge range les bilans
+        // de ses pas (`juge::nom_de_fiche_de_tache`).
+        let _ = request;
+        let fiche = super::juge::nom_de_fiche_de_tache(task);
         {
             let nom = json!({ "name": fiche }).to_string();
             let nom = &nom[1..nom.len() - 1];

@@ -116,6 +116,71 @@ fn borner(texte: String) -> String {
 /// **Le nom d'une fiche de bilan**, stable (96) : `bilan : ` puis l'intitulé
 /// en minuscules, espaces repliés, ponctuation de bord retirée. Une seule
 /// fonction : deux formulations rangées par deux fonctions feraient deux fiches.
+/// **Un pas d'équipier se juge sur son but** (8 novembre 2026, essai 3 de c7 : le pas
+/// « lire le ticket et le code » noté 2/10, « n'a pu accomplir aucune action
+/// corrective », jugé comme la tâche entière ; ses fiches portaient la demande
+/// entière, 2 000 caractères, pour nom). Le run d'un pas : sa tâche (`tache.nom`)
+/// et son numéro (`pas`), lus au journal.
+fn pas_d_equipier(journal: &Value) -> Option<(String, u64)> {
+    Some((journal["tache"]["nom"].as_str()?.to_string(), journal["pas"].as_u64()?))
+}
+
+/// La date d'un run, lue dans son nom (`agent-<ms en hexadécimal>-<n>`).
+fn date_du_run(run: &str) -> Option<String> {
+    let ms = u64::from_str_radix(run.split('-').nth(1)?, 16).ok()?;
+    let t = jiff::Timestamp::from_millisecond(ms as i64).ok()?;
+    Some(t.to_zoned(jiff::tz::TimeZone::system()).strftime("%Y-%m-%d").to_string())
+}
+
+/// **La fiche d'une tâche d'équipier** : « bilan : <nom de la tâche> », court et
+/// stable. Tous ses pas y vont, un apport par pas (« pas N · <date> » en tête), et ses
+/// plans clos aussi ; le hook de Claude Code la lit sous le même nom.
+pub fn nom_de_fiche_de_tache(tache: &str) -> String {
+    format!("bilan : {tache}")
+}
+
+/// **Le nom de la fiche d'un run** : pour un pas d'équipier, la fiche de sa tâche
+/// ([`nom_de_fiche_de_tache`]) ; sinon le nom de l'intitulé ([`nom_de_tache`]).
+pub fn nom_de_fiche_du_run(_run: &str, journal: &Value, intitule: &str) -> String {
+    match pas_d_equipier(journal) {
+        Some((tache, _)) => nom_de_fiche_de_tache(&tache),
+        None => nom_de_tache(intitule),
+    }
+}
+
+/// L'en-tête de l'apport d'un pas : « pas N · <date> ».
+fn entete_du_pas(run: &str, journal: &Value) -> Option<String> {
+    let (_, pas) = pas_d_equipier(journal)?;
+    Some(match date_du_run(run) {
+        Some(d) => format!("pas {pas} · {d}"),
+        None => format!("pas {pas}"),
+    })
+}
+
+/// **Ce que le juge reçoit pour cible** : un pas d'équipier, avec son message de pas
+/// (le plan, l'élément en cours, la boîte) comme but ; un autre run, sa tâche.
+pub fn consigne_du_juge(run: &str, journal: &Value, intitule: &str) -> String {
+    match pas_d_equipier(journal) {
+        Some((tache, pas)) => {
+            let message = journal["tours"]
+                .as_array()
+                .and_then(|t| t.iter().find(|t| t["role"] == "user"))
+                .and_then(|t| t["content"].as_str())
+                .unwrap_or_default();
+            let mut coupe = message.len().min(3000);
+            while !message.is_char_boundary(coupe) {
+                coupe -= 1;
+            }
+            let message = if coupe < message.len() { format!("{}… [coupé]", &message[..coupe]) } else { message.to_string() };
+            format!(
+                "Juge ce run : {run}, le pas {pas} de la tâche « {tache} ». Juge le pas sur **son** but : ce que son message de pas lui demandait (l'élément du plan en cours, la boîte), cité ci-dessous, et non la tâche entière, qui se fait en plusieurs pas. Les outils déclarés sont ceux du journal, pas seulement ceux que le pas a appelés. Enquête, puis dis en une ligne que tu as assez.\n\nLe message du pas :\n{}",
+                message
+            )
+        }
+        None => format!("Juge ce run : {run}, sur la tâche « {intitule} ». Enquête, puis dis en une ligne que tu as assez."),
+    }
+}
+
 pub fn nom_de_tache(intitule: &str) -> String {
     let replie = intitule.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ");
     let nu = replie.trim_matches(|c: char| !c.is_alphanumeric());
@@ -343,7 +408,7 @@ impl DaemonHost {
         let (fiche, dit_de_la_fiche) = if est_un_tour_de_claude_code(&journal) {
             fiche_d_un_tour_de_claude_code(self, &memoire_pour_la_fiche, &journal)?
         } else {
-            (nom_de_tache(&intitule), None)
+            (nom_de_fiche_du_run(run, &journal, &intitule), None)
         };
         if let Some(d) = &dit_de_la_fiche {
             eprintln!("[juge] {run} : {d}");
@@ -362,7 +427,7 @@ impl DaemonHost {
         let debut = std::time::Instant::now();
         let silencieux: EventHandler = Arc::new(|_| {});
         let enquete = session.run_with(
-            &format!("Juge ce run : {run}, sur la tâche « {intitule} ». Enquête, puis dis en une ligne que tu as assez."),
+            &consigne_du_juge(run, &journal, &intitule),
             llm.as_ref(),
             &outils,
             &config,
@@ -407,6 +472,11 @@ impl DaemonHost {
         // autres fiches citées), en tête du bilan.
         let texte = match &dit_de_la_fiche {
             Some(d) => format!("> {d}\n\n{texte}"),
+            None => texte,
+        };
+        // L'apport d'un pas dit lequel, et quand : la fiche de la tâche en porte un par pas.
+        let texte = match entete_du_pas(run, &journal) {
+            Some(e) => format!("**{e}**\n\n{texte}"),
             None => texte,
         };
         // **La fiche d'un outil suit le code qu'il exécute** (96) : un graphe livré
@@ -894,6 +964,29 @@ mod tests {
     }
 
     use super::*;
+
+    /// **Un pas d'équipier se juge sur son but, sous le nom court de sa tâche** (8 novembre
+    /// 2026, c7) : la fiche « bilan : <tâche> » (un apport par pas, « pas N · <date> » en
+    /// tête), et le juge reçoit le message du pas pour but ; un run qui n'est pas un pas
+    /// garde le nom de son intitulé et la consigne d'avant.
+    #[test]
+    fn a_teammate_step_has_its_own_fiche_and_is_judged_on_its_goal() {
+        let run = format!("agent-{:x}-887", 1794098554713u64);
+        let journal = json!({
+            "tache": { "nom": "journaux-annulation-tmp-3", "parent": "e4d8635ecfe7" },
+            "pas": 3,
+            "demande": "Tâche réelle, bornée ".repeat(100),
+            "tours": [{ "role": "user", "content": "[Pas 3]\n\nTon plan actif : écrire le témoin rouge" }],
+        });
+        let nom = nom_de_fiche_du_run(&run, &journal, journal["demande"].as_str().unwrap());
+        assert_eq!(nom, "bilan : journaux-annulation-tmp-3", "le nom court de la tâche, pas sa demande");
+        assert!(entete_du_pas(&run, &journal).is_some_and(|e| e.starts_with("pas 3 · 2026-11-")), "{:?}", entete_du_pas(&run, &journal));
+        let consigne = consigne_du_juge(&run, &journal, "");
+        assert!(consigne.contains("le pas 3 de la tâche « journaux-annulation-tmp-3 »") && consigne.contains("non la tâche entière") && consigne.contains("écrire le témoin rouge"), "{consigne}");
+        let autre = json!({ "demande": "Dis salut" });
+        assert_eq!(nom_de_fiche_du_run("chat-x", &autre, "Dis salut"), "bilan : dis salut");
+        assert!(consigne_du_juge("chat-x", &autre, "Dis salut").contains("sur la tâche « Dis salut »"));
+    }
 
     /// Le nom d'une fiche de bilan : une seule fonction (96).
     #[test]

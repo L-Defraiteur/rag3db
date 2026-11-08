@@ -222,6 +222,9 @@ mod teammate_tools;
 /// La livraison des lignes de boîte adressées à `codex:<nom>`, par `codex queue`.
 pub mod livraison_codex;
 
+/// Un symbole cité dans le chat, résolu par l'index pour en faire un lien.
+mod symboles_cites;
+
 /// L'atelier : l'hôte attache les worktrees (page 03 du 7 novembre 2026, lot 0).
 #[cfg(feature = "code")]
 pub mod worktrees;
@@ -1160,7 +1163,7 @@ impl DaemonHost {
             // sa branche, sa racine.
             let mut premier = espace(b, Some("open"));
             premier["repo"] = json!(repo_of(&t.depot));
-            premier["branch"] = json!(t.branche);
+            premier["branch"] = if t.branche.is_empty() { Value::Null } else { json!(t.branche) };
             premier["path"] = json!(t.workspace.as_ref().filter(|w| w.code.is_none()).map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone()));
             let mut spaces = vec![premier];
             if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()) {
@@ -1897,7 +1900,7 @@ mod tests {
         assert!(host.state()["backends"].as_array().is_none_or(|b| b.is_empty()), "aucun backend n'a été ouvert");
     }
 
-    fn hote_isole() -> DaemonHost {
+    pub(super) fn hote_isole() -> DaemonHost {
         DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()))
     }
 

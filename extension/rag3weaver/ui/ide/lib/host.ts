@@ -98,7 +98,9 @@ export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStat
       /* une ligne illisible ne coupe pas le flux */
     }
   };
-  (window as unknown as { __ide?: { flux?: EventSource } }).__ide = { flux: source };
+  // Le reste de `__ide` (les relevés des vues, que les témoins lisent) est gardé.
+  const w = window as unknown as { __ide?: Record<string, unknown> };
+  w.__ide = { ...(w.__ide ?? {}), flux: source };
   return () => source.close();
 }
 

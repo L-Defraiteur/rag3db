@@ -259,7 +259,14 @@ impl Components {
                             let chemin = format!("components/{clic}");
                             let texte = lecteur.lire_texte(&backend_dir.join(&chemin)).map_err(|e| format!("{chemin} : {e}"))?;
                             vide = texte.trim().is_empty();
-                            compiler_clic(&texte, &chemin, &composant, &decl.effets, &self.ecran, mode)?
+                            // Blanc : l'instant d'une écriture en place, rendu comme une source
+                            // vide (un module vide, marqué) — l'aperçu attend la suite au lieu
+                            // d'échouer (rouge de l'aperçu à chaud sous charge, 8 novembre 2026).
+                            if vide {
+                                compiler("", &composant, mode)?
+                            } else {
+                                compiler_clic(&texte, &chemin, &composant, &decl.effets, &self.ecran, mode)?
+                            }
                         }
                         _ => {
                             let source = lecteur.lire_texte(&backend_dir.join("components").join(&decl.source))

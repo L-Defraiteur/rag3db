@@ -1,8 +1,8 @@
 # Le code dans le chat n'est ni coloré ni relié au dépôt
 
-- **État** : ouvert (7 novembre 2026), retour de Lucie sur la pose de 21 h 51 ; pour hooks-essai.
-  Fait : la coloration (A, highlight.js, 48abbd62d ; puis B, les grammaires de l'hôte, branche
-  coloration-b), le code en ligne, le chemin cité en lien. Reste : le lien vers un symbole.
+- **État** : corrigé (8 novembre 2026) : la coloration A (384f6fac5) et B (5ec68e9a5), le code en
+  ligne et le chemin cité en lien (384f6fac5), le symbole cité en lien vers sa définition
+  (36aced578, session archi). Retour de Lucie sur la pose de 21 h 51.
 - **Famille** : produit
 - **Gravité** : gêne (un code illisible, des références qui ne mènent nulle part).
 - **Atteignable en service** : oui, toute réponse qui montre du code.
@@ -38,3 +38,14 @@ Témoins navigateur : un bloc rust coloré ; un chemin cité qui mène au fichie
   inconnue ; bloc resté sous highlight.js), verts sur f1f048186.
 - **Reste** : un symbole connu cité par le modèle (`Backend::run`) qui mène à sa définition. Il
   faut une résolution du nom par l'index (outline ou usages) côté page ; c'est un lot à part.
+
+## Le symbole cité (8 novembre 2026, archi, 36aced578)
+
+`POST /ide/symboles {backend, names}` résout en lot par `usages`, en appel discret
+(`Backend::call_discret` : son run va sur un bus à part, ni journal ni barre), sans ouvrir de
+dépôt ni attendre un catalogue tenu, sans lien sur un index partiel. Dans la page, un code en
+ligne en forme d'identifiant devient un lien vers le fichier à sa ligne (une définition) ou vers
+la vue du symbole (plusieurs) ; les mots du langage ne sont pas demandés, le cache vit cinq
+minutes et se vide à un événement `files`. Témoins : `un_symbole_cite_se_resout_par_l_index_sans_ouvrir_de_depot`,
+`un_catalogue_tenu_rend_tout_de_suite_sans_attendre`, `un_rendu_n_ecrit_aucun_run_au_journal`,
+`un_symbole_cite_par_le_modele_mene_a_sa_definition`.

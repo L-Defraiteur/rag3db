@@ -14,6 +14,29 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// Une identité git déclarée : le nom et l'adresse d'un auteur de commit.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitIdentity {
+    pub name: String,
+    pub email: String,
+}
+
+/// **L'identité des commits de rag3weaver** : celle que le manifeste déclare
+/// (`workspace.git_identity`), sinon `rag3weaver <rag3weaver@localhost>`. Elle se
+/// passe à git par `-c user.name=… -c user.email=…` ([`GitIdentity::git_args`]),
+/// jamais par la config globale ni par celle du dépôt.
+pub fn git_identity_or_default(declared: Option<&GitIdentity>) -> GitIdentity {
+    declared.cloned().unwrap_or_else(|| GitIdentity { name: "rag3weaver".into(), email: "rag3weaver@localhost".into() })
+}
+
+impl GitIdentity {
+    /// Les arguments qui posent cette identité pour une seule commande git.
+    pub fn git_args(&self) -> [String; 4] {
+        ["-c".into(), format!("user.name={}", self.name), "-c".into(), format!("user.email={}", self.email)]
+    }
+}
+
 /// La clé `workspace` d'un `backend.json`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -37,6 +60,25 @@ pub struct WorkspaceConfig {
     /// l'agent hors d'une fusion.
     #[serde(default)]
     pub task_writes: bool,
+    /// **Faire de la racine un dépôt, sur demande** (page 03 d'everything
+    /// declarative, § 1 « Sans git ») : une racine qu'aucun git ne suit devient
+    /// un dépôt (`git init` et un premier commit) à l'ouverture de la première
+    /// tâche, qui est alors une branche. Sans l'option, jamais d'office : la
+    /// tâche travaille dans une copie de la racine.
+    #[serde(default)]
+    pub git_init: bool,
+    /// **L'identité des commits que rag3weaver pose** (le premier commit de
+    /// `git_init`, les déclarations d'un worktree attaché) : absente,
+    /// `rag3weaver <rag3weaver@localhost>` ([`git_identity_or_default`]). Jamais la
+    /// config git de la machine : la CI n'en a pas, et celle d'un poste peut porter
+    /// une adresse qui ne doit pas entrer dans ces dépôts.
+    #[serde(default)]
+    pub git_identity: Option<GitIdentity>,
+    /// **Ce qu'une tâche sans git ne copie pas** : des noms de dossiers, pris à
+    /// toute profondeur. Absent : `target`, `node_modules`, `.venv` (un build ou
+    /// des dépendances, que la tâche n'a pas à relire ni à fusionner).
+    #[serde(default)]
+    pub exclude: Option<Vec<String>>,
     /// La porte des commandes (`run`/`run_bg`) : absente ou `off`, le
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
@@ -737,6 +779,9 @@ mod tests {
             root: "sources".into(),
             read_only,
             task_writes: false,
+            git_init: false,
+            git_identity: None,
+            exclude: None,
             commands: CommandGate::Off,
             index_signals: std::collections::BTreeMap::new(),
             sandbox: SandboxConfig::default(),

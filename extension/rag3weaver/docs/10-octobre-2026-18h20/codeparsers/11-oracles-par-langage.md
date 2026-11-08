@@ -120,15 +120,17 @@ Mêmes arêtes, même graine, même arbre (a72acfeef), juge strict :
   juge strict la dit fausse, à raison. Python : un `parse_args` relié par le nom à un homonyme du
   dépôt, quand c'est celui d'`argparse` (la famille du ticket « la marque nom relie un appel de
   méthode standard à un homonyme »).
-- **TypeScript : 39 faux, deux familles.**
-  - **17 liaisons d'import** : notre arête vise `const path = require("path")` dans le fichier même,
-    le serveur rend `@types/node`. Notre cible est la définition que l'index connaît (le module est
-    hors de l'index) : ce n'est pas un homonyme faux, mais le juge strict ne le sait pas. À
-    départager par un verdict à part (« liaison d'import ») plutôt que de les compter justes.
-  - **21 homonymes locaux du même fichier** : `const ctx`, `const res`, `const json` déclarés dans
-    plusieurs fonctions de `lucivy-worker.js` ; la marque « fichier » relie la mention au premier
-    homonyme du fichier, pas à celui de sa fonction. Ce sont de vrais faux : la résolution « fichier »
-    ne tient pas compte de la portée d'une locale en JavaScript.
+- **TypeScript : 39 faux, trois familles.**
+  - **12 liaisons d'import**, un verdict à part depuis le 8 novembre (`liaison_d_import`) : notre
+    arête vise `const path = require("path")` dans le fichier même, le serveur rend `@types/node`. Notre
+    cible est la définition que l'index connaît, le module étant hors de l'index.
+  - **5 `require` d'un module de l'arbre** : `const PreparedStatement = require("./prepared_statement.js")`,
+    notre arête s'arrête à la liaison quand la classe est définie dans `prepared_statement.js`. De vrais
+    faux : un `require` relatif ne se suit pas comme un `import`.
+  - **21 homonymes locaux du même fichier** : des `const ctx` déclarées dans plusieurs blocs de
+    `lucivy-worker.js`, reliées au premier homonyme du fichier. **Corrigé le 8 novembre**
+    (codeparsers c660893, ticket fermé `2026-11-08-la-marque-fichier-relie-une-locale-javascript-au-premier-homonyme.md`) :
+    sur les mêmes mentions, juste 259 → 279 et faux 30 → 10, aucun juste perdu.
   - 1 autre (`var entries` contre `lib.dom`).
 
 ## Deux trouvailles en chemin

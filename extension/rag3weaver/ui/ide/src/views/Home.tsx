@@ -1,39 +1,41 @@
 import { FolderTree, GitBranch, History, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { shortName, type Backend, type HostState } from "@/lib/host";
+import { displayName, type Backend, type HostState } from "@/lib/host";
 import { SearchBox } from "@/components/SearchBox";
 
-// **L'accueil** : les backends de l'hôte, chacun avec ses vues et ses tâches.
-// Les repères que les témoins navigateur lisent restent ceux de l'ancienne page :
-// `#vue h1` « Backends », un lien `/ide/code/<id>/arbre/` par backend.
+// **L'accueil** : les dépôts de l'hôte, chacun avec ses vues et ses tâches (Lucie, 8
+// novembre 2026 : l'accueil parle en dépôts, comme la barre du chat). Une carte se nomme
+// par son dépôt et sa branche (`displayName`), le chemin du manifeste n'est qu'en
+// infobulle, une tâche se dit par son worktree (sa branche `agent/<nom>`) ; « backend »
+// ne paraît pas à l'écran. Repères des témoins : `#vue h1` « Dépôts », `.depot[data-backend]`
+// et son `.nom`, `.worktree`, un lien `/ide/code/<id>/arbre/` par dépôt.
 export function Home({ state }: { state: HostState }) {
   const backends = state.backends ?? [];
   if (!backends.length) {
-    return <p className="text-muted-foreground">L'hôte ne sert encore aucun backend : un client (MCP) l'ouvre à son premier appel.</p>;
+    return <p className="text-muted-foreground">L'hôte ne sert encore aucun dépôt : un dépôt paraît ici quand un agent ou l'atelier l'ouvre.</p>;
   }
   const principals = backends.filter((b) => !b.tache);
   const tasksOf = (b: Backend) => backends.filter((t) => t.tache && t.tache.parent === b.id);
   return (
     <>
-      <h1 className="text-xl font-semibold mb-4">Backends</h1>
+      <h1 className="text-xl font-semibold mb-4">Dépôts</h1>
       <ul className="liste grid gap-3">
         {principals.map((b) => (
-          <li key={b.id}>
+          <li key={b.id} className="depot" data-backend={b.id}>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <a href={`/ide/code/${b.id}/arbre/`} className="hover:underline">
-                    {shortName(b.manifest)}
+                  <a href={`/ide/code/${b.id}/arbre/`} className="nom hover:underline" title={b.manifest}>
+                    {displayName(b)}
                   </a>
-                  <Badge variant={b.open ? "default" : "secondary"}>{b.open ? "ouvert" : "fermé"}</Badge>
+                  <Badge variant={b.open ? "default" : "secondary"}>{b.open ? "chargé" : "non chargé"}</Badge>
                   {(b.template_drift ?? []).length ? (
                     <Badge variant="outline" title={b.template_drift!.join("\n")}>
                       {b.template_drift!.length} gabarit(s) local(aux) différent(s) du livré
                     </Badge>
                   ) : null}
                 </CardTitle>
-                <p className="text-xs text-muted-foreground break-all">{b.manifest}</p>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 <div className="basis-full">
@@ -48,8 +50,8 @@ export function Home({ state }: { state: HostState }) {
                 <Link href={`/ide/code/${b.id}/recherches/`} icon={<History className="size-4" />} label="mes recherches" />
                 {tasksOf(b).map((t) => (
                   <span key={t.id} className="flex items-center gap-1 basis-full pt-1">
-                    <Badge variant="outline" className="pastille">
-                      tâche {t.tache!.nom}
+                    <Badge variant="outline" className="pastille worktree" title={t.manifest}>
+                      worktree {displayName(t)} · tâche {t.tache!.nom}
                     </Badge>
                     <Link href={`/ide/code/${t.id}/arbre/`} icon={<FolderTree className="size-4" />} label="son arbre" />
                     <Link href={`/ide/code/${t.id}/chat`} icon={<MessageSquare className="size-4" />} label="chat" />

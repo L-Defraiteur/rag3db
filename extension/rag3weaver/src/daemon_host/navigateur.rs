@@ -478,7 +478,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     // L'entrée par le jeton pose le cookie, et mène à l'accueil.
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
     let vues: &[(&str, String, &str)] = &[
-        ("l'accueil", format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Backends'"),
+        ("l'accueil", format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Dépôts'"),
         (
             "l'arbre",
             format!("{racine}/ide/code/{id}/arbre/"),
@@ -903,7 +903,7 @@ fn l_entree_par_un_lien_venu_d_ailleurs_ouvre_la_page_au_premier_clic() {
     // L'accueil d'un hôte sans backend dit qu'il n'en sert aucun : la page s'est
     // rendue avec le cookie (un 403 bad token n'aurait ni #vue ni ce texte).
     n.attendre(
-        "location.pathname === '/ide/' && (document.querySelector('#vue h1')?.textContent === 'Backends' || document.querySelector('#vue')?.textContent.includes('aucun backend'))",
+        "location.pathname === '/ide/' && (document.querySelector('#vue h1')?.textContent === 'Dépôts' || document.querySelector('#vue')?.textContent.includes('aucun dépôt'))",
         "l'accueil au premier clic",
     );
     assert!(n.erreurs.is_empty(), "l'entrée par un lien externe : erreurs à la console : {:#?}", n.erreurs);
@@ -1032,7 +1032,7 @@ fn l_ide_d_un_vrai_hote_se_rend_en_lecture_seule() {
     n.aller(&format!("{racine}/ide/entrer?jeton={jeton}"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
     let fichier_url: String = fichier.split('/').map(|p| p.replace('%', "%25").replace('#', "%23").replace('?', "%3F").replace(' ', "%20")).collect::<Vec<_>>().join("/");
     let vues: Vec<(&str, String, String)> = vec![
-        ("l'accueil", format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Backends'".into()),
+        ("l'accueil", format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Dépôts'".into()),
         ("l'arbre", format!("{racine}/ide/code/{id}/arbre/"), "document.querySelectorAll('#vue li a').length > 0".into()),
         (
             "un fichier",

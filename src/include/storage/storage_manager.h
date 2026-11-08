@@ -99,6 +99,11 @@ public:
 
     static StorageManager* Get(const main::ClientContext& context);
 
+    // Rend à `tracker` chaque plage de pages que les tables tiennent (colonnes, index de clé
+    // primaire, tableaux disque, débordement), sans rien libérer : le parcours de reclaimStorage,
+    // vers un allocateur qui ne fait que noter. Sert à connaître la fin de ce qui est tenu.
+    void reportOwnedPages(PageAllocator& tracker) const;
+
 private:
     void createNodeTable(catalog::NodeTableCatalogEntry* entry);
 

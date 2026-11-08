@@ -5,9 +5,16 @@
 //! premier index en fond et le publie sur le flux (`repos`, `RepoAttached`) ;
 //! `list_worktrees` dit les worktrees inscrits. Aucune commande git n'est lancée, rien
 //! n'est cloné. Les phrases parlent de dépôt, de worktree, de branche et d'index.
+//!
+//! **La fin du premier index se dit** (Lucie, 8 novembre 2026 à 16 h 08 : « il devrait
+//! avoir notif quand indexation finie ? ») : un suiveur lit le journal de l'index jusqu'à
+//! sa dernière ligne et publie `RepoIndexed` sur `repos` — fini (avec le reste dû des
+//! vecteurs, s'il y en a), en échec ou arrêté —, avec les fichiers et les symboles de
+//! l'index ; la page en tire une ligne dans le chat de l'atelier et le badge de la barre.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
@@ -34,6 +41,249 @@ fn gabarit_livre(sous: &Path) -> Result<(PathBuf, PathBuf), String> {
     std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
     crate::code_tree::copy(&crate::builtin_templates::root()?, &templates, false)?;
     Ok((templates.join("backends/code/backend.json"), dossier))
+}
+
+/// Les bornes d'un premier index suivi : `plafond`, au-delà duquel la fin se dit en
+/// échec (le journal n'a pas fini) plutôt que de suivre sans fin ; `naissance`, le temps
+/// laissé au journal pour paraître (une passe morte avant d'écrire, des journaux
+/// nettoyés : l'échec se dit tout de suite après, pas au plafond).
+#[derive(Clone, Copy)]
+pub(super) struct Bornes {
+    pub plafond: Duration,
+    pub naissance: Duration,
+}
+
+/// Les bornes du service.
+pub(super) const BORNES_DU_SUIVI: Bornes = Bornes { plafond: Duration::from_secs(6 * 3600), naissance: Duration::from_secs(60) };
+
+/// Ce qu'on garde de la fin du journal pour y lire sa dernière ligne.
+const QUEUE_DU_JOURNAL: usize = 4096;
+
+/// **La lecture d'un journal d'index par sa fin** (relecture d'everything declarative : un
+/// premier index fait des Mo de journal en heures, le relire entier quatre fois par
+/// seconde en ferait des Go) : seul ce qui s'est ajouté depuis la lecture précédente se
+/// lit, et les derniers octets se gardent pour la dernière ligne.
+#[derive(Default)]
+struct LectureDuJournal {
+    offset: u64,
+    queue: Vec<u8>,
+    /// La ligne commencée, pas encore finie par son retour.
+    entamee: Vec<u8>,
+    /// Les lignes complètes lues à la dernière lecture.
+    neuves: Vec<String>,
+}
+
+impl LectureDuJournal {
+    /// Lit l'ajout : `None` si le journal n'existe pas ; sinon, si l'ajout (cousu à la
+    /// queue d'avant) dit « plein texte prêt », et la fin du journal si sa dernière ligne
+    /// la dit (le contrat de `index_nodes` : `DONE_LINE`, éventuellement « — <reste dû> »,
+    /// ou une ligne d'échec ou d'arrêt) : `(fini, la ligne)`.
+    fn lire(&mut self, journal: &Path) -> Option<(bool, Option<(bool, String)>)> {
+        use crate::dataflow::index_nodes::{DONE_LINE, FAILED_PREFIX, STOPPED_PREFIX};
+        use std::io::{Read, Seek, SeekFrom};
+        let mut f = std::fs::File::open(journal).ok()?;
+        let longueur = f.metadata().map(|m| m.len()).unwrap_or(0);
+        if longueur < self.offset {
+            // Réécrit depuis : tout relire.
+            self.offset = 0;
+            self.queue.clear();
+        }
+        let mut ajout = Vec::new();
+        if f.seek(SeekFrom::Start(self.offset)).is_ok() {
+            let _ = f.read_to_end(&mut ajout);
+        }
+        self.offset += ajout.len() as u64;
+        // Les lignes complètes de l'ajout (la dernière, sans retour, attend la suite).
+        let mut lignes = std::mem::take(&mut self.entamee);
+        lignes.extend_from_slice(&ajout);
+        let fin_complete = lignes.iter().rposition(|b| *b == b'\n').map(|i| i + 1).unwrap_or(0);
+        self.entamee = lignes[fin_complete..].to_vec();
+        self.neuves = String::from_utf8_lossy(&lignes[..fin_complete]).lines().map(str::to_string).collect();
+        let mut cousu = std::mem::take(&mut self.queue);
+        cousu.extend_from_slice(&ajout);
+        let texte_pret = !ajout.is_empty() && String::from_utf8_lossy(&cousu).contains("plein texte prêt");
+        let debut = cousu.len().saturating_sub(QUEUE_DU_JOURNAL);
+        self.queue = cousu[debut..].to_vec();
+        let queue = String::from_utf8_lossy(&self.queue);
+        let fin = queue.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.trim().to_string()).and_then(|derniere| {
+            if derniere.starts_with(DONE_LINE) {
+                Some((true, derniere))
+            } else if derniere.starts_with(FAILED_PREFIX) || derniere.starts_with(STOPPED_PREFIX) {
+                Some((false, derniere))
+            } else {
+                None
+            }
+        });
+        Some((texte_pret, fin))
+    }
+}
+
+/// **L'avancement d'un index, lu dans une ligne de son journal** (Lucie, 8 novembre 2026 à
+/// 16 h 30 : une barre qui avance, son pourcentage ; « par SSE, pas par polling ») : la
+/// phase, et ce qui est fait sur le total. Les lignes de `index_nodes` et de
+/// `catalog::progress` : « plein texte : N fichiers sur M (…) », « … · vecteurs N sur C
+/// (P %, modèle) … », « … · vecteurs prêts (C morceaux, modèle) ».
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Avancement {
+    pub phase: &'static str,
+    pub fait: u64,
+    pub total: u64,
+}
+
+pub(super) fn avancement_de_la_ligne(ligne: &str) -> Option<Avancement> {
+    let nombre = |s: &str| s.trim().split(|c: char| !c.is_ascii_digit()).next().and_then(|n| n.parse::<u64>().ok());
+    if let Some(i) = ligne.find("vecteurs prêts (") {
+        let c = nombre(&ligne[i + "vecteurs prêts (".len()..])?;
+        return Some(Avancement { phase: "vecteurs", fait: c, total: c });
+    }
+    // Le dernier « vecteurs » de la ligne (relecture d'everything declarative : une ligne
+    // qui en porterait deux, « sans vecteurs … · vecteurs N sur C », se lit par le second).
+    if let Some(i) = ligne.rfind("vecteurs ") {
+        let reste = &ligne[i + "vecteurs ".len()..];
+        if let Some((fait, apres)) = reste.split_once(" sur ") {
+            if let (Some(fait), Some(total)) = (nombre(fait), nombre(apres)) {
+                return Some(Avancement { phase: "vecteurs", fait, total });
+            }
+        }
+    }
+    if let Some(reste) = ligne.strip_prefix("plein texte : ") {
+        if let Some((fait, apres)) = reste.split_once(" fichiers sur ") {
+            if let (Some(fait), Some(total)) = (nombre(fait), nombre(apres)) {
+                return Some(Avancement { phase: "plein texte", fait, total });
+            }
+        }
+    }
+    None
+}
+
+/// La cadence des avancements publiés : au plus un par seconde et par dépôt, plus un à
+/// chaque changement de phase.
+const CADENCE_DE_L_AVANCEMENT: Duration = Duration::from_secs(1);
+
+/// Les fichiers et les symboles de l'index d'un backend (`fts_counts` de
+/// `Backend::index_states`), relus une fois si une écriture tient le catalogue ;
+/// `None` plutôt que des zéros.
+fn comptes_de_l_index(hote: &DaemonHost, hosted: &Arc<super::Hosted>) -> (Option<u64>, Option<u64>) {
+    for essai in 0..2 {
+        let etat = hote.with_backend(hosted, |b| b.index_states()).ok().and_then(|r| r.ok()).unwrap_or(Value::Null);
+        if etat["busy"] == true && essai == 0 {
+            std::thread::sleep(Duration::from_millis(500));
+            continue;
+        }
+        let compte = |entite: &str| etat["fts_counts"][entite]["rows"].as_u64();
+        return (compte("File"), compte("Symbol"));
+    }
+    (None, None)
+}
+
+/// **Suivre le premier index d'un dépôt** jusqu'à la dernière ligne de son journal, puis
+/// publier `RepoIndexed` sur `repos`. Un fil nommé, borné à la vie de l'hôte (le `Weak` :
+/// l'hôte parti, il sort sans rien dire) et par `bornes` (un journal qui ne paraît pas, un
+/// journal qui ne finit pas : un échec dit tel). `quoi` porte le worktree, le dépôt et la
+/// branche, repris dans l'événement.
+pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super::Hosted>, journal: PathBuf, quoi: Value, bornes: Bornes) {
+    let nom = format!("index-suivi:{}", hosted.id);
+    let _ = std::thread::Builder::new().name(nom).spawn(move || {
+        let debut = Instant::now();
+        // Le plein texte prêt, quand le journal le dit (« plein texte prêt · vecteurs … ») :
+        // la recherche par mots répond dès ce moment.
+        let mut texte_ms: Option<u64> = None;
+        let mut lecture = LectureDuJournal::default();
+        // Le dernier avancement publié, l'instant et ce qui était fait : le débit se mesure
+        // entre deux publications.
+        let mut publie: Option<(Avancement, Instant)> = None;
+        let mut dernier: Option<Avancement> = None;
+        let cle = hosted.manifest.display().to_string();
+        let (ok, ligne) = loop {
+            match lecture.lire(&journal) {
+                None if debut.elapsed() > bornes.naissance => {
+                    break (false, format!("le journal de l'index n'existe pas : {}", journal.display()));
+                }
+                None => {}
+                Some((texte_pret, fin)) => {
+                    if texte_pret && texte_ms.is_none() {
+                        texte_ms = Some(debut.elapsed().as_millis() as u64);
+                    }
+                    for l in &lecture.neuves {
+                        if let Some(a) = avancement_de_la_ligne(l) {
+                            dernier = Some(a);
+                        }
+                    }
+                    if let Some(a) = dernier.clone() {
+                        let change_de_phase = publie.as_ref().is_none_or(|(p, _)| p.phase != a.phase);
+                        let a_bouge = publie.as_ref().is_none_or(|(p, _)| p != &a);
+                        let a_temps = publie.as_ref().is_none_or(|(_, t)| t.elapsed() >= CADENCE_DE_L_AVANCEMENT);
+                        if a_bouge && (change_de_phase || a_temps) {
+                            if let Some(h) = hote.upgrade() {
+                                let debit = publie.as_ref().filter(|(p, _)| p.phase == a.phase && a.fait >= p.fait).map(|(p, t)| {
+                                    let s = t.elapsed().as_secs_f64().max(0.001);
+                                    (((a.fait - p.fait) as f64 / s) * 10.0).round() / 10.0
+                                });
+                                let mut e = json!({
+                                    "kind": "IndexProgress",
+                                    "phase": a.phase,
+                                    "fait": a.fait,
+                                    "total": a.total,
+                                    "pourcent": if a.total > 0 { (a.fait * 100 / a.total).min(100) } else { 0 },
+                                    "debit": debit,
+                                    "unite": if a.phase == "vecteurs" { "morceaux" } else { "fichiers" },
+                                    "at_ms": crate::events::maintenant_ms(),
+                                });
+                                if let (Some(o), Some(q)) = (e.as_object_mut(), quoi.as_object()) {
+                                    for (k, v) in q {
+                                        o.insert(k.clone(), v.clone());
+                                    }
+                                }
+                                h.ide_flux().publier("repos", &cle, e);
+                            }
+                            publie = Some((a, Instant::now()));
+                        }
+                    }
+                    if let Some(fin) = fin {
+                        break fin;
+                    }
+                }
+            }
+            if debut.elapsed() > bornes.plafond {
+                break (false, format!("le journal de l'index n'a pas fini en {} min ({})", bornes.plafond.as_secs() / 60, journal.display()));
+            }
+            if hote.strong_count() == 0 {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        };
+        let Some(h) = hote.upgrade() else { return };
+        let (fichiers, symboles) = if ok { comptes_de_l_index(&h, &hosted) } else { (None, None) };
+        let reste = ligne.split_once(" — ").map(|(_, r)| r.to_string()).filter(|_| ok);
+        let mut e = json!({
+            "kind": "RepoIndexed",
+            "ok": ok,
+            "fichiers": fichiers,
+            "symboles": symboles,
+            "ms": debut.elapsed().as_millis() as u64,
+            "texte_ms": texte_ms,
+            "reste": reste,
+            "erreur": (!ok).then_some(ligne),
+            "journal": journal,
+        });
+        if let (Some(o), Some(q)) = (e.as_object_mut(), quoi.as_object()) {
+            for (k, v) in q {
+                o.insert(k.clone(), v.clone());
+            }
+        }
+        h.ide_flux().publier("repos", &hosted.manifest.display().to_string(), e);
+    });
+}
+
+/// Le chemin du journal dans le reçu d'`index`, où qu'il soit : la ligne
+/// `journal : <chemin>` du texte (le format de l'outil), ou un champ `journal`.
+fn journal_du_recu(v: &Value) -> Option<PathBuf> {
+    match v {
+        Value::String(s) => s.lines().find_map(|l| l.trim().strip_prefix("journal : ")).map(|p| PathBuf::from(p.trim())),
+        Value::Object(o) => o.get("journal").and_then(Value::as_str).map(PathBuf::from).or_else(|| o.values().find_map(journal_du_recu)),
+        Value::Array(a) => a.iter().find_map(journal_du_recu),
+        _ => None,
+    }
 }
 
 /// L'état de l'index d'un manifeste hébergé, dit en mots, d'après `/etat`.
@@ -118,7 +368,14 @@ impl WorktreeHost for HoteDesWorktrees {
             None
         } else {
             Some(match hote.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))) {
-                Ok(Ok(_)) => "son index est lancé en fond".to_string(),
+                Ok(Ok(recu)) => {
+                    // La fin se dira sur le flux (`RepoIndexed`) : la page la montre.
+                    if let Some(journal) = journal_du_recu(&recu) {
+                        let quoi = json!({ "worktree": worktree, "depot": depot, "branche": branche });
+                        suivre_le_premier_index(Arc::downgrade(&hote), h.clone(), journal, quoi, BORNES_DU_SUIVI);
+                    }
+                    "son index est lancé en fond ; sa fin se dira sur le flux de l'IDE".to_string()
+                }
                 Ok(Err(e)) | Err(e) => format!("son index n'a pas pu partir : {e}"),
             })
         };
@@ -393,6 +650,100 @@ mod tests {
         fil.join().unwrap();
     }
 
+    /// **La fin de l'index se dit dans le chat de l'atelier et dans la barre** (Lucie, 8
+    /// novembre 2026 à 16 h 08 : « il devrait avoir notif quand indexation finie ? ») : après
+    /// « Ouvre le worktree … », une ligne de la page dit « index de <dépôt · branche> terminé :
+    /// N fichiers, M symboles, en T s » (pas un tour : le modèle ne la voit pas), et le dépôt
+    /// passe à « rag indexé » sous « Dépôts », la page jamais rechargée.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn la_fin_de_l_index_se_dit_dans_le_chat_de_l_atelier_et_la_barre() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        const TEMOIN: &str = "la_fin_de_l_index_se_dit_dans_le_chat_de_l_atelier_et_la_barre";
+        let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("rag3db-essai");
+        std::fs::create_dir_all(depot.join("src")).unwrap();
+        std::fs::write(depot.join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n").unwrap();
+        for args in [&["init", "-q", "-b", "essai"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"], &["add", "-A"], &["commit", "-q", "-m", "le dépôt"]] {
+            git(&depot, args);
+        }
+        let gabarits = d.path().join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let atelier = gabarits.join("backends/atelier/backend.json");
+        let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+        let chemin = depot.display().to_string();
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let chemin = chemin.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                if turns[depuis..].iter().any(|t| t.role == "tool") {
+                    MockLlm::new("C'est fait.").generate(turns, opts, sink)
+                } else {
+                    MockLlm::new("").with_tool_calls(vec![("attach_worktree".to_string(), json!({ "path": chemin }).to_string())]).generate(turns, opts, sink)
+                }
+            })))
+        });
+        let (runs, chats) = (d.path().join("runs"), d.path().join("chats"));
+        let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_chat_model(model));
+        let racine = format!("http://{adresse}");
+        let ide = |methode: &str, route: &str, corps: Value| -> Value {
+            let agent = crate::daemon::agent();
+            let mut r = if methode == "GET" {
+                agent.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap()
+            } else {
+                agent.post(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap()
+            };
+            serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+        };
+        assert_eq!(ide("POST", "/ide/describe", json!({ "manifest": atelier }))["ok"], true);
+        let etat = ide("GET", "/ide/etat", Value::Null);
+        let canon = atelier.canonicalize().unwrap();
+        let id = etat["backends"]
+            .as_array()
+            .and_then(|a| a.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(canon.as_path())))
+            .and_then(|b| b["id"].as_str())
+            .unwrap_or_else(|| panic!("l'atelier dans l'état : {etat:#}"))
+            .to_string();
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+        n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        n.aller(
+            &format!("{racine}/ide/code/{id}/chat"),
+            "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+        );
+        n.evaluer("(() => { const s = document.querySelector('#vue-barre'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, 'repo'); s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+        n.attendre("!!document.querySelector('#arbre-depots')", "la vue par dépôt");
+        let sel = "#arbre-depots .depot[data-depot=\"rag3db-essai\"]";
+        assert_eq!(n.evaluer(&format!("!!document.querySelector('{sel}')")), json!(false), "le dépôt paraît avant d'être attaché");
+        // Une marque dans la page : un rechargement l'effacerait.
+        n.evaluer("window.__pas_rechargee = 1");
+        n.evaluer(&format!("document.querySelector('#message').value = 'Ouvre le worktree {}'; document.querySelector('#send').click()", depot.display()));
+        n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour de l'atelier");
+        n.attendre(&format!("!!document.querySelector('{sel} .espace')"), "le dépôt attaché sous « Dépôts »");
+        let espace = n.evaluer(&format!("document.querySelector('{sel} .espace').textContent"));
+        assert!(espace.as_str().unwrap_or_default().contains("rag3db-essai · essai"), "le dépôt et sa branche : {espace}");
+        // La fin du premier index : une ligne de la page dans le chat de l'atelier, et le
+        // rag du dépôt indexé dans la barre, sans recharger.
+        n.attendre("!!document.querySelector('.fin-d-index')", "la ligne de fin d'index dans le chat de l'atelier");
+        let ligne = n.evaluer("document.querySelector('.fin-d-index').textContent");
+        let ligne = ligne.as_str().unwrap_or_default().to_string();
+        assert!(ligne.starts_with("index de rag3db-essai · essai terminé") && ligne.contains("fichiers") && ligne.contains("symboles") && ligne.contains(" s"), "{ligne}");
+        assert_eq!(n.evaluer("document.querySelectorAll('.message.assistant').length"), json!(1), "la ligne n'est pas un tour de l'agent");
+        n.attendre(&format!("document.querySelector('{sel} .espace')?.textContent.includes('rag indexé')"), "le rag du dépôt indexé dans la barre");
+        assert_eq!(n.evaluer("window.__pas_rechargee ?? null"), json!(1), "la page s'est rechargée");
+
+        assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
+
     /// **L'atelier ouvre une branche dans un worktree frère** (page 03, le pas d'après
     /// attach_worktree ; c7 : « aucun git caché : la commande git est dite dans la
     /// réponse »). Une branche neuve naît dans `<dépôt>-<branche>` à côté du dépôt, le
@@ -434,5 +785,303 @@ mod tests {
         assert!(encore.contains("déjà ouverte") && encore.contains("aucune commande git"), "{encore}");
         let refus = appel(json!({ "path": depot, "branch": "a..b" })).expect_err("un nom invalide");
         assert!(refus.contains("pas un nom de branche valide"), "{refus}");
+    }
+
+    /// Les `RepoIndexed` captés sur le flux (l'événement de chaque trame).
+    fn indexes_captes(flux: &Arc<Mutex<Vec<u8>>>) -> Vec<Value> {
+        let texte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+        texte
+            .lines()
+            .filter_map(|l| l.strip_prefix("data: ").or_else(|| l.strip_prefix("data:")))
+            .filter_map(|l| serde_json::from_str::<Value>(l.trim()).ok())
+            .map(|v| v.get("evenement").cloned().unwrap_or(v))
+            .filter(|e| e["kind"] == "RepoIndexed")
+            .collect()
+    }
+
+    /// Un petit dépôt git d'un fichier, sur sa branche `essai`.
+    fn petit_depot(d: &Path) -> std::path::PathBuf {
+        let depot = d.join("rag3db-essai");
+        std::fs::create_dir_all(depot.join("src")).unwrap();
+        std::fs::write(depot.join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n\npub fn deux() -> u32 { 2 }\n").unwrap();
+        for args in [&["init", "-q", "-b", "essai"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"], &["add", "-A"], &["commit", "-q", "-m", "le dépôt"]] {
+            git(&depot, args);
+        }
+        depot
+    }
+
+    /// **La fin du premier index se dit sur le flux** (Lucie, 8 novembre 2026 à 16 h 08 :
+    /// « il devrait avoir notif quand indexation finie ? »). Un worktree attaché par
+    /// l'atelier : quand la dernière ligne du journal de son index arrive, `RepoIndexed`
+    /// passe sur `repos`, fini, avec le dépôt, la branche, les fichiers et les symboles de
+    /// l'index et sa durée. Un second appel (« déjà attaché ») ne relance rien.
+    #[test]
+    fn the_end_of_the_first_index_of_an_attached_worktree_is_published() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarits = d.path().join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let atelier = gabarits.join("backends/atelier/backend.json");
+        let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
+        let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines).with_runs_root(d.path().join("runs")));
+        host.se_connaitre();
+        let flux = Arc::new(Mutex::new(Vec::new()));
+        host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
+        let h = host.hosted(&atelier).unwrap();
+        let dit = host.with_backend(&h, |b| b.call("attach_worktree", json!({ "path": depot }))).unwrap().unwrap();
+        assert!(dit["result"].as_str().unwrap_or_default().contains("sa fin se dira sur le flux de l'IDE"), "{dit}");
+
+        let debut = std::time::Instant::now();
+        let fin = loop {
+            if let Some(e) = indexes_captes(&flux).into_iter().next() {
+                break e;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(60), "aucun RepoIndexed en 60 s : {}", String::from_utf8_lossy(&flux.lock().unwrap()));
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+        assert_eq!(fin["ok"], true, "{fin}");
+        assert_eq!(fin["depot"], "rag3db-essai", "{fin}");
+        assert_eq!(fin["branche"], "essai", "{fin}");
+        assert!(fin["fichiers"].as_u64().is_some_and(|n| n >= 1), "les fichiers de l'index : {fin}");
+        assert!(fin["symboles"].as_u64().is_some_and(|n| n >= 2), "les symboles de l'index : {fin}");
+        assert!(fin["ms"].is_u64() && fin["erreur"].is_null(), "{fin}");
+
+        // Déjà attaché : pas de second index, pas de second RepoIndexed.
+        host.with_backend(&h, |b| b.call("attach_worktree", json!({ "path": depot }))).unwrap().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        assert_eq!(indexes_captes(&flux).len(), 1, "un worktree déjà attaché ne relance pas d'index");
+    }
+
+    /// **Le suiveur tient le contrat du journal d'index** : un échec et un arrêt se disent
+    /// `ok: false` avec leur ligne ; un index fini avec un reste dû des vecteurs est fini
+    /// (`ok: true`, `reste`) ; un journal qui ne finit pas se dit au plafond ; l'hôte parti,
+    /// rien n'est publié.
+    #[test]
+    fn the_index_follower_keeps_the_contract_of_the_index_journal() {
+        use crate::dataflow::index_nodes::{DONE_LINE, FAILED_PREFIX, STOPPED_PREFIX};
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        std::fs::create_dir_all(d.path().join("base")).unwrap();
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &d.path().join("base")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(depot.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
+        let host = Arc::new(hote(d.path(), model));
+        let flux = Arc::new(Mutex::new(Vec::new()));
+        host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
+        let h = host.hosted(&manifeste).unwrap();
+        let quoi = |n: &str| json!({ "worktree": format!("/w/{n}"), "depot": "rag3db-essai", "branche": n });
+        let bornes = |plafond_ms: u64| super::Bornes { plafond: std::time::Duration::from_millis(plafond_ms), naissance: std::time::Duration::from_millis(400) };
+        let suivre = |n: &str, lignes: &[String], plafond_ms: u64| {
+            let journal = d.path().join(format!("{n}.log"));
+            std::fs::write(&journal, lignes.join("\n") + "\n").unwrap();
+            super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal, quoi(n), bornes(plafond_ms));
+        };
+        let long = 60_000;
+        suivre("echec", &["plein texte : 1/1 fichiers".into(), format!("{FAILED_PREFIX} : la racine a disparu")], long);
+        suivre("arret", &[format!("{STOPPED_PREFIX} : l'hôte s'arrête")], long);
+        suivre("reste", &[format!("{DONE_LINE} — 12 morceau(x) sans vecteur, l'embarqueur n'a pas répondu")], long);
+        suivre("plafond", &["plein texte : 0/1 fichiers".into()], 300);
+        // Un journal qui ne paraît jamais : l'échec se dit après la naissance, pas au plafond.
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), d.path().join("absent.log"), quoi("absent"), bornes(long));
+        // Un gros journal (plus que la queue gardée) : le plein texte prêt au milieu, la fin
+        // tout au bout — lus par l'ajout, sans relire le début.
+        let mut gros: Vec<String> = (0..2000).map(|i| format!("vecteurs {i} sur 2000 (granite-278m)")).collect();
+        gros.insert(10, "plein texte prêt · relations 4/4".into());
+        gros.push(DONE_LINE.into());
+        suivre("gros", &gros, long);
+
+        let debut = std::time::Instant::now();
+        let vus = loop {
+            let vus = indexes_captes(&flux);
+            if vus.len() >= 6 {
+                break vus;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(20), "six RepoIndexed attendus : {vus:#?}");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+        let de = |n: &str| vus.iter().find(|e| e["branche"] == n).cloned().unwrap_or_else(|| panic!("{n} : {vus:#?}"));
+        let e = de("echec");
+        assert_eq!((e["ok"].clone(), e["erreur"].as_str().map(|s| s.starts_with(FAILED_PREFIX))), (json!(false), Some(true)), "{e}");
+        let e = de("arret");
+        assert_eq!((e["ok"].clone(), e["erreur"].as_str().map(|s| s.starts_with(STOPPED_PREFIX))), (json!(false), Some(true)), "{e}");
+        let e = de("reste");
+        assert_eq!(e["ok"], true, "un reste dû des vecteurs n'est pas un échec : {e}");
+        assert!(e["reste"].as_str().is_some_and(|r| r.contains("12 morceau(x)")) && e["erreur"].is_null(), "{e}");
+        let e = de("plafond");
+        assert!(e["ok"] == false && e["erreur"].as_str().is_some_and(|s| s.contains("n'a pas fini")), "{e}");
+        let e = de("absent");
+        assert!(e["ok"] == false && e["erreur"].as_str().is_some_and(|s| s.contains("n'existe pas")), "{e}");
+        let e = de("gros");
+        assert!(e["ok"] == true && e["texte_ms"].is_u64(), "le plein texte prêt lu au milieu d'un gros journal : {e}");
+
+        // L'hôte parti, le suiveur sort sans rien publier.
+        let journal = d.path().join("parti.log");
+        std::fs::write(&journal, "plein texte : 0/1 fichiers\n").unwrap();
+        let faible = Arc::downgrade(&host);
+        super::suivre_le_premier_index(faible.clone(), h.clone(), journal.clone(), quoi("parti"), bornes(long));
+        let flux2 = flux.clone();
+        drop(host);
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        assert!(faible.upgrade().is_none(), "l'hôte est parti");
+        std::fs::write(&journal, format!("{DONE_LINE}\n")).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        assert!(!indexes_captes(&flux2).iter().any(|e| e["branche"] == "parti"), "un hôte parti ne publie rien");
+    }
+
+    /// **L'avancement se lit dans les lignes du journal**, aux formes que `index_nodes` et
+    /// `catalog::progress` écrivent.
+    #[test]
+    fn the_progress_of_an_index_reads_from_its_journal_lines() {
+        use super::{avancement_de_la_ligne, Avancement};
+        assert_eq!(avancement_de_la_ligne("plein texte : 12 fichiers sur 40 (88 scopes) · 3 liens en file"), Some(Avancement { phase: "plein texte", fait: 12, total: 40 }));
+        assert_eq!(
+            avancement_de_la_ligne("plein texte prêt · vecteurs 8200 sur 20100 (40 %, granite-278m) · reste environ 3 min"),
+            Some(Avancement { phase: "vecteurs", fait: 8200, total: 20100 })
+        );
+        assert_eq!(avancement_de_la_ligne("plein texte prêt · vecteurs prêts (20100 morceaux, granite-278m)"), Some(Avancement { phase: "vecteurs", fait: 20100, total: 20100 }));
+        assert_eq!(avancement_de_la_ligne("sans vecteurs (repris) · vecteurs 3 sur 9 (33 %, granite-278m)"), Some(Avancement { phase: "vecteurs", fait: 3, total: 9 }));
+        assert_eq!(avancement_de_la_ligne("indexation lancée : 40 fichiers, granite-278m"), None);
+        assert_eq!(avancement_de_la_ligne("plein texte prêt : 40 fichiers, 88 scopes, 12 relations posées"), None);
+    }
+
+    /// **L'avancement d'un index passe sur le flux, sans polling** (Lucie, 8 novembre 2026 à
+    /// 16 h 30 et 16 h 31) : le suiveur publie `IndexProgress` à mesure que le journal
+    /// avance — un changement de phase tout de suite, sinon au plus un par seconde —, avec
+    /// le pourcentage et le débit, puis `RepoIndexed` à la fin.
+    #[test]
+    fn the_progress_of_an_index_is_published_on_the_flux_as_its_journal_grows() {
+        use crate::dataflow::index_nodes::DONE_LINE;
+        use std::io::Write;
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        std::fs::create_dir_all(d.path().join("base")).unwrap();
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &d.path().join("base")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(depot.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
+        let host = Arc::new(hote(d.path(), model));
+        let flux = Arc::new(Mutex::new(Vec::new()));
+        host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["repos".to_string()].into_iter().collect()), None);
+        let h = host.hosted(&manifeste).unwrap();
+        let journal = d.path().join("index.log");
+        std::fs::write(&journal, "indexation lancée : 4 fichiers, granite-278m\n").unwrap();
+        let bornes = super::Bornes { plafond: std::time::Duration::from_secs(60), naissance: std::time::Duration::from_secs(5) };
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal.clone(), json!({ "worktree": "/w", "depot": "rag3db-essai", "branche": "essai" }), bornes);
+        let ecrire = |l: &str| {
+            let mut f = std::fs::OpenOptions::new().append(true).open(&journal).unwrap();
+            writeln!(f, "{l}").unwrap();
+        };
+        let pause = |ms: u64| std::thread::sleep(std::time::Duration::from_millis(ms));
+        // Le plein texte : dix lignes en 300 ms — la cadence n'en publie pas dix.
+        for i in 1..=10 {
+            ecrire(&format!("plein texte : {i} fichiers sur 10 (0 scopes)"));
+            pause(30);
+        }
+        pause(1300);
+        // Les vecteurs : un changement de phase, publié tout de suite, puis l'avance.
+        ecrire("plein texte prêt · vecteurs 100 sur 1000 (10 %, granite-278m)");
+        pause(1200);
+        ecrire("plein texte prêt · vecteurs 600 sur 1000 (60 %, granite-278m) · reste environ 30 s");
+        pause(1200);
+        ecrire(DONE_LINE);
+        let evenements = || -> Vec<Value> {
+            let texte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+            texte.lines().filter_map(|l| l.strip_prefix("data: ").or_else(|| l.strip_prefix("data:"))).filter_map(|l| serde_json::from_str::<Value>(l.trim()).ok()).map(|v| v.get("evenement").cloned().unwrap_or(v)).collect()
+        };
+        let debut = std::time::Instant::now();
+        while !evenements().iter().any(|e| e["kind"] == "RepoIndexed") {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(10), "pas de RepoIndexed : {:#?}", evenements());
+            pause(100);
+        }
+        let tout = evenements();
+        let progres: Vec<&Value> = tout.iter().filter(|e| e["kind"] == "IndexProgress").collect();
+        let texte: Vec<&&Value> = progres.iter().filter(|e| e["phase"] == "plein texte").collect();
+        let vecteurs: Vec<&&Value> = progres.iter().filter(|e| e["phase"] == "vecteurs").collect();
+        assert!(!texte.is_empty() && texte.len() <= 3, "la cadence borne le plein texte (dix lignes en 300 ms) : {texte:#?}");
+        assert_eq!(texte.last().unwrap()["fait"], 10, "le dernier état du plein texte est publié : {texte:#?}");
+        assert_eq!(vecteurs.len(), 2, "le changement de phase, puis l'avance : {vecteurs:#?}");
+        assert_eq!((vecteurs[0]["fait"].clone(), vecteurs[0]["total"].clone(), vecteurs[0]["pourcent"].clone()), (json!(100), json!(1000), json!(10)));
+        assert_eq!(vecteurs[1]["pourcent"], 60);
+        assert!(vecteurs[1]["debit"].as_f64().is_some_and(|d| d > 100.0 && d < 1000.0), "500 morceaux en ~1,2 s : {}", vecteurs[1]);
+        assert!(vecteurs[0]["debit"].is_null(), "pas de débit sur un changement de phase : {}", vecteurs[0]);
+        assert_eq!((vecteurs[1]["depot"].clone(), vecteurs[1]["unite"].clone()), (json!("rag3db-essai"), json!("morceaux")));
+        let i_fin = tout.iter().position(|e| e["kind"] == "RepoIndexed").unwrap();
+        assert!(tout.iter().rposition(|e| e["kind"] == "IndexProgress").unwrap() < i_fin, "RepoIndexed vient après les avancements");
+    }
+
+    /// **L'avancement de l'index se lit dans la barre, par le flux** (Lucie, 8 novembre 2026
+    /// à 16 h 30 et 16 h 31) : la ligne du dépôt dit la phase, le pourcentage et le débit à
+    /// mesure que le journal avance, « figé depuis » quand rien ne bouge, et s'efface à la
+    /// fin — la page jamais rechargée, aucune relecture de l'hôte.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn l_avancement_de_l_index_se_lit_dans_la_barre_par_le_flux() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        use crate::dataflow::index_nodes::DONE_LINE;
+        use std::io::Write;
+        const TEMOIN: &str = "l_avancement_de_l_index_se_lit_dans_la_barre_par_le_flux";
+        let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        std::fs::create_dir_all(d.path().join("base")).unwrap();
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &d.path().join("base")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(depot.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("ok"))) });
+        let host = Arc::new(crate::daemon_host::tests::hote_isole().with_chats_root(d.path().join("chats")).with_racine_des_taches(d.path().join("taches")).with_chat_model(model));
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let racine = format!("http://{}", ecoute.local_addr().unwrap());
+        let serveur = tiny_http::Server::from_listener(ecoute, None).unwrap();
+        let servi = host.clone();
+        let fil = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(serveur, 2).serve(servi, Some("j".to_string())));
+        let mut r = crate::daemon::agent()
+            .post(format!("{racine}/ide/describe"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste }).to_string())
+            .unwrap();
+        let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(v["ok"], true, "{v}");
+        let h = host.hosted(&manifeste.canonicalize().unwrap()).unwrap();
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        n.aller(&format!("{racine}/ide/code/{}/chat", h.id), "!!document.querySelector('#barre') && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+        n.evaluer("window.__ideFigeMs = 1500");
+        let journal = d.path().join("index.log");
+        std::fs::write(&journal, "indexation lancée : 1 fichiers, granite-278m\n").unwrap();
+        let bornes = super::Bornes { plafond: std::time::Duration::from_secs(60), naissance: std::time::Duration::from_secs(5) };
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal.clone(), json!({ "worktree": depot, "depot": "rag3db-essai", "branche": "essai" }), bornes);
+        let ecrire = |l: &str| {
+            let mut f = std::fs::OpenOptions::new().append(true).open(&journal).unwrap();
+            writeln!(f, "{l}").unwrap();
+        };
+        ecrire("plein texte prêt · vecteurs 100 sur 1000 (10 %, granite-278m)");
+        n.attendre("document.querySelector('.avancement')?.dataset.pourcent === '10'", "l'avancement à 10 % dans la barre");
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        ecrire("plein texte prêt · vecteurs 600 sur 1000 (60 %, granite-278m) · reste environ 30 s");
+        n.attendre("document.querySelector('.avancement')?.dataset.pourcent === '60' && document.querySelector('.avancement').textContent.includes('morceaux/s')", "60 % et le débit");
+        let texte = n.evaluer("document.querySelector('.avancement').textContent");
+        assert!(texte.as_str().is_some_and(|t| t.contains("vecteurs 60 % (600/1000 morceaux)")), "{texte}");
+        n.attendre("document.querySelector('.avancement')?.textContent.includes('figé depuis')", "« figé depuis » quand rien ne bouge");
+        ecrire(DONE_LINE);
+        n.attendre("!document.querySelector('.avancement')", "l'avancement s'efface à la fin de l'index");
+
+        assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
     }
 }

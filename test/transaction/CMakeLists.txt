@@ -20,6 +20,6 @@ add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_te
         copy_null_strings_test.cpp
         storage_format_version_test.cpp stable_column_ids_test.cpp
         checkpoint_new_segment_test.cpp checkpoint_under_readers_test.cpp checkpoint_open_reader_test.cpp projected_graph_read_only_test.cpp
-        refused_copy_same_session_test.cpp)
+        refused_copy_same_session_test.cpp data_file_extent_test.cpp)
 
 add_subdirectory(concurrence)

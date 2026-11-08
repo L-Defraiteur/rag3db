@@ -10,7 +10,9 @@ d'usage (définition, puis déclaration), et le verdict tombe :
 - faux : le serveur désigne autre chose ;
 - décl : il désigne la mention même — c'est une déclaration (un en-tête qui déclare ce que la
   cible définit), pas un usage ;
-- muet : il ne rend rien (macro, code non compilé, nom absent de la ligne).
+- muet : il ne rend rien (macro, code non compilé, nom absent de la ligne) ;
+- liaison d'import (juge strict) : notre cible lie le nom à un module hors de l'arbre, et le serveur
+  ne rend que ce module (voir `liaison_d_import`).
 Les verdicts se ventilent par marque `resolution` : `nom`, `dossier` et `ambigu` sont nos arêtes
 douteuses.
 
@@ -97,6 +99,21 @@ def lire_scopes(chemin):
             continue
         par_fichier[v[2]].append((int(v[3]), int(v[4] if v[4] is not None else v[3]), v[0] or "", v[1] or ""))
     return par_fichier
+
+
+def liaison_d_import(rendu, a, racine):
+    """**Liaison d'import** (8 novembre 2026, c7) : notre cible est la ligne qui lie le nom à un module
+    (`const path = require("path")`, `import x from`, `from m import x`, `use m::x`), et le serveur ne
+    rend que des positions hors de l'arbre jugé (le module, ses types). La définition que l'index
+    connaît est cette liaison : ni juste ni faux au juge strict, comptée à part."""
+    cible = os.path.join(racine, a["vers"])
+    try:
+        texte = open(cible, encoding="utf-8", errors="replace").read().split("\n")[a["debut"] - 1]
+    except (OSError, IndexError):
+        return False
+    if not (re.search(r"\b(import|require|from|use)\b", texte) and re.search(rf"\b{re.escape(a['nom'])}\b", texte)):
+        return False
+    return all(os.path.relpath(os.path.realpath(f), racine).startswith("..") for f, _ in rendu)
 
 
 class Serveur:
@@ -378,6 +395,8 @@ def main():
                                 # Le serveur ne rend qu'une déclaration d'en-tête, même la cible
                                 # ouverte : ni juste ni faux, compté à part.
                                 verdict = "en-tête seul"
+                            elif liaison_d_import(rendu, a, racine):
+                                verdict = "liaison d'import"
                             else:
                                 verdict = "faux"
                         elif rendu:

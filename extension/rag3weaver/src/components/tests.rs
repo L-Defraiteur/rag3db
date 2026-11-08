@@ -702,3 +702,24 @@ fn a_click_graph_component_enters_the_module_graph_through_its_graph() {
     assert!(vue.code.contains("Fiche/vue"), "la vue a sa propre famille : {}", vue.code);
     assert!(vue.deps.values().any(|d| d == "comp:Bouton"), "la vue garde ses imports : {:?}", vue.deps);
 }
+
+/// **Un graphe de clic vide fait attendre l'aperçu, il ne le fait pas échouer**
+/// (rouge de l'aperçu à chaud sous charge, 8 novembre 2026) : un éditeur qui écrit
+/// en place vide le fichier d'abord (`std::fs::write` aussi : il tronque, puis
+/// écrit), et la montre peut le voir dans cet état. Comme une source vide, le
+/// module se rend, marqué vide (`empty_source`), et la page attend sa version
+/// suivante ; avant, la compilation du graphe vide échouait et l'aperçu répondait
+/// 422, que le navigateur dit à sa console.
+#[test]
+fn an_empty_click_graph_makes_the_preview_wait_instead_of_failing() {
+    let (_t, b) = backend_executable();
+    std::fs::write(b.join("components/fiche.clic.mmd"), "").unwrap();
+    std::fs::write(
+        b.join("components/fiche.component.json"),
+        json!({ "name": "Fiche", "source": "fiche.tsx", "clic": "fiche.clic.mmd", "libs": { "react": "19.2.0" } }).to_string(),
+    )
+    .unwrap();
+    let c = Components::load(&b).unwrap_or_else(|e| panic!("un graphe de clic vide se déclare : {e:?}"));
+    let g = c.module_graph(&b, "Fiche", Mode::Development).unwrap_or_else(|e| panic!("un graphe de clic vide fait échouer l'aperçu : {e}"));
+    assert!(g.modules["comp:Fiche"].empty_source, "le module du graphe vide est marqué vide : la page attend la suite");
+}

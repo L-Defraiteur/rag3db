@@ -7,6 +7,14 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **8 nov. — En JavaScript, une locale ne se confond plus avec celle du bloc voisin.** Deux `const ctx`
+  dans deux blocs d'un même fichier ne s'échangent plus leurs usages : codeparsers c660893, 20 faux
+  sur 30 deviennent justes au juge TypeScript.
+- **8 nov. — L'équipier travaille aussi sans git.** Une tâche sur un dossier qu'aucun dépôt ne
+  suit s'ouvre dans une copie de ce dossier, se relit par différence et se fusionne par recopie,
+  refusée si le dossier a bougé entre-temps. Une racine hors dépôt n'est plus « lue telle quelle,
+  jamais écrite » : la tâche écrit dans sa copie si `task_writes` le permet. `git_init` en fait un
+  dépôt, seulement si on le déclare (tache-sans-git).
 - **8 nov. — Depuis le chat, l'atelier ouvre un worktree ou une branche.** La conversation de
   l'atelier (`rag3weaver-backend atelier`) attache un worktree déjà sur le poste par un mot
   (`attach_worktree`) : il est inscrit, ouvert, son index part en fond, et il paraît sous « Dépôts »

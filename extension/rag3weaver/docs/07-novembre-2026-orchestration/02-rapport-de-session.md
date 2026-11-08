@@ -1298,3 +1298,276 @@ avance d'autant ; les hashs, eux, sont exacts.
   jeu (e8a91105f). **Prêts** : 96 (en push), archi (le symbole cité en lien : `POST /ide/symboles`
   par `usages`, l'appel discret qui ne journalise pas un rendu), hooks-essai (la tâche sans git,
   avec le rouge de master nommé), ED (le juge par pas, idem).
+
+## 14 h 48 — 7878 fait la queue pour tout luciepc pendant le départage
+
+- **Le rouge de master sur l'index d'une tâche s'explique par la file de 7878** (hooks-essai, ED) :
+  l'index d'une tâche écrit « indexation lancée : 1 fichiers, granite-278m » puis attend ; /sante
+  répond en 0,3 ms mais les runs de départage de G réembarquent tout code-lourd (137 000 morceaux)
+  sur 7878 depuis 14 h 26, et le banc chargeait ses modèles : /embed fait la queue, le délai de 60 s
+  de l'arbre le dit (« pas indexé en 60 s ») au lieu de figer comme la nuit. e2e_lectures seule chez
+  hooks-essai : 19 rouges sur 24 avec les mêmes signes, verte 24/24 à 13 h 10 avant les runs. ED
+  départage quand même par la lib avec une sonde /embed toutes les 5 s pendant chaque essai (un
+  rouge avec /embed lent = la file ; avec /embed rapide = l'index). Règle du moment : G dit la fin
+  de la phase d'index de chaque run et « 7878 libre » à la fin ; les e2e des autres se glissent entre.
+- **Le jeu de Lucie** : vérifié sur luciepc, Bloodborne (bb-probe, gamescope, Steam, seat1) ne rend
+  que sur card0 (renderD130, 85 %, 5,6 Go) ; les trois services d'embarquement sur card2
+  (renderD129, 21,5 Go : granite-278m 7,7 Go, bge-m3 8,6 Go, granite-107m 5,1 Go — trois modèles,
+  voulu). Son jeu a été lent à démarrer : la charge CPU du poste (21 à 28), pas la carte. Le script
+  du banc tenait des descripteurs sur les deux cartes (torch ROCm énumère tout à l'init) : passes
+  CPU relancées avec les cartes masquées (44 Kio de contexte, aucun calcul), passes GPU bornées à
+  card2 par HIP_VISIBLE_DEVICES, VRAM de card0 relue avant et après.
+- **Codeparsers** : le correctif des locales JavaScript mesuré sur les mêmes 298 mentions — faux
+  30 → 10, aucun juste perdu, 78 arêtes justes de plus hors échantillon ; lot en passe (pointeur
+  c660893, le verdict « liaison d'import » dans l'oracle, ticket fermé) ; le suivant : le `require`
+  relatif. **Archi** : le symbole cité en lien est prêt (`POST /ide/symboles` par `usages`, l'appel
+  discret qui ne journalise pas un rendu). **96** en push. Tous les pushes attendent le dernier pas
+  seul sous poste push ; les passes rendent leur place lourde au vert.
+
+## 15 h 14 — le rouge de master innocente la lib : c'était la file de 7878
+
+- **Le départage d'ED** sur `la_base_principale_n_est_jamais_ecrite_par_la_tache`, test seul sur
+  master e8a91105f : cbc06c3e1 pendant l'index de G sur 7878 → 2 rouges sur 3 ; cbc06c3e1 dans la
+  fenêtre libre (15 h 08 – 15 h 12) → 0 sur 5 ; dadbf0041 → 0 sur 5 ; 17a094d12 → 8 sur 8 (lib trop
+  ancienne pour le Rust de master, ne dit rien). **La lib n'y est pour rien : l'index de la tâche
+  attend l'embarquement de son fichier derrière les gros lots du départage**, et le délai de 60 s
+  tombe. Une sonde /embed courte restait à 0,2 s : un texte court ne voit pas la file des gros lots ;
+  la mesure juste est l'âge du lot en attente. L'interdit sur le Rust de l'index est levé ; ED
+  fera un lot court pour que l'index et le témoin nomment leur attente (« attend le service 7878
+  depuis N s, N morceaux en file »). hooks-essai a confirmé dans la fenêtre : e2e_lectures 24/24 en
+  18,5 s, le test des tâches en 10 s.
+- **luciepc saturé** : charge 33 à 36 sur 24 cœurs à 6 lourds (le réembarquement du départage, la
+  mesure des résidus, le banc à 8 fils, une lib entière) ; les témoins de temps rougissaient partout,
+  une passe de 20 min en prenait 45. **lourds-max ramené de 6 à 4** à 15 h 20 ; on remonte quand la
+  file est courte. Le run 1b du départage (17a094d12) : index fini à 15 h 07 après 41 min (137 943
+  morceaux réembarqués), contrôle en cours ; les runs 2b et 3b prendront ~40 min d'index chacun —
+  verdicts vers 17 h ; G annonce la fin de chaque phase d'index pour que les e2e des autres se
+  glissent entre.
+- **Atterri** : hooks-essai, **la tâche sans git** (d987d2143, par fusion en avance rapide de
+  l'arbre exactement joué : une racine hors dépôt se travaille dans une copie, relecture par diff de
+  dossier, fusion par recopie, `git_init` sur déclaration ; l'intermittent de l'équipier nommé en
+  ticket, le script d'affichage réparé). **En push** : archi (le symbole cité en lien) ; **en file** :
+  96 (M4 pas 3, rejeu seul dans la fenêtre), codeparsers (les locales JavaScript : deux témoins de
+  temps verts seuls, suites en cours), ED (le juge par pas), recherche (le cache hors de /tmp).
+
+## 15 h 39 — le run 1b tranche : l'écart des deux sens existe déjà sous 17a094d12
+
+- **Run 1b de G** (17a094d12, binaire 41411ff0, copie saine de 12 h 06, `index confirm` complet de
+  14 h 26 à 15 h 07, arrêt sans .wal) : **ÉCART**, les mêmes chiffres qu'à midi sous cbc06c3e1 —
+  INHERITS_FROM 650 / 658, LOCKS 544 / 546, QUERIES 5 d'un seul côté, 6 vues deux fois, 9 aux bouts
+  différents, IMPLEMENTS égales. Le défaut est **antérieur aux lots du jour** (la famille LOCKS du
+  25 octobre), déterministe ; les runs 2b (dadbf0041, en cours, 7878 occupé jusqu'à ~16 h 18) et 3b
+  (cbc06c3e1) confirmeront sans changer la décision. Instantanés intacts à luciepc pour le moteur :
+  departage-1b-17a et preuve-cbc06c3e1.
+- **Décisions** : **la pose du portable reprend** (cbc06c3e1 n'ajoute pas ce défaut et retire le
+  SIGSEGV HNSW et le rejeu des COPY ; même déroulé qu'à 13 h 40, `courant` → cbc06c3e1 aux deux
+  postes) ; **aucun `index confirm` complet sur les bases de Lucie jusqu'au correctif** — la montre
+  seule ne fait pas naître l'écart (contrôle de 14 h 15 vert sur sa base) ; **le chantier moteur
+  passe devant B chez hotfixs**, ticket gravité perte, la recette reproductible (copie saine, index
+  complet, contrôle 339cbb5dc), la bissection par le chemin (DELETE puis COPY de relations dans une
+  même transaction sur une table déjà au disque, groupes CSR persistés : ce que les témoins à un
+  écrivain n'avaient pas) puis par les commits d'avant 17a094d12 ; le cœur lit avec lui.
+- **Atterris** : archi, le symbole cité en lien (36aced578) et la page 03 sans « pas fait »
+  (d59812592) — la liste de Lucie d'hier soir sur l'IDE est faite en une journée. Codeparsers : un
+  troisième rouge sous charge au navigateur (un module de l'aperçu à chaud servi en 422 juste après
+  le vidage du magasin, vert seul 2/2) : une course possible, à archi avec la relecture d'ED.
+
+## 16 h 40 — le portable est posé deux fois, Lucie essaie l'atelier, ce que son essai révèle
+
+- **Le défaut des deux sens est plus ancien que les V2** : hotfixs retrouve la demi-arête LOCKS sous
+  58b46a9bf (25 octobre) ; le chemin désigné est le point de reprise CSR qui réécrit une base
+  pleine (`populateRegionCSROffsets` écrase le bord droit d'une région sous un `KU_ASSERT`, la garde
+  de densité ne lit pas les longueurs qu'il range — hypothèse, dans le ticket avant la preuve). Le
+  run 2b (dadbf0041) rend les mêmes chiffres que 1b. Le run sous 04063ee06 est désarmé (base de
+  départ différente, 40 min de 7878) ; hotfixs mène, le cœur l'aide ; sa trace d'`index confirm`
+  tourne depuis 16 h 21 sur un hôte d'essai 7992 avec **un service d'embarquement à lui (7882)** —
+  j'avais cru qu'elle saturait 7878 et je me suis trompé, dit à hotfixs. memoire-longue est saine
+  (0 écart sur 18 tables, copie prise à l'arrêt). Trois témoins de forme verts chez hotfixs : la
+  forme ne suffit pas, la trace du vrai régime est nécessaire ; accord d'avance pour un binaire à
+  trace JSON si la forme ne suffit pas.
+- **Deux poses du portable** : 15 h 41 (ff6e88ddf, G coupe quatre minutes avant l'heure annoncée
+  parce qu'il s'était fié à une heure non lue : dit tel quel) puis **16 h 08** (e59e59834, parce que
+  `open_branch` 9fd49b38d n'était pas dans le premier binaire ; coupure de 7 s). `courant` →
+  cbc06c3e1 aux deux postes, tunnels vérifiés, 0 core. Le 7878 de luciepc est rendu aux pushes à
+  16 h 08.
+- **L'essai de l'atelier par Lucie** (16 h 00 → 16 h 35), et ce qu'il a révélé, chaque point avec
+  son lot et son témoin rouge d'abord :
+  1. le modèle dit « je ne peux pas exécuter de commande shell, faites-le dans votre terminal » :
+     `open_branch` manquait au binaire (repose) **et** au manifeste de l'atelier, copié du gabarit
+     livré de l'ancien binaire et jamais remis à jour (« atelier déjà posé »). Lucie : « il faut
+     1 - qu'il ait commande shell, 2 - des outils spécialisés tenus par notre framework » et « que
+     ce soit dynamique, qu'on n'ait pas besoin de tout recharger manuellement à chacune de nos
+     avancées ». → ED, pile `gabarits-vivants` : commandes de l'atelier hors tâche par sa porte
+     (approbation), `chat_instructions`, **gabarits vivants** (`<manifeste>.livre`, remplacé à
+     l'ouverture par l'hôte s'il est resté tel qu'écrit, `TemplateRefreshed` sur le flux) ; geste
+     manuel fait une fois pour Lucie (templates déplacé, `atelier` rejoué, `open_branch` déclaré) ;
+  2. `list_worktrees` dit « plein texte 4/7, vecteurs 3/7 » pour la base principale de Lucie, qui
+     croit qu'un index tourne dessus : `fts_counts`, `reads`, `watches` comptés comme des entités,
+     `not_declared` compté comme un manque ; et « 0/4 » pendant un index au lieu de « en cours » →
+     ED a538a1575 et 878c874da ;
+  3. le `workspace` vide du gabarit est listé comme un worktree attaché → ED ;
+  4. **l'index d'un worktree attaché ne reprend pas après un redémarrage de l'hôte** : wt-react5
+     attaché à 16 h 04, hôte reposé à 16 h 08, « index pas ouvert » et rien ne le rouvre ; rouvert
+     à la main (POST /backend/open) l'index HNSW est reconstruit mais **le rattrapage des vecteurs
+     ne repart pas** (15 % depuis 16 h 12 : ED lit que rien ne solde la dette à l'ouverture, seul
+     l'outil `index` le fait). Tranché **(b)** : `embeddings.catch_up_on_open` déclaré dans le
+     gabarit livré du code, hérité par les worktrees ; la base de Lucie, posée sans lui, ne bouge
+     pas ; un rattrapage de fond s'arrête au paquet suivant sur /backend/close au lieu de refuser
+     (ED 744d568eb, 67247bfbb, c7d0a7b35). wt-react5 relancé à la main par `index confirm` à
+     16 h 34 (base jetable) ;
+  5. l'accueil de l'IDE dit encore « Backends » et des chemins de manifeste → archi
+     `ide-accueil-depots` (f5c8a6868, passe verte, en file) ;
+  6. Lucie : « il devrait avoir notif quand indexation finie », « une barre de progression qui
+     glisse dans le chat quand je charge un worktree, ou un handle pour l'agent », « par SSE, pas
+     par polling, voire rendre générique quand on a besoin d'un SSE » → archi + ED : `RepoIndexed`
+     à la dernière ligne du journal d'index, `IndexProgress` sur le flux (1/s au plus par backend),
+     un champ `ui` sur les résultats d'outils (`{kind, repo, sujets}`) rendu par la page sous le
+     tour et branché sur le flux déjà ouvert, `show_progress` comme handle ; zéro polling, règle
+     pour toute progression à venir.
+- **Mesures** : un worktree de rag3db s'indexe en **13 min** par le tunnel vers 7878 (essai-atelier :
+  111 024 Scope_Chunk en 10 min 20 s, ~160 morceaux/s) ; pendant ce temps la carte des services
+  de luciepc est à 26–51 % et le service à 12 % d'un cœur : **sous-utilisée, pas bloquée**, les
+  clients envoient un lot et attendent (Lucie : « j'entends pas fort travailler les GPU de
+  luciepc »). Pas de service sur le portable (Lucie : « le portable devient lourd dingue »). La
+  vraie réponse est la marche 1 des vues par worktree (6 novembre) : un worktree de rag3db
+  réembarque ce que la base principale a déjà.
+- **La file** : 96 (M4 pas 3) et codeparsers (locales JS) ont chacun un seul rouge, le témoin
+  `un_symbole_cite_se_resout_par_l_index_sans_ouvrir_de_depot` de 36aced578 sous charge (« catalogue
+  tenu par une écriture ») ; ED porte le correctif (relire tant que `why` le dit, 10 s) dans
+  juge-par-pas-3 ; 96 attend que les index du portable finissent pour rejouer seul ; codeparsers
+  rejoue court et pousse ; archi ensuite avec deux lots ; puis ED, recherche (un `.tmp` de 4 Ko
+  intermittent, cherche la source). Quota Vertex épuisé 24 min vers 15 h 40 : pas le banc (fini
+  à 14 h 51, en série), nos passes à Gemini jouées en même temps. Le banc passe ses reprises au
+  doublement.
+- **Règle apprise** : un index de mesure ou de trace tourne sur **son propre** service
+  d'embarquement (même modèle, port neuf, VRAM lue), jamais sur le 7878 partagé — il n'y a pas
+  de fenêtre dans une file de pushes.
+
+## 17 h 25 — le disque de luciepc, le mécanisme du SIGSEGV, le chemin du MERGE
+
+- **Lucie : « il m'a pas l'air surmené, luciepc »**, et elle avait raison. La charge moyenne (25 à
+  33) comptait des processus bloqués sur le disque : PSI cpu 0,5 %, mémoire 0 %, **E/S 22 à 30 %** ;
+  le NVMe (Crucial T710) occupé à 98 % pour 9 Mio/s, parce qu'il passait **4 743 ms sur 5 s en
+  commandes TRIM** (37 ms chacune) : btrfs monté `discard=async` par défaut du noyau (absent de
+  fstab), 5,2 Gio en 151 840 petits extents à rendre après les effacements de targets et de bases
+  de la journée. C'était la famille des « pas indexé en 60 s » et des passes trois fois plus
+  longues (lib entière d'ED 1 623 s contre 189 s), pas la charge. **Lucie a remonté `/` en
+  `nodiscard` et activé `fstrim.timer` à 17 h 10** (TRIM 0 ms ensuite ; `nodiscard` à ajouter à la
+  ligne 9 de fstab pour le redémarrage). Mais le SSD reste lent après : 98 % d'occupation pour
+  50 Mio/s, **31,5 ms par flush**, 3 à 4 ms par opération, 49 °C, PCIe 5 x4 : travail interne
+  après la journée de discards, se détend avec le temps. Une veille (occupé < 40 %, flush < 8 ms,
+  PSI io < 6) dit aux sessions quand rejouer ; d'ici là un rouge de durée à luciepc se nomme
+  « attente disque », et les seuils des témoins ne se relâchent pas (ED a remis 60 et 120 s).
+- **Le mécanisme du SIGSEGV du matin, sans course** (cœur, sur ma base creuse) : l'en-tête déclare
+  455 380 pages, le fichier en compte 83 108 352 ; deux segments vivants de Scope_Chunk
+  `embedding__granite_278m_data` à 83 108 096 et 83 108 192 et une entrée libre à côté. À
+  l'ouverture, `Checkpointer::returnOwnerlessPages` (0aed3c4b5, 10 octobre) rend libre tout
+  l'intervalle de l'étendue à la fin du fichier **sans vérifier qu'aucun segment vivant ne s'y
+  trouve** ; après CHECKPOINT des pages vivantes sont dans l'espace libre ; `mergePageRanges` puis
+  `handleLastPageRange` tronquent `numPages` sous les segments ; le lecteur suivant suit un maillon
+  nul du `ConcurrentVector` : les deux cores de 8 h 50 et 9 h 05, au même bloc. Le use-after-free de
+  `shrinkForNode` n'était pas la cause. Inconnu : le premier événement qui a posé des pages à 82 M
+  au-delà (00 h 08 → 8 h 50, sous 17a094d12 ou dadbf0041). Correctifs rouges d'abord, dans l'ordre :
+  (3) sonde fsm_info × storage_info (page libre et tenue), (1) returnOwnerlessPages ne rend que ce
+  que rien ne tient, (2) erreur au lieu de plantage au-delà de numPages (branche `etendue-gardes`).
+  Relevé : 22 bases lisibles à luciepc, aucune creuse ; ici toutes saines sauf la mienne, fermée à
+  17 h 14 (son point de reprise de fermeture a mis les pages vivantes dans l'entrée libre) et mise
+  de côté entière avec la copie de 16 h 52 dans `~/.cache/rag3db-moteur-notes/essais-c7/` ; pas de
+  rebâtie par index complet (chemin des deux sens), une base neuve à la prochaine ouverture.
+- **Les deux sens : la trace d'hotfixs réfute le débordement CSR** (aucune garde n'a sauté sur 3 176
+  instructions, mêmes écarts au chiffre près, sur 7882 et non 7878 : j'avais accusé à tort). Les
+  tables abîmées s'écrivent toutes par `UNWIND $items … MERGE (a)-[r]->(b) SET r.line`, par lots
+  validés un à un et relus ; les saines par COPY ; aucun effacement sauf le DETACH DELETE final de
+  103 Scope (INHERITS_FROM est Scope→Scope). Témoin de ce chemin en cours (da1f9b1b6) ; le cœur
+  lit le MERGE sur une table déjà au disque et la sonde de cohérence sert aussi là (une liste
+  arrière sur les mauvaises rangées peut venir d'une réécriture de pages).
+- **La pile de l'atelier d'ED, dix commits** (a538a1575 → edee38062) : commandes hors tâche par la
+  porte, `chat_instructions`, gabarits vivants (`.livre`, `TemplateRefreshed`), reprise du premier
+  index, `embeddings.catch_up_on_open` (forme (b), tranchée : déclaré dans le gabarit livré, hérité
+  par les worktrees, la base de Lucie ne bouge pas ; un rattrapage de fond s'arrête au paquet
+  suivant sur /backend/close au lieu de refuser), la phrase de l'index (« en cours » seulement si
+  une indexation vit ; une note `running` périmée du 25 octobre se lit prête quand les comptes sont
+  complets), seuils à 60 et 120 s. Archi : quatre lots verts en file (aperçu, accueil en dépôts,
+  fin d'index `RepoIndexed`, avancement `IndexProgress` par le flux, 1/s au plus, « figé depuis »,
+  « flux coupé », zéro polling) ; la carte sous le tour attend `Turn.ui` d'ED (Lucie : « que ça
+  glisse une UI dans le chat », « par SSE, pas par polling »).
+- **Recherche** : le Surveillant `l_embarquement_du_retard_appelle_le_service_hors_du_verrou` est
+  rouge 5/10 sur master seul (ticket, à elle après son lot) ; les `.tmp` intermittents sont des
+  TempDir qu'un fil de fond du backend écrit encore après son Drop (ticket, à elle, à partir du
+  `stop_indexings_of` d'ED) ; le témoin des résidus prend deux listes, `toujours` et `parfois`
+  (known_red avec ticket, résidu dit en clair, sortie par le commit qui corrige).
+- **La file** : le seul rouge qui bloque codeparsers (3 verts, 1 rouge ligne 147) et 96 est le
+  témoin de 36aced578 ; **ED pousse d'abord un mini-lot avec son seul correctif** (f7248fbae) au
+  « disque détendu », puis codeparsers, 96, archi ×4, juge-par-pas-3, recherche.
+
+## 18 h 15 — le disque de luciepc rendu : TRIM, puis de la place
+
+- **Le TRIM** : `fstrim -v /` plein prenait des heures (le T710 traite 20 commandes TRIM par seconde à
+  52 ms, et btrfs lui donnait l'espace libre en petits bouts) ; arrêté, relancé en
+  `fstrim -v -m 16M /` : **452 Gio rendus en 58 s**. `nodiscard` ajouté à la ligne de `/` dans
+  fstab (copie `fstab.avant-nodiscard`), `fstrim.timer` actif. Après, le SSD restait lent de
+  lui-même (102 ms par écriture 4 Kio + fsync, 26 ms par flush, presque rien qui écrivait) : travail
+  interne du disque, plein à 85 % (3,07 / 3,63 Tio ; 271 Gio non alloués btrfs : pas le mal de la
+  tablette, aucun balance nécessaire). SMART sain (usure 1 %, réserve 100 %, 0 erreur, 49 °C).
+  **Détendu à 18 h 03** (occupé < 40 %, flush < 8 ms, PSI io < 6) ; la passe du mini-lot d'ED est
+  partie à 18 h 03 m 46 s.
+- **De la place, au mot de Lucie** (elle a répondu dossier par dossier) : journal `nemotron-test.log`
+  de llama.cpp (342 Gio, 16 juin, aucun écrivain) ; `extension/rag3weaver/target` laissé dans son
+  arbre de luciepc (208 Gio, août) ; `~/lucivy_bench` (97 Gio) ; les deux `.venv` torch+ROCm de
+  ML/audio (30 Gio) ; `Téléchargements/dump_mistake_extraction` (20 Gio : objets Blender en double
+  et 449 fichiers de ROMs et de firmware, 284 avec jumeau) ; `z_image_turbo_bf16.safetensors`
+  (11,5 Gio) ; l'émulation Xbox `ROMS/Emulation/roms/xbox360` (320 Gio, l'émulateur xenia et ses
+  réglages compris) et `xbox` (1 Gio) ; Talos Principle 2 et Path of Exile 2 par Steam (117 + 141
+  Gio). **De 566 Gio libres (85 %) à ≈ 1,55 Tio libres (≈ 58 %)**. Gardés : les GGUF de ML (76 Gio,
+  référencés par llama-swap), les jeux de données audio, les autres consoles, les documents.
+- **Une faute à moi** : `lucivy_bench` effacé sans attendre la réponse de la session lucivy ; ses
+  scripts de mesure écrits à la main hors dépôt (`scratch-positions/` : cold.py, compat.mjs,
+  ab.sh, after-fix.sh, compact-bench) sont perdus, leurs méthodes et chiffres restent dans ses
+  docs. Règle écrite : un dossier de travail d'une session ne s'efface qu'après sa réponse ; les
+  outils de mesure s'écrivent dans le dépôt. Lucivy en a tiré un constat plus grave : dix tests du
+  job core passaient vert sans corpus (synthétique de onze mots, « Skipping: corpus not found ») ;
+  lot `4.3.2.1-corpus-absent` : un corpus manquant fait rougir en nommant le chemin et la recette,
+  `LUCIVY_CORPUS_ABSENT_OK=1` dit l'absence par son nom ; PR puis fusion au vert (règle du
+  3 octobre), aucun tag v*.
+- **Le SIGSEGV** : le correctif du cœur (62af3ae42, branche `etendue-gardes`) est vert sur la vraie
+  pièce (copie de 16 h 52 : rien rendu, 0 page libre et tenue, 114 855 vecteurs relus identiques,
+  pile du demandeur dans l'erreur) ; push au vert des suites voisines, `transaction_test` entier à
+  rejouer sur disque calme avant tout rebâti de lib qui prend ce lot. Les deux sondes d'hotfixs
+  (copie saine, base du premier index) : 0 page libre et tenue → les deux sens ne sont pas ce
+  défaut, le MERGE reste le premier suspect ; son second run (trace à paramètres littéraux pour un
+  rejeu exact) est suspendu jusqu'à « file passée ».
+
+## 19 h 20 — la file passe, ce qu'elle a laissé voir
+
+- **Atterris depuis 18 h 15** : le mini-lot d'ED (7276a02fa, les témoins des symboles cités relisent
+  « catalogue tenu » et « index partiel ») ; codeparsers (43dd520b0, pointeur c660893, locales JS
+  par leur portée, oracle « liaison d'import », page 11, mesure 30 → 10) ; le cœur (9bae60786, les
+  gardes de l'étendue : numPages ne baisse plus, returnOwnerlessPages part de la fin de ce qui est
+  tenu, refus au-delà du fichier avec la pile du demandeur ; `transaction_test` entier en cours
+  avant tout rebâti de lib) ; hooks-essai (2d6e58d1a, `git_init` porte une identité propre
+  « rag3weaver <rag3weaver@localhost> » ou `workspace.git_identity`, jamais la config de la
+  machine : la CI rag3weaver de master était rouge depuis 14 h 14 UTC sur « Author identity
+  unknown », pas sur le formatage) ; archi (9c20d6773, pile de quatre lots en un push : aperçu sur
+  graphe vide, accueil en dépôts, RepoIndexed, IndexProgress par le flux avec débit, « figé
+  depuis », « flux coupé »). Suivent : le juge par pas d'ED (vert, « à toi » donné), sa pile de
+  l'atelier (13 commits, passe en cours : l'état `.livre`/`.premier-index` est passé hors de l'arbre
+  des déclarations sous `~/.local/state/rag3weaver` après un rouge réel à l'étape navigateur), 96
+  (rouge sur e2e_cited_by : SIGSEGV à la sortie après 3/3, « fermeture FTS incomplète — Apport
+  encore partagé … save_metas : No such file »), recherche. Puis **une repose du portable par G**,
+  un seul arrêt, pour que Lucie voie l'accueil en dépôts, la progression et l'atelier complet.
+- **Tranché** : un arbre inscrit dont les déclarations sont suivies par git se remet au gabarit
+  livré par **un commit** à l'identité neutre (fichiers propres seulement, sinon refus dit), lot à
+  part chez ED ; l'atelier posé par copie se met à jour directement.
+- **Un défaut qui rougit les passes des autres** : à chaque fermeture d'un backend de code, le plein
+  texte est fermé tard par un fil que le Drop n'attend pas (quatre tables, « encore partagé » puis
+  `save_metas : No such file`), résidus `.tmp` chez recherche, plantage à la sortie chez 96 ;
+  ticket de recherche (a24541f3b), devant son Surveillant ; un agent cartographie les poignées et
+  les fils non joints, forme à venir, à partir de `stop_indexings_of` d'ED.
+- **Le banc du modèle de décision** (440 paires, 88 positifs à provenance vérifiée) : Gemini 3.8
+  Flash retrouve le positif premier dans 81 à 84 % des cas (4,5 s par cas) ; dense bge-m3 0,41
+  (66 ms) ; reranker 0,36 ; Qwen2.5-0.5B, SmolLM2-360M, Laya en zéro-coup 0,17 à 0,23 et **le même
+  score pour toutes les fiches d'un cas** : ils lisent le contexte, pas la fiche, aucun seuil n'a de
+  sens. Suite demandée : passe GPU, page ; le cosinus bge-m3 en filtre qui ôte seulement au seuil
+  qui garde 100 % des utiles ; Qwen2.5-1.5B par logits sur card2 ; Laya spécialisé plus tard.
+- **luciepc** : plafond des lourds remis à 6 à 18 h 48 (la charge du jour était du disque) ; 1,3 Tio
+  libres (65 %) ; la CI de master s'annule à chaque push (concurrence) : lot court chez hooks-essai.

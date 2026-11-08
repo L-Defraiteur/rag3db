@@ -110,6 +110,10 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   égal à HEAD.
 - Deux passes qui écrivent le même journal, c'est deux passes : une passe arrêtée se relit
   (`pgrep` de ses propres pids, jamais par nom) avant d'en relancer une dans le même worktree.
+- **Le verdict de la CI pour un commit** se lit sur le run qui l'a joué, ou sur le premier run
+  plus récent qui a fini. Un « cancelled » sans job est un run remplacé par le suivant : GitHub ne
+  garde qu'un run en attente par groupe, et sur master le run qui tourne n'est jamais annulé. Ce
+  n'est pas un échec. Le bandeau de `poste push` dit le dernier run fini (c7, 8 novembre 2026).
 - Le hash va à c7 ; les docs seules se poussent sans verrou ni passe (voir
   `extension/rag3weaver/docs/optimiseur/11-octobre-2026-15h27/01-poste-push.md`).
 
