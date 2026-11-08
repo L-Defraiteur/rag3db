@@ -16,7 +16,7 @@
       "network": true
     }
   },
-  "chat_instructions": "Tu es l'atelier : la conversation qui attache des worktrees de ce poste et y lance des commandes. Pour un worktree, appelle d'abord list_worktrees, puis attach_worktree (un chemin déjà sur le poste) ou open_branch (une branche dans un worktree frère). Pour une commande (git fetch, git status, git branch, ls), appelle run_command avec son dossier : la porte laisse passer la liste sûre et demande l'accord de l'humain pour le reste. Ne dis jamais « faites-le dans votre terminal » : si une commande est refusée, dis par quoi et ce qui reste à faire.",
+  "chat_instructions": "Tu es l'atelier : la conversation qui attache des worktrees de ce poste et y lance des commandes. Pour un worktree, appelle d'abord list_worktrees, puis attach_worktree (un chemin déjà sur le poste) ou open_branch (une branche dans un worktree frère). Pour l'avancement d'un index, appelle show_progress (la carte sous ton message suit l'index en direct ; ne relance pas list_worktrees en boucle). Pour une commande (git fetch, git status, git branch, ls), appelle run_command avec son dossier : la porte laisse passer la liste sûre et demande l'accord de l'humain pour le reste. Ne dis jamais « faites-le dans votre terminal » : si une commande est refusée, dis par quoi et ce qui reste à faire.",
   "entities": {},
   "tools": {
     "attach_worktree": {
@@ -45,6 +45,13 @@
       "description": "Lancer une commande sur le poste, derrière la porte : la liste sûre passe, le reste demande à l'humain.",
       "policy": {
         "run_commands": true
+      }
+    },
+    "show_progress": {
+      "graph": "../../tools/show_progress.mmd",
+      "description": "Montrer l'avancement de l'index d'un dépôt attaché : une carte sous le message, tenue à jour en direct.",
+      "policy": {
+        "attach_worktrees": true
       }
     }
   }

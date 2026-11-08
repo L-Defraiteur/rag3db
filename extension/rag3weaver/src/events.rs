@@ -238,6 +238,8 @@ pub enum Event {
         result_excerpt: Option<String>,
         /// L'extrait a été coupé.
         truncated: bool,
+        /// **Ce que la page rend sous le tour** (`Turn::ui`), que le modèle ne voit pas.
+        ui: Option<Value>,
     },
     /// Un nœud d'un graphe exécuté par le runtime — ce qui se passe *sous*
     /// un outil.
@@ -711,7 +713,7 @@ impl Event {
             Self::ToolCallStarted { run, agent, call_id, tool, arguments } => json!({
                 "kind": "ToolCallStarted", "run": run, "agent": agent, "call_id": call_id, "tool": tool, "arguments": arguments,
             }),
-            Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes, result_excerpt, truncated } => {
+            Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes, result_excerpt, truncated, ui } => {
                 let mut v = json!({
                     "kind": "ToolCallFinished", "run": run, "agent": agent, "call_id": call_id, "tool": tool,
                     "ok": ok, "error_kind": error_kind, "ms": ms, "bytes": bytes,
@@ -721,6 +723,9 @@ impl Event {
                     if *truncated {
                         v["truncated"] = json!(true);
                     }
+                }
+                if let Some(u) = ui {
+                    v["ui"] = u.clone();
                 }
                 v
             }
