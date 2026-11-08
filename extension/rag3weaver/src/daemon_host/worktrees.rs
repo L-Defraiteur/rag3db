@@ -237,4 +237,90 @@ mod tests {
         assert!(encore.contains("déjà attaché") && encore.contains("il est ouvert"), "{encore}");
         let _: Value = etat;
     }
+
+    /// **Un worktree attaché paraît sous « Dépôts » sans recharger la page** (c7, 8
+    /// novembre 2026, la suite de la barre). Dans le chat de l'atelier, l'utilisatrice
+    /// demande d'ouvrir un worktree ; le modèle appelle `attach_worktree` ; la barre, en
+    /// vue par dépôt, montre le dépôt et sa branche dès `RepoAttached`, la page jamais
+    /// rechargée.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn un_worktree_attache_parait_sous_depots_sans_recharger_la_page() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        const TEMOIN: &str = "un_worktree_attache_parait_sous_depots_sans_recharger_la_page";
+        let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("rag3db-essai");
+        std::fs::create_dir_all(depot.join("src")).unwrap();
+        std::fs::write(depot.join("src/lib.rs"), "pub fn un() -> u32 { 1 }\n").unwrap();
+        for args in [&["init", "-q", "-b", "essai"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"], &["add", "-A"], &["commit", "-q", "-m", "le dépôt"]] {
+            git(&depot, args);
+        }
+        let gabarits = d.path().join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let atelier = gabarits.join("backends/atelier/backend.json");
+        let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+        let chemin = depot.display().to_string();
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let chemin = chemin.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                if turns[depuis..].iter().any(|t| t.role == "tool") {
+                    MockLlm::new("C'est fait.").generate(turns, opts, sink)
+                } else {
+                    MockLlm::new("").with_tool_calls(vec![("attach_worktree".to_string(), json!({ "path": chemin }).to_string())]).generate(turns, opts, sink)
+                }
+            })))
+        });
+        let (runs, chats) = (d.path().join("runs"), d.path().join("chats"));
+        let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_chat_model(model));
+        let racine = format!("http://{adresse}");
+        let ide = |methode: &str, route: &str, corps: Value| -> Value {
+            let agent = crate::daemon::agent();
+            let mut r = if methode == "GET" {
+                agent.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap()
+            } else {
+                agent.post(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap()
+            };
+            serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+        };
+        assert_eq!(ide("POST", "/ide/describe", json!({ "manifest": atelier }))["ok"], true);
+        let etat = ide("GET", "/ide/etat", Value::Null);
+        let canon = atelier.canonicalize().unwrap();
+        let id = etat["backends"]
+            .as_array()
+            .and_then(|a| a.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(canon.as_path())))
+            .and_then(|b| b["id"].as_str())
+            .unwrap_or_else(|| panic!("l'atelier dans l'état : {etat:#}"))
+            .to_string();
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.commande("Emulation.setDeviceMetricsOverride", json!({ "width": 1920, "height": 1080, "deviceScaleFactor": 1, "mobile": false }));
+        n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        n.aller(
+            &format!("{racine}/ide/code/{id}/chat"),
+            "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+        );
+        n.evaluer("(() => { const s = document.querySelector('#vue-barre'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, 'repo'); s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+        n.attendre("!!document.querySelector('#arbre-depots')", "la vue par dépôt");
+        let sel = "#arbre-depots .depot[data-depot=\"rag3db-essai\"]";
+        assert_eq!(n.evaluer(&format!("!!document.querySelector('{sel}')")), json!(false), "le dépôt paraît avant d'être attaché");
+        // Une marque dans la page : un rechargement l'effacerait.
+        n.evaluer("window.__pas_rechargee = 1");
+        n.evaluer(&format!("document.querySelector('#message').value = 'Ouvre le worktree {}'; document.querySelector('#send').click()", depot.display()));
+        n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour de l'atelier");
+        n.attendre(&format!("!!document.querySelector('{sel} .espace')"), "le dépôt attaché sous « Dépôts »");
+        let espace = n.evaluer(&format!("document.querySelector('{sel} .espace').textContent"));
+        assert!(espace.as_str().unwrap_or_default().contains("rag3db-essai · essai"), "le dépôt et sa branche : {espace}");
+        assert_eq!(n.evaluer("window.__pas_rechargee ?? null"), json!(1), "la page s'est rechargée");
+
+        assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
 }
