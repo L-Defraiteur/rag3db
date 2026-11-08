@@ -4,6 +4,7 @@
 
 #include "common/exception/runtime.h"
 #include "common/file_system/virtual_file_system.h"
+#include "common/stack_to_stderr.h"
 #include "common/string_format.h"
 #include "main/client_context.h"
 #include "main/db_config.h"
@@ -177,6 +178,7 @@ void FileHandle::writePagesToFile(const uint8_t* buffer, uint64_t size, page_idx
     const auto endPage =
         static_cast<uint64_t>(startPageIdx) + (size + getPageSize() - 1) / getPageSize();
     if (endPage > numPages) {
+        common::printStackToStderr("a write of pages beyond the file");
         throw common::RuntimeException(
             common::stringFormat("Writing pages [{}, {}) of {} would go beyond its {} pages.",
                 startPageIdx, endPage, fileInfo ? fileInfo->path : std::string{}, numPages.load()));
