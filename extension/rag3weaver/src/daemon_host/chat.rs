@@ -503,6 +503,12 @@ impl DaemonHost {
         let llm = (self.chat_model)(&tour.prepared).map_err(|why| format!("le chat est éteint : {why}"))?;
         let dans_une_tache = tour.dans_une_tache;
         let mut prompt = system_prompt(tour.mode, dans_une_tache);
+        // **La consigne déclarée du chat** (`chat_instructions`) : celle de l'atelier dit
+        // l'ordre de ses outils.
+        if let Some(c) = tour.prepared.manifest.chat_instructions.as_deref().filter(|c| !c.trim().is_empty()) {
+            prompt.push_str("\n\n");
+            prompt.push_str(c.trim());
+        }
         if let Some(s) = step {
             prompt.push_str("\n\n");
             prompt.push_str(s.system_prompt());
@@ -657,7 +663,11 @@ impl<'a> OutilsDuChat<'a> {
         // Dans une tâche, les commandes passent par la porte déclarée du workspace
         // (lot 2 de la page 07-novembre-2026-everything-declarative/01) ; hors
         // d'une tâche, ou sans porte, le chat n'en lance pas.
-        let porte = dans_une_tache && prepared.manifest.workspace.as_ref().is_some_and(|w| w.commands != crate::backend_code::CommandGate::Off);
+        let porte = prepared
+            .manifest
+            .workspace
+            .as_ref()
+            .is_some_and(|w| w.commands != crate::backend_code::CommandGate::Off && (dans_une_tache || w.commands_outside_tasks));
         for (nom, outil) in &prepared.manifest.tools {
             if outil.policy.run_commands && !porte {
                 retires.insert(nom.clone(), format!("« {nom} » lance des commandes, et le chat n'en lance pas : il lit et édite le code"));
