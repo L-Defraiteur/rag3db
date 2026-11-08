@@ -220,6 +220,34 @@ pub struct SandboxConfig {
     /// Écritures en plus du domaine (ex. `~/.cargo/registry/cache`).
     #[serde(default)]
     pub extra_write: Vec<String>,
+    /// **L'environnement des commandes** (8 novembre 2026), posé par-dessus
+    /// celui de l'hôte. Deux jetons, valables aussi dans `extra_read` et
+    /// `extra_write` : `{task_dir}`, le dossier de la tâche (hors tâche, un
+    /// dossier du backend sous le cache), écrit d'office ; `{repo_target}`, le
+    /// target partagé des tâches du dépôt (`taches-<dépôt>` sous
+    /// `RAG3WEAVER_TARGETS_DIR`, défaut `~/.cache/rag3weaver-build`), écrit
+    /// d'office, tenu sous un verrou pendant chaque commande et plafonné par
+    /// `RAG3WEAVER_TARGET_MAX_GO`. Une valeur qui porte un jeton est un dossier,
+    /// créé au montage. Ex. `{"CARGO_TARGET_DIR": "{repo_target}", "TMPDIR":
+    /// "{task_dir}/tmp", "CARGO_NET_OFFLINE": "true"}`.
+    #[serde(default)]
+    pub env: std::collections::BTreeMap<String, String>,
+}
+
+/// Les valeurs des jetons de `sandbox` pour un backend.
+#[derive(Debug, Clone, PartialEq)]
+pub struct JetonsDuBac {
+    pub task_dir: std::path::PathBuf,
+    pub repo_target: std::path::PathBuf,
+}
+
+/// Étend `~/`, `{task_dir}` et `{repo_target}` ; dit lesquels des deux jetons
+/// la valeur portait.
+fn etendre_jetons(v: &str, j: &JetonsDuBac) -> (String, bool, bool) {
+    let tache = v.contains("{task_dir}");
+    let depot = v.contains("{repo_target}");
+    let e = v.replace("{task_dir}", &j.task_dir.to_string_lossy()).replace("{repo_target}", &j.repo_target.to_string_lossy());
+    (etendre_tilde(&e).to_string_lossy().into_owned(), tache, depot)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -423,16 +451,40 @@ const HOOK_FORBIDDEN: &[&str] = &[
 pub fn build_bac_a_sable(
     sandbox: &SandboxConfig,
     domaine: &std::path::Path,
+    jetons: &JetonsDuBac,
 ) -> Option<crate::commande::BacASable> {
     if sandbox.mode == SandboxMode::Off {
         return None;
     }
     let mut bac = crate::commande::BacASable::autour(domaine).avec_reseau(sandbox.network);
+    let (mut tache, mut depot) = (false, false);
     for p in &sandbox.extra_read {
-        bac = bac.lire_en_plus(etendre_tilde(p));
+        let (e, t, d) = etendre_jetons(p, jetons);
+        (tache, depot) = (tache | t, depot | d);
+        bac = bac.lire_en_plus(e);
     }
     for p in &sandbox.extra_write {
-        bac = bac.ecrire_en_plus(etendre_tilde(p));
+        let (e, t, d) = etendre_jetons(p, jetons);
+        (tache, depot) = (tache | t, depot | d);
+        bac = bac.ecrire_en_plus(e);
+    }
+    for (k, v) in &sandbox.env {
+        let (e, t, d) = etendre_jetons(v, jetons);
+        // Une valeur à jeton est un dossier : Landlock saute sans un mot une
+        // règle sur un chemin absent, il doit donc exister avant la commande.
+        if t || d {
+            let _ = std::fs::create_dir_all(&e);
+        }
+        (tache, depot) = (tache | t, depot | d);
+        bac = bac.avec_env(k.clone(), e);
+    }
+    if tache {
+        let _ = std::fs::create_dir_all(&jetons.task_dir);
+        bac = bac.ecrire_en_plus(jetons.task_dir.clone());
+    }
+    if depot {
+        let _ = std::fs::create_dir_all(&jetons.repo_target);
+        bac = bac.avec_cible_partagee(jetons.repo_target.clone());
     }
     Some(bac)
 }
