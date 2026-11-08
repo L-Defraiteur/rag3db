@@ -286,6 +286,10 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
         crate::builtin_templates::link(dir, &mut m);
     }
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifest.display()))?;
+    // Posé d'après un gabarit livré : il suivra les bâtis (`builtin_templates::refresh`).
+    if let Some(nom) = source.canonicalize().ok().and_then(|s| crate::builtin_templates::builtin_name_of(&s)) {
+        crate::builtin_templates::record(&manifest, nom)?;
+    }
     depot_des_declarations(&dossier, &identite, &tree, &name)?;
 
     // La base : un instantané de celle de `from`, fichier par fichier.

@@ -527,6 +527,22 @@ impl DaemonHost {
     /// l'empreinte du manifeste lu.
     fn open_slot(&self, hosted: &Hosted, slot: &mut Option<Backend>) -> Result<(), String> {
         if slot.is_none() {
+            // **Le gabarit livré suit le binaire** (Lucie, 8 novembre 2026, 16 h 12) : un
+            // manifeste posé d'après un gabarit livré et resté tel quel prend celui de ce
+            // binaire avant d'être lu ; un manifeste modifié à la main est gardé. Une
+            // remise à jour impossible n'empêche pas d'ouvrir : elle se dit.
+            match crate::builtin_templates::refresh(&hosted.manifest) {
+                Ok(crate::builtin_templates::Refresh::Refreshed { added, removed }) => {
+                    eprintln!("[hôte] {} : remis au gabarit livré (outils venus : {added:?}, partis : {removed:?})", hosted.manifest.display());
+                    self.ide.publier(
+                        "repos",
+                        &hosted.manifest.display().to_string(),
+                        json!({ "kind": "TemplateRefreshed", "manifest": hosted.manifest, "added": added, "removed": removed }),
+                    );
+                }
+                Err(e) => eprintln!("[hôte] {} : la remise au gabarit livré a échoué ({e}) ; le manifeste est lu tel quel", hosted.manifest.display()),
+                Ok(_) => {}
+            }
             let print = manifest_print(&hosted.manifest)?;
             let prepared = PreparedBackend::load(&hosted.manifest)?;
             // **Une tâche** : sa base copiée et son mode, par-dessus le manifeste.
