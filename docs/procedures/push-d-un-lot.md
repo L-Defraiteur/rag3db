@@ -130,3 +130,8 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   suivent la même règle à la fin de chaque lot, plus seulement à la fin de la session.
 - Les rapports de session (`01-rapport`, `02-knowledge-dump` du jour) se tiennent à jour après
   chaque lot ; un défaut connu non corrigé devient un ticket dans `docs/tickets/`.
+- **Le README suit ce que l'utilisateur voit** (Lucie, 8 novembre 2026) : un lot dont la ligne de
+  `docs/nouveautes.md` change ce que l'utilisateur voit ou fait — un outil, une commande, un
+  réglage, un comportement visible — met aussi à jour le README concerné (`README.md` à la racine,
+  `extension/rag3weaver/README.md`) dans le même lot. Sinon, un rattrapage des README depuis
+  `nouveautes.md` toutes les semaines.
