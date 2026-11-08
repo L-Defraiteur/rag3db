@@ -37,6 +37,13 @@ pub struct WorkspaceConfig {
     /// l'agent hors d'une fusion.
     #[serde(default)]
     pub task_writes: bool,
+    /// **Faire de la racine un dépôt, sur demande** (page 03 d'everything
+    /// declarative, § 1 « Sans git ») : une racine qu'aucun git ne suit devient
+    /// un dépôt (`git init` et un premier commit) à l'ouverture de la première
+    /// tâche, qui est alors une branche. Sans l'option, jamais d'office : la
+    /// tâche travaille dans une copie de la racine.
+    #[serde(default)]
+    pub git_init: bool,
     /// La porte des commandes (`run`/`run_bg`) : absente ou `off`, le
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
@@ -737,6 +744,7 @@ mod tests {
             root: "sources".into(),
             read_only,
             task_writes: false,
+            git_init: false,
             commands: CommandGate::Off,
             index_signals: std::collections::BTreeMap::new(),
             sandbox: SandboxConfig::default(),

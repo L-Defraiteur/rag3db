@@ -1160,7 +1160,7 @@ impl DaemonHost {
             // sa branche, sa racine.
             let mut premier = espace(b, Some("open"));
             premier["repo"] = json!(repo_of(&t.depot));
-            premier["branch"] = json!(t.branche);
+            premier["branch"] = if t.branche.is_empty() { Value::Null } else { json!(t.branche) };
             premier["path"] = json!(t.workspace.as_ref().filter(|w| w.code.is_none()).map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone()));
             let mut spaces = vec![premier];
             if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()) {

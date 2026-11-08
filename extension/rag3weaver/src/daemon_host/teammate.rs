@@ -1121,10 +1121,14 @@ impl DaemonHost {
         // commitée n'y est pas, et sans le dire on la cherche longtemps.
         let depart = ouverte.then(|| {
             let court: String = t.depart.chars().take(9).collect();
-            let note = format!(
-                "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)",
-                t.branche
-            );
+            // Sans git (page 03 d'everything declarative, § 1) : la boîte le dit.
+            let note = match t.workspace.as_ref().filter(|w| w.copie.is_some()) {
+                Some(w) => format!("tâche ouverte : {} (une copie de {})", super::taches::SANS_GIT, w.racine_principale.display()),
+                None => format!(
+                    "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)",
+                    t.branche
+                ),
+            };
             let _ = files.append("host", "report", None, &note);
             json!({ "branche": t.branche, "depart": t.depart })
         });

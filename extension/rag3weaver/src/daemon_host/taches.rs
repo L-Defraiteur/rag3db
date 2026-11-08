@@ -48,6 +48,12 @@ pub struct Tache {
     /// une copie dans son dossier (`declarations/`), non versionnée.
     #[serde(default)]
     pub declarations_hors_depot: bool,
+    /// **Aucun dépôt** (ni les déclarations ni la racine) : pas de worktree ni
+    /// de branche ; `arbre` est l'espace copié, `depot`, `branche` et `depart`
+    /// sont vides de sens. Ses changements se relisent par différence de
+    /// dossiers (`WorkspaceDeTache.copie`).
+    #[serde(default)]
+    pub sans_depot: bool,
 }
 
 /// **Le workspace d'une tâche** (marche 3) : la racine du principal est
@@ -66,6 +72,74 @@ pub struct WorkspaceDeTache {
     pub racine_principale: PathBuf,
     /// Le dépôt de code, quand ce n'est pas celui du backend.
     pub code: Option<DepotDeCode>,
+    /// **Sans git** : la racine n'est dans aucun dépôt, la tâche travaille dans
+    /// une copie (`racine`), relue et fusionnée par différence de dossiers.
+    #[serde(default)]
+    pub copie: Option<CopieDEspace>,
+}
+
+/// **La copie d'une racine sans git** (page 03 d'everything declarative, § 1) :
+/// l'empreinte (blake3) de chaque fichier au départ, chemin relatif → empreinte,
+/// ce contre quoi la relecture et la fusion comparent ; et ce que la copie a
+/// coûté.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CopieDEspace {
+    pub empreintes: std::collections::BTreeMap<String, String>,
+    pub reflink: bool,
+    pub octets: u64,
+}
+
+/// La phrase que la boîte et la relecture disent d'un espace sans git.
+pub const SANS_GIT: &str = "sans git : les changements se relisent par le diff du dossier";
+
+/// Les fichiers d'un dossier, chemin relatif (séparé par `/`) → empreinte blake3,
+/// et leur taille totale. Les liens symboliques ne sont pas suivis.
+fn empreintes_de(racine: &Path) -> Result<(std::collections::BTreeMap<String, String>, u64), String> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut octets = 0u64;
+    let mut pile = vec![racine.to_path_buf()];
+    while let Some(d) = pile.pop() {
+        for e in std::fs::read_dir(&d).map_err(|e| format!("{} : {e}", d.display()))? {
+            let e = e.map_err(|e| format!("{} : {e}", d.display()))?;
+            let genre = e.file_type().map_err(|e| format!("{} : {e}", e))?;
+            let chemin = e.path();
+            if genre.is_dir() {
+                pile.push(chemin);
+            } else if genre.is_file() {
+                let octets_du_fichier = std::fs::read(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+                octets += octets_du_fichier.len() as u64;
+                let relatif = chemin.strip_prefix(racine).unwrap_or(&chemin).components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
+                out.insert(relatif, blake3::hash(&octets_du_fichier).to_hex().to_string());
+            }
+        }
+    }
+    Ok((out, octets))
+}
+
+/// L'empreinte d'un fichier, `None` s'il n'existe pas.
+fn empreinte(chemin: &Path) -> Option<String> {
+    std::fs::read(chemin).ok().map(|o| blake3::hash(&o).to_hex().to_string())
+}
+
+impl WorkspaceDeTache {
+    /// Les chemins que la copie change depuis le départ : modifiés, neufs,
+    /// effacés.
+    fn chemins_changes(&self) -> Result<Vec<String>, String> {
+        let Some(c) = &self.copie else { return Ok(Vec::new()) };
+        let (maintenant, _) = empreintes_de(&self.racine)?;
+        let mut tous: std::collections::BTreeSet<&String> = c.empreintes.keys().collect();
+        tous.extend(maintenant.keys());
+        Ok(tous.into_iter().filter(|p| c.empreintes.get(*p) != maintenant.get(*p)).cloned().collect())
+    }
+
+    /// Les chemins que la racine principale a changés depuis le départ, parmi
+    /// `chemins` (ceux que la tâche change) ou tous si `chemins` est vide.
+    fn racine_a_bouge(&self, chemins: &[String]) -> Vec<String> {
+        let Some(c) = &self.copie else { return Vec::new() };
+        let mut vus: Vec<String> = if chemins.is_empty() { c.empreintes.keys().cloned().collect() } else { chemins.to_vec() };
+        vus.retain(|p| empreinte(&self.racine_principale.join(p)).as_ref() != c.empreintes.get(p));
+        vus
+    }
 }
 
 /// Un dépôt de code à part, son worktree de tâche, le commit de départ.
@@ -86,7 +160,10 @@ struct Volet<'a> {
 
 impl Tache {
     fn volets(&self) -> Vec<Volet<'_>> {
-        let mut v = vec![Volet { depot: &self.depot, arbre: &self.arbre, depart: &self.depart }];
+        let mut v = Vec::new();
+        if !self.sans_depot {
+            v.push(Volet { depot: &self.depot, arbre: &self.arbre, depart: &self.depart });
+        }
         if let Some(c) = self.workspace.as_ref().and_then(|w| w.code.as_ref()) {
             v.push(Volet { depot: &c.depot, arbre: &c.arbre, depart: &c.depart });
         }
@@ -216,7 +293,7 @@ fn ce_qui_manque(t: &Tache) -> Option<String> {
     if !t.parent_manifest.is_file() {
         manque.push(format!("le manifeste du backend principal {}", t.parent_manifest.display()));
     }
-    if git(&t.depot, &["rev-parse", "--verify", "-q", &format!("refs/heads/{}", t.branche)]).is_err() {
+    if !t.sans_depot && git(&t.depot, &["rev-parse", "--verify", "-q", &format!("refs/heads/{}", t.branche)]).is_err() {
         manque.push(format!("la branche {}", t.branche));
     }
     if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()) {
@@ -375,14 +452,25 @@ impl DaemonHost {
             return Err(format!("la tâche « {nom} » est déjà ouverte"));
         }
         let hote = self.hote_par_id(parent)?;
-        let (directory, espace) = self.with_backend(&hote, |b| {
+        let (directory, espace, git_init) = self.with_backend(&hote, |b| {
             let p = b.prepared();
             let espace = p.manifest.workspace.as_ref().map(|w| {
                 let racine = if w.root.is_absolute() { w.root.clone() } else { p.directory.join(&w.root) };
                 (racine.canonicalize().unwrap_or(racine), !w.read_only || w.task_writes)
             });
-            (p.directory.clone(), espace)
+            let git_init = p.manifest.workspace.as_ref().is_some_and(|w| w.git_init);
+            (p.directory.clone(), espace, git_init)
         })?;
+        // **`git_init` déclaré** : une racine qu'aucun git ne suit devient un
+        // dépôt, avec un premier commit de ce qu'elle porte ; jamais d'office.
+        if let Some((racine, _)) = espace.as_ref().filter(|_| git_init) {
+            if git(racine, &["rev-parse", "--show-toplevel"]).is_err() {
+                git(racine, &["init", "-q"]).map_err(|e| format!("git_init : {e}"))?;
+                git(racine, &["add", "-A"]).map_err(|e| format!("git_init : {e}"))?;
+                git(racine, &["commit", "-q", "--allow-empty", "-m", "le dépôt de la racine (git_init déclaré)"])
+                    .map_err(|e| format!("git_init : le premier commit ({e}) ; une identité git (user.name, user.email) est-elle posée ?"))?;
+            }
+        }
         // Le dépôt de la tâche : celui des déclarations ; à défaut, celui de
         // `workspace.root` (c7, 7 nov. 2026 : le manifeste de Lucie vit dans un
         // dossier de configuration hors git, son code dans un dépôt). Dans ce
@@ -390,20 +478,17 @@ impl DaemonHost {
         // reçoit une copie dans son dossier.
         let depot_des_declarations = git(&directory, &["rev-parse", "--show-toplevel"]);
         let declarations_hors_depot = depot_des_declarations.is_err();
-        let depot = PathBuf::from(
-            depot_des_declarations
-                .or_else(|e| match &espace {
-                    Some((racine, _)) => git(racine, &["rev-parse", "--show-toplevel"]).map_err(|e2| format!("{e} ; workspace.root {} : {e2}", racine.display())),
-                    None => Err(e),
-                })
-                .map_err(|e| {
-                    format!(
-                        "ni le backend ni sa workspace.root ne sont dans un dépôt git ({e}) : une tâche est une branche. `git init` \
-                         à la racine de ses déclarations ou de son code, puis un commit (code-tree add le fait pour un arbre inscrit)"
-                    )
-                })?,
-        );
-        let depot = depot.canonicalize().unwrap_or(depot);
+        // **Sans aucun dépôt** (Lucie : « il doit pouvoir aussi démarrer un truc
+        // même sans git du tout ») : ni worktree ni branche, l'espace est une
+        // copie de la racine. Sans racine déclarée non plus, rien à copier : le
+        // refus le dit.
+        let depot = depot_des_declarations.ok().or_else(|| espace.as_ref().and_then(|(racine, _)| git(racine, &["rev-parse", "--show-toplevel"]).ok())).map(PathBuf::from);
+        let sans_depot = depot.is_none();
+        if sans_depot && espace.is_none() {
+            return Err("le backend n'est dans aucun dépôt git et ne déclare pas de workspace.root : une tâche n'a rien où travailler".into());
+        }
+        let dossier_des_taches = self.racine_des_taches.join(parent).join(nom);
+        let depot = depot.map(|d| d.canonicalize().unwrap_or(d)).unwrap_or_else(|| dossier_des_taches.clone());
         // Hors dépôt, la racine des déclarations copiées : le premier ancêtre
         // `templates` du manifeste (ses chemins relatifs en sortent :
         // `../../tools/x.mmd` ; c'est ce que `code-tree add` copie), à défaut
@@ -422,18 +507,20 @@ impl DaemonHost {
                 .map_err(|_| format!("le manifeste {} n'est pas sous {}", hote.manifest.display(), racine_des_declarations.display()))?
                 .to_path_buf()
         } else {
+            // (les déclarations dans un dépôt : `depot` est ce dépôt-là)
             hote.manifest
                 .strip_prefix(&depot)
                 .map_err(|_| format!("le manifeste {} n'est pas dans le dépôt {}", hote.manifest.display(), depot.display()))?
                 .to_path_buf()
         };
-        let dossier = self.racine_des_taches.join(parent).join(nom);
+        let dossier = dossier_des_taches;
         if dossier.exists() {
             return Err(format!("{} existe déjà : une tâche de ce nom n'a pas été fermée", dossier.display()));
         }
-        let arbre = dossier.join("arbre");
+        // Sans dépôt, l'arbre de la tâche est son espace copié.
+        let arbre = if sans_depot { dossier.join("espace") } else { dossier.join("arbre") };
         let arbre_code = dossier.join("code");
-        let branche = format!("agent/{nom}");
+        let branche = if sans_depot { String::new() } else { format!("agent/{nom}") };
         // Le dépôt du code, s'il est à part.
         let depot_code = espace
             .as_ref()
@@ -443,16 +530,18 @@ impl DaemonHost {
             .filter(|d| *d != depot);
         // Une branche du même nom existe : refusé avant de rien créer (et
         // donc avant que la défaite d'une étape ne l'efface).
-        for d in std::iter::once(&depot).chain(depot_code.as_ref()) {
+        for d in std::iter::once(&depot).filter(|_| !sans_depot).chain(depot_code.as_ref()) {
             if git(d, &["rev-parse", "--verify", "-q", &format!("refs/heads/{branche}")]).is_ok() {
                 return Err(format!("la branche {branche} existe déjà dans {} : une tâche de ce nom n'a pas été fermée", d.display()));
             }
         }
-        let depart = git(&depot, &["rev-parse", "HEAD"])?;
+        let depart = if sans_depot { String::new() } else { git(&depot, &["rev-parse", "HEAD"])? };
         std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
         let defaire = |etape: &str, e: String| -> String {
-            let _ = git(&depot, &["worktree", "remove", "--force", &arbre.to_string_lossy()]);
-            let _ = git(&depot, &["branch", "-D", &branche]);
+            if !sans_depot {
+                let _ = git(&depot, &["worktree", "remove", "--force", &arbre.to_string_lossy()]);
+                let _ = git(&depot, &["branch", "-D", &branche]);
+            }
             if let Some(d) = &depot_code {
                 let _ = git(d, &["worktree", "remove", "--force", &arbre_code.to_string_lossy()]);
                 let _ = git(d, &["branch", "-D", &branche]);
@@ -460,7 +549,9 @@ impl DaemonHost {
             let _ = std::fs::remove_dir_all(&dossier);
             format!("tâche « {nom} » : {etape} : {e}")
         };
-        git(&depot, &["worktree", "add", "-q", "-b", &branche, &arbre.to_string_lossy(), &depart]).map_err(|e| defaire("le worktree", e))?;
+        if !sans_depot {
+            git(&depot, &["worktree", "add", "-q", "-b", &branche, &arbre.to_string_lossy(), &depart]).map_err(|e| defaire("le worktree", e))?;
+        }
         let workspace = match espace {
             None => None,
             Some((racine_principale, permis)) => Some(match &depot_code {
@@ -474,15 +565,29 @@ impl DaemonHost {
                         ecrit: permis,
                         racine_principale,
                         code: Some(DepotDeCode { depot: d.clone(), arbre: arbre_code.clone(), depart: depart_code }),
+                        copie: None,
                     }
                 }
                 None => match racine_principale.strip_prefix(&depot) {
                     // Le code dans le dépôt du backend : sa racine dans le même worktree.
-                    Ok(sous) if git(&racine_principale, &["rev-parse", "--show-toplevel"]).is_ok() => {
-                        WorkspaceDeTache { racine: arbre.join(sous), ecrit: permis, racine_principale: racine_principale.clone(), code: None }
+                    Ok(sous) if !sans_depot && git(&racine_principale, &["rev-parse", "--show-toplevel"]).is_ok() => {
+                        WorkspaceDeTache { racine: arbre.join(sous), ecrit: permis, racine_principale: racine_principale.clone(), code: None, copie: None }
                     }
-                    // Hors de tout dépôt : lue telle quelle, jamais écrite.
-                    _ => WorkspaceDeTache { racine: racine_principale.clone(), ecrit: false, racine_principale, code: None },
+                    // **Hors de tout dépôt** : la tâche travaille dans une copie de
+                    // la racine (reflink quand le disque le sait), relue et
+                    // fusionnée par différence de dossiers.
+                    _ => {
+                        let vers = dossier.join("espace");
+                        let reflink = crate::code_tree::copy(&racine_principale, &vers, true).map_err(|e| defaire("la copie de la racine", e))?;
+                        let (empreintes, octets) = empreintes_de(&vers).map_err(|e| defaire("les empreintes de la copie", e))?;
+                        WorkspaceDeTache {
+                            racine: vers,
+                            ecrit: permis,
+                            racine_principale,
+                            code: None,
+                            copie: Some(CopieDEspace { empreintes, reflink, octets }),
+                        }
+                    }
                 },
             }),
         };
@@ -513,6 +618,7 @@ impl DaemonHost {
             ouverte_ms: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0),
             workspace,
             declarations_hors_depot,
+            sans_depot,
         };
         // Inscrite avant l'ouverture : `open_slot` y lit ses surcharges.
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.clone(), tache.clone());
@@ -571,6 +677,18 @@ impl DaemonHost {
                 });
             }
         }
+        // **Sans git** : la copie contre ses empreintes de départ ; l'avant se lit
+        // dans la racine principale.
+        if let Some(w) = tache.workspace.as_ref().filter(|w| w.copie.is_some()) {
+            for chemin in w.chemins_changes()? {
+                out.push(Changement {
+                    genre: "code",
+                    avant: w.copie.as_ref().and_then(|c| c.empreintes.get(&chemin)).and_then(|_| std::fs::read_to_string(w.racine_principale.join(&chemin)).ok()),
+                    apres: std::fs::read_to_string(w.racine.join(&chemin)).ok(),
+                    chemin,
+                });
+            }
+        }
         Ok(out)
     }
 
@@ -596,6 +714,10 @@ impl DaemonHost {
         for v in tache.volets() {
             base_a_bouge |= git(v.depot, &["rev-parse", "HEAD"])? != v.depart;
         }
+        let copie = tache.workspace.as_ref().filter(|w| w.copie.is_some());
+        if let Some(w) = copie {
+            base_a_bouge |= !w.racine_a_bouge(&[]).is_empty();
+        }
         Ok(json!({
             "tache": tache,
             "fichiers": changements.iter().map(|c| json!({ "genre": c.genre, "path": c.chemin, "avant": c.avant, "apres": c.apres })).collect::<Vec<_>>(),
@@ -603,6 +725,10 @@ impl DaemonHost {
             "composants": composants,
             "temoins": { "chargement": temoin.is_none(), "refus": temoin },
             "base_a_bouge": base_a_bouge,
+            "espace": match copie {
+                Some(w) => json!({ "git": false, "note": SANS_GIT, "octets": w.copie.as_ref().map(|c| c.octets), "reflink": w.copie.as_ref().map(|c| c.reflink) }),
+                None => json!({ "git": true }),
+            },
             "declarations": if tache.declarations_hors_depot {
                 json!({"versionnees": false, "note": "déclarations hors dépôt : non versionnées, non fusionnées"})
             } else {
@@ -628,6 +754,20 @@ impl DaemonHost {
     pub fn fusionner_une_tache(&self, parent: &str, nom: &str, message: &str) -> Result<Value, String> {
         let mut tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
         let message = if message.trim().is_empty() { format!("la tâche {nom}") } else { message.trim().to_string() };
+        // **Sans git** : la racine a-t-elle bougé là où la tâche écrit ? Refusé
+        // avant de rien fusionner, les fichiers nommés.
+        let copie = tache.workspace.clone().filter(|w| w.copie.is_some());
+        let a_recopier = match &copie {
+            Some(w) => {
+                let changes = w.chemins_changes()?;
+                let bouges = w.racine_a_bouge(&changes);
+                if !bouges.is_empty() {
+                    return Err(format!("la racine {} a changé depuis l'ouverture de la tâche, rien n'est fusionné : {}", w.racine_principale.display(), bouges.join(", ")));
+                }
+                changes
+            }
+            None => Vec::new(),
+        };
         for v in tache.volets() {
             git(v.arbre, &["add", "-A"])?;
             if !git(v.arbre, &["status", "--porcelain", "--untracked-files=no"])?.is_empty() {
@@ -646,9 +786,11 @@ impl DaemonHost {
             tetes.push(tete);
         }
         // Les changements vus de la base où la branche est maintenant posée.
-        tache.depart = tetes[0].clone();
+        if !tache.sans_depot {
+            tache.depart = tetes[0].clone();
+        }
         if let Some(c) = tache.workspace.as_mut().and_then(|w| w.code.as_mut()) {
-            c.depart = tetes[1].clone();
+            c.depart = tetes[if tache.sans_depot { 0 } else { 1 }].clone();
         }
         let changements = self.changements(&tache)?;
         let principal = self.hote_par_id(parent)?;
@@ -669,12 +811,28 @@ impl DaemonHost {
             git(v.depot, &["merge", "-q", "--ff-only", &tache.branche])?;
             commits.push(git(v.depot, &["rev-parse", "HEAD"])?);
         }
+        // Sans git : les fichiers changés recopiés dans la racine, les effacés
+        // effacés.
+        if let Some(w) = &copie {
+            for chemin in &a_recopier {
+                let (de, vers) = (w.racine.join(chemin), w.racine_principale.join(chemin));
+                if de.is_file() {
+                    if let Some(d) = vers.parent() {
+                        std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+                    }
+                    std::fs::copy(&de, &vers).map_err(|e| format!("{} → {} : {e}", de.display(), vers.display()))?;
+                } else if vers.exists() {
+                    std::fs::remove_file(&vers).map_err(|e| format!("{} : {e}", vers.display()))?;
+                }
+            }
+        }
         let fusion = commits.last().cloned().unwrap_or_default();
         let fusion_code = (commits.len() > 1).then(|| commits[0].clone());
         let recharge = self.with_backend(&principal, |b| b.reload_reactions())?;
         self.fermer_une_tache(parent, nom)?;
         let fin = json!({
             "nom": nom, "parent": parent, "etat": "fusionnee", "commit": fusion, "commit_code": fusion_code,
+            "recopies": copie.as_ref().map(|_| &a_recopier),
             "message": message, "rechargement": recharge.as_ref().err(),
         });
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
