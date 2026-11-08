@@ -53,6 +53,12 @@ pub struct WorkspaceConfig {
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
     pub commands: CommandGate,
+    /// **La porte ouverte hors des tâches** (Lucie, 8 novembre 2026 : l'atelier « qu'il
+    /// ait commande shell ») : le chat lance des commandes par la porte même hors d'une
+    /// tâche. Pour l'atelier, dont l'espace est le poste et non une branche de code ;
+    /// un dépôt de code garde ses commandes dans ses tâches (défaut : faux).
+    #[serde(default)]
+    pub commands_outside_tasks: bool,
     /// **Des signaux montés sur les entités du schéma nommé** — la clé
     /// EXPLICITE : un signal de plus sur une entité se déclare, il ne
     /// découle pas de `models.sparse` tout seul. Générique : n'importe
@@ -752,6 +758,7 @@ mod tests {
             git_init: false,
             exclude: None,
             commands: CommandGate::Off,
+            commands_outside_tasks: false,
             index_signals: std::collections::BTreeMap::new(),
             sandbox: SandboxConfig::default(),
             index: Some("code".into()),
