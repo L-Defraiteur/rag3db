@@ -108,7 +108,9 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   `trap`), et le délai de `poste lourd` dépasse le sien. Après toute expiration, chercher les
   restes par l'exécutable du target (`readlink /proc/<pid>/exe`) avant de rendre la carte, et les
   arrêter par l'arbre de leurs pids, jamais par nom. Un e2e entier qui embarque en creux est un
-  lourd GPU : il passe quand la carte est à personne.
+  lourd GPU : il passe quand la carte est à personne. Une mesure qui tient la carte longtemps
+  (e2e_charge_ingestion, près de deux heures) s'écarte d'un e2e entier par
+  `RAG3WEAVER_E2E_SAUF="<suite> …"` (dite NON JOUÉE) et se joue seule sous `poste mesure`.
 
 ## Le push (sous `poste push`, dans le worktree de push)
 

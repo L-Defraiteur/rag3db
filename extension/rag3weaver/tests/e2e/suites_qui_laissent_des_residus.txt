@@ -16,8 +16,3 @@ e2e_prise_atomique
 e2e_rag3daemon
 e2e_repli_de_branche
 e2e_rouvrir
-# Intermittents (8 novembre 2026, trois passes par suite) : des TempDir dont l'effacement bute, un
-# fil du backend écrivant encore après son Drop.
-e2e_cited_by docs/tickets/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md
-e2e_juge docs/tickets/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md
-e2e_lectures docs/tickets/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md
