@@ -494,6 +494,10 @@ est_une_suite_a_modele() {
 SUITES_CARTE_LOCALE=(e2e_burn_ e2e_demon_embeddings e2e_mesure_ingestion_code e2e_banc_bge_m3)
 SANS_CARTE_LOCALE="${RAG3WEAVER_SANS_CARTE_LOCALE:-1}"
 ECARTEES_CARTE_LOCALE=()
+# **Les suites écartées à la demande** (`RAG3WEAVER_E2E_SAUF="<suite> …"`, 9 novembre 2026) : une
+# mesure qui tient la carte (e2e_charge_ingestion, près de deux heures) se joue seule, sous
+# `poste mesure`, pas à chaque passe entière. Elles sont dites NON JOUÉES, jamais tues.
+ECARTEES_SAUF=()
 # ── Les bancs à services ────────────────────────────────────────────────────
 #
 # Un banc dont l'objet est un service que la batterie ne pose pas (un
@@ -551,6 +555,10 @@ else
     if [ "$nom" = "e2e_postgres" ] && [ "$PG_DANS_LA_PASSE" = false ]; then
       continue
     fi
+    if [[ " ${RAG3WEAVER_E2E_SAUF:-} " == *" $nom "* ]]; then
+      ECARTEES_SAUF+=("$nom")
+      continue
+    fi
     if [ "$SANS_CARTE_LOCALE" != 0 ] && est_de_la_carte_locale "$nom"; then
       ECARTEES_CARTE_LOCALE+=("$nom")
       continue
@@ -572,6 +580,10 @@ else
   if [ ${#ECARTEES_CARTE_LOCALE[@]} -gt 0 ]; then
     echo "▸ ⚠ ${#ECARTEES_CARTE_LOCALE[@]} suites NON JOUÉES (carte locale, RAG3WEAVER_SANS_CARTE_LOCALE=0 pour les jouer) :"
     echo "    ${ECARTEES_CARTE_LOCALE[*]}"
+  fi
+  if [ ${#ECARTEES_SAUF[@]} -gt 0 ]; then
+    echo "▸ ⚠ ${#ECARTEES_SAUF[@]} suites NON JOUÉES (écartées par RAG3WEAVER_E2E_SAUF) :"
+    echo "    ${ECARTEES_SAUF[*]}"
   fi
   for nom in "${ECARTEES_BANCS[@]}"; do
     echo "▸ ⚠ $nom NON JOUÉE (banc à services : posez $(services_du_banc "$nom") pour la jouer)"
