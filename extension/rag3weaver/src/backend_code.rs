@@ -448,8 +448,8 @@ const BASE_NODES: &[&str] = &[
 
 // Le balayage lit les fichiers de la source : il demande le même droit que
 // `read` et `grep` — c'est pour lui que `search_code` déclare `read_files`.
-const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode"];
-const WRITE_NODES: &[&str] = &["EditFileNode"];
+const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode", "LireFichierNode"];
+const WRITE_NODES: &[&str] = &["EditFileNode", "EcrireFichierNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
 const MODEL_NODES: &[&str] = &["Decide"];
 const WORKTREE_NODES: &[&str] = &["WorktreeNode"];
@@ -495,6 +495,7 @@ pub fn est_un_noeud_reactif(node_type: &str) -> bool {
 /// n'a pas de cas d'usage honnête, et c'est écrit ici plutôt que découvert.
 const HOOK_FORBIDDEN: &[&str] = &[
     "WorktreeNode",
+    "EcrireFichierNode",
     "EntityRecordNode",
     "EntityBatchNode",
     "RelationBatchNode",
