@@ -1883,3 +1883,13 @@ avance d'autant ; les hashs, eux, sont exacts.
   pose à luciepc puis sur le portable ; **hotfixs rejoue sa trace exacte** sous cette lib (7882/7992)
   et un index complet sur une copie : ce vert ferme le ticket de l'index complet (le cœur le ferme).
   Jusqu'à la pose, aucun index complet sur les bases de Lucie.
+- **10 h 3x, lib 29a7bc52a bâtie à luciepc** (G, 10 h 33 : `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-…`,
+  md5 b65cc5be, incrémental de 4 s, csr_node_group.cpp.o recompilé, ABI inchangée ; courant reste
+  9bae60786 jusqu'à la pose). Le cœur a posé ses tickets (833c89539 : l'index complet porte la cause et
+  le départage ; ticket neuf « sous vingt écrivains, un pool plein laisse une annulation inachevée »,
+  318 434 BEGIN refusés jusqu'à la fin du scénario) et prend l'annulation inachevée comme chantier
+  suivant, témoin réduit d'abord. **Incident GPU sans dégât** (G, 10 h 32) : un cinquième service
+  granite-278m sur card2 (82 % de VRAM, quatre services) a mis la carte en reset de ring dès son premier
+  calcul ; les quatre services ont survécu. Règle : plus de cinquième service sur card2 ; le contrôle par
+  l'hôte (copie de code-lourd, index complet sous 29a7bc52a, 0 écart attendu) passe en série sur le
+  7882 d'hotfixs après sa trace, pas sur card0 sans le mot de Lucie. La pose attend ce 0 écart.
