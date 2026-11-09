@@ -330,11 +330,12 @@ pub(super) fn diff_unifie(nom: &str, avant: &str, apres: &str) -> String {
     let max_suffixe = a.len().min(b.len()) - prefixe;
     let suffixe = a.iter().rev().zip(b.iter().rev()).take(max_suffixe).take_while(|(x, y)| x == y).count();
     if prefixe == a.len() && prefixe == b.len() {
-        return format!("--- a/{nom}\n+++ b/{nom}\n(aucun changement)\n");
+        return format!("--- a/{}\n+++ b/{}\n(aucun changement)\n", nom.trim_start_matches('/'), nom.trim_start_matches('/'));
     }
     let debut = prefixe.saturating_sub(CONTEXTE);
     let fin_a = (a.len() - suffixe + CONTEXTE).min(a.len());
     let fin_b = (b.len() - suffixe + CONTEXTE).min(b.len());
+    let nom = nom.trim_start_matches('/');
     let mut out = format!("--- a/{nom}\n+++ b/{nom}\n@@ -{},{} +{},{} @@\n", debut + 1, fin_a - debut, debut + 1, fin_b - debut);
     for l in &a[debut..prefixe] {
         out.push_str(&format!(" {l}\n"));
@@ -383,6 +384,11 @@ pub(super) mod tests {
     }
 
     pub(crate) fn atelier(d: &Path) -> Atelier {
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
+        atelier_avec(d, model)
+    }
+
+    pub(crate) fn atelier_avec(d: &Path, model: ChatModel) -> Atelier {
         let racine = d.join("rw");
         std::fs::create_dir_all(&racine).unwrap();
         let gabarits = d.join("atelier/templates");
@@ -393,7 +399,6 @@ pub(super) mod tests {
         m["workspace"]["root"] = json!(racine.to_string_lossy());
         std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         let racines = crate::code_tree::Roots { config: d.join("config"), data: d.join("data") };
-        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
         let host = Arc::new(hote(d, model).with_racines_de_code(racines).with_runs_root(d.join("runs")));
         host.se_connaitre();
         let h = host.hosted(&manifeste).unwrap();
@@ -526,5 +531,62 @@ pub(super) mod tests {
         let refus = a.appeler("read_scope", json!({ "name": "rien", "path": "notes.txt" })).unwrap_err();
         assert!(refus.contains("sans index") && refus.contains("read_file"), "sous la racine, read_scope dit pourquoi : {refus}");
         attendre_l_index(&a, &depot);
+    }
+
+    /// **L'empreinte de lecture** (Lucie : replace_lines et insert_lines exigent d'avoir lu
+    /// ces lignes dans ce tour ou le précédent) : par de vrais tours de chat dans l'atelier,
+    /// un faux modèle qui suit un script par message.
+    #[test]
+    fn the_workshop_chat_writes_lines_only_after_reading_them_recently() {
+        use crate::llm::{CallbackLlm, Turn};
+        use std::sync::Mutex;
+        // Le script : pour chaque message, les appels dans l'ordre, puis « fait ».
+        let script: Vec<(&str, Vec<(&str, Value)>)> = vec![
+            ("t1", vec![
+                ("replace_lines", json!({ "path": "liste.txt", "from": 2, "to": 2, "text": "DEUX" })),
+                ("read_file", json!({ "path": "liste.txt" })),
+                ("replace_lines", json!({ "path": "liste.txt", "from": 2, "to": 2, "text": "DEUX" })),
+            ]),
+            ("t2", vec![("insert_lines", json!({ "path": "liste.txt", "at": 2, "text": "un et demi" }))]),
+            ("t3", vec![("read_file", json!({ "path": "liste.txt", "offset": 1, "length": 3 }))]),
+            ("t4", vec![("insert_lines", json!({ "path": "liste.txt", "at": 2, "text": "un et demi" }))]),
+            ("t5", vec![]),
+            ("t6", vec![("replace_lines", json!({ "path": "liste.txt", "from": 1, "to": 1, "text": "UN" }))]),
+        ];
+        let resultats: Arc<Mutex<Vec<(String, String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+        let vus = resultats.clone();
+        let script = Arc::new(script.into_iter().map(|(m, c)| (m.to_string(), c.into_iter().map(|(n, a)| (n.to_string(), a)).collect::<Vec<_>>())).collect::<Vec<_>>());
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (script, vus) = (script.clone(), vus.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let message = turns[depuis].content.clone();
+                let faits: Vec<&Turn> = turns[depuis..].iter().filter(|t| t.role == "tool").collect();
+                if let Some(dernier) = faits.last() {
+                    vus.lock().unwrap().push((message.clone(), dernier.tool_name.clone().unwrap_or_default(), dernier.content.clone()));
+                }
+                let appels = script.iter().find(|(m, _)| *m == message).map(|(_, c)| c.clone()).unwrap_or_default();
+                match appels.get(faits.len()) {
+                    Some((nom, args)) => MockLlm::new("").with_tool_calls(vec![(nom.clone(), args.to_string())]).generate(turns, opts, sink),
+                    None => MockLlm::new("fait").generate(turns, opts, sink),
+                }
+            })))
+        });
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier_avec(d.path(), model);
+        std::fs::write(a.racine.join("liste.txt"), "un\ndeux\ntrois\nquatre\ncinq\n").unwrap();
+        for m in ["t1", "t2", "t3", "t4", "t5", "t6"] {
+            a.host.chat_turn(&a.h.id, m).unwrap_or_else(|e| panic!("le tour {m} : {e}"));
+        }
+        let r = resultats.lock().unwrap().clone();
+        let de = |m: &str, outil: &str| -> Vec<String> { r.iter().filter(|(mm, o, _)| mm == m && o == outil).map(|(_, _, c)| c.clone()).collect() };
+        let t1 = de("t1", "replace_lines");
+        assert_eq!(t1.len(), 2, "{r:#?}");
+        assert!(t1[0].contains("relis d'abord") && t1[0].contains("2-2"), "sans lecture, refusé : {}", t1[0]);
+        assert!(t1[1].contains("+DEUX"), "après lecture, écrit : {}", t1[1]);
+        assert!(de("t2", "insert_lines")[0].contains("relis d'abord"), "l'écriture du tour 1 a déplacé les lignes : {r:#?}");
+        assert!(de("t4", "insert_lines")[0].contains("+un et demi"), "lu au tour précédent : écrit : {r:#?}");
+        assert!(de("t6", "replace_lines")[0].contains("relis d'abord"), "lu deux tours plus tôt, puis écrit : refusé : {r:#?}");
+        assert_eq!(std::fs::read_to_string(a.racine.join("liste.txt")).unwrap(), "un\nun et demi\nDEUX\ntrois\nquatre\ncinq\n");
     }
 }
