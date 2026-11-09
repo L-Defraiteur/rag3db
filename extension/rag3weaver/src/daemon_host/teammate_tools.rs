@@ -108,8 +108,10 @@ impl Etanche<'_> {
                 }
             });
             let r = self.host.with_backend(&self.hosted, |b| {
-                let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
-                f(&OutilsDuChat::de(b, &declares, true))
+                let outils = crate::backend_tools::BackendTools { backend: b };
+                let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
+                let du_chat = OutilsDuChat::de(b, &declares, true);
+                f(&du_chat)
             });
             fini.store(true, Ordering::SeqCst);
             r

@@ -503,8 +503,18 @@ impl Garde {
     /// shell, une forme qui ne se lit pas : rien n'est accordé). Sous `code`,
     /// comme `juger_ligne` (le découpage est celui de codeparsers).
     #[cfg(feature = "code")]
+    ///
+    /// La ligne se juge **sans** l'accord de l'utilisateur : jugée « accordée par
+    /// l'utilisateur », la sentinelle autorise la famille entière, et la porte la
+    /// retenait au passage (un oui sur la carte d'accord pour `mkdir faits` laissait
+    /// passer tout `mkdir` ; trouvé par le lot 7 de l'atelier, 9 novembre 2026). Une
+    /// partie refusée (élevée…) refuse la ligne : rien n'est accordé.
     pub fn accorder_ligne(&self, ligne: &str, ctx: &Contexte) -> Result<Vec<String>, String> {
-        let v = self.juger_ligne(ligne, ctx).map_err(|r| r.to_string())?;
+        let sans_accord = Contexte { accorde_par_l_utilisateur: false, ..ctx.clone() };
+        let v = self.juger_ligne(ligne, &sans_accord).map_err(|r| r.to_string())?;
+        if let Some((c, refus)) = v.parties.iter().find(|(_, x)| x.decision == Decision::Refuse) {
+            return Err(format!("`{}` : {}", c.lisible(), refus.motif));
+        }
         let accordees: Vec<String> = v.parties.iter().map(|(c, _)| c.lisible()).collect();
         for c in &accordees {
             self.acquis.accorder_commande(c.clone());
@@ -2307,6 +2317,21 @@ mod tests {
 
     fn ctx_dans(d: &std::path::Path) -> Contexte {
         Contexte { accorde_par_l_utilisateur: false, domaine: Some(d.to_path_buf()) }
+    }
+
+    /// **Un oui accorde la commande exacte, pas sa famille** (lot 7 de l'atelier, 9 novembre
+    /// 2026) : accordée par l'utilisateur, `mkdir faits` passe ; `mkdir autres` demande
+    /// encore.
+    #[test]
+    #[cfg(feature = "code")]
+    fn un_oui_accorde_la_commande_exacte_pas_sa_famille() {
+        let dossier = tempfile::tempdir().unwrap();
+        let g = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(dossier.path());
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..ctx.clone() };
+        assert_eq!(g.accorder_ligne("mkdir faits", &accorde).unwrap(), vec!["mkdir faits".to_string()]);
+        assert_eq!(g.juger(&cmd("mkdir", &["faits"]), &ctx).decision, Decision::Autorise);
+        assert_eq!(g.juger(&cmd("mkdir", &["autres"]), &ctx).decision, Decision::Demande, "le oui ne vaut que pour la commande exacte");
     }
 
     /// **La lecture libre ne sort pas du domaine.** Chaque argument doit se
