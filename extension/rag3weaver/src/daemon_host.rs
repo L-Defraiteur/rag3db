@@ -237,6 +237,9 @@ pub mod worktrees;
 #[cfg(feature = "code")]
 mod atelier_fichiers;
 
+/// L'empreinte de lecture du chat : écrire des lignes exige de les avoir lues.
+mod empreintes;
+
 /// Combien de temps l'arrêt attend que les runs annulés finissent, avant de
 /// fermer les backends quand même (et de le dire).
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
