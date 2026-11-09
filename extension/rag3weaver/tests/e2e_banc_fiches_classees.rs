@@ -16,6 +16,12 @@
 //! décision par fiche, « lequel des candidats, ou aucun » : l'élément porte
 //! `{text, candidats}` et le `decide` prend ses étiquettes par `labels_from`,
 //! plus `aucun` en fixe — tentative 4). Les deux formes se comptent de même.
+//! En forme par fiche, `tentative.json` peut nommer l'étiquette d'abstention
+//! (`"aucun"`, par défaut `aucun`) et une **étiquette de création** (`"creer"`,
+//! tentative 5 : `none | create`, celles de l'outil `archive`) ; une création ne
+//! range la fiche sous aucun sujet et se compte à part : sur une fiche sans
+//! sujet, sur une fiche dont le bon sujet manque aux candidats, ou **fautive**
+//! quand le bon sujet était candidat.
 //! Le jeu est `tests/data/banc-fiches-classees/v1.json` : des sujets,
 //! des fiches, et pour chacune le sujet juste ou `null`. Le banc mesure le rappel
 //! des candidats, les ancrages justes, les **faux ancrages**, les manqués, le
@@ -113,9 +119,21 @@ fn question_fiche(fiche: &Value, candidats: &[Value]) -> String {
     )
 }
 
-/// L'étiquette d'abstention de la forme par fiche, déclarée en `labels` fixes
-/// à côté de `labels_from`.
+/// L'étiquette d'abstention de la forme par fiche quand `tentative.json` n'en
+/// nomme pas, déclarée en `labels` fixes à côté de `labels_from`.
 const AUCUN: &str = "aucun";
+
+/// Les étiquettes fixes d'une tentative par fiche, lues dans `tentative.json` :
+/// l'abstention (`"aucun"`) et la création (`"creer"`, absente avant la
+/// tentative 5).
+fn etiquettes_fixes() -> (String, Option<String>) {
+    let chemin = tentative().join("tentative.json");
+    let Ok(texte) = std::fs::read_to_string(&chemin) else { return (AUCUN.to_string(), None) };
+    let v: Value = serde_json::from_str(&texte).unwrap_or_else(|e| panic!("{} : {e}", chemin.display()));
+    let aucun = v["aucun"].as_str().unwrap_or(AUCUN).to_string();
+    let creer = v["creer"].as_str().map(str::to_string);
+    (aucun, creer)
+}
 
 /// **La forme d'une tentative**, lue dans son `tentative.json` (absent : la
 /// forme des tentatives 1 à 3).
@@ -246,6 +264,12 @@ struct Compte {
     manques: usize,
     fiches_justes: usize,
     abstentions_justes: usize,
+    /// Les créations (tentative 5) : sur une fiche sans sujet, sur une fiche
+    /// dont le bon sujet manque aux candidats, et fautives (le bon sujet était
+    /// candidat).
+    creations_sans_sujet: usize,
+    creations_hors_rappel: usize,
+    creations_fautives: usize,
     ms: u128,
 }
 
@@ -305,7 +329,8 @@ fn le_sujet_d_une_fiche_au_put_memory() {
 
     let mut sortie = json!({"jeu": "v1", "candidats": CANDIDATS, "rappel": [rappel, avec_sujet], "voies": []});
     let forme = forme();
-    eprintln!("  forme de la tentative : {forme:?}");
+    let (aucun, creer) = etiquettes_fixes();
+    eprintln!("  forme de la tentative : {forme:?} ; abstention « {aucun} », création {creer:?}");
     for voie in &voies {
         let mut c = Compte::default();
         let mut lignes = Vec::new();
@@ -313,6 +338,8 @@ fn le_sujet_d_une_fiche_au_put_memory() {
             let gold = f["gold"].as_str();
             // Les sujets que la voie range la fiche dessous.
             let mut oui: Vec<String> = Vec::new();
+            // La voie a demandé une fiche neuve (tentative 5).
+            let mut cree = false;
             match forme {
                 Forme::ParCandidat => {
                     let permises = ["yes".to_string(), "no".to_string()];
@@ -335,14 +362,24 @@ fn le_sujet_d_une_fiche_au_put_memory() {
                     let sujets_candidats: Vec<Value> =
                         noms.iter().map(|n| par_nom(n).expect("un candidat est un sujet du jeu")).collect();
                     let mut permises = noms.clone();
-                    permises.push(AUCUN.to_string());
+                    permises.push(aucun.clone());
+                    if let Some(c) = &creer {
+                        permises.push(c.clone());
+                    }
                     let t = Instant::now();
                     let r = voie
                         .decider(json!({"text": question_fiche(f, &sujets_candidats), "candidats": noms}), &permises)
                         .unwrap_or_else(|e| panic!("{} : la décision n'a pas rendu d'étiquette — {e}", voie.nom));
                     c.ms += t.elapsed().as_millis();
                     c.decisions += 1;
-                    if r.etiquette != AUCUN {
+                    if creer.as_deref() == Some(r.etiquette.as_str()) {
+                        cree = true;
+                        match gold {
+                            None => c.creations_sans_sujet += 1,
+                            Some(g) if noms.iter().any(|n| n == g) => c.creations_fautives += 1,
+                            Some(_) => c.creations_hors_rappel += 1,
+                        }
+                    } else if r.etiquette != aucun {
                         oui.push(r.etiquette.clone());
                     }
                     lignes.push(json!({"claim": f["claim"], "candidats": noms, "gold": gold, "choix": r.etiquette, "proba_verdict": r.proba_verdict}));
@@ -369,7 +406,9 @@ fn le_sujet_d_une_fiche_au_put_memory() {
             };
             if fiche_juste {
                 c.fiches_justes += 1;
-                if gold.is_none() {
+                // Une création sur une fiche sans sujet ne range rien à tort,
+                // mais n'est pas une abstention : elle se compte à part.
+                if gold.is_none() && !cree {
                     c.abstentions_justes += 1;
                 }
             }
@@ -386,6 +425,12 @@ fn le_sujet_d_une_fiche_au_put_memory() {
             c.faux_ancrages,
             c.manques
         );
+        if creer.is_some() {
+            eprintln!(
+                "  créations : {} sur une fiche sans sujet (/{sans_sujet}), {} hors du rappel, FAUTIVES {}",
+                c.creations_sans_sujet, c.creations_hors_rappel, c.creations_fautives
+            );
+        }
         eprintln!(
             "  {} décisions, {} ms ({} ms par décision)",
             c.decisions,
@@ -396,6 +441,7 @@ fn le_sujet_d_une_fiche_au_put_memory() {
             "voie": voie.nom, "tentative": tentative().file_name().map(|n| n.to_string_lossy().to_string()), "forme": format!("{forme:?}"), "fiches": fiches.len(), "fiches_justes": c.fiches_justes,
             "abstentions_justes": c.abstentions_justes, "sans_sujet": sans_sujet,
             "ancrages_justes": c.ancrages_justes, "faux_ancrages": c.faux_ancrages, "manques": c.manques,
+            "creations": {"sans_sujet": c.creations_sans_sujet, "hors_rappel": c.creations_hors_rappel, "fautives": c.creations_fautives},
             "decisions": c.decisions, "ms": c.ms as u64,
             "lignes": lignes,
         }));
