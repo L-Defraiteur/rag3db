@@ -2065,3 +2065,14 @@ avance d'autant ; les hashs, eux, sont exacts.
   bouge. recherche : arret-du-backend-4 (945234559) prêt, `RAG3WEAVER_E2E_SAUF` dans run_e2e.sh, rebase à
   faire sur le lot des bancs de 96 (run_e2e.sh en commun), passe ordinaire dès le rebase, e2e entiers à
   mon « pars ».
+- **13 h 2x, la mesure de l'équipier est faite, et elle est éloquente** (96) : la tâche readme-nouveautes-novembre
+  a passé 12 appels à Gemini ; l'appel 8 a duré **1 004 s avec quatre reprises**, les appels 5 et 7 97 s et
+  64 s ; **16 min 44 s de reculs du client du modèle, dits nulle part** (ni la boîte, ni le journal de l'hôte :
+  le fil dormait en hrtimer_nanosleep). Puis un seul step_done (« Analyse complète des 31 lignes… »), aucun
+  report de verdicts, aucune proposition, et l'hôte a clos la tâche « fait sans plan » sans attendre le
+  superviseur. Trois tickets pour ED (équipier par pas) : le recul du modèle visible et borné (un pas a un
+  budget et dit ce qu'il attend, au-delà il échoue en le disant) ; une tâche ne se dit pas faite sans le
+  livrable demandé ni l'accord de la boîte ; la cause des reculs (code et rythme de Gemini, le quota de
+  Lucie). Pas de relance. Le rejeu des bancs de 96 est vert à 13 h 19 (owed_vectors vert cette fois), tour
+  de push lancé ; archi rebasé sur 99623503c (branche -2, pas de force) en rejeu court, « à toi » au
+  « poussé » de 96.
