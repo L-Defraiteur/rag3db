@@ -86,10 +86,31 @@ branché, il ne retarde rien d'utile, et il suffit pour donner l'envie d'essayer
 | 2, prompt sans code | 0 | ~0 (une regex) | 0 |
 | 3, grep ou read sur le dépôt | 1 (`usages` ou `search_code`) | à mesurer, hors du chemin de la réponse | ≤ 40, au plus tous les cinq outils |
 
-Je n'ai pas encore chiffré `search_code` en plein texte seul par l'hôte du portable. Le rappel des
-fiches, qui lui embarque sa requête, prend 124 à 168 ms quand le service est libre, et
-`recall_apports` 50 à 90 ms. Je m'attends à moins de 200 ms pour le plein texte seul, mais c'est la
-première chose que la mesure dira.
+### La latence de `search_code` en plein texte seul, mesurée (9 novembre, 12 h 45 à 12 h 49)
+
+Le banc :
+- l'hôte du portable (7970) et code-rag3db ;
+- `search_code` avec `options: {signals: ["bm25"], limit: 3}`, sans embarquement ;
+- un appel de chauffe, puis cent requêtes tirées de mes propres `grep` des deux derniers jours,
+  jouées trois fois ;
+- PSI io sous 0,25, et les hooks inchangés.
+
+La latence compte l'aller-retour HTTP et le crochet « Liens » (`links.mmd`), présent dans 20 à 26
+réponses sur 100.
+
+| requêtes | n | p50 | p95 | max |
+|---|---|---|---|---|
+| toutes (motifs de `grep` réels, trois mots au plus) | 100 | 267 à 270 ms | 1 127 à 1 141 ms | 1 620 à 1 686 ms |
+| **formes de code**, celles qui déclencheraient le hook (chemin, `A::b`, `snake_case`, `CamelCase`, identifiant > 6 lettres) | 48 | **258 ms** | **532 ms** | 956 ms |
+| mots courts ou génériques (`code`, `join`, `name =`) | 52 | 289 ms | 1 340 ms | 1 686 ms |
+| phrases entières (premier passage, extracteur trop large) | quelques-unes | | | jusqu'à 7 047 ms |
+
+Ce que j'en tire pour le pas 2 :
+- Le budget de 600 ms couvre environ 95 % des requêtes que le hook enverrait.
+- Il faut tenir la règle de déclenchement : jamais un mot court ou générique, jamais une phrase. Ce
+  sont eux qui font la queue de la distribution.
+- Le crochet « Liens » peut se couper pour cet usage, si la mesure du pas 2 le demande.
+- Le rappel des fiches, qui embarque sa requête, prend 124 à 168 ms quand le service est libre.
 
 ## Comment on le mesure, sur hooks-essai d'abord
 
