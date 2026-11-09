@@ -288,13 +288,17 @@ fn run_level(nodes: &mut [Box<dyn Node>], prepared: Vec<PreparedNode>) -> Vec<Do
     for idx in &wanted {
         slots.push(by_idx.remove(idx));
     }
+    // L'échéance de l'appel (thread-local) suit les nœuds sur leurs fils : un
+    // embarquement sous échéance la lit, où qu'il tourne.
+    let echeance = crate::backend::current_call_deadline();
     std::thread::scope(|scope| {
         let handles: Vec<_> = prepared
             .into_iter()
             .zip(slots)
             .map(|(p, slot)| {
                 let node = slot.expect("un nœud prêt existe dans le graphe");
-                scope.spawn(move || execute_one(node, p))
+                let echeance = echeance.clone();
+                scope.spawn(move || crate::backend::with_call_deadline(echeance, || execute_one(node, p)))
             })
             .collect();
         handles

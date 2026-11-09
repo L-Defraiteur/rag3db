@@ -480,7 +480,11 @@ impl ClientHote {
         if statut == 422 && v["error_kind"] == "deadline" {
             // L'hôte a arrêté le run à son échéance (`cancelled_by: deadline`) :
             // un dépassement, pas un refus.
-            return Err(format!("{route} : délai dépassé côté hôte — {}", v["error"].as_str().unwrap_or("?")));
+            // Ce que l'hôte attendait, s'il le dit (`waiting_on`) : nommé.
+            return Err(match v["waiting_on"].as_str() {
+                Some(a) => format!("{route} : délai dépassé côté hôte — l'hôte attendait {a}"),
+                None => format!("{route} : délai dépassé côté hôte — {}", v["error"].as_str().unwrap_or("?")),
+            });
         }
         if statut != 200 {
             return Err(format!("{route} : refus {statut} — {}", v["error"].as_str().unwrap_or(&v.to_string())));
@@ -1083,9 +1087,15 @@ enum Statut {
     Changee(u64),
 }
 
-/// La ligne du bloc pour un rappel des fiches qui dépasse son budget.
-fn ligne_du_rappel_lent(_err: &str, budget_ms: u64) -> String {
-    format!("Rappel des fiches : pas de réponse en {budget_ms} ms — il continue en fond, son résultat viendra au prochain outil ou au prochain tour.\n")
+/// **La ligne du bloc pour un rappel des fiches qui dépasse son budget** : ce que
+/// l'hôte attendait quand il le dit (`waiting_on`, « l'embarquement de la requête
+/// par <service> : N ms »), sinon le budget seul.
+fn ligne_du_rappel_lent(err: &str, budget_ms: u64) -> String {
+    let suite = "il continue en fond, son résultat viendra au prochain outil ou au prochain tour.";
+    match err.split_once("l'hôte attendait ") {
+        Some((_, a)) => format!("Rappel des fiches : l'hôte attendait {} (budget {budget_ms} ms) — {suite}\n", premiere_ligne(a, 160)),
+        None => format!("Rappel des fiches : pas de réponse en {budget_ms} ms — {suite}\n"),
+    }
 }
 
 fn chemin_de_l_etat(reglage: &Reglage, session_id: &str) -> PathBuf {
