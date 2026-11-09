@@ -95,3 +95,41 @@ Un e2e par outil, sous le jeu large, avec une garde de capacité :
 - `insert_lines` avec une lecture vieille de deux tours est refusé ;
 - un chemin hors de la racine est refusé avec les deux suites ; `ask_permission` accordé ouvre le
   chemin, refusé le garde fermé, et les deux se journalisent.
+
+## Ce qui est fait (9 novembre 2026, branche atelier-lire-ecrire)
+
+Les décisions de c7 sur les quatre questions : une carte d'accord dans le chat, et la boîte reste
+à l'équipier ; un journal des décisions à part ; l'empreinte gardée en mémoire ; à une pose neuve,
+le dossier courant ou `~/rw-code` comme racine, l'atelier déjà posé gardant la sienne ; les noms
+`read_file`, `read_scope`, `replace_text`, `replace_lines`, `insert_lines` et `ask_permission`.
+
+En chemin, deux faits ont ajusté la forme :
+- **Les outils passent par l'hôte** (`LireFichierNode` et `EcrireFichierNode`, par le service des
+  worktrees). L'atelier n'a pas d'index : un chemin pris dans un worktree attaché est servi par le
+  backend de code de ce worktree (son `read_file`, `outline`, `usages`, et son `edit_file`, qui
+  réindexe) ; un autre chemin, sous la racine de l'atelier, se lit et s'écrit sans index.
+- **`workspace.writes_outside_tasks`** (vrai dans l'atelier seul) : hors d'une tâche, le chat
+  gardait aucun outil d'écriture.
+
+**Qui écrit un worktree attaché**, puisque tout arbre inscrit porte `task_writes` (décision de
+c7) :
+- un worktree **né de l'atelier**, créé par `open_branch` et marqué à côté de son manifeste
+  (`ouvert-par-l-atelier`), s'écrit sans question, au nom de l'utilisatrice ;
+- tout autre arbre passe par `ask_permission`. La marque n'est pas dans le manifeste : l'écrire
+  sur un dépôt ouvert le ferait relire, ce qui couperait son index.
+
+| outil | ce qu'il fait |
+|---|---|
+| `read_file` | 200 lignes au plus, la suite dite ; lu par son dépôt dans un worktree attaché |
+| `read_scope` | par `usages` (où) et `outline` (ses bornes) ; un nom inconnu, ambigu (les définitions listées) ou un fichier sans index sont refusés en disant pourquoi |
+| `replace_text` | un ancien texte unique, sinon « N occurrences » ; le diff unifié |
+| `replace_lines`, `insert_lines` | leurs bornes vérifiées ; l'empreinte de lecture (dans `OutilsDuChat`) exige d'avoir lu ces lignes dans ce tour ou le précédent ; une écriture oublie les lectures du fichier |
+| `ask_permission` | une carte d'accord sous l'appel (registre `ui`, kind `accord`) ; `/ide/accords` décide ; un oui ouvre ce chemin pour ce mode (`write` vaut aussi lecture), et chaque décision s'ajoute à `<racine des runs>/decisions.jsonl` (chemin, mode, raison, décision, qui, quand) |
+
+Témoins, tous vus rouges d'abord : sept par le chemin de l'hôte (dans `daemon_host::atelier_fichiers`)
+et un au navigateur (la carte d'accord), plus la règle de la racine (`code_tree`) et
+l'empreinte (`empreintes`).
+
+**Lot suivant** : les commandes en attente de `run_command` sur la même carte, accordées par la
+`Garde` de l'atelier, avec le même journal.
+
