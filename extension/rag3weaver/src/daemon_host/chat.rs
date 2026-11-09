@@ -42,6 +42,9 @@ pub(super) struct ChatEntry {
     /// mémoire seulement — après un redémarrage de l'hôte, inconnu jusqu'au
     /// prochain tour.
     last_call: Option<crate::agent::LastCall>,
+    /// **L'empreinte de lecture** de la conversation (en mémoire : un redémarrage la
+    /// perd, et le modèle relit).
+    empreintes: std::sync::Arc<std::sync::Mutex<super::empreintes::Empreintes>>,
 }
 
 /// Ce qui se garde sur le disque : le manifeste (pour la relecture) et la session.
@@ -183,7 +186,7 @@ impl DaemonHost {
                         self.chats
                             .lock()
                             .unwrap_or_else(|p| p.into_inner())
-                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None, last_call: None });
+                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None, last_call: None, empreintes: Default::default() });
                     }
                     Err(e) => {
                         lignes.push(format!("session de chat de {id} orpheline : {e}"));
@@ -426,13 +429,14 @@ impl DaemonHost {
                 annule.store(true, Ordering::SeqCst);
             })
         };
-        let (mut session, _en_vol) = {
+        let (mut session, _en_vol, empreintes) = {
             let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
             let e = chats.entry(backend_id.to_string()).or_insert_with(|| ChatEntry {
                 manifest: hosted.manifest.clone(),
                 session: ChatSession::default(),
                 busy: None,
                 last_call: None,
+                empreintes: Default::default(),
             });
             if let Some(run) = &e.busy {
                 return Err(format!("un tour est déjà en cours sur ce backend (run {run}) : attendez sa fin, ou arrêtez-le"));
@@ -449,14 +453,16 @@ impl DaemonHost {
                 Err(e) => return Err(e),
             };
             e.busy = Some(run_id.clone());
-            (std::mem::take(&mut e.session), en_vol)
+            (std::mem::take(&mut e.session), en_vol, e.empreintes.clone())
         };
+        // Le numéro de ce tour (l'empreinte de lecture compte « ce tour ou le précédent »).
+        let numero_du_tour = session.turns.iter().filter(|t| t.role == "user").count() + 1;
         let resultat = match step {
             None => self
                 .with_backend(&hosted, |b| {
                     let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
                     let dans_une_tache = b.prepared().surcharges().workspace.is_some();
-                    let outils = OutilsDuChat::de(b, &declares, dans_une_tache);
+                    let outils = OutilsDuChat::de(b, &declares, dans_une_tache).avec_empreinte(empreintes.clone(), numero_du_tour, b.prepared().workspace_root());
                     let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &outils, ecrivent: &outils.ecrivent, repli: None };
                     self.run_chat_turn(tour, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, None)
                 })
@@ -649,6 +655,9 @@ impl Tour<'_> {
 /// éditer.
 pub(crate) struct OutilsDuChat<'a> {
     inner: &'a (dyn crate::agent::ToolBox + Sync),
+    /// L'empreinte de lecture, le numéro du tour et la racine de travail (les chemins
+    /// relatifs s'y joignent), quand la conversation en tient une.
+    empreinte: Option<(std::sync::Arc<std::sync::Mutex<super::empreintes::Empreintes>>, usize, Option<PathBuf>)>,
     /// Les outils qui écrivent les fichiers (proposés dans une tâche).
     pub(crate) ecrivent: HashSet<String>,
     /// Ceux qui ne sont pas proposés, et pourquoi.
@@ -686,7 +695,87 @@ impl<'a> OutilsDuChat<'a> {
                 }
             }
         }
-        Self { inner, ecrivent, retires }
+        Self { inner, ecrivent, retires, empreinte: None }
+    }
+
+    /// Tenir l'empreinte de lecture de la conversation pendant ce tour (`tour` : son
+    /// numéro, à partir de 1).
+    pub(crate) fn avec_empreinte(mut self, e: std::sync::Arc<std::sync::Mutex<super::empreintes::Empreintes>>, tour: usize, racine: Option<PathBuf>) -> Self {
+        self.empreinte = Some((e, tour, racine));
+        self
+    }
+
+    /// **Avant un appel** : `replace_lines` et `insert_lines` exigent une lecture récente
+    /// des lignes visées ; le refus le dit.
+    fn refus_d_empreinte(&self, call: &crate::llm::ToolCall) -> Option<crate::llm::Turn> {
+        let (e, tour, racine) = self.empreinte.as_ref()?;
+        let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+        let n = |k: &str| args[k].as_u64().map(|x| x as usize);
+        let (de, a) = match call.name.as_str() {
+            "replace_lines" => (n("from")?, n("to")?),
+            // Insérer avant `at` : la ligne d'avant lue (la première, pour une insertion en tête).
+            "insert_lines" => {
+                let l = n("at")?.saturating_sub(1).max(1);
+                (l, l)
+            }
+            _ => return None,
+        };
+        let path = args["path"].as_str().unwrap_or_default();
+        let chemin = super::empreintes::cle(racine.as_deref(), path);
+        if e.lock().unwrap_or_else(|p| p.into_inner()).couvre(&chemin, de, a, *tour) {
+            return None;
+        }
+        let pourquoi = format!(
+            "relis d'abord : aucune lecture récente des lignes {de}-{a} de {path} (read_file dans ce tour ou le précédent ; une écriture du fichier oublie ses lectures, et un redémarrage de l'hôte aussi)"
+        );
+        Some(crate::llm::Turn::tool_result(&call.id, &call.name, json!({ "ok": false, "error": pourquoi }).to_string()))
+    }
+
+    /// **Après un appel réussi** : une lecture se note, une écriture oublie les lectures
+    /// du fichier.
+    fn noter_l_empreinte(&self, call: &crate::llm::ToolCall, resultat: &crate::llm::Turn) {
+        let Some((e, tour, racine)) = self.empreinte.as_ref() else { return };
+        let echec = match serde_json::from_str::<Value>(&resultat.content) {
+            Ok(Value::Object(o)) => o.contains_key("error") || o.get("ok") == Some(&json!(false)),
+            _ => false,
+        };
+        if echec {
+            return;
+        }
+        let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+        let path = args["path"].as_str().unwrap_or_default();
+        let mut e = e.lock().unwrap_or_else(|p| p.into_inner());
+        match call.name.as_str() {
+            "read_file" => {
+                let de = args["offset"].as_u64().unwrap_or(1).max(1) as usize;
+                let longueur = args["length"].as_u64().map(|l| l as usize).unwrap_or(crate::dataflow::fichier_nodes::LIGNES_MAX);
+                let longueur = longueur.clamp(1, crate::dataflow::fichier_nodes::LIGNES_MAX);
+                e.noter(super::empreintes::cle(racine.as_deref(), path), de, de + longueur - 1, *tour);
+            }
+            // read_scope dit son fichier et ses bornes : « — <chemin> lignes D-F, ».
+            "read_scope" => {
+                let texte = serde_json::from_str::<Value>(&resultat.content).ok().and_then(|v| v["result"].as_str().map(str::to_string)).unwrap_or_else(|| resultat.content.clone());
+                if let Some(apres) = texte.split(" — ").nth(1) {
+                    if let Some((chemin, reste)) = apres.split_once(" lignes ") {
+                        let bornes: Vec<usize> = reste.split(|c: char| !c.is_ascii_digit()).filter(|x| !x.is_empty()).take(2).filter_map(|x| x.parse().ok()).collect();
+                        if let [de, a] = bornes[..] {
+                            e.noter(super::empreintes::cle(racine.as_deref(), chemin), de, a, *tour);
+                        }
+                    }
+                }
+            }
+            nom if self.ecrivent.contains(nom) => e.oublier(&super::empreintes::cle(racine.as_deref(), path)),
+            _ => {}
+        }
+    }
+
+    fn appeler(&self, call: &crate::llm::ToolCall, f: impl FnOnce() -> crate::llm::Turn) -> crate::llm::Turn {
+        if let Some(r) = self.refus(call).or_else(|| self.refus_d_empreinte(call)) {
+            return r;
+        }
+        let t = f();
+        self.noter_l_empreinte(call, &t);
+        t
     }
 
     fn refus(&self, call: &crate::llm::ToolCall) -> Option<crate::llm::Turn> {
@@ -698,13 +787,13 @@ impl<'a> OutilsDuChat<'a> {
 
 impl crate::agent::ToolBox for OutilsDuChat<'_> {
     fn call(&self, call: &crate::llm::ToolCall) -> crate::llm::Turn {
-        self.refus(call).unwrap_or_else(|| self.inner.call(call))
+        self.appeler(call, || self.inner.call(call))
     }
     fn call_in(&self, call: &crate::llm::ToolCall, run: &str) -> crate::llm::Turn {
-        self.refus(call).unwrap_or_else(|| self.inner.call_in(call, run))
+        self.appeler(call, || self.inner.call_in(call, run))
     }
     fn call_with(&self, call: &crate::llm::ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> crate::llm::Turn {
-        self.refus(call).unwrap_or_else(|| self.inner.call_with(call, run, inv))
+        self.appeler(call, || self.inner.call_with(call, run, inv))
     }
     fn tool_defs(&self) -> Vec<crate::tools::ToolDef> {
         self.inner.tool_defs().into_iter().filter(|d| !self.retires.contains_key(&d.name)).collect()
