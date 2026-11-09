@@ -765,4 +765,93 @@ pub(super) mod tests {
         assert!(lignes[0]["chemin"].as_str().is_some_and(|c| c.ends_with("dehors/a.txt")) && lignes[0]["qui"] == "le témoin" && lignes[0]["quand_ms"].is_u64(), "{journal}");
         assert_eq!(lignes[1]["decision"], "refusé");
     }
+
+    /// **La carte d'accord glisse sous l'appel** (décision de c7, 9 novembre 2026) : dans le
+    /// chat de l'atelier, le modèle demande à lire hors de la racine ; la carte paraît sous
+    /// l'appel (le chemin, le mode, la raison), « accorder » la décide sans recharger la page,
+    /// la décision va au journal ; au tour suivant, la lecture passe.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn the_permission_card_slides_under_the_call_and_grants_the_read() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        use crate::llm::{CallbackLlm, Turn};
+        const TEMOIN: &str = "the_permission_card_slides_under_the_call_and_grants_the_read";
+        let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path().join("rw");
+        std::fs::create_dir_all(&racine).unwrap();
+        let dehors = d.path().join("dehors");
+        std::fs::create_dir_all(&dehors).unwrap();
+        std::fs::write(dehors.join("note.txt"), "la note du dehors\n").unwrap();
+        let gabarits = d.path().join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let manifeste = gabarits.join("backends/atelier/backend.json");
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(racine.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let note = dehors.join("note.txt").display().to_string();
+        let vus: Arc<std::sync::Mutex<Vec<String>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let releve = vus.clone();
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (note, vus) = (note.clone(), releve.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let message = turns[depuis].content.clone();
+                let faits: Vec<&Turn> = turns[depuis..].iter().filter(|t| t.role == "tool").collect();
+                if let Some(t) = faits.last() {
+                    vus.lock().unwrap().push(t.content.clone());
+                }
+                match (message.as_str(), faits.len()) {
+                    ("lis la note", 0) => MockLlm::new("").with_tool_calls(vec![("ask_permission".to_string(), json!({ "path": note, "mode": "read", "reason": "lire la note posée hors de l'atelier" }).to_string())]).generate(turns, opts, sink),
+                    ("c'est accordé", 0) => MockLlm::new("").with_tool_calls(vec![("read_file".to_string(), json!({ "path": note }).to_string())]).generate(turns, opts, sink),
+                    _ => MockLlm::new("fait").generate(turns, opts, sink),
+                }
+            })))
+        });
+        let (runs, chats, taches) = (d.path().join("runs"), d.path().join("chats"), d.path().join("taches"));
+        let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+        let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+            h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_racine_des_taches(taches).with_chat_model(model)
+        });
+        let racine_url = format!("http://{adresse}");
+        let poster = |route: &str, corps: Value| -> Value {
+            let mut r = crate::daemon::agent().post(format!("{racine_url}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
+            serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+        };
+        assert_eq!(poster("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
+        let mut r = crate::daemon::agent().get(format!("{racine_url}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let etat: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        let canon = manifeste.canonicalize().unwrap();
+        let id = etat["backends"].as_array().and_then(|bs| bs.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(canon.as_path()))).and_then(|b| b["id"].as_str()).unwrap().to_string();
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.aller(&format!("{racine_url}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+        n.aller(&format!("{racine_url}/ide/code/{id}/chat"), prete);
+        n.evaluer("document.querySelector('#message').value = 'lis la note'; document.querySelector('#send').click()");
+        n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le premier tour");
+        let carte = "details.outil[data-outil=\"ask_permission\"] + .ui-du-tour .carte-accord";
+        n.attendre(&format!("!!document.querySelector('{carte} button.accorder')"), "la carte d'accord sous l'appel");
+        let texte = n.evaluer(&format!("document.querySelector('{carte}').textContent"));
+        assert!(texte.as_str().is_some_and(|t| t.contains("lire") && t.contains("note.txt") && t.contains("lire la note posée hors de l'atelier")), "{texte}");
+        n.evaluer("window.__pas_rechargee = 1");
+        n.evaluer(&format!("document.querySelector('{carte} button.accorder').click()"));
+        n.attendre(&format!("document.querySelector('{carte}')?.dataset.decision === 'accordé'"), "la carte dit la décision");
+        assert_eq!(n.evaluer("window.__pas_rechargee ?? null"), json!(1), "la page s'est rechargée");
+        let journal = std::fs::read_to_string(d.path().join("runs/decisions.jsonl")).expect("le journal des décisions");
+        assert!(journal.contains("accordé") && journal.contains("l'utilisatrice, dans l'IDE") && journal.contains("note.txt"), "{journal}");
+
+        n.evaluer("document.querySelector('#message').value = \"c'est accordé\"; document.querySelector('#send').click()");
+        n.attendre("document.querySelectorAll('.message.assistant').length === 2 && document.querySelector('#status')?.textContent === 'fini'", "le second tour");
+        assert!(vus.lock().unwrap().iter().any(|c| c.contains("la note du dehors")), "la lecture passe après l'accord : {:?}", vus.lock().unwrap());
+
+        assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine_url}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
 }
