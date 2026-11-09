@@ -668,12 +668,14 @@ impl<'a> OutilsDuChat<'a> {
             .workspace
             .as_ref()
             .is_some_and(|w| w.commands != crate::backend_code::CommandGate::Off && (dans_une_tache || w.commands_outside_tasks));
+        // L'atelier écrit hors des tâches, quand son gabarit le déclare.
+        let ecrit_hors_tache = prepared.manifest.workspace.as_ref().is_some_and(|w| w.writes_outside_tasks);
         for (nom, outil) in &prepared.manifest.tools {
             if outil.policy.run_commands && !porte {
                 retires.insert(nom.clone(), format!("« {nom} » lance des commandes, et le chat n'en lance pas : il lit et édite le code"));
             } else if outil.policy.write_files {
                 ecrivent.insert(nom.clone());
-                if !dans_une_tache {
+                if !dans_une_tache && !ecrit_hors_tache {
                     retires.insert(
                         nom.clone(),
                         format!(

@@ -1,0 +1,9 @@
+%% tool: replace_text
+%% description: Remplacer un texte unique d'un fichier : `old` doit y apparaître exactement une fois (sinon le refus dit combien de fois ; donnez plus de contexte). Rend le diff unifié ; dans un worktree attaché, son index suit.
+%% param: path string! -- Le chemin, relatif à la racine de l'atelier ou absolu.
+%% param: old string! -- L'ancien texte, unique dans le fichier.
+%% param: new string = "" -- Le nouveau texte.
+%% result: ecrire.result
+
+graph LR
+    ecrire["EcrireFichierNode(action='replace_text', path=$path, old=$old, new=$new)"]
