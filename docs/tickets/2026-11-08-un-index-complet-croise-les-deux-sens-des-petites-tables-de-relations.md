@@ -1,6 +1,7 @@
 # Un index complet croise les deux sens des petites tables de relations
 
-- **État** : ouvert (8 novembre 2026, session hotfixs ; premier chantier, devant le lot B)
+- **État** : ouvert (8 novembre 2026, session hotfixs) ; corrigé sur master en 29a7bc52a (9 novembre,
+  cœur c++), à fermer après la pose de la lib et un index complet vert sur une copie
 - **Famille** : moteur
 - **Gravité** : perte — après une réindexation complète, des relations sont fausses en service :
   rattachées au mauvais nœud, présentes dans un seul sens, ou vues deux fois
@@ -126,7 +127,73 @@ et des groupes CSR persistés de longue date, avec des régions à réécrire.
   `~/.cache/rag3db-mesure-g5/trace-9bae/rejoue`. L'instantané de l'index : `hotfixs-trace-9bae` et
   `-controle`. Le cœur passe la recette sous ASAN (`~/.cache/rag3db-moteur-notes/deux-sens-asan/`).
 
+## La cause et le correctif (9 novembre, cœur c++)
+
+hotfixs a réduit le rouge par dichotomie, puis par ddmin. « Lignes 1 à 729, puis CHECKPOINT » est
+vert, « 1 à 730 » est rouge. La ligne 730 est un MERGE qui retrouve une relation existante,
+37654→23480, et réécrit sa propriété `line` : c'est une mise à jour, pas une insertion. Son témoin
+tient en trois relations versées par COPY, un SET et un CHECKPOINT :
+`LateRelTableRewrites.UpdatingACopiedRelKeepsBothDirectionsThroughACheckpoint`, dans
+`test/transaction/concurrence/late_rel_table_rewrites_test.cpp`.
+
+Sous ASAN (lib RelWithDebInfo de 9bae60786), le rejeu reproduit le rouge au chiffre près, sans
+aucune erreur mémoire : c'est une erreur de logique.
+
+Une trace d'étude posée dans le point de reprise, non poussée, a montré la cause. Au sens arrière,
+seize feuilles sont marquées changées pour une seule mise à jour. `mergeRegionsToCheckpoint` les
+remonte en deux régions : 0..16383 au niveau 4, et 16384..24575 au niveau 3. Pour ces régions,
+`populateRegionCSROffsets` recalcule les décalages en serrant les listes et en regroupant les trous
+en fin de région. Sept listes changent de place, celles des nœuds suivants.
+
+| Nœud | Ancien début et longueur | Nouveau début et longueur |
+|---|---|---|
+| 1503 | 12 + 6 | 9 + 6 |
+| 2422 | 20 + 1 | 15 + 1 |
+| 2423 | 21 + 1 | 16 + 1 |
+| 3223 | 23 + 3 | 17 + 3 |
+| 4815 | 27 + 1 | 20 + 1 |
+| 5354 | 29 + 5 | 21 + 5 |
+| 8157 | 36 + 7 | 26 + 7 |
+
+Ce sont exactement les destinations abîmées de la base. `checkpointColumn` sautait toute colonne
+sans mise à jour dans la région. Le voisin, l'identifiant de relation et les autres propriétés
+restaient donc aux anciens décalages, et le nouvel en-tête les lisait ailleurs. De là viennent la
+rangée vide lue comme relation 0 vers le nœud 0, les relations vues deux fois et celles d'un seul
+sens.
+
+**Le correctif**, en 52d73a301 et sur master en 29a7bc52a : une colonne se réécrit aussi dans une
+région où un décalage ou une longueur change (`csrOffsetsMoveInRegion`, qui compare l'ancien et le
+nouvel en-tête nœud par nœud).
+
+**Ce qui a été joué à luciepc** :
+- le témoin est rouge en 813d7eda8, master plus le seul témoin, et vert en 52d73a301 ;
+  LateRelTableRewrites passe en entier, 6 cas ;
+- sous la lib du correctif, la recette réduite, item-2 sur fixture-729, ne donne aucun écart ;
+- « 1 à 796, puis CHECKPOINT » sur coupure-12h06 ne donne aucun écart non plus ;
+- `transaction_test` entier passe : 357 verts, 2 outils sautés ;
+- `concurrence_test` entier : 339 verts, 21 rouges connus, 6 hors known_red.
+
+Les six cas hors known_red ont été rejoués seuls, sur le correctif et sur 813d7eda8. Ils donnent
+les mêmes verdicts des deux côtés : aucun ne dépend du correctif.
+
+| Cas | Seul, sur les deux |
+|---|---|
+| `TwentyWriters.KilledDuringTheCheckpoint` | vert |
+| `TwentyWriters.DdlEveryFifteenSeconds` | vert |
+| `VectorIndexCost.ProductShapeDeleteCost` | vert |
+| `Builds/VectorIndexDeleteCost…/SetInBatchesOf64` | rouge |
+| `Builds/VectorIndexDeleteCost…/SetInBatchesOf64WithRelation` | rouge |
+| `TwentyWriters.DdlEveryMinute` | rouge |
+
+**Ce qui reste, hors de ce lot** : une feuille vide fait remonter le niveau d'une région, parce
+qu'`isWithinDensityBound` divise par une capacité nulle. Avec le correctif, ce n'est plus qu'un
+coût : une région remontée est réécrite juste.
+
 ## La suite
+
+Faits : la dichotomie (1), le témoin (2) et le correctif (3). Il reste la lib du correctif, bâtie
+par G et posée sur les deux postes, puis un index complet vert sur une copie avant de fermer. La
+règle « aucun index complet sur les bases de Lucie » ne se lève qu'à la pose de la lib.
 
 1. La dichotomie sur K pour « lignes 1 à K, puis `CHECKPOINT` » : la plus petite K rouge désigne
    l'écriture dont le point de reprise est fautif (en cours, le 9 novembre ; luciepc avait le disque
