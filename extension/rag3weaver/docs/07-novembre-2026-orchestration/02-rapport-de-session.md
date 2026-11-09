@@ -1969,3 +1969,14 @@ avance d'autant ; les hashs, eux, sont exacts.
   `/ide/accords`, décision suivie par le flux). La carte pour les commandes en attente passe au lot
   suivant. Sa passe complète attend le creux de bge-m3 : `e2e_charge_ingestion` de recherche tient la
   carte à 100 % (7880 → 7879 par le tunnel muet 5 s à /health, service actif).
+- **12 h 23, les deux postes sont sur 29a7bc52a.** luciepc posé à 12 h 12 (réveil vert, bases rouvertes, 0
+  erreur), courant basculé aux deux postes à 12 h 12 min 46. Le portable coupé à 12 h 18 (binaire 78bac6ad,
+  instantané avant-29a7bc52a) ; **le réveil a été refusé deux fois par la garde des services** : le tunnel
+  7980 (bge-m3) ne répond pas en 5 s, la `/sante` de 7879 met 17 s sous `e2e_charge_ingestion` de
+  recherche (plus d'une heure de carte). Tranché (b) : réveil sans la garde, le service étant lent et non
+  absent, l'hôte de Lucie coupé pesant plus ; réveillé à 12 h 23 sur 29a7bc52a (pid 526790, lib lue dans
+  /sante et dans les maps). À nuancer dans la garde : un service lent n'est pas un service absent, le
+  réveil prévient au lieu de refuser. « Portable posé » dit à 96, qui lance son essai d'équipier ; la
+  règle « aucun index complet sur les bases de Lucie » est levée, ses bases gardent leur écart jusqu'à
+  un index complet à son mot. hooks-essai : un `recall_fiches` à 1 046 ms (timeout) à 12 h 13, sans
+  cause lue, à relire au tour suivant.
