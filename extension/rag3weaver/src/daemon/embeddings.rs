@@ -662,7 +662,11 @@ impl DaemonEmbedder {
     }
 
     fn envoyer_corps(&self, route: &str, corps: serde_json::Value) -> Result<serde_json::Value, EmbedError> {
-        let texte = poster(&self.agent, &self.base, route, corps.to_string()).map_err(|e| match e {
+        self.envoyer_par(&self.agent, route, corps)
+    }
+
+    fn envoyer_par(&self, agent: &ureq::Agent, route: &str, corps: serde_json::Value) -> Result<serde_json::Value, EmbedError> {
+        let texte = poster(agent, &self.base, route, corps.to_string()).map_err(|e| match e {
             DaemonError::SansReponse { .. } => EmbedError::Timeout,
             e => EmbedError::ProviderError(e.to_string()),
         })?;
@@ -672,7 +676,25 @@ impl DaemonEmbedder {
 
 impl Embedder for DaemonEmbedder {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
-        let v = self.envoyer("/embed", texts)?;
+        // **Sous l'échéance d'un appel** (le `/call` d'un hook, `deadline_ms`) :
+        // l'attente du service est bornée au temps qui reste, et ce qu'on attendait
+        // est noté dans l'échéance, pour que la réponse « deadline » le dise
+        // (c7, 9 novembre 2026). Hors d'un appel (une indexation), rien ne change.
+        let v = match crate::backend::current_call_deadline() {
+            Some(d) if d.at.saturating_duration_since(std::time::Instant::now()) < self.delai => {
+                let reste = d.at.saturating_duration_since(std::time::Instant::now()).max(std::time::Duration::from_millis(1));
+                let debut = std::time::Instant::now();
+                match self.envoyer_par(&super::agent_with_timeout(reste), "/embed", serde_json::json!({ "texts": texts })) {
+                    Err(EmbedError::Timeout) => {
+                        let attente = format!("l'embarquement de la requête par {} : {} ms", self.adresse, debut.elapsed().as_millis());
+                        *d.waiting.lock().unwrap_or_else(|p| p.into_inner()) = Some(attente);
+                        return Err(EmbedError::Timeout);
+                    }
+                    r => r?,
+                }
+            }
+            _ => self.envoyer("/embed", texts)?,
+        };
         serde_json::from_value(v["vectors"].clone())
             .map_err(|e| EmbedError::ProviderError(format!("champ 'vectors' : {e}")))
     }

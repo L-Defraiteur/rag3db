@@ -760,14 +760,21 @@ impl DaemonHost {
             waiting: Default::default(),
         });
         let frappe = echeance.as_ref().map(|d| d.fired.clone());
+        let attente = echeance.as_ref().map(|d| d.waiting.clone());
         let mut reponse = crate::backend::with_call_deadline(echeance, || self.call_sans_delai(session, manifest, name, arguments));
         if let (Some(ms), Some(frappe)) = (deadline_ms, frappe) {
             if frappe.load(std::sync::atomic::Ordering::SeqCst) {
+                // Ce que l'appel attendait à l'échéance, s'il le sait.
+                let attendait = attente.and_then(|a| a.lock().unwrap_or_else(|p| p.into_inner()).clone());
                 reponse = json!({
                     "ok": false,
-                    "error": format!("délai dépassé ({ms} ms) : l'hôte a arrêté « {name} » à son échéance (cancelled_by « deadline »)"),
+                    "error": match &attendait {
+                        Some(a) => format!("délai dépassé ({ms} ms) : l'hôte attendait {a} ; il a arrêté « {name} » à son échéance (cancelled_by « deadline »)"),
+                        None => format!("délai dépassé ({ms} ms) : l'hôte a arrêté « {name} » à son échéance (cancelled_by « deadline »)"),
+                    },
                     "error_kind": "deadline",
                     "transient": true,
+                    "waiting_on": attendait,
                 });
             }
         }
