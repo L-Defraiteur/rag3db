@@ -2081,3 +2081,14 @@ avance d'autant ; les hashs, eux, sont exacts.
   contrôles, pas de Rust. « À toi » à archi (le délai des témoins de l'hôte), recherche prend la carte à
   son « poussé ». 96 pousse la page de mesure de l'équipier et ses trois tickets en docs seules, puis dit
   ce que M8 (templates upgrade) couvre avant de partir.
+- **13 h 2x, archi a poussé 8efd3eeb0** (le délai des témoins de l'hôte, le ticket du 8 fermé, le ticket des
+  cinq clients de production sans délai ouvert) : rejeu court vert sur 99623503c, rebase sans rejeu sur les
+  docs et scripts de 96, trois contrôles. L'atelier rebasé dessus (atelier-lire-ecrire-2, f89f8fefd : les
+  requêtes du témoin de la carte par `agent_de_temoin()`), passe complète en cours. « Pars » à recherche
+  pour arret-du-backend, la carte est à elle. 96 a poussé 6a4d55d13 (page de l'équipier et trois tickets ;
+  la fin sans livrable vient de la règle de teammate.rs « aucun plan vivant + step_done = fin », remaining
+  ignoré) et écrit la page de M8 en s'appuyant sur le gabarit vivant d'ED. **La CI de master est rouge
+  depuis 12 h 45** (run de ce972f028, docs seules) sur le même témoin que le rejeu de 96 et que la nuit :
+  `owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it` (worktrees.rs:1795), non déterministe,
+  dont le correctif des réclamations d'ED attend l'approbation de Lucie depuis le matin ; les runs d'après
+  sont remplacés (cancelled). Rien d'autre n'est rouge.
