@@ -109,7 +109,7 @@ En chemin, deux faits ont ajusté la forme :
   backend de code de ce worktree (son `read_file`, `outline`, `usages`, et son `edit_file`, qui
   réindexe) ; un autre chemin, sous la racine de l'atelier, se lit et s'écrit sans index.
 - **`workspace.writes_outside_tasks`** (vrai dans l'atelier seul) : hors d'une tâche, le chat
-  gardait aucun outil d'écriture.
+  ne gardait aucun outil d'écriture.
 
 **Qui écrit un worktree attaché**, puisque tout arbre inscrit porte `task_writes` (décision de
 c7) :
