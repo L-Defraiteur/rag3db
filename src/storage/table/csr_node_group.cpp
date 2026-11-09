@@ -877,14 +877,38 @@ void CSRNodeGroup::redistributeCSRRegions(const CSRNodeGroupCheckpointState& csr
     csrState.newHeader->finalizeCSRRegionEndOffsets(rightCSROffsetOfRegions);
 }
 
+// Une région réécrite peut voir ses listes changer de place sans changer de contenu : une région
+// remontée à un niveau plus haut (isWithinDensityBound) reçoit des décalages recalculés
+// (populateRegionCSROffsets), les trous regroupés en fin de région. Une colonne sans mise à jour
+// dans la région garde alors ses rangées aux anciens décalages, et le nouvel en-tête les lit
+// ailleurs : la liste d'un nœud désigne les rangées d'un autre (le ticket
+// 2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations, une mise à jour
+// seule dans la région 22 du sens arrière déplaçait les listes des régions 1 à 8). Dans une telle
+// région, toutes les colonnes se réécrivent.
+static bool csrOffsetsMoveInRegion(const CSRNodeGroupCheckpointState& csrState,
+    const CSRRegion& region) {
+    for (auto nodeOffset = region.leftNodeOffset; nodeOffset <= region.rightNodeOffset;
+        nodeOffset++) {
+        if (csrState.oldHeader->getStartCSROffset(nodeOffset) !=
+                csrState.newHeader->getStartCSROffset(nodeOffset) ||
+            csrState.oldHeader->getCSRLength(nodeOffset) !=
+                csrState.newHeader->getCSRLength(nodeOffset)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::unique_ptr<ColumnChunk> CSRNodeGroup::checkpointColumn(const ChunkedGroups& groups,
     column_id_t columnID, idx_t checkpointColumnIdx, const CSRNodeGroupCheckpointState& csrState,
     const std::vector<CSRRegion>& regions) const {
     std::vector<ChunkCheckpointState> chunkCheckpointStates;
     chunkCheckpointStates.reserve(regions.size());
     for (auto& region : regions) {
-        if (!region.needCheckpointColumn(checkpointColumnIdx)) {
-            // Skip checkpoint for the column if it has no changes in the region.
+        if (!region.needCheckpointColumn(checkpointColumnIdx) &&
+            !csrOffsetsMoveInRegion(csrState, region)) {
+            // Skip checkpoint for the column if it has no changes in the region and its rows stay
+            // where they are.
             continue;
         }
         auto regionCheckpointStates =
