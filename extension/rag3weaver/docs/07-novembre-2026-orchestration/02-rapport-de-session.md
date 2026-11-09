@@ -2038,3 +2038,12 @@ avance d'autant ; les hashs, eux, sont exacts.
   recherche rejoue sans lui (SUITES_EN_PLUS=e2e_archiviste) et le dit dans son verdict. Son témoin de
   résidus a jugé toutes les suites : e2e_lectures « résidu connu » avec ticket, e2e_code dette déclarée,
   e2e_archiviste et le banc propres. bge-m3 rendu à 13 h 03 ; archi fait d'abord son mini-lot du délai.
+- **13 h 0x, le mini-lot du délai d'archi est prêt** (`delai-des-temoins-de-l-hote`, 054edbc7e) : rouge joué
+  (un faux hôte qui accepte et ne répond jamais : sur master la sonde attend encore à 20 s, avec le
+  correctif elle rend la main à 10 s en le disant), `demander` borné, les clients des témoins de l'hôte
+  passent par `agent_de_temoin()` bornés à 120 s pour la connexion, l'envoi et l'attente (le corps libre
+  pour les flux de l'IDE), le témoin de l'hôte inactif juge son délai depuis la dernière sonde ; le ticket
+  du 8 (`un-test-de-l-hote-attend-son-hote-par-un-client-sans-delai`) fermé dans le lot. Cinq clients de
+  production sans délai signalés (code_tree, daemon_client, daemon_lifecycle ×2, daemon/db) : ticket dans
+  le même lot, question de conception pour Lucie. **File de push** : recherche (dernier pas), 96 (les bancs
+  hors de l'e2e entier, aeb55ea1f), archi (le délai), puis sa passe de l'atelier.
