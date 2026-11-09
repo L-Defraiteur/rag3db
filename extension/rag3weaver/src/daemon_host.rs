@@ -1768,6 +1768,9 @@ mod navigateur;
 mod apercu_a_chaud;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sur_un_depot;
+/// L'IDE par le flux : ce que la page demande à l'hôte hors du flux.
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_par_le_flux;
 /// Mes recherches, avec les clics (8 novembre 2026).
 #[cfg(all(test, unix, feature = "code"))]
 mod mes_recherches;
