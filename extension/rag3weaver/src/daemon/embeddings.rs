@@ -967,6 +967,49 @@ mod tests {
         panic!("le démon n'a pas répondu");
     }
 
+    /// Un service qui dort `.0` avant de répondre : le granite saturé du 8 novembre (19 s par
+    /// texte), en petit.
+    #[derive(Debug)]
+    struct Lent(std::time::Duration);
+
+    impl Embedder for Lent {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            std::thread::sleep(self.0);
+            Ok(texts.iter().map(|_| vec![0.0; 4]).collect())
+        }
+        fn dim(&self) -> usize {
+            4
+        }
+        fn name(&self) -> &str {
+            "lent"
+        }
+    }
+
+    /// **Sous l'échéance d'un appel, l'embarquement rend la main à l'échéance et dit
+    /// ce qu'il attendait** (c7, 9 novembre 2026 : le rappel des hooks disait
+    /// « l'hôte ne répond pas » pendant que l'hôte attendait un service lent) : le
+    /// service dort 3 s, l'appel porte 400 ms ; l'embarquement échoue en délai
+    /// avant 1,5 s, et l'échéance garde « l'embarquement de la requête par
+    /// <adresse> : N ms ». Hors d'un appel, rien ne change.
+    #[test]
+    fn sous_une_echeance_l_embarquement_rend_la_main_et_dit_ce_qu_il_attendait() {
+        let adresse = demon(EmbedDaemon::new(Arc::new(Lent(std::time::Duration::from_secs(3)))));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let echeance = crate::backend::CallDeadline {
+            at: std::time::Instant::now() + std::time::Duration::from_millis(400),
+            ms: 400,
+            fired: Default::default(),
+            waiting: Default::default(),
+        };
+        let attente = echeance.waiting.clone();
+        let debut = std::time::Instant::now();
+        let r = crate::backend::with_call_deadline(Some(echeance), || c.embed(&["une requête".to_string()]));
+        assert!(debut.elapsed() < std::time::Duration::from_millis(1500), "l'embarquement n'a pas rendu la main à l'échéance : {:?}", debut.elapsed());
+        assert!(matches!(r, Err(EmbedError::Timeout)), "{r:?}");
+        let dit = attente.lock().unwrap().clone().unwrap_or_default();
+        assert!(dit.starts_with(&format!("l'embarquement de la requête par {adresse} : ")) && dit.ends_with(" ms"), "{dit:?}");
+    }
+
     #[test]
     fn il_se_nomme_et_dit_sa_dimension() {
         let adresse = demon(EmbedDaemon::new(Arc::new(Regle(8))));

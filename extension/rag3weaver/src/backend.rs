@@ -2828,6 +2828,14 @@ pub struct CallDeadline {
     pub at: std::time::Instant,
     pub ms: u64,
     pub fired: Arc<std::sync::atomic::AtomicBool>,
+    /// **Ce que l'appel attendait à son échéance**, s'il le sait (« l'embarquement
+    /// de la requête par <service> : N ms ») : la réponse « deadline » le dit.
+    pub waiting: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+/// L'échéance de l'appel en cours dans ce fil, s'il en porte une.
+pub fn current_call_deadline() -> Option<CallDeadline> {
+    DEADLINE_OF_CALL.with(|c| c.borrow().clone())
 }
 
 thread_local! {
