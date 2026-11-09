@@ -186,6 +186,10 @@ pub struct DaemonHost {
     /// tâche à rôle), par (dépôt, run) : le journal ne garde que des runs finis,
     /// qui ne changent plus ; un rendu ne relit que les runs nouveaux.
     resumes_des_runs: Mutex<HashMap<(String, String), Option<Value>>>,
+    /// **Les accords de l'atelier** (ask_permission) : les demandes et les chemins ouverts,
+    /// en mémoire (un redémarrage les ferme ; le journal des décisions les garde).
+    #[cfg(feature = "code")]
+    accords: Mutex<atelier_fichiers::Accords>,
     /// La racine des sessions de chat (`RAG3WEAVER_CHATS_DIR`).
     chats_root: PathBuf,
     /// Ce qui donne le modèle d'un backend.
@@ -308,6 +312,8 @@ impl DaemonHost {
             chats: Mutex::new(std::collections::BTreeMap::new()),
             orphan_chats: Mutex::new(Vec::new()),
             resumes_des_runs: Mutex::new(HashMap::new()),
+            #[cfg(feature = "code")]
+            accords: Mutex::new(Default::default()),
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
             chat_meter: Arc::new(crate::meter::Meter::new()),

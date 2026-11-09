@@ -13,6 +13,25 @@ use serde_json::{json, Value};
 use super::{DaemonHost, Hosted};
 use crate::dataflow::fichier_nodes::Edition;
 
+/// **Une demande d'accord** (ask_permission) : le chemin, le mode, la raison du modèle, et
+/// la décision quand elle est prise.
+#[derive(Debug, Clone)]
+pub(super) struct Demande {
+    pub chemin: PathBuf,
+    pub mode: String,
+    pub raison: String,
+    pub decision: Option<bool>,
+}
+
+/// Les demandes et les chemins ouverts de l'atelier.
+#[derive(Debug, Default)]
+pub(super) struct Accords {
+    demandes: std::collections::HashMap<String, Demande>,
+    /// Les chemins accordés et leur mode (`read` ou `write` ; `write` vaut aussi lecture).
+    ouverts: Vec<(PathBuf, String)>,
+    suivant: u64,
+}
+
 /// Le worktree attaché qui contient un chemin : son backend, sa racine, son dépôt et sa
 /// branche.
 pub(super) struct Worktree {
@@ -54,12 +73,12 @@ fn canonique(p: &Path) -> PathBuf {
 impl DaemonHost {
     /// **Résoudre un chemin de l'atelier** : relatif à sa racine, ou absolu (`~/`
     /// s'étend) ; refusé hors de la racine, avec les deux suites que le modèle a.
-    pub(super) fn atelier_resoudre(&self, racine: Option<&Path>, path: &str) -> Result<Resolu, String> {
+    pub(super) fn atelier_resoudre(&self, racine: Option<&Path>, path: &str, mode: &str) -> Result<Resolu, String> {
         let racine = racine.ok_or("l'atelier n'a pas de racine de travail (`workspace.root`)")?;
         let racine = canonique(racine);
         let p = crate::backend_code::etendre_tilde(path.trim());
         let chemin = canonique(&if p.is_absolute() { p } else { racine.join(p) });
-        if !chemin.starts_with(&racine) {
+        if !chemin.starts_with(&racine) && !self.accorde(&chemin, mode) {
             return Err(format!(
                 "{} est hors de la racine de l'atelier ({}). Deux suites : déclarer l'espace (attach_worktree ou open_branch sur le worktree qui le contient), ou demander l'accord de l'utilisateur (ask_permission, avec la raison).",
                 chemin.display(),
@@ -92,14 +111,100 @@ impl DaemonHost {
     /// `open_branch`, marqué à côté de son manifeste), ou si l'utilisatrice l'a accordé
     /// (ask_permission) ; sinon non (décision de c7, 9 novembre 2026 : `task_writes` garde
     /// son sens pour l'arbre qu'elle tient).
-    fn atelier_peut_ecrire(&self, w: &Worktree, _chemin: &Path) -> bool {
+    fn atelier_peut_ecrire(&self, w: &Worktree, chemin: &Path) -> bool {
+        if self.accorde(chemin, "write") {
+            return true;
+        }
         let Ok(racines) = self.racines_de_code() else { return false };
         crate::code_tree::name_of_tree(&w.racine).is_ok_and(|nom| racines.marque_de_l_atelier(&nom).is_file())
     }
 
+    /// Un accord couvre-t-il ce chemin pour ce mode ? (`write` vaut aussi lecture.)
+    fn accorde(&self, chemin: &Path, mode: &str) -> bool {
+        let a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
+        a.ouverts.iter().any(|(p, m)| chemin.starts_with(p) && (m == "write" || m == mode))
+    }
+
+    /// **Demander l'accord** (`ask_permission`) : la demande gardée, sa carte rendue.
+    pub(super) fn atelier_demander(&self, racine: Option<&Path>, path: &str, mode: &str, raison: &str) -> Result<crate::dataflow::worktree_nodes::WorktreeAnswer, String> {
+        if !matches!(mode, "read" | "write") {
+            return Err(format!("ask_permission : le mode est « read » ou « write » (reçu « {mode} »)"));
+        }
+        if raison.trim().is_empty() {
+            return Err("ask_permission : donnez la raison (`reason`) : l'utilisatrice décide sur elle".into());
+        }
+        let p = crate::backend_code::etendre_tilde(path.trim());
+        let chemin = canonique(&match (p.is_absolute(), racine) {
+            (false, Some(r)) => r.join(p),
+            _ => p,
+        });
+        let id = {
+            let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
+            a.suivant += 1;
+            let id = format!("accord-{}-{}", crate::events::maintenant_ms(), a.suivant);
+            a.demandes.insert(id.clone(), Demande { chemin: chemin.clone(), mode: mode.to_string(), raison: raison.trim().to_string(), decision: None });
+            id
+        };
+        let mot = if mode == "write" { "écrire" } else { "lire" };
+        Ok(crate::dataflow::worktree_nodes::WorktreeAnswer {
+            text: format!(
+                "Demande {id} posée : {mot} {} ({}). L'utilisatrice accorde ou refuse sur la carte sous ce message ; attendez sa réponse, puis réessayez.",
+                chemin.display(),
+                raison.trim()
+            ),
+            ui: vec![json!({ "kind": "accord", "sujets": ["accords"], "id": id, "chemin": chemin, "mode": mode, "raison": raison.trim() })],
+        })
+    }
+
+    /// **Décider une demande** : un oui ouvre le chemin pour ce mode ; la décision va au
+    /// journal des décisions (`<racine des runs>/decisions.jsonl`, une ligne) et au flux
+    /// (`accords`).
+    pub fn decider_accord(&self, id: &str, accorder: bool, qui: &str) -> Result<Value, String> {
+        let d = {
+            let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
+            let d = a.demandes.get_mut(id).ok_or_else(|| format!("aucune demande {id}"))?;
+            if let Some(deja) = d.decision {
+                return Err(format!("la demande {id} est déjà {}", if deja { "accordée" } else { "refusée" }));
+            }
+            d.decision = Some(accorder);
+            let d = d.clone();
+            if accorder {
+                a.ouverts.push((d.chemin.clone(), d.mode.clone()));
+            }
+            d
+        };
+        let ligne = json!({
+            "id": id,
+            "genre": "chemin",
+            "chemin": d.chemin,
+            "mode": d.mode,
+            "raison": d.raison,
+            "decision": if accorder { "accordé" } else { "refusé" },
+            "qui": qui,
+            "quand_ms": crate::events::maintenant_ms(),
+        });
+        let journal = self.journal.racine().join("decisions.jsonl");
+        if let Some(dir) = journal.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
+        }
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&journal).map_err(|e| format!("{} : {e}", journal.display()))?;
+        writeln!(f, "{ligne}").map_err(|e| format!("{} : {e}", journal.display()))?;
+        self.ide_flux().publier("accords", "*", json!({ "kind": "AccordDecide", "id": id, "decision": ligne["decision"], "chemin": d.chemin, "mode": d.mode }));
+        Ok(ligne)
+    }
+
+    /// L'état d'une demande (la carte relue après un rechargement).
+    pub fn etat_accord(&self, id: &str) -> Option<Value> {
+        let a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
+        a.demandes.get(id).map(|d| {
+            json!({ "id": id, "chemin": d.chemin, "mode": d.mode, "raison": d.raison, "decision": d.decision.map(|x| if x { "accordé" } else { "refusé" }) })
+        })
+    }
+
     /// **Lire un fichier de l'atelier** (`read_file`) : 200 lignes au plus, la suite dite.
     pub(super) fn atelier_lire(&self, racine: Option<&Path>, path: &str, offset: usize, length: usize) -> Result<String, String> {
-        let r = self.atelier_resoudre(racine, path)?;
+        let r = self.atelier_resoudre(racine, path, "read")?;
         if let Some(w) = &r.worktree {
             let rel = r.chemin.strip_prefix(&w.racine).unwrap_or(&r.chemin).to_string_lossy().to_string();
             let v = self.with_backend(&w.hosted, |b| b.call("read_file", json!({ "path": rel, "offset": offset, "limit": length }))).and_then(|x| x)?;
@@ -147,7 +252,7 @@ impl DaemonHost {
         let (worktrees, rel_voulu): (Vec<Worktree>, Option<String>) = if path.trim().is_empty() {
             (self.worktrees_attaches(), None)
         } else {
-            let r = self.atelier_resoudre(racine, path)?;
+            let r = self.atelier_resoudre(racine, path, "read")?;
             let Some(w) = r.worktree else {
                 return Err(format!(
                     "{} est sous la racine de l'atelier, sans index : read_scope ne connaît que les worktrees attachés ; lisez-le par read_file",
@@ -222,7 +327,7 @@ impl DaemonHost {
     /// neuf calculé, écrit (par le dépôt s'il est dans un worktree attaché, qui le
     /// réindexe), et le diff unifié rendu.
     pub(super) fn atelier_ecrire(&self, racine: Option<&Path>, path: &str, edition: Edition) -> Result<String, String> {
-        let r = self.atelier_resoudre(racine, path)?;
+        let r = self.atelier_resoudre(racine, path, "write")?;
         let avant = match std::fs::read_to_string(&r.chemin) {
             Ok(t) => t,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && matches!(edition, Edition::Insertion { avant: 1, .. }) => String::new(),
@@ -615,5 +720,49 @@ pub(super) mod tests {
         // sous la racine et s'écrit sans index ; attaché, il demanderait l'accord (témoin
         // the_workshop_replaces_a_unique_text_and_says_the_diff).
         attendre_l_index(&a, &frere);
+    }
+
+    /// **`ask_permission`** (décision de c7, 9 novembre 2026) : hors de la racine, ou sur un
+    /// arbre que tient l'utilisatrice, le modèle demande l'accord ; la demande rend une carte
+    /// d'accord (`ui`), l'utilisatrice accorde ou refuse ; un oui ouvre ce chemin pour ce
+    /// mode, un non le garde fermé ; chaque décision va au journal des décisions (une ligne,
+    /// à côté des runs), avec le chemin, le mode, la raison du modèle, qui, quand.
+    #[test]
+    fn a_permission_asked_by_the_workshop_opens_the_path_only_when_granted() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let dehors = d.path().join("dehors");
+        std::fs::create_dir_all(&dehors).unwrap();
+        std::fs::write(dehors.join("a.txt"), "hors de la racine\n").unwrap();
+        std::fs::write(dehors.join("b.txt"), "aussi\n").unwrap();
+        let refus = a.appeler("read_file", json!({ "path": dehors.join("a.txt") })).unwrap_err();
+        assert!(refus.contains("hors de la racine") && refus.contains("ask_permission"), "{refus}");
+
+        let demande = a.appeler("ask_permission", json!({ "path": dehors.join("a.txt"), "mode": "read", "reason": "lire la note posée hors de l'atelier" })).expect("ask_permission");
+        let carte = demande["ui"][0].clone();
+        assert_eq!(carte["kind"], "accord", "la carte d'accord sous l'appel : {demande}");
+        let id = carte["id"].as_str().expect("l'id de la demande").to_string();
+        assert!(Atelier::texte(&demande).contains(&id), "le modèle a l'id : {demande}");
+        // Rien n'est ouvert avant la décision.
+        assert!(a.appeler("read_file", json!({ "path": dehors.join("a.txt") })).is_err());
+        a.host.decider_accord(&id, true, "le témoin").expect("accorder");
+        let r = a.appeler("read_file", json!({ "path": dehors.join("a.txt") })).expect("lu après l'accord");
+        assert!(Atelier::texte(&r).contains("hors de la racine"), "{r}");
+        // Un accord de lecture n'ouvre pas l'écriture.
+        assert!(a.appeler("replace_text", json!({ "path": dehors.join("a.txt"), "old": "hors", "new": "dans" })).is_err());
+
+        let demande = a.appeler("ask_permission", json!({ "path": dehors.join("b.txt"), "mode": "write", "reason": "corriger b" })).unwrap();
+        let id2 = demande["ui"][0]["id"].as_str().unwrap().to_string();
+        a.host.decider_accord(&id2, false, "le témoin").expect("refuser");
+        assert!(a.appeler("replace_text", json!({ "path": dehors.join("b.txt"), "old": "aussi", "new": "non" })).is_err(), "un refus garde fermé");
+        assert_eq!(std::fs::read_to_string(dehors.join("b.txt")).unwrap(), "aussi\n");
+
+        let journal = std::fs::read_to_string(d.path().join("runs/decisions.jsonl")).expect("le journal des décisions");
+        let lignes: Vec<Value> = journal.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(lignes.len(), 2, "{journal}");
+        assert_eq!((lignes[0]["decision"].clone(), lignes[0]["mode"].clone()), (json!("accordé"), json!("read")), "{journal}");
+        assert_eq!(lignes[0]["raison"], "lire la note posée hors de l'atelier");
+        assert!(lignes[0]["chemin"].as_str().is_some_and(|c| c.ends_with("dehors/a.txt")) && lignes[0]["qui"] == "le témoin" && lignes[0]["quand_ms"].is_u64(), "{journal}");
+        assert_eq!(lignes[1]["decision"], "refusé");
     }
 }

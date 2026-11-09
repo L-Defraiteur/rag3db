@@ -714,6 +714,10 @@ impl WorktreeHost for HoteDesWorktrees {
         self.hote()?.atelier_lire_scope(racine, name, path).map(WorktreeAnswer::from)
     }
 
+    fn ask(&self, racine: Option<&Path>, path: &str, mode: &str, reason: &str) -> Result<WorktreeAnswer, String> {
+        self.hote()?.atelier_demander(racine, path, mode, reason)
+    }
+
     fn edit(&self, racine: Option<&Path>, path: &str, edition: crate::dataflow::fichier_nodes::Edition) -> Result<WorktreeAnswer, String> {
         self.hote()?.atelier_ecrire(racine, path, edition).map(WorktreeAnswer::from)
     }
