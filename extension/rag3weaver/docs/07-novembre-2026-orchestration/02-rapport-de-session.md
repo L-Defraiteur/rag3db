@@ -1893,3 +1893,24 @@ avance d'autant ; les hashs, eux, sont exacts.
   calcul ; les quatre services ont survécu. Règle : plus de cinquième service sur card2 ; le contrôle par
   l'hôte (copie de code-lourd, index complet sous 29a7bc52a, 0 écart attendu) passe en série sur le
   7882 d'hotfixs après sa trace, pas sur card0 sans le mot de Lucie. La pose attend ce 0 écart.
+- **10 h 5x — la lib des passes est 29a7bc52a.** Le rejeu de 96 a rougi à 10 h 43 sans rien du lot :
+  les e2e refusent « librag3db.so est plus vieux que le dernier commit de ses sources » sous 9bae60786
+  dès que master porte le C++ de 29a7bc52a. Mot donné à 96 (a : épingler 29a7bc52a, rejeu relancé),
+  et la lib nommée à recherche, codeparsers, ED, archi : `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-…`,
+  sans MOTEUR_ANCIEN. Leçon : la lib suivante se nomme à toutes les sessions qui poussent dès que du
+  C++ du moteur atterrit, sans attendre qu'elles rougissent. recherche : passe ordinaire verte sur
+  88bf5b729 sous 9bae60786, e2e entier parti à 10 h 29, aucun refus de lib ; au push, le rebase apporte
+  le C++ seul, sans rejeu.
+- **96, banc fini à 10 h 35, vert** : Gemini crée un sujet partout où il peut (les 8 fiches sans
+  sujet, les 2 hors rappel, 2 créations fautives) ; les ancrages ne bougent pas (27 justes, 0 faux).
+  archive démarre avec `allow_create` éteint pour Lucie ; lot lot-96-tentative-5-2 (e593517ae), tour
+  de push après le rejeu. codeparsers passe après, puis recherche.
+- **archi, sans lot, prend les outils de lecture et d'édition de l'atelier** (décisions de Lucie
+  d'hier soir) ; sa page de conception `09-novembre-2026-atelier-lire-ecrire/01-conception.md`
+  (1889d2659) et mes quatre réponses : carte d'accord sous l'appel par le registre `ui` (la même pour
+  les commandes en attente si ça tient dans le lot), **journal des décisions à part** (matière du
+  décideur local) ; empreinte de lecture dans `OutilsDuChat`, en mémoire, perdue au redémarrage (on
+  relit) ; racine = dossier courant sauf `$HOME` et `/` → `~/rw-code`, l'atelier de Lucie déjà posé à
+  `$HOME` gardé ; noms `read_file`, `read_scope`, `replace_text`, `replace_lines`, `insert_lines`,
+  `ask_permission`, `edit_file` retiré de la liste. ED garde la page de l'atelier et le correctif des
+  réclamations.
