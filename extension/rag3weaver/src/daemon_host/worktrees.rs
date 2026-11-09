@@ -279,6 +279,7 @@ pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super:
             }
         }
         h.ide_flux().publier("repos", &hosted.manifest.display().to_string(), e);
+        h.publier_l_etat_de_l_hote();
     });
 }
 
@@ -589,6 +590,7 @@ impl WorktreeHost for HoteDesWorktrees {
             &manifeste.display().to_string(),
             json!({ "kind": "RepoAttached", "worktree": worktree, "depot": depot, "branche": branche, "deja": deja }),
         );
+        hote.publier_l_etat_de_l_hote();
         let ou = match (&depot, &branche) {
             (Some(d), Some(b)) => format!("dépôt {d}, branche {b}"),
             (Some(d), None) => format!("dépôt {d}, tête détachée"),

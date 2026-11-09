@@ -136,6 +136,13 @@ impl Flux {
         flux
     }
 
+    /// **Publie un état** (l'IDE par le flux, 9 novembre 2026) : `{kind: "Etat", de, cle,
+    /// etat}` sous le sujet `etat`. Celui qui change un état le pousse ; la page le garde
+    /// (`onEtat` dans `lib/host.ts`) au lieu de le relire à l'hôte après un événement.
+    pub fn publier_etat(&self, de: &str, cle: &str, etat: Value) {
+        self.publier("etat", cle, serde_json::json!({ "kind": "Etat", "de": de, "cle": cle, "etat": etat }));
+    }
+
     /// Publie `evenement` (déjà en JSON) sous `sujet`, pour le backend `backend`.
     pub fn publier(&self, sujet: &str, backend: &str, evenement: Value) {
         // **L'id se tire sous le verrou des abonnés**, avec l'empilement et
