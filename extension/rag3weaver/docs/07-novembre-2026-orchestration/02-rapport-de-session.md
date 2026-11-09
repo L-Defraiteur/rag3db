@@ -2168,3 +2168,15 @@ avance d'autant ; les hashs, eux, sont exacts.
   préfixe, card0 au mot d'hier), la forme de production, contre les chiffres torch bf16 d'hier. 96 fait à la
   main le rattrapage des README depuis nouveautes.md que l'équipier n'a pas fait, et note dans sa page ce
   qu'un équipier aurait dû produire : la référence de la prochaine tentative.
+- **13 h 5x, deux relevés.** 96 a poussé 8a20e0914, le rattrapage des README à la main (onze ajouts depuis
+  les 33 lignes de nouveautés de novembre, dix dans le README de rag3weaver, un à la racine ; 17 lignes déjà
+  dites, 4 internes ; chaque nom vérifié dans le code ; la page 01 de son dossier porte la référence ligne par
+  ligne pour la prochaine tentative d'équipier, et une leçon de consigne : les README sont en anglais). 96
+  mesure ensuite la précision du rappel d'aujourd'hui sur une centaine de rappels réels des crochets (juge
+  Gemini, vingt contrôlés à la main), la ligne de base du classeur. **banc achoppe** : les binaires llama-server
+  du portable (CachyOS x86-64-v4, AVX-512) plantent à luciepc par « Instruction non permise », dont le
+  processeur n'a pas AVX-512 ; deux voies, (1) bâtir llama.cpp à luciepc depuis les sources épinglées sur le
+  commit du paquet du portable (HIP gfx1201, sous poste lourd), (2) l'installer par pacman, qui demande le
+  sudo de Lucie. **Mon mot pour (1) a été refusé par le classificateur d'auto mode** (sans raison donnée) ;
+  je ne le reformule pas et ne le fais pas porter par une autre session : **Lucie tranche** entre (1) et (2),
+  et le dit à banc. Pas d'autre voie proposée. hooks-essai, 96, archi, recherche, G : à jour.
