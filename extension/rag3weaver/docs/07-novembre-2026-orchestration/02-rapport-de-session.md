@@ -2092,3 +2092,14 @@ avance d'autant ; les hashs, eux, sont exacts.
   `owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it` (worktrees.rs:1795), non déterministe,
   dont le correctif des réclamations d'ED attend l'approbation de Lucie depuis le matin ; les runs d'après
   sont remplacés (cancelled). Rien d'autre n'est rouge.
+- **13 h 2x, deux défauts de plus, bien coupés.** recherche (arret-du-backend-6, d89ae998e, passe entière en
+  cours) : `e2e_juge` laisse encore un TempDir, autre cause que le backend — `JournalDesRuns::noter` écrit
+  après une grâce de 250 ms dans un fil détaché que l'arrêt de l'hôte n'attend pas ; rouge connu avec ticket
+  neuf (`le-journal-des-runs-ecrit-apres-l-arret-de-son-hote`), correctif en lot suivant **devant** le
+  Surveillant (un fil qui écrit pendant l'effacement, c'est un défaut en service). 96 : la page de M8
+  (0fff7aa00) étend refresh et livre.json d'ED (adoption d'une copie d'avant livre.json comme celle de
+  Lucie, base pour les fichiers copiés, fusion au-delà de l'intouché avec refus nommé, diff des outils et
+  appelants, migration de schéma) ; et un défaut trouvé en chemin : **428 livre.json dans le dossier d'état
+  de Lucie, dont 400 écrits par les passes depuis hier 21 h 43**, aucun test ne posant RAG3WEAVER_STATE_DIR.
+  Ticket et petit lot à 96 avant M8 (dossier temporaire par l'aide commune des tests, garde cfg(test) qui
+  refuse le dossier réel) ; les fichiers existants sont listés, pas effacés : Lucie tranche.
