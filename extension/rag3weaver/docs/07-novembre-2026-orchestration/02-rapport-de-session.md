@@ -2020,3 +2020,13 @@ avance d'autant ; les hashs, eux, sont exacts.
   de la tâche qui s'inscrit, sans doute). hooks-essai a mesuré la latence du plein texte (87f9b19bd) :
   formes de code p50 258 ms, p95 532 ms, le budget de 600 ms en couvre 95 % ; mots courts p95 1,34 s,
   écartés par la règle de déclenchement.
+- **13 h 0x, la lib entière d'archi figée 25 min sur un témoin étranger à son lot**, cause lue dans le code :
+  `l_hote_inactif_s_arrete_seul_et_une_sonde_ne_le_retient_pas` (daemon_host.rs:2234) sonde un hôte qui
+  s'arrête à 600 ms d'inactivité par `demander`, qui prend `daemon::agent()` **sans délai** ; sous la charge
+  de la lib entière, une sonde part pendant l'arrêt, la connexion est acceptée, la réponse ne vient jamais.
+  `agent_with_timeout` existe depuis le ticket du 11 octobre. Décidé : ticket avec les piles, mini-lot à
+  part (les `demander` des témoins de l'hôte passent à `agent_with_timeout(10 s)`, le témoin juge son
+  timing sans la sonde ; rouge d'abord par un faux hôte qui accepte et ne répond pas), puis la passe de
+  l'atelier rejouée quand bge-m3 est rendu. Joué seul, le témoin est vert cinq fois : un départage par
+  répétition n'aurait rien dit. archi a dit « fini » pour bge-m3 ; recherche est partie en rejeu court
+  (residus-de-suite-4 sur 120a5db31, sous 29a7bc52a).
