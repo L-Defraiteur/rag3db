@@ -32,3 +32,25 @@ Le superviseur ne pouvait pas distinguer un recul d'un appel pendu ou d'un outil
   `teammate.max_unavailable_steps` le fait déjà pour un refus qui remonte jusqu'à l'équipier.
 - Témoin : un faux serveur qui rend trois 429 ; la boîte porte trois lignes de recul avec leur
   code ; un budget plus court que les reculs fait échouer le pas, nommé.
+
+## Ce qui est fait (9 novembre 2026, session mémoire)
+
+Dans le client du modèle, partagé par le chat, l'équipier et le juge :
+
+- `GenOptions.retry_budget` : le budget des reculs de l'appelant, qui resserre le plafond de la
+  politique (`RetryPolicy.max_total`, trente minutes). Au-delà, l'appel échoue en nommant le code,
+  les reprises faites, le temps passé et « budget de reculs de N s atteint ».
+- Chaque recul se dit une fois au journal de qui appelle, l'hôte compris : « [modèle <nom>] recul
+  n° k : HTTP 429 … ; attente N s (déjà M s, budget B s) » ; et le statut du chat dit le numéro, le
+  code et l'attente, au lieu de « Provider retry scheduled ».
+- Les budgets déclarés par les appelants (`crate::llm`) : un tour de chat de l'IDE 300 s, un pas
+  de l'équipier 120 s (au-delà, le refus remonte à sa boucle, qui attend le fournisseur en le
+  disant dans la boîte), le juge des bilans 600 s.
+- Témoin : `a_chat_refused_for_good_says_each_backoff_and_stops_at_its_budget`
+  (`tests/openai_llm_retry.rs`), rouge sur master 56e0c0df3 (« le tour a attendu 1540 s, au-delà
+  de son budget 300s »), vert après.
+
+## Ce qui reste
+
+Un recul de moins de 120 s dans un pas de l'équipier se dit au journal de l'hôte, pas encore dans
+la boîte ; le client Anthropic garde sa règle de reprise et ne lit pas `retry_budget`.

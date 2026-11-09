@@ -189,6 +189,9 @@ pub struct ChatRunOptions {
     pub stopped_by: Option<Arc<std::sync::Mutex<Option<String>>>>,
     /// Les outils dont l'appel réussi finit le tour ([`Agent::with_terminal_tools`]).
     pub terminal_tools: Vec<String>,
+    /// Le budget des reculs du modèle pour ce tour ; absent :
+    /// [`crate::llm::BUDGET_DES_RECULS_DU_CHAT`].
+    pub retry_budget: Option<std::time::Duration>,
 }
 
 impl ChatSession {
@@ -254,6 +257,7 @@ impl ChatSession {
         // `ToolInvocation`), et c'est la boîte (`with_inbox`) qui ramène cette
         // fin dans la conversation au tour suivant. Personne d'autre n'y est
         // abonné : s'il déborde, le plus ancien tombe, le chat ne ralentit pas.
+        let retry_budget = options.retry_budget.unwrap_or(crate::llm::BUDGET_DES_RECULS_DU_CHAT);
         let bus = options.bus.unwrap_or_else(|| crate::events::EventBus::new(64));
         let mut agent = Agent::new(&observed_llm, &observed);
         if let Some(run_id) = options.run_id {
@@ -286,7 +290,8 @@ impl ChatSession {
                 GenOptions::default()
                     .with_max_tokens(config.max_output_tokens)
                     .with_temperature(config.temperature)
-                    .with_top_p(config.top_p),
+                    .with_top_p(config.top_p)
+                    .with_retry_budget(retry_budget),
             )
             .run(&mut self.turns, &mut sink)
             .map_err(|e| e.to_string())
@@ -357,7 +362,13 @@ impl TokenSink for ChatSink {
             return Flow::Stop;
         }
         if matches!(event.phase, crate::llm::RetryPhase::Scheduled) {
-            (self.events)(json!({"event":"status","text":"Provider retry scheduled"}));
+            (self.events)(json!({"event":"status","text":format!(
+                "recul n° {} du modèle : {}, attente {} s (déjà {} s)",
+                event.attempt,
+                event.reason,
+                event.wait.as_secs(),
+                event.elapsed.as_secs()
+            )}));
         }
         Flow::Continue
     }

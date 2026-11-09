@@ -565,7 +565,23 @@ pub struct GenOptions {
     /// ne connaît pas ce réglage. Voir [`ReasoningEffort`] : ce n'est pas un
     /// réglage cosmétique, c'est **le** levier de coût et de latence.
     pub reasoning: Option<ReasoningEffort>,
+    /// **Le budget des reculs de l'appelant** (9 novembre 2026) : le temps qu'il
+    /// accepte de passer dans cet appel, attentes de reprise comprises, en deçà du
+    /// plafond de la politique du client. Au-delà, l'appel échoue en nommant la
+    /// cause, ses reprises et le budget, au lieu de dormir. `None` = le plafond de
+    /// la politique seul. Voir [`BUDGET_DES_RECULS_DU_CHAT`] et ses voisins.
+    pub retry_budget: Option<std::time::Duration>,
 }
+
+/// Le budget des reculs d'un tour de chat de l'IDE : cinq minutes. Au-delà, la
+/// personne devant l'écran attend en silence un modèle qui ne répond pas.
+pub const BUDGET_DES_RECULS_DU_CHAT: std::time::Duration = std::time::Duration::from_secs(300);
+/// Celui d'un pas de l'équipier : deux minutes. Au-delà, le refus remonte à la
+/// boucle de l'équipier, qui attend le fournisseur en le disant dans sa boîte
+/// (`teammate.quota_wait_s`, `teammate.max_unavailable_steps`).
+pub const BUDGET_DES_RECULS_DE_L_EQUIPIER: std::time::Duration = std::time::Duration::from_secs(120);
+/// Celui du juge des bilans, qui tourne en fond : dix minutes.
+pub const BUDGET_DES_RECULS_DU_JUGE: std::time::Duration = std::time::Duration::from_secs(600);
 
 impl Default for GenOptions {
     fn default() -> Self {
@@ -578,11 +594,17 @@ impl Default for GenOptions {
             tool_choice: ToolChoice::Auto,
             response_format: None,
             reasoning: None,
+            retry_budget: None,
         }
     }
 }
 
 impl GenOptions {
+    /// Le budget des reculs de l'appelant ([`GenOptions::retry_budget`]).
+    pub fn with_retry_budget(mut self, budget: std::time::Duration) -> Self {
+        self.retry_budget = Some(budget);
+        self
+    }
     pub fn with_max_tokens(mut self, n: usize) -> Self {
         self.max_tokens = n;
         self

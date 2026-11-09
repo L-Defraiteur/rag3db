@@ -571,6 +571,9 @@ impl DaemonHost {
                 meter: Some(self.chat_meter.clone()),
                 stopped_by: Some(arrete_par.clone()),
                 terminal_tools: step.map(|_| super::teammate::Step::terminal_tools()).unwrap_or_default(),
+                // Un pas d'équipier rend vite la main à sa boucle, qui attend le
+                // fournisseur en le disant dans la boîte.
+                retry_budget: Some(if step.is_some() { crate::llm::BUDGET_DES_RECULS_DE_L_EQUIPIER } else { crate::llm::BUDGET_DES_RECULS_DU_CHAT }),
             },
         );
         let consomme: Vec<Value> = self
