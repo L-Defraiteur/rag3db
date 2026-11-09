@@ -498,13 +498,19 @@ ECARTEES_CARTE_LOCALE=()
 #
 # Un banc dont l'objet est un service que la batterie ne pose pas (un
 # llama-server, Vertex) refuse sans lui, et c'est juste : un banc sauté n'est
-# pas un banc vert. Mais tel quel il rougirait toute batterie ordinaire. Il est
-# donc **écarté en le disant** quand aucune de ses variables n'est posée, comme
-# les suites de la carte locale : nommé au départ et au résumé, et la passe se
-# dit « complète hors bancs à services ». Une suite nommée par `--test` se joue
-# toujours. Forme : `suite:VAR1|VAR2` — l'une des variables suffit à la jouer
-# (décision de l'orchestration, 11 octobre 2026, au soir).
+# pas un banc vert. **Il ne fait jamais partie de l'e2e entier** : une passe
+# complète l'écarte en le disant, ses variables posées ou non, nommé au départ
+# et au résumé, et la passe se dit « complète hors bancs à services ». Il se
+# joue **seul**, nommé par `--test`, avec sa voie (décision de l'orchestration,
+# 9 novembre 2026 : posé pour l'e2e entier, il rougissait d'environnement toute
+# passe qui l'embarquait sans sa voie, jusqu'au rejeu de la session recherche).
+# Nommé sans aucune de ses variables, ou avec une variable dont la feature
+# manque au jeu, il est refusé ROUGE avant tout bâti, en disant quoi poser.
+# Forme : `suite:VAR1|VAR2` — l'une des variables suffit à la jouer ;
+# `VOIES_FEATURES` dit la feature qu'une variable exige (sans elle, la voie
+# n'est pas compilée et le banc n'a aucune voie).
 BANCS_A_SERVICES=("e2e_banc_fiches_classees:RAG3WEAVER_BANC_DECIDE|RAG3WEAVER_BANC_VERTEX")
+VOIES_FEATURES=("RAG3WEAVER_BANC_DECIDE:daemon" "RAG3WEAVER_BANC_VERTEX:openai-llm")
 ECARTEES_BANCS=()
 banc_sans_service() {
   local entree vars v
@@ -518,6 +524,28 @@ banc_sans_service() {
     return 0
   done
   return 1
+}
+est_un_banc_a_services() {
+  local entree
+  for entree in "${BANCS_A_SERVICES[@]}"; do
+    [ "${entree%%:*}" = "$1" ] && return 0
+  done
+  return 1
+}
+# Les voies posées d'un banc dont la feature manque au jeu, une par ligne.
+voies_sans_feature() {
+  local entree vars v f
+  for entree in "${BANCS_A_SERVICES[@]}"; do
+    [ "${entree%%:*}" = "$1" ] || continue
+    IFS='|' read -r -a vs <<< "${entree#*:}"
+    for v in "${vs[@]}"; do
+      [ -n "${!v:-}" ] || continue
+      for f in "${VOIES_FEATURES[@]}"; do
+        [ "${f%%:*}" = "$v" ] || continue
+        case ",$FEATURES," in *",${f#*:},"*) ;; *) echo "$v (feature ${f#*:})" ;; esac
+      done
+    done
+  done
 }
 services_du_banc() {
   local entree
@@ -540,6 +568,17 @@ CARGO_ARGS=(
 
 if [ ${#TEST_FILES[@]} -gt 0 ]; then
   for nom in "${TEST_FILES[@]}"; do
+    if est_un_banc_a_services "$nom"; then
+      if banc_sans_service "$nom"; then
+        echo "✗ $nom est un banc à services : il se joue seul, avec sa voie — posez $(services_du_banc "$nom") (procédure du push, « Les bancs »)"
+        exit 1
+      fi
+      sans=$(voies_sans_feature "$nom")
+      if [ -n "$sans" ]; then
+        echo "✗ $nom : une voie posée n'est pas compilée dans le jeu ($FEATURES) : $(echo $sans) — ajoutez la feature (--features …)"
+        exit 1
+      fi
+    fi
     CARGO_ARGS+=(--test "$nom")
   done
 else
@@ -555,7 +594,7 @@ else
       ECARTEES_CARTE_LOCALE+=("$nom")
       continue
     fi
-    if banc_sans_service "$nom"; then
+    if est_un_banc_a_services "$nom"; then
       ECARTEES_BANCS+=("$nom")
       continue
     fi
@@ -574,7 +613,7 @@ else
     echo "    ${ECARTEES_CARTE_LOCALE[*]}"
   fi
   for nom in "${ECARTEES_BANCS[@]}"; do
-    echo "▸ ⚠ $nom NON JOUÉE (banc à services : posez $(services_du_banc "$nom") pour la jouer)"
+    echo "▸ ⚠ $nom NON JOUÉE (banc à services, il se joue seul : --test $nom avec $(services_du_banc "$nom"))"
   done
 fi
 
