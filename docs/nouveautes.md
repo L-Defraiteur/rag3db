@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **9 nov. — L'atelier lit et écrit, et demande avant de sortir de chez lui.** Il lit 200 lignes
+  à la fois ou un scope par son nom, remplace un texte unique ou des lignes qu'il vient de lire, et
+  rend le diff de chaque écriture ; un worktree qu'il a ouvert se réindexe, sans question. Hors de
+  sa racine, ou sur un dépôt que l'utilisatrice tient, une carte sous l'appel demande l'accord, et
+  chaque décision s'inscrit dans un journal à part. Un atelier posé neuf prend pour racine le
+  dossier d'où on le lance, ou `~/rw-code`. (`atelier-lire-ecrire`)
 - **8 nov. — En JavaScript, une locale ne se confond plus avec celle du bloc voisin.** Deux `const ctx`
   dans deux blocs d'un même fichier ne s'échangent plus leurs usages : codeparsers c660893, 20 faux
   sur 30 deviennent justes au juge TypeScript.
