@@ -2204,3 +2204,12 @@ avance d'autant ; les hashs, eux, sont exacts.
   d'hier soir, prise par personne) — lire ce qu'elle mesure et quand, reproduire, dire la cause avant de
   corriger (hôte ou IDE), et ce qu'elle devrait dire au survol. La pose du binaire pour Lucie attend
   l'atterrissage de recherche (deux e2e entiers en cours depuis 13 h 24, puis rejeu court).
+- **14 h 1x, la jauge de contexte ne mentait pas** (archi, lu dans le code puis sur l'atelier de Lucie en
+  lecture seule) : `used` = les `prompt_tokens` du dernier appel au modèle, `max` = `context_len` du modèle
+  déclaré ; pour Lucie, gemini-3.8-flash à **1 000 000**, dernier tour ≈ 4 900 jetons : **0,5 %**, une barre
+  invisible et aucun pourcentage écrit ; elle ne se relit qu'en fin de tour alors que le flux porte un
+  `LlmCall` par appel ; et `last_call` n'est pas gardé avec la session, la reprise après une pose la remet à
+  « pas encore de tour ». Lot en un (archi) : pourcentage écrit à la bonne précision, barre d'au moins quelques
+  pixels, la jauge suit chaque LlmCall, last_call dans le fichier de session, échelle linéaire sans plafond
+  inventé ; au survol les jetons, le plafond et l'heure. Le découpage de ce qui pèse (instructions, outils,
+  historique, résultats d'outils) est le lot suivant, nommé.
