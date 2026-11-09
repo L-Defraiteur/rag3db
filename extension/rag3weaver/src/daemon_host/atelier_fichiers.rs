@@ -722,6 +722,69 @@ pub(super) mod tests {
         attendre_l_index(&a, &frere);
     }
 
+    /// **Une commande en attente se décide sur la carte d'accord** (lot 7 de la page
+    /// `09-novembre-2026-atelier-lire-ecrire/01-conception.md`, c7, 9 novembre 2026) : dans
+    /// le chat de l'atelier, une commande que la porte met en attente (`mkdir` écrit) rend la
+    /// carte d'accord sous l'appel ; un oui l'accorde à la porte de l'atelier, et la même
+    /// commande passe au tour suivant ; un non la laisse en attente. Chaque décision va au
+    /// journal des décisions, avec la commande.
+    #[test]
+    fn a_command_on_hold_in_the_workshop_chat_is_decided_on_the_permission_card() {
+        use crate::llm::{CallbackLlm, Turn};
+        let appels: Vec<(&str, &str)> = vec![("c1", "mkdir faits"), ("c2", "mkdir faits"), ("c3", "mkdir autres"), ("c4", "mkdir autres")];
+        let appels = Arc::new(appels.into_iter().map(|(m, c)| (m.to_string(), c.to_string())).collect::<Vec<_>>());
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let appels = appels.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let message = turns[depuis].content.clone();
+                let fait = turns[depuis..].iter().any(|t| t.role == "tool");
+                match appels.iter().find(|(m, _)| *m == message).filter(|_| !fait) {
+                    Some((_, c)) => MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": c }).to_string())]).generate(turns, opts, sink),
+                    None => MockLlm::new("fait").generate(turns, opts, sink),
+                }
+            })))
+        });
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier_avec(d.path(), model);
+        // Le dernier résultat de run_command de la conversation.
+        let dernier = |a: &Atelier| -> Value {
+            let etat = a.host.chat_state(&a.h.id).unwrap();
+            etat["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "tool").last().cloned().unwrap_or(Value::Null)
+        };
+
+        a.host.chat_turn(&a.h.id, "c1").expect("le tour c1");
+        let t = dernier(&a);
+        assert!(t["content"].as_str().unwrap_or_default().contains("Commande en attente"), "mkdir attend l'accord : {t:#}");
+        assert!(!a.racine.join("faits").exists(), "rien ne s'est exécuté");
+        let carte = t["ui"][0].clone();
+        assert_eq!(carte["kind"], "accord", "la carte d'accord sous l'appel : {t:#}");
+        assert_eq!(carte["genre"], "commande", "{carte:#}");
+        assert_eq!(carte["commande"], "mkdir faits", "{carte:#}");
+        let id = carte["id"].as_str().expect("l'id de la demande").to_string();
+        assert_eq!(a.host.etat_accord(&id).unwrap()["commande"], "mkdir faits");
+
+        let ligne = a.host.decider_accord(&id, true, "le témoin").expect("accorder");
+        assert_eq!(ligne["genre"], "commande", "{ligne}");
+        a.host.chat_turn(&a.h.id, "c2").expect("le tour c2");
+        let t = dernier(&a);
+        assert!(a.racine.join("faits").is_dir(), "accordée, la commande passe : {t:#}");
+
+        a.host.chat_turn(&a.h.id, "c3").expect("le tour c3");
+        let id = dernier(&a)["ui"][0]["id"].as_str().expect("une seconde carte").to_string();
+        a.host.decider_accord(&id, false, "le témoin").expect("refuser");
+        a.host.chat_turn(&a.h.id, "c4").expect("le tour c4");
+        let t = dernier(&a);
+        assert!(t["content"].as_str().unwrap_or_default().contains("Commande en attente"), "refusée, elle attend encore : {t:#}");
+        assert!(!a.racine.join("autres").exists());
+
+        let journal = std::fs::read_to_string(d.path().join("runs/decisions.jsonl")).expect("le journal des décisions");
+        let lignes: Vec<Value> = journal.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(lignes.len(), 2, "{journal}");
+        assert_eq!((lignes[0]["commande"].as_str(), lignes[0]["decision"].as_str()), (Some("mkdir faits"), Some("accordé")), "{journal}");
+        assert_eq!((lignes[1]["commande"].as_str(), lignes[1]["decision"].as_str()), (Some("mkdir autres"), Some("refusé")), "{journal}");
+    }
+
     /// **`ask_permission`** (décision de c7, 9 novembre 2026) : hors de la racine, ou sur un
     /// arbre que tient l'utilisatrice, le modèle demande l'accord ; la demande rend une carte
     /// d'accord (`ui`), l'utilisatrice accorde ou refuse ; un oui ouvre ce chemin pour ce
