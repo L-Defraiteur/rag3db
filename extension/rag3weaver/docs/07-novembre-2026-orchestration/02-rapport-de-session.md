@@ -2054,3 +2054,14 @@ avance d'autant ; les hashs, eux, sont exacts.
   hors de sa passe et dit ; master n'avait reçu que deux .md depuis la base testée ; trois contrôles.
   « À toi » à 96 pour les bancs ; archi ensuite. Recherche prépare arret-du-backend (liste réduite, la
   charge d'ingestion hors passe comme son ticket le dit) et part à mon mot quand la carte est à personne.
+- **13 h 1x, deux relevés de 96** : son rejeu des bancs a rougi sur le seul témoin du rattrapage d'ED
+  (`owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it`, rouge en lot et vert seul hier
+  aussi, correctif des réclamations en attente d'approbation) ; consigne : rejoué seul, nommé comme rouge
+  d'environnement à cause connue, ticket s'il n'en a pas, push. **L'équipier est muet depuis 12 h 58 min 51 s** :
+  le chat Gemini a démarré, quatre read_file en 28 s, puis plus rien — aucun appel au modèle journalisé,
+  rien dans la boîte, running = true. Une attente sans délai quelque part (un appel Gemini sans réponse,
+  ou un outil qui attend l'index de la base neuve de la tâche) : c'est la mesure elle-même, à nommer et à
+  ticketer (le pas d'un équipier a un budget et dit ce qu'il attend) ; arrêt propre à 13 h 30 si rien ne
+  bouge. recherche : arret-du-backend-4 (945234559) prêt, `RAG3WEAVER_E2E_SAUF` dans run_e2e.sh, rebase à
+  faire sur le lot des bancs de 96 (run_e2e.sh en commun), passe ordinaire dès le rebase, e2e entiers à
+  mon « pars ».
