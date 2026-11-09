@@ -591,3 +591,32 @@ mod tests {
         assert_eq!(name_of_tree(Path::new("/x/a b")).unwrap(), "code-a-b");
     }
 }
+
+/// **La racine d'un atelier posé neuf** (Lucie, 8 novembre 2026 au soir ; c7, 9 novembre) :
+/// le dossier où l'atelier est lancé ; mais lancé « sans y avoir réfléchi », depuis le
+/// dossier de l'utilisateur ou `/`, c'est `~/rw-code`, créé s'il manque. Un atelier déjà
+/// posé garde la sienne (celle de Lucie est `$HOME` : « domaine tout mon home »).
+pub fn racine_de_l_atelier(lance_depuis: &Path, home: &Path) -> PathBuf {
+    let sans_fin = |p: &Path| PathBuf::from(p.to_string_lossy().trim_end_matches('/'));
+    let (ici, maison) = (sans_fin(lance_depuis), sans_fin(home));
+    if ici.as_os_str().is_empty() || ici == maison {
+        home.join("rw-code")
+    } else {
+        lance_depuis.to_path_buf()
+    }
+}
+
+#[cfg(test)]
+mod racine_de_l_atelier_tests {
+    use super::racine_de_l_atelier;
+    use std::path::Path;
+
+    #[test]
+    fn a_new_workshop_takes_the_folder_it_is_started_from_unless_home_or_root() {
+        let home = Path::new("/home/lucie");
+        assert_eq!(racine_de_l_atelier(Path::new("/home/lucie/projets/carte"), home), Path::new("/home/lucie/projets/carte"));
+        assert_eq!(racine_de_l_atelier(home, home), Path::new("/home/lucie/rw-code"));
+        assert_eq!(racine_de_l_atelier(Path::new("/home/lucie/"), home), Path::new("/home/lucie/rw-code"));
+        assert_eq!(racine_de_l_atelier(Path::new("/"), home), Path::new("/home/lucie/rw-code"));
+    }
+}
