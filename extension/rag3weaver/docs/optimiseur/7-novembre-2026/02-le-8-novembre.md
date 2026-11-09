@@ -113,9 +113,22 @@ Le disque de luciepc est rendu depuis 18 h 03 (nodiscard et fstrim), et Lucie a 
   aux deux postes à 23 h 41.** L'hôte du portable reste sur cbc06c3e1 par son env jusqu'à **9 h 30**.
   Les passes prennent `RAG3DB_LIB=9bae60786` explicite, et `RAG3WEAVER_MOTEUR_ANCIEN` tombe.
 
+## La nuit et le matin du 9 novembre
+
+- Le lien vers luciepc a été coupé vers 01 h 50 et 01 h 56 (tailscale passé en relais), pas la machine :
+  uptime intact, les tunnels du portable relancés seuls par leur unité (4 redémarrages). La cause du
+  disque de luciepc à 100 % : `fstrim.timer` hebdomadaire (lundi, 01 h 35) qui rend ~200 000 petits
+  extents. C'est à Lucie (sudo) de lui donner `--minimum 16M`. À 8 h 56, tout était revenu : lien direct,
+  trim fini, PSI io à 0.
+- **9 h 30 – 9 h 36 : le portable passe sur 9bae60786** avec le binaire 48c93d7ab (48f44562, lots d'archi
+  623e97249 compris) : essai VERT, check-manifests 5/0, instantané avant-9bae60786, réveil VERT (MainPID
+  4130295), quatre backends rouverts, /ide/ rendu avec « Dépôts » et 407 éléments. Le réveil a attendu
+  6 min le « copié » d'hotfixs, qui n'est pas venu : réveil sur le mot de c7. Mon instantané de 9 h 30
+  contient memoire-longue.
+- Les deux postes sont sur 9bae60786 ; cbc06c3e1 reste au magasin.
+
 ## À suivre
 
-- 9 h 30 : pose du portable sur 9bae60786, binaire à la tête de master rebâti vers 9 h ; annonce,
-  « arrêté » à hotfixs, instantané, réveil, témoin de l'IDE.
+- `rag3weaver-backend atelier`, une fois, de la main de Lucie : la pose de l'atelier n'est pas notée.
 - Les bases code-lourd et code-principal de luciepc reviennent aux copies de 12 h 06 d'hotfixs, sans
   réindexation complète.
