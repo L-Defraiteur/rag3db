@@ -1,6 +1,6 @@
 # Un backend écrit encore dans son dossier pendant qu'on l'efface, après son Drop
 
-- **État** : ouvert (8 novembre 2026, session recherche), cause à départager.
+- **État** : corrigé (9 novembre 2026, lot arret-du-backend de la session recherche) : un backend qu'on laisse tomber attend ses fils et ferme son catalogue, comme `shutdown()`.
 - **Famille** : produit
 - **Gravité** : **plantage** — un processus de test meurt en SIGSEGV à sa sortie (96, 8 novembre
   18 h 49) ; et des TempDir à moitié effacés dans /tmp, qui est de la mémoire vive. Passe devant le
@@ -70,3 +70,23 @@ l'équipier `agent/tests-bases-dans-tmp` sont une autre cause ; le seul cas qui 
 `drop(base)` sous un démon encore vivant, dans `un_lecteur_choisit_son_chemin_et_le_dit`) y est
 déjà retiré. Ce ticket porte celle-ci ; son correctif est à part. Les trois suites sortent de la
 liste des résidus dans le commit qui la corrige, prouvé par plusieurs passes propres.
+
+## Le correctif (9 novembre 2026, lot arret-du-backend)
+
+- **Un seul registre d'arrêt** pour les fils de fond d'un catalogue (`catalog_threads`) : les
+  indexations de fond et le rebâti du plein texte s'y inscrivent, chacun avec son drapeau d'arrêt
+  lu entre deux paquets ; `stop_and_join` les arrête et les attend. Le registre tient le catalogue
+  par un `Weak` (l'ancien `INDEXINGS` gardait l'`Arc` des indexations finies). `indexings_running`
+  et `embed_watch_of` ne comptent que les index (accordé avec everything declarative).
+- **Le rebâti du plein texte** s'arrête au lot suivant et reprend à la prochaine ouverture.
+- **`impl Drop for Backend`** fait `shutdown()`, une fois : réactions attendues, fils arrêtés et
+  attendus, catalogue fermé. **`Drop for Catalog`** vide sa vue de lecture avant de fermer ses
+  poignées du plein texte.
+- Témoins (daemon_host.rs) : `un_backend_qu_on_laisse_tomber_ne_laisse_ni_catalogue_tenu_ni_dossier`
+  (un backend de code indexé puis cherché) et `une_memoire_qu_on_laisse_tomber_avec_ses_reactions_ne_laisse_rien`
+  (le cas d'e2e_cited_by) : rouges sur master (« 1 détenteur tient encore le catalogue après le
+  Drop »), verts sur le correctif.
+- e2e_cited_by, e2e_juge et e2e_lectures sortent de la liste des résidus
+  (`tests/e2e/suites_qui_laissent_des_residus.txt`), prouvé par deux e2e entiers propres.
+- Hors de ce lot : `ShardedHandle::close` de lucivy sort sur erreur avant d'arrêter ses pools (c7
+  l'a dit à la session lucivy).
