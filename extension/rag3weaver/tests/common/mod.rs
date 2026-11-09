@@ -511,3 +511,16 @@ pub fn sauter_si_indisponible(suite: &str, e: &rag3weaver::llm::LlmError) -> boo
     println!("{ligne}");
     true
 }
+
+/// **Le dossier d'état des e2e** (9 novembre 2026 : 400 `livre.json` de témoins dans le
+/// dossier d'état réel du poste de Lucie). La lib ne voit pas `cfg(test)` depuis un e2e :
+/// le binaire e2e appelle cette fonction avant `main`, quand aucun fil n'existe encore
+/// (`tests/e2e/generer.py`), et pose `RAG3WEAVER_STATE_DIR` sur un dossier temporaire
+/// propre au processus, sauf si elle est déjà posée. Les hôtes et les binaires que les
+/// suites lancent en héritent.
+pub extern "C" fn poser_l_etat_des_temoins() {
+    if std::env::var_os("RAG3WEAVER_STATE_DIR").is_none() {
+        let d = std::env::temp_dir().join(format!("rag3weaver-etat-des-e2e-{}", std::process::id()));
+        std::env::set_var("RAG3WEAVER_STATE_DIR", d);
+    }
+}

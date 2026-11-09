@@ -147,6 +147,23 @@ fn put_corps(host: &DaemonHost, session: &str, manifest: &Path, outil: &str, tit
     host.call(Some(session), manifest, outil, json!({"record": {"titre": titre, "corps": corps, "etat": "courant"}}))
 }
 
+/// **Le dossier d'état d'un e2e est temporaire** (9 novembre 2026 : 400 `livre.json` de
+/// témoins dans le dossier d'état réel du poste de Lucie). Le binaire e2e pose
+/// `RAG3WEAVER_STATE_DIR` avant `main` ; un manifeste ouvert ici a son état dessous, jamais
+/// sous `~/.local/state`.
+#[test]
+#[ignore]
+fn le_dossier_d_etat_d_un_e2e_est_temporaire() {
+    let racine = std::env::var_os("RAG3WEAVER_STATE_DIR").map(PathBuf::from).expect("le binaire e2e pose RAG3WEAVER_STATE_DIR avant main");
+    assert!(racine.starts_with(std::env::temp_dir()), "{}", racine.display());
+    let d = tempfile::tempdir().unwrap();
+    let etat = rag3weaver::builtin_templates::state_dir_of(&d.path().join("backend.json"));
+    assert!(etat.starts_with(&racine), "{}", etat.display());
+    if let Some(h) = std::env::var_os("HOME") {
+        assert!(!etat.starts_with(PathBuf::from(h).join(".local/state")), "{}", etat.display());
+    }
+}
+
 #[test]
 #[ignore]
 fn deux_backends_dans_un_processus_chacun_sa_base() {

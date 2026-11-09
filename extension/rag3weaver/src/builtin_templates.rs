@@ -255,14 +255,54 @@ struct Livre {
 /// posé à côté du manifeste était, pour une tâche, une déclaration inconnue, et sa
 /// fusion refusée). `RAG3WEAVER_STATE_DIR`, sinon `$XDG_STATE_HOME`, sinon
 /// `~/.local/state`, sous `rag3weaver/manifestes/<empreinte du chemin canonique>`.
+///
+/// **Un témoin n'y écrit jamais le dossier réel** (9 novembre 2026 : 400 `livre.json` de
+/// témoins dans le dossier d'état du poste de Lucie). Sous `cfg(test)`, sans
+/// `RAG3WEAVER_STATE_DIR`, la racine est un dossier temporaire propre au processus, et
+/// une racine sous le dossier réel fait paniquer en le disant. Les e2e, qui lisent la lib
+/// sans `cfg(test)`, posent `RAG3WEAVER_STATE_DIR` avant tout fil (`tests/common`,
+/// `poser_l_etat_des_temoins`), et leurs processus enfants en héritent.
 pub fn state_dir_of(manifest: &Path) -> PathBuf {
     let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
     let base = var("RAG3WEAVER_STATE_DIR")
-        .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("rag3weaver")))
-        .or_else(|| var("HOME").map(|h| h.join(".local/state/rag3weaver")))
+        .or_else(racine_des_temoins)
+        .or_else(real_state_root)
         .unwrap_or_else(|| std::env::temp_dir().join("rag3weaver-state"));
+    #[cfg(test)]
+    if let Err(e) = refuser_le_reel(&base, real_state_root().as_deref()) {
+        panic!("{e}");
+    }
     let canon = manifest.canonicalize().unwrap_or_else(|_| manifest.to_path_buf());
     base.join("manifestes").join(&blake3::hash(canon.to_string_lossy().as_bytes()).to_hex()[..16])
+}
+
+/// Le dossier d'état réel de l'utilisateur : `$XDG_STATE_HOME/rag3weaver`, sinon
+/// `~/.local/state/rag3weaver`.
+fn real_state_root() -> Option<PathBuf> {
+    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    var("XDG_STATE_HOME").map(|d| d.join("rag3weaver")).or_else(|| var("HOME").map(|h| h.join(".local/state/rag3weaver")))
+}
+
+/// La racine d'état des témoins de la lib : un dossier temporaire par processus.
+#[cfg(test)]
+fn racine_des_temoins() -> Option<PathBuf> {
+    Some(std::env::temp_dir().join(format!("rag3weaver-etat-des-temoins-{}", std::process::id())))
+}
+#[cfg(not(test))]
+fn racine_des_temoins() -> Option<PathBuf> {
+    None
+}
+
+/// Le garde des témoins : une racine d'état sous le dossier réel est refusée, nommée.
+#[cfg(test)]
+fn refuser_le_reel(base: &Path, reel: Option<&Path>) -> Result<(), String> {
+    match reel {
+        Some(r) if base.starts_with(r) => Err(format!(
+            "un témoin écrirait dans le dossier d'état réel ({}) : posez RAG3WEAVER_STATE_DIR sur un dossier temporaire",
+            base.display()
+        )),
+        _ => Ok(()),
+    }
 }
 
 pub(crate) fn livre_of(manifest: &Path) -> PathBuf {
@@ -552,6 +592,38 @@ mod tests {
         assert_eq!(m["workspace"]["root"], "/home/quelqu-une");
         assert_eq!(m["tools"]["open_branch"]["graph"], "builtin:tools/open_branch.mmd", "sans copie locale, le livré : {m:#}");
         assert_eq!(refresh(&manifeste).unwrap(), Refresh::UpToDate);
+    }
+
+    /// **Un témoin n'écrit jamais dans le dossier d'état réel** (9 novembre 2026 : 400
+    /// `livre.json` de `backends/code` posés depuis la veille au soir dans
+    /// `~/.local/state/rag3weaver/manifestes/` du poste de Lucie, par rafales au rythme des
+    /// passes ; aucun témoin ne posait `RAG3WEAVER_STATE_DIR`). Le dossier d'état d'un
+    /// manifeste de témoin est hors de `$XDG_STATE_HOME` et de `~/.local/state`.
+    #[test]
+    fn a_witness_never_writes_in_the_real_state_directory() {
+        let d = tempfile::tempdir().unwrap();
+        let manifeste = d.path().join("backends/code/backend.json");
+        let etat = state_dir_of(&manifeste);
+        let reels: Vec<PathBuf> = [
+            std::env::var_os("XDG_STATE_HOME").map(PathBuf::from),
+            std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        for r in &reels {
+            assert!(!etat.starts_with(r), "le dossier d'état d'un témoin est sous le dossier réel {} : {}", r.display(), etat.display());
+        }
+    }
+
+    /// **Le garde refuse une racine sous le dossier réel**, et la nomme ; ailleurs, il laisse.
+    #[test]
+    fn the_guard_refuses_a_root_under_the_real_state_directory() {
+        let reel = Path::new("/home/quelqu-une/.local/state/rag3weaver");
+        let e = refuser_le_reel(&reel.join("manifestes"), Some(reel)).unwrap_err();
+        assert!(e.contains("dossier d'état réel") && e.contains("RAG3WEAVER_STATE_DIR"), "{e}");
+        assert!(refuser_le_reel(Path::new("/tmp/rag3weaver-etat-des-temoins-1"), Some(reel)).is_ok());
+        assert!(refuser_le_reel(&reel.join("x"), None).is_ok());
     }
 
     /// **Un manifeste modifié à la main est gardé** : la remise à jour le dit et n'écrit rien.
