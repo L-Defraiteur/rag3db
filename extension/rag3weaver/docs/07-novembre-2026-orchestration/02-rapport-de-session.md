@@ -1873,3 +1873,13 @@ avance d'autant ; les hashs, eux, sont exacts.
 - **96** : banc des fiches classées lancé à 9 h 58 à luciepc (unité banc5-96, 8694a4f3c, lib
   9bae60786), tentative 4 rejouée puis la 5 ; « banc fini » à son rendu, puis son tour. Deux lourds
   à luciepc (banc de 96, départage du cœur), plafond 4.
+- **10 h 3x — le correctif des deux sens est sur master : 29a7bc52a** (cœur, « une région CSR dont les
+  listes changent de place réécrit toutes ses colonnes », `csr_node_group.cpp` et un témoin dans
+  `late_rel_table_rewrites_test.cpp`). Le départage des six rouges de concurrence_test ne dépend pas du
+  correctif : trois verts seuls des deux côtés (rouges d'environnement du banc entier), trois rouges
+  des deux côtés (DdlEveryMinute « buffer pool is full » → ticket avec hash et lib, les deux seuils
+  VectorIndexDeleteCost notés dedans comme seuils à revoir ; KilledDuringTheCheckpoint vert seul,
+  SIGSEGV de l'enfant vu seulement sous charge, noté sans ticket). **G bâtit la lib de 29a7bc52a** et la
+  pose à luciepc puis sur le portable ; **hotfixs rejoue sa trace exacte** sous cette lib (7882/7992)
+  et un index complet sur une copie : ce vert ferme le ticket de l'index complet (le cœur le ferme).
+  Jusqu'à la pose, aucun index complet sur les bases de Lucie.
