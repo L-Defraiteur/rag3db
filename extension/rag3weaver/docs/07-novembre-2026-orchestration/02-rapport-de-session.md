@@ -2150,3 +2150,11 @@ avance d'autant ; les hashs, eux, sont exacts.
   publiait déjà chaque recul (on_retry) et bornait à 30 min, mais aucun appelant ne posait de budget ;
   correctif : `GenOptions.retry_budget` (chat 300 s, pas d'équipier 120 s, juge 600 s), une ligne au journal
   par recul, le statut du chat dit le numéro, le code et l'attente.
+- **13 h 5x, 96 a poussé a6637eeee** (un recul du modèle se dit et se borne : `GenOptions.retry_budget`, une
+  ligne au journal par reprise, le statut du chat la dit ; chat 300 s, pas d'équipier 120 s, juge 600 s ;
+  témoin à faux 429 sans fin et horloge virtuelle). Un rouge d'environnement nommé au navigateur
+  (« Inspected target navigated or closed », deuxième fois de la semaine ; ticket à la troisième). 96
+  passe à une page de conception : **le classeur local dans le rappel** (Qwen3-4B par llama-server à
+  luciepc, k=5 → 1 ou 2, les deux derniers tours en contexte, en option et mesuré sous le budget d'une
+  seconde du rappel ; rien ne se code avant Lucie). archi : passe de référence puis rejeu court avant son
+  vert ; recherche tient la carte.
