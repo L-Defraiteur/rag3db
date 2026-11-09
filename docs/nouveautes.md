@@ -7,6 +7,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **9 nov. — La jauge du contexte se voit avancer.** Elle écrit son pourcentage, garde une barre
+  visible même à moins de 1 % d'un modèle à un million de jetons, suit chaque appel au modèle
+  pendant le tour, et ne se perd plus quand l'hôte redémarre. (`jauge-du-contexte`)
 - **9 nov. — Une commande en attente se décide d'un clic, et l'atelier repart seul.** Quand la
   porte de l'atelier met une commande en attente, la même carte d'accord la montre sous l'appel ;
   accorder laisse passer cette commande exacte, jamais toute sa famille, et la décision relance le

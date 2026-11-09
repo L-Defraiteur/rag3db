@@ -661,7 +661,7 @@ pub struct AgentRun {
 }
 
 /// Le dernier appel au modèle d'un run ([`AgentRun::last_call`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LastCall {
     /// Les jetons d'entrée de l'appel, cache compris.
     pub prompt_tokens: usize,
