@@ -862,7 +862,7 @@ mod tests {
         let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_chat_model(model));
         let racine = format!("http://{adresse}");
         let ide = |methode: &str, route: &str, corps: Value| -> Value {
-            let agent = crate::daemon::agent();
+            let agent = crate::daemon::agent_de_temoin();
             let mut r = if methode == "GET" {
                 agent.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap()
             } else {
@@ -948,7 +948,7 @@ mod tests {
         let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_chat_model(model));
         let racine = format!("http://{adresse}");
         let ide = |methode: &str, route: &str, corps: Value| -> Value {
-            let agent = crate::daemon::agent();
+            let agent = crate::daemon::agent_de_temoin();
             let mut r = if methode == "GET" {
                 agent.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap()
             } else {
@@ -1041,7 +1041,7 @@ mod tests {
         let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_chat_model(model));
         let racine = format!("http://{adresse}");
         let ide = |methode: &str, route: &str, corps: Value| -> Value {
-            let agent = crate::daemon::agent();
+            let agent = crate::daemon::agent_de_temoin();
             let mut r = if methode == "GET" {
                 agent.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap()
             } else {
@@ -1404,7 +1404,7 @@ mod tests {
         let serveur = tiny_http::Server::from_listener(ecoute, None).unwrap();
         let servi = host.clone();
         let fil = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(serveur, 2).serve(servi, Some("j".to_string())));
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/ide/describe"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")

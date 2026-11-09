@@ -303,7 +303,7 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     });
     let racine = format!("http://{adresse}");
     let decrit: Value = {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/ide/describe"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -318,7 +318,7 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     // tour en vol, ou fini. La page a ensuite 20 s pour la montrer ; si elle ne le fait pas,
     // c'est la page ou le flux qui a manqué, et le message le dit.
     let tour_en_vol = || -> Option<String> {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .get(format!("{racine}/ide/chat?backend={id}"))
             .header("Cookie", "rag3weaver_ide=j")
             .call()
@@ -617,7 +617,7 @@ fn la_page_du_chat_tient_l_ordre_le_defilement_et_la_place() {
     });
     let racine = format!("http://{adresse}");
     let post = |chemin: &str, corps: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}{chemin}"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -626,7 +626,7 @@ fn la_page_du_chat_tient_l_ordre_le_defilement_et_la_place() {
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let etat_du_chat = || -> Value {
-        let mut r = crate::daemon::agent().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str::<Value>(&r.body_mut().read_to_string().unwrap()).unwrap()["result"].clone()
     };
     assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
@@ -739,7 +739,7 @@ fn la_barre_du_chat_parle_en_depots_et_chacun_a_sa_jauge() {
     });
     let racine = format!("http://{adresse}");
     for m in [&m1, &m2] {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/ide/describe"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -805,7 +805,7 @@ fn la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste() {
         h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(page_du_chat())
     });
     let racine = format!("http://{adresse}");
-    let mut r = crate::daemon::agent()
+    let mut r = crate::daemon::agent_de_temoin()
         .post(format!("{racine}/ide/describe"))
         .header("Cookie", "rag3weaver_ide=j")
         .header("content-type", "application/json")
@@ -964,7 +964,7 @@ fn le_premier_jeton_d_un_tour_arrive_dans_la_page() {
         h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(rapide())
     });
     let racine = format!("http://{adresse}");
-    let mut r = crate::daemon::agent()
+    let mut r = crate::daemon::agent_de_temoin()
         .post(format!("{racine}/ide/describe"))
         .header("Cookie", "rag3weaver_ide=j")
         .header("content-type", "application/json")
@@ -1098,7 +1098,7 @@ fn le_code_du_chat_est_colore_par_les_grammaires_de_l_hote() {
         h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_montre_deux_langues())
     });
     let racine = format!("http://{adresse}");
-    let mut r = crate::daemon::agent()
+    let mut r = crate::daemon::agent_de_temoin()
         .post(format!("{racine}/ide/describe"))
         .header("Cookie", "rag3weaver_ide=j")
         .header("content-type", "application/json")
@@ -1155,7 +1155,7 @@ fn le_code_du_chat_se_lit_comme_du_code() {
         h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_montre_du_code())
     });
     let racine = format!("http://{adresse}");
-    let mut r = crate::daemon::agent()
+    let mut r = crate::daemon::agent_de_temoin()
         .post(format!("{racine}/ide/describe"))
         .header("Cookie", "rag3weaver_ide=j")
         .header("content-type", "application/json")
@@ -1214,7 +1214,7 @@ fn le_retour_d_un_outil_se_lit_et_le_brut_reste_exact() {
     });
     let racine = format!("http://{adresse}");
     let post = |chemin: &str, corps: Value| -> Value {
-        let mut r = crate::daemon::agent().post(format!("{racine}{chemin}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
+        let mut r = crate::daemon::agent_de_temoin().post(format!("{racine}{chemin}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
@@ -1224,7 +1224,7 @@ fn le_retour_d_un_outil_se_lit_et_le_brut_reste_exact() {
     n.evaluer("document.querySelector('#message').value = 'regarde le code'; document.querySelector('#send').click()");
     n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour");
     let etat: Value = {
-        let mut r = crate::daemon::agent().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine}/ide/chat?backend={id}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str::<Value>(&r.body_mut().read_to_string().unwrap()).unwrap()["result"].clone()
     };
     let recu = etat["turns"].as_array().unwrap().iter().find(|t| t["role"] == "tool" && t["tool_name"] == "read_file").and_then(|t| t["content"].as_str()).unwrap_or_default().to_string();
@@ -1305,7 +1305,7 @@ fn la_barre_se_lit_par_session_tache_et_espace() {
     });
     let racine = format!("http://{adresse}");
     let ide = |chemin: &str, corps: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}{chemin}"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -1470,7 +1470,7 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
         h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(lent)
     });
     let racine = format!("http://{adresse}");
-    let mut r = crate::daemon::agent()
+    let mut r = crate::daemon::agent_de_temoin()
         .post(format!("{racine}/ide/describe"))
         .header("Cookie", "rag3weaver_ide=j")
         .header("content-type", "application/json")
@@ -1480,7 +1480,7 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
     assert_eq!(v["ok"], true, "{v}");
     // Le thème que l'hôte sert est le fichier commun, octet pour octet.
     let commun = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/themes/daemon.json")).unwrap();
-    let servi = crate::daemon::agent().get(format!("{racine}/ide/theme/daemon.json")).header("Cookie", "rag3weaver_ide=j").call().unwrap().body_mut().read_to_string().unwrap();
+    let servi = crate::daemon::agent_de_temoin().get(format!("{racine}/ide/theme/daemon.json")).header("Cookie", "rag3weaver_ide=j").call().unwrap().body_mut().read_to_string().unwrap();
     assert_eq!(servi, commun, "l'hôte sert templates/themes/daemon.json");
     let theme: Value = serde_json::from_str(&commun).unwrap();
 
@@ -1630,7 +1630,7 @@ fn l_accueil_parle_en_depots_et_en_worktrees() {
     });
     let racine = format!("http://{adresse}");
     let ide = |chemin: &str, corps: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}{chemin}"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")

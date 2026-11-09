@@ -68,7 +68,7 @@ fn mes_recherches_rendent_celles_de_l_ide_et_des_agents_avec_les_clics() {
         serde_json::from_str(&texte).unwrap_or_else(|_| json!({ "pas_du_json": texte.chars().take(200).collect::<String>() }))
     };
     let ide = |route: &str, corps: Option<Value>| -> Value {
-        let a = crate::daemon::agent();
+        let a = crate::daemon::agent_de_temoin();
         let r = match corps {
             Some(c) => a
                 .post(format!("{racine}{route}"))
@@ -82,7 +82,7 @@ fn mes_recherches_rendent_celles_de_l_ide_et_des_agents_avec_les_clics() {
     };
     let appeler = |nom: &str, args: Value| -> Value { ide("/ide/call", Some(json!({ "manifest": manifeste, "name": nom, "arguments": args }))) };
     let session_agent = {
-        let r = crate::daemon::agent()
+        let r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/session"))
             .header("Authorization", "Bearer j")
             .header("content-type", "application/json")
@@ -120,7 +120,7 @@ fn mes_recherches_rendent_celles_de_l_ide_et_des_agents_avec_les_clics() {
 
     // 3. La recherche d'un agent, par sa session.
     let agent = {
-        let r = crate::daemon::agent()
+        let r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/call"))
             .header("Authorization", "Bearer j")
             .header(super::SESSION_HEADER, &session_agent)
