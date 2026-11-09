@@ -81,7 +81,7 @@ fn monter(paquets: &std::path::Path, fichiers: &[(&str, &str)]) -> Banc {
     let racine = format!("http://{adresse}");
     // `describe` ouvre le backend ; `/ide/etat` donne son id.
     let decrit: Value = {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/ide/describe"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -91,7 +91,7 @@ fn monter(paquets: &std::path::Path, fichiers: &[(&str, &str)]) -> Banc {
     };
     assert_eq!(decrit["ok"], true, "{decrit}");
     let etat: Value = {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .get(format!("{racine}/ide/etat"))
             .header("Cookie", "rag3weaver_ide=j")
             .call()
@@ -131,7 +131,7 @@ fn un_composant_modifie_se_recharge_dans_la_page_en_gardant_son_etat() {
     // gabarit, celui d'un composant (sans graphe de clic : vide), et le refus
     // d'une demande sans backend.
     let graphe = |requete: &str| -> (u16, Value) {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .get(format!("{racine}/ide/graphe?{requete}"))
             .header("Cookie", "rag3weaver_ide=j")
             .config()
@@ -408,7 +408,7 @@ fn une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide() {
         assert!(std::process::Command::new("git").arg("-C").arg(&dossier).args(args).status().unwrap().success());
     }
     let poster = |route: &str, corps: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/ide/propositions{route}"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -514,7 +514,7 @@ fn une_tache_se_relit_puis_se_fusionne_dans_l_ide() {
         assert!(std::process::Command::new("git").arg("-C").arg(&dossier).args(args).status().unwrap().success(), "git {args:?}");
     }
     let poster = |route: &str, corps: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}{route}"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -523,7 +523,7 @@ fn une_tache_se_relit_puis_se_fusionne_dans_l_ide() {
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let lire = |route: &str| -> Value {
-        let mut r = crate::daemon::agent().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let id_de = |nom: &str| -> String {
@@ -655,13 +655,13 @@ fn l_agent_de_l_ide_propose_un_gabarit_sur_gemini() {
         ],
     );
     let lire = |route: &str| -> Value {
-        let mut r = crate::daemon::agent().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let poster = {
         let racine = racine.clone();
         move |route: &str, corps: Value| -> Value {
-            let mut r = crate::daemon::agent()
+            let mut r = crate::daemon::agent_de_temoin()
                 .post(format!("{racine}{route}"))
                 .header("Cookie", "rag3weaver_ide=j")
                 .header("content-type", "application/json")

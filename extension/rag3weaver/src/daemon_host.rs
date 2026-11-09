@@ -1957,6 +1957,10 @@ mod tests {
     }
 
     /// Un hôte gardé par un jeton, sur un port libre ; rend l'adresse.
+    /// Le délai d'une requête de [`demander`] : `/sante`, `/session`, `/arret`, qui répondent
+    /// en millisecondes ; dix secondes laissent la marge de la lib entière sous charge.
+    pub(super) const DELAI_D_UNE_SONDE: std::time::Duration = std::time::Duration::from_secs(10);
+
     pub(super) fn hote_garde(jeton: &str) -> (String, std::thread::JoinHandle<()>) {
         hote_garde_avec(jeton, |h| h)
     }
@@ -1973,23 +1977,27 @@ mod tests {
         (adresse, fil)
     }
 
+    /// Une requête de témoin vers un hôte : **bornée** à [`DELAI_D_UNE_SONDE`] en tout (ticket
+    /// du 8 novembre 2026, un test de l'hôte attendait son hôte par un client sans délai) ; un
+    /// hôte qui ne répond pas fait paniquer le témoin en nommant la route et le délai.
     pub(super) fn demander(methode: &str, url: &str, jeton: Option<&str>) -> (u16, Value) {
-        let agent = crate::daemon::agent();
+        let agent = crate::daemon::agent_with_timeout(DELAI_D_UNE_SONDE);
+        let muet = |e: ureq::Error| -> ! { panic!("{methode} {url} : sans réponse après {} s ({e})", DELAI_D_UNE_SONDE.as_secs()) };
         let mut r = if methode == "GET" {
             let mut q = agent.get(url);
             if let Some(t) = jeton {
                 q = q.header("Authorization", &format!("Bearer {t}"));
             }
-            q.call().unwrap()
+            q.call().unwrap_or_else(|e| muet(e))
         } else {
             let mut q = agent.post(url).header("content-type", "application/json");
             if let Some(t) = jeton {
                 q = q.header("Authorization", &format!("Bearer {t}"));
             }
-            q.send(json!({ "client": "le témoin" }).to_string()).unwrap()
+            q.send(json!({ "client": "le témoin" }).to_string()).unwrap_or_else(|e| muet(e))
         };
         let statut = r.status().as_u16();
-        let texte = r.body_mut().read_to_string().unwrap();
+        let texte = r.body_mut().read_to_string().unwrap_or_else(|e| muet(e));
         (statut, serde_json::from_str(&texte).unwrap())
     }
 
@@ -2132,7 +2140,7 @@ mod tests {
 
         let (adresse, fil) = hote_garde("j");
         let appeler = |nom: &str, args: Value| -> Value {
-            let mut r = crate::daemon::agent()
+            let mut r = crate::daemon::agent_de_temoin()
                 .post(format!("http://{adresse}/ide/call"))
                 .header("Cookie", "rag3weaver_ide=j")
                 .header("content-type", "application/json")
@@ -2222,6 +2230,31 @@ mod tests {
         fil.join().unwrap();
     }
 
+    /// **La sonde d'un témoin rend la main devant un hôte muet** (9 novembre
+    /// 2026) : `demander` par un agent sans délai a figé la lib entière 25 min,
+    /// une sonde `/sante` tombée dans l'arrêt d'un hôte (connexion acceptée,
+    /// réponse jamais venue). Le faux hôte accepte et ne répond pas : la sonde
+    /// rend la main dans son délai, en le disant.
+    #[test]
+    fn la_sonde_d_un_temoin_rend_la_main_devant_un_hote_muet() {
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let (connexion, _) = ecoute.accept().unwrap();
+            std::thread::sleep(std::time::Duration::from_secs(60));
+            drop(connexion);
+        });
+        let t0 = std::time::Instant::now();
+        let sonde = std::thread::spawn(move || demander("GET", &format!("http://{adresse}/sante"), None));
+        while !sonde.is_finished() {
+            assert!(t0.elapsed() < std::time::Duration::from_secs(20), "la sonde attend sans fin un hôte muet ({:?})", t0.elapsed());
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let panique = sonde.join().expect_err("un hôte muet ne rend aucune réponse");
+        let dit = panique.downcast_ref::<String>().cloned().unwrap_or_default();
+        assert!(dit.contains("sans réponse après 10 s"), "la sonde dit son délai : {dit}");
+    }
+
     /// **L'arrêt après inactivité** (18 octobre 2026) : sans requête ni travail,
     /// l'hôte s'arrête seul dans son délai ; une sonde `/sante` ne le retient pas,
     /// une requête en vol si (une connexion qui envoie sans finir).
@@ -2233,13 +2266,22 @@ mod tests {
             .with_idle(Some(std::time::Duration::from_millis(600)));
         let t0 = std::time::Instant::now();
         let fil = std::thread::spawn(move || server.serve(Arc::new(hote_isole()), Some("j".into())));
-        // Des sondes pendant tout le délai : elles ne comptent pas.
+        // Des sondes pendant tout le délai : elles ne comptent pas. Sous la charge de la lib
+        // entière, une sonde retardée peut tomber dans l'arrêt même (connexion acceptée,
+        // réponse jamais venue : 25 min de figement le 9 novembre 2026) ; bornée, elle rend
+        // alors une erreur, qui dit que l'hôte s'arrête, et les sondes cessent.
+        let sonde = crate::daemon::agent_with_timeout(DELAI_D_UNE_SONDE);
         while t0.elapsed() < std::time::Duration::from_millis(500) {
-            let _ = demander("GET", &format!("http://{adresse}/sante"), None);
+            if sonde.get(format!("http://{adresse}/sante")).call().is_err() {
+                break;
+            }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        // Le délai se juge depuis la dernière sonde, pas depuis le départ : une sonde tombée
+        // dans l'arrêt a pu tenir jusqu'à son propre délai.
+        let fin_des_sondes = std::time::Instant::now();
         while !fil.is_finished() {
-            assert!(t0.elapsed() < std::time::Duration::from_secs(5), "l'hôte inactif ne s'est pas arrêté");
+            assert!(fin_des_sondes.elapsed() < std::time::Duration::from_secs(5), "l'hôte inactif ne s'est pas arrêté");
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         fil.join().unwrap();

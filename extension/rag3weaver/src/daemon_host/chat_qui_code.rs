@@ -211,7 +211,7 @@ fn le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page() {
     });
     let racine = format!("http://{adresse}");
     let ide = |route: &str, corps: Option<Value>| -> Value {
-        let a = crate::daemon::agent();
+        let a = crate::daemon::agent_de_temoin();
         let mut r = match corps {
             Some(c) => a
                 .post(format!("{racine}{route}"))
@@ -438,7 +438,7 @@ fn le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise() {
     let (adresse, fil) = super::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(qui_repond_en_markdown()));
     let racine = format!("http://{adresse}");
     let ide = |route: &str, corps: Option<Value>| -> Value {
-        let a = crate::daemon::agent();
+        let a = crate::daemon::agent_de_temoin();
         let mut r = match corps {
             Some(c) => a.post(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(c.to_string()).unwrap(),
             None => a.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap(),

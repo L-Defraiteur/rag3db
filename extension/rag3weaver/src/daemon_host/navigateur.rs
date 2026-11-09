@@ -432,7 +432,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
 
     let (adresse, fil) = super::tests::hote_garde("j");
     let appeler = |nom: &str, args: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("http://{adresse}/ide/call"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -458,7 +458,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
         std::thread::sleep(Duration::from_millis(200));
     }
     let etat: Value = {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .get(format!("http://{adresse}/ide/etat"))
             .header("Cookie", "rag3weaver_ide=j")
             .call()
@@ -648,7 +648,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     let lent = {
         let (adresse, manifeste, journal) = (adresse.clone(), manifeste.clone(), journal.to_string_lossy().to_string());
         std::thread::spawn(move || -> Value {
-            let mut r = crate::daemon::agent()
+            let mut r = crate::daemon::agent_de_temoin()
                 .post(format!("http://{adresse}/ide/call"))
                 .header("Cookie", "rag3weaver_ide=j")
                 .header("content-type", "application/json")
@@ -675,7 +675,7 @@ fn les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur() {
     let etat = n.evaluer("document.querySelector('#dag-etat').textContent");
     let run = etat.as_str().unwrap().strip_prefix("run ").and_then(|r| r.split(' ').next()).unwrap().to_string();
     let refus: Value = {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("http://{adresse}/ide/runs/arreter"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -723,7 +723,7 @@ fn la_marge_d_un_fichier_se_rend_sans_l_outil_outline() {
 
     let (adresse, fil) = super::tests::hote_garde("j");
     let appeler = |nom: &str, args: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("http://{adresse}/ide/call"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -745,7 +745,7 @@ fn la_marge_d_un_fichier_se_rend_sans_l_outil_outline() {
     let refus = appeler("outline", json!({ "path": "src/compteur.rs", "format": "json" }));
     assert_eq!(refus["ok"], false, "outline n'est pas exposé par ce manifeste : {refus}");
     let etat: Value = {
-        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let id = etat["backends"]
@@ -805,7 +805,7 @@ fn la_recherche_se_tape_depuis_l_accueil_et_le_dossier_n_est_qu_un_filtre() {
 
     let (adresse, fil) = super::tests::hote_garde("j");
     let appeler = |nom: &str, args: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("http://{adresse}/ide/call"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -828,7 +828,7 @@ fn la_recherche_se_tape_depuis_l_accueil_et_le_dossier_n_est_qu_un_filtre() {
         std::thread::sleep(Duration::from_millis(200));
     }
     let etat: Value = {
-        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let id = etat["backends"]
@@ -972,7 +972,7 @@ fn l_ide_d_un_vrai_hote_se_rend_en_lecture_seule() {
     let jeton = std::fs::read_to_string(&fichier_jeton).unwrap_or_else(|e| panic!("{} : {e}", fichier_jeton.display())).trim().to_string();
     let cookie = format!("rag3weaver_ide={jeton}");
     let appeler = |outil: &str, args: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("http://{adresse}/ide/call"))
             .header("Cookie", &cookie)
             .header("content-type", "application/json")
@@ -1016,7 +1016,7 @@ fn l_ide_d_un_vrai_hote_se_rend_en_lecture_seule() {
         .unwrap_or_else(|| panic!("aucun fichier de code indexé, à jour et nommé parmi {} ({} candidats)", entrees.len(), candidats.len()));
     eprintln!("{nom} : {fichier}, symbole {symbole}");
     let etat: Value = {
-        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", &cookie).call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/etat")).header("Cookie", &cookie).call().unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let id = etat["backends"]

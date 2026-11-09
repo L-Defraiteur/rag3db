@@ -97,7 +97,7 @@ pub(super) mod tests {
     }
 
     fn poster(adresse: &str, route: &str, corps: Value) -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("http://{adresse}{route}"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -108,7 +108,7 @@ pub(super) mod tests {
 
     /// L'id d'un backend dans l'état de l'hôte, par son manifeste.
     fn id_de(adresse: &str, manifeste: &str) -> (String, bool) {
-        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         let etat: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
         let b = etat["backends"].as_array().and_then(|b| b.iter().find(|b| b["manifest"] == manifeste)).unwrap_or_else(|| panic!("{manifeste} n'est pas dans l'état : {etat}")).clone();
         (b["id"].as_str().unwrap().to_string(), b["open"] == true)
@@ -163,9 +163,9 @@ pub(super) mod tests {
         // Un dépôt connu de l'hôte mais fermé : rien ne s'ouvre, la raison est dite.
         let decrit = poster(&adresse, "/ide/describe", json!({ "manifest": ferme }));
         assert_eq!(decrit["ok"], true, "{decrit}");
-        let mut s = crate::daemon::agent().post(format!("http://{adresse}/session")).header("Authorization", "Bearer j").header("content-type", "application/json").send(json!({ "client": "le témoin" }).to_string()).unwrap();
+        let mut s = crate::daemon::agent_de_temoin().post(format!("http://{adresse}/session")).header("Authorization", "Bearer j").header("content-type", "application/json").send(json!({ "client": "le témoin" }).to_string()).unwrap();
         let session: Value = serde_json::from_str(&s.body_mut().read_to_string().unwrap()).unwrap();
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("http://{adresse}/backend/close"))
             .header("Authorization", "Bearer j")
             .header("X-Rag3weaver-Session", session["session"].as_str().unwrap_or_default())
