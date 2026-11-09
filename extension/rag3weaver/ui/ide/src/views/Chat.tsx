@@ -112,7 +112,17 @@ function when(t: ToolBlock): string {
 }
 
 /// Les jetons lisibles : 12 345 → « 12,3 k ».
-const tokens = (n: number | null | undefined) => (n == null ? "?" : n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")} k` : String(n));
+const tokens = (n: number | null | undefined) =>
+  n == null ? "?" : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} M` : n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")} k` : String(n);
+/// Un nombre entier, ses milliers séparés par une espace (le survol de la jauge).
+const entier = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+/// **Le pourcentage de la jauge** (Lucie, 8 novembre 2026 : « ni le pourcentage ») : une
+/// décimale sous 10 %, aucune au-delà, et « < 0,1 % » plutôt qu'un zéro qui mentirait.
+const pourcent = (r: number) => {
+  const p = r * 100;
+  if (p > 0 && p < 0.1) return "< 0,1 %";
+  return `${(p < 10 ? p.toFixed(1) : p.toFixed(0)).replace(".", ",")} %`;
+};
 
 /// Une ligne de la barre des runs à rôle : l'archiviste, la compaction…
 type RoleRun = { run: string; role: string; what: string; at?: number; state: "en cours" | "fini" | "en erreur" | "inconnu" };
@@ -211,18 +221,27 @@ function Invocation({ actif }: { actif: boolean }) {
 }
 
 /// **La jauge du contexte** : le dernier appel au modèle sur le maximum du modèle
-/// déclaré ; « inconnu » quand l'un manque, jamais une valeur codée en dur.
+/// déclaré ; « inconnu » quand l'un manque, jamais une valeur codée en dur. L'échelle est
+/// linéaire, sans plafond inventé ; sous un modèle d'un million de jetons, quelques lectures
+/// font moins de 1 % : le pourcentage l'écrit, et la barre garde quelques pixels dès qu'il y a
+/// un compte. Elle suit chaque appel au modèle du tour (`LlmCall` sur le flux).
 function Gauge({ context, model, counters }: { context?: ChatContext; model?: string | null; counters?: string }) {
   const used = context?.used ?? null;
   const max = context?.max ?? null;
   const ratio = used != null && max ? Math.min(1, used / max) : null;
+  const survol =
+    used == null
+      ? "aucun appel au modèle encore"
+      : `${entier(used)} jetons au dernier appel au modèle${max ? ` sur ${entier(max)} (plafond du modèle)` : " (plafond du modèle inconnu)"}${context?.at ? ` · ${new Date(context.at).toLocaleTimeString()}` : ""}`;
   return (
-    <div className="usage mt-1 mb-2 pl-6 pr-1 text-[11px] text-muted-foreground" data-used={used ?? ""} data-max={max ?? ""}>
+    <div className="usage mt-1 mb-2 pl-6 pr-1 text-[11px] text-muted-foreground" data-used={used ?? ""} data-max={max ?? ""} title={survol}>
       <div className="h-1.5 rounded bg-sidebar-accent overflow-hidden" role="meter" aria-label="contexte utilisé" aria-valuemin={0} aria-valuemax={max ?? undefined} aria-valuenow={used ?? undefined}>
-        <div className="h-full bg-primary" style={{ width: `${Math.round((ratio ?? 0) * 100)}%` }} />
+        <div className="h-full bg-primary" style={{ width: ratio ? `max(3px, ${(ratio * 100).toFixed(2)}%)` : "0" }} />
       </div>
       <div className="flex justify-between gap-2 mt-0.5">
-        <span className="contexte">{used == null ? "contexte : pas encore de tour" : `contexte ${tokens(used)} / ${max ? tokens(max) : "inconnu"}`}</span>
+        <span className="contexte">
+          {used == null ? "contexte : pas encore de tour" : `contexte ${tokens(used)} / ${max ? tokens(max) : "inconnu"}${ratio != null ? ` · ${pourcent(ratio)}` : ""}`}
+        </span>
         {model ? <span className="truncate">{model}</span> : null}
       </div>
       {counters ? <div id="chat-conso" className="break-words">{counters}</div> : null}
@@ -411,6 +430,16 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         return;
       }
       if (ev.run !== undefined && runRef.current && ev.run !== runRef.current) return;
+      // **La jauge suit chaque appel au modèle du tour** : `prompt_tokens` du dernier appel,
+      // sans attendre la fin du tour.
+      if (ev.kind === "LlmCall" && runRef.current && ev.run === runRef.current && typeof ev.prompt_tokens === "number") {
+        const used = ev.prompt_tokens;
+        setRecaps((cur) => {
+          const r = cur[id] ?? {};
+          const c: ChatContext = { used: null, max: null, source: "run", at: null, ...r.context };
+          return { ...cur, [id]: { ...r, context: { ...c, used, at: Date.now() } } };
+        });
+      }
       // L'invocation ne suit que le run du tour (relecture d'everything declarative) : le
       // bus du dépôt porte aussi le juge, l'archiviste et les réactions, et le filtre
       // ci-dessus laisse passer leurs trames tant que le RunStarted du chat n'est pas lu.

@@ -47,11 +47,15 @@ pub(super) struct ChatEntry {
     empreintes: std::sync::Arc<std::sync::Mutex<super::empreintes::Empreintes>>,
 }
 
-/// Ce qui se garde sur le disque : le manifeste (pour la relecture) et la session.
+/// Ce qui se garde sur le disque : le manifeste (pour la relecture), la session, et le
+/// dernier appel au modèle (la jauge du contexte, qu'un redémarrage ne doit pas remettre à
+/// « pas encore de tour » ; Lucie, 8 novembre 2026).
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ChatFile {
     manifest: PathBuf,
     session: ChatSession,
+    #[serde(default)]
+    last_call: Option<crate::agent::LastCall>,
 }
 
 /// La racine des sessions : `RAG3WEAVER_CHATS_DIR`, sinon
@@ -146,7 +150,7 @@ impl DaemonHost {
         let texte = {
             let chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
             let Some(e) = chats.get(backend_id) else { return Ok(()) };
-            serde_json::to_vec(&json!({ "manifest": e.manifest, "session": e.session })).map_err(|e| e.to_string())?
+            serde_json::to_vec(&json!({ "manifest": e.manifest, "session": e.session, "last_call": e.last_call })).map_err(|e| e.to_string())?
         };
         std::fs::create_dir_all(&self.chats_root).map_err(|e| format!("{} : {e}", self.chats_root.display()))?;
         let chemin = self.chat_path(backend_id);
@@ -186,7 +190,7 @@ impl DaemonHost {
                         self.chats
                             .lock()
                             .unwrap_or_else(|p| p.into_inner())
-                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None, last_call: None, empreintes: Default::default() });
+                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None, last_call: f.last_call, empreintes: Default::default() });
                     }
                     Err(e) => {
                         lignes.push(format!("session de chat de {id} orpheline : {e}"));
