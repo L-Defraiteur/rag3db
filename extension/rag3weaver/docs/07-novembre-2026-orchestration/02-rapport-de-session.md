@@ -1821,3 +1821,4 @@ avance d'autant ; les hashs, eux, sont exacts.
   reprise d'un état en mémoire, « 1..796 puis CHECKPOINT » suffit, dichotomie sur K en attente du
   disque). La CI de master reste rouge sur le témoin du rattrapage d'ED, correctif prêt (219053a4b),
   passe en attente du disque.
+- **02 h 28** : le fstrim a fini de lui-même (53 min) ; disque de luciepc à 1 %, PSI io 1,1 ; prochain tir le lundi 16 à 00 h 02, d'où le drop-in `--minimum 16M` et une heure creuse à poser avant. « Disque rendu » dit aux sessions à 02 h 30 : la dichotomie d'hotfixs, la mesure de codeparsers et la passe du correctif de CI d'ED reprennent.
