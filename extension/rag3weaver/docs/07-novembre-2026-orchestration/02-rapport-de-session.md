@@ -2030,3 +2030,11 @@ avance d'autant ; les hashs, eux, sont exacts.
   l'atelier rejouée quand bge-m3 est rendu. Joué seul, le témoin est vert cinq fois : un départage par
   répétition n'aurait rien dit. archi a dit « fini » pour bge-m3 ; recherche est partie en rejeu court
   (residus-de-suite-4 sur 120a5db31, sous 29a7bc52a).
+- **13 h 0x, le rejeu court de recherche a rougi sur la suite neuve de 96** : `e2e_banc_fiches_classees`
+  panique sans voie (« posez RAG3WEAVER_BANC_DECIDE et/ou RAG3WEAVER_BANC_VERTEX — un banc sauté n'est pas
+  un banc vert »). Le refus est juste, la place non : un banc qui exige un décideur rougit d'environnement
+  dans tout e2e entier joué sans sa voie. Décidé : 96 le sort de la liste de l'e2e entier vers les bancs
+  joués seuls avec leur voie (comme la charge d'ingestion), petit lot après le premier pas de l'équipier ;
+  recherche rejoue sans lui (SUITES_EN_PLUS=e2e_archiviste) et le dit dans son verdict. Son témoin de
+  résidus a jugé toutes les suites : e2e_lectures « résidu connu » avec ticket, e2e_code dette déclarée,
+  e2e_archiviste et le banc propres. bge-m3 rendu à 13 h 03 ; archi fait d'abord son mini-lot du délai.
