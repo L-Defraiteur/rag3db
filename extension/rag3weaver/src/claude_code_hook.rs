@@ -1083,6 +1083,11 @@ enum Statut {
     Changee(u64),
 }
 
+/// La ligne du bloc pour un rappel des fiches qui dépasse son budget.
+fn ligne_du_rappel_lent(_err: &str, budget_ms: u64) -> String {
+    format!("Rappel des fiches : pas de réponse en {budget_ms} ms — il continue en fond, son résultat viendra au prochain outil ou au prochain tour.\n")
+}
+
 fn chemin_de_l_etat(reglage: &Reglage, session_id: &str) -> PathBuf {
     reglage.journal.parent().map(|d| d.join("hooks")).unwrap_or_else(|| PathBuf::from("hooks")).join(format!("{session_id}.json"))
 }
@@ -1622,7 +1627,7 @@ fn bloc_de_prompt(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal: &mut 
                 journal.push(format!("recall_fiches en {} ms : {err}", debut.elapsed().as_millis()));
                 if lent {
                     confier_au_fond(e, reglage, &requete, None, etat.tour, identite.as_ref().map(|i| i.cle.as_str()).unwrap_or(""), journal);
-                    b.push_str(&format!("Rappel des fiches : pas de réponse en {} ms — il continue en fond, son résultat viendra au prochain outil ou au prochain tour.\n", reglage.recall_timeout_ms));
+                    b.push_str(&ligne_du_rappel_lent(&err, reglage.recall_timeout_ms));
                 } else {
                     b.push_str(&format!("Rappel des fiches en panne : {} — le rappel sera retenté au prochain tour.\n", premiere_ligne(&err, 160)));
                 }
@@ -2223,6 +2228,23 @@ mod tests {
         let r = recues.lock().unwrap();
         let appel: Value = serde_json::from_str(&r[2].3).unwrap();
         assert_eq!(appel["deadline_ms"], 950, "le rappel borné à 1 s donne 950 ms à l'hôte : {appel}");
+    }
+
+    /// **Un rappel en délai dit ce que l'hôte attendait** (c7, 9 novembre 2026) :
+    /// la réponse « deadline » porte `waiting_on` ; l'erreur et la ligne du bloc le
+    /// disent, au lieu de « l'hôte ne répond pas » ou d'un « pas de réponse » muet.
+    #[test]
+    fn un_rappel_en_delai_dit_ce_que_l_hote_attendait() {
+        let (adresse, _recues) = hote_en_carton(vec![
+            (200, json!({ "session": "S9" }).to_string()),
+            (200, json!({ "ok": true, "describe": { "name": "memoire-longue" } }).to_string()),
+            (422, json!({ "ok": false, "error": "délai dépassé (950 ms)", "error_kind": "deadline", "transient": true, "waiting_on": "l'embarquement de la requête par 127.0.0.1:7979 : 950 ms" }).to_string()),
+        ]);
+        let c = ClientHote::ouvrir(&adresse, None, Path::new("/m/backend.json"), &["dev".into()], Duration::from_secs(5)).unwrap();
+        let e = c.appeler_borne("recall_fiches", json!({ "query": "x" }), Duration::from_millis(1_000)).unwrap_err();
+        assert!(e.contains("l'hôte attendait l'embarquement de la requête par 127.0.0.1:7979 : 950 ms"), "{e}");
+        let ligne = ligne_du_rappel_lent(&e, 1_000);
+        assert!(ligne.contains("l'hôte attendait l'embarquement de la requête par 127.0.0.1:7979 : 950 ms") && !ligne.contains("ne répond pas"), "{ligne}");
     }
 
     #[test]

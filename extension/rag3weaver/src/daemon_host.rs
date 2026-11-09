@@ -757,6 +757,7 @@ impl DaemonHost {
             at: std::time::Instant::now() + std::time::Duration::from_millis(ms),
             ms,
             fired: Default::default(),
+            waiting: Default::default(),
         });
         let frappe = echeance.as_ref().map(|d| d.fired.clone());
         let mut reponse = crate::backend::with_call_deadline(echeance, || self.call_sans_delai(session, manifest, name, arguments));
