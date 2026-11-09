@@ -8,7 +8,7 @@ import { RagDesDepots, UiDuTour } from "@/components/UiDuTour";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
 import { daemonTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
-import { displayName, fetchChat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
+import { displayName, fetchChat, onEtat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatPousse, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
 // la colonne des conversations, l'en-tête nom / modèle / état, le fil, la saisie
@@ -348,6 +348,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // avant (page rechargée, flux coupé puis repris) a publié son run.
   const reload = async () => {
     const s = await fetchChat(id);
+    toursRef.current = s.turns;
     setChat(s);
     follow.current = true;
     setItems((cur) => (cur.some((i) => i.kind === "message" && i.live) ? cur : fromTurns(s.turns)));
@@ -469,7 +470,6 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         live((m) => (m.propositions.some((p) => p.id === ev.id) ? m : { ...m, propositions: [...m.propositions, { id: Number(ev.id), paths: ev.paths as string[] | undefined, accepted: ev.accepted as boolean | undefined }] }));
       } else if (ev.kind === "RunFinished" && ev.run === runRef.current) {
         setRun(null);
-        if (!envoiDeLaPage.current) relireUnTourVenuDAilleurs().catch((e: Error) => setStatus(e.message));
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -482,27 +482,59 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     follow.current = false;
   }, [items]);
 
-  // **Un tour venu d'ailleurs, relu à sa fin** : la session fait foi, comme pour un tour
-  // envoyé d'ici ; l'hôte la rend quand le tour l'a reposée (son run levé).
-  const relireUnTourVenuDAilleurs = async () => {
-    let s = await fetchChat(id);
-    for (let i = 0; s.run && i < 50; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      s = await fetchChat(id);
-    }
-    setChat(s);
-    follow.current = true;
-    setItems(fromTurns(s.turns));
-    setBusy(false);
-    setPense(false);
-    setStatus("fini");
-    reloadRecaps();
-  };
+  // **La fin d'un tour, poussée par l'hôte** (l'IDE par le flux, 9 novembre 2026) : l'état
+  // du chat et les tours ajoutés, une fois la session reposée et l'usage écrit. La page ne
+  // relit rien : la barre prend le récapitulatif, un tour venu d'ailleurs (la carte d'accord)
+  // se montre entier, et un tour envoyé d'ici reçoit sa session (`etatDuTour`).
+  const toursRef = useRef<ChatTurn[]>([]);
+  const etatsRecus = useRef(new Map<string, ChatState>());
+  const attentes = useRef(new Map<string, (s: ChatState) => void>());
+  useEffect(
+    () =>
+      onEtat<ChatPousse>("chat", id, (p) => {
+        const tours = [...toursRef.current.slice(0, p.depuis), ...p.nouveaux_tours];
+        toursRef.current = tours;
+        const { depuis: _d, nouveaux_tours: _n, tour: _t, ...reste } = p;
+        const s: ChatState = { ...reste, turns: tours };
+        setChat(s);
+        setRecaps((cur) => ({ ...cur, [id]: { ...cur[id], context: p.context, model: p.model, writes: p.memory_writes, writesWhy: p.memory_writes_why, usage: p.usage } }));
+        const run = p.tour;
+        if (envoiDeLaPage.current) {
+          const attente = run ? attentes.current.get(run) : undefined;
+          if (attente) attente(s);
+          else if (run) etatsRecus.current.set(run, s);
+          return;
+        }
+        follow.current = true;
+        setItems(fromTurns(tours));
+        setBusy(false);
+        setPense(false);
+        setStatus("fini");
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [id],
+  );
+  /// L'état poussé à la fin du tour `run` de cette page ; s'il ne vient pas en 5 s (un tour
+  /// arrêté sans usage au journal), la session se relit une fois.
+  const etatDuTour = (run: string) =>
+    new Promise<ChatState | null>((ok) => {
+      const deja = etatsRecus.current.get(run);
+      if (deja) {
+        etatsRecus.current.delete(run);
+        return ok(deja);
+      }
+      const t = setTimeout(() => {
+        attentes.current.delete(run);
+        fetchChat(id).then(ok, () => ok(null));
+      }, 5000);
+      attentes.current.set(run, (s) => {
+        clearTimeout(t);
+        attentes.current.delete(run);
+        ok(s);
+      });
+    });
 
   const send = async () => {
-    // Le run du tour : l'usage se lit au journal de l'hôte, écrit juste après
-    // la fin du tour ; la barre se relit jusqu'à l'y voir (dix fois au plus).
-    let finiRun: string | null = null;
     const text = input.current?.value.trim() ?? "";
     if (!text || busy || !chat?.on) return;
     if (input.current) input.current.value = "";
@@ -516,10 +548,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     setItems((cur) => [...cur, message("user", text), message("assistant", "", { live: true })]);
     try {
       const r = await sendChat(id, text);
-      finiRun = r.run;
-      // Le tour fini : les résultats entiers et les heures se relisent dans la
-      // session, et se rattachent par l'appel — la bulle garde sa suite.
-      const s = await fetchChat(id).catch(() => null);
+      // Le tour fini : les résultats entiers et les heures arrivent avec l'état que
+      // l'hôte pousse, et se rattachent par l'appel — la bulle garde sa suite.
+      const s = await etatDuTour(r.run);
       // **La session fait foi à la fin du tour** : la bulle prend la suite relue
       // (la dernière bulle d'agent de la session), résultats entiers et heures
       // compris — le flux n'a servi qu'à montrer le tour pendant qu'il se faisait.
@@ -558,20 +589,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       setBusy(false);
       setPense(false);
       setRun(null);
-      const attendu = finiRun;
-      // Toute la barre une fois, puis la seule conversation du tour jusqu'à y
-      // voir son run (relecture d'everything declarative : le coût par tour).
-      void (async () => {
-        const m = await reloadRecaps();
-        if (!attendu || m[id]?.usage?.tour_run === attendu) return;
-        for (let k = 0; k < 10; k++) {
-          await new Promise((ok) => setTimeout(ok, 300));
-          const [, r] = await lireRecap(id);
-          setRecaps((cur) => ({ ...cur, [id]: r }));
-          if (r.usage?.tour_run === attendu) return;
-        }
-        console.warn(`[chat] l'usage du run ${attendu} n'est pas venu au journal de l'hôte en 3 s ; la barre garde sa dernière lecture`);
-      })();
+      // La barre a reçu le récapitulatif du tour avec l'état poussé : rien à relire.
     }
   };
 
