@@ -575,4 +575,60 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte, tampon large";
 }
 
+// Le défaut du ticket 2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations,
+// réduit depuis la trace exacte d'un `index confirm` (9 novembre 2026, sous 9bae60786) : le rejeu de
+// la trace sur la copie saine rougit après le point de reprise qui suit un MERGE trouvant une relation
+// existante d'INHERITS_FROM (Scope→Scope) et réécrivant sa propriété ; puis, par ddmin, trois relations
+// versées d'un COPY dans une table de 82 890 nœuds suffisent. Le MERGE seul laisse les deux sens égaux ;
+// c'est le point de reprise de la mise à jour qui écrit la liste avant fausse : une rangée vide lue
+// comme une relation 0 vers le nœud 0, une relation vue deux fois, une autre au seul sens arrière —
+// la signature de la base de Lucie. Les décalages sont ceux de la fixture (37654 → 23480, 5358 → 5354,
+// 6316 → 640) ; les mêmes paires versées par petits lots restent vertes.
+TEST_F(LateRelTableRewrites, UpdatingACopiedRelKeepsBothDirectionsThroughACheckpoint) {
+    ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
+    ok("CREATE REL TABLE INHERITS_FROM(FROM Scope TO Scope, line INT64);");
+    ok("UNWIND range(0, 82889) AS i CREATE (:Scope {id: i});");
+    ok("CHECKPOINT;");
+    const std::vector<std::pair<int64_t, int64_t>> rels = {{37654, 23480}, {5358, 5354}, {6316, 640}};
+    ok("COPY INHERITS_FROM FROM (UNWIND [[37654, 23480], [5358, 5354], [6316, 640]] AS p "
+       "RETURN p[1] AS f, p[2] AS t, 1 AS line);");
+    ok("CHECKPOINT;");
+    std::set<int64_t> sources, destinations;
+    for (auto& [f, t] : rels) {
+        sources.insert(f);
+        destinations.insert(t);
+    }
+    // Les deux sens d'INHERITS_FROM, lus nœud par nœud : (relation, source, destination).
+    auto readDirection = [&](bool forward, const std::set<int64_t>& nodes) {
+        std::multimap<int64_t, std::pair<int64_t, int64_t>> edges;
+        for (auto node : nodes) {
+            auto result = conn->query(std::string("MATCH (a:Scope)-[r:INHERITS_FROM]->(b:Scope) WHERE ") +
+                                      (forward ? "a" : "b") + ".id = " + std::to_string(node) +
+                                      " RETURN offset(id(r)), a.id, b.id;");
+            EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
+            while (result->isSuccess() && result->hasNext()) {
+                auto row = result->getNext();
+                edges.emplace(row->getValue(0)->getValue<int64_t>(),
+                    std::make_pair(row->getValue(1)->getValue<int64_t>(),
+                        row->getValue(2)->getValue<int64_t>()));
+            }
+        }
+        return edges;
+    };
+    const auto expected = readDirection(true, sources);
+    ASSERT_EQ(expected.size(), 3u);
+    ASSERT_EQ(readDirection(false, destinations), expected) << "avant la mise à jour";
+    ok("MATCH (a:Scope {id: 37654}), (b:Scope {id: 23480}) MERGE (a)-[r:INHERITS_FROM]->(b) SET r.line = 131;");
+    EXPECT_EQ(readDirection(true, sources), expected) << "sens avant, mise à jour validée";
+    EXPECT_EQ(readDirection(false, destinations), expected) << "sens arrière, mise à jour validée";
+    ok("CHECKPOINT;");
+    EXPECT_EQ(readDirection(true, sources), expected) << "sens avant, après le point de reprise";
+    EXPECT_EQ(readDirection(false, destinations), expected) << "sens arrière, après le point de reprise";
+    conn.reset();
+    database.reset();
+    createDBAndConn();
+    EXPECT_EQ(readDirection(true, sources), expected) << "sens avant, base rouverte";
+    EXPECT_EQ(readDirection(false, destinations), expected) << "sens arrière, base rouverte";
+}
+
 } // namespace
