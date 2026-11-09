@@ -2138,3 +2138,15 @@ avance d'autant ; les hashs, eux, sont exacts.
   racine par la carte d'accord (page d'archi, section « À essayer dans ton atelier »). archi : la carte
   de commande relance le tour d'elle-même au oui comme au refus (message marqué « (carte d'accord) ») ;
   les cartes de chemin relanceront dans le lot d'après.
+- **13 h 4x, un défaut de sécurité trouvé et corrigé en route par archi** (lot (7), `atelier-commandes-sur-la-carte`,
+  283771f10 → a2e09eef1) : `Garde::accorder_ligne` accordait **toute la famille** de la commande — un oui pour
+  `mkdir faits` laissait passer tout `mkdir`, contre sa propre doc, et le oui du superviseur d'un équipier
+  avait le même défaut. Correctif : la ligne se juge sans l'accord, seule la commande exacte est retenue, une
+  partie refusée refuse la ligne ; témoin rouge puis vert, teammate 20/20 ; ticket fermé pour la trace (demandé).
+  Le lot : demande de genre commande, accord à la Garde, `decisions.jsonl`, relance automatique du tour au oui
+  comme au refus, carte « l'atelier demande à lancer … », le chat suit un tour qu'il n'a pas envoyé. Passe en
+  cours, « à toi » à son vert. 96 : rouge posé pour le recul du modèle (tests/openai_llm_retry.rs, faux 429
+  sans fin, horloge virtuelle : « le tour a attendu 1 540 s au-delà de son budget 300 s ») ; le client
+  publiait déjà chaque recul (on_retry) et bornait à 30 min, mais aucun appelant ne posait de budget ;
+  correctif : `GenOptions.retry_budget` (chat 300 s, pas d'équipier 120 s, juge 600 s), une ligne au journal
+  par recul, le statut du chat dit le numéro, le code et l'attente.
