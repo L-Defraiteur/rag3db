@@ -459,6 +459,9 @@ impl DaemonHost {
             e.busy = Some(run_id.clone());
             (std::mem::take(&mut e.session), en_vol, e.empreintes.clone())
         };
+        // Les tours que la page a déjà (ceux que `chat_state` rend, sans le système) : la fin
+        // du tour pousse ceux d'après.
+        let depuis = session.turns.iter().filter(|t| t.role != "system").count();
         // Le numéro de ce tour (l'empreinte de lecture compte « ce tour ou le précédent »).
         let numero_du_tour = session.turns.iter().filter(|t| t.role == "user").count() + 1;
         let resultat = match step {
@@ -506,7 +509,31 @@ impl DaemonHost {
             }
         }
         self.write_chat(backend_id)?;
+        self.publier_l_etat_du_chat(backend_id, depuis, &run_id);
         resultat
+    }
+
+    /// **La fin d'un tour, poussée** (l'IDE par le flux, 9 novembre 2026) : l'état du chat
+    /// (contexte, usage, modèle, fiches écrites), le run du tour et les tours ajoutés depuis
+    /// `depuis`. L'usage du tour s'écrit au journal juste après le tour : l'hôte l'attend
+    /// dans un fil, au plus 5 s, sur son journal local, plutôt que la page ne relise l'hôte
+    /// jusqu'à l'y voir ; passé ce délai, l'état part tel quel.
+    fn publier_l_etat_du_chat(&self, backend_id: &str, depuis: usize, run: &str) {
+        let Some(hote) = self.soi.get().and_then(std::sync::Weak::upgrade) else { return };
+        let (backend_id, run) = (backend_id.to_string(), run.to_string());
+        std::thread::spawn(move || {
+            let debut = std::time::Instant::now();
+            while hote.usage_et_taches_a_role(&backend_id).0["tour_run"] != json!(run) && debut.elapsed() < std::time::Duration::from_secs(5) {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            let Ok(mut v) = hote.chat_state(&backend_id) else { return };
+            let tours = v.as_object_mut().and_then(|o| o.remove("turns")).and_then(|t| t.as_array().cloned()).unwrap_or_default();
+            let depuis = depuis.min(tours.len());
+            v["tour"] = json!(run);
+            v["depuis"] = json!(depuis);
+            v["nouveaux_tours"] = json!(tours[depuis..]);
+            hote.ide_flux().publier_etat("chat", &backend_id, v);
+        });
     }
 
     #[allow(clippy::too_many_arguments)]
