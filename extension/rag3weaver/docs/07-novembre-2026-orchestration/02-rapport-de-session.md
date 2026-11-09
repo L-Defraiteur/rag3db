@@ -1980,3 +1980,15 @@ avance d'autant ; les hashs, eux, sont exacts.
   règle « aucun index complet sur les bases de Lucie » est levée, ses bases gardent leur écart jusqu'à
   un index complet à son mot. hooks-essai : un `recall_fiches` à 1 046 ms (timeout) à 12 h 13, sans
   cause lue, à relire au tour suivant.
+- **12 h 25, l'e2e d'ingestion de recherche arrêté sur mon mot** : `ingerer_notre_propre_source_avec_le_vrai_embedder`
+  tenait bge-m3 depuis 11 h 10 (1 h 14 min 33 s, deux jours de suite), `/sante` à 17-19 s, et la mémoire des
+  hooks embarque sa requête par bge-m3 : les trois dépassements de `recall_fiches` de hooks-essai (12 h 13,
+  12 h 14, après la pose) en relèvent, la requête relancée en fond aboutit en 22 à 35 ms. Ce qui touche les
+  rappels de Lucie pendant qu'elle travaille passe avant une suite de plus. Verdict de residus-de-suite-2 :
+  passe ordinaire verte, 18 suites entières sans résidu, l'ingestion non comptée, les suites d'après dites
+  et non comptées ; ticket à venir sur la durée de cette suite (sa place : e2e entier ou banc sous poste
+  mesure). bge-m3 rendu à archi pour sa passe complète ; recherche part ensuite en rejeu court
+  (residus-de-suite-3, base 6653976ac, sous 29a7bc52a) et passe devant codeparsers, muet. hooks-essai prend
+  le message du rappel qui dépasse son budget (dire « j'attendais l'embarquement », pas « l'hôte ne répond
+  pas »). 96 : reset refusé par sa permission, avance rapide à la place (rien à perdre, HEAD ancêtre de
+  master), arbre essais-c7 sur 74519fc65, index en cours (206 fichiers), request à l'index prêt.
