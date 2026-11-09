@@ -1801,3 +1801,23 @@ avance d'autant ; les hashs, eux, sont exacts.
   du cœur sur l'état rouge : 0 page libre et tenue, fin du dernier segment sous l'étendue. Dichotomie sur
   K (« 1..K puis CHECKPOINT », dix essais d'une minute et demie) en cours, puis le témoin réduit au cœur.
   La famille LOCKS du 25 octobre a donc son chemin : l'écriture dont le point de reprise est fautif.
+
+## 01 h 58 (9 novembre) — la nuit de luciepc : le fstrim hebdomadaire
+
+- **Deux coupures réseau** vers luciepc (01 h 50 et 01 h 56, deux minutes chacune ; tailscale en relais,
+  plus de direct ; les tunnels se relancent seuls) : la machine n'a pas redémarré, ses processus ont
+  continué. À lire par G au matin.
+- **Le disque de luciepc étranglé** (100 % d'occupation pour 1 Mio/s, commits btrfs de 6 à 9 minutes,
+  tâches bloquées plus de 122 s, Steam compris, PSI io 66) : c'est **`fstrim.service`**, lancé par le
+  `fstrim.timer` activé hier à 17 h 10 (`weekly`, `Persistent` : il a tiré lundi à 01 h 35), qui refait
+  le `fstrim` plein évité hier avec `-m 16M` : 207 780 petits extents à 20 commandes par seconde,
+  0 Gio rendus par cinq secondes, des heures. Pas root : non touché ; les sessions ne concluent rien
+  des temps de cette nuit (la dichotomie d'hotfixs sur K, l'index B de codeparsers, la passe du
+  correctif de CI d'ED). **Au matin, pour Lucie** : arrêter le service (`sudo systemctl stop
+  fstrim.service`, sans danger) ou le laisser finir ; puis un drop-in (`sudo systemctl edit
+  fstrim.service`) qui ajoute `--minimum 16M` à l'ExecStart, et un `OnCalendar` hors des heures de
+  travail ; le remède d'hier sans ce réglage est pire que le mal.
+- **Hotfixs** a poussé le ticket des deux sens (755ed61b6 : le rejeu exact est rouge, c'est le point de
+  reprise d'un état en mémoire, « 1..796 puis CHECKPOINT » suffit, dichotomie sur K en attente du
+  disque). La CI de master reste rouge sur le témoin du rattrapage d'ED, correctif prêt (219053a4b),
+  passe en attente du disque.
