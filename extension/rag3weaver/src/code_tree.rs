@@ -592,6 +592,19 @@ mod tests {
     }
 }
 
+/// **La marque d'un worktree né de l'atelier** (open_branch l'a créé) : un fichier à côté
+/// du manifeste de l'arbre inscrit, que rien ne relit au fil de l'eau (écrire le manifeste
+/// d'un dépôt ouvert le ferait relire, et couper son index). L'atelier écrit un tel arbre
+/// au nom de l'utilisatrice, sans question (décision de c7, 9 novembre 2026).
+pub const MARQUE_DE_L_ATELIER: &str = "ouvert-par-l-atelier";
+
+impl Roots {
+    /// Le fichier qui marque l'arbre `name` comme né de l'atelier.
+    pub fn marque_de_l_atelier(&self, name: &str) -> PathBuf {
+        self.config.join(name).join(MARQUE_DE_L_ATELIER)
+    }
+}
+
 /// **La racine d'un atelier posé neuf** (Lucie, 8 novembre 2026 au soir ; c7, 9 novembre) :
 /// le dossier où l'atelier est lancé ; mais lancé « sans y avoir réfléchi », depuis le
 /// dossier de l'utilisateur ou `/`, c'est `~/rw-code`, créé s'il manque. Un atelier déjà

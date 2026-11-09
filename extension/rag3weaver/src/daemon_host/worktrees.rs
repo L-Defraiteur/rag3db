@@ -645,6 +645,18 @@ impl WorktreeHost for HoteDesWorktrees {
             }
         };
         let WorktreeAnswer { text: attache, ui } = self.attach(&worktree)?;
+        // **Né de l'atelier** : un worktree que cette commande a créé se marque, une fois inscrit (décision de
+        // c7, 9 novembre 2026) ; l'atelier l'écrira au nom de l'utilisatrice. Une branche
+        // déjà ouverte ailleurs ne l'est pas : c'est l'arbre de quelqu'un.
+        if commande.is_some() {
+            let racines = self.hote()?.racines_de_code()?;
+            let nom = crate::code_tree::name_of_tree(&worktree.canonicalize().unwrap_or(worktree.clone()))?;
+            let marque = racines.marque_de_l_atelier(&nom);
+            if let Some(d) = marque.parent() {
+                std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+            }
+            std::fs::write(&marque, "open_branch\n").map_err(|e| format!("{} : {e}", marque.display()))?;
+        }
         let text = match commande {
             Some(c) => format!("Branche {branch} ouverte dans le worktree {} (commande : `{c}`). {attache}", worktree.display()),
             None => format!("La branche {branch} est déjà ouverte dans le worktree {} : aucune commande git. {attache}", worktree.display()),
