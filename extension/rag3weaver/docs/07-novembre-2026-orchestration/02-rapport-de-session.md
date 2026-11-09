@@ -1788,3 +1788,16 @@ avance d'autant ; les hashs, eux, sont exacts.
   `~/rw-code`, Landlock en deux modes déclarés, le journal des approbations, les deux cas de
   l'installeur, le ticket des morceaux refusés) ; recherche relit la part plein texte ; le banc a sa
   recommandation (page 03) ; les tickets du jour sont à jour.
+
+## 01 h 35 (9 novembre) — les deux sens : c'est le point de reprise
+
+- **Hotfixs, rejeu exact** : la trace à paramètres littéraux (3 178 instructions, index complet de la copie
+  saine de 12 h 06 sous 9bae60786, service 7882) rend les mêmes écarts compte pour compte (INHERITS_FROM
+  650/658, QUERIES 20 relations, LOCKS 544/546) : défaut déterministe, rejouable. Le premier écart
+  d'INHERITS_FROM apparaît après la ligne 797, un `UNWIND … MERGE (a:Scope)-[r:MENTIONS]->(b:Symbol)` de
+  5 000 relations qui n'écrit pas dans INHERITS_FROM ; et « lignes 1 à 796, puis CHECKPOINT » rougit
+  aussi, alors que l'état lu après 796 est vert. **Ce n'est ni le MERGE de la table abîmée ni celui de
+  797 : c'est le point de reprise d'un état encore en mémoire** (797 déclenchait l'automatique). Les sondes
+  du cœur sur l'état rouge : 0 page libre et tenue, fin du dernier segment sous l'étendue. Dichotomie sur
+  K (« 1..K puis CHECKPOINT », dix essais d'une minute et demie) en cours, puis le témoin réduit au cœur.
+  La famille LOCKS du 25 octobre a donc son chemin : l'écriture dont le point de reprise est fautif.
