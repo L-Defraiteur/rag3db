@@ -2213,3 +2213,12 @@ avance d'autant ; les hashs, eux, sont exacts.
   pixels, la jauge suit chaque LlmCall, last_call dans le fichier de session, échelle linéaire sans plafond
   inventé ; au survol les jetons, le plafond et l'heure. Le découpage de ce qui pèse (instructions, outils,
   historique, résultats d'outils) est le lot suivant, nommé.
+- **14 h 3x, archi a poussé ab8272deb** (la jauge du contexte écrit son pourcentage — une décimale sous 10 %,
+  « < 0,1 % » au besoin —, garde 3 px dès qu'il y a un compte, suit chaque LlmCall du run, dit au survol les
+  jetons, le plafond et l'heure, et `last_call` survit au redémarrage dans le fichier de session) : passe
+  verte (lib 2094, navigateur 33/33), trois contrôles ; témoin vu rouge deux fois pour deux raisons. La CI
+  reste rouge par intermittence sur le témoin connu du rattrapage (run de f2ffff0eb), correctif d'ED en
+  attente d'approbation. Lot suivant d'archi : **plus un seul polling dans l'IDE** (inventaire de ce qui
+  interroge l'hôte en boucle et de son coût par minute, chaque boucle remplacée par un sujet du flux, une
+  façon générique de s'abonner ; rouge : les requêtes de l'IDE à l'hôte pendant une minute d'inactivité,
+  demain zéro hors le flux) — la demande de Lucie d'hier soir. Le découpage au survol après.
