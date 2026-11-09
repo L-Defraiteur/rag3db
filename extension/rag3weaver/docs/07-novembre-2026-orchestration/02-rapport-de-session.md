@@ -2113,3 +2113,13 @@ avance d'autant ; les hashs, eux, sont exacts.
   sur master, ses remarques feront un lot de suite. La carte pour les commandes en attente de run_command
   est le lot suivant. L'atelier de Lucie doit être reposé au gabarit livré (archi dit si `atelier` le fait
   seul). Du Rust pour recherche (rejeu court dû à son push) et pour 96 (après recherche).
+- **13 h 3x, la suite de la file.** archi : page « À essayer dans ton atelier » en tête de sa conception
+  (b3053bd51) ; le gabarit de Lucie a été noté à la pose de 9 h 37 (`livre.json` bb347ff93e835435) et
+  `builtin_templates::refresh` lui donnera les six outils neufs à la réouverture par un hôte sur d23af9cd2,
+  racine et base gardées : rien à reposer à la main, seulement le binaire. **G pose le binaire seul** (lib
+  29a7bc52a inchangée) à la fin de la file — recherche puis 96 —, luciepc puis le portable, une seule
+  coupure, et vérifie que l'atelier rouvert expose les outils. 96 : rouge posé pour le dossier d'état des
+  témoins (`a_witness_never_writes_in_the_real_state_directory` ; racine temporaire par processus sous
+  cfg(test), garde qui panique sur le dossier réel, `.init_array` pour les e2e ; 477 entrées listées au
+  ticket, l'atelier de Lucie seul manifeste réel, rien d'effacé), lot-96-etat-des-tests (3810f86f7) en
+  rejeu, « à toi » après recherche. archi prend (7), les commandes en attente de run_command sur la carte.
