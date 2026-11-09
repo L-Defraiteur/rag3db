@@ -95,6 +95,16 @@ pub struct WorkspaceConfig {
     /// dépôt de code écrit dans ses tâches (défaut : faux).
     #[serde(default)]
     pub writes_outside_tasks: bool,
+    /// Le dossier d'où l'atelier a été posé (noté par `rag3weaver-backend atelier`, à la
+    /// pose neuve ; sa racine en découle).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launched_from: Option<PathBuf>,
+    /// **Qui a ouvert cet arbre** : `"atelier"` pour un worktree que l'atelier a créé
+    /// (open_branch) — l'atelier l'écrit alors au nom de l'utilisatrice, sans question
+    /// (décision de c7, 9 novembre 2026) ; absent, l'arbre est celui que tient
+    /// l'utilisatrice, et l'écrire demande son accord.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opened_by: Option<String>,
     /// **Des signaux montés sur les entités du schéma nommé** — la clé
     /// EXPLICITE : un signal de plus sur une entité se déclare, il ne
     /// découle pas de `models.sparse` tout seul. Générique : n'importe
@@ -798,6 +808,8 @@ mod tests {
             commands: CommandGate::Off,
             commands_outside_tasks: false,
             writes_outside_tasks: false,
+            launched_from: None,
+            opened_by: None,
             index_signals: std::collections::BTreeMap::new(),
             sandbox: SandboxConfig::default(),
             index: Some("code".into()),
