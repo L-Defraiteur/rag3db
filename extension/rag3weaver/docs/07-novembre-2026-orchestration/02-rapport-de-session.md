@@ -2123,3 +2123,9 @@ avance d'autant ; les hashs, eux, sont exacts.
   cfg(test), garde qui panique sur le dossier réel, `.init_array` pour les e2e ; 477 entrées listées au
   ticket, l'atelier de Lucie seul manifeste réel, rien d'effacé), lot-96-etat-des-tests (3810f86f7) en
   rejeu, « à toi » après recherche. archi prend (7), les commandes en attente de run_command sur la carte.
+- **13 h 3x, 96 a poussé 0b0ff221a** (un témoin n'écrit plus son état de manifeste dans le dossier d'état
+  réel : racine temporaire par processus sous cfg(test), garde qui panique, `.init_array` des e2e ; vert sur
+  990239cc7, lib 2091, navigateur 31). Passé devant recherche, dont le push devait déjà rejouer court pour
+  le Rust d'archi. **Pose du binaire 0b0ff221a demandée à G** (lib 29a7bc52a inchangée) : luciepc puis le
+  portable, une coupure, et le relevé des outils de l'atelier de Lucie avant (5) et après (11 attendus).
+  Le lot de recherche (arret-du-backend) sera posé à la prochaine occasion.
