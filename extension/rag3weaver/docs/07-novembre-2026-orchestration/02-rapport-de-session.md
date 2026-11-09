@@ -1914,3 +1914,14 @@ avance d'autant ; les hashs, eux, sont exacts.
   `$HOME` gardé ; noms `read_file`, `read_scope`, `replace_text`, `replace_lines`, `insert_lines`,
   `ask_permission`, `edit_file` retiré de la liste. ED garde la page de l'atelier et le correctif des
   réclamations.
+- **10 h 51, 96 a poussé 3b119beb6** (tentative 5 des fiches classées, `allow_create` éteint par défaut
+  dans archive, rejeu vert sous 29a7bc52a, trois contrôles). Du Rust sous extension/rag3weaver (deux
+  témoins e2e, deux gabarits) : rejeu court dû à recherche et à codeparsers au moment de leur push.
+  La file passe à codeparsers, dont la lecture de la mesure est demandée une deuxième fois (silence
+  depuis 10 h 00). L'essai d'équipier de 96 a sa tâche : le rattrapage des README depuis
+  `docs/nouveautes.md` (règle du 8 novembre), un worktree à lui, les deux README seuls, un oui par
+  proposition, et une page de mesure courte pour ED ; M8 ensuite. archi a posé la conception des
+  outils de lecture et d'édition de l'atelier et pose le rouge de `read_file` ; deux faits de plus :
+  l'atelier n'a pas d'index (les outils de fichier passent par le backend du worktree attaché qui
+  contient le chemin, par l'hôte), et hors tâche le chat retire les outils `write_files` (drapeau
+  `workspace.writes_outside_tasks`, vrai dans l'atelier seul).
