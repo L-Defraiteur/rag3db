@@ -1934,3 +1934,16 @@ avance d'autant ; les hashs, eux, sont exacts.
   partage lui va. Condition de moment : l'avance de HEAD relance un index complet par l'hôte du
   portable, encore sous 9bae60786 ; rien avant « portable posé » (29a7bc52a). Toute commande par la
   porte est refusée dans cet essai.
+- **11 h 0x, archi : rouge posé** (`the_workshop_reads_a_file_two_hundred_lines_at_a_time`, « unexposed
+  tool read_file »), et une décision de conception tranchée par c7, **à relire par Lucie** : dans un
+  worktree attaché, les écritures de l'atelier se heurtent à `task_writes` (tout arbre inscrit : « l'agent
+  édite dans une tâche, l'humain édite le principal dans l'IDE »). Tranché : **(a) sans question pour un
+  worktree que l'atelier a ouvert lui-même** (open_branch, attache d'une branche à lui, noté à l'attache),
+  écriture au nom de l'utilisatrice par call_humain, diff et journal — c'est « l'édition y va par
+  confort » ; **(c) pour tout autre arbre inscrit** (l'arbre principal, un worktree tenu dans l'IDE) :
+  `ask_permission` et la carte d'accord, l'accord gardé pour la conversation et au journal des décisions.
+  Une ligne à changer si Lucie tranche autrement.
+- **Quatre sessions attendent une approbation de Lucie** (lu à 10 h 56 : codeparsers, ED, hotfixs, cœur
+  « waiting ») : la lecture de la mesure du require, le correctif des réclamations, le rejeu de la trace
+  sous 29a7bc52a et le témoin de l'annulation inachevée sont bloqués là. Lucie travaille sur ses sessions
+  Sairen depuis 9 h environ ; dit dans mon terminal, rien qui presse.
