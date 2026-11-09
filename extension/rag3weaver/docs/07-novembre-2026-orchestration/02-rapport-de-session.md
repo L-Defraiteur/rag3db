@@ -2129,3 +2129,12 @@ avance d'autant ; les hashs, eux, sont exacts.
   le Rust d'archi. **Pose du binaire 0b0ff221a demandée à G** (lib 29a7bc52a inchangée) : luciepc puis le
   portable, une coupure, et le relevé des outils de l'atelier de Lucie avant (5) et après (11 attendus).
   Le lot de recherche (arret-du-backend) sera posé à la prochaine occasion.
+- **13 h 42, les deux postes sur le binaire 0b0ff221a** (G ; lib 29a7bc52a inchangée) : luciepc à 13 h 39
+  (réveil vert, code-lourd et code-principal rouverts), le portable coupé de 13 h 41 min 11 s à 13 h 41 min
+  19 s, réveil vert, cinq backends rouverts, l'IDE rend « Dépôts » (431 éléments) et `/ide/accords` répond.
+  **L'atelier de Lucie expose 11 outils** contre 5 avant : ask_permission, insert_lines, read_file,
+  read_scope, replace_lines, replace_text en plus ; `livre.json` réécrit par refresh (851daa39 → 20c43595),
+  rien reposé à la main. Elle peut essayer : lire un fichier par tranches, le modifier, et sortir de la
+  racine par la carte d'accord (page d'archi, section « À essayer dans ton atelier »). archi : la carte
+  de commande relance le tour d'elle-même au oui comme au refus (message marqué « (carte d'accord) ») ;
+  les cartes de chemin relanceront dans le lot d'après.
