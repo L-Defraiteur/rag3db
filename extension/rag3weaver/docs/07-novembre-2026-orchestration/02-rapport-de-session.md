@@ -1842,3 +1842,4 @@ avance d'autant ; les hashs, eux, sont exacts.
 - **En attente de réponse** : hotfixs (la dichotomie sur K du point de reprise), codeparsers (la mesure
   du `require`, puis « carte libre » pour recherche), ED (le correctif des réclamations, puis la
   relecture des vues). Lucie lit la page des vues.
+- **09 h 57, les deux sens : K = 730.** La dichotomie d'hotfixs a fini à 02 h 22 (lue à luciepc) : « lignes 1..729 puis CHECKPOINT » vert, « 1..730 puis CHECKPOINT » rouge ; l'instruction 730 de la trace exacte est celle dont le point de reprise d'un état en mémoire abîme INHERITS_FROM. Hotfixs lit l'instruction et construit le témoin réduit, le cœur corrige le point de reprise sous ASAN : chantier du matin, devant tout le reste.
