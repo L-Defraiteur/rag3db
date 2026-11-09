@@ -2076,3 +2076,8 @@ avance d'autant ; les hashs, eux, sont exacts.
   Lucie). Pas de relance. Le rejeu des bancs de 96 est vert à 13 h 19 (owed_vectors vert cette fois), tour
   de push lancé ; archi rebasé sur 99623503c (branche -2, pas de force) en rejeu court, « à toi » au
   « poussé » de 96.
+- **13 h 19, 96 a poussé a9872fb87** (un banc à services ne fait jamais partie de l'e2e entier ; nommé sans sa
+  voie, refusé rouge avant tout bâti ; paragraphe « Les bancs » dans la procédure) : rejeu vert, trois
+  contrôles, pas de Rust. « À toi » à archi (le délai des témoins de l'hôte), recherche prend la carte à
+  son « poussé ». 96 pousse la page de mesure de l'équipier et ses trois tickets en docs seules, puis dit
+  ce que M8 (templates upgrade) couvre avant de partir.
