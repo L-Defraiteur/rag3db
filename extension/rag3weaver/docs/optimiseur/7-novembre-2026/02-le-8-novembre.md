@@ -48,7 +48,7 @@ chez everything declarative). On annonce donc la fin de chaque phase d'index.
 Le portable, contrôlé à 14 h 15 (instantané controle-portable-8nov, sous 17a094d12) : **aucun écart**.
 Cette base n'avait pas eu d'index complet depuis 9 h 10 : la montre seule ne fait pas naître l'écart.
 
-**Règle jusqu'au correctif moteur : aucun `index confirm` complet sur les bases de Lucie.**
+**Règle jusqu'au correctif moteur : aucun `index confirm` complet sur les bases de Lucie.** (Correctif posé le 9 nov. à 12 h 23 : 29a7bc52a, plus bas.)
 
 ## La pose de cbc06c3e1 au portable (15 h 41 – 15 h 44)
 
@@ -126,6 +126,30 @@ Le disque de luciepc est rendu depuis 18 h 03 (nodiscard et fstrim), et Lucie a 
   6 min le « copié » d'hotfixs, qui n'est pas venu : réveil sur le mot de c7. Mon instantané de 9 h 30
   contient memoire-longue.
 - Les deux postes sont sur 9bae60786 ; cbc06c3e1 reste au magasin.
+
+## Le correctif des deux sens : 29a7bc52a (9 nov., 10 h 31 – 12 h 23)
+
+Le correctif du cœur (29a7bc52a, `csr_node_group.cpp`) fait réécrire toutes ses colonnes à une région
+CSR dont les listes changent de place.
+- **Lib :** bâtie à luciepc en incrémental sur 9bae60786 (10 h 31 min 33 s → 37 s, csr_node_group.cpp.o
+  recompilé), md5 b65cc5be. 0 symbole ajouté ou retiré, aucune vtable changée.
+- **Binaire :** 833c89539 contre elle (78bac6ad). Passe e2e verte (e2e_code 27/27, e2e_lectures 24/24),
+  hôte d'essai VERT.
+- **Index de contrôle par l'hôte :** copie neuve de coupure-12h06/code-lourd, index complet de 11 h 27 à
+  11 h 49, embarquement par le 7882 d'hotfixs (jamais 7878, où passent les worktrees de Lucie).
+  **Aucun écart** : INHERITS_FROM 658/658 (650/658 sous 17a094d12 et dadbf0041), LOCKS 546/546
+  (544/546), QUERIES 20093/20093 sans relation d'un seul côté, IMPLEMENTS 804/804.
+  Le correctif empêche de créer l'écart ; les bases qui l'ont déjà le gardent.
+- **Un incident de ma faute, 10 h 32 :** un cinquième service granite-278m (7883) lancé sur card2, à 82 %
+  de VRAM avec quatre services, a mis l'anneau gfx en reset. Seul mon processus a été tué, les quatre
+  autres ont répondu. Règle de c7 : aucun service de plus sur card2.
+- **Poses :** luciepc à 12 h 12 (MainPID 4163488, instantané avant-29a7bc52a), `courant` = 29a7bc52a aux
+  deux postes à 12 h 12 min 46 s, portable à 12 h 23 (MainPID 526790).
+- **Le réveil du portable a buté sur sa garde :** bge-m3 7980 répondait en 17 à 19 s, tenu par
+  `e2e_charge_ingestion` de recherche. **Garde passée à la main sur le mot de c7** : le service était lent,
+  pas absent, et l'hôte de Lucie était coupé depuis 12 h 18. Depuis, `bascule-reveil.sh` distingue les
+  deux cas : absent (rien en 30 s) refuse ; lent (plus de 5 s) prévient et réveille.
+- 9bae60786 et cbc06c3e1 restent au magasin.
 
 ## À suivre
 
