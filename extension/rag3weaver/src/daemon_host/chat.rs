@@ -463,6 +463,15 @@ impl DaemonHost {
                     let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
                     let dans_une_tache = b.prepared().surcharges().workspace.is_some();
                     let outils = OutilsDuChat::de(b, &declares, dans_une_tache).avec_empreinte(empreintes.clone(), numero_du_tour, b.prepared().workspace_root());
+                    // Hors d'une tâche, une commande en attente se décide sur la carte
+                    // d'accord (lot 7) ; dans une tâche, la boîte du superviseur la tient.
+                    #[cfg(feature = "code")]
+                    let outils = if dans_une_tache {
+                        outils
+                    } else {
+                        let (backend, domaine) = (hosted.id.clone(), b.prepared().workspace_root());
+                        outils.avec_les_commandes_en_attente(move |ligne| self.atelier_demander_commande(&backend, ligne, domaine.as_deref()))
+                    };
                     let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &outils, ecrivent: &outils.ecrivent, repli: None };
                     self.run_chat_turn(tour, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, None)
                 })
@@ -665,6 +674,9 @@ pub(crate) struct OutilsDuChat<'a> {
     pub(crate) ecrivent: HashSet<String>,
     /// Ceux qui ne sont pas proposés, et pourquoi.
     retires: HashMap<String, String>,
+    /// **Une commande que la porte met en attente** (lot 7 de l'atelier, 9 novembre 2026) :
+    /// la ligne donnée, rend le texte à ajouter au résultat et la carte d'accord.
+    en_attente: Option<Box<dyn Fn(&str) -> (String, Value) + Send + Sync + 'a>>,
 }
 
 impl<'a> OutilsDuChat<'a> {
@@ -698,7 +710,7 @@ impl<'a> OutilsDuChat<'a> {
                 }
             }
         }
-        Self { inner, ecrivent, retires, empreinte: None }
+        Self { inner, ecrivent, retires, empreinte: None, en_attente: None }
     }
 
     /// Tenir l'empreinte de lecture de la conversation pendant ce tour (`tour` : son
@@ -772,12 +784,40 @@ impl<'a> OutilsDuChat<'a> {
         }
     }
 
+    /// Hors d'une tâche, une commande mise en attente par la porte se décide sur une carte
+    /// d'accord : `demander` la pose (l'hôte) et rend le texte et la carte.
+    pub(crate) fn avec_les_commandes_en_attente(mut self, demander: impl Fn(&str) -> (String, Value) + Send + Sync + 'a) -> Self {
+        self.en_attente = Some(Box::new(demander));
+        self
+    }
+
+    /// La commande mise en attente : la carte d'accord sous l'appel, et le texte qui dit au
+    /// modèle d'attendre la décision.
+    #[cfg(feature = "code")]
+    fn carte_d_une_commande_en_attente(&self, call: &crate::llm::ToolCall, t: &mut crate::llm::Turn) {
+        let Some(demander) = &self.en_attente else { return };
+        if !t.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
+            return;
+        }
+        let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+        let Some(ligne) = args["command"].as_str() else { return };
+        let (texte, carte) = demander(ligne);
+        t.content.push_str(&texte);
+        match &mut t.ui {
+            Some(Value::Array(cartes)) => cartes.push(carte),
+            ui => *ui = Some(json!([carte])),
+        }
+    }
+    #[cfg(not(feature = "code"))]
+    fn carte_d_une_commande_en_attente(&self, _call: &crate::llm::ToolCall, _t: &mut crate::llm::Turn) {}
+
     fn appeler(&self, call: &crate::llm::ToolCall, f: impl FnOnce() -> crate::llm::Turn) -> crate::llm::Turn {
         if let Some(r) = self.refus(call).or_else(|| self.refus_d_empreinte(call)) {
             return r;
         }
-        let t = f();
+        let mut t = f();
         self.noter_l_empreinte(call, &t);
+        self.carte_d_une_commande_en_attente(call, &mut t);
         t
     }
 
