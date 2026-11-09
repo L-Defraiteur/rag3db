@@ -14,13 +14,17 @@ use super::{DaemonHost, Hosted};
 use crate::dataflow::fichier_nodes::Edition;
 
 /// **Une demande d'accord** (ask_permission) : le chemin, le mode, la raison du modèle, et
-/// la décision quand elle est prise.
+/// la décision quand elle est prise. Une **commande en attente** du chat de l'atelier (lot 7)
+/// en est une aussi : sa ligne et le backend dont la porte l'accordera ; son chemin est le
+/// domaine de travail.
 #[derive(Debug, Clone)]
 pub(super) struct Demande {
     pub chemin: PathBuf,
     pub mode: String,
     pub raison: String,
     pub decision: Option<bool>,
+    /// La ligne de commande et l'id du backend dont la porte (`Garde`) l'accorde.
+    pub commande: Option<(String, String)>,
 }
 
 /// Les demandes et les chemins ouverts de l'atelier.
@@ -142,7 +146,7 @@ impl DaemonHost {
             let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
             a.suivant += 1;
             let id = format!("accord-{}-{}", crate::events::maintenant_ms(), a.suivant);
-            a.demandes.insert(id.clone(), Demande { chemin: chemin.clone(), mode: mode.to_string(), raison: raison.trim().to_string(), decision: None });
+            a.demandes.insert(id.clone(), Demande { chemin: chemin.clone(), mode: mode.to_string(), raison: raison.trim().to_string(), decision: None, commande: None });
             id
         };
         let mot = if mode == "write" { "écrire" } else { "lire" };
@@ -156,26 +160,69 @@ impl DaemonHost {
         })
     }
 
-    /// **Décider une demande** : un oui ouvre le chemin pour ce mode ; la décision va au
-    /// journal des décisions (`<racine des runs>/decisions.jsonl`, une ligne) et au flux
-    /// (`accords`).
+    /// **Une commande en attente devient une demande d'accord** (lot 7 ; c7, 9 novembre
+    /// 2026) : le chat de l'atelier, hors d'une tâche, a vu la porte mettre `ligne` en
+    /// attente ; la demande est gardée avec le backend dont la porte l'accordera, et la
+    /// carte rendue (genre `commande`). Rend le texte à ajouter au résultat de l'outil, et
+    /// la carte.
+    pub(super) fn atelier_demander_commande(&self, backend: &str, ligne: &str, domaine: Option<&Path>) -> (String, Value) {
+        let chemin = domaine.map(Path::to_path_buf).unwrap_or_default();
+        let id = {
+            let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
+            a.suivant += 1;
+            let id = format!("accord-{}-{}", crate::events::maintenant_ms(), a.suivant);
+            a.demandes.insert(
+                id.clone(),
+                Demande { chemin: chemin.clone(), mode: "command".into(), raison: String::new(), decision: None, commande: Some((ligne.to_string(), backend.to_string())) },
+            );
+            id
+        };
+        (
+            format!(
+                "\n\n_La demande {id} est sur la carte d'accord, sous cet appel : l'utilisatrice accorde ou refuse. Accordée, cette même commande passe telle quelle ; attendez sa réponse, puis relancez-la._"
+            ),
+            json!({ "kind": "accord", "sujets": ["accords"], "id": id, "genre": "commande", "commande": ligne, "chemin": chemin }),
+        )
+    }
+
+    /// **Décider une demande** : un oui ouvre le chemin pour ce mode, ou, pour une commande,
+    /// l'accorde à la porte de son backend (comme le oui du superviseur d'une tâche) ; la
+    /// décision va au journal des décisions (`<racine des runs>/decisions.jsonl`, une ligne)
+    /// et au flux (`accords`).
     pub fn decider_accord(&self, id: &str, accorder: bool, qui: &str) -> Result<Value, String> {
         let d = {
-            let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
-            let d = a.demandes.get_mut(id).ok_or_else(|| format!("aucune demande {id}"))?;
+            let a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
+            let d = a.demandes.get(id).ok_or_else(|| format!("aucune demande {id}"))?;
             if let Some(deja) = d.decision {
                 return Err(format!("la demande {id} est déjà {}", if deja { "accordée" } else { "refusée" }));
             }
-            d.decision = Some(accorder);
-            let d = d.clone();
-            if accorder {
+            d.clone()
+        };
+        // Une commande s'accorde à la porte avant que le oui ne s'écrive : un accord qui ne
+        // se pose pas laisse la demande ouverte, et le dit.
+        if let (true, Some((commande, backend))) = (accorder, &d.commande) {
+            let domaine = Some(d.chemin.clone()).filter(|c| !c.as_os_str().is_empty());
+            self.with_backend_id(backend, |b| match b.garde() {
+                Some(g) => g.accorder_ligne(commande, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
+                None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
+            })
+            .and_then(|r| r)
+            .map_err(|e| format!("l'accord de « {commande} » n'a pas pu se poser : {e}"))?;
+        }
+        {
+            let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
+            let Some(e) = a.demandes.get_mut(id) else { return Err(format!("aucune demande {id}")) };
+            if e.decision.is_some() {
+                return Err(format!("la demande {id} a été décidée entre-temps"));
+            }
+            e.decision = Some(accorder);
+            if accorder && d.commande.is_none() {
                 a.ouverts.push((d.chemin.clone(), d.mode.clone()));
             }
-            d
-        };
-        let ligne = json!({
+        }
+        let mut ligne = json!({
             "id": id,
-            "genre": "chemin",
+            "genre": if d.commande.is_some() { "commande" } else { "chemin" },
             "chemin": d.chemin,
             "mode": d.mode,
             "raison": d.raison,
@@ -183,6 +230,9 @@ impl DaemonHost {
             "qui": qui,
             "quand_ms": crate::events::maintenant_ms(),
         });
+        if let Some((commande, _)) = &d.commande {
+            ligne["commande"] = json!(commande);
+        }
         let journal = self.journal.racine().join("decisions.jsonl");
         if let Some(dir) = journal.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
@@ -190,15 +240,48 @@ impl DaemonHost {
         use std::io::Write;
         let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&journal).map_err(|e| format!("{} : {e}", journal.display()))?;
         writeln!(f, "{ligne}").map_err(|e| format!("{} : {e}", journal.display()))?;
-        self.ide_flux().publier("accords", "*", json!({ "kind": "AccordDecide", "id": id, "decision": ligne["decision"], "chemin": d.chemin, "mode": d.mode }));
-        Ok(ligne)
+        self.ide_flux().publier("accords", "*", json!({ "kind": "AccordDecide", "id": id, "decision": ligne["decision"], "chemin": d.chemin, "mode": d.mode, "commande": ligne["commande"] }));
+        let mut rendu = ligne;
+        if let Some((commande, backend)) = &d.commande {
+            rendu["relance"] = json!(self.relancer_apres_la_carte(backend, commande, accorder));
+        }
+        Ok(rendu)
+    }
+
+    /// **La décision relance le tour d'elle-même** (c7, 9 novembre 2026 : que Lucie n'ait
+    /// pas à retaper) : elle entre dans la conversation comme un message que le modèle lit,
+    /// et un tour repart, dans un fil, sans que l'utilisatrice écrive. Rend vrai si le tour
+    /// est parti ; un tour déjà en cours, ou un hôte qui ne se connaît pas, le laisse à
+    /// l'utilisatrice, et le journal de l'hôte le dit.
+    fn relancer_apres_la_carte(&self, backend: &str, commande: &str, accorde: bool) -> bool {
+        let message = if accorde {
+            format!("(carte d'accord) La commande `{commande}` est accordée : relance-la telle quelle.")
+        } else {
+            format!("(carte d'accord) La commande `{commande}` est refusée : ne la relance pas ; fais autrement, ou demande-moi.")
+        };
+        let Some(hote) = self.soi.get().and_then(std::sync::Weak::upgrade) else { return false };
+        let backend = backend.to_string();
+        std::thread::spawn(move || {
+            if let Err(e) = hote.chat_turn(&backend, &message) {
+                eprintln!("[démon] la relance après la carte d'accord n'est pas partie ({backend}) : {e}");
+            }
+        });
+        true
     }
 
     /// L'état d'une demande (la carte relue après un rechargement).
     pub fn etat_accord(&self, id: &str) -> Option<Value> {
         let a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
         a.demandes.get(id).map(|d| {
-            json!({ "id": id, "chemin": d.chemin, "mode": d.mode, "raison": d.raison, "decision": d.decision.map(|x| if x { "accordé" } else { "refusé" }) })
+            json!({
+                "id": id,
+                "genre": if d.commande.is_some() { "commande" } else { "chemin" },
+                "commande": d.commande.as_ref().map(|(c, _)| c),
+                "chemin": d.chemin,
+                "mode": d.mode,
+                "raison": d.raison,
+                "decision": d.decision.map(|x| if x { "accordé" } else { "refusé" }),
+            })
         })
     }
 
@@ -725,35 +808,50 @@ pub(super) mod tests {
     /// **Une commande en attente se décide sur la carte d'accord** (lot 7 de la page
     /// `09-novembre-2026-atelier-lire-ecrire/01-conception.md`, c7, 9 novembre 2026) : dans
     /// le chat de l'atelier, une commande que la porte met en attente (`mkdir` écrit) rend la
-    /// carte d'accord sous l'appel ; un oui l'accorde à la porte de l'atelier, et la même
-    /// commande passe au tour suivant ; un non la laisse en attente. Chaque décision va au
-    /// journal des décisions, avec la commande.
+    /// carte d'accord sous l'appel. La décision relance le tour d'elle-même : un oui l'accorde
+    /// à la porte de l'atelier et le modèle, qui le lit, relance la même commande, qui passe ;
+    /// un non le lui dit, et rien ne passe. Chaque décision va au journal des décisions.
     #[test]
     fn a_command_on_hold_in_the_workshop_chat_is_decided_on_the_permission_card() {
         use crate::llm::{CallbackLlm, Turn};
-        let appels: Vec<(&str, &str)> = vec![("c1", "mkdir faits"), ("c2", "mkdir faits"), ("c3", "mkdir autres"), ("c4", "mkdir autres")];
-        let appels = Arc::new(appels.into_iter().map(|(m, c)| (m.to_string(), c.to_string())).collect::<Vec<_>>());
         let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
-            let appels = appels.clone();
             Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
                 let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
                 let message = turns[depuis].content.clone();
                 let fait = turns[depuis..].iter().any(|t| t.role == "tool");
-                match appels.iter().find(|(m, _)| *m == message).filter(|_| !fait) {
-                    Some((_, c)) => MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": c }).to_string())]).generate(turns, opts, sink),
+                // Un ordre (`mkdir …`), ou l'accord dit par la carte : la commande entre
+                // accents graves, relancée telle quelle.
+                let commande = match message.strip_prefix("lance ") {
+                    Some(c) => Some(c.to_string()),
+                    None if message.contains("est accordée : relance-la") => message.split('`').nth(1).map(str::to_string),
+                    None => None,
+                };
+                match commande.filter(|_| !fait) {
+                    Some(c) => MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": c }).to_string())]).generate(turns, opts, sink),
                     None => MockLlm::new("fait").generate(turns, opts, sink),
                 }
             })))
         });
         let d = tempfile::tempdir().unwrap();
         let a = atelier_avec(d.path(), model);
+        let etat = |a: &Atelier| a.host.chat_state(&a.h.id).unwrap();
         // Le dernier résultat de run_command de la conversation.
-        let dernier = |a: &Atelier| -> Value {
-            let etat = a.host.chat_state(&a.h.id).unwrap();
-            etat["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "tool").last().cloned().unwrap_or(Value::Null)
+        let dernier = |a: &Atelier| -> Value { etat(a)["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "tool").last().cloned().unwrap_or(Value::Null) };
+        // Le tour relancé par la carte : `n` messages de l'utilisatrice, et plus aucun tour en vol.
+        let attendre_le_tour = |a: &Atelier, n: usize| {
+            let debut = std::time::Instant::now();
+            loop {
+                let e = etat(a);
+                let messages = e["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "user").count();
+                if messages >= n && e["run"].is_null() {
+                    return e;
+                }
+                assert!(debut.elapsed() < std::time::Duration::from_secs(30), "la carte n'a pas relancé de tour : {e:#}");
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
         };
 
-        a.host.chat_turn(&a.h.id, "c1").expect("le tour c1");
+        a.host.chat_turn(&a.h.id, "lance mkdir faits").expect("le premier tour");
         let t = dernier(&a);
         assert!(t["content"].as_str().unwrap_or_default().contains("Commande en attente"), "mkdir attend l'accord : {t:#}");
         assert!(!a.racine.join("faits").exists(), "rien ne s'est exécuté");
@@ -764,19 +862,20 @@ pub(super) mod tests {
         let id = carte["id"].as_str().expect("l'id de la demande").to_string();
         assert_eq!(a.host.etat_accord(&id).unwrap()["commande"], "mkdir faits");
 
-        let ligne = a.host.decider_accord(&id, true, "le témoin").expect("accorder");
-        assert_eq!(ligne["genre"], "commande", "{ligne}");
-        a.host.chat_turn(&a.h.id, "c2").expect("le tour c2");
-        let t = dernier(&a);
-        assert!(a.racine.join("faits").is_dir(), "accordée, la commande passe : {t:#}");
+        let rendu = a.host.decider_accord(&id, true, "le témoin").expect("accorder");
+        assert_eq!((rendu["genre"].as_str(), rendu["relance"].as_bool()), (Some("commande"), Some(true)), "{rendu}");
+        let e = attendre_le_tour(&a, 2);
+        let dit = e["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "user").last().unwrap()["content"].clone();
+        assert!(dit.as_str().is_some_and(|d| d.contains("`mkdir faits` est accordée")), "le modèle lit l'accord : {dit}");
+        assert!(a.racine.join("faits").is_dir(), "accordée et relancée, la commande passe : {:#}", dernier(&a));
 
-        a.host.chat_turn(&a.h.id, "c3").expect("le tour c3");
+        a.host.chat_turn(&a.h.id, "lance mkdir autres").expect("le troisième tour");
         let id = dernier(&a)["ui"][0]["id"].as_str().expect("une seconde carte").to_string();
         a.host.decider_accord(&id, false, "le témoin").expect("refuser");
-        a.host.chat_turn(&a.h.id, "c4").expect("le tour c4");
-        let t = dernier(&a);
-        assert!(t["content"].as_str().unwrap_or_default().contains("Commande en attente"), "refusée, elle attend encore : {t:#}");
-        assert!(!a.racine.join("autres").exists());
+        let e = attendre_le_tour(&a, 4);
+        let dit = e["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "user").last().unwrap()["content"].clone();
+        assert!(dit.as_str().is_some_and(|d| d.contains("`mkdir autres` est refusée")), "le modèle lit le refus : {dit}");
+        assert!(!a.racine.join("autres").exists(), "refusée, rien ne passe");
 
         let journal = std::fs::read_to_string(d.path().join("runs/decisions.jsonl")).expect("le journal des décisions");
         let lignes: Vec<Value> = journal.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
