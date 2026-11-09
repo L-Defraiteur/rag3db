@@ -2003,3 +2003,11 @@ avance d'autant ; les hashs, eux, sont exacts.
   sa session d'abord ; pas de code avant la lecture de Lucie. Le ticket de recherche sur le banc de
   charge d'ingestion est écrit (832b57b26) : 14 012 scopes en 1 h 46 hier, card2 à 94 % ; sa place est
   un banc sous poste mesure, pas une suite de l'e2e entier.
+- **12 h 4x, à lire par Lucie** : la page de hooks-essai `07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md`
+  (b93123f34) : ligne de base de sa session (1 255 Bash, 485 grep dans src/, 0 appel aux outils de code,
+  qui sont différés et que rien ne rappelle) ; trois pas du moins au plus coûteux (SessionStart dit que
+  le dépôt est indexé ; UserPromptSubmit glisse trois résultats de search_code en plein texte seul, sans
+  embarquement, 600 ms et 600 caractères, déjà-vu ; PostToolUse après un grep ou un Read sur le dépôt
+  indexé, au plus tous les cinq outils) ; mesure sur hooks-essai seule une journée, seuil pour étendre ;
+  trois questions à la fin. La latence du plein texte se mesure en attendant son mot. Avec la page des
+  vues (10b8affce) et la conception de l'atelier d'archi (1889d2659), c'est la liste de lecture du jour.
