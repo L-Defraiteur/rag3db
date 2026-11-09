@@ -1683,7 +1683,7 @@ mod tests {
         }
         fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
             // Lent exprès : un rattrapage dure assez pour qu'une fermeture le croise.
-            std::thread::sleep(std::time::Duration::from_millis(10 * texts.len() as u64));
+            std::thread::sleep(std::time::Duration::from_millis(2 * texts.len() as u64));
             Ok(texts.iter().map(|_| { let mut v = vec![0.0_f32; 768]; v[0] = 1.0; v }).collect())
         }
         fn dim(&self) -> usize {
@@ -1720,8 +1720,9 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let (manifeste, arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
         let manifeste = PathBuf::from(manifeste);
-        // Assez de morceaux pour plusieurs passes de 512.
-        for i in 0..300 {
+        // Assez de morceaux pour que, coupé après au plus une passe de 512 à l'étape 1, il
+        // en reste plusieurs à l'étape 3 (la CI, plus lente, coupait après la première).
+        for i in 0..1500 {
             std::fs::write(arbre.join(format!("src/f{i}.rs")), format!("pub fn fonction_{i}() -> u32 {{\n    {i}\n}}\n")).unwrap();
         }
         let ecrire = |f: &dyn Fn(&mut Value)| {
@@ -1778,14 +1779,17 @@ mod tests {
         ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(true));
         host.with_backend(&h, |_| ()).unwrap();
         assert!(host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0, "avec le réglage, l'index repart à l'ouverture");
+        // Son journal, par le témoin du premier index que l'ouverture a posé.
+        let journal_du_rattrapage = std::fs::read_to_string(super::marque_du_premier_index(&manifeste)).expect("le rattrapage a posé son témoin");
         std::thread::sleep(std::time::Duration::from_millis(300));
         let debut = std::time::Instant::now();
         fermer();
         assert!(debut.elapsed() < std::time::Duration::from_secs(30), "la fermeture a attendu {:?}", debut.elapsed());
-        ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(false));
-        let reste = dus();
-        assert!(reste > 0, "la fermeture a coupé le rattrapage : la dette reste");
-        fermer();
+        // La coupure se lit à la dernière ligne du journal, sans rouvrir le dépôt : une
+        // réouverture verrait le témoin du premier index et relancerait l'index, qui
+        // solderait la dette sous la mesure (la CI de master, 9 novembre 2026).
+        let derniere = std::fs::read_to_string(journal_du_rattrapage.trim()).unwrap_or_default().lines().rev().find(|l| !l.trim().is_empty()).unwrap_or_default().to_string();
+        assert!(derniere.starts_with(crate::dataflow::index_nodes::STOPPED_PREFIX), "la fermeture a coupé le rattrapage, et la dette reste : {derniere}");
 
         // 4. Rouvert avec le réglage, laissé faire : la dette se solde.
         ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(true));
