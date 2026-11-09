@@ -79,6 +79,8 @@ pub struct LireFichierNode {
     offset: usize,
     length: usize,
     name: String,
+    mode: String,
+    reason: String,
 }
 
 impl Node for LireFichierNode {
@@ -105,13 +107,19 @@ impl Node for LireFichierNode {
                 let longueur = if self.length == 0 { LIGNES_MAX } else { self.length.min(LIGNES_MAX) };
                 hote.read(racine.as_deref(), self.path.trim(), self.offset.max(1), longueur)?
             }
+            "ask" => {
+                if self.path.trim().is_empty() {
+                    return Err("ask_permission : donnez le chemin (`path`)".into());
+                }
+                hote.ask(racine.as_deref(), self.path.trim(), self.mode.trim(), &self.reason)?
+            }
             "scope" => {
                 if self.name.trim().is_empty() && self.path.trim().is_empty() {
                     return Err("read_scope : donnez le nom du scope (`name`), et son fichier (`path`) pour lever une ambiguïté".into());
                 }
                 hote.read_scope(racine.as_deref(), self.name.trim(), self.path.trim())?
             }
-            autre => return Err(format!("LireFichierNode : action inconnue « {autre} » (read, scope)")),
+            autre => return Err(format!("LireFichierNode : action inconnue « {autre} » (read, scope, ask)")),
         };
         rendre(ctx, r);
         Ok(())
@@ -123,8 +131,8 @@ pub struct LireFichierNodeFactory;
 impl NodeFactory for LireFichierNodeFactory {
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let action = config.get("action").and_then(|v| v.as_str()).ok_or("LireFichierNode : 'action' est obligatoire (read, scope)")?;
-        if !matches!(action, "read" | "scope") {
-            return Err(format!("LireFichierNode : action inconnue « {action} » (read, scope)"));
+        if !matches!(action, "read" | "scope" | "ask") {
+            return Err(format!("LireFichierNode : action inconnue « {action} » (read, scope, ask)"));
         }
         Ok(Box::new(LireFichierNode {
             node_name: name.to_string(),
@@ -133,6 +141,8 @@ impl NodeFactory for LireFichierNodeFactory {
             offset: entier(config, "offset"),
             length: entier(config, "length"),
             name: texte(config, "name"),
+            mode: texte(config, "mode"),
+            reason: texte(config, "reason"),
         }))
     }
     fn node_type(&self) -> &'static str {
@@ -145,11 +155,13 @@ impl NodeFactory for LireFichierNodeFactory {
             inputs: vec![],
             outputs: vec![PortDef::value("result", PortType::Map, false), PortDef::value("ui", PortType::Any, false)],
             config_params: vec![
-                action(&["read", "scope"], "read : un fichier par fenêtre ; scope : le texte et les bornes d'un scope de l'index."),
+                action(&["read", "scope", "ask"], "read : un fichier par fenêtre ; scope : le texte et les bornes d'un scope de l'index ; ask : demander l'accord de l'utilisatrice (hors de la racine, ou sur un arbre qu'elle tient)."),
                 param("path", ConfigParamType::String, serde_json::json!(""), "Le chemin (relatif à la racine de l'atelier, ou absolu ; `~/` s'étend)."),
                 param("offset", ConfigParamType::Int, serde_json::json!(1), "La première ligne lue (1-based)."),
                 param("length", ConfigParamType::Int, serde_json::json!(LIGNES_MAX), "Le nombre de lignes (200 au plus)."),
                 param("name", ConfigParamType::String, serde_json::json!(""), "Le nom du scope, pour scope."),
+                param("mode", ConfigParamType::String, serde_json::json!("read"), "read ou write, pour ask."),
+                param("reason", ConfigParamType::String, serde_json::json!(""), "La raison dite à l'utilisatrice, pour ask."),
             ],
         }
     }
