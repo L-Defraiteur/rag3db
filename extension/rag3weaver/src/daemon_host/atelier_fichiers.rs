@@ -1195,4 +1195,108 @@ pub(super) mod tests {
         assert_eq!(statut, 200);
         fil.join().unwrap();
     }
+
+    /// **La jauge du contexte se voit avancer** (Lucie, 8 novembre 2026 au soir : « la barre de
+    /// progression du contexte, je la vois pas beaucoup avancer, ni le pourcentage » ; c7, 9
+    /// novembre). Sous un modèle d'un million de jetons, comme le sien, trois `read_file` de
+    /// 200 lignes : la jauge suit chaque appel au modèle pendant le tour, écrit son pourcentage,
+    /// garde une barre visible, et retrouve sa valeur après un redémarrage de l'hôte.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn the_context_gauge_follows_each_model_call_says_its_percentage_and_survives_a_restart() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        use crate::llm::{CallbackLlm, Turn};
+        const TEMOIN: &str = "the_context_gauge_follows_each_model_call_says_its_percentage_and_survives_a_restart";
+        let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path().join("rw");
+        std::fs::create_dir_all(&racine).unwrap();
+        for f in ["a", "b", "c"] {
+            let texte: String = (1..=200).map(|i| format!("ligne {i} du fichier {f}, quelques mots de plus pour peser dans le contexte\n")).collect();
+            std::fs::write(racine.join(format!("{f}.txt")), texte).unwrap();
+        }
+        let gabarits = d.path().join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let manifeste = gabarits.join("backends/atelier/backend.json");
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(racine.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        // Le plafond de Lucie (gemini-3.8-flash) ; un appel lent, pour que la page ait le
+        // temps de rendre chacun.
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 1_000_000, move |turns: &[Turn], opts, sink| {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let faits = turns[depuis..].iter().filter(|t| t.role == "tool").count();
+                match ["a.txt", "b.txt", "c.txt"].get(faits) {
+                    Some(f) => MockLlm { context_len: 1_000_000, ..MockLlm::new("") }.with_tool_calls(vec![("read_file".to_string(), json!({ "path": f }).to_string())]).generate(turns, opts, sink),
+                    None => MockLlm { context_len: 1_000_000, ..MockLlm::new("lu") }.generate(turns, opts, sink),
+                }
+            })))
+        });
+        let (runs, chats, taches) = (d.path().join("runs"), d.path().join("chats"), d.path().join("taches"));
+        let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+        let lancer = || {
+            let (runs, chats, taches, racines, model) = (runs.clone(), chats.clone(), taches.clone(), racines.clone(), model.clone());
+            crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+                h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_racine_des_taches(taches).with_chat_model(model).with_chats_reread()
+            })
+        };
+        let (adresse, fil) = lancer();
+        let racine_url = format!("http://{adresse}");
+        let mut r = crate::daemon::agent_de_temoin()
+            .post(format!("{racine_url}/ide/describe"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste }).to_string())
+            .unwrap();
+        let decrit: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(decrit["ok"], true, "{decrit}");
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine_url}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let etat: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        let canon = manifeste.canonicalize().unwrap();
+        let id = etat["backends"].as_array().and_then(|bs| bs.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(canon.as_path()))).and_then(|b| b["id"].as_str()).unwrap().to_string();
+        let jauge = format!(".conversation[data-backend=\"{id}\"] .usage");
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.aller(&format!("{racine_url}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+        n.aller(&format!("{racine_url}/ide/code/{id}/chat"), prete);
+        n.attendre(&format!("!!document.querySelector('{jauge}')"), "la jauge de la conversation");
+        // Chaque valeur que la jauge prend pendant le tour.
+        n.evaluer(&format!(
+            "window.__jauge = []; new MutationObserver(() => {{ const u = document.querySelector('{jauge}')?.dataset.used; if (u && window.__jauge.at(-1) !== u) window.__jauge.push(u); }}).observe(document.body, {{ subtree: true, attributes: true, childList: true }})"
+        ));
+        n.evaluer("document.querySelector('#message').value = 'lis les trois'; document.querySelector('#send').click()");
+        n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour des trois lectures");
+        n.attendre(&format!("Number(document.querySelector('{jauge}')?.dataset.used) > 0"), "la jauge du dernier appel");
+        let vus = n.evaluer("window.__jauge");
+        assert!(vus.as_array().is_some_and(|v| v.len() >= 3), "la jauge suit chaque appel au modèle pendant le tour, pas seulement la fin : {vus}");
+        let texte = n.evaluer(&format!("document.querySelector('{jauge} .contexte').textContent"));
+        assert!(texte.as_str().is_some_and(|t| t.contains('%')), "la jauge écrit son pourcentage : {texte}");
+        let largeur = n.evaluer(&format!("document.querySelector('{jauge} [role=meter] > div').getBoundingClientRect().width"));
+        assert!(largeur.as_f64().is_some_and(|l| l >= 2.0), "une barre visible, même à moins de 1 % : {largeur}");
+        let avant = n.evaluer(&format!("document.querySelector('{jauge}').dataset.used"));
+        let titre = n.evaluer(&format!("document.querySelector('{jauge}').title"));
+        assert!(titre.as_str().is_some_and(|t| t.contains("1 000 000") || t.contains("1 M")), "au survol, le plafond : {titre}");
+
+        // L'hôte redémarre : la jauge garde le dernier appel.
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine_url}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+        let (adresse, fil) = lancer();
+        let racine_url = format!("http://{adresse}");
+        n.aller(&format!("{racine_url}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        n.aller(&format!("{racine_url}/ide/code/{id}/chat"), prete);
+        n.attendre(&format!("document.querySelector('{jauge}')?.dataset.used === {avant}"), "la jauge relue après le redémarrage");
+
+        assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine_url}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
 }
