@@ -261,6 +261,25 @@ The binaries `rag3weaver-backend` and `rag3weaver-chat` are this runtime served
 over HTTP, with sections rendered after each tool so that a person reading over
 the agent's shoulder sees what it did.
 
+## The workshop
+
+`rag3weaver-backend atelier` sets up a workshop: a chat whose space is the machine rather than a
+branch of code. A new workshop takes the folder it is started from as its root, or `~/rw-code`
+(created if missing) when started from the home folder or `/`; an existing workshop keeps its
+root. In the chat, the workshop:
+
+- attaches a worktree already on disk (`attach_worktree`), or opens a branch in a sibling worktree
+  (`open_branch`); each is registered, opened and indexed in the background, and its progress and
+  end show under the call and in the sidebar;
+- reads a file 200 lines at a time (`read_file`), or a scope from the index of an attached worktree
+  by its name (`read_scope`);
+- writes with `replace_text` (an old text that appears exactly once), `replace_lines` and
+  `insert_lines`; the line edits require that those lines were read in this turn or the previous
+  one. Every write returns the unified diff, and a write inside an attached worktree reindexes it;
+- writes a worktree it opened itself without asking; anything outside its root, and any worktree
+  the user holds, goes through `ask_permission`: a card under the call, granted or refused by the
+  user, and recorded one line per decision in `decisions.jsonl` next to the run journal.
+
 ## Claude Code and Codex
 
 The memory and the mailbox reach agents that do not run in rag3weaver.
