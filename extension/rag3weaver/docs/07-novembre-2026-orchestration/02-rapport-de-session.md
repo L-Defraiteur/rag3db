@@ -1823,3 +1823,22 @@ avance d'autant ; les hashs, eux, sont exacts.
   passe en attente du disque.
 - **02 h 28** : le fstrim a fini de lui-même (53 min) ; disque de luciepc à 1 %, PSI io 1,1 ; prochain tir le lundi 16 à 00 h 02, d'où le drop-in `--minimum 16M` et une heure creuse à poser avant. « Disque rendu » dit aux sessions à 02 h 30 : la dichotomie d'hotfixs, la mesure de codeparsers et la passe du correctif de CI d'ED reprennent.
 - **02 h 45, ED, sur disque sain** : le témoin du rattrapage (1 500 fichiers, vert en 22 s sous les deux régimes) rougit au troisième essai pour une vraie raison : une passe de vecteurs coupée garde ses réclamations (`_embed_claim`, périmées après 60 s, reprises seulement par leur écrivain) ; le catalogue rouvert, autre écrivain, les saute 60 s, et un rattrapage qui finit dans ce délai se dit « terminé » en laissant jusqu'à 512 morceaux par table dus. Le ticket des morceaux refusés a sans doute la même cause. Master reste rouge sur ce témoin, qui a raison ; ED corrige au matin (une passe arrêtée rend ses réclamations, la ligne de fin dit le reste dû).
+
+## 09 h 38 (9 novembre) — le matin : le portable posé, la CI verte
+
+- **Le portable est posé à 9 h 36** (G) : lib 9bae60786, binaire 48c93d7ab (la tête de master, lots
+  d'archi compris), coupure de 9 h 30 m 24 s à 9 h 36 m 08 s (le « copié » d'hotfixs n'est pas venu, sa
+  dichotomie tournant à luciepc : réveil sur mot de c7, instantané avant-9bae60786 des deux bases pris
+  avec RETOUR.sh), réveil vert, quatre backends rouverts, tunnels vivants, l'IDE rend « Dépôts » (407
+  éléments, aucune erreur de console). **Les deux postes sont sur 9bae60786**, cbc06c3e1 au magasin.
+  L'atelier de Lucie remis à la main au gabarit livré de ce binaire (show_progress en plus) : le
+  gabarit vivant ne note toujours pas une pose, cas de l'installeur chez ED.
+- **La CI rag3weaver de master est verte** (runs de 305fc51c6 et 48c93d7ab, 01 h 30 et 01 h 36) : le
+  rouge du témoin du rattrapage sur le runner n'était pas déterministe ; le défaut produit qu'il
+  révèle (les réclamations d'une passe coupée restent 60 s invisibles) est à corriger par ED ce matin.
+- **luciepc** : réseau de nouveau direct (tailscale 192.168.1.176), tunnels stables depuis 01 h 52 ;
+  fstrim hebdomadaire fini à 02 h 28 ; PSI io 0, charge 4. Reste à Lucie : le drop-in `--minimum 16M`
+  et une heure creuse avant le lundi 16 à 00 h 02.
+- **En attente de réponse** : hotfixs (la dichotomie sur K du point de reprise), codeparsers (la mesure
+  du `require`, puis « carte libre » pour recherche), ED (le correctif des réclamations, puis la
+  relecture des vues). Lucie lit la page des vues.
