@@ -1,5 +1,5 @@
-import { createContext, useContext } from "react";
-import type { Rag, UiComposant } from "@/lib/host";
+import { createContext, useContext, useEffect, useState } from "react";
+import { onFlux, type Rag, type UiComposant } from "@/lib/host";
 import { avancementText, useAvancement, useFinDIndex } from "@/lib/progres";
 
 // **Une interface qui glisse dans le chat** (Lucie, 8 novembre 2026 à 16 h 30 : « que ça
@@ -10,7 +10,57 @@ import { avancementText, useAvancement, useFinDIndex } from "@/lib/progres";
 // le premier : l'avancement de l'index d'un dépôt.
 const REGISTRE: Record<string, (p: { u: UiComposant }) => React.ReactNode> = {
   index_progress: CarteAvancement,
+  accord: CarteAccord,
 };
+
+/// **La carte d'accord** (ask_permission ; décision de c7, 9 novembre 2026) : le chemin, le
+/// mode et la raison du modèle ; « accorder » ou « refuser ». La décision va à l'hôte, qui
+/// la journalise et la publie (sujet `accords`) ; la carte la suit par le flux, et relue
+/// après un rechargement, elle lit son état une fois.
+function CarteAccord({ u }: { u: UiComposant }) {
+  const [decision, setDecision] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    if (!u.id) return;
+    fetch(`/ide/accords?id=${encodeURIComponent(u.id)}`)
+      .then((r) => r.json())
+      .then((v: { ok?: boolean; result?: { decision?: string | null } }) => {
+        if (v.ok && v.result?.decision) setDecision(v.result.decision);
+      })
+      .catch(() => {});
+    return onFlux((d) => {
+      const e = d.evenement ?? {};
+      if (d.sujet === "accords" && e.kind === "AccordDecide" && e.id === u.id) setDecision(String(e.decision));
+    });
+  }, [u.id]);
+  const decider = (d: "accorder" | "refuser") =>
+    fetch("/ide/accords", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: u.id, decision: d }) })
+      .then((r) => r.json())
+      .then((v: { ok?: boolean; error?: string; result?: { decision?: string } }) => (v.ok ? setDecision(v.result?.decision ?? null) : setErreur(v.error ?? "refusé par l'hôte")))
+      .catch((e: Error) => setErreur(e.message));
+  const verbe = u.mode === "write" ? "écrire" : "lire";
+  return (
+    <div className="carte-accord border rounded-lg px-3 py-2 text-xs" data-id={u.id ?? ""} data-decision={decision ?? ""}>
+      <div className="font-medium text-foreground/90">
+        l'atelier demande à {verbe} <span className="font-mono">{u.chemin}</span>
+      </div>
+      <div className="raison text-muted-foreground mt-0.5">{u.raison}</div>
+      {decision ? (
+        <div className="decision mt-1.5 font-medium">{decision}</div>
+      ) : (
+        <div className="flex gap-2 mt-1.5">
+          <button type="button" className="accorder border rounded px-2 py-0.5 hover:bg-accent" onClick={() => decider("accorder")}>
+            accorder
+          </button>
+          <button type="button" className="refuser border rounded px-2 py-0.5 hover:bg-accent" onClick={() => decider("refuser")}>
+            refuser
+          </button>
+        </div>
+      )}
+      {erreur ? <div className="text-destructive mt-1">{erreur}</div> : null}
+    </div>
+  );
+}
 
 /// Le rag de chaque dépôt (par son id) tel que l'état de l'hôte le tient déjà dans la page :
 /// une carte relue après un rechargement, sans avancement sur le flux, dit par lui si

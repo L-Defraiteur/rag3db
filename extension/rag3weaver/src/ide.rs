@@ -695,6 +695,32 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        // **Les accords de l'atelier** (ask_permission) : la carte sous l'appel décide
+        // (`{id, decision: accorder|refuser}`) ; relue après un rechargement, elle lit son
+        // état (`?id=`).
+        #[cfg(feature = "code")]
+        ("POST", "/ide/accords") => {
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match c["decision"].as_str() {
+                    Some(d @ ("accorder" | "refuser")) => match host.decider_accord(c["id"].as_str().unwrap_or_default(), d == "accorder", "l'utilisatrice, dans l'IDE") {
+                        Ok(v) => json!({ "ok": true, "result": v }),
+                        Err(e) => json!({ "ok": false, "error": e }),
+                    },
+                    _ => json!({ "ok": false, "error": "« decision » vaut accorder ou refuser" }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        #[cfg(feature = "code")]
+        ("GET", "/ide/accords") => {
+            let v = match host.etat_accord(&param("id").unwrap_or_default()) {
+                Some(v) => json!({ "ok": true, "result": v }),
+                None => json!({ "ok": false, "error": "aucune demande de ce nom (un redémarrage de l'hôte les oublie ; le journal des décisions les garde)" }),
+            };
+            let _ = request.respond(json_(200, &v));
+        }
         ("POST", "/ide/symboles") => {
             // **Les symboles cités dans le chat** (`daemon_host::symboles_cites`) : la page
             // les envoie en lot, l'index dit où chacun est défini.
