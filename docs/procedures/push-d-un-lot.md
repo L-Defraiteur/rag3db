@@ -63,6 +63,16 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   exigé, `RAG3WEAVER_EXIGER_GEMINI=1`, identifiants par le chemin de `.vault`, jamais leur contenu)
   si le juge ou l'équipier.
 - Un témoin qui se saute n'est pas vert : `SAUTÉ` compte comme un rouge dans la passe.
+- **Les bancs** ne sont pas des suites de la passe. Un banc à services (aujourd'hui
+  `e2e_banc_fiches_classees`, sa voie : `RAG3WEAVER_BANC_VERTEX` avec la feature `openai-llm`, ou
+  `RAG3WEAVER_BANC_DECIDE` et un llama-server) n'entre jamais dans l'e2e entier : `run_e2e.sh`
+  l'écarte en le disant, ses variables posées ou non, et la passe se dit « complète hors bancs à
+  services ». Il se joue **seul**, quand sa tentative ou son code change :
+  `RAG3WEAVER_BANC_VERTEX=1 RAG3WEAVER_LLM=vertex ./run_e2e.sh --test e2e_banc_fiches_classees`,
+  les identifiants Vertex par le chemin de `.vault`. Nommé sans sa voie, ou avec une voie dont la
+  feature manque au jeu, il est refusé rouge avant tout bâti en disant quoi poser : c'est voulu,
+  un banc sauté n'est pas un banc vert. Une mesure de durée (un banc de charge) se joue sous
+  `poste mesure`.
 - **Les tickets du lot se relisent** avant le push : `python3 extension/rag3weaver/scripts/check_tickets.py --lot origin/master` imprime ceux que le lot ouvre, ferme ou change d'état (l'index ne se compte plus à la main depuis le 7 novembre 2026 ; il se génère par `--index`).
 - **Un contrôle qui ne trouve rien à juger est ROUGE**, jamais vert par défaut : un filtre ctest qui ne trouve aucun test (« No tests were found », code 0) a fait dire VERTE une passe dont la comparaison du banc n'avait pas tourné (hotfixs, 7 novembre 2026). Le verdict se lit sur la sortie qui juge (« bench matches », « running N tests »), pas sur un code de sortie seul.
 - **Les e2e d'une passe se jouent sous le jeu large de features**

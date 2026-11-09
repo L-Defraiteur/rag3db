@@ -83,5 +83,27 @@ compte "$T/journal-vide" --test e2e e2e_lectures > "$T/sortie-compte5" ; grep -q
 cas $? "--test e2e e2e_lectures sans aucune ligne : 0 sur 1, la suite nommée"
 [ ! -e "$T/cargo-appele" ]
 cas $? "le compte seul n'appelle pas cargo"
-[ $echec = 0 ] || { echo "--- sortie"; tail -15 "$T/sortie"; tail -15 "$T/sortie-features" 2>/dev/null; tail -15 "$T/sortie-defaut" 2>/dev/null; tail -5 "$T"/sortie-compte* 2>/dev/null; }
+# Les bancs à services (9 novembre 2026) : jamais dans l'e2e entier, joués seuls
+# avec leur voie, refusés rouges avant tout bâti sans elle.
+banc() { # <sortie> <env…> -- <args…>
+  local s="$1"; shift; local env=(); while [ "$1" != -- ]; do env+=("$1"); shift; done; shift
+  rm -f "$T/cargo-appele"
+  env -u RAG3WEAVER_BANC_VERTEX -u RAG3WEAVER_BANC_DECIDE RAG3WEAVER_VERROU_TENU=1 RAG3WEAVER_MOTEUR_ANCIEN=1 "${env[@]}" \
+    PATH="$T/bin:$PATH" CARGO_TARGET_DIR="$T/target" timeout 120 bash "$SCRIPT" "$@" > "$T/$s" 2>&1
+}
+banc sortie-banc1 -- --test e2e_banc_fiches_classees; code=$?
+[ "$code" = 1 ] && grep -q "e2e_banc_fiches_classees est un banc à services : il se joue seul, avec sa voie" "$T/sortie-banc1" && [ ! -e "$T/cargo-appele" ]
+cas $? "un banc nommé sans sa voie : rouge avant tout cargo, il dit quoi poser (rendu $code)"
+banc sortie-banc2 RAG3WEAVER_BANC_VERTEX=1 RAG3WEAVER_E2E_FEATURES=rag3db-native,code,daemon -- --test e2e_banc_fiches_classees; code=$?
+[ "$code" = 1 ] && grep -q "RAG3WEAVER_BANC_VERTEX (feature openai-llm)" "$T/sortie-banc2" && [ ! -e "$T/cargo-appele" ]
+cas $? "une voie posée sans sa feature : rouge, la variable et la feature nommées (rendu $code)"
+banc sortie-banc3 RAG3WEAVER_BANC_VERTEX=1 RAG3WEAVER_E2E_VERIFIER_SEULEMENT=1 -- --test e2e_banc_fiches_classees; code=$?
+[ "$code" = 0 ] && grep -q "chaque suite demandée a les siennes" "$T/sortie-banc3"
+cas $? "le banc nommé avec sa voie et sa feature passe la garde (rendu $code)"
+banc sortie-banc4 RAG3WEAVER_BANC_VERTEX=1 RAG3WEAVER_E2E_VERIFIER_SEULEMENT=1 --; code=$?
+grep -q "e2e_banc_fiches_classees NON JOUÉE (banc à services, il se joue seul" "$T/sortie-banc4"
+cas $? "l'e2e entier écarte le banc même sa variable posée, en le disant (rendu $code)"
+[ ! -e "$T/cargo-appele" ]
+cas $? "les gardes des bancs n'appellent pas cargo"
+[ $echec = 0 ] || { echo "--- sortie"; tail -15 "$T/sortie"; tail -15 "$T/sortie-features" 2>/dev/null; tail -15 "$T/sortie-defaut" 2>/dev/null; tail -5 "$T"/sortie-compte* "$T"/sortie-banc* 2>/dev/null; }
 exit $echec
