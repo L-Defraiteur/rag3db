@@ -1947,3 +1947,25 @@ avance d'autant ; les hashs, eux, sont exacts.
   « waiting ») : la lecture de la mesure du require, le correctif des réclamations, le rejeu de la trace
   sous 29a7bc52a et le témoin de l'annulation inachevée sont bloqués là. Lucie travaille sur ses sessions
   Sairen depuis 9 h environ ; dit dans mon terminal, rien qui presse.
+
+## 12 h 0x (9 novembre) — 0 écart sous 29a7bc52a par le vrai chemin de l'hôte, les poses
+
+- **Le contrôle par l'hôte de G est à 0 écart** (12 h 07) : copie neuve de coupure-12h06/code-lourd,
+  index complet par l'hôte d'essai 7991 de 11 h 27 à 11 h 49, embarquement par le 7882 d'hotfixs
+  (bloqué sur une approbation de Lucie, son service libre), TERM sans .wal, outil de contrôle 339cbb5dc :
+  INHERITS_FROM 658/658 (650/658 sous 17a094d12 et dadbf0041), LOCKS 546/546 (544/546), QUERIES
+  20093/20093 sans relation d'un seul côté, IMPLEMENTS 804/804. Le sens avant a retrouvé ses 8
+  INHERITS_FROM et ses 2 LOCKS. Journal à luciepc : `instantanes/controle-29a-controle/code-lourd.log`.
+- **Pose à luciepc à 12 h 12** (hôte 7970 là-bas, binaire 78bac6ad, instantané avant-29a7bc52a), courant
+  aux deux postes, puis le portable (annonce, coupure cinq minutes après). À « portable posé », 96 lance
+  son essai d'équipier dans mon arbre essais-c7, et la règle « aucun index complet sur les bases de
+  Lucie » se lève. **Les bases existantes gardent leur ancien écart** : le correctif empêche d'en créer,
+  il ne répare pas ; la réparation est un index complet des bases de Lucie après la pose, à son mot
+  (sa carte, son heure). Le cœur ferme le ticket avec la trace d'hotfixs, ou sur ce contrôle seul si
+  elle tarde encore à 14 h.
+- **archi** : huit témoins verts et poussés sur origin/atelier-lire-ecrire (marque « né de l'atelier »
+  à côté du manifeste inscrit, pas dedans, pour ne pas couper l'index ; racine à une pose neuve avec
+  `launched_from` ; ask_permission et `<runs>/decisions.jsonl` ; carte d'accord sous l'appel,
+  `/ide/accords`, décision suivie par le flux). La carte pour les commandes en attente passe au lot
+  suivant. Sa passe complète attend le creux de bge-m3 : `e2e_charge_ingestion` de recherche tient la
+  carte à 100 % (7880 → 7879 par le tunnel muet 5 s à /health, service actif).
