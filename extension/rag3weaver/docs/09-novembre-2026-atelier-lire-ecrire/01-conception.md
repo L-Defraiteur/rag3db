@@ -136,6 +136,28 @@ Témoins, tous vus rouges d'abord : sept par le chemin de l'hôte (dans `daemon_
 et un au navigateur (la carte d'accord), plus la règle de la racine (`code_tree`) et
 l'empreinte (`empreintes`).
 
-**Lot suivant** : les commandes en attente de `run_command` sur la même carte, accordées par la
-`Garde` de l'atelier, avec le même journal.
+## Les commandes en attente sur la carte (lot 7, branche atelier-commandes-sur-la-carte)
+
+- **La carte.** Hors d'une tâche, le chat de l'atelier voit la porte mettre une commande en
+  attente (`EN_ATTENTE` dans le résultat de `run_command`). L'hôte pose alors une demande de genre
+  `commande` dans les mêmes accords (`atelier_demander_commande`), et la carte glisse sous l'appel :
+  « l'atelier demande à lancer `…` ». Dans une tâche, la boîte du superviseur garde la main.
+- **La décision.** Un oui l'accorde à la `Garde` du backend (`accorder_ligne`) avant de s'écrire.
+  Un non la laisse en attente. Le journal `decisions.jsonl` porte `genre: commande` et la ligne.
+- **La relance** (c7 : que Lucie n'ait pas à retaper). La décision relance le tour d'elle-même,
+  dans un fil. Le modèle lit « (carte d'accord) La commande `…` est accordée : relance-la telle
+  quelle. », ou qu'elle est refusée. Rien ne s'exécute hors d'un tour, et c'est le modèle qui
+  relance la commande, comme l'équipier sous un oui du superviseur. La page suit ce tour, qu'elle
+  n'a pas envoyé : une bulle vivante au `RunStarted`, puis la session relue à la fin.
+- **Un défaut trouvé en route.** `accorder_ligne` accordait la famille entière : jugée « accordée
+  par l'utilisateur », la sentinelle autorise la famille, et la porte la retenait. Un oui pour
+  `mkdir faits` laissait donc passer tout `mkdir`. La ligne se juge désormais sans l'accord, et
+  seule la commande exacte est retenue. Cela vaut aussi pour le oui du superviseur d'une tâche.
+- **Témoins**, tous vus rouges d'abord :
+  - `a_command_on_hold_in_the_workshop_chat_is_decided_on_the_permission_card`, par l'hôte ;
+  - `un_oui_accorde_la_commande_exacte_pas_sa_famille`, dans `commande` ;
+  - `the_command_card_grants_the_command_and_the_turn_starts_again_by_itself`, au navigateur.
+
+**Lot suivant** : la carte d'un chemin (`ask_permission`) relance le tour, elle aussi. Sa demande
+doit pour cela porter le backend qui l'a posée.
 

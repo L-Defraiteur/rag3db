@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **9 nov. — Une commande en attente se décide d'un clic, et l'atelier repart seul.** Quand la
+  porte de l'atelier met une commande en attente, la même carte d'accord la montre sous l'appel ;
+  accorder laisse passer cette commande exacte, jamais toute sa famille, et la décision relance le
+  tour sans qu'on retape rien. (`atelier-commandes-sur-la-carte`)
 - **9 nov. — Un modèle qui refuse se voit attendre, et n'attend plus sans fin.** Chaque recul du
   client du modèle après un 429 ou un 503 se dit au journal et dans le statut du chat, avec son
   numéro, son code et son attente. Chaque appelant borne ses reculs : cinq minutes pour un tour de
