@@ -884,6 +884,73 @@ pub(super) mod tests {
         assert_eq!((lignes[1]["commande"].as_str(), lignes[1]["decision"].as_str()), (Some("mkdir autres"), Some("refusé")), "{journal}");
     }
 
+    /// **La carte d'un chemin relance son tour, elle aussi** (c7, 9 novembre 2026, le lot
+    /// d'après celui des commandes) : un oui sur la carte d'`ask_permission` ouvre le chemin
+    /// et le dit au modèle dans un tour qui repart seul ; il relit, et la lecture passe. Un non
+    /// le lui dit aussi, et rien ne s'ouvre.
+    #[test]
+    fn a_path_card_decision_starts_the_turn_again_by_itself() {
+        use crate::llm::{CallbackLlm, Turn};
+        let d = tempfile::tempdir().unwrap();
+        let dehors = d.path().join("dehors");
+        std::fs::create_dir_all(&dehors).unwrap();
+        std::fs::write(dehors.join("note.txt"), "la note du dehors\n").unwrap();
+        std::fs::write(dehors.join("autre.txt"), "l'autre note\n").unwrap();
+        let (note, autre) = (dehors.join("note.txt").display().to_string(), dehors.join("autre.txt").display().to_string());
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (note, autre) = (note.clone(), autre.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let message = turns[depuis].content.clone();
+                let fait = turns[depuis..].iter().any(|t| t.role == "tool");
+                let appel = match message.as_str() {
+                    "lis la note" => Some(("ask_permission", json!({ "path": note, "mode": "read", "reason": "lire la note du dehors" }))),
+                    "lis l'autre" => Some(("ask_permission", json!({ "path": autre, "mode": "read", "reason": "lire l'autre note" }))),
+                    m if m.contains("est accordé") => m.split('`').nth(1).map(|p| ("read_file", json!({ "path": p }))),
+                    _ => None,
+                };
+                match appel.filter(|_| !fait) {
+                    Some((nom, args)) => MockLlm::new("").with_tool_calls(vec![(nom.to_string(), args.to_string())]).generate(turns, opts, sink),
+                    None => MockLlm::new("fait").generate(turns, opts, sink),
+                }
+            })))
+        });
+        let a = atelier_avec(d.path(), model);
+        let etat = |a: &Atelier| a.host.chat_state(&a.h.id).unwrap();
+        let dernier = |a: &Atelier| -> Value { etat(a)["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "tool").last().cloned().unwrap_or(Value::Null) };
+        let attendre_le_tour = |a: &Atelier, n: usize| {
+            let debut = std::time::Instant::now();
+            loop {
+                let e = etat(a);
+                let messages = e["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "user").count();
+                if messages >= n && e["run"].is_null() {
+                    return e;
+                }
+                assert!(debut.elapsed() < std::time::Duration::from_secs(30), "la carte n'a pas relancé de tour : {e:#}");
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        };
+        let dernier_message = |e: &Value| e["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "user").last().unwrap()["content"].as_str().unwrap_or_default().to_string();
+
+        a.host.chat_turn(&a.h.id, "lis la note").expect("le premier tour");
+        let id = dernier(&a)["ui"][0]["id"].as_str().expect("la carte d'accord").to_string();
+        let rendu = a.host.decider_accord(&id, true, "le témoin").expect("accorder");
+        assert_eq!(rendu["relance"], true, "la décision relance le tour : {rendu}");
+        let e = attendre_le_tour(&a, 2);
+        assert!(dernier_message(&e).contains("note.txt") && dernier_message(&e).contains("est accordé"), "le modèle lit l'accord : {}", dernier_message(&e));
+        let lu = dernier(&a);
+        assert_eq!(lu["tool_name"], "read_file", "{lu:#}");
+        assert!(lu["content"].as_str().unwrap_or_default().contains("la note du dehors"), "la lecture passe : {lu:#}");
+
+        a.host.chat_turn(&a.h.id, "lis l'autre").expect("le troisième tour");
+        let id = dernier(&a)["ui"][0]["id"].as_str().expect("une seconde carte").to_string();
+        let rendu = a.host.decider_accord(&id, false, "le témoin").expect("refuser");
+        assert_eq!(rendu["relance"], true, "{rendu}");
+        let e = attendre_le_tour(&a, 4);
+        assert!(dernier_message(&e).contains("autre.txt") && dernier_message(&e).contains("refusé"), "le modèle lit le refus : {}", dernier_message(&e));
+        assert_eq!(dernier(&a)["tool_name"], "ask_permission", "refusé, rien n'est relu");
+    }
+
     /// **`ask_permission`** (décision de c7, 9 novembre 2026) : hors de la racine, ou sur un
     /// arbre que tient l'utilisatrice, le modèle demande l'accord ; la demande rend une carte
     /// d'accord (`ui`), l'utilisatrice accorde ou refuse ; un oui ouvre ce chemin pour ce
