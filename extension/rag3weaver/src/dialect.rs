@@ -988,6 +988,11 @@ pub trait SchemaDialect: Send + Sync {
     /// Paramètres : `$reclamation`, `$perime`, `$mien`, `$exclus`.
     fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String;
 
+    /// **Rendre les réclamations d'un écrivain** sur `table` : `_embed_claim` vidé là où
+    /// il finit par `$mien`. Une passe arrêtée ou finie ne laisse pas 60 s de morceaux
+    /// invisibles à l'écrivain suivant (le rattrapage, 9 novembre 2026).
+    fn rendre_reclamations(&self, table: &str) -> String;
+
     /// Combien de morceaux de `table` n'ont pas de texte (`_text` nul ou
     /// vide) : ni cherchables par leur texte, ni embarqués. Rend `cnt`.
     fn count_chunks_sans_texte(&self, table: &str) -> String;
@@ -2285,6 +2290,10 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
+    fn rendre_reclamations(&self, table: &str) -> String {
+        format!("MATCH (n:{}) WHERE n._embed_claim ENDS WITH $mien SET n._embed_claim = '' RETURN count(n) AS cnt", self.quote(table))
+    }
+
     fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {
         let (table, marqueur) = (self.quote(table), self.quote(marqueur));
         format!(
@@ -3573,6 +3582,10 @@ impl SchemaDialect for PostgresDialect {
                 OR _chunked_hash <> _content_hash \
              LIMIT {limite}"
         )
+    }
+
+    fn rendre_reclamations(&self, table: &str) -> String {
+        format!("UPDATE {} SET _embed_claim = '' WHERE _embed_claim LIKE '%' || $mien", self.quote(table))
     }
 
     fn reclamer_chunks_sans_marqueur(&self, table: &str, marqueur: &str, limite: usize) -> String {

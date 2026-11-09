@@ -1958,4 +1958,64 @@ mod tests {
         let ouvert = etat["backends"].as_array().and_then(|bs| bs.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(manifeste.as_path()))).map(|b| b["open"].clone());
         assert_eq!(ouvert, Some(json!(false)), "le dépôt est encore fermé dans l'état de l'hôte : {etat:#}");
     }
+
+    /// **Des morceaux refusés par le service se reprennent à l'index suivant, même rouvert**
+    /// (ticket « des morceaux refusés par le service ne sont jamais repris », 8 novembre
+    /// 2026 ; la cause, lue le 9 : les réclamations de la passe restaient au nom de son
+    /// écrivain, que le catalogue rouvert, autre écrivain, sautait une minute). Un index dont
+    /// le service refuse tout, la base fermée et rouverte, puis un index avec un service
+    /// sain, dans la minute : la dette tombe à zéro.
+    #[test]
+    fn refused_chunks_are_retaken_by_the_next_index_after_a_reopen() {
+        struct Refuse;
+        impl crate::embedder::Embedder for Refuse {
+            fn name(&self) -> &str {
+                "granite-278m"
+            }
+            fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+                Err(crate::embedder::EmbedError::ProviderError("le service du témoin refuse tout".into()))
+            }
+            fn dim(&self) -> usize {
+                768
+            }
+        }
+        let d = tempfile::tempdir().unwrap();
+        let (manifeste, _) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+        let manifeste = PathBuf::from(manifeste);
+        let ecrire = |f: &dyn Fn(&mut Value)| {
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+            f(&mut m);
+            std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        };
+        let refuse = servir(Arc::new(Refuse));
+        ecrire(&|m| {
+            m["embeddings"]["catch_up_on_open"] = json!(false);
+            m["embeddings"]["address"] = json!(refuse);
+        });
+        let host = Arc::new(crate::daemon_host::tests::hote_isole());
+        let h = host.hosted(&manifeste).unwrap();
+        let indexer = || {
+            let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+            let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
+            let debut = std::time::Instant::now();
+            while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+                assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s : {journal}");
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            journal
+        };
+        // La sonde d'`index` refuserait de partir : un débit noté d'avance.
+        host.with_backend(&h, |b| b.catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate::from_sample(100_000, std::time::Duration::from_secs(1)).unwrap()).unwrap()).unwrap();
+        indexer();
+        let dus = || host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
+        assert!(dus() > 0, "le service a tout refusé : des vecteurs restent dus");
+        let s = host.open_session("le témoin", None, Vec::new(), None);
+        assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
+        // Un service sain, la base rouverte (un autre écrivain), dans la minute.
+        let sain = service_granite();
+        ecrire(&|m| m["embeddings"]["address"] = json!(sain));
+        let journal = indexer();
+        assert_eq!(dus(), 0, "les morceaux refusés sont repris par l'index suivant : {}", std::fs::read_to_string(&journal).unwrap_or_default());
+    }
+
 }

@@ -365,6 +365,12 @@ fn spawn_index_with_stop(
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let fin = indexer_et_dire(&catalog, source, &journal, kept_bytes, generated, &watch);
+        // **Les réclamations de cet index, rendues** quelle que soit la sortie (finie,
+        // en échec, arrêtée entre deux passes) : sinon l'écrivain suivant les saute
+        // une minute, et son rattrapage se dit fini sur une dette (9 novembre 2026).
+        if let Ok(mut g) = catalog.lock() {
+            g.rendre_mes_reclamations();
+        }
         // Un index retient des Go que glibc garde une fois libérés : rendus ici
         // (ticket « l'hôte ne rend pas la mémoire d'un gros index », 19 octobre
         // 2026), avant la ligne de fin. Le rendu se dit sur la sortie d'erreur de
@@ -658,6 +664,13 @@ fn run_index(
         ));
     }
     if muets.is_empty() && echecs.is_empty() {
+        // **Une dette qui reste sans muet ni échec** : des morceaux réclamés par un autre
+        // écrivain (une passe d'avant, d'un catalogue fermé ou d'un autre processus),
+        // repris quand leur réclamation périme ; la fin le dit au lieu de « terminée » sec.
+        let dus = catalog.lock().ok().and_then(|g| g.index_progress().ok()).map(|p| p.dense_missing()).unwrap_or(0);
+        if dus > 0 {
+            return Ok(Some(format!("reste dû : {dus} morceau(x) sans vecteur — sans service d'embarquement, ou réclamés par un autre écrivain ; repris à l'index suivant")));
+        }
         return Ok((total_vides > 0).then(|| format!("{total_vides} morceau(x) sans texte, ni cherchables ni embarqués")));
     }
     let dus = {
