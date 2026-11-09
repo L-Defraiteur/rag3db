@@ -2103,3 +2103,13 @@ avance d'autant ; les hashs, eux, sont exacts.
   de Lucie, dont 400 écrits par les passes depuis hier 21 h 43**, aucun test ne posant RAG3WEAVER_STATE_DIR.
   Ticket et petit lot à 96 avant M8 (dossier temporaire par l'aide commune des tests, garde cfg(test) qui
   refuse le dossier réel) ; les fichiers existants sont listés, pas effacés : Lucie tranche.
+- **13 h 3x, l'atelier lit et écrit : atterri (archi, tête d23af9cd2).** Huit témoins par le chemin de
+  l'hôte (read_file à 200 lignes avec la suite dite, read_scope par le backend du worktree attaché qui
+  contient le chemin, replace_text unique, replace_lines et insert_lines sous empreinte de lecture, la
+  marque « né de l'atelier » à côté du manifeste, la racine à une pose neuve avec `launched_from`,
+  ask_permission et `<runs>/decisions.jsonl`, la carte d'accord sous l'appel par le registre `ui` et
+  `/ide/accords`), `workspace.writes_outside_tasks`, `edit_file` retiré de la liste ; passe verte (lib 2089,
+  e2e_hooks 2/2, navigateur 31/31). Poussé sans la relecture d'ED, bloqué sur une approbation : il relira
+  sur master, ses remarques feront un lot de suite. La carte pour les commandes en attente de run_command
+  est le lot suivant. L'atelier de Lucie doit être reposé au gabarit livré (archi dit si `atelier` le fait
+  seul). Du Rust pour recherche (rejeu court dû à son push) et pour 96 (après recherche).
