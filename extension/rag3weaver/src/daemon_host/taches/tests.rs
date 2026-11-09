@@ -159,7 +159,7 @@ fn une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne() {
         (format!("http://{adresse}"), fil)
     };
     let appeler = |racine: &str, route: &str, corps: Option<Value>| -> Value {
-        let a = crate::daemon::agent();
+        let a = crate::daemon::agent_de_temoin();
         let mut r = match corps {
             Some(c) => a
                 .post(format!("{racine}{route}"))

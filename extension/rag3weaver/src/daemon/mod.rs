@@ -361,6 +361,29 @@ pub fn agent_with_timeout(delai: std::time::Duration) -> ureq::Agent {
     ureq::Agent::new_with_config(ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(delai)).build())
 }
 
+/// **Le client des témoins** (ticket du 8 novembre 2026 : un test de l'hôte attendait son hôte
+/// par un client sans délai, et la lib entière s'est figée 25 min le 9 sur une sonde tombée dans
+/// l'arrêt d'un hôte). Connexion, envoi et attente de la réponse bornés à [`DELAI_DES_TEMOINS`] ;
+/// la lecture du corps ne l'est pas, pour qu'un flux de l'IDE lu par un témoin ne soit pas coupé.
+#[cfg(test)]
+pub(crate) fn agent_de_temoin() -> ureq::Agent {
+    let d = Some(DELAI_DES_TEMOINS);
+    ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_connect(d)
+            .timeout_send_request(d)
+            .timeout_send_body(d)
+            .timeout_recv_response(d)
+            .build(),
+    )
+}
+
+/// Le délai de [`agent_de_temoin`] : large, un tour de chat ou un appel qui indexe sous la charge
+/// de la lib entière y tient ; il change un figement sans fin en un rouge qui se lit.
+#[cfg(test)]
+pub(crate) const DELAI_DES_TEMOINS: std::time::Duration = std::time::Duration::from_secs(120);
+
 /// **Le nom d'un démon qui ne rend pas** (le ticket des figements de la lib entière, 8 novembre
 /// 2026) : « service d'embarquement <adresse> muet après N s », la même phrase pour l'embarqueur,
 /// le relecteur et l'OCR, pour qu'un rouge dise quel service et quel délai.

@@ -364,11 +364,11 @@ fn the_addressed_mailbox_by_the_host_routes() {
     let (adresse, _fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(model));
     let racine = format!("http://{adresse}");
     let get = |route: &str| -> Value {
-        let mut r = crate::daemon::agent().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let post = |route: &str, corps: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}{route}"))
             .header("Cookie", "rag3weaver_ide=j")
             .header("content-type", "application/json")
@@ -605,13 +605,13 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
                         // de l'équipier, et son backend se ferme.
                         let r = racine.lock().unwrap().clone();
                         let lire = |route: String| -> Value {
-                            let mut x = crate::daemon::agent().get(format!("{r}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+                            let mut x = crate::daemon::agent_de_temoin().get(format!("{r}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
                             serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap()
                         };
                         let tache = lire(format!("/ide/teammate?backend={id}&task=doc"))["result"]["backend"].as_str().unwrap().to_string();
-                        let mut s = crate::daemon::agent().post(format!("{r}/session")).header("Authorization", "Bearer j").header("content-type", "application/json").send(json!({ "client": "le témoin" }).to_string()).unwrap();
+                        let mut s = crate::daemon::agent_de_temoin().post(format!("{r}/session")).header("Authorization", "Bearer j").header("content-type", "application/json").send(json!({ "client": "le témoin" }).to_string()).unwrap();
                         let session: Value = serde_json::from_str(&s.body_mut().read_to_string().unwrap()).unwrap();
-                        let mut x = crate::daemon::agent()
+                        let mut x = crate::daemon::agent_de_temoin()
                             .post(format!("{r}/backend/close"))
                             .header("Authorization", "Bearer j")
                             .header("X-Rag3weaver-Session", session["session"].as_str().unwrap_or_default())
@@ -631,7 +631,7 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
     *racine.lock().unwrap() = format!("http://{adresse}");
     let r = racine.lock().unwrap().clone();
     let post = |route: &str, corps: Value| -> Value {
-        let mut x = crate::daemon::agent().post(format!("{r}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
+        let mut x = crate::daemon::agent_de_temoin().post(format!("{r}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
         serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap()
     };
     assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
@@ -639,7 +639,7 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
     assert_eq!(v["ok"], true, "{v}");
     let borne = Instant::now() + Duration::from_secs(60);
     loop {
-        let mut x = crate::daemon::agent().get(format!("{r}/ide/teammate/list?supervisor=supervisor")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut x = crate::daemon::agent_de_temoin().get(format!("{r}/ide/teammate/list?supervisor=supervisor")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         let l: Value = serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap();
         if l["result"]["teammates"][0]["state"] == "ended" {
             break;
@@ -699,7 +699,7 @@ fn a_teammate_resumes_after_the_host_restarts() {
         h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(model).avec_les_taches_relues()
     });
     let lire = |task: &str| -> Value {
-        let mut r = crate::daemon::agent().get(format!("http://{adresse}/ide/teammate?backend={id}&task={task}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/teammate?backend={id}&task={task}")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
     };
     let borne = Instant::now() + Duration::from_secs(60);

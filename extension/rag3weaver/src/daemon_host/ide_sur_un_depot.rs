@@ -76,7 +76,7 @@ fn l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide() {
     let (adresse, fil) = super::tests::hote_garde_avec("j", |h| h.with_racine_des_taches(taches));
     let racine = format!("http://{adresse}");
     let ide = |route: &str, corps: Option<Value>| -> Value {
-        let a = crate::daemon::agent();
+        let a = crate::daemon::agent_de_temoin();
         let mut r = match corps {
             Some(c) => a
                 .post(format!("{racine}{route}"))
@@ -93,7 +93,7 @@ fn l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide() {
     };
     // L'agent : une session à lui, par le jeton, comme un client MCP.
     let session_agent = {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/session"))
             .header("Authorization", "Bearer j")
             .header("content-type", "application/json")
@@ -103,7 +103,7 @@ fn l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide() {
         v["session"].as_str().unwrap().to_string()
     };
     let agent = |manifest: &Path, nom: &str, args: Value| -> Value {
-        let mut r = crate::daemon::agent()
+        let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/call"))
             .header("Authorization", "Bearer j")
             .header(super::SESSION_HEADER, &session_agent)
