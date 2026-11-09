@@ -73,6 +73,23 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   avoir jamais été joué). Lire « running N tests » de chaque suite du changement avant de dire
   vert.
 
+- **Une suite rend son TMPDIR vide** (8 novembre 2026, lot residus-de-suite) : `run_e2e.sh` regarde
+  le TMPDIR de chaque suite avant de l'effacer. Une suite qui y laisse quelque chose est ROUGE,
+  avec la liste de ce qu'elle laisse, sauf si `tests/e2e/suites_qui_laissent_des_residus.txt` la
+  nomme. Une entrée `<suite>` seule : elle en laisse à chaque passe, et propre, elle est rouge.
+  Une entrée `<suite> <ticket>` : un résidu intermittent dont la cause est en ticket, dit
+  « résidu connu : … ». Un lot qui rend une suite propre la retire de la liste dans son commit,
+  prouvé par plusieurs passes propres, et le ticket le dit.
+- **Un e2e entier arrête tout son arbre à l'échéance**, jamais le seul haut. Le 8 novembre 2026,
+  `poste lourd timeout 14000` a expiré : la place s'est rendue, mais `run_e2e.sh` et son binaire,
+  orphelins, ont tenu bge-m3 (7879) à 100 % de la carte une heure de plus. `timeout` ne signale
+  que son fils. Le lanceur pose `run_e2e.sh` dans sa propre session (`setsid`), arrête son groupe
+  entier (`kill -TERM -- -<pid>`, puis KILL) à son échéance ou s'il est lui-même arrêté (un
+  `trap`), et le délai de `poste lourd` dépasse le sien. Après toute expiration, chercher les
+  restes par l'exécutable du target (`readlink /proc/<pid>/exe`) avant de rendre la carte, et les
+  arrêter par l'arbre de leurs pids, jamais par nom. Un e2e entier qui embarque en creux est un
+  lourd GPU : il passe quand la carte est à personne.
+
 ## Le push (sous `poste push`, dans le worktree de push)
 
 - **Le verrou `poste push` ne couvre que le dernier pas** : fetch, rebase, push et les trois contrôles,
