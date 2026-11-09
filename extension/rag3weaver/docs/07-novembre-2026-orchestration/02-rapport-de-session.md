@@ -1992,3 +1992,14 @@ avance d'autant ; les hashs, eux, sont exacts.
   le message du rappel qui dépasse son budget (dire « j'attendais l'embarquement », pas « l'hôte ne répond
   pas »). 96 : reset refusé par sa permission, avance rapide à la place (rien à perdre, HEAD ancêtre de
   master), arbre essais-c7 sur 74519fc65, index en cours (206 fichiers), request à l'index prêt.
+- **12 h 4x, hooks-essai a poussé 120a5db31** (rappel-dit-ce-qu-il-attend) : sous l'échéance d'un `/call`,
+  l'embarquement de la requête borne son attente au temps restant et l'hôte répond à l'échéance avec
+  `waiting_on` ; le hook écrit « l'hôte attendait l'embarquement de la requête par … » au lieu de
+  « l'hôte ne répond pas ». Deux témoins rouges puis verts, passe verte sous 29a7bc52a, ticket fermé, pas
+  de rejeu (master sans code depuis 7e864dc8d). Du Rust pour les suivants : recherche refait sa branche
+  sur 120a5db31 pour son rejeu court, « pars » au « fini » d'archi. hooks-essai prend ensuite une page de
+  conception : comment les hooks amènent la recherche de code aux sessions (search_code/usages glissés
+  à un UserPromptSubmit qui nomme un symbole, borné comme le rappel), son coût par tour et sa mesure sur
+  sa session d'abord ; pas de code avant la lecture de Lucie. Le ticket de recherche sur le banc de
+  charge d'ingestion est écrit (832b57b26) : 14 012 scopes en 1 h 46 hier, card2 à 94 % ; sa place est
+  un banc sous poste mesure, pas une suite de l'e2e entier.
