@@ -2011,3 +2011,12 @@ avance d'autant ; les hashs, eux, sont exacts.
   indexé, au plus tous les cinq outils) ; mesure sur hooks-essai seule une journée, seuil pour étendre ;
   trois questions à la fin. La latence du plein texte se mesure en attendant son mot. Avec la page des
   vues (10b8affce) et la conception de l'atelier d'archi (1889d2659), c'est la liste de lecture du jour.
+- **12 h 58, l'essai d'équipier de 96 est lancé** (request readme-nouveautes-novembre, acceptée) dans
+  rag3db-essais-c7 avancé sur 74519fc65 : texte et relations prêts à 12 h 33 ; **les vecteurs de File et
+  Scope sont à « never » depuis la réouverture de 12 h 24**, 7878 répondant en 150 ms : une occurrence
+  de plus du défaut du rattrapage à la réouverture (ED, correctif en attente de l'approbation de Lucie),
+  sans effet sur la tâche, qui lit, cherche par grep et édite. À vérifier par 96 : deux backends de
+  branche essais-c7 dans /etat et un retard de 6 372 fichiers né à l'instant de la request (le worktree
+  de la tâche qui s'inscrit, sans doute). hooks-essai a mesuré la latence du plein texte (87f9b19bd) :
+  formes de code p50 258 ms, p95 532 ms, le budget de 600 ms en couvre 95 % ; mots courts p95 1,34 s,
+  écartés par la règle de déclenchement.
