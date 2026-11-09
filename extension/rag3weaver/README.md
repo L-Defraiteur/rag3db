@@ -300,7 +300,8 @@ root. In the chat, the workshop:
 - runs commands through its gate (`run_command`); a command the gate puts on hold shows the same
   card under the call, with the command line. A grant allows that exact command, not its family,
   and the decision starts the next turn by itself: the model reads "granted: run it again" or
-  "refused", and the user types nothing.
+  "refused", and the user types nothing. A decision on a path card starts the turn again the
+  same way.
 
 ## Claude Code and Codex
 
