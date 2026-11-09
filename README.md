@@ -93,7 +93,10 @@ tickets are written in French.
   bound when it dies (four readers of a real repository: 30 GB → 7.1 GB).
 - **`CREATE_VECTOR_INDEX` without freezing writes**: it waits only for the
   writers already open, then builds while the others write; `SHOW_INDEXES` says
-  whether an index is ready, under construction or incomplete. HNSW pruning uses
+  whether an index is ready, under construction or incomplete. Every open loads
+  the extensions recorded beside the database, even after an empty journal, and
+  an extension that fails to load no longer goes unnoticed: the database opens
+  and `SHOW_INDEXES` names the path and the cause in `extension_error`. HNSW pruning uses
   the classic heuristic since 10 October 2026 (an existing index keeps its graph
   until it is recreated).
 - **A concurrency bench** (`test/`, `known_red` list: 16 lines, from 59 on

@@ -184,6 +184,9 @@ rag3weaver is not a library an agent calls; it is where the agent runs.
   backend (`backend_code.rs`) declares its `workspace` — which files, under
   which root, read-only or not, with which command gate — so the same engine
   serves a cloud agent on a snapshot and a desktop agent on the real tree.
+  When the root disappears from disk, `daemon_status` says « racine absente :
+  <path> » and every tool that touches the files names the cause instead of
+  returning a raw I/O error.
 - **Sessions, postures, work domain** (`session.rs`, `postures.rs`,
   `work_domain.rs`): what is kept from one turn to the next and what stops
   being paid for; who stayed silent towards whom in a multi-party
@@ -198,7 +201,12 @@ rag3weaver is not a library an agent calls; it is where the agent runs.
   OpenAI-compatible client, the Anthropic Messages API (`anthropic-llm`,
   `"protocol": "anthropic"` in `models.llm`) or a local server, all behind the
   same `Llm` trait; streaming is in the trait, and a model may declare its
-  reasoning budget (`models.llm.reasoning`).
+  reasoning budget (`models.llm.reasoning`). A refused call (429, 503) is
+  retried after a minute, then twice as long each time, ten minutes and five
+  retries at most; each backoff is written to the log and to the chat status
+  with its number, code and wait. Each caller bounds its backoffs — a chat turn
+  five minutes, a teammate step two, the judge ten — and past that the call
+  fails, naming the cause and the time waited.
 
 ### Working alone: steps, a judge, a memory
 
@@ -252,6 +260,11 @@ weight and age with pinned runs. Since then:
   restart, and a working teammate keeps the host from going idle.
 - **Without its backend, it still reads and edits** the task's files, and says
   so; it stops after three failed steps in a row.
+- **A task without git.** A task on a folder that no repository tracks opens
+  in a copy of that folder, is reviewed by difference and merged back by copy,
+  refused if the folder moved meanwhile. It writes in its copy when the
+  workspace declares `task_writes`; `git_init` makes the folder a repository,
+  only when declared.
 
 The supervisor follows it at `/ide/teammate` (`/ide/teammate/mailbox`,
 `/ide/teammate/pending`, `/ide/teammate/seen`, `/ide/teammate/list`), in the IDE
@@ -259,7 +272,11 @@ or in a terminal (below).
 
 The binaries `rag3weaver-backend` and `rag3weaver-chat` are this runtime served
 over HTTP, with sections rendered after each tool so that a person reading over
-the agent's shoulder sees what it did.
+the agent's shoulder sees what it did. Every line of the host's log
+(`daemon.log`) starts with its time to the millisecond and names the client,
+session and repository of the call that wrote it. A second process that opens a
+database for writing while another one holds it is refused with who holds it:
+role, pid, since when, and the tool.
 
 ## The workshop
 
@@ -269,8 +286,9 @@ branch of code. A new workshop takes the folder it is started from as its root, 
 root. In the chat, the workshop:
 
 - attaches a worktree already on disk (`attach_worktree`), or opens a branch in a sibling worktree
-  (`open_branch`); each is registered, opened and indexed in the background, and its progress and
-  end show under the call and in the sidebar;
+  (`open_branch`, the git command it ran said in the answer); each is registered, opened and
+  indexed in the background, and its progress and end show under the call and in the sidebar;
+  `list_worktrees` gives each one's path, repository, branch and index; nothing is cloned or pushed;
 - reads a file 200 lines at a time (`read_file`), or a scope from the index of an attached worktree
   by its name (`read_scope`);
 - writes with `replace_text` (an old text that appears exactly once), `replace_lines` and
@@ -306,7 +324,13 @@ The host serves an IDE in React (`ui/ide/`, built into `templates/ide/app/` and
 embedded, never loaded from elsewhere): the chat, files with in-page editing,
 search, tasks and their review with the teammate, session verdicts, the tree,
 symbols, the graph, the live DAG of a running tool (with a Stop button),
-reactions and proposals. "My searches" lists the searches made in a repository,
+reactions and proposals. The chat keeps the order things happened in — words,
+tool calls, the answer — during the turn and after a reload, each tool unfolded
+with its time, duration and full result. The sidebar speaks in repositories
+(« Dépôts », « Mémoire », « Projets »), with a context gauge under each
+conversation. Search can be typed from the home page, across every index, and
+the folder open in the tree filters it (the `scope` of `search_code`).
+"My searches" lists the searches made in a repository,
 by you and by agents under their name, with their first results and the ones you
 clicked (`GET /ide/recherches`). Code in the chat is coloured by the same
 tree-sitter grammars that index it (`POST /highlight`).
@@ -317,7 +341,9 @@ bottom; Enter talks to the teammate, Esc stops it. It works over ssh (at most
 30 redraws per second), resumes after a cut without loss or duplicate
 (`Last-Event-ID`), degrades to 256 colours, 16, none and ASCII, and colours code
 with the host's grammars and the theme `templates/themes/daemon.json`.
-`--plain` writes the stream as text.
+While the agent thinks, reads or writes, the view plays the Daemon Code
+Summoning — runes, an alchemical symbol, a glitch — chosen by what the tool is
+allowed to do, at most 1.6 KB/s over ssh. `--plain` writes the stream as text.
 
 ## Embeddings and rerankers
 

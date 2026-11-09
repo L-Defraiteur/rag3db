@@ -73,3 +73,54 @@ l'essai ne permet pas de le dire.
   12 h 24 (le défaut connu du rattrapage, correctif d'ED en attente de Lucie).
 - Le lot des README n'existe pas : aucune proposition. Il se rejoue quand les tickets 1 et 3 sont
   corrigés, avec la même consigne.
+
+## La référence de la prochaine tentative (fait à la main le 9 novembre, l'après-midi)
+
+Le rattrapage que l'équipier n'a pas fait, fait par la session mémoire sur les 33 lignes de
+novembre (les 31 de la tâche et les deux du 9). Les deux README sont **en anglais** : la consigne
+« au ton des README » voulait dire en anglais, ce qu'elle ne disait pas ; la prochaine le dira.
+Verdicts : **interne** (une correction que l'utilisateur ne voit pas comme une capacité), **déjà
+dit** (le README le dit, section), **ajouté** (README, section).
+
+| ligne de nouveautés | verdict |
+|---|---|
+| 9 nov. — un modèle qui refuse se voit attendre | ajouté : rag3weaver, *The agent* (la puce du modèle), avec la règle d'une minute du 8 |
+| 9 nov. — l'atelier lit et écrit | déjà dit : rag3weaver, *The workshop* |
+| 8 nov. — JavaScript, locales de blocs voisins | interne (justesse des usages) |
+| 8 nov. — l'équipier sans git | ajouté : rag3weaver, *Working alone*, puce « A task without git » |
+| 8 nov. — l'atelier ouvre un worktree ou une branche | déjà dit pour `attach_worktree` et `open_branch` ; ajouté : `list_worktrees`, la commande git dite, rien cloné ni poussé |
+| 8 nov. — un quota, une minute puis le double | ajouté avec la ligne du 9 |
+| 8 nov. — mes recherches | déjà dit : rag3weaver, *The IDE* |
+| 8 nov. — le score dit d'où il vient | déjà dit : rag3weaver, *Search* (`bestSignal`, `chunk.signal`) |
+| 8 nov. — le code du chat aux couleurs du dépôt | déjà dit : rag3weaver, *The IDE* (`POST /highlight`) |
+| 8 nov. — un journal qui recopie puis met à jour une relation | déjà dit : racine, *Hardened write paths* |
+| 8 nov. — l'index vectoriel retrouvé, `extension_error` | ajouté : racine, la puce de `CREATE_VECTOR_INDEX` |
+| 8 nov. — une phrase collée, le surlignage sans modèle, le second écrivain | déjà dit pour les deux premiers (*Search*) ; ajouté : le second écrivain refusé avec qui tient la base (rag3weaver, après les binaires) |
+| 8 nov. — les fichiers d'annulation hors de `/tmp` | interne |
+| 8 nov. — un gros COPY de blobs | déjà dit : racine, *Hardened write paths* |
+| 8 nov. — la racine disparue | ajouté : rag3weaver, *The agent*, la puce du manifeste |
+| 7 nov. — un appel dans une garde de `match` | interne (justesse des usages) |
+| 7 nov. — le flux de l'IDE ne perd plus un événement | interne ; la barre par `kind` est dans la ligne « la barre parle en dépôts » |
+| 7 nov. — le chat tient l'ordre d'arrivée | ajouté : rag3weaver, *The IDE* |
+| 7 nov. — la barre parle en dépôts | ajouté : rag3weaver, *The IDE* |
+| 7 nov. — le journal de l'hôte dit l'heure et l'auteur | ajouté : rag3weaver, après les binaires |
+| 7 nov. — deux écrivains sous un COPY de relations | déjà dit : racine, *Several writers at once* |
+| 7 nov. — la recherche surligne le vecteur, filtre juste, prompt collé | déjà dit : rag3weaver, *Search* |
+| 7 nov. — une lecture survit à l'échec d'une instruction | déjà dit : racine, *Reads that hold together* |
+| 8 nov. — le code se colore dans le terminal | déjà dit : rag3weaver, *The IDE and the terminal* |
+| 7 nov. — le Daemon Code Summoning | ajouté : rag3weaver, *The IDE and the terminal* |
+| 7 nov. — le terminal de l'agent a sa vue | déjà dit |
+| 7 nov. — l'équipier depuis un terminal (`--plain`) | déjà dit |
+| 7 nov. — chercher sans avoir ouvert un dossier | ajouté : rag3weaver, *The IDE* |
+| 7 nov. — l'IDE entier en React | déjà dit |
+| 7 nov. — un lecteur ne voit plus les lignes annulées | déjà dit : racine, *Readers that never wait* |
+| 7 nov. — un appel C++ ne voit que ce qu'il inclut | déjà dit : rag3weaver, tableau et *The code graph* |
+| 7 nov. — la mémoire parle à Claude Code | déjà dit : rag3weaver, *Claude Code and Codex* |
+| 7 nov. — Claude parle au trait Llm | déjà dit : rag3weaver, tableau et *The agent* |
+
+**Le compte attendu d'un équipier** : 12 lignes à ajout, dont 2 en partie déjà dites, pour
+11 ajouts (le quota du 8 avec la ligne du 9) ; 17 « déjà dit » ; 4 « interne ». Les noms cités (`task_writes`, `git_init`,
+`list_worktrees`, `extension_error`, « racine absente », `decisions.jsonl`, `~/rw-code`)
+sont vérifiés dans le code. Une tentative qui propose un ajout pour une ligne « déjà dit », ou un
+nom absent du code, se compte en faute.
+
