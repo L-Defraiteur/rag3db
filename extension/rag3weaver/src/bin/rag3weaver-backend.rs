@@ -716,10 +716,16 @@ fn atelier_cli(args: &[String]) -> Result<(), String> {
         let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).map_err(|e| format!("{} : {e}", manifeste.display()))?).map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&roots.data).map_err(|e| format!("{} : {e}", roots.data.display()))?;
         m["database"] = json!(roots.data.join("atelier.rag3db").display().to_string());
-        // L'espace des commandes de l'atelier est le poste : le dossier de l'utilisateur
-        // (Lucie, 8 novembre 2026, « qu'il ait commande shell »).
+        // **La racine** (Lucie, 8 novembre 2026 au soir ; c7, 9 novembre) : le dossier où
+        // l'atelier est lancé ; depuis le dossier de l'utilisateur ou `/`, `~/rw-code`, créé
+        // s'il manque. Le dossier de lancement est noté au manifeste.
         if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
-            m["workspace"]["root"] = json!(std::path::PathBuf::from(home).display().to_string());
+            let ici = std::env::current_dir().map_err(|e| format!("le dossier courant : {e}"))?;
+            let racine = rag3weaver::code_tree::racine_de_l_atelier(&ici, std::path::Path::new(&home));
+            std::fs::create_dir_all(&racine).map_err(|e| format!("{} : {e}", racine.display()))?;
+            m["workspace"]["root"] = json!(racine.display().to_string());
+            m["workspace"]["launched_from"] = json!(ici.display().to_string());
+            println!("racine de l'atelier : {}", racine.display());
         }
         // Les copies identiques au livré le désignent par son nom (`builtin:`) : elles
         // suivent chaque bâti ; le manifeste, noté, suit à chaque ouverture par l'hôte.
@@ -731,6 +737,11 @@ fn atelier_cli(args: &[String]) -> Result<(), String> {
         println!("atelier posé : {}", manifeste.display());
     } else {
         println!("atelier déjà posé : {}", manifeste.display());
+        // La racine d'un atelier posé reste la sienne (celle de Lucie : son dossier).
+        let racine = std::fs::read_to_string(&manifeste).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|m| m["workspace"]["root"].as_str().map(str::to_string));
+        if let Some(r) = racine {
+            println!("racine {r} gardée ; pour la changer : éditer workspace.root de {}, ou retirer ce manifeste et relancer `atelier` depuis le dossier voulu", manifeste.display());
+        }
     }
     if !sans_hote {
         let adresse = hote.unwrap_or_else(|| rag3weaver::daemon_lifecycle::read().map(|f| f.address).unwrap_or_else(|| rag3weaver::daemon_lifecycle::DEFAULT_ADDRESS.to_string()));
