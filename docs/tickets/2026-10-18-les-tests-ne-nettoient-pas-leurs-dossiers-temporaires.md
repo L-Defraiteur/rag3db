@@ -128,7 +128,8 @@ Aucun pour l'instant. Il faudrait :
   La branche de l'équipier `agent/tests-bases-dans-tmp` (relue par hotfixs, qui la complète) vise
   une partie de ces suites : chaque suite qu'elle rend propre sort de la liste dans son commit.
 
-- **Le 9 novembre 2026** (lot arret-du-backend) : e2e_cited_by, e2e_juge et e2e_lectures sortent de
-  la liste, leur cause corrigée (un backend qu'on laisse tomber attend ses fils, ticket fermé
-  `closed/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md`). Restent les cinq
-  suites qui laissent leurs résidus à chaque passe.
+- **Le 9 novembre 2026** (lot arret-du-backend) : e2e_cited_by et e2e_lectures sortent de la liste,
+  leur cause corrigée (un backend qu'on laisse tomber attend ses fils, ticket fermé
+  `closed/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md`). e2e_juge reste en
+  rouge connu, une autre cause (`2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md`),
+  avec les cinq suites qui laissent leurs résidus à chaque passe.

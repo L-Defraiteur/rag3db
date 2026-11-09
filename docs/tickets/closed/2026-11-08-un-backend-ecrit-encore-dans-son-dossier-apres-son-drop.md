@@ -86,7 +86,9 @@ liste des résidus dans le commit qui la corrige, prouvé par plusieurs passes p
   (un backend de code indexé puis cherché) et `une_memoire_qu_on_laisse_tomber_avec_ses_reactions_ne_laisse_rien`
   (le cas d'e2e_cited_by) : rouges sur master (« 1 détenteur tient encore le catalogue après le
   Drop »), verts sur le correctif.
-- e2e_cited_by, e2e_juge et e2e_lectures sortent de la liste des résidus
+- e2e_cited_by et e2e_lectures sortent de la liste des résidus
   (`tests/e2e/suites_qui_laissent_des_residus.txt`), prouvé par deux e2e entiers propres.
+  e2e_juge y reste : son résidu (des journaux de runs) a une autre cause, le journal des runs qui
+  écrit après l'arrêt de son hôte (`2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md`).
 - Hors de ce lot : `ShardedHandle::close` de lucivy sort sur erreur avant d'arrêter ses pools (c7
   l'a dit à la session lucivy).
