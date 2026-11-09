@@ -1925,3 +1925,12 @@ avance d'autant ; les hashs, eux, sont exacts.
   l'atelier n'a pas d'index (les outils de fichier passent par le backend du worktree attaché qui
   contient le chemin, par l'hôte), et hors tâche le chat retire les outils `write_files` (drapeau
   `workspace.writes_outside_tasks`, vrai dans l'atelier seul).
+- **10 h 5x, l'essai d'équipier de 96 dans mon arbre essais-c7** : 96 prend `~/git_workspaces/rag3db-essais-c7`
+  (backend e4d8635ecfe7, qui a déjà `edit_file`, `run_command` derrière approbation et le bac à sable)
+  plutôt que d'ajouter `edit_file` aux déclarations d'un arbre neuf, écriture que G s'était vu refuser.
+  Vérifié : status vide, aucun commit de la branche absent de master ; le reset --hard sur origin/master
+  ne perd rien ; la base a été recréée neuve par l'hôte hier soir. La déclaration est de moi, écrite
+  sans refus dans ma session, 96 s'en sert telle quelle et n'ajoute rien : à Lucie de dire si ce
+  partage lui va. Condition de moment : l'avance de HEAD relance un index complet par l'hôte du
+  portable, encore sous 9bae60786 ; rien avant « portable posé » (29a7bc52a). Toute commande par la
+  porte est refusée dans cet essai.
