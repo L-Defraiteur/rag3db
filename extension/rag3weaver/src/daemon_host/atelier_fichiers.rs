@@ -818,11 +818,11 @@ pub(super) mod tests {
         });
         let racine_url = format!("http://{adresse}");
         let poster = |route: &str, corps: Value| -> Value {
-            let mut r = crate::daemon::agent().post(format!("{racine_url}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
+            let mut r = crate::daemon::agent_de_temoin().post(format!("{racine_url}{route}")).header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json").send(corps.to_string()).unwrap();
             serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
         };
         assert_eq!(poster("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
-        let mut r = crate::daemon::agent().get(format!("{racine_url}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine_url}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
         let etat: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
         let canon = manifeste.canonicalize().unwrap();
         let id = etat["backends"].as_array().and_then(|bs| bs.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(canon.as_path()))).and_then(|b| b["id"].as_str()).unwrap().to_string();
