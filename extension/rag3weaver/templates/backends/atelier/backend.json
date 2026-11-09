@@ -53,6 +53,13 @@
       "policy": {
         "attach_worktrees": true
       }
+    },
+    "read_file": {
+      "graph": "../../tools/atelier_read_file.mmd",
+      "description": "Lire un fichier, 200 lignes au plus d'un coup : par son dépôt s'il est dans un worktree attaché, sinon sous la racine de l'atelier.",
+      "policy": {
+        "read_files": true
+      }
     }
   }
 }

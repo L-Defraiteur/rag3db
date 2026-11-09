@@ -45,6 +45,24 @@ pub trait WorktreeHost: Send + Sync {
     /// **L'avancement de l'index d'un dépôt** (`repo` : son nom, sa branche ou le chemin
     /// de son worktree ; vide : tous ceux dont l'index avance), avec sa carte.
     fn progress(&self, repo: Option<&str>) -> Result<WorktreeAnswer, String>;
+    /// **Lire un fichier** (`fichier_nodes`) : `path` relatif à `racine` (celle de
+    /// l'atelier) ou absolu ; par le backend du worktree attaché qui le contient, sinon
+    /// sous la racine, sans index.
+    fn read(&self, racine: Option<&std::path::Path>, path: &str, offset: usize, length: usize) -> Result<WorktreeAnswer, String> {
+        let _ = (racine, path, offset, length);
+        Err("lire un fichier passe par l'hôte de rag3weaver".into())
+    }
+    /// **Lire un scope** de l'index du worktree attaché qui contient `path` (ou qui
+    /// connaît `name`) : son texte et ses bornes.
+    fn read_scope(&self, racine: Option<&std::path::Path>, name: &str, path: &str) -> Result<WorktreeAnswer, String> {
+        let _ = (racine, name, path);
+        Err("lire un scope passe par l'hôte de rag3weaver".into())
+    }
+    /// **Écrire un fichier** : le diff unifié rendu, le worktree attaché réindexé.
+    fn edit(&self, racine: Option<&std::path::Path>, path: &str, edition: crate::dataflow::fichier_nodes::Edition) -> Result<WorktreeAnswer, String> {
+        let _ = (racine, path, edition);
+        Err("écrire un fichier passe par l'hôte de rag3weaver".into())
+    }
 }
 
 pub struct WorktreeNode {
