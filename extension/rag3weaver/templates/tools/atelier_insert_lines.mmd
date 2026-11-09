@@ -1,0 +1,9 @@
+%% tool: insert_lines
+%% description: Insérer `text` avant la ligne `at` (1-based ; le nombre de lignes + 1 : à la fin). Exige d'avoir lu les lignes autour (read_file) dans ce tour ou le précédent, sinon « relis d'abord ». Rend le diff unifié ; dans un worktree attaché, son index suit.
+%% param: path string! -- Le chemin, relatif à la racine de l'atelier ou absolu.
+%% param: at int! -- La ligne avant laquelle insérer (1-based).
+%% param: text string! -- Le texte inséré.
+%% result: ecrire.result
+
+graph LR
+    ecrire["EcrireFichierNode(action='insert_lines', path=$path, at=$at, text=$text)"]

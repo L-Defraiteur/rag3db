@@ -1,0 +1,10 @@
+%% tool: replace_lines
+%% description: Remplacer les lignes from..to (1-based, incluses) d'un fichier par `text`. Exige d'avoir lu ces lignes (read_file) dans ce tour ou le précédent, sinon « relis d'abord ». Rend le diff unifié ; dans un worktree attaché, son index suit.
+%% param: path string! -- Le chemin, relatif à la racine de l'atelier ou absolu.
+%% param: from int! -- La première ligne remplacée (1-based).
+%% param: to int! -- La dernière ligne remplacée (incluse).
+%% param: text string = "" -- Le texte qui les remplace (vide : les lignes sont retirées).
+%% result: ecrire.result
+
+graph LR
+    ecrire["EcrireFichierNode(action='replace_lines', path=$path, from=$from, to=$to, text=$text)"]

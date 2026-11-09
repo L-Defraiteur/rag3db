@@ -89,6 +89,12 @@ pub struct WorkspaceConfig {
     /// un dépôt de code garde ses commandes dans ses tâches (défaut : faux).
     #[serde(default)]
     pub commands_outside_tasks: bool,
+    /// **Les écritures hors des tâches** (Lucie, 8 novembre 2026 au soir : l'atelier lit
+    /// et écrit, « il doit rester capable de tout faire ») : le chat garde ses outils
+    /// d'écriture même hors d'une tâche. Pour l'atelier, dont l'espace est le poste ; un
+    /// dépôt de code écrit dans ses tâches (défaut : faux).
+    #[serde(default)]
+    pub writes_outside_tasks: bool,
     /// **Des signaux montés sur les entités du schéma nommé** — la clé
     /// EXPLICITE : un signal de plus sur une entité se déclare, il ne
     /// découle pas de `models.sparse` tout seul. Générique : n'importe
@@ -791,6 +797,7 @@ mod tests {
             exclude: None,
             commands: CommandGate::Off,
             commands_outside_tasks: false,
+            writes_outside_tasks: false,
             index_signals: std::collections::BTreeMap::new(),
             sandbox: SandboxConfig::default(),
             index: Some("code".into()),

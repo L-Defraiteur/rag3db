@@ -88,6 +88,20 @@ impl DaemonHost {
         Ok(Some(Worktree { hosted, depot: super::repo_of(&racine), branche: super::branch_of(&racine), racine }))
     }
 
+    /// **L'atelier peut-il écrire ce worktree ?** Oui s'il est né de l'atelier (ouvert par
+    /// `open_branch` : `workspace.opened_by = "atelier"` au manifeste inscrit), ou si
+    /// l'utilisatrice l'a accordé (ask_permission) ; sinon non (décision de c7, 9 novembre
+    /// 2026 : `task_writes` garde son sens pour l'arbre qu'elle tient).
+    fn atelier_peut_ecrire(&self, w: &Worktree, _chemin: &Path) -> bool {
+        let manifeste = self.racines_de_code().ok().and_then(|r| {
+            r.registered_manifests().into_iter().find(|m| m.canonicalize().ok().as_deref() == Some(w.hosted.manifest.as_path()) || m == &w.hosted.manifest)
+        });
+        manifeste
+            .and_then(|m| std::fs::read_to_string(m).ok())
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .is_some_and(|v| v["workspace"]["opened_by"] == "atelier")
+    }
+
     /// **Lire un fichier de l'atelier** (`read_file`) : 200 lignes au plus, la suite dite.
     pub(super) fn atelier_lire(&self, racine: Option<&Path>, path: &str, offset: usize, length: usize) -> Result<String, String> {
         let r = self.atelier_resoudre(racine, path)?;
@@ -115,15 +129,226 @@ impl DaemonHost {
         Ok(out)
     }
 
-    /// **Lire un scope** (`read_scope`) : à écrire, son témoin d'abord.
-    pub(super) fn atelier_lire_scope(&self, _racine: Option<&Path>, _name: &str, _path: &str) -> Result<String, String> {
-        Err("read_scope : pas encore écrit".into())
+    /// Tous les worktrees attachés (les arbres inscrits).
+    fn worktrees_attaches(&self) -> Vec<Worktree> {
+        let Ok(racines) = self.racines_de_code() else { return Vec::new() };
+        racines
+            .registered_manifests()
+            .into_iter()
+            .filter_map(|m| {
+                let v = std::fs::read_to_string(&m).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok())?;
+                let root = PathBuf::from(v["workspace"]["root"].as_str()?);
+                let racine = canonique(&if root.is_absolute() { root } else { m.parent()?.join(root) });
+                let hosted = self.hosted(&m.canonicalize().unwrap_or(m)).ok()?;
+                Some(Worktree { hosted, depot: super::repo_of(&racine), branche: super::branch_of(&racine), racine })
+            })
+            .collect()
     }
 
-    /// **Écrire un fichier** : à écrire, son témoin d'abord.
-    pub(super) fn atelier_ecrire(&self, _racine: Option<&Path>, _path: &str, _edition: Edition) -> Result<String, String> {
-        Err("écrire : pas encore écrit".into())
+    /// **Lire un scope** (`read_scope`) : par `usages` (où il est défini) et `outline` (ses
+    /// bornes) dans le worktree attaché ; son texte lu entre ses bornes (200 lignes au
+    /// plus, la suite dite).
+    pub(super) fn atelier_lire_scope(&self, racine: Option<&Path>, name: &str, path: &str) -> Result<String, String> {
+        let (worktrees, rel_voulu): (Vec<Worktree>, Option<String>) = if path.trim().is_empty() {
+            (self.worktrees_attaches(), None)
+        } else {
+            let r = self.atelier_resoudre(racine, path)?;
+            let Some(w) = r.worktree else {
+                return Err(format!(
+                    "{} est sous la racine de l'atelier, sans index : read_scope ne connaît que les worktrees attachés ; lisez-le par read_file",
+                    r.chemin.display()
+                ));
+            };
+            let rel = r.chemin.strip_prefix(&w.racine).unwrap_or(&r.chemin).to_string_lossy().to_string();
+            (vec![w], Some(rel))
+        };
+        if worktrees.is_empty() {
+            return Err("aucun worktree attaché : read_scope lit l'index d'un worktree attaché (attach_worktree, open_branch)".into());
+        }
+        let json_de = |v: &Value| -> Value {
+            let r = &v["result"];
+            match r.as_str() {
+                Some(s) => serde_json::from_str(s).unwrap_or(Value::Null),
+                None => r.get("result").cloned().unwrap_or_else(|| r.clone()),
+            }
+        };
+        // Les définitions du nom, par worktree : (worktree, fichier relatif, ligne de début).
+        let mut trouves: Vec<(&Worktree, String, u64)> = Vec::new();
+        for w in &worktrees {
+            let args = json!({ "name": name, "path": rel_voulu.clone().unwrap_or_default(), "limit": 1, "format": "json" });
+            let Ok(Ok(v)) = self.with_backend(&w.hosted, |b| b.call("usages", args)) else { continue };
+            for d in json_de(&v)["definitions"].as_array().into_iter().flatten() {
+                if let (Some(p), Some(l)) = (d["path"].as_str(), d["line"].as_u64()) {
+                    trouves.push((w, p.to_string(), l));
+                }
+            }
+        }
+        let (w, rel, ligne) = match trouves.len() {
+            0 => return Err(format!("« {name} » : aucun scope de ce nom dans l'index des worktrees attachés")),
+            1 => trouves.remove(0),
+            n => {
+                let liste: Vec<String> = trouves.iter().map(|(w, p, l)| format!("{}:{l} ({})", w.racine.join(p).display(), w.nom())).collect();
+                return Err(format!("« {name} » est défini {n} fois : donnez `path` pour choisir — {}", liste.join(" ; ")));
+            }
+        };
+        // Les bornes, par le plan du fichier.
+        let v = self.with_backend(&w.hosted, |b| b.call("outline", json!({ "path": rel, "format": "json" }))).and_then(|x| x)?;
+        let plan = json_de(&v);
+        let scope = plan["rows"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|s| s["name"].as_str() == Some(name) && s["start_line"].as_u64() == Some(ligne))
+            .cloned()
+            .ok_or_else(|| format!("« {name} » : défini à {rel}:{ligne}, mais le plan du fichier ne le borne pas (l'index est-il à jour ?)"))?;
+        let debut = scope["start_line"].as_u64().unwrap_or(ligne) as usize;
+        let fin = scope["end_line"].as_u64().unwrap_or(ligne) as usize;
+        let chemin = w.racine.join(&rel);
+        let contenu = std::fs::read_to_string(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        let lignes: Vec<&str> = contenu.lines().collect();
+        let fin_lue = fin.min(debut + crate::dataflow::fichier_nodes::LIGNES_MAX - 1).min(lignes.len());
+        let mut out = format!(
+            "{} ({}) — {} lignes {debut}-{fin}, dépôt {}\n",
+            name,
+            scope["scope_type"].as_str().unwrap_or("scope"),
+            chemin.display(),
+            w.nom()
+        );
+        for (i, l) in lignes.iter().enumerate().take(fin_lue).skip(debut.saturating_sub(1)) {
+            out.push_str(&format!("{:05}| {l}\n", i + 1));
+        }
+        if fin_lue < fin {
+            out.push_str(&format!("… {} ligne(s) de plus : read_file(path, offset={})\n", fin - fin_lue, fin_lue + 1));
+        }
+        Ok(out)
     }
+
+    /// **Écrire un fichier** (`replace_text`, `replace_lines`, `insert_lines`) : le texte
+    /// neuf calculé, écrit (par le dépôt s'il est dans un worktree attaché, qui le
+    /// réindexe), et le diff unifié rendu.
+    pub(super) fn atelier_ecrire(&self, racine: Option<&Path>, path: &str, edition: Edition) -> Result<String, String> {
+        let r = self.atelier_resoudre(racine, path)?;
+        let avant = match std::fs::read_to_string(&r.chemin) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && matches!(edition, Edition::Insertion { avant: 1, .. }) => String::new(),
+            Err(e) => return Err(format!("{} : {e}", r.chemin.display())),
+        };
+        let apres = texte_apres(&avant, &edition).map_err(|e| format!("{} : {e}", r.chemin.display()))?;
+        let mut dit = Vec::new();
+        if let Some(w) = &r.worktree {
+            if !self.atelier_peut_ecrire(w, &r.chemin) {
+                return Err(format!(
+                    "{} est dans le dépôt {}, que l'atelier n'a pas ouvert lui-même (l'arbre que tient l'utilisatrice) : demandez son accord par ask_permission (path, mode « write », la raison), puis réessayez ; ou ouvrez une branche à vous (open_branch) et écrivez-y",
+                    r.chemin.display(),
+                    w.nom()
+                ));
+            }
+        }
+        match &r.worktree {
+            Some(w) => {
+                let rel = r.chemin.strip_prefix(&w.racine).unwrap_or(&r.chemin).to_string_lossy().to_string();
+                let v = self.with_backend(&w.hosted, |b| b.call_humain("edit_file", json!({ "path": rel, "content": apres }))).and_then(|x| x)?;
+                let rendu = v["presentation"].as_str().or_else(|| v["result"].as_str()).unwrap_or_default().to_string();
+                // Ce que l'édition du dépôt dit de son index (le rendu de `EditResult`).
+                let index = if let Some(reste) = rendu.split("Index updated: ").nth(1) {
+                    let n = |mot: &str| reste.split(mot).next().and_then(|x| x.rsplit(|c: char| !c.is_ascii_digit()).find(|m| !m.is_empty())).unwrap_or("0").to_string();
+                    format!("réindexé ({} scope(s) écrits, {} retirés)", n(" scopes upserted"), n(" removed"))
+                } else if rendu.contains("index will pick it up") || rendu.contains("indexing in progress will read it") {
+                    "un index tourne : il prendra ce fichier".to_string()
+                } else if let Some(e) = rendu.split("the index did not follow (").nth(1) {
+                    format!("sa réindexation n'a pas suivi ({})", e.split(") —").next().unwrap_or(e))
+                } else {
+                    "sans index".to_string()
+                };
+                dit.push(format!("écrit dans le dépôt {} ; {index}", w.nom()));
+            }
+            None => {
+                ecrire_atomique(&r.chemin, &apres)?;
+                dit.push("écrit sous la racine de l'atelier (sans index)".to_string());
+            }
+        }
+        Ok(format!("{}\n{}", dit.join("\n"), diff_unifie(&r.chemin.display().to_string(), &avant, &apres)))
+    }
+}
+
+/// Les lignes d'un texte, chacune avec sa fin de ligne.
+fn lignes(t: &str) -> Vec<&str> {
+    t.split_inclusive('\n').collect()
+}
+
+/// Un texte écrit en lignes : sa dernière ligne finie par un retour.
+fn en_lignes(t: &str) -> String {
+    if t.is_empty() || t.ends_with('\n') { t.to_string() } else { format!("{t}\n") }
+}
+
+/// **Le texte après une édition**, ou le refus qui dit pourquoi.
+pub(super) fn texte_apres(avant: &str, edition: &Edition) -> Result<String, String> {
+    match edition {
+        Edition::Texte { ancien, nouveau } => match avant.matches(ancien.as_str()).count() {
+            0 => Err("l'ancien texte n'y est pas : relisez le fichier (read_file) et recopiez-le exactement".into()),
+            1 => Ok(avant.replacen(ancien.as_str(), nouveau, 1)),
+            n => Err(format!("l'ancien texte y est {n} occurrences : donnez plus de contexte pour qu'il soit unique")),
+        },
+        Edition::Lignes { de, a, texte } => {
+            let l = lignes(avant);
+            if *de < 1 || *a < *de || *a > l.len() {
+                return Err(format!("le fichier a {} lignes : les lignes {de}..{a} n'y sont pas", l.len()));
+            }
+            Ok(format!("{}{}{}", l[..de - 1].concat(), en_lignes(texte), l[*a..].concat()))
+        }
+        Edition::Insertion { avant: at, texte } => {
+            let l = lignes(avant);
+            if *at < 1 || *at > l.len() + 1 {
+                return Err(format!("le fichier a {} lignes : on insère avant une ligne de 1 à {}", l.len(), l.len() + 1));
+            }
+            // Un fichier sans retour final : la ligne d'avant reçoit le sien avant l'ajout.
+            let tete = l[..at - 1].concat();
+            let tete = if *at - 1 == l.len() { en_lignes(&tete) } else { tete };
+            Ok(format!("{tete}{}{}", en_lignes(texte), l[at - 1..].concat()))
+        }
+    }
+}
+
+/// Écrire un fichier d'un coup (un fichier voisin, puis renommé).
+fn ecrire_atomique(chemin: &Path, texte: &str) -> Result<(), String> {
+    if let Some(d) = chemin.parent() {
+        std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+    }
+    let tmp = chemin.with_extension(format!("{}.atelier-tmp", chemin.extension().and_then(|e| e.to_str()).unwrap_or("")));
+    std::fs::write(&tmp, texte).map_err(|e| format!("{} : {e}", tmp.display()))?;
+    std::fs::rename(&tmp, chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+}
+
+/// **Le diff unifié d'une édition** : une région changée (les trois écritures n'en
+/// changent qu'une), entre le préfixe et le suffixe communs, avec trois lignes de
+/// contexte.
+pub(super) fn diff_unifie(nom: &str, avant: &str, apres: &str) -> String {
+    const CONTEXTE: usize = 3;
+    let a: Vec<&str> = avant.lines().collect();
+    let b: Vec<&str> = apres.lines().collect();
+    let prefixe = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let max_suffixe = a.len().min(b.len()) - prefixe;
+    let suffixe = a.iter().rev().zip(b.iter().rev()).take(max_suffixe).take_while(|(x, y)| x == y).count();
+    if prefixe == a.len() && prefixe == b.len() {
+        return format!("--- a/{nom}\n+++ b/{nom}\n(aucun changement)\n");
+    }
+    let debut = prefixe.saturating_sub(CONTEXTE);
+    let fin_a = (a.len() - suffixe + CONTEXTE).min(a.len());
+    let fin_b = (b.len() - suffixe + CONTEXTE).min(b.len());
+    let mut out = format!("--- a/{nom}\n+++ b/{nom}\n@@ -{},{} +{},{} @@\n", debut + 1, fin_a - debut, debut + 1, fin_b - debut);
+    for l in &a[debut..prefixe] {
+        out.push_str(&format!(" {l}\n"));
+    }
+    for l in &a[prefixe..a.len() - suffixe] {
+        out.push_str(&format!("-{l}\n"));
+    }
+    for l in &b[prefixe..b.len() - suffixe] {
+        out.push_str(&format!("+{l}\n"));
+    }
+    for l in &a[a.len() - suffixe..fin_a] {
+        out.push_str(&format!(" {l}\n"));
+    }
+    out
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]
@@ -228,6 +453,78 @@ pub(super) mod tests {
         let t = Atelier::texte(&r);
         assert!(t.contains("pub fn un()") && t.contains("pub fn deux()"), "{t}");
         assert!(t.contains("rag3db-essai"), "la lecture dit le dépôt qui l'a servie : {t}");
+        attendre_l_index(&a, &depot);
+    }
+
+    /// **`replace_text`** : un ancien texte unique, sinon un refus qui dit le nombre
+    /// d'occurrences ; le diff unifié rendu ; dans un worktree attaché, l'index suit (le
+    /// nom neuf se trouve par `usages`).
+    #[test]
+    fn the_workshop_replaces_a_unique_text_and_says_the_diff() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        std::fs::write(a.racine.join("conf.txt"), "a = 1\nb = 1\nc = 2\n").unwrap();
+        let refus = a.appeler("replace_text", json!({ "path": "conf.txt", "old": "= 1", "new": "= 9" })).unwrap_err();
+        assert!(refus.contains("2 occurrences"), "le refus dit le nombre d'occurrences : {refus}");
+        let r = a.appeler("replace_text", json!({ "path": "conf.txt", "old": "c = 2", "new": "c = 3" })).expect("replace_text");
+        let t = Atelier::texte(&r);
+        assert!(t.contains("--- ") && t.contains("+++ ") && t.contains("@@") && t.contains("-c = 2") && t.contains("+c = 3"), "le diff unifié : {t}");
+        assert_eq!(std::fs::read_to_string(a.racine.join("conf.txt")).unwrap(), "a = 1\nb = 1\nc = 3\n");
+
+        let depot = petit_depot(&a.racine);
+        a.appeler("attach_worktree", json!({ "path": depot })).unwrap();
+        attendre_l_index(&a, &depot);
+        // Un worktree que l'atelier n'a pas ouvert lui-même (attaché d'un dossier existant :
+        // l'arbre que tient l'utilisatrice) : l'écrire demande son accord (décision de c7,
+        // 9 novembre 2026), et rien n'est écrit.
+        let refus = a.appeler("replace_text", json!({ "path": depot.join("src/lib.rs"), "old": "pub fn deux()", "new": "pub fn trois()" })).unwrap_err();
+        assert!(refus.contains("ask_permission") && refus.contains("rag3db-essai"), "un arbre tenu par l'utilisatrice demande son accord : {refus}");
+        assert!(std::fs::read_to_string(depot.join("src/lib.rs")).unwrap().contains("pub fn deux()"), "rien n'est écrit sans accord");
+        attendre_l_index(&a, &depot);
+    }
+
+    /// **`replace_lines` et `insert_lines`** (par le graphe ; l'empreinte de lecture est
+    /// tenue par le chat, son témoin est à part) : les lignes remplacées ou insérées, le
+    /// diff unifié, les bornes refusées en le disant.
+    #[test]
+    fn the_workshop_replaces_and_inserts_lines_with_a_diff() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        std::fs::write(a.racine.join("liste.txt"), "un\ndeux\ntrois\nquatre\ncinq\n").unwrap();
+        let r = a.appeler("replace_lines", json!({ "path": "liste.txt", "from": 2, "to": 3, "text": "DEUX\nTROIS" })).expect("replace_lines");
+        let t = Atelier::texte(&r);
+        assert!(t.contains("-deux") && t.contains("-trois") && t.contains("+DEUX") && t.contains("+TROIS"), "{t}");
+        a.appeler("insert_lines", json!({ "path": "liste.txt", "at": 1, "text": "zéro" })).expect("insert_lines au début");
+        let r = a.appeler("insert_lines", json!({ "path": "liste.txt", "at": 7, "text": "six" })).expect("insert_lines à la fin");
+        assert!(Atelier::texte(&r).contains("+six"), "{r}");
+        assert_eq!(std::fs::read_to_string(a.racine.join("liste.txt")).unwrap(), "zéro\nun\nDEUX\nTROIS\nquatre\ncinq\nsix\n");
+        let refus = a.appeler("insert_lines", json!({ "path": "liste.txt", "at": 10, "text": "x" })).unwrap_err();
+        assert!(refus.contains("7 lignes"), "{refus}");
+        let refus = a.appeler("replace_lines", json!({ "path": "liste.txt", "from": 6, "to": 9, "text": "x" })).unwrap_err();
+        assert!(refus.contains("7 lignes"), "{refus}");
+    }
+
+    /// **`read_scope`** : un scope de l'index d'un worktree attaché, par son nom (et son
+    /// fichier pour lever une ambiguïté) : son texte et ses bornes ; un nom inconnu, ou
+    /// un fichier sous la racine sans index, refusés en disant pourquoi.
+    #[test]
+    fn the_workshop_reads_a_scope_from_the_index_of_an_attached_worktree() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&a.racine);
+        a.appeler("attach_worktree", json!({ "path": depot })).unwrap();
+        attendre_l_index(&a, &depot);
+        let r = a.appeler("read_scope", json!({ "name": "deux" })).expect("read_scope par le nom");
+        let t = Atelier::texte(&r);
+        assert!(t.contains("pub fn deux()") && t.contains("2") && !t.contains("pub fn un()"), "le texte du scope seul : {t}");
+        assert!(t.contains("lignes 5-7") && t.contains("src/lib.rs") && t.contains("rag3db-essai"), "ses bornes, son fichier, son dépôt : {t}");
+        let r = a.appeler("read_scope", json!({ "name": "un", "path": depot.join("src/lib.rs") })).expect("read_scope par le nom et le fichier");
+        assert!(Atelier::texte(&r).contains("lignes 1-3"), "{r}");
+        let refus = a.appeler("read_scope", json!({ "name": "inconnu_xyz" })).unwrap_err();
+        assert!(refus.contains("inconnu_xyz") && refus.contains("aucun"), "{refus}");
+        std::fs::write(a.racine.join("notes.txt"), "rien\n").unwrap();
+        let refus = a.appeler("read_scope", json!({ "name": "rien", "path": "notes.txt" })).unwrap_err();
+        assert!(refus.contains("sans index") && refus.contains("read_file"), "sous la racine, read_scope dit pourquoi : {refus}");
         attendre_l_index(&a, &depot);
     }
 }

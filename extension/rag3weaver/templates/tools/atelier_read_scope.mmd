@@ -1,0 +1,8 @@
+%% tool: read_scope
+%% description: Lire un scope (fonction, type, méthode…) de l'index d'un worktree attaché, par son nom : son texte et ses bornes (fichier, lignes). Avec `path`, ne chercher que dans ce fichier (pour lever une ambiguïté). Un fichier sous la racine de l'atelier, hors d'un worktree attaché, n'a pas d'index : read_file le lit.
+%% param: name string! -- Le nom du scope, tel qu'écrit dans le code.
+%% param: path string = "" -- Le fichier (relatif à la racine de l'atelier, ou absolu) ; vide : tous les worktrees attachés.
+%% result: lire.result
+
+graph LR
+    lire["LireFichierNode(action='scope', name=$name, path=$path)"]
