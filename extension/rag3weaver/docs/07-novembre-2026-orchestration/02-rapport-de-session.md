@@ -2047,3 +2047,10 @@ avance d'autant ; les hashs, eux, sont exacts.
   production sans délai signalés (code_tree, daemon_client, daemon_lifecycle ×2, daemon/db) : ticket dans
   le même lot, question de conception pour Lucie. **File de push** : recherche (dernier pas), 96 (les bancs
   hors de l'e2e entier, aeb55ea1f), archi (le délai), puis sa passe de l'atelier.
+- **13 h 1x, recherche a poussé 92180836b** (residus-de-suite : huit commits, le témoin à rouges connus, le
+  correctif du cache, la procédure complétée — e2e_entier.sh arrête tout son groupe à l'échéance —, le
+  ticket du banc de charge d'ingestion). Rejeu court sur 120a5db31 sous 29a7bc52a vert (e2e_lectures 24,
+  e2e_code 27, e2e_archiviste 2, check_features 5/5, lib 2079, navigateur 30), le banc des fiches classées
+  hors de sa passe et dit ; master n'avait reçu que deux .md depuis la base testée ; trois contrôles.
+  « À toi » à 96 pour les bancs ; archi ensuite. Recherche prépare arret-du-backend (liste réduite, la
+  charge d'ingestion hors passe comme son ticket le dit) et part à mon mot quand la carte est à personne.
