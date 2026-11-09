@@ -14,7 +14,8 @@ const REGISTRE: Record<string, (p: { u: UiComposant }) => React.ReactNode> = {
 };
 
 /// **La carte d'accord** (ask_permission ; décision de c7, 9 novembre 2026) : le chemin, le
-/// mode et la raison du modèle ; « accorder » ou « refuser ». La décision va à l'hôte, qui
+/// mode et la raison du modèle ; « accorder » ou « refuser ». Une commande en attente (lot 7)
+/// y dit sa ligne ; la décision relance le tour d'elle-même. La décision va à l'hôte, qui
 /// la journalise et la publie (sujet `accords`) ; la carte la suit par le flux, et relue
 /// après un rechargement, elle lit son état une fois.
 function CarteAccord({ u }: { u: UiComposant }) {
@@ -39,12 +40,21 @@ function CarteAccord({ u }: { u: UiComposant }) {
       .then((v: { ok?: boolean; error?: string; result?: { decision?: string } }) => (v.ok ? setDecision(v.result?.decision ?? null) : setErreur(v.error ?? "refusé par l'hôte")))
       .catch((e: Error) => setErreur(e.message));
   const verbe = u.mode === "write" ? "écrire" : "lire";
+  const commande = u.genre === "commande";
   return (
     <div className="carte-accord border rounded-lg px-3 py-2 text-xs" data-id={u.id ?? ""} data-decision={decision ?? ""}>
       <div className="font-medium text-foreground/90">
-        l'atelier demande à {verbe} <span className="font-mono">{u.chemin}</span>
+        {commande ? (
+          <>
+            l'atelier demande à lancer <span className="commande font-mono">{u.commande}</span>
+          </>
+        ) : (
+          <>
+            l'atelier demande à {verbe} <span className="font-mono">{u.chemin}</span>
+          </>
+        )}
       </div>
-      <div className="raison text-muted-foreground mt-0.5">{u.raison}</div>
+      {u.raison ? <div className="raison text-muted-foreground mt-0.5">{u.raison}</div> : null}
       {decision ? (
         <div className="decision mt-1.5 font-medium">{decision}</div>
       ) : (

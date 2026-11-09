@@ -287,6 +287,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLElement>(null);
   const runRef = useRef<string | null>(null);
+  // Un tour envoyé par cette page ; un tour venu d'ailleurs (relancé par la carte d'accord,
+  // lot 7 de l'atelier) se suit par le flux et se relit à sa fin.
+  const envoiDeLaPage = useRef(false);
   runRef.current = run;
   // **Le défilement** (tickets « le chat saute au scroll », « déplier un outil
   // déplace le scroll ») : c'est l'état du dernier défilement de la personne qui
@@ -399,6 +402,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${id}`) {
         setRun(String(ev.run));
         setBusy(true);
+        if (!envoiDeLaPage.current) {
+          setStatus("l'agent travaille…");
+          follow.current = true;
+          setItems((cur) => (cur.some((i) => i.kind === "message" && i.live) ? cur : [...cur, message("assistant", "", { run: String(ev.run), live: true })]));
+        }
         live((m) => ({ ...m, run: String(ev.run) }));
         return;
       }
@@ -432,6 +440,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         live((m) => (m.propositions.some((p) => p.id === ev.id) ? m : { ...m, propositions: [...m.propositions, { id: Number(ev.id), paths: ev.paths as string[] | undefined, accepted: ev.accepted as boolean | undefined }] }));
       } else if (ev.kind === "RunFinished" && ev.run === runRef.current) {
         setRun(null);
+        if (!envoiDeLaPage.current) relireUnTourVenuDAilleurs().catch((e: Error) => setStatus(e.message));
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -444,6 +453,23 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     follow.current = false;
   }, [items]);
 
+  // **Un tour venu d'ailleurs, relu à sa fin** : la session fait foi, comme pour un tour
+  // envoyé d'ici ; l'hôte la rend quand le tour l'a reposée (son run levé).
+  const relireUnTourVenuDAilleurs = async () => {
+    let s = await fetchChat(id);
+    for (let i = 0; s.run && i < 50; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      s = await fetchChat(id);
+    }
+    setChat(s);
+    follow.current = true;
+    setItems(fromTurns(s.turns));
+    setBusy(false);
+    setPense(false);
+    setStatus("fini");
+    reloadRecaps();
+  };
+
   const send = async () => {
     // Le run du tour : l'usage se lit au journal de l'hôte, écrit juste après
     // la fin du tour ; la barre se relit jusqu'à l'y voir (dix fois au plus).
@@ -451,6 +477,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     const text = input.current?.value.trim() ?? "";
     if (!text || busy || !chat?.on) return;
     if (input.current) input.current.value = "";
+    envoiDeLaPage.current = true;
     setBusy(true);
     setPense(true);
     setStatus("l'agent travaille…");
@@ -498,6 +525,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       setItems((cur) => [...cur.filter((i) => !(i.kind === "message" && i.live)), message("error", (e as Error).message)]);
       setStatus("Erreur");
     } finally {
+      envoiDeLaPage.current = false;
       setBusy(false);
       setPense(false);
       setRun(null);
