@@ -89,17 +89,12 @@ impl DaemonHost {
     }
 
     /// **L'atelier peut-il écrire ce worktree ?** Oui s'il est né de l'atelier (ouvert par
-    /// `open_branch` : `workspace.opened_by = "atelier"` au manifeste inscrit), ou si
-    /// l'utilisatrice l'a accordé (ask_permission) ; sinon non (décision de c7, 9 novembre
-    /// 2026 : `task_writes` garde son sens pour l'arbre qu'elle tient).
+    /// `open_branch`, marqué à côté de son manifeste), ou si l'utilisatrice l'a accordé
+    /// (ask_permission) ; sinon non (décision de c7, 9 novembre 2026 : `task_writes` garde
+    /// son sens pour l'arbre qu'elle tient).
     fn atelier_peut_ecrire(&self, w: &Worktree, _chemin: &Path) -> bool {
-        let manifeste = self.racines_de_code().ok().and_then(|r| {
-            r.registered_manifests().into_iter().find(|m| m.canonicalize().ok().as_deref() == Some(w.hosted.manifest.as_path()) || m == &w.hosted.manifest)
-        });
-        manifeste
-            .and_then(|m| std::fs::read_to_string(m).ok())
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .is_some_and(|v| v["workspace"]["opened_by"] == "atelier")
+        let Ok(racines) = self.racines_de_code() else { return false };
+        crate::code_tree::name_of_tree(&w.racine).is_ok_and(|nom| racines.marque_de_l_atelier(&nom).is_file())
     }
 
     /// **Lire un fichier de l'atelier** (`read_file`) : 200 lignes au plus, la suite dite.
@@ -588,5 +583,37 @@ pub(super) mod tests {
         assert!(de("t4", "insert_lines")[0].contains("+un et demi"), "lu au tour précédent : écrit : {r:#?}");
         assert!(de("t6", "replace_lines")[0].contains("relis d'abord"), "lu deux tours plus tôt, puis écrit : refusé : {r:#?}");
         assert_eq!(std::fs::read_to_string(a.racine.join("liste.txt")).unwrap(), "un\nun et demi\nDEUX\ntrois\nquatre\ncinq\n");
+    }
+
+    /// **Un worktree né de l'atelier s'écrit sans question** (décision de c7, 9 novembre
+    /// 2026) : open_branch crée la branche dans un worktree frère et le marque
+    /// (`opened_by = "atelier"`) ; l'atelier l'écrit au nom de l'utilisatrice, son index
+    /// suit. Le dépôt d'où elle part, que tient l'utilisatrice, demande toujours son accord.
+    #[test]
+    fn a_worktree_opened_by_the_workshop_is_written_without_asking() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&a.racine);
+        let dit = a.appeler("open_branch", json!({ "path": depot, "branch": "atelier/essai" })).expect("open_branch");
+        let dit = Atelier::texte(&dit);
+        assert!(dit.contains("atelier/essai"), "{dit}");
+        let frere = a.racine.join("rag3db-essai-atelier-essai");
+        assert!(frere.join("src/lib.rs").is_file(), "le worktree frère : {dit}");
+        attendre_l_index(&a, &frere);
+        let racines = a.host.racines_de_code().unwrap();
+        let nom = crate::code_tree::name_of_tree(&frere.canonicalize().unwrap()).unwrap();
+        let m = racines.manifest(&nom);
+        assert!(racines.marque_de_l_atelier(&nom).is_file(), "la marque à côté du manifeste inscrit : {dit}");
+
+        let r = a.appeler("replace_text", json!({ "path": frere.join("src/lib.rs"), "old": "pub fn deux()", "new": "pub fn trois()" })).expect("écrire le worktree né de l'atelier");
+        let t = Atelier::texte(&r);
+        assert!(t.contains("-pub fn deux()") && t.contains("+pub fn trois()") && t.contains("réindexé"), "{t}");
+        let h = a.host.hosted(&m.canonicalize().unwrap()).unwrap();
+        let u = a.host.with_backend(&h, |b| b.call("usages", json!({ "name": "trois", "format": "json" }))).unwrap().unwrap();
+        assert!(u["result"]["result"]["definitions"].as_array().is_some_and(|d| !d.is_empty()), "trois est défini dans l'index : {u}");
+        // Le dépôt d'origine n'est pas né de l'atelier : il n'est pas attaché ici, il est
+        // sous la racine et s'écrit sans index ; attaché, il demanderait l'accord (témoin
+        // the_workshop_replaces_a_unique_text_and_says_the_diff).
+        attendre_l_index(&a, &frere);
     }
 }
