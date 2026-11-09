@@ -96,7 +96,8 @@ fn un_document_entre_et_ses_sections_sont_rangees_une_par_fiche_none_ou_create()
     });
     appel(&b, "put_fiche", json!({"record": {"name": FICHE, "about": "Comment le moteur rejoue son journal à l'ouverture.", "state": "current"}}));
 
-    let r = appel(&b, "archive", json!({"titre": "Journal du 26", "contenu": DOCUMENT, "jour": "2026-10-26"}));
+    // La création est éteinte par défaut (tentative 5 des fiches classées) : le témoin l'allume.
+    let r = appel(&b, "archive", json!({"titre": "Journal du 26", "contenu": DOCUMENT, "jour": "2026-10-26", "allow_create": true}));
     // Le résultat est le rapport des décisions : trois sections, aucune en erreur.
     assert_eq!(r["result"]["errors"], json!([]), "{r}");
     assert_eq!((r["result"]["elements"].as_u64(), r["result"]["ok"].as_u64()), (Some(3), Some(3)), "trois sections décidées : {r}");

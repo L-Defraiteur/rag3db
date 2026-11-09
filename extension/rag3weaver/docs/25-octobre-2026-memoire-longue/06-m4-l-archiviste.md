@@ -152,6 +152,9 @@ Limite : aucun outil ne rend `ANCHORED_TO`, le Subject d'une Memory se retrouve 
   tentative 4 avec `create` en plus de `none`, où les 8 sans sujet disent ce que le modèle fait
   d'un sujet net sans fiche. La mesure se lit avant d'allumer `create` pour Lucie ; si le
   modèle crée là où il devrait s'abstenir, `archive` démarre avec `create` éteint, et le dit.
+  **Jouée le 9 novembre 2026** (`templates/experiments/2026-11-09-fiches-classees-5/NOTE.md`) :
+  Gemini crée sur les 8 fiches sans sujet et deux fois là où la bonne fiche était candidate,
+  les ancrages tiennent (27 justes, 0 faux) ; `allow_create` est éteint par défaut.
 - **Ce que la mesure tranchera ensuite**, pas cette nuit : le sous-découpage d'une section à
   plusieurs sujets ; le nom d'une fiche proposée par le modèle plutôt que par le titre ; le
   nombre de candidates.
