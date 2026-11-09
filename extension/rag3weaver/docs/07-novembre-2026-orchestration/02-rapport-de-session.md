@@ -2198,3 +2198,9 @@ avance d'autant ; les hashs, eux, sont exacts.
   fiches et des ancrages qu'il créerait, à approuver ou tailler par Lucie avant d'écrire dans sa vraie
   mémoire, qui reste intouchée. Vu au passage : la réponse de recall_fiches chez Lucie n'a pas `via`
   (copie du 25 octobre), un cas de plus pour M8.
+- **14 h 1x, archi a poussé 3e8c87aa5** (la carte d'un chemin relance son tour comme celle d'une commande ;
+  la demande porte le backend de sa conversation) : passe verte (lib 2094, e2e_hooks 2/2, navigateur 32/32),
+  trois contrôles, CI verte. Lot suivant : **la jauge de contexte du chat qui n'avance pas** (demande de Lucie
+  d'hier soir, prise par personne) — lire ce qu'elle mesure et quand, reproduire, dire la cause avant de
+  corriger (hôte ou IDE), et ce qu'elle devrait dire au survol. La pose du binaire pour Lucie attend
+  l'atterrissage de recherche (deux e2e entiers en cours depuis 13 h 24, puis rejeu court).
