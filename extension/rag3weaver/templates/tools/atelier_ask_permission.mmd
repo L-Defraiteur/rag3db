@@ -1,0 +1,10 @@
+%% tool: ask_permission
+%% description: Demander à l'utilisatrice l'accord de lire ou d'écrire un chemin hors de la racine de l'atelier, ou d'écrire un dépôt qu'elle tient (que l'atelier n'a pas ouvert lui-même). Elle accorde ou refuse sur une carte sous l'appel ; attendez sa réponse, puis réessayez l'outil. Dites la raison en une phrase : c'est sur elle qu'elle décide.
+%% param: path string! -- Le chemin (un fichier ou un dossier ; un dossier ouvre ce qu'il contient).
+%% param: mode string = "read" -- read : lire ; write : écrire (vaut aussi lecture).
+%% choices: mode = read | write
+%% param: reason string! -- Pourquoi, en une phrase, pour l'utilisatrice.
+%% result: lire.result
+
+graph LR
+    lire["LireFichierNode(action='ask', path=$path, mode=$mode, reason=$reason)"]

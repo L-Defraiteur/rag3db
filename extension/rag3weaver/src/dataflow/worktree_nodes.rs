@@ -58,6 +58,12 @@ pub trait WorktreeHost: Send + Sync {
         let _ = (racine, name, path);
         Err("lire un scope passe par l'hôte de rag3weaver".into())
     }
+    /// **Demander l'accord** de l'utilisatrice pour lire ou écrire `path` : la demande
+    /// gardée, sa carte rendue (`ui`).
+    fn ask(&self, racine: Option<&std::path::Path>, path: &str, mode: &str, reason: &str) -> Result<WorktreeAnswer, String> {
+        let _ = (racine, path, mode, reason);
+        Err("demander un accord passe par l'hôte de rag3weaver".into())
+    }
     /// **Écrire un fichier** : le diff unifié rendu, le worktree attaché réindexé.
     fn edit(&self, racine: Option<&std::path::Path>, path: &str, edition: crate::dataflow::fichier_nodes::Edition) -> Result<WorktreeAnswer, String> {
         let _ = (racine, path, edition);

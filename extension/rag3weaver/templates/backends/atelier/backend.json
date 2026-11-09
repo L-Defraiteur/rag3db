@@ -89,6 +89,13 @@
       "policy": {
         "read_files": true
       }
+    },
+    "ask_permission": {
+      "graph": "../../tools/atelier_ask_permission.mmd",
+      "description": "Demander à l'utilisatrice l'accord de lire ou d'écrire hors de la racine, ou d'écrire un dépôt qu'elle tient : une carte sous l'appel, elle accorde ou refuse.",
+      "policy": {
+        "read_files": true
+      }
     }
   }
 }
