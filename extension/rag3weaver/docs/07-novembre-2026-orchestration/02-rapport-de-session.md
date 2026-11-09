@@ -2158,3 +2158,13 @@ avance d'autant ; les hashs, eux, sont exacts.
   luciepc, k=5 → 1 ou 2, les deux derniers tours en contexte, en option et mesuré sous le budget d'une
   seconde du rappel ; rien ne se code avant Lucie). archi : passe de référence puis rejeu court avant son
   vert ; recherche tient la carte.
+- **13 h 5x, à lire par Lucie aussi** : la page de 96 sur **le classeur local dans le rappel**
+  (`09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md`, dc7741cb8) : Qwen3-4B par
+  llama-server à luciepc par tunnel, branché dans le fils du rappel différé à la place du juge Gemini quand
+  il est déclaré (le synchrone n'a qu'une seconde, rappel compris), 5 candidates → 1 ou 2, les deux derniers
+  tours et leurs résultats d'outils en contexte (1 200 caractères chacun, 2 k jetons) qui ne quittent plus le
+  poste, sans service le rappel d'aujourd'hui ; mesure à trois juges (aucun, Gemini, le classeur) ; cinq
+  questions. La session banc rejoue d'abord les 440 paires en GGUF par llama-server (Q8_0 et Q4_K_M, cache de
+  préfixe, card0 au mot d'hier), la forme de production, contre les chiffres torch bf16 d'hier. 96 fait à la
+  main le rattrapage des README depuis nouveautes.md que l'équipier n'a pas fait, et note dans sa page ce
+  qu'un équipier aurait dû produire : la référence de la prochaine tentative.
