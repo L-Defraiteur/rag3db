@@ -2180,3 +2180,9 @@ avance d'autant ; les hashs, eux, sont exacts.
   sudo de Lucie. **Mon mot pour (1) a été refusé par le classificateur d'auto mode** (sans raison donnée) ;
   je ne le reformule pas et ne le fais pas porter par une autre session : **Lucie tranche** entre (1) et (2),
   et le dit à banc. Pas d'autre voie proposée. hooks-essai, 96, archi, recherche, G : à jour.
+- **14 h 0x, archi a poussé be319fa75** (les commandes en attente sur la carte d'accord, relance automatique
+  du tour, `accorder_ligne` resserré à la commande exacte avec son ticket fermé, le chat suit un tour parti
+  d'ailleurs) : rejeu court vert après le rebase sur 0b0ff221a et a6637eeee (lib 2093, e2e_hooks 2/2,
+  navigateur 32/32 ; un conflit de docs dans nouveautes.md, les deux lignes gardées), trois contrôles.
+  **La CI de rag3weaver est de nouveau verte.** Prochain lot d'archi : la carte de chemin (ask_permission)
+  relance son tour. La pose du binaire pour Lucie se regroupera avec l'atterrissage de recherche.
