@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **9 nov. — Une commande en attente se décide d'un clic, et l'atelier repart seul.** Quand la
+  porte de l'atelier met une commande en attente, la même carte d'accord la montre sous l'appel ;
+  accorder laisse passer cette commande exacte, jamais toute sa famille, et la décision relance le
+  tour sans qu'on retape rien. (`atelier-commandes-sur-la-carte`)
 - **9 nov. — L'atelier lit et écrit, et demande avant de sortir de chez lui.** Il lit 200 lignes
   à la fois ou un scope par son nom, remplace un texte unique ou des lignes qu'il vient de lire, et
   rend le diff de chaque écriture ; un worktree qu'il a ouvert se réindexe, sans question. Hors de
