@@ -1843,3 +1843,33 @@ avance d'autant ; les hashs, eux, sont exacts.
   du `require`, puis « carte libre » pour recherche), ED (le correctif des réclamations, puis la
   relecture des vues). Lucie lit la page des vues.
 - **09 h 57, les deux sens : K = 730.** La dichotomie d'hotfixs a fini à 02 h 22 (lue à luciepc) : « lignes 1..729 puis CHECKPOINT » vert, « 1..730 puis CHECKPOINT » rouge ; l'instruction 730 de la trace exacte est celle dont le point de reprise d'un état en mémoire abîme INHERITS_FROM. Hotfixs lit l'instruction et construit le témoin réduit, le cœur corrige le point de reprise sous ASAN : chantier du matin, devant tout le reste.
+
+## 10 h 0x (9 novembre) — la cause des deux sens est trouvée, la mesure du `require` est finie
+
+- **Le cœur a la cause et le correctif** (message lu à 10 h 00, travail de la nuit) : le témoin
+  d'hotfixs tient en trois relations et un SET (`temoin-deux-sens-reprise`) ; ASAN reproduit le
+  rouge sans erreur mémoire, c'est une erreur de logique. La mise à jour `37654 → 23480` rend le
+  point de reprise du sens arrière : il remonte la région 0..16383 au niveau 4 et recalcule ses
+  décalages, sept listes changent de place ; mais `checkpointColumn` saute les colonnes sans mise à
+  jour dans la région, et le voisin et l'identifiant de relation restent aux anciens décalages — les
+  destinations abîmées chez Lucie. Correctif sur `region-deplacee` (52d73a301 au-dessus du témoin
+  repris 813d7eda8) : toute région dont un décalage ou une longueur change réécrit toutes ses
+  colonnes. Vert à luciepc : le témoin rouge en 813d7eda8 et vert en 52d73a301, les six cas de
+  LateRelTableRewrites, la recette item-2 sur fixture-729 sans écart, « 1..796 puis CHECKPOINT » sans
+  écart, transaction_test entier 357 verts à 04 h 10. concurrence_test : 339 verts, 27 rouges dont 21
+  connus ; six à départager sur 52d73a301 puis 813d7eda8 (trois seuils de temps lus sous deux lourds
+  voisins ; deux « buffer pool is full » ; un enfant mort de SIGSEGV avant le point de reprise).
+  **Carte libre au cœur** : push au vert du départage, verdict en clair ; puis G bâtit la lib du
+  correctif et la pose sur les deux postes, et seulement alors la règle « aucun index complet sur les
+  bases de Lucie » se lève. hotfixs prévenu : son témoin a servi, le cœur tient la suite.
+- **La mesure du `require` (codeparsers) a fini à 02 h 31** à luciepc, lib 9bae60786 sans
+  MOTEUR_ANCIEN : A (master 4f54e473a, codeparsers c660893) 324 arêtes rejugées, 279 justes, 10
+  fausses, 12 liaisons d'import ; B (le lot, 0a20764f5, codeparsers 78888f5) 300 arêtes, 275 justes,
+  2 fausses, aucune liaison d'import ; TS/JS ajoutées 673, ôtées 176 ; échantillon des ajoutées
+  (426) : l'oracle muet sur 415 (marque « liaison »), 7 justes, 2 fausses ; des ôtées (82) : 17
+  justes, 14 fausses, 51 liaisons d'import. La lecture est demandée à codeparsers (les 17 justes
+  ôtées, les 415 muettes, le lot tient-il) ; « à toi » pour `require-js` après le « poussé » de 96 si
+  elle est favorable.
+- **96** : banc des fiches classées lancé à 9 h 58 à luciepc (unité banc5-96, 8694a4f3c, lib
+  9bae60786), tentative 4 rejouée puis la 5 ; « banc fini » à son rendu, puis son tour. Deux lourds
+  à luciepc (banc de 96, départage du cœur), plafond 4.
