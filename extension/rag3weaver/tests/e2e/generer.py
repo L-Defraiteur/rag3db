@@ -53,6 +53,12 @@ entete = '''//! **Le binaire unique des suites e2e** (11 octobre 2026, demande d
 #[path = "../common/mod.rs"]
 mod common;
 
+/// Le dossier d'état des témoins, posé avant `main`, quand aucun fil n'existe encore
+/// (`common::poser_l_etat_des_temoins`) : aucun e2e n'écrit dans le dossier d'état réel.
+#[used]
+#[link_section = ".init_array"]
+static ETAT_DES_TEMOINS: extern "C" fn() = common::poser_l_etat_des_temoins;
+
 '''
 
 mods = "".join(f'#[path = "../{s}.rs"]\nmod {s};\n' for s in suites)
