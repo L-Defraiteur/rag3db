@@ -42,7 +42,7 @@ après le point de reprise sur la portion de rangées d'une autre destination.
 
 Le run 2b de G, sous dadbf0041, rend les mêmes chiffres que 1b sous 17a094d12.
 
-## L'hypothèse (relue avec le cœur, pas encore prouvée)
+## L'hypothèse du débordement de région (réfutée le 8 novembre au soir)
 
 `InMemChunkedCSRHeader::populateRegionCSROffsets` (`src/storage/table/csr_chunked_node_group.cpp`)
 range les longueurs du nouvel en-tête à la suite, depuis le début gauche d'avant de la région. Puis il
@@ -100,11 +100,38 @@ arêtes puis COPY dans la même transaction ; un SET sur une partie des relation
 avec points de reprise. Le second verse deux fois une même table de nœuds. Il leur manque le volume
 et des groupes CSR persistés de longue date, avec des régions à réécrire.
 
+## Le rejeu exact : c'est le point de reprise (9 novembre, nuit)
+
+- **La trace.** Un binaire d'étude (branche `trace-exacte-9bae`, 2b73c4ff7, à ne pas atterrir : 9bae60786
+  plus `RAG3WEAVER_TRACE_CYPHER_FICHIER`) écrit chaque instruction avec ses paramètres en littéraux
+  Cypher, et copie le CSV de chaque COPY. L'index confirm de la copie saine, sous 9bae60786 (hôte
+  7992, service 7882), donne les mêmes écarts que tous les runs précédents, compte pour compte :
+  INHERITS_FROM 650 au sens avant et 658 au sens arrière, QUERIES 20 relations abîmées, LOCKS 544 et 546.
+  La trace compte 3 178 instructions, aucun BEGIN, 16 COPY.
+- **Le rejeu.** `rejoue` (un programme C++ lié à 9bae60786 qui reprend la fonction de contrôle de
+  `check_rel_directions`) joue la trace sur une copie neuve, sans aucune erreur. Le contrôle est vert
+  jusqu'à la ligne 777, et INHERITS_FROM est abîmé après la ligne 797. Ce sont les mêmes relations
+  que dans la base de Lucie : 29:467 à 469 vers 11:3223, et 29:357 à 360 vers 11:5354. La ligne 797
+  est un `UNWIND … MERGE (a:Scope)-[r:MENTIONS]->(b:Symbol)` de 5 000 relations, qui n'écrit pas dans
+  INHERITS_FROM.
+- **Le point de reprise.** « Lignes 1 à 796, puis `CHECKPOINT` » rougit de même, alors que l'état lu
+  avant ce point de reprise est vert. Ce ne sont donc ni les MERGE de la table abîmée ni celui de la
+  ligne 797, qui déclenchait le point de reprise automatique : c'est le point de reprise d'un état
+  encore en mémoire qui écrit des listes CSR fausses.
+- **Les sondes du cœur** sur l'état rouge : aucune page à la fois libre et tenue par un segment, fin
+  du dernier segment 325537 sous l'étendue 326011, pas de creux. Ni `returnOwnerlessPages` ni la
+  troncature.
+- **Les pièces (luciepc).** La trace : `~/.cache/rag3db-tickets-notes/trace-exacte-9bae/cypher.txt`,
+  avec `copies/`. La recette : `d-796-checkpoint.txt`. Le rejoueur :
+  `~/.cache/rag3db-mesure-g5/trace-9bae/rejoue`. L'instantané de l'index : `hotfixs-trace-9bae` et
+  `-controle`. Le cœur passe la recette sous ASAN (`~/.cache/rag3db-moteur-notes/deux-sens-asan/`).
+
 ## La suite
 
-1. Capturer la suite exacte des instructions d'un `index confirm` (`RAG3WEAVER_TRACE_CYPHER=1`) sur
-   une copie de la copie saine.
-2. La rejouer seule contre le moteur, sur une autre copie, jusqu'aux écarts. Puis la réduire, par
-   le chemin d'abord (un DELETE puis un COPY de relations dans la même transaction, sur une table
-   au disque), et par les commits d'avant 17a094d12 si le chemin ne suffit pas.
-3. Un témoin déterministe, rouge, puis le correctif.
+1. La dichotomie sur K pour « lignes 1 à K, puis `CHECKPOINT` » : la plus petite K rouge désigne
+   l'écriture dont le point de reprise est fautif (en cours, le 9 novembre ; luciepc avait le disque
+   saturé à 2 h).
+2. Un témoin réduit, rouge, au cœur : la base d'avant cette écriture, l'écriture, `CHECKPOINT`.
+3. Le correctif, dans la fusion du CSR en mémoire avec le persistant au point de reprise (piste du
+   cœur : une région réécrite à côté d'une région qui ne l'est pas, ou les longueurs du sens arrière
+   lues avant la compaction des lignes mortes).
