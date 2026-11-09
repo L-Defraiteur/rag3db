@@ -200,6 +200,25 @@ impl OpenAiLlm {
         self
     }
 
+    /// **Garde une requête refusée** dans `requetes-refusees/` de la racine d'état
+    /// ([`crate::builtin_templates::state_root`]) : l'URL, le modèle, le statut, le
+    /// corps de la requête tel qu'envoyé (il ne porte aucune clé : l'authentification
+    /// est dans les entêtes, qui ne sont pas gardés) et le corps entier de l'erreur.
+    fn garder_le_refus(&self, url: &str, body: &str, status: u16, corps: &str) -> Result<std::path::PathBuf, String> {
+        let dossier = crate::builtin_templates::state_root().join("requetes-refusees");
+        std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        let quand = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        let chemin = dossier.join(format!("{quand}-{status}-{}.json", std::process::id()));
+        let requete: Value = serde_json::from_str(body).unwrap_or_else(|_| Value::String(body.to_string()));
+        let garde = json!({
+            "url": url, "model": self.model, "status": status,
+            "headers": "content-type et accept seulement ; l'authentification n'est jamais gardée",
+            "request": requete, "error_body": corps,
+        });
+        std::fs::write(&chemin, serde_json::to_string_pretty(&garde).map_err(|e| e.to_string())?).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        Ok(chemin)
+    }
+
     /// Remplace l'horloge. Réservé aux tests : sans ça, vérifier le plafond
     /// total prendrait cinq minutes.
     pub fn with_clock(mut self, clock: std::sync::Arc<dyn Clock>) -> Self {
@@ -1140,6 +1159,9 @@ impl Llm for OpenAiLlm {
                 Auth::Header(k, v) => req.header(k.as_str(), v.as_str()),
             };
 
+            // Le corps entier d'un refus HTTP, avant sa coupure à 512 caractères :
+            // c'est lui que garde un refus 4xx ([`OpenAiLlm::garder_le_refus`]).
+            let mut corps_d_erreur: Option<String> = None;
             // Ce que cette tentative a produit : soit on rend, soit on décide
             // de réessayer.
             let (err, verdict, server_delay, statut) = match req.send(body.clone()) {
@@ -1196,6 +1218,7 @@ impl Llm for OpenAiLlm {
                         .body_mut()
                         .read_to_string()
                         .unwrap_or_else(|e| format!("(corps d'erreur illisible : {e})"));
+                    corps_d_erreur = Some(msg.clone());
                     msg.truncate(512);
                     if msg.trim().is_empty() {
                         msg = "(corps d'erreur vide)".into();
@@ -1265,6 +1288,27 @@ impl Llm for OpenAiLlm {
                 // Un 429 qui ne guérit pas en attendant (par jour, dépense).
                 if statut == Some(429) {
                     return Err(indisponible(err, crate::llm::Quota::Exhausted));
+                }
+                // **Un refus 4xx se relit** (9 novembre 2026 : « HTTP 400
+                // INVALID_ARGUMENT » de Vertex à cinq décisions sur sept, sans
+                // personne pour relire la requête) : la requête et le corps entier
+                // de l'erreur sont gardés, et l'erreur dit où.
+                if let (Some(s), Some(corps)) = (statut, corps_d_erreur.as_deref()) {
+                    if (400..500).contains(&s) {
+                        return Err(match self.garder_le_refus(&url, &body, s, corps) {
+                            Ok(chemin) => {
+                                eprintln!("[modèle {}] HTTP {s} refusé : requête gardée : {}", self.model, chemin.display());
+                                match err {
+                                    LlmError::Model(m) => LlmError::Model(format!("{m} — requête gardée : {}", chemin.display())),
+                                    autre => autre,
+                                }
+                            }
+                            Err(pourquoi) => {
+                                eprintln!("[modèle {}] HTTP {s} refusé ; la requête ne se garde pas : {pourquoi}", self.model);
+                                err
+                            }
+                        });
+                    }
                 }
                 return Err(err);
             };

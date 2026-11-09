@@ -263,6 +263,17 @@ struct Livre {
 /// sans `cfg(test)`, posent `RAG3WEAVER_STATE_DIR` avant tout fil (`tests/common`,
 /// `poser_l_etat_des_temoins`), et leurs processus enfants en héritent.
 pub fn state_dir_of(manifest: &Path) -> PathBuf {
+    let base = state_root();
+    let canon = manifest.canonicalize().unwrap_or_else(|_| manifest.to_path_buf());
+    base.join("manifestes").join(&blake3::hash(canon.to_string_lossy().as_bytes()).to_hex()[..16])
+}
+
+/// **La racine de l'état que rag3weaver tient hors des déclarations** :
+/// `RAG3WEAVER_STATE_DIR`, sinon (sous `cfg(test)`) un dossier temporaire du
+/// processus, sinon `$XDG_STATE_HOME/rag3weaver`, sinon `~/.local/state/rag3weaver`.
+/// Les manifestes y ont leur état ([`state_dir_of`]), le client du modèle ses
+/// requêtes refusées (`requetes-refusees/`).
+pub fn state_root() -> PathBuf {
     let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
     let base = var("RAG3WEAVER_STATE_DIR")
         .or_else(racine_des_temoins)
@@ -272,8 +283,7 @@ pub fn state_dir_of(manifest: &Path) -> PathBuf {
     if let Err(e) = refuser_le_reel(&base, real_state_root().as_deref()) {
         panic!("{e}");
     }
-    let canon = manifest.canonicalize().unwrap_or_else(|_| manifest.to_path_buf());
-    base.join("manifestes").join(&blake3::hash(canon.to_string_lossy().as_bytes()).to_hex()[..16])
+    base
 }
 
 /// Le dossier d'état réel de l'utilisateur : `$XDG_STATE_HOME/rag3weaver`, sinon

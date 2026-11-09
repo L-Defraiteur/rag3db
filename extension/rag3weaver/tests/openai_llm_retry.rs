@@ -15,6 +15,17 @@ use rag3weaver::llm::{
 };
 use rag3weaver::openai_llm::{Clock, OpenAiLlm, RetryPolicy};
 
+/// Le dossier d'état de ce binaire de test, posé avant `main` quand aucun fil
+/// n'existe : une requête refusée s'y range, jamais dans le dossier réel.
+extern "C" fn poser_l_etat() {
+    if std::env::var_os("RAG3WEAVER_STATE_DIR").is_none() {
+        std::env::set_var("RAG3WEAVER_STATE_DIR", std::env::temp_dir().join(format!("rag3weaver-etat-openai-retry-{}", std::process::id())));
+    }
+}
+#[used]
+#[link_section = ".init_array"]
+static ETAT: extern "C" fn() = poser_l_etat;
+
 fn hello() -> Vec<Turn> {
     vec![Turn::system("s"), Turn::user("u")]
 }
@@ -640,5 +651,26 @@ fn a_chat_refused_for_good_says_each_backoff_and_stops_at_its_budget() {
     assert!(dit.contains("429") && dit.contains("budget"), "l'échec nomme la cause et le budget : {dit}");
     let statuts = statuts.lock().unwrap().clone();
     assert!(statuts.first().is_some_and(|s| s.contains("recul n° 1") && s.contains("429")), "chaque recul se dit, avec son code : {statuts:?}");
+}
+
+/// **Un refus 4xx garde la requête fautive** (9 novembre 2026, l'archivage à blanc : Vertex a
+/// rendu « HTTP 400 INVALID_ARGUMENT » à cinq décisions sur sept, et personne ne pouvait relire la
+/// requête ; le corps de l'erreur était coupé à 512 caractères). Le client range la requête (son
+/// corps, sans aucune entête d'authentification) et le corps entier de l'erreur dans un fichier du
+/// dossier d'état, et l'erreur en donne le chemin.
+#[test]
+fn a_4xx_refusal_keeps_the_faulty_request_and_the_whole_error_body() {
+    let long = format!("{{\"error\":{{\"code\":400,\"message\":\"Request contains an invalid argument.\",\"details\":\"{}FIN-DU-CORPS\"}}}}", "x".repeat(700));
+    let srv = FakeServer::start_sequence(vec![Reply::Status { code: 400, body: long, retry_after: None }]);
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default()).with_auth(rag3weaver::openai_llm::Auth::Bearer("SECRET-DU-TEMOIN".into()));
+    let e = llm.generate(&hello(), &GenOptions::default(), &mut RetrySink::default()).expect_err("un 400 n'est pas rejoué");
+    let dit = e.to_string();
+    let chemin = dit.split("requête gardée : ").nth(1).map(|s| s.split_whitespace().next().unwrap_or("").to_string()).unwrap_or_else(|| panic!("l'erreur donne le chemin de la requête gardée : {dit}"));
+    let garde = std::fs::read_to_string(&chemin).unwrap_or_else(|err| panic!("{chemin} : {err}"));
+    assert!(garde.contains("\"messages\"") && garde.contains("FIN-DU-CORPS"), "la requête et le corps entier de l'erreur : {garde}");
+    assert!(!garde.contains("SECRET-DU-TEMOIN") && !garde.contains("Bearer"), "jamais l'authentification : {garde}");
+    let etat = std::env::var_os("RAG3WEAVER_STATE_DIR").map(std::path::PathBuf::from).expect("posé avant main");
+    assert!(std::path::Path::new(&chemin).starts_with(&etat), "dans le dossier d'état : {chemin}");
 }
 
