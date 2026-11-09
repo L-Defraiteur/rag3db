@@ -5,6 +5,12 @@ le 9 au matin. Cette page dit ce qui existe (relevé sur `origin/master` 6036371
 propose, et les questions à trancher avant tout code. everything declarative tient la plume de la
 page de conception de l'atelier ; c7 tranche les désaccords de forme.
 
+## À essayer dans ton atelier (sur master `d23af9cd2`)
+
+- **Rien à reposer à la main.** Ton manifeste a été noté à sa pose (9 h 37) et n'a pas changé depuis. Dès que l'hôte tourne sur `d23af9cd2`, c'est-à-dire après la pose par G, il prend seul les outils neufs à la réouverture de l'atelier, et ta racine `/home/lucied` est gardée.
+- **Lire puis écrire.** Demande-lui de lire un fichier (`read_file`, 200 lignes à la fois) ou une fonction d'un dépôt attaché (`read_scope`), puis de changer quelques lignes. Il rend le diff, réindexe le dépôt, et refuse d'écrire des lignes qu'il n'a pas relues ce tour-ci ou le précédent.
+- **Hors de la racine.** Demande-lui un fichier hors de ta racine : une carte d'accord glisse sous l'appel. Tu accordes ou tu refuses, et la décision s'écrit dans `decisions.jsonl`.
+
 ## Ce que Lucie a décidé
 
 1. **Lire** : `read_file {path, offset, length}`, avec 200 lignes par défaut et jamais plus d'un
