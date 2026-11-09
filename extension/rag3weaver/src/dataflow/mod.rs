@@ -59,6 +59,9 @@ pub mod run_nodes;
 /// L'atelier : attacher un worktree déjà sur le disque, par l'hôte (page 03 du 7 novembre, lot 0).
 #[cfg(feature = "code")]
 pub mod worktree_nodes;
+/// L'atelier lit et écrit, par l'hôte (Lucie, 8 novembre 2026 au soir).
+#[cfg(feature = "code")]
+pub mod fichier_nodes;
 /// **La carte du graphe**, en Mermaid, pour qu'un agent cesse d'inventer des relations.
 pub mod schema_nodes;
 pub mod filter_results_node;

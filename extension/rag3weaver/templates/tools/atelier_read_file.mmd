@@ -1,0 +1,9 @@
+%% tool: read_file
+%% description: Lire un fichier, 200 lignes au plus d'un coup, avec leurs numéros. Un fichier d'un worktree attaché est lu par son dépôt (son index le connaît) ; un autre, sous la racine de l'atelier. Pour la suite d'un fichier long, relancer avec offset. Lire les lignes avant de les remplacer : replace_lines et insert_lines exigent une lecture récente.
+%% param: path string! -- Le chemin, relatif à la racine de l'atelier ou absolu (`~/` s'étend).
+%% param: offset int = 1 -- La première ligne lue (1-based).
+%% param: length int = 200 -- Le nombre de lignes, 200 au plus.
+%% result: lire.result
+
+graph LR
+    lire["LireFichierNode(action='read', path=$path, offset=$offset, length=$length)"]

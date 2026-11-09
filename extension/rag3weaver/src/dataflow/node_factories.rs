@@ -1582,12 +1582,14 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
         registry.register(Box::new(super::run_nodes::TailNodeFactory));
         registry.register(Box::new(super::worktree_nodes::WorktreeNodeFactory));
+        registry.register(Box::new(super::fichier_nodes::LireFichierNodeFactory));
+        registry.register(Box::new(super::fichier_nodes::EcrireFichierNodeFactory));
     }
 }
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 16 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 18 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1860,6 +1862,8 @@ mod tests {
                 "RunCommandNode" => serde_json::json!({ "command": "true" }),
                 "WaitOutputNode" => serde_json::json!({ "journal": "sortie.log", "pattern": "prêt" }),
                 "WorktreeNode" => serde_json::json!({ "action": "list" }),
+                "LireFichierNode" => serde_json::json!({ "action": "read", "path": "README.md" }),
+                "EcrireFichierNode" => serde_json::json!({ "action": "replace_text", "path": "README.md", "old": "a", "new": "b" }),
                 "TailNode" => serde_json::json!({ "handle": "#cmd-0" }),
                 "SpawnNode" => serde_json::json!({ "node_type": "Echo" }),
                 "PlaceTemplateNode" => serde_json::json!({ "template": "gabarit" }),

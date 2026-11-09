@@ -694,6 +694,18 @@ impl WorktreeHost for HoteDesWorktrees {
         Ok(WorktreeAnswer { text, ui })
     }
 
+    fn read(&self, racine: Option<&Path>, path: &str, offset: usize, length: usize) -> Result<WorktreeAnswer, String> {
+        self.hote()?.atelier_lire(racine, path, offset, length).map(WorktreeAnswer::from)
+    }
+
+    fn read_scope(&self, racine: Option<&Path>, name: &str, path: &str) -> Result<WorktreeAnswer, String> {
+        self.hote()?.atelier_lire_scope(racine, name, path).map(WorktreeAnswer::from)
+    }
+
+    fn edit(&self, racine: Option<&Path>, path: &str, edition: crate::dataflow::fichier_nodes::Edition) -> Result<WorktreeAnswer, String> {
+        self.hote()?.atelier_ecrire(racine, path, edition).map(WorktreeAnswer::from)
+    }
+
     fn list(&self) -> Result<WorktreeAnswer, String> {
         let hote = self.hote()?;
         let manifestes = hote.racines_de_code()?.registered_manifests();
