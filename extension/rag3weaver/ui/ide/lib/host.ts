@@ -132,7 +132,7 @@ export type ChatTurn = {
 /// Un composant `ui` d'un résultat d'outil : son nom (`kind`), les sujets du flux qu'il
 /// écoute, et ce qu'il montre (pour `index_progress` : le dépôt et son manifeste, la clé
 /// du flux).
-export type UiComposant = { kind: string; sujets?: string[]; repo?: string; manifest?: string; titre?: string; id?: string; chemin?: string; mode?: string; raison?: string };
+export type UiComposant = { kind: string; sujets?: string[]; repo?: string; manifest?: string; titre?: string; id?: string; chemin?: string; mode?: string; raison?: string; genre?: string; commande?: string };
 // La jauge du contexte : `used`, les jetons d'entrée (cache compris) du dernier
 // appel au modèle ; `max`, le contexte du modèle déclaré (null : inconnu).
 export type ChatContext = { used: number | null; max: number | null; source: string; at: number | null };
