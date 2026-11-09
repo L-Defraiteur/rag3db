@@ -2186,3 +2186,15 @@ avance d'autant ; les hashs, eux, sont exacts.
   navigateur 32/32 ; un conflit de docs dans nouveautes.md, les deux lignes gardées), trois contrôles.
   **La CI de rag3weaver est de nouveau verte.** Prochain lot d'archi : la carte de chemin (ask_permission)
   relance son tour. La pose du binaire pour Lucie se regroupera avec l'atterrissage de recherche.
+- **14 h 1x, la précision du rappel d'aujourd'hui, mesurée** (96, `09-novembre-2026-memoire-longue/04-…`,
+  5e9ebaf9a) : une seule session porte les crochets (hooks-essai), 171 rappels du 7 au 9, 104 jugés par
+  Gemini (20 contrôlés à la main, 20 accords). **92 % des rappels ne glissent rien ; 1 fiche pertinente sur
+  12 glissées** (dix étaient des fiches du juge, exclues depuis le 8 au soir) ; sous les règles d'aujourd'hui
+  seule « régime GPU » glisserait, pertinente 2 fois sur 58 ; plafond d'un classeur : 4 candidates
+  pertinentes en 104 rappels. Rappel p50 161 ms, p95 397 ms, max 1 028 ms. Conclusion : une seconde de
+  classeur ne paierait pas aujourd'hui, **le contenu manque** (19 fiches, une seule de sujet). Lot suivant de
+  96, à blanc : ce que l'archivage des docs de la semaine ferait dans la mémoire de Lucie, `archive_decide`
+  sur une **copie** de sa base avec allow_create allumé sur la copie seulement — la liste des sujets, des
+  fiches et des ancrages qu'il créerait, à approuver ou tailler par Lucie avant d'écrire dans sa vraie
+  mémoire, qui reste intouchée. Vu au passage : la réponse de recall_fiches chez Lucie n'a pas `via`
+  (copie du 25 octobre), un cas de plus pour M8.
