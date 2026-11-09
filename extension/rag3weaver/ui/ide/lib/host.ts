@@ -88,7 +88,8 @@ export type FluxStatus = "ouvert" | "coupé, reprise…" | "fermé";
 /// renvoyé par le navigateur à la reconnexion ; l'hôte rejoue ce qu'il garde.
 export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStatus) => void): () => void {
   // `repos` : un worktree attaché par l'atelier (`RepoAttached`), que la barre montre.
-  const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords");
+  // `etat` : les états que l'hôte pousse (`onEtat`), au lieu d'une relecture après un événement.
+  const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat");
   source.onopen = () => onStatus("ouvert");
   source.onerror = () => onStatus("coupé, reprise…");
   source.onmessage = (e) => {
@@ -115,6 +116,22 @@ export function onFlux(l: Listener): () => void {
 export function dispatchFlux(e: FluxEvent) {
   for (const l of listeners) l(e);
 }
+
+/// **S'abonner à un état poussé par l'hôte** (l'IDE par le flux ; Lucie, 8 novembre 2026 :
+/// « rendre générique quand on a besoin d'un SSE ») : l'hôte publie `{kind: "Etat", de, cle,
+/// etat}` sur le sujet `etat` quand l'état change (`Flux::publier_etat`) ; une vue le reçoit
+/// ici, pour `de` (« hote », « chat »…) et sa clé (`null` : toutes), sans relire l'hôte. La
+/// lecture au chargement reste la sienne, une fois.
+export function onEtat<T>(de: string, cle: string | null, f: (etat: T, cle: string) => void): () => void {
+  return onFlux((d) => {
+    const e = d.evenement;
+    if (d.sujet === "etat" && e?.kind === "Etat" && e.de === de && (cle == null || e.cle === cle)) f(e.etat as T, String(e.cle));
+  });
+}
+
+/// L'état d'un chat que l'hôte pousse à la fin d'un tour : son état sans les tours, ceux
+/// d'avant `depuis` gardés par la page, et les tours ajoutés.
+export type ChatPousse = Omit<ChatState, "turns"> & { tour: string; depuis: number; nouveaux_tours: ChatTurn[] };
 
 // Un tour de la session. `at_ms` : sur un appel, l'heure où il est parti ; sur un
 // tour `tool`, l'heure où le résultat est revenu (la durée est l'écart) ; absent

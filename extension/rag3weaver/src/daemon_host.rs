@@ -356,6 +356,16 @@ impl DaemonHost {
         &self.journal
     }
 
+    /// **L'état de l'hôte, poussé** (l'IDE par le flux, 9 novembre 2026) : ce que rend
+    /// `GET /ide/etat`, publié quand un dépôt est attaché ou indexé, pour que la page ne
+    /// relise pas tout l'hôte à chaque événement.
+    pub fn publier_l_etat_de_l_hote(&self) {
+        let (statut, v) = self.handle("GET", "/etat", None, &[]);
+        if statut == 200 {
+            self.ide_flux().publier_etat("hote", "*", v);
+        }
+    }
+
     /// Le flux de l'IDE.
     pub fn ide_flux(&self) -> &Arc<crate::ide::Flux> {
         &self.ide
