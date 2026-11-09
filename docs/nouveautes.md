@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **9 nov. — Un modèle qui refuse se voit attendre, et n'attend plus sans fin.** Chaque recul du
+  client du modèle après un 429 ou un 503 se dit au journal et dans le statut du chat, avec son
+  numéro, son code et son attente. Chaque appelant borne ses reculs : cinq minutes pour un tour de
+  chat, deux pour un pas de l'équipier, dix pour le juge. Au-delà, l'appel échoue en nommant la
+  cause et le temps attendu, au lieu de dormir vingt minutes en silence comme l'équipier le
+  9 novembre.
 - **9 nov. — L'atelier lit et écrit, et demande avant de sortir de chez lui.** Il lit 200 lignes
   à la fois ou un scope par son nom, remplace un texte unique ou des lignes qu'il vient de lire, et
   rend le diff de chaque écriture ; un worktree qu'il a ouvert se réindexe, sans question. Hors de

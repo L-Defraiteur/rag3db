@@ -433,7 +433,7 @@ impl DaemonHost {
             &config,
             silencieux,
             Arc::new(AtomicBool::new(false)),
-            ChatRunOptions { bus: None, run_id: Some(format!("juge-{run}")), meter: Some(self.chat_meter.clone()), stopped_by: None, ..Default::default() },
+            ChatRunOptions { bus: None, run_id: Some(format!("juge-{run}")), meter: Some(self.chat_meter.clone()), stopped_by: None, retry_budget: Some(crate::llm::BUDGET_DES_RECULS_DU_JUGE), ..Default::default() },
         )?;
 
         // Le dernier pas : le verdict, dans la forme fixe du schéma.
@@ -449,6 +449,7 @@ impl DaemonHost {
             let opts = GenOptions {
                 max_tokens: config.max_output_tokens,
                 response_format: Some(ResponseFormat::strict_schema(nom, schema)),
+                retry_budget: Some(crate::llm::BUDGET_DES_RECULS_DU_JUGE),
                 ..Default::default()
             };
             let mut sink = StringSink::default();

@@ -599,3 +599,46 @@ fn a_quota_after_the_five_retries_says_them_in_minutes() {
     let dit = e.to_string();
     assert!(dit.contains("quota dépassé (HTTP 429) après 5 reprise(s) en ") && dit.contains(" min"), "{dit}");
 }
+
+/// **Un chat refusé sans fin dit chaque recul et s'arrête à son budget** (9 novembre 2026,
+/// l'essai de l'équipier sur les README : un appel à Gemini a dormi 1 004 s en quatre
+/// reprises, sans une ligne dans la boîte ni dans le journal de l'hôte ; ticket
+/// `2026-11-09-le-recul-du-client-du-modele-ne-se-voit-pas-et-n-a-pas-de-borne-de-pas`).
+/// Un tour de chat (l'IDE, et l'équipier qui passe par lui) porte un budget de reculs :
+/// chaque recul se dit à l'appelant avec son numéro, son code et son attente, et au-delà
+/// du budget le tour échoue en nommant la cause et le temps attendu.
+#[test]
+fn a_chat_refused_for_good_says_each_backoff_and_stops_at_its_budget() {
+    use rag3weaver::agent::ToolBox;
+    use rag3weaver::chat::{ChatConfig, ChatSession};
+    struct Aucun;
+    impl ToolBox for Aucun {
+        fn call(&self, call: &rag3weaver::llm::ToolCall) -> Turn {
+            Turn::tool_result(&call.id, &call.name, "aucun outil")
+        }
+    }
+    let srv = FakeServer::start_sequence((0..8).map(|_| Reply::status(429)).collect());
+    let clock = FakeClock::new();
+    let llm = client(&srv, Arc::clone(&clock), RetryPolicy::default());
+    let d = tempfile::tempdir().unwrap();
+    let config: ChatConfig = serde_json::from_value(serde_json::json!({
+        "name": "recul", "system_prompt": "s", "state_dir": d.path()
+    }))
+    .unwrap();
+    let statuts = Arc::new(Mutex::new(Vec::<String>::new()));
+    let s = Arc::clone(&statuts);
+    let events: rag3weaver::chat::EventHandler = Arc::new(move |ev: serde_json::Value| {
+        if ev["event"] == "status" {
+            s.lock().unwrap().push(ev["text"].as_str().unwrap_or_default().to_string());
+        }
+    });
+    let fin = ChatSession::new("s").run("bonjour", &llm, &Aucun, &config, events, Arc::new(std::sync::atomic::AtomicBool::new(false)));
+    let dit = fin.expect_err("huit refus : le tour échoue");
+    // Le budget des reculs d'un tour de chat : cinq minutes.
+    let budget = Duration::from_secs(300);
+    assert!(clock.total() <= budget, "le tour a attendu {:?}, au-delà de son budget {budget:?}", clock.total());
+    assert!(dit.contains("429") && dit.contains("budget"), "l'échec nomme la cause et le budget : {dit}");
+    let statuts = statuts.lock().unwrap().clone();
+    assert!(statuts.first().is_some_and(|s| s.contains("recul n° 1") && s.contains("429")), "chaque recul se dit, avec son code : {statuts:?}");
+}
+

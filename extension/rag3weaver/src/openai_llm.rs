@@ -1293,13 +1293,28 @@ impl Llm for OpenAiLlm {
                 None => self.jittered(self.retry.backoff(base, retries)),
             };
 
-            // Plafond total : mieux vaut rendre l'erreur que dépasser.
+            // Plafond total : mieux vaut rendre l'erreur que dépasser. Le budget
+            // de l'appelant le resserre, et se nomme quand c'est lui qui coupe.
             let elapsed = self.clock.now().saturating_duration_since(started);
-            if elapsed + wait > self.retry.max_total {
+            let budget = opts.retry_budget.filter(|b| *b < self.retry.max_total);
+            if elapsed + wait > budget.unwrap_or(self.retry.max_total) {
+                let err = match (budget, err) {
+                    (Some(b), LlmError::Model(m)) => LlmError::Model(format!("{m} ; budget de reculs de {} s atteint", b.as_secs())),
+                    (_, e) => e,
+                };
                 return Err(epuise(err));
             }
 
             let reason = err.to_string();
+            // **Chaque recul se dit** (9 novembre 2026 : 1 004 s de reculs muets) :
+            // une ligne au journal de qui appelle, l'hôte compris.
+            eprintln!(
+                "[modèle {}] recul n° {retries} : {reason} ; attente {} s (déjà {} s{})",
+                self.model,
+                wait.as_secs(),
+                elapsed.as_secs(),
+                opts.retry_budget.map(|b| format!(", budget {} s", b.as_secs())).unwrap_or_default()
+            );
             let announce = crate::llm::RetryEvent {
                 phase: crate::llm::RetryPhase::Scheduled,
                 attempt: retries,
