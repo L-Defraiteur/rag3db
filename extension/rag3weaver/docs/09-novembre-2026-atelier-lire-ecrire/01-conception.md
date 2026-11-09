@@ -158,6 +158,15 @@ l'empreinte (`empreintes`).
   - `un_oui_accorde_la_commande_exacte_pas_sa_famille`, dans `commande` ;
   - `the_command_card_grants_the_command_and_the_turn_starts_again_by_itself`, au navigateur.
 
-**Lot suivant** : la carte d'un chemin (`ask_permission`) relance le tour, elle aussi. Sa demande
-doit pour cela porter le backend qui l'a posée.
+## La carte d'un chemin relance son tour (branche atelier-chemin-relance)
+
+- La demande porte le backend de la conversation qui l'a posée (`Demande.backend`). Le nœud
+  d'`ask_permission` ne le connaît pas : c'est le chat qui, voyant passer une carte `accord` sous
+  l'appel, la rattache à sa conversation (`rattacher_accord`).
+- La décision relance ce tour pour les deux genres. Pour un chemin, le modèle lit « (carte
+  d'accord) L'accès en lecture à `…` est accordé : réessaie. », ou qu'il est refusé. Une demande
+  posée hors d'un chat n'a pas de backend : rien ne repart (`relance: false`).
+- Témoins : `a_path_card_decision_starts_the_turn_again_by_itself`, par l'hôte, vu rouge d'abord.
+  Le témoin navigateur de la carte de chemin attend désormais le tour relancé, au lieu de
+  renvoyer « c'est accordé » à la main.
 

@@ -470,7 +470,10 @@ impl DaemonHost {
                         outils
                     } else {
                         let (backend, domaine) = (hosted.id.clone(), b.prepared().workspace_root());
-                        outils.avec_les_commandes_en_attente(move |ligne| self.atelier_demander_commande(&backend, ligne, domaine.as_deref()))
+                        let du_chat = hosted.id.clone();
+                        outils
+                            .avec_les_commandes_en_attente(move |ligne| self.atelier_demander_commande(&backend, ligne, domaine.as_deref()))
+                            .avec_les_cartes_rattachees(move |id| self.rattacher_accord(id, &du_chat))
                     };
                     let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &outils, ecrivent: &outils.ecrivent, repli: None };
                     self.run_chat_turn(tour, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, None)
@@ -677,6 +680,9 @@ pub(crate) struct OutilsDuChat<'a> {
     /// **Une commande que la porte met en attente** (lot 7 de l'atelier, 9 novembre 2026) :
     /// la ligne donnée, rend le texte à ajouter au résultat et la carte d'accord.
     en_attente: Option<Box<dyn Fn(&str) -> (String, Value) + Send + Sync + 'a>>,
+    /// **Une carte d'accord passée sous un appel** : son id, rattaché à la conversation pour
+    /// que la décision y relance le tour (la carte d'un chemin ; c7, 9 novembre 2026).
+    rattacher: Option<Box<dyn Fn(&str) + Send + Sync + 'a>>,
 }
 
 impl<'a> OutilsDuChat<'a> {
@@ -710,7 +716,7 @@ impl<'a> OutilsDuChat<'a> {
                 }
             }
         }
-        Self { inner, ecrivent, retires, empreinte: None, en_attente: None }
+        Self { inner, ecrivent, retires, empreinte: None, en_attente: None, rattacher: None }
     }
 
     /// Tenir l'empreinte de lecture de la conversation pendant ce tour (`tour` : son
@@ -791,6 +797,21 @@ impl<'a> OutilsDuChat<'a> {
         self
     }
 
+    /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
+    pub(crate) fn avec_les_cartes_rattachees(mut self, rattacher: impl Fn(&str) + Send + Sync + 'a) -> Self {
+        self.rattacher = Some(Box::new(rattacher));
+        self
+    }
+
+    fn rattacher_les_cartes(&self, t: &crate::llm::Turn) {
+        let (Some(rattacher), Some(Value::Array(cartes))) = (&self.rattacher, &t.ui) else { return };
+        for c in cartes.iter().filter(|c| c["kind"] == "accord") {
+            if let Some(id) = c["id"].as_str() {
+                rattacher(id);
+            }
+        }
+    }
+
     /// La commande mise en attente : la carte d'accord sous l'appel, et le texte qui dit au
     /// modèle d'attendre la décision.
     #[cfg(feature = "code")]
@@ -818,6 +839,7 @@ impl<'a> OutilsDuChat<'a> {
         let mut t = f();
         self.noter_l_empreinte(call, &t);
         self.carte_d_une_commande_en_attente(call, &mut t);
+        self.rattacher_les_cartes(&t);
         t
     }
 
