@@ -234,3 +234,25 @@ avec modifications ; ce snapshot les matérialise sans changement. Le checkpoint
 ajoute les témoins de réouverture/ScopeNONE et le fix SQL, non joués par v3.
 Binaire e2e SHA256 97e438e4dae5a42e6baaea3a2077ebb8fb10125231ea2212a9a4cc13bea8d120 ;
 provenance complète et hash du journal v3 dans le ticket recherche de résidu lié ci-dessus.
+
+### Chemin SQL public atteint et contrat de paramètres
+
+Le rouge PG premier n'est pas une adaptation de fixture : le test appelle
+`Catalog::ingest_entities("OccurrencePg", records)`, chemin public normal. Le lot atomique
+compose le graphe de dérivation ; DeriveNode lit les références canoniques avec
+`dialect.derived_references` et `QueryParam("uuids", CypherValue::List(String...))`.
+La connexion PostgreSQL commune sérialise volontairement une liste scalaire comme
+`Vec<String>`/text[], tandis qu'une liste de maps devient du JSON de lignes.
+Le dialecte doit donc demander text[] : unnest joint chaque UUID à la racine attendue.
+Les mêmes références servent au masque de `Catalog::rechercher`, et le changement de
+recette passe la même liste à `mark_derived_references_pending` : ANY compare ce tableau
+aux UUID d'origine. Ce correctif couvre l'ingestion et la lecture publiques sans changer
+leur format de données ni leur sérialisation. Le témoin vérifie ensuite de vraies lectures
+publiques sur chaque cellule : on n'escamote pas une erreur restante du masque de recherche.
+Source candidate PG v2 : **1a728dcd6**, WT distant propre au lancement ; verdict à lire dans
+`cx-contenu-pg-v2.log`. V3 natif reste exclusivement attribué à **965b835b8**.
+
+PG v2 (source1a728) ne teste pas encore SQL : compilation refusée par l'extraction du
+helper de réouverture dans e2e_entites_derivees (mauvais bloc coupé, variables du compteur
+hors portée). Erreur de fixture corrigée, six erreurs de compilation distinctes du défaut
+SQL produit. Aucun résultat PostgreSQL obtenu par ce lancement, 0 suite jouée.
