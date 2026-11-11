@@ -597,6 +597,26 @@ fn l_usage_scelle_ne_se_perd_ni_ne_se_double_au_passage_au_journal() {
     assert_eq!(reprise.usage_et_taches_a_role(&id).0, attendu, "la reprise relit le même total, pas les traces");
 }
 
+#[test]
+fn l_usage_relit_les_ajouts_tardifs_et_les_anciennes_traces() {
+    let (_d, host, _m, id) = banc(qui_lit_deux_fois());
+    let ancien = "agent-100-1";
+    let tardif = "agent-100-2";
+    host.journal.deposer(&id, ancien, json!({
+        "chat": id,
+        "evenements": [{ "kind": "Consumed", "units": [{ "unit": "input_tokens", "amount": 11 }] }],
+    })).unwrap();
+    host.journal.deposer(&id, tardif, json!({})).unwrap();
+    assert_eq!(host.usage_et_taches_a_role(&id).0["session"]["input_tokens"], 11);
+    host.journal.ajouter(&id, tardif, serde_json::from_value(json!({
+        "chat": id, "usage_du_chat": { "input_tokens": 7 },
+    })).unwrap());
+    let usage = host.usage_et_taches_a_role(&id).0;
+    assert_eq!(usage["session"]["input_tokens"], 18);
+    assert_eq!(usage["tour_run"], tardif);
+    assert_eq!(usage["tours"], 2);
+}
+
 /// Le faux modèle de la page du chat : « deux outils » fait « mots, outil, mots,
 /// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
 /// flux de soixante événements), puis finit.

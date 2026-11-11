@@ -343,7 +343,9 @@ impl DaemonHost {
             return r.clone();
         }
         let v = self.journal.lire(backend_id, run)?;
-        let r = resumer(&v);
+        // Les ajouts de fin peuvent encore arriver après le premier fichier :
+        // une absence ne devient pas un résumé négatif permanent.
+        let r = Some(resumer(&v)?);
         let mut m = self.resumes_des_runs.lock().unwrap_or_else(|p| p.into_inner());
         if m.len() >= RETENUS_MAX {
             m.clear();
