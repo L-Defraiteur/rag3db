@@ -1,10 +1,13 @@
 # Un membre externe platform se lie à un homonyme du projet
 
-- **État** : ouvert — observé dans l'A/B require du 9 novembre, relecture du 11 ; mesure du correctif des exports en cours
+- **État** : ouvert — faux conservé dans la seconde A/B d96ed3264 ; politique externe hors du lot des exports
 - **Gravité** : réponse fausse (usage relié au mauvais fichier)
 - **Atteignable en service** : oui, résolution JS par le seul nom
 - **Touche rag3weaver** : oui (rendez-vous de `src/code.rs`) et codeparsers (origine des références)
 - **Famille** : produit
+
+- **Pour** : session codeparsers
+- **Signalé par** : session codeparsers ; reprise et preuves dans [le bilan du 11 novembre](../11-11-2026/04-bilan-navigation-et-provenance.md)
 
 ## Preuve
 
