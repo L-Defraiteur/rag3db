@@ -1538,4 +1538,5 @@ fn invocation_executes_the_checked_declarations_after_reload() {
         "B contient RhaiNode, dont la lecture seule n'est pas prouvée");
     let response = backend.invoke_read_on(&checked, &authority, "echo", json!({}), cancel).unwrap();
     assert_ne!(response["result"]["version"], json!(2), "B ne doit jamais être exécutée après vérification de A : {response}");
+    assert!(response["result"]["targets"].is_array(), "A doit avoir exécuté SchemaNode : {response}");
 }

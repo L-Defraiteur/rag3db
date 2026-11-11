@@ -3316,8 +3316,7 @@ impl Backend {
     /// **Les réactions d'une cellule**, montées à la première requête qui la
     /// nomme (`call_in`) : son bus, ses services. La cellule du catalogue a les
     /// siennes par [`mount_reactions`](Self::mount_reactions).
-    fn reactions_de_la_cellule(&self, cell: &crate::scope::Scope) -> Result<(), String> {
-        let prepared = self.prepared();
+    fn reactions_de_la_cellule_on(&self, prepared: &PreparedBackend, cell: &crate::scope::Scope) -> Result<(), String> {
         if prepared.reactions.is_empty() || self.reactions.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
             // Pas de réactions déclarées, ou pas en service (tests, arrêt) : rien à monter.
             return Ok(());
@@ -3742,6 +3741,12 @@ impl Backend {
     /// jusqu'aux nœuds, au lieu de la cellule du catalogue. `call` reste
     /// l'appel dans la cellule par défaut du catalogue.
     pub fn call_in(&self, cell: &crate::scope::Scope, name: &str, args: Value) -> Result<Value, String> {
+        self.call_in_on(&self.prepared(), cell, name, args)
+    }
+
+    // Même version pour cellule, garde, harnais, graphe et présentation.
+    // Un rechargement peut publier la suivante sans changer cet appel en vol.
+    fn call_in_on(&self, prepared: &PreparedBackend, cell: &crate::scope::Scope, name: &str, args: Value) -> Result<Value, String> {
         // La cellule vit le temps de cet appel, dans ce fil : les services se
         // construisent ici, avant que le graphe ne parte sur d'autres fils.
         struct Remettre(Option<crate::scope::Scope>);
@@ -3753,8 +3758,8 @@ impl Backend {
         let avant = CELL_OF_CALL.with(|c| c.replace(Some(cell.clone())));
         let _remettre = Remettre(avant);
         // Les réactions de cette cellule écoutent avant que l'appel n'écrive.
-        self.reactions_de_la_cellule(cell)?;
-        self.call(name, args)
+        self.reactions_de_la_cellule_on(prepared, cell)?;
+        self.call_on(prepared, name, args)
     }
 
     /// **Arrête un run en vol** de ce backend (C4), au nom de `by` : un appel
@@ -3821,14 +3826,18 @@ impl Backend {
         let scope = self.catalog.lock().map_err(|_| "catalogue cible indisponible")?.scope().clone();
         if scope != authority.scope { return Err("invocation refusée : domaines de l'appelant et de la cible différents".into()); }
         crate::dataflow::invocation_nodes::during_parent_cancel(cancel,
-            || self.call_in(&authority.scope, operation, arguments))
+            || self.call_in_on(prepared, &authority.scope, operation, arguments))
     }
 
     pub fn call(&self, name: &str, args: Value) -> Result<Value, String> {
+        self.call_on(&self.prepared(), name, args)
+    }
+
+    fn call_on(&self, prepared: &PreparedBackend, name: &str, args: Value) -> Result<Value, String> {
         if !APPEL_HUMAIN.with(|h| h.get()) {
-            self.refus_de_l_agent_hors_tache(name)?;
+            self.refus_de_l_agent_hors_tache(prepared, name)?;
         }
-        let mut response = self.call_tool(name, args)?;
+        let mut response = self.call_tool_on(prepared, name, args)?;
         harness_presentation(&mut response);
         Ok(response)
     }
@@ -3853,8 +3862,7 @@ impl Backend {
     /// Le refus d'un outil d'écriture appelé par l'agent sur le principal
     /// d'un workspace à `task_writes` (une tâche, elle, a sa surcharge de
     /// workspace et écrit dans son worktree).
-    fn refus_de_l_agent_hors_tache(&self, name: &str) -> Result<(), String> {
-        let prepared = self.prepared();
+    fn refus_de_l_agent_hors_tache(&self, prepared: &PreparedBackend, name: &str) -> Result<(), String> {
         let task_writes = prepared.manifest.workspace.as_ref().is_some_and(|w| w.task_writes);
         let ecrit = prepared.manifest.tools.get(name).is_some_and(|t| t.policy.write_files);
         if task_writes && ecrit && prepared.surcharges().workspace.is_none() {
