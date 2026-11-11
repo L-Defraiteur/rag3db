@@ -1,100 +1,130 @@
-# Reprise du lot require : exports par défaut
+# Exports par défaut : état de reprise et preuves
 
-## Périmètre et preuves
+## Code courant, distinct de la première mesure
 
-Le lot `codeparsers/require-js` reste différé. La branche isolée
-`codeparsers/require-temoins` part de 280b5a3f1 et porte les témoins 5767adf35,
-le correctif 4d479816b et le témoin entre lots e1015a379. Son sous-module pointe
-sur `e48b41499782590e0181a7a87aad19ddcd8f9093`, sauvegardé sur la branche
-codeparsers `require-default-metadata`, sans avancement de master.
+- Branche rag3db : `cx-codeparsers-require-2`, code **d96ed3264**, worktree
+  `/home/lucied/git_workspaces/cx-wt-codeparsers-require` aux deux postes.
+- Sous-module : **a730a9ba89ef233423bb7063f85181de26d98ce0**, branche
+  `cx-codeparsers-default-metadata`, worktree du parseur au portable
+  `/home/lucied/git_workspaces/cx-wt-codeparsers-metadata`.
+- Tout commit est sauvegardé sur sa branche distante. Aucun master n'a avancé
+  avec ce lot et aucun tour de push n'est accordé.
+- **8 e2e ciblés passent**, avec les formes CJS/ES, l'instance, l'objet de
+  réexportation exact, l'externe/généré absent, les deux ordres d'ingestion,
+  les extensions explicites et le refus de plusieurs écritures d'export.
+- **286 tests unitaires et d'intégration codeparsers passent**, zéro ignoré
+  dans `cargo test --tests` (45 résultats de suites). Une invocation antérieure
+  de `cargo test` contient aussi un ancien exemple documentaire `ignore` :
+  il n'est pas revendiqué comme joué.
+- La passe complète rag3weaver n'est pas jouée. Une nouvelle A/B est requise
+  pour ces hashes : les mesures de la première implémentation ne les valident pas.
 
-Le résolveur de codeparsers expose sa lecture existante de l'export par défaut :
-nom ou instance. rag3weaver offre un symbole de rendez-vous qualifié par source
-et fichier, relié par DEFINES au scope nommé ou à la zone de l'instance. Une
-mention importée par défaut attend ce symbole, indépendamment de son alias.
-Aucune sorte de scope supplémentaire, aucun changement d'oracle, de seuil
-ou de politique des modules externes.
+## Le modèle et ses invariants
 
-## Les quatre cas
+`ScopeFileAnalysis.default_export` porte un fait optionnel de fichier :
+`DefaultExportTarget::Name(String)` ou `Instance { line: usize }` (ligne 1-based).
+L'extraction lit la déclaration une seule fois avant la perte du préfixe
+`export default` dans le texte propre des scopes. Les autres langages gardent
+None. Serde accepte une ancienne analyse sans ce champ ; un témoin vérifie
+l'aller-retour du fait et l'absence du champ dans l'ancien format.
+Plusieurs écritures reconnues ne désignent pas une cible statique unique :
+le fait reste absent, sans choix de la première écriture.
 
-- Alias différent de l'export : `Alias = require('./outil.js')`, export `Outil`.
-  La navigation attend la classe Outil, marquée import. Rouge initial : aucune arête.
-- Instance exportée : `module.exports = new Outil()`.
-  La navigation attend la zone de cet export, jamais la classe. Rouge initial :
-  arête vers la classe, marquée import.
-- Réexportation : la mention de l'alias dans un objet renvoyé doit naviguer vers
-  la définition exportée. Rouge initial : aucune arête.
-- Externe ou fichier généré absent : les mentions gardent leur repli sur la
-  zone de liaison, marquée liaison. Vert avant et après le correctif.
+Le résolveur entre fichiers et rag3weaver consomment le même fait. Une instance
+vise la zone de fichier qui contient sa ligne d'export, jamais la classe utilisée
+pour la construire. Un nom doit désigner un scope non ambigu du fichier.
+`resolve_relative_js_module` partage la résolution existante d'un import vers
+son **fichier exact**, extension comprise ; le symbole de rendez-vous est
+`@default:{source}#{fichier}`. Effacer l'extension fusionnait deux modules voisins.
 
-Une navigation vers la définition exportée et une définition de liaison locale
-rendue par le LSP sont deux contrats. Les attentes ci-dessus sont celles de
-navigation ; aucun verdict LSP nouveau n'est revendiqué pour ces fixtures.
+Les tuple3 `CodeAnalysis.default_exports` et `pending_defaults` relient cette
+information aux primitives existantes DEFINES/MENTIONS et aux scopes existants.
+Aucun import_binding, gabarit, IR, stable_scope_keys, own_texts ou ScopeRecord
+n'a changé. Le fait d'export appartient au contexte de résolution d'une occurrence :
+partager contenu/vecteurs ne partage pas automatiquement analyse et visibilité.
+Ces blocs ont été coordonnés avec arbre principal.
 
-## Ce que dit réellement l'A/B du 9 novembre
+## Rouge puis vert réellement observés
 
-Preuves brutes relues à luciepc dans
-`~/.cache/codeparsers-notes/require-mesure-2/` (`resume.txt`,
-`verdicts-otees.tsv`, `verdicts-ajoutees.tsv`).
+Journaux à luciepc sous `~/.cache/codeparsers-notes/` :
 
-Les 415 ajouts sont des arêtes vers une zone de liaison, toutes muettes pour
-l'oracle : ni 415 scopes, ni 415 gains de précision prouvés.
-Les 17 arêtes justes ôtées visaient les liaisons locales : 13 dans les index.js
-(4 node, 4 sync, 5 wasm), deux reader dans collect.cjs, une rag3db_wasm générée,
-une CSS dans grammar.js. Le LSP désignait exactement ces lignes de liaison.
-Les remplacer par une navigation plus lointaine ne rétablit pas automatiquement
-ces 17 verdicts stricts. Les résultats futurs doivent rester séparés de ce constat.
+- `require-temoins-rouge.log` : 4 joués, 3 échecs (alias et réexportation sans
+  cible, instance reliée à sa classe), 1 vert externe.
+- `require-temoins-correctif.log` puis `require-temoins-incremental.log` : 4 puis
+  5 verts sur l'ancienne implémentation e1015a379/e48b414.
+- `cx-require-temoins-complets.log` : 7 verts sur la reprise master ; l'objet
+  `module.exports = { Alias }` exact est enfin couvert. Le premier témoin de
+  « réexportation » renvoyait un objet depuis une fonction.
+- `cx-require-extensions-rouge.log` : 6 verts/1 rouge avec un voisin .ts écrit
+  `export default OutilTs`; `cx-require-extensions-vert.log` : 7 verts après
+  conservation du fichier exact.
+- `cx-require-formes-export.log` : 6 verts/1 rouge pour `export default class`;
+  `cx-require-fait-export-vert.log` : 7 verts après le fait de fichier typé.
+- `cx-require-ambiguite-rouge.log` : 7 verts/1 rouge (première écriture choisie);
+  `cx-require-ambiguite-vert.log` : **8 verts**, zéro ignoré, sur d96ed3264/a730a9b.
+- `cx-codeparsers-fait-export-tests.log` : **286 verts**, zéro ignoré, sur a730a9b.
 
-## Vérifications réellement jouées
+Lib de ces vérifications :
+`rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`.
 
-À luciepc, sous `poste lourd`, lib
-`rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF` :
+## Première A/B, uniquement e1015a379/e48b414
 
-- `require-temoins-rouge.log` : 4 tests joués, 3 rouges ciblés, 1 vert, 0 ignoré.
-- `require-temoins-correctif.log` : 4 joués, 4 verts, 0 ignoré.
-- `require-temoins-incremental.log` : 5 joués, 5 verts, 0 ignoré, dont le
-  rendez-vous entre fichiers ingérés séparément dans les deux ordres.
+Source propre a72acfeef, même lib 29a7bc52a aux deux index. Baseline
+4f54e473a/c660893, lot e1015a379/e48b414. Résultats à luciepc :
+`~/.cache/codeparsers-notes/require-default-exports-e1015a379/`.
+L'oracle est identique octet pour octet à celui de la branche historique.
 
-Journaux sous `~/.cache/codeparsers-notes/`. La passe complète n'est pas jouée.
-Le contrôle initial de retard rendait 195, sous le seuil 200, sans le modifier.
+A : index terminé en 1223 s, 137848 morceaux. B : terminé en 1300 s,
+137783 morceaux. Ces durées sont sous la charge du poste, sans conclusion de vitesse.
+Les hôtes ont été arrêtés par SIGTERM, leur absence et l'absence de connexions
+7882 lues ; l'optimiseur a été averti de la libération du service privé.
 
-## Mesure suivante
+Sondes : A 128430 CONSUMES, B 128971 ; mentionneurs TS/JS 1381 contre 1922.
+Échantillon commun de 298 mentions : A 324 arêtes (279 justes, 10 fausses,
+17 muettes, 12 liaisons d'import, 6 décl), B 307 (282 justes, 2 fausses,
+17 muettes, 6 décl). Arêtes ajoutées : 464, dont 36 justes, 4 réexportations,
+1 fausse et 423 muettes. Le jugement des arêtes retirées est encore en cours.
+Aucun de ces nombres ne valide le code courant d96ed3264/a730a9b.
 
-Le script `outils/mesure-default-exports.sh` conserve les résultats historiques,
-compare A=4f54e473a/c660893 à B=e1015a379/e48b414 sous la même lib 29a7bc52a,
-et garde l'oracle strict et l'échantillon de référence.
-L'optimiseur a transmis explicitement le service privé 7882 après hotfixs :
-granite-278m dense768, sans creux ni relecteur. L'hôte isolé est 7978 ; seules
-les copies du gabarit reçoivent embeddings.address=7882. Aucun usage des services
-partagés 7878–7880. La séquence complète doit rester sous un seul poste lourd.
+Les 17 arêtes justes retirées dans l'ancienne mesure du 9 novembre visaient
+les liaisons locales : 13 index.js, deux reader, une rag3db_wasm et une CSS.
+Une navigation plus lointaine ne rétablit pas automatiquement leurs verdicts LSP.
 
-Aucun tour de push master accordé. Aucun résultat A/B nouveau annoncé à ce stade.
+## Contrat sonde → oracle : mention et cible distinctes
 
-## Reprise sur master et convention cx-
+L'oracle cherche le nom **de cible** sur la ligne source avant de demander
+une définition. Pour les 415 liaisons historiques, vérification sur TSV+sources :
+415 tokens absents, zéro source absente, zéro token présent. Ces questions
+n'ont pas été envoyées. Ce n'est pas un silence du serveur.
 
-Après un nouveau fetch, l'ancienne branche a 216 commits de retard : elle ne
-servira pas à une nouvelle passe. Les sept commits ont été repris sans conflit
-sur master 2870f3e81 dans `/home/lucied/git_workspaces/cx-wt-codeparsers-require`,
-branche `cx-codeparsers-require`, tous sauvegardés sur origin.
-Le témoin exact `module.exports = { Alias }` est ajouté en 846fcf778 ; il n'est
-pas encore joué. Le premier témoin dit « réexportation » utilisait un objet
-renvoyé par une fonction : ses verts ne prouvent pas la forme exacte des index.js.
+Le lecteur `outils/lire-interrogations-oracle.py` distingue, sans changer les
+entrées ni les verdicts : non interrogé/token absent, LSP interrogé sans réponse,
+réponses avec positions visibles dans/hors corpus, verdict original juste/faux
+ou autre. Les TSV ne conservent que deux positions : la qualification de corpus
+porte explicitement sur ces positions visibles, pas sur la réponse exhaustive.
+Aucun faux n'est neutralisé au motif qu'une réponse visible est hors corpus.
 
-La mesure active reste figée sur e1015a379/e48b414 et ses anciens chemins :
-aucun worktree ni script n'a été déplacé sous sa compilation. Ses résultats
-ne seront pas présentés comme une passe du master repris. Le rejeu des témoins,
-puis la validation requise, restent à faire sur la branche cx-.
+Tickets ouverts : le contrat de mention de l'oracle et le faux platform vers
+un homonyme du projet. Une baisse des faux accompagnée de non-interrogés ne
+prouve pas une précision gagnée. L'oracle n'a pas été modifié dans ces corrections.
 
-Les dix tests `require_js` de codeparsers sont également passés, zéro ignoré,
-sur e48b414 (journal luciepc `require-parser-metadata.log`).
+## Prochaine mesure et intégration
 
-## Correction de lecture : les 415 muettes n'ont pas interrogé le LSP
+Le retard initial était 195, puis 216 après fetch : reprise dans un worktree
+neuf sur master, sous préfixe cx-, sans réécriture ni suppression des anciennes
+branches. La branche -2 a été créée avant rebase et sauvegardée.
 
-Vérification supplémentaire : pour les 415 arêtes liaison historiques, le champ
-nom est absent de chacune des 415 lignes sources (aucune source manquante).
-L'oracle cherche ce nom de cible avant toute question : aucune interrogation
-n'a donc eu lieu pour ces arêtes. « Muet » ne démontre ici aucun silence du
-serveur. Même risque pour Alias vers Outil et FS vers une zone exportée.
-Voir le ticket `2026-11-11-l-oracle-cherche-la-cible-au-lieu-du-nom-mentionne.md`.
-L'oracle et l'A/B active restent inchangés ; ces cas ne seront pas comptés comme
-gains de précision. Le modèle requis sépare mention source et cible proposée.
+Le script `outils/cx-mesure-default-exports-v2.sh` prépare deux bases fraîches :
+A=aece4b9f1/c660893 (base exacte de la branche, docs seules après 41526b29a),
+B=d96ed3264/a730a9b, même lib 29a7bc52a. Source/modèle restent figés, gabarits
+copiés seulement, hôte privé 7978 et service privé granite-278m dense768 sur
+7882. Il conserve l'historique et les relevés de charge avant/après chaque index.
+Un accord opérationnel neuf de l'optimiseur est requis : rien n'est réservé
+par le script ni par l'accord de principe de l'orchestration.
+
+Après la première A/B, proposer un complément borné au vrai token et à la
+position source, sur les mêmes cas avant/après, séparé de l'oracle historique :
+les 17 positions de liaisons locales, FS et les nouvelles arêtes non interrogées
+avec un alias différent de l'export. Les cibles fichier/plage restent celles
+de chaque base ; la question LSP porte sur la mention, pas sur leur nom.
+Aucune refonte générale de l'oracle n'est incluse implicitement.

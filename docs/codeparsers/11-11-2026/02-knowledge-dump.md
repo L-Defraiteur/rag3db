@@ -237,3 +237,19 @@ sur un poste calme (§8).
   lu (en cours, partagé).
 - `docs/codeparsers/tickets/2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md` — les marques
   `resolution` (en cours, partagé ; la marque `liaison` du lot `require` s'y ajoute).
+
+## Fait d'export et preuve LSP — complément de reprise
+
+Sur la branche cx-codeparsers-require-2 (pas master), ScopeFileAnalysis expose
+un fait de fichier optionnel default_export : nom ou ligne de l'instance.
+Le consommateur ne doit pas relire le texte propre d'un scope pour retrouver
+un préfixe export retiré par la découpe. L'import et le symbole d'export gardent
+le fichier exact avec son extension ; le contenu partagé reste distinct du
+contexte de résolution d'occurrence. Voir la page 03 pour hashes et preuves.
+
+L'oracle historique utilise le nom cible pour retrouver le token source : une
+zone ou un alias peuvent être « muets » sans interrogation. Séparer question
+non envoyée, serveur sans réponse, réponse visible hors corpus et verdict de
+cible. Les 415 liaisons historiques n'ont pas déclenché de questions ; aucune
+conclusion de précision n'en découle. Le ticket du contrat mention/cible et
+le lecteur de TSV préservent les preuves sans changer cet oracle.
