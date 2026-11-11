@@ -215,3 +215,19 @@ permutation des noms, deux racines/une version et trois modes de lecture ; refus
 associations invalides à la préparation et après mutation du préparé avant le premier appel
 base. La validation d'association n'est pas encore raccordée : rouge attendu, pas affirmé.
 Le ticket reste ouvert, ED et 1a gardent leurs preuves distinctes.
+
+## Rouge combiné 1a et frontière partagée
+
+Source **490e0acf6951e7fcade74a5d4febf4571089ddca**, après rebase sur ED c693 et mise
+au commit a730 du sous-module. Log `cx-manifeste-public-1a-rouge.log` sur luciepc :
+**1 réussi, 1 échoué**. Le vrai chargement/ouverture/écriture/recherche public est déjà
+vert : trois permutations de noms, une version pour deux racines, trois modes de résultat.
+Le rouge est réel et distinct : `searchIndex: Missing` est accepté à la préparation.
+Les autres refus et le compteur zéroappelDB ne sont pas déduits de ce premier échec.
+
+Correctif candidat : `EntityConfig::validate_search_index_context` vérifie les faits réels,
+appelé par la Forme de recherche et par SchemaFacts à la préparation/avant open. Même règle
+pour index présent, identité content/from correct, absence de récursion, contenu cherchable
+et champs indexés (titre compris) existant sur l'occurrence. Aucun doublon de validation
+métier, aucune pseudo-config fournie, aucune arête Root→Index dans l'ordre de création.
+La validation de dérivation root/content et le refus des chaînes restent ceux partagés par ED.

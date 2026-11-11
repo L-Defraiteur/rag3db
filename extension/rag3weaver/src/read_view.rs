@@ -176,13 +176,10 @@ impl Forme<'_> {
 
     pub fn resolve_search_target(&self, name: &str) -> Result<search::SearchTarget, CatalogError> {
         if let Some(public) = self.entity_configs.get(name).filter(|c| c.search_index.is_some()) {
+            public.validate_search_index_context(name, |n| self.entity_configs.get(n))
+                .map_err(CatalogError::SchemaError)?;
             let index = public.search_index.as_ref().unwrap();
-            let cfg = self.entity_configs.get(index).ok_or_else(|| CatalogError::SchemaError(format!("{name} : index dérivé inconnu {index}")))?;
-            let derived = cfg.derived.as_ref().filter(|d| d.from == name && matches!(d.identity, crate::config::DerivedIdentity::Content { .. }))
-                .ok_or_else(|| CatalogError::SchemaError(format!("{name} : {index} doit être une dérivée par contenu de cette cible")))?;
-            if index == name || cfg.search_index.is_some() {
-                return Err(CatalogError::SchemaError(format!("{name} : association d'index récursive refusée")));
-            }
+            let cfg = self.entity_configs.get(index).expect("index validé dans la forme immuable");
             let mut target = self.resolve_storage_target(index, true)?;
             let mut fields: Vec<String> = public.content_fields().into_iter().map(str::to_string).collect();
             if let Some(title) = public.title_field() { fields.push(title.to_string()); }
@@ -194,9 +191,6 @@ impl Forme<'_> {
             if let Some(title) = cfg.title_field() { content_fields.push(title.to_string()); }
             content_fields.sort(); content_fields.dedup();
             for field in &content_fields {
-                if !public.fields.contains_key(field) {
-                    return Err(CatalogError::SchemaError(format!("{name} : le champ indexé {field} n'existe pas sur l'occurrence ; projection des coordonnées non déclarée")));
-                }
                 fields.push(field.clone());
             }
             fields.sort(); fields.dedup();
@@ -209,7 +203,6 @@ impl Forme<'_> {
             target.occurrence_projection = Some(search::OccurrenceProjection {
                 entity: name.to_string(), relation: crate::schema::derived_rel_name(index), fields, content_fields,
             });
-            let _ = derived;
             return Ok(target);
         }
         self.resolve_storage_target(name, false)
