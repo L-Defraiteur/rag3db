@@ -4,6 +4,10 @@ Pour un agent sans aucun souvenir de nos échanges. L'état du jour (lots, branc
 dans `docs/memoire/11-11-2026/01-rapport-de-session.md`. Tous les chemins de code sont relatifs à
 `extension/rag3weaver/` sauf mention contraire.
 
+## Actualisation du 11 novembre
+
+Le refus 4xx se relit depuis `2d6a08a65` sur master ; les mentions de lot non poussé ci-dessous sont historiques. Le correctif de l’archiviste est livré sous `41526b29a` : les étiquettes courtes se résolvent vers les noms exacts, avec refus d’un alias inconnu ou ambigu. Les preuves, le rejeu après rebase et le nettoyage du lot sont dans [04-alias-candidats.md](04-alias-candidats.md). Le premier document réel passe sur copie ; les cinquante documents restent en attente d’une nouvelle consigne de l’orchestration. Aucune modification de la mémoire réelle.
+
 ## 1. Le vocabulaire
 
 - **rag3db** : la base de données (un fork de Kuzu, en C++), à la racine du dépôt. **rag3weaver** :

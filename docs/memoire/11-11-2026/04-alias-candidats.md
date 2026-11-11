@@ -2,7 +2,7 @@
 
 ## Lot et périmètre
 
-Branche actuelle publiée : `cx-memoire-alias-candidats-2` (ancien nom conservé sur origin : `cx-memoire-alias-candidats`) ; témoins `7a6914ade`, correctif `9bf3bb33a`. Base jouée : `133b9013e`. Aucun push de code sur master n’est autorisé à ce stade.
+**Livré sur master : `41526b29a79e7137a315ac81bb9c5a5b0a6b83a9`**, au tour donné par l’orchestration. Branche distante de livraison : `cx-memoire-alias-integration-3` ; les branches de préparation restent sur origin. Témoins initiaux `7a6914ade`, correctif initial `9bf3bb33a`, première base jouée `133b9013e`.
 
 Le gabarit `memory` présente chaque candidate au modèle avec un identifiant court `candidate_N`, son nom exact et son `about`. Une liste de correspondances accompagne la section jusqu’à `archive_decided`, qui retrouve le nom exact avant de composer l’apport, sa clé et ses liens. La fiche ne change pas d’identité. `verdict` garde le nom résolu pour une candidate, et les décisions fixes `none` et `create` gardent leur comportement.
 
@@ -25,18 +25,20 @@ La passe historique a terminé verte sous l’unité `cx-memoire-alias-passe` : 
 
 Le premier document réel est aussi rejoué sur une copie neuve de l’instantané, avec les deux scripts exacts du lot et le binaire certifié d1345a115 fourni par optimiseur (SHA256 `597f6a29de486a9161996e8e4f460731802e090c71f0859a7ad80808ad7da7ee`). Résultat : **7/7 sections, zéro erreur, zéro requête refusée**, 331,5 s pour le processus entier. Ce temps n’est pas une mesure exclusive ni une durée par section ; aucune cause de sa variation n’est établie. Son dossier est `validation-correctif-alias/` sous la racine temporaire des essais de la [note précédente](03-reprise-archivage.md). Les maps du processus ont confirmé la lib épinglée, dans `lib-chargee.txt`. Le résultat est consigné dans `resultats.jsonl` ; aucune durée par section n’est mesurée.
 
-Les cinquante documents ne sont pas lancés et la mémoire réelle est inchangée. Le ticket est déplacé dans `docs/tickets/closed/` dans le lot du correctif ; sa livraison sur master reste en attente.
+Les cinquante documents ne sont pas lancés et la mémoire réelle est inchangée. Le ticket est déplacé dans `docs/tickets/closed/` dans le lot du correctif ; sa livraison sur master est faite sous `41526b29a`.
 
 ## Rejeu après rebase
 
 Master a reçu `1904e04e42cd3666d6b3a64fee5bd51f0629c020`, un garde-fou Rust dans les tests de backend. Après la passe historique, le lot a été rebasé sur `0b488c0fd8deedfe78ac8aa1c0aaca0249055fa7`, sous le nom neuf `cx-memoire-alias-candidats-2`, puis poussé. Le diff du rebase a été relu : seul le témoin de `backend.rs` est du Rust nouveau, le reste est documentaire. Le correctif rebasé est `c481a66c6` ; le commit joué est `6f13217aaa775c16606e79295c5441fd51dd8e22`. Les commits ultérieurs ne changent que la documentation.
 
-Le rejeu court est **VERT** : features **5/5** ; lib **2 095 passés, 0 échoué, 58 ignorés**, 59,31 s ; archivage **5 passés, 0 échoué, 0 ignoré**, 36,61 s ; PostgreSQL **34 passés, 0 échoué, 0 ignoré**, 9,59 s. Chaque suite e2e a aussi joué ses deux gardes préalables, verts. Le contrôle des tickets est vert et annonce la fermeture de ce ticket. La lib et le jeu de features sont ceux nommés plus haut. Les journaux historiques restent intacts ; les journaux de ce rejeu utilisent le préfixe `cx-memoire-alias-r2-`. Aucun tour de push n’est accordé à ce stade.
+Le rejeu court est **VERT** : features **5/5** ; lib **2 095 passés, 0 échoué, 58 ignorés**, 59,31 s ; archivage **5 passés, 0 échoué, 0 ignoré**, 36,61 s ; PostgreSQL **34 passés, 0 échoué, 0 ignoré**, 9,59 s. Chaque suite e2e a aussi joué ses deux gardes préalables, verts. Le contrôle des tickets est vert et annonce la fermeture de ce ticket. La lib et le jeu de features sont ceux nommés plus haut. Les journaux historiques restent intacts ; les journaux de ce rejeu utilisent le préfixe `cx-memoire-alias-r2-`. Le tour a ensuite été donné pour ce lot seul.
 
-## Où reprendre
+## Livraison et nettoyage
 
-- Portable : `~/.cache/rag3weaver-build/cx-wt-memoire-alias`, branche `cx-memoire-alias-candidats-2`.
-- luciepc : `~/git_workspaces/cx-rag3db-memoire-alias`, branche `cx-memoire-alias-passe-2`, propre sur `6f13217aa` au lancement du rejeu ; script `~/.cache/rag3weaver-build/cx-memoire-alias-r2.sh`.
-- Target unique utilisé : `~/.cache/rag3weaver-build/target-96-fiches4` (17 Go à la dernière lecture, plafond 32 Go).
-- L’ancien miroir `~/git_workspaces/rag3db-memoire-alias` a seulement joué le rouge. Son unité est terminée. Git a refusé son déplacement car il contient un sous-module ; le miroir `cx-` a été créé neuf. Une remise de sécurité dans le miroir `cx-` conserve les trois fichiers joués avant passage au commit publié (`cx-memoire-alias-source-jouee`).
-- Les anciennes branches distantes restent ; aucune suppression distante ni réécriture de commit poussé.
+Sous `poste push`, master a été relu à `2870f3e81` : seulement des documents depuis la base rejouée. Le lot a été rebasé sous le nom neuf `cx-memoire-alias-integration-3`, sauvegardé sur origin, puis poussé dans `if grep -qx VERT`. Les deux scripts, le graphe et les témoins sont vérifiés octet pour octet identiques à ceux du commit rejoué `6f13217aa`.
+
+Après fetch, les trois contrôles ont été lus : **status propre**, **aucun rebase en cours**, **origin/master = HEAD = `41526b29a79e7137a315ac81bb9c5a5b0a6b83a9`**. Journal externe : `~/.cache/rag3weaver-build/cx-memoire-alias-integration.log` à luciepc ; hash dans `cx-memoire-alias-pousse.hash`.
+
+Les processus du lot étaient inactifs au nettoyage. Le script a supprimé le worktree de passe `~/git_workspaces/cx-rag3db-memoire-alias`, ses branches locales et le target unique `~/.cache/rag3weaver-build/target-96-fiches4`. Le miroir du rouge `~/git_workspaces/rag3db-memoire-alias` a été supprimé après vérification que son seul fichier modifié est celui de `7a6914ade` et sauvegarde externe du diff (`cx-memoire-alias-rouge-source.diff`). Sur le portable, `~/.cache/rag3weaver-build/cx-wt-memoire-alias` et les branches locales de ce lot ont été supprimés ; aucun target n’y avait été créé pour ce lot. Toutes les branches distantes restent.
+
+Pour reprendre, créer un worktree et une branche `cx-` neufs depuis master. Les journaux ciblés, complets et r2 restent dans `~/.cache/rag3weaver-build/` à luciepc ; les essais sur copie restent dans la racine temporaire décrite plus haut. Ces essais ne valent pas une validation du classement sémantique de cinquante documents. **Les cinquante documents ne sont pas lancés et aucune écriture n’est faite dans la mémoire réelle.**

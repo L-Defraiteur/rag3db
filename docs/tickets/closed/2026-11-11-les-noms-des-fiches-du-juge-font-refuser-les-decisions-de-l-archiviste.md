@@ -1,6 +1,6 @@
 # Les noms des fiches du juge font refuser les décisions de l’archiviste
 
-- **État** : corrigé par `c481a66c6` (avant rebase : `9bf3bb33a`), sur la branche du lot ; rejeu après rebase vert, livraison sur master en attente du tour de l’orchestration.
+- **État** : corrigé et livré sur master sous `41526b29a79e7137a315ac81bb9c5a5b0a6b83a9`, après la passe complète, le rejeu et les trois contrôles lus.
 - **Famille** : produit
 - **Gravité** : blocage partiel de l’archivage : des sections restent sans apport.
 - **Atteignable en service** : oui, si archive rappelle des fiches dont les noms sont des bilans longs.
