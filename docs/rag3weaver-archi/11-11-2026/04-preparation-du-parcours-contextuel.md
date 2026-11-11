@@ -56,12 +56,24 @@ les preuves runtime d'ED ; le parcours ambigu / inconnu sera complété avec sa 
   `~/.cache/rag3weaver-build/cx-archi-target`, après nettoyage du précédent.
 - Source et résultat du check :
   `~/.cache/rag3weaver-build/cx-ui-contextuel-dbf3f7419-check-20261111/`.
-- Le relais n'est pas encore implémenté : **aucun rouge/vert d'exposition ou de parcours
-  n'est revendiqué**. Dès disponibilité annoncée, intégrer la primitive au point sûr,
-  relever le rouge réel (exposition, exécution ou rendu), puis corriger l'UI et jouer le vert.
+- Baseline **ROUGE d'exposition observée** sur `dbf3f7419` : 0 réussi, 1 échec, 0 ignoré,
+  3,78 s. Les deux dépôts réels ont été attachés/indexés et la demande Chrome atteint le
+  modèle ; l'assertion dit exactement `search_code n'atteint pas le modèle`.
+  Journal : `cx-ui-contextuel-dbf3f7419-rouge-20261111/navigateur.log` à luciepc.
+- Le relais n'est pas encore implémenté : **exécution du relais, clic et reprise non atteints**.
+  Dès disponibilité annoncée, intégrer la primitive au point sûr puis jouer le même témoin
+  pour observer l'étape suivante, sans rejouer une absence inchangée ni affaiblir les assertions.
 - Ne pas fixer des liens à la main, réécrire un résultat pour le faire passer, ni compter
   une compilation ou un témoin ignoré comme preuve du parcours.
 
 Fichiers de rendu réservés au futur correctif archi : `ui/ide/src/views/Chat.tsx` et
 `ui/ide/lib/toolview.tsx`. Aucune modification à ces deux fichiers à ce stade ; aucun
 changement à `code.rs`, au gabarit code ou aux fichiers du lot remaining d'ED.
+
+## Provenance et coupure du texte
+
+ED et archi ont confirmé que la provenance nécessaire aux actions doit voyager structurellement
+jusqu'aux tours, événements et sessions (ou par référence stable), hors du budget du texte du
+modèle. Si la présentation est coupée, la cible doit rester connue ; sinon l'action contextuelle
+refuse ou reste inactive, sans repli sur la conversation. Le premier petit cas du témoin relit
+le vrai reçu dans le transport actuel ; il ne constitue pas encore une preuve de ce cas de coupure.
