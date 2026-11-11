@@ -866,6 +866,26 @@ mod tests {
         assert!(r.params.is_empty());
     }
 
+    #[test]
+    fn postgres_scalar_membership_compiles_all_array_forms() {
+        let relations = HashMap::new();
+        let dialect = crate::dialect::PostgresDialect;
+        for values in [vec![], vec![CypherValue::String("ready".into()), CypherValue::String("queued".into())]] {
+            for (value, negative) in [
+                (FilterValue::List(values.clone()), false),
+                (FilterValue::Ops(vec![FilterOp::In(values.clone())]), false),
+                (FilterValue::Ops(vec![FilterOp::NotIn(values.clone())]), true),
+            ] {
+                let mut parser = FilterParser::new(&relations, &dialect);
+                let parsed = parser.parse(&HashMap::from([("status".into(), value)]), "Doc", "n").unwrap();
+                let member = "n.\"status\" = ANY($filter_p0)";
+                assert_eq!(parsed.where_clauses, vec![if negative { format!("NOT ({member})") } else { member.to_string() }]);
+                assert_eq!(parsed.params.len(), 1);
+                assert_eq!(parsed.params[0].value, CypherValue::List(values.clone()));
+            }
+        }
+    }
+
     // ── array IN ────────────────────────────────────────────────────────
 
     #[test]
