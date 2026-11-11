@@ -56,3 +56,23 @@ la base privée cx_codeparsers_20261111_1698_test. Relire les quatre mentions
 originelles dans les preuves avant toute clôture. Publier seulement après
 verdict vert et tour de push explicite ; documenter le résultat utilisateur.
 L'attente de base et la transmission du bilan ne ferment pas ce ticket.
+
+### Préparation de la reprise sur master
+
+Lecture du master distant 1b5cfd941 après fetch, sans rebase ni compilation :
+80 commits sont arrivés depuis la branche courante. Depuis la base aece4b9f1,
+aucun changement de code.rs ni records.rs ; la reprise n'annonce donc pas de
+conflit textuel dans ces deux fichiers. Cela ne prouve pas la compatibilité :
+les changements du catalogue, backend, indexation, recherche et dépendances
+Lucivy imposent la passe sur l'ensemble intégré. run_e2e.sh a aussi changé.
+La base finale reste celle à convenir après le relais/UI et ED, pas ce relevé.
+
+Le diff global du lot comprend déjà une évolution historique de
+scripts/oracle_lsp.py antérieure au complément : catégories liaison/réexportation.
+L'affirmation « oracle inchangé » du bilan porte sur les campagnes figées et
+le complément, tous épinglés au même hash, pas sur l'absence de diff de cet
+outil dans tout le lot depuis aece4b9f1. Garder cette distinction en revue.
+
+Aucun nouveau target créé : réutiliser target-codeparsers-clic avec le garde
+RAG3WEAVER_TARGET_REPRENDRE=1 au point de reprise ; épingler la lib convenue,
+pas courant. Demander le créneau après atterrissage de la base ED commune.
