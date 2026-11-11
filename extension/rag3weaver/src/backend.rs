@@ -8055,3 +8055,7 @@ fn base_de_verification(base: &Path) -> Result<Box<dyn DbConnection>, String> {
         Err(format!("vérifier les fichiers demande la feature rag3db-native ({})", base.display()))
     }
 }
+
+#[cfg(all(test, feature = "rag3db-native"))]
+#[path = "backend_opening_tests.rs"]
+mod opening_tests;
