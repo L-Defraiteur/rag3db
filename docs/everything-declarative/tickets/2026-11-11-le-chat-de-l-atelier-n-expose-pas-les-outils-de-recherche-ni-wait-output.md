@@ -74,3 +74,17 @@ Preuves sur les deux postes : `cx-ui-contextuel-a92b21233-navigateur-entier-2026
 cache de build. Reste verdict ED sur a92, puis combinaison avec le lot recherche 4.3.3 après
 sa fenêtre, diff et rejeux requis, clôture documentaire et intégration autorisée/nettoyée.
 Le ticket reste ouvert ; aucune preuve de la future combinaison n'est anticipée.
+
+
+### Rejeu archi après recherche 4.3.3 : source 458
+
+Sur `458e50b46a277618f08bb0f37d5bcbebe1250db7`, trois ciblés réels sous jeu large **3/0/0 en
+135,93 s**. Attestation ELF `701a37d1…e1cc91f` : 220 chemins et contenus actuels, zéro absent,
+JS/manifeste inchangés. Preuves sauvegardées aux deux postes dans
+`cx-ui-contextuel-458e50b46-cibles-final-20261111/`. Pas de répétition des 39 sur cette source :
+leur résultat a92 reste distinct. ED tient les autres contrôles du même SHA.
+
+L'intégration attend aussi le départage du ticket de revue ED
+`2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`, avant tout
+« à toi ». La passe 458 n'a pas été arrêtée ni modifiée pour cette revue. Ce ticket commun
+reste ouvert et le target archi conservé pour le rejeu qu'un correctif justifierait.

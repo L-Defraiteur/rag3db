@@ -178,3 +178,33 @@ et rejouer les contrôles requis avant toute demande de tour. Les résultats a92
 un succès de cette combinaison future. Aucun push master de ce lot n'est encore réalisé.
 Le worktree PC reste exactement sur a92 pendant la passe ED ; les compléments suivants sont
 uniquement documentaires sur la branche archi. Target archi 8,6 Go, conservé pour la suite du lot.
+
+
+## Reprise après combinaison recherche 4.3.3 — non livrée
+
+Source testée exacte `458e50b46a277618f08bb0f37d5bcbebe1250db7`, branche archi
+`cx-archi-ui-contextuel-commun-4` (base commune ED `cx-ed-relais-commun-3`), mêmes worktrees
+`~/.cache/rag3weaver-build/cx-wt-ui-contextuel` sur les deux postes, target unique PC
+`cx-archi-target` conservé. Diff depuis a92 relu : dépendances Lucivy 4.3.3, témoin FTS et
+Markdown ; aucun changement du code UI/runtime/gabarits du relais.
+
+Trois ciblés navigateur sous jeu large **3 réussis, 0 échec, 0 ignoré en 135,93 s** :
+nominal B/A, vraie coupure du texte B/A avec bons clics/rechargement, commande réelle accordée
+puis wait_output sur sortie différée. ELF testé SHA256
+`701a37d153c7cacf376852d48631aa8b86c6695466f1771c8595cd01ee1cc91f` :
+table de son `.d`, 220 chemins actuels et 220 contenus présents, zéro absent, JS/manifeste
+identiques à a92. Preuves sur les deux postes dans
+`cx-ui-contextuel-458e50b46-cibles-final-20261111/` du cache de build. Aucun processus du
+target archi encore présent après contrôle de `/proc`. Les 39 navigateurs verts a92 restent
+une preuve distincte, pas présentée comme un nouveau passage 39 sur 458.
+
+Le ticket commun reste ouvert :
+`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
+(porteurs ED intégration et archi UI). **Avant intégration**, attendre le verdict ED sur 458
+et le départage ED du ticket de revue
+`docs/everything-declarative/tickets/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`.
+L'enchaînement statique invoke_read → call_in → call → call_tool relit prepared ; cela ne
+constitue pas ici une reproduction concurrente. Aucun correctif archi de ce point, aucune
+modification de source pendant les passes, aucune clôture ni push master anticipé. Le défaut
+d'accord extérieur est désormais transféré ouvert à
+`docs/everything-declarative/tickets/2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md`.
