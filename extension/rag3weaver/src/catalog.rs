@@ -3883,6 +3883,24 @@ fn read_threads() -> u64 {
         self.reclamer_le_retard_sauf(table, marqueur, limite, &HashSet::new())
     }
 
+    /// **Rend les réclamations de cet écrivain** sur toutes les tables de morceaux : une
+    /// passe arrêtée ou finie laissait jusqu'à un lot par table réclamé à son nom, que
+    /// l'écrivain suivant (un catalogue rouvert) sautait pendant
+    /// [`Self::MARQUE_PERIMEE_MS`] ; un rattrapage fini dans ce délai se disait
+    /// « terminé » sur une dette laissée (9 novembre 2026). Rend combien, quand le
+    /// dialecte sait le dire.
+    pub fn rendre_mes_reclamations(&mut self) -> usize {
+        let mien = format!("|{}", self.writer_id);
+        let mut rendues = 0usize;
+        for table in self.vector_tables() {
+            let requete = self.dialect.rendre_reclamations(&table);
+            if let Ok(r) = self.conn.execute_with_params(&requete, &[QueryParam::new("mien", CypherValue::String(mien.clone()))]) {
+                rendues += r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+            }
+        }
+        rendues
+    }
+
     /// [`Self::reclamer_le_retard`], sans les morceaux de `exclus` : ceux qu'un
     /// run a vus sans réponse du service d'embarquement.
     pub fn reclamer_le_retard_sauf(
