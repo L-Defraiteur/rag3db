@@ -11,8 +11,9 @@ publiée et vérifiée sur les trois registres ; PR #22 à #25 fusionnées,
 Démo en 4.3.2, format d’index inchangé. Cette session a relu les objets Git locaux
 (tag/CHANGELOG, note et présence du témoin de fermeture), sans rejouer tests,
 workflow ni contrôles des registres. Le rapport adjacent précise les limites.
-Recherche porte dépendances et lock rag3weaver vers 4.3.3, avec les preuves de
-compatibilité et de fermeture en erreur ; ce lot n’est pas déclaré livré ici.
+Recherche porte dépendances et lock rag3weaver vers 4.3.3, avec une preuve dédiée de
+fermeture en erreur et la passe habituelle ; aucun nouveau test de compatibilité,
+banc ou migration demandé (format inchangé). Ce lot n’est pas déclaré livré ici.
 
 ## 1. Ce qu'est lucivy
 

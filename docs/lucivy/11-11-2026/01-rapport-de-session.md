@@ -42,19 +42,18 @@ Le manifeste relu par cette session prend encore `lucivy-core`, `ld-lucivy` et
 lot dépendances et Cargo.lock vers 4.3.3** ; la publication amont ne signifie pas
 que ce lot est déjà livré dans rag3db.
 
-Coordination envoyée à recherche : couvrir la fermeture sur erreur sans crash à
-la sortie et la réouverture/recherche d’un index 4.3.2 avec 4.3.3. Le témoin amont
-est `a_failed_close_still_stops_its_pools`, dans
-`lucivy_core/src/sharded_handle.rs` : dossier d’index supprimé avant `close()`,
-erreur rendue et acteurs libérés. Les preuves d’intégration restent à produire
-par le lot recherche ; aucune passe verte n’est revendiquée ici.
+Coordination avec recherche, recentrée ensuite par Lucie via l’orchestration :
+lot distinct `cx-recherche-lucivy-4-3-3`, après stabilisation du lot d’arrêt,
+limité aux minimums des dépendances et au lock ciblé. **Aucun nouveau témoin de
+compatibilité 4.3.2 → 4.3.3, banc ou migration** : le format est inchangé.
+La réouverture et la recherche existantes restent dans la passe habituelle.
 
-Retour de recherche : lot distinct `cx-recherche-lucivy-4-3-3`, après
-stabilisation de son lot d’arrêt. Préparation annoncée d’une fixture écrite sous
-4.3.2 et d’un enfant isolé pour l’erreur de fermeture ; aucun test 4.3.3 joué à
-ce stade. Témoins existants inventoriés par recherche :
-`positionless_reopened_index_keeps_hits_highlights_and_filters`,
-`drop_without_close_then_reopen`, `e2e_cited_by` et `e2e_rouvrir`.
+La seule preuve dédiée porte sur `close()` en erreur : pools et acteurs arrêtés,
+processus terminé proprement. Point de départ amont :
+`a_failed_close_still_stops_its_pools` dans
+`lucivy_core/src/sharded_handle.rs` (dossier d’index supprimé avant `close()`,
+erreur rendue et acteurs libérés). Recherche prépare cette preuve ; aucun test
+4.3.3 joué à ce stade, aucune passe verte revendiquée ici.
 
 ## 3. La CI publie sur un tag
 
@@ -106,8 +105,8 @@ avec l’état corrigé en 4.3.2 (chemin et contenu vérifiés dans cette repris
 
 ## 7. Prochain pas
 
-Recherche porte la montée des dépendances et du lock, ses tests de compatibilité
-et de fermeture en erreur. Reporter ses preuves lorsqu’elles sont disponibles.
+Recherche porte la montée des dépendances et du lock, sa passe habituelle
+et sa preuve dédiée de fermeture en erreur. Reporter ses preuves lorsqu’elles sont disponibles.
 La session lucivy actualise les présentes docs sans dupliquer ce lot.
 
 ## 8. Reprendre
