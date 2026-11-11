@@ -163,3 +163,66 @@ Toujours à luciepc :
 3. Le décideur d'actions (page 03, § 7) : quand la porte de l'atelier aura journalisé quelques
    centaines d'approbations et de refus, mesurer Qwen3-4B en « cette action est-elle permise ? »
    par le taux de faux « permis ».
+
+## 7. Reprendre
+
+Il n'y a **aucun worktree ni clone de travail inachevé** : le banc GGUF n'a pas commencé son clone
+de llama.cpp, faute du choix du § 2. Voici les points de reprise, avec leur chemin exact.
+
+### 7.1 Le banc GGUF de Qwen3-4B, à luciepc
+
+- **Fait** :
+  - les poids officiels sont dans `luciepc:~/.cache/rag3db-banc-notes/hf/qwen3-4b-instruct-2507/`
+    (safetensors bf16, Apache 2.0) ;
+  - le jeu est dans `luciepc:~/.cache/rag3db-banc-notes/paires2-court-2000.jsonl`,
+    `paires2-fin-6000.jsonl` et `cas2-melange.jsonl` ;
+  - les chiffres torch bf16 de référence sont dans `petits-qwen3-4b-card0.jsonl`,
+    `petits-qwen3-4b-card0-fin.jsonl` et `multi-qwen3-4b-*.jsonl`, même dossier.
+- **Reste** :
+  - bâtir llama.cpp ;
+  - convertir et quantifier ;
+  - écrire le client llama-server qui lit les logits oui/non : `POST /completion` avec
+    `n_probs` et `cache_prompt: true`, le gabarit de conversation appliqué côté client ;
+  - rejouer ;
+  - écrire la page.
+- **Commandes, voie (1)**, après accord de l'orchestration. Sur luciepc, en bash :
+
+```bash
+L=~/.cache/rag3db-banc-notes/llama.cpp
+git clone https://github.com/ggml-org/llama.cpp $L && git -C $L checkout d812350493
+~/.cache/rag3weaver-build/poste lourd bash -c "cmake -S $L -B $L/build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx1201 -DCMAKE_BUILD_TYPE=Release && cmake --build $L/build -j 8 --target llama-server llama-quantize"
+python3 -m venv ~/.cache/rag3db-banc-notes/gguf-venv && ~/.cache/rag3db-banc-notes/gguf-venv/bin/pip install -r $L/requirements/requirements-convert_hf_to_gguf.txt
+H=~/.cache/rag3db-banc-notes/hf
+~/.cache/rag3db-banc-notes/gguf-venv/bin/python $L/convert_hf_to_gguf.py $H/qwen3-4b-instruct-2507 --outtype bf16 --outfile $H/qwen3-4b-bf16.gguf
+$L/build/bin/llama-quantize $H/qwen3-4b-bf16.gguf $H/qwen3-4b-Q8_0.gguf Q8_0
+$L/build/bin/llama-quantize $H/qwen3-4b-bf16.gguf $H/qwen3-4b-Q4_K_M.gguf Q4_K_M
+ROCR_VISIBLE_DEVICES=1 setsid nohup $L/build/bin/llama-server -m $H/qwen3-4b-Q8_0.gguf -ngl 99 -c 8192 --port 8099 > ~/.cache/rag3db-banc-notes/llama-server.log 2>&1 & disown
+```
+
+  Avant le serveur, lire la VRAM de card0 : la moitié de la VRAM libre doit rester à Lucie. Le
+  commit d812350493 est celui du paquet du portable ; le noter dans la page, avec la version du
+  paquet pip `gguf`.
+
+### 7.2 Le juge local, à refaire ou à étendre
+
+- **Fait** : tout, pages 01 à 03 sur master.
+- **Reprendre une passe** : `luciepc:~/.cache/rag3db-banc-notes/`, par exemple
+
+```bash
+cd ~/.cache/rag3db-banc-notes && setsid nohup ~/.cache/rag3weaver-build/poste lourd ./gpu-qwen3.sh > gpu-qwen3.log 2>&1 & disown
+```
+
+  Les scripts reprennent là où leur fichier de sortie s'arrête. Pour une passe neuve, effacer
+  d'abord le fichier de sortie `petits-<modèle>-card0*.jsonl`.
+- **Étendre le jeu** : sur le portable, `~/.cache/rag3db-banc-notes/decision/`.
+  - `g_construire.py` tire ses prompts de `~/.claude/projects/-home-lucied-git-workspaces-rag3db*/*.jsonl`.
+    Pour d'autres sessions, ajouter leurs transcriptions à ce motif, effacer `a-construire.json`
+    (le tirage), garder `construites.json` (les fiches déjà construites), puis lancer
+    `python3 -I g_construire.py` et `python3 -I i_paires.py`.
+
+### 7.3 Le worktree du portable
+
+- `~/git_workspaces/rag3db-begin`, branche `banc-temoins-v22`, dernier commit 888b8b7e8.
+- Son contenu est atterri sur master (072c467d7). Rien à reprendre : il peut être effacé
+  (`git worktree remove --force`, ou effacer le dossier puis `git worktree prune`, parce qu'il
+  porte des sous-modules).
