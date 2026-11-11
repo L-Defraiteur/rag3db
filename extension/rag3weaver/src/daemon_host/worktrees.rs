@@ -690,12 +690,14 @@ impl WorktreeHost for HoteDesWorktrees {
             if !vise {
                 continue;
             }
+            let cible = hote.hosted(&m)?;
             lignes.push(format!(
-                "- {} — dépôt {}, branche {} ; index : {}",
+                "- {} — dépôt {}, branche {} ; index : {} ; contexte : {}",
                 racine.as_deref().map(|r| r.display().to_string()).unwrap_or_else(|| "?".into()),
                 depot.as_deref().unwrap_or("hors git"),
                 branche.as_deref().unwrap_or("détachée"),
-                etat_de_l_index(&etat, &m)
+                etat_de_l_index(&etat, &m),
+                json!({"target":{"kind":"backend","id":cible.id}})
             ));
             ui.extend(carte);
         }
@@ -742,12 +744,14 @@ impl WorktreeHost for HoteDesWorktrees {
         for m in manifestes {
             let racine = super::espace_du_manifeste(&m);
             let (depot, branche) = racine.as_deref().map(|r| (super::repo_of(r), super::branch_of(r))).unwrap_or((None, None));
+            let cible = hote.hosted(&m)?;
             lignes.push(format!(
-                "- {} — dépôt {}, branche {} ; index : {}",
+                "- {} — dépôt {}, branche {} ; index : {} ; contexte : {}",
                 racine.as_deref().map(|r| r.display().to_string()).unwrap_or_else(|| "?".into()),
                 depot.as_deref().unwrap_or("hors git"),
                 branche.as_deref().unwrap_or("détachée"),
-                etat_de_l_index(&etat, &m)
+                etat_de_l_index(&etat, &m),
+                json!({"target":{"kind":"backend","id":cible.id}})
             ));
         }
         Ok(WorktreeAnswer { text: lignes.join("\n"), ui })

@@ -495,6 +495,7 @@ fn format_value(v: &serde_json::Value) -> String {
         serde_json::Value::String(s) => format!("'{s}'"),
         serde_json::Value::Number(n) => n.to_string(),
         serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Object(_) | serde_json::Value::Array(_) => v.to_string(),
         other => format!("'{other}'"),
     }
 }
