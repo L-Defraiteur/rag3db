@@ -126,8 +126,7 @@ runtime n'étant pas livré. Cette compilation ne prouve pas l'exécution du con
 
 ## Références de l'archiviste à préserver
 
-Le futur branchement dans l'atelier doit repartir du traitement déjà conçu, sans inventer
-un orchestrateur ou un agent conversant supplémentaire :
+Les références historiques à conserver pour le futur branchement dans l'atelier sont :
 
 - [Vision des mémoires par gabarit, §9.2](../../../extension/rag3weaver/visions/2026-10-04-00h09-memoires-par-gabarit-et-fiches-qui-pointent-vers-tout.md) :
   classer à la compression et rappeler par deux décisions fermées, chercher puis injecter,
@@ -139,3 +138,10 @@ un orchestrateur ou un agent conversant supplémentaire :
 Ces pages sont des conceptions. L'outil archive livré, le juge de fond et le rappel des crochets
 sont des capacités distinctes ; leur existence ne prouve pas l'activation d'un archiviste
 parallèle dans la mémoire réelle. Aucun nouveau code d'archiviste ni d'orchestration dans ce lot.
+
+La [clarification de l'archiviste automatique du chat du 11 novembre](../../memoire/11-11-2026/05-archiviste-automatique-du-chat.md)
+précise désormais l'agent spécialisé, les frontières message utilisateur / tour agent complet /
+compression, son état par conversation et ses reçus. Une fin sans rangement est normale ;
+`terminer(raison)` est une forme proposée, qui écrit seulement au journal. Cette conception
+complète les documents historiques et reste distincte de leur implémentation. Elle n'autorise
+aucun nouvel orchestrateur général ni nouveau code d'archiviste dans le présent lot relais.
