@@ -347,3 +347,18 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
   conservées. ED/recherche/archi/arbre/codeparsers prévenus du rejeu requis avant leur push.
 - Ce correctif est intégré au dépôt ; sa disponibilité dans les gabarits personnels ou les
   binaires posés reste distincte. Aucune nouvelle lib C++ n’est requise par ce lot.
+
+
+### Lot mémoire clos ; fenêtre de stabilité pour recherche
+
+- **fb203b016ed53f714df0eda566d2e4f53d3c8b3f**, docs seules, mémoire : notes de livraison,
+  rapport et ticket actualisés après41526b29a. Trois contrôles confirmés ; hash/diff relus ici.
+  Nettoyage complet du lot confirmé aux deux postes, y compris ancien miroir du rouge, branches
+  locales et target96-fiches4, après contrôle d’inactivité ; preuves externes et refs distantes
+  conservées. Aucun lancement50documents ni écriture dans la mémoire réelle, M8/classeur inchangés.
+- Recherche atteint la limite des trois rebases et demande une fenêtre. L’orchestration réserve
+  la stabilité du code sur master41526b29a plus docs jusqu’au résultat de son rejeu d’arrêt.
+  ED, archi, arbre et codeparsers prévenus : travail/tests possibles, pas de nouveau tour de push
+  de code pendant cette fenêtre. Aucun verrou poste push tenu pendant les passes.
+- La fenêtre ne vaut pas tour de push implicite : preuve finale à relire, notamment deux vrais
+  témoins lib d’arrêt identifiés par nom, et juge Gemini réellement joué sans SAUTÉ/ignored.
