@@ -15,6 +15,22 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
 
+## Reprise suivante — association et projection publiques en branche
+
+Porteur et action : [ticket des occurrences partagées](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+Association canonique search_index sur l'entité publique ; plan dérivé de from/DERIVED_FROM,
+filtre relationnel commun pour le masque, projection dans les signaux avant fusion/pagination.
+Aucun chemin spécial Scope. Les champs indexés doivent préserver les octets des champs publics
+pour conserver leurs coordonnées ; un cas incompatible est refusé. Le stockage content direct
+reste protégé. Le texte natif sans garantie de masque est refusé, sans recherche non filtrée.
+
+Premier e2e natif : index_derive_rend_les_occurrences_publiques_avant_pagination, 1/0 dans
+cx-projection-publique-premier.log (luciepc). Dense/plein texte × Aggregated/Detailed/SourceResolved,
+deux occurrences et leurs positions, une seule version ; offset=1 conserve la seconde occurrence.
+À éprouver maintenant : sensibilité du témoin, filtres et saturation de candidats invisibles avant
+top-k pour chaque signal, sparse et cellules. Aucune passe globale sur ce diff. Scope/gabarits
+inchangés, pas d'activation vivante ni de tour master. Les checkpoints précédents restent ci-dessous.
+
 ## Checkpoint d'implémentation 1a — après la projection livrée
 
 Cette section prime sur les états de préparation ci-dessous. Branche active
