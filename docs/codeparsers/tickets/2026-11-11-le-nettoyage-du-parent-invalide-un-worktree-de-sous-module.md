@@ -171,3 +171,38 @@ Commande prévue : `python3 garde_worktree.py --depot <dépôt> --worktree <cibl
 --archive <git-dir privé> <copie hors cible> --rapport <rapport neuf hors cible>`.
 Les copies, rapports, branches distantes et traces forensiques seront conservés.
 Aucun accès supplémentaire à l'ancien codeparsers-garde, aucun GC/prune.
+
+### Livraison effective et arrêt du nettoyage par la garde
+
+Master c04c62021d0d90a29ad0b1d23de22934f49e7526 poussé sous poste push,
+verdict VERT explicite, trois contrôles relus : status propre, aucun rebase,
+origin/master égal à HEAD. Le bandeau CI pré-push signalait un rouge global
+antérieur depuis 21:17 UTC ; ce bandeau n'est pas le résultat des 14 témoins
+Python relus pour ce lot et n'en change pas les preuves.
+
+Première utilisation pour retirer le worktree de livraison : refus ROUGE
+sur le répertoire lié tools/rust_api/rag3db-src présent dans les sources.
+Archive administrative comparée fidèle, mais le contrôle conservateur des
+répertoires liés interdit le retrait. Aucun worktree ni branche de ce suivi
+n'a donc été supprimé ; aucune tentative en force, modification de lien ou
+changement du script pour contourner le refus. L'autre worktree documentaire
+est conservé également, sans tentative identique supplémentaire.
+
+Commande exécutée :
+`python3 ~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison/garde_worktree.py
+--depot /home/lucied/git_workspaces/rag3db
+--worktree /home/lucied/git_workspaces/cx-codeparsers-garde-nettoyage
+--archive /home/lucied/git_workspaces/rag3db/.git/worktrees/cx-codeparsers-garde-nettoyage
+~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison/admin-cx-codeparsers-garde-nettoyage
+--rapport ~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison/rapport-cx-codeparsers-garde-nettoyage.json`.
+Le shell a développé les chemins ~ avant l'appel ; copie et rapport sont
+conservés. Empreinte d'inventaire validée dans ce rapport :
+7f7a73fd1688c7cc67e94c120fedd74326de5438b71752a59f8efb5e5c2125ed (11 entrées).
+La copie est l'état de l'administration au premier contrôle, pas celui après
+la présente mise à jour documentaire ; ne pas la réutiliser comme preuve fraîche.
+
+Reste à cadrer avec l'orchestration : distinction entre un lien source que
+le retrait ne ferait que délier et une dépendance administrative qui serait
+cassée, puis éventuel témoin et correctif de la garde. Pas de code supplémentaire
+avant cette revue. Le volet historique index/refs/reflogs reste non certifié,
+indépendamment du refus de nettoyage et de la garde livrée.
