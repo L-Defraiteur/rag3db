@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **11 nov. — Le chat suit l'hôte par le flux et garde ses actions après une panne.**
+  Au repos, il n'interroge plus l'hôte ; la fin du tour pousse son état, avec le même usage
+  dans la barre et le récapitulatif. Une erreur conserve les outils déjà exécutés et leurs
+  résultats, permet de reprendre et se dit aussi pour un tour relancé hors du formulaire.
+  (`cx-archi-ide-par-le-flux-chat-4`)
 - **11 nov. — L’archiviste garde le nom des fiches, même long.** Il choisit une candidate par un identifiant court, puis range la section sous son nom exact ; un identifiant inconnu ou ambigu est refusé. Les noms des bilans restent lisibles par le modèle. (`cx-memoire-alias-candidats`)
 
 - **9 nov. — La jauge du contexte se voit avancer.** Elle écrit son pourcentage, garde une barre
