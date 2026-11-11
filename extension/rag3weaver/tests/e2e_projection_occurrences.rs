@@ -48,12 +48,21 @@ fn un_hit_partage_se_projette_vers_toutes_ses_occurrences() {
         for (r, path) in resolved.iter().zip(["a.rs", "b.rs"]) {
             assert_eq!(r.data.as_ref().unwrap()["file_path"].as_str(), Some(path));
             assert_eq!(r.score, 0.75);
+            let line = r.data.as_ref().unwrap()["start_line"].as_i64().unwrap();
+            assert_eq!(line, if path == "a.rs" { 1 } else { 3 }, "position de l'occurrence {path}");
             let chunk = if mode == ResultMode::Detailed {
                 let chunks = r.chunks.as_ref().unwrap();
                 assert_eq!(chunks.len(), 1);
+                assert_eq!((chunks[0].start_line, chunks[0].end_line), (0, 3));
+                assert_eq!(chunks[0].start_char, 0);
                 &chunks[0].uuid
             } else {
-                &r.chunk.as_ref().unwrap().uuid
+                {
+                    let chunk = r.chunk.as_ref().unwrap();
+                    assert_eq!((chunk.start_line, chunk.end_line), (0, 3));
+                    assert_eq!(chunk.start_char, 0);
+                    &chunk.uuid
+                }
             };
             assert_eq!(chunk, &uuid, "le contenu projeté doit être le hit d'origine");
         }
