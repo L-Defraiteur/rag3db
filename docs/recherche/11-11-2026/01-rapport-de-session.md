@@ -1,8 +1,8 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
-## Lot Lucivy 4.3.3 : passe complète verte, tour demandé
+## Lot Lucivy 4.3.3 : passe complète verte, atterrissage autorisé
 
-Ticket porteur : `docs/recherche/tickets/2026-11-11-la-fermeture-fts-en-erreur-laisse-le-handle-actif.md` (recherche). La validation complète est verte ; le ticket attend le tour puis l’atterrissage, sans clôture sur une simple attente.
+Ticket porteur : `docs/tickets/closed/2026-11-11-la-fermeture-fts-en-erreur-laisse-le-handle-actif.md` (recherche). La validation complète est verte ; tour explicite reçu, ticket clôturé dans le commit de fin validé.
 
 Branche `cx-recherche-lucivy-4-3-3`, worktree homonyme aux deux postes ; source de la passe `c1463b9ee`. L'arrêt précédent est livré (voir section suivante). Trois minimums passent à 4.3.3 (`lucivy-core`, `ld-lucivy`, `sparse-vector`) ; Cargo.lock ne change que les versions et sommes de ces trois paquets, `luciole` et `lucistore`, tous du registre, sans patch local. Aucun autre paquet mis à jour.
 
@@ -10,7 +10,7 @@ Le nouveau témoin public `fts_handle::repro_drop::une_fermeture_fts_en_erreur_r
 
 La preuve interne des pools est celle d'amont, déjà exécutée par lucivy sur le tag 663975a ; notre témoin public la complète sans prétendre mesurer ses Arc internes. Aucun test de compatibilité, migration ou banc d'index ajouté : format inchangé. Les contrôles de recherche/réouverture existants restent ceux de la lib FTS et d'e2e_search (notamment sparse mmap persistence).
 
-Passe neuve lancée sous poste lourd, target unique `target-97k` neuf et gardé, lib complète 29a7bc52a sans dérogation, journaux `journaux-cx-recherche-lucivy-433-11nov/vert-433/`. Plan : même témoin puis neuf suites e2e (search, dense après suppressions, cited_by, lectures, code, quatre tx), features 5/5, preuve compilation, lib entière, navigateur séparé, attestation des gabarits. Pas de nouveau juge Gemini inchangé, périmètre confirmé par l'orchestration. Verdict complet VERT vérifié : témoin close 1/0/0, neuf e2e 121/0/0, features 5/5, lib 2105/0/61 (57,93 s), navigateur 36/0/0 (132,34 s), 212 gabarits attestés dans les binaires. Sources inchangées, lock limité aux cinq paquets du registre. Preuve `vert-433/verdict-final.log`, `attestation-artefacts.json`, vérificateur `cx-recherche-lucivy433-verifier.py`. Ticket complété ; tour demandé, aucun push master de ce lot encore réalisé.
+Passe neuve lancée sous poste lourd, target unique `target-97k` neuf et gardé, lib complète 29a7bc52a sans dérogation, journaux `journaux-cx-recherche-lucivy-433-11nov/vert-433/`. Plan : même témoin puis neuf suites e2e (search, dense après suppressions, cited_by, lectures, code, quatre tx), features 5/5, preuve compilation, lib entière, navigateur séparé, attestation des gabarits. Pas de nouveau juge Gemini inchangé, périmètre confirmé par l'orchestration. Verdict complet VERT vérifié : témoin close 1/0/0, neuf e2e 121/0/0, features 5/5, lib 2105/0/61 (57,93 s), navigateur 36/0/0 (132,34 s), 212 gabarits attestés dans les binaires. Sources inchangées, lock limité aux cinq paquets du registre. Preuve `vert-433/verdict-final.log`, `attestation-artefacts.json`, vérificateur `cx-recherche-lucivy433-verifier.py`. Ticket clôturé avec preuves dans le commit de fin, tour reçu ; push et contrôles suivent la procédure. Consulter `vert-433/pousse.log` et la prochaine actualisation pour le résultat effectif.
 
 ## Actualisation de la reprise, 11 novembre en fin de journée
 
@@ -374,7 +374,7 @@ done
 
 La consigne de Lucie du 11 novembre demande un ticket avant toute transmission d'une nouvelle action. Les tickets de recherche existants portent désormais leur session et leurs sources ; aucune duplication de l'historique. Les tâches déjà décrites restent dans leurs tickets, sans nouvelle autorisation implicite de lot :
 
-- Intégration Lucivy : `recherche/tickets/2026-11-11-la-fermeture-fts-en-erreur-laisse-le-handle-actif.md`, recherche, passe verte et atterrissage restant.
+- Intégration Lucivy validée : ticket désormais dans `tickets/closed/2026-11-11-la-fermeture-fts-en-erreur-laisse-le-handle-actif.md`, recherche ; tour reçu et procédure d’atterrissage lancée.
 - Journal après arrêt hôte : `recherche/tickets/2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md`, recherche, correctif et preuve encore requis.
 - Surveillant : `recherche/tickets/2026-11-08-le-temoin-de-l-embarquement-hors-verrou-rougit-sous-charge.md`, recherche, départage puis correction selon preuve.
 - Provenance des artefacts : `recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md`, recherche pour le suivi, correction durable du garde à attribuer avec orchestration ; récupération seule accomplie.
