@@ -270,8 +270,10 @@ fn le_chat_attend_la_sortie_differee_d_une_commande_apres_accord() {
         return;
     };
     let d = tempfile::tempdir().unwrap();
-    let signal = d.path().join("signal");
-    let script = d.path().join("attendre.py");
+    let racine = d.path().join("rw");
+    std::fs::create_dir_all(&racine).unwrap();
+    let signal = racine.join("signal");
+    let script = racine.join("attendre.py");
     std::fs::write(
         &script,
         format!(
