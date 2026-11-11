@@ -256,3 +256,26 @@ PG v2 (source1a728) ne teste pas encore SQL : compilation refusée par l'extract
 helper de réouverture dans e2e_entites_derivees (mauvais bloc coupé, variables du compteur
 hors portée). Erreur de fixture corrigée, six erreurs de compilation distinctes du défaut
 SQL produit. Aucun résultat PostgreSQL obtenu par ce lancement, 0 suite jouée.
+
+Garde complémentaire du même invariant de coordonnées, en préparation : les champs de
+contenu sont comparés octet pour octet avant projection ; le titre également indexé en
+BM25 doit porter la même garantie. Témoin `projection_refuse_aussi_un_titre_indexe_sans_remappage` :
+corps inchangé, titre rendu préfixé. Le test exige un refus nommé plutôt que des spans
+attribués au titre brut. Aucun changement de format ni mapping implicite ; rouge pas encore joué.
+
+Source **288bc80ae**, journaux `cx-contenu-pg-v3.log` et `cx-cellules-reouverture.log` :
+compilation réparée ; **21 dérivées + 3 Scope privé verts**, rc0 pour le natif. Cela couvre
+la réouverture multicellule sans réinscription et Scope::NONE. Le PG franchit désormais
+la lecture des références (sérialisation réparée), puis échoue réellement à l'application
+post-commit du tampon FTS : requête UNWIND construite dans `appliquer_le_tampon`.
+Le point public atteint reste ingest_entities, pas une requête brute de la fixture.
+Candidat correctif : réutiliser `dialect.select_node_ids(entity)` déjà existant dans les
+deux dialectes ; même liste UUID, même retour UUID+offset, sans nouveau sérialiseur ni
+branche SQL ad hoc. Le défaut n'est pas escamoté par désactivation du plein texte : le
+témoin conserve Lucivy et contrôle ensuite les lectures publiques puis le rollback.
+
+Titre : rouge réel `cx-projection-titre-rouge.log`, source288bc80ae + seul témoin ajouté.
+Une requête BM25 « prefixe » rend l'occurrence au titre « titre » alors que le titre indexé
+est « prefixe titre », sans remappage déclaré. La garde inclut désormais le titre dans la
+liste existante des octets à préserver ; aucun nouveau format de cible ni règle spéciale Scope.
+Le correctif est candidat, à rejouer avec les lectures positives existantes.

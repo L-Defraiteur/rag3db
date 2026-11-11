@@ -8304,11 +8304,7 @@ fn read_threads() -> u64 {
         for (entity, lignes) in &a.presentes {
             let Some(h) = self.fts_handles.get(entity) else { continue };
             let uuids = CypherValue::List(lignes.iter().map(|(u, _)| CypherValue::String(u.clone())).collect());
-            let q = format!(
-                "UNWIND $uuids AS u MATCH (n:{} {{_uuid: u}}) RETURN u, {}",
-                self.dialect.quote(entity),
-                self.dialect.node_offset_expr("n")
-            );
+            let q = self.dialect.select_node_ids(entity);
             let rows = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids)]).map_err(|e| err(e.to_string()))?;
             let decalages: HashMap<String, u64> = rows
                 .rows
