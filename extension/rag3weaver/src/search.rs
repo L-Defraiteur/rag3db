@@ -1484,7 +1484,7 @@ pub fn resolve_vector_chunks_admitted(
                     e.insert((r.score, meta.parent_uuid.clone(), chunk_info, meta.parent_data.clone()));
                 }
                 std::collections::hash_map::Entry::Occupied(mut e) => {
-                    if r.score > e.get().0 {
+                    if r.score > e.get().0 || (r.score == e.get().0 && r.uuid < e.get().2.uuid) {
                         e.insert((r.score, meta.parent_uuid.clone(), chunk_info, meta.parent_data.clone()));
                     }
                 }
