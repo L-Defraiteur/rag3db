@@ -17,6 +17,10 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 
 ## Les visions de novembre 2026 (pages de conception, laissées dans leurs dossiers de session)
 
+- **Applications déclaratives et contrats d’effets** — avis d’architecture du 11 novembre :
+  distinguer application, déploiement et autorisation ; examiner les effets et la provenance des
+  compositions, puis en dériver des preuves techniques. Vision future, aucun nouveau chantier lancé :
+  [note](2026-11-11-applications-declaratives-et-contrats-d-effets.md).
 - **Une vue est un filtre** — un index par dépôt, des vues par worktree, par branche, en pyramide ;
   le fichier composite ; décidé par Lucie le 6 et le 8 novembre :
   `extension/rag3weaver/docs/08-novembre-2026-arbre/01-conception-des-vues-marche-1.md`.
