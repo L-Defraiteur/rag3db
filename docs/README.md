@@ -45,6 +45,17 @@ Il s’agit d’une conception, distincte de l’outil `archive` déjà livré.
 
 ## Les tickets
 
+- **Tout nouveau travail identifié a un ticket** : défaut, capacité manquante, suite de lot,
+  intégration, mesure, conception à compléter ou décision bloquante. La règle vaut aussi pour
+  un travail découvert en faisant autre chose et pour un signalement entre sessions. Chercher
+  d’abord le ticket existant ; le compléter plutôt que créer un doublon. Un échange de statut
+  sans nouvelle action reste un échange de statut.
+- **Avant de transmettre une action**, la session qui la découvre crée ou complète le ticket,
+  puis envoie son chemin à la session destinataire. Le ticket indique le constat ou la demande,
+  les preuves disponibles, ce qui reste à faire, le porteur attendu et les critères de fin.
+  Le signalement seul n’est ni une prise en charge ni une résolution. Le destinataire confirme
+  la reprise en reliant le même ticket à son lot ; si le porteur n’est pas encore fixé,
+  l’orchestration garde le suivi.
 - Un ticket ouvert vit dans `docs/<session>/tickets/` (la session qui le tient) ou, s'il n'a pas de
   session, dans `docs/tickets/`. Un ticket fermé va dans `docs/tickets/closed/` (`git mv`).
 - **Fermer un ticket de session** : `git mv docs/<session>/tickets/<nom>.md docs/tickets/closed/<nom>.md`,
@@ -53,6 +64,14 @@ Il s’agit d’une conception, distincte de l’outil `archive` déjà livré.
   **Déplacer** un ticket ouvert d'une session à une autre, c'est un `git mv` entre leurs dossiers
   `tickets/`. Un même nom ne vit qu'à un endroit : le script refuse un ticket présent à deux places,
   un ticket clos hors de `closed/`, et un ticket de `closed/` dont l'État dit « ouvert ».
+- **Terminé ou abandonné : clôturer le ticket**, le déplacer et mettre son État à jour dans
+  le même commit. Une réalisation cite son commit et sa validation ; un abandon explique la
+  décision et ce qui le remplace, le cas échéant. Une attente, un blocage, une conception seule
+  ou un simple envoi à une autre session ne ferment pas le travail restant.
+- Les sessions relient leurs actions en cours et leurs suites à leurs tickets dans leurs
+  rapports. À la reprise, elles régularisent les actions encore sans ticket, sans rouvrir
+  artificiellement tout l’historique. Le contenu minimal et la convention sont dans
+  [tickets/README.md](tickets/README.md).
 - `python3 extension/rag3weaver/scripts/check_tickets.py` contrôle les en-têtes (VERT ou ROUGE avec
   la liste des refus) ; `--index` écrit `docs/tickets/INDEX.md` (non suivi par git), avec le dossier de
   chaque ticket.
@@ -69,7 +88,7 @@ Il s’agit d’une conception, distincte de l’outil `archive` déjà livré.
   Un ticket de `docs/tickets/` s'écrit `<nom>.md` ou `closed/<nom>.md`, celui d'une session
   `<session>/tickets/<nom>.md`. Un déplacement, même réécrit au point que git ne voit plus de
   renommage, se lit « déplacé » ou « fermé », jamais comme un ouvert et un retiré.
-- Un défaut connu non corrigé est un ticket, jamais une ligne de message.
+- Une action à faire ne reste jamais seulement dans un message ou une liste mentale.
 
 ## Les règles qui ne se discutent pas
 
