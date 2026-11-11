@@ -6251,6 +6251,18 @@ fn read_threads() -> u64 {
             return Ok(FlushResult::default());
         }
 
+        // Le graphe direct écrit la source avant de lancer ses dérivations.
+        // Le même L3 doit donc commencer ici, pas seulement au second drain.
+        // Ticket : docs/arbre-principal/tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md
+        if !self.in_transaction {
+            let tables = self.fermeture(entity_name, true);
+            let partage = tables.iter().any(|name| self.entity_configs.get(name).and_then(|c| c.derived.as_ref())
+                .is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })));
+            if partage {
+                return self.ecrire_un_lot_atomique(Some(&tables), |catalog| catalog.ingest_entities_jusqu_a(entity_name, records, exige));
+            }
+        }
+
         // Même contrat que `drain()` : sans handle ouvert, l'indexation FTS est
         // sautée en silence. `ingest_entities` a son propre graphe, il faut donc
         // l'ouvrir ici aussi.
@@ -8162,6 +8174,58 @@ fn read_threads() -> u64 {
         Ok(())
     }
 
+    /// Une écriture logique, sa fermeture et son verdict : même L3 pour
+    /// l'ingestion directe et le drain. Les autres ressources restent en file.
+    fn ecrire_un_lot_atomique(
+        &mut self,
+        tables: Option<&HashSet<String>>,
+        execute: impl FnOnce(&mut Self) -> Result<FlushResult, CatalogError>,
+    ) -> Result<FlushResult, CatalogError> {
+        let lot = match tables {
+            Some(tables) => self.pending.extraire_les_tables(tables, &Self::bouts_des_relations(&self.config)),
+            None => std::mem::take(&mut self.pending),
+        };
+        let mut hors_lot = std::mem::replace(&mut self.pending, lot);
+        let outcome = match self.commencer_lot_atomique() {
+            Err(error) => Err(error),
+            Ok(()) => match execute(self) {
+                Err(error) => { self.rollback_lot(); Err(error) }
+                Ok(mut result) => {
+                    if result.failed > 0 {
+                        self.rollback_lot();
+                        result.failed += result.processed;
+                        result.processed = 0;
+                        result.unchanged = 0;
+                        result.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
+                        for update in &mut result.update_results {
+                            update.status = crate::records::UpdateStatus::Failed("lot de références annulé".into());
+                            update.reembedded = false;
+                            update.chunks_created = 0;
+                            update.chunks_deleted = 0;
+                        }
+                        for delete in &mut result.delete_results {
+                            delete.echec = Some("lot de références annulé".into());
+                            delete.chunks_deleted = 0;
+                            delete.relations_deleted = 0;
+                        }
+                        result.warnings.push("lot de références annulé ; versions et rattachements antérieurs conservés".into());
+                    } else if let Err(error) = self.commit_lot() {
+                        result.failed += 1;
+                        result.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
+                        result.warnings.push(error.to_string());
+                    }
+                    Ok(result)
+                }
+            }
+        };
+        self.pending.entities.append(&mut hors_lot.entities);
+        self.pending.relations.append(&mut hors_lot.relations);
+        self.pending.updates.append(&mut hors_lot.updates);
+        self.pending.deletes.append(&mut hors_lot.deletes);
+        self.pending.derivations.append(&mut hors_lot.derivations);
+        outcome
+    }
+
     /// **Valider un lot** : COMMIT, puis le plein texte du tampon appliqué
     /// aux décalages relus par `_uuid` (une ligne neuve peut changer de
     /// décalage au COMMIT sous plusieurs écrivains), puis la synchronisation
@@ -8660,51 +8724,12 @@ fn read_threads() -> u64 {
                 .is_some_and(|cfg| matches!(cfg.identity, crate::config::DerivedIdentity::Content { .. }))
         });
         if references_immuables && !self.in_transaction {
-            let lot = match fermeture {
-                Some(tables) => self.pending.extraire_les_tables(&tables, &Self::bouts_des_relations(&self.config)),
-                None => std::mem::take(&mut self.pending),
-            };
-            // Le rollback L3 vide sa file ; les ressources indépendantes restent
-            // à part et seront rendues au catalogue quel que soit le verdict.
-            let mut hors_lot = std::mem::replace(&mut self.pending, lot);
-            if let Err(error) = self.commencer_lot_atomique() {
-                self.pending.entities.append(&mut hors_lot.entities);
-                self.pending.relations.append(&mut hors_lot.relations);
-                self.pending.updates.append(&mut hors_lot.updates);
-                self.pending.deletes.append(&mut hors_lot.deletes);
-                self.pending.derivations.append(&mut hors_lot.derivations);
-                return FlushResult { failed: 1, warnings: vec![error.to_string()], rendu_pret: Some(crate::disponibilite::Disponibilites::AUCUNE), ..Default::default() };
-            }
-            let mut result = self.drainer(avec_embarquement, avec_decoupage, None);
-            if result.failed > 0 {
-                self.rollback_lot();
-                result.failed += result.processed;
-                result.processed = 0;
-                result.unchanged = 0;
-                result.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
-                for update in &mut result.update_results {
-                    update.status = crate::records::UpdateStatus::Failed("lot de références annulé".into());
-                    update.reembedded = false;
-                    update.chunks_created = 0;
-                    update.chunks_deleted = 0;
-                }
-                for delete in &mut result.delete_results {
-                    delete.echec = Some("lot de références annulé".into());
-                    delete.chunks_deleted = 0;
-                    delete.relations_deleted = 0;
-                }
-                result.warnings.push("lot de références annulé ; versions et rattachements antérieurs conservés".into());
-            } else if let Err(error) = self.commit_lot() {
-                result.failed += 1;
-                result.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
-                result.warnings.push(error.to_string());
-            }
-            self.pending.entities.append(&mut hors_lot.entities);
-            self.pending.relations.append(&mut hors_lot.relations);
-            self.pending.updates.append(&mut hors_lot.updates);
-            self.pending.deletes.append(&mut hors_lot.deletes);
-            self.pending.derivations.append(&mut hors_lot.derivations);
-            return result;
+            return self.ecrire_un_lot_atomique(fermeture.as_ref(), |catalog| {
+                Ok(catalog.drainer(avec_embarquement, avec_decoupage, None))
+            }).unwrap_or_else(|error| FlushResult {
+                failed: 1, warnings: vec![error.to_string()],
+                rendu_pret: Some(crate::disponibilite::Disponibilites::AUCUNE), ..Default::default()
+            });
         }
 
         // Le journal de ce drain seulement.

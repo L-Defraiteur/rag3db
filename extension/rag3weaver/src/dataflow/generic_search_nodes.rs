@@ -866,7 +866,7 @@ impl Node for VectorSearchNode {
             .service::<ConnService>("conn")
             .ok_or("VectorSearchNode: 'conn' service not found")?
             .0.clone();
-        let options = occurrence_mask_options(ctx, &target, options, &conn)?;
+        let (options, admitted_occurrences) = occurrence_mask_options(ctx, &target, options, &conn)?;
         let embedder = ctx
             .service::<Arc<dyn Embedder>>("embedder").cloned()
             .ok_or("VectorSearchNode: 'embedder' service not found")?;
@@ -1129,7 +1129,7 @@ impl Node for VectorSearchNode {
             }
         };
 
-        let unified = finish_signal(ctx, "VectorSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &options, &label)?;
+        let unified = finish_signal(ctx, "VectorSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), admitted_occurrences.as_ref(), &label)?;
         for w in &node_warnings {
             ctx.warn(w);
         }
@@ -1318,7 +1318,7 @@ impl Node for BM25SearchNode {
             .service::<ConnService>("conn")
             .ok_or("BM25SearchNode: 'conn' service not found")?
             .0.clone();
-        let options = occurrence_mask_options(ctx, &target, options, &conn)?;
+        let (options, admitted_occurrences) = occurrence_mask_options(ctx, &target, options, &conn)?;
 
         // Le handle FTS de la table parente : d'abord l'instantané du service
         // `fts_handles`, sinon le catalogue **vivant** — une entité
@@ -1428,7 +1428,7 @@ impl Node for BM25SearchNode {
                 ctx.warn(w);
             }
             let unified =
-                finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &options, &label)?;
+                finish_signal(ctx, "BM25SearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), admitted_occurrences.as_ref(), &label)?;
             let nombre = unified.len();
             ctx.set_output("results", PortValue::new(unified));
             statut_disponible(ctx, &label);
@@ -1602,10 +1602,10 @@ impl Node for BM25SearchNode {
         }
 
         if let Some(exacts) = exacts {
-            let unified = finish_signal(ctx, "BM25SearchNode", &target, exacts, result_mode, &options, &format!("{label}_exact"))?;
+            let unified = finish_signal(ctx, "BM25SearchNode", &target, exacts, result_mode, admitted_occurrences.as_ref(), &format!("{label}_exact"))?;
             ctx.set_output("exact", PortValue::new(unified));
         }
-        let unified = finish_signal(ctx, "BM25SearchNode", &target, results, result_mode, &options, &label)?;
+        let unified = finish_signal(ctx, "BM25SearchNode", &target, results, result_mode, admitted_occurrences.as_ref(), &label)?;
         let nombre = unified.len();
         ctx.set_output("results", PortValue::new(unified));
         statut_disponible(ctx, &label);
@@ -1742,7 +1742,7 @@ impl Node for SparseSearchNode {
             .service::<ConnService>("conn")
             .ok_or("SparseSearchNode: 'conn' service not found")?
             .0.clone();
-        let options = occurrence_mask_options(ctx, &target, options, &conn)?;
+        let (options, admitted_occurrences) = occurrence_mask_options(ctx, &target, options, &conn)?;
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
         let strict = options.strict_signals;
 
@@ -1895,7 +1895,7 @@ impl Node for SparseSearchNode {
             }
         };
 
-        let unified = finish_signal(ctx, "SparseSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), &options, &label)?;
+        let unified = finish_signal(ctx, "SparseSearchNode", &target, results, self.result_mode.unwrap_or(options.result_mode), admitted_occurrences.as_ref(), &label)?;
         for w in &node_warnings {
             ctx.warn(w);
         }
@@ -2968,15 +2968,29 @@ fn occurrence_roots_for(
 fn occurrence_mask_options(
     ctx: &NodeContext, target: &SearchTarget, mut options: SearchOptions,
     conn: &Arc<dyn crate::connection::DbConnection>,
-) -> Result<SearchOptions, String> {
-    let Some(projection) = &target.occurrence_projection else { return Ok(options) };
+) -> Result<(SearchOptions, Option<HashSet<String>>), String> {
+    let Some(projection) = &target.occurrence_projection else { return Ok((options, None)) };
     let roots = occurrence_roots_for(ctx, target, &options, conn)?;
-    let mut ids: Vec<_> = roots.into_iter().collect(); ids.sort();
+    let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
+    // La relation canonique est imposée par le contrat, jamais choisie parmi
+    // d'autres liens entre les mêmes entités (ticket des occurrences partagées).
+    let query = dialect.derived_references(&target.parent_table, &projection.entity, &projection.relation);
+    let mut root_ids: Vec<_> = roots.iter().cloned().collect(); root_ids.sort();
+    let mut versions = HashSet::new();
+    for batch in root_ids.chunks(5_000) {
+        let rows = conn.execute_with_params(&query, &[crate::connection::QueryParam::new("uuids",
+            crate::connection::CypherValue::List(batch.iter().cloned().map(crate::connection::CypherValue::String).collect()))])
+            .map_err(|e| format!("projection : masque des versions non résolu : {e}"))?;
+        for row in rows.rows {
+            if let Some(id) = row.get(1).and_then(|v| v.as_str()) { versions.insert(id.to_string()); }
+        }
+    }
+    let mut ids: Vec<_> = versions.into_iter().collect(); ids.sort();
     options.filter_condition = Some(crate::filter::FilterCondition::Field {
-        key: format!("{}._uuid", projection.entity),
+        key: "_uuid".into(),
         value: crate::filter::FilterValue::List(ids.into_iter().map(crate::connection::CypherValue::String).collect()),
     });
-    Ok(options)
+    Ok((options, Some(roots)))
 }
 
 /// Les parents admis dans la forme et la cellule de l'appel. Le préfiltre des
@@ -3169,14 +3183,14 @@ fn finish_signal(
     target: &SearchTarget,
     results: Vec<SearchResult>,
     result_mode: ResultMode,
-    options: &SearchOptions,
+    admitted_occurrences: Option<&HashSet<String>>,
     label: &str,
 ) -> Result<Vec<UnifiedResult>, String> {
     let results = if target.occurrence_projection.is_some() {
         let conn = ctx.service::<ConnService>("conn").ok_or("projection : connexion absente")?.0.clone();
         let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
-        let roots = occurrence_roots_for(ctx, target, options, &conn)?;
-        crate::search::project_occurrence_results(conn.as_ref(), dialect.as_ref(), target, results, &roots).map_err(|e| e.to_string())?
+        let roots = admitted_occurrences.ok_or("projection : masque des occurrences absent")?;
+        crate::search::project_occurrence_results(conn.as_ref(), dialect.as_ref(), target, results, roots).map_err(|e| e.to_string())?
     } else { results };
 
     // La résolution vers l'entité **source** ne se fait plus ici, par signal
