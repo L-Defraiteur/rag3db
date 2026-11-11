@@ -5,6 +5,8 @@
 - **Gravité** : fichiers temporaires abandonnés après un arrêt brutal ; le témoin des résidus rougit.
 - **Atteignable en service** : oui, si le processus est tué entre la création du CSV et son effacement.
 - **Touche rag3weaver** : oui (`src/dataflow/record_nodes.rs`, `tests/e2e_tx_par_paquet_arret.rs`).
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Observation et preuve
 

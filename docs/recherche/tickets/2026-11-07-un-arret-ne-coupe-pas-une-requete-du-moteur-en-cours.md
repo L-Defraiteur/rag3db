@@ -7,6 +7,8 @@
   requête que son nœud a déjà lancée au moteur, par exemple un plein texte flou de 30 s.
 - **Atteignable en service** : oui, sur une requête lente arrêtée en vol.
 - **Touche rag3weaver** : oui (`Rag3dbConnection`, le trait `DbConnection`, l'exécution d'un graphe).
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Ce que c'est
 

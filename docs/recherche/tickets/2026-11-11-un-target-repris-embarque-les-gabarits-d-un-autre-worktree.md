@@ -5,6 +5,8 @@
 - **Gravité** : une validation peut mélanger du Rust récent et des gabarits anciens ; rouge navigateur observé, risque de faux vert sur des comportements non éprouvés.
 - **Atteignable en service** : oui si un binaire ainsi construit est posé ; aucune pose réalisée ici.
 - **Touche rag3weaver** : oui (`build.rs`, `scripts/garde_target.sh`, chemins Cargo et attestation des gabarits).
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Faits vérifiés
 

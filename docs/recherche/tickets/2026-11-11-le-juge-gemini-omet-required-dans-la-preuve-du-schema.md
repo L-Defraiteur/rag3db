@@ -5,6 +5,8 @@
 - **Gravité** : validation rouge malgré un défaut nommé et une correction proposée ; preuve textuelle insuffisante selon le contrat courant du témoin.
 - **Atteignable en service** : à départager ; le vrai juge produit le rapport, l'échec bloquant observé est celui de son témoin.
 - **Touche rag3weaver** : oui (`tests/e2e_juge.rs`, contrat de preuve du juge).
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Observation
 
