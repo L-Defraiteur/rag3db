@@ -42,7 +42,7 @@ marche, comment on mesure, les pièges) est dans [02-knowledge-dump.md](02-knowl
 
 ## Le lot en cours : `require` (non poussé)
 
-**Le défaut** (ticket ouvert `docs/tickets/2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md`) :
+**Le défaut** (ticket ouvert `docs/codeparsers/tickets/2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md`) :
 en JavaScript CommonJS, `const PreparedStatement = require("./prepared_statement.js")` faisait de la
 ligne de liaison une variable du fichier, et les mentions de `PreparedStatement` y allaient au lieu de
 la classe définie dans `prepared_statement.js`.
@@ -105,14 +105,14 @@ matin, et le bilan (17 justes perdus, +36 % d'arêtes TS/JS par les liaisons) de
 avant le push : garder les liaisons telles quelles, les restreindre, ou d'abord faire le second lot
 (ci-dessous).
 
-## Le ticket `import_binding` (pas écrit)
+## Le ticket `import_binding`
 
 c7 a demandé (8 nov.) de **compter avant de décider** : une sorte de scope nouvelle, `import_binding`,
 donnerait à chaque nom importé (y compris `import` ES externe) sa propre cible. Il faut d'abord compter
 sur code-lourd combien de noms importés cela ferait (TS/JS, et Python, Rust, Go si la règle vaut pour
 tous) et ce que cela pèse en scopes et en vecteurs, puis écrire le ticket avec le chiffre ; on décide
-ensuite, avec Lucie si l'index grossit de plus de quelques pour cent. **Le compte n'est pas fait, le
-ticket n'existe pas.**
+ensuite, avec Lucie si l'index grossit de plus de quelques pour cent. **Le compte n'est pas fait** ; le ticket
+est écrit (11 nov.) : `docs/codeparsers/tickets/2026-11-11-une-mention-d-un-import-es-externe-n-a-pas-de-cible-a-elle.md`.
 
 ## L'arbre de Lucie : le sous-module apparaît modifié
 
@@ -123,26 +123,27 @@ le sous-module est resté extrait à **672a0d5** (le pointeur du 7 novembre). L'
 `git -C ~/git_workspaces/rag3db submodule update extension/rag3weaver/codeparsers`. **Les sessions ne
 touchent pas cet arbre** ; c'est à Lucie de le faire, ou à une session sur son mot.
 
-## Mes tickets ouverts (`docs/tickets/`)
+## Mes tickets ouverts (`docs/codeparsers/tickets/`)
 
-- `2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md` — le lot en cours ci-dessus.
-- `2026-11-07-la-marque-nom-relie-un-appel-de-methode-standard-a-un-homonyme.md` — `split_off`,
+- `docs/codeparsers/tickets/2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md` — le lot en cours ci-dessus.
+- `docs/codeparsers/tickets/2026-11-07-la-marque-nom-relie-un-appel-de-methode-standard-a-un-homonyme.md` — `split_off`,
   `is_zero` reliés par le nom à un homonyme du dépôt quand le receveur est un type de la bibliothèque
   standard.
-- `2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md` — C++ : une définition reliée à sa
+- `docs/codeparsers/tickets/2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md` — C++ : une définition reliée à sa
   propre déclaration d'en-tête.
-- `2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md` — recul
+- `docs/codeparsers/tickets/2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md` — recul
   accepté par Lucie avec tree-sitter 0.27.
-- `2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md` — des scopes sans arête vers
+- `docs/codeparsers/tickets/2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md` — des scopes sans arête vers
   leur fichier après une réindexation à neuf.
-- `2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md` — coût d'analyse d'un fichier Rust.
-- `2026-10-11-new-est-un-mot-vide-en-rust.md` — `new` traité comme un mot vide.
-- `2026-10-04-des-receveurs-restent-sans-type.md` (en cours) et
-  `2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md` (en cours) — la lecture des types de
+- `docs/codeparsers/tickets/2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md` — coût d'analyse d'un fichier Rust.
+- `docs/codeparsers/tickets/2026-10-11-new-est-un-mot-vide-en-rust.md` — `new` traité comme un mot vide.
+- `docs/codeparsers/tickets/2026-10-04-des-receveurs-restent-sans-type.md` (en cours) et
+  `docs/codeparsers/tickets/2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md` (en cours) — la lecture des types de
   receveurs et les marques ; partagés avec d'autres sessions.
 
-Ils restent dans `docs/tickets/` : c7 dira « déplace » quand le script d'index saura lire
-`docs/*/tickets/`.
+Ils sont dans `docs/codeparsers/tickets/` depuis le 11 novembre, avec un dixième ouvert le même jour :
+`docs/codeparsers/tickets/2026-11-11-une-mention-d-un-import-es-externe-n-a-pas-de-cible-a-elle.md` (la sorte
+`import_binding`, le compte à faire).
 
 ## Ce qui reste sur disque (rien n'a été supprimé)
 
