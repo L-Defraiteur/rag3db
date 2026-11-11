@@ -274,3 +274,12 @@ locales ; il est à adapter (branche, sous-module attendu) s'il sert de modèle.
    de X ») de codeparsers jusqu'au rendez-vous de `code.rs`, qui le lit quand l'import est par défaut.
    Il rendrait les 17 justes perdus et corrigerait l'instance (`FS`).
 3. **Le compte pour `import_binding`**, puis le ticket avec les chiffres.
+
+## Reprise du 11 novembre — exports par défaut
+
+Le lot require initial reste différé. État courant et preuves dans
+[03-reprise-exports-par-defaut.md](03-reprise-exports-par-defaut.md) : branche
+`cx-codeparsers-require-2`, code d96ed3264, sous-module a730a9b ; huit e2e ciblés
+et 286 tests unitaires/intégration du parseur verts. La passe complète et une
+nouvelle A/B sur ces hashes restent à faire. La première A/B e101/e48 est
+conservée séparément et ne valide pas la nouvelle implémentation.
