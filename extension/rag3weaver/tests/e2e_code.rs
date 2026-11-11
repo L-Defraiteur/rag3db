@@ -2001,3 +2001,14 @@ fn require_explicit_js_does_not_choose_a_typescript_sibling() {
         assert!(matches!((&rows[0][0], &rows[0][1], &rows[0][2]), (S(n), S(f), S(m)) if n == "OutilJs" && f == "outil.js" && m == "import"), "no typescript sibling: {rows:?}");
     }
 }
+
+/// Multiple writes do not establish a single static export target.
+#[test]
+#[ignore]
+fn require_multiple_default_exports_do_not_guess() {
+    let rows = require_navigation_rows(&[
+        ("outil.js", "class Premier {}\nclass Second {}\nmodule.exports = Premier;\nmodule.exports = Second;\n"),
+        ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
+    ]);
+    assert!(rows.is_empty(), "ambiguous export must remain unresolved: {rows:?}");
+}
