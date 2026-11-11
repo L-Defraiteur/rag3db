@@ -95,12 +95,11 @@ fn opening_manifest_writes_the_root_and_searches_its_derived_entity_with_permute
             let record = |key: &str,body: &str| BTreeMap::from([
                 ("key".into(),CypherValue::String(key.into())),("body".into(),CypherValue::String(body.into()))]);
             let source = cat.create(root,record("r","chaudiere")).unwrap();
-            let uuid = source.uuid().unwrap().to_string();
             let other = cat.create(neighbor,record("n","thermostat")).unwrap();
-            cat.link("LINK",source,other,BTreeMap::new()).unwrap();
+            cat.link("LINK",source.clone(),other,BTreeMap::new()).unwrap();
             let drain = cat.drain();
             assert_eq!(drain.failed,0,"{:?}",drain.warnings);
-            uuid
+            source.uuid().unwrap().to_string()
         };
         let result = Catalog::rechercher(&backend.catalog,view,"thermostat",SearchOptions {
             signals:Some(SearchSignals::BM25),consistency:Consistency::Immediate,
