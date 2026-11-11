@@ -292,37 +292,18 @@ pub mod burn {
             // 2026 ; ce static veut BGE-M3, il le dit. Un démon déjà en place
             // qui sert autre chose est refusé plus bas, et on charge ici.
             .env("RAG3WEAVER_EMBED_MODEL", "bge-m3")
-            .journal_dans(std::env::temp_dir().join("rag3weaver-demons"));
+            .journal_dans(std::env::var_os("RAG3WEAVER_E2E_JOURNAUX_DEMONS")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::env::temp_dir().join("rag3weaver-demons")));
 
         let t0 = std::time::Instant::now();
-        let mut d = DaemonEmbedder::assurer(&serveur).map_err(|e| e.to_string())?;
-        // **Un démon d'une autre construction se remplace.** Il survit à
-        // celui qui l'a lancé — c'est son rôle — donc il survit aux
-        // reconstructions : le 6 septembre 2026, un démon de la veille a servi
-        // toute une journée de mesures avec un code que plus personne n'avait.
+        let d = DaemonEmbedder::assurer(&serveur).map_err(|e| e.to_string())?;
+        // Le service préexistant reste à son propriétaire, même périmé.
+        // Ticket recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md.
         let binaire = std::path::Path::new(env!("CARGO_BIN_EXE_rag3weaver-embeddings"));
         if !d.est_a_jour_avec(binaire) {
-            eprintln!(
-                "▸ démon d'embedding périmé ({}) : on le remplace",
-                if d.identite().executable.is_empty() { "d'avant l'empreinte" } else { d.identite().executable.as_str() }
-            );
-            d.quitter().map_err(|e| format!("le démon périmé ne veut pas quitter : {e}"))?;
-            let debut = std::time::Instant::now();
-            while std::net::TcpStream::connect_timeout(
-                &adresse.parse().map_err(|e| format!("adresse : {e}"))?,
-                std::time::Duration::from_millis(200),
-            )
-            .is_ok()
-            {
-                if debut.elapsed() > std::time::Duration::from_secs(10) {
-                    return Err("le démon périmé tient le port".into());
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            d = DaemonEmbedder::assurer(&serveur).map_err(|e| e.to_string())?;
-            if !d.est_a_jour_avec(binaire) {
-                return Err(format!("le démon relancé n'est toujours pas le nôtre : {:?}", d.identite()));
-            }
+            return Err(format!("démon d'embedding périmé ({}) : refus de remplacer un service préexistant",
+                d.identite().executable));
         }
         let id = d.identite().clone();
 

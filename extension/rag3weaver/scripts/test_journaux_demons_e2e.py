@@ -82,6 +82,9 @@ import os, subprocess, sys
 from pathlib import Path
 if '--exact' in sys.argv: sys.exit(0)
 subprocess.run([os.environ['FAKE_ATTACHE']], check=True)
+if 'e2e_search::' in sys.argv and os.environ.get('FAKE_ECHEC'):
+    Path(os.environ['TMPDIR'], 'preuve-processus').write_text('processus rouge')
+    sys.exit(7)
 if 'e2e_search::' in sys.argv and os.environ.get('FAKE_RESIDU'):
     Path(os.environ['TMPDIR'], 'interdit').write_text('preuve du garde')
 print('test result: ok. 1 passed; 0 failed; 0 ignored;')
@@ -117,7 +120,7 @@ class Journaux(unittest.TestCase):
         self.d = Path(tempfile.mkdtemp(dir=self.root)); (self.d/'bin').mkdir()
         self.pids = self.d/'pids'; self.pids.touch()
         self.env = os.environ.copy()
-        for key in ('RAG3WEAVER_PASSE_E2E', 'FAKE_OLD', 'FAKE_IGNORE_TERM', 'FAKE_RESIDU', 'RAG3WEAVER_GARDER', 'RAG3WEAVER_E2E_JOURNAUX_DEMONS'):
+        for key in ('RAG3WEAVER_PASSE_E2E', 'FAKE_OLD', 'FAKE_IGNORE_TERM', 'FAKE_RESIDU', 'FAKE_ECHEC', 'RAG3WEAVER_GARDER', 'RAG3WEAVER_E2E_JOURNAUX_DEMONS'):
             self.env.pop(key, None)
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]
@@ -157,7 +160,7 @@ class Journaux(unittest.TestCase):
             except OSError: time.sleep(.01)
         self.fail('le faux service privé ne démarre pas')
 
-    def jouer(self, residu=False, ignore_term=False):
+    def jouer(self, residu=False, ignore_term=False, echec=False):
         disque = self.d/'disque'; disque.mkdir()
         parent = disque/'passe'; parent.mkdir()
         tmp = self.d/'tmp'; tmp.mkdir()
@@ -178,6 +181,7 @@ exit $?
 ''')
         env = self.env.copy(); env['PATH'] = str(self.d/'bin')+':'+env['PATH']
         if residu: env['FAKE_RESIDU'] = '1'
+        if echec: env['FAKE_ECHEC'] = '1'
         if ignore_term: env['FAKE_IGNORE_TERM'] = '1'
         rendu = subprocess.run(['bash', str(harness)], env=env, text=True, capture_output=True, timeout=30)
         print(rendu.stdout, rendu.stderr)
@@ -199,6 +203,13 @@ exit $?
         preuves = list((self.d/'disque/e2e-gardes').rglob('interdit'))
         self.assertEqual(len(preuves), 1, 'rouge du garde archivé même si assertions vertes')
         self.assertEqual(preuves[0].read_text(), 'preuve du garde')
+
+    def test_rouge_du_processus_archive_aussi_son_tmpdir(self):
+        r = self.jouer(echec=True)
+        self.assertEqual(r.returncode, 101)
+        preuves = list((self.d/'disque/e2e-gardes').rglob('preuve-processus'))
+        self.assertEqual(len(preuves), 1)
+        self.assertEqual(preuves[0].read_text(), 'processus rouge')
 
     def test_existant_courant_reste_intact(self):
         p = self.existant()
