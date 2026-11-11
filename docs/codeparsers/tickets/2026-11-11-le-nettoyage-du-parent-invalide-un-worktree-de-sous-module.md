@@ -259,3 +259,36 @@ des copies administratives neuves et des rapports exclusifs sous
 Les premiers rapports/copies/refus restent conservés séparément, sans écrasement.
 Aucun retrait si le contrôle est rouge, aucun changement d'état entre archive
 et retrait, aucun accès à l'ancien garde ni GC/prune.
+
+### Prévention livrée et nettoyage final vérifié
+
+Master reçoit 65aa01328456439ed0389e9c2a6a60e966c0ae23 sous poste push,
+if VERT et trois contrôles lus : propre, aucun rebase, origin/master=HEAD.
+La garde livrée (SHA dca13...f628 complet ci-dessus) a contrôlé les deux
+worktrees du suivi avant retrait : deux VERT, une archive fidèle privée et
+un lien source suivi inspecté comme feuille par worktree. Retraits ensuite
+réalisés sans force, aucune modification entre archive et retrait ; branches
+locales cx-codeparsers-garde-nettoyage et cx-codeparsers-incident-cleanup supprimées,
+chemins absents vérifiés. Branches distantes et preuves conservées.
+
+Artefacts sur le portable, sous
+~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison-v2/ :
+
+- pousser.sh : commande exacte `python3 garde_worktree.py --depot R --worktree T
+  --archive ADMIN COPIE --rapport NEUF`, puis retrait conditionné à son succès ;
+- push-controles.txt et nettoyage.txt : livraison et retraits ;
+- admin-cx-codeparsers-garde-nettoyage et admin-cx-codeparsers-incident-cleanup :
+  copies fidèles conservées hors cibles, non modifiées après contrôle ;
+- rapport-cx-codeparsers-garde-nettoyage.json : VERT, SHA-256
+  e85242767f1d9f8e8de0d19f0bc4e2bb591f7bedc94d14c23cfb301089152f54 ;
+- rapport-cx-codeparsers-incident-cleanup.json : VERT, SHA-256
+  365988edcdd60c5214be48f92558fb8b73771f735a958f5d9638bd0c6c2f9981.
+
+La relecture locale de l'orchestration est 19 tests/0 échec en 0,995 s, preuve
+~/.cache/orchestration-notes/guard-review/tests-8e9ceff85.log ; la durée approximative
+initialement transmise n'est pas retenue. Premier rapport ROUGE et premières
+copies restent conservés séparément. Aucun accès supplémentaire au garde ancien,
+aucun GC/prune, aucune restitution exhaustive d'index/refs/reflogs revendiquée.
+Ce ticket reste **ouvert** sur l'état historique non certifié ; la prévention
+et son nettoyage livrés ne ferment pas ce volet. Après le présent bilan MD,
+veille demandée, aucun nouveau lot activé.

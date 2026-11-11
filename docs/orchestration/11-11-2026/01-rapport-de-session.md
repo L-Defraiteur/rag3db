@@ -16,9 +16,15 @@ Les sections de passation ci-dessous sont historiques ; les entrées finales dé
 | IDE | flux/usage/reprise8d5139f9e et outils contextuels/wait_output68b9ede17 intégrés ; deux dépôts homonymes, troncature, clics, rechargement et commande différée éprouvés |
 | arrêt des backends | intégré80b467dd3, erreur de fermeture conservée et arrêt idempotent ; défaut de provenance des gabarits suivi séparément, récupération attestée |
 | équipier | correction du reste explicite en branche, ciblés verts ; passe globale rouge sur18/26 bilans à600s, cause non établie ; ne pas confondre avec le relais livré |
-| codeparsers | complément23 positions terminé, six gains stricts attribués sans score global ; rebase sur68b et passe intégrée en cours, pas encore livré |
+| codeparsers | require/defaults intégrés2e910930d, passe intégrée relue ; contrat de navigation vers symbole/valeur exportée explicite ; six gains stricts attribués, aucun score global ; tickets oracle/provenance et homonyme ouverts |
 | lucivy |4.3.3 publiée ; minimums et lock rag3weaver intégrésf96acc6cf, close en erreur rouge4.3.2 puis vert4.3.3 ; aucun changement de format |
 | pose du binaire | 68b9ede17 posé et contrôlé aux deux postes : luciepc 22:03:08–22:03:11, portable 22:03:56–22:04:04 (Paris), atelier principal 20 outils exposés, UI servie conforme et rendu navigateur sans erreur ; [preuves et retour](../../tickets/closed/2026-11-11-preparer-et-poser-le-binaire-regroupe-aux-deux-postes.md) ; ancien artefact d134 jamais posé |
+
+Garde commune de nettoyage livrée65aa01328 : liens source suivis inchangés traités sans
+traverser leur cible, administrations partagées refusées même avec archive ; 19 témoins verts.
+Les deux auto-contrôles sont verts et leurs worktrees retirés, archives et rapports conservés.
+[L’incident reste ouvert](../../codeparsers/tickets/2026-11-11-le-nettoyage-du-parent-invalide-un-worktree-de-sous-module.md)
+sur l’ancien index et les références historiques non certifiés ; aucune restauration exhaustive revendiquée.
 
 La règle de suivi couvre désormais toute nouvelle action et tout signalement entre sessions :
 ticket existant ou nouveau, porteur explicite, puis déplacement vers `docs/tickets/closed/`
