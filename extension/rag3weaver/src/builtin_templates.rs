@@ -544,11 +544,12 @@ mod tests {
     #[test]
     fn a_portable_linked_manifest_loads_and_reports_its_modified_copy() {
         let d = tempfile::tempdir().unwrap();
-        let graph = d.path().join("schema.mmd");
+        let graph = d.path().join("templates/tools/schema.mmd");
+        std::fs::create_dir_all(graph.parent().unwrap()).unwrap();
         std::fs::write(&graph, get("tools/schema.mmd").unwrap()).unwrap();
         let mut m = json!({"version":1,"name":"portable","database":"test.rag3db",
             "embeddings":{"address":"127.0.0.1:1","model":"toy","dimensions":8},
-            "entities":{},"tools":{"schema":{"graph":"schema.mmd"}}});
+            "entities":{},"tools":{"schema":{"graph":"templates/tools/schema.mmd"}}});
         let (linked,kept) = link(d.path(),&mut m);
         assert_eq!(linked.len(),1);
         assert!(kept.is_empty());
@@ -570,7 +571,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let m = json!({"version":1,"name":"workspace","database":"test.rag3db",
             "embeddings":{"address":"127.0.0.1:1","model":"toy","dimensions":8},
-            "entities":{},"tools":{},"workspace":{"root":"."}});
+            "entities":{},"tools":{},"workspace":{"source":"working_tree","root":"."}});
         let path = d.path().join("backend.json");
         std::fs::write(&path,serde_json::to_vec(&m).unwrap()).unwrap();
         let error = crate::backend::PreparedBackend::load(&path).err().expect("workspace refusé sans code");
