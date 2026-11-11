@@ -335,3 +335,14 @@ Rectification : cet incident reste ouvert dans
 revue et garde de nettoyage restent à faire. Pas de nouvelle intervention dans
 le garde ni de suppression des restes avant revue. Les suites oracle/provenance
 et homonyme restent distinctes, ouvertes également.
+
+## Garde de nettoyage validée pour livraison
+
+Garde Python et procédure commune du lot 91c386388 : revue acceptée, 14 témoins
+passés aux deux postes et rejoués par l'orchestration. Ticket d'incident
+`docs/codeparsers/tickets/2026-11-11-le-nettoyage-du-parent-invalide-un-worktree-de-sous-module.md`
+reste ouvert : garde livrée, état historique de l'index/refs/reflogs de l'ancien
+garde non certifié. Pas de nouvelle intervention dans ce dépôt ni GC/prune.
+Cleanup des worktrees propres à ce suivi contrôlé par la garde elle-même,
+archives et rapports hors cible conservés dans
+`~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison/` sur le portable.

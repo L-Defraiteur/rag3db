@@ -150,3 +150,24 @@ Quiescence toujours à la charge du propriétaire ; archives obligatoirement
 hors cible et administration détruite. La garde ne copie ni ne rend atomique
 le retrait ultérieur. L'incertitude historique index/refs/reflogs de l'ancien
 garde demeure ; ce ticket reste ouvert même après livraison de la garde.
+
+### Garde validée pour livraison, incident historique toujours ouvert
+
+Code final 91c386388bba471fe48a03c99a2a6577009e7c6b, SHA-256 du script
+`ef52d5901f3bfc39fa63e4aa72843b7204967b57cc61e713a8cf58b5cbc8e9fb`.
+Les 14 témoins passent aux deux postes et ont été rejoués par l'orchestration
+(14/14, 0,698 s). Logs luciepc :
+`~/.cache/codeparsers-notes/cx-garde-nettoyage/tests-racines-protegees.log`,
+SHA-256 `d6aa32b30592102464efecbd5c00e1b5d2a083dbb820efaa8a02af764f546684`.
+Revue finale acceptée et tour de push accordé pour scripts/procédure seulement,
+sans rejeu Rust requis. La garde est livrée dans ce lot, sans restauration
+exhaustive revendiquée : index, références et reflogs historiques du garde
+restent non certifiés ; le ticket demeure **ouvert** sur cette partie.
+
+Le retrait des deux worktrees de ce suivi utilisera cette garde, avec copies
+fidèles d'administrations privées et rapports exclusifs hors cibles sous
+`~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison/` sur le portable.
+Commande prévue : `python3 garde_worktree.py --depot <dépôt> --worktree <cible>
+--archive <git-dir privé> <copie hors cible> --rapport <rapport neuf hors cible>`.
+Les copies, rapports, branches distantes et traces forensiques seront conservés.
+Aucun accès supplémentaire à l'ancien codeparsers-garde, aucun GC/prune.
