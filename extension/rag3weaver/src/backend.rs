@@ -3790,6 +3790,13 @@ impl Backend {
     pub(crate) fn invoke_read(&self, authority: &crate::dataflow::invocation_nodes::InvocationAuthority,
         operation: &str, arguments: Value, cancel: crate::dataflow::node::CancelToken) -> Result<Value, String> {
         let prepared = self.prepared();
+        self.invoke_read_on(&prepared, authority, operation, arguments, cancel)
+    }
+
+    #[cfg(all(feature = "code", feature = "daemon"))]
+    fn invoke_read_on(&self, prepared: &PreparedBackend,
+        authority: &crate::dataflow::invocation_nodes::InvocationAuthority,
+        operation: &str, arguments: Value, cancel: crate::dataflow::node::CancelToken) -> Result<Value, String> {
         let tool = prepared.tools.get(operation).ok_or("opération cible non exposée")?;
         let attachment = &prepared.manifest.tools[operation];
         let policy = attachment.policy;

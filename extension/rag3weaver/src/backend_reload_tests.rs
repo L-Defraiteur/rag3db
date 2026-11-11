@@ -1515,3 +1515,27 @@ fn in_approval_mode_the_agent_proposes_and_does_not_declare() {
         assert!(noms.contains(&n.to_string()), "{n} : {noms:?}");
     }
 }
+
+
+#[cfg(all(feature = "code", feature = "daemon"))]
+#[test]
+fn invocation_executes_the_checked_declarations_after_reload() {
+    let (dir, backend) = toy();
+    write(dir.path(), "echo.mmd", "%% tool: echo\n%% description: read the schema\n%% result: answer.result\ngraph LR\n answer[\"SchemaNode\"]\n");
+    backend.reload().unwrap();
+    let checked = backend.prepared();
+    // Remplacement contrôlé après capture de A, sans délai ni course aléatoire.
+    write(dir.path(), "echo.mmd", GRAPH);
+    write(dir.path(), "answer.rhai", "#{version: 2, got: input}");
+    backend.apply_reload(backend.check_reload().unwrap());
+    let authority = crate::dataflow::invocation_nodes::InvocationAuthority {
+        manifest: checked.manifest_path.clone(),
+        policy: Default::default(),
+        scope: Default::default(),
+    };
+    let cancel = crate::dataflow::node::NodeContext::new().cancellation();
+    assert!(backend.invoke_read(&authority, "echo", json!({"value": {}}), cancel.clone()).is_err(),
+        "B contient RhaiNode, dont la lecture seule n'est pas prouvée");
+    let response = backend.invoke_read_on(&checked, &authority, "echo", json!({"value": {}}), cancel).unwrap();
+    assert_ne!(response["result"]["version"], json!(2), "B ne doit jamais être exécutée après vérification de A : {response}");
+}
