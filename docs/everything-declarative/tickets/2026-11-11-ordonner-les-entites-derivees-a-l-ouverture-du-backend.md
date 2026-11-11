@@ -97,3 +97,18 @@ entités explicites (backend.rs1397), donc la comparaison est nécessaire.
 Aucune duplication de schéma Scope ou pseudo-configuration ne sera utilisée ;
 les faits doivent venir du fournisseur existant. Source08 et sa passe restent
 inchangées. Ce point de revue peut empêcher l'intégration même si la passe08 est verte.
+
+Comparaison terminée après fin de la passe08 : baseline `6cf2bc8b5` (base2e,
+tests seuls) et candidat `db79fd2a1` donnent chacun **0/3/0**, 0,01s.
+La relation custom vers Scope échoue identiquement (`ANNOTATES: unknown relation
+endpoint`) : **pas de régression prouvée de ce chemin**, il était déjà refusé.
+Les deux dérivées sont refusées sur baseline par hashsafe, sur le candidat par
+la racine Scope absente des entités explicites. Il reste donc une limite de
+composition préexistante, pas une réussite du point de revue. Preuves externes
+`nomme-baseline.log`, `nomme-candidat.log`, `commit-nomme-*`.
+
+La passe08 s'est achevée verte avant cette comparaison : features5, gardes20,
+lib2121/0/64 ignorés (41,73s), navigateur39/0/0 (132,88s), sept suites e2e
+sans SAUTÉ : dérivées4, lectures24, PG34, txvecteurs3, txarrêt18, txmerge1,
+txligne3. Elle reste étiquetée08, ne valide pas le schéma nommé et n'autorise
+pas le push tant que ce point de revue n'est pas départagé/corrigé.
