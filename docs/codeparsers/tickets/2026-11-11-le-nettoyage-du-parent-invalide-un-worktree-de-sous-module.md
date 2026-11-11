@@ -92,3 +92,21 @@ reconstruit honnêtement à partir du seul état final.
 
 Ce ticket est distinct du ticket require corrigé et des tickets oracle et
 homonyme. Aucun verdict fonctionnel ou LSP n'est requalifié par l'incident.
+
+## Lecture ciblée et plan soumis avant code
+
+Les rectifications 8df1266cd sont sur master, trois contrôles lus. Aucun
+nouveau changement dans le garde. L'autre clone du portable conserve
+672a0d5012f716da2742eeb1bf03e38450c345cd, son arbre et la référence garde-de-match ;
+un journal antérieur atteste sa publication. Cela ne reconstitue pas l'ancien
+index, ses références locales exhaustives ou ses reflogs. Administration du
+parent supprimé absente ; aucun snapshot de ces éléments identifié dans la
+lecture ciblée. Preuves et SHA-256 dans
+[le plan avant code](../11-11-2026/05-plan-garde-nettoyage.md).
+
+Plan proposé : garde_worktree.py en lecture seule, test_garde_worktree.py
+sur fixtures temporaires et appel dans la procédure commune avant retrait.
+Contrat : refuser partage/ambiguïté ; ne pas confondre propreté des sources,
+propriété des administrations et préservation des références. La méthode de
+certification des références utiles reste un point explicite de revue avant
+code. Aucun nouveau mécanisme n'est implémenté par la rédaction de ce plan.
