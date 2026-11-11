@@ -35,8 +35,11 @@ regrouper avec le lot de la session « recherche ».
 
 ## Le lot en branche : l'IDE par le flux (reprise du 11 novembre)
 
-- Branche de référence : `origin/cx-archi-ide-par-le-flux-2`, code `61066a2b3` ;
-  rebasée après le garde-fou `1904e04e4` et le correctif mémoire `41526b29a`.
+- Branche de référence : `origin/cx-archi-ide-par-le-flux-3`, état `29271d169` ;
+  rebasée sur `91e5f760b`, qui comprend le correctif ED des réclamations.
+  Aucun rejeu sur cette base n'est encore lancé : attendre l'intégration de projection
+  pour la fenêtre utile demandée par l'orchestration. Les résultats ci-dessous restent
+  attachés aux bases historiques ; l'ancien rouge 606 dus n'est pas effacé.
 - Worktree sur les deux postes : `/home/lucied/.cache/rag3weaver-build/cx-wt-flux`.
   Le target de validation est `~/.cache/rag3weaver-build/flux` sur luciepc.
 - Les anciens worktrees `wt-flux` et branches `ide-par-le-flux` /
@@ -113,7 +116,14 @@ par target ; ne pas déplacer un worktree actif. Après un résultat global vert
 tour à l'orchestration. Toute arrivée de code impose rebase sur une nouvelle branche `cx-`
 et rejeu court hors verrou de push ; les docs seules n'imposent pas de rejeu.
 **Aucun tour de push master accordé.** L'ancien `wt-flux-push.sh` ne correspond plus aux chemins
-ni aux verdicts courants : préparer et relire un lanceur conforme avant de l'utiliser.
+ni aux verdicts courants. Les remplaçants sont préparés et `bash -n` est vert, sans exécution :
+`~/.cache/rag3weaver-build/cx-flux-apres-projection-{passe,push}.sh` sur le portable.
+La passe démarre par défaut en mode complet, refuse une sortie existante et note commit,
+master de départ et lib épinglée ; ses sorties seront `cx-flux-apres-projection-20261111`.
+Le push exige le verdict complet, vérifie le code testé et toute arrivée de code, rend
+le verrou pour rebase/rejeu si nécessaire, sauvegarde la branche puis pousse sous le garde
+VERT ; trois contrôles avant nettoyage du worktree/target, journaux conservés.
+Copier sur luciepc et relire les chemins après le prochain rebase avant toute exécution.
 
 ## Les lots nommés, pas commencés
 
