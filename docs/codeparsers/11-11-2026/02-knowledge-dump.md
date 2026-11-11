@@ -220,20 +220,20 @@ sur un poste calme (§8).
 
 ## 9. Mes tickets ouverts (une ligne chacun)
 
-- `docs/tickets/2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md` — un `require` relatif s'arrêtait
+- `docs/codeparsers/tickets/2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md` — un `require` relatif s'arrêtait
   à la ligne de liaison ; le lot `require` le traite (non poussé).
-- `docs/tickets/2026-11-07-la-marque-nom-relie-un-appel-de-methode-standard-a-un-homonyme.md` — un appel
+- `docs/codeparsers/tickets/2026-11-07-la-marque-nom-relie-un-appel-de-methode-standard-a-un-homonyme.md` — un appel
   sur un type de la bibliothèque standard (`Vec::split_off`) relié par le nom à un homonyme du dépôt.
-- `docs/tickets/2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md` — C++ : une
+- `docs/codeparsers/tickets/2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md` — C++ : une
   définition reliée à sa propre déclaration d'en-tête.
-- `docs/tickets/2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md`
+- `docs/codeparsers/tickets/2026-10-25-fmt-format-h-une-macro-lue-comme-un-corps-de-fonction-depuis-tree-sitter-0-27.md`
   — une macro lue comme une fonction depuis tree-sitter 0.27 (recul accepté).
-- `docs/tickets/2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md` — des scopes sans
+- `docs/codeparsers/tickets/2026-10-18-des-scopes-sans-defined-in-dans-une-reindexation-a-neuf.md` — des scopes sans
   arête vers leur fichier après une réindexation à neuf.
-- `docs/tickets/2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md` — le coût d'analyse
+- `docs/codeparsers/tickets/2026-10-11-un-fichier-rust-s-analyse-plus-lentement-a-la-ligne.md` — le coût d'analyse
   d'un fichier Rust croît avec sa longueur plus que linéairement.
-- `docs/tickets/2026-10-11-new-est-un-mot-vide-en-rust.md` — `new` est traité comme un mot vide.
-- `docs/tickets/2026-10-04-des-receveurs-restent-sans-type.md` — des receveurs d'appel restent sans type
+- `docs/codeparsers/tickets/2026-10-11-new-est-un-mot-vide-en-rust.md` — `new` est traité comme un mot vide.
+- `docs/codeparsers/tickets/2026-10-04-des-receveurs-restent-sans-type.md` — des receveurs d'appel restent sans type
   lu (en cours, partagé).
-- `docs/tickets/2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md` — les marques
+- `docs/codeparsers/tickets/2026-10-04-une-arete-ne-dit-pas-comment-elle-a-ete-resolue.md` — les marques
   `resolution` (en cours, partagé ; la marque `liaison` du lot `require` s'y ajoute).
