@@ -494,7 +494,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       onEtat<ChatPousse>("chat", id, (p) => {
         const tours = [...toursRef.current.slice(0, p.depuis), ...p.nouveaux_tours];
         toursRef.current = tours;
-        const { depuis: _d, nouveaux_tours: _n, tour: _t, ...reste } = p;
+        const { depuis: _d, nouveaux_tours: _n, tour: _t, fin_du_tour: fin, ...reste } = p;
         const s: ChatState = { ...reste, turns: tours };
         setChat(s);
         setRecaps((cur) => ({ ...cur, [id]: { ...cur[id], context: p.context, model: p.model, writes: p.memory_writes, writesWhy: p.memory_writes_why, usage: p.usage } }));
@@ -506,10 +506,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           return;
         }
         follow.current = true;
-        setItems(fromTurns(tours));
+        const relues = fromTurns(tours);
+        setItems(fin.ok ? relues : [...relues, message("error", fin.erreur)]);
         setBusy(false);
         setPense(false);
-        setStatus("fini");
+        setStatus(!fin.ok ? "Erreur" : fin.arrete_par ? `arrêté ${fin.arrete_par === "ide" ? "dans l'IDE" : `par ${fin.arrete_par}`}` : "fini");
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [id],
@@ -582,7 +583,13 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       for (const c of r.consumed ?? []) byUnit.set(c.unit, (byUnit.get(c.unit) ?? 0) + c.amount);
       setConsumed(byUnit.size ? [...byUnit].map(([u, n]) => `${u.replace(/_tokens$/, "")} ${tokens(n)}`).join(" · ") : "");
     } catch (e) {
-      setItems((cur) => [...cur.filter((i) => !(i.kind === "message" && i.live)), message("error", (e as Error).message)]);
+      // Les outils ont pu agir avant la panne : leur trace reste dans la
+      // conversation, même si la requête qui attendait le modèle échoue.
+      setItems((cur) => [
+        ...cur.filter((i) => !(i.kind === "message" && i.live && i.parts.length === 0))
+          .map((i) => i.kind === "message" && i.live ? { ...i, live: false } : i),
+        message("error", (e as Error).message),
+      ]);
       setStatus("Erreur");
     } finally {
       envoiDeLaPage.current = false;
